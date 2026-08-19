@@ -26,10 +26,16 @@
 
 ### 分支管理與 PR 工作流 (Branch & PR Workflow)
 
-所有功能開發與問題修復必須遵循以下流程：
-1. 嚴禁直接 Push 至 `main` 分支。
-2. 凡有新需求或修復，一律從最新 `main` 建立 `feature/<issue-id>-<name>` 或 `fix/<issue-id>-<name>` 分支。
-3. 遵循 TDD 完成開發並通過本地測試後，推送分支並由 `gh pr create` 發起 Pull Request。
-4. 經 GitHub Actions CI 綠燈驗證後，方得以 Squash and Merge 合併回 `main`。
-5. 詳細新手操作手冊請參閱 [docs/guides/branch_protection_and_pr_workflow.md](file:///d:/APP/股票紀錄/docs/guides/branch_protection_and_pr_workflow.md)。
+所有功能開發與問題修復必須嚴格遵循以下流程：
+1. **嚴禁直接 Push 至 `main` 分支**：主幹分支受保護，所有變更一律走 PR 流程。
+2. **Issue 優先原則 (Issue-First)**：
+   - 凡有新需求或修復，**必須先確認或建立對應的 GitHub Issue**（使用 `gh issue create`）。
+   - 嚴禁無 Issue 直接開發。分支名稱一律命名為 `feature/<issue-id>-<name>`、`fix/<issue-id>-<name>` 或 `docs/<name>`。
+3. **測試驅動開發 (TDD)**：遵循紅-綠-重構循環完成開發，本地確保 `npm test` (100% 通過) 與 `npm run build` (TypeScript 0 錯誤)。
+4. **領域文檔同步 (Doc Sync)**：若涉及新術語、架構決策或新元件，必須於同一 PR 中同步更新 `CONTEXT.md`、`docs/adr/` 與交接手冊，杜絕文檔脫鉤。
+5. **發起 PR 與自動關聯 (Issue Link)**：
+   - 推送分支後使用 `gh pr create` 發起 Pull Request。
+   - **PR 描述內必須包含 `Closes #<issue-id>`**，確保 Squash and Merge 時 GitHub 自動關閉對應 Issue。
+6. **合併與分支清理**：經 GitHub Actions CI 綠燈驗證後，執行 Squash and Merge 合併回 `main`，並同步清理遠端與本地已合併分支。
+7. **詳細新手操作手冊**：請參閱 [docs/guides/branch_protection_and_pr_workflow.md](file:///d:/APP/股票紀錄/docs/guides/branch_protection_and_pr_workflow.md)。
 
