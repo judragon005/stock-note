@@ -9,6 +9,7 @@
 ## 📂 安裝技能檔案清單 (26 穩定版技能)
 
 ### 🛠️ 工程開發 (`.agents/skills/engineering/` - 17 個技能)
+
 - [ask-matt](./engineering/ask-matt/SKILL.md) — 諮詢 Matt Pocock 思維 (Ask Matt)
 - [code-review](./engineering/code-review/SKILL.md) — 程式碼審查 (Code Review)
 - [codebase-design](./engineering/codebase-design/SKILL.md) — 程式碼庫架構設計 (Codebase Design)
@@ -28,6 +29,7 @@
 - [wayfinder](./engineering/wayfinder/SKILL.md) — 程式碼庫導覽 (Wayfinder)
 
 ### ⚡ 生產力與對齊 (`.agents/skills/productivity/` - 5 個技能)
+
 - [grill-me](./productivity/grill-me/SKILL.md) — 方案高強度拷問 (Grill Me)
 - [grilling](./productivity/grilling/SKILL.md) — 拷問面試工作流 (Grilling)
 - [handoff](./productivity/handoff/SKILL.md) — 上下文交接 (Handoff)
@@ -35,6 +37,7 @@
 - [writing-great-skills](./productivity/writing-great-skills/SKILL.md) — 編寫優質技能 (Writing Great Skills)
 
 ### 📦 工具與輔助 (`.agents/skills/misc/` - 4 個技能)
+
 - [git-guardrails-claude-code](./misc/git-guardrails-claude-code/SKILL.md) — Git 安全護欄 (Git Guardrails)
 - [migrate-to-shoehorn](./misc/migrate-to-shoehorn/SKILL.md) — 遷移至 Shoehorn (Migrate to Shoehorn)
 - [scaffold-exercises](./misc/scaffold-exercises/SKILL.md) — 腳手架練習生成 (Scaffold Exercises)
@@ -76,7 +79,7 @@ flowchart TD
     G -->|審查通過| H[8. 上下文紀錄交接 /handoff]
 ```
 
-### 工作流階段解析：
+### 工作流階段解析
 
 1. **對齊階段 (Alignment)**：執行 `/setup-matt-pocock-skills` 定義追蹤器與領域文檔規約。
 2. **拷問階段 (Grilling)**：透過 `/grill-with-docs` 精準對齊架構決策 (ADR) 與術語 (Glossary)。
