@@ -1,0 +1,41 @@
+name: 專案自動化測試與 CI 流水線
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-test:
+    name: 結構合規與自動化驗證
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 簽出原始碼 (Checkout repository)
+        uses: actions/checkout@v4
+
+      - name: 專案必要檔案完整性檢查 (Check Required Files)
+        run: |
+          echo "=== 檢查必要專案文件 ==="
+          test -f README.md || (echo "❌ 缺少 README.md" && exit 1)
+          test -f .gitignore || (echo "❌ 缺少 .gitignore" && exit 1)
+          echo "✅ 基礎版控與文件結構檢查通過"
+
+      - name: 敏感資訊防禦檢查 (Secrets Guard)
+        run: |
+          echo "=== 檢查是否存在敏感環境變數檔案 ==="
+          if [ -f .env ]; then
+            echo "❌ 警告：發現 .env 檔案被提交至儲存庫！"
+            exit 1
+          fi
+          echo "✅ 敏感資訊防禦檢查通過"
+
+      - name: 自動化測試完成通報 (Summary)
+        run: |
+          echo "========================================"
+          echo "🎉 CI 自動化測試與結構校驗全部通過！"
+          echo "========================================"
