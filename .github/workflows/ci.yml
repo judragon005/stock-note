@@ -11,19 +11,27 @@ permissions:
 
 jobs:
   validate-and-test:
-    name: 結構合規與自動化驗證
+    name: 自動化單元測試與語法驗證
     runs-on: ubuntu-latest
 
     steps:
       - name: 簽出原始碼 (Checkout repository)
         uses: actions/checkout@v4
 
-      - name: 專案必要檔案完整性檢查 (Check Required Files)
-        run: |
-          echo "=== 檢查必要專案文件 ==="
-          test -f README.md || (echo "❌ 缺少 README.md" && exit 1)
-          test -f .gitignore || (echo "❌ 缺少 .gitignore" && exit 1)
-          echo "✅ 基礎版控與文件結構檢查通過"
+      - name: 設定 Node.js 環境 (Set up Node.js)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 安裝相依套件 (Install dependencies)
+        run: npm ci
+
+      - name: 執行 TypeScript 語法與型別檢查 (Type Check)
+        run: npx tsc --noEmit
+
+      - name: 執行 Vitest 會計引擎自動化單元測試 (Run Vitest)
+        run: npm test
 
       - name: 敏感資訊防禦檢查 (Secrets Guard)
         run: |
@@ -37,5 +45,5 @@ jobs:
       - name: 自動化測試完成通報 (Summary)
         run: |
           echo "========================================"
-          echo "🎉 CI 自動化測試與結構校驗全部通過！"
+          echo "🎉 CI 自動化單元測試與型別校驗全部通過！"
           echo "========================================"
