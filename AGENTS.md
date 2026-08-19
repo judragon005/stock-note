@@ -23,3 +23,13 @@
 ### Domain docs
 
 採用單一領域架構 (Single-context)，以根目錄 `CONTEXT.md` 與 [docs/adr/](file:///d:/APP/股票紀錄/docs/adr/) 進行領域術語與決策紀錄。詳細消費規則請見 [docs/agents/domain.md](file:///d:/APP/股票紀錄/docs/agents/domain.md)。
+
+### 分支管理與 PR 工作流 (Branch & PR Workflow)
+
+所有功能開發與問題修復必須遵循以下流程：
+1. 嚴禁直接 Push 至 `main` 分支。
+2. 凡有新需求或修復，一律從最新 `main` 建立 `feature/<issue-id>-<name>` 或 `fix/<issue-id>-<name>` 分支。
+3. 遵循 TDD 完成開發並通過本地測試後，推送分支並由 `gh pr create` 發起 Pull Request。
+4. 經 GitHub Actions CI 綠燈驗證後，方得以 Squash and Merge 合併回 `main`。
+5. 詳細新手操作手冊請參閱 [docs/guides/branch_protection_and_pr_workflow.md](file:///d:/APP/股票紀錄/docs/guides/branch_protection_and_pr_workflow.md)。
+

@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { TrendingUp, PlusCircle, Download, Upload, DollarSign } from 'lucide-react';
-import { MarketType } from '../types/stock';
+import { TrendingUp, PlusCircle, Download, Upload, DollarSign, Palette } from 'lucide-react';
+import { MarketType, ColorThemeMode } from '../types/stock';
 
 interface HeaderProps {
   currentMarket: 'ALL' | MarketType;
   onSelectMarket: (market: 'ALL' | MarketType) => void;
   usdToTwdRate: number;
   onUpdateRate: (rate: number) => void;
+  colorTheme: ColorThemeMode;
+  onToggleColorTheme: () => void;
   onOpenTradeModal: () => void;
   onExportJSON: () => void;
   onExportCSV: () => void;
@@ -18,6 +20,8 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectMarket,
   usdToTwdRate,
   onUpdateRate,
+  colorTheme,
+  onToggleColorTheme,
   onOpenTradeModal,
   onExportJSON,
   onExportCSV,
@@ -93,6 +97,19 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Action Controls & Rate Config */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {/* Color Theme Toggle */}
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={onToggleColorTheme}
+            title="切換漲跌色彩模式 (台股紅漲綠跌 / 國際綠漲紅跌)"
+            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px' }}
+          >
+            <Palette size={13} color="var(--primary-color)" />
+            <span style={{ fontSize: '0.75rem' }}>
+              {colorTheme === 'taiwan' ? '🔴 紅漲 🟢 綠跌' : '🟢 綠漲 🔴 跌'}
+            </span>
+          </button>
+
           {/* Exchange Rate Badge */}
           <div style={{
             display: 'flex',

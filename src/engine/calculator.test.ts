@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateHoldingsAndSummary } from './calculator';
+import { calculateHoldingsAndSummary, calculateTaiwanFee, calculateTaiwanTax } from './calculator';
 import { TradeRecord } from '../types/stock';
 
 describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
@@ -305,5 +305,91 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
     // 實現損益 = 597,345 - 500,712 = 96,633
     expect(mtk?.realizedPnL).toBe(96633);
     expect(summary.twd.realizedPnL).toBe(96633);
+  });
+
+  it('應精確計算持股成本殖利率 (Yield on Cost, YoC)', () => {
+    const trades: TradeRecord[] = [
+      {
+        id: '1',
+        date: '2025-01-01',
+        symbol: '00878',
+        name: '國泰永續高股息',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        shares: 10000,
+        price: 20,
+        fee: 285,
+        tax: 0,
+        createdAt: 1,
+      },
+      {
+        id: '2',
+        date: '2025-05-01',
+        symbol: '00878',
+        name: '國泰永續高股息',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'DIVIDEND',
+        shares: 10000,
+        price: 0.5, // 每股領 0.5 元 = 5000 元
+        fee: 0,
+        tax: 0,
+        createdAt: 2,
+      },
+      {
+        id: '3',
+        date: '2025-08-01',
+        symbol: '00878',
+        name: '國泰永續高股息',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'DIVIDEND',
+        shares: 10000,
+        price: 0.5, // 再領 0.5 元 = 5000 元，累計 10,000 元
+        fee: 0,
+        tax: 0,
+        createdAt: 3,
+      },
+    ];
+
+    const currentPrices = { '00878': 22 };
+    const { holdings } = calculateHoldingsAndSummary(trades, currentPrices, 32.0);
+
+    const etf = holdings.find((h) => h.symbol === '00878');
+    expect(etf).toBeDefined();
+    expect(etf?.totalDividends).toBe(10000);
+    // 總買入成本 = 200,285
+    // YoC = (10000 / 200285) * 100 = 4.99288%
+    expect(etf?.yieldOnCostPercent).toBeCloseTo(4.99, 1);
+  });
+
+  it('應正確試算台股券商電子下單折數與最低手續費 (calculateTaiwanFee)', () => {
+    // 買進 1000 股 @ 100 元 = 100,000 元
+    // 原始手續費 = 100000 * 0.001425 = 142.5
+    // 不打折 (1.0) = floor(142.5) = 142
+    expect(calculateTaiwanFee(100, 1000, 1.0, 20)).toBe(142);
+
+    // 6 折 = floor(142.5 * 0.6) = floor(85.5) = 85
+    expect(calculateTaiwanFee(100, 1000, 0.6, 20)).toBe(85);
+
+    // 2.8 折 = floor(142.5 * 0.28) = floor(39.9) = 39
+    expect(calculateTaiwanFee(100, 1000, 0.28, 20)).toBe(39);
+
+    // 零股買進 10 股 @ 100 元 = 1000 元
+    // 原始手續費 = 1.425 -> 2.8折 = 0.399
+    // 低於最低 20 元門檻時應回傳 20 元
+    expect(calculateTaiwanFee(100, 10, 0.28, 20)).toBe(20);
+
+    // 若設定無低消門檻 (minFee = 0)
+    expect(calculateTaiwanFee(100, 10, 0.28, 0)).toBe(1);
+  });
+
+  it('應正確試算台股股票 (0.3%) 與 ETF (0.1%) 證交稅 (calculateTaiwanTax)', () => {
+    // 股票賣出 1000 股 @ 100 元 = 100,000 元，稅率 0.3% = 300
+    expect(calculateTaiwanTax(100, 1000, false)).toBe(300);
+
+    // ETF 賣出 1000 股 @ 100 元 = 100,000 元，稅率 0.1% = 100
+    expect(calculateTaiwanTax(100, 1000, true)).toBe(100);
   });
 });

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { TradeRecord, MarketType, TradeType } from './types/stock';
+import { TradeRecord, MarketType, TradeType, ColorThemeMode } from './types/stock';
 import { calculateHoldingsAndSummary } from './engine/calculator';
 import {
   loadTradesFromStorage,
@@ -22,6 +22,19 @@ export const App: React.FC = () => {
   const [usdToTwdRate, setUsdToTwdRate] = useState<number>(() => loadExchangeRate());
   const [currentMarket, setCurrentMarket] = useState<'ALL' | MarketType>('ALL');
   const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({});
+  const [colorTheme, setColorTheme] = useState<ColorThemeMode>(() => {
+    return (localStorage.getItem('stock_tracker_color_theme') as ColorThemeMode) || 'taiwan';
+  });
+
+  // 監聽並將色彩主題套用到 DOM
+  useEffect(() => {
+    document.documentElement.setAttribute('data-color-theme', colorTheme);
+    localStorage.setItem('stock_tracker_color_theme', colorTheme);
+  }, [colorTheme]);
+
+  const handleToggleColorTheme = () => {
+    setColorTheme((prev) => (prev === 'taiwan' ? 'international' : 'taiwan'));
+  };
 
   // 彈窗狀態
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -132,6 +145,8 @@ export const App: React.FC = () => {
         onSelectMarket={setCurrentMarket}
         usdToTwdRate={usdToTwdRate}
         onUpdateRate={handleUpdateRate}
+        colorTheme={colorTheme}
+        onToggleColorTheme={handleToggleColorTheme}
         onOpenTradeModal={handleOpenNewTrade}
         onExportJSON={handleExportJSON}
         onExportCSV={handleExportCSV}
@@ -141,8 +156,12 @@ export const App: React.FC = () => {
       {/* 總資產與損益卡片 */}
       <SummaryCards summary={summary} currentMarket={currentMarket} />
 
-      {/* 資產配置視覺化長條圖 */}
-      <AllocationChart holdings={holdings} usdToTwdRate={usdToTwdRate} />
+      {/* 資產配置視覺化圖表 (樹狀圖 / 權重清單) */}
+      <AllocationChart
+        holdings={holdings}
+        usdToTwdRate={usdToTwdRate}
+        colorTheme={colorTheme}
+      />
 
       {/* 當前持倉庫存表 */}
       <HoldingsTable

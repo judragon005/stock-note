@@ -66,6 +66,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                 <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>持倉總成本</th>
                 <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>當前市值</th>
                 <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>未實現損益 / 報酬率</th>
+                <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>累計股息 / YoC</th>
                 <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'center' }}>操作</th>
               </tr>
             </thead>
@@ -74,6 +75,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                 const isGain = item.unrealizedPnL >= 0;
                 const isUS = item.currency === 'USD';
                 const decimals = isUS ? 2 : (item.avgCost < 50 ? 2 : 1);
+                const currencyPrefix = isUS ? '$' : 'NT$';
 
                 return (
                   <tr
@@ -189,6 +191,16 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                         marginTop: '2px'
                       }}>
                         {isGain ? '▲' : '▼'} {Math.abs(item.unrealizedPnLPercent).toFixed(2)}%
+                      </div>
+                    </td>
+
+                    {/* 累計股息與成本殖利率 YoC */}
+                    <td style={{ padding: '14px', textAlign: 'right' }}>
+                      <div className="mono" style={{ fontWeight: 600, color: item.totalDividends > 0 ? '#fbbf24' : 'var(--text-muted)', fontSize: '0.85rem' }}>
+                        {currencyPrefix} {Math.round(item.totalDividends).toLocaleString('en-US')}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: item.totalDividends > 0 ? '#fbbf24' : 'var(--text-muted)', marginTop: '2px' }}>
+                        YoC: {item.yieldOnCostPercent > 0 ? `${item.yieldOnCostPercent.toFixed(2)}%` : '-'}
                       </div>
                     </td>
 
