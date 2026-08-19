@@ -45,3 +45,41 @@ _Avoid_: Local Currency, Base Unit
 **Portfolio (投資組合 / 資產池)**:
 使用者所持有所有美股與台股持倉、歷史交易與現金流的匯總實體。
 _Avoid_: Account, Wallet
+
+### 股息與收益率 (Dividend & Yield)  *(新增於 V1.1)*
+
+**Dividend (股息 / 配息)**:
+公司或 ETF 依據持股記錄日所支付之現金配息，以 `TradeRecord.type = 'DIVIDEND'` 記帳，金額記於 `price * shares` 欄位，稅費記於 `tax`。
+_Avoid_: Coupon, Distribution
+
+**Total Dividends (累計股息)**:
+特定標的所有 DIVIDEND 紀錄的未稅配息總和。儲存於 `HoldingPosition.totalDividends`。
+_Avoid_: Income, Yield Amount
+
+**Yield on Cost, YoC (成本殖利率)**:
+以累計股息除以總投入成本基準計算之報酬率，公式為 `totalDividends / totalCostBasis`。
+反映持有期間從原始成本角度所獲得的真實股息回報效率。
+_Avoid_: Current Yield, Dividend Rate
+
+### 視覺化與主題 (Visualization & Theme)  *(新增於 V1.1)*
+
+**Treemap (資產樹狀圖)**:
+以矩形面積比例呈現各標的市值佔比、以色彩深度呈現未實現損益率的互動式資產分佈圖。
+實作採用 Squarified 演算法，面積精確對應折算後市值（含匯率），色彩映射範圍為 ±40%。
+_Avoid_: Heatmap, Block Chart
+
+**ColorThemeMode (漲跌色彩主題)**:
+控制漲跌顏色邏輯的枚舉型別，分為 `'taiwan'`（紅漲綠跌）與 `'international'`（綠漲紅跌）兩種模式。
+透過 `data-color-theme` HTML 屬性與 CSS 變數 (`--profit-color`, `--loss-color`) 實現全域主題切換，並持久化至 `localStorage`。
+_Avoid_: Theme, Color Mode
+
+### 費率計算 (Fee Calculation)  *(新增於 V1.1)*
+
+**Broker Fee Discount Rate (券商手續費折數)**:
+台股券商依電子下單協議提供之手續費優惠折扣比例，如 `0.28` 表示 2.8 折（原始費率 0.1425% 的 28%）。
+系統支援 2.8折 / 5折 / 6折 / 不打折 / 自訂五種選項。
+
+**Minimum Fee Threshold (最低手續費門檻)**:
+台股單筆交易手續費的最低收費下限，預設為 **20 元**（可由使用者停用）。
+由 `calculateTaiwanFee(price, shares, discountRate, minFee)` 統一處理。
+_Avoid_: Base Fee, Floor Fee
