@@ -197,4 +197,113 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
     // 未實現損益：100000 + 500 * 32.5 = 116,250
     expect(summary.combinedTWD.unrealizedPnL).toBe(116250);
   });
+
+  it('應正確處理美股高精度小數點持股 (Fractional Shares) 與微量規費', () => {
+    const trades: TradeRecord[] = [
+      {
+        id: '1',
+        date: '2026-01-01',
+        symbol: 'TSLA',
+        name: 'Tesla',
+        market: 'US',
+        currency: 'USD',
+        type: 'BUY',
+        shares: 0.1234,
+        price: 250,
+        fee: 0,
+        tax: 0,
+        createdAt: 1,
+      },
+      {
+        id: '2',
+        date: '2026-01-15',
+        symbol: 'TSLA',
+        name: 'Tesla',
+        market: 'US',
+        currency: 'USD',
+        type: 'BUY',
+        shares: 0.5,
+        price: 260,
+        fee: 0,
+        tax: 0,
+        createdAt: 2,
+      },
+      {
+        id: '3',
+        date: '2026-02-01',
+        symbol: 'TSLA',
+        name: 'Tesla',
+        market: 'US',
+        currency: 'USD',
+        type: 'SELL',
+        shares: 0.2,
+        price: 300,
+        fee: 0.05,
+        tax: 0,
+        createdAt: 3,
+      },
+    ];
+
+    const currentPrices = { TSLA: 320 };
+    const { holdings, summary } = calculateHoldingsAndSummary(trades, currentPrices, 32.0);
+
+    const tsla = holdings.find((h) => h.symbol === 'TSLA');
+    expect(tsla).toBeDefined();
+    // 剩餘股數 = 0.1234 + 0.5 - 0.2 = 0.4234
+    expect(tsla?.shares).toBeCloseTo(0.4234, 4);
+
+    // 總買入股數 = 0.6234，總成本 = 0.1234 * 250 + 0.5 * 260 = 30.85 + 130 = 160.85
+    // 加權平均單價 = 160.85 / 0.6234 = 258.0173
+    // 賣出 0.2 股成本 = 0.2 * 258.0173 = 51.60346
+    // 賣出收入 = 0.2 * 300 - 0.05 = 59.95
+    // 實現損益 = 59.95 - 51.60346 = 8.3465
+    expect(tsla?.realizedPnL).toBeCloseTo(8.35, 1);
+    expect(summary.usd.realizedPnL).toBeCloseTo(8.35, 1);
+  });
+
+  it('全數賣出 (平倉) 時持股數應為 0 且鎖定已實現損益', () => {
+    const trades: TradeRecord[] = [
+      {
+        id: '1',
+        date: '2026-01-01',
+        symbol: '2454',
+        name: '聯發科',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        shares: 500,
+        price: 1000,
+        fee: 712,
+        tax: 0,
+        createdAt: 1,
+      },
+      {
+        id: '2',
+        date: '2026-02-01',
+        symbol: '2454',
+        name: '聯發科',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'SELL',
+        shares: 500,
+        price: 1200,
+        fee: 855,
+        tax: 1800, // 證交稅 0.3%
+        createdAt: 2,
+      },
+    ];
+
+    const currentPrices = { '2454': 1300 };
+    const { holdings, summary } = calculateHoldingsAndSummary(trades, currentPrices, 32.0);
+
+    const mtk = holdings.find((h) => h.symbol === '2454');
+    expect(mtk?.shares).toBe(0);
+    expect(mtk?.marketValue).toBe(0);
+    expect(mtk?.unrealizedPnL).toBe(0);
+    // 買入總成本 = 500 * 1000 + 712 = 500,712
+    // 賣出淨收入 = 500 * 1200 - 855 - 1800 = 597,345
+    // 實現損益 = 597,345 - 500,712 = 96,633
+    expect(mtk?.realizedPnL).toBe(96633);
+    expect(summary.twd.realizedPnL).toBe(96633);
+  });
 });
