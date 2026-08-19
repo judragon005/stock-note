@@ -11,14 +11,21 @@
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
   
-  --gain-color: #10b981;
-  --gain-bg: rgba(16, 185, 129, 0.12);
-  --loss-color: #f43f5e;
-  --loss-bg: rgba(244, 63, 94, 0.12);
+  /* 預設台灣市場色彩習慣：紅漲綠跌 */
+  --profit-color: #ef4444;
+  --profit-bg: rgba(239, 68, 68, 0.12);
+  --loss-color: #10b981;
+  --loss-bg: rgba(16, 185, 129, 0.12);
+
+  --gain-color: var(--profit-color);
+  --gain-bg: var(--profit-bg);
   
   --accent-primary: #3b82f6;
   --accent-purple: #8b5cf6;
   --accent-amber: #f59e0b;
+
+  --primary-color: #10b981;
+  --font-mono: 'JetBrains Mono', monospace;
   
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -27,6 +34,26 @@
   
   --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
   --shadow-glow: 0 0 20px rgba(16, 185, 129, 0.15);
+}
+
+/* 台灣市場主題：紅漲綠跌 */
+[data-color-theme="taiwan"] {
+  --profit-color: #ef4444;
+  --profit-bg: rgba(239, 68, 68, 0.12);
+  --loss-color: #10b981;
+  --loss-bg: rgba(16, 185, 129, 0.12);
+  --gain-color: var(--profit-color);
+  --gain-bg: var(--profit-bg);
+}
+
+/* 國際/美股主題：綠漲紅跌 */
+[data-color-theme="international"] {
+  --profit-color: #10b981;
+  --profit-bg: rgba(16, 185, 129, 0.12);
+  --loss-color: #ef4444;
+  --loss-bg: rgba(239, 68, 68, 0.12);
+  --gain-color: var(--profit-color);
+  --gain-bg: var(--profit-bg);
 }
 
 * {

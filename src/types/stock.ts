@@ -33,7 +33,10 @@ export interface HoldingPosition {
   unrealizedPnLPercent: number; // 未實現報酬率 %
   realizedPnL: number; // 累計已實現損益（此標的歷史賣出累積）
   totalDividends: number; // 累計領取股息
+  yieldOnCostPercent: number; // 成本殖利率 % (totalDividends / totalCostBasis * 100)
 }
+
+export type ColorThemeMode = 'taiwan' | 'international'; // taiwan: 紅漲綠跌, international: 綠漲紅跌
 
 export interface PortfolioSummary {
   // 原始幣別獨立統計

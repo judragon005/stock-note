@@ -98,6 +98,7 @@ export function calculateHoldingsAndSummary(
     const marketValue = item.shares * currentPrice;
     const unrealizedPnL = marketValue - item.totalCostBasis;
     const unrealizedPnLPercent = item.totalCostBasis > 0 ? (unrealizedPnL / item.totalCostBasis) * 100 : 0;
+    const yieldOnCostPercent = item.totalCostBasis > 0 ? (item.totalDividends / item.totalCostBasis) * 100 : 0;
 
     holdings.push({
       symbol: item.symbol,
@@ -113,6 +114,7 @@ export function calculateHoldingsAndSummary(
       unrealizedPnLPercent,
       realizedPnL: item.realizedPnL,
       totalDividends: item.totalDividends,
+      yieldOnCostPercent,
     });
   }
 
@@ -183,4 +185,44 @@ export function calculateHoldingsAndSummary(
   }
 
   return { holdings, summary };
+}
+
+/**
+ * 試算台股手續費（支援券商電子下單折數與最低收費門檻）
+ * @param price 每股成交價
+ * @param shares 成交股數
+ * @param discountRate 券商折數 (如 1.0 = 不打折, 0.6 = 6折, 0.28 = 2.8折)
+ * @param minFee 最低手續費 (預設 20 元，若設為 0 則不設低消)
+ */
+export function calculateTaiwanFee(
+  price: number,
+  shares: number,
+  discountRate: number = 1.0,
+  minFee: number = 20
+): number {
+  if (price <= 0 || shares <= 0) return 0;
+  const rawAmount = price * shares;
+  const baseFee = rawAmount * 0.001425;
+  const discountedFee = Math.floor(baseFee * discountRate);
+  if (minFee > 0 && discountedFee < minFee) {
+    return minFee;
+  }
+  return Math.max(1, discountedFee);
+}
+
+/**
+ * 試算台股證交稅 (股票 0.3%，ETF 0.1%)
+ * @param price 每股成交價
+ * @param shares 成交股數
+ * @param isETF 是否為 ETF
+ */
+export function calculateTaiwanTax(
+  price: number,
+  shares: number,
+  isETF: boolean = false
+): number {
+  if (price <= 0 || shares <= 0) return 0;
+  const rawAmount = price * shares;
+  const rate = isETF ? 0.001 : 0.003;
+  return Math.floor(rawAmount * rate);
 }
