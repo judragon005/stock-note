@@ -1,14 +1,16 @@
-import { TradeRecord } from '../types/stock';
+import { TradeRecord, MarketType, TradeType, Currency } from '../types/stock';
 
 const STORAGE_KEY = 'STOCK_TRACKER_TRADES_V1';
 const RATE_STORAGE_KEY = 'STOCK_TRACKER_USD_TWD_RATE';
+const PRICES_STORAGE_KEY = 'STOCK_TRACKER_CUSTOM_PRICES_V1';
 
 export function loadTradesFromStorage(): TradeRecord[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return getDefaultSampleTrades();
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed;
+    const validated = validateTradesSchema(parsed);
+    if (validated) return validated;
     return getDefaultSampleTrades();
   } catch (err) {
     console.error('Failed to load trades from localStorage:', err);
@@ -43,6 +45,227 @@ export function saveExchangeRate(rate: number): void {
   } catch (err) {
     console.error('Failed to save exchange rate:', err);
   }
+}
+
+export function loadCustomPricesFromStorage(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(PRICES_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const validPrices: Record<string, number> = {};
+      for (const [key, val] of Object.entries(parsed)) {
+        if (typeof val === 'number' && !isNaN(val) && val >= 0) {
+          validPrices[key] = val;
+        }
+      }
+      return validPrices;
+    }
+    return {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveCustomPricesToStorage(prices: Record<string, number>): void {
+  try {
+    localStorage.setItem(PRICES_STORAGE_KEY, JSON.stringify(prices));
+  } catch (err) {
+    console.error('Failed to save custom prices:', err);
+  }
+}
+
+export function validateTradesSchema(data: unknown): TradeRecord[] | null {
+  if (!Array.isArray(data) || data.length === 0) {
+    return null;
+  }
+
+  const validTrades: TradeRecord[] = [];
+  for (const item of data) {
+    if (!item || typeof item !== 'object') return null;
+
+    const t = item as Partial<TradeRecord>;
+    if (
+      typeof t.date !== 'string' || !t.date ||
+      typeof t.symbol !== 'string' || !t.symbol ||
+      (t.market !== 'TW' && t.market !== 'US') ||
+      (t.type !== 'BUY' && t.type !== 'SELL' && t.type !== 'DIVIDEND') ||
+      typeof t.shares !== 'number' || isNaN(t.shares) || t.shares <= 0 ||
+      typeof t.price !== 'number' || isNaN(t.price) || t.price < 0
+    ) {
+      return null;
+    }
+
+    validTrades.push({
+      id: t.id || `trade-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      date: t.date,
+      symbol: t.symbol.toUpperCase(),
+      name: t.name || t.symbol,
+      market: t.market as MarketType,
+      currency: (t.currency || (t.market === 'TW' ? 'TWD' : 'USD')) as Currency,
+      type: t.type as TradeType,
+      shares: t.shares,
+      price: t.price,
+      fee: typeof t.fee === 'number' ? t.fee : 0,
+      tax: typeof t.tax === 'number' ? t.tax : 0,
+      tags: Array.isArray(t.tags) ? t.tags : [],
+      note: t.note || '',
+      createdAt: typeof t.createdAt === 'number' ? t.createdAt : Date.now(),
+    });
+  }
+
+  return validTrades;
+}
+
+export function mergeTrades(existing: TradeRecord[], incoming: TradeRecord[]): TradeRecord[] {
+  const existingIds = new Set(existing.map((t) => t.id));
+  const newTrades: TradeRecord[] = [];
+
+  for (const item of incoming) {
+    let tradeToAdd = item;
+    if (!tradeToAdd.id) {
+      tradeToAdd = {
+        ...tradeToAdd,
+        id: `trade-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+        createdAt: tradeToAdd.createdAt || Date.now(),
+      };
+    }
+    if (!existingIds.has(tradeToAdd.id)) {
+      newTrades.push(tradeToAdd);
+      existingIds.add(tradeToAdd.id);
+    }
+  }
+
+  return [...newTrades, ...existing];
+}
+
+// 輔助函式：解析包含引號與逗號之單行 CSV
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+export interface ParseCSVResult {
+  trades: TradeRecord[];
+  successCount: number;
+  skippedCount: number;
+}
+
+export function parseCSVToTrades(csvText: string): ParseCSVResult {
+  // 移除 BOM
+  let cleaned = csvText;
+  if (cleaned.charCodeAt(0) === 0xFEFF) {
+    cleaned = cleaned.slice(1);
+  }
+
+  const lines = cleaned.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  if (lines.length === 0) {
+    return { trades: [], successCount: 0, skippedCount: 0 };
+  }
+
+  // 表頭映射
+  const headerLine = lines[0];
+  const headerCols = parseCSVLine(headerLine).map((h) => h.toLowerCase().replace(/["']/g, '').trim());
+
+  const getColIndex = (names: string[]): number => {
+    return headerCols.findIndex((col) => names.some((n) => col.includes(n.toLowerCase())));
+  };
+
+  const idxDate = getColIndex(['日期', 'date']);
+  const idxMarket = getColIndex(['市場', 'market']);
+  const idxSymbol = getColIndex(['代碼', 'symbol', 'code']);
+  const idxName = getColIndex(['名稱', 'name']);
+  const idxType = getColIndex(['類別', 'type', 'action']);
+  const idxShares = getColIndex(['股數', 'shares', 'qty', 'quantity']);
+  const idxPrice = getColIndex(['單價', 'price']);
+  const idxCurrency = getColIndex(['幣別', 'currency']);
+  const idxFee = getColIndex(['手續費', 'fee']);
+  const idxTax = getColIndex(['稅費', 'tax']);
+  const idxTags = getColIndex(['標籤', 'tags', 'tag']);
+  const idxNote = getColIndex(['備註', 'note', 'memo']);
+
+  const trades: TradeRecord[] = [];
+  let skippedCount = 0;
+
+  for (let i = 1; i < lines.length; i++) {
+    const row = parseCSVLine(lines[i]);
+    const getVal = (idx: number): string => (idx >= 0 && idx < row.length ? row[idx] : '');
+
+    const rawDate = getVal(idxDate);
+    const rawMarket = getVal(idxMarket).toUpperCase();
+    const rawSymbol = getVal(idxSymbol).toUpperCase();
+    const rawName = getVal(idxName);
+    const rawType = getVal(idxType).toUpperCase();
+    const rawShares = parseFloat(getVal(idxShares));
+    const rawPrice = parseFloat(getVal(idxPrice));
+    const rawCurrency = getVal(idxCurrency).toUpperCase();
+    const rawFee = parseFloat(getVal(idxFee)) || 0;
+    const rawTax = parseFloat(getVal(idxTax)) || 0;
+    const rawTags = getVal(idxTags);
+    const rawNote = getVal(idxNote);
+
+    // 格式防呆檢查
+    const market: MarketType = rawMarket === 'US' ? 'US' : rawMarket === 'TW' ? 'TW' : rawSymbol.length >= 4 && /^\d+$/.test(rawSymbol) ? 'TW' : 'US';
+    const type: TradeType = rawType.includes('DIV') || rawType.includes('息') ? 'DIVIDEND' : rawType.includes('SELL') || rawType.includes('賣') ? 'SELL' : 'BUY';
+    const currency: Currency = rawCurrency === 'USD' ? 'USD' : rawCurrency === 'TWD' ? 'TWD' : market === 'TW' ? 'TWD' : 'USD';
+
+    if (
+      !rawDate ||
+      !rawSymbol ||
+      isNaN(rawShares) || rawShares <= 0 ||
+      isNaN(rawPrice) || rawPrice < 0
+    ) {
+      skippedCount++;
+      continue;
+    }
+
+    const tags = rawTags
+      ? rawTags.split(/[;,]/).map((t) => t.trim()).filter((t) => t.length > 0)
+      : [];
+
+    trades.push({
+      id: `trade-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      date: rawDate,
+      symbol: rawSymbol,
+      name: rawName || rawSymbol,
+      market,
+      currency,
+      type,
+      shares: rawShares,
+      price: rawPrice,
+      fee: isNaN(rawFee) ? 0 : rawFee,
+      tax: isNaN(rawTax) ? 0 : rawTax,
+      tags,
+      note: rawNote,
+      createdAt: Date.now() - (lines.length - i) * 1000,
+    });
+  }
+
+  return {
+    trades,
+    successCount: trades.length,
+    skippedCount,
+  };
 }
 
 export function exportTradesToJSON(trades: TradeRecord[]): void {

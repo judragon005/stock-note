@@ -6,6 +6,11 @@ import {
   saveTradesToStorage,
   loadExchangeRate,
   saveExchangeRate,
+  loadCustomPricesFromStorage,
+  saveCustomPricesToStorage,
+  validateTradesSchema,
+  parseCSVToTrades,
+  mergeTrades,
   exportTradesToJSON,
   exportTradesToCSV,
 } from './utils/storage';
@@ -16,12 +21,13 @@ import { AllocationChart } from './components/AllocationChart';
 import { HoldingsTable } from './components/HoldingsTable';
 import { TradeHistoryTable } from './components/TradeHistoryTable';
 import { TradeModal } from './components/TradeModal';
+import { ImportModal } from './components/ImportModal';
 
 export const App: React.FC = () => {
   const [trades, setTrades] = useState<TradeRecord[]>(() => loadTradesFromStorage());
   const [usdToTwdRate, setUsdToTwdRate] = useState<number>(() => loadExchangeRate());
   const [currentMarket, setCurrentMarket] = useState<'ALL' | MarketType>('ALL');
-  const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({});
+  const [currentPrices, setCurrentPrices] = useState<Record<string, number>>(() => loadCustomPricesFromStorage());
   const [colorTheme, setColorTheme] = useState<ColorThemeMode>(() => {
     return (localStorage.getItem('stock_tracker_color_theme') as ColorThemeMode) || 'taiwan';
   });
@@ -41,10 +47,28 @@ export const App: React.FC = () => {
   const [modalInitialSymbol, setModalInitialSymbol] = useState('');
   const [modalInitialType, setModalInitialType] = useState<TradeType>('BUY');
 
+  // 匯入確認彈窗狀態
+  const [importModal, setImportModal] = useState<{
+    isOpen: boolean;
+    fileName: string;
+    incomingTrades: TradeRecord[];
+    skippedCount: number;
+  }>({
+    isOpen: false,
+    fileName: '',
+    incomingTrades: [],
+    skippedCount: 0,
+  });
+
   // 持久化交易紀錄
   useEffect(() => {
     saveTradesToStorage(trades);
   }, [trades]);
+
+  // 持久化自訂市價快照
+  useEffect(() => {
+    saveCustomPricesToStorage(currentPrices);
+  }, [currentPrices]);
 
   // 持久化匯率
   const handleUpdateRate = (rate: number) => {
@@ -116,25 +140,78 @@ export const App: React.FC = () => {
     exportTradesToCSV(trades);
   };
 
-  // JSON 匯入還原
-  const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 統一檔案匯入 (支援 JSON / CSV)
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const fileName = file.name;
+    const isCSV = fileName.toLowerCase().endsWith('.csv');
+    const isJSON = fileName.toLowerCase().endsWith('.json');
+
+    if (!isCSV && !isJSON) {
+      alert('❌ 請選擇 .json 或 .csv 格式的備份檔案！');
+      return;
+    }
+
     const fileReader = new FileReader();
-    if (e.target.files && e.target.files[0]) {
-      fileReader.readAsText(e.target.files[0], 'UTF-8');
-      fileReader.onload = (event) => {
+    fileReader.readAsText(file, 'UTF-8');
+    fileReader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (!content) {
+        alert('❌ 檔案內容為空，無法讀取。');
+        return;
+      }
+
+      if (isJSON) {
         try {
-          const parsed = JSON.parse(event.target?.result as string);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setTrades(parsed);
-            alert(`✅ 成功匯入 ${parsed.length} 筆交易紀錄！`);
+          const parsed = JSON.parse(content);
+          const validated = validateTradesSchema(parsed);
+          if (validated && validated.length > 0) {
+            setImportModal({
+              isOpen: true,
+              fileName,
+              incomingTrades: validated,
+              skippedCount: 0,
+            });
           } else {
-            alert('❌ 檔案格式不符合，請確認是否為有效之 JSON 備份檔。');
+            alert('❌ JSON 備份檔格式不符或缺少必要交易欄位！');
           }
         } catch {
-          alert('❌ 檔案解析失敗，請確認檔案格式是否正確。');
+          alert('❌ JSON 解析失敗，請確認檔案語法是否正確。');
         }
-      };
-    }
+      } else if (isCSV) {
+        try {
+          const result = parseCSVToTrades(content);
+          if (result.trades.length > 0) {
+            setImportModal({
+              isOpen: true,
+              fileName,
+              incomingTrades: result.trades,
+              skippedCount: result.skippedCount,
+            });
+          } else {
+            alert('❌ CSV 檔案中未解析出任何有效之交易紀錄！');
+          }
+        } catch {
+          alert('❌ CSV 解析失敗，請確認檔案格式是否正確。');
+        }
+      }
+    };
+  };
+
+  // 執行全量覆蓋
+  const handleConfirmOverwrite = (incoming: TradeRecord[]) => {
+    setTrades(incoming);
+    setImportModal((prev) => ({ ...prev, isOpen: false }));
+    alert(`✅ 已成功全量還原 ${incoming.length} 筆交易紀錄！`);
+  };
+
+  // 執行追加合併
+  const handleConfirmMerge = (incoming: TradeRecord[]) => {
+    setTrades((prev) => mergeTrades(prev, incoming));
+    setImportModal((prev) => ({ ...prev, isOpen: false }));
+    alert(`✅ 已成功合併 ${incoming.length} 筆交易紀錄！`);
   };
 
   return (
@@ -150,7 +227,7 @@ export const App: React.FC = () => {
         onOpenTradeModal={handleOpenNewTrade}
         onExportJSON={handleExportJSON}
         onExportCSV={handleExportCSV}
-        onImportJSON={handleImportJSON}
+        onImportFile={handleImportFile}
       />
 
       {/* 總資產與損益卡片 */}
@@ -180,6 +257,18 @@ export const App: React.FC = () => {
         onSaveTrade={handleSaveTrade}
         initialSymbol={modalInitialSymbol}
         initialType={modalInitialType}
+      />
+
+      {/* 匯入還原確認彈窗 */}
+      <ImportModal
+        isOpen={importModal.isOpen}
+        onClose={() => setImportModal((prev) => ({ ...prev, isOpen: false }))}
+        fileName={importModal.fileName}
+        incomingTrades={importModal.incomingTrades}
+        skippedCount={importModal.skippedCount}
+        existingCount={trades.length}
+        onConfirmOverwrite={handleConfirmOverwrite}
+        onConfirmMerge={handleConfirmMerge}
       />
     </div>
   );

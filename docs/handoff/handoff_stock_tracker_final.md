@@ -1,7 +1,7 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案交接手冊 (Handoff Document)
 
-> **交接產生時間**：2026-08-20 10:55 (UTC+8)  
-> **交接里程碑**：V1.1 全量功能收斂、雙軸 Code Review 修復、分支保護手冊、AGENTS.md 協作規範強化、交接手冊全量同步。
+> **交接產生時間**：2026-08-20 15:15 (UTC+8)  
+> **交接里程碑**：Issue #6 本地儲存持久化、JSON/CSV 雙向匯入匯出、自訂市價快照持久化、ImportModal 衝突選擇完成，全量測試 22/22 通過。
 
 ---
 
@@ -9,9 +9,9 @@
 
 - **專案路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon003/-.git`
-- **當前主分支**：`main`（與 `origin/main` 保持 100% 同步）
+- **當前分支**：`feature/6-persistence-and-backup`
 - **CI/CD 自動化**：[`.github/workflows/ci.yml`](file:///d:/APP/股票紀錄/.github/workflows/ci.yml)
-- **測試狀態**：**13/13 通過** (100% Passed)，TypeScript 0 錯誤，Production Bundle 打包完成 (209.55 kB / gzip: 62.77 kB)。
+- **測試狀態**：**22/22 通過** (100% Passed)，TypeScript 0 錯誤，Production Bundle 打包完成 (219.16 kB / gzip: 65.56 kB)。
 - **目前正式版本**：**V1.1**
 
 ---
@@ -41,9 +41,11 @@
 | **單元測試套件** | [`src/engine/calculator.test.ts`](file:///d:/APP/股票紀錄/src/engine/calculator.test.ts) | 9 大測試案例，涵蓋買進、賣出、股息、YoC 精度、台股折數手續費與證交稅 (100% 通過)。 |
 | **Treemap 演算法** | [`src/utils/treemap.ts`](file:///d:/APP/股票紀錄/src/utils/treemap.ts) | Squarified Treemap 遞迴排版演算法，純數學幾何計算，零外部依賴。 |
 | **Treemap 測試** | [`src/utils/treemap.test.ts`](file:///d:/APP/股票紀錄/src/utils/treemap.test.ts) | 4 大測試案例，驗證單一持倉、多持倉幾何鋪滿、長寬比優化與空資料防禦。 |
-| **資料儲存與備份** | [`src/utils/storage.ts`](file:///d:/APP/股票紀錄/src/utils/storage.ts) | LocalStorage 容錯存取、JSON 備份還原、相容 Excel 之 UTF-8 BOM CSV 匯出。 |
+| **資料儲存與備份** | [`src/utils/storage.ts`](file:///d:/APP/股票紀錄/src/utils/storage.ts) | LocalStorage 容錯存取、JSON/CSV 雙向解析還原、自訂市價快照持久化、相容 Excel 之 UTF-8 BOM CSV 匯出。 |
+| **持久化測試** | [`src/utils/storage.test.ts`](file:///d:/APP/股票紀錄/src/utils/storage.test.ts) | 9 大測試案例，涵蓋 CSV UTF-8 BOM 解析、雙引號脫逸、追加合併去重、市價持久化與損毀防禦。 |
 | **型別定義** | [`src/types/stock.ts`](file:///d:/APP/股票紀錄/src/types/stock.ts) | `TradeRecord`, `HoldingPosition` (含 `totalDividends`, `yieldOnCostPercent`), `ColorThemeMode`。 |
-| **頂部工具列** | [`src/components/Header.tsx`](file:///d:/APP/股票紀錄/src/components/Header.tsx) | 市場切換 (全部/台股/美股)、匯率調整、紅漲綠跌/綠漲紅跌切換按鈕、資料匯出入。 |
+| **頂部工具列** | [`src/components/Header.tsx`](file:///d:/APP/股票紀錄/src/components/Header.tsx) | 市場切換 (全部/台股/美股)、匯率調整、紅漲綠跌/綠漲紅跌切換按鈕、JSON/CSV 匯出入。 |
+| **匯入確認彈窗** | [`src/components/ImportModal.tsx`](file:///d:/APP/股票紀錄/src/components/ImportModal.tsx) | 檔案解析摘要統計、全量覆蓋 (Overwrite) 與追加合併 (Merge & Append) 模式選擇。 |
 | **關鍵財務卡片** | [`src/components/SummaryCards.tsx`](file:///d:/APP/股票紀錄/src/components/SummaryCards.tsx) | 總市值、未實現損益、已實現損益、累計股息收益。 |
 | **資產配置圖表** | [`src/components/AllocationChart.tsx`](file:///d:/APP/股票紀錄/src/components/AllocationChart.tsx) | 視圖切換器（Treemap / 權重長條圖）與雙市場配置比例。 |
 | **Treemap 元件** | [`src/components/TreemapChart.tsx`](file:///d:/APP/股票紀錄/src/components/TreemapChart.tsx) | 原生 SVG 樹狀圖，支援主題感知、自適應文字大小與懸浮 Tooltip。 |
@@ -62,7 +64,7 @@
 | [#3](https://github.com/judragon003/-/issues/3) | feat: 雙市場交易錄入彈窗與自動稅費試算 | ✅ Closed | 交易彈窗 |
 | [#4](https://github.com/judragon003/-/issues/4) | feat: 財務指標儀表板、資產配置圖與多幣別切換 | ✅ Closed | 儀表板與圖表 |
 | [#5](https://github.com/judragon003/-/issues/5) | feat: 持倉總覽表與交易明細搜尋過濾 | ✅ Closed | 表格與過濾 |
-| **[#6](https://github.com/judragon003/-/issues/6)** | **feat: 本地儲存持久化與 JSON/CSV 雙向備份還原** | 🟢 **Open** | **下一個即將執行** |
+| **[#6](https://github.com/judragon003/-/issues/6)** | **feat: 本地儲存持久化與 JSON/CSV 雙向備份還原** | 🔄 **In PR** | **已實作並通過 22/22 測試** |
 | [#7](https://github.com/judragon003/-/pull/7) | PR: feat(v1.1) 資產樹狀圖、手續費折數、色彩主題與 YoC | 🟣 Merged | V1.1 主功能 PR |
 | [#8](https://github.com/judragon003/-/issues/8) | feat(v1.1): 資產樹狀圖視覺化 (Squarified Treemap) | ✅ Closed | V1.1 關聯 Issue |
 | [#9](https://github.com/judragon003/-/issues/9) | feat(v1.1): 智慧交易錄入 - Autosuggest 與連續記帳模式 | ✅ Closed | V1.1 關聯 Issue |

@@ -12,7 +12,7 @@ interface HeaderProps {
   onOpenTradeModal: () => void;
   onExportJSON: () => void;
   onExportCSV: () => void;
-  onImportJSON: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onImportFile: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -25,7 +25,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenTradeModal,
   onExportJSON,
   onExportCSV,
-  onImportJSON,
+  onImportFile,
 }) => {
   const [isEditingRate, setIsEditingRate] = useState(false);
   const [rateInput, setRateInput] = useState(usdToTwdRate.toString());
@@ -164,10 +164,10 @@ export const Header: React.FC<HeaderProps> = ({
             <Download size={14} /> CSV
           </button>
 
-          {/* Import file */}
-          <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }} title="從 JSON 還原備份">
+          {/* Import file (JSON & CSV) */}
+          <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }} title="從 JSON 或 CSV 還原/匯入備份">
             <Upload size={14} /> 匯入
-            <input type="file" accept=".json" onChange={onImportJSON} style={{ display: 'none' }} />
+            <input type="file" accept=".json,.csv" onChange={onImportFile} style={{ display: 'none' }} value="" />
           </label>
 
           {/* New Trade Record Button */}
