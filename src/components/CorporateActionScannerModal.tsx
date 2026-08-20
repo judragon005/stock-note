@@ -200,16 +200,45 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
             gap: '8px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.825rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.825rem', flexWrap: 'wrap' }}>
             {loading ? (
               <span style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <RefreshCw size={14} className="animate-spin" /> 正向官方與金融資料庫掃描比對中...
               </span>
             ) : (
-              <span>
-                掃描完成：共發現 <strong style={{ color: '#fff' }}>{actions.length}</strong> 個事件，
-                其中 <strong style={{ color: '#f59e0b' }}>{unrecordedCount}</strong> 筆待補登。
-              </span>
+              <>
+                <span>
+                  掃描完成：共發現 <strong style={{ color: '#fff' }}>{actions.length}</strong> 個事件，
+                  其中 <strong style={{ color: '#f59e0b' }}>{unrecordedCount}</strong> 筆待補登。
+                </span>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '2px 8px',
+                    borderRadius: '6px',
+                    fontSize: '0.7rem',
+                    fontWeight: 600,
+                    background: actions.some((a) => a.sourceType === 'LIVE_API')
+                      ? 'rgba(16, 185, 129, 0.15)'
+                      : 'rgba(245, 158, 11, 0.15)',
+                    color: actions.some((a) => a.sourceType === 'LIVE_API') ? '#34d399' : '#fbbf24',
+                    border: `1px solid ${
+                      actions.some((a) => a.sourceType === 'LIVE_API')
+                        ? 'rgba(16, 185, 129, 0.3)'
+                        : 'rgba(245, 158, 11, 0.3)'
+                    }`,
+                  }}
+                  title={
+                    actions.some((a) => a.sourceType === 'LIVE_API')
+                      ? '已透過 Yahoo Finance API 即時取得最新除權息資訊'
+                      : '外部 API 暫不可用或逾時，已自動啟用內建歷史備援資料庫'
+                  }
+                >
+                  {actions.some((a) => a.sourceType === 'LIVE_API') ? '🟢 即時金融 API' : '🟡 離線備援庫'}
+                </span>
+              </>
             )}
           </div>
 

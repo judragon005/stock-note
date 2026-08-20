@@ -35,6 +35,7 @@ export interface HoldingPosition {
   market: MarketType;
   currency: Currency;
   shares: number; // 當前持有股數
+  originalBuyShares?: number; // 原始買進與增資累計股數（未含配股/減資調整）
   avgCost: number; // 平均買進每股成本
   totalCostBasis: number; // 總投入成本（含買進手續費與認購金額，減去減資退還）
   adjustedCostBasis: number; // 經資本返還調整後之實際在倉本金基準
@@ -51,37 +52,20 @@ export interface HoldingPosition {
 
 export type ColorThemeMode = 'taiwan' | 'international'; // taiwan: 紅漲綠跌, international: 綠漲紅跌
 
+export interface MarketSummarySlice {
+  totalCost: number;
+  marketValue: number;
+  unrealizedPnL: number;
+  unrealizedPnLPercent: number;
+  realizedPnL: number;
+  totalDividends: number;
+  totalCapitalReturned: number;
+}
+
 export interface PortfolioSummary {
-  // 原始幣別獨立統計
-  twd: {
-    totalCost: number;
-    marketValue: number;
-    unrealizedPnL: number;
-    unrealizedPnLPercent: number;
-    realizedPnL: number;
-    totalDividends: number;
-    totalCapitalReturned: number;
-  };
-  usd: {
-    totalCost: number;
-    marketValue: number;
-    unrealizedPnL: number;
-    unrealizedPnLPercent: number;
-    realizedPnL: number;
-    totalDividends: number;
-    totalCapitalReturned: number;
-  };
-  // 基準幣折算匯總（預設以 TWD 呈現）
-  combinedTWD: {
-    totalCost: number;
-    marketValue: number;
-    unrealizedPnL: number;
-    unrealizedPnLPercent: number;
-    realizedPnL: number;
-    totalDividends: number;
-    totalCapitalReturned: number;
-    netAssetValue: number;
-  };
+  twd: MarketSummarySlice;
+  usd: MarketSummarySlice;
+  combinedTWD: MarketSummarySlice & { netAssetValue: number };
   usdToTwdRate: number;
 }
 

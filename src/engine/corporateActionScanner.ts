@@ -11,6 +11,7 @@ export interface RawCorporateEvent {
   shares?: number; // 變更股數
   cashAmount?: number; // 總退款或入帳金額
   description?: string;
+  sourceType?: 'LIVE_API' | 'FALLBACK_DB';
 }
 
 export interface ScannedCorporateAction {
@@ -29,6 +30,7 @@ export interface ScannedCorporateAction {
   estimatedCashAmount: number;
   description: string;
   isAlreadyRecorded: boolean;
+  sourceType: 'LIVE_API' | 'FALLBACK_DB';
 }
 
 /**
@@ -117,6 +119,7 @@ export async function fetchLiveCorporateEvents(symbol: string, market: MarketTyp
             date: d,
             price: Number(div.amount) || 0,
             description: `現金股利每股 ${div.amount} ${market === 'TW' ? 'TWD' : 'USD'}`,
+            sourceType: 'LIVE_API',
           });
         }
       }
@@ -132,6 +135,7 @@ export async function fetchLiveCorporateEvents(symbol: string, market: MarketTyp
             date: d,
             ratio,
             description: `股票分割 ${spl.splitRatio || `${spl.numerator}:${spl.denominator}`}`,
+            sourceType: 'LIVE_API',
           });
         }
       }
@@ -144,7 +148,10 @@ export async function fetchLiveCorporateEvents(symbol: string, market: MarketTyp
   const fallbackEvents = BUILT_IN_EVENT_REGISTRY.filter((e) => e.symbol.toUpperCase() === symbol.toUpperCase());
   for (const fb of fallbackEvents) {
     if (!events.some((ev) => ev.date === fb.date && ev.type === fb.type)) {
-      events.push(fb);
+      events.push({
+        ...fb,
+        sourceType: 'FALLBACK_DB',
+      });
     }
   }
 
@@ -234,6 +241,7 @@ export async function scanCorporateActions(
         estimatedCashAmount: estimatedCash,
         description: ev.description || `${symbol} ${ev.type}`,
         isAlreadyRecorded,
+        sourceType: ev.sourceType || 'FALLBACK_DB',
       });
     }
   }

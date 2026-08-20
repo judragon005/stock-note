@@ -1,8 +1,49 @@
-import { TradeRecord, HoldingPosition, PortfolioSummary, MarketType, Currency } from '../types/stock';
+import { TradeRecord, HoldingPosition, PortfolioSummary, MarketType, Currency, TradeType } from '../types/stock';
 
 export interface CalculationResult {
   holdings: HoldingPosition[];
   summary: PortfolioSummary;
+}
+
+/**
+ * 純函式：計算單筆交易或公司行動對現有股數的異動結果
+ * @param currentShares 現有持有股數
+ * @param trade 包含交易類別、股數與比例之紀錄
+ */
+export function applyTradeToShares(
+  currentShares: number,
+  trade: { type: TradeType; shares?: number; ratio?: number }
+): number {
+  const shares = Number(trade.shares) || 0;
+  const ratio = Number(trade.ratio) || 0;
+
+  switch (trade.type) {
+    case 'BUY':
+    case 'CAPITAL_INCREASE':
+      return currentShares + shares;
+
+    case 'SELL':
+      return Math.max(0, currentShares - Math.min(shares, currentShares));
+
+    case 'STOCK_DIVIDEND': {
+      const added = shares > 0 ? shares : (ratio > 0 ? currentShares * ratio : 0);
+      return currentShares + added;
+    }
+
+    case 'STOCK_SPLIT': {
+      const multiplier = ratio > 0 ? ratio : (shares > 0 && currentShares > 0 ? (currentShares + shares) / currentShares : 1);
+      return multiplier > 0 ? currentShares * multiplier : currentShares;
+    }
+
+    case 'CAPITAL_REDUCTION': {
+      const reduced = shares > 0 ? Math.min(shares, currentShares) : (ratio > 0 ? currentShares * ratio : 0);
+      return Math.max(0, currentShares - reduced);
+    }
+
+    case 'DIVIDEND':
+    default:
+      return currentShares;
+  }
 }
 
 /**
@@ -26,45 +67,9 @@ export function getHoldingsAsOfDate(
     });
 
   let currentShares = 0;
-
   for (const trade of symbolTrades) {
-    const shares = Number(trade.shares) || 0;
-    const ratio = Number(trade.ratio) || 0;
-
-    switch (trade.type) {
-      case 'BUY':
-      case 'CAPITAL_INCREASE':
-        currentShares += shares;
-        break;
-
-      case 'SELL':
-        currentShares = Math.max(0, currentShares - Math.min(shares, currentShares));
-        break;
-
-      case 'STOCK_DIVIDEND': {
-        const added = shares > 0 ? shares : (ratio > 0 ? currentShares * ratio : 0);
-        currentShares += added;
-        break;
-      }
-
-      case 'STOCK_SPLIT': {
-        const multiplier = ratio > 0 ? ratio : (shares > 0 && currentShares > 0 ? (currentShares + shares) / currentShares : 1);
-        currentShares *= multiplier;
-        break;
-      }
-
-      case 'CAPITAL_REDUCTION': {
-        const reduced = shares > 0 ? Math.min(shares, currentShares) : (ratio > 0 ? currentShares * ratio : 0);
-        currentShares = Math.max(0, currentShares - reduced);
-        break;
-      }
-
-      case 'DIVIDEND':
-      default:
-        break;
-    }
+    currentShares = applyTradeToShares(currentShares, trade);
   }
-
   return currentShares;
 }
 
@@ -87,6 +92,7 @@ export function calculateHoldingsAndSummary(
     market: MarketType;
     currency: Currency;
     shares: number;
+    originalBuyShares: number;
     totalCostBasis: number;
     realizedPnL: number;
     totalDividends: number;
@@ -104,6 +110,7 @@ export function calculateHoldingsAndSummary(
         market: trade.market || (trade.currency === 'USD' ? 'US' : 'TW'),
         currency: trade.currency || (trade.market === 'US' ? 'USD' : 'TWD'),
         shares: 0,
+        originalBuyShares: 0,
         totalCostBasis: 0,
         realizedPnL: 0,
         totalDividends: 0,
@@ -130,6 +137,7 @@ export function calculateHoldingsAndSummary(
         const netCost = grossAmount + fee + tax;
         item.totalCostBasis += netCost;
         item.shares += shares;
+        item.originalBuyShares += shares;
         break;
       }
 
@@ -201,6 +209,7 @@ export function calculateHoldingsAndSummary(
         const netCost = grossAmount + fee + tax;
         item.totalCostBasis += netCost;
         item.shares += shares;
+        item.originalBuyShares += shares;
         break;
       }
 
@@ -225,6 +234,7 @@ export function calculateHoldingsAndSummary(
       market: item.market,
       currency: item.currency,
       shares: item.shares,
+      originalBuyShares: item.originalBuyShares,
       avgCost,
       totalCostBasis: item.totalCostBasis,
       adjustedCostBasis: item.totalCostBasis,

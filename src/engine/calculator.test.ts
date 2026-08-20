@@ -1,6 +1,30 @@
 import { describe, it, expect } from 'vitest';
-import { calculateHoldingsAndSummary, calculateTaiwanFee, calculateTaiwanTax, getHoldingsAsOfDate } from './calculator';
+import { calculateHoldingsAndSummary, calculateTaiwanFee, calculateTaiwanTax, getHoldingsAsOfDate, applyTradeToShares } from './calculator';
 import { TradeRecord } from '../types/stock';
+
+describe('applyTradeToShares 純函式股數異動計算', () => {
+  it('買進與增資應累加股數', () => {
+    expect(applyTradeToShares(1000, { type: 'BUY', shares: 500 })).toBe(1500);
+    expect(applyTradeToShares(1000, { type: 'CAPITAL_INCREASE', shares: 200 })).toBe(1200);
+  });
+
+  it('賣出與減資應扣減股數且不小於 0', () => {
+    expect(applyTradeToShares(1000, { type: 'SELL', shares: 400 })).toBe(600);
+    expect(applyTradeToShares(1000, { type: 'SELL', shares: 1500 })).toBe(0);
+    expect(applyTradeToShares(1000, { type: 'CAPITAL_REDUCTION', shares: 200 })).toBe(800);
+    expect(applyTradeToShares(1000, { type: 'CAPITAL_REDUCTION', ratio: 0.2 })).toBe(800);
+  });
+
+  it('除權配股與分割應正確乘除調整股數', () => {
+    expect(applyTradeToShares(1000, { type: 'STOCK_DIVIDEND', shares: 50 })).toBe(1050);
+    expect(applyTradeToShares(1000, { type: 'STOCK_DIVIDEND', ratio: 0.05 })).toBe(1050);
+    expect(applyTradeToShares(100, { type: 'STOCK_SPLIT', ratio: 10 })).toBe(1000);
+  });
+
+  it('股息事件不影響持有股數', () => {
+    expect(applyTradeToShares(1000, { type: 'DIVIDEND', shares: 1000 })).toBe(1000);
+  });
+});
 
 describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
   it('應正確計算單筆與分批買進的移動加權平均成本 (Moving Weighted Average)', () => {

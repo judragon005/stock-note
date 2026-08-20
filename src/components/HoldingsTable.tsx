@@ -161,6 +161,11 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                             含配股 +{item.totalStockDividendsShares.toLocaleString()} 股
                           </div>
                         ) : null}
+                        {item.originalBuyShares && item.originalBuyShares > 0 && item.originalBuyShares !== item.shares && (
+                          <div style={{ fontSize: '0.675rem', color: 'var(--text-muted)' }}>
+                            原買入 {item.originalBuyShares.toLocaleString()} 股
+                          </div>
+                        )}
                       </td>
 
                       {/* 平均成本 */}
