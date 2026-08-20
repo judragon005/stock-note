@@ -4,14 +4,14 @@ import { getHoldingsAsOfDate } from './calculator';
 export interface RawCorporateEvent {
   symbol: string;
   market: MarketType;
-  type: TradeType; // 'DIVIDEND' | 'STOCK_DIVIDEND' | 'STOCK_SPLIT' | 'CAPITAL_REDUCTION' | 'CAPITAL_INCREASE'
+  type: TradeType;
   date: string; // YYYY-MM-DD
   price?: number; // 每股配息或減資退款
-  ratio?: number; // 分割比率或配股率
+  ratio?: number; // 分割比率或配股率或減資比率
   shares?: number; // 變更股數
   cashAmount?: number; // 總退款或入帳金額
   description?: string;
-  sourceType?: 'LIVE_API' | 'FALLBACK_DB';
+  sourceType?: 'LIVE_API';
 }
 
 export interface ScannedCorporateAction {
@@ -30,84 +30,176 @@ export interface ScannedCorporateAction {
   estimatedCashAmount: number;
   description: string;
   isAlreadyRecorded: boolean;
-  sourceType: 'LIVE_API' | 'FALLBACK_DB';
+  sourceType: 'LIVE_API';
 }
 
 /**
- * 內建台美熱門標的公開歷史除權息與分割資料庫（支援離線/容錯/無網路時優雅降級）
+ * 透過多重 CORS 代理池請求線上端點
  */
-const BUILT_IN_EVENT_REGISTRY: RawCorporateEvent[] = [
-  // 台積電 (2330)
-  { symbol: '2330', market: 'TW', type: 'DIVIDEND', date: '2024-03-18', price: 3.5, description: '2023Q3 現金股利每股 3.5 元' },
-  { symbol: '2330', market: 'TW', type: 'DIVIDEND', date: '2024-06-13', price: 3.5, description: '2023Q4 現金股利每股 3.5 元' },
-  { symbol: '2330', market: 'TW', type: 'DIVIDEND', date: '2024-09-12', price: 4.0, description: '2024Q1 現金股利每股 4.0 元' },
-  { symbol: '2330', market: 'TW', type: 'DIVIDEND', date: '2024-12-12', price: 4.0, description: '2024Q2 現金股利每股 4.0 元' },
-  { symbol: '2330', market: 'TW', type: 'DIVIDEND', date: '2025-03-18', price: 4.5, description: '2024Q3 現金股利每股 4.5 元' },
-  { symbol: '2330', market: 'TW', type: 'DIVIDEND', date: '2025-06-12', price: 4.5, description: '2024Q4 現金股利每股 4.5 元' },
-  { symbol: '2330', market: 'TW', type: 'DIVIDEND', date: '2025-09-18', price: 5.0, description: '2025Q1 現金股利每股 5.0 元' },
+async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 5000): Promise<any> {
+  const proxies = [
+    `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
+  ];
 
-  // 元大台灣50 (0050)
-  { symbol: '0050', market: 'TW', type: 'DIVIDEND', date: '2024-01-17', price: 3.0, description: '2023 下半年度配息 3.0 元' },
-  { symbol: '0050', market: 'TW', type: 'DIVIDEND', date: '2024-07-16', price: 1.0, description: '2024 上半年度配息 1.0 元' },
-  { symbol: '0050', market: 'TW', type: 'DIVIDEND', date: '2025-01-16', price: 2.6, description: '2024 下半年度配息 2.6 元' },
-  { symbol: '0050', market: 'TW', type: 'DIVIDEND', date: '2025-07-16', price: 1.5, description: '2025 上半年度配息 1.5 元' },
-
-  // 國泰永續高股息 (00878)
-  { symbol: '00878', market: 'TW', type: 'DIVIDEND', date: '2024-02-27', price: 0.40, description: '2024Q1 配息 0.40 元' },
-  { symbol: '00878', market: 'TW', type: 'DIVIDEND', date: '2024-05-17', price: 0.51, description: '2024Q2 配息 0.51 元' },
-  { symbol: '00878', market: 'TW', type: 'DIVIDEND', date: '2024-08-16', price: 0.55, description: '2024Q3 配息 0.55 元' },
-  { symbol: '00878', market: 'TW', type: 'DIVIDEND', date: '2024-11-18', price: 0.55, description: '2024Q4 配息 0.55 元' },
-  { symbol: '00878', market: 'TW', type: 'DIVIDEND', date: '2025-02-20', price: 0.55, description: '2025Q1 配息 0.55 元' },
-  { symbol: '00878', market: 'TW', type: 'DIVIDEND', date: '2025-05-16', price: 0.55, description: '2025Q2 配息 0.55 元' },
-
-  // 聯電 (2303)
-  { symbol: '2303', market: 'TW', type: 'DIVIDEND', date: '2024-07-02', price: 3.0, description: '2023 年度現金股利 3.0 元' },
-  { symbol: '2303', market: 'TW', type: 'DIVIDEND', date: '2025-07-03', price: 2.8, description: '2024 年度現金股利 2.8 元' },
-
-  // 玉山金 (2884)
-  { symbol: '2884', market: 'TW', type: 'DIVIDEND', date: '2024-07-25', price: 1.2, description: '2023 年度現金股利 1.2 元' },
-  { symbol: '2884', market: 'TW', type: 'STOCK_DIVIDEND', date: '2024-07-25', ratio: 0.02, description: '2023 年度股票股利每股配 0.2 元 (配股率 0.02)' },
-  { symbol: '2884', market: 'TW', type: 'DIVIDEND', date: '2025-07-24', price: 1.3, description: '2024 年度現金股利 1.3 元' },
-  { symbol: '2884', market: 'TW', type: 'STOCK_DIVIDEND', date: '2025-07-24', ratio: 0.015, description: '2024 年度股票股利每股配 0.15 元' },
-
-  // 美股 NVDA
-  { symbol: 'NVDA', market: 'US', type: 'STOCK_SPLIT', date: '2024-06-10', ratio: 10, description: '1 拆 10 股票分割 (10-for-1 Stock Split)' },
-  { symbol: 'NVDA', market: 'US', type: 'DIVIDEND', date: '2024-06-11', price: 0.01, description: '2024Q2 季度股息 $0.01' },
-  { symbol: 'NVDA', market: 'US', type: 'DIVIDEND', date: '2024-09-12', price: 0.01, description: '2024Q3 季度股息 $0.01' },
-  { symbol: 'NVDA', market: 'US', type: 'DIVIDEND', date: '2024-12-05', price: 0.01, description: '2024Q4 季度股息 $0.01' },
-  { symbol: 'NVDA', market: 'US', type: 'DIVIDEND', date: '2025-03-12', price: 0.01, description: '2025Q1 季度股息 $0.01' },
-
-  // 美股 AAPL
-  { symbol: 'AAPL', market: 'US', type: 'DIVIDEND', date: '2024-02-09', price: 0.24, description: '2024Q1 季度股息 $0.24' },
-  { symbol: 'AAPL', market: 'US', type: 'DIVIDEND', date: '2024-05-10', price: 0.25, description: '2024Q2 季度股息 $0.25' },
-  { symbol: 'AAPL', market: 'US', type: 'DIVIDEND', date: '2024-08-12', price: 0.25, description: '2024Q3 季度股息 $0.25' },
-  { symbol: 'AAPL', market: 'US', type: 'DIVIDEND', date: '2024-11-08', price: 0.25, description: '2024Q4 季度股息 $0.25' },
-  { symbol: 'AAPL', market: 'US', type: 'DIVIDEND', date: '2025-02-10', price: 0.25, description: '2025Q1 季度股息 $0.25' },
-
-  // 美股 VOO
-  { symbol: 'VOO', market: 'US', type: 'DIVIDEND', date: '2024-03-22', price: 1.54, description: '2024Q1 季度配息 $1.54' },
-  { symbol: 'VOO', market: 'US', type: 'DIVIDEND', date: '2024-06-28', price: 1.66, description: '2024Q2 季度配息 $1.66' },
-  { symbol: 'VOO', market: 'US', type: 'DIVIDEND', date: '2024-09-27', price: 1.77, description: '2024Q3 季度配息 $1.77' },
-  { symbol: 'VOO', market: 'US', type: 'DIVIDEND', date: '2024-12-20', price: 1.95, description: '2024Q4 季度配息 $1.95' },
-];
+  for (const proxyUrl of proxies) {
+    try {
+      const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(timeoutMs) });
+      if (response.ok) {
+        const text = await response.text();
+        try {
+          return JSON.parse(text);
+        } catch {
+          // ignore non-json response
+        }
+      }
+    } catch {
+      // try next proxy
+    }
+  }
+  return null;
+}
 
 /**
- * 線上即時查詢 Yahoo Finance API 或 TWSE 公開除權息資訊 (含 CORS 代理與快取容錯)
+ * 將台灣民國年或 YYYYMMDD 格式轉換為標準 YYYY-MM-DD
  */
-export async function fetchLiveCorporateEvents(symbol: string, market: MarketType): Promise<RawCorporateEvent[]> {
+export function normalizeTWSEDate(rawDateStr: string): string {
+  if (!rawDateStr) return '';
+  const cleaned = rawDateStr.replace(/[^0-9]/g, '');
+  if (cleaned.length === 7) {
+    // 民國年 1140915
+    const year = parseInt(cleaned.slice(0, 3), 10) + 1911;
+    const month = cleaned.slice(3, 5);
+    const day = cleaned.slice(5, 7);
+    return `${year}-${month}-${day}`;
+  }
+  if (cleaned.length === 6) {
+    // 民國年 990915
+    const year = parseInt(cleaned.slice(0, 2), 10) + 1911;
+    const month = cleaned.slice(2, 4);
+    const day = cleaned.slice(4, 6);
+    return `${year}-${month}-${day}`;
+  }
+  if (cleaned.length === 8) {
+    // 西元年 20250915
+    return `${cleaned.slice(0, 4)}-${cleaned.slice(4, 6)}-${cleaned.slice(6, 8)}`;
+  }
+  return rawDateStr;
+}
+
+/**
+ * 查詢台灣證交所 (TWSE) 官方減資預告表 (TWT48U_ALL)
+ */
+export async function fetchTWSECapitalReductions(symbol: string): Promise<RawCorporateEvent[]> {
   const events: RawCorporateEvent[] = [];
-  const querySymbol = market === 'TW' ? `${symbol}.TW` : symbol;
-
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(querySymbol)}?events=div%7Csplit&interval=1d&range=5y`;
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const url = 'https://openapi.twse.com.tw/v1/exchangeReport/TWT48U_ALL';
+    const data = await fetchWithCORSProxy(url, 4000);
+    if (Array.isArray(data)) {
+      const target = data.filter((item: any) => {
+        const code = (item.Code || item['股票代號'] || item['公司代號'] || '').trim();
+        return code === symbol;
+      });
 
-    const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(4000) });
-    if (response.ok) {
-      const data = await response.json();
+      for (const item of target) {
+        const rawDate = item.Date || item['恢復買賣日期'] || item['最後交易日'] || item['減資換發新股基準日'] || '';
+        const date = normalizeTWSEDate(rawDate);
+        const refund = parseFloat(item.RefundPerShare || item['每股退還股款(元)'] || item['退還股款'] || '0') || 0;
+        const ratioRaw = parseFloat(item.ReductionRatio || item['減資比率'] || '0') || 0;
+        const ratio = ratioRaw > 1 ? ratioRaw / 100 : ratioRaw; // 28.28% -> 0.2828
+        const reason = item.ReductionType || item['減資事由'] || '現金減資';
+
+        if (date) {
+          events.push({
+            symbol: symbol.toUpperCase(),
+            market: 'TW',
+            type: 'CAPITAL_REDUCTION',
+            date,
+            price: refund,
+            ratio: ratio > 0 ? ratio : undefined,
+            description: `${reason}（減資比率 ${(ratio * 100).toFixed(2)}%，每股退款 ${refund} 元）`,
+            sourceType: 'LIVE_API',
+          });
+        }
+      }
+    }
+  } catch {
+    // fallback gracefully
+  }
+  return events;
+}
+
+/**
+ * 查詢台灣證交所 (TWSE) 除權除息預告表 (TWT49U_ALL)
+ */
+export async function fetchTWSEDividends(symbol: string): Promise<RawCorporateEvent[]> {
+  const events: RawCorporateEvent[] = [];
+  try {
+    const url = 'https://openapi.twse.com.tw/v1/exchangeReport/TWT49U_ALL';
+    const data = await fetchWithCORSProxy(url, 4000);
+    if (Array.isArray(data)) {
+      const target = data.filter((item: any) => {
+        const code = (item.Code || item['股票代號'] || '').trim();
+        return code === symbol;
+      });
+
+      for (const item of target) {
+        const rawDate = item.Date || item['除權息日期'] || '';
+        const date = normalizeTWSEDate(rawDate);
+        const cashDiv = parseFloat(item.CashDividend || item['現金股利(元/股)'] || item['現金股利'] || '0') || 0;
+        const stockDivRatio = parseFloat(item.StockDividend || item['無償配股率'] || '0') || 0;
+
+        if (date) {
+          if (cashDiv > 0) {
+            events.push({
+              symbol: symbol.toUpperCase(),
+              market: 'TW',
+              type: 'DIVIDEND',
+              date,
+              price: cashDiv,
+              description: `現金股利每股 ${cashDiv} TWD`,
+              sourceType: 'LIVE_API',
+            });
+          }
+          if (stockDivRatio > 0) {
+            events.push({
+              symbol: symbol.toUpperCase(),
+              market: 'TW',
+              type: 'STOCK_DIVIDEND',
+              date,
+              ratio: stockDivRatio > 1 ? stockDivRatio / 100 : stockDivRatio,
+              description: `股票股利配股率 ${stockDivRatio}`,
+              sourceType: 'LIVE_API',
+            });
+          }
+        }
+      }
+    }
+  } catch {
+    // fallback gracefully
+  }
+  return events;
+}
+
+/**
+ * 線上即時查詢 Yahoo Finance API (支援台股上市/上櫃、美股全市場、ETF 與債券)
+ */
+export async function fetchYahooFinanceEvents(symbol: string, market: MarketType): Promise<RawCorporateEvent[]> {
+  const events: RawCorporateEvent[] = [];
+  const symbolCandidates = market === 'TW'
+    ? [`${symbol}.TW`, `${symbol}.TWO`]
+    : [symbol.toUpperCase()];
+
+  for (const querySym of symbolCandidates) {
+    try {
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(querySym)}?events=div%7Csplit&interval=1d&range=5y`;
+      const data = await fetchWithCORSProxy(url, 4000);
       const chartResult = data?.chart?.result?.[0];
       const rawDividends = chartResult?.events?.dividends;
       const rawSplits = chartResult?.events?.splits;
+
+      let found = false;
 
       if (rawDividends && typeof rawDividends === 'object') {
         for (const div of Object.values(rawDividends) as any[]) {
@@ -121,6 +213,7 @@ export async function fetchLiveCorporateEvents(symbol: string, market: MarketTyp
             description: `現金股利每股 ${div.amount} ${market === 'TW' ? 'TWD' : 'USD'}`,
             sourceType: 'LIVE_API',
           });
+          found = true;
         }
       }
 
@@ -137,21 +230,13 @@ export async function fetchLiveCorporateEvents(symbol: string, market: MarketTyp
             description: `股票分割 ${spl.splitRatio || `${spl.numerator}:${spl.denominator}`}`,
             sourceType: 'LIVE_API',
           });
+          found = true;
         }
       }
-    }
-  } catch {
-    // 網路請求超時或受限，優雅降級為使用內建資料庫
-  }
 
-  // 融合內建資料庫補充
-  const fallbackEvents = BUILT_IN_EVENT_REGISTRY.filter((e) => e.symbol.toUpperCase() === symbol.toUpperCase());
-  for (const fb of fallbackEvents) {
-    if (!events.some((ev) => ev.date === fb.date && ev.type === fb.type)) {
-      events.push({
-        ...fb,
-        sourceType: 'FALLBACK_DB',
-      });
+      if (found) break;
+    } catch {
+      // try next candidate
     }
   }
 
@@ -159,78 +244,111 @@ export async function fetchLiveCorporateEvents(symbol: string, market: MarketTyp
 }
 
 /**
- * 智慧掃描使用者持股期間的所有公司行動
+ * 線上即時查詢全市場公開除權息、減資與分割事件 (100% 純線上即時資料源)
+ */
+export async function fetchLiveCorporateEvents(symbol: string, market: MarketType): Promise<RawCorporateEvent[]> {
+  const events: RawCorporateEvent[] = [];
+
+  if (market === 'TW') {
+    // 1. 台股優先查詢官方 TWSE 減資公開資料庫
+    const reductionEvents = await fetchTWSECapitalReductions(symbol);
+    events.push(...reductionEvents);
+
+    // 2. 查詢 TWSE 除權息預告表
+    const twseDivEvents = await fetchTWSEDividends(symbol);
+    for (const ev of twseDivEvents) {
+      if (!events.some((e) => e.date === ev.date && e.type === ev.type)) {
+        events.push(ev);
+      }
+    }
+  }
+
+  // 3. 查詢 Yahoo Finance 全市場資料 (美股或台股歷史除權息/分割補充)
+  const yahooEvents = await fetchYahooFinanceEvents(symbol, market);
+  for (const ev of yahooEvents) {
+    if (!events.some((e) => e.date === ev.date && e.type === ev.type)) {
+      events.push(ev);
+    }
+  }
+
+  return events;
+}
+
+/**
+ * 智慧比對歷史交易時序，自動篩選待補登之全市場公司行動
  */
 export async function scanCorporateActions(
   trades: TradeRecord[],
-  customFetcher?: (symbol: string, market: MarketType) => Promise<RawCorporateEvent[]>
+  fetcher: (symbol: string, market: MarketType) => Promise<RawCorporateEvent[]> = fetchLiveCorporateEvents
 ): Promise<ScannedCorporateAction[]> {
-  // 1. 整理使用者曾持有過的所有標的與名稱、市場
-  const symbolMap = new Map<string, { symbol: string; name: string; market: MarketType; currency: Currency }>();
-  for (const t of trades) {
-    if (!symbolMap.has(t.symbol)) {
-      symbolMap.set(t.symbol, {
-        symbol: t.symbol,
-        name: t.name || t.symbol,
-        market: t.market || (t.currency === 'USD' ? 'US' : 'TW'),
-        currency: t.currency || (t.market === 'US' ? 'USD' : 'TWD'),
+  const symbolMap = new Map<string, { market: MarketType; name: string; currency: Currency; earliestDate: string }>();
+
+  for (const trade of trades) {
+    if (!symbolMap.has(trade.symbol)) {
+      symbolMap.set(trade.symbol, {
+        market: trade.market,
+        name: trade.name || trade.symbol,
+        currency: trade.currency,
+        earliestDate: trade.date,
       });
+    } else {
+      const entry = symbolMap.get(trade.symbol)!;
+      if (trade.date < entry.earliestDate) {
+        entry.earliestDate = trade.date;
+      }
     }
   }
 
   const results: ScannedCorporateAction[] = [];
 
-  for (const [symbol, info] of symbolMap.entries()) {
-    // 取得該標的所有歷史公司行動
-    let events: RawCorporateEvent[] = [];
-    if (customFetcher) {
-      events = await customFetcher(symbol, info.market);
-    } else {
-      events = await fetchLiveCorporateEvents(symbol, info.market);
+  for (const [symbol, meta] of symbolMap.entries()) {
+    let rawEvents: RawCorporateEvent[] = [];
+    try {
+      rawEvents = await fetcher(symbol, meta.market);
+    } catch {
+      rawEvents = [];
     }
 
-    for (const ev of events) {
-      // 判定基準日當時持股
-      const sharesHeld = getHoldingsAsOfDate(trades, ev.date, symbol);
-      if (sharesHeld <= 0) {
-        // 若該基準日當時並無持股，則不列入
+    for (const ev of rawEvents) {
+      // 僅檢視在持股起始日 (earliestDate) 當日或之後發生的事件
+      if (ev.date < meta.earliestDate) {
         continue;
       }
 
-      // 檢查是否已存在於現有交易中 (查重)
-      const isAlreadyRecorded = trades.some((t) => {
-        return (
-          t.symbol.toUpperCase() === symbol.toUpperCase() &&
-          t.date === ev.date &&
-          t.type === ev.type
-        );
-      });
+      // 依基準日時序推算持股數
+      const sharesHeld = getHoldingsAsOfDate(trades, ev.date, symbol);
 
-      let estimatedCash = 0;
-      let estimatedShares = 0;
-
-      if (ev.type === 'DIVIDEND') {
-        const p = ev.price || 0;
-        estimatedCash = ev.cashAmount !== undefined ? ev.cashAmount : sharesHeld * p;
-      } else if (ev.type === 'STOCK_DIVIDEND') {
-        const r = ev.ratio || (ev.price ? ev.price / 10 : 0);
-        estimatedShares = ev.shares !== undefined ? ev.shares : Math.round(sharesHeld * r);
-      } else if (ev.type === 'STOCK_SPLIT') {
-        const r = ev.ratio || 1;
-        estimatedShares = (sharesHeld * r) - sharesHeld;
-      } else if (ev.type === 'CAPITAL_REDUCTION') {
-        const r = ev.ratio || 0;
-        estimatedShares = -(sharesHeld * r);
-        const p = ev.price || 0;
-        estimatedCash = ev.cashAmount !== undefined ? ev.cashAmount : sharesHeld * p;
+      // 若該基準日時尚未持有或已清倉 (持股 = 0)，則略過
+      if (sharesHeld <= 0) {
+        continue;
       }
 
+      let estimatedShares = 0;
+      let estimatedCash = 0;
+
+      if (ev.type === 'DIVIDEND') {
+        estimatedCash = (ev.price || 0) * sharesHeld;
+      } else if (ev.type === 'STOCK_DIVIDEND') {
+        estimatedShares = ev.shares && ev.shares > 0 ? ev.shares : (ev.ratio ? sharesHeld * ev.ratio : 0);
+      } else if (ev.type === 'STOCK_SPLIT') {
+        const multiplier = ev.ratio || 1;
+        estimatedShares = multiplier > 1 ? sharesHeld * (multiplier - 1) : 0;
+      } else if (ev.type === 'CAPITAL_REDUCTION') {
+        estimatedShares = ev.shares && ev.shares > 0 ? ev.shares : (ev.ratio ? sharesHeld * ev.ratio : 0);
+        estimatedCash = ev.cashAmount && ev.cashAmount > 0 ? ev.cashAmount : (ev.price ? sharesHeld * ev.price : 0);
+      }
+
+      // 檢查是否已在 TradeRecords 中記錄
+      const isAlreadyRecorded = trades.some(
+        (t) => t.symbol.toUpperCase() === symbol.toUpperCase() && t.type === ev.type && t.date === ev.date
+      );
+
       results.push({
-        id: `scanned-${symbol}-${ev.date}-${ev.type}`,
+        id: `scan-${symbol}-${ev.type}-${ev.date}`,
         symbol,
-        name: info.name,
-        market: info.market,
-        currency: info.currency,
+        name: meta.name,
+        market: meta.market,
+        currency: meta.currency,
         type: ev.type,
         date: ev.date,
         exDate: ev.date,
@@ -241,11 +359,16 @@ export async function scanCorporateActions(
         estimatedCashAmount: estimatedCash,
         description: ev.description || `${symbol} ${ev.type}`,
         isAlreadyRecorded,
-        sourceType: ev.sourceType || 'FALLBACK_DB',
+        sourceType: 'LIVE_API',
       });
     }
   }
 
-  // 依日期倒序排列
-  return results.sort((a, b) => b.date.localeCompare(a.date));
+  // 依日期與代碼排序
+  return results.sort((a, b) => {
+    if (a.date !== b.date) {
+      return a.date.localeCompare(b.date);
+    }
+    return a.symbol.localeCompare(b.symbol);
+  });
 }

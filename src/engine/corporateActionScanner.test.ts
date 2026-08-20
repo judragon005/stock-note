@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { scanCorporateActions } from './corporateActionScanner';
+import { scanCorporateActions, normalizeTWSEDate } from './corporateActionScanner';
 import { TradeRecord } from '../types/stock';
 
 describe('公司行動智慧掃描引擎 (Corporate Action Scanner)', () => {
@@ -165,5 +165,63 @@ describe('公司行動智慧掃描引擎 (Corporate Action Scanner)', () => {
     const results = await scanCorporateActions(trades, mockFetcher);
     // 基準日持股為 0，不應列入待補登清單
     expect(results).toHaveLength(0);
+  });
+
+  it('TWSE 日期格式標準化函式 normalizeTWSEDate 應正確轉換民國年與西元年', () => {
+    expect(normalizeTWSEDate('1140915')).toBe('2025-09-15');
+    expect(normalizeTWSEDate('1130613')).toBe('2024-06-13');
+    expect(normalizeTWSEDate('20250915')).toBe('2025-09-15');
+    expect(normalizeTWSEDate('2025-09-15')).toBe('2025-09-15');
+  });
+
+  it('真實場景：9927 泰銘 2025 現金減資線上資料解析與待補登試算', async () => {
+    const trades: TradeRecord[] = [
+      {
+        id: '1',
+        date: '2025-09-12',
+        symbol: '9927',
+        name: '泰銘',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        shares: 10000,
+        price: 55.8,
+        fee: 0,
+        tax: 0,
+        createdAt: 1,
+      },
+    ];
+
+    const mockFetcher = async (symbol: string) => {
+      if (symbol === '9927') {
+        return [
+          {
+            symbol: '9927',
+            market: 'TW' as const,
+            type: 'CAPITAL_REDUCTION' as const,
+            date: '2025-09-15',
+            price: 2.828,
+            ratio: 0.2828,
+            description: '現金減資（減資比率 28.28%，每股退款 2.828 元）',
+            sourceType: 'LIVE_API' as const,
+          },
+        ];
+      }
+      return [];
+    };
+
+    const results = await scanCorporateActions(trades, mockFetcher);
+    expect(results).toHaveLength(1);
+
+    const tmReduction = results[0];
+    expect(tmReduction.symbol).toBe('9927');
+    expect(tmReduction.type).toBe('CAPITAL_REDUCTION');
+    expect(tmReduction.sharesHeldOnDate).toBe(10000);
+    // 預估縮減股數 = 10,000 * 0.2828 = 2,828 股
+    expect(tmReduction.estimatedSharesChange).toBeCloseTo(2828, 0);
+    // 預估退款金額 = 10,000 * 2.828 = 28,280 元
+    expect(tmReduction.estimatedCashAmount).toBe(28280);
+    expect(tmReduction.isAlreadyRecorded).toBe(false);
+    expect(tmReduction.sourceType).toBe('LIVE_API');
   });
 });

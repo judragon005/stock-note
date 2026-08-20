@@ -220,23 +220,13 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
                     borderRadius: '6px',
                     fontSize: '0.7rem',
                     fontWeight: 600,
-                    background: actions.some((a) => a.sourceType === 'LIVE_API')
-                      ? 'rgba(16, 185, 129, 0.15)'
-                      : 'rgba(245, 158, 11, 0.15)',
-                    color: actions.some((a) => a.sourceType === 'LIVE_API') ? '#34d399' : '#fbbf24',
-                    border: `1px solid ${
-                      actions.some((a) => a.sourceType === 'LIVE_API')
-                        ? 'rgba(16, 185, 129, 0.3)'
-                        : 'rgba(245, 158, 11, 0.3)'
-                    }`,
+                    background: 'rgba(16, 185, 129, 0.15)',
+                    color: '#34d399',
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
                   }}
-                  title={
-                    actions.some((a) => a.sourceType === 'LIVE_API')
-                      ? '已透過 Yahoo Finance API 即時取得最新除權息資訊'
-                      : '外部 API 暫不可用或逾時，已自動啟用內建歷史備援資料庫'
-                  }
+                  title="已透過 TWSE / Yahoo Finance 線上即時取得最新除權息與減資公告"
                 >
-                  {actions.some((a) => a.sourceType === 'LIVE_API') ? '🟢 即時金融 API' : '🟡 離線備援庫'}
+                  🟢 全市場純線上即時掃描
                 </span>
               </>
             )}

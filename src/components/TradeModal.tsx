@@ -66,6 +66,10 @@ export const TradeModal: React.FC<TradeModalProps> = ({
   const [tax, setTax] = useState<string>('0');
   const [ratio, setRatio] = useState<string>('');
   const [cashAmount, setCashAmount] = useState<string>('');
+  const [targetSymbol, setTargetSymbol] = useState<string>('');
+  const [targetName, setTargetName] = useState<string>('');
+  const [allocationRatio, setAllocationRatio] = useState<string>('0.2');
+  const [conversionPrice, setConversionPrice] = useState<string>('');
   const [tagInput, setTagInput] = useState<string>('');
   const [tags, setTags] = useState<string[]>(['核心持股']);
   const [note, setNote] = useState<string>('');
@@ -128,6 +132,31 @@ export const TradeModal: React.FC<TradeModalProps> = ({
     } else if (type === 'DIVIDEND') {
       if (asOfShares > 0 && price && parseFloat(price) > 0) {
         setCashAmount((asOfShares * parseFloat(price)).toString());
+      }
+    } else if (type === 'STOCK_MERGER') {
+      if (asOfShares > 0 && (!shares || shares === '1000')) {
+        setShares(asOfShares.toString());
+      }
+      if (!ratio) setRatio('1.0');
+    } else if (type === 'PREFERRED_REDEMPTION') {
+      if (asOfShares > 0) {
+        setShares(asOfShares.toString());
+        setPrice('50');
+        setCashAmount((asOfShares * 50).toString());
+      }
+    } else if (type === 'SPIN_OFF') {
+      if (!ratio) setRatio('0.2');
+      if (!allocationRatio) setAllocationRatio('0.2');
+      if (asOfShares > 0) {
+        setShares(Math.round(asOfShares * 0.2).toString());
+      }
+    } else if (type === 'CB_CONVERSION') {
+      if (!conversionPrice) setConversionPrice('50');
+      if (!cashAmount) setCashAmount('100000');
+      setShares('2000');
+    } else if (type === 'TENDER_OFFER') {
+      if (asOfShares > 0) {
+        setShares(asOfShares.toString());
       }
     }
   }, [type, asOfShares]);
@@ -269,6 +298,10 @@ export const TradeModal: React.FC<TradeModalProps> = ({
       ratio: r,
       cashAmount: c,
       exDate: date,
+      targetSymbol: targetSymbol ? targetSymbol.trim().toUpperCase() : undefined,
+      targetName: targetName ? targetName.trim() : undefined,
+      allocationRatio: allocationRatio ? parseFloat(allocationRatio) : undefined,
+      conversionPrice: conversionPrice ? parseFloat(conversionPrice) : undefined,
       tags,
       note: note.trim(),
     });
@@ -283,6 +316,10 @@ export const TradeModal: React.FC<TradeModalProps> = ({
       setTax('0');
       setRatio('');
       setCashAmount('');
+      setTargetSymbol('');
+      setTargetName('');
+      setAllocationRatio('0.2');
+      setConversionPrice('');
       setNote('');
       if (symbolInputRef.current) {
         symbolInputRef.current.focus();
@@ -312,7 +349,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
         className="glass-card animate-fade-in"
         style={{
           width: '100%',
-          maxWidth: '620px',
+          maxWidth: '640px',
           padding: '28px',
           position: 'relative',
           maxHeight: '92vh',
@@ -345,7 +382,12 @@ export const TradeModal: React.FC<TradeModalProps> = ({
              type === 'STOCK_DIVIDEND' ? '記錄除權配股' :
              type === 'STOCK_SPLIT' ? '記錄股票分割/反分割' :
              type === 'CAPITAL_REDUCTION' ? '記錄現金/虧損減資' :
-             '記錄現金增資認股'}
+             type === 'CAPITAL_INCREASE' ? '記錄現金增資認股' :
+             type === 'STOCK_MERGER' ? '記錄換股合併 / 股份轉換' :
+             type === 'PREFERRED_REDEMPTION' ? '記錄特別股收回 / 贖回' :
+             type === 'SPIN_OFF' ? '記錄企業分拆獨立上市' :
+             type === 'CB_CONVERSION' ? '記錄可轉債 (CB) 換股普通股' :
+             '記錄公開收購 / 私有化下市'}
           </h2>
         </div>
 
@@ -403,7 +445,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
               {/* Quick Type Selection */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
-                  常用類別
+                  常用買賣
                 </label>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   {(['BUY', 'SELL', 'DIVIDEND'] as const).map((t) => (
@@ -436,11 +478,11 @@ export const TradeModal: React.FC<TradeModalProps> = ({
               </div>
             </div>
 
-            {/* Corporate Actions Dropdown / Tabs */}
-            <div style={{ background: 'rgba(30, 41, 59, 0.4)', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            {/* Corporate Actions Tabs */}
+            <div style={{ background: 'rgba(30, 41, 59, 0.4)', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-                  🏢 公司行動與股權異動 (Corporate Actions)
+                  🏢 常規公司行動 (Standard Actions)
                 </span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
@@ -461,6 +503,42 @@ export const TradeModal: React.FC<TradeModalProps> = ({
                       background: type === item.key ? '#6366f1' : 'rgba(15, 23, 42, 0.6)',
                       color: type === item.key ? '#fff' : 'var(--text-secondary)',
                       fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Special Corporate Actions Tabs */}
+            <div style={{ background: 'rgba(30, 41, 59, 0.4)', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#ec4899' }}>
+                  ⚡ 特殊公司行動 (Special Events)
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
+                {[
+                  { key: 'STOCK_MERGER', label: '換股合併' },
+                  { key: 'PREFERRED_REDEMPTION', label: '特別股贖回' },
+                  { key: 'SPIN_OFF', label: '企業分拆' },
+                  { key: 'CB_CONVERSION', label: '可轉債換股' },
+                  { key: 'TENDER_OFFER', label: '公開收購' },
+                ].map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setType(item.key as TradeType)}
+                    style={{
+                      padding: '6px 4px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border-color)',
+                      background: type === item.key ? '#db2777' : 'rgba(15, 23, 42, 0.6)',
+                      color: type === item.key ? '#fff' : 'var(--text-secondary)',
+                      fontSize: '0.7rem',
                       fontWeight: 600,
                       cursor: 'pointer',
                     }}
@@ -1001,6 +1079,400 @@ export const TradeModal: React.FC<TradeModalProps> = ({
                     textAlign: 'right',
                   }}
                 />
+              </div>
+            </div>
+          )}
+
+          {/* 7. 換股合併 (STOCK_MERGER) */}
+          {type === 'STOCK_MERGER' && (
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#ec4899', marginBottom: '6px', fontWeight: 600 }}>
+                    換股目標標的代碼 *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="如: COMP_B"
+                    value={targetSymbol}
+                    onChange={(e) => setTargetSymbol(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      color: '#fff',
+                      fontSize: '0.875rem',
+                      textTransform: 'uppercase',
+                    }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                    目標名稱 (選填)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="如: 新合併公司"
+                    value={targetName}
+                    onChange={(e) => setTargetName(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      color: '#fff',
+                      fontSize: '0.875rem',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                    換股比率 (1股換N股)
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="如: 1.5"
+                    value={ratio}
+                    onChange={(e) => setRatio(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      color: '#fff',
+                      fontSize: '0.875rem',
+                      textAlign: 'right',
+                    }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                    現金補償 ({currency})
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="如: 0"
+                    value={cashAmount}
+                    onChange={(e) => setCashAmount(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      color: '#10b981',
+                      fontSize: '0.875rem',
+                      textAlign: 'right',
+                    }}
+                  />
+                </div>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                💡 換股合併後，原標的持股將歸零，目標標的將增加換算股數並承接原始投入成本。
+              </div>
+            </div>
+          )}
+
+          {/* 8. 特別股贖回 (PREFERRED_REDEMPTION) */}
+          {type === 'PREFERRED_REDEMPTION' && (
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '14px', marginBottom: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                    每股收回價 ({currency})
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="如: 50"
+                    value={price}
+                    onChange={(e) => {
+                      setPrice(e.target.value);
+                      const p = parseFloat(e.target.value);
+                      if (!isNaN(p) && asOfShares > 0) {
+                        setCashAmount((p * asOfShares).toString());
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      color: '#fff',
+                      fontSize: '0.875rem',
+                      textAlign: 'right',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#10b981', marginBottom: '6px', fontWeight: 600 }}>
+                    贖回退還總現金 ({currency}) *
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={cashAmount}
+                    onChange={(e) => setCashAmount(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      color: '#10b981',
+                      fontWeight: 700,
+                      fontSize: '0.875rem',
+                      textAlign: 'right',
+                    }}
+                    required
+                  />
+                </div>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                💡 特別股到期收回後持股將歸零，系統自動將贖回現金與原始成本結算已實現損益。
+              </div>
+            </div>
+          )}
+
+          {/* 9. 企業分拆 (SPIN_OFF) */}
+          {type === 'SPIN_OFF' && (
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#ec4899', marginBottom: '6px', fontWeight: 600 }}>
+                    分拆新公司代碼 *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="如: SUB_SYM"
+                    value={targetSymbol}
+                    onChange={(e) => setTargetSymbol(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      color: '#fff',
+                      fontSize: '0.875rem',
+                      textTransform: 'uppercase',
+                    }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                    新公司名稱
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="如: 新分拆子公司"
+                    value={targetName}
+                    onChange={(e) => setTargetName(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      color: '#fff',
+                      fontSize: '0.875rem',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                    配股率 (母1股配N股)
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="如: 0.2"
+                    value={ratio}
+                    onChange={(e) => setRatio(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      color: '#fff',
+                      fontSize: '0.875rem',
+                      textAlign: 'right',
+                    }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                    成本拆分比例 (0.2=20%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="如: 0.2"
+                    value={allocationRatio}
+                    onChange={(e) => setAllocationRatio(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      color: '#fff',
+                      fontSize: '0.875rem',
+                      textAlign: 'right',
+                    }}
+                  />
+                </div>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                💡 母公司持股數不變，成本依比例拆分；新子公司以分拆成本與獲配股數入帳。
+              </div>
+            </div>
+          )}
+
+          {/* 10. 可轉債換股 (CB_CONVERSION) */}
+          {type === 'CB_CONVERSION' && (
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                    轉換價格 ({currency}) *
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="如: 50"
+                    value={conversionPrice}
+                    onChange={(e) => setConversionPrice(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      color: '#fff',
+                      fontSize: '0.875rem',
+                      textAlign: 'right',
+                    }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                    換得普通股數 *
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={shares}
+                    onChange={(e) => setShares(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      color: '#60a5fa',
+                      fontWeight: 700,
+                      fontSize: '0.875rem',
+                      textAlign: 'right',
+                    }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                    債券投入本金 ({currency})
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="如: 100000"
+                    value={cashAmount}
+                    onChange={(e) => setCashAmount(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      color: '#fff',
+                      fontSize: '0.875rem',
+                      textAlign: 'right',
+                    }}
+                  />
+                </div>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                💡 原始可轉債本金轉為新普通股之持股成本基準。
+              </div>
+            </div>
+          )}
+
+          {/* 11. 公開收購 (TENDER_OFFER) */}
+          {type === 'TENDER_OFFER' && (
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                    收購成交單價 ({currency}) *
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="每股收購價"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      color: '#fff',
+                      fontSize: '0.875rem',
+                      textAlign: 'right',
+                    }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                    收購賣出股數 *
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={shares}
+                    onChange={(e) => setShares(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      color: '#f43f5e',
+                      fontWeight: 700,
+                      fontSize: '0.875rem',
+                      textAlign: 'right',
+                    }}
+                    required
+                  />
+                </div>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                💡 依收購價全額結算賣出並結清損益。
               </div>
             </div>
           )}

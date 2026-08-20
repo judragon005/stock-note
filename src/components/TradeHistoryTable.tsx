@@ -51,6 +51,16 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ trades, on
         return <span className="badge badge-reduction">減資退款</span>;
       case 'CAPITAL_INCREASE':
         return <span className="badge badge-increase">現金增資</span>;
+      case 'STOCK_MERGER':
+        return <span className="badge" style={{ background: 'rgba(236, 72, 153, 0.2)', color: '#f472b6', border: '1px solid rgba(236, 72, 153, 0.4)' }}>換股合併</span>;
+      case 'PREFERRED_REDEMPTION':
+        return <span className="badge" style={{ background: 'rgba(244, 63, 94, 0.2)', color: '#fb7185', border: '1px solid rgba(244, 63, 94, 0.4)' }}>特別股贖回</span>;
+      case 'SPIN_OFF':
+        return <span className="badge" style={{ background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.4)' }}>企業分拆</span>;
+      case 'CB_CONVERSION':
+        return <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.4)' }}>可轉債換股</span>;
+      case 'TENDER_OFFER':
+        return <span className="badge" style={{ background: 'rgba(251, 146, 60, 0.2)', color: '#fb923c', border: '1px solid rgba(251, 146, 60, 0.4)' }}>公開收購</span>;
       default:
         return <span className="badge">{type}</span>;
     }

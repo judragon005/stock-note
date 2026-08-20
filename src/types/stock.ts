@@ -7,13 +7,18 @@ export type TradeType =
   | 'STOCK_DIVIDEND'
   | 'STOCK_SPLIT'
   | 'CAPITAL_REDUCTION'
-  | 'CAPITAL_INCREASE';
+  | 'CAPITAL_INCREASE'
+  | 'STOCK_MERGER'          // 換股合併 / 股份轉換
+  | 'PREFERRED_REDEMPTION'   // 特別股贖回 / 到期收回
+  | 'SPIN_OFF'               // 企業分拆獨立上市
+  | 'CB_CONVERSION'          // 可轉債換股普通股
+  | 'TENDER_OFFER';          // 公開收購 / 私有化下市
 
 export interface TradeRecord {
   id: string;
   date: string; // YYYY-MM-DD
-  symbol: string; // e.g. 2330, AAPL, NVDA, 0050
-  name?: string; // e.g. 台積電, Apple Inc.
+  symbol: string; // e.g. 2330, AAPL, NVDA, 0050, 9927
+  name?: string; // e.g. 台積電, 泰銘
   market: MarketType;
   currency: Currency;
   type: TradeType;
@@ -21,9 +26,13 @@ export interface TradeRecord {
   price: number; // 每股單價（原始幣別，公司行動時為認購價或每股配發/退款金額）
   fee: number; // 手續費
   tax: number; // 證交稅 / 扣繳稅額
-  ratio?: number; // 比例（如股票分割比例 10、減資比例 0.2、配股率 0.05）
-  cashAmount?: number; // 退還或入帳總現金金額（如減資退款總額）
+  ratio?: number; // 比例（如股票分割比例 10、減資比例 0.2828、配股率 0.05、換股比例 1.2）
+  cashAmount?: number; // 退還或入帳總現金金額（如減資退款總額、現金補貼）
   exDate?: string; // 基準日 / 除權息日 (YYYY-MM-DD)
+  targetSymbol?: string; // 換股目標標的代碼 (STOCK_MERGER) 或分拆新公司代碼 (SPIN_OFF)
+  targetName?: string; // 目標標的名稱
+  allocationRatio?: number; // 分拆成本分攤比例 (如 0.2 代表拆出 20% 成本給新標的)
+  conversionPrice?: number; // 可轉債轉換價格
   note?: string; // 交易備註
   tags?: string[]; // 標籤（如：長期核心、波段動能、股息成長）
   createdAt: number;

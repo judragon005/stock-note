@@ -20,10 +20,19 @@ export function applyTradeToShares(
   switch (trade.type) {
     case 'BUY':
     case 'CAPITAL_INCREASE':
+    case 'CB_CONVERSION':
       return currentShares + shares;
 
     case 'SELL':
+    case 'TENDER_OFFER':
+    case 'PREFERRED_REDEMPTION':
       return Math.max(0, currentShares - Math.min(shares, currentShares));
+
+    case 'STOCK_MERGER':
+      return 0; // 原標的在換股合併後持股歸零轉出
+
+    case 'SPIN_OFF':
+      return currentShares; // 企業分拆母公司持有股數不變
 
     case 'STOCK_DIVIDEND': {
       const added = shares > 0 ? shares : (ratio > 0 ? currentShares * ratio : 0);
@@ -58,7 +67,7 @@ export function getHoldingsAsOfDate(
   symbol: string
 ): number {
   const symbolTrades = trades
-    .filter((t) => t.symbol === symbol && t.date <= targetDate)
+    .filter((t) => (t.symbol === symbol || t.targetSymbol === symbol) && t.date <= targetDate)
     .sort((a, b) => {
       if (a.date !== b.date) {
         return a.date.localeCompare(b.date);
@@ -68,7 +77,15 @@ export function getHoldingsAsOfDate(
 
   let currentShares = 0;
   for (const trade of symbolTrades) {
-    currentShares = applyTradeToShares(currentShares, trade);
+    if (trade.targetSymbol === symbol) {
+      // 若當前標的是目標標的 (換股目標或分拆新公司)
+      if (trade.type === 'STOCK_MERGER' || trade.type === 'SPIN_OFF') {
+        const added = Number(trade.shares) || 0;
+        currentShares += added;
+      }
+    } else {
+      currentShares = applyTradeToShares(currentShares, trade);
+    }
   }
   return currentShares;
 }
@@ -102,13 +119,18 @@ export function calculateHoldingsAndSummary(
 
   const map = new Map<string, Accumulator>();
 
-  for (const trade of sortedTrades) {
-    if (!map.has(trade.symbol)) {
-      map.set(trade.symbol, {
-        symbol: trade.symbol,
-        name: trade.name || trade.symbol,
-        market: trade.market || (trade.currency === 'USD' ? 'US' : 'TW'),
-        currency: trade.currency || (trade.market === 'US' ? 'USD' : 'TWD'),
+  const getOrCreateItem = (
+    sym: string,
+    defaultName?: string,
+    defaultMarket?: MarketType,
+    defaultCurrency?: Currency
+  ): Accumulator => {
+    if (!map.has(sym)) {
+      map.set(sym, {
+        symbol: sym,
+        name: defaultName || sym,
+        market: defaultMarket || 'TW',
+        currency: defaultCurrency || (defaultMarket === 'US' ? 'USD' : 'TWD'),
         shares: 0,
         originalBuyShares: 0,
         totalCostBasis: 0,
@@ -118,8 +140,17 @@ export function calculateHoldingsAndSummary(
         totalStockDividendsShares: 0,
       });
     }
+    return map.get(sym)!;
+  };
 
-    const item = map.get(trade.symbol)!;
+  for (const trade of sortedTrades) {
+    const item = getOrCreateItem(
+      trade.symbol,
+      trade.name,
+      trade.market || (trade.currency === 'USD' ? 'US' : 'TW'),
+      trade.currency || (trade.market === 'US' ? 'USD' : 'TWD')
+    );
+
     if (trade.name && trade.name !== trade.symbol) {
       item.name = trade.name;
     }
@@ -210,6 +241,84 @@ export function calculateHoldingsAndSummary(
         item.totalCostBasis += netCost;
         item.shares += shares;
         item.originalBuyShares += shares;
+        break;
+      }
+
+      case 'STOCK_MERGER': {
+        const transferCost = item.totalCostBasis;
+        const preMergerShares = item.shares;
+        item.shares = 0;
+        item.totalCostBasis = 0;
+
+        if (trade.targetSymbol) {
+          const targetItem = getOrCreateItem(
+            trade.targetSymbol,
+            trade.targetName || trade.targetSymbol,
+            item.market,
+            item.currency
+          );
+          const newSharesB = shares > 0 ? shares : (ratio > 0 ? preMergerShares * ratio : preMergerShares);
+          targetItem.shares += newSharesB;
+          targetItem.originalBuyShares += newSharesB;
+          targetItem.totalCostBasis += Math.max(0, transferCost - cashAmount);
+        }
+        break;
+      }
+
+      case 'PREFERRED_REDEMPTION': {
+        const redemptionTotal = cashAmount > 0 ? cashAmount : (price > 0 && shares > 0 ? price * shares : price);
+        const pnl = (redemptionTotal - fee - tax) - item.totalCostBasis;
+        item.realizedPnL += pnl;
+        item.shares = 0;
+        item.totalCostBasis = 0;
+        break;
+      }
+
+      case 'SPIN_OFF': {
+        const alloc = trade.allocationRatio !== undefined && trade.allocationRatio > 0 ? trade.allocationRatio : 0.2;
+        const splitCost = item.totalCostBasis * alloc;
+        item.totalCostBasis = Math.max(0, item.totalCostBasis - splitCost);
+
+        if (trade.targetSymbol) {
+          const targetItem = getOrCreateItem(
+            trade.targetSymbol,
+            trade.targetName || trade.targetSymbol,
+            item.market,
+            item.currency
+          );
+          const newSharesChild = shares > 0 ? shares : (ratio > 0 ? item.shares * ratio : 0);
+          targetItem.shares += newSharesChild;
+          targetItem.originalBuyShares += newSharesChild;
+          targetItem.totalCostBasis += splitCost;
+        }
+        break;
+      }
+
+      case 'CB_CONVERSION': {
+        const convCost = cashAmount > 0 ? cashAmount : (shares > 0 && price > 0 ? shares * price + fee + tax : fee + tax);
+        item.totalCostBasis += convCost;
+        item.shares += shares;
+        item.originalBuyShares += shares;
+        break;
+      }
+
+      case 'TENDER_OFFER': {
+        if (item.shares > 0) {
+          const avgUnitCost = item.totalCostBasis / item.shares;
+          const sellShares = Math.min(shares > 0 ? shares : item.shares, item.shares);
+          const costOfSold = sellShares * avgUnitCost;
+          const netRevenue = (sellShares * price) - fee - tax;
+          const pnl = netRevenue - costOfSold;
+
+          item.realizedPnL += pnl;
+          item.shares -= sellShares;
+          item.totalCostBasis = Math.max(0, item.totalCostBasis - costOfSold);
+
+          if (item.shares <= 0) {
+            item.shares = 0;
+            item.totalCostBasis = 0;
+          }
+        }
         break;
       }
 

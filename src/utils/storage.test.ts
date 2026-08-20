@@ -134,6 +134,36 @@ describe('Storage & Persistence Utilities (Issue #6)', () => {
       expect(result.trades[3].shares).toBe(200);
       expect(result.trades[3].price).toBe(33);
     });
+
+    it('應能正確解析換股合併、特別股贖回、企業分拆、可轉債換股與公開收購等特殊公司行動 CSV', () => {
+      const csvContent = '日期,市場,代碼,名稱,類別,股數,單價,幣別,手續費,稅費,比例,退款金額,基準日,目標標的,成本分攤比例,轉換價,標籤,備註\n' +
+        '2024-06-30,TW,COMP_A,A公司,換股合併,1500,0,TWD,0,0,1.5,0,2024-06-30,COMP_B,,,,"換股"\n' +
+        '2025-01-10,TW,PREF_A,特別股,特別股贖回,1000,50,TWD,0,0,0,50000,2025-01-10,,,,,"贖回"\n' +
+        '2024-05-15,TW,PARENT,母公司,分拆,200,0,TWD,0,0,0.2,0,2024-05-15,CHILD,0.2,,,"分拆新公司"\n' +
+        '2024-03-01,TW,CONV_S,轉股票,可轉債換股,20000,50,TWD,0,0,0,1000000,2024-03-01,,,50,,"CB換股"\n' +
+        '2024-09-01,TW,TEND_S,收購股,公開收購,10000,65,TWD,0,0,0,0,2024-09-01,,,,,"收購下市"';
+
+      const result = parseCSVToTrades(csvContent);
+      expect(result.successCount).toBe(5);
+      expect(result.skippedCount).toBe(0);
+
+      expect(result.trades[0].type).toBe('STOCK_MERGER');
+      expect(result.trades[0].targetSymbol).toBe('COMP_B');
+      expect(result.trades[0].ratio).toBe(1.5);
+
+      expect(result.trades[1].type).toBe('PREFERRED_REDEMPTION');
+      expect(result.trades[1].cashAmount).toBe(50000);
+
+      expect(result.trades[2].type).toBe('SPIN_OFF');
+      expect(result.trades[2].targetSymbol).toBe('CHILD');
+      expect(result.trades[2].allocationRatio).toBe(0.2);
+
+      expect(result.trades[3].type).toBe('CB_CONVERSION');
+      expect(result.trades[3].conversionPrice).toBe(50);
+
+      expect(result.trades[4].type).toBe('TENDER_OFFER');
+      expect(result.trades[4].price).toBe(65);
+    });
   });
 
   describe('Seam 2: mergeTrades (交易追加與去重)', () => {

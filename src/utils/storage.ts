@@ -88,6 +88,11 @@ export function validateTradesSchema(data: unknown): TradeRecord[] | null {
     'STOCK_SPLIT',
     'CAPITAL_REDUCTION',
     'CAPITAL_INCREASE',
+    'STOCK_MERGER',
+    'PREFERRED_REDEMPTION',
+    'SPIN_OFF',
+    'CB_CONVERSION',
+    'TENDER_OFFER',
   ]);
 
   const validTrades: TradeRecord[] = [];
@@ -119,6 +124,10 @@ export function validateTradesSchema(data: unknown): TradeRecord[] | null {
       ratio: typeof t.ratio === 'number' ? t.ratio : undefined,
       cashAmount: typeof t.cashAmount === 'number' ? t.cashAmount : undefined,
       exDate: typeof t.exDate === 'string' ? t.exDate : undefined,
+      targetSymbol: typeof t.targetSymbol === 'string' ? t.targetSymbol.toUpperCase() : undefined,
+      targetName: typeof t.targetName === 'string' ? t.targetName : undefined,
+      allocationRatio: typeof t.allocationRatio === 'number' ? t.allocationRatio : undefined,
+      conversionPrice: typeof t.conversionPrice === 'number' ? t.conversionPrice : undefined,
       tags: Array.isArray(t.tags) ? t.tags : [],
       note: t.note || '',
       createdAt: typeof t.createdAt === 'number' ? t.createdAt : Date.now(),
@@ -138,7 +147,6 @@ export function mergeTrades(existing: TradeRecord[], incoming: TradeRecord[]): T
       tradeToAdd = {
         ...tradeToAdd,
         id: `trade-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-        createdAt: tradeToAdd.createdAt || Date.now(),
       };
     }
     if (!existingIds.has(tradeToAdd.id)) {
@@ -150,30 +158,25 @@ export function mergeTrades(existing: TradeRecord[], incoming: TradeRecord[]): T
   return [...newTrades, ...existing];
 }
 
-// 輔助函式：解析包含引號與逗號之單行 CSV
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (char === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === ',' && !inQuotes) {
-      result.push(current.trim());
-      current = '';
-    } else {
-      current += char;
+function parseCSVRows(csvText: string): string[][] {
+  let cleaned = csvText;
+  if (cleaned.charCodeAt(0) === 0xFEFF) cleaned = cleaned.slice(1);
+  const lines = cleaned.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  return lines.map((line) => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+        else { inQuotes = !inQuotes; }
+      } else if (char === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+      else { current += char; }
     }
-  }
-  result.push(current.trim());
-  return result;
+    result.push(current.trim());
+    return result;
+  });
 }
 
 export interface ParseCSVResult {
@@ -182,39 +185,42 @@ export interface ParseCSVResult {
   skippedCount: number;
 }
 
+/**
+ * 解析 CSV 字串為 TradeRecord 陣列
+ * 支援 Excel / 繁體中文欄位表頭自動辨識
+ */
 export function parseCSVToTrades(csvText: string): ParseCSVResult {
-  // 移除 BOM
-  let cleaned = csvText;
-  if (cleaned.charCodeAt(0) === 0xFEFF) {
-    cleaned = cleaned.slice(1);
-  }
-
-  const lines = cleaned.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  if (lines.length === 0) {
+  const lines = parseCSVRows(csvText);
+  if (lines.length < 2) {
     return { trades: [], successCount: 0, skippedCount: 0 };
   }
 
-  // 表頭映射
-  const headerLine = lines[0];
-  const headerCols = parseCSVLine(headerLine).map((h) => h.toLowerCase().replace(/["']/g, '').trim());
+  const header = lines[0].map((h) => h.trim().toLowerCase());
 
   const getColIndex = (names: string[]): number => {
-    return headerCols.findIndex((col) => names.some((n) => col.includes(n.toLowerCase())));
+    for (const name of names) {
+      const idx = header.indexOf(name.toLowerCase());
+      if (idx !== -1) return idx;
+    }
+    return -1;
   };
 
-  const idxDate = getColIndex(['日期', 'date']);
+  const idxDate = getColIndex(['日期', 'date', '交易日期']);
   const idxMarket = getColIndex(['市場', 'market']);
-  const idxSymbol = getColIndex(['代碼', 'symbol', 'code']);
-  const idxName = getColIndex(['名稱', 'name']);
-  const idxType = getColIndex(['類別', 'type', 'action']);
-  const idxShares = getColIndex(['股數', 'shares', 'qty', 'quantity']);
-  const idxPrice = getColIndex(['單價', 'price']);
+  const idxSymbol = getColIndex(['代碼', 'symbol', '股票代碼', '標的代碼']);
+  const idxName = getColIndex(['名稱', 'name', '股票名稱', '標的名稱']);
+  const idxType = getColIndex(['類別', 'type', '交易類別', '動作']);
+  const idxShares = getColIndex(['股數', 'shares', '數量', '成交股數']);
+  const idxPrice = getColIndex(['單價', 'price', '價格', '成交單價', '買入價格', '賣出價格']);
   const idxCurrency = getColIndex(['幣別', 'currency']);
   const idxFee = getColIndex(['手續費', 'fee']);
   const idxTax = getColIndex(['稅費', 'tax']);
-  const idxRatio = getColIndex(['比例', 'ratio', '折數']);
-  const idxCashAmount = getColIndex(['退款', 'cashamount', '現金金額', '金額']);
+  const idxRatio = getColIndex(['比例', 'ratio', '折數', '換股比率', '減資比率', '配股率']);
+  const idxCashAmount = getColIndex(['退款金額', '退款/配發金額', '退款', 'cashamount', '現金金額', '金額', '退還金額']);
   const idxExDate = getColIndex(['基準日', 'exdate', '除權息日']);
+  const idxTargetSymbol = getColIndex(['目標標的', 'targetsymbol', '換股目標', '分拆目標']);
+  const idxAllocRatio = getColIndex(['成本分攤比例', 'allocationratio', '分拆比例']);
+  const idxConvPrice = getColIndex(['轉換價', 'conversionprice', 'cb轉換價']);
   const idxTags = getColIndex(['標籤', 'tags', 'tag']);
   const idxNote = getColIndex(['備註', 'note', 'memo']);
 
@@ -222,8 +228,12 @@ export function parseCSVToTrades(csvText: string): ParseCSVResult {
   let skippedCount = 0;
 
   for (let i = 1; i < lines.length; i++) {
-    const row = parseCSVLine(lines[i]);
-    const getVal = (idx: number): string => (idx >= 0 && idx < row.length ? row[idx] : '');
+    const row = lines[i];
+    if (row.length === 0 || (row.length === 1 && !row[0].trim())) {
+      continue;
+    }
+
+    const getVal = (idx: number): string => (idx !== -1 && idx < row.length ? row[idx].trim() : '');
 
     const rawDate = getVal(idxDate);
     const rawMarket = getVal(idxMarket).toUpperCase();
@@ -238,14 +248,26 @@ export function parseCSVToTrades(csvText: string): ParseCSVResult {
     const rawRatio = parseFloat(getVal(idxRatio));
     const rawCashAmount = parseFloat(getVal(idxCashAmount));
     const rawExDate = getVal(idxExDate);
+    const rawTargetSymbol = getVal(idxTargetSymbol).toUpperCase();
+    const rawAllocRatio = parseFloat(getVal(idxAllocRatio));
+    const rawConvPrice = parseFloat(getVal(idxConvPrice));
     const rawTags = getVal(idxTags);
     const rawNote = getVal(idxNote);
 
-    // 格式防呆檢查
     const market: MarketType = rawMarket === 'US' ? 'US' : rawMarket === 'TW' ? 'TW' : rawSymbol.length >= 4 && /^\d+$/.test(rawSymbol) ? 'TW' : 'US';
 
     let type: TradeType = 'BUY';
-    if (rawType.includes('STOCK_DIV') || rawType.includes('除權') || rawType.includes('配股')) {
+    if (rawType.includes('CONVERSION') || rawType.includes('可轉債') || rawType.includes('CB') || rawType.includes('債券轉換')) {
+      type = 'CB_CONVERSION';
+    } else if (rawType.includes('MERGER') || rawType.includes('換股') || rawType.includes('合併')) {
+      type = 'STOCK_MERGER';
+    } else if (rawType.includes('PREFERRED') || rawType.includes('特別股') || rawType.includes('贖回')) {
+      type = 'PREFERRED_REDEMPTION';
+    } else if (rawType.includes('SPIN') || rawType.includes('分拆')) {
+      type = 'SPIN_OFF';
+    } else if (rawType.includes('TENDER') || rawType.includes('收購') || rawType.includes('私有化')) {
+      type = 'TENDER_OFFER';
+    } else if (rawType.includes('STOCK_DIV') || rawType.includes('除權') || rawType.includes('配股')) {
       type = 'STOCK_DIVIDEND';
     } else if (rawType.includes('SPLIT') || rawType.includes('分割') || rawType.includes('拆股')) {
       type = 'STOCK_SPLIT';
@@ -295,6 +317,9 @@ export function parseCSVToTrades(csvText: string): ParseCSVResult {
       ratio: !isNaN(rawRatio) && rawRatio > 0 ? rawRatio : undefined,
       cashAmount: !isNaN(rawCashAmount) ? rawCashAmount : undefined,
       exDate: rawExDate || undefined,
+      targetSymbol: rawTargetSymbol || undefined,
+      allocationRatio: !isNaN(rawAllocRatio) && rawAllocRatio > 0 ? rawAllocRatio : undefined,
+      conversionPrice: !isNaN(rawConvPrice) && rawConvPrice > 0 ? rawConvPrice : undefined,
       tags,
       note: rawNote,
       createdAt: Date.now() - (lines.length - i) * 1000,
@@ -319,7 +344,26 @@ export function exportTradesToJSON(trades: TradeRecord[]): void {
 }
 
 export function exportTradesToCSV(trades: TradeRecord[]): void {
-  const headers = ['日期', '市場', '代碼', '名稱', '類別', '股數', '單價', '幣別', '手續費', '稅費', '比例', '退款/配發金額', '基準日', '標籤', '備註'];
+  const headers = [
+    '日期',
+    '市場',
+    '代碼',
+    '名稱',
+    '類別',
+    '股數',
+    '單價',
+    '幣別',
+    '手續費',
+    '稅費',
+    '比例',
+    '退款/配發金額',
+    '基準日',
+    '目標標的',
+    '成本分攤比例',
+    '轉換價',
+    '標籤',
+    '備註',
+  ];
   const rows = trades.map((t) => [
     t.date,
     t.market,
@@ -334,6 +378,9 @@ export function exportTradesToCSV(trades: TradeRecord[]): void {
     t.ratio !== undefined ? t.ratio : '',
     t.cashAmount !== undefined ? t.cashAmount : '',
     t.exDate || '',
+    t.targetSymbol || '',
+    t.allocationRatio !== undefined ? t.allocationRatio : '',
+    t.conversionPrice !== undefined ? t.conversionPrice : '',
     `"${(t.tags || []).join(';')}"`,
     `"${(t.note || '').replace(/"/g, '""')}"`,
   ]);

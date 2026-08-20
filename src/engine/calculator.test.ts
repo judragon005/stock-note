@@ -786,5 +786,248 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
     expect(summary.twd.totalDividends).toBe(5000);
     expect(summary.twd.totalCapitalReturned).toBe(2000);
   });
+
+  it('真實場景：9927 泰銘 2025 現金減資應精準縮減股數與扣減本金', () => {
+    const trades: TradeRecord[] = [
+      // 1. 2025-09-12 買進 10,000 股 @ 55.8，手續費 795
+      {
+        id: '9927-buy',
+        date: '2025-09-12',
+        symbol: '9927',
+        name: '泰銘',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        shares: 10000,
+        price: 55.8,
+        fee: 795,
+        tax: 0,
+        createdAt: 1,
+      },
+      // 2. 2025-09-15 現金減資 28.28%，每股退款 2.828 元 (退款 28,280 元，縮減 2,828 股)
+      {
+        id: '9927-reduction',
+        date: '2025-09-15',
+        symbol: '9927',
+        name: '泰銘',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'CAPITAL_REDUCTION',
+        shares: 2828,
+        price: 2.828,
+        ratio: 0.2828,
+        cashAmount: 28280,
+        fee: 0,
+        tax: 0,
+        createdAt: 2,
+      },
+    ];
+
+    const currentPrices = { '9927': 69.4 };
+    const { holdings, summary } = calculateHoldingsAndSummary(trades, currentPrices, 32.0);
+
+    const tm = holdings.find((h) => h.symbol === '9927');
+    expect(tm).toBeDefined();
+    // 剩餘持有股數 = 10,000 - 2,828 = 7,172 股
+    expect(tm?.shares).toBe(7172);
+    expect(tm?.originalBuyShares).toBe(10000);
+    // 總投入本金 = 558,795 - 28,280 = 530,515
+    expect(tm?.totalCostBasis).toBe(530515);
+    // 平均成本 = 530515 / 7172 = 73.969
+    expect(tm?.avgCost).toBeCloseTo(73.97, 2);
+    // 累計減資退款
+    expect(tm?.totalCapitalReturned).toBe(28280);
+    expect(summary.twd.totalCapitalReturned).toBe(28280);
+  });
+
+  it('特殊公司行動 1：換股合併 (STOCK_MERGER) 原標的歸零且成本平移至目標標的', () => {
+    const trades: TradeRecord[] = [
+      // 1. 買進 A 公司 1,000 股 @ 50 (成本 50,000)
+      {
+        id: 'merger-buy-a',
+        date: '2024-01-10',
+        symbol: 'COMP_A',
+        name: 'A公司',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        shares: 1000,
+        price: 50,
+        fee: 0,
+        tax: 0,
+        createdAt: 1,
+      },
+      // 2. 換股合併：A 公司 1:1.5 換為 B 公司股票
+      {
+        id: 'merger-event',
+        date: '2024-06-30',
+        symbol: 'COMP_A',
+        name: 'A公司',
+        targetSymbol: 'COMP_B',
+        targetName: 'B公司',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'STOCK_MERGER',
+        shares: 1500, // 換得 1500 股 B
+        ratio: 1.5,
+        price: 0,
+        fee: 0,
+        tax: 0,
+        createdAt: 2,
+      },
+    ];
+
+    const currentPrices = { COMP_A: 0, COMP_B: 45 };
+    const { holdings } = calculateHoldingsAndSummary(trades, currentPrices, 32.0);
+
+    const stockA = holdings.find((h) => h.symbol === 'COMP_A');
+    expect(stockA?.shares).toBe(0);
+    expect(stockA?.totalCostBasis).toBe(0);
+
+    const stockB = holdings.find((h) => h.symbol === 'COMP_B');
+    expect(stockB).toBeDefined();
+    expect(stockB?.shares).toBe(1500);
+    expect(stockB?.totalCostBasis).toBe(50000); // 原始本金平移至 B
+    expect(stockB?.avgCost).toBeCloseTo(33.33, 2); // 50000 / 1500
+  });
+
+  it('特殊公司行動 2：特別股贖回 (PREFERRED_REDEMPTION) 應結清持股並結算損益', () => {
+    const trades: TradeRecord[] = [
+      // 1. 買進特別股 1,000 股 @ 48 (成本 48,000)
+      {
+        id: 'pref-buy',
+        date: '2023-01-10',
+        symbol: 'PREF_A',
+        name: '甲種特別股',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        shares: 1000,
+        price: 48,
+        fee: 0,
+        tax: 0,
+        createdAt: 1,
+      },
+      // 2. 公司以每股 50 元收回贖回 (退款 50,000)
+      {
+        id: 'pref-redeem',
+        date: '2025-01-10',
+        symbol: 'PREF_A',
+        name: '甲種特別股',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'PREFERRED_REDEMPTION',
+        shares: 1000,
+        price: 50,
+        cashAmount: 50000,
+        fee: 0,
+        tax: 0,
+        createdAt: 2,
+      },
+    ];
+
+    const { holdings } = calculateHoldingsAndSummary(trades, {}, 32.0);
+    const pref = holdings.find((h) => h.symbol === 'PREF_A');
+    expect(pref?.shares).toBe(0);
+    expect(pref?.totalCostBasis).toBe(0);
+    // 已實現獲利 = 50,000 - 48,000 = 2,000
+    expect(pref?.realizedPnL).toBe(2000);
+  });
+
+  it('特殊公司行動 3：企業分拆 (SPIN_OFF) 應按比例拆分母公司成本並建立子公司持股', () => {
+    const trades: TradeRecord[] = [
+      // 1. 買進母公司 1,000 股 @ 100 (成本 100,000)
+      {
+        id: 'parent-buy',
+        date: '2023-01-10',
+        symbol: 'PARENT',
+        name: '母公司',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        shares: 1000,
+        price: 100,
+        fee: 0,
+        tax: 0,
+        createdAt: 1,
+      },
+      // 2. 分拆子公司 SUB：每 1 股母公司配 0.2 股子公司，分拆成本比率 20%
+      {
+        id: 'spinoff-event',
+        date: '2024-05-15',
+        symbol: 'PARENT',
+        name: '母公司',
+        targetSymbol: 'CHILD',
+        targetName: '新分拆子公司',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'SPIN_OFF',
+        shares: 200, // 獲配 200 股
+        ratio: 0.2,
+        allocationRatio: 0.2, // 20% 成本拆給新公司
+        price: 0,
+        fee: 0,
+        tax: 0,
+        createdAt: 2,
+      },
+    ];
+
+    const currentPrices = { PARENT: 110, CHILD: 60 };
+    const { holdings } = calculateHoldingsAndSummary(trades, currentPrices, 32.0);
+
+    const parent = holdings.find((h) => h.symbol === 'PARENT');
+    expect(parent?.shares).toBe(1000);
+    expect(parent?.totalCostBasis).toBe(80000); // 100,000 * 0.8
+    expect(parent?.avgCost).toBe(80);
+
+    const child = holdings.find((h) => h.symbol === 'CHILD');
+    expect(child).toBeDefined();
+    expect(child?.shares).toBe(200);
+    expect(child?.totalCostBasis).toBe(20000); // 100,000 * 0.2
+    expect(child?.avgCost).toBe(100); // 20000 / 200
+  });
+
+  it('特殊公司行動 4：可轉債換股 (CB_CONVERSION) 與公開收購 (TENDER_OFFER)', () => {
+    const cbTrades: TradeRecord[] = [
+      // 1. 可轉債換股 10 張 (成本 1,000,000)，轉換價 50 -> 獲得 20,000 股
+      {
+        id: 'cb-convert',
+        date: '2024-03-01',
+        symbol: 'CONV_STOCK',
+        name: '轉換普通股',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'CB_CONVERSION',
+        shares: 20000,
+        price: 50,
+        conversionPrice: 50,
+        cashAmount: 1000000,
+        fee: 0,
+        tax: 0,
+        createdAt: 1,
+      },
+      // 2. 公開收購以每股 60 元收購全數 20,000 股
+      {
+        id: 'tender-event',
+        date: '2024-09-01',
+        symbol: 'CONV_STOCK',
+        name: '轉換普通股',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'TENDER_OFFER',
+        shares: 20000,
+        price: 60,
+        fee: 0,
+        tax: 0,
+        createdAt: 2,
+      },
+    ];
+
+    const { holdings } = calculateHoldingsAndSummary(cbTrades, {}, 32.0);
+    const result = holdings.find((h) => h.symbol === 'CONV_STOCK');
+    expect(result?.shares).toBe(0);
+    // 獲利 = 20000 * 60 - 1,000,000 = 200,000
+    expect(result?.realizedPnL).toBe(200000);
+  });
 });
 
