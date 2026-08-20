@@ -64,7 +64,7 @@
 | [#3](https://github.com/judragon003/-/issues/3) | feat: 雙市場交易錄入彈窗與自動稅費試算 | ✅ Closed | 交易彈窗 |
 | [#4](https://github.com/judragon003/-/issues/4) | feat: 財務指標儀表板、資產配置圖與多幣別切換 | ✅ Closed | 儀表板與圖表 |
 | [#5](https://github.com/judragon003/-/issues/5) | feat: 持倉總覽表與交易明細搜尋過濾 | ✅ Closed | 表格與過濾 |
-| **[#6](https://github.com/judragon003/-/issues/6)** | **feat: 本地儲存持久化與 JSON/CSV 雙向備份還原** | 🔄 **In PR** | **已實作並通過 22/22 測試** |
+| [#6](https://github.com/judragon003/-/issues/6) | feat: 本地儲存持久化與 JSON/CSV 雙向備份還原 | ✅ Closed | 儲存持久化 |
 | [#7](https://github.com/judragon003/-/pull/7) | PR: feat(v1.1) 資產樹狀圖、手續費折數、色彩主題與 YoC | 🟣 Merged | V1.1 主功能 PR |
 | [#8](https://github.com/judragon003/-/issues/8) | feat(v1.1): 資產樹狀圖視覺化 (Squarified Treemap) | ✅ Closed | V1.1 關聯 Issue |
 | [#9](https://github.com/judragon003/-/issues/9) | feat(v1.1): 智慧交易錄入 - Autosuggest 與連續記帳模式 | ✅ Closed | V1.1 關聯 Issue |
@@ -72,34 +72,24 @@
 | [#11](https://github.com/judragon003/-/pull/11) | PR: docs: 同步更新 V1.1 領域模型、ADR 與交接手冊 | 🟣 Merged | 文檔同步 PR |
 | [#12](https://github.com/judragon003/-/pull/12) | PR: docs(agents): 強化 Agent 協作工作流規範 | 🟣 Merged | 規範升級 PR |
 | [#13](https://github.com/judragon003/-/pull/13) | PR: docs: 更新交接手冊至最新狀態 | 🟣 Merged | 交接手冊同步 PR |
+| [#15](https://github.com/judragon003/-/pull/15) | PR: feat: 本地儲存持久化與 JSON/CSV 雙向備份還原 | 🟣 Merged | Issue #6 實作 PR |
 
 ---
 
-## 🔮 5. 下一步工作接力指南 (Next Agent Quick Start)
+## 🔮 5. 專案全量收斂與未來規劃 (Project Status & Future Roadmap)
 
-下一個接力 Agent 請直接從 **GitHub Issue #6** 開始：
+目前 **V1.0 與 V1.1 之所有規劃 Issue（#1 ~ #6, #8 ~ #10）已 100% 全數開發、測試與驗收完成**。
 
-```powershell
-# 1. 確認當前 main 分支為最新
-git checkout main
-git pull origin main
-
-# 2. 依照 Issue-First 原則建立分支
-git checkout -b feature/6-persistence-and-backup
-
-# 3. 遵循 TDD 模式開發 (針對 storage.ts 擴充單元測試)
-npm test
-
-# 4. 驗證並發起 PR
-npm run build
-git push -u origin feature/6-persistence-and-backup
-gh pr create --title "feat: 本地儲存持久化與 JSON/CSV 雙向備份還原" --body "實作瀏覽器持久化與檔案備份，Closes #6"
-```
+若未來啟動 **V1.2 / V2.0** 新功能（例如：歷史損益走勢圖折線圖、券商對帳單自動 OCR 匯入、即時股價 API 自動同步等），請遵循標準 Agent 工作流：
+1. `/to-spec`：定義新版規格書並沉澱至 `docs/specs/`
+2. `/to-tickets`：建立對應 GitHub Issues
+3. `/triage` ➔ `/tdd` ➔ `/code-review` ➔ `PR`
 
 ---
 
 ## 🛠️ 推薦工作流指令 (Skills Trigger)
 
-- **`/triage`**：檢視並領取下一個 GitHub Issue（當前唯一 Open: `#6`）。
-- **`/tdd`**：進入紅-綠-重構循環，實作持久化與匯出入的縫隙測試。
-- **`/code-review`**：實作完成後發起標準與規格雙軸審查。
+- **`/to-spec`**：規劃下一階段 V1.2 全新功能規格書。
+- **`/triage`**：檢視並分流新開立之 Issue。
+- **`/code-review`**：對任意變更進行標準與規格雙軸審查。
+
