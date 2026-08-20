@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TrendingUp, PlusCircle, Download, Upload, DollarSign, Palette } from 'lucide-react';
+import { TrendingUp, PlusCircle, Download, Upload, DollarSign, Palette, Sparkles } from 'lucide-react';
 import { MarketType, ColorThemeMode } from '../types/stock';
 
 interface HeaderProps {
@@ -10,6 +10,7 @@ interface HeaderProps {
   colorTheme: ColorThemeMode;
   onToggleColorTheme: () => void;
   onOpenTradeModal: () => void;
+  onOpenScannerModal: () => void;
   onExportJSON: () => void;
   onExportCSV: () => void;
   onImportFile: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -23,6 +24,7 @@ export const Header: React.FC<HeaderProps> = ({
   colorTheme,
   onToggleColorTheme,
   onOpenTradeModal,
+  onOpenScannerModal,
   onExportJSON,
   onExportCSV,
   onImportFile,
@@ -169,6 +171,20 @@ export const Header: React.FC<HeaderProps> = ({
             <Upload size={14} /> 匯入
             <input type="file" accept=".json,.csv" onChange={onImportFile} style={{ display: 'none' }} value="" />
           </label>
+
+          {/* Smart Corporate Action Scanner Button */}
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={onOpenScannerModal}
+            title="智慧掃描持股除權息、減資與分割事件"
+            style={{
+              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(168, 85, 247, 0.25) 100%)',
+              border: '1px solid rgba(168, 85, 247, 0.4)',
+              color: '#c084fc',
+            }}
+          >
+            <Sparkles size={14} color="#c084fc" /> 智慧掃描
+          </button>
 
           {/* New Trade Record Button */}
           <button className="btn btn-primary" onClick={onOpenTradeModal}>

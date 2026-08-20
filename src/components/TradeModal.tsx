@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { TradeRecord, MarketType, TradeType, Currency } from '../types/stock';
-import { calculateTaiwanFee, calculateTaiwanTax } from '../engine/calculator';
-import { X, Plus, Calculator, Zap, Sparkles } from 'lucide-react';
+import { calculateTaiwanFee, calculateTaiwanTax, getHoldingsAsOfDate } from '../engine/calculator';
+import { X, Plus, Calculator, Zap, Sparkles, Calendar } from 'lucide-react';
 
 interface TradeModalProps {
   isOpen: boolean;
@@ -9,6 +9,7 @@ interface TradeModalProps {
   onSaveTrade: (trade: Omit<TradeRecord, 'id' | 'createdAt'>) => void;
   initialSymbol?: string;
   initialType?: TradeType;
+  trades?: TradeRecord[];
 }
 
 interface StockSuggestion {
@@ -52,6 +53,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
   onSaveTrade,
   initialSymbol = '',
   initialType = 'BUY',
+  trades = [],
 }) => {
   const [market, setMarket] = useState<MarketType>('TW');
   const [type, setType] = useState<TradeType>(initialType);
@@ -62,6 +64,8 @@ export const TradeModal: React.FC<TradeModalProps> = ({
   const [price, setPrice] = useState<string>('');
   const [fee, setFee] = useState<string>('0');
   const [tax, setTax] = useState<string>('0');
+  const [ratio, setRatio] = useState<string>('');
+  const [cashAmount, setCashAmount] = useState<string>('');
   const [tagInput, setTagInput] = useState<string>('');
   const [tags, setTags] = useState<string[]>(['核心持股']);
   const [note, setNote] = useState<string>('');
@@ -74,6 +78,12 @@ export const TradeModal: React.FC<TradeModalProps> = ({
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
 
   const symbolInputRef = useRef<HTMLInputElement>(null);
+
+  // 判定所選日期當時之持股數量
+  const asOfShares = useMemo(() => {
+    if (!symbol.trim()) return 0;
+    return getHoldingsAsOfDate(trades, date, symbol.trim().toUpperCase());
+  }, [trades, date, symbol]);
 
   useEffect(() => {
     if (initialSymbol) {
@@ -88,9 +98,43 @@ export const TradeModal: React.FC<TradeModalProps> = ({
     setType(initialType);
   }, [initialSymbol, initialType, isOpen]);
 
+  // 當切換類別時，動態設置預設提示與計算
+  useEffect(() => {
+    if (type === 'STOCK_DIVIDEND') {
+      if (!ratio) setRatio('0.05');
+      if (asOfShares > 0 && (!shares || shares === '1000' || shares === '10')) {
+        const estShares = Math.round(asOfShares * 0.05);
+        setShares(estShares > 0 ? estShares.toString() : '50');
+      }
+      setPrice('0');
+      setFee('0');
+      setTax('0');
+    } else if (type === 'STOCK_SPLIT') {
+      if (!ratio) setRatio('10');
+      setShares('0');
+      setPrice('0');
+      setFee('0');
+      setTax('0');
+    } else if (type === 'CAPITAL_REDUCTION') {
+      if (!ratio) setRatio('0.2');
+      if (!price) setPrice('2');
+      if (asOfShares > 0) {
+        const reduced = Math.round(asOfShares * 0.2);
+        setShares(reduced.toString());
+        setCashAmount((asOfShares * 2).toString());
+      }
+      setFee('0');
+      setTax('0');
+    } else if (type === 'DIVIDEND') {
+      if (asOfShares > 0 && price && parseFloat(price) > 0) {
+        setCashAmount((asOfShares * parseFloat(price)).toString());
+      }
+    }
+  }, [type, asOfShares]);
+
   const currency: Currency = market === 'US' ? 'USD' : 'TWD';
 
-  // 取得有效的手續費折扣比例（純計算，無閉包依賴）
+  // 取得有效的手續費折扣比例
   const getDiscountRate = (discount: string, custom: string): number => {
     if (discount === 'custom') {
       const val = parseFloat(custom);
@@ -99,20 +143,26 @@ export const TradeModal: React.FC<TradeModalProps> = ({
     return parseFloat(discount) || 1.0;
   };
 
-  // 自動試算手續費（供手動按鈕呼叫）
+  // 自動試算手續費
   const autoCalculateFees = () => {
     const s = parseFloat(shares) || 0;
     const p = parseFloat(price) || 0;
     recalcFees(p, s, market, type, feeDiscount, customDiscount, hasMinFee, symbol);
   };
 
-  // 純函式：根據所有參數重新計算費用，避免 stale closure
+  // 純函式：根據所有參數重新計算費用
   const recalcFees = (
     p: number, s: number,
     mkt: typeof market, tradeType: typeof type,
     discount: string, customDisc: string,
     minFeeOn: boolean, sym: string
   ) => {
+    if (tradeType !== 'BUY' && tradeType !== 'SELL' && tradeType !== 'CAPITAL_INCREASE') {
+      setFee('0');
+      setTax('0');
+      return;
+    }
+
     if (mkt === 'TW') {
       const discountRate = getDiscountRate(discount, customDisc);
       const minFee = minFeeOn ? 20 : 0;
@@ -135,11 +185,11 @@ export const TradeModal: React.FC<TradeModalProps> = ({
     }
   };
 
-  // 當價格、股數、市場或折數改變時，自動更新費用 (完整 deps，無 stale closure)
+  // 當價格、股數、市場或折數改變時，自動更新費用
   useEffect(() => {
     const p = parseFloat(price) || 0;
     const s = parseFloat(shares) || 0;
-    if (p > 0 && s > 0) {
+    if (p > 0 && s > 0 && (type === 'BUY' || type === 'SELL' || type === 'CAPITAL_INCREASE')) {
       recalcFees(p, s, market, type, feeDiscount, customDiscount, hasMinFee, symbol);
     }
   }, [price, shares, market, type, feeDiscount, customDiscount, hasMinFee, symbol]);
@@ -188,13 +238,20 @@ export const TradeModal: React.FC<TradeModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const s = parseFloat(shares);
-    const p = parseFloat(price);
+    const s = parseFloat(shares) || 0;
+    const p = parseFloat(price) || 0;
     const f = parseFloat(fee) || 0;
     const t = parseFloat(tax) || 0;
+    const r = ratio ? parseFloat(ratio) : undefined;
+    const c = cashAmount ? parseFloat(cashAmount) : undefined;
 
-    if (!symbol.trim() || isNaN(s) || isNaN(p) || s <= 0 || p <= 0) {
-      alert('請填寫有效的標的代碼、股數與成交單價！');
+    if (!symbol.trim()) {
+      alert('請填寫有效的標的代碼！');
+      return;
+    }
+
+    if ((type === 'BUY' || type === 'SELL' || type === 'CAPITAL_INCREASE') && (s <= 0 || p <= 0)) {
+      alert('買賣或增資請填寫大於 0 的股數與單價！');
       return;
     }
 
@@ -209,6 +266,9 @@ export const TradeModal: React.FC<TradeModalProps> = ({
       price: p,
       fee: f,
       tax: t,
+      ratio: r,
+      cashAmount: c,
+      exDate: date,
       tags,
       note: note.trim(),
     });
@@ -218,8 +278,11 @@ export const TradeModal: React.FC<TradeModalProps> = ({
       setSymbol('');
       setName('');
       setPrice('');
+      setShares('1000');
       setFee('0');
       setTax('0');
+      setRatio('');
+      setCashAmount('');
       setNote('');
       if (symbolInputRef.current) {
         symbolInputRef.current.focus();
@@ -249,10 +312,10 @@ export const TradeModal: React.FC<TradeModalProps> = ({
         className="glass-card animate-fade-in"
         style={{
           width: '100%',
-          maxWidth: '580px',
+          maxWidth: '620px',
           padding: '28px',
           position: 'relative',
-          maxHeight: '90vh',
+          maxHeight: '92vh',
           overflowY: 'auto',
         }}
       >
@@ -273,93 +336,136 @@ export const TradeModal: React.FC<TradeModalProps> = ({
         </button>
 
         {/* Title */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px' }}>
           <span style={{ fontSize: '1.4rem' }}>📝</span>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: '#ffffff' }}>
-            錄入股票交易紀錄
+            {type === 'BUY' ? '新增買進紀錄' :
+             type === 'SELL' ? '新增賣出結算' :
+             type === 'DIVIDEND' ? '記錄現金股利 (除息)' :
+             type === 'STOCK_DIVIDEND' ? '記錄除權配股' :
+             type === 'STOCK_SPLIT' ? '記錄股票分割/反分割' :
+             type === 'CAPITAL_REDUCTION' ? '記錄現金/虧損減資' :
+             '記錄現金增資認股'}
           </h2>
         </div>
 
         <form onSubmit={handleSubmit}>
-          {/* Market & Type Selector */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
-            {/* Market */}
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
-                交易市場
-              </label>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMarket('TW');
-                    if (shares === '10') setShares('1000');
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: '8px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border-color)',
-                    background: market === 'TW' ? '#3b82f6' : 'rgba(30, 41, 59, 0.6)',
-                    color: market === 'TW' ? '#fff' : 'var(--text-secondary)',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  🇹🇼 台股 (TWD)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMarket('US');
-                    if (shares === '1000') setShares('10');
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: '8px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border-color)',
-                    background: market === 'US' ? '#8b5cf6' : 'rgba(30, 41, 59, 0.6)',
-                    color: market === 'US' ? '#fff' : 'var(--text-secondary)',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  🇺🇸 美股 (USD)
-                </button>
-              </div>
-            </div>
-
-            {/* Trade Type */}
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
-                交易類別
-              </label>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                {(['BUY', 'SELL', 'DIVIDEND'] as const).map((t) => (
+          {/* Market & Category Selector */}
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+              {/* Market */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                  交易市場
+                </label>
+                <div style={{ display: 'flex', gap: '6px' }}>
                   <button
-                    key={t}
                     type="button"
-                    onClick={() => setType(t)}
+                    onClick={() => {
+                      setMarket('TW');
+                      if (shares === '10') setShares('1000');
+                    }}
                     style={{
                       flex: 1,
                       padding: '8px',
                       borderRadius: '8px',
                       border: '1px solid var(--border-color)',
-                      background:
-                        type === t
-                          ? t === 'BUY'
-                            ? '#10b981'
-                            : t === 'SELL'
-                            ? '#f43f5e'
-                            : '#f59e0b'
-                          : 'rgba(30, 41, 59, 0.6)',
-                      color: type === t ? '#fff' : 'var(--text-secondary)',
+                      background: market === 'TW' ? '#3b82f6' : 'rgba(30, 41, 59, 0.6)',
+                      color: market === 'TW' ? '#fff' : 'var(--text-secondary)',
                       fontWeight: 600,
                       cursor: 'pointer',
                     }}
                   >
-                    {t === 'BUY' ? '買進' : t === 'SELL' ? '賣出' : '配息'}
+                    🇹🇼 台股 (TWD)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMarket('US');
+                      if (shares === '1000') setShares('10');
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '8px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-color)',
+                      background: market === 'US' ? '#8b5cf6' : 'rgba(30, 41, 59, 0.6)',
+                      color: market === 'US' ? '#fff' : 'var(--text-secondary)',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    🇺🇸 美股 (USD)
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Type Selection */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                  常用類別
+                </label>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {(['BUY', 'SELL', 'DIVIDEND'] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setType(t)}
+                      style={{
+                        flex: 1,
+                        padding: '8px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border-color)',
+                        background:
+                          type === t
+                            ? t === 'BUY'
+                              ? '#10b981'
+                              : t === 'SELL'
+                              ? '#f43f5e'
+                              : '#f59e0b'
+                            : 'rgba(30, 41, 59, 0.6)',
+                        color: type === t ? '#fff' : 'var(--text-secondary)',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {t === 'BUY' ? '買進' : t === 'SELL' ? '賣出' : '除息'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Corporate Actions Dropdown / Tabs */}
+            <div style={{ background: 'rgba(30, 41, 59, 0.4)', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  🏢 公司行動與股權異動 (Corporate Actions)
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                {[
+                  { key: 'STOCK_DIVIDEND', label: '除權/配股' },
+                  { key: 'STOCK_SPLIT', label: '股票分割' },
+                  { key: 'CAPITAL_REDUCTION', label: '現金/虧損減資' },
+                  { key: 'CAPITAL_INCREASE', label: '現金增資認股' },
+                ].map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setType(item.key as TradeType)}
+                    style={{
+                      padding: '6px 4px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border-color)',
+                      background: type === item.key ? '#6366f1' : 'rgba(15, 23, 42, 0.6)',
+                      color: type === item.key ? '#fff' : 'var(--text-secondary)',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {item.label}
                   </button>
                 ))}
               </div>
@@ -367,10 +473,10 @@ export const TradeModal: React.FC<TradeModalProps> = ({
           </div>
 
           {/* Date & Symbol with Autosuggest */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
-                交易日期
+                交易 / 基準日期
               </label>
               <input
                 type="date"
@@ -475,180 +581,163 @@ export const TradeModal: React.FC<TradeModalProps> = ({
             </div>
           </div>
 
-          {/* Name & Shares & Price */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr', gap: '14px', marginBottom: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
-                標的名稱 (選填)
-              </label>
-              <input
-                type="text"
-                placeholder="如: 台積電"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '8px',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-color)',
-                  color: '#fff',
-                  fontSize: '0.875rem',
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
-                成交股數
-              </label>
-              <input
-                type="number"
-                step="any"
-                value={shares}
-                onChange={(e) => setShares(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '8px',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-color)',
-                  color: '#fff',
-                  fontSize: '0.875rem',
-                  textAlign: 'right',
-                }}
-                required
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
-                成交單價 ({currency})
-              </label>
-              <input
-                type="number"
-                step="any"
-                placeholder="每股價格"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '8px',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-color)',
-                  color: '#fff',
-                  fontSize: '0.875rem',
-                  textAlign: 'right',
-                }}
-                required
-              />
-            </div>
-          </div>
-
-          {/* Fee & Tax Calculation with Broker Discount */}
-          <div
-            style={{
-              background: 'rgba(30, 41, 59, 0.4)',
-              padding: '14px',
-              borderRadius: '8px',
-              border: '1px solid var(--border-color)',
-              marginBottom: '16px',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                手續費與稅費核算
-              </span>
-
-              {/* 台股券商折數選擇器 */}
-              {market === 'TW' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>券商折數:</label>
-                  <select
-                    value={feeDiscount}
-                    onChange={(e) => setFeeDiscount(e.target.value)}
-                    style={{
-                      padding: '3px 8px',
-                      borderRadius: '6px',
-                      background: 'var(--bg-input)',
-                      border: '1px solid var(--border-color)',
-                      color: '#60a5fa',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                    }}
-                  >
-                    <option value="1.0">原價 (不打折)</option>
-                    <option value="0.6">6 折 (0.60)</option>
-                    <option value="0.5">5 折 (0.50)</option>
-                    <option value="0.28">2.8 折 (0.28)</option>
-                    <option value="0.2">2 折 (0.20)</option>
-                    <option value="custom">自訂折數</option>
-                  </select>
-
-                  {feeDiscount === 'custom' && (
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="0.28"
-                      value={customDiscount}
-                      onChange={(e) => setCustomDiscount(e.target.value)}
-                      style={{
-                        width: '60px',
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                        background: 'var(--bg-input)',
-                        border: '1px solid var(--border-color)',
-                        color: '#fff',
-                        fontSize: '0.75rem',
-                      }}
-                    />
-                  )}
-
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.7rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={hasMinFee}
-                      onChange={(e) => setHasMinFee(e.target.checked)}
-                    />
-                    低消20元
-                  </label>
-                </div>
+          {/* As of Date Holding Banner */}
+          {symbol.trim() && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 12px',
+                borderRadius: '6px',
+                background: 'rgba(59, 130, 246, 0.12)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                marginBottom: '14px',
+                fontSize: '0.8rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#60a5fa' }}>
+                <Calendar size={14} />
+                <span>
+                  截至 <strong>{date}</strong> 基準日持股：<strong>{asOfShares.toLocaleString()}</strong> 股
+                </span>
+              </div>
+              {asOfShares === 0 && (
+                <span style={{ color: '#f59e0b', fontSize: '0.72rem' }}>⚠️ 該日期前尚無買入持股</span>
               )}
-
-              <button
-                type="button"
-                className="btn btn-sm btn-secondary"
-                onClick={autoCalculateFees}
-                style={{ padding: '3px 8px', fontSize: '0.7rem' }}
-              >
-                <Calculator size={12} /> 自動試算
-              </button>
             </div>
+          )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          {/* DYNAMIC FORM FIELDS BY TYPE */}
+          {/* 1. 標準買賣 (BUY / SELL) */}
+          {(type === 'BUY' || type === 'SELL') && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr', gap: '14px', marginBottom: '16px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                  交易手續費 ({currency})
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                  標的名稱 (選填)
+                </label>
+                <input
+                  type="text"
+                  placeholder="如: 台積電"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                    color: '#fff',
+                    fontSize: '0.875rem',
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                  成交股數
                 </label>
                 <input
                   type="number"
                   step="any"
-                  value={fee}
-                  onChange={(e) => setFee(e.target.value)}
+                  value={shares}
+                  onChange={(e) => setShares(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '8px 10px',
-                    borderRadius: '6px',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
                     background: 'var(--bg-input)',
                     border: '1px solid var(--border-color)',
                     color: '#fff',
-                    fontSize: '0.8rem',
+                    fontSize: '0.875rem',
+                    textAlign: 'right',
+                  }}
+                  required
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                  成交單價 ({currency})
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  placeholder="每股價格"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                    color: '#fff',
+                    fontSize: '0.875rem',
+                    textAlign: 'right',
+                  }}
+                  required
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 2. 除息 (DIVIDEND) */}
+          {type === 'DIVIDEND' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                  每股配息 ({currency})
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  placeholder="如: 3.5"
+                  value={price}
+                  onChange={(e) => {
+                    setPrice(e.target.value);
+                    const p = parseFloat(e.target.value);
+                    if (!isNaN(p) && asOfShares > 0) {
+                      setCashAmount((p * asOfShares).toString());
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                    color: '#fff',
+                    fontSize: '0.875rem',
                     textAlign: 'right',
                   }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                  證交稅 / 扣繳稅額 ({currency})
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                  配息總金額 ({currency})
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  placeholder="實收總配息"
+                  value={cashAmount}
+                  onChange={(e) => setCashAmount(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                    color: '#10b981',
+                    fontWeight: 700,
+                    fontSize: '0.875rem',
+                    textAlign: 'right',
+                  }}
+                  required
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                  扣繳稅費 ({currency})
                 </label>
                 <input
                   type="number"
@@ -657,18 +746,392 @@ export const TradeModal: React.FC<TradeModalProps> = ({
                   onChange={(e) => setTax(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '8px 10px',
-                    borderRadius: '6px',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
                     background: 'var(--bg-input)',
                     border: '1px solid var(--border-color)',
                     color: '#fff',
-                    fontSize: '0.8rem',
+                    fontSize: '0.875rem',
                     textAlign: 'right',
                   }}
                 />
               </div>
             </div>
-          </div>
+          )}
+
+          {/* 3. 除權配股 (STOCK_DIVIDEND) */}
+          {type === 'STOCK_DIVIDEND' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                  配股率 (每股配股 / 0.05=每千股配50股)
+                </label>
+                <input
+                  type="number"
+                  step="0.001"
+                  placeholder="如: 0.05"
+                  value={ratio}
+                  onChange={(e) => {
+                    setRatio(e.target.value);
+                    const r = parseFloat(e.target.value);
+                    if (!isNaN(r) && asOfShares > 0) {
+                      setShares(Math.round(asOfShares * r).toString());
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                    color: '#fff',
+                    fontSize: '0.875rem',
+                    textAlign: 'right',
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                  獲配股數 (增加持有股數)
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={shares}
+                  onChange={(e) => setShares(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                    color: '#818cf8',
+                    fontWeight: 700,
+                    fontSize: '0.875rem',
+                    textAlign: 'right',
+                  }}
+                  required
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 4. 股票分割 (STOCK_SPLIT) */}
+          {type === 'STOCK_SPLIT' && (
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                分割倍率 (Ratio，如 10 代表 1 拆 10；0.5 代表 2 併 1)
+              </label>
+              <input
+                type="number"
+                step="any"
+                placeholder="如: 10"
+                value={ratio}
+                onChange={(e) => setRatio(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--border-color)',
+                  color: '#38bdf8',
+                  fontWeight: 700,
+                  fontSize: '0.875rem',
+                  textAlign: 'right',
+                }}
+                required
+              />
+              {asOfShares > 0 && ratio && (
+                <div style={{ marginTop: '6px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  💡 分割後預估持股數將由 {asOfShares.toLocaleString()} 股調整為{' '}
+                  <strong style={{ color: '#38bdf8' }}>
+                    {(asOfShares * (parseFloat(ratio) || 1)).toLocaleString()}
+                  </strong>{' '}
+                  股（總投入成本保持不變）。
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 5. 現金/虧損減資 (CAPITAL_REDUCTION) */}
+          {type === 'CAPITAL_REDUCTION' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                  減資比例 (如 0.2 = 減資20%)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.2"
+                  value={ratio}
+                  onChange={(e) => {
+                    setRatio(e.target.value);
+                    const r = parseFloat(e.target.value);
+                    if (!isNaN(r) && asOfShares > 0) {
+                      setShares(Math.round(asOfShares * r).toString());
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                    color: '#fff',
+                    fontSize: '0.875rem',
+                    textAlign: 'right',
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                  減資扣減股數
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={shares}
+                  onChange={(e) => setShares(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                    color: '#f59e0b',
+                    fontWeight: 700,
+                    fontSize: '0.875rem',
+                    textAlign: 'right',
+                  }}
+                  required
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                  每股退現 / 總退款 ({currency})
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  placeholder="退款總額 (0為虧損減資)"
+                  value={cashAmount}
+                  onChange={(e) => setCashAmount(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                    color: '#10b981',
+                    fontWeight: 700,
+                    fontSize: '0.875rem',
+                    textAlign: 'right',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 6. 現金增資 (CAPITAL_INCREASE) */}
+          {type === 'CAPITAL_INCREASE' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                  認購股數
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={shares}
+                  onChange={(e) => setShares(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                    color: '#fff',
+                    fontSize: '0.875rem',
+                    textAlign: 'right',
+                  }}
+                  required
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                  認購單價 ({currency})
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  placeholder="每股認購價"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                    color: '#fff',
+                    fontSize: '0.875rem',
+                    textAlign: 'right',
+                  }}
+                  required
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                  手續費/匯款費 ({currency})
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={fee}
+                  onChange={(e) => setFee(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                    color: '#fff',
+                    fontSize: '0.875rem',
+                    textAlign: 'right',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Fee & Tax Calculation with Broker Discount (買賣與增資時顯示) */}
+          {(type === 'BUY' || type === 'SELL' || type === 'CAPITAL_INCREASE') && (
+            <div
+              style={{
+                background: 'rgba(30, 41, 59, 0.4)',
+                padding: '14px',
+                borderRadius: '8px',
+                border: '1px solid var(--border-color)',
+                marginBottom: '16px',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  手續費與稅費核算
+                </span>
+
+                {/* 台股券商折數選擇器 */}
+                {market === 'TW' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>券商折數:</label>
+                    <select
+                      value={feeDiscount}
+                      onChange={(e) => setFeeDiscount(e.target.value)}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        background: 'var(--bg-input)',
+                        border: '1px solid var(--border-color)',
+                        color: '#60a5fa',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                      }}
+                    >
+                      <option value="1.0">原價 (不打折)</option>
+                      <option value="0.6">6 折 (0.60)</option>
+                      <option value="0.5">5 折 (0.50)</option>
+                      <option value="0.28">2.8 折 (0.28)</option>
+                      <option value="0.2">2 折 (0.20)</option>
+                      <option value="custom">自訂折數</option>
+                    </select>
+
+                    {feeDiscount === 'custom' && (
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.28"
+                        value={customDiscount}
+                        onChange={(e) => setCustomDiscount(e.target.value)}
+                        style={{
+                          width: '60px',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          background: 'var(--bg-input)',
+                          border: '1px solid var(--border-color)',
+                          color: '#fff',
+                          fontSize: '0.75rem',
+                        }}
+                      />
+                    )}
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.7rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={hasMinFee}
+                        onChange={(e) => setHasMinFee(e.target.checked)}
+                      />
+                      低消20元
+                    </label>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary"
+                  onClick={autoCalculateFees}
+                  style={{ padding: '3px 8px', fontSize: '0.7rem' }}
+                >
+                  <Calculator size={12} /> 自動試算
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                    交易手續費 ({currency})
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={fee}
+                    onChange={(e) => setFee(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      color: '#fff',
+                      fontSize: '0.8rem',
+                      textAlign: 'right',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                    證交稅 / 扣繳稅額 ({currency})
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={tax}
+                    onChange={(e) => setTax(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                      color: '#fff',
+                      fontSize: '0.8rem',
+                      textAlign: 'right',
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Strategy Tags */}
           <div style={{ marginBottom: '16px' }}>
@@ -730,10 +1193,10 @@ export const TradeModal: React.FC<TradeModalProps> = ({
           {/* Notes */}
           <div style={{ marginBottom: '20px' }}>
             <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
-              交易備註 (筆記與心態)
+              交易備註 (筆記與除權息說明)
             </label>
             <textarea
-              placeholder="記錄買進理由、停損利計畫或市場觀察..."
+              placeholder="記錄買進理由、除權息說明、減資公告或市場觀察..."
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={2}
@@ -769,7 +1232,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
                 取消
               </button>
               <button type="submit" className="btn btn-primary">
-                {continuousMode ? '儲存並繼續新增' : '確認儲存交易'}
+                {continuousMode ? '儲存並繼續新增' : '確認儲存紀錄'}
               </button>
             </div>
           </div>

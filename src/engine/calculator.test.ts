@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateHoldingsAndSummary, calculateTaiwanFee, calculateTaiwanTax } from './calculator';
+import { calculateHoldingsAndSummary, calculateTaiwanFee, calculateTaiwanTax, getHoldingsAsOfDate } from './calculator';
 import { TradeRecord } from '../types/stock';
 
 describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
@@ -392,4 +392,375 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
     // ETF 賣出 1000 股 @ 100 元 = 100,000 元，稅率 0.1% = 100
     expect(calculateTaiwanTax(100, 1000, true)).toBe(100);
   });
+
+  /* -------------------------------------------------------------------------- */
+  /* V1.2 公司行動 (Corporate Actions) 與歷史基準日持股回溯測試                */
+  /* -------------------------------------------------------------------------- */
+
+  it('應正確回溯任一歷史交易日期的持股部位 (getHoldingsAsOfDate)', () => {
+    const trades: TradeRecord[] = [
+      {
+        id: '1',
+        date: '2025-01-10',
+        symbol: '2330',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        shares: 1000,
+        price: 500,
+        fee: 0,
+        tax: 0,
+        createdAt: 1,
+      },
+      {
+        id: '2',
+        date: '2025-03-15',
+        symbol: '2330',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        shares: 1000,
+        price: 600,
+        fee: 0,
+        tax: 0,
+        createdAt: 2,
+      },
+      {
+        id: '3',
+        date: '2025-06-20',
+        symbol: '2330',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'SELL',
+        shares: 500,
+        price: 700,
+        fee: 0,
+        tax: 0,
+        createdAt: 3,
+      },
+    ];
+
+    // 買進前 (2025-01-01)：持股 0
+    expect(getHoldingsAsOfDate(trades, '2025-01-01', '2330')).toBe(0);
+
+    // 第一次買進當天 (2025-01-10)：持股 1000
+    expect(getHoldingsAsOfDate(trades, '2025-01-10', '2330')).toBe(1000);
+
+    // 第二次買進前一天 (2025-03-14)：持股 1000
+    expect(getHoldingsAsOfDate(trades, '2025-03-14', '2330')).toBe(1000);
+
+    // 第二次買進當天 (2025-03-15)：持股 2000
+    expect(getHoldingsAsOfDate(trades, '2025-03-15', '2330')).toBe(2000);
+
+    // 賣出後 (2025-06-20 及之後)：持股 1500
+    expect(getHoldingsAsOfDate(trades, '2025-06-20', '2330')).toBe(1500);
+    expect(getHoldingsAsOfDate(trades, '2026-01-01', '2330')).toBe(1500);
+  });
+
+  it('應正確處理股票股利 (STOCK_DIVIDEND 除權配股)：增加股數、總成本不變、稀釋每股成本', () => {
+    const trades: TradeRecord[] = [
+      {
+        id: '1',
+        date: '2025-01-10',
+        symbol: '2884',
+        name: '玉山金',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        shares: 1000,
+        price: 25,
+        fee: 35,
+        tax: 0,
+        createdAt: 1,
+      },
+      {
+        id: '2',
+        date: '2025-08-20',
+        symbol: '2884',
+        name: '玉山金',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'STOCK_DIVIDEND',
+        shares: 50, // 每千股配 50 股
+        price: 0,
+        fee: 0,
+        tax: 0,
+        ratio: 0.05,
+        note: '除權配股 50 股',
+        createdAt: 2,
+      },
+    ];
+
+    const currentPrices = { '2884': 28 };
+    const { holdings } = calculateHoldingsAndSummary(trades, currentPrices, 32.0);
+
+    const stock = holdings.find((h) => h.symbol === '2884');
+    expect(stock).toBeDefined();
+    // 總持股變為 1000 + 50 = 1050 股
+    expect(stock?.shares).toBe(1050);
+    // 總投入成本依然為 25000 + 35 = 25035
+    expect(stock?.totalCostBasis).toBe(25035);
+    // 每股平均成本稀釋：25035 / 1050 = 23.8428
+    expect(stock?.avgCost).toBeCloseTo(23.84, 2);
+    // 累計配股總數
+    expect(stock?.totalStockDividendsShares).toBe(50);
+    // 市值 = 1050 * 28 = 29,400
+    expect(stock?.marketValue).toBe(29400);
+    // 未實現損益 = 29400 - 25035 = 4365
+    expect(stock?.unrealizedPnL).toBe(4365);
+  });
+
+  it('應正確處理股票分割 (STOCK_SPLIT)：乘數縮放股數、總成本不變、平均成本反向調整', () => {
+    const trades: TradeRecord[] = [
+      {
+        id: '1',
+        date: '2024-01-10',
+        symbol: 'NVDA',
+        name: 'NVIDIA',
+        market: 'US',
+        currency: 'USD',
+        type: 'BUY',
+        shares: 10,
+        price: 1200,
+        fee: 0,
+        tax: 0,
+        createdAt: 1,
+      },
+      {
+        id: '2',
+        date: '2024-06-10',
+        symbol: 'NVDA',
+        name: 'NVIDIA',
+        market: 'US',
+        currency: 'USD',
+        type: 'STOCK_SPLIT',
+        shares: 0,
+        price: 0,
+        fee: 0,
+        tax: 0,
+        ratio: 10, // 1 拆 10
+        note: '1:10 股票分割',
+        createdAt: 2,
+      },
+    ];
+
+    const currentPrices = { NVDA: 130 };
+    const { holdings } = calculateHoldingsAndSummary(trades, currentPrices, 32.0);
+
+    const nvda = holdings.find((h) => h.symbol === 'NVDA');
+    expect(nvda).toBeDefined();
+    // 股數由 10 股變成 100 股
+    expect(nvda?.shares).toBe(100);
+    // 總成本維持 12,000 USD
+    expect(nvda?.totalCostBasis).toBe(12000);
+    // 平均每股成本由 1200 降為 120 USD
+    expect(nvda?.avgCost).toBe(120);
+    // 市值 = 100 * 130 = 13,000
+    expect(nvda?.marketValue).toBe(13000);
+    expect(nvda?.unrealizedPnL).toBe(1000);
+  });
+
+  it('應正確處理現金減資 (CAPITAL_REDUCTION)：縮減股數、扣減本金成本基準、累計資本返還', () => {
+    const trades: TradeRecord[] = [
+      {
+        id: '1',
+        date: '2024-01-10',
+        symbol: '2303',
+        name: '聯電',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        shares: 1000,
+        price: 50,
+        fee: 71,
+        tax: 0,
+        createdAt: 1,
+      },
+      {
+        id: '2',
+        date: '2024-09-15',
+        symbol: '2303',
+        name: '聯電',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'CAPITAL_REDUCTION',
+        shares: 200, // 減資 20% (扣減 200 股)
+        price: 2, // 每股退還 2 元
+        cashAmount: 2000, // 總計退還 2,000 元現金
+        ratio: 0.2,
+        fee: 0,
+        tax: 0,
+        note: '現金減資 20% 退還 2 元',
+        createdAt: 2,
+      },
+    ];
+
+    const currentPrices = { '2303': 55 };
+    const { holdings, summary } = calculateHoldingsAndSummary(trades, currentPrices, 32.0);
+
+    const umc = holdings.find((h) => h.symbol === '2303');
+    expect(umc).toBeDefined();
+    // 剩餘股數 = 1000 - 200 = 800 股
+    expect(umc?.shares).toBe(800);
+    // 原始總成本 50071 - 退款 2000 = 48071
+    expect(umc?.totalCostBasis).toBe(48071);
+    expect(umc?.adjustedCostBasis).toBe(48071);
+    // 累計退款
+    expect(umc?.totalCapitalReturned).toBe(2000);
+    expect(summary.twd.totalCapitalReturned).toBe(2000);
+    // 平均成本 = 48071 / 800 = 60.08875
+    expect(umc?.avgCost).toBeCloseTo(60.09, 2);
+    // 市值 = 800 * 55 = 44000
+    expect(umc?.marketValue).toBe(44000);
+  });
+
+  it('應正確處理現金增資 (CAPITAL_INCREASE)：增加股數、累加認購成本與手續費', () => {
+    const trades: TradeRecord[] = [
+      {
+        id: '1',
+        date: '2025-01-10',
+        symbol: '2886',
+        name: '兆豐金',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        shares: 1000,
+        price: 40,
+        fee: 57,
+        tax: 0,
+        createdAt: 1,
+      },
+      {
+        id: '2',
+        date: '2025-04-10',
+        symbol: '2886',
+        name: '兆豐金',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'CAPITAL_INCREASE',
+        shares: 200, // 認購 200 股
+        price: 33, // 認購價 33 元
+        fee: 15, // 匯款/手續費
+        tax: 0,
+        note: '現金增資認股',
+        createdAt: 2,
+      },
+    ];
+
+    const currentPrices = { '2886': 42 };
+    const { holdings } = calculateHoldingsAndSummary(trades, currentPrices, 32.0);
+
+    const mega = holdings.find((h) => h.symbol === '2886');
+    expect(mega).toBeDefined();
+    // 總持股 = 1000 + 200 = 1200 股
+    expect(mega?.shares).toBe(1200);
+    // 總投入成本 = (40000 + 57) + (200 * 33 + 15) = 40057 + 6615 = 46672
+    expect(mega?.totalCostBasis).toBe(46672);
+    // 平均成本 = 46672 / 1200 = 38.8933
+    expect(mega?.avgCost).toBeCloseTo(38.89, 2);
+  });
+
+  it('應精確計算混合交錯公司行動（買進 ➔ 配息 ➔ 減資 ➔ 配股 ➔ 賣出）之時序生命週期', () => {
+    const trades: TradeRecord[] = [
+      // 1. 買進 1000 股 @ 100
+      {
+        id: '1',
+        date: '2024-01-01',
+        symbol: 'TEST',
+        name: '測試股',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        shares: 1000,
+        price: 100,
+        fee: 0,
+        tax: 0,
+        createdAt: 1,
+      },
+      // 2. 配息每股 5 元 (領 5000)
+      {
+        id: '2',
+        date: '2024-04-01',
+        symbol: 'TEST',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'DIVIDEND',
+        shares: 1000,
+        price: 5,
+        fee: 0,
+        tax: 0,
+        createdAt: 2,
+      },
+      // 3. 現金減資 20% 退 2 元 (減 200 股，退 2000 元，剩 800 股，本金變 98,000)
+      {
+        id: '3',
+        date: '2024-07-01',
+        symbol: 'TEST',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'CAPITAL_REDUCTION',
+        shares: 200,
+        price: 2,
+        cashAmount: 2000,
+        fee: 0,
+        tax: 0,
+        createdAt: 3,
+      },
+      // 4. 除權配股 10% (800 股配 80 股，總股數變 880 股，總本金維持 98,000)
+      {
+        id: '4',
+        date: '2024-09-01',
+        symbol: 'TEST',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'STOCK_DIVIDEND',
+        shares: 80,
+        price: 0,
+        fee: 0,
+        tax: 0,
+        createdAt: 4,
+      },
+      // 5. 賣出 440 股 @ 150 (賣出一半，結算已實現損益)
+      {
+        id: '5',
+        date: '2024-11-01',
+        symbol: 'TEST',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'SELL',
+        shares: 440,
+        price: 150,
+        fee: 0,
+        tax: 0,
+        createdAt: 5,
+      },
+    ];
+
+    const currentPrices = { TEST: 160 };
+    const { holdings, summary } = calculateHoldingsAndSummary(trades, currentPrices, 32.0);
+
+    const testStock = holdings.find((h) => h.symbol === 'TEST');
+    expect(testStock).toBeDefined();
+
+    // 剩餘股數 = 880 - 440 = 440 股
+    expect(testStock?.shares).toBe(440);
+    // 賣出一半，剩餘本金 = 98000 / 2 = 49,000
+    expect(testStock?.totalCostBasis).toBe(49000);
+    // 平均成本 = 49000 / 440 = 111.3636
+    expect(testStock?.avgCost).toBeCloseTo(111.36, 2);
+    // 賣出收入 440 * 150 = 66,000，成本 49,000 -> 實現損益 = 17,000
+    expect(testStock?.realizedPnL).toBe(17000);
+    // 累計股息 5000
+    expect(testStock?.totalDividends).toBe(5000);
+    // 累計減資退還 2000
+    expect(testStock?.totalCapitalReturned).toBe(2000);
+    // 累計配股 80 股
+    expect(testStock?.totalStockDividendsShares).toBe(80);
+
+    // Summary 驗證
+    expect(summary.twd.realizedPnL).toBe(17000);
+    expect(summary.twd.totalDividends).toBe(5000);
+    expect(summary.twd.totalCapitalReturned).toBe(2000);
+  });
 });
+

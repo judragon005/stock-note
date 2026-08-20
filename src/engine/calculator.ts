@@ -5,6 +5,69 @@ export interface CalculationResult {
   summary: PortfolioSummary;
 }
 
+/**
+ * 依歷史交易日期時序回溯判定特定時點的持有股數 (As of Date)
+ * @param trades 所有交易紀錄
+ * @param targetDate 目標基準日 (YYYY-MM-DD)
+ * @param symbol 標的代碼
+ */
+export function getHoldingsAsOfDate(
+  trades: TradeRecord[],
+  targetDate: string,
+  symbol: string
+): number {
+  const symbolTrades = trades
+    .filter((t) => t.symbol === symbol && t.date <= targetDate)
+    .sort((a, b) => {
+      if (a.date !== b.date) {
+        return a.date.localeCompare(b.date);
+      }
+      return a.createdAt - b.createdAt;
+    });
+
+  let currentShares = 0;
+
+  for (const trade of symbolTrades) {
+    const shares = Number(trade.shares) || 0;
+    const ratio = Number(trade.ratio) || 0;
+
+    switch (trade.type) {
+      case 'BUY':
+      case 'CAPITAL_INCREASE':
+        currentShares += shares;
+        break;
+
+      case 'SELL':
+        currentShares = Math.max(0, currentShares - Math.min(shares, currentShares));
+        break;
+
+      case 'STOCK_DIVIDEND': {
+        const added = shares > 0 ? shares : (ratio > 0 ? currentShares * ratio : 0);
+        currentShares += added;
+        break;
+      }
+
+      case 'STOCK_SPLIT': {
+        const multiplier = ratio > 0 ? ratio : (shares > 0 && currentShares > 0 ? (currentShares + shares) / currentShares : 1);
+        currentShares *= multiplier;
+        break;
+      }
+
+      case 'CAPITAL_REDUCTION': {
+        const reduced = shares > 0 ? Math.min(shares, currentShares) : (ratio > 0 ? currentShares * ratio : 0);
+        currentShares = Math.max(0, currentShares - reduced);
+        break;
+      }
+
+      case 'DIVIDEND':
+      default:
+        break;
+    }
+  }
+
+  return currentShares;
+}
+
 export function calculateHoldingsAndSummary(
   trades: TradeRecord[],
   currentPrices: Record<string, number> = {},
@@ -27,6 +90,8 @@ export function calculateHoldingsAndSummary(
     totalCostBasis: number;
     realizedPnL: number;
     totalDividends: number;
+    totalCapitalReturned: number;
+    totalStockDividendsShares: number;
   }
 
   const map = new Map<string, Accumulator>();
@@ -42,6 +107,8 @@ export function calculateHoldingsAndSummary(
         totalCostBasis: 0,
         realizedPnL: 0,
         totalDividends: 0,
+        totalCapitalReturned: 0,
+        totalStockDividendsShares: 0,
       });
     }
 
@@ -54,39 +121,91 @@ export function calculateHoldingsAndSummary(
     const tax = Number(trade.tax) || 0;
     const price = Number(trade.price) || 0;
     const shares = Number(trade.shares) || 0;
+    const ratio = Number(trade.ratio) || 0;
+    const cashAmount = trade.cashAmount !== undefined ? Number(trade.cashAmount) : 0;
 
-    if (trade.type === 'BUY') {
-      const grossAmount = shares * price;
-      const netCost = grossAmount + fee + tax;
-      item.totalCostBasis += netCost;
-      item.shares += shares;
-    } else if (trade.type === 'SELL') {
-      if (item.shares > 0) {
-        const avgUnitCost = item.totalCostBasis / item.shares;
-        const sellShares = Math.min(shares, item.shares);
-        const costOfSold = sellShares * avgUnitCost;
-        const netRevenue = (sellShares * price) - fee - tax;
-        const pnl = netRevenue - costOfSold;
+    switch (trade.type) {
+      case 'BUY': {
+        const grossAmount = shares * price;
+        const netCost = grossAmount + fee + tax;
+        item.totalCostBasis += netCost;
+        item.shares += shares;
+        break;
+      }
 
-        item.realizedPnL += pnl;
-        item.shares -= sellShares;
-        item.totalCostBasis = Math.max(0, item.totalCostBasis - costOfSold);
+      case 'SELL': {
+        if (item.shares > 0) {
+          const avgUnitCost = item.totalCostBasis / item.shares;
+          const sellShares = Math.min(shares, item.shares);
+          const costOfSold = sellShares * avgUnitCost;
+          const netRevenue = (sellShares * price) - fee - tax;
+          const pnl = netRevenue - costOfSold;
 
-        if (item.shares <= 0) {
-          item.shares = 0;
-          item.totalCostBasis = 0;
+          item.realizedPnL += pnl;
+          item.shares -= sellShares;
+          item.totalCostBasis = Math.max(0, item.totalCostBasis - costOfSold);
+
+          if (item.shares <= 0) {
+            item.shares = 0;
+            item.totalCostBasis = 0;
+          }
         }
+        break;
       }
-    } else if (trade.type === 'DIVIDEND') {
-      let divAmount = 0;
-      if (price > 0 && shares > 0) {
-        divAmount = (price * shares) - tax - fee;
-      } else if (price > 0) {
-        divAmount = price - tax - fee;
-      } else if (fee > 0) {
-        divAmount = fee;
+
+      case 'DIVIDEND': {
+        let divAmount = 0;
+        if (cashAmount > 0) {
+          divAmount = cashAmount;
+        } else if (price > 0 && shares > 0) {
+          divAmount = (price * shares) - tax - fee;
+        } else if (price > 0) {
+          divAmount = price - tax - fee;
+        } else if (fee > 0) {
+          divAmount = fee;
+        }
+        item.totalDividends += Math.max(0, divAmount);
+        break;
       }
-      item.totalDividends += Math.max(0, divAmount);
+
+      case 'STOCK_DIVIDEND': {
+        const addedShares = shares > 0 ? shares : (ratio > 0 ? item.shares * ratio : 0);
+        item.shares += addedShares;
+        item.totalStockDividendsShares += addedShares;
+        break;
+      }
+
+      case 'STOCK_SPLIT': {
+        const splitMultiplier = ratio > 0 ? ratio : (shares > 0 && item.shares > 0 ? (item.shares + shares) / item.shares : 1);
+        if (splitMultiplier > 0) {
+          item.shares *= splitMultiplier;
+        }
+        break;
+      }
+
+      case 'CAPITAL_REDUCTION': {
+        const reducedShares = shares > 0 ? Math.min(shares, item.shares) : (ratio > 0 ? item.shares * ratio : 0);
+        const preReductionShares = item.shares;
+        item.shares = Math.max(0, item.shares - reducedShares);
+
+        const refund = cashAmount > 0 ? cashAmount : (price > 0 ? preReductionShares * price : 0);
+        if (refund > 0) {
+          item.totalCostBasis = Math.max(0, item.totalCostBasis - refund);
+          item.totalCapitalReturned += refund;
+        }
+        break;
+      }
+
+      case 'CAPITAL_INCREASE': {
+        const grossAmount = shares * price;
+        const netCost = grossAmount + fee + tax;
+        item.totalCostBasis += netCost;
+        item.shares += shares;
+        break;
+      }
+
+      default:
+        break;
     }
   }
 
@@ -108,12 +227,15 @@ export function calculateHoldingsAndSummary(
       shares: item.shares,
       avgCost,
       totalCostBasis: item.totalCostBasis,
+      adjustedCostBasis: item.totalCostBasis,
       currentPrice,
       marketValue,
       unrealizedPnL,
       unrealizedPnLPercent,
       realizedPnL: item.realizedPnL,
       totalDividends: item.totalDividends,
+      totalCapitalReturned: item.totalCapitalReturned,
+      totalStockDividendsShares: item.totalStockDividendsShares,
       yieldOnCostPercent,
     });
   }
@@ -127,6 +249,7 @@ export function calculateHoldingsAndSummary(
       unrealizedPnLPercent: 0,
       realizedPnL: 0,
       totalDividends: 0,
+      totalCapitalReturned: 0,
     },
     usd: {
       totalCost: 0,
@@ -135,6 +258,7 @@ export function calculateHoldingsAndSummary(
       unrealizedPnLPercent: 0,
       realizedPnL: 0,
       totalDividends: 0,
+      totalCapitalReturned: 0,
     },
     combinedTWD: {
       totalCost: 0,
@@ -143,6 +267,7 @@ export function calculateHoldingsAndSummary(
       unrealizedPnLPercent: 0,
       realizedPnL: 0,
       totalDividends: 0,
+      totalCapitalReturned: 0,
       netAssetValue: 0,
     },
     usdToTwdRate,
@@ -155,12 +280,14 @@ export function calculateHoldingsAndSummary(
       summary.twd.unrealizedPnL += h.unrealizedPnL;
       summary.twd.realizedPnL += h.realizedPnL;
       summary.twd.totalDividends += h.totalDividends;
+      summary.twd.totalCapitalReturned += h.totalCapitalReturned;
     } else {
       summary.usd.totalCost += h.totalCostBasis;
       summary.usd.marketValue += h.marketValue;
       summary.usd.unrealizedPnL += h.unrealizedPnL;
       summary.usd.realizedPnL += h.realizedPnL;
       summary.usd.totalDividends += h.totalDividends;
+      summary.usd.totalCapitalReturned += h.totalCapitalReturned;
     }
   }
 
@@ -178,6 +305,7 @@ export function calculateHoldingsAndSummary(
   summary.combinedTWD.unrealizedPnL = summary.twd.unrealizedPnL + (summary.usd.unrealizedPnL * usdRate);
   summary.combinedTWD.realizedPnL = summary.twd.realizedPnL + (summary.usd.realizedPnL * usdRate);
   summary.combinedTWD.totalDividends = summary.twd.totalDividends + (summary.usd.totalDividends * usdRate);
+  summary.combinedTWD.totalCapitalReturned = summary.twd.totalCapitalReturned + (summary.usd.totalCapitalReturned * usdRate);
   summary.combinedTWD.netAssetValue = summary.combinedTWD.marketValue;
 
   if (summary.combinedTWD.totalCost > 0) {
@@ -226,3 +354,4 @@ export function calculateTaiwanTax(
   const rate = isETF ? 0.001 : 0.003;
   return Math.floor(rawAmount * rate);
 }
+

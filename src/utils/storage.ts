@@ -80,6 +80,16 @@ export function validateTradesSchema(data: unknown): TradeRecord[] | null {
     return null;
   }
 
+  const validTypes = new Set<TradeType>([
+    'BUY',
+    'SELL',
+    'DIVIDEND',
+    'STOCK_DIVIDEND',
+    'STOCK_SPLIT',
+    'CAPITAL_REDUCTION',
+    'CAPITAL_INCREASE',
+  ]);
+
   const validTrades: TradeRecord[] = [];
   for (const item of data) {
     if (!item || typeof item !== 'object') return null;
@@ -89,9 +99,7 @@ export function validateTradesSchema(data: unknown): TradeRecord[] | null {
       typeof t.date !== 'string' || !t.date ||
       typeof t.symbol !== 'string' || !t.symbol ||
       (t.market !== 'TW' && t.market !== 'US') ||
-      (t.type !== 'BUY' && t.type !== 'SELL' && t.type !== 'DIVIDEND') ||
-      typeof t.shares !== 'number' || isNaN(t.shares) || t.shares <= 0 ||
-      typeof t.price !== 'number' || isNaN(t.price) || t.price < 0
+      !validTypes.has(t.type as TradeType)
     ) {
       return null;
     }
@@ -104,10 +112,13 @@ export function validateTradesSchema(data: unknown): TradeRecord[] | null {
       market: t.market as MarketType,
       currency: (t.currency || (t.market === 'TW' ? 'TWD' : 'USD')) as Currency,
       type: t.type as TradeType,
-      shares: t.shares,
-      price: t.price,
+      shares: typeof t.shares === 'number' && !isNaN(t.shares) ? t.shares : 0,
+      price: typeof t.price === 'number' && !isNaN(t.price) ? t.price : 0,
       fee: typeof t.fee === 'number' ? t.fee : 0,
       tax: typeof t.tax === 'number' ? t.tax : 0,
+      ratio: typeof t.ratio === 'number' ? t.ratio : undefined,
+      cashAmount: typeof t.cashAmount === 'number' ? t.cashAmount : undefined,
+      exDate: typeof t.exDate === 'string' ? t.exDate : undefined,
       tags: Array.isArray(t.tags) ? t.tags : [],
       note: t.note || '',
       createdAt: typeof t.createdAt === 'number' ? t.createdAt : Date.now(),
@@ -201,6 +212,9 @@ export function parseCSVToTrades(csvText: string): ParseCSVResult {
   const idxCurrency = getColIndex(['幣別', 'currency']);
   const idxFee = getColIndex(['手續費', 'fee']);
   const idxTax = getColIndex(['稅費', 'tax']);
+  const idxRatio = getColIndex(['比例', 'ratio', '折數']);
+  const idxCashAmount = getColIndex(['退款', 'cashamount', '現金金額', '金額']);
+  const idxExDate = getColIndex(['基準日', 'exdate', '除權息日']);
   const idxTags = getColIndex(['標籤', 'tags', 'tag']);
   const idxNote = getColIndex(['備註', 'note', 'memo']);
 
@@ -221,19 +235,42 @@ export function parseCSVToTrades(csvText: string): ParseCSVResult {
     const rawCurrency = getVal(idxCurrency).toUpperCase();
     const rawFee = parseFloat(getVal(idxFee)) || 0;
     const rawTax = parseFloat(getVal(idxTax)) || 0;
+    const rawRatio = parseFloat(getVal(idxRatio));
+    const rawCashAmount = parseFloat(getVal(idxCashAmount));
+    const rawExDate = getVal(idxExDate);
     const rawTags = getVal(idxTags);
     const rawNote = getVal(idxNote);
 
     // 格式防呆檢查
     const market: MarketType = rawMarket === 'US' ? 'US' : rawMarket === 'TW' ? 'TW' : rawSymbol.length >= 4 && /^\d+$/.test(rawSymbol) ? 'TW' : 'US';
-    const type: TradeType = rawType.includes('DIV') || rawType.includes('息') ? 'DIVIDEND' : rawType.includes('SELL') || rawType.includes('賣') ? 'SELL' : 'BUY';
+
+    let type: TradeType = 'BUY';
+    if (rawType.includes('STOCK_DIV') || rawType.includes('除權') || rawType.includes('配股')) {
+      type = 'STOCK_DIVIDEND';
+    } else if (rawType.includes('SPLIT') || rawType.includes('分割') || rawType.includes('拆股')) {
+      type = 'STOCK_SPLIT';
+    } else if (rawType.includes('REDUCTION') || rawType.includes('減資')) {
+      type = 'CAPITAL_REDUCTION';
+    } else if (rawType.includes('INCREASE') || rawType.includes('增資') || rawType.includes('認股')) {
+      type = 'CAPITAL_INCREASE';
+    } else if (rawType.includes('DIV') || rawType.includes('息')) {
+      type = 'DIVIDEND';
+    } else if (rawType.includes('SELL') || rawType.includes('賣')) {
+      type = 'SELL';
+    } else {
+      type = 'BUY';
+    }
+
     const currency: Currency = rawCurrency === 'USD' ? 'USD' : rawCurrency === 'TWD' ? 'TWD' : market === 'TW' ? 'TWD' : 'USD';
 
+    if (!rawDate || !rawSymbol) {
+      skippedCount++;
+      continue;
+    }
+
     if (
-      !rawDate ||
-      !rawSymbol ||
-      isNaN(rawShares) || rawShares <= 0 ||
-      isNaN(rawPrice) || rawPrice < 0
+      (type === 'BUY' || type === 'SELL' || type === 'CAPITAL_INCREASE') &&
+      (isNaN(rawShares) || rawShares <= 0 || isNaN(rawPrice) || rawPrice < 0)
     ) {
       skippedCount++;
       continue;
@@ -251,10 +288,13 @@ export function parseCSVToTrades(csvText: string): ParseCSVResult {
       market,
       currency,
       type,
-      shares: rawShares,
-      price: rawPrice,
+      shares: isNaN(rawShares) ? 0 : rawShares,
+      price: isNaN(rawPrice) ? 0 : rawPrice,
       fee: isNaN(rawFee) ? 0 : rawFee,
       tax: isNaN(rawTax) ? 0 : rawTax,
+      ratio: !isNaN(rawRatio) && rawRatio > 0 ? rawRatio : undefined,
+      cashAmount: !isNaN(rawCashAmount) ? rawCashAmount : undefined,
+      exDate: rawExDate || undefined,
       tags,
       note: rawNote,
       createdAt: Date.now() - (lines.length - i) * 1000,
@@ -279,8 +319,8 @@ export function exportTradesToJSON(trades: TradeRecord[]): void {
 }
 
 export function exportTradesToCSV(trades: TradeRecord[]): void {
-  const headers = ['日期', '市場', '代碼', '名稱', '類別', '股數', '單價', '幣別', '手續費', '稅費', '標籤', '備註'];
-  const rows = trades.map(t => [
+  const headers = ['日期', '市場', '代碼', '名稱', '類別', '股數', '單價', '幣別', '手續費', '稅費', '比例', '退款/配發金額', '基準日', '標籤', '備註'];
+  const rows = trades.map((t) => [
     t.date,
     t.market,
     t.symbol,
@@ -291,11 +331,14 @@ export function exportTradesToCSV(trades: TradeRecord[]): void {
     t.currency,
     t.fee,
     t.tax,
+    t.ratio !== undefined ? t.ratio : '',
+    t.cashAmount !== undefined ? t.cashAmount : '',
+    t.exDate || '',
     `"${(t.tags || []).join(';')}"`,
-    `"${(t.note || '').replace(/"/g, '""')}"`
+    `"${(t.note || '').replace(/"/g, '""')}"`,
   ]);
 
-  const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+  const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const downloadAnchor = document.createElement('a');

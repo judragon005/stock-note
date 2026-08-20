@@ -22,6 +22,7 @@ import { HoldingsTable } from './components/HoldingsTable';
 import { TradeHistoryTable } from './components/TradeHistoryTable';
 import { TradeModal } from './components/TradeModal';
 import { ImportModal } from './components/ImportModal';
+import { CorporateActionScannerModal } from './components/CorporateActionScannerModal';
 
 export const App: React.FC = () => {
   const [trades, setTrades] = useState<TradeRecord[]>(() => loadTradesFromStorage());
@@ -46,6 +47,7 @@ export const App: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalInitialSymbol, setModalInitialSymbol] = useState('');
   const [modalInitialType, setModalInitialType] = useState<TradeType>('BUY');
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   // 匯入確認彈窗狀態
   const [importModal, setImportModal] = useState<{
@@ -97,10 +99,18 @@ export const App: React.FC = () => {
     setTrades((prev) => [newTrade, ...prev]);
 
     // 更新市價預設為本次成交價
-    setCurrentPrices((prev) => ({
-      ...prev,
-      [tradeData.symbol]: tradeData.price,
-    }));
+    if (tradeData.price > 0) {
+      setCurrentPrices((prev) => ({
+        ...prev,
+        [tradeData.symbol]: tradeData.price,
+      }));
+    }
+  };
+
+  // 批次補登公司行動
+  const handleApplyCorporateActions = (newActions: TradeRecord[]) => {
+    setTrades((prev) => [...newActions, ...prev]);
+    alert(`✨ 成功補登 ${newActions.length} 筆公司行動紀錄！`);
   };
 
   // 刪除交易
@@ -225,6 +235,7 @@ export const App: React.FC = () => {
         colorTheme={colorTheme}
         onToggleColorTheme={handleToggleColorTheme}
         onOpenTradeModal={handleOpenNewTrade}
+        onOpenScannerModal={() => setIsScannerOpen(true)}
         onExportJSON={handleExportJSON}
         onExportCSV={handleExportCSV}
         onImportFile={handleImportFile}
@@ -243,6 +254,7 @@ export const App: React.FC = () => {
       {/* 當前持倉庫存表 */}
       <HoldingsTable
         holdings={holdings}
+        trades={trades}
         onUpdatePrice={handleUpdatePrice}
         onQuickTrade={handleQuickTrade}
       />
@@ -257,6 +269,15 @@ export const App: React.FC = () => {
         onSaveTrade={handleSaveTrade}
         initialSymbol={modalInitialSymbol}
         initialType={modalInitialType}
+        trades={trades}
+      />
+
+      {/* 智慧掃描公司行動彈窗 */}
+      <CorporateActionScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        trades={trades}
+        onApplyActions={handleApplyCorporateActions}
       />
 
       {/* 匯入還原確認彈窗 */}

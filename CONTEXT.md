@@ -83,3 +83,21 @@ _Avoid_: Theme, Color Mode
 台股單筆交易手續費的最低收費下限，預設為 **20 元**（可由使用者停用）。
 由 `calculateTaiwanFee(price, shares, discountRate, minFee)` 統一處理。
 _Avoid_: Base Fee, Floor Fee
+
+### 公司行動與歷史基準日 (Corporate Actions & Date Resolution)  *(新增於 V1.2)*
+
+**Date Holding Resolution (歷史基準日時序持股回溯)**:
+透過 `getHoldingsAsOfDate(trades, targetDate, symbol)` 函式，僅篩選 `date <= targetDate` 且按日期升序重播買賣、分割與減資，精確求出除權息或減資基準日時點的有效持股股數。
+
+**Stock Dividend (除權配股 / 股票股利)**:
+公司將盈餘以股票形式發放給股東。股數增加，總成本基準不變，加權平均成本自然稀釋。
+
+**Stock Split (股票分割 / 拆股)**:
+美股常見之股權分割行動（如 1 拆 10）。股數乘以分割倍數 `ratio`，總成本基準不變，每股成本等比例下降。
+
+**Capital Reduction (減資 / 虧損減資 / 現金減資)**:
+公司銷除股份。現金減資退款記入 `cashAmount`，直接從持有成本基準扣減（`totalCostBasis = max(0, totalCostBasis - refund)`）並累計至 `totalCapitalReturned`；虧損減資則僅銷除股數，成本不退款。
+
+**Capital Increase (現金增資 / 認股)**:
+股東按認購價格加碼認購新股。增加持股股數，並將認購總價款加計至總成本基準。
+

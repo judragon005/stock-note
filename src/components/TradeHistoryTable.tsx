@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TradeRecord } from '../types/stock';
+import { TradeRecord, TradeType } from '../types/stock';
 import { History, Trash2, Search, Tag } from 'lucide-react';
 
 interface TradeHistoryTableProps {
@@ -9,7 +9,7 @@ interface TradeHistoryTableProps {
 
 export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ trades, onDeleteTrade }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'ALL' | 'BUY' | 'SELL' | 'DIVIDEND'>('ALL');
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'BUY' | 'SELL' | 'DIVIDEND' | 'CORPORATE'>('ALL');
 
   const filteredTrades = [...trades]
     .sort((a, b) => {
@@ -20,34 +20,65 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ trades, on
       const matchSearch =
         t.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (t.name && t.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (t.tags && t.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))) ||
+        (t.tags && t.tags.some((tag) => tag.toLowerCase().includes(searchTerm.toLowerCase()))) ||
         (t.note && t.note.toLowerCase().includes(searchTerm.toLowerCase()));
-      
-      const matchType = typeFilter === 'ALL' || t.type === typeFilter;
+
+      let matchType = true;
+      if (typeFilter === 'ALL') {
+        matchType = true;
+      } else if (typeFilter === 'CORPORATE') {
+        matchType = t.type === 'STOCK_DIVIDEND' || t.type === 'STOCK_SPLIT' || t.type === 'CAPITAL_REDUCTION' || t.type === 'CAPITAL_INCREASE';
+      } else {
+        matchType = t.type === typeFilter;
+      }
+
       return matchSearch && matchType;
     });
+
+  const getTypeBadge = (type: TradeType) => {
+    switch (type) {
+      case 'BUY':
+        return <span className="badge badge-buy">買進</span>;
+      case 'SELL':
+        return <span className="badge badge-sell">賣出</span>;
+      case 'DIVIDEND':
+        return <span className="badge badge-dividend">現金股利</span>;
+      case 'STOCK_DIVIDEND':
+        return <span className="badge badge-stock-div">除權配股</span>;
+      case 'STOCK_SPLIT':
+        return <span className="badge badge-split">股票分割</span>;
+      case 'CAPITAL_REDUCTION':
+        return <span className="badge badge-reduction">減資退款</span>;
+      case 'CAPITAL_INCREASE':
+        return <span className="badge badge-increase">現金增資</span>;
+      default:
+        return <span className="badge">{type}</span>;
+    }
+  };
 
   return (
     <div className="glass-card" style={{ padding: '24px', overflow: 'hidden' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px', marginBottom: '18px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <History size={20} color="#3b82f6" />
-          <h2 style={{ fontSize: '1.125rem', fontWeight: 700, margin: 0 }}>交易明細歷程</h2>
+          <h2 style={{ fontSize: '1.125rem', fontWeight: 700, margin: 0 }}>交易與公司行動明細歷程</h2>
           <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>({filteredTrades.length} 筆)</span>
         </div>
 
         {/* Filters */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           {/* Search */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: 'rgba(30, 41, 59, 0.6)',
-            padding: '4px 10px',
-            borderRadius: '8px',
-            border: '1px solid var(--border-color)'
-          }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'rgba(30, 41, 59, 0.6)',
+              padding: '4px 10px',
+              borderRadius: '8px',
+              border: '1px solid var(--border-color)',
+            }}
+          >
             <Search size={14} color="var(--text-muted)" />
             <input
               type="text"
@@ -60,29 +91,35 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ trades, on
                 color: '#fff',
                 fontSize: '0.8rem',
                 outline: 'none',
-                width: '140px'
+                width: '140px',
               }}
             />
           </div>
 
           {/* Type Filter */}
-          <div style={{ display: 'flex', gap: '4px' }}>
-            {(['ALL', 'BUY', 'SELL', 'DIVIDEND'] as const).map((t) => (
+          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+            {[
+              { key: 'ALL', label: '全部' },
+              { key: 'BUY', label: '買進' },
+              { key: 'SELL', label: '賣出' },
+              { key: 'DIVIDEND', label: '股息' },
+              { key: 'CORPORATE', label: '🏢 公司行動' },
+            ].map((item) => (
               <button
-                key={t}
-                onClick={() => setTypeFilter(t)}
+                key={item.key}
+                onClick={() => setTypeFilter(item.key as any)}
                 style={{
                   padding: '4px 10px',
                   borderRadius: '6px',
                   border: '1px solid var(--border-color)',
-                  background: typeFilter === t ? 'rgba(59, 130, 246, 0.3)' : 'rgba(30, 41, 59, 0.4)',
-                  color: typeFilter === t ? '#60a5fa' : 'var(--text-secondary)',
+                  background: typeFilter === item.key ? 'rgba(59, 130, 246, 0.3)' : 'rgba(30, 41, 59, 0.4)',
+                  color: typeFilter === item.key ? '#60a5fa' : 'var(--text-secondary)',
                   fontSize: '0.75rem',
-                  fontWeight: typeFilter === t ? 700 : 500,
-                  cursor: 'pointer'
+                  fontWeight: typeFilter === item.key ? 700 : 500,
+                  cursor: 'pointer',
                 }}
               >
-                {t === 'ALL' ? '全部' : t === 'BUY' ? '買進' : t === 'SELL' ? '賣出' : '配息'}
+                {item.label}
               </button>
             ))}
           </div>
@@ -90,13 +127,15 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ trades, on
       </div>
 
       {filteredTrades.length === 0 ? (
-        <div style={{
-          textAlign: 'center',
-          padding: '30px 20px',
-          color: 'var(--text-muted)',
-          fontSize: '0.875rem'
-        }}>
-          未找到符合條件的交易紀錄。
+        <div
+          style={{
+            textAlign: 'center',
+            padding: '30px 20px',
+            color: 'var(--text-muted)',
+            fontSize: '0.875rem',
+          }}
+        >
+          未找到符合條件的交易或公司行動紀錄。
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
@@ -106,11 +145,11 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ trades, on
                 <th style={{ padding: '10px 12px', fontWeight: 600 }}>交易日期</th>
                 <th style={{ padding: '10px 12px', fontWeight: 600 }}>類別</th>
                 <th style={{ padding: '10px 12px', fontWeight: 600 }}>標的代碼 / 名稱</th>
-                <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'right' }}>成交股數</th>
-                <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'right' }}>成交單價</th>
-                <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'right' }}>交易手續費</th>
-                <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'right' }}>證交稅 / 扣繳</th>
-                <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'right' }}>結算總額</th>
+                <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'right' }}>異動 / 成交股數</th>
+                <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'right' }}>單價 / 比例</th>
+                <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'right' }}>手續費</th>
+                <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'right' }}>稅費</th>
+                <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'right' }}>結算 / 退款金額</th>
                 <th style={{ padding: '10px 12px', fontWeight: 600 }}>策略標籤 / 備註</th>
                 <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'center' }}>刪除</th>
               </tr>
@@ -119,17 +158,44 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ trades, on
               {filteredTrades.map((t) => {
                 const isBuy = t.type === 'BUY';
                 const isSell = t.type === 'SELL';
+                const isDiv = t.type === 'DIVIDEND';
+                const isStockDiv = t.type === 'STOCK_DIVIDEND';
+                const isSplit = t.type === 'STOCK_SPLIT';
+                const isReduction = t.type === 'CAPITAL_REDUCTION';
+                const isIncrease = t.type === 'CAPITAL_INCREASE';
                 const isUS = t.currency === 'USD';
                 const decimals = isUS ? 2 : (t.price < 50 ? 2 : 1);
 
-                // 計算結算總額
-                let totalAmount = 0;
+                // 計算結算與呈現金額
+                let totalAmountDisplay = '';
+                let amountColor = '#fff';
+
                 if (isBuy) {
-                  totalAmount = (t.shares * t.price) + (t.fee || 0) + (t.tax || 0);
+                  const net = (t.shares * t.price) + (t.fee || 0) + (t.tax || 0);
+                  totalAmountDisplay = `-${t.currency} ${Math.round(net).toLocaleString('en-US')}`;
+                  amountColor = 'var(--loss-color)';
                 } else if (isSell) {
-                  totalAmount = (t.shares * t.price) - (t.fee || 0) - (t.tax || 0);
-                } else {
-                  totalAmount = (t.shares > 0 && t.price > 0) ? (t.shares * t.price) - (t.tax || 0) - (t.fee || 0) : (t.fee || 0);
+                  const net = (t.shares * t.price) - (t.fee || 0) - (t.tax || 0);
+                  totalAmountDisplay = `+${t.currency} ${Math.round(net).toLocaleString('en-US')}`;
+                  amountColor = 'var(--gain-color)';
+                } else if (isDiv) {
+                  const div = t.cashAmount !== undefined ? t.cashAmount : (t.shares > 0 && t.price > 0 ? (t.shares * t.price) - (t.tax || 0) - (t.fee || 0) : (t.price || 0));
+                  totalAmountDisplay = `+${t.currency} ${Math.round(div).toLocaleString('en-US')}`;
+                  amountColor = '#fbbf24';
+                } else if (isReduction) {
+                  const ref = t.cashAmount !== undefined ? t.cashAmount : (t.price > 0 ? t.price * t.shares : 0);
+                  totalAmountDisplay = ref > 0 ? `+${t.currency} ${Math.round(ref).toLocaleString('en-US')} (退款)` : '0 (虧損減資)';
+                  amountColor = ref > 0 ? '#fb923c' : 'var(--text-muted)';
+                } else if (isIncrease) {
+                  const cost = (t.shares * t.price) + (t.fee || 0) + (t.tax || 0);
+                  totalAmountDisplay = `-${t.currency} ${Math.round(cost).toLocaleString('en-US')}`;
+                  amountColor = '#a5b4fc';
+                } else if (isStockDiv) {
+                  totalAmountDisplay = `+${t.shares} 股 (配股)`;
+                  amountColor = '#c084fc';
+                } else if (isSplit) {
+                  totalAmountDisplay = `比例 ${t.ratio || 1}x`;
+                  amountColor = '#38bdf8';
                 }
 
                 return (
@@ -144,9 +210,7 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ trades, on
 
                     {/* 類別 */}
                     <td style={{ padding: '10px 12px' }}>
-                      <span className={`badge ${isBuy ? 'badge-buy' : isSell ? 'badge-sell' : 'badge-dividend'}`}>
-                        {isBuy ? '買進' : isSell ? '賣出' : '股息'}
-                      </span>
+                      {getTypeBadge(t.type)}
                     </td>
 
                     {/* 代碼與名稱 */}
@@ -164,14 +228,20 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ trades, on
                       )}
                     </td>
 
-                    {/* 成交股數 */}
+                    {/* 成交 / 異動股數 */}
                     <td className="mono" style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>
-                      {t.shares.toLocaleString('en-US', { maximumFractionDigits: 4 })}
+                      {isReduction ? `-${t.shares.toLocaleString()}` :
+                       isStockDiv ? `+${t.shares.toLocaleString()}` :
+                       isSplit ? `1 拆 ${t.ratio || 1}` :
+                       t.shares > 0 ? t.shares.toLocaleString('en-US', { maximumFractionDigits: 4 }) : '-'}
                     </td>
 
-                    {/* 成交單價 */}
+                    {/* 成交單價 / 比例 */}
                     <td className="mono" style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-secondary)' }}>
-                      {t.currency} {t.price.toFixed(decimals)}
+                      {isSplit ? `${t.ratio}x` :
+                       isStockDiv ? (t.ratio ? `配股率 ${t.ratio}` : '-') :
+                       isReduction ? (t.price > 0 ? `退 ${t.price} 元` : '虧損減資') :
+                       t.price > 0 ? `${t.currency} ${t.price.toFixed(decimals)}` : '-'}
                     </td>
 
                     {/* 手續費 */}
@@ -185,13 +255,16 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ trades, on
                     </td>
 
                     {/* 結算總額 */}
-                    <td className="mono" style={{
-                      padding: '10px 12px',
-                      textAlign: 'right',
-                      fontWeight: 700,
-                      color: isBuy ? 'var(--loss-color)' : isSell ? 'var(--gain-color)' : '#fbbf24'
-                    }}>
-                      {isBuy ? '-' : '+'}{t.currency} {Math.round(totalAmount).toLocaleString('en-US')}
+                    <td
+                      className="mono"
+                      style={{
+                        padding: '10px 12px',
+                        textAlign: 'right',
+                        fontWeight: 700,
+                        color: amountColor,
+                      }}
+                    >
+                      {totalAmountDisplay}
                     </td>
 
                     {/* 標籤與備註 */}
@@ -209,7 +282,7 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ trades, on
                                 color: '#94a3b8',
                                 padding: '1px 6px',
                                 borderRadius: '4px',
-                                fontSize: '0.65rem'
+                                fontSize: '0.65rem',
                               }}
                             >
                               <Tag size={10} /> {tag}
@@ -228,7 +301,7 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ trades, on
                     <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                       <button
                         onClick={() => {
-                          if (confirm(`確定要刪除 ${t.date} ${t.symbol} 的 ${t.type} 交易紀錄嗎？`)) {
+                          if (confirm(`確定要刪除 ${t.date} ${t.symbol} 的 ${t.type} 紀錄嗎？`)) {
                             onDeleteTrade(t.id);
                           }
                         }}
@@ -239,7 +312,7 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ trades, on
                           cursor: 'pointer',
                           padding: '4px',
                           borderRadius: '4px',
-                          transition: 'color 0.2s ease'
+                          transition: 'color 0.2s ease',
                         }}
                         onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--loss-color)')}
                         onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}

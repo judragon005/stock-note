@@ -106,6 +106,34 @@ describe('Storage & Persistence Utilities (Issue #6)', () => {
       expect(result.skippedCount).toBe(2); // 略過 2 筆無效行
       expect(result.trades.map(t => t.symbol)).toEqual(['2330', 'NVDA']);
     });
+
+    it('應能正確解析除權配股、股票分割、現金減資與現金增資等公司行動 CSV', () => {
+      const csvContent = '日期,市場,代碼,名稱,類別,股數,單價,幣別,手續費,稅費,比例,退款金額,基準日,標籤,備註\n' +
+        '2025-08-20,TW,2884,玉山金,除權配股,50,0,TWD,0,0,0.05,0,2025-08-20,"金融;存股","配股 50 股"\n' +
+        '2024-06-10,US,NVDA,NVIDIA,股票分割,0,0,USD,0,0,10,0,2024-06-10,"AI","1拆10"\n' +
+        '2024-09-15,TW,2303,聯電,現金減資,200,2,TWD,0,0,0.2,2000,2024-09-15,"晶圓","減資退款 2000"\n' +
+        '2025-04-10,TW,2886,兆豐金,現金增資,200,33,TWD,15,0,0,0,2025-04-10,"官股","認股"';
+
+      const result = parseCSVToTrades(csvContent);
+
+      expect(result.successCount).toBe(4);
+      expect(result.skippedCount).toBe(0);
+
+      expect(result.trades[0].type).toBe('STOCK_DIVIDEND');
+      expect(result.trades[0].shares).toBe(50);
+      expect(result.trades[0].ratio).toBe(0.05);
+
+      expect(result.trades[1].type).toBe('STOCK_SPLIT');
+      expect(result.trades[1].ratio).toBe(10);
+
+      expect(result.trades[2].type).toBe('CAPITAL_REDUCTION');
+      expect(result.trades[2].shares).toBe(200);
+      expect(result.trades[2].cashAmount).toBe(2000);
+
+      expect(result.trades[3].type).toBe('CAPITAL_INCREASE');
+      expect(result.trades[3].shares).toBe(200);
+      expect(result.trades[3].price).toBe(33);
+    });
   });
 
   describe('Seam 2: mergeTrades (交易追加與去重)', () => {
