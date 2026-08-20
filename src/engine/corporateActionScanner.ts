@@ -329,12 +329,15 @@ export async function scanCorporateActions(
       if (ev.type === 'DIVIDEND') {
         estimatedCash = (ev.price || 0) * sharesHeld;
       } else if (ev.type === 'STOCK_DIVIDEND') {
-        estimatedShares = ev.shares && ev.shares > 0 ? ev.shares : (ev.ratio ? sharesHeld * ev.ratio : 0);
+        const rawShares = ev.shares && ev.shares > 0 ? ev.shares : (ev.ratio ? sharesHeld * ev.ratio : 0);
+        estimatedShares = meta.market === 'TW' ? Math.round(rawShares) : rawShares;
       } else if (ev.type === 'STOCK_SPLIT') {
         const multiplier = ev.ratio || 1;
-        estimatedShares = multiplier > 1 ? sharesHeld * (multiplier - 1) : 0;
+        const rawShares = multiplier > 1 ? sharesHeld * (multiplier - 1) : 0;
+        estimatedShares = meta.market === 'TW' ? Math.round(rawShares) : rawShares;
       } else if (ev.type === 'CAPITAL_REDUCTION') {
-        estimatedShares = ev.shares && ev.shares > 0 ? ev.shares : (ev.ratio ? sharesHeld * ev.ratio : 0);
+        const rawShares = ev.shares && ev.shares > 0 ? ev.shares : (ev.ratio ? sharesHeld * ev.ratio : 0);
+        estimatedShares = meta.market === 'TW' ? Math.round(rawShares) : rawShares;
         estimatedCash = ev.cashAmount && ev.cashAmount > 0 ? ev.cashAmount : (ev.price ? sharesHeld * ev.price : 0);
       }
 

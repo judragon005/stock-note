@@ -240,10 +240,10 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ trades, on
 
                     {/* 成交 / 異動股數 */}
                     <td className="mono" style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>
-                      {isReduction ? `-${t.shares.toLocaleString()}` :
-                       isStockDiv ? `+${t.shares.toLocaleString()}` :
+                      {isReduction ? `-${t.shares.toLocaleString('en-US', { maximumFractionDigits: t.market === 'TW' ? 0 : 4 })}` :
+                       isStockDiv ? `+${t.shares.toLocaleString('en-US', { maximumFractionDigits: t.market === 'TW' ? 0 : 4 })}` :
                        isSplit ? `1 拆 ${t.ratio || 1}` :
-                       t.shares > 0 ? t.shares.toLocaleString('en-US', { maximumFractionDigits: 4 }) : '-'}
+                       t.shares > 0 ? t.shares.toLocaleString('en-US', { maximumFractionDigits: t.market === 'TW' ? 0 : 4 }) : '-'}
                     </td>
 
                     {/* 成交單價 / 比例 */}

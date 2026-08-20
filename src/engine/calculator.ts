@@ -12,53 +12,67 @@ export interface CalculationResult {
  */
 export function applyTradeToShares(
   currentShares: number,
-  trade: { type: TradeType; shares?: number; ratio?: number }
+  trade: { type: TradeType; shares?: number; ratio?: number; market?: MarketType; symbol?: string }
 ): number {
   const shares = Number(trade.shares) || 0;
   const ratio = Number(trade.ratio) || 0;
+  const isTW = trade.market === 'TW' || (trade.symbol ? /^\d+$/.test(trade.symbol) : false);
 
+  let result = currentShares;
   switch (trade.type) {
     case 'BUY':
     case 'CAPITAL_INCREASE':
     case 'CB_CONVERSION':
-      return currentShares + shares;
+      result = currentShares + shares;
+      break;
 
     case 'SELL':
     case 'TENDER_OFFER':
     case 'PREFERRED_REDEMPTION':
-      return Math.max(0, currentShares - Math.min(shares, currentShares));
+      result = Math.max(0, currentShares - Math.min(shares, currentShares));
+      break;
 
     case 'STOCK_MERGER':
-      return 0; // 原標的在換股合併後持股歸零轉出
+      result = 0; // 原標的在換股合併後持股歸零轉出
+      break;
 
     case 'SPIN_OFF':
-      return currentShares; // 企業分拆母公司持有股數不變
+      result = currentShares; // 企業分拆母公司持有股數不變
+      break;
 
     case 'STOCK_DIVIDEND': {
       const added = shares > 0 ? shares : (ratio > 0 ? currentShares * ratio : 0);
-      return currentShares + added;
+      result = currentShares + (isTW ? Math.round(added) : added);
+      break;
     }
 
     case 'STOCK_SPLIT': {
       const multiplier = ratio > 0 ? ratio : (shares > 0 && currentShares > 0 ? (currentShares + shares) / currentShares : 1);
-      return multiplier > 0 ? currentShares * multiplier : currentShares;
+      const calculated = multiplier > 0 ? currentShares * multiplier : currentShares;
+      result = isTW ? Math.round(calculated) : calculated;
+      break;
     }
 
     case 'CAPITAL_REDUCTION': {
       const reduced = shares > 0 ? Math.min(shares, currentShares) : (ratio > 0 ? currentShares * ratio : 0);
-      return Math.max(0, currentShares - reduced);
+      const finalReduced = isTW ? Math.round(reduced) : reduced;
+      result = Math.max(0, currentShares - finalReduced);
+      break;
     }
 
     case 'DIVIDEND':
     default:
-      return currentShares;
+      result = currentShares;
+      break;
   }
+
+  return isTW ? Math.round(result) : result;
 }
 
 /**
  * 依歷史交易日期時序回溯判定特定時點的持有股數 (As of Date)
  * @param trades 所有交易紀錄
- * @param targetDate 目標基準日 (YYYY-MM-DD)
+ * @param targetDate 查詢基準日 (YYYY-MM-DD)
  * @param symbol 標的代碼
  */
 export function getHoldingsAsOfDate(
@@ -66,30 +80,22 @@ export function getHoldingsAsOfDate(
   targetDate: string,
   symbol: string
 ): number {
-  const symbolTrades = trades
-    .filter((t) => (t.symbol === symbol || t.targetSymbol === symbol) && t.date <= targetDate)
-    .sort((a, b) => {
-      if (a.date !== b.date) {
-        return a.date.localeCompare(b.date);
-      }
-      return a.createdAt - b.createdAt;
-    });
+  const symbolUpper = symbol.toUpperCase();
+  const sortedTrades = [...trades]
+    .filter((t) => t.symbol.toUpperCase() === symbolUpper && t.date <= targetDate)
+    .sort((a, b) => (a.date !== b.date ? a.date.localeCompare(b.date) : a.createdAt - b.createdAt));
 
   let currentShares = 0;
-  for (const trade of symbolTrades) {
-    if (trade.targetSymbol === symbol) {
-      // 若當前標的是目標標的 (換股目標或分拆新公司)
-      if (trade.type === 'STOCK_MERGER' || trade.type === 'SPIN_OFF') {
-        const added = Number(trade.shares) || 0;
-        currentShares += added;
-      }
-    } else {
-      currentShares = applyTradeToShares(currentShares, trade);
-    }
+  for (const trade of sortedTrades) {
+    currentShares = applyTradeToShares(currentShares, trade);
   }
+
   return currentShares;
 }
 
+/**
+ * 核心會計引擎：計算所有標的之持倉統計、均價與投資組合摘要
+ */
 export function calculateHoldingsAndSummary(
   trades: TradeRecord[],
   currentPrices: Record<string, number> = {},
@@ -155,10 +161,12 @@ export function calculateHoldingsAndSummary(
       item.name = trade.name;
     }
 
+    const isTW = item.market === 'TW' || /^\d+$/.test(trade.symbol);
     const fee = Number(trade.fee) || 0;
     const tax = Number(trade.tax) || 0;
     const price = Number(trade.price) || 0;
-    const shares = Number(trade.shares) || 0;
+    const rawShares = Number(trade.shares) || 0;
+    const shares = isTW ? Math.round(rawShares) : rawShares;
     const ratio = Number(trade.ratio) || 0;
     const cashAmount = trade.cashAmount !== undefined ? Number(trade.cashAmount) : 0;
 
@@ -208,7 +216,8 @@ export function calculateHoldingsAndSummary(
       }
 
       case 'STOCK_DIVIDEND': {
-        const addedShares = shares > 0 ? shares : (ratio > 0 ? item.shares * ratio : 0);
+        const rawAdded = shares > 0 ? shares : (ratio > 0 ? item.shares * ratio : 0);
+        const addedShares = isTW ? Math.round(rawAdded) : rawAdded;
         item.shares += addedShares;
         item.totalStockDividendsShares += addedShares;
         break;
@@ -218,14 +227,17 @@ export function calculateHoldingsAndSummary(
         const splitMultiplier = ratio > 0 ? ratio : (shares > 0 && item.shares > 0 ? (item.shares + shares) / item.shares : 1);
         if (splitMultiplier > 0) {
           item.shares *= splitMultiplier;
+          if (isTW) item.shares = Math.round(item.shares);
         }
         break;
       }
 
       case 'CAPITAL_REDUCTION': {
-        const reducedShares = shares > 0 ? Math.min(shares, item.shares) : (ratio > 0 ? item.shares * ratio : 0);
+        const rawReduced = shares > 0 ? Math.min(shares, item.shares) : (ratio > 0 ? item.shares * ratio : 0);
+        const reducedShares = isTW ? Math.round(rawReduced) : rawReduced;
         const preReductionShares = item.shares;
         item.shares = Math.max(0, item.shares - reducedShares);
+        if (isTW) item.shares = Math.round(item.shares);
 
         const refund = cashAmount > 0 ? cashAmount : (price > 0 ? preReductionShares * price : 0);
         if (refund > 0) {
@@ -257,7 +269,8 @@ export function calculateHoldingsAndSummary(
             item.market,
             item.currency
           );
-          const newSharesB = shares > 0 ? shares : (ratio > 0 ? preMergerShares * ratio : preMergerShares);
+          const rawSharesB = shares > 0 ? shares : (ratio > 0 ? preMergerShares * ratio : preMergerShares);
+          const newSharesB = isTW ? Math.round(rawSharesB) : rawSharesB;
           targetItem.shares += newSharesB;
           targetItem.originalBuyShares += newSharesB;
           targetItem.totalCostBasis += Math.max(0, transferCost - cashAmount);
@@ -286,7 +299,8 @@ export function calculateHoldingsAndSummary(
             item.market,
             item.currency
           );
-          const newSharesChild = shares > 0 ? shares : (ratio > 0 ? item.shares * ratio : 0);
+          const rawChild = shares > 0 ? shares : (ratio > 0 ? item.shares * ratio : 0);
+          const newSharesChild = isTW ? Math.round(rawChild) : rawChild;
           targetItem.shares += newSharesChild;
           targetItem.originalBuyShares += newSharesChild;
           targetItem.totalCostBasis += splitCost;

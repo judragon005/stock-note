@@ -155,15 +155,15 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
 
                       {/* 股數 */}
                       <td className="mono" style={{ padding: '14px', textAlign: 'right', fontWeight: 600 }}>
-                        <div>{item.shares.toLocaleString('en-US', { maximumFractionDigits: 4 })} 股</div>
+                        <div>{item.shares.toLocaleString('en-US', { maximumFractionDigits: item.market === 'TW' ? 0 : 4 })} 股</div>
                         {item.totalStockDividendsShares && item.totalStockDividendsShares > 0 ? (
                           <div style={{ fontSize: '0.7rem', color: '#c084fc' }}>
-                            含配股 +{item.totalStockDividendsShares.toLocaleString()} 股
+                            含配股 +{item.totalStockDividendsShares.toLocaleString('en-US', { maximumFractionDigits: item.market === 'TW' ? 0 : 4 })} 股
                           </div>
                         ) : null}
                         {item.originalBuyShares && item.originalBuyShares > 0 && item.originalBuyShares !== item.shares && (
                           <div style={{ fontSize: '0.675rem', color: 'var(--text-muted)' }}>
-                            原買入 {item.originalBuyShares.toLocaleString()} 股
+                            原買入 {item.originalBuyShares.toLocaleString('en-US', { maximumFractionDigits: item.market === 'TW' ? 0 : 4 })} 股
                           </div>
                         )}
                       </td>

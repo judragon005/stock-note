@@ -1029,5 +1029,47 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
     // 獲利 = 20000 * 60 - 1,000,000 = 200,000
     expect(result?.realizedPnL).toBe(200000);
   });
+
+  it('台股市場（TW）股數精確度規則：絕無小數點股數，分割與減資一律四捨五入取整數', () => {
+    // 模擬 9927 泰銘外部 API 傳入浮點分割/減資比率 (如 0.7171949 或 0.2828051)
+    const twTrades: TradeRecord[] = [
+      {
+        id: '1',
+        date: '2025-09-12',
+        symbol: '9927',
+        name: '泰銘',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        shares: 10000,
+        price: 55.8,
+        fee: 0,
+        tax: 0,
+        createdAt: 1,
+      },
+      {
+        id: '2',
+        date: '2025-09-15',
+        symbol: '9927',
+        name: '泰銘',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'CAPITAL_REDUCTION',
+        shares: 2828.051, // 浮點數精度漂移
+        price: 2.828,
+        cashAmount: 28280,
+        fee: 0,
+        tax: 0,
+        createdAt: 2,
+      },
+    ];
+
+    const { holdings } = calculateHoldingsAndSummary(twTrades, {}, 32.0);
+    const tm = holdings.find((h) => h.symbol === '9927');
+    expect(tm).toBeDefined();
+    // 嚴格確保為正整數 7,172 股，不帶任何小數點
+    expect(tm?.shares).toBe(7172);
+    expect(Number.isInteger(tm?.shares)).toBe(true);
+  });
 });
 
