@@ -1071,5 +1071,34 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
     expect(tm?.shares).toBe(7172);
     expect(Number.isInteger(tm?.shares)).toBe(true);
   });
+
+  it('應該將持倉標的依照台股優先、代碼自然升冪（Natural Sort）、美股置底的規則正確排序', () => {
+    const mixedTrades: TradeRecord[] = [
+      { id: '1', date: '2024-01-01', symbol: 'VT', name: 'VT', market: 'US', currency: 'USD', type: 'BUY', shares: 10, price: 100, fee: 0, tax: 0, createdAt: 1 },
+      { id: '2', date: '2024-01-02', symbol: '2886', name: '兆豐金', market: 'TW', currency: 'TWD', type: 'BUY', shares: 1000, price: 35, fee: 0, tax: 0, createdAt: 2 },
+      { id: '3', date: '2024-01-03', symbol: '0050', name: '元大台灣50', market: 'TW', currency: 'TWD', type: 'BUY', shares: 1000, price: 150, fee: 0, tax: 0, createdAt: 3 },
+      { id: '4', date: '2024-01-04', symbol: '00403A', name: '主動統一升級50', market: 'TW', currency: 'TWD', type: 'BUY', shares: 1000, price: 15, fee: 0, tax: 0, createdAt: 4 },
+      { id: '5', date: '2024-01-05', symbol: '00981A', name: '富邦特選高股息30', market: 'TW', currency: 'TWD', type: 'BUY', shares: 1000, price: 15, fee: 0, tax: 0, createdAt: 5 },
+      { id: '6', date: '2024-01-06', symbol: '9927', name: '泰銘', market: 'TW', currency: 'TWD', type: 'BUY', shares: 1000, price: 50, fee: 0, tax: 0, createdAt: 6 },
+      { id: '7', date: '2024-01-07', symbol: '2330', name: '台積電', market: 'TW', currency: 'TWD', type: 'BUY', shares: 100, price: 900, fee: 0, tax: 0, createdAt: 7 },
+      { id: '8', date: '2024-01-08', symbol: 'AAPL', name: 'Apple', market: 'US', currency: 'USD', type: 'BUY', shares: 5, price: 200, fee: 0, tax: 0, createdAt: 8 },
+      { id: '9', date: '2024-01-09', symbol: '00878', name: '國泰永續高股息', market: 'TW', currency: 'TWD', type: 'BUY', shares: 1000, price: 22, fee: 0, tax: 0, createdAt: 9 },
+    ];
+
+    const { holdings } = calculateHoldingsAndSummary(mixedTrades, {}, 32.0);
+    const symbols = holdings.map((h) => h.symbol);
+
+    expect(symbols).toEqual([
+      '00403A',
+      '0050',
+      '00878',
+      '00981A',
+      '2330',
+      '2886',
+      '9927',
+      'AAPL',
+      'VT',
+    ]);
+  });
 });
 

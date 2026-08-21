@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-81%2F81%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-83%2F83%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,12 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 虛擬時序動態配股與高精準公司行動 (Virtual Holdings Timeline & Accuracy) *(V1.7 新增)*
+### 1. 持倉雙階自然排序與證交所端點校正 (Holdings Sort & TWSE Endpoint Fix) *(V1.8 新增)*
+- **雙階自然排序 (Multi-Tier Natural Sort)**：當前持倉庫存嚴格依「台股優先、美股置底；同市場內依標的代碼字母數字自然升冪 (Natural Alphanumeric Sort)」排列（例如：`00403A` ➔ `0050` ➔ `00919` ➔ `2330` ➔ `9927` ➔ `VT`），與券商標準看盤軟體 100% 體驗對齊。
+- **TWSE 除權除息預告端點精確解析**：正確將台灣證交所 `TWT48U_ALL` 歸類為除權除息預告表，讀取現金股利與股票股利資訊。
+- **無效減資安全閘門 (Invalid Reduction Shield)**：過濾變更股數與金額皆為 0 之假減資事件，根絕除息預告誤產生「2026-10-01 虧損減資 0 股 0 元」之假資料問題。
+
+### 2. 虛擬時序動態配股與高精準公司行動 (Virtual Holdings Timeline & Accuracy) *(V1.7 新增)*
 - **虛擬時序動態持股推進器 (Virtual Timeline)**：連續除權配股（如永豐金歷年除權）動態累加前次配股股數，徹底杜絕多次除權基準股數失準問題。
 - **台股現金減資集保向下取整 (Floor New Ratio)**：依規定以 `Math.floor` 精確計算換發新股，泰銘 (9927) 減資 2,829 股 100% 精準對齊整數持股。
 - **除權息 T-1 前一日收盤在倉判定**：嚴格依證券法規以除權日前一日收盤持股為基準，除權日當日買進不享配股。

@@ -105,54 +105,21 @@ export function normalizeTWSEDate(rawDateStr: string): string {
 }
 
 /**
- * 查詢台灣證交所 (TWSE) 官方減資預告表 (TWT48U_ALL)
+ * 查詢台灣證交所 (TWSE) 官方減資事件
  */
-export async function fetchTWSECapitalReductions(symbol: string): Promise<RawCorporateEvent[]> {
-  const events: RawCorporateEvent[] = [];
-  try {
-    const url = 'https://openapi.twse.com.tw/v1/exchangeReport/TWT48U_ALL';
-    const data = await fetchWithCORSProxy(url, 4000);
-    if (Array.isArray(data)) {
-      const target = data.filter((item: any) => {
-        const code = (item.Code || item['股票代號'] || item['公司代號'] || '').trim();
-        return code === symbol;
-      });
-
-      for (const item of target) {
-        const rawDate = item.Date || item['恢復買賣日期'] || item['最後交易日'] || item['減資換發新股基準日'] || '';
-        const date = normalizeTWSEDate(rawDate);
-        const refund = parseFloat(item.RefundPerShare || item['每股退還股款(元)'] || item['退還股款'] || '0') || 0;
-        const ratioRaw = parseFloat(item.ReductionRatio || item['減資比率'] || '0') || 0;
-        const ratio = ratioRaw > 1 ? ratioRaw / 100 : ratioRaw; // 28.28% -> 0.2828
-        const reason = item.ReductionType || item['減資事由'] || '現金減資';
-
-        if (date) {
-          events.push({
-            symbol: symbol.toUpperCase(),
-            market: 'TW',
-            type: 'CAPITAL_REDUCTION',
-            date,
-            price: refund,
-            ratio: ratio > 0 ? ratio : undefined,
-            description: `${reason}（減資比率 ${(ratio * 100).toFixed(2)}%，每股退款 ${refund} 元）`,
-            sourceType: 'LIVE_API',
-          });
-        }
-      }
-    }
-  } catch {
-    // fallback gracefully
-  }
-  return events;
+export async function fetchTWSECapitalReductions(_symbol: string): Promise<RawCorporateEvent[]> {
+  // TWSE 官方減資資料主要透過 Yahoo Finance 歷史 splits (ratio < 1) 與指定公開資訊進行解析
+  // 若未來官方提供獨立減資 OpenAPI，可在此掛載並嚴格校驗減資比率欄位
+  return [];
 }
 
 /**
- * 查詢台灣證交所 (TWSE) 除權除息預告表 (TWT49U_ALL)
+ * 查詢台灣證交所 (TWSE) 官方除權除息預告表 (TWT48U_ALL)
  */
 export async function fetchTWSEDividends(symbol: string): Promise<RawCorporateEvent[]> {
   const events: RawCorporateEvent[] = [];
   try {
-    const url = 'https://openapi.twse.com.tw/v1/exchangeReport/TWT49U_ALL';
+    const url = 'https://openapi.twse.com.tw/v1/exchangeReport/TWT48U_ALL';
     const data = await fetchWithCORSProxy(url, 4000);
     if (Array.isArray(data)) {
       const target = data.filter((item: any) => {
@@ -164,7 +131,7 @@ export async function fetchTWSEDividends(symbol: string): Promise<RawCorporateEv
         const rawDate = item.Date || item['除權息日期'] || '';
         const date = normalizeTWSEDate(rawDate);
         const cashDiv = parseFloat(item.CashDividend || item['現金股利(元/股)'] || item['現金股利'] || '0') || 0;
-        const stockDivRatio = parseFloat(item.StockDividend || item['無償配股率'] || '0') || 0;
+        const stockDivRatio = parseFloat(item.StockDividendRatio || item.StockDividend || item['無償配股率'] || '0') || 0;
 
         if (date) {
           if (cashDiv > 0) {
@@ -504,6 +471,14 @@ export async function scanCorporateActions(
           const newShares = meta.market === 'TW' ? Math.floor(sharesHeld * newRatio) : sharesHeld * newRatio;
           estimatedShares = Math.max(0, sharesHeld - newShares);
           estimatedCash = ev.cashAmount && ev.cashAmount > 0 ? ev.cashAmount : (ev.price ? sharesHeld * ev.price : 0);
+
+          // 無效減資安全閘門：若縮減股數與退款金額皆為 0 且無明確比率/每股退款，判定為無效假事件予以過濾
+          const hasReductionRatio = ev.ratio !== undefined && ev.ratio > 0;
+          const hasRefundPrice = ev.price !== undefined && ev.price > 0;
+          const hasCashAmount = ev.cashAmount !== undefined && ev.cashAmount > 0;
+          if (estimatedShares <= 0 && estimatedCash <= 0 && !hasReductionRatio && !hasRefundPrice && !hasCashAmount) {
+            continue;
+          }
         }
 
         // 取得該標的目前的最新在倉股數

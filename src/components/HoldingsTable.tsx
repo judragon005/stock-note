@@ -145,8 +145,17 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   const [priceInput, setPriceInput] = useState<string>('');
   const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
 
-  // 僅顯示仍有持股的標的（股數 > 0）
-  const activeHoldings = holdings.filter((h) => h.shares > 0);
+  // 僅顯示仍有持股的標的（股數 > 0），並確保台股優先、代碼字母數字升冪排序
+  const activeHoldings = holdings
+    .filter((h) => h.shares > 0)
+    .sort((a, b) => {
+      const marketWeightA = a.market === 'TW' ? 0 : 1;
+      const marketWeightB = b.market === 'TW' ? 0 : 1;
+      if (marketWeightA !== marketWeightB) {
+        return marketWeightA - marketWeightB;
+      }
+      return a.symbol.localeCompare(b.symbol);
+    });
 
   const startEditPrice = (symbol: string, currentPrice: number) => {
     setEditingSymbol(symbol);

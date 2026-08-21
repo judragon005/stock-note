@@ -511,5 +511,42 @@ describe('公司行動智慧掃描引擎 (Corporate Action Scanner)', () => {
       // 因目前持股為 0 股，歷史配股應被守護鎖定為已記錄，防範死灰復燃
       expect(results[0].isAlreadyRecorded).toBe(true);
     });
+
+    it('無效減資安全閘門：無減資比率且無每股退款且無金額之假減資事件應被自動過濾', async () => {
+      const trades: TradeRecord[] = [
+        {
+          id: '1',
+          date: '2024-01-01',
+          symbol: '9927',
+          name: '泰銘',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 10000,
+          price: 50,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+      ];
+
+      // 模擬先前誤將除息預告解析成的 0 股 0 元假減資
+      const mockFetcher = async () => [
+        {
+          symbol: '9927',
+          market: 'TW' as const,
+          type: 'CAPITAL_REDUCTION' as const,
+          date: '2026-10-01',
+          price: 0,
+          ratio: 0,
+          cashAmount: 0,
+          description: '現金減資（減資比率 0.00%，每股退款 0 元）',
+        },
+      ];
+
+      const results = await scanCorporateActions(trades, mockFetcher);
+      // 應被安全過濾閘門剔除，結果為空
+      expect(results).toHaveLength(0);
+    });
   });
 });

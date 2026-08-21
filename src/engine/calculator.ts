@@ -373,6 +373,16 @@ export function calculateHoldingsAndSummary(
     });
   }
 
+  // 依規格排序：台股置前、美股置底；同市場內依標的代碼字母數字升冪排序（完全吻合照片 2 順序）
+  holdings.sort((a, b) => {
+    const marketWeightA = a.market === 'TW' ? 0 : 1;
+    const marketWeightB = b.market === 'TW' ? 0 : 1;
+    if (marketWeightA !== marketWeightB) {
+      return marketWeightA - marketWeightB;
+    }
+    return a.symbol.localeCompare(b.symbol);
+  });
+
   // 匯總計算
   const summary: PortfolioSummary = {
     twd: {
