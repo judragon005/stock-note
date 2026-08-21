@@ -124,5 +124,20 @@ _Avoid_: Base Fee, Floor Fee
 **Taiwan Stock Share Precision Rule (台股整數股數與精度規則)**:
 台股市場（上市、上櫃、興櫃）最小交易與持有單位為整數 1 股（零股亦為正整數），不允許存在小數點股數（Fractional Shares）。所有除權配股、股票分割與減資縮股在計算與呈現時一律強制四捨五入取整數，消除浮點數漂移。
 
+### 即時與延遲報價系統 (Real-time & Delayed Market Quotes)  *(新增於 V1.4)*
+
+**Realtime & Delayed Quotes Engine (多源免費即時與延遲報價引擎)**:
+純前端整合 Yahoo Finance API (v8/v7 Chart API) 與台灣證交所 (TWSE) 官方 OpenAPI 盤後收盤價備援。透過多節點 CORS 代理池自動輪詢與指數退避，全自動獲取台股（上市 `.TW` / 上櫃 `.TWO` / ETF）與美股（NYSE / NASDAQ / AMEX）之最新成交價、前一交易日收盤價 (`previousClose`)、當日漲跌額與漲跌百分比。
+
+**Market Session Detection & Auto Refresh (交易時段判定與智慧自動輪詢)**:
+由 `usePriceAutoRefresh` 自動判定台股交易時段（週一至週五 09:00~13:30 台北時間）與美股交易時段（美東時間 09:30~16:00 / 台北時間 21:30~04:00 夏令）。開盤期間每 60 秒背景自動輪詢刷新；休市期間停止輪詢以節省頻寬與代理額度；進站自動發起全持股同步。
+
+**Manual Price Lock Shield (自訂價格手動鎖定防禦機制)**:
+使用者在持股表格手動編輯特定標的市價時，系統自動將該標的標記為「自訂鎖定 (🔒)」。自動輪詢時跳過鎖定標的，保護使用者自訂之壓力測試或試算價格不被覆蓋，並支援一鍵點擊解鎖以恢復全自動市場報價追蹤。
+
+**Quote Status Badge & Fallback Cache (報價狀態徽章與持久化快取降級)**:
+表格即時呈現 🟢 盤中即時/延遲、🟡 昨日收盤價、🔒 自訂鎖定、⚠️ 離線快取四大狀態徽章與當日漲跌幅色塊。當網路斷線或代理超時時，平滑退回 `localStorage` 本地最後有效報價，確保離線狀態下系統計算與視覺化 100% 穩定可用。
+
+
 
 
