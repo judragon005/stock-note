@@ -7,6 +7,7 @@ import {
   getLockedSymbols,
   setSymbolLock as persistSymbolLock,
 } from '../utils/storage';
+import { logger } from '../utils/logger';
 
 /**
  * 判定台股當前是否處於開盤交易時段 (週一至週五 09:00 ~ 13:30 台北時間)
@@ -191,7 +192,7 @@ export function usePriceAutoRefresh({
         }
       }
     } catch (err) {
-      console.error('Batch refresh prices failed:', err);
+      logger.error('Batch refresh prices failed:', err);
     } finally {
       setIsRefreshing(false);
     }
@@ -220,7 +221,7 @@ export function usePriceAutoRefresh({
           return quote;
         }
       } catch (err) {
-        console.error(`Refresh symbol ${symbol} failed:`, err);
+        logger.error(`Refresh symbol ${symbol} failed:`, err);
       } finally {
         setIsRefreshing(false);
       }

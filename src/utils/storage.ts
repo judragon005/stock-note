@@ -1,4 +1,5 @@
 import { TradeRecord, MarketType, TradeType, Currency, PriceMetadataStore, PriceQuote } from '../types/stock';
+import { logger } from './logger';
 
 const STORAGE_KEY = 'STOCK_TRACKER_TRADES_V1';
 const RATE_STORAGE_KEY = 'STOCK_TRACKER_USD_TWD_RATE';
@@ -14,7 +15,7 @@ export function loadTradesFromStorage(): TradeRecord[] {
     if (validated) return validated;
     return getDefaultSampleTrades();
   } catch (err) {
-    console.error('Failed to load trades from localStorage:', err);
+    logger.error('Failed to load trades from localStorage:', err);
     return getDefaultSampleTrades();
   }
 }
@@ -23,7 +24,7 @@ export function saveTradesToStorage(trades: TradeRecord[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(trades));
   } catch (err) {
-    console.error('Failed to save trades to localStorage:', err);
+    logger.error('Failed to save trades to localStorage:', err);
   }
 }
 
@@ -44,7 +45,7 @@ export function saveExchangeRate(rate: number): void {
   try {
     localStorage.setItem(RATE_STORAGE_KEY, rate.toString());
   } catch (err) {
-    console.error('Failed to save exchange rate:', err);
+    logger.error('Failed to save exchange rate:', err);
   }
 }
 
@@ -72,7 +73,7 @@ export function saveCustomPricesToStorage(prices: Record<string, number>): void 
   try {
     localStorage.setItem(PRICES_STORAGE_KEY, JSON.stringify(prices));
   } catch (err) {
-    console.error('Failed to save custom prices:', err);
+    logger.error('Failed to save custom prices:', err);
   }
 }
 
@@ -108,7 +109,7 @@ export function savePriceMetadataToStorage(store: PriceMetadataStore): void {
   try {
     localStorage.setItem(PRICE_METADATA_STORAGE_KEY, JSON.stringify(store));
   } catch (err) {
-    console.error('Failed to save price metadata:', err);
+    logger.error('Failed to save price metadata:', err);
   }
 }
 

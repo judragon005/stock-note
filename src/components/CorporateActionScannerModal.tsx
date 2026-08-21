@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TradeRecord } from '../types/stock';
 import { scanCorporateActions, ScannedCorporateAction } from '../engine/corporateActionScanner';
 import { X, Sparkles, CheckCircle2, RefreshCw } from 'lucide-react';
+import { logger } from '../utils/logger';
 
 interface CorporateActionScannerModalProps {
   isOpen: boolean;
@@ -35,7 +36,7 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
       }
       setSelectedIds(initialSelected);
     } catch (err) {
-      console.error('Failed to scan corporate actions:', err);
+      logger.error('Failed to scan corporate actions:', err);
     } finally {
       setLoading(false);
     }

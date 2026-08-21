@@ -64,6 +64,7 @@ export type PriceQuoteStatus = 'REALTIME' | 'DELAYED' | 'PREVIOUS_CLOSE' | 'MANU
 
 export interface PriceQuote {
   symbol: string;
+  market: MarketType;
   price: number;
   previousClose?: number;
   change?: number;
