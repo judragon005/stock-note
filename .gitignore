@@ -49,3 +49,6 @@ scratch/
 tmp/
 temp/
 .git_commit_msg.txt
+0-0_開發歷程自動化紀錄/
+*.jsonl
+
