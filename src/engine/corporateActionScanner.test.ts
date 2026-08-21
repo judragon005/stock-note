@@ -1,8 +1,12 @@
-import { describe, it, expect } from 'vitest';
-import { scanCorporateActions, normalizeTWSEDate } from './corporateActionScanner';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { scanCorporateActions, normalizeTWSEDate, CorporateActionSessionCache } from './corporateActionScanner';
 import { TradeRecord } from '../types/stock';
 
 describe('公司行動智慧掃描引擎 (Corporate Action Scanner)', () => {
+  beforeEach(() => {
+    CorporateActionSessionCache.clear();
+  });
+
   it('應能分析持股期間，正確偵測並計算歷史除息與分割事件', async () => {
     const trades: TradeRecord[] = [
       {
@@ -223,5 +227,98 @@ describe('公司行動智慧掃描引擎 (Corporate Action Scanner)', () => {
     expect(tmReduction.estimatedCashAmount).toBe(28280);
     expect(tmReduction.isAlreadyRecorded).toBe(false);
     expect(tmReduction.sourceType).toBe('LIVE_API');
+  });
+
+  describe('進度回呼、受控並行、中斷信號與 Session 快取', () => {
+    const multiTrades: TradeRecord[] = [
+      { id: '1', date: '2024-01-01', symbol: '2330', name: '台積電', market: 'TW', currency: 'TWD', type: 'BUY', shares: 1000, price: 600, fee: 0, tax: 0, createdAt: 1 },
+      { id: '2', date: '2024-01-01', symbol: '2317', name: '鴻海', market: 'TW', currency: 'TWD', type: 'BUY', shares: 2000, price: 100, fee: 0, tax: 0, createdAt: 2 },
+      { id: '3', date: '2024-01-01', symbol: '2454', name: '聯發科', market: 'TW', currency: 'TWD', type: 'BUY', shares: 500, price: 900, fee: 0, tax: 0, createdAt: 3 },
+      { id: '4', date: '2024-01-01', symbol: 'AAPL', name: '蘋果', market: 'US', currency: 'USD', type: 'BUY', shares: 10, price: 180, fee: 0, tax: 0, createdAt: 4 },
+      { id: '5', date: '2024-01-01', symbol: 'MSFT', name: '微軟', market: 'US', currency: 'USD', type: 'BUY', shares: 5, price: 400, fee: 0, tax: 0, createdAt: 5 },
+    ];
+
+    it('應能透過 onProgress 逐步回報即時進度與當前個股', async () => {
+      const progressList: any[] = [];
+      const mockFetcher = async (symbol: string) => {
+        if (symbol === '2330') {
+          return [{ symbol: '2330', market: 'TW' as const, type: 'DIVIDEND' as const, date: '2024-06-13', price: 3.5 }];
+        }
+        return [];
+      };
+
+      const results = await scanCorporateActions(multiTrades, mockFetcher, {
+        concurrency: 2,
+        onProgress: (p) => {
+          progressList.push({ ...p });
+        },
+      });
+
+      expect(results).toHaveLength(1);
+      expect(progressList.length).toBeGreaterThanOrEqual(5);
+      // 最後一筆進度狀態
+      const lastProgress = progressList[progressList.length - 1];
+      expect(lastProgress.current).toBe(5);
+      expect(lastProgress.total).toBe(5);
+      expect(lastProgress.status).toBe('completed');
+    });
+
+    it('應支援 AbortSignal 中斷掃描，並安全回傳已完成之事件', async () => {
+      const controller = new AbortController();
+      let fetchedCount = 0;
+
+      const mockFetcher = async (symbol: string) => {
+        fetchedCount++;
+        if (fetchedCount === 2) {
+          // 在處理第二檔時中止
+          controller.abort();
+        }
+        return [{ symbol, market: 'TW' as const, type: 'DIVIDEND' as const, date: '2024-06-13', price: 1 }];
+      };
+
+      const results = await scanCorporateActions(multiTrades, mockFetcher, {
+        concurrency: 1,
+        signal: controller.signal,
+      });
+
+      // 應在中斷前已完成的筆數內，且不會拋出 unhandled 錯誤
+      expect(results.length).toBeLessThan(5);
+    });
+
+    it('應支援 symbolsToScan 參數，精準針對指定個股進行斷點接續掃描', async () => {
+      const calledSymbols: string[] = [];
+      const mockFetcher = async (symbol: string) => {
+        calledSymbols.push(symbol);
+        return [{ symbol, market: 'TW' as const, type: 'DIVIDEND' as const, date: '2024-06-13', price: 2 }];
+      };
+
+      // 僅接續掃描 AAPL 與 MSFT
+      const results = await scanCorporateActions(multiTrades, mockFetcher, {
+        symbolsToScan: ['AAPL', 'MSFT'],
+      });
+
+      expect(calledSymbols).toEqual(['AAPL', 'MSFT']);
+      expect(results).toHaveLength(2);
+    });
+
+    it('應支援 Session 快取機制，命中快取時不重複呼叫 fetcher，且 forceRefresh 能強制重撈', async () => {
+      let fetchCount = 0;
+      const mockFetcher = async (symbol: string) => {
+        fetchCount++;
+        return [{ symbol, market: 'TW' as const, type: 'DIVIDEND' as const, date: '2024-06-13', price: 3 }];
+      };
+
+      // 第一次掃描：呼叫 fetcher 5 次
+      await scanCorporateActions(multiTrades, mockFetcher, { forceRefresh: true });
+      expect(fetchCount).toBe(5);
+
+      // 第二次掃描（未帶 forceRefresh）：命中快取，fetchCount 應保持 5
+      await scanCorporateActions(multiTrades, mockFetcher, { forceRefresh: false });
+      expect(fetchCount).toBe(5);
+
+      // 第三次掃描（forceRefresh: true）：強制重掃，fetchCount 增加 5 變為 10
+      await scanCorporateActions(multiTrades, mockFetcher, { forceRefresh: true });
+      expect(fetchCount).toBe(10);
+    });
   });
 });

@@ -46,9 +46,17 @@ htmlcov/
 logs/
 *.log
 scratch/
+.scratch/*.json
+.scratch/*.mjs
 tmp/
 temp/
 .git_commit_msg.txt
 0-0_開發歷程自動化紀錄/
 *.jsonl
 
+# User Private Trade Records & Data
+docs/json/
+*.private.json
+*trades*.json
+!package*.json
+!tsconfig*.json

@@ -274,13 +274,63 @@ export async function fetchLiveCorporateEvents(symbol: string, market: MarketTyp
   return events;
 }
 
+export interface ScanProgress {
+  current: number;
+  total: number;
+  currentSymbol?: string;
+  currentName?: string;
+  foundEventsCount: number;
+  status: 'scanning' | 'paused' | 'completed' | 'error';
+}
+
+export interface ScanCorporateActionsOptions {
+  concurrency?: number;
+  signal?: AbortSignal;
+  onProgress?: (progress: ScanProgress) => void;
+  symbolsToScan?: string[];
+  forceRefresh?: boolean;
+}
+
 /**
- * 智慧比對歷史交易時序，自動篩選待補登之全市場公司行動
+ * Session 級公司行動事件記憶體快取
+ */
+export class CorporateActionSessionCache {
+  private static cache = new Map<string, { events: RawCorporateEvent[]; timestamp: number }>();
+
+  static get(symbol: string): RawCorporateEvent[] | null {
+    const entry = this.cache.get(symbol.toUpperCase());
+    return entry ? entry.events : null;
+  }
+
+  static set(symbol: string, events: RawCorporateEvent[]): void {
+    this.cache.set(symbol.toUpperCase(), { events, timestamp: Date.now() });
+  }
+
+  static clear(): void {
+    this.cache.clear();
+  }
+}
+
+/**
+ * 智慧比對歷史交易時序，自動篩選待補登之全市場公司行動 (支援並發、進度回呼、中斷與快取)
  */
 export async function scanCorporateActions(
   trades: TradeRecord[],
-  fetcher: (symbol: string, market: MarketType) => Promise<RawCorporateEvent[]> = fetchLiveCorporateEvents
+  fetcher: (symbol: string, market: MarketType) => Promise<RawCorporateEvent[]> = fetchLiveCorporateEvents,
+  options: ScanCorporateActionsOptions = {}
 ): Promise<ScannedCorporateAction[]> {
+  const {
+    concurrency = 3,
+    signal,
+    onProgress,
+    symbolsToScan,
+    forceRefresh = false,
+  } = options;
+
+  if (forceRefresh) {
+    CorporateActionSessionCache.clear();
+  }
+
   const symbolMap = new Map<string, { market: MarketType; name: string; currency: Currency; earliestDate: string }>();
 
   for (const trade of trades) {
@@ -299,75 +349,152 @@ export async function scanCorporateActions(
     }
   }
 
-  const results: ScannedCorporateAction[] = [];
-
-  for (const [symbol, meta] of symbolMap.entries()) {
-    let rawEvents: RawCorporateEvent[] = [];
-    try {
-      rawEvents = await fetcher(symbol, meta.market);
-    } catch {
-      rawEvents = [];
-    }
-
-    for (const ev of rawEvents) {
-      // 僅檢視在持股起始日 (earliestDate) 當日或之後發生的事件
-      if (ev.date < meta.earliestDate) {
-        continue;
-      }
-
-      // 依基準日時序推算持股數
-      const sharesHeld = getHoldingsAsOfDate(trades, ev.date, symbol);
-
-      // 若該基準日時尚未持有或已清倉 (持股 = 0)，則略過
-      if (sharesHeld <= 0) {
-        continue;
-      }
-
-      let estimatedShares = 0;
-      let estimatedCash = 0;
-
-      if (ev.type === 'DIVIDEND') {
-        estimatedCash = (ev.price || 0) * sharesHeld;
-      } else if (ev.type === 'STOCK_DIVIDEND') {
-        const rawShares = ev.shares && ev.shares > 0 ? ev.shares : (ev.ratio ? sharesHeld * ev.ratio : 0);
-        estimatedShares = meta.market === 'TW' ? Math.round(rawShares) : rawShares;
-      } else if (ev.type === 'STOCK_SPLIT') {
-        const multiplier = ev.ratio || 1;
-        const rawShares = multiplier > 1 ? sharesHeld * (multiplier - 1) : 0;
-        estimatedShares = meta.market === 'TW' ? Math.round(rawShares) : rawShares;
-      } else if (ev.type === 'CAPITAL_REDUCTION') {
-        const rawShares = ev.shares && ev.shares > 0 ? ev.shares : (ev.ratio ? sharesHeld * ev.ratio : 0);
-        estimatedShares = meta.market === 'TW' ? Math.round(rawShares) : rawShares;
-        estimatedCash = ev.cashAmount && ev.cashAmount > 0 ? ev.cashAmount : (ev.price ? sharesHeld * ev.price : 0);
-      }
-
-      // 檢查是否已在 TradeRecords 中記錄
-      const isAlreadyRecorded = trades.some(
-        (t) => t.symbol.toUpperCase() === symbol.toUpperCase() && t.type === ev.type && t.date === ev.date
-      );
-
-      results.push({
-        id: `scan-${symbol}-${ev.type}-${ev.date}`,
-        symbol,
-        name: meta.name,
-        market: meta.market,
-        currency: meta.currency,
-        type: ev.type,
-        date: ev.date,
-        exDate: ev.date,
-        ratio: ev.ratio,
-        price: ev.price,
-        sharesHeldOnDate: sharesHeld,
-        estimatedSharesChange: estimatedShares,
-        estimatedCashAmount: estimatedCash,
-        description: ev.description || `${symbol} ${ev.type}`,
-        isAlreadyRecorded,
-        sourceType: 'LIVE_API',
-      });
-    }
+  let allEntries = Array.from(symbolMap.entries());
+  if (symbolsToScan && symbolsToScan.length > 0) {
+    const allowed = new Set(symbolsToScan.map((s) => s.toUpperCase()));
+    allEntries = allEntries.filter(([symbol]) => allowed.has(symbol.toUpperCase()));
   }
 
-  // 依日期與代碼排序
+  const total = allEntries.length;
+  let current = 0;
+  const results: ScannedCorporateAction[] = [];
+
+  if (total === 0) {
+    onProgress?.({
+      current: 0,
+      total: 0,
+      foundEventsCount: 0,
+      status: 'completed',
+    });
+    return results;
+  }
+
+  // 初始進度回報
+  onProgress?.({
+    current: 0,
+    total,
+    foundEventsCount: 0,
+    status: 'scanning',
+  });
+
+  // 任務佇列與並行 Pool
+  let nextIndex = 0;
+  const workerCount = Math.max(1, Math.min(concurrency, total));
+
+  const runWorker = async () => {
+    while (nextIndex < total) {
+      if (signal?.aborted) {
+        return;
+      }
+
+      const currentIndex = nextIndex++;
+      const [symbol, meta] = allEntries[currentIndex];
+
+      onProgress?.({
+        current,
+        total,
+        currentSymbol: symbol,
+        currentName: meta.name,
+        foundEventsCount: results.length,
+        status: 'scanning',
+      });
+
+      let rawEvents: RawCorporateEvent[] = [];
+      const cached = CorporateActionSessionCache.get(symbol);
+
+      if (!forceRefresh && cached) {
+        rawEvents = cached;
+      } else {
+        try {
+          if (signal?.aborted) return;
+          rawEvents = await fetcher(symbol, meta.market);
+          CorporateActionSessionCache.set(symbol, rawEvents);
+          // 輕量微延遲以保護外部 API
+          await new Promise((r) => setTimeout(r, 60));
+        } catch {
+          rawEvents = [];
+        }
+      }
+
+      if (signal?.aborted) {
+        return;
+      }
+
+      for (const ev of rawEvents) {
+        if (ev.date < meta.earliestDate) {
+          continue;
+        }
+
+        const sharesHeld = getHoldingsAsOfDate(trades, ev.date, symbol);
+        if (sharesHeld <= 0) {
+          continue;
+        }
+
+        let estimatedShares = 0;
+        let estimatedCash = 0;
+
+        if (ev.type === 'DIVIDEND') {
+          estimatedCash = (ev.price || 0) * sharesHeld;
+        } else if (ev.type === 'STOCK_DIVIDEND') {
+          const rawShares = ev.shares && ev.shares > 0 ? ev.shares : (ev.ratio ? sharesHeld * ev.ratio : 0);
+          estimatedShares = meta.market === 'TW' ? Math.round(rawShares) : rawShares;
+        } else if (ev.type === 'STOCK_SPLIT') {
+          const multiplier = ev.ratio || 1;
+          const rawShares = multiplier > 1 ? sharesHeld * (multiplier - 1) : 0;
+          estimatedShares = meta.market === 'TW' ? Math.round(rawShares) : rawShares;
+        } else if (ev.type === 'CAPITAL_REDUCTION') {
+          const rawShares = ev.shares && ev.shares > 0 ? ev.shares : (ev.ratio ? sharesHeld * ev.ratio : 0);
+          estimatedShares = meta.market === 'TW' ? Math.round(rawShares) : rawShares;
+          estimatedCash = ev.cashAmount && ev.cashAmount > 0 ? ev.cashAmount : (ev.price ? sharesHeld * ev.price : 0);
+        }
+
+        const isAlreadyRecorded = trades.some(
+          (t) => t.symbol.toUpperCase() === symbol.toUpperCase() && t.type === ev.type && t.date === ev.date
+        );
+
+        results.push({
+          id: `scan-${symbol}-${ev.type}-${ev.date}`,
+          symbol,
+          name: meta.name,
+          market: meta.market,
+          currency: meta.currency,
+          type: ev.type,
+          date: ev.date,
+          exDate: ev.date,
+          ratio: ev.ratio,
+          price: ev.price,
+          sharesHeldOnDate: sharesHeld,
+          estimatedSharesChange: estimatedShares,
+          estimatedCashAmount: estimatedCash,
+          description: ev.description || `${symbol} ${ev.type}`,
+          isAlreadyRecorded,
+          sourceType: 'LIVE_API',
+        });
+      }
+
+      current++;
+      onProgress?.({
+        current,
+        total,
+        currentSymbol: symbol,
+        currentName: meta.name,
+        foundEventsCount: results.length,
+        status: current >= total ? 'completed' : (signal?.aborted ? 'paused' : 'scanning'),
+      });
+    }
+  };
+
+  const workers = Array.from({ length: workerCount }, () => runWorker());
+  await Promise.all(workers);
+
+  const isPaused = signal?.aborted && current < total;
+  onProgress?.({
+    current,
+    total,
+    foundEventsCount: results.length,
+    status: isPaused ? 'paused' : 'completed',
+  });
+
   return results.sort((a, b) => {
     if (a.date !== b.date) {
       return a.date.localeCompare(b.date);
@@ -375,3 +502,4 @@ export async function scanCorporateActions(
     return a.symbol.localeCompare(b.symbol);
   });
 }
+

@@ -146,8 +146,19 @@ _Avoid_: Base Fee, Floor Fee
 **Exchange Rate Fallback Cascade (匯率多層平滑降級備援機制)**:
 當網路斷線或 API 異常時，系統自動按階層降級：盤中即時價 ➔ 前日收盤價 ➔ LocalStorage 本地歷史快取 ➔ 基準預設值 (32.5)，確保美股折合台幣總市值計算 100% 穩定且平滑無中斷。
 
-**Automated Rate Badge & Status Tooltip (自動化匯率徽章與狀態提示)**:
-頂部 Header 移除手動編輯框，全面改為純自動化徽章 (`USD/TWD: 32.45`)，背景刷新時展示轉動微動畫，滑鼠懸停 (Tooltip) 顯示來源狀態（即時 / 前日收盤 / 本地快取）與更新時間戳記。
+### 智慧掃描進度可視化與斷點接續 (Scanner Progress & Resume Architecture)  *(新增於 V1.6)*
+
+**Rate-Limited Concurrency Pool (受控並行池與頻控)**:
+掃描引擎採用 Promise Worker Pool (`concurrency = 3`) 並行處理多檔個股查詢，並在批次請求間注入 60~100ms jitter 微延遲，大幅縮短掃描時間同時防範 TWSE OpenAPI 與 CORS 代理限流。
+
+**AbortSignal Interruption & Graceful Pause (原生中斷與優雅暫停)**:
+完整整合原生 `AbortController`，使用者點擊中止或關閉彈窗時立即終止連線，並完整保留當前已完成個股的比對結果。
+
+**Resume & Targeted Rescan (斷點接續與指定個股掃描)**:
+透過 `symbolsToScan` 參數與未完成個股集合，支援精準自中斷處續掃，避免重複掃描已完成標的。
+
+**Session Corporate Action Cache (Session 級個股記憶體快取)**:
+在同一頁面生命週期內快取已查詢之事件，開啟彈窗秒開已掃描個股，並支援「強制全量重掃」清空快取。
 
 ---
 
@@ -159,6 +170,8 @@ _Avoid_: Base Fee, Floor Fee
 - [ADR-0004: V1.3 全市場純線上即時公司行動掃描器與 5 大特殊公司行動會計核心](docs/adr/0004-full-market-live-corporate-actions-and-special-events.md)
 - [ADR-0005: V1.4 全市場即時與延遲多源報價引擎、交易時段智慧輪詢與自訂價格鎖定防禦架構](docs/adr/0005-realtime-and-delayed-market-quotes-system.md)
 - [ADR-0006: V1.5 美金台幣 (USD/TWD) 匯率自動更新、行情同步輪詢與多層平滑備援架構](docs/adr/0006-auto-usd-twd-exchange-rate-and-fallback.md)
+- [ADR-0007: V1.6 智慧掃描公司行動進度可視化、受控並行與斷點接續架構](docs/adr/0007-scanner-progress-and-resume-architecture.md)
+
 
 
 

@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { TradeRecord } from '../types/stock';
-import { scanCorporateActions, ScannedCorporateAction } from '../engine/corporateActionScanner';
-import { X, Sparkles, CheckCircle2, RefreshCw } from 'lucide-react';
+import { scanCorporateActions, ScannedCorporateAction, ScanProgress } from '../engine/corporateActionScanner';
+import { X, Sparkles, CheckCircle2, RefreshCw, Square, Play, AlertCircle } from 'lucide-react';
 import { logger } from '../utils/logger';
 
 interface CorporateActionScannerModalProps {
@@ -17,26 +17,79 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
   trades,
   onApplyActions,
 }) => {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [actions, setActions] = useState<ScannedCorporateAction[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [progress, setProgress] = useState<ScanProgress>({
+    current: 0,
+    total: 0,
+    foundEventsCount: 0,
+    status: 'completed',
+  });
 
-  const handleScan = async () => {
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const completedSymbolsRef = useRef<Set<string>>(new Set());
+
+  // 取得全部不重複的股票代號清單
+  const allSymbols = Array.from(new Set(trades.map((t) => t.symbol)));
+
+  const handleScan = async (symbolsToScan?: string[], forceRefresh: boolean = false) => {
+    // 中止任何進行中的請求
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setLoading(true);
-    try {
-      const scanned = await scanCorporateActions(trades);
-      setActions(scanned);
 
-      // 預設全選尚未入帳之項目
-      const initialSelected = new Set<string>();
-      for (const item of scanned) {
-        if (!item.isAlreadyRecorded) {
-          initialSelected.add(item.id);
-        }
+    if (forceRefresh) {
+      completedSymbolsRef.current.clear();
+      setActions([]);
+      setSelectedIds(new Set());
+    }
+
+    try {
+      const scanned = await scanCorporateActions(trades, undefined, {
+        concurrency: 3,
+        signal: controller.signal,
+        symbolsToScan,
+        forceRefresh,
+        onProgress: (p) => {
+          setProgress(p);
+          if (p.currentSymbol) {
+            completedSymbolsRef.current.add(p.currentSymbol);
+          }
+        },
+      });
+
+      // 合併既有與新掃描的事件
+      setActions((prev) => {
+        const map = new Map<string, ScannedCorporateAction>();
+        for (const a of prev) map.set(a.id, a);
+        for (const a of scanned) map.set(a.id, a);
+        const merged = Array.from(map.values()).sort((a, b) => {
+          if (a.date !== b.date) return a.date.localeCompare(b.date);
+          return a.symbol.localeCompare(b.symbol);
+        });
+
+        // 預設將未入帳的新項目加入選取
+        setSelectedIds((prevIds) => {
+          const next = new Set(prevIds);
+          for (const item of merged) {
+            if (!item.isAlreadyRecorded) {
+              next.add(item.id);
+            }
+          }
+          return next;
+        });
+
+        return merged;
+      });
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        logger.error('Failed to scan corporate actions:', err);
       }
-      setSelectedIds(initialSelected);
-    } catch (err) {
-      logger.error('Failed to scan corporate actions:', err);
     } finally {
       setLoading(false);
     }
@@ -44,9 +97,38 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
 
   useEffect(() => {
     if (isOpen) {
-      handleScan();
+      handleScan(undefined, false);
+    } else {
+      // 關閉彈窗時主動中止進行中的請求
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
     }
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [isOpen]);
+
+  const handleCancel = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setLoading(false);
+      setProgress((prev) => ({ ...prev, status: 'paused' }));
+    }
+  };
+
+  const handleResume = () => {
+    const remaining = allSymbols.filter((s) => !completedSymbolsRef.current.has(s));
+    if (remaining.length > 0) {
+      handleScan(remaining, false);
+    }
+  };
+
+  const handleFullRescan = () => {
+    handleScan(undefined, true);
+  };
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -122,6 +204,10 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
   const totalUsdCash = selectedItems.filter((a) => a.currency === 'USD').reduce((sum, a) => sum + a.estimatedCashAmount, 0);
   const totalStockDivShares = selectedItems.filter((a) => a.type === 'STOCK_DIVIDEND').reduce((sum, a) => sum + a.estimatedSharesChange, 0);
 
+  const remainingCount = allSymbols.filter((s) => !completedSymbolsRef.current.has(s)).length;
+  const progressPercent = progress.total > 0 ? Math.min(100, Math.round((progress.current / progress.total) * 100)) : 100;
+  const isPaused = !loading && progress.status === 'paused' && remainingCount > 0;
+
   return (
     <div
       style={{
@@ -140,12 +226,13 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
         className="glass-card animate-fade-in"
         style={{
           width: '100%',
-          maxWidth: '780px',
-          padding: '28px',
+          maxWidth: '820px',
+          padding: '26px',
           position: 'relative',
           maxHeight: '92vh',
           display: 'flex',
           flexDirection: 'column',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(139, 92, 246, 0.15)',
         }}
       >
         {/* Close Button */}
@@ -186,60 +273,143 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
           </div>
         </div>
 
-        {/* Status Bar */}
+        {/* Progress Bar & Live Status Indicator */}
         <div
           style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            background: 'rgba(30, 41, 59, 0.5)',
-            padding: '10px 14px',
-            borderRadius: '8px',
-            border: '1px solid var(--border-color)',
-            margin: '14px 0',
-            flexWrap: 'wrap',
-            gap: '8px',
+            background: 'rgba(15, 23, 42, 0.7)',
+            padding: '12px 14px',
+            borderRadius: '10px',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            margin: '12px 0 8px 0',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.825rem', flexWrap: 'wrap' }}>
-            {loading ? (
-              <span style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <RefreshCw size={14} className="animate-spin" /> 正向官方與金融資料庫掃描比對中...
-              </span>
-            ) : (
-              <>
-                <span>
-                  掃描完成：共發現 <strong style={{ color: '#fff' }}>{actions.length}</strong> 個事件，
-                  其中 <strong style={{ color: '#f59e0b' }}>{unrecordedCount}</strong> 筆待補登。
-                </span>
-                <span
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    padding: '2px 8px',
-                    borderRadius: '6px',
-                    fontSize: '0.7rem',
-                    fontWeight: 600,
-                    background: 'rgba(16, 185, 129, 0.15)',
-                    color: '#34d399',
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
-                  }}
-                  title="已透過 TWSE / Yahoo Finance 線上即時取得最新除權息與減資公告"
-                >
-                  🟢 全市場純線上即時掃描
-                </span>
-              </>
-            )}
+          {/* Progress Bar Track */}
+          <div
+            style={{
+              width: '100%',
+              height: '6px',
+              background: 'rgba(255, 255, 255, 0.1)',
+              borderRadius: '3px',
+              overflow: 'hidden',
+              position: 'relative',
+              marginBottom: '10px',
+            }}
+          >
+            <div
+              style={{
+                width: `${progressPercent}%`,
+                height: '100%',
+                background: loading
+                  ? 'linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899)'
+                  : isPaused
+                  ? '#f59e0b'
+                  : 'linear-gradient(90deg, #10b981, #06b6d4)',
+                borderRadius: '3px',
+                transition: 'width 0.3s ease-out',
+                boxShadow: loading ? '0 0 10px rgba(139, 92, 246, 0.5)' : 'none',
+              }}
+            />
           </div>
 
-          {!loading && (
+          {/* Status Row */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontSize: '0.8rem',
+              flexWrap: 'wrap',
+              gap: '8px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {loading ? (
+                <span style={{ color: '#93c5fd', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <RefreshCw size={13} className="animate-spin" />
+                  正在比對：<strong style={{ color: '#fff' }}>{progress.currentSymbol || '初始化中'}</strong> {progress.currentName && `(${progress.currentName})`} ({progress.current}/{progress.total} 檔 · {progressPercent}%)
+                </span>
+              ) : isPaused ? (
+                <span style={{ color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <AlertCircle size={14} /> 掃描已中止（已完成 {completedSymbolsRef.current.size}/{allSymbols.length} 檔）
+                </span>
+              ) : (
+                <span style={{ color: '#34d399', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <CheckCircle2 size={14} /> 全市場掃描完成（共 {allSymbols.length} 檔比對完畢，發現 {actions.length} 筆公司行動）
+                </span>
+              )}
+            </div>
+
+            {/* Live Controls */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {loading && (
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="btn btn-sm btn-secondary"
+                  style={{
+                    padding: '2px 8px',
+                    fontSize: '0.725rem',
+                    color: '#f87171',
+                    borderColor: 'rgba(239, 68, 68, 0.4)',
+                    background: 'rgba(239, 68, 68, 0.1)',
+                  }}
+                >
+                  <Square size={11} fill="#f87171" /> 中止掃描
+                </button>
+              )}
+
+              {isPaused && (
+                <button
+                  type="button"
+                  onClick={handleResume}
+                  className="btn btn-sm btn-primary"
+                  style={{
+                    padding: '2px 10px',
+                    fontSize: '0.725rem',
+                    background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                    borderColor: '#f59e0b',
+                  }}
+                >
+                  <Play size={11} fill="#fff" /> 接續掃描剩餘 ({remainingCount} 檔)
+                </button>
+              )}
+
+              {!loading && (
+                <button
+                  type="button"
+                  onClick={handleFullRescan}
+                  className="btn btn-sm btn-secondary"
+                  style={{ padding: '2px 8px', fontSize: '0.725rem' }}
+                  title="清空 Session 快取並全量重新線上查詢"
+                >
+                  <RefreshCw size={11} /> {isPaused ? '強制全量重掃' : '重新整理'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Selection Action Toolbar */}
+        {!loading && actions.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '6px 4px 8px 4px',
+              fontSize: '0.775rem',
+            }}
+          >
+            <div style={{ color: 'var(--text-secondary)' }}>
+              共發現 <strong style={{ color: '#fff' }}>{actions.length}</strong> 個事件，
+              其中 <strong style={{ color: '#f59e0b' }}>{unrecordedCount}</strong> 筆待補登
+            </div>
             <div style={{ display: 'flex', gap: '6px' }}>
               <button
                 type="button"
                 className="btn btn-sm btn-secondary"
                 onClick={handleSelectAllUnrecorded}
-                style={{ padding: '3px 8px', fontSize: '0.725rem' }}
+                style={{ padding: '2px 8px', fontSize: '0.725rem' }}
               >
                 全選待補登 ({unrecordedCount})
               </button>
@@ -247,21 +417,14 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
                 type="button"
                 className="btn btn-sm btn-secondary"
                 onClick={handleClearAll}
-                style={{ padding: '3px 8px', fontSize: '0.725rem' }}
+                style={{ padding: '2px 8px', fontSize: '0.725rem' }}
               >
                 清空選取
               </button>
-              <button
-                type="button"
-                className="btn btn-sm btn-secondary"
-                onClick={handleScan}
-                style={{ padding: '3px 8px', fontSize: '0.725rem' }}
-              >
-                <RefreshCw size={12} /> 重新掃描
-              </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
 
         {/* Action List */}
         <div style={{ flex: 1, overflowY: 'auto', marginBottom: '16px', minHeight: '260px' }}>
