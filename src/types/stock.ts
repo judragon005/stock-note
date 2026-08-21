@@ -61,6 +61,27 @@ export interface HoldingPosition {
 
 export type ColorThemeMode = 'taiwan' | 'international'; // taiwan: 紅漲綠跌, international: 綠漲紅跌
 
+export type PriceQuoteStatus = 'REALTIME' | 'DELAYED' | 'PREVIOUS_CLOSE' | 'MANUAL_LOCKED' | 'CACHED' | 'ERROR';
+
+export interface PriceQuote {
+  symbol: string;
+  market: MarketType;
+  price: number;
+  previousClose?: number;
+  change?: number;
+  changePercent?: number;
+  currency: Currency;
+  status: PriceQuoteStatus;
+  updatedAt: number; // Unix timestamp in ms
+  source: 'YAHOO' | 'TWSE' | 'MANUAL' | 'CACHE';
+}
+
+export interface PriceMetadataStore {
+  quotes: Record<string, PriceQuote>;
+  lockedSymbols: string[];
+  lastGlobalUpdate?: number;
+}
+
 export interface MarketSummarySlice {
   totalCost: number;
   marketValue: number;
@@ -77,4 +98,5 @@ export interface PortfolioSummary {
   combinedTWD: MarketSummarySlice & { netAssetValue: number };
   usdToTwdRate: number;
 }
+
 
