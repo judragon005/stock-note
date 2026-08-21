@@ -187,8 +187,8 @@ _Avoid_: Base Fee, Floor Fee
 | 6 | **00923** | **群益台ESG低碳50** | TW / TWD | 5,847 股 |
 | 7 | **00924** | **復華S&P500成長** | TW / TWD | 5,000 股 |
 | 8 | **009816** | **凱基台灣TOP50** | TW / TWD | 10,000 股 |
-| 9 | **00981A** | **富邦特選高股息30** | TW / TWD | 5,000 股 |
-| 10 | **009826** | **統一台灣高息動能** | TW / TWD | 5,000 股 |
+| 9 | **00981A** | **主動統一台股增長** | TW / TWD | 5,000 股 |
+| 10 | **009826** | **貝萊德世界股票** | TW / TWD | 5,000 股 |
 | 11 | **2327** | **國巨** | TW / TWD | 600 股 |
 | 12 | **2330** | **台積電** | TW / TWD | 700 股 |
 | 13 | **2481** | **強茂** | TW / TWD | 400 股 |
@@ -215,6 +215,8 @@ _Avoid_: Base Fee, Floor Fee
 - [ADR-0008: V1.7 虛擬時序動態配股與台股減資整數換發架構](docs/adr/0008-virtual-holdings-timeline-and-corporate-action-accuracy.md)
 - [ADR-0009: V1.8 持倉列表自然排序與證交所除權除息端點校正](docs/adr/0009-holdings-natural-sorting-and-twse-endpoint-correction.md)
 - [ADR-0010: V1.9 技術債與改善建議分級歸檔架構](docs/adr/0010-technical-debt-management-architecture.md)
+- [ADR-0011: V2.0 雙軌會計口徑計算模型與官方標的數據校正架構](docs/adr/0011-dual-accounting-mode-and-official-symbols-alignment.md)
+- [ADR-0012: V2.1 券商手續費折讓率自訂與在倉成本校準架構](docs/adr/0012-broker-fee-discount-and-cost-basis-alignment.md)
 
 ### 持倉排序規範 (Holdings Sort Standard) *(新增於 V1.8)*
 

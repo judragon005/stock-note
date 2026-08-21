@@ -6,13 +6,91 @@ import {
   PriceMetadataStore,
   PriceQuote,
   ExchangeRateQuote,
+  AccountingView,
 } from '../types/stock';
 import { logger } from './logger';
 
-const STORAGE_KEY = 'STOCK_TRACKER_TRADES_V1';
-const RATE_STORAGE_KEY = 'STOCK_TRACKER_USD_TWD_RATE';
-const PRICES_STORAGE_KEY = 'STOCK_TRACKER_CUSTOM_PRICES_V1';
-const PRICE_METADATA_STORAGE_KEY = 'STOCK_TRACKER_PRICE_METADATA_V1';
+export const STORAGE_KEY = 'STOCK_TRACKER_TRADES_V1';
+export const RATE_STORAGE_KEY = 'STOCK_TRACKER_USD_TWD_RATE';
+export const PRICES_STORAGE_KEY = 'STOCK_TRACKER_CUSTOM_PRICES_V1';
+export const PRICE_METADATA_STORAGE_KEY = 'STOCK_TRACKER_PRICE_METADATA_V1';
+export const ACCOUNTING_VIEW_STORAGE_KEY = 'STOCK_TRACKER_ACCOUNTING_VIEW_V1';
+export const BROKER_FEE_DISCOUNT_STORAGE_KEY = 'STOCK_TRACKER_BROKER_FEE_DISCOUNT_V1';
+
+export const OFFICIAL_SECURITY_NAMES: Record<string, string> = {
+  '00403A': '主動統一升級50',
+  '0050': '元大台灣50',
+  '00636': '國泰中國A50',
+  '00878': '國泰永續高股息',
+  '00919': '群益台灣精選高息',
+  '00923': '群益台ESG低碳50',
+  '00924': '復華S&P500成長',
+  '009816': '凱基台灣TOP50',
+  '00981A': '主動統一台股增長',
+  '009826': '貝萊德世界股票',
+  '2327': '國巨',
+  '2330': '台積電',
+  '2481': '強茂',
+  '2755': '揚秦',
+  '2883': '凱基金',
+  '2886': '兆豐金',
+  '2890': '永豐金',
+  '3715': '定穎投控',
+  '8105': '凌巨',
+  '9927': '泰銘',
+  'VT': 'Vanguard全世界股票ETF',
+};
+
+export function resolveOfficialSecurityName(symbol: string, fallbackName?: string): string {
+  const cleanSymbol = symbol.trim().toUpperCase();
+  if (OFFICIAL_SECURITY_NAMES[cleanSymbol]) {
+    return OFFICIAL_SECURITY_NAMES[cleanSymbol];
+  }
+  return fallbackName || cleanSymbol;
+}
+
+export function loadAccountingViewFromStorage(): AccountingView {
+  try {
+    const raw = localStorage.getItem(ACCOUNTING_VIEW_STORAGE_KEY);
+    if (raw === 'BROKER' || raw === 'TOTAL_RETURN') {
+      return raw;
+    }
+    return 'BROKER';
+  } catch {
+    return 'BROKER';
+  }
+}
+
+export function saveAccountingViewToStorage(view: AccountingView): void {
+  try {
+    localStorage.setItem(ACCOUNTING_VIEW_STORAGE_KEY, view);
+  } catch (err) {
+    logger.error('Failed to save accounting view:', err);
+  }
+}
+
+export function loadBrokerFeeDiscountFromStorage(): number {
+  try {
+    const saved = localStorage.getItem(BROKER_FEE_DISCOUNT_STORAGE_KEY);
+    if (saved !== null) {
+      const val = parseFloat(saved);
+      if (!isNaN(val) && val >= 0 && val <= 1) {
+        return val;
+      }
+    }
+  } catch (err) {
+    logger.error('Failed to load broker fee discount from storage:', err);
+  }
+  return 1.0; // 預設 1.0 全額牌告（100% 像素級對齊券商 App 標準預扣口徑）
+}
+
+export function saveBrokerFeeDiscountToStorage(discount: number): void {
+  try {
+    localStorage.setItem(BROKER_FEE_DISCOUNT_STORAGE_KEY, discount.toString());
+  } catch (err) {
+    logger.error('Failed to save broker fee discount to storage:', err);
+  }
+}
 
 export function loadTradesFromStorage(): TradeRecord[] {
   try {
@@ -225,11 +303,12 @@ export function validateTradesSchema(data: unknown): TradeRecord[] | null {
       return null;
     }
 
+    const cleanSymbol = t.symbol.toUpperCase();
     validTrades.push({
       id: t.id || `trade-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       date: t.date,
-      symbol: t.symbol.toUpperCase(),
-      name: t.name || t.symbol,
+      symbol: cleanSymbol,
+      name: resolveOfficialSecurityName(cleanSymbol, t.name),
       market: t.market as MarketType,
       currency: (t.currency || (t.market === 'TW' ? 'TWD' : 'USD')) as Currency,
       type: t.type as TradeType,
@@ -422,7 +501,7 @@ export function parseCSVToTrades(csvText: string): ParseCSVResult {
       id: `trade-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       date: rawDate,
       symbol: rawSymbol,
-      name: rawName || rawSymbol,
+      name: resolveOfficialSecurityName(rawSymbol, rawName),
       market,
       currency,
       type,

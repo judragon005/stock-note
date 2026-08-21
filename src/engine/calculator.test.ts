@@ -1100,5 +1100,89 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
       'VT',
     ]);
   });
+
+  it('應自動校準 2026 新標的之官方正式名稱 (00403A, 009816, 00981A, 009826)', () => {
+    const rawTrades: TradeRecord[] = [
+      { id: '1', date: '2026-01-01', symbol: '00403A', name: '國泰台灣5G+', market: 'TW', currency: 'TWD', type: 'BUY', shares: 1000, price: 10, fee: 0, tax: 0, createdAt: 1 },
+      { id: '2', date: '2026-01-02', symbol: '009816', name: '富邦科技', market: 'TW', currency: 'TWD', type: 'BUY', shares: 1000, price: 15, fee: 0, tax: 0, createdAt: 2 },
+      { id: '3', date: '2026-01-03', symbol: '00981A', name: '富邦特選高股息30', market: 'TW', currency: 'TWD', type: 'BUY', shares: 1000, price: 15, fee: 0, tax: 0, createdAt: 3 },
+      { id: '4', date: '2026-01-04', symbol: '009826', name: '統一台灣高息動能', market: 'TW', currency: 'TWD', type: 'BUY', shares: 1000, price: 10, fee: 0, tax: 0, createdAt: 4 },
+    ];
+
+    const { holdings } = calculateHoldingsAndSummary(rawTrades);
+    expect(holdings.find((h) => h.symbol === '00403A')?.name).toBe('主動統一升級50');
+    expect(holdings.find((h) => h.symbol === '009816')?.name).toBe('凱基台灣TOP50');
+    expect(holdings.find((h) => h.symbol === '00981A')?.name).toBe('主動統一台股增長');
+    expect(holdings.find((h) => h.symbol === '009826')?.name).toBe('貝萊德世界股票');
+  });
+
+  it('應精準計算雙軌會計口徑：券商核帳模式（不含息/含稅淨現值）與總回報模式（含息/毛市值）', () => {
+    // 台積電現股 1000 股買進價 600，現價 700
+    // ETF 0050 1000 股買進價 150，現價 180，已領股利 5000
+    const trades: TradeRecord[] = [
+      { id: '1', date: '2026-01-01', symbol: '2330', name: '台積電', market: 'TW', currency: 'TWD', type: 'BUY', shares: 1000, price: 600, fee: 513, tax: 0, createdAt: 1 },
+      { id: '2', date: '2026-01-02', symbol: '0050', name: '元大台灣50', market: 'TW', currency: 'TWD', type: 'BUY', shares: 1000, price: 150, fee: 128, tax: 0, createdAt: 2 },
+      { id: '3', date: '2026-03-01', symbol: '0050', name: '元大台灣50', market: 'TW', currency: 'TWD', type: 'DIVIDEND', shares: 0, price: 0, fee: 0, tax: 0, cashAmount: 5000, createdAt: 3 },
+    ];
+
+    const currentPrices = {
+      '2330': 700, // grossMV: 700,000, tax 0.3% = 2,100, fee 0.1425%*0.6 = 598 -> netMV: 697,302
+      '0050': 180, // grossMV: 180,000, tax 0.1% = 180, fee 0.1425%*0.6 = 153 -> netMV: 179,667
+    };
+
+    // 1. 券商核帳模式 (BROKER，搭配 0.6 折)
+    const brokerRes = calculateHoldingsAndSummary(trades, currentPrices, 32.0, 'BROKER', 0.6);
+    const tsMCBroker = brokerRes.holdings.find((h) => h.symbol === '2330');
+    const etfBroker = brokerRes.holdings.find((h) => h.symbol === '0050');
+
+    expect(tsMCBroker?.grossMarketValue).toBe(700000);
+    expect(tsMCBroker?.estimatedSellTax).toBe(2100);
+    expect(tsMCBroker?.estimatedSellFee).toBe(598);
+    expect(tsMCBroker?.netMarketValue).toBe(697302);
+    expect(tsMCBroker?.marketValue).toBe(697302); // BROKER 模式下 marketValue 為淨市值
+    expect(tsMCBroker?.totalCostBasis).toBe(600513);
+    expect(tsMCBroker?.unrealizedPnL).toBe(697302 - 600513); // 96789
+
+    expect(etfBroker?.grossMarketValue).toBe(180000);
+    expect(etfBroker?.estimatedSellTax).toBe(180);
+    expect(etfBroker?.estimatedSellFee).toBe(153);
+    expect(etfBroker?.netMarketValue).toBe(179667);
+    expect(etfBroker?.marketValue).toBe(179667);
+
+    // 2. 總回報模式 (TOTAL_RETURN)
+    const trRes = calculateHoldingsAndSummary(trades, currentPrices, 32.0, 'TOTAL_RETURN');
+    const etfTR = trRes.holdings.find((h) => h.symbol === '0050');
+    expect(etfTR?.marketValue).toBe(180000); // TOTAL_RETURN 模式下 marketValue 為毛市值
+    expect(etfTR?.grossMarketValue).toBe(180000);
+    expect(etfTR?.totalDividends).toBe(5000);
+    expect(etfTR?.adjustedCostBasis).toBe(150128 - 5000); // 145128
+    expect(etfTR?.totalReturnPnL).toBe((180000 - 150128) + 5000); // 34872
+  });
+
+  it('應精準支援自訂券商賣出手續費折讓率 (1.0 全額牌告、0.6 6折、0.28 2.8折)', () => {
+    const trades: TradeRecord[] = [
+      { id: '1', date: '2026-01-01', symbol: '2330', name: '台積電', market: 'TW', currency: 'TWD', type: 'BUY', shares: 1000, price: 600, fee: 0, tax: 0, createdAt: 1 },
+    ];
+    const currentPrices = { '2330': 700 }; // grossMV = 700,000, tax 0.3% = 2,100
+
+    // 1.0 全額牌告 (0.1425% * 1.0 = 997) -> netMV = 700,000 - 2,100 - 997 = 696,903
+    const resFull = calculateHoldingsAndSummary(trades, currentPrices, 32.0, 'BROKER', 1.0);
+    const tsMCFull = resFull.holdings.find((h) => h.symbol === '2330');
+    expect(tsMCFull?.estimatedSellFee).toBe(997);
+    expect(tsMCFull?.netMarketValue).toBe(696903);
+
+    // 0.6 6折 (0.1425% * 0.6 = 598) -> netMV = 700,000 - 2,100 - 598 = 697,302
+    const res60 = calculateHoldingsAndSummary(trades, currentPrices, 32.0, 'BROKER', 0.6);
+    const tsMC60 = res60.holdings.find((h) => h.symbol === '2330');
+    expect(tsMC60?.estimatedSellFee).toBe(598);
+    expect(tsMC60?.netMarketValue).toBe(697302);
+
+    // 0.28 2.8折 (0.1425% * 0.28 = 279) -> netMV = 700,000 - 2,100 - 279 = 697,621
+    const res28 = calculateHoldingsAndSummary(trades, currentPrices, 32.0, 'BROKER', 0.28);
+    const tsMC28 = res28.holdings.find((h) => h.symbol === '2330');
+    expect(tsMC28?.estimatedSellFee).toBe(279);
+    expect(tsMC28?.netMarketValue).toBe(697621);
+  });
 });
+
 

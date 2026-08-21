@@ -1,52 +1,40 @@
 import React from 'react';
-import { PortfolioSummary, MarketType } from '../types/stock';
+import { PortfolioSummary, MarketType, AccountingView } from '../types/stock';
 import { Wallet, ArrowUpRight, ArrowDownRight, Award, Coins } from 'lucide-react';
 
 interface SummaryCardsProps {
   summary: PortfolioSummary;
   currentMarket: 'ALL' | MarketType;
+  accountingView?: AccountingView;
 }
 
-export const SummaryCards: React.FC<SummaryCardsProps> = ({ summary, currentMarket }) => {
+export const SummaryCards: React.FC<SummaryCardsProps> = ({
+  summary,
+  currentMarket,
+  accountingView = 'BROKER',
+}) => {
   const isTW = currentMarket === 'TW';
   const isUS = currentMarket === 'US';
   const isALL = currentMarket === 'ALL';
 
   const currencySymbol = isUS ? 'USD $' : 'NT$';
+  const isBroker = accountingView === 'BROKER';
 
-  let marketValue = 0;
-  let totalCost = 0;
-  let unrealizedPnL = 0;
-  let unrealizedPnLPercent = 0;
-  let realizedPnL = 0;
-  let totalDividends = 0;
-  let totalCapitalReturned = 0;
+  const slice = isTW ? summary.twd : isUS ? summary.usd : summary.combinedTWD;
 
-  if (isTW) {
-    marketValue = summary.twd.marketValue;
-    totalCost = summary.twd.totalCost;
-    unrealizedPnL = summary.twd.unrealizedPnL;
-    unrealizedPnLPercent = summary.twd.unrealizedPnLPercent;
-    realizedPnL = summary.twd.realizedPnL;
-    totalDividends = summary.twd.totalDividends;
-    totalCapitalReturned = summary.twd.totalCapitalReturned || 0;
-  } else if (isUS) {
-    marketValue = summary.usd.marketValue;
-    totalCost = summary.usd.totalCost;
-    unrealizedPnL = summary.usd.unrealizedPnL;
-    unrealizedPnLPercent = summary.usd.unrealizedPnLPercent;
-    realizedPnL = summary.usd.realizedPnL;
-    totalDividends = summary.usd.totalDividends;
-    totalCapitalReturned = summary.usd.totalCapitalReturned || 0;
-  } else {
-    marketValue = summary.combinedTWD.marketValue;
-    totalCost = summary.combinedTWD.totalCost;
-    unrealizedPnL = summary.combinedTWD.unrealizedPnL;
-    unrealizedPnLPercent = summary.combinedTWD.unrealizedPnLPercent;
-    realizedPnL = summary.combinedTWD.realizedPnL;
-    totalDividends = summary.combinedTWD.totalDividends;
-    totalCapitalReturned = summary.combinedTWD.totalCapitalReturned || 0;
-  }
+  const grossMarketValue = slice.grossMarketValue ?? slice.marketValue;
+  const netMarketValue = slice.netMarketValue ?? slice.marketValue;
+  const estimatedTaxFee = (slice.estimatedSellTax || 0) + (slice.estimatedSellFee || 0);
+
+  const displayMarketValue = isBroker ? netMarketValue : grossMarketValue;
+  const totalCost = slice.totalCost;
+  const unrealizedPnL = slice.unrealizedPnL;
+  const unrealizedPnLPercent = slice.unrealizedPnLPercent;
+  const totalReturnPnL = slice.totalReturnPnL ?? (unrealizedPnL + slice.totalDividends + slice.realizedPnL);
+  const totalReturnPercent = slice.totalReturnPercent ?? (totalCost > 0 ? (totalReturnPnL / totalCost) * 100 : 0);
+  const realizedPnL = slice.realizedPnL;
+  const totalDividends = slice.totalDividends;
+  const totalCapitalReturned = slice.totalCapitalReturned || 0;
 
   const isGain = unrealizedPnL >= 0;
   const isRealizedGain = realizedPnL >= 0;
@@ -70,9 +58,23 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ summary, currentMark
       {/* 1. 總資產市值 */}
       <div className="glass-card" style={{ padding: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-            總資產市值 {isALL && '(折合台幣)'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+              {isBroker ? '庫存總市值 (含稅淨現值)' : '總資產市值 (毛市值)'} {isALL && '(折合台幣)'}
+            </span>
+            <span
+              style={{
+                fontSize: '0.65rem',
+                padding: '1px 6px',
+                borderRadius: '4px',
+                background: isBroker ? 'rgba(59, 130, 246, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                color: isBroker ? '#60a5fa' : '#34d399',
+                fontWeight: 600,
+              }}
+            >
+              {isBroker ? '券商口徑' : '總報酬口徑'}
+            </span>
+          </div>
           <div
             style={{
               background: 'rgba(59, 130, 246, 0.15)',
@@ -88,14 +90,21 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ summary, currentMark
           </div>
         </div>
         <div className="mono" style={{ fontSize: '1.625rem', fontWeight: 700, color: '#ffffff' }}>
-          {currencySymbol} {formatNumber(marketValue)}
+          {currencySymbol} {formatNumber(displayMarketValue)}
         </div>
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px' }}>
-          持有成本基準：{currencySymbol} {formatNumber(totalCost)}
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <div>
+            {isBroker
+              ? `牌面毛市值: ${currencySymbol} ${formatNumber(grossMarketValue)} (預估賣出稅費: -${currencySymbol} ${formatNumber(estimatedTaxFee)})`
+              : `預估清算淨值: ${currencySymbol} ${formatNumber(netMarketValue)} (預估稅費: ${currencySymbol} ${formatNumber(estimatedTaxFee)})`}
+          </div>
+          <div style={{ color: 'var(--text-secondary)' }}>
+            總付出成本基準：{currencySymbol} {formatNumber(totalCost)}
+          </div>
         </div>
       </div>
 
-      {/* 2. 未實現損益 */}
+      {/* 2. 未實現損益 / 總投資損益 */}
       <div
         className="glass-card"
         style={{
@@ -104,9 +113,23 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ summary, currentMark
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-            未實現損益 (浮動報酬)
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+              {isBroker ? '損益試算 (券商含稅)' : '投資總報酬 (加計股息)'}
+            </span>
+            <span
+              style={{
+                fontSize: '0.65rem',
+                padding: '1px 6px',
+                borderRadius: '4px',
+                background: isGain ? 'var(--gain-bg)' : 'var(--loss-bg)',
+                color: isGain ? 'var(--gain-color)' : 'var(--loss-color)',
+                fontWeight: 600,
+              }}
+            >
+              {isBroker ? '不含息·含稅' : 'Total Return'}
+            </span>
+          </div>
           <div
             style={{
               background: isGain ? 'var(--gain-bg)' : 'var(--loss-bg)',
@@ -129,7 +152,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ summary, currentMark
             color: isGain ? 'var(--gain-color)' : 'var(--loss-color)',
           }}
         >
-          {isGain ? '+' : ''}{currencySymbol} {formatNumber(unrealizedPnL)}
+          {isGain ? '+' : ''}{currencySymbol} {formatNumber(isBroker ? unrealizedPnL : totalReturnPnL)}
         </div>
         <div
           style={{
@@ -142,8 +165,12 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ summary, currentMark
             marginTop: '6px',
           }}
         >
-          <span>{isGain ? '▲' : '▼'} {Math.abs(unrealizedPnLPercent).toFixed(2)}%</span>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 400 }}>未平倉報酬率</span>
+          <span>{isGain ? '▲' : '▼'} {Math.abs(isBroker ? unrealizedPnLPercent : totalReturnPercent).toFixed(2)}%</span>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+            {isBroker
+              ? `未扣稅損益: ${currencySymbol} ${formatNumber(grossMarketValue - totalCost)}`
+              : `未實現價差: ${isGain ? '+' : ''}${currencySymbol} ${formatNumber(unrealizedPnL)} (${unrealizedPnLPercent.toFixed(2)}%)`}
+          </span>
         </div>
       </div>
 

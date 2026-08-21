@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { TradeRecord, MarketType, TradeType, ColorThemeMode } from './types/stock';
+import { TradeRecord, MarketType, TradeType, ColorThemeMode, AccountingView } from './types/stock';
 import { calculateHoldingsAndSummary } from './engine/calculator';
 import {
   loadTradesFromStorage,
@@ -8,6 +8,10 @@ import {
   saveExchangeRate,
   loadCustomPricesFromStorage,
   saveCustomPricesToStorage,
+  loadAccountingViewFromStorage,
+  saveAccountingViewToStorage,
+  loadBrokerFeeDiscountFromStorage,
+  saveBrokerFeeDiscountToStorage,
   validateTradesSchema,
   parseCSVToTrades,
   mergeTrades,
@@ -31,9 +35,20 @@ export const App: React.FC = () => {
   const [usdToTwdRate, setUsdToTwdRate] = useState<number>(() => loadExchangeRate());
   const [currentMarket, setCurrentMarket] = useState<'ALL' | MarketType>('ALL');
   const [currentPrices, setCurrentPrices] = useState<Record<string, number>>(() => loadCustomPricesFromStorage());
+  const [accountingView, setAccountingView] = useState<AccountingView>(() => loadAccountingViewFromStorage());
+  const [brokerFeeDiscount, setBrokerFeeDiscount] = useState<number>(() => loadBrokerFeeDiscountFromStorage());
   const [colorTheme, setColorTheme] = useState<ColorThemeMode>(() => {
     return (localStorage.getItem('stock_tracker_color_theme') as ColorThemeMode) || 'taiwan';
   });
+
+  // 監聽並持久化 accountingView 與 brokerFeeDiscount
+  useEffect(() => {
+    saveAccountingViewToStorage(accountingView);
+  }, [accountingView]);
+
+  useEffect(() => {
+    saveBrokerFeeDiscountToStorage(brokerFeeDiscount);
+  }, [brokerFeeDiscount]);
 
   // 監聽並將色彩主題套用到 DOM
   useEffect(() => {
@@ -80,10 +95,16 @@ export const App: React.FC = () => {
     return trades.filter((t) => t.market === currentMarket);
   }, [trades, currentMarket]);
 
-  // 執行損益與持倉計算
+  // 執行損益與持倉計算（傳入 accountingView 與 brokerFeeDiscount）
   const { holdings, summary } = useMemo(() => {
-    return calculateHoldingsAndSummary(displayedTrades, currentPrices, usdToTwdRate);
-  }, [displayedTrades, currentPrices, usdToTwdRate]);
+    return calculateHoldingsAndSummary(
+      displayedTrades,
+      currentPrices,
+      usdToTwdRate,
+      accountingView,
+      brokerFeeDiscount
+    );
+  }, [displayedTrades, currentPrices, usdToTwdRate, accountingView, brokerFeeDiscount]);
 
   // 報價與匯率自動輪詢更新回呼
   const handlePricesCalculated = useCallback((newPrices: Record<string, number>) => {
@@ -129,6 +150,8 @@ export const App: React.FC = () => {
         [tradeData.symbol]: tradeData.price,
       }));
     }
+
+    setIsModalOpen(false);
   };
 
   // 批次補登公司行動
@@ -262,6 +285,10 @@ export const App: React.FC = () => {
         exchangeRateQuote={exchangeRateQuote}
         colorTheme={colorTheme}
         onToggleColorTheme={handleToggleColorTheme}
+        accountingView={accountingView}
+        onChangeAccountingView={setAccountingView}
+        brokerFeeDiscount={brokerFeeDiscount}
+        onChangeBrokerFeeDiscount={setBrokerFeeDiscount}
         isRefreshing={isRefreshing}
         lastUpdated={lastUpdated}
         marketStatus={marketStatus}
@@ -274,7 +301,7 @@ export const App: React.FC = () => {
       />
 
       {/* 總資產與損益卡片 */}
-      <SummaryCards summary={summary} currentMarket={currentMarket} />
+      <SummaryCards summary={summary} currentMarket={currentMarket} accountingView={accountingView} />
 
       {/* 資產配置視覺化圖表 (樹狀圖 / 權重清單) */}
       <AllocationChart
@@ -289,6 +316,7 @@ export const App: React.FC = () => {
         trades={trades}
         quotes={quotes}
         lockedSymbols={lockedSymbols}
+        accountingView={accountingView}
         onUpdatePrice={handleUpdatePrice}
         onToggleLock={toggleSymbolLock}
         onRefreshSymbol={refreshSymbol}

@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-83%2F83%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-89%2F89%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,14 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 持倉雙階自然排序與證交所端點校正 (Holdings Sort & TWSE Endpoint Fix) *(V1.8 新增)*
+### 1. 雙軌會計口徑切換與官方標的全面校準 (Dual Accounting & Official Symbols) *(V2.0 新增)*
+- **全域雙軌會計口徑切換**：頂部導覽列提供 `[🏢 券商核帳模式 (不含息/含稅)]` ⇋ `[📈 總報酬模式 (含息/毛市值)]` 一鍵切換。
+- **券商 100% 像素級對帳 (Broker View)**：以純加權付出成本為基準，預扣「預估賣出證券交易稅（現股 0.3%、ETF 0.1%）與手續費」，市值與損益試算與券商 App 完全對齊。
+- **存股總報酬視角 (Total Return View)**：以客觀牌面毛市值呈現，加計歷史累計現金股利與已實現利得，展現真實複利與投資總回報。
+- **雙層主副資訊看板**：總覽卡片與持倉表格大字呈現當前口徑，小字副標題同時清楚標註另一模式數據與預估稅費差額。
+- **官方 21 檔標的數據單一事實來源校準**：對齊 2026 年新掛牌之 `00403A`（主動統一升級50）、`009816`（凱基台灣TOP50）、`00981A`（主動統一台股增長）、`009826`（貝萊德世界股票），並具備自動校準防護機制。
+
+### 2. 持倉雙階自然排序與證交所端點校正 (Holdings Sort & TWSE Endpoint Fix) *(V1.8 新增)*
 - **雙階自然排序 (Multi-Tier Natural Sort)**：當前持倉庫存嚴格依「台股優先、美股置底；同市場內依標的代碼字母數字自然升冪 (Natural Alphanumeric Sort)」排列（例如：`00403A` ➔ `0050` ➔ `00919` ➔ `2330` ➔ `9927` ➔ `VT`），與券商標準看盤軟體 100% 體驗對齊。
 - **TWSE 除權除息預告端點精確解析**：正確將台灣證交所 `TWT48U_ALL` 歸類為除權除息預告表，讀取現金股利與股票股利資訊。
 - **無效減資安全閘門 (Invalid Reduction Shield)**：過濾變更股數與金額皆為 0 之假減資事件，根絕除息預告誤產生「2026-10-01 虧損減資 0 股 0 元」之假資料問題。

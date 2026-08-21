@@ -1,6 +1,6 @@
 import React from 'react';
 import { TrendingUp, PlusCircle, Download, Upload, DollarSign, Palette, Sparkles, RefreshCw } from 'lucide-react';
-import { MarketType, ColorThemeMode, ExchangeRateQuote } from '../types/stock';
+import { MarketType, ColorThemeMode, ExchangeRateQuote, AccountingView } from '../types/stock';
 
 interface HeaderProps {
   currentMarket: 'ALL' | MarketType;
@@ -9,6 +9,10 @@ interface HeaderProps {
   exchangeRateQuote?: ExchangeRateQuote;
   colorTheme: ColorThemeMode;
   onToggleColorTheme: () => void;
+  accountingView?: AccountingView;
+  onChangeAccountingView?: (view: AccountingView) => void;
+  brokerFeeDiscount?: number;
+  onChangeBrokerFeeDiscount?: (discount: number) => void;
   isRefreshing?: boolean;
   lastUpdated?: number | null;
   marketStatus?: { isTWOpen: boolean; isUSOpen: boolean; isAnyOpen: boolean };
@@ -27,6 +31,10 @@ export const Header: React.FC<HeaderProps> = ({
   exchangeRateQuote,
   colorTheme,
   onToggleColorTheme,
+  accountingView = 'BROKER',
+  onChangeAccountingView,
+  brokerFeeDiscount = 1.0,
+  onChangeBrokerFeeDiscount,
   isRefreshing = false,
   lastUpdated = null,
   marketStatus,
@@ -94,6 +102,101 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           ))}
         </div>
+
+        {/* Accounting View Mode Toggle */}
+        {onChangeAccountingView && (
+          <div
+            style={{
+              display: 'flex',
+              background: 'rgba(30, 41, 59, 0.7)',
+              padding: '3px',
+              borderRadius: '10px',
+              border: '1px solid var(--border-color)',
+            }}
+          >
+            <button
+              onClick={() => onChangeAccountingView('BROKER')}
+              title="券商核帳模式：不含息原始付出成本，市值預先扣除預估賣出證交稅與手續費（淨變現清算值），100% 對齊券商 App"
+              style={{
+                padding: '5px 12px',
+                borderRadius: '7px',
+                border: 'none',
+                background: accountingView === 'BROKER' ? '#3b82f6' : 'transparent',
+                color: accountingView === 'BROKER' ? '#ffffff' : 'var(--text-secondary)',
+                fontWeight: accountingView === 'BROKER' ? 700 : 500,
+                fontSize: '0.78rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <span>🏢 券商核帳</span>
+              <span style={{ fontSize: '0.68rem', opacity: 0.85 }}>(不含息·含稅)</span>
+            </button>
+            <button
+              onClick={() => onChangeAccountingView('TOTAL_RETURN')}
+              title="投資總報酬模式：牌面毛市值，損益加計歷年已領現金股利與已實現利得，展現真實存股複利績效"
+              style={{
+                padding: '5px 12px',
+                borderRadius: '7px',
+                border: 'none',
+                background: accountingView === 'TOTAL_RETURN' ? '#10b981' : 'transparent',
+                color: accountingView === 'TOTAL_RETURN' ? '#ffffff' : 'var(--text-secondary)',
+                fontWeight: accountingView === 'TOTAL_RETURN' ? 700 : 500,
+                fontSize: '0.78rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <span>📈 總報酬</span>
+              <span style={{ fontSize: '0.68rem', opacity: 0.85 }}>(含息·毛市值)</span>
+            </button>
+          </div>
+        )}
+
+        {/* Broker Fee Discount Selector (僅在券商核帳模式下呈現) */}
+        {accountingView === 'BROKER' && onChangeBrokerFeeDiscount && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: 'rgba(30, 41, 59, 0.7)',
+              padding: '3px 8px',
+              borderRadius: '10px',
+              border: '1px solid var(--border-color)',
+              fontSize: '0.75rem',
+              color: 'var(--text-secondary)',
+            }}
+            title="券商預扣手續費折讓率：1.0 為標準牌告全額 (100% 對齊券商 App 標準口徑)，亦可切換為 6折 或 2.8折"
+          >
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>賣出手續費:</span>
+            <select
+              value={brokerFeeDiscount.toString()}
+              onChange={(e) => onChangeBrokerFeeDiscount(parseFloat(e.target.value))}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#60a5fa',
+                fontWeight: 700,
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                outline: 'none',
+              }}
+            >
+              <option value="1" style={{ background: '#1e293b', color: '#ffffff' }}>1.0 全額 (券商預設)</option>
+              <option value="0.6" style={{ background: '#1e293b', color: '#ffffff' }}>0.6 (6折)</option>
+              <option value="0.28" style={{ background: '#1e293b', color: '#ffffff' }}>0.28 (2.8折)</option>
+              <option value="0.2" style={{ background: '#1e293b', color: '#ffffff' }}>0.2 (2折)</option>
+              <option value="0" style={{ background: '#1e293b', color: '#ffffff' }}>0.0 (免手續費)</option>
+            </select>
+          </div>
+        )}
 
         {/* Action Controls & Rate Config */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>

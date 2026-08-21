@@ -38,6 +38,8 @@ export interface TradeRecord {
   createdAt: number;
 }
 
+export type AccountingView = 'BROKER' | 'TOTAL_RETURN'; // BROKER: 券商核帳模式（不含息、含稅）; TOTAL_RETURN: 總報酬模式（含息、毛市值）
+
 export interface HoldingPosition {
   symbol: string;
   name: string;
@@ -47,15 +49,23 @@ export interface HoldingPosition {
   originalBuyShares?: number; // 原始買進與增資累計股數（未含配股/減資調整）
   avgCost: number; // 平均買進每股成本
   totalCostBasis: number; // 總投入成本（含買進手續費與認購金額，減去減資退還）
-  adjustedCostBasis: number; // 經資本返還調整後之實際在倉本金基準
+  adjustedCostBasis: number; // 經資本返還與股息調整後之本金基準
   currentPrice: number; // 最新參考市價
-  marketValue: number; // 當前總市值 (shares * currentPrice)
-  unrealizedPnL: number; // 未實現損益金額 (marketValue - totalCostBasis)
+  marketValue: number; // 總市值 (相容性主欄位：依當前模式為 netMarketValue 或 grossMarketValue)
+  grossMarketValue: number; // 毛市值 (shares * currentPrice)
+  estimatedSellTax: number; // 預估賣出證券交易稅
+  estimatedSellFee: number; // 預估賣出手續費
+  netMarketValue: number; // 含稅淨變現市值 (grossMarketValue - estimatedSellTax - estimatedSellFee)
+  unrealizedPnL: number; // 未實現損益金額
   unrealizedPnLPercent: number; // 未實現報酬率 %
+  unrealizedPnLBroker: number; // 券商口徑未實現損益 (netMarketValue - totalCostBasis)
+  unrealizedPnLBrokerPercent: number; // 券商口徑報酬率 %
   realizedPnL: number; // 累計已實現損益（此標的歷史賣出累積）
   totalDividends: number; // 累計領取現金股息
   totalCapitalReturned: number; // 累計減資退還現金
   totalStockDividendsShares: number; // 累計除權配股股數
+  totalReturnPnL: number; // 含息總損益 ((grossMarketValue - totalCostBasis) + totalDividends + realizedPnL)
+  totalReturnPercent: number; // 含息總報酬率 %
   yieldOnCostPercent: number; // 成本殖利率 % (totalDividends / totalCostBasis * 100)
 }
 
@@ -98,11 +108,17 @@ export interface PriceMetadataStore {
 export interface MarketSummarySlice {
   totalCost: number;
   marketValue: number;
+  grossMarketValue: number;
+  netMarketValue: number;
+  estimatedSellTax: number;
+  estimatedSellFee: number;
   unrealizedPnL: number;
   unrealizedPnLPercent: number;
   realizedPnL: number;
   totalDividends: number;
   totalCapitalReturned: number;
+  totalReturnPnL: number;
+  totalReturnPercent: number;
 }
 
 export interface PortfolioSummary {
@@ -111,6 +127,7 @@ export interface PortfolioSummary {
   combinedTWD: MarketSummarySlice & { netAssetValue: number };
   usdToTwdRate: number;
 }
+
 
 
 

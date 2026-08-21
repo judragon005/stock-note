@@ -15,6 +15,10 @@ import {
   setSymbolLock,
   updateQuoteInStorage,
   getDefaultSampleTrades,
+  loadAccountingViewFromStorage,
+  saveAccountingViewToStorage,
+  loadBrokerFeeDiscountFromStorage,
+  saveBrokerFeeDiscountToStorage,
 } from './storage';
 
 // 模擬 LocalStorage 環境
@@ -350,6 +354,44 @@ describe('Storage & Persistence Utilities (Issue #6)', () => {
 
       // 同步檢查舊 key
       expect(localStorage.getItem('STOCK_TRACKER_USD_TWD_RATE')).toBe('32.45');
+    });
+
+    it('應能正確儲存與讀取 AccountingView 狀態', () => {
+      saveAccountingViewToStorage('BROKER');
+      expect(loadAccountingViewFromStorage()).toBe('BROKER');
+
+      saveAccountingViewToStorage('TOTAL_RETURN');
+      expect(loadAccountingViewFromStorage()).toBe('TOTAL_RETURN');
+    });
+
+    it('應能正確儲存與讀取 BrokerFeeDiscount 折讓率 (預設為 1.0 全額牌告)', () => {
+      // 預設值為 1.0
+      localStorage.removeItem('STOCK_TRACKER_BROKER_FEE_DISCOUNT_V1');
+      expect(loadBrokerFeeDiscountFromStorage()).toBe(1.0);
+
+      // 儲存 0.6
+      saveBrokerFeeDiscountToStorage(0.6);
+      expect(loadBrokerFeeDiscountFromStorage()).toBe(0.6);
+
+      // 儲存 0.28
+      saveBrokerFeeDiscountToStorage(0.28);
+      expect(loadBrokerFeeDiscountFromStorage()).toBe(0.28);
+    });
+
+    it('validateTradesSchema 應自動將 00403A, 009816, 00981A, 009826 對齊至官方證券簡稱', () => {
+      const input = [
+        { date: '2026-01-01', symbol: '00403A', name: '舊名稱A', market: 'TW', type: 'BUY', shares: 100, price: 10 },
+        { date: '2026-01-02', symbol: '009816', name: '舊名稱B', market: 'TW', type: 'BUY', shares: 100, price: 15 },
+        { date: '2026-01-03', symbol: '00981A', name: '舊名稱C', market: 'TW', type: 'BUY', shares: 100, price: 15 },
+        { date: '2026-01-04', symbol: '009826', name: '舊名稱D', market: 'TW', type: 'BUY', shares: 100, price: 10 },
+      ];
+
+      const validated = validateTradesSchema(input);
+      expect(validated).not.toBeNull();
+      expect(validated?.find((t) => t.symbol === '00403A')?.name).toBe('主動統一升級50');
+      expect(validated?.find((t) => t.symbol === '009816')?.name).toBe('凱基台灣TOP50');
+      expect(validated?.find((t) => t.symbol === '00981A')?.name).toBe('主動統一台股增長');
+      expect(validated?.find((t) => t.symbol === '009826')?.name).toBe('貝萊德世界股票');
     });
   });
 });

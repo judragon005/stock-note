@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { HoldingPosition, TradeRecord, PriceQuote, MarketType } from '../types/stock';
-import { Edit2, Check, Layers, ChevronDown, ChevronRight, Calendar, Lock, Unlock, RefreshCw } from 'lucide-react';
+import { HoldingPosition, TradeRecord, PriceQuote, MarketType, AccountingView } from '../types/stock';
+import { Edit2, Check, ChevronDown, ChevronRight, Calendar, Lock, Unlock, RefreshCw } from 'lucide-react';
 
 interface HoldingsTableProps {
   holdings: HoldingPosition[];
   trades?: TradeRecord[];
   quotes?: Record<string, PriceQuote>;
   lockedSymbols?: string[];
+  accountingView?: AccountingView;
   onUpdatePrice: (symbol: string, price: number) => void;
   onToggleLock?: (symbol: string) => void;
   onRefreshSymbol?: (symbol: string, market: MarketType) => void;
@@ -136,6 +137,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   trades = [],
   quotes = {},
   lockedSymbols = [],
+  accountingView = 'BROKER',
   onUpdatePrice,
   onToggleLock,
   onRefreshSymbol,
@@ -144,6 +146,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   const [editingSymbol, setEditingSymbol] = useState<string | null>(null);
   const [priceInput, setPriceInput] = useState<string>('');
   const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
+  const isBroker = accountingView === 'BROKER';
 
   // 僅顯示仍有持股的標的（股數 > 0），並確保台股優先、代碼字母數字升冪排序
   const activeHoldings = holdings
@@ -163,9 +166,9 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   };
 
   const savePrice = (symbol: string) => {
-    const val = parseFloat(priceInput);
-    if (!isNaN(val) && val >= 0) {
-      onUpdatePrice(symbol, val);
+    const newPrice = parseFloat(priceInput);
+    if (!isNaN(newPrice) && newPrice >= 0) {
+      onUpdatePrice(symbol, newPrice);
     }
     setEditingSymbol(null);
   };
@@ -175,27 +178,30 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   };
 
   return (
-    <div className="glass-card" style={{ padding: '24px', marginBottom: '24px', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+    <div className="glass-card" style={{ padding: '24px', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Layers size={20} color="#10b981" />
-          <h2 style={{ fontSize: '1.125rem', fontWeight: 700, margin: 0 }}>當前持倉庫存與未實現損益</h2>
+          <h2 style={{ fontSize: '1.125rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+            當前持倉庫存 ({activeHoldings.length} 檔)
+          </h2>
+          <span
+            style={{
+              fontSize: '0.7rem',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              background: isBroker ? 'rgba(59, 130, 246, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+              color: isBroker ? '#60a5fa' : '#34d399',
+              fontWeight: 600,
+            }}
+          >
+            {isBroker ? '🏢 券商核帳口徑 (含稅淨值)' : '📈 投資總報酬口徑 (毛市值)'}
+          </span>
         </div>
-        <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-          共 {activeHoldings.length} 檔持股 · 點擊項目可展開股權歷程時間軸
-        </span>
       </div>
 
       {activeHoldings.length === 0 ? (
-        <div
-          style={{
-            textAlign: 'center',
-            padding: '40px 20px',
-            color: 'var(--text-muted)',
-            fontSize: '0.875rem',
-          }}
-        >
-          目前無任何持股庫存。點擊右上角「新增交易」開始紀錄！
+        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+          目前無任何持股紀錄。請點擊上方按鈕新增交易或智慧掃描公司行動。
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
@@ -208,10 +214,18 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                 <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>持有股數</th>
                 <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>平均成本</th>
                 <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>最新參考市價</th>
-                <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>持倉成本基準</th>
-                <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>當前市值</th>
-                <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>未實現損益 / 報酬率</th>
-                <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>累計股息 / YoC</th>
+                <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>
+                  {isBroker ? '總付出成本' : '持倉成本基準'}
+                </th>
+                <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>
+                  {isBroker ? '當前市值 (含稅淨值)' : '當前毛市值'}
+                </th>
+                <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>
+                  {isBroker ? '未實現損益 (含稅)' : '未實現損益 / 報酬率'}
+                </th>
+                <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>
+                  {isBroker ? '累計股息 / YoC' : '含息總損益 / 回報%'}
+                </th>
                 <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'center' }}>操作</th>
               </tr>
             </thead>
@@ -372,7 +386,12 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
 
                       {/* 當前市值 */}
                       <td className="mono" style={{ padding: '14px', textAlign: 'right', fontWeight: 600, color: '#ffffff' }}>
-                        {Math.round(item.marketValue).toLocaleString('en-US')}
+                        <div>{Math.round(item.marketValue).toLocaleString('en-US')}</div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400, marginTop: '2px' }}>
+                          {isBroker
+                            ? `毛 ${Math.round(item.grossMarketValue).toLocaleString()} (稅費 -${Math.round(item.estimatedSellTax + item.estimatedSellFee)})`
+                            : `淨現值 ${Math.round(item.netMarketValue).toLocaleString()}`}
+                        </div>
                       </td>
 
                       {/* 未實現損益與報酬率 */}
@@ -386,7 +405,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                           }}
                         >
                           {isGain ? '+' : ''}
-                          {Math.round(item.unrealizedPnL).toLocaleString('en-US')}
+                          {Math.round(isBroker ? item.unrealizedPnL : item.unrealizedPnL).toLocaleString('en-US')}
                         </div>
                         <div
                           style={{
@@ -400,27 +419,54 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                         </div>
                       </td>
 
-                      {/* 累計股息與成本殖利率 YoC */}
+                      {/* 累計股息與總報酬 / YoC */}
                       <td style={{ padding: '14px', textAlign: 'right' }}>
-                        <div
-                          className="mono"
-                          style={{
-                            fontWeight: 600,
-                            color: item.totalDividends > 0 ? '#fbbf24' : 'var(--text-muted)',
-                            fontSize: '0.85rem',
-                          }}
-                        >
-                          {currencyPrefix} {Math.round(item.totalDividends).toLocaleString('en-US')}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: '0.75rem',
-                            color: item.totalDividends > 0 ? '#fbbf24' : 'var(--text-muted)',
-                            marginTop: '2px',
-                          }}
-                        >
-                          YoC: {item.yieldOnCostPercent > 0 ? `${item.yieldOnCostPercent.toFixed(2)}%` : '-'}
-                        </div>
+                        {isBroker ? (
+                          <>
+                            <div
+                              className="mono"
+                              style={{
+                                fontWeight: 600,
+                                color: item.totalDividends > 0 ? '#fbbf24' : 'var(--text-muted)',
+                                fontSize: '0.85rem',
+                              }}
+                            >
+                              {currencyPrefix} {Math.round(item.totalDividends).toLocaleString('en-US')}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: '0.75rem',
+                                color: item.totalDividends > 0 ? '#fbbf24' : 'var(--text-muted)',
+                                marginTop: '2px',
+                              }}
+                            >
+                              YoC: {item.yieldOnCostPercent > 0 ? `${item.yieldOnCostPercent.toFixed(2)}%` : '-'}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div
+                              className="mono"
+                              style={{
+                                fontWeight: 700,
+                                color: item.totalReturnPnL >= 0 ? 'var(--gain-color)' : 'var(--loss-color)',
+                                fontSize: '0.85rem',
+                              }}
+                            >
+                              {item.totalReturnPnL >= 0 ? '+' : ''}{currencyPrefix} {Math.round(item.totalReturnPnL).toLocaleString('en-US')}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                color: item.totalReturnPnL >= 0 ? 'var(--gain-color)' : 'var(--loss-color)',
+                                marginTop: '2px',
+                              }}
+                            >
+                              總回報: {item.totalReturnPercent >= 0 ? '+' : ''}{item.totalReturnPercent.toFixed(2)}%
+                            </div>
+                          </>
+                        )}
                       </td>
 
                       {/* 快速加碼 / 平倉操作 */}

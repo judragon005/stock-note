@@ -1,8 +1,51 @@
-import { TradeRecord, HoldingPosition, PortfolioSummary, MarketType, Currency, TradeType } from '../types/stock';
+import {
+  TradeRecord,
+  HoldingPosition,
+  PortfolioSummary,
+  MarketType,
+  Currency,
+  TradeType,
+  AccountingView,
+} from '../types/stock';
+import { resolveOfficialSecurityName } from '../utils/storage';
 
 export interface CalculationResult {
   holdings: HoldingPosition[];
   summary: PortfolioSummary;
+}
+
+/**
+ * 試算預估賣出證券交易稅（台股現股 0.3%，台股 ETF 0.1%，美股 0%）
+ */
+export function calculateEstimatedSellTax(symbol: string, market: MarketType, grossMarketValue: number): number {
+  if (grossMarketValue <= 0) return 0;
+  if (market === 'TW') {
+    const cleanSymbol = symbol.trim().toUpperCase();
+    const isETF = cleanSymbol.startsWith('00') || cleanSymbol.endsWith('B');
+    const taxRate = isETF ? 0.001 : 0.003;
+    return Math.floor(grossMarketValue * taxRate);
+  }
+  return 0;
+}
+
+/**
+ * 計算預估賣出手續費 (台股 0.1425% 搭配自訂折讓率，美股 0)
+ * @param market 市場
+ * @param grossMarketValue 牌面毛市值
+ * @param discountRate 手續費折扣率 (例如 1.0 為全額牌告對齊券商 App 預設、0.6 為 6折、0.28 為 2.8折)
+ */
+export function calculateEstimatedSellFee(
+  market: MarketType,
+  grossMarketValue: number,
+  discountRate: number = 1.0
+): number {
+  if (market === 'US') {
+    return 0; // 美股賣出券商免手續費或極微量 SEC fee
+  }
+  // 台股券商公定手續費 0.1425%，低消 20 元
+  const standardFee = grossMarketValue * 0.001425;
+  const discountedFee = Math.max(20, Math.floor(standardFee * discountRate));
+  return Math.max(0, discountedFee);
 }
 
 /**
@@ -33,11 +76,11 @@ export function applyTradeToShares(
       break;
 
     case 'STOCK_MERGER':
-      result = 0; // 原標的在換股合併後持股歸零轉出
+      result = 0;
       break;
 
     case 'SPIN_OFF':
-      result = currentShares; // 企業分拆母公司持有股數不變
+      result = currentShares;
       break;
 
     case 'STOCK_DIVIDEND': {
@@ -99,9 +142,10 @@ export function getHoldingsAsOfDate(
 export function calculateHoldingsAndSummary(
   trades: TradeRecord[],
   currentPrices: Record<string, number> = {},
-  usdToTwdRate: number = 32.0
+  usdToTwdRate: number = 32.0,
+  accountingView: AccountingView = 'TOTAL_RETURN',
+  brokerFeeDiscount: number = 1.0
 ): CalculationResult {
-  // 1. 嚴格依交易日期與建立時間排序
   const sortedTrades = [...trades].sort((a, b) => {
     if (a.date !== b.date) {
       return a.date.localeCompare(b.date);
@@ -131,10 +175,11 @@ export function calculateHoldingsAndSummary(
     defaultMarket?: MarketType,
     defaultCurrency?: Currency
   ): Accumulator => {
-    if (!map.has(sym)) {
-      map.set(sym, {
-        symbol: sym,
-        name: defaultName || sym,
+    const cleanSym = sym.trim().toUpperCase();
+    if (!map.has(cleanSym)) {
+      map.set(cleanSym, {
+        symbol: cleanSym,
+        name: resolveOfficialSecurityName(cleanSym, defaultName),
         market: defaultMarket || 'TW',
         currency: defaultCurrency || (defaultMarket === 'US' ? 'USD' : 'TWD'),
         shares: 0,
@@ -146,7 +191,7 @@ export function calculateHoldingsAndSummary(
         totalStockDividendsShares: 0,
       });
     }
-    return map.get(sym)!;
+    return map.get(cleanSym)!;
   };
 
   for (const trade of sortedTrades) {
@@ -158,38 +203,35 @@ export function calculateHoldingsAndSummary(
     );
 
     if (trade.name && trade.name !== trade.symbol) {
-      item.name = trade.name;
+      item.name = resolveOfficialSecurityName(item.symbol, trade.name);
     }
 
-    const isTW = item.market === 'TW' || /^\d+$/.test(trade.symbol);
     const fee = Number(trade.fee) || 0;
     const tax = Number(trade.tax) || 0;
+    const shares = Number(trade.shares) || 0;
     const price = Number(trade.price) || 0;
-    const rawShares = Number(trade.shares) || 0;
-    const shares = isTW ? Math.round(rawShares) : rawShares;
     const ratio = Number(trade.ratio) || 0;
-    const cashAmount = trade.cashAmount !== undefined ? Number(trade.cashAmount) : 0;
+    const cashAmount = Number(trade.cashAmount) || 0;
 
     switch (trade.type) {
       case 'BUY': {
-        const grossAmount = shares * price;
-        const netCost = grossAmount + fee + tax;
-        item.totalCostBasis += netCost;
+        const netCost = shares * price + fee;
         item.shares += shares;
         item.originalBuyShares += shares;
+        item.totalCostBasis += netCost;
         break;
       }
 
       case 'SELL': {
         if (item.shares > 0) {
+          const soldShares = Math.min(shares, item.shares);
           const avgUnitCost = item.totalCostBasis / item.shares;
-          const sellShares = Math.min(shares, item.shares);
-          const costOfSold = sellShares * avgUnitCost;
-          const netRevenue = (sellShares * price) - fee - tax;
-          const pnl = netRevenue - costOfSold;
+          const costOfSold = avgUnitCost * soldShares;
+          const netProceeds = soldShares * price - fee - tax;
+          const profit = netProceeds - costOfSold;
 
-          item.realizedPnL += pnl;
-          item.shares -= sellShares;
+          item.shares = Math.max(0, item.shares - soldShares);
+          item.realizedPnL += profit;
           item.totalCostBasis = Math.max(0, item.totalCostBasis - costOfSold);
 
           if (item.shares <= 0) {
@@ -201,85 +243,74 @@ export function calculateHoldingsAndSummary(
       }
 
       case 'DIVIDEND': {
-        let divAmount = 0;
-        if (cashAmount > 0) {
-          divAmount = cashAmount;
-        } else if (price > 0 && shares > 0) {
-          divAmount = (price * shares) - tax - fee;
-        } else if (price > 0) {
-          divAmount = price - tax - fee;
-        } else if (fee > 0) {
-          divAmount = fee;
-        }
-        item.totalDividends += Math.max(0, divAmount);
+        const netDiv = (shares > 0 && price > 0 ? shares * price : cashAmount) - fee - tax;
+        item.totalDividends += Math.max(0, netDiv);
         break;
       }
 
       case 'STOCK_DIVIDEND': {
-        const rawAdded = shares > 0 ? shares : (ratio > 0 ? item.shares * ratio : 0);
-        const addedShares = isTW ? Math.round(rawAdded) : rawAdded;
-        item.shares += addedShares;
-        item.totalStockDividendsShares += addedShares;
+        const added = shares > 0 ? shares : (ratio > 0 ? item.shares * ratio : 0);
+        const finalAdded = item.market === 'TW' ? Math.round(added) : added;
+        item.shares += finalAdded;
+        item.totalStockDividendsShares += finalAdded;
         break;
       }
 
       case 'STOCK_SPLIT': {
-        const splitMultiplier = ratio > 0 ? ratio : (shares > 0 && item.shares > 0 ? (item.shares + shares) / item.shares : 1);
-        if (splitMultiplier > 0) {
-          item.shares *= splitMultiplier;
-          if (isTW) item.shares = Math.round(item.shares);
+        const multiplier = ratio > 0 ? ratio : (shares > 0 && item.shares > 0 ? (item.shares + shares) / item.shares : 1);
+        if (multiplier > 0) {
+          const newShares = item.shares * multiplier;
+          item.shares = item.market === 'TW' ? Math.round(newShares) : newShares;
         }
         break;
       }
 
       case 'CAPITAL_REDUCTION': {
-        const rawReduced = shares > 0 ? Math.min(shares, item.shares) : (ratio > 0 ? item.shares * ratio : 0);
-        const reducedShares = isTW ? Math.round(rawReduced) : rawReduced;
-        const preReductionShares = item.shares;
-        item.shares = Math.max(0, item.shares - reducedShares);
-        if (isTW) item.shares = Math.round(item.shares);
+        const reduced = shares > 0 ? Math.min(shares, item.shares) : (ratio > 0 ? item.shares * ratio : 0);
+        const finalReduced = item.market === 'TW' ? Math.round(reduced) : reduced;
+        item.shares = Math.max(0, item.shares - finalReduced);
 
-        const refund = cashAmount > 0 ? cashAmount : (price > 0 ? preReductionShares * price : 0);
+        const refund = cashAmount > 0 ? cashAmount : (price > 0 && finalReduced > 0 ? finalReduced * price : 0);
         if (refund > 0) {
-          item.totalCostBasis = Math.max(0, item.totalCostBasis - refund);
           item.totalCapitalReturned += refund;
+          item.totalCostBasis = Math.max(0, item.totalCostBasis - refund);
+        }
+
+        if (item.shares <= 0) {
+          item.totalCostBasis = 0;
         }
         break;
       }
 
       case 'CAPITAL_INCREASE': {
-        const grossAmount = shares * price;
-        const netCost = grossAmount + fee + tax;
-        item.totalCostBasis += netCost;
+        const netCost = shares * price + fee;
         item.shares += shares;
         item.originalBuyShares += shares;
+        item.totalCostBasis += netCost;
         break;
       }
 
       case 'STOCK_MERGER': {
-        const transferCost = item.totalCostBasis;
-        const preMergerShares = item.shares;
-        item.shares = 0;
-        item.totalCostBasis = 0;
+        const targetSym = trade.targetSymbol || '';
+        if (targetSym && targetSym !== trade.symbol) {
+          const targetItem = getOrCreateItem(targetSym, trade.targetName || targetSym, item.market, item.currency);
+          const transferCost = item.totalCostBasis;
+          const mergedShares = shares > 0 ? shares : (ratio > 0 ? item.shares * ratio : 0);
+          item.shares = 0;
+          item.totalCostBasis = 0;
 
-        if (trade.targetSymbol) {
-          const targetItem = getOrCreateItem(
-            trade.targetSymbol,
-            trade.targetName || trade.targetSymbol,
-            item.market,
-            item.currency
-          );
-          const rawSharesB = shares > 0 ? shares : (ratio > 0 ? preMergerShares * ratio : preMergerShares);
-          const newSharesB = isTW ? Math.round(rawSharesB) : rawSharesB;
-          targetItem.shares += newSharesB;
-          targetItem.originalBuyShares += newSharesB;
+          if (cashAmount > 0) {
+            item.realizedPnL += cashAmount;
+          }
+
+          targetItem.shares += mergedShares;
           targetItem.totalCostBasis += Math.max(0, transferCost - cashAmount);
         }
         break;
       }
 
       case 'PREFERRED_REDEMPTION': {
-        const redemptionTotal = cashAmount > 0 ? cashAmount : (price > 0 && shares > 0 ? price * shares : price);
+        const redemptionTotal = (shares > 0 ? shares : item.shares) * (price > 0 ? price : 1);
         const pnl = (redemptionTotal - fee - tax) - item.totalCostBasis;
         item.realizedPnL += pnl;
         item.shares = 0;
@@ -288,45 +319,39 @@ export function calculateHoldingsAndSummary(
       }
 
       case 'SPIN_OFF': {
-        const alloc = trade.allocationRatio !== undefined && trade.allocationRatio > 0 ? trade.allocationRatio : 0.2;
-        const splitCost = item.totalCostBasis * alloc;
-        item.totalCostBasis = Math.max(0, item.totalCostBasis - splitCost);
+        const targetSym = trade.targetSymbol || '';
+        const alloc = trade.allocationRatio || 0;
+        if (targetSym && targetSym !== trade.symbol && alloc > 0 && alloc < 1) {
+          const splitCost = item.totalCostBasis * alloc;
+          item.totalCostBasis = Math.max(0, item.totalCostBasis - splitCost);
 
-        if (trade.targetSymbol) {
-          const targetItem = getOrCreateItem(
-            trade.targetSymbol,
-            trade.targetName || trade.targetSymbol,
-            item.market,
-            item.currency
-          );
-          const rawChild = shares > 0 ? shares : (ratio > 0 ? item.shares * ratio : 0);
-          const newSharesChild = isTW ? Math.round(rawChild) : rawChild;
-          targetItem.shares += newSharesChild;
-          targetItem.originalBuyShares += newSharesChild;
+          const targetItem = getOrCreateItem(targetSym, trade.targetName || targetSym, item.market, item.currency);
+          const newShares = shares > 0 ? shares : (ratio > 0 ? item.shares * ratio : 0);
+          targetItem.shares += newShares;
           targetItem.totalCostBasis += splitCost;
         }
         break;
       }
 
       case 'CB_CONVERSION': {
-        const convCost = cashAmount > 0 ? cashAmount : (shares > 0 && price > 0 ? shares * price + fee + tax : fee + tax);
-        item.totalCostBasis += convCost;
+        const convPrice = trade.conversionPrice || price;
+        const convCost = shares * (convPrice > 0 ? convPrice : price) + fee;
         item.shares += shares;
-        item.originalBuyShares += shares;
+        item.totalCostBasis += convCost;
         break;
       }
 
       case 'TENDER_OFFER': {
         if (item.shares > 0) {
+          const boughtShares = Math.min(shares, item.shares);
           const avgUnitCost = item.totalCostBasis / item.shares;
-          const sellShares = Math.min(shares > 0 ? shares : item.shares, item.shares);
-          const costOfSold = sellShares * avgUnitCost;
-          const netRevenue = (sellShares * price) - fee - tax;
-          const pnl = netRevenue - costOfSold;
+          const costOfBought = avgUnitCost * boughtShares;
+          const netProceeds = boughtShares * price - fee - tax;
+          const profit = netProceeds - costOfBought;
 
-          item.realizedPnL += pnl;
-          item.shares -= sellShares;
-          item.totalCostBasis = Math.max(0, item.totalCostBasis - costOfSold);
+          item.shares = Math.max(0, item.shares - boughtShares);
+          item.realizedPnL += profit;
+          item.totalCostBasis = Math.max(0, item.totalCostBasis - costOfBought);
 
           if (item.shares <= 0) {
             item.shares = 0;
@@ -346,10 +371,24 @@ export function calculateHoldingsAndSummary(
   for (const item of map.values()) {
     const avgCost = item.shares > 0 ? item.totalCostBasis / item.shares : 0;
     const currentPrice = currentPrices[item.symbol] !== undefined ? currentPrices[item.symbol] : (avgCost || 0);
-    const marketValue = item.shares * currentPrice;
-    const unrealizedPnL = marketValue - item.totalCostBasis;
-    const unrealizedPnLPercent = item.totalCostBasis > 0 ? (unrealizedPnL / item.totalCostBasis) * 100 : 0;
+    const grossMarketValue = item.shares * currentPrice;
+    
+    const estimatedSellTax = calculateEstimatedSellTax(item.symbol, item.market, grossMarketValue);
+    const estimatedSellFee = calculateEstimatedSellFee(item.market, grossMarketValue, brokerFeeDiscount);
+    const netMarketValue = Math.max(0, grossMarketValue - estimatedSellTax - estimatedSellFee);
+
+    const unrealizedPnLBroker = netMarketValue - item.totalCostBasis;
+    const unrealizedPnLBrokerPercent = item.totalCostBasis > 0 ? (unrealizedPnLBroker / item.totalCostBasis) * 100 : 0;
+
+    const totalReturnPnL = (grossMarketValue - item.totalCostBasis) + item.totalDividends + item.realizedPnL;
+    const totalReturnPercent = item.totalCostBasis > 0 ? (totalReturnPnL / item.totalCostBasis) * 100 : 0;
+    const adjustedCostBasis = Math.max(0, item.totalCostBasis - item.totalDividends);
     const yieldOnCostPercent = item.totalCostBasis > 0 ? (item.totalDividends / item.totalCostBasis) * 100 : 0;
+
+    const isBroker = accountingView === 'BROKER';
+    const marketValue = isBroker ? netMarketValue : grossMarketValue;
+    const unrealizedPnL = isBroker ? unrealizedPnLBroker : (grossMarketValue - item.totalCostBasis);
+    const unrealizedPnLPercent = isBroker ? unrealizedPnLBrokerPercent : (item.totalCostBasis > 0 ? (unrealizedPnL / item.totalCostBasis) * 100 : 0);
 
     holdings.push({
       symbol: item.symbol,
@@ -360,20 +399,27 @@ export function calculateHoldingsAndSummary(
       originalBuyShares: item.originalBuyShares,
       avgCost,
       totalCostBasis: item.totalCostBasis,
-      adjustedCostBasis: item.totalCostBasis,
+      adjustedCostBasis,
       currentPrice,
       marketValue,
+      grossMarketValue,
+      estimatedSellTax,
+      estimatedSellFee,
+      netMarketValue,
       unrealizedPnL,
       unrealizedPnLPercent,
+      unrealizedPnLBroker,
+      unrealizedPnLBrokerPercent,
       realizedPnL: item.realizedPnL,
       totalDividends: item.totalDividends,
       totalCapitalReturned: item.totalCapitalReturned,
       totalStockDividendsShares: item.totalStockDividendsShares,
+      totalReturnPnL,
+      totalReturnPercent,
       yieldOnCostPercent,
     });
   }
 
-  // 依規格排序：台股置前、美股置底；同市場內依標的代碼字母數字升冪排序（完全吻合照片 2 順序）
   holdings.sort((a, b) => {
     const marketWeightA = a.market === 'TW' ? 0 : 1;
     const marketWeightB = b.market === 'TW' ? 0 : 1;
@@ -383,76 +429,97 @@ export function calculateHoldingsAndSummary(
     return a.symbol.localeCompare(b.symbol);
   });
 
-  // 匯總計算
   const summary: PortfolioSummary = {
     twd: {
       totalCost: 0,
       marketValue: 0,
+      grossMarketValue: 0,
+      netMarketValue: 0,
+      estimatedSellTax: 0,
+      estimatedSellFee: 0,
       unrealizedPnL: 0,
       unrealizedPnLPercent: 0,
       realizedPnL: 0,
       totalDividends: 0,
       totalCapitalReturned: 0,
+      totalReturnPnL: 0,
+      totalReturnPercent: 0,
     },
     usd: {
       totalCost: 0,
       marketValue: 0,
+      grossMarketValue: 0,
+      netMarketValue: 0,
+      estimatedSellTax: 0,
+      estimatedSellFee: 0,
       unrealizedPnL: 0,
       unrealizedPnLPercent: 0,
       realizedPnL: 0,
       totalDividends: 0,
       totalCapitalReturned: 0,
+      totalReturnPnL: 0,
+      totalReturnPercent: 0,
     },
     combinedTWD: {
       totalCost: 0,
       marketValue: 0,
+      grossMarketValue: 0,
+      netMarketValue: 0,
+      estimatedSellTax: 0,
+      estimatedSellFee: 0,
       unrealizedPnL: 0,
       unrealizedPnLPercent: 0,
       realizedPnL: 0,
       totalDividends: 0,
       totalCapitalReturned: 0,
+      totalReturnPnL: 0,
+      totalReturnPercent: 0,
       netAssetValue: 0,
     },
     usdToTwdRate,
   };
 
   for (const h of holdings) {
-    if (h.currency === 'TWD') {
-      summary.twd.totalCost += h.totalCostBasis;
-      summary.twd.marketValue += h.marketValue;
-      summary.twd.unrealizedPnL += h.unrealizedPnL;
-      summary.twd.realizedPnL += h.realizedPnL;
-      summary.twd.totalDividends += h.totalDividends;
-      summary.twd.totalCapitalReturned += h.totalCapitalReturned;
-    } else {
-      summary.usd.totalCost += h.totalCostBasis;
-      summary.usd.marketValue += h.marketValue;
-      summary.usd.unrealizedPnL += h.unrealizedPnL;
-      summary.usd.realizedPnL += h.realizedPnL;
-      summary.usd.totalDividends += h.totalDividends;
-      summary.usd.totalCapitalReturned += h.totalCapitalReturned;
-    }
+    const targetSlice = h.currency === 'TWD' ? summary.twd : summary.usd;
+    targetSlice.totalCost += h.totalCostBasis;
+    targetSlice.marketValue += h.marketValue;
+    targetSlice.grossMarketValue += h.grossMarketValue;
+    targetSlice.netMarketValue += h.netMarketValue;
+    targetSlice.estimatedSellTax += h.estimatedSellTax;
+    targetSlice.estimatedSellFee += h.estimatedSellFee;
+    targetSlice.unrealizedPnL += h.unrealizedPnL;
+    targetSlice.realizedPnL += h.realizedPnL;
+    targetSlice.totalDividends += h.totalDividends;
+    targetSlice.totalCapitalReturned += h.totalCapitalReturned;
+    targetSlice.totalReturnPnL += h.totalReturnPnL;
   }
 
   if (summary.twd.totalCost > 0) {
     summary.twd.unrealizedPnLPercent = (summary.twd.unrealizedPnL / summary.twd.totalCost) * 100;
+    summary.twd.totalReturnPercent = (summary.twd.totalReturnPnL / summary.twd.totalCost) * 100;
   }
   if (summary.usd.totalCost > 0) {
     summary.usd.unrealizedPnLPercent = (summary.usd.unrealizedPnL / summary.usd.totalCost) * 100;
+    summary.usd.totalReturnPercent = (summary.usd.totalReturnPnL / summary.usd.totalCost) * 100;
   }
 
-  // Combined TWD
   const usdRate = usdToTwdRate > 0 ? usdToTwdRate : 32.0;
   summary.combinedTWD.totalCost = summary.twd.totalCost + (summary.usd.totalCost * usdRate);
   summary.combinedTWD.marketValue = summary.twd.marketValue + (summary.usd.marketValue * usdRate);
+  summary.combinedTWD.grossMarketValue = summary.twd.grossMarketValue + (summary.usd.grossMarketValue * usdRate);
+  summary.combinedTWD.netMarketValue = summary.twd.netMarketValue + (summary.usd.netMarketValue * usdRate);
+  summary.combinedTWD.estimatedSellTax = summary.twd.estimatedSellTax + (summary.usd.estimatedSellTax * usdRate);
+  summary.combinedTWD.estimatedSellFee = summary.twd.estimatedSellFee + (summary.usd.estimatedSellFee * usdRate);
   summary.combinedTWD.unrealizedPnL = summary.twd.unrealizedPnL + (summary.usd.unrealizedPnL * usdRate);
   summary.combinedTWD.realizedPnL = summary.twd.realizedPnL + (summary.usd.realizedPnL * usdRate);
   summary.combinedTWD.totalDividends = summary.twd.totalDividends + (summary.usd.totalDividends * usdRate);
   summary.combinedTWD.totalCapitalReturned = summary.twd.totalCapitalReturned + (summary.usd.totalCapitalReturned * usdRate);
+  summary.combinedTWD.totalReturnPnL = summary.twd.totalReturnPnL + (summary.usd.totalReturnPnL * usdRate);
   summary.combinedTWD.netAssetValue = summary.combinedTWD.marketValue;
 
   if (summary.combinedTWD.totalCost > 0) {
     summary.combinedTWD.unrealizedPnLPercent = (summary.combinedTWD.unrealizedPnL / summary.combinedTWD.totalCost) * 100;
+    summary.combinedTWD.totalReturnPercent = (summary.combinedTWD.totalReturnPnL / summary.combinedTWD.totalCost) * 100;
   }
 
   return { holdings, summary };
