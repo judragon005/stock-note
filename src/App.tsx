@@ -74,12 +74,6 @@ export const App: React.FC = () => {
     saveCustomPricesToStorage(currentPrices);
   }, [currentPrices]);
 
-  // 持久化匯率
-  const handleUpdateRate = (rate: number) => {
-    setUsdToTwdRate(rate);
-    saveExchangeRate(rate);
-  };
-
   // 篩選市場交易紀錄
   const displayedTrades = useMemo(() => {
     if (currentMarket === 'ALL') return trades;
@@ -98,6 +92,7 @@ export const App: React.FC = () => {
 
   const handleExchangeRateCalculated = useCallback((newRate: number) => {
     setUsdToTwdRate(newRate);
+    saveExchangeRate(newRate);
   }, []);
 
   // 智慧報價與匯率自動輪詢 Hook
@@ -265,7 +260,6 @@ export const App: React.FC = () => {
         onSelectMarket={setCurrentMarket}
         usdToTwdRate={usdToTwdRate}
         exchangeRateQuote={exchangeRateQuote}
-        onUpdateRate={handleUpdateRate}
         colorTheme={colorTheme}
         onToggleColorTheme={handleToggleColorTheme}
         isRefreshing={isRefreshing}

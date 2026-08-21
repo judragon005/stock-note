@@ -7,7 +7,6 @@ interface HeaderProps {
   onSelectMarket: (market: 'ALL' | MarketType) => void;
   usdToTwdRate: number;
   exchangeRateQuote?: ExchangeRateQuote;
-  onUpdateRate?: (rate: number) => void;
   colorTheme: ColorThemeMode;
   onToggleColorTheme: () => void;
   isRefreshing?: boolean;
