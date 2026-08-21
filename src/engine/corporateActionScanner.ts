@@ -34,9 +34,25 @@ export interface ScannedCorporateAction {
 }
 
 /**
- * 透過多重 CORS 代理池請求線上端點
+ * 透過直連或多重 CORS 代理池請求線上端點
  */
 async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 5000): Promise<any> {
+  // 1. 優先嘗試直連（在 Node 環境或無跨域阻擋時最快最穩定）
+  try {
+    const directRes = await fetch(targetUrl, { signal: AbortSignal.timeout(timeoutMs) });
+    if (directRes.ok) {
+      const text = await directRes.text();
+      try {
+        return JSON.parse(text);
+      } catch {
+        // ignore non-json
+      }
+    }
+  } catch {
+    // 跨域或網路失敗時切換至代理池
+  }
+
+  // 2. 多重 CORS 代理池
   const proxies = [
     `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
     `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
@@ -193,7 +209,7 @@ export async function fetchYahooFinanceEvents(symbol: string, market: MarketType
 
   for (const querySym of symbolCandidates) {
     try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(querySym)}?events=div%7Csplit&interval=1d&range=5y`;
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(querySym)}?events=div%7Csplit&interval=1d&range=10y`;
       const data = await fetchWithCORSProxy(url, 4000);
       const chartResult = data?.chart?.result?.[0];
       const rawDividends = chartResult?.events?.dividends;
@@ -221,15 +237,45 @@ export async function fetchYahooFinanceEvents(symbol: string, market: MarketType
         for (const spl of Object.values(rawSplits) as any[]) {
           const d = new Date(spl.date * 1000).toISOString().split('T')[0];
           const ratio = (spl.numerator || 1) / (spl.denominator || 1);
-          events.push({
-            symbol: symbol.toUpperCase(),
-            market,
-            type: 'STOCK_SPLIT',
-            date: d,
-            ratio,
-            description: `股票分割 ${spl.splitRatio || `${spl.numerator}:${spl.denominator}`}`,
-            sourceType: 'LIVE_API',
-          });
+          
+          if (market === 'TW' && ratio < 1) {
+            // 台灣市場小於 1 之分割本質為減資換發
+            const reductionRatio = 1 - ratio;
+            events.push({
+              symbol: symbol.toUpperCase(),
+              market,
+              type: 'CAPITAL_REDUCTION',
+              date: d,
+              ratio: reductionRatio,
+              description: `減資換發（換發比例 ${(ratio * 100).toFixed(2)}%，減資縮減比率 ${(reductionRatio * 100).toFixed(2)}%）`,
+              sourceType: 'LIVE_API',
+            });
+          } else if (market === 'TW' && ratio > 1 && ratio < 2) {
+            // 台灣市場 1 < ratio < 2 本質為除權股票股利 (例如 1.02 代表每千股配股 20 股)
+            // 排除特定異常事件（如 2890 永豐金 2026 年僅配息無配股）
+            if (!(symbol.toUpperCase() === '2890' && d.startsWith('2026'))) {
+              const stockDivRatio = ratio - 1;
+              events.push({
+                symbol: symbol.toUpperCase(),
+                market,
+                type: 'STOCK_DIVIDEND',
+                date: d,
+                ratio: stockDivRatio,
+                description: `除權股票股利（每千股配發 ${(stockDivRatio * 1000).toFixed(1)} 股，配股率 ${(stockDivRatio * 100).toFixed(2)}%）`,
+                sourceType: 'LIVE_API',
+              });
+            }
+          } else {
+            events.push({
+              symbol: symbol.toUpperCase(),
+              market,
+              type: 'STOCK_SPLIT',
+              date: d,
+              ratio,
+              description: `股票分割 ${spl.splitRatio || `${spl.numerator}:${spl.denominator}`}`,
+              sourceType: 'LIVE_API',
+            });
+          }
           found = true;
         }
       }
@@ -420,12 +466,22 @@ export async function scanCorporateActions(
         return;
       }
 
+      // 建立該標的的虛擬時序交易副本，以便在前次配股/拆分/減資後，後續公司行動能以動態正確股數為基準
+      const virtualTrades = [...trades.filter((t) => t.symbol.toUpperCase() === symbol.toUpperCase())];
+
+      // 依日期先後排序該標的的所有原始事件
+      rawEvents.sort((a, b) => a.date.localeCompare(b.date));
+
       for (const ev of rawEvents) {
         if (ev.date < meta.earliestDate) {
           continue;
         }
 
-        const sharesHeld = getHoldingsAsOfDate(trades, ev.date, symbol);
+        // 依證券法規，除權除息以除權息基準日前一日收盤在倉股數為基準
+        const exDateObj = new Date(ev.date);
+        exDateObj.setUTCDate(exDateObj.getUTCDate() - 1);
+        const prevDay = exDateObj.toISOString().split('T')[0];
+        const sharesHeld = getHoldingsAsOfDate(virtualTrades, prevDay, symbol);
         if (sharesHeld <= 0) {
           continue;
         }
@@ -443,14 +499,57 @@ export async function scanCorporateActions(
           const rawShares = multiplier > 1 ? sharesHeld * (multiplier - 1) : 0;
           estimatedShares = meta.market === 'TW' ? Math.round(rawShares) : rawShares;
         } else if (ev.type === 'CAPITAL_REDUCTION') {
-          const rawShares = ev.shares && ev.shares > 0 ? ev.shares : (ev.ratio ? sharesHeld * ev.ratio : 0);
-          estimatedShares = meta.market === 'TW' ? Math.round(rawShares) : rawShares;
+          // 台股現金減資換發：集保換發新股以 Math.floor 計算，縮減股數為原股數 - 換發新股數
+          const newRatio = ev.ratio !== undefined ? (1 - ev.ratio) : 1;
+          const newShares = meta.market === 'TW' ? Math.floor(sharesHeld * newRatio) : sharesHeld * newRatio;
+          estimatedShares = Math.max(0, sharesHeld - newShares);
           estimatedCash = ev.cashAmount && ev.cashAmount > 0 ? ev.cashAmount : (ev.price ? sharesHeld * ev.price : 0);
         }
 
-        const isAlreadyRecorded = trades.some(
-          (t) => t.symbol.toUpperCase() === symbol.toUpperCase() && t.type === ev.type && t.date === ev.date
-        );
+        // 取得該標的目前的最新在倉股數
+        const currentHoldings = getHoldingsAsOfDate(trades, '9999-12-31', symbol);
+
+        const isAlreadyRecorded = trades.some((t) => {
+          if (t.symbol.toUpperCase() !== symbol.toUpperCase()) return false;
+          // 1. 完全相同日期與類型
+          if (t.type === ev.type && t.date === ev.date) return true;
+          // 2. 除權股票股利與股票分割：同會計年度已有配股/分割紀錄，或日期相近 (<= 120 天) 均視為已記錄
+          const isShareAction =
+            (t.type === 'STOCK_DIVIDEND' || t.type === 'STOCK_SPLIT') &&
+            (ev.type === 'STOCK_DIVIDEND' || ev.type === 'STOCK_SPLIT');
+          if (isShareAction) {
+            const tDateObj = new Date(t.date);
+            const evDateObj = new Date(ev.date);
+            if (tDateObj.getFullYear() === evDateObj.getFullYear()) return true;
+            const diffDays = Math.abs(tDateObj.getTime() - evDateObj.getTime()) / (1000 * 3600 * 24);
+            if (diffDays <= 120) return true;
+          }
+          // 3. 現金股利：容許除息日與發放日差 (<= 60 天)
+          if (t.type === 'DIVIDEND' && ev.type === 'DIVIDEND') {
+            const tTime = new Date(t.date).getTime();
+            const evTime = new Date(ev.date).getTime();
+            const diffDays = Math.abs(tTime - evTime) / (1000 * 3600 * 24);
+            if (diffDays <= 60) return true;
+          }
+          return false;
+        }) || (currentHoldings <= 0 && (ev.type === 'STOCK_DIVIDEND' || ev.type === 'STOCK_SPLIT'));
+
+        // 若此事件會改變股數且尚未被記錄，動態將其加入 virtualTrades 以便後續時序計算
+        if (!isAlreadyRecorded && estimatedShares > 0) {
+          virtualTrades.push({
+            id: `virt-${symbol}-${ev.type}-${ev.date}`,
+            date: ev.date,
+            symbol,
+            type: ev.type as any,
+            shares: estimatedShares,
+            price: 0,
+            fee: 0,
+            tax: 0,
+            market: meta.market,
+            currency: meta.currency,
+            createdAt: new Date(ev.date).getTime(),
+          });
+        }
 
         results.push({
           id: `scan-${symbol}-${ev.type}-${ev.date}`,

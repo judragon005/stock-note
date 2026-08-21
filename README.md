@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-77%2F77%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-81%2F81%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,14 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 智慧掃描公司行動進度可視化、受控並行與斷點接續 (Scanner Progress & Resume) *(V1.6 新增)*
+### 1. 虛擬時序動態配股與高精準公司行動 (Virtual Holdings Timeline & Accuracy) *(V1.7 新增)*
+- **虛擬時序動態持股推進器 (Virtual Timeline)**：連續除權配股（如永豐金歷年除權）動態累加前次配股股數，徹底杜絕多次除權基準股數失準問題。
+- **台股現金減資集保向下取整 (Floor New Ratio)**：依規定以 `Math.floor` 精確計算換發新股，泰銘 (9927) 減資 2,829 股 100% 精準對齊整數持股。
+- **除權息 T-1 前一日收盤在倉判定**：嚴格依證券法規以除權日前一日收盤持股為基準，除權日當日買進不享配股。
+- **零持股平倉安全守護 (Zero-Holding Shield)**：已平倉（0 股）標的自動鎖定歷史股票分割與配股，杜絕已賣光標的死灰復燃。
+- **全量台灣時區 (Asia/Taipei UTC+8) 轉換**：支援 Ghostfolio 交易資料無損匯入與官方名稱自動校準。
+
+### 2. 智慧掃描公司行動進度可視化、受控並行與斷點接續 (Scanner Progress & Resume) *(V1.6 新增)*
 - **即時動態進度條與個股反饋**：現代漸變發光進度條，展示完成比例、已完成檔數與當前比對個股名稱/代號 (`正在比對：2330 台積電 (3/15)`)。
 - **受控並行池與防頻控微延遲**：採用 Promise Worker Pool (`concurrency = 3`) 並行加速，輔以 60~100ms jitter 微延遲，將多檔股票掃描時間縮短 3~5 倍並防護 Rate Limit。
 - **原生 AbortSignal 中斷機制**：隨時點擊「中止掃描」或關閉彈窗立即停止連線，完整保留已掃描事件供即時勾選套用。

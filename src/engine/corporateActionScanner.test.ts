@@ -321,4 +321,195 @@ describe('公司行動智慧掃描引擎 (Corporate Action Scanner)', () => {
       expect(fetchCount).toBe(10);
     });
   });
+
+  describe('V1.7 虛擬時序動態配股與高精準公司行動 (V1.7 Accuracy & Timeline Tests)', () => {
+    it('應能透過虛擬時序 (Virtual Holdings Timeline) 動態累加歷年配股股數 (如 2890 連續除權)', async () => {
+      const trades: TradeRecord[] = [
+        {
+          id: '1',
+          date: '2023-01-01',
+          symbol: '2890',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 10000,
+          price: 15,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: '2',
+          date: '2024-01-01',
+          symbol: '2890',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 800,
+          price: 18,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+      ];
+
+      const mockFetcher = async () => [
+        {
+          symbol: '2890',
+          market: 'TW' as const,
+          type: 'STOCK_DIVIDEND' as const,
+          date: '2023-08-09',
+          ratio: 0.02, // 2023 配 2%
+        },
+        {
+          symbol: '2890',
+          market: 'TW' as const,
+          type: 'STOCK_DIVIDEND' as const,
+          date: '2024-08-22',
+          ratio: 0.025, // 2024 配 2.5%
+        },
+      ];
+
+      const results = await scanCorporateActions(trades, mockFetcher);
+
+      expect(results).toHaveLength(2);
+      // 2023 年：10,000 * 2% = 200 股
+      expect(results[0].sharesHeldOnDate).toBe(10000);
+      expect(results[0].estimatedSharesChange).toBe(200);
+
+      // 2024 年：基準股數應為 10,000 + 200(2023配) + 800(買進) = 11,000 股！
+      expect(results[1].sharesHeldOnDate).toBe(11000);
+      expect(results[1].estimatedSharesChange).toBe(275); // 11,000 * 2.5% = 275 股
+    });
+
+    it('台股現金減資縮減股數應依集保規定採向下取整 (Math.floor) 精確計算 (如 9927 減資 2,829 股)', async () => {
+      const trades: TradeRecord[] = [
+        {
+          id: '1',
+          date: '2025-01-01',
+          symbol: '9927',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 10000,
+          price: 58.7,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+      ];
+
+      const mockFetcher = async () => [
+        {
+          symbol: '9927',
+          market: 'TW' as const,
+          type: 'CAPITAL_REDUCTION' as const,
+          date: '2025-11-13',
+          ratio: 0.2828051, // 換發比例 71.71949%，縮減比率 28.28051%
+          price: 2.828,
+        },
+      ];
+
+      const results = await scanCorporateActions(trades, mockFetcher);
+
+      expect(results).toHaveLength(1);
+      // 10,000 股減資換發新股 = floor(10000 * 0.7171949) = 7,171 股，縮減股數應精確為 2,829 股！
+      expect(results[0].estimatedSharesChange).toBe(2829);
+    });
+
+    it('除權息計算應以基準日前一日 (T-1) 收盤在倉為基準，當日買進不享配股配息', async () => {
+      const trades: TradeRecord[] = [
+        {
+          id: '1',
+          date: '2024-06-12', // 除權日前一日買進
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 600,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: '2',
+          date: '2024-06-13', // 除權日當天買進
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 500,
+          price: 610,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+      ];
+
+      const mockFetcher = async () => [
+        {
+          symbol: '2330',
+          market: 'TW' as const,
+          type: 'DIVIDEND' as const,
+          date: '2024-06-13',
+          price: 3.5,
+        },
+      ];
+
+      const results = await scanCorporateActions(trades, mockFetcher);
+
+      expect(results).toHaveLength(1);
+      // 基準日股數應只有 T-1 前的 1000 股，當日買進的 500 股不計入
+      expect(results[0].sharesHeldOnDate).toBe(1000);
+      expect(results[0].estimatedCashAmount).toBe(3500);
+    });
+
+    it('已全數平倉歸零 (0 股) 之標的，歷史股票分割與配股應自動標記為 isAlreadyRecorded = true', async () => {
+      const trades: TradeRecord[] = [
+        {
+          id: '1',
+          date: '2024-01-01',
+          symbol: '3056',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 20,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: '2',
+          date: '2024-12-31',
+          symbol: '3056',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'SELL',
+          shares: 1000,
+          price: 25,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+      ];
+
+      const mockFetcher = async () => [
+        {
+          symbol: '3056',
+          market: 'TW' as const,
+          type: 'STOCK_DIVIDEND' as const,
+          date: '2024-06-15',
+          ratio: 0.1,
+        },
+      ];
+
+      const results = await scanCorporateActions(trades, mockFetcher);
+
+      expect(results).toHaveLength(1);
+      // 因目前持股為 0 股，歷史配股應被守護鎖定為已記錄，防範死灰復燃
+      expect(results[0].isAlreadyRecorded).toBe(true);
+    });
+  });
 });

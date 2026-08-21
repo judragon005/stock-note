@@ -1,7 +1,7 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Document)
 
-> **交接產生時間**：2026-08-21 12:40 (UTC+8)  
-> **交接里程碑**：**V1.6 智慧掃描公司行動進度可視化、受控並行與斷點接續架構**（發光進度條、即時狀態個股動態、受控並行池 Concurrency = 3 與微延遲防頻控、原生 `AbortSignal` 中止掃描、`symbolsToScan` 斷點接續掃描、Session 級記憶體快取與強制全量重掃、Code Review 雙軸審查 100% 通過）。全量單元測試 77/77 通過 (100% Passed)，TypeScript 0 錯誤 0 警告，GitHub Actions CI 綠燈。
+> **交接產生時間**：2026-08-21 14:38 (UTC+8)  
+> **交接里程碑**：**V1.7 智慧掃描動態時序配股與交易時態清洗系統**（虛擬時序動態配股推進器 `Virtual Holdings Timeline`、台股現金減資向下取整 `Floor New Ratio` 縮減股數精算法、除權息 $T-1$ 前一日收盤在倉判定、零持股平倉安全守護 `Zero-Holding Shield`、全量台灣時區 `Asia/Taipei UTC+8` 解析校準、官方標的正式名稱校正、純手動匯入 ➔ 智慧掃描 ➔ 21 檔持股 100% 吻合閉環）。全量單元測試 81/81 通過 (100% Passed)，TypeScript 0 錯誤 0 警告，Vite Production Bundle 建置成功。
 
 ---
 
@@ -9,42 +9,41 @@
 
 - **專案路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon003/-.git`
-- **當前開發分支**：`feature/v1.6-scanner-progress-and-resume`（已完成所有代碼實作、單元測試、文檔同步與 Code Review）
+- **當前開發分支**：`main`
 - **CI/CD 自動化**：[`.github/workflows/ci.yml`](file:///d:/APP/股票紀錄/.github/workflows/ci.yml) (GitHub Actions 綠燈)
-- **測試狀態**：**77/77 通過** (100% Passed)，TypeScript 0 錯誤，Production Bundle 打包正常。
-- **目前正式版本**：**V1.6**
-- **對話全量實體備份**：[`0-0_開發歷程自動化紀錄/20260821_V1.6智慧掃描公司行動進度可視化與斷點接續_對話紀錄.jsonl`](file:///d:/APP/股票紀錄/0-0_開發歷程自動化紀錄/20260821_V1.6智慧掃描公司行動進度可視化與斷點接續_對話紀錄.jsonl) (已隔離於 Git 之外)
+- **測試狀態**：**81/81 通過** (100% Passed)，TypeScript 0 錯誤，Production Bundle 打包正常。
+- **目前正式版本**：**V1.7**
+- **隱私安全**：所有交易資料 JSON（如 `clean_trades_import_latest.json`）均受 `.gitignore` 隔離保護，杜絕個人財務資料推播至 GitHub 遠端。
 
 ---
 
 ## 🏛️ 2. 領域模型與架構決策索引 (Domain & Decisions)
 
 1. **通用語言詞彙表**：[`CONTEXT.md`](file:///d:/APP/股票紀錄/CONTEXT.md)
-   - 包含 Security, Trade Record, Moving Weighted Average Cost, Realized/Unrealized PnL, Total Cost Basis, Yield on Cost (YoC), Treemap, ColorThemeMode, Date Holding Resolution, Special Corporate Actions, Realtime Quotes Engine, Auto Exchange Rate Engine。
-   - **V1.6 新增術語**：
-     - `Rate-Limited Concurrency Pool`（受控並行池與頻控）
-     - `AbortSignal Interruption & Graceful Pause`（原生中斷與優雅暫停）
-     - `Resume & Targeted Rescan`（斷點接續與指定個股掃描）
-     - `Session Corporate Action Cache`（Session 級個股記憶體快取）
+   - **V1.7 新增術語**：
+     - `Virtual Cumulative Holdings Timeline`（虛擬時序動態持股推進器）
+     - `Floor New Ratio Capital Reduction`（台股集保整數換發減資算法）
+     - `Pre-Ex-Date Resolution`（除權息 T-1 基準日在倉判定）
+     - `Zero-Holding Shield`（零持股平倉安全守護）
+     - 官方標的詞庫對照表（嚴格依使用者照片一順序呈現：`00403A` 至 `VT` 21 檔）
 2. **架構決策紀錄 (ADR)**：
    - [`ADR-0001`](file:///d:/APP/股票紀錄/docs/adr/0001-core-architecture-and-accounting-model.md)：React 18 + TypeScript + Vite + Vanilla CSS，雙市場獨立記帳與加權平均成本模型。
-   - [`ADR-0002`](file:///d:/APP/股票紀錄/docs/adr/0002-v1.1-treemap-theme-and-fee-architecture.md)：純 SVG Squarified Treemap（零外部圖表套件）、CSS 變數全域主題切換、純函式 + 完整 deps 消除 Stale Closure。
+   - [`ADR-0002`](file:///d:/APP/股票紀錄/docs/adr/0002-v1.1-treemap-theme-and-fee-architecture.md)：純 SVG Squarified Treemap、CSS 變數全域主題切換。
    - [`ADR-0003`](file:///d:/APP/股票紀錄/docs/adr/0003-v1.2-corporate-actions-and-date-holding-resolution.md)：統一事件流模型、純函式 `applyTradeToShares` 股數回放、資本返還扣減成本會計模型。
-   - [`ADR-0004`](file:///d:/APP/股票紀錄/docs/adr/0004-full-market-live-corporate-actions-and-special-events.md)：全市場純線上多源即時掃描（TWSE OpenAPI + 多重 CORS 代理池）、5 大特殊公司行動會計核心與台股整數股數規則。
-   - [`ADR-0005`](file:///d:/APP/股票紀錄/docs/adr/0005-realtime-and-delayed-market-quotes-system.md)：全市場即時與延遲多源報價引擎（Yahoo + TWSE 備援）、交易時段智慧輪詢與自訂價格鎖定防禦架構。
+   - [`ADR-0004`](file:///d:/APP/股票紀錄/docs/adr/0004-full-market-live-corporate-actions-and-special-events.md)：全市場純線上多源即時掃描、5 大特殊公司行動會計核心與台股整數股數規則。
+   - [`ADR-0005`](file:///d:/APP/股票紀錄/docs/adr/0005-realtime-and-delayed-market-quotes-system.md)：全市場即時與延遲多源報價引擎、交易時段智慧輪詢與自訂價格鎖定防禦架構。
    - [`ADR-0006`](file:///d:/APP/股票紀錄/docs/adr/0006-auto-usd-twd-exchange-rate-and-fallback.md)：美金台幣 (USD/TWD) 匯率自動更新、行情同步輪詢與多層平滑備援架構。
    - [`ADR-0007`](file:///d:/APP/股票紀錄/docs/adr/0007-scanner-progress-and-resume-architecture.md)：智慧掃描公司行動進度可視化、受控並行與斷點接續架構。
+   - [`ADR-0008`](file:///d:/APP/股票紀錄/docs/adr/0008-virtual-holdings-timeline-and-corporate-action-accuracy.md)：**V1.7 虛擬時序動態配股與台股減資整數換發架構**。
 3. **規格說明書 (PRD)**：
-   - [`0001-stock-tracker-and-analyzer.md`](file:///d:/APP/股票紀錄/docs/specs/0001-stock-tracker-and-analyzer.md)（V1.0：15 條 User Stories 全數落實）
-   - [`0002-v1-enhancements-and-treemap.md`](file:///d:/APP/股票紀錄/docs/specs/0002-v1-enhancements-and-treemap.md)（V1.1：US-16 至 US-21 全數落實）
-   - [`0003-corporate-actions-and-date-holding-resolution.md`](file:///d:/APP/股票紀錄/docs/specs/0003-corporate-actions-and-date-holding-resolution.md)（V1.2：US-22 至 US-35 全數落實）
-   - [`0004-full-market-live-corporate-actions-and-special-events.md`](file:///d:/APP/股票紀錄/docs/specs/0004-full-market-live-corporate-actions-and-special-events.md)（V1.3：US-36 至 US-42 全數落實）
-   - [`0005-realtime-and-delayed-market-quotes-system.md`](file:///d:/APP/股票紀錄/docs/specs/0005-realtime-and-delayed-market-quotes-system.md)（V1.4：US-47 至 US-53 全數落實）
-   - [`0006-auto-usd-twd-exchange-rate.md`](file:///d:/APP/股票紀錄/docs/specs/0006-auto-usd-twd-exchange-rate.md)（V1.5：US-63 至 US-66 全數落實）
-   - [`0007-corporate-action-scanner-progress-and-resume.md`](file:///d:/APP/股票紀錄/docs/specs/0007-corporate-action-scanner-progress-and-resume.md)（**V1.6：US-51 至 US-55 全數落實，PRD 0007 驗收 100% 通過**）
-4. **協作規範與操作指引**：
-   - [`AGENTS.md`](file:///d:/APP/股票紀錄/AGENTS.md)：定義 Issue-First 原則、PR 自動關聯 (`Closes #ID`)、Doc Sync 領域文檔同步與分支清理。
-   - [`docs/guides/manual_verification_runbook.md`](file:///d:/APP/股票紀錄/docs/guides/manual_verification_runbook.md)：手動驗證作業指導手冊。
+   - [`0001-stock-tracker-and-analyzer.md`](file:///d:/APP/股票紀錄/docs/specs/0001-stock-tracker-and-analyzer.md)（V1.0）
+   - [`0002-v1-enhancements-and-treemap.md`](file:///d:/APP/股票紀錄/docs/specs/0002-v1-enhancements-and-treemap.md)（V1.1）
+   - [`0003-corporate-actions-and-date-holding-resolution.md`](file:///d:/APP/股票紀錄/docs/specs/0003-corporate-actions-and-date-holding-resolution.md)（V1.2）
+   - [`0004-full-market-live-corporate-actions-and-special-events.md`](file:///d:/APP/股票紀錄/docs/specs/0004-full-market-live-corporate-actions-and-special-events.md)（V1.3）
+   - [`0005-realtime-and-delayed-market-quotes-system.md`](file:///d:/APP/股票紀錄/docs/specs/0005-realtime-and-delayed-market-quotes-system.md)（V1.4）
+   - [`0006-auto-usd-twd-exchange-rate.md`](file:///d:/APP/股票紀錄/docs/specs/0006-auto-usd-twd-exchange-rate.md)（V1.5）
+   - [`0007-corporate-action-scanner-progress-and-resume.md`](file:///d:/APP/股票紀錄/docs/specs/0007-corporate-action-scanner-progress-and-resume.md)（V1.6）
+   - [`v1.7_corporate_actions_and_trades_cleaning_spec.md`](file:///d:/APP/股票紀錄/docs/specs/v1.7_corporate_actions_and_trades_cleaning_spec.md)（**V1.7：AC-1 至 AC-4 全數驗收通過**）
 
 ---
 
@@ -52,40 +51,30 @@
 
 | 模組分類 | 檔案路徑 | 核心職責與特性 |
 | :--- | :--- | :--- |
-| **純線上即時掃描** | [`src/engine/corporateActionScanner.ts`](file:///d:/APP/股票紀錄/src/engine/corporateActionScanner.ts) | 串接 TWSE 開放資料與 Yahoo Finance，升級為受控並行池 (Concurrency = 3)、請求微延遲 (60ms jitter)、`AbortSignal` 中斷、`symbolsToScan` 斷點接續與 `CorporateActionSessionCache` 記憶體快取。 |
-| **掃描模組測試** | [`src/engine/corporateActionScanner.test.ts`](file:///d:/APP/股票紀錄/src/engine/corporateActionScanner.test.ts) | 9 大測試案例，涵蓋除權息/減資試算、TWSE 日期標準化、進度即時回呼、並行加速、中斷信號、斷點接續與 Session 快取 (100% 通過)。 |
-| **智慧掃描彈窗 UI** | [`src/components/CorporateActionScannerModal.tsx`](file:///d:/APP/股票紀錄/src/components/CorporateActionScannerModal.tsx) | 現代發光進度條、即時比對動態反饋、[中止掃描]、[接續掃描剩餘 (X 檔)] 與 [強制全量重掃] 操作控制。 |
-| **報價與匯率引擎** | [`src/engine/priceFetcher.ts`](file:///d:/APP/股票紀錄/src/engine/priceFetcher.ts) | 純前端多源引擎：Yahoo Finance API (v8/v7) 台美股代碼正規化、`USDTWD=X` 匯率抓取與解析、TWSE 官方 OpenAPI 盤後收盤價備援、CORS 代理池多節點重試與超時熔斷、批次並行抓取。 |
-| **報價與匯率測試** | [`src/engine/priceFetcher.test.ts`](file:///d:/APP/股票紀錄/src/engine/priceFetcher.test.ts) | 16 大測試案例，涵蓋代碼正規化、Yahoo API 響應解析、TWSE OpenAPI 降級備援、匯率解析、前日收盤降級與批次並行請求 (100% 通過)。 |
-| **自動輪詢 Hook** | [`src/hooks/usePriceAutoRefresh.ts`](file:///d:/APP/股票紀錄/src/hooks/usePriceAutoRefresh.ts) | 交易時段精確判定、進站自動抓取持股與匯率、開盤 60 秒定時輪詢、過濾已鎖定標的、單檔強制刷新與匯率回呼更新。 |
-| **自動輪詢測試** | [`src/hooks/usePriceAutoRefresh.test.ts`](file:///d:/APP/股票紀錄/src/hooks/usePriceAutoRefresh.test.ts) | 6 大測試案例，驗證台股/美股/週末開休市時段精確判定、已鎖定標的過濾、無持股不請求 (100% 通過)。 |
-| **會計計算核心** | [`src/engine/calculator.ts`](file:///d:/APP/股票紀錄/src/engine/calculator.ts) | 支援 12 種交易與特殊公司行動、`applyTradeToShares` 純函式計算、台股市場強制整數四捨五入、換股合併成本平移、分拆成本拆分、特別股/收購已實現結算。 |
-| **計算引擎測試** | [`src/engine/calculator.test.ts`](file:///d:/APP/股票紀錄/src/engine/calculator.test.ts) | 25 大測試案例，涵蓋買賣、股息、分割、減資退款、9927 現金減資、4 大特殊行動與台股整數精度 (100% 通過)。 |
-| **Treemap 演算法** | [`src/utils/treemap.ts`](file:///d:/APP/股票紀錄/src/utils/treemap.ts) | Squarified Treemap 遞迴排版演算法，純數學幾何計算，零外部依賴。 |
-| **資料儲存與備份** | [`src/utils/storage.ts`](file:///d:/APP/股票紀錄/src/utils/storage.ts) | LocalStorage 容錯存取、`PriceMetadataStore`、`ExchangeRateQuote` 與 `lockedSymbols` 讀寫、JSON/CSV 雙向解析還原。 |
-| **型別定義** | [`src/types/stock.ts`](file:///d:/APP/股票紀錄/src/types/stock.ts) | `ExchangeRateStatus`、`ExchangeRateQuote`、`PriceQuoteStatus`、`PriceQuote`、`PriceMetadataStore`、12 種 `TradeType`、`TradeRecord`、`HoldingPosition`、`PortfolioSummary`。 |
-| **頂部工具列** | [`src/components/Header.tsx`](file:///d:/APP/股票紀錄/src/components/Header.tsx) | 市場切換、純自動 USD/TWD 匯率徽章（含 Tooltip 狀態與時間）、色彩主題切換、JSON/CSV 匯出入、✨ 智慧掃描、⚡ 一鍵更新市價按鈕與開休市狀態標籤。 |
-| **持倉總覽表** | [`src/components/HoldingsTable.tsx`](file:///d:/APP/股票紀錄/src/components/HoldingsTable.tsx) | 狀態徽章 (🟢/🟡/🔒/⚠️)、當日漲跌額與百分比、單檔 🔒 鎖定切換與 🔄 立即刷新、`<PriceDisplayView />` 獨立渲染子元件、展開股權時間軸。 |
-| **交易明細表** | [`src/components/TradeHistoryTable.tsx`](file:///d:/APP/股票紀錄/src/components/TradeHistoryTable.tsx) | 12 種交易/特殊公司行動彩色徽章、比例/退款/除權息日呈現、搜尋與標籤過濾。 |
-| **交易錄入彈窗** | [`src/components/TradeModal.tsx`](file:///d:/APP/股票紀錄/src/components/TradeModal.tsx) | 3 大分類選擇器（常規買賣、常見公司行動、⚡ 特殊公司行動）、專屬動態欄位與基準日持股即時試算橫幅。 |
+| **純線上即時掃描** | [`src/engine/corporateActionScanner.ts`](file:///d:/APP/股票紀錄/src/engine/corporateActionScanner.ts) | 升級 `virtualTrades` 虛擬時序推進器、台股現金減資換發 `Math.floor` 縮減股數算法、除權息 $T-1$ 前一日在倉判定、零持股平倉安全守護、受控並行池與斷點接續。 |
+| **掃描模組測試** | [`src/engine/corporateActionScanner.test.ts`](file:///d:/APP/股票紀錄/src/engine/corporateActionScanner.test.ts) | 13 大測試案例，涵蓋虛擬時序多次配股累積、台股減資整數換發 (9927)、$T-1$ 基準日持股、零持股平倉保護、進度回呼、中斷與快取 (100% 通過)。 |
+| **會計計算核心** | [`src/engine/calculator.ts`](file:///d:/APP/股票紀錄/src/engine/calculator.ts) | 支援 12 種交易與特殊公司行動、`applyTradeToShares` 純函式計算、`getHoldingsAsOfDate` 歷史基準日持股時態回溯。 |
+| **報價與匯率引擎** | [`src/engine/priceFetcher.ts`](file:///d:/APP/股票紀錄/src/engine/priceFetcher.ts) | 多源即時與延遲報價、`USDTWD=X` 自動匯率、TWSE 備援降級與 CORS 代理池。 |
+| **最新純手動交易檔** | [`docs/json/clean_trades_import_latest.json`](file:///d:/APP/股票紀錄/docs/json/clean_trades_import_latest.json) | 全量台灣時區校準、不寫死任何配股與減資特例、官方名稱完整更正之純手動交易紀錄。 |
 
 ---
 
 ## 🎯 4. 歷史交付票券閉環摘要 (Ticket Summary)
 
-### V1.6 迭代 (當前)
-| 票券編號 | 標題 | 本地 Ticket | 狀態 |
-| :--- | :--- | :---: | :---: |
-| **Ticket #1** | `[Engine] 掃描引擎受控並行、進度回呼與中斷支援` | [01-scanner-engine-concurrency-and-progress.md](file:///d:/APP/股票紀錄/.scratch/v1.6-scanner-progress-and-resume/issues/01-scanner-engine-concurrency-and-progress.md) | ✅ Completed |
-| **Ticket #2** | `[Engine] Session 級個股記憶體快取與斷點接續模組` | [02-scanner-engine-cache-and-resume.md](file:///d:/APP/股票紀錄/.scratch/v1.6-scanner-progress-and-resume/issues/02-scanner-engine-cache-and-resume.md) | ✅ Completed |
-| **Ticket #3** | `[UI] 智慧掃描彈窗進度條、即時狀態列與中止/接續操作控制` | [03-ui-modal-progress-and-resume-controls.md](file:///d:/APP/股票紀錄/.scratch/v1.6-scanner-progress-and-resume/issues/03-ui-modal-progress-and-resume-controls.md) | ✅ Completed |
-| **Ticket #4** | `[Test & Doc] 單元測試 100% 覆蓋與架構文檔同步` | [04-tdd-tests-and-verification.md](file:///d:/APP/股票紀錄/.scratch/v1.6-scanner-progress-and-resume/issues/04-tdd-tests-and-verification.md) | ✅ Completed |
+### V1.7 迭代 (當前)
+| 票券編號 | 標題 | 本地 Ticket | GitHub 遠端 Issue | 狀態 |
+| :--- | :--- | :---: | :---: | :---: |
+| **Epic** | `Feature: V1.7 智慧掃描動態時序配股與交易時態清洗系統` | [PRD v1.7](docs/specs/v1.7_corporate_actions_and_trades_cleaning_spec.md) | [#73](https://github.com/judragon003/-/issues/73) | ✅ Completed |
+| **Ticket #1** | `[Engine] 實作虛擬時序動態配股推進器 (Virtual Holdings Timeline)` | [01-virtual-holdings-timeline.md](.scratch/v1.7-corporate-actions-accuracy/issues/01-virtual-holdings-timeline.md) | [#74](https://github.com/judragon003/-/issues/74) | ✅ Completed |
+| **Ticket #2** | `[Engine] 實作台股現金減資整數換發 (Floor New Ratio)` | [02-floor-capital-reduction.md](.scratch/v1.7-corporate-actions-accuracy/issues/02-floor-capital-reduction.md) | [#75](https://github.com/judragon003/-/issues/75) | ✅ Completed |
+| **Ticket #3** | `[Engine] 實作除權息 T-1 基準日收盤判定與零持股平倉安全守護` | [03-pre-exdate-and-zero-holding-shield.md](.scratch/v1.7-corporate-actions-accuracy/issues/03-pre-exdate-and-zero-holding-shield.md) | [#76](https://github.com/judragon003/-/issues/76) | ✅ Completed |
+| **Ticket #4** | `[Data & Test] 全量交易資料時區校準 (UTC+8) 與端到端全量驗收測試` | [04-timezone-names-and-e2e-verification.md](.scratch/v1.7-corporate-actions-accuracy/issues/04-timezone-names-and-e2e-verification.md) | [#77](https://github.com/judragon003/-/issues/77) | ✅ Completed |
 
 ---
 
 ## 🔮 5. 下一階段建議主題 (Next Session Candidates)
 
-若使用者欲啟動下一迭代版本（V1.7），建議可探索以下候選功能方向：
+若使用者欲啟動下一迭代版本（V1.8），建議可探索以下候選功能方向：
 1. **多投資組合 / 分帳戶管理 (Multi-Portfolio Support)**：支援「長期存股倉」、「短線波段倉」、「退休帳戶」多帳號分流記帳。
 2. **歷程淨值走勢與績效圖表 (Historical NAV & Performance Chart)**：繪製時間序列的總資產淨值曲線與大盤指數（如 S&P 500、加權指數）對比基準。
 3. **自動股息預估與行事曆 (Dividend Forecast & Calendar)**：基於在倉持股與已公告除息日程，預估未來 12 個月現金流。
@@ -98,4 +87,3 @@
 - **`brief-builder`** 或 **`/grill-with-docs`**：進行新需求的深入拷問與規格對齊。
 - **`/to-spec` & `/to-tickets`**：產出 PRD 與可測試的微小 Tickets。
 - **`Unit Test Master`** (`/tdd`)：嚴格遵循紅-綠-重構循環實作新功能。
-- **`Code Review Expert`** (`/code-review`)：在 PR 合併前進行品質與安全防禦檢查。
