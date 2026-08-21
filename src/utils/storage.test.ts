@@ -6,6 +6,12 @@ import {
   validateTradesSchema,
   loadCustomPricesFromStorage,
   saveCustomPricesToStorage,
+  loadPriceMetadataFromStorage,
+  savePriceMetadataToStorage,
+  getLockedSymbols,
+  isSymbolLocked,
+  setSymbolLock,
+  updateQuoteInStorage,
   getDefaultSampleTrades,
 } from './storage';
 
@@ -252,4 +258,66 @@ describe('Storage & Persistence Utilities (Issue #6)', () => {
       expect(loadCustomPricesFromStorage()).toEqual({});
     });
   });
+
+  describe('Seam 5: PriceMetadataStore & Manual Locking (報價中繼資料與自訂鎖定)', () => {
+    it('初始為空時應返回預設結構', () => {
+      const metadata = loadPriceMetadataFromStorage();
+      expect(metadata.quotes).toEqual({});
+      expect(metadata.lockedSymbols).toEqual([]);
+    });
+
+    it('應能正確儲存並載入完整報價中繼資料', () => {
+      const mockStore = {
+        quotes: {
+          '2330': {
+            symbol: '2330',
+            market: 'TW' as const,
+            price: 1050,
+            previousClose: 1040,
+            change: 10,
+            changePercent: 0.96,
+            currency: 'TWD' as const,
+            status: 'DELAYED' as const,
+            updatedAt: 1724217000000,
+            source: 'YAHOO' as const,
+          },
+        },
+        lockedSymbols: ['2330'],
+        lastGlobalUpdate: 1724217000000,
+      };
+
+      savePriceMetadataToStorage(mockStore);
+      const loaded = loadPriceMetadataFromStorage();
+      expect(loaded).toEqual(mockStore);
+    });
+
+    it('應能切換標的自訂價格鎖定狀態', () => {
+      expect(isSymbolLocked('2330')).toBe(false);
+      setSymbolLock('2330', true);
+      expect(isSymbolLocked('2330')).toBe(true);
+      expect(getLockedSymbols()).toContain('2330');
+
+      setSymbolLock('2330', false);
+      expect(isSymbolLocked('2330')).toBe(false);
+      expect(getLockedSymbols()).not.toContain('2330');
+    });
+
+    it('更新單一報價 updateQuoteInStorage 應自動同步且不破壞已鎖定狀態', () => {
+      setSymbolLock('NVDA', true);
+      updateQuoteInStorage({
+        symbol: 'NVDA',
+        market: 'US',
+        price: 135,
+        currency: 'USD',
+        status: 'REALTIME',
+        updatedAt: 1724218000000,
+        source: 'YAHOO',
+      });
+
+      const loaded = loadPriceMetadataFromStorage();
+      expect(loaded.quotes['NVDA']?.price).toBe(135);
+      expect(loaded.lockedSymbols).toContain('NVDA');
+    });
+  });
 });
+

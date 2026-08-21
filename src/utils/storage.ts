@@ -1,8 +1,9 @@
-import { TradeRecord, MarketType, TradeType, Currency } from '../types/stock';
+import { TradeRecord, MarketType, TradeType, Currency, PriceMetadataStore, PriceQuote } from '../types/stock';
 
 const STORAGE_KEY = 'STOCK_TRACKER_TRADES_V1';
 const RATE_STORAGE_KEY = 'STOCK_TRACKER_USD_TWD_RATE';
 const PRICES_STORAGE_KEY = 'STOCK_TRACKER_CUSTOM_PRICES_V1';
+const PRICE_METADATA_STORAGE_KEY = 'STOCK_TRACKER_PRICE_METADATA_V1';
 
 export function loadTradesFromStorage(): TradeRecord[] {
   try {
@@ -74,6 +75,81 @@ export function saveCustomPricesToStorage(prices: Record<string, number>): void 
     console.error('Failed to save custom prices:', err);
   }
 }
+
+export function loadPriceMetadataFromStorage(): PriceMetadataStore {
+  try {
+    const raw = localStorage.getItem(PRICE_METADATA_STORAGE_KEY);
+    if (!raw) {
+      return { quotes: {}, lockedSymbols: [] };
+    }
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      const quotes: Record<string, PriceQuote> = {};
+      if (parsed.quotes && typeof parsed.quotes === 'object') {
+        for (const [key, quote] of Object.entries(parsed.quotes)) {
+          if (quote && typeof quote === 'object' && typeof (quote as any).price === 'number') {
+            quotes[key] = quote as PriceQuote;
+          }
+        }
+      }
+      const lockedSymbols = Array.isArray(parsed.lockedSymbols)
+        ? parsed.lockedSymbols.filter((s: any) => typeof s === 'string')
+        : [];
+      const lastGlobalUpdate = typeof parsed.lastGlobalUpdate === 'number' ? parsed.lastGlobalUpdate : undefined;
+      return { quotes, lockedSymbols, lastGlobalUpdate };
+    }
+    return { quotes: {}, lockedSymbols: [] };
+  } catch {
+    return { quotes: {}, lockedSymbols: [] };
+  }
+}
+
+export function savePriceMetadataToStorage(store: PriceMetadataStore): void {
+  try {
+    localStorage.setItem(PRICE_METADATA_STORAGE_KEY, JSON.stringify(store));
+  } catch (err) {
+    console.error('Failed to save price metadata:', err);
+  }
+}
+
+export function getLockedSymbols(): string[] {
+  const store = loadPriceMetadataFromStorage();
+  return store.lockedSymbols || [];
+}
+
+export function isSymbolLocked(symbol: string): boolean {
+  const cleanSymbol = symbol.trim().toUpperCase();
+  const locked = getLockedSymbols();
+  return locked.some((s) => s.trim().toUpperCase() === cleanSymbol);
+}
+
+export function setSymbolLock(symbol: string, locked: boolean): void {
+  const cleanSymbol = symbol.trim().toUpperCase();
+  const store = loadPriceMetadataFromStorage();
+  const currentLocked = new Set((store.lockedSymbols || []).map((s) => s.trim().toUpperCase()));
+
+  if (locked) {
+    currentLocked.add(cleanSymbol);
+  } else {
+    currentLocked.delete(cleanSymbol);
+  }
+
+  store.lockedSymbols = Array.from(currentLocked);
+  savePriceMetadataToStorage(store);
+}
+
+export function updateQuoteInStorage(quote: PriceQuote): void {
+  const store = loadPriceMetadataFromStorage();
+  store.quotes[quote.symbol] = quote;
+  store.lastGlobalUpdate = Date.now();
+  savePriceMetadataToStorage(store);
+
+  // 同步維護自訂市價快照以保持相容
+  const customPrices = loadCustomPricesFromStorage();
+  customPrices[quote.symbol] = quote.price;
+  saveCustomPricesToStorage(customPrices);
+}
+
 
 export function validateTradesSchema(data: unknown): TradeRecord[] | null {
   if (!Array.isArray(data) || data.length === 0) {
