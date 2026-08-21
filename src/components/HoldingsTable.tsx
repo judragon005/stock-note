@@ -1,18 +1,26 @@
 import React, { useState } from 'react';
-import { HoldingPosition, TradeRecord } from '../types/stock';
-import { Edit2, Check, Layers, ChevronDown, ChevronRight, Calendar } from 'lucide-react';
+import { HoldingPosition, TradeRecord, PriceQuote, MarketType } from '../types/stock';
+import { Edit2, Check, Layers, ChevronDown, ChevronRight, Calendar, Lock, Unlock, RefreshCw } from 'lucide-react';
 
 interface HoldingsTableProps {
   holdings: HoldingPosition[];
   trades?: TradeRecord[];
+  quotes?: Record<string, PriceQuote>;
+  lockedSymbols?: string[];
   onUpdatePrice: (symbol: string, price: number) => void;
+  onToggleLock?: (symbol: string) => void;
+  onRefreshSymbol?: (symbol: string, market: MarketType) => void;
   onQuickTrade: (symbol: string, type: 'BUY' | 'SELL') => void;
 }
 
 export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   holdings,
   trades = [],
+  quotes = {},
+  lockedSymbols = [],
   onUpdatePrice,
+  onToggleLock,
+  onRefreshSymbol,
   onQuickTrade,
 }) => {
   const [editingSymbol, setEditingSymbol] = useState<string | null>(null);
@@ -176,7 +184,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                         ) : null}
                       </td>
 
-                      {/* 最新參考市價（支援編輯） */}
+                      {/* 最新參考市價（支援編輯、狀態徽章、當日漲跌與鎖定切換） */}
                       <td
                         className="mono"
                         style={{ padding: '14px', textAlign: 'right' }}
@@ -210,26 +218,107 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                               <Check size={12} />
                             </button>
                           </div>
-                        ) : (
-                          <div
-                            onClick={() => startEditPrice(item.symbol, item.currentPrice)}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              cursor: 'pointer',
-                              padding: '2px 6px',
-                              borderRadius: '4px',
-                              background: 'rgba(30, 41, 59, 0.4)',
-                            }}
-                            title="點擊修改最新現價"
-                          >
-                            <span style={{ fontWeight: 600, color: '#ffffff' }}>
-                              {item.currentPrice.toFixed(decimals)}
-                            </span>
-                            <Edit2 size={12} color="var(--text-muted)" />
-                          </div>
-                        )}
+                        ) : (() => {
+                          const isLocked = lockedSymbols.some((s) => s.trim().toUpperCase() === item.symbol.trim().toUpperCase());
+                          const quote = quotes[item.symbol];
+                          const hasDailyChange = quote && typeof quote.change === 'number' && typeof quote.changePercent === 'number';
+
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <div
+                                  onClick={() => startEditPrice(item.symbol, item.currentPrice)}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    cursor: 'pointer',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    background: 'rgba(30, 41, 59, 0.4)',
+                                  }}
+                                  title="點擊修改最新現價"
+                                >
+                                  <span style={{ fontWeight: 600, color: '#ffffff' }}>
+                                    {item.currentPrice.toFixed(decimals)}
+                                  </span>
+                                  <Edit2 size={12} color="var(--text-muted)" />
+                                </div>
+
+                                {/* 鎖定/解鎖切換 */}
+                                {onToggleLock && (
+                                  <button
+                                    onClick={() => onToggleLock(item.symbol)}
+                                    style={{
+                                      background: isLocked ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
+                                      border: isLocked ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid transparent',
+                                      borderRadius: '4px',
+                                      padding: '2px 4px',
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                    }}
+                                    title={isLocked ? '目前為自訂鎖定價格（點擊解鎖以恢復全自動更新）' : '點擊鎖定自訂價格（避免被自動輪詢覆蓋）'}
+                                  >
+                                    {isLocked ? <Lock size={12} color="#60a5fa" /> : <Unlock size={12} color="var(--text-muted)" />}
+                                  </button>
+                                )}
+
+                                {/* 單檔刷新按鈕 */}
+                                {onRefreshSymbol && (
+                                  <button
+                                    onClick={() => onRefreshSymbol(item.symbol, item.market)}
+                                    style={{
+                                      background: 'transparent',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      padding: '2px 4px',
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                    }}
+                                    title="手動刷新此標的最新市場報價"
+                                  >
+                                    <RefreshCw size={11} color="var(--text-muted)" />
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* 狀態徽章與當日漲跌 */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem' }}>
+                                {isLocked ? (
+                                  <span className="badge badge-locked" style={{ padding: '0px 4px', fontSize: '0.62rem' }}>
+                                    🔒 鎖定
+                                  </span>
+                                ) : quote?.status === 'DELAYED' || quote?.status === 'REALTIME' ? (
+                                  <span className="badge badge-realtime" style={{ padding: '0px 4px', fontSize: '0.62rem' }}>
+                                    🟢 即時
+                                  </span>
+                                ) : quote?.status === 'PREVIOUS_CLOSE' ? (
+                                  <span className="badge badge-prevclose" style={{ padding: '0px 4px', fontSize: '0.62rem' }}>
+                                    🟡 昨收
+                                  </span>
+                                ) : quote?.status === 'CACHED' ? (
+                                  <span className="badge badge-cached" style={{ padding: '0px 4px', fontSize: '0.62rem' }}>
+                                    ⚠️ 快取
+                                  </span>
+                                ) : null}
+
+                                {hasDailyChange && (
+                                  <span
+                                    style={{
+                                      color: quote.change! >= 0 ? 'var(--gain-color)' : 'var(--loss-color)',
+                                      fontWeight: 600,
+                                    }}
+                                    title={`昨日收盤價: ${quote.previousClose?.toFixed(decimals)}`}
+                                  >
+                                    {quote.change! >= 0 ? '+' : ''}{quote.change!.toFixed(decimals)} ({quote.changePercent! >= 0 ? '+' : ''}{quote.changePercent!.toFixed(2)}%)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* 總成本 */}

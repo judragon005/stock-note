@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TrendingUp, PlusCircle, Download, Upload, DollarSign, Palette, Sparkles } from 'lucide-react';
+import { TrendingUp, PlusCircle, Download, Upload, DollarSign, Palette, Sparkles, RefreshCw } from 'lucide-react';
 import { MarketType, ColorThemeMode } from '../types/stock';
 
 interface HeaderProps {
@@ -9,6 +9,10 @@ interface HeaderProps {
   onUpdateRate: (rate: number) => void;
   colorTheme: ColorThemeMode;
   onToggleColorTheme: () => void;
+  isRefreshing?: boolean;
+  lastUpdated?: number | null;
+  marketStatus?: { isTWOpen: boolean; isUSOpen: boolean; isAnyOpen: boolean };
+  onRefreshAll?: () => void;
   onOpenTradeModal: () => void;
   onOpenScannerModal: () => void;
   onExportJSON: () => void;
@@ -23,6 +27,10 @@ export const Header: React.FC<HeaderProps> = ({
   onUpdateRate,
   colorTheme,
   onToggleColorTheme,
+  isRefreshing = false,
+  lastUpdated = null,
+  marketStatus,
+  onRefreshAll,
   onOpenTradeModal,
   onOpenScannerModal,
   onExportJSON,
@@ -99,6 +107,59 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Action Controls & Rate Config */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {/* Live Quote Refresh & Market Status */}
+          {onRefreshAll && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={onRefreshAll}
+              disabled={isRefreshing}
+              title="一鍵更新全場有效持股市價 (Yahoo Finance / TWSE 備援)"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%)',
+                border: '1px solid rgba(16, 185, 129, 0.4)',
+                color: '#34d399',
+                fontWeight: 600,
+              }}
+            >
+              <RefreshCw size={13} className={isRefreshing ? 'spin-animation' : ''} />
+              <span>{isRefreshing ? '更新中...' : '⚡ 更新市價'}</span>
+            </button>
+          )}
+
+          {/* Market Status & Time Chip */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'rgba(30, 41, 59, 0.5)',
+              padding: '6px 10px',
+              borderRadius: '8px',
+              border: '1px solid var(--border-color)',
+              fontSize: '0.72rem',
+              color: 'var(--text-secondary)',
+            }}
+            title="開盤時段系統每 60 秒自動輪詢最新市價"
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              {marketStatus?.isTWOpen ? (
+                <span style={{ color: '#34d399', fontWeight: 600 }}>🟢 台股盤中</span>
+              ) : marketStatus?.isUSOpen ? (
+                <span style={{ color: '#34d399', fontWeight: 600 }}>🟢 美股盤中</span>
+              ) : (
+                <span style={{ color: 'var(--text-muted)' }}>⚪ 休市中</span>
+              )}
+            </span>
+            {lastUpdated && (
+              <span className="mono" style={{ color: 'var(--text-muted)', borderLeft: '1px solid var(--border-color)', paddingLeft: '6px' }}>
+                {new Date(lastUpdated).toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            )}
+          </div>
+
           {/* Color Theme Toggle */}
           <button
             className="btn btn-secondary btn-sm"

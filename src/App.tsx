@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { TradeRecord, MarketType, TradeType, ColorThemeMode } from './types/stock';
 import { calculateHoldingsAndSummary } from './engine/calculator';
 import {
@@ -14,6 +14,8 @@ import {
   exportTradesToJSON,
   exportTradesToCSV,
 } from './utils/storage';
+
+import { usePriceAutoRefresh } from './hooks/usePriceAutoRefresh';
 
 import { Header } from './components/Header';
 import { SummaryCards } from './components/SummaryCards';
@@ -89,6 +91,26 @@ export const App: React.FC = () => {
     return calculateHoldingsAndSummary(displayedTrades, currentPrices, usdToTwdRate);
   }, [displayedTrades, currentPrices, usdToTwdRate]);
 
+  // 報價自動輪詢更新回呼
+  const handlePricesCalculated = useCallback((newPrices: Record<string, number>) => {
+    setCurrentPrices((prev) => ({ ...prev, ...newPrices }));
+  }, []);
+
+  // 智慧報價自動輪詢 Hook
+  const {
+    quotes,
+    lockedSymbols,
+    isRefreshing,
+    lastUpdated,
+    marketStatus,
+    refreshAll,
+    refreshSymbol,
+    toggleSymbolLock,
+  } = usePriceAutoRefresh({
+    holdings,
+    onPricesCalculated: handlePricesCalculated,
+  });
+
   // 新增交易
   const handleSaveTrade = (tradeData: Omit<TradeRecord, 'id' | 'createdAt'>) => {
     const newTrade: TradeRecord = {
@@ -118,12 +140,14 @@ export const App: React.FC = () => {
     setTrades((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // 更新市價
+  // 手動更新市價（自動套用鎖定保護）
   const handleUpdatePrice = (symbol: string, price: number) => {
     setCurrentPrices((prev) => ({
       ...prev,
       [symbol]: price,
     }));
+    // 手動修改時標記為自訂鎖定
+    toggleSymbolLock(symbol);
   };
 
   // 快速加碼或平倉
@@ -234,6 +258,10 @@ export const App: React.FC = () => {
         onUpdateRate={handleUpdateRate}
         colorTheme={colorTheme}
         onToggleColorTheme={handleToggleColorTheme}
+        isRefreshing={isRefreshing}
+        lastUpdated={lastUpdated}
+        marketStatus={marketStatus}
+        onRefreshAll={refreshAll}
         onOpenTradeModal={handleOpenNewTrade}
         onOpenScannerModal={() => setIsScannerOpen(true)}
         onExportJSON={handleExportJSON}
@@ -255,7 +283,11 @@ export const App: React.FC = () => {
       <HoldingsTable
         holdings={holdings}
         trades={trades}
+        quotes={quotes}
+        lockedSymbols={lockedSymbols}
         onUpdatePrice={handleUpdatePrice}
+        onToggleLock={toggleSymbolLock}
+        onRefreshSymbol={refreshSymbol}
         onQuickTrade={handleQuickTrade}
       />
 
