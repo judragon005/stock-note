@@ -146,8 +146,10 @@ export const App: React.FC = () => {
       ...prev,
       [symbol]: price,
     }));
-    // 手動修改時標記為自訂鎖定
-    toggleSymbolLock(symbol);
+    // 手動修改時強制標記為自訂鎖定（冪等操作，不會意外解鎖）
+    if (!lockedSymbols.some((s) => s.trim().toUpperCase() === symbol.trim().toUpperCase())) {
+      toggleSymbolLock(symbol);
+    }
   };
 
   // 快速加碼或平倉
