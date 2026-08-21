@@ -38,7 +38,10 @@
    - **PR 描述內必須包含 `Closes #<issue-id>`**，確保 Squash and Merge 時 GitHub 自動關閉對應 Issue。
 6. **合併與分支清理**：經 GitHub Actions CI 綠燈驗證後，執行 Squash and Merge 合併回 `main`，並同步清理遠端與本地已合併分支。
 7. **交接自動補全 (Handoff & Auto-Sync)**：每次執行 `/handoff` 收尾時，Agent **必須主動檢查 `docs/specs/`、`docs/adr/` 與 `.scratch/`**。若本次迭代有新 PRD 但尚未建立 ADR 或 `.scratch/` 鏡像，Agent 必須主動自動生成對應 ADR、導出 `.scratch/v1.X/issues/` 本地票券鏡像，並同步更新 `README.md`、`CONTEXT.md` 與交接手冊，嚴禁等待人類提醒。
-8. **詳細新手操作手冊**：請參閱 [docs/guides/branch_protection_and_pr_workflow.md](file:///d:/APP/股票紀錄/docs/guides/branch_protection_and_pr_workflow.md)。
+8. **技術債與改善建議管理 (Technical Debt Tracking)**：
+   - 在程式碼審查 (`/code-review`) 或交接時，若存在識別出但「未在當期 PR 即時修改」之架構改善建議，Agent 必須主動建檔至 `docs/debts/` 並更新 `docs/debts/README.md` 索引。
+   - 僅收錄未即時修改之建議；當期已修復完成者不建檔；已解決之技術債標記為 `RESOLVED`。
+9. **詳細新手操作手冊**：請參閱 [docs/guides/branch_protection_and_pr_workflow.md](file:///d:/APP/股票紀錄/docs/guides/branch_protection_and_pr_workflow.md)。
 
 
 

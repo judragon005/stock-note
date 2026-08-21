@@ -214,11 +214,18 @@ _Avoid_: Base Fee, Floor Fee
 - [ADR-0007: V1.6 智慧掃描公司行動進度可視化、受控並行與斷點接續架構](docs/adr/0007-scanner-progress-and-resume-architecture.md)
 - [ADR-0008: V1.7 虛擬時序動態配股與台股減資整數換發架構](docs/adr/0008-virtual-holdings-timeline-and-corporate-action-accuracy.md)
 - [ADR-0009: V1.8 持倉列表自然排序與證交所除權除息端點校正](docs/adr/0009-holdings-natural-sorting-and-twse-endpoint-correction.md)
+- [ADR-0010: V1.9 技術債與改善建議分級歸檔架構](docs/adr/0010-technical-debt-management-architecture.md)
 
 ### 持倉排序規範 (Holdings Sort Standard) *(新增於 V1.8)*
 
 **Holdings Multi-Tier Sort (持倉雙階自然排序)**:
 持倉清單展示嚴格遵循「台股優先、美股置底；同市場內依代碼字母數字升冪 (Natural Alphanumeric Sort)」之排序準則，確保如 `00403A`、`0050`、`00981A`、`2330`、`9927`、`VT` 之穩定清晰閱覽體驗。
+
+### 技術債管理機制 (Technical Debt Registry) *(新增於 V1.9)*
+
+**Technical Debt Registry (技術債索引看板)**:
+位於 `docs/debts/` 之架構改善集中存放區，採編號獨立檔案與四段式結構管理未在當期 PR 即時修改之架構建議，區分 P1/P2/P3 優先級並定義明確觸發時機。
+
 
 
 

@@ -90,10 +90,10 @@
 ├── .github/workflows/ci.yml         # GitHub Actions 自動化 CI 流程
 ├── .scratch/                        # 本地任務切片與 Ticket 追蹤
 ├── docs/
-│   ├── adr/                         # 架構決策紀錄 (ADR-0001 ~ ADR-0007)
-│   ├── handoff/                     # 專案全量交付手冊 (handoff_stock_tracker_final.md)
-│   ├── specs/                       # 功能規格需求書 (PRD-0001 ~ PRD-0007)
-│   └── guides/                      # 分支保護、PR 工作流與驗證手冊
+│   ├── adr/                         # 架構決策紀錄 (ADR-0001 ~ ADR-0010)
+│   ├── debts/                       # 架構技術債與改善建議索引看板 (0001-*.md)
+│   ├── specs/                       # 產品需求規格書 (SPEC-0001 ~ SPEC-0010)
+│   └── guides/                      # 開發與分支管理手冊
 ├── src/
 │   ├── components/                  # 前端 UI 元件
 │   │   ├── CorporateActionScannerModal.tsx # 純線上即時掃描彈窗（進度條、斷點接續與 Session 快取）
