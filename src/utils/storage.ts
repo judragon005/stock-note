@@ -1,4 +1,12 @@
-import { TradeRecord, MarketType, TradeType, Currency, PriceMetadataStore, PriceQuote } from '../types/stock';
+import {
+  TradeRecord,
+  MarketType,
+  TradeType,
+  Currency,
+  PriceMetadataStore,
+  PriceQuote,
+  ExchangeRateQuote,
+} from '../types/stock';
 import { logger } from './logger';
 
 const STORAGE_KEY = 'STOCK_TRACKER_TRADES_V1';
@@ -97,7 +105,16 @@ export function loadPriceMetadataFromStorage(): PriceMetadataStore {
         ? parsed.lockedSymbols.filter((s: any) => typeof s === 'string')
         : [];
       const lastGlobalUpdate = typeof parsed.lastGlobalUpdate === 'number' ? parsed.lastGlobalUpdate : undefined;
-      return { quotes, lockedSymbols, lastGlobalUpdate };
+      let exchangeRateQuote: ExchangeRateQuote | undefined = undefined;
+      if (
+        parsed.exchangeRateQuote &&
+        typeof parsed.exchangeRateQuote === 'object' &&
+        typeof parsed.exchangeRateQuote.rate === 'number' &&
+        parsed.exchangeRateQuote.rate > 0
+      ) {
+        exchangeRateQuote = parsed.exchangeRateQuote as ExchangeRateQuote;
+      }
+      return { quotes, lockedSymbols, lastGlobalUpdate, exchangeRateQuote };
     }
     return { quotes: {}, lockedSymbols: [] };
   } catch {
@@ -112,6 +129,28 @@ export function savePriceMetadataToStorage(store: PriceMetadataStore): void {
     logger.error('Failed to save price metadata:', err);
   }
 }
+
+export function loadExchangeRateQuote(): ExchangeRateQuote {
+  const store = loadPriceMetadataFromStorage();
+  if (store.exchangeRateQuote && store.exchangeRateQuote.rate > 0) {
+    return store.exchangeRateQuote;
+  }
+  const fallbackRate = loadExchangeRate();
+  return {
+    rate: fallbackRate,
+    status: 'CACHED',
+    updatedAt: Date.now(),
+    source: 'CACHE',
+  };
+}
+
+export function saveExchangeRateQuote(quote: ExchangeRateQuote): void {
+  const store = loadPriceMetadataFromStorage();
+  store.exchangeRateQuote = quote;
+  savePriceMetadataToStorage(store);
+  saveExchangeRate(quote.rate);
+}
+
 
 export function getLockedSymbols(): string[] {
   const store = loadPriceMetadataFromStorage();

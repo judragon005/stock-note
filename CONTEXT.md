@@ -138,6 +138,17 @@ _Avoid_: Base Fee, Floor Fee
 **Quote Status Badge & Fallback Cache (報價狀態徽章與持久化快取降級)**:
 表格即時呈現 🟢 盤中即時/延遲、🟡 昨日收盤價、🔒 自訂鎖定、⚠️ 離線快取四大狀態徽章與當日漲跌幅色塊。當網路斷線或代理超時時，平滑退回 `localStorage` 本地最後有效報價，確保離線狀態下系統計算與視覺化 100% 穩定可用。
 
+### 美金台幣匯率自動更新與平滑備援 (Auto USD/TWD Exchange Rate & Fallback)  *(新增於 V1.5)*
+
+**Auto Exchange Rate Engine (美金台幣純前端自動匯率引擎)**:
+透過 Yahoo Finance API (`USDTWD=X`) 與多節點 CORS 代理池自動抓取最新盤中匯率、前一日收盤價 (`chartPreviousClose`) 與漲跌幅度。與即時行情機制（進站同步、開盤 60 秒輪詢、手動重整）完全同步更新。
+
+**Exchange Rate Fallback Cascade (匯率多層平滑降級備援機制)**:
+當網路斷線或 API 異常時，系統自動按階層降級：盤中即時價 ➔ 前日收盤價 ➔ LocalStorage 本地歷史快取 ➔ 基準預設值 (32.5)，確保美股折合台幣總市值計算 100% 穩定且平滑無中斷。
+
+**Automated Rate Badge & Status Tooltip (自動化匯率徽章與狀態提示)**:
+頂部 Header 移除手動編輯框，全面改為純自動化徽章 (`USD/TWD: 32.45`)，背景刷新時展示轉動微動畫，滑鼠懸停 (Tooltip) 顯示來源狀態（即時 / 前日收盤 / 本地快取）與更新時間戳記。
+
 ---
 
 ## 🏛️ 架構決策紀錄索引 (Architecture Decision Records)
@@ -147,6 +158,8 @@ _Avoid_: Base Fee, Floor Fee
 - [ADR-0003: V1.2 公司行動事件流與基準日持股時態解析](docs/adr/0003-v1.2-corporate-actions-and-date-holding-resolution.md)
 - [ADR-0004: V1.3 全市場純線上即時公司行動掃描器與 5 大特殊公司行動會計核心](docs/adr/0004-full-market-live-corporate-actions-and-special-events.md)
 - [ADR-0005: V1.4 全市場即時與延遲多源報價引擎、交易時段智慧輪詢與自訂價格鎖定防禦架構](docs/adr/0005-realtime-and-delayed-market-quotes-system.md)
+- [ADR-0006: V1.5 美金台幣 (USD/TWD) 匯率自動更新、行情同步輪詢與多層平滑備援架構](docs/adr/0006-auto-usd-twd-exchange-rate-and-fallback.md)
+
 
 
 

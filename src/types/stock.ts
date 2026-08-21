@@ -76,10 +76,23 @@ export interface PriceQuote {
   source: 'YAHOO' | 'TWSE' | 'MANUAL' | 'CACHE';
 }
 
+export type ExchangeRateStatus = 'REALTIME' | 'DELAYED' | 'PREVIOUS_CLOSE' | 'CACHED' | 'FALLBACK';
+
+export interface ExchangeRateQuote {
+  rate: number;
+  prevClose?: number;
+  change?: number;
+  changePercent?: number;
+  status: ExchangeRateStatus;
+  updatedAt: number;
+  source: 'YAHOO' | 'CACHE' | 'FALLBACK';
+}
+
 export interface PriceMetadataStore {
   quotes: Record<string, PriceQuote>;
   lockedSymbols: string[];
   lastGlobalUpdate?: number;
+  exchangeRateQuote?: ExchangeRateQuote;
 }
 
 export interface MarketSummarySlice {
@@ -98,5 +111,6 @@ export interface PortfolioSummary {
   combinedTWD: MarketSummarySlice & { netAssetValue: number };
   usdToTwdRate: number;
 }
+
 
 

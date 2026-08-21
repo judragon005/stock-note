@@ -1,4 +1,4 @@
-import { MarketType, PriceQuote } from '../types/stock';
+import { MarketType, PriceQuote, ExchangeRateQuote } from '../types/stock';
 
 const CORS_PROXIES = [
   (url: string) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
@@ -201,3 +201,75 @@ export async function fetchBatchStockQuotes(
   await Promise.allSettled(promises);
   return results;
 }
+
+/**
+ * 解析 Yahoo Finance USDTWD=X 匯率響應
+ */
+export function parseYahooExchangeRateResponse(data: any): ExchangeRateQuote | null {
+  try {
+    if (!data || !data.chart || !Array.isArray(data.chart.result) || data.chart.result.length === 0) {
+      return null;
+    }
+
+    const meta = data.chart.result[0]?.meta;
+    if (!meta) return null;
+
+    const regularMarketPrice = typeof meta.regularMarketPrice === 'number' ? meta.regularMarketPrice : 0;
+    const prevClose =
+      typeof meta.chartPreviousClose === 'number' && meta.chartPreviousClose > 0
+        ? meta.chartPreviousClose
+        : typeof meta.previousClose === 'number' && meta.previousClose > 0
+        ? meta.previousClose
+        : undefined;
+
+    let rate = regularMarketPrice;
+    let status: 'REALTIME' | 'PREVIOUS_CLOSE' = 'REALTIME';
+
+    if (rate <= 0) {
+      if (prevClose && prevClose > 0) {
+        rate = prevClose;
+        status = 'PREVIOUS_CLOSE';
+      } else {
+        return null;
+      }
+    }
+
+    let change: number | undefined = undefined;
+    let changePercent: number | undefined = undefined;
+
+    if (prevClose && prevClose > 0) {
+      change = rate - prevClose;
+      changePercent = (change / prevClose) * 100;
+    }
+
+    return {
+      rate,
+      prevClose,
+      change,
+      changePercent,
+      status,
+      updatedAt: Date.now(),
+      source: 'YAHOO',
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 抓取最新 USD/TWD 匯率 (Yahoo Finance USDTWD=X)
+ */
+export async function fetchExchangeRate(
+  customFetch: (url: string, timeoutMs?: number) => Promise<any> = fetchWithCORSProxy
+): Promise<ExchangeRateQuote | null> {
+  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/USDTWD=X?interval=1d&range=1d`;
+  try {
+    const data = await customFetch(yahooUrl, 4000);
+    const quote = parseYahooExchangeRateResponse(data);
+    if (quote) return quote;
+  } catch {
+    // Return null so caller can gracefully fallback to LocalStorage cached rate
+  }
+  return null;
+}
+

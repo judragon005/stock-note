@@ -8,6 +8,8 @@ import {
   saveCustomPricesToStorage,
   loadPriceMetadataFromStorage,
   savePriceMetadataToStorage,
+  loadExchangeRateQuote,
+  saveExchangeRateQuote,
   getLockedSymbols,
   isSymbolLocked,
   setSymbolLock,
@@ -319,5 +321,37 @@ describe('Storage & Persistence Utilities (Issue #6)', () => {
       expect(loaded.lockedSymbols).toContain('NVDA');
     });
   });
+
+  describe('Seam 6: ExchangeRateQuote Persistence (匯率持久化與平滑降級)', () => {
+    it('當無任何紀錄時應返回預設快取結構與預設匯率 (32.5)', () => {
+      const quote = loadExchangeRateQuote();
+      expect(quote.rate).toBe(32.5);
+      expect(quote.status).toBe('CACHED');
+    });
+
+    it('應能正確儲存與讀取 ExchangeRateQuote 並同步更新 RATE_STORAGE_KEY', () => {
+      const mockRateQuote = {
+        rate: 32.45,
+        prevClose: 32.35,
+        change: 0.1,
+        changePercent: 0.31,
+        status: 'REALTIME' as const,
+        updatedAt: 1724218000000,
+        source: 'YAHOO' as const,
+      };
+
+      saveExchangeRateQuote(mockRateQuote);
+
+      const loaded = loadExchangeRateQuote();
+      expect(loaded.rate).toBe(32.45);
+      expect(loaded.prevClose).toBe(32.35);
+      expect(loaded.status).toBe('REALTIME');
+      expect(loaded.source).toBe('YAHOO');
+
+      // 同步檢查舊 key
+      expect(localStorage.getItem('STOCK_TRACKER_USD_TWD_RATE')).toBe('32.45');
+    });
+  });
 });
+
 

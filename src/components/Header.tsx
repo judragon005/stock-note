@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { TrendingUp, PlusCircle, Download, Upload, DollarSign, Palette, Sparkles, RefreshCw } from 'lucide-react';
-import { MarketType, ColorThemeMode } from '../types/stock';
+import { MarketType, ColorThemeMode, ExchangeRateQuote } from '../types/stock';
 
 interface HeaderProps {
   currentMarket: 'ALL' | MarketType;
   onSelectMarket: (market: 'ALL' | MarketType) => void;
   usdToTwdRate: number;
-  onUpdateRate: (rate: number) => void;
+  exchangeRateQuote?: ExchangeRateQuote;
+  onUpdateRate?: (rate: number) => void;
   colorTheme: ColorThemeMode;
   onToggleColorTheme: () => void;
   isRefreshing?: boolean;
@@ -24,7 +25,7 @@ export const Header: React.FC<HeaderProps> = ({
   currentMarket,
   onSelectMarket,
   usdToTwdRate,
-  onUpdateRate,
+  exchangeRateQuote,
   colorTheme,
   onToggleColorTheme,
   isRefreshing = false,
@@ -37,17 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
   onExportCSV,
   onImportFile,
 }) => {
-  const [isEditingRate, setIsEditingRate] = useState(false);
-  const [rateInput, setRateInput] = useState(usdToTwdRate.toString());
 
-  const handleRateSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const parsed = parseFloat(rateInput);
-    if (!isNaN(parsed) && parsed > 0) {
-      onUpdateRate(parsed);
-      setIsEditingRate(false);
-    }
-  };
 
   return (
     <header className="glass-card" style={{ padding: '18px 24px', marginBottom: '24px' }}>
@@ -174,50 +165,79 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {/* Exchange Rate Badge */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: 'rgba(30, 41, 59, 0.5)',
-            padding: '6px 12px',
-            borderRadius: '8px',
-            border: '1px solid var(--border-color)',
-            fontSize: '0.75rem',
-            color: 'var(--text-secondary)'
-          }}>
-            <DollarSign size={14} color="#f59e0b" />
-            <span>USD/TWD:</span>
-            {isEditingRate ? (
-              <form onSubmit={handleRateSubmit} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={rateInput}
-                  onChange={(e) => setRateInput(e.target.value)}
-                  style={{
-                    width: '60px',
-                    padding: '2px 4px',
-                    borderRadius: '4px',
-                    background: '#090d16',
-                    border: '1px solid #10b981',
-                    color: '#fff',
-                    fontSize: '0.75rem'
-                  }}
-                  autoFocus
-                />
-                <button type="submit" className="btn btn-sm btn-primary" style={{ padding: '2px 6px', fontSize: '0.7rem' }}>存</button>
-              </form>
-            ) : (
-              <span
-                onClick={() => setIsEditingRate(true)}
-                className="mono"
-                style={{ color: '#f8fafc', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline dotted' }}
-                title="點擊修改換算匯率"
+          {(() => {
+            const statusLabel =
+              exchangeRateQuote?.status === 'REALTIME'
+                ? '🟢 即時匯率 (Yahoo Finance)'
+                : exchangeRateQuote?.status === 'DELAYED'
+                ? '🟢 盤中延遲匯率 (Yahoo Finance)'
+                : exchangeRateQuote?.status === 'PREVIOUS_CLOSE'
+                ? '🟡 昨日收盤匯率 (Yahoo Finance)'
+                : exchangeRateQuote?.status === 'CACHED'
+                ? '⚠️ 離線快取匯率 (LocalStorage)'
+                : '基準預設匯率';
+
+            const updateTimeStr = exchangeRateQuote?.updatedAt
+              ? new Date(exchangeRateQuote.updatedAt).toLocaleTimeString('zh-TW', { hour12: false })
+              : null;
+
+            const changeStr =
+              typeof exchangeRateQuote?.changePercent === 'number'
+                ? ` (${exchangeRateQuote.changePercent >= 0 ? '+' : ''}${exchangeRateQuote.changePercent.toFixed(2)}%)`
+                : '';
+
+            const tooltipText = `USD/TWD 美金台幣匯率\n狀態：${statusLabel}${changeStr}${
+              updateTimeStr ? `\n更新時間：${updateTimeStr}` : ''
+            }`;
+
+            return (
+              <div
+                title={tooltipText}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'rgba(30, 41, 59, 0.6)',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  fontSize: '0.75rem',
+                  color: 'var(--text-secondary)',
+                  cursor: 'help',
+                  transition: 'all 0.2s ease',
+                }}
               >
-                {usdToTwdRate.toFixed(2)}
-              </span>
-            )}
-          </div>
+                <DollarSign
+                  size={14}
+                  color="#f59e0b"
+                  style={{
+                    animation: isRefreshing ? 'spin 1.5s linear infinite' : 'none',
+                  }}
+                />
+                <span>USD/TWD:</span>
+                <span
+                  className="mono"
+                  style={{
+                    color: '#f8fafc',
+                    fontWeight: 600,
+                  }}
+                >
+                  {usdToTwdRate > 0 ? usdToTwdRate.toFixed(2) : '32.50'}
+                </span>
+                {exchangeRateQuote?.status === 'PREVIOUS_CLOSE' && (
+                  <span style={{ fontSize: '0.65rem', color: '#f59e0b', background: 'rgba(245, 158, 11, 0.15)', padding: '1px 4px', borderRadius: '4px' }}>
+                    昨收
+                  </span>
+                )}
+                {exchangeRateQuote?.status === 'CACHED' && (
+                  <span style={{ fontSize: '0.65rem', color: '#94a3b8', background: 'rgba(148, 163, 184, 0.15)', padding: '1px 4px', borderRadius: '4px' }}>
+                    快取
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+
 
           {/* Backup / Export Buttons */}
           <button className="btn btn-secondary btn-sm" onClick={onExportJSON} title="匯出完整 JSON 備份檔">

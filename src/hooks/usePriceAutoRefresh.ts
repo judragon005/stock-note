@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { MarketType, PriceQuote, HoldingPosition } from '../types/stock';
-import { fetchBatchStockQuotes, fetchStockQuote } from '../engine/priceFetcher';
+import { MarketType, PriceQuote, HoldingPosition, ExchangeRateQuote } from '../types/stock';
+import { fetchBatchStockQuotes, fetchStockQuote, fetchExchangeRate } from '../engine/priceFetcher';
 import {
   loadPriceMetadataFromStorage,
   savePriceMetadataToStorage,
+  loadExchangeRateQuote,
+  saveExchangeRateQuote,
   getLockedSymbols,
   setSymbolLock as persistSymbolLock,
 } from '../utils/storage';
@@ -124,20 +126,26 @@ export async function orchestrateBatchRefresh(
 interface UsePriceAutoRefreshOptions {
   holdings: HoldingPosition[];
   onPricesCalculated?: (newPrices: Record<string, number>) => void;
+  onExchangeRateCalculated?: (rate: number, quote: ExchangeRateQuote) => void;
   intervalMs?: number; // 預設 60000 ms (60秒)
 }
 
 /**
- * 全市場即時/延遲報價智慧輪詢 React Hook
+ * 全市場即時/延遲報價與匯率智慧輪詢 React Hook
  */
 export function usePriceAutoRefresh({
   holdings,
   onPricesCalculated,
+  onExchangeRateCalculated,
   intervalMs = 60000,
 }: UsePriceAutoRefreshOptions) {
   const [quotes, setQuotes] = useState<Record<string, PriceQuote>>(() => {
     const store = loadPriceMetadataFromStorage();
     return store.quotes || {};
+  });
+
+  const [exchangeRateQuote, setExchangeRateQuote] = useState<ExchangeRateQuote>(() => {
+    return loadExchangeRateQuote();
   });
 
   const [lockedSymbols, setLockedSymbols] = useState<string[]>(() => {
@@ -156,47 +164,64 @@ export function usePriceAutoRefresh({
   const lockedSymbolsRef = useRef(lockedSymbols);
   lockedSymbolsRef.current = lockedSymbols;
 
-  // 執行全體未鎖定持股刷新
+  // 執行全體未鎖定持股與匯率同步刷新
   const refreshAll = useCallback(async () => {
-    const activeHoldings = holdingsRef.current.filter((h) => h.shares > 0);
-    if (activeHoldings.length === 0) return;
-
     setIsRefreshing(true);
     try {
-      const fetchedQuotes = await orchestrateBatchRefresh(
-        activeHoldings,
-        lockedSymbolsRef.current,
-        fetchBatchStockQuotes
-      );
+      const activeHoldings = holdingsRef.current.filter((h) => h.shares > 0);
 
-      if (Object.keys(fetchedQuotes).length > 0) {
-        const now = Date.now();
-        setQuotes((prev) => {
-          const updated = { ...prev, ...fetchedQuotes };
-          savePriceMetadataToStorage({
-            quotes: updated,
-            lockedSymbols: lockedSymbolsRef.current,
-            lastGlobalUpdate: now,
-          });
-          return updated;
-        });
+      const [quotesResult, rateResult] = await Promise.allSettled([
+        activeHoldings.length > 0
+          ? orchestrateBatchRefresh(activeHoldings, lockedSymbolsRef.current, fetchBatchStockQuotes)
+          : Promise.resolve<Record<string, PriceQuote>>({}),
+        fetchExchangeRate(),
+      ]);
 
-        setLastUpdated(now);
+      const now = Date.now();
+      let latestRateQuote: ExchangeRateQuote | undefined = undefined;
 
-        if (onPricesCalculated) {
-          const priceMap: Record<string, number> = {};
-          for (const [symbol, q] of Object.entries(fetchedQuotes)) {
-            priceMap[symbol] = q.price;
-          }
-          onPricesCalculated(priceMap);
+      // 處理匯率更新
+      if (rateResult.status === 'fulfilled' && rateResult.value) {
+        latestRateQuote = rateResult.value;
+        setExchangeRateQuote(latestRateQuote);
+        saveExchangeRateQuote(latestRateQuote);
+        if (onExchangeRateCalculated) {
+          onExchangeRateCalculated(latestRateQuote.rate, latestRateQuote);
         }
       }
+
+      // 處理持股報價更新
+      if (quotesResult.status === 'fulfilled') {
+        const fetchedQuotes: Record<string, PriceQuote> = quotesResult.value;
+        if (Object.keys(fetchedQuotes).length > 0) {
+          setQuotes((prev) => {
+            const updated = { ...prev, ...fetchedQuotes };
+            savePriceMetadataToStorage({
+              quotes: updated,
+              lockedSymbols: lockedSymbolsRef.current,
+              lastGlobalUpdate: now,
+              exchangeRateQuote: latestRateQuote,
+            });
+            return updated;
+          });
+
+          if (onPricesCalculated) {
+            const priceMap: Record<string, number> = {};
+            for (const [symbol, q] of Object.entries(fetchedQuotes)) {
+              priceMap[symbol] = q.price;
+            }
+            onPricesCalculated(priceMap);
+          }
+        }
+      }
+
+      setLastUpdated(now);
     } catch (err) {
-      logger.error('Batch refresh prices failed:', err);
+      logger.error('Batch refresh prices and exchange rate failed:', err);
     } finally {
       setIsRefreshing(false);
     }
-  }, [onPricesCalculated]);
+  }, [onPricesCalculated, onExchangeRateCalculated]);
 
   // 單檔標的強制刷新（即便已鎖定亦可手動刷新單檔）
   const refreshSymbol = useCallback(
@@ -270,6 +295,7 @@ export function usePriceAutoRefresh({
 
   return {
     quotes,
+    exchangeRateQuote,
     lockedSymbols,
     isRefreshing,
     lastUpdated,
@@ -279,3 +305,4 @@ export function usePriceAutoRefresh({
     toggleSymbolLock,
   };
 }
+

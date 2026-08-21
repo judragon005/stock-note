@@ -5,6 +5,8 @@ import {
   parseTWSEDayAllResponse,
   fetchStockQuote,
   fetchBatchStockQuotes,
+  parseYahooExchangeRateResponse,
+  fetchExchangeRate,
 } from './priceFetcher';
 import { MarketType } from '../types/stock';
 
@@ -184,4 +186,92 @@ describe('PriceFetcher Engine (TDD Seam)', () => {
       expect(mockSingleFetcher).toHaveBeenCalledTimes(2);
     });
   });
+
+  describe('6. parseYahooExchangeRateResponse (美金台幣匯率解析)', () => {
+    it('應正確解析 Yahoo Finance Chart v8 匯率數據 (盤中即時/延遲)', () => {
+      const mockYahooRateData = {
+        chart: {
+          result: [
+            {
+              meta: {
+                currency: 'TWD',
+                symbol: 'USDTWD=X',
+                regularMarketPrice: 32.456,
+                chartPreviousClose: 32.35,
+                previousClose: 32.35,
+              },
+            },
+          ],
+        },
+      };
+
+      const quote = parseYahooExchangeRateResponse(mockYahooRateData);
+      expect(quote).not.toBeNull();
+      expect(quote?.rate).toBe(32.456);
+      expect(quote?.prevClose).toBe(32.35);
+      expect(quote?.change).toBeCloseTo(0.106, 3);
+      expect(quote?.changePercent).toBeCloseTo((0.106 / 32.35) * 100, 2);
+      expect(quote?.status).toBe('REALTIME');
+      expect(quote?.source).toBe('YAHOO');
+    });
+
+    it('當 regularMarketPrice 缺失或為 0 時，應平滑降級至前日收盤價 (PREVIOUS_CLOSE)', () => {
+      const mockFallbackRateData = {
+        chart: {
+          result: [
+            {
+              meta: {
+                symbol: 'USDTWD=X',
+                regularMarketPrice: 0,
+                chartPreviousClose: 32.4,
+              },
+            },
+          ],
+        },
+      };
+
+      const quote = parseYahooExchangeRateResponse(mockFallbackRateData);
+      expect(quote).not.toBeNull();
+      expect(quote?.rate).toBe(32.4);
+      expect(quote?.status).toBe('PREVIOUS_CLOSE');
+      expect(quote?.source).toBe('YAHOO');
+    });
+
+    it('當格式錯誤或無任何有效價格時應回傳 null', () => {
+      expect(parseYahooExchangeRateResponse({})).toBeNull();
+      expect(parseYahooExchangeRateResponse({ chart: { result: [] } })).toBeNull();
+      expect(parseYahooExchangeRateResponse({ chart: { result: [{ meta: { regularMarketPrice: 0, chartPreviousClose: 0 } }] } })).toBeNull();
+    });
+  });
+
+  describe('7. fetchExchangeRate (匯率多源抓取與容錯)', () => {
+    it('當 Yahoo 成功時應返回解析後之匯率報價', async () => {
+      const mockProxy = vi.fn().mockResolvedValue({
+        chart: {
+          result: [
+            {
+              meta: {
+                symbol: 'USDTWD=X',
+                regularMarketPrice: 32.5,
+                chartPreviousClose: 32.4,
+              },
+            },
+          ],
+        },
+      });
+
+      const quote = await fetchExchangeRate(mockProxy);
+      expect(quote).not.toBeNull();
+      expect(quote?.rate).toBe(32.5);
+      expect(quote?.status).toBe('REALTIME');
+      expect(mockProxy).toHaveBeenCalledWith(expect.stringContaining('USDTWD=X'), expect.any(Number));
+    });
+
+    it('當代理請求全數失敗時應返回 null 以利呼叫端回退快取', async () => {
+      const mockProxy = vi.fn().mockRejectedValue(new Error('Proxy Timeout'));
+      const quote = await fetchExchangeRate(mockProxy);
+      expect(quote).toBeNull();
+    });
+  });
 });
+

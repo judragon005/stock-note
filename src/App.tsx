@@ -91,14 +91,19 @@ export const App: React.FC = () => {
     return calculateHoldingsAndSummary(displayedTrades, currentPrices, usdToTwdRate);
   }, [displayedTrades, currentPrices, usdToTwdRate]);
 
-  // 報價自動輪詢更新回呼
+  // 報價與匯率自動輪詢更新回呼
   const handlePricesCalculated = useCallback((newPrices: Record<string, number>) => {
     setCurrentPrices((prev) => ({ ...prev, ...newPrices }));
   }, []);
 
-  // 智慧報價自動輪詢 Hook
+  const handleExchangeRateCalculated = useCallback((newRate: number) => {
+    setUsdToTwdRate(newRate);
+  }, []);
+
+  // 智慧報價與匯率自動輪詢 Hook
   const {
     quotes,
+    exchangeRateQuote,
     lockedSymbols,
     isRefreshing,
     lastUpdated,
@@ -109,7 +114,9 @@ export const App: React.FC = () => {
   } = usePriceAutoRefresh({
     holdings,
     onPricesCalculated: handlePricesCalculated,
+    onExchangeRateCalculated: handleExchangeRateCalculated,
   });
+
 
   // 新增交易
   const handleSaveTrade = (tradeData: Omit<TradeRecord, 'id' | 'createdAt'>) => {
@@ -257,6 +264,7 @@ export const App: React.FC = () => {
         currentMarket={currentMarket}
         onSelectMarket={setCurrentMarket}
         usdToTwdRate={usdToTwdRate}
+        exchangeRateQuote={exchangeRateQuote}
         onUpdateRate={handleUpdateRate}
         colorTheme={colorTheme}
         onToggleColorTheme={handleToggleColorTheme}
