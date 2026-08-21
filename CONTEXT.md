@@ -138,6 +138,17 @@ _Avoid_: Base Fee, Floor Fee
 **Quote Status Badge & Fallback Cache (報價狀態徽章與持久化快取降級)**:
 表格即時呈現 🟢 盤中即時/延遲、🟡 昨日收盤價、🔒 自訂鎖定、⚠️ 離線快取四大狀態徽章與當日漲跌幅色塊。當網路斷線或代理超時時，平滑退回 `localStorage` 本地最後有效報價，確保離線狀態下系統計算與視覺化 100% 穩定可用。
 
+---
+
+## 🏛️ 架構決策紀錄索引 (Architecture Decision Records)
+
+- [ADR-0001: 核心架構與會計模型](docs/adr/0001-core-architecture-and-accounting-model.md)
+- [ADR-0002: V1.1 Squarified Treemap 資產樹狀圖與全域色彩主題系統](docs/adr/0002-v1.1-treemap-theme-and-fee-architecture.md)
+- [ADR-0003: V1.2 公司行動事件流與基準日持股時態解析](docs/adr/0003-v1.2-corporate-actions-and-date-holding-resolution.md)
+- [ADR-0004: V1.3 全市場純線上即時公司行動掃描器與 5 大特殊公司行動會計核心](docs/adr/0004-full-market-live-corporate-actions-and-special-events.md)
+- [ADR-0005: V1.4 全市場即時與延遲多源報價引擎、交易時段智慧輪詢與自訂價格鎖定防禦架構](docs/adr/0005-realtime-and-delayed-market-quotes-system.md)
+
+
 
 
 

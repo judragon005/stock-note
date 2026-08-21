@@ -31,6 +31,7 @@
    - [`ADR-0002`](file:///d:/APP/股票紀錄/docs/adr/0002-v1.1-treemap-theme-and-fee-architecture.md)：純 SVG Squarified Treemap（零外部圖表套件）、CSS 變數全域主題切換、純函式 + 完整 deps 消除 Stale Closure。
    - [`ADR-0003`](file:///d:/APP/股票紀錄/docs/adr/0003-v1.2-corporate-actions-and-date-holding-resolution.md)：統一事件流模型、純函式 `applyTradeToShares` 股數回放、資本返還扣減成本會計模型。
    - [`ADR-0004`](file:///d:/APP/股票紀錄/docs/adr/0004-full-market-live-corporate-actions-and-special-events.md)：全市場純線上多源即時掃描（TWSE OpenAPI + 多重 CORS 代理池）、5 大特殊公司行動會計核心與台股整數股數規則。
+   - [`ADR-0005`](file:///d:/APP/股票紀錄/docs/adr/0005-realtime-and-delayed-market-quotes-system.md)：全市場即時與延遲多源報價引擎（Yahoo + TWSE 備援）、交易時段智慧輪詢與自訂價格鎖定防禦架構。
 3. **規格說明書 (PRD)**：
    - [`0001-stock-tracker-and-analyzer.md`](file:///d:/APP/股票紀錄/docs/specs/0001-stock-tracker-and-analyzer.md)（V1.0：15 條 User Stories 全數落實）
    - [`0002-v1-enhancements-and-treemap.md`](file:///d:/APP/股票紀錄/docs/specs/0002-v1-enhancements-and-treemap.md)（V1.1：US-16 至 US-21 全數落實）
