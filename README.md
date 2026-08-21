@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-66%2F66%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-73%2F73%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,12 +11,18 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 雙市場獨立記帳與高精度會計引擎 (Dual Market Accounting)
+### 1. 美金台幣 (USD/TWD) 匯率自動更新與平滑備援 (Auto USD/TWD Rate) *(V1.5 新增)*
+- **純前端免 Key 自動抓取**：透過 Yahoo Finance (`USDTWD=X`) 與多節點 CORS 代理池自動抓取最新盤中匯率與前日收盤價。
+- **四層平滑降級備援 (Fallback Cascade)**：即時匯率 ➔ 前日收盤價 (`chartPreviousClose`) ➔ LocalStorage 本地歷史快取 ➔ 基準預設值 (32.5)，斷線不崩潰。
+- **行情機制完全同步**：進站自動抓取、開盤期間 60 秒智慧輪詢、點擊「重整行情」按鈕同步強制刷新。
+- **純自動化 UI 徽章**：頂部 Header 呈現優雅匯率徽章，背景刷新時展示微旋轉動畫，滑鼠懸停 (Tooltip) 提示來源狀態與時間。
+
+### 2. 雙市場獨立記帳與高精度會計引擎 (Dual Market Accounting)
 - **台股 (TWD) & 美股 (USD) 雙軌並行**：支援匯率動態切換與換算，資產損益與現金流分項精確加總。
 - **移動加權平均成本模型**：精確處理分批買進、部分賣出已實現損益、台股券商手續費折數（2.8折/5折/6折/自訂）與 20 元低消門檻。
 - **台股整數股數嚴格對齊**：依台灣市場規則，台股持股與異動一律四捨五入為整數 1 股（零小數點股數）。
 
-### 2. 全市場即時與延遲報價系統與自訂價格鎖定 (Realtime Quotes & Price Lock) *(V1.4 新增)*
+### 3. 全市場即時與延遲報價系統與自訂價格鎖定 (Realtime Quotes & Price Lock) *(V1.4 新增)*
 - **純前端免費多源報價**：Yahoo Finance API (v8/v7) 支援台美全市場，搭配 TWSE 官方 OpenAPI 盤後每日收盤價備援。
 - **健全 CORS 代理池**：多節點輪替重試（`corsproxy.io`、`allorigins`、`codetabs`）與 4000ms 超時熔斷。
 - **智慧開盤自動輪詢**：自動判定台股與美股交易時段，開盤時每 60 秒背景自動輪詢，休市期間暫停以節省資源；進站自動發起全持股同步。
@@ -24,12 +30,12 @@
 - **持久化快取降級 (⚠️)**：離線或請求受限時平滑退回 `localStorage` 本地最後有效報價，保證 100% 離線可用。
 - **透明化狀態徽章與當日漲跌**：呈現 🟢 盤中即時/延遲、🟡 昨收、🔒 鎖定、⚠️ 快取四大徽章與當日漲跌額幅。
 
-### 3. 全市場純線上即時公司行動掃描 (Full Market Live Scanner)
+### 4. 全市場純線上即時公司行動掃描 (Full Market Live Scanner)
 - **官方開放資料端點直連**：串接台灣證券交易所 (TWSE) 官方減資預告表 (`TWT48U_ALL`) 與除權息預告表 (`TWT49U_ALL`)。
 - **全市場涵蓋**：支援台股上市 (`.TW`)、上櫃／債券 ETF (`.TWO`) 與美股全市場代碼。
 - **自動時間窗口與持有回溯**：自動以持股「最早買進日」至今日掃描待補登事件，調用 `getHoldingsAsOfDate` 依基準日時點持股精準試算。
 
-### 4. 5 大特殊公司行動會計核心 (Special Corporate Actions)
+### 5. 5 大特殊公司行動會計核心 (Special Corporate Actions)
 支援 12 種交易與公司行動型別之完整會計處理：
 - 🔄 **換股合併 (`STOCK_MERGER`)**：原標的持股歸零，目標標的增加換算股數並承接原始投入成本。
 - 💰 **特別股贖回 (`PREFERRED_REDEMPTION`)**：收回後持股歸零，以贖回現金與原始成本結算已實現損益。
@@ -37,12 +43,12 @@
 - 📜 **可轉債換股 (`CB_CONVERSION`)**：原始債券投入本金轉為新普通股的持股成本基準。
 - 🤝 **公開收購 (`TENDER_OFFER`)**：依收購價全額結算賣出並結算損益。
 
-### 5. 視覺化資產配置與互動圖表 (Visualizations & Treemap)
+### 6. 視覺化資產配置與互動圖表 (Visualizations & Treemap)
 - **純原生 SVG Squarified Treemap**：面積精確對應市值比重，色彩深度即時反映損益率（零外部臃腫圖表套件依賴）。
 - **雙主題漲跌色彩模式**：支援「台灣紅漲綠跌」與「國際綠漲紅跌」一鍵即時切換。
 - **持股歷程時間軸 (Timeline)**：持倉列表支援折疊展開查看單一標的所有歷史買賣、除權息與減資歷程。
 
-### 6. 本地隱私與雙向資料備份 (Privacy & Persistence)
+### 7. 本地隱私與雙向資料備份 (Privacy & Persistence)
 - **資料 100% 留存於本地瀏覽器**：無須註冊，不將資產資料上傳第三方伺服器。
 - **JSON / CSV 雙向無損備份還原**：支援 UTF-8 BOM 與 18 欄位公司行動結構完整相容。
 
@@ -52,7 +58,7 @@
 
 - **核心框架**：React 18 + TypeScript + Vite
 - **樣式系統**：Vanilla CSS + CSS 變數全域主題系統（現代深色玻璃擬態風格）
-- **測試框架**：Vitest（66/66 單元測試，100% 測試驅動開發 TDD）
+- **測試框架**：Vitest（73/73 單元測試，100% 測試驅動開發 TDD）
 - **圖示庫**：Lucide React
 - **CI / CD**：GitHub Actions 自動化測試與型別檢查
 
@@ -65,9 +71,9 @@
 ├── .github/workflows/ci.yml         # GitHub Actions 自動化 CI 流程
 ├── .scratch/                        # 本地任務切片與 Ticket 追蹤
 ├── docs/
-│   ├── adr/                         # 架構決策紀錄 (ADR-0001 ~ ADR-0005)
+│   ├── adr/                         # 架構決策紀錄 (ADR-0001 ~ ADR-0006)
 │   ├── handoff/                     # 專案全量交付手冊 (handoff_stock_tracker_final.md)
-│   ├── specs/                       # 功能規格需求書 (PRD-0001 ~ PRD-0005)
+│   ├── specs/                       # 功能規格需求書 (PRD-0001 ~ PRD-0006)
 │   └── guides/                      # 分支保護、PR 工作流與驗證手冊
 ├── src/
 │   ├── components/                  # 前端 UI 元件
