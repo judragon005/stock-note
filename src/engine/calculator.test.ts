@@ -418,12 +418,18 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
     expect(calculateTaiwanFee(100, 10, 0.28, 0)).toBe(1);
   });
 
-  it('應正確試算台股股票 (0.3%) 與 ETF (0.1%) 證交稅 (calculateTaiwanTax)', () => {
-    // 股票賣出 1000 股 @ 100 元 = 100,000 元，稅率 0.3% = 300
-    expect(calculateTaiwanTax(100, 1000, false)).toBe(300);
+  it('應正確試算台股股票 (0.3%)、當沖 (0.15%)、股票 ETF (0.1%) 與債券 ETF (0%) 證交稅 (calculateTaiwanTax)', () => {
+    // 股票賣出 1000 股 @ 100 元 = 100,000 元，現股稅率 0.3% = 300
+    expect(calculateTaiwanTax(100, 1000, false, false, false)).toBe(300);
 
-    // ETF 賣出 1000 股 @ 100 元 = 100,000 元，稅率 0.1% = 100
-    expect(calculateTaiwanTax(100, 1000, true)).toBe(100);
+    // 現股當沖賣出 1000 股 @ 100 元 = 100,000 元，當沖稅率 0.15% = 150
+    expect(calculateTaiwanTax(100, 1000, false, true, false)).toBe(150);
+
+    // 股票 ETF 賣出 1000 股 @ 100 元 = 100,000 元，ETF 稅率 0.1% = 100
+    expect(calculateTaiwanTax(100, 1000, true, false, false)).toBe(100);
+
+    // 債券 ETF 賣出 1000 股 @ 100 元 = 100,000 元，債券 ETF 稅率 0% 免稅 = 0
+    expect(calculateTaiwanTax(100, 1000, false, false, true)).toBe(0);
   });
 
   /* -------------------------------------------------------------------------- */
