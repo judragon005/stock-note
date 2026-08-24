@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-98%2F98%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-100%2F100%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,13 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 整合式設定工作台與外部 API Key 配置 (Settings Hub & API Keys) *(V3.3 新增)*
+### 1. 摩擦成本精準計算引擎與台美股稅制深度校驗 (Friction & Tax Precision Engine) *(V3.4 新增)*
+- **法定標準牌告低消 20 元折讓基準**：以 $\max(20, \lfloor \text{成交額} \times 0.001425 \rfloor)$ 計算折讓差額，真實反映零股與定期定額低消手續費省下效益。
+- **債券型 ETF 0% 免徵證交稅**：精確識別代碼結尾為 `B` 的台股債券 ETF（如 00679B, 00687B）為免稅，修正預估出清摩擦成本。
+- **美股 30% 股息預扣稅獨立透視**：現金股利自動累計 30% W-8BEN 預扣稅負，真實穿透美股長期持有的摩擦成本黑洞。
+- **交易稅率分層與當沖支援**：支援普通股票 (0.3%)、現股當沖 (0.15%)、股票 ETF (0.1%)、債券 ETF (0%) 完整試算與手動覆寫。
+
+### 2. 整合式設定工作台與外部 API Key 配置 (Settings Hub & API Keys) *(V3.3 新增)*
 - **Header 工具列純粹極簡**：移除頂部重複的「摩擦成本」與「券商設定」按鈕，統一由第三活頁標籤 `[⚙️ 設定]` 進入。
 - **全新 ⚙️ 設定工作台**：整合「🏛️ 券商帳戶與費率管理」、「💸 交易摩擦成本深度分析」與「🔑 外部金融資料 API 金鑰管理」三大模組。
 - **外部 API Key 獨立隔離持久化**：支援 FinMind Token (台股)、FMP API Key (美股)、Alpha Vantage Key (外匯/總經) 與自訂 Proxy 端點，具備密碼遮罩 `👁️` 與獨立 LocalStorage 隔離保存 (`STOCK_TRACKER_API_KEYS_V1`)。
