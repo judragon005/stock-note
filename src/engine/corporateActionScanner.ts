@@ -34,10 +34,34 @@ export interface ScannedCorporateAction {
 }
 
 /**
- * 透過直連或多重 CORS 代理池請求線上端點
+ * 透過本地代理、直連或多重 CORS 代理池請求線上端點 (三層平滑降級)
  */
-async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 5000): Promise<any> {
-  // 1. 優先嘗試直連（在 Node 環境或無跨域阻擋時最快最穩定）
+export async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 4000): Promise<any> {
+  // 1. 優先嘗試 Vite 本地開發代理路由 (在 npm run dev 環境下 0 跨域阻擋、毫秒級響應)
+  let localProxyUrl: string | null = null;
+  if (targetUrl.startsWith('https://query1.finance.yahoo.com')) {
+    localProxyUrl = targetUrl.replace('https://query1.finance.yahoo.com', '/api/yahoo');
+  } else if (targetUrl.startsWith('https://openapi.twse.com.tw')) {
+    localProxyUrl = targetUrl.replace('https://openapi.twse.com.tw', '/api/twse');
+  }
+
+  if (localProxyUrl && typeof window !== 'undefined') {
+    try {
+      const res = await fetch(localProxyUrl, { signal: AbortSignal.timeout(timeoutMs) });
+      if (res.ok) {
+        const text = await res.text();
+        try {
+          return JSON.parse(text);
+        } catch {
+          return text;
+        }
+      }
+    } catch {
+      // 本地代理不可用時平滑降級
+    }
+  }
+
+  // 2. 嘗試直連（在 Node 測試環境或無跨域阻擋時最快）
   try {
     const directRes = await fetch(targetUrl, { signal: AbortSignal.timeout(timeoutMs) });
     if (directRes.ok) {
@@ -45,16 +69,16 @@ async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 5000): 
       try {
         return JSON.parse(text);
       } catch {
-        // ignore non-json
+        return text;
       }
     }
   } catch {
-    // 跨域或網路失敗時切換至代理池
+    // 瀏覽器跨域或網路失敗時切換至代理池
   }
 
-  // 2. 多重 CORS 代理池
+  // 3. 多重公開 CORS 代理池 (純靜態託管生產環境降級)
   const proxies = [
-    `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
+    `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`,
     `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
     `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
   ];
@@ -67,7 +91,7 @@ async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 5000): 
         try {
           return JSON.parse(text);
         } catch {
-          // ignore non-json response
+          return text;
         }
       }
     } catch {
@@ -304,28 +328,75 @@ export interface ScanCorporateActionsOptions {
   forceRefresh?: boolean;
 }
 
+const STORAGE_KEY_CA_CACHE = 'STOCK_TRACKER_CA_CACHE_V1';
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 小時實體快取
+
 /**
- * Session 級公司行動事件記憶體快取
+ * 雙層公司行動事件快取 (記憶體 + LocalStorage 24H 實體快取)
  */
 export class CorporateActionSessionCache {
-  private static cache = new Map<string, { events: RawCorporateEvent[]; timestamp: number }>();
+  private static memCache = new Map<string, { events: RawCorporateEvent[]; timestamp: number }>();
 
   static get(symbol: string): RawCorporateEvent[] | null {
-    const entry = this.cache.get(symbol.toUpperCase());
-    return entry ? entry.events : null;
+    const key = symbol.toUpperCase();
+    const now = Date.now();
+
+    // 1. 優先命中記憶體快取
+    const mem = this.memCache.get(key);
+    if (mem && now - mem.timestamp < CACHE_TTL_MS) {
+      return mem.events;
+    }
+
+    // 2. 命中 LocalStorage 實體快取
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_CA_CACHE);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const entry = parsed[key];
+          if (entry && now - entry.timestamp < CACHE_TTL_MS) {
+            this.memCache.set(key, entry);
+            return entry.events;
+          }
+        }
+      } catch {
+        // ignore storage error
+      }
+    }
+    return null;
   }
 
   static set(symbol: string, events: RawCorporateEvent[]): void {
-    this.cache.set(symbol.toUpperCase(), { events, timestamp: Date.now() });
+    const key = symbol.toUpperCase();
+    const entry = { events, timestamp: Date.now() };
+    this.memCache.set(key, entry);
+
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_CA_CACHE);
+        const store = raw ? JSON.parse(raw) : {};
+        store[key] = entry;
+        localStorage.setItem(STORAGE_KEY_CA_CACHE, JSON.stringify(store));
+      } catch {
+        // ignore storage error
+      }
+    }
   }
 
   static clear(): void {
-    this.cache.clear();
+    this.memCache.clear();
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem(STORAGE_KEY_CA_CACHE);
+      } catch {
+        // ignore
+      }
+    }
   }
 }
 
 /**
- * 智慧比對歷史交易時序，自動篩選待補登之全市場公司行動 (支援並發、進度回呼、中斷與快取)
+ * 智慧比對歷史交易時序，自動篩選待補登之全市場公司行動 (支援並發受控、進度回呼、中斷與 24H 快取)
  */
 export async function scanCorporateActions(
   trades: TradeRecord[],
@@ -333,7 +404,7 @@ export async function scanCorporateActions(
   options: ScanCorporateActionsOptions = {}
 ): Promise<ScannedCorporateAction[]> {
   const {
-    concurrency = 3,
+    concurrency = 2,
     signal,
     onProgress,
     symbolsToScan,
@@ -390,7 +461,7 @@ export async function scanCorporateActions(
     status: 'scanning',
   });
 
-  // 任務佇列與並行 Pool
+  // 任務佇列與受控並行 Pool (Concurrency: 2)
   let nextIndex = 0;
   const workerCount = Math.max(1, Math.min(concurrency, total));
 
@@ -422,8 +493,8 @@ export async function scanCorporateActions(
           if (signal?.aborted) return;
           rawEvents = await fetcher(symbol, meta.market);
           CorporateActionSessionCache.set(symbol, rawEvents);
-          // 輕量微延遲以保護外部 API
-          await new Promise((r) => setTimeout(r, 60));
+          // 嚴格節流延遲 150ms 以保護外部 API 頻率限制 (Rate Limit Guard)
+          await new Promise((r) => setTimeout(r, 150));
         } catch {
           rawEvents = [];
         }

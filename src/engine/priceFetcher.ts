@@ -7,11 +7,50 @@ const CORS_PROXIES = [
 ];
 
 /**
- * 透過 CORS 代理池發送請求，包含多代理重試與超時熔斷
+ * 透過本地代理、直連或 CORS 代理池發送請求，包含多代理重試與超時熔斷 (三層平滑降級)
  */
 export async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 4000): Promise<any> {
-  let lastError: Error | null = null;
+  // 1. 優先嘗試 Vite 本地開發代理路由
+  let localProxyUrl: string | null = null;
+  if (targetUrl.startsWith('https://query1.finance.yahoo.com')) {
+    localProxyUrl = targetUrl.replace('https://query1.finance.yahoo.com', '/api/yahoo');
+  } else if (targetUrl.startsWith('https://openapi.twse.com.tw')) {
+    localProxyUrl = targetUrl.replace('https://openapi.twse.com.tw', '/api/twse');
+  }
 
+  if (localProxyUrl && typeof window !== 'undefined') {
+    try {
+      const res = await fetch(localProxyUrl, { signal: AbortSignal.timeout(timeoutMs) });
+      if (res.ok) {
+        const text = await res.text();
+        try {
+          return JSON.parse(text);
+        } catch {
+          return text;
+        }
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  // 2. 嘗試直連 (Node 環境)
+  try {
+    const directRes = await fetch(targetUrl, { signal: AbortSignal.timeout(timeoutMs) });
+    if (directRes.ok) {
+      const text = await directRes.text();
+      try {
+        return JSON.parse(text);
+      } catch {
+        return text;
+      }
+    }
+  } catch {
+    // browser CORS fallback
+  }
+
+  // 3. 外部 CORS 代理池
+  let lastError: Error | null = null;
   for (const getProxyUrl of CORS_PROXIES) {
     const proxyUrl = getProxyUrl(targetUrl);
     try {

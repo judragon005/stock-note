@@ -379,10 +379,10 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
                   type="button"
                   onClick={handleFullRescan}
                   className="btn btn-sm btn-secondary"
-                  style={{ padding: '2px 8px', fontSize: '0.725rem' }}
-                  title="清空 Session 快取並全量重新線上查詢"
+                  style={{ padding: '2px 8px', fontSize: '0.725rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  title="清空 24H 快取並強制重新發送線上 API 查詢"
                 >
-                  <RefreshCw size={11} /> {isPaused ? '強制全量重掃' : '重新整理'}
+                  <RefreshCw size={11} /> <span>{isPaused ? '強制全量重掃' : '強制清除快取重掃'}</span>
                 </button>
               )}
             </div>
@@ -403,6 +403,9 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
             <div style={{ color: 'var(--text-secondary)' }}>
               共發現 <strong style={{ color: '#fff' }}>{actions.length}</strong> 個事件，
               其中 <strong style={{ color: '#f59e0b' }}>{unrecordedCount}</strong> 筆待補登
+              <span style={{ marginLeft: '8px', fontSize: '0.72rem', color: '#10b981' }}>
+                (⚡ 已啟用受控節流與 24H 實體快取)
+              </span>
             </div>
             <div style={{ display: 'flex', gap: '6px' }}>
               <button
