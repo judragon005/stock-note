@@ -8,6 +8,7 @@ import {
   AccountingView,
   BrokerAccount,
   FrictionSummary,
+  TaxRateCategory,
 } from '../types/stock';
 import { resolveOfficialSecurityName } from '../utils/storage';
 
@@ -88,17 +89,64 @@ export function calculateAccountSellFee(
 }
 
 /**
+ * 智慧修復歷史帳本中「稅費合一 (Ghostfolio / 舊版 CSV 匯入缺 tax)」之台股賣出交易
+ * 依據成交金額精準推導證交稅 (0.3% / 0.1% / 0%) 並從原 fee 中分離，保持交割淨額與損益 100% 恆等
+ */
+export function repairLedgerTaxAndFee(trades: TradeRecord[]): {
+  repairedTrades: TradeRecord[];
+  fixedCount: number;
+  totalTaxSeparated: number;
+} {
+  let fixedCount = 0;
+  let totalTaxSeparated = 0;
+
+  const repairedTrades = trades.map((t) => {
+    // 僅修復台股賣出、且 tax 為 0 (或未設定)、且 fee > 0 的紀錄
+    if (t.type === 'SELL' && (t.market === 'TW' || !t.market) && (!t.tax || t.tax === 0) && t.fee > 0 && t.shares > 0 && t.price > 0) {
+      const cleanSym = (t.symbol || '').trim().toUpperCase();
+      const isBond = cleanSym.endsWith('B');
+      const isETF = cleanSym.startsWith('00') && !isBond;
+      const isDayTrading = t.taxRateCategory === 'DAY_TRADING';
+      
+      const estimatedTax = calculateTaiwanTax(t.price, t.shares, isETF, isDayTrading, isBond);
+      
+      // 當原手續費大於或等於推導出的證交稅時，進行安全拆分
+      if (estimatedTax > 0 && t.fee >= estimatedTax) {
+        const newTax = estimatedTax;
+        const newFee = Math.max(1, t.fee - estimatedTax);
+        fixedCount++;
+        totalTaxSeparated += newTax;
+        const category: TaxRateCategory = isDayTrading
+          ? 'DAY_TRADING'
+          : (isBond ? 'BOND_ETF_TAX_FREE' : (isETF ? 'STOCK_ETF' : 'STOCK_REGULAR'));
+        return {
+          ...t,
+          tax: newTax,
+          fee: newFee,
+          taxRateCategory: category,
+        };
+      }
+    }
+    return t;
+  });
+
+  return { repairedTrades, fixedCount, totalTaxSeparated };
+}
+
+/**
  * 交易摩擦成本深度分析統計函式 (Friction Cost Center)
  */
 export function calculateFrictionCostSummary(
   trades: TradeRecord[],
   holdings: HoldingPosition[],
-  accounts: BrokerAccount[] = []
+  accounts: BrokerAccount[] = [],
+  usdRate: number = 32.0
 ): FrictionSummary {
   let totalBuyFee = 0;
   let totalSellFee = 0;
   let totalSellTax = 0;
   let totalUSDividendTax = 0;
+  let totalTWDividendTax = 0;
   let totalFeeSavedByDiscount = 0;
 
   const accountMap = new Map<string, BrokerAccount>();
@@ -107,65 +155,84 @@ export function calculateFrictionCostSummary(
   }
 
   for (const t of trades) {
-    const fee = t.fee || 0;
-    const tax = t.tax || 0;
+    const rawFee = t.fee || 0;
+    const rawTax = t.tax || 0;
+    const isUS = t.market === 'US' || t.currency === 'USD';
+    const rate = isUS ? usdRate : 1.0;
+    const feeInTWD = rawFee * rate;
+    const taxInTWD = rawTax * rate;
     const volume = t.shares * t.price;
 
     if (t.type === 'BUY') {
-      totalBuyFee += fee;
+      totalBuyFee += feeInTWD;
       if (t.market === 'TW' && volume > 0) {
         // 台股法定標準牌告手續費基準：低消 20 元 + 費率 0.1425%
         const standardFee = Math.max(20, Math.floor(volume * 0.001425));
-        if (standardFee > fee) {
-          totalFeeSavedByDiscount += (standardFee - fee);
+        if (standardFee > rawFee) {
+          totalFeeSavedByDiscount += (standardFee - rawFee);
         }
       }
     } else if (t.type === 'SELL') {
-      totalSellFee += fee;
-      totalSellTax += tax;
+      totalSellFee += feeInTWD;
+      totalSellTax += taxInTWD;
       if (t.market === 'TW' && volume > 0) {
         const standardFee = Math.max(20, Math.floor(volume * 0.001425));
-        if (standardFee > fee) {
-          totalFeeSavedByDiscount += (standardFee - fee);
+        if (standardFee > rawFee) {
+          totalFeeSavedByDiscount += (standardFee - rawFee);
         }
       }
     } else if (t.type === 'DIVIDEND') {
-      if (t.market === 'US') {
+      if (isUS) {
         // 美股現金股利 30% 預扣稅 (Withholding Tax)
-        const usDivTax = tax > 0 ? tax : Math.round(volume * 0.3);
+        const usDivTax = rawTax > 0 ? rawTax : Math.round(volume * 0.3);
         totalUSDividendTax += usDivTax;
+      } else if (t.market === 'TW') {
+        // 台股現金股利二代健保補充保費：單筆 >= 20,000 元課 2.11%
+        if (volume >= 20000) {
+          const twDivTax = rawTax > 0 ? rawTax : Math.floor(volume * 0.0211);
+          totalTWDividendTax += twDivTax;
+        }
       }
     }
   }
 
-  const totalRealizedFriction = totalBuyFee + totalSellFee + totalSellTax + totalUSDividendTax;
+  const totalUSDividendTaxInTWD = totalUSDividendTax * usdRate;
+  const totalRealizedFriction = totalBuyFee + totalSellFee + totalSellTax + totalUSDividendTaxInTWD + totalTWDividendTax;
 
   let totalEstimatedFutureTax = 0;
   let totalEstimatedFutureFee = 0;
 
   for (const h of holdings) {
     if (h.shares > 0 && h.grossMarketValue > 0) {
-      totalEstimatedFutureTax += h.estimatedSellTax;
-      totalEstimatedFutureFee += h.estimatedSellFee;
+      const isUS = h.market === 'US' || h.currency === 'USD';
+      const rate = isUS ? usdRate : 1.0;
+      totalEstimatedFutureTax += (h.estimatedSellTax * rate);
+      totalEstimatedFutureFee += (h.estimatedSellFee * rate);
     }
   }
 
   const totalEstimatedFutureFriction = totalEstimatedFutureTax + totalEstimatedFutureFee;
-  const totalGrossAsset = holdings.reduce((sum, h) => sum + (h.shares > 0 ? h.grossMarketValue : 0), 0);
+  const totalGrossAsset = holdings.reduce((sum, h) => {
+    if (h.shares <= 0) return sum;
+    const isUS = h.market === 'US' || h.currency === 'USD';
+    return sum + (isUS ? h.grossMarketValue * usdRate : h.grossMarketValue);
+  }, 0);
+
   const frictionImpactPercent = totalGrossAsset > 0
     ? ((totalRealizedFriction + totalEstimatedFutureFriction) / totalGrossAsset) * 100
     : 0;
 
   return {
-    totalBuyFee,
-    totalSellFee,
-    totalSellTax,
+    totalBuyFee: Math.round(totalBuyFee),
+    totalSellFee: Math.round(totalSellFee),
+    totalSellTax: Math.round(totalSellTax),
     totalUSDividendTax,
-    totalRealizedFriction,
-    totalFeeSavedByDiscount,
-    totalEstimatedFutureFriction,
-    totalEstimatedFutureTax,
-    totalEstimatedFutureFee,
+    totalTWDividendTax,
+    totalRealizedFriction: Math.round(totalRealizedFriction),
+    totalFeeSavedByDiscount: Math.round(totalFeeSavedByDiscount),
+    totalEstimatedFutureFriction: Math.round(totalEstimatedFutureFriction),
+    totalEstimatedFutureTax: Math.round(totalEstimatedFutureTax),
+    totalEstimatedFutureFee: Math.round(totalEstimatedFutureFee),
     frictionImpactPercent,
   };
 }
@@ -665,7 +732,7 @@ export function calculateHoldingsAndSummary(
     summary.combinedTWD.totalReturnPercent = (summary.combinedTWD.totalReturnPnL / summary.combinedTWD.totalCost) * 100;
   }
 
-  const frictionSummary = calculateFrictionCostSummary(filteredTrades, holdings, accounts);
+  const frictionSummary = calculateFrictionCostSummary(filteredTrades, holdings, accounts, usdRate);
 
   return { holdings, summary, frictionSummary };
 }

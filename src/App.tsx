@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { TradeRecord, MarketType, TradeType, ColorThemeMode, AccountingView, ApiKeysConfig } from './types/stock';
-import { calculateHoldingsAndSummary } from './engine/calculator';
+import { calculateHoldingsAndSummary, repairLedgerTaxAndFee } from './engine/calculator';
 import {
   loadTradesFromStorage,
   saveTradesToStorage,
@@ -301,6 +301,23 @@ export const App: React.FC = () => {
     alert(`✅ 已成功合併 ${incoming.length} 筆交易紀錄！`);
   };
 
+  // 執行歷史賣出紀錄稅費智慧拆分修復 (保持損益與淨額 100% 恆等)
+  const handleRepairLedgerTaxAndFee = useCallback(() => {
+    const { repairedTrades, fixedCount, totalTaxSeparated } = repairLedgerTaxAndFee(trades);
+    if (fixedCount > 0) {
+      setTrades(repairedTrades);
+      saveTradesToStorage(repairedTrades);
+      alert(
+        `🎉 成功修復 ${fixedCount} 筆歷史賣出紀錄！\n\n` +
+        `• 已精準拆分出證券交易稅：NT$ ${totalTaxSeparated.toLocaleString()}\n` +
+        `• 實付手續費與券商折讓金額已即時還原\n` +
+        `• 已實現損益與交割總金額 100% 保持恆等！`
+      );
+    } else {
+      alert('歷史帳本格式良好，無未拆分之稅費紀錄。');
+    }
+  }, [trades]);
+
   return (
     <div className="app-container">
       {/* 頂部導航與功能列 */}
@@ -366,6 +383,7 @@ export const App: React.FC = () => {
             setSelectedAccountId('ALL');
           }}
           onDeleteTrade={handleDeleteTrade}
+          onRepairTaxAndFee={handleRepairLedgerTaxAndFee}
         />
       )}
 
@@ -379,6 +397,8 @@ export const App: React.FC = () => {
           onSelectAccount={setSelectedAccountId}
           apiKeys={apiKeys}
           onSaveApiKeys={handleSaveApiKeys}
+          trades={trades}
+          onRepairTaxAndFee={handleRepairLedgerTaxAndFee}
         />
       )}
 

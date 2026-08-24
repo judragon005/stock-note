@@ -33,15 +33,16 @@ export interface BrokerAccount {
 export type TaxRateCategory = 'STOCK_REGULAR' | 'DAY_TRADING' | 'STOCK_ETF' | 'BOND_ETF_TAX_FREE' | 'CUSTOM';
 
 export interface FrictionSummary {
-  totalBuyFee: number;                  // 歷史累計買進手續費
-  totalSellFee: number;                 // 歷史累計賣出手續費
+  totalBuyFee: number;                  // 歷史累計買進手續費 (折算 TWD)
+  totalSellFee: number;                 // 歷史累計賣出手續費 (折算 TWD)
   totalSellTax: number;                 // 歷史累計賣出證交稅
-  totalUSDividendTax?: number;          // 美股現金股利 30% 預扣稅累計
-  totalRealizedFriction: number;        // 歷史已付總摩擦成本 (買手續費 + 賣手續費 + 賣證交稅 + 股息預扣稅)
-  totalFeeSavedByDiscount: number;      // 歷史券商折讓累計節省金額 (以法定牌告 20 元低消為基準)
-  totalEstimatedFutureFriction: number; // 當前在庫持股預估未來出清摩擦成本 (預估稅 + 預估費)
-  totalEstimatedFutureTax: number;      // 預估未來出清證交稅
-  totalEstimatedFutureFee: number;      // 預估未來出清手續費
+  totalUSDividendTax?: number;          // 美股現金股利 30% 預扣稅累計 (USD)
+  totalTWDividendTax?: number;          // 台股現金股利二代健保補充保費 (2.11%) 累計 (TWD)
+  totalRealizedFriction: number;        // 歷史已付總摩擦成本 (買費 + 賣費 + 賣稅 + 股息預扣稅/健保費，折算 TWD)
+  totalFeeSavedByDiscount: number;      // 歷史券商折讓累計節省金額 (以法定牌告 20 元低消為基準，TWD)
+  totalEstimatedFutureFriction: number; // 當前在庫持股預估未來出清摩擦成本 (預估稅 + 預估費，折算 TWD)
+  totalEstimatedFutureTax: number;      // 預估未來出清證交稅 (折算 TWD)
+  totalEstimatedFutureFee: number;      // 預估未來出清手續費 (折算 TWD)
   frictionImpactPercent: number;        // 摩擦成本佔 (毛市值 + 已實現利得) 之衝擊比例 %
 }
 

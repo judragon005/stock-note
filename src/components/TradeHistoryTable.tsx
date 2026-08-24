@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { TradeRecord, TradeType } from '../types/stock';
-import { History, Trash2, Search, Tag } from 'lucide-react';
+import { History, Trash2, Search, Tag, Sparkles, Wrench } from 'lucide-react';
 
 interface TradeHistoryTableProps {
   trades: TradeRecord[];
   totalTradesCount?: number;
   onResetGlobalFilters?: () => void;
   onDeleteTrade: (id: string) => void;
+  onRepairTaxAndFee?: () => void;
 }
 
 export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
@@ -14,12 +15,17 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
   totalTradesCount,
   onResetGlobalFilters,
   onDeleteTrade,
+  onRepairTaxAndFee,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'BUY' | 'SELL' | 'DIVIDEND' | 'CORPORATE'>('ALL');
 
   const totalCount = totalTradesCount ?? trades.length;
   const isGlobalFiltered = totalCount > trades.length;
+
+  const needsRepairCount = useMemo(() => {
+    return trades.filter((t) => t.type === 'SELL' && (t.market === 'TW' || !t.market) && (!t.tax || t.tax === 0) && t.fee > 0 && t.shares > 0 && t.price > 0).length;
+  }, [trades]);
 
   const filteredTrades = [...trades]
     .sort((a, b) => {
@@ -87,6 +93,66 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
 
   return (
     <div className="glass-card" style={{ padding: '24px', overflow: 'hidden' }}>
+      {/* ⚠️ 歷史賣出紀錄稅費未拆分警示與一鍵修復橫幅 */}
+      {needsRepairCount > 0 && onRepairTaxAndFee && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(239, 68, 68, 0.15) 100%)',
+            border: '1px solid rgba(245, 158, 11, 0.4)',
+            borderRadius: '12px',
+            padding: '14px 18px',
+            marginBottom: '18px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px',
+            boxShadow: '0 4px 20px rgba(245, 158, 11, 0.1)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div
+              style={{
+                padding: '8px',
+                borderRadius: '10px',
+                background: 'rgba(245, 158, 11, 0.2)',
+                color: '#f59e0b',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+              }}
+            >
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#fef3c7', marginBottom: '2px' }}>
+                偵測到 {needsRepairCount} 筆歷史賣出紀錄「稅費未拆分」
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>
+                歷史匯入資料因將 0.3% 證交稅誤併入手續費，導致累計已繳證交稅顯示為 0 且折讓全數漏計。
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={onRepairTaxAndFee}
+            className="btn btn-primary"
+            style={{
+              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+              border: 'none',
+              color: '#ffffff',
+              fontWeight: 700,
+              padding: '8px 16px',
+              fontSize: '0.82rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 4px 15px rgba(245, 158, 11, 0.3)',
+            }}
+          >
+            <Wrench size={16} /> 一鍵智慧拆分修復 (損益 100% 恆等)
+          </button>
+        </div>
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px', marginBottom: '18px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

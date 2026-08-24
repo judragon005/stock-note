@@ -134,7 +134,14 @@ export const FrictionCenterModal: React.FC<FrictionCenterModalProps> = ({
                   NT$ {frictionSummary.totalRealizedFriction.toLocaleString()}
                 </div>
               </div>
-              {frictionSummary.totalUSDividendTax !== undefined && frictionSummary.totalUSDividendTax > 0 ? (
+              {frictionSummary.totalTWDividendTax !== undefined && frictionSummary.totalTWDividendTax > 0 ? (
+                <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
+                  <div className="text-slate-300 font-medium mb-0.5">台股二代健保 (2.11%)</div>
+                  <div className="text-sm font-bold text-amber-400">
+                    NT$ {frictionSummary.totalTWDividendTax.toLocaleString()}
+                  </div>
+                </div>
+              ) : frictionSummary.totalUSDividendTax !== undefined && frictionSummary.totalUSDividendTax > 0 ? (
                 <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
                   <div className="text-slate-300 font-medium mb-0.5">美股股息 30% 預扣</div>
                   <div className="text-sm font-bold text-rose-400">
@@ -143,9 +150,9 @@ export const FrictionCenterModal: React.FC<FrictionCenterModalProps> = ({
                 </div>
               ) : (
                 <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
-                  <div className="text-slate-300 font-medium mb-0.5">美股股息預扣稅</div>
+                  <div className="text-slate-300 font-medium mb-0.5">除權息摩擦稅負</div>
                   <div className="text-sm font-bold text-slate-400">
-                    $0
+                    NT$ 0
                   </div>
                 </div>
               )}

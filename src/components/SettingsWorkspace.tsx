@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BrokerAccount, FrictionSummary, MarketType, USFeeType, ApiKeysConfig } from '../types/stock';
+import { BrokerAccount, FrictionSummary, MarketType, USFeeType, ApiKeysConfig, TradeRecord } from '../types/stock';
 import { DEFAULT_BROKER_PRESETS } from '../utils/storage';
 import {
   Zap,
@@ -28,6 +28,8 @@ interface SettingsWorkspaceProps {
   onSelectAccount: (id: string) => void;
   apiKeys: ApiKeysConfig;
   onSaveApiKeys: (apiKeys: ApiKeysConfig) => void;
+  trades?: TradeRecord[];
+  onRepairTaxAndFee?: () => void;
 }
 
 export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
@@ -38,6 +40,8 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
   onSelectAccount,
   apiKeys,
   onSaveApiKeys,
+  trades = [],
+  onRepairTaxAndFee,
 }) => {
   // --- 券商帳戶表單狀態 ---
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -527,6 +531,44 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                 : '🔴 摩擦衝擊偏高，請檢視低消限制或爭取更低折讓率。'}
             </div>
           </div>
+
+          {/* 歷史帳本稅費未拆分警示與一鍵修復 */}
+          {trades.filter((t) => t.type === 'SELL' && (t.market === 'TW' || !t.market) && (!t.tax || t.tax === 0) && t.fee > 0 && t.shares > 0 && t.price > 0).length > 0 && onRepairTaxAndFee && (
+            <div
+              style={{
+                background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(239, 68, 68, 0.15) 100%)',
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                borderRadius: '10px',
+                padding: '12px 14px',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '10px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sparkles size={16} color="#f59e0b" />
+                <div style={{ fontSize: '0.75rem', color: '#fef3c7' }}>
+                  偵測到歷史賣出稅費未拆分（已繳證交稅為 0）
+                </div>
+              </div>
+              <button
+                onClick={onRepairTaxAndFee}
+                className="btn btn-primary btn-sm"
+                style={{
+                  background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                  border: 'none',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '0.75rem',
+                  padding: '4px 10px',
+                }}
+              >
+                🛠️ 一鍵智慧拆分
+              </button>
+            </div>
+          )}
 
           {/* 券商費率與省費效益清單 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
