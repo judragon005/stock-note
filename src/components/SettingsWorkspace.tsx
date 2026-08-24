@@ -533,7 +533,13 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
           </div>
 
           {/* 歷史帳本稅費未拆分警示與一鍵修復 */}
-          {trades.filter((t) => t.type === 'SELL' && (t.market === 'TW' || !t.market) && (!t.tax || t.tax === 0) && t.fee > 0 && t.shares > 0 && t.price > 0).length > 0 && onRepairTaxAndFee && (
+          {trades.filter((t) => {
+            if (t.type !== 'SELL' || (t.market !== 'TW' && t.market) || t.shares <= 0 || t.price <= 0) return false;
+            if (t.tax && t.tax > 0) return false;
+            const cleanSym = (t.symbol || '').trim().toUpperCase();
+            if (cleanSym.endsWith('B')) return false;
+            return true;
+          }).length > 0 && onRepairTaxAndFee && (
             <div
               style={{
                 background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(239, 68, 68, 0.15) 100%)',

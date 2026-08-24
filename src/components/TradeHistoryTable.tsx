@@ -24,7 +24,13 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
   const isGlobalFiltered = totalCount > trades.length;
 
   const needsRepairCount = useMemo(() => {
-    return trades.filter((t) => t.type === 'SELL' && (t.market === 'TW' || !t.market) && (!t.tax || t.tax === 0) && t.fee > 0 && t.shares > 0 && t.price > 0).length;
+    return trades.filter((t) => {
+      if (t.type !== 'SELL' || (t.market !== 'TW' && t.market) || t.shares <= 0 || t.price <= 0) return false;
+      if (t.tax && t.tax > 0) return false;
+      const cleanSym = (t.symbol || '').trim().toUpperCase();
+      if (cleanSym.endsWith('B')) return false; // 債券型 ETF 0% 免稅屬合法正常狀態
+      return true;
+    }).length;
   }, [trades]);
 
   const filteredTrades = [...trades]

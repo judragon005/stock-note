@@ -101,24 +101,34 @@ export function repairLedgerTaxAndFee(trades: TradeRecord[]): {
   let totalTaxSeparated = 0;
 
   const repairedTrades = trades.map((t) => {
-    // 僅修復台股賣出、且 tax 為 0 (或未設定)、且 fee > 0 的紀錄
-    if (t.type === 'SELL' && (t.market === 'TW' || !t.market) && (!t.tax || t.tax === 0) && t.fee > 0 && t.shares > 0 && t.price > 0) {
+    // 僅修復台股賣出、且 tax 為 0 (或未設定)、且 shares > 0、price > 0 的紀錄
+    if (t.type === 'SELL' && (t.market === 'TW' || !t.market) && (!t.tax || t.tax === 0) && t.shares > 0 && t.price > 0) {
       const cleanSym = (t.symbol || '').trim().toUpperCase();
       const isBond = cleanSym.endsWith('B');
-      const isETF = cleanSym.startsWith('00') && !isBond;
+      if (isBond) {
+        // 債券型 ETF 0% 免稅，屬正常合法狀態，無須修復
+        return t;
+      }
+
+      const isETF = cleanSym.startsWith('00');
       const isDayTrading = t.taxRateCategory === 'DAY_TRADING';
-      
-      const estimatedTax = calculateTaiwanTax(t.price, t.shares, isETF, isDayTrading, isBond);
-      
-      // 當原手續費大於或等於推導出的證交稅時，進行安全拆分
-      if (estimatedTax > 0 && t.fee >= estimatedTax) {
-        const newTax = estimatedTax;
-        const newFee = Math.max(1, t.fee - estimatedTax);
+      const estimatedTax = calculateTaiwanTax(t.price, t.shares, isETF, isDayTrading, false);
+
+      if (estimatedTax > 0) {
+        let newTax = estimatedTax;
+        let newFee = t.fee || 0;
+
+        // 若原手續費大於或等於推導出的證交稅（代表稅被灌進了 fee），進行安全拆分
+        if (newFee >= estimatedTax) {
+          newFee = Math.max(1, newFee - estimatedTax);
+        }
+        // 若原手續費小於證交稅（代表記錄時純填手續費，漏填了證交稅），保留 newFee，補上 newTax
+
         fixedCount++;
         totalTaxSeparated += newTax;
         const category: TaxRateCategory = isDayTrading
           ? 'DAY_TRADING'
-          : (isBond ? 'BOND_ETF_TAX_FREE' : (isETF ? 'STOCK_ETF' : 'STOCK_REGULAR'));
+          : (isETF ? 'STOCK_ETF' : 'STOCK_REGULAR');
         return {
           ...t,
           tax: newTax,

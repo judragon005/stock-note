@@ -1449,6 +1449,48 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
       expect(secondRun.fixedCount).toBe(0);
     });
 
+    it('repairLedgerTaxAndFee 應正確處理單純缺漏 tax (fee < estimatedTax) 以及忽略債券 ETF 免稅', () => {
+      const trades: TradeRecord[] = [
+        {
+          id: 't-sell-omitted-tax',
+          date: '2025-06-01',
+          symbol: '3715',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'SELL',
+          shares: 100,
+          price: 100, // 成交金額 10,000，證交稅應為 30，手續費若為 15 -> 原本 tax = 0
+          fee: 15,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 't-sell-bond-etf',
+          date: '2025-06-02',
+          symbol: '00679B',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'SELL',
+          shares: 1000,
+          price: 30, // 債券 ETF 免稅
+          fee: 10,
+          tax: 0,
+          createdAt: 2,
+        },
+      ];
+
+      const { repairedTrades, fixedCount } = repairLedgerTaxAndFee(trades);
+      expect(fixedCount).toBe(1); // 僅修復 3715，00679B 債券 ETF 保持免稅
+
+      const fixed3715 = repairedTrades.find((t) => t.id === 't-sell-omitted-tax')!;
+      expect(fixed3715.tax).toBe(30);
+      expect(fixed3715.fee).toBe(15);
+
+      const fixedBond = repairedTrades.find((t) => t.id === 't-sell-bond-etf')!;
+      expect(fixedBond.tax).toBe(0);
+      expect(fixedBond.fee).toBe(10);
+    });
+
     it('calculateFrictionCostSummary 應支援雙幣別匯率折算與台股股利二代健保補充保費', () => {
       const mixedTrades: TradeRecord[] = [
         {
