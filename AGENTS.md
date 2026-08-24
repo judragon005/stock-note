@@ -28,20 +28,24 @@
 
 所有功能開發與問題修復必須嚴格遵循以下流程：
 1. **嚴禁直接 Push 至 `main` 分支**：主幹分支受保護，所有變更一律走 PR 流程。
-2. **Issue 優先原則 (Issue-First)**：
-   - 凡有新需求或修復，**必須先確認或建立對應的 GitHub Issue**（使用 `gh issue create`）。
-   - 嚴禁無 Issue 直接開發。分支名稱一律命名為 `feature/<issue-id>-<name>`、`fix/<issue-id>-<name>` 或 `docs/<name>`。
+2. **本地優先原則 (Local-First Task Tracking)**：
+   - 凡有新需求或修復，**優先於本地 `.scratch/` 目錄建立任務鏡像與規格**。
+   - **嚴禁使用腳本或 CLI 高頻、批量建立遠端 GitHub Issues**，避免觸發 GitHub 濫用偵測機制。
 3. **測試驅動開發 (TDD)**：遵循紅-綠-重構循環完成開發，本地確保 `npm test` (100% 通過) 與 `npm run build` (TypeScript 0 錯誤)。
 4. **領域文檔同步 (Doc Sync)**：若涉及新術語、架構決策或新元件，必須於同一 PR 中同步更新 `CONTEXT.md`、`docs/adr/` 與交接手冊，杜絕文檔脫鉤。
-5. **發起 PR 與自動關聯 (Issue Link)**：
-   - 推送分支後使用 `gh pr create` 發起 Pull Request。
-   - **PR 描述內必須包含 `Closes #<issue-id>`**，確保 Squash and Merge 時 GitHub 自動關閉對應 Issue。
+5. **聚合推送 (Consolidated Push)**：開發過程中所有 Commit 留存於本地分支，完成完整測試與驗收後才單次 Push 至遠端，避免連續頻繁 Push 造成 GitHub Actions CI 伺服器負擔。
 6. **合併與分支清理**：經 GitHub Actions CI 綠燈驗證後，執行 Squash and Merge 合併回 `main`，並同步清理遠端與本地已合併分支。
-7. **交接自動補全 (Handoff & Auto-Sync)**：每次執行 `/handoff` 收尾時，Agent **必須主動檢查 `docs/specs/`、`docs/adr/` 與 `.scratch/`**。若本次迭代有新 PRD 但尚未建立 ADR 或 `.scratch/` 鏡像，Agent 必須主動自動生成對應 ADR、導出 `.scratch/v1.X/issues/` 本地票券鏡像，並同步更新 `README.md`、`CONTEXT.md` 與交接手冊，嚴禁等待人類提醒。
-8. **技術債與改善建議管理 (Technical Debt Tracking)**：
-   - 在程式碼審查 (`/code-review`) 或交接時，若存在識別出但「未在當期 PR 即時修改」之架構改善建議，Agent 必須主動建檔至 `docs/debts/` 並更新 `docs/debts/README.md` 索引。
-   - 僅收錄未即時修改之建議；當期已修復完成者不建檔；已解決之技術債標記為 `RESOLVED`。
-9. **詳細新手操作手冊**：請參閱 [docs/guides/branch_protection_and_pr_workflow.md](file:///d:/APP/股票紀錄/docs/guides/branch_protection_and_pr_workflow.md)。
+7. **交接自動補全 (Handoff & Auto-Sync)**：每次執行 `/handoff` 收尾時，Agent 必須主動維護 `docs/specs/`、`docs/adr/`、`CHANGELOG.md` 與 `docs/handoff/handoff_stock_tracker_final.md`。
+
+---
+
+## GitHub 社群服務規範與防濫用合規守則 (GitHub Compliance & Anti-Abuse)
+
+為嚴格遵守 [GitHub Acceptable Use Policies](https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies) 與 API 使用限制，所有 Agent 與自動化流程必須遵守：
+- **🚫 嚴禁高頻 API 轟炸**：禁止在短時間內連續呼叫 `gh` CLI 建立多個 Issue/PR。
+- **⏱️ 請求節流 (Throttling)**：若必須呼叫 GitHub API，單次請求間隔不得低於 2 秒，杜絕並行請求。
+- **🛡️ 本地隔離保護**：專案一切演進歷史以本地 `.scratch/` 與 Git 歷程為主，不依賴遠端高頻同步。
+- **👤 人類審查控制**：任何遠端發布、PR 發起或 Push 操作，均由使用者親自確認控制。
 
 
 
