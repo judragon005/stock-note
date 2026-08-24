@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-96%2F96%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-98%2F98%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,26 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 雙軌會計口徑切換與官方標的全面校準 (Dual Accounting & Official Symbols) *(V2.0 新增)*
+### 1. 整合式設定工作台與外部 API Key 配置 (Settings Hub & API Keys) *(V3.3 新增)*
+- **Header 工具列純粹極簡**：移除頂部重複的「摩擦成本」與「券商設定」按鈕，統一由第三活頁標籤 `[⚙️ 設定]` 進入。
+- **全新 ⚙️ 設定工作台**：整合「🏛️ 券商帳戶與費率管理」、「💸 交易摩擦成本深度分析」與「🔑 外部金融資料 API 金鑰管理」三大模組。
+- **外部 API Key 獨立隔離持久化**：支援 FinMind Token (台股)、FMP API Key (美股)、Alpha Vantage Key (外匯/總經) 與自訂 Proxy 端點，具備密碼遮罩 `👁️` 與獨立 LocalStorage 隔離保存 (`STOCK_TRACKER_API_KEYS_V1`)。
+
+### 2. 公司行動雙軌資料管線、受控限速與本地代理 (Dual Pipeline & Dev Proxy) *(V3.2 新增)*
+- **Vite 本地極速代理 (Dev Proxy)**：在 `vite.config.ts` 內建 `/api/twse` 與 `/api/yahoo` 轉發，徹底終結瀏覽器端 CORS 跨域攔截，毫秒級穩定查詢。
+- **雙軌合規資料源管線**：台股除權息優先查詢 TWSE 官方除權息預告表 (`TWT48U_ALL`)，官方無資料或分割/減資由 Yahoo Finance 備援；美股查詢 Yahoo Finance。
+- **受控節流佇列與 24H 實體快取**：並發度受控為 2，單標的間隔 150ms 節流延遲防止 429 限制；`STOCK_TRACKER_CA_CACHE_V1` 快取 24 小時有效，第二次查詢 0 外部請求。
+
+### 3. 活頁本工作台架構與券商手續費整併 (Tabbed Workspace Hub) *(V3.1 新增)*
+- **現代發光活頁標籤欄**：劃分三大核心視圖（📊 投資組合與庫存、📜 歷史交易帳本、⚙️ 設定），支援 LocalStorage 頁籤狀態記憶。
+- **手續費功能全面收斂 (SSOT)**：各持股部位之預估賣出手續費與稅金由其所屬之券商帳戶設定直接試算，消除概念重複。
+- **交易帳本總筆數透明指示器**：表頭動態呈現 `已篩選顯示 M 筆 / 全量共 N 筆`，並提供一鍵 `[ 🔄 顯示全部 N 筆 ]` 重置篩選按鈕。
+
+### 4. 多券商帳戶管理體系與交易摩擦成本分析儀 (Multi-Broker & Friction Engine) *(V3.0 新增)*
+- **多券商獨立帳戶體系**：支援自訂台股/美股多券商（國泰 2.8 折、永豐 2 折、富邦 1.8 折、海外券商 0 免手續費、國內複委託等），支援自訂最低手續費與證交稅率。
+- **交易摩擦成本深度分析儀**：4 大發光看板（累計實付手續費、累計證交稅、券商折讓已省金額、庫存預估出清成本）與摩擦衝擊佔比進度條。
+
+### 5. 雙軌會計口徑切換與官方標的全面校準 (Dual Accounting & Official Symbols) *(V2.0 新增)*
 - **全域雙軌會計口徑切換**：頂部導覽列提供 `[🏢 券商核帳模式 (不含息/含稅)]` ⇋ `[📈 總報酬模式 (含息/毛市值)]` 一鍵切換。
 - **券商 100% 像素級對帳 (Broker View)**：以純加權付出成本為基準，預扣「預估賣出證券交易稅（現股 0.3%、ETF 0.1%）與手續費」，市值與損益試算與券商 App 完全對齊。
 - **存股總報酬視角 (Total Return View)**：以客觀牌面毛市值呈現，加計歷史累計現金股利與已實現利得，展現真實複利與投資總回報。
