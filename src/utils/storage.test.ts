@@ -23,6 +23,8 @@ import {
   saveBrokerAccountsToStorage,
   getDefaultBrokerAccounts,
   DEFAULT_BROKER_PRESETS,
+  loadApiKeysConfigFromStorage,
+  saveApiKeysConfigToStorage,
 } from './storage';
 
 // 模擬 LocalStorage 環境
@@ -440,6 +442,26 @@ describe('Storage & Persistence Utilities (Issue #6)', () => {
       expect(DEFAULT_BROKER_PRESETS.some((p) => p.id === 'preset-cathay')).toBe(true);
       expect(DEFAULT_BROKER_PRESETS.some((p) => p.id === 'preset-sinopac')).toBe(true);
       expect(DEFAULT_BROKER_PRESETS.some((p) => p.id === 'preset-schwab')).toBe(true);
+    });
+  });
+
+  describe('Seam 8: ApiKeysConfig Persistence (外部金融 API 金鑰隔離持久化)', () => {
+    it('無紀錄時應回傳空物件', () => {
+      localStorage.removeItem('STOCK_TRACKER_API_KEYS_V1');
+      expect(loadApiKeysConfigFromStorage()).toEqual({});
+    });
+
+    it('應能正確儲存並讀取 FinMind / FMP / Alpha Vantage 金鑰', () => {
+      const config = {
+        finmindToken: 'fm_token_123',
+        fmpApiKey: 'fmp_key_456',
+        alphaVantageKey: 'av_key_789',
+        customProxyUrl: 'https://proxy.example.com',
+      };
+
+      saveApiKeysConfigToStorage(config);
+      const loaded = loadApiKeysConfigFromStorage();
+      expect(loaded).toEqual(config);
     });
   });
 });

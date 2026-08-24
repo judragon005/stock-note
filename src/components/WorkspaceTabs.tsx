@@ -1,7 +1,7 @@
 import React from 'react';
-import { PieChart, History, Zap } from 'lucide-react';
+import { PieChart, History, Settings } from 'lucide-react';
 
-export type WorkspaceTabKey = 'portfolio' | 'ledger' | 'friction';
+export type WorkspaceTabKey = 'portfolio' | 'ledger' | 'settings' | 'friction';
 
 interface WorkspaceTabsProps {
   activeTab: WorkspaceTabKey;
@@ -20,6 +20,9 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
   accountsCount,
   totalSavedFriction = 0,
 }) => {
+  // 向後相容 friction 映射至 settings
+  const normalizedActiveTab = activeTab === 'friction' ? 'settings' : activeTab;
+
   const tabs: {
     key: WorkspaceTabKey;
     label: string;
@@ -42,9 +45,9 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
       badgeColor: '#10b981',
     },
     {
-      key: 'friction',
-      label: '券商與摩擦中心',
-      icon: <Zap size={16} />,
+      key: 'settings',
+      label: '設定',
+      icon: <Settings size={16} />,
       badge: totalSavedFriction > 0 ? `省 NT$ ${Math.round(totalSavedFriction).toLocaleString()}` : `${accountsCount} 帳戶`,
       badgeColor: '#f59e0b',
     },
@@ -63,7 +66,7 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
       }}
     >
       {tabs.map((tab) => {
-        const isActive = activeTab === tab.key;
+        const isActive = normalizedActiveTab === tab.key;
         return (
           <button
             key={tab.key}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { TradeRecord, MarketType, TradeType, ColorThemeMode, AccountingView } from './types/stock';
+import { TradeRecord, MarketType, TradeType, ColorThemeMode, AccountingView, ApiKeysConfig } from './types/stock';
 import { calculateHoldingsAndSummary } from './engine/calculator';
 import {
   loadTradesFromStorage,
@@ -17,6 +17,8 @@ import {
   exportTradesToCSV,
   loadBrokerAccountsFromStorage,
   saveBrokerAccountsToStorage,
+  loadApiKeysConfigFromStorage,
+  saveApiKeysConfigToStorage,
 } from './utils/storage';
 
 import { usePriceAutoRefresh } from './hooks/usePriceAutoRefresh';
@@ -32,12 +34,13 @@ import { CorporateActionScannerModal } from './components/CorporateActionScanner
 import { BrokerAccountsModal } from './components/BrokerAccountsModal';
 import { FrictionCenterModal } from './components/FrictionCenterModal';
 import { WorkspaceTabs, WorkspaceTabKey } from './components/WorkspaceTabs';
-import { BrokerAndFrictionHub } from './components/BrokerAndFrictionHub';
+import { SettingsWorkspace } from './components/SettingsWorkspace';
 
 export const App: React.FC = () => {
   const [trades, setTrades] = useState<TradeRecord[]>(() => loadTradesFromStorage());
   const [accounts, setAccounts] = useState(() => loadBrokerAccountsFromStorage());
   const [selectedAccountId, setSelectedAccountId] = useState<string>('ALL');
+  const [apiKeys, setApiKeys] = useState<ApiKeysConfig>(() => loadApiKeysConfigFromStorage());
   const [usdToTwdRate, setUsdToTwdRate] = useState<number>(() => loadExchangeRate());
   const [currentMarket, setCurrentMarket] = useState<'ALL' | MarketType>('ALL');
   const [currentPrices, setCurrentPrices] = useState<Record<string, number>>(() => loadCustomPricesFromStorage());
@@ -58,6 +61,12 @@ export const App: React.FC = () => {
   useEffect(() => {
     saveBrokerAccountsToStorage(accounts);
   }, [accounts]);
+
+  // 監聽並持久化 apiKeys
+  const handleSaveApiKeys = (keys: ApiKeysConfig) => {
+    setApiKeys(keys);
+    saveApiKeysConfigToStorage(keys);
+  };
 
   // 監聽並持久化 accountingView
   useEffect(() => {
@@ -301,8 +310,6 @@ export const App: React.FC = () => {
         accounts={accounts}
         selectedAccountId={selectedAccountId}
         onSelectAccount={setSelectedAccountId}
-        onOpenBrokerAccountsModal={() => setActiveTab('friction')}
-        onOpenFrictionCenterModal={() => setActiveTab('friction')}
         usdToTwdRate={usdToTwdRate}
         exchangeRateQuote={exchangeRateQuote}
         colorTheme={colorTheme}
@@ -362,14 +369,16 @@ export const App: React.FC = () => {
         />
       )}
 
-      {/* 活頁 3: ⚡ 券商帳戶與摩擦成本中心 */}
-      {activeTab === 'friction' && (
-        <BrokerAndFrictionHub
+      {/* 活頁 3: ⚙️ 設定中心 (券商、摩擦分析、外部 API Key) */}
+      {(activeTab === 'settings' || activeTab === 'friction') && (
+        <SettingsWorkspace
           accounts={accounts}
           onSaveAccounts={setAccounts}
           frictionSummary={frictionSummary}
           selectedAccountId={selectedAccountId}
           onSelectAccount={setSelectedAccountId}
+          apiKeys={apiKeys}
+          onSaveApiKeys={handleSaveApiKeys}
         />
       )}
 

@@ -8,8 +8,6 @@ import {
   Palette,
   Sparkles,
   RefreshCw,
-  Coins,
-  Settings2,
 } from 'lucide-react';
 import { MarketType, ColorThemeMode, ExchangeRateQuote, AccountingView, BrokerAccount } from '../types/stock';
 
@@ -19,8 +17,6 @@ interface HeaderProps {
   accounts?: BrokerAccount[];
   selectedAccountId?: string;
   onSelectAccount?: (id: string) => void;
-  onOpenBrokerAccountsModal?: () => void;
-  onOpenFrictionCenterModal?: () => void;
   usdToTwdRate: number;
   exchangeRateQuote?: ExchangeRateQuote;
   colorTheme: ColorThemeMode;
@@ -44,8 +40,6 @@ export const Header: React.FC<HeaderProps> = ({
   accounts = [],
   selectedAccountId = 'ALL',
   onSelectAccount,
-  onOpenBrokerAccountsModal,
-  onOpenFrictionCenterModal,
   usdToTwdRate,
   exchangeRateQuote,
   colorTheme,
@@ -369,38 +363,6 @@ export const Header: React.FC<HeaderProps> = ({
             <Upload size={14} /> 匯入
             <input type="file" accept=".json,.csv" onChange={onImportFile} style={{ display: 'none' }} value="" />
           </label>
-
-          {/* Friction Center Button */}
-          {onOpenFrictionCenterModal && (
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={onOpenFrictionCenterModal}
-              title="交易摩擦成本分析儀：深度透視手續費、證交稅與折讓省下金額"
-              style={{
-                background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(234, 88, 12, 0.2) 100%)',
-                border: '1px solid rgba(245, 158, 11, 0.4)',
-                color: '#fbbf24',
-              }}
-            >
-              <Coins size={14} color="#fbbf24" /> 摩擦成本
-            </button>
-          )}
-
-          {/* Broker Accounts Config Button */}
-          {onOpenBrokerAccountsModal && (
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={onOpenBrokerAccountsModal}
-              title="券商帳戶與費率管理：自訂台美券商手續費折讓率與計費規則"
-              style={{
-                background: 'rgba(30, 41, 59, 0.7)',
-                border: '1px solid var(--border-color)',
-                color: '#94a3b8',
-              }}
-            >
-              <Settings2 size={14} /> 券商設定
-            </button>
-          )}
 
           {/* Smart Corporate Action Scanner Button */}
           <button

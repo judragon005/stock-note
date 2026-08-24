@@ -8,6 +8,7 @@ import {
   ExchangeRateQuote,
   AccountingView,
   BrokerAccount,
+  ApiKeysConfig,
 } from '../types/stock';
 import { logger } from './logger';
 
@@ -18,6 +19,7 @@ export const PRICE_METADATA_STORAGE_KEY = 'STOCK_TRACKER_PRICE_METADATA_V1';
 export const ACCOUNTING_VIEW_STORAGE_KEY = 'STOCK_TRACKER_ACCOUNTING_VIEW_V1';
 export const BROKER_FEE_DISCOUNT_STORAGE_KEY = 'STOCK_TRACKER_BROKER_FEE_DISCOUNT_V1';
 export const BROKER_ACCOUNTS_STORAGE_KEY = 'STOCK_TRACKER_BROKER_ACCOUNTS_V1';
+export const API_KEYS_STORAGE_KEY = 'STOCK_TRACKER_API_KEYS_V1';
 
 /**
  * 主流券商費率模板庫 (Broker Presets)
@@ -823,4 +825,23 @@ export function getDefaultSampleTrades(): TradeRecord[] {
       createdAt: Date.now() - 2000000,
     }
   ];
+}
+
+export function loadApiKeysConfigFromStorage(): ApiKeysConfig {
+  try {
+    const raw = localStorage.getItem(API_KEYS_STORAGE_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as ApiKeysConfig;
+  } catch (err) {
+    logger.error('Failed to load api keys config from storage:', err);
+    return {};
+  }
+}
+
+export function saveApiKeysConfigToStorage(config: ApiKeysConfig): void {
+  try {
+    localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(config));
+  } catch (err) {
+    logger.error('Failed to save api keys config to storage:', err);
+  }
 }

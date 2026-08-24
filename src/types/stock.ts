@@ -159,6 +159,13 @@ export interface PortfolioSummary {
   usdToTwdRate: number;
 }
 
+export interface ApiKeysConfig {
+  finmindToken?: string;
+  fmpApiKey?: string;
+  alphaVantageKey?: string;
+  customProxyUrl?: string;
+}
+
 
 
 
