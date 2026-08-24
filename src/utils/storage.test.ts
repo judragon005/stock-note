@@ -19,6 +19,10 @@ import {
   saveAccountingViewToStorage,
   loadBrokerFeeDiscountFromStorage,
   saveBrokerFeeDiscountToStorage,
+  loadBrokerAccountsFromStorage,
+  saveBrokerAccountsToStorage,
+  getDefaultBrokerAccounts,
+  DEFAULT_BROKER_PRESETS,
 } from './storage';
 
 // 模擬 LocalStorage 環境
@@ -378,20 +382,64 @@ describe('Storage & Persistence Utilities (Issue #6)', () => {
       expect(loadBrokerFeeDiscountFromStorage()).toBe(0.28);
     });
 
-    it('validateTradesSchema 應自動將 00403A, 009816, 00981A, 009826 對齊至官方證券簡稱', () => {
+    it('validateTradesSchema 應自動將 00403A, 009816, 00981A, 009826 對齊至官方證券簡稱並補齊 accountId', () => {
       const input = [
         { date: '2026-01-01', symbol: '00403A', name: '舊名稱A', market: 'TW', type: 'BUY', shares: 100, price: 10 },
         { date: '2026-01-02', symbol: '009816', name: '舊名稱B', market: 'TW', type: 'BUY', shares: 100, price: 15 },
         { date: '2026-01-03', symbol: '00981A', name: '舊名稱C', market: 'TW', type: 'BUY', shares: 100, price: 15 },
         { date: '2026-01-04', symbol: '009826', name: '舊名稱D', market: 'TW', type: 'BUY', shares: 100, price: 10 },
+        { date: '2026-01-05', symbol: 'VT', name: 'VT', market: 'US', type: 'BUY', shares: 10, price: 110 },
       ];
 
       const validated = validateTradesSchema(input);
       expect(validated).not.toBeNull();
       expect(validated?.find((t) => t.symbol === '00403A')?.name).toBe('主動統一升級50');
+      expect(validated?.find((t) => t.symbol === '00403A')?.accountId).toBe('broker-tw-default');
       expect(validated?.find((t) => t.symbol === '009816')?.name).toBe('凱基台灣TOP50');
       expect(validated?.find((t) => t.symbol === '00981A')?.name).toBe('主動統一台股增長');
       expect(validated?.find((t) => t.symbol === '009826')?.name).toBe('貝萊德世界股票');
+      expect(validated?.find((t) => t.symbol === 'VT')?.accountId).toBe('broker-us-default');
+    });
+  });
+
+  describe('Seam 7: BrokerAccount Persistence & Preset Models (券商帳戶與模板持久化)', () => {
+    it('無任何紀錄時應返回台美預設帳戶結構', () => {
+      localStorage.removeItem('STOCK_TRACKER_BROKER_ACCOUNTS_V1');
+      const accounts = loadBrokerAccountsFromStorage();
+      expect(accounts.length).toBe(2);
+      expect(accounts[0].id).toBe('broker-tw-default');
+      expect(accounts[0].market).toBe('TW');
+      expect(accounts[1].id).toBe('broker-us-default');
+      expect(accounts[1].market).toBe('US');
+    });
+
+    it('應能正確儲存並讀取自訂券商帳戶清單', () => {
+      const customAccounts = [
+        ...getDefaultBrokerAccounts(),
+        {
+          id: 'broker-cathay',
+          name: '國泰證券 (2.8折)',
+          market: 'TW' as const,
+          feeRate: 0.001425,
+          discountRate: 0.28,
+          minFee: 1,
+          taxRate: 0.003,
+          color: '#10b981',
+          createdAt: Date.now(),
+        },
+      ];
+
+      saveBrokerAccountsToStorage(customAccounts);
+      const loaded = loadBrokerAccountsFromStorage();
+      expect(loaded.length).toBe(3);
+      expect(loaded.find((a) => a.id === 'broker-cathay')?.name).toBe('國泰證券 (2.8折)');
+    });
+
+    it('主流券商範本 DEFAULT_BROKER_PRESETS 應包含台美主流券商 (國泰/永豐/富邦/元大/美股海外/美股複委託)', () => {
+      expect(DEFAULT_BROKER_PRESETS.length).toBeGreaterThanOrEqual(6);
+      expect(DEFAULT_BROKER_PRESETS.some((p) => p.id === 'preset-cathay')).toBe(true);
+      expect(DEFAULT_BROKER_PRESETS.some((p) => p.id === 'preset-sinopac')).toBe(true);
+      expect(DEFAULT_BROKER_PRESETS.some((p) => p.id === 'preset-schwab')).toBe(true);
     });
   });
 });

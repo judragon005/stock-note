@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { TradeRecord, MarketType, TradeType, Currency } from '../types/stock';
+import { TradeRecord, MarketType, TradeType, Currency, BrokerAccount } from '../types/stock';
 import { calculateTaiwanFee, calculateTaiwanTax, getHoldingsAsOfDate } from '../engine/calculator';
 import { X, Plus, Calculator, Zap, Sparkles, Calendar } from 'lucide-react';
 
@@ -10,6 +10,7 @@ interface TradeModalProps {
   initialSymbol?: string;
   initialType?: TradeType;
   trades?: TradeRecord[];
+  accounts?: BrokerAccount[];
 }
 
 interface StockSuggestion {
@@ -54,8 +55,10 @@ export const TradeModal: React.FC<TradeModalProps> = ({
   initialSymbol = '',
   initialType = 'BUY',
   trades = [],
+  accounts = [],
 }) => {
   const [market, setMarket] = useState<MarketType>('TW');
+  const [accountId, setAccountId] = useState<string>('broker-tw-default');
   const [type, setType] = useState<TradeType>(initialType);
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [symbol, setSymbol] = useState<string>(initialSymbol);
@@ -291,6 +294,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
       market,
       currency,
       type,
+      accountId,
       shares: s,
       price: p,
       fee: f,
@@ -442,7 +446,47 @@ export const TradeModal: React.FC<TradeModalProps> = ({
                 </div>
               </div>
 
-              {/* Quick Type Selection */}
+              {/* Broker Account Selection */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                  所屬券商帳戶
+                </label>
+                <select
+                  value={accountId}
+                  onChange={(e) => {
+                    const chosenId = e.target.value;
+                    setAccountId(chosenId);
+                    const acc = accounts.find((a) => a.id === chosenId);
+                    if (acc && acc.market === 'TW') {
+                      setFeeDiscount(acc.discountRate.toString());
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-color)',
+                    background: 'rgba(30, 41, 59, 0.9)',
+                    color: '#38bdf8',
+                    fontWeight: 600,
+                    fontSize: '0.85rem',
+                    outline: 'none',
+                  }}
+                >
+                  {accounts
+                    .filter((acc) => acc.market === market)
+                    .map((acc) => (
+                      <option key={acc.id} value={acc.id} style={{ background: '#1e293b', color: '#ffffff' }}>
+                        {acc.name}
+                      </option>
+                    ))}
+                  {accounts.filter((acc) => acc.market === market).length === 0 && (
+                    <option value={market === 'TW' ? 'broker-tw-default' : 'broker-us-default'}>
+                      {market === 'TW' ? '預設台股帳戶' : '預設美股帳戶'}
+                    </option>
+                  )}
+                </select>
+              </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
                   常用買賣

@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { calculateHoldingsAndSummary, calculateTaiwanFee, calculateTaiwanTax, getHoldingsAsOfDate, applyTradeToShares } from './calculator';
-import { TradeRecord } from '../types/stock';
+import {
+  calculateHoldingsAndSummary,
+  calculateTaiwanFee,
+  calculateTaiwanTax,
+  getHoldingsAsOfDate,
+  applyTradeToShares,
+  calculateFrictionCostSummary,
+  calculateAccountSellFee,
+} from './calculator';
+import { TradeRecord, BrokerAccount } from '../types/stock';
 
 describe('applyTradeToShares 純函式股數異動計算', () => {
   it('買進與增資應累加股數', () => {
@@ -1182,6 +1190,132 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
     const tsMC28 = res28.holdings.find((h) => h.symbol === '2330');
     expect(tsMC28?.estimatedSellFee).toBe(279);
     expect(tsMC28?.netMarketValue).toBe(697621);
+  });
+
+  describe('Seam 8: Multi-Account Filtering & Friction Cost Summary (多帳戶篩選與摩擦成本分析)', () => {
+    const mockAccounts: BrokerAccount[] = [
+      {
+        id: 'broker-cathay',
+        name: '國泰證券 (2.8折)',
+        market: 'TW',
+        feeRate: 0.001425,
+        discountRate: 0.28,
+        minFee: 1,
+        taxRate: 0.003,
+      },
+      {
+        id: 'broker-sinopac',
+        name: '永豐大戶投 (2折)',
+        market: 'TW',
+        feeRate: 0.001425,
+        discountRate: 0.2,
+        minFee: 1,
+        taxRate: 0.003,
+      },
+      {
+        id: 'broker-schwab',
+        name: '嘉信海外美股',
+        market: 'US',
+        feeRate: 0,
+        discountRate: 0,
+        minFee: 0,
+        taxRate: 0,
+        usFeeType: 'ZERO_COMMISSION',
+      },
+    ];
+
+    const multiTrades: TradeRecord[] = [
+      {
+        id: 't1',
+        date: '2026-01-01',
+        symbol: '2330',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        accountId: 'broker-cathay',
+        shares: 1000,
+        price: 600,
+        fee: 239, // 實扣 2.8折手續費 (標準 855)
+        tax: 0,
+        createdAt: 1,
+      },
+      {
+        id: 't2',
+        date: '2026-01-02',
+        symbol: '0050',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        accountId: 'broker-sinopac',
+        shares: 2000,
+        price: 150,
+        fee: 85, // 實扣 2折手續費 (標準 427)
+        tax: 0,
+        createdAt: 2,
+      },
+      {
+        id: 't3',
+        date: '2026-01-03',
+        symbol: 'VT',
+        market: 'US',
+        currency: 'USD',
+        type: 'BUY',
+        accountId: 'broker-schwab',
+        shares: 50,
+        price: 100,
+        fee: 0,
+        tax: 0,
+        createdAt: 3,
+      },
+    ];
+
+    it('selectedAccountId 為 ALL 時應合併統計全帳戶持倉', () => {
+      const currentPrices = { '2330': 700, '0050': 160, 'VT': 110 };
+      const res = calculateHoldingsAndSummary(multiTrades, currentPrices, 32.0, 'BROKER', 1.0, mockAccounts, 'ALL');
+      expect(res.holdings.length).toBe(3);
+      expect(res.summary.twd.totalCost).toBe(600000 + 239 + 300000 + 85);
+    });
+
+    it('selectedAccountId 為特定帳戶時應精確過濾持倉與成本', () => {
+      const currentPrices = { '2330': 700, '0050': 160, 'VT': 110 };
+      const cathayRes = calculateHoldingsAndSummary(multiTrades, currentPrices, 32.0, 'BROKER', 1.0, mockAccounts, 'broker-cathay');
+      expect(cathayRes.holdings.length).toBe(1);
+      expect(cathayRes.holdings[0].symbol).toBe('2330');
+      expect(cathayRes.summary.twd.totalCost).toBe(600239);
+
+      const sinopacRes = calculateHoldingsAndSummary(multiTrades, currentPrices, 32.0, 'BROKER', 1.0, mockAccounts, 'broker-sinopac');
+      expect(sinopacRes.holdings.length).toBe(1);
+      expect(sinopacRes.holdings[0].symbol).toBe('0050');
+      expect(sinopacRes.summary.twd.totalCost).toBe(300085);
+    });
+
+    it('calculateFrictionCostSummary 應精準計算已付摩擦、折讓省下金額與未來出清成本', () => {
+      const currentPrices = { '2330': 700, '0050': 160, 'VT': 110 };
+      const res = calculateHoldingsAndSummary(multiTrades, currentPrices, 32.0, 'BROKER', 1.0, mockAccounts, 'ALL');
+      const friction = calculateFrictionCostSummary(multiTrades, res.holdings, mockAccounts);
+      expect(friction).toBeDefined();
+
+      // 已付買進手續費 = 239 + 85 = 324
+      expect(friction.totalBuyFee).toBe(324);
+      expect(friction.totalRealizedFriction).toBe(324);
+
+      // 折讓省下金額: (855 - 239) + (427 - 85) = 616 + 342 = 958
+      expect(friction.totalFeeSavedByDiscount).toBe(958);
+
+      // 未來出清預估稅費 > 0
+      expect(friction.totalEstimatedFutureTax).toBeGreaterThan(0);
+      expect(friction.totalEstimatedFutureFee).toBeGreaterThan(0);
+      expect(friction.frictionImpactPercent).toBeGreaterThan(0);
+    });
+
+    it('calculateAccountSellFee 應正確根據券商帳戶設定計算賣出手續費', () => {
+      const cathayAcc = mockAccounts.find((a) => a.id === 'broker-cathay');
+      // 100,000 * 0.001425 * 0.28 = 39.9 -> 39, 低消 1 -> 39
+      expect(calculateAccountSellFee(100000, cathayAcc)).toBe(39);
+
+      const schwabAcc = mockAccounts.find((a) => a.id === 'broker-schwab');
+      expect(calculateAccountSellFee(100000, schwabAcc)).toBe(0);
+    });
   });
 });
 

@@ -7,6 +7,7 @@ import {
   PriceQuote,
   ExchangeRateQuote,
   AccountingView,
+  BrokerAccount,
 } from '../types/stock';
 import { logger } from './logger';
 
@@ -16,6 +17,152 @@ export const PRICES_STORAGE_KEY = 'STOCK_TRACKER_CUSTOM_PRICES_V1';
 export const PRICE_METADATA_STORAGE_KEY = 'STOCK_TRACKER_PRICE_METADATA_V1';
 export const ACCOUNTING_VIEW_STORAGE_KEY = 'STOCK_TRACKER_ACCOUNTING_VIEW_V1';
 export const BROKER_FEE_DISCOUNT_STORAGE_KEY = 'STOCK_TRACKER_BROKER_FEE_DISCOUNT_V1';
+export const BROKER_ACCOUNTS_STORAGE_KEY = 'STOCK_TRACKER_BROKER_ACCOUNTS_V1';
+
+/**
+ * 主流券商費率模板庫 (Broker Presets)
+ */
+export const DEFAULT_BROKER_PRESETS: BrokerAccount[] = [
+  {
+    id: 'preset-cathay',
+    name: '國泰證券 (2.8折 / 低消1元)',
+    market: 'TW',
+    feeRate: 0.001425,
+    discountRate: 0.28,
+    minFee: 1,
+    taxRate: 0.003,
+    color: '#10b981',
+  },
+  {
+    id: 'preset-sinopac',
+    name: '永豐大戶投 (2折 / 低消1元)',
+    market: 'TW',
+    feeRate: 0.001425,
+    discountRate: 0.2,
+    minFee: 1,
+    taxRate: 0.003,
+    color: '#8b5cf6',
+  },
+  {
+    id: 'preset-fubon',
+    name: '富邦證券 (1.8折 / 無低消)',
+    market: 'TW',
+    feeRate: 0.001425,
+    discountRate: 0.18,
+    minFee: 0,
+    taxRate: 0.003,
+    color: '#06b6d4',
+  },
+  {
+    id: 'preset-yuanta',
+    name: '元大證券 (6折 / 低消20元)',
+    market: 'TW',
+    feeRate: 0.001425,
+    discountRate: 0.6,
+    minFee: 20,
+    taxRate: 0.003,
+    color: '#f59e0b',
+  },
+  {
+    id: 'preset-standard-tw',
+    name: '台股標準牌告 (1.0全額 / 低消20元)',
+    market: 'TW',
+    feeRate: 0.001425,
+    discountRate: 1.0,
+    minFee: 20,
+    taxRate: 0.003,
+    color: '#3b82f6',
+  },
+  {
+    id: 'preset-schwab',
+    name: '海外美股券商 (嘉信/Firstrade/IB 免手續費)',
+    market: 'US',
+    feeRate: 0,
+    discountRate: 0,
+    minFee: 0,
+    taxRate: 0,
+    usFeeType: 'ZERO_COMMISSION',
+    color: '#38bdf8',
+  },
+  {
+    id: 'preset-sub-discount',
+    name: '美股複委託優惠戶 (0.1% / 無低消)',
+    market: 'US',
+    feeRate: 0.001,
+    discountRate: 1.0,
+    minFee: 1,
+    taxRate: 0,
+    usFeeType: 'SUB_BROKERAGE',
+    color: '#a855f7',
+  },
+  {
+    id: 'preset-sub-standard',
+    name: '美股複委託標準戶 (0.25% / 低消15 USD)',
+    market: 'US',
+    feeRate: 0.0025,
+    discountRate: 1.0,
+    minFee: 15,
+    taxRate: 0,
+    usFeeType: 'SUB_BROKERAGE',
+    color: '#ec4899',
+  },
+];
+
+/**
+ * 預設初始化帳戶清單
+ */
+export function getDefaultBrokerAccounts(): BrokerAccount[] {
+  return [
+    {
+      id: 'broker-tw-default',
+      name: '預設台股帳戶 (標準牌告 1.0折)',
+      market: 'TW',
+      feeRate: 0.001425,
+      discountRate: 1.0,
+      minFee: 20,
+      taxRate: 0.003,
+      isDefault: true,
+      color: '#3b82f6',
+      createdAt: 1,
+    },
+    {
+      id: 'broker-us-default',
+      name: '預設美股帳戶 (海外免手續費)',
+      market: 'US',
+      feeRate: 0,
+      discountRate: 0,
+      minFee: 0,
+      taxRate: 0,
+      usFeeType: 'ZERO_COMMISSION',
+      isDefault: true,
+      color: '#38bdf8',
+      createdAt: 2,
+    },
+  ];
+}
+
+export function loadBrokerAccountsFromStorage(): BrokerAccount[] {
+  try {
+    const raw = localStorage.getItem(BROKER_ACCOUNTS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    logger.error('Failed to load broker accounts from storage:', err);
+  }
+  return getDefaultBrokerAccounts();
+}
+
+export function saveBrokerAccountsToStorage(accounts: BrokerAccount[]): void {
+  try {
+    localStorage.setItem(BROKER_ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
+  } catch (err) {
+    logger.error('Failed to save broker accounts to storage:', err);
+  }
+}
 
 export const OFFICIAL_SECURITY_NAMES: Record<string, string> = {
   '00403A': '主動統一升級50',
@@ -312,6 +459,7 @@ export function validateTradesSchema(data: unknown): TradeRecord[] | null {
       market: t.market as MarketType,
       currency: (t.currency || (t.market === 'TW' ? 'TWD' : 'USD')) as Currency,
       type: t.type as TradeType,
+      accountId: t.accountId || (t.market === 'TW' ? 'broker-tw-default' : 'broker-us-default'),
       shares: typeof t.shares === 'number' && !isNaN(t.shares) ? t.shares : 0,
       price: typeof t.price === 'number' && !isNaN(t.price) ? t.price : 0,
       fee: typeof t.fee === 'number' ? t.fee : 0,
@@ -505,6 +653,7 @@ export function parseCSVToTrades(csvText: string): ParseCSVResult {
       market,
       currency,
       type,
+      accountId: market === 'TW' ? 'broker-tw-default' : 'broker-us-default',
       shares: isNaN(rawShares) ? 0 : rawShares,
       price: isNaN(rawPrice) ? 0 : rawPrice,
       fee: isNaN(rawFee) ? 0 : rawFee,

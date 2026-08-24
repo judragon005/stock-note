@@ -1,10 +1,26 @@
 import React from 'react';
-import { TrendingUp, PlusCircle, Download, Upload, DollarSign, Palette, Sparkles, RefreshCw } from 'lucide-react';
-import { MarketType, ColorThemeMode, ExchangeRateQuote, AccountingView } from '../types/stock';
+import {
+  TrendingUp,
+  PlusCircle,
+  Download,
+  Upload,
+  DollarSign,
+  Palette,
+  Sparkles,
+  RefreshCw,
+  Coins,
+  Settings2,
+} from 'lucide-react';
+import { MarketType, ColorThemeMode, ExchangeRateQuote, AccountingView, BrokerAccount } from '../types/stock';
 
 interface HeaderProps {
   currentMarket: 'ALL' | MarketType;
   onSelectMarket: (market: 'ALL' | MarketType) => void;
+  accounts?: BrokerAccount[];
+  selectedAccountId?: string;
+  onSelectAccount?: (id: string) => void;
+  onOpenBrokerAccountsModal?: () => void;
+  onOpenFrictionCenterModal?: () => void;
   usdToTwdRate: number;
   exchangeRateQuote?: ExchangeRateQuote;
   colorTheme: ColorThemeMode;
@@ -27,6 +43,11 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   currentMarket,
   onSelectMarket,
+  accounts = [],
+  selectedAccountId = 'ALL',
+  onSelectAccount,
+  onOpenBrokerAccountsModal,
+  onOpenFrictionCenterModal,
   usdToTwdRate,
   exchangeRateQuote,
   colorTheme,
@@ -102,6 +123,43 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           ))}
         </div>
+
+        {/* Account Selector (多券商帳戶篩選器) */}
+        {onSelectAccount && accounts.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'rgba(30, 41, 59, 0.7)',
+              padding: '4px 10px',
+              borderRadius: '10px',
+              border: '1px solid var(--border-color)',
+            }}
+          >
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>帳戶:</span>
+            <select
+              value={selectedAccountId}
+              onChange={(e) => onSelectAccount(e.target.value)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#38bdf8',
+                fontWeight: 700,
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                outline: 'none',
+              }}
+            >
+              <option value="ALL" style={{ background: '#1e293b', color: '#ffffff' }}>🏛️ 全部帳戶合併</option>
+              {accounts.map((acc) => (
+                <option key={acc.id} value={acc.id} style={{ background: '#1e293b', color: '#ffffff' }}>
+                  {acc.market === 'TW' ? '🇹🇼' : '🇺🇸'} {acc.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Accounting View Mode Toggle */}
         {onChangeAccountingView && (
@@ -354,6 +412,38 @@ export const Header: React.FC<HeaderProps> = ({
             <Upload size={14} /> 匯入
             <input type="file" accept=".json,.csv" onChange={onImportFile} style={{ display: 'none' }} value="" />
           </label>
+
+          {/* Friction Center Button */}
+          {onOpenFrictionCenterModal && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={onOpenFrictionCenterModal}
+              title="交易摩擦成本分析儀：深度透視手續費、證交稅與折讓省下金額"
+              style={{
+                background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(234, 88, 12, 0.2) 100%)',
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                color: '#fbbf24',
+              }}
+            >
+              <Coins size={14} color="#fbbf24" /> 摩擦成本
+            </button>
+          )}
+
+          {/* Broker Accounts Config Button */}
+          {onOpenBrokerAccountsModal && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={onOpenBrokerAccountsModal}
+              title="券商帳戶與費率管理：自訂台美券商手續費折讓率與計費規則"
+              style={{
+                background: 'rgba(30, 41, 59, 0.7)',
+                border: '1px solid var(--border-color)',
+                color: '#94a3b8',
+              }}
+            >
+              <Settings2 size={14} /> 券商設定
+            </button>
+          )}
 
           {/* Smart Corporate Action Scanner Button */}
           <button

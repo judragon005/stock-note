@@ -17,6 +17,8 @@ import {
   mergeTrades,
   exportTradesToJSON,
   exportTradesToCSV,
+  loadBrokerAccountsFromStorage,
+  saveBrokerAccountsToStorage,
 } from './utils/storage';
 
 import { usePriceAutoRefresh } from './hooks/usePriceAutoRefresh';
@@ -29,9 +31,13 @@ import { TradeHistoryTable } from './components/TradeHistoryTable';
 import { TradeModal } from './components/TradeModal';
 import { ImportModal } from './components/ImportModal';
 import { CorporateActionScannerModal } from './components/CorporateActionScannerModal';
+import { BrokerAccountsModal } from './components/BrokerAccountsModal';
+import { FrictionCenterModal } from './components/FrictionCenterModal';
 
 export const App: React.FC = () => {
   const [trades, setTrades] = useState<TradeRecord[]>(() => loadTradesFromStorage());
+  const [accounts, setAccounts] = useState(() => loadBrokerAccountsFromStorage());
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('ALL');
   const [usdToTwdRate, setUsdToTwdRate] = useState<number>(() => loadExchangeRate());
   const [currentMarket, setCurrentMarket] = useState<'ALL' | MarketType>('ALL');
   const [currentPrices, setCurrentPrices] = useState<Record<string, number>>(() => loadCustomPricesFromStorage());
@@ -40,6 +46,11 @@ export const App: React.FC = () => {
   const [colorTheme, setColorTheme] = useState<ColorThemeMode>(() => {
     return (localStorage.getItem('stock_tracker_color_theme') as ColorThemeMode) || 'taiwan';
   });
+
+  // 監聽並持久化 broker accounts
+  useEffect(() => {
+    saveBrokerAccountsToStorage(accounts);
+  }, [accounts]);
 
   // 監聽並持久化 accountingView 與 brokerFeeDiscount
   useEffect(() => {
@@ -65,6 +76,8 @@ export const App: React.FC = () => {
   const [modalInitialSymbol, setModalInitialSymbol] = useState('');
   const [modalInitialType, setModalInitialType] = useState<TradeType>('BUY');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isBrokerAccountsOpen, setIsBrokerAccountsOpen] = useState(false);
+  const [isFrictionCenterOpen, setIsFrictionCenterOpen] = useState(false);
 
   // 匯入確認彈窗狀態
   const [importModal, setImportModal] = useState<{
@@ -95,16 +108,18 @@ export const App: React.FC = () => {
     return trades.filter((t) => t.market === currentMarket);
   }, [trades, currentMarket]);
 
-  // 執行損益與持倉計算（傳入 accountingView 與 brokerFeeDiscount）
-  const { holdings, summary } = useMemo(() => {
+  // 執行損益與持倉計算（傳入 accountingView, brokerFeeDiscount, accounts, selectedAccountId）
+  const { holdings, summary, frictionSummary } = useMemo(() => {
     return calculateHoldingsAndSummary(
       displayedTrades,
       currentPrices,
       usdToTwdRate,
       accountingView,
-      brokerFeeDiscount
+      brokerFeeDiscount,
+      accounts,
+      selectedAccountId
     );
-  }, [displayedTrades, currentPrices, usdToTwdRate, accountingView, brokerFeeDiscount]);
+  }, [displayedTrades, currentPrices, usdToTwdRate, accountingView, brokerFeeDiscount, accounts, selectedAccountId]);
 
   // 報價與匯率自動輪詢更新回呼
   const handlePricesCalculated = useCallback((newPrices: Record<string, number>) => {
@@ -281,6 +296,11 @@ export const App: React.FC = () => {
       <Header
         currentMarket={currentMarket}
         onSelectMarket={setCurrentMarket}
+        accounts={accounts}
+        selectedAccountId={selectedAccountId}
+        onSelectAccount={setSelectedAccountId}
+        onOpenBrokerAccountsModal={() => setIsBrokerAccountsOpen(true)}
+        onOpenFrictionCenterModal={() => setIsFrictionCenterOpen(true)}
         usdToTwdRate={usdToTwdRate}
         exchangeRateQuote={exchangeRateQuote}
         colorTheme={colorTheme}
@@ -334,6 +354,24 @@ export const App: React.FC = () => {
         initialSymbol={modalInitialSymbol}
         initialType={modalInitialType}
         trades={trades}
+        accounts={accounts}
+      />
+
+      {/* 券商帳戶與費率管理彈窗 */}
+      <BrokerAccountsModal
+        isOpen={isBrokerAccountsOpen}
+        onClose={() => setIsBrokerAccountsOpen(false)}
+        accounts={accounts}
+        onSaveAccounts={setAccounts}
+      />
+
+      {/* 交易摩擦成本深度分析儀彈窗 */}
+      <FrictionCenterModal
+        isOpen={isFrictionCenterOpen}
+        onClose={() => setIsFrictionCenterOpen(false)}
+        frictionSummary={frictionSummary}
+        accounts={accounts}
+        selectedAccountId={selectedAccountId}
       />
 
       {/* 智慧掃描公司行動彈窗 */}

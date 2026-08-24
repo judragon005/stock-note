@@ -217,6 +217,7 @@ _Avoid_: Base Fee, Floor Fee
 - [ADR-0010: V1.9 技術債與改善建議分級歸檔架構](docs/adr/0010-technical-debt-management-architecture.md)
 - [ADR-0011: V2.0 雙軌會計口徑計算模型與官方標的數據校正架構](docs/adr/0011-dual-accounting-mode-and-official-symbols-alignment.md)
 - [ADR-0012: V2.1 券商手續費折讓率自訂與在倉成本校準架構](docs/adr/0012-broker-fee-discount-and-cost-basis-alignment.md)
+- [ADR-0013: V3.0 多券商帳戶管理體系與交易摩擦成本分析架構](docs/adr/0013-multi-broker-account-and-friction-cost-engine.md)
 
 ### 持倉排序規範 (Holdings Sort Standard) *(新增於 V1.8)*
 

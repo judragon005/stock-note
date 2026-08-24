@@ -6,12 +6,15 @@ import {
   Currency,
   TradeType,
   AccountingView,
+  BrokerAccount,
+  FrictionSummary,
 } from '../types/stock';
 import { resolveOfficialSecurityName } from '../utils/storage';
 
 export interface CalculationResult {
   holdings: HoldingPosition[];
   summary: PortfolioSummary;
+  frictionSummary?: FrictionSummary;
 }
 
 /**
@@ -33,19 +36,124 @@ export function calculateEstimatedSellTax(symbol: string, market: MarketType, gr
  * @param market 市場
  * @param grossMarketValue 牌面毛市值
  * @param discountRate 手續費折扣率 (例如 1.0 為全額牌告對齊券商 App 預設、0.6 為 6折、0.28 為 2.8折)
+ * @param minFee 最低手續費門檻 (預設 20 元)
  */
 export function calculateEstimatedSellFee(
   market: MarketType,
   grossMarketValue: number,
-  discountRate: number = 1.0
+  discountRate: number = 1.0,
+  minFee: number = 20
 ): number {
+  if (grossMarketValue <= 0) return 0;
   if (market === 'US') {
-    return 0; // 美股賣出券商免手續費或極微量 SEC fee
+    return 0; // 美股海外券商免手續費或微量監管費
   }
-  // 台股券商公定手續費 0.1425%，低消 20 元
+  // 台股券商公定手續費 0.1425%
   const standardFee = grossMarketValue * 0.001425;
-  const discountedFee = Math.max(20, Math.floor(standardFee * discountRate));
+  const discountedFee = Math.max(minFee, Math.floor(standardFee * discountRate));
   return Math.max(0, discountedFee);
+}
+
+/**
+ * 依特定券商帳戶規則計算預估賣出手續費
+ */
+export function calculateAccountSellFee(
+  grossMarketValue: number,
+  account?: BrokerAccount,
+  fallbackDiscount: number = 1.0
+): number {
+  if (grossMarketValue <= 0) return 0;
+  if (!account) {
+    const standardFee = grossMarketValue * 0.001425;
+    return Math.max(20, Math.floor(standardFee * fallbackDiscount));
+  }
+
+  if (account.market === 'US') {
+    if (account.usFeeType === 'SUB_BROKERAGE') {
+      const fee = grossMarketValue * (account.feeRate || 0.001) * (account.discountRate || 1.0);
+      return Math.max(account.minFee || 0, Math.floor(fee));
+    }
+    return 0; // ZERO_COMMISSION
+  }
+
+  // 台股帳戶
+  const standardFee = grossMarketValue * (account.feeRate || 0.001425);
+  const discounted = Math.floor(standardFee * (account.discountRate ?? fallbackDiscount));
+  return Math.max(account.minFee ?? 20, discounted);
+}
+
+/**
+ * 交易摩擦成本深度分析統計函式 (Friction Cost Center)
+ */
+export function calculateFrictionCostSummary(
+  trades: TradeRecord[],
+  holdings: HoldingPosition[],
+  accounts: BrokerAccount[] = []
+): FrictionSummary {
+  let totalBuyFee = 0;
+  let totalSellFee = 0;
+  let totalSellTax = 0;
+  let totalFeeSavedByDiscount = 0;
+
+  const accountMap = new Map<string, BrokerAccount>();
+  for (const acc of accounts) {
+    accountMap.set(acc.id, acc);
+  }
+
+  for (const t of trades) {
+    const fee = t.fee || 0;
+    const tax = t.tax || 0;
+    const volume = t.shares * t.price;
+
+    if (t.type === 'BUY') {
+      totalBuyFee += fee;
+      if (t.market === 'TW' && volume > 0) {
+        const standardFee = Math.floor(volume * 0.001425);
+        if (standardFee > fee) {
+          totalFeeSavedByDiscount += (standardFee - fee);
+        }
+      }
+    } else if (t.type === 'SELL') {
+      totalSellFee += fee;
+      totalSellTax += tax;
+      if (t.market === 'TW' && volume > 0) {
+        const standardFee = Math.floor(volume * 0.001425);
+        if (standardFee > fee) {
+          totalFeeSavedByDiscount += (standardFee - fee);
+        }
+      }
+    }
+  }
+
+  const totalRealizedFriction = totalBuyFee + totalSellFee + totalSellTax;
+
+  let totalEstimatedFutureTax = 0;
+  let totalEstimatedFutureFee = 0;
+
+  for (const h of holdings) {
+    if (h.shares > 0 && h.grossMarketValue > 0) {
+      totalEstimatedFutureTax += h.estimatedSellTax;
+      totalEstimatedFutureFee += h.estimatedSellFee;
+    }
+  }
+
+  const totalEstimatedFutureFriction = totalEstimatedFutureTax + totalEstimatedFutureFee;
+  const totalGrossAsset = holdings.reduce((sum, h) => sum + (h.shares > 0 ? h.grossMarketValue : 0), 0);
+  const frictionImpactPercent = totalGrossAsset > 0
+    ? ((totalRealizedFriction + totalEstimatedFutureFriction) / totalGrossAsset) * 100
+    : 0;
+
+  return {
+    totalBuyFee,
+    totalSellFee,
+    totalSellTax,
+    totalRealizedFriction,
+    totalFeeSavedByDiscount,
+    totalEstimatedFutureFriction,
+    totalEstimatedFutureTax,
+    totalEstimatedFutureFee,
+    frictionImpactPercent,
+  };
 }
 
 /**
@@ -144,9 +252,21 @@ export function calculateHoldingsAndSummary(
   currentPrices: Record<string, number> = {},
   usdToTwdRate: number = 32.0,
   accountingView: AccountingView = 'TOTAL_RETURN',
-  brokerFeeDiscount: number = 1.0
+  brokerFeeDiscount: number = 1.0,
+  accounts: BrokerAccount[] = [],
+  selectedAccountId: 'ALL' | string = 'ALL'
 ): CalculationResult {
-  const sortedTrades = [...trades].sort((a, b) => {
+  const accountMap = new Map<string, BrokerAccount>();
+  for (const acc of accounts) {
+    accountMap.set(acc.id, acc);
+  }
+
+  // 依選定帳戶進行交易過濾
+  const filteredTrades = selectedAccountId === 'ALL'
+    ? trades
+    : trades.filter((t) => (t.accountId || (t.market === 'TW' ? 'broker-tw-default' : 'broker-us-default')) === selectedAccountId);
+
+  const sortedTrades = [...filteredTrades].sort((a, b) => {
     if (a.date !== b.date) {
       return a.date.localeCompare(b.date);
     }
@@ -522,7 +642,9 @@ export function calculateHoldingsAndSummary(
     summary.combinedTWD.totalReturnPercent = (summary.combinedTWD.totalReturnPnL / summary.combinedTWD.totalCost) * 100;
   }
 
-  return { holdings, summary };
+  const frictionSummary = calculateFrictionCostSummary(filteredTrades, holdings, accounts);
+
+  return { holdings, summary, frictionSummary };
 }
 
 /**
