@@ -307,25 +307,31 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
                 let totalAmountDisplay = '';
                 let amountColor = '#fff';
 
+                const formatAmountVal = (val: number) => {
+                  return isUS
+                    ? val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    : Math.round(val).toLocaleString('en-US');
+                };
+
                 if (isBuy) {
                   const net = (t.shares * t.price) + (t.fee || 0) + (t.tax || 0);
-                  totalAmountDisplay = `-${t.currency} ${Math.round(net).toLocaleString('en-US')}`;
+                  totalAmountDisplay = `-${t.currency} ${formatAmountVal(net)}`;
                   amountColor = 'var(--loss-color)';
                 } else if (isSell) {
                   const net = (t.shares * t.price) - (t.fee || 0) - (t.tax || 0);
-                  totalAmountDisplay = `+${t.currency} ${Math.round(net).toLocaleString('en-US')}`;
+                  totalAmountDisplay = `+${t.currency} ${formatAmountVal(net)}`;
                   amountColor = 'var(--gain-color)';
                 } else if (isDiv) {
                   const div = t.cashAmount !== undefined ? t.cashAmount : (t.shares > 0 && t.price > 0 ? (t.shares * t.price) - (t.tax || 0) - (t.fee || 0) : (t.price || 0));
-                  totalAmountDisplay = `+${t.currency} ${Math.round(div).toLocaleString('en-US')}`;
+                  totalAmountDisplay = `+${t.currency} ${formatAmountVal(div)}`;
                   amountColor = '#fbbf24';
                 } else if (isReduction) {
                   const ref = t.cashAmount !== undefined ? t.cashAmount : (t.price > 0 ? t.price * t.shares : 0);
-                  totalAmountDisplay = ref > 0 ? `+${t.currency} ${Math.round(ref).toLocaleString('en-US')} (退款)` : '0 (虧損減資)';
+                  totalAmountDisplay = ref > 0 ? `+${t.currency} ${formatAmountVal(ref)} (退款)` : '0 (虧損減資)';
                   amountColor = ref > 0 ? '#fb923c' : 'var(--text-muted)';
                 } else if (isIncrease) {
                   const cost = (t.shares * t.price) + (t.fee || 0) + (t.tax || 0);
-                  totalAmountDisplay = `-${t.currency} ${Math.round(cost).toLocaleString('en-US')}`;
+                  totalAmountDisplay = `-${t.currency} ${formatAmountVal(cost)}`;
                   amountColor = '#a5b4fc';
                 } else if (isStockDiv) {
                   totalAmountDisplay = `+${t.shares} 股 (配股)`;
