@@ -18,13 +18,18 @@ export interface CalculationResult {
 }
 
 /**
- * 試算預估賣出證券交易稅（台股現股 0.3%，台股 ETF 0.1%，美股 0%）
+ * 試算預估賣出證券交易稅（台股債券 ETF 0% 免稅，台股股票 ETF 0.1%，台股現股 0.3%，美股 0%）
  */
 export function calculateEstimatedSellTax(symbol: string, market: MarketType, grossMarketValue: number): number {
   if (grossMarketValue <= 0) return 0;
   if (market === 'TW') {
     const cleanSymbol = symbol.trim().toUpperCase();
-    const isETF = cleanSymbol.startsWith('00') || cleanSymbol.endsWith('B');
+    // 債券型 ETF（如 00679B, 00687B）依台灣稅法停徵證券交易稅 (0%)
+    if (cleanSymbol.endsWith('B')) {
+      return 0;
+    }
+    // 股票型 ETF (00 開頭) 證交稅為 0.1%
+    const isETF = cleanSymbol.startsWith('00');
     const taxRate = isETF ? 0.001 : 0.003;
     return Math.floor(grossMarketValue * taxRate);
   }
@@ -93,6 +98,7 @@ export function calculateFrictionCostSummary(
   let totalBuyFee = 0;
   let totalSellFee = 0;
   let totalSellTax = 0;
+  let totalUSDividendTax = 0;
   let totalFeeSavedByDiscount = 0;
 
   const accountMap = new Map<string, BrokerAccount>();
@@ -108,7 +114,8 @@ export function calculateFrictionCostSummary(
     if (t.type === 'BUY') {
       totalBuyFee += fee;
       if (t.market === 'TW' && volume > 0) {
-        const standardFee = Math.floor(volume * 0.001425);
+        // 台股法定標準牌告手續費基準：低消 20 元 + 費率 0.1425%
+        const standardFee = Math.max(20, Math.floor(volume * 0.001425));
         if (standardFee > fee) {
           totalFeeSavedByDiscount += (standardFee - fee);
         }
@@ -117,15 +124,21 @@ export function calculateFrictionCostSummary(
       totalSellFee += fee;
       totalSellTax += tax;
       if (t.market === 'TW' && volume > 0) {
-        const standardFee = Math.floor(volume * 0.001425);
+        const standardFee = Math.max(20, Math.floor(volume * 0.001425));
         if (standardFee > fee) {
           totalFeeSavedByDiscount += (standardFee - fee);
         }
       }
+    } else if (t.type === 'DIVIDEND') {
+      if (t.market === 'US') {
+        // 美股現金股利 30% 預扣稅 (Withholding Tax)
+        const usDivTax = tax > 0 ? tax : Math.round(volume * 0.3);
+        totalUSDividendTax += usDivTax;
+      }
     }
   }
 
-  const totalRealizedFriction = totalBuyFee + totalSellFee + totalSellTax;
+  const totalRealizedFriction = totalBuyFee + totalSellFee + totalSellTax + totalUSDividendTax;
 
   let totalEstimatedFutureTax = 0;
   let totalEstimatedFutureFee = 0;
@@ -147,6 +160,7 @@ export function calculateFrictionCostSummary(
     totalBuyFee,
     totalSellFee,
     totalSellTax,
+    totalUSDividendTax,
     totalRealizedFriction,
     totalFeeSavedByDiscount,
     totalEstimatedFutureFriction,
@@ -680,19 +694,28 @@ export function calculateTaiwanFee(
 }
 
 /**
- * 試算台股證交稅 (股票 0.3%，ETF 0.1%)
+ * 試算台股證交稅 (現股 0.3%，當沖 0.15%，股票 ETF 0.1%，債券 ETF 0% 免稅)
  * @param price 每股成交價
  * @param shares 成交股數
- * @param isETF 是否為 ETF
+ * @param isETF 是否為股票型 ETF (0.1%)
+ * @param isDayTrading 是否為現股當沖 (0.15%)
+ * @param isBondETF 是否為債券型 ETF (0%)
  */
 export function calculateTaiwanTax(
   price: number,
   shares: number,
-  isETF: boolean = false
+  isETF: boolean = false,
+  isDayTrading: boolean = false,
+  isBondETF: boolean = false
 ): number {
-  if (price <= 0 || shares <= 0) return 0;
+  if (price <= 0 || shares <= 0 || isBondETF) return 0;
   const rawAmount = price * shares;
-  const rate = isETF ? 0.001 : 0.003;
+  let rate = 0.003;
+  if (isDayTrading) {
+    rate = 0.0015;
+  } else if (isETF) {
+    rate = 0.001;
+  }
   return Math.floor(rawAmount * rate);
 }
 

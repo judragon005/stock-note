@@ -30,12 +30,15 @@ export interface BrokerAccount {
   createdAt?: number;
 }
 
+export type TaxRateCategory = 'STOCK_REGULAR' | 'DAY_TRADING' | 'STOCK_ETF' | 'BOND_ETF_TAX_FREE' | 'CUSTOM';
+
 export interface FrictionSummary {
   totalBuyFee: number;                  // 歷史累計買進手續費
   totalSellFee: number;                 // 歷史累計賣出手續費
   totalSellTax: number;                 // 歷史累計賣出證交稅
-  totalRealizedFriction: number;        // 歷史已付總摩擦成本 (買手續費 + 賣手續費 + 賣證交稅)
-  totalFeeSavedByDiscount: number;      // 歷史券商折讓累計節省金額
+  totalUSDividendTax?: number;          // 美股現金股利 30% 預扣稅累計
+  totalRealizedFriction: number;        // 歷史已付總摩擦成本 (買手續費 + 賣手續費 + 賣證交稅 + 股息預扣稅)
+  totalFeeSavedByDiscount: number;      // 歷史券商折讓累計節省金額 (以法定牌告 20 元低消為基準)
   totalEstimatedFutureFriction: number; // 當前在庫持股預估未來出清摩擦成本 (預估稅 + 預估費)
   totalEstimatedFutureTax: number;      // 預估未來出清證交稅
   totalEstimatedFutureFee: number;      // 預估未來出清手續費
@@ -55,6 +58,7 @@ export interface TradeRecord {
   price: number; // 每股單價（原始幣別，公司行動時為認購價或每股配發/退款金額）
   fee: number; // 手續費
   tax: number; // 證交稅 / 扣繳稅額
+  taxRateCategory?: TaxRateCategory; // 稅率類別 (現股 0.3% / 當沖 0.15% / ETF 0.1% / 免稅 0% / 自訂)
   ratio?: number; // 比例（如股票分割比例 10、減資比例 0.2828、配股率 0.05、換股比例 1.2）
   cashAmount?: number; // 退還或入帳總現金金額（如減資退款總額、現金補貼）
   exDate?: string; // 基準日 / 除權息日 (YYYY-MM-DD)

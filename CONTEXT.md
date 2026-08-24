@@ -221,6 +221,7 @@ _Avoid_: Base Fee, Floor Fee
 - [ADR-0014: V3.1 活頁本工作台架構與券商手續費整併收斂](docs/adr/0014-tabbed-workspace-and-broker-fee-consolidation.md)
 - [ADR-0015: V3.2 公司行動雙軌資料源、受控限速與本地代理防禦架構](docs/adr/0015-corporate-action-dual-pipeline-and-rate-limiting.md)
 - [ADR-0016: V3.3 整合式設定工作台與外部 API Key 管理架構](docs/adr/0016-settings-workspace-and-api-key-configuration.md)
+- [ADR-0017: V3.4 摩擦成本與稅率精準計算引擎升級](docs/adr/0017-friction-cost-and-tax-precision-engine.md)
 
 ### 持倉排序規範 (Holdings Sort Standard) *(新增於 V1.8)*
 

@@ -3,6 +3,7 @@ import {
   calculateHoldingsAndSummary,
   calculateTaiwanFee,
   calculateTaiwanTax,
+  calculateEstimatedSellTax,
   getHoldingsAsOfDate,
   applyTradeToShares,
   calculateFrictionCostSummary,
@@ -1327,6 +1328,60 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
 
       const schwabAcc = mockAccounts.find((a) => a.id === 'broker-schwab');
       expect(calculateAccountSellFee(100000, schwabAcc)).toBe(0);
+    });
+
+    it('calculateEstimatedSellTax 應精確判斷普通股 0.3%、股票 ETF 0.1%、債券 ETF 0% 免稅與美股 0%', () => {
+      // 台股普通股 (2330): 0.3% -> 100,000 * 0.003 = 300
+      expect(calculateEstimatedSellTax('2330', 'TW', 100000)).toBe(300);
+      // 台股股票 ETF (0050, 00878): 0.1% -> 100,000 * 0.001 = 100
+      expect(calculateEstimatedSellTax('0050', 'TW', 100000)).toBe(100);
+      expect(calculateEstimatedSellTax('00878', 'TW', 100000)).toBe(100);
+      // 台股債券 ETF (00679B, 00687B): 0% 免稅 -> 0
+      expect(calculateEstimatedSellTax('00679B', 'TW', 100000)).toBe(0);
+      expect(calculateEstimatedSellTax('00687B', 'TW', 100000)).toBe(0);
+      // 美股 (AAPL): 0
+      expect(calculateEstimatedSellTax('AAPL', 'US', 100000)).toBe(0);
+    });
+
+    it('calculateFrictionCostSummary 應以牌告低消 20 元為基準計算小額零股折讓省下金額並納入美股股息 30% 預扣稅', () => {
+      const oddLotTrades: TradeRecord[] = [
+        {
+          id: 't-odd-1',
+          date: '2026-08-01',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 2,
+          price: 1000, // 成交額 2,000，標準手續費 floor(2000*0.001425)=2，但牌告低消為 20 元
+          fee: 1, // 國泰 2.8 折低消 1 元
+          tax: 0,
+          createdAt: 100,
+        },
+        {
+          id: 't-div-us',
+          date: '2026-08-15',
+          symbol: 'AAPL',
+          market: 'US',
+          currency: 'USD',
+          type: 'DIVIDEND',
+          shares: 10,
+          price: 10, // 股利 100 USD
+          fee: 0,
+          tax: 30, // 30% 預扣稅 30 USD
+          createdAt: 101,
+        },
+      ];
+
+      const friction = calculateFrictionCostSummary(oddLotTrades, []);
+      // 零股標準手續費 max(20, 2) = 20，實付 1，省下 20 - 1 = 19
+      expect(friction.totalFeeSavedByDiscount).toBe(19);
+      // 買進手續費 1
+      expect(friction.totalBuyFee).toBe(1);
+      // 美股股息 30% 預扣稅 30
+      expect(friction.totalUSDividendTax).toBe(30);
+      // 總已實現摩擦 = 買進手續費 1 + 股息預扣稅 30 = 31
+      expect(friction.totalRealizedFriction).toBe(31);
     });
   });
 });

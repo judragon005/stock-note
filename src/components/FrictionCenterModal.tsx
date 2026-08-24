@@ -89,7 +89,7 @@ export const FrictionCenterModal: React.FC<FrictionCenterModalProps> = ({
               <div className="text-lg font-bold text-emerald-300">
                 +NT$ {frictionSummary.totalFeeSavedByDiscount.toLocaleString()}
               </div>
-              <div className="text-[10px] text-emerald-500/80 mt-1">對比標準牌告節省額</div>
+              <div className="text-[10px] text-emerald-500/80 mt-1">基準：法定牌告 20元低消+0.1425%</div>
             </div>
 
             {/* 4. 預估未來出清成本 */}
@@ -102,7 +102,7 @@ export const FrictionCenterModal: React.FC<FrictionCenterModalProps> = ({
                 NT$ {frictionSummary.totalEstimatedFutureFriction.toLocaleString()}
               </div>
               <div className="text-[10px] text-amber-500/80 mt-1">
-                預估稅 {frictionSummary.totalEstimatedFutureTax.toLocaleString()} / 費 {frictionSummary.totalEstimatedFutureFee.toLocaleString()}
+                預估稅 {frictionSummary.totalEstimatedFutureTax.toLocaleString()} (債券ETF 0%) / 費 {frictionSummary.totalEstimatedFutureFee.toLocaleString()}
               </div>
             </div>
           </div>
@@ -127,13 +127,28 @@ export const FrictionCenterModal: React.FC<FrictionCenterModalProps> = ({
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-xs text-slate-400">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-2 text-xs text-slate-400">
               <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
                 <div className="text-slate-300 font-medium mb-0.5">歷史總摩擦支出</div>
                 <div className="text-sm font-bold text-slate-100">
                   NT$ {frictionSummary.totalRealizedFriction.toLocaleString()}
                 </div>
               </div>
+              {frictionSummary.totalUSDividendTax !== undefined && frictionSummary.totalUSDividendTax > 0 ? (
+                <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
+                  <div className="text-slate-300 font-medium mb-0.5">美股股息 30% 預扣</div>
+                  <div className="text-sm font-bold text-rose-400">
+                    USD {frictionSummary.totalUSDividendTax.toLocaleString()}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
+                  <div className="text-slate-300 font-medium mb-0.5">美股股息預扣稅</div>
+                  <div className="text-sm font-bold text-slate-400">
+                    $0
+                  </div>
+                </div>
+              )}
               <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
                 <div className="text-slate-300 font-medium mb-0.5">全週期預期摩擦</div>
                 <div className="text-sm font-bold text-slate-100">
@@ -155,10 +170,11 @@ export const FrictionCenterModal: React.FC<FrictionCenterModalProps> = ({
           <div className="p-4 rounded-xl bg-blue-950/20 border border-blue-500/30 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
             <div className="text-xs text-slate-300 space-y-1">
-              <div className="font-semibold text-blue-300">摩擦成本優化指南</div>
+              <div className="font-semibold text-blue-300">摩擦成本優化與法規指南</div>
               <p className="leading-relaxed text-slate-400">
-                1. <strong>台股低消陷阱</strong>：若單筆買進金額低於 NT$ 14,035（以 1.0 全額 20 元低消計），手續費率將大幅高於 0.1425%。建議善用 2.8 折 / 2 折低消 1 元帳戶。<br />
-                2. <strong>美股交易成本</strong>：美股海外券商免手續費適合頻繁再平衡；國內複委託則適合大額單筆長放以省去電匯摩擦。
+                1. <strong>台股低消陷阱與折讓基準</strong>：法定標準牌告手續費設有 NT$ 20 低消。單筆小額或零股買進若使用 2.8折/2折且低消 1 元之券商，每筆可直接省下 NT$ 19 以上之低消溢繳費用。<br />
+                2. <strong>台股證券交易稅率分層</strong>：普通股票賣出課徵 0.3%；現股當沖課徵 0.15%；股票型 ETF 課徵 0.1%；債券型 ETF（代碼以 B 結尾）依法停徵證交稅（0%）。<br />
+                3. <strong>美股投資摩擦全貌</strong>：海外券商交易免手續費，但現金股利自動預扣 30% 稅額（W-8BEN 預扣）；賣出時僅收取微量 SEC 規費 (0.00278%) 與 FINRA TAF。
               </p>
             </div>
           </div>

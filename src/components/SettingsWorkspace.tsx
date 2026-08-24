@@ -206,7 +206,7 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
           <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f87171', margin: '8px 0 4px 0' }}>
             NT$ {Math.round(totalSellTax).toLocaleString()}
           </div>
-          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>政府徵收千分之三交易稅</div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>股票 0.3% · 當沖 0.15% · 股票ETF 0.1% · 債券ETF 免稅</div>
         </div>
 
         {/* 卡片 3: 券商折讓已省金額 */}
@@ -226,7 +226,7 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
           <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#34d399', margin: '8px 0 4px 0' }}>
             NT$ {Math.round(totalFeeSaved).toLocaleString()}
           </div>
-          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>對比 100% 牌告手續費所累積之實質省下金額</div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>基準：法定牌告手續費 (低消 20 元 + 0.1425%)</div>
         </div>
 
         {/* 卡片 4: 在庫預估出清摩擦成本 */}
@@ -246,7 +246,7 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
             NT$ {Math.round(totalFutureFriction).toLocaleString()}
           </div>
           <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-            預估稅金 NT$ {Math.round(totalFutureTax).toLocaleString()} · 手續費 NT$ {Math.round(totalFutureFee).toLocaleString()}
+            預估稅金 NT$ {Math.round(totalFutureTax).toLocaleString()} (債券ETF 0%) · 手續費 NT$ {Math.round(totalFutureFee).toLocaleString()}
           </div>
         </div>
       </div>
