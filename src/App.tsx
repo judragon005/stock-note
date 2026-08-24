@@ -10,8 +10,6 @@ import {
   saveCustomPricesToStorage,
   loadAccountingViewFromStorage,
   saveAccountingViewToStorage,
-  loadBrokerFeeDiscountFromStorage,
-  saveBrokerFeeDiscountToStorage,
   validateTradesSchema,
   parseCSVToTrades,
   mergeTrades,
@@ -33,6 +31,8 @@ import { ImportModal } from './components/ImportModal';
 import { CorporateActionScannerModal } from './components/CorporateActionScannerModal';
 import { BrokerAccountsModal } from './components/BrokerAccountsModal';
 import { FrictionCenterModal } from './components/FrictionCenterModal';
+import { WorkspaceTabs, WorkspaceTabKey } from './components/WorkspaceTabs';
+import { BrokerAndFrictionHub } from './components/BrokerAndFrictionHub';
 
 export const App: React.FC = () => {
   const [trades, setTrades] = useState<TradeRecord[]>(() => loadTradesFromStorage());
@@ -42,24 +42,27 @@ export const App: React.FC = () => {
   const [currentMarket, setCurrentMarket] = useState<'ALL' | MarketType>('ALL');
   const [currentPrices, setCurrentPrices] = useState<Record<string, number>>(() => loadCustomPricesFromStorage());
   const [accountingView, setAccountingView] = useState<AccountingView>(() => loadAccountingViewFromStorage());
-  const [brokerFeeDiscount, setBrokerFeeDiscount] = useState<number>(() => loadBrokerFeeDiscountFromStorage());
+  const [activeTab, setActiveTab] = useState<WorkspaceTabKey>(() => {
+    return (localStorage.getItem('stock_tracker_active_tab') as WorkspaceTabKey) || 'portfolio';
+  });
   const [colorTheme, setColorTheme] = useState<ColorThemeMode>(() => {
     return (localStorage.getItem('stock_tracker_color_theme') as ColorThemeMode) || 'taiwan';
   });
+
+  // 監聽並持久化 activeTab
+  useEffect(() => {
+    localStorage.setItem('stock_tracker_active_tab', activeTab);
+  }, [activeTab]);
 
   // 監聽並持久化 broker accounts
   useEffect(() => {
     saveBrokerAccountsToStorage(accounts);
   }, [accounts]);
 
-  // 監聽並持久化 accountingView 與 brokerFeeDiscount
+  // 監聽並持久化 accountingView
   useEffect(() => {
     saveAccountingViewToStorage(accountingView);
   }, [accountingView]);
-
-  useEffect(() => {
-    saveBrokerFeeDiscountToStorage(brokerFeeDiscount);
-  }, [brokerFeeDiscount]);
 
   // 監聽並將色彩主題套用到 DOM
   useEffect(() => {
@@ -108,18 +111,17 @@ export const App: React.FC = () => {
     return trades.filter((t) => t.market === currentMarket);
   }, [trades, currentMarket]);
 
-  // 執行損益與持倉計算（傳入 accountingView, brokerFeeDiscount, accounts, selectedAccountId）
+  // 執行損益與持倉計算（傳入 accountingView, accounts, selectedAccountId）
   const { holdings, summary, frictionSummary } = useMemo(() => {
     return calculateHoldingsAndSummary(
       displayedTrades,
       currentPrices,
       usdToTwdRate,
       accountingView,
-      brokerFeeDiscount,
       accounts,
       selectedAccountId
     );
-  }, [displayedTrades, currentPrices, usdToTwdRate, accountingView, brokerFeeDiscount, accounts, selectedAccountId]);
+  }, [displayedTrades, currentPrices, usdToTwdRate, accountingView, accounts, selectedAccountId]);
 
   // 報價與匯率自動輪詢更新回呼
   const handlePricesCalculated = useCallback((newPrices: Record<string, number>) => {
@@ -299,16 +301,14 @@ export const App: React.FC = () => {
         accounts={accounts}
         selectedAccountId={selectedAccountId}
         onSelectAccount={setSelectedAccountId}
-        onOpenBrokerAccountsModal={() => setIsBrokerAccountsOpen(true)}
-        onOpenFrictionCenterModal={() => setIsFrictionCenterOpen(true)}
+        onOpenBrokerAccountsModal={() => setActiveTab('friction')}
+        onOpenFrictionCenterModal={() => setActiveTab('friction')}
         usdToTwdRate={usdToTwdRate}
         exchangeRateQuote={exchangeRateQuote}
         colorTheme={colorTheme}
         onToggleColorTheme={handleToggleColorTheme}
         accountingView={accountingView}
         onChangeAccountingView={setAccountingView}
-        brokerFeeDiscount={brokerFeeDiscount}
-        onChangeBrokerFeeDiscount={setBrokerFeeDiscount}
         isRefreshing={isRefreshing}
         lastUpdated={lastUpdated}
         marketStatus={marketStatus}
@@ -320,31 +320,58 @@ export const App: React.FC = () => {
         onImportFile={handleImportFile}
       />
 
-      {/* 總資產與損益卡片 */}
-      <SummaryCards summary={summary} currentMarket={currentMarket} accountingView={accountingView} />
-
-      {/* 資產配置視覺化圖表 (樹狀圖 / 權重清單) */}
-      <AllocationChart
-        holdings={holdings}
-        usdToTwdRate={usdToTwdRate}
-        colorTheme={colorTheme}
+      {/* 活頁本標籤導覽列 */}
+      <WorkspaceTabs
+        activeTab={activeTab}
+        onChangeTab={setActiveTab}
+        holdingsCount={holdings.length}
+        tradesCount={trades.length}
+        accountsCount={accounts.length}
+        totalSavedFriction={frictionSummary?.totalFeeSavedByDiscount}
       />
 
-      {/* 當前持倉庫存表 */}
-      <HoldingsTable
-        holdings={holdings}
-        trades={trades}
-        quotes={quotes}
-        lockedSymbols={lockedSymbols}
-        accountingView={accountingView}
-        onUpdatePrice={handleUpdatePrice}
-        onToggleLock={toggleSymbolLock}
-        onRefreshSymbol={refreshSymbol}
-        onQuickTrade={handleQuickTrade}
-      />
+      {/* 活頁 1: 📊 投資組合總覽與庫存 */}
+      {activeTab === 'portfolio' && (
+        <>
+          <SummaryCards summary={summary} currentMarket={currentMarket} accountingView={accountingView} />
+          <AllocationChart holdings={holdings} usdToTwdRate={usdToTwdRate} colorTheme={colorTheme} />
+          <HoldingsTable
+            holdings={holdings}
+            trades={trades}
+            quotes={quotes}
+            lockedSymbols={lockedSymbols}
+            accountingView={accountingView}
+            onUpdatePrice={handleUpdatePrice}
+            onToggleLock={toggleSymbolLock}
+            onRefreshSymbol={refreshSymbol}
+            onQuickTrade={handleQuickTrade}
+          />
+        </>
+      )}
 
-      {/* 歷史交易明細表 */}
-      <TradeHistoryTable trades={displayedTrades} onDeleteTrade={handleDeleteTrade} />
+      {/* 活頁 2: 📜 交易歷史明細帳本 */}
+      {activeTab === 'ledger' && (
+        <TradeHistoryTable
+          trades={displayedTrades}
+          totalTradesCount={trades.length}
+          onResetGlobalFilters={() => {
+            setCurrentMarket('ALL');
+            setSelectedAccountId('ALL');
+          }}
+          onDeleteTrade={handleDeleteTrade}
+        />
+      )}
+
+      {/* 活頁 3: ⚡ 券商帳戶與摩擦成本中心 */}
+      {activeTab === 'friction' && (
+        <BrokerAndFrictionHub
+          accounts={accounts}
+          onSaveAccounts={setAccounts}
+          frictionSummary={frictionSummary}
+          selectedAccountId={selectedAccountId}
+          onSelectAccount={setSelectedAccountId}
+        />
+      )}
 
       {/* 交易錄入彈窗 */}
       <TradeModal

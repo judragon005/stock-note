@@ -1138,8 +1138,20 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
       '0050': 180, // grossMV: 180,000, tax 0.1% = 180, fee 0.1425%*0.6 = 153 -> netMV: 179,667
     };
 
-    // 1. 券商核帳模式 (BROKER，搭配 0.6 折)
-    const brokerRes = calculateHoldingsAndSummary(trades, currentPrices, 32.0, 'BROKER', 0.6);
+    const customAccounts: BrokerAccount[] = [
+      {
+        id: 'acc-60',
+        name: '6折券商',
+        market: 'TW',
+        feeRate: 0.001425,
+        discountRate: 0.6,
+        minFee: 20,
+        taxRate: 0.003,
+      },
+    ];
+
+    // 1. 券商核帳模式 (BROKER，搭配 0.6 折帳戶)
+    const brokerRes = calculateHoldingsAndSummary(trades, currentPrices, 32.0, 'BROKER', customAccounts, 'ALL');
     const tsMCBroker = brokerRes.holdings.find((h) => h.symbol === '2330');
     const etfBroker = brokerRes.holdings.find((h) => h.symbol === '0050');
 
@@ -1158,7 +1170,7 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
     expect(etfBroker?.marketValue).toBe(179667);
 
     // 2. 總回報模式 (TOTAL_RETURN)
-    const trRes = calculateHoldingsAndSummary(trades, currentPrices, 32.0, 'TOTAL_RETURN');
+    const trRes = calculateHoldingsAndSummary(trades, currentPrices, 32.0, 'TOTAL_RETURN', customAccounts, 'ALL');
     const etfTR = trRes.holdings.find((h) => h.symbol === '0050');
     expect(etfTR?.marketValue).toBe(180000); // TOTAL_RETURN 模式下 marketValue 為毛市值
     expect(etfTR?.grossMarketValue).toBe(180000);
@@ -1167,26 +1179,26 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
     expect(etfTR?.totalReturnPnL).toBe((180000 - 150128) + 5000); // 34872
   });
 
-  it('應精準支援自訂券商賣出手續費折讓率 (1.0 全額牌告、0.6 6折、0.28 2.8折)', () => {
+  it('應精準支援依券商帳戶賣出手續費折讓率 (1.0 全額牌告、0.6 6折、0.28 2.8折) 試算', () => {
     const trades: TradeRecord[] = [
       { id: '1', date: '2026-01-01', symbol: '2330', name: '台積電', market: 'TW', currency: 'TWD', type: 'BUY', shares: 1000, price: 600, fee: 0, tax: 0, createdAt: 1 },
     ];
     const currentPrices = { '2330': 700 }; // grossMV = 700,000, tax 0.3% = 2,100
 
-    // 1.0 全額牌告 (0.1425% * 1.0 = 997) -> netMV = 700,000 - 2,100 - 997 = 696,903
-    const resFull = calculateHoldingsAndSummary(trades, currentPrices, 32.0, 'BROKER', 1.0);
+    const accFull: BrokerAccount[] = [{ id: 'acc-full', name: '牌告', market: 'TW', feeRate: 0.001425, discountRate: 1.0, minFee: 20, taxRate: 0.003 }];
+    const resFull = calculateHoldingsAndSummary(trades, currentPrices, 32.0, 'BROKER', accFull, 'ALL');
     const tsMCFull = resFull.holdings.find((h) => h.symbol === '2330');
     expect(tsMCFull?.estimatedSellFee).toBe(997);
     expect(tsMCFull?.netMarketValue).toBe(696903);
 
-    // 0.6 6折 (0.1425% * 0.6 = 598) -> netMV = 700,000 - 2,100 - 598 = 697,302
-    const res60 = calculateHoldingsAndSummary(trades, currentPrices, 32.0, 'BROKER', 0.6);
+    const acc60: BrokerAccount[] = [{ id: 'acc-60', name: '6折', market: 'TW', feeRate: 0.001425, discountRate: 0.6, minFee: 20, taxRate: 0.003 }];
+    const res60 = calculateHoldingsAndSummary(trades, currentPrices, 32.0, 'BROKER', acc60, 'ALL');
     const tsMC60 = res60.holdings.find((h) => h.symbol === '2330');
     expect(tsMC60?.estimatedSellFee).toBe(598);
     expect(tsMC60?.netMarketValue).toBe(697302);
 
-    // 0.28 2.8折 (0.1425% * 0.28 = 279) -> netMV = 700,000 - 2,100 - 279 = 697,621
-    const res28 = calculateHoldingsAndSummary(trades, currentPrices, 32.0, 'BROKER', 0.28);
+    const acc28: BrokerAccount[] = [{ id: 'acc-28', name: '2.8折', market: 'TW', feeRate: 0.001425, discountRate: 0.28, minFee: 1, taxRate: 0.003 }];
+    const res28 = calculateHoldingsAndSummary(trades, currentPrices, 32.0, 'BROKER', acc28, 'ALL');
     const tsMC28 = res28.holdings.find((h) => h.symbol === '2330');
     expect(tsMC28?.estimatedSellFee).toBe(279);
     expect(tsMC28?.netMarketValue).toBe(697621);
@@ -1271,19 +1283,19 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
 
     it('selectedAccountId 為 ALL 時應合併統計全帳戶持倉', () => {
       const currentPrices = { '2330': 700, '0050': 160, 'VT': 110 };
-      const res = calculateHoldingsAndSummary(multiTrades, currentPrices, 32.0, 'BROKER', 1.0, mockAccounts, 'ALL');
+      const res = calculateHoldingsAndSummary(multiTrades, currentPrices, 32.0, 'BROKER', mockAccounts, 'ALL');
       expect(res.holdings.length).toBe(3);
       expect(res.summary.twd.totalCost).toBe(600000 + 239 + 300000 + 85);
     });
 
     it('selectedAccountId 為特定帳戶時應精確過濾持倉與成本', () => {
       const currentPrices = { '2330': 700, '0050': 160, 'VT': 110 };
-      const cathayRes = calculateHoldingsAndSummary(multiTrades, currentPrices, 32.0, 'BROKER', 1.0, mockAccounts, 'broker-cathay');
+      const cathayRes = calculateHoldingsAndSummary(multiTrades, currentPrices, 32.0, 'BROKER', mockAccounts, 'broker-cathay');
       expect(cathayRes.holdings.length).toBe(1);
       expect(cathayRes.holdings[0].symbol).toBe('2330');
       expect(cathayRes.summary.twd.totalCost).toBe(600239);
 
-      const sinopacRes = calculateHoldingsAndSummary(multiTrades, currentPrices, 32.0, 'BROKER', 1.0, mockAccounts, 'broker-sinopac');
+      const sinopacRes = calculateHoldingsAndSummary(multiTrades, currentPrices, 32.0, 'BROKER', mockAccounts, 'broker-sinopac');
       expect(sinopacRes.holdings.length).toBe(1);
       expect(sinopacRes.holdings[0].symbol).toBe('0050');
       expect(sinopacRes.summary.twd.totalCost).toBe(300085);
@@ -1291,7 +1303,7 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
 
     it('calculateFrictionCostSummary 應精準計算已付摩擦、折讓省下金額與未來出清成本', () => {
       const currentPrices = { '2330': 700, '0050': 160, 'VT': 110 };
-      const res = calculateHoldingsAndSummary(multiTrades, currentPrices, 32.0, 'BROKER', 1.0, mockAccounts, 'ALL');
+      const res = calculateHoldingsAndSummary(multiTrades, currentPrices, 32.0, 'BROKER', mockAccounts, 'ALL');
       const friction = calculateFrictionCostSummary(multiTrades, res.holdings, mockAccounts);
       expect(friction).toBeDefined();
 

@@ -252,7 +252,6 @@ export function calculateHoldingsAndSummary(
   currentPrices: Record<string, number> = {},
   usdToTwdRate: number = 32.0,
   accountingView: AccountingView = 'TOTAL_RETURN',
-  brokerFeeDiscount: number = 1.0,
   accounts: BrokerAccount[] = [],
   selectedAccountId: 'ALL' | string = 'ALL'
 ): CalculationResult {
@@ -285,6 +284,7 @@ export function calculateHoldingsAndSummary(
     totalDividends: number;
     totalCapitalReturned: number;
     totalStockDividendsShares: number;
+    accountId?: string;
   }
 
   const map = new Map<string, Accumulator>();
@@ -293,7 +293,8 @@ export function calculateHoldingsAndSummary(
     sym: string,
     defaultName?: string,
     defaultMarket?: MarketType,
-    defaultCurrency?: Currency
+    defaultCurrency?: Currency,
+    defaultAccountId?: string
   ): Accumulator => {
     const cleanSym = sym.trim().toUpperCase();
     if (!map.has(cleanSym)) {
@@ -302,6 +303,7 @@ export function calculateHoldingsAndSummary(
         name: resolveOfficialSecurityName(cleanSym, defaultName),
         market: defaultMarket || 'TW',
         currency: defaultCurrency || (defaultMarket === 'US' ? 'USD' : 'TWD'),
+        accountId: defaultAccountId,
         shares: 0,
         originalBuyShares: 0,
         totalCostBasis: 0,
@@ -319,8 +321,12 @@ export function calculateHoldingsAndSummary(
       trade.symbol,
       trade.name,
       trade.market || (trade.currency === 'USD' ? 'US' : 'TW'),
-      trade.currency || (trade.market === 'US' ? 'USD' : 'TWD')
+      trade.currency || (trade.market === 'US' ? 'USD' : 'TWD'),
+      trade.accountId
     );
+    if (trade.accountId) {
+      item.accountId = trade.accountId;
+    }
 
     if (trade.name && trade.name !== trade.symbol) {
       item.name = resolveOfficialSecurityName(item.symbol, trade.name);
@@ -494,7 +500,10 @@ export function calculateHoldingsAndSummary(
     const grossMarketValue = item.shares * currentPrice;
     
     const estimatedSellTax = calculateEstimatedSellTax(item.symbol, item.market, grossMarketValue);
-    const estimatedSellFee = calculateEstimatedSellFee(item.market, grossMarketValue, brokerFeeDiscount);
+    const targetAccount = item.accountId
+      ? accountMap.get(item.accountId)
+      : accounts.find((a) => a.market === item.market);
+    const estimatedSellFee = calculateAccountSellFee(grossMarketValue, targetAccount);
     const netMarketValue = Math.max(0, grossMarketValue - estimatedSellTax - estimatedSellFee);
 
     const unrealizedPnLBroker = netMarketValue - item.totalCostBasis;

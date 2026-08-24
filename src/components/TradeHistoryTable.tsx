@@ -4,12 +4,22 @@ import { History, Trash2, Search, Tag } from 'lucide-react';
 
 interface TradeHistoryTableProps {
   trades: TradeRecord[];
+  totalTradesCount?: number;
+  onResetGlobalFilters?: () => void;
   onDeleteTrade: (id: string) => void;
 }
 
-export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ trades, onDeleteTrade }) => {
+export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
+  trades,
+  totalTradesCount,
+  onResetGlobalFilters,
+  onDeleteTrade,
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'BUY' | 'SELL' | 'DIVIDEND' | 'CORPORATE'>('ALL');
+
+  const totalCount = totalTradesCount ?? trades.length;
+  const isGlobalFiltered = totalCount > trades.length;
 
   const filteredTrades = [...trades]
     .sort((a, b) => {
@@ -27,7 +37,16 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ trades, on
       if (typeFilter === 'ALL') {
         matchType = true;
       } else if (typeFilter === 'CORPORATE') {
-        matchType = t.type === 'STOCK_DIVIDEND' || t.type === 'STOCK_SPLIT' || t.type === 'CAPITAL_REDUCTION' || t.type === 'CAPITAL_INCREASE';
+        matchType =
+          t.type === 'STOCK_DIVIDEND' ||
+          t.type === 'STOCK_SPLIT' ||
+          t.type === 'CAPITAL_REDUCTION' ||
+          t.type === 'CAPITAL_INCREASE' ||
+          t.type === 'STOCK_MERGER' ||
+          t.type === 'PREFERRED_REDEMPTION' ||
+          t.type === 'SPIN_OFF' ||
+          t.type === 'CB_CONVERSION' ||
+          t.type === 'TENDER_OFFER';
       } else {
         matchType = t.type === typeFilter;
       }
@@ -69,10 +88,46 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ trades, on
   return (
     <div className="glass-card" style={{ padding: '24px', overflow: 'hidden' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px', marginBottom: '18px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <History size={20} color="#3b82f6" />
-          <h2 style={{ fontSize: '1.125rem', fontWeight: 700, margin: 0 }}>交易與公司行動明細歷程</h2>
-          <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>({filteredTrades.length} 筆)</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <History size={20} color="#3b82f6" />
+            <h2 style={{ fontSize: '1.125rem', fontWeight: 700, margin: 0 }}>交易與公司行動明細歷程</h2>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span
+              style={{
+                fontSize: '0.8rem',
+                padding: '2px 8px',
+                borderRadius: '6px',
+                background: isGlobalFiltered ? 'rgba(245, 158, 11, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                color: isGlobalFiltered ? '#f59e0b' : '#60a5fa',
+                fontWeight: 600,
+                border: isGlobalFiltered ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(59, 130, 246, 0.3)',
+              }}
+            >
+              {isGlobalFiltered
+                ? `已篩選顯示 ${filteredTrades.length} 筆 / 全量共 ${totalCount} 筆`
+                : `共 ${filteredTrades.length} 筆交易`}
+            </span>
+
+            {isGlobalFiltered && onResetGlobalFilters && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={onResetGlobalFilters}
+                title="清除頂部市場與帳戶篩選，展示全量交易"
+                style={{
+                  fontSize: '0.72rem',
+                  padding: '2px 8px',
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  color: '#f87171',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                }}
+              >
+                🔄 顯示全部 {totalCount} 筆
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Filters */}
