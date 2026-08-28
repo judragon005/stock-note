@@ -1072,12 +1072,13 @@ export function autoReconcileSchwabRecords(
     // 3. VT 2026-03-24 股息校正 (毛額 $26.18，稅 $7.85)
     if (t.symbol === 'VT' && t.type === 'DIVIDEND' && (t.date === '2026-03-20' || t.date === '2026-03-24')) {
       const gross = t.shares * t.price;
-      if (Math.abs(gross - 26.18) > 0.01 || t.date !== '2026-03-24' || Math.abs((t.tax || 0) - 7.85) > 0.01) {
+      if (Math.abs(gross - 26.18) > 0.005 || t.date !== '2026-03-24' || Math.abs((t.tax || 0) - 7.85) > 0.01 || t.cashAmount !== 26.18) {
         modified = true;
         return {
           ...t,
           date: '2026-03-24',
-          price: t.shares > 0 ? 26.18 / t.shares : 26.18,
+          price: 0.32725,
+          cashAmount: 26.18,
           tax: 7.85,
         };
       }
@@ -1086,12 +1087,13 @@ export function autoReconcileSchwabRecords(
     // 4. VT 2026-06-23 股息校正 (毛額 $45.09，稅 $13.53)
     if (t.symbol === 'VT' && t.type === 'DIVIDEND' && (t.date === '2026-06-18' || t.date === '2026-06-23')) {
       const gross = t.shares * t.price;
-      if (Math.abs(gross - 45.09) > 0.01 || t.date !== '2026-06-23' || Math.abs((t.tax || 0) - 13.53) > 0.01) {
+      if (Math.abs(gross - 45.09) > 0.005 || t.date !== '2026-06-23' || Math.abs((t.tax || 0) - 13.53) > 0.01 || t.cashAmount !== 45.09) {
         modified = true;
         return {
           ...t,
           date: '2026-06-23',
-          price: t.shares > 0 ? 45.09 / t.shares : 45.09,
+          price: 0.562719,
+          cashAmount: 45.09,
           tax: 13.53,
         };
       }

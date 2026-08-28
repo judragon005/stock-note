@@ -303,7 +303,7 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
                 const isReduction = t.type === 'CAPITAL_REDUCTION';
                 const isIncrease = t.type === 'CAPITAL_INCREASE';
                 const isUS = t.currency === 'USD';
-                const decimals = isUS ? 2 : (t.price < 50 ? 2 : 1);
+                const decimals = isUS ? (isDiv ? 4 : 2) : (t.price < 50 ? 2 : 1);
 
                 // 計算結算與呈現金額
                 let totalAmountDisplay = '';
@@ -324,8 +324,12 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
                   totalAmountDisplay = `+${t.currency} ${formatAmountVal(net)}`;
                   amountColor = 'var(--gain-color)';
                 } else if (isDiv) {
-                  const div = t.cashAmount !== undefined ? t.cashAmount : (t.shares > 0 && t.price > 0 ? (t.shares * t.price) - (t.tax || 0) - (t.fee || 0) : (t.price || 0));
-                  totalAmountDisplay = `+${t.currency} ${formatAmountVal(div)}`;
+                  // 美股現金股利以毛額 (Gross) 呈現，搭配獨立之稅費欄位以對齊券商 DOI/JRN 標準
+                  const gross = t.cashAmount !== undefined
+                    ? t.cashAmount
+                    : (t.shares > 0 && t.price > 0 ? (t.shares * t.price) : (t.price || 0));
+                  const divDisplay = isUS ? gross : (gross - (t.tax || 0) - (t.fee || 0));
+                  totalAmountDisplay = `+${t.currency} ${formatAmountVal(divDisplay)}`;
                   amountColor = '#fbbf24';
                 } else if (isReduction) {
                   const ref = t.cashAmount !== undefined ? t.cashAmount : (t.price > 0 ? t.price * t.shares : 0);
