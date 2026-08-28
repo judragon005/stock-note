@@ -37,6 +37,7 @@ export interface FrictionSummary {
   totalSellFee: number;                 // 歷史累計賣出手續費 (折算 TWD)
   totalSellTax: number;                 // 歷史累計賣出證交稅
   totalUSDividendTax?: number;          // 美股現金股利 30% 預扣稅累計 (USD)
+  totalUSDividendTaxInTWD?: number;     // 美股現金股利 30% 預扣稅折算台幣累計 (TWD)
   totalTWDividendTax?: number;          // 台股現金股利二代健保補充保費 (2.11%) 累計 (TWD)
   totalRealizedFriction: number;        // 歷史已付總摩擦成本 (買費 + 賣費 + 賣稅 + 股息預扣稅/健保費，折算 TWD)
   totalFeeSavedByDiscount: number;      // 歷史券商折讓累計節省金額 (以法定牌告 20 元低消為基準，TWD)
@@ -45,6 +46,87 @@ export interface FrictionSummary {
   totalEstimatedFutureFee: number;      // 預估未來出清手續費 (折算 TWD)
   frictionImpactPercent: number;        // 摩擦成本佔 (毛市值 + 已實現利得) 之衝擊比例 %
 }
+
+// ==========================================
+// 主動交易計畫、風控與量化模型 (Trade Discipline & Risk Models)
+// ==========================================
+
+export interface TradePlan {
+  entryReason?: string;             // 進場理由 / 交易假說 (如：突破箱頂、籌碼集中、跌深反彈)
+  stopLossPrice?: number;           // 預設停損價
+  takeProfitPrice?: number;         // 預設停利價
+  plannedRiskRewardRatio?: number;  // 預計風報酬比 (R:R Ratio)
+}
+
+export type TradeMistakeType =
+  | 'CHASE_HIGH'        // 追高追價
+  | 'HOLD_LOSER'         // 凹單不肯停損
+  | 'PREMATURE_PROFIT'  // 過早停利飛走
+  | 'EMOTIONAL_SIZE'    // 情緒化重押
+  | 'NO_PLAN'           // 盲目無計畫進場
+  | 'OTHER';            // 其他
+
+export interface TradeReview {
+  isPlanFollowed: boolean;          // 是否嚴格遵守計畫出場
+  mistakesMade?: TradeMistakeType[];// 犯錯行為 (追高、凹單、過早停利、情緒化加碼)
+  lessonsLearned?: string;          // 覆盤得失與心得
+  disciplineScore: number;          // 紀律評分 (1 ~ 5 星)
+  reviewedAt: number;               // 覆盤時間戳
+}
+
+export type RiskAlertStatus =
+  | 'NORMAL'                 // 正常區間
+  | 'NEAR_STOP_LOSS'         // 接近停損 (距離 <= 3%)
+  | 'STOP_LOSS_TRIGGERED'    // 觸及/跌破停損 (🚨)
+  | 'NEAR_TAKE_PROFIT'       // 接近停利 (距離 <= 3%)
+  | 'TAKE_PROFIT_TRIGGERED'; // 觸及/超越停利 (🎯)
+
+export interface HoldingRiskMetrics {
+  stopLossPrice?: number;
+  takeProfitPrice?: number;
+  riskStatus: RiskAlertStatus;
+  distanceToStopLossPercent?: number;   // 離停損價百分比 % (正數代表高於停損，負數代表已跌破)
+  distanceToTakeProfitPercent?: number; // 離停利價百分比 % (正數代表低於停利，負數代表已超越)
+  plannedRiskRewardRatio?: number;
+  entryReason?: string;
+}
+
+export type BenchmarkType = 'NONE' | '0050' | 'SPY' | 'BALANCED_50_50';
+
+export interface QuantPerformanceMetrics {
+  hasBenchmark: boolean;          // 是否有選取並計算對照大盤基準
+  alpha: number | null;           // 詹森阿爾法 Jensen's Alpha % (無基準時為 null)
+  beta: number | null;            // 貝塔係數 Beta (無基準時為 null)
+  sharpeRatio: number;            // 夏普值 Sharpe Ratio
+  sortinoRatio?: number;          // 索提諾比 Sortino Ratio
+  annualizedVolatility: number;   // 年化波動度 %
+  benchmarkMaxDrawdown: number | null; // 基準最大回撤 % (無基準時為 null)
+  portfolioMaxDrawdown: number;   // 投資組合最大回撤 %
+  correlation: number | null;     // 與基準之相關係數 r (無基準時為 null)
+}
+
+export type DiagnosisHealthLevel = 'EXCELLENT' | 'GOOD' | 'FAIR' | 'ATTENTION' | 'NEUTRAL';
+
+export type QuantMetricId = 'alpha' | 'beta' | 'sharpe' | 'mdd' | 'volatility';
+
+export interface MetricDiagnosis {
+  id: QuantMetricId;
+  title: string;              // 指標完整名稱 (例如：詹森阿爾法 (Alpha))
+  fullName: string;           // 英文全稱 (例如：Jensen's Alpha)
+  definition: string;         // 原理與金融定義
+  formula: string;            // 計算公式
+  benchmarkNote?: string;     // 基準與參數備註 (例如：無風險利率 Rf = 1.5%)
+  
+  // 即時診斷結果
+  level: DiagnosisHealthLevel;// 健康度評級
+  levelBadge: string;         // 顯示標籤 (例如：🟢 穩健超額)
+  badgeColor: string;         // 標籤主題色
+  summary: string;            // 一句話即時診斷核心結論
+  suggestion: string;         // 具體量化操作建議
+}
+
+export type QuantDiagnosisMap = Record<QuantMetricId, MetricDiagnosis>;
+
 
 export interface TradeRecord {
   id: string;
@@ -69,6 +151,8 @@ export interface TradeRecord {
   conversionPrice?: number; // 可轉債轉換價格
   note?: string; // 交易備註
   tags?: string[]; // 標籤（如：長期核心、波段動能、股息成長）
+  plan?: TradePlan; // 交易計畫 (事前)
+  review?: TradeReview; // 賽後覆盤 (事後)
   createdAt: number;
 }
 
@@ -103,6 +187,45 @@ export interface HoldingPosition {
   totalReturnPnL: number; // 含息總損益 ((grossMarketValue - totalCostBasis) + totalDividends + realizedPnL)
   totalReturnPercent: number; // 含息總報酬率 %
   yieldOnCostPercent: number; // 成本殖利率 % (totalDividends / totalCostBasis * 100)
+  xirrPercent?: number; // 含息資金加權年化報酬率 XIRR %
+  isXirrAnnualized?: boolean; // XIRR 是否已年化 (天數 >= 30 為 true，< 30 為 false 標註非年化)
+  todaysPnL?: number; // 今日損益金額 (未實現價差波動，原生幣別)
+  todaysPnLPercent?: number; // 今日漲跌百分比 %
+  todaysChange?: number; // 今日每股單價變動額 (currentPrice - previousClose)
+  breakevenPrice?: number; // 精確損益平衡保本價 (含稅、費、折讓)
+  exitPrice?: number; // 清倉/最後出場均價 (已平倉標的)
+  lastTradeDate?: string; // 最後交易/平倉日期 (YYYY-MM-DD)
+  isClosed?: boolean; // 是否已清倉 (shares === 0)
+  accountingMethod?: import('./lot').AccountingMethod; // 所套用之沖銷會計模式
+  openLotsCount?: number; // 在席未沖銷批次數量
+  lots?: import('./lot').TaxLot[]; // 在席批次明細
+  plan?: TradePlan; // 所套用之最新建倉交易計畫
+  riskMetrics?: HoldingRiskMetrics; // 即時風控與觸價指標
+}
+
+export type PositionFilter = 'ACTIVE' | 'CLOSED' | 'ALL';
+
+export interface DisciplineSummary {
+  totalReviewedTrades: number;       // 已覆盤總筆數
+  followedPlanTradesCount: number;   // 遵守計畫筆數
+  disciplineRatePercent: number;     // 全局紀律執行率 %
+  averageDisciplineScore: number;    // 平均紀律評分 (1~5 星)
+  topMistakes: { mistake: TradeMistakeType; count: number }[]; // 常見犯錯排行
+  disciplinedAvgPnL: number;         // 遵守紀律平均損益 (TWD)
+  undisciplinedAvgPnL: number;       // 違反紀律平均損益 (TWD)
+}
+
+export interface ClosedPositionsSummary {
+  totalRealizedPnL: number; // 已實現總損益 (折算 TWD)
+  totalDividends: number; // 累計股利 (折算 TWD)
+  totalTradesCount: number; // 已平倉標的總數
+  winningTradesCount: number; // 獲利標的數 (realizedPnL > 0)
+  losingTradesCount: number; // 虧損標的數 (realizedPnL < 0)
+  breakEvenTradesCount: number; // 平手標的數 (realizedPnL === 0)
+  winRatePercent: number; // 勝率 % (winning / total * 100)
+  bestWinner?: { symbol: string; name: string; pnl: number; pnlPercent: number; market: MarketType; currency: Currency };
+  worstLoser?: { symbol: string; name: string; pnl: number; pnlPercent: number; market: MarketType; currency: Currency };
+  disciplineSummary?: DisciplineSummary; // 賽後紀律覆盤總結指標
 }
 
 export type ColorThemeMode = 'taiwan' | 'international'; // taiwan: 紅漲綠跌, international: 綠漲紅跌
@@ -155,6 +278,8 @@ export interface MarketSummarySlice {
   totalCapitalReturned: number;
   totalReturnPnL: number;
   totalReturnPercent: number;
+  todayPnL?: number; // 今日損益總額
+  todayPnLPercent?: number; // 今日總損益百分比 %
 }
 
 export interface PortfolioSummary {
@@ -171,6 +296,110 @@ export interface ApiKeysConfig {
   customProxyUrl?: string;
 }
 
+// 歷史日 K 與資產淨值模型型別 (Historical NAV & Time Series)
+export type HistoricalDailyPriceMap = Record<string, Record<string, number>>; // symbol -> { 'YYYY-MM-DD': closePrice }
+export type HistoricalFxRateMap = Record<string, number>; // 'YYYY-MM-DD' -> usdToTwdRate
 
+export type CashFlowCategory =
+  | 'DEPOSIT'              // 外部入金
+  | 'WITHDRAWAL'           // 外部出金
+  | 'STOCK_BUY'            // 股票買進交割扣款 (自動連動)
+  | 'STOCK_SELL'           // 股票賣出交割入帳 (自動連動)
+  | 'DIVIDEND_PAYOUT'      // 現金股利入帳 (自動連動/手動)
+  | 'CAPITAL_RETURN'       // 減資退款入帳 (自動連動)
+  | 'INTEREST_INCOME'      // 活存/閒置資金利息收入
+  | 'FINANCING_FEE'        // 融資/質押借款利息支出
+  | 'WIRE_FEE'             // 電匯/手續費/保管費支出
+  | 'FX_TRANSFER_IN'       // 換匯/調撥轉入
+  | 'FX_TRANSFER_OUT'      // 換匯/調撥轉出
+  | 'LOAN_DISBURSEMENT'    // 借貸撥款入帳
+  | 'LOAN_REPAYMENT'       // 借貸還本支出
+  | 'OTHER';
 
+export type CashEntryType = CashFlowCategory | 'DIVIDEND' | 'INTEREST' | 'FEE' | 'TAX';
 
+export interface CashTransaction {
+  id: string;
+  accountId: string;           // 所屬券商帳戶 (BrokerAccount.id)
+  currency: Currency;          // 'TWD' | 'USD'
+  type: CashEntryType;         // 交易類別 (兼容 type / category)
+  category?: CashFlowCategory; // 語義化別名 (同 type)
+  amount: number;              // 變動金額 (正數為流入增加現金，負數為流出扣除現金)
+  date: string;                // 交易/交割記錄日 (YYYY-MM-DD)
+  tradeDate?: string;          // 成交日期 (T 日，如 2026-08-21)
+  settlementDate?: string;     // 預計交割日 (台股 T+2 / 美股 T+1，如 2026-08-25)
+  settlementStatus?: 'PENDING' | 'SETTLED'; // 交割狀態 (待交割 / 已交割)
+  relatedTradeId?: string;     // 若為股票/股息自動連動，關聯之 TradeRecord.id
+  relatedLoanId?: string;      // 若為借貸關聯，關聯之 LoanRecord.id
+  fxRateToTwd?: number;        // 當前對台幣匯率
+  fxRate?: number;             // 若為換匯調撥時的兌換匯率 (如 32.15)
+  transferTargetAccountId?: string; // 若為跨帳戶調撥，目標帳戶 ID
+  transferPairId?: string;     // 換匯/調撥配對流水 ID
+  fee?: number;                // 附加手續費 (如電匯費 NT$600)
+  note?: string;               // 備註說明
+  createdAt: number;
+}
+
+export type LoanType = 'PLEDGE' | 'MARGIN' | 'CREDIT' | 'MORTGAGE' | 'OTHER';
+export type LoanEntryType = 'BORROW' | 'REPAY' | 'INTEREST_PAYMENT';
+
+export interface CollateralItem {
+  symbol: string;
+  shares: number;
+}
+
+export interface LoanRecord {
+  id: string;
+  accountId?: string;          // 關聯券商/銀行帳戶 ID
+  name: string;                // 貸款項目名稱 (如：元大台積電股票質押、富邦信貸)
+  loanType?: LoanType;         // 貸款類別 (PLEDGE, MARGIN, CREDIT, etc.)
+  type?: LoanEntryType;        // 兼容舊格式
+  principal: number;           // 當前未還本金餘額
+  initialPrincipal?: number;   // 原始借款總額
+  annualInterestRate?: number; // 年利率 % (如 2.35 代表 2.35%)
+  interestRate?: number;       // 兼容舊格式 (如 0.025 代表 2.5%)
+  currency: Currency;          // 'TWD' | 'USD'
+  startDate?: string;          // 借款起始日 (YYYY-MM-DD)
+  date?: string;               // 借款起始日 (兼容舊 date 欄位)
+  maturityDate?: string;       // 到期日 (YYYY-MM-DD)
+  lastInterestPaymentDate?: string; // 上次繳息日 (若無則自 startDate 起算)
+  pledgedCollateral?: CollateralItem[]; // 質押擔保品明細
+  transferFee?: number;        // 撥券費 (集保劃撥處理費，如每檔 NT$100)
+  pledgeRegistryFee?: number;  // 設質登記費 (設質手續費，預設 NT$100)
+  handlingFee?: number;        // 開辦手續費 / 徵信管理費 (預設 NT$0)
+  pledgeFee?: number;          // 規費總計 (撥券費 + 設質費 + 手續費)
+  warningRatio?: number;       // 質押維持率追繳警戒線 (預設 130%)
+  safeRatio?: number;          // 安全維持率警戒線 (預設 166%)
+  note?: string;
+  createdAt: number;
+}
+
+export interface PortfolioDailySnapshot {
+  date: string; // YYYY-MM-DD
+  totalNAV: number; // 持股市值 + 現金餘額 - 借貸負債
+  stockMarketValue: number; // 股票持股市值
+  cashBalance: number; // 現金帳戶總餘額
+  loanBalance: number; // 借貸負債總餘額
+  netCostBasis: number; // 累計外部投入本金 (入金 - 出金)
+  cumulativeReturnPnL: number; // 累計總損益 (NAV - netCostBasis)
+  cumulativeReturnPercent: number; // 累計總報酬率 %
+  dailyPnL?: number; // 當日損益變動
+  dailyReturnPercent?: number; // 當日漲跌幅 %
+  events: string[]; // 當日重大交易與事件摘要
+}
+
+export type TimeRangeFilter = '1M' | '3M' | '6M' | '1Y' | 'YTD' | 'ALL';
+
+export interface PortfolioPerformanceMetrics {
+  currentNAV: number;
+  netCostBasis: number;
+  totalProfitPnL: number;
+  totalReturnPercent: number;
+  maxDrawdownPercent: number; // 最大回撤 MDD %
+  allTimeHighNAV: number; // 歷史最高淨值 ATH
+  allTimeHighDate?: string;
+  annualizedReturnPercent?: number; // 年化複合成長率 CAGR %
+  xirrPercent?: number; // 資金加權年化報酬率 XIRR %
+  isXirrAnnualized?: boolean; // XIRR 是否已年化
+  xirrDurationDays?: number; // 總歷時天數
+}

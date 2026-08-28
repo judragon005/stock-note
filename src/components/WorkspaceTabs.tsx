@@ -1,7 +1,7 @@
 import React from 'react';
-import { PieChart, History, Settings } from 'lucide-react';
+import { PieChart, TrendingUp, History, Settings, Wallet } from 'lucide-react';
 
-export type WorkspaceTabKey = 'portfolio' | 'ledger' | 'settings' | 'friction';
+export type WorkspaceTabKey = 'portfolio' | 'growth' | 'cash' | 'ledger' | 'settings' | 'friction';
 
 interface WorkspaceTabsProps {
   activeTab: WorkspaceTabKey;
@@ -9,6 +9,7 @@ interface WorkspaceTabsProps {
   holdingsCount: number;
   tradesCount: number;
   accountsCount: number;
+  cashTransactionsCount?: number;
   totalSavedFriction?: number;
 }
 
@@ -18,6 +19,7 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
   holdingsCount,
   tradesCount,
   accountsCount,
+  cashTransactionsCount = 0,
   totalSavedFriction = 0,
 }) => {
   // 向後相容 friction 映射至 settings
@@ -38,11 +40,25 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
       badgeColor: '#3b82f6',
     },
     {
+      key: 'growth',
+      label: '資產成長 (NAV)',
+      icon: <TrendingUp size={16} />,
+      badge: '全歷史折線',
+      badgeColor: '#10b981',
+    },
+    {
+      key: 'cash',
+      label: '現金與借貸',
+      icon: <Wallet size={16} />,
+      badge: `${cashTransactionsCount} 筆流水`,
+      badgeColor: '#10b981',
+    },
+    {
       key: 'ledger',
       label: '歷史交易帳本',
       icon: <History size={16} />,
       badge: `${tradesCount} 筆`,
-      badgeColor: '#10b981',
+      badgeColor: '#3b82f6',
     },
     {
       key: 'settings',

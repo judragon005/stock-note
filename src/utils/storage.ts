@@ -9,8 +9,20 @@ import {
   AccountingView,
   BrokerAccount,
   ApiKeysConfig,
+  HistoricalDailyPriceMap,
+  HistoricalFxRateMap,
+  CashTransaction,
+  LoanRecord,
 } from '../types/stock';
 import { logger } from './logger';
+import {
+  dbPut,
+  dbBatchPut,
+  dbClear,
+  dbGetAll,
+  dbGet,
+  migrateFromLocalStorageIfNeeded,
+} from './db';
 
 export const STORAGE_KEY = 'STOCK_TRACKER_TRADES_V1';
 export const RATE_STORAGE_KEY = 'STOCK_TRACKER_USD_TWD_RATE';
@@ -20,6 +32,10 @@ export const ACCOUNTING_VIEW_STORAGE_KEY = 'STOCK_TRACKER_ACCOUNTING_VIEW_V1';
 export const BROKER_FEE_DISCOUNT_STORAGE_KEY = 'STOCK_TRACKER_BROKER_FEE_DISCOUNT_V1';
 export const BROKER_ACCOUNTS_STORAGE_KEY = 'STOCK_TRACKER_BROKER_ACCOUNTS_V1';
 export const API_KEYS_STORAGE_KEY = 'STOCK_TRACKER_API_KEYS_V1';
+export const HISTORICAL_PRICES_STORAGE_KEY = 'STOCK_TRACKER_HISTORICAL_PRICES_V1';
+export const HISTORICAL_FX_STORAGE_KEY = 'STOCK_TRACKER_HISTORICAL_FX_V1';
+export const CASH_TRANSACTIONS_STORAGE_KEY = 'STOCK_TRACKER_CASH_TRANSACTIONS_V1';
+export const LOAN_RECORDS_STORAGE_KEY = 'STOCK_TRACKER_LOAN_RECORDS_V1';
 
 /**
  * 主流券商費率模板庫 (Broker Presets)
@@ -161,6 +177,11 @@ export function loadBrokerAccountsFromStorage(): BrokerAccount[] {
 export function saveBrokerAccountsToStorage(accounts: BrokerAccount[]): void {
   try {
     localStorage.setItem(BROKER_ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
+    if (typeof indexedDB !== 'undefined') {
+      dbClear('brokerAccounts')
+        .then(() => dbBatchPut('brokerAccounts', accounts))
+        .catch((err) => logger.error('Failed to save broker accounts to IndexedDB:', err));
+    }
   } catch (err) {
     logger.error('Failed to save broker accounts to storage:', err);
   }
@@ -213,6 +234,11 @@ export function loadAccountingViewFromStorage(): AccountingView {
 export function saveAccountingViewToStorage(view: AccountingView): void {
   try {
     localStorage.setItem(ACCOUNTING_VIEW_STORAGE_KEY, view);
+    if (typeof indexedDB !== 'undefined') {
+      dbPut('settings', { key: 'accountingView', value: view }).catch((err) =>
+        logger.error('Failed to save accounting view to IndexedDB:', err)
+      );
+    }
   } catch (err) {
     logger.error('Failed to save accounting view:', err);
   }
@@ -258,6 +284,11 @@ export function loadTradesFromStorage(): TradeRecord[] {
 export function saveTradesToStorage(trades: TradeRecord[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(trades));
+    if (typeof indexedDB !== 'undefined') {
+      dbClear('trades')
+        .then(() => dbBatchPut('trades', trades))
+        .catch((err) => logger.error('Failed to save trades to IndexedDB:', err));
+    }
   } catch (err) {
     logger.error('Failed to save trades to localStorage:', err);
   }
@@ -418,7 +449,20 @@ export function updateQuoteInStorage(quote: PriceQuote): void {
 }
 
 
-export function validateTradesSchema(data: unknown): TradeRecord[] | null {
+/**
+ * 跨市場帳戶校驗與資料遷移核心函式
+ */
+export function validateAndMigrateTrades(
+  data: unknown,
+  accounts?: BrokerAccount[]
+): TradeRecord[] | null {
+  return validateTradesSchema(data, accounts);
+}
+
+export function validateTradesSchema(
+  data: unknown,
+  accounts?: BrokerAccount[]
+): TradeRecord[] | null {
   if (!Array.isArray(data) || data.length === 0) {
     return null;
   }
@@ -438,30 +482,65 @@ export function validateTradesSchema(data: unknown): TradeRecord[] | null {
     'TENDER_OFFER',
   ]);
 
+  const activeAccounts = accounts || loadBrokerAccountsFromStorage();
+  const accountMap = new Map<string, BrokerAccount>();
+  for (const acc of activeAccounts) {
+    accountMap.set(acc.id, acc);
+  }
+
+  // 取得台股與美股各自的預設帳戶 ID
+  const twDefaultAcc = activeAccounts.find((a) => a.market === 'TW' && a.isDefault) || activeAccounts.find((a) => a.market === 'TW');
+  const twDefaultId = twDefaultAcc ? twDefaultAcc.id : 'broker-tw-default';
+
+  const usDefaultAcc = activeAccounts.find((a) => a.market === 'US' && a.isDefault) || activeAccounts.find((a) => a.market === 'US');
+  const usDefaultId = usDefaultAcc ? usDefaultAcc.id : 'broker-us-default';
+
   const validTrades: TradeRecord[] = [];
   for (const item of data) {
-    if (!item || typeof item !== 'object') return null;
+    if (!item || typeof item !== 'object') continue;
 
     const t = item as Partial<TradeRecord>;
-    if (
-      typeof t.date !== 'string' || !t.date ||
-      typeof t.symbol !== 'string' || !t.symbol ||
-      (t.market !== 'TW' && t.market !== 'US') ||
-      !validTypes.has(t.type as TradeType)
-    ) {
-      return null;
+    if (!t.date || typeof t.date !== 'string' || !t.symbol || typeof t.symbol !== 'string') {
+      continue;
     }
 
-    const cleanSymbol = t.symbol.toUpperCase();
+    const cleanSymbol = t.symbol.trim().toUpperCase();
+    if (!cleanSymbol) continue;
+
+    // 市場校驗：必須為 TW 或 US
+    const market = t.market as MarketType;
+    if (market !== 'TW' && market !== 'US') {
+      continue;
+    }
+
+    // 交易類別校驗
+    const rawType = (t.type ? String(t.type).trim().toUpperCase() : 'BUY') as TradeType;
+    if (!validTypes.has(rawType)) {
+      continue;
+    }
+    const type: TradeType = rawType;
+
+    let targetAccountId = t.accountId;
+
+    // 跨市場帳戶校驗：若 accountId 存在但其 market 與 trade.market 不相符，自動校正
+    if (targetAccountId && accountMap.has(targetAccountId)) {
+      const boundAcc = accountMap.get(targetAccountId)!;
+      if (boundAcc.market !== market) {
+        targetAccountId = market === 'TW' ? twDefaultId : usDefaultId;
+      }
+    } else if (!targetAccountId) {
+      targetAccountId = market === 'TW' ? twDefaultId : usDefaultId;
+    }
+
     validTrades.push({
       id: t.id || `trade-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       date: t.date,
       symbol: cleanSymbol,
       name: resolveOfficialSecurityName(cleanSymbol, t.name),
-      market: t.market as MarketType,
-      currency: (t.currency || (t.market === 'TW' ? 'TWD' : 'USD')) as Currency,
-      type: t.type as TradeType,
-      accountId: t.accountId || (t.market === 'TW' ? 'broker-tw-default' : 'broker-us-default'),
+      market,
+      currency: (t.currency || (market === 'TW' ? 'TWD' : 'USD')) as Currency,
+      type,
+      accountId: targetAccountId,
       shares: typeof t.shares === 'number' && !isNaN(t.shares) ? t.shares : 0,
       price: typeof t.price === 'number' && !isNaN(t.price) ? t.price : 0,
       fee: typeof t.fee === 'number' ? t.fee : 0,
@@ -479,7 +558,7 @@ export function validateTradesSchema(data: unknown): TradeRecord[] | null {
     });
   }
 
-  return validTrades;
+  return validTrades.length > 0 ? validTrades : null;
 }
 
 export function mergeTrades(existing: TradeRecord[], incoming: TradeRecord[]): TradeRecord[] {
@@ -841,7 +920,194 @@ export function loadApiKeysConfigFromStorage(): ApiKeysConfig {
 export function saveApiKeysConfigToStorage(config: ApiKeysConfig): void {
   try {
     localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(config));
+    if (typeof indexedDB !== 'undefined') {
+      dbPut('settings', { key: 'apiKeys', value: config }).catch((err) =>
+        logger.error('Failed to save api keys to IndexedDB:', err)
+      );
+    }
   } catch (err) {
     logger.error('Failed to save api keys config to storage:', err);
   }
 }
+
+export function loadHistoricalPricesFromStorage(): HistoricalDailyPriceMap {
+  try {
+    const raw = localStorage.getItem(HISTORICAL_PRICES_STORAGE_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as HistoricalDailyPriceMap;
+  } catch (err) {
+    logger.error('Failed to load historical prices from storage:', err);
+    return {};
+  }
+}
+
+export function saveHistoricalPricesToStorage(prices: HistoricalDailyPriceMap): void {
+  try {
+    localStorage.setItem(HISTORICAL_PRICES_STORAGE_KEY, JSON.stringify(prices));
+    if (typeof indexedDB !== 'undefined' && prices && Object.keys(prices).length > 0) {
+      const items = Object.entries(prices).map(([symbol, data]) => ({ symbol, prices: data }));
+      dbClear('historicalPrices')
+        .then(() => dbBatchPut('historicalPrices', items))
+        .catch((err) => logger.error('Failed to save historical prices to IndexedDB:', err));
+    }
+  } catch (err) {
+    logger.error('Failed to save historical prices to storage:', err);
+  }
+}
+
+export function loadHistoricalFxFromStorage(): HistoricalFxRateMap {
+  try {
+    const raw = localStorage.getItem(HISTORICAL_FX_STORAGE_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as HistoricalFxRateMap;
+  } catch (err) {
+    logger.error('Failed to load historical fx from storage:', err);
+    return {};
+  }
+}
+
+export function saveHistoricalFxToStorage(fxMap: HistoricalFxRateMap): void {
+  try {
+    localStorage.setItem(HISTORICAL_FX_STORAGE_KEY, JSON.stringify(fxMap));
+    if (typeof indexedDB !== 'undefined' && fxMap && Object.keys(fxMap).length > 0) {
+      const items = Object.entries(fxMap).map(([pair, data]) => ({ pair, fxRates: data }));
+      dbClear('historicalFx')
+        .then(() => dbBatchPut('historicalFx', items))
+        .catch((err) => logger.error('Failed to save historical fx to IndexedDB:', err));
+    }
+  } catch (err) {
+    logger.error('Failed to save historical fx to storage:', err);
+  }
+}
+
+export function loadCashTransactionsFromStorage(): CashTransaction[] {
+  try {
+    const raw = localStorage.getItem(CASH_TRANSACTIONS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    logger.error('Failed to load cash transactions from storage:', err);
+    return [];
+  }
+}
+
+export function saveCashTransactionsToStorage(transactions: CashTransaction[]): void {
+  try {
+    localStorage.setItem(CASH_TRANSACTIONS_STORAGE_KEY, JSON.stringify(transactions));
+    if (typeof indexedDB !== 'undefined') {
+      dbClear('cashTransactions')
+        .then(() => dbBatchPut('cashTransactions', transactions))
+        .catch((err) => logger.error('Failed to save cash transactions to IndexedDB:', err));
+    }
+  } catch (err) {
+    logger.error('Failed to save cash transactions to storage:', err);
+  }
+}
+
+export function loadLoanRecordsFromStorage(): LoanRecord[] {
+  try {
+    const raw = localStorage.getItem(LOAN_RECORDS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    logger.error('Failed to load loan records from storage:', err);
+    return [];
+  }
+}
+
+export function saveLoanRecordsToStorage(loans: LoanRecord[]): void {
+  try {
+    localStorage.setItem(LOAN_RECORDS_STORAGE_KEY, JSON.stringify(loans));
+    if (typeof indexedDB !== 'undefined') {
+      dbClear('loanRecords')
+        .then(() => dbBatchPut('loanRecords', loans))
+        .catch((err) => logger.error('Failed to save loan records to IndexedDB:', err));
+    }
+  } catch (err) {
+    logger.error('Failed to save loan records to storage:', err);
+  }
+}
+
+/**
+ * 非同步初始化資料庫與儲存層（自動執行無損遷移與初次載入）
+ */
+export async function initializeStorageAsync(): Promise<{
+  trades: TradeRecord[];
+  brokerAccounts: BrokerAccount[];
+  cashTransactions: CashTransaction[];
+  loanRecords: LoanRecord[];
+  apiKeys: ApiKeysConfig;
+  accountingView: AccountingView;
+  historicalPrices: HistoricalDailyPriceMap;
+  historicalFx: HistoricalFxRateMap;
+}> {
+  try {
+    // 執行無損平滑遷移
+    await migrateFromLocalStorageIfNeeded();
+
+    const [dbTrades, dbAccounts, dbCash, dbLoans, dbHistPricesRaw, dbHistFxRaw, dbApiKeysObj, dbViewObj] =
+      await Promise.all([
+        dbGetAll<TradeRecord>('trades'),
+        dbGetAll<BrokerAccount>('brokerAccounts'),
+        dbGetAll<CashTransaction>('cashTransactions'),
+        dbGetAll<LoanRecord>('loanRecords'),
+        dbGetAll<{ symbol: string; prices?: any }>('historicalPrices'),
+        dbGetAll<{ pair: string; fxRates?: any }>('historicalFx'),
+        dbGet<{ key: string; value: ApiKeysConfig }>('settings', 'apiKeys'),
+        dbGet<{ key: string; value: AccountingView }>('settings', 'accountingView'),
+      ]);
+
+    // 處理歷史日 K 結構
+    const historicalPrices: HistoricalDailyPriceMap = {};
+    if (dbHistPricesRaw && dbHistPricesRaw.length > 0) {
+      for (const item of dbHistPricesRaw) {
+        if (item.symbol && item.prices) {
+          historicalPrices[item.symbol] = item.prices;
+        }
+      }
+    }
+
+    // 處理歷史匯率結構
+    const historicalFx: HistoricalFxRateMap = {};
+    if (dbHistFxRaw && dbHistFxRaw.length > 0) {
+      for (const item of dbHistFxRaw) {
+        if (item.pair && item.fxRates) {
+          historicalFx[item.pair] = item.fxRates;
+        }
+      }
+    }
+
+    const trades = dbTrades.length > 0 ? dbTrades : loadTradesFromStorage();
+    const brokerAccounts = dbAccounts.length > 0 ? dbAccounts : loadBrokerAccountsFromStorage();
+    const cashTransactions = dbCash.length > 0 ? dbCash : loadCashTransactionsFromStorage();
+    const loanRecords = dbLoans.length > 0 ? dbLoans : loadLoanRecordsFromStorage();
+    const apiKeys = dbApiKeysObj?.value || loadApiKeysConfigFromStorage();
+    const accountingView = dbViewObj?.value || loadAccountingViewFromStorage();
+
+    return {
+      trades,
+      brokerAccounts,
+      cashTransactions,
+      loanRecords,
+      apiKeys,
+      accountingView,
+      historicalPrices: Object.keys(historicalPrices).length > 0 ? historicalPrices : loadHistoricalPricesFromStorage(),
+      historicalFx: Object.keys(historicalFx).length > 0 ? historicalFx : loadHistoricalFxFromStorage(),
+    };
+  } catch (err) {
+    logger.error('Failed in initializeStorageAsync, falling back to localStorage:', err);
+    return {
+      trades: loadTradesFromStorage(),
+      brokerAccounts: loadBrokerAccountsFromStorage(),
+      cashTransactions: loadCashTransactionsFromStorage(),
+      loanRecords: loadLoanRecordsFromStorage(),
+      apiKeys: loadApiKeysConfigFromStorage(),
+      accountingView: loadAccountingViewFromStorage(),
+      historicalPrices: loadHistoricalPricesFromStorage(),
+      historicalFx: loadHistoricalFxFromStorage(),
+    };
+  }
+}
+

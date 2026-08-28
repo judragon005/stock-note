@@ -45,6 +45,8 @@ htmlcov/
 # Logs & Temp
 logs/
 *.log
+0-0_開發歷程自動化紀錄/
+*.jsonl
 scratch/
 .scratch/*.json
 .scratch/*.mjs

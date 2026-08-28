@@ -271,7 +271,7 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Palette size={13} color="var(--primary-color)" />
             <span style={{ fontSize: '0.75rem' }}>
-              {colorTheme === 'taiwan' ? '🔴 紅漲 🟢 綠跌' : '🟢 綠漲 🔴 跌'}
+              {colorTheme === 'taiwan' ? '🔴 紅漲 🟢 綠跌' : '🟢 綠漲 🔴 紅跌'}
             </span>
           </button>
 

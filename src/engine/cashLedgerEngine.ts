@@ -887,21 +887,31 @@ export function sortCashTransactions(
 
 /**
  * 智能歸一化利息項目名稱 (去除日期區間括號與明細後綴，使同類/同券商利息能自動合併)
+ * 支援全形逗號「，」、半形逗號「,」、中點「·」、各類破折號與明細後綴截斷
  */
 export function normalizeInterestName(rawNote?: string, fallback = '利息收入'): string {
   if (!rawNote || !rawNote.trim()) return fallback;
   let name = rawNote.trim();
 
-  // 1. 去除 " · 利息..." 或 " · ..." 明細後綴
+  // 1. 去除括號內的日期區間，如 (9/29-10/29)、(8/29~9/28)、(10/30–11/25)、(2026/01/01~2026/01/31) 等
+  name = name.replace(/\s*\([^)]*\d+[/~–—-]\d+[^)]*\)/g, '').trim();
+
+  // 2. 去除常見明細分隔符（全形逗號「，」、半形逗號「,」、中點「·」、冒號「：/:」）後接「利息」、「預扣」、「+」、「$」等後綴
+  name = name.split(/[\u00b7,，:：]\s*(?:利息|預扣|本金|\+|\$|\d)/)[0].trim();
+
+  // 3. 若有直接「，」、「·」或「,」分割，直接取前半段主項目名稱
   if (name.includes('·')) {
     name = name.split('·')[0].trim();
   }
+  if (name.includes('，')) {
+    name = name.split('，')[0].trim();
+  }
+  if (name.includes(',')) {
+    name = name.split(',')[0].trim();
+  }
 
-  // 2. 去除括號內的日期區間，如 (9/29-10/29)、(8/29~9/28)、(2026/01/01~2026/01/31) 等
-  name = name.replace(/\s*\([^)]*\d+[/~-]\d+[^)]*\)/g, '').trim();
-
-  // 3. 去除結尾多餘連字號或空白
-  name = name.replace(/[-~_]\s*$/, '').trim();
+  // 4. 去除結尾多餘連字號、逗號或空白
+  name = name.replace(/[-~_–—,，·:：]\s*$/, '').trim();
 
   return name || fallback;
 }

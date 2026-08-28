@@ -9,13 +9,24 @@ import {
   BrokerAccount,
   FrictionSummary,
   TaxRateCategory,
+  ClosedPositionsSummary,
+  PriceQuote,
+  TradePlan,
+  TradeMistakeType,
+  DisciplineSummary,
 } from '../types/stock';
+import { AccountingMethod } from '../types/lot';
+import { processLots } from './lotEngine';
 import { resolveOfficialSecurityName } from '../utils/storage';
+import { calculateSecurityXirr } from './xirrCalculator';
+import { buildHoldingRiskMetrics } from './riskAlertEngine';
 
 export interface CalculationResult {
   holdings: HoldingPosition[];
   summary: PortfolioSummary;
   frictionSummary?: FrictionSummary;
+  closedSummary?: ClosedPositionsSummary;
+  accountingMethod?: AccountingMethod;
 }
 
 /**
@@ -86,6 +97,76 @@ export function calculateAccountSellFee(
   const standardFee = grossMarketValue * (account.feeRate || 0.001425);
   const discounted = Math.floor(standardFee * (account.discountRate ?? fallbackDiscount));
   return Math.max(account.minFee ?? 20, discounted);
+}
+
+/**
+ * 萬分位強制精準收斂（防禦 IEEE 754 浮點數精度漂移）
+ */
+export function roundFractionalShares(shares: number): number {
+  return Math.round(shares * 10000) / 10000;
+}
+
+/**
+ * 試算精確損益平衡保本價 (Breakeven Price)
+ * 目標：以此單價出清在庫股數，扣除預估賣出證交稅與手續費後，淨所得恰好大於等於總投入成本基準
+ * @param shares 在庫持有股數
+ * @param totalCostBasis 總投入成本基準
+ * @param market 市場 ('TW' | 'US')
+ * @param symbol 股票代碼
+ * @param account 綁定之券商帳戶規則 (包含折讓率與低消)
+ */
+export function calculateBreakevenPrice(
+  shares: number,
+  totalCostBasis: number,
+  market: MarketType,
+  symbol: string,
+  account?: BrokerAccount
+): number {
+  if (shares <= 0 || totalCostBasis <= 0) return 0;
+
+  // 1. 美股免手續費帳戶 (ZERO_COMMISSION 或未指定帳戶)
+  if (market === 'US' && (!account || account.usFeeType !== 'SUB_BROKERAGE')) {
+    return roundFractionalShares(totalCostBasis / shares);
+  }
+
+  // 2. 台股或美股複委託
+  const isTW = market === 'TW';
+  const cleanSym = symbol.trim().toUpperCase();
+  const isBond = isTW && cleanSym.endsWith('B');
+  const isETF = isTW && cleanSym.startsWith('00');
+  const taxRate = isBond ? 0 : isETF ? 0.001 : isTW ? 0.003 : 0;
+
+  const feeRate = isTW
+    ? (account?.feeRate ?? 0.001425) * (account?.discountRate ?? 1.0)
+    : (account?.feeRate ?? 0.001) * (account?.discountRate ?? 1.0);
+  const minFee = account?.minFee ?? (isTW ? 20 : 0);
+
+  // 初步連續估計
+  let pEst = totalCostBasis / (shares * (1 - taxRate - feeRate));
+
+  // 若計算出的手續費小於低消，改採低消公式
+  if (shares * pEst * feeRate < minFee) {
+    pEst = (totalCostBasis + minFee) / (shares * (1 - taxRate));
+  }
+
+  // 台股精確至小數點後 2 位，美股 4 位
+  const decimals = isTW ? 2 : 4;
+  const factor = Math.pow(10, decimals);
+  let finalPrice = Math.ceil(pEst * factor) / factor;
+
+  // 離散取整階梯閉環驗證：確保賣出淨變現額 >= totalCostBasis
+  const computeNetProceeds = (p: number) => {
+    const gross = p * shares;
+    const estTax = isTW ? Math.floor(gross * taxRate) : gross * taxRate;
+    const estFee = Math.max(minFee, isTW ? Math.floor(gross * feeRate) : gross * feeRate);
+    return gross - estTax - estFee;
+  };
+
+  while (computeNetProceeds(finalPrice) < totalCostBasis - 1e-9) {
+    finalPrice = Math.round((finalPrice + 1 / factor) * factor) / factor;
+  }
+
+  return finalPrice;
 }
 
 /**
@@ -194,7 +275,7 @@ export function calculateFrictionCostSummary(
     } else if (t.type === 'DIVIDEND') {
       if (isUS) {
         // 美股現金股利 30% 預扣稅 (Withholding Tax)
-        const usDivTax = rawTax > 0 ? rawTax : Math.round(volume * 0.3);
+        const usDivTax = rawTax > 0 ? rawTax : Math.round(volume * 0.3 * 100) / 100;
         totalUSDividendTax += usDivTax;
       } else if (t.market === 'TW') {
         // 台股現金股利二代健保補充保費：單筆 >= 20,000 元課 2.11%
@@ -237,6 +318,7 @@ export function calculateFrictionCostSummary(
     totalSellFee: Math.round(totalSellFee),
     totalSellTax: Math.round(totalSellTax),
     totalUSDividendTax,
+    totalUSDividendTaxInTWD: Math.round(totalUSDividendTaxInTWD),
     totalTWDividendTax,
     totalRealizedFriction: Math.round(totalRealizedFriction),
     totalFeeSavedByDiscount: Math.round(totalFeeSavedByDiscount),
@@ -308,7 +390,7 @@ export function applyTradeToShares(
       break;
   }
 
-  return isTW ? Math.round(result) : result;
+  return isTW ? Math.round(result) : roundFractionalShares(result);
 }
 
 /**
@@ -344,7 +426,9 @@ export function calculateHoldingsAndSummary(
   usdToTwdRate: number = 32.0,
   accountingView: AccountingView = 'TOTAL_RETURN',
   accounts: BrokerAccount[] = [],
-  selectedAccountId: 'ALL' | string = 'ALL'
+  selectedAccountId: 'ALL' | string = 'ALL',
+  quotes?: Record<string, PriceQuote>,
+  accountingMethod: AccountingMethod = 'MOVING_AVERAGE'
 ): CalculationResult {
   const accountMap = new Map<string, BrokerAccount>();
   for (const acc of accounts) {
@@ -355,6 +439,11 @@ export function calculateHoldingsAndSummary(
   const filteredTrades = selectedAccountId === 'ALL'
     ? trades
     : trades.filter((t) => (t.accountId || (t.market === 'TW' ? 'broker-tw-default' : 'broker-us-default')) === selectedAccountId);
+
+  // 若採用批次沖銷會計模式 (FIFO / LIFO / HIFO)
+  const lotEngineResult = accountingMethod !== 'MOVING_AVERAGE'
+    ? processLots(filteredTrades, { accountingMethod })
+    : null;
 
   const sortedTrades = [...filteredTrades].sort((a, b) => {
     if (a.date !== b.date) {
@@ -376,6 +465,9 @@ export function calculateHoldingsAndSummary(
     totalCapitalReturned: number;
     totalStockDividendsShares: number;
     accountId?: string;
+    lastTradeDate?: string;
+    lastExitPrice?: number;
+    latestPlan?: TradePlan;
   }
 
   const map = new Map<string, Accumulator>();
@@ -423,6 +515,10 @@ export function calculateHoldingsAndSummary(
       item.name = resolveOfficialSecurityName(item.symbol, trade.name);
     }
 
+    if (trade.date) {
+      item.lastTradeDate = trade.date;
+    }
+
     const fee = Number(trade.fee) || 0;
     const tax = Number(trade.tax) || 0;
     const shares = Number(trade.shares) || 0;
@@ -436,10 +532,16 @@ export function calculateHoldingsAndSummary(
         item.shares += shares;
         item.originalBuyShares += shares;
         item.totalCostBasis += netCost;
+        if (trade.plan) {
+          item.latestPlan = trade.plan;
+        }
         break;
       }
 
       case 'SELL': {
+        if (price > 0) {
+          item.lastExitPrice = price;
+        }
         if (item.shares > 0) {
           const soldShares = Math.min(shares, item.shares);
           const avgUnitCost = item.totalCostBasis / item.shares;
@@ -484,13 +586,19 @@ export function calculateHoldingsAndSummary(
 
       case 'CAPITAL_REDUCTION': {
         const reduced = shares > 0 ? Math.min(shares, item.shares) : (ratio > 0 ? item.shares * ratio : 0);
-        const finalReduced = item.market === 'TW' ? Math.round(reduced) : reduced;
+        const finalReduced = item.market === 'TW' ? Math.round(reduced) : roundFractionalShares(reduced);
         item.shares = Math.max(0, item.shares - finalReduced);
 
         const refund = cashAmount > 0 ? cashAmount : (price > 0 && finalReduced > 0 ? finalReduced * price : 0);
         if (refund > 0) {
           item.totalCapitalReturned += refund;
-          item.totalCostBasis = Math.max(0, item.totalCostBasis - refund);
+          if (refund > item.totalCostBasis) {
+            const excessGain = refund - item.totalCostBasis;
+            item.realizedPnL += excessGain;
+            item.totalCostBasis = 0;
+          } else {
+            item.totalCostBasis -= refund;
+          }
         }
 
         if (item.shares <= 0) {
@@ -586,7 +694,24 @@ export function calculateHoldingsAndSummary(
   const holdings: HoldingPosition[] = [];
 
   for (const item of map.values()) {
-    const avgCost = item.shares > 0 ? item.totalCostBasis / item.shares : 0;
+    let finalCostBasis = item.totalCostBasis;
+    let finalRealizedPnL = item.realizedPnL;
+    let openLotsCount = 0;
+
+    if (lotEngineResult) {
+      const symOpenLots = lotEngineResult.openLots.filter((l) => l.symbol === item.symbol);
+      openLotsCount = symOpenLots.length;
+      if (symOpenLots.length > 0) {
+        finalCostBasis = symOpenLots.reduce((sum, l) => sum + l.totalCostBasis, 0);
+      } else if (item.shares === 0) {
+        finalCostBasis = 0;
+      }
+      if (lotEngineResult.realizedPnLBySymbol[item.symbol] !== undefined) {
+        finalRealizedPnL = lotEngineResult.realizedPnLBySymbol[item.symbol];
+      }
+    }
+
+    const avgCost = item.shares > 0 ? finalCostBasis / item.shares : 0;
     const currentPrice = currentPrices[item.symbol] !== undefined ? currentPrices[item.symbol] : (avgCost || 0);
     const grossMarketValue = item.shares * currentPrice;
     
@@ -597,18 +722,50 @@ export function calculateHoldingsAndSummary(
     const estimatedSellFee = calculateAccountSellFee(grossMarketValue, targetAccount);
     const netMarketValue = Math.max(0, grossMarketValue - estimatedSellTax - estimatedSellFee);
 
-    const unrealizedPnLBroker = netMarketValue - item.totalCostBasis;
-    const unrealizedPnLBrokerPercent = item.totalCostBasis > 0 ? (unrealizedPnLBroker / item.totalCostBasis) * 100 : 0;
+    const unrealizedPnLBroker = netMarketValue - finalCostBasis;
+    const unrealizedPnLBrokerPercent = finalCostBasis > 0 ? (unrealizedPnLBroker / finalCostBasis) * 100 : 0;
 
-    const totalReturnPnL = (grossMarketValue - item.totalCostBasis) + item.totalDividends + item.realizedPnL;
-    const totalReturnPercent = item.totalCostBasis > 0 ? (totalReturnPnL / item.totalCostBasis) * 100 : 0;
-    const adjustedCostBasis = Math.max(0, item.totalCostBasis - item.totalDividends);
-    const yieldOnCostPercent = item.totalCostBasis > 0 ? (item.totalDividends / item.totalCostBasis) * 100 : 0;
+    const totalReturnPnL = (grossMarketValue - finalCostBasis) + item.totalDividends + finalRealizedPnL;
+    const totalReturnPercent = finalCostBasis > 0 ? (totalReturnPnL / finalCostBasis) * 100 : 0;
+    const adjustedCostBasis = Math.max(0, finalCostBasis - item.totalDividends);
+    const yieldOnCostPercent = finalCostBasis > 0 ? (item.totalDividends / finalCostBasis) * 100 : 0;
 
     const isBroker = accountingView === 'BROKER';
     const marketValue = isBroker ? netMarketValue : grossMarketValue;
-    const unrealizedPnL = isBroker ? unrealizedPnLBroker : (grossMarketValue - item.totalCostBasis);
-    const unrealizedPnLPercent = isBroker ? unrealizedPnLBrokerPercent : (item.totalCostBasis > 0 ? (unrealizedPnL / item.totalCostBasis) * 100 : 0);
+    const unrealizedPnL = isBroker ? unrealizedPnLBroker : (grossMarketValue - finalCostBasis);
+    const unrealizedPnLPercent = isBroker ? unrealizedPnLBrokerPercent : (finalCostBasis > 0 ? (unrealizedPnL / finalCostBasis) * 100 : 0);
+    const isClosed = item.shares === 0;
+
+    const secXirr = calculateSecurityXirr({
+      symbol: item.symbol,
+      trades: sortedTrades,
+      currentMarketValue: grossMarketValue,
+      currency: item.currency,
+    });
+
+    const quote = quotes?.[item.symbol];
+    const previousClose = quote?.previousClose;
+    let todaysPnL: number | undefined = undefined;
+    let todaysPnLPercent: number | undefined = undefined;
+    let todaysChange: number | undefined = undefined;
+
+    if (typeof previousClose === 'number' && previousClose > 0 && item.shares > 0) {
+      todaysChange = currentPrice - previousClose;
+      todaysPnL = item.shares * todaysChange;
+      todaysPnLPercent = (todaysChange / previousClose) * 100;
+    } else if (typeof quote?.change === 'number' && item.shares > 0) {
+      todaysChange = quote.change;
+      todaysPnL = item.shares * quote.change;
+      todaysPnLPercent = quote.changePercent ?? 0;
+    }
+
+    const breakevenPrice = item.shares > 0
+      ? calculateBreakevenPrice(item.shares, finalCostBasis, item.market, item.symbol, targetAccount)
+      : undefined;
+
+    const riskMetrics = item.shares > 0 && item.latestPlan
+      ? buildHoldingRiskMetrics(currentPrice, item.latestPlan, avgCost)
+      : undefined;
 
     holdings.push({
       symbol: item.symbol,
@@ -618,7 +775,7 @@ export function calculateHoldingsAndSummary(
       shares: item.shares,
       originalBuyShares: item.originalBuyShares,
       avgCost,
-      totalCostBasis: item.totalCostBasis,
+      totalCostBasis: finalCostBasis,
       adjustedCostBasis,
       currentPrice,
       marketValue,
@@ -630,13 +787,26 @@ export function calculateHoldingsAndSummary(
       unrealizedPnLPercent,
       unrealizedPnLBroker,
       unrealizedPnLBrokerPercent,
-      realizedPnL: item.realizedPnL,
+      realizedPnL: finalRealizedPnL,
       totalDividends: item.totalDividends,
       totalCapitalReturned: item.totalCapitalReturned,
       totalStockDividendsShares: item.totalStockDividendsShares,
       totalReturnPnL,
       totalReturnPercent,
       yieldOnCostPercent,
+      xirrPercent: secXirr.ratePercent,
+      isXirrAnnualized: secXirr.isAnnualized,
+      todaysPnL,
+      todaysPnLPercent,
+      todaysChange,
+      breakevenPrice,
+      exitPrice: item.lastExitPrice,
+      lastTradeDate: item.lastTradeDate,
+      isClosed,
+      accountingMethod,
+      openLotsCount,
+      plan: item.latestPlan,
+      riskMetrics,
     });
   }
 
@@ -664,6 +834,8 @@ export function calculateHoldingsAndSummary(
       totalCapitalReturned: 0,
       totalReturnPnL: 0,
       totalReturnPercent: 0,
+      todayPnL: 0,
+      todayPnLPercent: 0,
     },
     usd: {
       totalCost: 0,
@@ -679,6 +851,8 @@ export function calculateHoldingsAndSummary(
       totalCapitalReturned: 0,
       totalReturnPnL: 0,
       totalReturnPercent: 0,
+      todayPnL: 0,
+      todayPnLPercent: 0,
     },
     combinedTWD: {
       totalCost: 0,
@@ -695,6 +869,8 @@ export function calculateHoldingsAndSummary(
       totalReturnPnL: 0,
       totalReturnPercent: 0,
       netAssetValue: 0,
+      todayPnL: 0,
+      todayPnLPercent: 0,
     },
     usdToTwdRate,
   };
@@ -712,15 +888,27 @@ export function calculateHoldingsAndSummary(
     targetSlice.totalDividends += h.totalDividends;
     targetSlice.totalCapitalReturned += h.totalCapitalReturned;
     targetSlice.totalReturnPnL += h.totalReturnPnL;
+    if (h.todaysPnL !== undefined && h.shares > 0) {
+      targetSlice.todayPnL = (targetSlice.todayPnL || 0) + h.todaysPnL;
+    }
   }
 
   if (summary.twd.totalCost > 0) {
     summary.twd.unrealizedPnLPercent = (summary.twd.unrealizedPnL / summary.twd.totalCost) * 100;
     summary.twd.totalReturnPercent = (summary.twd.totalReturnPnL / summary.twd.totalCost) * 100;
   }
+  const twdPrevGross = summary.twd.grossMarketValue - (summary.twd.todayPnL || 0);
+  if (twdPrevGross > 0 && summary.twd.todayPnL !== undefined) {
+    summary.twd.todayPnLPercent = (summary.twd.todayPnL / twdPrevGross) * 100;
+  }
+
   if (summary.usd.totalCost > 0) {
     summary.usd.unrealizedPnLPercent = (summary.usd.unrealizedPnL / summary.usd.totalCost) * 100;
     summary.usd.totalReturnPercent = (summary.usd.totalReturnPnL / summary.usd.totalCost) * 100;
+  }
+  const usdPrevGross = summary.usd.grossMarketValue - (summary.usd.todayPnL || 0);
+  if (usdPrevGross > 0 && summary.usd.todayPnL !== undefined) {
+    summary.usd.todayPnLPercent = (summary.usd.todayPnL / usdPrevGross) * 100;
   }
 
   const usdRate = usdToTwdRate > 0 ? usdToTwdRate : 32.0;
@@ -735,16 +923,164 @@ export function calculateHoldingsAndSummary(
   summary.combinedTWD.totalDividends = summary.twd.totalDividends + (summary.usd.totalDividends * usdRate);
   summary.combinedTWD.totalCapitalReturned = summary.twd.totalCapitalReturned + (summary.usd.totalCapitalReturned * usdRate);
   summary.combinedTWD.totalReturnPnL = summary.twd.totalReturnPnL + (summary.usd.totalReturnPnL * usdRate);
+  summary.combinedTWD.todayPnL = (summary.twd.todayPnL || 0) + ((summary.usd.todayPnL || 0) * usdRate);
   summary.combinedTWD.netAssetValue = summary.combinedTWD.marketValue;
 
   if (summary.combinedTWD.totalCost > 0) {
     summary.combinedTWD.unrealizedPnLPercent = (summary.combinedTWD.unrealizedPnL / summary.combinedTWD.totalCost) * 100;
     summary.combinedTWD.totalReturnPercent = (summary.combinedTWD.totalReturnPnL / summary.combinedTWD.totalCost) * 100;
   }
+  const combinedPrevGross = summary.combinedTWD.grossMarketValue - (summary.combinedTWD.todayPnL || 0);
+  if (combinedPrevGross > 0 && summary.combinedTWD.todayPnL !== undefined) {
+    summary.combinedTWD.todayPnLPercent = (summary.combinedTWD.todayPnL / combinedPrevGross) * 100;
+  }
 
   const frictionSummary = calculateFrictionCostSummary(filteredTrades, holdings, accounts, usdRate);
+  const closedSummary = calculateClosedPositionsSummary(holdings, usdRate, filteredTrades);
 
-  return { holdings, summary, frictionSummary };
+  return { holdings, summary, frictionSummary, closedSummary, accountingMethod };
+}
+
+/**
+ * 計算已平倉標的之統計指標（勝率、賺賠比、最大贏家/輸家、紀律覆盤總結）
+ */
+export function calculateClosedPositionsSummary(
+  holdings: HoldingPosition[],
+  usdToTwdRate: number = 32.0,
+  trades: TradeRecord[] = []
+): ClosedPositionsSummary {
+  // 已平倉定義：目前股數為 0，且歷史上曾有交易或已實現損益／股利
+  const closedHoldings = holdings.filter(
+    (h) => h.shares === 0 && (h.realizedPnL !== 0 || (h.totalDividends || 0) > 0 || (h.originalBuyShares || 0) > 0)
+  );
+
+  let totalRealizedPnL = 0;
+  let totalDividends = 0;
+  let winningTradesCount = 0;
+  let losingTradesCount = 0;
+  let breakEvenTradesCount = 0;
+
+  let bestWinner: ClosedPositionsSummary['bestWinner'] = undefined;
+  let worstLoser: ClosedPositionsSummary['worstLoser'] = undefined;
+
+  for (const h of closedHoldings) {
+    const rate = (h.market === 'US' || h.currency === 'USD') ? usdToTwdRate : 1.0;
+    const pnlInTWD = h.realizedPnL * rate;
+    const divInTWD = (h.totalDividends || 0) * rate;
+
+    totalRealizedPnL += pnlInTWD;
+    totalDividends += divInTWD;
+
+    if (h.realizedPnL > 0) {
+      winningTradesCount++;
+    } else if (h.realizedPnL < 0) {
+      losingTradesCount++;
+    } else {
+      breakEvenTradesCount++;
+    }
+
+    if (!bestWinner || h.realizedPnL > bestWinner.pnl) {
+      bestWinner = {
+        symbol: h.symbol,
+        name: h.name,
+        pnl: h.realizedPnL,
+        pnlPercent: h.totalReturnPercent || 0,
+        market: h.market,
+        currency: h.currency,
+      };
+    }
+
+    if (!worstLoser || h.realizedPnL < worstLoser.pnl) {
+      worstLoser = {
+        symbol: h.symbol,
+        name: h.name,
+        pnl: h.realizedPnL,
+        pnlPercent: h.totalReturnPercent || 0,
+        market: h.market,
+        currency: h.currency,
+      };
+    }
+  }
+
+  const totalTradesCount = closedHoldings.length;
+  const winRatePercent = totalTradesCount > 0 ? (winningTradesCount / totalTradesCount) * 100 : 0;
+
+  // 統計賽後紀律覆盤指標 (DisciplineSummary)
+  let disciplineSummary: DisciplineSummary | undefined = undefined;
+  const reviewedTrades = trades.filter((t) => t.review !== undefined);
+
+  if (reviewedTrades.length > 0) {
+    let followedPlanCount = 0;
+    let totalScore = 0;
+    let disciplinedPnLSum = 0;
+    let disciplinedTradesCount = 0;
+    let undisciplinedPnLSum = 0;
+    let undisciplinedTradesCount = 0;
+
+    const mistakeCounts: Record<TradeMistakeType, number> = {
+      CHASE_HIGH: 0,
+      HOLD_LOSER: 0,
+      PREMATURE_PROFIT: 0,
+      EMOTIONAL_SIZE: 0,
+      NO_PLAN: 0,
+      OTHER: 0,
+    };
+
+    for (const t of reviewedTrades) {
+      const review = t.review!;
+      totalScore += review.disciplineScore || 0;
+
+      // 估計該筆交易之損益影響 (以平倉或關聯標的計算)
+      const matchedHolding = holdings.find((h) => h.symbol === t.symbol);
+      const rate = (t.market === 'US' || t.currency === 'USD') ? usdToTwdRate : 1.0;
+      const tradePnL = matchedHolding ? matchedHolding.realizedPnL * rate : 0;
+
+      if (review.isPlanFollowed) {
+        followedPlanCount++;
+        disciplinedPnLSum += tradePnL;
+        disciplinedTradesCount++;
+      } else {
+        undisciplinedPnLSum += tradePnL;
+        undisciplinedTradesCount++;
+      }
+
+      if (review.mistakesMade) {
+        for (const m of review.mistakesMade) {
+          if (mistakeCounts[m] !== undefined) {
+            mistakeCounts[m]++;
+          }
+        }
+      }
+    }
+
+    const topMistakes = (Object.entries(mistakeCounts) as [TradeMistakeType, number][])
+      .filter(([_, count]) => count > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([mistake, count]) => ({ mistake, count }));
+
+    disciplineSummary = {
+      totalReviewedTrades: reviewedTrades.length,
+      followedPlanTradesCount: followedPlanCount,
+      disciplineRatePercent: Math.round((followedPlanCount / reviewedTrades.length) * 10000) / 100,
+      averageDisciplineScore: Math.round((totalScore / reviewedTrades.length) * 10) / 10,
+      topMistakes,
+      disciplinedAvgPnL: disciplinedTradesCount > 0 ? Math.round(disciplinedPnLSum / disciplinedTradesCount) : 0,
+      undisciplinedAvgPnL: undisciplinedTradesCount > 0 ? Math.round(undisciplinedPnLSum / undisciplinedTradesCount) : 0,
+    };
+  }
+
+  return {
+    totalRealizedPnL: Math.round(totalRealizedPnL),
+    totalDividends: Math.round(totalDividends),
+    totalTradesCount,
+    winningTradesCount,
+    losingTradesCount,
+    breakEvenTradesCount,
+    winRatePercent,
+    bestWinner,
+    worstLoser,
+    disciplineSummary,
+  };
 }
 
 /**

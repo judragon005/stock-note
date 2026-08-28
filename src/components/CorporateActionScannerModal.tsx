@@ -3,6 +3,7 @@ import { TradeRecord } from '../types/stock';
 import { scanCorporateActions, ScannedCorporateAction, ScanProgress } from '../engine/corporateActionScanner';
 import { X, Sparkles, CheckCircle2, RefreshCw, Square, Play, AlertCircle } from 'lucide-react';
 import { logger } from '../utils/logger';
+import { formatCurrencyAmount, formatSharesCount, normalizeCurrencyPrecision } from '../utils/formatters';
 
 interface CorporateActionScannerModalProps {
   isOpen: boolean;
@@ -174,6 +175,7 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
         market: a.market,
         currency: a.currency,
         type: a.type,
+        accountId: a.market === 'US' ? 'broker-us-default' : 'broker-tw-default',
         shares: isStockDiv ? a.estimatedSharesChange :
                 isReduction ? Math.abs(a.estimatedSharesChange) :
                 isSplit ? 0 : a.sharesHeldOnDate,
@@ -181,10 +183,10 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
         fee: 0,
         tax: 0,
         ratio: a.ratio,
-        cashAmount: a.estimatedCashAmount > 0 ? a.estimatedCashAmount : undefined,
+        cashAmount: a.estimatedCashAmount > 0 ? normalizeCurrencyPrecision(a.estimatedCashAmount, a.currency) : undefined,
         exDate: a.date,
         tags: ['智慧自動補登', '公司行動'],
-        note: `【智慧補登】基準日持股 ${a.sharesHeldOnDate} 股。${a.description}`,
+        note: `【智慧補登】基準日持股 ${formatSharesCount(a.sharesHeldOnDate, a.market)} 股。${a.description}`,
         createdAt: Date.now(),
       };
     });
@@ -518,10 +520,10 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
                     {/* Right: Estimated Payout & Status */}
                     <div style={{ textAlign: 'right' }}>
                       <div className="mono" style={{ fontWeight: 700, fontSize: '0.875rem', color: isDiv ? '#fbbf24' : isStockDiv ? '#c084fc' : '#38bdf8' }}>
-                        {isDiv && `+${act.currency} ${Math.round(act.estimatedCashAmount).toLocaleString()}`}
-                        {isStockDiv && `+${act.estimatedSharesChange.toLocaleString()} 股`}
+                        {isDiv && `+${formatCurrencyAmount(act.estimatedCashAmount, act.currency)}`}
+                        {isStockDiv && `+${formatSharesCount(act.estimatedSharesChange, act.market)} 股`}
                         {isSplit && `${act.ratio}x 分割`}
-                        {isReduction && `+${act.currency} ${Math.round(act.estimatedCashAmount).toLocaleString()}`}
+                        {isReduction && `+${formatCurrencyAmount(act.estimatedCashAmount, act.currency)}`}
                       </div>
                       <div style={{ fontSize: '0.7rem' }}>
                         {act.isAlreadyRecorded ? (
@@ -554,8 +556,8 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
         >
           <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
             已選取 <strong style={{ color: '#fff' }}>{selectedCount}</strong> 項
-            {totalTwdCash > 0 && <span> · 預估入帳 <strong>NT$ {totalTwdCash.toLocaleString()}</strong></span>}
-            {totalUsdCash > 0 && <span> · 預估入帳 <strong>${totalUsdCash.toFixed(2)}</strong></span>}
+            {totalTwdCash > 0 && <span> · 預估入帳 <strong>{formatCurrencyAmount(totalTwdCash, 'TWD')}</strong></span>}
+            {totalUsdCash > 0 && <span> · 預估入帳 <strong>{formatCurrencyAmount(totalUsdCash, 'USD')}</strong></span>}
             {totalStockDivShares > 0 && <span> · 預估配股 <strong>+{totalStockDivShares.toLocaleString()} 股</strong></span>}
           </div>
 

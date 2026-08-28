@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { TradeRecord, MarketType, TradeType, Currency, BrokerAccount } from '../types/stock';
+import { TradeRecord, MarketType, TradeType, Currency, BrokerAccount, TradePlan } from '../types/stock';
 import { calculateTaiwanFee, calculateTaiwanTax, getHoldingsAsOfDate } from '../engine/calculator';
-import { X, Plus, Calculator, Zap, Sparkles, Calendar } from 'lucide-react';
+import { calculatePlannedRiskRewardRatio } from '../engine/riskAlertEngine';
+import { X, Plus, Calculator, Zap, Sparkles, Calendar, Target, ShieldAlert, TrendingUp } from 'lucide-react';
 
 interface TradeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSaveTrade: (trade: Omit<TradeRecord, 'id' | 'createdAt'>) => void;
+  onSaveTrade: (trade: Omit<TradeRecord, 'id' | 'createdAt'>, existingTradeId?: string) => void;
+  editingTrade?: TradeRecord | null;
   initialSymbol?: string;
   initialType?: TradeType;
+  initialMarket?: MarketType;
+  initialAccountId?: string;
   trades?: TradeRecord[];
   accounts?: BrokerAccount[];
 }
@@ -17,6 +21,27 @@ interface StockSuggestion {
   symbol: string;
   name: string;
   market: MarketType;
+}
+
+/**
+ * 依據目標市場與給定的候選帳戶 ID，計算有效相容的帳戶 ID
+ */
+export function getEffectiveAccountIdForMarket(
+  targetMarket: MarketType,
+  candidateAccountId: string | undefined,
+  accounts: BrokerAccount[]
+): string {
+  if (candidateAccountId) {
+    const matched = accounts.find((a) => a.id === candidateAccountId);
+    if (matched && matched.market === targetMarket) {
+      return matched.id;
+    }
+  }
+  const defaultAcc = accounts.find((a) => a.market === targetMarket && a.isDefault);
+  if (defaultAcc) return defaultAcc.id;
+  const firstAcc = accounts.find((a) => a.market === targetMarket);
+  if (firstAcc) return firstAcc.id;
+  return targetMarket === 'TW' ? 'broker-tw-default' : 'broker-us-default';
 }
 
 const POPULAR_STOCKS: StockSuggestion[] = [
@@ -52,13 +77,18 @@ export const TradeModal: React.FC<TradeModalProps> = ({
   isOpen,
   onClose,
   onSaveTrade,
+  editingTrade,
   initialSymbol = '',
   initialType = 'BUY',
+  initialMarket = 'TW',
+  initialAccountId,
   trades = [],
   accounts = [],
 }) => {
-  const [market, setMarket] = useState<MarketType>('TW');
-  const [accountId, setAccountId] = useState<string>('broker-tw-default');
+  const [market, setMarket] = useState<MarketType>(initialMarket);
+  const [accountId, setAccountId] = useState<string>(() =>
+    getEffectiveAccountIdForMarket(initialMarket, initialAccountId, accounts)
+  );
   const [type, setType] = useState<TradeType>(initialType);
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [symbol, setSymbol] = useState<string>(initialSymbol);
@@ -77,6 +107,12 @@ export const TradeModal: React.FC<TradeModalProps> = ({
   const [tags, setTags] = useState<string[]>(['核心持股']);
   const [note, setNote] = useState<string>('');
 
+  // 交易計畫與風控狀態 (Trade Plan)
+  const [entryReason, setEntryReason] = useState<string>('');
+  const [stopLossPrice, setStopLossPrice] = useState<string>('');
+  const [takeProfitPrice, setTakeProfitPrice] = useState<string>('');
+  const [isPlanExpanded, setIsPlanExpanded] = useState<boolean>(false);
+
   // 智慧折數與連續記帳狀態
   const [feeDiscount, setFeeDiscount] = useState<string>('0.28'); // 預設 2.8 折
   const [customDiscount, setCustomDiscount] = useState<string>('0.28');
@@ -92,18 +128,83 @@ export const TradeModal: React.FC<TradeModalProps> = ({
     return getHoldingsAsOfDate(trades, date, symbol.trim().toUpperCase());
   }, [trades, date, symbol]);
 
-  useEffect(() => {
-    if (initialSymbol) {
-      setSymbol(initialSymbol);
-      if (/^[0-9]+$/.test(initialSymbol)) {
-        setMarket('TW');
-      } else {
-        setMarket('US');
-        setShares('10');
+  // 切換市場時連動帳戶與手續費折數
+  const handleMarketChange = (newMarket: MarketType) => {
+    setMarket(newMarket);
+    const nextAccId = getEffectiveAccountIdForMarket(newMarket, accountId, accounts);
+    setAccountId(nextAccId);
+    if (newMarket === 'TW') {
+      if (shares === '10') setShares('1000');
+      const acc = accounts.find((a) => a.id === nextAccId);
+      if (acc) {
+        setFeeDiscount(acc.discountRate.toString());
       }
+    } else {
+      if (shares === '1000') setShares('10');
     }
-    setType(initialType);
-  }, [initialSymbol, initialType, isOpen]);
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      if (editingTrade) {
+        setMarket(editingTrade.market);
+        setAccountId(editingTrade.accountId || (editingTrade.market === 'US' ? 'broker-us-default' : 'broker-tw-default'));
+        setType(editingTrade.type);
+        setDate(editingTrade.date);
+        setSymbol(editingTrade.symbol);
+        setName(editingTrade.name || '');
+        setShares(editingTrade.shares !== undefined ? editingTrade.shares.toString() : '0');
+        setPrice(editingTrade.price !== undefined ? editingTrade.price.toString() : '0');
+        setFee(editingTrade.fee !== undefined ? editingTrade.fee.toString() : '0');
+        setTax(editingTrade.tax !== undefined ? editingTrade.tax.toString() : '0');
+        setRatio(editingTrade.ratio !== undefined ? editingTrade.ratio.toString() : '');
+        setCashAmount(editingTrade.cashAmount !== undefined ? editingTrade.cashAmount.toString() : '');
+        setTargetSymbol(editingTrade.targetSymbol || '');
+        setTargetName(editingTrade.targetName || '');
+        setAllocationRatio(editingTrade.allocationRatio !== undefined ? editingTrade.allocationRatio.toString() : '0.2');
+        setConversionPrice(editingTrade.conversionPrice !== undefined ? editingTrade.conversionPrice.toString() : '');
+        setTags(editingTrade.tags || []);
+        setNote(editingTrade.note || '');
+        if (editingTrade.plan) {
+          setEntryReason(editingTrade.plan.entryReason || '');
+          setStopLossPrice(editingTrade.plan.stopLossPrice !== undefined ? editingTrade.plan.stopLossPrice.toString() : '');
+          setTakeProfitPrice(editingTrade.plan.takeProfitPrice !== undefined ? editingTrade.plan.takeProfitPrice.toString() : '');
+          setIsPlanExpanded(true);
+        } else {
+          setEntryReason('');
+          setStopLossPrice('');
+          setTakeProfitPrice('');
+          setIsPlanExpanded(false);
+        }
+        return;
+      }
+
+      let targetMkt: MarketType = initialMarket || 'TW';
+      if (initialSymbol) {
+        setSymbol(initialSymbol);
+        if (/^[0-9]+$/.test(initialSymbol)) {
+          targetMkt = 'TW';
+          setShares('1000');
+        } else {
+          targetMkt = 'US';
+          setShares('10');
+        }
+      }
+      setMarket(targetMkt);
+      const effectiveId = getEffectiveAccountIdForMarket(targetMkt, initialAccountId, accounts);
+      setAccountId(effectiveId);
+
+      const chosenAcc = accounts.find((a) => a.id === effectiveId);
+      if (chosenAcc && chosenAcc.market === 'TW') {
+        setFeeDiscount(chosenAcc.discountRate.toString());
+      }
+      setType(initialType);
+      setEntryReason('');
+      setStopLossPrice('');
+      setTakeProfitPrice('');
+      setIsPlanExpanded(false);
+    }
+  }, [initialSymbol, initialType, initialMarket, initialAccountId, isOpen, accounts, editingTrade]);
 
   // 當切換類別時，動態設置預設提示與計算
   useEffect(() => {
@@ -248,12 +349,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
   const handleSelectSuggestion = (suggestion: StockSuggestion) => {
     setSymbol(suggestion.symbol);
     setName(suggestion.name);
-    setMarket(suggestion.market);
-    if (suggestion.market === 'US' && shares === '1000') {
-      setShares('10');
-    } else if (suggestion.market === 'TW' && shares === '10') {
-      setShares('1000');
-    }
+    handleMarketChange(suggestion.market);
     setShowSuggestions(false);
   };
 
@@ -287,30 +383,52 @@ export const TradeModal: React.FC<TradeModalProps> = ({
       return;
     }
 
-    onSaveTrade({
-      date,
-      symbol: symbol.trim().toUpperCase(),
-      name: name.trim() || symbol.trim().toUpperCase(),
-      market,
-      currency,
-      type,
-      accountId,
-      shares: s,
-      price: p,
-      fee: f,
-      tax: t,
-      ratio: r,
-      cashAmount: c,
-      exDate: date,
-      targetSymbol: targetSymbol ? targetSymbol.trim().toUpperCase() : undefined,
-      targetName: targetName ? targetName.trim() : undefined,
-      allocationRatio: allocationRatio ? parseFloat(allocationRatio) : undefined,
-      conversionPrice: conversionPrice ? parseFloat(conversionPrice) : undefined,
-      tags,
-      note: note.trim(),
-    });
+    const numPrice = parseFloat(price) || 0;
+    const numStopLoss = stopLossPrice ? parseFloat(stopLossPrice) : undefined;
+    const numTakeProfit = takeProfitPrice ? parseFloat(takeProfitPrice) : undefined;
 
-    if (continuousMode) {
+    let tradePlan: TradePlan | undefined = undefined;
+    if (entryReason.trim() || numStopLoss !== undefined || numTakeProfit !== undefined) {
+      const rr =
+        numPrice > 0
+          ? calculatePlannedRiskRewardRatio(numPrice, numStopLoss, numTakeProfit)
+          : undefined;
+      tradePlan = {
+        entryReason: entryReason.trim() || undefined,
+        stopLossPrice: numStopLoss,
+        takeProfitPrice: numTakeProfit,
+        plannedRiskRewardRatio: rr,
+      };
+    }
+
+    onSaveTrade(
+      {
+        date,
+        symbol: symbol.trim().toUpperCase(),
+        name: name.trim() || symbol.trim().toUpperCase(),
+        market,
+        currency,
+        type,
+        accountId,
+        shares: s,
+        price: p,
+        fee: f,
+        tax: t,
+        ratio: r,
+        cashAmount: c,
+        exDate: date,
+        targetSymbol: targetSymbol ? targetSymbol.trim().toUpperCase() : undefined,
+        targetName: targetName ? targetName.trim() : undefined,
+        allocationRatio: allocationRatio ? parseFloat(allocationRatio) : undefined,
+        conversionPrice: conversionPrice ? parseFloat(conversionPrice) : undefined,
+        tags,
+        note: note.trim(),
+        plan: tradePlan,
+      },
+      editingTrade?.id
+    );
+
+    if (continuousMode && !editingTrade) {
       // 連續記帳模式：保留日期、市場與折數，清空代碼、價格與備註
       setSymbol('');
       setName('');
@@ -325,6 +443,9 @@ export const TradeModal: React.FC<TradeModalProps> = ({
       setAllocationRatio('0.2');
       setConversionPrice('');
       setNote('');
+      setEntryReason('');
+      setStopLossPrice('');
+      setTakeProfitPrice('');
       if (symbolInputRef.current) {
         symbolInputRef.current.focus();
       }
@@ -378,20 +499,33 @@ export const TradeModal: React.FC<TradeModalProps> = ({
 
         {/* Title */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px' }}>
-          <span style={{ fontSize: '1.4rem' }}>📝</span>
+          <span style={{ fontSize: '1.4rem' }}>{editingTrade ? '✏️' : '📝'}</span>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: '#ffffff' }}>
-            {type === 'BUY' ? '新增買進紀錄' :
-             type === 'SELL' ? '新增賣出結算' :
-             type === 'DIVIDEND' ? '記錄現金股利 (除息)' :
-             type === 'STOCK_DIVIDEND' ? '記錄除權配股' :
-             type === 'STOCK_SPLIT' ? '記錄股票分割/反分割' :
-             type === 'CAPITAL_REDUCTION' ? '記錄現金/虧損減資' :
-             type === 'CAPITAL_INCREASE' ? '記錄現金增資認股' :
-             type === 'STOCK_MERGER' ? '記錄換股合併 / 股份轉換' :
-             type === 'PREFERRED_REDEMPTION' ? '記錄特別股收回 / 贖回' :
-             type === 'SPIN_OFF' ? '記錄企業分拆獨立上市' :
-             type === 'CB_CONVERSION' ? '記錄可轉債 (CB) 換股普通股' :
-             '記錄公開收購 / 私有化下市'}
+            {editingTrade
+              ? `編輯交易紀錄 (${editingTrade.symbol})`
+              : type === 'BUY'
+              ? '新增買進紀錄'
+              : type === 'SELL'
+              ? '新增賣出結算'
+              : type === 'DIVIDEND'
+              ? '記錄現金股利 (除息)'
+              : type === 'STOCK_DIVIDEND'
+              ? '記錄除權配股'
+              : type === 'STOCK_SPLIT'
+              ? '記錄股票分割/反分割'
+              : type === 'CAPITAL_REDUCTION'
+              ? '記錄現金/虧損減資'
+              : type === 'CAPITAL_INCREASE'
+              ? '記錄現金增資認股'
+              : type === 'STOCK_MERGER'
+              ? '記錄換股合併 / 股份轉換'
+              : type === 'PREFERRED_REDEMPTION'
+              ? '記錄特別股收回 / 贖回'
+              : type === 'SPIN_OFF'
+              ? '記錄企業分拆獨立上市'
+              : type === 'CB_CONVERSION'
+              ? '記錄可轉債 (CB) 換股普通股'
+              : '記錄公開收購 / 私有化下市'}
           </h2>
         </div>
 
@@ -407,10 +541,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <button
                     type="button"
-                    onClick={() => {
-                      setMarket('TW');
-                      if (shares === '10') setShares('1000');
-                    }}
+                    onClick={() => handleMarketChange('TW')}
                     style={{
                       flex: 1,
                       padding: '8px',
@@ -426,10 +557,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      setMarket('US');
-                      if (shares === '1000') setShares('10');
-                    }}
+                    onClick={() => handleMarketChange('US')}
                     style={{
                       flex: 1,
                       padding: '8px',
@@ -799,6 +927,231 @@ export const TradeModal: React.FC<TradeModalProps> = ({
                   required
                 />
               </div>
+            </div>
+          )}
+
+          {/* 1.1 交易計畫與風控設定 (僅在 BUY 建倉時提供) */}
+          {type === 'BUY' && (
+            <div
+              style={{
+                marginBottom: '16px',
+                borderRadius: '10px',
+                border: '1px solid rgba(59, 130, 246, 0.25)',
+                background: 'rgba(15, 23, 42, 0.6)',
+                overflow: 'hidden',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setIsPlanExpanded(!isPlanExpanded)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 14px',
+                  background: isPlanExpanded ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
+                  border: 'none',
+                  color: '#93c5fd',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Target size={16} color="#60a5fa" />
+                  <span>🎯 交易作戰計畫與風控設定 (選填)</span>
+                  {(stopLossPrice || takeProfitPrice || entryReason) && (
+                    <span
+                      style={{
+                        fontSize: '0.7rem',
+                        background: 'rgba(16, 185, 129, 0.2)',
+                        color: '#34d399',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      已設定
+                    </span>
+                  )}
+                </div>
+                <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                  {isPlanExpanded ? '▲ 收合' : '▼ 展開設定'}
+                </span>
+              </button>
+
+              {isPlanExpanded && (
+                <div style={{ padding: '14px', borderTop: '1px solid rgba(59, 130, 246, 0.15)' }}>
+                  <div style={{ marginBottom: '12px' }}>
+                    <label
+                      style={{
+                        display: 'block',
+                        fontSize: '0.8rem',
+                        color: 'var(--text-secondary)',
+                        marginBottom: '6px',
+                        fontWeight: 600,
+                      }}
+                    >
+                      進場理由 / 交易假說
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="如：突破頸線、月線有撐、營收創高、季線回踩"
+                      value={entryReason}
+                      onChange={(e) => setEntryReason(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        background: 'var(--bg-input)',
+                        border: '1px solid var(--border-color)',
+                        color: '#fff',
+                        fontSize: '0.85rem',
+                      }}
+                    />
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: '12px',
+                      marginBottom: '12px',
+                    }}
+                  >
+                    <div>
+                      <label
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '0.8rem',
+                          color: '#f87171',
+                          marginBottom: '6px',
+                          fontWeight: 600,
+                        }}
+                      >
+                        <ShieldAlert size={14} /> 預設停損價 ({currency})
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="跌破此價停損"
+                        value={stopLossPrice}
+                        onChange={(e) => setStopLossPrice(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          background: 'var(--bg-input)',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          color: '#fca5a5',
+                          fontSize: '0.85rem',
+                          textAlign: 'right',
+                        }}
+                      />
+                      {parseFloat(price) > 0 && parseFloat(stopLossPrice) > 0 && (
+                        <div
+                          style={{
+                            fontSize: '0.72rem',
+                            color: '#f87171',
+                            marginTop: '4px',
+                            textAlign: 'right',
+                          }}
+                        >
+                          承擔風險：
+                          {(
+                            ((parseFloat(stopLossPrice) - parseFloat(price)) /
+                              parseFloat(price)) *
+                            100
+                          ).toFixed(2)}
+                          %
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '0.8rem',
+                          color: '#34d399',
+                          marginBottom: '6px',
+                          fontWeight: 600,
+                        }}
+                      >
+                        <TrendingUp size={14} /> 預設停利目標價 ({currency})
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="達此價分批停利"
+                        value={takeProfitPrice}
+                        onChange={(e) => setTakeProfitPrice(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          background: 'var(--bg-input)',
+                          border: '1px solid rgba(16, 185, 129, 0.3)',
+                          color: '#6ee7b7',
+                          fontSize: '0.85rem',
+                          textAlign: 'right',
+                        }}
+                      />
+                      {parseFloat(price) > 0 && parseFloat(takeProfitPrice) > 0 && (
+                        <div
+                          style={{
+                            fontSize: '0.72rem',
+                            color: '#34d399',
+                            marginTop: '4px',
+                            textAlign: 'right',
+                          }}
+                        >
+                          預期獲利：+
+                          {(
+                            ((parseFloat(takeProfitPrice) - parseFloat(price)) /
+                              parseFloat(price)) *
+                            100
+                          ).toFixed(2)}
+                          %
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 即時風報比 R:R 摘要卡片 */}
+                  {parseFloat(price) > 0 &&
+                    parseFloat(stopLossPrice) > 0 &&
+                    parseFloat(takeProfitPrice) > 0 && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          background: 'rgba(59, 130, 246, 0.1)',
+                          border: '1px solid rgba(59, 130, 246, 0.2)',
+                          fontSize: '0.8rem',
+                        }}
+                      >
+                        <span style={{ color: '#93c5fd' }}>⚡ 預期風報酬比 (Risk : Reward)：</span>
+                        <span style={{ fontWeight: 700, color: '#60a5fa' }}>
+                          1 :{' '}
+                          {calculatePlannedRiskRewardRatio(
+                            parseFloat(price),
+                            parseFloat(stopLossPrice),
+                            parseFloat(takeProfitPrice)
+                          ) ?? '-'}
+                        </span>
+                      </div>
+                    )}
+                </div>
+              )}
             </div>
           )}
 

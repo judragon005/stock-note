@@ -1,12 +1,11 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Document)
 
-> **交接產生時間**：2026-08-24 15:05 (UTC+8)  
+> **交接產生時間**：2026-08-27 14:02 (UTC+8)  
 > **當前最新里程碑**：
-> - **V3.0 多券商帳戶管理體系與交易摩擦成本分析儀**（多券商折讓率與低消設定、4 大摩擦指標發光看板、折讓省下金額試算）。
-> - **V3.1 活頁本工作台架構與券商手續費整併**（三大核心活頁標籤欄、出清手續費直接由券商帳戶驅動、交易帳本總筆數透明提示）。
-> - **V3.2 公司行動雙軌資料管線、受控限速與本地代理**（Vite Dev Proxy 徹底解決跨域問題、台股 TWSE 官方優先、Concurrency 2 + 150ms 節流延遲、24 小時實體快取）。
-> - **V3.3 整合式設定工作台、Header 瘦身與 API Key 配置**（Header 移除冗餘按鈕、第三活頁更名為【⚙️ 設定】、內建券商/摩擦/外部 API 金鑰三大模組與 LocalStorage 隔離保存）。
-> **品質狀態**：全量單元測試 **98/98 通過 (100% Passed)**，TypeScript 0 錯誤 0 警告，Vite 生產環境打包順利通過。
+> - **V5.2 交易員盤中當日損益 (Today's PnL) 與精確損益平衡保本價 (Breakeven Price) 體系 (技術債 #0015 & #0013 完整解決)**（精確損益平衡保本價逆推演算法；台股 20 元最低手續費階梯補償與離散 Floor 取整閉環驗證；現金減資超額退款轉列已實現利得；美股碎股萬分位精度強制收斂；首頁總資產卡片今日盈虧看板；持股清單保本價 Badge 與 Tooltip 稅費解構）。
+> - **V5.1 XIRR 不定期現金流年化報酬率引擎與多維度績效分析體系 (技術債 #0018 完整解決)**（0 外部依賴牛頓-二分法混合求解器；30 天智能自適應平滑防護；整戶總體、個股含息與週期 XIRR 三層級聚合；全維度 UI 整合與深色玻璃擬態現金流透視診斷彈窗 `XirrDetailModal`）。
+> - **V5.0 IndexedDB 底層儲存遷移、ACID 事務與時光機快照體系 (技術債 #0007 完整解決)**（原生 0 依賴 IndexedDB 儲存引擎 `StockTrackerDB`；無損平滑雙重保險自動遷移；CSV/清空前自動快照防呆；最新 10 份自動輪替淘汰；設定工作台時光機管理面板；一鍵二次確認還原與全庫 JSON 匯出匯入）。
+> **品質狀態**：全量單元測試 **195/195 通過 (100% Passed)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過。
 
 ---
 
@@ -14,48 +13,46 @@
 
 - **專案路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon003/-.git`
-- **當前開發分支**：`feature/v3.0-multi-broker-and-friction-center`
-- **測試套件狀態**：**98/98 通過** (6 test suites / 100% 綠燈)，TypeScript 0 錯誤。
-- **當前版本**：**V3.3**
-- **隱私安全**：所有本機交易資料與 API 金鑰均受 LocalStorage 本地隔離與 `.gitignore` 保護，杜絕個人財務資料推播至 GitHub 遠端。
+- **測試套件狀態**：**195/195 通過** (13 test suites / 100% 綠燈)，TypeScript 0 錯誤。
+- **當前版本**：**V5.2**
+- **隱私安全**：所有本機交易資料與 API 金鑰均受 IndexedDB / LocalStorage 本地隔離與 `.gitignore` 保護，杜絕個人財務資料推播至 GitHub 遠端。
 
 ---
 
 ## 🏛️ 2. 領域模型與架構決策索引 (Domain & Decisions)
 
 1. **通用語言詞彙表**：[`CONTEXT.md`](file:///d:/APP/股票紀錄/CONTEXT.md)
-   - **V3.0 ~ V3.3 核心術語**：
-     - `Multi-Broker Accounts`（多券商帳戶管理體系：折讓率、最低手續費、美股模式）
-     - `Transaction Friction Analyzer`（交易摩擦成本分析儀：實付費用、折讓節省、未來出清衝擊）
-     - `Tabbed Workspace Hub`（活頁本工作台：投資組合、歷史帳本、設定）
-     - `Controlled Throttling & 24H Cache`（受控節流佇列與 24 小時實體快取）
-     - `Dev Proxy & Fallback Chain`（本地開發代理與多重 CORS 降級鏈）
-     - `Isolated API Keys Storage`（外部資料 API 金鑰隔離持久化）
+   - **V5.2 核心術語**：
+     - `Today's PnL`（盤中當日損益：依 `shares * (currentPrice - previousClose)` 跨市場計算今日動態賺賠）
+     - `Breakeven Price`（精確損益平衡保本價：計入賣出證交稅、券商折讓與低消 20 元階梯補償）
+     - `Excess Capital Reduction`（減資超額退款：退款大於持倉成本時轉列已實現利得，杜絕成本截斷失真）
+     - `Fractional Shares Convergence`（碎股精度萬分位強制收斂）
+   - **V5.1 核心術語**：
+     - `XIRR / Money-Weighted Rate of Return, MWRR`（內部報酬率 / 資金加權報酬率：非線性折現真實年化複利）
+     - `Hybrid Newton-Raphson & Bisection Solver`（牛頓-二分法混合求解引擎：50 次迭代，容差 $10^{-7}$，100% 收斂防崩潰）
+     - `30-Day Adaptive Smoothing Guard`（30 天平滑防護：未滿 30 天以絕對累積報酬呈現，避免短線極端外推失真）
+   - **V5.0 核心術語**：
+     - `StockTrackerDB`（原生 0 依賴 IndexedDB 儲存引擎：9 大 Object Stores，解除 5MB 限制與同步阻塞）
+     - `Non-Destructive Dual-Check Migration`（無損平滑雙重保險遷移：搬移 localStorage 並留存冷備份）
 
-2. **架構決策紀錄 (ADR-0001 ~ ADR-0016)**：
-   - [`ADR-0001`](file:///d:/APP/股票紀錄/docs/adr/0001-core-architecture-and-accounting-model.md)：雙市場獨立記帳與加權平均成本模型。
-   - [`ADR-0002`](file:///d:/APP/股票紀錄/docs/adr/0002-v1.1-treemap-theme-and-fee-architecture.md)：純 SVG Squarified Treemap。
-   - [`ADR-0003`](file:///d:/APP/股票紀錄/docs/adr/0003-v1.2-corporate-actions-and-date-holding-resolution.md)：統一事件流模型與股數回放。
-   - [`ADR-0004`](file:///d:/APP/股票紀錄/docs/adr/0004-full-market-live-corporate-actions-and-special-events.md)：全市場線上即時公司行動掃描。
-   - [`ADR-0005`](file:///d:/APP/股票紀錄/docs/adr/0005-realtime-and-delayed-market-quotes-system.md)：即時與延遲多源報價引擎。
-   - [`ADR-0006`](file:///d:/APP/股票紀錄/docs/adr/0006-auto-usd-twd-exchange-rate-and-fallback.md)：USD/TWD 匯率自動更新。
-   - [`ADR-0007`](file:///d:/APP/股票紀錄/docs/adr/0007-scanner-progress-and-resume-architecture.md)：掃描進度可視化與中斷接續。
-   - [`ADR-0008`](file:///d:/APP/股票紀錄/docs/adr/0008-virtual-holdings-timeline-and-corporate-action-accuracy.md)：虛擬時序動態配股與減資換發。
-   - [`ADR-0009`](file:///d:/APP/股票紀錄/docs/adr/0009-holdings-natural-sorting-and-twse-endpoint-correction.md)：持倉雙階自然排序。
-   - [`ADR-0010`](file:///d:/APP/股票紀錄/docs/adr/0010-technical-debt-management-architecture.md)：技術債分級歸檔架構。
-   - [`ADR-0011`](file:///d:/APP/股票紀錄/docs/adr/0011-dual-accounting-view-and-official-symbol-alignment.md)：全域雙軌會計口徑切換。
-   - [`ADR-0012`](file:///d:/APP/股票紀錄/docs/adr/0012-broker-fee-discount-and-cost-basis-alignment.md)：券商手續費折讓率自訂。
-   - [`ADR-0013`](file:///d:/APP/股票紀錄/docs/adr/0013-multi-broker-account-and-friction-cost-engine.md)：多券商帳戶體系與摩擦成本分析。
-   - [`ADR-0014`](file:///d:/APP/股票紀錄/docs/adr/0014-tabbed-workspace-and-broker-fee-consolidation.md)：活頁本工作台與券商手續費整併。
-   - [`ADR-0015`](file:///d:/APP/股票紀錄/docs/adr/0015-corporate-action-dual-pipeline-and-rate-limiting.md)：公司行動雙軌管線、受控限速與本地代理。
-   - [`ADR-0016`](file:///d:/APP/股票紀錄/docs/adr/0016-settings-workspace-and-api-key-configuration.md)：整合式設定工作台與外部 API Key 配置。
+2. **架構決策紀錄 (ADR-0001 ~ ADR-0034)**：
+   - [`ADR-0034`](file:///d:/APP/股票紀錄/docs/adr/0034-todays-pnl-and-breakeven-price-system.md)：V5.2 交易員盤中當日損益 (Today's PnL) 與精確損益平衡保本價 (Breakeven Price) 體系。
+   - [`ADR-0033`](file:///d:/APP/股票紀錄/docs/adr/0033-xirr-performance-engine.md)：V5.1 XIRR 不定期現金流年化報酬率引擎與多維度績效分析體系。
+   - [`ADR-0032`](file:///d:/APP/股票紀錄/docs/adr/0032-indexeddb-storage-and-time-machine-snapshots.md)：V5.0 IndexedDB 底層儲存遷移、ACID 事務與時光機快照體系。
+   - [`ADR-0031`](file:///d:/APP/股票紀錄/docs/adr/0031-code-review-refactoring-and-settlement-automation.md)：Code Review 全量重構、在途交割日曆全自動化與時序卡片模組化。
 
-3. **需求規格說明書 (SPEC-0001 ~ SPEC-0016)**：
+3. **需求規格說明書 (SPEC-0001 ~ SPEC-0033)**：
    - 全量 PRD 存放於 [`docs/specs/`](file:///d:/APP/股票紀錄/docs/specs/)，全數標記 `APPROVED` 且驗收條件 (AC) 100% 通過。
+   - 最新：[SPEC-0033](file:///d:/APP/股票紀錄/docs/specs/0033-xirr-performance-engine.md)。
 
-4. **技術債管理區 (`docs/debts/`)**：
-   - [`docs/debts/README.md`](file:///d:/APP/股票紀錄/docs/debts/README.md)：技術債總覽看板。
-   - [`0001-holdings-sort-dry-refactor.md`](file:///d:/APP/股票紀錄/docs/debts/0001-holdings-sort-dry-refactor.md)：持倉雙階自然排序 DRY 重構 (`OPEN / P3`)。
+4. **單一版本交付紀錄存檔 (`docs/handoff/`)**：
+   - [V5.1: XIRR 不定期現金流年化報酬率引擎與多維度績效分析](2026-08-27-v5.1-xirr-performance-engine.md)
+   - [V5.0: 原生 IndexedDB 底層儲存與時光機快照](2026-08-27-v5.0-indexeddb-and-time-machine-snapshots.md)
+   - [V4.8: Code Review 全量重構與在途日曆全自動化](2026-08-27-v4.8-code-review-refactoring-and-settlement-automation.md)
+   - [V4.7: 券商級在途資金與三層可用性購買力帳本](2026-08-27-v4.7-in-transit-funds-and-buying-power-ledger.md)
+
+5. **本地票券鏡像區 (`.scratch/`)**：
+   - `.scratch/v5.1-xirr-performance-engine/issues/` (5/5 Completed)
 
 ---
 
@@ -63,21 +60,31 @@
 
 | 模組分類 | 檔案路徑 | 核心職責與特性 |
 | :--- | :--- | :--- |
-| **會計計算引擎** | [`src/engine/calculator.ts`](file:///d:/APP/股票紀錄/src/engine/calculator.ts) | 雙軌會計口徑計算、各部位券商帳戶獨立費率試算、摩擦成本指標匯總。 |
-| **計算引擎測試** | [`src/engine/calculator.test.ts`](file:///d:/APP/股票紀錄/src/engine/calculator.test.ts) | 33 個測試案例 (100% 通過)。 |
-| **公司行動掃描器** | [`src/engine/corporateActionScanner.ts`](file:///d:/APP/股票紀錄/src/engine/corporateActionScanner.ts) | 雙軌管線 (TWSE 官方優先 + Yahoo 備援)、本地代理優先、24H LocalStorage 快取、Concurrency 2 + 150ms 節流延遲 (14 tests)。 |
-| **報價與匯率引擎** | [`src/engine/priceFetcher.ts`](file:///d:/APP/股票紀錄/src/engine/priceFetcher.ts) | 即時行情、USD/TWD 匯率自動更新、本地代理優先與多重 CORS 降級 (16 tests)。 |
-| **活頁本導覽標籤** | [`src/components/WorkspaceTabs.tsx`](file:///d:/APP/股票紀錄/src/components/WorkspaceTabs.tsx) | 3 大活頁標籤（📊 投資組合、📜 歷史帳本、⚙️ 設定），支援 LocalStorage 頁籤記憶。 |
-| **設定中心工作台** | [`src/components/SettingsWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/SettingsWorkspace.tsx) | 整合券商帳戶 CRUD、4 大發光摩擦看板與 FinMind / FMP / Alpha Vantage 金鑰配置。 |
-| **交易歷史帳本** | [`src/components/TradeHistoryTable.tsx`](file:///d:/APP/股票紀錄/src/components/TradeHistoryTable.tsx) | 總筆數透明提示 (`已篩選 M 筆 / 全量共 N 筆`)、一鍵重置過濾。 |
-| **頂部工具列** | [`src/components/Header.tsx`](file:///d:/APP/股票紀錄/src/components/Header.tsx) | 極簡設計，專注於市場切換、帳戶篩選、會計口徑、匯率即時狀態與智慧掃描入口。 |
-| **本地開發代理** | [`vite.config.ts`](file:///d:/APP/股票紀錄/vite.config.ts) | 內建 `/api/twse` 與 `/api/yahoo` 本地開發代理路由。 |
+| **原生 IndexedDB 儲存引擎** | [`src/utils/db.ts`](file:///d:/APP/股票紀錄/src/utils/db.ts) | 0 依賴原生 Promise 封裝 `StockTrackerDB`（9 大 Stores），支援 CRUD、`batchPut`、事務、10 份快照輪替淘汰、無損遷移與全庫 JSON 匯入匯出。 |
+| **IndexedDB 引擎單元測試** | [`src/utils/db.test.ts`](file:///d:/APP/股票紀錄/src/utils/db.test.ts) | 9 個深度單元測試案例 (100% 綠燈通過)。 |
+| **設定與時光機看板** | [`src/components/SettingsWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/SettingsWorkspace.tsx) | 券商費率、摩擦看板、API Key 管理與「時光機快照管理面板」（指標、自訂快照、鎖定切換、一鍵還原二次確認、JSON 備份）。 |
+| **現金、在途與購買力引擎** | [`src/engine/cashLedgerEngine.ts`](file:///d:/APP/股票紀錄/src/engine/cashLedgerEngine.ts) | 三層可用性核算 (`calculateAccountBalances`)、交易購買力風控 (`calculateTradingBuyingPower`)、在途時序分組 (`groupPendingSettlementsByTimeline`)、日曆解析 (`getSettlementDate`)、DRY 工廠與判定函式。 |
+| **現金與在途引擎測試** | [`src/engine/cashLedgerEngine.test.ts`](file:///d:/APP/股票紀錄/src/engine/cashLedgerEngine.test.ts) | 29 個單元測試案例 (100% 綠燈通過)。 |
+| **現金工作台面板** | [`src/components/CashLedgerWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/CashLedgerWorkspace.tsx) | 頂部四核心可用性發光看板、在途交割時序排程面板、交割戶資金狀態網格、質押風控、流水表格三態過濾列與單筆點擊切換。 |
+| **在途時序卡片子元件** | [`src/components/PendingSettlementCard.tsx`](file:///d:/APP/股票紀錄/src/components/PendingSettlementCard.tsx) | 專職渲染在途排程卡片、幣別處理與一鍵核銷互動。 |
+| **收支換匯與交割彈窗** | [`src/components/CashTransactionModal.tsx`](file:///d:/APP/股票紀錄/src/components/CashTransactionModal.tsx) | 單筆收支、換匯調撥、預計交割日即時自動預填與手動狀態覆寫。 |
+| **質押借貸彈窗** | [`src/components/LoanModal.tsx`](file:///d:/APP/股票紀錄/src/components/LoanModal.tsx) | 質押本金、利率、擔保品明細與三大規費（撥券費/設質費/手續費）設定。 |
+| **歷史 NAV 引擎** | [`src/engine/historicalNav.ts`](file:///d:/APP/股票紀錄/src/engine/historicalNav.ts) | 歷史日 K 增量同步、遇假日 Forward-Fill、排除 relatedTradeId 避免雙重扣款 (9 tests)。 |
+| **XIRR 數值求解與金流聚合引擎** | [`src/engine/xirrCalculator.ts`](file:///d:/APP/股票紀錄/src/engine/xirrCalculator.ts) | 0 依賴 Newton-Raphson + Bisection 混合求解器、30 天平滑防護、整戶/個股/週期三層級現金流聚合 (11 tests)。 |
+| **XIRR 引擎單元測試** | [`src/engine/xirrCalculator.test.ts`](file:///d:/APP/股票紀錄/src/engine/xirrCalculator.test.ts) | 11 個深度單元測試案例 (100% 綠燈通過)。 |
+| **XIRR 現金流透視診斷彈窗** | [`src/components/XirrDetailModal.tsx`](file:///d:/APP/股票紀錄/src/components/XirrDetailModal.tsx) | 4 格關鍵指標卡片、折現公式說明條、現金流時序明細表（含折現年數與現值 PV）。 |
 
 ---
 
-## 🛠️ 4. 下一位 Agent 開啟新對話時的指引 (Guide for Next Agent)
+## ⚡ 4. 常用驗證與維護指令 (Quick Verification)
 
-在開啟新對話時，請下一位 Agent 直接讀取本手冊與 [`CONTEXT.md`](file:///d:/APP/股票紀錄/CONTEXT.md)，並遵循以下原則：
-1. **工作流標準**：嚴格依循八步閉環工作流（`/grill-with-docs` ➔ `/to-spec` ➔ `/to-tickets` ➔ `/triage` ➔ `/tdd & /implement` ➔ `/code-review` ➔ `/handoff`）。
-2. **品質門禁**：任何代碼改動必須確保 `npm test` (98/98 tests 綠燈) 與 `npm run build` (TypeScript 0 錯誤)。
-3. **隱私與安全**：所有 API Key 均隔離於 `STOCK_TRACKER_API_KEYS_V1`，個人交易資料隔離於 `STOCK_TRACKER_TRADES_V1`，絕不可外洩。
+```bash
+# 1. 執行全量單元測試 (應 186/186 100% 通過)
+npm test
+
+# 2. 執行 TypeScript 型別嚴格檢查 (應 0 錯誤)
+npx tsc --noEmit
+
+# 3. 執行 Vite 生產環境建置 (應 0 錯誤成功打包)
+npm run build
+```

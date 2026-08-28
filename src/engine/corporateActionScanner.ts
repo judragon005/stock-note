@@ -1,5 +1,6 @@
 import { TradeRecord, TradeType, MarketType, Currency } from '../types/stock';
 import { getHoldingsAsOfDate } from './calculator';
+import { calculateDividendCash, normalizeCurrencyPrecision } from '../utils/formatters';
 
 export interface RawCorporateEvent {
   symbol: string;
@@ -528,7 +529,7 @@ export async function scanCorporateActions(
         let estimatedCash = 0;
 
         if (ev.type === 'DIVIDEND') {
-          estimatedCash = (ev.price || 0) * sharesHeld;
+          estimatedCash = calculateDividendCash(sharesHeld, ev.price || 0, meta.currency);
         } else if (ev.type === 'STOCK_DIVIDEND') {
           const rawShares = ev.shares && ev.shares > 0 ? ev.shares : (ev.ratio ? sharesHeld * ev.ratio : 0);
           estimatedShares = meta.market === 'TW' ? Math.round(rawShares) : rawShares;
@@ -541,7 +542,9 @@ export async function scanCorporateActions(
           const newRatio = ev.ratio !== undefined ? (1 - ev.ratio) : 1;
           const newShares = meta.market === 'TW' ? Math.floor(sharesHeld * newRatio) : sharesHeld * newRatio;
           estimatedShares = Math.max(0, sharesHeld - newShares);
-          estimatedCash = ev.cashAmount && ev.cashAmount > 0 ? ev.cashAmount : (ev.price ? sharesHeld * ev.price : 0);
+          estimatedCash = ev.cashAmount && ev.cashAmount > 0 
+            ? normalizeCurrencyPrecision(ev.cashAmount, meta.currency) 
+            : (ev.price ? normalizeCurrencyPrecision(sharesHeld * ev.price, meta.currency) : 0);
 
           // 無效減資安全閘門：若縮減股數與退款金額皆為 0 且無明確比率/每股退款，判定為無效假事件予以過濾
           const hasReductionRatio = ev.ratio !== undefined && ev.ratio > 0;

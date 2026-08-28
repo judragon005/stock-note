@@ -1,6 +1,26 @@
-import React, { useState } from 'react';
-import { BrokerAccount, FrictionSummary, MarketType, USFeeType, ApiKeysConfig, TradeRecord } from '../types/stock';
+import React, { useState, useEffect } from 'react';
+import {
+  BrokerAccount,
+  FrictionSummary,
+  MarketType,
+  USFeeType,
+  ApiKeysConfig,
+  TradeRecord,
+  CashTransaction,
+  LoanRecord,
+} from '../types/stock';
 import { DEFAULT_BROKER_PRESETS } from '../utils/storage';
+import {
+  getSystemSnapshots,
+  createSystemSnapshot,
+  restoreSystemSnapshot,
+  deleteSystemSnapshot,
+  toggleLockSystemSnapshot,
+  exportFullDatabaseJSON,
+  importFullDatabaseJSON,
+  SystemSnapshot,
+  DB_VERSION,
+} from '../utils/db';
 import {
   Zap,
   Building2,
@@ -18,6 +38,17 @@ import {
   Save,
   CheckCircle2,
   ShieldAlert,
+  Landmark,
+  Receipt,
+  Database,
+  History,
+  Lock,
+  Unlock,
+  RotateCcw,
+  Download,
+  Upload,
+  Camera,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface SettingsWorkspaceProps {
@@ -29,7 +60,12 @@ interface SettingsWorkspaceProps {
   apiKeys: ApiKeysConfig;
   onSaveApiKeys: (apiKeys: ApiKeysConfig) => void;
   trades?: TradeRecord[];
+  cashTransactions?: CashTransaction[];
+  loanRecords?: LoanRecord[];
   onRepairTaxAndFee?: () => void;
+  onDataRestored?: () => void;
+  currentMarket?: MarketType | 'ALL';
+  usdRate?: number;
 }
 
 export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
@@ -41,7 +77,12 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
   apiKeys,
   onSaveApiKeys,
   trades = [],
+  cashTransactions = [],
+  loanRecords = [],
   onRepairTaxAndFee,
+  onDataRestored,
+  currentMarket = 'ALL',
+  usdRate = 32.0,
 }) => {
   // --- 券商帳戶表單狀態 ---
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -168,11 +209,15 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
   const totalFutureFee = frictionSummary?.totalEstimatedFutureFee ?? 0;
   const totalFutureFriction = frictionSummary?.totalEstimatedFutureFriction ?? 0;
   const impactPercent = frictionSummary?.frictionImpactPercent ?? 0;
+  const totalTWDividendTax = frictionSummary?.totalTWDividendTax ?? 0;
+  const totalUSDividendTax = frictionSummary?.totalUSDividendTax ?? 0;
+  const totalUSDividendTaxInTWD = frictionSummary?.totalUSDividendTaxInTWD ?? Math.round(totalUSDividendTax * usdRate);
+  const totalDividendFrictionInTWD = totalTWDividendTax + totalUSDividendTaxInTWD;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* 頂部：4 大摩擦指標發光卡片 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+      {/* 頂部：5 大摩擦指標發光卡片 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
         {/* 卡片 1: 累計手續費 */}
         <div
           className="glass-card"
@@ -233,7 +278,70 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
           <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>基準：法定牌告手續費 (低消 20 元 + 0.1425%)</div>
         </div>
 
-        {/* 卡片 4: 在庫預估出清摩擦成本 */}
+        {/* 卡片 4: 股息摩擦稅負 (依市場模式動態切換：台股二代健保 / 美股30%預扣 / 全部市場) */}
+        {currentMarket === 'TW' ? (
+          <div
+            className="glass-card"
+            style={{
+              padding: '16px',
+              borderRadius: '12px',
+              border: '1px solid rgba(168, 85, 247, 0.35)',
+              background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(15, 23, 42, 0.8) 100%)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#c084fc', fontSize: '0.8rem', fontWeight: 600 }}>
+              <Landmark size={16} color="#c084fc" /> 累計二代健保補充保費
+            </div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#e879f9', margin: '8px 0 4px 0' }}>
+              NT$ {Math.round(totalTWDividendTax).toLocaleString()}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              單筆達 2 萬課 2.11% · 累計已自台股股息扣繳
+            </div>
+          </div>
+        ) : currentMarket === 'US' ? (
+          <div
+            className="glass-card"
+            style={{
+              padding: '16px',
+              borderRadius: '12px',
+              border: '1px solid rgba(244, 63, 94, 0.35)',
+              background: 'linear-gradient(135deg, rgba(244, 63, 94, 0.1) 0%, rgba(15, 23, 42, 0.8) 100%)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fb7185', fontSize: '0.8rem', fontWeight: 600 }}>
+              <Receipt size={16} color="#fb7185" /> 美股 30% 股息預扣稅
+            </div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f43f5e', margin: '8px 0 4px 0' }}>
+              $ {totalUSDividendTax.toLocaleString()} <span style={{ fontSize: '0.85rem', fontWeight: 500, color: '#fda4af' }}>USD</span>
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              折合 NT$ {totalUSDividendTaxInTWD.toLocaleString()} · 美國國稅局 30% 預扣
+            </div>
+          </div>
+        ) : (
+          <div
+            className="glass-card"
+            style={{
+              padding: '16px',
+              borderRadius: '12px',
+              border: '1px solid rgba(168, 85, 247, 0.35)',
+              background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(15, 23, 42, 0.8) 100%)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#c084fc', fontSize: '0.8rem', fontWeight: 600 }}>
+              <Landmark size={16} color="#c084fc" /> 除權息摩擦稅負總計
+            </div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#e879f9', margin: '8px 0 4px 0' }}>
+              NT$ {totalDividendFrictionInTWD.toLocaleString()}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              台股健保 NT$ {totalTWDividendTax.toLocaleString()} · 美股預扣 ${totalUSDividendTax.toLocaleString()} USD
+            </div>
+          </div>
+        )}
+
+        {/* 卡片 5: 在庫預估出清摩擦成本 */}
         <div
           className="glass-card"
           style={{
@@ -763,9 +871,528 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '12px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
           <ShieldAlert size={13} color="#94a3b8" />
-          <span>隱私保護保證：所有 API 金鑰均儲存在您瀏覽器的本機 LocalStorage 中，絕不傳送至任何中央伺服器。</span>
+          <span>隱私保護保證：所有 API 金鑰均儲存在您瀏覽器的本機 LocalStorage / IndexedDB 中，絕不傳送至任何中央伺服器。</span>
         </div>
       </div>
+
+      {/* --- 第三區塊：🗄️ IndexedDB 資料庫狀態與時光機快照管理 --- */}
+      <DatabaseAndSnapshotsSection
+        trades={trades}
+        accounts={accounts}
+        cashTransactions={cashTransactions}
+        loanRecords={loanRecords}
+        apiKeys={apiKeys}
+        onDataRestored={onDataRestored}
+      />
     </div>
   );
 };
+
+// -------------------------------------------------------------
+// 時光機快照與資料庫狀態子元件
+// -------------------------------------------------------------
+
+interface DatabaseAndSnapshotsSectionProps {
+  trades: TradeRecord[];
+  accounts: BrokerAccount[];
+  cashTransactions?: CashTransaction[];
+  loanRecords?: LoanRecord[];
+  apiKeys: ApiKeysConfig;
+  onDataRestored?: () => void;
+}
+
+const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = ({
+  trades,
+  accounts,
+  cashTransactions = [],
+  loanRecords = [],
+  apiKeys,
+  onDataRestored,
+}) => {
+  const [snapshots, setSnapshots] = useState<SystemSnapshot[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [customSnapshotName, setCustomSnapshotName] = useState('');
+  const [isCreatingSnapshot, setIsCreatingSnapshot] = useState(false);
+  const [restoreConfirmSnap, setRestoreConfirmSnap] = useState<SystemSnapshot | null>(null);
+
+  const loadSnapshots = async () => {
+    try {
+      setIsLoading(true);
+      const list = await getSystemSnapshots();
+      setSnapshots(list);
+    } catch (err) {
+      console.error('Failed to load snapshots:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSnapshots();
+  }, []);
+
+  // 建立自訂快照
+  const handleCreateSnapshot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customSnapshotName.trim()) return;
+
+    try {
+      setIsCreatingSnapshot(true);
+      await createSystemSnapshot(
+        customSnapshotName.trim(),
+        'MANUAL',
+        {
+          trades,
+          brokerAccounts: accounts,
+          cashTransactions,
+          loanRecords,
+          historicalPrices: {},
+          historicalFx: {},
+          priceMetadata: { quotes: {}, lockedSymbols: [] },
+          apiKeys,
+          accountingView: 'BROKER',
+        },
+        false
+      );
+      setCustomSnapshotName('');
+      await loadSnapshots();
+      alert('📸 自訂快照已成功建立！');
+    } catch (err) {
+      alert(`建立快照失敗: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsCreatingSnapshot(false);
+    }
+  };
+
+  // 切換鎖定
+  const handleToggleLock = async (snapId: string) => {
+    try {
+      await toggleLockSystemSnapshot(snapId);
+      await loadSnapshots();
+    } catch (err) {
+      alert(`切換鎖定失敗: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  // 刪除快照
+  const handleDeleteSnapshot = async (snap: SystemSnapshot) => {
+    if (snap.isLocked) {
+      alert('🔒 此快照已受鎖定保護，請先解鎖後再刪除。');
+      return;
+    }
+    if (!window.confirm(`確定要刪除快照「${snap.name}」嗎？`)) {
+      return;
+    }
+
+    try {
+      await deleteSystemSnapshot(snap.id);
+      await loadSnapshots();
+    } catch (err) {
+      alert(`刪除快照失敗: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  // 執行還原
+  const handleConfirmRestore = async () => {
+    if (!restoreConfirmSnap) return;
+    try {
+      await restoreSystemSnapshot(restoreConfirmSnap.id);
+      setRestoreConfirmSnap(null);
+      alert(`🎉 系統已成功還原至快照【${restoreConfirmSnap.name}】時點！`);
+      if (onDataRestored) {
+        onDataRestored();
+      } else {
+        window.location.reload();
+      }
+    } catch (err) {
+      alert(`還原失敗: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  // 匯出全庫 JSON
+  const handleExportFullDB = async () => {
+    try {
+      const json = await exportFullDatabaseJSON();
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `stock-tracker-full-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`匯出失敗: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  // 匯入全庫 JSON
+  const handleImportFullDB = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!window.confirm('⚠️ 匯入全庫備份將會覆寫現有全部資料，確定要繼續嗎？')) {
+      e.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const content = ev.target?.result as string;
+        await importFullDatabaseJSON(content);
+        alert('🎉 全庫備份資料已成功匯入！');
+        if (onDataRestored) {
+          onDataRestored();
+        } else {
+          window.location.reload();
+        }
+      } catch (err) {
+        alert(`匯入失敗: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+  };
+
+  const formatSnapshotReason = (reason: SystemSnapshot['reason']) => {
+    switch (reason) {
+      case 'AUTO_BEFORE_IMPORT':
+        return { text: 'CSV 匯入前自動備份', bg: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa' };
+      case 'AUTO_BEFORE_RESET':
+        return { text: '清空重置前自動備份', bg: 'rgba(239, 68, 68, 0.15)', color: '#f87171' };
+      case 'AUTO_BEFORE_CORP_ACTION':
+        return { text: '公司行動補登前備份', bg: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24' };
+      case 'MANUAL':
+      default:
+        return { text: '手動建立快照', bg: 'rgba(16, 185, 129, 0.15)', color: '#34d399' };
+    }
+  };
+
+  return (
+    <div style={{ marginTop: '24px', background: 'var(--card-bg, #1e293b)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border-color)' }}>
+      {/* 標題列 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ padding: '8px', borderRadius: '10px', background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8' }}>
+            <Database size={22} />
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                底層資料庫與時光機快照體系
+              </h3>
+              <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', fontWeight: 600 }}>
+                IndexedDB v{DB_VERSION} (0 依賴原生驅動)
+              </span>
+            </div>
+            <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              解除 5MB 瀏覽器限制與同步阻塞，支援重大操作前自動快照防呆、鎖定保存與一鍵時光機回滾。
+            </p>
+          </div>
+        </div>
+
+        {/* 全庫 JSON 匯出/匯入 */}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            type="button"
+            onClick={handleExportFullDB}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid var(--border-color)',
+              color: 'var(--text-primary)',
+              fontSize: '0.78rem',
+              cursor: 'pointer',
+            }}
+          >
+            <Download size={13} />
+            匯出全庫備份
+          </button>
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid var(--border-color)',
+              color: 'var(--text-primary)',
+              fontSize: '0.78rem',
+              cursor: 'pointer',
+            }}
+          >
+            <Upload size={13} />
+            匯入全庫備份
+            <input type="file" accept=".json" onChange={handleImportFullDB} style={{ display: 'none' }} />
+          </label>
+        </div>
+      </div>
+
+      {/* 資料庫即時統計指標卡片 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+        <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 14px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>交易紀錄筆數</div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#38bdf8' }}>{trades.length.toLocaleString()} 筆</div>
+        </div>
+        <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 14px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>券商帳戶數</div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#a78bfa' }}>{accounts.length} 個</div>
+        </div>
+        <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 14px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>現金與交割流水</div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#34d399' }}>{cashTransactions.length.toLocaleString()} 筆</div>
+        </div>
+        <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 14px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>已存時光機快照</div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#fbbf24' }}>{snapshots.length} 份</div>
+        </div>
+      </div>
+
+      {/* 手動建立快照輸入列 */}
+      <form onSubmit={handleCreateSnapshot} style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+        <input
+          type="text"
+          value={customSnapshotName}
+          onChange={(e) => setCustomSnapshotName(e.target.value)}
+          placeholder="輸入自訂快照名稱（例：2026年度結算備份、大額加碼前快照）"
+          style={{
+            flex: 1,
+            padding: '8px 12px',
+            borderRadius: '8px',
+            background: 'rgba(15, 23, 42, 0.8)',
+            border: '1px solid var(--border-color)',
+            color: '#fff',
+            fontSize: '0.82rem',
+          }}
+        />
+        <button
+          type="submit"
+          disabled={isCreatingSnapshot || !customSnapshotName.trim()}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+            border: 'none',
+            color: '#fff',
+            fontWeight: 600,
+            fontSize: '0.82rem',
+            cursor: customSnapshotName.trim() ? 'pointer' : 'not-allowed',
+            opacity: customSnapshotName.trim() ? 1 : 0.6,
+          }}
+        >
+          <Camera size={14} />
+          {isCreatingSnapshot ? '建立中...' : '建立快照'}
+        </button>
+      </form>
+
+      {/* 快照列表清單 */}
+      <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', overflow: 'hidden' }}>
+        <div style={{ padding: '10px 14px', background: 'rgba(15, 23, 42, 0.8)', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+          <History size={14} color="#818cf8" />
+          <span>時光機歷史還原點列表 (最多保留 10 份自動快照，鎖定項目永久保留)</span>
+        </div>
+
+        {isLoading ? (
+          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+            載入快照中...
+          </div>
+        ) : snapshots.length === 0 ? (
+          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+            目前尚無快照記錄。在您進行 CSV 匯入或手動備份時，系統將自動於此處建立還原點。
+          </div>
+        ) : (
+          <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
+            {snapshots.map((snap) => {
+              const reasonInfo = formatSnapshotReason(snap.reason);
+              const dateStr = new Date(snap.createdAt).toLocaleString('zh-TW', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+              });
+
+              return (
+                <div
+                  key={snap.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 14px',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                    background: snap.isLocked ? 'rgba(99, 102, 241, 0.03)' : 'transparent',
+                    gap: '12px',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleLock(snap.id)}
+                      title={snap.isLocked ? '已鎖定（點擊解鎖）' : '未鎖定（點擊鎖定防刪）'}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: snap.isLocked ? '#fbbf24' : '#64748b',
+                        padding: '4px',
+                      }}
+                    >
+                      {snap.isLocked ? <Lock size={15} /> : <Unlock size={15} />}
+                    </button>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {snap.name}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '0.65rem',
+                            padding: '1px 6px',
+                            borderRadius: '6px',
+                            background: reasonInfo.bg,
+                            color: reasonInfo.color,
+                            fontWeight: 500,
+                          }}
+                        >
+                          {reasonInfo.text}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        📅 {dateStr} · 包含 {snap.metricsSummary?.totalTrades || 0} 筆交易 · {snap.metricsSummary?.totalAccounts || 0} 個帳戶 · {snap.metricsSummary?.totalCashTransactions || 0} 筆現金流水
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setRestoreConfirmSnap(snap)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '5px 10px',
+                        borderRadius: '6px',
+                        background: 'rgba(99, 102, 241, 0.15)',
+                        border: '1px solid rgba(99, 102, 241, 0.3)',
+                        color: '#a5b4fc',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <RotateCcw size={12} />
+                      還原此時點
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSnapshot(snap)}
+                      disabled={snap.isLocked}
+                      title={snap.isLocked ? '鎖定項目無法刪除' : '刪除快照'}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: snap.isLocked ? '#475569' : '#ef4444',
+                        cursor: snap.isLocked ? 'not-allowed' : 'pointer',
+                        padding: '4px',
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 二次確認還原彈窗 */}
+      {restoreConfirmSnap && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '16px',
+          }}
+        >
+          <div
+            style={{
+              background: '#0f172a',
+              border: '1px solid var(--border-color)',
+              borderRadius: '16px',
+              padding: '24px',
+              maxWidth: '440px',
+              width: '100%',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#f59e0b', marginBottom: '14px' }}>
+              <AlertTriangle size={24} />
+              <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#fff' }}>確認執行時光機還原？</h4>
+            </div>
+
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>
+              即將將全站資料庫回滾至快照：
+              <strong style={{ color: '#818cf8', display: 'block', margin: '4px 0' }}>
+                【{restoreConfirmSnap.name}】
+              </strong>
+              此操作將以該快照內容全量覆寫當前交易與帳本，請確認是否繼續。
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setRestoreConfirmSnap(null)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-secondary)',
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                }}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRestore}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: '8px',
+                  background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                  border: 'none',
+                  color: '#fff',
+                  fontWeight: 600,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                }}
+              >
+                確定還原
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+

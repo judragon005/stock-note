@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { MarketType, PriceQuote, HoldingPosition, ExchangeRateQuote } from '../types/stock';
+import { MarketType, PriceQuote, HoldingPosition, ExchangeRateQuote, TradeRecord } from '../types/stock';
 import { fetchBatchStockQuotes, fetchStockQuote, fetchExchangeRate } from '../engine/priceFetcher';
 import {
   loadPriceMetadataFromStorage,
@@ -105,7 +105,7 @@ export function isAnyMarketOpen(now: Date = new Date()): boolean {
 /**
  * 輪詢調度核心：過濾已鎖定或 0 股標的，發起並行請求
  */
-export async function orchestrateBatchRefresh(
+export function orchestrateBatchRefresh(
   holdings: { symbol: string; market: MarketType; shares: number }[],
   lockedSymbols: string[],
   batchFetcher: typeof fetchBatchStockQuotes = fetchBatchStockQuotes
@@ -117,14 +117,15 @@ export async function orchestrateBatchRefresh(
     .map((h) => ({ symbol: h.symbol, market: h.market }));
 
   if (targets.length === 0) {
-    return {};
+    return Promise.resolve({});
   }
 
-  return await batchFetcher(targets);
+  return batchFetcher(targets);
 }
 
 interface UsePriceAutoRefreshOptions {
-  holdings: HoldingPosition[];
+  holdings?: HoldingPosition[];
+  trades?: TradeRecord[];
   onPricesCalculated?: (newPrices: Record<string, number>) => void;
   onExchangeRateCalculated?: (rate: number, quote: ExchangeRateQuote) => void;
   intervalMs?: number; // 預設 60000 ms (60秒)
@@ -135,6 +136,7 @@ interface UsePriceAutoRefreshOptions {
  */
 export function usePriceAutoRefresh({
   holdings,
+  trades,
   onPricesCalculated,
   onExchangeRateCalculated,
   intervalMs = 60000,
@@ -158,8 +160,11 @@ export function usePriceAutoRefresh({
     return store.lastGlobalUpdate || null;
   });
 
-  const holdingsRef = useRef(holdings);
-  holdingsRef.current = holdings;
+  const holdingsRef = useRef(holdings || []);
+  holdingsRef.current = holdings || [];
+
+  const tradesRef = useRef(trades || []);
+  tradesRef.current = trades || [];
 
   const lockedSymbolsRef = useRef(lockedSymbols);
   lockedSymbolsRef.current = lockedSymbols;
@@ -168,7 +173,17 @@ export function usePriceAutoRefresh({
   const refreshAll = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const activeHoldings = holdingsRef.current.filter((h) => h.shares > 0);
+      let activeHoldings = (holdingsRef.current || []).filter((h) => h.shares > 0);
+      if (activeHoldings.length === 0 && tradesRef.current && tradesRef.current.length > 0) {
+        const symbolsMap = new Map<string, { symbol: string; market: MarketType; shares: number }>();
+        for (const t of tradesRef.current) {
+          const sym = t.symbol.trim().toUpperCase();
+          if (!symbolsMap.has(sym)) {
+            symbolsMap.set(sym, { symbol: sym, market: t.market || (t.currency === 'USD' ? 'US' : 'TW'), shares: 1 });
+          }
+        }
+        activeHoldings = Array.from(symbolsMap.values()) as HoldingPosition[];
+      }
 
       const [quotesResult, rateResult] = await Promise.allSettled([
         activeHoldings.length > 0

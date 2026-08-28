@@ -1017,7 +1017,7 @@ describe('股票交易交割自動同步與流水關聯 (Trade Settlement Sync)'
       },
     ];
 
-    it('在美股 (US) 模式下應僅聚合美元利息，並將帶有日期區間與明細的同類利息智能歸一化為單一膠囊', () => {
+    it('在美股 (US) 模式下應僅聚合美元利息，並將帶有全形逗號、破折號與明細的同類利息智能歸一化為單一膠囊', () => {
       const complexMonthlyInterestTx: CashTransaction[] = [
         {
           id: 'int-m1',
@@ -1026,7 +1026,7 @@ describe('股票交易交割自動同步與流水關聯 (Trade Settlement Sync)'
           type: 'INTEREST_INCOME',
           amount: 0.31,
           date: '2026-05-29',
-          note: 'Schwab 嘉信理財-現金利息 (4/29-5/29) · 利息 0.31 - 預扣 0.09 +$0.31 USD',
+          note: 'Schwab 嘉信理財-現金利息，利息 0.31 - 預扣 0.09 +$0.31 USD',
           createdAt: 10,
         },
         {
@@ -1036,7 +1036,7 @@ describe('股票交易交割自動同步與流水關聯 (Trade Settlement Sync)'
           type: 'INTEREST_INCOME',
           amount: 0.27,
           date: '2026-06-28',
-          note: 'Schwab 嘉信理財-現金利息 (5/29-6/28) · 利息 0.27 - 預扣 0.08 +$0.27 USD',
+          note: 'Schwab 嘉信理財-現金利息 (5/29–6/28)，利息 0.27 - 預扣 0.08 +$0.27 USD',
           createdAt: 20,
         },
         {
@@ -1046,7 +1046,7 @@ describe('股票交易交割自動同步與流水關聯 (Trade Settlement Sync)'
           type: 'INTEREST_INCOME',
           amount: 0.27,
           date: '2026-07-25',
-          note: 'Schwab 嘉信理財-現金利息 (6/30-7/25) · 利息 0.27 - 預扣 0.08 +$0.27 USD',
+          note: 'Schwab 嘉信理財-現金利息 (10/30–11/25) · 利息 0.27 - 預扣 0.08 +$0.27 USD',
           createdAt: 30,
         },
         {
@@ -1056,7 +1056,7 @@ describe('股票交易交割自動同步與流水關聯 (Trade Settlement Sync)'
           type: 'INTEREST_INCOME',
           amount: 0.15,
           date: '2026-08-27',
-          note: 'Schwab 嘉信理財-現金利息 (7/26-8/27) · 利息 0.15 - 預扣 0.04 +$0.15 USD',
+          note: 'Schwab 嘉信理財-現金利息，利息 0.15 - 預扣 0.04 +$0.15 USD',
           createdAt: 40,
         },
         {

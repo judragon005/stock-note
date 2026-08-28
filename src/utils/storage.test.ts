@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { TradeRecord } from '../types/stock';
+import { TradeRecord, BrokerAccount } from '../types/stock';
 import {
   parseCSVToTrades,
   mergeTrades,
   validateTradesSchema,
+  validateAndMigrateTrades,
   loadCustomPricesFromStorage,
   saveCustomPricesToStorage,
   loadPriceMetadataFromStorage,
@@ -464,6 +465,118 @@ describe('Storage & Persistence Utilities (Issue #6)', () => {
       expect(loaded).toEqual(config);
     });
   });
+
+  describe('Seam 9: Cross-Market BrokerAccount Alignment & Auto-Reconciliation (跨市場券商帳戶一致性校驗)', () => {
+    const mockAccounts: BrokerAccount[] = [
+      {
+        id: 'broker-tw-sinopac',
+        name: '永豐大戶投 (2折 / 低消1元)',
+        market: 'TW',
+        feeRate: 0.001425,
+        discountRate: 0.2,
+        minFee: 1,
+        taxRate: 0.003,
+        isDefault: true,
+        color: '#3b82f6',
+      },
+      {
+        id: 'broker-us-schwab',
+        name: '嘉信理財 (免手續費)',
+        market: 'US',
+        feeRate: 0,
+        discountRate: 0,
+        minFee: 0,
+        taxRate: 0,
+        usFeeType: 'ZERO_COMMISSION',
+        isDefault: true,
+        color: '#38bdf8',
+      },
+    ];
+
+    it('美股交易若誤植為台股帳戶，validateAndMigrateTrades 應自動修正為美股預設帳戶', () => {
+      const invalidTrades = [
+        {
+          id: 'trade-us-sgov',
+          date: '2026-01-01',
+          symbol: 'SGOV',
+          name: 'iShares 0-3月國庫債券 ETF',
+          market: 'US',
+          currency: 'USD',
+          type: 'BUY',
+          accountId: 'broker-tw-sinopac', // 誤植為台股永豐
+          shares: 89,
+          price: 100.38,
+          fee: 0,
+          tax: 0,
+        },
+      ];
+
+      const validated = validateAndMigrateTrades(invalidTrades, mockAccounts);
+      expect(validated).not.toBeNull();
+      expect(validated![0].accountId).toBe('broker-us-schwab');
+    });
+
+    it('台股交易若誤植為美股帳戶，應自動修正為台股預設帳戶', () => {
+      const invalidTrades = [
+        {
+          id: 'trade-tw-tsmc',
+          date: '2026-01-01',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          accountId: 'broker-us-schwab', // 誤植為美股嘉信
+          shares: 1000,
+          price: 1000,
+          fee: 1425,
+          tax: 0,
+        },
+      ];
+
+      const validated = validateAndMigrateTrades(invalidTrades, mockAccounts);
+      expect(validated).not.toBeNull();
+      expect(validated![0].accountId).toBe('broker-tw-sinopac');
+    });
+
+    it('遇部分損壞或未完整填寫欄位之紀錄時，應安全過濾並保留合法股息與股票紀錄，不回傳 null 造成整庫資料遺失', () => {
+      const mixedTrades = [
+        null,
+        { invalid: true },
+        {
+          id: 'trade-us-div-1',
+          date: '2026-06-23',
+          symbol: 'VT',
+          name: 'Vanguard 全世界股票 ETF',
+          market: 'US',
+          type: 'DIVIDEND',
+          // 缺少 accountId, 缺少 currency, 缺少 fee, tax
+          shares: 50,
+          price: 0.9018,
+          cashAmount: 45.09,
+        },
+        {
+          id: 'trade-tw-tsmc',
+          date: '2026-01-01',
+          symbol: '2330',
+          market: 'TW',
+          type: 'BUY',
+          shares: 1000,
+          price: 600,
+        },
+      ];
+
+      const validated = validateTradesSchema(mixedTrades, mockAccounts);
+      expect(validated).not.toBeNull();
+      expect(validated!.length).toBe(2);
+      expect(validated![0].symbol).toBe('VT');
+      expect(validated![0].market).toBe('US'); // 智能推斷
+      expect(validated![0].currency).toBe('USD');
+      expect(validated![0].accountId).toBe('broker-us-schwab');
+      expect(validated![1].symbol).toBe('2330');
+    });
+  });
 });
+
 
 

@@ -127,35 +127,25 @@ export const FrictionCenterModal: React.FC<FrictionCenterModalProps> = ({
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-2 text-xs text-slate-400">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 pt-2 text-xs text-slate-400">
               <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
                 <div className="text-slate-300 font-medium mb-0.5">歷史總摩擦支出</div>
                 <div className="text-sm font-bold text-slate-100">
                   NT$ {frictionSummary.totalRealizedFriction.toLocaleString()}
                 </div>
               </div>
-              {frictionSummary.totalTWDividendTax !== undefined && frictionSummary.totalTWDividendTax > 0 ? (
-                <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
-                  <div className="text-slate-300 font-medium mb-0.5">台股二代健保 (2.11%)</div>
-                  <div className="text-sm font-bold text-amber-400">
-                    NT$ {frictionSummary.totalTWDividendTax.toLocaleString()}
-                  </div>
+              <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
+                <div className="text-slate-300 font-medium mb-0.5">台股二代健保 (2.11%)</div>
+                <div className="text-sm font-bold text-amber-400">
+                  NT$ {(frictionSummary.totalTWDividendTax ?? 0).toLocaleString()}
                 </div>
-              ) : frictionSummary.totalUSDividendTax !== undefined && frictionSummary.totalUSDividendTax > 0 ? (
-                <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
-                  <div className="text-slate-300 font-medium mb-0.5">美股股息 30% 預扣</div>
-                  <div className="text-sm font-bold text-rose-400">
-                    USD {frictionSummary.totalUSDividendTax.toLocaleString()}
-                  </div>
+              </div>
+              <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
+                <div className="text-slate-300 font-medium mb-0.5">美股股息 30% 預扣</div>
+                <div className="text-sm font-bold text-rose-400">
+                  USD {(frictionSummary.totalUSDividendTax ?? 0).toLocaleString()}
                 </div>
-              ) : (
-                <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
-                  <div className="text-slate-300 font-medium mb-0.5">除權息摩擦稅負</div>
-                  <div className="text-sm font-bold text-slate-400">
-                    NT$ 0
-                  </div>
-                </div>
-              )}
+              </div>
               <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
                 <div className="text-slate-300 font-medium mb-0.5">全週期預期摩擦</div>
                 <div className="text-sm font-bold text-slate-100">

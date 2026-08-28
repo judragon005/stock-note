@@ -9,8 +9,11 @@ import {
   calculateFrictionCostSummary,
   calculateAccountSellFee,
   repairLedgerTaxAndFee,
+  calculateClosedPositionsSummary,
+  calculateBreakevenPrice,
+  roundFractionalShares,
 } from './calculator';
-import { TradeRecord, BrokerAccount } from '../types/stock';
+import { TradeRecord, BrokerAccount, PriceQuote } from '../types/stock';
 
 describe('applyTradeToShares 純函式股數異動計算', () => {
   it('買進與增資應累加股數', () => {
@@ -1528,6 +1531,453 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
       expect(friction.totalTWDividendTax).toBe(633);
       // 總已實現摩擦 = 160 + 633 = 793 TWD
       expect(friction.totalRealizedFriction).toBe(793);
+    });
+
+    it('應精準計算台股二代健保補充保費 (2.11% 門檻) 與美股 30% 股息預扣稅之雙軌累計', () => {
+      const dividendTrades: TradeRecord[] = [
+        // 案例 1: 台股股息單筆未滿 20,000 元 (1,000 股 * 15 元 = 15,000 元) -> 免扣二代健保 (0 元)
+        {
+          id: 'tw-div-exempt',
+          date: '2026-06-01',
+          symbol: '0056',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'DIVIDEND',
+          shares: 1000,
+          price: 15,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        // 案例 2: 台股股息單筆達 20,000 元 (2,000 股 * 10 元 = 20,000 元) -> 扣 2.11% = 422 元
+        {
+          id: 'tw-div-taxed',
+          date: '2026-07-01',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'DIVIDEND',
+          shares: 2000,
+          price: 10,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+        // 案例 3: 台股股息有自訂 tax (例如 500 元) -> 優先採用 500 元
+        {
+          id: 'tw-div-custom-tax',
+          date: '2026-08-01',
+          symbol: '2454',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'DIVIDEND',
+          shares: 1000,
+          price: 50, // 50,000 元
+          fee: 0,
+          tax: 500,  // 自訂實扣稅費
+          createdAt: 3,
+        },
+        // 案例 4: 美股股息無自訂 tax (100 股 * 2 USD = 200 USD) -> 預設扣 30% = 60 USD
+        {
+          id: 'us-div-auto',
+          date: '2026-06-15',
+          symbol: 'AAPL',
+          market: 'US',
+          currency: 'USD',
+          type: 'DIVIDEND',
+          shares: 100,
+          price: 2,
+          fee: 0,
+          tax: 0,
+          createdAt: 4,
+        },
+        // 案例 5: 美股股息有自訂 tax (50 股 * 10 USD = 500 USD, 實扣 tax = 145 USD) -> 採用 145 USD
+        {
+          id: 'us-div-custom',
+          date: '2026-07-15',
+          symbol: 'NVDA',
+          market: 'US',
+          currency: 'USD',
+          type: 'DIVIDEND',
+          shares: 50,
+          price: 10,
+          fee: 0,
+          tax: 145,
+          createdAt: 5,
+        },
+      ];
+
+      const friction = calculateFrictionCostSummary(dividendTrades, [], [], 32.0);
+
+      // 台股二代健保累計: 0 + 422 + 500 = 922 TWD
+      expect(friction.totalTWDividendTax).toBe(922);
+
+      // 美股 30% 預扣稅累計: 60 + 145 = 205 USD
+      expect(friction.totalUSDividendTax).toBe(205);
+
+      // 美股預扣稅折算 TWD: 205 * 32 = 6560 TWD
+      expect(friction.totalUSDividendTaxInTWD).toBe(6560);
+
+      // 總實現摩擦支出: 922 (台) + 6560 (美) = 7482 TWD
+      expect(friction.totalRealizedFriction).toBe(7482);
+    });
+
+    it('calculateHoldingsAndSummary 與 calculateClosedPositionsSummary 應正確識別已平倉標的、出場均價與勝率指標', () => {
+      const trades: TradeRecord[] = [
+        // 標的 1 (2330): 獲利已平倉
+        {
+          id: 't1',
+          date: '2025-01-10',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 500,
+          fee: 100,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 't2',
+          date: '2025-02-15',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'SELL',
+          shares: 1000,
+          price: 600,
+          fee: 100,
+          tax: 1800,
+          createdAt: 2,
+        },
+        // 標的 2 (2454): 虧損已平倉
+        {
+          id: 't3',
+          date: '2025-03-01',
+          symbol: '2454',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 500,
+          price: 1000,
+          fee: 100,
+          tax: 0,
+          createdAt: 3,
+        },
+        {
+          id: 't4',
+          date: '2025-04-10',
+          symbol: '2454',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'SELL',
+          shares: 500,
+          price: 900,
+          fee: 100,
+          tax: 1350,
+          createdAt: 4,
+        },
+        // 標的 3 (NVDA): 美股持倉中 (未平倉)
+        {
+          id: 't5',
+          date: '2025-05-01',
+          symbol: 'NVDA',
+          market: 'US',
+          currency: 'USD',
+          type: 'BUY',
+          shares: 10,
+          price: 100,
+          fee: 0,
+          tax: 0,
+          createdAt: 5,
+        },
+      ];
+
+      const res = calculateHoldingsAndSummary(trades, { 'NVDA': 120 }, 32.0);
+      const holdings = res.holdings;
+
+      // 檢查持倉標的 (NVDA)
+      const nvda = holdings.find((h) => h.symbol === 'NVDA')!;
+      expect(nvda.shares).toBe(10);
+      expect(nvda.isClosed).toBe(false);
+
+      // 檢查已平倉標的 (2330 與 2454)
+      const tsmc = holdings.find((h) => h.symbol === '2330')!;
+      expect(tsmc.shares).toBe(0);
+      expect(tsmc.isClosed).toBe(true);
+      expect(tsmc.exitPrice).toBe(600);
+      expect(tsmc.lastTradeDate).toBe('2025-02-15');
+      expect(tsmc.realizedPnL).toBeGreaterThan(0); // 獲利
+
+      const mtk = holdings.find((h) => h.symbol === '2454')!;
+      expect(mtk.shares).toBe(0);
+      expect(mtk.isClosed).toBe(true);
+      expect(mtk.exitPrice).toBe(900);
+      expect(mtk.lastTradeDate).toBe('2025-04-10');
+      expect(mtk.realizedPnL).toBeLessThan(0); // 虧損
+
+      // 檢查 closedSummary 勝率與統計 (包含直接呼叫純函式驗證)
+      const directClosedSummary = calculateClosedPositionsSummary(holdings, 32.0);
+      expect(directClosedSummary.totalTradesCount).toBe(2);
+      expect(directClosedSummary.winningTradesCount).toBe(1);
+      expect(directClosedSummary.losingTradesCount).toBe(1);
+      expect(directClosedSummary.winRatePercent).toBe(50);
+      expect(directClosedSummary.bestWinner?.symbol).toBe('2330');
+      expect(directClosedSummary.worstLoser?.symbol).toBe('2454');
+
+      const closed = res.closedSummary!;
+      expect(closed.totalTradesCount).toBe(2);
+      expect(closed.winningTradesCount).toBe(1);
+      expect(closed.losingTradesCount).toBe(1);
+      expect(closed.winRatePercent).toBe(50);
+      expect(closed.bestWinner?.symbol).toBe('2330');
+      expect(closed.worstLoser?.symbol).toBe('2454');
+    });
+  });
+
+  describe('v5.2: 交易員精確損益平衡保本價 (calculateBreakevenPrice)', () => {
+    it('美股零手續費保本價應直接等於平均成本', () => {
+      // 買進 10 股 NVDA 單價 120 USD (總成本 1200)
+      const be = calculateBreakevenPrice(10, 1200, 'US', 'NVDA');
+      expect(be).toBe(120);
+    });
+
+    it('台股現股 (0.3% 證交稅 + 0.1425% 全額手續費) 保本價應精確使淨所得大於等於投入成本', () => {
+      // 買進 1,000 股台積電 1,000 元，成本基準 1,001,425 元 (手續費 1425)
+      const costBasis = 1000 * 1000 + 1425;
+      const be = calculateBreakevenPrice(1000, costBasis, 'TW', '2330');
+      expect(be).toBeGreaterThan(1000);
+      
+      // 驗證以 be 賣出的淨變現額 >= 成本基準
+      const gross = be * 1000;
+      const tax = Math.floor(gross * 0.003);
+      const fee = Math.max(20, Math.floor(gross * 0.001425));
+      const netProceeds = gross - tax - fee;
+      expect(netProceeds).toBeGreaterThanOrEqual(costBasis);
+    });
+
+    it('台股現股搭配券商折讓 (如國泰 2.8 折) 保本價應低於無折讓', () => {
+      const costBasis = 100000;
+      const accFull: BrokerAccount = {
+        id: 'full',
+        name: '全額',
+        market: 'TW',
+        feeRate: 0.001425,
+        discountRate: 1.0,
+        minFee: 20,
+        taxRate: 0.003,
+      };
+      const acc28: BrokerAccount = {
+        id: '28',
+        name: '國泰 2.8折',
+        market: 'TW',
+        feeRate: 0.001425,
+        discountRate: 0.28,
+        minFee: 20,
+        taxRate: 0.003,
+      };
+
+      const beFull = calculateBreakevenPrice(1000, costBasis, 'TW', '2330', accFull);
+      const be28 = calculateBreakevenPrice(1000, costBasis, 'TW', '2330', acc28);
+      expect(be28).toBeLessThan(beFull);
+    });
+
+    it('台股股票型 ETF (0050, 0.1% 稅) 與債券型 ETF (00679B, 0% 稅) 保本價應自動辨識不同稅率', () => {
+      const shares = 1000;
+      const costBasis = 50000;
+      const beStockETF = calculateBreakevenPrice(shares, costBasis, 'TW', '0050');
+      const beBondETF = calculateBreakevenPrice(shares, costBasis, 'TW', '00679B');
+      const beStock = calculateBreakevenPrice(shares, costBasis, 'TW', '2330');
+
+      expect(beBondETF).toBeLessThan(beStockETF);
+      expect(beStockETF).toBeLessThan(beStock);
+    });
+
+    it('小額零股交易應觸發最低手續費 20 元階梯補償', () => {
+      // 買進 10 股 50 元股票，成本 520 元 (含 20 元買進低消)
+      const be = calculateBreakevenPrice(10, 520, 'TW', '2330');
+      // 賣出時也需付 20 元低消與證交稅，確保淨變現額 >= 520
+      const gross = be * 10;
+      const tax = Math.floor(gross * 0.003);
+      const fee = Math.max(20, Math.floor(gross * 0.001425));
+      const netProceeds = gross - tax - fee;
+      expect(netProceeds).toBeGreaterThanOrEqual(520);
+    });
+  });
+
+  describe('v5.2: 碎股精度 (roundFractionalShares) 與現金減資超額退款 (#0013)', () => {
+    it('roundFractionalShares 應強制萬分位精準四捨五入收斂', () => {
+      expect(roundFractionalShares(0.30000000000000004)).toBe(0.3);
+      expect(roundFractionalShares(1.2345678)).toBe(1.2346);
+    });
+
+    it('現金減資退款高於在庫成本時，成本歸零且超額款項轉入 realizedPnL', () => {
+      const trades: TradeRecord[] = [
+        {
+          id: '1',
+          date: '2026-01-01',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 5,
+          fee: 20,
+          tax: 0,
+          createdAt: 1,
+        },
+        // 減資前成本為 5020 元，本次現金減資退款 6,000 元 (減資 500 股，每股退 12 元)
+        {
+          id: '2',
+          date: '2026-06-01',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'CAPITAL_REDUCTION',
+          shares: 500,
+          price: 12,
+          cashAmount: 6000,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+      ];
+
+      const { holdings } = calculateHoldingsAndSummary(trades, { '2330': 10 }, 32.0);
+      const tsmc = holdings.find((h) => h.symbol === '2330')!;
+      expect(tsmc.shares).toBe(500);
+      expect(tsmc.totalCostBasis).toBe(0);
+      // 超額退款 6000 - 5020 = 980 轉列已實現利得
+      expect(tsmc.realizedPnL).toBe(980);
+      expect(tsmc.totalCapitalReturned).toBe(6000);
+    });
+  });
+
+  describe('v5.2: 盤中當日損益 (Today\'s PnL) 彙總與指標計算', () => {
+    it('應依據 quotes 的 previousClose 計算每檔個股當日每股變動額、漲跌幅與當日損益', () => {
+      const trades: TradeRecord[] = [
+        {
+          id: '1',
+          date: '2026-01-01',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 900,
+          fee: 100,
+          tax: 0,
+          createdAt: 1,
+        },
+      ];
+
+      const quotes: Record<string, PriceQuote> = {
+        '2330': {
+          symbol: '2330',
+          market: 'TW',
+          price: 950,
+          previousClose: 920,
+          change: 30,
+          changePercent: 3.26,
+          currency: 'TWD',
+          status: 'REALTIME',
+          updatedAt: Date.now(),
+          source: 'YAHOO',
+        },
+      };
+
+      const { holdings, summary } = calculateHoldingsAndSummary(
+        trades,
+        { '2330': 950 },
+        32.0,
+        'TOTAL_RETURN',
+        [],
+        'ALL',
+        quotes
+      );
+
+      const tsmc = holdings.find((h) => h.symbol === '2330')!;
+      expect(tsmc.todaysChange).toBe(30);
+      expect(tsmc.todaysPnL).toBe(30000); // 1000 股 * 30 元
+      expect(tsmc.todaysPnLPercent).toBeCloseTo(3.26, 1);
+      expect(tsmc.breakevenPrice).toBeGreaterThan(900);
+
+      // 檢查台股總覽與全市場總覽
+      expect(summary.twd.todayPnL).toBe(30000);
+      expect(summary.combinedTWD.todayPnL).toBe(30000);
+    });
+
+    it('跨市場 (台股 + 美股折算台幣) 應正確彙總整戶當日損益金額', () => {
+      const trades: TradeRecord[] = [
+        {
+          id: '1',
+          date: '2026-01-01',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 900,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: '2',
+          date: '2026-01-01',
+          symbol: 'AAPL',
+          market: 'US',
+          currency: 'USD',
+          type: 'BUY',
+          shares: 100,
+          price: 200,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+      ];
+
+      const quotes: Record<string, PriceQuote> = {
+        '2330': {
+          symbol: '2330',
+          market: 'TW',
+          price: 920,
+          previousClose: 900,
+          currency: 'TWD',
+          status: 'REALTIME',
+          updatedAt: Date.now(),
+          source: 'YAHOO',
+        },
+        'AAPL': {
+          symbol: 'AAPL',
+          market: 'US',
+          price: 210,
+          previousClose: 200,
+          currency: 'USD',
+          status: 'REALTIME',
+          updatedAt: Date.now(),
+          source: 'YAHOO',
+        },
+      };
+
+      const usdToTwdRate = 32.0;
+      const { summary } = calculateHoldingsAndSummary(
+        trades,
+        { '2330': 920, 'AAPL': 210 },
+        usdToTwdRate,
+        'TOTAL_RETURN',
+        [],
+        'ALL',
+        quotes
+      );
+
+      // 台股今日損益 = 1000 * 20 = 20,000 TWD
+      expect(summary.twd.todayPnL).toBe(20000);
+      // 美股今日損益 = 100 * 10 = 1,000 USD
+      expect(summary.usd.todayPnL).toBe(1000);
+      // 全市場折算台幣 = 20,000 + 1,000 * 32 = 52,000 TWD
+      expect(summary.combinedTWD.todayPnL).toBe(52000);
     });
   });
 });

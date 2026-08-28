@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { TradeRecord, TradeType } from '../types/stock';
-import { History, Trash2, Search, Tag, Sparkles, Wrench } from 'lucide-react';
+import { History, Trash2, Edit2, Search, Tag, Sparkles, Wrench } from 'lucide-react';
 
 interface TradeHistoryTableProps {
   trades: TradeRecord[];
@@ -8,6 +8,7 @@ interface TradeHistoryTableProps {
   onResetGlobalFilters?: () => void;
   onDeleteTrade: (id: string) => void;
   onRepairTaxAndFee?: () => void;
+  onEditTrade?: (trade: TradeRecord) => void;
 }
 
 export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
@@ -16,6 +17,7 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
   onResetGlobalFilters,
   onDeleteTrade,
   onRepairTaxAndFee,
+  onEditTrade,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'BUY' | 'SELL' | 'DIVIDEND' | 'CORPORATE'>('ALL');
@@ -288,7 +290,7 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
                 <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'right' }}>稅費</th>
                 <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'right' }}>結算 / 退款金額</th>
                 <th style={{ padding: '10px 12px', fontWeight: 600 }}>策略標籤 / 備註</th>
-                <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'center' }}>刪除</th>
+                <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'center' }}>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -440,29 +442,50 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
                       )}
                     </td>
 
-                    {/* 刪除按鈕 */}
-                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                      <button
-                        onClick={() => {
-                          if (confirm(`確定要刪除 ${t.date} ${t.symbol} 的 ${t.type} 紀錄嗎？`)) {
-                            onDeleteTrade(t.id);
-                          }
-                        }}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: 'var(--text-muted)',
-                          cursor: 'pointer',
-                          padding: '4px',
-                          borderRadius: '4px',
-                          transition: 'color 0.2s ease',
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--loss-color)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
-                        title="刪除此筆交易"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                    {/* 操作按鈕 (編輯 / 刪除) */}
+                    <td style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        {onEditTrade && (
+                          <button
+                            onClick={() => onEditTrade(t)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--text-muted)',
+                              cursor: 'pointer',
+                              padding: '4px',
+                              borderRadius: '4px',
+                              transition: 'color 0.2s ease',
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.color = '#38bdf8')}
+                            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+                            title="編輯此筆交易"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            if (confirm(`確定要刪除 ${t.date} ${t.symbol} 的 ${t.type} 紀錄嗎？`)) {
+                              onDeleteTrade(t.id);
+                            }
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'var(--text-muted)',
+                            cursor: 'pointer',
+                            padding: '4px',
+                            borderRadius: '4px',
+                            transition: 'color 0.2s ease',
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--loss-color)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+                          title="刪除此筆交易"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
