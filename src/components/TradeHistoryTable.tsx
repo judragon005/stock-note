@@ -35,9 +35,30 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
     }).length;
   }, [trades]);
 
+  const TRADE_TYPE_SAME_DAY_PRIORITY: Record<string, number> = {
+    STOCK_SPLIT: 1,
+    STOCK_DIVIDEND: 2,
+    CAPITAL_REDUCTION: 3,
+    DIVIDEND: 4, // 現金股利入帳 (先)
+    SELL: 5,     // 賣出變現 (先)
+    BUY: 6,      // 買進 / DRIP 股息再投資 (後)
+    CAPITAL_INCREASE: 7,
+    STOCK_MERGER: 8,
+    PREFERRED_REDEMPTION: 9,
+    SPIN_OFF: 10,
+    CB_CONVERSION: 11,
+    TENDER_OFFER: 12,
+  };
+
   const filteredTrades = [...trades]
     .sort((a, b) => {
       if (a.date !== b.date) return b.date.localeCompare(a.date);
+      // 同日交易按金融因果優先序排列（先入帳後扣款）
+      const priorityA = TRADE_TYPE_SAME_DAY_PRIORITY[a.type] || 50;
+      const priorityB = TRADE_TYPE_SAME_DAY_PRIORITY[b.type] || 50;
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
       return b.createdAt - a.createdAt;
     })
     .filter((t) => {
