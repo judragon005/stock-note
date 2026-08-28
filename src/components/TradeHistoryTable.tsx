@@ -35,14 +35,15 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
     }).length;
   }, [trades]);
 
-  const TRADE_TYPE_SAME_DAY_PRIORITY: Record<string, number> = {
-    STOCK_SPLIT: 1,
-    STOCK_DIVIDEND: 2,
-    CAPITAL_REDUCTION: 3,
-    DIVIDEND: 4, // 現金股利入帳 (先)
-    SELL: 5,     // 賣出變現 (先)
-    BUY: 6,      // 買進 / DRIP 股息再投資 (後)
-    CAPITAL_INCREASE: 7,
+  // 從新到舊 (DESC) 時間軸下之同日交易優先序：同日越晚發生的（最新）排在越上方
+  const TRADE_TYPE_SAME_DAY_PRIORITY_DESC: Record<string, number> = {
+    BUY: 1,                 // 買進 / DRIP 股息再投資 (後發生，最新，排上方)
+    SELL: 2,                // 賣出變現 (盤中發生)
+    DIVIDEND: 3,            // 現金股利入帳 (盤前/當日先入帳，排下方)
+    CAPITAL_INCREASE: 4,
+    CAPITAL_REDUCTION: 5,
+    STOCK_DIVIDEND: 6,
+    STOCK_SPLIT: 7,
     STOCK_MERGER: 8,
     PREFERRED_REDEMPTION: 9,
     SPIN_OFF: 10,
@@ -53,9 +54,9 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
   const filteredTrades = [...trades]
     .sort((a, b) => {
       if (a.date !== b.date) return b.date.localeCompare(a.date);
-      // 同日交易按金融因果優先序排列（先入帳後扣款）
-      const priorityA = TRADE_TYPE_SAME_DAY_PRIORITY[a.type] || 50;
-      const priorityB = TRADE_TYPE_SAME_DAY_PRIORITY[b.type] || 50;
+      // 從新到舊：同日最新發生者 (如 DRIP 買進) 排在上方，先發生者 (如 股息入帳) 排在下方
+      const priorityA = TRADE_TYPE_SAME_DAY_PRIORITY_DESC[a.type] || 50;
+      const priorityB = TRADE_TYPE_SAME_DAY_PRIORITY_DESC[b.type] || 50;
       if (priorityA !== priorityB) {
         return priorityA - priorityB;
       }
