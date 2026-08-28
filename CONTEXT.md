@@ -527,6 +527,18 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - [ADR-0044: V5.7.3 全專案「慣用紅綠漲跌」色彩模式統一與 CSS 變數體系全面連動](docs/adr/0044-color-theme-mode-unification-and-full-project-css-sync.md)
 - [ADR-0045: V5.7.4 淨槓桿零負債現貨保護機制與被動收入各項利息獨立膠囊展示](docs/adr/0045-risk-leverage-zero-debt-fix-and-passive-income-badges.md)
 - [ADR-0046: V5.8.0 零負債槓桿歸零、利息膠囊券商聚合與預扣稅分離、流水帳股息雙向同步全域連動](docs/adr/0046-zero-debt-leverage-zeroing-and-bidirectional-cash-trade-sync.md)
+- [ADR-0047: V5.9.0 嘉信理財對帳單像素級對齊、利息智能正規化與美股股息毛額雙筆記帳架構](docs/adr/0047-schwab-drip-reconciliation-smart-interest-normalization-and-gross-dividend.md)
+
+### 嘉信理財對帳單像素級對齊與雙筆記帳架構 (Schwab Statement Pixel-Perfect Alignment & Dual-Entry Architecture) *(新增於 V5.9.0)*
+
+**Dual-Entry Dividend & Tax Flow (美股股息毛額與預扣稅雙筆記帳)**:
+美股現金股息入帳流水一律採用「稅前毛額 (Gross)」，精準還原嘉信理財官方 `DOI（毛股息入帳）` + `JRN（30% 預扣稅扣除）` 的標準金流模型，徹底消除毛淨額混淆與重複扣稅風險。
+
+**Smart Interest Note Normalization (利息備註智能正規化)**:
+升級 `normalizeInterestName`，全面支援中文全形逗號 `，`、半形逗號 `,`、冒號 `：`、各類破折號與日期區間正則過濾，確保跨月份同券商利息 100% 合併為單一膠囊。
+
+**Auto-Reconciliation Engine (冪等式實績自動校正模組)**:
+在系統初始化層自動對齊歷史 SGOV 買賣金額與 VT 股息發放日/金額，自動消除手動出金校正流水，達成交割戶現金餘額 `$224.79 USD` 的 100% 吻合。
 
 ### 零負債槓桿歸零、利息聚合與雙向同步 (Zero-Debt Leverage Zeroing, Broker Interest Aggregation & Bidirectional Sync) *(新增於 V5.8.0)*
 
