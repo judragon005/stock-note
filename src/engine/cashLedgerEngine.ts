@@ -786,14 +786,15 @@ export function syncTradesWithCashTransactions(
       amount = isUS ? bankersRound(rawNet, 2) : Math.round(rawNet);
     } else if (trade.type === 'DIVIDEND') {
       category = 'DIVIDEND_PAYOUT';
-      // 現金股利淨入帳 = 總股息 - 預扣稅/二代健保
+      // 現金股利入帳：美股統一以稅前毛額 (Gross) 入帳，配合獨立之 TAX 預扣稅流水對齊券商 DOI/JRN 雙筆機制
       const rawGross = (trade.shares && trade.price) ? trade.shares * trade.price : (trade.cashAmount || 0);
       const gross = isUS ? bankersRound(rawGross, 2) : Math.floor(rawGross);
-      let tax = trade.tax || 0;
-      if (isUS && tax === 0 && !trade.cashAmount && gross > 0) {
-        tax = bankersRound(gross * 0.3, 2);
+      if (isUS) {
+        amount = gross;
+      } else {
+        const tax = trade.tax || 0;
+        amount = gross - tax;
       }
-      amount = gross - tax;
     } else if (trade.type === 'CAPITAL_REDUCTION' && trade.cashAmount && trade.cashAmount > 0) {
       category = 'CAPITAL_RETURN';
       amount = trade.cashAmount;

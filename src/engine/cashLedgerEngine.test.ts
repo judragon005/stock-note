@@ -566,6 +566,51 @@ describe('股票交易交割自動同步與流水關聯 (Trade Settlement Sync)'
     expect(synced[0].id).toBe('manual-deposit');
   });
 
+  it('美股現金股息流水統一以稅前毛額 (Gross) 入帳，以精準對齊券商 DOI/JRN 雙筆記帳機制', () => {
+    const trades: TradeRecord[] = [
+      {
+        id: 'trade-us-vt-div-auto-tax',
+        date: '2025-09-19',
+        symbol: 'VT',
+        name: 'Vanguard 全世界股票 ETF',
+        market: 'US',
+        currency: 'USD',
+        type: 'DIVIDEND',
+        accountId: 'broker-schwab',
+        shares: 10,
+        price: 0.478, // 毛額 4.78
+        fee: 0,
+        tax: 0,
+        createdAt: 1,
+      },
+      {
+        id: 'trade-us-vt-div-explicit-tax',
+        date: '2025-12-19',
+        symbol: 'VT',
+        name: 'Vanguard 全世界股票 ETF',
+        market: 'US',
+        currency: 'USD',
+        type: 'DIVIDEND',
+        accountId: 'broker-schwab',
+        shares: 20,
+        price: 0.5575, // 毛額 11.15
+        fee: 0,
+        tax: 3.35,
+        createdAt: 2,
+      },
+    ];
+
+    const synced = syncTradesWithCashTransactions(trades, []);
+    expect(synced.length).toBe(2);
+
+    // 美股股息流水統一記錄為稅前毛額 (4.78 與 11.15)
+    expect(synced[0].amount).toBeCloseTo(4.78, 2);
+    expect(synced[0].type).toBe('DIVIDEND_PAYOUT');
+
+    expect(synced[1].amount).toBeCloseTo(11.15, 2);
+    expect(synced[1].type).toBe('DIVIDEND_PAYOUT');
+  });
+
   it('美股買賣交易 (SGOV / VT) 自動生成流水帳時，accountId 應精準對齊所屬美股帳戶且幣別為 USD', () => {
     const trades: TradeRecord[] = [
       {
@@ -614,51 +659,6 @@ describe('股票交易交割自動同步與流水關聯 (Trade Settlement Sync)'
     expect(synced[1].currency).toBe('USD');
     expect(synced[1].type).toBe('STOCK_SELL');
     expect(synced[1].amount).toBe(+(89 * 100.63 - 0.02).toFixed(2));
-  });
-
-  it('美股現金股息若未填寫 tax 應自動按 30% 預扣稅折算淨額入帳，有指定 tax 則以指定為準', () => {
-    const trades: TradeRecord[] = [
-      {
-        id: 'trade-us-vt-div-auto-tax',
-        date: '2025-09-19',
-        symbol: 'VT',
-        name: 'Vanguard 全世界股票 ETF',
-        market: 'US',
-        currency: 'USD',
-        type: 'DIVIDEND',
-        accountId: 'broker-schwab',
-        shares: 10,
-        price: 0.478, // 毛額 4.78，30% 稅為 1.43 ➔ 淨額 3.35
-        fee: 0,
-        tax: 0,
-        createdAt: 1,
-      },
-      {
-        id: 'trade-us-vt-div-explicit-tax',
-        date: '2025-12-19',
-        symbol: 'VT',
-        name: 'Vanguard 全世界股票 ETF',
-        market: 'US',
-        currency: 'USD',
-        type: 'DIVIDEND',
-        accountId: 'broker-schwab',
-        shares: 20,
-        price: 0.5575, // 毛額 11.15
-        fee: 0,
-        tax: 3.35, // 明確指定稅額 3.35 ➔ 淨額 7.80
-        createdAt: 2,
-      },
-    ];
-
-    const synced = syncTradesWithCashTransactions(trades, []);
-    expect(synced.length).toBe(2);
-
-    // 未填寫稅額：自動 30% 預扣 (4.78 - 1.43 = 3.35)
-    expect(synced[0].amount).toBeCloseTo(3.35, 2);
-    expect(synced[0].type).toBe('DIVIDEND_PAYOUT');
-
-    // 明確指定稅額：11.15 - 3.35 = 7.80
-    expect(synced[1].amount).toBeCloseTo(7.80, 2);
   });
 
   it('應正確計算包含減資退款、借貸撥款/還本與稅費扣除的全量現金收支餘額', () => {
