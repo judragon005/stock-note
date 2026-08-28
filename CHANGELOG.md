@@ -4,6 +4,31 @@
 
 ---
 
+## [V5.9.0] - 2026-08-28
+### 嘉信理財對帳單像素級對齊、利息智能正規化與美股股息毛額雙筆記帳架構
+- **美股股息毛額雙筆記帳架構 (`src/engine/cashLedgerEngine.ts`)**：
+  - 美股現金股利流水統一以「稅前毛額（Gross）」入帳，精準還原嘉信理財官方 `DOI（毛股息入帳）` + `JRN（30% 預扣稅扣除）` 的標準金流模型，徹底消除毛淨額混淆與重複扣稅風險。
+- **利息備註智能正規化引擎 (`normalizeInterestName`)**：
+  - 全面支援中文全形逗號 `，`、半形 `,`、冒號 `：`、各類破折號（`-`、`~`、`–`、`—`）與日期區間截斷，確保跨月份同券商利息 100% 合併為單一膠囊（`💵 Schwab 嘉信理財-現金利息 +$1.00 USD`）。
+- **券商底層高精度計算規則注入 (`TradeHistoryTable.tsx` & `storage.ts`)**：
+  - 交易歷史明細支援 4 位高精度每股配息（DPS：`USD 0.5627` 與 `USD 0.3273`），結算金額統一以毛額呈現（`+USD 45.09` 與 `+USD 26.18`），徹底消除小數點乘除浮點截斷誤差。
+  - 實作 `autoReconcileSchwabRecords` 冪等式自動對齊模組，精準貼合嘉信交割戶真實現金餘額 `$224.79 USD`。
+- **關聯文件**：[SPEC-0047](docs/specs/0047-schwab-drip-reconciliation-smart-interest-normalization-and-gross-dividend-spec.md) · [ADR-0047](docs/adr/0047-schwab-drip-reconciliation-smart-interest-normalization-and-gross-dividend.md)。
+
+---
+
+## [V5.8.0] - 2026-08-28
+### 零負債槓桿歸零 0.00x、利息依券商聚合與預扣稅分離、流水帳股息雙向同步全域連動
+- **零負債淨槓桿歸零 (`src/engine/riskExposureEngine.ts`)**：
+  - 當帳戶無任何借貸/質押負債時，淨槓桿與總槓桿一律評定為 `0.00x`，徽章顯示「穩健無槓桿 (≤1.0x)」。
+- **利息依券商聚合與預扣稅分拆 (`src/components/SummaryCards.tsx`)**：
+  - 被動收益卡片分拆「美股股息預扣」與「利息預扣」兩顆獨立膠囊。
+- **現金流水帳 ➔ Trade 雙向連動 (`CashLedgerWorkspace.tsx` & `App.tsx`)**：
+  - 編輯流水帳股息金額時，自動雙向更新 Trade 原始紀錄並即時重算全域 NAV 與現金水位。
+- **關聯文件**：[SPEC-0046](docs/specs/0046-zero-debt-leverage-zeroing-and-bidirectional-cash-trade-sync.md) · [ADR-0046](docs/adr/0046-zero-debt-leverage-zeroing-and-bidirectional-cash-trade-sync.md)。
+
+---
+
 ## [V5.3] - 2026-08-27
 ### 多批次沖銷會計 (FIFO/LIFO/HIFO/Specific Lot) 與稅務最佳化沖銷系統 (唯一 P1 技術債 #0008 完整解決)
 - **多批次沖銷核心演算法引擎 (`src/engine/lotEngine.ts`)**：
