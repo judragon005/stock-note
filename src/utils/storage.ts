@@ -1033,6 +1033,89 @@ export function saveLoanRecordsToStorage(loans: LoanRecord[]): void {
 /**
  * 非同步初始化資料庫與儲存層（自動執行無損遷移與初次載入）
  */
+/**
+ * 自動校正美股嘉信理財歷史交易紀錄（消除歷史手動輸入之零頭差額與除息日/發放日日期差）
+ * 冪等執行，僅在偵測到不符項目時校正一次
+ */
+export function autoReconcileSchwabRecords(
+  trades: TradeRecord[],
+  cashTransactions: CashTransaction[]
+): { trades: TradeRecord[]; cashTransactions: CashTransaction[]; modified: boolean } {
+  let modified = false;
+
+  const updatedTrades = trades.map((t) => {
+    // 1. SGOV 買進記錄校正 (01/01/26 89 股，嘉信實扣 $8,933.82)
+    if (t.symbol === 'SGOV' && t.type === 'BUY' && Math.round(t.shares) === 89) {
+      if (Math.abs((t.price * t.shares + t.fee) - 8933.82) > 0.01) {
+        modified = true;
+        return {
+          ...t,
+          price: 100.38,
+          fee: 0,
+        };
+      }
+    }
+
+    // 2. SGOV 賣出記錄校正 (01/28/26 89 股，嘉信實收 $8,956.07)
+    if (t.symbol === 'SGOV' && t.type === 'SELL' && Math.round(t.shares) === 89) {
+      if (Math.abs((t.price * t.shares - (t.tax || 0) - (t.fee || 0)) - 8956.07) > 0.01) {
+        modified = true;
+        return {
+          ...t,
+          price: 100.63,
+          fee: 0.02,
+          tax: 0,
+        };
+      }
+    }
+
+    // 3. VT 2026-03-24 股息校正 (毛額 $26.18，稅 $7.85)
+    if (t.symbol === 'VT' && t.type === 'DIVIDEND' && (t.date === '2026-03-20' || t.date === '2026-03-24')) {
+      const gross = t.shares * t.price;
+      if (Math.abs(gross - 26.18) > 0.01 || t.date !== '2026-03-24' || Math.abs((t.tax || 0) - 7.85) > 0.01) {
+        modified = true;
+        return {
+          ...t,
+          date: '2026-03-24',
+          price: t.shares > 0 ? 26.18 / t.shares : 26.18,
+          tax: 7.85,
+        };
+      }
+    }
+
+    // 4. VT 2026-06-23 股息校正 (毛額 $45.09，稅 $13.53)
+    if (t.symbol === 'VT' && t.type === 'DIVIDEND' && (t.date === '2026-06-18' || t.date === '2026-06-23')) {
+      const gross = t.shares * t.price;
+      if (Math.abs(gross - 45.09) > 0.01 || t.date !== '2026-06-23' || Math.abs((t.tax || 0) - 13.53) > 0.01) {
+        modified = true;
+        return {
+          ...t,
+          date: '2026-06-23',
+          price: t.shares > 0 ? 45.09 / t.shares : 45.09,
+          tax: 13.53,
+        };
+      }
+    }
+
+    return t;
+  });
+
+  // 5. 移除手動校正 -$1.79 的流水
+  const filteredCash = cashTransactions.filter((tx) => {
+    if (tx.note && tx.note.includes('初始本金/交割戶真實餘額校正') && Math.abs(Math.abs(tx.amount) - 1.79) < 0.1) {
+      modified = true;
+      return false;
+    }
+    return true;
+  });
+
+  return {
+    trades: updatedTrades,
+    cashTransactions: filteredCash,
+    modified,
+  };
+}
+
 export async function initializeStorageAsync(): Promise<{
   trades: TradeRecord[];
   brokerAccounts: BrokerAccount[];
@@ -1079,12 +1162,22 @@ export async function initializeStorageAsync(): Promise<{
       }
     }
 
-    const trades = dbTrades.length > 0 ? dbTrades : loadTradesFromStorage();
+    let rawTrades = dbTrades.length > 0 ? dbTrades : loadTradesFromStorage();
     const brokerAccounts = dbAccounts.length > 0 ? dbAccounts : loadBrokerAccountsFromStorage();
-    const cashTransactions = dbCash.length > 0 ? dbCash : loadCashTransactionsFromStorage();
+    let rawCash = dbCash.length > 0 ? dbCash : loadCashTransactionsFromStorage();
     const loanRecords = dbLoans.length > 0 ? dbLoans : loadLoanRecordsFromStorage();
     const apiKeys = dbApiKeysObj?.value || loadApiKeysConfigFromStorage();
     const accountingView = dbViewObj?.value || loadAccountingViewFromStorage();
+
+    // 執行嘉信理財真實對帳單精準校正
+    const reconciled = autoReconcileSchwabRecords(rawTrades, rawCash);
+    const trades = reconciled.trades;
+    const cashTransactions = reconciled.cashTransactions;
+
+    if (reconciled.modified) {
+      saveTradesToStorage(trades);
+      saveCashTransactionsToStorage(cashTransactions);
+    }
 
     return {
       trades,
