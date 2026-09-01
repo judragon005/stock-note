@@ -4,6 +4,7 @@ import {
   LeverageRiskTier,
   LeverageRiskTierInfo,
 } from '../types/exposure';
+import { calculateLoanInterestAndPayoff } from './cashLedgerEngine';
 
 /**
  * 取得槓桿風險等級的中文標籤、主題顏色與說明
@@ -45,7 +46,7 @@ export function getLeverageRiskInfo(tier: LeverageRiskTier): LeverageRiskTierInf
  * 計算整戶總曝險與淨槓桿率 (Portfolio Gross/Net Exposure & Leverage Engine)
  */
 export function calculatePortfolioExposure(params: CalculateExposureParams): PortfolioExposureMetrics {
-  const { holdings, cashBalances, inTransitSummary, loans, usdToTwdRate } = params;
+  const { holdings, cashBalances, inTransitSummary, loans, usdToTwdRate, asOfDate } = params;
 
   // 1. 計算所有股票現值 (折合 TWD)
   let totalStockValueTWD = 0;
@@ -63,11 +64,13 @@ export function calculatePortfolioExposure(params: CalculateExposureParams): Por
   const inTransitNet = inTransitSummary?.netSettlementTWD || 0;
   const totalAvailableCashTWD = twdCash + usdCashInTWD + inTransitNet;
 
-  // 3. 計算總借款負債 (本金 + 應計利息)
+  // 3. 計算總借款負債 (本金 + 應計利息 + 設質規費)
   let totalDebtTWD = 0;
   for (const loan of loans) {
-    const principal = loan.principal || 0;
-    const debtTWD = loan.currency === 'USD' ? principal * usdToTwdRate : principal;
+    if (!loan.principal || loan.principal <= 0) continue;
+    const payoff = calculateLoanInterestAndPayoff(loan, asOfDate);
+    const debtNative = payoff.totalPayoffAmount;
+    const debtTWD = loan.currency === 'USD' ? debtNative * usdToTwdRate : debtNative;
     totalDebtTWD += debtTWD;
   }
 

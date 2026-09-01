@@ -24,6 +24,7 @@ import {
   createEmptyAccountSummary,
   isPendingOrFutureTransaction,
   aggregateInterestIncomeDetails,
+  generateMonthlyLoanInterestTransactions,
 } from './cashLedgerEngine';
 
 const mockAccounts: BrokerAccount[] = [
@@ -144,8 +145,8 @@ describe('現金帳本與多帳戶餘額試算引擎 (Cash Ledger Engine)', () =
         accountId: 'broker-cathay',
         currency: 'TWD',
         type: 'DIVIDEND_PAYOUT',
-        amount: 64145,
-        date: '2026-10-01', // 未來 2 個月後才發放
+        amount: 48945,
+        date: '2026-10-29', // 未來發放日
         createdAt: 3,
       },
     ];
@@ -153,13 +154,14 @@ describe('現金帳本與多帳戶餘額試算引擎 (Cash Ledger Engine)', () =
     const result = calculateAccountBalances(mockAccounts, transactions, 32.0, '2026-08-25');
     const cathay = result.byAccount['broker-cathay'];
 
-    // 實質可用現金餘額：只有已入帳的 100,000（待交割 -13,068 與未來股息 +64,145 不提前計入）
+    // 實質可用現金餘額：只有已入帳的 100,000（待交割 -13,068 與未來股息 +48,945 不提前計入）
     expect(cathay.balance).toBe(100000);
-    // 在途與未來款項合計：-13,068 + 64,145 = 51,077
-    expect(cathay.pendingSettlementAmount).toBe(51077);
-    // 預估全數交割後餘額：100,000 + 51,077 = 151,077
-    expect(cathay.projectedBalance).toBe(151077);
+    // 在途與未來款項合計：-13,068 + 48,945 = 35,877
+    expect(cathay.pendingSettlementAmount).toBe(35877);
+    // 預估全數交割後餘額：100,000 + 35,877 = 135,877
+    expect(cathay.projectedBalance).toBe(135877);
   });
+
 
   it('應精確計算外部淨投入本金 (Net Invested Capital: 純入金 - 純出金)', () => {
     const transactions: CashTransaction[] = [
@@ -458,14 +460,14 @@ describe('股票質押借款與即時擔保維持率風控引擎 (Loan & Pledge 
     expect(ratioResult.isMarginCall).toBe(true);
   });
 
-  it('應正確計算整體淨負債比 (LTV) 與年化利息支出', () => {
+  it('應正確計算整體淨負債比 (LTV) 與年化利息支出 (起始日即時負債)', () => {
     const loans: LoanRecord[] = [mockLoan];
     const totalStockMarketValue = 3000000;
     const totalCashBalance = 500000;
 
-    const leverage = calculateOverallLeverageMetrics(loans, totalStockMarketValue, totalCashBalance, 32.0);
+    const leverage = calculateOverallLeverageMetrics(loans, totalStockMarketValue, totalCashBalance, 32.0, '2026-01-01');
 
-    // 總負債 = 1,000,000
+    // 總負債 = 1,000,000 (0 天利息與規費)
     // 總資產 = 3,000,000 + 500,000 = 3,500,000
     // 淨資產 NAV = 2,500,000
     // 負債比 (LTV) = 1,000,000 / 3,500,000 * 100 = 28.57%
@@ -474,6 +476,40 @@ describe('股票質押借款與即時擔保維持率風控引擎 (Loan & Pledge 
     expect(leverage.netAssetValueInTWD).toBe(2500000);
     expect(leverage.debtRatioPercent).toBeCloseTo(28.57, 1);
     expect(leverage.estimatedAnnualInterestInTWD).toBe(23500); // 1,000,000 * 2.35%
+  });
+
+  it('總負債應精準計入應計利息與設質三大規費 (本利和+規費扣減 NAV)', () => {
+    const loanWithFees: LoanRecord = {
+      id: 'loan-fees',
+      name: '質押貸款含規費',
+      loanType: 'PLEDGE',
+      principal: 500000,
+      annualInterestRate: 2.5,
+      currency: 'TWD',
+      startDate: '2026-03-01',
+      transferFee: 100,
+      pledgeRegistryFee: 100,
+      handlingFee: 0,
+      createdAt: 1,
+    };
+
+    // 計息 30 天：2026-03-01 到 2026-03-31
+    // 利息 = 500000 * (0.025 / 365) * 30 = 1027
+    // 規費 = 100 + 100 = 200
+    // 本利和規費總負債 = 500,000 + 1,027 + 200 = 501,227
+    const leverage = calculateOverallLeverageMetrics(
+      [loanWithFees],
+      1000000, // 股票市值
+      200000,  // 現金
+      32.0,
+      '2026-03-31'
+    );
+
+    expect(leverage.totalDebtInTWD).toBe(501227);
+    expect(leverage.totalAssetInTWD).toBe(1200000);
+    expect(leverage.netAssetValueInTWD).toBe(1200000 - 501227); // 698,773
+    expect(leverage.debtRatioPercent).toBeCloseTo((501227 / 1200000) * 100, 2);
+    expect(leverage.estimatedAnnualInterestInTWD).toBe(12500); // 500,000 * 2.5%
   });
 });
 
@@ -1118,6 +1154,213 @@ describe('股票交易交割自動同步與流水關聯 (Trade Settlement Sync)'
       expect(res.interestItems).toHaveLength(4);
     });
   });
+
+  describe('Ticket #001: 融資買進 (MARGIN_BUY) 40% 自備款扣款與連動', () => {
+    it('當交易為 MARGIN_BUY 時，自動生成的現金扣款流水金額應為自備款 (40%) 加手續費', () => {
+      const trades: TradeRecord[] = [
+        {
+          id: 'trade-margin-1',
+          date: '2026-08-20',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'MARGIN_BUY',
+          shares: 1000,
+          price: 1000, // 總價款 1,000,000
+          fee: 1425,
+          tax: 0,
+          accountId: 'broker-tw-default',
+          createdAt: 100,
+        },
+      ];
+
+      const res = syncTradesWithCashTransactions(trades, []);
+      expect(res).toHaveLength(1);
+      const tx = res[0];
+      // 40% 自備款 = 400,000 + 手續費 1,425 = 401,425
+      expect(tx.amount).toBe(-401425);
+      expect(tx.category).toBe('STOCK_BUY');
+      expect(tx.note).toContain('融資買進');
+      expect(tx.note).toContain('自備款 40%');
+    });
+
+    it('當交易設定自訂 marginRate (例如 0.5) 時，應依自訂自備款比率扣款', () => {
+      const trades: TradeRecord[] = [
+        {
+          id: 'trade-margin-2',
+          date: '2026-08-20',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          isMargin: true,
+          marginRate: 0.5,
+          shares: 1000,
+          price: 1000, // 總價款 1,000,000
+          fee: 1000,
+          tax: 0,
+          accountId: 'broker-tw-default',
+          createdAt: 101,
+        },
+      ];
+
+      const res = syncTradesWithCashTransactions(trades, []);
+      expect(res).toHaveLength(1);
+      const tx = res[0];
+      // 50% 自備款 = 500,000 + 手續費 1,000 = 501,000
+      expect(tx.amount).toBe(-501000);
+      expect(tx.note).toContain('融資買進');
+      expect(tx.note).toContain('自備款 50%');
+    });
+  });
+
+  describe('Ticket #009: 質押借款每月定期實扣利息現金流水自動生成與對帳', () => {
+    it('應能依據質押借款本金與年利率，自動推算每月定期利息扣款現金流水 (FINANCING_FEE)', () => {
+      const loan: LoanRecord = {
+        id: 'loan-sample-1',
+        name: '富邦質押借款',
+        loanType: 'PLEDGE',
+        currency: 'TWD',
+        principal: 1000000, // 本金 100 萬
+        annualInterestRate: 2.5, // 年利率 2.5% ➔ 每月利息約 2,083 元
+        startDate: '2026-06-01',
+        createdAt: 100,
+      };
+
+      const asOfDate = '2026-08-25'; // 歷經 6月、7月、8月
+      const interestFlows = generateMonthlyLoanInterestTransactions([loan], asOfDate);
+
+      // 6月20日、7月20日、8月20日共 3 筆利息扣款
+      expect(interestFlows.length).toBeGreaterThanOrEqual(2);
+      const first = interestFlows[0];
+      expect(first.category).toBe('FINANCING_FEE');
+      expect(first.amount).toBeCloseTo(-2083, -1); // 約 -2083
+      expect(first.note).toContain('質押借款月利息');
+    });
+  });
+
+  describe('Ticket #003, #004, #011: 現金帳本進階對帳與防重複入帳驗證', () => {
+    it('Ticket #004: 手動出入金建立時若無 relatedTradeId，應維持獨立外部金流屬性不與股票交割混淆', () => {
+      const manualTx: CashTransaction[] = [
+        {
+          id: 'manual-dep-1',
+          accountId: 'broker-tw-default',
+          currency: 'TWD',
+          type: 'DEPOSIT',
+          category: 'DEPOSIT',
+          amount: 100000,
+          date: '2026-08-01',
+          createdAt: 1,
+        },
+      ];
+
+      const summary = calculateAccountBalances(mockAccounts, manualTx);
+      expect(summary.totalTWD).toBe(100000);
+      expect(summary.byAccount['broker-tw-default'].balance).toBe(100000);
+    });
+
+    it('Ticket #011: 質押借款撥款 (LOAN_DISBURSEMENT) 應正確計入可用現金並標註來源合約', () => {
+      const loanTx: CashTransaction[] = [
+        {
+          id: 'tx-loan-disburse',
+          accountId: 'broker-tw-default',
+          currency: 'TWD',
+          type: 'LOAN_DISBURSEMENT',
+          category: 'LOAN_DISBURSEMENT',
+          amount: 500000,
+          date: '2026-08-01',
+          relatedLoanId: 'loan-1',
+          note: '股票質押撥款入帳',
+          createdAt: 1,
+        },
+      ];
+
+      const summary = calculateAccountBalances(mockAccounts, loanTx);
+      expect(summary.totalTWD).toBe(500000);
+      expect(summary.byAccount['broker-tw-default'].balance).toBe(500000);
+    });
+
+    it('PRD #0052 (Ticket 003): 智慧補登之現金股利若帶有未到期 payDate，應在現金帳本中嚴格標記為 PENDING 在途，不提前計入實質可用現金', () => {
+      const todayStr = '2026-08-20';
+      const autoTrade: TradeRecord = {
+        id: 'auto-ca-2330-div',
+        date: '2026-08-15', // 除息基準日
+        exDate: '2026-08-15',
+        payDate: '2026-09-10', // 預估發放日 (未來日期)
+        symbol: '2330',
+        name: '台積電',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'DIVIDEND',
+        accountId: 'broker-tw-default',
+        shares: 1000,
+        price: 4.0,
+        fee: 0,
+        tax: 0,
+        createdAt: 1,
+      };
+
+      const synced = syncTradesWithCashTransactions([autoTrade], [], todayStr);
+      expect(synced).toHaveLength(1);
+      const divTx = synced[0];
+      expect(divTx.category).toBe('DIVIDEND_PAYOUT');
+      expect(divTx.amount).toBe(4000);
+      expect(divTx.settlementDate).toBe('2026-09-10'); // 嚴格綁定 payDate
+      expect(divTx.settlementStatus).toBe('PENDING'); // 因 todayStr (2026-08-20) < payDate (2026-09-10)
+
+      // 驗證可用結算現金餘額 (balance) 不會提前虛增，並計入 pendingReceivables
+      const summary = calculateAccountBalances(mockAccounts, synced, 32.0, todayStr);
+      expect(summary.byAccount['broker-tw-default'].balance).toBe(0);
+      expect(summary.byAccount['broker-tw-default'].pendingReceivables).toBe(4000);
+
+      // 當時間推進至 2026-09-10 (發放日當天)
+      const syncedOnPayDay = syncTradesWithCashTransactions([autoTrade], [], '2026-09-10');
+      expect(syncedOnPayDay[0].settlementStatus).toBe('SETTLED');
+      const summaryOnPayDay = calculateAccountBalances(mockAccounts, syncedOnPayDay, 32.0, '2026-09-10');
+      expect(summaryOnPayDay.byAccount['broker-tw-default'].balance).toBe(4000);
+      expect(summaryOnPayDay.byAccount['broker-tw-default'].pendingReceivables).toBe(0);
+    });
+
+    it('真實場景：2890 永豐金股息 34,100 元扣除二代健保 850 元 (實收 33,250 元)，現金帳本自動連動應精準產生 +NT$ 33,250 流水', () => {
+      const todayStr = '2026-08-28';
+      const sinoTrade: TradeRecord = {
+        id: 'auto-ca-2890-div',
+        date: '2026-07-23',
+        exDate: '2026-07-23',
+        payDate: '2026-08-20',
+        symbol: '2890',
+        name: '永豐金',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'DIVIDEND',
+        accountId: 'broker-tw-default',
+        shares: 31000,
+        price: 1.1,
+        tax: 850, // 二代健保
+        cashAmount: 33250, // 實收金額
+        fee: 0,
+        createdAt: 1,
+      };
+
+      const synced = syncTradesWithCashTransactions([sinoTrade], [], todayStr);
+      expect(synced).toHaveLength(1);
+      const divTx = synced[0];
+      expect(divTx.category).toBe('DIVIDEND_PAYOUT');
+      expect(divTx.amount).toBe(33250); // 實收淨額 33,250 元
+      expect(divTx.settlementDate).toBe('2026-08-20');
+      expect(divTx.settlementStatus).toBe('SETTLED'); // 2026-08-28 > 2026-08-20
+
+      const summary = calculateAccountBalances(mockAccounts, synced, 32.0, todayStr);
+      expect(summary.byAccount['broker-tw-default'].balance).toBe(33250);
+      expect(summary.byAccount['broker-tw-default'].totalDividends).toBe(33250);
+    });
+  });
 });
+
+
+
+
 
 

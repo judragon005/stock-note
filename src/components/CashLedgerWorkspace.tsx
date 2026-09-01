@@ -131,10 +131,10 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
   const [reconcileTargetAmount, setReconcileTargetAmount] = useState<string>('0');
   const [reconcileDate, setReconcileDate] = useState<string>('');
 
-  // 借貸快速繳息 / 還款彈窗
+  // 借貸快速繳息 / 還款 / 一鍵結清彈窗
   const [payLoanTarget, setPayLoanTarget] = useState<{
     loan: LoanRecord;
-    actionType: 'PAY_INTEREST' | 'REPAY_PRINCIPAL';
+    actionType: 'PAY_INTEREST' | 'REPAY_PRINCIPAL' | 'FULL_PAYOFF';
   } | null>(null);
   const [payAmountInput, setPayAmountInput] = useState<string>('');
   const [payAccountId, setPayAccountId] = useState<string>('');
@@ -347,11 +347,13 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
     setReconcileTarget(null);
   };
 
-  // 6. 開啟借貸快速繳息 / 還款
-  const handleOpenPayLoan = (loan: LoanRecord, actionType: 'PAY_INTEREST' | 'REPAY_PRINCIPAL') => {
+  // 6. 開啟借貸快速繳息 / 還款 / 一鍵結清
+  const handleOpenPayLoan = (loan: LoanRecord, actionType: 'PAY_INTEREST' | 'REPAY_PRINCIPAL' | 'FULL_PAYOFF') => {
     const metrics = calculateLoanInterestAndPayoff(loan);
     const defaultAmount = actionType === 'PAY_INTEREST'
       ? (metrics.accruedInterest > 0 ? metrics.accruedInterest : metrics.monthlyEstimatedInterest).toString()
+      : actionType === 'FULL_PAYOFF'
+      ? metrics.totalPayoffAmount.toString()
       : loan.principal.toString();
 
     setPayLoanTarget({ loan, actionType });
@@ -359,7 +361,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
     setPayAccountId(loan.accountId || (scopedAccounts[0]?.id || accounts[0]?.id || ''));
   };
 
-  // 執行繳息或還款
+  // 執行繳息、還本或一鍵結清
   const handleConfirmPayLoan = (e: React.FormEvent) => {
     e.preventDefault();
     if (!payLoanTarget) return;
@@ -373,11 +375,13 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
     const { loan, actionType } = payLoanTarget;
     const todayStr = new Date().toISOString().split('T')[0];
     const now = Date.now();
+    const currencySymbol = loan.currency === 'USD' ? '$' : 'NT$';
+    const targetAccountId = payAccountId || (loan.accountId || accounts[0]?.id || '');
 
     if (actionType === 'PAY_INTEREST') {
       const interestTx: CashTransaction = {
         id: `tx-interest-${loan.id}-${now}`,
-        accountId: payAccountId || (loan.accountId || accounts[0]?.id || ''),
+        accountId: targetAccountId,
         currency: loan.currency || 'TWD',
         type: 'FINANCING_FEE',
         category: 'FINANCING_FEE',
@@ -394,11 +398,89 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
 
       onSaveTransactions([interestTx, ...transactions]);
       onSaveLoans(updatedLoans);
-      alert(`✅ 成功支付利息 ${loan.currency === 'USD' ? '$' : 'NT$'} ${numAmount.toLocaleString()}，已記錄於現金帳本並更新付息日！`);
+      alert(`✅ 成功支付利息 ${currencySymbol} ${numAmount.toLocaleString()}，已記錄於現金帳本並更新付息日！`);
+    } else if (actionType === 'FULL_PAYOFF') {
+      // 一鍵全額結清 (本利和 + 規費，自動拆分精準流水)
+      const metrics = calculateLoanInterestAndPayoff(loan);
+      const splitTxs: CashTransaction[] = [];
+
+      // 1. 本金還款流水
+      if (loan.principal > 0) {
+        splitTxs.push({
+          id: `tx-repay-${loan.id}-${now}-1`,
+          accountId: targetAccountId,
+          currency: loan.currency || 'TWD',
+          type: 'LOAN_REPAYMENT',
+          category: 'LOAN_REPAYMENT',
+          amount: -loan.principal,
+          date: todayStr,
+          relatedLoanId: loan.id,
+          note: `結清償還質押本金: ${loan.name}`,
+          createdAt: now,
+        });
+      }
+
+      // 2. 融資利息支出流水
+      if (metrics.accruedInterest > 0) {
+        splitTxs.push({
+          id: `tx-interest-${loan.id}-${now}-2`,
+          accountId: targetAccountId,
+          currency: loan.currency || 'TWD',
+          type: 'FINANCING_FEE',
+          category: 'FINANCING_FEE',
+          amount: -metrics.accruedInterest,
+          date: todayStr,
+          relatedLoanId: loan.id,
+          note: `結清質押利息 (計息 ${metrics.daysElapsed} 天): ${loan.name}`,
+          createdAt: now + 1,
+        });
+      }
+
+      // 3. 設質規費扣除流水 (若有規費)
+      if (metrics.pledgeFees > 0) {
+        splitTxs.push({
+          id: `tx-fee-${loan.id}-${now}-3`,
+          accountId: targetAccountId,
+          currency: loan.currency || 'TWD',
+          type: 'WIRE_FEE',
+          category: 'WIRE_FEE',
+          amount: -metrics.pledgeFees,
+          date: todayStr,
+          relatedLoanId: loan.id,
+          note: `結清設質規費 (撥券/設質/手續費): ${loan.name}`,
+          createdAt: now + 2,
+        });
+      }
+
+      // 若使用者自訂了結清總金額且與預估總額不同，以 LOAN_REPAYMENT 補足差額
+      if (splitTxs.length === 0) {
+        splitTxs.push({
+          id: `tx-repay-${loan.id}-${now}-fallback`,
+          accountId: targetAccountId,
+          currency: loan.currency || 'TWD',
+          type: 'LOAN_REPAYMENT',
+          category: 'LOAN_REPAYMENT',
+          amount: -numAmount,
+          date: todayStr,
+          relatedLoanId: loan.id,
+          note: `結清借款: ${loan.name}`,
+          createdAt: now,
+        });
+      }
+
+      const updatedLoans = loans.map((l) =>
+        l.id === loan.id
+          ? { ...l, principal: 0, lastInterestPaymentDate: todayStr }
+          : l
+      );
+
+      onSaveTransactions([...splitTxs, ...transactions]);
+      onSaveLoans(updatedLoans);
+      alert(`⚡ 成功一鍵全額結清 ${loan.name}！共扣款 ${currencySymbol} ${numAmount.toLocaleString()}（已拆分 ${splitTxs.length} 筆帳本流水：本金/利息/規費），本金已歸零！`);
     } else {
       const repayTx: CashTransaction = {
         id: `tx-repay-${loan.id}-${now}`,
-        accountId: payAccountId || (loan.accountId || accounts[0]?.id || ''),
+        accountId: targetAccountId,
         currency: loan.currency || 'TWD',
         type: 'LOAN_REPAYMENT',
         category: 'LOAN_REPAYMENT',
@@ -417,7 +499,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
 
       onSaveTransactions([repayTx, ...transactions]);
       onSaveLoans(updatedLoans);
-      alert(`✅ 成功償還本金 ${loan.currency === 'USD' ? '$' : 'NT$'} ${numAmount.toLocaleString()}！`);
+      alert(`✅ 成功償還本金 ${currencySymbol} ${numAmount.toLocaleString()}！`);
     }
 
     setPayLoanTarget(null);
@@ -844,10 +926,20 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                 .filter((group) => group.items.length > 0)
                 .map((group) => (
                   <div key={group.title} style={{ background: group.bg, border: `1px solid ${group.border}`, borderRadius: '10px', padding: '10px 14px' }}>
-                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: group.color, marginBottom: '6px', display: 'flex', justifyContent: 'space-between' }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: group.color, marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span>{group.title} ({group.items.length} 筆)</span>
+                      <span style={{ fontSize: '0.74rem', color: '#94a3b8', fontWeight: 600 }}>
+                        {(() => {
+                          const groupNet = group.items.reduce((sum, it) => sum + (it.currency === 'USD' ? it.amount * usdToTwdRate : it.amount), 0);
+                          return (
+                            <span>
+                              小計: <span style={{ color: groupNet >= 0 ? '#34d399' : '#f87171' }}>{groupNet >= 0 ? '+' : '-'}NT$ {Math.abs(Math.round(groupNet)).toLocaleString()}</span>
+                            </span>
+                          );
+                        })()}
+                      </span>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '8px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       {group.items.map((item) => (
                         <PendingSettlementCard
                           key={item.transactionId}
@@ -1228,21 +1320,28 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                     </div>
                   )}
 
-                  {/* 快捷操作：繳交利息 / 本金還款 */}
-                  <div style={{ display: 'flex', gap: '8px', paddingTop: '8px', borderTop: '1px solid rgba(51, 65, 85, 0.4)' }}>
+                  {/* 快捷操作：繳交利息 / 本金還款 / 一鍵結清 */}
+                  <div style={{ display: 'flex', gap: '6px', paddingTop: '8px', borderTop: '1px solid rgba(51, 65, 85, 0.4)' }}>
                     <button
                       className="btn btn-secondary btn-sm"
                       onClick={() => handleOpenPayLoan(loan, 'PAY_INTEREST')}
-                      style={{ flex: 1, justifyContent: 'center', color: '#fbbf24', fontSize: '0.75rem' }}
+                      style={{ flex: 1, justifyContent: 'center', color: '#fbbf24', fontSize: '0.75rem', padding: '4px 6px' }}
                     >
-                      💰 繳交利息
+                      💰 繳息
                     </button>
                     <button
                       className="btn btn-secondary btn-sm"
                       onClick={() => handleOpenPayLoan(loan, 'REPAY_PRINCIPAL')}
-                      style={{ flex: 1, justifyContent: 'center', color: '#38bdf8', fontSize: '0.75rem' }}
+                      style={{ flex: 1, justifyContent: 'center', color: '#38bdf8', fontSize: '0.75rem', padding: '4px 6px' }}
                     >
-                      💳 本金還款
+                      💳 還本
+                    </button>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => handleOpenPayLoan(loan, 'FULL_PAYOFF')}
+                      style={{ flex: 1.2, justifyContent: 'center', background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)', color: '#ffffff', fontSize: '0.75rem', fontWeight: 700, padding: '4px 6px', border: 'none' }}
+                    >
+                      ⚡ 一鍵結清
                     </button>
                   </div>
                 </div>
@@ -1552,85 +1651,131 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
         </div>
       )}
 
-      {/* 借貸快速繳息 / 還款彈窗 */}
-      {payLoanTarget && (
-        <div className="modal-overlay" onClick={() => setPayLoanTarget(null)}>
-          <div
-            className="glass-card modal-content"
-            style={{ maxWidth: '460px', padding: '24px', borderRadius: '18px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(168, 85, 247, 0.5)' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid rgba(51, 65, 85, 0.5)', paddingBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ padding: '8px', borderRadius: '10px', background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.3)', color: '#c084fc' }}>
-                  <CreditCard size={20} />
+      {/* 借貸快速繳息 / 還款 / 一鍵結清彈窗 */}
+      {payLoanTarget && (() => {
+        const isFullPayoff = payLoanTarget.actionType === 'FULL_PAYOFF';
+        const payoffMetrics = calculateLoanInterestAndPayoff(payLoanTarget.loan);
+        const currSym = payLoanTarget.loan.currency === 'USD' ? '$' : 'NT$';
+
+        return (
+          <div className="modal-overlay" onClick={() => setPayLoanTarget(null)}>
+            <div
+              className="glass-card modal-content"
+              style={{ maxWidth: '480px', padding: '24px', borderRadius: '18px', background: 'rgba(15, 23, 42, 0.95)', border: `1px solid ${isFullPayoff ? 'rgba(56, 189, 248, 0.5)' : 'rgba(168, 85, 247, 0.5)'}` }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid rgba(51, 65, 85, 0.5)', paddingBottom: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ padding: '8px', borderRadius: '10px', background: isFullPayoff ? 'rgba(56, 189, 248, 0.15)' : 'rgba(168, 85, 247, 0.15)', border: `1px solid ${isFullPayoff ? 'rgba(56, 189, 248, 0.3)' : 'rgba(168, 85, 247, 0.3)'}`, color: isFullPayoff ? '#38bdf8' : '#c084fc' }}>
+                    <CreditCard size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc' }}>
+                      {isFullPayoff ? '⚡ 一鍵全額結清借款' : payLoanTarget.actionType === 'PAY_INTEREST' ? '💰 繳交借貸利息' : '💳 償還借貸本金'}
+                    </h3>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>
+                      {payLoanTarget.loan.name}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc' }}>
-                    {payLoanTarget.actionType === 'PAY_INTEREST' ? '繳交借貸利息' : '償還借貸本金'}
-                  </h3>
-                  <p style={{ margin: '2px 0 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>
-                    {payLoanTarget.loan.name}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setPayLoanTarget(null)}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleConfirmPayLoan} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', marginBottom: '4px' }}>
-                  扣款券商/銀行帳戶
-                </label>
-                <select
-                  value={payAccountId}
-                  onChange={(e) => setPayAccountId(e.target.value)}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: '#f8fafc', fontSize: '0.85rem', outline: 'none' }}
-                >
-                  {scopedAccounts.map((acc) => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.name} ({acc.market === 'US' ? 'USD' : 'TWD'})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#c084fc', marginBottom: '4px' }}>
-                  {payLoanTarget.actionType === 'PAY_INTEREST' ? '繳交利息金額' : '償還本金金額'} ({payLoanTarget.loan.currency || 'TWD'}):
-                </label>
-                <input
-                  type="number"
-                  step="any"
-                  required
-                  value={payAmountInput}
-                  onChange={(e) => setPayAmountInput(e.target.value)}
-                  className="mono"
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', background: 'var(--bg-input)', border: '1px solid #a855f7', color: '#ffffff', fontSize: '1.1rem', fontWeight: 700, outline: 'none' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setPayLoanTarget(null)}>
-                  取消
-                </button>
                 <button
-                  type="submit"
-                  className="btn btn-primary"
-                  style={{ background: 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)', boxShadow: '0 4px 12px rgba(168, 85, 247, 0.3)' }}
+                  onClick={() => setPayLoanTarget(null)}
+                  style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
                 >
-                  確認扣款
+                  <X size={20} />
                 </button>
               </div>
-            </form>
+
+              <form onSubmit={handleConfirmPayLoan} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', marginBottom: '4px' }}>
+                    扣款券商/銀行帳戶
+                  </label>
+                  <select
+                    value={payAccountId}
+                    onChange={(e) => setPayAccountId(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: '#f8fafc', fontSize: '0.85rem', outline: 'none' }}
+                  >
+                    {scopedAccounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.market === 'US' ? 'USD' : 'TWD'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {isFullPayoff && (
+                  <div
+                    style={{
+                      background: 'rgba(3, 7, 18, 0.6)',
+                      border: '1px solid rgba(56, 189, 248, 0.3)',
+                      borderRadius: '10px',
+                      padding: '12px 14px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px',
+                      fontSize: '0.78rem',
+                    }}
+                  >
+                    <div style={{ color: '#38bdf8', fontWeight: 700, marginBottom: '2px' }}>📊 結清應還明細拆分：</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
+                      <span>1. 償還本金 (LOAN_REPAYMENT):</span>
+                      <span className="mono" style={{ fontWeight: 600 }}>{currSym} {payLoanTarget.loan.principal.toLocaleString()}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#fbbf24' }}>
+                      <span>2. 應計利息 (FINANCING_FEE · {payoffMetrics.daysElapsed}天):</span>
+                      <span className="mono" style={{ fontWeight: 600 }}>{currSym} {payoffMetrics.accruedInterest.toLocaleString()}</span>
+                    </div>
+                    {payoffMetrics.pledgeFees > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#fcd34d' }}>
+                        <span>3. 設質三大規費 (HANDLING_FEE):</span>
+                        <span className="mono" style={{ fontWeight: 600 }}>{currSym} {payoffMetrics.pledgeFees.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#38bdf8', fontWeight: 800, fontSize: '0.85rem', paddingTop: '6px', borderTop: '1px dashed rgba(56, 189, 248, 0.4)', marginTop: '2px' }}>
+                      <span>應還款總金額 (本利和+規費):</span>
+                      <span className="mono">{currSym} {payoffMetrics.totalPayoffAmount.toLocaleString()}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: isFullPayoff ? '#38bdf8' : '#c084fc', marginBottom: '4px' }}>
+                    {isFullPayoff ? '結清扣款總金額' : payLoanTarget.actionType === 'PAY_INTEREST' ? '繳交利息金額' : '償還本金金額'} ({payLoanTarget.loan.currency || 'TWD'}):
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    value={payAmountInput}
+                    onChange={(e) => setPayAmountInput(e.target.value)}
+                    className="mono"
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', background: 'var(--bg-input)', border: `1px solid ${isFullPayoff ? '#38bdf8' : '#a855f7'}`, color: '#ffffff', fontSize: '1.1rem', fontWeight: 700, outline: 'none' }}
+                  />
+                  {isFullPayoff && (
+                    <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '4px' }}>
+                      💡 確認後系統將自動於現金帳本拆分產生各項獨立流水，並將借款本金歸零。
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setPayLoanTarget(null)}>
+                    取消
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    style={{ background: isFullPayoff ? 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)' : 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)', boxShadow: isFullPayoff ? '0 4px 12px rgba(14, 165, 233, 0.3)' : '0 4px 12px rgba(168, 85, 247, 0.3)', border: 'none' }}
+                  >
+                    {isFullPayoff ? '確認一鍵結清' : '確認扣款'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 記帳與調撥彈窗 */}
       <CashTransactionModal

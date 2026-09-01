@@ -10,6 +10,7 @@ import {
 } from '../types/stock';
 import { bankersRound } from '../utils/formatters';
 import { isBusinessDay } from './holidayCalendar';
+import { estimatePaymentDate } from './receivableDividendEngine';
 
 export interface AccountBalanceSummary {
   accountId: string;
@@ -592,26 +593,29 @@ export function calculatePledgeMaintenanceRatio(
 }
 
 /**
- * 計算整體淨負債比 (LTV) 與年化利息支出
+ * 計算整體淨負債比 (LTV) 與年化利息支出 (含本利和與規費之總借款負債)
  */
 export function calculateOverallLeverageMetrics(
   loans: LoanRecord[],
   totalStockMarketValue: number,
   totalCashBalance: number,
-  fxRate = 32.0
+  fxRate = 32.0,
+  asOfDate?: string
 ): LeverageMetrics {
   let totalDebtInTWD = 0;
   let estimatedAnnualInterestInTWD = 0;
 
   for (const loan of loans) {
+    if (!loan.principal || loan.principal <= 0) continue;
     const rate = loan.currency === 'USD' ? fxRate : 1;
-    const debt = (loan.principal || 0) * rate;
-    totalDebtInTWD += debt;
+    const payoff = calculateLoanInterestAndPayoff(loan, asOfDate);
+    const debtInTWD = payoff.totalPayoffAmount * rate;
+    totalDebtInTWD += debtInTWD;
 
     const interestRate = loan.annualInterestRate
       ? loan.annualInterestRate / 100
       : (loan.interestRate || 0);
-    estimatedAnnualInterestInTWD += debt * interestRate;
+    estimatedAnnualInterestInTWD += (loan.principal * rate) * interestRate;
   }
 
   const totalAssetInTWD = totalStockMarketValue + totalCashBalance;
@@ -746,13 +750,66 @@ export function calculateLoanInterestAndPayoff(loan: LoanRecord, asOfDate?: stri
 }
 
 /**
+ * 依據質押借款合約，自動產生歷月定期扣息之現金流水 (Monthly Loan Interest Transactions)
+ */
+export function generateMonthlyLoanInterestTransactions(
+  loans: LoanRecord[],
+  asOfDate?: string
+): CashTransaction[] {
+  const todayStr = asOfDate || new Date().toISOString().split('T')[0];
+  const interestTransactions: CashTransaction[] = [];
+
+  for (const loan of loans) {
+    if (!loan.principal || loan.principal <= 0) continue;
+    const rate = (loan.annualInterestRate || (loan.interestRate ? loan.interestRate * 100 : 0)) / 100;
+    if (rate <= 0) continue;
+
+    const startStr = loan.startDate || loan.date || todayStr;
+    const dStart = new Date(startStr);
+    const dToday = new Date(todayStr);
+
+    if (isNaN(dStart.getTime()) || isNaN(dToday.getTime()) || dStart > dToday) continue;
+
+    const monthlyInterest = Math.round(loan.principal * (rate / 12));
+    if (monthlyInterest <= 0) continue;
+
+    // 逐月推算結息日 (預設每月 20 號)
+    const cursor = new Date(dStart);
+    cursor.setDate(20);
+    if (cursor < dStart) {
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+
+    while (cursor <= dToday) {
+      const dateStr = cursor.toISOString().split('T')[0];
+      const tx: CashTransaction = {
+        id: `tx-loan-interest-${loan.id}-${dateStr}`,
+        accountId: loan.accountId || 'broker-tw-default',
+        currency: loan.currency || 'TWD',
+        type: 'FINANCING_FEE',
+        category: 'FINANCING_FEE',
+        amount: -monthlyInterest,
+        date: dateStr,
+        note: `[自動推算] ${loan.name || '質押借款'}月利息 (${dateStr} 結息扣款)`,
+        createdAt: cursor.getTime(),
+      };
+      interestTransactions.push(tx);
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+  }
+
+  return interestTransactions;
+}
+
+/**
  * 將 TradeRecord 與 CashTransaction 進行同步
  * 自動為買進/賣出/股息/減資生成或清理交割流水
  * 依據市場規則自動試算台股 (T+2) / 美股 (T+1) 交割日與交割狀態
  */
 export function syncTradesWithCashTransactions(
   trades: TradeRecord[],
-  currentCashTransactions: CashTransaction[]
+  currentCashTransactions: CashTransaction[],
+  asOfDate?: string
 ): CashTransaction[] {
   // 1. 保留手動建立（無 relatedTradeId）的現金流水
   const manualTransactions = currentCashTransactions.filter((tx) => !tx.relatedTradeId);
@@ -765,7 +822,7 @@ export function syncTradesWithCashTransactions(
     }
   }
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = asOfDate || new Date().toISOString().split('T')[0];
 
   // 3. 根據最新 trades 生成對應的現金流水
   const generatedAutoTransactions: CashTransaction[] = [];
@@ -776,24 +833,33 @@ export function syncTradesWithCashTransactions(
 
     const isUS = trade.market === 'US' || trade.currency === 'USD';
 
-    if (trade.type === 'BUY') {
+    const isMarginBuy = trade.type === 'MARGIN_BUY' || (trade.type === 'BUY' && Boolean(trade.isMargin));
+    const isMarginSell = trade.type === 'MARGIN_SELL' || (trade.type === 'SELL' && Boolean(trade.isMargin));
+
+    if (trade.type === 'BUY' || trade.type === 'MARGIN_BUY') {
       category = 'STOCK_BUY';
-      const rawCost = trade.shares * trade.price + (trade.fee || 0);
+      const marginRate = isMarginBuy ? (trade.marginRate ?? 0.4) : 1.0;
+      const principalCost = trade.shares * trade.price * marginRate;
+      const rawCost = principalCost + (trade.fee || 0);
       amount = isUS ? -bankersRound(rawCost, 2) : -Math.round(rawCost);
-    } else if (trade.type === 'SELL') {
+    } else if (trade.type === 'SELL' || trade.type === 'MARGIN_SELL') {
       category = 'STOCK_SELL';
       const rawNet = trade.shares * trade.price - (trade.fee || 0) - (trade.tax || 0);
       amount = isUS ? bankersRound(rawNet, 2) : Math.round(rawNet);
     } else if (trade.type === 'DIVIDEND') {
       category = 'DIVIDEND_PAYOUT';
-      // 現金股利入帳：美股統一以稅前毛額 (Gross) 入帳，配合獨立之 TAX 預扣稅流水對齊券商 DOI/JRN 雙筆機制
-      const rawGross = (trade.shares && trade.price) ? trade.shares * trade.price : (trade.cashAmount || 0);
-      const gross = isUS ? bankersRound(rawGross, 2) : Math.floor(rawGross);
-      if (isUS) {
-        amount = gross;
+      // 現金股利入帳：若已明確設定實收金額 (cashAmount)，優先以實收金額入帳；否則依 (shares * price - tax) 計算
+      if (trade.cashAmount !== undefined && trade.cashAmount > 0) {
+        amount = isUS ? bankersRound(trade.cashAmount, 2) : Math.floor(trade.cashAmount);
       } else {
-        const tax = trade.tax || 0;
-        amount = gross - tax;
+        const rawGross = (trade.shares && trade.price) ? trade.shares * trade.price : 0;
+        const gross = isUS ? bankersRound(rawGross, 2) : Math.floor(rawGross);
+        if (isUS) {
+          amount = gross;
+        } else {
+          const tax = trade.tax || 0;
+          amount = gross - tax;
+        }
       }
     } else if (trade.type === 'CAPITAL_REDUCTION' && trade.cashAmount && trade.cashAmount > 0) {
       category = 'CAPITAL_RETURN';
@@ -802,17 +868,31 @@ export function syncTradesWithCashTransactions(
 
     if (category) {
       const isUS = trade.market === 'US' || trade.currency === 'USD';
-      const settlementDate = (category === 'STOCK_BUY' || category === 'STOCK_SELL')
-        ? calculateSettlementDate(trade.date, isUS ? 'US' : 'TW')
-        : trade.date;
+      let settlementDate = trade.date;
+      if (category === 'STOCK_BUY' || category === 'STOCK_SELL') {
+        settlementDate = calculateSettlementDate(trade.date, isUS ? 'US' : 'TW');
+      } else if (category === 'DIVIDEND_PAYOUT') {
+        settlementDate = trade.payDate || estimatePaymentDate(trade.exDate || trade.date, trade.market);
+      }
       
       const settlementStatus = todayStr >= settlementDate ? 'SETTLED' : 'PENDING';
       const existing = existingAutoTxMap.get(trade.id);
 
       const cycleLabel = isUS ? '美股 T+1' : '台股 T+2';
-      const notePrefix = (category === 'STOCK_BUY' || category === 'STOCK_SELL')
-        ? `[${cycleLabel} 交割日: ${settlementDate}] `
-        : '';
+      let notePrefix = '';
+      if (category === 'STOCK_BUY' || category === 'STOCK_SELL') {
+        notePrefix = `[${cycleLabel} 交割日: ${settlementDate}] `;
+      } else if (category === 'DIVIDEND_PAYOUT') {
+        notePrefix = `[預估入帳發放日: ${settlementDate}] `;
+      }
+
+      let tradeTypeLabel: string = trade.type;
+      if (isMarginBuy) {
+        const ratePercent = ((trade.marginRate ?? 0.4) * 100).toFixed(0);
+        tradeTypeLabel = `融資買進: 自備款 ${ratePercent}%`;
+      } else if (isMarginSell) {
+        tradeTypeLabel = '融資賣出';
+      }
 
       const tx: CashTransaction = {
         id: existing ? existing.id : `tx-auto-${trade.id}`,
@@ -826,7 +906,7 @@ export function syncTradesWithCashTransactions(
         settlementDate,
         settlementStatus,
         relatedTradeId: trade.id,
-        note: `${notePrefix}自動連動: ${trade.name || trade.symbol} (${trade.type})`,
+        note: `${notePrefix}自動連動: ${trade.name || trade.symbol} (${tradeTypeLabel})`,
         createdAt: existing ? existing.createdAt : trade.createdAt || Date.now(),
       };
       generatedAutoTransactions.push(tx);

@@ -110,6 +110,39 @@ describe('整戶總曝險與淨槓桿率計算引擎 (riskExposureEngine)', () =
     expect(res.riskTier).toBe('MODERATE');
   });
 
+  it('場景 2.1: 負債精準包含應計利息與設質規費 (本利和規費扣減 NAV)', () => {
+    const mockLoans: LoanRecord[] = [
+      {
+        id: 'loan-1',
+        name: '台股質押借款含息費',
+        loanType: 'PLEDGE',
+        currency: 'TWD',
+        principal: 200000,
+        annualInterestRate: 3.65,
+        startDate: '2026-05-01',
+        transferFee: 100,
+        pledgeRegistryFee: 100,
+        handlingFee: 0,
+        createdAt: 1000,
+      },
+    ];
+
+    // 計息 10 天 (2026-05-01 到 2026-05-11)：200,000 * (0.0365/365) * 10 = 200
+    // 規費：100 + 100 = 200
+    // 本利和規費總負債：200,000 + 200 + 200 = 200,400
+    const res = calculatePortfolioExposure({
+      holdings: mockHoldings,
+      cashBalances: { TWD: 50000, USD: 0 },
+      loans: mockLoans,
+      usdToTwdRate: mockUsdRate,
+      asOfDate: '2026-05-11',
+    });
+
+    expect(res.totalDebtTWD).toBe(200400);
+    expect(res.navTWD).toBe(1070400 + 50000 - 200400); // 920,000
+    expect(res.riskTier).toBe('MODERATE');
+  });
+
   it('場景 3: 積極擴張槓桿 (1.3x < 淨槓桿 <= 1.6x，評定為 ELEVATED)', () => {
     const mockLoans: LoanRecord[] = [
       {

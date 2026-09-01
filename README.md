@@ -3,13 +3,146 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-304%2F304%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-388%2F388%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 1. 全域借款負債納入應計利息與規費及一鍵結清本利和 (Total Debt Payoff & Accrued Interest Settlement) *(V6.9.5 新增)*
+- **全域借款負債本利和與規費對齊 (`Total Debt SSOT Payoff Alignment`)**：
+  - 升級 `calculateOverallLeverageMetrics` 與 `calculatePortfolioExposure`，每筆借款負債統一以 `calculateLoanInterestAndPayoff(loan, asOfDate).totalPayoffAmount`（本金 + 應計未付利息 + 設質三大規費）計算折合台幣總額。
+  - 全域淨資產 $\text{NAV} = \text{股市總值} + \text{可用現金(含在途)} - \text{總借款負債}$，精準反映清償後真實淨資產，消除過去負債僅計本金導致 NAV 被高估的問題。
+- **借貸卡片一鍵結清與結構化明細彈窗 (`One-Click Full Payoff & Structured Modal`)**：
+  - 於 `CashLedgerWorkspace` 各筆借貸卡片新增「⚡ 一鍵結清」按鈕，彈窗清晰展示償還本金、計息天數與應計利息、設質三大規費細項（撥券/設質/手續費）與應付總額。
+- **現金帳本精準自動拆分記帳 (`Split Cash Transactions Automation`)**：
+  - 執行一鍵結清確認後，系統自動依明細寫入獨立現金帳本流水：
+    - `LOAN_REPAYMENT` (借貸還本)：扣除本金 `principal`
+    - `FINANCING_FEE` (融資利息)：扣除利息 `accruedInterest`
+    - `WIRE_FEE` (電匯/規費)：扣除設質規費總額 `pledgeFees`
+  - 同步將借款未還本金歸零，更新結息日為當日，保持損益與稅務扣抵之可稽核性。
+
+### 2. 減資多源去重、虛擬時序動態扣減與交易帳本股息淨額對齊 (Capital Reduction Deduplication & Virtual Timeline Accuracy) *(V6.9.4)*
+- **多來源減資區間合併去重 (`Multi-Source Capital Reduction Window Deduplication`)**：
+  - 在 `fetchLiveCorporateEvents` 整合 Yahoo Finance（反向分割）與 TWSE（官方減資）時，以 $\le 90$ 天為視窗進行去重合併，優先採用官方精準基準日與每股退款金額；在 `isAlreadyRecorded` 中建立相近日期減資重複補登攔截防護。
+- **虛擬時序交易池動態扣減減資股數 (`Virtual Trades Dynamic Reduction Subtraction`)**：
+  - 在 `scanCorporateActions` 內部，對於未入帳之減資事件自動生成 `{ type: 'CAPITAL_REDUCTION', shares: estimatedShares }` 推入 `virtualTrades`，確保後續配息回溯計算基準日持股時（如 9927 泰銘）動態扣減減資股數，徹底杜絕配息股數誤算。
+- **歷史交易帳本股息淨額呈現對齊 (`Trade History Dividend Payout Net Alignment`)**：
+  - `TradeHistoryTable` 呈現台股現金股利時，若已明確設定實收金額 `cashAmount`，直接取用 `cashAmount` 呈現結算金額，杜絕二次扣減二代健保稅費，使歷史交易帳本與台股現金流水帳 100% 吻合。
+- **官方 6 位精準減資比率對齊 (`Official 6-Decimal Capital Reduction Precision`)**：
+  - 官方備援庫全面對齊集保 6 位精準減資比率（如 9927 泰銘 `0.2828051`），依集保換發新股無條件捨去規則，確保 10,000 股減資精準換發 7,171 股、銷除 2,829 股，消除 1 股浮點截斷誤差。
+
+### 2. Storage Inspector 快取統計指標解構與字典計數對齊 (Storage Inspector Reconciliation) *(V6.9.3)*
+- **公司行動實體快取標的數與事件展平 (`Corporate Action Cache Flattening`)**：
+  - 修正 LocalStorage 實體快取解析，正確提取 61 檔股票代碼集合並展平所有事件計算真實總筆數，徹底修復 `0 檔 (61 筆)` 之結構性解析異常。
+- **美元/台幣單一貨幣對歷史外匯數據點累加 (`USD/TWD FX Points Accumulation`)**：
+  - 將以日期為 Key 映射之歷史匯率結構正確識別為 `1 對 (USD/TWD)` 幣別對，並將總歷史天數精準累加為 `4,529 點`，徹底消除 `4529 對 (0 點)` 錯位。
+- **股票字典庫總收錄檔數全口徑對齊 (`Stock Dictionary SSOT Alignment`)**：
+  - 快取檢視器卡片 2 統一綁定全量標的數 `3,350 檔`，與下方字典庫管理面板保持 100% 一致無歧義。
+
+### 2. 智慧掃描真實持股對齊、強制重掃狀態重置與精準配息比對 (Smart Scan Real Holding & Rescan Precision) *(V6.9.1)*
+- **基準日持股精確對齊真實帳本持股 (`SSOT Trades Alignment`)**：
+  - 徹底廢除未入帳歷史減資在記憶體中的虛擬預扣，除息基準日持股 100% 依據使用者帳本在 `exDate - 1` 收盤在籍股數計算（如 9927 泰銘精確呈現 **10,000 股**，預估入帳 NT$ 48,945）。
+- **證券法規除息日買進排除標準 (`Strict Ex-Date Compliance`)**：
+  - 嚴格遵守全球證券法規：除息日（Ex-Date）當天買進之部位不享有該次配息（持股為 0 股），杜絕 Double Dip 財務假利潤錯誤。
+- **連續除權配股跨年度動態累加**：
+  - 虛擬時序引擎僅對實質獲配新股之 `STOCK_DIVIDEND`（除權配股）與 `STOCK_SPLIT`（股票分割）動態累加股數，確保歷年配股複利累積精準無誤。
+- **強制重掃狀態即時重置與 IndexedDB 快取穿透 (`Cache Penetration`)**：
+  - 點擊「強制清除快取重掃」時，進度條立即自 0 檔重新遞增轉圈，消除畫面凍結感；`forceRefresh` 強制跳過本機 IndexedDB 快取，向線上金融端點重新連線。
+- **現金股利高精準比對與單季刪除補登**：
+  - 取消粗暴的 60 天同類型模糊判定，改為比對 `exDate`/`payDate`，或在 45 天內同時驗證每股配息單價與總金額。手動刪除特定季配息後，重掃 100% 能精確識別為「✨ 待補登」。
+
+### 2. 智慧掃描公司行動精準度、二代健保合併扣繳與現金帳本實收連動 (Smart Scan Accuracy & NHI Ledger Sync) *(V6.9.0)*
+- **解除 2890 永豐金硬編碼過濾與除權股票股利精準捕獲**：
+  - 徹底移除線上 API 對 2890 永豐金等個股之歷史硬編碼排除代碼，將 `isAlreadyRecorded` 改為精確比對行動類型與除權基準日（相差 $\le 7$ 天），確保 2026 年度永豐金配股 0.02（每千股配 20 股，8/24 發放）100% 納入待補登清單。
+- **二代健保補充保費合併扣繳試算與稅費存入**：
+  - 智慧掃描在產生待補登股息時，自動執行 `calculateConsolidatedTwNhiTax` 將「現金股利毛額 + 配股法定面額」合併計算二代健保，將扣繳稅額存入 `tax` 欄位，實收金額存入 `cashAmount`。
+- **現金帳本實收金額優先入帳 (`Net Cash Payout Priority`)**：
+  - 現金帳本自動流水產生引擎優先以 `trade.cashAmount`（若已定義且 $>0$）或 `gross - tax` 入帳，確保現金帳本 100% 反映扣除二代健保補充保費後的實收資金（如永豐金入帳 +NT$ 33,250），徹底消除資金虛增。
+- **減資時序前置扣減與在庫股數恆等性**：
+  - 現金減資（如 9927 泰銘 28.28% 減資）與後續買賣交易在除息日前依時序精確計算，基準日持股精確反映減資後與後續買進之真實庫存（10,000 股），發放日與退款金額精確對齊官方基準。
+
+### 2. 在途資金交割時序排程單行條列化與分組小計 (Settlement Timeline Single-Row Layout) *(V6.7.0)*
+- **單行橫向條列式清單 (1 Row 1 Item)**：
+  - 徹底解決多筆在途交割款並排時寬度遭擠壓、券商名稱與文字直立斷裂的排版問題，每筆項目擁有完整橫向展開寬度。
+- **多維度時序倒數與類別視覺膠囊**：
+  - 左側展示交割日期 + 倒數膠囊（`今日到期`、`明日到期`、`3 天後`、`逾期 2 天`）+ 類別徽章（`股票買進`、`股票賣出`、`現金股息` 等），輔以直觀顏色語意。
+  - 中間展示券商交割戶名稱與詳細備註（支援 Tooltip 與自動省略）；右側展示高對比等寬金額與【一鍵核銷】按鈕。
+- **時序分組小計與日期升冪排序**：
+  - 維持五大時間區塊（🔴 已逾期 / ⚡ 今日 / 📅 明日 / 🗓️ 本週 / 🔮 未來），並在標題即時計算呈現「分組淨現金流小計」（如 `小計: +NT$ 966,814`），組內依交割日嚴格升冪排列。
+
+### 2. 本地數據與儲存空間總覽看板 (Local Storage Inspector & Transparency Hub) *(V6.6.0)*
+- **100% 離線本地存儲與隱私信任保證**：
+  - 介面醒目標註「🔒 100% 本地離線存儲保證」，承諾所有個人交易、交割帳戶、現金流帳本與 API 金鑰 100% 保存在當前瀏覽器本地 (IndexedDB 與 LocalStorage)，絕不上傳任何第三方私有伺服器。
+- **瀏覽器磁碟空間佔用與配額監控 (Storage Quota Dashboard)**：
+  - 調用瀏覽器原生 `navigator.storage.estimate()` 動態取得磁碟佔用（如 `12.4 MB / 10.0 GB`，使用率 `0.1%`）與健康度進度條，並標示 IndexedDB 正常運行指示燈。
+- **三大維度本地資料明細卡片 (Three-Tier Categorized Datasets)**：
+  - **🛡️ 核心個人資產數據**：交易紀錄（買/賣/配息拆解、時間跨度）、證券交割戶、現金流記帳、質押信貸 + 匯出/匯入全庫備份。
+  - **⚡ 行情與市場快取**：歷史每日收盤價、外匯匯率、即時行情、公司行動庫、台美股官方字典 + 四組獨立【清空快取】按鈕與 Toast 反饋。
+  - **⚙️ 系統快照與偏好配置**：時光機快照統計、API 金鑰配置狀態、折數與計帳視圖。
+- **階梯式安全管理與核心資產護盾 (Tiered Asset Shield)**：
+  - 快取清除機制與使用者核心資產資料表完全實體隔離，杜絕誤刪記帳數據；重大操作前強制自動建立 `AUTO_BEFORE_RESET` 快照。
+
+### 2. 本機公司行動資料庫 (IndexedDB)、多源交叉增量同步管線與減資時序校準 *(V6.5.0)*
+- **本機持久化公司行動資料庫 (`corporateActions` Store)**：
+  - 於 IndexedDB 新增專屬 Store，以 `${symbol}-${type}-${date}` 為主鍵，支援本機離線讀取與差異化增量 Upsert。
+- **三層多源交叉驗證管線 (Three-Tier Pipeline)**：
+  - **Tier 1 (內建官方基準庫 SSOT)**：內建 9927 減資、2330、2886、00878、00923 等重大行動，100% 離線可用。
+  - **Tier 2 (官方開放資料端點 - 免 Key)**：串接 TWSE `TWT48U_ALL`（除權息預告）、`TWTAVU`（減資恢復買賣）與 TPEx 官方端點。
+  - **Tier 3 (深度歷史回填 - 選填免費 Key)**：在設定頁支援填入 **FinMind Token**（免費申請，每日 600 次額度），以 200ms 受控節流背景回填台股過去 10 年歷史減資與配息；美股支援選填 FMP / Finnhub Key 或 Yahoo 備援。
+- **泰銘 (9927) 減資除息全時序校準**：
+  - 納入 2025-09-15 現金減資（28.28%），在籍股數鎖定為 **10,000 股**。
+  - 2026-10-01 除息事件：未稅毛額 **50,000 元**，扣除 2.11% 二代健保（1,055 元）後實質入帳 **48,945 元**，預估發放日校準為 **2026-10-29**。
+  - 現金帳本自動連動流水同步校正為 `+NT$ 48,945`，於 2026-10-29 到達前保持 `PENDING` 在途狀態。
+
+### 2. 智慧掃描公司行動除息日與發放日雙欄位注入與現金在途隔離 *(V6.4.0)*
+- **雙日期完整模型 (`exDate` & `payDate`)**：
+  - 智慧掃描自動為現金股利事件注入精準的「預估發放日 (`payDate`)」，優先引用官方公告日曆，其餘標的自動依照交割週期推算（台股 +28 日、美股 +21 日）。
+- **除息日在庫持股嚴格判定**：
+  - 依法規嚴格以「除息日前一日（$Ex\text{-}Date - 1\text{ day}$）」收盤在庫股數計算配息金額與配股數，完全杜絕因除息日後的買賣操作造成持股數誤判。
+- **補登自動寫入雙日期與清晰備註**：
+  - 補登 Modal 自動將 `exDate`（除息基準日）與 `payDate`（發放日）完整寫入生成的 `TradeRecord`，並在備註清楚標註入帳時程。
+- **現金帳本在途隔離與自動交割流轉**：
+  - 現金帳本自動交割同步以 `payDate` 為唯一交割日，未到期款項標記為 `PENDING` 在途（不提前虛增實質可用現金），發放日當天自動轉為 `SETTLED`。
+
+
+### 2. 四大模組全量交叉核銷、融資/在途 NAV 守恆與自適應 XIRR *(V6.3.0)*
+- **融資自備款會計守恆 (Margin Buy 40% Down Payment)**：
+  - 融資買進 (`MARGIN_BUY`) 現金嚴格扣除 40% 自備款加手續費，股票市值 100% 入資產，60% 入借貸負債，全週期 NAV 精確守恆。
+- **除息在籍嚴格資格判定 (Strict Ex-Date Eligibility)**：
+  - 移除除息日前持股為 0 時 fallback 至現有持股的漏洞，杜絕除息日後買進者冒領股息。
+- **全域 NAV 在途款與應收股利平滑**：
+  - NAV 納入 $T\sim T+2$ 交易在途淨額與 $T_{ex} \sim T_{pay}$ 待入帳應收股息，徹底消除除權息旺季與交割時間差的淨值斷層。
+- **XIRR 自適應 Mode B 探針 (Pure Trade History Adaptive XIRR)**：
+  - 無手動出入金時自適應以歷史交易實質投入成本求解年化 XIRR，100% 保證數值收斂。
+- **質押擔保品在庫動態限制與斷頭追繳警報**：
+  - 以在庫實際持股數限制擔保品市值，賣出持股時擔保品自動核銷並即時觸發追繳差額逆運算。
+- **台股 10 元跨行匯費內扣與減資 0 元每股成本保底**：
+  - 台股股息試算精確扣除 10 元跨行匯費與 2.11% 二代健保；減資超額退款時每股成本保底為 0，損益率永不發生符號反轉。
+- **除息日 ($Ex\text{-}Date$) 與發放入帳日 ($Pay\text{-}Date$) 徹底時序分離**：
+  - 除息日僅用於除息假性虧損平滑與債權成立；發放日為資金實質入帳與可用現金結算日。
+  - 生命週期嚴格依時序判定：`today < exDate` (📢 即將除息) ➔ `exDate <= today < payDate` (⚡ 除息待入帳) ➔ `today >= payDate` (✅ 實質落袋)。
+- **官方除權息行事曆單一真實來源 (SSOT)**：
+  - 以官方公告為唯一基準，內建 2330 台積電、2886 兆豐金、00878、00923、9927 等標的，徹底排除歷史帳本舊日期的交錯干擾與誤殺。
+- **除息日在籍股數精準回溯計算**：
+  - 依法規以除息前一日收盤在籍股數為準，完整回溯並累加所有歷史買賣、除權配股 (`STOCK_DIVIDEND`)、分割、減資與增資補正。
+- **現金帳本發放日實質交割**：
+  - 現金股利交割日嚴格綁定發放日 (`payDate`)，未到期款項標記為在途 (`PENDING`)，絕不提前虛增可用現金。
+- **除權息卡片每行固定 2 欄與內部 2x2 舒展排版**：
+  - 每行固定 2 欄大器卡片，內部參數採 2 列 2 欄寬裕網格，文字與數值 100% 舒展零折行。
+
+### 2. 官方股票名稱字典庫、全域繁中解析與雙向智慧自動補齊 *(V6.0.0)*
+- **🇹🇼 台股全量官方標的庫**：內建臺灣證券交易所 (TWSE) 上市股票、創新板、ETF 與櫃買中心 (TPEx) 上櫃/興櫃全量代碼與官方繁中簡稱（2,000+ 檔標的）。
+- **🇺🇸 美股主流繁中精選庫**：收錄 S&P 500、Nasdaq 100 指數成分股及主流指數/主題 ETF 繁體中文名稱（500+ 檔標的）。
+- **雙向智慧搜尋與表單即時自動補齊 (`TradeModal.tsx`)**：
+  - 支援輸入「代碼 (2330/AAPL)」或「中文關鍵字 (台積/蘋果)」即時模糊搜尋全量字典。
+  - 精確命中代碼時自動補全中文名稱，同時支援手動微調與自訂名稱持久化記住。
+- **全域一致官方繁中解析 (`resolveOfficialSecurityName`)**：
+  - 庫存列表、歷史紀錄、資產樹狀圖 (Treemap)、報表與 CSV 匯入全站一致呈現官方繁體中文名稱。
+- **官方 OpenAPI 一鍵同步 (`SettingsWorkspace.tsx`)**：
+  - 設定頁提供專屬管理面板，可即時檢視字典統計與一鍵從 TWSE / TPEx OpenAPI 同步最新掛牌標的。
 
 ### 1. 淨槓桿零負債現貨保護機制與被動收入各項利息獨立膠囊展示 *(V5.7.4 新增)*
 - **零負債現貨保護機制 (Zero-Debt Spot Protection)**：
