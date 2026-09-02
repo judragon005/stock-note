@@ -235,7 +235,20 @@ export const App: React.FC = () => {
     onExchangeRateCalculated: handleExchangeRateCalculated,
   });
 
-  // 執行損益與持倉計算（傳入 accountingView, accounts, selectedAccountId, quotes, accountingMethod）
+  // 提取各標的歷史日 K 棒以驅動技術指標與警示膠囊
+  const historicalCandlesMap = useMemo(() => {
+    const map: Record<string, import('./types/signal').DailyCandle[]> = {};
+    if (quotes) {
+      for (const [sym, q] of Object.entries(quotes)) {
+        if (q.candles && q.candles.length > 0) {
+          map[sym] = q.candles;
+        }
+      }
+    }
+    return map;
+  }, [quotes]);
+
+  // 執行損益與持倉計算（傳入 accountingView, accounts, selectedAccountId, quotes, accountingMethod, historicalCandlesMap）
   const { holdings, summary, frictionSummary, closedSummary } = useMemo(() => {
     return calculateHoldingsAndSummary(
       displayedTrades,
@@ -245,9 +258,10 @@ export const App: React.FC = () => {
       accounts,
       selectedAccountId,
       quotes,
-      accountingMethod
+      accountingMethod,
+      historicalCandlesMap
     );
-  }, [displayedTrades, currentPrices, usdToTwdRate, accountingView, accounts, selectedAccountId, quotes, accountingMethod]);
+  }, [displayedTrades, currentPrices, usdToTwdRate, accountingView, accounts, selectedAccountId, quotes, accountingMethod, historicalCandlesMap]);
 
   // 整戶總體 XIRR 計算 (考慮外部出入金與期末淨資產)
   const portfolioXirr = useMemo(() => {

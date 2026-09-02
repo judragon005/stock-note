@@ -250,6 +250,7 @@ export interface PriceQuote {
   status: PriceQuoteStatus;
   updatedAt: number; // Unix timestamp in ms
   source: 'YAHOO' | 'TWSE' | 'MANUAL' | 'CACHE';
+  candles?: import('./signal').DailyCandle[]; // 近 3 個月歷史日 K 線棒
 }
 
 export type ExchangeRateStatus = 'REALTIME' | 'DELAYED' | 'PREVIOUS_CLOSE' | 'CACHED' | 'FALLBACK';

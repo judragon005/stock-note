@@ -1,4 +1,5 @@
 import { MarketType, PriceQuote, ExchangeRateQuote } from '../types/stock';
+import { parseYahooHistoricalCandlesResponse } from './historicalPriceFetcher';
 
 const CORS_PROXIES = [
   (url: string) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
@@ -114,6 +115,7 @@ export function parseYahooQuoteResponse(data: any, rawSymbol: string, market: Ma
     const change = price - prevClose;
     const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
     const currency = market === 'TW' ? 'TWD' : 'USD';
+    const candles = parseYahooHistoricalCandlesResponse(data);
 
     return {
       symbol: rawSymbol,
@@ -126,6 +128,7 @@ export function parseYahooQuoteResponse(data: any, rawSymbol: string, market: Ma
       status: 'DELAYED',
       updatedAt: (meta.regularMarketTime ? meta.regularMarketTime * 1000 : Date.now()),
       source: 'YAHOO',
+      candles: candles && candles.length > 0 ? candles : undefined,
     };
   } catch {
     return null;
@@ -182,7 +185,7 @@ export async function fetchStockQuote(
   customFetch: (url: string, timeoutMs?: number) => Promise<any> = fetchWithCORSProxy
 ): Promise<PriceQuote | null> {
   const yahooSymbol = normalizeYahooSymbol(symbol, market);
-  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=1d`;
+  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=3mo`;
 
   // 1. 嘗試 Yahoo Finance API (Primary)
   try {
@@ -193,7 +196,7 @@ export async function fetchStockQuote(
     // 若為台股且上櫃可能為 .TWO，嘗試切換後綴
     if (market === 'TW' && yahooSymbol.endsWith('.TW')) {
       const otcSymbol = `${symbol.replace(/\.TW$/i, '')}.TWO`;
-      const otcUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${otcSymbol}?interval=1d&range=1d`;
+      const otcUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${otcSymbol}?interval=1d&range=3mo`;
       try {
         const otcData = await customFetch(otcUrl, 3000);
         const otcQuote = parseYahooQuoteResponse(otcData, symbol, market);

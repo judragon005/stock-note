@@ -779,9 +779,80 @@ export function calculateHoldingsAndSummary(
       if (candles && candles.length > 0 && currentPrice > 0) {
         const indicators = computeTechnicalIndicators(candles, currentPrice);
         signals = extractHoldingSignals(currentPrice, indicators);
-        if (signals.length > 0) {
-          actionDirective = evaluateHoldingActionDirective(signals, indicators);
+      } else if (currentPrice > 0) {
+        // Fallback: 基於現價、前收價與成本均價即時產生基礎訊號
+        const fallbackSignals: import('../types/signal').HoldingSignal[] = [];
+        if (typeof todaysPnLPercent === 'number' && !isNaN(todaysPnLPercent)) {
+          if (todaysPnLPercent >= 2.5) {
+            fallbackSignals.push({
+              id: 'DAILY_STRONG_UP',
+              label: `今日強勢 +${todaysPnLPercent.toFixed(1)}%`,
+              category: 'MOMENTUM',
+              tone: 'BULLISH',
+              weight: 2,
+              description: `今日漲幅達 +${todaysPnLPercent.toFixed(2)}%`,
+            });
+          } else if (todaysPnLPercent <= -2.5) {
+            fallbackSignals.push({
+              id: 'DAILY_SHARP_DROP',
+              label: `今日回檔 ${todaysPnLPercent.toFixed(1)}%`,
+              category: 'MOMENTUM',
+              tone: 'BEARISH',
+              weight: -2,
+              description: `今日跌幅達 ${todaysPnLPercent.toFixed(2)}%`,
+            });
+          }
         }
+
+        if (avgCost > 0) {
+          if (currentPrice >= avgCost) {
+            fallbackSignals.push({
+              id: 'ABOVE_COST_BASIS',
+              label: '持股成本之上',
+              category: 'MA_LEVEL',
+              tone: 'BULLISH',
+              weight: 1,
+              description: `現價 ${currentPrice} 高於持有均價 (${avgCost.toFixed(2)})`,
+            });
+          } else {
+            fallbackSignals.push({
+              id: 'BELOW_COST_BASIS',
+              label: '跌破持股成本',
+              category: 'MA_LEVEL',
+              tone: 'BEARISH',
+              weight: -1,
+              description: `現價 ${currentPrice} 低於持有均價 (${avgCost.toFixed(2)})`,
+            });
+          }
+        }
+
+        if (breakevenPrice !== undefined && breakevenPrice > 0) {
+          if (currentPrice >= breakevenPrice) {
+            fallbackSignals.push({
+              id: 'ABOVE_BREAKEVEN',
+              label: '站穩保本價',
+              category: 'PRICE_EXTREME',
+              tone: 'BULLISH',
+              weight: 1,
+              description: `現價已高於精確保本出場價 (${breakevenPrice.toFixed(2)})`,
+            });
+          } else {
+            fallbackSignals.push({
+              id: 'BELOW_BREAKEVEN',
+              label: '保本線之下',
+              category: 'PRICE_EXTREME',
+              tone: 'WARNING',
+              weight: -1,
+              description: `現價低於精確保本出場價 (${breakevenPrice.toFixed(2)})`,
+            });
+          }
+        }
+
+        signals = fallbackSignals;
+      }
+
+      if (signals && signals.length > 0) {
+        actionDirective = evaluateHoldingActionDirective(signals);
       }
 
       holdings.push({
