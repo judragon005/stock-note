@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-463%2F463%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-465%2F465%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 

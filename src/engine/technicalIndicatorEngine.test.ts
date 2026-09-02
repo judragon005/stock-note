@@ -166,13 +166,66 @@ describe('technicalIndicatorEngine (技術指標與訊號運算引擎)', () => {
         volume: 1000 + i * 10,
       }));
 
-      const indicators = computeTechnicalIndicators(candles, 165.0);
-      expect(indicators.currentPrice).toBe(165.0);
-      expect(indicators.ma5).toBeDefined();
-      expect(indicators.ma20).toBeDefined();
-      expect(indicators.ma60).toBeDefined();
-      expect(indicators.k9).toBeDefined();
-      expect(indicators.dif12_26).toBeDefined();
+      const result = computeTechnicalIndicators(candles, 165.0);
+      expect(result.currentPrice).toBe(165.0);
+      expect(result.ma5).toBeDefined();
+      expect(result.ma20).toBeDefined();
+      expect(result.ma60).toBeDefined();
+      expect(result.bias20).toBeDefined();
+      expect(result.bias60).toBeDefined();
+      expect(result.k9).toBeDefined();
+      expect(result.d9).toBeDefined();
+      expect(result.dif12_26).toBeDefined();
+      expect(result.macdHist).toBeDefined();
+    });
+
+    it('應能精確計算均線乖離率 Bias% 並萃取正乖離過大或超跌反彈膠囊', () => {
+      // 假設現價 108，月線 100 -> bias20 = +8%
+      const indicators = {
+        currentPrice: 108,
+        ma20: 100,
+        bias20: 8.0,
+      };
+
+      const signals = extractHoldingSignals(108, indicators);
+      const overbought = signals.find((s) => s.id === 'BIAS_20_OVERBOUGHT');
+      expect(overbought).toBeDefined();
+      expect(overbought?.tone).toBe('WARNING');
+      expect(overbought?.label).toContain('月線正乖離 (+8.0%)');
+
+      // 假設現價 93，月線 100 -> bias20 = -7%
+      const oversoldIndicators = {
+        currentPrice: 93,
+        ma20: 100,
+        bias20: -7.0,
+      };
+      const oversoldSignals = extractHoldingSignals(93, oversoldIndicators);
+      const oversold = oversoldSignals.find((s) => s.id === 'BIAS_20_OVERSOLD');
+      expect(oversold).toBeDefined();
+      expect(oversold?.tone).toBe('WARNING');
+      expect(oversold?.label).toContain('月線負乖離 (-7.0%)');
+    });
+
+    it('應能識別多週期長短線共振結構 (長空短多反彈 vs 長多短空拉回)', () => {
+      // 短線反彈但在季線之下：5MA(105) > 20MA(100)，現價 105 < 60MA(110)
+      const reboundIndicators = {
+        currentPrice: 105,
+        ma5: 105,
+        ma20: 100,
+        ma60: 110,
+      };
+      const reboundSignals = extractHoldingSignals(105, reboundIndicators);
+      expect(reboundSignals.some((s) => s.id === 'CONFLUENCE_REBOUND_IN_DOWNTREND')).toBe(true);
+
+      // 長多短線拉回：5MA(98) < 20MA(100)，現價 102 >= 60MA(95)
+      const pullbackIndicators = {
+        currentPrice: 102,
+        ma5: 98,
+        ma20: 100,
+        ma60: 95,
+      };
+      const pullbackSignals = extractHoldingSignals(102, pullbackIndicators);
+      expect(pullbackSignals.some((s) => s.id === 'CONFLUENCE_PULLBACK_IN_UPTREND')).toBe(true);
     });
   });
 });
