@@ -125,7 +125,28 @@ export const HoldingSignalCapsules: React.FC<HoldingSignalCapsulesProps> = ({
     >
       {/* 智慧操作建議四字定調徽章 */}
       {showDirectiveBadge && directive && (
-        <Tooltip content={`💡 操作指南: ${directive.advice} (量化得分: ${directive.score})`}>
+        <Tooltip
+          position="top"
+          align="left"
+          content={
+            <div style={{ padding: '2px 0', minWidth: '220px', maxWidth: '300px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.12)', paddingBottom: '4px', marginBottom: '6px' }}>
+                <span style={{ fontWeight: 700, color: headlineColor, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Sparkles size={12} /> {directive.headline}
+                </span>
+                <span style={{ fontSize: '0.65rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(255,255,255,0.1)', color: '#e2e8f0' }}>
+                  量化評分: {directive.score > 0 ? `+${directive.score}` : directive.score}
+                </span>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#f1f5f9', lineHeight: 1.45, marginBottom: '6px' }}>
+                {directive.advice}
+              </div>
+              <div style={{ fontSize: '0.65rem', color: '#94a3b8', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '4px' }}>
+                💡 紀律指引：基於日線 MA/KD/MACD 多空專家矩陣量化評估
+              </div>
+            </div>
+          }
+        >
           <span
             style={{
               fontSize: '0.62rem',
@@ -154,7 +175,7 @@ export const HoldingSignalCapsules: React.FC<HoldingSignalCapsulesProps> = ({
         const tooltipText = formatSignalTooltip(sig);
 
         return (
-          <Tooltip key={sig.id} content={tooltipText}>
+          <Tooltip key={sig.id} position="top" align="left" content={tooltipText}>
             <span
               style={{
                 fontSize: '0.62rem',

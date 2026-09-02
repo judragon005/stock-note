@@ -47,6 +47,8 @@ export interface TechnicalIndicators {
   weekHigh5?: number;
   monthLow20?: number;
   monthHigh20?: number;
+  bias20?: number;                 // 月線乖離率 %
+  bias60?: number;                 // 季線乖離率 %
 }
 
 export type ActionSentiment =

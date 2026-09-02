@@ -223,6 +223,16 @@ export function computeTechnicalIndicators(
   const vol = calculateVolumeMetrics(volumes);
   const extremes = calculatePriceExtremes(highs, lows);
 
+  let bias20: number | undefined = undefined;
+  if (ma.ma20 && ma.ma20 > 0) {
+    bias20 = Math.round(((currentPrice - ma.ma20) / ma.ma20) * 10000) / 100;
+  }
+
+  let bias60: number | undefined = undefined;
+  if (ma.ma60 && ma.ma60 > 0) {
+    bias60 = Math.round(((currentPrice - ma.ma60) / ma.ma60) * 10000) / 100;
+  }
+
   return {
     currentPrice,
     ma5: ma.ma5,
@@ -245,6 +255,8 @@ export function computeTechnicalIndicators(
     weekLow5: extremes.weekLow5,
     monthHigh20: extremes.monthHigh20,
     monthLow20: extremes.monthLow20,
+    bias20,
+    bias60,
   };
 }
 
@@ -480,6 +492,54 @@ export function extractHoldingSignals(
       description: `現價 ${currentPrice} 創近 5 日最高價`,
       metricsValue: indicators.weekHigh5,
     });
+  }
+
+  // 6. 均線乖離率 (Bias %) 標籤
+  if (typeof indicators.bias20 === 'number') {
+    if (indicators.bias20 >= 8) {
+      signals.push({
+        id: 'BIAS_20_OVERBOUGHT',
+        label: `月線正乖離 (+${indicators.bias20.toFixed(1)}%)`,
+        category: 'PRICE_EXTREME',
+        tone: 'WARNING',
+        weight: -1,
+        description: `現價相對 20MA 正乖離達 +${indicators.bias20.toFixed(2)}%，短線漲幅偏高慎防回檔`,
+        metricsValue: indicators.bias20,
+      });
+    } else if (indicators.bias20 <= -6) {
+      signals.push({
+        id: 'BIAS_20_OVERSOLD',
+        label: `月線負乖離 (${indicators.bias20.toFixed(1)}%)`,
+        category: 'PRICE_EXTREME',
+        tone: 'WARNING',
+        weight: 1,
+        description: `現價相對 20MA 負乖離達 ${indicators.bias20.toFixed(2)}%，短線超跌醞釀技術反彈`,
+        metricsValue: indicators.bias20,
+      });
+    }
+  }
+
+  // 7. 長短多週期共振結構 (Multi-Timeframe Confluence)
+  if (typeof indicators.ma5 === 'number' && typeof indicators.ma20 === 'number' && typeof indicators.ma60 === 'number') {
+    if (indicators.ma5 > indicators.ma20 && currentPrice < indicators.ma60) {
+      signals.push({
+        id: 'CONFLUENCE_REBOUND_IN_DOWNTREND',
+        label: '長空短多 (反彈)',
+        category: 'MA_LEVEL',
+        tone: 'WARNING',
+        weight: 0,
+        description: '短期均線黃金交叉，但中長線仍在季線之下，定義為空頭反彈格局，宜逢高減碼',
+      });
+    } else if (indicators.ma5 < indicators.ma20 && currentPrice >= indicators.ma60) {
+      signals.push({
+        id: 'CONFLUENCE_PULLBACK_IN_UPTREND',
+        label: '長多短空 (拉回)',
+        category: 'MA_LEVEL',
+        tone: 'NEUTRAL',
+        weight: 1,
+        description: '中長線守穩季線多頭，短期 5MA 跌破 20MA 拉回整理，可觀察止跌支撐',
+      });
+    }
   }
 
   return signals;
