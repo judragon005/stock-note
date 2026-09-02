@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TradeRecord } from '../types/stock';
 import { scanCorporateActions, ScannedCorporateAction, ScanProgress } from '../engine/corporateActionScanner';
+import { estimatePaymentDate } from '../engine/receivableDividendEngine';
 import { X, Sparkles, CheckCircle2, RefreshCw, Square, Play, AlertCircle } from 'lucide-react';
 import { logger } from '../utils/logger';
 import { formatCurrencyAmount, formatSharesCount, normalizeCurrencyPrecision } from '../utils/formatters';
@@ -29,22 +30,40 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
   });
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isScanningRef = useRef(false);
   const completedSymbolsRef = useRef<Set<string>>(new Set());
 
-  // 取得全部不重複的股票代號清單
-  const allSymbols = Array.from(new Set(trades.map((t) => t.symbol)));
+  // 取得目前帳本內所有歷史持股代碼
+  const allSymbols = Array.from(new Set(trades.map((t) => t.symbol.toUpperCase()))).sort();
 
-  const handleScan = async (symbolsToScan?: string[], forceRefresh: boolean = false) => {
-    // 中止任何進行中的請求
+  const handleAbort = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
+      abortControllerRef.current = null;
     }
+    isScanningRef.current = false;
+    setLoading(false);
+  };
+
+  const handleCancel = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    isScanningRef.current = false;
+    setLoading(false);
+    setProgress((prev) => ({ ...prev, status: 'paused' }));
+  };
+
+  const handleScan = async (symbolsToRun?: string[], forceRefresh: boolean = false) => {
+    if (isScanningRef.current) return;
+    isScanningRef.current = true;
+    setLoading(true);
+
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    setLoading(true);
-
-    if (forceRefresh) {
+    if (!symbolsToRun || forceRefresh) {
       completedSymbolsRef.current.clear();
       setActions([]);
       setSelectedIds(new Set());
@@ -52,14 +71,14 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
 
     try {
       const scanned = await scanCorporateActions(trades, undefined, {
-        concurrency: 3,
+        concurrency: 2,
         signal: controller.signal,
-        symbolsToScan,
+        symbolsToScan: symbolsToRun,
         forceRefresh,
         onProgress: (p) => {
           setProgress(p);
           if (p.currentSymbol) {
-            completedSymbolsRef.current.add(p.currentSymbol);
+            completedSymbolsRef.current.add(p.currentSymbol.toUpperCase());
           }
         },
       });
@@ -67,32 +86,30 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
       // 合併既有與新掃描的事件
       setActions((prev) => {
         const map = new Map<string, ScannedCorporateAction>();
-        for (const a of prev) map.set(a.id, a);
-        for (const a of scanned) map.set(a.id, a);
-        const merged = Array.from(map.values()).sort((a, b) => {
+        prev.forEach((a) => map.set(a.id, a));
+        scanned.forEach((a) => map.set(a.id, a));
+        return Array.from(map.values()).sort((a, b) => {
           if (a.date !== b.date) return a.date.localeCompare(b.date);
           return a.symbol.localeCompare(b.symbol);
         });
-
-        // 預設將未入帳的新項目加入選取
-        setSelectedIds((prevIds) => {
-          const next = new Set(prevIds);
-          for (const item of merged) {
-            if (!item.isAlreadyRecorded) {
-              next.add(item.id);
-            }
-          }
-          return next;
-        });
-
-        return merged;
       });
+
+      // 預設全選尚未入帳的行動
+      const unrecordedIds = new Set<string>();
+      scanned.forEach((a) => {
+        if (!a.isAlreadyRecorded) {
+          unrecordedIds.add(a.id);
+        }
+      });
+      setSelectedIds((prev) => new Set([...prev, ...unrecordedIds]));
     } catch (err: any) {
-      if (err?.name !== 'AbortError') {
-        logger.error('Failed to scan corporate actions:', err);
+      if (err.name !== 'AbortError') {
+        logger.error('Corporate Action scan failed:', err);
       }
     } finally {
+      isScanningRef.current = false;
       setLoading(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -100,25 +117,12 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
     if (isOpen) {
       handleScan(undefined, false);
     } else {
-      // 關閉彈窗時主動中止進行中的請求
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+      handleAbort();
     }
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+      handleAbort();
     };
   }, [isOpen]);
-
-  const handleCancel = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      setLoading(false);
-      setProgress((prev) => ({ ...prev, status: 'paused' }));
-    }
-  };
 
   const handleResume = () => {
     const remaining = allSymbols.filter((s) => !completedSymbolsRef.current.has(s));
@@ -128,7 +132,20 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
   };
 
   const handleFullRescan = () => {
-    handleScan(undefined, true);
+    handleAbort();
+    completedSymbolsRef.current.clear();
+    setActions([]);
+    setSelectedIds(new Set());
+    setProgress({
+      current: 0,
+      total: allSymbols.length,
+      foundEventsCount: 0,
+      status: 'scanning',
+    });
+    // 透過微小延遲讓 React 渲染刷新載入動畫，隨後發起全新全量重掃
+    setTimeout(() => {
+      handleScan(undefined, true);
+    }, 50);
   };
 
   const toggleSelect = (id: string) => {
@@ -166,6 +183,7 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
       const isSplit = a.type === 'STOCK_SPLIT';
       const isReduction = a.type === 'CAPITAL_REDUCTION';
       const isDiv = a.type === 'DIVIDEND';
+      const effectivePayDate = isDiv ? (a.payDate || estimatePaymentDate(a.date, a.market)) : undefined;
 
       return {
         id: `auto-ca-${a.symbol}-${a.date}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -181,12 +199,13 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
                 isSplit ? 0 : a.sharesHeldOnDate,
         price: isDiv || isReduction ? (a.price || 0) : 0,
         fee: 0,
-        tax: 0,
+        tax: a.taxDeduction || 0,
         ratio: a.ratio,
         cashAmount: a.estimatedCashAmount > 0 ? normalizeCurrencyPrecision(a.estimatedCashAmount, a.currency) : undefined,
         exDate: a.date,
+        payDate: effectivePayDate,
         tags: ['智慧自動補登', '公司行動'],
-        note: `【智慧補登】基準日持股 ${formatSharesCount(a.sharesHeldOnDate, a.market)} 股。${a.description}`,
+        note: `【智慧補登】基準日持股 ${formatSharesCount(a.sharesHeldOnDate, a.market)} 股${effectivePayDate ? ` (預計 ${effectivePayDate} 發放入帳)` : ''}。${a.description}`,
         createdAt: Date.now(),
       };
     });
@@ -512,7 +531,7 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
                           </span>
                         </div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                          {act.date} 基準日持股：<strong>{act.sharesHeldOnDate.toLocaleString()}</strong> 股 · {act.description}
+                          除息日 {act.date} · 基準日持股：<strong>{act.sharesHeldOnDate.toLocaleString()}</strong> 股{act.payDate ? ` · 預計發放：${act.payDate}` : ''} · {act.description}
                         </div>
                       </div>
                     </div>

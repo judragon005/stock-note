@@ -1356,6 +1356,53 @@ describe('股票交易交割自動同步與流水關聯 (Trade Settlement Sync)'
       expect(summary.byAccount['broker-tw-default'].balance).toBe(33250);
       expect(summary.byAccount['broker-tw-default'].totalDividends).toBe(33250);
     });
+
+    it('真實場景：2890 永豐金股息交易未手動設定 tax 與 cashAmount (tax=0)，現金帳本自動連動應自動比對配股扣除 850 健保，精準產生 +NT$ 33,250 流水', () => {
+      const todayStr = '2026-08-28';
+      const trades: TradeRecord[] = [
+        {
+          id: 'auto-ca-2890-div-notax',
+          date: '2026-07-23',
+          exDate: '2026-07-23',
+          payDate: '2026-08-20',
+          symbol: '2890',
+          name: '永豐金',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'DIVIDEND',
+          accountId: 'broker-tw-default',
+          shares: 31000,
+          price: 1.1,
+          tax: 0, // 未手動填寫
+          fee: 0,
+          createdAt: 1,
+        },
+        {
+          id: 'auto-ca-2890-stock-div',
+          date: '2026-07-23',
+          symbol: '2890',
+          name: '永豐金',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'STOCK_DIVIDEND',
+          accountId: 'broker-tw-default',
+          shares: 620,
+          price: 0,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+      ];
+
+      const synced = syncTradesWithCashTransactions(trades, [], todayStr);
+      const divTx = synced.find((tx) => tx.relatedTradeId === 'auto-ca-2890-div-notax');
+      expect(divTx).toBeDefined();
+      expect(divTx!.category).toBe('DIVIDEND_PAYOUT');
+      // 應自動合併配股面額扣除 850 元二代健保，實收 33,250 元
+      expect(divTx!.amount).toBe(33250);
+      expect(divTx!.settlementDate).toBe('2026-08-20');
+      expect(divTx!.settlementStatus).toBe('SETTLED');
+    });
   });
 });
 

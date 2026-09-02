@@ -31,7 +31,8 @@ interface HeaderProps {
   onOpenScannerModal: () => void;
   onExportJSON: () => void;
   onExportCSV: () => void;
-  onImportFile: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onImportFile?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onOpenImportModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -55,6 +56,7 @@ export const Header: React.FC<HeaderProps> = ({
   onExportJSON,
   onExportCSV,
   onImportFile,
+  onOpenImportModal,
 }) => {
 
 
@@ -358,11 +360,21 @@ export const Header: React.FC<HeaderProps> = ({
             <Download size={14} /> CSV
           </button>
 
-          {/* Import file (JSON & CSV) */}
-          <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }} title="從 JSON 或 CSV 還原/匯入備份">
-            <Upload size={14} /> 匯入
-            <input type="file" accept=".json,.csv" onChange={onImportFile} style={{ display: 'none' }} value="" />
-          </label>
+          {/* Import file (JSON & CSV 智慧匯入精靈) */}
+          {onOpenImportModal ? (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={onOpenImportModal}
+              title="開啟增強型 CSV / JSON 智慧匯入精靈"
+            >
+              <Upload size={14} /> 匯入
+            </button>
+          ) : (
+            <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }} title="從 JSON 或 CSV 還原/匯入備份">
+              <Upload size={14} /> 匯入
+              <input type="file" accept=".json,.csv" onChange={onImportFile} style={{ display: 'none' }} value="" />
+            </label>
+          )}
 
           {/* Smart Corporate Action Scanner Button */}
           <button

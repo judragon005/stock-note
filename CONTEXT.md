@@ -260,6 +260,15 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0043: V5.7.2 機構級量化風控指標卡片懸浮雙層診斷與即時解讀系統](docs/adr/0043-quant-metrics-interactive-diagnosis-and-tooltips.md)
 - [ADR-0044: V5.7.3 全專案「慣用紅綠漲跌」色彩模式統一與 CSS 變數體系全面連動](docs/adr/0044-color-theme-mode-unification-and-full-project-css-sync.md)
 - [ADR-0059: V6.9.2 本地儲存檢測中心雙軌容錯韌性升級與 0 筆計數盲區修復](docs/adr/0059-local-storage-inspector-dual-track-resilience-and-zero-count-fix.md)
+- [ADR-0065: V7.0.0 資產配置目標偏離 (Drift) 試算與再平衡推薦器](docs/specs/0065-target-allocation-drift-and-rebalancing-optimizer-spec.md)
+
+### 資產配置目標偏離 (Drift) 試算與再平衡推薦器 (Target Allocation & Rebalancing) *(新增於 V7.0.0)*
+- **雙軌目標配置模型 (Target Allocation Config)**：支援「市場維度 (TW/US/Cash)」與「自訂個股維度 (Symbol-level)」策略設定，具備合計 100% 之防呆驗證與偏離容忍門檻 ($\pm 5\%$)。
+- **偏離度量化與三色診斷 (Drift Badges)**：計算實際佔比與目標差距 ($P_{\text{actual}} - P_{\text{target}}$)，即時輸出 `🟢 正常平衡`、`🟡 輕度偏離`、`🔴 顯著失衡` 狀態。
+- **雙模式再平衡演算法 (Rebalancing Engine)**：
+  - **定期注水加碼 (Cash-in Only)**：依缺口比例優先加碼低配標的，只買不賣，杜絕摩擦成本與稅負。
+  - **全量買賣再平衡 (Full Rebalancing)**：超配賣出、低配加碼，精確重置組合權重。
+- **跨市場下單顆粒度適配**：台股自動換算「整張數 (1,000股) + 零股」，美股支援碎股小數點計算，並同步輸出原幣別與折合 TWD 建議下單金額。
 
 ### 全專案色彩主題與慣用紅綠漲跌體系 (Color Theme Mode & CSS Unification) *(新增於 V5.7.3)*
 - **Data-Color-Theme CSS 變數體系**：全專案統一使用 `var(--gain-color)` 與 `var(--loss-color)` 作為唯一損益/漲跌顏色事實來源，徹底杜絕各元件內寫死 Hex 色碼。
@@ -815,3 +824,63 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     - `FINANCING_FEE` (融資利息)：扣除利息 `accruedInterest`
     - `WIRE_FEE` (電匯/規費)：扣除設質規費總額 `pledgeFees`
   - 同步將借款未還本金歸零，更新結息日為當日，保持損益與稅務扣抵之可稽核性。
+
+### 增強型 CSV 欄位對齊映射與逐行預覽匯入器 (Enhanced CSV Column Mapping & Row Preview Importer) *(新增於 V6.9.6)*
+
+- **Broker Fingerprint Registry (券商表頭指紋辨識庫)**:
+  - 內建國泰證券、富邦證券、永豐大戶投、元大證券、Firstrade、Charles Schwab、IB 等主流券商特徵庫，上傳 CSV 時自動匹配最佳範本並帶入欄位映射。
+- **Financial-Grade CSV Sanitizer (金融級 CSV 資料清洗與容錯引擎)**:
+  - `csvSanitizer.ts` 支援民國年 (`113/05/20`)、美式 (`05/20/2024`)、純數字 (`20240520`) 標準化。
+  - 自動清洗貨幣符號 (`$`, `NT$`)、千分位逗號 (`,`) 與會計負數括號 `(1,000)`。
+  - 智慧識別台美券商各類交易動作（買進/賣出/除權息/減資/拆股）並調用股票字典補全代碼與標的名稱。
+- **Trade Fingerprint & Smart Deduplication (交易指紋智慧去重模型)**:
+  - 以 `date_market_symbol_type_shares_price` 複合鍵計算交易特徵指紋，精確標記 `NEW`、`DUPLICATE`、`INVALID`。
+  - 提供「智慧追加去重（推薦）」、「全量快照覆蓋」與「強制全數追加」三種入庫策略，並在全量覆蓋前自動建立時光機快照防呆。
+
+### 除息公告背景自動同步、雙看板垂直拆分與配股配息合併健保扣除 (Background CA Sync & Consolidated NHI Tax) *(新增於 V6.9.7)*
+
+- **Background Corporate Actions Preload Sync (背景靜默自動預載同步)**:
+  - 在 `App.tsx` 啟動持股載入後，系統自動於背景發起 `handleSyncCorporateActions(false)`，利用 24H 本地快取與 150ms 節流延遲保護金融端點，無需手動進入「股利日誌」分頁，且介面保留手動強制同步按鈕。
+- **Dual Corporate Actions Kanban Board Separation (雙看板獨立垂直拆分與排版占位)**:
+  - 將原看板垂直拆分為「⚡ 除息待入帳行事曆 (`status !== 'UPCOMING_EX'`)」與「📢 即將除息公告看板 (`status === 'UPCOMING_EX'`)」兩組獨立 Glass Card。
+  - 當無待入帳或無即將除息項目時，各自展示專屬空狀態占位提示卡片，確保版面結構穩定不塌縮。
+- **Consolidated Stock & Cash Dividend NHI Tax SSOT (配股配息合併健保扣繳單一事實來源)**:
+  - 在 `taxComplianceEngine.ts` 封裝 `resolveEffectiveDividendTaxAndNet`，依法將股票股利面額（每股 NT$10）併入單次給付申報所得計算 2.11% 二代健保，且保費自現金股利代扣。
+  - 歷史明細表（`DividendLogView`）、待入帳計算引擎（`receivableDividendEngine`）、報表統計（`dividendAggregator`）與現金帳本自動連動流水（`cashLedgerEngine`）全面採用此 SSOT。
+  - **2890 永豐金（持股 31,000 股現金 34,100 元 + 620 股配股面額 6,200 元）**：
+    - 股利明細「扣繳稅款/健保」顯示 `-NT$ 850`，實領淨額顯示 `33,250 TWD`。
+    - 現金帳本自動連動 `DIVIDEND_PAYOUT` 入帳流水金額精準記錄為 **`+NT$ 33,250`**。
+
+### 資產配置目標偏離度試算與再平衡推薦器 (Target Allocation Drift & Rebalancing Optimizer) *(新增於 V7.0.0)*
+
+- **Target Allocation Model (目標資產配置模型)**:
+  - 支援市場大類 (`MARKET`: 'TW' | 'US' | 'CASH') 與個股標的 (`SYMBOL`) 雙軌自訂權重策略，內建「核心市場配置 (台股 40%、美股 40%、現金 20%)」與 $\pm 5\%$ 容忍區間。
+- **Dual Rebalance Engine (雙模式再平衡決策引擎)**:
+  - `CASH_IN`（定期注水加碼模式）：只買不賣，將新增注水現金依缺口權重分配至低配標的。
+  - `FULL_REBALANCE`（全量買賣重置模式）：精確計算超配賣出金額與低配買入金額。
+  - 適配台股整張 (1,000 股) 與盤中零股、美股碎股小數點，並估算摩擦成本。
+
+### 樹狀圖納入現金部位與總資產權重統一架構 (Treemap Cash Position & Unified Weight Architecture) *(新增於 V7.1.0)*
+
+- **Unified Total Asset Denominator (全資產分母統一)**:
+  - 總資產公式統一為 $\text{TotalAssets} = \sum (\text{StockValue}_{\text{TWD}}) + \max(0, \text{CashBalance}_{\text{TWD}})$。
+  - 樹狀圖 (Treemap)、權重清單 (Bars) 與頂部市場分佈條統一以此為分母計算佔比。
+- **Dynamic Cash Node Injection (動態現金節點注入與語意分離)**:
+  - 當現金餘額 $> 0$ 時自動注入 `CASH_TWD` 節點，採用中性深灰藍石板色（`hsla(215, 25%, 27%, 0.85)` / `#334155`）與板岩灰邊框（`#64748b`），損益固定標示 `0.0%`。
+- **3-Way Market Allocation Progress Bar (三段式市場分佈進度條)**:
+  - 整合 `🇹🇼 台股 XX.X%` (`#3b82f6`)、`🇺🇸 美股 XX.X%` (`#8b5cf6`)、`💵 現金 XX.X%` (`#10b981`)，提供全景資產配置透視。
+
+### 持股技術指標警示膠囊與智慧操作建議引擎 (Holding Technical Signal Capsules & Action Advisor) *(新增於 V7.2.0)*
+
+- **Technical Signal Capsules (技術與籌碼警示膠囊)**:
+  - 專門針對當前持股列提供多維度、多色彩的即時標籤體系：
+    - 🟢 偏多/強勢（如 `9日K大幅拉升`、`半年線之上`、`MACD黃金交叉`、`創週新高`）
+    - 🔴 偏空/破位（如 `5日線之下`、`月線之下`、`季線之下`、`創單週新低`）
+    - 🟡 量價/指標異動（如 `昨日量能注意`、`量縮窒息注意`、`MACD注意`）
+    - 🟣 均線結構（如 `均線多頭排列`、`均線糾結`）
+- **Deterministic Action Directive Matrix (確定性專家操作建議矩陣)**:
+  - 依據訊號加權計分輸出四字定調（如 `【強勢續抱】`、`【逢高減碼】`、`【超跌留意】`、`【盤整觀望】`）與 1~2 句紀律性操作指南。
+- **Offline-First Quant Calculation (離線優先量化運算)**:
+  - 純前端基於歷史日 K 線計算 MA(5/20/60/120/240)、KD(9,3,3)、MACD(12,26,9)、成交量均量比與極值高低點，零額外 API 成本與零延遲。
+
+

@@ -1,11 +1,12 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Document)
 
-> **交接產生時間**：2026-08-28 13:40 (UTC+8)  
+> **交接產生時間**：2026-09-01 16:05 (UTC+8)  
 > **當前最新里程碑**：
-> - **V5.9.0 嘉信理財對帳單像素級對齊、利息智能正規化與美股股息毛額雙筆記帳架構**（美股股息流水毛額入帳對齊 DOI/JRN；利息名稱智能正規化支援全形逗號與破折號；交易明細 4 位小數單價與實算毛額展示；autoReconcileSchwabRecords 冪等式自動對齊交割戶可用現金 $224.79 USD）。
-> - **V5.8.0 零負債槓桿歸零 0.00x、利息依券商聚合與預扣稅分離、流水帳股息雙向同步全域連動**（無負債時淨槓桿直接為 0.00x；利息依券商分組；美股股息與利息預扣稅分離；流水帳 ➔ Trade 雙向同步編輯即時連動全域 NAV）。
-> - **V5.7.4 淨槓桿零負債現貨保護機制與被動收入各項利息獨立膠囊展示**。
-> **品質狀態**：全量單元測試 **304/304 通過 (100% Passed)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過。
+> - **V6.9.4 減資多源去重、虛擬時序動態扣減與交易帳本股息淨額對齊**（TWSE 與 Yahoo 減資 $\le 90$ 天合併去重；虛擬時序池納入減資扣減；官方 6 位精準減資比率對齊消除 1 股誤差；交易帳本股息淨額對齊）。
+> - **V6.9.3 Storage Inspector 快取統計指標解構與字典計數對齊修復**（修復公司行動庫 0 檔 61 筆至真實 61 檔；修復歷史外匯 4529 對 0 點至 1 對 4,529 點；字典庫總數完全對齊 3,350 檔）。
+> - **V6.9.2 Local Storage 雙軌檢視器韌性增強與零筆數回退修復**。
+> - **V6.9.1 智慧掃描公司行動真實持股對齊、強制重掃狀態重置與精準配息比對**。
+> **品質狀態**：全量單元測試 **386/386 通過 (100% Passed)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過。
 
 ---
 
@@ -13,8 +14,8 @@
 
 - **專案路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon003/-.git`
-- **測試套件狀態**：**304/304 通過** (25 test suites / 100% 綠燈)，TypeScript 0 錯誤。
-- **當前版本**：**V5.9.0**
+- **測試套件狀態**：**386/386 通過** (33 test suites / 100% 綠燈)，TypeScript 0 錯誤。
+- **當前版本**：**V6.9.4**
 - **隱私安全**：所有本機交易資料與 API 金鑰均受 IndexedDB / LocalStorage 本地隔離與 `.gitignore` 保護，杜絕個人財務資料推播至 GitHub 遠端。
 
 ---
@@ -46,13 +47,17 @@
    - 最新：[SPEC-0033](file:///d:/APP/股票紀錄/docs/specs/0033-xirr-performance-engine.md)。
 
 4. **單一版本交付紀錄存檔 (`docs/handoff/`)**：
-   - [V5.1: XIRR 不定期現金流年化報酬率引擎與多維度績效分析](2026-08-27-v5.1-xirr-performance-engine.md)
+   - [V6.5.0: 本機公司行動資料庫、多源交叉增量同步管線與減資除息時序校準](2026-08-28-v6.5.0-official-corporate-action-db-and-capital-reduction-pipeline.md)
+   - [V6.4.0: 智慧掃描除息日與發放日雙欄位注入與現金在途隔離](2026-08-28-v6.4.0-smart-scan-pay-date-alignment-and-pending-ledger.md)
+   - [V6.3.0: 跨模組全量交叉核銷、融資/在途 NAV 守恆與自適應 XIRR](2026-08-28-v6.3.0-cross-module-ledger-dividend-portfolio-reconciliation.md)
+   - [V6.0.0: 官方股票名稱字典庫與智慧自動補齊](2026-08-28-v6.0.0-official-stock-dictionary-and-smart-autocomplete.md)
    - [V5.0: 原生 IndexedDB 底層儲存與時光機快照](2026-08-27-v5.0-indexeddb-and-time-machine-snapshots.md)
    - [V4.8: Code Review 全量重構與在途日曆全自動化](2026-08-27-v4.8-code-review-refactoring-and-settlement-automation.md)
    - [V4.7: 券商級在途資金與三層可用性購買力帳本](2026-08-27-v4.7-in-transit-funds-and-buying-power-ledger.md)
 
 5. **本地票券鏡像區 (`.scratch/`)**：
-   - `.scratch/v5.1-xirr-performance-engine/issues/` (5/5 Completed)
+   - `.scratch/v6.5.0-official-corporate-action-db-and-capital-reduction-pipeline/issues/` (3/3 Completed)
+
 
 ---
 
@@ -79,7 +84,7 @@
 ## ⚡ 4. 常用驗證與維護指令 (Quick Verification)
 
 ```bash
-# 1. 執行全量單元測試 (應 186/186 100% 通過)
+# 1. 執行全量單元測試 (應 355/355 100% 通過)
 npm test
 
 # 2. 執行 TypeScript 型別嚴格檢查 (應 0 錯誤)
@@ -88,3 +93,4 @@ npx tsc --noEmit
 # 3. 執行 Vite 生產環境建置 (應 0 錯誤成功打包)
 npm run build
 ```
+

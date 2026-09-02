@@ -347,10 +347,17 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
                   amountColor = 'var(--gain-color)';
                 } else if (isDiv) {
                   // 美股現金股利以毛額 (Gross) 呈現，搭配獨立之稅費欄位以對齊券商 DOI/JRN 標準
-                  const gross = t.cashAmount !== undefined
-                    ? t.cashAmount
-                    : (t.shares > 0 && t.price > 0 ? (t.shares * t.price) : (t.price || 0));
-                  const divDisplay = isUS ? gross : (gross - (t.tax || 0) - (t.fee || 0));
+                  // 台股現金股利：若已明確給定實收淨額 cashAmount，直接呈現 cashAmount；若無則以 (毛額 - 稅 - 費) 呈現，杜絕重複扣稅
+                  let divDisplay: number;
+                  if (isUS) {
+                    divDisplay = t.cashAmount !== undefined
+                      ? t.cashAmount
+                      : (t.shares > 0 && t.price > 0 ? (t.shares * t.price) : (t.price || 0));
+                  } else {
+                    divDisplay = t.cashAmount !== undefined && t.cashAmount > 0
+                      ? t.cashAmount
+                      : (t.shares > 0 && t.price > 0 ? (t.shares * t.price) - (t.tax || 0) - (t.fee || 0) : (t.price || 0));
+                  }
                   totalAmountDisplay = `+${t.currency} ${formatAmountVal(divDisplay)}`;
                   amountColor = '#fbbf24';
                 } else if (isReduction) {

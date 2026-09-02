@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { HoldingPosition, TradeRecord, PriceQuote, MarketType, AccountingView, PositionFilter } from '../types/stock';
 import { AccountingMethod, ACCOUNTING_METHOD_LABELS } from '../types/lot';
-import { Edit2, Check, ChevronDown, ChevronRight, Calendar, Lock, Unlock, RefreshCw, PlusCircle, Layers, Target } from 'lucide-react';
+import { ReceivableDividend } from '../types/dividend';
+import { calculateHoldingFxBreakdown } from '../engine/fxBreakdown';
+import { Edit2, Check, ChevronDown, ChevronRight, Calendar, Lock, Unlock, RefreshCw, PlusCircle, Layers, Target, Clock, Sparkles } from 'lucide-react';
 import { formatTimelineDividend, formatTimelineReduction } from '../utils/formatters';
 import { Tooltip } from './common/Tooltip';
 import { LotsBreakdownModal } from './LotsBreakdownModal';
 import { calculateHoldingPeriodMetrics } from '../engine/holdingPeriodEngine';
+import { HoldingSignalCapsules } from './common/HoldingSignalCapsules';
 
 interface HoldingsTableProps {
   holdings: HoldingPosition[];
@@ -22,6 +25,8 @@ interface HoldingsTableProps {
   onRefreshSymbol?: (symbol: string, market: MarketType) => void;
   onQuickTrade: (symbol: string, type: 'BUY' | 'SELL') => void;
   onInspectSecurityXirr?: (symbol: string) => void;
+  receivableDividends?: ReceivableDividend[];
+  usdToTwdRate?: number;
 }
 
 interface PriceDisplayViewProps {
@@ -172,6 +177,8 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   onRefreshSymbol,
   onQuickTrade,
   onInspectSecurityXirr,
+  receivableDividends = [],
+  usdToTwdRate = 32.0,
 }) => {
   const [localFilter, setLocalFilter] = useState<PositionFilter>('ACTIVE');
   const currentFilter = positionFilter ?? localFilter;
@@ -631,6 +638,13 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                             );
                           })()}
                         </div>
+                        {/* 技術指標多維警示膠囊與操作定調 */}
+                        {!isClosed && item.signals && item.signals.length > 0 && (
+                          <HoldingSignalCapsules
+                            signals={item.signals}
+                            directive={item.actionDirective}
+                          />
+                        )}
                       </td>
 
                       {/* 市場/幣別 */}
@@ -825,6 +839,64 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                             >
                               {isGain ? '▲' : '▼'} {Math.abs(item.unrealizedPnLPercent).toFixed(2)}%
                             </div>
+
+                            {/* 應收股利平滑補償提示 */}
+                            {(() => {
+                              const rec = receivableDividends?.find((r) => r.symbol.toUpperCase() === item.symbol.toUpperCase());
+                              if (!rec) return null;
+                              const smoothedPnL = item.unrealizedPnL + (item.currency === 'USD' ? rec.estimatedNetDividend : rec.estimatedNetDividendInTWD);
+                              return (
+                                <Tooltip
+                                  content={`💡 除息平滑補償：待發放應收股利 +${currencyPrefix}${Math.round(rec.estimatedNetDividend).toLocaleString()} (預估 ${rec.payDate} 入帳)，調整後平滑損益為 ${smoothedPnL >= 0 ? '+' : ''}${currencyPrefix}${Math.round(smoothedPnL).toLocaleString()}`}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: '0.65rem',
+                                      color: '#fbbf24',
+                                      background: 'rgba(245, 158, 11, 0.15)',
+                                      padding: '1px 5px',
+                                      borderRadius: '4px',
+                                      marginTop: '3px',
+                                      cursor: 'help',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '3px',
+                                    }}
+                                  >
+                                    <Clock size={10} />
+                                    <span>待入帳 +{currencyPrefix}{Math.round(rec.estimatedNetDividend).toLocaleString()}</span>
+                                  </div>
+                                </Tooltip>
+                              );
+                            })()}
+
+                            {/* 美股外匯匯差與本體價差拆解 Tooltip */}
+                            {item.market === 'US' && item.shares > 0 && (() => {
+                              const fx = calculateHoldingFxBreakdown(item, 32.0, usdToTwdRate || 32.0);
+                              return (
+                                <Tooltip
+                                  content={`🇺🇸 美股雙軸損益拆解 (TWD 計價)：\n• 股票本體價差：${fx.assetGainTWD >= 0 ? '+' : ''}NT$ ${fx.assetGainTWD.toLocaleString()} (${fx.assetGainPercent}%)\n• 外匯匯差波動：${fx.fxGainTWD >= 0 ? '+' : ''}NT$ ${fx.fxGainTWD.toLocaleString()} (${fx.fxGainPercent}%)\n• 總計台幣損益：${fx.totalGainTWD >= 0 ? '+' : ''}NT$ ${fx.totalGainTWD.toLocaleString()}`}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: '0.65rem',
+                                      color: '#38bdf8',
+                                      background: 'rgba(56, 189, 248, 0.15)',
+                                      padding: '1px 5px',
+                                      borderRadius: '4px',
+                                      marginTop: '3px',
+                                      cursor: 'help',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '3px',
+                                    }}
+                                  >
+                                    <Sparkles size={10} />
+                                    <span>FX 匯差 {fx.fxGainTWD >= 0 ? '+' : ''}{fx.fxGainPercent}%</span>
+                                  </div>
+                                </Tooltip>
+                              );
+                            })()}
                           </>
                         )}
                       </td>
@@ -1046,6 +1118,23 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                                   border: '1px solid rgba(59, 130, 246, 0.2)',
                                 }}
                               >
+                                {/* 0. 智慧量化操作建議方針 */}
+                                {!isClosed && item.actionDirective && (
+                                  <div style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px dashed rgba(51, 65, 85, 0.6)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <Sparkles size={14} color="#38bdf8" /> 🤖 智慧量化技術診斷與操作方針
+                                      </span>
+                                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#fbbf24' }}>
+                                        定調：{item.actionDirective.headline} (評分: {item.actionDirective.score > 0 ? `+${item.actionDirective.score}` : item.actionDirective.score})
+                                      </span>
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: '#e2e8f0', lineHeight: 1.5 }}>
+                                      💡 <strong>操作建言：</strong>{item.actionDirective.advice}
+                                    </div>
+                                  </div>
+                                )}
+
                                 {/* 1. 作戰計畫對照 */}
                                 {latestBuyWithPlan?.plan ? (
                                   <div style={{ marginBottom: isClosed ? '10px' : '0' }}>

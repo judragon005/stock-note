@@ -23,6 +23,12 @@ import {
   dbGet,
   migrateFromLocalStorageIfNeeded,
 } from './db';
+import {
+  resolveOfficialSecurityName,
+  STATIC_SECURITY_NAMES as OFFICIAL_SECURITY_NAMES,
+} from '../engine/stockNameResolver';
+
+export { resolveOfficialSecurityName, OFFICIAL_SECURITY_NAMES };
 
 export const STORAGE_KEY = 'STOCK_TRACKER_TRADES_V1';
 export const RATE_STORAGE_KEY = 'STOCK_TRACKER_USD_TWD_RATE';
@@ -185,38 +191,6 @@ export function saveBrokerAccountsToStorage(accounts: BrokerAccount[]): void {
   } catch (err) {
     logger.error('Failed to save broker accounts to storage:', err);
   }
-}
-
-export const OFFICIAL_SECURITY_NAMES: Record<string, string> = {
-  '00403A': '主動統一升級50',
-  '0050': '元大台灣50',
-  '00636': '國泰中國A50',
-  '00878': '國泰永續高股息',
-  '00919': '群益台灣精選高息',
-  '00923': '群益台ESG低碳50',
-  '00924': '復華S&P500成長',
-  '009816': '凱基台灣TOP50',
-  '00981A': '主動統一台股增長',
-  '009826': '貝萊德世界股票',
-  '2327': '國巨',
-  '2330': '台積電',
-  '2481': '強茂',
-  '2755': '揚秦',
-  '2883': '凱基金',
-  '2886': '兆豐金',
-  '2890': '永豐金',
-  '3715': '定穎投控',
-  '8105': '凌巨',
-  '9927': '泰銘',
-  'VT': 'Vanguard全世界股票ETF',
-};
-
-export function resolveOfficialSecurityName(symbol: string, fallbackName?: string): string {
-  const cleanSymbol = symbol.trim().toUpperCase();
-  if (OFFICIAL_SECURITY_NAMES[cleanSymbol]) {
-    return OFFICIAL_SECURITY_NAMES[cleanSymbol];
-  }
-  return fallbackName || cleanSymbol;
 }
 
 export function loadAccountingViewFromStorage(): AccountingView {
@@ -970,7 +944,7 @@ export function saveHistoricalFxToStorage(fxMap: HistoricalFxRateMap): void {
   try {
     localStorage.setItem(HISTORICAL_FX_STORAGE_KEY, JSON.stringify(fxMap));
     if (typeof indexedDB !== 'undefined' && fxMap && Object.keys(fxMap).length > 0) {
-      const items = Object.entries(fxMap).map(([pair, data]) => ({ pair, fxRates: data }));
+      const items = [{ pair: 'USD/TWD', fxRates: fxMap }];
       dbClear('historicalFx')
         .then(() => dbBatchPut('historicalFx', items))
         .catch((err) => logger.error('Failed to save historical fx to IndexedDB:', err));

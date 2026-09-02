@@ -1,6 +1,7 @@
 import React from 'react';
 import { FrictionSummary, BrokerAccount } from '../types/stock';
-import { X, Sparkles, TrendingDown, Award, AlertCircle, Percent, Coins, Receipt } from 'lucide-react';
+import { TaxComplianceStatus, TwNhiAlertItem } from '../types/dividend';
+import { X, TrendingDown, Award, AlertCircle, Percent, Coins, Receipt, ShieldAlert, FileText } from 'lucide-react';
 
 interface FrictionCenterModalProps {
   isOpen: boolean;
@@ -8,6 +9,7 @@ interface FrictionCenterModalProps {
   frictionSummary?: FrictionSummary;
   accounts: BrokerAccount[];
   selectedAccountId: string;
+  taxComplianceStatus?: TaxComplianceStatus;
 }
 
 export const FrictionCenterModal: React.FC<FrictionCenterModalProps> = ({
@@ -16,6 +18,7 @@ export const FrictionCenterModal: React.FC<FrictionCenterModalProps> = ({
   frictionSummary,
   accounts,
   selectedAccountId,
+  taxComplianceStatus,
 }) => {
   if (!isOpen || !frictionSummary) return null;
 
@@ -24,164 +27,294 @@ export const FrictionCenterModal: React.FC<FrictionCenterModalProps> = ({
     : accounts.find((a) => a.id === selectedAccountId);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-slate-100">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/90">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
-              <Coins className="w-5 h-5" />
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        background: 'rgba(0, 0, 0, 0.75)',
+        backdropFilter: 'blur(8px)',
+        animation: 'fadeIn 0.2s ease-in-out',
+      }}
+    >
+      <div
+        style={{
+          background: 'rgba(15, 23, 42, 0.95)',
+          border: '1px solid rgba(51, 65, 85, 0.8)',
+          borderRadius: '18px',
+          width: '100%',
+          maxWidth: '780px',
+          maxHeight: '90vh',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
+          overflow: 'hidden',
+          color: '#ffffff',
+        }}
+      >
+        {/* 頂部標頭 (Header) */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px 20px',
+            borderBottom: '1px solid rgba(51, 65, 85, 0.6)',
+            background: 'rgba(15, 23, 42, 0.9)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                background: 'rgba(245, 158, 11, 0.15)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                color: '#fbbf24',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Coins size={20} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold tracking-wide">交易摩擦成本深度分析儀</h2>
-                <span className="px-2 py-0.5 text-[11px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#ffffff' }}>
+                  交易摩擦成本與稅務合規分析儀
+                </h2>
+                <span
+                  style={{
+                    fontSize: '0.72rem',
+                    padding: '2px 8px',
+                    borderRadius: '10px',
+                    background: 'rgba(59, 130, 246, 0.2)',
+                    color: '#60a5fa',
+                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                    fontWeight: 600,
+                  }}
+                >
                   {currentAccount ? currentAccount.name : '全帳戶合併透視'}
                 </span>
               </div>
-              <p className="text-xs text-slate-400">穿透交易手續費、證券交易稅與券商退佣折讓對投資報酬之長期影響</p>
+              <p style={{ margin: '2px 0 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>
+                穿透手續費、證券交易稅、二代健保 (2.11%) 與美股海外所得 (AMT) 稅階衝擊
+              </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            style={{
+              background: 'rgba(51, 65, 85, 0.4)',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '6px',
+              color: '#94a3b8',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              transition: 'all 0.2s',
+            }}
           >
-            <X className="w-5 h-5" />
+            <X size={18} />
           </button>
         </div>
 
-        {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1 custom-scrollbar">
+        {/* 內容主體 (Content Body) */}
+        <div style={{ padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '18px' }}>
           {/* 4 大核心發光指標卡 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
             {/* 1. 歷史買進手續費 */}
-            <div className="p-4 bg-slate-800/60 border border-slate-700/70 rounded-xl">
-              <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+            <div style={{ padding: '14px', background: 'rgba(30, 41, 59, 0.6)', border: '1px solid rgba(51, 65, 85, 0.7)', borderRadius: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '4px' }}>
                 <span>累計買進手續費</span>
-                <Receipt className="w-3.5 h-3.5 text-blue-400" />
+                <Receipt size={14} color="#60a5fa" />
               </div>
-              <div className="text-lg font-bold text-slate-100">
+              <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff' }}>
                 NT$ {frictionSummary.totalBuyFee.toLocaleString()}
               </div>
-              <div className="text-[10px] text-slate-500 mt-1">建倉交易實扣佣金</div>
+              <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '4px' }}>建倉交易實扣佣金</div>
             </div>
 
             {/* 2. 歷史賣出稅費 */}
-            <div className="p-4 bg-slate-800/60 border border-slate-700/70 rounded-xl">
-              <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+            <div style={{ padding: '14px', background: 'rgba(30, 41, 59, 0.6)', border: '1px solid rgba(51, 65, 85, 0.7)', borderRadius: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '4px' }}>
                 <span>累計賣出稅費</span>
-                <TrendingDown className="w-3.5 h-3.5 text-rose-400" />
+                <TrendingDown size={14} color="#f43f5e" />
               </div>
-              <div className="text-lg font-bold text-slate-100">
+              <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff' }}>
                 NT$ {(frictionSummary.totalSellFee + frictionSummary.totalSellTax).toLocaleString()}
               </div>
-              <div className="text-[10px] text-slate-500 mt-1">
+              <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '4px' }}>
                 稅 {frictionSummary.totalSellTax.toLocaleString()} / 費 {frictionSummary.totalSellFee.toLocaleString()}
               </div>
             </div>
 
-            {/* 3. 券商折讓累計省下金額 */}
-            <div className="p-4 bg-emerald-950/30 border border-emerald-500/40 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.1)]">
-              <div className="flex items-center justify-between text-xs text-emerald-400 font-semibold mb-1">
+            {/* 3. 券商折讓已省下 */}
+            <div style={{ padding: '14px', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.35)', borderRadius: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#34d399', fontWeight: 600, marginBottom: '4px' }}>
                 <span>券商折讓已省下</span>
-                <Award className="w-3.5 h-3.5 text-emerald-400" />
+                <Award size={14} color="#34d399" />
               </div>
-              <div className="text-lg font-bold text-emerald-300">
+              <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: '#34d399' }}>
                 +NT$ {frictionSummary.totalFeeSavedByDiscount.toLocaleString()}
               </div>
-              <div className="text-[10px] text-emerald-500/80 mt-1">基準：法定牌告 20元低消+0.1425%</div>
+              <div style={{ fontSize: '0.68rem', color: '#059669', marginTop: '4px' }}>基準：法定牌告 20元+0.1425%</div>
             </div>
 
-            {/* 4. 預估未來出清成本 */}
-            <div className="p-4 bg-amber-950/20 border border-amber-500/30 rounded-xl">
-              <div className="flex items-center justify-between text-xs text-amber-400 font-semibold mb-1">
+            {/* 4. 預估出清摩擦成本 */}
+            <div style={{ padding: '14px', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.35)', borderRadius: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#fbbf24', fontWeight: 600, marginBottom: '4px' }}>
                 <span>預估出清摩擦成本</span>
-                <Percent className="w-3.5 h-3.5 text-amber-400" />
+                <Percent size={14} color="#fbbf24" />
               </div>
-              <div className="text-lg font-bold text-amber-300">
+              <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: '#fbbf24' }}>
                 NT$ {frictionSummary.totalEstimatedFutureFriction.toLocaleString()}
               </div>
-              <div className="text-[10px] text-amber-500/80 mt-1">
-                預估稅 {frictionSummary.totalEstimatedFutureTax.toLocaleString()} (債券ETF 0%) / 費 {frictionSummary.totalEstimatedFutureFee.toLocaleString()}
+              <div style={{ fontSize: '0.68rem', color: '#d97706', marginTop: '4px' }}>
+                預估稅 {frictionSummary.totalEstimatedFutureTax.toLocaleString()} / 費 {frictionSummary.totalEstimatedFutureFee.toLocaleString()}
               </div>
             </div>
           </div>
 
-          {/* 摩擦成本衝擊度分析 */}
-          <div className="p-5 bg-slate-800/40 border border-slate-700/80 rounded-xl space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-blue-400" />
-                <span className="text-sm font-semibold text-slate-200">摩擦成本佔總資產衝擊度</span>
+          {/* 稅階合規與海外所得進度條 (Tax Compliance & AMT Progress) */}
+          {taxComplianceStatus && (
+            <div
+              style={{
+                padding: '16px',
+                background: 'rgba(30, 41, 59, 0.7)',
+                border: '1px solid rgba(51, 65, 85, 0.8)',
+                borderRadius: '14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '14px',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <ShieldAlert size={18} color="#f59e0b" />
+                  <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: '#ffffff' }}>
+                    {taxComplianceStatus.usOverseasIncome.taxYear} 年度海外所得與二代健保合規進度
+                  </h3>
+                </div>
+                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>事前稅階預警</span>
               </div>
-              <span className="text-sm font-bold text-blue-400">
-                {frictionSummary.frictionImpactPercent.toFixed(2)}%
-              </span>
-            </div>
 
-            {/* 進度條 */}
-            <div className="w-full h-2.5 bg-slate-700/60 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-emerald-500 via-blue-500 to-amber-500 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, Math.max(2, frictionSummary.frictionImpactPercent * 20))}%` }}
-              />
-            </div>
+              {/* 美股海外所得進度 */}
+              <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: '12px 14px', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem', flexWrap: 'wrap', gap: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#cbd5e1', fontWeight: 600 }}>
+                    <FileText size={14} color="#60a5fa" />
+                    <span>美股海外所得申報門檻 (基本所得額)</span>
+                  </div>
+                  <div style={{ color: '#94a3b8' }}>
+                    當年度累積：
+                    <span className="mono" style={{ fontWeight: 700, color: '#ffffff' }}>
+                      NT$ {taxComplianceStatus.usOverseasIncome.totalOverseasIncomeTWD.toLocaleString()}
+                    </span>{' '}
+                    / 門檻 NT$ 1,000,000
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 pt-2 text-xs text-slate-400">
-              <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
-                <div className="text-slate-300 font-medium mb-0.5">歷史總摩擦支出</div>
-                <div className="text-sm font-bold text-slate-100">
-                  NT$ {frictionSummary.totalRealizedFriction.toLocaleString()}
+                {/* 100 萬申報門檻進度條 */}
+                <div style={{ width: '100%', height: '8px', background: 'rgba(51, 65, 85, 0.6)', borderRadius: '6px', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${Math.min(100, taxComplianceStatus.usOverseasIncome.filingProgressPercent)}%`,
+                      background: taxComplianceStatus.usOverseasIncome.isFilingRequired
+                        ? '#ef4444'
+                        : 'linear-gradient(90deg, #3b82f6 0%, #10b981 100%)',
+                      borderRadius: '6px',
+                      transition: 'width 0.5s ease',
+                    }}
+                  />
                 </div>
-              </div>
-              <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
-                <div className="text-slate-300 font-medium mb-0.5">台股二代健保 (2.11%)</div>
-                <div className="text-sm font-bold text-amber-400">
-                  NT$ {(frictionSummary.totalTWDividendTax ?? 0).toLocaleString()}
-                </div>
-              </div>
-              <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
-                <div className="text-slate-300 font-medium mb-0.5">美股股息 30% 預扣</div>
-                <div className="text-sm font-bold text-rose-400">
-                  USD {(frictionSummary.totalUSDividendTax ?? 0).toLocaleString()}
-                </div>
-              </div>
-              <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
-                <div className="text-slate-300 font-medium mb-0.5">全週期預期摩擦</div>
-                <div className="text-sm font-bold text-slate-100">
-                  NT$ {(frictionSummary.totalRealizedFriction + frictionSummary.totalEstimatedFutureFriction).toLocaleString()}
-                </div>
-              </div>
-              <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
-                <div className="text-slate-300 font-medium mb-0.5">折讓節省比率</div>
-                <div className="text-sm font-bold text-emerald-400">
-                  {frictionSummary.totalBuyFee + frictionSummary.totalFeeSavedByDiscount > 0
-                    ? `${((frictionSummary.totalFeeSavedByDiscount / (frictionSummary.totalBuyFee + frictionSummary.totalFeeSavedByDiscount)) * 100).toFixed(1)}%`
-                    : '0%'}
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {/* 專業投資建議與優化指南 */}
-          <div className="p-4 rounded-xl bg-blue-950/20 border border-blue-500/30 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-            <div className="text-xs text-slate-300 space-y-1">
-              <div className="font-semibold text-blue-300">摩擦成本優化與法規指南</div>
-              <p className="leading-relaxed text-slate-400">
-                1. <strong>台股低消陷阱與折讓基準</strong>：法定標準牌告手續費設有 NT$ 20 低消。單筆小額或零股買進若使用 2.8折/2折且低消 1 元之券商，每筆可直接省下 NT$ 19 以上之低消溢繳費用。<br />
-                2. <strong>台股證券交易稅率分層</strong>：普通股票賣出課徵 0.3%；現股當沖課徵 0.15%；股票型 ETF 課徵 0.1%；債券型 ETF（代碼以 B 結尾）依法停徵證交稅（0%）。<br />
-                3. <strong>美股投資摩擦全貌</strong>：海外券商交易免手續費，但現金股利自動預扣 30% 稅額（W-8BEN 預扣）；賣出時僅收取微量 SEC 規費 (0.00278%) 與 FINRA TAF。
-              </p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', color: '#94a3b8' }}>
+                  <span>
+                    進度：<b>{taxComplianceStatus.usOverseasIncome.filingProgressPercent}%</b>{' '}
+                    {taxComplianceStatus.usOverseasIncome.isFilingRequired && '⚠️ 達 100 萬需於 5 月綜所稅申報基本所得額'}
+                  </span>
+                  <span>最低稅負免稅額 (750 萬) 進度：<b>{taxComplianceStatus.usOverseasIncome.amtProgressPercent}%</b></span>
+                </div>
+              </div>
+
+              {/* 台股二代健保除息預警清單 */}
+              {taxComplianceStatus.twNhiAlerts.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <AlertCircle size={14} color="#f59e0b" />
+                    <span>即將除息之台股二代健保 (2.11%) 預警清單</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '8px' }}>
+                    {taxComplianceStatus.twNhiAlerts.map((alert: TwNhiAlertItem) => (
+                      <div
+                        key={alert.symbol}
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          fontSize: '0.75rem',
+                          background: alert.triggersNhi ? 'rgba(245, 158, 11, 0.15)' : 'rgba(15, 23, 42, 0.6)',
+                          border: alert.triggersNhi ? '1px solid rgba(245, 158, 11, 0.35)' : '1px solid rgba(51, 65, 85, 0.6)',
+                          color: alert.triggersNhi ? '#fef3c7' : '#94a3b8',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+                          <span>{alert.symbol} {alert.name}</span>
+                          <span>預估股利 NT$ {alert.grossDividendTWD.toLocaleString()}</span>
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: '#cbd5e1', marginTop: '4px' }}>{alert.description}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 專業法規與摩擦成本優化指南 */}
+          <div
+            style={{
+              padding: '14px 16px',
+              borderRadius: '12px',
+              background: 'rgba(59, 130, 246, 0.1)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '10px',
+            }}
+          >
+            <AlertCircle size={18} color="#60a5fa" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div style={{ fontSize: '0.75rem', color: '#cbd5e1', lineHeight: 1.5 }}>
+              <b style={{ color: '#93c5fd' }}>摩擦成本優化與法規指南：</b><br />
+              1. <strong>台股手續費低消</strong>：標準牌告手續費設有 NT$ 20 低消。小額零股建議使用具備 1 元低消與 2.8 折/2 折券商。<br />
+              2. <strong>台股證券交易稅率分層</strong>：普通股票 0.3%；股票 ETF 0.1%；債券型 ETF（以 B 結尾）依法停徵證交稅（0%）。<br />
+              3. <strong>美股投資摩擦</strong>：海外券商免手續費，現金股利自動預扣 30% IRS 預扣稅；賣出時僅收取微量 SEC / FINRA 規費。
             </div>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-3 border-t border-slate-800 bg-slate-900/90 flex justify-end">
+        {/* 底部按鈕 (Footer) */}
+        <div style={{ padding: '12px 20px', borderTop: '1px solid rgba(51, 65, 85, 0.6)', background: 'rgba(15, 23, 42, 0.9)', display: 'flex', justifyContent: 'flex-end' }}>
           <button
             onClick={onClose}
-            className="px-5 py-2 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors"
+            style={{
+              padding: '8px 20px',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              background: '#334155',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
           >
             關閉
           </button>

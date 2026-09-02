@@ -11,6 +11,7 @@ import {
 import { bankersRound } from '../utils/formatters';
 import { isBusinessDay } from './holidayCalendar';
 import { estimatePaymentDate } from './receivableDividendEngine';
+import { resolveEffectiveDividendTaxAndNet } from './taxComplianceEngine';
 
 export interface AccountBalanceSummary {
   accountId: string;
@@ -848,18 +849,14 @@ export function syncTradesWithCashTransactions(
       amount = isUS ? bankersRound(rawNet, 2) : Math.round(rawNet);
     } else if (trade.type === 'DIVIDEND') {
       category = 'DIVIDEND_PAYOUT';
-      // 現金股利入帳：若已明確設定實收金額 (cashAmount)，優先以實收金額入帳；否則依 (shares * price - tax) 計算
-      if (trade.cashAmount !== undefined && trade.cashAmount > 0) {
-        amount = isUS ? bankersRound(trade.cashAmount, 2) : Math.floor(trade.cashAmount);
+      if (isUS) {
+        // 美股現金股息流水統一記錄為稅前毛額 (Gross)，以對齊美股券商 DOI/JRN 記帳機制
+        const rawGross = (trade.shares && trade.price) ? trade.shares * trade.price : (trade.cashAmount || 0);
+        amount = bankersRound(rawGross, 2);
       } else {
-        const rawGross = (trade.shares && trade.price) ? trade.shares * trade.price : 0;
-        const gross = isUS ? bankersRound(rawGross, 2) : Math.floor(rawGross);
-        if (isUS) {
-          amount = gross;
-        } else {
-          const tax = trade.tax || 0;
-          amount = gross - tax;
-        }
+        // 台股現金股息流水記錄為實收淨額 (支援同次除權息配股合併二代健保扣繳)
+        const res = resolveEffectiveDividendTaxAndNet(trade, trades);
+        amount = Math.floor(res.netCash);
       }
     } else if (trade.type === 'CAPITAL_REDUCTION' && trade.cashAmount && trade.cashAmount > 0) {
       category = 'CAPITAL_RETURN';

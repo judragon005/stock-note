@@ -20,6 +20,9 @@ import { processLots } from './lotEngine';
 import { resolveOfficialSecurityName } from '../utils/storage';
 import { calculateSecurityXirr } from './xirrCalculator';
 import { buildHoldingRiskMetrics } from './riskAlertEngine';
+import { computeTechnicalIndicators, extractHoldingSignals } from './technicalIndicatorEngine';
+import { evaluateHoldingActionDirective } from './holdingAdvisorEngine';
+import { DailyCandle } from '../types/signal';
 
 export interface CalculationResult {
   holdings: HoldingPosition[];
@@ -428,7 +431,8 @@ export function calculateHoldingsAndSummary(
   accounts: BrokerAccount[] = [],
   selectedAccountId: 'ALL' | string = 'ALL',
   quotes?: Record<string, PriceQuote>,
-  accountingMethod: AccountingMethod = 'MOVING_AVERAGE'
+  accountingMethod: AccountingMethod = 'MOVING_AVERAGE',
+  historicalCandlesMap?: Record<string, DailyCandle[]>
 ): CalculationResult {
   const accountMap = new Map<string, BrokerAccount>();
   for (const acc of accounts) {
@@ -767,48 +771,64 @@ export function calculateHoldingsAndSummary(
       ? buildHoldingRiskMetrics(currentPrice, item.latestPlan, avgCost)
       : undefined;
 
-    holdings.push({
-      symbol: item.symbol,
-      name: item.name,
-      market: item.market,
-      currency: item.currency,
-      shares: item.shares,
-      originalBuyShares: item.originalBuyShares,
-      avgCost,
-      totalCostBasis: finalCostBasis,
-      adjustedCostBasis,
-      currentPrice,
-      marketValue,
-      grossMarketValue,
-      estimatedSellTax,
-      estimatedSellFee,
-      netMarketValue,
-      unrealizedPnL,
-      unrealizedPnLPercent,
-      unrealizedPnLBroker,
-      unrealizedPnLBrokerPercent,
-      realizedPnL: finalRealizedPnL,
-      totalDividends: item.totalDividends,
-      totalCapitalReturned: item.totalCapitalReturned,
-      totalStockDividendsShares: item.totalStockDividendsShares,
-      totalReturnPnL,
-      totalReturnPercent,
-      yieldOnCostPercent,
-      xirrPercent: secXirr.ratePercent,
-      isXirrAnnualized: secXirr.isAnnualized,
-      todaysPnL,
-      todaysPnLPercent,
-      todaysChange,
-      breakevenPrice,
-      exitPrice: item.lastExitPrice,
-      lastTradeDate: item.lastTradeDate,
-      isClosed,
-      accountingMethod,
-      openLotsCount,
-      plan: item.latestPlan,
-      riskMetrics,
-    });
-  }
+      // 技術指標與操作建議評定
+      let signals: import('../types/signal').HoldingSignal[] | undefined = undefined;
+      let actionDirective: import('../types/signal').HoldingActionDirective | undefined = undefined;
+
+      const candles = historicalCandlesMap ? historicalCandlesMap[item.symbol] : undefined;
+      if (candles && candles.length > 0 && currentPrice > 0) {
+        const indicators = computeTechnicalIndicators(candles, currentPrice);
+        signals = extractHoldingSignals(currentPrice, indicators);
+        if (signals.length > 0) {
+          actionDirective = evaluateHoldingActionDirective(signals, indicators);
+        }
+      }
+
+      holdings.push({
+        symbol: item.symbol,
+        name: item.name,
+        market: item.market,
+        currency: item.currency,
+        shares: item.shares,
+        originalBuyShares: item.originalBuyShares,
+        avgCost,
+        totalCostBasis: finalCostBasis,
+        adjustedCostBasis,
+        currentPrice,
+        marketValue,
+        grossMarketValue,
+        estimatedSellTax,
+        estimatedSellFee,
+        netMarketValue,
+        unrealizedPnL,
+        unrealizedPnLPercent,
+        unrealizedPnLBroker,
+        unrealizedPnLBrokerPercent,
+        realizedPnL: finalRealizedPnL,
+        totalDividends: item.totalDividends,
+        totalCapitalReturned: item.totalCapitalReturned,
+        totalStockDividendsShares: item.totalStockDividendsShares,
+        totalReturnPnL,
+        totalReturnPercent,
+        yieldOnCostPercent,
+        xirrPercent: secXirr.ratePercent,
+        isXirrAnnualized: secXirr.isAnnualized,
+        todaysPnL,
+        todaysPnLPercent,
+        todaysChange,
+        breakevenPrice,
+        exitPrice: item.lastExitPrice,
+        lastTradeDate: item.lastTradeDate,
+        isClosed,
+        accountingMethod,
+        openLotsCount,
+        lots: lotEngineResult ? lotEngineResult.openLots.filter((l) => l.symbol === item.symbol) : [],
+        plan: item.latestPlan,
+        riskMetrics,
+        signals,
+        actionDirective,
+      });
+    }
 
   holdings.sort((a, b) => {
     const marketWeightA = a.market === 'TW' ? 0 : 1;

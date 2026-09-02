@@ -1,7 +1,7 @@
 import React from 'react';
-import { PieChart, TrendingUp, History, Settings, Wallet } from 'lucide-react';
+import { PieChart, TrendingUp, History, Settings, Wallet, Coins } from 'lucide-react';
 
-export type WorkspaceTabKey = 'portfolio' | 'growth' | 'cash' | 'ledger' | 'settings' | 'friction';
+export type WorkspaceTabKey = 'portfolio' | 'growth' | 'dividend' | 'cash' | 'ledger' | 'settings' | 'friction';
 
 interface WorkspaceTabsProps {
   activeTab: WorkspaceTabKey;
@@ -9,6 +9,8 @@ interface WorkspaceTabsProps {
   holdingsCount: number;
   tradesCount: number;
   accountsCount: number;
+  dividendTradesCount?: number;
+  receivableDividendsCount?: number;
   cashTransactionsCount?: number;
   totalSavedFriction?: number;
 }
@@ -19,6 +21,8 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
   holdingsCount,
   tradesCount,
   accountsCount,
+  dividendTradesCount = 0,
+  receivableDividendsCount = 0,
   cashTransactionsCount = 0,
   totalSavedFriction = 0,
 }) => {
@@ -45,6 +49,13 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
       icon: <TrendingUp size={16} />,
       badge: '全歷史折線',
       badgeColor: '#10b981',
+    },
+    {
+      key: 'dividend',
+      label: '股利日誌與現金流',
+      icon: <Coins size={16} />,
+      badge: receivableDividendsCount > 0 ? `${receivableDividendsCount} 待發放` : `${dividendTradesCount} 筆入帳`,
+      badgeColor: receivableDividendsCount > 0 ? '#f59e0b' : '#10b981',
     },
     {
       key: 'cash',

@@ -137,6 +137,70 @@ describe('公司行動智慧掃描引擎 (Corporate Action Scanner)', () => {
     expect(results[0].isAlreadyRecorded).toBe(true);
   });
 
+  it('永豐金除權息實務：智慧掃描同時偵測到配息 1.1 與配股 0.2 時，應合併計算二代健保 850 元並自動自現金股利代扣', async () => {
+    const trades: TradeRecord[] = [
+      {
+        id: 'trade-yf-1',
+        date: '2026-01-10',
+        symbol: '2890',
+        name: '永豐金',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        shares: 31000,
+        price: 20,
+        fee: 0,
+        tax: 0,
+        createdAt: 1,
+      },
+    ];
+
+    const mockFetcher = async (symbol: string) => {
+      if (symbol === '2890') {
+        return [
+          {
+            symbol: '2890',
+            market: 'TW' as const,
+            type: 'DIVIDEND' as const,
+            date: '2026-07-15',
+            payDate: '2026-08-20',
+            price: 1.1,
+            description: '現金股利 1.1 元',
+          },
+          {
+            symbol: '2890',
+            market: 'TW' as const,
+            type: 'STOCK_DIVIDEND' as const,
+            date: '2026-07-15',
+            payDate: '2026-09-05',
+            ratio: 0.02, // 每千股配 20 股 (0.2 元)
+            price: 0,
+            description: '股票股利 0.2 元 (配股率 0.02)',
+          },
+        ];
+      }
+      return [];
+    };
+
+    const actions = await scanCorporateActions(trades, mockFetcher);
+
+    expect(actions).toHaveLength(2);
+
+    const cashAction = actions.find((a) => a.type === 'DIVIDEND');
+    const stockAction = actions.find((a) => a.type === 'STOCK_DIVIDEND');
+
+    expect(cashAction).toBeDefined();
+    expect(stockAction).toBeDefined();
+
+    // 股票股利：獲配 620 股 (31,000 * 0.02)
+    expect(stockAction!.estimatedSharesChange).toBe(620);
+    expect(stockAction!.payDate).toBe('2026-09-05');
+
+    // 現金股利：毛額 34,100 - 合併健保 850 = 33,250
+    expect(cashAction!.estimatedCashAmount).toBe(33250);
+    expect(cashAction!.payDate).toBe('2026-08-20');
+  });
+
   it('基準日前未持有該股票 (持股為 0) 時應自動過濾或排除', async () => {
     const trades: TradeRecord[] = [
       {
@@ -548,5 +612,435 @@ describe('公司行動智慧掃描引擎 (Corporate Action Scanner)', () => {
       // 應被安全過濾閘門剔除，結果為空
       expect(results).toHaveLength(0);
     });
+
+    it('應為現金股利 (DIVIDEND) 事件自動精確注入預估發放日 payDate 欄位', async () => {
+      const trades: TradeRecord[] = [
+        {
+          id: '1',
+          date: '2026-01-01',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 2000,
+          price: 900,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: '2',
+          date: '2026-01-01',
+          symbol: 'AAPL',
+          name: 'Apple',
+          market: 'US',
+          currency: 'USD',
+          type: 'BUY',
+          shares: 50,
+          price: 200,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+      ];
+
+      const mockFetcher = async (symbol: string) => {
+        if (symbol === '2330') {
+          return [
+            {
+              symbol: '2330',
+              market: 'TW' as const,
+              type: 'DIVIDEND' as const,
+              date: '2026-09-16',
+              price: 7.0,
+              payDate: '2026-10-08',
+              description: '季度現金股利每股 7.0 TWD',
+            },
+          ];
+        }
+        if (symbol === 'AAPL') {
+          return [
+            {
+              symbol: 'AAPL',
+              market: 'US' as const,
+              type: 'DIVIDEND' as const,
+              date: '2026-08-10',
+              price: 0.25,
+              description: 'Quarterly Cash Dividend',
+            },
+          ];
+        }
+        return [];
+      };
+
+      const results = await scanCorporateActions(trades, mockFetcher);
+      expect(results).toHaveLength(2);
+
+      const tsmc = results.find((r) => r.symbol === '2330');
+      expect(tsmc).toBeDefined();
+      expect(tsmc?.date).toBe('2026-09-16');
+      expect(tsmc?.exDate).toBe('2026-09-16');
+      expect(tsmc?.payDate).toBe('2026-10-08'); // 官方指定發放日
+      expect(tsmc?.sharesHeldOnDate).toBe(2000);
+
+      const aapl = results.find((r) => r.symbol === 'AAPL');
+      expect(aapl).toBeDefined();
+      expect(aapl?.date).toBe('2026-08-10');
+      expect(aapl?.exDate).toBe('2026-08-10');
+      expect(aapl?.payDate).toBeDefined(); // 美股推算發放日 (2026-08-31)
+      expect(aapl?.payDate).toBe('2026-08-31');
+      expect(aapl?.sharesHeldOnDate).toBe(50);
+    });
+
+    it('真實場景：9927 泰銘減資 28.28% 後經後續交易庫存為 10,000 股，2026-10-01 除息應精準計算 50,000 元且發放日為 2026-10-29', async () => {
+      const trades: TradeRecord[] = [
+        // 1. 2024 年買進 10,000 股
+        {
+          id: 'tm-buy-1',
+          date: '2024-05-10',
+          symbol: '9927',
+          name: '泰銘',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 10000,
+          price: 55,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        // 2. 2025-09-15 現金減資 28.28% (縮減 2,828 股，剩餘 7,172 股)
+        {
+          id: 'tm-reduct',
+          date: '2025-09-15',
+          symbol: '9927',
+          name: '泰銘',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'CAPITAL_REDUCTION',
+          shares: 2828,
+          price: 2.828,
+          ratio: 0.2828,
+          cashAmount: 28280,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+        // 3. 減資後再買進 2,828 股補正，使持股回升至 10,000 股
+        {
+          id: 'tm-buy-2',
+          date: '2025-11-20',
+          symbol: '9927',
+          name: '泰銘',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 2828,
+          price: 60,
+          fee: 0,
+          tax: 0,
+          createdAt: 3,
+        },
+      ];
+
+      const mockFetcher = async (symbol: string) => {
+        if (symbol === '9927') {
+          return [
+            {
+              symbol: '9927',
+              market: 'TW' as const,
+              type: 'DIVIDEND' as const,
+              date: '2026-10-01',
+              payDate: '2026-10-29',
+              price: 5.0,
+              description: '年度現金股利每股 5.0 TWD (預計 2026-10-29 發放入帳)',
+            },
+          ];
+        }
+        return [];
+      };
+
+      const results = await scanCorporateActions(trades, mockFetcher);
+      expect(results).toHaveLength(1);
+
+      const tmDiv = results[0];
+      expect(tmDiv.symbol).toBe('9927');
+      expect(tmDiv.date).toBe('2026-10-01');
+      expect(tmDiv.exDate).toBe('2026-10-01');
+      expect(tmDiv.payDate).toBe('2026-10-29'); // 官方校準之發放日
+      expect(tmDiv.sharesHeldOnDate).toBe(10000); // 減資與後續交易精準合計 10,000 股
+      expect(tmDiv.taxDeduction).toBe(1055); // 50,000 * 2.11% = 1,055 元健保費
+      expect(tmDiv.estimatedCashAmount).toBe(48945); // 50,000 - 1,055 = 48,945 元實收
+    });
+
+    it('真實場景：2890 永豐金 2026 年同時除權 (每千股 20 股) 與除息 (每股 1.1 元)，持股 31,000 股應正確掃描配股 620 股並精確扣除二代健保實收 33,250 元', async () => {
+      const trades: TradeRecord[] = [
+        {
+          id: 'sinopac-buy-1',
+          date: '2026-01-10',
+          symbol: '2890',
+          name: '永豐金',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 31000,
+          price: 24.5,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+      ];
+
+      const results = await scanCorporateActions(trades);
+      expect(results.length).toBeGreaterThanOrEqual(2);
+
+      const stockDiv = results.find((r) => r.type === 'STOCK_DIVIDEND' && r.date === '2026-07-23');
+      expect(stockDiv).toBeDefined();
+      expect(stockDiv?.symbol).toBe('2890');
+      expect(stockDiv?.sharesHeldOnDate).toBe(31000);
+      expect(stockDiv?.estimatedSharesChange).toBe(620); // 31,000 * 0.02 = 620 股
+      expect(stockDiv?.payDate).toBe('2026-08-24');
+
+      const cashDiv = results.find((r) => r.type === 'DIVIDEND' && r.date === '2026-07-23');
+      expect(cashDiv).toBeDefined();
+      expect(cashDiv?.symbol).toBe('2890');
+      expect(cashDiv?.sharesHeldOnDate).toBe(31000);
+      expect(cashDiv?.price).toBe(1.1);
+      expect(cashDiv?.taxDeduction).toBe(850); // (34,100 + 6,200) * 2.11% = 850 元
+      expect(cashDiv?.estimatedCashAmount).toBe(33250); // 34,100 - 850 = 33,250 元
+      expect(cashDiv?.payDate).toBe('2026-08-20');
+    }, 15000);
+
+    it('防禦驗證：當手動刪除特定季配息後，重掃時該除息事件應精準標記為待補登 (isAlreadyRecorded: false)，不被其他季度混淆', async () => {
+      const trades: TradeRecord[] = [
+        {
+          id: 'tsmc-buy',
+          date: '2024-01-01',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 600,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        // 帳本中保留 Q1 配息 (2024-03-18, 每股 3.5 元)
+        {
+          id: 'tsmc-div-q1',
+          date: '2024-03-18',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'DIVIDEND',
+          shares: 1000,
+          price: 3.5,
+          fee: 0,
+          tax: 0,
+          cashAmount: 3500,
+          createdAt: 2,
+        },
+        // 假設使用者刪除了 Q2 配息 (2024-06-13, 每股 4.0 元)
+      ];
+
+      const mockFetcher = async (sym: string) => {
+        if (sym === '2330') {
+          return [
+            {
+              symbol: '2330',
+              market: 'TW' as const,
+              type: 'DIVIDEND' as const,
+              date: '2024-03-18',
+              price: 3.5,
+              description: '2023Q3 現金股利每股 3.5 元',
+            },
+            {
+              symbol: '2330',
+              market: 'TW' as const,
+              type: 'DIVIDEND' as const,
+              date: '2024-06-13',
+              price: 4.0,
+              description: '2023Q4 現金股利每股 4.0 元',
+            },
+          ];
+        }
+        return [];
+      };
+
+      const results = await scanCorporateActions(trades, mockFetcher);
+      expect(results).toHaveLength(2);
+
+      const q1Event = results.find((r) => r.date === '2024-03-18');
+      const q2Event = results.find((r) => r.date === '2024-06-13');
+
+      expect(q1Event?.isAlreadyRecorded).toBe(true); // 已存在帳本
+      expect(q2Event?.isAlreadyRecorded).toBe(false); // 被刪除後應正確識別為待補登！
+    });
+
+    it('法規合規驗證：除息日當天買進不享有該次配息，除息日前一日在倉者方享有配息', async () => {
+      const trades: TradeRecord[] = [
+        {
+          id: 'ex-day-buy',
+          date: '2026-08-18', // 於 00878 除息日當天買進
+          symbol: '00878',
+          name: '國泰永續高股息',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 2000,
+          price: 22.0,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+      ];
+
+      // 00878 於 2026-08-18 除息，因除息日前一日 (2026-08-17) 在倉為 0，不得享有該次配息
+      const results = await scanCorporateActions(trades);
+      const div00878 = results.find((r) => r.symbol === '00878' && r.date === '2026-08-18');
+      expect(div00878).toBeUndefined();
+    });
+
+    it('真實場景：9927 泰銘 2025 年減資 28.28% 後買回，2026 年配息 5.0 元應精確以 10,000 股計算', async () => {
+      const trades: TradeRecord[] = [
+        {
+          id: 'trade-9927-1',
+          date: '2025-09-12',
+          symbol: '9927',
+          name: '泰銘',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 10000,
+          price: 58.7,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 'trade-9927-2',
+          date: '2025-12-17',
+          symbol: '9927',
+          name: '泰銘',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 829,
+          price: 68.3,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+        {
+          id: 'trade-9927-3',
+          date: '2025-12-17',
+          symbol: '9927',
+          name: '泰銘',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 2000,
+          price: 68.1,
+          fee: 0,
+          tax: 0,
+          createdAt: 3,
+        },
+      ];
+
+      // 模擬資料源同時回傳 TWSE 減資 (2025-09-15) 與 2026 年度配息 (2026-10-01)
+      const mockFetcher = async () => [
+        {
+          symbol: '9927',
+          market: 'TW' as const,
+          type: 'CAPITAL_REDUCTION' as const,
+          date: '2025-09-15',
+          ratio: 0.2828051,
+          price: 2.828051,
+          description: '現金減資（換發比例 71.71949%，減資縮減比率 28.28051%，每股退款 2.828051 元）',
+        },
+        {
+          symbol: '9927',
+          market: 'TW' as const,
+          type: 'DIVIDEND' as const,
+          date: '2026-10-01',
+          payDate: '2026-10-29',
+          price: 5.0,
+          description: '年度現金股利每股 5.0 TWD (預計 2026-10-29 發放入帳)',
+        },
+      ];
+
+      const results = await scanCorporateActions(trades, mockFetcher);
+
+      // 減資事件檢驗 (10,000 股依集保換發 71.71949% 換發 7,171 股，縮減 2,829 股)
+      const reduction = results.find((r) => r.type === 'CAPITAL_REDUCTION');
+      expect(reduction).toBeDefined();
+      expect(reduction?.sharesHeldOnDate).toBe(10000);
+      expect(reduction?.estimatedSharesChange).toBe(2829); // 10000 - 7171 = 2829 股
+      expect(reduction?.estimatedCashAmount).toBe(28280); // 10000 * 2.828051 = 28280 元
+
+      // 2026-10-01 除息事件檢驗 (基準日持股應為 10,000 - 2,829 + 829 + 2,000 = 10,000 股)
+      const dividend = results.find((r) => r.type === 'DIVIDEND');
+      expect(dividend).toBeDefined();
+      expect(dividend?.sharesHeldOnDate).toBe(10000); // 7171 + 2829 = 10000 股
+      // 5.0 元股息 * 10000 = 50000 元，二代健保 2.11% = 1055 元，實收 = 48945 元
+      expect(dividend?.estimatedCashAmount).toBe(48945);
+      expect(dividend?.taxDeduction).toBe(1055);
+    });
+
+    it('減資防重複判定：若帳本已有 2025-09-15 減資，即使掃描到 2025-11-13 換發亦應標記為已記錄', async () => {
+      const trades: TradeRecord[] = [
+        {
+          id: 'trade-9927-buy',
+          date: '2025-09-12',
+          symbol: '9927',
+          name: '泰銘',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 10000,
+          price: 58.7,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 'trade-9927-reduction',
+          date: '2025-09-15',
+          symbol: '9927',
+          name: '泰銘',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'CAPITAL_REDUCTION',
+          shares: 2828,
+          price: 2.828,
+          cashAmount: 28280,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+      ];
+
+      const mockFetcher = async () => [
+        {
+          symbol: '9927',
+          market: 'TW' as const,
+          type: 'CAPITAL_REDUCTION' as const,
+          date: '2025-11-13', // Yahoo Finance 可能記錄在 11-13
+          ratio: 0.2828,
+          price: 0,
+          description: '減資換發',
+        },
+      ];
+
+      const results = await scanCorporateActions(trades, mockFetcher);
+      expect(results).toHaveLength(1);
+      expect(results[0].isAlreadyRecorded).toBe(true);
+    });
   });
 });
+
+

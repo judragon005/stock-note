@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-388%2F388%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-463%2F463%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,42 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 全域借款負債納入應計利息與規費及一鍵結清本利和 (Total Debt Payoff & Accrued Interest Settlement) *(V6.9.5 新增)*
+### 1. 持股技術指標警示膠囊與智慧操作建議引擎 (Holding Technical Signal Capsules & Action Advisor) *(V7.2.0 新增)*
+- **純前端離線技術指標引擎 (`Technical Indicator Engine`)**：
+  - 100% 離線純前端運算，即時計算 MA(5/20/60/120/240)、KD(9,3,3)、MACD(12,26,9)、昨日/5日成交均量比、5日/20日高低點極值，零額外 API 負擔與延遲。
+- **多維色彩膠囊標籤體系 (`Holding Signal Capsules`)**：
+  - 🟢 **偏多/強勢** (如 `9日K大幅拉升`、`半年線之上`、`MACD黃金交叉`、`創週新高`)
+  - 🔴 **偏空/破位** (如 `5日線之下`、`月線之下`、`季線之下`、`創單週新低`)
+  - 🟡 **量價/指標異動** (如 `昨日量能注意`、`量縮窒息注意`、`MACD注意`)
+  - 🟣 **結構與長線支撐** (如 `均線多頭排列`、`均線糾結`)
+- **確定性專家操作建議矩陣 (`Action Directive Advisor Engine`)**：
+  - 依據多空訊號總分加權評定，自動輸出四字定調（如 `【強勢續抱】`、`【逢高減碼】`、`【超跌留意】`、`【盤整觀望】`、`【嚴設停損】`）與客觀紀律性具體操作指南。
+- **持股清單與展開詳情全景整合**：
+  - 在持股表格中每檔標的代碼下方呈現膠囊列，並於展開時間軸中提供「🤖 智慧量化技術診斷與操作方針」詳細卡片。
+
+### 1. 資產配置目標偏離 (Drift) 試算與再平衡推薦器 (Target Allocation & Rebalancing Optimizer) *(V7.0.0 新增)*
+- **雙軌目標資產配置模型 (`Target Allocation Config`)**：
+  - 支援「市場維度 (台股/美股/現金)」與「個股維度 (Symbol-level)」配置策略切換，內建動態編輯器與合計 100% 之防呆校驗。
+- **偏離度量化與三色診斷標籤 (`Drift Quantification & Badges`)**：
+  - 統一聚合台股、美股與帳本可用現金作為總資產單一事實來源 (SSOT)，即時輸出偏離幅度與 `🟢 正常平衡`、`🟡 輕度偏離`、`🔴 顯著失衡` 即時燈號。
+- **雙模式再平衡演算法 (`Rebalancing Engine`)**：
+  - **定期注水加碼 (Cash-in Only)**：優先加碼低配標的，只買不賣，100% 杜絕摩擦成本與稅負衝擊。
+  - **全量買賣再平衡 (Full Rebalancing)**：超配賣出、低配加碼，精確重置組合權重。
+- **台美雙市場交易顆粒度與摩擦成本**：
+  - 台股自動轉換為「整張數 (1,000股) + 零股」，美股支援碎股小數點計算，並同步輸出原幣別與折合台幣建議下單金額。
+
+### 2. 除息公告背景自動同步、雙看板垂直拆分、配股配息合併健保扣除與現金帳本 SSOT 連動 *(V6.9.7)*
+- **應用程式啟動背景靜默自動同步 (`Background CA Preload Sync`)**：
+  - 在 `App.tsx` 啟動持股載入後，系統自動於背景靜默預載同步除息公告，無需使用者手動切換至「股利日誌」分頁；右上角仍保留手動強制同步按鈕與旋轉 Loading 動畫。
+- **雙看板獨立垂直拆分與版面占位 (`Dual Kanban Board Separation & Stable Layout`)**：
+  - 將除權息看板垂直拆分為「⚡ 除息待入帳行事曆」與「📢 即將除息公告看板」兩組獨立 Glass Card。無項目時各自展示專屬空狀態占位提示卡片，確保版面排版結構穩定不塌縮。
+- **配股配息合併二代健保扣除與全域單一事實來源 (`Consolidated NHI Tax & SSOT`)**：
+  - 封裝 `resolveEffectiveDividendTaxAndNet`，依法將股票股利面額（每股 NT$10）併入單次給付申報所得計算 2.11% 二代健保，且保費自現金股利代扣。
+  - **2890 永豐金（31,000 股現金 34,100 元 + 620 股配股面額 6,200 元）**：
+    - 股利明細「扣繳稅款/健保」顯示 `-NT$ 850`，實領顯示 `33,250 TWD`。
+    - 現金帳本自動連動 `DIVIDEND_PAYOUT` 入帳流水金額精準記錄為 **`+NT$ 33,250`**（徹底杜絕毛額 34,100 的落差）。
+
+### 2. 全域借款負債納入應計利息與規費及一鍵結清本利和 (Total Debt Payoff & Accrued Interest Settlement) *(V6.9.5)*
 - **全域借款負債本利和與規費對齊 (`Total Debt SSOT Payoff Alignment`)**：
   - 升級 `calculateOverallLeverageMetrics` 與 `calculatePortfolioExposure`，每筆借款負債統一以 `calculateLoanInterestAndPayoff(loan, asOfDate).totalPayoffAmount`（本金 + 應計未付利息 + 設質三大規費）計算折合台幣總額。
   - 全域淨資產 $\text{NAV} = \text{股市總值} + \text{可用現金(含在途)} - \text{總借款負債}$，精準反映清償後真實淨資產，消除過去負債僅計本金導致 NAV 被高估的問題。

@@ -86,4 +86,63 @@ describe('Squarified Treemap 佈局演算法', () => {
       expect(Number.isNaN(node.height)).toBe(false);
     });
   });
+
+  it('股票 + 現金部位混合輸入，現金節點應正確分配權重與空間', () => {
+    const items: TreemapItem[] = [
+      { id: 'TW_2330', symbol: '2330', name: '台積電', market: 'TW', value: 50000, pnlPercent: 15 },
+      { id: 'US_AAPL', symbol: 'AAPL', name: '蘋果', market: 'US', value: 30000, pnlPercent: -5 },
+      { id: 'CASH_TWD', symbol: '💵 現金', name: 'Cash / 活存與備用金', market: 'CASH', value: 20000, pnlPercent: 0 },
+    ];
+
+    const width = 1000;
+    const height = 500;
+    const nodes = computeTreemapLayout(items, width, height);
+
+    expect(nodes.length).toBe(3);
+
+    const cashNode = nodes.find((n) => n.id === 'CASH_TWD')!;
+    const tsMCNode = nodes.find((n) => n.id === 'TW_2330')!;
+    const aaplNode = nodes.find((n) => n.id === 'US_AAPL')!;
+
+    expect(cashNode).toBeDefined();
+    expect(cashNode.market).toBe('CASH');
+    expect(cashNode.weight).toBe(20);
+    expect(tsMCNode.weight).toBe(50);
+    expect(aaplNode.weight).toBe(30);
+    expect(cashNode.pnlPercent).toBe(0);
+
+    // 檢查面積總和
+    const totalArea = nodes.reduce((sum, n) => sum + n.width * n.height, 0);
+    expect(totalArea).toBeCloseTo(width * height, 1);
+  });
+
+  it('純現金輸入 (零持股)，應產生單一佔滿 100% 畫布的現金節點', () => {
+    const items: TreemapItem[] = [
+      { id: 'CASH_TWD', symbol: '💵 現金', name: 'Cash / 活存與備用金', market: 'CASH', value: 100000, pnlPercent: 0 },
+    ];
+
+    const width = 1000;
+    const height = 500;
+    const nodes = computeTreemapLayout(items, width, height);
+
+    expect(nodes.length).toBe(1);
+    expect(nodes[0].id).toBe('CASH_TWD');
+    expect(nodes[0].symbol).toBe('💵 現金');
+    expect(nodes[0].width).toBe(width);
+    expect(nodes[0].height).toBe(height);
+    expect(nodes[0].weight).toBe(100);
+  });
+
+  it('現金為 0 或負數時應被過濾，不產生無效節點', () => {
+    const items: TreemapItem[] = [
+      { id: 'TW_2330', symbol: '2330', name: '台積電', market: 'TW', value: 50000, pnlPercent: 10 },
+      { id: 'CASH_TWD', symbol: '💵 現金', name: 'Cash', market: 'CASH', value: 0, pnlPercent: 0 },
+      { id: 'CASH_NEG', symbol: '💵 負現金', name: 'Cash Neg', market: 'CASH', value: -5000, pnlPercent: 0 },
+    ];
+
+    const nodes = computeTreemapLayout(items, 1000, 500);
+    expect(nodes.length).toBe(1);
+    expect(nodes[0].symbol).toBe('2330');
+    expect(nodes[0].weight).toBe(100);
+  });
 });

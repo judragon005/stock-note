@@ -1980,6 +1980,231 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
       expect(summary.combinedTWD.todayPnL).toBe(52000);
     });
   });
+
+  describe('Ticket #014: 現金減資退還股款之每股成本 0 元保底防禦', () => {
+    it('當現金減資退還金額大於原持股總成本時，總成本與每股平均成本應保底為 0，未實現損益率正常正向顯示絕不顛倒', () => {
+      const trades: TradeRecord[] = [
+        {
+          id: 't-buy-cheap',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 1, // 原始成本 1,000 元
+          fee: 0,
+          tax: 0,
+          date: '2026-01-01',
+          createdAt: 1,
+        },
+        {
+          id: 't-reduction-excess',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'CAPITAL_REDUCTION',
+          ratio: 0.2, // 消除 20% 股數 ➔ 剩 800 股
+          cashAmount: 3000, // 退還 3,000 元現金 (超過原始成本 1,000 元)
+          shares: 0,
+          price: 0,
+          fee: 0,
+          tax: 0,
+          date: '2026-06-01',
+          createdAt: 2,
+        },
+      ];
+
+      const { holdings } = calculateHoldingsAndSummary(
+        trades,
+        { '2330': 1000 },
+        32.0,
+        'TOTAL_RETURN'
+      );
+
+      expect(holdings).toHaveLength(1);
+      const h = holdings[0];
+      expect(h.shares).toBe(800);
+      // 成本保底為 0，絕不為負數
+      expect(h.totalCostBasis).toBe(0);
+      expect(h.avgCost).toBe(0);
+      // 市值 800 * 1000 = 800,000，未實現損益為 800,000
+      expect(h.unrealizedPnL).toBe(800000);
+      // 未實現損益率應為正數，絕不能出現負號反轉
+      expect(h.unrealizedPnLPercent).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('Ticket #008: 股票股利（配股）成本自然稀釋與現金 0 污染驗證', () => {
+    it('除權配股 (STOCK_DIVIDEND) 應精確增加持股數並自然稀釋每股平均成本，且總成本保持不變', () => {
+      const trades: TradeRecord[] = [
+        {
+          id: 't-buy-2886',
+          symbol: '2886',
+          name: '兆豐金',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 40, // 成本 40,000 元，每股 40 元
+          fee: 0,
+          tax: 0,
+          date: '2026-01-01',
+          createdAt: 1,
+        },
+        {
+          id: 't-stock-div-2886',
+          symbol: '2886',
+          name: '兆豐金',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'STOCK_DIVIDEND',
+          shares: 100, // 配股 100 股
+          price: 0,
+          fee: 0,
+          tax: 0,
+          date: '2026-08-15',
+          createdAt: 2,
+        },
+      ];
+
+      const { holdings } = calculateHoldingsAndSummary(
+        trades,
+        { '2886': 40 },
+        32.0,
+        'TOTAL_RETURN'
+      );
+
+      expect(holdings).toHaveLength(1);
+      const h = holdings[0];
+      // 總股數 = 1,000 + 100 = 1,100 股
+      expect(h.shares).toBe(1100);
+      expect(h.totalStockDividendsShares).toBe(100);
+      // 總成本基準保持 40,000 元不變
+      expect(h.totalCostBasis).toBe(40000);
+      // 每股平均成本自然稀釋 = 40,000 / 1,100 ≈ 36.36 元
+      expect(h.avgCost).toBeCloseTo(36.3636, 2);
+    });
+  });
+
+  describe('Ticket #015: 庫存 FIFO 批次成本與加權平均成本雙軌會計口徑', () => {
+    it('在庫持股應同時提供加權平均成本與 FIFO 批次明細，部分賣出時口徑清晰', () => {
+      const trades: TradeRecord[] = [
+        {
+          id: 't-batch-1',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 500, // 批次 1: 500 元
+          fee: 0,
+          tax: 0,
+          date: '2026-01-01',
+          createdAt: 1,
+        },
+        {
+          id: 't-batch-2',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 700, // 批次 2: 700 元
+          fee: 0,
+          tax: 0,
+          date: '2026-02-01',
+          createdAt: 2,
+        },
+        {
+          id: 't-sell-partial',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'SELL',
+          shares: 1000, // 賣出 1,000 股 @ 600
+          price: 600,
+          fee: 0,
+          tax: 0,
+          date: '2026-03-01',
+          createdAt: 3,
+        },
+      ];
+
+      const { holdings } = calculateHoldingsAndSummary(
+        trades,
+        { '2330': 800 },
+        32.0,
+        'TOTAL_RETURN',
+        [],
+        'ALL',
+        {},
+        'FIFO'
+      );
+
+      expect(holdings).toHaveLength(1);
+      const h = holdings[0];
+      expect(h.shares).toBe(1000);
+      // FIFO 模式下，剩餘庫存為批次 2 (成本 700 元)
+      expect(h.lots).toBeDefined();
+      expect(h.lots?.length).toBe(1);
+      expect(h.lots?.[0].buyPrice).toBe(700);
+    });
+
+    it('傳入 historicalCandlesMap 時，應自動計算持股之 signals 與 actionDirective', () => {
+      const trades: TradeRecord[] = [
+        {
+          id: 'trade-00924-1',
+          symbol: '00924',
+          name: '復華S&P500成長',
+          type: 'BUY',
+          shares: 10000,
+          price: 24.0,
+          fee: 34,
+          tax: 0,
+          date: '2026-01-01',
+          createdAt: 1000,
+          market: 'TW',
+          currency: 'TWD',
+        },
+      ];
+
+      // 構造 65 筆 K 線
+      const mockCandles = Array.from({ length: 65 }, (_, i) => ({
+        date: `2026-01-${String((i % 28) + 1).padStart(2, '0')}`,
+        open: 20 + i * 0.1,
+        high: 20.5 + i * 0.1,
+        low: 19.8 + i * 0.1,
+        close: 20.2 + i * 0.1,
+        volume: 1000,
+      }));
+
+      const { holdings } = calculateHoldingsAndSummary(
+        trades,
+        { '00924': 27.0 },
+        32.0,
+        'TOTAL_RETURN',
+        [],
+        'ALL',
+        {},
+        'MOVING_AVERAGE',
+        { '00924': mockCandles }
+      );
+
+      expect(holdings).toHaveLength(1);
+      const h = holdings[0];
+      expect(h.signals).toBeDefined();
+      expect(h.signals?.length).toBeGreaterThan(0);
+      expect(h.actionDirective).toBeDefined();
+      expect(h.actionDirective?.headline).toBeDefined();
+    });
+  });
 });
+
+
 
 

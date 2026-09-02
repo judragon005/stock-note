@@ -94,7 +94,7 @@ describe('Storage & Persistence Utilities (Issue #6)', () => {
       expect(result.trades[0].symbol).toBe('AAPL');
       expect(result.trades[0].market).toBe('US');
       expect(result.trades[0].type).toBe('BUY');
-      expect(result.trades[0].name).toBe('Apple, Inc.');
+      expect(result.trades[0].name).toBe('蘋果');
       expect(result.trades[0].shares).toBe(15);
       expect(result.trades[0].price).toBe(220);
     });

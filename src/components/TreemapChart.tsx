@@ -5,10 +5,16 @@ import { computeTreemapLayout, TreemapItem, TreemapNode } from '../utils/treemap
 interface TreemapChartProps {
   holdings: HoldingPosition[];
   usdToTwdRate: number;
+  cashBalanceTwd?: number;
   colorTheme: ColorThemeMode;
 }
 
-export const TreemapChart: React.FC<TreemapChartProps> = ({ holdings, usdToTwdRate, colorTheme }) => {
+export const TreemapChart: React.FC<TreemapChartProps> = ({
+  holdings,
+  usdToTwdRate,
+  cashBalanceTwd = 0,
+  colorTheme,
+}) => {
   const [hoveredNode, setHoveredNode] = useState<TreemapNode | null>(null);
 
   const activeHoldings = holdings.filter((h) => h.shares > 0);
@@ -26,6 +32,18 @@ export const TreemapChart: React.FC<TreemapChartProps> = ({ holdings, usdToTwdRa
     };
   });
 
+  // 若有現金餘額 (> 0)，動態注入現金節點
+  if (cashBalanceTwd > 0) {
+    treemapItems.push({
+      id: 'CASH_TWD',
+      symbol: '💵 現金',
+      name: 'Cash / 活存與備用金',
+      market: 'CASH',
+      value: cashBalanceTwd,
+      pnlPercent: 0,
+    });
+  }
+
   const viewBoxWidth = 1000;
   const viewBoxHeight = 520;
   const nodes = computeTreemapLayout(treemapItems, viewBoxWidth, viewBoxHeight);
@@ -33,13 +51,18 @@ export const TreemapChart: React.FC<TreemapChartProps> = ({ holdings, usdToTwdRa
   if (nodes.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-        暫無有效持倉市值數據
+        暫無有效資產市值數據
       </div>
     );
   }
 
-  // 顏色映射：根據損益率計算顏色
-  const getNodeColor = (pnlPercent: number) => {
+  // 顏色映射：根據損益率或現金屬性計算顏色
+  const getNodeColor = (node: TreemapNode) => {
+    if (node.market === 'CASH' || node.id === 'CASH_TWD') {
+      return 'hsla(215, 25%, 27%, 0.85)'; // 中性深灰藍石板色
+    }
+
+    const pnlPercent = node.pnlPercent;
     const isTaiwanTheme = colorTheme === 'taiwan';
     const isProfit = pnlPercent >= 0;
 
@@ -56,7 +79,12 @@ export const TreemapChart: React.FC<TreemapChartProps> = ({ holdings, usdToTwdRa
     return `hsla(${activeHue}, ${opacity})`;
   };
 
-  const getNodeBorderColor = (pnlPercent: number) => {
+  const getNodeBorderColor = (node: TreemapNode) => {
+    if (node.market === 'CASH' || node.id === 'CASH_TWD') {
+      return '#64748b'; // 板岩灰邊框
+    }
+
+    const pnlPercent = node.pnlPercent;
     const isTaiwanTheme = colorTheme === 'taiwan';
     const isProfit = pnlPercent >= 0;
     if (isProfit) {
@@ -87,17 +115,20 @@ export const TreemapChart: React.FC<TreemapChartProps> = ({ holdings, usdToTwdRa
 
         {nodes.map((node) => {
           const isHovered = hoveredNode?.id === node.id;
-          const bgFill = getNodeColor(node.pnlPercent);
+          const isCash = node.market === 'CASH' || node.id === 'CASH_TWD';
+          const bgFill = getNodeColor(node);
 
           // 判斷區塊寬高是否足夠顯示文字
           const showSymbol = node.width > 40 && node.height > 30;
           const showName = node.width > 70 && node.height > 55;
           const showPnl = node.width > 60 && node.height > 45;
 
-          const pnlText = `${node.pnlPercent >= 0 ? '+' : ''}${node.pnlPercent.toFixed(1)}%`;
+          const pnlText = isCash
+            ? '0.0%'
+            : `${node.pnlPercent >= 0 ? '+' : ''}${node.pnlPercent.toFixed(1)}%`;
           const weightText = `${node.weight.toFixed(1)}%`;
 
-          const borderColor = getNodeBorderColor(node.pnlPercent);
+          const borderColor = getNodeBorderColor(node);
 
           return (
             <g
@@ -130,7 +161,7 @@ export const TreemapChart: React.FC<TreemapChartProps> = ({ holdings, usdToTwdRa
                   dominantBaseline="middle"
                   fill="#ffffff"
                   style={{
-                    fontFamily: "'JetBrains Mono', monospace",
+                    fontFamily: isCash ? 'inherit' : "'JetBrains Mono', monospace",
                     fontWeight: 700,
                     fontSize: Math.min(18, Math.max(11, node.width / 7)),
                     pointerEvents: 'none',
@@ -180,7 +211,8 @@ export const TreemapChart: React.FC<TreemapChartProps> = ({ holdings, usdToTwdRa
 
       {/* Floating Tooltip */}
       {hoveredNode && (() => {
-        const tooltipBorderColor = getNodeBorderColor(hoveredNode.pnlPercent);
+        const isCash = hoveredNode.market === 'CASH' || hoveredNode.id === 'CASH_TWD';
+        const tooltipBorderColor = getNodeBorderColor(hoveredNode);
         return (
           <div
             className="glass-card"
@@ -200,12 +232,15 @@ export const TreemapChart: React.FC<TreemapChartProps> = ({ holdings, usdToTwdRa
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-              <span style={{ fontWeight: 700, color: '#fff', fontFamily: "'JetBrains Mono', monospace" }}>
+              <span style={{ fontWeight: 700, color: '#fff', fontFamily: isCash ? 'inherit' : "'JetBrains Mono', monospace" }}>
                 {hoveredNode.symbol}
               </span>
               <span style={{ color: 'var(--text-muted)' }}>{hoveredNode.name}</span>
-              <span className={`badge ${hoveredNode.market === 'TW' ? 'badge-tw' : 'badge-us'}`}>
-                {hoveredNode.market}
+              <span
+                className={isCash ? 'badge' : `badge ${hoveredNode.market === 'TW' ? 'badge-tw' : 'badge-us'}`}
+                style={isCash ? { background: '#334155', color: '#94a3b8', border: '1px solid #64748b' } : undefined}
+              >
+                {isCash ? 'CASH' : hoveredNode.market}
               </span>
             </div>
             <div style={{ display: 'flex', gap: '14px', fontSize: '0.8rem' }}>
@@ -225,10 +260,9 @@ export const TreemapChart: React.FC<TreemapChartProps> = ({ holdings, usdToTwdRa
                 <span style={{ color: 'var(--text-muted)' }}>報酬率: </span>
                 <span
                   className="mono"
-                  style={{ fontWeight: 700, color: tooltipBorderColor }}
+                  style={{ fontWeight: 700, color: isCash ? '#94a3b8' : tooltipBorderColor }}
                 >
-                  {hoveredNode.pnlPercent >= 0 ? '+' : ''}
-                  {hoveredNode.pnlPercent.toFixed(2)}%
+                  {isCash ? '0.00% (無損益)' : `${hoveredNode.pnlPercent >= 0 ? '+' : ''}${hoveredNode.pnlPercent.toFixed(2)}%`}
                 </span>
               </div>
             </div>

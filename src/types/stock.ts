@@ -3,6 +3,8 @@ export type Currency = 'TWD' | 'USD';
 export type TradeType =
   | 'BUY'
   | 'SELL'
+  | 'MARGIN_BUY'          // 融資買進 (資買，自備款 40%)
+  | 'MARGIN_SELL'         // 融資賣出 / 償還融資 (資賣)
   | 'DIVIDEND'
   | 'STOCK_DIVIDEND'
   | 'STOCK_SPLIT'
@@ -145,10 +147,13 @@ export interface TradeRecord {
   ratio?: number; // 比例（如股票分割比例 10、減資比例 0.2828、配股率 0.05、換股比例 1.2）
   cashAmount?: number; // 退還或入帳總現金金額（如減資退款總額、現金補貼）
   exDate?: string; // 基準日 / 除權息日 (YYYY-MM-DD)
+  payDate?: string; // 股利入帳發放日 (YYYY-MM-DD)
   targetSymbol?: string; // 換股目標標的代碼 (STOCK_MERGER) 或分拆新公司代碼 (SPIN_OFF)
   targetName?: string; // 目標標的名稱
   allocationRatio?: number; // 分拆成本分攤比例 (如 0.2 代表拆出 20% 成本給新標的)
   conversionPrice?: number; // 可轉債轉換價格
+  isMargin?: boolean; // 是否為信用交易融資買進/賣出
+  marginRate?: number; // 融資自備款比例 (預設台股現股融資為 0.4 即 40% 自備款)
   note?: string; // 交易備註
   tags?: string[]; // 標籤（如：長期核心、波段動能、股息成長）
   plan?: TradePlan; // 交易計畫 (事前)
@@ -201,6 +206,8 @@ export interface HoldingPosition {
   lots?: import('./lot').TaxLot[]; // 在席批次明細
   plan?: TradePlan; // 所套用之最新建倉交易計畫
   riskMetrics?: HoldingRiskMetrics; // 即時風控與觸價指標
+  signals?: import('./signal').HoldingSignal[]; // 技術面與量價警示訊號膠囊清單
+  actionDirective?: import('./signal').HoldingActionDirective; // 智慧操作建議四字定調與紀律指引
 }
 
 export type PositionFilter = 'ACTIVE' | 'CLOSED' | 'ALL';
@@ -403,3 +410,80 @@ export interface PortfolioPerformanceMetrics {
   isXirrAnnualized?: boolean; // XIRR 是否已年化
   xirrDurationDays?: number; // 總歷時天數
 }
+
+export interface StoredCorporateAction {
+  id: string; // `${symbol}-${type}-${date}`
+  symbol: string;
+  name?: string;
+  market: MarketType;
+  currency: Currency;
+  type: TradeType;
+  date: string; // 除權息基準日 / 事件基準日 YYYY-MM-DD
+  exDate?: string;
+  payDate?: string; // 預估或實際發放日
+  ratio?: number;
+  price?: number;
+  cashAmount?: number;
+  description?: string;
+  sourceType: 'LIVE_API' | 'CACHE' | 'OFFICIAL_DATA';
+  verifiedSources?: string[];
+  updatedAt?: number;
+}
+
+export interface StorageObjectStoreStat {
+  name: string;
+  count: number;
+  description: string;
+  category: 'CORE_ASSETS' | 'MARKET_CACHE' | 'SYSTEM_CONFIG';
+  details?: Record<string, string | number>;
+}
+
+export interface LocalStorageInspectionStats {
+  storageUsageBytes: number;
+  storageQuotaBytes: number;
+  usagePercentage: number;
+  isStorageEstimateSupported: boolean;
+  isIndexedDbHealthy: boolean;
+  isLocalStorageHealthy: boolean;
+  indexedDbName: string;
+  indexedDbVersion: number;
+  
+  // 分類統計
+  coreAssets: {
+    totalTrades: number;
+    buyTrades: number;
+    sellTrades: number;
+    dividendTrades: number;
+    earliestTradeDate?: string;
+    latestTradeDate?: string;
+    totalAccounts: number;
+    totalCashTransactions: number;
+    totalLoanRecords: number;
+  };
+  
+  marketCache: {
+    historicalPricesSymbols: number;
+    historicalPricesDataPoints: number;
+    historicalFxPairs: number;
+    historicalFxDataPoints: number;
+    priceMetadataSymbols: number;
+    corporateActionsTotal: number;
+    corporateActionsSymbols: number;
+    stockDictionaryTotalCount: number;
+    stockDictionaryOfficialCount: number;
+    stockDictionaryCustomCount: number;
+  };
+  
+  systemConfig: {
+    totalSnapshots: number;
+    lockedSnapshots: number;
+    hasFinMindKey: boolean;
+    hasFmpKey: boolean;
+    hasTwseConfig: boolean;
+    accountingView: string;
+    brokerFeeDiscount: number;
+  };
+  
+  stores: StorageObjectStoreStat[];
+}
+

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   TradeRecord,
   MarketType,
@@ -25,9 +25,6 @@ import {
   saveCustomPricesToStorage,
   loadAccountingViewFromStorage,
   saveAccountingViewToStorage,
-  validateTradesSchema,
-  parseCSVToTrades,
-  mergeTrades,
   exportTradesToJSON,
   exportTradesToCSV,
   loadBrokerAccountsFromStorage,
@@ -53,8 +50,10 @@ import { PortfolioGrowthChart } from './components/PortfolioGrowthChart';
 import { HoldingsTable } from './components/HoldingsTable';
 import { TradeHistoryTable } from './components/TradeHistoryTable';
 import { CashLedgerWorkspace } from './components/CashLedgerWorkspace';
+import { DividendLogView } from './components/DividendLogView';
 import { TradeModal } from './components/TradeModal';
-import { ImportModal } from './components/ImportModal';
+import { EnhancedImportModal } from './components/EnhancedImportModal';
+import { ImportDeduplicationMode } from './engine/tradeDeduplicator';
 import { CorporateActionScannerModal } from './components/CorporateActionScannerModal';
 import { BrokerAccountsModal } from './components/BrokerAccountsModal';
 import { FrictionCenterModal } from './components/FrictionCenterModal';
@@ -65,6 +64,9 @@ import { SettingsWorkspace } from './components/SettingsWorkspace';
 import { syncTradesWithCashTransactions, calculateAccountBalances, aggregateInterestIncomeDetails } from './engine/cashLedgerEngine';
 import { calculatePortfolioXirr, calculateSecurityXirr, XirrResult, CashFlowEvent } from './engine/xirrCalculator';
 import { calculatePortfolioExposure } from './engine/riskExposureEngine';
+import { calculateReceivableDividends } from './engine/receivableDividendEngine';
+import { buildTaxComplianceStatus } from './engine/taxComplianceEngine';
+import { CorporateActionSessionCache, scanCorporateActions } from './engine/corporateActionScanner';
 import { initializeStorageAsync } from './utils/storage';
 import { createSystemSnapshot } from './utils/db';
 
@@ -185,18 +187,8 @@ export const App: React.FC = () => {
   const [isFrictionCenterOpen, setIsFrictionCenterOpen] = useState(false);
   const [isMarginStressOpen, setIsMarginStressOpen] = useState(false);
 
-  // 匯入確認彈窗狀態
-  const [importModal, setImportModal] = useState<{
-    isOpen: boolean;
-    fileName: string;
-    incomingTrades: TradeRecord[];
-    skippedCount: number;
-  }>({
-    isOpen: false,
-    fileName: '',
-    incomingTrades: [],
-    skippedCount: 0,
-  });
+  // 增強型匯入精靈彈窗狀態
+  const [isEnhancedImportModalOpen, setIsEnhancedImportModalOpen] = useState(false);
 
   // 持久化交易紀錄
   useEffect(() => {
@@ -309,6 +301,56 @@ export const App: React.FC = () => {
   const interestIncomeSummary = useMemo(() => {
     return aggregateInterestIncomeDetails(cashTransactions, currentMarket, usdToTwdRate);
   }, [cashTransactions, currentMarket, usdToTwdRate]);
+
+  // 公司行動除息事件快取版本與同步狀態
+  const [caVersion, setCaVersion] = useState(0);
+  const [isCaSyncing, setIsCaSyncing] = useState(false);
+
+  const handleSyncCorporateActions = useCallback(async (force: boolean = false) => {
+    if (isCaSyncing || trades.length === 0) return;
+    setIsCaSyncing(true);
+    try {
+      const activeSymbols = Array.from(new Set(holdings.filter((h) => h.shares > 0).map((h) => h.symbol.toUpperCase())));
+      if (activeSymbols.length > 0) {
+        await scanCorporateActions(trades, undefined, {
+          symbolsToScan: activeSymbols,
+          concurrency: 3,
+          forceRefresh: force,
+        });
+        setCaVersion((v) => v + 1);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsCaSyncing(false);
+    }
+  }, [isCaSyncing, trades, holdings]);
+
+  // 待發放應收現金股利 (除息日至發放日之間平滑)
+  const receivableDividends = useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const cachedEvents = CorporateActionSessionCache.getAllEvents();
+    return calculateReceivableDividends(holdings, cachedEvents, trades, todayStr, usdToTwdRate);
+  }, [holdings, trades, usdToTwdRate, caVersion]);
+
+  // 應用程式初始載入就緒時，自動在背景靜默預載在庫持股除息日曆公告 (保留手動強制同步按鈕)
+  const hasTriggeredAutoSyncRef = useRef(false);
+  useEffect(() => {
+    if (!hasTriggeredAutoSyncRef.current && !isCaSyncing && holdings.length > 0) {
+      hasTriggeredAutoSyncRef.current = true;
+      handleSyncCorporateActions(false);
+    }
+  }, [isCaSyncing, holdings, handleSyncCorporateActions]);
+
+  // 稅階合規預警狀態 (台股二代健保 20,000 與美股海外所得 100萬/750萬)
+  const taxComplianceStatus = useMemo(() => {
+    return buildTaxComplianceStatus(receivableDividends, trades, new Date().getFullYear(), usdToTwdRate);
+  }, [receivableDividends, trades, usdToTwdRate]);
+
+  // 股利交易筆數
+  const dividendTradesCount = useMemo(() => {
+    return trades.filter((t) => t.type === 'DIVIDEND').length;
+  }, [trades]);
 
   // XIRR 現金流透視彈窗狀態
   const [xirrModalState, setXirrModalState] = useState<{
@@ -477,111 +519,45 @@ export const App: React.FC = () => {
     exportTradesToCSV(trades);
   };
 
-  // 統一檔案匯入 (支援 JSON / CSV)
-  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const fileName = file.name;
-    const isCSV = fileName.toLowerCase().endsWith('.csv');
-    const isJSON = fileName.toLowerCase().endsWith('.json');
-
-    if (!isCSV && !isJSON) {
-      alert('❌ 請選擇 .json 或 .csv 格式的備份檔案！');
-      return;
-    }
-
-    const fileReader = new FileReader();
-    fileReader.readAsText(file, 'UTF-8');
-    fileReader.onload = (event) => {
-      const content = event.target?.result as string;
-      if (!content) {
-        alert('❌ 檔案內容為空，無法讀取。');
-        return;
-      }
-
-      if (isJSON) {
-        try {
-          const parsed = JSON.parse(content);
-          const validated = validateTradesSchema(parsed);
-          if (validated && validated.length > 0) {
-            setImportModal({
-              isOpen: true,
-              fileName,
-              incomingTrades: validated,
-              skippedCount: 0,
-            });
-          } else {
-            alert('❌ JSON 備份檔格式不符或缺少必要交易欄位！');
-          }
-        } catch {
-          alert('❌ JSON 解析失敗，請確認檔案語法是否正確。');
-        }
-      } else if (isCSV) {
-        try {
-          const result = parseCSVToTrades(content);
-          if (result.trades.length > 0) {
-            setImportModal({
-              isOpen: true,
-              fileName,
-              incomingTrades: result.trades,
-              skippedCount: result.skippedCount,
-            });
-          } else {
-            alert('❌ CSV 檔案中未解析出任何有效之交易紀錄！');
-          }
-        } catch {
-          alert('❌ CSV 解析失敗，請確認檔案格式是否正確。');
-        }
-      }
-    };
-  };
-
-  // 執行全量覆蓋 (自動建立快照防呆)
-  const handleConfirmOverwrite = async (incoming: TradeRecord[]) => {
+  // 執行增強型匯入確認 (自動建立時光機快照防呆)
+  const handleConfirmEnhancedImport = async (
+    finalTrades: TradeRecord[],
+    mode: ImportDeduplicationMode,
+    rawIncomingCount: number
+  ) => {
     try {
-      await createSystemSnapshot('自動備份 (CSV/JSON 全量覆蓋前)', 'AUTO_BEFORE_IMPORT', {
-        trades,
-        brokerAccounts: accounts,
-        cashTransactions,
-        loanRecords,
-        historicalPrices,
-        historicalFx,
-        priceMetadata: { quotes: {}, lockedSymbols: [] },
-        apiKeys,
-        accountingView,
-      });
+      await createSystemSnapshot(
+        `自動備份 (增強型匯入前: ${mode === 'OVERWRITE' ? '全量覆蓋' : mode === 'SMART_MERGE' ? '智慧追加去重' : '強制追加'})`,
+        'AUTO_BEFORE_IMPORT',
+        {
+          trades,
+          brokerAccounts: accounts,
+          cashTransactions,
+          loanRecords,
+          historicalPrices,
+          historicalFx,
+          priceMetadata: { quotes: {}, lockedSymbols: [] },
+          apiKeys,
+          accountingView,
+        }
+      );
     } catch (e) {
-      console.warn('Failed to take auto snapshot before overwrite:', e);
+      console.warn('Failed to take auto snapshot before import:', e);
     }
-    setTrades(incoming);
-    setCashTransactions((prev) => syncTradesWithCashTransactions(incoming, prev));
-    setImportModal((prev) => ({ ...prev, isOpen: false }));
-    alert(`✅ 已成功全量還原 ${incoming.length} 筆交易紀錄！(系統已為您自動備份還原點)`);
-  };
 
-  // 執行追加合併 (自動建立快照防呆)
-  const handleConfirmMerge = async (incoming: TradeRecord[]) => {
-    try {
-      await createSystemSnapshot('自動備份 (CSV/JSON 追加合併前)', 'AUTO_BEFORE_IMPORT', {
-        trades,
-        brokerAccounts: accounts,
-        cashTransactions,
-        loanRecords,
-        historicalPrices,
-        historicalFx,
-        priceMetadata: { quotes: {}, lockedSymbols: [] },
-        apiKeys,
-        accountingView,
-      });
-    } catch (e) {
-      console.warn('Failed to take auto snapshot before merge:', e);
-    }
-    const merged = mergeTrades(trades, incoming);
-    setTrades(merged);
-    setCashTransactions((prev) => syncTradesWithCashTransactions(merged, prev));
-    setImportModal((prev) => ({ ...prev, isOpen: false }));
-    alert(`✅ 已成功合併 ${incoming.length} 筆交易紀錄！(系統已為您自動備份還原點)`);
+    setTrades(finalTrades);
+    saveTradesToStorage(finalTrades);
+    setCashTransactions((prev) => syncTradesWithCashTransactions(finalTrades, prev));
+    setIsEnhancedImportModalOpen(false);
+
+    const modeText =
+      mode === 'OVERWRITE'
+        ? `全量覆蓋完成 (共 ${finalTrades.length} 筆)`
+        : mode === 'SMART_MERGE'
+        ? `智慧追加去重完成 (現有總筆數: ${finalTrades.length} 筆)`
+        : `全數追加完成 (現有總筆數: ${finalTrades.length} 筆)`;
+
+    alert(`🎉 ${modeText}！\n\n• 原始檔案共解析出 ${rawIncomingCount} 筆\n• 系統已為您自動建立還原點快照`);
   };
 
   // 執行歷史賣出紀錄稅費智慧拆分修復 (保持損益與淨額 100% 恆等)
@@ -711,7 +687,7 @@ export const App: React.FC = () => {
         onOpenScannerModal={() => setIsScannerOpen(true)}
         onExportJSON={handleExportJSON}
         onExportCSV={handleExportCSV}
-        onImportFile={handleImportFile}
+        onOpenImportModal={() => setIsEnhancedImportModalOpen(true)}
       />
 
       {/* 活頁本標籤導覽列 */}
@@ -721,6 +697,8 @@ export const App: React.FC = () => {
         holdingsCount={holdings.length}
         tradesCount={trades.length}
         accountsCount={accounts.length}
+        dividendTradesCount={dividendTradesCount}
+        receivableDividendsCount={receivableDividends.length}
         cashTransactionsCount={cashTransactions.length}
         totalSavedFriction={frictionSummary?.totalFeeSavedByDiscount}
       />
@@ -728,7 +706,12 @@ export const App: React.FC = () => {
       {/* 活頁 1: 📊 投資組合總覽與庫存 */}
       {activeTab === 'portfolio' && (
         <>
-          <AllocationChart holdings={holdings} usdToTwdRate={usdToTwdRate} colorTheme={colorTheme} />
+          <AllocationChart
+            holdings={holdings}
+            usdToTwdRate={usdToTwdRate}
+            cashBalanceTwd={cashLedgerSummary.totalCashInTWD}
+            colorTheme={colorTheme}
+          />
           <SummaryCards
             summary={summary}
             currentMarket={currentMarket}
@@ -757,6 +740,8 @@ export const App: React.FC = () => {
             onRefreshSymbol={refreshSymbol}
             onQuickTrade={handleQuickTrade}
             onInspectSecurityXirr={handleInspectSecurityXirr}
+            receivableDividends={receivableDividends}
+            usdToTwdRate={usdToTwdRate}
           />
         </>
       )}
@@ -771,6 +756,19 @@ export const App: React.FC = () => {
           syncProgressText={historicalSyncProgress}
           onRefreshHistory={handleSyncHistoricalPrices}
           onInspectXirr={handleInspectGrowthXirr}
+        />
+      )}
+
+      {/* 活頁: 💰 股利日誌與被動現金流全景 */}
+      {activeTab === 'dividend' && (
+        <DividendLogView
+          trades={trades}
+          receivableDividends={receivableDividends}
+          usdToTwdRate={usdToTwdRate}
+          market={currentMarket}
+          selectedAccountId={selectedAccountId}
+          onSyncCorporateActions={() => handleSyncCorporateActions(true)}
+          isSyncingCorporateActions={isCaSyncing}
         />
       )}
 
@@ -862,6 +860,7 @@ export const App: React.FC = () => {
         frictionSummary={frictionSummary}
         accounts={accounts}
         selectedAccountId={selectedAccountId}
+        taxComplianceStatus={taxComplianceStatus}
       />
 
       {/* 智慧掃描公司行動彈窗 */}
@@ -872,16 +871,13 @@ export const App: React.FC = () => {
         onApplyActions={handleApplyCorporateActions}
       />
 
-      {/* 匯入還原確認彈窗 */}
-      <ImportModal
-        isOpen={importModal.isOpen}
-        onClose={() => setImportModal((prev) => ({ ...prev, isOpen: false }))}
-        fileName={importModal.fileName}
-        incomingTrades={importModal.incomingTrades}
-        skippedCount={importModal.skippedCount}
-        existingCount={trades.length}
-        onConfirmOverwrite={handleConfirmOverwrite}
-        onConfirmMerge={handleConfirmMerge}
+      {/* 增強型 CSV / JSON 智慧匯入精靈彈窗 */}
+      <EnhancedImportModal
+        isOpen={isEnhancedImportModalOpen}
+        onClose={() => setIsEnhancedImportModalOpen(false)}
+        accounts={accounts}
+        existingTrades={trades}
+        onConfirmImport={handleConfirmEnhancedImport}
       />
 
       {/* XIRR 現金流明細與收斂診斷透視彈窗 */}

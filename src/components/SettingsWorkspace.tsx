@@ -18,9 +18,19 @@ import {
   toggleLockSystemSnapshot,
   exportFullDatabaseJSON,
   importFullDatabaseJSON,
+  getLocalStorageInspectionStats,
+  clearHistoricalPricesCache,
+  clearHistoricalFxCache,
+  clearPriceMetadataCache,
+  clearCorporateActionsCache,
   SystemSnapshot,
   DB_VERSION,
+  DB_NAME,
 } from '../utils/db';
+import { syncOfficialTaiwanStockList } from '../engine/stockDictionarySync';
+import { getStockDictionaryStats, clearCustomStockNames } from '../engine/stockNameResolver';
+import { StockDictionaryStats } from '../types/stockDictionary';
+import { LocalStorageInspectionStats } from '../types/stock';
 import {
   Zap,
   Building2,
@@ -38,9 +48,9 @@ import {
   Save,
   CheckCircle2,
   ShieldAlert,
+  ShieldCheck,
   Landmark,
   Receipt,
-  Database,
   History,
   Lock,
   Unlock,
@@ -49,6 +59,11 @@ import {
   Upload,
   Camera,
   AlertTriangle,
+  BookOpen,
+  RefreshCw,
+  HardDrive,
+  Layers,
+  Activity,
 } from 'lucide-react';
 
 interface SettingsWorkspaceProps {
@@ -782,13 +797,14 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
               type={showKeys['finmind'] ? 'text' : 'password'}
               value={finmindToken}
               onChange={(e) => setFinmindToken(e.target.value)}
-              placeholder="輸入 FinMind Token (選填)"
+              placeholder="輸入 FinMind Token (選填，每日 600 次免費額度)"
               style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', background: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border-color)', color: '#fff', fontSize: '0.82rem' }}
             />
             <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              用於查詢台股高階個股籌碼、還原股價與即時行情。
+              用於台股歷史 10 年除權息與減資事件深度回填 (支援免費 Token，每日 600 次額度，可至 <a href="https://finmind.github.io/" target="_blank" rel="noreferrer" style={{ color: '#38bdf8' }}>FinMind 官網</a> 免費申請)。
             </div>
           </div>
+
 
           {/* FMP (Financial Modeling Prep) API Key */}
           <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
@@ -884,12 +900,28 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
         apiKeys={apiKeys}
         onDataRestored={onDataRestored}
       />
+
+      {/* --- 第四區塊：📚 官方股票名稱字典庫與自動補齊管理 --- */}
+      <StockDictionaryManagementSection />
     </div>
   );
 };
 
 // -------------------------------------------------------------
-// 時光機快照與資料庫狀態子元件
+// 輔助函式：位元組格式化
+// -------------------------------------------------------------
+function formatBytes(bytes: number, decimals: number = 2): string {
+  if (!bytes || bytes <= 0) return '0 B';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const safeI = Math.min(i, sizes.length - 1);
+  return parseFloat((bytes / Math.pow(k, safeI)).toFixed(dm)) + ' ' + sizes[safeI];
+}
+
+// -------------------------------------------------------------
+// 本地數據與儲存空間總覽子元件 (Local Storage Inspector)
 // -------------------------------------------------------------
 
 interface DatabaseAndSnapshotsSectionProps {
@@ -910,26 +942,60 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
   onDataRestored,
 }) => {
   const [snapshots, setSnapshots] = useState<SystemSnapshot[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [inspectionStats, setInspectionStats] = useState<LocalStorageInspectionStats | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [customSnapshotName, setCustomSnapshotName] = useState('');
   const [isCreatingSnapshot, setIsCreatingSnapshot] = useState(false);
   const [restoreConfirmSnap, setRestoreConfirmSnap] = useState<SystemSnapshot | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<{ text: string; isError?: boolean } | null>(null);
+  const [activePurging, setActivePurging] = useState<string | null>(null);
 
-  const loadSnapshots = async () => {
+  const loadAllData = async () => {
     try {
-      setIsLoading(true);
-      const list = await getSystemSnapshots();
-      setSnapshots(list);
+      setIsLoadingStats(true);
+      const [snapList, stats] = await Promise.all([
+        getSystemSnapshots(),
+        getLocalStorageInspectionStats(),
+      ]);
+      setSnapshots(snapList);
+      setInspectionStats(stats);
     } catch (err) {
-      console.error('Failed to load snapshots:', err);
+      console.error('Failed to load storage inspection stats:', err);
     } finally {
-      setIsLoading(false);
+      setIsLoadingStats(false);
     }
   };
 
   useEffect(() => {
-    loadSnapshots();
-  }, []);
+    loadAllData();
+  }, [trades.length, accounts.length, cashTransactions.length, loanRecords.length]);
+
+  const showToast = (text: string, isError: boolean = false) => {
+    setActionFeedback({ text, isError });
+    setTimeout(() => setActionFeedback(null), 4000);
+  };
+
+  // 快取清除操作
+  const handleClearCache = async (
+    type: 'PRICES' | 'FX' | 'PRICE_META' | 'CORP_ACTIONS',
+    title: string,
+    clearFn: () => Promise<void>
+  ) => {
+    if (!window.confirm(`確定要清除「${title}」嗎？\n\n此操作僅會清空本機快取與暫存資料，完全不會刪除您的個人交易與帳本紀錄。`)) {
+      return;
+    }
+
+    try {
+      setActivePurging(type);
+      await clearFn();
+      await loadAllData();
+      showToast(`🧹 已成功清除「${title}」，可點擊重新同步或於各頁面自動拉取最新資料。`);
+    } catch (err: any) {
+      showToast(`⚠️ 清除快取失敗: ${err?.message || String(err)}`, true);
+    } finally {
+      setActivePurging(null);
+    }
+  };
 
   // 建立自訂快照
   const handleCreateSnapshot = async (e: React.FormEvent) => {
@@ -955,10 +1021,10 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
         false
       );
       setCustomSnapshotName('');
-      await loadSnapshots();
-      alert('📸 自訂快照已成功建立！');
+      await loadAllData();
+      showToast('📸 自訂快照已成功建立！');
     } catch (err) {
-      alert(`建立快照失敗: ${err instanceof Error ? err.message : String(err)}`);
+      showToast(`建立快照失敗: ${err instanceof Error ? err.message : String(err)}`, true);
     } finally {
       setIsCreatingSnapshot(false);
     }
@@ -968,9 +1034,9 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
   const handleToggleLock = async (snapId: string) => {
     try {
       await toggleLockSystemSnapshot(snapId);
-      await loadSnapshots();
+      await loadAllData();
     } catch (err) {
-      alert(`切換鎖定失敗: ${err instanceof Error ? err.message : String(err)}`);
+      showToast(`切換鎖定失敗: ${err instanceof Error ? err.message : String(err)}`, true);
     }
   };
 
@@ -986,9 +1052,10 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
 
     try {
       await deleteSystemSnapshot(snap.id);
-      await loadSnapshots();
+      await loadAllData();
+      showToast('🗑️ 快照已成功刪除');
     } catch (err) {
-      alert(`刪除快照失敗: ${err instanceof Error ? err.message : String(err)}`);
+      showToast(`刪除快照失敗: ${err instanceof Error ? err.message : String(err)}`, true);
     }
   };
 
@@ -1020,8 +1087,9 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
       a.download = `stock-tracker-full-backup-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
+      showToast('📦 全庫 JSON 備份檔案已成功導出！');
     } catch (err) {
-      alert(`匯出失敗: ${err instanceof Error ? err.message : String(err)}`);
+      showToast(`匯出失敗: ${err instanceof Error ? err.message : String(err)}`, true);
     }
   };
 
@@ -1067,143 +1135,717 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
     }
   };
 
+  const stats = inspectionStats;
+
   return (
-    <div style={{ marginTop: '24px', background: 'var(--card-bg, #1e293b)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border-color)' }}>
-      {/* 標題列 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ padding: '8px', borderRadius: '10px', background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8' }}>
-            <Database size={22} />
+    <div
+      style={{
+        marginTop: '24px',
+        background: 'var(--card-bg, #1e293b)',
+        borderRadius: '16px',
+        padding: '24px',
+        border: '1px solid var(--border-color)',
+      }}
+    >
+      {/* 1. 頂部資安與 100% 離線隱私保證橫幅 */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '16px 20px',
+          borderRadius: '12px',
+          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(6, 78, 59, 0.25))',
+          border: '1px solid rgba(16, 185, 129, 0.3)',
+          marginBottom: '20px',
+          flexWrap: 'wrap',
+          gap: '14px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div
+            style={{
+              padding: '10px',
+              borderRadius: '12px',
+              background: 'rgba(16, 185, 129, 0.2)',
+              color: '#34d399',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <ShieldCheck size={26} />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                底層資料庫與時光機快照體系
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#34d399' }}>
+                100% 本地離線存儲 · 極致隱私安全保證
               </h3>
-              <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', fontWeight: 600 }}>
-                IndexedDB v{DB_VERSION} (0 依賴原生驅動)
+              <span
+                style={{
+                  fontSize: '0.68rem',
+                  padding: '2px 8px',
+                  borderRadius: '10px',
+                  background: 'rgba(16, 185, 129, 0.25)',
+                  color: '#6ee7b7',
+                  fontWeight: 600,
+                }}
+              >
+                Local-First
               </span>
             </div>
-            <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              解除 5MB 瀏覽器限制與同步阻塞，支援重大操作前自動快照防呆、鎖定保存與一鍵時光機回滾。
+            <p
+              style={{
+                margin: '3px 0 0',
+                fontSize: '0.78rem',
+                color: 'rgba(255, 255, 255, 0.75)',
+                lineHeight: 1.5,
+              }}
+            >
+              本系統的所有個人交易、交割帳戶、現金流帳本與 API 金鑰，均 100% 儲存在您的瀏覽器本地環境（IndexedDB 與 LocalStorage），絕不上傳任何私有雲端伺服器。
             </p>
           </div>
         </div>
 
-        {/* 全庫 JSON 匯出/匯入 */}
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              fontSize: '0.72rem',
+              padding: '4px 10px',
+              borderRadius: '8px',
+              background: 'rgba(15, 23, 42, 0.6)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              color: '#34d399',
+            }}
+          >
+            <span
+              style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                background: '#10b981',
+                boxShadow: '0 0 8px #10b981',
+              }}
+            />
+            IndexedDB 引擎正常 ({DB_NAME} v{DB_VERSION})
+          </span>
           <button
             type="button"
-            onClick={handleExportFullDB}
+            onClick={loadAllData}
+            title="重新整理本機資料庫統計"
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              padding: '6px 12px',
+              gap: '4px',
+              padding: '5px 10px',
               borderRadius: '8px',
-              background: 'rgba(255, 255, 255, 0.05)',
+              background: 'rgba(255, 255, 255, 0.06)',
               border: '1px solid var(--border-color)',
-              color: 'var(--text-primary)',
-              fontSize: '0.78rem',
+              color: 'var(--text-secondary)',
+              fontSize: '0.75rem',
               cursor: 'pointer',
             }}
           >
-            <Download size={13} />
-            匯出全庫備份
+            <RefreshCw size={12} className={isLoadingStats ? 'animate-spin' : ''} />
+            整理統計
           </button>
-          <label
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 12px',
-              borderRadius: '8px',
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid var(--border-color)',
-              color: 'var(--text-primary)',
-              fontSize: '0.78rem',
-              cursor: 'pointer',
-            }}
-          >
-            <Upload size={13} />
-            匯入全庫備份
-            <input type="file" accept=".json" onChange={handleImportFullDB} style={{ display: 'none' }} />
-          </label>
         </div>
       </div>
 
-      {/* 資料庫即時統計指標卡片 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-        <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 14px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>交易紀錄筆數</div>
-          <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#38bdf8' }}>{trades.length.toLocaleString()} 筆</div>
-        </div>
-        <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 14px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>券商帳戶數</div>
-          <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#a78bfa' }}>{accounts.length} 個</div>
-        </div>
-        <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 14px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>現金與交割流水</div>
-          <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#34d399' }}>{cashTransactions.length.toLocaleString()} 筆</div>
-        </div>
-        <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 14px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>已存時光機快照</div>
-          <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#fbbf24' }}>{snapshots.length} 份</div>
-        </div>
-      </div>
-
-      {/* 手動建立快照輸入列 */}
-      <form onSubmit={handleCreateSnapshot} style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-        <input
-          type="text"
-          value={customSnapshotName}
-          onChange={(e) => setCustomSnapshotName(e.target.value)}
-          placeholder="輸入自訂快照名稱（例：2026年度結算備份、大額加碼前快照）"
-          style={{
-            flex: 1,
-            padding: '8px 12px',
-            borderRadius: '8px',
-            background: 'rgba(15, 23, 42, 0.8)',
-            border: '1px solid var(--border-color)',
-            color: '#fff',
-            fontSize: '0.82rem',
-          }}
-        />
-        <button
-          type="submit"
-          disabled={isCreatingSnapshot || !customSnapshotName.trim()}
+      {/* 2. 磁碟儲存配額與引擎健康度 (Storage Quota Dashboard) */}
+      <div
+        style={{
+          background: 'rgba(15, 23, 42, 0.7)',
+          padding: '16px 20px',
+          borderRadius: '12px',
+          border: '1px solid var(--border-color)',
+          marginBottom: '24px',
+        }}
+      >
+        <div
           style={{
             display: 'flex',
+            justifyContent: 'space-between',
             alignItems: 'center',
-            gap: '6px',
-            padding: '8px 16px',
-            borderRadius: '8px',
-            background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-            border: 'none',
-            color: '#fff',
-            fontWeight: 600,
-            fontSize: '0.82rem',
-            cursor: customSnapshotName.trim() ? 'pointer' : 'not-allowed',
-            opacity: customSnapshotName.trim() ? 1 : 0.6,
+            marginBottom: '10px',
+            flexWrap: 'wrap',
+            gap: '8px',
           }}
         >
-          <Camera size={14} />
-          {isCreatingSnapshot ? '建立中...' : '建立快照'}
-        </button>
-      </form>
-
-      {/* 快照列表清單 */}
-      <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', overflow: 'hidden' }}>
-        <div style={{ padding: '10px 14px', background: 'rgba(15, 23, 42, 0.8)', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-          <History size={14} color="#818cf8" />
-          <span>時光機歷史還原點列表 (最多保留 10 份自動快照，鎖定項目永久保留)</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <HardDrive size={18} color="#38bdf8" />
+            <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+              瀏覽器儲存空間佔用與配額 (Storage Quota)
+            </span>
+          </div>
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+            已使用{' '}
+            <strong style={{ color: '#38bdf8' }}>
+              {stats ? formatBytes(stats.storageUsageBytes) : '計算中...'}
+            </strong>{' '}
+            / 配額上限{' '}
+            <span style={{ color: 'var(--text-muted)' }}>
+              {stats && stats.isStorageEstimateSupported && stats.storageQuotaBytes > 0
+                ? formatBytes(stats.storageQuotaBytes)
+                : '瀏覽器動態配額'}
+            </span>
+            {stats && stats.isStorageEstimateSupported && (
+              <span
+                style={{
+                  marginLeft: '8px',
+                  padding: '2px 6px',
+                  borderRadius: '6px',
+                  background: 'rgba(56, 189, 248, 0.15)',
+                  color: '#38bdf8',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                }}
+              >
+                佔用率 {stats.usagePercentage.toFixed(3)}%
+              </span>
+            )}
+          </div>
         </div>
 
-        {isLoading ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-            載入快照中...
+        {/* 進度條 */}
+        <div
+          style={{
+            width: '100%',
+            height: '8px',
+            borderRadius: '4px',
+            background: 'rgba(255, 255, 255, 0.08)',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              width: `${Math.max(1, Math.min(100, stats?.usagePercentage || 1))}%`,
+              height: '100%',
+              borderRadius: '4px',
+              background: 'linear-gradient(90deg, #10b981, #38bdf8)',
+              transition: 'width 0.5s ease',
+            }}
+          />
+        </div>
+      </div>
+
+      {/* 3. 三大維度本地資料明細卡片群 (Categorized Datasets) */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(310px, 1fr))',
+          gap: '16px',
+          marginBottom: '24px',
+        }}
+      >
+        {/* 卡片 1：🛡️ 核心個人資產數據 */}
+        <div
+          style={{
+            background: 'rgba(15, 23, 42, 0.5)',
+            border: '1px solid rgba(59, 130, 246, 0.25)',
+            borderRadius: '12px',
+            padding: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div
+                  style={{
+                    padding: '6px',
+                    borderRadius: '8px',
+                    background: 'rgba(59, 130, 246, 0.15)',
+                    color: '#60a5fa',
+                  }}
+                >
+                  <Receipt size={16} />
+                </div>
+                <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: '#93c5fd' }}>
+                  1. 核心個人資產數據
+                </h4>
+              </div>
+              <span
+                style={{
+                  fontSize: '0.68rem',
+                  padding: '2px 6px',
+                  borderRadius: '6px',
+                  background: 'rgba(59, 130, 246, 0.2)',
+                  color: '#60a5fa',
+                  fontWeight: 600,
+                }}
+              >
+                高防護層
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.78rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+                <span>歷史交易紀錄 (trades)</span>
+                <strong style={{ color: 'var(--text-primary)' }}>
+                  {(stats?.coreAssets ? (stats.coreAssets.totalTrades || trades.length) : trades.length).toLocaleString()} 筆
+                </strong>
+              </div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', paddingLeft: '8px' }}>
+                • 買進: {stats?.coreAssets?.buyTrades || trades.filter(t => t.type === 'BUY' || t.type === 'MARGIN_BUY').length} | 賣出: {stats?.coreAssets?.sellTrades || trades.filter(t => t.type === 'SELL' || t.type === 'MARGIN_SELL').length} | 配息: {stats?.coreAssets?.dividendTrades || trades.filter(t => t.type === 'DIVIDEND' || t.type === 'STOCK_DIVIDEND').length}
+              </div>
+              {(stats?.coreAssets?.earliestTradeDate || trades.length > 0) && (
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', paddingLeft: '8px' }}>
+                  • 期間: {stats?.coreAssets?.earliestTradeDate || (trades.map(t => t.date).filter(Boolean).sort()[0] || '-')} ~ {stats?.coreAssets?.latestTradeDate || (trades.map(t => t.date).filter(Boolean).sort().slice(-1)[0] || '-')}
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+                <span>證券交割帳戶 (brokerAccounts)</span>
+                <strong style={{ color: 'var(--text-primary)' }}>
+                  {stats?.coreAssets ? (stats.coreAssets.totalAccounts || accounts.length) : accounts.length} 個
+                </strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+                <span>現金流水記帳 (cashTransactions)</span>
+                <strong style={{ color: 'var(--text-primary)' }}>
+                  {(stats?.coreAssets ? (stats.coreAssets.totalCashTransactions || cashTransactions.length) : cashTransactions.length).toLocaleString()} 筆
+                </strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+                <span>質押信貸紀錄 (loanRecords)</span>
+                <strong style={{ color: 'var(--text-primary)' }}>
+                  {stats?.coreAssets ? (stats.coreAssets.totalLoanRecords || loanRecords.length) : loanRecords.length} 筆
+                </strong>
+              </div>
+            </div>
           </div>
-        ) : snapshots.length === 0 ? (
+
+          <div
+            style={{
+              display: 'flex',
+              gap: '8px',
+              marginTop: '16px',
+              paddingTop: '12px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+            }}
+          >
+            <button
+              type="button"
+              onClick={handleExportFullDB}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '5px',
+                padding: '6px 10px',
+                borderRadius: '8px',
+                background: 'rgba(59, 130, 246, 0.15)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                color: '#93c5fd',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <Download size={13} />
+              匯出全庫 JSON
+            </button>
+            <label
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '5px',
+                padding: '6px 10px',
+                borderRadius: '8px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-secondary)',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+              }}
+            >
+              <Upload size={13} />
+              匯入備份
+              <input type="file" accept=".json" onChange={handleImportFullDB} style={{ display: 'none' }} />
+            </label>
+          </div>
+        </div>
+
+        {/* 卡片 2：⚡ 行情與市場快取 */}
+        <div
+          style={{
+            background: 'rgba(15, 23, 42, 0.5)',
+            border: '1px solid rgba(245, 158, 11, 0.25)',
+            borderRadius: '12px',
+            padding: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div
+                  style={{
+                    padding: '6px',
+                    borderRadius: '8px',
+                    background: 'rgba(245, 158, 11, 0.15)',
+                    color: '#fbbf24',
+                  }}
+                >
+                  <Activity size={16} />
+                </div>
+                <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: '#fde68a' }}>
+                  2. 行情與市場快取
+                </h4>
+              </div>
+              <span
+                style={{
+                  fontSize: '0.68rem',
+                  padding: '2px 6px',
+                  borderRadius: '6px',
+                  background: 'rgba(245, 158, 11, 0.2)',
+                  color: '#fbbf24',
+                  fontWeight: 600,
+                }}
+              >
+                可安全重置
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.78rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-secondary)' }}>
+                <span>歷史每日收盤價 (historicalPrices)</span>
+                <span style={{ color: 'var(--text-primary)' }}>
+                  {stats?.marketCache.historicalPricesSymbols ?? 0} 檔 ({stats?.marketCache.historicalPricesDataPoints.toLocaleString() ?? 0} 點)
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-secondary)' }}>
+                <span>歷史外匯匯率 (historicalFx)</span>
+                <span style={{ color: 'var(--text-primary)' }}>
+                  {stats?.marketCache.historicalFxPairs ?? 0} 對 ({stats?.marketCache.historicalFxDataPoints.toLocaleString() ?? 0} 點)
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-secondary)' }}>
+                <span>即時報價中繼快取 (priceMetadata)</span>
+                <span style={{ color: 'var(--text-primary)' }}>
+                  {stats?.marketCache.priceMetadataSymbols ?? 0} 檔
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-secondary)' }}>
+                <span>公司行動資料庫 (corporateActions)</span>
+                <span style={{ color: 'var(--text-primary)' }}>
+                  {stats?.marketCache.corporateActionsSymbols ?? 0} 檔 ({stats?.marketCache.corporateActionsTotal ?? 0} 筆)
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-secondary)' }}>
+                <span>台美股官方字典 (stockDictionary)</span>
+                <span style={{ color: 'var(--text-primary)' }}>
+                  {(stats?.marketCache.stockDictionaryTotalCount ?? stats?.marketCache.stockDictionaryOfficialCount ?? 0).toLocaleString()} 檔
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '6px',
+              marginTop: '16px',
+              paddingTop: '12px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => handleClearCache('PRICES', '歷史收盤價快取', clearHistoricalPricesCache)}
+              disabled={activePurging === 'PRICES'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                padding: '5px 8px',
+                borderRadius: '6px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-secondary)',
+                fontSize: '0.72rem',
+                cursor: 'pointer',
+              }}
+            >
+              <Trash2 size={11} />
+              清空股價快取
+            </button>
+            <button
+              type="button"
+              onClick={() => handleClearCache('FX', '歷史外匯快取', clearHistoricalFxCache)}
+              disabled={activePurging === 'FX'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                padding: '5px 8px',
+                borderRadius: '6px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-secondary)',
+                fontSize: '0.72rem',
+                cursor: 'pointer',
+              }}
+            >
+              <Trash2 size={11} />
+              清空匯率快取
+            </button>
+            <button
+              type="button"
+              onClick={() => handleClearCache('PRICE_META', '即時行情快取', clearPriceMetadataCache)}
+              disabled={activePurging === 'PRICE_META'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                padding: '5px 8px',
+                borderRadius: '6px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-secondary)',
+                fontSize: '0.72rem',
+                cursor: 'pointer',
+              }}
+            >
+              <Trash2 size={11} />
+              清空即時報價
+            </button>
+            <button
+              type="button"
+              onClick={() => handleClearCache('CORP_ACTIONS', '公司行動資料庫', clearCorporateActionsCache)}
+              disabled={activePurging === 'CORP_ACTIONS'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                padding: '5px 8px',
+                borderRadius: '6px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-secondary)',
+                fontSize: '0.72rem',
+                cursor: 'pointer',
+              }}
+            >
+              <Trash2 size={11} />
+              清空行動庫
+            </button>
+          </div>
+        </div>
+
+        {/* 卡片 3：⚙️ 系統快照與偏好配置 */}
+        <div
+          style={{
+            background: 'rgba(15, 23, 42, 0.5)',
+            border: '1px solid rgba(168, 85, 247, 0.25)',
+            borderRadius: '12px',
+            padding: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div
+                  style={{
+                    padding: '6px',
+                    borderRadius: '8px',
+                    background: 'rgba(168, 85, 247, 0.15)',
+                    color: '#c084fc',
+                  }}
+                >
+                  <Layers size={16} />
+                </div>
+                <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: '#e9d5ff' }}>
+                  3. 系統快照與偏好配置
+                </h4>
+              </div>
+              <span
+                style={{
+                  fontSize: '0.68rem',
+                  padding: '2px 6px',
+                  borderRadius: '6px',
+                  background: 'rgba(168, 85, 247, 0.2)',
+                  color: '#c084fc',
+                  fontWeight: 600,
+                }}
+              >
+                自動保護
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.78rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+                <span>時光機快照 (snapshots)</span>
+                <strong style={{ color: 'var(--text-primary)' }}>
+                  {stats?.systemConfig ? (stats.systemConfig.totalSnapshots || snapshots.length) : snapshots.length} 份 (已鎖定 {stats?.systemConfig ? (stats.systemConfig.lockedSnapshots || snapshots.filter(s => s.isLocked).length) : snapshots.filter(s => s.isLocked).length} 份)
+                </strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+                <span>FinMind API Token</span>
+                <span style={{ color: stats?.systemConfig.hasFinMindKey ? '#34d399' : 'var(--text-muted)' }}>
+                  {stats?.systemConfig.hasFinMindKey ? '✓ 已配置' : '未設定'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+                <span>FMP API Key</span>
+                <span style={{ color: stats?.systemConfig.hasFmpKey ? '#34d399' : 'var(--text-muted)' }}>
+                  {stats?.systemConfig.hasFmpKey ? '✓ 已配置' : '未設定'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+                <span>臺灣證券交易所 OpenAPI</span>
+                <span style={{ color: '#34d399' }}>✓ 官方免 Key 直連</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
+                <span>券商手續費預設折數</span>
+                <span style={{ color: 'var(--text-primary)' }}>
+                  {((stats?.systemConfig.brokerFeeDiscount || 0.28) * 10).toFixed(1)} 折
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginTop: '16px',
+              paddingTop: '12px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+            }}
+          >
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              💡 重大操作（如全庫重置、CSV 覆寫匯入）前，系統皆會強制自動建立安全快照。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 回饋訊息 Toast */}
+      {actionFeedback && (
+        <div
+          style={{
+            padding: '10px 14px',
+            borderRadius: '8px',
+            background: actionFeedback.isError
+              ? 'rgba(239, 68, 68, 0.15)'
+              : 'rgba(16, 185, 129, 0.15)',
+            border: `1px solid ${
+              actionFeedback.isError ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)'
+            }`,
+            color: actionFeedback.isError ? '#f87171' : '#34d399',
+            fontSize: '0.82rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '16px',
+          }}
+        >
+          {actionFeedback.isError ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}
+          <span>{actionFeedback.text}</span>
+        </div>
+      )}
+
+      {/* 4. 時光機手動建立與還原管理清單 */}
+      <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', overflow: 'hidden' }}>
+        <div
+          style={{
+            padding: '12px 16px',
+            background: 'rgba(15, 23, 42, 0.85)',
+            borderBottom: '1px solid var(--border-color)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '10px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <History size={16} color="#818cf8" />
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+              時光機歷史還原點管理 (最多保留 10 份自動快照，鎖定項目永久保留)
+            </span>
+          </div>
+
+          {/* 手動建立快照輸入列 */}
+          <form onSubmit={handleCreateSnapshot} style={{ display: 'flex', gap: '6px', flex: '1 1 300px', maxWidth: '420px' }}>
+            <input
+              type="text"
+              value={customSnapshotName}
+              onChange={(e) => setCustomSnapshotName(e.target.value)}
+              placeholder="自訂快照名稱（如：年度結算備份）"
+              style={{
+                flex: 1,
+                padding: '6px 10px',
+                borderRadius: '6px',
+                background: 'rgba(15, 23, 42, 0.8)',
+                border: '1px solid var(--border-color)',
+                color: '#fff',
+                fontSize: '0.78rem',
+              }}
+            />
+            <button
+              type="submit"
+              disabled={isCreatingSnapshot || !customSnapshotName.trim()}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                border: 'none',
+                color: '#fff',
+                fontWeight: 600,
+                fontSize: '0.78rem',
+                cursor: customSnapshotName.trim() ? 'pointer' : 'not-allowed',
+                opacity: customSnapshotName.trim() ? 1 : 0.6,
+              }}
+            >
+              <Camera size={13} />
+              {isCreatingSnapshot ? '建立中...' : '建立快照'}
+            </button>
+          </form>
+        </div>
+
+        {snapshots.length === 0 ? (
           <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
             目前尚無快照記錄。在您進行 CSV 匯入或手動備份時，系統將自動於此處建立還原點。
           </div>
@@ -1227,7 +1869,7 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '12px 14px',
+                    padding: '12px 16px',
                     borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
                     background: snap.isLocked ? 'rgba(99, 102, 241, 0.03)' : 'transparent',
                     gap: '12px',
@@ -1390,6 +2032,265 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
               </button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// -------------------------------------------------------------
+// 官方股票名稱字典管理子元件
+// -------------------------------------------------------------
+
+export const StockDictionaryManagementSection: React.FC = () => {
+  const [stats, setStats] = useState<StockDictionaryStats>(() => getStockDictionaryStats());
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [syncFeedback, setSyncFeedback] = useState<{ text: string; isError?: boolean } | null>(null);
+
+  const refreshStats = () => {
+    setStats(getStockDictionaryStats());
+  };
+
+  useEffect(() => {
+    refreshStats();
+  }, []);
+
+  const handleSyncOfficialList = async () => {
+    setIsSyncing(true);
+    setSyncFeedback(null);
+    try {
+      const result = await syncOfficialTaiwanStockList();
+      if (result.success) {
+        refreshStats();
+        setSyncFeedback({
+          text: `🎉 官方清單同步成功！共更新 ${result.totalSynced.toLocaleString()} 檔標的 (TWSE 上市: ${result.twseCount} 檔, TPEx 上櫃: ${result.tpexCount} 檔)。`,
+        });
+      } else {
+        setSyncFeedback({
+          text: `⚠️ 同步失敗: ${result.error || '無法連線至官方 API'}`,
+          isError: true,
+        });
+      }
+    } catch (err: any) {
+      setSyncFeedback({
+        text: `⚠️ 同步發生異常: ${err?.message || String(err)}`,
+        isError: true,
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleClearCustom = () => {
+    if (!window.confirm('確定要清除所有自訂股票名稱並恢復至預設官方字典嗎？')) {
+      return;
+    }
+    clearCustomStockNames();
+    refreshStats();
+    setSyncFeedback({ text: '🧹 已重設自訂股票名稱快取為預設官方字典。' });
+  };
+
+  return (
+    <div
+      style={{
+        marginTop: '24px',
+        background: 'var(--card-bg, #1e293b)',
+        borderRadius: '16px',
+        padding: '24px',
+        border: '1px solid var(--border-color)',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '20px',
+          flexWrap: 'wrap',
+          gap: '12px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            style={{
+              padding: '8px',
+              borderRadius: '10px',
+              background: 'rgba(16, 185, 129, 0.15)',
+              color: '#34d399',
+            }}
+          >
+            <BookOpen size={22} />
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: '1.1rem',
+                  fontWeight: 700,
+                  color: 'var(--text-primary)',
+                }}
+              >
+                官方股票名稱字典庫與智慧自動補齊
+              </h3>
+              <span
+                style={{
+                  fontSize: '0.68rem',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  background: 'rgba(59, 130, 246, 0.2)',
+                  color: '#60a5fa',
+                  fontWeight: 600,
+                }}
+              >
+                離線優先 · 雙向檢索
+              </span>
+            </div>
+            <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              內建台股全量官方掛牌清單與美股主要成分股，輸入代碼或中文名稱即時雙向搜尋，自動補全標的名稱。
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            type="button"
+            onClick={handleClearCustom}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid var(--border-color)',
+              color: 'var(--text-secondary)',
+              fontSize: '0.78rem',
+              cursor: 'pointer',
+            }}
+          >
+            <Trash2 size={13} />
+            重設自訂快取
+          </button>
+          <button
+            type="button"
+            onClick={handleSyncOfficialList}
+            disabled={isSyncing}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 14px',
+              borderRadius: '8px',
+              background: isSyncing
+                ? 'rgba(59, 130, 246, 0.5)'
+                : 'linear-gradient(135deg, #3b82f6, #2563eb)',
+              border: 'none',
+              color: '#fff',
+              fontWeight: 600,
+              fontSize: '0.78rem',
+              cursor: isSyncing ? 'not-allowed' : 'pointer',
+              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
+            }}
+          >
+            <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
+            {isSyncing ? '同步官方清單中...' : '一鍵同步證交所與櫃買清單'}
+          </button>
+        </div>
+      </div>
+
+      {/* 字典統計指標卡片 */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+          gap: '12px',
+          marginBottom: '16px',
+        }}
+      >
+        <div
+          style={{
+            background: 'rgba(15, 23, 42, 0.6)',
+            padding: '12px 14px',
+            borderRadius: '10px',
+            border: '1px solid var(--border-color)',
+          }}
+        >
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+            總收錄標的數
+          </div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#38bdf8' }}>
+            {stats.totalCount.toLocaleString()} 檔
+          </div>
+        </div>
+        <div
+          style={{
+            background: 'rgba(15, 23, 42, 0.6)',
+            padding: '12px 14px',
+            borderRadius: '10px',
+            border: '1px solid var(--border-color)',
+          }}
+        >
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+            🇹🇼 台股官方收錄
+          </div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#34d399' }}>
+            {stats.twCount.toLocaleString()} 檔
+          </div>
+        </div>
+        <div
+          style={{
+            background: 'rgba(15, 23, 42, 0.6)',
+            padding: '12px 14px',
+            borderRadius: '10px',
+            border: '1px solid var(--border-color)',
+          }}
+        >
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+            🇺🇸 美股精選繁中
+          </div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#a78bfa' }}>
+            {stats.usCount.toLocaleString()} 檔
+          </div>
+        </div>
+        <div
+          style={{
+            background: 'rgba(15, 23, 42, 0.6)',
+            padding: '12px 14px',
+            borderRadius: '10px',
+            border: '1px solid var(--border-color)',
+          }}
+        >
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+            ⚙️ 自訂與同步增量
+          </div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#fbbf24' }}>
+            {stats.customCount.toLocaleString()} 檔
+          </div>
+        </div>
+      </div>
+
+      {/* 同步回饋訊息 */}
+      {syncFeedback && (
+        <div
+          style={{
+            padding: '10px 14px',
+            borderRadius: '8px',
+            background: syncFeedback.isError
+              ? 'rgba(239, 68, 68, 0.15)'
+              : 'rgba(16, 185, 129, 0.15)',
+            border: `1px solid ${
+              syncFeedback.isError ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)'
+            }`,
+            color: syncFeedback.isError ? '#f87171' : '#34d399',
+            fontSize: '0.82rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          {syncFeedback.isError ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}
+          <span>{syncFeedback.text}</span>
         </div>
       )}
     </div>

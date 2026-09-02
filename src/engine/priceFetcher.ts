@@ -16,6 +16,8 @@ export async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 
     localProxyUrl = targetUrl.replace('https://query1.finance.yahoo.com', '/api/yahoo');
   } else if (targetUrl.startsWith('https://openapi.twse.com.tw')) {
     localProxyUrl = targetUrl.replace('https://openapi.twse.com.tw', '/api/twse');
+  } else if (targetUrl.startsWith('https://www.tpex.org.tw')) {
+    localProxyUrl = targetUrl.replace('https://www.tpex.org.tw', '/api/tpex');
   }
 
   if (localProxyUrl && typeof window !== 'undefined') {

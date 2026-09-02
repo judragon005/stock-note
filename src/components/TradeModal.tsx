@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { TradeRecord, MarketType, TradeType, Currency, BrokerAccount, TradePlan } from '../types/stock';
 import { calculateTaiwanFee, calculateTaiwanTax, getHoldingsAsOfDate } from '../engine/calculator';
 import { calculatePlannedRiskRewardRatio } from '../engine/riskAlertEngine';
+import { searchStockSuggestions, resolveOfficialSecurityName, registerCustomStockName } from '../engine/stockNameResolver';
+import { StockDictionaryItem } from '../types/stockDictionary';
 import { X, Plus, Calculator, Zap, Sparkles, Calendar, Target, ShieldAlert, TrendingUp } from 'lucide-react';
 
 interface TradeModalProps {
@@ -43,35 +45,6 @@ export function getEffectiveAccountIdForMarket(
   if (firstAcc) return firstAcc.id;
   return targetMarket === 'TW' ? 'broker-tw-default' : 'broker-us-default';
 }
-
-const POPULAR_STOCKS: StockSuggestion[] = [
-  // 台股熱門
-  { symbol: '2330', name: '台積電', market: 'TW' },
-  { symbol: '0050', name: '元大台灣50', market: 'TW' },
-  { symbol: '00878', name: '國泰永續高股息', market: 'TW' },
-  { symbol: '0056', name: '元大高股息', market: 'TW' },
-  { symbol: '00919', name: '群益台灣精選高息', market: 'TW' },
-  { symbol: '00929', name: '復華台灣科技優息', market: 'TW' },
-  { symbol: '006208', name: '富邦台50', market: 'TW' },
-  { symbol: '2454', name: '聯發科', market: 'TW' },
-  { symbol: '2317', name: '鴻海', market: 'TW' },
-  { symbol: '2881', name: '富邦金', market: 'TW' },
-  { symbol: '2882', name: '國泰金', market: 'TW' },
-  { symbol: '2603', name: '長榮', market: 'TW' },
-  // 美股熱門
-  { symbol: 'NVDA', name: 'NVIDIA 輝達', market: 'US' },
-  { symbol: 'AAPL', name: 'Apple 蘋果', market: 'US' },
-  { symbol: 'TSLA', name: 'Tesla 特斯拉', market: 'US' },
-  { symbol: 'MSFT', name: 'Microsoft 微軟', market: 'US' },
-  { symbol: 'AMZN', name: 'Amazon 亞馬遜', market: 'US' },
-  { symbol: 'GOOGL', name: 'Alphabet Google', market: 'US' },
-  { symbol: 'META', name: 'Meta 臉書', market: 'US' },
-  { symbol: 'VOO', name: 'Vanguard S&P 500 ETF', market: 'US' },
-  { symbol: 'QQQ', name: 'Invesco QQQ 納指100', market: 'US' },
-  { symbol: 'SPY', name: 'SPDR S&P 500 ETF', market: 'US' },
-  { symbol: 'VT', name: 'Vanguard 全世界股票 ETF', market: 'US' },
-  { symbol: 'TLT', name: 'iShares 20年期以上美國公債 ETF', market: 'US' },
-];
 
 export const TradeModal: React.FC<TradeModalProps> = ({
   isOpen,
@@ -119,6 +92,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
   const [hasMinFee, setHasMinFee] = useState<boolean>(true); // 預設有 20 元低消
   const [continuousMode, setContinuousMode] = useState<boolean>(false);
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
+  const [isNameManuallyEdited, setIsNameManuallyEdited] = useState<boolean>(false);
 
   const symbolInputRef = useRef<HTMLInputElement>(null);
 
@@ -203,6 +177,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
       setStopLossPrice('');
       setTakeProfitPrice('');
       setIsPlanExpanded(false);
+      setIsNameManuallyEdited(false);
     }
   }, [initialSymbol, initialType, initialMarket, initialAccountId, isOpen, accounts, editingTrade]);
 
@@ -336,19 +311,36 @@ export const TradeModal: React.FC<TradeModalProps> = ({
     }
   }, [showSuggestions]);
 
-  // 過濾智慧建議候選標的
-  const filteredSuggestions = POPULAR_STOCKS.filter((stock) => {
-    if (!symbol.trim()) return stock.market === market;
-    const query = symbol.trim().toUpperCase();
-    return (
-      stock.symbol.toUpperCase().includes(query) ||
-      stock.name.includes(query)
-    );
-  }).slice(0, 6);
+  // 雙向智慧檢索候選標的 (支援代碼與繁體中文搜尋全量字典)
+  const filteredSuggestions = useMemo(() => {
+    return searchStockSuggestions(symbol, market, 8);
+  }, [symbol, market]);
 
-  const handleSelectSuggestion = (suggestion: StockSuggestion) => {
+  // 處理代碼輸入與即時智慧自動補齊名稱
+  const handleSymbolChange = (newVal: string) => {
+    setSymbol(newVal);
+    setShowSuggestions(true);
+    const clean = newVal.trim().toUpperCase();
+    if (!clean) return;
+
+    // 自動切換市場
+    if (/^\d+$/.test(clean) && market !== 'TW') {
+      handleMarketChange('TW');
+    }
+
+    // 若使用者尚未手動覆蓋名稱，自動帶入官方中文名稱
+    if (!isNameManuallyEdited) {
+      const officialName = resolveOfficialSecurityName(clean);
+      if (officialName && officialName !== clean) {
+        setName(officialName);
+      }
+    }
+  };
+
+  const handleSelectSuggestion = (suggestion: StockDictionaryItem | StockSuggestion) => {
     setSymbol(suggestion.symbol);
     setName(suggestion.name);
+    setIsNameManuallyEdited(false);
     handleMarketChange(suggestion.market);
     setShowSuggestions(false);
   };
@@ -427,6 +419,11 @@ export const TradeModal: React.FC<TradeModalProps> = ({
       },
       editingTrade?.id
     );
+
+    // 若填寫了有效名稱，自動持久化至本地自訂字典
+    if (name.trim() && symbol.trim()) {
+      registerCustomStockName(symbol.trim().toUpperCase(), name.trim(), market);
+    }
 
     if (continuousMode && !editingTrade) {
       // 連續記帳模式：保留日期、市場與折數，清空代碼、價格與備註
@@ -758,13 +755,10 @@ export const TradeModal: React.FC<TradeModalProps> = ({
               <input
                 ref={symbolInputRef}
                 type="text"
-                placeholder={market === 'TW' ? '如: 2330, 0050' : '如: AAPL, NVDA'}
+                placeholder={market === 'TW' ? '如: 2330, 0050 或 台積' : '如: AAPL, NVDA 或 蘋果'}
                 value={symbol}
                 onFocus={() => setShowSuggestions(true)}
-                onChange={(e) => {
-                  setSymbol(e.target.value);
-                  setShowSuggestions(true);
-                }}
+                onChange={(e) => handleSymbolChange(e.target.value)}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
@@ -870,7 +864,10 @@ export const TradeModal: React.FC<TradeModalProps> = ({
                   type="text"
                   placeholder="如: 台積電"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setIsNameManuallyEdited(true);
+                  }}
                   style={{
                     width: '100%',
                     padding: '10px 12px',
