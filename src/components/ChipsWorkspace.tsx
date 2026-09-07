@@ -103,7 +103,7 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
           }
 
           // 生成模擬歷史 5 日時序位移點 (基於真實數據增量)
-          const baseFlow = twseData ? twseData.totalNetShares / 2500 : (h.todaysPnLPercent || 0) / 5;
+          const baseFlow = twseData ? twseData.totalNetShares / 2500 : 0;
           const histFlows = availableDates.map((d, idx) => {
             const factor = (idx + 1) / availableDates.length;
             const changeP = (h.todaysPnLPercent || 0) * factor + (idx % 2 === 0 ? 0.3 : -0.2);

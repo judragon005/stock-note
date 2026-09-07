@@ -253,7 +253,7 @@ export function getTemporalBubbleFrameData(
   let quadrant: SmartMoneyQuadrant;
   if (currentChange >= 0 && currentFlow >= 0) {
     quadrant = 'BREAKOUT';
-  } else if (currentChange < 0 && currentFlow >= 0) {
+  } else if (currentChange < 0 && currentFlow > 0) {
     quadrant = 'ACCUMULATION';
   } else if (currentChange >= 0 && currentFlow < 0) {
     quadrant = 'DISTRIBUTION';
@@ -416,7 +416,7 @@ export function calculateSmartMoneyFlowDynamics(
     if (x >= 0 && y >= 0) {
       quadrant = 'BREAKOUT';
       breakoutCount++;
-    } else if (x < 0 && y >= 0) {
+    } else if (x < 0 && y > 0) {
       quadrant = 'ACCUMULATION';
       accumulationCount++;
     } else if (x >= 0 && y < 0) {

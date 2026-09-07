@@ -1070,8 +1070,16 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 在 `ChipsWorkspace` 持倉模式中，美股先生成量價日 K 棒並計算基礎 CMF，並於 5 日時序軌跡注入各日 `cmf` 與 `netFlowAmount`（`cmf * volume * price`），使 VT 等美股標的在時序播放時呈現真實的機構資金推升位移。
 - **Reactive Temporal Quadrant Indicator Cards (頂部四象限指標卡即時響應動態連動)**:
   - 頂部「🔥 主力抬轎區、🛡️ 逢低撿便宜區、⚠️ 割韭菜警戒區、❄️ 冷凍提款區」統計卡，綁定 `currentFrameCounts`，依據 `currentDateIndex` 滑桿位置即時重算當日影格中各標的所處之四象限檔數，徹底消除時序切換時指標數字凍結在最新一天的脫鉤現象。
-- **Force Refresh Button (強制同步盤後籌碼支援)**:
-  - 頂部「🔄 同步盤後籌碼」按鈕傳入 `forceRefresh: true`，略過本地 IndexedDB 快取直接發起全市場最新日報拉取，賦予使用者最高權威之強制刷新能力。
+### 動態影格象限色彩同步、象限邊界守門員與時序籌碼一致性 *(新增於 V8.5.0)*
+
+- **Dynamic Frame Quadrant Coloring (動態影格象限色彩同步)**:
+  - 徹底解決第三象限（左下角「❄️ 冷凍提款區」）氣泡呈現黃色之錯亂問題：`SmartMoneyBubbleChart.tsx` 中 `placedBubbles` 依據當前影格坐標即時重新換算 `dynQuadrant`，且 `getBubbleFillColor` 與 `getBubbleStrokeColor` 支援 `overrideQuadrant` 傳入當日真實象限。
+  - 只要泡泡坐標落於第三象限（$x < 0, y < 0$），顏色 100% 強制為冰霜冷灰藍色 (`rgba(100, 116, 139, 0.4)` / `#94a3b8`)，**絕對杜絕出現黃色**。
+- **Strict Quadrant Boundary Guard (象限邊界零軸守門員)**:
+  - 修正 `smartMoneyEngine.ts` 中象限邊界判定：嚴格限定 $x < 0$ 且 $y > 0$（實質法人大買）才歸入第二象限 `ACCUMULATION`（逢低吸籌黃色）；$y \le 0$（零法人動作或倒貨）且 $x < 0$ 嚴格歸入 `LIQUIDATION`（冷凍提款區，灰色），消滅零籌碼動作被誤判為吸籌黃色的根本病根。
+- **Temporal Neutral Fallback (時序流向缺損平滑中立降級)**:
+  - 修正 `ChipsWorkspace.tsx` 中 `baseFlow`：當外部籌碼數據缺損時，設為 `0` 而非 `(todaysPnLPercent)/5`，避免在法人數據尚未加載時將下跌股票偽造為大舉倒貨負向位移。
+
 
 
 

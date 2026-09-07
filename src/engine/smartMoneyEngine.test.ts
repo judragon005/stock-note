@@ -203,6 +203,32 @@ describe('smartMoneyEngine (籌碼與聰明錢量化引擎)', () => {
       expect(b.flowDescription).toContain('CMF');
     });
 
+    it('台股：股價下跌且三大法人無買賣超 (0 張)，嚴格不歸入 ACCUMULATION 逢低吸籌區', () => {
+      const items: SmartMoneyInputItem[] = [
+        {
+          symbol: '2886',
+          name: '兆豐金',
+          market: 'TW',
+          currentPrice: 38,
+          previousClose: 38.5,
+          changePercent: -1.4,
+          holdingValueTwd: 500000,
+          foreignBuyShares: 0,
+          foreignSellShares: 0,
+          trustBuyShares: 0,
+          trustSellShares: 0,
+          dealerBuyShares: 0,
+          dealerSellShares: 0,
+        },
+      ];
+
+      const result = calculateSmartMoneyFlowDynamics(items);
+      const b = result.bubbles[0];
+      // 零法人買盤絕不可誤判為逢低吸籌 (ACCUMULATION)
+      expect(b.quadrant).not.toBe('ACCUMULATION');
+      expect(b.quadrant).toBe('LIQUIDATION');
+    });
+
     it('坐標嚴格鉗制在 [-100, +100] 範圍內，泡泡半徑在 [14, 46] 之間', () => {
       const extremeItems: SmartMoneyInputItem[] = [
         {

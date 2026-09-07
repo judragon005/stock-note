@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-550%2F550%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-552%2F552%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,15 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. TWSE 全市場覆蓋健全檢查、V4 快取換代、美股 CMF 診斷隔離與時序象限動態連動 (`TWSE Coverage Guard, V4 Cache & US CMF Diagnosis Sync`) *(V8.4.0 全新升級)*
+### 0. 動態影格象限色彩同步、象限邊界守門員與時序籌碼一致性 (`Dynamic Frame Quadrant Coloring & Strict Boundary Guard`) *(V8.5.0 全新升級)*
+- **動態影格象限色彩同步 (`Dynamic Frame Quadrant Coloring`)**：
+  - 徹底根除第三象限（左下角「❄️ 冷凍提款區」）氣泡呈現黃色之嚴重視覺 Bug：`SmartMoneyBubbleChart.tsx` 中 `placedBubbles` 依據當前影格坐標動態換算 `dynQuadrant`，且色彩映射函式傳入當日真實象限，**第三象限標的 100% 強制呈現冷灰藍色 (`rgba(100, 116, 139, 0.4)` / `#94a3b8`)，絕對杜絕出現黃色**。
+- **象限邊界零軸守門員 (`Strict Quadrant Boundary Guard`)**：
+  - 修正 `smartMoneyEngine.ts` 判定邏輯漏洞：嚴格限定 $x < 0$ 且 $y > 0$（實質法人大買）才為第二象限 `ACCUMULATION`（逢低吸籌黃色）；零法人動作標的（$y \le 0$）嚴格歸入 `LIQUIDATION`（冷凍提款區，灰色），消滅零量能誤判為吸籌黃色之根本病根。
+- **時序流向缺損平滑中立降級 (`Temporal Neutral Fallback`)**：
+  - 修正 `ChipsWorkspace.tsx` 中 `baseFlow`：當外部籌碼數據缺損時，設為 `0` 而非 `(todaysPnLPercent)/5`，避免在法人數據尚未加載時將下跌股票偽造為大舉倒貨負向位移。
+
+### 0. TWSE 全市場覆蓋健全檢查、V4 快取換代、美股 CMF 診斷隔離與時序象限動態連動 (`TWSE Coverage Guard, V4 Cache & US CMF Diagnosis Sync`) *(V8.4.0)*
 - **全市場覆蓋健全檢查與上市哨兵 (`TWSE Market Coverage Guard & Sentinel`)**：
   - 徹底解決台積電 (2330) 等上市股票三大法人張數全為 0 的根本問題：以 `2330` 為健康指標哨兵，若快取缺少 2330 判定為殘缺快取並拒絕使用，強制重新拉取 TWSE 與 TPEx；同時升級快取版本至 `TWSE_TPEX_CHIPS_V4_`，徹底作廢過去被污染的殘缺快取。
 - **美股 CMF 專屬診斷與三大法人字眼絕對隔離 (`US CMF Isolated Diagnosis & Anti-Hallucination Guard`)**：

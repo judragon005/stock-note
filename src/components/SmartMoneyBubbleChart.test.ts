@@ -72,6 +72,16 @@ describe('SmartMoneyBubbleChart 視覺映射與輔助計算測試 (Tickets 03 & 
       // 國際空頭為紅
       expect(getBubbleStrokeColor(bearBubble, 'international')).toBe('#ef4444');
     });
+
+    it('第三象限 (LIQUIDATION) 泡泡絕對為冰霜冷灰藍色，即使傳入 overrideQuadrant 也正確覆寫，絕不出現黃色', () => {
+      const yellowBubble = { ...mockBubble, quadrant: 'ACCUMULATION' as const };
+      // 若動態影格為 LIQUIDATION，色彩必須強制覆寫為冷灰藍色
+      const fill = getBubbleFillColor(yellowBubble, 'taiwan', 'LIQUIDATION');
+      const stroke = getBubbleStrokeColor(yellowBubble, 'taiwan', 'LIQUIDATION');
+      expect(fill).toBe('rgba(100, 116, 139, 0.4)');
+      expect(stroke).toBe('#94a3b8');
+      expect(fill).not.toContain('245, 158, 11'); // 絕不為黃色
+    });
   });
 
   describe('formatInstitutionalDetailText (三大法人明細格式化)', () => {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   SmartMoneyBubbleData,
+  SmartMoneyQuadrant,
   ColorThemeMode,
   MarketType,
 } from '../types/stock';
@@ -53,42 +54,47 @@ export function calculateCanvasCoordinates(
 }
 
 /**
- * 泡泡背景填充色 (半透明玻璃光暈)
+ * 泡泡背景填充色 (半透明玻璃光暈，支援動態影格象限 overrideQuadrant 覆寫)
  */
 export function getBubbleFillColor(
   bubble: SmartMoneyBubbleData,
-  colorTheme: ColorThemeMode
+  colorTheme: ColorThemeMode,
+  overrideQuadrant?: SmartMoneyQuadrant
 ): string {
   const isTaiwan = colorTheme === 'taiwan';
+  const targetQuadrant = overrideQuadrant || bubble.quadrant;
 
-  if (bubble.quadrant === 'BREAKOUT') {
+  if (targetQuadrant === 'BREAKOUT') {
     // 飆股抬轎區
     return isTaiwan ? 'rgba(239, 68, 68, 0.45)' : 'rgba(16, 185, 129, 0.45)';
-  } else if (bubble.quadrant === 'ACCUMULATION') {
+  } else if (targetQuadrant === 'ACCUMULATION') {
     // 逢低吸籌區 (琥珀暖金/藍紫)
     return 'rgba(245, 158, 11, 0.4)';
-  } else if (bubble.quadrant === 'DISTRIBUTION') {
+  } else if (targetQuadrant === 'DISTRIBUTION') {
     // 割韭菜警戒區 (高檔倒貨)
     return isTaiwan ? 'rgba(16, 185, 129, 0.45)' : 'rgba(239, 68, 68, 0.45)';
   } else {
-    // 冷凍提款區
+    // 冷凍提款區 (LIQUIDATION) 絕對為冷灰藍色，杜絕出現黃色
     return 'rgba(100, 116, 139, 0.4)';
   }
 }
 
 /**
- * 泡泡外邊框描邊色
+ * 泡泡外邊框描邊色 (支援動態影格象限 overrideQuadrant 覆寫)
  */
 export function getBubbleStrokeColor(
   bubble: SmartMoneyBubbleData,
-  colorTheme: ColorThemeMode
+  colorTheme: ColorThemeMode,
+  overrideQuadrant?: SmartMoneyQuadrant
 ): string {
   const isTaiwan = colorTheme === 'taiwan';
-  if (bubble.quadrant === 'BREAKOUT') {
+  const targetQuadrant = overrideQuadrant || bubble.quadrant;
+
+  if (targetQuadrant === 'BREAKOUT') {
     return isTaiwan ? '#ef4444' : '#10b981';
-  } else if (bubble.quadrant === 'ACCUMULATION') {
+  } else if (targetQuadrant === 'ACCUMULATION') {
     return '#f59e0b';
-  } else if (bubble.quadrant === 'DISTRIBUTION') {
+  } else if (targetQuadrant === 'DISTRIBUTION') {
     return isTaiwan ? '#10b981' : '#ef4444';
   } else {
     return '#94a3b8';
@@ -221,12 +227,24 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
         ? b.trail[currentDateIndex]
         : null;
       if (trailPt) {
+        let dynQuadrant: SmartMoneyQuadrant = b.quadrant;
+        if (trailPt.x >= 0 && trailPt.y >= 0) {
+          dynQuadrant = 'BREAKOUT';
+        } else if (trailPt.x < 0 && trailPt.y > 0) {
+          dynQuadrant = 'ACCUMULATION';
+        } else if (trailPt.x >= 0 && trailPt.y < 0) {
+          dynQuadrant = 'DISTRIBUTION';
+        } else {
+          dynQuadrant = 'LIQUIDATION';
+        }
+
         return {
           ...b,
           x: trailPt.x,
           y: trailPt.y,
           changePercent: trailPt.changePercent !== undefined ? trailPt.changePercent : b.changePercent,
           flowScore: trailPt.flowScore !== undefined ? trailPt.flowScore : b.flowScore,
+          quadrant: dynQuadrant,
         };
       }
       return b;
@@ -580,8 +598,8 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
           {displayBubbles.map((b) => {
             const cx = b.cx !== undefined ? b.cx : calculateCanvasCoordinates(b.x, b.y, width, height, padding).cx;
             const cy = b.cy !== undefined ? b.cy : calculateCanvasCoordinates(b.x, b.y, width, height, padding).cy;
-            const fillColor = getBubbleFillColor(b, colorTheme);
-            const strokeColor = getBubbleStrokeColor(b, colorTheme);
+            const fillColor = getBubbleFillColor(b, colorTheme, b.quadrant);
+            const strokeColor = getBubbleStrokeColor(b, colorTheme, b.quadrant);
             const isHovered = hoveredBubble?.symbol === b.symbol;
             const isSelected = selectedBubble?.symbol === b.symbol;
             const isActive = isHovered || isSelected;
