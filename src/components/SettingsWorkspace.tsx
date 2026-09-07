@@ -23,6 +23,7 @@ import {
   clearHistoricalFxCache,
   clearPriceMetadataCache,
   clearCorporateActionsCache,
+  clearInstitutionalChipsCache,
   SystemSnapshot,
   DB_VERSION,
   DB_NAME,
@@ -977,7 +978,7 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
 
   // 快取清除操作
   const handleClearCache = async (
-    type: 'PRICES' | 'FX' | 'PRICE_META' | 'CORP_ACTIONS',
+    type: 'PRICES' | 'FX' | 'PRICE_META' | 'CORP_ACTIONS' | 'CHIPS',
     title: string,
     clearFn: () => Promise<void>
   ) => {
@@ -1557,6 +1558,12 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-secondary)' }}>
+                <span>三大法人籌碼日報 (institutionalChips)</span>
+                <span style={{ color: 'var(--text-primary)' }}>
+                  {stats?.marketCache.institutionalChipsDays ?? 0} 天 ({stats?.marketCache.institutionalChipsTotalRecords?.toLocaleString() ?? 0} 筆)
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-secondary)' }}>
                 <span>台美股官方字典 (stockDictionary)</span>
                 <span style={{ color: 'var(--text-primary)' }}>
                   {(stats?.marketCache.stockDictionaryTotalCount ?? stats?.marketCache.stockDictionaryOfficialCount ?? 0).toLocaleString()} 檔
@@ -1568,7 +1575,7 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(105px, 1fr))',
               gap: '6px',
               marginTop: '16px',
               paddingTop: '12px',
@@ -1658,6 +1665,27 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
             >
               <Trash2 size={11} />
               清空行動庫
+            </button>
+            <button
+              type="button"
+              onClick={() => handleClearCache('CHIPS', '三大法人籌碼快取', clearInstitutionalChipsCache)}
+              disabled={activePurging === 'CHIPS'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                padding: '5px 8px',
+                borderRadius: '6px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-secondary)',
+                fontSize: '0.72rem',
+                cursor: 'pointer',
+              }}
+            >
+              <Trash2 size={11} />
+              清空籌碼快取
             </button>
           </div>
         </div>

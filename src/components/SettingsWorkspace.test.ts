@@ -5,6 +5,7 @@ import {
   clearHistoricalFxCache,
   clearPriceMetadataCache,
   clearCorporateActionsCache,
+  clearInstitutionalChipsCache,
   dbPut,
   dbGetAll,
   closeDB,
@@ -298,18 +299,31 @@ describe('SettingsWorkspace - Local Storage Inspector & Data Transparency', () =
       await dbPut('historicalFx', { pair: 'USD/TWD', fxRates: { '2026-08-01': 31.5 } });
       await dbPut('priceMetadata', { symbol: '2330', currentPrice: 900, updatedAt: Date.now() });
       await dbPut('corporateActions', { id: '2330-DIV-1', symbol: '2330', type: 'DIVIDEND', date: '2026-08-01' });
+      await dbPut('settings', {
+        key: 'TWSE_TPEX_CHIPS_V4_20260901',
+        date: '20260901',
+        data: { '2330': { symbol: '2330' } },
+      });
 
-      // 連續執行四大快取清除
+      // 檢查統計應包含籌碼快取
+      const statsBefore = await getLocalStorageInspectionStats();
+      expect(statsBefore.marketCache.institutionalChipsDays).toBe(1);
+      expect(statsBefore.marketCache.institutionalChipsTotalRecords).toBe(1);
+
+      // 連續執行五大快取清除 (包含籌碼快取)
       await clearHistoricalPricesCache();
       await clearHistoricalFxCache();
       await clearPriceMetadataCache();
       await clearCorporateActionsCache();
+      await clearInstitutionalChipsCache();
 
       // 驗證快取已被清空
       expect((await dbGetAll('historicalPrices')).length).toBe(0);
       expect((await dbGetAll('historicalFx')).length).toBe(0);
       expect((await dbGetAll('priceMetadata')).length).toBe(0);
       expect((await dbGetAll('corporateActions')).length).toBe(0);
+      const settingsAfter = await dbGetAll<any>('settings');
+      expect(settingsAfter.filter(s => typeof s.key === 'string' && s.key.startsWith('TWSE_TPEX_CHIPS_')).length).toBe(0);
 
       // 驗證核心數據依然完整無損 (Shielded)
       const remainingTrades = await dbGetAll<TradeRecord>('trades');

@@ -486,6 +486,8 @@ export interface LocalStorageInspectionStats {
     stockDictionaryTotalCount: number;
     stockDictionaryOfficialCount: number;
     stockDictionaryCustomCount: number;
+    institutionalChipsDays?: number;
+    institutionalChipsTotalRecords?: number;
   };
   
   systemConfig: {

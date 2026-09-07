@@ -67,6 +67,13 @@
   - 精準識別外資與投信方向相反時為「⚡ 土洋對作激戰」，診斷標記內外資多空換手，杜絕因代數相加為 0 而誤判為進出平衡。
   - 識別外資與投信同向時為「🚀 土洋合買抬轎」或「💣 土洋同步調節」，Tooltip 醒目呈現共振徽章。
 
+### 0. 本地離線儲存籌碼日報筆數統計與管理管線 (`Local Storage Institutional Chips Stats & Management`) *(V8.7.0)*
+- **籌碼日報快取透明度 100% (`Institutional Chips Storage Metrics`)**：
+  - 在「設定 ➔ 本地離線存儲 (Storage Quota)」的「2. 行情與市場快取」列表中，新增「三大法人籌碼日報 (institutionalChips)」統計行。
+  - 即時呈現已快取的交易日天數與累計個股法人日報記錄筆數（例如：`5 天 (11,850 筆)`），讓「時間換空間」的本地沉澱成果一覽無餘。
+- **籌碼快取細粒度獨立重置按鈕 (`Granular Chips Cache Purge Button`)**：
+  - 新增「🗑️ 清空籌碼快取」按鈕，實裝安全清除函式 `clearInstitutionalChipsCache()`，支援在不影響任何交易、現金流與個人帳戶的前提下，單獨重置本地籌碼日報。
+
 ### 0. 象限顏色動態連動使用者燈號習慣與籌碼資料本地化增量補足 (`Color Theme Mode Quadrant Sync & Local Incremental Chips`) *(V8.6.0)*
 - **全場動態習慣燈號色彩連動 (`Adaptive Color Theme Sync`)**：
   - 四象限浮水印文字與頂部統計指標卡片全面連動 `colorTheme`（台灣紅漲綠跌 vs 國際綠漲紅跌）。

@@ -23,6 +23,7 @@ import {
   clearHistoricalFxCache,
   clearPriceMetadataCache,
   clearCorporateActionsCache,
+  clearInstitutionalChipsCache,
 } from './db';
 import { TradeRecord, StoredCorporateAction, BrokerAccount, CashTransaction, LoanRecord } from '../types/stock';
 
@@ -733,6 +734,49 @@ describe('IndexedDB Core Engine & Snapshots (db.ts)', () => {
 
       await clearCorporateActionsCache();
       expect((await dbGetAll('corporateActions')).length).toBe(0);
+    });
+
+    it('getStorageStats 應正確統計三大法人籌碼日報快取天數與總筆數，且 clearInstitutionalChipsCache 能獨立清空', async () => {
+      // 模擬 settings 表寫入兩天籌碼日報，分別有 2 筆與 3 筆個股日報
+      await dbPut('settings', {
+        key: 'TWSE_TPEX_CHIPS_V4_20260901',
+        date: '20260901',
+        data: {
+          '2330': { symbol: '2330', foreignNetShares: 1000 },
+          '8299': { symbol: '8299', foreignNetShares: 500 },
+        },
+      });
+      await dbPut('settings', {
+        key: 'TWSE_TPEX_CHIPS_V4_20260902',
+        date: '20260902',
+        data: {
+          '2330': { symbol: '2330', foreignNetShares: 2000 },
+          '8299': { symbol: '8299', foreignNetShares: 800 },
+          '2454': { symbol: '2454', foreignNetShares: 300 },
+        },
+      });
+      // 其他一般 setting
+      await dbPut('settings', {
+        key: 'USER_ACCOUNTING_VIEW',
+        value: 'BROKER',
+      });
+
+      const stats = await getLocalStorageInspectionStats();
+      expect(stats.marketCache.institutionalChipsDays).toBe(2);
+      expect(stats.marketCache.institutionalChipsTotalRecords).toBe(5);
+
+      // 清除籌碼快取
+      await clearInstitutionalChipsCache();
+
+      // 驗證一般設定依然存在，只有籌碼被刪除
+      const remainingSettings = await dbGetAll<any>('settings');
+      expect(remainingSettings.length).toBe(1);
+      expect(remainingSettings[0].key).toBe('USER_ACCOUNTING_VIEW');
+
+      // 重新統計應歸零
+      const statsAfter = await getLocalStorageInspectionStats();
+      expect(statsAfter.marketCache.institutionalChipsDays).toBe(0);
+      expect(statsAfter.marketCache.institutionalChipsTotalRecords).toBe(0);
     });
 
     it('當 IndexedDB 為空但 LocalStorage 有資料時，getLocalStorageInspectionStats 應自動雙軌回退讀取正確筆數', async () => {

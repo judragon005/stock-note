@@ -1094,6 +1094,15 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 透過 `buildHoldingHistoricalFlows` 輔助函式，當本地已沉澱歷史日報時，時序播放器各影格（T-4 ~ T）100% 精準對齊真實歷史日報的外資、投信、自營商買賣超張數與量化分數，未補齊前平滑降級為係數模擬。
   - 頂部資訊列增設本地歷史籌碼增量儲存狀態徽章，明確回饋使用者「時間換空間」的本地日報沉澱天數與狀態。
 
+### 本地離線儲存籌碼日報筆數統計與管理管線 *(新增於 V8.7.0)*
+
+- **Institutional Chips Storage Metrics (三大法人籌碼離線存儲檢測指標)**:
+  - 在 `DatabaseInspectionStats.marketCache` 中納入 `institutionalChipsDays`（快取交易日數）與 `institutionalChipsTotalRecords`（累積個股日報記錄總筆數）。
+  - `getStorageStats()` 遍歷 IndexedDB `settings` 表中以 `TWSE_TPEX_CHIPS_` 為鍵名之實體紀錄，動態加總天數與個股日報筆數，使本地離線快取透明度達到 100%。
+- **Granular Chips Cache Eviction (細粒度籌碼快取獨立重置與清空)**:
+  - 實裝純函數 `clearInstitutionalChipsCache()`，僅針對 `settings` 表中 `TWSE_TPEX_CHIPS_` 前綴快取進行批次刪除。
+  - 嚴格隔離核心個人資產（交易紀錄、交割帳戶、現金流記帳、質押借貸）與使用者偏好設定，在 `SettingsWorkspace` 提供「🗑️ 清空籌碼快取」專屬安全通道。
+
 
 
 

@@ -1010,6 +1010,16 @@ export async function getLocalStorageInspectionStats(): Promise<LocalStorageInsp
     },
   ];
 
+  // 統計三大法人籌碼日報快取 (存於 settings 表中，key 以 TWSE_TPEX_CHIPS_ 開頭)
+  const chipsSettings = settings.filter((s: any) => typeof s.key === 'string' && s.key.startsWith('TWSE_TPEX_CHIPS_'));
+  const institutionalChipsDays = chipsSettings.length;
+  let institutionalChipsTotalRecords = 0;
+  for (const item of chipsSettings) {
+    if (item.data && typeof item.data === 'object') {
+      institutionalChipsTotalRecords += Object.keys(item.data).length;
+    }
+  }
+
   return {
     storageUsageBytes,
     storageQuotaBytes,
@@ -1041,6 +1051,8 @@ export async function getLocalStorageInspectionStats(): Promise<LocalStorageInsp
       stockDictionaryTotalCount,
       stockDictionaryOfficialCount,
       stockDictionaryCustomCount,
+      institutionalChipsDays,
+      institutionalChipsTotalRecords,
     },
     systemConfig: {
       totalSnapshots: snapshots.length,
@@ -1098,6 +1110,20 @@ export async function clearPriceMetadataCache(): Promise<void> {
 export async function clearCorporateActionsCache(): Promise<void> {
   if (typeof indexedDB !== 'undefined') {
     await dbClear('corporateActions');
+  }
+}
+
+/**
+ * 安全清除三大法人籌碼日報快取 (不影響交易與交割紀錄)
+ */
+export async function clearInstitutionalChipsCache(): Promise<void> {
+  if (typeof indexedDB !== 'undefined') {
+    const allSettings = await dbGetAll<any>('settings');
+    for (const s of allSettings) {
+      if (typeof s.key === 'string' && s.key.startsWith('TWSE_TPEX_CHIPS_')) {
+        await dbDelete('settings', s.key);
+      }
+    }
   }
 }
 
