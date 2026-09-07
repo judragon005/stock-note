@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-465%2F465%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-491%2F491%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,64 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 持股技術指標警示膠囊與智慧操作建議引擎 (Holding Technical Signal Capsules & Action Advisor) *(V7.2.0 ~ V7.2.1)*
+### 0. 歷史現金股利入帳日與除息日時序徹底分離、永豐金發放日校正與主次排版系統 (`Dividend Log View Pay-Date Temporal Separation`) *(V7.6.0 全新升級)*
+- **入帳日 ($Pay\text{-}Date$) 與除息日 ($Ex\text{-}Date$) 時序徹底分離**：
+  - 確立除息日為假性虧損平滑與債權成立基準日，發放日為資金實質到帳與可用現金交割日，徹底解決舊版將除息基準日誤植為入帳日期之根本缺陷。
+- **主次並列展示架構 (`Primary-Secondary Dual Display`)**：
+  - 「入帳日期」欄位主視覺高亮醒目呈現實際到帳日 `effectivePayDate`（若為未來款項則自動標註「預約待入」琥珀色膠囊標籤），下方 micro-text 以灰色清晰標註「`📅 除息: YYYY-MM-DD`」，使銀行存摺核帳與除息週期追蹤一目了然。
+- **有效入帳日嚴格倒序排列 (`Effective Pay-Date Descending Sort`)**：
+  - 明細列表排序機制重構，優先以實質入帳發放日降冪倒序排列（若發放日相同則依除息基準日倒序），最新到帳之資金始終呈現在列表頂部。
+- **永豐金 (2890) 官方除息行事曆基準校正**：
+  - 於官方常態日曆庫與即時公司行動掃描引擎中，將永豐金 2890 之現金股利預估/官方發放日精準校正為官方公告之 `2026-08-24`。
+
+### 0. 歷史已結清借貸成本透視、規費 0 值防禦與結清還款日手動維護 (`Settled Loan Cost & Lifecycle`) *(V7.5.2 全新升級)*
+- **三大規費明細單一事實來源 (SSOT) 與 0 值防禦** *(V7.5.2)*：
+  - 徹底修復舊相容性欄位回填 Bug：若借貸登錄設質費為 0，設質費絕對強制為 0，嚴禁被舊總額 `pledgeFee` 覆蓋污染，徹底杜絕規費重複翻倍計算。
+- **結清還款日 (closedDate) 手動維護** *(V7.5.2)*：
+  - `LoanModal` 表單支援已結清借貸（未還本金為 0）手動填寫/修改「✅ 結清還款日 / 終止日」，支援使用者自主對齊真實清償日與借款歷時天數。
+- **已付借貸成本雙軌聚合引擎 (`Dual-Track Settled Cost Engine`)**：
+  - 純函數 `calculateLoanSettledSummary` 優先從現金帳本流水精準統計實際扣繳利息與各項規費；若帳本缺漏則平滑備援推算，卡片 100% 數值精確不留白。
+- **台灣集保與券商官方名詞標準化膠囊 (`Official TDCC & Broker Nomenclature`)**：
+  - 徹底移除「未還本金: NT$ 0」，改為醒目展示「總借貸支出成本」，並以結構化彩色膠囊詳細拆解：
+    - 💰 **已付利息** (台股質押利息 / 美股融資利息 Margin Interest)
+    - 🏛️ **已付設質費** (對齊集保與券商「設質登記費 / 設定費」)
+    - 📄 **已付撥券費** (對齊集保「集保劃撥費 / 撥券手續費」)
+    - 🏷️ **已付手續費** (對齊券商「開辦手續費 / 徵信管理費」)
+
+### 1. 股票質押借款撥款同步、零本金斷頭防禦與已結清歷史歸檔 (`Loan Disbursement & Settled Archive`) *(V7.5.0)*
+- **借款建立自動連動撥款入帳 (`LOAN_DISBURSEMENT`)**：
+  - 新增借貸或質押項目時預設開啟撥款入帳選項，以借款起日建立正數現金流入，確保借貸成立與還款本利和的會計借貸平衡。
+- **歷史借款缺漏一鍵平帳機制 (`Historical Disbursement Reconciliation`)**：
+  - 系統主動偵測具有還款但缺失借款入帳之歷史借貸（包含 2026-07-28 之股票質押），提供「⚡ 一鍵自動補登撥款入帳」按鈕，立即補正可用現金帳面。
+- **進行中與已結清看板分流 (`Active vs. Closed Workspace Split`)**：
+  - 頂部即時風控看板僅監控進行中借貸 (`principal > 0`)；若無未清償債務，顯示「🟢 目前無未結清之借貸或股票質押負債」安全看板。
+  - 已還清借貸自動歸入專屬「📜 歷史借貸與質押已結清紀錄」可折疊面板，完整保留歷史初借額、起訖日、利率與原擔保品清單。
+- **零借款本金斷頭誤判防禦與規費清零 (`Zero-Debt Margin Guard`)**：
+  - 計算引擎修復邊界條件：當未還本金歸零時，維持率回傳 `Infinity`（介面顯示「無負債 (安全)」），標記為 `SAFE` 且非追繳，徹底消除斷頭誤判紅燈並清零殘留規費。
+
+### 1. 樹狀圖納入借款與負債槓桿視覺化架構 (`Treemap Debt & Leverage Visualization`) *(V7.4.0 全新升級)*
+- **正幾何資本來源模型 (`Capital Employed Positive Geometry`)**：
+  - 樹狀圖維持以總資產為分母，當帳戶存在有效借款（總負債額 $> 0$）時，動態注入 `🏦 借貸負債` 正面積區塊，直觀呈現負債相對總資產之財務槓桿佔比。
+- **專屬琥珀金警示視覺語意 (`Amber Warning Semantics`)**：
+  - 借款節點採用高對比琥珀金配色 (`#f59e0b` / `hsla(38, 92%, 50%, 0.85)`) 與深琥珀邊框，完全獨立於紅綠漲跌色彩主題，並清楚標註負債總額與年化借款利率成本。
+- **多層次借貸合約透視 Tooltip (`Hierarchical Contract Inspection`)**：
+  - 滑鼠懸浮於借款區塊時，彈出結構化卡片，完整羅列各筆借款合約名稱、借款類別（質押/融資/信貸）、本金與利率。
+- **權重清單與頂部 LTV 膠囊同步連動 (`Bars & LTV Capsule Integration`)**：
+  - 切換至「權重清單」視圖時同步納入借款長條項；頂部市場配置條維持純資產百分比，並於比例欄位動態呈現 `🏦 負債比 LTV: XX.X%`，零借款時 100% 自動隱藏。
+
+### 1. 全站 UI/UX 現代金融終端深色玻璃擬態與直覺對稱配色體系 *(V7.3.0 ~ V7.3.3 全新升級)*
+- **頂部工具列對稱色彩模式切換器 (`Symmetric Color Theme Toggle & Dynamic Tooltip`)** *(V7.3.3)*：
+  - 徹底解決「`🟢 紅跌`」單色詞綴引起的認知歧義，全面升級為對稱雙色標籤（台股模式為 `🔴 紅漲 🟢 綠跌`，國際模式為 `🟢 綠漲 🔴 紅跌`），並配置動態懸浮 Tooltip 說明當前模式與點擊切換效果。
+- **現代深色玻璃擬態與精選調色板 (`Modern Glassmorphism & Design Tokens`)**：
+  - 深度整合 CSS Design Tokens，全域採用毛玻璃層次 (`glass-card`、柔和漸變與多層次陰影)，消除厚重生硬邊框，打造沉浸式現代金融終端體驗。
+- **等寬金融數字排版 (`Tabular Numbers & Monospace Font Hierarchy`)**：
+  - 成交價、成交股數、手續費、證交稅、損益金額、總資產、購買力與維持率全面採用等寬字型 (`font-variant-numeric: tabular-nums`)，解決數值變動時跳動與列不對齊問題。
+- **全站元件膠囊化切換器 (`Pill Switchers`)**：
+  - 市場選擇器 (TW/US)、帳戶篩選、持倉狀態 (在倉/已平倉)、時間範圍 (1M/3M/6M/YTD/1Y/ALL) 與歷史交易類別全面重構為微光膠囊按鈕組。
+- **全頁面零破壞升級 (`100% Backward Compatible`)**：
+  - 頂部 HUD 導覽列、標籤列、資產總覽看板、庫存表格、資產成長折線圖、股利日誌、現金與借貸質押管理中心、歷史交易明細表、設定中心與全站彈窗模態框全量優化，保留 100% 商業與會計邏輯。
+
+### 2. 持股技術指標警示膠囊與智慧操作建議引擎 (Holding Technical Signal Capsules & Action Advisor) *(V7.2.0 ~ V7.2.1)*
 - **純前端離線技術指標與乖離率引擎 (`Technical Indicator & Bias Engine`)**：
   - 100% 離線純前端運算，即時計算 MA(5/20/60/120/240)、KD(9,3,3)、MACD(12,26,9)、昨日/5日成交均量比、5日/20日高低點極值，以及 20MA/60MA **均線乖離率 (Bias %)**，零額外 API 負擔與延遲。
 - **多維色彩膠囊標籤體系 (`Holding Signal Capsules`)**：

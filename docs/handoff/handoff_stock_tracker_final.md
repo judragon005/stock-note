@@ -1,12 +1,16 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Document)
 
-> **交接產生時間**：2026-09-01 16:05 (UTC+8)  
+> **交接產生時間**：2026-09-03 14:30 (UTC+8)  
 > **當前最新里程碑**：
-> - **V6.9.4 減資多源去重、虛擬時序動態扣減與交易帳本股息淨額對齊**（TWSE 與 Yahoo 減資 $\le 90$ 天合併去重；虛擬時序池納入減資扣減；官方 6 位精準減資比率對齊消除 1 股誤差；交易帳本股息淨額對齊）。
-> - **V6.9.3 Storage Inspector 快取統計指標解構與字典計數對齊修復**（修復公司行動庫 0 檔 61 筆至真實 61 檔；修復歷史外匯 4529 對 0 點至 1 對 4,529 點；字典庫總數完全對齊 3,350 檔）。
-> - **V6.9.2 Local Storage 雙軌檢視器韌性增強與零筆數回退修復**。
-> - **V6.9.1 智慧掃描公司行動真實持股對齊、強制重掃狀態重置與精準配息比對**。
-> **品質狀態**：全量單元測試 **386/386 通過 (100% Passed)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過。
+> - **V7.5.2 歷史已結清借貸規費明細計算校正與結清還款日手動維護**（三大規費明細單一事實來源 SSOT 判定，設質費為 0 絕對強制為 0，杜絕舊 pledgeFee 與未拆分流水污染翻倍；LoanModal 支援已結清借貸 handoff 手動編輯校正結清還款日 closedDate）。
+> - **V7.5.1 歷史已結清借貸利息與官方規費明細拆解、借款天數與結清還款日追蹤**（closedDate 時態補完；結清還款日與歷時借款天數自動推算；雙軌聚合已付利息、設質登記費、集保撥券費、開辦手續費；總借貸支出成本醒目展示；官方標準術語統一膠囊）。
+> - **V7.5.0 股票質押借款撥款金流同步、零本金斷頭誤判防禦與已結清歷史歸檔**（借款自動連動撥款入帳 LOAN_DISBURSEMENT；2026-07-28 缺漏金流一鍵平帳；進行中 vs 已結清看板分流；維持率零本金防禦與規費清零；已結清歷史折疊面板）。
+> - **V7.4.0 樹狀圖納入借款與負債槓桿視覺化架構**（正數幾何資本來源模型注入 `DEBT_TWD`；專屬高對比琥珀警示色與邊框；多層次借貸合約透視 Tooltip；權重清單同步納入負債長條項；頂部比例 HUD 注入獨立 `負債比 LTV` 膠囊；純現貨零借款 100% 自動隱藏防禦）。
+> - **V7.3.3 對稱色彩模式切換器與動態情境式懸浮提示**（雙色球標籤、即時 Tooltip 提示、跨主題紅綠同步）。
+> - **V7.2.1 持股技術指標結構化卡片防截斷與 20MA/60MA 均線乖離率**。
+> - **V7.1.0 樹狀圖納入現金部位與總資產權重統一架構**。
+> - **V7.0.0 資產配置目標偏離 (Drift) 試算與再平衡推薦器**。
+> **品質狀態**：全量單元測試 **489/489 通過 (100% Passed)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過。
 
 ---
 
@@ -14,8 +18,8 @@
 
 - **專案路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon003/-.git`
-- **測試套件狀態**：**386/386 通過** (33 test suites / 100% 綠燈)，TypeScript 0 錯誤。
-- **當前版本**：**V6.9.4**
+- **測試套件狀態**：**491/491 通過** (45 test suites / 100% 綠燈)，TypeScript 0 錯誤。
+- **當前版本**：**V7.6.0**
 - **隱私安全**：所有本機交易資料與 API 金鑰均受 IndexedDB / LocalStorage 本地隔離與 `.gitignore` 保護，杜絕個人財務資料推播至 GitHub 遠端。
 
 ---
@@ -23,40 +27,26 @@
 ## 🏛️ 2. 領域模型與架構決策索引 (Domain & Decisions)
 
 1. **通用語言詞彙表**：[`CONTEXT.md`](file:///d:/APP/股票紀錄/CONTEXT.md)
-   - **V5.2 核心術語**：
-     - `Today's PnL`（盤中當日損益：依 `shares * (currentPrice - previousClose)` 跨市場計算今日動態賺賠）
-     - `Breakeven Price`（精確損益平衡保本價：計入賣出證交稅、券商折讓與低消 20 元階梯補償）
-     - `Excess Capital Reduction`（減資超額退款：退款大於持倉成本時轉列已實現利得，杜絕成本截斷失真）
-     - `Fractional Shares Convergence`（碎股精度萬分位強制收斂）
-   - **V5.1 核心術語**：
-     - `XIRR / Money-Weighted Rate of Return, MWRR`（內部報酬率 / 資金加權報酬率：非線性折現真實年化複利）
-     - `Hybrid Newton-Raphson & Bisection Solver`（牛頓-二分法混合求解引擎：50 次迭代，容差 $10^{-7}$，100% 收斂防崩潰）
-     - `30-Day Adaptive Smoothing Guard`（30 天平滑防護：未滿 30 天以絕對累積報酬呈現，避免短線極端外推失真）
-   - **V5.0 核心術語**：
-     - `StockTrackerDB`（原生 0 依賴 IndexedDB 儲存引擎：9 大 Object Stores，解除 5MB 限制與同步阻塞）
-     - `Non-Destructive Dual-Check Migration`（無損平滑雙重保險遷移：搬移 localStorage 並留存冷備份）
+   - **V7.6.0 核心術語**：
+     - `Ex-Date vs Pay-Date Temporal Separation`（除息日與入帳發放日時序徹底分離：除息基準日平滑假性虧損，發放日落袋結算）
+     - `Primary-Secondary Dual Display`（主次並列展示架構：主視覺醒目呈現入帳發放日，副視覺標註除息基準日）
+     - `Effective Pay-Date Descending Sort`（有效入帳日倒序排列，最新入帳資金始終置頂）
 
-2. **架構決策紀錄 (ADR-0001 ~ ADR-0034)**：
-   - [`ADR-0034`](file:///d:/APP/股票紀錄/docs/adr/0034-todays-pnl-and-breakeven-price-system.md)：V5.2 交易員盤中當日損益 (Today's PnL) 與精確損益平衡保本價 (Breakeven Price) 體系。
-   - [`ADR-0033`](file:///d:/APP/股票紀錄/docs/adr/0033-xirr-performance-engine.md)：V5.1 XIRR 不定期現金流年化報酬率引擎與多維度績效分析體系。
-   - [`ADR-0032`](file:///d:/APP/股票紀錄/docs/adr/0032-indexeddb-storage-and-time-machine-snapshots.md)：V5.0 IndexedDB 底層儲存遷移、ACID 事務與時光機快照體系。
-   - [`ADR-0031`](file:///d:/APP/股票紀錄/docs/adr/0031-code-review-refactoring-and-settlement-automation.md)：Code Review 全量重構、在途交割日曆全自動化與時序卡片模組化。
+2. **架構決策紀錄 (最新)**：
+   - [`ADR-0076`](file:///d:/APP/股票紀錄/docs/adr/0076-dividend-log-view-pay-date-temporal-separation-and-sorting.md)：V7.6.0 歷史現金股利入帳明細入帳日與除息日時序徹底分離與主次排版架構。
+   - [`ADR-0075`](file:///d:/APP/股票紀錄/docs/adr/0075-settled-loan-fee-breakdown-bugfix-and-payoff-date-editor.md)：V7.5.2 歷史已結清借貸規費明細計算校正與結清還款日維護架構。
+   - [`ADR-0074`](file:///d:/APP/股票紀錄/docs/adr/0074-settled-loan-cost-breakdown-and-payoff-date.md)：V7.5.1 歷史已結清借貸成本透視與結清還款日追蹤架構。
 
-3. **需求規格說明書 (SPEC-0001 ~ SPEC-0033)**：
-   - 全量 PRD 存放於 [`docs/specs/`](file:///d:/APP/股票紀錄/docs/specs/)，全數標記 `APPROVED` 且驗收條件 (AC) 100% 通過。
-   - 最新：[SPEC-0033](file:///d:/APP/股票紀錄/docs/specs/0033-xirr-performance-engine.md)。
+3. **需求規格說明書 (最新)**：
+   - [SPEC-0076](file:///d:/APP/股票紀錄/docs/specs/0076-dividend-log-view-pay-date-temporal-separation-and-sorting-spec.md)：歷史現金股利入帳明細入帳日與除息日時序徹底分離、官方發放日校正與主次層級排版系統 PRD (4 大驗收條件全數通過)。
 
 4. **單一版本交付紀錄存檔 (`docs/handoff/`)**：
-   - [V6.5.0: 本機公司行動資料庫、多源交叉增量同步管線與減資除息時序校準](2026-08-28-v6.5.0-official-corporate-action-db-and-capital-reduction-pipeline.md)
-   - [V6.4.0: 智慧掃描除息日與發放日雙欄位注入與現金在途隔離](2026-08-28-v6.4.0-smart-scan-pay-date-alignment-and-pending-ledger.md)
-   - [V6.3.0: 跨模組全量交叉核銷、融資/在途 NAV 守恆與自適應 XIRR](2026-08-28-v6.3.0-cross-module-ledger-dividend-portfolio-reconciliation.md)
-   - [V6.0.0: 官方股票名稱字典庫與智慧自動補齊](2026-08-28-v6.0.0-official-stock-dictionary-and-smart-autocomplete.md)
-   - [V5.0: 原生 IndexedDB 底層儲存與時光機快照](2026-08-27-v5.0-indexeddb-and-time-machine-snapshots.md)
-   - [V4.8: Code Review 全量重構與在途日曆全自動化](2026-08-27-v4.8-code-review-refactoring-and-settlement-automation.md)
-   - [V4.7: 券商級在途資金與三層可用性購買力帳本](2026-08-27-v4.7-in-transit-funds-and-buying-power-ledger.md)
+   - [V7.6.0: 歷史現金股利入帳明細時序分離與主次排版系統](2026-09-07-v7.6.0-dividend-log-view-pay-date-temporal-separation.md)
+   - [V7.5.2: 歷史已結清借貸規費校正與結清日維護](2026-09-03-v7.5.2-settled-loan-fee-breakdown-bugfix-and-payoff-date-editor.md)
+   - [V7.4.0: 樹狀圖納入借款與負債槓桿視覺化架構](2026-09-03-v7.4.0-treemap-debt-and-leverage-visualization.md)
 
 5. **本地票券鏡像區 (`.scratch/`)**：
-   - `.scratch/v6.5.0-official-corporate-action-db-and-capital-reduction-pipeline/issues/` (3/3 Completed)
+   - `.scratch/v7.6.0-dividend-log-view-pay-date-temporal-separation/issues/` (4/4 Completed)
 
 
 ---
