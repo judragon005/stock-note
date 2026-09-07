@@ -1122,6 +1122,17 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 整合外部官方全市場數據庫，透過 `isValidTaiwanSecurity` 嚴格過濾短期權證與可轉債，將 `src/data/stockDictionary.ts` 台股標的全面擴充至 2,285 檔（含新興主動型 ETF 如 00400A、00403A，債券 ETF 與中小型上櫃股票）。
   - 達成 100% 離線繁體中文名稱解析，零依賴外部 OpenAPI 網路同步。
 
+### 客戶端 API 速率限制與 429 熔斷防禦架構 *(新增於 V8.9.0 / ADR #0090)*
+
+- **Token Bucket Rate Limiting (網域獨立權杖桶速率節流)**:
+  - 核心模組 `ClientRequestScheduler` (`src/engine/rateLimiter.ts`) 針對外部金融 API 實施網域獨立平滑節流（Yahoo Finance 最大 5 突發/每秒補 3，TWSE/TPEx 最大 3 突發/每秒補 2），防止並發請求衝垮外部伺服器。
+- **Concurrency Pool (連線並發槽位限制)**:
+  - 限制單一網域或全域同時間在線的 HTTP 請求數上限（預設 2~3），防止大量非同步請求佔滿瀏覽器同源連線池並導致主執行緒卡頓。
+- **Circuit Breaker & 429 Backoff (HTTP 429 自動熔斷與指數退避冷卻)**:
+  - 當外部 API 回傳 `HTTP 429 Too Many Requests` 或 `503` 時，自動觸發熔斷器進入 30 秒冷卻期，在冷卻期內自動阻斷或排隊延遲向該網域的新請求，並內建指數退避與隨機抖動 (Jitter)，徹底阻絕連環轟炸導致 IP 被封鎖數小時的系統性癱瘓風險。
+- **Zero-Disruption Proxy Adapter (無痛代理中介層整合)**:
+  - 深度整合於 `fetchWithCORSProxy`，自 URL 自動解析真實目標主機名稱，既有報價抓取、歷史價格同步與公司行動掃描模組零改動即刻獲得全域速率防護。
+
 
 
 

@@ -1,9 +1,10 @@
 # 技術債 #0035: 客戶端 API 速率限制 (Rate Limiting) 與防封禁配額保護
 
-- **狀態**：`OPEN`
+- **狀態**：`RESOLVED` (已於 v8.9.0 / ADR #0090 完整解決)
 - **優先級**：`P2`
 - **發現來源**：資安架構深度審查
 - **建立日期**：2026-09-02
+- **解決日期**：2026-09-07 (PRD #0090 / ADR #0090)
 - **標籤**：`Security` · `RateLimiting` · `Quota` · `Resilience` · `CircuitBreaker`
 
 ---
