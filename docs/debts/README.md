@@ -42,7 +42,7 @@
 | [**0032**](0032-csv-formula-injection-and-json-data-sanitization.md) | CSV 公式注入防禦 (DDE Protection) 與備份匯出脫敏機制 | `P2` | `OPEN` | 資安架構深度審查 | `Security` · `CSV` · `Injection` · `Export` · `Sanitization` | 優化匯入匯出模組 (Debt #0028) 或升級報表時 |
 | [**0033**](0033-csp-headers-and-browser-defense-hardening.md) | 內容安全策略 (CSP) 與瀏覽器端防禦加固 | `P1` | `OPEN` | 資安架構深度審查 | `Security` · `CSP` · `Headers` · `BrowserHardening` · `AntiClickjacking` | 發布正式生產版本或雲端託管部署時 |
 | [**0034**](0034-import-parser-prototype-pollution-and-schema-validation.md) | 匯入解析防護、原型污染防禦與數值邊界熔斷 | `P2` | `OPEN` | 資安架構深度審查 | `Security` · `PrototypePollution` · `Validation` · `Sanitization` · `Schema` | 升級匯入衝突消解器 (Debt #0028) 或快照校驗時 |
-| [**0035**](0035-client-side-rate-limiting-and-api-quota-guard.md) | 客戶端 API 速率限制 (Rate Limiting) 與防封禁配額保護 | `P2` | `OPEN` | 資安架構深度審查 | `Security` · `RateLimiting` · `Quota` · `Resilience` · `CircuitBreaker` | 實作全量指標回補 (Debt #0019) 或戰情室 (Debt #0020) 前 |
+| [**0035**](0035-client-side-rate-limiting-and-api-quota-guard.md) | 客戶端 API 速率限制 (Rate Limiting) 與防封禁配額保護 | `P2` | `RESOLVED` | 資安架構深度審查 | `Security` · `RateLimiting` · `Quota` · `Resilience` · `CircuitBreaker` | **已於 v8.9.0 (ADR #0090) 完整解決** |
 
 ---
 
