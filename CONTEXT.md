@@ -267,6 +267,18 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0075: V7.5.2 歷史已結清借貸規費明細計算校正與結清還款日手動維護架構](docs/adr/0075-settled-loan-fee-breakdown-bugfix-and-payoff-date-editor.md)
 - [ADR-0076: V7.6.0 歷史現金股利入帳明細入帳日與除息日時序徹底分離與發放日校正](docs/adr/0076-dividend-log-view-pay-date-temporal-separation-and-sorting.md)
 - [ADR-0077: V7.7.0 籌碼與聰明錢動態觀察儀（零基礎小白友善版、量價動能四象限泡泡圖與時序播放軌跡系統）](docs/adr/0077-smart-money-bubble-view-and-chip-flow-dynamics.md)
+- [ADR-0088: V8.8.0 籌碼動態星圖市場篩選隔離與 Header 狀態雙向同步](docs/adr/0088-chips-workspace-market-filter-isolation-and-header-sync.md)
+
+### 籌碼動態星圖市場篩選隔離與 Header 狀態雙向同步 (Chips Workspace Market Filter Isolation) *(新增於 V8.8.0)*
+- **全市場純度保證 (Zero Cross-Market Contamination)**：
+  - `US` 模式：輸出清單 100% 純美股標的（如 NVDA, AAPL, MSFT, META, TSLA 等全美股巨頭），嚴禁出現任何台股。
+  - `TW` 模式：輸出清單 100% 純台股標的（如 2330, 2454, 0050 等三大法人焦點），嚴禁出現任何美股。
+  - `ALL` 模式：台股焦點 Top 20 結合美股科技巨頭 Top 10，均衡反映全球資產與跨市場主力動向。
+- **全視圖模式市場篩選器常駐 (Permanent Filter Visibility)**：
+  - 市場篩選器（全部/台股/美股）在「我的在庫持倉」與「全市場法人焦點 Top 30」兩大模式下均常駐可見，杜絕模式切換導致按鈕隱藏之困擾。
+- **雙向狀態連動機制 (Bi-directional State Synchronization)**：
+  - 頂部導航列之 `currentMarket` 透過 Props 傳入 `ChipsWorkspace`。當全域市場切換時，工作區內即時連動切換。
+  - 工作區內點擊市場標籤時，同步觸發 `onMarketChange` 更新頂部全域狀態，達成無縫雙向同步。
 
 ### 籌碼與聰明錢動態觀察儀 (Smart Money Flow & Bubble View) *(新增於 V7.7.0)*
 - **零基礎四象限生活化定調 (Beginner-Friendly Quadrants)**：

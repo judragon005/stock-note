@@ -127,19 +127,199 @@ export function buildHoldingHistoricalFlows(
   });
 }
 
+export const US_MARKET_FOCUS_LIST = [
+  { symbol: 'NVDA', name: '輝達', pnl: 3.2, cmf: 0.65 },
+  { symbol: 'AAPL', name: '蘋果', pnl: 1.1, cmf: 0.35 },
+  { symbol: 'MSFT', name: '微軟', pnl: 0.8, cmf: 0.28 },
+  { symbol: 'AMZN', name: '亞馬遜', pnl: -0.6, cmf: 0.42 },
+  { symbol: 'GOOGL', name: 'Alphabet', pnl: 1.5, cmf: 0.30 },
+  { symbol: 'META', name: 'Meta', pnl: 2.4, cmf: 0.55 },
+  { symbol: 'TSLA', name: '特斯拉', pnl: -2.8, cmf: -0.45 },
+  { symbol: 'AVGO', name: '博通', pnl: 2.1, cmf: 0.48 },
+  { symbol: 'AMD', name: '超微', pnl: 1.8, cmf: -0.32 },
+  { symbol: 'PLTR', name: 'Palantir', pnl: 4.2, cmf: 0.72 },
+  { symbol: 'ARM', name: '安謀', pnl: -1.2, cmf: 0.25 },
+  { symbol: 'QCOM', name: '高通', pnl: 0.5, cmf: -0.22 },
+  { symbol: 'ASML', name: '艾斯摩爾', pnl: -1.8, cmf: 0.38 },
+  { symbol: 'TSM', name: '台積電ADR', pnl: 3.5, cmf: 0.68 },
+  { symbol: 'MU', name: '美光', pnl: -2.1, cmf: -0.40 },
+  { symbol: 'SMCI', name: '美超微', pnl: 5.1, cmf: 0.52 },
+  { symbol: 'NFLX', name: '網飛', pnl: 1.2, cmf: 0.18 },
+  { symbol: 'COST', name: '好市多', pnl: 0.4, cmf: 0.22 },
+  { symbol: 'BRK.B', name: '波克夏B', pnl: 0.2, cmf: 0.15 },
+  { symbol: 'JPM', name: '摩根大通', pnl: -0.8, cmf: 0.30 },
+  { symbol: 'LLY', name: '禮來', pnl: 1.9, cmf: 0.45 },
+  { symbol: 'NVO', name: '諾和諾德', pnl: -1.5, cmf: -0.35 },
+  { symbol: 'SPY', name: '標普500 ETF', pnl: 0.6, cmf: 0.25 },
+  { symbol: 'QQQ', name: '那斯達克 ETF', pnl: 1.1, cmf: 0.40 },
+  { symbol: 'SOXX', name: '費半 ETF', pnl: 2.2, cmf: 0.58 },
+];
+
+/**
+ * 全市場焦點標的依據市場篩選嚴格過濾與生成
+ * 嚴格保證：US 模式 100% 零台股，TW 模式 100% 零美股
+ */
+export function filterMarketFocusList(
+  marketFilter: 'ALL' | MarketType,
+  twseChipsMap: Record<string, TwseInstitutionalRow>,
+  holdings: HoldingPosition[] = [],
+  availableDates: string[] = ['T'],
+  historyReportsMap?: Record<string, Record<string, TwseInstitutionalRow>>
+): SmartMoneyInputItem[] {
+  if (marketFilter === 'US') {
+    // 100% 純美股全市場焦點 Top 25 (絕對無任何台股)
+    return US_MARKET_FOCUS_LIST.map((usItem, idx) => {
+      const histFlows = availableDates.map((d, dIdx) => {
+        const factor = (dIdx + 1) / availableDates.length;
+        const curCmf = Math.round(usItem.cmf * factor * 100) / 100;
+        return {
+          date: d,
+          changePercent: Math.round(usItem.pnl * factor * 100) / 100,
+          flowScore: curCmf,
+          cmf: curCmf,
+          netFlowAmount: usItem.cmf * 50000000 * factor,
+        };
+      });
+
+      const candles = Array.from({ length: 20 }).map((_, cIdx) => {
+        const step = 100 * (1 + (usItem.pnl / 100) * ((cIdx + 1) / 20));
+        const isBull = usItem.cmf >= 0;
+        const high = step * 1.015;
+        const low = step * 0.985;
+        const close = isBull ? step * 1.012 : step * 0.988;
+        return {
+          date: `2026-08-${String(cIdx + 1).padStart(2, '0')}`,
+          open: step,
+          high,
+          low,
+          close,
+          volume: 2000000 + idx * 100000,
+        };
+      });
+
+      return {
+        symbol: usItem.symbol,
+        name: usItem.name,
+        market: 'US' as MarketType,
+        currentPrice: 100,
+        previousClose: 100 - usItem.pnl,
+        changePercent: usItem.pnl,
+        holdingValueTwd: 500000,
+        volume: 2000000,
+        candles,
+        historicalDailyFlows: histFlows,
+      };
+    });
+  }
+
+  // 台股全市場焦點 Top 30
+  const topSymbols = Object.values(twseChipsMap)
+    .sort((a, b) => Math.abs(b.totalNetShares) - Math.abs(a.totalNetShares))
+    .slice(0, marketFilter === 'ALL' ? 20 : 30);
+
+  const twItems: SmartMoneyInputItem[] = topSymbols.map((item, idx) => {
+    const matchingHolding = holdings.find((h) => h.symbol.replace(/\.(TW|TWO)$/i, '').trim() === item.symbol);
+    let changeP = matchingHolding?.todaysPnLPercent;
+
+    if (changeP === undefined) {
+      const isDivergent = idx % 4 === 1;
+      const baseMagnitude = 0.8 + ((Math.abs(item.totalNetShares) % 35) / 10);
+      if (item.totalNetShares > 0) {
+        changeP = isDivergent ? -baseMagnitude : baseMagnitude;
+      } else {
+        changeP = isDivergent ? baseMagnitude : -baseMagnitude;
+      }
+    }
+
+    const estPrice = matchingHolding?.currentPrice || 100;
+    const histFlows = buildHoldingHistoricalFlows(
+      {
+        symbol: item.symbol,
+        todaysPnLPercent: changeP,
+        currentPrice: estPrice,
+        market: 'TW',
+      },
+      availableDates,
+      item,
+      0,
+      historyReportsMap
+    );
+
+    return {
+      symbol: item.symbol,
+      name: item.name,
+      market: 'TW' as MarketType,
+      currentPrice: estPrice,
+      previousClose: estPrice - changeP,
+      changePercent: Math.round(changeP * 100) / 100,
+      volume: Math.abs(item.totalNetShares) * 1.5,
+      foreignBuyShares: item.foreignBuyShares,
+      foreignSellShares: item.foreignSellShares,
+      trustBuyShares: item.trustBuyShares,
+      trustSellShares: item.trustSellShares,
+      dealerBuyShares: item.dealerNetShares > 0 ? item.dealerNetShares : 0,
+      dealerSellShares: item.dealerNetShares < 0 ? Math.abs(item.dealerNetShares) : 0,
+      historicalDailyFlows: histFlows,
+    };
+  });
+
+  if (marketFilter === 'ALL') {
+    // ALL 模式混合前 10 檔美股巨頭
+    const usMix: SmartMoneyInputItem[] = US_MARKET_FOCUS_LIST.slice(0, 10).map((usItem) => ({
+      symbol: usItem.symbol,
+      name: usItem.name,
+      market: 'US' as MarketType,
+      currentPrice: 100,
+      previousClose: 100 - usItem.pnl,
+      changePercent: usItem.pnl,
+      holdingValueTwd: 400000,
+      volume: 2000000,
+      candles: Array.from({ length: 20 }).map((_, cIdx) => ({
+        date: `2026-08-${String(cIdx + 1).padStart(2, '0')}`,
+        open: 100,
+        high: 101.5,
+        low: 98.5,
+        close: usItem.cmf >= 0 ? 101.2 : 98.8,
+        volume: 2000000,
+      })),
+    }));
+    return [...twItems, ...usMix];
+  }
+
+  // 純台股 (TW) 模式：100% 絕對無任何美股
+  return twItems;
+}
+
 export interface ChipsWorkspaceProps {
   holdings: HoldingPosition[];
   colorTheme: ColorThemeMode;
   usdToTwdRate: number;
+  market?: 'ALL' | MarketType;
+  onMarketChange?: (market: 'ALL' | MarketType) => void;
 }
 
 export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
   holdings,
   colorTheme,
   usdToTwdRate,
+  market,
+  onMarketChange,
 }) => {
   const [viewMode, setViewMode] = useState<'PORTFOLIO' | 'MARKET'>('PORTFOLIO');
-  const [marketFilter, setMarketFilter] = useState<'ALL' | 'TW' | 'US'>('ALL');
+  const [internalMarketFilter, setInternalMarketFilter] = useState<'ALL' | MarketType>(market || 'ALL');
+
+  useEffect(() => {
+    if (market) {
+      setInternalMarketFilter(market);
+    }
+  }, [market]);
+
+  const marketFilter = market ?? internalMarketFilter;
+
+  const handleSetMarketFilter = (m: 'ALL' | MarketType) => {
+    setInternalMarketFilter(m);
+    onMarketChange?.(m);
+  };
   const [isLoading, setIsLoading] = useState(false);
   const [twseChipsMap, setTwseChipsMap] = useState<Record<string, TwseInstitutionalRow>>({});
   const [reportDate, setReportDate] = useState<string>(getLatestTradingDateString());
@@ -265,160 +445,16 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
           };
         });
     } else {
-      // 2. 全市場法人與機構焦點模式 (支援台股 / 美股 Top 30 / 雙市場聯動)
-      const US_FOCUS_LIST = [
-        { symbol: 'NVDA', name: '輝達', pnl: 3.2, cmf: 0.65 },
-        { symbol: 'AAPL', name: '蘋果', pnl: 1.1, cmf: 0.35 },
-        { symbol: 'MSFT', name: '微軟', pnl: 0.8, cmf: 0.28 },
-        { symbol: 'AMZN', name: '亞馬遜', pnl: -0.6, cmf: 0.42 }, // 逢低吸籌
-        { symbol: 'GOOGL', name: 'Alphabet', pnl: 1.5, cmf: 0.30 },
-        { symbol: 'META', name: 'Meta', pnl: 2.4, cmf: 0.55 },
-        { symbol: 'TSLA', name: '特斯拉', pnl: -2.8, cmf: -0.45 }, // 冷凍提款
-        { symbol: 'AVGO', name: '博通', pnl: 2.1, cmf: 0.48 },
-        { symbol: 'AMD', name: '超微', pnl: 1.8, cmf: -0.32 }, // 趁高倒貨
-        { symbol: 'PLTR', name: 'Palantir', pnl: 4.2, cmf: 0.72 },
-        { symbol: 'ARM', name: '安謀', pnl: -1.2, cmf: 0.25 },
-        { symbol: 'QCOM', name: '高通', pnl: 0.5, cmf: -0.22 },
-        { symbol: 'ASML', name: '艾斯摩爾', pnl: -1.8, cmf: 0.38 },
-        { symbol: 'TSM', name: '台積電ADR', pnl: 3.5, cmf: 0.68 },
-        { symbol: 'MU', name: '美光', pnl: -2.1, cmf: -0.40 },
-        { symbol: 'SMCI', name: '美超微', pnl: 5.1, cmf: 0.52 },
-        { symbol: 'NFLX', name: '網飛', pnl: 1.2, cmf: 0.18 },
-        { symbol: 'COST', name: '好市多', pnl: 0.4, cmf: 0.22 },
-        { symbol: 'BRK.B', name: '波克夏B', pnl: 0.2, cmf: 0.15 },
-        { symbol: 'JPM', name: '摩根大通', pnl: -0.8, cmf: 0.30 },
-        { symbol: 'LLY', name: '禮來', pnl: 1.9, cmf: 0.45 },
-        { symbol: 'NVO', name: '諾和諾德', pnl: -1.5, cmf: -0.35 },
-        { symbol: 'SPY', name: '標普500 ETF', pnl: 0.6, cmf: 0.25 },
-        { symbol: 'QQQ', name: '那斯達克 ETF', pnl: 1.1, cmf: 0.40 },
-        { symbol: 'SOXX', name: '費半 ETF', pnl: 2.2, cmf: 0.58 },
-      ];
-
-      if (marketFilter === 'US') {
-        // 美股全市場焦點 Top 25
-        return US_FOCUS_LIST.map((usItem, idx) => {
-          const histFlows = availableDates.map((d, dIdx) => {
-            const factor = (dIdx + 1) / availableDates.length;
-            const curCmf = Math.round(usItem.cmf * factor * 100) / 100;
-            return {
-              date: d,
-              changePercent: Math.round(usItem.pnl * factor * 100) / 100,
-              flowScore: curCmf,
-              cmf: curCmf,
-              netFlowAmount: usItem.cmf * 50000000 * factor,
-            };
-          });
-
-          // 生成對應 CMF 20 日 K 棒
-          const candles = Array.from({ length: 20 }).map((_, cIdx) => {
-            const step = 100 * (1 + (usItem.pnl / 100) * ((cIdx + 1) / 20));
-            const isBull = usItem.cmf >= 0;
-            const high = step * 1.015;
-            const low = step * 0.985;
-            const close = isBull ? step * 1.012 : step * 0.988;
-            return {
-              date: `2026-08-${String(cIdx + 1).padStart(2, '0')}`,
-              open: step,
-              high,
-              low,
-              close,
-              volume: 2000000 + idx * 100000,
-            };
-          });
-
-          return {
-            symbol: usItem.symbol,
-            name: usItem.name,
-            market: 'US' as MarketType,
-            currentPrice: 100,
-            previousClose: 100 - usItem.pnl,
-            changePercent: usItem.pnl,
-            holdingValueTwd: 500000,
-            volume: 2000000,
-            candles,
-            historicalDailyFlows: histFlows,
-          };
-        });
-      }
-
-      // 台股全市場焦點 Top 30
-      const topSymbols = Object.values(twseChipsMap)
-        .sort((a, b) => Math.abs(b.totalNetShares) - Math.abs(a.totalNetShares))
-        .slice(0, marketFilter === 'ALL' ? 20 : 30);
-
-      const twItems = topSymbols.map((item, idx) => {
-        const matchingHolding = holdings.find((h) => h.symbol.replace(/\.(TW|TWO)$/i, '').trim() === item.symbol);
-        let changeP = matchingHolding?.todaysPnLPercent;
-
-        if (changeP === undefined) {
-          const isDivergent = idx % 4 === 1;
-          const baseMagnitude = 0.8 + ((Math.abs(item.totalNetShares) % 35) / 10);
-          if (item.totalNetShares > 0) {
-            changeP = isDivergent ? -baseMagnitude : baseMagnitude;
-          } else {
-            changeP = isDivergent ? baseMagnitude : -baseMagnitude;
-          }
-        }
-
-        const estPrice = matchingHolding?.currentPrice || 100;
-        const histFlows = buildHoldingHistoricalFlows(
-          {
-            symbol: item.symbol,
-            todaysPnLPercent: changeP,
-            currentPrice: estPrice,
-            market: 'TW',
-          },
-          availableDates,
-          item,
-          0,
-          historyReportsMap
-        );
-
-        return {
-          symbol: item.symbol,
-          name: item.name,
-          market: 'TW' as MarketType,
-          currentPrice: estPrice,
-          previousClose: estPrice - changeP,
-          changePercent: Math.round(changeP * 100) / 100,
-          volume: Math.abs(item.totalNetShares) * 1.5,
-          foreignBuyShares: item.foreignBuyShares,
-          foreignSellShares: item.foreignSellShares,
-          trustBuyShares: item.trustBuyShares,
-          trustSellShares: item.trustSellShares,
-          dealerBuyShares: item.dealerNetShares > 0 ? item.dealerNetShares : 0,
-          dealerSellShares: item.dealerNetShares < 0 ? Math.abs(item.dealerNetShares) : 0,
-          historicalDailyFlows: histFlows,
-        };
-      });
-
-      if (marketFilter === 'ALL') {
-        // ALL 模式混合前 10 檔美股巨頭
-        const usMix = US_FOCUS_LIST.slice(0, 10).map((usItem) => ({
-          symbol: usItem.symbol,
-          name: usItem.name,
-          market: 'US' as MarketType,
-          currentPrice: 100,
-          previousClose: 100 - usItem.pnl,
-          changePercent: usItem.pnl,
-          holdingValueTwd: 400000,
-          volume: 2000000,
-          candles: Array.from({ length: 20 }).map((_, cIdx) => ({
-            date: `2026-08-${String(cIdx + 1).padStart(2, '0')}`,
-            open: 100,
-            high: 101.5,
-            low: 98.5,
-            close: usItem.cmf >= 0 ? 101.2 : 98.8,
-            volume: 2000000,
-          })),
-        }));
-        return [...twItems, ...usMix];
-      }
-
-      return twItems;
+      // 2. 全市場法人與機構焦點模式 (由 filterMarketFocusList 統一嚴格處理市場純度)
+      return filterMarketFocusList(
+        marketFilter,
+        twseChipsMap,
+        holdings,
+        availableDates,
+        historyReportsMap
+      );
     }
-
-  }, [holdings, twseChipsMap, viewMode, marketFilter, usdToTwdRate, availableDates]);
+  }, [holdings, twseChipsMap, viewMode, marketFilter, usdToTwdRate, availableDates, historyReportsMap]);
 
   // 透過量化引擎計算四象限模型
   const analysisResult = useMemo(() => {
@@ -528,37 +564,35 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
 
         {/* 右側：市場篩選與重新同步按鈕 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {viewMode === 'PORTFOLIO' && (
-            <div
-              style={{
-                display: 'flex',
-                background: 'rgba(30, 41, 59, 0.6)',
-                padding: '3px',
-                borderRadius: '8px',
-                border: '1px solid rgba(51, 65, 85, 0.3)',
-              }}
-            >
-              {(['ALL', 'TW', 'US'] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setMarketFilter(m)}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    border: 'none',
-                    background: marketFilter === m ? '#3b82f6' : 'transparent',
-                    color: marketFilter === m ? '#ffffff' : '#94a3b8',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  {m === 'ALL' ? '全部' : m === 'TW' ? '台股' : '美股'}
-                </button>
-              ))}
-            </div>
-          )}
+          <div
+            style={{
+              display: 'flex',
+              background: 'rgba(30, 41, 59, 0.6)',
+              padding: '3px',
+              borderRadius: '8px',
+              border: '1px solid rgba(51, 65, 85, 0.3)',
+            }}
+          >
+            {(['ALL', 'TW', 'US'] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => handleSetMarketFilter(m)}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: marketFilter === m ? '#3b82f6' : 'transparent',
+                  color: marketFilter === m ? '#ffffff' : '#94a3b8',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {m === 'ALL' ? '全部' : m === 'TW' ? '台股' : '美股'}
+              </button>
+            ))}
+          </div>
 
           {/* 本地歷史籌碼「時間換空間」狀態徽章 */}
           <div

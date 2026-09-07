@@ -785,6 +785,8 @@ export const App: React.FC = () => {
           holdings={holdings}
           colorTheme={colorTheme}
           usdToTwdRate={usdToTwdRate}
+          market={currentMarket}
+          onMarketChange={setCurrentMarket}
         />
       )}
 

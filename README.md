@@ -3,13 +3,23 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-552%2F552%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-560%2F560%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 籌碼動態星圖市場篩選隔離與 Header 狀態雙向同步 (`Chips Workspace Market Filter Isolation & Bi-directional Header Sync`) *(V8.8.0 全新升級)*
+- **全市場純度 100% 絕對隔離 (`100% Zero-Pollution Market Purity`)**：
+  - **美股 (`US`)**：畫布呈現 100% 純美股標的（NVDA, AAPL, MSFT, META, TSLA, AMZN, GOOGL, AVGO, PLTR 等全美股巨頭），徹底杜絕 0050、2344、2409 等任何台股混雜出現。
+  - **台股 (`TW`)**：畫布呈現 100% 純台股標的（如 2330, 2454, 0050 等三大法人焦點），絕對排除美股。
+  - **全部 (`ALL`)**：台股焦點 Top 20 與美股科技巨頭 Top 10 均衡共存，完整縱覽全球跨市場主力動向。
+- **市場篩選切換器常駐可見 (`Permanent Market Filter Visibility`)**：
+  - 徹底移除「全市場法人焦點 Top 30」模式下市場切換按鈕隱藏之缺陷，於「在庫持倉」與「全市場焦點」雙模式下均常駐顯示「全部 / 台股 / 美股」三態切換按鈕。
+- **Header 與工作區雙向狀態連動 (`Bi-directional Market State Synchronization`)**：
+  - 頂部導航列切換市場時，即時驅動籌碼工作區連動切換；工作區內部切換市場時，同步回呼通知 Header 更新 `currentMarket`，徹底消滅狀態脫鉤。
 
 ### 0. 動態影格象限色彩同步、象限邊界守門員與時序籌碼一致性 (`Dynamic Frame Quadrant Coloring & Strict Boundary Guard`) *(V8.5.0 全新升級)*
 - **動態影格象限色彩同步 (`Dynamic Frame Quadrant Coloring`)**：

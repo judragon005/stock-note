@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { getChipsQuadrantCardStyles, buildHoldingHistoricalFlows } from './ChipsWorkspace';
+import {
+  getChipsQuadrantCardStyles,
+  buildHoldingHistoricalFlows,
+  filterMarketFocusList,
+} from './ChipsWorkspace';
 
 describe('ChipsWorkspace 象限卡片動態習慣燈號連動 (ColorThemeMode)', () => {
   it('台股模式 (taiwan): 主力抬轎為紅，割韭菜警戒為綠', () => {
@@ -85,6 +89,33 @@ describe('ChipsWorkspace 象限卡片動態習慣燈號連動 (ColorThemeMode)',
 
       // 第 1 天 (20260902) 缺失歷史日報，優雅降級為係數折算
       expect(flows[1].foreignNetShares).toBe(10000); // factor = 2/2 = 1.0
+    });
+  });
+
+  describe('filterMarketFocusList (市場篩選嚴格隔離檢驗：美股、台股、全部)', () => {
+    const mockTwseChipsMap: any = {
+      '2330': { symbol: '2330', name: '台積電', totalNetShares: 5000 },
+      '2454': { symbol: '2454', name: '聯發科', totalNetShares: -2000 },
+    };
+
+    it('美股模式 (US): 產出清單 100% 均為美股，絕不出現台股', () => {
+      const items = filterMarketFocusList('US', mockTwseChipsMap, [], ['T']);
+      expect(items.length).toBeGreaterThan(0);
+      expect(items.every((it) => it.market === 'US')).toBe(true);
+      expect(items.some((it) => it.market === 'TW')).toBe(false);
+    });
+
+    it('台股模式 (TW): 產出清單 100% 均為台股，絕不出現美股', () => {
+      const items = filterMarketFocusList('TW', mockTwseChipsMap, [], ['T']);
+      expect(items.length).toBeGreaterThan(0);
+      expect(items.every((it) => it.market === 'TW')).toBe(true);
+      expect(items.some((it) => it.market === 'US')).toBe(false);
+    });
+
+    it('全部模式 (ALL): 產出清單應均衡涵蓋台股與美股巨頭', () => {
+      const items = filterMarketFocusList('ALL', mockTwseChipsMap, [], ['T']);
+      expect(items.some((it) => it.market === 'TW')).toBe(true);
+      expect(items.some((it) => it.market === 'US')).toBe(true);
     });
   });
 });
