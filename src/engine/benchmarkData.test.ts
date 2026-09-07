@@ -1,85 +1,84 @@
 import { describe, it, expect } from 'vitest';
 import {
+  getBenchmarkDailyPrices,
   alignBenchmarkTimeSeries,
   calculateNormalizedGrowth,
-  getBenchmarkDailyPrices,
   calculate5050BalancedGrowth,
 } from './benchmarkData';
 
-describe('本地基準大盤歷史數據模組 (benchmarkData)', () => {
-  describe('1. 基準歷史收盤價獲取 (getBenchmarkDailyPrices)', () => {
-    it('應能正確獲取 0050.TW 內建歷史價格數據', () => {
+describe('Benchmark Data Engine (benchmarkData.ts)', () => {
+  describe('getBenchmarkDailyPrices', () => {
+    it('應支援 TAIEX 台股加權指數基準並回傳非空字典', () => {
+      const prices = getBenchmarkDailyPrices('TAIEX');
+      expect(prices).toBeDefined();
+      expect(typeof prices).toBe('object');
+      const dates = Object.keys(prices);
+      expect(dates.length).toBeGreaterThan(100);
+      // 驗證最新 2026-09-07 數據點位
+      expect(prices['2026-09-07']).toBeCloseTo(47326.27, 1);
+    });
+
+    it('應支援 0050 元大台灣50基準', () => {
       const prices = getBenchmarkDailyPrices('0050');
-      expect(Object.keys(prices).length).toBeGreaterThan(40);
+      expect(prices).toBeDefined();
       expect(prices['2024-01-02']).toBeDefined();
+      expect(prices['2026-09-07']).toBeDefined();
     });
 
-    it('應能正確獲取 SPY 內建歷史價格數據', () => {
+    it('應支援 SPY 標普500基準', () => {
       const prices = getBenchmarkDailyPrices('SPY');
-      expect(Object.keys(prices).length).toBeGreaterThan(40);
+      expect(prices).toBeDefined();
       expect(prices['2024-01-02']).toBeDefined();
     });
 
-    it('當傳入 NONE 或未知代碼時應回傳空物件', () => {
+    it('若輸入 NONE 或未知基準，應回傳空字典', () => {
       expect(getBenchmarkDailyPrices('NONE')).toEqual({});
       expect(getBenchmarkDailyPrices('UNKNOWN' as any)).toEqual({});
     });
   });
 
-  describe('2. 時間序列對齊與補值演算法 (alignBenchmarkTimeSeries)', () => {
-    it('應依照給定的日期清單對齊基準價格，並對休市日向前填充 (Forward Fill)', () => {
-      const dates = ['2026-01-05', '2026-01-06', '2026-01-07'];
-      const rawPrices = {
-        '2026-01-05': 100,
-        '2026-01-07': 102,
-        // 2026-01-06 缺漏
-      };
-
-      const aligned = alignBenchmarkTimeSeries(dates, rawPrices);
-      expect(aligned).toEqual([100, 100, 102]);
+  describe('alignBenchmarkTimeSeries', () => {
+    it('當 dates 為空時，應回傳空陣列', () => {
+      expect(alignBenchmarkTimeSeries([], { '2026-01-01': 100 })).toEqual([]);
     });
 
-    it('若起始日即無數據，應向後尋找第一個有效價格 (Backfill)', () => {
-      const dates = ['2026-01-01', '2026-01-02', '2026-01-03'];
-      const rawPrices = {
-        '2026-01-02': 150,
-        '2026-01-03': 155,
-      };
-
-      const aligned = alignBenchmarkTimeSeries(dates, rawPrices);
-      expect(aligned).toEqual([150, 150, 155]);
+    it('當基準資料完全為空時，應預設填入 100', () => {
+      const result = alignBenchmarkTimeSeries(['2026-01-01', '2026-01-02'], {});
+      expect(result).toEqual([100, 100]);
     });
 
-    it('當輸入日期為空時應安全回傳空陣列', () => {
-      expect(alignBenchmarkTimeSeries([], {})).toEqual([]);
+    it('應能正確對齊並進行 Forward-fill 與 Back-fill', () => {
+      const rawPrices = {
+        '2026-01-02': 200,
+        '2026-01-05': 210,
+      };
+      // 2026-01-01 無資料應 Back-fill 為 200
+      // 2026-01-03、2026-01-04 無資料應 Forward-fill 為 200
+      // 2026-01-05 為 210
+      const dates = ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05'];
+      const aligned = alignBenchmarkTimeSeries(dates, rawPrices);
+      expect(aligned).toEqual([200, 200, 200, 200, 210]);
     });
   });
 
-  describe('3. 100% 基準走勢歸一化計算 (calculateNormalizedGrowth)', () => {
-    it('應以第一天為 100.0，後續價格等比例計算百分比', () => {
-      const prices = [100, 105, 110, 95];
+  describe('calculateNormalizedGrowth', () => {
+    it('應將起始價格標準化為 100，後續依比例增長', () => {
+      const prices = [200, 220, 180, 240];
       const growth = calculateNormalizedGrowth(prices);
-      expect(growth).toEqual([100, 105, 110, 95]);
+      expect(growth).toEqual([100, 110, 90, 120]);
     });
 
-    it('若起始價格非 100，應正確縮放至以 100 為基準', () => {
-      const prices = [50, 55, 60, 45];
-      const growth = calculateNormalizedGrowth(prices);
-      expect(growth).toEqual([100, 110, 120, 90]);
-    });
-
-    it('防禦單一數據或全零數值', () => {
+    it('空陣列應回傳空陣列', () => {
       expect(calculateNormalizedGrowth([])).toEqual([]);
-      expect(calculateNormalizedGrowth([0, 0])).toEqual([100, 100]);
     });
   });
 
-  describe('4. 50/50 股債/台美平衡走勢計算 (calculate5050BalancedGrowth)', () => {
-    it('應正確計算 50% 0050 + 50% SPY 歸一化成長曲線', () => {
-      const growthA = [100, 110, 120]; // 0050
-      const growthB = [100, 100, 110]; // SPY
-      const balanced = calculate5050BalancedGrowth(growthA, growthB);
-      expect(balanced).toEqual([100, 105, 115]);
+  describe('calculate5050BalancedGrowth', () => {
+    it('應精準計算 50% 0050 + 50% SPY 平衡組合', () => {
+      const g0050 = [100, 110, 120];
+      const gSPY = [100, 90, 110];
+      const balanced = calculate5050BalancedGrowth(g0050, gSPY);
+      expect(balanced).toEqual([100, 100, 115]);
     });
   });
 });

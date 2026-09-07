@@ -11,6 +11,14 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
+### 0. 台股加權指數 (TAIEX) Benchmark 全歷史日線與全市場股票字典補全 (`TAIEX Benchmark & Full-Market Stock Dictionary`) *(V8.9.0 全新升級)*
+- **加權指數 (^TWII) 官方大盤基準 (`TAIEX Benchmark Daily Time-Series`)**：
+  - 正式引入台股加權指數做為投資組合 Benchmark 基準，內建自 2020 年至今完整的加權指數每日歷史收盤點位（`TW_TAIEX_BENCHMARK_HISTORY`）與 0050 每日日線。
+  - 在資產成長對比圖表中解鎖「🇹🇼 加權」按鈕，讓詹森阿爾法 (Alpha)、貝塔 (Beta) 與夏普值 (Sharpe Ratio) 計算具備高精度真實日線對照。
+- **全市場 2,280+ 檔股票字典 100% 離線繁中解析 (`Full-Market Stock Dictionary`)**：
+  - 整合外部官方全市場數據庫，經 `isValidTaiwanSecurity` 嚴格清洗（排除短期權證與可轉債），收錄 2,285 檔上市櫃股票、ETF、特別股與主動型 ETF（如 00400A、00401A、00403A 等）。
+  - 達成 100% 離線繁體中文名稱解析，零依賴外部 OpenAPI 網路請求。
+
 ### 0. 籌碼動態星圖市場篩選隔離與 Header 狀態雙向同步 (`Chips Workspace Market Filter Isolation & Bi-directional Header Sync`) *(V8.8.0 全新升級)*
 - **全市場純度 100% 絕對隔離 (`100% Zero-Pollution Market Purity`)**：
   - **美股 (`US`)**：畫布呈現 100% 純美股標的（NVDA, AAPL, MSFT, META, TSLA, AMZN, GOOGL, AVGO, PLTR 等全美股巨頭），徹底杜絕 0050、2344、2409 等任何台股混雜出現。

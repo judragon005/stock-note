@@ -93,7 +93,7 @@ export interface HoldingRiskMetrics {
   entryReason?: string;
 }
 
-export type BenchmarkType = 'NONE' | '0050' | 'SPY' | 'BALANCED_50_50';
+export type BenchmarkType = 'NONE' | '0050' | 'SPY' | 'BALANCED_50_50' | 'TAIEX';
 
 export interface QuantPerformanceMetrics {
   hasBenchmark: boolean;          // 是否有選取並計算對照大盤基準

@@ -1106,14 +1106,22 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 透過 `buildHoldingHistoricalFlows` 輔助函式，當本地已沉澱歷史日報時，時序播放器各影格（T-4 ~ T）100% 精準對齊真實歷史日報的外資、投信、自營商買賣超張數與量化分數，未補齊前平滑降級為係數模擬。
   - 頂部資訊列增設本地歷史籌碼增量儲存狀態徽章，明確回饋使用者「時間換空間」的本地日報沉澱天數與狀態。
 
-### 本地離線儲存籌碼日報筆數統計與管理管線 *(新增於 V8.7.0)*
+### 籌碼動態星圖市場篩選隔離與 Header 狀態雙向同步 *(新增於 V8.8.0)*
 
-- **Institutional Chips Storage Metrics (三大法人籌碼離線存儲檢測指標)**:
-  - 在 `DatabaseInspectionStats.marketCache` 中納入 `institutionalChipsDays`（快取交易日數）與 `institutionalChipsTotalRecords`（累積個股日報記錄總筆數）。
-  - `getStorageStats()` 遍歷 IndexedDB `settings` 表中以 `TWSE_TPEX_CHIPS_` 為鍵名之實體紀錄，動態加總天數與個股日報筆數，使本地離線快取透明度達到 100%。
-- **Granular Chips Cache Eviction (細粒度籌碼快取獨立重置與清空)**:
-  - 實裝純函數 `clearInstitutionalChipsCache()`，僅針對 `settings` 表中 `TWSE_TPEX_CHIPS_` 前綴快取進行批次刪除。
-  - 嚴格隔離核心個人資產（交易紀錄、交割帳戶、現金流記帳、質押借貸）與使用者偏好設定，在 `SettingsWorkspace` 提供「🗑️ 清空籌碼快取」專屬安全通道。
+- **Market Focus Isolation (市場標的嚴格隔離輸出)**:
+  - 抽離純函數 `filterMarketFocusList`：在「全市場法人焦點 Top 30」模式下，`US` 模式保證輸出純美股 Top 25 標的，零台股混雜；`TW` 模式保證輸出純台股 Top 30 標的，零美股混雜；`ALL` 模式則由台股焦點 Top 20 與美股巨頭 Top 10 均衡呈現。
+- **Bidirectional Header Sync (頂部市場切換雙向連動)**:
+  - `<ChipsWorkspace>` 與頂部 `<Header>` 之 `currentMarket` 建立雙向狀態綁定，解決跨視圖切換市場狀態脫鉤痛點，並解鎖工作區內市場切換按鈕於所有模式常駐可見。
+
+### 台股加權指數 Benchmark 全歷史日線與全市場股票字典補全 *(新增於 V8.9.0)*
+
+- **TAIEX Official Benchmark (台股加權指數官方大盤基準)**:
+  - 在 `BenchmarkType` 正式擴充 `'TAIEX'`，並於 `benchmarkConstants.ts` 引入 `TW_TAIEX_BENCHMARK_HISTORY`（收錄自 2020 年至今完整每日加權指數日線收盤價），同時補齊 `0050` 每日收盤點位。
+  - `PortfolioGrowthChart.tsx` 擴充支援加權指數基準切換按鈕與歸一化時間序列對齊，使夏普值、Beta 係數、詹森阿爾法 (Alpha) 計算具備真實市場日線精度。
+- **Full Market Stock Dictionary Sync (全市場 2,280+ 檔股票字典離線補全)**:
+  - 整合外部官方全市場數據庫，透過 `isValidTaiwanSecurity` 嚴格過濾短期權證與可轉債，將 `src/data/stockDictionary.ts` 台股標的全面擴充至 2,285 檔（含新興主動型 ETF 如 00400A、00403A，債券 ETF 與中小型上櫃股票）。
+  - 達成 100% 離線繁體中文名稱解析，零依賴外部 OpenAPI 網路同步。
+
 
 
 

@@ -1,11 +1,17 @@
 import { BenchmarkType } from '../types/stock';
-import { TW_0050_BENCHMARK_HISTORY, US_SPY_BENCHMARK_HISTORY } from './benchmarkConstants';
+import {
+  TW_0050_BENCHMARK_HISTORY,
+  TW_TAIEX_BENCHMARK_HISTORY,
+  US_SPY_BENCHMARK_HISTORY,
+} from './benchmarkConstants';
 
 /**
  * 取得指定基準之歷史每日收盤價字典
  */
 export function getBenchmarkDailyPrices(type: BenchmarkType): Record<string, number> {
   switch (type) {
+    case 'TAIEX':
+      return TW_TAIEX_BENCHMARK_HISTORY;
     case '0050':
       return TW_0050_BENCHMARK_HISTORY;
     case 'SPY':

@@ -90,7 +90,12 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
     let bGrowth: number[] = [];
     let label = '';
 
-    if (benchmarkType === '0050') {
+    if (benchmarkType === 'TAIEX') {
+      label = '🇹🇼 加權指數 (^TWII)';
+      const raw = getBenchmarkDailyPrices('TAIEX');
+      const aligned = alignBenchmarkTimeSeries(dates, raw);
+      bGrowth = calculateNormalizedGrowth(aligned);
+    } else if (benchmarkType === '0050') {
       label = '🇹🇼 0050 元大台灣50';
       const raw = getBenchmarkDailyPrices('0050');
       const aligned = alignBenchmarkTimeSeries(dates, raw);
@@ -317,6 +322,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
             {(
               [
                 { key: 'NONE', label: '無' },
+                { key: 'TAIEX', label: '🇹🇼 加權' },
                 { key: '0050', label: '🇹🇼 0050' },
                 { key: 'SPY', label: '🇺🇸 SPY' },
                 { key: 'BALANCED_50_50', label: '⚖️ 50/50' },

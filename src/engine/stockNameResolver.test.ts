@@ -21,6 +21,9 @@ describe('StockNameResolver Engine (TDD Seam)', () => {
       expect(resolveOfficialSecurityName('2454')).toBe('聯發科');
       expect(resolveOfficialSecurityName('6547')).toBe('高端疫苗');
       expect(resolveOfficialSecurityName('2755')).toBe('揚秦');
+      // 驗證新興主動型 ETF
+      expect(resolveOfficialSecurityName('00400A')).toBe('主動國泰動能高息');
+      expect(resolveOfficialSecurityName('00403A')).toBe('主動統一升級50');
     });
 
     it('應正確解析美股主要指數、成分股與 ETF 繁體中文名稱', () => {
