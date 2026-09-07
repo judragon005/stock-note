@@ -5,6 +5,7 @@ import {
   getBubbleStrokeColor,
   formatInstitutionalDetailText,
   calculateTooltipPlacement,
+  getQuadrantWatermarkColors,
 } from './SmartMoneyBubbleChart';
 import { SmartMoneyBubbleData } from '../types/stock';
 
@@ -81,6 +82,22 @@ describe('SmartMoneyBubbleChart 視覺映射與輔助計算測試 (Tickets 03 & 
       expect(fill).toBe('rgba(100, 116, 139, 0.4)');
       expect(stroke).toBe('#94a3b8');
       expect(fill).not.toContain('245, 158, 11'); // 絕不為黃色
+    });
+
+    it('四象限生活化浮水印文字顏色隨 colorTheme 動態反轉 (getQuadrantWatermarkColors)', () => {
+      // 台灣模式 (紅漲綠跌)
+      const twColors = getQuadrantWatermarkColors('taiwan');
+      expect(twColors.breakout).toContain('248, 113, 113'); // 主力抬轎為紅
+      expect(twColors.distribution).toContain('52, 211, 153'); // 割韭菜警戒為綠
+      expect(twColors.accumulation).toContain('251, 191, 36'); // 逢低撿便宜為金黃
+      expect(twColors.liquidation).toContain('148, 163, 184'); // 冷凍提款為灰藍
+
+      // 國際/美股模式 (綠漲紅跌)
+      const intlColors = getQuadrantWatermarkColors('international');
+      expect(intlColors.breakout).toContain('52, 211, 153'); // 主力抬轎為綠
+      expect(intlColors.distribution).toContain('248, 113, 113'); // 割韭菜警戒為紅
+      expect(intlColors.accumulation).toContain('251, 191, 36'); // 逢低撿便宜為金黃
+      expect(intlColors.liquidation).toContain('148, 163, 184'); // 冷凍提款為灰藍
     });
   });
 

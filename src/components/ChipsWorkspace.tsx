@@ -11,7 +11,12 @@ import {
   computeChaikinMoneyFlow,
   getTemporalBubbleFrameData,
 } from '../engine/smartMoneyEngine';
-import { fetchTwseInstitutionalReport, TwseInstitutionalRow, getLatestTradingDateString } from '../engine/smartMoneyFetcher';
+import {
+  fetchTwseInstitutionalReport,
+  fetchRecentTwseReports,
+  TwseInstitutionalRow,
+  getLatestTradingDateString,
+} from '../engine/smartMoneyFetcher';
 import {
   Flame,
   ShieldCheck,
@@ -21,6 +26,106 @@ import {
   Sparkles,
   PieChart,
 } from 'lucide-react';
+
+/**
+ * 依據使用者燈號習慣 (ColorThemeMode) 取得籌碼工作區四象限統計卡片樣式
+ */
+export function getChipsQuadrantCardStyles(colorTheme: ColorThemeMode) {
+  const isTaiwan = colorTheme === 'taiwan';
+  return {
+    breakout: {
+      bg: isTaiwan ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+      border: isTaiwan ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)',
+      titleColor: isTaiwan ? '#fca5a5' : '#a7f3d0',
+      countColor: isTaiwan ? '#f87171' : '#34d399',
+      iconColor: isTaiwan ? '#f87171' : '#34d399',
+    },
+    accumulation: {
+      bg: 'rgba(245, 158, 11, 0.12)',
+      border: '1px solid rgba(245, 158, 11, 0.3)',
+      titleColor: '#fde68a',
+      countColor: '#fbbf24',
+      iconColor: '#fbbf24',
+    },
+    distribution: {
+      bg: isTaiwan ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+      border: isTaiwan ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+      titleColor: isTaiwan ? '#a7f3d0' : '#fca5a5',
+      countColor: isTaiwan ? '#34d399' : '#f87171',
+      iconColor: isTaiwan ? '#34d399' : '#f87171',
+    },
+    liquidation: {
+      bg: 'rgba(100, 116, 139, 0.12)',
+      border: '1px solid rgba(100, 116, 139, 0.3)',
+      titleColor: '#cbd5e1',
+      countColor: '#94a3b8',
+      iconColor: '#94a3b8',
+    },
+  };
+}
+
+/**
+ * 構建單檔標的之時序軌跡流向節點
+ * 優先對齊 IndexedDB 本地已沉澱之真實歷史日報，若尚未補齊則優雅降級為係數模擬
+ */
+export function buildHoldingHistoricalFlows(
+  holding: { symbol: string; todaysPnLPercent?: number; currentPrice?: number; market?: MarketType },
+  availableDates: string[],
+  twseData?: TwseInstitutionalRow,
+  baseUsCmf = 0,
+  historyReportsMap?: Record<string, Record<string, TwseInstitutionalRow>>
+) {
+  const cleanSymbol = holding.symbol.replace(/\.(TW|TWO)$/i, '').trim();
+  const baseFlow = twseData ? twseData.totalNetShares / 2500 : 0;
+
+  return availableDates.map((d, idx) => {
+    const factor = (idx + 1) / availableDates.length;
+    const changeP = (holding.todaysPnLPercent || 0) * factor + (idx % 2 === 0 ? 0.3 : -0.2);
+
+    if (holding.market === 'US') {
+      const stepCmf = Math.round(baseUsCmf * factor * 100) / 100;
+      const usNetFlow = stepCmf * 1000000 * (holding.currentPrice || 100);
+      return {
+        date: d,
+        changePercent: Math.round(changeP * 100) / 100,
+        flowScore: stepCmf,
+        netFlowAmount: usNetFlow,
+        cmf: stepCmf,
+      };
+    }
+
+    // 檢查是否有真實歷史日報 (本地化存儲時間換空間)
+    const dayReport = historyReportsMap?.[d];
+    const dayItem = dayReport ? (dayReport[cleanSymbol] || dayReport[holding.symbol]) : undefined;
+
+    if (dayItem) {
+      const dayScore = dayItem.totalNetShares / 2500;
+      return {
+        date: d,
+        changePercent: Math.round(changeP * 100) / 100,
+        flowScore: Math.round(dayScore * 100) / 100,
+        netFlowAmount: dayItem.totalNetShares * 1000 * (holding.currentPrice || 100),
+        foreignNetShares: dayItem.foreignNetShares,
+        trustNetShares: dayItem.trustNetShares,
+        dealerNetShares: dayItem.dealerNetShares,
+      };
+    }
+
+    // 優雅降級模擬
+    const fNet = twseData ? Math.round(twseData.foreignNetShares * factor) : undefined;
+    const tNet = twseData ? Math.round(twseData.trustNetShares * factor) : undefined;
+    const dNet = twseData ? Math.round(twseData.dealerNetShares * factor) : undefined;
+    return {
+      date: d,
+      changePercent: Math.round(changeP * 100) / 100,
+      flowScore: Math.round(baseFlow * factor * 100) / 100,
+      netFlowAmount: (twseData?.totalNetShares || 0) * 1000 * (holding.currentPrice || 100) * factor,
+      foreignNetShares: fNet,
+      trustNetShares: tNet,
+      dealerNetShares: dNet,
+    };
+  });
+}
 
 export interface ChipsWorkspaceProps {
   holdings: HoldingPosition[];
@@ -39,6 +144,8 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
   const [twseChipsMap, setTwseChipsMap] = useState<Record<string, TwseInstitutionalRow>>({});
   const [reportDate, setReportDate] = useState<string>(getLatestTradingDateString());
   const [currentDateIndex, setCurrentDateIndex] = useState(0);
+  const [historyReportsMap, setHistoryReportsMap] = useState<Record<string, Record<string, TwseInstitutionalRow>>>({});
+  const [isHydratingHistory, setIsHydratingHistory] = useState<boolean>(false);
 
   // 模擬/支援 5 個近期交易日供時序回放
   const availableDates = useMemo(() => {
@@ -63,6 +170,33 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
   useEffect(() => {
     loadChipsData();
   }, []);
+
+  // 背景非同步增量補齊最近交易日日報至本地 IndexedDB (用時間換空間)
+  useEffect(() => {
+    let isMounted = true;
+    const hydrateHistory = async () => {
+      setIsHydratingHistory(true);
+      try {
+        const reports = await fetchRecentTwseReports(5);
+        if (isMounted && reports && reports.length > 0) {
+          const map: Record<string, Record<string, TwseInstitutionalRow>> = {};
+          reports.forEach((r) => {
+            map[r.date] = r.data;
+          });
+          setHistoryReportsMap((prev) => ({ ...prev, ...map }));
+        }
+      } catch {
+        // 背景靜默容錯
+      } finally {
+        if (isMounted) setIsHydratingHistory(false);
+      }
+    };
+
+    hydrateHistory();
+    return () => {
+      isMounted = false;
+    };
+  }, [reportDate]);
 
   // 依視圖模式與市場篩選產生 Input Items
   const smartMoneyItems = useMemo<SmartMoneyInputItem[]>(() => {
@@ -102,38 +236,14 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
             baseUsCmf = computeChaikinMoneyFlow(usCandles, 20);
           }
 
-          // 生成模擬歷史 5 日時序位移點 (基於真實數據增量)
-          const baseFlow = twseData ? twseData.totalNetShares / 2500 : 0;
-          const histFlows = availableDates.map((d, idx) => {
-            const factor = (idx + 1) / availableDates.length;
-            const changeP = (h.todaysPnLPercent || 0) * factor + (idx % 2 === 0 ? 0.3 : -0.2);
-
-            if (h.market === 'US') {
-              // 美股時序軌跡：依時序推進 CMF 與量化流向金額
-              const stepCmf = Math.round(baseUsCmf * factor * 100) / 100;
-              const usNetFlow = stepCmf * 1000000 * (h.currentPrice || 100);
-              return {
-                date: d,
-                changePercent: Math.round(changeP * 100) / 100,
-                flowScore: stepCmf,
-                netFlowAmount: usNetFlow,
-                cmf: stepCmf,
-              };
-            }
-
-            const fNet = twseData ? Math.round(twseData.foreignNetShares * factor) : undefined;
-            const tNet = twseData ? Math.round(twseData.trustNetShares * factor) : undefined;
-            const dNet = twseData ? Math.round(twseData.dealerNetShares * factor) : undefined;
-            return {
-              date: d,
-              changePercent: Math.round(changeP * 100) / 100,
-              flowScore: Math.round(baseFlow * factor * 100) / 100,
-              netFlowAmount: (twseData?.totalNetShares || 0) * 1000 * (h.currentPrice || 100) * factor,
-              foreignNetShares: fNet,
-              trustNetShares: tNet,
-              dealerNetShares: dNet,
-            };
-          });
+          // 生成歷史時序位移點 (優先對齊 IndexedDB 本地已沉澱之真實日報)
+          const histFlows = buildHoldingHistoricalFlows(
+            h,
+            availableDates,
+            twseData,
+            baseUsCmf,
+            historyReportsMap
+          );
 
           return {
             symbol: h.symbol,
@@ -251,18 +361,18 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
         }
 
         const estPrice = matchingHolding?.currentPrice || 100;
-        const histFlows = availableDates.map((d, dIdx) => {
-          const factor = (dIdx + 1) / availableDates.length;
-          return {
-            date: d,
-            changePercent: Math.round((changeP || 0) * factor * 100) / 100,
-            flowScore: Math.round((item.totalNetShares / 2500) * factor * 100) / 100,
-            netFlowAmount: item.totalNetShares * 1000 * estPrice * factor,
-            foreignNetShares: item.foreignBuyShares !== undefined && item.foreignSellShares !== undefined ? Math.round((item.foreignBuyShares - item.foreignSellShares) * factor) : undefined,
-            trustNetShares: item.trustBuyShares !== undefined && item.trustSellShares !== undefined ? Math.round((item.trustBuyShares - item.trustSellShares) * factor) : undefined,
-            dealerNetShares: item.dealerNetShares !== undefined ? Math.round(item.dealerNetShares * factor) : undefined,
-          };
-        });
+        const histFlows = buildHoldingHistoricalFlows(
+          {
+            symbol: item.symbol,
+            todaysPnLPercent: changeP,
+            currentPrice: estPrice,
+            market: 'TW',
+          },
+          availableDates,
+          item,
+          0,
+          historyReportsMap
+        );
 
         return {
           symbol: item.symbol,
@@ -450,6 +560,29 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
             </div>
           )}
 
+          {/* 本地歷史籌碼「時間換空間」狀態徽章 */}
+          <div
+            title={
+              isHydratingHistory
+                ? '背景非同步漸進沉澱最近 5 日全市場日報至本地 IndexedDB...'
+                : `本地 IndexedDB 已沉澱 ${Object.keys(historyReportsMap).length} 個交易日真實日報，時序播放器已對齊真實法人張數。`
+            }
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '5px 10px',
+              borderRadius: '8px',
+              background: isHydratingHistory ? 'rgba(59, 130, 246, 0.15)' : 'rgba(16, 185, 129, 0.12)',
+              border: isHydratingHistory ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid rgba(16, 185, 129, 0.25)',
+              color: isHydratingHistory ? '#93c5fd' : '#6ee7b7',
+              fontSize: '0.74rem',
+              fontWeight: 600,
+            }}
+          >
+            <span>{isHydratingHistory ? '⏳ 歷史補足中' : `💾 歷史籌碼 (${Object.keys(historyReportsMap).length || '就緒'})`}</span>
+          </div>
+
           <button
             onClick={() => loadChipsData(true)}
             disabled={isLoading}
@@ -482,85 +615,93 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
           gap: '12px',
         }}
       >
-        <div
-          style={{
-            background: 'rgba(239, 68, 68, 0.12)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            borderRadius: '12px',
-            padding: '12px 14px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: '0.75rem', color: '#fca5a5', fontWeight: 600 }}>🔥 主力抬轎區</div>
-            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#f87171', marginTop: '2px' }}>
-              {currentFrameCounts.breakoutCount} <span style={{ fontSize: '0.75rem' }}>檔</span>
-            </div>
-          </div>
-          <Flame size={24} color="#f87171" opacity={0.8} />
-        </div>
+        {/* 頂部象限統計指標卡 (依據使用者選擇習慣燈號顏色顯示) */}
+        {(() => {
+          const cardStyles = getChipsQuadrantCardStyles(colorTheme);
+          return (
+            <>
+              <div
+                style={{
+                  background: cardStyles.breakout.bg,
+                  border: cardStyles.breakout.border,
+                  borderRadius: '12px',
+                  padding: '12px 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: cardStyles.breakout.titleColor, fontWeight: 600 }}>🔥 主力抬轎區</div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 800, color: cardStyles.breakout.countColor, marginTop: '2px' }}>
+                    {currentFrameCounts.breakoutCount} <span style={{ fontSize: '0.75rem' }}>檔</span>
+                  </div>
+                </div>
+                <Flame size={24} color={cardStyles.breakout.iconColor} opacity={0.8} />
+              </div>
 
-        <div
-          style={{
-            background: 'rgba(245, 158, 11, 0.12)',
-            border: '1px solid rgba(245, 158, 11, 0.3)',
-            borderRadius: '12px',
-            padding: '12px 14px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: '0.75rem', color: '#fde68a', fontWeight: 600 }}>🛡️ 逢低撿便宜區</div>
-            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#fbbf24', marginTop: '2px' }}>
-              {currentFrameCounts.accumulationCount} <span style={{ fontSize: '0.75rem' }}>檔</span>
-            </div>
-          </div>
-          <ShieldCheck size={24} color="#fbbf24" opacity={0.8} />
-        </div>
+              <div
+                style={{
+                  background: cardStyles.accumulation.bg,
+                  border: cardStyles.accumulation.border,
+                  borderRadius: '12px',
+                  padding: '12px 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: cardStyles.accumulation.titleColor, fontWeight: 600 }}>🛡️ 逢低撿便宜區</div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 800, color: cardStyles.accumulation.countColor, marginTop: '2px' }}>
+                    {currentFrameCounts.accumulationCount} <span style={{ fontSize: '0.75rem' }}>檔</span>
+                  </div>
+                </div>
+                <ShieldCheck size={24} color={cardStyles.accumulation.iconColor} opacity={0.8} />
+              </div>
 
-        <div
-          style={{
-            background: 'rgba(16, 185, 129, 0.12)',
-            border: '1px solid rgba(16, 185, 129, 0.3)',
-            borderRadius: '12px',
-            padding: '12px 14px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: '0.75rem', color: '#a7f3d0', fontWeight: 600 }}>⚠️ 割韭菜警戒區</div>
-            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#34d399', marginTop: '2px' }}>
-              {currentFrameCounts.distributionCount} <span style={{ fontSize: '0.75rem' }}>檔</span>
-            </div>
-          </div>
-          <AlertTriangle size={24} color="#34d399" opacity={0.8} />
-        </div>
+              <div
+                style={{
+                  background: cardStyles.distribution.bg,
+                  border: cardStyles.distribution.border,
+                  borderRadius: '12px',
+                  padding: '12px 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: cardStyles.distribution.titleColor, fontWeight: 600 }}>⚠️ 割韭菜警戒區</div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 800, color: cardStyles.distribution.countColor, marginTop: '2px' }}>
+                    {currentFrameCounts.distributionCount} <span style={{ fontSize: '0.75rem' }}>檔</span>
+                  </div>
+                </div>
+                <AlertTriangle size={24} color={cardStyles.distribution.iconColor} opacity={0.8} />
+              </div>
 
-        <div
-          style={{
-            background: 'rgba(100, 116, 139, 0.12)',
-            border: '1px solid rgba(100, 116, 139, 0.3)',
-            borderRadius: '12px',
-            padding: '12px 14px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: '0.75rem', color: '#cbd5e1', fontWeight: 600 }}>❄️ 冷凍提款區</div>
-            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#94a3b8', marginTop: '2px' }}>
-              {currentFrameCounts.liquidationCount} <span style={{ fontSize: '0.75rem' }}>檔</span>
-            </div>
-          </div>
-          <Snowflake size={24} color="#94a3b8" opacity={0.8} />
-        </div>
+              <div
+                style={{
+                  background: cardStyles.liquidation.bg,
+                  border: cardStyles.liquidation.border,
+                  borderRadius: '12px',
+                  padding: '12px 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: cardStyles.liquidation.titleColor, fontWeight: 600 }}>❄️ 冷凍提款區</div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 800, color: cardStyles.liquidation.countColor, marginTop: '2px' }}>
+                    {currentFrameCounts.liquidationCount} <span style={{ fontSize: '0.75rem' }}>檔</span>
+                  </div>
+                </div>
+                <Snowflake size={24} color={cardStyles.liquidation.iconColor} opacity={0.8} />
+              </div>
+            </>
+          );
+        })()}
       </div>
 
       {/* 核心泡泡圖元件 */}

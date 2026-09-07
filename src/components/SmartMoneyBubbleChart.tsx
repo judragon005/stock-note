@@ -102,6 +102,19 @@ export function getBubbleStrokeColor(
 }
 
 /**
+ * 依據使用者燈號習慣 (ColorThemeMode) 取得四象限生活化浮水印文字顏色
+ */
+export function getQuadrantWatermarkColors(colorTheme: ColorThemeMode) {
+  const isTaiwan = colorTheme === 'taiwan';
+  return {
+    breakout: isTaiwan ? 'rgba(248, 113, 113, 0.55)' : 'rgba(52, 211, 153, 0.55)',
+    accumulation: 'rgba(251, 191, 36, 0.55)',
+    distribution: isTaiwan ? 'rgba(52, 211, 153, 0.55)' : 'rgba(248, 113, 113, 0.55)',
+    liquidation: 'rgba(148, 163, 184, 0.55)',
+  };
+}
+
+/**
  * 格式化法人或機構籌碼明細文字
  */
 export function formatInstitutionalDetailText(data: {
@@ -480,47 +493,54 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
             strokeDasharray="4 4"
           />
 
-          {/* 四象限生活化浮水印文字 */}
-          <text
-            x={width - padding - 15}
-            y={padding + 25}
-            textAnchor="end"
-            fill="rgba(248, 113, 113, 0.55)"
-            fontSize="13"
-            fontWeight="700"
-          >
-            🔥 主力抬轎飆股區 (價漲 + 法人大買)
-          </text>
-          <text
-            x={padding + 15}
-            y={padding + 25}
-            textAnchor="start"
-            fill="rgba(251, 191, 36, 0.55)"
-            fontSize="13"
-            fontWeight="700"
-          >
-            🛡️ 逢低撿便宜區 (價跌 + 法人偷偷吃貨)
-          </text>
-          <text
-            x={width - padding - 15}
-            y={height - padding - 15}
-            textAnchor="end"
-            fill="rgba(52, 211, 153, 0.55)"
-            fontSize="13"
-            fontWeight="700"
-          >
-            ⚠️ 割韭菜警戒區 (價漲 + 法人趁高倒貨)
-          </text>
-          <text
-            x={padding + 15}
-            y={height - padding - 15}
-            textAnchor="start"
-            fill="rgba(148, 163, 184, 0.55)"
-            fontSize="13"
-            fontWeight="700"
-          >
-            ❄️ 冷凍提款區 (價跌 + 法人逃跑提款)
-          </text>
+          {/* 四象限生活化浮水印文字 (依據使用者選擇習慣燈號顏色顯示) */}
+          {(() => {
+            const watermarkColors = getQuadrantWatermarkColors(colorTheme);
+            return (
+              <>
+                <text
+                  x={width - padding - 15}
+                  y={padding + 25}
+                  textAnchor="end"
+                  fill={watermarkColors.breakout}
+                  fontSize="13"
+                  fontWeight="700"
+                >
+                  🔥 主力抬轎飆股區 (價漲 + 法人大買)
+                </text>
+                <text
+                  x={padding + 15}
+                  y={padding + 25}
+                  textAnchor="start"
+                  fill={watermarkColors.accumulation}
+                  fontSize="13"
+                  fontWeight="700"
+                >
+                  🛡️ 逢低撿便宜區 (價跌 + 法人偷偷吃貨)
+                </text>
+                <text
+                  x={width - padding - 15}
+                  y={height - padding - 15}
+                  textAnchor="end"
+                  fill={watermarkColors.distribution}
+                  fontSize="13"
+                  fontWeight="700"
+                >
+                  ⚠️ 割韭菜警戒區 (價漲 + 法人趁高倒貨)
+                </text>
+                <text
+                  x={padding + 15}
+                  y={height - padding - 15}
+                  textAnchor="start"
+                  fill={watermarkColors.liquidation}
+                  fontSize="13"
+                  fontWeight="700"
+                >
+                  ❄️ 冷凍提款區 (價跌 + 法人逃跑提款)
+                </text>
+              </>
+            );
+          })()}
 
           {/* 軸向指引箭頭與標籤 */}
           <text

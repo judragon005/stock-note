@@ -1080,6 +1080,20 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Temporal Neutral Fallback (時序流向缺損平滑中立降級)**:
   - 修正 `ChipsWorkspace.tsx` 中 `baseFlow`：當外部籌碼數據缺損時，設為 `0` 而非 `(todaysPnLPercent)/5`，避免在法人數據尚未加載時將下跌股票偽造為大舉倒貨負向位移。
 
+### 象限色彩動態連動使用者習慣燈號與籌碼資料本地化增量補足 *(新增於 V8.6.0)*
+
+- **Adaptive Color Theme Quadrant Sync (象限顏色動態連動使用者燈號習慣)**:
+  - 透過 `getQuadrantWatermarkColors(colorTheme)` 與 `getChipsQuadrantCardStyles(colorTheme)`，將四象限浮水印 SVG 文字及頂部統計指標卡片全面連動使用者的色彩心智模式。
+  - 當設定為「🟢 綠漲 🔴 紅跌」(`international`) 時：
+    - 「🔥 主力抬轎飆股區」全面切換為多頭代表綠色 (`#10b981` / `#34d399`)。
+    - 「⚠️ 割韭菜警戒區」全面切換為危險/空頭代表紅色 (`#ef4444` / `#f87171`)。
+  - 當設定為「🔴 紅漲 🟢 綠跌」(`taiwan`) 時：
+    - 「🔥 主力抬轎飆股區」為紅色，「⚠️ 割韭菜警戒區」為綠色。
+- **Local Incremental Chips Hydration (籌碼資料本地化儲存背景增量補足 - 時間換空間)**:
+  - 頁面掛載時優先以 IndexedDB 既有日報完成毫秒級首屏渲染，背景非同步發起 `fetchRecentTwseReports(5)` 漸進向後探尋並沉澱最近 5 個交易日之 TWSE + TPEx 全市場法人日報至本地 IndexedDB。
+  - 透過 `buildHoldingHistoricalFlows` 輔助函式，當本地已沉澱歷史日報時，時序播放器各影格（T-4 ~ T）100% 精準對齊真實歷史日報的外資、投信、自營商買賣超張數與量化分數，未補齊前平滑降級為係數模擬。
+  - 頂部資訊列增設本地歷史籌碼增量儲存狀態徽章，明確回饋使用者「時間換空間」的本地日報沉澱天數與狀態。
+
 
 
 
