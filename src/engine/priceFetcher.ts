@@ -1,5 +1,6 @@
 import { MarketType, PriceQuote, ExchangeRateQuote } from '../types/stock';
 import { parseYahooHistoricalCandlesResponse } from './historicalPriceFetcher';
+import { globalRequestScheduler } from './rateLimiter';
 
 const CORS_PROXIES = [
   (url: string) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
@@ -8,26 +9,43 @@ const CORS_PROXIES = [
 ];
 
 /**
- * 透過本地代理、直連或 CORS 代理池發送請求，包含多代理重試與超時熔斷 (三層平滑降級)
+ * 透過本地代理、直連或 CORS 代理池發送請求，包含多代理重試與超時熔斷 (三層平滑降級)，並受全域速率限制保護
  */
 export async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 4000): Promise<any> {
-  // 1. 優先嘗試 Vite 本地開發代理路由
-  let localProxyUrl: string | null = null;
-  if (targetUrl.startsWith('https://query1.finance.yahoo.com')) {
-    localProxyUrl = targetUrl.replace('https://query1.finance.yahoo.com', '/api/yahoo');
-  } else if (targetUrl.startsWith('https://openapi.twse.com.tw')) {
-    localProxyUrl = targetUrl.replace('https://openapi.twse.com.tw', '/api/twse');
-  } else if (targetUrl.startsWith('https://www.twse.com.tw')) {
-    localProxyUrl = targetUrl.replace('https://www.twse.com.tw', '/api/twse-www');
-  } else if (targetUrl.startsWith('https://www.tpex.org.tw')) {
-    localProxyUrl = targetUrl.replace('https://www.tpex.org.tw', '/api/tpex');
-  }
+  return globalRequestScheduler.schedule(targetUrl, async () => {
+    // 1. 優先嘗試 Vite 本地開發代理路由
+    let localProxyUrl: string | null = null;
+    if (targetUrl.startsWith('https://query1.finance.yahoo.com')) {
+      localProxyUrl = targetUrl.replace('https://query1.finance.yahoo.com', '/api/yahoo');
+    } else if (targetUrl.startsWith('https://openapi.twse.com.tw')) {
+      localProxyUrl = targetUrl.replace('https://openapi.twse.com.tw', '/api/twse');
+    } else if (targetUrl.startsWith('https://www.twse.com.tw')) {
+      localProxyUrl = targetUrl.replace('https://www.twse.com.tw', '/api/twse-www');
+    } else if (targetUrl.startsWith('https://www.tpex.org.tw')) {
+      localProxyUrl = targetUrl.replace('https://www.tpex.org.tw', '/api/tpex');
+    }
 
-  if (localProxyUrl && typeof window !== 'undefined') {
+    if (localProxyUrl && typeof window !== 'undefined') {
+      try {
+        const res = await fetch(localProxyUrl, { signal: AbortSignal.timeout(timeoutMs) });
+        if (res.ok) {
+          const text = await res.text();
+          try {
+            return JSON.parse(text);
+          } catch {
+            return text;
+          }
+        }
+      } catch {
+        // fallback
+      }
+    }
+
+    // 2. 嘗試直連 (Node 環境)
     try {
-      const res = await fetch(localProxyUrl, { signal: AbortSignal.timeout(timeoutMs) });
-      if (res.ok) {
-        const text = await res.text();
+      const directRes = await fetch(targetUrl, { signal: AbortSignal.timeout(timeoutMs) });
+      if (directRes.ok) {
+        const text = await directRes.text();
         try {
           return JSON.parse(text);
         } catch {
@@ -35,46 +53,31 @@ export async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 
         }
       }
     } catch {
-      // fallback
+      // browser CORS fallback
     }
-  }
 
-  // 2. 嘗試直連 (Node 環境)
-  try {
-    const directRes = await fetch(targetUrl, { signal: AbortSignal.timeout(timeoutMs) });
-    if (directRes.ok) {
-      const text = await directRes.text();
+    // 3. 外部 CORS 代理池
+    let lastError: Error | null = null;
+    for (const getProxyUrl of CORS_PROXIES) {
+      const proxyUrl = getProxyUrl(targetUrl);
       try {
-        return JSON.parse(text);
-      } catch {
-        return text;
+        const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(timeoutMs) });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status} ${response.statusText}`);
+        }
+        const text = await response.text();
+        try {
+          return JSON.parse(text);
+        } catch {
+          return text;
+        }
+      } catch (err: any) {
+        lastError = err;
       }
     }
-  } catch {
-    // browser CORS fallback
-  }
 
-  // 3. 外部 CORS 代理池
-  let lastError: Error | null = null;
-  for (const getProxyUrl of CORS_PROXIES) {
-    const proxyUrl = getProxyUrl(targetUrl);
-    try {
-      const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(timeoutMs) });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status} ${response.statusText}`);
-      }
-      const text = await response.text();
-      try {
-        return JSON.parse(text);
-      } catch {
-        return text;
-      }
-    } catch (err: any) {
-      lastError = err;
-    }
-  }
-
-  throw lastError || new Error(`All CORS proxies failed for ${targetUrl}`);
+    throw lastError || new Error(`All CORS proxies failed for ${targetUrl}`);
+  });
 }
 
 /**
