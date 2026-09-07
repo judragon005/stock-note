@@ -1,7 +1,7 @@
 import React from 'react';
-import { PieChart, TrendingUp, History, Settings, Wallet, Coins } from 'lucide-react';
+import { PieChart, TrendingUp, History, Settings, Wallet, Coins, Activity } from 'lucide-react';
 
-export type WorkspaceTabKey = 'portfolio' | 'growth' | 'dividend' | 'cash' | 'ledger' | 'settings' | 'friction';
+export type WorkspaceTabKey = 'portfolio' | 'growth' | 'chips' | 'dividend' | 'cash' | 'ledger' | 'settings' | 'friction';
 
 interface WorkspaceTabsProps {
   activeTab: WorkspaceTabKey;
@@ -35,48 +35,64 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
     icon: React.ReactNode;
     badge?: string;
     badgeColor?: string;
+    badgeBg?: string;
   }[] = [
     {
       key: 'portfolio',
       label: '投資組合與庫存',
       icon: <PieChart size={16} />,
       badge: `${holdingsCount} 標的`,
-      badgeColor: '#3b82f6',
+      badgeColor: '#60a5fa',
+      badgeBg: 'rgba(59, 130, 246, 0.15)',
     },
     {
       key: 'growth',
       label: '資產成長 (NAV)',
       icon: <TrendingUp size={16} />,
       badge: '全歷史折線',
-      badgeColor: '#10b981',
+      badgeColor: '#34d399',
+      badgeBg: 'rgba(16, 185, 129, 0.15)',
+    },
+    {
+      key: 'chips',
+      label: '籌碼與動態星圖',
+      icon: <Activity size={16} />,
+      badge: '聰明錢泡泡',
+      badgeColor: '#f472b6',
+      badgeBg: 'rgba(244, 114, 182, 0.15)',
     },
     {
       key: 'dividend',
       label: '股利日誌與現金流',
       icon: <Coins size={16} />,
       badge: receivableDividendsCount > 0 ? `${receivableDividendsCount} 待發放` : `${dividendTradesCount} 筆入帳`,
-      badgeColor: receivableDividendsCount > 0 ? '#f59e0b' : '#10b981',
+      badgeColor: receivableDividendsCount > 0 ? '#fbbf24' : '#34d399',
+      badgeBg: receivableDividendsCount > 0 ? 'rgba(245, 158, 11, 0.18)' : 'rgba(16, 185, 129, 0.15)',
     },
+
     {
       key: 'cash',
       label: '現金與借貸',
       icon: <Wallet size={16} />,
       badge: `${cashTransactionsCount} 筆流水`,
-      badgeColor: '#10b981',
+      badgeColor: '#38bdf8',
+      badgeBg: 'rgba(56, 189, 248, 0.15)',
     },
     {
       key: 'ledger',
       label: '歷史交易帳本',
       icon: <History size={16} />,
       badge: `${tradesCount} 筆`,
-      badgeColor: '#3b82f6',
+      badgeColor: '#a78bfa',
+      badgeBg: 'rgba(139, 92, 246, 0.15)',
     },
     {
       key: 'settings',
-      label: '設定',
+      label: '設定中心',
       icon: <Settings size={16} />,
       badge: totalSavedFriction > 0 ? `省 NT$ ${Math.round(totalSavedFriction).toLocaleString()}` : `${accountsCount} 帳戶`,
-      badgeColor: '#f59e0b',
+      badgeColor: '#fb923c',
+      badgeBg: 'rgba(249, 115, 22, 0.15)',
     },
   ];
 
@@ -85,11 +101,14 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
+        gap: '6px',
         marginBottom: '20px',
-        borderBottom: '1px solid var(--border-color)',
-        paddingBottom: '12px',
+        background: 'rgba(15, 23, 42, 0.5)',
+        padding: '6px',
+        borderRadius: '14px',
+        border: '1px solid rgba(51, 65, 85, 0.35)',
         overflowX: 'auto',
+        backdropFilter: 'blur(10px)',
       }}
     >
       {tabs.map((tab) => {
@@ -102,32 +121,45 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              padding: '10px 18px',
-              borderRadius: '12px',
-              border: isActive ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid transparent',
+              padding: '9px 16px',
+              borderRadius: '10px',
+              border: isActive
+                ? '1px solid rgba(59, 130, 246, 0.45)'
+                : '1px solid transparent',
               background: isActive
-                ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%)'
-                : 'rgba(30, 41, 59, 0.4)',
+                ? 'linear-gradient(135deg, rgba(30, 58, 138, 0.4) 0%, rgba(15, 23, 42, 0.8) 100%)'
+                : 'transparent',
               color: isActive ? '#ffffff' : 'var(--text-secondary)',
               fontWeight: isActive ? 700 : 500,
-              fontSize: '0.9rem',
+              fontSize: '0.86rem',
               cursor: 'pointer',
               transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-              boxShadow: isActive ? '0 4px 12px rgba(59, 130, 246, 0.15)' : 'none',
+              boxShadow: isActive ? '0 4px 14px rgba(59, 130, 246, 0.2)' : 'none',
               whiteSpace: 'nowrap',
+              flexShrink: 0,
             }}
           >
-            <span style={{ color: isActive ? '#60a5fa' : 'var(--text-muted)' }}>{tab.icon}</span>
+            <span
+              style={{
+                color: isActive ? '#60a5fa' : 'var(--text-muted)',
+                display: 'flex',
+                alignItems: 'center',
+                transition: 'color 0.2s ease',
+              }}
+            >
+              {tab.icon}
+            </span>
             <span>{tab.label}</span>
             {tab.badge && (
               <span
                 style={{
-                  fontSize: '0.72rem',
+                  fontSize: '0.7rem',
                   padding: '2px 7px',
-                  borderRadius: '10px',
-                  background: isActive ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.3)',
-                  color: isActive ? '#ffffff' : tab.badgeColor || 'var(--text-muted)',
+                  borderRadius: '12px',
+                  background: isActive ? 'rgba(59, 130, 246, 0.25)' : (tab.badgeBg || 'rgba(0, 0, 0, 0.3)'),
+                  color: isActive ? '#93c5fd' : (tab.badgeColor || 'var(--text-muted)'),
                   fontWeight: 600,
+                  border: isActive ? '1px solid rgba(147, 197, 253, 0.3)' : '1px solid transparent',
                 }}
               >
                 {tab.badge}

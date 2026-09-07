@@ -3,8 +3,8 @@ import { HoldingPosition, TradeRecord, PriceQuote, MarketType, AccountingView, P
 import { AccountingMethod, ACCOUNTING_METHOD_LABELS } from '../types/lot';
 import { ReceivableDividend } from '../types/dividend';
 import { calculateHoldingFxBreakdown } from '../engine/fxBreakdown';
-import { Edit2, Check, ChevronDown, ChevronRight, Calendar, Lock, Unlock, RefreshCw, PlusCircle, Layers, Target, Clock, Sparkles } from 'lucide-react';
 import { formatTimelineDividend, formatTimelineReduction } from '../utils/formatters';
+import { Edit2, Check, ChevronDown, ChevronRight, Calendar, Lock, Unlock, RefreshCw, PlusCircle, Layers, Target, Clock, Sparkles } from 'lucide-react';
 import { Tooltip } from './common/Tooltip';
 import { LotsBreakdownModal } from './LotsBreakdownModal';
 import { calculateHoldingPeriodMetrics } from '../engine/holdingPeriodEngine';
@@ -61,15 +61,17 @@ const PriceDisplayView: React.FC<PriceDisplayViewProps> = ({
             gap: '4px',
             cursor: 'pointer',
             padding: '2px 6px',
-            borderRadius: '4px',
-            background: 'rgba(30, 41, 59, 0.4)',
+            borderRadius: '5px',
+            background: 'rgba(30, 41, 59, 0.5)',
+            border: '1px solid rgba(51, 65, 85, 0.4)',
+            transition: 'all 0.15s ease',
           }}
           title="點擊修改最新現價"
         >
-          <span style={{ fontWeight: 600, color: '#ffffff' }}>
+          <span style={{ fontWeight: 700, color: '#ffffff' }}>
             {item.currentPrice.toFixed(decimals)}
           </span>
-          <Edit2 size={12} color="var(--text-muted)" />
+          <Edit2 size={11} color="var(--text-muted)" />
         </div>
 
         {/* 鎖定/解鎖切換 */}
@@ -136,7 +138,7 @@ const PriceDisplayView: React.FC<PriceDisplayViewProps> = ({
             <span
               style={{
                 color: quote.change! >= 0 ? 'var(--gain-color)' : 'var(--loss-color)',
-                fontWeight: 600,
+                fontWeight: 700,
               }}
               title={`昨日收盤價: ${quote.previousClose?.toFixed(decimals)}`}
             >
@@ -149,7 +151,7 @@ const PriceDisplayView: React.FC<PriceDisplayViewProps> = ({
           <span
             style={{
               color: item.todaysPnL >= 0 ? 'var(--gain-color)' : 'var(--loss-color)',
-              fontWeight: 600,
+              fontWeight: 700,
               fontSize: '0.66rem',
             }}
             title="今日持有部位未實現損益波動額"
@@ -247,7 +249,15 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   };
 
   return (
-    <div className="glass-card" style={{ padding: '24px', marginBottom: '24px' }}>
+    <div
+      className="glass-card"
+      style={{
+        padding: '20px 24px',
+        marginBottom: '24px',
+        border: '1px solid rgba(51, 65, 85, 0.4)',
+        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.85) 0%, rgba(10, 16, 30, 0.75) 100%)',
+      }}
+    >
       <div
         style={{
           display: 'flex',
@@ -263,10 +273,10 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
           <div
             style={{
               display: 'inline-flex',
-              background: 'rgba(15, 23, 42, 0.6)',
+              background: 'rgba(19, 29, 49, 0.8)',
               padding: '3px',
               borderRadius: '10px',
-              border: '1px solid rgba(51, 65, 85, 0.4)',
+              border: '1px solid var(--border-color)',
             }}
           >
             <button
@@ -275,7 +285,9 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: 'none',
-                background: currentFilter === 'ACTIVE' ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : 'transparent',
+                background: currentFilter === 'ACTIVE'
+                  ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
+                  : 'transparent',
                 color: currentFilter === 'ACTIVE' ? '#ffffff' : 'var(--text-secondary)',
                 fontWeight: currentFilter === 'ACTIVE' ? 700 : 500,
                 fontSize: '0.8125rem',
@@ -284,6 +296,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
+                boxShadow: currentFilter === 'ACTIVE' ? '0 2px 8px rgba(59, 130, 246, 0.3)' : 'none',
               }}
             >
               <span>持倉中</span>
@@ -294,6 +307,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                   borderRadius: '10px',
                   background: currentFilter === 'ACTIVE' ? 'rgba(255,255,255,0.25)' : 'rgba(51, 65, 85, 0.6)',
                   color: '#ffffff',
+                  fontWeight: 700,
                 }}
               >
                 {activeCount}
@@ -306,7 +320,9 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: 'none',
-                background: currentFilter === 'CLOSED' ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' : 'transparent',
+                background: currentFilter === 'CLOSED'
+                  ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)'
+                  : 'transparent',
                 color: currentFilter === 'CLOSED' ? '#ffffff' : 'var(--text-secondary)',
                 fontWeight: currentFilter === 'CLOSED' ? 700 : 500,
                 fontSize: '0.8125rem',
@@ -315,6 +331,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
+                boxShadow: currentFilter === 'CLOSED' ? '0 2px 8px rgba(139, 92, 246, 0.3)' : 'none',
               }}
             >
               <span>已平倉</span>
@@ -325,6 +342,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                   borderRadius: '10px',
                   background: currentFilter === 'CLOSED' ? 'rgba(255,255,255,0.25)' : 'rgba(51, 65, 85, 0.6)',
                   color: '#ffffff',
+                  fontWeight: 700,
                 }}
               >
                 {closedCount}
@@ -337,7 +355,9 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: 'none',
-                background: currentFilter === 'ALL' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'transparent',
+                background: currentFilter === 'ALL'
+                  ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                  : 'transparent',
                 color: currentFilter === 'ALL' ? '#ffffff' : 'var(--text-secondary)',
                 fontWeight: currentFilter === 'ALL' ? 700 : 500,
                 fontSize: '0.8125rem',
@@ -346,6 +366,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
+                boxShadow: currentFilter === 'ALL' ? '0 2px 8px rgba(16, 185, 129, 0.3)' : 'none',
               }}
             >
               <span>全部總覽</span>
@@ -356,6 +377,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                   borderRadius: '10px',
                   background: currentFilter === 'ALL' ? 'rgba(255,255,255,0.25)' : 'rgba(51, 65, 85, 0.6)',
                   color: '#ffffff',
+                  fontWeight: 700,
                 }}
               >
                 {allCount}
@@ -373,10 +395,10 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
-                background: 'rgba(15, 23, 42, 0.6)',
-                padding: '3px 8px',
+                background: 'rgba(19, 29, 49, 0.8)',
+                padding: '4px 10px',
                 borderRadius: '8px',
-                border: '1px solid rgba(51, 65, 85, 0.6)',
+                border: '1px solid var(--border-color)',
               }}
             >
               <Tooltip content={ACCOUNTING_METHOD_LABELS[accountingMethod].tooltip}>
@@ -391,8 +413,8 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                   background: 'transparent',
                   border: 'none',
                   color: '#34d399',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
+                  fontSize: '0.76rem',
+                  fontWeight: 700,
                   cursor: 'pointer',
                   outline: 'none',
                 }}
@@ -412,9 +434,9 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
               padding: '4px 10px',
               borderRadius: '6px',
               background: isBroker ? 'rgba(59, 130, 246, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-              border: isBroker ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)',
+              border: isBroker ? '1px solid rgba(59, 130, 246, 0.35)' : '1px solid rgba(16, 185, 129, 0.35)',
               color: isBroker ? '#60a5fa' : '#34d399',
-              fontWeight: 600,
+              fontWeight: 700,
             }}
           >
             {isBroker ? '🏢 券商核帳口徑 (含稅淨值)' : '📈 投資總報酬口徑 (毛市值)'}
@@ -432,30 +454,30 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.86rem' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
-                <th style={{ padding: '12px 14px', fontWeight: 600, width: '32px' }}></th>
-                <th style={{ padding: '12px 14px', fontWeight: 600 }}>標的代碼 / 名稱</th>
-                <th style={{ padding: '12px 14px', fontWeight: 600 }}>市場 / 幣別</th>
-                <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>持有股數</th>
-                <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>平均成本</th>
-                <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>
+                <th style={{ padding: '12px 14px', fontWeight: 700, width: '32px' }}></th>
+                <th style={{ padding: '12px 14px', fontWeight: 700 }}>標的代碼 / 名稱</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700 }}>市場 / 幣別</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right' }}>持有股數</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right' }}>平均成本</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right' }}>
                   {currentFilter === 'CLOSED' ? '出場均價 / 清倉日' : '最新參考市價'}
                 </th>
-                <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>
+                <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right' }}>
                   {currentFilter === 'CLOSED' ? '歷史總投入' : isBroker ? '總付出成本' : '持倉成本基準'}
                 </th>
-                <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>
+                <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right' }}>
                   {currentFilter === 'CLOSED' ? '在倉市值' : isBroker ? '當前市值 (含稅淨值)' : '當前毛市值'}
                 </th>
-                <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>
+                <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right' }}>
                   {currentFilter === 'CLOSED' ? '已實現損益 / 報酬率' : isBroker ? '未實現損益 (含稅)' : '未實現損益 / 報酬率'}
                 </th>
-                <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'right' }}>
+                <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right' }}>
                   {isBroker ? '累計股息 / YoC' : '含息總損益 / 回報%'}
                 </th>
-                <th style={{ padding: '12px 14px', fontWeight: 600, textAlign: 'center' }}>操作</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'center' }}>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -490,8 +512,8 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                     <tr
                       style={{
                         borderBottom: isExpanded ? 'none' : '1px solid rgba(51, 65, 85, 0.3)',
-                        transition: 'background 0.15s ease',
-                        background: isExpanded ? 'rgba(30, 41, 59, 0.4)' : isClosed ? 'rgba(15, 23, 42, 0.25)' : 'transparent',
+                        transition: 'background 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                        background: isExpanded ? 'rgba(30, 41, 59, 0.45)' : isClosed ? 'rgba(15, 23, 42, 0.25)' : 'transparent',
                         cursor: 'pointer',
                         opacity: isClosed && currentFilter === 'ALL' ? 0.8 : 1,
                       }}
@@ -510,7 +532,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       {/* 標的 */}
                       <td style={{ padding: '14px 14px 14px 6px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span className="mono" style={{ fontWeight: 700, color: '#ffffff', fontSize: '0.95rem' }}>
+                          <span className="mono" style={{ fontWeight: 800, color: '#ffffff', fontSize: '0.96rem' }}>
                             {item.symbol}
                           </span>
                           {currentFilter === 'ALL' && (
@@ -521,7 +543,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                                 borderRadius: '4px',
                                 background: isClosed ? 'rgba(148, 163, 184, 0.15)' : 'rgba(16, 185, 129, 0.15)',
                                 color: isClosed ? '#94a3b8' : '#34d399',
-                                fontWeight: 600,
+                                fontWeight: 700,
                               }}
                             >
                               {isClosed ? '⚪ 已清倉' : '🟢 持倉中'}
@@ -797,9 +819,9 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                             <div
                               className="mono"
                               style={{
-                                fontWeight: 700,
+                                fontWeight: 800,
                                 color: item.realizedPnL >= 0 ? 'var(--gain-color)' : 'var(--loss-color)',
-                                fontSize: '0.9rem',
+                                fontSize: '0.92rem',
                               }}
                             >
                               {item.realizedPnL >= 0 ? '+' : ''}
@@ -821,9 +843,9 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                             <div
                               className="mono"
                               style={{
-                                fontWeight: 700,
+                                fontWeight: 800,
                                 color: isGain ? 'var(--gain-color)' : 'var(--loss-color)',
-                                fontSize: '0.9rem',
+                                fontSize: '0.92rem',
                               }}
                             >
                               {isGain ? '+' : ''}
@@ -832,7 +854,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                             <div
                               style={{
                                 fontSize: '0.75rem',
-                                fontWeight: 600,
+                                fontWeight: 700,
                                 color: isGain ? 'var(--gain-color)' : 'var(--loss-color)',
                                 marginTop: '2px',
                               }}
@@ -908,9 +930,9 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                             <div
                               className="mono"
                               style={{
-                                fontWeight: 600,
+                                fontWeight: 700,
                                 color: item.totalDividends > 0 ? '#fbbf24' : 'var(--text-muted)',
-                                fontSize: '0.85rem',
+                                fontSize: '0.86rem',
                               }}
                             >
                               {currencyPrefix} {Math.round(item.totalDividends).toLocaleString('en-US')}
@@ -930,9 +952,9 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                             <div
                               className="mono"
                               style={{
-                                fontWeight: 700,
+                                fontWeight: 800,
                                 color: item.totalReturnPnL >= 0 ? 'var(--gain-color)' : 'var(--loss-color)',
-                                fontSize: '0.85rem',
+                                fontSize: '0.86rem',
                               }}
                             >
                               {item.totalReturnPnL >= 0 ? '+' : ''}{currencyPrefix} {Math.round(item.totalReturnPnL).toLocaleString('en-US')}
@@ -940,7 +962,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                             <div
                               style={{
                                 fontSize: '0.75rem',
-                                fontWeight: 600,
+                                fontWeight: 700,
                                 color: item.totalReturnPnL >= 0 ? 'var(--gain-color)' : 'var(--loss-color)',
                                 marginTop: '2px',
                               }}
@@ -962,7 +984,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                             }}
                           >
                             <span
-                              style={{ color: item.xirrPercent >= 0 ? 'var(--gain-color)' : 'var(--loss-color)', fontWeight: 600 }}
+                              style={{ color: item.xirrPercent >= 0 ? 'var(--gain-color)' : 'var(--loss-color)', fontWeight: 700 }}
                               title="含息資金加權年化報酬率 (MWRR)，計入歷史買賣、加碼、股息與期末持股市值"
                             >
                               XIRR: {item.xirrPercent >= 0 ? '+' : ''}{item.xirrPercent.toFixed(2)}%
@@ -971,7 +993,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                             {onInspectSecurityXirr && (
                               <span
                                 onClick={(e) => {
-                                  e.stopPropagation();
+                                   e.stopPropagation();
                                   onInspectSecurityXirr(item.symbol);
                                 }}
                                 style={{
@@ -998,10 +1020,11 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                               background: 'rgba(59, 130, 246, 0.15)',
                               color: '#60a5fa',
                               padding: '4px 10px',
-                              border: '1px solid rgba(59, 130, 246, 0.3)',
+                              border: '1px solid rgba(59, 130, 246, 0.35)',
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: '4px',
+                              fontWeight: 600,
                             }}
                             onClick={() => onQuickTrade(item.symbol, 'BUY')}
                             title="以此標的再次建倉"
@@ -1015,9 +1038,10 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                               className="btn btn-sm"
                               style={{
                                 background: 'rgba(16, 185, 129, 0.15)',
-                                color: '#10b981',
-                                padding: '4px 8px',
-                                border: '1px solid rgba(16, 185, 129, 0.3)',
+                                color: '#34d399',
+                                padding: '4px 9px',
+                                border: '1px solid rgba(16, 185, 129, 0.35)',
+                                fontWeight: 700,
                               }}
                               onClick={() => onQuickTrade(item.symbol, 'BUY')}
                               title="買進加碼"
@@ -1028,9 +1052,10 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                               className="btn btn-sm"
                               style={{
                                 background: 'rgba(244, 63, 94, 0.15)',
-                                color: '#f43f5e',
-                                padding: '4px 8px',
-                                border: '1px solid rgba(244, 63, 94, 0.3)',
+                                color: '#fb7185',
+                                padding: '4px 9px',
+                                border: '1px solid rgba(244, 63, 94, 0.35)',
+                                fontWeight: 700,
                               }}
                               onClick={() => onQuickTrade(item.symbol, 'SELL')}
                               title="賣出平倉"
@@ -1049,7 +1074,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <Calendar size={14} color="#60a5fa" />
-                              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#60a5fa' }}>
+                              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#60a5fa' }}>
                                 【{item.symbol} {item.name}】完整交易與公司行動歷史時間軸 ({stockTrades.length} 筆)
                               </span>
                             </div>
@@ -1060,11 +1085,11 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                                   setSelectedLotHolding(item);
                                 }}
                                 style={{
-                                  background: 'rgba(16, 185, 129, 0.12)',
-                                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                                  background: 'rgba(16, 185, 129, 0.15)',
+                                  border: '1px solid rgba(16, 185, 129, 0.35)',
                                   color: '#34d399',
                                   borderRadius: '6px',
-                                  padding: '3px 10px',
+                                  padding: '4px 10px',
                                   fontSize: '0.75rem',
                                   fontWeight: 600,
                                   cursor: 'pointer',
@@ -1084,11 +1109,11 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                                     onInspectSecurityXirr(item.symbol);
                                   }}
                                   style={{
-                                    background: 'rgba(56, 189, 248, 0.12)',
-                                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                                    background: 'rgba(56, 189, 248, 0.15)',
+                                    border: '1px solid rgba(56, 189, 248, 0.35)',
                                     color: '#38bdf8',
                                     borderRadius: '6px',
-                                    padding: '3px 10px',
+                                    padding: '4px 10px',
                                     fontSize: '0.75rem',
                                     fontWeight: 600,
                                     cursor: 'pointer',
@@ -1115,7 +1140,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                                   padding: '12px',
                                   borderRadius: '8px',
                                   background: 'rgba(15, 23, 42, 0.7)',
-                                  border: '1px solid rgba(59, 130, 246, 0.2)',
+                                  border: '1px solid rgba(59, 130, 246, 0.25)',
                                 }}
                               >
                                 {/* 0. 智慧量化操作建議方針 */}

@@ -376,10 +376,23 @@ export interface LoanRecord {
   pledgeRegistryFee?: number;  // 設質登記費 (設質手續費，預設 NT$100)
   handlingFee?: number;        // 開辦手續費 / 徵信管理費 (預設 NT$0)
   pledgeFee?: number;          // 規費總計 (撥券費 + 設質費 + 手續費)
+  closedDate?: string;         // 結清還款日 / 借款終止日 (YYYY-MM-DD)
   warningRatio?: number;       // 質押維持率追繳警戒線 (預設 130%)
   safeRatio?: number;          // 安全維持率警戒線 (預設 166%)
   note?: string;
   createdAt: number;
+}
+
+export interface SettledLoanSummary {
+  payoffDate: string;             // 結清還款日 (YYYY-MM-DD)
+  borrowDays: number;             // 實際借款天數
+  paidInterest: number;           // 已付利息 (TWD/USD)
+  paidPledgeRegistryFee: number;  // 已付設質登記費 (設定費)
+  paidTransferFee: number;        // 已付集保撥券費 (撥券費)
+  paidHandlingFee: number;        // 已付開辦手續費 (手續費)
+  totalPledgeFees: number;        // 已付規費總計
+  totalBorrowingCost: number;     // 總借貸支出成本 (利息 + 規費)
+  hasActualLedgerRecords: boolean;// 是否有實際關聯帳本扣款流水
 }
 
 export interface PortfolioDailySnapshot {
@@ -487,4 +500,90 @@ export interface LocalStorageInspectionStats {
   
   stores: StorageObjectStoreStat[];
 }
+
+// ==========================================
+// 籌碼與聰明錢動態觀察儀 (Smart Money Flow & Bubble View)
+// ==========================================
+
+export type SmartMoneyQuadrant = 'BREAKOUT' | 'ACCUMULATION' | 'DISTRIBUTION' | 'LIQUIDATION';
+
+export type InstitutionalSynergyType = 'DUAL_BUY' | 'TUG_OF_WAR' | 'DUAL_SELL' | 'NEUTRAL';
+
+export interface SmartMoneyBubbleData {
+  symbol: string;
+  name: string;
+  market: MarketType;
+  x: number; // 漲跌幅動能映射 (-100 ~ +100)
+  y: number; // 聰明錢流向強度映射 (-100 ~ +100)
+  radius: number; // 泡泡半徑 (16px ~ 36px)
+  changePercent: number; // 實質價格漲跌幅 %
+  netFlowAmount: number; // 實質淨流向金額 (原幣別)
+  flowScore: number; // 歸一化聰明錢流向評分 (-1.0 ~ +1.0)
+  flowDescription: string; // 繁體中文白話描述 (如: "外資與投信合買 1.2 億")
+  quadrant: SmartMoneyQuadrant;
+  quadrantLabel: string; // 白話標籤 (🔥 主力抬轎區 / 🛡️ 逢低撿便宜區 / ⚠️ 割韭菜警戒區 / ❄️ 冷凍提款區)
+  diagnosisTitle: string; // 人類診斷結論標題
+  diagnosisDetail: string; // 詳細人話解釋
+  foreignNetShares?: number; // 外資買賣超張數
+  trustNetShares?: number; // 投信買賣超張數
+  dealerNetShares?: number; // 自營商買賣超張數
+  cmf?: number; // 美股 Chaikin Money Flow
+  institutionalSynergy?: InstitutionalSynergyType; // 機構共振態 (土洋合買/土洋對作/土洋齊賣/中立)
+  synergyLabel?: string; // 機構共振白話標籤 (🚀 土洋合買抬轎 / ⚡ 土洋對作激戰 等)
+  trail: {
+    x: number;
+    y: number;
+    date: string;
+    changePercent: number;
+    flowScore: number;
+    foreignNetShares?: number;
+    trustNetShares?: number;
+    dealerNetShares?: number;
+    cmf?: number;
+    netFlowAmount?: number;
+  }[]; // 過去 N 天時序位移點
+  cx?: number; // 經防碰撞佈局計算後之畫布像素 X 坐標
+  cy?: number; // 經防碰撞佈局計算後之畫布像素 Y 坐標
+}
+
+export interface SmartMoneyInputItem {
+  symbol: string;
+  name: string;
+  market: MarketType;
+  currentPrice: number;
+  previousClose: number;
+  changePercent: number;
+  holdingValueTwd?: number;
+  volume?: number;
+  // 台股三大法人數據 (張數)
+  foreignBuyShares?: number;
+  foreignSellShares?: number;
+  trustBuyShares?: number;
+  trustSellShares?: number;
+  dealerBuyShares?: number;
+  dealerSellShares?: number;
+  // 美股日 K 線歷史 (計算 CMF)
+  candles?: { date: string; open: number; high: number; low: number; close: number; volume: number }[];
+  historicalDailyFlows?: {
+    date: string;
+    changePercent: number;
+    flowScore: number;
+    netFlowAmount: number;
+    foreignNetShares?: number;
+    trustNetShares?: number;
+    dealerNetShares?: number;
+    cmf?: number;
+  }[];
+}
+
+export interface SmartMoneyFlowAnalysisResult {
+  bubbles: SmartMoneyBubbleData[];
+  overallSentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+  breakoutCount: number;
+  accumulationCount: number;
+  distributionCount: number;
+  liquidationCount: number;
+  summaryText: string;
+}
+
 

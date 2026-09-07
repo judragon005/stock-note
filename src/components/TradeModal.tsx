@@ -532,22 +532,25 @@ export const TradeModal: React.FC<TradeModalProps> = ({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
               {/* Market */}
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
                   交易市場
                 </label>
-                <div style={{ display: 'flex', gap: '6px' }}>
+                <div style={{ display: 'flex', gap: '6px', background: 'rgba(19, 29, 49, 0.8)', padding: '3px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
                   <button
                     type="button"
                     onClick={() => handleMarketChange('TW')}
                     style={{
                       flex: 1,
-                      padding: '8px',
+                      padding: '6px 8px',
                       borderRadius: '8px',
-                      border: '1px solid var(--border-color)',
-                      background: market === 'TW' ? '#3b82f6' : 'rgba(30, 41, 59, 0.6)',
+                      border: 'none',
+                      background: market === 'TW' ? 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)' : 'transparent',
                       color: market === 'TW' ? '#fff' : 'var(--text-secondary)',
-                      fontWeight: 600,
+                      fontWeight: 700,
+                      fontSize: '0.8rem',
                       cursor: 'pointer',
+                      transition: 'all 0.15s',
+                      boxShadow: market === 'TW' ? '0 2px 8px rgba(59, 130, 246, 0.35)' : 'none',
                     }}
                   >
                     🇹🇼 台股 (TWD)
@@ -557,13 +560,16 @@ export const TradeModal: React.FC<TradeModalProps> = ({
                     onClick={() => handleMarketChange('US')}
                     style={{
                       flex: 1,
-                      padding: '8px',
+                      padding: '6px 8px',
                       borderRadius: '8px',
-                      border: '1px solid var(--border-color)',
-                      background: market === 'US' ? '#8b5cf6' : 'rgba(30, 41, 59, 0.6)',
+                      border: 'none',
+                      background: market === 'US' ? 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)' : 'transparent',
                       color: market === 'US' ? '#fff' : 'var(--text-secondary)',
-                      fontWeight: 600,
+                      fontWeight: 700,
+                      fontSize: '0.8rem',
                       cursor: 'pointer',
+                      transition: 'all 0.15s',
+                      boxShadow: market === 'US' ? '0 2px 8px rgba(139, 92, 246, 0.35)' : 'none',
                     }}
                   >
                     🇺🇸 美股 (USD)
@@ -573,7 +579,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
 
               {/* Broker Account Selection */}
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
                   所屬券商帳戶
                 </label>
                 <select
@@ -589,12 +595,12 @@ export const TradeModal: React.FC<TradeModalProps> = ({
                   style={{
                     width: '100%',
                     padding: '8px 12px',
-                    borderRadius: '8px',
+                    borderRadius: '10px',
                     border: '1px solid var(--border-color)',
-                    background: 'rgba(30, 41, 59, 0.9)',
+                    background: 'var(--bg-input)',
                     color: '#38bdf8',
-                    fontWeight: 600,
-                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    fontSize: '0.82rem',
                     outline: 'none',
                   }}
                 >
@@ -612,11 +618,11 @@ export const TradeModal: React.FC<TradeModalProps> = ({
                   )}
                 </select>
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+              <div style={{ gridColumn: 'span 2' }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
                   常用買賣
                 </label>
-                <div style={{ display: 'flex', gap: '6px' }}>
+                <div style={{ display: 'flex', gap: '6px', background: 'rgba(19, 29, 49, 0.8)', padding: '3px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
                   {(['BUY', 'SELL', 'DIVIDEND'] as const).map((t) => (
                     <button
                       key={t}
@@ -624,23 +630,26 @@ export const TradeModal: React.FC<TradeModalProps> = ({
                       onClick={() => setType(t)}
                       style={{
                         flex: 1,
-                        padding: '8px',
+                        padding: '7px 8px',
                         borderRadius: '8px',
-                        border: '1px solid var(--border-color)',
+                        border: 'none',
                         background:
                           type === t
                             ? t === 'BUY'
-                              ? '#10b981'
+                              ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
                               : t === 'SELL'
-                              ? '#f43f5e'
-                              : '#f59e0b'
-                            : 'rgba(30, 41, 59, 0.6)',
+                              ? 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)'
+                              : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                            : 'transparent',
                         color: type === t ? '#fff' : 'var(--text-secondary)',
-                        fontWeight: 600,
+                        fontWeight: 700,
+                        fontSize: '0.8rem',
                         cursor: 'pointer',
+                        transition: 'all 0.15s',
+                        boxShadow: type === t ? '0 2px 8px rgba(0,0,0,0.3)' : 'none',
                       }}
                     >
-                      {t === 'BUY' ? '買進' : t === 'SELL' ? '賣出' : '除息'}
+                      {t === 'BUY' ? '⚡ 買進' : t === 'SELL' ? '⚡ 賣出' : '💰 除息'}
                     </button>
                   ))}
                 </div>

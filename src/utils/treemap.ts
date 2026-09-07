@@ -4,7 +4,7 @@ export interface TreemapItem {
   id: string;
   symbol: string;
   name: string;
-  market: MarketType | 'CASH';
+  market: MarketType | 'CASH' | 'DEBT';
   value: number; // 市值
   pnlPercent: number; // 未實現損益率
 }

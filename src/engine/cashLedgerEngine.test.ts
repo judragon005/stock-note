@@ -25,6 +25,8 @@ import {
   isPendingOrFutureTransaction,
   aggregateInterestIncomeDetails,
   generateMonthlyLoanInterestTransactions,
+  createLoanDisbursementTransaction,
+  calculateLoanSettledSummary,
 } from './cashLedgerEngine';
 
 const mockAccounts: BrokerAccount[] = [
@@ -510,6 +512,220 @@ describe('股票質押借款與即時擔保維持率風控引擎 (Loan & Pledge 
     expect(leverage.netAssetValueInTWD).toBe(1200000 - 501227); // 698,773
     expect(leverage.debtRatioPercent).toBeCloseTo((501227 / 1200000) * 100, 2);
     expect(leverage.estimatedAnnualInterestInTWD).toBe(12500); // 500,000 * 2.5%
+  });
+
+  it('當質押借款本金已還清歸零 (principal <= 0) 時，calculatePledgeMaintenanceRatio 應回傳 SAFE 且絕不誤判追繳斷頭', () => {
+    const zeroLoan: LoanRecord = {
+      ...mockLoan,
+      principal: 0,
+    };
+
+    const ratioResult = calculatePledgeMaintenanceRatio(zeroLoan, mockQuotes);
+
+    expect(ratioResult.principal).toBe(0);
+    expect(ratioResult.status).toBe('SAFE');
+    expect(ratioResult.isMarginCall).toBe(false);
+    expect(ratioResult.maintenanceRatio).toBe(Infinity);
+  });
+
+  it('當借款本金歸零且無未繳利息時，calculateLoanInterestAndPayoff 之應付總額與規費應歸零', () => {
+    const zeroLoan: LoanRecord = {
+      ...mockLoan,
+      principal: 0,
+      transferFee: 100,
+      pledgeRegistryFee: 100,
+      handlingFee: 0,
+    };
+
+    const metrics = calculateLoanInterestAndPayoff(zeroLoan, '2026-08-01');
+
+    expect(metrics.accruedInterest).toBe(0);
+    expect(metrics.monthlyEstimatedInterest).toBe(0);
+    expect(metrics.pledgeFees).toBe(0);
+    expect(metrics.totalPayoffAmount).toBe(0);
+  });
+
+  it('createLoanDisbursementTransaction 應正確生成 LOAN_DISBURSEMENT 現金入帳流水', () => {
+    const loan: LoanRecord = {
+      id: 'loan-test-disburse',
+      name: '永豐金 00878 質押借款',
+      loanType: 'PLEDGE',
+      principal: 495000,
+      annualInterestRate: 4.0,
+      currency: 'TWD',
+      accountId: 'broker-sinopac',
+      startDate: '2026-07-28',
+      createdAt: 1000,
+    };
+
+    const tx = createLoanDisbursementTransaction(loan);
+
+    expect(tx.type).toBe('LOAN_DISBURSEMENT');
+    expect(tx.category).toBe('LOAN_DISBURSEMENT');
+    expect(tx.amount).toBe(495000);
+    expect(tx.currency).toBe('TWD');
+    expect(tx.accountId).toBe('broker-sinopac');
+    expect(tx.date).toBe('2026-07-28');
+    expect(tx.relatedLoanId).toBe('loan-test-disburse');
+    expect(tx.note).toContain('永豐金 00878 質押借款');
+  });
+
+  describe('已結清借貸財務成本透視與結清還款日推算 (calculateLoanSettledSummary)', () => {
+    it('在有實際現金流水時，應精準統計已付利息、設質登記費、集保撥券費與還款日', () => {
+      const loan: LoanRecord = {
+        id: 'loan-sinopac-1',
+        name: '永豐金 00878+00919 股票質押',
+        loanType: 'PLEDGE',
+        principal: 0,
+        initialPrincipal: 495000,
+        annualInterestRate: 4.0,
+        currency: 'TWD',
+        startDate: '2026-07-28',
+        transferFee: 100,
+        pledgeRegistryFee: 100,
+        handlingFee: 0,
+        createdAt: 1,
+      };
+
+      const txs: CashTransaction[] = [
+        // 借款入帳
+        {
+          id: 'tx-1',
+          accountId: 'acc-1',
+          currency: 'TWD',
+          type: 'LOAN_DISBURSEMENT',
+          category: 'LOAN_DISBURSEMENT',
+          amount: 495000,
+          date: '2026-07-28',
+          relatedLoanId: 'loan-sinopac-1',
+          createdAt: 1,
+        },
+        // 規費扣款 (設質費 100 + 撥券費 100)
+        {
+          id: 'tx-2',
+          accountId: 'acc-1',
+          currency: 'TWD',
+          type: 'WIRE_FEE',
+          category: 'WIRE_FEE',
+          amount: -200,
+          date: '2026-07-28',
+          relatedLoanId: 'loan-sinopac-1',
+          note: '股票質押規費 (撥券 $100 + 設質 $100): 永豐金',
+          createdAt: 2,
+        },
+        // 繳納利息
+        {
+          id: 'tx-3',
+          accountId: 'acc-1',
+          currency: 'TWD',
+          type: 'FINANCING_FEE',
+          category: 'FINANCING_FEE',
+          amount: -1650,
+          date: '2026-08-28',
+          relatedLoanId: 'loan-sinopac-1',
+          note: '支付質押借款利息',
+          createdAt: 3,
+        },
+        // 還本結清 (2026-08-28 還清本金)
+        {
+          id: 'tx-4',
+          accountId: 'acc-1',
+          currency: 'TWD',
+          type: 'LOAN_REPAYMENT',
+          category: 'LOAN_REPAYMENT',
+          amount: -495000,
+          date: '2026-08-28',
+          relatedLoanId: 'loan-sinopac-1',
+          note: '結清償還質押本金',
+          createdAt: 4,
+        },
+      ];
+
+      const summary = calculateLoanSettledSummary(loan, txs);
+
+      expect(summary.payoffDate).toBe('2026-08-28');
+      expect(summary.borrowDays).toBe(31); // 2026-07-28 ~ 2026-08-28
+      expect(summary.paidInterest).toBe(1650);
+      expect(summary.paidPledgeRegistryFee).toBe(100);
+      expect(summary.paidTransferFee).toBe(100);
+      expect(summary.paidHandlingFee).toBe(0);
+      expect(summary.totalPledgeFees).toBe(200);
+      expect(summary.totalBorrowingCost).toBe(1850); // 1650 + 200
+      expect(summary.hasActualLedgerRecords).toBe(true);
+    });
+
+    it('若無現金流水時，應自動平滑備援推算利息並讀取登錄規費', () => {
+      const loan: LoanRecord = {
+        id: 'loan-no-tx',
+        name: '純登錄結清質押',
+        loanType: 'PLEDGE',
+        principal: 0,
+        initialPrincipal: 100000,
+        annualInterestRate: 3.65, // 每天 10 元利息
+        currency: 'TWD',
+        startDate: '2026-03-01',
+        closedDate: '2026-03-11', // 10 天
+        transferFee: 100,
+        pledgeRegistryFee: 100,
+        handlingFee: 50,
+        createdAt: 1,
+      };
+
+      const summary = calculateLoanSettledSummary(loan, []);
+
+      expect(summary.payoffDate).toBe('2026-03-11');
+      expect(summary.borrowDays).toBe(10);
+      expect(summary.paidInterest).toBe(100); // 100000 * (0.0365 / 365) * 10 = 100
+      expect(summary.paidTransferFee).toBe(100);
+      expect(summary.paidPledgeRegistryFee).toBe(100);
+      expect(summary.paidHandlingFee).toBe(50);
+      expect(summary.totalBorrowingCost).toBe(350); // 100 + 250
+      expect(summary.hasActualLedgerRecords).toBe(false);
+    });
+
+    it('真實場景防禦：當借貸登記撥券費 53 但設質費為 0 時，已付設質費必須精確為 0，絕不被 pledgeFee 總額污染覆蓋', () => {
+      // 模擬永豐金 00878+00919 質押資料
+      const sinopacLoan: LoanRecord = {
+        id: 'loan-sinopac-00878',
+        name: '永豐金00878+00919',
+        loanType: 'PLEDGE',
+        principal: 0,
+        initialPrincipal: 495000,
+        annualInterestRate: 4.0,
+        currency: 'TWD',
+        startDate: '2026-07-28',
+        closedDate: '2026-08-28',
+        transferFee: 53,
+        pledgeRegistryFee: 0,
+        handlingFee: 0,
+        pledgeFee: 53, // 合計 53
+        createdAt: 1,
+      };
+
+      const txs: CashTransaction[] = [
+        {
+          id: 'tx-fee-1',
+          accountId: 'acc-1',
+          currency: 'TWD',
+          type: 'WIRE_FEE',
+          category: 'WIRE_FEE',
+          amount: -53, // 當初扣除的 53 元規費
+          date: '2026-07-28',
+          relatedLoanId: 'loan-sinopac-00878',
+          note: '股票質押設質規費: 永豐金00878+00919', // 舊格式或手動備註
+          createdAt: 1,
+        },
+      ];
+
+      const summary = calculateLoanSettledSummary(sinopacLoan, txs);
+
+      expect(summary.paidTransferFee).toBe(53);
+      expect(summary.paidPledgeRegistryFee).toBe(0); // 👈 必須為 0，絕不能是 53！
+      expect(summary.paidHandlingFee).toBe(0);
+      expect(summary.totalPledgeFees).toBe(53);
+      // 總規費只能是 53，不得翻倍成 106
+      expect(summary.totalBorrowingCost).toBe(summary.paidInterest + 53);
+    });
   });
 });
 

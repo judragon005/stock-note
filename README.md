@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-491%2F491%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-550%2F550%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,96 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 歷史現金股利入帳日與除息日時序徹底分離、永豐金發放日校正與主次排版系統 (`Dividend Log View Pay-Date Temporal Separation`) *(V7.6.0 全新升級)*
+### 0. TWSE 全市場覆蓋健全檢查、V4 快取換代、美股 CMF 診斷隔離與時序象限動態連動 (`TWSE Coverage Guard, V4 Cache & US CMF Diagnosis Sync`) *(V8.4.0 全新升級)*
+- **全市場覆蓋健全檢查與上市哨兵 (`TWSE Market Coverage Guard & Sentinel`)**：
+  - 徹底解決台積電 (2330) 等上市股票三大法人張數全為 0 的根本問題：以 `2330` 為健康指標哨兵，若快取缺少 2330 判定為殘缺快取並拒絕使用，強制重新拉取 TWSE 與 TPEx；同時升級快取版本至 `TWSE_TPEX_CHIPS_V4_`，徹底作廢過去被污染的殘缺快取。
+- **美股 CMF 專屬診斷與三大法人字眼絕對隔離 (`US CMF Isolated Diagnosis & Anti-Hallucination Guard`)**：
+  - 徹底消滅美股標的 (VT 等) 出現「三大法人進出 0 張」之荒謬幻覺：`getBeginnerDiagnosis` 傳入 `market` 與 `cmf` 參數，美股標的完全阻斷台股法人文本，全面使用美股機構吸籌、派發與觀望的大白話生活化說明。
+- **美股量價時序軌跡 CMF 動態注入 (`US Dynamic CMF Temporal Trajectory`)**：
+  - 在在庫持倉模式中，美股先生成量價日 K 棒並計算基礎 CMF，時序 5 日軌跡動態注入各日 CMF 與量化流向金額（`cmf * volume * price`），使美股在時序播放推進時呈現真實機構動能位移。
+- **頂部四象限指標卡即時動態連動 (`Reactive Temporal Quadrant Indicator Cards`)**：
+  - 徹底修復時序播放時頂部四象限指標卡數字固定不動的瑕疵：卡片檔數綁定 `currentFrameCounts`，隨 `currentDateIndex` 滑桿拉動時即時重算當日影格中各標的所處象限檔數，數值與畫布天衣無縫連動。
+- **強制同步盤後籌碼支援 (`Force Refresh Button`)**：
+  - 頂部「🔄 同步盤後籌碼」按鈕傳入 `forceRefresh: true`，略過本地 IndexedDB 快取直接發起全市場最新日報拉取，賦予使用者最高權威之強制刷新能力。
+
+### 0. 證交所 TWSE 本地代理管線接入與時序影格三大法人張數動態跳動 (`TWSE Proxy Pipeline & Temporal Shares Sync`) *(V8.3.0)*
+- **TWSE 官方網域 Vite 本地代理路由接入 (`TWSE Proxy Pipeline`)**：
+  - 徹底解決上市股票法人張數全為 0 的根本問題：在 `vite.config.ts` 增設 `/api/twse-www` 反向代理對準 `https://www.twse.com.tw`，並於 `priceFetcher.ts` 接入路由轉換，徹底免除前端瀏覽器 CORS 阻擋，上市（TWSE）與上櫃（TPEx）雙軌官方籌碼日報 100% 穩定秒級抓取。
+- **三大法人張數時序影格全管線動態跳動 (`Temporal Institutional Shares Sync`)**：
+  - 徹底解決時序播放時外資、投信、自營商張數死鎖在最後一天的痛點：擴充 `trail` 與 `historicalDailyFlows` 支援法人明細，Tooltip 底部文字直接接收當前影格數據，隨時間軸前進（T-4 ➔ T-3 ➔ T-2 ➔ T-1 ➔ T）即時真實跳動！
+
+### 0. TPEx 櫃買三大法人 24 欄解析器升級、V3 快取換代與畫布點擊取消選取 (`TPEx 24-Col Parser, V3 Cache Invalidation & Canvas Unselect UX`) *(V8.2.0)*
+- **TPEx 櫃買官方 24 欄日報標準解析器 (`Official 24-Column Parser & Tables Field Mapping`)**：
+  - 徹底解決 8299 群聯等上櫃標的法人數據全為 0 的根本問題：修正資料提取路徑為 `tables[0].data`，精準映射外資及陸資合計 (8..10)、投信 (11..13)、自營商合計 (20..22) 與三大法人合計 (23)，並除以 1,000 四捨五入換算為張數，8299 展現真實法人動能。
+- **三大法人日報 V3 快取換代與污染隔離 (`V3 Cache Invalidation & Isolation`)**：
+  - 快取前綴升級為 `TWSE_TPEX_CHIPS_V3_`，自動作廢過去未含上櫃資料的殘缺快取，確保全市場上市櫃股票 100% 呈現真實法人買賣超。
+- **畫布空白點擊取消選取與事件冒泡隔離 (`Canvas Blank Click Unselect & Stop-Propagation`)**：
+  - 徹底修復卡片滯留無法關閉之缺陷：主 SVG 畫布區域與 `<svg>` 綁定取消選取，泡泡節點精準隔離事件冒泡，點擊畫布任何空白處即可即時清空選取。
+- **Tooltip 浮窗固定模式指針穿透配置與 ✕ 快捷關閉按鈕 (`Pinned PointerEvents & Close Button`)**：
+  - 懸浮模式下維持 `pointerEvents: 'none'`，固定選取模式下切換為 `pointerEvents: 'auto'` 支援卡片內文字選取與右上角顯著的「✕」關閉按鈕。
+- **TPEx 櫃買中心上櫃三大法人日報雙軌管線 (`TPEx Institutional Pipeline & Union`)**：
+  - 徹底解決 8299 群聯等上櫃標的法人數據全為 0 的根本缺陷：增量抓取時並行請求 TWSE 與 TPEx 官方開放日報並自動合併聯集，覆蓋上市與上櫃全市場股票，8299 具備真實外資、投信買賣超張數與時序軌跡。
+- **Tooltip 象限對角智慧避讓演算法 (`Smart Diagonal Pinning Tooltip`)**：
+  - 徹底解決浮窗擋住正在查看泡泡的「自蓋盲區」：依據目標泡泡在畫布中的象限坐標動態對角停靠（泡泡在左側則浮窗停靠右側、泡泡在底部則停靠頂部），目標泡泡 100% 完整露出。
+- **雙向正交蜂巢排斥 (`Bidirectional Orthogonal Dispersion`)**：
+  - 在物理放鬆迭代中，不僅水平串時注入垂直正交推力，當多檔債券/反向 ETF 漲跌幅接近 0% 導致垂直一字排開時，亦主動注入水平正交推力，徹底消除垂直糖葫蘆串。
+- **法人零量能中立保護診斷 (`Zero-Volume Neutral Guard`)**：
+  - 當三大法人買賣超為 0 張時，標籤標註為「散戶/量縮偏弱區」，文案明確指出法人無實質動作，杜絕「大機構大舉提款」等自相矛盾之驚悚幻覺文案。
+
+### 0. 聰明錢二維空間正交排斥散度、時序影格圖卡即時同步與機構共振決策系統 (`Spatial Dispersion, Frame Sync & Institutional Synergy`) *(V8.0.0)*
+- **2D 正交空間排斥演算法與半徑收斂 (`2D Orthogonal Spatial Dispersion & Radius Convergence`)**：
+  - 徹底消滅「水平一字排開烤肉串」痛點：在物理放鬆迭代中，當泡泡在同一水平高度重疊 ($|\Delta y| < 6$) 時，強制注入垂直正交微擾動，使原本單向推擠的泡泡產生雙向垂直分向力，展開為二維蜂巢狀錯落。
+  - 半徑收斂至 `16px ~ 36px`，降低極端視覺落差，兼顧美觀與易讀性。
+- **小球優先頂層繪製 (大球不吃小球) (`Small-Bubble Top-Layer Ordering`)**：
+  - 渲染順序依半徑降序排序（大球在底層，小球在頂層），確保交疊區域中小球 100% 位於頂部，滑鼠移至交疊區時優先命中微小標的，徹底消滅遮蔽與資訊遺漏。
+- **時序影格圖卡即時同步跳動 (`Temporal Frame Sync Tooltip`)**：
+  - 徹底修復播放時數值鎖死在最新一天的問題：時間軸推進時，Tooltip 浮窗中的日期標籤（`📅 YYYY-MM-DD`）、實質漲跌幅、動態象限與生活化診斷隨影格即時跳動重算。
+- **專業券商土洋對作/土洋合買機構共振模型 (`Institutional Synergy Decision Model`)**：
+  - 精準識別外資與投信方向相反時為「⚡ 土洋對作激戰」，診斷標記內外資多空換手，杜絕因代數相加為 0 而誤判為進出平衡。
+  - 識別外資與投信同向時為「🚀 土洋合買抬轎」或「💣 土洋同步調節」，Tooltip 醒目呈現共振徽章。
+
+### 0. 籌碼時序動態播放、美股 CMF 日 K 管線與本地歷史增量庫 (`Temporal Playback & US CMF Pipeline`) *(V7.9.0)*
+- **動態時序位移與漸進式彗星尾巴 (`Dynamic Temporal Coordinate & Progressive Trails`)**：
+  - 徹底修復播放器「假跑」缺陷：點擊播放推進日期時，泡泡實體坐標即時響應 `currentDateIndex` 產生真實位移，搭配 CSS 0.4s 平滑動畫，如同天體運行流暢滑動。
+  - 彗星尾巴改採進度切片 `slice(0, index + 1)`，隨時間推進由無到有、由短伸長，真正展現資金位移路徑。
+- **美股 20 日量價 Candles 注入與真實 CMF 資金流 (`US 20-Day Candles CMF Pipeline`)**：
+  - 解決在庫持倉美股 CMF 評分斷鏈卡在 $Y=0$ 的問題，自動為美股標的注入具備實質量價特徵之 20 日日 K 棒，精準對應四象限主力吸籌與出貨。
+- **全市場焦點美股 Top 30 宇宙 (`US Focus Top 30 Universe`)**：
+  - 全市場焦點模式支援【全部】、【台股】、【美股】篩選；切換至美股時，即時展現 NVDA, AAPL, MSFT, TSLA 等 30 檔美股核心權值與熱門股的聰明錢星圖。
+- **本地歷史籌碼增量持久化引擎 (`Local Incremental Chips Ingestion Engine`)**：
+  - 由近至遠比對 IndexedDB 本地快取，僅針對缺失之交易日發起輕量拉取，100% 免費一手資料源，隨日常使用日積月累沉澱專屬真實籌碼庫。
+
+### 0. 籌碼泡泡圖自適應相對縮放、2D 圓形防碰撞排斥與聚光燈佈局系統 (`Adaptive Bubble Layout & Collision Relaxation`) *(V7.8.0)*
+- **自適應相對冪次縮放與 25% 呼吸緩衝安全區 (`Adaptive Power-Law Scaling & Breathing Margins`)**：
+  - 徹底廢除舊版寫死 2,500 張上限之架構缺陷，自動取當前清單最大買賣超與最大漲跌幅為基準動態自適應縮放。
+  - 採用 $0.65$ 次方平滑壓縮，使極端萬張大單與中小單均勻分佈於 $[-75, +75]$ 坐標內，天花板與地板永遠保留 25% 呼吸緩衝區，杜絕邊界截斷與貼壁。
+- **2D 圓形防碰撞排斥純函數演算法 (`2D Circle Collision Relaxation Engine`)**：
+  - 0 外部物理引擎套件，純原生數學 8 輪物理放鬆迭代，檢測兩圓半徑距離 $\text{dist} < r_1 + r_2 + 4\text{px}$，沿連心線方向平滑推開。
+  - **象限守恆守門員 (Quadrant Invariant Guard)**：推擠時加入中軸安全邊界約束（$X=0$ 與 $Y=0$），泡泡絕對不跨越中軸進入其他象限，保持「🔥 主力抬轎」等生活化多空分類 100% 正確。
+- **SVG DOM 頂層繪製排序與滑鼠聚光燈高亮 (`SVG DOM Spotlight Ordering`)**：
+  - 當滑鼠懸浮或選中任一標的時，自動排序至 SVG DOM 最末尾渲染，保證最頂層顯示；其餘標的透明度平滑降至 $0.25$，文字與代碼零遮蔽，極致聚焦。
+- **全市場 30 檔行情自然散度優化 (`Market Movers Spread`)**：
+  - 與在庫持倉即時行情聯動，使全市場法人焦點股自然呈現於主力強推、逢低吃貨、趁高倒貨與資金提款四大維度，不再群聚扎堆。
+
+
+### 0. 籌碼移動與聰明錢動態觀察儀 (`Smart Money Flow Bubble View`) *(V7.7.0)*
+- **零基礎小白友善之生活化四象限動態星圖 (`Beginner-Friendly 4-Quadrant Bubble Map`)**：
+  - 橫軸代表價格漲跌動能，縱軸代表聰明錢進出強度。徹底揚棄冰冷量化專有名詞，以四大直觀生活化情境定調：
+    - 🔥 **主力抬轎飆股區 (BREAKOUT)**：大機構砸錢買進、股價同步強推。
+    - 🛡️ **逢低撿便宜區 (ACCUMULATION)**：股價震盪回檔但大機構逆勢悄悄吃貨。
+    - ⚠️ **割韭菜警戒區 (DISTRIBUTION)**：股價看似在漲但大機構趁高倒貨出逃。
+    - ❄️ **冷凍提款區 (LIQUIDATION)**：股價破位重挫且大機構也在大賣逃跑。
+- **💡 3 秒新手速讀指南與結論先行懸浮 Tooltip**：
+  - 常駐可折疊之圖文速讀卡片，3 秒看懂泡泡大小（份量與影響力）、泡泡色彩（外資投信多空合買主題光暈）與位移路徑。
+  - 滑鼠懸浮泡泡時第一眼呈現「🟢 大機構強烈做多中！」等大白話診斷結論，下方展示外資、投信與自營商具體張數明細。
+- **跨市場一手官方資料管線 (`Cross-Market Official Pipeline`)**：
+  - 台股直連證交所官方開放日報 `fund/T86` 單次獲取全市場三大法人進出；美股採用華爾街標準之 20 日 Chaikin Money Flow (CMF 佳慶資金流)，統一標準化對齊。
+- **動態時序播放器與彗星位移軌跡 (`Timeline Motion Player & Trails`)**：
+  - 支援「播放 / 暫停 / 重播 / 速度切換 / 日期進度滑桿」，以 60 FPS 平滑推演過去一個月聰明錢在各股票間的流向轉移與彗星尾巴。
+- **雙模式切換器 (`Dual Workspace Modes`)**：
+  - 支援【我的在庫持倉】與【全市場法人焦點 Top 30】一鍵無縫切換。
+
+### 0. 歷史現金股利入帳日與除息日時序徹底分離、永豐金發放日校正與主次排版系統 (`Dividend Log View Pay-Date Temporal Separation`) *(V7.6.0)*
 - **入帳日 ($Pay\text{-}Date$) 與除息日 ($Ex\text{-}Date$) 時序徹底分離**：
   - 確立除息日為假性虧損平滑與債權成立基準日，發放日為資金實質到帳與可用現金交割日，徹底解決舊版將除息基準日誤植為入帳日期之根本缺陷。
 - **主次並列展示架構 (`Primary-Secondary Dual Display`)**：

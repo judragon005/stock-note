@@ -18,6 +18,15 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/twse/, ''),
       },
+      '/api/twse-www': {
+        target: 'https://www.twse.com.tw',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/twse-www/, ''),
+        headers: {
+          Referer: 'https://www.twse.com.tw/',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        },
+      },
       '/api/tpex': {
         target: 'https://www.tpex.org.tw',
         changeOrigin: true,

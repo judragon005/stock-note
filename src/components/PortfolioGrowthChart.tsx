@@ -18,6 +18,7 @@ import {
   Activity,
   Compass,
   HelpCircle,
+  Eye,
 } from 'lucide-react';
 import { filterNavSeriesByRange, calculatePerformanceMetrics } from '../engine/historicalNav';
 import {
@@ -236,7 +237,6 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
       };
     }, [filteredSeries, visibleLines, benchmarkType, benchmarkGrowth]);
 
-
   if (series.length === 0) {
     return (
       <div className="glass-card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -252,7 +252,15 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
   const currencySymbol = baseCurrency === 'USD' ? '$' : 'NT$';
 
   return (
-    <div className="glass-card" style={{ padding: '24px', marginBottom: '24px' }}>
+    <div
+      className="glass-card"
+      style={{
+        padding: '20px 24px',
+        marginBottom: '24px',
+        border: '1px solid rgba(51, 65, 85, 0.4)',
+        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.85) 0%, rgba(10, 16, 30, 0.75) 100%)',
+      }}
+    >
       {/* 1. 頂部標題列與操作按鈕 */}
       <div
         style={{
@@ -260,30 +268,30 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: '16px',
-          marginBottom: '20px',
+          gap: '14px',
+          marginBottom: '18px',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div
             style={{
-              width: '36px',
-              height: '36px',
+              width: '38px',
+              height: '38px',
               borderRadius: '10px',
-              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(59, 130, 246, 0.2))',
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(59, 130, 246, 0.25) 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
+              border: '1px solid rgba(16, 185, 129, 0.4)',
             }}
           >
-            <TrendingUp size={20} color="#10b981" />
+            <TrendingUp size={20} color="#34d399" />
           </div>
           <div>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: '#fff' }}>
+            <h2 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: '#fff' }}>
               資產成長與全歷史淨值 (NAV)
             </h2>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
               公式口徑：持股市值 + 現金餘額 - 借貸負債
             </span>
           </div>
@@ -296,15 +304,15 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '4px',
-              background: 'rgba(30, 41, 59, 0.6)',
+              gap: '3px',
+              background: 'rgba(19, 29, 49, 0.8)',
               padding: '3px 6px',
-              borderRadius: '8px',
+              borderRadius: '9px',
               border: '1px solid var(--border-color)',
             }}
           >
-            <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginRight: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Compass size={13} color="#a855f7" /> 基準:
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8', marginRight: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Compass size={13} color="#c084fc" /> 基準:
             </span>
             {(
               [
@@ -319,14 +327,15 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
                 onClick={() => setBenchmarkType(b.key)}
                 style={{
                   padding: '3px 8px',
-                  fontSize: '0.75rem',
+                  fontSize: '0.74rem',
                   fontWeight: 600,
                   borderRadius: '6px',
                   border: 'none',
                   cursor: 'pointer',
-                  background: benchmarkType === b.key ? '#a855f7' : 'transparent',
+                  background: benchmarkType === b.key ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' : 'transparent',
                   color: benchmarkType === b.key ? '#fff' : 'var(--text-muted)',
                   transition: 'all 0.15s',
+                  boxShadow: benchmarkType === b.key ? '0 2px 8px rgba(139, 92, 246, 0.3)' : 'none',
                 }}
               >
                 {b.label}
@@ -334,12 +343,13 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
             ))}
           </div>
 
+          {/* 時間範圍切換膠囊 */}
           <div
             style={{
               display: 'flex',
-              background: 'rgba(30, 41, 59, 0.6)',
+              background: 'rgba(19, 29, 49, 0.8)',
               padding: '3px',
-              borderRadius: '8px',
+              borderRadius: '9px',
               border: '1px solid var(--border-color)',
             }}
           >
@@ -348,15 +358,16 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
                 key={r}
                 onClick={() => setTimeRange(r)}
                 style={{
-                  padding: '4px 10px',
-                  fontSize: '0.8rem',
+                  padding: '4px 9px',
+                  fontSize: '0.78rem',
                   fontWeight: 700,
                   borderRadius: '6px',
                   border: 'none',
                   cursor: 'pointer',
-                  background: timeRange === r ? 'var(--primary-color)' : 'transparent',
+                  background: timeRange === r ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'transparent',
                   color: timeRange === r ? '#fff' : 'var(--text-muted)',
                   transition: 'all 0.2s',
+                  boxShadow: timeRange === r ? '0 2px 8px rgba(16, 185, 129, 0.3)' : 'none',
                 }}
               >
                 {r}
@@ -368,23 +379,19 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
             <button
               onClick={onRefreshHistory}
               disabled={isSyncing}
+              className="btn btn-secondary btn-sm"
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                borderRadius: '8px',
-                background: 'rgba(30, 41, 59, 0.6)',
-                border: '1px solid var(--border-color)',
+                gap: '5px',
                 color: isSyncing ? '#94a3b8' : '#38bdf8',
-                cursor: isSyncing ? 'not-allowed' : 'pointer',
+                fontWeight: 600,
+                padding: '5px 11px',
               }}
               title="重新同步最新歷史日 K 收盤價與匯率"
             >
-              <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
-              {isSyncing ? syncProgressText || '同步中...' : '同步日 K'}
+              <RefreshCw size={13} className={isSyncing ? 'spin-animation' : ''} />
+              <span>{isSyncing ? syncProgressText || '同步中...' : '同步日 K'}</span>
             </button>
           )}
         </div>
@@ -394,39 +401,41 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
           gap: '12px',
-          marginBottom: '20px',
+          marginBottom: '18px',
         }}
       >
         {/* 當前總淨值 (NAV) */}
         <div
+          className="glass-card"
           style={{
-            background: 'rgba(15, 23, 42, 0.5)',
+            background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.8) 0%, rgba(10, 16, 30, 0.7) 100%)',
             padding: '14px 16px',
             borderRadius: '10px',
-            border: '1px solid rgba(16, 185, 129, 0.2)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
           }}
         >
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+          <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
             {activeSnapshot ? `${activeSnapshot.date} 淨資產 (NAV)` : '當前淨資產 (NAV)'}
           </div>
-          <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: '#10b981' }}>
+          <div className="mono" style={{ fontSize: '1.45rem', fontWeight: 800, color: '#34d399', lineHeight: 1.2 }}>
             {currencySymbol}
             {activeSnapshot ? activeSnapshot.totalNAV.toLocaleString() : metrics.currentNAV.toLocaleString()}
           </div>
           {activeSnapshot && activeSnapshot.dailyPnL !== undefined && (
             <div
               style={{
-                fontSize: '0.75rem',
+                fontSize: '0.74rem',
                 marginTop: '4px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
+                gap: '3px',
                 color: activeSnapshot.dailyPnL >= 0 ? 'var(--gain-color)' : 'var(--loss-color)',
+                fontWeight: 700,
               }}
             >
-              {activeSnapshot.dailyPnL >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+              {activeSnapshot.dailyPnL >= 0 ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
               <span>
                 {activeSnapshot.dailyPnL >= 0 ? '+' : ''}
                 {activeSnapshot.dailyPnL.toLocaleString()} ({activeSnapshot.dailyReturnPercent}%)
@@ -437,19 +446,20 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
 
         {/* 累計投入本金 */}
         <div
+          className="glass-card"
           style={{
-            background: 'rgba(15, 23, 42, 0.5)',
+            background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.8) 0%, rgba(10, 16, 30, 0.7) 100%)',
             padding: '14px 16px',
             borderRadius: '10px',
-            border: '1px solid rgba(245, 158, 11, 0.2)',
+            border: '1px solid rgba(245, 158, 11, 0.3)',
           }}
         >
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>累計投入本金</div>
-          <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: '#f59e0b' }}>
+          <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '4px' }}>累計投入本金</div>
+          <div className="mono" style={{ fontSize: '1.45rem', fontWeight: 800, color: '#fbbf24', lineHeight: 1.2 }}>
             {currencySymbol}
             {activeSnapshot ? activeSnapshot.netCostBasis.toLocaleString() : metrics.netCostBasis.toLocaleString()}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+          <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
             本金超額比率: {activeSnapshot && activeSnapshot.netCostBasis > 0
               ? `${((activeSnapshot.totalNAV / activeSnapshot.netCostBasis) * 100).toFixed(1)}%`
               : '-'}
@@ -458,27 +468,29 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
 
         {/* 累計總報酬與報酬率 */}
         <div
+          className="glass-card"
           style={{
-            background: 'rgba(15, 23, 42, 0.5)',
+            background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.8) 0%, rgba(10, 16, 30, 0.7) 100%)',
             padding: '14px 16px',
             borderRadius: '10px',
             border: '1px solid var(--border-color)',
           }}
         >
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>全期累計總損益</div>
+          <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '4px' }}>全期累計總損益</div>
           <div
             className="mono"
             style={{
-              fontSize: '1.35rem',
+              fontSize: '1.45rem',
               fontWeight: 800,
               color: (activeSnapshot?.cumulativeReturnPnL || 0) >= 0 ? 'var(--gain-color)' : 'var(--loss-color)',
+              lineHeight: 1.2,
             }}
           >
             {(activeSnapshot?.cumulativeReturnPnL || 0) >= 0 ? '+' : ''}
             {currencySymbol}
             {activeSnapshot ? activeSnapshot.cumulativeReturnPnL.toLocaleString() : metrics.totalProfitPnL.toLocaleString()}
           </div>
-          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: (activeSnapshot?.cumulativeReturnPercent || 0) >= 0 ? 'var(--gain-color)' : 'var(--loss-color)', marginTop: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: '0.74rem', fontWeight: 700, color: (activeSnapshot?.cumulativeReturnPercent || 0) >= 0 ? 'var(--gain-color)' : 'var(--loss-color)', marginTop: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>
               {(activeSnapshot?.cumulativeReturnPercent || 0) >= 0 ? '+' : ''}
               {activeSnapshot ? activeSnapshot.cumulativeReturnPercent.toFixed(2) : metrics.totalReturnPercent.toFixed(2)}%
@@ -494,37 +506,41 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
 
         {/* 歷史最高 (ATH) 與最大回撤 (MDD) */}
         <div
+          className="glass-card"
           style={{
-            background: 'rgba(15, 23, 42, 0.5)',
+            background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.8) 0%, rgba(10, 16, 30, 0.7) 100%)',
             padding: '14px 16px',
             borderRadius: '10px',
             border: '1px solid var(--border-color)',
           }}
         >
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+          <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
             最高淨值 (ATH) / 最大回撤 (MDD)
           </div>
-          <div className="mono" style={{ fontSize: '1.15rem', fontWeight: 800, color: '#38bdf8' }}>
+          <div className="mono" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#38bdf8', lineHeight: 1.2 }}>
             {currencySymbol}{metrics.allTimeHighNAV.toLocaleString()}
           </div>
-          <div style={{ fontSize: '0.75rem', color: '#f43f5e', marginTop: '4px', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: '0.74rem', color: '#f43f5e', marginTop: '4px', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>最大回撤: -{metrics.maxDrawdownPercent.toFixed(1)}%</span>
             {onInspectXirr && (
               <button
                 onClick={onInspectXirr}
                 style={{
                   background: 'rgba(56, 189, 248, 0.12)',
-                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  border: '1px solid rgba(56, 189, 248, 0.35)',
                   color: '#38bdf8',
-                  borderRadius: '4px',
-                  padding: '2px 6px',
-                  fontSize: '0.7rem',
+                  borderRadius: '5px',
+                  padding: '2px 7px',
+                  fontSize: '0.68rem',
                   fontWeight: 600,
                   cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
                 }}
                 title="點擊透視此週期之歷史現金流"
               >
-                透視金流
+                <Eye size={11} /> 透視金流
               </button>
             )}
           </div>
@@ -535,62 +551,66 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
       <div
         style={{
           display: 'flex',
-          gap: '14px',
+          gap: '12px',
           alignItems: 'center',
           flexWrap: 'wrap',
           marginBottom: '14px',
           fontSize: '0.8rem',
+          background: 'rgba(19, 29, 49, 0.5)',
+          padding: '6px 12px',
+          borderRadius: '8px',
+          border: '1px solid var(--border-color)',
         }}
       >
         <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>曲線顯示:</span>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#10b981', fontWeight: 700 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#34d399', fontWeight: 700 }}>
           <input
             type="checkbox"
             checked={visibleLines.nav}
             onChange={(e) => setVisibleLines((v) => ({ ...v, nav: e.target.checked }))}
           />
-          <span style={{ width: '10px', height: '3px', background: '#10b981', display: 'inline-block', borderRadius: '2px' }} />
+          <span style={{ width: '10px', height: '3px', background: '#34d399', display: 'inline-block', borderRadius: '2px' }} />
           總資產淨值 (NAV)
         </label>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#f59e0b', fontWeight: 700 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#fbbf24', fontWeight: 700 }}>
           <input
             type="checkbox"
             checked={visibleLines.costBasis}
             onChange={(e) => setVisibleLines((v) => ({ ...v, costBasis: e.target.checked }))}
           />
-          <span style={{ width: '10px', height: '3px', background: '#f59e0b', display: 'inline-block', borderRadius: '2px' }} />
-          累計投入本金 (Cost Basis)
+          <span style={{ width: '10px', height: '3px', background: '#fbbf24', display: 'inline-block', borderRadius: '2px' }} />
+          累計投入本金
         </label>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#3b82f6', fontWeight: 600 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#60a5fa', fontWeight: 600 }}>
           <input
             type="checkbox"
             checked={visibleLines.stockValue}
             onChange={(e) => setVisibleLines((v) => ({ ...v, stockValue: e.target.checked }))}
           />
-          <span style={{ width: '10px', height: '3px', background: '#3b82f6', display: 'inline-block', borderRadius: '2px' }} />
+          <span style={{ width: '10px', height: '3px', background: '#60a5fa', display: 'inline-block', borderRadius: '2px' }} />
           純持股市值
         </label>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#06b6d4', fontWeight: 600 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#22d3ee', fontWeight: 600 }}>
           <input
             type="checkbox"
             checked={visibleLines.cash}
             onChange={(e) => setVisibleLines((v) => ({ ...v, cash: e.target.checked }))}
           />
-          <span style={{ width: '10px', height: '3px', background: '#06b6d4', display: 'inline-block', borderRadius: '2px' }} />
+          <span style={{ width: '10px', height: '3px', background: '#22d3ee', display: 'inline-block', borderRadius: '2px' }} />
           現金水位
         </label>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#f43f5e', fontWeight: 600 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#fb7185', fontWeight: 600 }}>
           <input
             type="checkbox"
             checked={visibleLines.loan}
             onChange={(e) => setVisibleLines((v) => ({ ...v, loan: e.target.checked }))}
           />
-          <span style={{ width: '10px', height: '3px', background: '#f43f5e', display: 'inline-block', borderRadius: '2px' }} />
+          <span style={{ width: '10px', height: '3px', background: '#fb7185', display: 'inline-block', borderRadius: '2px' }} />
           借貸負債
         </label>
       </div>
@@ -600,10 +620,11 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
         style={{
           position: 'relative',
           width: '100%',
-          background: 'rgba(10, 15, 29, 0.6)',
+          background: 'rgba(8, 12, 20, 0.75)',
           borderRadius: '12px',
           border: '1px solid var(--border-color)',
           overflow: 'hidden',
+          boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.5)',
         }}
         onMouseLeave={() => setHoverIndex(null)}
       >
@@ -622,7 +643,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
         >
           <defs>
             <linearGradient id="navGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#10b981" stopOpacity="0.35" />
+              <stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
               <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
             </linearGradient>
             <linearGradient id="navStroke" x1="0" y1="0" x2="1" y2="0">
@@ -642,7 +663,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
                   y1={y}
                   x2={width - padding.right}
                   y2={y}
-                  stroke="rgba(51, 65, 85, 0.3)"
+                  stroke="rgba(51, 65, 85, 0.25)"
                   strokeDasharray="4 4"
                 />
                 <text
@@ -733,7 +754,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
                       y1={padding.top}
                       x2={x}
                       y2={height - padding.bottom}
-                      stroke="rgba(255, 255, 255, 0.4)"
+                      stroke="rgba(255, 255, 255, 0.45)"
                       strokeWidth="1.5"
                       strokeDasharray="3 3"
                     />
@@ -748,14 +769,14 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
         </svg>
       </div>
 
-      {/* 4.1 當日事件標籤與備註 (常駐置頂) */}
+      {/* 4.1 當日事件標籤與備註 */}
       <div
         style={{
           marginTop: '16px',
           padding: '12px 16px',
-          background: 'rgba(30, 41, 59, 0.5)',
-          borderRadius: '8px',
-          border: '1px solid rgba(56, 189, 248, 0.3)',
+          background: 'rgba(19, 29, 49, 0.6)',
+          borderRadius: '10px',
+          border: '1px solid rgba(56, 189, 248, 0.35)',
         }}
       >
         <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#38bdf8', marginBottom: '6px' }}>
@@ -767,10 +788,10 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
               <span
                 key={i}
                 style={{
-                  fontSize: '0.75rem',
+                  fontSize: '0.74rem',
                   padding: '2px 8px',
-                  borderRadius: '4px',
-                  background: 'rgba(15, 23, 42, 0.6)',
+                  borderRadius: '6px',
+                  background: 'rgba(15, 23, 42, 0.8)',
                   border: '1px solid var(--border-color)',
                   color: '#e2e8f0',
                 }}
@@ -781,9 +802,9 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
           ) : (
             <span
               style={{
-                fontSize: '0.75rem',
+                fontSize: '0.74rem',
                 padding: '2px 8px',
-                borderRadius: '4px',
+                borderRadius: '6px',
                 background: 'rgba(15, 23, 42, 0.4)',
                 border: '1px solid rgba(148, 163, 184, 0.2)',
                 color: '#94a3b8',
@@ -795,15 +816,15 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
         </div>
       </div>
 
-      {/* 4.2 機構級量化風控看板 (常駐置底 & 混合智能模式) */}
+      {/* 4.2 機構級量化風控看板 */}
       {quantMetrics && (
         <div
           style={{
             marginTop: '16px',
             padding: '16px',
-            background: 'rgba(15, 23, 42, 0.7)',
+            background: 'rgba(15, 23, 42, 0.8)',
             borderRadius: '12px',
-            border: '1px solid rgba(168, 85, 247, 0.3)',
+            border: '1px solid rgba(168, 85, 247, 0.35)',
           }}
         >
           <div
@@ -812,17 +833,19 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
               alignItems: 'center',
               justifyContent: 'space-between',
               marginBottom: '14px',
+              flexWrap: 'wrap',
+              gap: '8px',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Compass size={18} color="#c084fc" />
-              <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f3e8ff' }}>
+              <span style={{ fontSize: '0.92rem', fontWeight: 700, color: '#f3e8ff' }}>
                 {quantMetrics.hasBenchmark
                   ? `🏆 機構級量化風控與超額報酬看板 (對照 ${benchmarkLabel})`
                   : '🏆 機構級量化風控看板 (目前未設定基準對照)'}
               </span>
             </div>
-            <span style={{ fontSize: '0.75rem', color: '#a855f7' }}>
+            <span style={{ fontSize: '0.75rem', color: '#c084fc' }}>
               {quantMetrics.hasBenchmark
                 ? `紫虛線：${benchmarkLabel} 走勢對照`
                 : '提示：切換上方 🇹🇼 0050 / 🇺🇸 SPY 可解鎖 Alpha & Beta 超額指標'}
@@ -876,7 +899,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
                 {quantMetrics.hasBenchmark ? '超越基準之超額年化報酬' : '需設定大盤基準'}
               </div>
 
-              {/* Alpha Tooltip (靠左防溢出) */}
+              {/* Alpha Tooltip */}
               {activeTooltipMetric === 'alpha' && (
                 <div
                   style={{
@@ -896,49 +919,20 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
                     animation: 'fadeIn 0.15s ease-out',
                   }}
                 >
-                  {/* 上層：原理層 */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#f3e8ff', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      <Award size={14} color="#10b981" /> {quantDiagnosis.alpha.title}
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#34d399' }}>
+                      ✨ {quantDiagnosis.alpha.title}
                     </span>
-                    <span style={{ fontSize: '0.65rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.08)', color: '#94a3b8', fontFamily: 'monospace' }}>
-                      {quantDiagnosis.alpha.formula}
-                    </span>
+                    <span style={{ fontSize: '0.65rem', color: quantDiagnosis.alpha.badgeColor }}>{quantDiagnosis.alpha.levelBadge}</span>
                   </div>
-                  <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.4', marginBottom: '6px' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.4' }}>
                     {quantDiagnosis.alpha.definition}
                   </div>
-                  {quantDiagnosis.alpha.benchmarkNote && (
-                    <div style={{ fontSize: '0.68rem', color: '#94a3b8', background: 'rgba(255, 255, 255, 0.04)', padding: '3px 6px', borderRadius: '4px', marginBottom: '8px' }}>
-                      📌 {quantDiagnosis.alpha.benchmarkNote}
+                  <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed rgba(51, 65, 85, 0.5)', fontSize: '0.7rem' }}>
+                    <div style={{ color: quantDiagnosis.alpha.badgeColor, fontWeight: 700 }}>
+                      👉 {quantDiagnosis.alpha.summary}
                     </div>
-                  )}
-
-                  {/* 分隔線 */}
-                  <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.1)', margin: '6px 0' }} />
-
-                  {/* 下層：即時診斷層 */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginTop: '6px' }}>
-                    <span
-                      style={{
-                        fontSize: '0.68rem',
-                        fontWeight: 700,
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        background: quantDiagnosis.alpha.badgeColor,
-                        color: '#0f172a',
-                        whiteSpace: 'nowrap',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {quantDiagnosis.alpha.levelBadge}
-                    </span>
-                    <span style={{ fontSize: '0.72rem', color: '#f1f5f9', lineHeight: '1.35', fontWeight: 600 }}>
-                      {quantDiagnosis.alpha.summary}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '0.68rem', color: '#93c5fd', marginTop: '6px', lineHeight: '1.35' }}>
-                    💡 <span style={{ fontWeight: 600 }}>策略建議：</span>{quantDiagnosis.alpha.suggestion}
+                    <div style={{ color: '#cbd5e1', marginTop: '2px' }}>{quantDiagnosis.alpha.suggestion}</div>
                   </div>
                 </div>
               )}
@@ -965,34 +959,24 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
             >
               <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <Scale size={13} color="#60a5fa" /> 貝塔係數 (Beta)
+                  <Scale size={13} color="#3b82f6" /> 貝他係數 (Beta)
                 </span>
                 <HelpCircle size={12} color="var(--text-muted)" style={{ opacity: 0.6 }} />
               </div>
-              <div
-                className="mono"
-                style={{
-                  fontSize: '1.25rem',
-                  fontWeight: 800,
-                  color: quantMetrics.beta !== null ? '#60a5fa' : 'var(--text-muted)',
-                }}
-              >
-                {quantMetrics.beta !== null ? quantMetrics.beta.toFixed(2) : '無對應'}
+              <div className="mono" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#38bdf8' }}>
+                {quantMetrics.beta !== null ? `${quantMetrics.beta.toFixed(2)}` : '無對應'}
               </div>
               <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                {quantMetrics.correlation !== null
-                  ? `相關度 r = ${quantMetrics.correlation.toFixed(2)}`
-                  : '相關度 r = 無對應'}
+                {quantMetrics.hasBenchmark ? '相對大盤之系統性波動敏感度' : '需設定大盤基準'}
               </div>
 
-              {/* Beta Tooltip (居中) */}
+              {/* Beta Tooltip */}
               {activeTooltipMetric === 'beta' && (
                 <div
                   style={{
                     position: 'absolute',
                     bottom: 'calc(100% + 8px)',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
+                    left: '0',
                     width: '290px',
                     background: 'rgba(15, 23, 42, 0.97)',
                     backdropFilter: 'blur(16px)',
@@ -1006,55 +990,26 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
                     animation: 'fadeIn 0.15s ease-out',
                   }}
                 >
-                  {/* 上層：原理層 */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#f3e8ff', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      <Scale size={14} color="#60a5fa" /> {quantDiagnosis.beta.title}
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#60a5fa' }}>
+                      ⚖️ {quantDiagnosis.beta.title}
                     </span>
-                    <span style={{ fontSize: '0.65rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.08)', color: '#94a3b8', fontFamily: 'monospace' }}>
-                      {quantDiagnosis.beta.formula}
-                    </span>
+                    <span style={{ fontSize: '0.65rem', color: quantDiagnosis.beta.badgeColor }}>{quantDiagnosis.beta.levelBadge}</span>
                   </div>
-                  <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.4', marginBottom: '6px' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.4' }}>
                     {quantDiagnosis.beta.definition}
                   </div>
-                  {quantDiagnosis.beta.benchmarkNote && (
-                    <div style={{ fontSize: '0.68rem', color: '#94a3b8', background: 'rgba(255, 255, 255, 0.04)', padding: '3px 6px', borderRadius: '4px', marginBottom: '8px' }}>
-                      📌 {quantDiagnosis.beta.benchmarkNote}
+                  <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed rgba(51, 65, 85, 0.5)', fontSize: '0.7rem' }}>
+                    <div style={{ color: quantDiagnosis.beta.badgeColor, fontWeight: 700 }}>
+                      👉 {quantDiagnosis.beta.summary}
                     </div>
-                  )}
-
-                  {/* 分隔線 */}
-                  <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.1)', margin: '6px 0' }} />
-
-                  {/* 下層：即時診斷層 */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginTop: '6px' }}>
-                    <span
-                      style={{
-                        fontSize: '0.68rem',
-                        fontWeight: 700,
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        background: quantDiagnosis.beta.badgeColor,
-                        color: '#0f172a',
-                        whiteSpace: 'nowrap',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {quantDiagnosis.beta.levelBadge}
-                    </span>
-                    <span style={{ fontSize: '0.72rem', color: '#f1f5f9', lineHeight: '1.35', fontWeight: 600 }}>
-                      {quantDiagnosis.beta.summary}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '0.68rem', color: '#93c5fd', marginTop: '6px', lineHeight: '1.35' }}>
-                    💡 <span style={{ fontWeight: 600 }}>策略建議：</span>{quantDiagnosis.beta.suggestion}
+                    <div style={{ color: '#cbd5e1', marginTop: '2px' }}>{quantDiagnosis.beta.suggestion}</div>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* 3. Sharpe Ratio */}
+            {/* 3. Sharpe */}
             <div
               style={{
                 position: 'relative',
@@ -1075,32 +1030,24 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
             >
               <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <Zap size={13} color="#fbbf24" /> 夏普值 (Sharpe)
+                  <Zap size={13} color="#f59e0b" /> 夏普比率 (Sharpe)
                 </span>
                 <HelpCircle size={12} color="var(--text-muted)" style={{ opacity: 0.6 }} />
               </div>
-              <div
-                className="mono"
-                style={{
-                  fontSize: '1.25rem',
-                  fontWeight: 800,
-                  color: quantMetrics.sharpeRatio >= 1 ? '#34d399' : '#fbbf24',
-                }}
-              >
-                {quantMetrics.sharpeRatio !== 0 ? quantMetrics.sharpeRatio.toFixed(2) : '無'}
+              <div className="mono" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fbbf24' }}>
+                {quantMetrics.sharpeRatio.toFixed(2)}
               </div>
               <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                無風險利率基準 1.5%
+                每承受一分總風險之超額回報
               </div>
 
-              {/* Sharpe Tooltip (居中) */}
+              {/* Sharpe Tooltip */}
               {activeTooltipMetric === 'sharpe' && (
                 <div
                   style={{
                     position: 'absolute',
                     bottom: 'calc(100% + 8px)',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
+                    left: '0',
                     width: '290px',
                     background: 'rgba(15, 23, 42, 0.97)',
                     backdropFilter: 'blur(16px)',
@@ -1114,168 +1061,36 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
                     animation: 'fadeIn 0.15s ease-out',
                   }}
                 >
-                  {/* 上層：原理層 */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#f3e8ff', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      <Zap size={14} color="#fbbf24" /> {quantDiagnosis.sharpe.title}
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fbbf24' }}>
+                      ⚡ {quantDiagnosis.sharpe.title}
                     </span>
-                    <span style={{ fontSize: '0.65rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.08)', color: '#94a3b8', fontFamily: 'monospace' }}>
-                      {quantDiagnosis.sharpe.formula}
-                    </span>
+                    <span style={{ fontSize: '0.65rem', color: quantDiagnosis.sharpe.badgeColor }}>{quantDiagnosis.sharpe.levelBadge}</span>
                   </div>
-                  <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.4', marginBottom: '6px' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.4' }}>
                     {quantDiagnosis.sharpe.definition}
                   </div>
-                  {quantDiagnosis.sharpe.benchmarkNote && (
-                    <div style={{ fontSize: '0.68rem', color: '#94a3b8', background: 'rgba(255, 255, 255, 0.04)', padding: '3px 6px', borderRadius: '4px', marginBottom: '8px' }}>
-                      📌 {quantDiagnosis.sharpe.benchmarkNote}
+                  <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed rgba(51, 65, 85, 0.5)', fontSize: '0.7rem' }}>
+                    <div style={{ color: quantDiagnosis.sharpe.badgeColor, fontWeight: 700 }}>
+                      👉 {quantDiagnosis.sharpe.summary}
                     </div>
-                  )}
-
-                  {/* 分隔線 */}
-                  <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.1)', margin: '6px 0' }} />
-
-                  {/* 下層：即時診斷層 */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginTop: '6px' }}>
-                    <span
-                      style={{
-                        fontSize: '0.68rem',
-                        fontWeight: 700,
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        background: quantDiagnosis.sharpe.badgeColor,
-                        color: '#0f172a',
-                        whiteSpace: 'nowrap',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {quantDiagnosis.sharpe.levelBadge}
-                    </span>
-                    <span style={{ fontSize: '0.72rem', color: '#f1f5f9', lineHeight: '1.35', fontWeight: 600 }}>
-                      {quantDiagnosis.sharpe.summary}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '0.68rem', color: '#93c5fd', marginTop: '6px', lineHeight: '1.35' }}>
-                    💡 <span style={{ fontWeight: 600 }}>策略建議：</span>{quantDiagnosis.sharpe.suggestion}
+                    <div style={{ color: '#cbd5e1', marginTop: '2px' }}>{quantDiagnosis.sharpe.suggestion}</div>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* 4. Max Drawdown */}
+            {/* 4. Volatility */}
             <div
               style={{
                 position: 'relative',
                 background: 'rgba(30, 41, 59, 0.5)',
                 padding: '10px 14px',
                 borderRadius: '8px',
-                border: activeTooltipMetric === 'mdd' ? '1px solid rgba(239, 68, 68, 0.6)' : '1px solid rgba(239, 68, 68, 0.2)',
+                border: activeTooltipMetric === 'volatility' ? '1px solid rgba(139, 92, 246, 0.6)' : '1px solid rgba(139, 92, 246, 0.2)',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
-                boxShadow: activeTooltipMetric === 'mdd' ? '0 0 12px rgba(239, 68, 68, 0.25)' : 'none',
-              }}
-              onMouseEnter={() => setActiveTooltipMetric('mdd')}
-              onMouseLeave={() => setActiveTooltipMetric((prev) => (prev === 'mdd' ? null : prev))}
-              onClick={(e) => {
-                e.stopPropagation();
-                setActiveTooltipMetric((prev) => (prev === 'mdd' ? null : 'mdd'));
-              }}
-            >
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <TrendingUp size={13} color="#f87171" /> 最大回撤 (MDD)
-                </span>
-                <HelpCircle size={12} color="var(--text-muted)" style={{ opacity: 0.6 }} />
-              </div>
-              <div className="mono" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f87171' }}>
-                -{quantMetrics.portfolioMaxDrawdown.toFixed(2)}%
-              </div>
-              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                {quantMetrics.benchmarkMaxDrawdown !== null
-                  ? `基準回撤: -${quantMetrics.benchmarkMaxDrawdown.toFixed(2)}%`
-                  : '基準回撤: 無對應'}
-              </div>
-
-              {/* MDD Tooltip (居中) */}
-              {activeTooltipMetric === 'mdd' && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    bottom: 'calc(100% + 8px)',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    width: '290px',
-                    background: 'rgba(15, 23, 42, 0.97)',
-                    backdropFilter: 'blur(16px)',
-                    border: '1px solid rgba(239, 68, 68, 0.4)',
-                    boxShadow: '0 12px 30px -4px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05)',
-                    borderRadius: '10px',
-                    padding: '12px 14px',
-                    zIndex: 100,
-                    pointerEvents: 'none',
-                    textAlign: 'left',
-                    animation: 'fadeIn 0.15s ease-out',
-                  }}
-                >
-                  {/* 上層：原理層 */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#f3e8ff', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      <TrendingUp size={14} color="#f87171" /> {quantDiagnosis.mdd.title}
-                    </span>
-                    <span style={{ fontSize: '0.65rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.08)', color: '#94a3b8', fontFamily: 'monospace' }}>
-                      {quantDiagnosis.mdd.formula}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.4', marginBottom: '6px' }}>
-                    {quantDiagnosis.mdd.definition}
-                  </div>
-                  {quantDiagnosis.mdd.benchmarkNote && (
-                    <div style={{ fontSize: '0.68rem', color: '#94a3b8', background: 'rgba(255, 255, 255, 0.04)', padding: '3px 6px', borderRadius: '4px', marginBottom: '8px' }}>
-                      📌 {quantDiagnosis.mdd.benchmarkNote}
-                    </div>
-                  )}
-
-                  {/* 分隔線 */}
-                  <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.1)', margin: '6px 0' }} />
-
-                  {/* 下層：即時診斷層 */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginTop: '6px' }}>
-                    <span
-                      style={{
-                        fontSize: '0.68rem',
-                        fontWeight: 700,
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        background: quantDiagnosis.mdd.badgeColor,
-                        color: '#0f172a',
-                        whiteSpace: 'nowrap',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {quantDiagnosis.mdd.levelBadge}
-                    </span>
-                    <span style={{ fontSize: '0.72rem', color: '#f1f5f9', lineHeight: '1.35', fontWeight: 600 }}>
-                      {quantDiagnosis.mdd.summary}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '0.68rem', color: '#93c5fd', marginTop: '6px', lineHeight: '1.35' }}>
-                    💡 <span style={{ fontWeight: 600 }}>策略建議：</span>{quantDiagnosis.mdd.suggestion}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* 5. Volatility */}
-            <div
-              style={{
-                position: 'relative',
-                background: 'rgba(30, 41, 59, 0.5)',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: activeTooltipMetric === 'volatility' ? '1px solid rgba(6, 182, 212, 0.6)' : '1px solid rgba(6, 182, 212, 0.2)',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                boxShadow: activeTooltipMetric === 'volatility' ? '0 0 12px rgba(6, 182, 212, 0.25)' : 'none',
+                boxShadow: activeTooltipMetric === 'volatility' ? '0 0 12px rgba(139, 92, 246, 0.25)' : 'none',
               }}
               onMouseEnter={() => setActiveTooltipMetric('volatility')}
               onMouseLeave={() => setActiveTooltipMetric((prev) => (prev === 'volatility' ? null : prev))}
@@ -1286,29 +1101,28 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
             >
               <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <Activity size={13} color="#06b6d4" /> 年化波動度
+                  <Activity size={13} color="#a855f7" /> 年化波動度 (Vol)
                 </span>
                 <HelpCircle size={12} color="var(--text-muted)" style={{ opacity: 0.6 }} />
               </div>
-              <div className="mono" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#06b6d4' }}>
+              <div className="mono" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#c084fc' }}>
                 {quantMetrics.annualizedVolatility.toFixed(2)}%
               </div>
               <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                252 交易日標準差
+                年化每日收益率標準差
               </div>
 
-              {/* Volatility Tooltip (靠右防溢出) */}
+              {/* Volatility Tooltip */}
               {activeTooltipMetric === 'volatility' && (
                 <div
                   style={{
                     position: 'absolute',
                     bottom: 'calc(100% + 8px)',
-                    right: '0',
-                    left: 'auto',
+                    left: '0',
                     width: '290px',
                     background: 'rgba(15, 23, 42, 0.97)',
                     backdropFilter: 'blur(16px)',
-                    border: '1px solid rgba(6, 182, 212, 0.4)',
+                    border: '1px solid rgba(168, 85, 247, 0.4)',
                     boxShadow: '0 12px 30px -4px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05)',
                     borderRadius: '10px',
                     padding: '12px 14px',
@@ -1318,49 +1132,91 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
                     animation: 'fadeIn 0.15s ease-out',
                   }}
                 >
-                  {/* 上層：原理層 */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#f3e8ff', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      <Activity size={14} color="#06b6d4" /> {quantDiagnosis.volatility.title}
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#c084fc' }}>
+                      🌊 {quantDiagnosis.volatility.title}
                     </span>
-                    <span style={{ fontSize: '0.65rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.08)', color: '#94a3b8', fontFamily: 'monospace' }}>
-                      {quantDiagnosis.volatility.formula}
-                    </span>
+                    <span style={{ fontSize: '0.65rem', color: quantDiagnosis.volatility.badgeColor }}>{quantDiagnosis.volatility.levelBadge}</span>
                   </div>
-                  <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.4', marginBottom: '6px' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.4' }}>
                     {quantDiagnosis.volatility.definition}
                   </div>
-                  {quantDiagnosis.volatility.benchmarkNote && (
-                    <div style={{ fontSize: '0.68rem', color: '#94a3b8', background: 'rgba(255, 255, 255, 0.04)', padding: '3px 6px', borderRadius: '4px', marginBottom: '8px' }}>
-                      📌 {quantDiagnosis.volatility.benchmarkNote}
+                  <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed rgba(51, 65, 85, 0.5)', fontSize: '0.7rem' }}>
+                    <div style={{ color: quantDiagnosis.volatility.badgeColor, fontWeight: 700 }}>
+                      👉 {quantDiagnosis.volatility.summary}
                     </div>
-                  )}
-
-                  {/* 分隔線 */}
-                  <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.1)', margin: '6px 0' }} />
-
-                  {/* 下層：即時診斷層 */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginTop: '6px' }}>
-                    <span
-                      style={{
-                        fontSize: '0.68rem',
-                        fontWeight: 700,
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        background: quantDiagnosis.volatility.badgeColor,
-                        color: '#0f172a',
-                        whiteSpace: 'nowrap',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {quantDiagnosis.volatility.levelBadge}
-                    </span>
-                    <span style={{ fontSize: '0.72rem', color: '#f1f5f9', lineHeight: '1.35', fontWeight: 600 }}>
-                      {quantDiagnosis.volatility.summary}
-                    </span>
+                    <div style={{ color: '#cbd5e1', marginTop: '2px' }}>{quantDiagnosis.volatility.suggestion}</div>
                   </div>
-                  <div style={{ fontSize: '0.68rem', color: '#93c5fd', marginTop: '6px', lineHeight: '1.35' }}>
-                    💡 <span style={{ fontWeight: 600 }}>策略建議：</span>{quantDiagnosis.volatility.suggestion}
+                </div>
+              )}
+            </div>
+
+            {/* 5. Max Drawdown */}
+            <div
+              style={{
+                position: 'relative',
+                background: 'rgba(30, 41, 59, 0.5)',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: activeTooltipMetric === 'mdd' ? '1px solid rgba(244, 63, 94, 0.6)' : '1px solid rgba(244, 63, 94, 0.2)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: activeTooltipMetric === 'mdd' ? '0 0 12px rgba(244, 63, 94, 0.25)' : 'none',
+              }}
+              onMouseEnter={() => setActiveTooltipMetric('mdd')}
+              onMouseLeave={() => setActiveTooltipMetric((prev) => (prev === 'mdd' ? null : prev))}
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveTooltipMetric((prev) => (prev === 'mdd' ? null : 'mdd'));
+              }}
+            >
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <TrendingUp size={13} color="#f43f5e" style={{ transform: 'rotate(180deg)' }} /> 最大回撤 (MDD)
+                </span>
+                <HelpCircle size={12} color="var(--text-muted)" style={{ opacity: 0.6 }} />
+              </div>
+              <div className="mono" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fb7185' }}>
+                -{quantMetrics.portfolioMaxDrawdown.toFixed(1)}%
+              </div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                從歷史峰值最大拉回幅度
+              </div>
+
+              {/* MDD Tooltip */}
+              {activeTooltipMetric === 'mdd' && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: 'calc(100% + 8px)',
+                    right: '0',
+                    width: '290px',
+                    background: 'rgba(15, 23, 42, 0.97)',
+                    backdropFilter: 'blur(16px)',
+                    border: '1px solid rgba(244, 63, 94, 0.4)',
+                    boxShadow: '0 12px 30px -4px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+                    borderRadius: '10px',
+                    padding: '12px 14px',
+                    zIndex: 100,
+                    pointerEvents: 'none',
+                    textAlign: 'left',
+                    animation: 'fadeIn 0.15s ease-out',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fb7185' }}>
+                      📉 {quantDiagnosis.mdd.title}
+                    </span>
+                    <span style={{ fontSize: '0.65rem', color: quantDiagnosis.mdd.badgeColor }}>{quantDiagnosis.mdd.levelBadge}</span>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.4' }}>
+                    {quantDiagnosis.mdd.definition}
+                  </div>
+                  <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed rgba(51, 65, 85, 0.5)', fontSize: '0.7rem' }}>
+                    <div style={{ color: quantDiagnosis.mdd.badgeColor, fontWeight: 700 }}>
+                      👉 {quantDiagnosis.mdd.summary}
+                    </div>
+                    <div style={{ color: '#cbd5e1', marginTop: '2px' }}>{quantDiagnosis.mdd.suggestion}</div>
                   </div>
                 </div>
               )}

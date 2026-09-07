@@ -19,6 +19,8 @@ import {
   sortCashTransactions,
   calculateTotalBuyingPower,
   groupPendingSettlementsByTimeline,
+  createLoanDisbursementTransaction,
+  calculateLoanSettledSummary,
 } from '../engine/cashLedgerEngine';
 import { CashTransactionModal } from './CashTransactionModal';
 import { LoanModal } from './LoanModal';
@@ -109,6 +111,28 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
     return loans.filter((l) => l.currency === 'USD');
   }, [loans, currentMarket]);
 
+  // 進行中借貸 (未還本金 > 0)
+  const activeLoans = useMemo(() => {
+    return scopedLoans.filter((l) => (l.principal || 0) > 0);
+  }, [scopedLoans]);
+
+  // 已結清借貸 (未還本金 <= 0)
+  const closedLoans = useMemo(() => {
+    return scopedLoans.filter((l) => (l.principal || 0) <= 0);
+  }, [scopedLoans]);
+
+  const [isClosedLoansExpanded, setIsClosedLoansExpanded] = useState(false);
+
+  // 偵測是否存在「有還款紀錄但缺少借款入帳」的歷史借貸（如 2026-07-28 質押）
+  const missingDisbursementLoans = useMemo(() => {
+    return scopedLoans.filter((loan) => {
+      const relatedTxs = transactions.filter((t) => t.relatedLoanId === loan.id);
+      const hasRepayment = relatedTxs.some((t) => t.type === 'LOAN_REPAYMENT' || t.category === 'LOAN_REPAYMENT');
+      const hasDisbursement = relatedTxs.some((t) => t.type === 'LOAN_DISBURSEMENT' || t.category === 'LOAN_DISBURSEMENT');
+      return hasRepayment && !hasDisbursement;
+    });
+  }, [scopedLoans, transactions]);
+
   const scopedTransactions = useMemo(() => {
     if (currentMarket === 'ALL') return transactions;
     if (currentMarket === 'TW') return transactions.filter((t) => t.currency === 'TWD');
@@ -146,7 +170,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
     return sorted[0].date;
   }, [trades]);
 
-  // 1. 核心計算 (依市場過濾範疇計算)
+  // 1. 核心計算
   const balancesSummary = useMemo(() => {
     return calculateAccountBalances(scopedAccounts, scopedTransactions, usdToTwdRate);
   }, [scopedAccounts, scopedTransactions, usdToTwdRate]);
@@ -197,7 +221,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
     onSaveTransactions(updated);
   };
 
-  // 2. 單筆流水操作 (支援雙向回寫關聯股票交易 / 股息紀錄)
+  // 2. 單筆流水操作
   const handleSaveTransaction = (tx: CashTransaction) => {
     const existingIdx = transactions.findIndex((t) => t.id === tx.id);
     let updated: CashTransaction[];
@@ -219,7 +243,6 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
         };
 
         if (targetTrade.type === 'DIVIDEND') {
-          // 股息：依實收金額與稅額回算每股股息 price
           const tax = targetTrade.tax || 0;
           const grossAmount = Math.abs(tx.amount) + tax;
           if (targetTrade.shares > 0) {
@@ -256,8 +279,8 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
     onSaveTransactions(transactions.filter((t) => t.id !== id));
   };
 
-  // 3. 借貸項目操作 (支援三大規費手續費自動連動)
-  const handleSaveLoan = (loan: LoanRecord, shouldRecordFee?: boolean) => {
+  // 3. 借貸項目操作
+  const handleSaveLoan = (loan: LoanRecord, shouldRecordFee?: boolean, shouldRecordDisbursement?: boolean) => {
     const existingIdx = loans.findIndex((l) => l.id === loan.id);
     let updatedLoans: LoanRecord[];
     if (existingIdx >= 0) {
@@ -268,7 +291,14 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
     }
     onSaveLoans(updatedLoans);
 
-    // 若為新建立質押且勾選自動記錄三大規費
+    const newTxs: CashTransaction[] = [];
+
+    // 自動產生借款撥款入帳 (LOAN_DISBURSEMENT)
+    if (shouldRecordDisbursement && loan.principal > 0) {
+      const disburseTx = createLoanDisbursementTransaction(loan);
+      newTxs.push(disburseTx);
+    }
+
     const totalFeeAmount = loan.pledgeFee || ((loan.transferFee || 0) + (loan.pledgeRegistryFee || 0) + (loan.handlingFee || 0));
     if (shouldRecordFee && totalFeeAmount > 0) {
       const now = Date.now();
@@ -282,10 +312,38 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
         date: loan.startDate || loan.date || new Date().toISOString().split('T')[0],
         relatedLoanId: loan.id,
         note: `股票質押規費 (撥券 $${loan.transferFee || 0} + 設質 $${loan.pledgeRegistryFee || 0} + 手續費 $${loan.handlingFee || 0}): ${loan.name}`,
-        createdAt: now,
+        createdAt: now + 1,
       };
-      onSaveTransactions([feeTx, ...transactions]);
+      newTxs.push(feeTx);
     }
+
+    if (newTxs.length > 0) {
+      onSaveTransactions([...newTxs, ...transactions]);
+    }
+  };
+
+  // 一鍵補登歷史借款撥款入帳 (平帳機制)
+  const handleReconcileMissingDisbursements = () => {
+    if (missingDisbursementLoans.length === 0) return;
+
+    const newTxs: CashTransaction[] = [];
+    for (const loan of missingDisbursementLoans) {
+      const relatedRepayTxs = transactions.filter(
+        (t) => t.relatedLoanId === loan.id && (t.type === 'LOAN_REPAYMENT' || t.category === 'LOAN_REPAYMENT')
+      );
+      const totalRepaid = relatedRepayTxs.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+      const originalAmount = loan.initialPrincipal || (totalRepaid > 0 ? totalRepaid : loan.principal);
+
+      const disburseLoan: LoanRecord = {
+        ...loan,
+        principal: originalAmount,
+      };
+      const disburseTx = createLoanDisbursementTransaction(disburseLoan);
+      newTxs.push(disburseTx);
+    }
+
+    onSaveTransactions([...newTxs, ...transactions]);
+    alert(`🎉 成功平帳補登！已為 ${missingDisbursementLoans.length} 筆借貸自動補登當初的「借款撥款入帳 (LOAN_DISBURSEMENT)」現金流水，可用現金餘額已恢復精確平衡！`);
   };
 
   const handleDeleteLoan = (id: string) => {
@@ -294,7 +352,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
     }
   };
 
-  // 4. 一鍵與股票交易對齊 (含 T+2 / T+1 交割日試算)
+  // 4. 一鍵與股票交易對齊
   const handleSyncWithTrades = () => {
     if (trades.length === 0) {
       alert('目前尚無股票交易紀錄可供對齊。');
@@ -400,11 +458,9 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
       onSaveLoans(updatedLoans);
       alert(`✅ 成功支付利息 ${currencySymbol} ${numAmount.toLocaleString()}，已記錄於現金帳本並更新付息日！`);
     } else if (actionType === 'FULL_PAYOFF') {
-      // 一鍵全額結清 (本利和 + 規費，自動拆分精準流水)
       const metrics = calculateLoanInterestAndPayoff(loan);
       const splitTxs: CashTransaction[] = [];
 
-      // 1. 本金還款流水
       if (loan.principal > 0) {
         splitTxs.push({
           id: `tx-repay-${loan.id}-${now}-1`,
@@ -420,7 +476,6 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
         });
       }
 
-      // 2. 融資利息支出流水
       if (metrics.accruedInterest > 0) {
         splitTxs.push({
           id: `tx-interest-${loan.id}-${now}-2`,
@@ -436,7 +491,6 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
         });
       }
 
-      // 3. 設質規費扣除流水 (若有規費)
       if (metrics.pledgeFees > 0) {
         splitTxs.push({
           id: `tx-fee-${loan.id}-${now}-3`,
@@ -452,7 +506,6 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
         });
       }
 
-      // 若使用者自訂了結清總金額且與預估總額不同，以 LOAN_REPAYMENT 補足差額
       if (splitTxs.length === 0) {
         splitTxs.push({
           id: `tx-repay-${loan.id}-${now}-fallback`,
@@ -470,7 +523,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
 
       const updatedLoans = loans.map((l) =>
         l.id === loan.id
-          ? { ...l, principal: 0, lastInterestPaymentDate: todayStr }
+          ? { ...l, principal: 0, closedDate: todayStr, lastInterestPaymentDate: todayStr }
           : l
       );
 
@@ -491,9 +544,15 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
         createdAt: now,
       };
 
+      const remaining = Math.max(0, loan.principal - numAmount);
       const updatedLoans = loans.map((l) =>
         l.id === loan.id
-          ? { ...l, principal: Math.max(0, l.principal - numAmount), lastInterestPaymentDate: todayStr }
+          ? {
+              ...l,
+              principal: remaining,
+              closedDate: remaining === 0 ? todayStr : l.closedDate,
+              lastInterestPaymentDate: todayStr,
+            }
           : l
       );
 
@@ -505,14 +564,12 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
     setPayLoanTarget(null);
   };
 
-  // 7. 流水清單過濾與排序 (支援市場過濾)
+  // 7. 流水清單過濾與排序
   const filteredTransactions = useMemo(() => {
     const filtered = scopedTransactions.filter((tx) => {
-      // 帳戶篩選
       if (selectedAccountId !== 'ALL' && tx.accountId !== selectedAccountId) {
         return false;
       }
-      // 交割狀態篩選
       if (selectedSettlementFilter === 'PENDING' && tx.settlementStatus !== 'PENDING') {
         return false;
       }
@@ -520,7 +577,6 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
         return false;
       }
 
-      // 類別篩選
       const cat = tx.category || tx.type;
       if (selectedCategoryFilter === 'DEPOSIT_WITHDRAWAL') {
         if (cat !== 'DEPOSIT' && cat !== 'WITHDRAWAL') return false;
@@ -536,7 +592,6 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
         if (cat !== 'LOAN_DISBURSEMENT' && cat !== 'LOAN_REPAYMENT') return false;
       }
 
-      // 關鍵字搜尋
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const noteMatch = tx.note?.toLowerCase().includes(q) || false;
@@ -559,7 +614,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
 
     if (cat === 'TAX' || isTaxNote) {
       return (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(244, 63, 94, 0.15)', color: '#fb7185', border: '1px solid rgba(244, 63, 94, 0.3)' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 7px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(244, 63, 94, 0.15)', color: '#fb7185', border: '1px solid rgba(244, 63, 94, 0.3)' }}>
           <Receipt size={12} /> 預扣稅費
         </span>
       );
@@ -568,82 +623,82 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
     switch (cat) {
       case 'DEPOSIT':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 7px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
             <ArrowDownRight size={12} /> 外部入金
           </span>
         );
       case 'WITHDRAWAL':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 7px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
             <ArrowUpRight size={12} /> 外部出金
           </span>
         );
       case 'STOCK_BUY':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 7px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
             ⚡ 買進交割扣款
           </span>
         );
       case 'STOCK_SELL':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(6, 182, 212, 0.15)', color: '#22d3ee', border: '1px solid rgba(6, 182, 212, 0.3)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 7px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(6, 182, 212, 0.15)', color: '#22d3ee', border: '1px solid rgba(6, 182, 212, 0.3)' }}>
             ⚡ 賣出交割入帳
           </span>
         );
       case 'DIVIDEND_PAYOUT':
       case 'DIVIDEND':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 7px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
             💰 股息入帳
           </span>
         );
       case 'CAPITAL_RETURN':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 7px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
             📦 減資退款
           </span>
         );
       case 'INTEREST_INCOME':
       case 'INTEREST':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(20, 184, 166, 0.15)', color: '#2dd4bf', border: '1px solid rgba(20, 184, 166, 0.3)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 7px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(20, 184, 166, 0.15)', color: '#2dd4bf', border: '1px solid rgba(20, 184, 166, 0.3)' }}>
             📈 活存利息
           </span>
         );
       case 'FINANCING_FEE':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(139, 92, 246, 0.15)', color: '#a78bfa', border: '1px solid rgba(139, 92, 246, 0.3)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 7px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(139, 92, 246, 0.15)', color: '#a78bfa', border: '1px solid rgba(139, 92, 246, 0.3)' }}>
             📉 融資/借款利息
           </span>
         );
       case 'WIRE_FEE':
       case 'FEE':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(100, 116, 139, 0.2)', color: '#cbd5e1', border: '1px solid rgba(100, 116, 139, 0.3)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 7px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(100, 116, 139, 0.2)', color: '#cbd5e1', border: '1px solid rgba(100, 116, 139, 0.3)' }}>
             🏷️ 規費/手續費
           </span>
         );
       case 'FX_TRANSFER_IN':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(6, 182, 212, 0.15)', color: '#67e8f9', border: '1px solid rgba(6, 182, 212, 0.3)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 7px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(6, 182, 212, 0.15)', color: '#67e8f9', border: '1px solid rgba(6, 182, 212, 0.3)' }}>
             <ArrowLeftRight size={12} /> 換匯/調撥轉入
           </span>
         );
       case 'FX_TRANSFER_OUT':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(100, 116, 139, 0.2)', color: '#94a3b8', border: '1px solid rgba(100, 116, 139, 0.3)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 7px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(100, 116, 139, 0.2)', color: '#94a3b8', border: '1px solid rgba(100, 116, 139, 0.3)' }}>
             <ArrowLeftRight size={12} /> 換匯/調撥轉出
           </span>
         );
       case 'LOAN_DISBURSEMENT':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(147, 51, 234, 0.15)', color: '#c084fc', border: '1px solid rgba(147, 51, 234, 0.3)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 7px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(147, 51, 234, 0.15)', color: '#c084fc', border: '1px solid rgba(147, 51, 234, 0.3)' }}>
             🏦 借款撥款
           </span>
         );
       case 'LOAN_REPAYMENT':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(244, 63, 94, 0.15)', color: '#fb7185', border: '1px solid rgba(244, 63, 94, 0.3)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 7px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(244, 63, 94, 0.15)', color: '#fb7185', border: '1px solid rgba(244, 63, 94, 0.3)' }}>
             💳 還本扣款
           </span>
         );
@@ -653,13 +708,13 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', animation: 'fadeIn 0.3s ease-in-out' }}>
       {/* 1. 快捷一鍵對齊橫幅 (Sync Hero Banner) */}
       {transactions.length === 0 && trades.length > 0 && (
         <div
           className="glass-card"
           style={{
-            padding: '20px 24px',
+            padding: '18px 22px',
             borderRadius: '16px',
             background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%)',
             border: '1px solid rgba(16, 185, 129, 0.4)',
@@ -670,11 +725,11 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
             boxShadow: '0 8px 24px rgba(16, 185, 129, 0.15)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div
               style={{
-                width: '48px',
-                height: '48px',
+                width: '46px',
+                height: '46px',
                 borderRadius: '12px',
                 background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                 display: 'flex',
@@ -687,10 +742,10 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
               <Zap size={24} />
             </div>
             <div>
-              <h4 style={{ margin: '0 0 4px 0', fontSize: '1.05rem', fontWeight: 700, color: '#ffffff' }}>
+              <h4 style={{ margin: '0 0 3px 0', fontSize: '1.05rem', fontWeight: 800, color: '#ffffff' }}>
                 尚未建立交割流水？一鍵自動生成 (支援台股 T+2 / 美股 T+1)！
               </h4>
-              <p style={{ margin: 0, fontSize: '0.82rem', color: '#94a3b8', lineHeight: 1.4 }}>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: '#94a3b8', lineHeight: 1.4 }}>
                 系統偵測到您在庫有 <b>{trades.length} 筆歷史股票交易</b>。點擊右側按鈕，系統將自動依買進、賣出、現金股利與真實交割週期生成精準流水！
               </p>
             </div>
@@ -698,29 +753,29 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
           <button
             className="btn btn-primary"
             onClick={handleSyncWithTrades}
-            style={{ padding: '10px 20px', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 700 }}
+            style={{ padding: '9px 18px', fontSize: '0.88rem', whiteSpace: 'nowrap', fontWeight: 800 }}
           >
-            <Sparkles size={16} /> 一鍵依 T+2 / T+1 產生流水
+            <Sparkles size={15} /> 一鍵依 T+2 / T+1 產生流水
           </button>
         </div>
       )}
 
-      {/* 2. 頂部券商級四核心資金可用性指標看板 (Four-Pillar Cash & Buying Power Dashboard) */}
+      {/* 2. 頂部券商級四核心資金可用性指標看板 */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '14px' }}>
-        {/* 卡片 1: 實質可用現金 (可提領出金) */}
+        {/* 卡片 1: 實質可用現金 */}
         <div
           className="glass-card"
           style={{
-            padding: '18px',
+            padding: '16px 18px',
             borderRadius: '14px',
-            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(15, 23, 42, 0.85) 100%)',
+            background: 'linear-gradient(180deg, rgba(16, 185, 129, 0.12) 0%, rgba(15, 23, 42, 0.85) 100%)',
             border: '1px solid rgba(16, 185, 129, 0.35)',
             boxShadow: '0 4px 16px rgba(16, 185, 129, 0.08)',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#34d399', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Wallet size={16} /> 實質可用現金 (可提領)
+            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#34d399', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Wallet size={15} /> 實質可用現金 (可提領)
             </span>
             <span style={{ fontSize: '0.68rem', color: '#10b981', background: 'rgba(16, 185, 129, 0.15)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
               ✅ 已交割到位
@@ -731,15 +786,16 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
             style={{
               fontSize: '1.65rem',
               fontWeight: 800,
-              color: balancesSummary.totalSettledCashInTWD < 0 ? '#f87171' : '#10b981',
-              margin: '4px 0',
+              color: balancesSummary.totalSettledCashInTWD < 0 ? '#f87171' : '#34d399',
+              margin: '2px 0',
+              lineHeight: 1.2,
             }}
           >
             {currentMarket === 'US'
               ? `$${balancesSummary.totalUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
               : `NT$ ${Math.round(balancesSummary.totalSettledCashInTWD).toLocaleString()}`}
           </div>
-          <div className="mono" style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'flex', gap: '8px' }}>
+          <div className="mono" style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'flex', gap: '8px', marginTop: '4px' }}>
             {currentMarket === 'ALL' && (
               <>
                 <span>台幣 NT$ {Math.round(balancesSummary.totalTWD).toLocaleString()}</span>
@@ -752,97 +808,97 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
           </div>
         </div>
 
-        {/* 卡片 2: 在途應收款項 (待入帳) */}
+        {/* 卡片 2: 在途應收款項 */}
         <div
           className="glass-card"
           onClick={() => setIsTimelineDrawerOpen((prev) => !prev)}
           style={{
-            padding: '18px',
+            padding: '16px 18px',
             borderRadius: '14px',
-            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(15, 23, 42, 0.85) 100%)',
+            background: 'linear-gradient(180deg, rgba(245, 158, 11, 0.12) 0%, rgba(15, 23, 42, 0.85) 100%)',
             border: '1px solid rgba(245, 158, 11, 0.35)',
             cursor: 'pointer',
             boxShadow: '0 4px 16px rgba(245, 158, 11, 0.08)',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <ArrowDownRight size={16} /> 在途應收 (待入帳)
+            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ArrowDownRight size={15} /> 在途應收 (待入帳)
             </span>
             <span style={{ fontSize: '0.68rem', color: '#fbbf24', background: 'rgba(245, 158, 11, 0.15)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
               ⏳ {pendingTimelineGroup.totalInflowInTWD > 0 ? `${(pendingTimelineGroup.today.length + pendingTimelineGroup.tomorrow.length + pendingTimelineGroup.thisWeek.length + pendingTimelineGroup.future.length)} 筆在途` : '無待入帳'}
             </span>
           </div>
-          <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#fbbf24', margin: '4px 0' }}>
+          <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#fbbf24', margin: '2px 0', lineHeight: 1.2 }}>
             {currentMarket === 'US'
               ? `+$${(balancesSummary.totalPendingReceivablesInTWD / usdToTwdRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
               : `+NT$ ${Math.round(balancesSummary.totalPendingReceivablesInTWD).toLocaleString()}`}
           </div>
-          <div style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
             <span>賣出待交割 + 股息預計發放</span>
-            <span style={{ color: '#fbbf24' }}>{isTimelineDrawerOpen ? '點擊收合' : '點擊展開排程 ▾'}</span>
+            <span style={{ color: '#fbbf24', fontWeight: 600 }}>{isTimelineDrawerOpen ? '收合排程 ▴' : '展開排程 ▾'}</span>
           </div>
         </div>
 
-        {/* 卡片 3: 在途應付款項 (待扣款) */}
+        {/* 卡片 3: 在途應付款項 */}
         <div
           className="glass-card"
           onClick={() => setIsTimelineDrawerOpen((prev) => !prev)}
           style={{
-            padding: '18px',
+            padding: '16px 18px',
             borderRadius: '14px',
-            background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(15, 23, 42, 0.85) 100%)',
+            background: 'linear-gradient(180deg, rgba(239, 68, 68, 0.12) 0%, rgba(15, 23, 42, 0.85) 100%)',
             border: '1px solid rgba(239, 68, 68, 0.35)',
             cursor: 'pointer',
             boxShadow: '0 4px 16px rgba(239, 68, 68, 0.08)',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f87171', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <ArrowUpRight size={16} /> 在途應付 (待扣款)
+            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#f87171', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ArrowUpRight size={15} /> 在途應付 (待扣款)
             </span>
             <span style={{ fontSize: '0.68rem', color: '#f87171', background: 'rgba(239, 68, 68, 0.15)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
               🔒 買進交割備款
             </span>
           </div>
-          <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#f87171', margin: '4px 0' }}>
+          <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#f87171', margin: '2px 0', lineHeight: 1.2 }}>
             {currentMarket === 'US'
               ? `-$${(balancesSummary.totalPendingPayablesInTWD / usdToTwdRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
               : `-NT$ ${Math.round(balancesSummary.totalPendingPayablesInTWD).toLocaleString()}`}
           </div>
-          <div style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
             <span>預估交割後淨額: {currentMarket === 'US' ? `$${(balancesSummary.totalProjectedCashInTWD / usdToTwdRate).toFixed(2)}` : `NT$ ${Math.round(balancesSummary.totalProjectedCashInTWD).toLocaleString()}`}</span>
-            <span style={{ color: '#f87171' }}>{isTimelineDrawerOpen ? '▾' : '▸'}</span>
+            <span style={{ color: '#f87171', fontWeight: 600 }}>{isTimelineDrawerOpen ? '▴' : '▾'}</span>
           </div>
         </div>
 
-        {/* 卡片 4: 交易可用購買力 (Buying Power) */}
+        {/* 卡片 4: 交易可用購買力 */}
         <div
           className="glass-card"
           style={{
-            padding: '18px',
+            padding: '16px 18px',
             borderRadius: '14px',
-            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(15, 23, 42, 0.85) 100%)',
+            background: 'linear-gradient(180deg, rgba(59, 130, 246, 0.15) 0%, rgba(15, 23, 42, 0.85) 100%)',
             border: '1px solid rgba(59, 130, 246, 0.4)',
             boxShadow: '0 4px 16px rgba(59, 130, 246, 0.1)',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Zap size={16} /> 交易購買力 (Buying Power)
+            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Zap size={15} /> 交易購買力 (Buying Power)
             </span>
             <span style={{ fontSize: '0.68rem', color: '#60a5fa', background: 'rgba(59, 130, 246, 0.2)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(59, 130, 246, 0.4)' }}>
               ⚡ 賣出立即釋放
             </span>
           </div>
-          <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#3b82f6', margin: '4px 0' }}>
+          <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#38bdf8', margin: '2px 0', lineHeight: 1.2 }}>
             {currentMarket === 'US'
               ? `$${(totalBuyingPowerInTWD / usdToTwdRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
               : `NT$ ${Math.round(totalBuyingPowerInTWD).toLocaleString()}`}
           </div>
-          <div style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
             <span>可用現金 + 賣出在途 - 買進在途</span>
-            <span style={{ color: '#60a5fa' }}>即時可下單額度</span>
+            <span style={{ color: '#38bdf8', fontWeight: 600 }}>即時可下單額度</span>
           </div>
         </div>
       </div>
@@ -850,12 +906,12 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
       {/* 2.1 全域淨資產 (NAV) 與槓桿負債風控列 */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
         {/* 全域淨資產 */}
-        <div className="glass-card" style={{ padding: '12px 18px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(51, 65, 85, 0.6)' }}>
+        <div className="glass-card" style={{ padding: '12px 18px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(15, 23, 42, 0.75)', border: '1px solid var(--border-color)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Landmark size={18} color="#60a5fa" />
             <div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>全域淨資產 (NAV = 股市+現金-借款)</div>
-              <div className="mono" style={{ fontSize: '1.15rem', fontWeight: 700, color: '#f8fafc' }}>
+              <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>全域淨資產 (NAV = 股市+現金-借款)</div>
+              <div className="mono" style={{ fontSize: '1.15rem', fontWeight: 800, color: '#f8fafc' }}>
                 {currentMarket === 'US' ? `$${(leverageMetrics.netAssetValueInTWD / usdToTwdRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `NT$ ${Math.round(leverageMetrics.netAssetValueInTWD).toLocaleString()}`}
               </div>
             </div>
@@ -867,18 +923,18 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
         </div>
 
         {/* 槓桿負債比 LTV */}
-        <div className="glass-card" style={{ padding: '12px 18px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(51, 65, 85, 0.6)' }}>
+        <div className="glass-card" style={{ padding: '12px 18px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(15, 23, 42, 0.75)', border: '1px solid var(--border-color)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Percent size={18} color="#fbbf24" />
             <div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>整體槓桿負債比 (LTV)</div>
-              <div className="mono" style={{ fontSize: '1.15rem', fontWeight: 700, color: leverageMetrics.debtRatioPercent > 50 ? '#ef4444' : leverageMetrics.debtRatioPercent > 30 ? '#f59e0b' : '#10b981' }}>
+              <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>整體槓桿負債比 (LTV)</div>
+              <div className="mono" style={{ fontSize: '1.15rem', fontWeight: 800, color: leverageMetrics.debtRatioPercent > 50 ? '#ef4444' : leverageMetrics.debtRatioPercent > 30 ? '#f59e0b' : '#34d399' }}>
                 {leverageMetrics.debtRatioPercent.toFixed(2)}%
               </div>
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: '6px', background: leverageMetrics.debtRatioPercent > 50 ? 'rgba(239, 68, 68, 0.2)' : leverageMetrics.debtRatioPercent > 30 ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.2)', color: leverageMetrics.debtRatioPercent > 50 ? '#ef4444' : leverageMetrics.debtRatioPercent > 30 ? '#f59e0b' : '#10b981' }}>
+            <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: '6px', background: leverageMetrics.debtRatioPercent > 50 ? 'rgba(239, 68, 68, 0.2)' : leverageMetrics.debtRatioPercent > 30 ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.2)', color: leverageMetrics.debtRatioPercent > 50 ? '#ef4444' : leverageMetrics.debtRatioPercent > 30 ? '#f59e0b' : '#34d399' }}>
               {leverageMetrics.debtRatioPercent <= 30 ? '🟢 槓桿安全' : leverageMetrics.debtRatioPercent <= 50 ? '🟡 槓桿適中' : '🔴 槓桿偏高'}
             </span>
             <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '2px' }}>預估年息 ~NT$ {Math.round(leverageMetrics.estimatedAnnualInterestInTWD).toLocaleString()}</div>
@@ -886,17 +942,17 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
         </div>
       </div>
 
-      {/* 2.2 在途交割時序排程看板 (Settlement Timeline Schedule Drawer - 支援一鍵核銷) */}
+      {/* 2.2 在途交割時序排程看板 */}
       {isTimelineDrawerOpen && (
-        <div className="glass-card" style={{ padding: '18px 20px', borderRadius: '16px', border: '1px solid rgba(245, 158, 11, 0.3)', background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.9) 100%)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+        <div className="glass-card" style={{ padding: '16px 20px', borderRadius: '16px', border: '1px solid rgba(245, 158, 11, 0.35)', background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Clock size={18} color="#fbbf24" />
-              <h3 style={{ fontSize: '0.98rem', fontWeight: 700, margin: 0, color: '#ffffff' }}>
+              <h3 style={{ fontSize: '0.96rem', fontWeight: 700, margin: 0, color: '#ffffff' }}>
                 ⏳ 在途資金交割時序排程 (Settlement Timeline)
               </h3>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.78rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.76rem' }}>
               <span style={{ color: '#34d399' }}>預估入帳: +NT$ {Math.round(pendingTimelineGroup.totalInflowInTWD).toLocaleString()}</span>
               <span style={{ color: '#475569' }}>|</span>
               <span style={{ color: '#f87171' }}>預估扣款: -NT$ {Math.round(pendingTimelineGroup.totalOutflowInTWD).toLocaleString()}</span>
@@ -926,7 +982,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                 .filter((group) => group.items.length > 0)
                 .map((group) => (
                   <div key={group.title} style={{ background: group.bg, border: `1px solid ${group.border}`, borderRadius: '10px', padding: '10px 14px' }}>
-                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: group.color, marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontSize: '0.76rem', fontWeight: 700, color: group.color, marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span>{group.title} ({group.items.length} 筆)</span>
                       <span style={{ fontSize: '0.74rem', color: '#94a3b8', fontWeight: 600 }}>
                         {(() => {
@@ -955,16 +1011,16 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
         </div>
       )}
 
-      {/* 3. 券商交割戶資金狀態網格 (Account Cards Grid) */}
+      {/* 3. 券商交割戶資金狀態網格 */}
       <div className="glass-card" style={{ padding: '20px', borderRadius: '16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Building2 size={18} color="#10b981" />
             <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: '#ffffff' }}>
               🏛️ 各券商交割戶資金狀態 ({scopedAccounts.length} 帳戶)
             </h3>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button
               className="btn btn-primary btn-sm"
               onClick={() => {
@@ -979,8 +1035,8 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
               onClick={handleSyncWithTrades}
               title="自動比對股票交易與股息紀錄，依台股(T+2)/美股(T+1)補齊交割款流水"
             >
-              <RefreshCw size={14} color="#60a5fa" />
-              自動對齊交割款 (T+2/T+1)
+              <RefreshCw size={13} color="#60a5fa" />
+              <span>自動對齊交割款 (T+2/T+1)</span>
             </button>
           </div>
         </div>
@@ -1000,9 +1056,10 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
             return (
               <div
                 key={acc.id}
+                className="glass-card"
                 style={{
-                  background: 'rgba(15, 23, 42, 0.65)',
-                  border: '1px solid rgba(51, 65, 85, 0.6)',
+                  background: 'rgba(15, 23, 42, 0.85)',
+                  border: '1px solid var(--border-color)',
                   borderRadius: '14px',
                   padding: '16px',
                   display: 'flex',
@@ -1016,13 +1073,13 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <div
                         style={{
-                          width: '12px',
-                          height: '12px',
+                          width: '10px',
+                          height: '10px',
                           borderRadius: '50%',
                           backgroundColor: acc.color || (isTW ? '#10b981' : '#3b82f6'),
                         }}
                       />
-                      <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#ffffff' }}>{acc.name}</span>
+                      <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#ffffff' }}>{acc.name}</span>
                     </div>
                     <span className={isTW ? 'badge badge-tw' : 'badge badge-us'}>
                       {isTW ? '台幣 (TWD) · T+2 交割' : '美金 (USD) · T+1 交割'}
@@ -1032,7 +1089,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                   {/* 帳戶結餘 */}
                   <div style={{ margin: '8px 0' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
-                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>可用現金餘額 (已交割)</span>
+                      <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>可用現金餘額 (已交割)</span>
                       {Boolean(summary.pendingSettlementAmount) && (
                         <span style={{ fontSize: '0.68rem', color: '#fbbf24', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '1px 6px', borderRadius: '4px' }}>
                           在途待交割: {summary.pendingSettlementAmount > 0 ? '+' : ''}{isTW ? `NT$ ${Math.round(summary.pendingSettlementAmount).toLocaleString()}` : `$${summary.pendingSettlementAmount.toFixed(2)}`}
@@ -1045,6 +1102,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                         fontSize: '1.45rem',
                         fontWeight: 800,
                         color: summary.balance < 0 ? '#ef4444' : '#ffffff',
+                        lineHeight: 1.2,
                       }}
                     >
                       {isTW
@@ -1083,7 +1141,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                   <button
                     className="btn btn-primary btn-sm"
                     onClick={() => handleOpenReconcile(acc)}
-                    style={{ flex: 1.2, justifyContent: 'center', background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)' }}
+                    style={{ flex: 1.2, justifyContent: 'center', background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)', fontWeight: 700 }}
                     title="輸入目前交割銀行帳戶的真實可用現金，系統將自動回推並補登初始入金！"
                   >
                     ✏️ 校正/輸入真實現金
@@ -1115,23 +1173,23 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
         </div>
       </div>
 
-      {/* 4. 股票質押借款與風控看板 (Pledge & Loans Panel - 照片一三大規費強化) */}
+      {/* 4. 股票質押借款與風控看板 */}
       <div className="glass-card" style={{ padding: '20px', borderRadius: '16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ShieldAlert size={18} color="#a855f7" />
+            <ShieldAlert size={18} color="#c084fc" />
             <div>
               <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: '#ffffff' }}>
-                🛡️ {currentMarket === 'US' ? '美股借貸項目' : currentMarket === 'TW' ? '台股股票質押與借款' : '全域股票質押借款與槓桿風控'} ({scopedLoans.length} 筆借貸)
+                🛡️ {currentMarket === 'US' ? '美股進行中借貸' : currentMarket === 'TW' ? '台股進行中股票質押與借款' : '全域股票質押借款與槓桿風控'} ({activeLoans.length} 筆進行中)
               </h3>
-              <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '2px 0 0 0' }}>
-                動態試算擔保維持率、截至今日應計利息、本利和應還款金額與設質規費
+              <p style={{ fontSize: '0.74rem', color: '#94a3b8', margin: '2px 0 0 0' }}>
+                動態試算擔保維持率、截至今日應計利息、本利和應還款金額與設質規費 (僅監控未還清負債)
               </p>
             </div>
           </div>
           <button
             className="btn btn-primary btn-sm"
-            style={{ background: 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)', boxShadow: '0 4px 12px rgba(168, 85, 247, 0.3)' }}
+            style={{ background: 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)', boxShadow: '0 4px 12px rgba(168, 85, 247, 0.3)', fontWeight: 700 }}
             onClick={() => {
               setEditingLoan(null);
               setIsLoanModalOpen(true);
@@ -1141,19 +1199,60 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
           </button>
         </div>
 
-        {scopedLoans.length === 0 ? (
-          <div style={{ padding: '32px', textAlign: 'center', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '12px', border: '1px dashed rgba(51, 65, 85, 0.6)' }}>
-            <ShieldCheck size={32} color="#64748b" style={{ margin: '0 auto 8px auto' }} />
-            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#cbd5e1' }}>
-              {currentMarket === 'US' ? '美股市場目前無任何借貸或融資負債' : '目前尚無借貸或股票質押紀錄'}
+        {/* 缺漏撥款入帳自動平帳提示 */}
+        {missingDisbursementLoans.length > 0 && (
+          <div
+            style={{
+              padding: '12px 16px',
+              borderRadius: '12px',
+              background: 'rgba(234, 179, 8, 0.12)',
+              border: '1px solid rgba(234, 179, 8, 0.4)',
+              marginBottom: '16px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '10px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Sparkles size={18} color="#fbbf24" />
+              <div>
+                <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#fef08a' }}>
+                  【帳本平帳提示】偵測到 {missingDisbursementLoans.length} 筆已還款之借貸（含 2026-07-28 股票質押）缺少當初借款入帳流水！
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#cbd5e1', marginTop: '2px' }}>
+                  因當初未建立撥款現金流入但已扣減還款，導致可用現金帳戶虛減。點擊右側按鈕可一鍵自動補登借款起日之撥款入帳流水。
+                </div>
+              </div>
             </div>
-            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>
-              若您有使用股票質押、券商融資或信用貸款，可點擊上方按鈕建立項目以監控即時維持率。
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={handleReconcileMissingDisbursements}
+              style={{ background: 'linear-gradient(135deg, #eab308 0%, #ca8a04 100%)', color: '#000000', fontWeight: 800, border: 'none', boxShadow: '0 2px 8px rgba(234, 179, 8, 0.3)' }}
+            >
+              ⚡ 一鍵自動補登撥款入帳 (平帳)
+            </button>
+          </div>
+        )}
+
+        {activeLoans.length === 0 ? (
+          <div style={{ padding: '32px', textAlign: 'center', background: 'rgba(16, 185, 129, 0.08)', borderRadius: '12px', border: '1px dashed rgba(16, 185, 129, 0.35)' }}>
+            <ShieldCheck size={32} color="#34d399" style={{ margin: '0 auto 8px auto' }} />
+            <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#6ee7b7' }}>
+              {closedLoans.length > 0
+                ? '目前無未結清之借貸或股票質押負債 (所有借款已全額歸還)'
+                : currentMarket === 'US' ? '美股市場目前無任何借貸或融資負債' : '目前尚無借貸或股票質押紀錄'}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px' }}>
+              {closedLoans.length > 0
+                ? '所有借款本金已清償，槓桿已解除，維持率安全。歷史結清紀錄可於下方「歷史借貸與質押已結清紀錄」展開查閱。'
+                : '若您有使用股票質押、券商融資或信用貸款，可點擊上方按鈕建立項目以監控即時維持率。'}
             </div>
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '16px' }}>
-            {scopedLoans.map((loan) => {
+            {activeLoans.map((loan) => {
               const ratioResult = calculatePledgeMaintenanceRatio(loan, quotes);
               const interestMetrics = calculateLoanInterestAndPayoff(loan);
               const isPledge = loan.loanType === 'PLEDGE';
@@ -1163,8 +1262,9 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
               return (
                 <div
                   key={loan.id}
+                  className="glass-card"
                   style={{
-                    background: 'rgba(15, 23, 42, 0.7)',
+                    background: 'rgba(15, 23, 42, 0.85)',
                     border: '1px solid rgba(168, 85, 247, 0.35)',
                     borderRadius: '14px',
                     padding: '16px',
@@ -1177,12 +1277,12 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '1rem', fontWeight: 700, color: '#ffffff' }}>{loan.name}</span>
+                        <span style={{ fontSize: '1rem', fontWeight: 800, color: '#ffffff' }}>{loan.name}</span>
                         <span style={{ padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600, background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc' }}>
                           {loan.loanType === 'PLEDGE' ? '股票質押' : loan.loanType === 'MARGIN' ? '券商融資' : '信用貸款'}
                         </span>
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>
+                      <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '2px' }}>
                         年利率: <b style={{ color: '#f8fafc' }}>{loan.annualInterestRate || (loan.interestRate ? loan.interestRate * 100 : 0)}%</b> · 起日: {loan.startDate || loan.date || '-'}
                       </div>
                     </div>
@@ -1211,15 +1311,15 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                   {/* 1. 未還借款本金 */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', paddingTop: '6px', borderTop: '1px solid rgba(51, 65, 85, 0.4)' }}>
                     <span style={{ color: '#94a3b8' }}>未還借款本金:</span>
-                    <span className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: '#c084fc' }}>
+                    <span className="mono" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#c084fc' }}>
                       {isTW ? `NT$ ${Math.round(loan.principal).toLocaleString()}` : `$${loan.principal.toLocaleString()}`}
                     </span>
                   </div>
 
-                  {/* 2. 當前應返還利息、設質三大規費 與 應還款金額 (整併於黑色卡片內) */}
+                  {/* 2. 當前應返還利息、設質三大規費 與 應還款金額 */}
                   <div
                     style={{
-                      background: 'rgba(3, 7, 18, 0.55)',
+                      background: 'rgba(3, 7, 18, 0.65)',
                       padding: '12px 14px',
                       borderRadius: '10px',
                       border: '1px solid rgba(168, 85, 247, 0.25)',
@@ -1261,7 +1361,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                       <span style={{ color: '#f8fafc', fontWeight: 700 }}>
                         💳 當前應還款總金額 (本利和+規費):
                       </span>
-                      <span className="mono" style={{ fontSize: '1.1rem', fontWeight: 800, color: '#38bdf8' }}>
+                      <span className="mono" style={{ fontSize: '1.15rem', fontWeight: 800, color: '#38bdf8' }}>
                         {isTW ? `NT$ ${interestMetrics.totalPayoffAmount.toLocaleString()}` : `$${interestMetrics.totalPayoffAmount.toLocaleString()}`}
                       </span>
                     </div>
@@ -1286,13 +1386,15 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                             borderRadius: '4px',
                             fontWeight: 700,
                             background: ratioResult.status === 'DANGER' ? 'rgba(239, 68, 68, 0.2)' : ratioResult.status === 'WARNING' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.2)',
-                            color: ratioResult.status === 'DANGER' ? '#ef4444' : ratioResult.status === 'WARNING' ? '#f59e0b' : '#10b981',
+                            color: ratioResult.status === 'DANGER' ? '#ef4444' : ratioResult.status === 'WARNING' ? '#f59e0b' : '#34d399',
                             border: `1px solid ${ratioResult.status === 'DANGER' ? 'rgba(239, 68, 68, 0.4)' : ratioResult.status === 'WARNING' ? 'rgba(245, 158, 11, 0.4)' : 'rgba(16, 185, 129, 0.4)'}`,
                           }}
                         >
-                          {ratioResult.maintenanceRatio.toFixed(1)}% (
-                          {ratioResult.status === 'DANGER' ? '🔴 追繳斷頭' : ratioResult.status === 'WARNING' ? '🟡 警戒關注' : '🟢 安全'}
-                          )
+                          {ratioResult.maintenanceRatio === Infinity
+                            ? '無負債 (安全)'
+                            : `${ratioResult.maintenanceRatio.toFixed(1)}% (${
+                                ratioResult.status === 'DANGER' ? '🔴 追繳斷頭' : ratioResult.status === 'WARNING' ? '🟡 警戒關注' : '🟢 安全'
+                              })`}
                         </span>
                       </div>
 
@@ -1339,7 +1441,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                     <button
                       className="btn btn-primary btn-sm"
                       onClick={() => handleOpenPayLoan(loan, 'FULL_PAYOFF')}
-                      style={{ flex: 1.2, justifyContent: 'center', background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)', color: '#ffffff', fontSize: '0.75rem', fontWeight: 700, padding: '4px 6px', border: 'none' }}
+                      style={{ flex: 1.2, justifyContent: 'center', background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)', color: '#ffffff', fontSize: '0.75rem', fontWeight: 800, padding: '4px 6px', border: 'none' }}
                     >
                       ⚡ 一鍵結清
                     </button>
@@ -1349,9 +1451,129 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
             })}
           </div>
         )}
+
+        {/* 5. 歷史借貸與質押已結清紀錄 (可折疊清單) */}
+        {closedLoans.length > 0 && (
+          <div style={{ marginTop: '20px', borderTop: '1px solid rgba(51, 65, 85, 0.5)', paddingTop: '16px' }}>
+            <div
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', userSelect: 'none' }}
+              onClick={() => setIsClosedLoansExpanded(!isClosedLoansExpanded)}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Receipt size={16} color="#34d399" />
+                <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#e2e8f0' }}>
+                  📜 歷史借貸與質押已結清紀錄 ({closedLoans.length} 筆)
+                </span>
+                <span style={{ fontSize: '0.7rem', color: '#10b981', background: 'rgba(16, 185, 129, 0.15)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.3)', fontWeight: 600 }}>
+                  本金皆已清償歸零
+                </span>
+              </div>
+              <span style={{ fontSize: '0.76rem', color: '#94a3b8' }}>
+                {isClosedLoansExpanded ? '收合明細 ▲' : '展開檢視歷史明細 ▼'}
+              </span>
+            </div>
+
+            {isClosedLoansExpanded && (
+              <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {closedLoans.map((loan) => {
+                  const summary = calculateLoanSettledSummary(loan, transactions);
+                  const isUSD = loan.currency === 'USD';
+                  const sym = isUSD ? '$' : 'NT$';
+
+                  return (
+                    <div
+                      key={loan.id}
+                      style={{
+                        padding: '14px 16px',
+                        borderRadius: '10px',
+                        background: 'rgba(15, 23, 42, 0.65)',
+                        border: '1px solid rgba(51, 65, 85, 0.6)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: '12px',
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: '280px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.94rem' }}>{loan.name}</span>
+                          <span style={{ fontSize: '0.7rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', fontWeight: 600 }}>
+                            ✅ 已全額結清
+                          </span>
+                          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                            {loan.loanType === 'PLEDGE' ? '股票質押' : loan.loanType === 'MARGIN' ? '券商融資' : '信用貸款'}
+                          </span>
+                        </div>
+
+                        {/* 借款時態與總借款成本 */}
+                        <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '6px', display: 'flex', gap: '14px', flexWrap: 'wrap', alignItems: 'center' }}>
+                          <span>借款起日: <b style={{ color: '#cbd5e1' }}>{loan.startDate || loan.date || '-'}</b></span>
+                          <span>結清還款日: <b style={{ color: '#34d399' }}>{summary.payoffDate}</b> <span style={{ color: '#64748b' }}>(歷時 {summary.borrowDays} 天)</span></span>
+                          <span>年利率: <b style={{ color: '#cbd5e1' }}>{loan.annualInterestRate || (loan.interestRate ? loan.interestRate * 100 : 0)}%</b></span>
+                          <span>初始借款: <b style={{ color: '#c084fc' }}>{sym} {Math.round(loan.initialPrincipal || loan.principal).toLocaleString()}</b></span>
+                          <span>總借貸支出成本: <b style={{ color: '#f59e0b', fontSize: '0.8rem' }}>{sym} {summary.totalBorrowingCost.toLocaleString()}</b></span>
+                        </div>
+
+                        {/* 官方標準規費與利息明細膠囊 */}
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.7rem', color: '#64748b' }}>已付費用明細:</span>
+                          <span style={{ fontSize: '0.68rem', padding: '2px 8px', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.25)', borderRadius: '4px', color: '#fbbf24' }}>
+                            💰 {isUSD ? '融資利息' : '已付利息'}: <b className="mono">{sym} {summary.paidInterest.toLocaleString()}</b>
+                          </span>
+                          <span style={{ fontSize: '0.68rem', padding: '2px 8px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: '4px', color: '#7dd3fc' }}>
+                            🏛️ 已付設質費: <b className="mono">{sym} {summary.paidPledgeRegistryFee.toLocaleString()}</b>
+                          </span>
+                          <span style={{ fontSize: '0.68rem', padding: '2px 8px', background: 'rgba(147, 51, 234, 0.1)', border: '1px solid rgba(147, 51, 234, 0.2)', borderRadius: '4px', color: '#c084fc' }}>
+                            📄 已付撥券費: <b className="mono">{sym} {summary.paidTransferFee.toLocaleString()}</b>
+                          </span>
+                          <span style={{ fontSize: '0.68rem', padding: '2px 8px', background: 'rgba(100, 116, 139, 0.12)', border: '1px solid rgba(100, 116, 139, 0.2)', borderRadius: '4px', color: '#94a3b8' }}>
+                            🏷️ 已付手續費: <b className="mono">{sym} {summary.paidHandlingFee.toLocaleString()}</b>
+                          </span>
+                        </div>
+
+                        {/* 擔保品清單 */}
+                        {loan.pledgedCollateral && loan.pledgedCollateral.length > 0 && (
+                          <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.7rem', color: '#64748b' }}>原質押擔保品:</span>
+                            {loan.pledgedCollateral.map((c, idx) => (
+                              <span key={idx} className="mono" style={{ fontSize: '0.68rem', padding: '1px 6px', background: 'rgba(30, 41, 59, 0.8)', borderRadius: '4px', color: '#cbd5e1' }}>
+                                {c.symbol} × {c.shares.toLocaleString()} 股
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          setEditingLoan(loan);
+                          setIsLoanModalOpen(true);
+                        }}
+                        style={{ padding: '4px 8px', fontSize: '0.72rem' }}
+                      >
+                        <Edit2 size={12} /> 編輯
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => handleDeleteLoan(loan.id)}
+                        style={{ padding: '4px 8px', fontSize: '0.72rem', color: '#f87171' }}
+                      >
+                        <Trash2 size={12} /> 刪除
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* 5. 全量現金流水帳本表格 (Transactions Ledger Table - 依市場過濾) */}
+      {/* 5. 全量現金流水帳本表格 */}
       <div className="glass-card" style={{ padding: '20px', borderRadius: '16px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1362,12 +1584,12 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
           </div>
 
           {/* 三態快速切換膠囊按鈕組 */}
-          <div style={{ display: 'flex', gap: '6px', background: 'rgba(30, 41, 59, 0.6)', padding: '3px', borderRadius: '10px' }}>
+          <div style={{ display: 'flex', gap: '4px', background: 'rgba(19, 29, 49, 0.85)', padding: '3px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
             <button
               type="button"
               className={`btn btn-sm ${selectedSettlementFilter === 'ALL' ? 'btn-primary' : 'btn-ghost'}`}
               onClick={() => setSelectedSettlementFilter('ALL')}
-              style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: '7px' }}
+              style={{ fontSize: '0.74rem', padding: '4px 10px', borderRadius: '7px' }}
             >
               全部 ({scopedTransactions.length})
             </button>
@@ -1375,7 +1597,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
               type="button"
               className={`btn btn-sm ${selectedSettlementFilter === 'SETTLED' ? 'btn-primary' : 'btn-ghost'}`}
               onClick={() => setSelectedSettlementFilter('SETTLED')}
-              style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: '7px', color: selectedSettlementFilter === 'SETTLED' ? '#fff' : '#34d399' }}
+              style={{ fontSize: '0.74rem', padding: '4px 10px', borderRadius: '7px', color: selectedSettlementFilter === 'SETTLED' ? '#fff' : '#34d399' }}
             >
               ✅ 已交割 ({scopedTransactions.filter((t) => t.settlementStatus !== 'PENDING').length})
             </button>
@@ -1383,7 +1605,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
               type="button"
               className={`btn btn-sm ${selectedSettlementFilter === 'PENDING' ? 'btn-primary' : 'btn-ghost'}`}
               onClick={() => setSelectedSettlementFilter('PENDING')}
-              style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: '7px', color: selectedSettlementFilter === 'PENDING' ? '#fff' : '#fbbf24' }}
+              style={{ fontSize: '0.74rem', padding: '4px 10px', borderRadius: '7px', color: selectedSettlementFilter === 'PENDING' ? '#fff' : '#fbbf24' }}
             >
               ⏳ 在途待交割 ({scopedTransactions.filter((t) => t.settlementStatus === 'PENDING' || (Boolean(t.settlementDate) && t.settlementDate! > new Date().toISOString().split('T')[0])).length})
             </button>
@@ -1394,7 +1616,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
             <select
               value={selectedAccountId}
               onChange={(e) => setSelectedAccountId(e.target.value)}
-              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '6px 10px', fontSize: '0.78rem', color: '#f8fafc', outline: 'none' }}
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '6px 10px', fontSize: '0.76rem', color: '#f8fafc', outline: 'none' }}
             >
               <option value="ALL">全部{currentMarket === 'US' ? '美股' : currentMarket === 'TW' ? '台股' : ''}券商帳戶</option>
               {scopedAccounts.map((acc) => (
@@ -1408,7 +1630,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
             <select
               value={selectedCategoryFilter}
               onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '6px 10px', fontSize: '0.78rem', color: '#f8fafc', outline: 'none' }}
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '6px 10px', fontSize: '0.76rem', color: '#f8fafc', outline: 'none' }}
             >
               <option value="ALL">全部金流類別</option>
               <option value="DEPOSIT_WITHDRAWAL">外部出入金</option>
@@ -1427,7 +1649,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                 placeholder="搜尋日期、備註..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '6px 10px 6px 28px', fontSize: '0.78rem', color: '#f8fafc', outline: 'none', width: '150px' }}
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '6px 10px 6px 28px', fontSize: '0.76rem', color: '#f8fafc', outline: 'none', width: '150px' }}
               />
             </div>
 
@@ -1445,7 +1667,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8rem' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-color)', background: 'rgba(15, 23, 42, 0.4)', color: '#94a3b8' }}>
+              <tr style={{ borderBottom: '1px solid var(--border-color)', background: 'rgba(19, 29, 49, 0.4)', color: '#94a3b8' }}>
                 <th style={{ padding: '10px 14px' }}>成交日 ➔ 預計交割日</th>
                 <th style={{ padding: '10px 14px' }}>券商帳戶</th>
                 <th style={{ padding: '10px 14px' }}>金流類別</th>
@@ -1506,7 +1728,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                         style={{
                           padding: '10px 14px',
                           textAlign: 'right',
-                          fontWeight: 700,
+                          fontWeight: 800,
                           color: isPositive ? '#34d399' : '#f87171',
                         }}
                       >
@@ -1551,7 +1773,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
         </div>
       </div>
 
-      {/* 餘額校正彈窗 (Reconcile Balance Modal) */}
+      {/* 餘額校正彈窗 */}
       {reconcileTarget && (
         <div className="modal-overlay" onClick={() => setReconcileTarget(null)}>
           <div
@@ -1641,7 +1863,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }}
+                  style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)', fontWeight: 700 }}
                 >
                   確認校正
                 </button>
@@ -1707,7 +1929,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                 {isFullPayoff && (
                   <div
                     style={{
-                      background: 'rgba(3, 7, 18, 0.6)',
+                      background: 'rgba(3, 7, 18, 0.65)',
                       border: '1px solid rgba(56, 189, 248, 0.3)',
                       borderRadius: '10px',
                       padding: '12px 14px',
@@ -1766,7 +1988,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                   <button
                     type="submit"
                     className="btn btn-primary"
-                    style={{ background: isFullPayoff ? 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)' : 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)', boxShadow: isFullPayoff ? '0 4px 12px rgba(14, 165, 233, 0.3)' : '0 4px 12px rgba(168, 85, 247, 0.3)', border: 'none' }}
+                    style={{ background: isFullPayoff ? 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)' : 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)', boxShadow: isFullPayoff ? '0 4px 12px rgba(14, 165, 233, 0.3)' : '0 4px 12px rgba(168, 85, 247, 0.3)', border: 'none', fontWeight: 700 }}
                   >
                     {isFullPayoff ? '確認一鍵結清' : '確認扣款'}
                   </button>

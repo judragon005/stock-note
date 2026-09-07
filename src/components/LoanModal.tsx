@@ -15,7 +15,7 @@ interface LoanModalProps {
   accounts: BrokerAccount[];
   holdings: HoldingPosition[];
   initialLoan?: LoanRecord | null;
-  onSaveLoan: (loan: LoanRecord, shouldRecordFee?: boolean) => void;
+  onSaveLoan: (loan: LoanRecord, shouldRecordFee?: boolean, shouldRecordDisbursement?: boolean) => void;
 }
 
 export const LoanModal: React.FC<LoanModalProps> = ({
@@ -43,6 +43,8 @@ export const LoanModal: React.FC<LoanModalProps> = ({
   const [pledgeRegistryFee, setPledgeRegistryFee] = useState<string>('100'); // 設質費
   const [handlingFee, setHandlingFee] = useState<string>('0'); // 開辦手續費
   const [autoRecordFee, setAutoRecordFee] = useState<boolean>(true);
+  const [autoRecordDisbursement, setAutoRecordDisbursement] = useState<boolean>(true);
+  const [closedDate, setClosedDate] = useState<string>('');
   const [note, setNote] = useState('');
 
   useEffect(() => {
@@ -70,6 +72,8 @@ export const LoanModal: React.FC<LoanModalProps> = ({
       setPledgeRegistryFee((initialLoan.pledgeRegistryFee !== undefined ? initialLoan.pledgeRegistryFee : 100).toString());
       setHandlingFee((initialLoan.handlingFee !== undefined ? initialLoan.handlingFee : 0).toString());
       setAutoRecordFee(false);
+      setAutoRecordDisbursement(false);
+      setClosedDate(initialLoan.closedDate || '');
       setNote(initialLoan.note || '');
     } else {
       setName('');
@@ -87,6 +91,8 @@ export const LoanModal: React.FC<LoanModalProps> = ({
       setPledgeRegistryFee('100');
       setHandlingFee('0');
       setAutoRecordFee(true);
+      setAutoRecordDisbursement(true);
+      setClosedDate('');
       setNote('');
     }
   }, [initialLoan, isOpen, accounts]);
@@ -160,13 +166,14 @@ export const LoanModal: React.FC<LoanModalProps> = ({
       pledgeRegistryFee: loanType === 'PLEDGE' ? numPledgeRegistryFee : undefined,
       handlingFee: loanType === 'PLEDGE' ? numHandlingFee : undefined,
       pledgeFee: loanType === 'PLEDGE' ? numPledgeFee : undefined,
+      closedDate: (numPrincipal === 0 && closedDate.trim()) ? closedDate.trim() : (initialLoan?.closedDate || undefined),
       warningRatio: parseFloat(warningRatio) || 130,
       safeRatio: parseFloat(safeRatio) || 166,
       note: note.trim() || undefined,
       createdAt: initialLoan ? initialLoan.createdAt : Date.now(),
     };
 
-    onSaveLoan(loan, !initialLoan && autoRecordFee && numPledgeFee > 0);
+    onSaveLoan(loan, !initialLoan && autoRecordFee && numPledgeFee > 0, !initialLoan && autoRecordDisbursement);
     onClose();
   };
 
@@ -318,6 +325,45 @@ export const LoanModal: React.FC<LoanModalProps> = ({
               />
             </div>
           </div>
+
+          {/* 若本金為 0 (已結清借貸)，提供結清還款日編輯 */}
+          {parseFloat(principal) === 0 && (
+            <div style={{ padding: '8px 12px', borderRadius: '8px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#34d399', marginBottom: '4px' }}>
+                ✅ 結清還款日 / 終止日 (已結清借貸)
+              </label>
+              <input
+                type="date"
+                value={closedDate}
+                onChange={(e) => setClosedDate(e.target.value)}
+                className="mono"
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: 'var(--bg-input)', border: '1px solid rgba(16, 185, 129, 0.4)', color: '#34d399', fontSize: '0.85rem', outline: 'none' }}
+              />
+              <span style={{ display: 'block', fontSize: '0.68rem', color: '#94a3b8', marginTop: '4px' }}>
+                此借貸未還本金為 0，設定結清還款日後將精確計算借款歷時天數與總借貸成本。
+              </span>
+            </div>
+          )}
+
+          {/* 自動於關聯交割戶記錄撥款入帳 */}
+          {!initialLoan && (
+            <div style={{ padding: '8px 12px', borderRadius: '8px', background: 'rgba(14, 165, 233, 0.1)', border: '1px solid rgba(14, 165, 233, 0.3)' }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.75rem', color: '#7dd3fc', cursor: 'pointer', margin: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={autoRecordDisbursement}
+                  onChange={(e) => setAutoRecordDisbursement(e.target.checked)}
+                  style={{ accentColor: '#0ea5e9', marginTop: '2px' }}
+                />
+                <span>
+                  🏦 建立時自動於關聯帳戶記錄<b>借款撥款入帳 (LOAN_DISBURSEMENT)</b>
+                  <span style={{ display: 'block', fontSize: '0.68rem', color: '#94a3b8', marginTop: '2px' }}>
+                    入帳金額為 +{currency === 'USD' ? '$' : 'NT$'} {parseFloat(principal) || 0}，日期對齊借款起日，確保現金帳本平衡。
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
 
           {/* 股票質押專屬：質押擔保品明細、三大規費與警戒線 */}
           {loanType === 'PLEDGE' && (

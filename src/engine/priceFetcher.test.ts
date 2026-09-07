@@ -7,6 +7,7 @@ import {
   fetchBatchStockQuotes,
   parseYahooExchangeRateResponse,
   fetchExchangeRate,
+  fetchWithCORSProxy,
 } from './priceFetcher';
 import { MarketType } from '../types/stock';
 
@@ -271,6 +272,33 @@ describe('PriceFetcher Engine (TDD Seam)', () => {
       const mockProxy = vi.fn().mockRejectedValue(new Error('Proxy Timeout'));
       const quote = await fetchExchangeRate(mockProxy);
       expect(quote).toBeNull();
+    });
+  });
+
+  describe('8. fetchWithCORSProxy (本地代理路由轉換)', () => {
+    it('在瀏覽器環境下應將 www.twse.com.tw 映射至 /api/twse-www 代理路由', async () => {
+      const originalWindow = (globalThis as any).window;
+      const originalFetch = globalThis.fetch;
+
+      try {
+        // 模擬瀏覽器環境
+        (globalThis as any).window = {};
+        const mockFetch = vi.fn().mockResolvedValue({
+          ok: true,
+          text: () => Promise.resolve('{"stat":"OK"}'),
+        });
+        globalThis.fetch = mockFetch;
+
+        const res = await fetchWithCORSProxy('https://www.twse.com.tw/rwd/zh/fund/T86?response=json');
+        expect(res).toEqual({ stat: 'OK' });
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining('/api/twse-www/rwd/zh/fund/T86'),
+          expect.any(Object)
+        );
+      } finally {
+        (globalThis as any).window = originalWindow;
+        globalThis.fetch = originalFetch;
+      }
     });
   });
 });

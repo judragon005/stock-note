@@ -7,6 +7,7 @@ import {
   LoanRecord,
   PriceQuote,
   Currency,
+  SettledLoanSummary,
 } from '../types/stock';
 import { bankersRound } from '../utils/formatters';
 import { isBusinessDay } from './holidayCalendar';
@@ -567,7 +568,18 @@ export function calculatePledgeMaintenanceRatio(
   }
 
   const principal = loan.principal || 0;
-  const maintenanceRatio = principal > 0 ? (collateralMarketValue / principal) * 100 : 0;
+  if (principal <= 0) {
+    return {
+      loanId: loan.id,
+      collateralMarketValue,
+      principal: 0,
+      maintenanceRatio: Infinity,
+      status: 'SAFE',
+      isMarginCall: false,
+    };
+  }
+
+  const maintenanceRatio = (collateralMarketValue / principal) * 100;
 
   const warningRatio = loan.warningRatio ?? 130;
   const safeRatio = loan.safeRatio ?? 166;
@@ -729,7 +741,16 @@ export function calculateLoanInterestAndPayoff(loan: LoanRecord, asOfDate?: stri
   const daysElapsed = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
   const rate = (loan.annualInterestRate || (loan.interestRate ? loan.interestRate * 100 : 0)) / 100;
-  const principal = loan.principal;
+  const principal = loan.principal || 0;
+  if (principal <= 0) {
+    return {
+      daysElapsed: 0,
+      accruedInterest: 0,
+      monthlyEstimatedInterest: 0,
+      pledgeFees: 0,
+      totalPayoffAmount: 0,
+    };
+  }
 
   const accruedInterest = Math.round(principal * (rate / 365) * daysElapsed);
   const monthlyEstimatedInterest = Math.round(principal * (rate / 12));
@@ -1088,4 +1109,134 @@ export function aggregateInterestIncomeDetails(
     interestItems,
   };
 }
+
+/**
+ * 建立借貸/股票質押成立時的現金帳撥款入帳金流 (LOAN_DISBURSEMENT)
+ */
+export function createLoanDisbursementTransaction(
+  loan: LoanRecord,
+  targetAccountId?: string
+): CashTransaction {
+  const now = Date.now();
+  const dateStr = loan.startDate || loan.date || new Date().toISOString().split('T')[0];
+  const accId = targetAccountId || loan.accountId || '';
+
+  return {
+    id: `tx-disburse-${loan.id}-${now}`,
+    accountId: accId,
+    currency: loan.currency || 'TWD',
+    type: 'LOAN_DISBURSEMENT',
+    category: 'LOAN_DISBURSEMENT',
+    amount: Math.abs(loan.principal),
+    date: dateStr,
+    relatedLoanId: loan.id,
+    note: `質押借款撥款入帳: ${loan.name}`,
+    createdAt: now,
+  };
+}
+
+/**
+ * 依據已結清借貸與現金帳本流水，精準計算已付利息、各項法定規費、結清還款日與總借貸成本
+ */
+export function calculateLoanSettledSummary(
+  loan: LoanRecord,
+  transactions: CashTransaction[] = []
+): SettledLoanSummary {
+  const relatedTxs = transactions.filter((t) => t.relatedLoanId === loan.id);
+  const isUSD = loan.currency === 'USD';
+
+  // 1. 解析結清還款日 (Payoff Date)
+  let payoffDate = loan.closedDate;
+  if (!payoffDate) {
+    const repayTxs = relatedTxs.filter(
+      (t) => t.type === 'LOAN_REPAYMENT' || t.category === 'LOAN_REPAYMENT'
+    );
+    if (repayTxs.length > 0) {
+      const sorted = [...repayTxs].sort((a, b) => b.date.localeCompare(a.date));
+      payoffDate = sorted[0].date;
+    } else {
+      payoffDate = loan.maturityDate || loan.startDate || loan.date || new Date().toISOString().split('T')[0];
+    }
+  }
+
+  // 2. 計算借款天數 (Borrow Days)
+  const startDateStr = loan.startDate || loan.date || payoffDate;
+  const dStart = new Date(startDateStr);
+  const dEnd = new Date(payoffDate);
+  const diffMs = Math.max(0, dEnd.getTime() - dStart.getTime());
+  const borrowDays = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+
+  // 3. 聚合利息 (Paid Interest)
+  const interestTxs = relatedTxs.filter(
+    (t) => t.type === 'FINANCING_FEE' || t.category === 'FINANCING_FEE'
+  );
+  let paidInterest = 0;
+  if (interestTxs.length > 0) {
+    paidInterest = interestTxs.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  } else {
+    const principal = loan.initialPrincipal || loan.principal || 0;
+    const rate = (loan.annualInterestRate || (loan.interestRate ? loan.interestRate * 100 : 0)) / 100;
+    paidInterest = Math.round(principal * (rate / 365) * borrowDays);
+  }
+
+  // 4. 聚合三大規費 (設質登記費、集保撥券費、開辦手續費)
+  const feeTxs = relatedTxs.filter(
+    (t) => t.type === 'WIRE_FEE' || t.category === 'WIRE_FEE' || t.type === 'FEE'
+  );
+
+  let paidPledgeRegistryFee = 0;
+  let paidTransferFee = 0;
+  let paidHandlingFee = 0;
+
+  // 檢查借貸本體是否已具備明確的三大規費明細設定 (SSOT)
+  const hasSpecificRegisteredFees =
+    loan.transferFee !== undefined ||
+    loan.pledgeRegistryFee !== undefined ||
+    loan.handlingFee !== undefined;
+
+  if (hasSpecificRegisteredFees) {
+    // 嚴格以登錄明細為準：明確為 0 即為 0，絕不被舊 pledgeFee 或未拆分流水污染
+    paidTransferFee = loan.transferFee ?? 0;
+    paidPledgeRegistryFee = loan.pledgeRegistryFee ?? 0;
+    paidHandlingFee = loan.handlingFee ?? 0;
+  } else if (feeTxs.length > 0) {
+    for (const tx of feeTxs) {
+      const note = tx.note || '';
+      const amt = Math.abs(tx.amount);
+      if (note.includes('撥券') || note.includes('設質') || note.includes('手續費')) {
+        const mTransfer = note.match(/撥券\s*\$?([0-9.]+)/);
+        const mRegistry = note.match(/設質\s*\$?([0-9.]+)/);
+        const mHandling = note.match(/手續費\s*\$?([0-9.]+)/);
+        if (mTransfer || mRegistry || mHandling) {
+          if (mTransfer) paidTransferFee += parseFloat(mTransfer[1]) || 0;
+          if (mRegistry) paidPledgeRegistryFee += parseFloat(mRegistry[1]) || 0;
+          if (mHandling) paidHandlingFee += parseFloat(mHandling[1]) || 0;
+          continue;
+        }
+      }
+      paidPledgeRegistryFee += amt;
+    }
+  } else {
+    // 早期歷史資料且無流水：單一舊欄位 pledgeFee
+    paidPledgeRegistryFee = loan.pledgeFee ?? 0;
+  }
+
+  const totalPledgeFees = paidTransferFee + paidPledgeRegistryFee + paidHandlingFee;
+  const totalBorrowingCost = paidInterest + totalPledgeFees;
+  const hasActualLedgerRecords = relatedTxs.length > 0;
+
+  return {
+    payoffDate,
+    borrowDays,
+    paidInterest: isUSD ? bankersRound(paidInterest, 2) : Math.round(paidInterest),
+    paidTransferFee: isUSD ? bankersRound(paidTransferFee, 2) : Math.round(paidTransferFee),
+    paidPledgeRegistryFee: isUSD ? bankersRound(paidPledgeRegistryFee, 2) : Math.round(paidPledgeRegistryFee),
+    paidHandlingFee: isUSD ? bankersRound(paidHandlingFee, 2) : Math.round(paidHandlingFee),
+    totalPledgeFees: isUSD ? bankersRound(totalPledgeFees, 2) : Math.round(totalPledgeFees),
+    totalBorrowingCost: isUSD ? bankersRound(totalBorrowingCost, 2) : Math.round(totalBorrowingCost),
+    hasActualLedgerRecords,
+  };
+}
+
+
 

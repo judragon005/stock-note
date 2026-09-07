@@ -1,16 +1,11 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Document)
 
-> **交接產生時間**：2026-09-03 14:30 (UTC+8)  
+> **交接產生時間**：2026-09-07 13:45 (UTC+8)  
 > **當前最新里程碑**：
-> - **V7.5.2 歷史已結清借貸規費明細計算校正與結清還款日手動維護**（三大規費明細單一事實來源 SSOT 判定，設質費為 0 絕對強制為 0，杜絕舊 pledgeFee 與未拆分流水污染翻倍；LoanModal 支援已結清借貸 handoff 手動編輯校正結清還款日 closedDate）。
-> - **V7.5.1 歷史已結清借貸利息與官方規費明細拆解、借款天數與結清還款日追蹤**（closedDate 時態補完；結清還款日與歷時借款天數自動推算；雙軌聚合已付利息、設質登記費、集保撥券費、開辦手續費；總借貸支出成本醒目展示；官方標準術語統一膠囊）。
-> - **V7.5.0 股票質押借款撥款金流同步、零本金斷頭誤判防禦與已結清歷史歸檔**（借款自動連動撥款入帳 LOAN_DISBURSEMENT；2026-07-28 缺漏金流一鍵平帳；進行中 vs 已結清看板分流；維持率零本金防禦與規費清零；已結清歷史折疊面板）。
-> - **V7.4.0 樹狀圖納入借款與負債槓桿視覺化架構**（正數幾何資本來源模型注入 `DEBT_TWD`；專屬高對比琥珀警示色與邊框；多層次借貸合約透視 Tooltip；權重清單同步納入負債長條項；頂部比例 HUD 注入獨立 `負債比 LTV` 膠囊；純現貨零借款 100% 自動隱藏防禦）。
-> - **V7.3.3 對稱色彩模式切換器與動態情境式懸浮提示**（雙色球標籤、即時 Tooltip 提示、跨主題紅綠同步）。
-> - **V7.2.1 持股技術指標結構化卡片防截斷與 20MA/60MA 均線乖離率**。
-> - **V7.1.0 樹狀圖納入現金部位與總資產權重統一架構**。
-> - **V7.0.0 資產配置目標偏離 (Drift) 試算與再平衡推薦器**。
-> **品質狀態**：全量單元測試 **489/489 通過 (100% Passed)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過。
+> - **V7.9.0 籌碼時序動態播放修正、美股 CMF 日 K 管線連接與本地歷史籌碼增量儲存系統**（泡泡依據 `currentDateIndex` 即時時序位移與 CSS 平滑滑動、彗星尾巴漸進延伸切片、在庫美股 20 日量價 Candles 注入與真實 CMF 計算、全市場焦點美股 Top 30 宇宙、本地 IndexedDB 歷史籌碼增量持久化庫）。
+> - **V7.8.0 籌碼泡泡圖自適應相對縮放、2D 圓形防碰撞排斥算法與聚光燈佈局系統**（徹底解決全市場 Top 30 貼壁與重疊問題：動態自適應冪次縮放保留 25% 緩衝區、純原生 8 輪物理放鬆排斥演算法、象限守恆中軸鎖定、DOM 頂層繪製排序與滑鼠聚光燈高亮、動能散度優化）。
+> - **V7.7.0 籌碼與聰明錢動態觀察儀（零基礎小白友善版、量價動能四象限泡泡圖與時序播放軌跡系統）**。
+> **品質狀態**：全量單元測試 **525/525 通過 (100% Passed)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過。
 
 ---
 
@@ -18,8 +13,8 @@
 
 - **專案路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon003/-.git`
-- **測試套件狀態**：**491/491 通過** (45 test suites / 100% 綠燈)，TypeScript 0 錯誤。
-- **當前版本**：**V7.6.0**
+- **測試套件狀態**：**525/525 通過** (48 test suites / 100% 綠燈)，TypeScript 0 錯誤。
+- **當前版本**：**V7.9.0**
 - **隱私安全**：所有本機交易資料與 API 金鑰均受 IndexedDB / LocalStorage 本地隔離與 `.gitignore` 保護，杜絕個人財務資料推播至 GitHub 遠端。
 
 ---
@@ -27,26 +22,34 @@
 ## 🏛️ 2. 領域模型與架構決策索引 (Domain & Decisions)
 
 1. **通用語言詞彙表**：[`CONTEXT.md`](file:///d:/APP/股票紀錄/CONTEXT.md)
-   - **V7.6.0 核心術語**：
-     - `Ex-Date vs Pay-Date Temporal Separation`（除息日與入帳發放日時序徹底分離：除息基準日平滑假性虧損，發放日落袋結算）
-     - `Primary-Secondary Dual Display`（主次並列展示架構：主視覺醒目呈現入帳發放日，副視覺標註除息基準日）
-     - `Effective Pay-Date Descending Sort`（有效入帳日倒序排列，最新入帳資金始終置頂）
+   - **V7.9.0 核心術語**：
+     - `Dynamic Temporal Playback Binding`（時序動態位移綁定與漸進尾巴）
+     - `US 20-Day Daily Candles CMF Pipeline`（美股 20 日量價 Candles 注入管線）
+     - `US Focus Top 30 Universe`（美股機構焦點 Top 30 宇宙）
+     - `Local Incremental Chips Ingestion Engine`（本地歷史籌碼增量持久化引擎）
+   - **V7.8.0 核心術語**：
+     - `Adaptive Power-Law Scaling`（自適應相對冪次縮放與 25% 呼吸緩衝區）
+     - `2D Circle Collision Relaxation Engine`（2D 圓形防碰撞排斥純函數演算法）
+     - `Quadrant Invariant Guard`（象限中軸鎖定守門員）
+     - `SVG DOM Spotlight Ordering`（DOM 頂層繪製排序與滑鼠聚光燈模式）
 
 2. **架構決策紀錄 (最新)**：
-   - [`ADR-0076`](file:///d:/APP/股票紀錄/docs/adr/0076-dividend-log-view-pay-date-temporal-separation-and-sorting.md)：V7.6.0 歷史現金股利入帳明細入帳日與除息日時序徹底分離與主次排版架構。
-   - [`ADR-0075`](file:///d:/APP/股票紀錄/docs/adr/0075-settled-loan-fee-breakdown-bugfix-and-payoff-date-editor.md)：V7.5.2 歷史已結清借貸規費明細計算校正與結清還款日維護架構。
-   - [`ADR-0074`](file:///d:/APP/股票紀錄/docs/adr/0074-settled-loan-cost-breakdown-and-payoff-date.md)：V7.5.1 歷史已結清借貸成本透視與結清還款日追蹤架構。
+   - [`ADR-0079`](file:///d:/APP/股票紀錄/docs/adr/0079-smart-money-temporal-playback-local-persistence-and-us-cmf-pipeline.md)：V7.9.0 籌碼時序動態播放、美股 CMF 日 K 管線與本地歷史增量庫架構。
+   - [`ADR-0078`](file:///d:/APP/股票紀錄/docs/adr/0078-smart-money-bubble-collision-avoidance.md)：V7.8.0 籌碼泡泡圖自適應縮放、防碰撞排斥與聚光燈佈局架構。
+   - [`ADR-0077`](file:///d:/APP/股票紀錄/docs/adr/0077-smart-money-bubble-view-and-chip-flow-dynamics.md)：V7.7.0 籌碼與聰明錢動態觀察儀架構。
 
 3. **需求規格說明書 (最新)**：
-   - [SPEC-0076](file:///d:/APP/股票紀錄/docs/specs/0076-dividend-log-view-pay-date-temporal-separation-and-sorting-spec.md)：歷史現金股利入帳明細入帳日與除息日時序徹底分離、官方發放日校正與主次層級排版系統 PRD (4 大驗收條件全數通過)。
+   - [SPEC-0079](file:///d:/APP/股票紀錄/docs/specs/0079-smart-money-temporal-playback-local-persistence-and-us-cmf-pipeline-spec.md)：時序動態播放修正、美股 CMF 日 K 管線連接與本地歷史增量庫 PRD。
+   - [SPEC-0078](file:///d:/APP/股票紀錄/docs/specs/0078-smart-money-bubble-collision-avoidance-and-adaptive-layout-spec.md)：自適應相對縮放、圓形防碰撞排斥與聚光燈佈局 PRD。
 
 4. **單一版本交付紀錄存檔 (`docs/handoff/`)**：
-   - [V7.6.0: 歷史現金股利入帳明細時序分離與主次排版系統](2026-09-07-v7.6.0-dividend-log-view-pay-date-temporal-separation.md)
-   - [V7.5.2: 歷史已結清借貸規費校正與結清日維護](2026-09-03-v7.5.2-settled-loan-fee-breakdown-bugfix-and-payoff-date-editor.md)
-   - [V7.4.0: 樹狀圖納入借款與負債槓桿視覺化架構](2026-09-03-v7.4.0-treemap-debt-and-leverage-visualization.md)
+   - [V7.9.0: 籌碼時序動態播放修正、美股 CMF 日 K 管線連接與本地歷史籌碼增量儲存系統交接紀錄](2026-09-07-v7.9.0-smart-money-temporal-playback-local-persistence-and-us-cmf-pipeline.md)
+   - [V7.8.0: 籌碼泡泡圖自適應縮放、2D 防碰撞排斥算法與聚光燈佈局系統交接紀錄](2026-09-07-v7.8.0-smart-money-bubble-collision-avoidance-and-adaptive-layout.md)
 
 5. **本地票券鏡像區 (`.scratch/`)**：
-   - `.scratch/v7.6.0-dividend-log-view-pay-date-temporal-separation/issues/` (4/4 Completed)
+   - `.scratch/v7.9.0-smart-money-playback-and-us-pipeline/` (5/5 Completed)
+   - `.scratch/v7.8.0-smart-money-bubble-collision-avoidance/` (5/5 Completed)
+
 
 
 ---
@@ -55,6 +58,10 @@
 
 | 模組分類 | 檔案路徑 | 核心職責與特性 |
 | :--- | :--- | :--- |
+| **籌碼與動態星圖工作台** | [`src/components/ChipsWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/ChipsWorkspace.tsx) | 雙模式切換（我的在庫持倉 vs 全市場法人焦點 Top 30）、四象限即時診斷膠囊、官方籌碼重整與同步。 |
+| **原生 SVG 動態泡泡圖** | [`src/components/SmartMoneyBubbleChart.tsx`](file:///d:/APP/股票紀錄/src/components/SmartMoneyBubbleChart.tsx) | 0 外部圖表庫純 SVG 渲染、四象限生活化浮水印、💡 3 秒新手速讀指南、彗星位移尾巴 (Motion Trails)、時間軸播放器 (Timeline Player)、大白話結論先行 Tooltip。 |
+| **籌碼量化計算引擎** | [`src/engine/smartMoneyEngine.ts`](file:///d:/APP/股票紀錄/src/engine/smartMoneyEngine.ts) | 美股 20 日 CMF 佳慶資金流向演算法、四象限座標無量綱標準化映射、零基礎小白生活化診斷生成器 (12 tests)。 |
+| **官方籌碼資料管線與快取** | [`src/engine/smartMoneyFetcher.ts`](file:///d:/APP/股票紀錄/src/engine/smartMoneyFetcher.ts) | TWSE 官方開放日報 `fund/T86` 解析、交易日自動回推重試、IndexedDB 本地持久化快取與離線秒開 (7 tests)。 |
 | **原生 IndexedDB 儲存引擎** | [`src/utils/db.ts`](file:///d:/APP/股票紀錄/src/utils/db.ts) | 0 依賴原生 Promise 封裝 `StockTrackerDB`（9 大 Stores），支援 CRUD、`batchPut`、事務、10 份快照輪替淘汰、無損遷移與全庫 JSON 匯入匯出。 |
 | **IndexedDB 引擎單元測試** | [`src/utils/db.test.ts`](file:///d:/APP/股票紀錄/src/utils/db.test.ts) | 9 個深度單元測試案例 (100% 綠燈通過)。 |
 | **設定與時光機看板** | [`src/components/SettingsWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/SettingsWorkspace.tsx) | 券商費率、摩擦看板、API Key 管理與「時光機快照管理面板」（指標、自訂快照、鎖定切換、一鍵還原二次確認、JSON 備份）。 |

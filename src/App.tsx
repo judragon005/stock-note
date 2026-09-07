@@ -60,6 +60,7 @@ import { FrictionCenterModal } from './components/FrictionCenterModal';
 import { XirrDetailModal } from './components/XirrDetailModal';
 import { MarginStressModal } from './components/MarginStressModal';
 import { WorkspaceTabs, WorkspaceTabKey } from './components/WorkspaceTabs';
+import { ChipsWorkspace } from './components/ChipsWorkspace';
 import { SettingsWorkspace } from './components/SettingsWorkspace';
 import { syncTradesWithCashTransactions, calculateAccountBalances, aggregateInterestIncomeDetails } from './engine/cashLedgerEngine';
 import { calculatePortfolioXirr, calculateSecurityXirr, XirrResult, CashFlowEvent } from './engine/xirrCalculator';
@@ -292,12 +293,15 @@ export const App: React.FC = () => {
     return calculateAccountBalances(accounts, cashTransactions, usdToTwdRate);
   }, [accounts, cashTransactions, usdToTwdRate]);
 
-  // 整戶/分市場總曝險與淨槓桿率 (Net Leverage) 計算（依當前市場隔離持股、現金與負債）
-  const exposureMetrics = useMemo(() => {
-    const scopedLoans = currentMarket === 'ALL'
+  // 依當前市場過濾借貸紀錄
+  const scopedLoans = useMemo(() => {
+    return currentMarket === 'ALL'
       ? loanRecords
       : loanRecords.filter((l) => (currentMarket === 'US' ? l.currency === 'USD' : l.currency === 'TWD'));
+  }, [currentMarket, loanRecords]);
 
+  // 整戶/分市場總曝險與淨槓桿率 (Net Leverage) 計算（依當前市場隔離持股、現金與負債）
+  const exposureMetrics = useMemo(() => {
     const scopedCashBalances = {
       TWD: currentMarket === 'US' ? 0 : cashLedgerSummary.totalTWD,
       USD: currentMarket === 'TW' ? 0 : cashLedgerSummary.totalUSD,
@@ -309,7 +313,7 @@ export const App: React.FC = () => {
       loans: scopedLoans,
       usdToTwdRate,
     });
-  }, [holdings, cashLedgerSummary, loanRecords, usdToTwdRate, currentMarket]);
+  }, [holdings, cashLedgerSummary, scopedLoans, usdToTwdRate, currentMarket]);
 
   // 各項利息收入明細與總額聚合 (依當前市場過濾)
   const interestIncomeSummary = useMemo(() => {
@@ -724,6 +728,8 @@ export const App: React.FC = () => {
             holdings={holdings}
             usdToTwdRate={usdToTwdRate}
             cashBalanceTwd={cashLedgerSummary.totalCashInTWD}
+            totalDebtTwd={exposureMetrics.totalDebtTWD}
+            loans={scopedLoans}
             colorTheme={colorTheme}
           />
           <SummaryCards
@@ -770,6 +776,15 @@ export const App: React.FC = () => {
           syncProgressText={historicalSyncProgress}
           onRefreshHistory={handleSyncHistoricalPrices}
           onInspectXirr={handleInspectGrowthXirr}
+        />
+      )}
+
+      {/* 活頁: 🪐 籌碼與動態星圖 (Smart Money Bubble Map) */}
+      {activeTab === 'chips' && (
+        <ChipsWorkspace
+          holdings={holdings}
+          colorTheme={colorTheme}
+          usdToTwdRate={usdToTwdRate}
         />
       )}
 

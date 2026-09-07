@@ -145,4 +145,48 @@ describe('Squarified Treemap 佈局演算法', () => {
     expect(nodes[0].symbol).toBe('2330');
     expect(nodes[0].weight).toBe(100);
   });
+
+  it('股票 + 現金 + 借款負債混合輸入，借款節點應正確分配權重與空間', () => {
+    const items: TreemapItem[] = [
+      { id: 'TW_2330', symbol: '2330', name: '台積電', market: 'TW', value: 50000, pnlPercent: 15 },
+      { id: 'US_AAPL', symbol: 'AAPL', name: '蘋果', market: 'US', value: 30000, pnlPercent: -5 },
+      { id: 'CASH_TWD', symbol: '💵 現金', name: 'Cash / 活存與備用金', market: 'CASH', value: 20000, pnlPercent: 0 },
+      { id: 'DEBT_TWD', symbol: '🏦 借貸負債', name: '質押/借貸負債總額', market: 'DEBT', value: 25000, pnlPercent: 0 },
+    ];
+
+    const width = 1000;
+    const height = 500;
+    const nodes = computeTreemapLayout(items, width, height);
+
+    expect(nodes.length).toBe(4);
+
+    const debtNode = nodes.find((n) => n.id === 'DEBT_TWD')!;
+    const cashNode = nodes.find((n) => n.id === 'CASH_TWD')!;
+    const tsMCNode = nodes.find((n) => n.id === 'TW_2330')!;
+    const aaplNode = nodes.find((n) => n.id === 'US_AAPL')!;
+
+    expect(debtNode).toBeDefined();
+    expect(debtNode.market).toBe('DEBT');
+    expect(debtNode.weight).toBe(20); // 25000 / (50000+30000+20000+25000 = 125000) = 20%
+    expect(tsMCNode.weight).toBe(40); // 50000 / 125000 = 40%
+    expect(aaplNode.weight).toBe(24); // 30000 / 125000 = 24%
+    expect(cashNode.weight).toBe(16); // 20000 / 125000 = 16%
+
+    // 檢查面積總和
+    const totalArea = nodes.reduce((sum, n) => sum + n.width * n.height, 0);
+    expect(totalArea).toBeCloseTo(width * height, 1);
+  });
+
+  it('借款為 0 或負數時應被過濾，不產生無效負債節點', () => {
+    const items: TreemapItem[] = [
+      { id: 'TW_2330', symbol: '2330', name: '台積電', market: 'TW', value: 50000, pnlPercent: 10 },
+      { id: 'DEBT_ZERO', symbol: '🏦 零負債', name: 'Zero Debt', market: 'DEBT', value: 0, pnlPercent: 0 },
+      { id: 'DEBT_NEG', symbol: '🏦 負負債', name: 'Neg Debt', market: 'DEBT', value: -10000, pnlPercent: 0 },
+    ];
+
+    const nodes = computeTreemapLayout(items, 1000, 500);
+    expect(nodes.length).toBe(1);
+    expect(nodes[0].symbol).toBe('2330');
+    expect(nodes[0].weight).toBe(100);
+  });
 });

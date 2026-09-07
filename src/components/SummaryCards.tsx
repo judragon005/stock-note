@@ -1,8 +1,9 @@
+import React from 'react';
 import { PortfolioSummary, MarketType, AccountingView, PositionFilter, ClosedPositionsSummary, FrictionSummary } from '../types/stock';
 import { XirrResult } from '../engine/xirrCalculator';
 import { PortfolioExposureMetrics } from '../types/exposure';
 import { InterestIncomeSummary } from '../engine/cashLedgerEngine';
-import { Wallet, ArrowUpRight, ArrowDownRight, Award, Coins, Target, TrendingUp, TrendingDown } from 'lucide-react';
+import { Wallet, ArrowUpRight, ArrowDownRight, Award, Coins, Target, TrendingUp, TrendingDown, Eye } from 'lucide-react';
 
 interface SummaryCardsProps {
   summary: PortfolioSummary;
@@ -59,7 +60,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
   const todayPnLPercent = slice.todayPnLPercent ?? 0;
   const isTodayGain = todayPnL >= 0;
 
-  const isGain = unrealizedPnL >= 0;
+  const isGain = (isBroker ? unrealizedPnL : totalReturnPnL) >= 0;
   const isRealizedGain = realizedPnL >= 0;
 
   const formatNumber = (num: number, decimals: number = isUS ? 2 : 0) => {
@@ -83,22 +84,23 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
           gap: '16px',
-          marginBottom: '24px',
+          marginBottom: '20px',
         }}
       >
         {/* 1. 已實現總獲利/虧損 */}
         <div
           className="glass-card"
           style={{
-            padding: '20px',
+            padding: '18px 20px',
             borderLeft: `4px solid ${isClosedGain ? 'var(--gain-color)' : 'var(--loss-color)'}`,
+            background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.8) 0%, rgba(10, 16, 30, 0.7) 100%)',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
                 已平倉總實現損益 {isALL && '(折合台幣)'}
               </span>
               <span
@@ -109,6 +111,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                   background: isClosedGain ? 'var(--gain-bg)' : 'var(--loss-bg)',
                   color: isClosedGain ? 'var(--gain-color)' : 'var(--loss-color)',
                   fontWeight: 600,
+                  border: `1px solid ${isClosedGain ? 'var(--gain-border)' : 'var(--loss-border)'}`,
                 }}
               >
                 已清倉結算
@@ -117,9 +120,9 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
             <div
               style={{
                 background: isClosedGain ? 'var(--gain-bg)' : 'var(--loss-bg)',
-                width: '36px',
-                height: '36px',
-                borderRadius: '10px',
+                width: '34px',
+                height: '34px',
+                borderRadius: '8px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -131,30 +134,37 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
           <div
             className="mono"
             style={{
-              fontSize: '1.625rem',
-              fontWeight: 700,
+              fontSize: '1.65rem',
+              fontWeight: 800,
               color: isClosedGain ? 'var(--gain-color)' : 'var(--loss-color)',
+              lineHeight: 1.2,
             }}
           >
             {isClosedGain ? '+' : ''}{currencySymbol} {formatNumber(closedPnL)}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px' }}>
+          <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '6px' }}>
             共結清 {tradesCount} 檔歷史標的之淨損益
           </div>
         </div>
 
         {/* 2. 交易勝率儀表板 */}
-        <div className="glass-card" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+        <div
+          className="glass-card"
+          style={{
+            padding: '18px 20px',
+            background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.8) 0%, rgba(10, 16, 30, 0.7) 100%)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
               勝率與戰績統計
             </span>
             <div
               style={{
                 background: 'rgba(59, 130, 246, 0.15)',
-                width: '36px',
-                height: '36px',
-                borderRadius: '10px',
+                width: '34px',
+                height: '34px',
+                borderRadius: '8px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -163,27 +173,33 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
               <Target size={18} color="#60a5fa" />
             </div>
           </div>
-          <div className="mono" style={{ fontSize: '1.625rem', fontWeight: 700, color: '#60a5fa' }}>
-            {winRate.toFixed(1)}% <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 500 }}>勝率</span>
+          <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#60a5fa', lineHeight: 1.2 }}>
+            {winRate.toFixed(1)}% <span style={{ fontSize: '0.88rem', color: 'var(--text-muted)', fontWeight: 500 }}>勝率</span>
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', gap: '8px' }}>
+          <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', gap: '8px' }}>
             <span style={{ color: 'var(--gain-color)', fontWeight: 600 }}>🟢 獲利 {winCount} 檔</span>
             <span style={{ color: 'var(--loss-color)', fontWeight: 600 }}>🔴 虧損 {loseCount} 檔</span>
           </div>
         </div>
 
         {/* 3. 最大獲利 / 虧損標的 */}
-        <div className="glass-card" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+        <div
+          className="glass-card"
+          style={{
+            padding: '18px 20px',
+            background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.8) 0%, rgba(10, 16, 30, 0.7) 100%)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
               代表戰役 (贏家 / 輸家)
             </span>
             <div
               style={{
                 background: 'rgba(139, 92, 246, 0.15)',
-                width: '36px',
-                height: '36px',
-                borderRadius: '10px',
+                width: '34px',
+                height: '34px',
+                borderRadius: '8px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -192,7 +208,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
               <TrendingUp size={18} color="#a78bfa" />
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.85rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.82rem' }}>
             {closedSummary?.bestWinner ? (
               <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--gain-color)' }}>
                 <span style={{ fontWeight: 600 }}>🏆 {closedSummary.bestWinner.symbol} {closedSummary.bestWinner.name}</span>
@@ -211,17 +227,23 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
         </div>
 
         {/* 4. 歷史落袋股息與利息 */}
-        <div className="glass-card" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+        <div
+          className="glass-card"
+          style={{
+            padding: '18px 20px',
+            background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.8) 0%, rgba(10, 16, 30, 0.7) 100%)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
               已落袋被動收益 (股息與利息)
             </span>
             <div
               style={{
                 background: 'rgba(245, 158, 11, 0.15)',
-                width: '36px',
-                height: '36px',
-                borderRadius: '10px',
+                width: '34px',
+                height: '34px',
+                borderRadius: '8px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -230,18 +252,18 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
               <Coins size={18} color="#fbbf24" />
             </div>
           </div>
-          <div className="mono" style={{ fontSize: '1.625rem', fontWeight: 700, color: '#fbbf24' }}>
+          <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#fbbf24', lineHeight: 1.2 }}>
             {currencySymbol} {formatNumber(closedDivs + (interestIncomeSummary?.totalInterestAmount ?? 0))}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px' }}>
+          <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '6px' }}>
             已平倉標的現金股利與各項已入帳利息
           </div>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '6px' }}>
             {interestIncomeSummary?.interestItems && interestIncomeSummary.interestItems.map((item) => (
               <span
                 key={item.id}
                 style={{
-                  fontSize: '0.68rem',
+                  fontSize: '0.66rem',
                   padding: '1px 6px',
                   borderRadius: '4px',
                   background: 'rgba(6, 182, 212, 0.15)',
@@ -255,12 +277,12 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
               </span>
             ))}
             {(isTW || isALL) && totalTWDividendTax > 0 && (
-              <span style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
+              <span style={{ fontSize: '0.66rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
                 健保 -NT${Math.round(totalTWDividendTax).toLocaleString()}
               </span>
             )}
             {(isUS || isALL) && totalUSDividendTax > 0 && (
-              <span style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(244, 63, 94, 0.15)', color: '#fb7185', border: '1px solid rgba(244, 63, 94, 0.3)' }}>
+              <span style={{ fontSize: '0.66rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(244, 63, 94, 0.15)', color: '#fb7185', border: '1px solid rgba(244, 63, 94, 0.3)' }}>
                 美股預扣 30% -${totalUSDividendTax.toLocaleString()} USD
               </span>
             )}
@@ -268,17 +290,23 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
         </div>
 
         {/* 5. 賽後紀律覆盤指標 */}
-        <div className="glass-card" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+        <div
+          className="glass-card"
+          style={{
+            padding: '18px 20px',
+            background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.8) 0%, rgba(10, 16, 30, 0.7) 100%)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
               🎯 交易紀律覆盤統計
             </span>
             <div
               style={{
                 background: 'rgba(16, 185, 129, 0.15)',
-                width: '36px',
-                height: '36px',
-                borderRadius: '10px',
+                width: '34px',
+                height: '34px',
+                borderRadius: '8px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -289,13 +317,13 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
           </div>
           {closedSummary?.disciplineSummary && closedSummary.disciplineSummary.totalReviewedTrades > 0 ? (
             <>
-              <div className="mono" style={{ fontSize: '1.625rem', fontWeight: 700, color: '#10b981' }}>
+              <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#10b981', lineHeight: 1.2 }}>
                 {closedSummary.disciplineSummary.disciplineRatePercent.toFixed(1)}%{' '}
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 500 }}>
                   遵守率 ({closedSummary.disciplineSummary.followedPlanTradesCount}/{closedSummary.disciplineSummary.totalReviewedTrades})
                 </span>
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span>⭐ 平均評分 {closedSummary.disciplineSummary.averageDisciplineScore} / 5.0</span>
               </div>
               {closedSummary.disciplineSummary.topMistakes.length > 0 && (
@@ -320,8 +348,8 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
             </>
           ) : (
             <div>
-              <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-muted)' }}>尚未填寫覆盤</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px' }}>
+              <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-muted)' }}>尚未填寫覆盤</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
                 展開下方已平倉標的即可填寫賽後覆盤與檢討
               </div>
             </div>
@@ -336,16 +364,24 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
         gap: '16px',
-        marginBottom: '24px',
+        marginBottom: '20px',
       }}
     >
       {/* 1. 總資產市值 */}
-      <div className="glass-card" style={{ padding: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+      <div
+        className="glass-card"
+        style={{
+          padding: '18px 20px',
+          background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.85) 0%, rgba(10, 16, 30, 0.75) 100%)',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
               {isBroker ? '庫存總市值 (含稅淨現值)' : '總資產市值 (毛市值)'} {isALL && '(折合台幣)'}
             </span>
             <span
@@ -355,6 +391,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                 borderRadius: '4px',
                 background: isBroker ? 'rgba(59, 130, 246, 0.2)' : 'rgba(16, 185, 129, 0.2)',
                 color: isBroker ? '#60a5fa' : '#34d399',
+                border: isBroker ? '1px solid rgba(59, 130, 246, 0.35)' : '1px solid rgba(16, 185, 129, 0.35)',
                 fontWeight: 600,
               }}
             >
@@ -364,9 +401,9 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
           <div
             style={{
               background: 'rgba(59, 130, 246, 0.15)',
-              width: '36px',
-              height: '36px',
-              borderRadius: '10px',
+              width: '34px',
+              height: '34px',
+              borderRadius: '8px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -375,8 +412,8 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
             <Wallet size={18} color="#60a5fa" />
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' }}>
-          <div className="mono" style={{ fontSize: '1.625rem', fontWeight: 700, color: '#ffffff' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
+          <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#ffffff', lineHeight: 1.2 }}>
             {currencySymbol} {formatNumber(displayMarketValue)}
           </div>
           {todayPnL !== 0 && (
@@ -384,13 +421,14 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '4px',
-                padding: '2px 8px',
+                gap: '3px',
+                padding: '2px 7px',
                 borderRadius: '6px',
                 background: isTodayGain ? 'var(--gain-bg)' : 'var(--loss-bg)',
                 color: isTodayGain ? 'var(--gain-color)' : 'var(--loss-color)',
-                fontSize: '0.8125rem',
-                fontWeight: 600,
+                border: `1px solid ${isTodayGain ? 'var(--gain-border)' : 'var(--loss-border)'}`,
+                fontSize: '0.76rem',
+                fontWeight: 700,
               }}
               title="今日開盤以來的持股市值總變動金額與百分比"
             >
@@ -398,7 +436,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
             </div>
           )}
         </div>
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+        <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
           <div>
             {isBroker
               ? `牌面毛市值: ${currencySymbol} ${formatNumber(grossMarketValue)} (預估賣出稅費: -${currencySymbol} ${formatNumber(estimatedTaxFee)})`
@@ -413,13 +451,13 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
         {exposureMetrics && (
           <div
             style={{
-              marginTop: '10px',
+              marginTop: '8px',
               paddingTop: '8px',
               borderTop: '1px dashed rgba(51, 65, 85, 0.4)',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              fontSize: '0.75rem',
+              fontSize: '0.74rem',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -433,8 +471,8 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
               </span>
               <span
                 style={{
-                  fontSize: '0.65rem',
-                  padding: '1px 6px',
+                  fontSize: '0.64rem',
+                  padding: '1px 5px',
                   borderRadius: '4px',
                   border: '1px solid',
                 }}
@@ -450,11 +488,11 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                 onClick={onOpenMarginStressModal}
                 style={{
                   background: 'rgba(239, 68, 68, 0.12)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
                   color: '#f87171',
-                  borderRadius: '4px',
+                  borderRadius: '5px',
                   padding: '2px 8px',
-                  fontSize: '0.7rem',
+                  fontSize: '0.68rem',
                   fontWeight: 600,
                   cursor: 'pointer',
                   transition: 'all 0.15s',
@@ -475,13 +513,14 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
       <div
         className="glass-card"
         style={{
-          padding: '20px',
+          padding: '18px 20px',
           borderLeft: `4px solid ${isGain ? 'var(--gain-color)' : 'var(--loss-color)'}`,
+          background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.85) 0%, rgba(10, 16, 30, 0.75) 100%)',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
               {isBroker ? '損益試算 (券商含稅)' : '投資總報酬 (加計股息)'}
             </span>
             <span
@@ -491,6 +530,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                 borderRadius: '4px',
                 background: isGain ? 'var(--gain-bg)' : 'var(--loss-bg)',
                 color: isGain ? 'var(--gain-color)' : 'var(--loss-color)',
+                border: `1px solid ${isGain ? 'var(--gain-border)' : 'var(--loss-border)'}`,
                 fontWeight: 600,
               }}
             >
@@ -500,23 +540,24 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
           <div
             style={{
               background: isGain ? 'var(--gain-bg)' : 'var(--loss-bg)',
-              width: '36px',
-              height: '36px',
-              borderRadius: '10px',
+              width: '34px',
+              height: '34px',
+              borderRadius: '8px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            {isGain ? <ArrowUpRight size={20} color="var(--gain-color)" /> : <ArrowDownRight size={20} color="var(--loss-color)" />}
+            {isGain ? <ArrowUpRight size={18} color="var(--gain-color)" /> : <ArrowDownRight size={18} color="var(--loss-color)" />}
           </div>
         </div>
         <div
           className="mono"
           style={{
-            fontSize: '1.625rem',
-            fontWeight: 700,
+            fontSize: '1.65rem',
+            fontWeight: 800,
             color: isGain ? 'var(--gain-color)' : 'var(--loss-color)',
+            lineHeight: 1.2,
           }}
         >
           {isGain ? '+' : ''}{currencySymbol} {formatNumber(isBroker ? unrealizedPnL : totalReturnPnL)}
@@ -526,40 +567,40 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
-            fontSize: '0.8125rem',
-            fontWeight: 600,
+            fontSize: '0.8rem',
+            fontWeight: 700,
             color: isGain ? 'var(--gain-color)' : 'var(--loss-color)',
             marginTop: '6px',
           }}
         >
           <span>{isGain ? '▲' : '▼'} {Math.abs(isBroker ? unrealizedPnLPercent : totalReturnPercent).toFixed(2)}%</span>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+          <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)', fontWeight: 400 }}>
             {isBroker
               ? `未扣稅損益: ${currencySymbol} ${formatNumber(grossMarketValue - totalCost)}`
-              : `未實現價差: ${isGain ? '+' : ''}${currencySymbol} ${formatNumber(unrealizedPnL)} (${unrealizedPnLPercent.toFixed(2)}%)`}
+              : `未實現價差: ${unrealizedPnL >= 0 ? '+' : ''}${currencySymbol} ${formatNumber(unrealizedPnL)} (${unrealizedPnLPercent.toFixed(2)}%)`}
           </span>
         </div>
 
         {portfolioXirr && portfolioXirr.totalInflow > 0 && (
           <div
             style={{
-              marginTop: '10px',
+              marginTop: '8px',
               paddingTop: '8px',
               borderTop: '1px dashed rgba(51, 65, 85, 0.4)',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              fontSize: '0.75rem',
+              fontSize: '0.74rem',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <span style={{ color: 'var(--text-secondary)' }}>
-                {portfolioXirr.isAnnualized ? '年化 XIRR:' : '累計 XIRR (非年化):'}
+                {portfolioXirr.isAnnualized ? '年化 XIRR:' : '累計 XIRR:'}
               </span>
               <span
                 className="mono"
                 style={{
-                  fontWeight: 700,
+                  fontWeight: 800,
                   color: portfolioXirr.ratePercent >= 0 ? 'var(--gain-color)' : 'var(--loss-color)',
                 }}
               >
@@ -572,18 +613,21 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                 onClick={onInspectPortfolioXirr}
                 style={{
                   background: 'rgba(56, 189, 248, 0.12)',
-                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  border: '1px solid rgba(56, 189, 248, 0.35)',
                   color: '#38bdf8',
-                  borderRadius: '4px',
+                  borderRadius: '5px',
                   padding: '2px 8px',
-                  fontSize: '0.7rem',
+                  fontSize: '0.68rem',
                   fontWeight: 600,
                   cursor: 'pointer',
                   transition: 'all 0.15s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
                 }}
                 title="點擊透視整戶所有歷史現金流與折現權重明細"
               >
-                透視金流
+                <Eye size={11} /> 透視金流
               </button>
             )}
           </div>
@@ -591,17 +635,23 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
       </div>
 
       {/* 3. 已實現損益 */}
-      <div className="glass-card" style={{ padding: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+      <div
+        className="glass-card"
+        style={{
+          padding: '18px 20px',
+          background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.85) 0%, rgba(10, 16, 30, 0.75) 100%)',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
             累計已實現損益 (已出場)
           </span>
           <div
             style={{
               background: isRealizedGain ? 'var(--gain-bg)' : 'var(--loss-bg)',
-              width: '36px',
-              height: '36px',
-              borderRadius: '10px',
+              width: '34px',
+              height: '34px',
+              borderRadius: '8px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -613,30 +663,37 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
         <div
           className="mono"
           style={{
-            fontSize: '1.625rem',
-            fontWeight: 700,
+            fontSize: '1.65rem',
+            fontWeight: 800,
             color: isRealizedGain ? 'var(--gain-color)' : 'var(--loss-color)',
+            lineHeight: 1.2,
           }}
         >
           {isRealizedGain ? '+' : ''}{currencySymbol} {formatNumber(realizedPnL)}
         </div>
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px' }}>
+        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '6px' }}>
           歷史平倉沖銷獲利與虧損累計
         </div>
       </div>
 
       {/* 4. 累計股息與各項利息收益 */}
-      <div className="glass-card" style={{ padding: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+      <div
+        className="glass-card"
+        style={{
+          padding: '18px 20px',
+          background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.85) 0%, rgba(10, 16, 30, 0.75) 100%)',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
             累計被動收益 (股息與利息)
           </span>
           <div
             style={{
               background: 'rgba(245, 158, 11, 0.15)',
-              width: '36px',
-              height: '36px',
-              borderRadius: '10px',
+              width: '34px',
+              height: '34px',
+              borderRadius: '8px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -645,24 +702,24 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
             <Coins size={18} color="#fbbf24" />
           </div>
         </div>
-        <div className="mono" style={{ fontSize: '1.625rem', fontWeight: 700, color: '#fbbf24' }}>
+        <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#fbbf24', lineHeight: 1.2 }}>
           {currencySymbol} {formatNumber(totalDividends + (interestIncomeSummary?.totalInterestAmount ?? 0))}
         </div>
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>累積已領取現金配息與各項利息</span>
         </div>
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '6px' }}>
           {/* 各項利息收入獨立膠囊 */}
           {interestIncomeSummary?.interestItems && interestIncomeSummary.interestItems.map((item) => (
             <span
               key={item.id}
               style={{
-                fontSize: '0.68rem',
+                fontSize: '0.66rem',
                 padding: '1px 6px',
                 borderRadius: '4px',
                 background: 'rgba(6, 182, 212, 0.15)',
                 color: '#22d3ee',
-                border: '1px solid rgba(6, 182, 212, 0.3)',
+                border: '1px solid rgba(6, 182, 212, 0.35)',
                 fontWeight: 600,
               }}
               title={`已入帳利息項目: ${item.name}`}
@@ -673,14 +730,14 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
 
           {/* 減資退款膠囊 */}
           {totalCapitalReturned > 0 && (
-            <span style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(251, 146, 60, 0.15)', color: '#fb923c', border: '1px solid rgba(251, 146, 60, 0.3)', fontWeight: 600 }}>
+            <span style={{ fontSize: '0.66rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(251, 146, 60, 0.15)', color: '#fb923c', border: '1px solid rgba(251, 146, 60, 0.35)', fontWeight: 600 }}>
               減資退款 +{currencySymbol}{formatNumber(totalCapitalReturned)}
             </span>
           )}
 
           {/* 健保補充保費膠囊 */}
           {(isTW || isALL) && totalTWDividendTax > 0 && (
-            <span style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
+            <span style={{ fontSize: '0.66rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.35)' }}>
               健保 -NT${Math.round(totalTWDividendTax).toLocaleString()}
             </span>
           )}
@@ -688,7 +745,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
           {/* 美股股票股息 30% 預扣稅膠囊 */}
           {(isUS || isALL) && totalUSDividendTax > 0 && (
             <span
-              style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(244, 63, 94, 0.15)', color: '#fb7185', border: '1px solid rgba(244, 63, 94, 0.3)' }}
+              style={{ fontSize: '0.66rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(244, 63, 94, 0.15)', color: '#fb7185', border: '1px solid rgba(244, 63, 94, 0.35)' }}
               title={`美股股息預扣稅: -$${totalUSDividendTax.toLocaleString()} USD`}
             >
               美股股息預扣 -${totalUSDividendTax.toLocaleString()} USD
@@ -698,7 +755,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
           {/* 美元現金利息預扣稅膠囊 */}
           {(isUS || isALL) && (interestIncomeSummary?.totalInterestTaxUSD ?? 0) > 0 && (
             <span
-              style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(244, 63, 94, 0.15)', color: '#fb7185', border: '1px solid rgba(244, 63, 94, 0.3)' }}
+              style={{ fontSize: '0.66rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(244, 63, 94, 0.15)', color: '#fb7185', border: '1px solid rgba(244, 63, 94, 0.35)' }}
               title={`現金利息預扣稅: -$${interestIncomeSummary!.totalInterestTaxUSD.toLocaleString()} USD`}
             >
               利息預扣 -${interestIncomeSummary!.totalInterestTaxUSD.toLocaleString()} USD
@@ -708,7 +765,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
           {/* 台幣利息預扣稅膠囊 */}
           {(isTW || isALL) && (interestIncomeSummary?.totalInterestTaxTWD ?? 0) > 0 && (
             <span
-              style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(244, 63, 94, 0.15)', color: '#fb7185', border: '1px solid rgba(244, 63, 94, 0.3)' }}
+              style={{ fontSize: '0.66rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(244, 63, 94, 0.15)', color: '#fb7185', border: '1px solid rgba(244, 63, 94, 0.35)' }}
               title={`台幣利息扣繳稅: -NT$${interestIncomeSummary!.totalInterestTaxTWD.toLocaleString()}`}
             >
               利息扣繳 -NT${interestIncomeSummary!.totalInterestTaxTWD.toLocaleString()}
