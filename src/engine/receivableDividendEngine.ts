@@ -50,7 +50,7 @@ export const OFFICIAL_DIVIDEND_CALENDAR: RawCorporateEvent[] = [
     type: 'DIVIDEND',
     date: '2026-07-23',
     price: 1.10,
-    description: '年度現金股利每股 1.10 TWD (預計 2026-08-20 發放入帳)',
+    description: '年度現金股利每股 1.10 TWD (預計 2026-08-24 發放入帳)',
     sourceType: 'LIVE_API',
   },
   {
@@ -69,7 +69,7 @@ export const OFFICIAL_DIVIDEND_CALENDAR: RawCorporateEvent[] = [
  */
 export function estimatePaymentDate(exDateStr: string, market: MarketType): string {
   const knownPayDates: Record<string, string> = {
-    '2026-07-23': '2026-08-20', // 永豐金 2890
+    '2026-07-23': '2026-08-24', // 永豐金 2890
     '2026-09-16': '2026-10-08', // 台積電 2330
     '2026-08-13': '2026-09-04', // 兆豐金 2886
     '2026-08-18': '2026-09-11', // 國泰永續高股息 00878 / 群益 00923

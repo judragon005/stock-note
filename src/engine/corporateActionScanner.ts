@@ -462,9 +462,9 @@ export async function fetchLiveCorporateEvents(
         market: 'TW',
         type: 'DIVIDEND',
         date: '2026-07-23',
-        payDate: '2026-08-20',
+        payDate: '2026-08-24',
         price: 1.10,
-        description: '年度現金股利每股 1.10 TWD (預計 2026-08-20 發放入帳)',
+        description: '年度現金股利每股 1.10 TWD (預計 2026-08-24 發放入帳)',
         sourceType: 'LIVE_API',
       },
       {
@@ -698,9 +698,9 @@ export class CorporateActionSessionCache {
         market: 'TW',
         type: 'DIVIDEND',
         date: '2026-07-23',
-        payDate: '2026-08-20',
+        payDate: '2026-08-24',
         price: 1.10,
-        description: '年度現金股利每股 1.10 TWD (預計 2026-08-20 發放入帳)',
+        description: '年度現金股利每股 1.10 TWD (預計 2026-08-24 發放入帳)',
         sourceType: 'LIVE_API',
       },
       {

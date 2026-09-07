@@ -87,7 +87,13 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         const q = searchQuery.toLowerCase();
         return t.symbol.toLowerCase().includes(q) || (t.name && t.name.toLowerCase().includes(q));
       })
-      .sort((a, b) => b.date.localeCompare(a.date));
+      .sort((a, b) => {
+        const payA = a.payDate || estimatePaymentDate(a.exDate || a.date, a.market);
+        const payB = b.payDate || estimatePaymentDate(b.exDate || b.date, b.market);
+        const comp = payB.localeCompare(payA);
+        if (comp !== 0) return comp;
+        return (b.exDate || b.date).localeCompare(a.exDate || a.date);
+      });
   }, [scopedTrades, searchQuery, todayStr]);
 
   // 計算月度最大值以設定柱狀圖高度比例
@@ -107,33 +113,33 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
       <div
         className="glass-card"
         style={{
-          padding: '18px 24px',
+          padding: '16px 22px',
           borderRadius: '16px',
-          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(30, 41, 59, 0.7) 100%)',
+          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(15, 23, 42, 0.9) 100%)',
           border: '1px solid rgba(16, 185, 129, 0.35)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: '16px',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
+          gap: '14px',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.35)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           <div
             style={{
-              width: '46px',
-              height: '46px',
+              width: '44px',
+              height: '44px',
               borderRadius: '12px',
               background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#ffffff',
-              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)',
             }}
           >
-            <Coins size={24} />
+            <Coins size={22} />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -142,13 +148,13 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
               </h2>
               <span
                 style={{
-                  fontSize: '0.75rem',
+                  fontSize: '0.74rem',
                   padding: '2px 8px',
-                  borderRadius: '12px',
+                  borderRadius: '10px',
                   background: 'rgba(16, 185, 129, 0.2)',
                   color: '#34d399',
                   border: '1px solid rgba(16, 185, 129, 0.4)',
-                  fontWeight: 600,
+                  fontWeight: 700,
                 }}
               >
                 {selectedYear} 年度透視
@@ -156,49 +162,44 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
               {market !== 'ALL' && (
                 <span
                   style={{
-                    fontSize: '0.75rem',
+                    fontSize: '0.74rem',
                     padding: '2px 8px',
-                    borderRadius: '12px',
+                    borderRadius: '10px',
                     background: 'rgba(59, 130, 246, 0.2)',
                     color: '#60a5fa',
                     border: '1px solid rgba(59, 130, 246, 0.4)',
-                    fontWeight: 600,
+                    fontWeight: 700,
                   }}
                 >
                   {market === 'TW' ? '🇹🇼 台股市場' : '🇺🇸 美股市場'}
                 </span>
               )}
             </div>
-            <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: '#94a3b8' }}>
+            <p style={{ margin: '3px 0 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
               穿透每月被動現金流、除權息平滑待入帳款與全歷史配息成長趨勢（已連動頂部市場與帳戶）
             </p>
           </div>
         </div>
 
         {/* 右側操作群組：同步除息公告按鈕 + 年份切換器 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           {onSyncCorporateActions && (
             <button
               onClick={onSyncCorporateActions}
               disabled={isSyncingCorporateActions}
+              className="btn btn-secondary btn-sm"
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                padding: '6px 12px',
-                borderRadius: '10px',
-                background: 'rgba(16, 185, 129, 0.15)',
-                border: '1px solid rgba(16, 185, 129, 0.4)',
-                color: '#34d399',
-                fontSize: '0.8rem',
+                padding: '5px 12px',
+                color: isSyncingCorporateActions ? '#94a3b8' : '#34d399',
+                borderColor: 'rgba(16, 185, 129, 0.4)',
                 fontWeight: 700,
-                cursor: isSyncingCorporateActions ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s',
-                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.15)',
               }}
               title="立即同步最新官方除權息行事曆公告"
             >
-              <RefreshCw size={14} className={isSyncingCorporateActions ? 'animate-spin' : ''} style={{ animation: isSyncingCorporateActions ? 'spin 1s linear infinite' : 'none' }} />
+              <RefreshCw size={13} className={isSyncingCorporateActions ? 'spin-animation' : ''} />
               <span>{isSyncingCorporateActions ? '正在同步除息公告...' : '同步除息公告'}</span>
             </button>
           )}
@@ -208,11 +209,11 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              background: 'rgba(15, 23, 42, 0.8)',
-              padding: '4px 8px',
-              borderRadius: '12px',
-              border: '1px solid rgba(51, 65, 85, 0.8)',
+              gap: '4px',
+              background: 'rgba(19, 29, 49, 0.85)',
+              padding: '3px 6px',
+              borderRadius: '10px',
+              border: '1px solid var(--border-color)',
             }}
           >
             <button
@@ -220,19 +221,19 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
               style={{
                 background: 'rgba(51, 65, 85, 0.5)',
                 border: 'none',
-                borderRadius: '8px',
-                padding: '6px 8px',
+                borderRadius: '6px',
+                padding: '5px 7px',
                 color: '#cbd5e1',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                transition: 'all 0.2s',
+                transition: 'all 0.15s',
               }}
               title="檢視前一年"
             >
-              <ChevronLeft size={16} />
+              <ChevronLeft size={15} />
             </button>
-            <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#ffffff', minWidth: '70px', textAlign: 'center' }}>
+            <span className="mono" style={{ fontSize: '0.9rem', fontWeight: 800, color: '#ffffff', minWidth: '65px', textAlign: 'center' }}>
               {selectedYear} 年
             </span>
             <button
@@ -240,51 +241,51 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
               style={{
                 background: 'rgba(51, 65, 85, 0.5)',
                 border: 'none',
-                borderRadius: '8px',
-                padding: '6px 8px',
+                borderRadius: '6px',
+                padding: '5px 7px',
                 color: '#cbd5e1',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                transition: 'all 0.2s',
+                transition: 'all 0.15s',
               }}
               title="檢視後一年"
             >
-              <ChevronRight size={16} />
+              <ChevronRight size={15} />
             </button>
           </div>
         </div>
       </div>
 
       {/* 2. 四大發光 KPI 摘要卡片 (4-Pillar Metric Cards) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '14px' }}>
         {/* 卡片 1: 當年度實領股息 */}
         <div
           className="glass-card"
           style={{
-            padding: '18px',
+            padding: '16px 18px',
             borderRadius: '14px',
-            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(15, 23, 42, 0.85) 100%)',
-            border: '1px solid rgba(16, 185, 129, 0.4)',
+            background: 'linear-gradient(180deg, rgba(16, 185, 129, 0.15) 0%, rgba(15, 23, 42, 0.85) 100%)',
+            border: '1px solid rgba(16, 185, 129, 0.35)',
             boxShadow: '0 4px 16px rgba(16, 185, 129, 0.1)',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#34d399', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <DollarSign size={16} /> {selectedYear} 年度實領股息
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#34d399', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <DollarSign size={15} /> {selectedYear} 年度實領股息
             </span>
-            <span style={{ fontSize: '0.7rem', color: '#10b981', background: 'rgba(16, 185, 129, 0.15)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+            <span style={{ fontSize: '0.68rem', color: '#10b981', background: 'rgba(16, 185, 129, 0.15)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
               已實質入帳
             </span>
           </div>
-          <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#34d399' }}>
+          <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#34d399', lineHeight: 1.2 }}>
             NT$ {report.currentYearDividendsTWD.toLocaleString()}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', fontSize: '0.75rem', color: '#94a3b8' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', fontSize: '0.74rem', color: '#94a3b8' }}>
             <span>YoY 成長率：</span>
             <span
               style={{
-                fontWeight: 700,
+                fontWeight: 800,
                 color: report.yoyGrowthPercent >= 0 ? 'var(--gain-color)' : 'var(--loss-color)',
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -299,26 +300,26 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         <div
           className="glass-card"
           style={{
-            padding: '18px',
+            padding: '16px 18px',
             borderRadius: '14px',
-            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(15, 23, 42, 0.85) 100%)',
+            background: 'linear-gradient(180deg, rgba(59, 130, 246, 0.12) 0%, rgba(15, 23, 42, 0.85) 100%)',
             border: '1px solid rgba(59, 130, 246, 0.35)',
             boxShadow: '0 4px 16px rgba(59, 130, 246, 0.08)',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <TrendingUp size={16} /> 近 12 個月滾動現金流 (TTM)
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <TrendingUp size={15} /> 近 12 個月滾動現金流 (TTM)
             </span>
-            <span style={{ fontSize: '0.7rem', color: '#60a5fa', background: 'rgba(59, 130, 246, 0.15)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+            <span style={{ fontSize: '0.68rem', color: '#60a5fa', background: 'rgba(59, 130, 246, 0.15)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
               12M 滾動
             </span>
           </div>
-          <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#ffffff' }}>
+          <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#ffffff', lineHeight: 1.2 }}>
             NT$ {report.trailing12mDividendsTWD.toLocaleString()}
           </div>
-          <div style={{ marginTop: '6px', fontSize: '0.75rem', color: '#94a3b8' }}>
-            平均每月約 <b style={{ color: '#60a5fa' }}>NT$ {Math.round(report.trailing12mDividendsTWD / 12).toLocaleString()}</b>
+          <div style={{ marginTop: '6px', fontSize: '0.74rem', color: '#94a3b8' }}>
+            平均每月約 <b className="mono" style={{ color: '#60a5fa' }}>NT$ {Math.round(report.trailing12mDividendsTWD / 12).toLocaleString()}</b>
           </div>
         </div>
 
@@ -326,25 +327,25 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         <div
           className="glass-card"
           style={{
-            padding: '18px',
+            padding: '16px 18px',
             borderRadius: '14px',
-            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(15, 23, 42, 0.85) 100%)',
-            border: '1px solid rgba(245, 158, 11, 0.4)',
+            background: 'linear-gradient(180deg, rgba(245, 158, 11, 0.15) 0%, rgba(15, 23, 42, 0.85) 100%)',
+            border: '1px solid rgba(245, 158, 11, 0.35)',
             boxShadow: '0 4px 16px rgba(245, 158, 11, 0.1)',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Clock size={16} /> 待發放應收股利 (平滑中)
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Clock size={15} /> 待發放應收股利 (平滑中)
             </span>
-            <span style={{ fontSize: '0.7rem', color: '#fbbf24', background: 'rgba(245, 158, 11, 0.15)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+            <span style={{ fontSize: '0.68rem', color: '#fbbf24', background: 'rgba(245, 158, 11, 0.15)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
               ⚡ 假性虧損平滑
             </span>
           </div>
-          <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#fcd34d' }}>
+          <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#fcd34d', lineHeight: 1.2 }}>
             +NT$ {totalReceivableTWD.toLocaleString()}
           </div>
-          <div style={{ marginTop: '6px', fontSize: '0.75rem', color: '#fde68a' }}>
+          <div style={{ marginTop: '6px', fontSize: '0.74rem', color: '#fde68a' }}>
             共 <b>{scopedReceivables.filter((r) => r.status === 'PENDING_PAYMENT' || r.status === 'OVERDUE').length} 筆</b> 待入帳款項
           </div>
         </div>
@@ -353,25 +354,25 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         <div
           className="glass-card"
           style={{
-            padding: '18px',
+            padding: '16px 18px',
             borderRadius: '14px',
-            background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.12) 0%, rgba(15, 23, 42, 0.85) 100%)',
+            background: 'linear-gradient(180deg, rgba(168, 85, 247, 0.12) 0%, rgba(15, 23, 42, 0.85) 100%)',
             border: '1px solid rgba(168, 85, 247, 0.35)',
             boxShadow: '0 4px 16px rgba(168, 85, 247, 0.08)',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#c084fc', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Sparkles size={16} /> 全歷史累計實領淨額
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#c084fc', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Sparkles size={15} /> 全歷史累計實領淨額
             </span>
-            <span style={{ fontSize: '0.7rem', color: '#c084fc', background: 'rgba(168, 85, 247, 0.15)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
+            <span style={{ fontSize: '0.68rem', color: '#c084fc', background: 'rgba(168, 85, 247, 0.15)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
               全歷史已落袋
             </span>
           </div>
-          <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#d8b4fe' }}>
+          <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#d8b4fe', lineHeight: 1.2 }}>
             NT$ {report.totalHistoricalDividendsTWD.toLocaleString()}
           </div>
-          <div style={{ marginTop: '6px', fontSize: '0.75rem', color: '#94a3b8' }}>
+          <div style={{ marginTop: '6px', fontSize: '0.74rem', color: '#94a3b8' }}>
             已扣除二代健保與 30% IRS 預扣稅
           </div>
         </div>
@@ -386,8 +387,8 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
             gridColumn: 'span 2',
             padding: '20px',
             borderRadius: '16px',
-            background: 'rgba(15, 23, 42, 0.75)',
-            border: '1px solid rgba(51, 65, 85, 0.6)',
+            background: 'rgba(15, 23, 42, 0.85)',
+            border: '1px solid var(--border-color)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
@@ -401,7 +402,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
                 {selectedYear} 各月份現金流分佈 (1~12 月)
               </h3>
             </div>
-            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>單位：新台幣 TWD</span>
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>單位：新台幣 TWD</span>
           </div>
 
           {/* 柱狀圖本體 */}
@@ -442,21 +443,21 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '0.75rem' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                               <span style={{ color: '#94a3b8' }}>實領入帳：</span>
-                              <b style={{ color: '#34d399' }}>NT$ {m.netTWD.toLocaleString()}</b>
+                              <b className="mono" style={{ color: '#34d399' }}>NT$ {m.netTWD.toLocaleString()}</b>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                               <span style={{ color: '#94a3b8' }}>應發毛額：</span>
-                              <span style={{ color: '#ffffff' }}>NT$ {m.grossTWD.toLocaleString()}</span>
+                              <span className="mono" style={{ color: '#ffffff' }}>NT$ {m.grossTWD.toLocaleString()}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                               <span style={{ color: '#94a3b8' }}>扣繳稅款/健保：</span>
-                              <span style={{ color: m.taxTWD > 0 ? '#f43f5e' : '#94a3b8' }}>
+                              <span className="mono" style={{ color: m.taxTWD > 0 ? 'var(--loss-color)' : '#94a3b8' }}>
                                 {m.taxTWD > 0 ? `-NT$ ${m.taxTWD.toLocaleString()}` : 'NT$ 0'}
                               </span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                               <span style={{ color: '#94a3b8' }}>配息筆數：</span>
-                              <span style={{ color: '#ffffff' }}>{m.count} 筆</span>
+                              <span className="mono" style={{ color: '#ffffff' }}>{m.count} 筆</span>
                             </div>
                           </div>
                         ) : (
@@ -496,19 +497,19 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
             })}
           </div>
 
-          <div style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ fontSize: '0.74rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span>💡 提示：綠色長條代表該月有配息入帳，滑鼠懸浮柱狀條可檢視該月份實領與扣稅細節。</span>
           </div>
         </div>
 
-        {/* 右側 1 欄位：標的股息貢獻度排行 Top 榜 (支援當年度 vs 全歷史切換) */}
+        {/* 右側 1 欄位：標的股息貢獻度排行 Top 榜 */}
         <div
           className="glass-card"
           style={{
             padding: '20px',
             borderRadius: '16px',
-            background: 'rgba(15, 23, 42, 0.75)',
-            border: '1px solid rgba(51, 65, 85, 0.6)',
+            background: 'rgba(15, 23, 42, 0.85)',
+            border: '1px solid var(--border-color)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
@@ -528,10 +529,10 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
               <div
                 style={{
                   display: 'flex',
-                  background: 'rgba(30, 41, 59, 0.8)',
+                  background: 'rgba(19, 29, 49, 0.8)',
                   padding: '2px',
                   borderRadius: '8px',
-                  border: '1px solid rgba(51, 65, 85, 0.6)',
+                  border: '1px solid var(--border-color)',
                 }}
               >
                 <button
@@ -540,7 +541,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
                     padding: '3px 8px',
                     borderRadius: '6px',
                     border: 'none',
-                    background: rankMode === 'YEAR' ? '#8b5cf6' : 'transparent',
+                    background: rankMode === 'YEAR' ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' : 'transparent',
                     color: rankMode === 'YEAR' ? '#ffffff' : '#94a3b8',
                     fontSize: '0.7rem',
                     fontWeight: rankMode === 'YEAR' ? 700 : 500,
@@ -556,7 +557,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
                     padding: '3px 8px',
                     borderRadius: '6px',
                     border: 'none',
-                    background: rankMode === 'ALL_TIME' ? '#8b5cf6' : 'transparent',
+                    background: rankMode === 'ALL_TIME' ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' : 'transparent',
                     color: rankMode === 'ALL_TIME' ? '#ffffff' : '#94a3b8',
                     fontSize: '0.7rem',
                     fontWeight: rankMode === 'ALL_TIME' ? 700 : 500,
@@ -628,13 +629,13 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         </div>
       </div>
 
-      {/* 4. 雙看板區塊：⚡ 除息待入帳行事曆 (Receivable Dividends Pending Payment) */}
+      {/* 4. 雙看板區塊：⚡ 除息待入帳行事曆 */}
       <div
         className="glass-card"
         style={{
-          padding: '22px',
+          padding: '20px 22px',
           borderRadius: '16px',
-          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(15, 23, 42, 0.85) 100%)',
+          background: 'linear-gradient(180deg, rgba(245, 158, 11, 0.1) 0%, rgba(15, 23, 42, 0.85) 100%)',
           border: '1px solid rgba(245, 158, 11, 0.35)',
           display: 'flex',
           flexDirection: 'column',
@@ -692,7 +693,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))',
-              gap: '18px',
+              gap: '16px',
             }}
           >
             {scopedReceivables
@@ -700,30 +701,31 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
               .map((rec) => (
                 <div
                   key={rec.id}
+                  className="glass-card"
                   style={{
-                    padding: '18px 20px',
+                    padding: '16px 18px',
                     borderRadius: '14px',
                     background: 'rgba(15, 23, 42, 0.9)',
-                    border: '1px solid rgba(245, 158, 11, 0.6)',
+                    border: '1px solid rgba(245, 158, 11, 0.5)',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '14px',
-                    boxShadow: '0 8px 20px rgba(0, 0, 0, 0.35)',
+                    gap: '12px',
+                    boxShadow: '0 6px 18px rgba(0, 0, 0, 0.35)',
                   }}
                 >
                   {/* 卡片標頭 */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'nowrap', gap: '12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 800, color: '#ffffff', fontSize: '1.15rem', letterSpacing: '0.5px' }}>
+                      <span style={{ fontWeight: 800, color: '#ffffff', fontSize: '1.1rem', letterSpacing: '0.5px' }}>
                         {rec.symbol}
                       </span>
-                      <span style={{ color: '#cbd5e1', fontSize: '0.95rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      <span style={{ color: '#cbd5e1', fontSize: '0.92rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
                         {rec.name}
                       </span>
                       <span
                         style={{
-                          fontSize: '0.7rem',
-                          padding: '2px 8px',
+                          fontSize: '0.68rem',
+                          padding: '2px 7px',
                           borderRadius: '6px',
                           background: 'rgba(245, 158, 11, 0.2)',
                           color: '#fbbf24',
@@ -746,34 +748,34 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
                     style={{
                       display: 'grid',
                       gridTemplateColumns: '1fr 1fr',
-                      gap: '10px 14px',
-                      background: 'rgba(30, 41, 59, 0.6)',
-                      padding: '12px 16px',
+                      gap: '8px 12px',
+                      background: 'rgba(30, 41, 59, 0.55)',
+                      padding: '10px 14px',
                       borderRadius: '10px',
                       border: '1px solid rgba(51, 65, 85, 0.5)',
                     }}
                   >
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                      <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>📅 除息基準日</span>
-                      <b className="mono" style={{ fontSize: '0.9rem', color: '#ffffff', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>📅 除息基準日</span>
+                      <b className="mono" style={{ fontSize: '0.85rem', color: '#ffffff', whiteSpace: 'nowrap' }}>
                         {rec.exDate}
                       </b>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                      <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>💰 預估發放日</span>
-                      <b className="mono" style={{ fontSize: '0.9rem', color: '#fbbf24', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>💰 預估發放日</span>
+                      <b className="mono" style={{ fontSize: '0.85rem', color: '#fbbf24', whiteSpace: 'nowrap' }}>
                         {rec.payDate}
                       </b>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                      <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>📦 除息庫存股數</span>
-                      <b className="mono" style={{ fontSize: '0.9rem', color: '#ffffff', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>📦 除息庫存股數</span>
+                      <b className="mono" style={{ fontSize: '0.85rem', color: '#ffffff', whiteSpace: 'nowrap' }}>
                         {rec.sharesHeldOnExDate.toLocaleString()} 股
                       </b>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                      <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>💵 每股配息金額</span>
-                      <b className="mono" style={{ fontSize: '0.9rem', color: '#34d399', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>💵 每股配息金額</span>
+                      <b className="mono" style={{ fontSize: '0.85rem', color: '#34d399', whiteSpace: 'nowrap' }}>
                         {rec.cashDividendPerShare} {rec.currency}
                       </b>
                     </div>
@@ -783,7 +785,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
                   {rec.market === 'TW' && rec.estimatedGrossDividend >= 20000 && (
                     <div
                       style={{
-                        fontSize: '0.75rem',
+                        fontSize: '0.74rem',
                         color: '#fef3c7',
                         background: 'rgba(245, 158, 11, 0.12)',
                         padding: '6px 12px',
@@ -803,7 +805,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
                   {rec.market === 'US' && (
                     <div
                       style={{
-                        fontSize: '0.75rem',
+                        fontSize: '0.74rem',
                         color: '#93c5fd',
                         background: 'rgba(59, 130, 246, 0.12)',
                         padding: '6px 12px',
@@ -820,13 +822,13 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         )}
       </div>
 
-      {/* 4.5 雙看板區塊：📢 即將除息公告看板 (Upcoming Corporate Actions & Ex-Dividends) */}
+      {/* 4.5 雙看板區塊：📢 即將除息公告看板 */}
       <div
         className="glass-card"
         style={{
-          padding: '22px',
+          padding: '20px 22px',
           borderRadius: '16px',
-          background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(15, 23, 42, 0.85) 100%)',
+          background: 'linear-gradient(180deg, rgba(59, 130, 246, 0.1) 0%, rgba(15, 23, 42, 0.85) 100%)',
           border: '1px solid rgba(59, 130, 246, 0.35)',
           display: 'flex',
           flexDirection: 'column',
@@ -884,7 +886,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))',
-              gap: '18px',
+              gap: '16px',
             }}
           >
             {scopedReceivables
@@ -892,30 +894,31 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
               .map((rec) => (
                 <div
                   key={rec.id}
+                  className="glass-card"
                   style={{
-                    padding: '18px 20px',
+                    padding: '16px 18px',
                     borderRadius: '14px',
                     background: 'rgba(15, 23, 42, 0.9)',
-                    border: '1px solid rgba(59, 130, 246, 0.6)',
+                    border: '1px solid rgba(59, 130, 246, 0.5)',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '14px',
-                    boxShadow: '0 8px 20px rgba(0, 0, 0, 0.35)',
+                    gap: '12px',
+                    boxShadow: '0 6px 18px rgba(0, 0, 0, 0.35)',
                   }}
                 >
                   {/* 卡片標頭 */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'nowrap', gap: '12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 800, color: '#ffffff', fontSize: '1.15rem', letterSpacing: '0.5px' }}>
+                      <span style={{ fontWeight: 800, color: '#ffffff', fontSize: '1.1rem', letterSpacing: '0.5px' }}>
                         {rec.symbol}
                       </span>
-                      <span style={{ color: '#cbd5e1', fontSize: '0.95rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      <span style={{ color: '#cbd5e1', fontSize: '0.92rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
                         {rec.name}
                       </span>
                       <span
                         style={{
-                          fontSize: '0.7rem',
-                          padding: '2px 8px',
+                          fontSize: '0.68rem',
+                          padding: '2px 7px',
                           borderRadius: '6px',
                           background: 'rgba(59, 130, 246, 0.2)',
                           color: '#60a5fa',
@@ -938,34 +941,34 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
                     style={{
                       display: 'grid',
                       gridTemplateColumns: '1fr 1fr',
-                      gap: '10px 14px',
-                      background: 'rgba(30, 41, 59, 0.6)',
-                      padding: '12px 16px',
+                      gap: '8px 12px',
+                      background: 'rgba(30, 41, 59, 0.55)',
+                      padding: '10px 14px',
                       borderRadius: '10px',
                       border: '1px solid rgba(51, 65, 85, 0.5)',
                     }}
                   >
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                      <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>📅 除息基準日</span>
-                      <b className="mono" style={{ fontSize: '0.9rem', color: '#ffffff', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>📅 除息基準日</span>
+                      <b className="mono" style={{ fontSize: '0.85rem', color: '#ffffff', whiteSpace: 'nowrap' }}>
                         {rec.exDate}
                       </b>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                      <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>💰 預估發放日</span>
-                      <b className="mono" style={{ fontSize: '0.9rem', color: '#fbbf24', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>💰 預估發放日</span>
+                      <b className="mono" style={{ fontSize: '0.85rem', color: '#fbbf24', whiteSpace: 'nowrap' }}>
                         {rec.payDate}
                       </b>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                      <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>📦 除息庫存股數</span>
-                      <b className="mono" style={{ fontSize: '0.9rem', color: '#ffffff', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>📦 除息庫存股數</span>
+                      <b className="mono" style={{ fontSize: '0.85rem', color: '#ffffff', whiteSpace: 'nowrap' }}>
                         {rec.sharesHeldOnExDate.toLocaleString()} 股
                       </b>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                      <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>💵 每股配息金額</span>
-                      <b className="mono" style={{ fontSize: '0.9rem', color: '#34d399', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>💵 每股配息金額</span>
+                      <b className="mono" style={{ fontSize: '0.85rem', color: '#34d399', whiteSpace: 'nowrap' }}>
                         {rec.cashDividendPerShare} {rec.currency}
                       </b>
                     </div>
@@ -975,7 +978,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
                   {rec.market === 'TW' && rec.estimatedGrossDividend >= 20000 && (
                     <div
                       style={{
-                        fontSize: '0.75rem',
+                        fontSize: '0.74rem',
                         color: '#fef3c7',
                         background: 'rgba(245, 158, 11, 0.12)',
                         padding: '6px 12px',
@@ -995,7 +998,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
                   {rec.market === 'US' && (
                     <div
                       style={{
-                        fontSize: '0.75rem',
+                        fontSize: '0.74rem',
                         color: '#93c5fd',
                         background: 'rgba(59, 130, 246, 0.12)',
                         padding: '6px 12px',
@@ -1012,14 +1015,14 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         )}
       </div>
 
-      {/* 5. 歷史現金股利入帳流水明細表 (全量智能補齊二代健保 2.11% 與美股 30% 稅費) */}
+      {/* 5. 歷史現金股利入帳流水明細表 */}
       <div
         className="glass-card"
         style={{
           padding: '20px',
           borderRadius: '16px',
-          background: 'rgba(15, 23, 42, 0.75)',
-          border: '1px solid rgba(51, 65, 85, 0.6)',
+          background: 'rgba(15, 23, 42, 0.85)',
+          border: '1px solid var(--border-color)',
           display: 'flex',
           flexDirection: 'column',
           gap: '16px',
@@ -1031,7 +1034,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
             <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#ffffff' }}>
               歷史現金股利入帳明細
             </h3>
-            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>({dividendTrades.length} 筆)</span>
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>({dividendTrades.length} 筆)</span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -1045,8 +1048,8 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
                   padding: '6px 12px 6px 30px',
-                  background: 'rgba(30, 41, 59, 0.8)',
-                  border: '1px solid rgba(51, 65, 85, 0.8)',
+                  background: 'rgba(19, 29, 49, 0.8)',
+                  border: '1px solid var(--border-color)',
                   borderRadius: '8px',
                   fontSize: '0.75rem',
                   color: '#ffffff',
@@ -1062,7 +1065,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8rem' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid rgba(51, 65, 85, 0.8)', color: '#94a3b8' }}>
+              <tr style={{ borderBottom: '1px solid rgba(51, 65, 85, 0.8)', color: '#94a3b8', background: 'rgba(19, 29, 49, 0.4)' }}>
                 <th style={{ padding: '10px 12px', fontWeight: 600 }}>入帳日期</th>
                 <th style={{ padding: '10px 12px', fontWeight: 600 }}>標的代碼 / 名稱</th>
                 <th style={{ padding: '10px 12px', fontWeight: 600, textAlign: 'right' }}>除息股數</th>
@@ -1088,7 +1091,9 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
                   const effectiveTax = res.effectiveTax;
                   const net = res.netCash;
                   const netTWD = isUS ? Math.round(net * usdToTwdRate) : Math.round(net);
-                  const isFuture = t.date > new Date().toISOString().split('T')[0];
+                  const effectivePayDate = t.payDate || estimatePaymentDate(t.exDate || t.date, t.market);
+                  const exDate = t.exDate || t.date;
+                  const isFuture = effectivePayDate > todayStr;
 
                   // 格式化數字字串
                   const formattedShares = isUS ? t.shares.toLocaleString() : Math.round(t.shares).toLocaleString();
@@ -1112,8 +1117,22 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
                         background: isFuture ? 'rgba(245, 158, 11, 0.05)' : 'transparent',
                       }}
                     >
-                      <td className="mono" style={{ padding: '10px 12px', color: isFuture ? '#fbbf24' : '#cbd5e1' }}>
-                        {t.date} {isFuture && <span style={{ fontSize: '0.65rem', background: 'rgba(245, 158, 11, 0.2)', padding: '1px 4px', borderRadius: '4px', color: '#fbbf24' }}>預約待入</span>}
+                      <td className="mono" style={{ padding: '10px 12px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontWeight: 700, color: isFuture ? '#fbbf24' : '#34d399', fontSize: '0.85rem' }}>
+                              {effectivePayDate}
+                            </span>
+                            {isFuture && (
+                              <span style={{ fontSize: '0.65rem', background: 'rgba(245, 158, 11, 0.2)', padding: '1px 4px', borderRadius: '4px', color: '#fbbf24' }}>
+                                預約待入
+                              </span>
+                            )}
+                          </div>
+                          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                            除息: {exDate}
+                          </span>
+                        </div>
                       </td>
                       <td style={{ padding: '10px 12px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

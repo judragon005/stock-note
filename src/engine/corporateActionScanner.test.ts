@@ -809,7 +809,7 @@ describe('公司行動智慧掃描引擎 (Corporate Action Scanner)', () => {
       expect(cashDiv?.price).toBe(1.1);
       expect(cashDiv?.taxDeduction).toBe(850); // (34,100 + 6,200) * 2.11% = 850 元
       expect(cashDiv?.estimatedCashAmount).toBe(33250); // 34,100 - 850 = 33,250 元
-      expect(cashDiv?.payDate).toBe('2026-08-20');
+      expect(cashDiv?.payDate).toBe('2026-08-24');
     }, 15000);
 
     it('防禦驗證：當手動刪除特定季配息後，重掃時該除息事件應精準標記為待補登 (isAlreadyRecorded: false)，不被其他季度混淆', async () => {

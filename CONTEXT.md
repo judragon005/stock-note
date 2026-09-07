@@ -261,6 +261,25 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0044: V5.7.3 全專案「慣用紅綠漲跌」色彩模式統一與 CSS 變數體系全面連動](docs/adr/0044-color-theme-mode-unification-and-full-project-css-sync.md)
 - [ADR-0059: V6.9.2 本地儲存檢測中心雙軌容錯韌性升級與 0 筆計數盲區修復](docs/adr/0059-local-storage-inspector-dual-track-resilience-and-zero-count-fix.md)
 - [ADR-0065: V7.0.0 資產配置目標偏離 (Drift) 試算與再平衡推薦器](docs/specs/0065-target-allocation-drift-and-rebalancing-optimizer-spec.md)
+- [ADR-0072: V7.4.0 樹狀圖納入借款與負債槓桿視覺化架構](docs/adr/0072-treemap-debt-and-leverage-visualization.md)
+- [ADR-0073: V7.5.0 股票質押借款撥款金流同步、零本金斷頭誤判防禦與已結清歷史歸檔架構](docs/adr/0073-loan-disbursement-cash-sync-and-closed-pledge-archive.md)
+- [ADR-0074: V7.5.1 歷史已結清借貸利息與官方規費明細拆解、借款天數與結清還款日追蹤架構](docs/adr/0074-settled-loan-cost-breakdown-and-payoff-date.md)
+- [ADR-0075: V7.5.2 歷史已結清借貸規費明細計算校正與結清還款日手動維護架構](docs/adr/0075-settled-loan-fee-breakdown-bugfix-and-payoff-date-editor.md)
+
+### 歷史已結清借貸規費明細計算校正與結清還款日維護 (Settled Fee Fix & Payoff Date Editor) *(新增於 V7.5.2)*
+- **三大規費明細單一事實來源 (SSOT)**：當借貸登記設質費為 0 時強制為 0，徹底杜絕被 `pledgeFee` 總額或未拆分流水污染導致規費重複翻倍。
+- **結清還款日手動維護 (Closed Date Editor)**：`LoanModal` 支援在借貸結清本金為 0 時呈現日期選擇器，隨時檢視與校正真實結清還款日。
+
+### 歷史已結清借貸成本透視與結清還款日追蹤架構 (Settled Loan Cost & Lifecycle) *(新增於 V7.5.1)*
+- **合約結清時態與借款天數 (Payoff Date & Borrow Days)**：`LoanRecord` 擴充 `closedDate`，於還本歸零時自動寫入；卡片標註「借款起日 · 結清還款日 (歷時 XX 天)」，便於投資人對照券商對帳單。
+- **已付借貸成本雙軌聚合 (Settled Loan Summary Engine)**：以 `calculateLoanSettledSummary` 純函數優先聚合關聯現金流水中之實際扣繳利息與規費，缺漏時平滑備援推算。
+- **券商官方名詞標準化**：全面對齊集保結算所與主要券商正式名詞（「質押借款利息 / 融資利息」、「設質登記費」、「集保撥券費」、「開辦手續費」、「總借貸支出成本」）。
+
+### 股票質押借款撥款同步與歷史結清歸檔架構 (Loan Disbursement & Settled Archive) *(新增於 V7.5.0)*
+- **借貸撥款入帳自動連動 (Loan Disbursement Sync)**：建立借款時提供「自動於關聯帳戶記錄借款撥款入帳 (`LOAN_DISBURSEMENT`)」選項，以借款起日為生效日建立正數現金流，確保借貸成立與後續還款借貸平衡。
+- **零借款本金斷頭誤判防禦 (Zero-Debt Safety Guard)**：當借款未還本金歸零 (`principal <= 0`) 時，維持率標記為 `SAFE` (維持率為 `Infinity`，介面顯示「無負債 (安全)」)，徹底阻斷斷頭警報與殘留規費。
+- **進行中與已結清看板分流 (Active vs. Closed Workspace Split)**：即時風控看板僅渲染進行中借貸 (`principal > 0`)；已歸還完成之借貸自動收納於專屬「📜 歷史借貸與質押已結清紀錄」折疊清單中。
+- **歷史借款缺漏一鍵平帳 (Historical Reconciliation)**：自動偵測「有還款紀錄但缺少當初借款入帳」之歷史借貸（包含 2026-07-28 之股票質押），提供一鍵平帳補登功能。
 
 ### 資產配置目標偏離 (Drift) 試算與再平衡推薦器 (Target Allocation & Rebalancing) *(新增於 V7.0.0)*
 - **雙軌目標配置模型 (Target Allocation Config)**：支援「市場維度 (TW/US/Cash)」與「自訂個股維度 (Symbol-level)」策略設定，具備合計 100% 之防呆驗證與偏離容忍門檻 ($\pm 5\%$)。
@@ -889,5 +908,44 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Structured Directive Tooltip (結構化定調資訊卡片)** *(新增於 V7.2.1)*:
   - 採 `align="left"` 徹底防截斷排版，分層呈現【四字定調 + 量化得分】➔【操作指南內文】➔【風控紀律標註】。
 
+### 視覺設計系統與金融終端語言 (Design System & Visual Language) *(新增於 V7.3.0)*
+
+**Modern Glassmorphism (現代深色玻璃擬態)**:
+以 `--bg-primary: #080c14` 極深底色搭配半透明毛玻璃卡片（`backdrop-filter: blur(16px)`）、微漸變光暈與細緻邊框構成之現代專業金融介面。
+
+**Segmented Pill Switcher (膠囊切換器)**:
+將市場（ALL / TW / US）、會計口徑（券商核帳 / 總報酬）、持倉狀態（持倉中 / 已平倉 / 全部）與時間範圍收斂為流暢之膠囊按鈕群組，選中時具備發光漸變高光。
+
+**Financial Tabular Typography (等寬金融排版)**:
+全站金額、股數、報酬率與 XIRR 一律採用 `JetBrains Mono` 等寬字型與 `tabular-nums`，確保縱向數據快速掃描時無水平抖動。
+
+**Live Pulse Indicator (即時心跳光點)**:
+盤中即時狀態、連線狀態與健康指標採用 CSS 呼吸漸變光點（`pulse-dot-green`），提供即時性操作回饋。
+
+### 漲跌配色切換與提示語意 (Symmetric Color Theme Toggle) *(新增於 V7.3.3)*
+
+**Symmetric Color Theme Label (對稱色彩模式標籤)**:
+頂部工具列切換按鈕一律完整呈現漲跌雙色球與標籤文字（台股模式為 `🔴 紅漲 🟢 綠跌`，國際/美股模式為 `🟢 綠漲 🔴 紅跌`），消除單色標籤造成的認知衝突。
+
+**Dynamic Contextual Tooltip (動態情境式切換提示)**:
+當滑鼠懸浮於調色盤按鈕時，動態展示雙行「目前生效模式」與「點擊切換目標」，提供透明且可預期的操作回饋。
+
+### 樹狀圖納入借款與負債槓桿視覺化架構 (Treemap Debt & Leverage Visualization Architecture) *(新增於 V7.4.0)*
+
+- **Capital Employed Positive Geometry (資本來源正幾何模型)**:
+  - 樹狀圖維持以總資產 $\text{TotalAssets} = \sum \text{StockValue} + \max(0, \text{CashBalance})$ 為分母，當存在未結清借款（$\text{totalDebt} > 0$）時，以正數面積動態注入 `DEBT_TWD` 借款節點，直觀呈現負債相對總資產之槓桿份量。
+- **Amber Warning Visual Semantics (琥珀警示視覺語意)**:
+  - 借款節點採用專屬高對比琥珀金配色（`hsla(38, 92%, 50%, 0.85)` / `#f59e0b`）與深琥珀外框，標註負債金額與年化借款利率，與持股漲跌（紅/綠）及現金（深灰藍）形成明確視覺三態。
+- **Auxiliary LTV Indicator Capsule (獨立 LTV 槓桿負債比膠囊)**:
+  - 頂部市場進度條維持「台股 / 美股 / 現金」三段純資產百分比；右側比例欄位動態注入 `🏦 負債比 LTV: XX.X%` 琥珀色膠囊，零借款時自動隱藏。
+- **Hierarchical Debt Contract Inspection (借貸合約階層式透視 Tooltip)**:
+  - 懸浮於借款區塊時，彈出多層次結構化 Tooltip，羅列各筆借款名稱、類別（質押/融資/信貸）、本金、利率與擔保品狀況。
 
 
+### 歷史現金股利入帳日與除息日時序分離架構 (Dividend Log View Temporal Separation) *(新增於 V7.6.0)*
+
+- **Ex-Date vs Pay-Date Temporal Separation (除息日與入帳發放日時序徹底分離)**:
+  - **除息日 (Ex-Date)**：債權成立與假性虧損平滑日。系統內部以 TradeRecord.date 或 TradeRecord.exDate 標示除息基準日。
+  - **發放日 (Pay-Date)**：資金實質到帳日 (TradeRecord.payDate)。歷史現金股利入帳明細表第一欄主視覺醒目顯示實際入帳日，副視覺灰字標註除息基準日。
+  - **入帳日倒序排列 (Effective Pay-Date Descending Sort)**：歷史明細表排序依據由原先之 date 改為優先依 effectivePayDate 由新到舊倒序排列，若發放日相同則依除息基準日排序。
+  - **永豐金 (2890) 官方入帳日校正**：將 2890 現金股利預估/官方發放日基準校正為 2026-08-24。

@@ -208,4 +208,61 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
       expect(upcoming.length).toBe(0);
     });
   });
+
+  describe('3. 歷史現金股利入帳明細：入帳日 (payDate) 與除息日 (exDate) 時序分離與排序', () => {
+    it('2886 兆豐金除息 2026-08-13，有效入帳日應為 2026-09-04；2890 永豐金除息 2026-07-23，有效入帳日應為 2026-08-24', async () => {
+      const { estimatePaymentDate } = await import('../engine/receivableDividendEngine');
+      expect(estimatePaymentDate('2026-08-13', 'TW')).toBe('2026-09-04');
+      expect(estimatePaymentDate('2026-07-23', 'TW')).toBe('2026-08-24');
+    });
+
+    it('歷史入帳明細應以有效入帳日 (effectivePayDate) 為主鍵進行倒序排列，而非除息日', async () => {
+      const { estimatePaymentDate } = await import('../engine/receivableDividendEngine');
+      const testTrades: TradeRecord[] = [
+        {
+          id: 't-2890',
+          symbol: '2890',
+          name: '永豐金',
+          market: 'TW',
+          type: 'DIVIDEND',
+          date: '2026-07-23', // 除息日較早
+          payDate: '2026-08-24', // 入帳日較晚
+          shares: 31000,
+          price: 1.1,
+          currency: 'TWD',
+          fee: 0,
+          tax: 850,
+          createdAt: 1,
+        },
+        {
+          id: 't-0050',
+          symbol: '0050',
+          name: '元大台灣50',
+          market: 'TW',
+          type: 'DIVIDEND',
+          date: '2026-07-25', // 除息日較晚
+          payDate: '2026-08-15', // 入帳日較早
+          shares: 1000,
+          price: 1.0,
+          currency: 'TWD',
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+      ];
+
+      // 依 effectivePayDate 倒序排序
+      const sorted = [...testTrades].sort((a, b) => {
+        const payA = a.payDate || estimatePaymentDate(a.exDate || a.date, a.market);
+        const payB = b.payDate || estimatePaymentDate(b.exDate || b.date, b.market);
+        const comp = payB.localeCompare(payA);
+        if (comp !== 0) return comp;
+        return (b.exDate || b.date).localeCompare(a.exDate || a.date);
+      });
+
+      // 2890 入帳日 2026-08-24 應排在 0050 (2026-08-15) 前面
+      expect(sorted[0].symbol).toBe('2890');
+      expect(sorted[1].symbol).toBe('0050');
+    });
+  });
 });
