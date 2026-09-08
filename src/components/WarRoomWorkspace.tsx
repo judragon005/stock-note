@@ -321,9 +321,11 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
-  // 0. 持股技術訊號萃取 (掃描在倉標的)
+  // 0. 持股技術訊號萃取 (嚴格鎖定在倉標的 shares > 0，杜絕已閉倉標的干擾晨報)
   const holdingSignals = useMemo<MacroHoldingSignalInput[]>(() => {
-    return holdings.map((h) => {
+    return holdings
+      .filter((h) => h.shares > 0)
+      .map((h) => {
       const localDailyMap = historicalDailyPrices[h.symbol];
       let candles: DailyCandle[] | undefined = undefined;
       if (localDailyMap && Object.keys(localDailyMap).length >= 5) {

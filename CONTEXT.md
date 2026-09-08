@@ -1260,3 +1260,24 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     - 距離重大事件（CPI / FOMC）3 天內發出防守注碼預警。
     - 預告近期即將入帳之現金股息金額，規劃再平衡資金活水。
 
+### 在倉/已平倉持股分流過濾與小白動能百科架構 *(新增於 V8.18.0 / ADR #0099)*
+
+- **Active vs. Closed Holdings Separation (在倉與歷史平倉嚴格物理隔離)**:
+  - 核心機制：
+    - 在倉持股 (Active Holdings)：`shares > 0`。
+    - 歷史平倉 (Closed Holdings)：`shares === 0 && (realizedPnL !== 0 || totalDividends > 0 || originalBuyShares > 0)`。
+  - 影響範疇：
+    - **戰情室 AI 每日晨報**：`holdingSignals` 僅掃描 `shares > 0` 之在倉標的，徹底杜絕已清空平倉之歷史持股（如 00746B、1717 等）誤出現在「破線停損」清單中。
+    - **肌肉書僮動能雷達**：資產池切換列物理級拆分為「在倉持股」與「歷史平倉」獨立按鈕並標示即時標的數，解決過去 60 檔混合一團導致使用者無法辨識當前曝險之痛點。
+- **Beginner-Friendly Momentum Tooltips (股市小白專屬動能與操盤術語百科)**:
+  - 字典常數：`BEGINNER_TOOLTIPS`（位於 `src/components/MuscleBookerWorkspace.tsx`）。
+  - 白話文科普術語包括：
+    - **風益比 (Risk-Reward Ratio, R:R)**：每承受 1 塊錢停損風險能賺幾塊錢潛在獲利。
+    - **箱頂防守價 (Box Upper Defense)**：帶量突破整理壓力線後，箱頂轉為最強支撐防守線。
+    - **破底翻反轉 (Bottom Penetration Reversal)**：主力假跌破誘空、當天強勢拉抬吃貨之反轉訊號。
+    - **布林極致壓縮 (Bollinger Squeeze)**：帶寬 < 8%，多空高度收斂，即將爆發大變盤。
+    - **跌破箱底防守線 (Box Breakdown Stop Loss)**：跌破箱底防線，多方棄守，嚴格停損保命第一。
+    - **MA20 扣抵望遠鏡 (MA Deduction Telescope)**：以歷史扣抵價預測月線未來 3~5 日之翻揚或下彎方向。
+  - UI 呈現：採用 `<Tooltip>` 與 `textDecoration: underline dotted; cursor: help`，小白懸浮即可秒懂操盤意涵。
+
+

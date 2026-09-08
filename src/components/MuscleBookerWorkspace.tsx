@@ -21,6 +21,7 @@ import {
   evaluateMuscleBookerAction,
   MuscleBookerActionDecision,
 } from '../engine/muscleBookerEngine';
+import { Tooltip } from './common/Tooltip';
 
 interface MuscleBookerWorkspaceProps {
   holdings: HoldingPosition[];
@@ -28,7 +29,20 @@ interface MuscleBookerWorkspaceProps {
   currentMarket?: 'ALL' | MarketType;
 }
 
-type AssetPoolType = 'HOLDINGS' | 'TOP30_FOCUS' | 'TW50_CORE';
+export type AssetPoolType = 'HOLDINGS' | 'HOLDINGS_ACTIVE' | 'HOLDINGS_CLOSED' | 'TOP30_FOCUS' | 'TW50_CORE';
+
+/**
+ * 股市小白專屬動能名詞百科字典
+ */
+export const BEGINNER_TOOLTIPS = {
+  riskReward: '💡【股市小白指南】風益比 (Risk-Reward Ratio, R:R)：賺賠比。代表每承受 1 塊錢的停損風險，預期能賺取幾塊錢的潛在獲利。數值越大代表勝算越高，通常大於 1:2 R 才是值得進場的好機會！',
+  boxUpperDefense: '💡【股市小白指南】箱頂防守價：股價帶量突破過去一段時間的最高整理壓力線後，箱頂轉為最強支撐防守線。只要沒跌破箱頂，就代表多頭主升段續抱；若跌破則需警戒避險。',
+  bottomPenetration: '💡【股市小白指南】破底翻反轉：主力故意跌破前低支撐引誘散戶殺出，隨後當天強勢拉抬收復超過一半留下長下影線。這是典型的「假跌破、真吃貨」右側止跌進場訊號。',
+  bollingerSqueeze: '💡【股市小白指南】布林極致壓縮：帶寬小於 8%，代表多空力量高度收斂、股價像彈簧被壓到最緊。暗示隨時會爆發大方向變盤，此時切勿預設立場猜底，等待出方向再跟隨！',
+  boxLowerBreakdown: '💡【股市小白指南】跌破箱底防守線：跌破過去三日箱底的最後防線，多方棄守、趨勢轉弱。嚴禁凹單攤平，應果斷停損保全資金，保命第一！',
+  maDeductionTelescope: '💡【股市小白指南】MA20 扣抵望遠鏡：用來提前 3~5 天預測月均線的走勢。若目前現價高於 20 天前的扣抵價，月均線就會向上翻揚助漲；反之均線會下彎反壓。',
+  stopLossPrinciple: '💡【股市小白指南】嚴格停損紀律：只要跌破設定的防守價位，代表進場理由消失。小賠離場是為了保護本金，避免一次大跌讓資產腰斬！',
+};
 
 export interface ScannedStockItem {
   symbol: string;
@@ -244,7 +258,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
 
-  // 0. 依當前市場過濾在倉持股
+  // 0. 依當前市場過濾持股
   const marketScopedHoldings = useMemo(() => {
     if (currentMarket === 'US') {
       return holdings.filter((h) => h.market === 'US' || h.currency === 'USD');
@@ -255,10 +269,30 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     return holdings;
   }, [holdings, currentMarket]);
 
+  // 在倉持股 (shares > 0)
+  const activeHoldings = useMemo(() => {
+    return marketScopedHoldings.filter((h) => h.shares > 0);
+  }, [marketScopedHoldings]);
+
+  // 歷史閉倉 (shares === 0)
+  const closedHoldings = useMemo(() => {
+    return marketScopedHoldings.filter(
+      (h) => h.shares === 0 && (h.realizedPnL !== 0 || (h.totalDividends || 0) > 0 || (h.originalBuyShares || 0) > 0)
+    );
+  }, [marketScopedHoldings]);
+
   // 1. 產生掃描標的清單
   const targetUniverse = useMemo(() => {
-    if (selectedPool === 'HOLDINGS') {
-      return marketScopedHoldings.map((h) => ({
+    if (selectedPool === 'HOLDINGS' || selectedPool === 'HOLDINGS_ACTIVE') {
+      return activeHoldings.map((h) => ({
+        symbol: h.symbol,
+        name: h.name,
+        market: h.market,
+        basePrice: h.currentPrice || 100,
+      }));
+    }
+    if (selectedPool === 'HOLDINGS_CLOSED') {
+      return closedHoldings.map((h) => ({
         symbol: h.symbol,
         name: h.name,
         market: h.market,
@@ -266,7 +300,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
       }));
     }
     return getScopedUniverseSymbols(currentMarket, selectedPool);
-  }, [selectedPool, marketScopedHoldings, currentMarket]);
+  }, [selectedPool, activeHoldings, closedHoldings, currentMarket]);
 
   // 2. 進行肌肉書僮指標全量掃描
   const scannedItems = useMemo<ScannedStockItem[]>(() => {
@@ -402,17 +436,30 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
               {currentMarket === 'US' ? '美股焦點 Top 30' : currentMarket === 'TW' ? '台股焦點 Top 30' : '法人焦點 Top 30'}
             </button>
             <button
-              onClick={() => setSelectedPool('HOLDINGS')}
+              onClick={() => setSelectedPool('HOLDINGS_ACTIVE')}
               className="btn btn-sm"
               style={{
-                background: selectedPool === 'HOLDINGS' ? 'var(--accent-primary)' : 'rgba(30, 41, 59, 0.65)',
-                color: selectedPool === 'HOLDINGS' ? '#ffffff' : 'var(--text-secondary)',
-                border: '1px solid ' + (selectedPool === 'HOLDINGS' ? 'var(--accent-primary)' : 'var(--border-color)'),
+                background: (selectedPool === 'HOLDINGS_ACTIVE' || selectedPool === 'HOLDINGS') ? 'var(--accent-primary)' : 'rgba(30, 41, 59, 0.65)',
+                color: (selectedPool === 'HOLDINGS_ACTIVE' || selectedPool === 'HOLDINGS') ? '#ffffff' : 'var(--text-secondary)',
+                border: '1px solid ' + ((selectedPool === 'HOLDINGS_ACTIVE' || selectedPool === 'HOLDINGS') ? 'var(--accent-primary)' : 'var(--border-color)'),
                 cursor: 'pointer',
                 fontWeight: 600,
               }}
             >
-              {currentMarket === 'US' ? '美股持倉' : currentMarket === 'TW' ? '台股持倉' : '在倉持股'} ({marketScopedHoldings.length})
+              {currentMarket === 'US' ? '美股在倉' : currentMarket === 'TW' ? '台股在倉' : '在倉持股'} ({activeHoldings.length})
+            </button>
+            <button
+              onClick={() => setSelectedPool('HOLDINGS_CLOSED')}
+              className="btn btn-sm"
+              style={{
+                background: selectedPool === 'HOLDINGS_CLOSED' ? 'var(--accent-primary)' : 'rgba(30, 41, 59, 0.65)',
+                color: selectedPool === 'HOLDINGS_CLOSED' ? '#ffffff' : 'var(--text-secondary)',
+                border: '1px solid ' + (selectedPool === 'HOLDINGS_CLOSED' ? 'var(--accent-primary)' : 'var(--border-color)'),
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              {currentMarket === 'US' ? '美股平倉' : currentMarket === 'TW' ? '歷史平倉' : '已平倉'} ({closedHoldings.length})
             </button>
             <button
               onClick={() => setSelectedPool('TW50_CORE')}
@@ -591,13 +638,17 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                       </span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.74rem' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>
-                        防守: ${item.actionDecision.stopLossPrice ?? item.boxUpper ?? '-'}
-                      </span>
-                      {item.actionDecision.riskRewardRatio && (
-                        <span style={{ color: '#38bdf8' }}>
-                          風益比: {item.actionDecision.riskRewardRatio} R
+                      <Tooltip content={BEGINNER_TOOLTIPS.boxUpperDefense} position="top">
+                        <span style={{ color: 'var(--text-muted)', textDecoration: 'underline dotted', cursor: 'help' }}>
+                          防守: ${item.actionDecision.stopLossPrice ?? item.boxUpper ?? '-'}
                         </span>
+                      </Tooltip>
+                      {item.actionDecision.riskRewardRatio && (
+                        <Tooltip content={BEGINNER_TOOLTIPS.riskReward} position="top">
+                          <span style={{ color: '#38bdf8', textDecoration: 'underline dotted', cursor: 'help' }}>
+                            風益比: {item.actionDecision.riskRewardRatio} R
+                          </span>
+                        </Tooltip>
                       )}
                     </div>
                   </div>
@@ -710,10 +761,14 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                       </span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.74rem' }}>
-                      <span style={{ color: '#fca5a5' }}>
-                        原防守: ${item.boxLower ?? item.actionDecision.stopLossPrice ?? '-'}
-                      </span>
-                      <span style={{ color: '#f87171', fontWeight: 600 }}>破線停損</span>
+                      <Tooltip content={BEGINNER_TOOLTIPS.boxLowerBreakdown} position="top">
+                        <span style={{ color: '#fca5a5', textDecoration: 'underline dotted', cursor: 'help' }}>
+                          原防守: ${item.boxLower ?? item.actionDecision.stopLossPrice ?? '-'}
+                        </span>
+                      </Tooltip>
+                      <Tooltip content={BEGINNER_TOOLTIPS.boxLowerBreakdown} position="top">
+                        <span style={{ color: '#f87171', fontWeight: 600, textDecoration: 'underline dotted', cursor: 'help' }}>破線停損</span>
+                      </Tooltip>
                     </div>
                   </div>
                 ))
@@ -785,14 +840,18 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                       <span className="mono" style={{ fontWeight: 700, color: 'var(--gain-color)', fontSize: '1.1rem' }}>
                         ${item.currentPrice}
                       </span>
-                      <span className="mono" style={{ color: 'var(--text-secondary)' }}>
-                        箱頂防守: ${item.actionDecision.stopLossPrice ?? item.boxUpper}
-                      </span>
+                      <Tooltip content={BEGINNER_TOOLTIPS.boxUpperDefense} position="top">
+                        <span className="mono" style={{ color: 'var(--text-secondary)', textDecoration: 'underline dotted', cursor: 'help' }}>
+                          箱頂防守: ${item.actionDecision.stopLossPrice ?? item.boxUpper}
+                        </span>
+                      </Tooltip>
                     </div>
                     {item.actionDecision.riskRewardRatio && (
                       <div style={{ marginTop: '6px', fontSize: '0.74rem', color: '#38bdf8', display: 'flex', justifyContent: 'space-between' }}>
                         <span>目標價: ${item.actionDecision.targetPrice}</span>
-                        <span>風益比: {item.actionDecision.riskRewardRatio} R</span>
+                        <Tooltip content={BEGINNER_TOOLTIPS.riskReward} position="top">
+                          <span style={{ textDecoration: 'underline dotted', cursor: 'help' }}>風益比: {item.actionDecision.riskRewardRatio} R</span>
+                        </Tooltip>
                       </div>
                     )}
                     {isExpanded && (
@@ -843,9 +902,11 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                       <span className="mono" style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
                         {item.symbol}
                       </span>
-                      <span className="badge" style={{ background: 'rgba(6, 182, 212, 0.2)', color: 'var(--accent-cyan)', border: '1px solid rgba(6, 182, 212, 0.4)' }}>
-                        🟢 買進 · 破底翻
-                      </span>
+                      <Tooltip content={BEGINNER_TOOLTIPS.bottomPenetration} position="top">
+                        <span className="badge" style={{ background: 'rgba(6, 182, 212, 0.2)', color: 'var(--accent-cyan)', border: '1px solid rgba(6, 182, 212, 0.4)', textDecoration: 'underline dotted', cursor: 'help' }}>
+                          🟢 買進 · 破底翻
+                        </span>
+                      </Tooltip>
                     </div>
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px' }}>{item.name}</div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem' }}>
@@ -913,9 +974,11 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                       <span className="mono" style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '1.1rem' }}>
                         ${item.currentPrice}
                       </span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--accent-amber)' }}>
-                        帶寬 {item.bollingerBandwidth}%
-                      </span>
+                      <Tooltip content={BEGINNER_TOOLTIPS.bollingerSqueeze} position="top">
+                        <span style={{ fontSize: '0.75rem', color: 'var(--accent-amber)', textDecoration: 'underline dotted', cursor: 'help' }}>
+                          帶寬 {item.bollingerBandwidth}%
+                        </span>
+                      </Tooltip>
                     </div>
                     {isExpanded && (
                       <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.1)', fontSize: '0.76rem', color: '#cbd5e1', lineHeight: 1.4 }}>
@@ -965,9 +1028,11 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                       <span className="mono" style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
                         {item.symbol}
                       </span>
-                      <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.4)' }}>
-                        🔴 賣出 · 破線停損
-                      </span>
+                      <Tooltip content={BEGINNER_TOOLTIPS.boxLowerBreakdown} position="top">
+                        <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.4)', textDecoration: 'underline dotted', cursor: 'help' }}>
+                          🔴 賣出 · 破線停損
+                        </span>
+                      </Tooltip>
                     </div>
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px' }}>{item.name}</div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem' }}>
@@ -1014,11 +1079,19 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
               <tr>
                 <th>代號 / 標的名稱</th>
                 <th style={{ textAlign: 'right' }}>現價</th>
-                <th style={{ textAlign: 'right' }}>MA20 扣抵價</th>
+                <th style={{ textAlign: 'right' }}>
+                  <Tooltip content={BEGINNER_TOOLTIPS.maDeductionTelescope} position="top">
+                    <span style={{ textDecoration: 'underline dotted', cursor: 'help' }}>MA20 扣抵價 ℹ️</span>
+                  </Tooltip>
+                </th>
                 <th style={{ textAlign: 'center' }}>扣抵斜率預測</th>
                 <th style={{ textAlign: 'center' }}>箱體位階</th>
                 <th style={{ textAlign: 'center' }}>操盤建議</th>
-                <th style={{ textAlign: 'center' }}>防守價 / 風益比</th>
+                <th style={{ textAlign: 'center' }}>
+                  <Tooltip content={BEGINNER_TOOLTIPS.riskReward} position="top">
+                    <span style={{ textDecoration: 'underline dotted', cursor: 'help' }}>防守價 / 風益比 ℹ️</span>
+                  </Tooltip>
+                </th>
               </tr>
             </thead>
             <tbody>
