@@ -1,9 +1,10 @@
 # 技術債 #0027: 雙重動能與跨資產趨勢輪動評分引擎 (Dual Momentum & Relative Strength Rotation Engine)
 
-- **狀態**：`OPEN`
+- **狀態**：`RESOLVED`
 - **優先級**：`P2`
 - **發現來源**：/grill-with-docs 雙重動能與跨資產趨勢輪動調研
 - **建立日期**：2026-09-02
+- **解決日期**：2026-09-08 (v8.11.0, PRD #0092, ADR #0092)
 - **標籤**：`Quant` · `DualMomentum` · `AssetAllocation` · `Strategy` · `Rotation` · `Engine`
 
 ---
@@ -83,7 +84,21 @@ export function evaluateDualMomentum(
 
 ---
 
-## 4. 觸發處理時機 (Trigger Conditions)
 
-1. 當使用者需要「趨勢跟隨、板塊輪動與避險切換」輔助決策工具時。
-2. 與技術債 `#0020 宏觀戰情室` 整合，作為量化選股與跨資產動能雷達之核心子模組。
+---
+
+## 5. 解決方案與驗收結果 (Resolution & Verification)
+
+- **實施 PRD**：[docs/specs/0092-dual-momentum-and-relative-strength-rotation-spec.md](file:///d:/APP/股票紀錄/docs/specs/0092-dual-momentum-and-relative-strength-rotation-spec.md)
+- **架構決策**：[docs/adr/0092-dual-momentum-and-relative-strength-rotation.md](file:///d:/APP/股票紀錄/docs/adr/0092-dual-momentum-and-relative-strength-rotation.md)
+- **實作代碼**：
+  - 型別定義：[src/types/momentum.ts](file:///d:/APP/股票紀錄/src/types/momentum.ts)
+  - 評分引擎：[src/engine/dualMomentumEngine.ts](file:///d:/APP/股票紀錄/src/engine/dualMomentumEngine.ts)
+  - 單元測試：[src/engine/dualMomentumEngine.test.ts](file:///d:/APP/股票紀錄/src/engine/dualMomentumEngine.test.ts)
+- **交付功能亮點**：
+  1. **12-1M 加權動能評分**：自適應長短週期（`0.5 * 12M + 0.3 * 6M + 0.2 * 3M`）並剔除近 1 個月短期回轉雜訊。
+  2. **相對動能排行榜**：支援降序排名、自動排除資料不足之標的。
+  3. **絕對動能避風港狀態機**：榜首低於無風險報酬率或所有資產為負時，自動建議退守現金避風港標的（如 BIL / SGOV / 00712B 等）。
+  4. **三大預設資產池**：全球核心輪動（SPY/QQQ/TLT/GLD）、台股強勢版塊（0050/0056/00713/00919/006208）、美股美債對沖輪動。
+- **測試覆蓋**：5/5 單元測試 100% 通過，全工程 53 套件 589 測試全數綠燈，TypeScript 編譯零錯誤。
+

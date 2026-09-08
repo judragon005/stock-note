@@ -1149,9 +1149,16 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Historical OHLCV & Indicators Store (全量日 K 與指標本地持久化)**:
   - IndexedDB 升級至版本 3，新增 `historicalOhlcv` 與 `technicalIndicators` 物件庫，實現掛牌以來全量數據離線秒開與增量回補。
 
+### 雙重動能與跨資產趨勢輪動評分架構 *(新增於 V8.11.0 / ADR #0092)*
 
-
-
-
-
-
+- **12-1M Weighted Momentum (長短週期加權動能評分)**:
+  - 核心計算模型採用 Gary Antonacci 雙重動能與學術實證的 12-1M 複合動能架構：
+    $$\text{Score} = 0.5 \times R_{12M} + 0.3 \times R_{6M} + 0.2 \times R_{3M}$$
+  - 當設定 `skipRecentMonth = true` 時，以 $T-21$ 交易日為計算終點，剔除最近一個月的短期均值回歸雜訊，捕捉穩健的中期結構性趨勢。
+- **Relative Momentum Leaderboard (相對動能跨資產強弱排序)**:
+  - 在指定資產池中依加權綜合動能分數由高至低排列，精確定位表現最亮眼的領頭羊標的。
+- **Absolute Momentum Safe Haven (絕對動能過濾與現金避風港狀態機)**:
+  - 檢驗動能榜首標的之年化報酬是否高於無風險利率（預設 4% 或台美短債基準）。
+  - 若榜首標的未能超越無風險報酬或全池資產動能均為負，系統自動判定進入防禦避險狀態 (`safeHavenActive = true`)，並建議退守至預設避風港標的（如 BIL / SGOV / 00712B / 現金）。
+- **Predefined Strategic Universes (三大策略資產池)**:
+  - 系統預先載入「全球巨觀 ETF 核心輪動 (SPY / QQQ / TLT / GLD)」、「台股高息與市值版塊輪動 (0050 / 0056 / 00713 / 00919 / 006208)」與「美股美債對沖輪動」，支援投資人進行多層次宏觀資產配置決策。
