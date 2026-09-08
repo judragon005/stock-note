@@ -1,9 +1,10 @@
 # 技術債 #0019: 本地全量歷史技術指標庫與免費外部資源自動回補引擎 (Local Historical Indicators & External Backfill Engine)
 
-- **狀態**：`OPEN`
+- **狀態**：`RESOLVED` (已於 v8.10.0 / ADR #0091 完整解決)
 - **優先級**：`P2`
 - **發現來源**：/grill-with-docs 深度調研（整合「肌肉書僮」短線波段量化指標體系）
 - **建立日期**：2026-09-02
+- **解決日期**：2026-09-08 (PRD #0091 / ADR #0091)
 - **標籤**：`Architecture` · `Quant` · `Indicators` · `MuscleBooker` · `Storage` · `BackgroundWorker`
 
 ---

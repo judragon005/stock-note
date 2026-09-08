@@ -14,9 +14,10 @@ import {
 } from '../types/stock';
 import { logger } from './logger';
 import { getStockDictionaryStats } from '../engine/stockNameResolver';
+import { SymbolOhlcvStore, SymbolIndicatorsStore } from '../types/indicators';
 
 export const DB_NAME = 'StockTrackerDB';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 export type StoreName =
   | 'trades'
@@ -28,7 +29,9 @@ export type StoreName =
   | 'priceMetadata'
   | 'snapshots'
   | 'settings'
-  | 'corporateActions';
+  | 'corporateActions'
+  | 'historicalOhlcv'
+  | 'technicalIndicators';
 
 
 export interface SystemSnapshotPayload {
@@ -113,6 +116,12 @@ export function openDB(): Promise<IDBDatabase> {
         caStore.createIndex('by_symbol', 'symbol', { unique: false });
         caStore.createIndex('by_date', 'date', { unique: false });
         caStore.createIndex('by_type', 'type', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('historicalOhlcv')) {
+        db.createObjectStore('historicalOhlcv', { keyPath: 'symbol' });
+      }
+      if (!db.objectStoreNames.contains('technicalIndicators')) {
+        db.createObjectStore('technicalIndicators', { keyPath: 'symbol' });
       }
     };
 
@@ -1126,5 +1135,46 @@ export async function clearInstitutionalChipsCache(): Promise<void> {
     }
   }
 }
+
+/**
+ * 儲存標的全量歷史日 K 數列
+ */
+export async function saveSymbolOhlcv(data: SymbolOhlcvStore): Promise<void> {
+  return dbPut('historicalOhlcv', data);
+}
+
+/**
+ * 讀取標的全量歷史日 K 數列
+ */
+export async function getSymbolOhlcv(symbol: string): Promise<SymbolOhlcvStore | null> {
+  const res = await dbGet<SymbolOhlcvStore>('historicalOhlcv', symbol);
+  return res || null;
+}
+
+/**
+ * 儲存標的肌肉書僮技術指標數列
+ */
+export async function saveSymbolIndicators(data: SymbolIndicatorsStore): Promise<void> {
+  return dbPut('technicalIndicators', data);
+}
+
+/**
+ * 讀取標的肌肉書僮技術指標數列
+ */
+export async function getSymbolIndicators(symbol: string): Promise<SymbolIndicatorsStore | null> {
+  const res = await dbGet<SymbolIndicatorsStore>('technicalIndicators', symbol);
+  return res || null;
+}
+
+/**
+ * 安全清除全量歷史日 K 與技術指標快取
+ */
+export async function clearOhlcvAndIndicatorsCache(): Promise<void> {
+  if (typeof indexedDB !== 'undefined') {
+    await dbClear('historicalOhlcv');
+    await dbClear('technicalIndicators');
+  }
+}
+
 
 

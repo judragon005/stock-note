@@ -24,6 +24,11 @@ import {
   clearPriceMetadataCache,
   clearCorporateActionsCache,
   clearInstitutionalChipsCache,
+  saveSymbolOhlcv,
+  getSymbolOhlcv,
+  saveSymbolIndicators,
+  getSymbolIndicators,
+  clearOhlcvAndIndicatorsCache,
 } from './db';
 import { TradeRecord, StoredCorporateAction, BrokerAccount, CashTransaction, LoanRecord } from '../types/stock';
 
@@ -879,6 +884,53 @@ describe('IndexedDB Core Engine & Snapshots (db.ts)', () => {
 
       // 股票字典：應具備總收錄數
       expect(stats.marketCache.stockDictionaryTotalCount).toBeGreaterThanOrEqual(600);
+    });
+  });
+
+  describe('9. 全量歷史日 K 與肌肉書僮指標儲存 (OHLCV & Indicators Store)', () => {
+    it('應能正確寫入與讀取全量日 K 線，並支援清空快取', async () => {
+      await saveSymbolOhlcv({
+        symbol: '2330',
+        market: 'TW',
+        updatedAt: Date.now(),
+        candles: [
+          { date: '2026-01-01', open: 100, high: 105, low: 98, close: 104, volume: 5000 },
+        ],
+      });
+
+      const ohlcv = await getSymbolOhlcv('2330');
+      expect(ohlcv).not.toBeNull();
+      expect(ohlcv?.symbol).toBe('2330');
+      expect(ohlcv?.candles.length).toBe(1);
+
+      await clearOhlcvAndIndicatorsCache();
+      const cleared = await getSymbolOhlcv('2330');
+      expect(cleared).toBeNull();
+    });
+
+    it('應能正確寫入與讀取肌肉書僮技術指標數列', async () => {
+      await saveSymbolIndicators({
+        symbol: 'AAPL',
+        market: 'US',
+        updatedAt: Date.now(),
+        points: [
+          {
+            date: '2026-01-01',
+            close: 180,
+            ma: { ma5: 178, ma20: 175 },
+            maDeduction: { ma20Slope: 'UP', isBottomPenetrationRebound: false },
+            box: { boxStatus: 'BREAKOUT_UP', boxUpper: 179 },
+            bbands: { upper: 185, mid: 175, lower: 165, bandwidth: 11.4, isSqueeze: false },
+            atr: { atr14: 3.5, trailingDefensePrice: 172 },
+            momentum: { rs10Score: 4.2, rsRank: 'STRONG' },
+          },
+        ],
+      });
+
+      const indicators = await getSymbolIndicators('AAPL');
+      expect(indicators).not.toBeNull();
+      expect(indicators?.symbol).toBe('AAPL');
+      expect(indicators?.points[0].box.boxStatus).toBe('BREAKOUT_UP');
     });
   });
 });
