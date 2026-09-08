@@ -227,5 +227,33 @@ describe('technicalIndicatorEngine (技術指標與訊號運算引擎)', () => {
       const pullbackSignals = extractHoldingSignals(102, pullbackIndicators);
       expect(pullbackSignals.some((s) => s.id === 'CONFLUENCE_PULLBACK_IN_UPTREND')).toBe(true);
     });
+
+    it('computeTechnicalIndicators 應自動串聯肌肉書僮引擎並產出箱子突破膠囊', () => {
+      // 構建 25 天 K 線：前 24 天收在 100 左右（三日箱頂 102），第 25 天突破至 110
+      const candles: DailyCandle[] = Array.from({ length: 25 }, (_, i) => {
+        const isLast = i === 24;
+        const close = isLast ? 110 : 100 + (i % 3);
+        const high = isLast ? 112 : close + 1;
+        const low = isLast ? 109 : close - 1;
+        return {
+          date: `2026-08-${String(i + 1).padStart(2, '0')}`,
+          open: close,
+          high,
+          low,
+          close,
+          volume: isLast ? 50000 : 10000,
+        };
+      });
+
+      const indicators = computeTechnicalIndicators(candles, 110);
+      expect(indicators.boxStatus).toBe('BREAKOUT_UP');
+      expect(indicators.ma20DeductionSlope).toBeDefined();
+
+      const signals = extractHoldingSignals(110, indicators);
+      const boxBreakout = signals.find((s) => s.id === 'MUSCLE_BOX_BREAKOUT_UP');
+      expect(boxBreakout).toBeDefined();
+      expect(boxBreakout?.label).toBe('箱頂突破');
+      expect(boxBreakout?.tone).toBe('BULLISH');
+    });
   });
 });

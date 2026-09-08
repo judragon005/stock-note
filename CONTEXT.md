@@ -275,6 +275,18 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0093: V8.12.0 黑天鵝質押情境壓力矩陣與斷頭求解器](docs/adr/0093-black-swan-margin-stress-matrix-and-liquidation-simulator.md)
 - [ADR-0094: V8.13.0 市場宏觀戰情室、全球流動性四柱脈搏與 AI 策略建議](docs/adr/0094-market-war-room-macro-liquidity-and-ai-advisor.md)
 - [ADR-0095: V8.14.0 宏觀戰情室工作區、質押黑天鵝逃生矩陣與肌肉書僮持倉膠囊 UI 落地整合](docs/adr/0095-macro-war-room-stress-matrix-ui-integration.md)
+- [ADR-0096: V8.15.0 宏觀戰情室原生樣式重塑、色彩模式連動與肌肉書僮動能雷達專屬工作區](docs/adr/0096-muscle-booker-workspace-and-war-room-styling-fix.md)
+
+### 肌肉書僮動能雷達專屬工作區與戰情室原生樣式重塑 (Muscle Booker Radar & War Room Styling Fix) *(新增於 V8.15.0)*
+- **宏觀戰情室原生 Vanilla CSS 樣式重塑**：徹底移除無效之 Tailwind 類別，全面採用專案原生設計系統（`.card`、`.badge`、`.mono`、`.warroom-hero-card`、`.warroom-grid-4` 等），還原頂級深色毛玻璃金融終端質感。
+- **持倉訊號膠囊色彩模式動態變數化**：膠囊顏色全面引用 `var(--gain-color)`、`var(--loss-color)`、`var(--gain-bg)`、`var(--loss-bg)`，100% 同步頂部「台股紅漲綠跌 / 國際綠漲紅跌」按鈕動態切換。
+- **肌肉書僮計算鏈貫通與 Look-ahead Bias 修復**：
+  - 在 `computeTechnicalIndicators` 串聯 `detectDarvasBox`、`calculateMaDeduction` 與 `calculateBollingerSqueeze`，確保在倉標的自動產出箱子突破信號。
+  - 修復 `detectDarvasBox` fallback 時未排除當日 K 線之 Look-ahead Bug，確保當日創新高時正確判定為 `BREAKOUT_UP`。
+- **獨立「💪 肌肉書僮·動能雷達」工作區 (`MuscleBookerWorkspace.tsx`)**：
+  - 於導覽列註冊 `musclebooker` 專屬頁籤，提供「在倉持股 / 法人焦點 Top 30 (預設) / 台股權值 Top 50」三軌資產池切換。
+  - 四大箱子象限雷達看板：【箱頂突破區】、【底穿反轉區】、【布林極致收縮區】、【跌破箱底警戒區】。
+  - 均線扣抵望遠鏡清單：提前推算未來 3~5 日月線/季線扣低翻揚的動能潛力股。
 
 ### 宏觀戰情室工作區、質押黑天鵝逃生矩陣與肌肉書僮持倉膠囊 UI 落地 (Macro War Room, Margin Stress Matrix & Muscle Booker UI Integration) *(新增於 V8.14.0)*
 - **導覽列新增「🏛️ 宏觀戰情室」工作區**：

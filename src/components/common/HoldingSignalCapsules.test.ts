@@ -8,28 +8,28 @@ import {
 
 describe('HoldingSignalCapsules (持股警示膠囊輔助邏輯與渲染測試)', () => {
   describe('getSignalCapsuleStyle (多維膠囊色彩階梯)', () => {
-    it('BULLISH 翡翠綠色彩配置正確', () => {
+    it('BULLISH 採用 --gain-color 動態色彩變數', () => {
       const style = getSignalCapsuleStyle('BULLISH');
-      expect(style.color).toBe('#34d399');
-      expect(style.background).toContain('rgba(16, 185, 129');
+      expect(style.color).toBe('var(--gain-color)');
+      expect(style.background).toBe('var(--gain-bg)');
     });
 
-    it('BEARISH 亮紅色彩配置正確', () => {
+    it('BEARISH 採用 --loss-color 動態色彩變數', () => {
       const style = getSignalCapsuleStyle('BEARISH');
-      expect(style.color).toBe('#f87171');
-      expect(style.background).toContain('rgba(239, 68, 68');
+      expect(style.color).toBe('var(--loss-color)');
+      expect(style.background).toBe('var(--loss-bg)');
     });
 
-    it('WARNING 琥珀金色彩配置正確', () => {
+    it('WARNING 採用琥珀金色彩配置', () => {
       const style = getSignalCapsuleStyle('WARNING');
-      expect(style.color).toBe('#fbbf24');
+      expect(style.color).toBe('var(--accent-amber)');
       expect(style.background).toContain('rgba(245, 158, 11');
     });
 
-    it('NEUTRAL 沉穩藍紫色彩配置正確', () => {
+    it('NEUTRAL 採用核心主色配置', () => {
       const style = getSignalCapsuleStyle('NEUTRAL');
-      expect(style.color).toBe('#818cf8');
-      expect(style.background).toContain('rgba(99, 102, 241');
+      expect(style.color).toBe('var(--accent-primary)');
+      expect(style.background).toContain('rgba(59, 130, 246');
     });
   });
 

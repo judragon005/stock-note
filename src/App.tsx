@@ -61,6 +61,7 @@ import { XirrDetailModal } from './components/XirrDetailModal';
 import { MarginStressModal } from './components/MarginStressModal';
 import { WorkspaceTabs, WorkspaceTabKey } from './components/WorkspaceTabs';
 import { WarRoomWorkspace } from './components/WarRoomWorkspace';
+import { MuscleBookerWorkspace } from './components/MuscleBookerWorkspace';
 import { ChipsWorkspace } from './components/ChipsWorkspace';
 import { SettingsWorkspace } from './components/SettingsWorkspace';
 import { syncTradesWithCashTransactions, calculateAccountBalances, aggregateInterestIncomeDetails } from './engine/cashLedgerEngine';
@@ -776,6 +777,14 @@ export const App: React.FC = () => {
           totalNavTwd={summary.combinedTWD.marketValue}
           usdToTwdRate={usdToTwdRate}
           onOpenMarginStressModal={() => setIsMarginStressOpen(true)}
+        />
+      )}
+
+      {/* 活頁: 💪 肌肉書僮·動能雷達 (Muscle Booker Momentum Radar) */}
+      {activeTab === 'musclebooker' && (
+        <MuscleBookerWorkspace
+          holdings={holdings}
+          historicalDailyPrices={historicalPrices}
         />
       )}
 

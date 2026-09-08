@@ -59,9 +59,10 @@ export function detectDarvasBox(candles: DailyCandle[]): {
     }
   }
 
-  // 預設 fallback 為近 20 日高低
+  // 預設 fallback 為前波 (排除當日 K 線) 近 20 日高低
   if (confirmedUpper === undefined || confirmedLower === undefined) {
-    const lookback = candles.slice(-20);
+    const pastCandles = candles.slice(0, -1);
+    const lookback = pastCandles.length > 0 ? pastCandles.slice(-20) : candles;
     confirmedUpper = Math.max(...lookback.map((c) => c.high));
     confirmedLower = Math.min(...lookback.map((c) => c.low));
   }

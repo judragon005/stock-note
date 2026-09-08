@@ -1,4 +1,10 @@
 import { DailyCandle, HoldingSignal, TechnicalIndicators } from '../types/signal';
+import { BoxStatus, TrendSlope } from '../types/indicators';
+import {
+  detectDarvasBox,
+  calculateMaDeduction,
+  calculateBollingerSqueeze,
+} from './muscleBookerEngine';
 
 /**
  * 計算指定週期的簡單移動平均線 (SMA)
@@ -233,6 +239,22 @@ export function computeTechnicalIndicators(
     bias60 = Math.round(((currentPrice - ma.ma60) / ma.ma60) * 10000) / 100;
   }
 
+  // 整合肌肉書僮核心指標 (Darvas Box, MA Deduction, Bollinger Squeeze)
+  let boxStatus: BoxStatus | undefined = undefined;
+  let isBottomPenetration = false;
+  let ma20DeductionSlope: TrendSlope | undefined = undefined;
+  let isBollingerSqueeze = false;
+
+  if (candles.length >= 4) {
+    const box = detectDarvasBox(candles);
+    boxStatus = box.boxStatus;
+    const deduction = calculateMaDeduction(candles);
+    isBottomPenetration = deduction.isBottomPenetrationRebound;
+    ma20DeductionSlope = deduction.ma20Slope;
+    const bb = calculateBollingerSqueeze(candles);
+    isBollingerSqueeze = bb.isSqueeze;
+  }
+
   return {
     currentPrice,
     ma5: ma.ma5,
@@ -257,6 +279,10 @@ export function computeTechnicalIndicators(
     monthLow20: extremes.monthLow20,
     bias20,
     bias60,
+    boxStatus,
+    isBottomPenetration,
+    ma20DeductionSlope,
+    isBollingerSqueeze,
   };
 }
 

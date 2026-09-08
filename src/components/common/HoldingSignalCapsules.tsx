@@ -14,28 +14,28 @@ export function getSignalCapsuleStyle(tone: SignalTone): {
   switch (tone) {
     case 'BULLISH':
       return {
-        color: '#34d399',
-        background: 'rgba(16, 185, 129, 0.15)',
-        borderColor: 'rgba(16, 185, 129, 0.35)',
+        color: 'var(--gain-color)',
+        background: 'var(--gain-bg)',
+        borderColor: 'var(--gain-border)',
       };
     case 'BEARISH':
       return {
-        color: '#f87171',
-        background: 'rgba(239, 68, 68, 0.15)',
-        borderColor: 'rgba(239, 68, 68, 0.35)',
+        color: 'var(--loss-color)',
+        background: 'var(--loss-bg)',
+        borderColor: 'var(--loss-border)',
       };
     case 'WARNING':
       return {
-        color: '#fbbf24',
+        color: 'var(--accent-amber)',
         background: 'rgba(245, 158, 11, 0.15)',
         borderColor: 'rgba(245, 158, 11, 0.35)',
       };
     case 'NEUTRAL':
     default:
       return {
-        color: '#818cf8',
-        background: 'rgba(99, 102, 241, 0.15)',
-        borderColor: 'rgba(99, 102, 241, 0.35)',
+        color: 'var(--accent-primary)',
+        background: 'rgba(59, 130, 246, 0.15)',
+        borderColor: 'rgba(59, 130, 246, 0.35)',
       };
   }
 }
@@ -97,15 +97,15 @@ export const HoldingSignalCapsules: React.FC<HoldingSignalCapsulesProps> = ({
 
   if (directive) {
     if (directive.sentiment === 'STRONG_BUY' || directive.sentiment === 'ACCUMULATE') {
-      headlineColor = '#34d399';
-      headlineBg = 'rgba(16, 185, 129, 0.18)';
-      headlineBorder = 'rgba(16, 185, 129, 0.45)';
+      headlineColor = 'var(--gain-color)';
+      headlineBg = 'var(--gain-bg)';
+      headlineBorder = 'var(--gain-border)';
     } else if (directive.sentiment === 'STOP_LOSS_EXIT' || directive.sentiment === 'TRIM') {
-      headlineColor = '#f87171';
-      headlineBg = 'rgba(239, 68, 68, 0.18)';
-      headlineBorder = 'rgba(239, 68, 68, 0.45)';
+      headlineColor = 'var(--loss-color)';
+      headlineBg = 'var(--loss-bg)';
+      headlineBorder = 'var(--loss-border)';
     } else if (directive.headline.includes('留意') || directive.headline.includes('超跌')) {
-      headlineColor = '#fbbf24';
+      headlineColor = 'var(--accent-amber)';
       headlineBg = 'rgba(245, 158, 11, 0.18)';
       headlineBorder = 'rgba(245, 158, 11, 0.45)';
     }

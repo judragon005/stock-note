@@ -1,0 +1,642 @@
+import React, { useState, useMemo } from 'react';
+import {
+  Flame,
+  Zap,
+  TrendingUp,
+  AlertTriangle,
+  Search,
+} from 'lucide-react';
+import { HoldingPosition } from '../types/stock';
+import { DailyCandle, BoxStatus, TrendSlope } from '../types/indicators';
+import {
+  detectDarvasBox,
+  calculateMaDeduction,
+  calculateBollingerSqueeze,
+} from '../engine/muscleBookerEngine';
+
+interface MuscleBookerWorkspaceProps {
+  holdings: HoldingPosition[];
+  historicalDailyPrices?: Record<string, Record<string, number>>;
+}
+
+type AssetPoolType = 'HOLDINGS' | 'TOP30_FOCUS' | 'TW50_CORE';
+
+interface ScannedStockItem {
+  symbol: string;
+  name: string;
+  market: 'TW' | 'US';
+  currentPrice: number;
+  boxStatus: BoxStatus;
+  boxUpper?: number;
+  boxLower?: number;
+  boxWidthPercent?: number;
+  isBottomPenetration: boolean;
+  ma20Slope: TrendSlope;
+  ma20DeductionPrice?: number;
+  isBollingerSqueeze: boolean;
+  bollingerBandwidth?: number;
+}
+
+// 法人焦點 Top 30 標的清單
+const TOP_30_FOCUS_SYMBOLS = [
+  { symbol: '2330', name: '台積電', market: 'TW' as const, basePrice: 1010 },
+  { symbol: '2454', name: '聯發科', market: 'TW' as const, basePrice: 1280 },
+  { symbol: '2317', name: '鴻海', market: 'TW' as const, basePrice: 185 },
+  { symbol: '2382', name: '廣達', market: 'TW' as const, basePrice: 280 },
+  { symbol: '2603', name: '長榮', market: 'TW' as const, basePrice: 195 },
+  { symbol: '3231', name: '緯創', market: 'TW' as const, basePrice: 110 },
+  { symbol: '2356', name: '英業達', market: 'TW' as const, basePrice: 52 },
+  { symbol: '2379', name: '瑞昱', market: 'TW' as const, basePrice: 510 },
+  { symbol: '3008', name: '大立光', market: 'TW' as const, basePrice: 2600 },
+  { symbol: '2881', name: '富邦金', market: 'TW' as const, basePrice: 88 },
+  { symbol: '2882', name: '國泰金', market: 'TW' as const, basePrice: 65 },
+  { symbol: '2891', name: '中信金', market: 'TW' as const, basePrice: 36.5 },
+  { symbol: '0050', name: '元大台灣50', market: 'TW' as const, basePrice: 192 },
+  { symbol: '0056', name: '元大高股息', market: 'TW' as const, basePrice: 39.5 },
+  { symbol: '00878', name: '國泰永續高股息', market: 'TW' as const, basePrice: 23.8 },
+  { symbol: '00919', name: '群益台灣精選高息', market: 'TW' as const, basePrice: 25.8 },
+  { symbol: 'NVDA', name: '輝達 NVIDIA', market: 'US' as const, basePrice: 125 },
+  { symbol: 'AAPL', name: '蘋果 Apple', market: 'US' as const, basePrice: 220 },
+  { symbol: 'MSFT', name: '微軟 Microsoft', market: 'US' as const, basePrice: 425 },
+  { symbol: 'TSLA', name: '特斯拉 Tesla', market: 'US' as const, basePrice: 215 },
+  { symbol: 'AMZN', name: '亞馬遜 Amazon', market: 'US' as const, basePrice: 180 },
+  { symbol: 'GOOGL', name: '谷歌 Alphabet', market: 'US' as const, basePrice: 165 },
+  { symbol: 'META', name: 'Meta', market: 'US' as const, basePrice: 515 },
+  { symbol: 'AMD', name: '超微 AMD', market: 'US' as const, basePrice: 155 },
+];
+
+// 權值核心 Top 50 代表性標的
+const TW50_BLUE_CHIP_SYMBOLS = [
+  { symbol: '2330', name: '台積電', market: 'TW' as const, basePrice: 1010 },
+  { symbol: '2317', name: '鴻海', market: 'TW' as const, basePrice: 185 },
+  { symbol: '2454', name: '聯發科', market: 'TW' as const, basePrice: 1280 },
+  { symbol: '2881', name: '富邦金', market: 'TW' as const, basePrice: 88 },
+  { symbol: '2382', name: '廣達', market: 'TW' as const, basePrice: 280 },
+  { symbol: '2882', name: '國泰金', market: 'TW' as const, basePrice: 65 },
+  { symbol: '2412', name: '中華電', market: 'TW' as const, basePrice: 125 },
+  { symbol: '2886', name: '兆豐金', market: 'TW' as const, basePrice: 39.5 },
+  { symbol: '2891', name: '中信金', market: 'TW' as const, basePrice: 36.5 },
+  { symbol: '2308', name: '台達電', market: 'TW' as const, basePrice: 395 },
+  { symbol: '1301', name: '台塑', market: 'TW' as const, basePrice: 50 },
+  { symbol: '2002', name: '中鋼', market: 'TW' as const, basePrice: 22.5 },
+  { symbol: '1216', name: '統一', market: 'TW' as const, basePrice: 85 },
+  { symbol: '2603', name: '長榮', market: 'TW' as const, basePrice: 195 },
+  { symbol: '2884', name: '玉山金', market: 'TW' as const, basePrice: 28.5 },
+  { symbol: '2892', name: '第一金', market: 'TW' as const, basePrice: 28.2 },
+  { symbol: '2890', name: '永豐金', market: 'TW' as const, basePrice: 24.5 },
+  { symbol: '2880', name: '華南金', market: 'TW' as const, basePrice: 26 },
+  { symbol: '3711', name: '日月光投控', market: 'TW' as const, basePrice: 155 },
+  { symbol: '3045', name: '台灣大', market: 'TW' as const, basePrice: 112 },
+];
+
+/**
+ * 依據基礎價格生成具備真實特徵的 30 天模擬日 K 線 (用於無實時日 K 之公開標的)
+ */
+function generateSyntheticCandles(symbol: string, basePrice: number): DailyCandle[] {
+  const candles: DailyCandle[] = [];
+  // 透過 symbol 字元 hash 決定走勢型態
+  const hash = symbol.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const patternType = hash % 4; // 0: 突破, 1: 底穿, 2: 壓縮, 3: 整理
+
+  let price = basePrice * 0.95;
+  for (let i = 0; i < 25; i++) {
+    let changePct = ((Math.sin(i + hash) * 1.5) / 100);
+    if (i === 24) {
+      if (patternType === 0) changePct = 0.045; // 突破箱頂
+      else if (patternType === 1) changePct = 0.015; // 底穿反轉
+      else if (patternType === 2) changePct = 0.002; // 壓縮
+      else changePct = -0.01;
+    }
+    price = price * (1 + changePct);
+    const high = i === 24 && patternType === 0 ? price * 1.01 : price * 1.008;
+    const low = i === 24 && patternType === 1 ? price * 0.97 : price * 0.992;
+    const open = (high + low) / 2;
+
+    candles.push({
+      date: `2026-08-${String(i + 1).padStart(2, '0')}`,
+      open: Math.round(open * 100) / 100,
+      high: Math.round(high * 100) / 100,
+      low: Math.round(low * 100) / 100,
+      close: Math.round(price * 100) / 100,
+      volume: i === 24 && patternType === 0 ? 80000 : 25000,
+    });
+  }
+
+  return candles;
+}
+
+/**
+ * 針對單一標的執行肌肉書僮綜合指標運算
+ */
+export function scanMuscleBookerItem(
+  symbol: string,
+  name: string,
+  market: 'TW' | 'US',
+  basePrice: number,
+  localCandles?: DailyCandle[]
+): ScannedStockItem {
+  const candles =
+    localCandles && localCandles.length >= 5
+      ? localCandles
+      : generateSyntheticCandles(symbol, basePrice);
+
+  const box = detectDarvasBox(candles);
+  const deduction = calculateMaDeduction(candles);
+  const bbands = calculateBollingerSqueeze(candles);
+  const lastCandle = candles[candles.length - 1];
+
+  return {
+    symbol,
+    name,
+    market,
+    currentPrice: lastCandle.close,
+    boxStatus: box.boxStatus,
+    boxUpper: box.boxUpper,
+    boxLower: box.boxLower,
+    boxWidthPercent: box.boxWidthPercent,
+    isBottomPenetration: deduction.isBottomPenetrationRebound,
+    ma20Slope: deduction.ma20Slope,
+    ma20DeductionPrice: deduction.ma20DeductionPrice,
+    isBollingerSqueeze: bbands.isSqueeze,
+    bollingerBandwidth: bbands.bandwidth,
+  };
+}
+
+export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
+  holdings,
+  historicalDailyPrices = {},
+}) => {
+  const [selectedPool, setSelectedPool] = useState<AssetPoolType>('TOP30_FOCUS');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // 1. 產生掃描標的清單
+  const targetUniverse = useMemo(() => {
+    if (selectedPool === 'HOLDINGS') {
+      return holdings.map((h) => ({
+        symbol: h.symbol,
+        name: h.name,
+        market: h.market,
+        basePrice: h.currentPrice || 100,
+      }));
+    } else if (selectedPool === 'TW50_CORE') {
+      return TW50_BLUE_CHIP_SYMBOLS;
+    } else {
+      return TOP_30_FOCUS_SYMBOLS;
+    }
+  }, [selectedPool, holdings]);
+
+  // 2. 進行肌肉書僮指標全量掃描
+  const scannedItems = useMemo<ScannedStockItem[]>(() => {
+    return targetUniverse.map((item) => {
+      // 嘗試從本機歷史日 K 提取，若無則以合成走勢輔助
+      const localDailyMap = historicalDailyPrices[item.symbol];
+      let candles: DailyCandle[] | undefined = undefined;
+      if (localDailyMap && Object.keys(localDailyMap).length >= 5) {
+        const sortedDates = Object.keys(localDailyMap).sort();
+        candles = sortedDates.slice(-30).map((d) => {
+          const c = localDailyMap[d];
+          return { date: d, open: c, high: c * 1.01, low: c * 0.99, close: c, volume: 10000 };
+        });
+      }
+
+      return scanMuscleBookerItem(
+        item.symbol,
+        item.name,
+        item.market,
+        item.basePrice,
+        candles
+      );
+    });
+  }, [targetUniverse, historicalDailyPrices]);
+
+  // 3. 搜尋過濾
+  const filteredItems = useMemo(() => {
+    if (!searchQuery.trim()) return scannedItems;
+    const q = searchQuery.toLowerCase().trim();
+    return scannedItems.filter(
+      (item) => item.symbol.toLowerCase().includes(q) || item.name.toLowerCase().includes(q)
+    );
+  }, [scannedItems, searchQuery]);
+
+  // 4. 四大箱子象限分群
+  const breakoutUpItems = filteredItems.filter((i) => i.boxStatus === 'BREAKOUT_UP');
+  const bottomPenetrationItems = filteredItems.filter((i) => i.isBottomPenetration);
+  const squeezeItems = filteredItems.filter((i) => i.isBollingerSqueeze);
+  const breakoutDownItems = filteredItems.filter((i) => i.boxStatus === 'BREAKOUT_DOWN');
+  const deductionUpItems = filteredItems.filter((i) => i.ma20Slope === 'UP');
+
+  return (
+    <div className="warroom-container animate-fade-in">
+      {/* 頂部 Header */}
+      <div
+        className="card"
+        style={{
+          padding: '20px 24px',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px',
+          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(88, 28, 135, 0.4) 100%)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div
+            style={{
+              padding: '12px',
+              background: 'rgba(244, 63, 94, 0.18)',
+              color: '#fb7185',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid rgba(244, 63, 94, 0.35)',
+            }}
+          >
+            <Flame size={28} />
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <h1 style={{ fontSize: '1.45rem', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
+                肌肉書僮·動能雷達
+              </h1>
+              <span
+                className="badge"
+                style={{
+                  background: 'rgba(244, 63, 94, 0.2)',
+                  color: '#fb7185',
+                  border: '1px solid rgba(244, 63, 94, 0.4)',
+                }}
+              >
+                短線聖經 · 箱子戰術
+              </span>
+            </div>
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              「不預測高低，只跟隨突破；進場靠訊號，出場靠紀律」
+            </p>
+          </div>
+        </div>
+
+        {/* 搜尋框與資產池切換 */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px' }}>
+          <div style={{ position: 'relative' }}>
+            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input
+              type="text"
+              placeholder="搜尋代號或名稱..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                padding: '6px 12px 6px 30px',
+                borderRadius: 'var(--radius-sm)',
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-primary)',
+                fontSize: '0.8rem',
+                outline: 'none',
+                width: '170px',
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <button
+              onClick={() => setSelectedPool('TOP30_FOCUS')}
+              className="btn btn-sm"
+              style={{
+                background: selectedPool === 'TOP30_FOCUS' ? 'var(--accent-primary)' : 'rgba(30, 41, 59, 0.65)',
+                color: selectedPool === 'TOP30_FOCUS' ? '#ffffff' : 'var(--text-secondary)',
+                border: '1px solid ' + (selectedPool === 'TOP30_FOCUS' ? 'var(--accent-primary)' : 'var(--border-color)'),
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              法人焦點 Top 30
+            </button>
+            <button
+              onClick={() => setSelectedPool('HOLDINGS')}
+              className="btn btn-sm"
+              style={{
+                background: selectedPool === 'HOLDINGS' ? 'var(--accent-primary)' : 'rgba(30, 41, 59, 0.65)',
+                color: selectedPool === 'HOLDINGS' ? '#ffffff' : 'var(--text-secondary)',
+                border: '1px solid ' + (selectedPool === 'HOLDINGS' ? 'var(--accent-primary)' : 'var(--border-color)'),
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              在倉持股 ({holdings.length})
+            </button>
+            <button
+              onClick={() => setSelectedPool('TW50_CORE')}
+              className="btn btn-sm"
+              style={{
+                background: selectedPool === 'TW50_CORE' ? 'var(--accent-primary)' : 'rgba(30, 41, 59, 0.65)',
+                color: selectedPool === 'TW50_CORE' ? '#ffffff' : 'var(--text-secondary)',
+                border: '1px solid ' + (selectedPool === 'TW50_CORE' ? 'var(--accent-primary)' : 'var(--border-color)'),
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              權值核心 Top 50
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 戰術指南橫幅 */}
+      <div className="warroom-hero-card" style={{ padding: '16px 20px', background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.7) 100%)' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Zap size={18} style={{ color: 'var(--accent-amber)' }} />
+            <strong style={{ fontSize: '0.92rem', color: '#fef08a' }}>肌肉記憶短線實戰三大紀律：</strong>
+          </div>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            ① 三日不破高確立箱頂，<strong>帶量站上箱頂即為第一買點</strong>；
+            ② 跌破支撐後下影線收復過半即為<strong>底穿假跌破主力吃貨</strong>；
+            ③ <strong>跌破箱底防守線，絕不凹單果斷停損</strong>。
+          </span>
+        </div>
+      </div>
+
+      {/* 四大象限動能看板 */}
+      <div className="warroom-grid-2">
+        {/* 象限一：🔥 箱頂突破區 */}
+        <div className="card">
+          <div className="warroom-section-header">
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Flame size={18} style={{ color: 'var(--gain-color)' }} />
+                【箱頂突破區】(Breakout)
+              </h3>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                三日箱頂有效站穩 · 肌肉記憶主升段表態
+              </span>
+            </div>
+            <span className="badge" style={{ background: 'var(--gain-bg)', color: 'var(--gain-color)', border: '1px solid var(--gain-border)' }}>
+              {breakoutUpItems.length} 檔表態
+            </span>
+          </div>
+
+          {breakoutUpItems.length === 0 ? (
+            <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              目前選定資產池暫無標的突破箱頂，維持紀律耐心等待。
+            </div>
+          ) : (
+            <div className="warroom-grid-2">
+              {breakoutUpItems.map((item) => (
+                <div key={item.symbol} className="warroom-stat-card">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span className="mono" style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
+                      {item.symbol}
+                    </span>
+                    <span className="badge" style={{ background: 'var(--gain-bg)', color: 'var(--gain-color)' }}>
+                      🔥 箱頂突破
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px' }}>{item.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                    <span className="mono" style={{ fontWeight: 700, color: 'var(--gain-color)', fontSize: '1.1rem' }}>
+                      ${item.currentPrice}
+                    </span>
+                    <span className="mono" style={{ color: 'var(--text-secondary)' }}>
+                      箱頂防守: ${item.boxUpper}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 象限二：🚀 底穿上反轉區 */}
+        <div className="card">
+          <div className="warroom-section-header">
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <TrendingUp size={18} style={{ color: 'var(--accent-cyan)' }} />
+                【底穿上反轉區】(Reversal)
+              </h3>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                破底翻 · 盤中破支撐後下影線強勢收復 · 主力誘空
+              </span>
+            </div>
+            <span className="badge" style={{ background: 'rgba(6, 182, 212, 0.15)', color: 'var(--accent-cyan)', border: '1px solid rgba(6, 182, 212, 0.3)' }}>
+              {bottomPenetrationItems.length} 檔反轉
+            </span>
+          </div>
+
+          {bottomPenetrationItems.length === 0 ? (
+            <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              目前選定資產池暫無底穿假跌破反轉型態。
+            </div>
+          ) : (
+            <div className="warroom-grid-2">
+              {bottomPenetrationItems.map((item) => (
+                <div key={item.symbol} className="warroom-stat-card">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span className="mono" style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
+                      {item.symbol}
+                    </span>
+                    <span className="badge" style={{ background: 'rgba(6, 182, 212, 0.15)', color: 'var(--accent-cyan)' }}>
+                      🚀 破底翻反轉
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px' }}>{item.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                    <span className="mono" style={{ fontWeight: 700, color: 'var(--accent-cyan)', fontSize: '1.1rem' }}>
+                      ${item.currentPrice}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      下影線逾 50%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 象限三：⚡ 布林極致收縮區 */}
+        <div className="card">
+          <div className="warroom-section-header">
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Zap size={18} style={{ color: 'var(--accent-amber)' }} />
+                【布林極致壓縮區】(Bollinger Squeeze)
+              </h3>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                帶寬 &lt; 8% · 波動率收縮至極限 · 蓄勢即將變盤
+              </span>
+            </div>
+            <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: 'var(--accent-amber)', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+              {squeezeItems.length} 檔壓縮
+            </span>
+          </div>
+
+          {squeezeItems.length === 0 ? (
+            <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              目前選定資產池暫無帶寬小於 8% 之極致壓縮標的。
+            </div>
+          ) : (
+            <div className="warroom-grid-2">
+              {squeezeItems.map((item) => (
+                <div key={item.symbol} className="warroom-stat-card">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span className="mono" style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
+                      {item.symbol}
+                    </span>
+                    <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: 'var(--accent-amber)' }}>
+                      ⚡ 帶寬 {item.bollingerBandwidth}%
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px' }}>{item.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                    <span className="mono" style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '1.1rem' }}>
+                      ${item.currentPrice}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--accent-amber)' }}>
+                      隨時表態發動
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 象限四：⚠️ 跌破箱底警戒區 */}
+        <div className="card">
+          <div className="warroom-section-header">
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertTriangle size={18} style={{ color: 'var(--loss-color)' }} />
+                【跌破箱底防守警戒區】(Breakdown)
+              </h3>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                跌破三日箱底 · 防守失效 · 嚴格紀律果斷停損
+              </span>
+            </div>
+            <span className="badge" style={{ background: 'var(--loss-bg)', color: 'var(--loss-color)', border: '1px solid var(--loss-border)' }}>
+              {breakoutDownItems.length} 檔警示
+            </span>
+          </div>
+
+          {breakoutDownItems.length === 0 ? (
+            <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              目前選定資產池暫無跌破箱底防守線之標的，防守穩健。
+            </div>
+          ) : (
+            <div className="warroom-grid-2">
+              {breakoutDownItems.map((item) => (
+                <div key={item.symbol} className="warroom-stat-card">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span className="mono" style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
+                      {item.symbol}
+                    </span>
+                    <span className="badge" style={{ background: 'var(--loss-bg)', color: 'var(--loss-color)' }}>
+                      ⚠️ 跌破箱底
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px' }}>{item.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                    <span className="mono" style={{ fontWeight: 700, color: 'var(--loss-color)', fontSize: '1.1rem' }}>
+                      ${item.currentPrice}
+                    </span>
+                    <span className="mono" style={{ color: 'var(--text-secondary)' }}>
+                      箱底原防守: ${item.boxLower}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 📈 均線扣抵望遠鏡清單 */}
+      <div className="card">
+        <div className="warroom-section-header">
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <TrendingUp size={18} style={{ color: 'var(--accent-emerald)' }} />
+              均線扣抵望遠鏡：月線扣低翻揚助漲先鋒 (MA Deduction Telescope)
+            </h3>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              提前推算未來 3~5 日扣抵價 · 現價大幅高於扣抵值 · 月均線即將翻揚助漲
+            </span>
+          </div>
+          <span className="badge" style={{ background: 'var(--gain-bg)', color: 'var(--gain-color)' }}>
+            {deductionUpItems.length} 檔翻揚先鋒
+          </span>
+        </div>
+
+        <div className="warroom-table-container">
+          <table className="warroom-table">
+            <thead>
+              <tr>
+                <th>代號 / 標的名稱</th>
+                <th style={{ textAlign: 'right' }}>現價</th>
+                <th style={{ textAlign: 'right' }}>MA20 扣抵價</th>
+                <th style={{ textAlign: 'center' }}>扣抵斜率預測</th>
+                <th style={{ textAlign: 'center' }}>箱體位階</th>
+                <th style={{ textAlign: 'center' }}>布林狀態</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredItems.slice(0, 10).map((item) => (
+                <tr key={item.symbol}>
+                  <td>
+                    <div className="mono" style={{ fontWeight: 700, fontSize: '0.9rem' }}>{item.symbol}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.name}</div>
+                  </td>
+                  <td className="mono" style={{ textAlign: 'right', fontWeight: 700 }}>
+                    ${item.currentPrice}
+                  </td>
+                  <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
+                    ${item.ma20DeductionPrice ?? '-'}
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    {item.ma20Slope === 'UP' ? (
+                      <span className="badge" style={{ background: 'var(--gain-bg)', color: 'var(--gain-color)' }}>
+                        📈 扣低翻揚助漲
+                      </span>
+                    ) : item.ma20Slope === 'DOWN' ? (
+                      <span className="badge" style={{ background: 'var(--loss-bg)', color: 'var(--loss-color)' }}>
+                        📉 扣高下彎警戒
+                      </span>
+                    ) : (
+                      <span className="badge" style={{ background: 'rgba(51, 65, 85, 0.4)', color: 'var(--text-muted)' }}>
+                        平緩盤整
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    {item.boxStatus === 'BREAKOUT_UP' ? (
+                      <span className="badge" style={{ background: 'var(--gain-bg)', color: 'var(--gain-color)' }}>
+                        🔥 箱頂突破
+                      </span>
+                    ) : item.boxStatus === 'BREAKOUT_DOWN' ? (
+                      <span className="badge" style={{ background: 'var(--loss-bg)', color: 'var(--loss-color)' }}>
+                        ⚠️ 跌破箱底
+                      </span>
+                    ) : (
+                      <span className="badge" style={{ background: 'rgba(51, 65, 85, 0.3)', color: 'var(--text-secondary)' }}>
+                        箱內整理
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    {item.isBollingerSqueeze ? (
+                      <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: 'var(--accent-amber)' }}>
+                        ⚡ 極致壓縮 ({item.bollingerBandwidth}%)
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>常態擴張</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
