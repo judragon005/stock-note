@@ -1,9 +1,10 @@
 # 技術債 #0025: 除權息與黑天鵝多維動態壓力測試矩陣與斷頭逃生模擬器 (Margin Stress Matrix & Black Swan Simulator)
 
-- **狀態**：`OPEN`
+- **狀態**：`RESOLVED`
 - **優先級**：`P1`
 - **發現來源**：/grill-with-docs 質押融資極端風控與除權息假性跳水調研
 - **建立日期**：2026-09-02
+- **解決日期**：2026-09-08 (v8.12.0, PRD #0093, ADR #0093)
 - **標籤**：`Architecture` · `Risk` · `Margin` · `Pledge` · `StressTest` · `Quant` · `Discipline`
 
 ---
@@ -96,3 +97,21 @@ export interface LiquidationPriceThreshold {
 1. 規劃「質押與槓桿高階風控中心」或「黑天鵝壓力測試」專題時。
 2. 台股進入除權息旺季或市場波動率 (VIX) 突破 30 時。
 3. 使用者質押借款金額較大，需要防禦性斷頭預警與精確補款指南時。
+
+---
+
+## 5. 解決方案與驗收結果 (Resolution & Verification)
+
+- **實施 PRD**：[docs/specs/0093-black-swan-margin-stress-matrix-spec.md](file:///d:/APP/股票紀錄/docs/specs/0093-black-swan-margin-stress-matrix-spec.md)
+- **架構決策**：[docs/adr/0093-black-swan-margin-stress-matrix-and-liquidation-simulator.md](file:///d:/APP/股票紀錄/docs/adr/0093-black-swan-margin-stress-matrix-and-liquidation-simulator.md)
+- **實作代碼**：
+  - 型別定義：[src/types/marginStress.ts](file:///d:/APP/股票紀錄/src/types/marginStress.ts)
+  - 核心引擎：[src/engine/marginStressMatrixEngine.ts](file:///d:/APP/股票紀錄/src/engine/marginStressMatrixEngine.ts)
+  - 單元測試：[src/engine/marginStressMatrixEngine.test.ts](file:///d:/APP/股票紀錄/src/engine/marginStressMatrixEngine.test.ts)
+- **交付功能亮點**：
+  1. **除權息價格跳水扣減模型**：$P_{\text{stressed}} = \max(0, (P_{\text{current}} - D_{\text{cash}}) \times (1 - d))$，精確模擬股息尚未入帳之空窗期市值衝擊。
+  2. **標準 6 維動態情境壓力矩陣**：涵蓋 -5%、-10%、-20%、-30%、純除息跳水、以及最嚴苛之「-20% + 除息跳水」黑天鵝複合情境。
+  3. **斷頭臨界價格逆推求解器 (Liquidation Price Solver)**：精確逆推觸及 130%、140% 與 166% 之臨界股價與最大耐受跌幅，並具備「整戶斷頭免疫 (Immune)」自動判定。
+  4. **斷頭逃生救生圈雙軌計算器 (Capital Infusion Solver)**：同步輸出「方案 A：償還本金（減少分母）」與「方案 B：補進現金擔保品（增加分子）」以及「方案 C：指定持股加質股數」。
+- **測試覆蓋**：6/6 單元測試 100% 通過，全專案 54 個測試套件、595 個測試全數通過，TypeScript 編譯零錯誤。
+
