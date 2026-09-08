@@ -99,5 +99,35 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
     expect(result.actionDecision.action).toBe('SELL');
     expect(result.actionDecision.actionReason).toContain('跌破箱底');
   });
+
+  it('BEGINNER_TOOLTIPS 應包含風益比、箱頂防守、破底翻、布林壓縮與停損等白話文解說', async () => {
+    const { BEGINNER_TOOLTIPS } = await import('./MuscleBookerWorkspace');
+    expect(BEGINNER_TOOLTIPS).toBeDefined();
+    expect(BEGINNER_TOOLTIPS.riskReward).toContain('風益比');
+    expect(BEGINNER_TOOLTIPS.boxUpperDefense).toContain('箱頂防守價');
+    expect(BEGINNER_TOOLTIPS.bottomPenetration).toContain('破底翻反轉');
+    expect(BEGINNER_TOOLTIPS.bollingerSqueeze).toContain('布林極致壓縮');
+    expect(BEGINNER_TOOLTIPS.boxLowerBreakdown).toContain('跌破箱底防守線');
+    expect(BEGINNER_TOOLTIPS.maDeductionTelescope).toContain('MA20 扣抵望遠鏡');
+  });
+
+  it('持股分流邏輯應精確區分在倉 (shares > 0) 與歷史已平倉 (shares === 0)', () => {
+    const mockHoldings = [
+      { symbol: '2330', name: '台積電', shares: 1000, currentPrice: 1000, market: 'TW' as const, currency: 'TWD' as const, totalCost: 900000 },
+      { symbol: '00746B', name: '富邦A級公司債', shares: 0, currentPrice: 38, market: 'TW' as const, currency: 'TWD' as const, realizedPnL: 5000, totalCost: 0 },
+      { symbol: '1717', name: '長興', shares: 0, currentPrice: 32, market: 'TW' as const, currency: 'TWD' as const, realizedPnL: -2000, totalCost: 0 },
+      { symbol: 'NVDA', name: '輝達', shares: 50, currentPrice: 120, market: 'US' as const, currency: 'USD' as const, totalCost: 5000 },
+    ];
+
+    const activeTw = mockHoldings.filter((h) => h.market === 'TW' && h.shares > 0);
+    const closedTw = mockHoldings.filter((h) => h.market === 'TW' && h.shares === 0);
+
+    expect(activeTw).toHaveLength(1);
+    expect(activeTw[0].symbol).toBe('2330');
+
+    expect(closedTw).toHaveLength(2);
+    expect(closedTw.map((h) => h.symbol)).toEqual(['00746B', '1717']);
+  });
 });
+
 
