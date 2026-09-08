@@ -1,9 +1,10 @@
 # 技術債 #0020: 宏觀戰情室、全球流動性監控與 AI 智慧每日操作決策儀表板 (Market War Room, Macro Liquidity & AI Strategy Advisor)
 
-- **狀態**：`OPEN`
+- **狀態**：`RESOLVED`
 - **優先級**：`P2`
 - **發現來源**：/grill-with-docs 宏觀與券商級決策儀表板需求調研
 - **建立日期**：2026-09-02
+- **解決日期**：2026-09-08 (v8.13.0, PRD #0094, ADR #0094)
 - **標籤**：`Architecture` · `Macro` · `WarRoom` · `AI-Advisor` · `Liquidity` · `Quant` · `Dashboard`
 
 ---
@@ -182,3 +183,22 @@ export interface MacroIndicatorSnapshot {
 1. 開發全新「🏛️ 戰情室 (War Room)」主導覽頁籤與儀表板模組時。
 2. 整合「宏觀多源即時數據管線 (Macro Ingestion Pipeline)」與 Yahoo Finance / FRED 資料串接時。
 3. 引入「AI 智慧助理 / 每日晨報 (AI Morning Brief)」分析功能時。
+
+---
+
+## 5. 解決方案與驗收結果 (Resolution & Verification)
+
+- **實施 PRD**：[docs/specs/0094-macro-war-room-and-ai-advisor-spec.md](file:///d:/APP/股票紀錄/docs/specs/0094-macro-war-room-and-ai-advisor-spec.md)
+- **架構決策**：[docs/adr/0094-market-war-room-macro-liquidity-and-ai-advisor.md](file:///d:/APP/股票紀錄/docs/adr/0094-market-war-room-macro-liquidity-and-ai-advisor.md)
+- **實作代碼**：
+  - 型別定義：[src/types/macro.ts](file:///d:/APP/股票紀錄/src/types/macro.ts)
+  - 核心引擎：[src/engine/macroAdvisorEngine.ts](file:///d:/APP/股票紀錄/src/engine/macroAdvisorEngine.ts)
+  - 單元測試：[src/engine/macroAdvisorEngine.test.ts](file:///d:/APP/股票紀錄/src/engine/macroAdvisorEngine.test.ts)
+- **交付功能亮點**：
+  1. **個人投資組合宏觀防護盾 (Portfolio Macro Shield)**：精確提煉實質現金購買力比率（緊繃/適中/充裕）、質押借貸槓桿維持率等級（安全/警戒/追繳/零借款）與配置最大偏離度。
+  2. **關鍵財經催化劑倒數計算器**：動態計算 FOMC、美國 CPI、非農與央行會議之倒數天數並過濾過期事件。
+  3. **雙軌制 AI 每日作戰方針決策引擎**：
+     - **軌道一 (100% 離線確定性專家系統)**：四維交叉矩陣輸出四字定調（如 `【防禦蓄勢・分批低接】`、`【獲利調節・拉高現金】`、`【極端避險・嚴守防線】`、`【安全巡航・維持紀律】`）與客觀紀律要點，保證零幻覺、零資費消耗。
+     - **軌道二 (結構化 LLM 提示詞載荷)**：輸出語法嚴謹的 JSON Payload，支援未來接入 Gemini / Claude API 進行客製化對話。
+- **測試覆蓋**：8/8 單元測試 100% 通過，全專案 55 個測試套件、603 個測試全數綠燈，TypeScript 編譯零錯誤。
+
