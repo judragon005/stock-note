@@ -1133,6 +1133,22 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Zero-Disruption Proxy Adapter (無痛代理中介層整合)**:
   - 深度整合於 `fetchWithCORSProxy`，自 URL 自動解析真實目標主機名稱，既有報價抓取、歷史價格同步與公司行動掃描模組零改動即刻獲得全域速率防護。
 
+### 本地全量歷史技術指標庫與肌肉書僮量化體系 *(新增於 V8.10.0 / ADR #0091)*
+
+- **Darvas Box Theory (肌肉書僮箱子戰術與三日法則)**:
+  - 連續 3 日未創新高確認有效箱頂阻力，連續 3 日未創新低確認有效箱底支撐。依據當前收盤點位即時判定 `BREAKOUT_UP` (強勢突破)、`BREAKOUT_DOWN` (弱勢跌破) 或 `INSIDE_BOX` (箱內盤整)。
+- **MA Deduction & Time-Telescope (均線扣抵望遠鏡與底穿上假跌破)**:
+  - 精確計算 5 日與 20 日（生命線）扣抵價格，提前 1~3 天推導均線翻揚 (`UP`) 或下彎 (`DOWN`) 拐點。
+  - 盤中跌破支撐但收盤強勢收復且下影線 $\ge 50\%$ 振幅時，自動標記為「底穿上 (Bottom Penetration Rebound)」主力獵殺反轉型態。
+- **Bollinger Squeeze (布林通道極致壓縮)**:
+  - 動態計量帶寬 $\text{BW} = \frac{\text{Upper} - \text{Lower}}{\text{Mid}} \times 100\%$，當 $\text{BW} \le 8\%$ 時標記為極致壓縮狀態，預警主力蓄勢變盤。
+- **ATR Trailing Defense (ATR 動態移動防守價)**:
+  - 依據 14 日真實波動區間 (ATR)，計算 $\text{波段最高價} - 2.5 \times \text{ATR}_{14}$，為短線波段提供客觀量化防守停損線。
+- **Trust-to-Net-Volume Ratio (投量比與當沖水分過濾)**:
+  - 公式 $\frac{\text{投信買超張數}}{\max(1, \text{成交量} - \text{當沖量})} \times 100\%$，過濾短線虛胖量能，洞察投信主力真實鎖碼強度。
+- **Historical OHLCV & Indicators Store (全量日 K 與指標本地持久化)**:
+  - IndexedDB 升級至版本 3，新增 `historicalOhlcv` 與 `technicalIndicators` 物件庫，實現掛牌以來全量數據離線秒開與增量回補。
+
 
 
 
