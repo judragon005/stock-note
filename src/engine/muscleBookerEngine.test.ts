@@ -7,6 +7,7 @@ import {
   calculateAtrTrailingDefense,
   calculateRelativeStrength,
   calculateTrustToNetVolumeRatio,
+  evaluateMuscleBookerAction,
 } from './muscleBookerEngine';
 import { DailyCandle } from '../types/indicators';
 
@@ -153,9 +154,95 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
       // 500 / 2500 * 100 = 20%
       expect(ratio).toBe(20);
     });
+
+    it('投信佔比 > 15% 且連買應觸發高集中度多頭', () => {
+      const result = calculateTrustToNetVolumeRatio({
+        volume: 5000,
+        dayTradingVolume: 2500,
+        trustNetBuy: 600,
+      } as any);
+      // 600 / 2500 * 100 = 24% (> 15%)
+      expect(result).toBeGreaterThan(15);
+    });
   });
 
-  describe('7. 綜合指標點位生成 (calculateMuscleBookerIndicators)', () => {
+  describe('7. evaluateMuscleBookerAction (三色實戰操盤動作評估)', () => {
+    it('箱頂突破且均線向上，應輸出 BUY 買進並給出停損點與風益比', () => {
+      const decision = evaluateMuscleBookerAction({
+        currentPrice: 105,
+        box: {
+          boxStatus: 'BREAKOUT_UP',
+          boxUpper: 100,
+          boxLower: 90,
+          boxWidthPercent: 10,
+        },
+        deduction: {
+          ma20Slope: 'UP',
+          isBottomPenetrationRebound: false,
+        },
+        bbands: {
+          isSqueeze: false,
+          bandwidth: 15,
+        },
+      });
+
+      expect(decision.action).toBe('BUY');
+      expect(decision.actionBadge).toContain('買進');
+      expect(decision.stopLossPrice).toBe(100);
+      expect(decision.targetPrice).toBe(115);
+      expect(decision.riskRewardRatio).toBeDefined();
+    });
+
+    it('布林極致壓縮中，應輸出 AVOID 觀望不碰', () => {
+      const decision = evaluateMuscleBookerAction({
+        currentPrice: 100,
+        box: {
+          boxStatus: 'INSIDE_BOX',
+          boxUpper: 102,
+          boxLower: 98,
+          boxWidthPercent: 4,
+        },
+        deduction: {
+          ma20Slope: 'FLAT',
+          isBottomPenetrationRebound: false,
+        },
+        bbands: {
+          isSqueeze: true,
+          bandwidth: 4.5,
+        },
+      });
+
+      expect(decision.action).toBe('AVOID');
+      expect(decision.actionBadge).toContain('碰');
+      expect(decision.actionReason).toContain('壓縮');
+    });
+
+    it('跌破箱底，應輸出 SELL 建議賣出/停損', () => {
+      const decision = evaluateMuscleBookerAction({
+        currentPrice: 88,
+        box: {
+          boxStatus: 'BREAKOUT_DOWN',
+          boxUpper: 100,
+          boxLower: 90,
+          boxWidthPercent: 10,
+        },
+        deduction: {
+          ma20Slope: 'DOWN',
+          isBottomPenetrationRebound: false,
+        },
+        bbands: {
+          isSqueeze: false,
+          bandwidth: 12,
+        },
+      });
+
+      expect(decision.action).toBe('SELL');
+      expect(decision.actionBadge).toContain('賣出');
+      expect(decision.actionReason).toContain('停損');
+    });
+  });
+
+  describe('8. 綜合指標點位生成 (calculateMuscleBookerIndicators)', () => {
     it('傳入完整日 K 數列時，應輸出每根 K 線的完整指標時序結構', () => {
       const candles = generateMockCandles(30, 100);
       const points = calculateMuscleBookerIndicators(candles);

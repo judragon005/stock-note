@@ -74,6 +74,27 @@ export interface AiMorningBriefDirective {
 }
 
 /**
+ * 持股動能訊號摘要 (用於 AI 晨報動態點名)
+ */
+export interface MacroHoldingSignalInput {
+  symbol: string;
+  name?: string;
+  action: 'BUY' | 'AVOID' | 'SELL' | 'HOLD';
+  stopLossPrice?: number;
+  targetPrice?: number;
+}
+
+/**
+ * 待收股息進度 (用於 AI 晨報被動現金流規劃)
+ */
+export interface UpcomingDividendInput {
+  symbol: string;
+  amount: number;
+  payDate: string;
+  daysLeft: number;
+}
+
+/**
  * 引擎輸入參數
  */
 export interface MacroAdvisorInput {
@@ -81,4 +102,6 @@ export interface MacroAdvisorInput {
   shield: MacroPortfolioShield;
   asOfDate?: string;                 // 基準日 (YYYY-MM-DD, 預設為今日)
   catalysts?: UpcomingCatalyst[];
+  holdingSignals?: MacroHoldingSignalInput[];
+  upcomingDividends?: UpcomingDividendInput[];
 }
