@@ -1222,3 +1222,18 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     - 基於「市場情緒環境 × 個人現金彈藥 × 質押維持率 × 配置失衡度」四維交叉矩陣，輸出四字定調（如 `【防禦蓄勢・分批低接】`、`【獲利調節・拉高現金】`、`【極端避險・嚴守防線】`、`【安全巡航・維持紀律】`）與客觀紀律要點，保證零幻覺、零資費消耗。
   - **軌道二（結構化 LLM 提示詞載荷）**：
     - 輸出語法嚴謹的 JSON Payload，支援未來接入 Gemini / Claude API 進行客製化對話。
+
+### 市場四柱在地持久化資料庫與雙動能實戰擴展架構 *(新增於 V8.16.0 / ADR #0097)*
+
+- **Market Pulse Local Persistence Database (市場四柱在地持久化資料庫)**:
+  - 核心模組：`src/utils/macroPulseStorage.ts`。
+  - 建立本地時間序列資料庫，完整收錄美債 10Y/2Y 殖利率、利差、CBOE VIX 恐慌指數、CNN 恐懼貪婪指數、黃金現貨、WTI 原油、美元指數 (DXY)、USD/TWD 匯率與 M2 年增率。
+  - 具備離線優先讀取機制，避免重複網路呼叫與 API 限流，支援一鍵匯出 CSV 格式（`macro_pulse_history_YYYY-MM-DD.csv`）供投資人離線量化分析。
+- **Dual Momentum Adaptive Temporal Sampling (雙重動能自適應時間取樣演算法)**:
+  - 修復歷史資料在離散少數快照點時的步長退化問題，自適應動態插值，確保 3M、6M、12M 數據呈現真實階梯層次。
+  - 移除 UI 渲染重複乘算錯誤（修正百分比暴增 100 倍 Bug）。
+  - 擴展個股動能輪動資產池：「台股權值巨頭動能池」與「美股科技巨頭動能池 (Magnificent 7)」。
+  - 引入「📆 每月調倉倒數窗口 (Monthly Rebalance Countdown)」與「在庫持股適配指引」，強化投資人長線紀律執行力。
+- **Muscle Booker Market Scoping (肌肉書僮市場動態隔離)**:
+  - 支援 `currentMarket` 跨工作區聯動，台美股在倉持股、焦點候選池與權值 50 大池徹底切分，杜絕美股模式下混入台股代號之瑕疵。
+

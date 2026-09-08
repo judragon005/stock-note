@@ -47,4 +47,16 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
     expect(result.currentPrice).toBeGreaterThan(0);
     expect(['BREAKOUT_UP', 'BREAKOUT_DOWN', 'INSIDE_BOX']).toContain(result.boxStatus);
   });
+
+  it('應能依據市場狀態提供正確的標的池清單 (美股模式絕不包含台股)', async () => {
+    const { getScopedUniverseSymbols } = await import('./MuscleBookerWorkspace');
+    const usSymbols = getScopedUniverseSymbols('US', 'TW50_CORE');
+    expect(usSymbols.length).toBeGreaterThan(0);
+    expect(usSymbols.every((s) => s.market === 'US')).toBe(true);
+
+    const twSymbols = getScopedUniverseSymbols('TW', 'TW50_CORE');
+    expect(twSymbols.length).toBeGreaterThan(0);
+    expect(twSymbols.every((s) => s.market === 'TW')).toBe(true);
+  });
 });
+

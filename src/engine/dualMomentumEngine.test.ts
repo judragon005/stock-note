@@ -43,7 +43,30 @@ describe('Dual Momentum Engine (雙重動能與跨資產趨勢輪動核心)', ()
       expect(metric.momentumScore).toBeGreaterThan(0);
       expect(metric.isAboveRiskFree).toBe(true);
     });
+
+    it('當歷史 K 線只有離散快照 (如 5 筆) 時，應自適應採樣，3M/6M/12M 不應全部相同', () => {
+      // 5 筆資料代表 12M前, 6M前, 3M前, 1M前, 當前
+      const sparseCandles: DailyCandle[] = [
+        { date: '2025-08-01', open: 100, high: 100, low: 100, close: 100, volume: 100 },
+        { date: '2026-02-01', open: 110, high: 110, low: 110, close: 110, volume: 100 },
+        { date: '2026-05-01', open: 120, high: 120, low: 120, close: 120, volume: 100 },
+        { date: '2026-08-01', open: 130, high: 130, low: 130, close: 130, volume: 100 },
+        { date: '2026-09-08', open: 140, high: 140, low: 140, close: 140, volume: 100 },
+      ];
+      const metric = calculateAssetMomentum('0050.TW', 'TW', sparseCandles, 0.04);
+      expect(metric.currentPrice).toBe(140);
+      // 12M 前是 100 (40%), 6M 前是 120 (16.67%), 3M 前是 130 (7.69%)
+      expect(metric.returns12M).toBeGreaterThan(metric.returns6M);
+      expect(metric.returns6M).toBeGreaterThan(metric.returns3M);
+    });
+
+    it('DEFAULT_MOMENTUM_UNIVERSES 應包含台股權值巨頭與美股巨頭資產池', () => {
+      const ids = DEFAULT_MOMENTUM_UNIVERSES.map((u) => u.id);
+      expect(ids).toContain('taiwan_blue_chips');
+      expect(ids).toContain('us_mega_tech');
+    });
   });
+
 
   describe('2. evaluateDualMomentum (相對與絕對動能決策狀態機)', () => {
     it('情境 A：持有動能第一名標的且超越無風險利率，應輸出 HOLD_TOP 續抱', () => {
@@ -73,8 +96,9 @@ describe('Dual Momentum Engine (雙重動能與跨資產趨勢輪動核心)', ()
         'SPY': generateCandles(260, 100, 115), // 目前持有
       };
 
+      const usTechUniverse = DEFAULT_MOMENTUM_UNIVERSES.find((u) => u.id === 'us_tech')!;
       const signal = evaluateDualMomentum({
-        universeConfig: DEFAULT_MOMENTUM_UNIVERSES[2], // US Tech
+        universeConfig: usTechUniverse,
         quotesMap,
         currentHeldSymbol: 'SPY',
       });

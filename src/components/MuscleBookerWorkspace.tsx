@@ -6,7 +6,7 @@ import {
   AlertTriangle,
   Search,
 } from 'lucide-react';
-import { HoldingPosition } from '../types/stock';
+import { HoldingPosition, MarketType } from '../types/stock';
 import { DailyCandle, BoxStatus, TrendSlope } from '../types/indicators';
 import {
   detectDarvasBox,
@@ -17,6 +17,7 @@ import {
 interface MuscleBookerWorkspaceProps {
   holdings: HoldingPosition[];
   historicalDailyPrices?: Record<string, Record<string, number>>;
+  currentMarket?: 'ALL' | MarketType;
 }
 
 type AssetPoolType = 'HOLDINGS' | 'TOP30_FOCUS' | 'TW50_CORE';
@@ -37,8 +38,8 @@ interface ScannedStockItem {
   bollingerBandwidth?: number;
 }
 
-// 法人焦點 Top 30 標的清單
-const TOP_30_FOCUS_SYMBOLS = [
+// 台股法人焦點 Top 30
+export const TW_TOP_30_FOCUS_SYMBOLS = [
   { symbol: '2330', name: '台積電', market: 'TW' as const, basePrice: 1010 },
   { symbol: '2454', name: '聯發科', market: 'TW' as const, basePrice: 1280 },
   { symbol: '2317', name: '鴻海', market: 'TW' as const, basePrice: 185 },
@@ -55,6 +56,10 @@ const TOP_30_FOCUS_SYMBOLS = [
   { symbol: '0056', name: '元大高股息', market: 'TW' as const, basePrice: 39.5 },
   { symbol: '00878', name: '國泰永續高股息', market: 'TW' as const, basePrice: 23.8 },
   { symbol: '00919', name: '群益台灣精選高息', market: 'TW' as const, basePrice: 25.8 },
+];
+
+// 美股焦點與成長 Top 30
+export const US_TOP_30_FOCUS_SYMBOLS = [
   { symbol: 'NVDA', name: '輝達 NVIDIA', market: 'US' as const, basePrice: 125 },
   { symbol: 'AAPL', name: '蘋果 Apple', market: 'US' as const, basePrice: 220 },
   { symbol: 'MSFT', name: '微軟 Microsoft', market: 'US' as const, basePrice: 425 },
@@ -63,10 +68,18 @@ const TOP_30_FOCUS_SYMBOLS = [
   { symbol: 'GOOGL', name: '谷歌 Alphabet', market: 'US' as const, basePrice: 165 },
   { symbol: 'META', name: 'Meta', market: 'US' as const, basePrice: 515 },
   { symbol: 'AMD', name: '超微 AMD', market: 'US' as const, basePrice: 155 },
+  { symbol: 'AVGO', name: '博通 Broadcom', market: 'US' as const, basePrice: 160 },
+  { symbol: 'PLTR', name: 'Palantir', market: 'US' as const, basePrice: 32 },
+  { symbol: 'NFLX', name: 'Netflix', market: 'US' as const, basePrice: 680 },
+  { symbol: 'COST', name: '好市多 Costco', market: 'US' as const, basePrice: 880 },
+  { symbol: 'ARM', name: '安謀 ARM', market: 'US' as const, basePrice: 135 },
+  { symbol: 'MU', name: '美光 Micron', market: 'US' as const, basePrice: 95 },
+  { symbol: 'SMCI', name: '美超微 Supermicro', market: 'US' as const, basePrice: 450 },
+  { symbol: 'COIN', name: 'Coinbase', market: 'US' as const, basePrice: 210 },
 ];
 
-// 權值核心 Top 50 代表性標的
-const TW50_BLUE_CHIP_SYMBOLS = [
+// 台股權值核心 Top 50 代表性標的
+export const TW50_BLUE_CHIP_SYMBOLS = [
   { symbol: '2330', name: '台積電', market: 'TW' as const, basePrice: 1010 },
   { symbol: '2317', name: '鴻海', market: 'TW' as const, basePrice: 185 },
   { symbol: '2454', name: '聯發科', market: 'TW' as const, basePrice: 1280 },
@@ -88,6 +101,47 @@ const TW50_BLUE_CHIP_SYMBOLS = [
   { symbol: '3711', name: '日月光投控', market: 'TW' as const, basePrice: 155 },
   { symbol: '3045', name: '台灣大', market: 'TW' as const, basePrice: 112 },
 ];
+
+// 美股巨頭 Top 50 代表性標的
+export const US_MEGA_50_CORE_SYMBOLS = [
+  { symbol: 'NVDA', name: '輝達 NVIDIA', market: 'US' as const, basePrice: 125 },
+  { symbol: 'AAPL', name: '蘋果 Apple', market: 'US' as const, basePrice: 220 },
+  { symbol: 'MSFT', name: '微軟 Microsoft', market: 'US' as const, basePrice: 425 },
+  { symbol: 'AMZN', name: '亞馬遜 Amazon', market: 'US' as const, basePrice: 180 },
+  { symbol: 'GOOGL', name: '谷歌 Alphabet', market: 'US' as const, basePrice: 165 },
+  { symbol: 'META', name: 'Meta', market: 'US' as const, basePrice: 515 },
+  { symbol: 'TSLA', name: '特斯拉 Tesla', market: 'US' as const, basePrice: 215 },
+  { symbol: 'BRK.B', name: '波克夏 Berkshire', market: 'US' as const, basePrice: 450 },
+  { symbol: 'LLY', name: '禮來 Eli Lilly', market: 'US' as const, basePrice: 940 },
+  { symbol: 'JPM', name: '摩根大通 JPMorgan', market: 'US' as const, basePrice: 215 },
+  { symbol: 'V', name: 'Visa', market: 'US' as const, basePrice: 280 },
+  { symbol: 'UNH', name: '聯合健康 UnitedHealth', market: 'US' as const, basePrice: 580 },
+  { symbol: 'XOM', name: '埃克森美孚 ExxonMobil', market: 'US' as const, basePrice: 115 },
+  { symbol: 'MA', name: '萬事達 Mastercard', market: 'US' as const, basePrice: 470 },
+  { symbol: 'COST', name: '好市多 Costco', market: 'US' as const, basePrice: 880 },
+  { symbol: 'PG', name: '寶僑 P&G', market: 'US' as const, basePrice: 170 },
+  { symbol: 'HD', name: '家得寶 Home Depot', market: 'US' as const, basePrice: 370 },
+  { symbol: 'JNJ', name: '嬌生 Johnson & Johnson', market: 'US' as const, basePrice: 160 },
+  { symbol: 'ABBV', name: '艾伯維 AbbVie', market: 'US' as const, basePrice: 190 },
+  { symbol: 'WMT', name: '沃爾瑪 Walmart', market: 'US' as const, basePrice: 75 },
+];
+
+/**
+ * 依據當前市場與選定資產池獲取過濾後的標的
+ */
+export function getScopedUniverseSymbols(
+  market: 'ALL' | MarketType = 'ALL',
+  pool: AssetPoolType = 'TOP30_FOCUS'
+) {
+  if (pool === 'TW50_CORE') {
+    if (market === 'US') return US_MEGA_50_CORE_SYMBOLS;
+    return TW50_BLUE_CHIP_SYMBOLS;
+  }
+  if (market === 'US') return US_TOP_30_FOCUS_SYMBOLS;
+  if (market === 'TW') return TW_TOP_30_FOCUS_SYMBOLS;
+  return [...TW_TOP_30_FOCUS_SYMBOLS, ...US_TOP_30_FOCUS_SYMBOLS];
+}
+
 
 /**
  * 依據基礎價格生成具備真實特徵的 30 天模擬日 K 線 (用於無實時日 K 之公開標的)
@@ -165,25 +219,35 @@ export function scanMuscleBookerItem(
 export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
   holdings,
   historicalDailyPrices = {},
+  currentMarket = 'ALL',
 }) => {
   const [selectedPool, setSelectedPool] = useState<AssetPoolType>('TOP30_FOCUS');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // 0. 依當前市場過濾在倉持股
+  const marketScopedHoldings = useMemo(() => {
+    if (currentMarket === 'US') {
+      return holdings.filter((h) => h.market === 'US' || h.currency === 'USD');
+    }
+    if (currentMarket === 'TW') {
+      return holdings.filter((h) => h.market === 'TW' || h.currency === 'TWD');
+    }
+    return holdings;
+  }, [holdings, currentMarket]);
+
   // 1. 產生掃描標的清單
   const targetUniverse = useMemo(() => {
     if (selectedPool === 'HOLDINGS') {
-      return holdings.map((h) => ({
+      return marketScopedHoldings.map((h) => ({
         symbol: h.symbol,
         name: h.name,
         market: h.market,
         basePrice: h.currentPrice || 100,
       }));
-    } else if (selectedPool === 'TW50_CORE') {
-      return TW50_BLUE_CHIP_SYMBOLS;
-    } else {
-      return TOP_30_FOCUS_SYMBOLS;
     }
-  }, [selectedPool, holdings]);
+    return getScopedUniverseSymbols(currentMarket, selectedPool);
+  }, [selectedPool, marketScopedHoldings, currentMarket]);
+
 
   // 2. 進行肌肉書僮指標全量掃描
   const scannedItems = useMemo<ScannedStockItem[]>(() => {
@@ -308,7 +372,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                 fontWeight: 600,
               }}
             >
-              法人焦點 Top 30
+              {currentMarket === 'US' ? '美股焦點 Top 30' : currentMarket === 'TW' ? '台股焦點 Top 30' : '法人焦點 Top 30'}
             </button>
             <button
               onClick={() => setSelectedPool('HOLDINGS')}
@@ -321,7 +385,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                 fontWeight: 600,
               }}
             >
-              在倉持股 ({holdings.length})
+              {currentMarket === 'US' ? '美股持倉' : currentMarket === 'TW' ? '台股持倉' : '在倉持股'} ({marketScopedHoldings.length})
             </button>
             <button
               onClick={() => setSelectedPool('TW50_CORE')}
@@ -334,8 +398,9 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                 fontWeight: 600,
               }}
             >
-              權值核心 Top 50
+              {currentMarket === 'US' ? '美股巨頭 Top 50' : '權值核心 Top 50'}
             </button>
+
           </div>
         </div>
       </div>

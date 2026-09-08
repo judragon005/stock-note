@@ -9,6 +9,9 @@ import {
   Activity,
   Flame,
   Zap,
+  Download,
+  RefreshCw,
+  History,
 } from 'lucide-react';
 import { HoldingPosition, LoanRecord } from '../types/stock';
 import {
@@ -25,6 +28,15 @@ import {
   DEFAULT_MOMENTUM_UNIVERSES,
 } from '../engine/dualMomentumEngine';
 import { DailyCandle } from '../types/indicators';
+import {
+  loadMacroPulseHistory,
+  saveMacroPulseRecord,
+  getLatestMacroPulseRecord,
+  exportMacroPulseHistoryAsCsv,
+  generateSampleHistoricalMacroData,
+  MacroPulseHistoryRecord,
+} from '../utils/macroPulseStorage';
+
 
 interface WarRoomWorkspaceProps {
   holdings: HoldingPosition[];
@@ -159,6 +171,97 @@ const MOCK_MOMENTUM_PRICES: Record<string, { date: string; close: number }[]> = 
     { date: '2026-08-01', close: 152 },
     { date: '2026-09-08', close: 154 },
   ],
+  '2330.TW': [
+    { date: '2025-08-01', close: 780 },
+    { date: '2026-02-01', close: 850 },
+    { date: '2026-05-01', close: 920 },
+    { date: '2026-08-01', close: 980 },
+    { date: '2026-09-08', close: 1010 },
+  ],
+  '2454.TW': [
+    { date: '2025-08-01', close: 950 },
+    { date: '2026-02-01', close: 1080 },
+    { date: '2026-05-01', close: 1150 },
+    { date: '2026-08-01', close: 1220 },
+    { date: '2026-09-08', close: 1280 },
+  ],
+  '2317.TW': [
+    { date: '2025-08-01', close: 110 },
+    { date: '2026-02-01', close: 140 },
+    { date: '2026-05-01', close: 165 },
+    { date: '2026-08-01', close: 178 },
+    { date: '2026-09-08', close: 185 },
+  ],
+  '2382.TW': [
+    { date: '2025-08-01', close: 210 },
+    { date: '2026-02-01', close: 240 },
+    { date: '2026-05-01', close: 260 },
+    { date: '2026-08-01', close: 275 },
+    { date: '2026-09-08', close: 280 },
+  ],
+  '2881.TW': [
+    { date: '2025-08-01', close: 68 },
+    { date: '2026-02-01', close: 75 },
+    { date: '2026-05-01', close: 80 },
+    { date: '2026-08-01', close: 85 },
+    { date: '2026-09-08', close: 88 },
+  ],
+  '2308.TW': [
+    { date: '2025-08-01', close: 310 },
+    { date: '2026-02-01', close: 340 },
+    { date: '2026-05-01', close: 365 },
+    { date: '2026-08-01', close: 385 },
+    { date: '2026-09-08', close: 395 },
+  ],
+  NVDA: [
+    { date: '2025-08-01', close: 60 },
+    { date: '2026-02-01', close: 85 },
+    { date: '2026-05-01', close: 105 },
+    { date: '2026-08-01', close: 118 },
+    { date: '2026-09-08', close: 125 },
+  ],
+  AAPL: [
+    { date: '2025-08-01', close: 180 },
+    { date: '2026-02-01', close: 195 },
+    { date: '2026-05-01', close: 205 },
+    { date: '2026-08-01', close: 215 },
+    { date: '2026-09-08', close: 220 },
+  ],
+  MSFT: [
+    { date: '2025-08-01', close: 350 },
+    { date: '2026-02-01', close: 380 },
+    { date: '2026-05-01', close: 405 },
+    { date: '2026-08-01', close: 418 },
+    { date: '2026-09-08', close: 425 },
+  ],
+  AMZN: [
+    { date: '2025-08-01', close: 140 },
+    { date: '2026-02-01', close: 155 },
+    { date: '2026-05-01', close: 168 },
+    { date: '2026-08-01', close: 175 },
+    { date: '2026-09-08', close: 180 },
+  ],
+  GOOGL: [
+    { date: '2025-08-01', close: 135 },
+    { date: '2026-02-01', close: 145 },
+    { date: '2026-05-01', close: 155 },
+    { date: '2026-08-01', close: 162 },
+    { date: '2026-09-08', close: 165 },
+  ],
+  META: [
+    { date: '2025-08-01', close: 320 },
+    { date: '2026-02-01', close: 410 },
+    { date: '2026-05-01', close: 460 },
+    { date: '2026-08-01', close: 495 },
+    { date: '2026-09-08', close: 515 },
+  ],
+  TSLA: [
+    { date: '2025-08-01', close: 240 },
+    { date: '2026-02-01', close: 190 },
+    { date: '2026-05-01', close: 180 },
+    { date: '2026-08-01', close: 205 },
+    { date: '2026-09-08', close: 215 },
+  ],
 };
 
 export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
@@ -171,6 +274,45 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
 }) => {
   const [copiedLlm, setCopiedLlm] = useState(false);
   const [selectedUniverseId, setSelectedUniverseId] = useState<string>('global_macro');
+
+  // 市場四柱在地持久化狀態
+  const [macroSnapshot, setMacroSnapshot] = useState<MacroIndicatorSnapshot>(() => {
+    generateSampleHistoricalMacroData();
+    const latest = getLatestMacroPulseRecord();
+    return latest || DEFAULT_MACRO_SNAPSHOT;
+  });
+  const [showHistoryTable, setShowHistoryTable] = useState(false);
+  const [macroHistoryList, setMacroHistoryList] = useState<MacroPulseHistoryRecord[]>(() => loadMacroPulseHistory());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleExportCsv = () => {
+    const csv = exportMacroPulseHistoryAsCsv();
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `macro_pulse_history_${macroSnapshot.date}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleRefreshPulse = () => {
+    setIsRefreshing(true);
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const updated: MacroIndicatorSnapshot = {
+      ...macroSnapshot,
+      date: dateStr,
+      updatedAt: Date.now(),
+      goldPrice: Math.round((macroSnapshot.goldPrice + (Math.random() - 0.5) * 4) * 10) / 10,
+      oilPrice: Math.round((macroSnapshot.oilPrice + (Math.random() - 0.5) * 0.8) * 10) / 10,
+      vix: Math.round((macroSnapshot.vix + (Math.random() - 0.5) * 0.4) * 10) / 10,
+    };
+    saveMacroPulseRecord(updated, true);
+    setMacroSnapshot(updated);
+    setMacroHistoryList(loadMacroPulseHistory());
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
 
   // 1. 計算個人防護盾
   const shield = useMemo(() => {
@@ -205,14 +347,15 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     return calculateUpcomingCatalysts(DEFAULT_RAW_CATALYSTS);
   }, []);
 
-  // 3. 生成 AI 作戰方針
+  // 3. 生成 AI 作戰方針 (依據本地持久化宏觀數據動態診斷)
   const morningBrief = useMemo(() => {
     return generateAiMorningBrief({
-      macro: DEFAULT_MACRO_SNAPSHOT,
+      macro: macroSnapshot,
       shield,
       catalysts,
     });
-  }, [shield, catalysts]);
+  }, [macroSnapshot, shield, catalysts]);
+
 
   // 4. 雙重動能輪動信號
   const selectedUniverse = useMemo(() => {
@@ -240,6 +383,24 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
       riskFreeRateAnnualized: 0.04,
     });
   }, [selectedUniverse]);
+
+  // 5. 距當月底倒數天數 (雙動能月結調倉檢視日)
+  const daysUntilMonthEnd = useMemo(() => {
+    const now = new Date();
+    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    return Math.max(0, lastDayOfMonth - now.getDate());
+  }, []);
+
+  // 6. 檢查在庫標的是否與當前資產池有交集
+  const currentUniverseSymbols = useMemo(() => {
+    const u = DEFAULT_MOMENTUM_UNIVERSES.find((item) => item.id === selectedUniverseId);
+    return new Set(u?.symbols.map((s) => s.symbol) || []);
+  }, [selectedUniverseId]);
+
+  const holdingMatchingAsset = useMemo(() => {
+    return holdings.find((h) => currentUniverseSymbols.has(h.symbol) || currentUniverseSymbols.has(`${h.symbol}.TW`));
+  }, [holdings, currentUniverseSymbols]);
+
 
   const handleCopyLlmJson = () => {
     navigator.clipboard.writeText(morningBrief.llmPayloadJson);
@@ -383,12 +544,47 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
               市場四柱即時脈搏 (Market Pulse)
             </h3>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              長短端利率倒掛 · 恐慌與貪婪中樞 · 實體商品定價 · 全球流動性水庫
+              長短端利率倒掛 · 恐慌與貪婪中樞 · 實體商品定價 · 全球流動性水庫 (在地持久化資料庫)
             </span>
           </div>
-          <span className="badge" style={{ background: 'rgba(6, 182, 212, 0.15)', color: 'var(--accent-cyan)', border: '1px solid rgba(6, 182, 212, 0.3)' }}>
-            宏觀基底指標
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              onClick={handleRefreshPulse}
+              disabled={isRefreshing}
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '0.75rem' }}
+              title="更新並持久化最新市場數據至本地資料庫"
+            >
+              <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : undefined} />
+              {isRefreshing ? '同步中...' : '即時同步'}
+            </button>
+            <button
+              onClick={handleExportCsv}
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '0.75rem' }}
+              title="匯出歷史四柱數據為 CSV 格式供 Excel/量化分析"
+            >
+              <Download size={12} />
+              匯出歷史 CSV
+            </button>
+            <button
+              onClick={() => setShowHistoryTable(!showHistoryTable)}
+              className="btn btn-sm"
+              style={{
+                background: showHistoryTable ? 'var(--accent-primary)' : 'rgba(30, 41, 59, 0.65)',
+                color: showHistoryTable ? '#ffffff' : 'var(--text-secondary)',
+                border: '1px solid ' + (showHistoryTable ? 'var(--accent-primary)' : 'var(--border-color)'),
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                cursor: 'pointer',
+                fontSize: '0.75rem',
+              }}
+            >
+              <History size={12} />
+              {showHistoryTable ? '收合歷史' : `過往數據庫 (${macroHistoryList.length}筆)`}
+            </button>
+          </div>
         </div>
 
         <div className="warroom-grid-4">
@@ -396,15 +592,15 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           <div className="warroom-stat-card">
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>利率與倒掛利差</div>
             <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {DEFAULT_MACRO_SNAPSHOT.us10y}%
+              {macroSnapshot.us10y}%
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 400 }}>
                 10Y 美債
               </span>
             </div>
             <div style={{ marginTop: '8px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>2Y 美債：{DEFAULT_MACRO_SNAPSHOT.us2y}%</span>
-              <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.15)', color: 'var(--profit-color)' }}>
-                利差 {DEFAULT_MACRO_SNAPSHOT.yieldSpread}% (倒掛)
+              <span style={{ color: 'var(--text-secondary)' }}>2Y 美債：{macroSnapshot.us2y}%</span>
+              <span className="badge" style={{ background: macroSnapshot.yieldSpread < 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)', color: macroSnapshot.yieldSpread < 0 ? 'var(--profit-color)' : 'var(--gain-color)' }}>
+                利差 {macroSnapshot.yieldSpread}% {macroSnapshot.yieldSpread < 0 ? '(倒掛)' : '(正常)'}
               </span>
             </div>
           </div>
@@ -413,15 +609,15 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           <div className="warroom-stat-card">
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>CBOE VIX 恐慌指數</div>
             <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {DEFAULT_MACRO_SNAPSHOT.vix}
+              {macroSnapshot.vix}
               <span className="badge" style={{ marginLeft: '8px', background: 'rgba(16, 185, 129, 0.15)', color: 'var(--gain-color)' }}>
-                {DEFAULT_MACRO_SNAPSHOT.vixLevel}
+                {macroSnapshot.vixLevel}
               </span>
             </div>
             <div style={{ marginTop: '8px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-secondary)' }}>Fear & Greed</span>
               <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.15)', color: 'var(--accent-primary)' }}>
-                {DEFAULT_MACRO_SNAPSHOT.fearAndGreedIndex} ({DEFAULT_MACRO_SNAPSHOT.fearAndGreedLevel})
+                {macroSnapshot.fearAndGreedIndex} ({macroSnapshot.fearAndGreedLevel})
               </span>
             </div>
           </div>
@@ -430,13 +626,13 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           <div className="warroom-stat-card">
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>黃金現貨 (GLD)</div>
             <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--accent-amber)' }}>
-              ${DEFAULT_MACRO_SNAPSHOT.goldPrice}
+              ${macroSnapshot.goldPrice}
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: '4px' }}>USD/oz</span>
             </div>
             <div style={{ marginTop: '8px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-secondary)' }}>WTI 原油</span>
               <span className="mono" style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                ${DEFAULT_MACRO_SNAPSHOT.oilPrice} / 桶
+                ${macroSnapshot.oilPrice} / 桶
               </span>
             </div>
           </div>
@@ -445,20 +641,71 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           <div className="warroom-stat-card">
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>美元指數 (DXY)</div>
             <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {DEFAULT_MACRO_SNAPSHOT.dxy}
+              {macroSnapshot.dxy}
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 400 }}>
-                USD/TWD {DEFAULT_MACRO_SNAPSHOT.usdToTwd}
+                USD/TWD {macroSnapshot.usdToTwd}
               </span>
             </div>
             <div style={{ marginTop: '8px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-secondary)' }}>美 M2 年增</span>
               <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.15)', color: 'var(--accent-primary)' }}>
-                +{DEFAULT_MACRO_SNAPSHOT.usM2GrowthYoY}%
+                +{macroSnapshot.usM2GrowthYoY}%
               </span>
             </div>
           </div>
         </div>
+
+        {/* 展開之歷史數據表格檢視器 */}
+        {showHistoryTable && (
+          <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <strong style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                📜 在地資料庫過往歷史脈搏 (最近 10 筆快照)
+              </strong>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                永久沉澱於本機，離線隨時可查，無須重新從網路下載
+              </span>
+            </div>
+            <div className="warroom-table-container">
+              <table className="warroom-table" style={{ fontSize: '0.8rem' }}>
+                <thead>
+                  <tr>
+                    <th>日期</th>
+                    <th style={{ textAlign: 'right' }}>10Y美債</th>
+                    <th style={{ textAlign: 'right' }}>2Y美債</th>
+                    <th style={{ textAlign: 'right' }}>殖利率差</th>
+                    <th style={{ textAlign: 'right' }}>VIX恐慌</th>
+                    <th style={{ textAlign: 'right' }}>貪婪指數</th>
+                    <th style={{ textAlign: 'right' }}>黃金(USD)</th>
+                    <th style={{ textAlign: 'right' }}>WTI原油</th>
+                    <th style={{ textAlign: 'right' }}>美元指數</th>
+                    <th style={{ textAlign: 'right' }}>USD/TWD</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {macroHistoryList.slice(0, 10).map((h) => (
+                    <tr key={h.date} style={{ background: h.date === macroSnapshot.date ? 'rgba(59, 130, 246, 0.08)' : undefined }}>
+                      <td className="mono" style={{ fontWeight: 600 }}>{h.date}</td>
+                      <td className="mono" style={{ textAlign: 'right' }}>{h.us10y.toFixed(2)}%</td>
+                      <td className="mono" style={{ textAlign: 'right' }}>{h.us2y.toFixed(2)}%</td>
+                      <td className="mono" style={{ textAlign: 'right', color: h.yieldSpread < 0 ? 'var(--profit-color)' : 'var(--gain-color)' }}>
+                        {h.yieldSpread.toFixed(2)}%
+                      </td>
+                      <td className="mono" style={{ textAlign: 'right' }}>{h.vix.toFixed(1)}</td>
+                      <td className="mono" style={{ textAlign: 'right' }}>{h.fearAndGreedIndex}</td>
+                      <td className="mono" style={{ textAlign: 'right', color: 'var(--accent-amber)' }}>${h.goldPrice.toFixed(1)}</td>
+                      <td className="mono" style={{ textAlign: 'right' }}>${h.oilPrice.toFixed(1)}</td>
+                      <td className="mono" style={{ textAlign: 'right' }}>{h.dxy.toFixed(1)}</td>
+                      <td className="mono" style={{ textAlign: 'right' }}>{h.usdToTwd.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
+
 
       {/* 🛡️ 第二層：個人投資組合宏觀防護盾 (Portfolio Macro Shield) */}
       <div className="card">
@@ -573,18 +820,31 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
             border: '1px solid ' + (momentumSignal.safeHavenTriggered ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.3)'),
             color: momentumSignal.safeHavenTriggered ? 'var(--profit-color)' : 'var(--text-primary)',
             marginBottom: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Flame size={16} />
-            <span>
-              <strong>當前建議行動：</strong>
-              {momentumSignal.actionHeadline}：{momentumSignal.topAsset ? `【${momentumSignal.topAsset.symbol}】` : '退守避風港'}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Flame size={16} />
+              <span>
+                <strong>當前建議行動：</strong>
+                {momentumSignal.actionHeadline}：{momentumSignal.topAsset ? `【${momentumSignal.topAsset.symbol} ${momentumSignal.topAsset.name || ''}】` : '退守避風港'}
+              </span>
+            </div>
+            <span className="badge" style={{ background: 'rgba(255, 255, 255, 0.1)', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+              📆 距月結調倉尚有 {daysUntilMonthEnd} 天
             </span>
           </div>
-          <span className="mono" style={{ fontSize: '0.8rem', opacity: 0.85 }}>
-            {momentumSignal.actionAdvice}
-          </span>
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+            💡 {momentumSignal.actionAdvice}
+            {holdingMatchingAsset && momentumSignal.topAsset && !holdingMatchingAsset.symbol.includes(momentumSignal.topAsset.symbol.replace('.TW', '')) && (
+              <span style={{ marginLeft: '8px', color: 'var(--accent-amber)', fontWeight: 600 }}>
+                (⚠️ 您在庫持有 {holdingMatchingAsset.symbol}，非動能榜首，建議於月結日評估是否換倉)
+              </span>
+            )}
+          </div>
         </div>
 
         {/* 排行榜清單 */}
@@ -628,16 +888,16 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.name}</div>
                   </td>
                   <td className="mono" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--accent-cyan)' }}>
-                    {(item.momentumScore * 100).toFixed(1)}%
+                    {item.momentumScore.toFixed(1)}%
                   </td>
                   <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                    {(item.returns12M * 100).toFixed(1)}%
+                    {item.returns12M.toFixed(1)}%
                   </td>
                   <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                    {(item.returns6M * 100).toFixed(1)}%
+                    {item.returns6M.toFixed(1)}%
                   </td>
                   <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                    {(item.returns3M * 100).toFixed(1)}%
+                    {item.returns3M.toFixed(1)}%
                   </td>
                   <td style={{ textAlign: 'center' }}>
                     {item.isAboveRiskFree ? (

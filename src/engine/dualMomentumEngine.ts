@@ -36,6 +36,20 @@ export const DEFAULT_MOMENTUM_UNIVERSES: MomentumUniverseConfig[] = [
     ],
   },
   {
+    id: 'taiwan_blue_chips',
+    name: '台股權值巨頭動能池 (Taiwan Blue Chips)',
+    description: '台積電、聯發科、鴻海、廣達、富邦金與台達電龍頭個股動能輪動。',
+    riskFreeRateAnnualized: 0.02,
+    symbols: [
+      { symbol: '2330.TW', market: 'TW', name: '台積電' },
+      { symbol: '2454.TW', market: 'TW', name: '聯發科' },
+      { symbol: '2317.TW', market: 'TW', name: '鴻海' },
+      { symbol: '2382.TW', market: 'TW', name: '廣達' },
+      { symbol: '2881.TW', market: 'TW', name: '富邦金' },
+      { symbol: '2308.TW', market: 'TW', name: '台達電' },
+    ],
+  },
+  {
     id: 'us_tech',
     name: '美股成長與板塊輪動池 (US Tech & Growth)',
     description: '那斯達克 (QQQ)、標普500 (SPY)、半導體 (SMH) 與醫療保健 (XLV)。',
@@ -45,6 +59,21 @@ export const DEFAULT_MOMENTUM_UNIVERSES: MomentumUniverseConfig[] = [
       { symbol: 'SPY', market: 'US', name: 'SPDR S&P 500' },
       { symbol: 'SMH', market: 'US', name: 'VanEck 半導體 ETF' },
       { symbol: 'XLV', market: 'US', name: '醫療保健板塊 ETF' },
+    ],
+  },
+  {
+    id: 'us_mega_tech',
+    name: '美股科技巨頭動能池 (Magnificent 7)',
+    description: '輝達、蘋果、微軟、亞馬遜、谷歌、Meta 與特斯拉巨頭動能輪動。',
+    riskFreeRateAnnualized: 0.04,
+    symbols: [
+      { symbol: 'NVDA', market: 'US', name: '輝達 NVIDIA' },
+      { symbol: 'AAPL', market: 'US', name: '蘋果 Apple' },
+      { symbol: 'MSFT', market: 'US', name: '微軟 Microsoft' },
+      { symbol: 'AMZN', market: 'US', name: '亞馬遜 Amazon' },
+      { symbol: 'GOOGL', market: 'US', name: '谷歌 Alphabet' },
+      { symbol: 'META', market: 'US', name: 'Meta' },
+      { symbol: 'TSLA', market: 'US', name: '特斯拉 Tesla' },
     ],
   },
 ];
@@ -78,10 +107,23 @@ export function calculateAssetMomentum(
   const len = candles.length;
   const currentPrice = candles[len - 1].close;
 
-  // 交易日近似步長：3M = 63日, 6M = 126日, 12M = 252日
-  const idx3M = Math.max(0, len - 1 - 63);
-  const idx6M = Math.max(0, len - 1 - 126);
-  const idx12M = Math.max(0, len - 1 - 252);
+  // 自適應採樣：當日 K 線充足 (>= 252) 使用標準交易日步長；不足時自適應取樣
+  let idx3M = 0;
+  let idx6M = 0;
+  let idx12M = 0;
+
+  if (len >= 252) {
+    idx3M = Math.max(0, len - 1 - 63);
+    idx6M = Math.max(0, len - 1 - 126);
+    idx12M = Math.max(0, len - 1 - 252);
+  } else if (len >= 4) {
+    idx12M = 0;
+    idx6M = Math.max(1, Math.floor((len - 1) * 0.5));
+    idx3M = Math.max(idx6M, Math.floor((len - 1) * 0.75));
+    if (idx3M === idx6M && idx3M < len - 1) {
+      idx3M = Math.min(len - 1, idx6M + 1);
+    }
+  }
 
   const price3M = candles[idx3M].close;
   const price6M = candles[idx6M].close;
@@ -90,6 +132,7 @@ export function calculateAssetMomentum(
   const returns3M = price3M > 0 ? ((currentPrice - price3M) / price3M) * 100 : 0;
   const returns6M = price6M > 0 ? ((currentPrice - price6M) / price6M) * 100 : 0;
   const returns12M = price12M > 0 ? ((currentPrice - price12M) / price12M) * 100 : 0;
+
 
   // 12-1M 加權動能評分
   const momentumScore =

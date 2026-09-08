@@ -785,6 +785,7 @@ export const App: React.FC = () => {
         <MuscleBookerWorkspace
           holdings={holdings}
           historicalDailyPrices={historicalPrices}
+          currentMarket={currentMarket}
         />
       )}
 
