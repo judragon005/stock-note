@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { X, TrendingDown, RefreshCw, CheckCircle, Info, Calculator, ShieldCheck } from 'lucide-react';
+import { X, TrendingDown, RefreshCw, CheckCircle, Info, Calculator, ShieldCheck, ShieldAlert, LifeBuoy, Zap } from 'lucide-react';
 import { HoldingPosition, LoanRecord } from '../types/stock';
 import { calculateMarginStress } from '../engine/marginStressEngine';
+import { evaluateMarginStressMatrix } from '../engine/marginStressMatrixEngine';
 
 interface MarginStressModalProps {
   isOpen: boolean;
@@ -21,6 +22,21 @@ export const MarginStressModal: React.FC<MarginStressModalProps> = ({
   const [sliderDropPct, setSliderDropPct] = useState<number>(0); // 0 ~ 50
   const [customDrops, setCustomDrops] = useState<Record<string, number>>({});
   const [targetRecoveryRatio, setTargetRecoveryRatio] = useState<130 | 160>(160);
+  const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
+
+  const matrixResult = useMemo(() => {
+    return evaluateMarginStressMatrix({
+      holdings,
+      loans,
+      usdToTwdRate,
+    });
+  }, [holdings, loans, usdToTwdRate]);
+
+  const handleApplyScenario = (scenarioId: string, dropPct: number) => {
+    setSelectedScenarioId(scenarioId);
+    setSliderDropPct(Math.round(dropPct * 100));
+    setCustomDrops({});
+  };
 
   const stressResult = useMemo(() => {
     return calculateMarginStress({
@@ -288,6 +304,56 @@ export const MarginStressModal: React.FC<MarginStressModalProps> = ({
                 </div>
               </div>
 
+              {/* 黑天鵝 6 維情境矩陣快捷切換 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Zap size={16} color="#fbbf24" />
+                    黑天鵝多維情境壓力測試矩陣 (一鍵切換)
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                    含除權息假性跳水與複合黑天鵝情境
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px' }}>
+                  {matrixResult.rows.map((r) => {
+                    const isSelected = selectedScenarioId === r.scenario.id;
+                    return (
+                      <button
+                        key={r.scenario.id}
+                        type="button"
+                        onClick={() => handleApplyScenario(r.scenario.id, r.scenario.marketDropPercent)}
+                        style={{
+                          padding: '10px',
+                          borderRadius: '10px',
+                          backgroundColor: isSelected ? 'rgba(239, 68, 68, 0.2)' : 'rgba(30, 41, 59, 0.6)',
+                          border: `1px solid ${isSelected ? '#ef4444' : 'rgba(255, 255, 255, 0.1)'}`,
+                          color: '#f8fafc',
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '4px',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: isSelected ? '#fca5a5' : '#cbd5e1' }}>
+                          {r.scenario.name}
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                          <span className="mono" style={{ fontSize: '1.05rem', fontWeight: 800, color: r.stressedMaintenanceRatio < 130 ? '#f43f5e' : r.stressedMaintenanceRatio < 160 ? '#fbbf24' : '#38bdf8' }}>
+                            {r.stressedMaintenanceRatio.toFixed(1)}%
+                          </span>
+                          <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>
+                            {r.statusInfo.label.split(' ')[0]}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* 動態壓力模擬滑桿控制區 */}
               <div
                 style={{
@@ -473,6 +539,107 @@ export const MarginStressModal: React.FC<MarginStressModalProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* 斷頭臨界價格逆推表格 (Liquidation Price Solver) */}
+              {matrixResult.liquidationThresholds.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <ShieldAlert size={16} color="#f43f5e" />
+                      個股斷頭臨界價格逆推求解表 (Liquidation Price Solver)
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                      若僅單一持股下跌至該價位，整戶將跌破 130%
+                    </span>
+                  </div>
+
+                  <div style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)', color: '#94a3b8', textAlign: 'left' }}>
+                          <th style={{ padding: '8px 12px' }}>擔保標的</th>
+                          <th style={{ padding: '8px 12px' }}>當前現價</th>
+                          <th style={{ padding: '8px 12px' }}>佔擔保比重</th>
+                          <th style={{ padding: '8px 12px', color: '#f43f5e' }}>130% 斷頭價</th>
+                          <th style={{ padding: '8px 12px', color: '#fbbf24' }}>140% 預警價</th>
+                          <th style={{ padding: '8px 12px', color: '#38bdf8' }}>166% 安全價</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'right' }}>最大耐受跌幅</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {matrixResult.liquidationThresholds.map((item) => (
+                          <tr
+                            key={item.symbol}
+                            style={{
+                              borderTop: '1px solid rgba(255,255,255,0.05)',
+                              backgroundColor: 'rgba(30, 41, 59, 0.4)',
+                            }}
+                          >
+                            <td style={{ padding: '8px 12px', fontWeight: 600, color: '#f8fafc' }}>
+                              {item.symbol} <span style={{ color: '#94a3b8', fontWeight: 400 }}>{item.name}</span>
+                            </td>
+                            <td className="mono" style={{ padding: '8px 12px' }}>
+                              ${item.currentPrice.toFixed(2)}
+                            </td>
+                            <td className="mono" style={{ padding: '8px 12px' }}>
+                              {item.collateralWeightPercent}%
+                            </td>
+                            <td className="mono" style={{ padding: '8px 12px', color: item.isImmuneToLiquidation ? '#10b981' : '#f43f5e', fontWeight: 700 }}>
+                              {item.isImmuneToLiquidation ? '免於斷頭 (安全)' : `$${item.priceAt130MarginCall.toFixed(2)}`}
+                            </td>
+                            <td className="mono" style={{ padding: '8px 12px', color: '#fbbf24' }}>
+                              ${item.priceAt140Warning.toFixed(2)}
+                            </td>
+                            <td className="mono" style={{ padding: '8px 12px', color: '#38bdf8' }}>
+                              ${item.priceAt166Healthy.toFixed(2)}
+                            </td>
+                            <td className="mono" style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: item.isImmuneToLiquidation ? '#10b981' : item.maxDropPercentTo130 > 0.25 ? '#10b981' : '#f43f5e' }}>
+                              {item.isImmuneToLiquidation ? '100% (免疫)' : `- ${(item.maxDropPercentTo130 * 100).toFixed(1)}%`}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* 一鍵逃生雙軌救生圈指南 (Emergency Escape Playbook) */}
+              {!matrixResult.escapePlanFor166.isAlreadySafe && (
+                <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.12)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.4)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <LifeBuoy size={18} color="#f43f5e" />
+                    <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f8fafc' }}>
+                      一鍵逃生救生圈指南 (拉回 166% 法定安全線)
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                    <div style={{ backgroundColor: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: '8px' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>方案 A: 償還借款本金 (減少分母)</div>
+                      <div className="mono" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#ef4444', marginTop: '2px' }}>
+                        NT$ {matrixResult.escapePlanFor166.repayPrincipalCashTWD.toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>最省現金，直接縮減債務</div>
+                    </div>
+                    <div style={{ backgroundColor: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: '8px' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>方案 B: 補充現金擔保品 (增加分子)</div>
+                      <div className="mono" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#38bdf8', marginTop: '2px' }}>
+                        NT$ {matrixResult.escapePlanFor166.depositCashCollateralTWD.toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>匯入擔保品專戶，本金不變</div>
+                    </div>
+                    {matrixResult.escapePlanFor166.additionalSharesRequired.length > 0 && (
+                      <div style={{ backgroundColor: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>方案 C: 增質持股範例</div>
+                        <div className="mono" style={{ fontSize: '1.1rem', fontWeight: 800, color: '#a78bfa', marginTop: '2px' }}>
+                          加質 {matrixResult.escapePlanFor166.additionalSharesRequired[0].name} {matrixResult.escapePlanFor166.additionalSharesRequired[0].shares.toLocaleString()} 股
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>以在庫現股辦理質權設定</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* 質押標的明細與個股自訂跌幅 */}
               {pledgedHoldings.length > 0 && (

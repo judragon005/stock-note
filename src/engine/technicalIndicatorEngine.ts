@@ -542,5 +542,68 @@ export function extractHoldingSignals(
     }
   }
 
+  // 8. 肌肉書僮短線量化體系 (Phase 2, #0019)
+  if (indicators.boxStatus === 'BREAKOUT_UP') {
+    signals.push({
+      id: 'MUSCLE_BOX_BREAKOUT_UP',
+      label: '箱頂突破',
+      category: 'PRICE_EXTREME',
+      tone: 'BULLISH',
+      weight: 3,
+      description: '三日箱頂有效突破，肌肉記憶短線強勢表態',
+    });
+  } else if (indicators.boxStatus === 'BREAKOUT_DOWN') {
+    signals.push({
+      id: 'MUSCLE_BOX_BREAKOUT_DOWN',
+      label: '跌破箱底',
+      category: 'PRICE_EXTREME',
+      tone: 'BEARISH',
+      weight: -3,
+      description: '跌破三日箱底防守線，短線偏空注意防守停損',
+    });
+  }
+
+  if (indicators.isBottomPenetration) {
+    signals.push({
+      id: 'MUSCLE_BOTTOM_PENETRATION',
+      label: '底穿上反轉',
+      category: 'MOMENTUM',
+      tone: 'BULLISH',
+      weight: 3,
+      description: '盤中跌破支撐後強勢收復且下影線過半，主力誘空假跌破反轉型態',
+    });
+  }
+
+  if (indicators.ma20DeductionSlope === 'UP') {
+    signals.push({
+      id: 'MUSCLE_MA20_DED_UP',
+      label: '月線扣低翻揚',
+      category: 'MA_LEVEL',
+      tone: 'BULLISH',
+      weight: 1,
+      description: '均線扣抵望遠鏡預測：月線即將扣抵低價區翻揚助漲',
+    });
+  } else if (indicators.ma20DeductionSlope === 'DOWN') {
+    signals.push({
+      id: 'MUSCLE_MA20_DED_DOWN',
+      label: '月線扣高下彎',
+      category: 'MA_LEVEL',
+      tone: 'WARNING',
+      weight: -1,
+      description: '均線扣抵望遠鏡預測：月線即將扣抵高價區下彎助跌',
+    });
+  }
+
+  if (indicators.isBollingerSqueeze) {
+    signals.push({
+      id: 'MUSCLE_BB_SQUEEZE',
+      label: '布林極致壓縮',
+      category: 'VOLUME',
+      tone: 'WARNING',
+      weight: 0,
+      description: '帶寬小於 8%，波動率極致收縮，預警主力蓄勢即將變盤表態',
+    });
+  }
+
   return signals;
 }

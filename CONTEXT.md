@@ -268,6 +268,27 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0076: V7.6.0 歷史現金股利入帳明細入帳日與除息日時序徹底分離與發放日校正](docs/adr/0076-dividend-log-view-pay-date-temporal-separation-and-sorting.md)
 - [ADR-0077: V7.7.0 籌碼與聰明錢動態觀察儀（零基礎小白友善版、量價動能四象限泡泡圖與時序播放軌跡系統）](docs/adr/0077-smart-money-bubble-view-and-chip-flow-dynamics.md)
 - [ADR-0088: V8.8.0 籌碼動態星圖市場篩選隔離與 Header 狀態雙向同步](docs/adr/0088-chips-workspace-market-filter-isolation-and-header-sync.md)
+- [ADR-0089: V8.9.0 大盤基準對齊與全市場股票字典同步](docs/adr/0089-taiex-benchmark-and-full-market-stock-dictionary-sync.md)
+- [ADR-0090: V8.9.1 用戶端 API 智慧限流與配額熔斷保護](docs/adr/0090-client-side-rate-limiting-and-api-quota-guard.md)
+- [ADR-0091: V8.10.0 本地歷史指標回填與肌肉書僮量化指標體系](docs/adr/0091-local-historical-indicators-and-external-backfill-engine.md)
+- [ADR-0092: V8.11.0 雙重動能與相對強弱輪動引擎](docs/adr/0092-dual-momentum-and-relative-strength-rotation.md)
+- [ADR-0093: V8.12.0 黑天鵝質押情境壓力矩陣與斷頭求解器](docs/adr/0093-black-swan-margin-stress-matrix-and-liquidation-simulator.md)
+- [ADR-0094: V8.13.0 市場宏觀戰情室、全球流動性四柱脈搏與 AI 策略建議](docs/adr/0094-market-war-room-macro-liquidity-and-ai-advisor.md)
+- [ADR-0095: V8.14.0 宏觀戰情室工作區、質押黑天鵝逃生矩陣與肌肉書僮持倉膠囊 UI 落地整合](docs/adr/0095-macro-war-room-stress-matrix-ui-integration.md)
+
+### 宏觀戰情室工作區、質押黑天鵝逃生矩陣與肌肉書僮持倉膠囊 UI 落地 (Macro War Room, Margin Stress Matrix & Muscle Booker UI Integration) *(新增於 V8.14.0)*
+- **導覽列新增「🏛️ 宏觀戰情室」工作區**：
+  - 整合頂部「AI 作戰方針晨報」（四字定調、環境診斷、行動要點與一鍵複製 LLM Prompt Payload）。
+  - 全域市場「四柱脈搏矩陣」（美債殖利率倒掛、VIX 恐慌指標、大宗商品油金比、全球流動性美元指數/M2）。
+  - 個人「宏觀防護盾」（現金購買力比率、質押維持率健康度、配置偏離度）。
+  - 雙重動能「跨資產輪動排行榜」（全球宏觀池、台股核心池、美股成長池三維切換，12-1M 加權動能分與避風港警報）。
+  - 關鍵「財經事件倒數日曆」（FOMC、CPI、央行利率決議與市場衝擊預警）。
+- **質押壓力測試彈窗升級為「黑天鵝 6 維情境矩陣與斷頭求解器」**：
+  - 6 維情境快捷切換卡片（常態 -5%/-10%、空頭 -20%、黑天鵝 -30%、除息跳水、複合黑天鵝），即時計算維持率動態變化。
+  - 各標的 130% 斷頭臨界價格逆推求解表 (Liquidation Price Solver)，清晰揭露跌幅耐受度並標註免疫標的。
+  - 一鍵逃生雙軌救生圈指南（方案 A 還本金、方案 B 補現金、方案 C 質押現股）。
+- **持倉訊號膠囊視覺化整合肌肉書僮箱子戰術**：
+  - 持倉列表即時渲染「🔥 箱頂突破」、「⚠️ 跌破箱底」、「🚀 底穿上反轉」、「📈 月線扣低翻揚」、「📉 月線扣高下彎」、「⚡ 布林極致壓縮」等膠囊標籤。
 
 ### 籌碼動態星圖市場篩選隔離與 Header 狀態雙向同步 (Chips Workspace Market Filter Isolation) *(新增於 V8.8.0)*
 - **全市場純度保證 (Zero Cross-Market Contamination)**：

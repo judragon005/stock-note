@@ -49,6 +49,11 @@ export interface TechnicalIndicators {
   monthHigh20?: number;
   bias20?: number;                 // 月線乖離率 %
   bias60?: number;                 // 季線乖離率 %
+  // 肌肉書僮短線量化體系 (Phase 2, #0019)
+  boxStatus?: 'BREAKOUT_UP' | 'BREAKOUT_DOWN' | 'INSIDE_BOX';
+  isBottomPenetration?: boolean;     // 底穿上假跌破強勢反轉
+  ma20DeductionSlope?: 'UP' | 'DOWN' | 'FLAT'; // 月線扣抵翻揚/下彎拐點
+  isBollingerSqueeze?: boolean;      // 布林極致壓縮預警變盤
 }
 
 export type ActionSentiment =
