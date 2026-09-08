@@ -1162,3 +1162,19 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 若榜首標的未能超越無風險報酬或全池資產動能均為負，系統自動判定進入防禦避險狀態 (`safeHavenActive = true`)，並建議退守至預設避風港標的（如 BIL / SGOV / 00712B / 現金）。
 - **Predefined Strategic Universes (三大策略資產池)**:
   - 系統預先載入「全球巨觀 ETF 核心輪動 (SPY / QQQ / TLT / GLD)」、「台股高息與市值版塊輪動 (0050 / 0056 / 00713 / 00919 / 006208)」與「美股美債對沖輪動」，支援投資人進行多層次宏觀資產配置決策。
+
+### 黑天鵝動態壓力測試矩陣與斷頭逃生模擬架構 *(新增於 V8.12.0 / ADR #0093)*
+
+- **Ex-Dividend Jump-Drop Gap Model (除權息跳水空窗期扣減模型)**:
+  - 公式：$P_{\text{stressed}} = \max(0, (P_{\text{current}} - D_{\text{cash}}) \times (1 - d))$。
+  - 精確模擬除息日擔保品市值瞬間萎縮但現金股息尚未入帳之 2~4 週空窗期對維持率的實質衝擊。
+- **Multi-Factor Dynamic Stress Matrix (多維動態壓力測試矩陣)**:
+  - 內建 6 種標準壓力情境（常態回檔 -5%/-10%、深度修正 -20%、黑天鵝 -30%、純除息跳水、-20% + 除息跳水複合情境），動態輸出各情境下維持率等級、維持率點數變動與救生圈資金需求。
+- **Liquidation Price Solver (單一/多標的斷頭臨界價格逆推求解器)**:
+  - 嚴格閉環求解：$P_T^* = \frac{M \times L - V_{\text{other}}}{S_T \times \text{FX}_T}$。
+  - 精確逆推觸發 $130\%$ 斷頭追繳、$140\%$ 警戒預警與 $166\%$ 安全水位的股價與最大耐受跌幅；當其餘持股市值已大於 $1.30 \times L$ 時，自動標記為「斷頭免疫 (Immune)」，耐受跌幅為 100%。
+- **Emergency Capital Infusion Solver (斷頭逃生雙軌救生圈求解器)**:
+  - **方案 A（償還借款本金）**：$\Delta C_{\text{repay}} = \max(0, L - \frac{V_{\text{stressed}}}{M_{\text{target}}})$，透過減少借款分母快速拉升維持率。
+  - **方案 B（補充現金擔保品）**：$\Delta C_{\text{deposit}} = \max(0, M_{\text{target}} \times L - V_{\text{stressed}})$，增加擔保品分子。
+  - **方案 C（指定標的加質股數）**：計算增質指定現股所需的精確張數/股數。
+

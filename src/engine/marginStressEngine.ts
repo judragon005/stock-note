@@ -193,3 +193,6 @@ export function calculateMarginStress(params: CalculateMarginStressParams): Marg
     pledgedHoldings,
   };
 }
+
+export * from './marginStressMatrixEngine';
+
