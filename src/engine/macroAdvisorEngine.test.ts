@@ -240,6 +240,52 @@ describe('MacroAdvisorEngine (TDD Seam)', () => {
         true
       );
     });
+
+    it('情境 5：持股破線事件驅動 => 動態點名持股代號、防守價與停損警示', () => {
+      const macro = createBaseMacro();
+      const shield = createBaseShield();
+
+      const brief = generateAiMorningBrief({
+        macro,
+        shield,
+        asOfDate: '2026-09-08',
+        holdingSignals: [
+          { symbol: '2881', name: '富邦金', action: 'SELL', stopLossPrice: 85 },
+        ],
+      });
+
+      expect(brief.headline).toContain('【破線警戒・汰弱留強】');
+      expect(brief.tone).toBe('DEFENSIVE');
+      expect(brief.summary).toContain('跌破箱底');
+      expect(brief.actionPoints.some((p) => p.includes('2881') && p.includes('富邦金') && p.includes('$85'))).toBe(true);
+    });
+
+    it('情境 6：持股突破 + 重大催化劑 + 股息入帳多因子複合驅動', () => {
+      const macro = createBaseMacro();
+      const shield = createBaseShield();
+
+      const brief = generateAiMorningBrief({
+        macro,
+        shield,
+        asOfDate: '2026-09-08',
+        holdingSignals: [
+          { symbol: '2330', name: '台積電', action: 'BUY', stopLossPrice: 110 },
+        ],
+        catalysts: [
+          { id: 'cpi', name: '美 8 月 CPI 數據', date: '2026-09-10', daysLeft: 2, category: 'INFLATION', description: '通膨數據' },
+        ],
+        upcomingDividends: [
+          { symbol: '2330', amount: 15000, payDate: '2026-09-15', daysLeft: 7 },
+        ],
+      });
+
+      expect(brief.headline).toContain('【強者恆強・突破進攻】');
+      expect(brief.tone).toBe('OPPORTUNISTIC');
+      // 驗證三項具體事件均被點名
+      expect(brief.actionPoints.some((p) => p.includes('2330') && p.includes('動能突破'))).toBe(true);
+      expect(brief.actionPoints.some((p) => p.includes('CPI') && p.includes('2 天'))).toBe(true);
+      expect(brief.actionPoints.some((p) => p.includes('股息') && p.includes('15,000'))).toBe(true);
+    });
   });
 
   describe('4. LLM Payload 結構化合規檢驗 (buildLlmPromptPayload)', () => {

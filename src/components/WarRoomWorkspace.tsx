@@ -28,6 +28,9 @@ import {
   DEFAULT_MOMENTUM_UNIVERSES,
 } from '../engine/dualMomentumEngine';
 import { DailyCandle } from '../types/indicators';
+import { ReceivableDividend } from '../types/dividend';
+import { scanMuscleBookerItem } from './MuscleBookerWorkspace';
+import { MacroHoldingSignalInput, UpcomingDividendInput } from '../types/macro';
 import {
   loadMacroPulseHistory,
   saveMacroPulseRecord,
@@ -44,6 +47,8 @@ interface WarRoomWorkspaceProps {
   cashBalanceTwd: number;
   totalNavTwd: number;
   usdToTwdRate: number;
+  historicalDailyPrices?: Record<string, Record<string, number>>;
+  receivableDividends?: ReceivableDividend[];
   onOpenMarginStressModal: () => void;
 }
 
@@ -270,6 +275,8 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
   cashBalanceTwd,
   totalNavTwd,
   usdToTwdRate,
+  historicalDailyPrices = {},
+  receivableDividends = [],
   onOpenMarginStressModal,
 }) => {
   const [copiedLlm, setCopiedLlm] = useState(false);
@@ -314,6 +321,53 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
+  // 0. 持股技術訊號萃取 (掃描在倉標的)
+  const holdingSignals = useMemo<MacroHoldingSignalInput[]>(() => {
+    return holdings.map((h) => {
+      const localDailyMap = historicalDailyPrices[h.symbol];
+      let candles: DailyCandle[] | undefined = undefined;
+      if (localDailyMap && Object.keys(localDailyMap).length >= 5) {
+        const sortedDates = Object.keys(localDailyMap).sort();
+        candles = sortedDates.slice(-30).map((d) => {
+          const c = localDailyMap[d];
+          return { date: d, open: c, high: c * 1.01, low: c * 0.99, close: c, volume: 10000 };
+        });
+      }
+      const scanned = scanMuscleBookerItem(
+        h.symbol,
+        h.name,
+        h.market,
+        h.currentPrice || 100,
+        candles
+      );
+      return {
+        symbol: h.symbol,
+        name: h.name,
+        action: scanned.actionDecision.action,
+        stopLossPrice: scanned.actionDecision.stopLossPrice,
+        targetPrice: scanned.actionDecision.targetPrice,
+      };
+    });
+  }, [holdings, historicalDailyPrices]);
+
+  // 0.1 待收股息進度轉換
+  const upcomingDividends = useMemo<UpcomingDividendInput[]>(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const todayTime = new Date(`${today}T00:00:00`).getTime();
+    return receivableDividends
+      .map((r) => {
+        const payTime = new Date(`${r.payDate}T00:00:00`).getTime();
+        const diffDays = Math.round((payTime - todayTime) / (1000 * 60 * 60 * 24));
+        return {
+          symbol: r.symbol,
+          amount: r.estimatedNetDividendInTWD || r.estimatedGrossDividend || 0,
+          payDate: r.payDate,
+          daysLeft: diffDays,
+        };
+      })
+      .filter((d) => d.daysLeft >= 0);
+  }, [receivableDividends]);
+
   // 1. 計算個人防護盾
   const shield = useMemo(() => {
     let totalDebt = 0;
@@ -347,14 +401,16 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     return calculateUpcomingCatalysts(DEFAULT_RAW_CATALYSTS);
   }, []);
 
-  // 3. 生成 AI 作戰方針 (依據本地持久化宏觀數據動態診斷)
+  // 3. 生成 AI 作戰方針 (依據本地持久化宏觀數據 + 個人防護盾 + 持股動態 + 股息入帳全量診斷)
   const morningBrief = useMemo(() => {
     return generateAiMorningBrief({
       macro: macroSnapshot,
       shield,
       catalysts,
+      holdingSignals,
+      upcomingDividends,
     });
-  }, [macroSnapshot, shield, catalysts]);
+  }, [macroSnapshot, shield, catalysts, holdingSignals, upcomingDividends]);
 
 
   // 4. 雙重動能輪動信號
@@ -491,46 +547,80 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
 
         <div>
           <h4 style={{ margin: '0 0 10px 0', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-            📋 今日客觀紀律執行清單：
+            📋 今日客觀紀律執行清單 (個人化多因子事件驅動)：
           </h4>
           <div className="warroom-grid-3">
-            {morningBrief.actionPoints.map((point, idx) => (
-              <div
-                key={idx}
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '10px',
-                  padding: '12px',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'rgba(15, 23, 42, 0.6)',
-                  border: '1px solid rgba(51, 65, 85, 0.4)',
-                  fontSize: '0.82rem',
-                  color: 'var(--text-secondary)',
-                  lineHeight: 1.5,
-                }}
-              >
-                <span
-                  className="mono"
+            {morningBrief.actionPoints.map((point, idx) => {
+              const isSell = point.includes('破線停損') || point.includes('停損');
+              const isBuy = point.includes('動能突破') || point.includes('突破');
+              const isCatalyst = point.includes('催化劑倒數');
+              const isDividend = point.includes('股息活水');
+
+              let borderColor = 'rgba(51, 65, 85, 0.4)';
+              let bg = 'rgba(15, 23, 42, 0.6)';
+              let badgeBg = 'rgba(245, 158, 11, 0.2)';
+              let badgeColor = 'var(--accent-amber)';
+
+              if (isSell) {
+                borderColor = 'rgba(239, 68, 68, 0.45)';
+                bg = 'rgba(239, 68, 68, 0.08)';
+                badgeBg = 'rgba(239, 68, 68, 0.25)';
+                badgeColor = '#f87171';
+              } else if (isBuy) {
+                borderColor = 'rgba(34, 197, 94, 0.45)';
+                bg = 'rgba(34, 197, 94, 0.08)';
+                badgeBg = 'rgba(34, 197, 94, 0.25)';
+                badgeColor = '#4ade80';
+              } else if (isCatalyst) {
+                borderColor = 'rgba(6, 182, 212, 0.45)';
+                bg = 'rgba(6, 182, 212, 0.08)';
+                badgeBg = 'rgba(6, 182, 212, 0.25)';
+                badgeColor = '#38bdf8';
+              } else if (isDividend) {
+                borderColor = 'rgba(245, 158, 11, 0.45)';
+                bg = 'rgba(245, 158, 11, 0.08)';
+                badgeBg = 'rgba(245, 158, 11, 0.25)';
+                badgeColor = '#fbbf24';
+              }
+
+              return (
+                <div
+                  key={idx}
                   style={{
-                    width: '20px',
-                    height: '20px',
-                    flexShrink: 0,
                     display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: '50%',
-                    background: 'rgba(245, 158, 11, 0.2)',
-                    color: 'var(--accent-amber)',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
+                    alignItems: 'flex-start',
+                    gap: '10px',
+                    padding: '12px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: bg,
+                    border: `1px solid ${borderColor}`,
+                    fontSize: '0.82rem',
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.5,
                   }}
                 >
-                  {idx + 1}
-                </span>
-                <span>{point}</span>
-              </div>
-            ))}
+                  <span
+                    className="mono"
+                    style={{
+                      width: '20px',
+                      height: '20px',
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: '50%',
+                      background: badgeBg,
+                      color: badgeColor,
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {idx + 1}
+                  </span>
+                  <span style={{ color: isSell ? '#fecaca' : isBuy ? '#dcfce7' : undefined }}>{point}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

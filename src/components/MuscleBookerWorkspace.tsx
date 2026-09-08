@@ -5,6 +5,12 @@ import {
   TrendingUp,
   AlertTriangle,
   Search,
+  ShieldAlert,
+  CheckCircle2,
+  XCircle,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { HoldingPosition, MarketType } from '../types/stock';
 import { DailyCandle, BoxStatus, TrendSlope } from '../types/indicators';
@@ -12,6 +18,8 @@ import {
   detectDarvasBox,
   calculateMaDeduction,
   calculateBollingerSqueeze,
+  evaluateMuscleBookerAction,
+  MuscleBookerActionDecision,
 } from '../engine/muscleBookerEngine';
 
 interface MuscleBookerWorkspaceProps {
@@ -22,7 +30,7 @@ interface MuscleBookerWorkspaceProps {
 
 type AssetPoolType = 'HOLDINGS' | 'TOP30_FOCUS' | 'TW50_CORE';
 
-interface ScannedStockItem {
+export interface ScannedStockItem {
   symbol: string;
   name: string;
   market: 'TW' | 'US';
@@ -36,7 +44,9 @@ interface ScannedStockItem {
   ma20DeductionPrice?: number;
   isBollingerSqueeze: boolean;
   bollingerBandwidth?: number;
+  actionDecision: MuscleBookerActionDecision;
 }
+
 
 // 台股法人焦點 Top 30
 export const TW_TOP_30_FOCUS_SYMBOLS = [
@@ -199,6 +209,13 @@ export function scanMuscleBookerItem(
   const bbands = calculateBollingerSqueeze(candles);
   const lastCandle = candles[candles.length - 1];
 
+  const actionDecision = evaluateMuscleBookerAction({
+    currentPrice: lastCandle.close,
+    box,
+    deduction,
+    bbands,
+  });
+
   return {
     symbol,
     name,
@@ -213,6 +230,7 @@ export function scanMuscleBookerItem(
     ma20DeductionPrice: deduction.ma20DeductionPrice,
     isBollingerSqueeze: bbands.isSqueeze,
     bollingerBandwidth: bbands.bandwidth,
+    actionDecision,
   };
 }
 
@@ -222,7 +240,9 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
   currentMarket = 'ALL',
 }) => {
   const [selectedPool, setSelectedPool] = useState<AssetPoolType>('TOP30_FOCUS');
+  const [actionFilter, setActionFilter] = useState<'ALL' | 'BUY' | 'AVOID' | 'SELL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
 
   // 0. 依當前市場過濾在倉持股
   const marketScopedHoldings = useMemo(() => {
@@ -248,11 +268,9 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     return getScopedUniverseSymbols(currentMarket, selectedPool);
   }, [selectedPool, marketScopedHoldings, currentMarket]);
 
-
   // 2. 進行肌肉書僮指標全量掃描
   const scannedItems = useMemo<ScannedStockItem[]>(() => {
     return targetUniverse.map((item) => {
-      // 嘗試從本機歷史日 K 提取，若無則以合成走勢輔助
       const localDailyMap = historicalDailyPrices[item.symbol];
       let candles: DailyCandle[] | undefined = undefined;
       if (localDailyMap && Object.keys(localDailyMap).length >= 5) {
@@ -273,14 +291,23 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     });
   }, [targetUniverse, historicalDailyPrices]);
 
-  // 3. 搜尋過濾
+  // 統計各類動作數量
+  const buyItems = useMemo(() => scannedItems.filter((i) => i.actionDecision.action === 'BUY'), [scannedItems]);
+  const avoidItems = useMemo(() => scannedItems.filter((i) => i.actionDecision.action === 'AVOID'), [scannedItems]);
+  const sellItems = useMemo(() => scannedItems.filter((i) => i.actionDecision.action === 'SELL'), [scannedItems]);
+
+  // 3. 搜尋與動作過濾
   const filteredItems = useMemo(() => {
-    if (!searchQuery.trim()) return scannedItems;
+    let list = scannedItems;
+    if (actionFilter !== 'ALL') {
+      list = list.filter((item) => item.actionDecision.action === actionFilter);
+    }
+    if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase().trim();
-    return scannedItems.filter(
+    return list.filter(
       (item) => item.symbol.toLowerCase().includes(q) || item.name.toLowerCase().includes(q)
     );
-  }, [scannedItems, searchQuery]);
+  }, [scannedItems, actionFilter, searchQuery]);
 
   // 4. 四大箱子象限分群
   const breakoutUpItems = filteredItems.filter((i) => i.boxStatus === 'BREAKOUT_UP');
@@ -400,7 +427,298 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
             >
               {currentMarket === 'US' ? '美股巨頭 Top 50' : '權值核心 Top 50'}
             </button>
+          </div>
+        </div>
+      </div>
 
+      {/* 🚦 三色操作戰術導覽篩選列 */}
+      <div
+        className="card"
+        style={{
+          padding: '12px 18px',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          background: 'rgba(15, 23, 42, 0.75)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Zap size={15} style={{ color: 'var(--accent-amber)' }} />
+            實戰動作篩選：
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={() => setActionFilter('ALL')}
+              className="btn btn-sm"
+              style={{
+                background: actionFilter === 'ALL' ? 'var(--accent-primary)' : 'rgba(30, 41, 59, 0.5)',
+                color: actionFilter === 'ALL' ? '#ffffff' : 'var(--text-secondary)',
+                border: '1px solid ' + (actionFilter === 'ALL' ? 'var(--accent-primary)' : 'var(--border-color)'),
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '0.8rem',
+              }}
+            >
+              🔥 全部標的 ({scannedItems.length})
+            </button>
+            <button
+              onClick={() => setActionFilter('BUY')}
+              className="btn btn-sm"
+              style={{
+                background: actionFilter === 'BUY' ? 'rgba(34, 197, 94, 0.25)' : 'rgba(30, 41, 59, 0.5)',
+                color: actionFilter === 'BUY' ? '#4ade80' : 'var(--text-secondary)',
+                border: '1px solid ' + (actionFilter === 'BUY' ? '#22c55e' : 'var(--border-color)'),
+                cursor: 'pointer',
+                fontWeight: 700,
+                fontSize: '0.8rem',
+              }}
+            >
+              🟢 建議買進 ({buyItems.length})
+            </button>
+            <button
+              onClick={() => setActionFilter('AVOID')}
+              className="btn btn-sm"
+              style={{
+                background: actionFilter === 'AVOID' ? 'rgba(245, 158, 11, 0.25)' : 'rgba(30, 41, 59, 0.5)',
+                color: actionFilter === 'AVOID' ? '#fbbf24' : 'var(--text-secondary)',
+                border: '1px solid ' + (actionFilter === 'AVOID' ? '#f59e0b' : 'var(--border-color)'),
+                cursor: 'pointer',
+                fontWeight: 700,
+                fontSize: '0.8rem',
+              }}
+            >
+              ⛔ 觀望不碰 ({avoidItems.length})
+            </button>
+            <button
+              onClick={() => setActionFilter('SELL')}
+              className="btn btn-sm"
+              style={{
+                background: actionFilter === 'SELL' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(30, 41, 59, 0.5)',
+                color: actionFilter === 'SELL' ? '#f87171' : 'var(--text-secondary)',
+                border: '1px solid ' + (actionFilter === 'SELL' ? '#ef4444' : 'var(--border-color)'),
+                cursor: 'pointer',
+                fontWeight: 700,
+                fontSize: '0.8rem',
+              }}
+            >
+              🔴 建議賣出 ({sellItems.length})
+            </button>
+          </div>
+        </div>
+
+        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+          已顯示 {filteredItems.length} / {scannedItems.length} 檔標的
+        </span>
+      </div>
+
+      {/* 🧭 肌肉書僮·三色實戰操盤導航儀 (Action Matrix) */}
+      <div
+        className="card"
+        style={{
+          padding: '16px 20px',
+          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.85) 100%)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShieldAlert size={18} style={{ color: '#38bdf8' }} />
+            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+              三色實戰操盤導航儀 (Traffic-Light Action Matrix)
+            </h3>
+          </div>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+            一眼看懂：哪檔能買、哪檔不能碰、哪檔必須撤退
+          </span>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: '14px',
+          }}
+        >
+          {/* 區塊 1: 🟢 建議買進 */}
+          <div
+            style={{
+              background: 'rgba(34, 197, 94, 0.08)',
+              border: '1px solid rgba(34, 197, 94, 0.35)',
+              borderRadius: 'var(--radius-md)',
+              padding: '14px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#4ade80', fontWeight: 700, fontSize: '0.92rem' }}>
+                <CheckCircle2 size={16} />
+                🟢 建議買進 · 主升發動
+              </div>
+              <span className="badge" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }}>
+                {buyItems.length} 檔
+              </span>
+            </div>
+            <p style={{ margin: '0 0 10px 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+              突破箱頂或破底翻，帶量表態，防守點明確。
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {buyItems.length === 0 ? (
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', padding: '10px' }}>
+                  目前無符合強勢買進標的，切勿追高。
+                </div>
+              ) : (
+                buyItems.slice(0, 3).map((item) => (
+                  <div
+                    key={item.symbol}
+                    onClick={() => setExpandedSymbol(expandedSymbol === item.symbol ? null : item.symbol)}
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.65)',
+                      padding: '8px 10px',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer',
+                      border: '1px solid rgba(34, 197, 94, 0.2)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span className="mono" style={{ fontWeight: 800, color: '#ffffff' }}>
+                        {item.symbol} <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 400 }}>{item.name}</span>
+                      </span>
+                      <span className="mono" style={{ color: '#4ade80', fontWeight: 700 }}>
+                        ${item.currentPrice}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.74rem' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>
+                        防守: ${item.actionDecision.stopLossPrice ?? item.boxUpper ?? '-'}
+                      </span>
+                      {item.actionDecision.riskRewardRatio && (
+                        <span style={{ color: '#38bdf8' }}>
+                          風益比: {item.actionDecision.riskRewardRatio} R
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* 區塊 2: ⛔ 觀望不碰 */}
+          <div
+            style={{
+              background: 'rgba(245, 158, 11, 0.08)',
+              border: '1px solid rgba(245, 158, 11, 0.35)',
+              borderRadius: 'var(--radius-md)',
+              padding: '14px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fbbf24', fontWeight: 700, fontSize: '0.92rem' }}>
+                <HelpCircle size={16} />
+                ⛔ 觀望不碰 · 盤整待變
+              </div>
+              <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24' }}>
+                {avoidItems.length} 檔
+              </span>
+            </div>
+            <p style={{ margin: '0 0 10px 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+              布林極致壓縮或 20MA 下彎蓋頭反壓，等待出方向，切忌接刀。
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {avoidItems.length === 0 ? (
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', padding: '10px' }}>
+                  目前無極度危險或極致壓縮待變之標的。
+                </div>
+              ) : (
+                avoidItems.slice(0, 3).map((item) => (
+                  <div
+                    key={item.symbol}
+                    onClick={() => setExpandedSymbol(expandedSymbol === item.symbol ? null : item.symbol)}
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.65)',
+                      padding: '8px 10px',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer',
+                      border: '1px solid rgba(245, 158, 11, 0.2)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span className="mono" style={{ fontWeight: 800, color: '#ffffff' }}>
+                        {item.symbol} <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 400 }}>{item.name}</span>
+                      </span>
+                      <span className="mono" style={{ color: '#fbbf24', fontWeight: 700 }}>
+                        ${item.currentPrice}
+                      </span>
+                    </div>
+                    <div style={{ marginTop: '4px', fontSize: '0.74rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.actionDecision.actionReason}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* 區塊 3: 🔴 建議賣出 */}
+          <div
+            style={{
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.35)',
+              borderRadius: 'var(--radius-md)',
+              padding: '14px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f87171', fontWeight: 700, fontSize: '0.92rem' }}>
+                <XCircle size={16} />
+                🔴 建議賣出 · 破線停損
+              </div>
+              <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#f87171' }}>
+                {sellItems.length} 檔
+              </span>
+            </div>
+            <p style={{ margin: '0 0 10px 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+              跌破箱底防守線或均線扣高下殺，嚴禁凹單，果斷保全本金。
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {sellItems.length === 0 ? (
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', padding: '10px' }}>
+                  目前無跌破箱底之停損標的，防守線穩固。
+                </div>
+              ) : (
+                sellItems.slice(0, 3).map((item) => (
+                  <div
+                    key={item.symbol}
+                    onClick={() => setExpandedSymbol(expandedSymbol === item.symbol ? null : item.symbol)}
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.65)',
+                      padding: '8px 10px',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer',
+                      border: '1px solid rgba(239, 68, 68, 0.2)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span className="mono" style={{ fontWeight: 800, color: '#ffffff' }}>
+                        {item.symbol} <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 400 }}>{item.name}</span>
+                      </span>
+                      <span className="mono" style={{ color: '#f87171', fontWeight: 700 }}>
+                        ${item.currentPrice}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.74rem' }}>
+                      <span style={{ color: '#fca5a5' }}>
+                        原防守: ${item.boxLower ?? item.actionDecision.stopLossPrice ?? '-'}
+                      </span>
+                      <span style={{ color: '#f87171', fontWeight: 600 }}>破線停損</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -445,27 +763,46 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
             </div>
           ) : (
             <div className="warroom-grid-2">
-              {breakoutUpItems.map((item) => (
-                <div key={item.symbol} className="warroom-stat-card">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <span className="mono" style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
-                      {item.symbol}
-                    </span>
-                    <span className="badge" style={{ background: 'var(--gain-bg)', color: 'var(--gain-color)' }}>
-                      🔥 箱頂突破
-                    </span>
+              {breakoutUpItems.map((item) => {
+                const isExpanded = expandedSymbol === item.symbol;
+                return (
+                  <div
+                    key={item.symbol}
+                    className="warroom-stat-card"
+                    style={{ cursor: 'pointer', transition: 'all 0.2s' }}
+                    onClick={() => setExpandedSymbol(isExpanded ? null : item.symbol)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span className="mono" style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
+                        {item.symbol}
+                      </span>
+                      <span className="badge" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.4)' }}>
+                        🟢 買進 · 箱頂突破
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px' }}>{item.name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                      <span className="mono" style={{ fontWeight: 700, color: 'var(--gain-color)', fontSize: '1.1rem' }}>
+                        ${item.currentPrice}
+                      </span>
+                      <span className="mono" style={{ color: 'var(--text-secondary)' }}>
+                        箱頂防守: ${item.actionDecision.stopLossPrice ?? item.boxUpper}
+                      </span>
+                    </div>
+                    {item.actionDecision.riskRewardRatio && (
+                      <div style={{ marginTop: '6px', fontSize: '0.74rem', color: '#38bdf8', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>目標價: ${item.actionDecision.targetPrice}</span>
+                        <span>風益比: {item.actionDecision.riskRewardRatio} R</span>
+                      </div>
+                    )}
+                    {isExpanded && (
+                      <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.1)', fontSize: '0.76rem', color: '#cbd5e1', lineHeight: 1.4 }}>
+                        💡 <strong>操盤小抄：</strong>{item.actionDecision.actionReason}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px' }}>{item.name}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem' }}>
-                    <span className="mono" style={{ fontWeight: 700, color: 'var(--gain-color)', fontSize: '1.1rem' }}>
-                      ${item.currentPrice}
-                    </span>
-                    <span className="mono" style={{ color: 'var(--text-secondary)' }}>
-                      箱頂防守: ${item.boxUpper}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -493,27 +830,40 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
             </div>
           ) : (
             <div className="warroom-grid-2">
-              {bottomPenetrationItems.map((item) => (
-                <div key={item.symbol} className="warroom-stat-card">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <span className="mono" style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
-                      {item.symbol}
-                    </span>
-                    <span className="badge" style={{ background: 'rgba(6, 182, 212, 0.15)', color: 'var(--accent-cyan)' }}>
-                      🚀 破底翻反轉
-                    </span>
+              {bottomPenetrationItems.map((item) => {
+                const isExpanded = expandedSymbol === item.symbol;
+                return (
+                  <div
+                    key={item.symbol}
+                    className="warroom-stat-card"
+                    style={{ cursor: 'pointer', transition: 'all 0.2s' }}
+                    onClick={() => setExpandedSymbol(isExpanded ? null : item.symbol)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span className="mono" style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
+                        {item.symbol}
+                      </span>
+                      <span className="badge" style={{ background: 'rgba(6, 182, 212, 0.2)', color: 'var(--accent-cyan)', border: '1px solid rgba(6, 182, 212, 0.4)' }}>
+                        🟢 買進 · 破底翻
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px' }}>{item.name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                      <span className="mono" style={{ fontWeight: 700, color: 'var(--accent-cyan)', fontSize: '1.1rem' }}>
+                        ${item.currentPrice}
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                        防守: ${item.actionDecision.stopLossPrice ?? '-'}
+                      </span>
+                    </div>
+                    {isExpanded && (
+                      <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.1)', fontSize: '0.76rem', color: '#cbd5e1', lineHeight: 1.4 }}>
+                        💡 <strong>操盤小抄：</strong>{item.actionDecision.actionReason}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px' }}>{item.name}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem' }}>
-                    <span className="mono" style={{ fontWeight: 700, color: 'var(--accent-cyan)', fontSize: '1.1rem' }}>
-                      ${item.currentPrice}
-                    </span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                      下影線逾 50%
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -541,27 +891,40 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
             </div>
           ) : (
             <div className="warroom-grid-2">
-              {squeezeItems.map((item) => (
-                <div key={item.symbol} className="warroom-stat-card">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <span className="mono" style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
-                      {item.symbol}
-                    </span>
-                    <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: 'var(--accent-amber)' }}>
-                      ⚡ 帶寬 {item.bollingerBandwidth}%
-                    </span>
+              {squeezeItems.map((item) => {
+                const isExpanded = expandedSymbol === item.symbol;
+                return (
+                  <div
+                    key={item.symbol}
+                    className="warroom-stat-card"
+                    style={{ cursor: 'pointer', transition: 'all 0.2s' }}
+                    onClick={() => setExpandedSymbol(isExpanded ? null : item.symbol)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span className="mono" style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
+                        {item.symbol}
+                      </span>
+                      <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: 'var(--accent-amber)', border: '1px solid rgba(245, 158, 11, 0.4)' }}>
+                        ⛔ 觀望 · 極致壓縮
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px' }}>{item.name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                      <span className="mono" style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '1.1rem' }}>
+                        ${item.currentPrice}
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--accent-amber)' }}>
+                        帶寬 {item.bollingerBandwidth}%
+                      </span>
+                    </div>
+                    {isExpanded && (
+                      <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.1)', fontSize: '0.76rem', color: '#cbd5e1', lineHeight: 1.4 }}>
+                        💡 <strong>操盤小抄：</strong>{item.actionDecision.actionReason}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px' }}>{item.name}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem' }}>
-                    <span className="mono" style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '1.1rem' }}>
-                      ${item.currentPrice}
-                    </span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--accent-amber)' }}>
-                      隨時表態發動
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -589,27 +952,40 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
             </div>
           ) : (
             <div className="warroom-grid-2">
-              {breakoutDownItems.map((item) => (
-                <div key={item.symbol} className="warroom-stat-card">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <span className="mono" style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
-                      {item.symbol}
-                    </span>
-                    <span className="badge" style={{ background: 'var(--loss-bg)', color: 'var(--loss-color)' }}>
-                      ⚠️ 跌破箱底
-                    </span>
+              {breakoutDownItems.map((item) => {
+                const isExpanded = expandedSymbol === item.symbol;
+                return (
+                  <div
+                    key={item.symbol}
+                    className="warroom-stat-card"
+                    style={{ cursor: 'pointer', transition: 'all 0.2s' }}
+                    onClick={() => setExpandedSymbol(isExpanded ? null : item.symbol)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span className="mono" style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
+                        {item.symbol}
+                      </span>
+                      <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.4)' }}>
+                        🔴 賣出 · 破線停損
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px' }}>{item.name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                      <span className="mono" style={{ fontWeight: 700, color: 'var(--loss-color)', fontSize: '1.1rem' }}>
+                        ${item.currentPrice}
+                      </span>
+                      <span className="mono" style={{ color: 'var(--text-secondary)' }}>
+                        原防守: ${item.boxLower}
+                      </span>
+                    </div>
+                    {isExpanded && (
+                      <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.1)', fontSize: '0.76rem', color: '#cbd5e1', lineHeight: 1.4 }}>
+                        💡 <strong>操盤小抄：</strong>{item.actionDecision.actionReason}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px' }}>{item.name}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem' }}>
-                    <span className="mono" style={{ fontWeight: 700, color: 'var(--loss-color)', fontSize: '1.1rem' }}>
-                      ${item.currentPrice}
-                    </span>
-                    <span className="mono" style={{ color: 'var(--text-secondary)' }}>
-                      箱底原防守: ${item.boxLower}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -641,63 +1017,111 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                 <th style={{ textAlign: 'right' }}>MA20 扣抵價</th>
                 <th style={{ textAlign: 'center' }}>扣抵斜率預測</th>
                 <th style={{ textAlign: 'center' }}>箱體位階</th>
-                <th style={{ textAlign: 'center' }}>布林狀態</th>
+                <th style={{ textAlign: 'center' }}>操盤建議</th>
+                <th style={{ textAlign: 'center' }}>防守價 / 風益比</th>
               </tr>
             </thead>
             <tbody>
-              {filteredItems.slice(0, 10).map((item) => (
-                <tr key={item.symbol}>
-                  <td>
-                    <div className="mono" style={{ fontWeight: 700, fontSize: '0.9rem' }}>{item.symbol}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.name}</div>
-                  </td>
-                  <td className="mono" style={{ textAlign: 'right', fontWeight: 700 }}>
-                    ${item.currentPrice}
-                  </td>
-                  <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                    ${item.ma20DeductionPrice ?? '-'}
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    {item.ma20Slope === 'UP' ? (
-                      <span className="badge" style={{ background: 'var(--gain-bg)', color: 'var(--gain-color)' }}>
-                        📈 扣低翻揚助漲
-                      </span>
-                    ) : item.ma20Slope === 'DOWN' ? (
-                      <span className="badge" style={{ background: 'var(--loss-bg)', color: 'var(--loss-color)' }}>
-                        📉 扣高下彎警戒
-                      </span>
-                    ) : (
-                      <span className="badge" style={{ background: 'rgba(51, 65, 85, 0.4)', color: 'var(--text-muted)' }}>
-                        平緩盤整
-                      </span>
+              {filteredItems.slice(0, 15).map((item) => {
+                const isExpanded = expandedSymbol === item.symbol;
+                return (
+                  <React.Fragment key={item.symbol}>
+                    <tr
+                      onClick={() => setExpandedSymbol(isExpanded ? null : item.symbol)}
+                      style={{ cursor: 'pointer', background: isExpanded ? 'rgba(56, 189, 248, 0.06)' : undefined }}
+                    >
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span className="mono" style={{ fontWeight: 700, fontSize: '0.9rem' }}>{item.symbol}</span>
+                          {isExpanded ? <ChevronUp size={13} style={{ color: 'var(--accent-cyan)' }} /> : <ChevronDown size={13} style={{ color: 'var(--text-muted)' }} />}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.name}</div>
+                      </td>
+                      <td className="mono" style={{ textAlign: 'right', fontWeight: 700 }}>
+                        ${item.currentPrice}
+                      </td>
+                      <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
+                        ${item.ma20DeductionPrice ?? '-'}
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        {item.ma20Slope === 'UP' ? (
+                          <span className="badge" style={{ background: 'var(--gain-bg)', color: 'var(--gain-color)' }}>
+                            📈 扣低翻揚助漲
+                          </span>
+                        ) : item.ma20Slope === 'DOWN' ? (
+                          <span className="badge" style={{ background: 'var(--loss-bg)', color: 'var(--loss-color)' }}>
+                            📉 扣高下彎警戒
+                          </span>
+                        ) : (
+                          <span className="badge" style={{ background: 'rgba(51, 65, 85, 0.4)', color: 'var(--text-muted)' }}>
+                            平緩盤整
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        {item.boxStatus === 'BREAKOUT_UP' ? (
+                          <span className="badge" style={{ background: 'var(--gain-bg)', color: 'var(--gain-color)' }}>
+                            🔥 箱頂突破
+                          </span>
+                        ) : item.boxStatus === 'BREAKOUT_DOWN' ? (
+                          <span className="badge" style={{ background: 'var(--loss-bg)', color: 'var(--loss-color)' }}>
+                            ⚠️ 跌破箱底
+                          </span>
+                        ) : (
+                          <span className="badge" style={{ background: 'rgba(51, 65, 85, 0.3)', color: 'var(--text-secondary)' }}>
+                            箱內整理
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        {item.actionDecision.action === 'BUY' ? (
+                          <span className="badge" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.4)' }}>
+                            🟢 建議買進
+                          </span>
+                        ) : item.actionDecision.action === 'AVOID' ? (
+                          <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.4)' }}>
+                            ⛔ 觀望不碰
+                          </span>
+                        ) : item.actionDecision.action === 'SELL' ? (
+                          <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.4)' }}>
+                            🔴 建議賣出
+                          </span>
+                        ) : (
+                          <span className="badge" style={{ background: 'rgba(51, 65, 85, 0.3)', color: 'var(--text-secondary)' }}>
+                            ⚪ 區間觀望
+                          </span>
+                        )}
+                      </td>
+                      <td className="mono" style={{ textAlign: 'center', fontSize: '0.8rem' }}>
+                        {item.actionDecision.stopLossPrice ? (
+                          <span>
+                            防守: ${item.actionDecision.stopLossPrice}
+                            {item.actionDecision.riskRewardRatio && ` (${item.actionDecision.riskRewardRatio}R)`}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)' }}>-</span>
+                        )}
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr style={{ background: 'rgba(56, 189, 248, 0.04)' }}>
+                        <td colSpan={7} style={{ padding: '10px 16px', fontSize: '0.8rem', color: '#cbd5e1' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Zap size={14} style={{ color: 'var(--accent-amber)' }} />
+                            <strong>實戰操盤指引：</strong>
+                            <span>{item.actionDecision.actionReason}</span>
+                            {item.actionDecision.targetPrice && (
+                              <span style={{ color: '#38bdf8', marginLeft: 'auto' }}>
+                                目標價: ${item.actionDecision.targetPrice}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
                     )}
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    {item.boxStatus === 'BREAKOUT_UP' ? (
-                      <span className="badge" style={{ background: 'var(--gain-bg)', color: 'var(--gain-color)' }}>
-                        🔥 箱頂突破
-                      </span>
-                    ) : item.boxStatus === 'BREAKOUT_DOWN' ? (
-                      <span className="badge" style={{ background: 'var(--loss-bg)', color: 'var(--loss-color)' }}>
-                        ⚠️ 跌破箱底
-                      </span>
-                    ) : (
-                      <span className="badge" style={{ background: 'rgba(51, 65, 85, 0.3)', color: 'var(--text-secondary)' }}>
-                        箱內整理
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    {item.isBollingerSqueeze ? (
-                      <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: 'var(--accent-amber)' }}>
-                        ⚡ 極致壓縮 ({item.bollingerBandwidth}%)
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>常態擴張</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

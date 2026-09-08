@@ -776,6 +776,8 @@ export const App: React.FC = () => {
           cashBalanceTwd={cashLedgerSummary.totalCashInTWD}
           totalNavTwd={summary.combinedTWD.marketValue}
           usdToTwdRate={usdToTwdRate}
+          historicalDailyPrices={historicalPrices}
+          receivableDividends={receivableDividends}
           onOpenMarginStressModal={() => setIsMarginStressOpen(true)}
         />
       )}

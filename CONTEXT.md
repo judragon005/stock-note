@@ -1237,3 +1237,26 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Muscle Booker Market Scoping (肌肉書僮市場動態隔離)**:
   - 支援 `currentMarket` 跨工作區聯動，台美股在倉持股、焦點候選池與權值 50 大池徹底切分，杜絕美股模式下混入台股代號之瑕疵。
 
+### 肌肉書僮三色操作矩陣與事件驅動動態晨報架構 *(新增於 V8.17.0 / ADR #0098)*
+
+- **Traffic-Light Action Matrix (三色實戰操盤動能戰術導航儀)**:
+  - 核心模組：`src/engine/muscleBookerEngine.ts` 之 `evaluateMuscleBookerAction`。
+  - 將技術指標（達瓦斯三日箱體、月均線扣抵斜率、布林極致壓縮、破底翻反轉）直接轉譯為投資人一眼看懂的實戰動詞：
+    - `🟢 BUY (建議買進)`：三日箱頂有效站穩且 20MA 翻揚助漲，或破底翻假跌破收復下影線主力吃貨；輸出買進防守線與風益比 (R:R)。
+    - `⛔ AVOID (觀望不碰)`：布林極致壓縮（帶寬 `<8%`）等待出方向，或 20MA 下彎蓋頭反壓；嚴禁接刀凹單。
+    - `🔴 SELL (建議賣出)`：跌破三日箱底防守線，防守失效；破線立即停損，保全本金。
+    - `⚪ HOLD (區間觀望)`：箱內常態整理。
+  - UI 支援三色快速切換標籤（`🔥 全部` / `🟢 建議買進` / `⛔ 觀望不碰` / `🔴 建議賣出`），並提供每檔標的可展開的「實戰小抄（Action Reason）」。
+- **Event-Driven AI Morning Brief Engine (多因子真實帳戶事件驅動 AI 晨報引擎)**:
+  - 徹底告別假大空廣告看板與泛用雞湯。
+  - 核心模組：`src/engine/macroAdvisorEngine.ts` 之 `generateAiMorningBrief`。
+  - 輸入矩陣由原本的純宏觀四柱擴充為：
+    - 在倉標的箱體突破/破底訊號 (`holdingSignals`)
+    - 關鍵財經催化劑倒數 (`urgentCatalysts`)
+    - 待發放股息現金流進度 (`upcomingDividends`)
+  - 每日方針動態點名具體個人資產：
+    - 具體點名破線個股代號、防守價與停損警示（標題動態升級為 `【破線警戒・汰弱留強】`）。
+    - 具體點名強勢站上箱頂之持股與加碼防守點位（標題動態升級為 `【強者恆強・突破進攻】`）。
+    - 距離重大事件（CPI / FOMC）3 天內發出防守注碼預警。
+    - 預告近期即將入帳之現金股息金額，規劃再平衡資金活水。
+

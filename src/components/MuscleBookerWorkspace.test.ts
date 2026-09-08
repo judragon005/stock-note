@@ -58,5 +58,46 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
     expect(twSymbols.length).toBeGreaterThan(0);
     expect(twSymbols.every((s) => s.market === 'TW')).toBe(true);
   });
+
+  it('突破箱頂且 20MA 向上時，應輸出 actionDecision.action 為 BUY 並計算防守價與風益比', () => {
+    const candles: DailyCandle[] = Array.from({ length: 25 }, (_, i) => {
+      const isLast = i === 24;
+      const c = isLast ? 115 : 100 + i * 0.2;
+      return {
+        date: `2026-08-${String(i + 1).padStart(2, '0')}`,
+        open: c,
+        high: isLast ? 116 : c + 1,
+        low: isLast ? 114 : c - 1,
+        close: c,
+        volume: isLast ? 50000 : 10000,
+      };
+    });
+
+    const result = scanMuscleBookerItem('2330', '台積電', 'TW', 115, candles);
+    expect(result.actionDecision).toBeDefined();
+    expect(result.actionDecision.action).toBe('BUY');
+    expect(result.actionDecision.stopLossPrice).toBeDefined();
+    expect(result.actionDecision.stopLossPrice!).toBeLessThan(115);
+    expect(result.actionDecision.riskRewardRatio).toContain('1 :');
+  });
+
+  it('跌破三日箱底時，應輸出 actionDecision.action 為 SELL 並提示破線停損', () => {
+    const candles: DailyCandle[] = Array.from({ length: 25 }, (_, i) => {
+      const isLast = i === 24;
+      const c = isLast ? 85 : 100 + (i % 2);
+      return {
+        date: `2026-08-${String(i + 1).padStart(2, '0')}`,
+        open: c,
+        high: c + 1,
+        low: c - 1,
+        close: c,
+        volume: 10000,
+      };
+    });
+
+    const result = scanMuscleBookerItem('2881', '富邦金', 'TW', 85, candles);
+    expect(result.actionDecision.action).toBe('SELL');
+    expect(result.actionDecision.actionReason).toContain('跌破箱底');
+  });
 });
 

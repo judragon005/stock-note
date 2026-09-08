@@ -349,3 +349,114 @@ export function calculateMuscleBookerIndicators(
 
   return points;
 }
+
+export type MuscleBookerActionType = 'BUY' | 'AVOID' | 'SELL' | 'HOLD';
+
+export interface MuscleBookerActionDecision {
+  action: MuscleBookerActionType;
+  actionBadge: string;
+  actionReason: string;
+  stopLossPrice?: number;
+  targetPrice?: number;
+  riskRewardRatio?: string;
+}
+
+/**
+ * 8. 肌肉書僮實戰操盤三色決策引擎 (Traffic-Light Action Matrix)
+ * 輸出投資人最直觀的操作動詞：哪一支買、哪一支不能碰、哪一支賣
+ */
+export function evaluateMuscleBookerAction(params: {
+  currentPrice: number;
+  box: {
+    boxStatus: BoxStatus;
+    boxUpper?: number;
+    boxLower?: number;
+    boxWidthPercent?: number;
+  };
+  deduction: {
+    ma20Slope: TrendSlope;
+    isBottomPenetrationRebound?: boolean;
+    ma20DeductionPrice?: number;
+  };
+  bbands: {
+    isSqueeze: boolean;
+    bandwidth?: number;
+  };
+}): MuscleBookerActionDecision {
+  const { currentPrice, box, deduction, bbands } = params;
+
+  // 1. 優先判斷賣出/停損訊號 (SELL)
+  if (box.boxStatus === 'BREAKOUT_DOWN') {
+    return {
+      action: 'SELL',
+      actionBadge: '🔴 建議賣出 (破底停損)',
+      actionReason: '跌破箱底防守線，趨勢轉弱，應無條件停損保全本金',
+      stopLossPrice: box.boxLower,
+    };
+  }
+
+  // 2. 判斷買進訊號 (BUY)
+  // 情境 A: 突破箱頂 + 均線向上
+  if (box.boxStatus === 'BREAKOUT_UP' && deduction.ma20Slope === 'UP') {
+    const stopLoss = box.boxUpper ?? currentPrice * 0.95;
+    const boxWidth = box.boxUpper && box.boxLower ? box.boxUpper - box.boxLower : currentPrice - stopLoss;
+    const target = currentPrice + Math.max(boxWidth, currentPrice * 0.08);
+    const risk = Math.max(0.1, currentPrice - stopLoss);
+    const reward = Math.max(0.1, target - currentPrice);
+    const rrRatio = (reward / risk).toFixed(1);
+
+    return {
+      action: 'BUY',
+      actionBadge: '🟢 建議買進 (突破買點)',
+      actionReason: '帶量站上箱頂且20MA翻揚，第一買點確立，以箱頂作為防守線',
+      stopLossPrice: Math.round(stopLoss * 100) / 100,
+      targetPrice: Math.round(target * 100) / 100,
+      riskRewardRatio: `1 : ${rrRatio}`,
+    };
+  }
+
+  // 情境 B: 破底翻反轉
+  if (deduction.isBottomPenetrationRebound) {
+    const stopLoss = box.boxLower ? box.boxLower * 0.98 : currentPrice * 0.95;
+    const target = box.boxUpper ?? currentPrice * 1.1;
+    const risk = Math.max(0.1, currentPrice - stopLoss);
+    const reward = Math.max(0.1, target - currentPrice);
+    const rrRatio = (reward / risk).toFixed(1);
+
+    return {
+      action: 'BUY',
+      actionBadge: '🟢 建議買進 (破底翻)',
+      actionReason: '盤中跌破箱底但強勢收回50%以上，洗盤結束，右側進場',
+      stopLossPrice: Math.round(stopLoss * 100) / 100,
+      targetPrice: Math.round(target * 100) / 100,
+      riskRewardRatio: `1 : ${rrRatio}`,
+    };
+  }
+
+  // 3. 判斷觀望不碰 (AVOID)
+  if (bbands.isSqueeze) {
+    return {
+      action: 'AVOID',
+      actionBadge: '⛔ 嚴禁碰觸 (壓縮待變)',
+      actionReason: `布林極致壓縮 (帶寬 ${bbands.bandwidth?.toFixed(1) || '<8'}%)，變盤前夕等待表態，禁止預測押注`,
+    };
+  }
+
+  if (deduction.ma20Slope === 'DOWN') {
+    return {
+      action: 'AVOID',
+      actionBadge: '⛔ 嚴禁碰觸 (均線壓頂)',
+      actionReason: '20MA 扣抵高檔且均線下彎，上方蓋頭反壓沈重，切忌接刀',
+    };
+  }
+
+  // 4. 箱內常態震盪 (HOLD)
+  return {
+    action: 'HOLD',
+    actionBadge: '🔵 區間觀望',
+    actionReason: '價格在達瓦斯箱體內常態震盪，維持既有部位，靜待突破或觸底',
+    stopLossPrice: box.boxLower,
+    targetPrice: box.boxUpper,
+  };
+}
+
