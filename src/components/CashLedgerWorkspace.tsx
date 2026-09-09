@@ -1251,7 +1251,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
             </div>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, max(360px, calc(50% - 16px))), 1fr))', gap: '16px' }}>
             {activeLoans.map((loan) => {
               const ratioResult = calculatePledgeMaintenanceRatio(loan, quotes);
               const interestMetrics = calculateLoanInterestAndPayoff(loan);

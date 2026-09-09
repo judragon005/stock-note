@@ -12,7 +12,8 @@ import {
 import { bankersRound } from '../utils/formatters';
 import { isBusinessDay } from './holidayCalendar';
 import { estimatePaymentDate } from './receivableDividendEngine';
-import { resolveEffectiveDividendTaxAndNet } from './taxComplianceEngine';
+import { resolveEffectiveDividendTaxAndNet, calculateConsolidatedTwNhiTax } from './taxComplianceEngine';
+import { getHoldingsAsOfDate } from './calculator';
 
 export interface AccountBalanceSummary {
   accountId: string;
@@ -824,6 +825,97 @@ export function generateMonthlyLoanInterestTransactions(
 }
 
 /**
+ * 校正未來尚未到期之除息交易記錄 (Pending Dividend Reconciliation)
+ * 依證券法規，除息在籍持股嚴格以除息日前一日 (Last Cum-Date) 收盤在籍股數為準。
+ * 若今天尚未到達除息日 (today < exDate)，投資人在除息日前變更買賣持股時，
+ * 預估股息的在籍持股尚未定案，應依最新持股動態重算 shares、cashAmount 與二代健保補充保費。
+ */
+export function reconcilePendingDividendTrades(
+  trades: TradeRecord[],
+  asOfDate?: string
+): { updatedTrades: TradeRecord[]; hasChanged: boolean } {
+  const todayStr = asOfDate || new Date().toISOString().split('T')[0];
+  let hasChanged = false;
+
+  const nonDividendTrades = trades.filter((t) => t.type !== 'DIVIDEND');
+
+  const updatedTrades = trades.map((trade) => {
+    if (trade.type !== 'DIVIDEND') {
+      return trade;
+    }
+
+    const exDate = trade.exDate || trade.date;
+    // 若已到達或超過除息日 (today >= exDate)，在籍持股已定案，嚴格維持歷史事實不變
+    if (todayStr >= exDate) {
+      return trade;
+    }
+
+    // 計算除息日前一日截至目前最新交易的在庫持股
+    const exDateObj = new Date(exDate);
+    exDateObj.setUTCDate(exDateObj.getUTCDate() - 1);
+    const prevDay = exDateObj.toISOString().split('T')[0];
+
+    const currentShares = getHoldingsAsOfDate(nonDividendTrades, prevDay, trade.symbol);
+
+    // 取得每股配息單價
+    const unitPrice =
+      trade.price !== undefined && trade.price > 0
+        ? trade.price
+        : trade.shares && trade.shares > 0 && trade.cashAmount !== undefined
+        ? trade.cashAmount / trade.shares
+        : 0;
+
+    if (currentShares <= 0) {
+      // 若持股已被出清清空，股息股數與金額歸 0
+      if (trade.shares !== 0 || trade.cashAmount !== 0) {
+        hasChanged = true;
+        return {
+          ...trade,
+          shares: 0,
+          cashAmount: 0,
+          tax: 0,
+          price: unitPrice,
+        };
+      }
+      return trade;
+    }
+
+    // 若持股已改變或金額尚未正確對齊
+    const isUS = trade.market === 'US' || trade.currency === 'USD';
+    const gross = isUS
+      ? bankersRound(currentShares * unitPrice, 2)
+      : Math.floor(currentShares * unitPrice);
+
+    let effectiveTax = 0;
+    if (isUS) {
+      effectiveTax = bankersRound(gross * 0.3, 2);
+    } else {
+      const taxRes = calculateConsolidatedTwNhiTax({
+        cashDividendGross: gross,
+        stockDividendShares: 0,
+      });
+      effectiveTax = taxRes.nhiFeeTWD;
+    }
+    const netCash = isUS ? bankersRound(gross - effectiveTax, 2) : Math.max(0, gross - effectiveTax);
+
+    if (trade.shares !== currentShares || trade.cashAmount !== netCash || trade.tax !== effectiveTax) {
+      hasChanged = true;
+      return {
+        ...trade,
+        shares: currentShares,
+        price: unitPrice,
+        tax: effectiveTax,
+        cashAmount: netCash,
+      };
+    }
+
+    return trade;
+  });
+
+  return { updatedTrades, hasChanged };
+}
+
+/**
  * 將 TradeRecord 與 CashTransaction 進行同步
  * 自動為買進/賣出/股息/減資生成或清理交割流水
  * 依據市場規則自動試算台股 (T+2) / 美股 (T+1) 交割日與交割狀態
@@ -833,6 +925,12 @@ export function syncTradesWithCashTransactions(
   currentCashTransactions: CashTransaction[],
   asOfDate?: string
 ): CashTransaction[] {
+  const todayStr = asOfDate || new Date().toISOString().split('T')[0];
+
+  // 0. 先對尚未除息之預估股息進行動態在籍持股校正，確保流水金額與當前在庫精準對齊
+  const { updatedTrades } = reconcilePendingDividendTrades(trades, todayStr);
+  const effectiveTrades = updatedTrades;
+
   // 1. 保留手動建立（無 relatedTradeId）的現金流水
   const manualTransactions = currentCashTransactions.filter((tx) => !tx.relatedTradeId);
 
@@ -844,12 +942,10 @@ export function syncTradesWithCashTransactions(
     }
   }
 
-  const todayStr = asOfDate || new Date().toISOString().split('T')[0];
-
   // 3. 根據最新 trades 生成對應的現金流水
   const generatedAutoTransactions: CashTransaction[] = [];
 
-  for (const trade of trades) {
+  for (const trade of effectiveTrades) {
     let category: CashFlowCategory | null = null;
     let amount = 0;
 
@@ -870,13 +966,15 @@ export function syncTradesWithCashTransactions(
       amount = isUS ? bankersRound(rawNet, 2) : Math.round(rawNet);
     } else if (trade.type === 'DIVIDEND') {
       category = 'DIVIDEND_PAYOUT';
-      if (isUS) {
+      if (trade.shares === 0 && (trade.cashAmount === 0 || trade.cashAmount === undefined)) {
+        amount = 0;
+      } else if (isUS) {
         // 美股現金股息流水統一記錄為稅前毛額 (Gross)，以對齊美股券商 DOI/JRN 記帳機制
         const rawGross = (trade.shares && trade.price) ? trade.shares * trade.price : (trade.cashAmount || 0);
         amount = bankersRound(rawGross, 2);
       } else {
         // 台股現金股息流水記錄為實收淨額 (支援同次除權息配股合併二代健保扣繳)
-        const res = resolveEffectiveDividendTaxAndNet(trade, trades);
+        const res = resolveEffectiveDividendTaxAndNet(trade, effectiveTrades);
         amount = Math.floor(res.netCash);
       }
     } else if (trade.type === 'CAPITAL_REDUCTION' && trade.cashAmount && trade.cashAmount > 0) {

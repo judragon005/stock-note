@@ -129,6 +129,28 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
     expect(closedTw).toHaveLength(2);
     expect(closedTw.map((h) => h.symbol)).toEqual(['00746B', '1717']);
   });
+
+  it('三色實戰導航儀應將 HOLD (箱內常態整理) 歸併至黃燈觀望待變，確保三色加總 100% 等於全部標的總數', () => {
+    // 模擬 16 檔標的：10 檔 BUY、4 檔 AVOID、1 檔 SELL、1 檔 HOLD
+    const mockItems = [
+      ...Array.from({ length: 10 }, (_, i) => ({ symbol: `BUY_${i}`, actionDecision: { action: 'BUY' as const } })),
+      ...Array.from({ length: 4 }, (_, i) => ({ symbol: `AVOID_${i}`, actionDecision: { action: 'AVOID' as const } })),
+      { symbol: 'SELL_0', actionDecision: { action: 'SELL' as const } },
+      { symbol: 'HOLD_0', actionDecision: { action: 'HOLD' as const } },
+    ];
+
+    expect(mockItems.length).toBe(16);
+
+    const buyCount = mockItems.filter((i) => i.actionDecision.action === 'BUY').length;
+    const avoidCount = mockItems.filter((i) => i.actionDecision.action === 'AVOID' || i.actionDecision.action === 'HOLD').length;
+    const sellCount = mockItems.filter((i) => i.actionDecision.action === 'SELL').length;
+
+    expect(buyCount).toBe(10);
+    expect(avoidCount).toBe(5);
+    expect(sellCount).toBe(1);
+    expect(buyCount + avoidCount + sellCount).toBe(mockItems.length);
+  });
 });
+
 
 

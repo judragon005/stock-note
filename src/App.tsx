@@ -64,7 +64,7 @@ import { WarRoomWorkspace } from './components/WarRoomWorkspace';
 import { MuscleBookerWorkspace } from './components/MuscleBookerWorkspace';
 import { ChipsWorkspace } from './components/ChipsWorkspace';
 import { SettingsWorkspace } from './components/SettingsWorkspace';
-import { syncTradesWithCashTransactions, calculateAccountBalances, aggregateInterestIncomeDetails } from './engine/cashLedgerEngine';
+import { syncTradesWithCashTransactions, calculateAccountBalances, aggregateInterestIncomeDetails, reconcilePendingDividendTrades } from './engine/cashLedgerEngine';
 import { calculatePortfolioXirr, calculateSecurityXirr, XirrResult, CashFlowEvent } from './engine/xirrCalculator';
 import { calculatePortfolioExposure } from './engine/riskExposureEngine';
 import { calculateReceivableDividends } from './engine/receivableDividendEngine';
@@ -75,7 +75,10 @@ import { createSystemSnapshot } from './utils/db';
 
 export const App: React.FC = () => {
   const [isStorageInitialized, setIsStorageInitialized] = useState(false);
-  const [trades, setTrades] = useState<TradeRecord[]>(() => loadTradesFromStorage());
+  const [trades, setTrades] = useState<TradeRecord[]>(() => {
+    const loaded = loadTradesFromStorage();
+    return reconcilePendingDividendTrades(loaded).updatedTrades;
+  });
   const [accounts, setAccounts] = useState(() => loadBrokerAccountsFromStorage());
   const [selectedAccountId, setSelectedAccountId] = useState<string>('ALL');
   const [apiKeys, setApiKeys] = useState<ApiKeysConfig>(() => loadApiKeysConfigFromStorage());
@@ -111,9 +114,10 @@ export const App: React.FC = () => {
   const loadAllFromDB = useCallback(async () => {
     try {
       const data = await initializeStorageAsync();
-      setTrades(data.trades);
+      const { updatedTrades: reconciledTrades } = reconcilePendingDividendTrades(data.trades);
+      setTrades(reconciledTrades);
       setAccounts(data.brokerAccounts);
-      setCashTransactions(syncTradesWithCashTransactions(data.trades, data.cashTransactions));
+      setCashTransactions(syncTradesWithCashTransactions(reconciledTrades, data.cashTransactions));
       setLoanRecords(data.loanRecords);
       setApiKeys(data.apiKeys);
       setAccountingView(data.accountingView);
@@ -465,8 +469,9 @@ export const App: React.FC = () => {
       };
       updatedTrades = [newTrade, ...trades];
     }
-    setTrades(updatedTrades);
-    setCashTransactions((prev) => syncTradesWithCashTransactions(updatedTrades, prev));
+    const { updatedTrades: reconciledTrades } = reconcilePendingDividendTrades(updatedTrades);
+    setTrades(reconciledTrades);
+    setCashTransactions((prev) => syncTradesWithCashTransactions(reconciledTrades, prev));
 
     // 更新市價預設為本次成交價
     if (tradeData.price > 0) {
@@ -482,23 +487,26 @@ export const App: React.FC = () => {
 
   // 單筆 Trade 更新 (供現金流水帳雙向同步回寫)
   const handleUpdateTrade = (updatedTrade: TradeRecord) => {
-    const updatedTrades = trades.map((t) => (t.id === updatedTrade.id ? updatedTrade : t));
-    setTrades(updatedTrades);
+    const rawUpdated = trades.map((t) => (t.id === updatedTrade.id ? updatedTrade : t));
+    const { updatedTrades: reconciledTrades } = reconcilePendingDividendTrades(rawUpdated);
+    setTrades(reconciledTrades);
   };
 
   // 批次補登公司行動
   const handleApplyCorporateActions = (newActions: TradeRecord[]) => {
-    const updatedTrades = [...newActions, ...trades];
-    setTrades(updatedTrades);
-    setCashTransactions((prev) => syncTradesWithCashTransactions(updatedTrades, prev));
+    const rawUpdated = [...newActions, ...trades];
+    const { updatedTrades: reconciledTrades } = reconcilePendingDividendTrades(rawUpdated);
+    setTrades(reconciledTrades);
+    setCashTransactions((prev) => syncTradesWithCashTransactions(reconciledTrades, prev));
     alert(`✨ 成功補登 ${newActions.length} 筆公司行動紀錄！`);
   };
 
   // 刪除交易
   const handleDeleteTrade = (id: string) => {
-    const updatedTrades = trades.filter((t) => t.id !== id);
-    setTrades(updatedTrades);
-    setCashTransactions((prev) => syncTradesWithCashTransactions(updatedTrades, prev));
+    const rawUpdated = trades.filter((t) => t.id !== id);
+    const { updatedTrades: reconciledTrades } = reconcilePendingDividendTrades(rawUpdated);
+    setTrades(reconciledTrades);
+    setCashTransactions((prev) => syncTradesWithCashTransactions(reconciledTrades, prev));
   };
 
   // 手動更新市價（自動套用鎖定保護）

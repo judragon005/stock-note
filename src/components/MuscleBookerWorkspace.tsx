@@ -108,16 +108,23 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     });
   }, [targetUniverse, historicalDailyPrices]);
 
-  // 統計各類動作數量
+  // 統計各類動作數量 (將常態箱內整理 HOLD 歸併入黃燈觀望待變，確保三色加總等於總標的數)
   const buyItems = useMemo(() => scannedItems.filter((i) => i.actionDecision.action === 'BUY'), [scannedItems]);
-  const avoidItems = useMemo(() => scannedItems.filter((i) => i.actionDecision.action === 'AVOID'), [scannedItems]);
+  const avoidItems = useMemo(
+    () => scannedItems.filter((i) => i.actionDecision.action === 'AVOID' || i.actionDecision.action === 'HOLD'),
+    [scannedItems]
+  );
   const sellItems = useMemo(() => scannedItems.filter((i) => i.actionDecision.action === 'SELL'), [scannedItems]);
 
   // 3. 搜尋與動作過濾
   const filteredItems = useMemo(() => {
     let list = scannedItems;
-    if (actionFilter !== 'ALL') {
-      list = list.filter((item) => item.actionDecision.action === actionFilter);
+    if (actionFilter === 'BUY') {
+      list = list.filter((item) => item.actionDecision.action === 'BUY');
+    } else if (actionFilter === 'AVOID') {
+      list = list.filter((item) => item.actionDecision.action === 'AVOID' || item.actionDecision.action === 'HOLD');
+    } else if (actionFilter === 'SELL') {
+      list = list.filter((item) => item.actionDecision.action === 'SELL');
     }
     if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase().trim();
@@ -459,7 +466,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
               </span>
             </div>
             <p style={{ margin: '0 0 10px 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-              布林極致壓縮或 20MA 下彎蓋頭反壓，等待出方向，切忌接刀。
+              布林極致壓縮、20MA 下彎蓋頭或箱內震盪整理，等待出方向，切忌急躁進場。
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {avoidItems.length === 0 ? (

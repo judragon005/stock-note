@@ -27,6 +27,7 @@ import {
   generateMonthlyLoanInterestTransactions,
   createLoanDisbursementTransaction,
   calculateLoanSettledSummary,
+  reconcilePendingDividendTrades,
 } from './cashLedgerEngine';
 
 const mockAccounts: BrokerAccount[] = [
@@ -1618,6 +1619,202 @@ describe('股票交易交割自動同步與流水關聯 (Trade Settlement Sync)'
       expect(divTx!.amount).toBe(33250);
       expect(divTx!.settlementDate).toBe('2026-08-20');
       expect(divTx!.settlementStatus).toBe('SETTLED');
+    });
+
+    it('未到除息日 (today < exDate) 且持股改變時，應動態重新計算預估股息與待交割流水金額', () => {
+      const todayStr = '2026-09-09';
+      // 台積電 2330 於 2026-09-16 除息，每股 4 元，預計 2026-10-08 發放
+      const baseTrades: TradeRecord[] = [
+        {
+          id: 't-buy-1',
+          date: '2026-08-01',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 500,
+          price: 900,
+          fee: 20,
+          tax: 0,
+          createdAt: 1,
+        },
+        // 舊的預估股息 (當時持股 500 股，金額 2,000 元)
+        {
+          id: 't-div-2330',
+          date: '2026-09-16',
+          exDate: '2026-09-16',
+          payDate: '2026-10-08',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'DIVIDEND',
+          shares: 500,
+          price: 4,
+          cashAmount: 2000,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+        // 使用者在除息日前 (2026-09-05) 加碼買進 500 股，使在庫達到 1,000 股
+        {
+          id: 't-buy-2',
+          date: '2026-09-05',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 500,
+          price: 920,
+          fee: 20,
+          tax: 0,
+          createdAt: 3,
+        },
+      ];
+
+      // 1. 測試 reconcilePendingDividendTrades 應自動將 shares 更新為 1000，金額更新為 4000
+      const { updatedTrades, hasChanged } = reconcilePendingDividendTrades(baseTrades, todayStr);
+      expect(hasChanged).toBe(true);
+
+      const reconciledDiv = updatedTrades.find((t) => t.id === 't-div-2330');
+      expect(reconciledDiv).toBeDefined();
+      expect(reconciledDiv!.shares).toBe(1000);
+      expect(reconciledDiv!.cashAmount).toBe(4000);
+
+      // 2. 測試 syncTradesWithCashTransactions 自動產生的現金流水應為 +NT$ 4,000，而不是舊的 2,000
+      const syncedTx = syncTradesWithCashTransactions(baseTrades, [], todayStr);
+      const divTx = syncedTx.find((tx) => tx.relatedTradeId === 't-div-2330');
+      expect(divTx).toBeDefined();
+      expect(divTx!.amount).toBe(4000);
+      expect(divTx!.settlementDate).toBe('2026-10-08');
+      expect(divTx!.settlementStatus).toBe('PENDING');
+    });
+
+    it('若在除息日前已將持股全數賣出出清，預估股息金額應動態調整為 0', () => {
+      const todayStr = '2026-09-09';
+      const baseTrades: TradeRecord[] = [
+        {
+          id: 't-buy-1',
+          date: '2026-08-01',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 500,
+          price: 900,
+          fee: 20,
+          tax: 0,
+          createdAt: 1,
+        },
+        // 舊的預估股息
+        {
+          id: 't-div-2330',
+          date: '2026-09-16',
+          exDate: '2026-09-16',
+          payDate: '2026-10-08',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'DIVIDEND',
+          shares: 500,
+          price: 4,
+          cashAmount: 2000,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+        // 使用者在除息日前 (2026-09-05) 全數賣出 500 股，在庫變為 0 股
+        {
+          id: 't-sell-1',
+          date: '2026-09-05',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'SELL',
+          shares: 500,
+          price: 950,
+          fee: 20,
+          tax: 15,
+          createdAt: 3,
+        },
+      ];
+
+      const { updatedTrades, hasChanged } = reconcilePendingDividendTrades(baseTrades, todayStr);
+      expect(hasChanged).toBe(true);
+
+      const reconciledDiv = updatedTrades.find((t) => t.id === 't-div-2330');
+      expect(reconciledDiv).toBeDefined();
+      expect(reconciledDiv!.shares).toBe(0);
+      expect(reconciledDiv!.cashAmount).toBe(0);
+
+      const syncedTx = syncTradesWithCashTransactions(baseTrades, [], todayStr);
+      const divTx = syncedTx.find((tx) => tx.relatedTradeId === 't-div-2330');
+      // 出清後金額為 0
+      expect(divTx!.amount).toBe(0);
+    });
+
+    it('若已到達或超過除息日 (today >= exDate)，即使持股改變也嚴格維持歷史事實不變', () => {
+      const todayStr = '2026-09-20'; // 已過除息日 2026-09-16
+      const baseTrades: TradeRecord[] = [
+        {
+          id: 't-buy-1',
+          date: '2026-08-01',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 500,
+          price: 900,
+          fee: 20,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 't-div-2330',
+          date: '2026-09-16',
+          exDate: '2026-09-16',
+          payDate: '2026-10-08',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'DIVIDEND',
+          shares: 500,
+          price: 4,
+          cashAmount: 2000,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+        // 除息日後 (2026-09-18) 加碼買進
+        {
+          id: 't-buy-2',
+          date: '2026-09-18',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 930,
+          fee: 20,
+          tax: 0,
+          createdAt: 3,
+        },
+      ];
+
+      const { updatedTrades, hasChanged } = reconcilePendingDividendTrades(baseTrades, todayStr);
+      expect(hasChanged).toBe(false);
+
+      const div = updatedTrades.find((t) => t.id === 't-div-2330');
+      expect(div!.shares).toBe(500);
+      expect(div!.cashAmount).toBe(2000);
     });
   });
 });
