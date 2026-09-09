@@ -167,7 +167,34 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
   });
 
   describe('7. evaluateMuscleBookerAction (三色實戰操盤動作評估)', () => {
-    it('箱頂突破且均線向上，應輸出 BUY 買進並給出停損點與風益比', () => {
+    it('當帶寬極致收斂 (bandwidth <= 8.0%) 且突破箱頂、均線翻揚、風益比 >= 2.0 時，方可輸出 BUY 建議買進', () => {
+      const decision = evaluateMuscleBookerAction({
+        currentPrice: 105,
+        box: {
+          boxStatus: 'BREAKOUT_UP',
+          boxUpper: 100,
+          boxLower: 90,
+          boxWidthPercent: 10,
+        },
+        deduction: {
+          ma20Slope: 'UP',
+          isBottomPenetrationRebound: false,
+        },
+        bbands: {
+          isSqueeze: true,
+          bandwidth: 7.2, // 符合極致收斂 <= 8.0%
+        },
+      });
+
+      expect(decision.action).toBe('BUY');
+      expect(decision.actionBadge).toContain('買進');
+      expect(decision.stopLossPrice).toBe(100);
+      expect(decision.targetPrice).toBe(115);
+      expect(decision.riskRewardRatio).toBeDefined();
+      expect(decision.riskRewardRatioValue).toBeGreaterThanOrEqual(2.0);
+    });
+
+    it('當帶寬未極致收斂 (bandwidth > 8.0%) 時，即使突破箱頂，亦必須安全降級為 HOLD (觀望待變)，絕不可判定為 BUY', () => {
       const decision = evaluateMuscleBookerAction({
         currentPrice: 105,
         box: {
@@ -182,15 +209,14 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
         },
         bbands: {
           isSqueeze: false,
-          bandwidth: 15,
+          bandwidth: 15.5, // > 8.0%，未經歷壓縮蓄勢
         },
       });
 
-      expect(decision.action).toBe('BUY');
-      expect(decision.actionBadge).toContain('買進');
-      expect(decision.stopLossPrice).toBe(100);
-      expect(decision.targetPrice).toBe(115);
-      expect(decision.riskRewardRatio).toBeDefined();
+      expect(decision.action).not.toBe('BUY');
+      expect(decision.action).toBe('HOLD');
+      expect(decision.actionReason).toContain('帶寬');
+      expect(decision.actionReason).toContain('切忌追高');
     });
 
     it('布林極致壓縮中，應輸出 AVOID 觀望不碰', () => {

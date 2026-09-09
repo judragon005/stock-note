@@ -1399,3 +1399,15 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Dynamic Theme Color Binding (紅漲綠跌 / 綠漲紅跌自適應)**:
   - 核心機制：作戰指令看板與三色導航儀全面綁定 CSS 變數 `var(--gain-color)`、`var(--gain-bg)`、`var(--gain-border)` 與 `var(--loss-color)`、`var(--loss-bg)`、`var(--loss-border)`，完美適應台股與國際市場色彩切換。
 
+### 肌肉書僮布林帶寬審查硬門檻、目標價對齊與美股 US$ 貨幣別架構 *(新增於 V8.28.0 / ADR #0109)*
+
+- **Bandwidth <= 8% Hard Gate (布林帶寬審查硬門檻)**:
+  - 核心機制：`muscleBookerEngine.ts` 中 `evaluateMuscleBookerAction` 在突破箱頂且 20MA 向上時，強制審查 `bbands.bandwidth <= 8.0`（極致收斂）。
+  - 安全降級：若 `bbands.bandwidth > 8.0`，即使突破箱頂亦安全降級為 `HOLD`（「🟡 觀望 (帶寬未收斂)」），提示「帶寬未極致收斂 (X% > 8.0%)，非壓縮爆發起點，切忌追高」，嚴防擴張末段追高風險。
+- **Top 3 BUY Target Price & Risk-Reward Formatting (今日買進先鋒目標價補齊與風益比格式修正)**:
+  - 核心機制：作戰看板買進先鋒卡片補齊目標價（`目標: US$ 397.61`），與下方表格完全對齊；修復重複 `1:1:6.0R` 字串拼裝 Bug，統一輸出為 `1 : 6.0R`。
+  - 表格完整展示：移除下方表格 `.slice(0, 15)` 硬截斷，支援全量標的對照。
+- **US Stock Currency Formatting (美股標的 US$ 前綴標記)**:
+  - 核心機制：實作 `formatCurrencyPrice(price, market)` 函數。美股標的統一展示為 `US$ 368.16`，台股標的展示為 `$1,010`，全面套用於作戰看板、三色導航儀與表格所有價格與均線扣抵欄位，徹底消除貨幣別混淆。
+
+

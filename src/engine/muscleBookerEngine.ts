@@ -409,6 +409,19 @@ export function evaluateMuscleBookerAction(params: {
     const rrValue = Math.round((reward / risk) * 10) / 10;
     const rrRatio = rrValue.toFixed(1);
 
+    // 帶寬審查硬門檻：帶寬必須極致收斂 (<= 8.0%)，方為壓縮後方向確立之第一買點
+    if (bbands.bandwidth !== undefined && bbands.bandwidth > 8.0) {
+      return {
+        action: 'HOLD',
+        actionBadge: '🟡 觀望 (帶寬未收斂)',
+        actionReason: `帶量站上箱頂但布林帶寬未極致收斂 (${bbands.bandwidth.toFixed(1)}% > 8.0%)，非壓縮爆發起點，切忌追高`,
+        stopLossPrice: Math.round(stopLoss * 100) / 100,
+        targetPrice: Math.round(target * 100) / 100,
+        riskRewardRatio: `1 : ${rrRatio}`,
+        riskRewardRatioValue: rrValue,
+      };
+    }
+
     // 風益比硬門檻：不足 2:1 絕不追高進場
     if (rrValue < 2.0) {
       return {
@@ -425,7 +438,7 @@ export function evaluateMuscleBookerAction(params: {
     return {
       action: 'BUY',
       actionBadge: '🟢 建議買進 (突破買點)',
-      actionReason: '帶量站上箱頂且20MA翻揚，第一買點確立，以箱頂作為防守線',
+      actionReason: '帶量站上箱頂且20MA翻揚，帶寬極致壓縮方向確立，第一買點確立',
       stopLossPrice: Math.round(stopLoss * 100) / 100,
       targetPrice: Math.round(target * 100) / 100,
       riskRewardRatio: `1 : ${rrRatio}`,

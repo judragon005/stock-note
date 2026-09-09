@@ -3,13 +3,25 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-653%2F653%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-654%2F654%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 肌肉書僮布林帶寬審查硬門檻 (Bandwidth <= 8%)、作戰看板目標價對齊與美股 US$ 貨幣別 (`Muscle Booker Bandwidth Gate, Target Price Alignment & US Currency`) *(V8.28.0 全新升級)*
+- **買進決策布林帶寬硬門檻 (Bandwidth <= 8% Hard Gate)**：
+  - 徹底落實短線聖經核心紀律——「非單純風益比 $\ge 2.0$，更需帶寬 $< 8.0\%$ 極致收斂且方向確立方可進場」。
+  - 於 `muscleBookerEngine.ts` 中導入帶寬審查：突破箱頂且 20MA 翻揚時，若 `bbands.bandwidth > 8.0`（帶寬處於發散擴張末段），強制安全降級為 `HOLD`（「🟡 觀望 (帶寬未收斂)」），主理由明確提示「帶寬未極致收斂 (X% > 8.0%)，非壓縮爆發起點，切忌追高」，有效阻絕追高套牢風險。
+- **作戰看板目標價補齊與風益比格式修正**：
+  - 上方「今日買進先鋒」卡片補齊目標價展示（`目標: US$ 397.61`），與下方均線扣抵總表完全垂直對齊。
+  - 修正重複字串拼裝 Bug，將 `🔥 風益比: 1:1:6.0R` 修正為標準 `🔥 風益比: 1 : 6.0R`。
+  - 移除下方表格 `.slice(0, 15)` 硬截斷限制，支援所有目標池標的完整對照。
+- **美股貨幣別統一標示 `US$` 前綴**：
+  - 實作 `formatCurrencyPrice` 高階格式化器，美股標的一律標記 `US$ 368.16`，台股維持 `$1,010`，全面套用於作戰看板、三色導航儀與表格之現價、防守價、目標價與扣抵價，徹底消除跨市場貨幣歧義。
+
 
 ### 0. 肌肉書僮今日核心作戰指令 (Top 3 買進先鋒 vs 在庫持股限定賣出) 與自適應色彩主題 (`Muscle Booker Top 3 Action Directives & Holding-Gated Sell`) *(V8.27.0 全新升級)*
 - **今日核心作戰指令看板 (Top 3 Action Directives)**：

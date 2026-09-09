@@ -41,6 +41,17 @@ import { inferMarketFromSymbol } from '../engine/priceFetcher';
 import { Tooltip } from './common/Tooltip';
 import { getSymbolOhlcv } from '../utils/db';
 
+/**
+ * 格式化標的幣別價格字串：美股市場統一標示 US$，台股市場標示 $
+ */
+export function formatCurrencyPrice(price?: number, market?: 'TW' | 'US'): string {
+  if (price === undefined || price === null || isNaN(price)) return '-';
+  if (market === 'US') {
+    return `US$ ${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  return `$${price.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+}
+
 export interface MuscleBookerWorkspaceProps {
   holdings: HoldingPosition[];
   historicalDailyPrices?: Record<string, Record<string, number>>;
@@ -1369,16 +1380,21 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                         </span>
                       </div>
                       <span className="mono" style={{ color: 'var(--gain-color)', fontWeight: 800, fontSize: '1.05rem' }}>
-                        ${item.currentPrice}
+                        {formatCurrencyPrice(item.currentPrice, item.market)}
                       </span>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px', fontSize: '0.78rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px', fontSize: '0.78rem', flexWrap: 'wrap', gap: '8px' }}>
                       <Tooltip content={BEGINNER_TOOLTIPS.boxUpperDefense} position="top">
                         <span style={{ color: 'var(--text-muted)', textDecoration: 'underline dotted', cursor: 'help' }}>
-                          防守: ${item.actionDecision.stopLossPrice ?? item.boxUpper ?? '-'}
+                          防守: {formatCurrencyPrice(item.actionDecision.stopLossPrice ?? item.boxUpper, item.market)}
                         </span>
                       </Tooltip>
+                      {item.actionDecision.targetPrice && (
+                        <span style={{ color: 'var(--accent-cyan, #38bdf8)', fontWeight: 700 }}>
+                          目標: {formatCurrencyPrice(item.actionDecision.targetPrice, item.market)}
+                        </span>
+                      )}
                       {item.actionDecision.riskRewardRatio && (
                         <Tooltip content={BEGINNER_TOOLTIPS.riskReward} position="top">
                           <span
@@ -1389,7 +1405,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                               cursor: 'help',
                             }}
                           >
-                            🔥 風益比: 1:{item.actionDecision.riskRewardRatio}R
+                            🔥 風益比: {item.actionDecision.riskRewardRatio}R
                           </span>
                         </Tooltip>
                       )}
@@ -1520,14 +1536,14 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                           )}
                         </div>
                         <span className="mono" style={{ color: 'var(--loss-color)', fontWeight: 800, fontSize: '1.05rem' }}>
-                          ${item.currentPrice}
+                          {formatCurrencyPrice(item.currentPrice, item.market)}
                         </span>
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px', fontSize: '0.78rem' }}>
                         <Tooltip content={BEGINNER_TOOLTIPS.boxLowerBreakdown} position="top">
                           <span style={{ color: 'var(--loss-color)', textDecoration: 'underline dotted', cursor: 'help' }}>
-                            原防守: ${item.boxLower ?? item.actionDecision.stopLossPrice ?? '-'}
+                            原防守: {formatCurrencyPrice(item.boxLower ?? item.actionDecision.stopLossPrice, item.market)}
                           </span>
                         </Tooltip>
                         <span style={{ color: 'var(--loss-color)', fontWeight: 700 }}>
@@ -1619,13 +1635,13 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                         {item.symbol} <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 400 }}>{item.name}</span>
                       </span>
                       <span className="mono" style={{ color: 'var(--gain-color)', fontWeight: 700 }}>
-                        ${item.currentPrice}
+                        {formatCurrencyPrice(item.currentPrice, item.market)}
                       </span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.74rem' }}>
                       <Tooltip content={BEGINNER_TOOLTIPS.boxUpperDefense} position="top">
                         <span style={{ color: 'var(--text-muted)', textDecoration: 'underline dotted', cursor: 'help' }}>
-                          防守: ${item.actionDecision.stopLossPrice ?? item.boxUpper ?? '-'}
+                          防守: {formatCurrencyPrice(item.actionDecision.stopLossPrice ?? item.boxUpper, item.market)}
                         </span>
                       </Tooltip>
                       {item.actionDecision.riskRewardRatio && (
@@ -1694,7 +1710,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                         {item.symbol} <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 400 }}>{item.name}</span>
                       </span>
                       <span className="mono" style={{ color: '#fbbf24', fontWeight: 700 }}>
-                        ${item.currentPrice}
+                        {formatCurrencyPrice(item.currentPrice, item.market)}
                       </span>
                     </div>
                     <div style={{ marginTop: '4px', fontSize: '0.74rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1766,13 +1782,13 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                           )}
                         </span>
                         <span className="mono" style={{ color: 'var(--loss-color)', fontWeight: 700 }}>
-                          ${item.currentPrice}
+                          {formatCurrencyPrice(item.currentPrice, item.market)}
                         </span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.74rem' }}>
                         <Tooltip content={BEGINNER_TOOLTIPS.boxLowerBreakdown} position="top">
                           <span style={{ color: 'var(--loss-color)', textDecoration: 'underline dotted', cursor: 'help' }}>
-                            原防守: ${item.boxLower ?? item.actionDecision.stopLossPrice ?? '-'}
+                            原防守: {formatCurrencyPrice(item.boxLower ?? item.actionDecision.stopLossPrice, item.market)}
                           </span>
                         </Tooltip>
                         <Tooltip content={BEGINNER_TOOLTIPS.boxLowerBreakdown} position="top">
@@ -2106,7 +2122,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
               </tr>
             </thead>
             <tbody>
-              {filteredItems.slice(0, 15).map((item) => {
+              {filteredItems.map((item) => {
                 const isExpanded = expandedSymbol === item.symbol;
                 const isWatched = watchlistSymbols.includes(item.symbol);
                 return (
@@ -2123,10 +2139,10 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.name}</div>
                       </td>
                       <td className="mono" style={{ textAlign: 'right', fontWeight: 700 }}>
-                        ${item.currentPrice}
+                        {formatCurrencyPrice(item.currentPrice, item.market)}
                       </td>
                       <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                        ${item.ma20DeductionPrice ?? '-'}
+                        {formatCurrencyPrice(item.ma20DeductionPrice, item.market)}
                       </td>
                       <td style={{ textAlign: 'center' }}>
                         {item.isDataPending ? (
@@ -2192,7 +2208,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                       <td className="mono" style={{ textAlign: 'center', fontSize: '0.8rem' }}>
                         {item.actionDecision.stopLossPrice ? (
                           <span>
-                            防守: ${item.actionDecision.stopLossPrice}
+                            防守: {formatCurrencyPrice(item.actionDecision.stopLossPrice, item.market)}
                             {item.actionDecision.riskRewardRatio && ` (${item.actionDecision.riskRewardRatio}R)`}
                           </span>
                         ) : (
@@ -2230,7 +2246,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                             <span>{item.actionDecision.actionReason}</span>
                             {item.actionDecision.targetPrice && (
                               <span style={{ color: '#38bdf8', marginLeft: 'auto' }}>
-                                目標價: ${item.actionDecision.targetPrice}
+                                目標價: {formatCurrencyPrice(item.actionDecision.targetPrice, item.market)}
                               </span>
                             )}
                           </div>
