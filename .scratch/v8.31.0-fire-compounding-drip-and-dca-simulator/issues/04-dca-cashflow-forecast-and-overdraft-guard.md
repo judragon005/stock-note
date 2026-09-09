@@ -1,7 +1,7 @@
 # Issue 04: 實作 DCA 未來 30 天現金防透支推演與資金缺口警示
 
 ## 狀態與分流
-- 狀態：`OPEN`
+- 狀態：`CLOSED`
 - 負責人：Agent
 - 標籤：`ready-for-agent`, `engine`, `dca`, `cashflow`, `risk`
 

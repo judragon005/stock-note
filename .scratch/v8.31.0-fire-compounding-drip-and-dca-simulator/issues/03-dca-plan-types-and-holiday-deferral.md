@@ -1,7 +1,7 @@
 # Issue 03: 實作定期定額 (DCA) 計畫排程與休市順延撮合演算法
 
 ## 狀態與分流
-- 狀態：`OPEN`
+- 狀態：`CLOSED`
 - 負責人：Agent
 - 標籤：`ready-for-agent`, `engine`, `dca`, `settlement`, `calendar`
 

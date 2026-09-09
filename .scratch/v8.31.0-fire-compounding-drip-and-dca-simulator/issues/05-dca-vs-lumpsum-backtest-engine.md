@@ -1,7 +1,7 @@
 # Issue 05: 實作定期定額 vs. 單筆歐印 (Lump-Sum) 機會成本歷史回測
 
 ## 狀態與分流
-- 狀態：`OPEN`
+- 狀態：`CLOSED`
 - 負責人：Agent
 - 標籤：`ready-for-agent`, `engine`, `dca`, `backtest`, `quant`
 

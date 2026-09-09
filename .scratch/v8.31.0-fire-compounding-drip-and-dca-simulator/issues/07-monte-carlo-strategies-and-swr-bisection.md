@@ -1,7 +1,7 @@
 # Issue 07: 實作 3 大提領策略演算法與安全提領率 (SWR) 二分法逆運算
 
 ## 狀態與分流
-- 狀態：`OPEN`
+- 狀態：`CLOSED`
 - 負責人：Agent
 - 標籤：`ready-for-agent`, `engine`, `quant`, `fire`, `swr`, `guardrails`
 

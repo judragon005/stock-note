@@ -1,7 +1,7 @@
 # Issue 10: 全量測試回歸、打包驗收、技術債生命週期標記與 ADR 產出
 
 ## 狀態與分流
-- 狀態：`OPEN`
+- 狀態：`CLOSED`
 - 負責人：Agent
 - 標籤：`ready-for-agent`, `testing`, `documentation`, `debt-lifecycle`
 

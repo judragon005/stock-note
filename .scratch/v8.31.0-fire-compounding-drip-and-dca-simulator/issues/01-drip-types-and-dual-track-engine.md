@@ -1,7 +1,7 @@
 # Issue 01: 定義 FIRE 與複利資料型別，實作 DRIP 雙軌推演演算法核心
 
 ## 狀態與分流
-- 狀態：`OPEN`
+- 狀態：`CLOSED`
 - 負責人：Agent
 - 標籤：`ready-for-agent`, `engine`, `drip`, `types`, `quant`
 

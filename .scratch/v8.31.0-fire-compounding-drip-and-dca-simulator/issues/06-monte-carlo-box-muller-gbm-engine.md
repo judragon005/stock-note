@@ -1,7 +1,7 @@
 # Issue 06: 純原生 0 依賴實作 Box-Muller 常態亂數與幾何布朗運動 (GBM) 隨機路徑生成器
 
 ## 狀態與分流
-- 狀態：`OPEN`
+- 狀態：`CLOSED`
 - 負責人：Agent
 - 標籤：`ready-for-agent`, `engine`, `quant`, `monte-carlo`, `gbm`
 

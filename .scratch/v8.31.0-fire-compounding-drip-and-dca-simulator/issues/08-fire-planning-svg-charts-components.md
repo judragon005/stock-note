@@ -1,7 +1,7 @@
 # Issue 08: 開發原生 SVG 雙軌複利對照圖與蒙地卡羅百分位錐形圖 (Fan Chart)
 
 ## 狀態與分流
-- 狀態：`OPEN`
+- 狀態：`CLOSED`
 - 負責人：Agent
 - 標籤：`ready-for-agent`, `ui`, `svg`, `visualization`, `chart`
 

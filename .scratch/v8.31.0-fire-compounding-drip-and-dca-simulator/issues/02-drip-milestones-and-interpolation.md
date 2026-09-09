@@ -1,7 +1,7 @@
 # Issue 02: 實作 4 階被動收入自由度里程碑與連續線性插值演算法
 
 ## 狀態與分流
-- 狀態：`OPEN`
+- 狀態：`CLOSED`
 - 負責人：Agent
 - 標籤：`ready-for-agent`, `engine`, `drip`, `milestones`, `precision`
 

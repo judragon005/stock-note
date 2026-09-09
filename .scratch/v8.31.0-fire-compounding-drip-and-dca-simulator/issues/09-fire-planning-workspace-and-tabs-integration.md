@@ -1,7 +1,7 @@
 # Issue 09: 開發 FIRE 退休與複利工作台主面板並整合工作台導航
 
 ## 狀態與分流
-- 狀態：`OPEN`
+- 狀態：`CLOSED`
 - 負責人：Agent
 - 標籤：`ready-for-agent`, `ui`, `workspace`, `navigation`, `integration`
 
