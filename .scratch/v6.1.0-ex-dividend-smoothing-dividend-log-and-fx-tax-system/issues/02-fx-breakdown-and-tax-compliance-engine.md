@@ -1,11 +1,13 @@
 # Ticket #02: 外匯損益獨立拆解與二代健保/海外所得稅階預警引擎 (TDD)
 
 ## 🎯 任務目標 (對應技術債 #0011)
+
 實現美股外匯匯差與股票本體價差雙軸獨立拆解引擎 `src/engine/fxBreakdown.ts`，並於 `src/engine/taxComplianceEngine.ts` 實現台股二代健保 (20,000 元/2.11%) 預警與美股海外所得 (100萬申報/750萬免稅額) 稅階進度引擎。
 
 ---
 
 ## 🛠️ 實作要點
+
 1. **外匯損益拆解引擎** (`src/engine/fxBreakdown.ts`)：
    - 股票本體損益 (TWD)：`shares * (currentPriceUSD - avgCostUSD) * currentFxRate`
    - 外匯匯差損益 (TWD)：`totalCostUSD * (currentFxRate - costFxRate)`
@@ -19,6 +21,8 @@
 ---
 
 ## 🧪 驗收條件 (Acceptance Criteria)
+
 - [ ] 美股本體與匯差拆解之和與台幣總損益 100% 精確相等。
 - [ ] 二代健保單筆 $\ge 20,000$ 判定精準。
 - [ ] 海外所得門檻跨年度統計精確，百分比與警戒狀態正確。
+

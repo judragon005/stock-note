@@ -1279,5 +1279,3 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     - **跌破箱底防守線 (Box Breakdown Stop Loss)**：跌破箱底防線，多方棄守，嚴格停損保命第一。
     - **MA20 扣抵望遠鏡 (MA Deduction Telescope)**：以歷史扣抵價預測月線未來 3~5 日之翻揚或下彎方向。
   - UI 呈現：採用 `<Tooltip>` 與 `textDecoration: underline dotted; cursor: help`，小白懸浮即可秒懂操盤意涵。
-
-
