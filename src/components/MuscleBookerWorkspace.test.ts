@@ -81,25 +81,27 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
     expect(twSymbols.every((s) => s.market === 'TW')).toBe(true);
   });
 
-  it('突破箱頂且 20MA 向上時，應輸出 actionDecision.action 為 BUY 並計算防守價與風益比', () => {
+  it('突破箱頂且 20MA 向上時，若風益比 >= 2.0 應輸出 actionDecision.action 為 BUY 並計算防守價與風益比', () => {
+    // 箱體整理在 100~105，最後一天剛帶量突破箱頂收 106.5 (防守 105.6，風險僅 0.9，預期目標 115，風益比高達 9.4R)
     const candles: DailyCandle[] = Array.from({ length: 25 }, (_, i) => {
       const isLast = i === 24;
-      const c = isLast ? 115 : 100 + i * 0.2;
+      const c = isLast ? 106.5 : 100 + i * 0.2;
       return {
         date: `2026-08-${String(i + 1).padStart(2, '0')}`,
         open: c,
-        high: isLast ? 116 : c + 1,
-        low: isLast ? 114 : c - 1,
+        high: isLast ? 107 : c + 1,
+        low: isLast ? 105.8 : c - 1,
         close: c,
         volume: isLast ? 50000 : 10000,
       };
     });
 
-    const result = scanMuscleBookerItem('2330', '台積電', 'TW', 115, candles);
+    const result = scanMuscleBookerItem('2330', '台積電', 'TW', 106.5, candles);
     expect(result.actionDecision).toBeDefined();
     expect(result.actionDecision.action).toBe('BUY');
     expect(result.actionDecision.stopLossPrice).toBeDefined();
-    expect(result.actionDecision.stopLossPrice!).toBeLessThan(115);
+    expect(result.actionDecision.stopLossPrice!).toBeLessThan(106.5);
+    expect(result.actionDecision.riskRewardRatioValue).toBeGreaterThanOrEqual(2.0);
     expect(result.actionDecision.riskRewardRatio).toContain('1 :');
   });
 
@@ -230,6 +232,49 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
     const targetScanned = scannedList.find((i) => i.symbol === '3017');
     expect(targetScanned).toBe(adHocItem);
     expect(targetScanned?.currentPrice).toBe(adHocItem.currentPrice);
+  });
+
+  it('風益比不足 2:1 時 (如 1599 宏佳騰)，即使突破箱頂亦應自動降級為 HOLD (觀望待變)，絕不判定為 BUY', () => {
+    // 模擬 1599 宏佳騰：箱頂 $23.2，現價 $23.15，防守價 $22.3 (風險 0.85，利潤 0.10 -> 風益比約 0.1R)
+    const candles: DailyCandle[] = Array.from({ length: 25 }, (_, i) => {
+      const isLast = i === 24;
+      const c = isLast ? 23.15 : 22.0 + (i % 3) * 0.4;
+      return {
+        date: `2026-08-${String(i + 1).padStart(2, '0')}`,
+        open: c,
+        high: isLast ? 23.2 : 23.2,
+        low: isLast ? 22.3 : 21.8,
+        close: c,
+        volume: 15000,
+      };
+    });
+
+    const result = scanMuscleBookerItem('1599', '宏佳騰', 'TW', 23.15, candles);
+    // 由於利潤空間極小，風益比不足 2.0，絕不能是 BUY！
+    expect(result.actionDecision.action).not.toBe('BUY');
+    expect(result.actionDecision.action).toBe('HOLD');
+    expect(result.actionDecision.actionReason).toContain('風益比');
+    expect(result.actionDecision.riskRewardRatioValue).toBeLessThan(2.0);
+  });
+
+  it('建議買進清單應依據風益比數值 (riskRewardRatioValue) 由高至低降序排列', () => {
+    const item1 = {
+      actionDecision: { action: 'BUY' as const, riskRewardRatioValue: 2.1 },
+    };
+    const item2 = {
+      actionDecision: { action: 'BUY' as const, riskRewardRatioValue: 5.3 },
+    };
+    const item3 = {
+      actionDecision: { action: 'BUY' as const, riskRewardRatioValue: 3.2 },
+    };
+
+    const sorted = [item1, item2, item3].sort(
+      (a, b) => (b.actionDecision.riskRewardRatioValue ?? 0) - (a.actionDecision.riskRewardRatioValue ?? 0)
+    );
+
+    expect(sorted[0].actionDecision.riskRewardRatioValue).toBe(5.3);
+    expect(sorted[1].actionDecision.riskRewardRatioValue).toBe(3.2);
+    expect(sorted[2].actionDecision.riskRewardRatioValue).toBe(2.1);
   });
 });
 

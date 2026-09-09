@@ -3,13 +3,24 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-644%2F644%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-646%2F646%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 肌肉書僮風益比硬門檻 (R:R >= 2.0)、帶寬方向確立與無效代碼防護 (`Risk-Reward Hard Gate & Bandwidth Direction Gate`) *(V8.24.0 全新升級)*
+- **風益比硬門檻 (Risk-Reward Hard Gate >= 2.0)**：
+  - 突破箱頂與破底翻買點全面加入風益比檢驗：突破箱頂計算向上等幅利潤與防守箱頂風險；破底翻計算向上至箱頂利潤與防守箱底風險。
+  - 若風益比不足 $2.0R$（如 1599 宏佳騰向上僅剩 $0.1 元、防守停損需承擔 $0.85 元，風益比僅 0.1R），系統強制安全降級為 `HOLD`（觀望待變）並提示「向上空間狹窄，切忌追高」，徹底杜絕高風險雞肋買點。
+- **導航儀依風益比降序呈現 (Risk-Reward Priority Sorting)**：
+  - 買進卡片清單全面依照風益比由高至低排列，優先呈現 5.3R ➔ 3.2R ➔ 2.1R 等高潛力標的，並賦予金色火焰高光 `🔥 風益比: 1:XR`。
+- **帶寬極致壓縮與 20MA 反壓方向審查**：
+  - 布林帶寬 $\le 8\%$ 時標示為極致壓縮狀態，前置判定為 `AVOID`（方向未明，嚴禁猜測押注）；20MA 下彎蓋頭時判定為 `AVOID`（均線蓋頭，反壓沉重）。
+- **無效代碼防護與歷史幽靈代碼清理**：
+  - 自訂觀察清單加入代碼時即時檢核字典與遠端行情，查無標的（如 3175）則阻擋存入；掛載時自動清理已殘留之幽靈代碼。
 
 ### 0. 肌肉書僮真實日 K 單一真實來源 (SSOT) 與偽造行情機制徹底廢除 (`Real Candles SSOT & Synthetic Removal`) *(V8.23.0 全新升級)*
 - **徹底廢除偽造假 K 線 (Elimination of Synthetic Candles)**：

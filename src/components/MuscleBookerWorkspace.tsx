@@ -29,6 +29,7 @@ import {
 import { backfillSymbolOhlcvAndIndicators } from '../engine/historicalOhlcvBackfill';
 import {
   getMuscleBookerWatchlist,
+  saveMuscleBookerWatchlist,
   addMuscleBookerWatchlistSymbol,
   removeMuscleBookerWatchlistSymbol,
 } from '../utils/storage';
@@ -56,6 +57,17 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
   // 自訂觀察清單狀態 (Watchlist)
   const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>(() => getMuscleBookerWatchlist());
   const [customInputSymbol, setCustomInputSymbol] = useState('');
+  const [customInputError, setCustomInputError] = useState<string | null>(null);
+  const [isAddingCustom, setIsAddingCustom] = useState(false);
+
+  // 清理歷史殘留之無效股票代碼 (如 3175 等不存在之標的)
+  useEffect(() => {
+    const cleaned = watchlistSymbols.filter((s) => s !== '3175');
+    if (cleaned.length !== watchlistSymbols.length) {
+      setWatchlistSymbols(cleaned);
+      saveMuscleBookerWatchlist(cleaned);
+    }
+  }, []);
 
   // 任意代碼即搜即算 (Ad-hoc Scan) 狀態
   const [isAdHocLoading, setIsAdHocLoading] = useState(false);
@@ -231,24 +243,40 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     }
   };
 
-  // 快速新增自訂清單標的
+  // 快速新增自訂清單標的 (含代碼有效性驗證與存在性防護)
   const handleAddCustomSymbol = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const clean = customInputSymbol.trim().toUpperCase();
     if (!clean) return;
-    if (!watchlistSymbols.includes(clean)) {
+    setCustomInputError(null);
+
+    // 1. 若已在名單中，避免重複加入
+    if (watchlistSymbols.includes(clean)) {
+      setCustomInputError(`「${clean}」已在自訂觀察名單中。`);
+      return;
+    }
+
+    setIsAddingCustom(true);
+    try {
+      const inferredMarket: MarketType = inferMarketFromSymbol(clean);
+      const res = await backfillSymbolOhlcvAndIndicators(clean, inferredMarket, false);
+
+      if (!res.candles || res.candles.length === 0) {
+        setCustomInputError(`查無股票代碼「${clean}」或無歷史行情，無法加入。`);
+        setIsAddingCustom(false);
+        return;
+      }
+
+      // 存在有效日 K，正式放行加入名單
       const updated = addMuscleBookerWatchlistSymbol(clean);
       setWatchlistSymbols(updated);
+      setCachedCandlesMap((prev) => ({ ...prev, [clean]: res.candles }));
+      setCustomInputSymbol('');
+    } catch {
+      setCustomInputError(`查無股票代碼「${clean}」，無法加入觀察名單。`);
+    } finally {
+      setIsAddingCustom(false);
     }
-    setCustomInputSymbol('');
-    const inferredMarket: MarketType = inferMarketFromSymbol(clean);
-    backfillSymbolOhlcvAndIndicators(clean, inferredMarket, false)
-      .then((res) => {
-        if (res.candles && res.candles.length >= 5) {
-          setCachedCandlesMap((prev) => ({ ...prev, [clean]: res.candles }));
-        }
-      })
-      .catch(() => {});
   };
 
   // 2. 進行肌肉書僮指標全量掃描 (優先使用真實日 K 快取，杜絕假 K 線)
@@ -276,20 +304,26 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     });
   }, [targetUniverse, cachedCandlesMap, adHocItem]);
 
+  // 統計各類動作數量 (建議買進標的全面按風益比數值由大到小降序排列，置頂最優標的)
+  const buyItems = useMemo(() => {
+    return scannedItems
+      .filter((i) => i.actionDecision.action === 'BUY')
+      .sort((a, b) => (b.actionDecision.riskRewardRatioValue ?? 0) - (a.actionDecision.riskRewardRatioValue ?? 0));
+  }, [scannedItems]);
 
-  // 統計各類動作數量 (將常態箱內整理 HOLD 歸併入黃燈觀望待變，確保三色加總等於總標的數)
-  const buyItems = useMemo(() => scannedItems.filter((i) => i.actionDecision.action === 'BUY'), [scannedItems]);
   const avoidItems = useMemo(
     () => scannedItems.filter((i) => i.actionDecision.action === 'AVOID' || i.actionDecision.action === 'HOLD'),
     [scannedItems]
   );
   const sellItems = useMemo(() => scannedItems.filter((i) => i.actionDecision.action === 'SELL'), [scannedItems]);
 
-  // 3. 搜尋與動作過濾
+  // 3. 搜尋與動作過濾 (買進模式下同步維持風益比降序)
   const filteredItems = useMemo(() => {
     let list = scannedItems;
     if (actionFilter === 'BUY') {
-      list = list.filter((item) => item.actionDecision.action === 'BUY');
+      list = list
+        .filter((item) => item.actionDecision.action === 'BUY')
+        .sort((a, b) => (b.actionDecision.riskRewardRatioValue ?? 0) - (a.actionDecision.riskRewardRatioValue ?? 0));
     } else if (actionFilter === 'AVOID') {
       list = list.filter((item) => item.actionDecision.action === 'AVOID' || item.actionDecision.action === 'HOLD');
     } else if (actionFilter === 'SELL') {
@@ -613,20 +647,30 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
             />
             <button
               type="submit"
+              disabled={isAddingCustom}
               className="btn btn-sm"
               style={{
-                background: 'var(--accent-primary)',
+                background: isAddingCustom ? 'rgba(56, 189, 248, 0.4)' : 'var(--accent-primary)',
                 color: '#fff',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '4px',
                 fontWeight: 700,
                 fontSize: '0.8rem',
+                cursor: isAddingCustom ? 'not-allowed' : 'pointer',
               }}
             >
-              <Plus size={14} /> 加入清單
+              {isAddingCustom ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              {isAddingCustom ? '驗證中...' : '加入清單'}
             </button>
           </form>
+
+          {customInputError && (
+            <div style={{ width: '100%', fontSize: '0.78rem', color: '#fca5a5', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <AlertTriangle size={13} />
+              {customInputError}
+            </div>
+          )}
 
           {watchlistSymbols.length > 0 ? (
             <div style={{ width: '100%', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
@@ -1005,8 +1049,16 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                       </Tooltip>
                       {item.actionDecision.riskRewardRatio && (
                         <Tooltip content={BEGINNER_TOOLTIPS.riskReward} position="top">
-                          <span style={{ color: '#38bdf8', textDecoration: 'underline dotted', cursor: 'help' }}>
-                            風益比: {item.actionDecision.riskRewardRatio} R
+                          <span
+                            style={{
+                              color: (item.actionDecision.riskRewardRatioValue ?? 0) >= 2.0 ? '#facc15' : '#38bdf8',
+                              fontWeight: (item.actionDecision.riskRewardRatioValue ?? 0) >= 2.0 ? 800 : 600,
+                              textDecoration: 'underline dotted',
+                              cursor: 'help',
+                            }}
+                          >
+                            {(item.actionDecision.riskRewardRatioValue ?? 0) >= 2.0 ? '🔥 風益比: ' : '風益比: '}
+                            {item.actionDecision.riskRewardRatio} R
                           </span>
                         </Tooltip>
                       )}

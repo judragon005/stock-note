@@ -361,6 +361,7 @@ export interface MuscleBookerActionDecision {
   stopLossPrice?: number;
   targetPrice?: number;
   riskRewardRatio?: string;
+  riskRewardRatioValue?: number;
 }
 
 /**
@@ -405,7 +406,21 @@ export function evaluateMuscleBookerAction(params: {
     const target = currentPrice + Math.max(boxWidth, currentPrice * 0.08);
     const risk = Math.max(0.1, currentPrice - stopLoss);
     const reward = Math.max(0.1, target - currentPrice);
-    const rrRatio = (reward / risk).toFixed(1);
+    const rrValue = Math.round((reward / risk) * 10) / 10;
+    const rrRatio = rrValue.toFixed(1);
+
+    // 風益比硬門檻：不足 2:1 絕不追高進場
+    if (rrValue < 2.0) {
+      return {
+        action: 'HOLD',
+        actionBadge: '🟡 觀望 (風益比不足)',
+        actionReason: `帶量站上箱頂但向上空間狹窄 (風益比僅 1:${rrRatio}R < 2.0R)，期望值過低，切忌追高`,
+        stopLossPrice: Math.round(stopLoss * 100) / 100,
+        targetPrice: Math.round(target * 100) / 100,
+        riskRewardRatio: `1 : ${rrRatio}`,
+        riskRewardRatioValue: rrValue,
+      };
+    }
 
     return {
       action: 'BUY',
@@ -414,16 +429,31 @@ export function evaluateMuscleBookerAction(params: {
       stopLossPrice: Math.round(stopLoss * 100) / 100,
       targetPrice: Math.round(target * 100) / 100,
       riskRewardRatio: `1 : ${rrRatio}`,
+      riskRewardRatioValue: rrValue,
     };
   }
 
-  // 情境 B: 破底翻反轉
-  if (deduction.isBottomPenetrationRebound) {
+  // 情境 B: 破底翻反轉 (收復下影線且均線不下彎)
+  if (deduction.isBottomPenetrationRebound && deduction.ma20Slope !== 'DOWN') {
     const stopLoss = box.boxLower ? box.boxLower * 0.98 : currentPrice * 0.95;
     const target = box.boxUpper ?? currentPrice * 1.1;
     const risk = Math.max(0.1, currentPrice - stopLoss);
     const reward = Math.max(0.1, target - currentPrice);
-    const rrRatio = (reward / risk).toFixed(1);
+    const rrValue = Math.round((reward / risk) * 10) / 10;
+    const rrRatio = rrValue.toFixed(1);
+
+    // 風益比硬門檻：不足 2:1 絕不急躁進場
+    if (rrValue < 2.0) {
+      return {
+        action: 'HOLD',
+        actionBadge: '🟡 觀望 (空間不足)',
+        actionReason: `破底翻但距上方壓力過近 (風益比僅 1:${rrRatio}R < 2.0R)，空間狹小，切忌急躁進場`,
+        stopLossPrice: Math.round(stopLoss * 100) / 100,
+        targetPrice: Math.round(target * 100) / 100,
+        riskRewardRatio: `1 : ${rrRatio}`,
+        riskRewardRatioValue: rrValue,
+      };
+    }
 
     return {
       action: 'BUY',
@@ -432,6 +462,7 @@ export function evaluateMuscleBookerAction(params: {
       stopLossPrice: Math.round(stopLoss * 100) / 100,
       targetPrice: Math.round(target * 100) / 100,
       riskRewardRatio: `1 : ${rrRatio}`,
+      riskRewardRatioValue: rrValue,
     };
   }
 
