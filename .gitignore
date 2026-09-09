@@ -9,6 +9,7 @@ desktop.ini
 *.swp
 *.swo
 *.code-workspace
+*.bundle
 
 # Environment Variables & Secrets
 .env
