@@ -11,6 +11,10 @@ import {
   HelpCircle,
   ChevronDown,
   ChevronUp,
+  Star,
+  Loader2,
+  Plus,
+  X,
 } from 'lucide-react';
 import { HoldingPosition, MarketType } from '../types/stock';
 import type { DailyCandle } from '../types/indicators';
@@ -22,6 +26,13 @@ import {
   getScopedUniverseSymbols,
   scanMuscleBookerItem,
 } from '../engine/muscleBookerEngine';
+import { backfillSymbolOhlcvAndIndicators } from '../engine/historicalOhlcvBackfill';
+import {
+  getMuscleBookerWatchlist,
+  addMuscleBookerWatchlistSymbol,
+  removeMuscleBookerWatchlistSymbol,
+} from '../utils/storage';
+import { resolveOfficialSecurityName } from '../engine/stockNameResolver';
 import { Tooltip } from './common/Tooltip';
 
 export interface MuscleBookerWorkspaceProps {
@@ -29,7 +40,6 @@ export interface MuscleBookerWorkspaceProps {
   historicalDailyPrices?: Record<string, Record<string, number>>;
   currentMarket?: 'ALL' | MarketType;
 }
-
 
 export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
   holdings,
@@ -40,6 +50,16 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
   const [actionFilter, setActionFilter] = useState<'ALL' | 'BUY' | 'AVOID' | 'SELL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
+
+  // 自訂觀察清單狀態 (Watchlist)
+  const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>(() => getMuscleBookerWatchlist());
+  const [customInputSymbol, setCustomInputSymbol] = useState('');
+
+  // 任意代碼即搜即算 (Ad-hoc Scan) 狀態
+  const [isAdHocLoading, setIsAdHocLoading] = useState(false);
+  const [adHocError, setAdHocError] = useState<string | null>(null);
+  const [adHocItem, setAdHocItem] = useState<ScannedStockItem | null>(null);
+
 
   // 0. 依當前市場過濾持股
   const marketScopedHoldings = useMemo(() => {
@@ -82,12 +102,93 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         basePrice: h.currentPrice || 100,
       }));
     }
+    if (selectedPool === 'CUSTOM_WATCHLIST') {
+      return watchlistSymbols.map((sym) => {
+        const isTw = /^\d+$/.test(sym);
+        const name = resolveOfficialSecurityName(sym, sym);
+        const holding = holdings.find((h) => h.symbol.toUpperCase() === sym);
+        return {
+          symbol: sym,
+          name,
+          market: isTw ? ('TW' as const) : ('US' as const),
+          basePrice: holding?.currentPrice || 100,
+        };
+      });
+    }
     return getScopedUniverseSymbols(currentMarket, selectedPool);
-  }, [selectedPool, activeHoldings, closedHoldings, currentMarket]);
+  }, [selectedPool, activeHoldings, closedHoldings, watchlistSymbols, holdings, currentMarket]);
+
+  // 執行即時外部診斷 (Ad-hoc Scan)
+  const handleRunAdHocScan = async (symbolToQuery?: string) => {
+    const raw = (symbolToQuery ?? searchQuery).trim().toUpperCase();
+    if (!raw) return;
+    setIsAdHocLoading(true);
+    setAdHocError(null);
+
+    try {
+      const inferredMarket: MarketType = /^\d+$/.test(raw) ? 'TW' : 'US';
+      const res = await backfillSymbolOhlcvAndIndicators(raw, inferredMarket, false);
+
+      if (!res.candles || res.candles.length === 0) {
+        setAdHocError(`查無標的「${raw}」歷史行情，請確認代碼是否正確。`);
+        setIsAdHocLoading(false);
+        return;
+      }
+
+      const officialName = resolveOfficialSecurityName(raw, raw);
+      const latestCandle = res.candles[res.candles.length - 1];
+      const basePrice = latestCandle?.close || 100;
+
+      const scanned = scanMuscleBookerItem(
+        raw,
+        officialName,
+        inferredMarket,
+        basePrice,
+        res.candles
+      );
+
+      setAdHocItem(scanned);
+    } catch (err: any) {
+      setAdHocError(`連線診斷失敗：${err?.message || '查無此代碼或外部網路異常'}`);
+    } finally {
+      setIsAdHocLoading(false);
+    }
+  };
+
+  // 切換釘選/移除自訂清單
+  const handleToggleWatchlist = (symbol: string) => {
+    const clean = symbol.trim().toUpperCase();
+    if (watchlistSymbols.includes(clean)) {
+      const updated = removeMuscleBookerWatchlistSymbol(clean);
+      setWatchlistSymbols(updated);
+    } else {
+      const updated = addMuscleBookerWatchlistSymbol(clean);
+      setWatchlistSymbols(updated);
+    }
+  };
+
+  // 快速新增自訂清單標的
+  const handleAddCustomSymbol = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const clean = customInputSymbol.trim().toUpperCase();
+    if (!clean) return;
+    if (!watchlistSymbols.includes(clean)) {
+      const updated = addMuscleBookerWatchlistSymbol(clean);
+      setWatchlistSymbols(updated);
+    }
+    setCustomInputSymbol('');
+    const inferredMarket: MarketType = /^\d+$/.test(clean) ? 'TW' : 'US';
+    backfillSymbolOhlcvAndIndicators(clean, inferredMarket, false).catch(() => {});
+  };
 
   // 2. 進行肌肉書僮指標全量掃描
   const scannedItems = useMemo<ScannedStockItem[]>(() => {
     return targetUniverse.map((item) => {
+      // 若已有即時診斷項目，優先使用完整運算結果
+      if (adHocItem && adHocItem.symbol === item.symbol) {
+        return adHocItem;
+      }
+
       const localDailyMap = historicalDailyPrices[item.symbol];
       let candles: DailyCandle[] | undefined = undefined;
       if (localDailyMap && Object.keys(localDailyMap).length >= 5) {
@@ -106,7 +207,8 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         candles
       );
     });
-  }, [targetUniverse, historicalDailyPrices]);
+  }, [targetUniverse, historicalDailyPrices, adHocItem]);
+
 
   // 統計各類動作數量 (將常態箱內整理 HOLD 歸併入黃燈觀望待變，確保三色加總等於總標的數)
   const buyItems = useMemo(() => scannedItems.filter((i) => i.actionDecision.action === 'BUY'), [scannedItems]);
@@ -191,24 +293,54 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
 
         {/* 搜尋框與資產池切換 */}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px' }}>
-          <div style={{ position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-            <input
-              type="text"
-              placeholder="搜尋代號或名稱..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                padding: '6px 12px 6px 30px',
-                borderRadius: 'var(--radius-sm)',
-                background: 'var(--bg-input)',
-                border: '1px solid var(--border-color)',
-                color: 'var(--text-primary)',
-                fontSize: '0.8rem',
-                outline: 'none',
-                width: '170px',
-              }}
-            />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ position: 'relative' }}>
+              <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <input
+                type="text"
+                placeholder="搜尋或輸入代碼..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && searchQuery.trim()) {
+                    handleRunAdHocScan(searchQuery);
+                  }
+                }}
+                style={{
+                  padding: '6px 12px 6px 30px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.8rem',
+                  outline: 'none',
+                  width: '175px',
+                }}
+              />
+            </div>
+            {searchQuery.trim() && (
+              <button
+                onClick={() => handleRunAdHocScan(searchQuery)}
+                disabled={isAdHocLoading}
+                className="btn btn-sm"
+                style={{
+                  background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '6px 10px',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  cursor: isAdHocLoading ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+                title="即時連線外部回補日 K 並運算動能雷達"
+              >
+                {isAdHocLoading ? <Loader2 size={13} className="animate-spin" /> : <Flame size={13} />}
+                連線診斷
+              </button>
+            )}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -264,9 +396,27 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
             >
               {currentMarket === 'US' ? '美股巨頭 Top 50' : '權值核心 Top 50'}
             </button>
+            <button
+              onClick={() => setSelectedPool('CUSTOM_WATCHLIST')}
+              className="btn btn-sm"
+              style={{
+                background: selectedPool === 'CUSTOM_WATCHLIST' ? 'var(--accent-primary)' : 'rgba(30, 41, 59, 0.65)',
+                color: selectedPool === 'CUSTOM_WATCHLIST' ? '#ffffff' : 'var(--text-secondary)',
+                border: '1px solid ' + (selectedPool === 'CUSTOM_WATCHLIST' ? 'var(--accent-primary)' : 'var(--border-color)'),
+                cursor: 'pointer',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <Star size={13} style={{ color: selectedPool === 'CUSTOM_WATCHLIST' ? '#fde047' : 'inherit' }} fill={selectedPool === 'CUSTOM_WATCHLIST' ? '#fde047' : 'none'} />
+              自訂觀察 ({watchlistSymbols.length})
+            </button>
           </div>
         </div>
       </div>
+
 
       {/* 🚦 三色操作戰術導覽篩選列 */}
       <div
@@ -351,6 +501,359 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
           已顯示 {filteredItems.length} / {scannedItems.length} 檔標的
         </span>
       </div>
+
+      {/* 🌟 自訂觀察清單管理列 (僅在 CUSTOM_WATCHLIST 顯示) */}
+      {selectedPool === 'CUSTOM_WATCHLIST' && (
+        <div
+          className="card animate-fade-in"
+          style={{
+            padding: '12px 18px',
+            background: 'rgba(30, 41, 59, 0.55)',
+            border: '1px dashed rgba(56, 189, 248, 0.4)',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Star size={16} style={{ color: '#fde047' }} fill="#fde047" />
+            <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+              自訂觀察名單管理 ({watchlistSymbols.length} 檔)
+            </span>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              輸入台美股任意代碼加入觀察，永久保存在本地瀏覽器
+            </span>
+          </div>
+
+          <form onSubmit={handleAddCustomSymbol} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input
+              type="text"
+              placeholder="輸入代碼 (例: 3017, NVDA)..."
+              value={customInputSymbol}
+              onChange={(e) => setCustomInputSymbol(e.target.value)}
+              style={{
+                padding: '5px 12px',
+                borderRadius: 'var(--radius-sm)',
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-primary)',
+                fontSize: '0.8rem',
+                outline: 'none',
+                width: '200px',
+              }}
+            />
+            <button
+              type="submit"
+              className="btn btn-sm"
+              style={{
+                background: 'var(--accent-primary)',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontWeight: 700,
+                fontSize: '0.8rem',
+              }}
+            >
+              <Plus size={14} /> 加入清單
+            </button>
+          </form>
+
+          {watchlistSymbols.length > 0 ? (
+            <div style={{ width: '100%', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>清單標的：</span>
+              {watchlistSymbols.map((sym) => {
+                const officialName = resolveOfficialSecurityName(sym, sym);
+                return (
+                  <span
+                    key={sym}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      background: 'rgba(15, 23, 42, 0.75)',
+                      border: '1px solid rgba(56, 189, 248, 0.35)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '3px 8px',
+                      fontSize: '0.78rem',
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    <span className="mono" style={{ fontWeight: 700, color: '#38bdf8' }}>{sym}</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>{officialName}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleWatchlist(sym)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#f87171',
+                        cursor: 'pointer',
+                        padding: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                      title="從自訂名單移除"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ width: '100%', marginTop: '6px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              💡 目前觀察名單為空。請輸入代碼後點擊「加入清單」，或於上方搜尋欄輸入代碼進行即時連線診斷後點擊釘選。
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ⚡ 查無本地標的引導橫幅 */}
+      {searchQuery.trim() && filteredItems.length === 0 && !isAdHocLoading && (
+        <div
+          className="card animate-fade-in"
+          style={{
+            padding: '12px 18px',
+            background: 'rgba(30, 41, 59, 0.75)',
+            border: '1px solid rgba(56, 189, 248, 0.35)',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.86rem', color: '#e2e8f0' }}>
+            <AlertTriangle size={18} style={{ color: 'var(--accent-amber)' }} />
+            <span>
+              在目前清單中查無「<strong style={{ color: '#38bdf8' }}>{searchQuery.toUpperCase()}</strong>」。是否連線外部進行雷達診斷？
+            </span>
+          </div>
+          <button
+            onClick={() => handleRunAdHocScan(searchQuery)}
+            className="btn btn-sm"
+            style={{
+              background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+              color: '#ffffff',
+              border: 'none',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 14px',
+              cursor: 'pointer',
+            }}
+          >
+            <Flame size={14} />
+            ⚡ 立即連線外部診斷「{searchQuery.toUpperCase()}」
+          </button>
+        </div>
+      )}
+
+      {/* ⚡ 即時診斷異常提示 */}
+      {adHocError && (
+        <div
+          className="card animate-fade-in"
+          style={{
+            padding: '10px 16px',
+            background: 'rgba(239, 68, 68, 0.15)',
+            border: '1px solid rgba(239, 68, 68, 0.35)',
+            color: '#fca5a5',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '0.85rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertTriangle size={16} />
+            <span>{adHocError}</span>
+          </div>
+          <button
+            onClick={() => setAdHocError(null)}
+            style={{ background: 'none', border: 'none', color: '#fca5a5', cursor: 'pointer' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* ⚡ 即時診斷載入中指示 */}
+      {isAdHocLoading && (
+        <div
+          className="card animate-fade-in"
+          style={{
+            padding: '14px 20px',
+            background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.8))',
+            border: '1px solid rgba(56, 189, 248, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            color: '#38bdf8',
+            fontSize: '0.88rem',
+            fontWeight: 600,
+          }}
+        >
+          <Loader2 size={18} className="animate-spin" />
+          <span>正在連線外部資料源回補歷史日 K 並動態運算肌肉書僮指標...</span>
+        </div>
+      )}
+
+      {/* ⚡ 即時外部診斷高光置頂卡 (Spotlight Card) */}
+      {adHocItem && (
+        <div
+          className="card animate-fade-in"
+          style={{
+            padding: '18px 22px',
+            background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)',
+            border: '1px solid rgba(56, 189, 248, 0.5)',
+            boxShadow: '0 8px 32px rgba(56, 189, 248, 0.15)',
+          }}
+        >
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span
+                className="badge"
+                style={{
+                  background: 'rgba(56, 189, 248, 0.2)',
+                  color: '#38bdf8',
+                  border: '1px solid rgba(56, 189, 248, 0.4)',
+                  fontWeight: 800,
+                  fontSize: '0.75rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <Zap size={13} /> 即時外部診斷標的
+              </span>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                {adHocItem.symbol} {adHocItem.name}
+              </h3>
+              <span className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: '#38bdf8' }}>
+                ${adHocItem.currentPrice}
+              </span>
+              <span className="badge" style={{ background: 'rgba(100, 116, 139, 0.3)', color: 'var(--text-secondary)' }}>
+                {adHocItem.market}
+              </span>
+            </div>
+
+            {/* 操作按鈕組 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                onClick={() => handleToggleWatchlist(adHocItem.symbol)}
+                className="btn btn-sm"
+                style={{
+                  background: watchlistSymbols.includes(adHocItem.symbol) ? 'rgba(250, 204, 21, 0.2)' : 'rgba(56, 189, 248, 0.15)',
+                  color: watchlistSymbols.includes(adHocItem.symbol) ? '#fde047' : '#38bdf8',
+                  border: '1px solid ' + (watchlistSymbols.includes(adHocItem.symbol) ? 'rgba(250, 204, 21, 0.5)' : 'rgba(56, 189, 248, 0.4)'),
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: '0.8rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <Star size={14} fill={watchlistSymbols.includes(adHocItem.symbol) ? '#fde047' : 'none'} />
+                {watchlistSymbols.includes(adHocItem.symbol) ? '已在自訂觀察' : '釘選至自訂觀察'}
+              </button>
+
+              <button
+                onClick={() => setAdHocItem(null)}
+                className="btn btn-sm"
+                style={{
+                  background: 'rgba(51, 65, 85, 0.5)',
+                  color: 'var(--text-secondary)',
+                  border: '1px solid var(--border-color)',
+                  cursor: 'pointer',
+                  padding: '6px 8px',
+                }}
+                title="關閉診斷卡片"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          </div>
+
+          {/* 指標狀態條 */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: '12px',
+              background: 'rgba(15, 23, 42, 0.6)',
+              padding: '12px 16px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid rgba(255, 255, 255, 0.05)',
+            }}
+          >
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>實戰動作訊號</div>
+              {adHocItem.actionDecision.action === 'BUY' ? (
+                <span className="badge" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.4)', fontWeight: 800 }}>
+                  🟢 建議買進 · 主升發動
+                </span>
+              ) : adHocItem.actionDecision.action === 'SELL' ? (
+                <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.4)', fontWeight: 800 }}>
+                  🔴 建議賣出 · 破線停損
+                </span>
+              ) : (
+                <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.4)', fontWeight: 800 }}>
+                  🟡 觀望不碰 · 盤整待變
+                </span>
+              )}
+            </div>
+
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>箱子戰術狀態</div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                {adHocItem.boxStatus === 'BREAKOUT_UP' ? '🔥 突破箱頂' : adHocItem.boxStatus === 'BREAKOUT_DOWN' ? '⚠️ 跌破箱底' : '📦 箱內整理'}
+                {adHocItem.boxUpper && (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: '6px' }}>
+                    (頂: ${adHocItem.boxUpper} / 底: ${adHocItem.boxLower})
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>布林極致壓縮 & MA扣抵</div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                {adHocItem.isBollingerSqueeze ? (
+                  <span style={{ color: '#fbbf24' }}>⚡ 極致壓縮 ({adHocItem.bollingerBandwidth?.toFixed(1)}%)</span>
+                ) : (
+                  <span style={{ color: 'var(--text-secondary)' }}>帶寬 {adHocItem.bollingerBandwidth?.toFixed(1) || '-'}%</span>
+                )}
+                <span style={{ marginLeft: '6px', color: adHocItem.ma20Slope === 'UP' ? 'var(--gain-color)' : adHocItem.ma20Slope === 'DOWN' ? 'var(--loss-color)' : 'var(--text-muted)' }}>
+                  {adHocItem.ma20Slope === 'UP' ? '📈 扣抵翻揚' : adHocItem.ma20Slope === 'DOWN' ? '📉 扣抵下彎' : '➖ 均線走平'}
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>防守線與風益比</div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f87171' }}>
+                防守: ${adHocItem.actionDecision.stopLossPrice ?? '-'}
+                {adHocItem.actionDecision.riskRewardRatio && (
+                  <span style={{ color: '#38bdf8', marginLeft: '6px' }}>
+                    (風益比 1:{adHocItem.actionDecision.riskRewardRatio}R)
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: '10px', fontSize: '0.82rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Zap size={14} style={{ color: 'var(--accent-amber)' }} />
+            <strong>操盤建議：</strong>
+            <span>{adHocItem.actionDecision.actionReason}</span>
+          </div>
+        </div>
+      )}
 
       {/* 🧭 肌肉書僮·三色實戰操盤導航儀 (Action Matrix) */}
       <div
@@ -882,11 +1385,13 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                     <span style={{ textDecoration: 'underline dotted', cursor: 'help' }}>防守價 / 風益比 ℹ️</span>
                   </Tooltip>
                 </th>
+                <th style={{ textAlign: 'center', width: '60px' }}>自訂觀察</th>
               </tr>
             </thead>
             <tbody>
               {filteredItems.slice(0, 15).map((item) => {
                 const isExpanded = expandedSymbol === item.symbol;
+                const isWatched = watchlistSymbols.includes(item.symbol);
                 return (
                   <React.Fragment key={item.symbol}>
                     <tr
@@ -965,10 +1470,31 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                           <span style={{ color: 'var(--text-muted)' }}>-</span>
                         )}
                       </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleWatchlist(item.symbol);
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: isWatched ? '#fde047' : 'var(--text-muted)',
+                            padding: '4px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                          title={isWatched ? '從自訂觀察移除' : '加入自訂觀察'}
+                        >
+                          <Star size={15} fill={isWatched ? '#fde047' : 'none'} />
+                        </button>
+                      </td>
                     </tr>
                     {isExpanded && (
                       <tr style={{ background: 'rgba(56, 189, 248, 0.04)' }}>
-                        <td colSpan={7} style={{ padding: '10px 16px', fontSize: '0.8rem', color: '#cbd5e1' }}>
+                        <td colSpan={8} style={{ padding: '10px 16px', fontSize: '0.8rem', color: '#cbd5e1' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <Zap size={14} style={{ color: 'var(--accent-amber)' }} />
                             <strong>實戰操盤指引：</strong>

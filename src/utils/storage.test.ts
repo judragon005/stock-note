@@ -26,7 +26,12 @@ import {
   DEFAULT_BROKER_PRESETS,
   loadApiKeysConfigFromStorage,
   saveApiKeysConfigToStorage,
+  getMuscleBookerWatchlist,
+  saveMuscleBookerWatchlist,
+  addMuscleBookerWatchlistSymbol,
+  removeMuscleBookerWatchlistSymbol,
 } from './storage';
+
 
 // 模擬 LocalStorage 環境
 const createLocalStorageMock = () => {
@@ -576,7 +581,43 @@ describe('Storage & Persistence Utilities (Issue #6)', () => {
       expect(validated![1].symbol).toBe('2330');
     });
   });
+
+  describe('Seam 11: MuscleBookerWatchlist Persistence (肌肉書僮自訂觀察清單持久化)', () => {
+    beforeEach(() => {
+      localStorage.clear();
+    });
+
+    it('無紀錄時應回傳空陣列', () => {
+      const list = getMuscleBookerWatchlist();
+      expect(list).toEqual([]);
+    });
+
+    it('應能正確儲存與讀取自訂觀察代碼清單，並自動去重與轉大寫', () => {
+      saveMuscleBookerWatchlist(['2330', 'nvda', ' 2330 ', 'aapl']);
+      const list = getMuscleBookerWatchlist();
+      expect(list).toEqual(['2330', 'NVDA', 'AAPL']);
+    });
+
+    it('addMuscleBookerWatchlistSymbol 應能追加代碼並防止重複', () => {
+      saveMuscleBookerWatchlist(['2330']);
+      const updated = addMuscleBookerWatchlistSymbol('3017');
+      expect(updated).toEqual(['2330', '3017']);
+      expect(getMuscleBookerWatchlist()).toEqual(['2330', '3017']);
+
+      // 重複新增不應重複
+      const updated2 = addMuscleBookerWatchlistSymbol(' 3017 ');
+      expect(updated2).toEqual(['2330', '3017']);
+    });
+
+    it('removeMuscleBookerWatchlistSymbol 應能移除指定代碼', () => {
+      saveMuscleBookerWatchlist(['2330', '3017', 'NVDA']);
+      const updated = removeMuscleBookerWatchlistSymbol('3017');
+      expect(updated).toEqual(['2330', 'NVDA']);
+      expect(getMuscleBookerWatchlist()).toEqual(['2330', 'NVDA']);
+    });
+  });
 });
+
 
 
 

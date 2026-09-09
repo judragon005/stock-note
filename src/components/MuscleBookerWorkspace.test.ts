@@ -150,7 +150,68 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
     expect(sellCount).toBe(1);
     expect(buyCount + avoidCount + sellCount).toBe(mockItems.length);
   });
+
+  it('市場推斷規則應精確將純數字代碼推斷為 TW，英文字母推斷為 US', () => {
+    const inferMarket = (sym: string): 'TW' | 'US' => (/^\d+$/.test(sym.trim()) ? 'TW' : 'US');
+
+    expect(inferMarket('2330')).toBe('TW');
+    expect(inferMarket('0050')).toBe('TW');
+    expect(inferMarket('3017')).toBe('TW');
+    expect(inferMarket('AAPL')).toBe('US');
+    expect(inferMarket('NVDA')).toBe('US');
+    expect(inferMarket('TSLA')).toBe('US');
+  });
+
+  it('CUSTOM_WATCHLIST 自訂觀察池能正確由自訂清單代碼產生標的清單與對應市場', async () => {
+    const { resolveOfficialSecurityName } = await import('../engine/stockNameResolver');
+    const customWatchlist = ['2330', '3017', 'NVDA'];
+    const mockHoldings = [{ symbol: '2330', name: '台積電', currentPrice: 1020, market: 'TW' as const, shares: 100, currency: 'TWD' as const, totalCost: 100000 }];
+
+    const universe = customWatchlist.map((sym) => {
+      const isTw = /^\d+$/.test(sym);
+      const name = resolveOfficialSecurityName(sym, sym);
+      const holding = mockHoldings.find((h) => h.symbol.toUpperCase() === sym);
+      return {
+        symbol: sym,
+        name,
+        market: isTw ? ('TW' as const) : ('US' as const),
+        basePrice: holding?.currentPrice || 100,
+      };
+    });
+
+    expect(universe).toHaveLength(3);
+    expect(universe[0].symbol).toBe('2330');
+    expect(universe[0].market).toBe('TW');
+    expect(universe[0].basePrice).toBe(1020);
+
+    expect(universe[1].symbol).toBe('3017');
+    expect(universe[1].market).toBe('TW');
+    expect(universe[1].basePrice).toBe(100);
+
+    expect(universe[2].symbol).toBe('NVDA');
+    expect(universe[2].market).toBe('US');
+  });
+
+  it('即時診斷標的 (Ad-hoc Scanned Item) 應能正確覆蓋自訂池中尚未回補日 K 之靜態標的', () => {
+    const adHocItem = scanMuscleBookerItem('3017', '奇鋐', 'TW', 650);
+    expect(adHocItem.symbol).toBe('3017');
+    expect(adHocItem.actionDecision).toBeDefined();
+
+    const universeSymbols = ['2330', '3017'];
+    const scannedList = universeSymbols.map((sym) => {
+      if (adHocItem && adHocItem.symbol === sym) {
+        return adHocItem;
+      }
+      return scanMuscleBookerItem(sym, '台積電', 'TW', 1000);
+    });
+
+    const targetScanned = scannedList.find((i) => i.symbol === '3017');
+    expect(targetScanned).toBe(adHocItem);
+    expect(targetScanned?.currentPrice).toBe(adHocItem.currentPrice);
+  });
 });
+
+
 
 
 

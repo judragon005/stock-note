@@ -462,7 +462,7 @@ export function evaluateMuscleBookerAction(params: {
   };
 }
 
-export type AssetPoolType = 'HOLDINGS' | 'HOLDINGS_ACTIVE' | 'HOLDINGS_CLOSED' | 'TOP30_FOCUS' | 'TW50_CORE';
+export type AssetPoolType = 'HOLDINGS' | 'HOLDINGS_ACTIVE' | 'HOLDINGS_CLOSED' | 'TOP30_FOCUS' | 'TW50_CORE' | 'CUSTOM_WATCHLIST';
 
 /**
  * 股市小白專屬動能名詞百科字典

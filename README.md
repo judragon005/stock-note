@@ -3,13 +3,26 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-560%2F560%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-635%2F635%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 肌肉書僮動能雷達任意代碼即時外部回補診斷與自訂觀察清單 (`Ad-hoc Momentum Radar & Custom Watchlist`) *(V8.21.0 全新升級)*
+- **任意股票代碼即搜即算 (Ad-hoc Search & Fetch Pipeline)**：
+  - 突破過去僅能分析固定 4 個池子的藩籬，在搜尋列鍵入任何台股代碼（如 `3017`、`2603`）或美股代碼（如 `NVDA`、`TSLA`），按下 Enter 或點擊「連線診斷」即可觸發外部資料回補。
+  - 自動判斷市場屬性（純數字判定為 `TW`，英文字母判定為 `US`），優先查閱 IndexedDB 24hr 快取，未命中時非同步向 Yahoo Finance 拉取完整歷史日 K 數列並寫入快取，即時計算肌肉書僮指標。
+- **內嵌式置頂診斷高光卡片 (Spotlight Card)**：
+  - 運算完成後，以深藍漸層高光卡片內嵌置頂於操盤導航儀正上方，清晰展示三色動作訊號（🟢 買進 / 🟡 觀望 / 🔴 賣出）、Darvas 箱頂底線、布林極致壓縮帶寬（%）、MA20 扣抵斜率與建議停損防守價位。
+  - 右上方提供「⭐ 釘選至自訂觀察 / ★ 已在自訂觀察」與「✕ 關閉」快捷操作。
+- **常態自訂觀察清單池 (Custom Watchlist Pool)**：
+  - 標的池切換中解鎖「⭐ 自訂觀察 (N)」池，支援 LocalStorage 持久化保存。
+  - 自選池模式具備清單管理面板，支援一鍵加入新代碼、已觀察標的膠囊標籤與快捷刪除。
+  - 綜合動能監控總表中，每列均配置「⭐ 觀察」即時切換按鈕。
+
 
 ### 0. 台股加權指數 (TAIEX) Benchmark 全歷史日線與全市場股票字典補全 (`TAIEX Benchmark & Full-Market Stock Dictionary`) *(V8.9.0 全新升級)*
 - **加權指數 (^TWII) 官方大盤基準 (`TAIEX Benchmark Daily Time-Series`)**：

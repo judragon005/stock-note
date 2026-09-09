@@ -276,6 +276,21 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0094: V8.13.0 市場宏觀戰情室、全球流動性四柱脈搏與 AI 策略建議](docs/adr/0094-market-war-room-macro-liquidity-and-ai-advisor.md)
 - [ADR-0095: V8.14.0 宏觀戰情室工作區、質押黑天鵝逃生矩陣與肌肉書僮持倉膠囊 UI 落地整合](docs/adr/0095-macro-war-room-stress-matrix-ui-integration.md)
 - [ADR-0096: V8.15.0 宏觀戰情室原生樣式重塑、色彩模式連動與肌肉書僮動能雷達專屬工作區](docs/adr/0096-muscle-booker-workspace-and-war-room-styling-fix.md)
+- [ADR-0101: V8.20.0 三色導航儀動作歸併對齊、借貸卡片雙欄佈局與未到除息日預估股息動態重算](docs/adr/0101-traffic-light-hold-alignment-loan-grid-and-pending-dividend-sync.md)
+- [ADR-0102: V8.21.0 肌肉書僮動能雷達任意代碼即時外部回補診斷與自訂觀察清單架構](docs/adr/0102-muscle-booker-adhoc-scanner-and-custom-watchlist.md)
+
+### 肌肉書僮動能雷達任意代碼即時外部回補診斷與自訂觀察清單 (Ad-hoc Scanner & Custom Watchlist) *(新增於 V8.21.0)*
+- **任意代碼即搜即算 (Ad-hoc Search & Fetch Pipeline)**：
+  - 頂部搜尋框支援直接鍵入任意台股（如 3017, 2603）或美股（如 NVDA, TSLA）代碼，按 Enter 或點擊「連線診斷」即可觸發外部資料回補。
+  - 純數字自動推斷為台股 `TW`，英文字母自動推斷為美股 `US`。
+  - 整合 `backfillSymbolOhlcvAndIndicators`，優先讀取 IndexedDB 本地 24hr 快取，未命中時非同步向 Yahoo Finance 拉取日 K 數列並由 `scanMuscleBookerItem` 即時運算。
+- **內嵌式置頂診斷高光卡片 (Spotlight Card)**：
+  - 運算完成後，以高光毛玻璃卡片內嵌於三色操盤導航儀正上方，完整展示三色動作徽章（🟢 買進 / 🟡 觀望 / 🔴 賣出）、Darvas 箱頂底線、布林壓縮帶寬與停損防守位。
+  - 右上角提供「⭐ 釘選至自訂觀察 / ★ 已在自訂觀察」與「✕ 關閉」操作按鈕。
+- **自訂觀察池 (Custom Watchlist Pool)**：
+  - 標的池按鈕新增「⭐ 自訂觀察 (N)」，資料以 LocalStorage 持久化儲存。
+  - 自選池模式內提供名單管理面板、快速新增代碼與已觀察標的膠囊標籤（支援一鍵刪除）。
+  - 下方綜合動能監控總表中，每列均加入「⭐ 觀察」快捷切換按鈕。
 
 ### 肌肉書僮動能雷達專屬工作區與戰情室原生樣式重塑 (Muscle Booker Radar & War Room Styling Fix) *(新增於 V8.15.0)*
 - **宏觀戰情室原生 Vanilla CSS 樣式重塑**：徹底移除無效之 Tailwind 類別，全面採用專案原生設計系統（`.card`、`.badge`、`.mono`、`.warroom-hero-card`、`.warroom-grid-4` 等），還原頂級深色毛玻璃金融終端質感。

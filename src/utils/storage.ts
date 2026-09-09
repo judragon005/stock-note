@@ -42,6 +42,7 @@ export const HISTORICAL_PRICES_STORAGE_KEY = 'STOCK_TRACKER_HISTORICAL_PRICES_V1
 export const HISTORICAL_FX_STORAGE_KEY = 'STOCK_TRACKER_HISTORICAL_FX_V1';
 export const CASH_TRANSACTIONS_STORAGE_KEY = 'STOCK_TRACKER_CASH_TRANSACTIONS_V1';
 export const LOAN_RECORDS_STORAGE_KEY = 'STOCK_TRACKER_LOAN_RECORDS_V1';
+export const MUSCLE_BOOKER_WATCHLIST_STORAGE_KEY = 'STOCK_TRACKER_MUSCLE_BOOKER_WATCHLIST_V1';
 
 /**
  * 主流券商費率模板庫 (Broker Presets)
@@ -1179,4 +1180,61 @@ export async function initializeStorageAsync(): Promise<{
     };
   }
 }
+
+/**
+ * 讀取肌肉書僮自訂觀察清單代碼
+ */
+export function getMuscleBookerWatchlist(): string[] {
+  try {
+    const raw = localStorage.getItem(MUSCLE_BOOKER_WATCHLIST_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return Array.from(new Set(parsed.map((s) => String(s).trim().toUpperCase()).filter(Boolean)));
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 儲存肌肉書僮自訂觀察清單代碼
+ */
+export function saveMuscleBookerWatchlist(symbols: string[]): void {
+  try {
+    const cleaned = Array.from(
+      new Set(symbols.map((s) => String(s).trim().toUpperCase()).filter(Boolean))
+    );
+    localStorage.setItem(MUSCLE_BOOKER_WATCHLIST_STORAGE_KEY, JSON.stringify(cleaned));
+  } catch (err) {
+    logger.error('Failed to save muscle booker watchlist:', err);
+  }
+}
+
+/**
+ * 新增代碼至肌肉書僮自訂觀察清單
+ */
+export function addMuscleBookerWatchlistSymbol(symbol: string): string[] {
+  const current = getMuscleBookerWatchlist();
+  const clean = symbol.trim().toUpperCase();
+  if (!clean || current.includes(clean)) {
+    return current;
+  }
+  const next = [...current, clean];
+  saveMuscleBookerWatchlist(next);
+  return next;
+}
+
+/**
+ * 從肌肉書僮自訂觀察清單移除代碼
+ */
+export function removeMuscleBookerWatchlistSymbol(symbol: string): string[] {
+  const current = getMuscleBookerWatchlist();
+  const clean = symbol.trim().toUpperCase();
+  const next = current.filter((s) => s !== clean);
+  saveMuscleBookerWatchlist(next);
+  return next;
+}
+
 
