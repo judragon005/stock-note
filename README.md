@@ -3,13 +3,23 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-650%2F650%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-653%2F653%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 肌肉書僮今日核心作戰指令 (Top 3 買進先鋒 vs 在庫持股限定賣出) 與自適應色彩主題 (`Muscle Booker Top 3 Action Directives & Holding-Gated Sell`) *(V8.27.0 全新升級)*
+- **今日核心作戰指令看板 (Top 3 Action Directives)**：
+  - 於肌肉書僮動能雷達核心視覺區新增雙欄高光看板，一秒聚光當日最重要的買賣決策。
+  - **左欄【🟢 今日買進先鋒 (Top 3 BUY)】**：精選突破箱頂且 20MA 扣低走揚、風益比 $\ge 2.0$ 之標的，按風益比數值由高至低降序置頂前 3 檔；標註現價、防守價與 🔥 風益比，若無標的則呈現優雅無資料空狀態。
+  - **右欄【🔴 在庫賣出停損 (Holding-Gated SELL)】**：嚴格防護**「必須在庫持有才建議；若沒有持有，則絕對不予顯示」**，僅在標的為在籍持股（`shares > 0`）且技術觸發破線停損時才納入，標記在庫股數（如 `🚨 在庫: 1,000 股`）與停損原由；在庫持股均安全未破線時，明確顯示「0 檔 · 🟢 目前在籍持股均在防守線之上，無持股需賣出 (持倉安全)」，徹底消除投資人恐慌。
+- **三色實戰操盤導航儀與持股警戒聯動**：
+  - 導航儀賣出卡片同步標記 `🚨 在庫` 標籤，明確區隔在庫持股與市場觀察股。
+- **動態主題色彩全面自適應 (Dynamic Color Theme)**：
+  - 看板與導航儀全面綁定 CSS 變數（`var(--gain-color)`、`var(--loss-color)` 等），切換台灣市場「紅漲綠跌」或國際/美股市場「綠漲紅跌」時，買賣配色 100% 同步自適應。
 
 ### 0. 肌肉書僮目標池滿編規格化與名實相符擴充 (`Muscle Booker Full Universe Top 30/50 Alignment`) *(V8.26.0 全新升級)*
 - **臺灣 50 指數 (0050) 官方成分股 50 檔滿編 (`TW50_BLUE_CHIP_SYMBOLS`)**：

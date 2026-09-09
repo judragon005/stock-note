@@ -1387,7 +1387,15 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **US Mega 50 & Top 30 Momentum Pools (美股標普巨頭 50 與焦點 30 滿編)**:
   - 核心定義：`US_MEGA_50_CORE_SYMBOLS` 滿編 50 檔權值巨頭（NVDA, AAPL, MSFT, AMZN, GOOGL, META, TSLA, BRK.B, LLY, JPM, V, UNH, XOM, MA, COST, PG, HD, JNJ, ABBV, WMT 等全 50 檔）；`US_TOP_30_FOCUS_SYMBOLS` 滿編 30 檔科技與動能熱門標的。
 
+### 肌肉書僮今日核心作戰指令看板與在庫持股限定賣出架構 *(新增於 V8.27.0 / ADR #0108)*
 
-
-
+- **Top 3 BUY Directives (今日買進先鋒前 3 檔)**:
+  - 核心機制：從掃描清單中篩選 `action === 'BUY'` 且 `riskRewardRatioValue >= 2.0` 之標的，按風益比數值由大到小降序排列，最多取前 3 檔展示於作戰看板左欄。
+  - 視覺呈現：高光標註排行序號、現價、防守價、🔥 風益比數值與操盤白話建議；無標的時呈現「0 檔 · 🔍 目前目標池中無風益比 ≥ 2.0 之突破標的」空狀態。
+- **Holding-Gated SELL Directives (在庫持股限定賣出建議前 3 檔)**:
+  - 核心防護：建立 `activeHoldingsMap` 嚴格把關，**「賣出部分必須有持有才建議；若沒有持有，則絕對不予顯示」**。僅在標的為在籍持股（`shares > 0`）且技術觸發破線 `SELL` 時，才納入右欄賣出停損建議。
+  - 庫存標示：清楚標記在籍庫存股數（如 `🚨 在庫: 1,000 股`）、原防守線與破線停損原因。
+  - 持倉安全空狀態：當所有在籍持股均處於防守線之上無破線時，顯示「0 檔 · 🟢 目前在籍持股均在防守線之上，無持股需賣出 (持倉安全)」，徹底消除投資人恐慌。
+- **Dynamic Theme Color Binding (紅漲綠跌 / 綠漲紅跌自適應)**:
+  - 核心機制：作戰指令看板與三色導航儀全面綁定 CSS 變數 `var(--gain-color)`、`var(--gain-bg)`、`var(--gain-border)` 與 `var(--loss-color)`、`var(--loss-bg)`、`var(--loss-border)`，完美適應台股與國際市場色彩切換。
 

@@ -320,6 +320,80 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
     expect(ready).toBe(2);
     expect(percent).toBe(50);
   });
+
+  describe('今日核心作戰指令 (Top 3 Action Directives & Holding-Gated Sell)', () => {
+    it('買進先鋒前 3 檔應僅包含風益比 >= 2.0 之標的，並按風益比數值降序排列，最多取前 3 檔', () => {
+      const scannedList = [
+        { symbol: 'A', actionDecision: { action: 'BUY' as const, riskRewardRatioValue: 1.8 } },
+        { symbol: 'B', actionDecision: { action: 'BUY' as const, riskRewardRatioValue: 3.5 } },
+        { symbol: 'C', actionDecision: { action: 'BUY' as const, riskRewardRatioValue: 5.2 } },
+        { symbol: 'D', actionDecision: { action: 'AVOID' as const, riskRewardRatioValue: 4.0 } },
+        { symbol: 'E', actionDecision: { action: 'BUY' as const, riskRewardRatioValue: 2.5 } },
+        { symbol: 'F', actionDecision: { action: 'BUY' as const, riskRewardRatioValue: 4.1 } },
+      ];
+
+      const buyItems = scannedList
+        .filter((i) => i.actionDecision.action === 'BUY')
+        .sort((a, b) => (b.actionDecision.riskRewardRatioValue ?? 0) - (a.actionDecision.riskRewardRatioValue ?? 0));
+
+      const top3BuyItems = buyItems
+        .filter((i) => (i.actionDecision.riskRewardRatioValue ?? 0) >= 2.0)
+        .slice(0, 3);
+
+      expect(top3BuyItems).toHaveLength(3);
+      expect(top3BuyItems[0].symbol).toBe('C'); // 5.2
+      expect(top3BuyItems[1].symbol).toBe('F'); // 4.1
+      expect(top3BuyItems[2].symbol).toBe('B'); // 3.5
+      expect(top3BuyItems.find((i) => i.symbol === 'A')).toBeUndefined();
+      expect(top3BuyItems.find((i) => i.symbol === 'D')).toBeUndefined();
+    });
+
+    it('賣出建議必須在庫持股才顯示：非持股即使出現破線 SELL 訊號，也絕不出現在賣出建議清單', () => {
+      const activeHoldings = [
+        { symbol: '2330', shares: 1000 },
+        { symbol: '2454', shares: 500 },
+      ];
+      const activeHoldingsMap = new Map(activeHoldings.map((h) => [h.symbol.toUpperCase(), h]));
+
+      const scannedList = [
+        { symbol: '2330', actionDecision: { action: 'SELL' as const, actionReason: '跌破箱底防守線' } },
+        { symbol: '2317', actionDecision: { action: 'SELL' as const, actionReason: '均線下彎蓋頭' } }, // 非在庫持股
+        { symbol: '2454', actionDecision: { action: 'HOLD' as const, actionReason: '箱內震盪' } },
+        { symbol: '3008', actionDecision: { action: 'SELL' as const, actionReason: '破底下殺' } }, // 非在庫持股
+      ];
+
+      const holdingGatedSellItems = scannedList.filter(
+        (i) => i.actionDecision.action === 'SELL' && activeHoldingsMap.has(i.symbol.toUpperCase())
+      );
+      const top3SellItems = holdingGatedSellItems.slice(0, 3);
+
+      expect(top3SellItems).toHaveLength(1);
+      expect(top3SellItems[0].symbol).toBe('2330');
+      expect(top3SellItems.find((i) => i.symbol === '2317')).toBeUndefined();
+      expect(top3SellItems.find((i) => i.symbol === '3008')).toBeUndefined();
+    });
+
+    it('若所有在庫持股均安全未破線，賣出建議應為 0 檔 (觸發安全空狀態)', () => {
+      const activeHoldings = [
+        { symbol: '2330', shares: 1000 },
+        { symbol: '2454', shares: 500 },
+      ];
+      const activeHoldingsMap = new Map(activeHoldings.map((h) => [h.symbol.toUpperCase(), h]));
+
+      const scannedList = [
+        { symbol: '2330', actionDecision: { action: 'BUY' as const, actionReason: '突破箱頂' } },
+        { symbol: '2454', actionDecision: { action: 'HOLD' as const, actionReason: '箱內震盪' } },
+        { symbol: '2317', actionDecision: { action: 'SELL' as const, actionReason: '破底下殺' } }, // 非在庫持股
+      ];
+
+      const holdingGatedSellItems = scannedList.filter(
+        (i) => i.actionDecision.action === 'SELL' && activeHoldingsMap.has(i.symbol.toUpperCase())
+      );
+      const top3SellItems = holdingGatedSellItems.slice(0, 3);
+
+      expect(top3SellItems).toHaveLength(0);
+    });
+  });
 });
 
 

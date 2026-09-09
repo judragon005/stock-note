@@ -17,6 +17,7 @@ import {
   X,
   RefreshCw,
   Database,
+  Target,
 } from 'lucide-react';
 import { HoldingPosition, MarketType } from '../types/stock';
 import type { DailyCandle } from '../types/indicators';
@@ -437,6 +438,11 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     });
   }, [targetUniverse, cachedCandlesMap, adHocItem]);
 
+  // 在庫持股快速比對 Map (以大寫代碼為 key)
+  const activeHoldingsMap = useMemo(() => {
+    return new Map(activeHoldings.map((h) => [h.symbol.toUpperCase(), h]));
+  }, [activeHoldings]);
+
   // 統計各類動作數量 (建議買進標的全面按風益比數值由大到小降序排列，置頂最優標的)
   const buyItems = useMemo(() => {
     return scannedItems
@@ -444,11 +450,30 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
       .sort((a, b) => (b.actionDecision.riskRewardRatioValue ?? 0) - (a.actionDecision.riskRewardRatioValue ?? 0));
   }, [scannedItems]);
 
+  // 今日核心作戰指令：建議買進前 3 檔 (風益比 >= 2.0 優先，降序排列，最多取前 3)
+  const top3BuyItems = useMemo(() => {
+    return buyItems
+      .filter((i) => (i.actionDecision.riskRewardRatioValue ?? 0) >= 2.0)
+      .slice(0, 3);
+  }, [buyItems]);
+
   const avoidItems = useMemo(
     () => scannedItems.filter((i) => i.actionDecision.action === 'AVOID' || i.actionDecision.action === 'HOLD'),
     [scannedItems]
   );
   const sellItems = useMemo(() => scannedItems.filter((i) => i.actionDecision.action === 'SELL'), [scannedItems]);
+
+  // 今日核心作戰指令：在庫持股限定之賣出建議 (嚴格限制持股股數 > 0 者才建議賣出)
+  const holdingGatedSellItems = useMemo(() => {
+    return scannedItems.filter(
+      (i) => i.actionDecision.action === 'SELL' && activeHoldingsMap.has(i.symbol.toUpperCase())
+    );
+  }, [scannedItems, activeHoldingsMap]);
+
+  // 今日核心作戰指令：建議賣出前 3 檔 (在庫持股中觸發破線停損者，最多取前 3)
+  const top3SellItems = useMemo(() => {
+    return holdingGatedSellItems.slice(0, 3);
+  }, [holdingGatedSellItems]);
 
   // 3. 搜尋與動作過濾 (買進模式下同步維持風益比降序)
   const filteredItems = useMemo(() => {
@@ -1211,6 +1236,317 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         </div>
       )}
 
+      {/* 🎯 今日核心作戰指令看板 (Top 3 Action Directives & Holding-Gated Sell) */}
+      <div
+        className="card"
+        style={{
+          padding: '18px 20px',
+          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.98) 0%, rgba(30, 41, 59, 0.92) 100%)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.35)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Target size={20} style={{ color: 'var(--accent-amber, #f59e0b)' }} />
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.12rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                今日核心作戰指令 (Top 3 Action Directives)
+              </h3>
+              <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                精準雙欄聚光：篩選最高勝率買進先鋒 (風益比 ≥ 2.0)，在庫持股嚴格停損風控
+              </p>
+            </div>
+          </div>
+          <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>持股安全監控中</span>
+            <span className="badge" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
+              在庫監控: {activeHoldings.length} 檔
+            </span>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: '16px',
+          }}
+        >
+          {/* 左欄：🟢 今日買進先鋒 (Top 3 BUY) */}
+          <div
+            style={{
+              background: 'var(--gain-bg)',
+              border: '1px solid var(--gain-border)',
+              borderRadius: 'var(--radius-md)',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: 'inset 0 0 20px rgba(0,0,0,0.2)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--gain-color)', fontWeight: 800, fontSize: '0.96rem' }}>
+                <TrendingUp size={18} />
+                <span>🟢 今日買進先鋒 (Top 3 BUY)</span>
+              </div>
+              <span
+                className="badge"
+                style={{
+                  background: 'var(--gain-bg)',
+                  color: 'var(--gain-color)',
+                  border: '1px solid var(--gain-border)',
+                  fontWeight: 700,
+                  fontSize: '0.75rem',
+                }}
+              >
+                {top3BuyItems.length} 檔 · 風益比 ≥ 2.0
+              </span>
+            </div>
+            <p style={{ margin: '0 0 12px 0', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+              突破箱頂且 20MA 扣低走揚，風益比 ≥ 2:1 優先置頂，勝率與動能俱佳。
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+              {top3BuyItems.length === 0 ? (
+                <div
+                  style={{
+                    padding: '24px 16px',
+                    textAlign: 'center',
+                    background: 'rgba(15, 23, 42, 0.45)',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px dashed var(--gain-border)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    color: 'var(--text-muted)',
+                    fontSize: '0.82rem',
+                  }}
+                >
+                  <Search size={22} style={{ opacity: 0.5, color: 'var(--gain-color)' }} />
+                  <div>0 檔 · 目前目標池中無風益比 ≥ 2.0 之突破標的</div>
+                  <div style={{ fontSize: '0.74rem', opacity: 0.8 }}>耐心等待訊號確認，切忌盲目追高</div>
+                </div>
+              ) : (
+                top3BuyItems.map((item, index) => (
+                  <div
+                    key={item.symbol}
+                    onClick={() => setExpandedSymbol(expandedSymbol === item.symbol ? null : item.symbol)}
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.75)',
+                      padding: '12px 14px',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer',
+                      border: '1px solid var(--gain-border)',
+                      transition: 'transform 0.15s ease, border-color 0.15s ease',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          style={{
+                            background: 'var(--gain-bg)',
+                            color: 'var(--gain-color)',
+                            width: '20px',
+                            height: '20px',
+                            borderRadius: '50%',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.72rem',
+                            fontWeight: 800,
+                          }}
+                        >
+                          #{index + 1}
+                        </span>
+                        <span className="mono" style={{ fontWeight: 800, fontSize: '0.98rem', color: '#ffffff' }}>
+                          {item.symbol}{' '}
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 400 }}>
+                            {item.name}
+                          </span>
+                        </span>
+                      </div>
+                      <span className="mono" style={{ color: 'var(--gain-color)', fontWeight: 800, fontSize: '1.05rem' }}>
+                        ${item.currentPrice}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px', fontSize: '0.78rem' }}>
+                      <Tooltip content={BEGINNER_TOOLTIPS.boxUpperDefense} position="top">
+                        <span style={{ color: 'var(--text-muted)', textDecoration: 'underline dotted', cursor: 'help' }}>
+                          防守: ${item.actionDecision.stopLossPrice ?? item.boxUpper ?? '-'}
+                        </span>
+                      </Tooltip>
+                      {item.actionDecision.riskRewardRatio && (
+                        <Tooltip content={BEGINNER_TOOLTIPS.riskReward} position="top">
+                          <span
+                            style={{
+                              color: 'var(--accent-amber, #f59e0b)',
+                              fontWeight: 800,
+                              textDecoration: 'underline dotted',
+                              cursor: 'help',
+                            }}
+                          >
+                            🔥 風益比: 1:{item.actionDecision.riskRewardRatio}R
+                          </span>
+                        </Tooltip>
+                      )}
+                    </div>
+
+                    <div style={{ marginTop: '6px', fontSize: '0.74rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      💡 {item.actionDecision.actionReason}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* 右欄：🔴 在庫賣出停損 (Holding-Gated SELL) */}
+          <div
+            style={{
+              background: 'var(--loss-bg)',
+              border: '1px solid var(--loss-border)',
+              borderRadius: 'var(--radius-md)',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: 'inset 0 0 20px rgba(0,0,0,0.2)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--loss-color)', fontWeight: 800, fontSize: '0.96rem' }}>
+                <AlertTriangle size={18} />
+                <span>🔴 在庫賣出停損 (Holding-Gated SELL)</span>
+              </div>
+              <span
+                className="badge"
+                style={{
+                  background: 'var(--loss-bg)',
+                  color: 'var(--loss-color)',
+                  border: '1px solid var(--loss-border)',
+                  fontWeight: 700,
+                  fontSize: '0.75rem',
+                }}
+              >
+                {top3SellItems.length} 檔 · 在庫停損警戒
+              </span>
+            </div>
+            <p style={{ margin: '0 0 12px 0', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+              僅嚴格建議在庫持股：跌破箱底防守線或均線蓋頭，嚴禁凹單，果斷保全本金。
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+              {top3SellItems.length === 0 ? (
+                <div
+                  style={{
+                    padding: '24px 16px',
+                    textAlign: 'center',
+                    background: 'rgba(15, 23, 42, 0.45)',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px dashed rgba(34, 197, 94, 0.4)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    color: '#4ade80',
+                    fontSize: '0.82rem',
+                  }}
+                >
+                  <CheckCircle2 size={24} style={{ color: '#4ade80' }} />
+                  <div style={{ fontWeight: 700 }}>
+                    0 檔 · 🟢 目前在籍持股均在防守線之上，無持股需賣出 (持倉安全)
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                    持股防守線穩固，未出現跌破停損訊號，可安心續抱
+                  </div>
+                </div>
+              ) : (
+                top3SellItems.map((item, index) => {
+                  const holding = activeHoldingsMap.get(item.symbol.toUpperCase());
+                  return (
+                    <div
+                      key={item.symbol}
+                      onClick={() => setExpandedSymbol(expandedSymbol === item.symbol ? null : item.symbol)}
+                      style={{
+                        background: 'rgba(15, 23, 42, 0.75)',
+                        padding: '12px 14px',
+                        borderRadius: 'var(--radius-sm)',
+                        cursor: 'pointer',
+                        border: '1px solid var(--loss-border)',
+                        transition: 'transform 0.15s ease, border-color 0.15s ease',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span
+                            style={{
+                              background: 'var(--loss-bg)',
+                              color: 'var(--loss-color)',
+                              width: '20px',
+                              height: '20px',
+                              borderRadius: '50%',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.72rem',
+                              fontWeight: 800,
+                            }}
+                          >
+                            #{index + 1}
+                          </span>
+                          <span className="mono" style={{ fontWeight: 800, fontSize: '0.98rem', color: '#ffffff' }}>
+                            {item.symbol}{' '}
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 400 }}>
+                              {item.name}
+                            </span>
+                          </span>
+                          {holding && (
+                            <span
+                              className="badge"
+                              style={{
+                                fontSize: '0.72rem',
+                                background: 'var(--loss-bg)',
+                                color: 'var(--loss-color)',
+                                border: '1px solid var(--loss-border)',
+                                fontWeight: 700,
+                              }}
+                            >
+                              🚨 在庫: {holding.shares.toLocaleString()} 股
+                            </span>
+                          )}
+                        </div>
+                        <span className="mono" style={{ color: 'var(--loss-color)', fontWeight: 800, fontSize: '1.05rem' }}>
+                          ${item.currentPrice}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px', fontSize: '0.78rem' }}>
+                        <Tooltip content={BEGINNER_TOOLTIPS.boxLowerBreakdown} position="top">
+                          <span style={{ color: 'var(--loss-color)', textDecoration: 'underline dotted', cursor: 'help' }}>
+                            原防守: ${item.boxLower ?? item.actionDecision.stopLossPrice ?? '-'}
+                          </span>
+                        </Tooltip>
+                        <span style={{ color: 'var(--loss-color)', fontWeight: 700 }}>
+                          ⚠️ 破線已觸發停損
+                        </span>
+                      </div>
+
+                      <div style={{ marginTop: '6px', fontSize: '0.74rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        🚨 {item.actionDecision.actionReason}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* 🧭 肌肉書僮·三色實戰操盤導航儀 (Action Matrix) */}
       <div
         className="card"
@@ -1242,18 +1578,18 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
           {/* 區塊 1: 🟢 建議買進 */}
           <div
             style={{
-              background: 'rgba(34, 197, 94, 0.08)',
-              border: '1px solid rgba(34, 197, 94, 0.35)',
+              background: 'var(--gain-bg)',
+              border: '1px solid var(--gain-border)',
               borderRadius: 'var(--radius-md)',
               padding: '14px',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#4ade80', fontWeight: 700, fontSize: '0.92rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--gain-color)', fontWeight: 700, fontSize: '0.92rem' }}>
                 <CheckCircle2 size={16} />
                 🟢 建議買進 · 主升發動
               </div>
-              <span className="badge" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }}>
+              <span className="badge" style={{ background: 'var(--gain-bg)', color: 'var(--gain-color)', border: '1px solid var(--gain-border)' }}>
                 {buyItems.length} 檔
               </span>
             </div>
@@ -1275,14 +1611,14 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                       padding: '8px 10px',
                       borderRadius: 'var(--radius-sm)',
                       cursor: 'pointer',
-                      border: '1px solid rgba(34, 197, 94, 0.2)',
+                      border: '1px solid var(--gain-border)',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span className="mono" style={{ fontWeight: 800, color: '#ffffff' }}>
                         {item.symbol} <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 400 }}>{item.name}</span>
                       </span>
-                      <span className="mono" style={{ color: '#4ade80', fontWeight: 700 }}>
+                      <span className="mono" style={{ color: 'var(--gain-color)', fontWeight: 700 }}>
                         ${item.currentPrice}
                       </span>
                     </div>
@@ -1373,18 +1709,18 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
           {/* 區塊 3: 🔴 建議賣出 */}
           <div
             style={{
-              background: 'rgba(239, 68, 68, 0.08)',
-              border: '1px solid rgba(239, 68, 68, 0.35)',
+              background: 'var(--loss-bg)',
+              border: '1px solid var(--loss-border)',
               borderRadius: 'var(--radius-md)',
               padding: '14px',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f87171', fontWeight: 700, fontSize: '0.92rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--loss-color)', fontWeight: 700, fontSize: '0.92rem' }}>
                 <XCircle size={16} />
                 🔴 建議賣出 · 破線停損
               </div>
-              <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#f87171' }}>
+              <span className="badge" style={{ background: 'var(--loss-bg)', color: 'var(--loss-color)', border: '1px solid var(--loss-border)' }}>
                 {sellItems.length} 檔
               </span>
             </div>
@@ -1397,38 +1733,55 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                   目前無跌破箱底之停損標的，防守線穩固。
                 </div>
               ) : (
-                sellItems.slice(0, 3).map((item) => (
-                  <div
-                    key={item.symbol}
-                    onClick={() => setExpandedSymbol(expandedSymbol === item.symbol ? null : item.symbol)}
-                    style={{
-                      background: 'rgba(15, 23, 42, 0.65)',
-                      padding: '8px 10px',
-                      borderRadius: 'var(--radius-sm)',
-                      cursor: 'pointer',
-                      border: '1px solid rgba(239, 68, 68, 0.2)',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span className="mono" style={{ fontWeight: 800, color: '#ffffff' }}>
-                        {item.symbol} <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 400 }}>{item.name}</span>
-                      </span>
-                      <span className="mono" style={{ color: '#f87171', fontWeight: 700 }}>
-                        ${item.currentPrice}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.74rem' }}>
-                      <Tooltip content={BEGINNER_TOOLTIPS.boxLowerBreakdown} position="top">
-                        <span style={{ color: '#fca5a5', textDecoration: 'underline dotted', cursor: 'help' }}>
-                          原防守: ${item.boxLower ?? item.actionDecision.stopLossPrice ?? '-'}
+                sellItems.slice(0, 3).map((item) => {
+                  const isHolding = activeHoldingsMap.has(item.symbol.toUpperCase());
+                  return (
+                    <div
+                      key={item.symbol}
+                      onClick={() => setExpandedSymbol(expandedSymbol === item.symbol ? null : item.symbol)}
+                      style={{
+                        background: 'rgba(15, 23, 42, 0.65)',
+                        padding: '8px 10px',
+                        borderRadius: 'var(--radius-sm)',
+                        cursor: 'pointer',
+                        border: '1px solid var(--loss-border)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span className="mono" style={{ fontWeight: 800, color: '#ffffff' }}>
+                          {item.symbol} <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 400 }}>{item.name}</span>
+                          {isHolding && (
+                            <span
+                              className="badge"
+                              style={{
+                                fontSize: '0.7rem',
+                                background: 'var(--loss-bg)',
+                                color: 'var(--loss-color)',
+                                border: '1px solid var(--loss-border)',
+                                marginLeft: '6px',
+                              }}
+                            >
+                              🚨 在庫
+                            </span>
+                          )}
                         </span>
-                      </Tooltip>
-                      <Tooltip content={BEGINNER_TOOLTIPS.boxLowerBreakdown} position="top">
-                        <span style={{ color: '#f87171', fontWeight: 600, textDecoration: 'underline dotted', cursor: 'help' }}>破線停損</span>
-                      </Tooltip>
+                        <span className="mono" style={{ color: 'var(--loss-color)', fontWeight: 700 }}>
+                          ${item.currentPrice}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.74rem' }}>
+                        <Tooltip content={BEGINNER_TOOLTIPS.boxLowerBreakdown} position="top">
+                          <span style={{ color: 'var(--loss-color)', textDecoration: 'underline dotted', cursor: 'help' }}>
+                            原防守: ${item.boxLower ?? item.actionDecision.stopLossPrice ?? '-'}
+                          </span>
+                        </Tooltip>
+                        <Tooltip content={BEGINNER_TOOLTIPS.boxLowerBreakdown} position="top">
+                          <span style={{ color: 'var(--loss-color)', fontWeight: 600, textDecoration: 'underline dotted', cursor: 'help' }}>破線停損</span>
+                        </Tooltip>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
