@@ -1,6 +1,6 @@
 # 技術債 #0021: 定期定額 (DCA) 智慧回測、執行偏離度與扣款交割防透支引擎 (Smart DCA Simulator & Cashflow Scheduler)
 
-- **狀態**：`OPEN`
+- **狀態**：`RESOLVED` (已於 v8.31.0 ADR #0112 完整解決)
 - **優先級**：`P2`
 - **發現來源**：/grill-with-docs 定期定額與長期投資紀律需求調研
 - **建立日期**：2026-09-02

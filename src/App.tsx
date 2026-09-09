@@ -63,6 +63,7 @@ import { WorkspaceTabs, WorkspaceTabKey } from './components/WorkspaceTabs';
 import { WarRoomWorkspace } from './components/WarRoomWorkspace';
 import { MuscleBookerWorkspace } from './components/MuscleBookerWorkspace';
 import { ChipsWorkspace } from './components/ChipsWorkspace';
+import { FirePlanningWorkspace } from './components/FirePlanningWorkspace';
 import { SettingsWorkspace } from './components/SettingsWorkspace';
 import { syncTradesWithCashTransactions, calculateAccountBalances, aggregateInterestIncomeDetails, reconcilePendingDividendTrades } from './engine/cashLedgerEngine';
 import { calculatePortfolioXirr, calculateSecurityXirr, XirrResult, CashFlowEvent } from './engine/xirrCalculator';
@@ -796,6 +797,19 @@ export const App: React.FC = () => {
           holdings={holdings}
           historicalDailyPrices={historicalPrices}
           currentMarket={currentMarket}
+        />
+      )}
+
+      {/* 活頁: 🏖️ 退休財務自由與複利飛輪 (FIRE & Compounding Hub) */}
+      {activeTab === 'fire' && (
+        <FirePlanningWorkspace
+          holdings={holdings}
+          accounts={accounts}
+          totalNavTwd={
+            exposureMetrics?.navTWD && exposureMetrics.navTWD > 0
+              ? exposureMetrics.navTWD
+              : summary.combinedTWD.netAssetValue || 3_000_000
+          }
         />
       )}
 

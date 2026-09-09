@@ -1421,5 +1421,17 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 數值展示：所有買進訊號、作戰看板、導航儀與表格儲存格一律以純淨之 `${rrRatio}R`（如 `7.9R`、`2.0R`）呈現，代表每承擔 1 單位停損風險所預期的潛在獲利倍數。
   - 文案對齊：作戰看板說明與 Badge 全面統一為 `風益比 ≥ 2.0R 優先置頂`，實現引擎運算、字典解說、看板標註與數據渲染 100% 邏輯一致。
 
+### 長期財富飛輪三位一體：FIRE、DRIP 複利與 DCA 智慧排程 *(新增於 V8.31.0 / ADR #0112)*
+
+- **DRIP Dual-Track Compounding (DRIP 雙軌複利滾雪球模型)**:
+  - 核心定義：對比「股息提領花掉 (Cash Out)」與「股息自動再投資 (DRIP)」之 30 年財富演進軌跡。DRIP 每年將稅後淨股息全額以當期市價買進碎股，持股數呈幾何級數放大，輸出複利增益倍數（`Multiplier = NAV_DRIP / NAV_CashOut`）。
+- **Continuous Milestone Interpolation (被動收入自由度連續線性插值)**:
+  - 核心機制：定義 4 階里程碑（水電雜支 1萬、基礎生活 3萬、寬裕品質 6萬、財務自由 10萬）。以線性插值精確計算達標小數年份（如 7.4 年），並輸出 DRIP 替投資人提早實現的奮鬥年數 (`yearsSaved`)。
+- **DCA Holiday-Aware Scheduler & Overdraft Guard (定期定額休市順延與防透支預警)**:
+  - 核心機制：結合 `holidayCalendar.ts` 國定休市日曆，每月約定定投日若逢休市自動順延至下一撮合日 ($T$ 日)，並推導交割結算日。推演未來 30 天每日現金水位，一旦餘額 $< 0$ 即時亮紅燈並給出精確資金缺口。
+- **Monte Carlo 1,000-Path Simulation & Guyton-Klinger Guardrails (蒙地卡羅 1000 次路徑與動態護欄)**:
+  - 核心機制：純原生 0 依賴 Box-Muller 標準常態亂數與幾何布朗運動 (GBM) 抽樣。支援 Trinity 4%、Guyton-Klinger 動態護欄與純股息本金保全 3 大策略，輸出 P10~P90 百分位錐形圖、30 年破產率與二分法安全提領率 (SWR)。
+
+
 
 

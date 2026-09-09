@@ -7,7 +7,7 @@
 ## 📋 技術債清單看板 (Debt Registry)
 
 | 編號 | 標題 | 優先級 | 狀態 | 發現來源 | 標籤 | 預計觸發時機 |
-| :---: | :--- | :---: | :---: | :---: | :--- | :--- |
+| :---: | :--- | :--- | :--- | :--- | :--- | :--- |
 | [**0001**](0001-holdings-sort-dry-refactor.md) | 持倉雙階自然排序 DRY 集中化重構 | `P3` | `OPEN` | PR #83 審查 | `Refactor` | 新增第三交易市場或擴充自訂排序時 |
 | [**0002**](0002-trade-plan-and-discipline-review.md) | 交易計畫與紀律檢討模組 | `P2` | `RESOLVED` | 需求規格對齊 | `Feature` · `Journal` | **已於 v5.7 (ADR #0041) 完整解決** |
 | [**0003**](0003-cash-ledger-and-nav-tracking.md) | 現金帳本與資產淨值追蹤系統 | `P2` | `RESOLVED` | 需求規格對齊 | `Feature` · `Accounting` | **已於 v3.9 (ADR #0022) 完整解決** |
@@ -28,15 +28,15 @@
 | [**0018**](0018-xirr-engine-and-cashflow-weighted-performance.md) | XIRR 不定期現金流年化報酬率引擎與多維度績效分析 | `P2` | `RESOLVED` | 投資績效量化研究 | `Quant` · `Performance` · `XIRR` · `MWRR` | **已於 v5.1 (ADR #0033) 完整解決** |
 | [**0019**](0019-local-historical-indicators-and-external-backfill-engine.md) | 本地全量歷史技術指標庫與免費外部資源自動回補引擎 (含肌肉書僮量化體系) | `P2` | `RESOLVED` | /grill-with-docs 需求調研 | `Quant` · `Indicators` · `MuscleBooker` · `Storage` | **已於 v8.10.0 (ADR #0091) 完整解決** |
 | [**0020**](0020-market-war-room-macro-liquidity-and-ai-advisor.md) | 宏觀戰情室、全球流動性監控與 AI 智慧每日操作決策儀表板 | `P2` | `RESOLVED` | /grill-with-docs 需求調研 | `Architecture` · `Macro` · `WarRoom` · `AI-Advisor` · `Dashboard` | **已於 v8.13.0 (ADR #0094) 完整解決** |
-| [**0021**](0021-smart-dca-simulator-and-cashflow-scheduler.md) | 定期定額 (DCA) 智慧回測、執行偏離度與扣款交割防透支引擎 | `P2` | `OPEN` | /grill-with-docs 需求調研 | `Architecture` · `DCA` · `Cashflow` · `Simulation` · `Discipline` | 規劃 DCA 追蹤或現金流收支預測時 |
-| [**0022**](0022-monte-carlo-fire-and-safe-withdrawal-simulator.md) | 蒙地卡羅退休提領 (FIRE) 與安全提領率 (SWR) 模擬器 | `P2` | `OPEN` | /grill-with-docs 需求調研 | `Architecture` · `Quant` · `FIRE` · `Simulation` · `Retirement` | 規劃退休試算或長期資產存續度分析時 |
+| [**0021**](0021-smart-dca-simulator-and-cashflow-scheduler.md) | 定期定額 (DCA) 智慧回測、執行偏離度與扣款交割防透支引擎 | `P2` | `RESOLVED` | /grill-with-docs 需求調研 | `Architecture` · `DCA` · `Cashflow` · `Simulation` · `Discipline` | **已於 v8.31.0 (ADR #0112) 完整解決** |
+| [**0022**](0022-monte-carlo-fire-and-safe-withdrawal-simulator.md) | 蒙地卡羅退休提領 (FIRE) 與安全提領率 (SWR) 模擬器 | `P2` | `RESOLVED` | /grill-with-docs 需求調研 | `Architecture` · `Quant` · `FIRE` · `Simulation` · `Retirement` | **已於 v8.31.0 (ADR #0112) 完整解決** |
 | [**0023**](0023-pwa-offline-first-and-e2ee-cloud-sync.md) | 離線優先 PWA 與 E2EE 零知識端對端加密雲端同步 | `P3` | `OPEN` | /grill-with-docs 需求調研 | `Architecture` · `PWA` · `E2EE` · `Storage` · `Security` · `Sync` | 跨裝置同步或 PWA 離線安裝化時 |
 | [**0024**](0024-etf-look-through-and-sector-factor-concentration.md) | ETF 穿透式成分股透視 (Look-Through) 與產業因子集中度分析 | `P2` | `OPEN` | /grill-with-docs 需求調研 | `Architecture` · `Quant` · `ETF` · `Holdings` · `LookThrough` | 升級 Treemap 或過度集中風控診斷時 |
 | [**0025**](0025-ex-dividend-and-black-swan-margin-stress-matrix.md) | 除權息與黑天鵝多維動態壓力測試矩陣與斷頭逃生模擬器 | `P1` | `RESOLVED` | /grill-with-docs 需求調研 | `Architecture` · `Risk` · `Margin` · `Pledge` · `StressTest` | **已於 v8.12.0 (ADR #0093) 完整解決** |
 | [**0026**](0026-trading-behavioral-bias-and-psychology-audit.md) | 交易行為心理學與情緒偏誤量化覆盤審查系統 | `P2` | `OPEN` | /grill-with-docs 需求調研 | `BehavioralFinance` · `Trader` · `Discipline` · `Quant` | 交易檢討升級或年度/季度投資健檢時 |
 | [**0027**](0027-dual-momentum-and-relative-strength-rotation.md) | 雙重動能與跨資產趨勢輪動評分引擎 | `P2` | `RESOLVED` | /grill-with-docs 需求調研 | `Quant` · `DualMomentum` · `AssetAllocation` · `Strategy` | **已於 v8.11.0 (ADR #0092) 完整解決** |
 | [**0028**](0028-multi-broker-reconciliation-and-smart-import-conflict-resolver.md) | 跨券商持倉對賬審計與匯入衝突智能消解器 | `P2` | `OPEN` | /grill-with-docs 需求調研 | `Architecture` · `Reconciliation` · `Import` · `Integrity` | 庫存對賬不平或多券商子帳戶管理時 |
-| [**0029**](0029-drip-compounding-engine-and-cash-flow-growth-forecaster.md) | DRIP 股利再投資與被動現金流複利滾雪球預測器 | `P2` | `OPEN` | /grill-with-docs 需求調研 | `Dividend` · `DRIP` · `Compounding` · `FIRE` · `Forecasting` | 股息日誌升級或長期複利退休試算時 |
+| [**0029**](0029-drip-compounding-engine-and-cash-flow-growth-forecaster.md) | DRIP 股利再投資與被動現金流複利滾雪球預測器 | `P2` | `RESOLVED` | /grill-with-docs 需求調研 | `Dividend` · `DRIP` · `Compounding` · `FIRE` · `Forecasting` | **已於 v8.31.0 (ADR #0112) 完整解決** |
 | [**0030**](0030-web-crypto-api-key-encryption-and-secure-storage.md) | Web Crypto API 敏感金鑰加密與端到端保密持久化 | `P1` | `OPEN` | 資安架構深度審查 | `Security` · `Cryptography` · `Storage` · `Privacy` · `WebCrypto` | 接入更多付費 API 或啟動雲端同步 (Debt #0023) 前 |
 | [**0031**](0031-cors-proxy-credential-leak-prevention-and-safe-routing.md) | 公共 CORS 代理憑證防洩漏與安全邊界路由機制 | `P1` | `OPEN` | 資安架構深度審查 | `Security` · `Network` · `CORS` · `Privacy` · `MITM` | 串接 FinMind/FMP 外部 API 或配置自訂 Proxy 時 |
 | [**0032**](0032-csv-formula-injection-and-json-data-sanitization.md) | CSV 公式注入防禦 (DDE Protection) 與備份匯出脫敏機制 | `P2` | `OPEN` | 資安架構深度審查 | `Security` · `CSV` · `Injection` · `Export` · `Sanitization` | 優化匯入匯出模組 (Debt #0028) 或升級報表時 |
@@ -61,33 +61,3 @@
 - `P1 (High)`：對未來功能擴充具直接阻礙、影響資料底層安全或核心損益精確度，需於近期排程修復。
 - `P2 (Medium)`：具顯著金融會計、量化風控與交易員實戰價值，待下次相關模組重大變更或專題時一併實作。
 - `P3 (Low)`：進階決策輔助與代碼整潔度備忘，待特定觸發條件成立時再行抽取。
-
----
-
-## 📝 新增技術債模板 (Template)
-
-新建技術債時，請於 `docs/debts/` 建立 `XXXX-<short-name>.md` 並遵循四段式標準結構：
-
-```markdown
-# 技術債 #XXXX: <簡短標題>
-
-- **狀態**：`OPEN`
-- **優先級**：`P1` | `P2` | `P3`
-- **發現來源**：PR #<id> / Code Review
-- **建立日期**：YYYY-MM-DD
-- **標籤**：`Refactor` | `Performance` | `Testing` | `Architecture`
-
----
-
-## 1. 背景與現狀代碼 (Context & Current Code)
-<說明現行代碼位置與實作方式>
-
-## 2. 問題分析與暫緩理由 (Problem & Deferral Rationale)
-<說明技術債本質與為何當期不立即修改>
-
-## 3. 建議重構方案 (Proposed Refactoring Solution)
-<提供建議接口、虛擬代碼或架構草案>
-
-## 4. 觸發處理時機 (Trigger Conditions)
-<明確指出在何種條件下應啟動此重構>
-```

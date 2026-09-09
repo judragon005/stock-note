@@ -1,7 +1,7 @@
 import React from 'react';
 import { PieChart, TrendingUp, History, Settings, Wallet, Coins, Activity, Compass, Flame } from 'lucide-react';
 
-export type WorkspaceTabKey = 'portfolio' | 'warroom' | 'musclebooker' | 'growth' | 'chips' | 'dividend' | 'cash' | 'ledger' | 'settings' | 'friction';
+export type WorkspaceTabKey = 'portfolio' | 'warroom' | 'musclebooker' | 'fire' | 'growth' | 'chips' | 'dividend' | 'cash' | 'ledger' | 'settings' | 'friction';
 
 interface WorkspaceTabsProps {
   activeTab: WorkspaceTabKey;
@@ -60,6 +60,14 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
       badge: '短線聖經',
       badgeColor: '#f43f5e',
       badgeBg: 'rgba(244, 63, 94, 0.15)',
+    },
+    {
+      key: 'fire',
+      label: '退休與複利飛輪',
+      icon: <TrendingUp size={16} />,
+      badge: 'FIRE 導航',
+      badgeColor: '#f59e0b',
+      badgeBg: 'rgba(245, 158, 11, 0.15)',
     },
     {
       key: 'growth',

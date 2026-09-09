@@ -1,7 +1,8 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Document)
 
-> **交接產生時間**：2026-09-09 15:50 (UTC+8)  
+> **交接產生時間**：2026-09-09 16:15 (UTC+8)  
 > **當前最新里程碑**：
+> - **V8.31.0 FIRE 財務自由複利滾雪球與定期定額智慧排程系統**（一次性解決技術債 DEBT-0029, DEBT-0021, DEBT-0022。實作 DRIP 雙軌複利推演與 4 階里程碑、定期定額休市順延與未來 30 天防透支推演、純原生幾何布朗運動 1,000 次蒙地卡羅路徑與 Guyton-Klinger 動態護欄，全站 0 外部依賴原生 SVG 雙軌圖與錐形圖）。
 > - **V8.30.0 Yahoo Finance 報價昨日收盤價與今日漲跌幅精準修正**（徹底拔除 `meta.chartPreviousClose` 歷史圖表起算價干擾，以官方當日差值與精確昨收倒推，實盤數值 100% 吻合券商 APP，消除假性鉅額虧損誤算）。
 > - **V8.29.0 肌肉書僮風益比全面統一專業 R 倍數規範**（全系統消滅 `1 :` 與 `R` 冗贅混搭語病，全面統一為國際專業交易標準之 `${rrRatio}R`，作戰看板與總表定義 100% 邏輯一致）。
 > - **V8.28.0 肌肉書僮布林帶寬審查硬門檻 (Bandwidth <= 8%)、作戰看板目標價對齊與美股 US$ 貨幣別標示**。
@@ -9,7 +10,7 @@
 > - **V8.26.0 肌肉書僮目標池滿編規格化與名實相符擴充**（臺灣 50 滿編 50 檔、台股焦點滿編 30 檔、美股巨頭 50 檔與焦點 30 檔）。
 > - **V8.25.0 肌肉書僮真實日 K 受控並發增量回補與本地持久化加速**（IndexedDB 快取秒開、7 天短期增量請求、頂部就緒度進度條）。
 > - **V8.14.0 ~ V8.24.0 宏觀戰情室、黑天鵝壓力測試矩陣、雙動能輪動與量化防護網**。
-> **品質狀態**：全量單元測試 **655/655 通過 (100% Passed / 57 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過。
+> **品質狀態**：全量單元測試 **676/676 通過 (100% Passed / 60 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過。
 
 ---
 
@@ -17,11 +18,11 @@
 
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon003/-.git`
-- **當前工作分支**：`fix/0111-yahoo-quote-previous-close-and-daily-change-fix`（已完成本地提交 `f4b5162` 與文檔同步 `7127c90`，待發起 PR 與合併回 `main`）
-- **單元測試套件**：**655/655 通過 (57 test suites / 100% 綠燈)**
+- **當前工作分支**：`feature/0112-fire-compounding-drip-and-dca-simulator`
+- **單元測試套件**：**676/676 通過 (60 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
-- **生產環境構建**：`npm run build` 打包耗時 ~6.7 秒，產出 0 警告
-- **當前釋出版本**：**V8.30.0**
+- **生產環境構建**：`npm run build` 打包耗時 ~9.5 秒，產出 0 警告
+- **當前釋出版本**：**V8.31.0**
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens（如 FinMind / FMP / 自訂代理）均受 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
 ---
@@ -53,6 +54,7 @@
 
 | 版本 | 規格書 (PRD / Spec) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 核心變更與收益 |
 | :--- | :--- | :--- | :--- | :--- |
+| **v8.31.0** | [`SPEC-0112`](file:///d:/APP/股票紀錄/docs/specs/0112-fire-compounding-drip-and-dca-simulator-spec.md) | [`ADR-0112`](file:///d:/APP/股票紀錄/docs/adr/0112-fire-compounding-drip-and-dca-simulator.md) | `.scratch/v8.31.0-fire-compounding-drip-and-dca-simulator` | 一次性關閉 DEBT-0029, 0021, 0022。DRIP 雙軌複利、DCA 假日順延防透支推演、蒙地卡羅 1,000 次 GBM 與 Guyton-Klinger 護欄。 |
 | **v8.30.0** | [`SPEC-0111`](file:///d:/APP/股票紀錄/docs/specs/0111-yahoo-quote-previous-close-and-daily-change-spec.md) | [`ADR-0111`](file:///d:/APP/股票紀錄/docs/adr/0111-yahoo-quote-previous-close-and-daily-change.md) | `.scratch/v8.30.0-...` | 修復 Yahoo 報價誤用 3 個月前 `chartPreviousClose`，改以當日差值與昨收倒推，數據與券商 APP 100% 吻合。 |
 | **v8.29.0** | [`SPEC-0110`](file:///d:/APP/股票紀錄/docs/specs/0110-muscle-booker-risk-reward-r-multiple-format-spec.md) | [`ADR-0110`](file:///d:/APP/股票紀錄/docs/adr/0110-muscle-booker-risk-reward-r-multiple-format.md) | `.scratch/v8.29.0-...` | 風益比全面統一為標準 `${rrRatio}R`（如 `7.9R`），消滅上下方向顛倒與冗贅混搭語病。 |
 | **v8.28.0** | [`SPEC-0109`](file:///d:/APP/股票紀錄/docs/specs/0109-muscle-booker-bandwidth-gate-target-price-and-us-currency-spec.md) | [`ADR-0109`](file:///d:/APP/股票紀錄/docs/adr/0109-muscle-booker-bandwidth-gate-target-price-and-us-currency.md) | `.scratch/v8.28.0-...` | 布林帶寬 $\le 8\%$ 硬門檻防追高、作戰看板目標價對齊、美股 `US$` 貨幣別統一標示。 |
@@ -62,7 +64,7 @@
 
 ### 3.2 領域術語與單一事實來源 (SSOT)
 - **領域詞彙手冊**：[`CONTEXT.md`](file:///d:/APP/股票紀錄/CONTEXT.md)
-  - 核心規範包含：`Broker-Grade Precision`、`Quote Previous Close Precision & Chart Quarantine`、`Universal R-Multiple Standard`、`Bandwidth Gate`、`Holding-Gated Sell Protection`、`Rate-Limited Concurrency Pool` 等。
+  - 核心規範包含：`Broker-Grade Precision`、`Quote Previous Close Precision & Chart Quarantine`、`Universal R-Multiple Standard`、`Bandwidth Gate`、`Holding-Gated Sell Protection`、`DRIP Dual-Track Compounding`、`DCA Holiday-Aware Scheduler`、`Monte Carlo 1,000-Path Simulation` 等。
 
 ---
 
@@ -72,6 +74,9 @@
 
 | 模組分類 | 檔案路徑 | 核心職責與特性 | 測試覆蓋 |
 | :--- | :--- | :--- | :--- |
+| **DRIP 複利滾雪球引擎** | [`src/engine/dripCompoundingEngine.ts`](file:///d:/APP/股票紀錄/src/engine/dripCompoundingEngine.ts) | 雙軌市值對比、股份指數放大、複利增益倍數、4 階被動收入自由度里程碑連續線性插值。 | 8 tests |
+| **DCA 智慧排程防透支** | [`src/engine/dcaSchedulerEngine.ts`](file:///d:/APP/股票紀錄/src/engine/dcaSchedulerEngine.ts) | 國定假日休市順延下一撮合日 ($T$)、T+2/T+1 交割日曆、未來 30 天防透支現金推演、DCA vs 歐印歷史回測。 | 7 tests |
+| **蒙地卡羅 FIRE 模擬** | [`src/engine/monteCarloFireEngine.ts`](file:///d:/APP/股票紀錄/src/engine/monteCarloFireEngine.ts) | 純原生 0 依賴 Box-Muller 標準常態亂數、幾何布朗運動 1,000 次隨機路徑、Guyton-Klinger 動態護欄、二分法 SWR。 | 6 tests |
 | **肌肉書僮量化引擎** | [`src/engine/muscleBookerEngine.ts`](file:///d:/APP/股票紀錄/src/engine/muscleBookerEngine.ts) | 箱體突破、20MA 扣抵翻揚、帶寬門檻 $\le 8\%$、R 倍數制 (`7.9R`)、Top 3 買進、在庫限定賣出。 | 14 tests |
 | **市場即時報價引擎** | [`src/engine/priceFetcher.ts`](file:///d:/APP/股票紀錄/src/engine/priceFetcher.ts) | Yahoo Chart API 昨收隔離、`regularMarketChange` 官方差值解析、`price - change` 昨收倒推、多代理輪詢。 | 24 tests |
 | **歷史日 K 增量抓取** | [`src/engine/historicalPriceFetcher.ts`](file:///d:/APP/股票紀錄/src/engine/historicalPriceFetcher.ts) | 7 天短期增量回補、180 天初始回補、受控並發隊列與多代理容錯。 | 4 tests |

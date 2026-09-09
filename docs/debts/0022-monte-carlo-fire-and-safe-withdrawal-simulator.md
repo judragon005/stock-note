@@ -1,6 +1,6 @@
 # 技術債 #0022: 蒙地卡羅退休提領 (FIRE) 與安全提領率 (SWR) 模擬器 (Monte Carlo FIRE & Safe Withdrawal Simulator)
 
-- **狀態**：`OPEN`
+- **狀態**：`RESOLVED` (已於 v8.31.0 ADR #0112 完整解決)
 - **優先級**：`P2`
 - **發現來源**：/grill-with-docs 退休財務自由與長期資產存續模擬需求調研
 - **建立日期**：2026-09-02

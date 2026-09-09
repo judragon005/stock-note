@@ -1,6 +1,6 @@
 # 技術債 #0029: DRIP 股利再投資與被動現金流複利滾雪球預測器 (DRIP Compounding Engine & Cash Flow Growth Forecaster)
 
-- **狀態**：`OPEN`
+- **狀態**：`RESOLVED` (已於 v8.31.0 ADR #0112 完整解決)
 - **優先級**：`P2`
 - **發現來源**：/grill-with-docs 股利再投資複利效應與長期現金流預測調研
 - **建立日期**：2026-09-02
