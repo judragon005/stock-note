@@ -93,3 +93,18 @@ export interface DCACashflowProjection {
 1. 規劃「定期定額 (DCA) 追蹤與回測工作台」時。
 2. 升級現金帳本加入「未來 30 天金流收支預測與交割戶安全水位警示」時。
 3. 整合台美股歷史 K 線進行策略績效回測時。
+
+---
+
+## 5. 解決實作與成果說明 (Resolution & Outcome)
+
+- **解決版本**：`v8.31.0` (依據 [SPEC-0112](../specs/0112-fire-compounding-drip-and-dca-simulator-spec.md) 與 [ADR-0112](../adr/0112-fire-compounding-drip-and-dca-simulator.md))
+- **實作模組**：
+  - 運算引擎：[`src/engine/dcaSchedulerEngine.ts`](file:///d:/APP/股票紀錄/src/engine/dcaSchedulerEngine.ts)
+  - 單元測試：[`src/engine/dcaSchedulerEngine.test.ts`](file:///d:/APP/股票紀錄/src/engine/dcaSchedulerEngine.test.ts) (100% 綠燈覆蓋)
+  - 介面面板：[`src/components/FirePlanningWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/FirePlanningWorkspace.tsx) (DCA 未來 30 天扣款時序與交割防透支面板)
+- **交付成果**：
+  1. 完整整合專案既有之 `settlementEngine.ts` 國定休市日曆，扣款約定日遇週末或假日自動順延至下一撮合營業日 ($T$ 日)，並精準推導交割結算日（台股 $T+2$、美股 $T+1$）。
+  2. 依帳戶維度推演未來 30 天預估可用現金水位，一旦餘額不足即刻標記紅燈預警並給出精確資金補足缺口 (`shortfallAmountTwd`)。
+  3. 實作 DCA vs. 單筆歐印 (Lump-Sum) 歷史機會成本與最大回撤 (MDD) 回測演算法。
+

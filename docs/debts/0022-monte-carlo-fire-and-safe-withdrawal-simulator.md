@@ -97,3 +97,19 @@ $$NAV_{t} = \max\left(0, \left(NAV_{t-1} \cdot e^{\left(\mu - \frac{\sigma^2}{2}
 1. 規劃「🏖️ 退休與財務自由 (FIRE) 模擬工作台」時。
 2. 使用者需要評估現有股息被動收入與資產規模能否完全覆蓋退休生活支出時。
 3. 整合量化風控與長期資產存續度分析時。
+
+---
+
+## 5. 解決實作與成果說明 (Resolution & Outcome)
+
+- **解決版本**：`v8.31.0` (依據 [SPEC-0112](../specs/0112-fire-compounding-drip-and-dca-simulator-spec.md) 與 [ADR-0112](../adr/0112-fire-compounding-drip-and-dca-simulator.md))
+- **實作模組**：
+  - 運算引擎：[`src/engine/monteCarloFireEngine.ts`](file:///d:/APP/股票紀錄/src/engine/monteCarloFireEngine.ts)
+  - 單元測試：[`src/engine/monteCarloFireEngine.test.ts`](file:///d:/APP/股票紀錄/src/engine/monteCarloFireEngine.test.ts) (100% 綠燈覆蓋)
+  - 視覺圖表：[`src/components/fire/MonteCarloFanChart.tsx`](file:///d:/APP/股票紀錄/src/components/fire/MonteCarloFanChart.tsx) (純原生 SVG 百分位錐形圖)
+  - 前端工作台：[`src/components/FirePlanningWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/FirePlanningWorkspace.tsx)
+- **交付成果**：
+  1. 純原生 0 依賴實作 Box-Muller 標準常態亂數產生器與幾何布朗運動 (GBM) 1,000 次 30 年路徑隨機抽樣，運算耗時 <30ms。
+  2. 完整實作 Trinity 4% 通膨調整法則、Guyton-Klinger 動態護欄法則與純股息本金保全法則。
+  3. 實作安全提領率 (SWR) 二分搜尋法，逆運算求解 $\ge 95\%$ 存活率臨界提領率；輸出 P10/P25/P50/P75/P90 百分位走勢軌跡。
+
