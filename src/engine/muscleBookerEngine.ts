@@ -417,20 +417,20 @@ export function evaluateMuscleBookerAction(params: {
         actionReason: `帶量站上箱頂但布林帶寬未極致收斂 (${bbands.bandwidth.toFixed(1)}% > 8.0%)，非壓縮爆發起點，切忌追高`,
         stopLossPrice: Math.round(stopLoss * 100) / 100,
         targetPrice: Math.round(target * 100) / 100,
-        riskRewardRatio: `1 : ${rrRatio}`,
+        riskRewardRatio: `${rrRatio}R`,
         riskRewardRatioValue: rrValue,
       };
     }
 
-    // 風益比硬門檻：不足 2:1 絕不追高進場
+    // 風益比硬門檻：不足 2.0R 絕不追高進場
     if (rrValue < 2.0) {
       return {
         action: 'HOLD',
         actionBadge: '🟡 觀望 (風益比不足)',
-        actionReason: `帶量站上箱頂但向上空間狹窄 (風益比僅 1:${rrRatio}R < 2.0R)，期望值過低，切忌追高`,
+        actionReason: `帶量站上箱頂但向上空間狹窄 (風益比僅 ${rrRatio}R < 2.0R)，期望值過低，切忌追高`,
         stopLossPrice: Math.round(stopLoss * 100) / 100,
         targetPrice: Math.round(target * 100) / 100,
-        riskRewardRatio: `1 : ${rrRatio}`,
+        riskRewardRatio: `${rrRatio}R`,
         riskRewardRatioValue: rrValue,
       };
     }
@@ -441,7 +441,7 @@ export function evaluateMuscleBookerAction(params: {
       actionReason: '帶量站上箱頂且20MA翻揚，帶寬極致壓縮方向確立，第一買點確立',
       stopLossPrice: Math.round(stopLoss * 100) / 100,
       targetPrice: Math.round(target * 100) / 100,
-      riskRewardRatio: `1 : ${rrRatio}`,
+      riskRewardRatio: `${rrRatio}R`,
       riskRewardRatioValue: rrValue,
     };
   }
@@ -455,15 +455,15 @@ export function evaluateMuscleBookerAction(params: {
     const rrValue = Math.round((reward / risk) * 10) / 10;
     const rrRatio = rrValue.toFixed(1);
 
-    // 風益比硬門檻：不足 2:1 絕不急躁進場
+    // 風益比硬門檻：不足 2.0R 絕不急躁進場
     if (rrValue < 2.0) {
       return {
         action: 'HOLD',
         actionBadge: '🟡 觀望 (空間不足)',
-        actionReason: `破底翻但距上方壓力過近 (風益比僅 1:${rrRatio}R < 2.0R)，空間狹小，切忌急躁進場`,
+        actionReason: `破底翻但距上方壓力過近 (風益比僅 ${rrRatio}R < 2.0R)，空間狹小，切忌急躁進場`,
         stopLossPrice: Math.round(stopLoss * 100) / 100,
         targetPrice: Math.round(target * 100) / 100,
-        riskRewardRatio: `1 : ${rrRatio}`,
+        riskRewardRatio: `${rrRatio}R`,
         riskRewardRatioValue: rrValue,
       };
     }
@@ -474,7 +474,7 @@ export function evaluateMuscleBookerAction(params: {
       actionReason: '盤中跌破箱底但強勢收回50%以上，洗盤結束，右側進場',
       stopLossPrice: Math.round(stopLoss * 100) / 100,
       targetPrice: Math.round(target * 100) / 100,
-      riskRewardRatio: `1 : ${rrRatio}`,
+      riskRewardRatio: `${rrRatio}R`,
       riskRewardRatioValue: rrValue,
     };
   }
@@ -512,7 +512,7 @@ export type AssetPoolType = 'HOLDINGS' | 'HOLDINGS_ACTIVE' | 'HOLDINGS_CLOSED' |
  * 股市小白專屬動能名詞百科字典
  */
 export const BEGINNER_TOOLTIPS = {
-  riskReward: '💡【股市小白指南】風益比 (Risk-Reward Ratio, R:R)：賺賠比。代表每承受 1 塊錢的停損風險，預期能賺取幾塊錢的潛在獲利。數值越大代表勝算越高，通常大於 1:2 R 才是值得進場的好機會！',
+  riskReward: '💡【股市小白指南】風益比 (Risk-Reward Ratio, 以 R 倍數表示)：賺賠比。代表每承受 1 單位停損風險 (1R)，預期能賺取的獲利倍數。例如 7.9R 代表獲利是潛在停損的 7.9 倍！數值越大代表勝算越高，通常大於 2.0R 才是值得進場的好機會！',
   boxUpperDefense: '💡【股市小白指南】箱頂防守價：股價帶量突破過去一段時間的最高整理壓力線後，箱頂轉為最強支撐防守線。只要沒跌破箱頂，就代表多頭主升段續抱；若跌破則需警戒避險。',
   bottomPenetration: '💡【股市小白指南】破底翻反轉：主力故意跌破前低支撐引誘散戶殺出，隨後當天強勢拉抬收復超過一半留下長下影線。這是典型的「假跌破、真吃貨」右側止跌進場訊號。',
   bollingerSqueeze: '💡【股市小白指南】布林極致壓縮：帶寬小於 8%，代表多空力量高度收斂、股價像彈簧被壓到最緊。暗示隨時會爆發大方向變盤，此時切勿預設立場猜底，等待出方向再跟隨！',

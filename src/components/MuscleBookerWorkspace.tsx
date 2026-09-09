@@ -1311,11 +1311,11 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                   fontSize: '0.75rem',
                 }}
               >
-                {top3BuyItems.length} 檔 · 風益比 ≥ 2.0
+                {top3BuyItems.length} 檔 · 風益比 ≥ 2.0R
               </span>
             </div>
             <p style={{ margin: '0 0 12px 0', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-              突破箱頂且 20MA 扣低走揚，風益比 ≥ 2:1 優先置頂，勝率與動能俱佳。
+              突破箱頂且 20MA 扣低走揚，風益比 ≥ 2.0R 優先置頂，勝率與動能俱佳。
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
@@ -1337,7 +1337,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                   }}
                 >
                   <Search size={22} style={{ opacity: 0.5, color: 'var(--gain-color)' }} />
-                  <div>0 檔 · 目前目標池中無風益比 ≥ 2.0 之突破標的</div>
+                  <div>0 檔 · 目前目標池中無風益比 ≥ 2.0R 之突破標的</div>
                   <div style={{ fontSize: '0.74rem', opacity: 0.8 }}>耐心等待訊號確認，切忌盲目追高</div>
                 </div>
               ) : (
@@ -1405,7 +1405,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                               cursor: 'help',
                             }}
                           >
-                            🔥 風益比: {item.actionDecision.riskRewardRatio}R
+                            🔥 風益比: {item.actionDecision.riskRewardRatio}
                           </span>
                         </Tooltip>
                       )}
@@ -1655,7 +1655,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                             }}
                           >
                             {(item.actionDecision.riskRewardRatioValue ?? 0) >= 2.0 ? '🔥 風益比: ' : '風益比: '}
-                            {item.actionDecision.riskRewardRatio} R
+                            {item.actionDecision.riskRewardRatio}
                           </span>
                         </Tooltip>
                       )}
@@ -1876,7 +1876,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                       <div style={{ marginTop: '6px', fontSize: '0.74rem', color: '#38bdf8', display: 'flex', justifyContent: 'space-between' }}>
                         <span>目標價: ${item.actionDecision.targetPrice}</span>
                         <Tooltip content={BEGINNER_TOOLTIPS.riskReward} position="top">
-                          <span style={{ textDecoration: 'underline dotted', cursor: 'help' }}>風益比: {item.actionDecision.riskRewardRatio} R</span>
+                          <span style={{ textDecoration: 'underline dotted', cursor: 'help' }}>風益比: {item.actionDecision.riskRewardRatio}</span>
                         </Tooltip>
                       </div>
                     )}
@@ -2209,7 +2209,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                         {item.actionDecision.stopLossPrice ? (
                           <span>
                             防守: {formatCurrencyPrice(item.actionDecision.stopLossPrice, item.market)}
-                            {item.actionDecision.riskRewardRatio && ` (${item.actionDecision.riskRewardRatio}R)`}
+                            {item.actionDecision.riskRewardRatio && ` (${item.actionDecision.riskRewardRatio})`}
                           </span>
                         ) : (
                           <span style={{ color: 'var(--text-muted)' }}>-</span>

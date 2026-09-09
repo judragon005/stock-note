@@ -123,7 +123,8 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
     expect(result.actionDecision.stopLossPrice).toBeDefined();
     expect(result.actionDecision.stopLossPrice!).toBeLessThan(106.5);
     expect(result.actionDecision.riskRewardRatioValue).toBeGreaterThanOrEqual(2.0);
-    expect(result.actionDecision.riskRewardRatio).toContain('1 :');
+    expect(result.actionDecision.riskRewardRatio).toMatch(/^\d+(\.\d+)?R$/);
+    expect(result.actionDecision.riskRewardRatio).not.toContain('1 :');
   });
 
   it('跌破三日箱底時，應輸出 actionDecision.action 為 SELL 並提示破線停損', () => {
@@ -150,6 +151,7 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
 
     expect(BEGINNER_TOOLTIPS).toBeDefined();
     expect(BEGINNER_TOOLTIPS.riskReward).toContain('風益比');
+    expect(BEGINNER_TOOLTIPS.riskReward).toContain('R 倍數');
     expect(BEGINNER_TOOLTIPS.boxUpperDefense).toContain('箱頂防守價');
     expect(BEGINNER_TOOLTIPS.bottomPenetration).toContain('破底翻反轉');
     expect(BEGINNER_TOOLTIPS.bollingerSqueeze).toContain('布林極致壓縮');

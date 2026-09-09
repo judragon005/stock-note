@@ -190,7 +190,8 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
       expect(decision.actionBadge).toContain('買進');
       expect(decision.stopLossPrice).toBe(100);
       expect(decision.targetPrice).toBe(115);
-      expect(decision.riskRewardRatio).toBeDefined();
+      expect(decision.riskRewardRatio).toBe('2.0R');
+      expect(decision.riskRewardRatio).not.toContain('1 :');
       expect(decision.riskRewardRatioValue).toBeGreaterThanOrEqual(2.0);
     });
 
