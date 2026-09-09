@@ -3,13 +3,22 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-643%2F643%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-644%2F644%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 肌肉書僮真實日 K 單一真實來源 (SSOT) 與偽造行情機制徹底廢除 (`Real Candles SSOT & Synthetic Removal`) *(V8.23.0 全新升級)*
+- **徹底廢除偽造假 K 線 (Elimination of Synthetic Candles)**：
+  - 徹底移除 `generateSyntheticCandles` 透過 ASCII Hash 偽造 K 線之行為，杜絕同一標的（如 4763 材料*-KY）因缺乏日 K 而被演算法偽造暴漲大紅棒誤判為「突破買進」之嚴重 Bug。
+  - 當標的缺乏足夠真實歷史日 K 線時，明確標記 `isDataPending: true`，動作安全降級為 `AVOID`（觀望待變）並提示「數據回補中...」，絕不給出錯誤的買賣訊號，捍衛交易紀律。
+- **真實日 K 單一真實來源快取層 (`cachedCandlesMap`)**：
+  - `MuscleBookerWorkspace` 導入真實日 K 快取狀態，掛載時自動從 IndexedDB（`getSymbolOhlcv`）載入已快取的 30~60 根真實日 K 線，手動連線診斷拉回的日 K 即時寫入快取全域共享，確保連線診斷、自訂觀察清單與總表結論 100% 精確一致。
+- **自訂觀察清單缺損標的背景平滑自動回補**：
+  - 新增自選股時自動於背景非同步拉取遠端日 K 線，就緒後自動刷新指標與決策。
 
 ### 0. 台股上市櫃 (.TW / .TWO) 雙軌優先探測回補、美股特殊代碼容錯與市場智能推斷 (`TWSE/TPEx Dual-Pipeline & US Symbols Resilience`) *(V8.22.0 全新升級)*
 - **台股上櫃 (.TWO) 與上市 (.TW) 雙軌優先探測架構**：

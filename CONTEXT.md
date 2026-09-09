@@ -1340,6 +1340,13 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 核心機制：支援點號與連字號互轉（如 `BRK.B` $\leftrightarrow$ `BRK-B`）、4~5 碼連寫代碼自動拆解（如 `BRKB` 自動嘗試 `BRK-B`）、自動去除 `.US` 後綴與交易所前綴（`NASDAQ:` / `NYSE:`），大幅增強美股輸入之容錯韌性。
 - **Intelligent Market Inference (市場智能推斷引擎)**:
   - 模組：`src/engine/priceFetcher.ts` 導出之 `inferMarketFromSymbol`。
-  - 規則覆蓋：精準識別台股主動型 ETF（如 `00403A`、`00981A`）、特定市場後綴標的與純美股字母代碼，取代過去過度簡化的純數字正則。
+### 肌肉書僮真實日 K 單一真實來源 (SSOT) 與偽造行情徹底廢除 *(新增於 V8.23.0 / ADR #0104)*
+
+- **Elimination of Synthetic Candles (徹底廢除偽造行情機制)**:
+  - 核心機制：徹底移除 `generateSyntheticCandles` 藉由 ASCII Hash 偽造 K 線之回退邏輯。當標的缺乏真實歷史日 K 線（< 5 根）時，系統明確標記 `isDataPending: true`，動作安全降級為 `AVOID`（觀望待變）並提示數據回補中，杜絕任何偽造大紅棒突破買進的假訊號。
+- **Real Candles SSOT Cache Layer (真實日 K 單一真實來源快取層)**:
+  - 核心機制：`MuscleBookerWorkspace` 導入 `cachedCandlesMap` 狀態，掛載時批次從 `IndexedDB`（`getSymbolOhlcv`）載入已快取的真實日 K 線，手動診斷成功時即時注入該快取，達成全工作區計算強一致性（如 4763 材料*-KY 在手動診斷與自訂觀察名單中皆 100% 精準呈現「跌破箱底賣出」）。
+- **Automated Background Backfill (自訂清單缺損標的背景平滑自動回補)**:
+  - 核心機制：使用者將新標的加入自訂觀察名單時，系統自動在背景非同步發起真實日 K 回補，就緒後自動更新快取並觸發無縫動態重算。
 
 

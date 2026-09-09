@@ -491,6 +491,7 @@ export interface ScannedStockItem {
   ma20DeductionPrice?: number;
   isBollingerSqueeze: boolean;
   bollingerBandwidth?: number;
+  isDataPending?: boolean;
   actionDecision: MuscleBookerActionDecision;
 }
 
@@ -643,10 +644,28 @@ export function scanMuscleBookerItem(
   basePrice: number,
   localCandles?: DailyCandle[]
 ): ScannedStockItem {
-  const candles =
-    localCandles && localCandles.length >= 5
-      ? localCandles
-      : generateSyntheticCandles(symbol, basePrice);
+  // 防禦性零幻覺原則：無足夠真實歷史日 K 線（< 5 根）時，絕不可偽造假 K 線誤導交易！
+  if (!localCandles || localCandles.length < 5) {
+    return {
+      symbol,
+      name,
+      market,
+      currentPrice: basePrice,
+      boxStatus: 'INSIDE_BOX',
+      isBottomPenetration: false,
+      ma20Slope: 'FLAT',
+      isBollingerSqueeze: false,
+      isDataPending: true,
+      actionDecision: {
+        action: 'AVOID',
+        actionBadge: '🟡 數據回補中',
+        actionReason: '歷史日K數據回補中或不足，暫無量化訊號',
+        stopLossPrice: basePrice,
+      },
+    };
+  }
+
+  const candles = localCandles;
 
   const box = detectDarvasBox(candles);
   const deduction = calculateMaDeduction(candles);

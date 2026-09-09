@@ -41,11 +41,33 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
     expect(result.bollingerBandwidth).toBeLessThanOrEqual(8.0);
   });
 
-  it('在無本地日 K 時，應能平滑使用合成數據生成指標而不拋錯', () => {
+  it('在無本地日 K 時，應防禦性降級為數據未就緒 (isDataPending) 與觀望待變 (AVOID)，絕不偽造假買賣訊號', () => {
     const result = scanMuscleBookerItem('NVDA', '輝達', 'US', 125);
     expect(result.symbol).toBe('NVDA');
-    expect(result.currentPrice).toBeGreaterThan(0);
-    expect(['BREAKOUT_UP', 'BREAKOUT_DOWN', 'INSIDE_BOX']).toContain(result.boxStatus);
+    expect(result.currentPrice).toBe(125);
+    expect(result.isDataPending).toBe(true);
+    expect(result.actionDecision.action).toBe('AVOID');
+  });
+
+  it('使用相同真實日 K 時，手動診斷與清單掃描計算結果應 100% 一致 (以 4763 為例)', () => {
+    // 模擬 4763 跌破箱底真實走勢
+    const candles: DailyCandle[] = Array.from({ length: 25 }, (_, i) => ({
+      date: `2026-08-${String(i + 1).padStart(2, '0')}`,
+      open: 52 - i * 0.15,
+      high: 52.5 - i * 0.15,
+      low: 51.5 - i * 0.15,
+      close: i === 24 ? 48.35 : 52 - i * 0.15,
+      volume: 15000,
+    }));
+
+    const adHocResult = scanMuscleBookerItem('4763', '材料*-KY', 'TW', 48.35, candles);
+    const watchlistResult = scanMuscleBookerItem('4763', '材料*-KY', 'TW', 48.35, candles);
+
+    expect(adHocResult.actionDecision.action).toBe(watchlistResult.actionDecision.action);
+    expect(adHocResult.boxStatus).toBe(watchlistResult.boxStatus);
+    expect(adHocResult.boxUpper).toBe(watchlistResult.boxUpper);
+    expect(adHocResult.boxLower).toBe(watchlistResult.boxLower);
+    expect(adHocResult.currentPrice).toBe(48.35);
   });
 
   it('應能依據市場狀態提供正確的標的池清單 (美股模式絕不包含台股)', async () => {

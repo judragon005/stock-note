@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Flame,
   Zap,
@@ -35,6 +35,7 @@ import {
 import { resolveOfficialSecurityName } from '../engine/stockNameResolver';
 import { inferMarketFromSymbol } from '../engine/priceFetcher';
 import { Tooltip } from './common/Tooltip';
+import { getSymbolOhlcv } from '../utils/db';
 
 export interface MuscleBookerWorkspaceProps {
   holdings: HoldingPosition[];
@@ -44,7 +45,7 @@ export interface MuscleBookerWorkspaceProps {
 
 export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
   holdings,
-  historicalDailyPrices = {},
+  historicalDailyPrices: _historicalDailyPrices = {},
   currentMarket = 'ALL',
 }) => {
   const [selectedPool, setSelectedPool] = useState<AssetPoolType>('TOP30_FOCUS');
@@ -60,6 +61,9 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
   const [isAdHocLoading, setIsAdHocLoading] = useState(false);
   const [adHocError, setAdHocError] = useState<string | null>(null);
   const [adHocItem, setAdHocItem] = useState<ScannedStockItem | null>(null);
+
+  // 真實歷史日 K 線快取映射表 (SSOT Cache: Symbol -> DailyCandle[])
+  const [cachedCandlesMap, setCachedCandlesMap] = useState<Record<string, DailyCandle[]>>({});
 
 
   // 0. 依當前市場過濾持股
@@ -119,6 +123,54 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     return getScopedUniverseSymbols(currentMarket, selectedPool);
   }, [selectedPool, activeHoldings, closedHoldings, watchlistSymbols, holdings, currentMarket]);
 
+  // 1.1 異步從 IndexedDB 批次載入真實日 K 線，並對缺損標的進行背景平滑回補 (SSOT 快取架構)
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCandles = async () => {
+      const updates: Record<string, DailyCandle[]> = {};
+      const missing: { symbol: string; market: MarketType }[] = [];
+
+      for (const item of targetUniverse) {
+        if (cachedCandlesMap[item.symbol]) continue;
+
+        try {
+          const cached = await getSymbolOhlcv(item.symbol);
+          if (cached && cached.candles && cached.candles.length >= 5) {
+            updates[item.symbol] = cached.candles;
+          } else {
+            missing.push({ symbol: item.symbol, market: item.market });
+          }
+        } catch {
+          missing.push({ symbol: item.symbol, market: item.market });
+        }
+      }
+
+      if (isMounted && Object.keys(updates).length > 0) {
+        setCachedCandlesMap((prev) => ({ ...prev, ...updates }));
+      }
+
+      // 若為自訂觀察清單模式，針對缺損標的在背景非同步回補 (平滑節流)
+      if (missing.length > 0 && selectedPool === 'CUSTOM_WATCHLIST') {
+        for (const m of missing.slice(0, 8)) {
+          backfillSymbolOhlcvAndIndicators(m.symbol, m.market, false)
+            .then((res) => {
+              if (isMounted && res.candles && res.candles.length >= 5) {
+                setCachedCandlesMap((prev) => ({ ...prev, [m.symbol]: res.candles }));
+              }
+            })
+            .catch(() => {});
+        }
+      }
+    };
+
+    loadCandles();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [targetUniverse, selectedPool]);
+
   // 執行即時外部診斷 (Ad-hoc Scan)
   const handleRunAdHocScan = async (symbolToQuery?: string) => {
     const raw = (symbolToQuery ?? searchQuery).trim().toUpperCase();
@@ -135,6 +187,9 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         setIsAdHocLoading(false);
         return;
       }
+
+      // 同步寫入工作區真實日 K 快取，達成 SSOT 全域一致性
+      setCachedCandlesMap((prev) => ({ ...prev, [raw]: res.candles }));
 
       const officialName = resolveOfficialSecurityName(raw, raw);
       const latestCandle = res.candles[res.candles.length - 1];
@@ -165,6 +220,14 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     } else {
       const updated = addMuscleBookerWatchlistSymbol(clean);
       setWatchlistSymbols(updated);
+      const inferredMarket: MarketType = inferMarketFromSymbol(clean);
+      backfillSymbolOhlcvAndIndicators(clean, inferredMarket, false)
+        .then((res) => {
+          if (res.candles && res.candles.length >= 5) {
+            setCachedCandlesMap((prev) => ({ ...prev, [clean]: res.candles }));
+          }
+        })
+        .catch(() => {});
     }
   };
 
@@ -179,36 +242,39 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     }
     setCustomInputSymbol('');
     const inferredMarket: MarketType = inferMarketFromSymbol(clean);
-    backfillSymbolOhlcvAndIndicators(clean, inferredMarket, false).catch(() => {});
+    backfillSymbolOhlcvAndIndicators(clean, inferredMarket, false)
+      .then((res) => {
+        if (res.candles && res.candles.length >= 5) {
+          setCachedCandlesMap((prev) => ({ ...prev, [clean]: res.candles }));
+        }
+      })
+      .catch(() => {});
   };
 
-  // 2. 進行肌肉書僮指標全量掃描
+  // 2. 進行肌肉書僮指標全量掃描 (優先使用真實日 K 快取，杜絕假 K 線)
   const scannedItems = useMemo<ScannedStockItem[]>(() => {
     return targetUniverse.map((item) => {
-      // 若已有即時診斷項目，優先使用完整運算結果
-      if (adHocItem && adHocItem.symbol === item.symbol) {
+      // 1. 優先從真實日 K 快取中獲取
+      const candles = cachedCandlesMap[item.symbol];
+
+      // 若已有即時診斷項目且剛好是此標的，且有完整指標，直接複用
+      if (adHocItem && adHocItem.symbol === item.symbol && !adHocItem.isDataPending) {
         return adHocItem;
       }
 
-      const localDailyMap = historicalDailyPrices[item.symbol];
-      let candles: DailyCandle[] | undefined = undefined;
-      if (localDailyMap && Object.keys(localDailyMap).length >= 5) {
-        const sortedDates = Object.keys(localDailyMap).sort();
-        candles = sortedDates.slice(-30).map((d) => {
-          const c = localDailyMap[d];
-          return { date: d, open: c, high: c * 1.01, low: c * 0.99, close: c, volume: 10000 };
-        });
-      }
+      // 若本地有真實日 K，以最新收盤價為準；否則以 basePrice 為準
+      const latestCandle = candles && candles.length > 0 ? candles[candles.length - 1] : undefined;
+      const effectivePrice = latestCandle?.close || item.basePrice;
 
       return scanMuscleBookerItem(
         item.symbol,
         item.name,
         item.market,
-        item.basePrice,
+        effectivePrice,
         candles
       );
     });
-  }, [targetUniverse, historicalDailyPrices, adHocItem]);
+  }, [targetUniverse, cachedCandlesMap, adHocItem]);
 
 
   // 統計各類動作數量 (將常態箱內整理 HOLD 歸併入黃燈觀望待變，確保三色加總等於總標的數)
@@ -1413,7 +1479,11 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                         ${item.ma20DeductionPrice ?? '-'}
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        {item.ma20Slope === 'UP' ? (
+                        {item.isDataPending ? (
+                          <span className="badge" style={{ background: 'rgba(51, 65, 85, 0.3)', color: 'var(--text-muted)' }}>
+                            --
+                          </span>
+                        ) : item.ma20Slope === 'UP' ? (
                           <span className="badge" style={{ background: 'var(--gain-bg)', color: 'var(--gain-color)' }}>
                             📈 扣低翻揚助漲
                           </span>
@@ -1428,7 +1498,11 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                         )}
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        {item.boxStatus === 'BREAKOUT_UP' ? (
+                        {item.isDataPending ? (
+                          <span className="badge" style={{ background: 'rgba(51, 65, 85, 0.3)', color: 'var(--text-muted)' }}>
+                            資料未就緒
+                          </span>
+                        ) : item.boxStatus === 'BREAKOUT_UP' ? (
                           <span className="badge" style={{ background: 'var(--gain-bg)', color: 'var(--gain-color)' }}>
                             🔥 箱頂突破
                           </span>
@@ -1443,7 +1517,11 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                         )}
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        {item.actionDecision.action === 'BUY' ? (
+                        {item.isDataPending ? (
+                          <span className="badge" style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#facc15', border: '1px solid rgba(234, 179, 8, 0.35)' }}>
+                            🟡 回補中...
+                          </span>
+                        ) : item.actionDecision.action === 'BUY' ? (
                           <span className="badge" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.4)' }}>
                             🟢 建議買進
                           </span>
