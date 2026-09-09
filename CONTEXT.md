@@ -1270,7 +1270,7 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     - **戰情室 AI 每日晨報**：`holdingSignals` 僅掃描 `shares > 0` 之在倉標的，徹底杜絕已清空平倉之歷史持股（如 00746B、1717 等）誤出現在「破線停損」清單中。
     - **肌肉書僮動能雷達**：資產池切換列物理級拆分為「在倉持股」與「歷史平倉」獨立按鈕並標示即時標的數，解決過去 60 檔混合一團導致使用者無法辨識當前曝險之痛點。
 - **Beginner-Friendly Momentum Tooltips (股市小白專屬動能與操盤術語百科)**:
-  - 字典常數：`BEGINNER_TOOLTIPS`（位於 `src/components/MuscleBookerWorkspace.tsx`）。
+  - 字典常數：`BEGINNER_TOOLTIPS`（收攏於 `src/engine/muscleBookerEngine.ts`）。
   - 白話文科普術語包括：
     - **風益比 (Risk-Reward Ratio, R:R)**：每承受 1 塊錢停損風險能賺幾塊錢潛在獲利。
     - **箱頂防守價 (Box Upper Defense)**：帶量突破整理壓力線後，箱頂轉為最強支撐防守線。
@@ -1279,3 +1279,17 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     - **跌破箱底防守線 (Box Breakdown Stop Loss)**：跌破箱底防線，多方棄守，嚴格停損保命第一。
     - **MA20 扣抵望遠鏡 (MA Deduction Telescope)**：以歷史扣抵價預測月線未來 3~5 日之翻揚或下彎方向。
   - UI 呈現：採用 `<Tooltip>` 與 `textDecoration: underline dotted; cursor: help`，小白懸浮即可秒懂操盤意涵。
+
+### 引擎純邏輯解耦、Fast Refresh 規範化與開發代理異常防護 *(新增於 V8.19.0 / ADR #0100)*
+
+- **Engine-UI Decoupling & Fast Refresh Compliance (引擎純邏輯解耦與 HMR 熱重載規範化)**:
+  - 模組職責劃分：
+    - `src/engine/muscleBookerEngine.ts`：領域邏輯單一真實來源 (SSOT)，包含 `AssetPoolType`、資產池標的代碼集合（`TW50_BLUE_CHIP_SYMBOLS`、`US_MEGA_50_CORE_SYMBOLS` 等）、百科名詞字典 `BEGINNER_TOOLTIPS`、`getScopedUniverseSymbols` 與 `scanMuscleBookerItem`。
+    - `src/components/MuscleBookerWorkspace.tsx`：純粹展示層，僅匯出 React 元件與 Props 介面，100% 符合 `@vitejs/plugin-react` Fast Refresh 規範。
+  - 效益：杜絕非元件混合匯出所引發之全頁強迫重載 (Full Reload)，將元件修改更新延遲壓至毫秒級，並提升量化運算之單元測試隔離度。
+- **Proxy Socket Error Resilience (Vite 開發代理異常彈性防護)**:
+  - 機制：在 `vite.config.ts` 中的各外部 API 代理掛載 `proxy.on('error', ...)` 事件攔截器。
+  - 效益：在本機斷網、DNS 故障或遠端伺服器（Yahoo Finance、證交所、櫃買中心）連線逾時（`ENOTFOUND`, `ETIMEDOUT`）時，優雅攔截底層 socket 異常並回傳 HTTP 502，杜絕終端機未捕獲異常堆疊，平滑觸發前端降級備援機制。
+- **Markdownlint Workspace Compliance (工作區規格與文件格式全面合規)**:
+  - 全量遵循 MD012、MD022 與 MD032 規範，確保 PRD、ADR、本地票券與領域脈絡文件的格式嚴謹度與自動化審核無瑕疵。
+
