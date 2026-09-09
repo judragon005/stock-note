@@ -200,15 +200,44 @@ export function parseYahooQuoteResponse(data: any, rawSymbol: string, market: Ma
     const price = typeof meta.regularMarketPrice === 'number' ? meta.regularMarketPrice : 0;
     if (price <= 0) return null;
 
-    const prevClose =
-      typeof meta.chartPreviousClose === 'number'
-        ? meta.chartPreviousClose
-        : typeof meta.previousClose === 'number'
-        ? meta.previousClose
-        : price;
+    // 1. 優先提取 Yahoo Finance 官方計算之真實今日價差 (Change)
+    let change: number | undefined = undefined;
+    if (typeof meta.regularMarketChange === 'number') {
+      change = meta.regularMarketChange;
+    } else if (typeof meta.fulldayChange === 'number') {
+      change = meta.fulldayChange;
+    }
 
-    const change = price - prevClose;
-    const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+    // 2. 優先提取 Yahoo Finance 官方計算之真實今日漲跌幅 (ChangePercent)
+    let changePercent: number | undefined = undefined;
+    if (typeof meta.regularMarketChangePercent === 'number') {
+      changePercent = meta.regularMarketChangePercent;
+    } else if (typeof meta.fulldayChangePercent === 'number') {
+      changePercent = meta.fulldayChangePercent;
+    }
+
+    // 3. 提取或安全推導昨日收盤價 (Previous Close)
+    let prevClose: number = price;
+    if (typeof meta.regularMarketPreviousClose === 'number' && meta.regularMarketPreviousClose > 0) {
+      prevClose = meta.regularMarketPreviousClose;
+    } else if (typeof meta.previousClose === 'number' && meta.previousClose > 0) {
+      prevClose = meta.previousClose;
+    } else if (typeof change === 'number') {
+      // 若無顯式昨收價，依標準會計定義以現價減去今日價差精準倒推 (例如 27.27 - (-0.11) = 27.38)
+      prevClose = Math.round((price - change) * 10000) / 10000;
+    } else if (typeof meta.chartPreviousClose === 'number' && meta.chartPreviousClose > 0) {
+      // 僅作為最後完全缺失今日價差時之極弱備援
+      prevClose = meta.chartPreviousClose;
+    }
+
+    // 4. 若 change 或 changePercent 尚未得出，依 prevClose 補齊
+    if (change === undefined) {
+      change = price - prevClose;
+    }
+    if (changePercent === undefined) {
+      changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+    }
+
     const currency = market === 'TW' ? 'TWD' : 'USD';
     const candles = parseYahooHistoricalCandlesResponse(data);
 
@@ -354,12 +383,31 @@ export function parseYahooExchangeRateResponse(data: any): ExchangeRateQuote | n
     if (!meta) return null;
 
     const regularMarketPrice = typeof meta.regularMarketPrice === 'number' ? meta.regularMarketPrice : 0;
-    const prevClose =
-      typeof meta.chartPreviousClose === 'number' && meta.chartPreviousClose > 0
-        ? meta.chartPreviousClose
-        : typeof meta.previousClose === 'number' && meta.previousClose > 0
-        ? meta.previousClose
-        : undefined;
+
+    let change: number | undefined = undefined;
+    if (typeof meta.regularMarketChange === 'number') {
+      change = meta.regularMarketChange;
+    } else if (typeof meta.fulldayChange === 'number') {
+      change = meta.fulldayChange;
+    }
+
+    let changePercent: number | undefined = undefined;
+    if (typeof meta.regularMarketChangePercent === 'number') {
+      changePercent = meta.regularMarketChangePercent;
+    } else if (typeof meta.fulldayChangePercent === 'number') {
+      changePercent = meta.fulldayChangePercent;
+    }
+
+    let prevClose: number | undefined = undefined;
+    if (typeof meta.regularMarketPreviousClose === 'number' && meta.regularMarketPreviousClose > 0) {
+      prevClose = meta.regularMarketPreviousClose;
+    } else if (typeof meta.previousClose === 'number' && meta.previousClose > 0) {
+      prevClose = meta.previousClose;
+    } else if (typeof change === 'number' && regularMarketPrice > 0) {
+      prevClose = Math.round((regularMarketPrice - change) * 10000) / 10000;
+    } else if (typeof meta.chartPreviousClose === 'number' && meta.chartPreviousClose > 0) {
+      prevClose = meta.chartPreviousClose;
+    }
 
     let rate = regularMarketPrice;
     let status: 'REALTIME' | 'PREVIOUS_CLOSE' = 'REALTIME';
@@ -373,11 +421,10 @@ export function parseYahooExchangeRateResponse(data: any): ExchangeRateQuote | n
       }
     }
 
-    let change: number | undefined = undefined;
-    let changePercent: number | undefined = undefined;
-
-    if (prevClose && prevClose > 0) {
+    if (change === undefined && prevClose && prevClose > 0) {
       change = rate - prevClose;
+    }
+    if (changePercent === undefined && prevClose && prevClose > 0 && typeof change === 'number') {
       changePercent = (change / prevClose) * 100;
     }
 

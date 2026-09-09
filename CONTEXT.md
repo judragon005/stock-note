@@ -159,6 +159,10 @@ _Avoid_: Generic Rounding, Default String Conversion
 **Quote Status Badge & Fallback Cache (報價狀態徽章與持久化快取降級)**:
 表格即時呈現 🟢 盤中即時/延遲、🟡 昨日收盤價、🔒 自訂鎖定、⚠️ 離線快取四大狀態徽章與當日漲跌幅色塊。當網路斷線或代理超時時，平滑退回 `localStorage` 本地最後有效報價，確保離線狀態下系統計算與視覺化 100% 穩定可用。
 
+**Quote Previous Close Precision & Chart Quarantine (昨收價精準推導與圖表昨收隔離規範)**: *(新增於 V8.30.0)*
+為避免歷史線圖查詢週期（如 `range=3mo`）回傳之 `meta.chartPreviousClose` 污染當日行情，系統嚴格隔離圖表歷史起始價與昨日收盤價。優先提取官方即時差值（`regularMarketChange` / `fulldayChange`）與官方昨收（`regularMarketPreviousClose` / `previousClose`）；若官方昨收缺漏，則精準以最新價扣除今日差值（`price - change`）倒推昨收價，徹底拔除直接誤用 `chartPreviousClose` 作為昨日收盤價之舊代碼，確保今日損益與漲跌幅 100% 精準吻合券商即時盤面。
+
+
 ### 美金台幣匯率自動更新與平滑備援 (Auto USD/TWD Exchange Rate & Fallback)  *(新增於 V1.5)*
 
 **Auto Exchange Rate Engine (美金台幣純前端自動匯率引擎)**:

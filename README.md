@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-654%2F654%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-655%2F655%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,8 +11,17 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
+### 0. Yahoo Finance 報價昨日收盤價與今日漲跌幅精準修正 (`Yahoo Quote Previous Close & Daily Change Precision`) *(V8.30.0 全新升級)*
+- **徹底拔除圖表昨收干擾 (Quarantine of Chart Previous Close)**：
+  - 徹底修復因線圖請求帶有 3 個月歷史週期（`range=3mo`），API 回傳之 `chartPreviousClose` 為 3 個月前起始價（如 00636 為 28.13），被舊程式碼誤當作「昨日收盤價」導致今日價差與今日損益嚴重失真之重大瑕疵。
+  - 優先提取 Yahoo Finance 官方即時欄位 `regularMarketChange` / `fulldayChange` 與 `regularMarketChangePercent` / `fulldayChangePercent`。
+  - 昨日收盤價優先取官方 `regularMarketPreviousClose` / `previousClose`；若官方昨收缺漏，則以成交價扣除價差（`price - change`）精確倒推，徹底終結歷史區間對當日盤面與持股今日損益之干擾。
+- **實盤數值 100% 精準對齊券商 APP**：
+  - 經 00636 實盤驗證，今日收盤 27.27、今日跌幅 ▼ 0.11 (-0.40%)、昨日收盤 27.38，今日損益準確計算為 -1,100 元，徹底消除因誤算 -8,600 元產生之假性虧損恐慌。
+
 ### 0. 肌肉書僮風益比全面統一專業 R 倍數規範 (`Muscle Booker Risk-Reward R-Multiple Standard`) *(V8.29.0 全新升級)*
 - **全域 R 倍數制規範化 (Universal R-Multiple Standard)**：
+
   - 徹底終結過去上方說明文字寫「風益比 ≥ 2:1」與下方卡片顯示「🔥 風益比: 1 : 7.9R」之上下方向相反矛盾，以及「1 :」與「R」冗贅拼裝語病。
   - 所有買進決策、作戰看板、三色操盤導航儀與均線扣抵表格一律標準化為純淨之 `${rrRatio}R`（如 `7.9R`、`2.0R`），精確代表每承受 1 單位停損風險所預期的獲利倍數。
   - 作戰看板說明文字與 Badge 全面同步為「風益比 ≥ 2.0R 優先置頂」，實現數值定義、字典解說與視覺渲染 100% 邏輯一致。

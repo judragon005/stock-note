@@ -120,6 +120,35 @@ describe('PriceFetcher Engine (TDD Seam)', () => {
       expect(parseYahooQuoteResponse({ chart: { result: [] } }, '2330', 'TW')).toBeNull();
       expect(parseYahooQuoteResponse({ chart: { result: [{ meta: { regularMarketPrice: 0 } }] } }, '2330', 'TW')).toBeNull();
     });
+
+    it('當 Yahoo 回傳 range=3mo 導致 chartPreviousClose 為數月前價格時，應優先採用真實今日價差倒推昨日收盤價，絕不可誤拿 chartPreviousClose', () => {
+      const mock00636Data = {
+        chart: {
+          result: [
+            {
+              meta: {
+                currency: 'TWD',
+                symbol: '00636.TW',
+                regularMarketPrice: 27.27,
+                regularMarketChangePercent: -0.402,
+                fulldayChange: -0.11,
+                fulldayChangePercent: -0.402,
+                chartPreviousClose: 28.13, // 3 個月前的圖表起點收盤價
+              },
+            },
+          ],
+        },
+      };
+
+      const quote = parseYahooQuoteResponse(mock00636Data, '00636', 'TW');
+      expect(quote).not.toBeNull();
+      expect(quote?.price).toBe(27.27);
+      expect(quote?.change).toBe(-0.11);
+      expect(quote?.previousClose).toBe(27.38); // 27.27 - (-0.11) = 27.38
+      expect(quote?.changePercent).toBeCloseTo(-0.402, 2);
+      expect(quote?.previousClose).not.toBe(28.13);
+      expect(quote?.change).not.toBeCloseTo(-0.86, 2);
+    });
   });
 
   describe('3. parseTWSEDayAllResponse (台灣證交所官方 OpenAPI 備援解析)', () => {
