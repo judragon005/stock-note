@@ -33,6 +33,7 @@ import {
   removeMuscleBookerWatchlistSymbol,
 } from '../utils/storage';
 import { resolveOfficialSecurityName } from '../engine/stockNameResolver';
+import { inferMarketFromSymbol } from '../engine/priceFetcher';
 import { Tooltip } from './common/Tooltip';
 
 export interface MuscleBookerWorkspaceProps {
@@ -104,13 +105,13 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     }
     if (selectedPool === 'CUSTOM_WATCHLIST') {
       return watchlistSymbols.map((sym) => {
-        const isTw = /^\d+$/.test(sym);
+        const market = inferMarketFromSymbol(sym);
         const name = resolveOfficialSecurityName(sym, sym);
         const holding = holdings.find((h) => h.symbol.toUpperCase() === sym);
         return {
           symbol: sym,
           name,
-          market: isTw ? ('TW' as const) : ('US' as const),
+          market,
           basePrice: holding?.currentPrice || 100,
         };
       });
@@ -126,7 +127,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     setAdHocError(null);
 
     try {
-      const inferredMarket: MarketType = /^\d+$/.test(raw) ? 'TW' : 'US';
+      const inferredMarket: MarketType = inferMarketFromSymbol(raw);
       const res = await backfillSymbolOhlcvAndIndicators(raw, inferredMarket, false);
 
       if (!res.candles || res.candles.length === 0) {
@@ -177,7 +178,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
       setWatchlistSymbols(updated);
     }
     setCustomInputSymbol('');
-    const inferredMarket: MarketType = /^\d+$/.test(clean) ? 'TW' : 'US';
+    const inferredMarket: MarketType = inferMarketFromSymbol(clean);
     backfillSymbolOhlcvAndIndicators(clean, inferredMarket, false).catch(() => {});
   };
 

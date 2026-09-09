@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   normalizeYahooSymbol,
+  getYahooCandidateSymbols,
+  inferMarketFromSymbol,
   parseYahooQuoteResponse,
   parseTWSEDayAllResponse,
   fetchStockQuote,
@@ -12,7 +14,36 @@ import {
 import { MarketType } from '../types/stock';
 
 describe('PriceFetcher Engine (TDD Seam)', () => {
-  describe('1. normalizeYahooSymbol (標的代碼正規化)', () => {
+  describe('0. inferMarketFromSymbol (市場智能推斷)', () => {
+    it('純數字代碼應推斷為 TW', () => {
+      expect(inferMarketFromSymbol('2330')).toBe('TW');
+      expect(inferMarketFromSymbol('6204')).toBe('TW');
+      expect(inferMarketFromSymbol('0050')).toBe('TW');
+    });
+
+    it('台股主動型 ETF 與英數混合代碼應正確推斷為 TW', () => {
+      expect(inferMarketFromSymbol('00403A')).toBe('TW');
+      expect(inferMarketFromSymbol('00981A')).toBe('TW');
+      expect(inferMarketFromSymbol('009826')).toBe('TW');
+    });
+
+    it('帶有台股後綴 .TW 或 .TWO 應正確推斷為 TW', () => {
+      expect(inferMarketFromSymbol('6204.TWO')).toBe('TW');
+      expect(inferMarketFromSymbol('2330.TW')).toBe('TW');
+      expect(inferMarketFromSymbol('8299.two')).toBe('TW');
+    });
+
+    it('美股純英文字母與特殊點號代碼應推斷為 US', () => {
+      expect(inferMarketFromSymbol('AAPL')).toBe('US');
+      expect(inferMarketFromSymbol('NVDA')).toBe('US');
+      expect(inferMarketFromSymbol('TSLA')).toBe('US');
+      expect(inferMarketFromSymbol('BRK.B')).toBe('US');
+      expect(inferMarketFromSymbol('BRK-B')).toBe('US');
+      expect(inferMarketFromSymbol('AAPL.US')).toBe('US');
+    });
+  });
+
+  describe('1. normalizeYahooSymbol & getYahooCandidateSymbols (標的代碼正規化與候選)', () => {
     it('應正確為台股上市加上 .TW 後綴', () => {
       expect(normalizeYahooSymbol('2330', 'TW')).toBe('2330.TW');
       expect(normalizeYahooSymbol('0050', 'TW')).toBe('0050.TW');
@@ -28,7 +59,30 @@ describe('PriceFetcher Engine (TDD Seam)', () => {
       expect(normalizeYahooSymbol('NVDA', 'US')).toBe('NVDA');
       expect(normalizeYahooSymbol('BRK.B', 'US')).toBe('BRK-B');
     });
+
+    it('getYahooCandidateSymbols 應為台股產生上市與上櫃雙軌備援候選代碼', () => {
+      const candidates6204 = getYahooCandidateSymbols('6204', 'TW');
+      expect(candidates6204).toContain('6204.TWO');
+      expect(candidates6204).toContain('6204.TW');
+
+      const candidates2330 = getYahooCandidateSymbols('2330', 'TW');
+      expect(candidates2330[0]).toBe('2330.TW');
+      expect(candidates2330).toContain('2330.TWO');
+    });
+
+    it('getYahooCandidateSymbols 應為美股特殊代碼產生連字號與去點備援', () => {
+      const candidatesBrk = getYahooCandidateSymbols('BRK.B', 'US');
+      expect(candidatesBrk[0]).toBe('BRK-B');
+
+      const candidatesBrkb = getYahooCandidateSymbols('BRKB', 'US');
+      expect(candidatesBrkb).toContain('BRKB');
+      expect(candidatesBrkb).toContain('BRK-B');
+
+      const candidatesUs = getYahooCandidateSymbols('AAPL.US', 'US');
+      expect(candidatesUs[0]).toBe('AAPL');
+    });
   });
+
 
   describe('2. parseYahooQuoteResponse (Yahoo 響應資料解析)', () => {
     it('應正確解析 Yahoo Finance Chart v8 格式數據', () => {

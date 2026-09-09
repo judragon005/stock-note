@@ -119,8 +119,23 @@ export function resolveOfficialSecurityName(symbol: string, fallbackName?: strin
     return STATIC_SECURITY_NAMES[cleanSymbol];
   }
 
+  // 2.1 容錯：去除市場後綴 (如 6204.TWO -> 6204, AAPL.US -> AAPL)
+  const baseSymbol = cleanSymbol.replace(/\.(TW|TWO|US)$/i, '');
+  if (STATIC_SECURITY_NAMES[baseSymbol]) {
+    return STATIC_SECURITY_NAMES[baseSymbol];
+  }
+
+  // 2.2 容錯：上櫃歷史代碼結尾 O (如 6203 查 6203O, 或 6203O 查 6203)
+  if (STATIC_SECURITY_NAMES[`${baseSymbol}O`]) {
+    return STATIC_SECURITY_NAMES[`${baseSymbol}O`];
+  }
+  if (baseSymbol.endsWith('O') && STATIC_SECURITY_NAMES[baseSymbol.slice(0, -1)]) {
+    return STATIC_SECURITY_NAMES[baseSymbol.slice(0, -1)];
+  }
+
   // 3. 回退至傳入之 fallbackName 或原始代碼
   return fallbackName ? fallbackName.trim() : cleanSymbol;
+
 }
 
 /**

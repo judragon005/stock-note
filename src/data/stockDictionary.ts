@@ -1644,7 +1644,7 @@ export const STATIC_TW_STOCKS: StockDictionaryItem[] = [
   { symbol: '6201', name: '亞弘電', market: 'TW', category: '上市股票', source: 'TWSE' },
   { symbol: '6202', name: '盛群', market: 'TW', category: '上市股票', source: 'TWSE' },
   { symbol: '6203O', name: '海韻電', market: 'TW', category: '上櫃股票', source: 'TPEX' },
-  { symbol: '6204O', name: '艾華', market: 'TW', category: '上櫃股票', source: 'TPEX' },
+  { symbol: '6204', name: '艾華', market: 'TW', category: '上櫃股票', source: 'TPEX' },
   { symbol: '6205', name: '詮欣', market: 'TW', category: '上市股票', source: 'TWSE' },
   { symbol: '6206', name: '飛捷', market: 'TW', category: '上市股票', source: 'TWSE' },
   { symbol: '6207O', name: '雷科', market: 'TW', category: '上櫃股票', source: 'TPEX' },

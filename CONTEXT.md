@@ -1324,4 +1324,22 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     - 若除息日前該標的已全數出清（在庫為 0 股），待交割股息金額動態調整為 0，杜絕無持股卻虛增股息現金流。
     - 若已到達或超過除息日（`today >= exDate`），除息在籍事實正式封存，嚴格維持歷史紀錄不變。
 
+### 肌肉書僮動能雷達即時快篩與自訂常駐觀察清單 *(新增於 V8.21.0 / ADR #0102)*
+
+- **Ad-hoc Symbol Scanner (非池內任意代碼即時快篩)**:
+  - 核心機制：在肌肉書僮動能雷達頂部提供輸入框，使用者可鍵入任意代碼（如 `2330`、`6204`、`NVDA`、`AAPL`），系統自動觸發後台增量拉取日 K、計算技術指標並呈現即時動能決策。
+- **Custom Watchlist Persistence (自訂觀察清單本地持久化)**:
+  - 核心機制：快篩成功之標的可一鍵收錄至「自訂觀察清單 (Custom Watchlist)」，儲存於 `localStorage`，重新開盤或進站時自動納入常態追蹤。
+
+### 台股上櫃雙軌探測、美股代碼容錯與市場智能推斷引擎 *(新增於 V8.22.0 / ADR #0103)*
+
+- **TPEx & TWSE Dual-Pipeline Probe (台股上市櫃雙軌優先探測架構)**:
+  - 核心機制：`getYahooCandidateSymbols` 依據標的與字典產生優先與備援候選代碼（上櫃優先 `.TWO`、備援 `.TW`；上市優先 `.TW`、備援 `.TWO`）。日 K 回補引擎 `backfillSymbolOhlcvAndIndicators` 遭遇 404 或數據為空時自動無縫嘗試備援候選，徹底解決「6204 艾華」等上櫃股票查無標的 BUG。
+  - 效能優化：利用 `otcSymbolSet` 建立快取，達成 O(1) 瞬時市場歸屬判斷與循環依賴防護。
+- **US Symbol Resilience & Normalization (美股特殊代碼容錯與備援機制)**:
+  - 核心機制：支援點號與連字號互轉（如 `BRK.B` $\leftrightarrow$ `BRK-B`）、4~5 碼連寫代碼自動拆解（如 `BRKB` 自動嘗試 `BRK-B`）、自動去除 `.US` 後綴與交易所前綴（`NASDAQ:` / `NYSE:`），大幅增強美股輸入之容錯韌性。
+- **Intelligent Market Inference (市場智能推斷引擎)**:
+  - 模組：`src/engine/priceFetcher.ts` 導出之 `inferMarketFromSymbol`。
+  - 規則覆蓋：精準識別台股主動型 ETF（如 `00403A`、`00981A`）、特定市場後綴標的與純美股字母代碼，取代過去過度簡化的純數字正則。
+
 

@@ -3,13 +3,26 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-635%2F635%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-643%2F643%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 台股上市櫃 (.TW / .TWO) 雙軌優先探測回補、美股特殊代碼容錯與市場智能推斷 (`TWSE/TPEx Dual-Pipeline & US Symbols Resilience`) *(V8.22.0 全新升級)*
+- **台股上櫃 (.TWO) 與上市 (.TW) 雙軌優先探測架構**：
+  - 徹底解決輸入「6204 艾華」等櫃買中心上櫃股票時出現「查無標的」之根本缺陷：`getYahooCandidateSymbols` 自動產出候選代碼清單，已知上櫃標的優先請求 `.TWO`、備援 `.TW`；上市標的優先請求 `.TW`、備援 `.TWO`。
+  - 日 K 回補引擎在遭遇 HTTP 404 或資料為空時自動平滑切換備援候選代碼，100% 覆蓋全台股上市櫃股票。
+  - 引入 `otcSymbolSet` 快取結構，以 O(1) 極致效能進行判定，杜絕高頻查詢的重複計算與循環依賴風險。
+- **美股特殊代碼容錯、符號標準化與備援探測**：
+  - 全面支援美股波克夏等特殊標的：點號自動轉連字號備援（`BRK.B` $\leftrightarrow$ `BRK-B`）、4~5 碼連寫拆解備援（`BRKB` $\to$ `['BRKB', 'BRK-B', 'BRK.B']`）。
+  - 自動清洗 `.US` 後綴與交易所前綴（`NASDAQ:` / `NYSE:`），使用者無論如何鍵入均能精準獲取報價與指標。
+- **市場智能推斷引擎 (`inferMarketFromSymbol`)**：
+  - 精準辨識台股主動型 ETF（如 `00403A`、`00981A`），徹底淘汰過度簡化之純數字正則判斷，杜絕將台股代碼結尾包含英文字母者誤判為美股。
+- **官方字典與名稱解析校準**：
+  - 校準靜態字典中 `6204`（艾華）之標的代碼，去除 `O` 後綴，並擴充 `stockNameResolver` 支援去除市場後綴比對，實現 100% 離線中文化名稱解析。
 
 ### 0. 肌肉書僮動能雷達任意代碼即時外部回補診斷與自訂觀察清單 (`Ad-hoc Momentum Radar & Custom Watchlist`) *(V8.21.0 全新升級)*
 - **任意股票代碼即搜即算 (Ad-hoc Search & Fetch Pipeline)**：

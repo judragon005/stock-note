@@ -1,6 +1,6 @@
 import { MarketType } from '../types/stock';
 import { DailyCandle, MuscleBookerIndicatorPoint } from '../types/indicators';
-import { fetchWithCORSProxy, normalizeYahooSymbol } from './priceFetcher';
+import { fetchWithCORSProxy, getYahooCandidateSymbols } from './priceFetcher';
 import { parseYahooHistoricalCandlesResponse } from './historicalPriceFetcher';
 import { calculateMuscleBookerIndicators } from './muscleBookerEngine';
 import {
@@ -78,21 +78,30 @@ export async function backfillSymbolOhlcvAndIndicators(
     }
   }
 
-  // 2. 透過 Yahoo Finance Chart API 拉取完整歷史 OHLCV
-  // period1=0 代表自該標的掛牌上市日開始
-  const yahooSymbol = normalizeYahooSymbol(cleanSymbol, market);
+  // 2. 透過 Yahoo Finance Chart API 拉取完整歷史 OHLCV (支援雙軌後綴探測與美股容錯)
+  const candidateSymbols = getYahooCandidateSymbols(cleanSymbol, market);
   const nowSec = Math.floor(Date.now() / 1000);
-  const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
-    yahooSymbol
-  )}?period1=0&period2=${nowSec}&interval=1d`;
-
   let fetchedCandles: DailyCandle[] = [];
-  try {
-    const data = await fetchWithCORSProxy(targetUrl, 8000);
-    fetchedCandles = parseYahooHistoricalCandlesResponse(data);
-  } catch (err) {
-    logger.error(`Failed to fetch Yahoo historical OHLCV for ${cleanSymbol}:`, err);
-    // 若網路失敗，退回讀取本地舊資料
+
+  for (const sym of candidateSymbols) {
+    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
+      sym
+    )}?period1=0&period2=${nowSec}&interval=1d`;
+
+    try {
+      const data = await fetchWithCORSProxy(targetUrl, 8000);
+      const parsed = parseYahooHistoricalCandlesResponse(data);
+      if (parsed && parsed.length > 0) {
+        fetchedCandles = parsed;
+        break; // 成功命中候選代碼
+      }
+    } catch (err) {
+      logger.warn(`Candidate symbol ${sym} failed for ${cleanSymbol}, trying next candidate if available:`, err);
+    }
+  }
+
+  // 若所有候選皆無新資料，嘗試退回讀取本地舊快取
+  if (fetchedCandles.length === 0) {
     const cachedOhlcv = await getSymbolOhlcv(cleanSymbol);
     if (cachedOhlcv && cachedOhlcv.candles.length > 0) {
       return {
@@ -103,9 +112,6 @@ export async function backfillSymbolOhlcvAndIndicators(
     return { candles: [], indicators: [] };
   }
 
-  if (fetchedCandles.length === 0) {
-    return { candles: [], indicators: [] };
-  }
 
   // 3. 增量合併
   let finalCandles = fetchedCandles;

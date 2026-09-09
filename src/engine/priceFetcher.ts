@@ -1,6 +1,7 @@
 import { MarketType, PriceQuote, ExchangeRateQuote } from '../types/stock';
 import { parseYahooHistoricalCandlesResponse } from './historicalPriceFetcher';
 import { globalRequestScheduler } from './rateLimiter';
+import { STATIC_TW_STOCKS } from '../data/stockDictionary';
 
 const CORS_PROXIES = [
   (url: string) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
@@ -81,19 +82,108 @@ export async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 
 }
 
 /**
- * 正規化標的代碼為 Yahoo Finance 查詢代碼
+ * 智能推斷標的所屬市場 (TW 或 US)
+ */
+export function inferMarketFromSymbol(rawInput: string): MarketType {
+  const clean = (rawInput || '').trim().toUpperCase();
+  if (!clean) return 'TW';
+
+  // 1. 若顯式帶有市場後綴
+  if (clean.endsWith('.TW') || clean.endsWith('.TWO')) return 'TW';
+  if (clean.endsWith('.US')) return 'US';
+
+  // 2. 判斷是否為台股代碼特徵：
+  // - 4~6 碼純數字 (如 2330, 0050, 6204, 006204)
+  // - 5~6 碼數字+英文字母 (如 00403A, 00981A, 2883B)
+  if (/^\d{4,6}$/.test(clean)) return 'TW';
+  if (/^\d{4,5}[A-Z]$/.test(clean)) return 'TW';
+
+  // 3. 預設英文字母（如 AAPL, NVDA, BRK.B 等）為美股
+  return 'US';
+}
+
+/// 上櫃標的快取集合，提供 O(1) 極致查詢效能與防禦性初始化
+let otcSymbolSet: Set<string> | null = null;
+function getOtcSymbolSet(): Set<string> {
+  if (!otcSymbolSet && typeof STATIC_TW_STOCKS !== 'undefined' && Array.isArray(STATIC_TW_STOCKS)) {
+    otcSymbolSet = new Set(
+      STATIC_TW_STOCKS
+        .filter((item) => item.source === 'TPEX' || item.category?.includes('上櫃'))
+        .map((item) => item.symbol.toUpperCase())
+    );
+  }
+  return otcSymbolSet || new Set();
+}
+
+/**
+ * 依據標的與市場類型，產生 Yahoo Finance 候選查詢代碼清單 (支援雙軌與備援重試)
+ * 例如台股 6204 -> ['6204.TWO', '6204.TW']
+ * 例如台股 2330 -> ['2330.TW', '2330.TWO']
+ * 例如美股 BRK.B -> ['BRK-B', 'BRK.B']
+ * 例如美股 BRKB -> ['BRKB', 'BRK-B', 'BRK.B']
+ */
+export function getYahooCandidateSymbols(symbol: string, market: MarketType): string[] {
+  let clean = symbol.trim().toUpperCase();
+  if (!clean) return [];
+
+  // 清洗常見前綴
+  clean = clean.replace(/^(NASDAQ|NYSE|AMEX):/i, '');
+
+  if (market === 'TW') {
+    // 若已有顯式指定後綴
+    if (clean.endsWith('.TWO')) {
+      const base = clean.replace(/\.TWO$/i, '');
+      return [clean, `${base}.TW`];
+    }
+    if (clean.endsWith('.TW')) {
+      const base = clean.replace(/\.TW$/i, '');
+      return [clean, `${base}.TWO`];
+    }
+
+    // 檢查字典是否已知為上櫃 (TPEX)
+    const isKnownOtc = getOtcSymbolSet().has(clean);
+
+    if (isKnownOtc) {
+      return [`${clean}.TWO`, `${clean}.TW`];
+    }
+    return [`${clean}.TW`, `${clean}.TWO`];
+  }
+
+  // 美股處理
+  // 1. 清洗 .US 後綴 (如 AAPL.US -> AAPL)
+  clean = clean.replace(/\.US$/i, '');
+
+  const candidates: string[] = [];
+
+  // 2. 點號轉連字號 (如 BRK.B -> BRK-B)
+  if (clean.includes('.')) {
+    candidates.push(clean.replace(/\./g, '-'));
+    candidates.push(clean);
+  } else if (clean.includes('-')) {
+    candidates.push(clean);
+    candidates.push(clean.replace(/-/g, '.'));
+  } else {
+    candidates.push(clean);
+    // 常見美股 Class A/B 股連寫 (如 BRKB -> BRK-B, BF.B 等)
+    if (/^[A-Z]{3,4}[AB]$/.test(clean)) {
+      candidates.push(`${clean.slice(0, -1)}-${clean.slice(-1)}`);
+      candidates.push(`${clean.slice(0, -1)}.${clean.slice(-1)}`);
+    } else if (clean.length === 5 && /^[A-Z]{5}$/.test(clean)) {
+      candidates.push(`${clean.slice(0, 4)}-${clean.slice(4)}`);
+    }
+  }
+
+  return Array.from(new Set(candidates));
+}
+
+/**
+ * 正規化標的代碼為 Yahoo Finance 查詢代碼 (回傳主要候選代碼)
  */
 export function normalizeYahooSymbol(symbol: string, market: MarketType): string {
-  const cleanSymbol = symbol.trim().toUpperCase();
-  if (market === 'TW') {
-    if (cleanSymbol.endsWith('.TW') || cleanSymbol.endsWith('.TWO')) {
-      return cleanSymbol;
-    }
-    return `${cleanSymbol}.TW`;
-  }
-  // 美股特殊代碼處理 (如 BRK.B 轉為 BRK-B)
-  return cleanSymbol.replace(/\./g, '-');
+  const candidates = getYahooCandidateSymbols(symbol, market);
+  return candidates[0] || symbol.trim().toUpperCase();
 }
+
 
 /**
  * 解析 Yahoo Finance Chart API v8 響應格式
