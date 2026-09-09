@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { scanMuscleBookerItem } from './MuscleBookerWorkspace';
+import { scanMuscleBookerItem } from '../engine/muscleBookerEngine';
 import { DailyCandle } from '../types/indicators';
 
 describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () => {
@@ -49,7 +49,7 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
   });
 
   it('應能依據市場狀態提供正確的標的池清單 (美股模式絕不包含台股)', async () => {
-    const { getScopedUniverseSymbols } = await import('./MuscleBookerWorkspace');
+    const { getScopedUniverseSymbols } = await import('../engine/muscleBookerEngine');
     const usSymbols = getScopedUniverseSymbols('US', 'TW50_CORE');
     expect(usSymbols.length).toBeGreaterThan(0);
     expect(usSymbols.every((s) => s.market === 'US')).toBe(true);
@@ -101,7 +101,8 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
   });
 
   it('BEGINNER_TOOLTIPS 應包含風益比、箱頂防守、破底翻、布林壓縮與停損等白話文解說', async () => {
-    const { BEGINNER_TOOLTIPS } = await import('./MuscleBookerWorkspace');
+    const { BEGINNER_TOOLTIPS } = await import('../engine/muscleBookerEngine');
+
     expect(BEGINNER_TOOLTIPS).toBeDefined();
     expect(BEGINNER_TOOLTIPS.riskReward).toContain('風益比');
     expect(BEGINNER_TOOLTIPS.boxUpperDefense).toContain('箱頂防守價');

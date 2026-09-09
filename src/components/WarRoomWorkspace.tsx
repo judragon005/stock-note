@@ -29,7 +29,7 @@ import {
 } from '../engine/dualMomentumEngine';
 import { DailyCandle } from '../types/indicators';
 import { ReceivableDividend } from '../types/dividend';
-import { scanMuscleBookerItem } from './MuscleBookerWorkspace';
+import { scanMuscleBookerItem } from '../engine/muscleBookerEngine';
 import { MacroHoldingSignalInput, UpcomingDividendInput } from '../types/macro';
 import {
   loadMacroPulseHistory,
