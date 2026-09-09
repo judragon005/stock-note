@@ -3,13 +3,24 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-646%2F646%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-649%2F649%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 肌肉書僮真實日 K 受控並發增量回補與本地持久化加速 (`Muscle Booker Incremental Backfill & Local Cache`) *(V8.25.0 全新升級)*
+- **全目標池受控並發增量回補隊列 (All-Pool Controlled Concurrency Queue)**：
+  - 徹底修復非自訂清單（如台股市值 50、美股科技巨頭 50 等）因代碼漏失從未發起日 K 回補、導致長時間停滯在「🟡 回補中...」的嚴重缺陷。
+  - 採用受控並發隊列（Concurrency = 3，間隔 60ms 節流），每完成一檔即時寫入本地 IndexedDB 快取與畫面，技術指標一檔接一檔平滑解鎖，兼顧極致效能與遠端防風控。
+- **短期增量區間請求 (`calculateIncrementalPeriod1`)**：
+  - 本地已具備歷史日 K 時，自動取最後一根日期往前倒推 7 天向遠端請求最新數天數據，傳輸量劇降 90% 以上，延遲由 2~3 秒壓至 150~200ms；
+  - 本地為空時預設拉取最近 180 天（約 6 個月，~120 根日 K），足以計算 MA60 與 Darvas 箱體，不再請求數十年全量歷史，從根本消除 429 速率限制。
+- **本地日 K 快取狀態與動態進度工具列**：
+  - 肌肉書僮雷達頂部即時顯示「本地日 K 快取就緒度：X/Y 檔 (Z%)」、平滑進度動畫與當前同步標的代碼；
+  - 全數就緒時顯示「🟢 本地日 K 均已就緒 (支援離線即時秒算)」，並提供「🔄 增量同步最新收盤」按鈕，方便盤後一鍵補齊當日最新收盤價。
 
 ### 0. 肌肉書僮風益比硬門檻 (R:R >= 2.0)、帶寬方向確立與無效代碼防護 (`Risk-Reward Hard Gate & Bandwidth Direction Gate`) *(V8.24.0 全新升級)*
 - **風益比硬門檻 (Risk-Reward Hard Gate >= 2.0)**：

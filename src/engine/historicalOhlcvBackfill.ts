@@ -34,6 +34,28 @@ export function mergeDailyCandles(
 }
 
 /**
+ * 計算增量請求時間戳範圍
+ * @param existingCandles 本地已儲存之日 K 線
+ * @param nowSec 當前時間戳（秒）
+ * @returns period1（秒）
+ */
+export function calculateIncrementalPeriod1(
+  existingCandles?: DailyCandle[],
+  nowSec: number = Math.floor(Date.now() / 1000)
+): number {
+  if (existingCandles && existingCandles.length > 0) {
+    const last = existingCandles[existingCandles.length - 1];
+    const lastSec = Math.floor(new Date(last.date).getTime() / 1000);
+    if (!isNaN(lastSec) && lastSec > 0) {
+      // 緩衝往前倒推 7 天 (7 * 86400)，涵蓋休假日、盤後修正與當日收盤
+      return Math.max(0, lastSec - 7 * 86400);
+    }
+  }
+  // 本地無資料時，預設抓取最近 180 天 (約 6 個月，~120 根日 K)，足以計算 MA60 與 Darvas 箱體
+  return Math.max(0, nowSec - 180 * 86400);
+}
+
+/**
  * 回補單一標的全量歷史日 K (OHLCV) 與肌肉書僮技術指標
  */
 export async function backfillSymbolOhlcvAndIndicators(
@@ -45,17 +67,15 @@ export async function backfillSymbolOhlcvAndIndicators(
   indicators: MuscleBookerIndicatorPoint[];
 }> {
   const cleanSymbol = symbol.trim().toUpperCase();
+  let existingStoreCandles: DailyCandle[] = [];
 
   // 1. 檢查本地 IndexedDB 快取
-  if (!forceRefresh) {
-    try {
-      const cachedOhlcv = await getSymbolOhlcv(cleanSymbol);
+  try {
+    const cachedOhlcv = await getSymbolOhlcv(cleanSymbol);
+    if (cachedOhlcv && cachedOhlcv.candles && cachedOhlcv.candles.length > 0) {
+      existingStoreCandles = cachedOhlcv.candles;
 
-      if (
-        cachedOhlcv &&
-        cachedOhlcv.candles.length > 0 &&
-        Date.now() - cachedOhlcv.updatedAt < CACHE_FRESHNESS_MS
-      ) {
+      if (!forceRefresh && Date.now() - cachedOhlcv.updatedAt < CACHE_FRESHNESS_MS) {
         let indicators: MuscleBookerIndicatorPoint[] = [];
         try {
           const cachedIndicators = await getSymbolIndicators(cleanSymbol);
@@ -73,20 +93,21 @@ export async function backfillSymbolOhlcvAndIndicators(
           indicators,
         };
       }
-    } catch (err) {
-      logger.warn(`Failed to read local OHLCV cache for ${cleanSymbol}:`, err);
     }
+  } catch (err) {
+    logger.warn(`Failed to read local OHLCV cache for ${cleanSymbol}:`, err);
   }
 
-  // 2. 透過 Yahoo Finance Chart API 拉取完整歷史 OHLCV (支援雙軌後綴探測與美股容錯)
+  // 2. 透過 Yahoo Finance Chart API 拉取短期增量 OHLCV (支援雙軌後綴探測與美股容錯)
   const candidateSymbols = getYahooCandidateSymbols(cleanSymbol, market);
   const nowSec = Math.floor(Date.now() / 1000);
+  const period1 = calculateIncrementalPeriod1(existingStoreCandles, nowSec);
   let fetchedCandles: DailyCandle[] = [];
 
   for (const sym of candidateSymbols) {
     const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
       sym
-    )}?period1=0&period2=${nowSec}&interval=1d`;
+    )}?period1=${period1}&period2=${nowSec}&interval=1d`;
 
     try {
       const data = await fetchWithCORSProxy(targetUrl, 8000);
@@ -102,22 +123,20 @@ export async function backfillSymbolOhlcvAndIndicators(
 
   // 若所有候選皆無新資料，嘗試退回讀取本地舊快取
   if (fetchedCandles.length === 0) {
-    const cachedOhlcv = await getSymbolOhlcv(cleanSymbol);
-    if (cachedOhlcv && cachedOhlcv.candles.length > 0) {
+    if (existingStoreCandles.length > 0) {
       return {
-        candles: cachedOhlcv.candles,
-        indicators: calculateMuscleBookerIndicators(cachedOhlcv.candles),
+        candles: existingStoreCandles,
+        indicators: calculateMuscleBookerIndicators(existingStoreCandles),
       };
     }
     return { candles: [], indicators: [] };
   }
 
 
-  // 3. 增量合併
+  // 3. 增量合併 (以日期唯一鍵去重覆蓋並升冪排序)
   let finalCandles = fetchedCandles;
-  const existingStore = await getSymbolOhlcv(cleanSymbol);
-  if (existingStore && existingStore.candles.length > 0) {
-    finalCandles = mergeDailyCandles(existingStore.candles, fetchedCandles);
+  if (existingStoreCandles.length > 0) {
+    finalCandles = mergeDailyCandles(existingStoreCandles, fetchedCandles);
   }
 
   // 4. 計算肌肉書僮完整技術指標時序

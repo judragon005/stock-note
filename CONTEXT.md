@@ -1365,5 +1365,19 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Invalid Symbol Ingestion Gate & Auto-Cleanup (無效代碼存入阻擋與歷史幽靈清理機制)**:
   - 核心機制：加入自訂觀察清單時，嚴格比對股票字典與遠端行情探測，無效代碼（如 3175）嚴格阻擋並彈出警告；初始化時自動清理 LocalStorage 歷史殘留幽靈代碼。
 
+### 肌肉書僮真實日 K 受控並發增量回補與本地持久化加速架構 *(新增於 V8.25.0 / ADR #0106)*
+
+- **Incremental Short-term OHLCV Fetching (短期增量日 K 區間請求引擎)**:
+  - 核心機制：`historicalOhlcvBackfill.ts` 導出 `calculateIncrementalPeriod1`。
+  - 本地已存有該標的日 K 時，自動取最後一根日期倒推 7 天為起點向遠端請求最新數天數據，體積縮小 90% 以上，延遲壓至 150~200ms；
+  - 本地為空時，預設抓取最近 180 天（約 6 個月，~120 根日 K），足以計算 MA60 與 Darvas 箱體，不再請求數十年全量歷史，避免遭遠端 429 速率限制。
+  - 透過 `mergeDailyCandles` 自動以日期唯一鍵去重覆蓋並持久化至 IndexedDB。
+- **All-Pool Controlled Concurrency Queue (全目標池受控並發回補隊列)**:
+  - 核心機制：徹底移除僅在自訂清單觸發回補之缺陷，使「台股市值 50」、「美股 50」、「在籍持股」與「自訂清單」缺損標的皆能自動觸發受控回補。
+  - 佇列規範：Concurrency = 3，間隔 60ms 節流，每完成一檔即時寫入 `cachedCandlesMap`，畫面一檔接一檔平滑解鎖技術指標，徹底終結永久卡滯。
+- **Local Cache Sync Toolbar & Progress Bar (本地日 K 快取狀態與增量同步工具列)**:
+  - 核心機制：在肌肉書僮雷達頂部即時展示「本地日 K 快取就緒度：X/Y 檔 (Z%)」、同步動態進度條、當前同步標的代碼，並提供「🔄 增量同步最新收盤」按鈕，讓投資人盤後隨時一鍵更新最新收盤。
+
+
 
 

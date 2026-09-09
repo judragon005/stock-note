@@ -15,6 +15,8 @@ import {
   Loader2,
   Plus,
   X,
+  RefreshCw,
+  Database,
 } from 'lucide-react';
 import { HoldingPosition, MarketType } from '../types/stock';
 import type { DailyCandle } from '../types/indicators';
@@ -77,6 +79,17 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
   // 真實歷史日 K 線快取映射表 (SSOT Cache: Symbol -> DailyCandle[])
   const [cachedCandlesMap, setCachedCandlesMap] = useState<Record<string, DailyCandle[]>>({});
 
+  // 日 K 快取受控增量同步狀態
+  const [syncState, setSyncState] = useState<{
+    isSyncing: boolean;
+    total: number;
+    current: number;
+    currentSymbol?: string;
+  }>({
+    isSyncing: false,
+    total: 0,
+    current: 0,
+  });
 
   // 0. 依當前市場過濾持股
   const marketScopedHoldings = useMemo(() => {
@@ -135,14 +148,15 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     return getScopedUniverseSymbols(currentMarket, selectedPool);
   }, [selectedPool, activeHoldings, closedHoldings, watchlistSymbols, holdings, currentMarket]);
 
-  // 1.1 異步從 IndexedDB 批次載入真實日 K 線，並對缺損標的進行背景平滑回補 (SSOT 快取架構)
+  // 1.1 異步從 IndexedDB 批次載入真實日 K 線，並對缺損標的進行受控並發增量回補 (全目標池支援)
   useEffect(() => {
-    let isMounted = true;
+    let isCancelled = false;
 
-    const loadCandles = async () => {
+    const syncCandles = async () => {
       const updates: Record<string, DailyCandle[]> = {};
       const missing: { symbol: string; market: MarketType }[] = [];
 
+      // 第一步：瞬時檢查 IndexedDB 本地快取
       for (const item of targetUniverse) {
         if (cachedCandlesMap[item.symbol]) continue;
 
@@ -158,30 +172,149 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         }
       }
 
-      if (isMounted && Object.keys(updates).length > 0) {
+      if (isCancelled) return;
+
+      if (Object.keys(updates).length > 0) {
         setCachedCandlesMap((prev) => ({ ...prev, ...updates }));
       }
 
-      // 若為自訂觀察清單模式，針對缺損標的在背景非同步回補 (平滑節流)
-      if (missing.length > 0 && selectedPool === 'CUSTOM_WATCHLIST') {
-        for (const m of missing.slice(0, 8)) {
-          backfillSymbolOhlcvAndIndicators(m.symbol, m.market, false)
-            .then((res) => {
-              if (isMounted && res.candles && res.candles.length >= 5) {
+      // 所有目標池的缺損標的，均啟動受控並發增量回補 (Concurrency = 3, 節流 60ms)
+      if (missing.length > 0) {
+        setSyncState({
+          isSyncing: true,
+          total: missing.length,
+          current: 0,
+          currentSymbol: missing[0].symbol,
+        });
+
+        let completed = 0;
+        let index = 0;
+        const total = missing.length;
+        const concurrency = Math.min(3, total);
+
+        const worker = async () => {
+          while (index < total) {
+            if (isCancelled) return;
+            const currentIndex = index++;
+            const m = missing[currentIndex];
+
+            if (!isCancelled) {
+              setSyncState((prev) => ({
+                ...prev,
+                current: completed,
+                currentSymbol: m.symbol,
+              }));
+            }
+
+            try {
+              const res = await backfillSymbolOhlcvAndIndicators(m.symbol, m.market, false);
+              if (isCancelled) return;
+              if (res.candles && res.candles.length >= 5) {
                 setCachedCandlesMap((prev) => ({ ...prev, [m.symbol]: res.candles }));
               }
-            })
-            .catch(() => {});
+            } catch {
+              // 忽略單檔失敗
+            }
+
+            completed++;
+            if (!isCancelled) {
+              setSyncState((prev) => ({
+                ...prev,
+                current: completed,
+                currentSymbol: m.symbol,
+              }));
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 60));
+          }
+        };
+
+        const workers = Array.from({ length: concurrency }, () => worker());
+        await Promise.all(workers);
+
+        if (!isCancelled) {
+          setSyncState({
+            isSyncing: false,
+            total: missing.length,
+            current: missing.length,
+            currentSymbol: undefined,
+          });
         }
+      } else {
+        setSyncState({
+          isSyncing: false,
+          total: 0,
+          current: 0,
+        });
       }
     };
 
-    loadCandles();
+    syncCandles();
 
     return () => {
-      isMounted = false;
+      isCancelled = true;
     };
   }, [targetUniverse, selectedPool]);
+
+  // 手動觸發全池增量同步最新收盤
+  const handleTriggerManualSync = async (forceRefresh = false) => {
+    if (syncState.isSyncing) return;
+    const items = targetUniverse.map((item) => ({ symbol: item.symbol, market: item.market }));
+    if (items.length === 0) return;
+
+    setSyncState({
+      isSyncing: true,
+      total: items.length,
+      current: 0,
+      currentSymbol: items[0].symbol,
+    });
+
+    let completed = 0;
+    let index = 0;
+    const total = items.length;
+    const concurrency = Math.min(3, total);
+
+    const worker = async () => {
+      while (index < total) {
+        const currentIndex = index++;
+        const m = items[currentIndex];
+
+        setSyncState((prev) => ({
+          ...prev,
+          current: completed,
+          currentSymbol: m.symbol,
+        }));
+
+        try {
+          const res = await backfillSymbolOhlcvAndIndicators(m.symbol, m.market, forceRefresh);
+          if (res.candles && res.candles.length >= 5) {
+            setCachedCandlesMap((prev) => ({ ...prev, [m.symbol]: res.candles }));
+          }
+        } catch {
+          // ignore
+        }
+
+        completed++;
+        setSyncState((prev) => ({
+          ...prev,
+          current: completed,
+          currentSymbol: m.symbol,
+        }));
+
+        await new Promise((resolve) => setTimeout(resolve, 60));
+      }
+    };
+
+    const workers = Array.from({ length: concurrency }, () => worker());
+    await Promise.all(workers);
+
+    setSyncState({
+      isSyncing: false,
+      total: items.length,
+      current: items.length,
+      currentSymbol: undefined,
+    });
+  };
 
   // 執行即時外部診斷 (Ad-hoc Scan)
   const handleRunAdHocScan = async (symbolToQuery?: string) => {
@@ -342,6 +475,13 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
   const squeezeItems = filteredItems.filter((i) => i.isBollingerSqueeze);
   const breakoutDownItems = filteredItems.filter((i) => i.boxStatus === 'BREAKOUT_DOWN');
   const deductionUpItems = filteredItems.filter((i) => i.ma20Slope === 'UP');
+
+  // 5. 計算本地日 K 快取就緒狀態
+  const totalUniverseCount = targetUniverse.length;
+  const readyUniverseCount = targetUniverse.filter(
+    (item) => cachedCandlesMap[item.symbol] && cachedCandlesMap[item.symbol].length >= 5
+  ).length;
+  const readyPercent = totalUniverseCount > 0 ? Math.round((readyUniverseCount / totalUniverseCount) * 100) : 100;
 
   return (
     <div className="warroom-container animate-fade-in">
@@ -515,6 +655,111 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
               自訂觀察 ({watchlistSymbols.length})
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* 📊 本地日 K 快取與受控增量同步狀態列 */}
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          padding: '10px 16px',
+          borderRadius: 'var(--radius-md)',
+          background: syncState.isSyncing
+            ? 'linear-gradient(90deg, rgba(30, 58, 138, 0.35), rgba(15, 23, 42, 0.6))'
+            : 'rgba(15, 23, 42, 0.55)',
+          border: '1px solid ' + (syncState.isSyncing ? 'rgba(59, 130, 246, 0.4)' : 'rgba(255, 255, 255, 0.07)'),
+          backdropFilter: 'blur(8px)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: '260px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '28px',
+              height: '28px',
+              borderRadius: '6px',
+              background: syncState.isSyncing ? 'rgba(59, 130, 246, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+              color: syncState.isSyncing ? '#60a5fa' : '#34d399',
+            }}
+          >
+            {syncState.isSyncing ? <Loader2 size={16} className="animate-spin" /> : <Database size={16} />}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem', fontWeight: 600 }}>
+              <span style={{ color: 'var(--text-primary)' }}>
+                本地日 K 快取就緒度：
+              </span>
+              <span style={{ color: readyPercent === 100 ? '#34d399' : '#f59e0b', fontWeight: 700 }}>
+                {readyUniverseCount} / {totalUniverseCount} 檔 ({readyPercent}%)
+              </span>
+              {syncState.isSyncing && syncState.currentSymbol && (
+                <span style={{ fontSize: '0.75rem', color: '#93c5fd', fontWeight: 500 }}>
+                  ⏳ 正在增量同步：{syncState.currentSymbol} ({syncState.current}/{syncState.total})
+                </span>
+              )}
+              {!syncState.isSyncing && readyPercent === 100 && (
+                <span style={{ fontSize: '0.75rem', color: '#34d399', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <CheckCircle2 size={13} /> 均已在本地持久化，支援離線即時秒算
+                </span>
+              )}
+            </div>
+
+            {syncState.isSyncing && (
+              <div
+                style={{
+                  width: '100%',
+                  maxWidth: '360px',
+                  height: '4px',
+                  borderRadius: '2px',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  overflow: 'hidden',
+                  marginTop: '2px',
+                }}
+              >
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${syncState.total > 0 ? (syncState.current / syncState.total) * 100 : 0}%`,
+                    background: 'linear-gradient(90deg, #3b82f6, #60a5fa)',
+                    borderRadius: '2px',
+                    transition: 'width 0.2s ease',
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            onClick={() => handleTriggerManualSync(false)}
+            disabled={syncState.isSyncing}
+            className="btn btn-sm"
+            style={{
+              padding: '5px 12px',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              background: 'rgba(59, 130, 246, 0.15)',
+              color: '#93c5fd',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              borderRadius: 'var(--radius-sm)',
+              cursor: syncState.isSyncing ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+            }}
+            title="對當前池內所有標的進行增量補齊最新收盤價並持久化至本地"
+          >
+            <RefreshCw size={13} className={syncState.isSyncing ? 'animate-spin' : ''} />
+            {syncState.isSyncing ? '增量同步中...' : '增量同步最新收盤'}
+          </button>
         </div>
       </div>
 

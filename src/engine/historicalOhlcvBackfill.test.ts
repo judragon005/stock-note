@@ -3,6 +3,7 @@ import {
   backfillSymbolOhlcvAndIndicators,
   mergeDailyCandles,
   backfillPortfolioSymbols,
+  calculateIncrementalPeriod1,
 } from './historicalOhlcvBackfill';
 import { DailyCandle } from '../types/indicators';
 import * as db from '../utils/db';
@@ -192,6 +193,24 @@ describe('Historical OHLCV & Indicators Backfill Engine (回補引擎)', () => {
       expect(progressHistory.length).toBe(2);
       expect(progressHistory[0]).toEqual({ current: 1, total: 2, symbol: '2330' });
       expect(progressHistory[1]).toEqual({ current: 2, total: 2, symbol: 'AAPL' });
+    });
+  });
+
+  describe('4. calculateIncrementalPeriod1 (增量請求時間戳計算)', () => {
+    it('本地無日 K 時，預設請求過去 180 天 (~6 個月)', () => {
+      const nowSec = 1750000000;
+      const period1 = calculateIncrementalPeriod1(undefined, nowSec);
+      expect(period1).toBe(nowSec - 180 * 86400);
+    });
+
+    it('本地已有日 K 時，應以最後一根日期往前倒推 7 天作為緩衝增量拉取', () => {
+      const existing: DailyCandle[] = [
+        { date: '2026-06-01', open: 100, high: 105, low: 98, close: 102, volume: 1000 },
+        { date: '2026-06-15', open: 102, high: 106, low: 100, close: 105, volume: 1200 },
+      ];
+      const lastSec = Math.floor(new Date('2026-06-15').getTime() / 1000);
+      const period1 = calculateIncrementalPeriod1(existing, 1780000000);
+      expect(period1).toBe(lastSec - 7 * 86400);
     });
   });
 });

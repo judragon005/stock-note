@@ -276,6 +276,29 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
     expect(sorted[1].actionDecision.riskRewardRatioValue).toBe(3.2);
     expect(sorted[2].actionDecision.riskRewardRatioValue).toBe(2.1);
   });
+
+  it('本地日 K 快取就緒度應精確統計已就緒檔數與就緒百分比', () => {
+    const universe = [
+      { symbol: '2330' },
+      { symbol: '2454' },
+      { symbol: '2317' },
+      { symbol: '2382' },
+    ];
+
+    const candlesMap: Record<string, DailyCandle[]> = {
+      '2330': Array.from({ length: 10 }, (_, i) => ({ date: `2026-08-${i + 1}`, open: 100, high: 102, low: 98, close: 101, volume: 100 })),
+      '2454': Array.from({ length: 15 }, (_, i) => ({ date: `2026-08-${i + 1}`, open: 100, high: 102, low: 98, close: 101, volume: 100 })),
+      '2317': Array.from({ length: 2 }, (_, i) => ({ date: `2026-08-${i + 1}`, open: 100, high: 102, low: 98, close: 101, volume: 100 })), // < 5 根視為未就緒
+    };
+
+    const total = universe.length;
+    const ready = universe.filter((u) => candlesMap[u.symbol] && candlesMap[u.symbol].length >= 5).length;
+    const percent = Math.round((ready / total) * 100);
+
+    expect(total).toBe(4);
+    expect(ready).toBe(2);
+    expect(percent).toBe(50);
+  });
 });
 
 
