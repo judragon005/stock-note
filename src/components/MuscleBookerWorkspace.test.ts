@@ -81,6 +81,27 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
     expect(twSymbols.every((s) => s.market === 'TW')).toBe(true);
   });
 
+  it('目標池常數應名實相符：TW50 滿編 50 檔、US50 滿編 50 檔、台股焦點滿編 30 檔、美股焦點滿編 30 檔', async () => {
+    const {
+      TW50_BLUE_CHIP_SYMBOLS,
+      US_MEGA_50_CORE_SYMBOLS,
+      TW_TOP_30_FOCUS_SYMBOLS,
+      US_TOP_30_FOCUS_SYMBOLS,
+      getScopedUniverseSymbols,
+    } = await import('../engine/muscleBookerEngine');
+
+    expect(TW50_BLUE_CHIP_SYMBOLS).toHaveLength(50);
+    expect(US_MEGA_50_CORE_SYMBOLS).toHaveLength(50);
+    expect(TW_TOP_30_FOCUS_SYMBOLS).toHaveLength(30);
+    expect(US_TOP_30_FOCUS_SYMBOLS).toHaveLength(30);
+
+    // 驗證 getScopedUniverseSymbols 返回完全對齊
+    expect(getScopedUniverseSymbols('TW', 'TW50_CORE')).toHaveLength(50);
+    expect(getScopedUniverseSymbols('US', 'TW50_CORE')).toHaveLength(50);
+    expect(getScopedUniverseSymbols('TW', 'TOP30_FOCUS')).toHaveLength(30);
+    expect(getScopedUniverseSymbols('US', 'TOP30_FOCUS')).toHaveLength(30);
+  });
+
   it('突破箱頂且 20MA 向上時，若風益比 >= 2.0 應輸出 actionDecision.action 為 BUY 並計算防守價與風益比', () => {
     // 箱體整理在 100~105，最後一天剛帶量突破箱頂收 106.5 (防守 105.6，風險僅 0.9，預期目標 115，風益比高達 9.4R)
     const candles: DailyCandle[] = Array.from({ length: 25 }, (_, i) => {

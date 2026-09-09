@@ -3,13 +3,22 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon003/-/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon003/-/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-649%2F649%20Passed-brightgreen)](https://github.com/judragon003/-)
+[![Tests](https://img.shields.io/badge/Vitest-650%2F650%20Passed-brightgreen)](https://github.com/judragon003/-)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon003/-)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 肌肉書僮目標池滿編規格化與名實相符擴充 (`Muscle Booker Full Universe Top 30/50 Alignment`) *(V8.26.0 全新升級)*
+- **臺灣 50 指數 (0050) 官方成分股 50 檔滿編 (`TW50_BLUE_CHIP_SYMBOLS`)**：
+  - 徹底解決「權值核心 Top 50」按鈕下方實際僅有 20 檔之名實不符問題。
+  - 完整收錄臺灣證券交易所 0050 官方全量 50 檔權值股（納入台積電、鴻海、聯發科、台達電、廣達、聯電、中鋼、長榮、緯創、華碩、大立光、世芯-KY、奇鋐、聯詠、欣興、研華、國巨、緯穎等全 50 檔）。
+- **台股焦點動能 Top 30 滿編 (`TW_TOP_30_FOCUS_SYMBOLS`)**：
+  - 徹底解決「台股焦點 Top 30」實際僅有 16 檔之短缺問題，完整補齊至 30 檔市場法人聚焦之短線動能與核心飆股（奇鋐、雙鴻、世芯-KY、緯穎、技嘉、華碩、欣興、健策、陽明、長榮航、創意、台燿、高力、金像電、矽力*-KY、華城、中興電、東元等）。
+- **美股巨頭 Top 50 與焦點 Top 30 滿編**：
+  - `US_MEGA_50_CORE_SYMBOLS` 完整擴充至標普 50 權值巨頭 50 檔全名單；`US_TOP_30_FOCUS_SYMBOLS` 完整擴充至 30 檔科技與動能熱門標的。
 
 ### 0. 肌肉書僮真實日 K 受控並發增量回補與本地持久化加速 (`Muscle Booker Incremental Backfill & Local Cache`) *(V8.25.0 全新升級)*
 - **全目標池受控並發增量回補隊列 (All-Pool Controlled Concurrency Queue)**：

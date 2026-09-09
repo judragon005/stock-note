@@ -1378,6 +1378,16 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Local Cache Sync Toolbar & Progress Bar (本地日 K 快取狀態與增量同步工具列)**:
   - 核心機制：在肌肉書僮雷達頂部即時展示「本地日 K 快取就緒度：X/Y 檔 (Z%)」、同步動態進度條、當前同步標的代碼，並提供「🔄 增量同步最新收盤」按鈕，讓投資人盤後隨時一鍵更新最新收盤。
 
+### 肌肉書僮目標池滿編規格化與名實相符擴充架構 *(新增於 V8.26.0 / ADR #0107)*
+
+- **TW50 Official Full 50 Blue Chips (臺灣 50 指數 0050 官方成分股 50 檔滿編)**:
+  - 核心定義：`TW50_BLUE_CHIP_SYMBOLS` 完整收錄臺灣證券交易所與富時合編之「臺灣 50 指數」50 檔全量權值成分股（涵蓋台積電、鴻海、聯發科、台達電、廣達、富邦金、國泰金、聯電、中鋼、長榮、世芯-KY、緯穎、奇鋐、聯詠、欣興、研華、國巨等），100% 杜絕過去僅有 20 檔之名實不符弊端。
+- **TW Top 30 Momentum Focus Pool (台股焦點動能飆股 30 檔滿編)**:
+  - 核心定義：`TW_TOP_30_FOCUS_SYMBOLS` 擴充至滿編 30 檔熱門法人高動能標的（奇鋐、雙鴻、世芯-KY、緯穎、技嘉、華碩、欣興、健策、陽明、長榮航、創意、台燿、高力、金像電、矽力*-KY、華城、中興電、東元等）。
+- **US Mega 50 & Top 30 Momentum Pools (美股標普巨頭 50 與焦點 30 滿編)**:
+  - 核心定義：`US_MEGA_50_CORE_SYMBOLS` 滿編 50 檔權值巨頭（NVDA, AAPL, MSFT, AMZN, GOOGL, META, TSLA, BRK.B, LLY, JPM, V, UNH, XOM, MA, COST, PG, HD, JNJ, ABBV, WMT 等全 50 檔）；`US_TOP_30_FOCUS_SYMBOLS` 滿編 30 檔科技與動能熱門標的。
+
+
 
 
 
