@@ -17,7 +17,7 @@
 ## 📌 1. 專案當前狀態 (Current Project State)
 
 - **專案本機路徑**：`d:\APP\股票紀錄`
-- **遠端儲存庫**：`git@github.com:judragon003/-.git`
+- **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`feature/0112-fire-compounding-drip-and-dca-simulator`
 - **單元測試套件**：**676/676 通過 (60 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
