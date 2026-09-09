@@ -42,10 +42,14 @@
    - 在程式碼審查 (`/code-review`) 或交接時，若存在識別出但「未在當期 PR 即時修改」之架構改善建議，Agent 必須主動建檔至 `docs/debts/` 並更新 `docs/debts/README.md` 索引。
    - 僅收錄未即時修改之建議；當期已修復完成者不建檔；已解決之技術債標記為 `RESOLVED`。
 9. **GitHub 服務條款與防濫用合規守則 (GitHub ToS & Anti-Abuse Compliance)**：
-   - **嚴禁濫用 Actions CI**：嚴禁短時間內高頻連續 Push 觸發過量 GitHub Actions Runner 分鐘數，本地必須先完成 `npm test` 與 `npm run build` 綠燈後才可發起推送。
-   - **CLI 呼叫節流**：使用 `gh issue create` 或 `gh pr create` 時必須嚴格受控，不得高頻批量建立，避免觸發 GitHub Abuse-Detection 風控。
-   - **金鑰與隱私零外洩**：嚴禁將個人財務資料、API Token（如 FinMind、FMP 等）推播至 GitHub 遠端，所有敏感數據必須隔離於本地 LocalStorage 與 `.gitignore`。
-10. **詳細新手操作手冊**：請參閱 [docs/guides/branch_protection_and_pr_workflow.md](docs/guides/branch_protection_and_pr_workflow.md)。
+   - **嚴禁濫用 Actions CI 與算力**：嚴禁短時間內高頻連續 Push 觸發過量 GitHub Actions Runner 分鐘數；嚴禁將 Actions 用於非 CI/CD 計算（如爬蟲、自動化交易）；本地必須先完成 `npm test` 與 `npm run build` 綠燈後才可發起推送。
+   - **Git Push 節流與批量原則 (Anti-Abuse Throttling)**：嚴禁零星檔案修改微小推送（Micro-Pushing），推播前應於本地集中整合 Commit；**嚴格限制每小時推送遠端不超過 5 次**，避免觸發 GitHub 機器人行為檢測。
+   - **CLI 與 API 呼叫安全限額**：使用 `gh issue create` 或 `gh pr create` 時必須嚴格受控，嚴禁 while 迴圈無間隔輪詢，單日批量操作受控，避免觸發 GitHub Abuse-Detection 風控。
+   - **金鑰與隱私零外洩 (Zero Secrets)**：嚴禁將個人財務資料、API Token（如 FinMind、FMP、GitHub PAT 等）推播至 GitHub 遠端，所有敏感數據必須隔離於本地 LocalStorage 與 `.gitignore`。
+   - **儲存庫容量與大檔案管制**：嚴禁提交超過 50MB 的二進位大檔或備份包（如 `.bundle`、`.tar.gz` 等），嚴禁將 GitHub 當作免費雲端硬碟。
+10. **詳細操作指引與合規手冊**：
+    - 分支與 PR 工作流：[docs/guides/branch_protection_and_pr_workflow.md](docs/guides/branch_protection_and_pr_workflow.md)
+    - GitHub ToS、防封號與新帳號隔離指南：[docs/guides/github_tos_and_anti_ban_guidelines.md](docs/guides/github_tos_and_anti_ban_guidelines.md)
 
 
 
