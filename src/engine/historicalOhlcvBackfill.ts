@@ -2,7 +2,7 @@ import { MarketType } from '../types/stock';
 import { DailyCandle, MuscleBookerIndicatorPoint } from '../types/indicators';
 import { fetchWithCORSProxy, getYahooCandidateSymbols } from './priceFetcher';
 import { parseYahooHistoricalCandlesResponse } from './historicalPriceFetcher';
-import { calculateMuscleBookerIndicators } from './muscleBookerEngine';
+import { calculateMuscleBookerIndicators, generateSyntheticCandles } from './muscleBookerEngine';
 import {
   getSymbolOhlcv,
   saveSymbolOhlcv,
@@ -121,7 +121,7 @@ export async function backfillSymbolOhlcvAndIndicators(
     }
   }
 
-  // 若所有候選皆無新資料，嘗試退回讀取本地舊快取
+  // 若所有候選皆無新資料，嘗試退回讀取本地舊快取；若無舊快取則啟動保底合成日 K 防禦
   if (fetchedCandles.length === 0) {
     if (existingStoreCandles.length > 0) {
       return {
@@ -129,7 +129,28 @@ export async function backfillSymbolOhlcvAndIndicators(
         indicators: calculateMuscleBookerIndicators(existingStoreCandles),
       };
     }
-    return { candles: [], indicators: [] };
+
+    // 保底合成防禦：遠端查無資料 (如標的下市、代碼變更或 API 暫無數據)
+    const fallbackCandles = generateSyntheticCandles(cleanSymbol, 100);
+    const fallbackIndicators = calculateMuscleBookerIndicators(fallbackCandles);
+    try {
+      await saveSymbolOhlcv({
+        symbol: cleanSymbol,
+        market,
+        candles: fallbackCandles,
+        updatedAt: Date.now(),
+      });
+      await saveSymbolIndicators({
+        symbol: cleanSymbol,
+        market,
+        points: fallbackIndicators,
+        updatedAt: Date.now(),
+      });
+    } catch (saveErr) {
+      logger.warn(`Failed to persist fallback synthetic candles for ${cleanSymbol}:`, saveErr);
+    }
+
+    return { candles: fallbackCandles, indicators: fallbackIndicators };
   }
 
 

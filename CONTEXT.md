@@ -1432,6 +1432,15 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Monte Carlo 1,000-Path Simulation & Guyton-Klinger Guardrails (蒙地卡羅 1000 次路徑與動態護欄)**:
   - 核心機制：純原生 0 依賴 Box-Muller 標準常態亂數與幾何布朗運動 (GBM) 抽樣。支援 Trinity 4%、Guyton-Klinger 動態護欄與純股息本金保全 3 大策略，輸出 P10~P90 百分位錐形圖、30 年破產率與二分法安全提領率 (SWR)。
 
+### 肌肉書僮增量同步卡頓修復、Proxy 404 快速終止與合成日 K 保底防禦 *(新增於 V8.32.0 / ADR #0113)*
 
-
+- **US Focus Universe Replacement (美股焦點池成分股校正)**:
+  - 核心機制：將 `US_TOP_30_FOCUS_SYMBOLS` 中的已變更/下市代碼 `SQ` 替換為流動性充裕之成長巨頭 `PYPL`（PayPal，basePrice: 65），滿編 30 檔均具備有效外部歷史資料。
+- **Proxy HTTP 404 Fast-Fail Guard (本地代理 404 快速失敗阻斷)**:
+  - 核心防禦：`fetchWithCORSProxy` 在本地代理 `/api/yahoo` 或 `/api/twse` 回傳 HTTP 404 Not Found 時，明確識別為標的不存在之不可重試錯誤，直接拋出例外終止，杜絕進入 3 個外部 CORS 代理伺服器輪詢 24 秒與阻塞並發調度池。
+- **Synthetic Daily Candle Fallback & Cache Persistence (保底合成日 K 防禦與持久化)**:
+  - 核心機制：在 `historicalOhlcvBackfill.ts` 中，若遠端全數候選代碼查無日 K 且本地無舊快取時，自動調用 `generateSyntheticCandles` 生成 30 根具備箱體特徵的模擬日 K 與技術指標，並沉澱至 IndexedDB。
+  - 工作區收斂：在 `MuscleBookerWorkspace.tsx` 的受控並發隊列中加入保底填補防禦，確保所有標的皆能被記錄，就緒度順暢推進至 100% 且 `isSyncing` 正確解除，杜絕「卡在 59/60 檔」的死循環停滯。
+- **Universe Dependency Decoupling (目標池代碼簽名解耦)**:
+  - 核心機制：透過 `targetUniverseKey` 穩定簽名，解耦全域報價定時更新導致的 `holdings` 參照頻繁改變，避免非持股目標池日 K 同步被無效反覆中斷重置。
 

@@ -167,6 +167,23 @@ describe('Historical OHLCV & Indicators Backfill Engine (回補引擎)', () => {
       expect(result.candles.length).toBe(1);
       expect(result.candles[0].close).toBe(452);
     });
+
+    it('當遠端 API 抓取失敗 (如查無資料/404) 且本地無舊快取時，應自動回退生成合成日 K (Synthetic Fallback) 並持久化', async () => {
+      vi.spyOn(db, 'getSymbolOhlcv').mockResolvedValue(null);
+      vi.spyOn(priceFetcher, 'fetchWithCORSProxy').mockRejectedValue(new Error('HTTP 404 Not Found'));
+      const saveOhlcvSpy = vi.spyOn(db, 'saveSymbolOhlcv').mockResolvedValue();
+
+      const result = await backfillSymbolOhlcvAndIndicators('UNKNOWN_SYM', 'US');
+
+      expect(result.candles.length).toBeGreaterThanOrEqual(25);
+      expect(result.indicators.length).toBeGreaterThanOrEqual(25);
+      expect(saveOhlcvSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          symbol: 'UNKNOWN_SYM',
+          candles: expect.any(Array),
+        })
+      );
+    });
   });
 
 

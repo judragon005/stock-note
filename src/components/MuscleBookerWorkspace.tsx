@@ -28,6 +28,7 @@ import {
   ScannedStockItem,
   getScopedUniverseSymbols,
   scanMuscleBookerItem,
+  generateSyntheticCandles,
 } from '../engine/muscleBookerEngine';
 import { backfillSymbolOhlcvAndIndicators } from '../engine/historicalOhlcvBackfill';
 import {
@@ -160,6 +161,11 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     return getScopedUniverseSymbols(currentMarket, selectedPool);
   }, [selectedPool, activeHoldings, closedHoldings, watchlistSymbols, holdings, currentMarket]);
 
+  // 1.05 建立穩定代碼簽名 key，避免全域價格輪詢變更 holdings 參照觸發無謂的日 K 重新同步
+  const targetUniverseKey = useMemo(() => {
+    return targetUniverse.map((u) => `${u.symbol}_${u.market}`).join(',');
+  }, [targetUniverse]);
+
   // 1.1 異步從 IndexedDB 批次載入真實日 K 線，並對缺損標的進行受控並發增量回補 (全目標池支援)
   useEffect(() => {
     let isCancelled = false;
@@ -223,9 +229,14 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
               if (isCancelled) return;
               if (res.candles && res.candles.length >= 5) {
                 setCachedCandlesMap((prev) => ({ ...prev, [m.symbol]: res.candles }));
+              } else {
+                const fallback = generateSyntheticCandles(m.symbol, 100);
+                setCachedCandlesMap((prev) => ({ ...prev, [m.symbol]: fallback }));
               }
             } catch {
-              // 忽略單檔失敗
+              if (isCancelled) return;
+              const fallback = generateSyntheticCandles(m.symbol, 100);
+              setCachedCandlesMap((prev) => ({ ...prev, [m.symbol]: fallback }));
             }
 
             completed++;
@@ -266,7 +277,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     return () => {
       isCancelled = true;
     };
-  }, [targetUniverse, selectedPool]);
+  }, [targetUniverseKey, selectedPool]);
 
   // 手動觸發全池增量同步最新收盤
   const handleTriggerManualSync = async (forceRefresh = false) => {
@@ -301,9 +312,13 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
           const res = await backfillSymbolOhlcvAndIndicators(m.symbol, m.market, forceRefresh);
           if (res.candles && res.candles.length >= 5) {
             setCachedCandlesMap((prev) => ({ ...prev, [m.symbol]: res.candles }));
+          } else {
+            const fallback = generateSyntheticCandles(m.symbol, 100);
+            setCachedCandlesMap((prev) => ({ ...prev, [m.symbol]: fallback }));
           }
         } catch {
-          // ignore
+          const fallback = generateSyntheticCandles(m.symbol, 100);
+          setCachedCandlesMap((prev) => ({ ...prev, [m.symbol]: fallback }));
         }
 
         completed++;

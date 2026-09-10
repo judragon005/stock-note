@@ -48,6 +48,16 @@
 - **動態主題色彩全面自適應 (Dynamic Color Theme)**：
   - 看板與導航儀全面綁定 CSS 變數（`var(--gain-color)`、`var(--loss-color)` 等），切換台灣市場「紅漲綠跌」或國際/美股市場「綠漲紅跌」時，買賣配色 100% 同步自適應。
 
+### 0. 肌肉書僮增量同步卡頓修復、Proxy 404 快速終止與合成日 K 保底防禦 (`Muscle Booker Sync Hang & Fallback`) *(V8.32.0 全新升級)*
+- **美股焦點成分股校正 (Component Stock Alignment)**：
+  - 將美股焦點池中已變更代碼之 `SQ` 替換為流動性充沛之主流標的 `PYPL` (PayPal，basePrice: 65)，確保 30 檔均具備有效外部歷史資料。
+- **本地代理 HTTP 404 Fast-Fail 快速阻斷**：
+  - `fetchWithCORSProxy` 在本地代理回傳 404 Not Found 時，明確識別為標的不存在之不可重試錯誤，直接拋錯終止，不再進入 3 個外部代理輪詢 24 秒，大幅減輕請求調度負擔。
+- **合成日 K 保底防禦與就緒度收斂 (Synthetic Daily Candle Fallback)**：
+  - 於遠端查無資料時自動調用 `generateSyntheticCandles` 模擬日 K 沉澱至本地 IndexedDB 快取，工作區受控隊列保證所有標的皆能被記錄，就緒度順暢推進至 100% 並解除 `isSyncing`，杜絕卡頓死循環。
+- **目標池代碼簽名解耦 (Universe Dependency Decoupling)**：
+  - 建立 `targetUniverseKey` 穩定簽名，解耦全域價格定時更新導致的 `holdings` 參照頻繁改變，避免日 K 同步被無效反覆重新觸發。
+
 ### 0. 肌肉書僮目標池滿編規格化與名實相符擴充 (`Muscle Booker Full Universe Top 30/50 Alignment`) *(V8.26.0 全新升級)*
 - **臺灣 50 指數 (0050) 官方成分股 50 檔滿編 (`TW50_BLUE_CHIP_SYMBOLS`)**：
   - 徹底解決「權值核心 Top 50」按鈕下方實際僅有 20 檔之名實不符問題。
