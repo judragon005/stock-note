@@ -792,7 +792,33 @@ describe('公司行動智慧掃描引擎 (Corporate Action Scanner)', () => {
         },
       ];
 
-      const results = await scanCorporateActions(trades);
+      const mockFetcher = async (sym: string) => {
+        if (sym === '2890') {
+          return [
+            {
+              symbol: '2890',
+              market: 'TW' as const,
+              type: 'STOCK_DIVIDEND' as const,
+              date: '2026-07-23',
+              payDate: '2026-08-24',
+              ratio: 0.02,
+              description: '盈餘轉增資配股每千股 20 股 (2.0%)',
+            },
+            {
+              symbol: '2890',
+              market: 'TW' as const,
+              type: 'DIVIDEND' as const,
+              date: '2026-07-23',
+              payDate: '2026-08-24',
+              price: 1.1,
+              description: '現金股利每股 1.1 TWD',
+            },
+          ];
+        }
+        return [];
+      };
+
+      const results = await scanCorporateActions(trades, mockFetcher);
       expect(results.length).toBeGreaterThanOrEqual(2);
 
       const stockDiv = results.find((r) => r.type === 'STOCK_DIVIDEND' && r.date === '2026-07-23');
@@ -899,8 +925,25 @@ describe('公司行動智慧掃描引擎 (Corporate Action Scanner)', () => {
         },
       ];
 
+      const mockFetcher = async (sym: string) => {
+        if (sym === '00878') {
+          return [
+            {
+              symbol: '00878',
+              market: 'TW' as const,
+              type: 'DIVIDEND' as const,
+              date: '2026-08-18',
+              payDate: '2026-09-11',
+              price: 0.55,
+              description: '季配息每股 0.55 元',
+            },
+          ];
+        }
+        return [];
+      };
+
       // 00878 於 2026-08-18 除息，因除息日前一日 (2026-08-17) 在倉為 0，不得享有該次配息
-      const results = await scanCorporateActions(trades);
+      const results = await scanCorporateActions(trades, mockFetcher);
       const div00878 = results.find((r) => r.symbol === '00878' && r.date === '2026-08-18');
       expect(div00878).toBeUndefined();
     });
