@@ -1,13 +1,15 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Document)
 
-> **交接產生時間**：2026-09-10 12:45 (UTC+8)  
+> **交接產生時間**：2026-09-10 16:05 (UTC+8)  
 > **當前最新里程碑**：
+> - **V8.35.0 資安深度防護套件：Web Crypto 敏感憑證加密、CORS 安全代理邊界路由與 CSV DDE 公式注入防禦**（端到端保密持久化：AES-GCM 256-bit + PBKDF2 100,000 次雜湊衍生；智能安全代理路由：憑證敏感 Header/Query 強制阻斷外流公共代理池；CSV/Excel DDE 注入脫逸消毒；JSON 備份脫敏匯出；自訂代理 SSRF 內網阻擋校驗）。
+> - **V8.34.0 ETF 穿透核算分析、多券商對帳單自動消歧義與行為審計系統**（ETF Look-Through 權重下鑽、跨標的綜合實質產業因子曝險、多券商對帳單智慧衝突消解與分流匹配、行為紀律偏差即時對賬核銷）。
 > - **V8.33.0 自適應動態成分股同步、存活探針與每日開市前背景校準**（告別程式碼常數寫死成分股。實作 Stale-While-Revalidate 分級動態快取、Baseline 靜態種子 0 延遲秒開、台美後備候選庫自動遞補、404 存活探針、假日與同日節流、輕量浮動 Toast 提示通知與工具列即時指示）。
 > - **V8.32.0 肌肉書僮增量同步卡頓修復、Proxy 404 快速終止與合成日 K 保底防禦**（替換美股失效標的 SQ ➔ PYPL、本地代理 404 立即 Fast-Fail 阻斷 24 秒外網無謂輪詢、合成日 K 保底防禦與 IndexedDB 快取持久化、解耦 targetUniverseKey 代碼簽名）。
 > - **V8.31.0 FIRE 財務自由複利滾雪球與定期定額智慧排程系統**（DRIP 雙軌複利推演與 4 階里程碑、定期定額休市順延與未來 30 天防透支推演、純原生幾何布朗運動 1,000 次蒙地卡羅路徑與 Guyton-Klinger 動態護欄）。
 > - **V8.30.0 Yahoo Finance 報價昨日收盤價與今日漲跌幅精準修正**（徹底拔除 `meta.chartPreviousClose` 歷史圖表起算價干擾，實盤數值 100% 吻合券商 APP）。
 > - **V8.29.0 肌肉書僮風益比全面統一專業 R 倍數規範**（標準化為 `${rrRatio}R` 如 `7.9R`）。
-> **品質狀態**：全量單元測試 **689/689 通過 (100% Passed / 61 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過 (~9.1 秒)。
+> **品質狀態**：全量單元測試 **736/736 通過 (100% Passed / 69 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過 (~10.8 秒)。
 
 ---
 
@@ -15,28 +17,28 @@
 
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
-- **當前工作分支**：`main` (已同步最新遠端 `origin/main`，Commit: `b340bca`)
-- **單元測試套件**：**689/689 通過 (61 test suites / 100% 綠燈，耗時 ~33s)**
+- **當前工作分支**：`main` (已同步最新遠端 `origin/main`，最新主幹 Commit: `4ae9dc3`)
+- **單元測試套件**：**736/736 通過 (69 test suites / 100% 綠燈，耗時 ~35s)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
-- **生產環境構建**：`npm run build` 打包耗時 ~9.1 秒，產出 0 錯誤
-- **當前釋出版本**：**V8.33.0**
-- **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens（如 FinMind / FMP / 自訂代理）均受 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
+- **生產環境構建**：`npm run build` 打包耗時 ~10.8 秒，產出 0 錯誤
+- **當前釋出版本**：**V8.35.0**
+- **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens（如 FinMind / FMP / 自訂代理）均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
 ---
 
 ## 🧭 2. 接棒 Agent 推薦技能清單 (Suggested Skills for Next Agent)
 
-依據專案規範與 `.agents/skills/productivity/handoff/SKILL.md` 規定，接手本專案的下一任 Agent 應優先調用以下技能以確保工程質量：
+依據專案規範與 `.agents/skills/README.md` 規定，接手本專案的下一任 Agent 應優先調用以下技能以確保工程質量：
 
 1. **`專業單元測試 (Unit Test Master)`**：
    - 適用時機：開發任何新功能、修復 Bug 或重構前。
    - 核心準則：強制遵循 TDD 紅-綠-重構循環，堅持公開介面測試縫隙 (Test Seams)，禁止編寫脆性內部測試。
 2. **`架構感知與防禦性開發 (Defensive Development)`**：
-   - 適用時機：修改任何共用引擎（如 `adaptiveUniverseEngine.ts`、`priceFetcher.ts`、`muscleBookerEngine.ts`、`cashLedgerEngine.ts`）前。
+   - 適用時機：修改任何共用引擎（如 `cryptoEngine.ts`、`secureProxyRouter.ts`、`csvSanitizer.ts`、`priceFetcher.ts`、`muscleBookerEngine.ts`、`cashLedgerEngine.ts`）前。
    - 核心準則：進行全量影響評估，杜絕「修復 A 損壞 B」。
 3. **`GitHub 工作流顧問 (GitHub Workflow Consultant)`**：
    - 適用時機：建立分支、管理 Issue、發起 PR、Squash & Merge 與分支清理。
-   - 核心準則：嚴禁直推 `main`，維持 `Issue-First` 與 PR 關聯自動化。
+   - 核心準則：嚴禁直推 `main`，維持 `Issue-First` 與 PR 關聯自動化，嚴格遵守每小時 5 次推播節流與 CI 防濫用原則。
 4. **`數據實時校驗與防幻覺專家 (Real-Time Data Verification Expert)`**：
    - 適用時機：涉及金融報價、殖利率、股價昨收、成分股變更等數據解析時。
    - 核心準則：強制多源交叉驗證與即時 API 抓取，阻絕靜態舊資料與假性數值污染決策。
@@ -51,6 +53,8 @@
 
 | 版本 | 規格書 (PRD / Spec) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 核心變更與收益 |
 | :--- | :--- | :--- | :--- | :--- |
+| **v8.35.0** | [`SPEC-0116`](file:///d:/APP/股票紀錄/docs/specs/0116-web-crypto-cors-guard-and-csv-dde-sanitization-spec.md) | [`ADR-0116`](file:///d:/APP/股票紀錄/docs/adr/0116-web-crypto-cors-guard-and-csv-dde-sanitization.md) | `.scratch/v8.35.0-web-crypto-and-security-hardening` | Web Crypto 敏感金鑰加密 (AES-GCM/PBKDF2)、CORS 安全邊界路由阻斷外流、CSV DDE 公式注入防禦與脫敏匯出。 |
+| **v8.34.0** | [`SPEC-0115`](file:///d:/APP/股票紀錄/docs/specs/0115-etf-look-through-behavioral-audit-and-reconciliation-spec.md) | [`ADR-0115`](file:///d:/APP/股票紀錄/docs/adr/0115-etf-look-through-and-multi-broker-reconciliation.md) | `.scratch/v8.34.0-etf-look-through-and-reconciliation` | ETF 穿透核算分析、實質產業因子曝險下鑽、多券商對帳單自動消歧義與行為審計即時核銷。 |
 | **v8.33.0** | [`SPEC-0114`](file:///d:/APP/股票紀錄/docs/specs/0114-adaptive-universe-sync-and-liveness-probe-spec.md) | [`ADR-0114`](file:///d:/APP/股票紀錄/docs/adr/0114-adaptive-universe-sync-and-liveness-probe.md) | `.scratch/v8.33.0-adaptive-universe-sync-and-liveness-probe` | 自適應動態成分股同步、存活探針、後備池自動遞補、每日開市背景校準與輕量 Toast 通知。 |
 | **v8.32.0** | [`SPEC-0113`](file:///d:/APP/股票紀錄/docs/specs/0113-muscle-booker-sync-hang-and-fallback-spec.md) | [`ADR-0113`](file:///d:/APP/股票紀錄/docs/adr/0113-muscle-booker-sync-hang-proxy-404-fast-fail-and-synthetic-fallback.md) | `.scratch/v8.32.0-muscle-booker-sync-hang-and-fallback` | 替換失效代碼 SQ ➔ PYPL、本地代理 404 Fast-Fail 快速終止、合成日 K 保底防禦與 IndexedDB 持久化。 |
 | **v8.31.0** | [`SPEC-0112`](file:///d:/APP/股票紀錄/docs/specs/0112-fire-compounding-drip-and-dca-simulator-spec.md) | [`ADR-0112`](file:///d:/APP/股票紀錄/docs/adr/0112-fire-compounding-drip-and-dca-simulator.md) | `.scratch/v8.31.0-fire-compounding-drip-and-dca-simulator` | DRIP 雙軌複利、DCA 假日順延防透支推演、蒙地卡羅 1,000 次 GBM 與 Guyton-Klinger 護欄。 |
@@ -61,7 +65,7 @@
 
 ### 3.2 領域術語與單一事實來源 (SSOT)
 - **領域詞彙手冊**：[`CONTEXT.md`](file:///d:/APP/股票紀錄/CONTEXT.md)
-  - 核心規範包含：`Adaptive Dynamic Universe & Stale-While-Revalidate Baseline`、`Reserve Candidates Pool & Auto-Healing Engine`、`Pre-Market Daily Auto-Sync & Throttling`、`Liveness Probe & Lightweight Toast Notification`、`Universal R-Multiple Standard`、`Bandwidth Gate`、`DRIP Dual-Track Compounding`、`DCA Holiday-Aware Scheduler` 等。
+  - 核心規範包含：`Web Crypto Master Key & PBKDF2 Derivation`、`CORS Proxy Safe Boundary Router`、`CSV DDE Injection Sanitization`、`Look-Through Weighting Engine`、`Reconciliation Disambiguation Engine`、`Adaptive Dynamic Universe & Stale-While-Revalidate Baseline`、`Reserve Candidates Pool & Auto-Healing Engine`、`Pre-Market Daily Auto-Sync & Throttling`、`Universal R-Multiple Standard`、`DRIP Dual-Track Compounding`、`DCA Holiday-Aware Scheduler` 等。
 
 ---
 
@@ -71,9 +75,14 @@
 
 | 模組分類 | 檔案路徑 | 核心職責與特性 | 測試覆蓋 |
 | :--- | :--- | :--- | :--- |
+| **Web Crypto 安全密鑰** | [`src/engine/cryptoEngine.ts`](file:///d:/APP/股票紀錄/src/engine/cryptoEngine.ts) | 原生 Web Crypto API (AES-GCM 256-bit + PBKDF2 100,000 次)、零外部依賴、純密文持久化。 | 9 tests |
+| **智能安全代理路由** | [`src/engine/secureProxyRouter.ts`](file:///d:/APP/股票紀錄/src/engine/secureProxyRouter.ts) | 憑證安全邊界校驗、阻斷敏感金鑰流向公共代理池、自訂代理 SSRF 內網阻擋校驗。 | 10 tests |
+| **CSV 公式注入防護** | [`src/engine/csvSanitizer.ts`](file:///d:/APP/股票紀錄/src/engine/csvSanitizer.ts) | DDE 惡意公式注入消毒 (`=,+,-,@,\t,\r` 前綴脫逸)、JSON 敏感帳密脫敏遮罩。 | 22 tests |
+| **ETF 穿透核算引擎** | [`src/engine/lookThroughEngine.ts`](file:///d:/APP/股票紀錄/src/engine/lookThroughEngine.ts) | 跨標的持倉下鑽、穿透綜合實質權重計算、真實產業因子曝險聚合。 | 4 tests |
+| **對帳單消歧與對賬** | [`src/engine/reconciliationEngine.ts`](file:///d:/APP/股票紀錄/src/engine/reconciliationEngine.ts) | 多券商格式自動偵測、重疊流水號衝突消歧、行為紀律偏差即時核銷。 | 9 tests |
 | **自適應動態成分股** | [`src/engine/adaptiveUniverseEngine.ts`](file:///d:/APP/股票紀錄/src/engine/adaptiveUniverseEngine.ts) | 存活探針、後備候選池庫自動遞補、開市前每日校準、假日與同日節流保護。 | 10 tests |
 | **肌肉書僮量化引擎** | [`src/engine/muscleBookerEngine.ts`](file:///d:/APP/股票紀錄/src/engine/muscleBookerEngine.ts) | 箱體突破、20MA 扣抵翻揚、帶寬門檻 $\le 8\%$、R 倍數制 (`7.9R`)、動態快取委託。 | 14 tests |
-| **市場即時報價引擎** | [`src/engine/priceFetcher.ts`](file:///d:/APP/股票紀錄/src/engine/priceFetcher.ts) | Yahoo Chart 昨收隔離、HTTP 404 Fast-Fail 快速終止、`price - change` 倒推、多代理輪詢。 | 25 tests |
+| **市場即時報價引擎** | [`src/engine/priceFetcher.ts`](file:///d:/APP/股票紀錄/src/engine/priceFetcher.ts) | 安全代理路由整合、Yahoo Chart 昨收隔離、HTTP 404 Fast-Fail 快速終止、多代理輪詢。 | 25 tests |
 | **歷史日 K 回補引擎** | [`src/engine/historicalOhlcvBackfill.ts`](file:///d:/APP/股票紀錄/src/engine/historicalOhlcvBackfill.ts) | 7 天短期增量抓取、合成日 K 保底防禦、IndexedDB 歷史持久化。 | 10 tests |
 | **DRIP 複利滾雪球** | [`src/engine/dripCompoundingEngine.ts`](file:///d:/APP/股票紀錄/src/engine/dripCompoundingEngine.ts) | 雙軌市值對比、股份指數放大、複利增益倍數、4 階被動收入自由度里程碑連續線性插值。 | 8 tests |
 | **DCA 智慧排程防透支** | [`src/engine/dcaSchedulerEngine.ts`](file:///d:/APP/股票紀錄/src/engine/dcaSchedulerEngine.ts) | 國定假日休市順延下一撮合日 ($T$)、T+2/T+1 交割日曆、未來 30 天防透支現金推演。 | 7 tests |
@@ -91,11 +100,13 @@
 
 | 類別 | 檔案路徑 | 核心職責與特性 |
 | :--- | :--- | :--- |
+| **ETF 穿透與產業曝險** | [`src/components/LookThroughIntegration.tsx`](file:///d:/APP/股票紀錄/src/components/LookThroughIntegration.tsx) | ETF Look-Through 權重下鑽、跨標的綜合實質產業因子曝險圖表與體檢視窗。 |
+| **多券商對帳單消歧核銷** | [`src/components/ReconciliationModal.tsx`](file:///d:/APP/股票紀錄/src/components/ReconciliationModal.tsx) | 批次對帳單衝突消歧、差異比對、多筆交易一鍵核銷與審計標記。 |
 | **肌肉書僮工作台** | [`src/components/MuscleBookerWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/MuscleBookerWorkspace.tsx) | 開市自動校準、輕量 Toast 通知、狀態列指示與手動檢查、雙欄作戰看板 (Top 3 BUY vs Holding SELL)、日 K 就緒度進度條。 |
 | **宏觀戰情室工作台** | [`src/components/MacroWarRoomWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/MacroWarRoomWorkspace.tsx) | 全球總經脈動、黑天鵝壓力測試矩陣、雙動能輪動雷達與 AI 策略建議。 |
 | **籌碼星圖工作台** | [`src/components/ChipsWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/ChipsWorkspace.tsx) | 雙模式切換（在庫持倉 vs 全市場法人焦點 Top 30）、四象限診斷膠囊、籌碼重整。 |
 | **現金與交割工作台** | [`src/components/CashLedgerWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/CashLedgerWorkspace.tsx) | 四核心可用性發光看板、在途交割時序排程面板、交割戶資金網格、質押風控。 |
-| **設定與時光機看板** | [`src/components/SettingsWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/SettingsWorkspace.tsx) | 券商手續費率設定、API 金鑰管理、時光機快照管理（自訂快照、一鍵還原、JSON 備份）。 |
+| **設定與時光機看板** | [`src/components/SettingsWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/SettingsWorkspace.tsx) | 券商手續費率、Web Crypto 敏感金鑰防護徽章、自訂代理 SSRF 檢驗、脫敏備份匯出、時光機快照管理。 |
 
 ---
 
@@ -107,13 +118,19 @@
   - `DEBT-0001` ~ `DEBT-0018`：持股排序 DRY、交易紀律審查、現金簿 NAV、時光機 IndexedDB、質押壓力測試、XIRR 引擎、量化指標、股票字典同步等均已完整實作並驗收。
   - `DEBT-0021`：智慧定期定額 (DCA) 排程器與防透支推演（已於 V8.31.0 實作）。
   - `DEBT-0022`：蒙地卡羅 FIRE 退休安全提領模擬器（已於 V8.31.0 實作）。
+  - `DEBT-0024`：ETF 穿透分析與產業因子集中度體檢（已於 V8.34.0 實作）。
   - `DEBT-0025`：黑天鵝保證金壓力測試矩陣（已於 V8.12.0 實作）。
   - `DEBT-0027`：雙動能輪動體系（已於 V8.11.0 實作）。
+  - `DEBT-0028`：多券商對帳單智慧匯入衝突消解器（已於 V8.34.0 實作）。
   - `DEBT-0029`：股息再投資 (DRIP) 複利引擎與現金流增長預測（已於 V8.31.0 實作）。
+  - `DEBT-0030`：Web Crypto API 敏感金鑰加密與端到端保密持久化（已於 V8.35.0 實作）。
+  - `DEBT-0031`：公共 CORS 代理憑證防洩漏與安全邊界路由機制（已於 V8.35.0 實作）。
+  - `DEBT-0032`：CSV 公式注入防禦 (DDE Protection) 與備份匯出脫敏機制（已於 V8.35.0 實作）。
 - **待進行評估之架構改善 (Backlog / Open)**：
   - `DEBT-0023`：PWA 離線優先與端到端加密 (E2EE) 雲端同步。
-  - `DEBT-0024`：ETF 穿透分析與產業因子集中度體檢。
-  - `DEBT-0028`：多券商對帳單智慧匯入衝突消解器。
+  - `DEBT-0033`：靜態資源 Content-Security-Policy (CSP) 安全標頭與 XSS 深度防護。
+  - `DEBT-0034`：JSON / CSV 匯入解析的原型鏈污染 (Prototype Pollution) 與邊界防護。
+  - `DEBT-0035`：大型交易紀錄分頁載入與虛擬列表 (Virtualization) 滾動效能優化。
 
 ---
 
@@ -123,8 +140,8 @@
 
 1. **確認當前工作分支**：
    - 當前位於 `main` 主幹分支，工作目錄 100% clean。
-   - 所有代碼變更、規格書、ADR、本地票券與交接文檔均已合併收斂（最新 Commit: `b340bca`）。
+   - 所有代碼變更、規格書、ADR、本地票券與交接文檔均已合併收斂（最新 Commit: `4ae9dc3`）。
 2. **日常驗證防線**：
-   - 接手前務必執行 `npm test`（確認 689 個測試 100% 通過）與 `npm run build`（確認 0 型別錯誤）。
+   - 接手前務必執行 `npm test`（確認 736 個測試 100% 通過）與 `npm run build`（確認 0 型別錯誤）。
 3. **新需求啟動流程**：
    - 嚴格遵循工作流藍圖：`/grill-with-docs` ➔ `/to-spec` ➔ `/to-tickets` ➔ `/triage` ➔ `/tdd & /implement` ➔ `/code-review` ➔ `/handoff`。
