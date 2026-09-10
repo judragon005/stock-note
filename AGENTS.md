@@ -30,11 +30,13 @@
 1. **嚴禁直接 Push 至 `main` 分支**：主幹分支受保護，所有變更一律走 PR 流程。
 2. **Issue 優先原則 (Issue-First)**：
    - 凡有新需求或修復，**必須先確認或建立對應的 GitHub Issue**（使用 `gh issue create`）。
+   - **強制攜帶標準標籤**：建立 Issue 時必須指定類別與狀態標籤（如 `--label "enhancement,ready-for-agent"` 或 `--label "bug,ready-for-agent"`）；在執行 `/triage` 分流時必須確認遠端 Issue 已正確標註。
    - 嚴禁無 Issue 直接開發。分支名稱一律命名為 `feature/<issue-id>-<name>`、`fix/<issue-id>-<name>` 或 `docs/<name>`。
 3. **測試驅動開發 (TDD)**：遵循紅-綠-重構循環完成開發，本地確保 `npm test` (100% 通過) 與 `npm run build` (TypeScript 0 錯誤)。
 4. **領域文檔同步 (Doc Sync)**：若涉及新術語、架構決策或新元件，必須於同一 PR 中同步更新 `CONTEXT.md`、`docs/adr/` 與交接手冊，杜絕文檔脫鉤。
 5. **發起 PR 與自動關聯 (Issue Link)**：
    - 推送分支後使用 `gh pr create` 發起 Pull Request。
+   - **強制攜帶類別標籤**：PR 必須對齊關聯 Issue 帶上類別標籤（如 `--label "enhancement"`、`--label "bug"` 或 `--label "documentation"`），嚴禁建立無標籤之裸 PR。
    - **PR 描述內必須包含 `Closes #<issue-id>`**，確保 Squash and Merge 時 GitHub 自動關閉對應 Issue。
 6. **合併與分支清理**：經 GitHub Actions CI 綠燈驗證後，執行 Squash and Merge 合併回 `main`，並同步清理遠端與本地已合併分支。
 7. **交接自動補全 (Handoff & Auto-Sync)**：每次執行 `/handoff` 收尾時，Agent **必須主動檢查 `docs/specs/`、`docs/adr/` 與 `.scratch/`**。若本次迭代有新 PRD 但尚未建立 ADR 或 `.scratch/` 鏡像，Agent 必須主動自動生成對應 ADR、導出 `.scratch/v1.X/issues/` 本地票券鏡像，並同步更新 `README.md`、`CONTEXT.md` 與交接手冊，嚴禁等待人類提醒。
