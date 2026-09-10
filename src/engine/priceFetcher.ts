@@ -2,6 +2,7 @@ import { MarketType, PriceQuote, ExchangeRateQuote } from '../types/stock';
 import { parseYahooHistoricalCandlesResponse } from './historicalPriceFetcher';
 import { globalRequestScheduler } from './rateLimiter';
 import { STATIC_TW_STOCKS } from '../data/stockDictionary';
+import { inspectRequestForCredentials, SecurityCredentialRoutingError } from './secureProxyRouter';
 
 const CORS_PROXIES = [
   (url: string) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
@@ -70,7 +71,14 @@ export async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 
       // browser CORS fallback
     }
 
-    // 3. 外部 CORS 代理池
+    // 3. 外部 CORS 代理池 (安全邊界：嚴格禁止攜帶敏感憑證的請求流向公共第三方代理)
+    const inspection = inspectRequestForCredentials(targetUrl);
+    if (inspection.hasCredentials) {
+      throw new SecurityCredentialRoutingError(
+        `[SecurityGuard] 偵測到請求含有敏感憑證 [${inspection.detectedKeyWords.join(', ')}]，已強制阻斷外發至公共 CORS 代理池以杜絕金鑰洩漏！`
+      );
+    }
+
     let lastError: Error | null = null;
     for (const getProxyUrl of CORS_PROXIES) {
       const proxyUrl = getProxyUrl(targetUrl);

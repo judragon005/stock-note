@@ -27,6 +27,7 @@ import {
   resolveOfficialSecurityName,
   STATIC_SECURITY_NAMES as OFFICIAL_SECURITY_NAMES,
 } from '../engine/stockNameResolver';
+import { sanitizeCSVCell } from '../engine/csvSanitizer';
 
 export { resolveOfficialSecurityName, OFFICIAL_SECURITY_NAMES };
 
@@ -765,24 +766,24 @@ export function exportTradesToCSV(trades: TradeRecord[]): void {
     '備註',
   ];
   const rows = trades.map((t) => [
-    t.date,
-    t.market,
-    t.symbol,
-    `"${(t.name || '').replace(/"/g, '""')}"`,
-    t.type,
-    t.shares,
-    t.price,
-    t.currency,
-    t.fee,
-    t.tax,
-    t.ratio !== undefined ? t.ratio : '',
-    t.cashAmount !== undefined ? t.cashAmount : '',
-    t.exDate || '',
-    t.targetSymbol || '',
-    t.allocationRatio !== undefined ? t.allocationRatio : '',
-    t.conversionPrice !== undefined ? t.conversionPrice : '',
-    `"${(t.tags || []).join(';')}"`,
-    `"${(t.note || '').replace(/"/g, '""')}"`,
+    sanitizeCSVCell(t.date),
+    sanitizeCSVCell(t.market),
+    sanitizeCSVCell(t.symbol),
+    sanitizeCSVCell(t.name || ''),
+    sanitizeCSVCell(t.type),
+    sanitizeCSVCell(t.shares),
+    sanitizeCSVCell(t.price),
+    sanitizeCSVCell(t.currency),
+    sanitizeCSVCell(t.fee),
+    sanitizeCSVCell(t.tax),
+    sanitizeCSVCell(t.ratio !== undefined ? t.ratio : ''),
+    sanitizeCSVCell(t.cashAmount !== undefined ? t.cashAmount : ''),
+    sanitizeCSVCell(t.exDate || ''),
+    sanitizeCSVCell(t.targetSymbol || ''),
+    sanitizeCSVCell(t.allocationRatio !== undefined ? t.allocationRatio : ''),
+    sanitizeCSVCell(t.conversionPrice !== undefined ? t.conversionPrice : ''),
+    sanitizeCSVCell((t.tags || []).join(';')),
+    sanitizeCSVCell(t.note || ''),
   ]);
 
   const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');

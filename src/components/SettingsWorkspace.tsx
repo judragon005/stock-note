@@ -30,6 +30,7 @@ import {
 } from '../utils/db';
 import { syncOfficialTaiwanStockList } from '../engine/stockDictionarySync';
 import { getStockDictionaryStats, clearCustomStockNames } from '../engine/stockNameResolver';
+import { validateCustomProxyUrl } from '../engine/secureProxyRouter';
 import { StockDictionaryStats } from '../types/stockDictionary';
 import { LocalStorageInspectionStats } from '../types/stock';
 import {
@@ -124,7 +125,16 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
     setShowKeys((prev) => ({ ...prev, [field]: !prev[field] }));
   };
 
+  const proxyValidation = customProxyUrl.trim()
+    ? validateCustomProxyUrl(customProxyUrl.trim())
+    : { valid: true };
+
   const handleSaveApiKeys = () => {
+    if (!proxyValidation.valid) {
+      alert(`⚠️ 自訂 Proxy 網址不合規：${proxyValidation.error}。請修正後再儲存。`);
+      return;
+    }
+
     onSaveApiKeys({
       finmindToken: finmindToken.trim() || undefined,
       fmpApiKey: fmpApiKey.trim() || undefined,
@@ -768,6 +778,23 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '0.7rem',
+                padding: '3px 8px',
+                borderRadius: '6px',
+                background: 'rgba(56, 189, 248, 0.15)',
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+                color: '#38bdf8',
+                fontWeight: 600,
+              }}
+            >
+              <ShieldCheck size={12} />
+              Web Crypto 256-bit 保護中
+            </span>
             {keySavedToast && (
               <span style={{ fontSize: '0.78rem', color: '#34d399', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <CheckCircle2 size={14} /> 金鑰設定已儲存！
@@ -883,6 +910,12 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
             <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '4px' }}>
               自建 Cloudflare Worker 或私人反向代理轉發通道。
             </div>
+            {!proxyValidation.valid && (
+              <div style={{ fontSize: '0.72rem', color: '#f87171', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <ShieldAlert size={13} color="#f87171" />
+                <span>{proxyValidation.error}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1077,18 +1110,26 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
     }
   };
 
-  // 匯出全庫 JSON
+  // 脫敏匯出開關狀態 (預設開啟保護)
+  const [redactSensitiveExport, setRedactSensitiveExport] = useState(true);
+
+  // 匯出全庫 JSON (支援脫敏選項)
   const handleExportFullDB = async () => {
     try {
-      const json = await exportFullDatabaseJSON();
+      const json = await exportFullDatabaseJSON(redactSensitiveExport);
       const blob = new Blob([json], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `stock-tracker-full-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      const suffix = redactSensitiveExport ? 'redacted-backup' : 'full-backup';
+      a.download = `stock-tracker-${suffix}-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      showToast('📦 全庫 JSON 備份檔案已成功導出！');
+      showToast(
+        redactSensitiveExport
+          ? '🛡️ 全庫 JSON 脫敏備份已成功導出（已抹除敏感 API 金鑰）！'
+          : '📦 全庫 JSON 完整備份檔案已成功導出！'
+      );
     } catch (err) {
       showToast(`匯出失敗: ${err instanceof Error ? err.message : String(err)}`, true);
     }
@@ -1431,15 +1472,29 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
           <div
             style={{
               display: 'flex',
+              flexDirection: 'column',
               gap: '8px',
               marginTop: '16px',
               paddingTop: '12px',
               borderTop: '1px solid rgba(255, 255, 255, 0.06)',
             }}
           >
-            <button
-              type="button"
-              onClick={handleExportFullDB}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.74rem', color: '#93c5fd' }}>
+              <input
+                type="checkbox"
+                id="redact-sensitive-toggle"
+                checked={redactSensitiveExport}
+                onChange={(e) => setRedactSensitiveExport(e.target.checked)}
+                style={{ cursor: 'pointer', accentColor: '#3b82f6' }}
+              />
+              <label htmlFor="redact-sensitive-toggle" style={{ cursor: 'pointer', userSelect: 'none' }}>
+                🛡️ 脫敏匯出 (自動抹除 API 金鑰以防外洩)
+              </label>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={handleExportFullDB}
               style={{
                 flex: 1,
                 display: 'flex',
@@ -1481,6 +1536,7 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
             </label>
           </div>
         </div>
+      </div>
 
         {/* 卡片 2：⚡ 行情與市場快取 */}
         <div
