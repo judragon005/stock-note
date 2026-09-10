@@ -1444,3 +1444,15 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Universe Dependency Decoupling (目標池代碼簽名解耦)**:
   - 核心機制：透過 `targetUniverseKey` 穩定簽名，解耦全域報價定時更新導致的 `holdings` 參照頻繁改變，避免非持股目標池日 K 同步被無效反覆中斷重置。
 
+### 自適應動態成分股同步、開市前背景校準與存活探針 *(新增於 V8.33.0 / ADR #0114)*
+
+- **Adaptive Dynamic Universe & Stale-While-Revalidate Baseline (自適應動態成分股與分級快取基線)**:
+  - 核心定義：告別純代碼常數寫死成分股。以 LocalStorage / IndexedDB 存儲動態成分股清單（Key: `stock_tracker_dynamic_universe_${poolKey}`），首屏讀取動態快取；無快取時無縫回退至靜態常數種子（Baseline Seed），達成 0 延遲秒開首屏體驗。
+- **Reserve Candidates Pool & Auto-Healing Engine (後備候選庫與自動修復遞補引擎)**:
+  - 核心機制：為台股與美股分別建立後備候選池（`TW_RESERVE_CANDIDATES`, `US_RESERVE_CANDIDATES`）。當成分股下市、更名或被剔除時，系統自動自後備庫依序挑選未在庫標的進行替換，總檔數（30 檔 / 50 檔）始終維持滿編，無需工程師修改程式碼或發布新版本。
+- **Pre-Market Daily Auto-Sync & Throttling (開市前背景校準與同日節流保護)**:
+  - 核心機制：進入動能雷達工作區時非同步啟動 `checkAndSyncUniverseDaily`。整合 `holidayCalendar.ts` 營業日判斷，休市日自動跳過；同日已校準過自動節流跳過；跨日或非交易日後開盤自動執行存活探針檢驗。
+- **Liveness Probe & Lightweight Toast Notification (存活探針與輕量浮動通知)**:
+  - 核心機制：存活探針（`probeSymbolLiveness`）偵測標的是否存在 404 或資料損毀。當偵測到成分股自動遞補更動時，右上方彈出輕量浮動 Toast 提示投資人（如「🔔 已自動完成成分股校準：剔除下市標的...」），狀態列同步顯示 `🟢 官方成分股 (今日已校準)` 與手動「🔄 檢查官方成分股」按鈕。
+
+
