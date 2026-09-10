@@ -41,6 +41,7 @@ import { resolveOfficialSecurityName } from '../engine/stockNameResolver';
 import { inferMarketFromSymbol } from '../engine/priceFetcher';
 import { Tooltip } from './common/Tooltip';
 import { getSymbolOhlcv } from '../utils/db';
+import { checkAndSyncUniverseDaily } from '../engine/adaptiveUniverseEngine';
 
 /**
  * 格式化標的幣別價格字串：美股市場統一標示 US$，台股市場標示 $
@@ -91,6 +92,47 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
 
   // 真實歷史日 K 線快取映射表 (SSOT Cache: Symbol -> DailyCandle[])
   const [cachedCandlesMap, setCachedCandlesMap] = useState<Record<string, DailyCandle[]>>({});
+
+  // 成分股動態校準與 Toast 提示狀態
+  const [universeSyncToast, setUniverseSyncToast] = useState<{
+    message: string;
+    type: 'info' | 'success' | 'warn';
+  } | null>(null);
+  const [isCheckingUniverse, setIsCheckingUniverse] = useState(false);
+  const [universeStatusText, setUniverseStatusText] = useState<string>('🟢 官方成分股 (今日已校準)');
+
+  // 每日開市前背景自動校準成分股與存活探針
+  useEffect(() => {
+    let isCancelled = false;
+    const runDailyUniverseCheck = async () => {
+      try {
+        const res = await checkAndSyncUniverseDaily();
+        if (isCancelled) return;
+        if (res.hasChanges) {
+          setUniverseSyncToast({
+            message: res.summaryMessage,
+            type: 'info',
+          });
+          setUniverseStatusText(`🔔 已校準 (${res.replacedSymbols.length} 檔遞補)`);
+          setTimeout(() => {
+            if (!isCancelled) setUniverseSyncToast(null);
+          }, 7000);
+        } else {
+          setUniverseStatusText(
+            res.summaryMessage.includes('非交易日')
+              ? '📅 非交易日 (維持基準)'
+              : '🟢 官方成分股 (今日已校準)'
+          );
+        }
+      } catch (err) {
+        console.warn('Failed to perform daily universe check:', err);
+      }
+    };
+    runDailyUniverseCheck();
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   // 日 K 快取受控增量同步狀態
   const [syncState, setSyncState] = useState<{
@@ -343,6 +385,32 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     });
   };
 
+  // 手動觸發成分股校準與存活探針檢驗
+  const handleManualCheckUniverse = async () => {
+    setIsCheckingUniverse(true);
+    try {
+      const res = await checkAndSyncUniverseDaily({ force: true });
+      setUniverseSyncToast({
+        message: res.summaryMessage,
+        type: res.hasChanges ? 'info' : 'success',
+      });
+      if (res.hasChanges) {
+        setUniverseStatusText(`🔔 已校準 (${res.replacedSymbols.length} 檔遞補)`);
+      } else {
+        setUniverseStatusText('🟢 官方成分股 (已完成最新檢驗)');
+      }
+      setTimeout(() => setUniverseSyncToast(null), 6000);
+    } catch (err: any) {
+      setUniverseSyncToast({
+        message: `檢查失敗：${err?.message || '外部網路逾時'}`,
+        type: 'warn',
+      });
+      setTimeout(() => setUniverseSyncToast(null), 5000);
+    } finally {
+      setIsCheckingUniverse(false);
+    }
+  };
+
   // 執行即時外部診斷 (Ad-hoc Scan)
   const handleRunAdHocScan = async (symbolToQuery?: string) => {
     const raw = (symbolToQuery ?? searchQuery).trim().toUpperCase();
@@ -452,7 +520,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
 
       // 若本地有真實日 K，以最新收盤價為準；否則以 basePrice 為準
       const latestCandle = candles && candles.length > 0 ? candles[candles.length - 1] : undefined;
-      const effectivePrice = latestCandle?.close || item.basePrice;
+      const effectivePrice = latestCandle?.close ?? item.basePrice ?? 100;
 
       return scanMuscleBookerItem(
         item.symbol,
@@ -535,7 +603,60 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
   const readyPercent = totalUniverseCount > 0 ? Math.round((readyUniverseCount / totalUniverseCount) * 100) : 100;
 
   return (
-    <div className="warroom-container animate-fade-in">
+    <div className="warroom-container animate-fade-in" style={{ position: 'relative' }}>
+      {/* 輕量 Toast 通知 */}
+      {universeSyncToast && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '20px',
+            right: '24px',
+            zIndex: 9999,
+            maxWidth: '460px',
+            padding: '12px 18px',
+            borderRadius: 'var(--radius-md)',
+            background:
+              universeSyncToast.type === 'warn'
+                ? 'rgba(239, 68, 68, 0.95)'
+                : 'linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 58, 138, 0.96))',
+            border: '1px solid ' + (universeSyncToast.type === 'warn' ? '#ef4444' : '#3b82f6'),
+            color: '#ffffff',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)',
+            backdropFilter: 'blur(10px)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '10px',
+            animation: 'fadeIn 0.2s ease-out',
+          }}
+        >
+          <div style={{ marginTop: '2px', flexShrink: 0 }}>
+            {universeSyncToast.type === 'warn' ? (
+              <AlertTriangle size={18} color="#fca5a5" />
+            ) : (
+              <CheckCircle2 size={18} color="#60a5fa" />
+            )}
+          </div>
+          <div style={{ flex: 1, fontSize: '0.85rem', lineHeight: '1.45' }}>
+            {universeSyncToast.message}
+          </div>
+          <button
+            onClick={() => setUniverseSyncToast(null)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'rgba(255, 255, 255, 0.7)',
+              cursor: 'pointer',
+              padding: '2px',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+            title="關閉通知"
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
+
       {/* 頂部 Header */}
       <div
         className="card"
@@ -788,7 +909,45 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <span
+            style={{
+              fontSize: '0.75rem',
+              padding: '4px 8px',
+              borderRadius: 'var(--radius-sm)',
+              background: 'rgba(16, 185, 129, 0.12)',
+              color: '#34d399',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontWeight: 500,
+            }}
+          >
+            {universeStatusText}
+          </span>
+          <button
+            onClick={handleManualCheckUniverse}
+            disabled={isCheckingUniverse}
+            className="btn btn-sm"
+            style={{
+              padding: '5px 10px',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              background: 'rgba(139, 92, 246, 0.15)',
+              color: '#c4b5fd',
+              border: '1px solid rgba(139, 92, 246, 0.3)',
+              borderRadius: 'var(--radius-sm)',
+              cursor: isCheckingUniverse ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
+            title="檢驗官方成分股與存活探針，若遇下市或更名自動自後備池遞補"
+          >
+            <RefreshCw size={13} className={isCheckingUniverse ? 'animate-spin' : ''} />
+            {isCheckingUniverse ? '校準中...' : '檢查官方成分股'}
+          </button>
           <button
             onClick={() => handleTriggerManualSync(false)}
             disabled={syncState.isSyncing}

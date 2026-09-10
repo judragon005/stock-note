@@ -3,13 +3,23 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-676%2F676%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-689%2F689%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 自適應動態成分股同步、存活探針與每日開市前背景校準 (`Adaptive Universe Sync & Liveness Probe`) *(V8.33.0 全新升級)*
+- **擺脫純代碼寫死常數 (Dynamic Universe Stale-While-Revalidate)**：
+  - 徹底告別成分股（臺灣 50、美股 Top 50、法人焦點 30）寫死在代碼常數的缺陷。採用動態分級快取機制（LocalStorage / IndexedDB），首屏直接讀取動態名單，無快取時無縫回退至靜態常數種子（Baseline Seed），達成 0 延遲秒開首屏體驗。
+- **後備候選池庫與自動遞補修復 (Reserve Pools & Auto-Healing Engine)**：
+  - 分別建立台股優質權值池 (`TW_RESERVE_CANDIDATES`) 與美股標普巨頭池 (`US_RESERVE_CANDIDATES`)。當成分股下市、更名或被剔除時，系統自動自後備庫依序挑選未在庫之優質標的替換，30 檔與 50 檔始終維持滿編，**投資人再也不需要等待工程師手動修改程式碼或發布新版本**。
+- **每日開市前背景自動校準與同日節流 (Daily Pre-Market Auto-Sync & Throttling)**：
+  - 進入動能雷達工作區時非同步啟動校準任務，整合 `holidayCalendar.ts` 營業日判斷，休市日自動跳過，同日進入自動節流不重複連線；跨日開盤自動執行存活探針檢驗。
+- **存活探針與輕量浮動通知 (Liveness Probe & Lightweight Toast Notification)**：
+  - 存活探針（`probeSymbolLiveness`）偵測標的是否存在 404 或資料失效。若偵測到成分股自動遞補更動，畫面右上方彈出輕量浮動 Toast 通知（如「🔔 已自動完成成分股校準：剔除下市標的...」），狀態列同步顯示 `🟢 官方成分股 (今日已校準)` 與手動「🔄 檢查官方成分股」按鈕。
 
 ### 0. Yahoo Finance 報價昨日收盤價與今日漲跌幅精準修正 (`Yahoo Quote Previous Close & Daily Change Precision`) *(V8.30.0 全新升級)*
 - **徹底拔除圖表昨收干擾 (Quarantine of Chart Previous Close)**：

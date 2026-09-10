@@ -1237,4 +1237,61 @@ export function removeMuscleBookerWatchlistSymbol(symbol: string): string[] {
   return next;
 }
 
+export interface DynamicUniverseStorageData {
+  poolKey: string;
+  symbols: { symbol: string; name: string; market: MarketType; basePrice?: number }[];
+  lastCheckedDate: string; // YYYY-MM-DD
+  version: number;
+  inactiveSymbols?: string[];
+  updatedAt: number;
+}
+
+export const DYNAMIC_UNIVERSE_STORAGE_PREFIX = 'stock_tracker_dynamic_universe_';
+
+/**
+ * 讀取動態目標池成分股快取
+ */
+export function getDynamicUniverseStorage(poolKey: string): DynamicUniverseStorageData | null {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(`${DYNAMIC_UNIVERSE_STORAGE_PREFIX}${poolKey}`);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (err) {
+    logger.warn(`Failed to read dynamic universe storage for ${poolKey}:`, err);
+    return null;
+  }
+}
+
+/**
+ * 儲存動態目標池成分股快取
+ */
+export function saveDynamicUniverseStorage(poolKey: string, data: DynamicUniverseStorageData): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(`${DYNAMIC_UNIVERSE_STORAGE_PREFIX}${poolKey}`, JSON.stringify(data));
+  } catch (err) {
+    logger.error(`Failed to save dynamic universe storage for ${poolKey}:`, err);
+  }
+}
+
+/**
+ * 清除動態目標池快取 (用於測試或重置)
+ */
+export function clearDynamicUniverseStorage(): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(DYNAMIC_UNIVERSE_STORAGE_PREFIX)) {
+        keysToRemove.push(k);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch {
+    // ignore
+  }
+}
+
 

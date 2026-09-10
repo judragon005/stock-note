@@ -6,6 +6,7 @@ import {
   MuscleBookerIndicatorPoint,
 } from '../types/indicators';
 import { MarketType } from '../types/stock';
+import { getDynamicUniverseStorage } from '../utils/storage';
 
 
 /**
@@ -722,13 +723,28 @@ export function getScopedUniverseSymbols(
   market: 'ALL' | MarketType = 'ALL',
   pool: AssetPoolType = 'TOP30_FOCUS'
 ) {
+  const getWithCache = (poolKey: string, fallback: { symbol: string; name: string; market: MarketType; basePrice?: number }[]) => {
+    try {
+      const cached = getDynamicUniverseStorage(poolKey);
+      if (cached && cached.symbols && cached.symbols.length > 0) {
+        return cached.symbols;
+      }
+    } catch {
+      // ignore
+    }
+    return fallback;
+  };
+
   if (pool === 'TW50_CORE') {
-    if (market === 'US') return US_MEGA_50_CORE_SYMBOLS;
-    return TW50_BLUE_CHIP_SYMBOLS;
+    if (market === 'US') return getWithCache('US_MEGA_50_CORE', US_MEGA_50_CORE_SYMBOLS);
+    return getWithCache('TW50_CORE', TW50_BLUE_CHIP_SYMBOLS);
   }
-  if (market === 'US') return US_TOP_30_FOCUS_SYMBOLS;
-  if (market === 'TW') return TW_TOP_30_FOCUS_SYMBOLS;
-  return [...TW_TOP_30_FOCUS_SYMBOLS, ...US_TOP_30_FOCUS_SYMBOLS];
+  if (market === 'US') return getWithCache('US_TOP_30_FOCUS', US_TOP_30_FOCUS_SYMBOLS);
+  if (market === 'TW') return getWithCache('TW_TOP_30_FOCUS', TW_TOP_30_FOCUS_SYMBOLS);
+  return [
+    ...getWithCache('TW_TOP_30_FOCUS', TW_TOP_30_FOCUS_SYMBOLS),
+    ...getWithCache('US_TOP_30_FOCUS', US_TOP_30_FOCUS_SYMBOLS),
+  ];
 }
 
 /**
