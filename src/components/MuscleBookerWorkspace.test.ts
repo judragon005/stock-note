@@ -95,6 +95,10 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
     expect(TW_TOP_30_FOCUS_SYMBOLS).toHaveLength(30);
     expect(US_TOP_30_FOCUS_SYMBOLS).toHaveLength(30);
 
+    // 驗證美股焦點池成分股正確納入 PYPL 且徹底移除無效代碼 SQ
+    expect(US_TOP_30_FOCUS_SYMBOLS.some((item) => item.symbol === 'PYPL')).toBe(true);
+    expect(US_TOP_30_FOCUS_SYMBOLS.some((item) => item.symbol === 'SQ')).toBe(false);
+
     // 驗證 getScopedUniverseSymbols 返回完全對齊
     expect(getScopedUniverseSymbols('TW', 'TW50_CORE')).toHaveLength(50);
     expect(getScopedUniverseSymbols('US', 'TW50_CORE')).toHaveLength(50);
@@ -321,6 +325,27 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
     expect(total).toBe(4);
     expect(ready).toBe(2);
     expect(percent).toBe(50);
+  });
+
+  it('當標的遠端查無資料時，保底合成日 K 注入後就緒度應順利達到 100%', () => {
+    const universe = [
+      { symbol: '2330' },
+      { symbol: 'PYPL' },
+    ];
+
+    const candlesMap: Record<string, DailyCandle[]> = {
+      '2330': Array.from({ length: 10 }, (_, i) => ({ date: `2026-08-${i + 1}`, open: 100, high: 102, low: 98, close: 101, volume: 100 })),
+      // PYPL 經保底合成注入 25 根日 K
+      'PYPL': Array.from({ length: 25 }, (_, i) => ({ date: `2026-08-${i + 1}`, open: 65, high: 66, low: 64, close: 65.5, volume: 500 })),
+    };
+
+    const total = universe.length;
+    const ready = universe.filter((u) => candlesMap[u.symbol] && candlesMap[u.symbol].length >= 5).length;
+    const percent = Math.round((ready / total) * 100);
+
+    expect(total).toBe(2);
+    expect(ready).toBe(2);
+    expect(percent).toBe(100);
   });
 
   describe('今日核心作戰指令 (Top 3 Action Directives & Holding-Gated Sell)', () => {

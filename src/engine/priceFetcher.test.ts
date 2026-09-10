@@ -383,6 +383,35 @@ describe('PriceFetcher Engine (TDD Seam)', () => {
         globalThis.fetch = originalFetch;
       }
     });
+
+    it('當本地代理回傳 HTTP 404 Not Found 時，應判定資源不存在並立即快速失敗 (Fast-Fail)，不呼叫外部 CORS 代理池', async () => {
+      const originalWindow = (globalThis as any).window;
+      const originalFetch = globalThis.fetch;
+
+      try {
+        (globalThis as any).window = {};
+        const mockFetch = vi.fn().mockResolvedValue({
+          ok: false,
+          status: 404,
+          statusText: 'Not Found',
+        });
+        globalThis.fetch = mockFetch;
+
+        await expect(
+          fetchWithCORSProxy('https://query1.finance.yahoo.com/v8/finance/chart/DELISTED_TEST')
+        ).rejects.toThrow(/404/);
+
+        // 關鍵驗證：僅發起本地代理請求 1 次，不輪詢外部 CORS 代理池
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining('/api/yahoo/v8/finance/chart/DELISTED_TEST'),
+          expect.any(Object)
+        );
+      } finally {
+        (globalThis as any).window = originalWindow;
+        globalThis.fetch = originalFetch;
+      }
+    });
   });
 });
 

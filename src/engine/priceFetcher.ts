@@ -37,7 +37,14 @@ export async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 
             return text;
           }
         }
-      } catch {
+        // 若本地代理明確回傳 404 Not Found (例如 Yahoo 回應標的不存在或已下市)，立即 Fast-Fail，杜絕無謂的 24 秒外部代理輪詢
+        if (res.status === 404) {
+          throw new Error(`HTTP 404 Not Found: Target resource not found for ${targetUrl}`);
+        }
+      } catch (err: any) {
+        if (err?.message?.includes('404')) {
+          throw err;
+        }
         // fallback
       }
     }
@@ -53,7 +60,13 @@ export async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 
           return text;
         }
       }
-    } catch {
+      if (directRes.status === 404) {
+        throw new Error(`HTTP 404 Not Found: Target resource not found for ${targetUrl}`);
+      }
+    } catch (err: any) {
+      if (err?.message?.includes('404')) {
+        throw err;
+      }
       // browser CORS fallback
     }
 

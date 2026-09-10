@@ -604,7 +604,7 @@ export const US_TOP_30_FOCUS_SYMBOLS = [
   { symbol: 'MARA', name: 'MARA Holdings', market: 'US' as const, basePrice: 16 },
   { symbol: 'RIVN', name: 'Rivian', market: 'US' as const, basePrice: 14 },
   { symbol: 'MSTR', name: 'MicroStrategy', market: 'US' as const, basePrice: 135 },
-  { symbol: 'SQ', name: 'Block', market: 'US' as const, basePrice: 65 },
+  { symbol: 'PYPL', name: 'PayPal', market: 'US' as const, basePrice: 65 },
 ];
 
 // 臺灣 50 權值核心 Top 50 官方成分股全名單 (50 檔)
