@@ -1,6 +1,6 @@
 # 技術債 #0024: ETF 穿透式成分股透視 (Look-Through) 與產業因子集中度分析 (ETF Look-Through & Sector Concentration)
 
-- **狀態**：`OPEN`
+- **狀態**：`RESOLVED`（已於 v8.34.0 / ADR #0115 完整解決）
 - **優先級**：`P2`
 - **發現來源**：/grill-with-docs ETF 底層資產重疊與假性分散風險調研
 - **建立日期**：2026-09-02

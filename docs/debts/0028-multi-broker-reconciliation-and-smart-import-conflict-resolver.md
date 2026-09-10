@@ -1,6 +1,6 @@
 # 技術債 #0028: 跨券商持倉對賬審計與匯入衝突智能消解器 (Multi-Broker Reconciliation & Smart Import Conflict Resolver)
 
-- **狀態**：`OPEN`
+- **狀態**：`RESOLVED`（已於 v8.34.0 / ADR #0115 完整解決）
 - **優先級**：`P2`
 - **發現來源**：/grill-with-docs 跨券商資料對賬與匯入資料完整性調研
 - **建立日期**：2026-09-02

@@ -25,6 +25,7 @@ interface HoldingsTableProps {
   onRefreshSymbol?: (symbol: string, market: MarketType) => void;
   onQuickTrade: (symbol: string, type: 'BUY' | 'SELL') => void;
   onInspectSecurityXirr?: (symbol: string) => void;
+  onOpenReconciliation?: () => void;
   receivableDividends?: ReceivableDividend[];
   usdToTwdRate?: number;
 }
@@ -179,6 +180,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   onRefreshSymbol,
   onQuickTrade,
   onInspectSecurityXirr,
+  onOpenReconciliation,
   receivableDividends = [],
   usdToTwdRate = 32.0,
 }) => {
@@ -426,6 +428,32 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                 ))}
               </select>
             </div>
+          )}
+
+          {onOpenReconciliation && (
+            <button
+              onClick={onOpenReconciliation}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '5px 12px',
+                borderRadius: '8px',
+                background: 'rgba(59, 130, 246, 0.15)',
+                border: '1px solid rgba(59, 130, 246, 0.4)',
+                color: '#60a5fa',
+                fontSize: '0.76rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(59, 130, 246, 0.25)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)')}
+              title="匯入券商真實對帳單，自動比對股數差異並產出平整調整單"
+            >
+              <Sparkles size={13} />
+              <span>⚖️ 持倉對帳審計</span>
+            </button>
           )}
 
           <span

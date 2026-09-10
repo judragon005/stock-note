@@ -1455,4 +1455,16 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Liveness Probe & Lightweight Toast Notification (存活探針與輕量浮動通知)**:
   - 核心機制：存活探針（`probeSymbolLiveness`）偵測標的是否存在 404 或資料損毀。當偵測到成分股自動遞補更動時，右上方彈出輕量浮動 Toast 提示投資人（如「🔔 已自動完成成分股校準：剔除下市標的...」），狀態列同步顯示 `🟢 官方成分股 (今日已校準)` 與手動「🔄 檢查官方成分股」按鈕。
 
+### ETF 穿透透視、交易心理覆盤與跨券商持倉對賬審計 *(新增於 V8.34.0 / ADR #0115)*
+
+- **ETF Look-Through Decomposition (ETF 穿透式成分股透視)**:
+  - 核心定義：解構投資組合中持有的 ETF（如 0050, 006208, 00923, QQQ, SPY 等），依其成分股權重乘上市值，計算個別底層資產的「間接持股市值」，並與投資人直接持有的個股合併為真實全組合曝險。
+  - 核心價值：破除表面分散假象（如同時買 0050、006208 與台積電個股，實際台積電暴險可能已超 50%）。
+- **Disposition Effect & Behavioral Bias Audit (處置效應與行為金融學審查)**:
+  - 核心定義：量化交易員「急於賣出賺錢標的、長期套牢抱賠」的心理偏誤。計算實現獲利比例 (PGR) 與實現虧損比例 (PLR)，定義處置偏差值（$Bias = PGR - PLR$）與處置比率（$Ratio = PGR / PLR$）。
+  - 偏誤標籤體系：包括過度交易 (Overtrading)、報復性交易 (Revenge Trading)、追高殺低 (FOMO) 與過早停利 (Premature Exit)，為投資人提供理性覆盤鏡像與具體改進處方。
+- **Reconciliation Adjustment (跨券商持倉對賬平整單)**:
+  - 核心定義：以非侵入式 `TradeRecord.type = 'ADJUSTMENT'` 記帳機制校準多券商持倉與集保不一致之股數差額。
+  - 防禦性會計隔離：調整單僅更新該標的剩餘股數，其總成本基準 (`totalCostBasis`) 與已實現損益 (`realizedPnL`) 保持不變，徹底杜絕竄改歷史不可變交易分錄與財務失真。
+
 

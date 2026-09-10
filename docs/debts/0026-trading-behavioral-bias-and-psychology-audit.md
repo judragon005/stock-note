@@ -1,6 +1,6 @@
 # 技術債 #0026: 交易行為心理學與情緒偏誤量化覆盤審查系統 (Trading Behavioral Bias & Psychology Audit Engine)
 
-- **狀態**：`OPEN`
+- **狀態**：`RESOLVED`（已於 v8.34.0 / ADR #0115 完整解決）
 - **優先級**：`P2`
 - **發現來源**：/grill-with-docs 交易行為金融學與心理偏誤覆盤調研
 - **建立日期**：2026-09-02
