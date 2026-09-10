@@ -2203,6 +2203,46 @@ describe('股票會計與損益計算引擎 (Stock Accounting Engine)', () => {
       expect(h.actionDirective?.headline).toBeDefined();
     });
   });
+
+  describe('Seam: ADJUSTMENT 審計庫存校準單', () => {
+    it('若加入 ADJUSTMENT +10 股分錄，持倉股數應精確增加且總成本與已實現損益不受干擾', () => {
+      const trades: TradeRecord[] = [
+        {
+          id: 't-buy-1',
+          date: '2026-08-01',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 900,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 't-adj-1',
+          date: '2026-09-01',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'ADJUSTMENT',
+          shares: 10, // 補平 10 股
+          price: 0,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+      ];
+
+      const { holdings, summary } = calculateHoldingsAndSummary(trades, { '2330': 950 }, 32.0);
+      expect(holdings).toHaveLength(1);
+      const h = holdings[0];
+      expect(h.shares).toBe(1010); // 1000 + 10
+      expect(h.totalCostBasis).toBe(900000); // 成本保持不變
+      expect(summary.twd.realizedPnL).toBe(0); // 無已實現損益產生
+    });
+  });
 });
 
 

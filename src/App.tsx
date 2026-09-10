@@ -65,6 +65,8 @@ import { MuscleBookerWorkspace } from './components/MuscleBookerWorkspace';
 import { ChipsWorkspace } from './components/ChipsWorkspace';
 import { FirePlanningWorkspace } from './components/FirePlanningWorkspace';
 import { SettingsWorkspace } from './components/SettingsWorkspace';
+import { BehavioralAuditWorkspace } from './components/BehavioralAuditWorkspace';
+import { ReconciliationModal } from './components/ReconciliationModal';
 import { syncTradesWithCashTransactions, calculateAccountBalances, aggregateInterestIncomeDetails, reconcilePendingDividendTrades } from './engine/cashLedgerEngine';
 import { calculatePortfolioXirr, calculateSecurityXirr, XirrResult, CashFlowEvent } from './engine/xirrCalculator';
 import { calculatePortfolioExposure } from './engine/riskExposureEngine';
@@ -197,6 +199,9 @@ export const App: React.FC = () => {
 
   // 增強型匯入精靈彈窗狀態
   const [isEnhancedImportModalOpen, setIsEnhancedImportModalOpen] = useState(false);
+
+  // 跨券商持倉對帳審計彈窗狀態
+  const [isReconciliationOpen, setIsReconciliationOpen] = useState(false);
 
   // 持久化交易紀錄
   useEffect(() => {
@@ -773,6 +778,7 @@ export const App: React.FC = () => {
             onInspectSecurityXirr={handleInspectSecurityXirr}
             receivableDividends={receivableDividends}
             usdToTwdRate={usdToTwdRate}
+            onOpenReconciliation={() => setIsReconciliationOpen(true)}
           />
         </>
       )}
@@ -886,6 +892,15 @@ export const App: React.FC = () => {
         />
       )}
 
+      {/* 活頁: 🧠 交易行為心理學與情緒偏誤量化覆盤審查 */}
+      {activeTab === 'behavioral' && (
+        <BehavioralAuditWorkspace
+          trades={trades}
+          holdings={holdings}
+          averageNAV={summary.combinedTWD.marketValue}
+        />
+      )}
+
       {/* 活頁 3: ⚙️ 設定中心 (券商、摩擦分析、外部 API Key、時光機資料庫) */}
       {(activeTab === 'settings' || activeTab === 'friction') && (
         <SettingsWorkspace
@@ -976,6 +991,14 @@ export const App: React.FC = () => {
         holdings={holdings}
         loans={loanRecords}
         usdToTwdRate={usdToTwdRate}
+      />
+
+      {/* 跨券商持倉對帳審計與匯入衝突消解器彈窗 */}
+      <ReconciliationModal
+        isOpen={isReconciliationOpen}
+        onClose={() => setIsReconciliationOpen(false)}
+        holdings={holdings}
+        onAddTrade={handleSaveTrade}
       />
     </div>
   );

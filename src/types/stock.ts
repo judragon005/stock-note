@@ -14,7 +14,8 @@ export type TradeType =
   | 'PREFERRED_REDEMPTION'   // 特別股贖回 / 到期收回
   | 'SPIN_OFF'               // 企業分拆獨立上市
   | 'CB_CONVERSION'          // 可轉債換股普通股
-  | 'TENDER_OFFER';          // 公開收購 / 私有化下市
+  | 'TENDER_OFFER'           // 公開收購 / 私有化下市
+  | 'ADJUSTMENT';            // 審計庫存校準調整單 (無損平整持倉股數)
 
 export type USFeeType = 'ZERO_COMMISSION' | 'SUB_BROKERAGE';
 

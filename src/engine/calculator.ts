@@ -690,6 +690,19 @@ export function calculateHoldingsAndSummary(
         break;
       }
 
+      case 'ADJUSTMENT': {
+        // 審計無損調整單：直接校準持倉股數（差額可正可負），不改變總成本基準，不產生歷史損益
+        item.shares = Math.max(0, item.shares + shares);
+        if (shares > 0) {
+          item.originalBuyShares += shares;
+        }
+        if (item.shares <= 0) {
+          item.shares = 0;
+          item.totalCostBasis = 0;
+        }
+        break;
+      }
+
       default:
         break;
     }
