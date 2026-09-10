@@ -1,3 +1,7 @@
+/**
+ * 自適應動態成分股引擎與存活探針 (v8.33.0)
+ * 負責 Stale-While-Revalidate 分級動態成分股快取、後備候選庫自動遞補、每日開市校準與存活探針
+ */
 import { MarketType } from '../types/stock';
 import {
   AssetPoolType,
