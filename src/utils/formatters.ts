@@ -111,3 +111,24 @@ export function formatSharesCount(shares: number, market?: MarketType): string {
   }
   return Math.round(shares).toLocaleString('en-US');
 }
+
+/**
+ * 依據標的代碼特徵智能推斷市場別 (TW 或 US)
+ * - 若帶有 .US 後綴或純英文字母 (如 AAPL, NVDA, VT)，推斷為美股 ('US')
+ * - 若為 4~6 碼數字 (如 2330, 0050, 00878) 或台股標的，推斷為台股 ('TW')
+ */
+export function inferMarketFromSymbol(symbol: string): MarketType {
+  const clean = (symbol || '').trim().toUpperCase();
+  if (!clean) return 'TW';
+  if (clean.endsWith('.US') || /^[A-Z]{1,6}$/.test(clean)) {
+    return 'US';
+  }
+  return 'TW';
+}
+
+/**
+ * 依據市場別推斷預設幣別 (TW -> TWD, US -> USD)
+ */
+export function inferCurrencyFromMarket(market: MarketType): Currency {
+  return market === 'US' ? 'USD' : 'TWD';
+}

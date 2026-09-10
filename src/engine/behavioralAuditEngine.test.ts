@@ -102,4 +102,14 @@ describe('TDD Seam: behavioralAuditEngine (交易心理學與情緒偏誤量化�
     expect(report.actionableInsights.length).toBeGreaterThanOrEqual(2);
     expect(report.actionableInsights.some((i) => i.includes('處置效應') || i.includes('停損'))).toBe(true);
   });
+
+  it('即使傳入未排序或倒序的交易紀錄，內部亦應防禦性排序，消除倖存者偏差', () => {
+    const reversedTrades = [...mockTrades].reverse();
+    const reportFromReversed = calculateBehavioralAuditReport(reversedTrades, mockHoldings, 1000000);
+    const reportFromOrdered = calculateBehavioralAuditReport(mockTrades, mockHoldings, 1000000);
+
+    expect(reportFromReversed.disposition.avgHoldingDaysGain).toBe(reportFromOrdered.disposition.avgHoldingDaysGain);
+    expect(reportFromReversed.disposition.avgHoldingDaysLoss).toBe(reportFromOrdered.disposition.avgHoldingDaysLoss);
+    expect(reportFromReversed.disposition.severity).toBe(reportFromOrdered.disposition.severity);
+  });
 });

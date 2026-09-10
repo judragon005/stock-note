@@ -696,8 +696,9 @@ export function calculateHoldingsAndSummary(
         if (shares > 0) {
           item.originalBuyShares += shares;
         }
-        if (item.shares <= 0) {
-          item.shares = 0;
+        if (item.shares === 0) {
+          // 當持倉股數完全校準至 0 股（平倉/結清）時，將在庫持股成本重置為 0，
+          // 但絕對不計入已實現損益 (realizedPnL)，嚴格維持歷史會計隔離
           item.totalCostBasis = 0;
         }
         break;

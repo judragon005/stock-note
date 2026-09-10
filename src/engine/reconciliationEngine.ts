@@ -41,7 +41,7 @@ export function parseBrokerSnapshotText(rawText: string): BrokerSnapshotItem[] {
 
     for (let i = 0; i < tokens.length; i++) {
       const token = tokens[i];
-      // 清除千分位逗號
+      // 清除千分位逗號（TSV/空格模式下常見如 '1,000'；若為 CSV 帶引號情境亦具防禦效果）
       const cleanNum = token.replace(/,/g, '');
       const parsedNum = parseFloat(cleanNum);
 
@@ -245,9 +245,11 @@ export function generateAuditAdjustmentTrade(
 ): TradeRecord {
   const cleanSymbol = symbol.trim().toUpperCase();
   const today = new Date().toISOString().split('T')[0];
+  const timeHex = Date.now().toString(36);
+  const randomEntropy = Math.random().toString(36).substring(2, 10);
 
   return {
-    id: `adj_${Date.now()}_${cleanSymbol}_${Math.random().toString(36).substring(2, 7)}`,
+    id: `adj_${timeHex}_${cleanSymbol}_${randomEntropy}`,
     date: today,
     symbol: cleanSymbol,
     market,
