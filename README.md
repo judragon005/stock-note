@@ -3,13 +3,27 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-689%2F689%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-712%2F712%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. ETF 穿透透視、交易心理覆盤與跨券商持倉對賬審計 (`ETF Look-Through, Behavioral Audit & Reconciliation`) *(V8.34.0 全新升級)*
+- **ETF 穿透式成分股透視與產業因子集中度 (`Look-Through Exposure & Sector Concentration`)**：
+  - **破解表面分散假象**：支援台美主流 11 檔旗艦 ETF（0050, 006208, 00923, 0056, 00878, 00919, 00713, SPY, QQQ, VT, VTI）及其前十大成分股。
+  - **真實曝險聚合**：自動將 ETF 市值依權重拆解為底層公司之「間接持股市值」，並與投資人直接持有之個股合併。在 Treemap 樹狀圖提供「標的視圖 (Direct)」與「穿透視圖 (Look-Through)」一鍵無縫切換。
+  - **集中度主動警示**：單一標的實質曝險超過 25% 或單一產業超過 50% 時自動觸發紅框警示，點擊展開穿透來源彈窗（`LookThroughDetailModal`）。
+- **交易行為心理學與情緒偏誤量化覆盤 (`Disposition Effect & Behavioral Bias Audit`)**：
+  - **客觀反省鏡**：新增「🧠 交易心理與覆盤」專屬工作區，依據行為金融學經典模型精確量化處置效應（實現獲利比率 PGR vs 實現虧損比率 PLR）。
+  - **虧損抱牢天數 vs 獲利抱牢天數**：量化檢驗「賺錢抱不住 (平均持有天數短)、賠錢死命抱 (平均抱牢天數長)」偏差比率，超過 3 倍時標示 `🚨 顯著處置效應`，並將未實現浮虧部位納入防範凹單盲區。
+  - **摩擦成本侵蝕率與 FOMO 追高進場審計**：精算累計手續費、證交稅與年化資金拖累率；檢驗高於均價 15% 追高買進筆數與勝率減損，自動產出截斷虧損與移動停利等客觀紀律改善建議。
+- **跨券商持倉對賬審計與無損調整單 (`Reconciliation & Non-destructive Adjustment`)**：
+  - **智能文字解析**：持股表格右上角新增「⚖️ 券商持倉對賬」，支援直接貼上來自券商 APP 或集保的文字快照（TSV、CSV、空格格式），自動清除千分位並比對在庫持股。
+  - **雙向落差分類**：自動標記 `MATCH` (吻合)、`DIFF_SHARES` (股數差異)、`MISSING_IN_SYSTEM` (系統漏記) 或 `ORPHAN_IN_SYSTEM` (外部已賣出)。
+  - **防禦性會計隔離**：一鍵生成 `ADJUSTMENT` 類別之審計調整單，僅平整持倉股數，**完全不變動總投入成本基準，絕對不計入已實現損益 (`realizedPnL`)**，杜絕會計失真。
 
 ### 0. 自適應動態成分股同步、存活探針與每日開市前背景校準 (`Adaptive Universe Sync & Liveness Probe`) *(V8.33.0 全新升級)*
 - **擺脫純代碼寫死常數 (Dynamic Universe Stale-While-Revalidate)**：
