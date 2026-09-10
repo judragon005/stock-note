@@ -573,19 +573,35 @@ export async function migrateFromLocalStorageIfNeeded(): Promise<boolean> {
 }
 
 /**
- * 導出全量資料庫 JSON
+ * 導出全量資料庫 JSON (支援脫敏匯出)
  */
-export async function exportFullDatabaseJSON(): Promise<string> {
+export async function exportFullDatabaseJSON(redactSensitive = false): Promise<string> {
   const trades = await dbGetAll<TradeRecord>('trades');
   const brokerAccounts = await dbGetAll<BrokerAccount>('brokerAccounts');
   const cashTransactions = await dbGetAll<CashTransaction>('cashTransactions');
   const loanRecords = await dbGetAll<LoanRecord>('loanRecords');
   const snapshots = await dbGetAll<SystemSnapshot>('snapshots');
-  const settings = await dbGetAll<{ key: string; value: any }>('settings');
+  let settings = await dbGetAll<{ key: string; value: any }>('settings');
+
+  if (redactSensitive) {
+    settings = settings.map((s) => {
+      if (s.key === 'apiKeys' && s.value && typeof s.value === 'object') {
+        const cleanedKeys: Record<string, any> = { ...s.value };
+        for (const k of Object.keys(cleanedKeys)) {
+          if (typeof cleanedKeys[k] === 'string') {
+            cleanedKeys[k] = '';
+          }
+        }
+        return { ...s, value: cleanedKeys };
+      }
+      return s;
+    });
+  }
 
   const exportObj = {
     version: DB_VERSION,
     exportedAt: new Date().toISOString(),
+    isRedacted: redactSensitive,
     data: {
       trades,
       brokerAccounts,

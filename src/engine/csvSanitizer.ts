@@ -211,3 +211,80 @@ export function resolveSymbolAndName(
     currency,
   };
 }
+
+/**
+ * OWASP 建議之 CSV 公式注入 (DDE) 危險開頭字元
+ */
+const CSV_DANGEROUS_PREFIXES = ['=', '+', '-', '@', '\t', '\r'];
+
+/**
+ * OWASP CSV 儲存格消毒函數 (sanitizeCSVCell)
+ * 防止動態資料交換 (DDE) 與惡意公式執行 (RCE)
+ * - 數值型別保持純數值字串輸出，以維持 Excel 試算表統計彙總
+ * - 字串若以危險字元開頭，前置單引號 ' 進行中和，並以雙引號包裹
+ * - 空值或 undefined 輸出安全之空字串 ""
+ */
+export function sanitizeCSVCell(value: unknown): string {
+  if (value === null || value === undefined) {
+    return '""';
+  }
+
+  if (typeof value === 'number') {
+    return isNaN(value) ? '""' : String(value);
+  }
+
+  const str = String(value);
+  if (!str) {
+    return '""';
+  }
+
+  // 檢查第一個字元是否屬於危險字元
+  const firstChar = str.charAt(0);
+  const isDangerous = CSV_DANGEROUS_PREFIXES.includes(firstChar);
+
+  // 雙引號跳脫
+  const escapedContent = str.replace(/"/g, '""');
+
+  if (isDangerous) {
+    return `"'${escapedContent}"`;
+  }
+
+  return `"${escapedContent}"`;
+}
+
+export interface RedactedBackupResult<T> {
+  data: T;
+  isRedacted: boolean;
+  redactedAt: string;
+}
+
+/**
+ * 全庫 JSON 備份脫敏函數 (redactBackupData)
+ * 抹除備份檔案中 settings.apiKeys 的所有敏感金鑰欄位，並標記 isRedacted: true
+ */
+export function redactBackupData<T extends Record<string, any>>(backupData: T): RedactedBackupResult<T> {
+  if (!backupData || typeof backupData !== 'object') {
+    return { data: backupData, isRedacted: false, redactedAt: new Date().toISOString() };
+  }
+
+  // 深層拷貝
+  const cloned = JSON.parse(JSON.stringify(backupData)) as T;
+
+  if (cloned.settings && typeof cloned.settings === 'object') {
+    if (cloned.settings.apiKeys && typeof cloned.settings.apiKeys === 'object') {
+      const keys = cloned.settings.apiKeys as Record<string, any>;
+      // 清空敏感金鑰欄位
+      for (const field of Object.keys(keys)) {
+        if (typeof keys[field] === 'string' && keys[field].trim() !== '') {
+          keys[field] = '';
+        }
+      }
+    }
+  }
+
+  return {
+    data: cloned,
+    isRedacted: true,
+    redactedAt: new Date().toISOString(),
+  };
+}

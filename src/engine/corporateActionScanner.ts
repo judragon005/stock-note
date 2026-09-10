@@ -4,6 +4,7 @@ import { calculateDividendCash, normalizeCurrencyPrecision } from '../utils/form
 import { estimatePaymentDate } from './receivableDividendEngine';
 import { getCorporateActionsBySymbolFromDB, saveCorporateActionsToDB } from '../utils/db';
 import { calculateConsolidatedTwNhiTax } from './taxComplianceEngine';
+import { inspectRequestForCredentials } from './secureProxyRouter';
 
 
 export interface RawCorporateEvent {
@@ -85,7 +86,11 @@ export async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 
     // 瀏覽器跨域或網路失敗時切換至代理池
   }
 
-  // 3. 多重公開 CORS 代理池 (純靜態託管生產環境降級)
+  // 3. 多重公開 CORS 代理池 (純靜態託管生產環境降級；若含有憑證則嚴禁外發)
+  if (inspectRequestForCredentials(targetUrl).hasCredentials) {
+    return null;
+  }
+
   const proxies = [
     `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`,
     `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,

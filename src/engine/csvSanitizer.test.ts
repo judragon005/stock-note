@@ -4,6 +4,8 @@ import {
   sanitizeNumeric,
   inferTradeType,
   resolveSymbolAndName,
+  sanitizeCSVCell,
+  redactBackupData,
 } from './csvSanitizer';
 
 describe('Seam 1: csvSanitizer - 日期正規化 (normalizeDateString)', () => {
@@ -130,3 +132,63 @@ describe('Seam 4: csvSanitizer - 標的代碼與名稱自動補齊 (resolveSymbo
     expect(res.name).toBe('台積電');
   });
 });
+
+describe('Seam 5: csvSanitizer - OWASP CSV 公式注入 (DDE) 消毒 (sanitizeCSVCell)', () => {
+  it('對於以危險字元 (=, +, -, @, \\t, \\r) 開頭的字串，應自動前置單引號消毒並雙引號包裹', () => {
+    expect(sanitizeCSVCell('=cmd|\' /C calc\'!A0')).toBe("\"'=cmd|' /C calc'!A0\"");
+    expect(sanitizeCSVCell('+1234567890-cmd')).toBe("\"'+1234567890-cmd\"");
+    expect(sanitizeCSVCell('-2+3+cmd|')).toBe("\"'-2+3+cmd|\"");
+    expect(sanitizeCSVCell('@SUM(1+1)*cmd|')).toBe("\"'@SUM(1+1)*cmd|\"");
+    expect(sanitizeCSVCell('\t=malicious')).toBe("\"'\t=malicious\"");
+    expect(sanitizeCSVCell('\r=malicious')).toBe("\"'\r=malicious\"");
+  });
+
+  it('對於一般合法字串，不含危險開頭字元時不應添加前置單引號', () => {
+    expect(sanitizeCSVCell('台積電')).toBe('"台積電"');
+    expect(sanitizeCSVCell('TSMC Buy Trade')).toBe('"TSMC Buy Trade"');
+    expect(sanitizeCSVCell('2330')).toBe('"2330"');
+  });
+
+  it('對於數值型別 (number)，應保持原生數值格式以利試算表計算', () => {
+    expect(sanitizeCSVCell(123.45)).toBe('123.45');
+    expect(sanitizeCSVCell(0)).toBe('0');
+    expect(sanitizeCSVCell(-50.5)).toBe('-50.5');
+  });
+
+  it('面對 null 或 undefined 應安全回傳空字串', () => {
+    expect(sanitizeCSVCell(null)).toBe('""');
+    expect(sanitizeCSVCell(undefined)).toBe('""');
+  });
+});
+
+describe('Seam 6: csvSanitizer - 全庫 JSON 備份脫敏 (redactBackupData)', () => {
+  it('應精確抹除 apiKeys 中的敏感字串並注入 isRedacted: true 標記', () => {
+    const mockBackup = {
+      version: '8.34.0',
+      exportedAt: '2026-09-10T12:00:00.000Z',
+      trades: [{ id: 't1', symbol: '2330', shares: 1000, price: 950 }],
+      dividends: [{ id: 'd1', symbol: '2330', amount: 4000 }],
+      settings: {
+        apiKeys: {
+          finmindToken: 'secret-token-12345',
+          fmpApiKey: 'fmp-key-67890',
+          alphaVantageKey: 'av-key-abc',
+          customProxyUrl: 'https://proxy.example.com',
+        },
+        theme: 'dark',
+      },
+    };
+
+    const result = redactBackupData(mockBackup);
+
+    expect(result.isRedacted).toBe(true);
+    expect(result.data.settings.apiKeys.finmindToken).toBe('');
+    expect(result.data.settings.apiKeys.fmpApiKey).toBe('');
+    expect(result.data.settings.apiKeys.alphaVantageKey).toBe('');
+    // 非敏感設定與交易資料 100% 完整保留
+    expect(result.data.trades.length).toBe(1);
+    expect(result.data.dividends.length).toBe(1);
+    expect(result.data.settings.theme).toBe('dark');
+  });
+});
+
