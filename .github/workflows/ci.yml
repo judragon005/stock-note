@@ -9,10 +9,6 @@ on:
       - '.scratch/**'
   pull_request:
     branches: [ "main" ]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.scratch/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
