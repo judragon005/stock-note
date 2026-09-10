@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-712%2F712%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-736%2F736%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,18 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. ETF 穿透透視、交易心理覆盤與跨券商持倉對賬審計 (`ETF Look-Through, Behavioral Audit & Reconciliation`) *(V8.34.0 全新升級)*
+### 0. Web Crypto 敏感金鑰加密、CORS 代理零憑證防洩漏與 CSV DDE 公式注入防禦 (`Web Crypto, CORS Guard & CSV Sanitization`) *(V8.35.0 全新升級)*
+- **W3C 原生 Web Crypto 敏感金鑰端到端加密 (`cryptoEngine.ts`)**：
+  - **AES-GCM 256-bit + PBKDF2 100,000 次疊代**：全面基於瀏覽器標準原生 `window.crypto.subtle` 介面，零外部套件依賴。每次加密動態生成 16-byte 隨機 Salt 與 12-byte 隨機 IV，產出高隨機熵之 `EncryptedPayload` 封裝。
+  - **原地平滑自動升級 (Auto-Migration)**：自動偵測歷史明文 API 金鑰（FinMind Token、FMP API Key、AlphaVantage Key），無損原地升級為密文封裝；錯誤密碼拋出 `CryptoDecryptionError` 終止解密，杜絕同源 XSS 竊取與垃圾資料外洩。
+- **公共 CORS 代理零憑證外發安全邊界與 SSRF 阻斷 (`secureProxyRouter.ts`)**：
+  - **實體外發閘門**：智慧審查對外 HTTP 請求，一旦偵測含有 `token=`, `apikey=`, `secret=` 或 `Authorization` 標頭，100% 阻斷流向公共 CORS 代理池 (`corsproxy.io`, `allorigins.win`, `codetabs.com`)，試圖外發立即拋出 `SecurityCredentialRoutingError`。
+  - **自訂 Proxy SSRF 防禦**：強制檢核傳輸協定必須為 `https:`，硬性阻斷私有 IPv4 網段（`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`）與雲端 Metadata 位址（`169.254.169.254`），並於設定介面提供即時紅字警示。
+- **OWASP CSV 動態資料交換 (DDE) 公式消毒與全庫備份脫敏 (`csvSanitizer.ts`)**：
+  - **OWASP 儲存格消毒**：針對 `=, +, -, @, \t, \r` 6 大危險開頭字元前置單引號 `'` 消毒並雙引號包裹，阻斷試算表軟體（Excel、Calc）之動態代碼執行漏洞；成交價、股數、費用等數值欄位維持原生數值格式，完全不破壞試算表彙總計算。
+  - **全庫 JSON 一鍵脫敏備份**：全庫備份匯出新增「脫敏匯出」開關（預設開啟），自動抹除 API 金鑰並標記 `isRedacted: true`，兼顧除錯分享與憑證保密。
+
+### 1. ETF 穿透透視、交易心理覆盤與跨券商持倉對賬審計 (`ETF Look-Through, Behavioral Audit & Reconciliation`) *(V8.34.0 全新升級)*
 - **ETF 穿透式成分股透視與產業因子集中度 (`Look-Through Exposure & Sector Concentration`)**：
   - **破解表面分散假象**：支援台美主流 11 檔旗艦 ETF（0050, 006208, 00923, 0056, 00878, 00919, 00713, SPY, QQQ, VT, VTI）及其前十大成分股。
   - **真實曝險聚合**：自動將 ETF 市值依權重拆解為底層公司之「間接持股市值」，並與投資人直接持有之個股合併。在 Treemap 樹狀圖提供「標的視圖 (Direct)」與「穿透視圖 (Look-Through)」一鍵無縫切換。

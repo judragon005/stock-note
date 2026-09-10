@@ -282,6 +282,8 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0096: V8.15.0 宏觀戰情室原生樣式重塑、色彩模式連動與肌肉書僮動能雷達專屬工作區](docs/adr/0096-muscle-booker-workspace-and-war-room-styling-fix.md)
 - [ADR-0101: V8.20.0 三色導航儀動作歸併對齊、借貸卡片雙欄佈局與未到除息日預估股息動態重算](docs/adr/0101-traffic-light-hold-alignment-loan-grid-and-pending-dividend-sync.md)
 - [ADR-0102: V8.21.0 肌肉書僮動能雷達任意代碼即時外部回補診斷與自訂觀察清單架構](docs/adr/0102-muscle-booker-adhoc-scanner-and-custom-watchlist.md)
+- [ADR-0115: V8.34.0 ETF 穿透透視、交易心理覆盤與跨券商持倉對賬審計](docs/adr/0115-etf-look-through-behavioral-audit-and-reconciliation.md)
+- [ADR-0116: V8.35.0 Web Crypto 敏感金鑰加密、CORS 代理零憑證防洩漏與 CSV DDE 公式注入防禦](docs/adr/0116-web-crypto-cors-guard-and-csv-dde-sanitization.md)
 
 ### 肌肉書僮動能雷達任意代碼即時外部回補診斷與自訂觀察清單 (Ad-hoc Scanner & Custom Watchlist) *(新增於 V8.21.0)*
 - **任意代碼即搜即算 (Ad-hoc Search & Fetch Pipeline)**：
