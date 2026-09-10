@@ -27,15 +27,18 @@ export function calculateBehavioralAuditReport(
 ): BehavioralAuditReport {
   const today = new Date().toISOString().split('T')[0];
 
+  // 防禦性拷貝並確保按交易日期 (由舊至新) 穩定排序，消除處置效應比對時的倖存者偏差
+  const sortedTrades = [...trades].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
   // 1. 處置效應 (Disposition Effect) 量化
   const gainDaysList: number[] = [];
   const lossDaysList: number[] = [];
   let realizedGainTradesCount = 0;
   let realizedLossTradesCount = 0;
 
-  // 建立標的買進歷史快速檢索：symbol -> TradeRecord[] (BUY)
+  // 建立標的買進歷史快速檢索：symbol -> TradeRecord[] (BUY) (已按時序升冪排列)
   const buyTradesMap = new Map<string, TradeRecord[]>();
-  for (const t of trades) {
+  for (const t of sortedTrades) {
     if (t.type === 'BUY' || t.type === 'MARGIN_BUY') {
       const sym = t.symbol.trim().toUpperCase();
       if (!buyTradesMap.has(sym)) {
@@ -46,11 +49,11 @@ export function calculateBehavioralAuditReport(
   }
 
   // 遍歷所有賣出平倉紀錄
-  for (const t of trades) {
+  for (const t of sortedTrades) {
     if (t.type === 'SELL' || t.type === 'MARGIN_SELL') {
       const sym = t.symbol.trim().toUpperCase();
       const priorBuys = buyTradesMap.get(sym) || [];
-      // 尋找此筆賣出前最近或最早的買進日
+      // 尋找此筆賣出前最近的買進日 (priorBuys 已按時序排序，pop 即為最近一筆)
       const buyTrade = priorBuys.filter((b) => b.date <= t.date).pop();
       const holdingDays = buyTrade ? Math.max(1, diffDays(buyTrade.date, t.date)) : 1;
 
@@ -113,14 +116,19 @@ export function calculateBehavioralAuditReport(
   // 2. 摩擦成本與年化資產拖累率
   let totalFeesPaid = 0;
   let totalTaxesPaid = 0;
-  for (const t of trades) {
+  for (const t of sortedTrades) {
     totalFeesPaid += Number(t.fee) || 0;
     totalTaxesPaid += Number(t.tax) || 0;
   }
   const totalFrictionCost = totalFeesPaid + totalTaxesPaid;
   const safeNAV = averageNAV > 0 ? averageNAV : 1000000;
   const annualizedDragRatePercent = (totalFrictionCost / safeNAV) * 100;
-  const annualizedTurnoverRate = safeNAV > 0 ? (totalFrictionCost / safeNAV) * 50 : 0;
+
+  // 依據市場慣常摩擦費率反推資金年化週轉率：
+  // 完整來回買賣摩擦率約 0.5% ~ 2.0%（台股手續費 0.1425% * 2 折扣後 + 證交稅 0.3% ≈ 0.6%）
+  // 此處以估算乘數 50（等價於保守假設來回摩擦率為 2% 進行資金換手倍數推導：1 / 0.02 = 50）
+  const APPROX_ROUNDTRIP_FRICTION_MULTIPLIER = 50;
+  const annualizedTurnoverRate = safeNAV > 0 ? (totalFrictionCost / safeNAV) * APPROX_ROUNDTRIP_FRICTION_MULTIPLIER : 0;
 
   const friction: FrictionCostMetrics = {
     totalFeesPaid,
@@ -134,7 +142,7 @@ export function calculateBehavioralAuditReport(
   let totalBuyTradesCount = 0;
   let chasingHighTradesCount = 0;
 
-  for (const t of trades) {
+  for (const t of sortedTrades) {
     if (t.type === 'BUY' || t.type === 'MARGIN_BUY') {
       totalBuyTradesCount++;
       // 若無真實歷史 K 線，檢視當前持倉成本與買進價之相對偏離

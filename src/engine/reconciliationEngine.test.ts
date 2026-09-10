@@ -213,5 +213,15 @@ NVDA,300,128.4`;
       expect(adj.shares).toBe(-5);
       expect(adj.price).toBe(0);
     });
+
+    it('連續快速生成多筆調整單時，ID 應具備唯一性杜絕碰撞', () => {
+      const ids = new Set<string>();
+      for (let i = 0; i < 50; i++) {
+        const adj = generateAuditAdjustmentTrade('2330', 1, 'TW', 'TWD');
+        expect(ids.has(adj.id)).toBe(false);
+        ids.add(adj.id);
+      }
+      expect(ids.size).toBe(50);
+    });
   });
 });

@@ -6,6 +6,7 @@ import {
   generateAuditAdjustmentTrade,
 } from '../engine/reconciliationEngine';
 import { ReconciliationReport, ReconciliationDiscrepancy } from '../types/reconciliation';
+import { inferMarketFromSymbol, inferCurrencyFromMarket } from '../utils/formatters';
 
 export interface ReconciliationModalProps {
   isOpen: boolean;
@@ -43,8 +44,8 @@ export const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
 
   const handleApplyAdjustment = (item: ReconciliationDiscrepancy) => {
     if (item.diffShares === 0) return;
-    const market = item.symbol.endsWith('.US') || /^[A-Za-z]+$/.test(item.symbol) ? 'US' : 'TW';
-    const currency = market === 'US' ? 'USD' : 'TWD';
+    const market = inferMarketFromSymbol(item.symbol);
+    const currency = inferCurrencyFromMarket(market);
     const adjTrade = generateAuditAdjustmentTrade(
       item.symbol,
       item.diffShares,

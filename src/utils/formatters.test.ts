@@ -6,6 +6,8 @@ import {
   formatTimelineReduction,
   normalizeCurrencyPrecision,
   bankersRound,
+  inferMarketFromSymbol,
+  inferCurrencyFromMarket,
 } from './formatters';
 import { TradeRecord } from '../types/stock';
 
@@ -161,6 +163,24 @@ describe('多幣別與券商慣用精度格式化模組 (Formatters)', () => {
       // 美股奇進偶捨
       expect(normalizeCurrencyPrecision(usValue, 'USD')).toBe(101.00);
       expect(calculateDividendCash(10, 0.478, 'USD')).toBe(4.78);
+    });
+  });
+
+  describe('inferMarketFromSymbol & inferCurrencyFromMarket (標的市場與預設幣別推斷)', () => {
+    it('應正確將台股純數字代碼或含特殊字母推斷為 TW / TWD', () => {
+      expect(inferMarketFromSymbol('2330')).toBe('TW');
+      expect(inferMarketFromSymbol('0050')).toBe('TW');
+      expect(inferMarketFromSymbol('00878')).toBe('TW');
+      expect(inferMarketFromSymbol('')).toBe('TW');
+      expect(inferCurrencyFromMarket('TW')).toBe('TWD');
+    });
+
+    it('應正確將美股代碼或含 .US 後綴推斷為 US / USD', () => {
+      expect(inferMarketFromSymbol('AAPL')).toBe('US');
+      expect(inferMarketFromSymbol('NVDA')).toBe('US');
+      expect(inferMarketFromSymbol('VT')).toBe('US');
+      expect(inferMarketFromSymbol('TSM.US')).toBe('US');
+      expect(inferCurrencyFromMarket('US')).toBe('USD');
     });
   });
 });
