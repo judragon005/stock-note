@@ -1496,6 +1496,11 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Last Interest Date Manual Editor (前次繳息基準日手動維護通道)**:
   - 核心機制：於 `LoanModal.tsx` 新增選填欄位「前次繳息/還款基準日 (`lastInterestPaymentDate`)」，在建立或編輯借貸時支援手動微調校正，並修復了編輯保存時遺漏 `lastInterestPaymentDate` 的屬性丟失問題。
 
+### 質押借貸還款繳息入口整併、三大法人日報多維哨兵與聰明錢動能雷達 *(新增於 V8.38.0 / ADR #0119)*
 
-
-
+- **Unified Debt Repayment Entrance (質押借貸還款繳息單一入口)**:
+  - 核心定義：將質押借貸卡片原「💰 繳息」與「💳 還本」分立之操作整併為單一「💳 還款 / 繳息」主按鈕（保留「⚡ 一鍵結清」）。在彈窗頂部提供 `[帶入本期利息]` 與 `[帶入本息總額]` 快捷操作，底層依《民法》第 323 條法定沖償順序（規費 ➔ 利息 ➔ 本金）自動試算並拆分扣繳。
+- **Institutional Chips Multi-tier Sentinel & Graceful Fallback (三大法人日報多維完整性哨兵與優雅降級)**:
+  - 核心機制：在 `smartMoneyFetcher.ts` 實作 `isInstitutionalReportComplete`。以「全市場發布檔數門檻（正常 1800+ 檔，未達 1200 檔判定為盤後殘缺）」與「前 50 大活躍法人成交量非全零」進行多維攔截。未齊全時不污染快取，自動優雅回退 T-1 完整日報，狀態列以黃燈誠實提示 `🟡 盤後結算中：暫呈 T-1 完整日報`，徹底杜絕氣泡在 0 軸平躺的假同步問題。
+- **Momentum Horizon Aggregator & Decision Board (動能時間窗多日累計引擎與聰明錢決策看板)**:
+  - 核心機制：將靜態技術膠囊升級為「動能時間窗 (1D/3D/5D)」切換鈕。透過 `chipsAggregator.ts` 引擎累計歷史多日法人買賣超，過濾隔日沖雜訊；上方嵌入【🧭 聰明錢動態決策快報】，即時展示「🟢 法人聯手搶買榜 (可以買)」與「🔴 主力大舉提款榜 (一定要閃)」，輔助投資人 3 秒內完成決策。

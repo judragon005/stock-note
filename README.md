@@ -3,13 +3,27 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-747%2F747%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-761%2F761%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 質押借貸還款繳息按鈕整併、籌碼日報多維哨兵優雅降級與聰明錢動能雷達優化 (`Unified Pledge Repayment, Institutional Chips Multi-tier Sentinel & Smart Money Momentum Dashboard`) *(V8.38.0 全新升級)*
+- **質押借貸「還款/繳息」按鈕單一化與一鍵快捷帶入 (`CashLedgerWorkspace.tsx`)**：
+  - **解決二元分立操作混淆痛點**：將卡片底部的「💰 繳息」與「💳 還本」整併為單一主要按鈕 `[💳 還款 / 繳息]`（保留 `[⚡ 一鍵結清]`）。
+  - **快捷帶入利息與本利總額**：彈窗提供 `[💰 帶入本期利息 NT$ xxx]` 與 `[⚡ 帶入本息總額 NT$ yyy]`，輸入任意自訂金額均依《民法》第 323 條法定沖償順序（規費 ➔ 利息 ➔ 本金）即時拆分預覽，消除雙軌邏輯與心理摩擦。
+- **籌碼日報多維哨兵校驗與優雅降級（徹底修復全 0 張假同步 Bug）(`smartMoneyFetcher.ts`)**：
+  - **解決 15:30 盤後證交所 API 數據未齊全誤判 Bug**：捨棄單純檢查台積電 2330 的脆弱指標，建立多維哨兵 `isInstitutionalReportComplete`，檢驗全市場檔數門檻（正常 1800+ 檔，若 $< 1200$ 檔視為未完成日報）與前 50 大活躍法人買賣超非零驗證。
+  - **優雅降級回退 T-1 完整日報**：當日數據不合格時自動回退前一交易日完整日報，不污染本地快取，狀態列以黃燈誠實提示 `🟡 盤後結算中：暫呈 09/10 完整日報 (共 1,894 檔)`，徹底消除強茂 (2481) 等氣泡平躺 0 軸假象。
+- **歷史籌碼膠囊轉型為「動能時間窗 (1D/3D/5D)」與「決策快報」(`chipsAggregator.ts` & `ChipsWorkspace.tsx`)**：
+  - **動能時間窗選擇器**：移除無操作反饋之靜態徽章，升級為 `[1日 (當日)]` / `[3日 (短波段)]` / `[5日 (週籌碼)]` 膠囊切換鈕，過濾隔日沖雜訊。
+  - **聰明錢動態決策快報折疊看板**：
+    - 🟢 **【法人聯手搶買榜（可以買）】**：外資 + 投信雙法人認養前 4 檔個股與張數。
+    - 🔴 **【主力大舉提款榜（一定要閃）】**：主力出逃倒貨前 4 檔個股與張數。
+    - 讓投資人進站 3 秒內一眼掌握聰明錢流向與避險警示！
 
 ### 0. 質押借貸自訂還款扣款生效日、歷史補登動態試算與前次繳息日手動校正 (`Custom Repayment Date & Last Interest Date Alignment`) *(V8.37.0 全新升級)*
 - **還款彈窗自訂「還款扣款生效日」控制項 (`CashLedgerWorkspace.tsx`)**：
