@@ -163,7 +163,7 @@ export const LoanModal: React.FC<LoanModalProps> = ({
       currency,
       startDate,
       date: startDate,
-      lastInterestPaymentDate: lastInterestPaymentDate.trim() || undefined,
+      lastInterestPaymentDate: (lastInterestPaymentDate.trim() && lastInterestPaymentDate.trim() !== startDate) ? lastInterestPaymentDate.trim() : undefined,
       maturityDate: maturityDate.trim() || undefined,
       pledgedCollateral: loanType === 'PLEDGE' ? collaterals.filter((c) => c.shares > 0) : undefined,
       transferFee: loanType === 'PLEDGE' ? numTransferFee : undefined,
