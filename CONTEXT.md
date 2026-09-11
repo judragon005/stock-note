@@ -1484,5 +1484,18 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 美股 USD 零規費支援：美股無券商三大設質規費（DTC 集中保管），系統自動套用 0 規費，沖償順序為「利息 ➔ 本金」，彈窗與卡片自適應隱藏規費。
   - 交易分筆流水與履歷：還款彈窗即時三段試算拆分預覽，確認後分筆寫入現金流（`WIRE_FEE` 規費支出、`INTEREST` 利息支出、`REPAY_PRINCIPAL` 還本支出），借貸卡片標註前次還款履歷。
 
+### 質押借貸自訂還款扣款生效日與歷史補登動態試算 *(新增於 V8.37.0 / ADR #0118)*
+
+- **Custom Repayment Effective Date (自訂還款扣款生效日)**:
+  - 核心痛點：投資人於昨日在券商還款，隔日或數日後才開啟記帳系統補登。若還款日期強制綁定今日，會多算 1~2 天利息（例如多計息 1 天 $224），導致沖償本金金額被利息侵蝕少算。
+  - 還款彈窗日期選擇器：於還款 Modal 新增 `📅 還款扣款生效日 (payDateInput)` 輸入框，預設為今日，支援自由點選為昨日或歷史任一有效日期，具備防呆下限（`min = loan.startDate`）。
+- **Reactive Repayment Preview (響應式動態即時試算)**:
+  - 核心機制：彈窗內之 `payoffMetrics` 與 `applyDebtRepayment` 即時以所選還款日期重新試算計息天數、應計利息、實質沖本與預估剩餘本金，100% 吻合券商還款憑單。
+- **Full Date Provenance Dispatch (全域生效日精確入帳)**:
+  - 核心機制：三大動作模式（部分還本、繳息、全額結清）自動產生之所有現金流水分錄（`WIRE_FEE`, `FINANCING_FEE`, `LOAN_REPAYMENT`）與借貸合約付息起點 `lastInterestPaymentDate`，100% 精準寫入使用者所選之自訂生效日，杜絕會計日期偏移。
+- **Last Interest Date Manual Editor (前次繳息基準日手動維護通道)**:
+  - 核心機制：於 `LoanModal.tsx` 新增選填欄位「前次繳息/還款基準日 (`lastInterestPaymentDate`)」，在建立或編輯借貸時支援手動微調校正，並修復了編輯保存時遺漏 `lastInterestPaymentDate` 的屬性丟失問題。
+
+
 
 

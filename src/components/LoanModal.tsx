@@ -45,6 +45,7 @@ export const LoanModal: React.FC<LoanModalProps> = ({
   const [autoRecordFee, setAutoRecordFee] = useState<boolean>(true);
   const [autoRecordDisbursement, setAutoRecordDisbursement] = useState<boolean>(true);
   const [closedDate, setClosedDate] = useState<string>('');
+  const [lastInterestPaymentDate, setLastInterestPaymentDate] = useState<string>('');
   const [note, setNote] = useState('');
 
   useEffect(() => {
@@ -62,6 +63,7 @@ export const LoanModal: React.FC<LoanModalProps> = ({
           : '4.0'
       );
       setStartDate(initialLoan.startDate || initialLoan.date || new Date().toISOString().split('T')[0]);
+      setLastInterestPaymentDate(initialLoan.lastInterestPaymentDate || '');
       setMaturityDate(initialLoan.maturityDate || '');
       setWarningRatio((initialLoan.warningRatio || 130).toString());
       setSafeRatio((initialLoan.safeRatio || 166).toString());
@@ -83,6 +85,7 @@ export const LoanModal: React.FC<LoanModalProps> = ({
       setPrincipal('');
       setAnnualInterestRate('4.0');
       setStartDate(new Date().toISOString().split('T')[0]);
+      setLastInterestPaymentDate('');
       setMaturityDate('');
       setWarningRatio('130');
       setSafeRatio('166');
@@ -160,6 +163,7 @@ export const LoanModal: React.FC<LoanModalProps> = ({
       currency,
       startDate,
       date: startDate,
+      lastInterestPaymentDate: lastInterestPaymentDate.trim() || undefined,
       maturityDate: maturityDate.trim() || undefined,
       pledgedCollateral: loanType === 'PLEDGE' ? collaterals.filter((c) => c.shares > 0) : undefined,
       transferFee: loanType === 'PLEDGE' ? numTransferFee : undefined,
@@ -324,6 +328,24 @@ export const LoanModal: React.FC<LoanModalProps> = ({
                 style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: '#f8fafc', fontSize: '0.85rem', outline: 'none' }}
               />
             </div>
+          </div>
+
+          {/* 前次繳息/還款基準日手動維護通道 (Spec 0118 Ticket 04) */}
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', marginBottom: '4px' }}>
+              前次繳息/還款基準日 (選填，留空預設為借款起日)
+            </label>
+            <input
+              type="date"
+              value={lastInterestPaymentDate}
+              onChange={(e) => setLastInterestPaymentDate(e.target.value)}
+              min={startDate}
+              className="mono"
+              style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: '#38bdf8', fontSize: '0.85rem', outline: 'none' }}
+            />
+            <span style={{ display: 'block', fontSize: '0.68rem', color: '#94a3b8', marginTop: '4px' }}>
+              💡 系統利息計算之起算點。若曾於特定日期還款或繳息，可於此校正以對齊真實起息日。
+            </span>
           </div>
 
           {/* 若本金為 0 (已結清借貸)，提供結清還款日編輯 */}
