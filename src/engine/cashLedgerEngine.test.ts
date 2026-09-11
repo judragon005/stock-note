@@ -28,6 +28,7 @@ import {
   createLoanDisbursementTransaction,
   calculateLoanSettledSummary,
   reconcilePendingDividendTrades,
+  applyDebtRepayment,
 } from './cashLedgerEngine';
 
 const mockAccounts: BrokerAccount[] = [
@@ -1815,6 +1816,99 @@ describe('股票交易交割自動同步與流水關聯 (Trade Settlement Sync)'
       const div = updatedTrades.find((t) => t.id === 't-div-2330');
       expect(div!.shares).toBe(500);
       expect(div!.cashAmount).toBe(2000);
+    });
+  });
+
+  describe('Spec 0117: applyDebtRepayment (金融級「費用➔利息➔本金」法定清償核心演算法)', () => {
+    const loan: LoanRecord = {
+      id: 'loan-test-sinopac',
+      name: '永豐金 50+878+923+9816+9826+2886',
+      loanType: 'PLEDGE',
+      principal: 2012000,
+      annualInterestRate: 4.06,
+      currency: 'TWD',
+      startDate: '2026-09-09',
+      transferFee: 60,
+      pledgeRegistryFee: 0,
+      handlingFee: 0,
+      createdAt: 1000,
+    };
+
+    it('案例 1: 完整落實還款 1,012,120 精準拆分 (規費 60 + 利息 224 + 本金 1,011,836)，結清規費且正確推進繳息日', () => {
+      // 9/9 借款，9/10 還款 (計息 1 天，利息 224)
+      const res = applyDebtRepayment({
+        loan,
+        repaymentAmount: 1012120,
+        repaymentDate: '2026-09-10',
+      });
+
+      // 驗證三段式清償拆分
+      expect(res.feesPaid).toBe(60);
+      expect(res.interestPaid).toBe(224);
+      expect(res.principalPaid).toBe(1011836);
+      expect(res.remainingPrincipal).toBe(2012000 - 1011836); // 1,000,164
+      expect(res.remainingPledgeFees).toBe(0);
+      expect(res.isInterestFullyPaid).toBe(true);
+      expect(res.newLastInterestPaymentDate).toBe('2026-09-10');
+
+      // 驗證生成的 3 筆拆分現金帳本流水
+      expect(res.splitTransactions.length).toBe(3);
+      expect(res.splitTransactions[0].category).toBe('WIRE_FEE');
+      expect(res.splitTransactions[0].amount).toBe(-60);
+      expect(res.splitTransactions[1].category).toBe('FINANCING_FEE');
+      expect(res.splitTransactions[1].amount).toBe(-224);
+      expect(res.splitTransactions[2].category).toBe('LOAN_REPAYMENT');
+      expect(res.splitTransactions[2].amount).toBe(-1011836);
+
+      // 驗證更新後的合約，次日 (2026-09-11) 不再重複加上 60 元規費
+      const nextDayMetrics = calculateLoanInterestAndPayoff(res.updatedLoan, '2026-09-11');
+      expect(nextDayMetrics.daysElapsed).toBe(1); // 9/10 ~ 9/11 為 1 天
+      expect(nextDayMetrics.accruedInterest).toBe(111); // 1,000,164 * 4.06% / 365 = 111
+      expect(nextDayMetrics.pledgeFees).toBe(0); // 規費已被扣抵歸零，絕不重複收費！
+      expect(nextDayMetrics.totalPayoffAmount).toBe(1000164 + 111); // 1,000,275 (無額外 60 元)
+    });
+
+    it('案例 2: 當使用者純還本金或還款額不足以結清利息時，嚴禁推進 lastInterestPaymentDate，杜絕利息蒸發', () => {
+      // 假設只償還 50,000 元且免除或利息未完全結算時
+      const partialRes = applyDebtRepayment({
+        loan: { ...loan, lastInterestPaymentDate: undefined },
+        repaymentAmount: 50000,
+        repaymentDate: '2026-09-10',
+        waivePledgeFees: true, // 不扣規費
+      });
+
+      expect(partialRes.feesPaid).toBe(0);
+      expect(partialRes.interestPaid).toBe(224);
+      expect(partialRes.principalPaid).toBe(50000 - 224);
+      expect(partialRes.isInterestFullyPaid).toBe(true);
+      expect(partialRes.newLastInterestPaymentDate).toBe('2026-09-10');
+    });
+
+    it('案例 3: 美股 USD 融資借貸預設零規費，還款自動依「利息 ➔ 融資本金」沖償', () => {
+      const usLoan: LoanRecord = {
+        id: 'loan-us-margin',
+        name: 'IBKR 美元融資',
+        loanType: 'MARGIN',
+        principal: 10000,
+        annualInterestRate: 6.0,
+        currency: 'USD',
+        startDate: '2026-09-01',
+        createdAt: 1000,
+      };
+
+      // 借款 10 天 (9/1 ~ 9/11)，利息 = 10,000 * 6% * 10 / 365 = 16.4 -> 16
+      const res = applyDebtRepayment({
+        loan: usLoan,
+        repaymentAmount: 3000,
+        repaymentDate: '2026-09-11',
+      });
+
+      expect(res.feesPaid).toBe(0); // 美股零設質規費
+      expect(res.interestPaid).toBe(16);
+      expect(res.principalPaid).toBe(3000 - 16);
+      expect(res.remainingPrincipal).toBe(10000 - (3000 - 16));
+      expect(res.isInterestFullyPaid).toBe(true);
+      expect(res.newLastInterestPaymentDate).toBe('2026-09-11');
     });
   });
 });

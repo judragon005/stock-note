@@ -772,6 +772,162 @@ export function calculateLoanInterestAndPayoff(loan: LoanRecord, asOfDate?: stri
   };
 }
 
+export interface DebtRepaymentInput {
+  loan: LoanRecord;
+  repaymentAmount: number;
+  repaymentDate?: string;
+  waivePledgeFees?: boolean;
+  targetAccountId?: string;
+}
+
+export interface DebtRepaymentResult {
+  feesPaid: number;          // 沖銷之設質三大規費 (台股撥券費等)
+  interestPaid: number;      // 沖銷之累積利息
+  principalPaid: number;     // 沖償之借款本金
+  remainingPrincipal: number;// 剩餘未還本金
+  remainingPledgeFees: number; // 剩餘未結規費
+  isInterestFullyPaid: boolean; // 利息是否全數清償
+  newLastInterestPaymentDate?: string; // 更新後之起算繳息日
+  splitTransactions: CashTransaction[]; // 自動拆分之現金流水
+  updatedLoan: LoanRecord;   // 更新後之借貸合約
+}
+
+/**
+ * 金融級「費用➔利息➔本金」法定清償核心演算法 (Spec 0117 Ticket 03)
+ * 依據臺灣《民法》第 323 條與美股保證金融資結算規範，落實法定三段式清償順序，
+ * 扣抵已付規費防止次日重複計費，並嚴格保護繳息日起算點杜絕利息漏算。
+ */
+export function applyDebtRepayment(input: DebtRepaymentInput): DebtRepaymentResult {
+  const { loan, repaymentAmount, repaymentDate, waivePledgeFees = false, targetAccountId } = input;
+  const todayStr = repaymentDate || new Date().toISOString().split('T')[0];
+  const metrics = calculateLoanInterestAndPayoff(loan, todayStr);
+
+  const isUSD = loan.currency === 'USD';
+  // 美股零設質規費；台股依未結設質三大規費計算
+  const pledgeFeesToPay = (isUSD || waivePledgeFees) ? 0 : metrics.pledgeFees;
+
+  // 1. 第一順位：規費沖抵
+  const feesPaid = Math.min(repaymentAmount, pledgeFeesToPay);
+  let remaining = repaymentAmount - feesPaid;
+
+  // 2. 第二順位：應計利息沖抵
+  const interestPaid = Math.min(remaining, metrics.accruedInterest);
+  remaining -= interestPaid;
+
+  // 3. 第三順位：本金沖償
+  const principalPaid = Math.min(remaining, loan.principal);
+  const remainingPrincipal = Math.max(0, loan.principal - principalPaid);
+  const remainingPledgeFees = Math.max(0, pledgeFeesToPay - feesPaid);
+
+  // 繳息日保護：利息足額清償時才更新繳息日起算點
+  const isInterestFullyPaid = metrics.accruedInterest === 0 || interestPaid >= metrics.accruedInterest;
+  const newLastInterestPaymentDate = isInterestFullyPaid ? todayStr : loan.lastInterestPaymentDate;
+
+  // 更新借貸合約中對應之規費 (扣抵已繳納之規費，杜絕二次重複加總)
+  let updatedTransferFee = loan.transferFee;
+  let updatedPledgeRegistryFee = loan.pledgeRegistryFee;
+  let updatedHandlingFee = loan.handlingFee;
+  let updatedPledgeFee = loan.pledgeFee;
+
+  if (feesPaid > 0) {
+    let feeDeduct = feesPaid;
+    if (updatedTransferFee !== undefined) {
+      const d = Math.min(feeDeduct, updatedTransferFee);
+      updatedTransferFee -= d;
+      feeDeduct -= d;
+    }
+    if (updatedPledgeRegistryFee !== undefined && feeDeduct > 0) {
+      const d = Math.min(feeDeduct, updatedPledgeRegistryFee);
+      updatedPledgeRegistryFee -= d;
+      feeDeduct -= d;
+    }
+    if (updatedHandlingFee !== undefined && feeDeduct > 0) {
+      const d = Math.min(feeDeduct, updatedHandlingFee);
+      updatedHandlingFee -= d;
+      feeDeduct -= d;
+    }
+    if (updatedPledgeFee !== undefined && feeDeduct > 0) {
+      const d = Math.min(feeDeduct, updatedPledgeFee);
+      updatedPledgeFee -= d;
+      feeDeduct -= d;
+    }
+  }
+
+  const updatedLoan: LoanRecord = {
+    ...loan,
+    principal: remainingPrincipal,
+    lastInterestPaymentDate: newLastInterestPaymentDate,
+    closedDate: remainingPrincipal === 0 ? todayStr : loan.closedDate,
+    transferFee: updatedTransferFee,
+    pledgeRegistryFee: updatedPledgeRegistryFee,
+    handlingFee: updatedHandlingFee,
+    pledgeFee: updatedPledgeFee,
+  };
+
+  // 生成拆分現金流水
+  const splitTransactions: CashTransaction[] = [];
+  const now = Date.now();
+  const accountId = targetAccountId || loan.accountId || 'default';
+  const currency = loan.currency || 'TWD';
+
+  if (feesPaid > 0) {
+    splitTransactions.push({
+      id: `tx-fee-${loan.id}-${now}-1`,
+      accountId,
+      currency,
+      type: 'WIRE_FEE',
+      category: 'WIRE_FEE',
+      amount: -feesPaid,
+      date: todayStr,
+      relatedLoanId: loan.id,
+      note: `償還設質規費 (撥券/設質/手續費): ${loan.name}`,
+      createdAt: now,
+    });
+  }
+
+  if (interestPaid > 0) {
+    splitTransactions.push({
+      id: `tx-interest-${loan.id}-${now}-2`,
+      accountId,
+      currency,
+      type: 'FINANCING_FEE',
+      category: 'FINANCING_FEE',
+      amount: -interestPaid,
+      date: todayStr,
+      relatedLoanId: loan.id,
+      note: `償還借款利息 (計息 ${metrics.daysElapsed}天): ${loan.name}`,
+      createdAt: now + 1,
+    });
+  }
+
+  if (principalPaid > 0) {
+    splitTransactions.push({
+      id: `tx-repay-${loan.id}-${now}-3`,
+      accountId,
+      currency,
+      type: 'LOAN_REPAYMENT',
+      category: 'LOAN_REPAYMENT',
+      amount: -principalPaid,
+      date: todayStr,
+      relatedLoanId: loan.id,
+      note: `償還借款本金: ${loan.name}`,
+      createdAt: now + 2,
+    });
+  }
+
+  return {
+    feesPaid,
+    interestPaid,
+    principalPaid,
+    remainingPrincipal,
+    remainingPledgeFees,
+    isInterestFullyPaid,
+    newLastInterestPaymentDate,
+    splitTransactions,
+    updatedLoan,
+  };
+}
+
 /**
  * 依據質押借款合約，自動產生歷月定期扣息之現金流水 (Monthly Loan Interest Transactions)
  */

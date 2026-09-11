@@ -125,6 +125,14 @@ export function formatInstitutionalDetailText(data: {
   cmf?: number;
 }): string {
   if (data.market === 'TW') {
+    if (
+      data.foreignNetShares === undefined &&
+      data.trustNetShares === undefined &&
+      data.dealerNetShares === undefined
+    ) {
+      return '此標的查無當日盤後法人進出數據';
+    }
+
     const parts: string[] = [];
     if (data.foreignNetShares !== undefined) {
       const sign = data.foreignNetShares >= 0 ? '+' : '';

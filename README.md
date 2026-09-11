@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-736%2F736%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-744%2F744%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,18 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. Web Crypto 敏感金鑰加密、CORS 代理零憑證防洩漏與 CSV DDE 公式注入防禦 (`Web Crypto, CORS Guard & CSV Sanitization`) *(V8.35.0 全新升級)*
+### 0. 聰明錢動態星圖盤中有效日報回溯機制與質押借貸「規費 ➔ 利息 ➔ 本金」法定沖償引擎 (`Smart Money LKG Fetcher & Statutory Debt Repayment Engine`) *(V8.36.0 全新升級)*
+- **聰明錢動態星圖盤中有效日報回溯機制 (`smartMoneyFetcher.ts` & `ChipsWorkspace.tsx`)**：
+  - **解決盤中 0 籌碼橫排痛點**：針對台股下午 15:30 證交所結算前無當日資料導致外資/投信/自營商為 0 張、氣泡在中軸水平一字排開的問題，引入 15:30 時間感知自動切換。盤中自動載入前一交易日 ($T-1$) 已結算籌碼日報；15:30 後才嘗試請求當日最新日報。
+  - **斷網與逾時 Last Known Good 本地快取回溯**：若遠端日報為空或網路超時，自動依序往前回溯本地最近 5 交易日快取，以權值哨兵 `2330` 具有三大法人數據判定為有效日報，徹底告別全 0 空值。
+  - **高清晰狀態徽章與真實交易日時間軸**：介面清楚標註 `🟢 已更新至最新收盤 (2026-09-10)` 或 `🟡 盤中展示前一交易日籌碼 (2026-09-10)`，時間軸動態跳過週末與國定假日，投資人一目了然。
+- **質押借貸「規費 ➔ 利息 ➔ 本金」法定沖償順序與美股支援 (`cashLedgerEngine.ts` & `CashLedgerWorkspace.tsx`)**：
+  - **金融實務法定清償 (民法第 323 條)**：實作 `applyDebtRepayment` 沖償引擎，還款扣款依「① 待繳規費 ➔ ② 累積未結利息 ➔ ③ 借貸本金」順序精確沖抵。
+  - **修復利息少算與重複計收規費重大 Bug**：還款覆蓋待繳規費（如集保解質撥券費 60 元）時合約規費立即結清清零，次日不再重複扣費；僅在還款全額清償未結利息時推進 `lastInterestPaymentDate`，純還本未結利息時計息起算日維持原起算日，徹底杜絕利息蒸發少算一天。
+  - **美股 USD 零規費支援**：美股保證金借貸無券商設質規費，預設 0 規費，沖償順序無縫走「未結利息 ➔ 本金」，彈窗自適應隱藏規費。
+  - **即時拆分試算預覽與分筆寫入**：還款彈窗即時三段式拆分預覽，確認還款後自動分筆寫入現金流（`WIRE_FEE` 規費支出、`INTEREST` 利息支出、`REPAY_PRINCIPAL` 還本支出），借貸卡片顯示前次繳息日與還款履歷。
+
+### 1. Web Crypto 敏感金鑰加密、CORS 代理零憑證防洩漏與 CSV DDE 公式注入防禦 (`Web Crypto, CORS Guard & CSV Sanitization`) *(V8.35.0 全新升級)*
 - **W3C 原生 Web Crypto 敏感金鑰端到端加密 (`cryptoEngine.ts`)**：
   - **AES-GCM 256-bit + PBKDF2 100,000 次疊代**：全面基於瀏覽器標準原生 `window.crypto.subtle` 介面，零外部套件依賴。每次加密動態生成 16-byte 隨機 Salt 與 12-byte 隨機 IV，產出高隨機熵之 `EncryptedPayload` 封裝。
   - **原地平滑自動升級 (Auto-Migration)**：自動偵測歷史明文 API 金鑰（FinMind Token、FMP API Key、AlphaVantage Key），無損原地升級為密文封裝；錯誤密碼拋出 `CryptoDecryptionError` 終止解密，杜絕同源 XSS 竊取與垃圾資料外洩。
