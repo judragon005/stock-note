@@ -436,7 +436,11 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
 
     const { loan, actionType } = payLoanTarget;
     const todayStr = new Date().toISOString().split('T')[0];
-    const effectiveDate = payDateInput || todayStr;
+    const loanStartDate = loan.startDate || loan.date || todayStr;
+    let effectiveDate = payDateInput || todayStr;
+    if (effectiveDate < loanStartDate) {
+      effectiveDate = loanStartDate;
+    }
     const now = Date.now();
     const currencySymbol = loan.currency === 'USD' ? '$' : 'NT$';
     const targetAccountId = payAccountId || (loan.accountId || accounts[0]?.id || '');
@@ -1936,7 +1940,14 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                     type="date"
                     required
                     value={payDateInput}
-                    onChange={(e) => setPayDateInput(e.target.value)}
+                    onChange={(e) => {
+                      const newDate = e.target.value;
+                      setPayDateInput(newDate);
+                      if (isFullPayoff) {
+                        const newMetrics = calculateLoanInterestAndPayoff(payLoanTarget.loan, newDate);
+                        setPayAmountInput(newMetrics.totalPayoffAmount.toString());
+                      }
+                    }}
                     min={payLoanTarget.loan.startDate || payLoanTarget.loan.date}
                     max={new Date().toISOString().split('T')[0]}
                     className="mono"
