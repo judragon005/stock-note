@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-744%2F744%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-747%2F747%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,15 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 聰明錢動態星圖盤中有效日報回溯機制與質押借貸「規費 ➔ 利息 ➔ 本金」法定沖償引擎 (`Smart Money LKG Fetcher & Statutory Debt Repayment Engine`) *(V8.36.0 全新升級)*
+### 0. 質押借貸自訂還款扣款生效日、歷史補登動態試算與前次繳息日手動校正 (`Custom Repayment Date & Last Interest Date Alignment`) *(V8.37.0 全新升級)*
+- **還款彈窗自訂「還款扣款生效日」控制項 (`CashLedgerWorkspace.tsx`)**：
+  - **解決補登時差導致利息多算痛點**：投資人於昨日在券商 APP 還款，隔日或數日後才補登時，系統不再強制綁定「今日」，提供自訂日期輸入框（預設今日，支援自由點選昨日或歷史有效日期），並設有起借日防呆下限（`min = loan.startDate`）。
+  - **響應式動態即時試算 (Reactive Preview)**：切換日期至昨日（如 `2026-09-10`），即時重新試算計息天數（1 天）、應計利息（NT$ 224）、本金沖償（NT$ 1,011,836）與剩餘借款本金（NT$ 1,000,164），所見即所得，100% 吻合券商還款扣款憑單。
+  - **全域生效日精確入帳**：部分還本、繳息、全額結清所產生之現金帳本流水（`WIRE_FEE`, `FINANCING_FEE`, `LOAN_REPAYMENT`）與合約付息起點 `lastInterestPaymentDate` 均嚴格以自訂生效日為準，杜絕會計日期偏移。
+- **借貸編輯彈窗新增「前次繳息/還款基準日」維護通道 (`LoanModal.tsx`)**：
+  - 於「借款起日」下方新增選填之「前次繳息/還款基準日 (`lastInterestPaymentDate`)」手動維護控制項，修復了編輯保存時遺漏付息日屬性的問題，提供手動微調校正歷史合約之高度彈性。
+
+### 1. 聰明錢動態星圖盤中有效日報回溯機制與質押借貸「規費 ➔ 利息 ➔ 本金」法定沖償引擎 (`Smart Money LKG Fetcher & Statutory Debt Repayment Engine`) *(V8.36.0 全新升級)*
 - **聰明錢動態星圖盤中有效日報回溯機制 (`smartMoneyFetcher.ts` & `ChipsWorkspace.tsx`)**：
   - **解決盤中 0 籌碼橫排痛點**：針對台股下午 15:30 證交所結算前無當日資料導致外資/投信/自營商為 0 張、氣泡在中軸水平一字排開的問題，引入 15:30 時間感知自動切換。盤中自動載入前一交易日 ($T-1$) 已結算籌碼日報；15:30 後才嘗試請求當日最新日報。
   - **斷網與逾時 Last Known Good 本地快取回溯**：若遠端日報為空或網路超時，自動依序往前回溯本地最近 5 交易日快取，以權值哨兵 `2330` 具有三大法人數據判定為有效日報，徹底告別全 0 空值。

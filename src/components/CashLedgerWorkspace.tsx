@@ -163,6 +163,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
   } | null>(null);
   const [payAmountInput, setPayAmountInput] = useState<string>('');
   const [payAccountId, setPayAccountId] = useState<string>('');
+  const [payDateInput, setPayDateInput] = useState<string>(() => new Date().toISOString().split('T')[0]);
 
   // 找出最早交易日期作為預設初始入金日
   const earliestTradeDate = useMemo(() => {
@@ -408,19 +409,21 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
 
   // 6. 開啟借貸快速繳息 / 還款 / 一鍵結清
   const handleOpenPayLoan = (loan: LoanRecord, actionType: 'PAY_INTEREST' | 'REPAY_PRINCIPAL' | 'FULL_PAYOFF') => {
-    const metrics = calculateLoanInterestAndPayoff(loan);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const metrics = calculateLoanInterestAndPayoff(loan, todayStr);
     const defaultAmount = actionType === 'PAY_INTEREST'
       ? (metrics.accruedInterest > 0 ? metrics.accruedInterest : metrics.monthlyEstimatedInterest).toString()
       : actionType === 'FULL_PAYOFF'
       ? metrics.totalPayoffAmount.toString()
       : loan.principal.toString();
 
+    setPayDateInput(todayStr);
     setPayLoanTarget({ loan, actionType });
     setPayAmountInput(defaultAmount);
     setPayAccountId(loan.accountId || (scopedAccounts[0]?.id || accounts[0]?.id || ''));
   };
 
-  // 執行繳息、還本或一鍵結清
+  // 執行繳息、還本或一鍵結清 (支援自訂還款扣款生效日 Spec 0118)
   const handleConfirmPayLoan = (e: React.FormEvent) => {
     e.preventDefault();
     if (!payLoanTarget) return;
@@ -433,6 +436,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
 
     const { loan, actionType } = payLoanTarget;
     const todayStr = new Date().toISOString().split('T')[0];
+    const effectiveDate = payDateInput || todayStr;
     const now = Date.now();
     const currencySymbol = loan.currency === 'USD' ? '$' : 'NT$';
     const targetAccountId = payAccountId || (loan.accountId || accounts[0]?.id || '');
@@ -445,21 +449,21 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
         type: 'FINANCING_FEE',
         category: 'FINANCING_FEE',
         amount: -numAmount,
-        date: todayStr,
+        date: effectiveDate,
         relatedLoanId: loan.id,
         note: `支付質押借款利息: ${loan.name}`,
         createdAt: now,
       };
 
       const updatedLoans = loans.map((l) =>
-        l.id === loan.id ? { ...l, lastInterestPaymentDate: todayStr } : l
+        l.id === loan.id ? { ...l, lastInterestPaymentDate: effectiveDate } : l
       );
 
       onSaveTransactions([interestTx, ...transactions]);
       onSaveLoans(updatedLoans);
-      alert(`✅ 成功支付利息 ${currencySymbol} ${numAmount.toLocaleString()}，已記錄於現金帳本並更新付息日！`);
+      alert(`✅ 成功於 ${effectiveDate} 支付利息 ${currencySymbol} ${numAmount.toLocaleString()}，已記錄於現金帳本並更新付息日！`);
     } else if (actionType === 'FULL_PAYOFF') {
-      const metrics = calculateLoanInterestAndPayoff(loan);
+      const metrics = calculateLoanInterestAndPayoff(loan, effectiveDate);
       const splitTxs: CashTransaction[] = [];
 
       if (loan.principal > 0) {
@@ -470,7 +474,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
           type: 'LOAN_REPAYMENT',
           category: 'LOAN_REPAYMENT',
           amount: -loan.principal,
-          date: todayStr,
+          date: effectiveDate,
           relatedLoanId: loan.id,
           note: `結清償還質押本金: ${loan.name}`,
           createdAt: now,
@@ -485,7 +489,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
           type: 'FINANCING_FEE',
           category: 'FINANCING_FEE',
           amount: -metrics.accruedInterest,
-          date: todayStr,
+          date: effectiveDate,
           relatedLoanId: loan.id,
           note: `結清質押利息 (計息 ${metrics.daysElapsed} 天): ${loan.name}`,
           createdAt: now + 1,
@@ -500,7 +504,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
           type: 'WIRE_FEE',
           category: 'WIRE_FEE',
           amount: -metrics.pledgeFees,
-          date: todayStr,
+          date: effectiveDate,
           relatedLoanId: loan.id,
           note: `結清設質規費 (撥券/設質/手續費): ${loan.name}`,
           createdAt: now + 2,
@@ -515,7 +519,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
           type: 'LOAN_REPAYMENT',
           category: 'LOAN_REPAYMENT',
           amount: -numAmount,
-          date: todayStr,
+          date: effectiveDate,
           relatedLoanId: loan.id,
           note: `結清借款: ${loan.name}`,
           createdAt: now,
@@ -524,19 +528,19 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
 
       const updatedLoans = loans.map((l) =>
         l.id === loan.id
-          ? { ...l, principal: 0, closedDate: todayStr, lastInterestPaymentDate: todayStr }
+          ? { ...l, principal: 0, closedDate: effectiveDate, lastInterestPaymentDate: effectiveDate }
           : l
       );
 
       onSaveTransactions([...splitTxs, ...transactions]);
       onSaveLoans(updatedLoans);
-      alert(`⚡ 成功一鍵全額結清 ${loan.name}！共扣款 ${currencySymbol} ${numAmount.toLocaleString()}（已拆分 ${splitTxs.length} 筆帳本流水：本金/利息/規費），本金已歸零！`);
+      alert(`⚡ 成功一鍵全額結清 ${loan.name}！共扣款 ${currencySymbol} ${numAmount.toLocaleString()}（已拆分 ${splitTxs.length} 筆帳本流水：本金/利息/規費，生效日 ${effectiveDate}），本金已歸零！`);
     } else {
-      // 依據法定清償順序 (費用 ➔ 利息 ➔ 本金) 進行智慧沖償與拆分 (Spec 0117 Ticket 04)
+      // 依據法定清償順序 (費用 ➔ 利息 ➔ 本金) 進行智慧沖償與拆分 (Spec 0117 & 0118)
       const repaymentResult = applyDebtRepayment({
         loan,
         repaymentAmount: numAmount,
-        repaymentDate: todayStr,
+        repaymentDate: effectiveDate,
         targetAccountId,
       });
 
@@ -549,7 +553,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
 
       const feeMsg = repaymentResult.feesPaid > 0 ? ` · 規費 ${currencySymbol} ${repaymentResult.feesPaid.toLocaleString()}` : '';
       const intMsg = repaymentResult.interestPaid > 0 ? ` · 利息 ${currencySymbol} ${repaymentResult.interestPaid.toLocaleString()}` : '';
-      alert(`✅ 成功還款 ${currencySymbol} ${numAmount.toLocaleString()}！沖償本金 ${currencySymbol} ${repaymentResult.principalPaid.toLocaleString()}${intMsg}${feeMsg}，已自動產生 ${repaymentResult.splitTransactions.length} 筆帳本流水！`);
+      alert(`✅ 成功還款 ${currencySymbol} ${numAmount.toLocaleString()}（生效日 ${effectiveDate}）！沖償本金 ${currencySymbol} ${repaymentResult.principalPaid.toLocaleString()}${intMsg}${feeMsg}，已自動產生 ${repaymentResult.splitTransactions.length} 筆帳本流水！`);
     }
 
     setPayLoanTarget(null);
@@ -1874,7 +1878,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
       {/* 借貸快速繳息 / 還款 / 一鍵結清彈窗 */}
       {payLoanTarget && (() => {
         const isFullPayoff = payLoanTarget.actionType === 'FULL_PAYOFF';
-        const payoffMetrics = calculateLoanInterestAndPayoff(payLoanTarget.loan);
+        const payoffMetrics = calculateLoanInterestAndPayoff(payLoanTarget.loan, payDateInput);
         const currSym = payLoanTarget.loan.currency === 'USD' ? '$' : 'NT$';
 
         return (
@@ -1922,6 +1926,22 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', marginBottom: '4px' }}>
+                    📅 還款扣款生效日 (預設今日，補登可選昨天或歷史日期):
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={payDateInput}
+                    onChange={(e) => setPayDateInput(e.target.value)}
+                    min={payLoanTarget.loan.startDate || payLoanTarget.loan.date}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="mono"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: '#f8fafc', fontSize: '0.85rem', outline: 'none' }}
+                  />
                 </div>
 
                 {isFullPayoff && (
@@ -1985,6 +2005,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                   const preview = applyDebtRepayment({
                     loan: payLoanTarget.loan,
                     repaymentAmount: inputVal,
+                    repaymentDate: payDateInput,
                   });
                   return (
                     <div

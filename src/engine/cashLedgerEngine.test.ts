@@ -1911,6 +1911,77 @@ describe('股票交易交割自動同步與流水關聯 (Trade Settlement Sync)'
       expect(res.newLastInterestPaymentDate).toBe('2026-09-11');
     });
   });
+
+  describe('Spec 0118: 質押借貸自訂還款日期與歷史補登計息防護', () => {
+    const pledgeLoan: LoanRecord = {
+      id: 'loan-test-custom-date',
+      name: '永豐金 質押一號',
+      loanType: 'PLEDGE',
+      principal: 2012000,
+      annualInterestRate: 4.06,
+      currency: 'TWD',
+      startDate: '2026-09-09',
+      transferFee: 60,
+      pledgeRegistryFee: 0,
+      handlingFee: 0,
+      createdAt: 1000,
+    };
+
+    it('案例 1: 昨天 (2026-09-10) 還款，今天 (2026-09-11) 補登，指定自訂還款日利息精確為 1 天 (NT$ 224)，剩餘本金精確為 1,000,164', () => {
+      // 模擬在 9/11 打開系統，但選擇 9/10 還款
+      const metrics910 = calculateLoanInterestAndPayoff(pledgeLoan, '2026-09-10');
+      expect(metrics910.daysElapsed).toBe(1);
+      expect(metrics910.accruedInterest).toBe(224);
+
+      const res = applyDebtRepayment({
+        loan: pledgeLoan,
+        repaymentAmount: 1012120,
+        repaymentDate: '2026-09-10',
+      });
+
+      // 驗證三段沖償
+      expect(res.feesPaid).toBe(60);
+      expect(res.interestPaid).toBe(224);
+      expect(res.principalPaid).toBe(1011836);
+      expect(res.remainingPrincipal).toBe(1000164);
+      expect(res.isInterestFullyPaid).toBe(true);
+      expect(res.newLastInterestPaymentDate).toBe('2026-09-10');
+
+      // 驗證生成的現金帳本流水日期均為自訂還款日 2026-09-10
+      expect(res.splitTransactions.length).toBe(3);
+      expect(res.splitTransactions.every(tx => tx.date === '2026-09-10')).toBe(true);
+
+      // 驗證今日 (2026-09-11) 系統讀取該合約時，自 9/10 起計息 1 天，利息精確為 NT$ 111，應還款總金額精確為 NT$ 1,000,275
+      const todayMetrics = calculateLoanInterestAndPayoff(res.updatedLoan, '2026-09-11');
+      expect(todayMetrics.daysElapsed).toBe(1);
+      expect(todayMetrics.accruedInterest).toBe(111);
+      expect(todayMetrics.totalPayoffAmount).toBe(1000164 + 111); // 1,000,275
+    });
+
+    it('案例 2: 當還款日期與起借日相同 (2026-09-09)，計息天數為 0，利息為 0，金額全額沖償本金', () => {
+      const metricsSameDay = calculateLoanInterestAndPayoff(pledgeLoan, '2026-09-09');
+      expect(metricsSameDay.daysElapsed).toBe(0);
+      expect(metricsSameDay.accruedInterest).toBe(0);
+
+      const res = applyDebtRepayment({
+        loan: pledgeLoan,
+        repaymentAmount: 100060, // 規費 60 + 還本 100,000
+        repaymentDate: '2026-09-09',
+      });
+
+      expect(res.feesPaid).toBe(60);
+      expect(res.interestPaid).toBe(0);
+      expect(res.principalPaid).toBe(100000);
+      expect(res.remainingPrincipal).toBe(2012000 - 100000);
+      expect(res.splitTransactions.every(tx => tx.date === '2026-09-09')).toBe(true);
+    });
+
+    it('案例 3: 防呆防禦 - 當輸入之還款日早於借款起日，天數與利息安全歸零不拋錯', () => {
+      const earlyMetrics = calculateLoanInterestAndPayoff(pledgeLoan, '2026-09-01');
+      expect(earlyMetrics.daysElapsed).toBe(0);
+      expect(earlyMetrics.accruedInterest).toBe(0);
+    });
+  });
 });
 
 
