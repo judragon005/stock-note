@@ -227,12 +227,49 @@ export function parseTpexInstitutionalReport(rawData: any): Record<string, TwseI
 const CACHE_KEY_PREFIX = 'TWSE_TPEX_CHIPS_V4_';
 
 /**
- * 驗證籌碼資料是否涵蓋上市（以 2330 台積電為健康指標哨兵）
+ * 驗證籌碼資料是否涵蓋上市（以 2330 台積電為基本哨兵）
  */
 function isMarketCoverageValid(data: Record<string, TwseInstitutionalRow> | null | undefined): boolean {
   if (!data || typeof data !== 'object') return false;
-  // 若包含 2330 台積電，證明上市資料成功納入；若無 2330 則可能是純上櫃殘缺快取
   return Boolean(data['2330']);
+}
+
+/**
+ * 完整性多維哨兵：驗證籌碼資料是否涵蓋足夠市場深度與非全 0 主力交易量 (Spec 0119 Ticket 01)
+ * 解決 15:30 證交所 API 釋出半殘日報 (如僅 894 檔或全 0 張) 誤判已同步完成之重大 Bug
+ */
+export function isInstitutionalReportComplete(
+  data: Record<string, TwseInstitutionalRow> | null | undefined,
+  minSymbols?: number
+): boolean {
+  if (!data || typeof data !== 'object') return false;
+  const symbols = Object.keys(data);
+  if (symbols.length === 0) return false;
+
+  // 1. 活躍交易量哨兵：前 50 大股票三大法人買賣超絕對值總和不得為 0
+  let totalVolumeShares = 0;
+  const checkCount = Math.min(symbols.length, 50);
+  for (let i = 0; i < checkCount; i++) {
+    const row = data[symbols[i]];
+    if (row) {
+      totalVolumeShares += Math.abs(row.foreignNetShares || 0) + Math.abs(row.trustNetShares || 0) + Math.abs(row.dealerNetShares || 0);
+    }
+  }
+  // 若全部檢查標的買賣超全為 0，視為尚未公布結算數據之空日報
+  if (totalVolumeShares === 0) return false;
+
+  // 2. 檔數深度門檻檢驗：
+  if (minSymbols !== undefined) {
+    return symbols.length >= minSymbols;
+  }
+
+  // 自動探測模式：全市場真實環境正常應有 1,800+ 檔。
+  // 若介於 10 至 1,199 檔之間 (例如真實截圖中的 894 檔)，視為證交所分批上傳未齊之殘缺日報
+  if (symbols.length >= 10 && symbols.length < 1200) {
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -260,12 +297,13 @@ async function fetchCombinedTwseAndTpex(
 export interface InstitutionalReportResult {
   reportDate: string;        // 確切資料日期 (YYYYMMDD)
   isLiveToday: boolean;       // 是否為今日盤後最新數據
+  fallbackReason?: 'INCOMPLETE_DATA' | 'MARKET_NOT_READY';
   data: Record<string, TwseInstitutionalRow>;
   totalSymbols: number;       // 涵蓋標的總檔數
 }
 
 /**
- * 抓取台灣全市場三大法人日報，支援自動往前重試、IndexedDB 本地歷史快取回溯與詳細狀態封裝 (Spec 0117 Ticket 01)
+ * 抓取台灣全市場三大法人日報，支援自動往前重試、IndexedDB 本地歷史快取回溯與詳細狀態封裝 (Spec 0117 Ticket 01 / Spec 0119 Ticket 01)
  */
 export async function fetchTwseInstitutionalReportDetailed(
   initialDateStr?: string,
@@ -274,19 +312,18 @@ export async function fetchTwseInstitutionalReportDetailed(
   forceRefresh = false
 ): Promise<InstitutionalReportResult> {
   const latestPossibleDate = getLatestTradingDateString();
-  let currentDate = initialDateStr || latestPossibleDate;
-
-  // 判定是否可能為今日盤後 (僅當 latestPossibleDate 為當日且請求目標亦為最新時)
-  const isLiveToday = currentDate === latestPossibleDate;
+  const targetDate = initialDateStr || latestPossibleDate;
+  let currentDate = targetDate;
+  let hadIncompleteAttempt = false;
 
   // 1. 優先嘗試讀取當前目標日期快取 (若 forceRefresh 為 true 則略過)
   if (!forceRefresh) {
     try {
       const cached = await dbGet<any>('settings', `${CACHE_KEY_PREFIX}${currentDate}`);
-      if (cached && cached.data && isMarketCoverageValid(cached.data)) {
+      if (cached && cached.data && isInstitutionalReportComplete(cached.data)) {
         return {
           reportDate: currentDate,
-          isLiveToday,
+          isLiveToday: currentDate === latestPossibleDate,
           data: cached.data,
           totalSymbols: Object.keys(cached.data).length,
         };
@@ -303,10 +340,11 @@ export async function fetchTwseInstitutionalReportDetailed(
     if (attempts > 1 && !forceRefresh) {
       try {
         const cached = await dbGet<any>('settings', `${CACHE_KEY_PREFIX}${currentDate}`);
-        if (cached && cached.data && isMarketCoverageValid(cached.data)) {
+        if (cached && cached.data && isInstitutionalReportComplete(cached.data)) {
           return {
             reportDate: currentDate,
             isLiveToday: false,
+            fallbackReason: hadIncompleteAttempt ? 'INCOMPLETE_DATA' : undefined,
             data: cached.data,
             totalSymbols: Object.keys(cached.data).length,
           };
@@ -319,8 +357,9 @@ export async function fetchTwseInstitutionalReportDetailed(
     try {
       const combined = await fetchCombinedTwseAndTpex(currentDate, customFetch);
 
-      if (Object.keys(combined).length > 0) {
-        // 請求成功，寫入快取
+      // Spec 0119 Ticket 01: 完整性哨兵檢驗
+      if (isInstitutionalReportComplete(combined)) {
+        // 請求成功且資料完整，寫入快取
         try {
           await dbPut('settings', {
             key: `${CACHE_KEY_PREFIX}${currentDate}`,
@@ -333,10 +372,14 @@ export async function fetchTwseInstitutionalReportDetailed(
         }
         return {
           reportDate: currentDate,
-          isLiveToday: currentDate === latestPossibleDate,
+          isLiveToday: currentDate === latestPossibleDate && !hadIncompleteAttempt,
+          fallbackReason: hadIncompleteAttempt ? 'INCOMPLETE_DATA' : undefined,
           data: combined,
           totalSymbols: Object.keys(combined).length,
         };
+      } else if (Object.keys(combined).length > 0) {
+        // 抓回來的資料檔數不足 (如 894 檔) 或全為 0，標記未完成嘗試，絕不寫入快取污染系統
+        hadIncompleteAttempt = true;
       }
     } catch {
       // 請求失敗，繼續嘗試上一交易日
@@ -350,10 +393,11 @@ export async function fetchTwseInstitutionalReportDetailed(
   for (let i = 0; i < 10; i++) {
     try {
       const fallbackCached = await dbGet<any>('settings', `${CACHE_KEY_PREFIX}${fallbackCursor}`);
-      if (fallbackCached && fallbackCached.data && isMarketCoverageValid(fallbackCached.data)) {
+      if (fallbackCached && fallbackCached.data && isInstitutionalReportComplete(fallbackCached.data)) {
         return {
           reportDate: fallbackCursor,
           isLiveToday: false,
+          fallbackReason: hadIncompleteAttempt ? 'INCOMPLETE_DATA' : undefined,
           data: fallbackCached.data,
           totalSymbols: Object.keys(fallbackCached.data).length,
         };
@@ -368,6 +412,7 @@ export async function fetchTwseInstitutionalReportDetailed(
   return {
     reportDate: currentDate,
     isLiveToday: false,
+    fallbackReason: hadIncompleteAttempt ? 'INCOMPLETE_DATA' : undefined,
     data: {},
     totalSymbols: 0,
   };

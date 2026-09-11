@@ -156,10 +156,10 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
   const [reconcileTargetAmount, setReconcileTargetAmount] = useState<string>('0');
   const [reconcileDate, setReconcileDate] = useState<string>('');
 
-  // 借貸快速繳息 / 還款 / 一鍵結清彈窗
+  // 借貸快速還款/繳息 / 一鍵結清彈窗 (Spec 0119 Ticket 02)
   const [payLoanTarget, setPayLoanTarget] = useState<{
     loan: LoanRecord;
-    actionType: 'PAY_INTEREST' | 'REPAY_PRINCIPAL' | 'FULL_PAYOFF';
+    actionType: 'UNIFIED_REPAY' | 'FULL_PAYOFF' | 'PAY_INTEREST' | 'REPAY_PRINCIPAL';
   } | null>(null);
   const [payAmountInput, setPayAmountInput] = useState<string>('');
   const [payAccountId, setPayAccountId] = useState<string>('');
@@ -407,15 +407,17 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
     setReconcileTarget(null);
   };
 
-  // 6. 開啟借貸快速繳息 / 還款 / 一鍵結清
-  const handleOpenPayLoan = (loan: LoanRecord, actionType: 'PAY_INTEREST' | 'REPAY_PRINCIPAL' | 'FULL_PAYOFF') => {
+  // 6. 開啟借貸快速還款 / 繳息 / 一鍵結清 (Spec 0119 Ticket 02)
+  const handleOpenPayLoan = (loan: LoanRecord, actionType: 'UNIFIED_REPAY' | 'FULL_PAYOFF' | 'PAY_INTEREST' | 'REPAY_PRINCIPAL') => {
     const todayStr = new Date().toISOString().split('T')[0];
     const metrics = calculateLoanInterestAndPayoff(loan, todayStr);
-    const defaultAmount = actionType === 'PAY_INTEREST'
-      ? (metrics.accruedInterest > 0 ? metrics.accruedInterest : metrics.monthlyEstimatedInterest).toString()
-      : actionType === 'FULL_PAYOFF'
+    const defaultAmount = actionType === 'FULL_PAYOFF'
       ? metrics.totalPayoffAmount.toString()
-      : loan.principal.toString();
+      : actionType === 'PAY_INTEREST'
+      ? (metrics.accruedInterest > 0 ? metrics.accruedInterest : metrics.monthlyEstimatedInterest).toString()
+      : actionType === 'REPAY_PRINCIPAL'
+      ? loan.principal.toString()
+      : (metrics.accruedInterest > 0 ? metrics.accruedInterest : metrics.monthlyEstimatedInterest).toString();
 
     setPayDateInput(todayStr);
     setPayLoanTarget({ loan, actionType });
@@ -1428,26 +1430,19 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                     </div>
                   )}
 
-                  {/* 快捷操作：繳交利息 / 本金還款 / 一鍵結清 */}
-                  <div style={{ display: 'flex', gap: '6px', paddingTop: '8px', borderTop: '1px solid rgba(51, 65, 85, 0.4)' }}>
+                  {/* 快捷操作：還款/繳息 (單一入口) / 一鍵結清 (Spec 0119 Ticket 02) */}
+                  <div style={{ display: 'flex', gap: '8px', paddingTop: '8px', borderTop: '1px solid rgba(51, 65, 85, 0.4)' }}>
                     <button
                       className="btn btn-secondary btn-sm"
-                      onClick={() => handleOpenPayLoan(loan, 'PAY_INTEREST')}
-                      style={{ flex: 1, justifyContent: 'center', color: '#fbbf24', fontSize: '0.75rem', padding: '4px 6px' }}
+                      onClick={() => handleOpenPayLoan(loan, 'UNIFIED_REPAY')}
+                      style={{ flex: 1.4, justifyContent: 'center', color: '#38bdf8', fontSize: '0.78rem', fontWeight: 700, padding: '5px 8px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)' }}
                     >
-                      💰 繳息
-                    </button>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => handleOpenPayLoan(loan, 'REPAY_PRINCIPAL')}
-                      style={{ flex: 1, justifyContent: 'center', color: '#38bdf8', fontSize: '0.75rem', padding: '4px 6px' }}
-                    >
-                      💳 還本
+                      💳 還款 / 繳息
                     </button>
                     <button
                       className="btn btn-primary btn-sm"
                       onClick={() => handleOpenPayLoan(loan, 'FULL_PAYOFF')}
-                      style={{ flex: 1.2, justifyContent: 'center', background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)', color: '#ffffff', fontSize: '0.75rem', fontWeight: 800, padding: '4px 6px', border: 'none' }}
+                      style={{ flex: 1.2, justifyContent: 'center', background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)', color: '#ffffff', fontSize: '0.78rem', fontWeight: 800, padding: '5px 8px', border: 'none' }}
                     >
                       ⚡ 一鍵結清
                     </button>
@@ -1899,7 +1894,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                   </div>
                   <div>
                     <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc' }}>
-                      {isFullPayoff ? '⚡ 一鍵全額結清借款' : payLoanTarget.actionType === 'PAY_INTEREST' ? '💰 繳交借貸利息' : '💳 償還借貸本金'}
+                      {isFullPayoff ? '⚡ 一鍵全額結清借款' : '💳 貸款還款 / 繳息沖償'}
                     </h3>
                     <p style={{ margin: '2px 0 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>
                       {payLoanTarget.loan.name}
@@ -1991,9 +1986,37 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                 )}
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: isFullPayoff ? '#38bdf8' : '#c084fc', marginBottom: '4px' }}>
-                    {isFullPayoff ? '結清扣款總金額' : payLoanTarget.actionType === 'PAY_INTEREST' ? '繳交利息金額' : '償還本金金額'} ({payLoanTarget.loan.currency || 'TWD'}):
-                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 700, color: isFullPayoff ? '#38bdf8' : '#c084fc' }}>
+                      {isFullPayoff ? '結清扣款總金額' : '還款 / 繳息金額'} ({payLoanTarget.loan.currency || 'TWD'}):
+                    </label>
+                  </div>
+
+                  {/* 一鍵快捷帶入按鈕列 (Spec 0119 Ticket 02) */}
+                  {!isFullPayoff && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          const interestAmt = payoffMetrics.accruedInterest > 0 ? payoffMetrics.accruedInterest : payoffMetrics.monthlyEstimatedInterest;
+                          setPayAmountInput(interestAmt.toString());
+                        }}
+                        style={{ fontSize: '0.72rem', padding: '3px 8px', background: 'rgba(251, 191, 36, 0.15)', color: '#fbbf24', border: '1px solid rgba(251, 191, 36, 0.35)', borderRadius: '6px' }}
+                      >
+                        💰 帶入本期利息 ({currSym} {(payoffMetrics.accruedInterest > 0 ? payoffMetrics.accruedInterest : payoffMetrics.monthlyEstimatedInterest).toLocaleString()})
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setPayAmountInput(payoffMetrics.totalPayoffAmount.toString())}
+                        style={{ fontSize: '0.72rem', padding: '3px 8px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.35)', borderRadius: '6px' }}
+                      >
+                        ⚡ 帶入本息總額 ({currSym} {payoffMetrics.totalPayoffAmount.toLocaleString()})
+                      </button>
+                    </div>
+                  )}
+
                   <input
                     type="number"
                     step="any"
@@ -2010,7 +2033,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                   )}
                 </div>
 
-                {payLoanTarget.actionType === 'REPAY_PRINCIPAL' && (() => {
+                {!isFullPayoff && (() => {
                   const inputVal = parseFloat(payAmountInput) || 0;
                   if (inputVal <= 0) return null;
                   const preview = applyDebtRepayment({

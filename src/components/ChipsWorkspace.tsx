@@ -19,6 +19,11 @@ import {
   getRecentTradingDateSequence,
 } from '../engine/smartMoneyFetcher';
 import {
+  aggregateMultiDayChips,
+  classifyInstitutionalSignal,
+  getTopMomentumSymbols,
+} from '../engine/chipsAggregator';
+import {
   Flame,
   ShieldCheck,
   AlertTriangle,
@@ -325,15 +330,25 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
   const [twseChipsMap, setTwseChipsMap] = useState<Record<string, TwseInstitutionalRow>>({});
   const [reportDate, setReportDate] = useState<string>(getLatestTradingDateString());
   const [isLiveToday, setIsLiveToday] = useState<boolean>(false);
+  const [fallbackReason, setFallbackReason] = useState<'INCOMPLETE_DATA' | 'MARKET_NOT_READY' | undefined>(undefined);
   const [totalSymbols, setTotalSymbols] = useState<number>(0);
   const [currentDateIndex, setCurrentDateIndex] = useState(0);
   const [historyReportsMap, setHistoryReportsMap] = useState<Record<string, Record<string, TwseInstitutionalRow>>>({});
   const [isHydratingHistory, setIsHydratingHistory] = useState<boolean>(false);
+  // Spec 0119: 動能時間窗選擇器狀態 (1D / 3D / 5D)
+  const [chipsHorizon, setChipsHorizon] = useState<1 | 3 | 5>(1);
+  const [isDecisionBoardExpanded, setIsDecisionBoardExpanded] = useState<boolean>(true);
 
   // 支援 5 個連續真實交易日供時序回放 (Spec 0117 Ticket 02)
   const availableDates = useMemo(() => {
     return getRecentTradingDateSequence(reportDate, 5);
   }, [reportDate]);
+
+  // Spec 0119 Ticket 04: 依動能週期加總計算活動中的三大法人買賣超
+  const activeChipsMap = useMemo(() => {
+    if (chipsHorizon === 1) return twseChipsMap;
+    return aggregateMultiDayChips(historyReportsMap, availableDates, chipsHorizon);
+  }, [chipsHorizon, twseChipsMap, historyReportsMap, availableDates]);
 
   // 初次掛載或點擊重整時抓取官方籌碼 (支援 forceRefresh 略過殘缺快取)
   const loadChipsData = async (forceRefresh = false) => {
@@ -343,6 +358,7 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
       setTwseChipsMap(detailed.data);
       setReportDate(detailed.reportDate);
       setIsLiveToday(detailed.isLiveToday);
+      setFallbackReason(detailed.fallbackReason);
       setTotalSymbols(detailed.totalSymbols);
       setCurrentDateIndex(4); // 預設指向最新 (5 個交易日的最後一日)
     } catch {
@@ -383,7 +399,7 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
     };
   }, [reportDate]);
 
-  // 依視圖模式與市場篩選產生 Input Items
+  // 依視圖模式與市場篩選產生 Input Items (採用累計週期 activeChipsMap)
   const smartMoneyItems = useMemo<SmartMoneyInputItem[]>(() => {
     if (viewMode === 'PORTFOLIO') {
       // 1. 在庫持倉模式
@@ -392,7 +408,7 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
         .filter((h) => marketFilter === 'ALL' || h.market === marketFilter)
         .map((h) => {
           const cleanSymbol = h.symbol.replace(/\.(TW|TWO)$/i, '').trim();
-          const twseData = twseChipsMap[cleanSymbol] || twseChipsMap[h.symbol];
+          const twseData = activeChipsMap[cleanSymbol] || activeChipsMap[h.symbol];
 
           // 估算持倉價值 (TWD)
           const valTwd = h.market === 'US' ? h.grossMarketValue * usdToTwdRate : h.grossMarketValue;
@@ -450,16 +466,21 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
           };
         });
     } else {
-      // 2. 全市場法人與機構焦點模式 (由 filterMarketFocusList 統一嚴格處理市場純度)
+      // 2. 全市場法人與機構焦點模式 (由 filterMarketFocusList 統一嚴格處理市場純度，使用 activeChipsMap 累計週期)
       return filterMarketFocusList(
         marketFilter,
-        twseChipsMap,
+        activeChipsMap,
         holdings,
         availableDates,
         historyReportsMap
       );
     }
-  }, [holdings, twseChipsMap, viewMode, marketFilter, usdToTwdRate, availableDates, historyReportsMap]);
+  }, [holdings, activeChipsMap, viewMode, marketFilter, usdToTwdRate, availableDates, historyReportsMap]);
+
+  // Spec 0119 Ticket 04: 動態計算當前週期的決策排行榜 (可以買 vs 一定要閃)
+  const momentumSignals = useMemo(() => {
+    return getTopMomentumSymbols(activeChipsMap, 4);
+  }, [activeChipsMap]);
 
   // 透過量化引擎計算四象限模型
   const analysisResult = useMemo(() => {
@@ -599,30 +620,40 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
             ))}
           </div>
 
-          {/* 本地歷史籌碼「時間換空間」狀態徽章 */}
+          {/* 動能時間窗選擇器 (1日 / 3日 / 5日) (Spec 0119 Ticket 03) */}
           <div
-            title={
-              isHydratingHistory
-                ? '背景非同步漸進沉澱最近 5 日全市場日報至本地 IndexedDB...'
-                : `本地 IndexedDB 已沉澱 ${Object.keys(historyReportsMap).length} 個交易日真實日報，時序播放器已對齊真實法人張數。`
-            }
             style={{
               display: 'flex',
-              alignItems: 'center',
-              gap: '5px',
-              padding: '5px 10px',
-              borderRadius: '8px',
-              background: isHydratingHistory ? 'rgba(59, 130, 246, 0.15)' : 'rgba(16, 185, 129, 0.12)',
-              border: isHydratingHistory ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid rgba(16, 185, 129, 0.25)',
-              color: isHydratingHistory ? '#93c5fd' : '#6ee7b7',
-              fontSize: '0.74rem',
-              fontWeight: 600,
+              background: 'rgba(30, 41, 59, 0.7)',
+              padding: '3px',
+              borderRadius: '10px',
+              border: '1px solid rgba(51, 65, 85, 0.6)',
+              gap: '2px',
             }}
+            title="切換動能時間窗：加總法人近 1 日 / 3 日 / 5 日累計買賣超，過濾單日隔日沖雜訊"
           >
-            <span>{isHydratingHistory ? '⏳ 歷史補足中' : `💾 歷史籌碼 (${Object.keys(historyReportsMap).length || '就緒'})`}</span>
+            {([1, 3, 5] as const).map((days) => (
+              <button
+                key={days}
+                onClick={() => setChipsHorizon(days)}
+                style={{
+                  padding: '4px 9px',
+                  borderRadius: '7px',
+                  border: 'none',
+                  background: chipsHorizon === days ? 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)' : 'transparent',
+                  color: chipsHorizon === days ? '#ffffff' : '#94a3b8',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {days === 1 ? '1日 (當日)' : days === 3 ? '3日 (短波段)' : '5日 (週籌碼)'}
+              </button>
+            ))}
           </div>
 
-          {/* 籌碼資料狀態徽章 (Spec 0117 Ticket 02) */}
+          {/* 籌碼資料狀態徽章 (Spec 0117 / Spec 0119 優雅降級誠實揭露) */}
           <div
             style={{
               display: 'flex',
@@ -630,14 +661,16 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
               gap: '6px',
               padding: '5px 12px',
               borderRadius: '8px',
-              background: isLiveToday ? 'rgba(16, 185, 129, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-              border: isLiveToday ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid rgba(234, 179, 8, 0.35)',
+              background: isLiveToday ? 'rgba(16, 185, 129, 0.15)' : fallbackReason === 'INCOMPLETE_DATA' ? 'rgba(234, 179, 8, 0.2)' : 'rgba(234, 179, 8, 0.15)',
+              border: isLiveToday ? '1px solid rgba(16, 185, 129, 0.35)' : fallbackReason === 'INCOMPLETE_DATA' ? '1px solid rgba(234, 179, 8, 0.5)' : '1px solid rgba(234, 179, 8, 0.35)',
               color: isLiveToday ? '#6ee7b7' : '#fde047',
               fontSize: '0.74rem',
               fontWeight: 600,
             }}
             title={
-              isLiveToday
+              fallbackReason === 'INCOMPLETE_DATA'
+                ? `今日盤後證交所 API 數據未完整 (檔數過少或全0張)，系統已自動優雅降級呈現 ${reportDate} 完整已結算日報`
+                : isLiveToday
                 ? `臺灣證交所與櫃買中心今日 ${reportDate} 盤後三大法人已完整公布與同步`
                 : `盤中尚未公布今日日報 (預計 15:30 公布)，目前顯示 ${reportDate} 已結算完整籌碼`
             }
@@ -645,6 +678,8 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
             <span>
               {isLiveToday
                 ? `🟢 已同步：${reportDate.substring(4, 6)}/${reportDate.substring(6, 8)} 盤後 (共 ${totalSymbols} 檔)`
+                : fallbackReason === 'INCOMPLETE_DATA'
+                ? `🟡 盤後結算中：暫呈 ${reportDate.substring(4, 6)}/${reportDate.substring(6, 8)} 完整日報 (${totalSymbols} 檔)`
                 : `🕒 盤中模式：顯示 ${reportDate.substring(4, 6)}/${reportDate.substring(6, 8)} 盤後 (${totalSymbols} 檔)`}
             </span>
           </div>
@@ -652,7 +687,7 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
           <button
             onClick={() => loadChipsData(true)}
             disabled={isLoading}
-            title="點擊強制更新並同步臺灣證交所與櫃買中心三大法人籌碼日報"
+            title={`點擊強制更新並同步臺灣證交所與櫃買中心三大法人籌碼日報 (本地已沉澱 ${Object.keys(historyReportsMap).length} 個交易日)`}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -670,6 +705,9 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
             <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
             <span>{isLoading ? '同步中...' : '同步盤後籌碼'}</span>
           </button>
+          {isHydratingHistory && (
+            <span style={{ fontSize: '0.72rem', color: '#93c5fd' }}>⏳ 補足歷史中...</span>
+          )}
         </div>
       </div>
 
@@ -768,6 +806,153 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
             </>
           );
         })()}
+      </div>
+
+      {/* 聰明錢動態決策快報看板 (Spec 0119 Ticket 04: 一眼秒懂熱門、可以買是誰、要閃是誰) */}
+      <div
+        style={{
+          background: 'rgba(15, 23, 42, 0.75)',
+          border: '1px solid rgba(51, 65, 85, 0.6)',
+          borderRadius: '14px',
+          padding: '14px 16px',
+        }}
+      >
+        <div
+          onClick={() => setIsDecisionBoardExpanded(!isDecisionBoardExpanded)}
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1rem' }}>🧭</span>
+            <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#f8fafc' }}>
+              聰明錢動態決策快報 ({chipsHorizon === 1 ? '今日即時' : `近 ${chipsHorizon} 日累計`})
+            </span>
+            <span style={{ fontSize: '0.72rem', color: '#94a3b8', background: 'rgba(51, 65, 85, 0.5)', padding: '2px 8px', borderRadius: '6px' }}>
+              3秒看懂資金流向
+            </span>
+          </div>
+          <span style={{ fontSize: '0.78rem', color: '#38bdf8', fontWeight: 600 }}>
+            {isDecisionBoardExpanded ? '收合 ▲' : '展開盤勢解讀 ▼'}
+          </span>
+        </div>
+
+        {isDecisionBoardExpanded && (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: '12px',
+              marginTop: '12px',
+              paddingTop: '12px',
+              borderTop: '1px solid rgba(51, 65, 85, 0.4)',
+            }}
+          >
+            {/* 1. 法人聯手搶買榜 (可以買) */}
+            <div
+              style={{
+                background: 'rgba(16, 185, 129, 0.08)',
+                border: '1px solid rgba(16, 185, 129, 0.25)',
+                borderRadius: '10px',
+                padding: '10px 12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#34d399', fontSize: '0.82rem', fontWeight: 700, marginBottom: '8px' }}>
+                <Flame size={15} /> 🟢 法人聯手搶買榜 (推升力道強 · 可多方留意)
+              </div>
+              {momentumSignals.buyList.length === 0 ? (
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>當前週期未見明顯雙法人共買標的</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {momentumSignals.buyList.map((item) => {
+                    const sig = classifyInstitutionalSignal(item);
+                    return (
+                      <div
+                        key={item.symbol}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          fontSize: '0.78rem',
+                          padding: '5px 8px',
+                          background: 'rgba(15, 23, 42, 0.5)',
+                          borderRadius: '6px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span className="mono" style={{ fontWeight: 700, color: '#f8fafc' }}>{item.symbol}</span>
+                          <span style={{ color: '#cbd5e1' }}>{item.name}</span>
+                          <span style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: '4px', background: sig.badgeBg, color: sig.color }}>
+                            {sig.label}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '0.7rem', color: '#6ee7b7' }}>外資+{item.foreignNetShares.toLocaleString()}</span>
+                          <span style={{ fontSize: '0.7rem', color: '#93c5fd' }}>投信+{item.trustNetShares.toLocaleString()}</span>
+                          <span className="mono" style={{ fontWeight: 800, color: '#34d399' }}>+{item.totalNetShares.toLocaleString()}張</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 2. 主力大舉提款榜 (一定要閃) */}
+            <div
+              style={{
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                borderRadius: '10px',
+                padding: '10px 12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f87171', fontSize: '0.82rem', fontWeight: 700, marginBottom: '8px' }}>
+                <AlertTriangle size={15} /> 🔴 主力大舉提款榜 (提款出逃 · 嚴防接刀)
+              </div>
+              {momentumSignals.dumpList.length === 0 ? (
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>當前週期未見主力大幅倒貨標的</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {momentumSignals.dumpList.map((item) => {
+                    const sig = classifyInstitutionalSignal(item);
+                    return (
+                      <div
+                        key={item.symbol}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          fontSize: '0.78rem',
+                          padding: '5px 8px',
+                          background: 'rgba(15, 23, 42, 0.5)',
+                          borderRadius: '6px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span className="mono" style={{ fontWeight: 700, color: '#f8fafc' }}>{item.symbol}</span>
+                          <span style={{ color: '#cbd5e1' }}>{item.name}</span>
+                          <span style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: '4px', background: sig.badgeBg, color: sig.color }}>
+                            {sig.label}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '0.7rem', color: '#fca5a5' }}>外資{item.foreignNetShares.toLocaleString()}</span>
+                          <span style={{ fontSize: '0.7rem', color: '#fdba74' }}>投信{item.trustNetShares.toLocaleString()}</span>
+                          <span className="mono" style={{ fontWeight: 800, color: '#ef4444' }}>{item.totalNetShares.toLocaleString()}張</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 核心泡泡圖元件 */}

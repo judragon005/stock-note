@@ -7,6 +7,7 @@ import {
   fetchTwseInstitutionalReport,
   fetchTwseInstitutionalReportDetailed,
   fetchRecentTwseReports,
+  isInstitutionalReportComplete,
 } from './smartMoneyFetcher';
 import * as db from '../utils/db';
 
@@ -335,6 +336,104 @@ describe('smartMoneyFetcher (籌碼資料管線與解析)', () => {
       expect(res.totalSymbols).toBe(1);
     });
   });
+
+  describe('Spec 0119: 籌碼日報多維哨兵校驗與優雅降級回退 T-1 (Ticket 01)', () => {
+    describe('isInstitutionalReportComplete (日報完整度哨兵)', () => {
+      it('空資料、null 或未定義時回傳 false', () => {
+        expect(isInstitutionalReportComplete(null)).toBe(false);
+        expect(isInstitutionalReportComplete(undefined)).toBe(false);
+        expect(isInstitutionalReportComplete({})).toBe(false);
+      });
+
+      it('檔數不足預設門檻 (如 894 檔，正常 >= 1200 檔) 時回傳 false', () => {
+        const incompleteData: Record<string, any> = {};
+        for (let i = 0; i < 894; i++) {
+          incompleteData[`SYM_${i}`] = {
+            symbol: `SYM_${i}`,
+            foreignNetShares: 10,
+            trustNetShares: 5,
+            dealerNetShares: 2,
+            totalNetShares: 17,
+          };
+        }
+        expect(isInstitutionalReportComplete(incompleteData)).toBe(false);
+      });
+
+      it('全市場檔數雖然足夠，但所有股票三大法人買賣超全為 0 時回傳 false', () => {
+        const zeroData: Record<string, any> = {};
+        for (let i = 0; i < 1500; i++) {
+          zeroData[`SYM_${i}`] = {
+            symbol: `SYM_${i}`,
+            foreignNetShares: 0,
+            trustNetShares: 0,
+            dealerNetShares: 0,
+            totalNetShares: 0,
+          };
+        }
+        expect(isInstitutionalReportComplete(zeroData)).toBe(false);
+      });
+
+      it('檔數充足且前 30 大股票有活躍三大法人買賣超時回傳 true', () => {
+        const validData: Record<string, any> = {};
+        for (let i = 0; i < 1500; i++) {
+          validData[`SYM_${i}`] = {
+            symbol: `SYM_${i}`,
+            foreignNetShares: i === 0 ? 500 : 0,
+            trustNetShares: i === 1 ? 200 : 0,
+            dealerNetShares: 0,
+            totalNetShares: i === 0 ? 500 : (i === 1 ? 200 : 0),
+          };
+        }
+        expect(isInstitutionalReportComplete(validData)).toBe(true);
+      });
+    });
+
+    describe('fetchTwseInstitutionalReportDetailed (優雅降級回退 T-1 實測)', () => {
+      it('當最新一日抓取的資料未完整 (如僅 894 檔) 時，系統自動優雅回退 T-1 完整日報，且 isLiveToday = false', async () => {
+        // 今日 20260911 只抓到 894 檔 (半殘資料)
+        const partialData20260911: any[][] = [];
+        for (let i = 0; i < 894; i++) {
+          partialData20260911.push([
+            `SYM_${i}`, `股_${i}`, '0', '0', '0', '0', '0', '0', '0', '0', '0', '0'
+          ]);
+        }
+
+        // 前一日 20260910 則是完整 1500 檔且有交易量
+        const completeData20260910: any[][] = [];
+        for (let i = 0; i < 1500; i++) {
+          completeData20260910.push([
+            `SYM_${i}`, `股_${i}`, '1,000,000', '500,000', '500,000', '0', '0', '0', '200,000', '0', '200,000', '0'
+          ]);
+        }
+
+        const mockFetch = vi.fn().mockImplementation((url: string) => {
+          if (url.includes('20260911') || url.includes('115/09/11')) {
+            return Promise.resolve({
+              stat: 'OK',
+              date: '20260911',
+              data: partialData20260911,
+            });
+          }
+          if (url.includes('20260910') || url.includes('115/09/10')) {
+            return Promise.resolve({
+              stat: 'OK',
+              date: '20260910',
+              data: completeData20260910,
+            });
+          }
+          return Promise.reject(new Error('No data'));
+        });
+
+        const res = await fetchTwseInstitutionalReportDetailed('20260911', mockFetch, 5, true);
+        // 應自動退回到 20260910 完整日報
+        expect(res.reportDate).toBe('20260910');
+        expect(res.isLiveToday).toBe(false);
+        expect(res.fallbackReason).toBe('INCOMPLETE_DATA');
+        expect(res.totalSymbols).toBeGreaterThanOrEqual(1500);
+      });
+    });
+  });
 });
+
 
 
