@@ -1982,6 +1982,58 @@ describe('股票交易交割自動同步與流水關聯 (Trade Settlement Sync)'
       expect(earlyMetrics.accruedInterest).toBe(0);
     });
   });
+
+  describe('Spec 0119: 質押借貸單一還款入口 (UNIFIED_REPAY) 利息與本息快捷沖償驗證 (Ticket 02)', () => {
+    const pledgeLoan: LoanRecord = {
+      id: 'loan-unified-test',
+      name: '永豐金質押貸款',
+      loanType: 'PLEDGE',
+      principal: 500000,
+      annualInterestRate: 4.0,
+      currency: 'TWD',
+      startDate: '2026-09-09',
+      lastInterestPaymentDate: '2026-09-09',
+      pledgeFee: 0,
+      createdAt: 1,
+    };
+
+    it('捷徑 1 (僅繳利息)：當使用者點選「帶入本期利息」送出，精確扣抵利息、本金不變、付息日順利推進', () => {
+      // 9/9 借 50萬，9/11 付息 (計息 2 天，利息 110 元)
+      const metrics = calculateLoanInterestAndPayoff(pledgeLoan, '2026-09-11');
+      expect(metrics.daysElapsed).toBe(2);
+      expect(metrics.accruedInterest).toBe(110);
+
+      const res = applyDebtRepayment({
+        loan: pledgeLoan,
+        repaymentAmount: 110, // 點擊快捷鍵帶入
+        repaymentDate: '2026-09-11',
+      });
+
+      expect(res.feesPaid).toBe(0);
+      expect(res.interestPaid).toBe(110);
+      expect(res.principalPaid).toBe(0);
+      expect(res.remainingPrincipal).toBe(500000);
+      expect(res.updatedLoan.lastInterestPaymentDate).toBe('2026-09-11');
+      expect(res.splitTransactions.length).toBe(1);
+      expect(res.splitTransactions[0].type).toBe('FINANCING_FEE');
+      expect(res.splitTransactions[0].amount).toBe(-110);
+    });
+
+    it('捷徑 2 (繳息加部分還本)：當輸入 50,000 元，優先扣除 110 利息，剩餘 49,890 元扣抵本金', () => {
+      const res = applyDebtRepayment({
+        loan: pledgeLoan,
+        repaymentAmount: 50000,
+        repaymentDate: '2026-09-11',
+      });
+
+      expect(res.feesPaid).toBe(0);
+      expect(res.interestPaid).toBe(110);
+      expect(res.principalPaid).toBe(49890);
+      expect(res.remainingPrincipal).toBe(500000 - 49890);
+      expect(res.updatedLoan.lastInterestPaymentDate).toBe('2026-09-11');
+      expect(res.splitTransactions.length).toBe(2);
+    });
+  });
 });
 
 
