@@ -262,6 +262,28 @@ describe('SmartMoneyBubbleChart 視覺映射與輔助計算測試 (Tickets 03 & 
       expect(pinnedPlacement.pointerEvents).toBe('auto');
     });
   });
+
+  describe('formatInstitutionalDetailText (Spec 0117 Ticket 02: 查無資料友善標註)', () => {
+    it('當台股三大法人買賣超全為 undefined 時，應明確標示查無當日法人數據，絕不誤導為平穩或 0 張', () => {
+      const res = formatInstitutionalDetailText({
+        market: 'TW',
+        foreignNetShares: undefined,
+        trustNetShares: undefined,
+        dealerNetShares: undefined,
+      });
+      expect(res).toBe('此標的查無當日盤後法人進出數據');
+    });
+
+    it('當三大法人買賣超為數值 0 時，正常顯示外資 +0 張、投信 +0 張、自營商 +0 張', () => {
+      const res = formatInstitutionalDetailText({
+        market: 'TW',
+        foreignNetShares: 0,
+        trustNetShares: 0,
+        dealerNetShares: 0,
+      });
+      expect(res).toBe('外資: +0 張 | 投信: +0 張 | 自營商: +0 張');
+    });
+  });
 });
 
 

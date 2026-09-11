@@ -78,8 +78,9 @@ export function getLatestTradingDateString(referenceDate: Date = new Date()): st
 
   let target = new Date(twTime);
 
-  // 若當日小於 15:00，則當日資料尚未公佈，往前推一日
-  if (target.getHours() < 15) {
+  // 若當日小於 15:30，則當日盤後資料尚未公佈，往前推一日
+  const totalMinutes = target.getHours() * 60 + target.getMinutes();
+  if (totalMinutes < 15 * 60 + 30) {
     target.setDate(target.getDate() - 1);
   }
 
@@ -102,7 +103,7 @@ export function getLatestTradingDateString(referenceDate: Date = new Date()): st
 /**
  * 往前推算前一個交易日
  */
-function getPreviousTradingDateString(dateStr: string): string {
+export function getPreviousTradingDateString(dateStr: string): string {
   const y = parseInt(dateStr.substring(0, 4), 10);
   const m = parseInt(dateStr.substring(4, 6), 10) - 1;
   const d = parseInt(dateStr.substring(6, 8), 10);
@@ -117,8 +118,23 @@ function getPreviousTradingDateString(dateStr: string): string {
 
   const yyyy = cur.getFullYear();
   const mm = String(cur.getMonth() + 1).padStart(2, '0');
-  const dd = String(cur.getDate()).padStart(2, '0');
+  const dd = String(targetToTwoDigits(cur.getDate()));
   return `${yyyy}${mm}${dd}`;
+}
+
+const targetToTwoDigits = (num: number) => String(num).padStart(2, '0');
+
+/**
+ * 依基準日向前推算產生連續 N 個真實交易日之升冪字串陣列 (供時序回放軸與歷史映射)
+ */
+export function getRecentTradingDateSequence(endDateStr: string, count = 5): string[] {
+  const dates: string[] = [];
+  let cur = endDateStr;
+  for (let i = 0; i < count; i++) {
+    dates.push(cur);
+    cur = getPreviousTradingDateString(cur);
+  }
+  return dates.reverse();
 }
 
 /**
@@ -241,23 +257,39 @@ async function fetchCombinedTwseAndTpex(
   return { ...twseData, ...tpexData };
 }
 
+export interface InstitutionalReportResult {
+  reportDate: string;        // 確切資料日期 (YYYYMMDD)
+  isLiveToday: boolean;       // 是否為今日盤後最新數據
+  data: Record<string, TwseInstitutionalRow>;
+  totalSymbols: number;       // 涵蓋標的總檔數
+}
+
 /**
- * 抓取台灣全市場（上市 TWSE + 上櫃 TPEx）三大法人日報，支援自動往前重試與 IndexedDB 本地快取
+ * 抓取台灣全市場三大法人日報，支援自動往前重試、IndexedDB 本地歷史快取回溯與詳細狀態封裝 (Spec 0117 Ticket 01)
  */
-export async function fetchTwseInstitutionalReport(
+export async function fetchTwseInstitutionalReportDetailed(
   initialDateStr?: string,
   customFetch: (url: string, timeoutMs?: number) => Promise<any> = fetchWithCORSProxy,
   maxDaysBack = 5,
   forceRefresh = false
-): Promise<Record<string, TwseInstitutionalRow>> {
-  let currentDate = initialDateStr || getLatestTradingDateString();
+): Promise<InstitutionalReportResult> {
+  const latestPossibleDate = getLatestTradingDateString();
+  let currentDate = initialDateStr || latestPossibleDate;
 
-  // 1. 優先嘗試讀取快取 (若 forceRefresh 為 true 則略過)
+  // 判定是否可能為今日盤後 (僅當 latestPossibleDate 為當日且請求目標亦為最新時)
+  const isLiveToday = currentDate === latestPossibleDate;
+
+  // 1. 優先嘗試讀取當前目標日期快取 (若 forceRefresh 為 true 則略過)
   if (!forceRefresh) {
     try {
       const cached = await dbGet<any>('settings', `${CACHE_KEY_PREFIX}${currentDate}`);
       if (cached && cached.data && isMarketCoverageValid(cached.data)) {
-        return cached.data;
+        return {
+          reportDate: currentDate,
+          isLiveToday,
+          data: cached.data,
+          totalSymbols: Object.keys(cached.data).length,
+        };
       }
     } catch {
       // 快取讀取失敗則繼續線上請求
@@ -267,6 +299,23 @@ export async function fetchTwseInstitutionalReport(
   let attempts = 0;
   while (attempts < maxDaysBack) {
     attempts++;
+    // 若非首日且未要求強制重整，先嘗試讀取該歷史日之本地快取
+    if (attempts > 1 && !forceRefresh) {
+      try {
+        const cached = await dbGet<any>('settings', `${CACHE_KEY_PREFIX}${currentDate}`);
+        if (cached && cached.data && isMarketCoverageValid(cached.data)) {
+          return {
+            reportDate: currentDate,
+            isLiveToday: false,
+            data: cached.data,
+            totalSymbols: Object.keys(cached.data).length,
+          };
+        }
+      } catch {
+        // 忽略快取錯誤
+      }
+    }
+
     try {
       const combined = await fetchCombinedTwseAndTpex(currentDate, customFetch);
 
@@ -282,7 +331,12 @@ export async function fetchTwseInstitutionalReport(
         } catch {
           // 快取寫入失敗不阻擋主流程
         }
-        return combined;
+        return {
+          reportDate: currentDate,
+          isLiveToday: currentDate === latestPossibleDate,
+          data: combined,
+          totalSymbols: Object.keys(combined).length,
+        };
       }
     } catch {
       // 請求失敗，繼續嘗試上一交易日
@@ -291,7 +345,50 @@ export async function fetchTwseInstitutionalReport(
     currentDate = getPreviousTradingDateString(currentDate);
   }
 
-  return {};
+  // 3. 兜底保障：若嘗試多日線上抓取均失敗，主動向歷史回溯檢索最近 10 個交易日中已有之有效快取 (Last Known Good)
+  let fallbackCursor = latestPossibleDate;
+  for (let i = 0; i < 10; i++) {
+    try {
+      const fallbackCached = await dbGet<any>('settings', `${CACHE_KEY_PREFIX}${fallbackCursor}`);
+      if (fallbackCached && fallbackCached.data && isMarketCoverageValid(fallbackCached.data)) {
+        return {
+          reportDate: fallbackCursor,
+          isLiveToday: false,
+          data: fallbackCached.data,
+          totalSymbols: Object.keys(fallbackCached.data).length,
+        };
+      }
+    } catch {
+      // 忽略
+    }
+    fallbackCursor = getPreviousTradingDateString(fallbackCursor);
+  }
+
+  // 最終完全查無資料時回傳空結構
+  return {
+    reportDate: currentDate,
+    isLiveToday: false,
+    data: {},
+    totalSymbols: 0,
+  };
+}
+
+/**
+ * 抓取台灣全市場（上市 TWSE + 上櫃 TPEx）三大法人日報 (向下相容純字典介面)
+ */
+export async function fetchTwseInstitutionalReport(
+  initialDateStr?: string,
+  customFetch: (url: string, timeoutMs?: number) => Promise<any> = fetchWithCORSProxy,
+  maxDaysBack = 5,
+  forceRefresh = false
+): Promise<Record<string, TwseInstitutionalRow>> {
+  const result = await fetchTwseInstitutionalReportDetailed(
+    initialDateStr,
+    customFetch,
+    maxDaysBack,
+    forceRefresh
+  );
+  return result.data;
 }
 
 /**

@@ -21,6 +21,7 @@ import {
   groupPendingSettlementsByTimeline,
   createLoanDisbursementTransaction,
   calculateLoanSettledSummary,
+  applyDebtRepayment,
 } from '../engine/cashLedgerEngine';
 import { CashTransactionModal } from './CashTransactionModal';
 import { LoanModal } from './LoanModal';
@@ -531,34 +532,24 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
       onSaveLoans(updatedLoans);
       alert(`⚡ 成功一鍵全額結清 ${loan.name}！共扣款 ${currencySymbol} ${numAmount.toLocaleString()}（已拆分 ${splitTxs.length} 筆帳本流水：本金/利息/規費），本金已歸零！`);
     } else {
-      const repayTx: CashTransaction = {
-        id: `tx-repay-${loan.id}-${now}`,
-        accountId: targetAccountId,
-        currency: loan.currency || 'TWD',
-        type: 'LOAN_REPAYMENT',
-        category: 'LOAN_REPAYMENT',
-        amount: -numAmount,
-        date: todayStr,
-        relatedLoanId: loan.id,
-        note: `償還質押本金: ${loan.name}`,
-        createdAt: now,
-      };
+      // 依據法定清償順序 (費用 ➔ 利息 ➔ 本金) 進行智慧沖償與拆分 (Spec 0117 Ticket 04)
+      const repaymentResult = applyDebtRepayment({
+        loan,
+        repaymentAmount: numAmount,
+        repaymentDate: todayStr,
+        targetAccountId,
+      });
 
-      const remaining = Math.max(0, loan.principal - numAmount);
       const updatedLoans = loans.map((l) =>
-        l.id === loan.id
-          ? {
-              ...l,
-              principal: remaining,
-              closedDate: remaining === 0 ? todayStr : l.closedDate,
-              lastInterestPaymentDate: todayStr,
-            }
-          : l
+        l.id === loan.id ? repaymentResult.updatedLoan : l
       );
 
-      onSaveTransactions([repayTx, ...transactions]);
+      onSaveTransactions([...repaymentResult.splitTransactions, ...transactions]);
       onSaveLoans(updatedLoans);
-      alert(`✅ 成功償還本金 ${currencySymbol} ${numAmount.toLocaleString()}！`);
+
+      const feeMsg = repaymentResult.feesPaid > 0 ? ` · 規費 ${currencySymbol} ${repaymentResult.feesPaid.toLocaleString()}` : '';
+      const intMsg = repaymentResult.interestPaid > 0 ? ` · 利息 ${currencySymbol} ${repaymentResult.interestPaid.toLocaleString()}` : '';
+      alert(`✅ 成功還款 ${currencySymbol} ${numAmount.toLocaleString()}！沖償本金 ${currencySymbol} ${repaymentResult.principalPaid.toLocaleString()}${intMsg}${feeMsg}，已自動產生 ${repaymentResult.splitTransactions.length} 筆帳本流水！`);
     }
 
     setPayLoanTarget(null);
@@ -1282,8 +1273,15 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                           {loan.loanType === 'PLEDGE' ? '股票質押' : loan.loanType === 'MARGIN' ? '券商融資' : '信用貸款'}
                         </span>
                       </div>
-                      <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '2px' }}>
-                        年利率: <b style={{ color: '#f8fafc' }}>{loan.annualInterestRate || (loan.interestRate ? loan.interestRate * 100 : 0)}%</b> · 起日: {loan.startDate || loan.date || '-'}
+                      <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '2px', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+                        <span>年利率: <b style={{ color: '#f8fafc' }}>{loan.annualInterestRate || (loan.interestRate ? loan.interestRate * 100 : 0)}%</b></span>
+                        <span>·</span>
+                        <span>起日: {loan.startDate || loan.date || '-'}</span>
+                        {loan.lastInterestPaymentDate && loan.lastInterestPaymentDate !== (loan.startDate || loan.date) && (
+                          <span style={{ color: '#38bdf8', background: 'rgba(56, 189, 248, 0.12)', padding: '1px 6px', borderRadius: '4px', border: '1px solid rgba(56, 189, 248, 0.25)', fontWeight: 600 }}>
+                            前次繳息/還款: {loan.lastInterestPaymentDate}
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -1341,8 +1339,8 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                       </span>
                     </div>
 
-                    {/* 設質三大規費 */}
-                    {isPledge && (
+                    {/* 設質三大規費 (僅台股且規費大於 0 時顯示，美股零規費) */}
+                    {isPledge && isTW && totalPledgeFee > 0 && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', paddingTop: '4px', borderTop: '1px dashed rgba(51, 65, 85, 0.4)' }}>
                         <span style={{ color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '4px' }}>
                           <Receipt size={12} /> 設質三大規費:
@@ -1980,6 +1978,55 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                     </div>
                   )}
                 </div>
+
+                {payLoanTarget.actionType === 'REPAY_PRINCIPAL' && (() => {
+                  const inputVal = parseFloat(payAmountInput) || 0;
+                  const preview = applyDebtRepayment({
+                    loan: payLoanTarget.loan,
+                    repaymentAmount: inputVal,
+                  });
+                  return (
+                    <div
+                      style={{
+                        background: 'rgba(3, 7, 18, 0.65)',
+                        border: '1px solid rgba(168, 85, 247, 0.3)',
+                        borderRadius: '10px',
+                        padding: '12px 14px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px',
+                        fontSize: '0.78rem',
+                      }}
+                    >
+                      <div style={{ color: '#c084fc', fontWeight: 700, marginBottom: '2px' }}>
+                        ⚖️ 法定清償順序即時試算 (費用 ➔ 利息 ➔ 本金)：
+                      </div>
+                      {preview.feesPaid > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#fcd34d' }}>
+                          <span>1. 抵扣設質規費 (撥券/設質):</span>
+                          <span className="mono" style={{ fontWeight: 600 }}>- {currSym} {preview.feesPaid.toLocaleString()}</span>
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#fbbf24' }}>
+                        <span>{preview.feesPaid > 0 ? '2.' : '1.'} 抵扣應計利息 (計息 {payoffMetrics.daysElapsed}天):</span>
+                        <span className="mono" style={{ fontWeight: 600 }}>- {currSym} {preview.interestPaid.toLocaleString()}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#38bdf8' }}>
+                        <span>{preview.feesPaid > 0 ? '3.' : '2.'} 實際沖償本金:</span>
+                        <span className="mono" style={{ fontWeight: 700 }}>- {currSym} {preview.principalPaid.toLocaleString()}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', paddingTop: '6px', borderTop: '1px dashed rgba(51, 65, 85, 0.5)', marginTop: '2px' }}>
+                        <span>預估還款後剩餘借款本金:</span>
+                        <span className="mono" style={{ color: '#f8fafc', fontWeight: 700 }}>{currSym} {preview.remainingPrincipal.toLocaleString()}</span>
+                      </div>
+                      {preview.remainingPledgeFees === 0 && payoffMetrics.pledgeFees > 0 && (
+                        <div style={{ fontSize: '0.72rem', color: '#34d399', marginTop: '2px' }}>
+                          ✨ 設質規費在本次還款中已全額結清，後續結清將不再重複計費！
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
                   <button type="button" className="btn btn-secondary" onClick={() => setPayLoanTarget(null)}>

@@ -5,8 +5,10 @@ import {
   toRocDateString,
   getLatestTradingDateString,
   fetchTwseInstitutionalReport,
+  fetchTwseInstitutionalReportDetailed,
   fetchRecentTwseReports,
 } from './smartMoneyFetcher';
+import * as db from '../utils/db';
 
 describe('smartMoneyFetcher (籌碼資料管線與解析)', () => {
   describe('parseTwseT86Report (TWSE T86 官方日報 JSON 解析器)', () => {
@@ -265,6 +267,72 @@ describe('smartMoneyFetcher (籌碼資料管線與解析)', () => {
     it('將 20260904 轉為 115/09/04', () => {
       expect(toRocDateString('20260904')).toBe('115/09/04');
       expect(toRocDateString('20240105')).toBe('113/01/05');
+    });
+  });
+
+  describe('Spec 0117: 籌碼日報 Last Known Good 哨兵與 15:30 盤中回溯 (Ticket 01)', () => {
+    it('15:30 閥值：盤中 15:20 應自動退回前一交易日，15:30 之後才視為當日', () => {
+      // 2026-09-11 (週五) 15:20:00 -> 尚未滿 15:30，應退到 20260910
+      const friday1520 = new Date('2026-09-11T15:20:00+08:00');
+      expect(getLatestTradingDateString(friday1520)).toBe('20260910');
+
+      // 2026-09-11 (週五) 15:35:00 -> 已過 15:30，應為 20260911
+      const friday1535 = new Date('2026-09-11T15:35:00+08:00');
+      expect(getLatestTradingDateString(friday1535)).toBe('20260911');
+    });
+
+    it('fetchTwseInstitutionalReportDetailed: 成功回傳結構化 InstitutionalReportResult (含 reportDate, isLiveToday, totalSymbols)', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        stat: 'OK',
+        date: '20260910',
+        data: [
+          ['2330', '台積電', '10,000,000', '5,000,000', '5,000,000', '0', '0', '0', '1,000,000', '0', '1,000,000', '0'],
+          ['2327', '國巨', '3,000,000', '1,000,000', '2,000,000', '0', '0', '0', '500,000', '0', '500,000', '0'],
+        ],
+      });
+
+      const res = await fetchTwseInstitutionalReportDetailed('20260910', mockFetch);
+      expect(res.reportDate).toBe('20260910');
+      expect(res.totalSymbols).toBeGreaterThanOrEqual(2);
+      expect(res.data['2330']).toBeDefined();
+      expect(res.data['2327']).toBeDefined();
+      expect(res.data['2327'].foreignNetShares).toBe(2000);
+    });
+
+    it('當線上所有請求失敗時，能自動從 IndexedDB 回溯命中最新有效快取，絕不回傳空字典', async () => {
+      // 模擬 IndexedDB 中有 20260908 之歷史快取
+      vi.spyOn(db, 'dbGet').mockImplementation((_store: string, key: string) => {
+        if (key.includes('20260908')) {
+          return Promise.resolve({
+            key: 'TWSE_TPEX_CHIPS_V4_20260908',
+            date: '20260908',
+            data: {
+              '2330': {
+                symbol: '2330',
+                name: '台積電',
+                foreignBuyShares: 1000,
+                foreignSellShares: 500,
+                foreignNetShares: 500,
+                trustBuyShares: 0,
+                trustSellShares: 0,
+                trustNetShares: 0,
+                dealerNetShares: 0,
+                totalNetShares: 500,
+              },
+            },
+            updatedAt: Date.now(),
+          });
+        }
+        return Promise.resolve(null);
+      });
+
+      // 線上請求全部被拒絕或逾時
+      const failingFetch = vi.fn().mockRejectedValue(new Error('Network error'));
+
+      const res = await fetchTwseInstitutionalReportDetailed('20260910', failingFetch, 3);
+      expect(res.data['2330']).toBeDefined();
+      expect(res.reportDate).toBe('20260908');
+      expect(res.totalSymbols).toBe(1);
     });
   });
 });

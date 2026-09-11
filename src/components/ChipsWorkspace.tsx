@@ -12,10 +12,11 @@ import {
   getTemporalBubbleFrameData,
 } from '../engine/smartMoneyEngine';
 import {
-  fetchTwseInstitutionalReport,
+  fetchTwseInstitutionalReportDetailed,
   fetchRecentTwseReports,
   TwseInstitutionalRow,
   getLatestTradingDateString,
+  getRecentTradingDateSequence,
 } from '../engine/smartMoneyFetcher';
 import {
   Flame,
@@ -323,23 +324,27 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [twseChipsMap, setTwseChipsMap] = useState<Record<string, TwseInstitutionalRow>>({});
   const [reportDate, setReportDate] = useState<string>(getLatestTradingDateString());
+  const [isLiveToday, setIsLiveToday] = useState<boolean>(false);
+  const [totalSymbols, setTotalSymbols] = useState<number>(0);
   const [currentDateIndex, setCurrentDateIndex] = useState(0);
   const [historyReportsMap, setHistoryReportsMap] = useState<Record<string, Record<string, TwseInstitutionalRow>>>({});
   const [isHydratingHistory, setIsHydratingHistory] = useState<boolean>(false);
 
-  // 模擬/支援 5 個近期交易日供時序回放
+  // 支援 5 個連續真實交易日供時序回放 (Spec 0117 Ticket 02)
   const availableDates = useMemo(() => {
-    return ['T-4', 'T-3', 'T-2', 'T-1', reportDate];
+    return getRecentTradingDateSequence(reportDate, 5);
   }, [reportDate]);
 
   // 初次掛載或點擊重整時抓取官方籌碼 (支援 forceRefresh 略過殘缺快取)
   const loadChipsData = async (forceRefresh = false) => {
     setIsLoading(true);
     try {
-      const data = await fetchTwseInstitutionalReport(undefined, undefined, 5, forceRefresh);
-      setTwseChipsMap(data);
-      setReportDate(getLatestTradingDateString());
-      setCurrentDateIndex(availableDates.length - 1); // 預設指向最新
+      const detailed = await fetchTwseInstitutionalReportDetailed(undefined, undefined, 5, forceRefresh);
+      setTwseChipsMap(detailed.data);
+      setReportDate(detailed.reportDate);
+      setIsLiveToday(detailed.isLiveToday);
+      setTotalSymbols(detailed.totalSymbols);
+      setCurrentDateIndex(4); // 預設指向最新 (5 個交易日的最後一日)
     } catch {
       // 容錯靜默處理
     } finally {
@@ -615,6 +620,33 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
             }}
           >
             <span>{isHydratingHistory ? '⏳ 歷史補足中' : `💾 歷史籌碼 (${Object.keys(historyReportsMap).length || '就緒'})`}</span>
+          </div>
+
+          {/* 籌碼資料狀態徽章 (Spec 0117 Ticket 02) */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '5px 12px',
+              borderRadius: '8px',
+              background: isLiveToday ? 'rgba(16, 185, 129, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+              border: isLiveToday ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid rgba(234, 179, 8, 0.35)',
+              color: isLiveToday ? '#6ee7b7' : '#fde047',
+              fontSize: '0.74rem',
+              fontWeight: 600,
+            }}
+            title={
+              isLiveToday
+                ? `臺灣證交所與櫃買中心今日 ${reportDate} 盤後三大法人已完整公布與同步`
+                : `盤中尚未公布今日日報 (預計 15:30 公布)，目前顯示 ${reportDate} 已結算完整籌碼`
+            }
+          >
+            <span>
+              {isLiveToday
+                ? `🟢 已同步：${reportDate.substring(4, 6)}/${reportDate.substring(6, 8)} 盤後 (共 ${totalSymbols} 檔)`
+                : `🕒 盤中模式：顯示 ${reportDate.substring(4, 6)}/${reportDate.substring(6, 8)} 盤後 (${totalSymbols} 檔)`}
+            </span>
           </div>
 
           <button
