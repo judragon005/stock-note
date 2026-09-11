@@ -118,7 +118,7 @@ export function getPreviousTradingDateString(dateStr: string): string {
 
   const yyyy = cur.getFullYear();
   const mm = String(cur.getMonth() + 1).padStart(2, '0');
-  const dd = String(targetToTwoDigits(cur.getDate()));
+  const dd = targetToTwoDigits(cur.getDate());
   return `${yyyy}${mm}${dd}`;
 }
 

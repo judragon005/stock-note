@@ -1981,6 +1981,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
 
                 {payLoanTarget.actionType === 'REPAY_PRINCIPAL' && (() => {
                   const inputVal = parseFloat(payAmountInput) || 0;
+                  if (inputVal <= 0) return null;
                   const preview = applyDebtRepayment({
                     loan: payLoanTarget.loan,
                     repaymentAmount: inputVal,
