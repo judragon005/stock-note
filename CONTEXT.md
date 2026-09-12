@@ -1590,6 +1590,22 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 遮罩層固定為 `position: fixed; inset: 0; zIndex: 9999; backdropFilter: blur(8px)`，確保點擊持股時間軸按鈕時能立即於螢幕正中央浮現深色毛玻璃彈窗，杜絕 Modal 落入 DOM 頁尾導致「按鍵無反應」之缺陷。
   - 深度兼容單元測試與各市場色彩主題（台灣紅漲綠跌 / 國際綠漲紅跌），保留輔助函式公開介面，達成 TypeScript 0 報錯與全量單元測試 100% 綠燈。
 
+### 穿透式財報深度分析儀三大報表原子聚合與操盤手決策系統 *(新增於 V8.43.0 / Spec #0125 / Issue #47)*
+
+- **Taiwan Tri-Statement Atomic Ingestion Pipeline (台股三大財務報表原子聚合管線)**:
+  - 核心機制：透過 `Promise.allSettled` 同步並行抓取 FinMind 的損益表 (`TaiwanStockFinancialStatements`)、資產負債表 (`TaiwanStockBalanceSheet`) 與現金流量表 (`TaiwanStockCashFlowsStatement`)。
+  - 原子歸併：依據結算日 (`date`) 自動聚合至 16 項標準科目，補齊台股營業活動現金流 (CFO)、資本支出 (Capex)、總資產、總負債與權益總計，徹底杜絕 CFO 假陽性為 0 的系統漏洞。
+- **Financial Directive & Senior Trader Stance (操盤手結構化定調與白話方針)**:
+  - 核心契約：定義 `FinancialDirective`，包含操盤定調 (`stance`：強勢造血·長線續抱 / 體質穩健·逢回布局 / 體質承壓·防守觀望 / 重大風險·嚴格戒備)、核心矛盾剖析 (`conflictSummary`) 與具體操作方針 (`actionGuidance`)。
+  - 邏輯一致性：徹底拔除無腦「獲利現金流平穩健康」兜底，當出現現金流失血或背離時，保證 0 秒戰報橫幅與指示燈號 100% 語意吻合。
+- **Trends Layer Y-Axis & Value Capsules (三率折線圖動態刻度與最新數值膠囊)**:
+  - 刻度可讀性：SVG 動態計算百分比 min/max 刻度與水平格線，消弭盲猜走勢缺陷。
+  - 數值膠囊：圖表頂部置入最新一季毛利率、營益率、淨利率百分比數字膠囊。
+- **Net Income vs CFO Dual-Direction Bars with Amount Labels (淨利與 CFO 雙向階梯柱與金額標籤)**:
+  - 支援雙向正負柱狀排版（負 CFO 明確向下延伸並呈醒目紅柱），柱身直接標註每季金額（百萬/億），背離時顯著呈現「⚠️紙上富貴」警示標籤。
+- **Hero Layer Metric Cards Enrichment (四大體質卡片數據化)**:
+  - 獲利能力（毛利率、ROE、淨利率）、安全性（負債比、速動比、淨現金）、營運效率（DSO、DIO/豁免）、現金流（最新季 CFO、FCF 金額）均內嵌最新數據，提供具體決策佐證。
+
 
 
 

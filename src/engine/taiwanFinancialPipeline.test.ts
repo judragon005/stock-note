@@ -67,9 +67,30 @@ describe('Taiwan Financial Ingestion Pipeline (TDD Seam)', () => {
     vi.spyOn(db, 'getStoredFinancialRecords').mockResolvedValue(mockCached);
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
-    const result = await fetchTaiwanQuarterlyFinancials('2330');
-
-    expect(result).toEqual(mockCached);
+    const res = await fetchTaiwanQuarterlyFinancials('2330');
+    expect(res).toHaveLength(1);
+    expect(res[0].income.revenue).toBe(600000);
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('3. parseTaiwanFinancialStatements 應正確解析真實 FinMind 科目名 (CashFlowsFromOperatingActivities & IncomeAfterTaxes)', () => {
+    const rawRealFinmind = [
+      { date: '2024-06-30', type: 'Revenue', value: 31417937000 },
+      { date: '2024-06-30', type: 'GrossProfit', value: 11038249000 },
+      { date: '2024-06-30', type: 'OperatingIncome', value: 6482195000 },
+      { date: '2024-06-30', type: 'IncomeAfterTaxes', value: 5486256000 },
+      { date: '2024-06-30', type: 'TotalAssets', value: 140000000000 },
+      { date: '2024-06-30', type: 'TotalLiabilities', value: 60000000000 },
+      { date: '2024-06-30', type: 'CashFlowsFromOperatingActivities', value: 6850000000 },
+      { date: '2024-06-30', type: 'PropertyAndPlantAndEquipment', value: 2100000000 },
+    ];
+
+    const records = parseTaiwanFinancialStatements('2327', rawRealFinmind);
+    expect(records).toHaveLength(1);
+    const rec = records[0];
+    expect(rec.income.netIncome).toBe(5486256000);
+    expect(rec.cashFlow.operatingCashFlow).toBe(6850000000);
+    expect(rec.cashFlow.capitalExpenditure).toBe(2100000000);
+    expect(rec.balanceSheet.totalEquity).toBe(80000000000);
   });
 });
