@@ -1560,4 +1560,28 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 【第 2 層：3秒實戰作戰地圖】：4-Box 階梯卡片網格（第一減碼區、續強加碼點、短線動態防守、結構底線）。
   - 【第 3 層：深度佐證區】：三大 Tab（風險雷達與形態、15大指標全景、Markdown 研報預覽與複製）。
 
+### 穿透式財報分析儀與財務防雷鑑識系統 *(新增於 V8.42.0 / Spec #0123 / Issue #41)*
+
+- **Three-Layer Financial Forensic Architecture (三層穿透式財報漸進架構)**:
+  - **Layer 1 (0 秒戰報層)**：綜合健康評分 (0~100)、健康評級 (`EXCELLENT` | `HEALTHY` | `WARNING` | `DANGEROUS`)、四大體質維度指示燈（獲利能力、安全性、營運效率、現金流健康）與白話操盤結論。
+  - **Layer 2 (8 季趨勢矩陣與杜邦拆解)**：近 8 季獲利三率（毛利率、營益率、稅後淨利率）同軸走勢 SVG 圖、稅後淨利 vs 營業現金流 (CFO) 階梯對比、杜邦 ROE 三因子長條拆解。
+  - **Layer 3 (深度鑑識排雷與審計防線)**：「市場沒說什麼」六大逆向背離偵測卡片、簽證會計師事務所與四大所 (Big 4) 標章、查核意見等級與一鍵導出 Markdown 研報。
+- **Canonical 16-Field Financial Record (標準 16 科目季度財務契約)**:
+  - 核心定義：跨台美股損益表、資產負債表與現金流量表之標準化季度結構，杜絕不同數據源欄位命名混亂。所有除法計算均受 `safeDivide` 與零除防禦守護。
+- **DuPont Analysis & Driver Attribution (杜邦三因子拆解與驅動力歸因)**:
+  - 核心機制：$\text{ROE} = \text{淨利率} \times \text{總資產週轉率} \times \text{權益乘數}$。自動辨別驅動本質，標註是由「高產品定價權 (PROFITABILITY)」、「高資產週轉率 (EFFICIENCY)」或「高財務槓桿 (LEVERAGE)」推升，防範槓桿過高的估值反轉風險。
+- **Forensic Radar & "What the Market Left Unsaid" (逆向防雷與「市場沒說什麼」六大鑑識規則)**:
+  - ① **塞貨與庫存積壓 (Channel Stuffing)**：營收季增但 DSO/DIO 惡化超過 20 天。
+  - ② **紙上富貴現金脫鉤 (Decoupling)**：稅後淨利攀升但營業現金流 CFO 為負或脫鉤。
+  - ③ **借債配息 (Debt-Funded Dividend)**：自由現金流 FCF 為負卻維持大額現金股利發放。
+  - ④ **業外美化虛胖 (Core Decay)**：淨利成長但本業營業利益率連續 2 季衰退，靠處分資產美化帳面。
+  - ⑤ **美股股權激勵稀釋 (SBC Dilution)**：美股 SBC 佔營收比重超過 15%，實質稀釋股東權益。
+  - ⑥ **審計查核風險 (Auditor Risk)**：簽證會計師出具非無保留意見或頻繁更換事務所。
+- **Industry Gate & Exemption Model (產業隔離閘門與強週期防護)**:
+  - 金融保險股 (`FINANCIALS`)：針對台股 28XX 與美股銀行金控，豁免負債比與存貨週轉評估，杜絕常規製造業指標造成的假警報。
+  - 景氣循環股 (`CYCLICAL`)：針對航運、鋼鐵、塑化等週期標的，強制標註高獲利週期頂峰警語，防範將單季高獲利盲目年化。
+- **IndexedDB Multi-Tier Cache Pipeline (本地優先快取管線)**:
+  - 升級資料庫至 Version 4，建立 `financialStatements` store (主鍵 `${symbol}_${year}_Q${quarter}`，索引 `by_symbol`)。按需載入（On-Demand），命中本地快取時 0ms 呈現且永不重複請求歷史季度。
+
+
 

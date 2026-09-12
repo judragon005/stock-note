@@ -29,8 +29,13 @@ import {
   saveSymbolIndicators,
   getSymbolIndicators,
   clearOhlcvAndIndicatorsCache,
+  saveFinancialRecords,
+  getStoredFinancialRecords,
+  clearFinancialRecordsCache,
+  DB_VERSION,
 } from './db';
 import { TradeRecord, StoredCorporateAction, BrokerAccount, CashTransaction, LoanRecord } from '../types/stock';
+import type { QuarterlyFinancialRecord } from '../types/financialForensic';
 
 
 // 建立輕量化 Memory-based IDB Mock
@@ -931,6 +936,72 @@ describe('IndexedDB Core Engine & Snapshots (db.ts)', () => {
       expect(indicators).not.toBeNull();
       expect(indicators?.symbol).toBe('AAPL');
       expect(indicators?.points[0].box.boxStatus).toBe('BREAKOUT_UP');
+    });
+  });
+
+  describe('Financial Statements IndexedDB Storage (TDD Seam)', () => {
+    const createSample = (symbol: string, year: number, quarter: number): QuarterlyFinancialRecord => ({
+      symbol,
+      market: 'TW',
+      year,
+      quarter,
+      periodDate: `${year}-0${quarter * 3}-30`,
+      income: {
+        revenue: 1000000,
+        grossProfit: 500000,
+        operatingIncome: 300000,
+        netIncome: 250000,
+        eps: 5.0,
+      },
+      balanceSheet: {
+        totalAssets: 2000000,
+        totalLiabilities: 800000,
+        totalEquity: 1200000,
+        accountsReceivable: 150000,
+        inventory: 200000,
+        cashAndEquivalents: 600000,
+      },
+      cashFlow: {
+        operatingCashFlow: 350000,
+        capitalExpenditure: 120000,
+      },
+      updatedAt: Date.now(),
+    });
+
+    it('應支援 DB_VERSION 升級至 4 並成功建立 financialStatements 物件倉儲', () => {
+      expect(DB_VERSION).toBe(4);
+    });
+
+    it('應能批次儲存並精確讀取特定標的財報，且按時間由新到舊排序', async () => {
+      const q1 = createSample('2330', 2024, 1);
+      const q2 = createSample('2330', 2024, 2);
+      const q3 = createSample('2330', 2024, 3);
+      const other = createSample('2454', 2024, 2);
+
+      await saveFinancialRecords([q2, q1, other, q3]);
+
+      const res2330 = await getStoredFinancialRecords('2330');
+      expect(res2330).toHaveLength(3);
+      expect(res2330[0].quarter).toBe(3); // 最新季度在首位
+      expect(res2330[1].quarter).toBe(2);
+      expect(res2330[2].quarter).toBe(1);
+
+      const res2454 = await getStoredFinancialRecords('2454');
+      expect(res2454).toHaveLength(1);
+      expect(res2454[0].symbol).toBe('2454');
+    });
+
+    it('應支援指定標的清除快取與全量清除快取', async () => {
+      const q1 = createSample('2330', 2025, 1);
+      const q2 = createSample('AAPL', 2025, 1);
+      await saveFinancialRecords([q1, q2]);
+
+      await clearFinancialRecordsCache('2330');
+      expect(await getStoredFinancialRecords('2330')).toHaveLength(0);
+      expect(await getStoredFinancialRecords('AAPL')).toHaveLength(1);
+
+      await clearFinancialRecordsCache();
+      expect(await getStoredFinancialRecords('AAPL')).toHaveLength(0);
     });
   });
 });
