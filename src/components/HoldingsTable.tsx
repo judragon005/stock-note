@@ -4,7 +4,7 @@ import { AccountingMethod, ACCOUNTING_METHOD_LABELS } from '../types/lot';
 import { ReceivableDividend } from '../types/dividend';
 import { calculateHoldingFxBreakdown } from '../engine/fxBreakdown';
 import { formatTimelineDividend, formatTimelineReduction } from '../utils/formatters';
-import { Edit2, Check, ChevronDown, ChevronRight, Calendar, Lock, Unlock, RefreshCw, PlusCircle, Layers, Target, Clock, Sparkles } from 'lucide-react';
+import { Edit2, Check, ChevronDown, ChevronRight, Calendar, Lock, Unlock, RefreshCw, PlusCircle, Layers, Target, Clock, Sparkles, Activity } from 'lucide-react';
 import { Tooltip } from './common/Tooltip';
 import { LotsBreakdownModal } from './LotsBreakdownModal';
 import { calculateHoldingPeriodMetrics } from '../engine/holdingPeriodEngine';
@@ -26,6 +26,7 @@ interface HoldingsTableProps {
   onQuickTrade: (symbol: string, type: 'BUY' | 'SELL') => void;
   onInspectSecurityXirr?: (symbol: string) => void;
   onOpenReconciliation?: () => void;
+  onOpenOmniInspector?: (symbol: string, market: MarketType) => void;
   receivableDividends?: ReceivableDividend[];
   usdToTwdRate?: number;
 }
@@ -181,6 +182,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   onQuickTrade,
   onInspectSecurityXirr,
   onOpenReconciliation,
+  onOpenOmniInspector,
   receivableDividends = [],
   usdToTwdRate = 32.0,
 }) => {
@@ -1151,6 +1153,32 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                                   }}
                                 >
                                   🔍 透視個股含息 XIRR 現金流
+                                </button>
+                              )}
+
+                              {onOpenOmniInspector && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onOpenOmniInspector(item.symbol, item.market);
+                                  }}
+                                  style={{
+                                    background: 'rgba(99, 102, 241, 0.18)',
+                                    border: '1px solid rgba(99, 102, 241, 0.4)',
+                                    color: '#a5b4fc',
+                                    borderRadius: '6px',
+                                    padding: '4px 10px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                  }}
+                                  title="開啟 15 大關鍵技術指標全景透視與多空共振評分"
+                                >
+                                  <Activity size={13} />
+                                  <span>📊 全指標透視</span>
                                 </button>
                               )}
                             </div>

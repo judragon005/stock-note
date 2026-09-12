@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Database,
   Target,
+  Activity,
 } from 'lucide-react';
 import { HoldingPosition, MarketType } from '../types/stock';
 import type { DailyCandle } from '../types/indicators';
@@ -58,12 +59,14 @@ export interface MuscleBookerWorkspaceProps {
   holdings: HoldingPosition[];
   historicalDailyPrices?: Record<string, Record<string, number>>;
   currentMarket?: 'ALL' | MarketType;
+  onOpenOmniInspector?: (symbol: string, market: MarketType) => void;
 }
 
 export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
   holdings,
   historicalDailyPrices: _historicalDailyPrices = {},
   currentMarket = 'ALL',
+  onOpenOmniInspector,
 }) => {
   const [selectedPool, setSelectedPool] = useState<AssetPoolType>('TOP30_FOCUS');
   const [actionFilter, setActionFilter] = useState<'ALL' | 'BUY' | 'AVOID' | 'SELL'>('ALL');
@@ -1327,6 +1330,28 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
                 <Star size={14} fill={watchlistSymbols.includes(adHocItem.symbol) ? '#fde047' : 'none'} />
                 {watchlistSymbols.includes(adHocItem.symbol) ? '已在自訂觀察' : '釘選至自訂觀察'}
               </button>
+
+              {onOpenOmniInspector && (
+                <button
+                  onClick={() => onOpenOmniInspector(adHocItem.symbol, adHocItem.market)}
+                  className="btn btn-sm"
+                  style={{
+                    background: 'rgba(99, 102, 241, 0.2)',
+                    color: '#a5b4fc',
+                    border: '1px solid rgba(99, 102, 241, 0.45)',
+                    cursor: 'pointer',
+                    fontWeight: 700,
+                    fontSize: '0.8rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                  title="開啟 15 大關鍵技術指標全景透視與多空共振評分"
+                >
+                  <Activity size={14} />
+                  <span>全指標透視</span>
+                </button>
+              )}
 
               <button
                 onClick={() => setAdHocItem(null)}

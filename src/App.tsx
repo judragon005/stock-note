@@ -58,6 +58,7 @@ import { CorporateActionScannerModal } from './components/CorporateActionScanner
 import { BrokerAccountsModal } from './components/BrokerAccountsModal';
 import { FrictionCenterModal } from './components/FrictionCenterModal';
 import { XirrDetailModal } from './components/XirrDetailModal';
+import { OmniTechnicalInspectorModal } from './components/OmniTechnicalInspectorModal';
 import { MarginStressModal } from './components/MarginStressModal';
 import { WorkspaceTabs, WorkspaceTabKey } from './components/WorkspaceTabs';
 import { WarRoomWorkspace } from './components/WarRoomWorkspace';
@@ -196,12 +197,27 @@ export const App: React.FC = () => {
   const [isBrokerAccountsOpen, setIsBrokerAccountsOpen] = useState(false);
   const [isFrictionCenterOpen, setIsFrictionCenterOpen] = useState(false);
   const [isMarginStressOpen, setIsMarginStressOpen] = useState(false);
-
-  // 增強型匯入精靈彈窗狀態
   const [isEnhancedImportModalOpen, setIsEnhancedImportModalOpen] = useState(false);
-
-  // 跨券商持倉對帳審計彈窗狀態
   const [isReconciliationOpen, setIsReconciliationOpen] = useState(false);
+
+  // 全指標透視彈窗狀態
+  const [omniModalState, setOmniModalState] = useState<{
+    isOpen: boolean;
+    symbol: string;
+    market: MarketType;
+  }>({
+    isOpen: false,
+    symbol: '2330',
+    market: 'TW',
+  });
+
+  const handleOpenOmniInspector = useCallback((symbol: string, market: MarketType) => {
+    setOmniModalState({
+      isOpen: true,
+      symbol,
+      market,
+    });
+  }, []);
 
   // 持久化交易紀錄
   useEffect(() => {
@@ -779,6 +795,7 @@ export const App: React.FC = () => {
             receivableDividends={receivableDividends}
             usdToTwdRate={usdToTwdRate}
             onOpenReconciliation={() => setIsReconciliationOpen(true)}
+            onOpenOmniInspector={handleOpenOmniInspector}
           />
         </>
       )}
@@ -803,6 +820,7 @@ export const App: React.FC = () => {
           holdings={holdings}
           historicalDailyPrices={historicalPrices}
           currentMarket={currentMarket}
+          onOpenOmniInspector={handleOpenOmniInspector}
         />
       )}
 
@@ -999,6 +1017,15 @@ export const App: React.FC = () => {
         onClose={() => setIsReconciliationOpen(false)}
         holdings={holdings}
         onAddTrade={handleSaveTrade}
+      />
+
+      {/* 全市場個股全技術指標透視分析彈窗 */}
+      <OmniTechnicalInspectorModal
+        isOpen={omniModalState.isOpen}
+        onClose={() => setOmniModalState((prev) => ({ ...prev, isOpen: false }))}
+        initialSymbol={omniModalState.symbol}
+        initialMarket={omniModalState.market}
+        holdings={holdings}
       />
     </div>
   );
