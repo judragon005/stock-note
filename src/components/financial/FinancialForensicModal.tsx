@@ -106,66 +106,200 @@ export const FinancialForensicModal: React.FC<FinancialForensicModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/70 backdrop-blur-sm overflow-y-auto animate-fadeIn"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="relative w-full max-w-5xl max-h-[92vh] flex flex-col bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+      <div
+        style={{
+          position: 'relative',
+          width: '100%',
+          maxWidth: '1080px',
+          maxHeight: '92vh',
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundColor: 'var(--bg-card, #0f172a)',
+          border: '1px solid rgba(59, 130, 246, 0.3)',
+          borderRadius: '16px',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.7)',
+          overflow: 'hidden',
+          color: 'var(--text-primary, #ffffff)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* 頂部 Header */}
-        <div className="flex items-center justify-between px-5 py-4 bg-slate-900/90 border-b border-slate-800">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
-              <FileSpreadsheet className="w-5 h-5" />
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px 20px',
+            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+            borderBottom: '1px solid rgba(51, 65, 85, 0.5)',
+            flexWrap: 'wrap',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div
+              style={{
+                padding: '8px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
+                color: '#818cf8',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <FileSpreadsheet style={{ width: '20px', height: '20px' }} />
             </div>
             <div>
-              <h2 className="text-base md:text-lg font-bold text-white tracking-wide">
+              <h2
+                style={{
+                  fontSize: '1.15rem',
+                  fontWeight: 700,
+                  color: '#ffffff',
+                  letterSpacing: '0.02em',
+                  margin: 0,
+                }}
+              >
                 {resolveDisplayTitle(symbol, companyName)}
               </h2>
-              <span className="text-xs text-slate-400">
+              <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
                 三層漸進式架構：0秒戰報 ➔ 8季趨勢矩陣 ➔ 深度鑑識排雷
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
               onClick={() => loadData(true)}
               disabled={loading}
-              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors disabled:opacity-50"
+              style={{
+                padding: '7px 12px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(51, 65, 85, 0.5)',
+                border: '1px solid rgba(100, 116, 139, 0.4)',
+                color: '#cbd5e1',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                opacity: loading ? 0.6 : 1,
+                transition: 'all 0.2s ease',
+              }}
               title="強制刷新財報數據"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-indigo-400' : ''}`} />
+              <RefreshCw
+                style={{
+                  width: '14px',
+                  height: '14px',
+                  animation: loading ? 'spin 1s linear infinite' : 'none',
+                  color: loading ? '#818cf8' : 'inherit',
+                }}
+              />
+              <span>{loading ? '分析中...' : '重新整理'}</span>
             </button>
             <button
               onClick={onClose}
-              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+              style={{
+                padding: '7px 10px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(51, 65, 85, 0.4)',
+                border: '1px solid rgba(100, 116, 139, 0.3)',
+                color: '#94a3b8',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease',
+              }}
               title="關閉視窗 (ESC)"
             >
-              <X className="w-4 h-4" />
+              <X style={{ width: '18px', height: '18px' }} />
             </button>
           </div>
         </div>
 
         {/* 內容主滾動區 */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-5">
+        <div
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+          }}
+        >
           {loading && !report ? (
-            <div className="flex flex-col items-center justify-center py-20 space-y-4">
-              <Activity className="w-10 h-10 text-indigo-500 animate-spin" />
-              <p className="text-sm font-medium text-slate-300">
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '80px 20px',
+                gap: '16px',
+              }}
+            >
+              <Activity
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  color: '#6366f1',
+                  animation: 'spin 1.5s linear infinite',
+                }}
+              />
+              <p style={{ fontSize: '0.95rem', fontWeight: 600, color: '#e2e8f0', margin: 0 }}>
                 穿透式財報鑑識引擎解析中...
               </p>
-              <span className="text-xs text-slate-500">
+              <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
                 正在調度 16 項核心科目、計算三率、杜邦拆解與逆向鑑識規則
               </span>
             </div>
           ) : error ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
-              <AlertCircle className="w-10 h-10 text-rose-400" />
-              <div className="text-sm font-semibold text-rose-300">{error}</div>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '60px 20px',
+                textAlign: 'center',
+                gap: '14px',
+              }}
+            >
+              <AlertCircle style={{ width: '40px', height: '40px', color: '#fb7185' }} />
+              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#fda4af' }}>{error}</div>
               <button
                 onClick={() => loadData(true)}
-                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold"
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(51, 65, 85, 0.7)',
+                  border: '1px solid rgba(100, 116, 139, 0.5)',
+                  color: '#f1f5f9',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
               >
                 重試連線
               </button>

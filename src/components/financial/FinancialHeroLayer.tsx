@@ -30,10 +30,52 @@ export function getGradeColorClass(grade: FinancialHealthGrade): string {
   }
 }
 
+export function getGradeInlineStyle(grade: FinancialHealthGrade): {
+  color: string;
+  backgroundColor: string;
+  borderColor: string;
+} {
+  switch (grade) {
+    case 'EXCELLENT':
+      return {
+        color: '#34d399',
+        backgroundColor: 'rgba(16, 185, 129, 0.12)',
+        borderColor: 'rgba(16, 185, 129, 0.35)',
+      };
+    case 'HEALTHY':
+      return {
+        color: '#60a5fa',
+        backgroundColor: 'rgba(59, 130, 246, 0.12)',
+        borderColor: 'rgba(59, 130, 246, 0.35)',
+      };
+    case 'WARNING':
+      return {
+        color: '#fbbf24',
+        backgroundColor: 'rgba(245, 158, 11, 0.12)',
+        borderColor: 'rgba(245, 158, 11, 0.35)',
+      };
+    case 'DANGEROUS':
+      return {
+        color: '#fb7185',
+        backgroundColor: 'rgba(244, 63, 94, 0.12)',
+        borderColor: 'rgba(244, 63, 94, 0.35)',
+      };
+    default:
+      return {
+        color: '#94a3b8',
+        backgroundColor: 'rgba(100, 116, 139, 0.12)',
+        borderColor: 'rgba(100, 116, 139, 0.35)',
+      };
+  }
+}
+
 export function getTrafficLightBadgeInfo(color: TrafficLightColor): {
   text: string;
   bgClass: string;
   dotClass: string;
+  color: string;
+  backgroundColor: string;
+  borderColor: string;
 } {
   switch (color) {
     case 'GREEN':
@@ -41,18 +83,27 @@ export function getTrafficLightBadgeInfo(color: TrafficLightColor): {
         text: '正常健全',
         bgClass: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
         dotClass: 'bg-emerald-400',
+        color: '#6ee7b7',
+        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+        borderColor: 'rgba(16, 185, 129, 0.35)',
       };
     case 'YELLOW':
       return {
         text: '體質警戒',
         bgClass: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
         dotClass: 'bg-amber-400',
+        color: '#fcd34d',
+        backgroundColor: 'rgba(245, 158, 11, 0.15)',
+        borderColor: 'rgba(245, 158, 11, 0.35)',
       };
     case 'RED':
       return {
         text: '重大風險',
         bgClass: 'bg-rose-500/10 text-rose-300 border-rose-500/30',
         dotClass: 'bg-rose-400 animate-pulse',
+        color: '#fda4af',
+        backgroundColor: 'rgba(244, 63, 94, 0.15)',
+        borderColor: 'rgba(244, 63, 94, 0.35)',
       };
     case 'GRAY':
     default:
@@ -60,6 +111,9 @@ export function getTrafficLightBadgeInfo(color: TrafficLightColor): {
         text: '不適用',
         bgClass: 'bg-slate-500/10 text-slate-400 border-slate-500/30',
         dotClass: 'bg-slate-400',
+        color: '#94a3b8',
+        backgroundColor: 'rgba(100, 116, 139, 0.15)',
+        borderColor: 'rgba(100, 116, 139, 0.35)',
       };
   }
 }
@@ -68,6 +122,9 @@ export function getIndustryBadgeInfo(attr: IndustryAttribute): {
   label: string;
   exemptNote: string;
   badgeClass: string;
+  color: string;
+  backgroundColor: string;
+  borderColor: string;
 } {
   switch (attr) {
     case 'FINANCIALS':
@@ -75,12 +132,18 @@ export function getIndustryBadgeInfo(attr: IndustryAttribute): {
         label: '🏦 金融保險業',
         exemptNote: '已啟用專業豁免模式（負債與存貨週轉不列入扣分）',
         badgeClass: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+        color: '#a5b4fc',
+        backgroundColor: 'rgba(99, 102, 241, 0.2)',
+        borderColor: 'rgba(99, 102, 241, 0.4)',
       };
     case 'CYCLICAL':
       return {
         label: '⚠️ 景氣循環股',
         exemptNote: '注意高獲利週期高點，謹防均值回歸估值陷阱',
         badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+        color: '#fde047',
+        backgroundColor: 'rgba(245, 158, 11, 0.2)',
+        borderColor: 'rgba(245, 158, 11, 0.4)',
       };
     case 'STANDARD':
     default:
@@ -88,6 +151,9 @@ export function getIndustryBadgeInfo(attr: IndustryAttribute): {
         label: '標準模型（製造/科技）',
         exemptNote: '',
         badgeClass: 'bg-slate-800 text-slate-300 border-slate-700',
+        color: '#cbd5e1',
+        backgroundColor: 'rgba(51, 65, 85, 0.5)',
+        borderColor: 'rgba(71, 85, 105, 0.6)',
       };
   }
 }
@@ -108,7 +174,7 @@ export const FinancialHeroLayer: React.FC<FinancialHeroLayerProps> = ({ report }
     industryAttribute,
   } = report;
 
-  const gradeColor = getGradeColorClass(overallGrade);
+  const gradeStyle = getGradeInlineStyle(overallGrade);
   const indInfo = getIndustryBadgeInfo(industryAttribute);
 
   const lightCards = [
@@ -139,28 +205,92 @@ export const FinancialHeroLayer: React.FC<FinancialHeroLayerProps> = ({ report }
   ];
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6 bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-800/80 shadow-xl">
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px',
+        padding: '20px',
+        backgroundColor: 'rgba(15, 23, 42, 0.85)',
+        backdropFilter: 'blur(10px)',
+        borderRadius: '14px',
+        border: '1px solid rgba(51, 65, 85, 0.6)',
+        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+      }}
+    >
       {/* 標題列與基本資訊 */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
-            <Building2 className="w-6 h-6" />
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px',
+          borderBottom: '1px solid rgba(51, 65, 85, 0.5)',
+          paddingBottom: '14px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div
+            style={{
+              padding: '10px',
+              borderRadius: '10px',
+              backgroundColor: 'rgba(59, 130, 246, 0.15)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              color: '#60a5fa',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Building2 style={{ width: '22px', height: '22px' }} />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xl font-bold text-white tracking-tight">{symbol}</span>
-              <span className="text-lg text-slate-300 font-medium">{companyName}</span>
-              <span className="text-xs px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#ffffff' }}>
+                {symbol}
+              </span>
+              <span style={{ fontSize: '1.1rem', fontWeight: 600, color: '#cbd5e1' }}>
+                {companyName}
+              </span>
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  padding: '2px 8px',
+                  borderRadius: '6px',
+                  backgroundColor: 'rgba(51, 65, 85, 0.6)',
+                  color: '#94a3b8',
+                  border: '1px solid rgba(71, 85, 105, 0.6)',
+                }}
+              >
                 {latestPeriod}
               </span>
             </div>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className={`text-xs px-2 py-0.5 rounded-full border ${indInfo.badgeClass}`}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  padding: '2px 8px',
+                  borderRadius: '9999px',
+                  border: `1px solid ${indInfo.borderColor}`,
+                  backgroundColor: indInfo.backgroundColor,
+                  color: indInfo.color,
+                  fontWeight: 600,
+                }}
+              >
                 {indInfo.label}
               </span>
               {indInfo.exemptNote && (
-                <span className="text-xs text-amber-400/90 flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3" />
+                <span
+                  style={{
+                    fontSize: '0.75rem',
+                    color: '#fbbf24',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <AlertTriangle style={{ width: '13px', height: '13px' }} />
                   {indInfo.exemptNote}
                 </span>
               )}
@@ -169,14 +299,40 @@ export const FinancialHeroLayer: React.FC<FinancialHeroLayerProps> = ({ report }
         </div>
 
         {/* 0~100 評分徽章 */}
-        <div className="flex items-center gap-3">
-          <div className={`flex flex-col items-center justify-center px-4 py-2 rounded-xl border ${gradeColor}`}>
-            <span className="text-xs font-semibold uppercase tracking-wider">綜合評估</span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl md:text-3xl font-black font-mono">{overallScore}</span>
-              <span className="text-xs opacity-70">/ 100</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px 16px',
+              borderRadius: '12px',
+              border: `1px solid ${gradeStyle.borderColor}`,
+              backgroundColor: gradeStyle.backgroundColor,
+              color: gradeStyle.color,
+              minWidth: '100px',
+            }}
+          >
+            <span style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              綜合評估
+            </span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '2px' }}>
+              <span style={{ fontSize: '1.75rem', fontWeight: 900, fontFamily: 'monospace' }}>
+                {overallScore}
+              </span>
+              <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>/ 100</span>
             </div>
-            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-black/20 mt-0.5">
+            <span
+              style={{
+                fontSize: '0.65rem',
+                fontWeight: 700,
+                padding: '1px 6px',
+                borderRadius: '4px',
+                backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                marginTop: '2px',
+              }}
+            >
               {overallGrade}
             </span>
           </div>
@@ -184,12 +340,23 @@ export const FinancialHeroLayer: React.FC<FinancialHeroLayerProps> = ({ report }
       </div>
 
       {/* 0 秒操盤結論橫幅 (Executive Summary) */}
-      <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-purple-950/20 border border-blue-500/20 p-3.5">
-        <div className="flex items-start gap-2.5">
-          <ShieldAlert className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
+      <div
+        style={{
+          position: 'relative',
+          overflow: 'hidden',
+          borderRadius: '10px',
+          background: 'linear-gradient(90deg, rgba(30, 58, 138, 0.35) 0%, rgba(49, 46, 129, 0.25) 50%, rgba(88, 28, 135, 0.15) 100%)',
+          border: '1px solid rgba(59, 130, 246, 0.3)',
+          padding: '14px 16px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+          <ShieldAlert style={{ width: '18px', height: '18px', color: '#60a5fa', flexShrink: 0, marginTop: '2px' }} />
           <div>
-            <div className="text-xs font-semibold text-blue-300 mb-0.5">⚡ 0 秒核心操盤結論</div>
-            <p className="text-sm text-slate-200 leading-relaxed font-medium">
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#93c5fd', marginBottom: '3px' }}>
+              ⚡ 0 秒核心操盤結論
+            </div>
+            <p style={{ fontSize: '0.88rem', color: '#f1f5f9', lineHeight: 1.6, fontWeight: 500, margin: 0 }}>
               {executiveSummary}
             </p>
           </div>
@@ -197,26 +364,60 @@ export const FinancialHeroLayer: React.FC<FinancialHeroLayerProps> = ({ report }
       </div>
 
       {/* 四大體質維度指示燈卡片 (2x2 or 4x1) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: '12px',
+        }}
+      >
         {lightCards.map((card, idx) => {
           const info = getTrafficLightBadgeInfo(card.color);
           const IconComponent = card.icon;
           return (
             <div
               key={idx}
-              className="flex flex-col p-3 rounded-xl bg-slate-800/40 border border-slate-700/50 hover:border-slate-600 transition-colors"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                padding: '12px 14px',
+                borderRadius: '10px',
+                backgroundColor: 'rgba(30, 41, 59, 0.5)',
+                border: '1px solid rgba(51, 65, 85, 0.5)',
+                gap: '4px',
+              }}
             >
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-1.5 text-slate-400 text-xs font-medium">
-                  <IconComponent className="w-3.5 h-3.5 text-slate-300" />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#94a3b8', fontSize: '0.78rem', fontWeight: 600 }}>
+                  <IconComponent style={{ width: '14px', height: '14px', color: '#cbd5e1' }} />
                   <span>{card.title}</span>
                 </div>
-                <div className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${info.bgClass}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${info.dotClass}`} />
-                  <span className="font-semibold">{info.text}</span>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '0.7rem',
+                    padding: '2px 8px',
+                    borderRadius: '9999px',
+                    border: `1px solid ${info.borderColor}`,
+                    backgroundColor: info.backgroundColor,
+                    color: info.color,
+                    fontWeight: 700,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '9999px',
+                      backgroundColor: info.color,
+                    }}
+                  />
+                  <span>{info.text}</span>
                 </div>
               </div>
-              <span className="text-[11px] text-slate-500 line-clamp-1">{card.sub}</span>
+              <span style={{ fontSize: '0.72rem', color: '#64748b' }}>{card.sub}</span>
             </div>
           );
         })}

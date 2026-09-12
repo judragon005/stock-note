@@ -42,8 +42,8 @@ export function calculateMarginSvgPoints(
   const maxVal = Math.max(10, ...validMargins);
   const range = maxVal - minVal || 1;
 
-  const paddingX = 24;
-  const paddingY = 20;
+  const paddingX = 28;
+  const paddingY = 24;
   const usableW = width - paddingX * 2;
   const usableH = height - paddingY * 2;
 
@@ -73,6 +73,9 @@ export function getDuPontDriverBadge(driver: DuPontAnalysis['primaryDriver']): {
   label: string;
   isWarning: boolean;
   colorClass: string;
+  color: string;
+  backgroundColor: string;
+  borderColor: string;
 } {
   switch (driver) {
     case 'LEVERAGE':
@@ -80,12 +83,18 @@ export function getDuPontDriverBadge(driver: DuPontAnalysis['primaryDriver']): {
         label: '財務槓桿推升',
         isWarning: true,
         colorClass: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
+        color: '#fbbf24',
+        backgroundColor: 'rgba(245, 158, 11, 0.15)',
+        borderColor: 'rgba(245, 158, 11, 0.35)',
       };
     case 'EFFICIENCY':
       return {
         label: '資產週轉效率推升',
         isWarning: false,
         colorClass: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
+        color: '#60a5fa',
+        backgroundColor: 'rgba(59, 130, 246, 0.15)',
+        borderColor: 'rgba(59, 130, 246, 0.35)',
       };
     case 'PROFITABILITY':
     default:
@@ -93,6 +102,9 @@ export function getDuPontDriverBadge(driver: DuPontAnalysis['primaryDriver']): {
         label: '產品獲利率推升',
         isWarning: false,
         colorClass: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+        color: '#34d399',
+        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+        borderColor: 'rgba(16, 185, 129, 0.35)',
       };
   }
 }
@@ -132,54 +144,91 @@ export const FinancialTrendsLayer: React.FC<FinancialTrendsLayerProps> = ({
   );
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6 bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-800/80 shadow-xl">
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '18px',
+        padding: '20px',
+        backgroundColor: 'rgba(15, 23, 42, 0.85)',
+        backdropFilter: 'blur(10px)',
+        borderRadius: '14px',
+        border: '1px solid rgba(51, 65, 85, 0.6)',
+        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+      }}
+    >
       {/* 區塊標題 */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="w-5 h-5 text-indigo-400" />
-          <h3 className="text-base font-bold text-white tracking-wide">
-            近 8 季核心趨勢矩陣與杜邦拆解
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: '1px solid rgba(51, 65, 85, 0.5)',
+          paddingBottom: '12px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <TrendingUp style={{ width: '20px', height: '20px', color: '#818cf8' }} />
+          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#ffffff', letterSpacing: '0.02em', margin: 0 }}>
+            近 8 季核心財務趨勢與體質透視
           </h3>
         </div>
-        <span className="text-xs text-slate-400">
-          共收錄 {sortedRecords.length} 季度資料
+        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+          三率走勢 ｜ 現金流階梯 ｜ 杜邦 ROE 拆解
         </span>
       </div>
 
-      {/* 1. 獲利三率趨勢折線圖 (SVG) */}
-      <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <span className="text-xs font-semibold text-slate-200">
-            📈 獲利三率同軸走勢圖 (Margins Trend)
+      {/* 1. 近 8 季獲利三率趨勢折線圖 */}
+      <div
+        style={{
+          padding: '16px',
+          borderRadius: '12px',
+          backgroundColor: 'rgba(30, 41, 59, 0.45)',
+          border: '1px solid rgba(51, 65, 85, 0.5)',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '8px',
+            marginBottom: '12px',
+          }}
+        >
+          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#e2e8f0' }}>
+            📈 獲利三率走勢（毛利率 vs 營業利益率 vs 淨利率）
           </span>
-          <div className="flex items-center gap-3 text-xs">
-            <span className="flex items-center gap-1 text-emerald-400">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.75rem' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#34d399' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#34d399' }} />
               毛利率
             </span>
-            <span className="flex items-center gap-1 text-sky-400">
-              <span className="w-2.5 h-2.5 rounded-full bg-sky-400" />
-              營業利益率
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#38bdf8' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#38bdf8' }} />
+              營益率
             </span>
-            <span className="flex items-center gap-1 text-purple-400">
-              <span className="w-2.5 h-2.5 rounded-full bg-purple-400" />
-              稅後淨利率
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#c084fc' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#c084fc' }} />
+              淨利率
             </span>
           </div>
         </div>
 
+        {/* 折線圖 SVG 渲染區 */}
         {sortedRecords.length > 0 ? (
-          <div className="relative w-full overflow-x-auto">
+          <div style={{ position: 'relative', width: '100%', overflowX: 'auto' }}>
             <svg
               viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-              className="w-full h-44 overflow-visible"
+              style={{ width: '100%', height: '180px', overflow: 'visible' }}
             >
-              {/* 網格背景線 */}
-              <line x1="24" y1="30" x2={chartWidth - 24} y2="30" stroke="#334155" strokeDasharray="3 3" opacity="0.4" />
-              <line x1="24" y1="85" x2={chartWidth - 24} y2="85" stroke="#334155" strokeDasharray="3 3" opacity="0.4" />
-              <line x1="24" y1="140" x2={chartWidth - 24} y2="140" stroke="#334155" strokeDasharray="3 3" opacity="0.4" />
+              {/* 背景格線 */}
+              <line x1="28" y1="30" x2={chartWidth - 28} y2="30" stroke="rgba(51, 65, 85, 0.3)" strokeDasharray="3 3" />
+              <line x1="28" y1="80" x2={chartWidth - 28} y2="80" stroke="rgba(51, 65, 85, 0.3)" strokeDasharray="3 3" />
+              <line x1="28" y1="130" x2={chartWidth - 28} y2="130" stroke="rgba(51, 65, 85, 0.3)" strokeDasharray="3 3" />
 
-              {/* 三率折線 */}
+              {/* 折線 */}
               {grossPoints && (
                 <polyline
                   fill="none"
@@ -194,7 +243,7 @@ export const FinancialTrendsLayer: React.FC<FinancialTrendsLayerProps> = ({
                 <polyline
                   fill="none"
                   stroke="#38bdf8"
-                  strokeWidth="2.5"
+                  strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   points={opPoints}
@@ -204,29 +253,30 @@ export const FinancialTrendsLayer: React.FC<FinancialTrendsLayerProps> = ({
                 <polyline
                   fill="none"
                   stroke="#c084fc"
-                  strokeWidth="2.5"
+                  strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   points={netPoints}
                 />
               )}
 
-              {/* 資料節點 */}
+              {/* 節點與季度標籤 */}
               {sortedRecords.map((r, i) => {
-                const stepX = (chartWidth - 48) / (sortedRecords.length - 1 || 1);
-                const x = 24 + i * stepX;
-                const label = `${r.year}Q${r.quarter}`;
+                const stepX = (chartWidth - 56) / Math.max(1, sortedRecords.length - 1);
+                const x = 28 + i * stepX;
+                const periodLabel = `${r.year % 100}Q${r.quarter}`;
                 return (
                   <g key={i}>
+                    <line x1={x} y1="20" x2={x} y2={chartHeight - 20} stroke="rgba(51, 65, 85, 0.2)" />
                     <text
                       x={x}
-                      y={chartHeight - 4}
+                      y={chartHeight - 6}
                       textAnchor="middle"
                       fill="#94a3b8"
                       fontSize="10"
                       fontFamily="monospace"
                     >
-                      {label}
+                      {periodLabel}
                     </text>
                   </g>
                 );
@@ -234,67 +284,119 @@ export const FinancialTrendsLayer: React.FC<FinancialTrendsLayerProps> = ({
             </svg>
           </div>
         ) : (
-          <div className="text-center py-8 text-xs text-slate-500">暫無歷史季度數據</div>
+          <div style={{ textAlign: 'center', padding: '30px 0', fontSize: '0.78rem', color: '#64748b' }}>
+            暫無歷史季度數據
+          </div>
         )}
       </div>
 
-      {/* 2. 稅後淨利 vs CFO 營業現金流階梯圖 */}
-      <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-1.5">
-            <DollarSign className="w-4 h-4 text-emerald-400" />
-            <span className="text-xs font-semibold text-slate-200">
-              💰 稅後淨利 vs 營業現金流 (CFO) 階梯對比
+      {/* 2. 稅後淨利 vs 營業活動現金流 (CFO) 階梯柱狀圖 */}
+      <div
+        style={{
+          padding: '16px',
+          borderRadius: '12px',
+          backgroundColor: 'rgba(30, 41, 59, 0.45)',
+          border: '1px solid rgba(51, 65, 85, 0.5)',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '8px',
+            marginBottom: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <DollarSign style={{ width: '16px', height: '16px', color: '#34d399' }} />
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#e2e8f0' }}>
+              💵 獲利品質檢驗：稅後淨利 vs 營業現金流 (CFO)
             </span>
           </div>
-          <div className="flex items-center gap-3 text-xs">
-            <span className="flex items-center gap-1 text-purple-300">
-              <span className="w-2.5 h-2.5 rounded bg-purple-500/80" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.75rem' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#c084fc' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: '#a855f7' }} />
               稅後淨利
             </span>
-            <span className="flex items-center gap-1 text-emerald-300">
-              <span className="w-2.5 h-2.5 rounded bg-emerald-500/80" />
-              營業現金流
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#6ee7b7' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: '#10b981' }} />
+              營業現金流 (CFO)
             </span>
           </div>
         </div>
 
-        <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+        {/* 柱狀圖 */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${Math.max(4, sortedRecords.length)}, 1fr)`,
+            gap: '8px',
+          }}
+        >
           {sortedRecords.map((r, idx) => {
-            const netVal = r.income?.netIncome ?? r.netIncome ?? 0;
-            const cfoVal = r.cashFlow?.operatingCashFlow ?? r.operatingCashFlow ?? 0;
-            const netHeightRatio = Math.min(Math.abs(netVal) / maxCashValue, 1);
-            const cfoHeightRatio = Math.min(Math.abs(cfoVal) / maxCashValue, 1);
-            const isCashDivergent = cfoVal < netVal;
+            const net = r.income?.netIncome ?? r.netIncome ?? 0;
+            const cfo = r.cashFlow?.operatingCashFlow ?? r.operatingCashFlow ?? 0;
+            const isDivergent = net > 0 && cfo < 0;
+
+            const netHeightPct = Math.min(100, Math.max(12, (Math.abs(net) / maxCashValue) * 100));
+            const cfoHeightPct = Math.min(100, Math.max(12, (Math.abs(cfo) / maxCashValue) * 100));
 
             return (
               <div
                 key={idx}
-                className="flex flex-col items-center bg-slate-900/50 p-2 rounded-lg border border-slate-800 hover:border-slate-600 transition-colors"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  padding: '8px 4px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(15, 23, 42, 0.5)',
+                  border: isDivergent ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(51, 65, 85, 0.4)',
+                }}
               >
-                <div className="h-28 w-full flex items-end justify-center gap-1.5 pb-1">
-                  {/* 淨利長條 */}
+                <div
+                  style={{
+                    height: '110px',
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    paddingBottom: '4px',
+                  }}
+                >
+                  {/* 淨利長條柱 */}
                   <div
-                    className="w-3 rounded-t bg-purple-500/70 hover:bg-purple-400 transition-all"
-                    style={{ height: `${Math.max(netHeightRatio * 100, 4)}%` }}
-                    title={`淨利: ${formatCurrencyMillions(netVal)}`}
+                    style={{
+                      width: '12px',
+                      height: `${netHeightPct}%`,
+                      borderTopLeftRadius: '3px',
+                      borderTopRightRadius: '3px',
+                      backgroundColor: net >= 0 ? 'rgba(168, 85, 247, 0.75)' : 'rgba(239, 68, 68, 0.75)',
+                    }}
+                    title={`淨利: ${formatCurrencyMillions(net)}`}
                   />
-                  {/* CFO 長條 */}
+                  {/* CFO 長條柱 */}
                   <div
-                    className={`w-3 rounded-t transition-all ${
-                      isCashDivergent
-                        ? 'bg-amber-500/80 hover:bg-amber-400'
-                        : 'bg-emerald-500/80 hover:bg-emerald-400'
-                    }`}
-                    style={{ height: `${Math.max(cfoHeightRatio * 100, 4)}%` }}
-                    title={`CFO: ${formatCurrencyMillions(cfoVal)}`}
+                    style={{
+                      width: '12px',
+                      height: `${cfoHeightPct}%`,
+                      borderTopLeftRadius: '3px',
+                      borderTopRightRadius: '3px',
+                      backgroundColor: cfo >= 0 ? 'rgba(16, 185, 129, 0.75)' : 'rgba(244, 63, 94, 0.75)',
+                    }}
+                    title={`CFO: ${formatCurrencyMillions(cfo)}`}
                   />
                 </div>
-                <span className="text-[10px] font-mono text-slate-400 mt-1">
-                  {r.quarter}Q{String(r.year).slice(2)}
+                <span style={{ fontSize: '0.68rem', fontFamily: 'monospace', color: '#94a3b8', marginTop: '4px' }}>
+                  {r.year % 100}Q{r.quarter}
                 </span>
-                {isCashDivergent && (
-                  <span className="text-[9px] text-amber-400 font-bold mt-0.5">背離</span>
+                {isDivergent && (
+                  <span style={{ fontSize: '0.62rem', color: '#fbbf24', fontWeight: 700, marginTop: '2px' }}>
+                    ⚠️背離
+                  </span>
                 )}
               </div>
             );
@@ -302,58 +404,131 @@ export const FinancialTrendsLayer: React.FC<FinancialTrendsLayerProps> = ({
         </div>
       </div>
 
-      {/* 3. 杜邦三因子拆解矩陣 (DuPont Breakdown) */}
-      <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <div className="flex items-center gap-2">
-            <Scale className="w-4 h-4 text-cyan-400" />
-            <span className="text-xs font-semibold text-slate-200">
-              🔬 杜邦 ROE 三因子拆解（DuPont Analysis）
+      {/* 3. 杜邦 ROE 三因子矩陣拆解 */}
+      <div
+        style={{
+          padding: '16px',
+          borderRadius: '12px',
+          backgroundColor: 'rgba(30, 41, 59, 0.45)',
+          border: '1px solid rgba(51, 65, 85, 0.5)',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '8px',
+            marginBottom: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Scale style={{ width: '16px', height: '16px', color: '#22d3ee' }} />
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#e2e8f0' }}>
+              🧬 杜邦分析 ROE 三因子拆解 (DuPont Analysis)
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">主驅動力：</span>
-            <span className={`text-xs px-2 py-0.5 rounded-full border ${driverBadge.colorClass}`}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>主驅動力：</span>
+            <span
+              style={{
+                fontSize: '0.72rem',
+                padding: '2px 8px',
+                borderRadius: '9999px',
+                border: `1px solid ${driverBadge.borderColor}`,
+                backgroundColor: driverBadge.backgroundColor,
+                color: driverBadge.color,
+                fontWeight: 700,
+              }}
+            >
               {driverBadge.label}
             </span>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {/* ROE */}
-          <div className="flex flex-col p-3 rounded-lg bg-slate-900/60 border border-slate-700/60">
-            <span className="text-[11px] text-slate-400">股東權益報酬率 (ROE)</span>
-            <div className="text-xl font-bold font-mono text-emerald-400 mt-1">
-              {duPont.roe.toFixed(2)}%
+        {/* 三因子指標四卡片 (ROE = 淨利率 x 資產週轉率 x 權益乘數) */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gap: '10px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              padding: '12px',
+              borderRadius: '8px',
+              backgroundColor: 'rgba(15, 23, 42, 0.6)',
+              border: '1px solid rgba(51, 65, 85, 0.6)',
+            }}
+          >
+            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>股東權益報酬率 (ROE)</span>
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, fontFamily: 'monospace', color: '#34d399', marginTop: '2px' }}>
+              {(duPont.roe * 100).toFixed(1)}%
             </div>
-            <span className="text-[10px] text-slate-500 mt-0.5">三因子乘積總結果</span>
+            <span style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '2px' }}>三因子乘積總結果</span>
           </div>
 
-          {/* 淨利率 */}
-          <div className="flex flex-col p-3 rounded-lg bg-slate-900/60 border border-slate-700/60">
-            <span className="text-[11px] text-slate-400">1. 稅後淨利率 (Net Margin)</span>
-            <div className="text-lg font-bold font-mono text-white mt-1">
-              {duPont.netMargin.toFixed(2)}%
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              padding: '12px',
+              borderRadius: '8px',
+              backgroundColor: 'rgba(15, 23, 42, 0.6)',
+              border: '1px solid rgba(51, 65, 85, 0.6)',
+            }}
+          >
+            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>1. 稅後淨利率 (Net Margin)</span>
+            <div style={{ fontSize: '1.15rem', fontWeight: 800, fontFamily: 'monospace', color: '#ffffff', marginTop: '2px' }}>
+              {(duPont.netMargin * 100).toFixed(1)}%
             </div>
-            <span className="text-[10px] text-slate-500 mt-0.5">反映產品定價權</span>
+            <span style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '2px' }}>定價權與本業獲利力</span>
           </div>
 
-          {/* 資產週轉率 */}
-          <div className="flex flex-col p-3 rounded-lg bg-slate-900/60 border border-slate-700/60">
-            <span className="text-[11px] text-slate-400">2. 資產週轉率 (Turnover)</span>
-            <div className="text-lg font-bold font-mono text-white mt-1">
-              {duPont.assetTurnover.toFixed(4)} 次
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              padding: '12px',
+              borderRadius: '8px',
+              backgroundColor: 'rgba(15, 23, 42, 0.6)',
+              border: '1px solid rgba(51, 65, 85, 0.6)',
+            }}
+          >
+            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>2. 資產週轉率 (Turnover)</span>
+            <div style={{ fontSize: '1.15rem', fontWeight: 800, fontFamily: 'monospace', color: '#ffffff', marginTop: '2px' }}>
+              {duPont.assetTurnover.toFixed(2)} 次
             </div>
-            <span className="text-[10px] text-slate-500 mt-0.5">反映資產營運效率</span>
+            <span style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '2px' }}>資產運用與翻桌效率</span>
           </div>
 
-          {/* 權益乘數 */}
-          <div className="flex flex-col p-3 rounded-lg bg-slate-900/60 border border-slate-700/60">
-            <span className="text-[11px] text-slate-400">3. 權益乘數 (Leverage)</span>
-            <div className={`text-lg font-bold font-mono mt-1 ${duPont.equityMultiplier > 2.5 ? 'text-amber-400' : 'text-white'}`}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              padding: '12px',
+              borderRadius: '8px',
+              backgroundColor: 'rgba(15, 23, 42, 0.6)',
+              border: '1px solid rgba(51, 65, 85, 0.6)',
+            }}
+          >
+            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>3. 權益乘數 (Leverage)</span>
+            <div
+              style={{
+                fontSize: '1.15rem',
+                fontWeight: 800,
+                fontFamily: 'monospace',
+                color: duPont.equityMultiplier > 2.5 ? '#fbbf24' : '#ffffff',
+                marginTop: '2px',
+              }}
+            >
               {duPont.equityMultiplier.toFixed(2)} 倍
             </div>
-            <span className="text-[10px] text-slate-500 mt-0.5">反映財務槓桿大小</span>
+            <span style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '2px' }}>負債槓桿擴張程度</span>
           </div>
         </div>
       </div>

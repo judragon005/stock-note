@@ -9,6 +9,7 @@ import { Tooltip } from './common/Tooltip';
 import { LotsBreakdownModal } from './LotsBreakdownModal';
 import { calculateHoldingPeriodMetrics } from '../engine/holdingPeriodEngine';
 import { HoldingSignalCapsules } from './common/HoldingSignalCapsules';
+import { logger } from '../utils/logger';
 
 interface HoldingsTableProps {
   holdings: HoldingPosition[];
@@ -1188,6 +1189,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    logger.info(`[HoldingsTable] Open Financial Forensic for ${item.symbol} (${item.name || ''})`);
                                     onOpenFinancialForensic(item.symbol, item.market, item.name);
                                   }}
                                   style={{
@@ -1202,6 +1204,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '4px',
+                                    transition: 'all 0.15s ease',
                                   }}
                                   title="開啟穿透式財報深度戰情室與防雷鑑識"
                                 >

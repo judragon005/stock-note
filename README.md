@@ -11,7 +11,10 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 穿透式財報分析儀與財務防雷鑑識系統 (`Financial Statement Analyzer & Forensic Radar`) *(V8.42.0 全新升級)*
+### 0. 穿透式財報分析儀與財務防雷鑑識系統 (`Financial Statement Analyzer & Forensic Radar`) *(V8.42.1 樣式修復與原生化)*
+- **原生深色浮動彈窗與高層級遮罩 (`Native Inline Styling & High Z-Index Modal`)** *(V8.42.1 修復)*：
+  - 徹底移除誤用之無效 Tailwind classes，全面遷移至原生 Vanilla CSS + Inline Styles。
+  - 遮罩層固定為 `position: fixed; inset: 0; zIndex: 9999; backdropFilter: blur(8px)`，點擊時間軸「📊 財報穿透」按鈕立即於螢幕中央浮起深色毛玻璃彈窗，支援 ESC 與點擊外圍關閉。
 - **三層漸進式決策架構 (Three-Layer Progressive Disclosure)**：
   - 【Layer 1：0 秒操盤戰報】：0~100 分綜合健康評分徽章、四大體質維度指示燈（獲利能力、安全性、營運效率、現金流健康）與一句話白話操盤總結。
   - 【Layer 2：8 季趨勢矩陣與杜邦拆解】：近 8 季獲利三率（毛利率、營益率、稅後淨利率）同軸走勢 SVG 圖、稅後淨利 vs 營業現金流 (CFO) 階梯長條對比（紙上富貴一眼擊穿）、杜邦 ROE 三因子長條矩陣（自動識別產品定價權、資產週轉或財務槓桿推升）。
