@@ -1,15 +1,12 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Document)
 
-> **交接產生時間**：2026-09-10 16:05 (UTC+8)  
+> **交接產生時間**：2026-09-12 12:12 (UTC+8)  
 > **當前最新里程碑**：
+> - **V8.42.0 穿透式財報分析儀與財務防雷鑑識系統**（三層漸進式架構：0秒戰報 ➔ 8季獲利三率趨勢 ➔ 深度排雷；稅後淨利 vs 營業現金流 CFO 階梯圖；杜邦 ROE 三因子長條矩陣；「市場沒說什麼」六大逆向背離偵測；會計師查核防線與四大所標章；金融保險業豁免與強週期高峰警語；IndexedDB Version 4 本地優先快取管線；持倉清單「📊 財報穿透」直達按鈕）。
+> - **V8.41.0 全能技術指標大腦升級與三層實戰矩陣系統**（市場狀態機四階判定、ADX 鈍化與矛盾懲罰、關鍵位密集聚集、ATR 吊燈移動防守、背離偵測與誘多假突破）。
+> - **V8.40.0 全市場個股全技術指標透視分析與多空共振系統**（趨勢、動能、通道、量能、位階五大維度 15 種關鍵指標矩陣、多空共振評分儀、隨選真實日 K 回補）。
 > - **V8.35.0 資安深度防護套件：Web Crypto 敏感憑證加密、CORS 安全代理邊界路由與 CSV DDE 公式注入防禦**（端到端保密持久化：AES-GCM 256-bit + PBKDF2 100,000 次雜湊衍生；智能安全代理路由：憑證敏感 Header/Query 強制阻斷外流公共代理池；CSV/Excel DDE 注入脫逸消毒；JSON 備份脫敏匯出；自訂代理 SSRF 內網阻擋校驗）。
-> - **V8.34.0 ETF 穿透核算分析、多券商對帳單自動消歧義與行為審計系統**（ETF Look-Through 權重下鑽、跨標的綜合實質產業因子曝險、多券商對帳單智慧衝突消解與分流匹配、行為紀律偏差即時對賬核銷）。
-> - **V8.33.0 自適應動態成分股同步、存活探針與每日開市前背景校準**（告別程式碼常數寫死成分股。實作 Stale-While-Revalidate 分級動態快取、Baseline 靜態種子 0 延遲秒開、台美後備候選庫自動遞補、404 存活探針、假日與同日節流、輕量浮動 Toast 提示通知與工具列即時指示）。
-> - **V8.32.0 肌肉書僮增量同步卡頓修復、Proxy 404 快速終止與合成日 K 保底防禦**（替換美股失效標的 SQ ➔ PYPL、本地代理 404 立即 Fast-Fail 阻斷 24 秒外網無謂輪詢、合成日 K 保底防禦與 IndexedDB 快取持久化、解耦 targetUniverseKey 代碼簽名）。
-> - **V8.31.0 FIRE 財務自由複利滾雪球與定期定額智慧排程系統**（DRIP 雙軌複利推演與 4 階里程碑、定期定額休市順延與未來 30 天防透支推演、純原生幾何布朗運動 1,000 次蒙地卡羅路徑與 Guyton-Klinger 動態護欄）。
-> - **V8.30.0 Yahoo Finance 報價昨日收盤價與今日漲跌幅精準修正**（徹底拔除 `meta.chartPreviousClose` 歷史圖表起算價干擾，實盤數值 100% 吻合券商 APP）。
-> - **V8.29.0 肌肉書僮風益比全面統一專業 R 倍數規範**（標準化為 `${rrRatio}R` 如 `7.9R`）。
-> **品質狀態**：全量單元測試 **736/736 通過 (100% Passed / 69 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過 (~10.8 秒)。
+> **品質狀態**：全量單元測試 **867/867 通過 (100% Passed / 88 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過。
 
 ---
 
@@ -17,11 +14,11 @@
 
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
-- **當前工作分支**：`main` (已同步最新遠端 `origin/main`，最新主幹 Commit: `4ae9dc3`)
-- **單元測試套件**：**736/736 通過 (69 test suites / 100% 綠燈，耗時 ~35s)**
+- **當前工作分支**：`main` (已同步最新遠端 `origin/main`)
+- **單元測試套件**：**867/867 通過 (88 test suites / 100% 綠燈，耗時 ~30s)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
-- **生產環境構建**：`npm run build` 打包耗時 ~10.8 秒，產出 0 錯誤
-- **當前釋出版本**：**V8.35.0**
+- **生產環境構建**：`npm run build` 打包耗時 ~5.8 秒，產出 0 錯誤
+- **當前釋出版本**：**V8.42.0**
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens（如 FinMind / FMP / 自訂代理）均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
 ---
@@ -53,6 +50,7 @@
 
 | 版本 | 規格書 (PRD / Spec) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 核心變更與收益 |
 | :--- | :--- | :--- | :--- | :--- |
+| **v8.42.0** | [`SPEC-0123`](file:///d:/APP/股票紀錄/docs/specs/0123-financial-statement-analyzer-and-forensic-radar-spec.md) | [`ADR-0123`](file:///d:/APP/股票紀錄/docs/adr/0123-financial-statement-analyzer-and-forensic-radar.md) | `.scratch/v8.42.0-financial-statement-analyzer-and-forensic-radar` | 穿透式財報戰情室（0秒戰報 ➔ 8季趨勢矩陣 ➔ 深度排雷）、杜邦三因子長條拆解、六大逆向背離防雷偵測、會計師查核意見與四大所標章、IndexedDB 快取優先管線。 |
 | **v8.35.0** | [`SPEC-0116`](file:///d:/APP/股票紀錄/docs/specs/0116-web-crypto-cors-guard-and-csv-dde-sanitization-spec.md) | [`ADR-0116`](file:///d:/APP/股票紀錄/docs/adr/0116-web-crypto-cors-guard-and-csv-dde-sanitization.md) | `.scratch/v8.35.0-web-crypto-and-security-hardening` | Web Crypto 敏感金鑰加密 (AES-GCM/PBKDF2)、CORS 安全邊界路由阻斷外流、CSV DDE 公式注入防禦與脫敏匯出。 |
 | **v8.34.0** | [`SPEC-0115`](file:///d:/APP/股票紀錄/docs/specs/0115-etf-look-through-behavioral-audit-and-reconciliation-spec.md) | [`ADR-0115`](file:///d:/APP/股票紀錄/docs/adr/0115-etf-look-through-and-multi-broker-reconciliation.md) | `.scratch/v8.34.0-etf-look-through-and-reconciliation` | ETF 穿透核算分析、實質產業因子曝險下鑽、多券商對帳單自動消歧義與行為審計即時核銷。 |
 | **v8.33.0** | [`SPEC-0114`](file:///d:/APP/股票紀錄/docs/specs/0114-adaptive-universe-sync-and-liveness-probe-spec.md) | [`ADR-0114`](file:///d:/APP/股票紀錄/docs/adr/0114-adaptive-universe-sync-and-liveness-probe.md) | `.scratch/v8.33.0-adaptive-universe-sync-and-liveness-probe` | 自適應動態成分股同步、存活探針、後備池自動遞補、每日開市背景校準與輕量 Toast 通知。 |
@@ -95,6 +93,9 @@
 | **現金、在途與購買力** | [`src/engine/cashLedgerEngine.ts`](file:///d:/APP/股票紀錄/src/engine/cashLedgerEngine.ts) | 三層可用性核算 (`calculateAccountBalances`)、交易購買力風控、法定假日結算日曆。 | 29 tests |
 | **歷史 NAV 引擎** | [`src/engine/historicalNav.ts`](file:///d:/APP/股票紀錄/src/engine/historicalNav.ts) | 歷史日 K 增量同步、遇假日 Forward-Fill、排除 relatedTradeId 避免雙重扣款。 | 9 tests |
 | **XIRR 數值求解引擎** | [`src/engine/xirrCalculator.ts`](file:///d:/APP/股票紀錄/src/engine/xirrCalculator.ts) | 0 依賴 Newton-Raphson + Bisection 混合求解器、30 天平滑防護、現金流時序聚合。 | 11 tests |
+| **穿透式財報鑑識引擎** | [`src/engine/financialScoringEngine.ts`](file:///d:/APP/股票紀錄/src/engine/financialScoringEngine.ts) | 0~100 分綜合體質評估、獲利/安全/效率/現金流四大指示燈、杜邦三因子拆解與白話結論。 | 35 tests |
+| **逆向防雷鑑識雷達** | [`src/engine/forensicRadarEngine.ts`](file:///d:/APP/股票紀錄/src/engine/forensicRadarEngine.ts) | 「市場沒說什麼」六大結構性背離排雷（塞貨、紙上富貴、借債配息、業外虛胖、SBC稀釋、審計異常）。 | 8 tests |
+| **財報資料雙軌管線** | [`src/engine/financialReportService.ts`](file:///d:/APP/股票紀錄/src/engine/financialReportService.ts) | IndexedDB 快取優先、台股 FinMind / 美股 FMP 雙軌隨選載入、永久快取歷史季度。 | 8 tests |
 
 ### 4.2 前端工作台與核心組件 (`src/components/`)
 
@@ -107,6 +108,7 @@
 | **籌碼星圖工作台** | [`src/components/ChipsWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/ChipsWorkspace.tsx) | 雙模式切換（在庫持倉 vs 全市場法人焦點 Top 30）、四象限診斷膠囊、籌碼重整。 |
 | **現金與交割工作台** | [`src/components/CashLedgerWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/CashLedgerWorkspace.tsx) | 四核心可用性發光看板、在途交割時序排程面板、交割戶資金網格、質押風控。 |
 | **設定與時光機看板** | [`src/components/SettingsWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/SettingsWorkspace.tsx) | 券商手續費率、Web Crypto 敏感金鑰防護徽章、自訂代理 SSRF 檢驗、脫敏備份匯出、時光機快照管理。 |
+| **穿透式財報深度戰情室** | [`src/components/financial/FinancialForensicModal.tsx`](file:///d:/APP/股票紀錄/src/components/financial/FinancialForensicModal.tsx) | 三層漸進式架構（0秒戰報 ➔ 8季趨勢矩陣 ➔ 深度排雷）、純 SVG 走勢圖、一鍵導出 Markdown 研報。 |
 
 ---
 

@@ -3,13 +3,25 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-794%2F794%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-867%2F867%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 穿透式財報分析儀與財務防雷鑑識系統 (`Financial Statement Analyzer & Forensic Radar`) *(V8.42.0 全新升級)*
+- **三層漸進式決策架構 (Three-Layer Progressive Disclosure)**：
+  - 【Layer 1：0 秒操盤戰報】：0~100 分綜合健康評分徽章、四大體質維度指示燈（獲利能力、安全性、營運效率、現金流健康）與一句話白話操盤總結。
+  - 【Layer 2：8 季趨勢矩陣與杜邦拆解】：近 8 季獲利三率（毛利率、營益率、稅後淨利率）同軸走勢 SVG 圖、稅後淨利 vs 營業現金流 (CFO) 階梯長條對比（紙上富貴一眼擊穿）、杜邦 ROE 三因子長條矩陣（自動識別產品定價權、資產週轉或財務槓桿推升）。
+  - 【Layer 3：深度鑑識排雷與審計防線】：「市場沒說什麼」六大逆向背離排雷清單（塞貨庫存、紙上富貴、借債配息、業外美化、美股 SBC 稀釋、審計異常）、會計師事務所四大所 (Big 4) 標章與查核意見等級、一鍵導出完整 Markdown 研報。
+- **產業隔離閘門與強週期警語 (`Industry Gate & Cyclical Guard`)**：
+  - 金融保險股 (`FINANCIALS`)：針對台股 28XX 與美股金控啟用豁免模型，負債比與存貨週轉不列入扣分，杜絕假警報。
+  - 景氣循環股 (`CYCLICAL`)：針對航運、鋼鐵、塑化等週期標的，強制標註高獲利週期頂峰警語，防範將單季高獲利盲目年化。
+- **IndexedDB 快取優先與按需載入 (`On-Demand Fetching & DB Cache`)**：
+  - 升級資料庫至 Version 4，建立 `financialStatements` store。
+  - 持倉列表操作列提供「📊 財報穿透」按鈕按需載入，命中本地快取 0ms 呈現且永不重複請求歷史季度。
 
 ### 0. 全能技術指標大腦升級與三層實戰矩陣系統 (`Omni Technical Matrix & Regime Brain`) *(V8.41.0 全新升級)*
 - **市場狀態機與多空矛盾懲罰 (`evaluateMarketRegime` & `Contradiction Penalty`)**：
