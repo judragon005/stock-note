@@ -16,6 +16,7 @@ import type {
 } from '../../types/financialForensic';
 import { isBigFourFirm } from '../../types/financialForensic';
 import { generateFinancialForensicMarkdown } from '../../engine/financialReportPipeline';
+import { logger } from '../../utils/logger';
 
 export function getAnomalySeverityBadgeInfo(severity: ForensicAnomaly['severity']): {
   text: string;
@@ -98,7 +99,7 @@ export const FinancialForensicDeepAuditLayer: React.FC<FinancialForensicDeepAudi
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy report:', err);
+      logger.error('Failed to copy report:', err);
     }
   };
 
