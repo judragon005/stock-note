@@ -1543,3 +1543,21 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 核心呈現：質感毛玻璃彈窗，頂部支援自由輸入台美股代碼搜尋與在倉標的快速選取；中間以 5 大卡片展示五大指標群與多空共振指針；支援紅漲綠跌/綠漲紅跌主題即時切換與一鍵複製 Markdown 研報。
   - 在庫持倉 (`HoldingsTable`) 與動能雷達 (`MuscleBookerWorkspace`) 操作列無縫整合「📊 全指標透視」按鈕，一鍵直達。
 
+### 全能技術指標大腦升級與三層實戰矩陣系統 *(新增於 V8.41.0 / Spec #0122 / Issue #39)*
+
+- **Market Regime State Machine (市場狀態機)**:
+  - 核心定義：依據 ADX(14)、布林帶寬 Bandwidth 與均線排列，將個股判定為四大狀態：`VOLATILITY_SQUEEZE`（⚡ 變盤在即）、`CHOPPY_RANGE`（〰️ 無趨勢盤整）、`TRENDING_BULL`（🚀 強多主升）與 `TRENDING_BEAR`（🔻 空頭主跌）。
+- **Contradiction Penalty & Chop Discount (無趨勢鈍化與多空矛盾懲罰)**:
+  - 核心機制：當 `ADX < 20` 時，趨勢維度得分乘 0.4 折扣；當均線多排但 `-DI > +DI`（空方動能壓制多方）時，扣除 20 分矛盾分數並強制封頂於 58 分 (`NEUTRAL`)，徹底杜絕無趨勢橫盤盲目給出 95 分的高危盲點。
+- **Key Level Proximity Clustering (關鍵位密集聚集演算法)**:
+  - 核心機制：自動將相距 $\le 1.5\%$ 的 Pivot、Fibonacci、布林軌道、Darvas 箱體聚合成「第一壓力帶 (Cluster 1)」、「次級阻力帶」、「短線防守帶」與「結構底線」，識別多重壓力共振區。
+- **Wilder ATR(14) & Chandelier Trailing Exit (真實波幅動態吊燈防守)**:
+  - 核心機制：以 J. Welles Wilder 平滑真實波幅計算動態移動停損點（過去 22 日最高價 $- 2.5 \times \text{ATR}(14)$），隨股價波動自適應調整保護區間。
+- **Divergence & Bull Trap Detector (背離與誘多假突破偵測)**:
+  - 核心機制：搜尋最近 20 根 K 線波峰波谷，比對股價創高但 RSI/MACD 頭頭低之「頂背離」；在壓力區偵測長上影線墓碑倒錘線之「誘多假突破 (Bull Trap)」。
+- **Three-Tier Progressive Disclosure Architecture (三層漸進式決策架構)**:
+  - 【第 1 層：0秒決策核心】：頂部 Hero 卡片，顯示校正後評分、市場狀態徽章、大白話操盤指南一句話。
+  - 【第 2 層：3秒實戰作戰地圖】：4-Box 階梯卡片網格（第一減碼區、續強加碼點、短線動態防守、結構底線）。
+  - 【第 3 層：深度佐證區】：三大 Tab（風險雷達與形態、15大指標全景、Markdown 研報預覽與複製）。
+
+

@@ -3,15 +3,12 @@ import {
   X,
   Search,
   Activity,
-  TrendingUp,
-  Flame,
-  Shield,
-  BarChart3,
   Copy,
   Check,
   RefreshCw,
-  Sliders,
   AlertTriangle,
+  Target,
+  Zap,
 } from 'lucide-react';
 import { MarketType, HoldingPosition } from '../types/stock';
 import { OmniIndicatorReport } from '../types/omniIndicator';
@@ -38,9 +35,9 @@ export const OmniTechnicalInspectorModal: React.FC<OmniTechnicalInspectorModalPr
   const [report, setReport] = useState<OmniIndicatorReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [activeMainTab, setActiveMainTab] = useState<'RADAR' | 'ALL_INDICATORS' | 'REPORT'>('RADAR');
   const [activeMatrixTab, setActiveMatrixTab] = useState<'ALL' | 'TREND' | 'MOMENTUM' | 'VOLATILITY' | 'VOLUME' | 'LEVELS'>('ALL');
 
-  // 同步 initialSymbol 變更
   useEffect(() => {
     if (isOpen && initialSymbol) {
       setSymbolInput(initialSymbol);
@@ -106,6 +103,8 @@ export const OmniTechnicalInspectorModal: React.FC<OmniTechnicalInspectorModalPr
       ? '#f59e0b'
       : 'var(--loss-color, #ef4444)';
 
+  const matrix = report?.confluence.actionMatrix;
+
   return (
     <div
       style={{
@@ -124,8 +123,8 @@ export const OmniTechnicalInspectorModal: React.FC<OmniTechnicalInspectorModalPr
       <div
         style={{
           width: '100%',
-          maxWidth: '1050px',
-          maxHeight: '92vh',
+          maxWidth: '1080px',
+          maxHeight: '94vh',
           backgroundColor: 'var(--bg-card, #131b2e)',
           borderRadius: '16px',
           border: '1px solid rgba(59, 130, 246, 0.3)',
@@ -152,10 +151,10 @@ export const OmniTechnicalInspectorModal: React.FC<OmniTechnicalInspectorModalPr
             <Activity size={22} style={{ color: '#60a5fa' }} />
             <div>
               <h2 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>
-                全市場個股全技術指標透視分析儀
+                全能技術指標透視分析儀 (Omni Regime Brain)
               </h2>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #94a3b8)' }}>
-                15 大關鍵技術指標 × 多空共振量化評估 (Spec 0121)
+                15大指標 × 市場狀態機 × 實戰作戰階梯矩陣 (Spec 0122)
               </span>
             </div>
           </div>
@@ -191,7 +190,6 @@ export const OmniTechnicalInspectorModal: React.FC<OmniTechnicalInspectorModalPr
         >
           {/* 搜尋表單 */}
           <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {/* 市場切換按鈕 */}
             <div
               style={{
                 display: 'flex',
@@ -235,7 +233,6 @@ export const OmniTechnicalInspectorModal: React.FC<OmniTechnicalInspectorModalPr
               </button>
             </div>
 
-            {/* 代碼輸入框 */}
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <input
                 type="text"
@@ -277,7 +274,7 @@ export const OmniTechnicalInspectorModal: React.FC<OmniTechnicalInspectorModalPr
             </button>
           </form>
 
-          {/* 在庫持股快速標籤 */}
+          {/* 在庫快速切換 */}
           {holdings.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflowX: 'auto', maxWidth: '480px' }}>
               <span style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>在庫快速選取:</span>
@@ -308,20 +305,20 @@ export const OmniTechnicalInspectorModal: React.FC<OmniTechnicalInspectorModalPr
           {loading && !report ? (
             <div style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8' }}>
               <RefreshCw size={32} className="animate-spin" style={{ margin: '0 auto 12px', color: '#60a5fa' }} />
-              <p style={{ margin: 0, fontSize: '0.9rem' }}>正在回補全量日 K 線並即時運算 15 大技術指標...</p>
+              <p style={{ margin: 0, fontSize: '0.9rem' }}>正在回補全量日 K 線並即時運算技術矩陣與實戰階梯...</p>
             </div>
           ) : report ? (
             <div>
-              {/* 核心看板：現價與多空共振評分總覽 */}
+              {/* 【第 1 層】：0秒決策核心 (Hero Executive Card) */}
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
                   gap: '16px',
-                  marginBottom: '20px',
+                  marginBottom: '16px',
                 }}
               >
-                {/* 標的與行情卡片 */}
+                {/* 現價與市場狀態 */}
                 <div
                   style={{
                     padding: '16px 20px',
@@ -335,8 +332,8 @@ export const OmniTechnicalInspectorModal: React.FC<OmniTechnicalInspectorModalPr
                 >
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '1.4rem', fontWeight: 800 }}>{report.symbol}</span>
-                      <span style={{ fontSize: '1rem', color: '#cbd5e1' }}>{report.name}</span>
+                      <span style={{ fontSize: '1.5rem', fontWeight: 800 }}>{report.symbol}</span>
+                      <span style={{ fontSize: '1.05rem', color: '#cbd5e1' }}>{report.name}</span>
                       <span
                         style={{
                           fontSize: '0.7rem',
@@ -349,19 +346,35 @@ export const OmniTechnicalInspectorModal: React.FC<OmniTechnicalInspectorModalPr
                         {report.market === 'TW' ? '台股' : '美股'}
                       </span>
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                      基準日: {report.asOfDate} ｜ 日 K 數: {report.candleCount} 根
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                      <span
+                        style={{
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          background: 'rgba(99, 102, 241, 0.2)',
+                          color: '#a5b4fc',
+                          border: '1px solid rgba(99, 102, 241, 0.4)',
+                        }}
+                      >
+                        {report.confluence.regimeLabel}
+                      </span>
+                      <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                        基準日: {report.asOfDate} ({report.candleCount} 根 K 線)
+                      </span>
                     </div>
                   </div>
 
                   <div style={{ marginTop: '12px', display: 'flex', alignItems: 'baseline', gap: '10px' }}>
-                    <span style={{ fontSize: '1.8rem', fontWeight: 800 }}>
+                    <span style={{ fontSize: '2rem', fontWeight: 900 }}>
                       {currencySymbol} {report.currentPrice.toLocaleString()}
                     </span>
                     {report.dailyChange !== undefined && (
                       <span
                         style={{
-                          fontSize: '0.9rem',
+                          fontSize: '0.95rem',
                           fontWeight: 700,
                           color:
                             report.dailyChange >= 0
@@ -376,7 +389,7 @@ export const OmniTechnicalInspectorModal: React.FC<OmniTechnicalInspectorModalPr
                   </div>
                 </div>
 
-                {/* 多空共振量化計分儀 */}
+                {/* 校正後多空共振儀表板 */}
                 <div
                   style={{
                     padding: '16px 20px',
@@ -389,8 +402,14 @@ export const OmniTechnicalInspectorModal: React.FC<OmniTechnicalInspectorModalPr
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#94a3b8' }}>
-                      🎯 多空共振量化評分
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Zap size={15} style={{ color: confluenceColor }} />
+                      多空共振評分儀
+                      {report.confluence.contradictionPenaltyApplied && (
+                        <span style={{ fontSize: '0.7rem', color: '#f59e0b', background: 'rgba(245, 158, 11, 0.15)', padding: '1px 5px', borderRadius: '4px' }}>
+                          矛盾校正
+                        </span>
+                      )}
                     </span>
                     <span
                       style={{
@@ -407,362 +426,416 @@ export const OmniTechnicalInspectorModal: React.FC<OmniTechnicalInspectorModalPr
                     </span>
                   </div>
 
-                  <div style={{ margin: '8px 0', display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                    <span style={{ fontSize: '2.2rem', fontWeight: 900, color: confluenceColor }}>
+                  <div style={{ margin: '6px 0', display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                    <span style={{ fontSize: '2.4rem', fontWeight: 900, color: confluenceColor }}>
                       {report.confluence.score}
                     </span>
                     <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>/ 100 分</span>
                   </div>
 
+                  {/* 大白話 0 秒操盤指南 */}
                   <div
                     style={{
                       fontSize: '0.78rem',
-                      lineHeight: '1.4',
+                      lineHeight: '1.45',
                       color: '#e2e8f0',
-                      background: 'rgba(0, 0, 0, 0.25)',
+                      background: 'rgba(0, 0, 0, 0.3)',
                       padding: '8px 10px',
                       borderRadius: '8px',
+                      borderLeft: `3px solid ${confluenceColor}`,
                     }}
                   >
-                    💡 {report.confluence.actionAdvice}
+                    💡 {report.confluence.oneSentenceBottomLine}
                   </div>
                 </div>
               </div>
 
-              {/* 核心特徵與風險預警 */}
-              <div
-                style={{
-                  marginBottom: '20px',
-                  padding: '12px 16px',
-                  borderRadius: '10px',
-                  background: 'rgba(30, 41, 59, 0.5)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                }}
-              >
-                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#93c5fd', marginBottom: '6px' }}>
-                  ⚡ 當前盤勢關鍵特徵共振:
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                  {report.confluence.primarySignals.map((sig, idx) => (
-                    <span
-                      key={idx}
+              {/* 【第 2 層】：3秒實戰作戰地圖 (Actionable Trade Matrix 4-Box Grid) */}
+              {matrix && (
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                    <Target size={16} style={{ color: '#60a5fa' }} />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#93c5fd' }}>
+                      實戰作戰地圖 (Actionable Trade Matrix)
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                      gap: '12px',
+                    }}
+                  >
+                    {/* 1. 第一減碼阻力區 */}
+                    <div
                       style={{
-                        fontSize: '0.75rem',
-                        padding: '3px 8px',
-                        borderRadius: '6px',
-                        background: 'rgba(59, 130, 246, 0.15)',
-                        color: '#bfdbfe',
+                        padding: '12px 14px',
+                        borderRadius: '10px',
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f87171' }}>🎯 第一減碼 / 阻力區</span>
+                        <span style={{ fontSize: '0.75rem', color: '#fca5a5', fontWeight: 700 }}>
+                          {matrix.primaryResistanceZone.distancePercent >= 0 ? '+' : ''}
+                          {matrix.primaryResistanceZone.distancePercent}%
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fca5a5' }}>
+                        {currencySymbol} {matrix.primaryResistanceZone.price.toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {matrix.primaryResistanceZone.label}
+                      </div>
+                    </div>
+
+                    {/* 2. 突破續強加碼位 */}
+                    <div
+                      style={{
+                        padding: '12px 14px',
+                        borderRadius: '10px',
+                        background: 'rgba(168, 85, 247, 0.1)',
+                        border: '1px solid rgba(168, 85, 247, 0.3)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#c084fc' }}>🚀 突破續強 / 加碼位</span>
+                        <span style={{ fontSize: '0.75rem', color: '#d8b4fe', fontWeight: 700 }}>
+                          {matrix.expansionTargetZone.distancePercent >= 0 ? '+' : ''}
+                          {matrix.expansionTargetZone.distancePercent}%
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#d8b4fe' }}>
+                        {currencySymbol} {matrix.expansionTargetZone.price.toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {matrix.expansionTargetZone.label}
+                      </div>
+                    </div>
+
+                    {/* 3. 短線動態防守線 */}
+                    <div
+                      style={{
+                        padding: '12px 14px',
+                        borderRadius: '10px',
+                        background: 'rgba(59, 130, 246, 0.1)',
                         border: '1px solid rgba(59, 130, 246, 0.3)',
                       }}
                     >
-                      ✓ {sig}
-                    </span>
-                  ))}
-                  {report.confluence.riskAlert && (
-                    <span
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#60a5fa' }}>🛡️ 短線動態防守線</span>
+                        <span style={{ fontSize: '0.75rem', color: '#93c5fd', fontWeight: 700 }}>
+                          {matrix.shortTermDefenseLine.distancePercent}%
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#93c5fd' }}>
+                        {currencySymbol} {matrix.shortTermDefenseLine.price.toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {matrix.shortTermDefenseLine.label}
+                      </div>
+                    </div>
+
+                    {/* 4. 結構底線 (停損) */}
+                    <div
                       style={{
-                        fontSize: '0.75rem',
-                        padding: '3px 8px',
-                        borderRadius: '6px',
-                        background: 'rgba(239, 68, 68, 0.15)',
-                        color: '#fca5a5',
-                        border: '1px solid rgba(239, 68, 68, 0.3)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
+                        padding: '12px 14px',
+                        borderRadius: '10px',
+                        background: 'rgba(100, 116, 139, 0.12)',
+                        border: '1px solid rgba(100, 116, 139, 0.3)',
                       }}
                     >
-                      <AlertTriangle size={12} /> {report.confluence.riskAlert}
-                    </span>
-                  )}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1' }}>⛔ 結構底線 (停損)</span>
+                        <span style={{ fontSize: '0.75rem', color: '#cbd5e1', fontWeight: 700 }}>
+                          {matrix.structuralInvalidationLine.distancePercent}%
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#e2e8f0' }}>
+                        {currencySymbol} {matrix.structuralInvalidationLine.price.toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {matrix.structuralInvalidationLine.label}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* 維度過濾標籤 */}
-              <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', overflowX: 'auto' }}>
-                {(
-                  [
-                    { key: 'ALL', label: '全部維度' },
-                    { key: 'TREND', label: '1. 趨勢追蹤' },
-                    { key: 'MOMENTUM', label: '2. 動能擺盪' },
-                    { key: 'VOLATILITY', label: '3. 波動通道' },
-                    { key: 'VOLUME', label: '4. 量能資金' },
-                    { key: 'LEVELS', label: '5. 關鍵位階' },
-                  ] as const
-                ).map((tab) => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveMatrixTab(tab.key)}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: '8px',
-                      border: activeMatrixTab === tab.key ? '1px solid #3b82f6' : '1px solid transparent',
-                      background: activeMatrixTab === tab.key ? 'rgba(59, 130, 246, 0.25)' : 'rgba(0, 0, 0, 0.2)',
-                      color: activeMatrixTab === tab.key ? '#fff' : '#94a3b8',
-                      fontSize: '0.78rem',
-                      fontWeight: activeMatrixTab === tab.key ? 700 : 500,
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* 五大指標矩陣卡片 */}
+              {/* 【第 3 層】：深度佐證標籤切換區 (Tabs) */}
               <div
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(310px, 1fr))',
-                  gap: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                  marginBottom: '16px',
                 }}
               >
-                {/* 1. 趨勢矩陣 */}
-                {(activeMatrixTab === 'ALL' || activeMatrixTab === 'TREND') && (
-                  <div
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setActiveMainTab('RADAR')}
                     style={{
-                      padding: '16px',
-                      borderRadius: '12px',
-                      background: 'rgba(15, 23, 42, 0.5)',
-                      border: '1px solid rgba(59, 130, 246, 0.2)',
+                      padding: '8px 14px',
+                      background: 'transparent',
+                      border: 'none',
+                      borderBottom: activeMainTab === 'RADAR' ? '2px solid #3b82f6' : '2px solid transparent',
+                      color: activeMainTab === 'RADAR' ? '#60a5fa' : '#94a3b8',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
-                      <TrendingUp size={16} style={{ color: '#60a5fa' }} />
-                      <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>1️⃣ 趨勢追蹤矩陣 (Trend)</span>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#94a3b8' }}>均線排列:</span>
-                        <span style={{ fontWeight: 700, color: report.trend.maAlignment === 'BULLISH' ? '#10b981' : report.trend.maAlignment === 'BEARISH' ? '#ef4444' : '#f59e0b' }}>
-                          {report.trend.maAlignment === 'BULLISH' ? '多頭排列 (強勢)' : report.trend.maAlignment === 'BEARISH' ? '空頭排列 (弱勢)' : '均線糾結整理'}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#94a3b8' }}>MA 均線群:</span>
-                        <span>MA5: {report.trend.ma5 ?? '-'} ｜ MA20: {report.trend.ma20 ?? '-'} ｜ MA60: {report.trend.ma60 ?? '-'}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#94a3b8' }}>MACD 柱狀體:</span>
-                        <span style={{ fontWeight: 700, color: report.trend.macd.hist >= 0 ? 'var(--profit-color, #10b981)' : 'var(--loss-color, #ef4444)' }}>
-                          {report.trend.macd.hist} ({report.trend.macd.hist >= 0 ? '紅柱擴張' : '綠柱修正'})
-                        </span>
-                      </div>
-                      {report.trend.dmiAdx && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: '#94a3b8' }}>DMI/ADX 強度:</span>
-                          <span>ADX: {report.trend.dmiAdx.adx} ({report.trend.dmiAdx.trendDirection})</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* 2. 動能擺盪 */}
-                {(activeMatrixTab === 'ALL' || activeMatrixTab === 'MOMENTUM') && (
-                  <div
+                    ⚡ 風險雷達與形態
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveMainTab('ALL_INDICATORS')}
                     style={{
-                      padding: '16px',
-                      borderRadius: '12px',
-                      background: 'rgba(15, 23, 42, 0.5)',
-                      border: '1px solid rgba(168, 85, 247, 0.2)',
+                      padding: '8px 14px',
+                      background: 'transparent',
+                      border: 'none',
+                      borderBottom: activeMainTab === 'ALL_INDICATORS' ? '2px solid #3b82f6' : '2px solid transparent',
+                      color: activeMainTab === 'ALL_INDICATORS' ? '#60a5fa' : '#94a3b8',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
-                      <Flame size={16} style={{ color: '#c084fc' }} />
-                      <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>2️⃣ 動能擺盪矩陣 (Momentum)</span>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#94a3b8' }}>RSI (14):</span>
-                        <span style={{ fontWeight: 700 }}>{report.momentum.rsi14 ?? '-'} ({report.momentum.rsiStatus})</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#94a3b8' }}>KD (9, 3, 3):</span>
-                        <span>K: {report.momentum.kd9.k} ｜ D: {report.momentum.kd9.d} ({report.momentum.kd9.status})</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#94a3b8' }}>CCI (20) 順勢:</span>
-                        <span>{report.momentum.cci20 ?? '-'}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#94a3b8' }}>Williams %R:</span>
-                        <span>{report.momentum.williamsR14 ?? '-'}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 3. 波動通道 */}
-                {(activeMatrixTab === 'ALL' || activeMatrixTab === 'VOLATILITY') && (
-                  <div
+                    📊 15 大指標全景
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveMainTab('REPORT')}
                     style={{
-                      padding: '16px',
-                      borderRadius: '12px',
-                      background: 'rgba(15, 23, 42, 0.5)',
-                      border: '1px solid rgba(245, 158, 11, 0.2)',
+                      padding: '8px 14px',
+                      background: 'transparent',
+                      border: 'none',
+                      borderBottom: activeMainTab === 'REPORT' ? '2px solid #3b82f6' : '2px solid transparent',
+                      color: activeMainTab === 'REPORT' ? '#60a5fa' : '#94a3b8',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
-                      <Sliders size={16} style={{ color: '#fbbf24' }} />
-                      <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>3️⃣ 波動通道矩陣 (Volatility)</span>
-                    </div>
+                    📝 專業 Markdown 研報
+                  </button>
+                </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#94a3b8' }}>布林帶寬 Squeeze:</span>
-                        <span style={{ fontWeight: 700, color: report.volatility.bollinger.isSqueeze ? '#fbbf24' : '#94a3b8' }}>
-                          {report.volatility.bollinger.bandwidthPercent}% {report.volatility.bollinger.isSqueeze ? '(⚡極致壓縮變盤)' : ''}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#94a3b8' }}>ATR (14) 移動防守價:</span>
-                        <span style={{ fontWeight: 700, color: '#f59e0b' }}>
-                          {currencySymbol} {report.volatility.trailingDefensePrice}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#94a3b8' }}>MA20 乖離率:</span>
-                        <span style={{ fontWeight: 600 }}>{report.volatility.bias20Percent}%</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 4. 量能與資金流 */}
-                {(activeMatrixTab === 'ALL' || activeMatrixTab === 'VOLUME') && (
-                  <div
-                    style={{
-                      padding: '16px',
-                      borderRadius: '12px',
-                      background: 'rgba(15, 23, 42, 0.5)',
-                      border: '1px solid rgba(16, 185, 129, 0.2)',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
-                      <BarChart3 size={16} style={{ color: '#34d399' }} />
-                      <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>4️⃣ 量能資金矩陣 (Volume/Flow)</span>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#94a3b8' }}>5日均量比:</span>
-                        <span style={{ fontWeight: 700 }}>
-                          {report.volumeFlow.volumeRatio5}x ({report.volumeFlow.isSurge ? '🔥放量' : report.volumeFlow.isDryUp ? '❄️量縮' : '持平'})
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#94a3b8' }}>昨日量 / 20日均量:</span>
-                        <span>{report.volumeFlow.yesterdayVolume.toLocaleString()} / {Math.round(report.volumeFlow.avgVolume20).toLocaleString()}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#94a3b8' }}>OBV 能量潮趨勢:</span>
-                        <span style={{ fontWeight: 700, color: report.volumeFlow.obv.trend === 'RISING' ? '#10b981' : report.volumeFlow.obv.trend === 'FALLING' ? '#ef4444' : '#94a3b8' }}>
-                          {report.volumeFlow.obv.trend === 'RISING' ? '持續淨流入' : report.volumeFlow.obv.trend === 'FALLING' ? '持續淨流出' : '持平盤整'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 5. 關鍵支撐壓力 */}
-                {(activeMatrixTab === 'ALL' || activeMatrixTab === 'LEVELS') && (
-                  <div
-                    style={{
-                      padding: '16px',
-                      borderRadius: '12px',
-                      background: 'rgba(15, 23, 42, 0.5)',
-                      border: '1px solid rgba(236, 72, 153, 0.2)',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
-                      <Shield size={16} style={{ color: '#f472b6' }} />
-                      <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>5️⃣ 關鍵位階 (Levels)</span>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#94a3b8' }}>Darvas 箱頂 / 箱底:</span>
-                        <span style={{ fontWeight: 700 }}>
-                          {currencySymbol} {report.levels.darvasBox.upper} / {currencySymbol} {report.levels.darvasBox.lower}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#94a3b8' }}>Fib 0.618 強支撐:</span>
-                        <span style={{ fontWeight: 600 }}>{currencySymbol} {report.levels.fibonacci.fib618}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#94a3b8' }}>樞紐中軸 P / 阻力 R1:</span>
-                        <span>{currencySymbol} {report.levels.pivotPoints.pivot} / {currencySymbol} {report.levels.pivotPoints.r1}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <button
+                  onClick={handleCopyMarkdown}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '5px 12px',
+                    borderRadius: '6px',
+                    background: copySuccess ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+                    color: copySuccess ? '#34d399' : '#cbd5e1',
+                    border: copySuccess ? '1px solid #10b981' : '1px solid rgba(255, 255, 255, 0.1)',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {copySuccess ? <Check size={14} /> : <Copy size={14} />}
+                  {copySuccess ? '已複製研報' : '複製 Markdown'}
+                </button>
               </div>
+
+              {/* Tab 1: 風險雷達與形態 */}
+              {activeMainTab === 'RADAR' && (
+                <div>
+                  {/* 風險預警與特殊狀態 */}
+                  {(report.confluence.riskAlert || report.volatility.bollinger.isSqueeze || report.confluence.priceActionTrap?.hasBullTrap || report.confluence.divergence?.hasBearishDivergence) && (
+                    <div
+                      style={{
+                        padding: '12px 16px',
+                        borderRadius: '10px',
+                        background: 'rgba(239, 68, 68, 0.12)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        marginBottom: '16px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f87171', fontWeight: 700, fontSize: '0.85rem', marginBottom: '6px' }}>
+                        <AlertTriangle size={16} />
+                        關鍵警示與防禦重點:
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: '#fca5a5', lineHeight: '1.5' }}>
+                        {report.confluence.riskAlert && <div>• {report.confluence.riskAlert}</div>}
+                        {report.volatility.bollinger.isSqueeze && <div>• ⚡ 布林通道極致壓縮中（帶寬 {report.volatility.bollinger.bandwidthPercent}%），即將發生大變盤，方向未決前切勿過度重押！</div>}
+                        {report.confluence.priceActionTrap?.hasBullTrap && <div>• ⚠️ 壓力帶出現長上影線墓碑，提防誘多假突破 (Bull Trap)！</div>}
+                        {report.confluence.divergence?.hasBearishDivergence && <div>• ⚠️ 偵測到頂背離訊號：股價創高但動能指標走低，留意拉高倒貨風險！</div>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 盤勢特徵列表 */}
+                  <div
+                    style={{
+                      padding: '16px',
+                      borderRadius: '12px',
+                      background: 'rgba(15, 23, 42, 0.5)',
+                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#93c5fd', marginBottom: '10px' }}>
+                      📋 當前多空特徵條列盤點:
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '10px' }}>
+                      {report.confluence.primarySignals.map((sig, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            fontSize: '0.78rem',
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            background: 'rgba(30, 41, 59, 0.6)',
+                            border: '1px solid rgba(255, 255, 255, 0.05)',
+                            color: '#e2e8f0',
+                          }}
+                        >
+                          • {sig}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 2: 15大指標全景 */}
+              {activeMainTab === 'ALL_INDICATORS' && (
+                <div>
+                  {/* 分類切換按鈕 */}
+                  <div style={{ display: 'flex', gap: '6px', marginBottom: '14px', flexWrap: 'wrap' }}>
+                    {[
+                      { id: 'ALL', label: '全部指標 (15項)' },
+                      { id: 'TREND', label: '1. 趨勢均線' },
+                      { id: 'MOMENTUM', label: '2. 動能震盪' },
+                      { id: 'VOLATILITY', label: '3. 通道ATR' },
+                      { id: 'VOLUME', label: '4. 量能資金' },
+                      { id: 'LEVELS', label: '5. 箱體樞紐' },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveMatrixTab(tab.id as any)}
+                        style={{
+                          padding: '5px 10px',
+                          borderRadius: '6px',
+                          border: activeMatrixTab === tab.id ? '1px solid #3b82f6' : '1px solid rgba(255, 255, 255, 0.08)',
+                          background: activeMatrixTab === tab.id ? 'rgba(59, 130, 246, 0.25)' : 'rgba(0, 0, 0, 0.2)',
+                          color: activeMatrixTab === tab.id ? '#93c5fd' : '#94a3b8',
+                          fontSize: '0.74rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 15大指標卡片網格 */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+                    {(activeMatrixTab === 'ALL' || activeMatrixTab === 'TREND') && (
+                      <div style={{ padding: '14px', borderRadius: '10px', background: 'rgba(30, 41, 59, 0.4)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#93c5fd', marginBottom: '8px' }}>1️⃣ 均線與 MACD</div>
+                        <div style={{ fontSize: '0.75rem', color: '#cbd5e1', lineHeight: '1.6' }}>
+                          <div>MA5: {report.trend.ma5 ?? '-'} ｜ MA20: {report.trend.ma20 ?? '-'}</div>
+                          <div>MA60: {report.trend.ma60 ?? '-'} ｜ MA120: {report.trend.ma120 ?? '-'}</div>
+                          <div>排列: <span style={{ color: report.trend.maAlignment === 'BULLISH' ? '#34d399' : '#f87171' }}>{report.trend.maAlignment}</span></div>
+                          <div>MACD 柱狀體: {report.trend.macd.hist} ({report.trend.macd.hist >= 0 ? '紅柱' : '綠柱'})</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {(activeMatrixTab === 'ALL' || activeMatrixTab === 'TREND') && report.trend.dmiAdx && (
+                      <div style={{ padding: '14px', borderRadius: '10px', background: 'rgba(30, 41, 59, 0.4)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#93c5fd', marginBottom: '8px' }}>2️⃣ DMI / ADX 趨向系統</div>
+                        <div style={{ fontSize: '0.75rem', color: '#cbd5e1', lineHeight: '1.6' }}>
+                          <div>+DI: <span style={{ color: '#34d399', fontWeight: 700 }}>{report.trend.dmiAdx.pdi}</span></div>
+                          <div>-DI: <span style={{ color: '#f87171', fontWeight: 700 }}>{report.trend.dmiAdx.mdi}</span></div>
+                          <div>ADX 強度: <span style={{ fontWeight: 700 }}>{report.trend.dmiAdx.adx}</span> ({report.trend.dmiAdx.trendDirection})</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {(activeMatrixTab === 'ALL' || activeMatrixTab === 'MOMENTUM') && (
+                      <div style={{ padding: '14px', borderRadius: '10px', background: 'rgba(30, 41, 59, 0.4)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#93c5fd', marginBottom: '8px' }}>3️⃣ RSI 與 KD 隨機指標</div>
+                        <div style={{ fontSize: '0.75rem', color: '#cbd5e1', lineHeight: '1.6' }}>
+                          <div>RSI(14): <span style={{ fontWeight: 700 }}>{report.momentum.rsi14 ?? '-'}</span> ({report.momentum.rsiStatus})</div>
+                          <div>KD(9,3,3): K {report.momentum.kd9.k} ｜ D {report.momentum.kd9.d}</div>
+                          <div>CCI(20): {report.momentum.cci20 ?? '-'} ｜ Williams %R: {report.momentum.williamsR14 ?? '-'}</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {(activeMatrixTab === 'ALL' || activeMatrixTab === 'VOLATILITY') && (
+                      <div style={{ padding: '14px', borderRadius: '10px', background: 'rgba(30, 41, 59, 0.4)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#93c5fd', marginBottom: '8px' }}>4️⃣ 布林通道與 ATR 吊燈</div>
+                        <div style={{ fontSize: '0.75rem', color: '#cbd5e1', lineHeight: '1.6' }}>
+                          <div>布林上軌: {report.volatility.bollinger.upper} ｜ 下軌: {report.volatility.bollinger.lower}</div>
+                          <div>帶寬: {report.volatility.bollinger.bandwidthPercent}% ({report.volatility.bollinger.isSqueeze ? '⚡極致壓縮' : '正常'})</div>
+                          <div>真實波幅 ATR(14): {report.volatility.atr14}</div>
+                          <div>吊燈防守價: {currencySymbol} {report.volatility.trailingDefensePrice}</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {(activeMatrixTab === 'ALL' || activeMatrixTab === 'VOLUME') && (
+                      <div style={{ padding: '14px', borderRadius: '10px', background: 'rgba(30, 41, 59, 0.4)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#93c5fd', marginBottom: '8px' }}>5️⃣ 量能動能與 OBV</div>
+                        <div style={{ fontSize: '0.75rem', color: '#cbd5e1', lineHeight: '1.6' }}>
+                          <div>昨日成交量: {report.volumeFlow.yesterdayVolume.toLocaleString()}</div>
+                          <div>5日均量: {report.volumeFlow.avgVolume5.toLocaleString()} (量比 {report.volumeFlow.volumeRatio5}x)</div>
+                          <div>量能狀態: {report.volumeFlow.isSurge ? '🔥爆量突破' : report.volumeFlow.isDryUp ? '❄️窒息量縮' : '平穩'}</div>
+                          <div>OBV 能量潮: {report.volumeFlow.obv.trend} ({report.volumeFlow.obv.current.toLocaleString()})</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {(activeMatrixTab === 'ALL' || activeMatrixTab === 'LEVELS') && (
+                      <div style={{ padding: '14px', borderRadius: '10px', background: 'rgba(30, 41, 59, 0.4)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#93c5fd', marginBottom: '8px' }}>6️⃣ 箱體與樞紐點位</div>
+                        <div style={{ fontSize: '0.75rem', color: '#cbd5e1', lineHeight: '1.6' }}>
+                          <div>Darvas 箱頂: {report.levels.darvasBox.upper} ｜ 箱底: {report.levels.darvasBox.lower}</div>
+                          <div>Fibonacci 0.382: {report.levels.fibonacci.fib382} ｜ 0.618: {report.levels.fibonacci.fib618}</div>
+                          <div>Pivot P: {report.levels.pivotPoints.pivot} ｜ R1: {report.levels.pivotPoints.r1} ｜ S1: {report.levels.pivotPoints.s1}</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 3: Markdown 研報預覽 */}
+              {activeMainTab === 'REPORT' && (
+                <div
+                  style={{
+                    padding: '16px',
+                    borderRadius: '10px',
+                    background: 'rgba(0, 0, 0, 0.35)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    maxHeight: '400px',
+                    overflowY: 'auto',
+                    fontFamily: 'monospace',
+                    fontSize: '0.78rem',
+                    color: '#e2e8f0',
+                    whiteSpace: 'pre-wrap',
+                  }}
+                >
+                  {generateOmniReportMarkdown(report)}
+                </div>
+              )}
             </div>
           ) : (
             <div style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8' }}>
-              請輸入代碼並點擊「診斷」以載入指標。
+              請輸入股票代碼並點擊診斷。
             </div>
           )}
-        </div>
-
-        {/* 4. 底部動作列 */}
-        <div
-          style={{
-            padding: '14px 20px',
-            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            background: 'rgba(15, 23, 42, 0.6)',
-          }}
-        >
-          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-            {report ? `已完成 ${report.candleCount} 根日 K 線指標萃取` : ''}
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px' }}>
-            {report && (
-              <button
-                onClick={handleCopyMarkdown}
-                style={{
-                  padding: '7px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(59, 130, 246, 0.4)',
-                  background: copySuccess ? 'rgba(16, 185, 129, 0.2)' : 'rgba(59, 130, 246, 0.15)',
-                  color: copySuccess ? '#34d399' : '#93c5fd',
-                  fontSize: '0.82rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
-                {copySuccess ? <Check size={15} /> : <Copy size={15} />}
-                {copySuccess ? '已複製 Markdown 研報' : '📋 複製 Markdown 研報'}
-              </button>
-            )}
-
-            <button
-              onClick={onClose}
-              style={{
-                padding: '7px 16px',
-                borderRadius: '8px',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                background: 'rgba(255, 255, 255, 0.05)',
-                color: '#cbd5e1',
-                fontSize: '0.82rem',
-                cursor: 'pointer',
-              }}
-            >
-              關閉
-            </button>
-          </div>
         </div>
       </div>
     </div>

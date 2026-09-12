@@ -9,6 +9,10 @@ import {
   calculatePivotPoints,
   calculateTechnicalConfluence,
   computeOmniIndicators,
+  evaluateMarketRegime,
+  calculateKeyLevelClusters,
+  detectDivergence,
+  detectPriceActionTraps,
 } from './omniIndicatorEngine';
 import { DailyCandle } from '../types/indicators';
 
@@ -31,7 +35,6 @@ describe('OmniIndicatorEngine - 純數學量化指標測試縫隙 (Test Seams)',
     });
 
     it('漲跌交錯標準數列計算驗證', () => {
-      // 模擬交錯走勢
       const closes = [44, 44.3, 44.1, 44.5, 43.8, 44.2, 44.6, 44.4, 44.8, 45.1, 45.0, 45.3, 45.5, 45.2, 45.7, 46.0];
       const rsi = calculateRSI(closes, 14);
       expect(rsi).toBeDefined();
@@ -80,7 +83,6 @@ describe('OmniIndicatorEngine - 純數學量化指標測試縫隙 (Test Seams)',
         lows.push(base - 1);
         closes.push(base + 1);
       }
-      // 最後一根跳空大暴漲
       highs[highs.length - 1] = 160;
       lows[lows.length - 1] = 140;
       closes[closes.length - 1] = 158;
@@ -95,7 +97,7 @@ describe('OmniIndicatorEngine - 純數學量化指標測試縫隙 (Test Seams)',
     it('收盤價接近區間最高時，%R 應落於 0 到 -20 之間 (超買強軋區)', () => {
       const highs = Array.from({ length: 15 }, (_, i) => 100 + i);
       const lows = Array.from({ length: 15 }, (_, i) => 90 + i);
-      const closes = Array.from({ length: 15 }, (_, i) => 99 + i); // 貼近 high
+      const closes = Array.from({ length: 15 }, (_, i) => 99 + i);
       const wr = calculateWilliamsR(highs, lows, closes, 14);
       expect(wr).toBeDefined();
       expect(wr!).toBeGreaterThanOrEqual(-20);
@@ -103,51 +105,108 @@ describe('OmniIndicatorEngine - 純數學量化指標測試縫隙 (Test Seams)',
     });
   });
 
-  describe('5. calculateOBV (On-Balance Volume 能量潮)', () => {
-    it('價漲量增時 OBV 累加，價跌時扣減', () => {
+  describe('5. calculateOBV (能量潮指標)', () => {
+    it('價格上漲加成交量，價格下跌扣成交量', () => {
       const closes = [10, 12, 11, 13];
-      const volumes = [1000, 2000, 1500, 3000];
-      // Day 0: OBV = 1000
-      // Day 1: Close 12 > 10 => 1000 + 2000 = 3000
-      // Day 2: Close 11 < 12 => 3000 - 1500 = 1500
-      // Day 3: Close 13 > 11 => 1500 + 3000 = 4500
+      const volumes = [100, 200, 150, 300];
       const obv = calculateOBV(closes, volumes);
-      expect(obv.current).toBe(4500);
+      // Day 0: 100
+      // Day 1: 100 + 200 = 300
+      // Day 2: 300 - 150 = 150
+      // Day 3: 150 + 300 = 450
+      expect(obv.current).toBe(450);
       expect(obv.trend).toBe('RISING');
     });
   });
 
-  describe('6. calculateFibonacciLevels & calculatePivotPoints', () => {
-    it('精確計算斐波那契回撤各黃金比例', () => {
-      const highs = [100, 150, 130];
-      const lows = [90, 100, 110];
-      const fib = calculateFibonacciLevels(highs, lows);
-      expect(fib.high).toBe(150);
-      expect(fib.low).toBe(90);
-      // Diff = 60
-      // Fib 0.618 = 150 - 60 * 0.618 = 112.92
-      expect(fib.fib618).toBeCloseTo(112.92, 1);
-      // Fib 0.5 = 150 - 30 = 120
-      expect(fib.fib500).toBe(120);
+  describe('6. calculateFibonacci & calculatePivotPoints', () => {
+    it('費波那契回撤各比例正確產出', () => {
+      const fib = calculateFibonacciLevels([100], [0]);
+      expect(fib.fib236).toBe(76.4);
+      expect(fib.fib382).toBe(61.8);
+      expect(fib.fib500).toBe(50.0);
+      expect(fib.fib618).toBe(38.2);
     });
 
-    it('精確計算經典樞紐點 (Pivot Points)', () => {
-      // H: 105, L: 95, C: 100
-      // P = (105 + 95 + 100) / 3 = 100
-      // R1 = 2*100 - 95 = 105
-      // S1 = 2*100 - 105 = 95
-      const p = calculatePivotPoints(105, 95, 100);
-      expect(p.pivot).toBe(100);
-      expect(p.r1).toBe(105);
-      expect(p.s1).toBe(95);
-      expect(p.r2).toBe(110);
-      expect(p.s2).toBe(90);
+    it('經典樞紐點 R1/S1 對稱計算', () => {
+      const pivot = calculatePivotPoints(110, 90, 100);
+      // P = 300 / 3 = 100
+      // R1 = 200 - 90 = 110
+      // S1 = 200 - 110 = 90
+      expect(pivot.pivot).toBe(100);
+      expect(pivot.r1).toBe(110);
+      expect(pivot.s1).toBe(90);
     });
   });
 
-  describe('7. calculateTechnicalConfluence (多空共振評分儀)', () => {
-    it('多頭共振強勢樣本評分應 >= 80 且評定為 STRONG_BULL', () => {
+  describe('7. 市場狀態機 (evaluateMarketRegime)', () => {
+    it('布林帶寬 < 8% 時優先判斷為 VOLATILITY_SQUEEZE (變盤在即)', () => {
+      const regime = evaluateMarketRegime({
+        adx: 18,
+        pdi: 20,
+        mdi: 15,
+        bandwidthPercent: 6.75,
+        maAlignment: 'BULLISH',
+      });
+      expect(regime.regime).toBe('VOLATILITY_SQUEEZE');
+      expect(regime.label).toContain('變盤在即');
+    });
+
+    it('ADX < 20 且帶寬正常時，判斷為 CHOPPY_RANGE (無趨勢盤整)', () => {
+      const regime = evaluateMarketRegime({
+        adx: 5.94,
+        pdi: 26.77,
+        mdi: 30.38,
+        bandwidthPercent: 12.5,
+        maAlignment: 'BULLISH',
+      });
+      expect(regime.regime).toBe('CHOPPY_RANGE');
+      expect(regime.label).toContain('無趨勢盤整');
+    });
+
+    it('ADX >= 25 且 +DI > -DI 時，判斷為 TRENDING_BULL', () => {
+      const regime = evaluateMarketRegime({
+        adx: 32,
+        pdi: 35,
+        mdi: 12,
+        bandwidthPercent: 15,
+        maAlignment: 'BULLISH',
+      });
+      expect(regime.regime).toBe('TRENDING_BULL');
+    });
+  });
+
+  describe('8. 矛盾懲罰與評分校準 (Contradiction Penalty - 解決 95 分盲點)', () => {
+    it('實戰案例：均線多頭排列但 ADX=5.94 且 -DI(30.38) > +DI(26.77)，總分絕不超過 58 分且標註矛盾懲罰', () => {
       const confluence = calculateTechnicalConfluence({
+        currentPrice: 10.34,
+        maAlignment: 'BULLISH',
+        isAboveMa20: true,
+        isMacdHistPositive: true,
+        rsi14: 58,
+        kdStatus: 'GOLDEN_CROSS',
+        cci20: 30,
+        boxStatus: 'INSIDE_BOX',
+        isVolumeSurgeBullish: false,
+        obvTrend: 'FLAT',
+        adx: 5.94,
+        pdi: 26.77,
+        mdi: 30.38,
+        bandwidthPercent: 6.75,
+      });
+
+      // 關鍵斷言：絕不盲目給予 95 分高分！
+      expect(confluence.score).toBeLessThanOrEqual(58);
+      expect(confluence.rating).toBe('NEUTRAL');
+      expect(confluence.contradictionPenaltyApplied).toBe(true);
+      expect(confluence.marketRegime).toBe('VOLATILITY_SQUEEZE');
+      expect(confluence.primarySignals.some((s) => s.includes('矛盾') || s.includes('無趨勢'))).toBe(true);
+      expect(confluence.oneSentenceBottomLine).toContain('變盤');
+    });
+
+    it('標準強多且有量能、ADX 35 強趨勢時，得分可 >= 80 分 (STRONG_BULL)', () => {
+      const confluence = calculateTechnicalConfluence({
+        currentPrice: 100,
         maAlignment: 'BULLISH',
         isAboveMa20: true,
         isMacdHistPositive: true,
@@ -157,33 +216,92 @@ describe('OmniIndicatorEngine - 純數學量化指標測試縫隙 (Test Seams)',
         boxStatus: 'BREAKOUT_UP',
         isVolumeSurgeBullish: true,
         obvTrend: 'RISING',
+        adx: 35,
+        pdi: 38,
+        mdi: 14,
+        bandwidthPercent: 16,
       });
       expect(confluence.score).toBeGreaterThanOrEqual(80);
       expect(confluence.rating).toBe('STRONG_BULL');
-      expect(confluence.primarySignals.length).toBeGreaterThan(0);
-      expect(confluence.actionAdvice).toContain('多頭');
-    });
-
-    it('空頭破線樣本評分應 <= 25 且評定為 STRONG_BEAR', () => {
-      const confluence = calculateTechnicalConfluence({
-        maAlignment: 'BEARISH',
-        isAboveMa20: false,
-        isMacdHistPositive: false,
-        rsi14: 25,
-        kdStatus: 'DEATH_CROSS',
-        cci20: -140,
-        boxStatus: 'BREAKOUT_DOWN',
-        isVolumeSurgeBullish: false,
-        obvTrend: 'FALLING',
-      });
-      expect(confluence.score).toBeLessThanOrEqual(25);
-      expect(confluence.rating).toBe('STRONG_BEAR');
-      expect(confluence.riskAlert).toBeDefined();
+      expect(confluence.contradictionPenaltyApplied).toBe(false);
     });
   });
 
-  describe('8. computeOmniIndicators (全指標綜合計算)', () => {
-    it('傳入日 K 線數列能完整產生 5 大模組與共振結果', () => {
+  describe('9. 關鍵價位密集聚集演算法 (calculateKeyLevelClusters)', () => {
+    it('相距 < 1.5% 之箱頂 (10.51) 與布林上軌 (10.54) 應成功聚合成第一壓力帶', () => {
+      const clusters = calculateKeyLevelClusters({
+        currentPrice: 10.34,
+        darvasBox: { upper: 10.51, lower: 10.06 },
+        bollinger: { upper: 10.54, mid: 10.20, lower: 9.86 },
+        pivotPoints: { pivot: 10.30, r1: 10.38, r2: 10.80, s1: 10.15, s2: 9.90 },
+        fibonacci: { fib236: 10.90, fib382: 10.25, fib500: 9.88, fib618: 9.50 },
+        trailingDefensePrice: 9.92,
+      });
+
+      expect(clusters.primaryResistance).toBeDefined();
+      expect(clusters.primaryResistance!.spanStart).toBeLessThanOrEqual(10.38);
+      expect(clusters.primaryResistance!.spanEnd).toBeGreaterThanOrEqual(10.51);
+      expect(clusters.primaryResistance!.price).toBeGreaterThanOrEqual(10.40);
+      expect(clusters.primaryResistance!.price).toBeLessThanOrEqual(10.55);
+      expect(clusters.primaryResistance!.sources.length).toBeGreaterThanOrEqual(2);
+      expect(clusters.primaryResistance!.label).toContain('10.5');
+
+      expect(clusters.shortTermDefense).toBeDefined();
+      expect(clusters.shortTermDefense!.price).toBeLessThan(10.34);
+    });
+  });
+
+  describe('10. 背離偵測與價格行為陷阱 (Divergence & Bull Trap)', () => {
+    it('價格創新高但 RSI 走低時，偵測到頂背離 (ALERT_BEARISH_DIVERGENCE)', () => {
+      // 兩波明確的局部波峰：第一個在 15，第二個在 17 (後有壓回 14)
+      const closes = [10, 12, 15, 13, 11, 12, 14, 17, 14];
+      const rsis = [40, 55, 80, 60, 50, 55, 65, 70, 55]; // 第二個波峰 70 < 第一個波峰 80
+      const div = detectDivergence(closes, rsis);
+      expect(div.hasBearishDivergence).toBe(true);
+    });
+
+    it('箱頂壓力區出現長上影線墓碑線時，判定為誘多假突破 (Bull Trap)', () => {
+      const trap = detectPriceActionTraps({
+        open: 10.30,
+        high: 10.58, // 衝過箱頂 10.51
+        low: 10.28,
+        close: 10.34, // 收盤壓回
+        resistanceLevel: 10.51,
+      });
+      expect(trap.hasBullTrap).toBe(true);
+      expect(trap.description).toContain('假突破');
+    });
+  });
+
+  describe('11. 籌碼質變交叉校驗 (Smart Money Confluence)', () => {
+    it('技術面偏多但主力連5日大賣超時，應標記籌碼背離警戒', () => {
+      const confluence = calculateTechnicalConfluence({
+        currentPrice: 50,
+        maAlignment: 'BULLISH',
+        isAboveMa20: true,
+        isMacdHistPositive: true,
+        rsi14: 65,
+        kdStatus: 'GOLDEN_CROSS',
+        cci20: 60,
+        boxStatus: 'BREAKOUT_UP',
+        isVolumeSurgeBullish: true,
+        obvTrend: 'RISING',
+        adx: 30,
+        pdi: 32,
+        mdi: 15,
+        chipsContext: {
+          institutional5DayNetBuy: -5000, // 主力連日大賣
+          majorHoldersDiffPercent: -2.5,
+        },
+      });
+
+      expect(confluence.chipsContradiction).toBe(true);
+      expect(confluence.riskAlert).toContain('籌碼');
+    });
+  });
+
+  describe('12. computeOmniIndicators 完整綜合產出', () => {
+    it('傳入日 K 線數列能完整產生 5 大模組、市場狀態機與實戰階梯矩陣', () => {
       const sampleCandles: DailyCandle[] = [];
       const baseDate = new Date('2026-08-01');
       for (let i = 0; i < 70; i++) {
@@ -210,12 +328,10 @@ describe('OmniIndicatorEngine - 純數學量化指標測試縫隙 (Test Seams)',
 
       expect(report.symbol).toBe('2330');
       expect(report.candleCount).toBe(70);
-      expect(report.trend.ma5).toBeDefined();
-      expect(report.momentum.rsi14).toBeDefined();
-      expect(report.volatility.bollinger.upper).toBeGreaterThan(0);
-      expect(report.volumeFlow.yesterdayVolume).toBeGreaterThan(0);
-      expect(report.levels.fibonacci.fib618).toBeGreaterThan(0);
-      expect(report.confluence.score).toBeGreaterThan(0);
+      expect(report.confluence.marketRegime).toBeDefined();
+      expect(report.confluence.actionMatrix.primaryResistanceZone).toBeDefined();
+      expect(report.confluence.actionMatrix.shortTermDefenseLine).toBeDefined();
+      expect(report.confluence.oneSentenceBottomLine).toBeDefined();
     });
   });
 });

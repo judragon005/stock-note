@@ -1,5 +1,8 @@
 import { BoxStatus } from './indicators';
 
+// 市場狀態機枚舉
+export type MarketRegime = 'TRENDING_BULL' | 'TRENDING_BEAR' | 'CHOPPY_RANGE' | 'VOLATILITY_SQUEEZE';
+
 // 1. 趨勢指標群
 export interface TrendMetrics {
   ma5?: number;
@@ -18,7 +21,7 @@ export interface TrendMetrics {
   dmiAdx?: {
     pdi: number; // +DI
     mdi: number; // -DI
-    adx: number; // 趨勢強度 (>=25 代表強趨勢)
+    adx: number; // 趨勢強度 (>=25 代表強趨勢, <20 代表盤整無趨勢)
     trendDirection: 'BULLISH' | 'BEARISH' | 'RANGE';
   };
 }
@@ -49,7 +52,7 @@ export interface VolatilityMetrics {
     isSqueeze: boolean; // 帶寬 <= 8%
   };
   atr14: number;
-  trailingDefensePrice: number; // 滾動波段最高價 - 2.5 * ATR
+  trailingDefensePrice: number; // 滾動波段最高價 - 2.5 * ATR (吊燈動態防守)
   bias20Percent: number; // (Close - MA20) / MA20 * 100%
   bias60Percent: number;
 }
@@ -94,13 +97,61 @@ export interface SupportResistanceLevels {
   };
 }
 
-// 6. 多空共振量化評估結果
+// 關鍵價位密集聚集群 (Cluster)
+export interface KeyLevelCluster {
+  price: number;
+  spanStart: number;
+  spanEnd: number;
+  label: string; // 例如: "箱頂 10.51 + 布林上軌 10.54"
+  distancePercent: number; // 與當前價差距 %
+  sources: string[];
+}
+
+export interface KeyLevelClusters {
+  primaryResistance?: KeyLevelCluster; // 第一壓力帶 (減碼區)
+  secondaryResistance?: KeyLevelCluster; // 次級阻力帶 (續強目標)
+  shortTermDefense?: KeyLevelCluster; // 短線防守帶
+  structuralDefense?: KeyLevelCluster; // 結構底線
+}
+
+// 背離訊號
+export interface DivergenceSignal {
+  hasBearishDivergence: boolean; // 頂背離
+  hasBullishDivergence: boolean; // 底背離
+  description?: string;
+}
+
+// 價格行為陷阱 (Price Action Trap)
+export interface PriceActionTrapSignal {
+  hasBullTrap: boolean; // 誘多假突破 (壓力帶長上影線/墓碑線)
+  hasBearTrap: boolean; // 誘空假跌破 (支撐帶長下影線/長針破底翻)
+  description?: string;
+}
+
+// 實戰交易階梯矩陣 (Actionable Trade Matrix)
+export interface ActionableTradeMatrix {
+  primaryResistanceZone: { price: number; label: string; distancePercent: number };
+  expansionTargetZone: { price: number; label: string; distancePercent: number };
+  shortTermDefenseLine: { price: number; label: string; distancePercent: number };
+  structuralInvalidationLine: { price: number; label: string; distancePercent: number };
+}
+
+// 6. 多空共振量化評估結果 (升級版大腦)
 export interface TechnicalConfluence {
   score: number; // 0 ~ 100 分
   rating: 'STRONG_BULL' | 'MODERATE_BULL' | 'NEUTRAL' | 'MODERATE_BEAR' | 'STRONG_BEAR';
-  primarySignals: string[]; // 核心多空特徵條列 (如: "均線多頭排列", "MACD紅柱擴張")
-  actionAdvice: string;     // 具體紀律指引 (如: "多頭動能強勁，跌破移動防守線前續抱")
-  riskAlert?: string;       // 潛在風險預警 (如: "KD已進入極端超買區，慎防正乖離過大短拉回")
+  marketRegime: MarketRegime;
+  regimeLabel: string; // 例如: "⚡ 變盤在即 (Squeeze)"、"〰️ 無趨勢盤整 (Choppy)"
+  oneSentenceBottomLine: string; // 0秒一眼決策核心：繁體中文大白話操盤指南
+  contradictionPenaltyApplied: boolean; // 是否觸發無趨勢矛盾懲罰
+  primarySignals: string[]; // 核心多空特徵條列
+  actionAdvice: string;     // 具體紀律指引
+  riskAlert?: string;       // 潛在風險預警
+  clusters: KeyLevelClusters;
+  actionMatrix: ActionableTradeMatrix;
+  divergence: DivergenceSignal;
+  priceActionTrap: PriceActionTrapSignal;
+  chipsContradiction?: boolean;
 }
 
 // 7. 個股全指標整合資料包

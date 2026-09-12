@@ -16,7 +16,6 @@ describe('OmniReportPipeline - 隨選回補與報告管線測試', () => {
   }));
 
   it('能正確整合 K 線並組裝出 OmniIndicatorReport', async () => {
-    // 注入 mock 的 backfill 函式
     const mockBackfill = vi.fn().mockResolvedValue({
       candles: mockCandles,
       indicators: [],
@@ -34,12 +33,14 @@ describe('OmniReportPipeline - 隨選回補與報告管線測試', () => {
     expect(report.market).toBe('TW');
     expect(report.candleCount).toBe(60);
     expect(report.confluence).toBeDefined();
+    expect(report.confluence.marketRegime).toBeDefined();
+    expect(report.confluence.actionMatrix).toBeDefined();
     expect(report.trend).toBeDefined();
     expect(report.momentum).toBeDefined();
     expect(report.levels).toBeDefined();
   });
 
-  it('能產出結構完整、格式合規的 Markdown 研報字串', () => {
+  it('能產出結構完整、包含三層架構與實戰階梯矩陣的 Markdown 研報字串', () => {
     const mockReport = {
       symbol: '2330',
       name: '台積電',
@@ -88,18 +89,33 @@ describe('OmniReportPipeline - 隨選回補與報告管線測試', () => {
       confluence: {
         score: 82,
         rating: 'STRONG_BULL' as const,
+        marketRegime: 'TRENDING_BULL' as const,
+        regimeLabel: '🚀 強多主升 (Trending Bull)',
+        oneSentenceBottomLine: '強勢多頭主升段！以 910 為動態移動停利防守線，突破 960 可順勢續抱。',
+        contradictionPenaltyApplied: false,
         primarySignals: ['多天期均線呈多頭排列', '股價穩站 20 日月線之上', 'KD 高檔強勢鈍化軋空'],
         actionAdvice: '多頭共振動能強勁！建議順勢持有，以 ATR 動態防守線或箱頂為移動停利點。',
         riskAlert: undefined,
+        clusters: {},
+        actionMatrix: {
+          primaryResistanceZone: { price: 960, label: '箱頂 + 布林上軌', distancePercent: 1.05 },
+          expansionTargetZone: { price: 975, label: 'Pivot R2 加碼位', distancePercent: 2.63 },
+          shortTermDefenseLine: { price: 930, label: '20MA / 樞紐線', distancePercent: -2.11 },
+          structuralInvalidationLine: { price: 915, label: '箱底破位停損', distancePercent: -3.68 },
+        },
+        divergence: { hasBearishDivergence: false, hasBullishDivergence: false },
+        priceActionTrap: { hasBullTrap: false, hasBearTrap: false },
       },
     };
 
     const md = generateOmniReportMarkdown(mockReport);
-    expect(md).toContain('# 📊 【2330 台積電】全技術指標透視診斷報告');
-    expect(md).toContain('多空共振評分');
+    expect(md).toContain('全能技術指標透視診斷報告');
+    expect(md).toContain('【第 1 層】0秒決策核心');
+    expect(md).toContain('【第 2 層】3秒實戰作戰地圖');
+    expect(md).toContain('第一減碼 / 阻力區');
+    expect(md).toContain('短線動態防守線');
     expect(md).toContain('**82 分**');
-    expect(md).toContain('多頭共振動能強勁');
+    expect(md).toContain('強多主升');
     expect(md).toContain('RSI(14)');
-    expect(md).toContain('Darvas Box 箱體');
   });
 });
