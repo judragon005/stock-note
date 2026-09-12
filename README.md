@@ -3,13 +3,30 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-767%2F767%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-786%2F786%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 全市場個股全技術指標透視分析與多空共振量化評估 (`Omni-Technical Indicator Analysis & Confluence Radar`) *(V8.40.0 全新升級)*
+- **五大維度全技術指標純數學核心 (`omniIndicatorEngine.ts`)**：
+  - **趨勢追蹤 (Trend)**：MA 均線系統 (5/20/60/120/240)、多頭/空頭/糾結排列、MACD (12, 26, 9) 柱狀體與交叉判定、DMI / ADX (14) 趨勢強度。
+  - **動能擺盪 (Momentum)**：Wilder Smoothing RSI (6, 14, 24)、KD (9, 3, 3)、CCI (20) 順勢指標、Williams %R (14) 威廉指標。
+  - **波動通道 (Volatility)**：布林通道 (20, 2)、極致壓縮 Squeeze 警示 (帶寬 $\le 8\%$)、ATR (14) 滾動移動防守價、MA20/60 乖離率。
+  - **量能資金 (Volume/Flow)**：5日/20日均量比、爆量攻擊與窒息量檢驗、OBV (能量潮累積與趨勢)、投量比。
+  - **關鍵位階 (Levels)**：Darvas Box (三日法則箱頂/箱底)、Fibonacci 黃金分割 (0.236/0.382/0.5/0.618/0.786)、經典樞紐點 Pivot Points (P, R1, R2, S1, S2)。
+- **多空共振量化評分儀 (Technical Confluence Score 0~100 分)**：
+  - 將 15 種指標依照趨勢 (35%)、動能 (25%)、型態 (20%)、量能 (20%) 進行客觀加權，產出五階多空評級（`STRONG_BULL` $\ge 80$、`MODERATE_BULL`、`NEUTRAL`、`MODERATE_BEAR`、`STRONG_BEAR` $\le 20$）。
+  - 動態輸出核心特徵條列、具體交易紀律操作建議與風險警示標籤，徹底消除多指標互相矛盾造成的「分析癱瘓」。
+- **隨選歷史 K 線回補與研報管線 (`omniReportPipeline.ts`)**：
+  - 串接 IndexedDB 快取與外部回補，全市場台股與美股任意代碼隨選即算，未滿 6 小時零外部網路消耗。
+  - 支援 `generateOmniReportMarkdown` 產出排版嚴謹的 Markdown 研報，完美相容大模型 Prompt 輸入與決策留存。
+- **個股全景透視面板 UI (`OmniTechnicalInspectorModal.tsx`)**：
+  - 毛玻璃風格彈窗，支援代碼自由搜尋、台美股市場切換、在庫持股快速選取與全域紅漲綠跌/綠漲紅跌主題同步。
+  - 在庫持倉 (`HoldingsTable`) 與動能雷達 (`MuscleBookerWorkspace`) 操作列無縫整合「📊 全指標透視」按鈕，一鍵直達。
 
 ### 0. 台美雙市場全量籌碼零遺漏、雙軌原子合流與真實 20D CMF 入庫防禦 (`Dual-Market Smart Money Zero-Loss, Atomic Chips Pipeline & Real 20D CMF`) *(V8.39.0 全新升級)*
 - **Vite Proxy 路由優先權修正與防前綴遮蔽 (`vite.config.ts`)**：

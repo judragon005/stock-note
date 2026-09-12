@@ -1523,3 +1523,23 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Dual-Market Health HUD & Full Re-sync (雙市場健康指標看板與全量重步)**:
   - 核心機制：籌碼工作區頂部提供台股（TWSE+TPEx 總檔數、更新日期）與美股（持倉標的 CMF 狀態、K線涵蓋期）之獨立健康徽章，並提供「🔄 雙市場全量重新同步」按鈕，支援使用者手動觸發強制洗滌快取與全量回補。
 
+### 全市場個股全技術指標透視分析與多空共振系統 *(新增於 V8.40.0 / Spec #0121 / Issue #37)*
+
+- **Omni-Technical Indicator Matrix (五大維度全技術指標矩陣)**:
+  - 核心定義：完整收斂個人股票投資必備之 15 種關鍵技術指標，徹底消除指標碎片化痛點。
+  - ① **趨勢追蹤 (Trend)**：MA (SMA 5/20/60/120/240)、多頭/空頭/糾結排列、MACD (12, 26, 9) 柱狀體與交叉、DMI / ADX (14) 趨勢強度。
+  - ② **動能擺盪 (Momentum)**：RSI (6, 14, 24 採 Wilder 平滑算法)、KD (9, 3, 3)、CCI (20) 順勢指標、Williams %R (14) 威廉指標。
+  - ③ **波動通道 (Volatility)**：布林通道 (20, 2)、帶寬極致壓縮 Squeeze (帶寬 $\le 8\%$)、ATR (14) 移動防守價、MA20/60 乖離率 (Bias)。
+  - ④ **量能資金 (Volume/Flow)**：5日/20日均量比、爆量攻擊與量縮窒息檢驗、OBV (能量潮累積與趨勢)、投量比。
+  - ⑤ **關鍵位階 (Levels)**：Darvas Box (三日法則箱頂與箱底)、Fibonacci 黃金分割位 (0.236, 0.382, 0.5, 0.618, 0.786)、經典樞紐點 Pivot Points (P, R1, R2, S1, S2)。
+- **Technical Confluence Score (多空共振量化評分儀)**:
+  - 核心機制：將五大矩陣 15 種指標依趨勢 (35%)、動能 (25%)、型態支撐 (20%) 與量能資金 (20%) 客觀加權，收斂為 0~100 分之共振評分。
+  - 五階多空位階：$\ge 80$ `STRONG_BULL` (強勢多頭)、$60 \sim 79$ `MODERATE_BULL` (偏多整理)、$41 \sim 59$ `NEUTRAL` (多空平衡/觀望)、$21 \sim 40$ `MODERATE_BEAR` (偏空修正)、$\le 20$ `STRONG_BEAR` (空頭急跌)。
+  - 產出主要共振特徵、操作紀律導引與風險警示標籤，破除多指標矛盾與「分析癱瘓」問題。
+- **On-Demand Backfill & Report Pipeline (隨選 K 線回補與報告管線)**:
+  - 核心機制：串接 `historicalOhlcvBackfill.ts` 與 IndexedDB 快取，支援全市場任意美股與台股 Symbol 即時隨選回補真實日 K 線，6 小時內不重複請求外部網路。
+  - 支援 `generateOmniReportMarkdown` 產出排版嚴謹之 Markdown 研報，供外部大模型提示詞消費或投資決策留存。
+- **Omni-Technical Inspector Modal (個股全技術指標透視面板)**:
+  - 核心呈現：質感毛玻璃彈窗，頂部支援自由輸入台美股代碼搜尋與在倉標的快速選取；中間以 5 大卡片展示五大指標群與多空共振指針；支援紅漲綠跌/綠漲紅跌主題即時切換與一鍵複製 Markdown 研報。
+  - 在庫持倉 (`HoldingsTable`) 與動能雷達 (`MuscleBookerWorkspace`) 操作列無縫整合「📊 全指標透視」按鈕，一鍵直達。
+
