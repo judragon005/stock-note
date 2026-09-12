@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-867%2F867%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-870%2F870%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,12 +11,27 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
+### 0. 穿透式財報深度分析儀三大報表原子聚合與操盤手決策系統 (`Financial Forensic Clarity, Tri-Statement Pipeline & Action Directives`) *(V8.43.0 全新升級)*
+- **台股三大財務報表原子聚合管線 (`Taiwan Tri-Statement Atomic Ingestion Pipeline`)**：
+  - 並行請求 FinMind 損益表 (`TaiwanStockFinancialStatements`)、資產負債表 (`TaiwanStockBalanceSheet`) 與現金流量表 (`TaiwanStockCashFlowsStatement`)。
+  - 依結算日跨表原子歸併至 16 項標準科目，補齊台股營業活動現金流 (CFO)、資本支出 (Capex)、總資產、總負債與權益總計，徹底解決 CFO 假陽性為 0 的系統漏洞。
+- **操盤手結構化定調與白話決策方針 (`Financial Directive & Action Guidance`)**：
+  - 徹底移除盲目「獲利與營運現金流處於健康區間」之矛盾兜底文字。
+  - 引入四級操盤定調徽章（`【強勢造血·長線續抱】`、`【體質穩健·逢回布局】`、`【體質承壓·防守觀望】`、`【重大風險·嚴格戒備】`）、核心矛盾洞察（如紙上富貴/失血風險）與具體操盤方針。
+- **獲利三率動態 Y 軸刻度與最新三率數值膠囊 (`Trends Layer Y-Axis & Value Capsules`)**：
+  - SVG 左側動態計算百分比 min/max 刻度與水平格線，消弭盲猜走勢缺陷。
+  - 圖表頂部清晰展示最新一季毛利率、營益率、淨利率百分比數字膠囊。
+- **淨利 vs CFO 雙向階梯柱與金額標籤 (`Net Income vs CFO Dual-Direction Bars with Amount Labels`)**：
+  - 支援雙向正負柱狀排版（負 CFO 明確向下延伸並呈醒目紅柱），柱身直接標註每季金額標籤（百萬/億），背離時顯著呈現「⚠️紙上富貴」警示標籤。
+- **四大體質維度卡片數據化 (`Hero Layer Metric Cards Enrichment`)**：
+  - 獲利能力（毛利率、ROE、淨利率）、安全性（負債比、速動比、淨現金）、營運效率（DSO、DIO/豁免）、現金流（最新季 CFO、FCF 金額）均內嵌最新數據，決策依據一目了然。
+
 ### 0. 穿透式財報分析儀與財務防雷鑑識系統 (`Financial Statement Analyzer & Forensic Radar`) *(V8.42.1 樣式修復與原生化)*
 - **原生深色浮動彈窗與高層級遮罩 (`Native Inline Styling & High Z-Index Modal`)** *(V8.42.1 修復)*：
   - 徹底移除誤用之無效 Tailwind classes，全面遷移至原生 Vanilla CSS + Inline Styles。
   - 遮罩層固定為 `position: fixed; inset: 0; zIndex: 9999; backdropFilter: blur(8px)`，點擊時間軸「📊 財報穿透」按鈕立即於螢幕中央浮起深色毛玻璃彈窗，支援 ESC 與點擊外圍關閉。
 - **三層漸進式決策架構 (Three-Layer Progressive Disclosure)**：
-  - 【Layer 1：0 秒操盤戰報】：0~100 分綜合健康評分徽章、四大體質維度指示燈（獲利能力、安全性、營運效率、現金流健康）與一句話白話操盤總結。
+  - 【Layer 1：0 秒操盤戰報】：0~100 分綜合健康評分徽章、四大體質維度指示燈（獲利能力、安全性、營運效率、現金流健康）與白話操盤方針。
   - 【Layer 2：8 季趨勢矩陣與杜邦拆解】：近 8 季獲利三率（毛利率、營益率、稅後淨利率）同軸走勢 SVG 圖、稅後淨利 vs 營業現金流 (CFO) 階梯長條對比（紙上富貴一眼擊穿）、杜邦 ROE 三因子長條矩陣（自動識別產品定價權、資產週轉或財務槓桿推升）。
   - 【Layer 3：深度鑑識排雷與審計防線】：「市場沒說什麼」六大逆向背離排雷清單（塞貨庫存、紙上富貴、借債配息、業外美化、美股 SBC 稀釋、審計異常）、會計師事務所四大所 (Big 4) 標章與查核意見等級、一鍵導出完整 Markdown 研報。
 - **產業隔離閘門與強週期警語 (`Industry Gate & Cyclical Guard`)**：

@@ -1,5 +1,5 @@
 /**
- * 財務健康度總體評分與 0 秒操盤總結引擎 (Spec 0123)
+ * 財務健康度總體評分與 0 秒操盤總結引擎 (Spec 0123 / Spec 0125)
  * Financial Health Scoring & Executive Summary Engine
  */
 
@@ -9,12 +9,90 @@ import type {
   FinancialHealthGrade,
   TrafficLightsState,
   MarketType,
+  FinancialDirective,
 } from '../types/financialForensic';
 import { calculateProfitabilityMetrics, calculateDuPontAnalysis } from './financialProfitabilityEngine';
 import { calculateSafetyMetrics } from './financialSafetyEngine';
 import { calculateTurnoverMetrics } from './financialTurnoverEngine';
 import { detectForensicAnomalies } from './forensicRadarEngine';
 import { resolveIndustryAttribute } from './industryGate';
+
+/**
+ * 依據評分、體質燈號與異常清單生成操盤手風格結構化方針 (Spec 0125)
+ */
+export function generateFinancialDirective(
+  score: number,
+  overallGrade: FinancialHealthGrade,
+  trafficLights: TrafficLightsState,
+  anomalies: any[],
+  marginTrend: string,
+  isNetCashPositive: boolean,
+  isFinancial: boolean
+): FinancialDirective {
+  // 1. 定調
+  let stance: FinancialDirective['stance'] = 'STABLE_ACCUMULATE';
+  let stanceLabel = '【體質穩健·逢回布局】';
+
+  if (score >= 85) {
+    stance = 'STRONG_BUY_AND_HOLD';
+    stanceLabel = '【強勢造血·長線續抱】';
+  } else if (score >= 65) {
+    stance = 'STABLE_ACCUMULATE';
+    stanceLabel = '【體質穩健·逢回布局】';
+  } else if (score >= 45) {
+    stance = 'DEFENSIVE_WATCH';
+    stanceLabel = '【體質承壓·防守觀望】';
+  } else {
+    stance = 'HIGH_RISK_TRIM';
+    stanceLabel = '【重大風險·嚴格戒備】';
+  }
+
+  // 2. 核心矛盾與體質洞見
+  let conflictSummary = '';
+  const dangerous = anomalies.filter((a) => a.severity === 'DANGEROUS');
+  const warning = anomalies.filter((a) => a.severity === 'WARNING');
+
+  if (dangerous.length > 0) {
+    conflictSummary = `核心警戒：${dangerous[0].summary}`;
+  } else if (trafficLights.cashFlow === 'RED') {
+    conflictSummary = '核心警戒：營運活動現金流量呈現赤字（CFO 為負），獲利未能轉化為真金白銀，警惕紙上富貴與失血風險。';
+  } else if (warning.length > 0) {
+    conflictSummary = `體質關注：${warning[0].summary}`;
+  } else if (trafficLights.profitability === 'RED') {
+    conflictSummary = '體質關注：本業獲利能力滑落至虧損區間，稅後淨利率與 ROE 承壓。';
+  } else if (trafficLights.safety === 'RED') {
+    conflictSummary = '體質關注：負債比率偏高或速動比率脆弱，資產清算與償債安全邊際不足。';
+  } else if (!isFinancial && !isNetCashPositive && trafficLights.safety === 'YELLOW') {
+    conflictSummary = '體質關注：公司處於淨負債結構（總有息負債高於在手現金），需留意利率敏感度與償債週轉。';
+  } else if (trafficLights.efficiency === 'RED') {
+    conflictSummary = '體質關注：應收帳款或存貨週轉天數過長，營運資金週轉效率下降。';
+  } else if (isFinancial) {
+    conflictSummary = '金融保險業模型運作正常，淨利與股東權益穩健，無異常做帳風險。';
+  } else if (marginTrend === 'EXPANDING' || overallGrade === 'EXCELLENT') {
+    conflictSummary = '本業造血強勁，毛利率走勢穩健，淨現金水位充沛，未檢出結構性財務背離。';
+  } else {
+    conflictSummary = '財務結構整體平順，獲利三率保持在常態營運水準。';
+  }
+
+  // 3. 具體操盤方針
+  let actionGuidance = '';
+  if (stance === 'STRONG_BUY_AND_HOLD') {
+    actionGuidance = '基本面護城河堅實，獲利含金量高，大盤震盪回檔均為中長線優質買點。';
+  } else if (stance === 'STABLE_ACCUMULATE') {
+    actionGuidance = '整體體質穩健，建議逢技術面重要均線支撐分批佈局，不盲目追高。';
+  } else if (stance === 'DEFENSIVE_WATCH') {
+    actionGuidance = '建議暫停加碼，嚴設均線跌破停損點，靜待本業現金流回正或存貨去化。';
+  } else {
+    actionGuidance = '財務地雷風險顯著，切忌摸底攤平，逢反彈應逢高減碼以降低風險曝險。';
+  }
+
+  return {
+    stance,
+    stanceLabel,
+    conflictSummary,
+    actionGuidance,
+  };
+}
 
 /**
  * 綜合評估四大維度指示燈與 0~100 分量化評分
@@ -46,6 +124,12 @@ export function generateFinancialForensicReport(
         cashFlow: 'GRAY',
       },
       executiveSummary: '目前查無可用之季度財務報表數據，暫無法進行鑑識分析。',
+      directive: {
+        stance: 'HIGH_RISK_TRIM',
+        stanceLabel: '【數據缺失·暫勿進場】',
+        conflictSummary: '目前查無可用之季度財務報表數據，無法評估真實獲利與償債體質。',
+        actionGuidance: '建議先行觀望，待公司完整申報季度財報後再行決策。',
+      },
       anomalies: [],
       duPont: {
         roe: 0,
@@ -161,19 +245,18 @@ export function generateFinancialForensicReport(
     overallGrade = 'WARNING';
   }
 
-  // 6. 一句話 0 秒白話操盤總結
-  let executiveSummary = '';
-  if (dangerousAnomalies.length > 0) {
-    executiveSummary = `⚠️ 核心警戒：${dangerousAnomalies[0].summary.slice(0, 70)}...`;
-  } else if (warningAnomalies.length > 0) {
-    executiveSummary = `🟡 體質關注：${warningAnomalies[0].summary.slice(0, 70)}...`;
-  } else if ((profitability.marginTrend === 'EXPANDING' || overallGrade === 'EXCELLENT') && safety.isNetCashPositive) {
-    executiveSummary = `本業造血強勁，毛利率走勢穩健，淨現金水位充沛，未檢出結構性財務背離。`;
-  } else if (industryAttribute === 'FINANCIALS') {
-    executiveSummary = `金融保險控股模型運作正常，淨利與股東權益穩健，無異常做帳風險。`;
-  } else {
-    executiveSummary = `整體財務結構平穩，獲利與營運現金流處於健康區間。`;
-  }
+  // 6. 產出結構化操盤手方針 (Spec 0125)
+  const directive = generateFinancialDirective(
+    score,
+    overallGrade,
+    trafficLights,
+    anomalies,
+    profitability.marginTrend,
+    safety.isNetCashPositive,
+    industryAttribute === 'FINANCIALS'
+  );
+
+  const executiveSummary = `${directive.stanceLabel} ${directive.conflictSummary} 操作方針：${directive.actionGuidance}`;
 
   return {
     symbol: cleanSymbol,
@@ -185,6 +268,7 @@ export function generateFinancialForensicReport(
     overallGrade,
     trafficLights,
     executiveSummary,
+    directive,
     anomalies,
     duPont,
     historicalRecords: records,

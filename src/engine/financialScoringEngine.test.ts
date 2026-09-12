@@ -96,4 +96,18 @@ describe('Financial Health Scoring & Executive Summary Engine (TDD Seam)', () =>
     expect(report.latestPeriod).toBe('N/A');
     expect(report.executiveSummary).toContain('查無');
   });
+
+  it('5. 當 CFO 為負或警告時應產出操盤方針且杜絕「獲利現金流平穩」之矛盾', () => {
+    const records = createHealthyRecords();
+    records[0].cashFlow.operatingCashFlow = -10000000000;
+
+    const report = generateFinancialForensicReport('2327', 'TW', '國巨', records);
+
+    expect(report.trafficLights.cashFlow).toBe('RED');
+    expect(report.directive).toBeDefined();
+    expect(report.directive?.actionGuidance).toBeTruthy();
+    expect(report.executiveSummary).not.toContain('獲利與營運現金流處於健康區間');
+    expect(report.executiveSummary).toContain('操作方針');
+  });
 });
+

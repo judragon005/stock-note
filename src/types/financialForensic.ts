@@ -167,6 +167,16 @@ export interface TrafficLightsState {
 export type FinancialHealthGrade = 'EXCELLENT' | 'HEALTHY' | 'WARNING' | 'DANGEROUS';
 
 /**
+ * 操盤手風格結構化方針契約 (Spec 0125)
+ */
+export interface FinancialDirective {
+  stance: 'STRONG_BUY_AND_HOLD' | 'STABLE_ACCUMULATE' | 'DEFENSIVE_WATCH' | 'HIGH_RISK_TRIM';
+  stanceLabel: string;          // e.g. '【強勢造血·長線續抱】'、'【體質承壓·防守觀望】'
+  conflictSummary: string;      // 核心矛盾剖析
+  actionGuidance: string;       // 具體操盤方針
+}
+
+/**
  * 穿透式財報戰情報告實體 (Financial Forensic Report)
  */
 export interface FinancialForensicReport {
@@ -178,7 +188,8 @@ export interface FinancialForensicReport {
   overallScore: number;         // 0 ~ 100
   overallGrade: FinancialHealthGrade;
   trafficLights: TrafficLightsState;
-  executiveSummary: string;     // 0 秒核心操盤結論一句話
+  executiveSummary: string;     // 0 秒核心操盤結論
+  directive?: FinancialDirective; // 操盤手結構化定調與方針 (Spec 0125)
   anomalies: ForensicAnomaly[]; // 六大逆向排查清單
   duPont: DuPontAnalysis;
   historicalRecords: QuarterlyFinancialRecord[];

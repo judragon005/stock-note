@@ -171,11 +171,53 @@ export const FinancialHeroLayer: React.FC<FinancialHeroLayerProps> = ({ report }
     overallGrade,
     trafficLights,
     executiveSummary,
+    directive,
     industryAttribute,
+    historicalRecords = [],
+    duPont,
   } = report;
 
   const gradeStyle = getGradeInlineStyle(overallGrade);
   const indInfo = getIndustryBadgeInfo(industryAttribute);
+
+  // 提取最新一季數據
+  const latestRec = historicalRecords.length > 0 ? historicalRecords[historicalRecords.length - 1] : null;
+
+  // 1. 獲利能力數據
+  const grossMarginStr = latestRec && latestRec.income.revenue > 0
+    ? `${((latestRec.income.grossProfit / latestRec.income.revenue) * 100).toFixed(1)}%`
+    : '-';
+  const roeStr = duPont?.roe != null ? `${duPont.roe.toFixed(1)}%` : '-';
+  const netMarginStr = latestRec && latestRec.income.revenue > 0
+    ? `${((latestRec.income.netIncome / latestRec.income.revenue) * 100).toFixed(1)}%`
+    : '-';
+
+  // 2. 安全性與償債數據
+  const debtRatioStr = latestRec && latestRec.balanceSheet.totalAssets > 0
+    ? `${((latestRec.balanceSheet.totalLiabilities / latestRec.balanceSheet.totalAssets) * 100).toFixed(1)}%`
+    : '-';
+  const quickRatioStr = latestRec && latestRec.balanceSheet.totalLiabilities > 0
+    ? `${(((latestRec.balanceSheet.cashAndEquivalents + latestRec.balanceSheet.accountsReceivable) / latestRec.balanceSheet.totalLiabilities) * 100).toFixed(0)}%`
+    : '-';
+  const totalDebt = (latestRec?.balanceSheet.shortTermDebt || 0) + (latestRec?.balanceSheet.longTermDebt || 0);
+  const netCashAmount = latestRec ? latestRec.balanceSheet.cashAndEquivalents - totalDebt : 0;
+  const netCashStr = latestRec ? `${(netCashAmount / 1e8).toFixed(1)}億` : '-';
+
+  // 3. 營運效率數據
+  const dsoStr = latestRec && latestRec.income.revenue > 0
+    ? `${Math.round((latestRec.balanceSheet.accountsReceivable / latestRec.income.revenue) * 90)}天`
+    : '-';
+  const cogs = latestRec ? latestRec.income.revenue - latestRec.income.grossProfit : 0;
+  const dioStr = latestRec && cogs > 0
+    ? `${Math.round((latestRec.balanceSheet.inventory / cogs) * 90)}天`
+    : '-';
+
+  // 4. 現金流健康數據
+  const cfoAmount = latestRec?.cashFlow?.operatingCashFlow ?? 0;
+  const cfoStr = latestRec ? `${(cfoAmount / 1e8).toFixed(1)}億` : '-';
+  const capexAmount = latestRec?.cashFlow?.capitalExpenditure ?? 0;
+  const fcfAmount = cfoAmount - capexAmount;
+  const fcfStr = latestRec ? `${(fcfAmount / 1e8).toFixed(1)}億` : '-';
 
   const lightCards = [
     {
@@ -183,24 +225,42 @@ export const FinancialHeroLayer: React.FC<FinancialHeroLayerProps> = ({ report }
       sub: '三率走勢與 ROE',
       color: trafficLights.profitability,
       icon: TrendingUp,
+      metrics: [
+        { label: '毛利率', value: grossMarginStr },
+        { label: 'ROE', value: roeStr },
+        { label: '淨利率', value: netMarginStr },
+      ],
     },
     {
       title: '安全性與償債',
       sub: '速動比與真實淨現金',
       color: trafficLights.safety,
       icon: ShieldCheck,
+      metrics: [
+        { label: '負債比', value: debtRatioStr },
+        { label: '速動比', value: quickRatioStr },
+        { label: '淨現金', value: netCashStr },
+      ],
     },
     {
       title: '營運效率',
       sub: '收帳與存貨 CCC 週期',
       color: trafficLights.efficiency,
       icon: Activity,
+      metrics: [
+        { label: '應收天數(DSO)', value: dsoStr },
+        { label: '存貨天數(DIO)', value: industryAttribute === 'FINANCIALS' ? '豁免' : dioStr },
+      ],
     },
     {
       title: '現金流健康',
       sub: '本業營運造血與 FCF',
       color: trafficLights.cashFlow,
       icon: Coins,
+      metrics: [
+        { label: '營運現金流(CFO)', value: cfoStr },
+        { label: '自由現金流(FCF)', value: fcfStr },
+      ],
     },
   ];
 
@@ -339,35 +399,99 @@ export const FinancialHeroLayer: React.FC<FinancialHeroLayerProps> = ({ report }
         </div>
       </div>
 
-      {/* 0 秒操盤結論橫幅 (Executive Summary) */}
+      {/* 0 秒操盤結論橫幅 (Executive Summary & Action Directive) */}
       <div
         style={{
           position: 'relative',
           overflow: 'hidden',
-          borderRadius: '10px',
-          background: 'linear-gradient(90deg, rgba(30, 58, 138, 0.35) 0%, rgba(49, 46, 129, 0.25) 50%, rgba(88, 28, 135, 0.15) 100%)',
-          border: '1px solid rgba(59, 130, 246, 0.3)',
-          padding: '14px 16px',
+          borderRadius: '12px',
+          background: 'linear-gradient(90deg, rgba(30, 58, 138, 0.35) 0%, rgba(49, 46, 129, 0.25) 50%, rgba(88, 28, 135, 0.2) 100%)',
+          border: '1px solid rgba(59, 130, 246, 0.4)',
+          padding: '16px 18px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-          <ShieldAlert style={{ width: '18px', height: '18px', color: '#60a5fa', flexShrink: 0, marginTop: '2px' }} />
-          <div>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#93c5fd', marginBottom: '3px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShieldAlert style={{ width: '20px', height: '20px', color: '#60a5fa', flexShrink: 0 }} />
+            <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#93c5fd', letterSpacing: '0.05em' }}>
               ⚡ 0 秒核心操盤結論
-            </div>
-            <p style={{ fontSize: '0.88rem', color: '#f1f5f9', lineHeight: 1.6, fontWeight: 500, margin: 0 }}>
-              {executiveSummary}
-            </p>
+            </span>
           </div>
+
+          {directive?.stanceLabel && (
+            <span
+              style={{
+                fontSize: '0.78rem',
+                fontWeight: 800,
+                padding: '3px 10px',
+                borderRadius: '9999px',
+                backgroundColor: directive.stance === 'STRONG_BUY_AND_HOLD'
+                  ? 'rgba(16, 185, 129, 0.2)'
+                  : directive.stance === 'HIGH_RISK_TRIM'
+                  ? 'rgba(244, 63, 94, 0.25)'
+                  : 'rgba(245, 158, 11, 0.2)',
+                color: directive.stance === 'STRONG_BUY_AND_HOLD'
+                  ? '#34d399'
+                  : directive.stance === 'HIGH_RISK_TRIM'
+                  ? '#fb7185'
+                  : '#fbbf24',
+                border: '1px solid currentColor',
+              }}
+            >
+              {directive.stanceLabel}
+            </span>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <p style={{ fontSize: '0.92rem', color: '#f8fafc', lineHeight: 1.6, fontWeight: 600, margin: 0 }}>
+            {executiveSummary}
+          </p>
+
+          {directive?.conflictSummary && (
+            <div
+              style={{
+                fontSize: '0.82rem',
+                color: '#e2e8f0',
+                backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                padding: '8px 12px',
+                borderRadius: '6px',
+                borderLeft: '3px solid #f59e0b',
+                lineHeight: 1.5,
+              }}
+            >
+              <span style={{ color: '#fbbf24', fontWeight: 700, marginRight: '4px' }}>⚠️ 核心矛盾：</span>
+              {directive.conflictSummary}
+            </div>
+          )}
+
+          {directive?.actionGuidance && (
+            <div
+              style={{
+                fontSize: '0.82rem',
+                color: '#e2e8f0',
+                backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                padding: '8px 12px',
+                borderRadius: '6px',
+                borderLeft: '3px solid #38bdf8',
+                lineHeight: 1.5,
+              }}
+            >
+              <span style={{ color: '#38bdf8', fontWeight: 700, marginRight: '4px' }}>🎯 操盤方針：</span>
+              {directive.actionGuidance}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 四大體質維度指示燈卡片 (2x2 or 4x1) */}
+      {/* 四大體質維度指示燈卡片 (內嵌最新關鍵數字) */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
           gap: '12px',
         }}
       >
@@ -384,7 +508,7 @@ export const FinancialHeroLayer: React.FC<FinancialHeroLayerProps> = ({ report }
                 borderRadius: '10px',
                 backgroundColor: 'rgba(30, 41, 59, 0.5)',
                 border: '1px solid rgba(51, 65, 85, 0.5)',
-                gap: '4px',
+                gap: '8px',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -417,7 +541,29 @@ export const FinancialHeroLayer: React.FC<FinancialHeroLayerProps> = ({ report }
                   <span>{info.text}</span>
                 </div>
               </div>
-              <span style={{ fontSize: '0.72rem', color: '#64748b' }}>{card.sub}</span>
+
+              {/* 核心關鍵指標數值膠囊 */}
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '6px',
+                  backgroundColor: 'rgba(15, 23, 42, 0.4)',
+                  padding: '6px 8px',
+                  borderRadius: '6px',
+                  marginTop: '2px',
+                }}
+              >
+                {card.metrics.map((m, mIdx) => (
+                  <div key={mIdx} style={{ fontSize: '0.72rem', display: 'flex', gap: '4px' }}>
+                    <span style={{ color: '#94a3b8' }}>{m.label}:</span>
+                    <span style={{ color: '#f8fafc', fontWeight: 700, fontFamily: 'monospace' }}>{m.value}</span>
+                    {mIdx < card.metrics.length - 1 && <span style={{ color: '#475569', marginLeft: '2px' }}>|</span>}
+                  </div>
+                ))}
+              </div>
+
+              <span style={{ fontSize: '0.7rem', color: '#64748b' }}>{card.sub}</span>
             </div>
           );
         })}
