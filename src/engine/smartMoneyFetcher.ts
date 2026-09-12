@@ -1,5 +1,8 @@
 import { fetchWithCORSProxy } from './priceFetcher';
-import { dbGet, dbPut } from '../utils/db';
+import { dbGet, dbPut, getSymbolOhlcv, saveSymbolOhlcv } from '../utils/db';
+import { parseYahooHistoricalCandlesResponse } from './historicalPriceFetcher';
+import { computeChaikinMoneyFlow } from './smartMoneyEngine';
+import { DailyCandle } from '../types/signal';
 
 export interface TwseInstitutionalRow {
   symbol: string;
@@ -227,16 +230,35 @@ export function parseTpexInstitutionalReport(rawData: any): Record<string, TwseI
 const CACHE_KEY_PREFIX = 'TWSE_TPEX_CHIPS_V4_';
 
 /**
- * 驗證籌碼資料是否涵蓋上市（以 2330 台積電為基本哨兵）
+ * 具備指數退避之智慧重試抓取函數 (Spec 0120 Ticket 01)
  */
-function isMarketCoverageValid(data: Record<string, TwseInstitutionalRow> | null | undefined): boolean {
-  if (!data || typeof data !== 'object') return false;
-  return Boolean(data['2330']);
+export async function fetchWithRetry<T = any>(
+  fetcher: () => Promise<T>,
+  maxRetries = 3,
+  initialDelayMs = 600
+): Promise<T> {
+  let lastError: any;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fetcher();
+    } catch (err: any) {
+      lastError = err;
+      if (err?.message?.includes('404')) {
+        throw err;
+      }
+      if (attempt < maxRetries) {
+        const delay = initialDelayMs * Math.pow(2, attempt - 1);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastError;
 }
 
+
 /**
- * 完整性多維哨兵：驗證籌碼資料是否涵蓋足夠市場深度與非全 0 主力交易量 (Spec 0119 Ticket 01)
- * 解決 15:30 證交所 API 釋出半殘日報 (如僅 894 檔或全 0 張) 誤判已同步完成之重大 Bug
+ * 金融級雙市場雙哨兵：驗證籌碼資料是否涵蓋上市、上櫃完整深度與非全 0 主力交易量 (Spec 0119 / Spec 0120 Ticket 02)
+ * 解決 15:30 證交所 API 釋出半殘日報 (如僅 894 檔或全 0 張) 或單邊市場成功誤判之重大缺陷
  */
 export function isInstitutionalReportComplete(
   data: Record<string, TwseInstitutionalRow> | null | undefined,
@@ -258,24 +280,33 @@ export function isInstitutionalReportComplete(
   // 若全部檢查標的買賣超全為 0，視為尚未公布結算數據之空日報
   if (totalVolumeShares === 0) return false;
 
-  // 2. 檔數深度門檻檢驗：
+  // 2. 自訂門檻檢驗 (供單元測試或特定市場子集驗證)：
   if (minSymbols !== undefined) {
     return symbols.length >= minSymbols;
   }
 
-  // 自動探測模式：全市場真實環境正常應有 1,800+ 檔。
-  // 若介於 10 至 1,199 檔之間 (例如真實截圖中的 894 檔)，視為證交所分批上傳未齊之殘缺日報
-  if (symbols.length >= 10 && symbols.length < 1200) {
-    return false;
+  // 3. 真實全市場深度與雙哨兵檢驗 (Spec 0120 Ticket 02):
+  // 針對真實全市場環境 (檔數 >= 10)：
+  if (symbols.length >= 10) {
+    // 3.1 檔數深度門檻：若介於 10 至 1,199 檔之間 (例如僅抓到上櫃 894 檔)，視為分批上傳未齊之殘缺日報
+    if (symbols.length < 1200) {
+      return false;
+    }
+    // 3.2 雙市場雙哨兵：若含有真實市場代碼，則上市龍頭 2330 與上櫃龍頭 8299 必須同時存在，任一缺失視為單邊殘缺
+    const hasTwseSentinel = Boolean(data['2330']);
+    const hasTpexSentinel = Boolean(data['8299']);
+    if ((hasTwseSentinel || hasTpexSentinel) && (!hasTwseSentinel || !hasTpexSentinel)) {
+      return false;
+    }
   }
 
   return true;
 }
 
 /**
- * 雙軌並行抓取臺灣證交所 (TWSE) 與 櫃檯買賣中心 (TPEx) 三大法人日報並合併
+ * 雙軌並行抓取臺灣證交所 (TWSE) 與 櫃檯買賣中心 (TPEx) 三大法人日報並以原子性合併 (Spec 0120 Ticket 01, Ticket 02)
  */
-async function fetchCombinedTwseAndTpex(
+export async function fetchCombinedTwseAndTpex(
   dateStr: string,
   customFetch: (url: string, timeoutMs?: number) => Promise<any>
 ): Promise<Record<string, TwseInstitutionalRow>> {
@@ -284,12 +315,20 @@ async function fetchCombinedTwseAndTpex(
   const tpexUrl = `https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=json&se=EW&t=D&d=${rocDate}`;
 
   const [twseRes, tpexRes] = await Promise.allSettled([
-    customFetch(twseUrl, 6000),
-    customFetch(tpexUrl, 6000),
+    fetchWithRetry(() => customFetch(twseUrl, 6000), 2, 400),
+    fetchWithRetry(() => customFetch(tpexUrl, 6000), 2, 400),
   ]);
 
   const twseData = twseRes.status === 'fulfilled' ? parseTwseT86Report(twseRes.value) : {};
   const tpexData = tpexRes.status === 'fulfilled' ? parseTpexInstitutionalReport(tpexRes.value) : {};
+
+  // 原子性原則 (Spec 0120 Ticket 02):
+  // 在真實市場規模下 (任一市場檔數 >= 10)，若另一市場為空，合流視為未完整，回傳空字典
+  const twseCount = Object.keys(twseData).length;
+  const tpexCount = Object.keys(tpexData).length;
+  if ((twseCount >= 10 && tpexCount === 0) || (tpexCount >= 10 && twseCount === 0)) {
+    return {};
+  }
 
   return { ...twseData, ...tpexData };
 }
@@ -454,11 +493,11 @@ export async function fetchRecentTwseReports(
 
   while (foundDays < daysCount && attempts < maxAttempts) {
     attempts++;
-    // 優先讀取快取
+    // 優先讀取快取 (Spec 0120 Ticket 04: 採用金融級雙哨兵檢驗，自動洗滌舊版殘缺快取)
     let dayData: Record<string, TwseInstitutionalRow> | null = null;
     try {
       const cached = await dbGet<any>('settings', `${CACHE_KEY_PREFIX}${currentDate}`);
-      if (cached && cached.data && isMarketCoverageValid(cached.data)) {
+      if (cached && cached.data && isInstitutionalReportComplete(cached.data)) {
         dayData = cached.data;
       }
     } catch {
@@ -466,10 +505,10 @@ export async function fetchRecentTwseReports(
     }
 
     if (!dayData) {
-      // 線上增量拉取 (上市 + 上櫃合併)
+      // 線上增量拉取 (上市 + 上櫃原子合併)
       try {
         const combined = await fetchCombinedTwseAndTpex(currentDate, customFetch);
-        if (Object.keys(combined).length > 0) {
+        if (isInstitutionalReportComplete(combined)) {
           dayData = combined;
           try {
             await dbPut('settings', {
@@ -498,4 +537,119 @@ export async function fetchRecentTwseReports(
   // 按日期由舊到新排序 (供時序播放器時序推進)
   return results.reverse();
 }
+
+export interface UsRealStockData {
+  symbol: string;
+  name?: string;
+  currentPrice: number;
+  previousClose: number;
+  changePercent: number;
+  volume: number;
+  cmf: number;
+  candles: { date: string; open: number; high: number; low: number; close: number; volume: number }[];
+  historicalDailyFlows: {
+    date: string;
+    changePercent: number;
+    flowScore: number;
+    cmf: number;
+    netFlowAmount: number;
+  }[];
+}
+
+/**
+ * 抓取並持久化美股真實 20~60 根日 K (OHLCV) 並計算標準 20D CMF (Spec 0120 Ticket 03)
+ * 徹底杜絕任何合成模擬日 K，100% 依據真實量價結構入庫與計算
+ */
+export async function fetchUsMarketRealData(
+  symbols: string[],
+  customFetch: (url: string, timeoutMs?: number) => Promise<any> = fetchWithCORSProxy,
+  forceRefresh = false
+): Promise<Record<string, UsRealStockData>> {
+  const result: Record<string, UsRealStockData> = {};
+  if (!symbols || symbols.length === 0) return result;
+
+  for (const sym of symbols) {
+    const cleanSym = sym.trim().toUpperCase();
+    let candles: DailyCandle[] = [];
+
+    // 1. 優先讀取 IndexedDB 快取
+    if (!forceRefresh) {
+      try {
+        const cached = await getSymbolOhlcv(cleanSym);
+        if (cached && Array.isArray(cached.candles) && cached.candles.length >= 20) {
+          candles = cached.candles;
+        }
+      } catch {
+        // 忽略快取錯誤
+      }
+    }
+
+    // 2. 若無快取或要求強制更新，透過 Yahoo Finance API 拉取 3 個月日 K
+    if (candles.length < 20) {
+      try {
+        const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(cleanSym)}?interval=1d&range=3mo`;
+        const data = await customFetch(targetUrl, 6000);
+        const parsed = parseYahooHistoricalCandlesResponse(data);
+        if (parsed && parsed.length >= 20) {
+          candles = parsed;
+          try {
+            await saveSymbolOhlcv({
+              symbol: cleanSym,
+              market: 'US',
+              candles: parsed,
+              updatedAt: Date.now(),
+            });
+          } catch {
+            // 忽略儲存錯誤
+          }
+        }
+      } catch {
+        // 網路錯誤
+      }
+    }
+
+    // 3. 計算真實金融指標
+    if (candles.length >= 20) {
+      const latest = candles[candles.length - 1];
+      const prev = candles[candles.length - 2] || latest;
+      const curPrice = latest.close;
+      const prevClose = prev.close;
+      const changePercent = prevClose > 0 ? ((curPrice - prevClose) / prevClose) * 100 : 0;
+      const cmf = computeChaikinMoneyFlow(candles.slice(-20), 20);
+
+      // 產生過去 5 個交易日之時序位移點
+      const historyFlows: UsRealStockData['historicalDailyFlows'] = [];
+      const historySliceCount = Math.min(5, candles.length);
+      for (let i = candles.length - historySliceCount; i < candles.length; i++) {
+        const c = candles[i];
+        const windowCandles = candles.slice(Math.max(0, i - 19), i + 1);
+        const dayCmf = computeChaikinMoneyFlow(windowCandles, 20);
+        const dayPrevClose = i > 0 ? candles[i - 1].close : c.open;
+        const dayChangeP = dayPrevClose > 0 ? ((c.close - dayPrevClose) / dayPrevClose) * 100 : 0;
+
+        historyFlows.push({
+          date: c.date,
+          changePercent: Math.round(dayChangeP * 100) / 100,
+          flowScore: Math.round(dayCmf * 100) / 100,
+          cmf: Math.round(dayCmf * 100) / 100,
+          netFlowAmount: Math.round(dayCmf * 50000000),
+        });
+      }
+
+      result[cleanSym] = {
+        symbol: cleanSym,
+        currentPrice: curPrice,
+        previousClose: prevClose,
+        changePercent: Math.round(changePercent * 100) / 100,
+        volume: latest.volume,
+        cmf,
+        candles,
+        historicalDailyFlows: historyFlows,
+      };
+    }
+  }
+
+  return result;
+}
+
 

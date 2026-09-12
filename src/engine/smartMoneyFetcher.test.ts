@@ -8,6 +8,8 @@ import {
   fetchTwseInstitutionalReportDetailed,
   fetchRecentTwseReports,
   isInstitutionalReportComplete,
+  fetchWithRetry,
+  fetchUsMarketRealData,
 } from './smartMoneyFetcher';
 import * as db from '../utils/db';
 
@@ -433,7 +435,127 @@ describe('smartMoneyFetcher (籌碼資料管線與解析)', () => {
       });
     });
   });
+
+  describe('Spec 0120: 台美雙市場全量籌碼零遺漏、雙軌原子合流與真實 20D CMF 入庫防禦', () => {
+    describe('fetchWithRetry (智慧指數退避重試)', () => {
+      it('首次失敗但在重試次數內成功時，應成功回傳結果', async () => {
+        let attempts = 0;
+        const flakeyFn = vi.fn().mockImplementation(async () => {
+          attempts++;
+          if (attempts === 1) {
+            throw new Error('Network timeout');
+          }
+          return { success: true };
+        });
+
+        const res = await fetchWithRetry(flakeyFn, 3, 50);
+        expect(res).toEqual({ success: true });
+        expect(attempts).toBe(2);
+      });
+
+      it('若遇到明確 404 錯誤應立即中斷重試，杜絕浪費連線', async () => {
+        let attempts = 0;
+        const notFoundFn = vi.fn().mockImplementation(async () => {
+          attempts++;
+          throw new Error('HTTP 404 Not Found');
+        });
+
+        await expect(fetchWithRetry(notFoundFn, 3, 50)).rejects.toThrow('404');
+        expect(attempts).toBe(1);
+      });
+    });
+
+    describe('isInstitutionalReportComplete 雙市場雙哨兵檢驗', () => {
+      it('全市場規模下，若有台積電 2330 卻缺少群聯 8299 應判定為單邊殘缺 (回傳 false)', () => {
+        const twseOnlyData: Record<string, any> = {
+          '2330': { symbol: '2330', foreignNetShares: 1000, trustNetShares: 500, dealerNetShares: 200, totalNetShares: 1700 },
+        };
+        for (let i = 0; i < 1300; i++) {
+          twseOnlyData[`TWSE_${i}`] = { symbol: `TWSE_${i}`, foreignNetShares: 10, trustNetShares: 5, dealerNetShares: 2, totalNetShares: 17 };
+        }
+        expect(isInstitutionalReportComplete(twseOnlyData)).toBe(false);
+      });
+
+      it('全市場規模下，若有群聯 8299 卻缺少台積電 2330 應判定為單邊殘缺 (回傳 false)', () => {
+        const tpexOnlyData: Record<string, any> = {
+          '8299': { symbol: '8299', foreignNetShares: 800, trustNetShares: 300, dealerNetShares: 100, totalNetShares: 1200 },
+        };
+        for (let i = 0; i < 890; i++) {
+          tpexOnlyData[`TPEX_${i}`] = { symbol: `TPEX_${i}`, foreignNetShares: 10, trustNetShares: 5, dealerNetShares: 2, totalNetShares: 17 };
+        }
+        expect(isInstitutionalReportComplete(tpexOnlyData)).toBe(false);
+      });
+
+      it('全市場規模下，同時涵蓋台積電 2330 與群聯 8299 且總數達 1800 檔以上，應通過檢驗 (回傳 true)', () => {
+        const fullMarketData: Record<string, any> = {
+          '2330': { symbol: '2330', foreignNetShares: 1000, trustNetShares: 500, dealerNetShares: 200, totalNetShares: 1700 },
+          '8299': { symbol: '8299', foreignNetShares: 800, trustNetShares: 300, dealerNetShares: 100, totalNetShares: 1200 },
+        };
+        for (let i = 0; i < 2200; i++) {
+          fullMarketData[`SYM_${i}`] = { symbol: `SYM_${i}`, foreignNetShares: 10, trustNetShares: 5, dealerNetShares: 2, totalNetShares: 17 };
+        }
+        expect(isInstitutionalReportComplete(fullMarketData)).toBe(true);
+      });
+    });
+
+    describe('fetchUsMarketRealData (美股真實日 K 抓取與 CMF 計算)', () => {
+      it('能透過 Yahoo Finance API 拉取 3 個月日 K，計算出標準 20D CMF 並產出 5 日時序位移點', async () => {
+        // 模擬 30 根真實日 K
+        const timestamps: number[] = [];
+        const opens: number[] = [];
+        const highs: number[] = [];
+        const lows: number[] = [];
+        const closes: number[] = [];
+        const volumes: number[] = [];
+
+        const baseTime = 1757000000;
+        for (let i = 0; i < 30; i++) {
+          timestamps.push(baseTime + i * 86400);
+          opens.push(100 + i);
+          highs.push(105 + i);
+          lows.push(95 + i);
+          closes.push(104 + i); // 收盤偏向高點 (多方吸籌)
+          volumes.push(2000000);
+        }
+
+        const mockYahooData = {
+          chart: {
+            result: [
+              {
+                meta: { symbol: 'NVDA' },
+                timestamp: timestamps,
+                indicators: {
+                  quote: [
+                    {
+                      open: opens,
+                      high: highs,
+                      low: lows,
+                      close: closes,
+                      volume: volumes,
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        };
+
+        const mockFetch = vi.fn().mockResolvedValue(mockYahooData);
+        const result = await fetchUsMarketRealData(['NVDA'], mockFetch, true);
+
+        expect(mockFetch).toHaveBeenCalled();
+        expect(result['NVDA']).toBeDefined();
+        const nvda = result['NVDA'];
+        expect(nvda.symbol).toBe('NVDA');
+        expect(nvda.currentPrice).toBe(133); // 104 + 29
+        expect(nvda.candles.length).toBe(30);
+        expect(nvda.cmf).toBeGreaterThan(0); // 應為正向吸籌
+        expect(nvda.historicalDailyFlows.length).toBe(5);
+      });
+    });
+  });
 });
+
 
 
 

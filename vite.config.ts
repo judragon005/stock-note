@@ -21,10 +21,14 @@ export default defineConfig({
           });
         },
       },
-      '/api/twse': {
-        target: 'https://openapi.twse.com.tw',
+      '/api/twse-www': {
+        target: 'https://www.twse.com.tw',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/twse/, ''),
+        rewrite: (path) => path.replace(/^\/api\/twse-www/, ''),
+        headers: {
+          Referer: 'https://www.twse.com.tw/',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        },
         configure: (proxy) => {
           proxy.on('error', (err, _req, res) => {
             if (res && 'writeHead' in res && !(res as any).headersSent) {
@@ -34,14 +38,10 @@ export default defineConfig({
           });
         },
       },
-      '/api/twse-www': {
-        target: 'https://www.twse.com.tw',
+      '/api/twse': {
+        target: 'https://openapi.twse.com.tw',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/twse-www/, ''),
-        headers: {
-          Referer: 'https://www.twse.com.tw/',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        },
+        rewrite: (path) => path.replace(/^\/api\/twse/, ''),
         configure: (proxy) => {
           proxy.on('error', (err, _req, res) => {
             if (res && 'writeHead' in res && !(res as any).headersSent) {
