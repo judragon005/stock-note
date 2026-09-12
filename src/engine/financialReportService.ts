@@ -12,6 +12,7 @@ import { getStoredFinancialRecords, saveFinancialRecords } from '../utils/db';
 import { fetchTaiwanQuarterlyFinancials } from './taiwanFinancialPipeline';
 import { fetchUSQuarterlyFinancials } from './usFinancialPipeline';
 import { generateFinancialForensicReport } from './financialScoringEngine';
+import { logger } from '../utils/logger';
 
 export interface FinancialReportOptions {
   forceRefresh?: boolean;
@@ -32,7 +33,7 @@ export async function loadOrFetchFinancialReport(
     try {
       records = await getStoredFinancialRecords(cleanSymbol);
     } catch (e) {
-      console.warn('[financialReportService] Failed to read from IndexedDB:', e);
+      logger.warn('[financialReportService] Failed to read from IndexedDB:', e);
     }
   }
 
@@ -47,7 +48,7 @@ export async function loadOrFetchFinancialReport(
       try {
         await saveFinancialRecords(records);
       } catch (e) {
-        console.warn('[financialReportService] Failed to save to IndexedDB:', e);
+        logger.warn('[financialReportService] Failed to save to IndexedDB:', e);
       }
     }
   }
