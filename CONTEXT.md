@@ -1504,3 +1504,22 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 核心機制：在 `smartMoneyFetcher.ts` 實作 `isInstitutionalReportComplete`。以「全市場發布檔數門檻（正常 1800+ 檔，未達 1200 檔判定為盤後殘缺）」與「前 50 大活躍法人成交量非全零」進行多維攔截。未齊全時不污染快取，自動優雅回退 T-1 完整日報，狀態列以黃燈誠實提示 `🟡 盤後結算中：暫呈 T-1 完整日報`，徹底杜絕氣泡在 0 軸平躺的假同步問題。
 - **Momentum Horizon Aggregator & Decision Board (動能時間窗多日累計引擎與聰明錢決策看板)**:
   - 核心機制：將靜態技術膠囊升級為「動能時間窗 (1D/3D/5D)」切換鈕。透過 `chipsAggregator.ts` 引擎累計歷史多日法人買賣超，過濾隔日沖雜訊；上方嵌入【🧭 聰明錢動態決策快報】，即時展示「🟢 法人聯手搶買榜 (可以買)」與「🔴 主力大舉提款榜 (一定要閃)」，輔助投資人 3 秒內完成決策。
+
+### 台美雙市場全量籌碼零遺漏、雙軌原子合流與真實 20D CMF 入庫防禦 *(新增於 V8.39.0 / ADR #0120)*
+
+- **Proxy Route Precedence & Prefix Shadowing Immunity (代理路由順序與防前綴遮蔽)**:
+  - 核心痛點：Vite Proxy 路由若將短前綴 `'/api/twse'` 置於長前綴 `'/api/twse-www'` 前方，上市大盤日報請求會被短前綴攔截改寫為 `-www/...` 打往 OpenAPI 報 404 (nginx)，導致上市資料 100% 遺失且降級死鎖。
+  - 防禦機制：強制將長前綴 `'/api/twse-www'` 宣告於前面，確保 TWSE 上市大盤 1,300+ 檔日報正確直達證交所官方伺服器。
+- **Dual-Market Dual-Sentinel Compliance (上市櫃雙龍頭哨兵互補檢驗體系)**:
+  - 核心定義：`isInstitutionalReportComplete` 升級為雙龍頭互補哨兵。除全市場總檔數需 $\ge 1,800$ 檔、前 50 大活躍法人買賣超非零外，強制要求上市龍頭台積電 (`2330`) 與上櫃龍頭群聯 (`8299`) 同時具備完整買賣超數據，杜絕單邊市場缺失。
+- **Atomic All-or-Nothing Chips Pipeline (台股雙軌原子合流管線)**:
+  - 核心機制：在 `fetchCombinedTwseAndTpex` 中實施全有或全無原子合併。TWSE 與 TPEx 任一市場請求失敗或未達雙哨兵門檻，視為當日結算尚未完備，絕不將單邊殘缺日報寫入本地快取，徹底杜絕半殘污染。
+  - 具備指數退避重試之 `fetchWithRetry`（最大 3 次重試，遇 404 狀態立即中斷）。
+- **Cache Wash & Self-Healing (歷史快取自癒洗滌)**:
+  - 核心機制：讀取本地歷史快取時套用雙哨兵檢驗。一旦偵測出歷史快取存在僅有單邊市場的殘缺紀錄，自動標記無效並自遠端全量重新抓取覆蓋，具備自動升級與自癒能力。
+- **US Real Candles & True 20D CMF Pipeline (美股真實日 K 與真實 20D CMF 數據庫)**:
+  - 核心定義：徹底拔除過去使用 `Array.from({ length: 20 })` 進行常態分佈虛擬模擬美股日 K 與 CMF 的暫代代碼。
+  - 核心機制：`fetchUsMarketRealData` 對接官方 Yahoo Finance API 抓取真實 3 個月日 K（OHLCV），存入 IndexedDB `ohlcvStore`，以真實收盤價、最高價、最低價與成交量精確計算真實 20D CMF 與滾動時序 flow。
+- **Dual-Market Health HUD & Full Re-sync (雙市場健康指標看板與全量重步)**:
+  - 核心機制：籌碼工作區頂部提供台股（TWSE+TPEx 總檔數、更新日期）與美股（持倉標的 CMF 狀態、K線涵蓋期）之獨立健康徽章，並提供「🔄 雙市場全量重新同步」按鈕，支援使用者手動觸發強制洗滌快取與全量回補。
+

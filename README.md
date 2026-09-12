@@ -3,13 +3,28 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-761%2F761%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-767%2F767%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 台美雙市場全量籌碼零遺漏、雙軌原子合流與真實 20D CMF 入庫防禦 (`Dual-Market Smart Money Zero-Loss, Atomic Chips Pipeline & Real 20D CMF`) *(V8.39.0 全新升級)*
+- **Vite Proxy 路由優先權修正與防前綴遮蔽 (`vite.config.ts`)**：
+  - **根除 404 斷層痛點**：將 `'/api/twse-www'` 宣告明確置於 `'/api/twse'` 前方，徹底消除 Prefix Shadowing。上市大盤三大法人日報請求不再被誤導向 OpenAPI，100% 穩定取得證交所官方 1,300+ 檔日報（200 OK）。
+- **上市櫃雙龍頭哨兵與台股雙軌原子合流 (`smartMoneyFetcher.ts`)**：
+  - **雙哨兵互補檢驗**：升級 `isInstitutionalReportComplete`，強制同時校驗上市龍頭台積電 (`2330`) 與上櫃龍頭群聯 (`8299`)、全市場深度總檔數 $\ge 1,800$ 檔及活躍成交張數非零，嚴格阻絕單邊殘缺。
+  - **原子合流 (All-or-Nothing)**：上市 (TWSE) 與上櫃 (TPEx) 任一市場拉取失敗或未發布齊全，視為未完成日報，嚴禁單邊寫入快取。
+  - **指數退避重試**：實作 `fetchWithRetry`（最大 3 次重試，遇到 404 立即快速失敗），兼顧高彈性與高效率。
+- **歷史快取自動洗滌與自癒機制 (Cache Wash)**：
+  - 本地讀取歷史快取時全面套用雙哨兵校驗。若舊快取因先前斷層僅存單邊市場（如僅 894 檔），系統自動標記無效並自遠端全量重新抓取覆蓋，具備自動升級與自癒能力。
+- **美股真實 3 個月日 K 入庫與真實 20D CMF 計算 (`smartMoneyFetcher.ts` & `ChipsWorkspace.tsx`)**：
+  - **徹底拔除虛擬模擬假象**：廢除美股持倉與市場焦點中所有 `Array.from({ length: 20 })` 模擬代碼，全面捍衛投資人決策依據的 100% 真實性。
+  - **IndexedDB 真實日 K 持久化**：對接 Yahoo Finance 官方 Chart API 獲取真實 3 個月日 K（OHLCV），快取至 IndexedDB `ohlcvStore`，由真實成交量與量價關係計算出精準的 20 日 CMF 資金流量指標。
+- **雙市場獨立健康指標 HUD 與一鍵全量重步 (`ChipsWorkspace.tsx`)**：
+  - 頂部工具列提供台股與美股獨立狀態徽章（TWSE+TPEx 總檔數、更新日期、美股真實 CMF 狀態），並提供「🔄 雙市場全量重新同步」按鈕，支援隨時手動洗滌快取與強制同步。
 
 ### 0. 質押借貸還款繳息按鈕整併、籌碼日報多維哨兵優雅降級與聰明錢動能雷達優化 (`Unified Pledge Repayment, Institutional Chips Multi-tier Sentinel & Smart Money Momentum Dashboard`) *(V8.38.0 全新升級)*
 - **質押借貸「還款/繳息」按鈕單一化與一鍵快捷帶入 (`CashLedgerWorkspace.tsx`)**：
