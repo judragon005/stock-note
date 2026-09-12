@@ -4,7 +4,7 @@ import { AccountingMethod, ACCOUNTING_METHOD_LABELS } from '../types/lot';
 import { ReceivableDividend } from '../types/dividend';
 import { calculateHoldingFxBreakdown } from '../engine/fxBreakdown';
 import { formatTimelineDividend, formatTimelineReduction } from '../utils/formatters';
-import { Edit2, Check, ChevronDown, ChevronRight, Calendar, Lock, Unlock, RefreshCw, PlusCircle, Layers, Target, Clock, Sparkles, Activity } from 'lucide-react';
+import { Edit2, Check, ChevronDown, ChevronRight, Calendar, Lock, Unlock, RefreshCw, PlusCircle, Layers, Target, Clock, Sparkles, Activity, FileSpreadsheet } from 'lucide-react';
 import { Tooltip } from './common/Tooltip';
 import { LotsBreakdownModal } from './LotsBreakdownModal';
 import { calculateHoldingPeriodMetrics } from '../engine/holdingPeriodEngine';
@@ -27,6 +27,7 @@ interface HoldingsTableProps {
   onInspectSecurityXirr?: (symbol: string) => void;
   onOpenReconciliation?: () => void;
   onOpenOmniInspector?: (symbol: string, market: MarketType) => void;
+  onOpenFinancialForensic?: (symbol: string, market: MarketType, companyName?: string) => void;
   receivableDividends?: ReceivableDividend[];
   usdToTwdRate?: number;
 }
@@ -183,6 +184,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   onInspectSecurityXirr,
   onOpenReconciliation,
   onOpenOmniInspector,
+  onOpenFinancialForensic,
   receivableDividends = [],
   usdToTwdRate = 32.0,
 }) => {
@@ -1179,6 +1181,32 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                                 >
                                   <Activity size={13} />
                                   <span>📊 全指標透視</span>
+                                </button>
+                              )}
+
+                              {onOpenFinancialForensic && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onOpenFinancialForensic(item.symbol, item.market, item.name);
+                                  }}
+                                  style={{
+                                    background: 'rgba(16, 185, 129, 0.18)',
+                                    border: '1px solid rgba(16, 185, 129, 0.4)',
+                                    color: '#6ee7b7',
+                                    borderRadius: '6px',
+                                    padding: '4px 10px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                  }}
+                                  title="開啟穿透式財報深度戰情室與防雷鑑識"
+                                >
+                                  <FileSpreadsheet size={13} />
+                                  <span>📊 財報穿透</span>
                                 </button>
                               )}
                             </div>

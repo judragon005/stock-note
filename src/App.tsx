@@ -59,6 +59,7 @@ import { BrokerAccountsModal } from './components/BrokerAccountsModal';
 import { FrictionCenterModal } from './components/FrictionCenterModal';
 import { XirrDetailModal } from './components/XirrDetailModal';
 import { OmniTechnicalInspectorModal } from './components/OmniTechnicalInspectorModal';
+import { FinancialForensicModal } from './components/financial/FinancialForensicModal';
 import { MarginStressModal } from './components/MarginStressModal';
 import { WorkspaceTabs, WorkspaceTabKey } from './components/WorkspaceTabs';
 import { WarRoomWorkspace } from './components/WarRoomWorkspace';
@@ -216,6 +217,28 @@ export const App: React.FC = () => {
       isOpen: true,
       symbol,
       market,
+    });
+  }, []);
+
+  // 穿透式財報深度戰情室彈窗狀態
+  const [financialForensicState, setFinancialForensicState] = useState<{
+    isOpen: boolean;
+    symbol: string;
+    market: MarketType;
+    companyName: string;
+  }>({
+    isOpen: false,
+    symbol: '2330',
+    market: 'TW',
+    companyName: '台積電',
+  });
+
+  const handleOpenFinancialForensic = useCallback((symbol: string, market: MarketType, companyName?: string) => {
+    setFinancialForensicState({
+      isOpen: true,
+      symbol,
+      market,
+      companyName: companyName || symbol,
     });
   }, []);
 
@@ -796,6 +819,7 @@ export const App: React.FC = () => {
             usdToTwdRate={usdToTwdRate}
             onOpenReconciliation={() => setIsReconciliationOpen(true)}
             onOpenOmniInspector={handleOpenOmniInspector}
+            onOpenFinancialForensic={handleOpenFinancialForensic}
           />
         </>
       )}
@@ -1026,6 +1050,17 @@ export const App: React.FC = () => {
         initialSymbol={omniModalState.symbol}
         initialMarket={omniModalState.market}
         holdings={holdings}
+      />
+
+      {/* 穿透式財報深度戰情室與防雷鑑識彈窗 */}
+      <FinancialForensicModal
+        isOpen={financialForensicState.isOpen}
+        onClose={() => setFinancialForensicState((prev) => ({ ...prev, isOpen: false }))}
+        symbol={financialForensicState.symbol}
+        market={financialForensicState.market}
+        companyName={financialForensicState.companyName}
+        fmpApiKey={apiKeys.fmpApiKey}
+        finmindToken={apiKeys.finmindToken}
       />
     </div>
   );

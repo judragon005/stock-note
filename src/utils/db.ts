@@ -15,9 +15,10 @@ import {
 import { logger } from './logger';
 import { getStockDictionaryStats } from '../engine/stockNameResolver';
 import { SymbolOhlcvStore, SymbolIndicatorsStore } from '../types/indicators';
+import type { QuarterlyFinancialRecord } from '../types/financialForensic';
 
 export const DB_NAME = 'StockTrackerDB';
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 export type StoreName =
   | 'trades'
@@ -31,7 +32,8 @@ export type StoreName =
   | 'settings'
   | 'corporateActions'
   | 'historicalOhlcv'
-  | 'technicalIndicators';
+  | 'technicalIndicators'
+  | 'financialStatements';
 
 
 export interface SystemSnapshotPayload {
@@ -122,6 +124,10 @@ export function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains('technicalIndicators')) {
         db.createObjectStore('technicalIndicators', { keyPath: 'symbol' });
+      }
+      if (!db.objectStoreNames.contains('financialStatements')) {
+        const fsStore = db.createObjectStore('financialStatements', { keyPath: 'id' });
+        fsStore.createIndex('by_symbol', 'symbol', { unique: false });
       }
     };
 
@@ -1191,6 +1197,66 @@ export async function clearOhlcvAndIndicatorsCache(): Promise<void> {
     await dbClear('technicalIndicators');
   }
 }
+
+/**
+ * 財務報表儲存包裝實體 (含唯一主鍵 id)
+ */
+export interface StoredFinancialRecordItem extends QuarterlyFinancialRecord {
+  id: string; // 複合鍵: `${symbol}_${year}_Q${quarter}`
+}
+
+/**
+ * 批次儲存季度財務報表數據（支援冪等寫入，自動建立複合主鍵）
+ */
+export async function saveFinancialRecords(records: QuarterlyFinancialRecord[]): Promise<void> {
+  if (!records || records.length === 0) return;
+  const items: StoredFinancialRecordItem[] = records.map((rec) => ({
+    ...rec,
+    id: `${rec.symbol.toUpperCase()}_${rec.year}_Q${rec.quarter}`,
+  }));
+  return dbBatchPut('financialStatements', items);
+}
+
+/**
+ * 讀取特定標的的所有歷史季度財務報表（按年份與季度降序排列，最新在最前）
+ */
+export async function getStoredFinancialRecords(symbol: string): Promise<QuarterlyFinancialRecord[]> {
+  if (!symbol) return [];
+  const cleanSymbol = symbol.trim().toUpperCase();
+  const allRecords = await dbGetAll<StoredFinancialRecordItem>('financialStatements');
+  const filtered = allRecords.filter((r) => r.symbol.toUpperCase() === cleanSymbol);
+
+  // 排序：由新到舊 (Year 降序, Quarter 降序)
+  return filtered.sort((a, b) => {
+    if (a.year !== b.year) {
+      return b.year - a.year;
+    }
+    return b.quarter - a.quarter;
+  });
+}
+
+/**
+ * 安全清除財務報表快取（可指定標的代碼）
+ */
+export async function clearFinancialRecordsCache(symbol?: string): Promise<void> {
+  if (typeof indexedDB === 'undefined') return;
+
+  if (!symbol) {
+    await dbClear('financialStatements');
+    return;
+  }
+
+  const cleanSymbol = symbol.trim().toUpperCase();
+  const allRecords = await dbGetAll<StoredFinancialRecordItem>('financialStatements');
+  const targetIds = allRecords
+    .filter((r) => r.symbol.toUpperCase() === cleanSymbol)
+    .map((r) => r.id);
+
+  for (const id of targetIds) {
+    await dbDelete('financialStatements', id);
+  }
+}
+
 
 
 
