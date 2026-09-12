@@ -1583,5 +1583,13 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **IndexedDB Multi-Tier Cache Pipeline (本地優先快取管線)**:
   - 升級資料庫至 Version 4，建立 `financialStatements` store (主鍵 `${symbol}_${year}_Q${quarter}`，索引 `by_symbol`)。按需載入（On-Demand），命中本地快取時 0ms 呈現且永不重複請求歷史季度。
 
+### 穿透式財報深度戰情室浮動彈窗樣式修復與原生化架構 *(新增於 V8.42.1 / Spec #0124 / Issue #45)*
+
+- **Native Inline Style & High Z-Index Modal (原生內聯樣式與高層級置中彈窗)**:
+  - 徹底移除財報穿透彈窗與子圖層誤用之無效 Tailwind classes，全面遷移至專案標準之原生 Inline Styles 與 CSS Variables。
+  - 遮罩層固定為 `position: fixed; inset: 0; zIndex: 9999; backdropFilter: blur(8px)`，確保點擊持股時間軸按鈕時能立即於螢幕正中央浮現深色毛玻璃彈窗，杜絕 Modal 落入 DOM 頁尾導致「按鍵無反應」之缺陷。
+  - 深度兼容單元測試與各市場色彩主題（台灣紅漲綠跌 / 國際綠漲紅跌），保留輔助函式公開介面，達成 TypeScript 0 報錯與全量單元測試 100% 綠燈。
+
+
 
 
