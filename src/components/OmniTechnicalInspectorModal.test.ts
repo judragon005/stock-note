@@ -20,4 +20,11 @@ describe('OmniTechnicalInspectorModal - 輔助邏輯與評估測試', () => {
     expect(getCurrency('TW')).toBe('NT$');
     expect(getCurrency('US')).toBe('$');
   });
+
+  it('實戰作戰地圖階梯距離百分比格式化驗證', () => {
+    const formatDistance = (dist: number) => `${dist >= 0 ? '+' : ''}${dist}%`;
+    expect(formatDistance(1.64)).toBe('+1.64%');
+    expect(formatDistance(-2.15)).toBe('-2.15%');
+    expect(formatDistance(0)).toBe('+0%');
+  });
 });

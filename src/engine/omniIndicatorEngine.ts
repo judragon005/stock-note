@@ -7,6 +7,12 @@ import {
   SupportResistanceLevels,
   TechnicalConfluence,
   OmniIndicatorReport,
+  MarketRegime,
+  KeyLevelCluster,
+  KeyLevelClusters,
+  DivergenceSignal,
+  PriceActionTrapSignal,
+  ActionableTradeMatrix,
 } from '../types/omniIndicator';
 import {
   calculateMovingAverages,
@@ -28,7 +34,6 @@ export function calculateRSI(closes: number[], period = 14): number | undefined 
     return undefined;
   }
 
-  // 1. 初次平均上漲與下跌幅度
   let sumGain = 0;
   let sumLoss = 0;
 
@@ -44,7 +49,6 @@ export function calculateRSI(closes: number[], period = 14): number | undefined 
   let avgGain = sumGain / period;
   let avgLoss = sumLoss / period;
 
-  // 2. Wilder Smoothing 平滑迭代後續數據
   for (let i = period + 1; i < closes.length; i++) {
     const diff = closes[i] - closes[i - 1];
     const gain = diff > 0 ? diff : 0;
@@ -96,11 +100,9 @@ export function calculateDmiAdx(
     const prevH = highs[i - 1];
     const prevL = lows[i - 1];
 
-    // True Range
     const tr = Math.max(h - l, Math.abs(h - prevC), Math.abs(l - prevC));
     trs.push(tr);
 
-    // Directional Movement
     const upMove = h - prevH;
     const downMove = prevL - l;
 
@@ -121,54 +123,58 @@ export function calculateDmiAdx(
     return undefined;
   }
 
-  // 初次平滑
-  let smoothTR = trs.slice(0, period).reduce((a, b) => a + b, 0);
-  let smoothPlusDM = plusDMs.slice(0, period).reduce((a, b) => a + b, 0);
-  let smoothMinusDM = minusDMs.slice(0, period).reduce((a, b) => a + b, 0);
+  let smoothedTR = trs.slice(0, period).reduce((a, b) => a + b, 0);
+  let smoothedPlusDM = plusDMs.slice(0, period).reduce((a, b) => a + b, 0);
+  let smoothedMinusDM = minusDMs.slice(0, period).reduce((a, b) => a + b, 0);
 
-  const dxHistory: number[] = [];
+  const dxList: number[] = [];
 
   for (let i = period; i < trs.length; i++) {
-    smoothTR = smoothTR - smoothTR / period + trs[i];
-    smoothPlusDM = smoothPlusDM - smoothPlusDM / period + plusDMs[i];
-    smoothMinusDM = smoothMinusDM - smoothMinusDM / period + minusDMs[i];
+    smoothedTR = smoothedTR - smoothedTR / period + trs[i];
+    smoothedPlusDM = smoothedPlusDM - smoothedPlusDM / period + plusDMs[i];
+    smoothedMinusDM = smoothedMinusDM - smoothedMinusDM / period + minusDMs[i];
 
-    const pdi = smoothTR > 0 ? (smoothPlusDM / smoothTR) * 100 : 0;
-    const mdi = smoothTR > 0 ? (smoothMinusDM / smoothTR) * 100 : 0;
-    const sum = pdi + mdi;
-    const dx = sum > 0 ? (Math.abs(pdi - mdi) / sum) * 100 : 0;
-    dxHistory.push(dx);
+    const pdi = smoothedTR === 0 ? 0 : (smoothedPlusDM / smoothedTR) * 100;
+    const mdi = smoothedTR === 0 ? 0 : (smoothedMinusDM / smoothedTR) * 100;
+    const diDiff = Math.abs(pdi - mdi);
+    const diSum = pdi + mdi;
+    const dx = diSum === 0 ? 0 : (diDiff / diSum) * 100;
+    dxList.push(dx);
   }
 
-  const pdi = smoothTR > 0 ? Math.round((smoothPlusDM / smoothTR) * 10000) / 100 : 0;
-  const mdi = smoothTR > 0 ? Math.round((smoothMinusDM / smoothTR) * 10000) / 100 : 0;
+  const finalPdi = smoothedTR === 0 ? 0 : Math.round(((smoothedPlusDM / smoothedTR) * 100) * 100) / 100;
+  const finalMdi = smoothedTR === 0 ? 0 : Math.round(((smoothedMinusDM / smoothedTR) * 100) * 100) / 100;
 
-  // ADX 是 DX 的平滑
   let adx = 20;
-  if (dxHistory.length > 0) {
-    const adxSlice = dxHistory.slice(-period);
-    adx = Math.round((adxSlice.reduce((a, b) => a + b, 0) / adxSlice.length) * 100) / 100;
+  if (dxList.length >= period) {
+    let adxSum = dxList.slice(0, period).reduce((a, b) => a + b, 0) / period;
+    for (let i = period; i < dxList.length; i++) {
+      adxSum = (adxSum * (period - 1) + dxList[i]) / period;
+    }
+    adx = Math.round(adxSum * 100) / 100;
+  } else if (dxList.length > 0) {
+    adx = Math.round((dxList.reduce((a, b) => a + b, 0) / dxList.length) * 100) / 100;
   }
 
   let trendDirection: 'BULLISH' | 'BEARISH' | 'RANGE' = 'RANGE';
   if (adx >= 20) {
-    if (pdi > mdi) {
+    if (finalPdi > finalMdi) {
       trendDirection = 'BULLISH';
-    } else if (mdi > pdi) {
+    } else if (finalMdi > finalPdi) {
       trendDirection = 'BEARISH';
     }
   }
 
   return {
-    pdi,
-    mdi,
+    pdi: finalPdi,
+    mdi: finalMdi,
     adx,
     trendDirection,
   };
 }
 
 /**
- * 3. 計算 CCI 順勢指標 (Commodity Channel Index, 週期 N=20)
+ * 3. 計算 CCI 順勢指標 (Commodity Channel Index)
  */
 export function calculateCCI(
   highs: number[],
@@ -177,7 +183,7 @@ export function calculateCCI(
   period = 20
 ): number | undefined {
   const len = closes.length;
-  if (!highs || !lows || !closes || len < period) {
+  if (!highs || !lows || !closes || len < period || highs.length !== len || lows.length !== len) {
     return undefined;
   }
 
@@ -186,23 +192,26 @@ export function calculateCCI(
     tps.push((highs[i] + lows[i] + closes[i]) / 3);
   }
 
-  const recentTps = tps.slice(-period);
-  const currentTp = recentTps[recentTps.length - 1];
-  const smaTp = recentTps.reduce((a, b) => a + b, 0) / period;
+  const currentWindow = tps.slice(-period);
+  const smaTP = currentWindow.reduce((a, b) => a + b, 0) / period;
 
-  const meanDeviation =
-    recentTps.reduce((acc, val) => acc + Math.abs(val - smaTp), 0) / period;
+  let meanDev = 0;
+  for (let i = 0; i < period; i++) {
+    meanDev += Math.abs(currentWindow[i] - smaTP);
+  }
+  meanDev = meanDev / period;
 
-  if (meanDeviation === 0) {
+  if (meanDev === 0) {
     return 0;
   }
 
-  const cci = (currentTp - smaTp) / (0.015 * meanDeviation);
+  const currentTP = tps[tps.length - 1];
+  const cci = (currentTP - smaTP) / (0.015 * meanDev);
   return Math.round(cci * 100) / 100;
 }
 
 /**
- * 4. 計算 Williams %R 威廉指標 (週期 N=14)
+ * 4. 計算 Williams %R (威廉指標)
  */
 export function calculateWilliamsR(
   highs: number[],
@@ -211,7 +220,7 @@ export function calculateWilliamsR(
   period = 14
 ): number | undefined {
   const len = closes.length;
-  if (!highs || !lows || !closes || len < period) {
+  if (!highs || !lows || !closes || len < period || highs.length !== len || lows.length !== len) {
     return undefined;
   }
 
@@ -231,7 +240,7 @@ export function calculateWilliamsR(
 }
 
 /**
- * 5. 計算 OBV 能量潮累積與近期趨勢
+ * 5. 計算 OBV 能量潮指標
  */
 export function calculateOBV(
   closes: number[],
@@ -240,78 +249,73 @@ export function calculateOBV(
   current: number;
   trend: 'RISING' | 'FALLING' | 'FLAT';
 } {
-  if (!closes || !volumes || closes.length === 0 || volumes.length === 0) {
+  if (!closes || !volumes || closes.length === 0 || closes.length !== volumes.length) {
     return { current: 0, trend: 'FLAT' };
   }
 
-  let obv = volumes[0] || 0;
-  const history: number[] = [obv];
+  const obvValues: number[] = [volumes[0]];
 
   for (let i = 1; i < closes.length; i++) {
-    const currentPrice = closes[i];
-    const prevPrice = closes[i - 1];
-    const vol = volumes[i] || 0;
+    const prevObv = obvValues[i - 1];
+    const c = closes[i];
+    const prevC = closes[i - 1];
+    const v = volumes[i];
 
-    if (currentPrice > prevPrice) {
-      obv += vol;
-    } else if (currentPrice < prevPrice) {
-      obv -= vol;
+    if (c > prevC) {
+      obvValues.push(prevObv + v);
+    } else if (c < prevC) {
+      obvValues.push(prevObv - v);
+    } else {
+      obvValues.push(prevObv);
     }
-    history.push(obv);
   }
 
+  const current = obvValues[obvValues.length - 1];
   let trend: 'RISING' | 'FALLING' | 'FLAT' = 'FLAT';
-  if (history.length >= 2) {
-    const lookback = history.slice(-Math.min(5, history.length));
-    const start = lookback[0];
-    const end = lookback[lookback.length - 1];
-    if (end > start) {
-      trend = 'RISING';
-    } else if (end < start) {
-      trend = 'FALLING';
-    }
+  if (obvValues.length >= 2) {
+    const recent = obvValues.length >= 10 ? obvValues.slice(-10) : obvValues;
+    const obvDiff = recent[recent.length - 1] - recent[0];
+    if (obvDiff > 0) trend = 'RISING';
+    else if (obvDiff < 0) trend = 'FALLING';
   }
 
   return {
-    current: obv,
+    current,
     trend,
   };
 }
 
 /**
- * 6. 計算斐波那契回撤黃金比例位階 (Fibonacci Retracement)
+ * 6. 計算費波那契回撤 (Fibonacci Retracement)
  */
-export function calculateFibonacciLevels(
-  highs: number[],
-  lows: number[]
-): SupportResistanceLevels['fibonacci'] {
-  const high = highs && highs.length > 0 ? Math.max(...highs) : 0;
-  const low = lows && lows.length > 0 ? Math.min(...lows) : 0;
-  const diff = high - low;
+export function calculateFibonacciLevels(highs: number[], lows: number[]) {
+  if (!highs || !lows || highs.length === 0 || lows.length === 0) {
+    return { high: 0, low: 0, fib236: 0, fib382: 0, fib500: 0, fib618: 0, fib786: 0 };
+  }
+
+  const high = Math.max(...highs);
+  const low = Math.min(...lows);
+  const range = high - low;
 
   return {
-    high,
-    low,
-    fib236: Math.round((high - diff * 0.236) * 100) / 100,
-    fib382: Math.round((high - diff * 0.382) * 100) / 100,
-    fib500: Math.round((high - diff * 0.5) * 100) / 100,
-    fib618: Math.round((high - diff * 0.618) * 100) / 100,
-    fib786: Math.round((high - diff * 0.786) * 100) / 100,
+    high: Math.round(high * 100) / 100,
+    low: Math.round(low * 100) / 100,
+    fib236: Math.round((high - range * 0.236) * 100) / 100,
+    fib382: Math.round((high - range * 0.382) * 100) / 100,
+    fib500: Math.round((high - range * 0.5) * 100) / 100,
+    fib618: Math.round((high - range * 0.618) * 100) / 100,
+    fib786: Math.round((high - range * 0.786) * 100) / 100,
   };
 }
 
 /**
- * 7. 計算經典樞紐點 (Standard Pivot Points)
+ * 7. 計算經典樞紐點 (Pivot Points Classic)
  */
-export function calculatePivotPoints(
-  high: number,
-  low: number,
-  close: number
-): SupportResistanceLevels['pivotPoints'] {
+export function calculatePivotPoints(high: number, low: number, close: number) {
   const pivot = Math.round(((high + low + close) / 3) * 100) / 100;
   const r1 = Math.round((2 * pivot - low) * 100) / 100;
-  const s1 = Math.round((2 * pivot - high) * 100) / 100;
   const r2 = Math.round((pivot + (high - low)) * 100) / 100;
+  const s1 = Math.round((2 * pivot - high) * 100) / 100;
   const s2 = Math.round((pivot - (high - low)) * 100) / 100;
 
   return {
@@ -324,9 +328,288 @@ export function calculatePivotPoints(
 }
 
 /**
- * 8. 多空共振量化評估 (Technical Confluence Scoring Engine)
+ * 8. 市場狀態機 (Market Regime Evaluator)
+ */
+export function evaluateMarketRegime(params: {
+  adx?: number;
+  pdi?: number;
+  mdi?: number;
+  bandwidthPercent?: number;
+  maAlignment?: 'BULLISH' | 'BEARISH' | 'ENTANGLED';
+}): { regime: MarketRegime; label: string; description: string } {
+  const { adx = 0, pdi = 0, mdi = 0, bandwidthPercent = 10, maAlignment = 'ENTANGLED' } = params;
+
+  // 1. 布林通道極致收斂：變盤在即 (Squeeze)
+  if (bandwidthPercent <= 8.0) {
+    return {
+      regime: 'VOLATILITY_SQUEEZE',
+      label: '⚡ 變盤在即 (Squeeze)',
+      description: `布林帶寬僅 ${bandwidthPercent.toFixed(2)}%，波動率極致壓縮，預示即將迎來單向噴出或突破大變盤。`,
+    };
+  }
+
+  // 2. 強趨勢行情 (Trending)
+  if (adx >= 25) {
+    if (pdi > mdi && maAlignment === 'BULLISH') {
+      return {
+        regime: 'TRENDING_BULL',
+        label: '🚀 強多主升 (Trending Bull)',
+        description: `ADX 達 ${adx.toFixed(1)}，多方動能 (+DI ${pdi.toFixed(1)}) 明確主導，均線多頭排列。`,
+      };
+    }
+    if (mdi > pdi && maAlignment === 'BEARISH') {
+      return {
+        regime: 'TRENDING_BEAR',
+        label: '🔻 空頭主跌 (Trending Bear)',
+        description: `ADX 達 ${adx.toFixed(1)}，空方動能 (-DI ${mdi.toFixed(1)}) 強烈壓制，處於主跌波段。`,
+      };
+    }
+  }
+
+  // 3. 無趨勢橫盤整理 (Choppy Range)
+  if (adx < 20) {
+    return {
+      regime: 'CHOPPY_RANGE',
+      label: '〰️ 無趨勢盤整 (Choppy Range)',
+      description: `ADX 僅 ${adx.toFixed(1)} (< 20)，缺乏方向動能，短線均線交纏，此時趨勢指標容易頻繁鈍化失真。`,
+    };
+  }
+
+  return {
+    regime: 'CHOPPY_RANGE',
+    label: '⚖️ 震盪拉鋸 (Consolidation)',
+    description: '多空力道互有勝負，建議以區間箱體或支撐壓力操作為宜。',
+  };
+}
+
+/**
+ * 9. 關鍵價位密集聚集演算法 (Key Level Proximity Clustering)
+ */
+export function calculateKeyLevelClusters(params: {
+  currentPrice: number;
+  darvasBox?: { upper: number; lower: number };
+  bollinger?: { upper: number; mid: number; lower: number };
+  pivotPoints?: { pivot: number; r1: number; r2: number; s1: number; s2: number };
+  fibonacci?: { fib236: number; fib382: number; fib500: number; fib618: number };
+  trailingDefensePrice?: number;
+}): KeyLevelClusters {
+  const { currentPrice, darvasBox, bollinger, pivotPoints, fibonacci, trailingDefensePrice } = params;
+
+  interface RawLevel {
+    price: number;
+    source: string;
+  }
+
+  const rawLevels: RawLevel[] = [];
+
+  if (darvasBox) {
+    if (darvasBox.upper > 0) rawLevels.push({ price: darvasBox.upper, source: `箱頂 ${darvasBox.upper}` });
+    if (darvasBox.lower > 0) rawLevels.push({ price: darvasBox.lower, source: `箱底 ${darvasBox.lower}` });
+  }
+
+  if (bollinger) {
+    if (bollinger.upper > 0) rawLevels.push({ price: bollinger.upper, source: `布林上軌 ${bollinger.upper}` });
+    if (bollinger.mid > 0) rawLevels.push({ price: bollinger.mid, source: `布林中軌 ${bollinger.mid}` });
+    if (bollinger.lower > 0) rawLevels.push({ price: bollinger.lower, source: `布林下軌 ${bollinger.lower}` });
+  }
+
+  if (pivotPoints) {
+    if (pivotPoints.r1 > 0) rawLevels.push({ price: pivotPoints.r1, source: `Pivot R1 ${pivotPoints.r1}` });
+    if (pivotPoints.r2 > 0) rawLevels.push({ price: pivotPoints.r2, source: `Pivot R2 ${pivotPoints.r2}` });
+    if (pivotPoints.pivot > 0) rawLevels.push({ price: pivotPoints.pivot, source: `樞紐中軸 ${pivotPoints.pivot}` });
+    if (pivotPoints.s1 > 0) rawLevels.push({ price: pivotPoints.s1, source: `Pivot S1 ${pivotPoints.s1}` });
+    if (pivotPoints.s2 > 0) rawLevels.push({ price: pivotPoints.s2, source: `Pivot S2 ${pivotPoints.s2}` });
+  }
+
+  if (fibonacci) {
+    if (fibonacci.fib236 > 0) rawLevels.push({ price: fibonacci.fib236, source: `Fib 0.236 (${fibonacci.fib236})` });
+    if (fibonacci.fib382 > 0) rawLevels.push({ price: fibonacci.fib382, source: `Fib 0.382 (${fibonacci.fib382})` });
+    if (fibonacci.fib500 > 0) rawLevels.push({ price: fibonacci.fib500, source: `Fib 0.500 (${fibonacci.fib500})` });
+    if (fibonacci.fib618 > 0) rawLevels.push({ price: fibonacci.fib618, source: `Fib 0.618 (${fibonacci.fib618})` });
+  }
+
+  if (trailingDefensePrice && trailingDefensePrice > 0) {
+    rawLevels.push({ price: trailingDefensePrice, source: `ATR吊燈防守 ${trailingDefensePrice}` });
+  }
+
+  // 區分上方阻力與下方支撐
+  const resistances = rawLevels
+    .filter((l) => l.price >= currentPrice)
+    .sort((a, b) => a.price - b.price);
+
+  const supports = rawLevels
+    .filter((l) => l.price < currentPrice)
+    .sort((a, b) => b.price - a.price);
+
+  // 聚類相距在 1.5% 內的相鄰價位
+  function clusterPoints(levels: RawLevel[]): KeyLevelCluster[] {
+    if (levels.length === 0) return [];
+    const clusters: KeyLevelCluster[] = [];
+    let currentGroup: RawLevel[] = [levels[0]];
+
+    for (let i = 1; i < levels.length; i++) {
+      const prev = currentGroup[currentGroup.length - 1];
+      const curr = levels[i];
+      const distanceRatio = Math.abs(curr.price - prev.price) / prev.price;
+      if (distanceRatio <= 0.015) {
+        currentGroup.push(curr);
+      } else {
+        const prices = currentGroup.map((g) => g.price);
+        const minP = Math.min(...prices);
+        const maxP = Math.max(...prices);
+        const avgP = Math.round((prices.reduce((a, b) => a + b, 0) / prices.length) * 100) / 100;
+        const distPct = currentPrice > 0 ? Math.round(((avgP - currentPrice) / currentPrice) * 10000) / 100 : 0;
+        const sources = currentGroup.map((g) => g.source);
+        clusters.push({
+          price: avgP,
+          spanStart: minP,
+          spanEnd: maxP,
+          label: sources.join(' + '),
+          distancePercent: distPct,
+          sources,
+        });
+        currentGroup = [curr];
+      }
+    }
+
+    if (currentGroup.length > 0) {
+      const prices = currentGroup.map((g) => g.price);
+      const minP = Math.min(...prices);
+      const maxP = Math.max(...prices);
+      const avgP = Math.round((prices.reduce((a, b) => a + b, 0) / prices.length) * 100) / 100;
+      const distPct = currentPrice > 0 ? Math.round(((avgP - currentPrice) / currentPrice) * 10000) / 100 : 0;
+      const sources = currentGroup.map((g) => g.source);
+      clusters.push({
+        price: avgP,
+        spanStart: minP,
+        spanEnd: maxP,
+        label: sources.join(' + '),
+        distancePercent: distPct,
+        sources,
+      });
+    }
+
+    return clusters;
+  }
+
+  const resClusters = clusterPoints(resistances);
+  const supClusters = clusterPoints(supports);
+
+  return {
+    primaryResistance: resClusters[0],
+    secondaryResistance: resClusters[1] || resClusters[0],
+    shortTermDefense: supClusters[0],
+    structuralDefense: supClusters[supClusters.length - 1] || supClusters[0],
+  };
+}
+
+/**
+ * 10. 背離偵測純函式 (Divergence Detector)
+ */
+export function detectDivergence(
+  closes: number[],
+  indicatorSeries: number[]
+): DivergenceSignal {
+  if (!closes || !indicatorSeries || closes.length < 8 || closes.length !== indicatorSeries.length) {
+    return { hasBearishDivergence: false, hasBullishDivergence: false };
+  }
+
+  // 尋找局部波峰 (Swing Highs)
+  const peakIndices: number[] = [];
+  for (let i = 1; i < closes.length - 1; i++) {
+    if (closes[i] >= closes[i - 1] && closes[i] >= closes[i + 1]) {
+      peakIndices.push(i);
+    }
+  }
+
+  let hasBearishDivergence = false;
+  let hasBullishDivergence = false;
+  let description: string | undefined = undefined;
+
+  if (peakIndices.length >= 2) {
+    const p1 = peakIndices[peakIndices.length - 2];
+    const p2 = peakIndices[peakIndices.length - 1];
+
+    if (closes[p2] > closes[p1] && indicatorSeries[p2] < indicatorSeries[p1]) {
+      hasBearishDivergence = true;
+      description = `偵測到頂背離：股價二度創高 (${closes[p1]} ➔ ${closes[p2]})，但動能指標高點走低，顯示主力買盤力竭或倒貨跡象。`;
+    }
+  }
+
+  // 尋找局部波谷 (Swing Lows)
+  const troughIndices: number[] = [];
+  for (let i = 1; i < closes.length - 1; i++) {
+    if (closes[i] <= closes[i - 1] && closes[i] <= closes[i + 1]) {
+      troughIndices.push(i);
+    }
+  }
+
+  if (troughIndices.length >= 2) {
+    const t1 = troughIndices[troughIndices.length - 2];
+    const t2 = troughIndices[troughIndices.length - 1];
+
+    if (closes[t2] < closes[t1] && indicatorSeries[t2] > indicatorSeries[t1]) {
+      hasBullishDivergence = true;
+      description = `偵測到底背離：股價破底但動能指標率先抬頭，潛在反轉築底訊號。`;
+    }
+  }
+
+  return {
+    hasBearishDivergence,
+    hasBullishDivergence,
+    description,
+  };
+}
+
+/**
+ * 11. 價格行為假突破誘多偵測 (Price Action Trap Detector)
+ */
+export function detectPriceActionTraps(params: {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  resistanceLevel?: number;
+  supportLevel?: number;
+}): PriceActionTrapSignal {
+  const { open, high, low, close, resistanceLevel, supportLevel } = params;
+
+  const body = Math.abs(close - open);
+  const upperShadow = high - Math.max(open, close);
+  const lowerShadow = Math.min(open, close) - low;
+
+  let hasBullTrap = false;
+  let hasBearTrap = false;
+  let description: string | undefined = undefined;
+
+  // 假突破：衝過阻力但收盤壓回，且上影線顯著長於實體 (墓碑線/射擊之星)
+  if (resistanceLevel && high >= resistanceLevel && close <= resistanceLevel * 1.005) {
+    if (upperShadow >= body * 1.5 || close < open) {
+      hasBullTrap = true;
+      description = `壓力位 (${resistanceLevel}) 出現長上影線墓碑倒錘，盤中突破無效收盤壓回，為典型誘多假突破 (Bull Trap)。`;
+    }
+  }
+
+  // 假跌破：摜破支撐但收盤拉回長下影線 (破底翻錘子線)
+  if (supportLevel && low <= supportLevel && close >= supportLevel * 0.995) {
+    if (lowerShadow >= body * 1.5 && close > open) {
+      hasBearTrap = true;
+      description = `支撐位 (${supportLevel}) 留下長下影線破底翻，空方摜壓失敗，買盤積極承接。`;
+    }
+  }
+
+  return {
+    hasBullTrap,
+    hasBearTrap,
+    description,
+  };
+}
+
+/**
+ * 12. 多空共振量化評估 (Technical Confluence Scoring Engine) - 升級版大腦
  */
 export interface ConfluenceInputParams {
+  currentPrice?: number;
   maAlignment?: 'BULLISH' | 'BEARISH' | 'ENTANGLED';
   isAboveMa20?: boolean;
   isMacdHistPositive?: boolean;
@@ -336,47 +619,77 @@ export interface ConfluenceInputParams {
   boxStatus?: 'BREAKOUT_UP' | 'BREAKOUT_DOWN' | 'INSIDE_BOX';
   isVolumeSurgeBullish?: boolean;
   obvTrend?: 'RISING' | 'FALLING' | 'FLAT';
+  adx?: number;
+  pdi?: number;
+  mdi?: number;
+  bandwidthPercent?: number;
+  darvasBox?: { upper: number; lower: number };
+  bollinger?: { upper: number; mid: number; lower: number };
+  pivotPoints?: { pivot: number; r1: number; r2: number; s1: number; s2: number };
+  fibonacci?: { fib236: number; fib382: number; fib500: number; fib618: number };
+  trailingDefensePrice?: number;
+  closes?: number[];
+  chipsContext?: {
+    institutional5DayNetBuy?: number;
+    majorHoldersDiffPercent?: number;
+  };
 }
 
 export function calculateTechnicalConfluence(params: ConfluenceInputParams): TechnicalConfluence {
+  const currentPrice = params.currentPrice ?? 10;
   let score = 50; // 基底中性分數
   const primarySignals: string[] = [];
   let riskAlert: string | undefined = undefined;
 
-  // 1. 趨勢維度 (權重 35%)
+  // 1. 市場狀態機評估
+  const regimeInfo = evaluateMarketRegime({
+    adx: params.adx,
+    pdi: params.pdi,
+    mdi: params.mdi,
+    bandwidthPercent: params.bandwidthPercent,
+    maAlignment: params.maAlignment,
+  });
+
+  // 2. 趨勢維度 (權重 35%) - 帶有無趨勢盤整鈍化折扣
+  const isChoppy = typeof params.adx === 'number' && params.adx < 20;
+  const trendMultiplier = isChoppy ? 0.4 : 1.0;
+
   if (params.maAlignment === 'BULLISH') {
-    score += 15;
+    score += Math.round(15 * trendMultiplier);
     primarySignals.push('多天期均線呈多頭排列');
   } else if (params.maAlignment === 'BEARISH') {
-    score -= 15;
+    score -= Math.round(15 * trendMultiplier);
     primarySignals.push('多天期均線呈空頭排列');
   }
 
   if (params.isAboveMa20) {
-    score += 10;
+    score += Math.round(10 * trendMultiplier);
     primarySignals.push('股價穩站 20 日月線之上');
   } else if (params.isAboveMa20 === false) {
-    score -= 10;
+    score -= Math.round(10 * trendMultiplier);
     primarySignals.push('跌破 20 日月線支撐防線');
   }
 
   if (params.isMacdHistPositive) {
-    score += 10;
+    score += Math.round(10 * trendMultiplier);
     primarySignals.push('MACD 柱狀體維持紅柱擴張');
   } else if (params.isMacdHistPositive === false) {
-    score -= 10;
+    score -= Math.round(10 * trendMultiplier);
     primarySignals.push('MACD 柱狀體翻綠偏空');
   }
 
-  // 2. 動能維度 (權重 25%)
+  // 3. 動能維度 (權重 25%)
   if (typeof params.rsi14 === 'number') {
     if (params.rsi14 >= 55 && params.rsi14 <= 75) {
       score += 10;
       primarySignals.push(`RSI(14) 位於強勢攻擊區 (${params.rsi14})`);
-    } else if (params.rsi14 > 80) {
+    } else if (params.rsi14 > 75) {
       score += 5;
-      riskAlert = 'RSI 極度超買，正乖離過大，慎防短線獲利回吐拉回';
-    } else if (params.rsi14 <= 35) {
+      riskAlert = 'RSI(14) 進入極端超買區 (>75)，慎防短線正乖離過大拉回';
+    } else if (params.rsi14 <= 45 && params.rsi14 >= 25) {
+      score -= 5;
+      primarySignals.push(`RSI(14) 處於偏弱弱勢區 (${params.rsi14})`);
+    } else if (params.rsi14 < 25) {
       score -= 10;
       primarySignals.push(`RSI(14) 弱勢探底 (${params.rsi14})`);
     }
@@ -398,7 +711,7 @@ export function calculateTechnicalConfluence(params: ConfluenceInputParams): Tec
     }
   }
 
-  // 3. 型態與支撐 (權重 20%)
+  // 4. 型態與支撐 (權重 20%)
   if (params.boxStatus === 'BREAKOUT_UP') {
     score += 10;
     primarySignals.push('強勢突破近 60 日 Darvas 箱頂防線');
@@ -408,7 +721,7 @@ export function calculateTechnicalConfluence(params: ConfluenceInputParams): Tec
     riskAlert = '關鍵防守破位，首要執行停損保全資金紀律';
   }
 
-  // 4. 量能資金 (權重 20%)
+  // 5. 量能資金 (權重 20%)
   if (params.isVolumeSurgeBullish) {
     score += 10;
     primarySignals.push('出量突破，大戶買盤進駐');
@@ -422,7 +735,36 @@ export function calculateTechnicalConfluence(params: ConfluenceInputParams): Tec
     primarySignals.push('OBV 資金持續淨流出');
   }
 
-  // 嚴密邊界約束 0 ~ 100
+  // 6. 多空矛盾懲罰機制 (Contradiction Penalty)
+  let contradictionPenaltyApplied = false;
+  if (
+    params.maAlignment === 'BULLISH' &&
+    typeof params.pdi === 'number' &&
+    typeof params.mdi === 'number' &&
+    params.mdi > params.pdi
+  ) {
+    // 均線多排但空方動能 > 多方動能，且無趨勢盤整
+    contradictionPenaltyApplied = true;
+    score -= 20;
+    primarySignals.push(`多空矛盾警戒：均線排列偏多但空方動能 (-DI ${params.mdi.toFixed(1)}) 壓制多方 (+DI ${params.pdi.toFixed(1)})`);
+    riskAlert = '均線多頭與實質動能存在背離矛盾，極易遭遇箱頂假突破或震盪折返';
+    // 強制封頂於 58 分 (NEUTRAL)
+    score = Math.min(score, 58);
+  }
+
+  // 7. 籌碼背離交叉校驗 (Smart Money Confluence)
+  let chipsContradiction = false;
+  if (params.chipsContext) {
+    const net5d = params.chipsContext.institutional5DayNetBuy ?? 0;
+    if (score >= 60 && net5d < -1000) {
+      chipsContradiction = true;
+      score -= 10;
+      primarySignals.push(`籌碼背離：技術面偏多但主力近5日淨賣出 ${Math.abs(net5d)} 張`);
+      riskAlert = (riskAlert ? riskAlert + '；' : '') + '籌碼面警訊：外資主力近期呈現逢高出貨，慎防主力拉高倒貨';
+    }
+  }
+
+  // 邊界約束 0 ~ 100
   score = Math.max(0, Math.min(100, Math.round(score)));
 
   let rating: TechnicalConfluence['rating'] = 'NEUTRAL';
@@ -442,17 +784,87 @@ export function calculateTechnicalConfluence(params: ConfluenceInputParams): Tec
     actionAdvice = '技術面偏弱修正，上方套牢壓力沉重，宜降低持股水位保守應對。';
   }
 
+  // 8. 關鍵位密集聚集 (Clusters)
+  const clusters = calculateKeyLevelClusters({
+    currentPrice,
+    darvasBox: params.darvasBox,
+    bollinger: params.bollinger,
+    pivotPoints: params.pivotPoints,
+    fibonacci: params.fibonacci,
+    trailingDefensePrice: params.trailingDefensePrice,
+  });
+
+  // 9. 實戰交易階梯矩陣 (Actionable Trade Matrix)
+  const primaryResPrice = clusters.primaryResistance?.price ?? (currentPrice * 1.03);
+  const secondaryResPrice = clusters.secondaryResistance?.price ?? (currentPrice * 1.06);
+  const shortDefensePrice = clusters.shortTermDefense?.price ?? (params.trailingDefensePrice ?? currentPrice * 0.97);
+  const structDefensePrice = clusters.structuralDefense?.price ?? (params.darvasBox?.lower ?? currentPrice * 0.95);
+
+  const actionMatrix: ActionableTradeMatrix = {
+    primaryResistanceZone: {
+      price: Math.round(primaryResPrice * 100) / 100,
+      label: clusters.primaryResistance?.label ?? '近期關鍵壓力帶',
+      distancePercent: Math.round(((primaryResPrice - currentPrice) / currentPrice) * 10000) / 100,
+    },
+    expansionTargetZone: {
+      price: Math.round(secondaryResPrice * 100) / 100,
+      label: clusters.secondaryResistance?.label ?? '波段突破加碼目標',
+      distancePercent: Math.round(((secondaryResPrice - currentPrice) / currentPrice) * 10000) / 100,
+    },
+    shortTermDefenseLine: {
+      price: Math.round(shortDefensePrice * 100) / 100,
+      label: clusters.shortTermDefense?.label ?? 'ATR吊燈 / 20MA 動態防守',
+      distancePercent: Math.round(((shortDefensePrice - currentPrice) / currentPrice) * 10000) / 100,
+    },
+    structuralInvalidationLine: {
+      price: Math.round(structDefensePrice * 100) / 100,
+      label: clusters.structuralDefense?.label ?? '結構底線 (箱底防守)',
+      distancePercent: Math.round(((structDefensePrice - currentPrice) / currentPrice) * 10000) / 100,
+    },
+  };
+
+  // 10. 背離與價格行為偵測
+  const divergence: DivergenceSignal = {
+    hasBearishDivergence: false,
+    hasBullishDivergence: false,
+  };
+  const priceActionTrap: PriceActionTrapSignal = {
+    hasBullTrap: false,
+    hasBearTrap: false,
+  };
+
+  // 11. 大白話 0 秒操盤語錄 (oneSentenceBottomLine)
+  let oneSentenceBottomLine = `多空共振評定為 ${rating} (${score}分)。`;
+  if (regimeInfo.regime === 'VOLATILITY_SQUEEZE') {
+    oneSentenceBottomLine = `帶寬極度收斂進入變盤期，上方臨近 ${actionMatrix.primaryResistanceZone.price} 重壓，未帶量突破前切勿追價，短線防守設於 ${actionMatrix.shortTermDefenseLine.price}。`;
+  } else if (contradictionPenaltyApplied) {
+    oneSentenceBottomLine = `均線與動能存在背離矛盾，目前處於箱體震盪內部，上方第一壓力為 ${actionMatrix.primaryResistanceZone.price}，建議逢高分批減碼。`;
+  } else if (score >= 80) {
+    oneSentenceBottomLine = `強勢多頭主升段！以 ${actionMatrix.shortTermDefenseLine.price} 為動態移動停利防守線，突破 ${actionMatrix.primaryResistanceZone.price} 可順勢續抱。`;
+  } else if (score <= 30) {
+    oneSentenceBottomLine = `空方主導格局，已跌破重要支撐，建議嚴格以 ${actionMatrix.structuralInvalidationLine.price} 為最後底線落實停損保全資金。`;
+  }
+
   return {
     score,
     rating,
+    marketRegime: regimeInfo.regime,
+    regimeLabel: regimeInfo.label,
+    oneSentenceBottomLine,
+    contradictionPenaltyApplied,
     primarySignals,
     actionAdvice,
     riskAlert,
+    clusters,
+    actionMatrix,
+    divergence,
+    priceActionTrap,
+    chipsContradiction,
   };
 }
 
 /**
- * 9. 個股全指標綜合運算純函式 (Compute Omni Indicators)
+ * 13. 個股全指標綜合運算純函式 (Compute Omni Indicators) - 整合版
  */
 export function computeOmniIndicators(params: {
   symbol: string;
@@ -461,8 +873,12 @@ export function computeOmniIndicators(params: {
   candles: DailyCandle[];
   currentPrice: number;
   previousClose?: number;
+  chipsContext?: {
+    institutional5DayNetBuy?: number;
+    majorHoldersDiffPercent?: number;
+  };
 }): OmniIndicatorReport {
-  const { symbol, name, market, candles, currentPrice, previousClose } = params;
+  const { symbol, name, market, candles, currentPrice, previousClose, chipsContext } = params;
 
   const closes = candles.map((c) => c.close);
   const highs = candles.map((c) => c.high);
@@ -550,7 +966,7 @@ export function computeOmniIndicators(params: {
     williamsR14,
   };
 
-  // 3. 波動通道
+  // 3. 波動通道與真實波幅
   const bb = calculateBollingerSqueeze(candles);
   const atrDefense = calculateAtrTrailingDefense(candles);
   const bias20Percent = ma.ma20 ? Math.round(((currentPrice - ma.ma20) / ma.ma20) * 10000) / 100 : 0;
@@ -597,7 +1013,12 @@ export function computeOmniIndicators(params: {
   // 5. 關鍵支撐壓力
   const box = detectDarvasBox(candles);
   const fib = calculateFibonacciLevels(highs.slice(-60), lows.slice(-60));
-  const lastCandle = candles[candles.length - 1] || { high: currentPrice, low: currentPrice, close: currentPrice };
+  const lastCandle = candles[candles.length - 1] || {
+    open: currentPrice,
+    high: currentPrice,
+    low: currentPrice,
+    close: currentPrice,
+  };
   const pivot = calculatePivotPoints(lastCandle.high, lastCandle.low, lastCandle.close);
 
   const levels: SupportResistanceLevels = {
@@ -610,12 +1031,13 @@ export function computeOmniIndicators(params: {
     pivotPoints: pivot,
   };
 
-  // 6. 多空共振評分
+  // 6. 多空共振評分 (升級版)
   const isAboveMa20 = ma.ma20 ? currentPrice >= ma.ma20 : undefined;
   const isMacdHistPositive = typeof macdRaw.macdHist === 'number' ? macdRaw.macdHist >= 0 : undefined;
   const isVolumeSurgeBullish = volumeFlow.isSurge && (previousClose ? currentPrice > previousClose : true);
 
   const confluence = calculateTechnicalConfluence({
+    currentPrice,
     maAlignment,
     isAboveMa20,
     isMacdHistPositive,
@@ -625,7 +1047,35 @@ export function computeOmniIndicators(params: {
     boxStatus: box.boxStatus,
     isVolumeSurgeBullish,
     obvTrend: obv.trend,
+    adx: dmiAdx?.adx,
+    pdi: dmiAdx?.pdi,
+    mdi: dmiAdx?.mdi,
+    bandwidthPercent: bb.bandwidth,
+    darvasBox: { upper: box.boxUpper ?? currentPrice, lower: box.boxLower ?? currentPrice },
+    bollinger: { upper: bb.upper, mid: bb.mid, lower: bb.lower },
+    pivotPoints: pivot,
+    fibonacci: fib,
+    trailingDefensePrice: atrDefense.trailingDefensePrice,
+    closes,
+    chipsContext,
   });
+
+  // 補足背離與價格行為
+  if (closes.length >= 10 && rsi14 !== undefined) {
+    const rsiValues = closes.map((_, i) => calculateRSI(closes.slice(0, i + 1), 14) ?? 50);
+    confluence.divergence = detectDivergence(closes, rsiValues);
+  }
+
+  if (lastCandle) {
+    confluence.priceActionTrap = detectPriceActionTraps({
+      open: lastCandle.open ?? currentPrice,
+      high: lastCandle.high,
+      low: lastCandle.low,
+      close: lastCandle.close,
+      resistanceLevel: confluence.actionMatrix.primaryResistanceZone.price,
+      supportLevel: confluence.actionMatrix.shortTermDefenseLine.price,
+    });
+  }
 
   const dailyChange = previousClose ? Math.round((currentPrice - previousClose) * 100) / 100 : undefined;
   const dailyChangePercent =
