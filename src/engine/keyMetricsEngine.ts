@@ -308,8 +308,9 @@ export function calculateDcfValuation(
     pvSum += pv;
   }
 
-  // 永續價值 (Terminal Value)
-  const terminalVal = (runningFcf * (1 + gn)) / (r - gn);
+  // 永續價值 (Terminal Value) - 防禦 r - gn <= 0 之極限情況
+  const denominator = Math.max(0.005, r - gn);
+  const terminalVal = (runningFcf * (1 + gn)) / denominator;
   const pvTerminal = terminalVal / Math.pow(1 + r, 5);
 
   const totalEnterpriseValue = pvSum + pvTerminal;

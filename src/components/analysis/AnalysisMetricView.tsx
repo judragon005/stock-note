@@ -626,7 +626,13 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
                 max="0.15"
                 step="0.005"
                 value={dcfWacc}
-                onChange={(e) => setDcfWacc(parseFloat(e.target.value))}
+                onChange={(e) => {
+                  const nextWacc = parseFloat(e.target.value);
+                  setDcfWacc(nextWacc);
+                  if (dcfGrowth >= nextWacc - 0.01) {
+                    setDcfGrowth(Number(Math.max(0.01, nextWacc - 0.01).toFixed(3)));
+                  }
+                }}
                 style={{ width: '100%', cursor: 'pointer' }}
               />
             </div>
@@ -639,7 +645,7 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
               <input
                 type="range"
                 min="0.01"
-                max="0.04"
+                max={Math.max(0.01, Math.min(0.05, Number((dcfWacc - 0.01).toFixed(3))))}
                 step="0.005"
                 value={dcfGrowth}
                 onChange={(e) => setDcfGrowth(parseFloat(e.target.value))}
@@ -655,13 +661,19 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
         <div style={{ background: 'var(--bg-secondary)', padding: '24px', borderRadius: '12px', textAlign: 'center' }}>
           <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>戈登股利折現合理價 (DDM Fair Value)</span>
           <div style={{ fontSize: '32px', fontWeight: 900, color: 'var(--text-primary)', margin: '8px 0' }}>
-            {ddmRes.fairValue} 元
+            {ddmRes.fairValue > 0 ? `${ddmRes.fairValue} 元` : '不適用'}
           </div>
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '400px', margin: '0 auto' }}>
-            以連續穩定發放之現金股利推估內在價值。評定為：
-            <strong style={{ color: ddmRes.assessment === 'UNDERVALUED' ? '#10b981' : '#f59e0b', marginLeft: '4px' }}>
-              {ddmRes.assessment === 'UNDERVALUED' ? '具投資安全邊際 (低估)' : '評價合理'}
-            </strong>
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '440px', margin: '0 auto', lineHeight: 1.6 }}>
+            {ddmRes.fairValue > 0 ? (
+              <>
+                以連續穩定發放之現金股利推估內在價值。評定為：
+                <strong style={{ color: ddmRes.assessment === 'UNDERVALUED' ? '#10b981' : '#f59e0b', marginLeft: '4px' }}>
+                  {ddmRes.assessment === 'UNDERVALUED' ? '具投資安全邊際 (低估)' : '評價合理'}
+                </strong>
+              </>
+            ) : (
+              '本標的暫無歷史現金配息紀錄（或屬於不配息之高速擴張成長股），建議切換至彼得林區 PEG 或 DCF 現金流折現模型進行估值。'
+            )}
           </p>
         </div>
       )}
