@@ -284,6 +284,33 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0102: V8.21.0 肌肉書僮動能雷達任意代碼即時外部回補診斷與自訂觀察清單架構](docs/adr/0102-muscle-booker-adhoc-scanner-and-custom-watchlist.md)
 - [ADR-0115: V8.34.0 ETF 穿透透視、交易心理覆盤與跨券商持倉對賬審計](docs/adr/0115-etf-look-through-behavioral-audit-and-reconciliation.md)
 - [ADR-0116: V8.35.0 Web Crypto 敏感金鑰加密、CORS 代理零憑證防洩漏與 CSV DDE 公式注入防禦](docs/adr/0116-web-crypto-cors-guard-and-csv-dde-sanitization.md)
+- [ADR-0127: V8.45.0 股票健診系統純運算診斷引擎、穿透報告與專屬工作區架構](docs/adr/0127-stock-health-check-diagnosis-engine-and-workspace.md)
+- [ADR-0128: V8.45.1 股票健診系統原生毛玻璃擬態、ETF防呆與標的快捷膠囊全面重構](docs/adr/0128-stock-health-check-ux-redesign-and-glassmorphism.md)
+
+### 股票健診系統原生毛玻璃擬態、ETF智慧防呆與標的快捷膠囊 (Stock Health Check & Native Glassmorphism) *(新增於 V8.45.1)*
+- **原生 Glassmorphism 擬態與排版防禦**：
+  - 徹底根除無效 Tailwind Utility Classes，全面改採專案原生 CSS 變數 (`var(--bg-card)`, `var(--border-color)`, `var(--text-primary)`) 與 Inline Styles。
+  - 儀表板指針 SVG 錨定 ViewBox (`0 0 200 135`) 與旋轉原點，徹底杜絕巨大黑三角遮擋畫面。
+  - 穿透報告彈窗 (`HealthReportModal`) 全面採用深黑遮罩與高斯模糊，高對比綠勾與紅叉呈現，支援 `ESC` 鍵全域監聽與滾動鎖定。
+- **ETF 智慧識別防呆橫幅 (Amber Warning Guard)**：
+  - 建立 `isEtfSymbol` 引擎，精準辨識台股 `00...`（含 `00403A` 等混合編號）與美股大盤 ETF。
+  - 當前選中標的為 ETF 時，卡片頂部浮現琥珀色警示橫幅，明確解釋 ETF 為一籃子資產組合、無一般企業財報，並附上一鍵切換至權值個股之快捷按鈕。
+  - 預設標的優先智慧錨定在庫持倉普通股，庫存全為 ETF 時安全錨定熱門股 `2330`。
+- **Stock Pills 快捷標的膠囊列 (Quick Navigation Pills)**：
+  - Header 下方橫向滾動膠囊列整合持倉個股與 6 大熱門權值標的（2330 台積電、2454 聯發科、2317 鴻海、NVDA、AAPL、IBM）。
+  - 內建 `seen` Set 嚴格雙重去重機制，選中標的高光深藍發光顯示，實現一秒切換標的。
+- **說明橫幅開合狀態記憶 (Banner State Persistence)**：
+  - 頂部科技海軍藍漸層橫幅支援展開與收起，狀態即時同步至 `localStorage`。
+
+### 股票健診系統純運算診斷引擎、穿透報告與專屬工作區 (Stock Health Check Diagnosis Engine & Dedicated Workspace) *(新增於 V8.45.0)*
+- **4 大核心幫手與 21 項量化指標純函式引擎 (`stockHealthDiagnosis.ts`)**：
+  - 排除地雷股健診 (6 項指標)：5 年 FCF 自由現金流、CFO/淨利真實度比、應收帳款天數 (DSO) 與存貨天數 (DIO) 同期比較。
+  - 定存股健診 (5 項指標)：近 1 年殖利率、近 5 年平均殖利率、連續 5 年配息紀錄與股息發放率。
+  - 成長股健診 (4 項指標)：最新一季毛利、營業利益、稅前淨利、稅後淨利 YoY 年增率。
+  - 便宜股健診 (6 項指標)：5 年本益比分位數、PB 分位數與歷史中位數回測。
+- **金融股智能豁免機制 (Financial Industry Auto-Exemption)**：
+  - 自動偵測金融控股業，智慧豁免製造業專屬之 DSO 與 DIO 指標，動態重算分母，杜絕誤判。
+
 
 ### 肌肉書僮動能雷達任意代碼即時外部回補診斷與自訂觀察清單 (Ad-hoc Scanner & Custom Watchlist) *(新增於 V8.21.0)*
 - **任意代碼即搜即算 (Ad-hoc Search & Fetch Pipeline)**：
@@ -1616,6 +1643,26 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 核心機制：`isQuarterRecordComplete` 自動過濾尚未申報完整季報（無淨利與資產負債）的自結空殼季度（如 26Q2）。將 0 秒戰報、四大體質卡片、杜邦分析嚴格錨定於「最新完整申報季」，並在頂部明確標記【審計基準季：YYYY-QX】，徹底消滅 `0.0%`、`負債比 -`、`CFO 0 億` 等假陽性真空。
 - **Broker-Grade Glassmorphism Skeleton & Fade-In Gate (券商級深色毛玻璃骨架屏與延遲淡入門禁)**:
   - 核心體驗：資料同步或解析期間，維持版面結構固定（Zero-CLS）的深色毛玻璃骨架屏，嚴禁未完備數據提前渲染；待三大報表 100% 聚合驗證完成後，以 0.2 秒平滑淡入（Fade-In）點亮呈現，達成券商級沉浸式操作體驗。
+
+### 股票健診系統診斷引擎、穿透報告與專屬工作區 *(新增於 V8.45.0 / Spec #0127 / Issue #55)*
+
+- **Stock Health Diagnosis Engine (股票健診純運算引擎)**:
+  - 核心定義：純函式 (`computeStockHealthDiagnosis`)，輸入 20 季財務報表、歷史股利與即時報價，100% 本地端即時計算，無任何外部網路連線依賴與狀態副作用。
+- **Four Core Health Check Dimensions (四大核心健診幫手與 21 項指標)**:
+  - **排除地雷股健診 (Safe Guard - 6 項)**：5 年自由現金流 (FCF) 至少 3 年 $>0$、5 年平均 FCF $>0$、CFO/淨利比 3 年 $>100\%$、5 年平均 $>100\%$、最新一季應收帳款天數 (DSO) 與存貨天數 (DIO) 同期比對。
+  - **定存股健診 (Dividend Value - 5 項)**：近 1 年殖利率 $>6\%$、近 5 年平均殖利率 $>6\%$、連續 5 年配息、配息發放率 3 年 $>50\%$、5 年平均發放率 $>50\%$。
+  - **成長股健診 (Growth Momentum - 4 項)**：近一季毛利、營業利益、稅前利益、稅後淨利之年增率 (YoY) $>0\%$。
+  - **便宜股健診 (Cheap Valuation - 6 項)**：本益比 5 年區間最低 20% 分位、低於自身 5 年歷史中位數、PB 5 年最低 20% 分位、低於自身 5 年中位數、殖利率指標連動。
+- **Financial Industry Exemption (金融股自動豁免機制)**:
+  - 當標的產業類別為金融保險控股 (`industryAttribute === 'FINANCIALS'`) 時，系統自動豁免存貨週轉天數與應收帳款週轉天數兩項指標，總檢驗項目自動調整為 4 項，並據此計算公正通過率，杜絕金控股被誤判為地雷股之假陽性。
+- **Extensible 7-Slot Architecture (7 大插槽擴充架構)**:
+  - 預留 `SOLVENCY` (安全性)、`PROFITABILITY` (獲利能力) 與 `FREE_CASH_FLOW` (自由現金流) 三個額外插槽，利於後續迭代無痛啟用。
+- **Health Score Gauge & Forensic Modal (雙層圓環評分進度條與穿透報告彈窗)**:
+  - 動態 SVG 雙層圓環進度條，中央大字標註通過條件數（如 $4/6$）與百分比。
+  - 穿透式詳細報告彈窗提供對齊業界標準之高對比綠勾「✔ 通過」與紅叉「✖ 沒過」詳細指標檢驗清單與文字門檻說明。
+- **Dedicated Stock Health Workspace (專屬股票健診一級工作區)**:
+  - 系統一級導航整合，包含頂部藍色導航橫幅（可折疊關閉說明）、標的資訊與快速切換器、追蹤按鈕、雙欄卡片流，以及右側「深入了解」Q&A 導航側邊欄。
+
 
 
 
