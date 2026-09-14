@@ -7,6 +7,7 @@ import type {
   QuarterlyFinancialRecord,
 } from '../types/financialForensic';
 import { getStoredFinancialRecords, saveFinancialRecords } from '../utils/db';
+import { isFinancialRecordsCacheValid } from './financialCacheValidator';
 import { logger } from '../utils/logger';
 
 /**
@@ -75,6 +76,9 @@ export function parseUSFinancialStatements(
     const totalAssets = bItem.totalAssets || 0;
     const totalLiabilities = bItem.totalLiabilities || 0;
     const totalEquity = bItem.totalStockholdersEquity || (totalAssets - totalLiabilities);
+    const currentAssets = bItem.totalCurrentAssets !== undefined ? bItem.totalCurrentAssets : undefined;
+    const currentLiabilities = bItem.totalCurrentLiabilities !== undefined ? bItem.totalCurrentLiabilities : undefined;
+    const capitalStock = bItem.commonStock !== undefined ? bItem.commonStock : undefined;
     const accountsReceivable = bItem.netReceivables || 0;
     const inventory = bItem.inventory || 0;
     const cashAndEquivalents = bItem.cashAndCashEquivalents || 0;
@@ -85,6 +89,7 @@ export function parseUSFinancialStatements(
     const capitalExpenditure = Math.abs(cItem.capitalExpenditure || 0);
     const stockBasedCompensation = cItem.stockBasedCompensation || 0;
     const dividendPaid = Math.abs(cItem.dividendsPaid || 0);
+    const interestPaid = cItem.interestPaid !== undefined ? Math.abs(cItem.interestPaid) : undefined;
 
     results.push({
       symbol: symbol.toUpperCase(),
@@ -106,6 +111,9 @@ export function parseUSFinancialStatements(
         accountsReceivable,
         inventory,
         cashAndEquivalents,
+        currentAssets,
+        currentLiabilities,
+        capitalStock,
         shortTermDebt,
         longTermDebt,
       },
@@ -114,6 +122,7 @@ export function parseUSFinancialStatements(
         capitalExpenditure,
         stockBasedCompensation,
         dividendPaid,
+        interestPaid,
       },
       auditInfo: {
         opinionType: 'UNQUALIFIED',
@@ -136,18 +145,21 @@ export function parseUSFinancialStatements(
  */
 export async function fetchUSQuarterlyFinancials(
   symbol: string,
-  apiKey?: string
+  apiKey?: string,
+  forceRefresh: boolean = false
 ): Promise<QuarterlyFinancialRecord[]> {
   const cleanSymbol = symbol.trim().toUpperCase();
 
-  // 1. 快取優先查詢
-  try {
-    const cached = await getStoredFinancialRecords(cleanSymbol);
-    if (cached && cached.length > 0) {
-      return cached;
+  // 1. 快取優先查詢 (僅在非強制刷新且快取完整時使用)
+  if (!forceRefresh) {
+    try {
+      const cached = await getStoredFinancialRecords(cleanSymbol);
+      if (cached && cached.length > 0 && isFinancialRecordsCacheValid(cached)) {
+        return cached;
+      }
+    } catch {
+      // 忽略環境不支援 IndexedDB
     }
-  } catch {
-    // 忽略環境不支援 IndexedDB
   }
 
   // 2. 外部 API 請求

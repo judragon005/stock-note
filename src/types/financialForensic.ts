@@ -50,6 +50,9 @@ export interface QuarterlyFinancialRecord {
     accountsReceivable: number; // 應收帳款與票據
     inventory: number;          // 存貨
     cashAndEquivalents: number; // 現金與約當現金
+    currentAssets?: number;      // 流動資產 (選填)
+    currentLiabilities?: number; // 流動負債 (選填)
+    capitalStock?: number;       // 股本 (選填)
     shortTermDebt?: number;     // 短期借款 (選填)
     longTermDebt?: number;      // 長期有息負債 (選填)
   };
@@ -60,6 +63,7 @@ export interface QuarterlyFinancialRecord {
     capitalExpenditure: number; // 資本支出 (Capex)
     stockBasedCompensation?: number; // 美股股權激勵 (SBC, 選填)
     dividendPaid?: number;      // 支付之現金股利 (選填)
+    interestPaid?: number;      // 支付之利息 (選填)
   };
 
   // 審計查核資訊 (Auditor & KAM)

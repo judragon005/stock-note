@@ -7,6 +7,7 @@ import type {
   QuarterlyFinancialRecord,
 } from '../types/financialForensic';
 import { getStoredFinancialRecords, saveFinancialRecords } from '../utils/db';
+import { isFinancialRecordsCacheValid } from './financialCacheValidator';
 import { logger } from '../utils/logger';
 
 export interface FinmindFinancialItem {
@@ -103,7 +104,30 @@ export function parseTaiwanFinancialStatements(
     const totalLiabilities = rawLiab;
     const totalEquity = rawEquity;
 
+    const currentAssets =
+      values['CurrentAssets'] ||
+      values['流動資產'] ||
+      values['流動資產合計'] ||
+      values['流動資產總計'] ||
+      undefined;
+
+    const currentLiabilities =
+      values['CurrentLiabilities'] ||
+      values['流動負債'] ||
+      values['流動負債合計'] ||
+      values['流動負債總計'] ||
+      undefined;
+
+    const capitalStock =
+      values['CapitalStock'] ||
+      values['OrdinaryShare'] ||
+      values['股本'] ||
+      values['普通股股本'] ||
+      undefined;
+
     const accountsReceivable =
+      values['AccountsReceivableNet'] ||
+      values['BillsReceivableNet'] ||
       values['AccountsReceivable'] ||
       values['NotesAndAccountsReceivable'] ||
       values['應收帳款及票據'] ||
@@ -136,7 +160,7 @@ export function parseTaiwanFinancialStatements(
       values['營業活動之現金流量合計'] ||
       values['OperatingCashFlow'] ||
       0;
-    const capitalExpenditure =
+    const rawCapex =
       values['PropertyAndPlantAndEquipment'] ||
       values['CapitalExpenditures'] ||
       values['取得不動產、廠房及設備'] ||
@@ -144,8 +168,16 @@ export function parseTaiwanFinancialStatements(
       values['購置不動產、廠房及設備'] ||
       values['資本支出'] ||
       0;
+    const capitalExpenditure = Math.abs(rawCapex);
     const dividendPaid =
       values['CashDividendsPaid'] || values['發放現金股利'] || values['發放之現金股利'] || undefined;
+    const interestPaid =
+      values['PayTheInterest'] ||
+      values['InterestExpense'] ||
+      values['支付之利息'] ||
+      values['支付利息'] ||
+      values['利息費用'] ||
+      undefined;
 
     results.push({
       symbol: symbol.toUpperCase(),
@@ -167,6 +199,9 @@ export function parseTaiwanFinancialStatements(
         accountsReceivable,
         inventory,
         cashAndEquivalents,
+        currentAssets,
+        currentLiabilities,
+        capitalStock,
         shortTermDebt,
         longTermDebt,
       },
@@ -175,6 +210,7 @@ export function parseTaiwanFinancialStatements(
         capitalExpenditure,
         stockBasedCompensation: 0,
         dividendPaid,
+        interestPaid,
       },
       auditInfo: {
         opinionType: 'UNQUALIFIED',
@@ -197,19 +233,22 @@ export function parseTaiwanFinancialStatements(
  */
 export async function fetchTaiwanQuarterlyFinancials(
   symbol: string,
-  token?: string
+  token?: string,
+  forceRefresh: boolean = false
 ): Promise<QuarterlyFinancialRecord[]> {
   const cleanSymbol = symbol.trim().toUpperCase();
 
   let cached: QuarterlyFinancialRecord[] = [];
-  // 1. 快取優先查詢
-  try {
-    cached = (await getStoredFinancialRecords(cleanSymbol)) || [];
-    if (cached.length > 0) {
-      return cached;
+  // 1. 快取優先查詢 (僅在非強制刷新且快取完整時使用)
+  if (!forceRefresh) {
+    try {
+      cached = (await getStoredFinancialRecords(cleanSymbol)) || [];
+      if (cached.length > 0 && isFinancialRecordsCacheValid(cached)) {
+        return cached;
+      }
+    } catch {
+      // 忽略環境不支援 IndexedDB 的快取錯誤
     }
-  } catch {
-    // 忽略環境不支援 IndexedDB 的快取錯誤
   }
 
   // 2. 外部 API 並行請求三大報表 (綜合損益表、資產負債表、現金流量表)

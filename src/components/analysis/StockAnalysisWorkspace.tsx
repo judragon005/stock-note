@@ -248,7 +248,7 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
   }, [trades, selectedSymbol]);
 
   // 載入財報與公開股利數據
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (forceRefresh: boolean = false) => {
     setIsLoading(true);
     try {
       // 1. 同步取得上市公司真實歷年公開股利政策
@@ -264,7 +264,7 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
           ? divHistory.map((d) => ({ year: d.year, amount: d.cashDividend }))
           : annualDividends;
 
-      // 2. 獲取財務報表
+      // 2. 獲取財務報表 (支援 forceRefresh 強制重整自癒)
       const report = await loadOrFetchFinancialReport(
         selectedSymbol,
         market,
@@ -272,7 +272,7 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
         {
           fmpApiKey,
           finmindToken,
-          forceRefresh: false,
+          forceRefresh,
         }
       );
 
@@ -612,7 +612,7 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
 
           <button
             type="button"
-            onClick={loadData}
+            onClick={() => loadData(true)}
             disabled={isLoading}
             style={{
               padding: '7px 10px',
@@ -625,7 +625,7 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
               alignItems: 'center',
               justifyContent: 'center',
             }}
-            title="重新載入財報"
+            title="強制重新整理財報 (強制刷新快取)"
           >
             <RefreshCw
               size={15}

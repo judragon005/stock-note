@@ -207,7 +207,7 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
     const range = Math.max(1, maxVal - minVal);
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div style={{ display: 'flex', gap: '16px', justifyContent: 'flex-end', fontSize: '12px' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: series1.color, fontWeight: 700 }}>
             <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: series1.color }} />
@@ -224,8 +224,8 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
             display: 'flex',
             alignItems: 'flex-end',
             gap: '8px',
-            height: '210px',
-            paddingTop: '20px',
+            height: '230px',
+            paddingTop: '32px',
             borderBottom: '1px solid var(--border-color)',
             overflowX: 'auto',
           }}
@@ -233,8 +233,8 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
           {labels.map((lbl, idx) => {
             const v1 = series1.values[idx] || 0;
             const v2 = series2.values[idx] || 0;
-            const h1 = Math.min(100, Math.max(5, ((v1 - minVal) / range) * 100));
-            const h2 = Math.min(100, Math.max(5, ((v2 - minVal) / range) * 100));
+            const h1 = Math.min(100, Math.max(6, ((v1 - minVal) / range) * 100));
+            const h2 = Math.min(100, Math.max(6, ((v2 - minVal) / range) * 100));
 
             return (
               <div
@@ -243,12 +243,40 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  minWidth: '42px',
+                  minWidth: '46px',
                   flex: 1,
                   height: '100%',
                   justifyContent: 'flex-end',
                 }}
               >
+                {/* 柱頂數值雙標籤 */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px', marginBottom: '4px' }}>
+                  <span
+                    style={{
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      color: series1.color,
+                      fontFamily: 'var(--font-mono, monospace)',
+                      whiteSpace: 'nowrap',
+                      lineHeight: 1.1,
+                    }}
+                  >
+                    {v1.toFixed(1)}{unit}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      color: series2.color,
+                      fontFamily: 'var(--font-mono, monospace)',
+                      whiteSpace: 'nowrap',
+                      lineHeight: 1.1,
+                    }}
+                  >
+                    {v2.toFixed(1)}{unit}
+                  </span>
+                </div>
+
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', width: '100%', height: '100%' }}>
                   <div
                     style={{
@@ -275,6 +303,46 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
               </div>
             );
           })}
+        </div>
+
+        {/* 歷史季報數值明細對照表 */}
+        <div
+          style={{
+            marginTop: '8px',
+            background: 'var(--bg-secondary)',
+            borderRadius: '10px',
+            padding: '12px 14px',
+            border: '1px solid var(--border-color)',
+            overflowX: 'auto',
+          }}
+        >
+          <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+            歷史各季數值明細對照表：
+          </div>
+          <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse', textAlign: 'center', fontFamily: 'var(--font-mono, monospace)' }}>
+            <thead>
+              <tr style={{ color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-color)' }}>
+                <th style={{ padding: '4px 6px', textAlign: 'left', whiteSpace: 'nowrap' }}>科目指標</th>
+                {labels.map((lbl, i) => (
+                  <th key={i} style={{ padding: '4px 6px', minWidth: '44px', whiteSpace: 'nowrap' }}>{lbl}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr style={{ borderBottom: '1px dashed rgba(255,255,255,0.06)' }}>
+                <td style={{ padding: '4px 6px', textAlign: 'left', color: series1.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{series1.name}</td>
+                {series1.values.map((v, i) => (
+                  <td key={i} style={{ padding: '4px 6px', color: series1.color, fontWeight: 600 }}>{v.toFixed(1)}{unit}</td>
+                ))}
+              </tr>
+              <tr>
+                <td style={{ padding: '4px 6px', textAlign: 'left', color: series2.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{series2.name}</td>
+                {series2.values.map((v, i) => (
+                  <td key={i} style={{ padding: '4px 6px', color: series2.color, fontWeight: 600 }}>{v.toFixed(1)}{unit}</td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     );
@@ -361,14 +429,16 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
           <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 12px 0' }}>每股淨值 (BVPS) 20 季走勢</h3>
           {renderSimpleBars(
             chronological.map((r) => {
-              // 精確由 totalEquity 與股本計算每股淨值 (若無股本以台泥 75 億股或標準推算)
               const equity = r.balanceSheet?.totalEquity || 0;
-              // 台灣面額 10 元，若有 equity 且未提供股本，依據權益規模估算真實每股淨值
-              const bvps = equity > 0 ? Number((equity / 7531181742 * 10).toFixed(2)) : 0;
+              let shares = r.balanceSheet?.capitalStock ? r.balanceSheet.capitalStock / 10 : 0;
+              if (shares <= 0 && r.income?.eps && r.income.eps > 0 && r.income?.netIncome && r.income.netIncome > 0) {
+                shares = r.income.netIncome / r.income.eps;
+              }
+              const bvps = shares > 0 && equity > 0 ? Number((equity / shares).toFixed(2)) : 0;
               return {
                 label: `${r.year % 100}Q${r.quarter}`,
                 value: bvps > 0 ? bvps : Number((equity / 100000000).toFixed(1)),
-                displayValue: `${bvps > 0 ? bvps : (equity / 100000000).toFixed(1)}元`,
+                displayValue: bvps > 0 ? `${bvps}元` : `${(equity / 100000000).toFixed(1)}億(無股數)`,
               };
             }),
             '#10b981',
@@ -602,16 +672,27 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
             {
               name: 'ROE 股東權益報酬率',
               values: chronological.map((r) => {
-                const eq = r.balanceSheet?.totalEquity || 1;
-                return Number((((r.income?.netIncome || 0) * 4 / eq) * 100).toFixed(1));
+                let eq = r.balanceSheet?.totalEquity || 0;
+                if (eq <= 0 && r.balanceSheet?.totalAssets && r.balanceSheet?.totalLiabilities) {
+                  eq = Math.max(0, r.balanceSheet.totalAssets - r.balanceSheet.totalLiabilities);
+                }
+                if (eq <= 0) return 0;
+                const net = r.income?.netIncome || 0;
+                const roe = ((net * 4) / eq) * 100;
+                if (!isFinite(roe) || isNaN(roe)) return 0;
+                return Number(Math.max(-100, Math.min(200, roe)).toFixed(1));
               }),
               color: '#10b981',
             },
             {
               name: 'ROA 資產報酬率',
               values: chronological.map((r) => {
-                const as = r.balanceSheet?.totalAssets || 1;
-                return Number((((r.income?.netIncome || 0) * 4 / as) * 100).toFixed(1));
+                const as = r.balanceSheet?.totalAssets || 0;
+                if (as <= 0) return 0;
+                const net = r.income?.netIncome || 0;
+                const roa = ((net * 4) / as) * 100;
+                if (!isFinite(roa) || isNaN(roa)) return 0;
+                return Number(Math.max(-100, Math.min(100, roa)).toFixed(1));
               }),
               color: '#3b82f6',
             }
@@ -652,17 +733,17 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
             <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '10px' }}>
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>應收帳款週轉率</span>
               <div style={{ fontSize: '22px', fontWeight: 800, color: '#3b82f6', marginTop: '4px' }}>
-                {latestRecord?.balanceSheet?.accountsReceivable
-                  ? ((latestRecord.income.revenue / latestRecord.balanceSheet.accountsReceivable)).toFixed(1)
-                  : 4.5}次/年
+                {latestRecord?.balanceSheet?.accountsReceivable && latestRecord.balanceSheet.accountsReceivable > 0
+                  ? ((latestRecord.income.revenue / latestRecord.balanceSheet.accountsReceivable)).toFixed(1) + '次/年'
+                  : '暫無資料'}
               </div>
             </div>
             <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '10px' }}>
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>存貨週轉率</span>
               <div style={{ fontSize: '22px', fontWeight: 800, color: '#10b981', marginTop: '4px' }}>
-                {latestRecord?.balanceSheet?.inventory
-                  ? (((latestRecord.income.revenue - latestRecord.income.grossProfit) / latestRecord.balanceSheet.inventory)).toFixed(1)
-                  : 5.2}次/年
+                {latestRecord?.balanceSheet?.inventory && latestRecord.balanceSheet.inventory > 0
+                  ? (((latestRecord.income.revenue - latestRecord.income.grossProfit) / latestRecord.balanceSheet.inventory)).toFixed(1) + '次/年'
+                  : '暫無資料'}
               </div>
             </div>
           </div>
@@ -721,9 +802,12 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
           <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 12px 0' }}>財務結構比率 (負債比率走勢)</h3>
           {renderSimpleBars(
             chronological.map((r) => {
-              const as = r.balanceSheet?.totalAssets || 1;
-              const liab = r.balanceSheet?.totalLiabilities || 0;
-              const debtRatio = Number(((liab / as) * 100).toFixed(1));
+              const as = r.balanceSheet?.totalAssets || 0;
+              let liab = r.balanceSheet?.totalLiabilities || 0;
+              if (liab === 0 && as > 0 && (r.balanceSheet?.totalEquity || 0) > 0) {
+                liab = Math.max(0, as - (r.balanceSheet?.totalEquity || 0));
+              }
+              const debtRatio = as > 0 ? Number(((liab / as) * 100).toFixed(1)) : 0;
               return {
                 label: `${r.year % 100}Q${r.quarter}`,
                 value: debtRatio,
@@ -745,17 +829,26 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
             {
               name: '流動比率 (Current)',
               values: chronological.map((r) => {
-                const liab = r.balanceSheet?.totalLiabilities || 1;
-                return Number((((r.balanceSheet?.totalAssets || 0) * 0.4 / (liab * 0.35)) * 100).toFixed(0));
+                const curLiab = r.balanceSheet?.currentLiabilities || (r.balanceSheet?.totalLiabilities ? r.balanceSheet.totalLiabilities * 0.45 : 0);
+                const curAssets = r.balanceSheet?.currentAssets || (r.balanceSheet?.cashAndEquivalents || 0) + (r.balanceSheet?.accountsReceivable || 0) + (r.balanceSheet?.inventory || 0);
+                if (curLiab <= 0 || curAssets <= 0) return 0;
+                const ratio = (curAssets / curLiab) * 100;
+                if (!isFinite(ratio) || isNaN(ratio)) return 0;
+                return Number(Math.min(999, Math.max(0, ratio)).toFixed(0));
               }),
               color: '#3b82f6',
             },
             {
               name: '速動比率 (Quick)',
               values: chronological.map((r) => {
-                const liab = r.balanceSheet?.totalLiabilities || 1;
-                const quickAssets = (r.balanceSheet?.cashAndEquivalents || 0) + (r.balanceSheet?.accountsReceivable || 0);
-                return Number(((quickAssets / (liab * 0.35)) * 100).toFixed(0));
+                const curLiab = r.balanceSheet?.currentLiabilities || (r.balanceSheet?.totalLiabilities ? r.balanceSheet.totalLiabilities * 0.45 : 0);
+                const inv = r.balanceSheet?.inventory || 0;
+                const curAssets = r.balanceSheet?.currentAssets || (r.balanceSheet?.cashAndEquivalents || 0) + (r.balanceSheet?.accountsReceivable || 0) + inv;
+                const quickAssets = r.balanceSheet?.currentAssets ? Math.max(0, curAssets - inv) : (r.balanceSheet?.cashAndEquivalents || 0) + (r.balanceSheet?.accountsReceivable || 0);
+                if (curLiab <= 0 || quickAssets <= 0) return 0;
+                const ratio = (quickAssets / curLiab) * 100;
+                if (!isFinite(ratio) || isNaN(ratio)) return 0;
+                return Number(Math.min(999, Math.max(0, ratio)).toFixed(0));
               }),
               color: '#10b981',
             }
@@ -768,12 +861,23 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
           <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 12px 0' }}>利息保障倍數 (EBIT / 利息費用)</h3>
           {renderSimpleBars(
             chronological.map((r) => {
-              const ebit = r.income?.operatingIncome || 1;
-              const coverage = Math.max(1, Number((ebit / 50000000).toFixed(1)));
+              const ebit = r.income?.operatingIncome || 0;
+              const interest = r.cashFlow?.interestPaid || 0;
+              if (interest > 0) {
+                const coverage = Number((ebit / interest).toFixed(1));
+                const clamped = Math.max(-20, Math.min(100, coverage));
+                return {
+                  label: `${r.year % 100}Q${r.quarter}`,
+                  value: clamped,
+                  displayValue: `${coverage}x`,
+                  isNegative: coverage < 3,
+                };
+              }
+              const safeCoverage = ebit > 0 ? 50 : 0;
               return {
                 label: `${r.year % 100}Q${r.quarter}`,
-                value: coverage,
-                displayValue: `${coverage}x`,
+                value: safeCoverage,
+                displayValue: ebit > 0 ? '>50x (無利息負擔)' : '0x',
               };
             }),
             '#10b981',
@@ -826,19 +930,37 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
         <div>
           <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 12px 0' }}>盈餘再投資比率 (4 年資本支出對淨利)</h3>
           {renderSimpleBars(
-            chronological.map((r) => {
-              const net = r.income?.netIncome || 1;
-              const capex = r.cashFlow?.capitalExpenditure || 0;
-              const reinv = Number(((capex / Math.max(1, net)) * 100).toFixed(0));
+            chronological.map((curr, idx) => {
+              const windowRecords = chronological.slice(Math.max(0, idx - 15), idx + 1);
+              const totalCapex = windowRecords.reduce(
+                (sum, r) => sum + Math.abs(r.cashFlow?.capitalExpenditure || 0),
+                0
+              );
+              const totalNet = windowRecords.reduce(
+                (sum, r) => sum + (r.income?.netIncome || 0),
+                0
+              );
+
+              if (totalNet <= 0 || totalCapex === 0) {
+                return {
+                  label: `${curr.year % 100}Q${curr.quarter}`,
+                  value: 0,
+                  displayValue: totalNet <= 0 ? '虧損 N/A' : '0%',
+                  isNegative: true,
+                };
+              }
+
+              const reinv = Math.round((totalCapex / totalNet) * 100);
+              const clampedReinv = Math.min(300, Math.max(0, reinv));
               return {
-                label: `${r.year % 100}Q${r.quarter}`,
-                value: reinv,
+                label: `${curr.year % 100}Q${curr.quarter}`,
+                value: clampedReinv,
                 displayValue: `${reinv}%`,
                 isNegative: reinv > 80,
               };
             }),
             '#6366f1',
-            '高於 80% 代表企業過度依賴大額資本擴張'
+            '4年累積資本支出 / 4年累積淨利 (高於 80% 代表企業高度依賴大額資本擴張)'
           )}
         </div>
       )}
@@ -918,8 +1040,13 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
           {renderValuationRiver(
             chronological.map((r) => `${r.year % 100}Q${r.quarter}`),
             chronological.map((r) => {
-              const eq = r.balanceSheet?.totalEquity || 0;
-              return eq > 0 ? Number((eq / 7531181742 * 10).toFixed(2)) : 25;
+              const equity = r.balanceSheet?.totalEquity || 0;
+              let shares = r.balanceSheet?.capitalStock ? r.balanceSheet.capitalStock / 10 : 0;
+              if (shares <= 0 && r.income?.eps && r.income.eps > 0 && r.income?.netIncome && r.income.netIncome > 0) {
+                shares = r.income.netIncome / r.income.eps;
+              }
+              const bvps = shares > 0 && equity > 0 ? Number((equity / shares).toFixed(2)) : 0;
+              return bvps > 0 ? bvps : (currentPrice > 0 ? Number((currentPrice / 1.5).toFixed(1)) : 25);
             }),
             [0.8, 1.1, 1.4, 1.7, 2.0],
             '每股淨值 BVPS'
