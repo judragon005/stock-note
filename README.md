@@ -3,7 +3,8 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-888%2F888%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/Vitest-893%2F893%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +12,23 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 股票健診系統純運算診斷引擎、穿透報告與專屬工作區 (`Stock Health Check Diagnosis Engine, Forensic Report & Dedicated Workspace`) *(V8.45.0 全新巨獻)*
+### 0. 股票健診系統原生毛玻璃擬態、ETF智慧防呆與標的快捷膠囊全面重構 (`Stock Health Check UX Redesign, Native Glassmorphism & ETF Guard`) *(V8.45.1 全新重構)*
+- **原生 Glassmorphism 擬態與排版防禦 (`Native Glassmorphism & Anti-Break Layout`)**：
+  - 徹底移除失效之 Tailwind 類別，改採純原生 Inline Styles 與專案 Design Tokens，徹底根除白色破版與透明卡片問題。
+  - SVG 儀表板指針錨定 ViewBox (`0 0 200 135`) 與旋轉原點，徹底消滅巨大黑三角箭頭遮擋。
+  - 穿透式詳細報告彈窗 (`HealthReportModal`) 深色毛玻璃化 (`backdropFilter: blur(12px)`)，高對比綠勾與紅叉呈現，支援 `ESC` 鍵全域監聽。
+- **ETF 智慧識別防呆橫幅 (`ETF Smart Guard Banner`)**：
+  - 建立 `isEtfSymbol` 引擎，智慧識別台股 `00...`（含 `00403A` 等混合編號）與美股大盤 ETF。
+  - 當前選中標的為 ETF 時，頂部浮現琥珀色毛玻璃防呆橫幅，主動說明 ETF 為一籃子資產組合不適用企業財報量化分析，並提供一鍵切換個股按鈕。
+  - 預設標的優先選擇持倉普通股，庫存全為 ETF 時安全預設為熱門標的 `2330`。
+- **Stock Pills 快捷標的膠囊列 (`Stock Pills Navigation`)**：
+  - Header 下方橫向滾動膠囊列整合持倉個股與 6 大熱門權值標的（2330 台積電、2454 聯發科、2317 鴻海、NVDA、AAPL、IBM）。
+  - 內建 `seen` Set 雙重去重防護，高亮發光選中狀態，一秒無縫切換。
+- **說明橫幅開合狀態記憶 (`Banner State Persistence`)**：
+  - 頂部科技海軍藍漸層橫幅支援展開與收起，開合狀態即時持久化於 `localStorage`。
+
+### 0. 股票健診系統純運算診斷引擎、穿透報告與專屬工作區 (`Stock Health Check Diagnosis Engine, Forensic Report & Dedicated Workspace`) *(V8.45.0)*
+
 - **四大核心健診幫手與 21 項指標 (`Four Core Health Check Dimensions`)**：
   - **排除地雷股健診 (6 項)**：5 年 FCF 至少 3 年 $>0$、5 年平均 FCF $>0$、CFO/淨利比 3 年 $>100\%$、5 年平均 $>100\%$、最新季應收帳款與存貨天數同期比對。
   - **定存股健診 (5 項)**：近 1 年殖利率 $>6\%$、近 5 年平均殖利率 $>6\%$、連續 5 年配息、配息發放率 3 年 $>50\%$、5 年平均發放率 $>50\%$。
