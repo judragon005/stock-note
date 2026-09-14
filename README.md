@@ -4,7 +4,7 @@
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-904%2F904%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-909%2F909%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,21 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 個股深度分析工作區、雙層側邊欄導航與關鍵量化估值體系 (`Stock Analysis Workspace & Key Metrics Engine`) *(V8.46.0 全新發布)*
+### 0. 個股分析全量指標補齊、公開市場歷年股利串接與實盤體驗優化 (`Stock Analysis Comprehensive Audit & Full Metrics Pipeline`) *(V8.46.1 全新發布)*
+- **頂部一級導航列收斂與相容重定向 (`Navigation Convergence & Legacy Redirection`)**：
+  - 頂部導航列移除重複的「股票健診」頁籤，全面統一收斂於「個股分析」內部，舊路由訪問自動相容無痛重定向。
+- **21 項量化指標平鋪全覽檢驗清單 (`21-Metric Health Check Flat View`)**：
+  - 二級選單切換至「21項量化指標」時，全量展開 21 項健康指標檢驗表，包含綜合通過率、各指標門檻、實測值、綠勾/紅叉與特許豁免（如金融股豁免存貨週轉），免開彈窗一覽無遺。
+- **FinMind 真實科目對齊與會計自癒平衡 (`FinMind Subject Alignment & Self-Healing`)**：
+  - 對齊真實欄位 `Liabilities`、`Equity`、`ShorttermBorrowings`、`LongtermBorrowings`，導入會計恆等式自癒平衡（$Assets = Liabilities + Equity$）；若偵測到資產非零但權益負債歸零之殘缺快取，自動自癒重撈。
+- **公開市場上市公司歷年股利管線 (`Public Market Historical Dividend Service`)**：
+  - 新增 `dividendService.ts` 串接 FinMind `TaiwanStockDividend`，精確呈現真實公開每股現金與股票股利，徹底隔離個人記帳 trades；內建 24 小時 TTL 與 100 筆上限容量守衛（FIFO 淘汰）。
+- **圖表高度動態浮動底線縮放 (`Dynamic Baseline Bar Scaling`)**：
+  - 在長條圖中引入自適應浮動底線縮放（$minVal \times 0.85$），立體拉大 4500 億至 6200 億總資產階梯起伏，告別齊平假象。
+- **45 項二級指標 100% 完整視覺化 (`Full 45-Metric Visualization`)**：
+  - 補齊費用率拆解、業外佔比、ROE/ROA 走勢、週轉能力、利息保障倍數、四大年增率 YoY 柱狀圖、PE/PB 河流圖通道、借款結構與重大事件日曆，徹底消滅黑屏空白。
+
+### 0. 個股深度分析工作區、雙層側邊欄導航與關鍵量化估值體系 (`Stock Analysis Workspace & Key Metrics Engine`) *(V8.46.0)*
 - **雙層二級側邊欄導航拓撲 (`Two-Tier Hierarchical Topology`)**：
   - 8 大主題分類（最新動態、股票健診、財務報表、獲利能力、安全性分析、成長力分析、價值評估、關鍵指標）橫向串聯 45 個細項單一指標。
   - 單一指標微切片呈現（如每股盈餘、每股淨值、損益階梯、資產分佈、負債權益結構、現金流瀑布、三率走勢、杜邦三因子拆解、週轉天數 DSO/DIO/CCC、流速動比率、利息保障倍數等）。

@@ -1678,3 +1678,18 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - **Peter Lynch Valuation & PEG (彼得林區合理價與成長動能指標)**: 以 TTM EPS 乘上每股淨利年複合成長率計算合理價，並推算 PEG 判定 UNDERVALUED / FAIR / OVERVALUED。
   - **Interactive DCF Model (現金流折現模型與雙滑桿即時試算)**: 具備加權平均資金成本 (WACC) 與永續成長率 (Terminal Growth Rate) 互動滑桿，即時動態折現企業價值與股權價值。
   - **Gordon Growth DDM (股利折現模型)**: 依據近 5 年現金股利發放水準與折現門檻，推算定存收息股之理論安全邊際價值。
+
+### 個股分析全面體檢、公開市場歷年股利與全量指標補齊 *(新增於 V8.46.1 / Spec #0130 / Issue #61)*
+
+- **Navigation Convergence & Legacy Redirection (頂部導航收斂與相容重定向)**:
+  - 核心定義：一級導航列全面移除獨立的「股票健診」頁籤，收斂由「個股分析 (analysis)」統一承載；若使用者訪問舊路徑 `health` 則自動重定向至 `analysis` 保持無痛相容。
+- **21-Metric Health Check Flat View (21項量化指標平鋪全覽)**:
+  - 核心定義：左側二級導航切換至「21項量化指標 (`health_radar`)」時，以全量檢驗清單（含四大維度通過率、各項門檻、實測值、綠勾/紅叉與特許豁免標籤）免開彈窗直接一覽無遺平鋪展開。
+- **FinMind Subject Alignment & Balance Sheet Self-Healing (財報科目對齊與會計自癒平衡)**:
+  - 核心機制：自動對齊 FinMind 真實欄位別名（`Liabilities`、`Equity`、`ShorttermBorrowings`、`LongtermBorrowings`），並導入會計恆等式自癒平衡（$Assets = Liabilities + Equity$）；若本機快取存在總資產非零但負債權益歸零之殘缺狀態，自動判定快取失效並發起遠端重撈自癒。
+- **Public Market Dividend History Pipeline (`src/engine/dividendService.ts`)**:
+  - 核心機制：獨立串接 FinMind `TaiwanStockDividend` 獲取上市公司真實公開歷年每股現金（盈餘分配 + 公積）與股票配息，徹底拔除讀取個人記帳 trades 之嚴重數值偏差；內建 24 小時 TTL 與 100 筆上限容量守衛（FIFO 淘汰）。
+- **Dynamic Baseline Bar Scaling (圖表高度動態浮動底線)**:
+  - 核心機制：在柱狀圖採用自適應浮動底線演算法（$\text{baseMin} = \min \times 0.85$），將 4500 億至 6200 億之總資產起伏以立體階梯比例拉大呈現，告別齊平假象。
+- **Full Coverage of 45 Secondary Metrics (45 項二級指標 100% 完整視覺化)**:
+  - 核心定義：完整實作費用率拆解、業外佔比、ROE/ROA 雙走勢、週轉能力、利息保障倍數、四大年增率 YoY 柱狀圖、PE/PB 河流圖通道、借款結構與重大事件日曆，徹底消滅未串接黑屏。
