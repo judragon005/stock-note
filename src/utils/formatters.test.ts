@@ -8,6 +8,7 @@ import {
   bankersRound,
   inferMarketFromSymbol,
   inferCurrencyFromMarket,
+  formatFinancialAmount,
 } from './formatters';
 import { TradeRecord } from '../types/stock';
 
@@ -181,6 +182,26 @@ describe('多幣別與券商慣用精度格式化模組 (Formatters)', () => {
       expect(inferMarketFromSymbol('VT')).toBe('US');
       expect(inferMarketFromSymbol('TSM.US')).toBe('US');
       expect(inferCurrencyFromMarket('US')).toBe('USD');
+    });
+  });
+
+  describe('formatFinancialAmount (券商級財務金額自適應換算器)', () => {
+    it('應正確轉換 >= 1 億元為 X.X 億', () => {
+      expect(formatFinancialAmount(5490000000)).toBe('54.9 億');
+      expect(formatFinancialAmount(-3200000000)).toBe('-32.0 億');
+      expect(formatFinancialAmount(100000000)).toBe('1.0 億');
+    });
+
+    it('應正確轉換 100 萬～1 億元為 X.X 百萬', () => {
+      expect(formatFinancialAmount(45000000)).toBe('45.0 百萬');
+      expect(formatFinancialAmount(-8500000)).toBe('-8.5 百萬');
+      expect(formatFinancialAmount(1000000)).toBe('1.0 百萬');
+    });
+
+    it('應正確轉換 < 100 萬為萬或 0.0 億', () => {
+      expect(formatFinancialAmount(500000)).toBe('50 萬');
+      expect(formatFinancialAmount(0)).toBe('0.0 億');
+      expect(formatFinancialAmount(NaN)).toBe('0.0 億');
     });
   });
 });
