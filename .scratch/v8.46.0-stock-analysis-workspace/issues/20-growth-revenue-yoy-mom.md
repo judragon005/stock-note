@@ -10,4 +10,4 @@ Owner: Agent
 Type: subtask
 Parent-Issue: #59
 
-- [ ] 計算歷史各季營收同期 YoY 與環比變化率\n- [ ] 渲染營收動能增長柱狀圖
+- [x] 計算歷史各季營收同期 YoY 與環比變化率\n- [x] 渲染營收動能增長柱狀圖

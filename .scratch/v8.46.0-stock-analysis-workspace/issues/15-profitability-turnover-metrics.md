@@ -10,4 +10,4 @@ Owner: Agent
 Type: subtask
 Parent-Issue: #59
 
-- [ ] 呼叫 financialTurnoverEngine 計算 20 季 DSO, DIO, CCC\n- [ ] 渲染週轉天數多線圖並支援金融股智慧豁免標記
+- [x] 呼叫 financialTurnoverEngine 計算 20 季 DSO, DIO, CCC\n- [x] 渲染週轉天數多線圖並支援金融股智慧豁免標記

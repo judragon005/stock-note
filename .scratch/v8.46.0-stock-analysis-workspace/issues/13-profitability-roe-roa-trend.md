@@ -10,4 +10,4 @@ Owner: Agent
 Type: subtask
 Parent-Issue: #59
 
-- [ ] 計算單季年化 ROE 與 ROA 數列\n- [ ] 渲染 ROE 與 ROA 對照折線圖
+- [x] 計算單季年化 ROE 與 ROA 數列\n- [x] 渲染 ROE 與 ROA 對照折線圖

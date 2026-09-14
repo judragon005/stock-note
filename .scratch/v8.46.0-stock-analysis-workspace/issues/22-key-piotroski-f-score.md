@@ -10,4 +10,4 @@ Owner: Agent
 Type: subtask
 Parent-Issue: #59
 
-- [ ] 撰寫 piotroskiEngine.test.ts 單元測試（TDD）\n- [ ] 實作 Piotroski 9 項檢驗規則計算引擎\n- [ ] 渲染深色毛玻璃計分卡與總分進度環
+- [x] 撰寫 piotroskiEngine.test.ts 單元測試（TDD）\n- [x] 實作 Piotroski 9 項檢驗規則計算引擎\n- [x] 渲染深色毛玻璃計分卡與總分進度環

@@ -10,4 +10,4 @@ Owner: Agent
 Type: subtask
 Parent-Issue: #59
 
-- [ ] 實作 DDM 貼現函式與股息成長率估算\n- [ ] 渲染 DDM 合理股價卡片與當前股價對照
+- [x] 實作 DDM 貼現函式與股息成長率估算\n- [x] 渲染 DDM 合理股價卡片與當前股價對照

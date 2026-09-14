@@ -10,4 +10,4 @@ Owner: Agent
 Type: subtask
 Parent-Issue: #59
 
-- [ ] 計算近 20 季 EPS 數列與 YoY 變化\n- [ ] 渲染高對比原生 SVG 柱狀圖與數值標籤
+- [x] 計算近 20 季 EPS 數列與 YoY 變化\n- [x] 渲染高對比原生 SVG 柱狀圖與數值標籤

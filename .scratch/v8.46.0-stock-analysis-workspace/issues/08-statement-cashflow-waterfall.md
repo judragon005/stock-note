@@ -10,4 +10,4 @@ Owner: Agent
 Type: subtask
 Parent-Issue: #59
 
-- [ ] 提取現金流量三表數列並計算 FCF = CFO - Capex\n- [ ] 渲染正負雙向長條瀑布圖
+- [x] 提取現金流量三表數列並計算 FCF = CFO - Capex\n- [x] 渲染正負雙向長條瀑布圖

@@ -5,9 +5,11 @@
 
 **Blocked by:** 01
 
-**Status:** todo
+**Status:** done
 Owner: Agent
 Type: subtask
 Parent-Issue: #59
 
-- [ ] 在二級導航中切換至「股票健診」時渲染 HealthCard 卡片流\n- [ ] 保證 HealthReportModal 穿透報告正常開合與互動
+- [x] 在二級導航中切換至「股票健診」時渲染 HealthCard 卡片流
+- [x] 保證 HealthReportModal 穿透報告正常開合與互動
+

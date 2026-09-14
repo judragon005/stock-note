@@ -10,4 +10,4 @@ Owner: Agent
 Type: subtask
 Parent-Issue: #59
 
-- [ ] 提取資產負債表股東權益與股數計算 BVPS\n- [ ] 渲染 20 季淨值歷史走勢圖
+- [x] 提取資產負債表股東權益與股數計算 BVPS\n- [x] 渲染 20 季淨值歷史走勢圖

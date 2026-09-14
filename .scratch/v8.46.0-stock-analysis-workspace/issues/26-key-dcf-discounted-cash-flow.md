@@ -10,4 +10,4 @@ Owner: Agent
 Type: subtask
 Parent-Issue: #59
 
-- [ ] 撰寫 dcfEngine.test.ts 單元測試（TDD）\n- [ ] 實作 5 年 FCF 預測期與永續價值兩階段貼現演算法\n- [ ] 渲染雙滑桿 (WACC & 成長率) 與即時內在價值試算卡片
+- [x] 撰寫 dcfEngine.test.ts 單元測試（TDD）\n- [x] 實作 5 年 FCF 預測期與永續價值兩階段貼現演算法\n- [x] 渲染雙滑桿 (WACC & 成長率) 與即時內在價值試算卡片

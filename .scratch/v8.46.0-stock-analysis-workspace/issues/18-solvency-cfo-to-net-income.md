@@ -10,4 +10,4 @@ Owner: Agent
 Type: subtask
 Parent-Issue: #59
 
-- [ ] 計算 20 季 CFO / 稅後淨利 比率\n- [ ] 渲染比率走勢圖並標記異常背離點
+- [x] 計算 20 季 CFO / 稅後淨利 比率\n- [x] 渲染比率走勢圖並標記異常背離點

@@ -1,7 +1,7 @@
 import React from 'react';
-import { PieChart, TrendingUp, History, Settings, Wallet, Coins, Activity, Compass, Flame, Brain, HeartPulse } from 'lucide-react';
+import { PieChart, TrendingUp, History, Settings, Wallet, Coins, Activity, Compass, Flame, Brain, HeartPulse, BarChart3 } from 'lucide-react';
 
-export type WorkspaceTabKey = 'portfolio' | 'health' | 'warroom' | 'musclebooker' | 'behavioral' | 'fire' | 'growth' | 'chips' | 'dividend' | 'cash' | 'ledger' | 'settings' | 'friction';
+export type WorkspaceTabKey = 'portfolio' | 'analysis' | 'health' | 'warroom' | 'musclebooker' | 'behavioral' | 'fire' | 'growth' | 'chips' | 'dividend' | 'cash' | 'ledger' | 'settings' | 'friction';
 
 interface WorkspaceTabsProps {
   activeTab: WorkspaceTabKey;
@@ -44,6 +44,14 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
       badge: `${holdingsCount} 標的`,
       badgeColor: '#60a5fa',
       badgeBg: 'rgba(59, 130, 246, 0.15)',
+    },
+    {
+      key: 'analysis',
+      label: '個股分析',
+      icon: <BarChart3 size={16} />,
+      badge: '深度財報',
+      badgeColor: '#10b981',
+      badgeBg: 'rgba(16, 185, 129, 0.15)',
     },
     {
       key: 'health',

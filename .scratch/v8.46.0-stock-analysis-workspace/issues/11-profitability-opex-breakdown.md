@@ -10,4 +10,4 @@ Owner: Agent
 Type: subtask
 Parent-Issue: #59
 
-- [ ] 計算費用科目佔營收比例\n- [ ] 渲染費用率堆疊走勢圖
+- [x] 計算費用科目佔營收比例\n- [x] 渲染費用率堆疊走勢圖

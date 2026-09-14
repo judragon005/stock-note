@@ -5,9 +5,13 @@
 
 **Blocked by:** None
 
-**Status:** todo
+**Status:** done
 Owner: Agent
 Type: subtask
 Parent-Issue: #59
 
-- [ ] 在 App.tsx 註冊 stock-analysis 一級頁籤與切換狀態\n- [ ] 建立 StockAnalysisWorkspace.tsx 雙層側邊欄導航佈局\n- [ ] 整合頂部標的 Header 與 Stock Pills 快捷標的膠囊列\n- [ ] 整合 ETF 智慧防呆警示橫幅
+- [x] 在 App.tsx 註冊 stock-analysis 一級頁籤與切換狀態
+- [x] 建立 StockAnalysisWorkspace.tsx 雙層側邊欄導航佈局
+- [x] 整合頂部標的 Header 與 Stock Pills 快捷標的膠囊列
+- [x] 整合 ETF 智慧防呆警示橫幅
+

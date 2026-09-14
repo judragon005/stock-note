@@ -10,4 +10,4 @@ Owner: Agent
 Type: subtask
 Parent-Issue: #59
 
-- [ ] 執行 npm test 確保全專案單元測試 100% 綠燈\n- [ ] 執行 npm run build 確保 TypeScript 與打包 0 錯誤
+- [x] 執行 npm test 確保全專案單元測試 100% 綠燈\n- [x] 執行 npm run build 確保 TypeScript 與打包 0 錯誤

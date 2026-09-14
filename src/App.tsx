@@ -69,6 +69,7 @@ import { FirePlanningWorkspace } from './components/FirePlanningWorkspace';
 import { SettingsWorkspace } from './components/SettingsWorkspace';
 import { BehavioralAuditWorkspace } from './components/BehavioralAuditWorkspace';
 import { StockHealthWorkspace } from './components/health/StockHealthWorkspace';
+import { StockAnalysisWorkspace } from './components/analysis/StockAnalysisWorkspace';
 import { ReconciliationModal } from './components/ReconciliationModal';
 import { syncTradesWithCashTransactions, calculateAccountBalances, aggregateInterestIncomeDetails, reconcilePendingDividendTrades } from './engine/cashLedgerEngine';
 import { calculatePortfolioXirr, calculateSecurityXirr, XirrResult, CashFlowEvent } from './engine/xirrCalculator';
@@ -823,6 +824,18 @@ export const App: React.FC = () => {
             onOpenFinancialForensic={handleOpenFinancialForensic}
           />
         </>
+      )}
+
+      {/* 活頁: 📊 個股深度分析 (Stock Analysis Workspace) */}
+      {activeTab === 'analysis' && (
+        <StockAnalysisWorkspace
+          holdings={holdings}
+          trades={trades}
+          currentPrices={currentPrices}
+          fmpApiKey={apiKeys.fmpApiKey}
+          finmindToken={apiKeys.finmindToken}
+          usdToTwdRate={usdToTwdRate}
+        />
       )}
 
       {/* 活頁: 🩺 股票健診 (Stock Health Check Workspace) */}

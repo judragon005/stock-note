@@ -10,4 +10,4 @@ Owner: Agent
 Type: subtask
 Parent-Issue: #59
 
-- [ ] 計算最新 TTM 自由現金流殖利率\n- [ ] 渲染 FCF Yield 評估卡片與安全邊際標籤
+- [x] 計算最新 TTM 自由現金流殖利率\n- [x] 渲染 FCF Yield 評估卡片與安全邊際標籤
