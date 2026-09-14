@@ -109,7 +109,7 @@
 | **籌碼星圖工作台** | [`src/components/ChipsWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/ChipsWorkspace.tsx) | 雙模式切換（在庫持倉 vs 全市場法人焦點 Top 30）、四象限診斷膠囊、籌碼重整。 |
 | **現金與交割工作台** | [`src/components/CashLedgerWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/CashLedgerWorkspace.tsx) | 四核心可用性發光看板、在途交割時序排程面板、交割戶資金網格、質押風控。 |
 | **設定與時光機看板** | [`src/components/SettingsWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/SettingsWorkspace.tsx) | 券商手續費率、Web Crypto 敏感金鑰防護徽章、自訂代理 SSRF 檢驗、脫敏備份匯出、時光機快照管理。 |
-| **穿透式財報深度戰情室** | [`src/components/financial/FinancialForensicModal.tsx`](file:///d:/APP/股票紀錄/src/components/financial/FinancialForensicModal.tsx) | 三層漸進式架構（0秒戰報 ➔ 8季趨勢矩陣 ➔ 深度排雷）、純 SVG 走勢圖、一鍵導出 Markdown 研報。 |
+| **穿透式財報深度戰情室** | [`src/components/financial/FinancialForensicModal.tsx`](file:///d:/APP/股票紀錄/src/components/financial/FinancialForensicModal.tsx) | 三層漸進式架構（0秒戰報 ➔ 8季趨勢矩陣 ➔ 深度排雷）、三大報表原子聚合、操盤方針定調、券商級常態同步、審計季度錨定、零CLS深色毛玻璃骨架屏與平滑淡入門禁。 |
 
 ---
 
@@ -143,8 +143,8 @@
 
 1. **確認當前工作分支**：
    - 當前位於 `main` 主幹分支，工作目錄 100% clean。
-   - 所有代碼變更、規格書、ADR、本地票券與交接文檔均已合併收斂（最新 Commit: `4ae9dc3`）。
+   - 所有代碼變更、規格書、ADR (至 ADR 0126)、本地票券與交接手冊均已合併收斂至 `main`。
 2. **日常驗證防線**：
-   - 接手前務必執行 `npm test`（確認 736 個測試 100% 通過）與 `npm run build`（確認 0 型別錯誤）。
+   - 接手前務必執行 `npm test`（確認 88 個測試檔案、879 個測試 100% 綠燈）與 `npm run build`（確認 0 型別錯誤）。
 3. **新需求啟動流程**：
    - 嚴格遵循工作流藍圖：`/grill-with-docs` ➔ `/to-spec` ➔ `/to-tickets` ➔ `/triage` ➔ `/tdd & /implement` ➔ `/code-review` ➔ `/handoff`。
