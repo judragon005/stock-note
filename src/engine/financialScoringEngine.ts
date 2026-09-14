@@ -97,6 +97,19 @@ export function generateFinancialDirective(
 /**
  * 綜合評估四大維度指示燈與 0~100 分量化評分
  */
+/**
+ * 審計季度完整性哨兵檢驗
+ * 過濾僅有營收、尚未申報稅後淨利與資產負債的空殼季度（如未申報完整的自結月分）
+ */
+export function isQuarterRecordComplete(record: QuarterlyFinancialRecord): boolean {
+  if (!record) return false;
+  // 若總資產為 0 且淨利為 0，視為尚未申報完整季報之空殼季度
+  if (record.balanceSheet.totalAssets === 0 && record.income.netIncome === 0) {
+    return false;
+  }
+  return true;
+}
+
 export function generateFinancialForensicReport(
   symbol: string,
   market: MarketType,
@@ -143,15 +156,19 @@ export function generateFinancialForensicReport(
     };
   }
 
-  const latest = records[0];
+  // 1.1 審計季度過濾哨兵：優先錨定最新完整申報季
+  const auditedRecords = records.filter(isQuarterRecordComplete);
+  const effectiveRecords = auditedRecords.length > 0 ? auditedRecords : records;
+
+  const latest = effectiveRecords[0];
   const latestPeriod = `${latest.year}-Q${latest.quarter}`;
 
   // 2. 運算四大維度
-  const profitability = calculateProfitabilityMetrics(records);
+  const profitability = calculateProfitabilityMetrics(effectiveRecords);
   const safety = calculateSafetyMetrics(latest);
   const turnover = calculateTurnoverMetrics(latest);
   const duPont = calculateDuPontAnalysis(latest);
-  const anomalies = detectForensicAnomalies(records);
+  const anomalies = detectForensicAnomalies(effectiveRecords);
 
   // 3. 判定四大指示燈
   const trafficLights: TrafficLightsState = {

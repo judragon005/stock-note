@@ -15,6 +15,7 @@ import { loadOrFetchFinancialReport } from '../../engine/financialReportService'
 import { FinancialHeroLayer } from './FinancialHeroLayer';
 import { FinancialTrendsLayer } from './FinancialTrendsLayer';
 import { FinancialForensicDeepAuditLayer } from './FinancialForensicDeepAuditLayer';
+import { FinancialSkeletonLayer } from './FinancialSkeletonLayer';
 import { logger } from '../../utils/logger';
 
 export function resolveDisplayTitle(symbol: string, companyName?: string): string {
@@ -248,31 +249,39 @@ export const FinancialForensicModal: React.FC<FinancialForensicModalProps> = ({
             gap: '20px',
           }}
         >
-          {loading && !report ? (
+          {loading ? (
             <div
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '80px 20px',
-                gap: '16px',
+                gap: '20px',
+                animation: 'fadeIn 0.2s ease-in-out',
               }}
             >
-              <Activity
+              <div
                 style={{
-                  width: '40px',
-                  height: '40px',
-                  color: '#6366f1',
-                  animation: 'spin 1.5s linear infinite',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 14px',
+                  backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(99, 102, 241, 0.25)',
+                  fontSize: '0.8rem',
+                  color: '#a5b4fc',
                 }}
-              />
-              <p style={{ fontSize: '0.95rem', fontWeight: 600, color: '#e2e8f0', margin: 0 }}>
-                穿透式財報鑑識引擎解析中...
-              </p>
-              <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                正在調度 16 項核心科目、計算三率、杜邦拆解與逆向鑑識規則
-              </span>
+              >
+                <Activity
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    animation: 'spin 1.5s linear infinite',
+                    color: '#818cf8',
+                  }}
+                />
+                <span>正在從權威資料源原子性同步並驗證財報三表，完備後即刻點亮...</span>
+              </div>
+              <FinancialSkeletonLayer />
             </div>
           ) : error ? (
             <div
@@ -305,7 +314,20 @@ export const FinancialForensicModal: React.FC<FinancialForensicModalProps> = ({
               </button>
             </div>
           ) : report ? (
-            <>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '20px',
+                animation: 'modalFadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              }}
+            >
+              <style>{`
+                @keyframes modalFadeIn {
+                  from { opacity: 0; transform: translateY(4px); }
+                  to { opacity: 1; transform: translateY(0); }
+                }
+              `}</style>
               {/* Layer 1: 0 秒核心決策與四大指示燈 */}
               <FinancialHeroLayer report={report} />
 
@@ -317,7 +339,7 @@ export const FinancialForensicModal: React.FC<FinancialForensicModalProps> = ({
 
               {/* Layer 3: 「市場沒說什麼」深度鑑識與會計師審查 */}
               <FinancialForensicDeepAuditLayer report={report} />
-            </>
+            </div>
           ) : null}
         </div>
       </div>

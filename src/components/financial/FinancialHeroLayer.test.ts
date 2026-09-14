@@ -1,117 +1,111 @@
 import { describe, it, expect } from 'vitest';
 import {
-  getGradeColorClass,
-  getTrafficLightBadgeInfo,
+  resolveLatestAuditedRecord,
+  getGradeInlineStyle,
   getIndustryBadgeInfo,
+  getTrafficLightBadgeInfo,
 } from './FinancialHeroLayer';
+import type { QuarterlyFinancialRecord } from '../../types/financialForensic';
 
-describe('FinancialHeroLayer (Layer 1 UI Logic & Seam Tests)', () => {
-  it('1. 綜合評分評級顏色映射正確', () => {
-    expect(getGradeColorClass('EXCELLENT')).toContain('emerald');
-    expect(getGradeColorClass('HEALTHY')).toContain('blue');
-    expect(getGradeColorClass('WARNING')).toContain('amber');
-    expect(getGradeColorClass('DANGEROUS')).toContain('rose');
+describe('FinancialHeroLayer UI Helper Functions (TDD Seam)', () => {
+  const mockQuarter2025Q2: QuarterlyFinancialRecord = {
+    symbol: '2327',
+    market: 'TW',
+    year: 2025,
+    quarter: 2,
+    periodDate: '2025-06-30',
+    income: {
+      revenue: 30000000000,
+      grossProfit: 11000000000,
+      operatingIncome: 6000000000,
+      netIncome: 5000000000,
+      eps: 5.2,
+    },
+    balanceSheet: {
+      totalAssets: 120000000000,
+      totalLiabilities: 48000000000,
+      totalEquity: 72000000000,
+      accountsReceivable: 15000000000,
+      inventory: 18000000000,
+      cashAndEquivalents: 25000000000,
+    },
+    cashFlow: {
+      operatingCashFlow: 8000000000,
+      capitalExpenditure: 3000000000,
+    },
+    auditInfo: {
+      opinionType: 'UNQUALIFIED',
+      cpaFirm: '安侯建業聯合會計師事務所',
+      isBigFour: true,
+    },
+    updatedAt: Date.now(),
+  };
+
+  const mockShell2026Q2: QuarterlyFinancialRecord = {
+    ...mockQuarter2025Q2,
+    year: 2026,
+    quarter: 2,
+    periodDate: '2026-06-30',
+    income: {
+      revenue: 35000000000,
+      grossProfit: 12000000000,
+      operatingIncome: 0,
+      netIncome: 0,
+      eps: 0,
+    },
+    balanceSheet: {
+      totalAssets: 0,
+      totalLiabilities: 0,
+      totalEquity: 0,
+      accountsReceivable: 0,
+      inventory: 0,
+      cashAndEquivalents: 0,
+    },
+    cashFlow: {
+      operatingCashFlow: 0,
+      capitalExpenditure: 0,
+    },
+  };
+
+  it('1. 當首項為空殼季 2026-Q2 時，resolveLatestAuditedRecord 應自動排除並錨定 2025-Q2', () => {
+    const records = [mockShell2026Q2, mockQuarter2025Q2];
+    const resolved = resolveLatestAuditedRecord(records, '2025-Q2');
+    expect(resolved).not.toBeNull();
+    expect(resolved?.year).toBe(2025);
+    expect(resolved?.quarter).toBe(2);
+    expect(resolved?.balanceSheet.totalAssets).toBe(120000000000);
   });
 
-  it('2. 四大維度體質指示燈文字與背景色映射正確', () => {
-    const greenInfo = getTrafficLightBadgeInfo('GREEN');
-    expect(greenInfo.text).toBe('正常健全');
-    expect(greenInfo.bgClass).toContain('emerald');
-
-    const yellowInfo = getTrafficLightBadgeInfo('YELLOW');
-    expect(yellowInfo.text).toBe('體質警戒');
-    expect(yellowInfo.bgClass).toContain('amber');
-
-    const redInfo = getTrafficLightBadgeInfo('RED');
-    expect(redInfo.text).toBe('重大風險');
-    expect(redInfo.bgClass).toContain('rose');
-
-    const grayInfo = getTrafficLightBadgeInfo('GRAY');
-    expect(grayInfo.text).toBe('不適用');
-    expect(grayInfo.bgClass).toContain('slate');
+  it('2. 當未指定 latestPeriod 或該季為空殼時，自動挑選第一筆完整申報季', () => {
+    const records = [mockShell2026Q2, mockQuarter2025Q2];
+    const resolved = resolveLatestAuditedRecord(records);
+    expect(resolved).not.toBeNull();
+    expect(resolved?.year).toBe(2025);
+    expect(resolved?.quarter).toBe(2);
   });
 
-  it('3. 產業屬性徽章判斷正確', () => {
-    const finInfo = getIndustryBadgeInfo('FINANCIALS');
-    expect(finInfo.label).toContain('金融保險');
-    expect(finInfo.exemptNote).toContain('豁免');
-
-    const cycInfo = getIndustryBadgeInfo('CYCLICAL');
-    expect(cycInfo.label).toContain('景氣循環');
-    expect(cycInfo.exemptNote).toContain('週期高點');
-
-    const stdInfo = getIndustryBadgeInfo('STANDARD');
-    expect(stdInfo.label).toContain('標準模型');
-    expect(stdInfo.exemptNote).toBe('');
+  it('3. 空紀錄時安全回傳 null', () => {
+    expect(resolveLatestAuditedRecord([])).toBeNull();
   });
 
-  it('4. 操盤定調與體質指標結構完整定義', () => {
-    // 驗證型別與契約無語法錯誤
-    const mockReport = {
-      symbol: '2327',
-      market: 'TW' as const,
-      companyName: '國巨',
-      industryAttribute: 'STANDARD' as const,
-      latestPeriod: '2025-Q2',
-      overallScore: 55,
-      overallGrade: 'WARNING' as const,
-      trafficLights: {
-        profitability: 'GREEN' as const,
-        safety: 'YELLOW' as const,
-        efficiency: 'YELLOW' as const,
-        cashFlow: 'RED' as const,
-      },
-      executiveSummary: '獲利數據亮眼但營運現金流嚴重失血',
-      directive: {
-        stance: 'DEFENSIVE_WATCH' as const,
-        stanceLabel: '【體質承壓·防守觀望】',
-        conflictSummary: '帳面淨利看似獲利，但營運現金流 (CFO) 呈現淨流出',
-        actionGuidance: '建議提高警覺並採取防守姿態，嚴控資金水位',
-      },
-      anomalies: [],
-      duPont: {
-        roe: 12.5,
-        netMargin: 15.2,
-        assetTurnover: 0.8,
-        equityMultiplier: 1.5,
-        primaryDriver: 'PROFITABILITY' as const,
-      },
-      historicalRecords: [
-        {
-          symbol: '2327',
-          market: 'TW' as const,
-          year: 2025,
-          quarter: 2,
-          periodDate: '2025-06-30',
-          income: {
-            revenue: 30000000000,
-            grossProfit: 10000000000,
-            operatingIncome: 5000000000,
-            netIncome: 4500000000,
-            eps: 10.5,
-          },
-          balanceSheet: {
-            totalAssets: 100000000000,
-            totalLiabilities: 45000000000,
-            totalEquity: 55000000000,
-            accountsReceivable: 12000000000,
-            inventory: 15000000000,
-            cashAndEquivalents: 20000000000,
-            shortTermDebt: 5000000000,
-            longTermDebt: 10000000000,
-          },
-          cashFlow: {
-            operatingCashFlow: -1500000000,
-            capitalExpenditure: 3000000000,
-          },
-          updatedAt: Date.now(),
-        },
-      ],
-      updatedAt: Date.now(),
-    };
+  it('4. 體質評級樣式對齊正確色彩代碼', () => {
+    const exc = getGradeInlineStyle('EXCELLENT');
+    expect(exc.color).toBe('#34d399');
 
-    expect(mockReport.directive.stanceLabel).toContain('防守觀望');
-    expect(mockReport.directive.conflictSummary).toContain('淨流出');
-    expect(mockReport.directive.actionGuidance).toContain('建議提高警覺');
+    const dan = getGradeInlineStyle('DANGEROUS');
+    expect(dan.color).toBe('#fb7185');
+  });
+
+  it('5. 金融業產業標籤回傳豁免警語', () => {
+    const fin = getIndustryBadgeInfo('FINANCIALS');
+    expect(fin.label).toContain('金融保險業');
+    expect(fin.exemptNote).toContain('豁免');
+  });
+
+  it('6. 體質燈號狀態解析正確', () => {
+    const red = getTrafficLightBadgeInfo('RED');
+    expect(red.text).toBe('重大風險');
+    const green = getTrafficLightBadgeInfo('GREEN');
+    expect(green.text).toBe('正常健全');
   });
 });

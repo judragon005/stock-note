@@ -1606,6 +1606,18 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Hero Layer Metric Cards Enrichment (四大體質卡片數據化)**:
   - 獲利能力（毛利率、ROE、淨利率）、安全性（負債比、速動比、淨現金）、營運效率（DSO、DIO/豁免）、現金流（最新季 CFO、FCF 金額）均內嵌最新數據，提供具體決策佐證。
 
+### 穿透式財報券商級常態同步、審計季度錨定與完整性門禁系統 *(新增於 V8.44.0 / Spec #0126 / Issue #50)*
+
+- **Adaptive Amount Formatter (金額自適應換算器)**:
+  - 核心定義：基於「元 (TWD)」為基底，嚴格依據真實券商報表規範轉換：$\ge 1$ 億元換算為 `X.X 億`，100 萬～1 億元換算為 `X.X 百萬`，$< 100$ 萬元輸出千分位整數，徹底消滅因單位誤判導致的「499,910 億」天文數字。
+- **Cache Integrity Sentry & Auto-Healing (快取完整性檢驗與自癒管線)**:
+  - 核心機制：`isFinancialRecordsCacheValid` 檢驗本地快取是否具備有效資產負債與現金流數據。若偵測到 CFO 與總資產全數為 0 之殘缺快取，自動判定失效並無縫發起遠端全量重撈與覆蓋更新，杜絕使用者手動清空資料庫之困擾。
+- **Audited Quarter Sentry & Metric Normalization (審計季度過濾哨兵與指標錨定)**:
+  - 核心機制：`isQuarterRecordComplete` 自動過濾尚未申報完整季報（無淨利與資產負債）的自結空殼季度（如 26Q2）。將 0 秒戰報、四大體質卡片、杜邦分析嚴格錨定於「最新完整申報季」，並在頂部明確標記【審計基準季：YYYY-QX】，徹底消滅 `0.0%`、`負債比 -`、`CFO 0 億` 等假陽性真空。
+- **Broker-Grade Glassmorphism Skeleton & Fade-In Gate (券商級深色毛玻璃骨架屏與延遲淡入門禁)**:
+  - 核心體驗：資料同步或解析期間，維持版面結構固定（Zero-CLS）的深色毛玻璃骨架屏，嚴禁未完備數據提前渲染；待三大報表 100% 聚合驗證完成後，以 0.2 秒平滑淡入（Fade-In）點亮呈現，達成券商級沉浸式操作體驗。
+
+
 
 
 

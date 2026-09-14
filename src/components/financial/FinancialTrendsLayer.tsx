@@ -72,6 +72,30 @@ export function formatCurrencyMillions(val: number): string {
   return `${Math.round(val).toLocaleString()} 百萬`;
 }
 
+/**
+ * 券商標準：以「元」為基數之金額自適應格式化器 (Spec 0126)
+ * - 絕對值 >= 1 億 (100,000,000) 顯示為 X.X 億
+ * - 絕對值 100 萬 ~ 1 億 (1,000,000 ~ 100,000,000) 顯示為 X.X 百萬
+ * - 絕對值 < 100 萬但非 0 顯示為 X 萬
+ * - 0 或 NaN 顯示為 0.0 億
+ */
+export function formatFinancialAmount(val: number): string {
+  if (isNaN(val) || val === 0) return '0.0 億';
+  const abs = Math.abs(val);
+  const sign = val < 0 ? '-' : '';
+
+  if (abs >= 100000000) {
+    const yi = (abs / 100000000).toFixed(1);
+    return `${sign}${yi} 億`;
+  }
+  if (abs >= 1000000) {
+    const baiwan = (abs / 1000000).toFixed(1);
+    return `${sign}${baiwan} 百萬`;
+  }
+  const wan = Math.round(abs / 10000);
+  return `${sign}${wan} 萬`;
+}
+
 export function getDuPontDriverBadge(driver: DuPontAnalysis['primaryDriver']): {
   label: string;
   isWarning: boolean;
@@ -484,7 +508,7 @@ export const FinancialTrendsLayer: React.FC<FinancialTrendsLayerProps> = ({
                   {/* 淨利長條柱 */}
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
                     <span style={{ fontSize: '0.62rem', fontFamily: 'monospace', color: '#c084fc', marginBottom: '2px' }}>
-                      {formatCurrencyMillions(net)}
+                      {formatFinancialAmount(net)}
                     </span>
                     <div
                       style={{
@@ -494,7 +518,7 @@ export const FinancialTrendsLayer: React.FC<FinancialTrendsLayerProps> = ({
                         borderTopRightRadius: '3px',
                         backgroundColor: net >= 0 ? 'rgba(168, 85, 247, 0.8)' : 'rgba(239, 68, 68, 0.8)',
                       }}
-                      title={`淨利: ${formatCurrencyMillions(net)}`}
+                      title={`淨利: ${formatFinancialAmount(net)}`}
                     />
                   </div>
 
@@ -509,7 +533,7 @@ export const FinancialTrendsLayer: React.FC<FinancialTrendsLayerProps> = ({
                         fontWeight: cfo < 0 ? 700 : 400,
                       }}
                     >
-                      {formatCurrencyMillions(cfo)}
+                      {formatFinancialAmount(cfo)}
                     </span>
                     <div
                       style={{
@@ -519,7 +543,7 @@ export const FinancialTrendsLayer: React.FC<FinancialTrendsLayerProps> = ({
                         borderTopRightRadius: '3px',
                         backgroundColor: cfo >= 0 ? 'rgba(16, 185, 129, 0.8)' : 'rgba(244, 63, 94, 0.8)',
                       }}
-                      title={`CFO: ${formatCurrencyMillions(cfo)}`}
+                      title={`CFO: ${formatFinancialAmount(cfo)}`}
                     />
                   </div>
                 </div>
