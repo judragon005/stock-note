@@ -312,7 +312,7 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
                     {multipliers.slice().reverse().map((_, mIdx) => {
                       return (
                         <div
-                          key={mIdx}
+                          key={`river-band-${mIdx}`}
                           style={{
                             height: '18%',
                             background: mIdx === 2 ? 'rgba(59, 130, 246, 0.4)' : 'rgba(59, 130, 246, 0.15)',

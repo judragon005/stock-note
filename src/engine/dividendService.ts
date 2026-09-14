@@ -17,6 +17,7 @@ export interface CompanyDividendPolicyRecord {
 // 本地記憶體快取避免重複頻繁請求
 const memoryCache = new Map<string, { records: CompanyDividendPolicyRecord[]; timestamp: number }>();
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 小時
+const MAX_CACHE_ENTRIES = 100; // 最大快取標的數，防止記憶體膨脹
 
 /**
  * 查詢公開市場上市公司歷年每股配息政策
@@ -86,6 +87,10 @@ export async function fetchCompanyDividendHistory(
 
           const records = Array.from(mapByYear.values()).sort((a, b) => a.year - b.year);
           if (records.length > 0) {
+            if (memoryCache.size >= MAX_CACHE_ENTRIES) {
+              const oldestKey = memoryCache.keys().next().value;
+              if (oldestKey) memoryCache.delete(oldestKey);
+            }
             memoryCache.set(cacheKey, { records, timestamp: Date.now() });
             return records;
           }

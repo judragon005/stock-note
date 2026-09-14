@@ -73,4 +73,26 @@ describe('fetchCompanyDividendHistory', () => {
     const result = await fetchCompanyDividendHistory('9999', 'TW');
     expect(result).toEqual([]);
   });
+
+  it('同標的重複請求時應命中記憶體快取，不重發 fetch 請求', async () => {
+    const mockData = {
+      data: [
+        {
+          date: '2023-07-01',
+          CashEarningsDistribution: 5.0,
+        },
+      ],
+    };
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => mockData,
+    } as Response);
+
+    const res1 = await fetchCompanyDividendHistory('2454', 'TW');
+    const res2 = await fetchCompanyDividendHistory('2454', 'TW');
+
+    expect(res1).toEqual(res2);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
 });
