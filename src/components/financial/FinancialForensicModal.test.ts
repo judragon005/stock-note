@@ -3,6 +3,7 @@ import {
   resolveDisplayTitle,
   filterHistoricalRecordsByQuarter,
 } from './FinancialForensicModal';
+import { FinancialSkeletonLayer } from './FinancialSkeletonLayer';
 import type { QuarterlyFinancialRecord } from '../../types/financialForensic';
 
 describe('FinancialForensicModal (Modal Integration & Helper Tests)', () => {
@@ -41,5 +42,10 @@ describe('FinancialForensicModal (Modal Integration & Helper Tests)', () => {
     expect(sorted.length).toBe(2);
     expect(sorted[0].quarter).toBe(1);
     expect(sorted[1].quarter).toBe(2);
+  });
+
+  it('3. 券商級深色毛玻璃骨架屏 FinancialSkeletonLayer 正常定義與匯出', () => {
+    expect(FinancialSkeletonLayer).toBeDefined();
+    expect(typeof FinancialSkeletonLayer).toBe('function');
   });
 });

@@ -61,11 +61,40 @@ describe('financialReportService (TDD Seam)', () => {
     vi.spyOn(db, 'getStoredFinancialRecords').mockResolvedValue([]);
     const fetchSpy = vi.spyOn(twPipeline, 'fetchTaiwanQuarterlyFinancials').mockResolvedValue([dummyRecord]);
     const saveSpy = vi.spyOn(db, 'saveFinancialRecords').mockResolvedValue();
-
     const report = await loadOrFetchFinancialReport('2330', 'TW', '台積電');
 
     expect(fetchSpy).toHaveBeenCalledWith('2330', undefined);
     expect(saveSpy).toHaveBeenCalledWith([dummyRecord]);
     expect(report.overallScore).toBeGreaterThan(0);
+  });
+
+  it('3. 當本地快取屬於殘缺舊資料 (CFO 與資產全為 0) 時，應自動判定為無效快取並觸發遠端重撈自癒', async () => {
+    // 模擬先前舊版存留之單表殘缺快取 (無 CFO，無資產負債)
+    const staleRecord: QuarterlyFinancialRecord = {
+      ...dummyRecord,
+      balanceSheet: {
+        totalAssets: 0,
+        totalLiabilities: 0,
+        totalEquity: 0,
+        accountsReceivable: 0,
+        inventory: 0,
+        cashAndEquivalents: 0,
+      },
+      cashFlow: {
+        operatingCashFlow: 0,
+        capitalExpenditure: 0,
+      },
+    };
+
+    vi.spyOn(db, 'getStoredFinancialRecords').mockResolvedValue([staleRecord]);
+    const fetchSpy = vi.spyOn(twPipeline, 'fetchTaiwanQuarterlyFinancials').mockResolvedValue([dummyRecord]);
+    const saveSpy = vi.spyOn(db, 'saveFinancialRecords').mockResolvedValue();
+
+    const report = await loadOrFetchFinancialReport('2330', 'TW', '台積電', { forceRefresh: false });
+
+    // 應識別舊快取殘缺，自動發起遠端拉取以自癒
+    expect(fetchSpy).toHaveBeenCalledWith('2330', undefined);
+    expect(saveSpy).toHaveBeenCalledWith([dummyRecord]);
+    expect(report.trafficLights.cashFlow).not.toBe('GRAY');
   });
 });

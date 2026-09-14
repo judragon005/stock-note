@@ -13,7 +13,10 @@ import type {
   TrafficLightColor,
   FinancialHealthGrade,
   IndustryAttribute,
+  QuarterlyFinancialRecord,
 } from '../../types/financialForensic';
+import { isQuarterRecordComplete } from '../../engine/financialScoringEngine';
+import { formatFinancialAmount } from './FinancialTrendsLayer';
 
 export function getGradeColorClass(grade: FinancialHealthGrade): string {
   switch (grade) {
@@ -158,6 +161,20 @@ export function getIndustryBadgeInfo(attr: IndustryAttribute): {
   }
 }
 
+export function resolveLatestAuditedRecord(
+  historicalRecords: QuarterlyFinancialRecord[] = [],
+  latestPeriod?: string
+): QuarterlyFinancialRecord | null {
+  if (!historicalRecords || historicalRecords.length === 0) return null;
+  if (latestPeriod) {
+    const matched = historicalRecords.find((r) => `${r.year}-Q${r.quarter}` === latestPeriod);
+    if (matched && isQuarterRecordComplete(matched)) return matched;
+  }
+  const complete = historicalRecords.find(isQuarterRecordComplete);
+  if (complete) return complete;
+  return historicalRecords[0] || null;
+}
+
 interface FinancialHeroLayerProps {
   report: FinancialForensicReport;
 }
@@ -180,8 +197,8 @@ export const FinancialHeroLayer: React.FC<FinancialHeroLayerProps> = ({ report }
   const gradeStyle = getGradeInlineStyle(overallGrade);
   const indInfo = getIndustryBadgeInfo(industryAttribute);
 
-  // 提取最新一季數據
-  const latestRec = historicalRecords.length > 0 ? historicalRecords[historicalRecords.length - 1] : null;
+  // 提取最新完整審計季數據 (優先比對 latestPeriod，次之搜尋完整申報季)
+  const latestRec = resolveLatestAuditedRecord(historicalRecords, latestPeriod);
 
   // 1. 獲利能力數據
   const grossMarginStr = latestRec && latestRec.income.revenue > 0
@@ -201,7 +218,7 @@ export const FinancialHeroLayer: React.FC<FinancialHeroLayerProps> = ({ report }
     : '-';
   const totalDebt = (latestRec?.balanceSheet.shortTermDebt || 0) + (latestRec?.balanceSheet.longTermDebt || 0);
   const netCashAmount = latestRec ? latestRec.balanceSheet.cashAndEquivalents - totalDebt : 0;
-  const netCashStr = latestRec ? `${(netCashAmount / 1e8).toFixed(1)}億` : '-';
+  const netCashStr = latestRec ? formatFinancialAmount(netCashAmount) : '-';
 
   // 3. 營運效率數據
   const dsoStr = latestRec && latestRec.income.revenue > 0
@@ -214,10 +231,10 @@ export const FinancialHeroLayer: React.FC<FinancialHeroLayerProps> = ({ report }
 
   // 4. 現金流健康數據
   const cfoAmount = latestRec?.cashFlow?.operatingCashFlow ?? 0;
-  const cfoStr = latestRec ? `${(cfoAmount / 1e8).toFixed(1)}億` : '-';
+  const cfoStr = latestRec ? formatFinancialAmount(cfoAmount) : '-';
   const capexAmount = latestRec?.cashFlow?.capitalExpenditure ?? 0;
   const fcfAmount = cfoAmount - capexAmount;
-  const fcfStr = latestRec ? `${(fcfAmount / 1e8).toFixed(1)}億` : '-';
+  const fcfStr = latestRec ? formatFinancialAmount(fcfAmount) : '-';
 
   const lightCards = [
     {
@@ -323,7 +340,7 @@ export const FinancialHeroLayer: React.FC<FinancialHeroLayerProps> = ({ report }
                   border: '1px solid rgba(71, 85, 105, 0.6)',
                 }}
               >
-                {latestPeriod}
+                審計基準季：{latestPeriod}
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>

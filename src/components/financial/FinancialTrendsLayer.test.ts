@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   calculateMarginSvgPoints,
   formatCurrencyMillions,
+  formatFinancialAmount,
   getDuPontDriverBadge,
 } from './FinancialTrendsLayer';
 import type { QuarterlyFinancialRecord } from '../../types/financialForensic';
@@ -76,6 +77,17 @@ describe('FinancialTrendsLayer (Layer 2 UI Logic & TDD Tests)', () => {
     expect(formatCurrencyMillions(325258)).toBe('3,253 億');
     expect(formatCurrencyMillions(50)).toBe('50 百萬');
     expect(formatCurrencyMillions(-12000)).toBe('-120 億');
+  });
+
+  it('3.1 券商級真實金額 (元) 自適應換算器 formatFinancialAmount 正確', () => {
+    // 54.8 億元
+    expect(formatFinancialAmount(5486256000)).toBe('54.9 億');
+    // 負數 -8.8 億元
+    expect(formatFinancialAmount(-884300000)).toBe('-8.8 億');
+    // 5,000 萬元 (50 百萬)
+    expect(formatFinancialAmount(50000000)).toBe('50.0 百萬');
+    // 0 元
+    expect(formatFinancialAmount(0)).toBe('0.0 億');
   });
 
   it('4. 杜邦主驅動力標籤顯示與風險警示正確', () => {

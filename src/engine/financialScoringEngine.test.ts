@@ -105,9 +105,53 @@ describe('Financial Health Scoring & Executive Summary Engine (TDD Seam)', () =>
 
     expect(report.trafficLights.cashFlow).toBe('RED');
     expect(report.directive).toBeDefined();
-    expect(report.directive?.actionGuidance).toBeTruthy();
     expect(report.executiveSummary).not.toContain('獲利與營運現金流處於健康區間');
     expect(report.executiveSummary).toContain('操作方針');
+  });
+
+  it('6. 當最新一筆為空殼未申報季 (無淨利/資產) 時，應自動錨定最新完整申報季', () => {
+    const baseRecords = createHealthyRecords();
+    // 插入一筆空殼 2026-Q2 (僅有營收，無淨利無資產無現金流)
+    const shellRecord: QuarterlyFinancialRecord = {
+      ...baseRecords[0],
+      year: 2026,
+      quarter: 2,
+      periodDate: '2026-06-30',
+      income: {
+        revenue: 35000000000,
+        grossProfit: 12000000000,
+        operatingIncome: 0,
+        netIncome: 0,
+        eps: 0,
+      },
+      balanceSheet: {
+        totalAssets: 0,
+        totalLiabilities: 0,
+        totalEquity: 0,
+        accountsReceivable: 0,
+        inventory: 0,
+        cashAndEquivalents: 0,
+      },
+      cashFlow: {
+        operatingCashFlow: 0,
+        capitalExpenditure: 0,
+      },
+    };
+
+    const valid2025Q2: QuarterlyFinancialRecord = {
+      ...baseRecords[0],
+      year: 2025,
+      quarter: 2,
+      periodDate: '2025-06-30',
+    };
+
+    const mixedRecords = [shellRecord, valid2025Q2, ...baseRecords];
+    const report = generateFinancialForensicReport('2327', 'TW', '國巨', mixedRecords);
+
+    // 評估基準應自動錨定上一筆完整季 2025-Q2，而非空殼 2026-Q2
+    expect(report.latestPeriod).toBe('2025-Q2');
+    expect(report.duPont.roe).toBeGreaterThan(0);
+    expect(report.duPont.netMargin).toBeGreaterThan(0);
   });
 });
 

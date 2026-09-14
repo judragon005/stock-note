@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-870%2F870%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-876%2F876%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,19 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 穿透式財報深度分析儀三大報表原子聚合與操盤手決策系統 (`Financial Forensic Clarity, Tri-Statement Pipeline & Action Directives`) *(V8.43.0 全新升級)*
+### 0. 穿透式財報券商級常態同步、審計季度錨定與完整性門禁系統 (`Financial Forensic Broker-Grade Sync, Audited Sentry & Integrity Gate`) *(V8.44.0 全新升級)*
+- **金額自適應換算器 (`Adaptive Amount Formatter`)**：
+  - 嚴格以「元 (TWD)」為基底換算，$\ge 1$ 億換算為 `X.X 億`，100 萬～1 億換算為 `X.X 百萬`，徹底根除因單位乘除偏差導致的「499,910 億」等荒誕天文數字。
+- **快取完整性檢驗與自癒管線 (`Cache Integrity Sentry & Auto-Healing Pipeline`)**：
+  - `isFinancialRecordsCacheValid` 自動檢驗本地 IndexedDB 快取是否具備完整三表數據。若偵測到 CFO 與總資產全數為 0 的舊版殘缺快取，自動判定失效並無縫自遠端重撈覆蓋，杜絕假陽性空白。
+- **正式審計季度過濾哨兵 (`Audited Quarter Sentry & Metric Normalization`)**：
+  - 自動檢驗並過濾未申報完整季報（無淨利與資產負債）的自結空殼季度（如 26Q2）。
+  - 將 0 秒戰報、四大體質卡片、杜邦分析嚴格錨定於「最新完整申報季」，並在頂部明確標記【審計基準季：YYYY-QX】，徹底消滅 `0.0%`、`負債比 -`、`CFO 0 億` 之假陽性。
+- **券商級深色毛玻璃骨架屏與延遲淡入門禁 (`Broker-Grade Skeleton & Fade-In Gate`)**：
+  - 在資料同步或遠端重撈解析期間，維持結構固定的深色毛玻璃骨架屏（Hero 決策層、四大指標卡、三率趨勢圖與深度審查佔位），嚴禁未完備過渡數據提前渲染。
+  - 三大報表 100% 聚合驗證完成後，以 0.2 秒平滑淡入（Fade-In）點亮呈現，達成券商級沉浸式操作體驗。
+
+### 0. 穿透式財報深度分析儀三大報表原子聚合與操盤手決策系統 (`Financial Forensic Clarity, Tri-Statement Pipeline & Action Directives`) *(V8.43.0)*
 - **台股三大財務報表原子聚合管線 (`Taiwan Tri-Statement Atomic Ingestion Pipeline`)**：
   - 並行請求 FinMind 損益表 (`TaiwanStockFinancialStatements`)、資產負債表 (`TaiwanStockBalanceSheet`) 與現金流量表 (`TaiwanStockCashFlowsStatement`)。
   - 依結算日跨表原子歸併至 16 項標準科目，補齊台股營業活動現金流 (CFO)、資本支出 (Capex)、總資產、總負債與權益總計，徹底解決 CFO 假陽性為 0 的系統漏洞。

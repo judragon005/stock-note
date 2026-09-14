@@ -59,50 +59,61 @@ export function parseTaiwanFinancialStatements(
     const { year, quarter } = resolveYearQuarter(dateStr);
 
     // 1. 損益表科目 (Income Statement)
-    const revenue = values['Revenue'] || values['營業收入'] || 0;
-    const grossProfit = values['GrossProfit'] || values['營業毛利'] || 0;
-    const operatingIncome = values['OperatingIncome'] || values['營業利益'] || 0;
+    const revenue = values['Revenue'] || values['營業收入'] || values['營業收入合計'] || 0;
+    const grossProfit = values['GrossProfit'] || values['營業毛利'] || values['營業毛利（毛損）'] || 0;
+    const operatingIncome = values['OperatingIncome'] || values['營業利益'] || values['營業利益（損失）'] || 0;
     const netIncome =
       values['IncomeAfterTaxes'] ||
       values['NetIncome'] ||
       values['EquityAttributableToOwnersOfParent'] ||
+      values['歸屬於母公司業主之本期淨利（淨損）'] ||
+      values['本期淨利（淨損）'] ||
       values['本期淨利'] ||
       values['稅後淨利'] ||
       0;
-    const eps = values['EPS'] || values['每股盈餘'] || 0;
+    const eps = values['EPS'] || values['每股盈餘'] || values['基本每股盈餘'] || 0;
 
     // 2. 資產負債表科目 (Balance Sheet)
-    const totalAssets = values['TotalAssets'] || values['資產總計'] || 0;
-    const totalLiabilities = values['TotalLiabilities'] || values['負債總計'] || 0;
+    const totalAssets = values['TotalAssets'] || values['資產總計'] || values['資產總額'] || values['資產合計'] || 0;
+    const totalLiabilities = values['TotalLiabilities'] || values['負債總計'] || values['負債總額'] || values['負債合計'] || 0;
     const totalEquity =
       values['TotalEquity'] ||
       values['權益總計'] ||
+      values['權益總額'] ||
+      values['權益合計'] ||
       (totalAssets && totalLiabilities ? totalAssets - totalLiabilities : 0);
     const accountsReceivable =
       values['AccountsReceivable'] ||
       values['NotesAndAccountsReceivable'] ||
+      values['應收帳款及票據'] ||
+      values['應收票據及帳款'] ||
       values['應收帳款'] ||
       0;
-    const inventory = values['Inventories'] || values['存貨'] || 0;
+    const inventory = values['Inventories'] || values['存貨'] || values['存貨合計'] || 0;
     const cashAndEquivalents =
-      values['CashAndCashEquivalents'] || values['現金及約當現金'] || 0;
-    const shortTermDebt = values['ShortTermDebt'] || values['短期借款'] || undefined;
-    const longTermDebt = values['LongTermDebt'] || values['長期借款'] || undefined;
+      values['CashAndCashEquivalents'] || values['現金及約當現金'] || values['現金及約當現金總額'] || 0;
+    const shortTermDebt = values['ShortTermDebt'] || values['短期借款'] || values['短期有息負債'] || undefined;
+    const longTermDebt = values['LongTermDebt'] || values['長期借款'] || values['長期有息負債'] || undefined;
 
     // 3. 現金流量表科目 (Cash Flow Statement)
     const operatingCashFlow =
       values['CashFlowsFromOperatingActivities'] ||
       values['NetCashInflowFromOperatingActivities'] ||
-      values['OperatingCashFlow'] ||
+      values['營業活動之淨現金流入（流出）'] ||
       values['營業活動之現金流量'] ||
+      values['營業活動之現金流量合計'] ||
+      values['OperatingCashFlow'] ||
       0;
     const capitalExpenditure =
       values['PropertyAndPlantAndEquipment'] ||
       values['CapitalExpenditures'] ||
+      values['取得不動產、廠房及設備'] ||
       values['取得不動產廠房及設備'] ||
+      values['購置不動產、廠房及設備'] ||
+      values['資本支出'] ||
       0;
     const dividendPaid =
-      values['CashDividendsPaid'] || values['發放現金股利'] || undefined;
+      values['CashDividendsPaid'] || values['發放現金股利'] || values['發放之現金股利'] || undefined;
 
     results.push({
       symbol: symbol.toUpperCase(),
