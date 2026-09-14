@@ -74,14 +74,35 @@ export function parseTaiwanFinancialStatements(
     const eps = values['EPS'] || values['每股盈餘'] || values['基本每股盈餘'] || 0;
 
     // 2. 資產負債表科目 (Balance Sheet)
-    const totalAssets = values['TotalAssets'] || values['資產總計'] || values['資產總額'] || values['資產合計'] || 0;
-    const totalLiabilities = values['TotalLiabilities'] || values['負債總計'] || values['負債總額'] || values['負債合計'] || 0;
-    const totalEquity =
+    const rawAssets =
+      values['TotalAssets'] || values['資產總計'] || values['資產總額'] || values['資產合計'] || 0;
+    let rawLiab =
+      values['Liabilities'] ||
+      values['TotalLiabilities'] ||
+      values['負債總計'] ||
+      values['負債總額'] ||
+      values['負債合計'] ||
+      0;
+    let rawEquity =
+      values['Equity'] ||
+      values['EquityAttributableToOwnersOfParent'] ||
       values['TotalEquity'] ||
       values['權益總計'] ||
       values['權益總額'] ||
       values['權益合計'] ||
-      (totalAssets && totalLiabilities ? totalAssets - totalLiabilities : 0);
+      0;
+
+    // 會計恆等式自癒平衡 (Assets = Liabilities + Equity)
+    if (rawAssets > 0 && rawEquity > 0 && rawLiab === 0) {
+      rawLiab = Math.max(0, rawAssets - rawEquity);
+    } else if (rawAssets > 0 && rawLiab > 0 && rawEquity === 0) {
+      rawEquity = Math.max(0, rawAssets - rawLiab);
+    }
+
+    const totalAssets = rawAssets;
+    const totalLiabilities = rawLiab;
+    const totalEquity = rawEquity;
+
     const accountsReceivable =
       values['AccountsReceivable'] ||
       values['NotesAndAccountsReceivable'] ||
@@ -92,8 +113,19 @@ export function parseTaiwanFinancialStatements(
     const inventory = values['Inventories'] || values['存貨'] || values['存貨合計'] || 0;
     const cashAndEquivalents =
       values['CashAndCashEquivalents'] || values['現金及約當現金'] || values['現金及約當現金總額'] || 0;
-    const shortTermDebt = values['ShortTermDebt'] || values['短期借款'] || values['短期有息負債'] || undefined;
-    const longTermDebt = values['LongTermDebt'] || values['長期借款'] || values['長期有息負債'] || undefined;
+    const shortTermDebt =
+      values['ShorttermBorrowings'] ||
+      values['ShortTermDebt'] ||
+      values['短期借款'] ||
+      values['短期有息負債'] ||
+      undefined;
+    const longTermDebt =
+      values['LongtermBorrowings'] ||
+      values['LongTermDebt'] ||
+      values['長期借款'] ||
+      values['長期有息負債'] ||
+      values['BondsPayable'] ||
+      undefined;
 
     // 3. 現金流量表科目 (Cash Flow Statement)
     const operatingCashFlow =

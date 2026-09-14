@@ -24,6 +24,10 @@ import { HealthCard } from '../health/HealthCard';
 import { HealthReportModal } from '../health/HealthReportModal';
 import { isEtfSymbol } from '../health/StockHealthWorkspace';
 import { AnalysisMetricView } from './AnalysisMetricView';
+import {
+  fetchCompanyDividendHistory,
+  type CompanyDividendPolicyRecord,
+} from '../../engine/dividendService';
 import { logger } from '../../utils/logger';
 
 // 8 大一級主題
@@ -160,6 +164,7 @@ interface StockAnalysisWorkspaceProps {
   fmpApiKey?: string;
   finmindToken?: string;
   usdToTwdRate?: number;
+  defaultPrimaryTab?: PrimaryCategoryKey;
 }
 
 export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
@@ -168,6 +173,7 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
   currentPrices,
   fmpApiKey,
   finmindToken,
+  defaultPrimaryTab,
 }) => {
   // 1. 預設標的優先選擇非 ETF 普通股
   const initialSymbol = useMemo(() => {
@@ -181,13 +187,18 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
   const [searchInput, setSearchInput] = useState<string>('');
 
   // 雙層選單導航狀態
-  const [primaryTab, setPrimaryTab] = useState<PrimaryCategoryKey>('statements');
-  const [subTab, setSubTab] = useState<string>('eps');
+  const [primaryTab, setPrimaryTab] = useState<PrimaryCategoryKey>(
+    defaultPrimaryTab || 'statements'
+  );
+  const [subTab, setSubTab] = useState<string>(
+    defaultPrimaryTab === 'health' ? 'health_overview' : 'eps'
+  );
 
   // 健診與財報數據狀態
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [diagnosis, setDiagnosis] = useState<StockHealthDiagnosis | null>(null);
   const [financialRecords, setFinancialRecords] = useState<QuarterlyFinancialRecord[]>([]);
+  const [companyDividends, setCompanyDividends] = useState<CompanyDividendPolicyRecord[]>([]);
   const [activeModalResult, setActiveModalResult] = useState<HealthCheckCategoryResult | null>(null);
 
   // 追蹤清單狀態
@@ -222,7 +233,7 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
   const currentPrice = currentPrices[selectedSymbol] || selectedHolding?.currentPrice || 100;
   const isCurrentEtf = isEtfSymbol(selectedSymbol);
 
-  // 歷史配息整理
+  // 個人交易歷史配息整理 (作為備援)
   const annualDividends = useMemo(() => {
     const symbolTrades = trades.filter(
       (t) => t.symbol === selectedSymbol && t.type === 'DIVIDEND'
@@ -236,10 +247,24 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
     return Array.from(divByYear.entries()).map(([year, amount]) => ({ year, amount }));
   }, [trades, selectedSymbol]);
 
-  // 載入財報數據
+  // 載入財報與公開股利數據
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
+      // 1. 同步取得上市公司真實歷年公開股利政策
+      const divHistory = await fetchCompanyDividendHistory(
+        selectedSymbol,
+        market,
+        finmindToken
+      );
+      setCompanyDividends(divHistory);
+
+      const effectiveDividends =
+        divHistory.length > 0
+          ? divHistory.map((d) => ({ year: d.year, amount: d.cashDividend }))
+          : annualDividends;
+
+      // 2. 獲取財務報表
       const report = await loadOrFetchFinancialReport(
         selectedSymbol,
         market,
@@ -262,7 +287,7 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
         records,
         currentPrice,
         changeRate: 0,
-        annualDividends,
+        annualDividends: effectiveDividends,
       });
       setDiagnosis(res);
     } catch (err) {
@@ -831,7 +856,153 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
                   />
                   <p style={{ fontSize: '14px', margin: 0 }}>正在深度分析歷史財務數據與量化指標...</p>
                 </div>
+              ) : subTab === 'health_radar' ? (
+                /* 21 項量化指標平鋪全覽清單 (免開彈窗一覽無遺) */
+                (() => {
+                  const totalItemsCount = diagnosis?.categories.reduce((s, c) => s + c.totalItems, 0) || 0;
+                  const totalPassedCount = diagnosis?.categories.reduce((s, c) => s + c.passedItems, 0) || 0;
+                  const overallPassRate = totalItemsCount > 0 ? Math.round((totalPassedCount / totalItemsCount) * 100) : 0;
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                      <div
+                        style={{
+                          background: 'var(--bg-card)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '14px',
+                          padding: '20px 24px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: '16px',
+                        }}
+                      >
+                        <div>
+                          <h2 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
+                            21 項量化財務健康指標全覽表
+                          </h2>
+                          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
+                            四大維度綜合通過率：{overallPassRate}%（通過 {totalPassedCount} / {totalItemsCount} 項）
+                          </p>
+                        </div>
+                        <div
+                          style={{
+                            padding: '6px 16px',
+                            borderRadius: '20px',
+                            fontSize: '13px',
+                            fontWeight: 800,
+                            background:
+                              overallPassRate >= 70
+                                ? 'rgba(16, 185, 129, 0.15)'
+                                : 'rgba(239, 68, 68, 0.15)',
+                            color: overallPassRate >= 70 ? '#10b981' : '#ef4444',
+                            border: `1px solid ${
+                              overallPassRate >= 70 ? '#10b981' : '#ef4444'
+                            }`,
+                          }}
+                        >
+                          體質總評：{overallPassRate >= 70 ? '健康強韌' : '需注意風險'}
+                        </div>
+                      </div>
+
+                      {diagnosis?.categories.map((cat) => (
+                        <div
+                          key={cat.category}
+                          style={{
+                            background: 'var(--bg-card)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '14px',
+                            padding: '20px 24px',
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              borderBottom: '1px solid var(--border-color)',
+                              paddingBottom: '12px',
+                              marginBottom: '16px',
+                            }}
+                          >
+                            <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                              {cat.title} ({cat.passedItems}/{cat.totalItems})
+                            </h3>
+                            <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--accent-primary, #3b82f6)' }}>
+                              通過率 {cat.passRatio}%
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {cat.items.map((item) => (
+                              <div
+                                key={item.id}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'flex-start',
+                                  justifyContent: 'space-between',
+                                  padding: '12px 14px',
+                                  borderRadius: '10px',
+                                  background: 'var(--bg-secondary)',
+                                  gap: '12px',
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                                  <span style={{ marginTop: '2px' }}>
+                                    {item.exempted ? (
+                                      <ShieldCheck size={16} style={{ color: '#38bdf8' }} />
+                                    ) : item.passed ? (
+                                      <Check size={16} style={{ color: '#10b981' }} />
+                                    ) : (
+                                      <AlertTriangle size={16} style={{ color: '#ef4444' }} />
+                                    )}
+                                  </span>
+                                  <div>
+                                    <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                      {item.name}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                                      門檻：{item.thresholdDesc}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                  <div
+                                    style={{
+                                      fontSize: '12px',
+                                      fontWeight: 800,
+                                      color: item.exempted
+                                        ? '#38bdf8'
+                                        : item.passed
+                                        ? '#10b981'
+                                        : '#ef4444',
+                                    }}
+                                  >
+                                    {item.exempted ? '特許豁免' : item.passed ? '✔ 通過' : '✖ 未過'}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: '11px',
+                                      color: 'var(--text-secondary)',
+                                      marginTop: '2px',
+                                      fontFamily: 'var(--font-mono, monospace)',
+                                    }}
+                                  >
+                                    實測: {item.actualValue}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()
               ) : (
+                /* 四大健診卡片流 */
                 diagnosis?.categories.map((cat) => (
                   <HealthCard
                     key={cat.category}
@@ -895,7 +1066,12 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
                 subTab={subTab}
                 records={financialRecords}
                 currentPrice={currentPrice}
-                annualDividends={annualDividends}
+                annualDividends={
+                  companyDividends.length > 0
+                    ? companyDividends.map((d) => ({ year: d.year, amount: d.cashDividend }))
+                    : annualDividends
+                }
+                companyDividends={companyDividends}
                 stockName={stockName}
                 symbol={selectedSymbol}
               />

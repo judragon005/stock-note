@@ -29,9 +29,15 @@ export function isFinancialRecordsCacheValid(records: QuarterlyFinancialRecord[]
 
   const hasValidCashFlow = records.some((r) => (r.cashFlow?.operatingCashFlow ?? 0) !== 0);
   const hasValidBalanceSheet = records.some((r) => (r.balanceSheet?.totalAssets ?? 0) !== 0);
+  const hasValidEquityOrLiab = records.some(
+    (r) => (r.balanceSheet?.totalEquity ?? 0) !== 0 || (r.balanceSheet?.totalLiabilities ?? 0) !== 0
+  );
 
-  // 若兩者皆無（完全沒有現金流與資產負債），判定為無效快取需重撈自癒
+  // 若無現金流與資產負債，或總資產存在但負債與股東權益全為 0，判定為殘缺舊快取需自癒
   if (!hasValidCashFlow && !hasValidBalanceSheet) {
+    return false;
+  }
+  if (hasValidBalanceSheet && !hasValidEquityOrLiab) {
     return false;
   }
 
