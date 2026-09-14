@@ -4,7 +4,7 @@
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-909%2F909%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-923%2F923%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,19 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 個股分析全量指標補齊、公開市場歷年股利串接與實盤體驗優化 (`Stock Analysis Comprehensive Audit & Full Metrics Pipeline`) *(V8.46.1 全新發布)*
+### 0. 個股分析成長率基期補齊、極端值視覺防禦、真實河流圖與估值模型審計 (`Stock Analysis Growth, River Bands & Valuation Audit`) *(V8.46.2 全新發布)*
+- **成長率基期補齊與缺失平整化 (`Growth Baseline Expansion & Flattener`)**：
+  - 財報查詢起始日提前至 `2021-01-01`，補足 2022 年 4 季之完整前期基期；無基期時輸出 `displayValue: '-'` 且柱高歸零，徹底杜絕誤標 `0%` 假綠柱。
+- **極端值自適應可視封頂防禦 (`Outlier Visual Capping Engine`)**：
+  - 核實台泥 23Q2 毛利暴衝 `+5326.2%` 為歷史真實數據（煤炭危機回落）；提取非離群上限作為縮放基準，使正常季度（+14.5%, +52.1%）保有起伏，極端值高度封頂 100% 並標註 `⚡+5326.2%` 與低基期效應說明。
+- **真實 SVG 估值河流圖引擎 (`True SVG Valuation River Bands Engine`)**：
+  - 揚棄寫死 18% 藍色假方塊，改以 SVG 多邊形 (`<polygon>`) 繪製 4 階彩色漸層河流帶，隨 TTM EPS、每股淨值 BVPS、平均股息動態流動；疊加現價水平線、最新落點脈衝光點、評級徽章與歷季數據矩陣。
+- **價值評估 7 大獨立子頁面重構 (`7-Valuation Subtabs Full Redesign`)**：
+  - 完整實作本益比評價 (`pe_valuation`)、本益比河流圖 (`pe_river`)、淨值比評價 (`pb_valuation`)、淨值比河流圖 (`pb_river`)、股利殖利率 (`dividend_yield`)、平均股息估價 (`avg_dividend_yield`) 與股息河流圖 (`dividend_river`)。
+- **全市場動態流通股數推導與量化估值校準 (`Dynamic Shares, FCF Yield & DCF Real Value`)**：
+  - 優先自資產負債表股本 (`capitalStock / 10`) 動態推導真實流通股數（台泥為 75.3 億股），徹底拔除寫死 1000 萬股；台泥 FCF Yield 回歸 5%~15% 正常區間，DCF 每股內在價值回歸 30~45 元正常區間。
+
+### 0. 個股分析全量指標補齊、公開市場歷年股利串接與實盤體驗優化 (`Stock Analysis Comprehensive Audit & Full Metrics Pipeline`) *(V8.46.1)*
 - **頂部一級導航列收斂與相容重定向 (`Navigation Convergence & Legacy Redirection`)**：
   - 頂部導航列移除重複的「股票健診」頁籤，全面統一收斂於「個股分析」內部，舊路由訪問自動相容無痛重定向。
 - **21 項量化指標平鋪全覽檢驗清單 (`21-Metric Health Check Flat View`)**：
