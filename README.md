@@ -3,13 +3,28 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-879%2F879%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-888%2F888%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 股票健診系統純運算診斷引擎、穿透報告與專屬工作區 (`Stock Health Check Diagnosis Engine, Forensic Report & Dedicated Workspace`) *(V8.45.0 全新巨獻)*
+- **四大核心健診幫手與 21 項指標 (`Four Core Health Check Dimensions`)**：
+  - **排除地雷股健診 (6 項)**：5 年 FCF 至少 3 年 $>0$、5 年平均 FCF $>0$、CFO/淨利比 3 年 $>100\%$、5 年平均 $>100\%$、最新季應收帳款與存貨天數同期比對。
+  - **定存股健診 (5 項)**：近 1 年殖利率 $>6\%$、近 5 年平均殖利率 $>6\%$、連續 5 年配息、配息發放率 3 年 $>50\%$、5 年平均發放率 $>50\%$。
+  - **成長股健診 (4 項)**：近一季毛利、營業利益、稅前利益、稅後淨利 YoY 年增率 $>0\%$。
+  - **便宜股健診 (6 項)**：本益比/股價淨值比 5 年區間最低 20% 分位、低於自身 5 年歷史中位數、殖利率指標連動。
+- **金融控股業自動豁免機制 (`Financial Industry Exemption`)**：
+  - 金融控股與銀行業（`industryAttribute === 'FINANCIALS'`）依法自動豁免存貨週轉天數與應收帳款天數，總檢驗項目自動降為 4 項並重算通過率，杜絕金控股誤判為地雷股。
+- **雙層 SVG 圓環評分進度條與卡片流 (`HealthScoreGauge & HealthCard`)**：
+  - 現代雙層 SVG 進度環，中央清晰標註通過條件數（如 $4/6$）與百分比，外環依比例自動染色（藍/綠/橘/紅）。
+- **穿透式完整健診報告彈窗 (`HealthReportModal`)**：
+  - 忠實還原參考介面之綠勾「✔ 通過」與紅叉「✖ 沒過」清單，提供各指標門檻與評估詳解。
+- **一級專屬工作區與深入了解側邊欄 (`StockHealthWorkspace`)**：
+  - 整合頂部藍色導航橫幅（可折疊關閉說明）、標的資訊與快速切換器、追蹤按鈕，以及右側「深入了解」Q&A 導航側邊欄。
 
 ### 0. 穿透式財報券商級常態同步、審計季度錨定與完整性門禁系統 (`Financial Forensic Broker-Grade Sync, Audited Sentry & Integrity Gate`) *(V8.44.0 全新升級)*
 - **金額自適應換算器 (`Adaptive Amount Formatter`)**：
