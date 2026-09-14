@@ -1,10 +1,13 @@
-# Ticket 04: 全面重構本益比、淨值比、現金股息 7 大獨立子分頁
+# 04 — 價值評估七大子分頁視圖重構與分流 (Seven Valuation Subtabs Redesign)
 
-## 任務內容
-- [x] 重構 pe_valuation (滾動 4 季 TTM EPS、五檔階梯卡片、現價評估)
-- [x] 串接 pe_river (真實 TTM EPS 河流圖)
-- [x] 重構 pb_valuation (真實 BVPS、五檔淨值比通道、落點判定)
-- [x] 串接 pb_river (真實每股淨值河流圖)
-- [x] 重構 dividend_yield (最新年度殖利率卡片與近 5 年股息歷史表)
-- [x] 重構 avg_dividend_yield (近 3 年/5 年平均股息、三段估價與安全邊際)
-- [x] 串接 dividend_river (平均股息殖利率河流圖)
+**What to build:**
+徹底解決「價值評估」模組下 7 個子分頁內容混亂與共用靜態模板的問題。使 7 大子分頁（本益比評價、本益比河流圖、本淨比評價、本淨比河流圖、現金殖利率評價、平均現金股利評價、殖利率河流圖）各自呈現獨立專屬的視覺介面、歷史軌跡統計、專屬指標卡片與河流圖通道分析。
+
+**Blocked by:** 03 — 真實 SVG 估值河流圖色帶引擎 (SVG Valuation River Bands Engine)
+
+**Status:** ready-for-agent
+
+- [x] 重構 `renderValuationView` 路由分流，支援 7 大子分頁專屬渲染
+- [x] 本益比/本淨比評價分頁：展示最新倍數、歷史中位數、高低估偏離度與歷季統計卡片
+- [x] 本益比/本淨比河流圖分頁：嵌入動態 SVG 河流圖引擎與估值區間矩陣
+- [x] 殖利率三大分頁：展示最新殖利率、歷年配息總額、填息天數評估與專屬殖利率位階分析

@@ -1,6 +1,12 @@
-# Ticket 01: 成長率基期擴充與缺失基期平整化
+# 01 — 成長率基期擴充與缺失基期平整化 (Growth Baseline Expansion & Flattener)
 
-## 任務內容
-- [x] 將 taiwanFinancialPipeline.ts 之 start_date 擴展至 2021-01-01
-- [x] 在 AnalysisMetricView.tsx 增加基期嚴格判定 (hasBaseline)
-- [x] 無基期時輸出 displayValue: '-' 且柱高歸零，杜絕虛假 0% 綠柱
+**What to build:**
+當使用者在「個股分析」查看營收或獲利成長率時，前端圖表能完整呈現 2022 年起各季度的正確 YoY 成長趨勢；對於因數據源起始點而完全無同期數據可比的極早期季度（如 2021 年），圖表應平整化顯示為 `-` 且柱高歸零，而非誤標為 `0%` 成長柱。
+
+**Blocked by:** None — can start immediately.
+
+**Status:** ready-for-agent
+
+- [x] 擴充財務資料管線獲取起算日期至 2021-01-01，確保 2022Q1~2022Q4 擁有完整 4 季同比對照基準
+- [x] 成長率柱狀圖具備無基期防禦檢核機制，當數據無同期對比時，數值顯示 `-` 且柱狀高設為 0
+- [x] 單元測試驗證 2022 年全季度均能計算出真實 YoY，無基期時不再產生誤導性 0% 綠柱
