@@ -4,13 +4,27 @@
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-893%2F893%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-904%2F904%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 個股深度分析工作區、雙層側邊欄導航與關鍵量化估值體系 (`Stock Analysis Workspace & Key Metrics Engine`) *(V8.46.0 全新發布)*
+- **雙層二級側邊欄導航拓撲 (`Two-Tier Hierarchical Topology`)**：
+  - 8 大主題分類（最新動態、股票健診、財務報表、獲利能力、安全性分析、成長力分析、價值評估、關鍵指標）橫向串聯 45 個細項單一指標。
+  - 單一指標微切片呈現（如每股盈餘、每股淨值、損益階梯、資產分佈、負債權益結構、現金流瀑布、三率走勢、杜邦三因子拆解、週轉天數 DSO/DIO/CCC、流速動比率、利息保障倍數等）。
+- **關鍵量化估值模型與即時互動滑桿 (`Quantitative Valuation & Interactive Sliders`)**：
+  - **Piotroski F-Score (9 分評分卡)**：從獲利性、安全性、營運效率三大面向評估體質，針對雙負虧損建立嚴格防禦邊界。
+  - **自由現金流報酬率 (FCF Yield)**：每股自由現金流與市價之報酬率，附帶優質與警示評級。
+  - **彼得林區價值模型 (Peter Lynch PEG)**：以 EPS 年複合成長率推算合理成長定價與 PEG 比率。
+  - **現金流折現模型 (DCF with Real-Time Sliders)**：內建加權資金成本 (WACC) 與永續成長率 (Terminal Growth Rate) 雙滑桿，支援即時動態拖曳並計算每股內在價值與溢折價幅度。
+  - **高登股利折現模型 (Gordon Growth DDM)**：依據歷史現金股利推估長期穩定收息之安全邊際價位。
+- **標的快捷膠囊與 ETF 智慧防呆遮罩 (`Stock Pills & ETF Look-Through Gate`)**：
+  - 動態整合使用者持倉個股、自訂追蹤清單與台美權值股，點擊即時無縫切換。
+  - 智慧識別 ETF 標的，呈現專屬防呆導航引導前往「持股穿透分析」，杜絕誤讀個體企業財報。
 
 ### 0. 股票健診系統原生毛玻璃擬態、ETF智慧防呆與標的快捷膠囊全面重構 (`Stock Health Check UX Redesign, Native Glassmorphism & ETF Guard`) *(V8.45.1 全新重構)*
 - **原生 Glassmorphism 擬態與排版防禦 (`Native Glassmorphism & Anti-Break Layout`)**：

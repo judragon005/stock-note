@@ -1661,10 +1661,20 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 動態 SVG 雙層圓環進度條，中央大字標註通過條件數（如 $4/6$）與百分比。
   - 穿透式詳細報告彈窗提供對齊業界標準之高對比綠勾「✔ 通過」與紅叉「✖ 沒過」詳細指標檢驗清單與文字門檻說明。
 - **Dedicated Stock Health Workspace (專屬股票健診一級工作區)**:
-  - 系統一級導航整合，包含頂部藍色導航橫幅（可折疊關閉說明）、標的資訊與快速切換器、追蹤按鈕、雙欄卡片流，以及右側「深入了解」Q&A 導航側邊欄。
 
+### 個股深度分析工作區與關鍵量化估值體系 *(新增於 V8.46.0 / Spec #0129 / Issue #59)*
 
-
-
-
-
+- **Stock Analysis Workspace (個股深度分析一級工作區)**:
+  - 核心定義：一站式深度分析環境，整合 8 大一級主題（最新動態、股票健診、財務報表、獲利能力、安全性分析、成長力分析、價值評估、關鍵指標）與 45 項單一微切片指標。
+- **Stock Pills & Quick Switcher (標的快捷膠囊列)**:
+  - 核心機制：動態整合即時持倉股、自訂追蹤清單與台美市場龍頭股（台積電、聯發科、鴻海、Apple、Nvidia、Microsoft），支援一鍵點擊切換，自動快取歷史 20 季報表並自適應更新。
+- **ETF Look-Through Safety Gate (ETF 智慧防呆遮罩)**:
+  - 核心機制：自動辨識 0050、0056、VOO 等指數型 ETF，當進入個股財報或財務指標時，渲染智慧指引遮罩，引導使用者前往「持股穿透 (Look-Through)」視圖，杜絕將 ETF 誤判為無財報的個體企業。
+- **Two-Tier Hierarchical Topology (雙層導航拓撲)**:
+  - 側邊欄採用 Tier 1（一級主題按鈕列）與 Tier 2（二級單一微指標清單）的立體分離導航架構，支援使用者專注於單一財務視角，無干擾深入審計。
+- **Quantitative Valuation Engine (`src/engine/keyMetricsEngine.ts`)**:
+  - **Piotroski F-Score (9 分卡)**: 評估獲利能力 (ROA、CFO、ROA變動、Accrual)、資本結構 (槓桿比率變動、流動比率變動、稀釋股份變動) 與營運效率 (毛利率變動、資產週轉率變動)。嚴格約束虧損且現金流惡化企業判定，提供 0~9 分評級 (STRONG, MODERATE, WEAK)。
+  - **FCF Yield (自由現金流報酬率)**: 每股 FCF 與當前股價之收益率比，衡量企業現金回報能力。
+  - **Peter Lynch Valuation & PEG (彼得林區合理價與成長動能指標)**: 以 TTM EPS 乘上每股淨利年複合成長率計算合理價，並推算 PEG 判定 UNDERVALUED / FAIR / OVERVALUED。
+  - **Interactive DCF Model (現金流折現模型與雙滑桿即時試算)**: 具備加權平均資金成本 (WACC) 與永續成長率 (Terminal Growth Rate) 互動滑桿，即時動態折現企業價值與股權價值。
+  - **Gordon Growth DDM (股利折現模型)**: 依據近 5 年現金股利發放水準與折現門檻，推算定存收息股之理論安全邊際價值。
