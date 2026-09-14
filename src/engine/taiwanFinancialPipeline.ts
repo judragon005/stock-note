@@ -263,7 +263,7 @@ export async function fetchTaiwanQuarterlyFinancials(
     const fetchDataset = async (dataset: string): Promise<FinmindFinancialItem[]> => {
       const url = `https://api.finmindtrade.com/api/v4/data?dataset=${dataset}&data_id=${encodeURIComponent(
         cleanSymbol
-      )}&start_date=2022-01-01${tokenParam}`;
+      )}&start_date=2021-01-01${tokenParam}`;
       const res = await fetch(url);
       if (!res.ok) return [];
       const json = await res.json();

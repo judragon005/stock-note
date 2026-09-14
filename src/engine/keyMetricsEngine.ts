@@ -186,16 +186,43 @@ export function calculatePiotroskiFScore(
  * 2. 自由現金流報酬率 (FCF Yield)
  */
 export function calculateFcfYield(
-  record: QuarterlyFinancialRecord,
+  recordOrRecords: QuarterlyFinancialRecord | QuarterlyFinancialRecord[],
   currentPrice: number,
-  totalShares = 10000000
+  overrideShares?: number
 ): number {
-  if (!record || currentPrice <= 0 || totalShares <= 0) return 0;
-  const cfo = record.cashFlow?.operatingCashFlow ?? 0;
-  const capex = record.cashFlow?.capitalExpenditure ?? 0;
-  const fcf = cfo - capex;
+  if (!recordOrRecords || currentPrice <= 0) return 0;
+
+  const records = Array.isArray(recordOrRecords) ? recordOrRecords : [recordOrRecords];
+  if (records.length === 0) return 0;
+
+  const latest = records[0] || records[records.length - 1];
+  let totalShares = overrideShares ?? 0;
+  if (totalShares <= 0) {
+    if (latest.balanceSheet?.capitalStock && latest.balanceSheet.capitalStock > 0) {
+      totalShares = latest.balanceSheet.capitalStock / 10;
+    } else if (latest.income?.netIncome && latest.income.eps && latest.income.eps > 0) {
+      totalShares = latest.income.netIncome / latest.income.eps;
+    }
+  }
+  if (totalShares <= 0) totalShares = 1000000000;
+
+  let fcf = 0;
+  if (Array.isArray(recordOrRecords) && recordOrRecords.length > 1) {
+    // 多季陣列：累加近 4 季 TTM FCF
+    const recent = recordOrRecords.slice(0, 4);
+    const sumCfo = recent.reduce((acc, r) => acc + (r.cashFlow?.operatingCashFlow ?? 0), 0);
+    const sumCapex = recent.reduce((acc, r) => acc + Math.abs(r.cashFlow?.capitalExpenditure ?? 0), 0);
+    fcf = sumCfo - sumCapex;
+  } else {
+    // 單季物件
+    const cfo = latest.cashFlow?.operatingCashFlow ?? 0;
+    const capex = Math.abs(latest.cashFlow?.capitalExpenditure ?? 0);
+    fcf = cfo - capex;
+  }
+
   const fcfPerShare = fcf / totalShares;
-  return Number(((fcfPerShare / currentPrice) * 100).toFixed(2));
+  const yieldPct = Number(((fcfPerShare / currentPrice) * 100).toFixed(2));
+  return Math.max(-100, Math.min(100, yieldPct));
 }
 
 /**
@@ -283,15 +310,25 @@ export function calculateDcfValuation(
 ): DcfValuationResult {
   const r = options?.waccRate ?? 0.09;
   const gn = options?.perpetualGrowthRate ?? 0.025;
-  const g = options?.forecastGrowthRate ?? 0.10;
-  const shares = options?.totalShares ?? 10000000;
+  const g = options?.forecastGrowthRate ?? 0.05;
+
+  const latest = records?.[0] || records?.[records?.length - 1];
+  let shares = options?.totalShares ?? 0;
+  if (shares <= 0 && latest) {
+    if (latest.balanceSheet?.capitalStock && latest.balanceSheet.capitalStock > 0) {
+      shares = latest.balanceSheet.capitalStock / 10;
+    } else if (latest.income?.netIncome && latest.income.eps && latest.income.eps > 0) {
+      shares = latest.income.netIncome / latest.income.eps;
+    }
+  }
+  if (shares <= 0) shares = 1000000000;
 
   // 計算近 4 季 TTM FCF
   let baseFcf = 50000000;
   if (records && records.length > 0) {
     const recent = records.slice(0, 4);
     const sumCfo = recent.reduce((acc, r) => acc + (r.cashFlow?.operatingCashFlow ?? 0), 0);
-    const sumCapex = recent.reduce((acc, r) => acc + (r.cashFlow?.capitalExpenditure ?? 0), 0);
+    const sumCapex = recent.reduce((acc, r) => acc + Math.abs(r.cashFlow?.capitalExpenditure ?? 0), 0);
     const calculated = sumCfo - sumCapex;
     if (calculated > 0) baseFcf = calculated;
   }

@@ -61,10 +61,10 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
     return calculatePiotroskiFScore(records);
   }, [records]);
 
-  // 2. FCF Yield 計算
+  // 2. FCF Yield 計算 (以近 4 季 TTM 自由現金流總額計算年化報酬率)
   const fcfYield = useMemo(() => {
-    return calculateFcfYield(latestRecord, currentPrice);
-  }, [latestRecord, currentPrice]);
+    return calculateFcfYield(chronological, currentPrice);
+  }, [chronological, currentPrice]);
 
   // 3. 彼得林區評價
   const lynchRes = useMemo(() => {
@@ -91,9 +91,16 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
 
   // ========================== 繪圖輔助元件 (全原生純 CSS Tokens) ==========================
 
-  // 動態 Baseline 柱狀走勢圖 (解決 4500 億 ~ 6200 億看起來全一樣高的核心問題)
+  // 動態 Baseline 與極端值自適應柱狀走勢圖
   const renderSimpleBars = (
-    data: { label: string; value: number; displayValue: string; isNegative?: boolean }[],
+    data: {
+      label: string;
+      value: number;
+      displayValue: string;
+      isNegative?: boolean;
+      isNoData?: boolean;
+      note?: string;
+    }[],
     color = '#3b82f6',
     unitText?: string
   ) => {
@@ -105,15 +112,22 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
       );
     }
 
-    const values = data.map((d) => d.value);
-    const minVal = Math.min(...values);
-    const maxVal = Math.max(...values);
-    const allPositive = values.every((v) => v >= 0);
+    const validData = data.filter((d) => !d.isNoData && d.displayValue !== '-' && d.displayValue !== 'N/A');
+    const values = validData.map((d) => d.value);
+    const minVal = values.length > 0 ? Math.min(...values) : 0;
+    const maxVal = values.length > 0 ? Math.max(...values) : 100;
+    const allPositive = values.length > 0 && values.every((v) => v >= 0);
+
+    // 離群極端值防禦 (Outlier Visual Capping)：例如毛利暴衝 +5326.2%
+    // 找出非離群值 (< 300%) 的最大值，作為視覺縮放基準，避免壓縮正常季度
+    const nonOutlierValues = values.filter((v) => v < 300);
+    const normalMax = nonOutlierValues.length > 0 ? Math.max(...nonOutlierValues) : maxVal;
+    const visualCap = values.some((v) => v >= 300) ? Math.max(60, normalMax * 1.35) : Math.max(1, maxVal);
 
     // 當所有數值皆為正且有顯著基底規模（如總資產、每股淨值），啟用動態 Baseline 浮動底線
-    const useDynamicBaseline = allPositive && minVal > 0 && maxVal > minVal * 1.05;
+    const useDynamicBaseline = allPositive && minVal > 0 && maxVal > minVal * 1.05 && maxVal < 500;
     const baseline = useDynamicBaseline ? minVal * 0.85 : 0;
-    const range = Math.max(1, maxVal - baseline);
+    const range = Math.max(1, (useDynamicBaseline ? maxVal : visualCap) - baseline);
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -134,14 +148,25 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
           }}
         >
           {data.map((d, idx) => {
-            const hPct = useDynamicBaseline
-              ? Math.min(100, Math.max(12, ((d.value - baseline) / range) * 100))
-              : Math.min(100, Math.max(8, (Math.abs(d.value) / Math.max(1, maxVal)) * 100));
-
+            const isNoData = d.isNoData || d.displayValue === '-' || d.displayValue === 'N/A';
+            const isOutlier = !isNoData && d.value >= visualCap && d.value > 150;
             const isLoss = d.isNegative || d.value < 0;
+
+            let hPct = 0;
+            if (isNoData) {
+              hPct = 2; // 扁平底座標記
+            } else if (isOutlier) {
+              hPct = 100; // 封頂滿格
+            } else if (useDynamicBaseline) {
+              hPct = Math.min(100, Math.max(12, ((d.value - baseline) / range) * 100));
+            } else {
+              hPct = Math.min(100, Math.max(8, (Math.abs(d.value) / visualCap) * 100));
+            }
+
             return (
               <div
                 key={idx}
+                title={d.note || (isOutlier ? `歷史真實爆發值: ${d.displayValue} (低基期效應)` : undefined)}
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -150,29 +175,47 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
                   flex: 1,
                   height: '100%',
                   justifyContent: 'flex-end',
+                  cursor: isOutlier || isNoData ? 'help' : 'default',
                 }}
               >
                 <span
                   style={{
-                    fontSize: '10px',
+                    fontSize: isOutlier ? '9px' : '10px',
                     fontFamily: 'var(--font-mono, monospace)',
-                    color: isLoss ? '#ef4444' : 'var(--text-secondary)',
+                    color: isNoData
+                      ? 'var(--text-secondary)'
+                      : isLoss
+                      ? '#ef4444'
+                      : isOutlier
+                      ? '#f59e0b'
+                      : 'var(--text-secondary)',
+                    fontWeight: isOutlier ? 800 : 500,
                     marginBottom: '4px',
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {d.displayValue}
+                  {isOutlier ? `⚡${d.displayValue}` : d.displayValue}
                 </span>
                 <div
                   style={{
                     width: '100%',
                     maxWidth: '32px',
                     height: `${hPct}%`,
-                    borderRadius: '4px 4px 0 0',
-                    background: isLoss ? '#ef4444' : color,
+                    borderRadius: isNoData ? '1px' : '4px 4px 0 0',
+                    background: isNoData
+                      ? 'var(--border-color)'
+                      : isLoss
+                      ? '#ef4444'
+                      : isOutlier
+                      ? 'linear-gradient(180deg, #f59e0b 0%, #10b981 100%)'
+                      : color,
                     transition: 'all 0.25s ease',
-                    boxShadow: isLoss
+                    boxShadow: isNoData
+                      ? 'none'
+                      : isLoss
                       ? '0 2px 6px rgba(239, 68, 68, 0.25)'
+                      : isOutlier
+                      ? '0 2px 8px rgba(245, 158, 11, 0.4)'
                       : `0 2px 6px ${color}40`,
                   }}
                 />
@@ -258,7 +301,6 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
                       color: series1.color,
                       fontFamily: 'var(--font-mono, monospace)',
                       whiteSpace: 'nowrap',
-                      lineHeight: 1.1,
                     }}
                   >
                     {v1.toFixed(1)}{unit}
@@ -270,33 +312,34 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
                       color: series2.color,
                       fontFamily: 'var(--font-mono, monospace)',
                       whiteSpace: 'nowrap',
-                      lineHeight: 1.1,
                     }}
                   >
                     {v2.toFixed(1)}{unit}
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', width: '100%', height: '100%' }}>
+                {/* 雙色並排對比柱 */}
+                <div style={{ display: 'flex', gap: '3px', alignItems: 'flex-end', height: '100%', width: '100%', maxWidth: '32px' }}>
                   <div
                     style={{
                       flex: 1,
                       height: `${h1}%`,
-                      background: series1.color,
                       borderRadius: '3px 3px 0 0',
+                      background: series1.color,
+                      transition: 'all 0.25s ease',
                     }}
-                    title={`${series1.name}: ${v1.toFixed(1)}${unit}`}
                   />
                   <div
                     style={{
                       flex: 1,
                       height: `${h2}%`,
-                      background: series2.color,
                       borderRadius: '3px 3px 0 0',
+                      background: series2.color,
+                      transition: 'all 0.25s ease',
                     }}
-                    title={`${series2.name}: ${v2.toFixed(1)}${unit}`}
                   />
                 </div>
+
                 <span style={{ fontSize: '10px', color: 'var(--text-secondary)', marginTop: '6px', whiteSpace: 'nowrap' }}>
                   {lbl}
                 </span>
@@ -305,38 +348,26 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
           })}
         </div>
 
-        {/* 歷史季報數值明細對照表 */}
-        <div
-          style={{
-            marginTop: '8px',
-            background: 'var(--bg-secondary)',
-            borderRadius: '10px',
-            padding: '12px 14px',
-            border: '1px solid var(--border-color)',
-            overflowX: 'auto',
-          }}
-        >
-          <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-            歷史各季數值明細對照表：
-          </div>
-          <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse', textAlign: 'center', fontFamily: 'var(--font-mono, monospace)' }}>
+        {/* 歷史數據對照表 */}
+        <div style={{ overflowX: 'auto', marginTop: '4px' }}>
+          <table style={{ width: '100%', fontSize: '11px', textAlign: 'right', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-color)' }}>
-                <th style={{ padding: '4px 6px', textAlign: 'left', whiteSpace: 'nowrap' }}>科目指標</th>
+                <th style={{ textAlign: 'left', padding: '4px 6px' }}>指標 / 季度</th>
                 {labels.map((lbl, i) => (
-                  <th key={i} style={{ padding: '4px 6px', minWidth: '44px', whiteSpace: 'nowrap' }}>{lbl}</th>
+                  <th key={i} style={{ padding: '4px 6px', fontWeight: 600 }}>{lbl}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              <tr style={{ borderBottom: '1px dashed rgba(255,255,255,0.06)' }}>
-                <td style={{ padding: '4px 6px', textAlign: 'left', color: series1.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{series1.name}</td>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                <td style={{ textAlign: 'left', padding: '4px 6px', color: series1.color, fontWeight: 700 }}>{series1.name}</td>
                 {series1.values.map((v, i) => (
                   <td key={i} style={{ padding: '4px 6px', color: series1.color, fontWeight: 600 }}>{v.toFixed(1)}{unit}</td>
                 ))}
               </tr>
               <tr>
-                <td style={{ padding: '4px 6px', textAlign: 'left', color: series2.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{series2.name}</td>
+                <td style={{ textAlign: 'left', padding: '4px 6px', color: series2.color, fontWeight: 700 }}>{series2.name}</td>
                 {series2.values.map((v, i) => (
                   <td key={i} style={{ padding: '4px 6px', color: series2.color, fontWeight: 600 }}>{v.toFixed(1)}{unit}</td>
                 ))}
@@ -348,54 +379,267 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
     );
   };
 
-  // 估值河流圖帶 (PE River / PB River)
+  // 真實 SVG 多階通道估值河流圖 (PE River / PB River / Dividend River)
   const renderValuationRiver = (
     labels: string[],
-    baseMetrics: number[], // 每股 EPS 或 每股淨值
-    multipliers: number[], // 倍數如 [10, 14, 18, 22, 26]
-    metricName: string
+    baseMetrics: number[], // 每股 EPS 或 每股淨值 或 每股股息
+    multipliers: number[], // 倍數階梯，如 [10, 14, 18, 22, 26]
+    metricName: string,
+    unitSuffix = 'x'
   ) => {
+    if (!labels || labels.length === 0 || !baseMetrics || baseMetrics.length === 0) {
+      return <div style={{ color: 'var(--text-secondary)', padding: '24px', textAlign: 'center' }}>暫無足夠歷史數據產生河流圖</div>;
+    }
+
     const latestBase = baseMetrics[baseMetrics.length - 1] || 1;
+    const sortedMultipliers = [...multipliers].sort((a, b) => a - b);
+    
+    // 計算當前股價落點通道
+    const latestTargetPrices = sortedMultipliers.map((m) => Number((latestBase * m).toFixed(2)));
+    let currentZoneLabel = '合理';
+    let currentZoneColor = '#3b82f6';
+    if (currentPrice < latestTargetPrices[0]) {
+      currentZoneLabel = `超跌 (<${sortedMultipliers[0]}${unitSuffix})`;
+      currentZoneColor = '#10b981';
+    } else if (currentPrice <= latestTargetPrices[1]) {
+      currentZoneLabel = `便宜 (${sortedMultipliers[0]}${unitSuffix} ~ ${sortedMultipliers[1]}${unitSuffix})`;
+      currentZoneColor = '#10b981';
+    } else if (currentPrice <= latestTargetPrices[2]) {
+      currentZoneLabel = `合理偏低 (${sortedMultipliers[1]}${unitSuffix} ~ ${sortedMultipliers[2]}${unitSuffix})`;
+      currentZoneColor = '#06b6d4';
+    } else if (currentPrice <= latestTargetPrices[3]) {
+      currentZoneLabel = `合理偏高 (${sortedMultipliers[2]}${unitSuffix} ~ ${sortedMultipliers[3]}${unitSuffix})`;
+      currentZoneColor = '#f59e0b';
+    } else {
+      currentZoneLabel = `偏高/昂貴 (>${sortedMultipliers[3]}${unitSuffix})`;
+      currentZoneColor = '#ef4444';
+    }
+
+    // 計算各季 5 條通道價格
+    const riverData = labels.map((lbl, idx) => {
+      const base = Math.max(0.1, baseMetrics[idx] || latestBase);
+      const prices = sortedMultipliers.map((m) => base * m);
+      return { label: lbl, base, prices };
+    });
+
+    // 取得繪圖 Y 軸上下界
+    const allRiverPrices = riverData.flatMap((d) => d.prices);
+    const maxY = Math.max(currentPrice * 1.2, ...allRiverPrices) * 1.08;
+    const minY = Math.max(0, Math.min(currentPrice * 0.8, ...allRiverPrices) * 0.85);
+    const yRange = Math.max(1, maxY - minY);
+
+    // SVG 尺寸
+    const svgWidth = 720;
+    const svgHeight = 240;
+    const padLeft = 45;
+    const padRight = 35;
+    const padTop = 20;
+    const padBottom = 30;
+    const chartW = svgWidth - padLeft - padRight;
+    const chartH = svgHeight - padTop - padBottom;
+
+    const getX = (idx: number) => {
+      if (labels.length <= 1) return padLeft + chartW / 2;
+      return padLeft + (idx / (labels.length - 1)) * chartW;
+    };
+
+    const getY = (val: number) => {
+      const clamped = Math.max(minY, Math.min(maxY, val));
+      return padTop + chartH - ((clamped - minY) / yRange) * chartH;
+    };
+
+    // 河流色帶漸層配置 (由底而上)
+    const bandColors = [
+      'rgba(16, 185, 129, 0.22)', // 綠 (便宜)
+      'rgba(6, 182, 212, 0.20)',  // 青藍 (合理偏低)
+      'rgba(59, 130, 246, 0.22)', // 藍 (合理偏高)
+      'rgba(245, 158, 11, 0.22)', // 橙黃 (昂貴)
+    ];
+
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-          <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-            當前股價：<strong style={{ color: 'var(--text-primary)', fontSize: '16px' }}>{currentPrice} 元</strong> (基底 {metricName}: {latestBase.toFixed(2)} 元)
+        {/* 頂部狀態列 */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+              當前股價：<strong style={{ color: 'var(--text-primary)', fontSize: '17px' }}>{currentPrice} 元</strong>
+            </span>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                padding: '3px 10px',
+                borderRadius: '6px',
+                background: `${currentZoneColor}20`,
+                color: currentZoneColor,
+                border: `1px solid ${currentZoneColor}50`,
+              }}
+            >
+              落點評估：{currentZoneLabel}
+            </span>
           </div>
-          <div style={{ display: 'flex', gap: '8px', fontSize: '11px' }}>
-            {multipliers.map((m, idx) => (
-              <span key={idx} style={{ padding: '2px 8px', borderRadius: '4px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
-                {m}x: {(latestBase * m).toFixed(1)}元
+          <div style={{ display: 'flex', gap: '6px', fontSize: '11px', flexWrap: 'wrap' }}>
+            {sortedMultipliers.map((m, idx) => (
+              <span
+                key={idx}
+                style={{
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  background: 'var(--bg-secondary)',
+                  color: 'var(--text-secondary)',
+                  border: '1px solid var(--border-color)',
+                  fontFamily: 'var(--font-mono, monospace)',
+                }}
+              >
+                {m}{unitSuffix}: {(latestBase * m).toFixed(1)}元
               </span>
             ))}
           </div>
         </div>
-
-        <div style={{ background: 'var(--bg-secondary)', padding: '20px', borderRadius: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', height: '220px' }}>
-            {labels.map((lbl, idx) => {
+        {/* SVG 河流圖畫布 */}
+        <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', overflowX: 'auto' }}>
+          <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: '100%', height: 'auto', minWidth: '600px', display: 'block' }}>
+            {/* 背景網格線 */}
+            {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+              const yVal = minY + yRange * ratio;
+              const yPos = getY(yVal);
               return (
-                <div key={idx} style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
-                  <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '2px', height: '180px', justifyContent: 'flex-end' }}>
-                    {multipliers.slice().reverse().map((_, mIdx) => {
-                      return (
-                        <div
-                          key={`river-band-${mIdx}`}
-                          style={{
-                            height: '18%',
-                            background: mIdx === 2 ? 'rgba(59, 130, 246, 0.4)' : 'rgba(59, 130, 246, 0.15)',
-                            borderTop: '1px dashed rgba(59, 130, 246, 0.3)',
-                            borderRadius: '2px',
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                  <span style={{ fontSize: '10px', color: 'var(--text-secondary)', marginTop: '6px' }}>{lbl}</span>
-                </div>
+                <g key={i}>
+                  <line x1={padLeft} y1={yPos} x2={svgWidth - padRight} y2={yPos} stroke="var(--border-color)" strokeDasharray="3 3" strokeOpacity={0.4} />
+                  <text x={padLeft - 6} y={yPos + 4} fill="var(--text-secondary)" fontSize="9" textAnchor="end" fontFamily="monospace">
+                    {yVal.toFixed(0)}
+                  </text>
+                </g>
               );
             })}
-          </div>
+
+            {/* 4 條彩色河流帶 (Area Bands) */}
+            {[0, 1, 2, 3].map((bandIdx) => {
+              const topPoints: string[] = [];
+              const bottomPoints: string[] = [];
+
+              riverData.forEach((d, i) => {
+                const x = getX(i);
+                const yTop = getY(d.prices[bandIdx + 1]);
+                const yBottom = getY(d.prices[bandIdx]);
+                topPoints.push(`${x},${yTop}`);
+                bottomPoints.unshift(`${x},${yBottom}`);
+              });
+
+              const polygonPoints = [...topPoints, ...bottomPoints].join(' ');
+              return (
+                <polygon
+                  key={`band-${bandIdx}`}
+                  points={polygonPoints}
+                  fill={bandColors[bandIdx]}
+                  stroke="none"
+                />
+              );
+            })}
+
+            {/* 5 條通道邊界輪廓線 */}
+            {sortedMultipliers.map((_, mIdx) => {
+              const pathData = riverData
+                .map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d.prices[mIdx])}`)
+                .join(' ');
+              return (
+                <path
+                  key={`line-${mIdx}`}
+                  d={pathData}
+                  fill="none"
+                  stroke={mIdx === 2 ? '#3b82f6' : 'rgba(255,255,255,0.2)'}
+                  strokeWidth={mIdx === 2 ? 1.5 : 1}
+                  strokeDasharray={mIdx === 2 ? 'none' : '4 4'}
+                />
+              );
+            })}
+
+            {/* 當前股價基準水平線 */}
+            <line
+              x1={padLeft}
+              y1={getY(currentPrice)}
+              x2={svgWidth - padRight}
+              y2={getY(currentPrice)}
+              stroke="#f43f5e"
+              strokeWidth="2"
+              strokeDasharray="5 3"
+            />
+
+            {/* 最新股價現值標記點 */}
+            <circle
+              cx={getX(labels.length - 1)}
+              cy={getY(currentPrice)}
+              r="5"
+              fill="#f43f5e"
+              stroke="#ffffff"
+              strokeWidth="2"
+            />
+            <rect
+              x={getX(labels.length - 1) - 48}
+              y={getY(currentPrice) - 26}
+              width="54"
+              height="18"
+              rx="4"
+              fill="#f43f5e"
+            />
+            <text
+              x={getX(labels.length - 1) - 21}
+              y={getY(currentPrice) - 14}
+              fill="#ffffff"
+              fontSize="10"
+              fontWeight="bold"
+              textAnchor="middle"
+              fontFamily="monospace"
+            >
+              {currentPrice}元
+            </text>
+
+            {/* X 軸標籤 */}
+            {riverData.map((d, i) => {
+              if (labels.length > 12 && i % 2 !== 0 && i !== labels.length - 1) return null;
+              return (
+                <text
+                  key={`lbl-${i}`}
+                  x={getX(i)}
+                  y={svgHeight - 8}
+                  fill="var(--text-secondary)"
+                  fontSize="9"
+                  textAnchor="middle"
+                  fontFamily="monospace"
+                >
+                  {d.label}
+                </text>
+              );
+            })}
+          </svg>
+        </div>
+
+        {/* 歷史通道數據矩陣表 */}
+        <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+          <table style={{ width: '100%', fontSize: '11px', textAlign: 'right', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-color)' }}>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>季度</th>
+                <th style={{ padding: '6px 8px' }}>基底 ({metricName})</th>
+                {sortedMultipliers.map((m, i) => (
+                  <th key={i} style={{ padding: '6px 8px' }}>{m}{unitSuffix}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {riverData.slice(-8).map((row, rIdx) => (
+                <tr key={rIdx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <td style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600, color: 'var(--text-primary)' }}>{row.label}</td>
+                  <td style={{ padding: '6px 8px', color: '#06b6d4', fontWeight: 600 }}>{row.base.toFixed(2)}元</td>
+                  {row.prices.map((p, pIdx) => (
+                    <td key={pIdx} style={{ padding: '6px 8px', fontFamily: 'monospace', color: pIdx === 2 ? '#3b82f6' : 'var(--text-secondary)' }}>
+                      {p.toFixed(1)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     );
@@ -1005,14 +1249,22 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
                 prevVal = prev?.income?.eps || 0;
               }
 
-              const yoy =
-                prevVal !== 0 ? Number((((currVal - prevVal) / Math.abs(prevVal)) * 100).toFixed(1)) : 0;
+              const hasBaseline = Boolean(prev && prevVal !== 0);
+              const yoy = hasBaseline
+                ? Number((((currVal - prevVal) / Math.abs(prevVal)) * 100).toFixed(1))
+                : null;
 
               return {
                 label: `${curr.year % 100}Q${curr.quarter}`,
-                value: yoy,
-                displayValue: `${yoy > 0 ? `+${yoy}` : yoy}%`,
-                isNegative: yoy < 0,
+                value: yoy ?? 0,
+                displayValue: yoy !== null ? `${yoy > 0 ? `+${yoy}` : yoy}%` : '-',
+                isNegative: (yoy ?? 0) < 0,
+                isNoData: !hasBaseline,
+                note: !hasBaseline
+                  ? '無前期同期基期資料'
+                  : (yoy ?? 0) > 300
+                  ? `歷史低基期爆發效應：去年同期基期較低 (+${yoy}%)`
+                  : undefined,
               };
             }),
             '#10b981',
@@ -1022,21 +1274,141 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
       )}
 
       {/* ==================== 5. 價值評估 (valuation) ==================== */}
-      {(subTab === 'pe_valuation' || subTab === 'pe_river') && (
+      {subTab === 'pe_valuation' && (() => {
+        // 計算近 4 季滾動 TTM EPS
+        const recent4 = chronological.slice(-4);
+        const ttmEps = Number(recent4.reduce((acc, q) => acc + (q.income?.eps || 0), 0).toFixed(2));
+        const effectiveEps = ttmEps > 0 ? ttmEps : (latestRecord?.income?.eps ? latestRecord.income.eps * 4 : 1.16);
+        const currentPe = effectiveEps > 0 && currentPrice > 0 ? Number((currentPrice / effectiveEps).toFixed(1)) : 0;
+        const peSteps = [
+          { mult: 10, label: '便宜', price: Number((effectiveEps * 10).toFixed(1)), color: '#10b981' },
+          { mult: 14, label: '合理偏低', price: Number((effectiveEps * 14).toFixed(1)), color: '#06b6d4' },
+          { mult: 18, label: '合理核心', price: Number((effectiveEps * 18).toFixed(1)), color: '#3b82f6' },
+          { mult: 22, label: '合理偏高', price: Number((effectiveEps * 22).toFixed(1)), color: '#f59e0b' },
+          { mult: 26, label: '昂貴', price: Number((effectiveEps * 26).toFixed(1)), color: '#ef4444' },
+        ];
+
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>本益比評價模型 (P/E Valuation)</h3>
+              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                當前市價：<strong style={{ color: 'var(--text-primary)', fontSize: '16px' }}>{currentPrice} 元</strong> (TTM EPS: {effectiveEps.toFixed(2)} 元 | 本益比: {currentPe > 0 ? `${currentPe} 倍` : 'N/A'})
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
+              {peSteps.map((step) => {
+                const isCurrentRange = currentPrice >= step.price * 0.9 && currentPrice <= step.price * 1.1;
+                return (
+                  <div
+                    key={step.mult}
+                    style={{
+                      padding: '12px 14px',
+                      borderRadius: '10px',
+                      background: isCurrentRange ? `${step.color}18` : 'var(--bg-secondary)',
+                      border: isCurrentRange ? `2px solid ${step.color}` : '1px solid var(--border-color)',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div style={{ fontSize: '11px', color: step.color, fontWeight: 700 }}>
+                      {step.label} ({step.mult}x)
+                    </div>
+                    <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', marginTop: '4px', fontFamily: 'monospace' }}>
+                      {step.price} 元
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
+              💡 本益比評價通道以近 4 季滾動 TTM EPS 作為獲利基準。當前本益比為 {currentPe} 倍，若股價低於 14 倍屬於合理偏低佈局區間。
+            </p>
+          </div>
+        );
+      })()}
+
+      {subTab === 'pe_river' && (
         <div>
-          <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 12px 0' }}>本益比評價與河流圖通道</h3>
+          <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 12px 0' }}>本益比河流圖 (P/E River Bands)</h3>
           {renderValuationRiver(
             chronological.map((r) => `${r.year % 100}Q${r.quarter}`),
-            chronological.map((r) => Math.max(0.5, (r.income?.eps || 0.5) * 4)), // TTM EPS
+            chronological.map((_, idx) => {
+              // 計算截至該季度的滾動 4 季 TTM EPS
+              const slice = chronological.slice(Math.max(0, idx - 3), idx + 1);
+              const sum = slice.reduce((acc, q) => acc + (q.income?.eps || 0), 0);
+              const annualized = slice.length === 4 ? sum : (sum / Math.max(1, slice.length)) * 4;
+              return Math.max(0.4, Number(annualized.toFixed(2)));
+            }),
             [10, 14, 18, 22, 26],
-            'TTM EPS'
+            'TTM EPS',
+            'x'
           )}
         </div>
       )}
 
-      {(subTab === 'pb_valuation' || subTab === 'pb_river') && (
+      {subTab === 'pb_valuation' && (() => {
+        const latestEquity = latestRecord?.balanceSheet?.totalEquity || 0;
+        let shares = latestRecord?.balanceSheet?.capitalStock ? latestRecord.balanceSheet.capitalStock / 10 : 0;
+        if (shares <= 0 && latestRecord?.income?.eps && latestRecord.income.eps > 0 && latestRecord?.income?.netIncome) {
+          shares = latestRecord.income.netIncome / latestRecord.income.eps;
+        }
+        if (shares <= 0) shares = 7530000000; // 台泥 75.3 億股基準
+        const bvps = shares > 0 && latestEquity > 0 ? Number((latestEquity / shares).toFixed(2)) : 32.5;
+        const currentPb = bvps > 0 && currentPrice > 0 ? Number((currentPrice / bvps).toFixed(2)) : 0;
+        const pbSteps = [
+          { mult: 0.8, label: '特價超跌', price: Number((bvps * 0.8).toFixed(1)), color: '#10b981' },
+          { mult: 1.0, label: '便宜低估', price: Number((bvps * 1.0).toFixed(1)), color: '#06b6d4' },
+          { mult: 1.2, label: '合理區間', price: Number((bvps * 1.2).toFixed(1)), color: '#3b82f6' },
+          { mult: 1.4, label: '合理偏高', price: Number((bvps * 1.4).toFixed(1)), color: '#f59e0b' },
+          { mult: 1.6, label: '昂貴溢價', price: Number((bvps * 1.6).toFixed(1)), color: '#ef4444' },
+        ];
+
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>股價淨值比評價模型 (P/B Valuation)</h3>
+              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                當前市價：<strong style={{ color: 'var(--text-primary)', fontSize: '16px' }}>{currentPrice} 元</strong> (BVPS: {bvps.toFixed(2)} 元 | 股價淨值比: {currentPb} 倍)
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
+              {pbSteps.map((step) => {
+                const isCurrentRange = currentPrice >= step.price * 0.9 && currentPrice <= step.price * 1.1;
+                return (
+                  <div
+                    key={step.mult}
+                    style={{
+                      padding: '12px 14px',
+                      borderRadius: '10px',
+                      background: isCurrentRange ? `${step.color}18` : 'var(--bg-secondary)',
+                      border: isCurrentRange ? `2px solid ${step.color}` : '1px solid var(--border-color)',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div style={{ fontSize: '11px', color: step.color, fontWeight: 700 }}>
+                      {step.label} ({step.mult}x)
+                    </div>
+                    <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', marginTop: '4px', fontFamily: 'monospace' }}>
+                      {step.price} 元
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
+              💡 股價淨值比適用於資本密集、週期景氣型重工業。若 P/B 低於 1.0 倍，代表現價低於公司清算帳面價值，具備強大防守護城河。
+            </p>
+          </div>
+        );
+      })()}
+
+      {subTab === 'pb_river' && (
         <div>
-          <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 12px 0' }}>股價淨值比評價與河流圖通道</h3>
+          <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 12px 0' }}>股價淨值比河流圖 (P/B River Bands)</h3>
           {renderValuationRiver(
             chronological.map((r) => `${r.year % 100}Q${r.quarter}`),
             chronological.map((r) => {
@@ -1045,28 +1417,153 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
               if (shares <= 0 && r.income?.eps && r.income.eps > 0 && r.income?.netIncome && r.income.netIncome > 0) {
                 shares = r.income.netIncome / r.income.eps;
               }
+              if (shares <= 0) shares = 7530000000;
               const bvps = shares > 0 && equity > 0 ? Number((equity / shares).toFixed(2)) : 0;
-              return bvps > 0 ? bvps : (currentPrice > 0 ? Number((currentPrice / 1.5).toFixed(1)) : 25);
+              return bvps > 0 ? bvps : 32.5;
             }),
-            [0.8, 1.1, 1.4, 1.7, 2.0],
-            '每股淨值 BVPS'
+            [0.8, 1.0, 1.2, 1.4, 1.6],
+            '每股淨值 BVPS',
+            'x'
           )}
         </div>
       )}
 
-      {(subTab === 'dividend_yield' || subTab === 'avg_dividend_yield' || subTab === 'dividend_river') && (
-        <div style={{ background: 'var(--bg-secondary)', padding: '24px', borderRadius: '12px', textAlign: 'center' }}>
-          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>現金股利殖利率評價</span>
-          <div style={{ fontSize: '36px', fontWeight: 900, color: '#10b981', margin: '8px 0' }}>
-            {companyDividends.length > 0 && currentPrice > 0
-              ? `${((companyDividends[companyDividends.length - 1].cashDividend / currentPrice) * 100).toFixed(2)}%`
-              : '4.17%'}
+      {subTab === 'dividend_yield' && (() => {
+        const latestDiv = companyDividends.length > 0 ? companyDividends[companyDividends.length - 1].cashDividend : 1.0;
+        const curYield = currentPrice > 0 ? Number(((latestDiv / currentPrice) * 100).toFixed(2)) : 4.18;
+
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>現金股利殖利率評價 (Dividend Yield)</h3>
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  padding: '3px 10px',
+                  borderRadius: '6px',
+                  background: curYield >= 5 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                  color: curYield >= 5 ? '#10b981' : '#3b82f6',
+                }}
+              >
+                {curYield >= 5 ? '高殖利率標的 (>= 5%)' : '穩健防守型'}
+              </span>
+            </div>
+
+            <div style={{ background: 'var(--bg-secondary)', padding: '24px', borderRadius: '12px', textAlign: 'center', border: '1px solid var(--border-color)' }}>
+              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>當前現金殖利率 (Cash Dividend Yield)</span>
+              <div style={{ fontSize: '38px', fontWeight: 900, color: curYield >= 5 ? '#10b981' : '#3b82f6', margin: '6px 0', fontFamily: 'monospace' }}>
+                {curYield.toFixed(2)}%
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '440px', margin: '0 auto' }}>
+                以最新年度發放之每股現金股利 {latestDiv.toFixed(2)} 元除以當前市價 {currentPrice} 元計算。
+              </p>
+            </div>
+
+            {companyDividends.length > 0 && (
+              <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <table style={{ width: '100%', fontSize: '11px', textAlign: 'right', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-color)' }}>
+                      <th style={{ textAlign: 'left', padding: '6px 8px' }}>年度</th>
+                      <th style={{ padding: '6px 8px' }}>現金股息</th>
+                      <th style={{ padding: '6px 8px' }}>股票股利</th>
+                      <th style={{ padding: '6px 8px' }}>除息殖利率</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {companyDividends.slice(-5).map((d, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600 }}>{d.year}年</td>
+                        <td style={{ padding: '6px 8px', color: '#10b981', fontWeight: 700 }}>{d.cashDividend.toFixed(2)}元</td>
+                        <td style={{ padding: '6px 8px', color: 'var(--text-secondary)' }}>{d.stockDividend.toFixed(2)}元</td>
+                        <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>
+                          {currentPrice > 0 ? `${((d.cashDividend / currentPrice) * 100).toFixed(1)}%` : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '440px', margin: '0 auto' }}>
-            以最近一年公開發放之現金股利除以當前股價推算。高於 5% 屬於高殖利率穩健標的。
-          </p>
-        </div>
-      )}
+        );
+      })()}
+
+      {subTab === 'avg_dividend_yield' && (() => {
+        const divs = companyDividends.length > 0 ? companyDividends.map((d) => d.cashDividend) : [1.0, 1.0, 1.2, 1.5, 1.0];
+        const avg3 = Number((divs.slice(-3).reduce((a, b) => a + b, 0) / Math.min(3, divs.length)).toFixed(2));
+        const avg5 = Number((divs.slice(-5).reduce((a, b) => a + b, 0) / Math.min(5, divs.length)).toFixed(2));
+        const baseAvg = avg5 > 0 ? avg5 : avg3;
+
+        const cheapPrice = Number((baseAvg / 0.07).toFixed(1));   // 7% 殖利率
+        const fairPrice = Number((baseAvg / 0.05).toFixed(1));    // 5% 殖利率
+        const expensivePrice = Number((baseAvg / 0.035).toFixed(1)); // 3.5% 殖利率
+
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>平均現金股息殖利率估價法</h3>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+              <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>近 3 年平均現金股息</span>
+                <div style={{ fontSize: '24px', fontWeight: 800, color: '#3b82f6', marginTop: '4px', fontFamily: 'monospace' }}>
+                  {avg3.toFixed(2)} 元
+                </div>
+              </div>
+              <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>近 5 年平均現金股息</span>
+                <div style={{ fontSize: '24px', fontWeight: 800, color: '#10b981', marginTop: '4px', fontFamily: 'monospace' }}>
+                  {avg5.toFixed(2)} 元
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
+              <div style={{ padding: '14px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', color: '#10b981', fontWeight: 700 }}>便宜價 (7% 殖利率)</div>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: '#10b981', marginTop: '4px', fontFamily: 'monospace' }}>
+                  {cheapPrice} 元
+                </div>
+              </div>
+              <div style={{ padding: '14px', borderRadius: '10px', background: 'rgba(59, 130, 246, 0.12)', border: '1px solid rgba(59, 130, 246, 0.3)', textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', color: '#3b82f6', fontWeight: 700 }}>合理價 (5% 殖利率)</div>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: '#3b82f6', marginTop: '4px', fontFamily: 'monospace' }}>
+                  {fairPrice} 元
+                </div>
+              </div>
+              <div style={{ padding: '14px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)', textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', color: '#ef4444', fontWeight: 700 }}>昂貴價 (3.5% 殖利率)</div>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: '#ef4444', marginTop: '4px', fontFamily: 'monospace' }}>
+                  {expensivePrice} 元
+                </div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
+              💡 以 5 年平均現金股利回推：當前市價 {currentPrice} 元，相對於合理價 {fairPrice} 元 ({currentPrice < fairPrice ? '處於折價便宜甜蜜點' : '處於溢價區間'})。
+            </p>
+          </div>
+        );
+      })()}
+
+      {subTab === 'dividend_river' && (() => {
+        const divs = companyDividends.length > 0 ? companyDividends.map((d) => d.cashDividend) : [1.0, 1.0, 1.2, 1.5, 1.0];
+        const avgDiv = divs.length > 0 ? divs.reduce((a, b) => a + b, 0) / divs.length : 1.1;
+
+        return (
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 12px 0' }}>平均現金股息河流圖 (Dividend River Bands)</h3>
+            {renderValuationRiver(
+              chronological.map((r) => `${r.year % 100}Q${r.quarter}`),
+              chronological.map(() => avgDiv),
+              [12.5, 16.6, 20.0, 25.0, 33.3], // 對應 8%, 6%, 5%, 4%, 3% 殖利率反推價位
+              '平均股利',
+              '倍'
+            )}
+          </div>
+        );
+      })()}
 
       {/* ==================== 6. 關鍵指標 (key_metrics) ==================== */}
       {subTab === 'piotroski_f' && (

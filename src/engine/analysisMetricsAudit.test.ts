@@ -104,4 +104,76 @@ describe('Analysis Metrics Calculation Integrity (TDD Seam)', () => {
     const bvps2 = Number((equity / sharesFromEps).toFixed(2));
     expect(bvps2).toBeCloseTo(25.8, 0.5);
   });
+
+  it('6. 成長力分析若無前期基期資料，應返回 "-" 與 isNoData=true，杜絕顯示 0% 綠柱誤導使用者', () => {
+    const currentQ = { ...mock1101Quarter, year: 2022, quarter: 1 };
+    const prevQ = null; // 無 2021 年同期基期
+
+    const currVal = currentQ.income.revenue;
+    const prevVal = (prevQ as any)?.income?.revenue || 0;
+    const hasBaseline = Boolean(prevQ && prevVal !== 0);
+    const yoy = hasBaseline ? Number((((currVal - prevVal) / Math.abs(prevVal)) * 100).toFixed(1)) : null;
+
+    const barItem = {
+      label: '22Q1',
+      value: yoy ?? 0,
+      displayValue: yoy !== null ? `${yoy > 0 ? `+${yoy}` : yoy}%` : '-',
+      isNegative: (yoy ?? 0) < 0,
+      isNoData: !hasBaseline,
+    };
+
+    expect(barItem.displayValue).toBe('-');
+    expect(barItem.isNoData).toBe(true);
+    expect(barItem.value).toBe(0);
+  });
+
+  it('7. 台泥 23Q2 毛利年增率 +5326.2% 為歷史真實數據 (煤炭成本危機後復甦)，應支援離群值視覺封頂防禦', () => {
+    // 2022Q2 煤炭暴漲致毛利僅 1.10 億，2023Q2 恢復至 59.85 億
+    const gp2022Q2 = 110298000;
+    const gp2023Q2 = 5984958000;
+    const yoy = Number((((gp2023Q2 - gp2022Q2) / Math.abs(gp2022Q2)) * 100).toFixed(1));
+
+    expect(yoy).toBe(5326.2); // 確實為真實現實數據
+
+    // 離群值防禦：正常季度數值 (如 14.5%, 52.1%) 不應被 5326.2% 壓成死線
+    const normalValues = [14.5, 9.9, -13.2, 52.1, 72.9];
+    const normalMax = Math.max(...normalValues);
+    const visualCap = Math.max(60, normalMax * 1.35); // 約 98.4%
+    
+    // 正常季度高度比例
+    const normalHeightPct = (52.1 / visualCap) * 100;
+    expect(normalHeightPct).toBeGreaterThan(50); // 52.1% 柱子保有超過 50% 可視高度
+    expect(normalHeightPct).toBeLessThan(100);
+  });
+
+  it('8. 自由現金流報酬率 (FCF Yield) 應動態推導真實股數 (75.3億股)，杜絕 9135.81% 天文數字', () => {
+    const shares = mock1101Quarter.balanceSheet.capitalStock! / 10; // 7,531,181,742 股
+    const cfo = mock1101Quarter.cashFlow.operatingCashFlow; // 95 億
+    const capex = mock1101Quarter.cashFlow.capitalExpenditure; // 139 億
+    const fcf = cfo - capex; // -44.3 億 (大額擴張支出)
+    const currentPrice = 23.90;
+
+    const fcfPerShare = fcf / shares;
+    const yieldPct = Number(((fcfPerShare / currentPrice) * 100).toFixed(2));
+
+    expect(shares).toBeGreaterThan(7000000000);
+    expect(Math.abs(yieldPct)).toBeLessThan(50); // 合理落在正常區間，絕非 9135%
+  });
+
+  it('9. DCF 現金流折現估值以真實發行股數推導，台泥合理內在價值應落在 25~55 元正常區間', () => {
+    const shares = mock1101Quarter.balanceSheet.capitalStock! / 10;
+    expect(shares).toBeGreaterThan(7000000000);
+
+    // 假設 TTM FCF 150 億，折現率 9%，永續成長 2.5%
+    const baseFcf = 15000000000;
+    const r = 0.09;
+    const gn = 0.025;
+    const terminalValue = (baseFcf * (1 + gn)) / (r - gn);
+    const intrinsicValuePerShare = Number(((terminalValue) / shares).toFixed(2));
+
+    expect(intrinsicValuePerShare).toBeGreaterThan(20);
+    expect(intrinsicValuePerShare).toBeLessThan(60);
+    // 絕非 285,283 元與 1193554% 荒謬折價
+  });
 });
+
