@@ -93,4 +93,32 @@ describe('Taiwan Financial Ingestion Pipeline (TDD Seam)', () => {
     expect(rec.cashFlow.capitalExpenditure).toBe(2100000000);
     expect(rec.balanceSheet.totalEquity).toBe(80000000000);
   });
+
+  it('4. parseTaiwanFinancialStatements 應正確解析 FinMind 原始別名 Liabilities / Equity / ShorttermBorrowings 並具備自癒平衡', () => {
+    const rawFinmindWithAliases = [
+      { date: '2024-09-30', type: 'TotalAssets', value: 450000000000 },
+      { date: '2024-09-30', type: 'Liabilities', value: 200000000000 },
+      { date: '2024-09-30', type: 'Equity', value: 250000000000 },
+      { date: '2024-09-30', type: 'ShorttermBorrowings', value: 30000000000 },
+      { date: '2024-09-30', type: 'LongtermBorrowings', value: 50000000000 },
+      { date: '2024-09-30', type: 'Revenue', value: 100000000000 },
+    ];
+
+    const records = parseTaiwanFinancialStatements('1101', rawFinmindWithAliases);
+    expect(records).toHaveLength(1);
+    const rec = records[0];
+    expect(rec.balanceSheet.totalAssets).toBe(450000000000);
+    expect(rec.balanceSheet.totalLiabilities).toBe(200000000000);
+    expect(rec.balanceSheet.totalEquity).toBe(250000000000);
+    expect(rec.balanceSheet.shortTermDebt).toBe(30000000000);
+    expect(rec.balanceSheet.longTermDebt).toBe(50000000000);
+
+    // 測試自癒平衡：若有資產與負債但缺乏 Equity，自動自癒 Equity = Assets - Liabilities
+    const brokenData = [
+      { date: '2024-09-30', type: 'TotalAssets', value: 5000 },
+      { date: '2024-09-30', type: 'Liabilities', value: 2000 },
+    ];
+    const healed = parseTaiwanFinancialStatements('1101', brokenData);
+    expect(healed[0].balanceSheet.totalEquity).toBe(3000);
+  });
 });

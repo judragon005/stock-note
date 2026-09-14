@@ -68,6 +68,7 @@ import { ChipsWorkspace } from './components/ChipsWorkspace';
 import { FirePlanningWorkspace } from './components/FirePlanningWorkspace';
 import { SettingsWorkspace } from './components/SettingsWorkspace';
 import { BehavioralAuditWorkspace } from './components/BehavioralAuditWorkspace';
+import { StockAnalysisWorkspace } from './components/analysis/StockAnalysisWorkspace';
 import { ReconciliationModal } from './components/ReconciliationModal';
 import { syncTradesWithCashTransactions, calculateAccountBalances, aggregateInterestIncomeDetails, reconcilePendingDividendTrades } from './engine/cashLedgerEngine';
 import { calculatePortfolioXirr, calculateSecurityXirr, XirrResult, CashFlowEvent } from './engine/xirrCalculator';
@@ -822,6 +823,19 @@ export const App: React.FC = () => {
             onOpenFinancialForensic={handleOpenFinancialForensic}
           />
         </>
+      )}
+
+      {/* 活頁: 📊 個股深度分析 (全面收編股票健診) */}
+      {(activeTab === 'analysis' || activeTab === 'health') && (
+        <StockAnalysisWorkspace
+          holdings={holdings}
+          trades={trades}
+          currentPrices={currentPrices}
+          fmpApiKey={apiKeys.fmpApiKey}
+          finmindToken={apiKeys.finmindToken}
+          usdToTwdRate={usdToTwdRate}
+          defaultPrimaryTab={activeTab === 'health' ? 'health' : undefined}
+        />
       )}
 
       {/* 活頁: 🏛️ 宏觀總體戰情室 (Market War Room & AI Strategy Advisor) */}

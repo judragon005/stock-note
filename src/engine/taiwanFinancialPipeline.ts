@@ -7,6 +7,7 @@ import type {
   QuarterlyFinancialRecord,
 } from '../types/financialForensic';
 import { getStoredFinancialRecords, saveFinancialRecords } from '../utils/db';
+import { isFinancialRecordsCacheValid } from './financialCacheValidator';
 import { logger } from '../utils/logger';
 
 export interface FinmindFinancialItem {
@@ -74,15 +75,59 @@ export function parseTaiwanFinancialStatements(
     const eps = values['EPS'] || values['每股盈餘'] || values['基本每股盈餘'] || 0;
 
     // 2. 資產負債表科目 (Balance Sheet)
-    const totalAssets = values['TotalAssets'] || values['資產總計'] || values['資產總額'] || values['資產合計'] || 0;
-    const totalLiabilities = values['TotalLiabilities'] || values['負債總計'] || values['負債總額'] || values['負債合計'] || 0;
-    const totalEquity =
+    const rawAssets =
+      values['TotalAssets'] || values['資產總計'] || values['資產總額'] || values['資產合計'] || 0;
+    let rawLiab =
+      values['Liabilities'] ||
+      values['TotalLiabilities'] ||
+      values['負債總計'] ||
+      values['負債總額'] ||
+      values['負債合計'] ||
+      0;
+    let rawEquity =
+      values['Equity'] ||
+      values['EquityAttributableToOwnersOfParent'] ||
       values['TotalEquity'] ||
       values['權益總計'] ||
       values['權益總額'] ||
       values['權益合計'] ||
-      (totalAssets && totalLiabilities ? totalAssets - totalLiabilities : 0);
+      0;
+
+    // 會計恆等式自癒平衡 (Assets = Liabilities + Equity)
+    if (rawAssets > 0 && rawEquity > 0 && rawLiab === 0) {
+      rawLiab = Math.max(0, rawAssets - rawEquity);
+    } else if (rawAssets > 0 && rawLiab > 0 && rawEquity === 0) {
+      rawEquity = Math.max(0, rawAssets - rawLiab);
+    }
+
+    const totalAssets = rawAssets;
+    const totalLiabilities = rawLiab;
+    const totalEquity = rawEquity;
+
+    const currentAssets =
+      values['CurrentAssets'] ||
+      values['流動資產'] ||
+      values['流動資產合計'] ||
+      values['流動資產總計'] ||
+      undefined;
+
+    const currentLiabilities =
+      values['CurrentLiabilities'] ||
+      values['流動負債'] ||
+      values['流動負債合計'] ||
+      values['流動負債總計'] ||
+      undefined;
+
+    const capitalStock =
+      values['CapitalStock'] ||
+      values['OrdinaryShare'] ||
+      values['股本'] ||
+      values['普通股股本'] ||
+      undefined;
+
     const accountsReceivable =
+      values['AccountsReceivableNet'] ||
+      values['BillsReceivableNet'] ||
       values['AccountsReceivable'] ||
       values['NotesAndAccountsReceivable'] ||
       values['應收帳款及票據'] ||
@@ -92,8 +137,19 @@ export function parseTaiwanFinancialStatements(
     const inventory = values['Inventories'] || values['存貨'] || values['存貨合計'] || 0;
     const cashAndEquivalents =
       values['CashAndCashEquivalents'] || values['現金及約當現金'] || values['現金及約當現金總額'] || 0;
-    const shortTermDebt = values['ShortTermDebt'] || values['短期借款'] || values['短期有息負債'] || undefined;
-    const longTermDebt = values['LongTermDebt'] || values['長期借款'] || values['長期有息負債'] || undefined;
+    const shortTermDebt =
+      values['ShorttermBorrowings'] ||
+      values['ShortTermDebt'] ||
+      values['短期借款'] ||
+      values['短期有息負債'] ||
+      undefined;
+    const longTermDebt =
+      values['LongtermBorrowings'] ||
+      values['LongTermDebt'] ||
+      values['長期借款'] ||
+      values['長期有息負債'] ||
+      values['BondsPayable'] ||
+      undefined;
 
     // 3. 現金流量表科目 (Cash Flow Statement)
     const operatingCashFlow =
@@ -104,7 +160,7 @@ export function parseTaiwanFinancialStatements(
       values['營業活動之現金流量合計'] ||
       values['OperatingCashFlow'] ||
       0;
-    const capitalExpenditure =
+    const rawCapex =
       values['PropertyAndPlantAndEquipment'] ||
       values['CapitalExpenditures'] ||
       values['取得不動產、廠房及設備'] ||
@@ -112,8 +168,16 @@ export function parseTaiwanFinancialStatements(
       values['購置不動產、廠房及設備'] ||
       values['資本支出'] ||
       0;
+    const capitalExpenditure = Math.abs(rawCapex);
     const dividendPaid =
       values['CashDividendsPaid'] || values['發放現金股利'] || values['發放之現金股利'] || undefined;
+    const interestPaid =
+      values['PayTheInterest'] ||
+      values['InterestExpense'] ||
+      values['支付之利息'] ||
+      values['支付利息'] ||
+      values['利息費用'] ||
+      undefined;
 
     results.push({
       symbol: symbol.toUpperCase(),
@@ -135,6 +199,9 @@ export function parseTaiwanFinancialStatements(
         accountsReceivable,
         inventory,
         cashAndEquivalents,
+        currentAssets,
+        currentLiabilities,
+        capitalStock,
         shortTermDebt,
         longTermDebt,
       },
@@ -143,6 +210,7 @@ export function parseTaiwanFinancialStatements(
         capitalExpenditure,
         stockBasedCompensation: 0,
         dividendPaid,
+        interestPaid,
       },
       auditInfo: {
         opinionType: 'UNQUALIFIED',
@@ -165,19 +233,22 @@ export function parseTaiwanFinancialStatements(
  */
 export async function fetchTaiwanQuarterlyFinancials(
   symbol: string,
-  token?: string
+  token?: string,
+  forceRefresh: boolean = false
 ): Promise<QuarterlyFinancialRecord[]> {
   const cleanSymbol = symbol.trim().toUpperCase();
 
   let cached: QuarterlyFinancialRecord[] = [];
-  // 1. 快取優先查詢
-  try {
-    cached = (await getStoredFinancialRecords(cleanSymbol)) || [];
-    if (cached.length > 0) {
-      return cached;
+  // 1. 快取優先查詢 (僅在非強制刷新且快取完整時使用)
+  if (!forceRefresh) {
+    try {
+      cached = (await getStoredFinancialRecords(cleanSymbol)) || [];
+      if (cached.length > 0 && isFinancialRecordsCacheValid(cached)) {
+        return cached;
+      }
+    } catch {
+      // 忽略環境不支援 IndexedDB 的快取錯誤
     }
-  } catch {
-    // 忽略環境不支援 IndexedDB 的快取錯誤
   }
 
   // 2. 外部 API 並行請求三大報表 (綜合損益表、資產負債表、現金流量表)
@@ -192,7 +263,7 @@ export async function fetchTaiwanQuarterlyFinancials(
     const fetchDataset = async (dataset: string): Promise<FinmindFinancialItem[]> => {
       const url = `https://api.finmindtrade.com/api/v4/data?dataset=${dataset}&data_id=${encodeURIComponent(
         cleanSymbol
-      )}&start_date=2022-01-01${tokenParam}`;
+      )}&start_date=2021-01-01${tokenParam}`;
       const res = await fetch(url);
       if (!res.ok) return [];
       const json = await res.json();

@@ -20,23 +20,8 @@ export interface FinancialReportOptions {
   finmindToken?: string;
 }
 
-/**
- * 檢驗本地快取紀錄是否具備三大報表完整性 (Spec 0126)
- * 若快取資料屬於先前舊版單表殘留（所有記錄的 CFO 均為 0 且資產總額均為 0），判定為無效殘缺快取。
- */
-export function isFinancialRecordsCacheValid(records: QuarterlyFinancialRecord[]): boolean {
-  if (!records || records.length === 0) return false;
-
-  const hasValidCashFlow = records.some((r) => (r.cashFlow?.operatingCashFlow ?? 0) !== 0);
-  const hasValidBalanceSheet = records.some((r) => (r.balanceSheet?.totalAssets ?? 0) !== 0);
-
-  // 若兩者皆無（完全沒有現金流與資產負債），判定為無效快取需重撈自癒
-  if (!hasValidCashFlow && !hasValidBalanceSheet) {
-    return false;
-  }
-
-  return true;
-}
+import { isFinancialRecordsCacheValid } from './financialCacheValidator';
+export { isFinancialRecordsCacheValid };
 
 export async function loadOrFetchFinancialReport(
   symbol: string,
@@ -62,9 +47,13 @@ export async function loadOrFetchFinancialReport(
 
   if (records.length === 0) {
     if (market === 'TW') {
-      records = await fetchTaiwanQuarterlyFinancials(cleanSymbol, options.finmindToken);
+      records = options.forceRefresh
+        ? await fetchTaiwanQuarterlyFinancials(cleanSymbol, options.finmindToken, true)
+        : await fetchTaiwanQuarterlyFinancials(cleanSymbol, options.finmindToken);
     } else {
-      records = await fetchUSQuarterlyFinancials(cleanSymbol, options.fmpApiKey);
+      records = options.forceRefresh
+        ? await fetchUSQuarterlyFinancials(cleanSymbol, options.fmpApiKey, true)
+        : await fetchUSQuarterlyFinancials(cleanSymbol, options.fmpApiKey);
     }
 
     if (records.length > 0) {

@@ -1,7 +1,6 @@
-import React from 'react';
-import { PieChart, TrendingUp, History, Settings, Wallet, Coins, Activity, Compass, Flame, Brain } from 'lucide-react';
+import { PieChart, TrendingUp, History, Settings, Wallet, Coins, Activity, Compass, Flame, Brain, BarChart3 } from 'lucide-react';
 
-export type WorkspaceTabKey = 'portfolio' | 'warroom' | 'musclebooker' | 'behavioral' | 'fire' | 'growth' | 'chips' | 'dividend' | 'cash' | 'ledger' | 'settings' | 'friction';
+export type WorkspaceTabKey = 'portfolio' | 'analysis' | 'health' | 'warroom' | 'musclebooker' | 'behavioral' | 'fire' | 'growth' | 'chips' | 'dividend' | 'cash' | 'ledger' | 'settings' | 'friction';
 
 interface WorkspaceTabsProps {
   activeTab: WorkspaceTabKey;
@@ -26,8 +25,9 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
   cashTransactionsCount = 0,
   totalSavedFriction = 0,
 }) => {
-  // 向後相容 friction 映射至 settings
-  const normalizedActiveTab = activeTab === 'friction' ? 'settings' : activeTab;
+  // 向後相容 friction 映射至 settings，health 映射至 analysis
+  const normalizedActiveTab =
+    activeTab === 'friction' ? 'settings' : activeTab === 'health' ? 'analysis' : activeTab;
 
   const tabs: {
     key: WorkspaceTabKey;
@@ -44,6 +44,14 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
       badge: `${holdingsCount} 標的`,
       badgeColor: '#60a5fa',
       badgeBg: 'rgba(59, 130, 246, 0.15)',
+    },
+    {
+      key: 'analysis',
+      label: '個股分析',
+      icon: <BarChart3 size={16} />,
+      badge: '深度財報',
+      badgeColor: '#10b981',
+      badgeBg: 'rgba(16, 185, 129, 0.15)',
     },
     {
       key: 'warroom',

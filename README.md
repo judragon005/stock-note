@@ -3,13 +3,85 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-879%2F879%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/Vitest-923%2F923%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 個股分析成長率基期補齊、極端值視覺防禦、真實河流圖與估值模型審計 (`Stock Analysis Growth, River Bands & Valuation Audit`) *(V8.46.2 全新發布)*
+- **成長率基期補齊與缺失平整化 (`Growth Baseline Expansion & Flattener`)**：
+  - 財報查詢起始日提前至 `2021-01-01`，補足 2022 年 4 季之完整前期基期；無基期時輸出 `displayValue: '-'` 且柱高歸零，徹底杜絕誤標 `0%` 假綠柱。
+- **極端值自適應可視封頂防禦 (`Outlier Visual Capping Engine`)**：
+  - 核實台泥 23Q2 毛利暴衝 `+5326.2%` 為歷史真實數據（煤炭危機回落）；提取非離群上限作為縮放基準，使正常季度（+14.5%, +52.1%）保有起伏，極端值高度封頂 100% 並標註 `⚡+5326.2%` 與低基期效應說明。
+- **真實 SVG 估值河流圖引擎 (`True SVG Valuation River Bands Engine`)**：
+  - 揚棄寫死 18% 藍色假方塊，改以 SVG 多邊形 (`<polygon>`) 繪製 4 階彩色漸層河流帶，隨 TTM EPS、每股淨值 BVPS、平均股息動態流動；疊加現價水平線、最新落點脈衝光點、評級徽章與歷季數據矩陣。
+- **價值評估 7 大獨立子頁面重構 (`7-Valuation Subtabs Full Redesign`)**：
+  - 完整實作本益比評價 (`pe_valuation`)、本益比河流圖 (`pe_river`)、淨值比評價 (`pb_valuation`)、淨值比河流圖 (`pb_river`)、股利殖利率 (`dividend_yield`)、平均股息估價 (`avg_dividend_yield`) 與股息河流圖 (`dividend_river`)。
+- **全市場動態流通股數推導與量化估值校準 (`Dynamic Shares, FCF Yield & DCF Real Value`)**：
+  - 優先自資產負債表股本 (`capitalStock / 10`) 動態推導真實流通股數（台泥為 75.3 億股），徹底拔除寫死 1000 萬股；台泥 FCF Yield 回歸 5%~15% 正常區間，DCF 每股內在價值回歸 30~45 元正常區間。
+
+### 0. 個股分析全量指標補齊、公開市場歷年股利串接與實盤體驗優化 (`Stock Analysis Comprehensive Audit & Full Metrics Pipeline`) *(V8.46.1)*
+- **頂部一級導航列收斂與相容重定向 (`Navigation Convergence & Legacy Redirection`)**：
+  - 頂部導航列移除重複的「股票健診」頁籤，全面統一收斂於「個股分析」內部，舊路由訪問自動相容無痛重定向。
+- **21 項量化指標平鋪全覽檢驗清單 (`21-Metric Health Check Flat View`)**：
+  - 二級選單切換至「21項量化指標」時，全量展開 21 項健康指標檢驗表，包含綜合通過率、各指標門檻、實測值、綠勾/紅叉與特許豁免（如金融股豁免存貨週轉），免開彈窗一覽無遺。
+- **FinMind 真實科目對齊與會計自癒平衡 (`FinMind Subject Alignment & Self-Healing`)**：
+  - 對齊真實欄位 `Liabilities`、`Equity`、`ShorttermBorrowings`、`LongtermBorrowings`，導入會計恆等式自癒平衡（$Assets = Liabilities + Equity$）；若偵測到資產非零但權益負債歸零之殘缺快取，自動自癒重撈。
+- **公開市場上市公司歷年股利管線 (`Public Market Historical Dividend Service`)**：
+  - 新增 `dividendService.ts` 串接 FinMind `TaiwanStockDividend`，精確呈現真實公開每股現金與股票股利，徹底隔離個人記帳 trades；內建 24 小時 TTL 與 100 筆上限容量守衛（FIFO 淘汰）。
+- **圖表高度動態浮動底線縮放 (`Dynamic Baseline Bar Scaling`)**：
+  - 在長條圖中引入自適應浮動底線縮放（$minVal \times 0.85$），立體拉大 4500 億至 6200 億總資產階梯起伏，告別齊平假象。
+- **45 項二級指標 100% 完整視覺化 (`Full 45-Metric Visualization`)**：
+  - 補齊費用率拆解、業外佔比、ROE/ROA 走勢、週轉能力、利息保障倍數、四大年增率 YoY 柱狀圖、PE/PB 河流圖通道、借款結構與重大事件日曆，徹底消滅黑屏空白。
+
+### 0. 個股深度分析工作區、雙層側邊欄導航與關鍵量化估值體系 (`Stock Analysis Workspace & Key Metrics Engine`) *(V8.46.0)*
+- **雙層二級側邊欄導航拓撲 (`Two-Tier Hierarchical Topology`)**：
+  - 8 大主題分類（最新動態、股票健診、財務報表、獲利能力、安全性分析、成長力分析、價值評估、關鍵指標）橫向串聯 45 個細項單一指標。
+  - 單一指標微切片呈現（如每股盈餘、每股淨值、損益階梯、資產分佈、負債權益結構、現金流瀑布、三率走勢、杜邦三因子拆解、週轉天數 DSO/DIO/CCC、流速動比率、利息保障倍數等）。
+- **關鍵量化估值模型與即時互動滑桿 (`Quantitative Valuation & Interactive Sliders`)**：
+  - **Piotroski F-Score (9 分評分卡)**：從獲利性、安全性、營運效率三大面向評估體質，針對雙負虧損建立嚴格防禦邊界。
+  - **自由現金流報酬率 (FCF Yield)**：每股自由現金流與市價之報酬率，附帶優質與警示評級。
+  - **彼得林區價值模型 (Peter Lynch PEG)**：以 EPS 年複合成長率推算合理成長定價與 PEG 比率。
+  - **現金流折現模型 (DCF with Real-Time Sliders)**：內建加權資金成本 (WACC) 與永續成長率 (Terminal Growth Rate) 雙滑桿，支援即時動態拖曳並計算每股內在價值與溢折價幅度。
+  - **高登股利折現模型 (Gordon Growth DDM)**：依據歷史現金股利推估長期穩定收息之安全邊際價位。
+- **標的快捷膠囊與 ETF 智慧防呆遮罩 (`Stock Pills & ETF Look-Through Gate`)**：
+  - 動態整合使用者持倉個股、自訂追蹤清單與台美權值股，點擊即時無縫切換。
+  - 智慧識別 ETF 標的，呈現專屬防呆導航引導前往「持股穿透分析」，杜絕誤讀個體企業財報。
+
+### 0. 股票健診系統原生毛玻璃擬態、ETF智慧防呆與標的快捷膠囊全面重構 (`Stock Health Check UX Redesign, Native Glassmorphism & ETF Guard`) *(V8.45.1 全新重構)*
+- **原生 Glassmorphism 擬態與排版防禦 (`Native Glassmorphism & Anti-Break Layout`)**：
+  - 徹底移除失效之 Tailwind 類別，改採純原生 Inline Styles 與專案 Design Tokens，徹底根除白色破版與透明卡片問題。
+  - SVG 儀表板指針錨定 ViewBox (`0 0 200 135`) 與旋轉原點，徹底消滅巨大黑三角箭頭遮擋。
+  - 穿透式詳細報告彈窗 (`HealthReportModal`) 深色毛玻璃化 (`backdropFilter: blur(12px)`)，高對比綠勾與紅叉呈現，支援 `ESC` 鍵全域監聽。
+- **ETF 智慧識別防呆橫幅 (`ETF Smart Guard Banner`)**：
+  - 建立 `isEtfSymbol` 引擎，智慧識別台股 `00...`（含 `00403A` 等混合編號）與美股大盤 ETF。
+  - 當前選中標的為 ETF 時，頂部浮現琥珀色毛玻璃防呆橫幅，主動說明 ETF 為一籃子資產組合不適用企業財報量化分析，並提供一鍵切換個股按鈕。
+  - 預設標的優先選擇持倉普通股，庫存全為 ETF 時安全預設為熱門標的 `2330`。
+- **Stock Pills 快捷標的膠囊列 (`Stock Pills Navigation`)**：
+  - Header 下方橫向滾動膠囊列整合持倉個股與 6 大熱門權值標的（2330 台積電、2454 聯發科、2317 鴻海、NVDA、AAPL、IBM）。
+  - 內建 `seen` Set 雙重去重防護，高亮發光選中狀態，一秒無縫切換。
+- **說明橫幅開合狀態記憶 (`Banner State Persistence`)**：
+  - 頂部科技海軍藍漸層橫幅支援展開與收起，開合狀態即時持久化於 `localStorage`。
+
+### 0. 股票健診系統純運算診斷引擎、穿透報告與專屬工作區 (`Stock Health Check Diagnosis Engine, Forensic Report & Dedicated Workspace`) *(V8.45.0)*
+
+- **四大核心健診幫手與 21 項指標 (`Four Core Health Check Dimensions`)**：
+  - **排除地雷股健診 (6 項)**：5 年 FCF 至少 3 年 $>0$、5 年平均 FCF $>0$、CFO/淨利比 3 年 $>100\%$、5 年平均 $>100\%$、最新季應收帳款與存貨天數同期比對。
+  - **定存股健診 (5 項)**：近 1 年殖利率 $>6\%$、近 5 年平均殖利率 $>6\%$、連續 5 年配息、配息發放率 3 年 $>50\%$、5 年平均發放率 $>50\%$。
+  - **成長股健診 (4 項)**：近一季毛利、營業利益、稅前利益、稅後淨利 YoY 年增率 $>0\%$。
+  - **便宜股健診 (6 項)**：本益比/股價淨值比 5 年區間最低 20% 分位、低於自身 5 年歷史中位數、殖利率指標連動。
+- **金融控股業自動豁免機制 (`Financial Industry Exemption`)**：
+  - 金融控股與銀行業（`industryAttribute === 'FINANCIALS'`）依法自動豁免存貨週轉天數與應收帳款天數，總檢驗項目自動降為 4 項並重算通過率，杜絕金控股誤判為地雷股。
+- **雙層 SVG 圓環評分進度條與卡片流 (`HealthScoreGauge & HealthCard`)**：
+  - 現代雙層 SVG 進度環，中央清晰標註通過條件數（如 $4/6$）與百分比，外環依比例自動染色（藍/綠/橘/紅）。
+- **穿透式完整健診報告彈窗 (`HealthReportModal`)**：
+  - 忠實還原參考介面之綠勾「✔ 通過」與紅叉「✖ 沒過」清單，提供各指標門檻與評估詳解。
+- **一級專屬工作區與深入了解側邊欄 (`StockHealthWorkspace`)**：
+  - 整合頂部藍色導航橫幅（可折疊關閉說明）、標的資訊與快速切換器、追蹤按鈕，以及右側「深入了解」Q&A 導航側邊欄。
 
 ### 0. 穿透式財報券商級常態同步、審計季度錨定與完整性門禁系統 (`Financial Forensic Broker-Grade Sync, Audited Sentry & Integrity Gate`) *(V8.44.0 全新升級)*
 - **金額自適應換算器 (`Adaptive Amount Formatter`)**：
