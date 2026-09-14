@@ -132,3 +132,27 @@ export function inferMarketFromSymbol(symbol: string): MarketType {
 export function inferCurrencyFromMarket(market: MarketType): Currency {
   return market === 'US' ? 'USD' : 'TWD';
 }
+
+/**
+ * 券商標準：以「元」為基數之金額自適應格式化器 (Spec 0126)
+ * - 絕對值 >= 1 億 (100,000,000) 顯示為 X.X 億
+ * - 絕對值 100 萬 ~ 1 億 (1,000,000 ~ 100,000,000) 顯示為 X.X 百萬
+ * - 絕對值 < 100 萬但非 0 顯示為 X 萬
+ * - 0 或 NaN 顯示為 0.0 億
+ */
+export function formatFinancialAmount(val: number): string {
+  if (isNaN(val) || val === 0) return '0.0 億';
+  const abs = Math.abs(val);
+  const sign = val < 0 ? '-' : '';
+
+  if (abs >= 100000000) {
+    const yi = (abs / 100000000).toFixed(1);
+    return `${sign}${yi} 億`;
+  }
+  if (abs >= 1000000) {
+    const baiwan = (abs / 1000000).toFixed(1);
+    return `${sign}${baiwan} 百萬`;
+  }
+  const wan = Math.round(abs / 10000);
+  return `${sign}${wan} 萬`;
+}

@@ -16,7 +16,7 @@ import type {
   QuarterlyFinancialRecord,
 } from '../../types/financialForensic';
 import { isQuarterRecordComplete } from '../../engine/financialScoringEngine';
-import { formatFinancialAmount } from './FinancialTrendsLayer';
+import { formatFinancialAmount } from '../../utils/formatters';
 
 export function getGradeColorClass(grade: FinancialHealthGrade): string {
   switch (grade) {

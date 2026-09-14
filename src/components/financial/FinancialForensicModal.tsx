@@ -140,6 +140,12 @@ export const FinancialForensicModal: React.FC<FinancialForensicModalProps> = ({
         }}
         onClick={(e) => e.stopPropagation()}
       >
+        <style>{`
+          @keyframes modalFadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+        `}</style>
         {/* 頂部 Header */}
         <div
           style={{
@@ -322,12 +328,6 @@ export const FinancialForensicModal: React.FC<FinancialForensicModalProps> = ({
                 animation: 'modalFadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
               }}
             >
-              <style>{`
-                @keyframes modalFadeIn {
-                  from { opacity: 0; transform: translateY(4px); }
-                  to { opacity: 1; transform: translateY(0); }
-                }
-              `}</style>
               {/* Layer 1: 0 秒核心決策與四大指示燈 */}
               <FinancialHeroLayer report={report} />
 
