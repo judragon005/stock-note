@@ -189,21 +189,30 @@ export const StockHealthWorkspace: React.FC<StockHealthWorkspaceProps> = ({
     }
   };
 
-  // 統合快捷膠囊 (持倉非 ETF 優先 + 熱門權值標的)
+  // 統合快捷膠囊 (持倉非 ETF 優先 + 熱門權值標的，嚴格 Set 去重)
   const quickPills = useMemo(() => {
     const pills: Array<{ symbol: string; name: string; isHolding?: boolean }> = [];
-    // 1. 持倉標的
+    const seen = new Set<string>();
+
+    // 1. 持倉標的 (去重納入)
     holdings.forEach((h) => {
-      pills.push({ symbol: h.symbol, name: h.name || h.symbol, isHolding: true });
+      if (!seen.has(h.symbol)) {
+        seen.add(h.symbol);
+        pills.push({ symbol: h.symbol, name: h.name || h.symbol, isHolding: true });
+      }
     });
-    // 2. 熱門推薦
+
+    // 2. 熱門推薦 (去重補全)
     POPULAR_STOCKS.forEach((p) => {
-      if (!pills.some((item) => item.symbol === p.symbol)) {
+      if (!seen.has(p.symbol)) {
+        seen.add(p.symbol);
         pills.push(p);
       }
     });
+
     return pills;
   }, [holdings]);
+
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: '48px' }}>
