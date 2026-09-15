@@ -87,7 +87,35 @@ function parseStockHistoryCsv(filePath) {
 }
 
 /**
- * 3. 交易日曆對齊與停牌前值填補 (第二層容錯)
+ * 快速計算 14 日 Wilder Smoothing RSI 指標
+ */
+function calculateQuickRsi(closes, period = 14) {
+  if (!Array.isArray(closes) || closes.length <= period) return 50;
+  let gains = 0;
+  let losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const diff = closes[i] - closes[i - 1];
+    if (diff > 0) gains += diff;
+    else losses += Math.abs(diff);
+  }
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+
+  for (let i = period + 1; i < closes.length; i++) {
+    const diff = closes[i] - closes[i - 1];
+    const gain = diff > 0 ? diff : 0;
+    const loss = diff < 0 ? Math.abs(diff) : 0;
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+  }
+
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  return Math.round((100 - 100 / (1 + rs)) * 100) / 100;
+}
+
+/**
+ * 3. 交易日曆對齊與停牌前值填補 (第二層容錯，二分搜尋 O(log M) 最佳化)
  */
 function alignCandlesWithCalendar(candles, calendar) {
   if (!Array.isArray(candles) || candles.length === 0) return [];
@@ -101,7 +129,34 @@ function alignCandlesWithCalendar(candles, calendar) {
   const firstDate = candles[0].date;
   const lastDate = candles[candles.length - 1].date;
 
-  const relevantCalendar = calendar.filter((d) => d >= firstDate && d <= lastDate);
+  // 二分搜尋起迄索引
+  let low = 0;
+  let high = calendar.length - 1;
+  let startIdx = calendar.length;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (calendar[mid] >= firstDate) {
+      startIdx = mid;
+      high = mid - 1;
+    } else {
+      low = mid + 1;
+    }
+  }
+
+  low = 0;
+  high = calendar.length - 1;
+  let endIdx = -1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (calendar[mid] <= lastDate) {
+      endIdx = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  const relevantCalendar = startIdx <= endIdx ? calendar.slice(startIdx, endIdx + 1) : [];
   const result = [];
   let prevClose = candles[0].close;
 
@@ -233,9 +288,17 @@ async function runFullMarketHistoryBackfill() {
     const latestStockDate = alignedCandles[alignedCandles.length - 1]?.date;
     const isUpToDate = latestStockDate >= latestMarketDate;
     if (!isUpToDate) {
+      let type = '個股';
+      if (symbol.startsWith('00') && (symbol.includes('K') || symbol.includes('U'))) {
+        type = '外幣ETF/期貨反向';
+      } else if (symbol.startsWith('00')) {
+        type = '台幣ETF';
+      }
+
       gapsAuditList.push({
         symbol,
         name,
+        type,
         latestStockDate,
         latestMarketDate,
       });
@@ -254,6 +317,7 @@ async function runFullMarketHistoryBackfill() {
     const recentCandles = alignedCandles.slice(-120);
     const indicatorPoints = computeIncrementalIndicators(recentCandles);
     const lastPoint = indicatorPoints[indicatorPoints.length - 1];
+    const computedRsi = calculateQuickRsi(recentCandles.map((c) => c.close), 14);
 
     stocksSummaryMap[symbol] = {
       symbol,
@@ -270,9 +334,9 @@ async function runFullMarketHistoryBackfill() {
         ma10: lastPoint?.ma?.ma10 || latestCandle.close,
         ma20: lastPoint?.ma?.ma20 || latestCandle.close,
         ma60: lastPoint?.ma?.ma60 || latestCandle.close,
-        rsi14: 50,
-        boxUpper: lastPoint?.box?.confirmedUpper || latestCandle.high,
-        boxLower: lastPoint?.box?.confirmedLower || latestCandle.low,
+        rsi14: computedRsi,
+        boxUpper: lastPoint?.box?.boxUpper || latestCandle.high,
+        boxLower: lastPoint?.box?.boxLower || latestCandle.low,
       },
       chips: {
         foreignNetShares: latestChip.foreignNetShares,

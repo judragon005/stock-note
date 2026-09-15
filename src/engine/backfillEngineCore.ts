@@ -57,10 +57,34 @@ export function alignCandlesWithCalendar(
   const firstStockDate = sortedStockDates[0];
   const lastStockDate = sortedStockDates[sortedStockDates.length - 1];
 
-  // 3. 找出日曆中落在此個股生命週期區間的所有有效交易日
-  const relevantCalendar = calendar.filter(
-    (d) => d >= firstStockDate && d <= lastStockDate
-  );
+  // 3. 以二分搜尋快速定位個股生命週期在日曆中的起迄索引 (O(log M) 取代 O(M) 全量 filter)
+  let low = 0;
+  let high = calendar.length - 1;
+  let startIdx = calendar.length;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (calendar[mid] >= firstStockDate) {
+      startIdx = mid;
+      high = mid - 1;
+    } else {
+      low = mid + 1;
+    }
+  }
+
+  low = 0;
+  high = calendar.length - 1;
+  let endIdx = -1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (calendar[mid] <= lastStockDate) {
+      endIdx = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  const relevantCalendar = startIdx <= endIdx ? calendar.slice(startIdx, endIdx + 1) : [];
 
   const result: RawCandleItem[] = [];
   let prevClose = candles[0]?.close || 0;
