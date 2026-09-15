@@ -4,7 +4,7 @@
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-936%2F936%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-941%2F941%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,18 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 每日收盤全市場台美股定時同步、本地快取秒讀與零遺漏稽核 (`Scheduled Full-Market Batch Sync, Zero-Latency Cache & Audit`) *(V8.47.0 全新發布)*
+### 0. 頂部 Header 盤後快取狀態膠囊視覺重構與設定中心 Windows 排程管理中樞 (`Header Sync Capsule Redesign & Windows Schedule Hub`) *(V8.47.1 全新發布)*
+- **Header 盤後快取膠囊視覺收斂 (`Zero Tailwind & Glassmorphism Convergence`)**：
+  - 徹底移除生硬的 Tailwind CSS 樣式與生硬白邊，改採專案原生黑金深色半透明毛玻璃 (`rgba(19, 29, 49, 0.7)`) 與 `var(--border-color)` 規格。
+  - 文字精簡為極簡膠囊格式 (`🇹🇼 16:00 · 🇺🇸 08:00`)，並將該元件移至右側狀態晶片組（與「台股盤中」狀態並列），左側操作按鈕區恢復乾淨對稱的呼吸感。
+  - 彈窗介面全面採用一致暗黑毛玻璃卡片，新增「前往設定中心」直達跳轉按鈕。
+- **設定中心 Windows 背景排程管理中樞 (`MarketScheduleHubSection`)**：
+  - 針對使用者排程管理與移除痛點，在「設定中心」獨立建立排程管理面板。
+  - **透明水線監控**：即時展示台股（16:00）與美股（08:00）任務名稱、最新快取日期、涵蓋標的數與執行秒數。
+  - **一鍵複製卸載指令**：提供一鍵複製 CMD / PowerShell 強制刪除指令（`schtasks /delete ... /f`）與批次檔選單 `[2]` 移除指引。
+  - **安裝路徑複製與搬遷重綁定指引**：提供批次檔相對路徑一鍵複製與絕對路徑重綁定教學，嚴格恪守瀏覽器沙盒安全邊界與 KISS 原則。
+
+### 0. 每日收盤全市場台美股定時同步、本地快取秒讀與零遺漏稽核 (`Scheduled Full-Market Batch Sync, Zero-Latency Cache & Audit`) *(V8.47.0)*
 - **全市場整包下載批次獲取 (`TWSE/TPEx Bulk Batch Engine`)**：
   - **台股每日 16:00 自動排程**：單次請求直接獲取 TWSE 與 TPEx 官方全市場（2,200+ 檔）三大法人籌碼 (T86) 與每日收盤行情 (MI_INDEX)，本地 CPU 毫秒級滾動計算 MA (5/10/20/60)、RSI14、MACD 與 Darvas 箱體指標，徹底消除逐檔打 API 的 429 限制。
   - **美股每日 08:00 自動排程**：雙層優先隊列調度（Tier 1 庫存/自選/S&P500 優先秒級完成 + Tier 2 平滑退避重試）。
