@@ -9,7 +9,7 @@ export interface InstitutionalChipRow {
   totalNetShares: number;   // 張數
 }
 
-const parseCleanNumber = (val: any): number => {
+export const parseCleanNumber = (val: any): number => {
   if (val === null || val === undefined) return 0;
   const str = String(val).replace(/,/g, '').trim();
   if (str === '--' || str === '' || str === '---') return 0;
@@ -75,10 +75,28 @@ export function parseTpexT86BulkData(rawData: any): Record<string, Institutional
       const symbol = String(row[0]).trim();
       const name = String(row[1]).trim();
 
-      const foreignNetShares = Math.round(parseCleanNumber(row[4]) / 1000);
-      const trustNetShares = Math.round(parseCleanNumber(row[7]) / 1000);
-      const dealerNetShares = Math.round(parseCleanNumber(row[8]) / 1000);
-      const totalNetShares = foreignNetShares + trustNetShares + dealerNetShares;
+      let foreignNetShares = 0;
+      let trustNetShares = 0;
+      let dealerNetShares = 0;
+      let totalNetShares = 0;
+
+      if (row.length >= 24) {
+        // 官方標準 24 欄格式
+        // 外資及陸資買賣超：row[10]
+        foreignNetShares = Math.round(parseCleanNumber(row[10]) / 1000);
+        // 投信買賣超：row[13]
+        trustNetShares = Math.round(parseCleanNumber(row[13]) / 1000);
+        // 自營商買賣超：row[22]
+        dealerNetShares = Math.round(parseCleanNumber(row[22]) / 1000);
+        // 三大法人合計買賣超：row[23]
+        totalNetShares = row[23] !== undefined ? Math.round(parseCleanNumber(row[23]) / 1000) : (foreignNetShares + trustNetShares + dealerNetShares);
+      } else {
+        // 簡化或舊版相容格式
+        foreignNetShares = Math.round(parseCleanNumber(row[4]) / 1000);
+        trustNetShares = Math.round(parseCleanNumber(row[7]) / 1000);
+        dealerNetShares = Math.round(parseCleanNumber(row[8]) / 1000);
+        totalNetShares = foreignNetShares + trustNetShares + dealerNetShares;
+      }
 
       result[symbol] = {
         symbol,

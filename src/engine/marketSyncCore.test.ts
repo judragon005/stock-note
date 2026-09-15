@@ -53,6 +53,28 @@ describe('Market Sync Core Engine (全市場批次同步核心)', () => {
       expect(result['6488'].foreignNetShares).toBe(500); // 500,000 / 1000
       expect(result['6488'].trustNetShares).toBe(150);
     });
+
+    it('應能正確解析 TPEx 官方 24 欄位標準三大法人日報', () => {
+      // 官方標準 24 欄：代號(0), 名稱(1), ..., 外資淨(10), ..., 投信淨(13), ..., 自營淨(22), 合計(23)
+      const mockOfficialRow = new Array(24).fill('0');
+      mockOfficialRow[0] = '8299';
+      mockOfficialRow[1] = '群聯';
+      mockOfficialRow[10] = '2,450,000'; // 外資買賣超
+      mockOfficialRow[13] = '1,120,000'; // 投信買賣超
+      mockOfficialRow[22] = '-350,000';  // 自營商買賣超
+      mockOfficialRow[23] = '3,220,000';  // 合計
+
+      const mockOfficialRaw = {
+        tables: [{ data: [mockOfficialRow] }],
+      };
+
+      const result = parseTpexT86BulkData(mockOfficialRaw);
+      expect(result['8299']).toBeDefined();
+      expect(result['8299'].foreignNetShares).toBe(2450);
+      expect(result['8299'].trustNetShares).toBe(1120);
+      expect(result['8299'].dealerNetShares).toBe(-350);
+      expect(result['8299'].totalNetShares).toBe(3220);
+    });
   });
 
   describe('3. parseTwseDailyQuotesBulk & parseTpexDailyQuotesBulk (全市場收盤行情)', () => {
