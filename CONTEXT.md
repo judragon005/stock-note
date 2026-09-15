@@ -1708,8 +1708,17 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - `pb_valuation` (股價淨值比評價)：真實每股淨值 BVPS、當前 P/B、五檔淨值比通道。
   - `pb_river` (股價淨值比河流圖)：真實 SVG 淨值比河流圖。
   - `dividend_yield` (現金股利殖利率)：當前現金殖利率卡片與近 5 年股息發放歷程表。
-  - `avg_dividend_yield` (平均現金股息殖利率)：近 3 年/5 年平均股息、7%/5%/3.5% 殖利率反推目標價與安全邊際折溢價。
-  - `dividend_river` (平均現金股息河流圖)：真實 SVG 平均現金股息河流圖。
-- **Dynamic Real Shares Deduction (`src/engine/keyMetricsEngine.ts`)**:
-  - 核心機制：揚棄寫死 1000 萬股，優先自資產負債表之股本 (`capitalStock / 10`) 動態推導全市場上市櫃公司真實流通股數（台泥實際為 75.3 億股），並以 `netIncome / eps` 作為次級備援；支援以近 4 季 TTM FCF 計算年化報酬率，使 FCF Yield (5%~15%) 與 DCF 每股內在價值 (30~45 元) 回歸合理真實區間，徹底告別 9135% 與 28.5 萬元天文數字。
+### 每日收盤全市場定時同步、本地快取秒讀與零遺漏稽核 *(新增於 V8.47.0 / Spec #0132 / Issue #63)*
+
+- **Market Batch Sync Engine (`scripts/market-sync/`)**:
+  - **TW Market Batch (`sync-tw-market.cjs`)**: 每日 16:00 定時整包抓取 TWSE/TPEx 三大法人籌碼 (T86) 與 MI_INDEX 收盤行情，本地 CPU 增量計算技術指標（MA5/10/20/60、RSI14、MACD、Darvas 箱體），免打個別 API 杜絕 429 封鎖。
+  - **US Tiered Queue (`sync-us-market.cjs`)**: 每日 08:00 定時以雙層優先隊列抓取持股、自選股與大型指數成份股，搭配帶抖動的指數退避重試防禦限流。
+- **Zero-Latency Cache Loader (`src/engine/marketCacheLoader.ts`)**:
+  - 核心機制：打開網頁時立即熱讀取本地持久化快取（`tw_market_summary.json`、`us_market_summary.json`），達成毫秒級瞬間讀取且 0 網路延遲；隨後在背景閒置時將日 K 與指標批量沉澱至 IndexedDB。
+- **Zero-Data-Loss Verification & Audit (`audit-verifier.cjs`)**:
+  - 核心機制：整合台灣與美國法定休市日曆，國定假日自動標註 `MARKET_CLOSED`；交易日實施實收率檢驗與 Dead-Letter Queue 3 次重試，生成 `sync_audit_report.json`。
+- **Windows Task Scheduler Automation (`setup-windows-task.bat`, `run-sync-silent.vbs`)**:
+  - 核心機制：透過 VBS 隱藏黑視窗技術，在 Windows 工作排程器自動註冊每日 16:00 (台股) 與 08:00 (美股) 靜默背景執行，實現全自動無感排程。
+- **Market Sync Status Badge (`src/components/MarketSyncStatusBadge.tsx`)**:
+  - 頂部導航控制列即時展示台股與美股盤後同步時間與涵蓋檔數，點擊開啟毛玻璃彈窗查看完整審計報告與手動測試提示。
 
