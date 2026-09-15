@@ -123,7 +123,7 @@ export const MarketSyncStatusBadge: React.FC<MarketSyncStatusBadgeProps> = ({
             }}
           >
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'between', borderBottom: '1px solid rgba(51, 65, 85, 0.4)', paddingBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(51, 65, 85, 0.4)', paddingBottom: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Database size={18} color="#10b981" />
                 <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#f8fafc', margin: 0 }}>
