@@ -9,18 +9,18 @@ echo.
 echo 此工具將在 Windows 工作排程器 (Task Scheduler) 中註冊兩項定時任務：
 echo  1. [StockTracker_TW_Sync] : 每日 16:00 自動同步台股全市場籌碼與日K (TWSE / TPEx)
 echo  2. [StockTracker_US_Sync] : 每日 08:00 自動同步美股全市場指標與日K (NYSE / NASDAQ)
-echo.
-echo 執行方式為「背景靜默執行」，不會跳出任何黑視窗打擾您的日常作業。
-echo 資料將自動儲存在本地快取中，開啟網頁時即刻秒讀！
+echo 執行方式: 背景靜默執行 (不彈出黑視窗)
+echo 資料儲存: 本地快取秒讀 (Zero Latency Cache)
 echo.
 echo 請選擇操作：
 echo  [1] 安裝 / 更新排程任務
 echo  [2] 移除排程任務
 echo  [3] 立即手動測試台股同步 (16:00 腳本)
 echo  [4] 立即手動測試美股同步 (08:00 腳本)
-echo  [5] 離開
+echo  [5] 立即執行台股全市場全歷史回補 (導入本機數據庫與日曆對齊)
+echo  [6] 離開
 echo ======================================================================
-set /p choice="請輸入選項 (1-5): "
+set /p choice="請輸入選項 (1-6): "
 
 set PROJECT_DIR=%~dp0..\..
 cd /d "%PROJECT_DIR%"
@@ -30,7 +30,8 @@ if "%choice%"=="1" goto INSTALL
 if "%choice%"=="2" goto UNINSTALL
 if "%choice%"=="3" goto TEST_TW
 if "%choice%"=="4" goto TEST_US
-if "%choice%"=="5" goto END
+if "%choice%"=="5" goto BACKFILL
+if "%choice%"=="6" goto END
 goto END
 
 :INSTALL
@@ -91,6 +92,13 @@ goto END
 echo.
 echo 正在執行美股同步測試...
 node "%PROJECT_DIR%\scripts\market-sync\sync-us-market.cjs"
+pause
+goto END
+
+:BACKFILL
+echo.
+echo 正在執行台股全市場全歷史回補 (導入本機數據庫、日曆對齊與指標計算)...
+node "%PROJECT_DIR%\scripts\market-sync\backfill-local-csv.cjs"
 pause
 goto END
 

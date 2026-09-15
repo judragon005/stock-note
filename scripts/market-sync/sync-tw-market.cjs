@@ -30,9 +30,21 @@ function fetchJson(url, options = {}) {
         timeout: 15000,
       },
       (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          reject(new Error(`HTTP 重定向 (${res.statusCode}) 至: ${res.headers.location}`));
+          return;
+        }
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          reject(new Error(`HTTP 異常狀態碼: ${res.statusCode}`));
+          return;
+        }
         let raw = '';
         res.on('data', (chunk) => (raw += chunk));
         res.on('end', () => {
+          if (!raw || !raw.trim()) {
+            reject(new Error(`回應內容為空 (0 bytes)`));
+            return;
+          }
           try {
             const data = JSON.parse(raw);
             resolve(data);
@@ -66,19 +78,29 @@ async function retryFetch(fn, retries = 3, delayMs = 1500) {
   throw lastErr;
 }
 
-async function runTwMarketSync() {
+async function runTwMarketSync(targetDateInput) {
   const startTime = Date.now();
   console.log(`[${new Date().toISOString()}] 開始執行台股全市場盤後自動同步 (Spec 0132)...`);
 
-  const today = new Date();
+  let targetDate = new Date();
+  if (targetDateInput) {
+    const clean = String(targetDateInput).replace(/-/g, '');
+    if (/^\d{8}$/.test(clean)) {
+      const y = parseInt(clean.substring(0, 4), 10);
+      const m = parseInt(clean.substring(4, 6), 10) - 1;
+      const d = parseInt(clean.substring(6, 8), 10);
+      targetDate = new Date(y, m, d);
+    }
+  }
+
   // 檢查是否週末
-  const day = today.getDay();
-  if (day === 0 || day === 6) {
+  const day = targetDate.getDay();
+  if (!targetDateInput && (day === 0 || day === 6)) {
     console.log(`[略過] 今日為週末 (Day ${day})，台股休市無交易數據。`);
     return;
   }
 
-  const dateStr = formatDateYMD(today);
+  const dateStr = formatDateYMD(targetDate);
   const yyyymmdd = dateStr.replace(/-/g, '');
 
   console.log(`[1/4] 抓取 TWSE 台灣證交所全市場收盤行情與 T86 籌碼日報 (日期: ${yyyymmdd})...`);
@@ -105,8 +127,8 @@ async function runTwMarketSync() {
   let tpexQuotesRaw = null;
   let tpexT86Raw = null;
 
-  const rocYear = today.getFullYear() - 1911;
-  const rocDateStr = `${rocYear}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`;
+  const rocYear = targetDate.getFullYear() - 1911;
+  const rocDateStr = `${rocYear}/${String(targetDate.getMonth() + 1).padStart(2, '0')}/${String(targetDate.getDate()).padStart(2, '0')}`;
 
   try {
     tpexQuotesRaw = await retryFetch(() =>
@@ -118,7 +140,7 @@ async function runTwMarketSync() {
 
   try {
     tpexT86Raw = await retryFetch(() =>
-      fetchJson(`https://www.tpex.org.tw/web/stock/3insti/daily_trades/3itrade_hedge_result.php?l=zh-tw&se=EW&t=D&d=${rocDateStr}&_=${Date.now()}`)
+      fetchJson(`https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=json&se=EW&t=D&d=${rocDateStr}&_=${Date.now()}`)
     );
   } catch (e) {
     console.warn(`TPEx T86 下載警告:`, e.message);
@@ -134,6 +156,10 @@ async function runTwMarketSync() {
   const allChips = { ...twseChips, ...tpexChips };
 
   const allSymbols = new Set([...Object.keys(allQuotes), ...Object.keys(allChips)]);
+  if (allSymbols.size === 0) {
+    console.log(`[提示] 目標日期 (${dateStr}) 官方尚未發布盤後數據（TWSE/TPEx 通常於 15:30~16:00 結算產出）或該日為非交易休市日。`);
+  }
+
   const stocksMap = {};
 
   let successCount = 0;
@@ -178,7 +204,8 @@ async function runTwMarketSync() {
 }
 
 if (require.main === module) {
-  runTwMarketSync().catch((err) => {
+  const customDateArg = process.argv[2] || null;
+  runTwMarketSync(customDateArg).catch((err) => {
     console.error(`台股盤後同步失敗:`, err);
     process.exit(1);
   });

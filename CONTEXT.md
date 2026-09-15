@@ -1729,4 +1729,20 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Windows Task Scheduler Hub (`MarketScheduleHubSection.tsx`)**:
   - 核心定義：在「設定中心」獨立建立盤後自動化與 Windows 排程管理面板，提供台股（16:00）與美股（08:00）排程水線、一鍵複製 CMD/PowerShell 卸載指令（`schtasks /delete ... /f`）、批次檔選單執行指南以及專案路徑更名/搬遷重綁定防禦指引，恪守純前端沙盒安全邊界與 KISS 原則。
 
+### 全市場全歷史數據回補與四層容錯修復管線 *(新增於 V8.48.0 / Spec #0134 / Issue #73)*
+
+- **Trading Calendar SSOT Alignment (大盤加權指數交易日曆對齊引擎)**:
+  - 核心機制：以台股大盤加權指數歷史日曆（`TAIEX_history_all.csv`）的 7,158 個有效交易日作為全市場唯一事實來源，嚴格校驗各檔標的日期連續性，解決長線回測時的日期漂移問題。
+- **Four-Tier Reconciliation & Healing (四層容錯與靶向修復機制)**:
+  - **第 1 層（差距稽核 Gap Audit）**：主動比對個股日 K 與大盤日曆，精確識別日期斷層、落後天數，輸出 `backfill_gaps_audit.json`。
+  - **第 2 層（停牌無量前值填補 Trading Halt Auto-Fill）**：遇減資或無量停牌時，開高低收沿用前一有效收盤價，成交量補 0 並標記 `isHalted: true`，籌碼補 0，確保 MA5/20/60、RSI14 與 MACD 數列計算不產生 NaN 斷裂。
+  - **第 3 層（按日單次批次補漏 Targeted Batch Healing）**：針對全市場缺漏日，統一調用交易所全市場單日總表 API（TWSE `MI_INDEX`+`T86`、TPEx `stk_wn1430`+`daily_trade`），單日僅 4 次 HTTP 請求即補齊 2,200+ 檔標的，徹底阻斷 429 速率封鎖。
+  - **第 4 層（除檔隔離 Quarantine Gate）**：下市或失效標的（HTTP 404）自動歸入黑名單，終止無效重試。
+- **Dual Persistence Architecture (雙目的地沉澱管線)**:
+  - **目的地 1**：產出 `public/market-cache/tw_market_summary.json`（1.26MB 全市場秒讀總表）與 `tw_market_ohlcv_compact.json`（16.7MB 緊湊日 K 數列），供前端 0 延遲瞬間秒讀並沉澱至 IndexedDB。
+  - **目的地 2**：回寫至本地磁碟歷史 CSV 數據庫，產出驗收報告 `backfill_audit_report.json`。
+- **Batch Automation Integration (`setup-windows-task.bat`)**:
+  - 修復 Windows cmd UTF-8 指針跳行 Bug，修正 TPEx T86 單數路徑 (`daily_trade`) 與 `o=json`，並新增選項 `[5]` 一鍵執行全歷史回補。
+
+
 
