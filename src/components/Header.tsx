@@ -12,6 +12,7 @@ import {
   FileJson,
 } from 'lucide-react';
 import { MarketType, ColorThemeMode, ExchangeRateQuote, AccountingView, BrokerAccount } from '../types/stock';
+import { MarketSyncStatusBadge } from './MarketSyncStatusBadge';
 
 interface HeaderProps {
   currentMarket: 'ALL' | MarketType;
@@ -322,6 +323,9 @@ export const Header: React.FC<HeaderProps> = ({
               <span>{isRefreshing ? '更新中...' : '⚡ 更新市價'}</span>
             </button>
           )}
+
+          {/* 全市場每日盤後定時同步狀態徽章 (Spec 0132) */}
+          <MarketSyncStatusBadge />
 
           {/* Market Status & Time Chip */}
           <div

@@ -78,6 +78,7 @@ import { buildTaxComplianceStatus } from './engine/taxComplianceEngine';
 import { CorporateActionSessionCache, scanCorporateActions } from './engine/corporateActionScanner';
 import { initializeStorageAsync } from './utils/storage';
 import { createSystemSnapshot } from './utils/db';
+import { loadMarketCacheSummary, syncMarketCacheToIndexedDB } from './engine/marketCacheLoader';
 
 export const App: React.FC = () => {
   const [isStorageInitialized, setIsStorageInitialized] = useState(false);
@@ -133,6 +134,37 @@ export const App: React.FC = () => {
       if (data.historicalFx && Object.keys(data.historicalFx).length > 0) {
         setHistoricalFx(data.historicalFx);
       }
+
+      // 盤後全市場快取秒讀熱載入 (Spec 0132: 打開網頁秒讀 0 延遲)
+      loadMarketCacheSummary('TW').then((twCache) => {
+        if (twCache && twCache.stocks) {
+          setCurrentPrices((prev) => {
+            const next = { ...prev };
+            for (const [sym, item] of Object.entries(twCache.stocks)) {
+              if (item.quote && item.quote.close > 0) {
+                next[sym] = item.quote.close;
+              }
+            }
+            return next;
+          });
+          syncMarketCacheToIndexedDB(twCache);
+        }
+      });
+
+      loadMarketCacheSummary('US').then((usCache) => {
+        if (usCache && usCache.stocks) {
+          setCurrentPrices((prev) => {
+            const next = { ...prev };
+            for (const [sym, item] of Object.entries(usCache.stocks)) {
+              if (item.quote && item.quote.close > 0) {
+                next[sym] = item.quote.close;
+              }
+            }
+            return next;
+          });
+          syncMarketCacheToIndexedDB(usCache);
+        }
+      });
     } finally {
       setIsStorageInitialized(true);
     }
