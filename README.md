@@ -4,7 +4,7 @@
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-923%2F923%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-936%2F936%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,20 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 個股分析成長率基期補齊、極端值視覺防禦、真實河流圖與估值模型審計 (`Stock Analysis Growth, River Bands & Valuation Audit`) *(V8.46.2 全新發布)*
+### 0. 每日收盤全市場台美股定時同步、本地快取秒讀與零遺漏稽核 (`Scheduled Full-Market Batch Sync, Zero-Latency Cache & Audit`) *(V8.47.0 全新發布)*
+- **全市場整包下載批次獲取 (`TWSE/TPEx Bulk Batch Engine`)**：
+  - **台股每日 16:00 自動排程**：單次請求直接獲取 TWSE 與 TPEx 官方全市場（2,200+ 檔）三大法人籌碼 (T86) 與每日收盤行情 (MI_INDEX)，本地 CPU 毫秒級滾動計算 MA (5/10/20/60)、RSI14、MACD 與 Darvas 箱體指標，徹底消除逐檔打 API 的 429 限制。
+  - **美股每日 08:00 自動排程**：雙層優先隊列調度（Tier 1 庫存/自選/S&P500 優先秒級完成 + Tier 2 平滑退避重試）。
+- **打開網頁毫秒級「瞬間秒讀」(`Zero-Latency Cache Hot-Loader`)**：
+  - 打開網頁時透過 `marketCacheLoader.ts` 記憶體級瞬間熱讀取本地持久化快取（`tw_market_summary.json`、`us_market_summary.json`），達成真正的 **0 網路延遲瞬間秒讀**，隨後在背景非同步將資料沉澱至 IndexedDB。
+- **防漏水稽核與休市日曆過濾 (`Zero-Data-Loss Verification & Dead-Letter Retry`)**：
+  - 內建台灣與美國法定休市日曆，國定假日自動記錄 `MARKET_CLOSED`；交易日實施實收率檢驗與 Dead-Letter Queue 3 次重試，生成 `sync_audit_report.json`。
+- **Windows 工作排程一鍵安裝工具 (`scripts/market-sync/setup-windows-task.bat`)**：
+  - 提供一鍵安裝批次檔，透過 VBScript 隱藏黑視窗技術，在 Windows 工作排程器自動註冊 16:00 (台股) 與 08:00 (美股) 靜默背景執行，實現全自動無感排程；若日後搬移專案目錄，重新右鍵管理員執行即可一鍵重新綁定路徑。
+- **即時狀態指示徽章 (`MarketSyncStatusBadge`)**：
+  - 頂部導航即時展示今日台美股盤後同步時間與檔數，點擊可開啟毛玻璃彈窗查看完整審計報告與手動測試提示。
+
+### 0. 個股分析成長率基期補齊、極端值視覺防禦、真實河流圖與估值模型審計 (`Stock Analysis Growth, River Bands & Valuation Audit`) *(V8.46.2)*
 - **成長率基期補齊與缺失平整化 (`Growth Baseline Expansion & Flattener`)**：
   - 財報查詢起始日提前至 `2021-01-01`，補足 2022 年 4 季之完整前期基期；無基期時輸出 `displayValue: '-'` 且柱高歸零，徹底杜絕誤標 `0%` 假綠柱。
 - **極端值自適應可視封頂防禦 (`Outlier Visual Capping Engine`)**：
