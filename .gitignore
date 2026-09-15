@@ -63,3 +63,7 @@ docs/json/
 *trades*.json
 !package*.json
 !tsconfig*.json
+
+# Local Market Data Caches (Background Schedule Output)
+public/market-cache/
+.scratch/market-cache/

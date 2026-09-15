@@ -33,6 +33,7 @@ import { getStockDictionaryStats, clearCustomStockNames } from '../engine/stockN
 import { validateCustomProxyUrl } from '../engine/secureProxyRouter';
 import { StockDictionaryStats } from '../types/stockDictionary';
 import { LocalStorageInspectionStats } from '../types/stock';
+import { MarketScheduleHubSection } from './MarketScheduleHubSection';
 import {
   Zap,
   Building2,
@@ -937,6 +938,9 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
       {/* --- 第四區塊：📚 官方股票名稱字典庫與自動補齊管理 --- */}
       <StockDictionaryManagementSection />
+
+      {/* --- 第五區塊：⏰ 全市場每日盤後自動化與 Windows 排程管理 (Spec 0133) --- */}
+      <MarketScheduleHubSection />
     </div>
   );
 };
