@@ -3,14 +3,22 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-941%2F941%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-953%2F953%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 盤後同步彈窗 CSS 包含塊陷阱修復與視窗邊界防溢出約束 (`Sync Status Badge Modal Containing Block Fix & Viewport Boundary Guard`) *(V8.48.1)*
+- **React Portal 脫離包含塊 (`createPortal`)**：
+  - 徹底根治祖先元素 `<header className="glass-card">` 的 `backdrop-filter: blur(16px)` 劫持 `position: fixed` 定位參照點的 CSS 包含塊陷阱。透過 React 原生 `createPortal` 將 Modal 遮罩層渲染至 `document.body` 頂層。
+- **視窗上下邊界防溢出自適應 (`MODAL_VIEWPORT_STYLES`)**：
+  - 彈窗遮罩外層設定 `padding: 24px 16px` 與 `overflowY: auto`；卡片本體限制 `maxHeight: min(90vh, 620px)`、`overflowY: auto` 與 `margin: auto`，確保在任何解析度或縱向窄視窗下，彈窗標題、市場卡片與右上角 `X` 關閉按鈕均完整可見可點。
+- **鍵盤無障礙操作 (ESC 快捷退出)**：
+  - 註冊鍵盤事件監聽器，支援按下 `Escape` 鍵或點擊外部遮罩時自動關閉彈窗，並在卸載或關閉時精準釋放監聽器，落實鍵盤無障礙操作與防禦性開發。
+
 
 ### 0. 全市場全歷史數據回補與四層容錯修復管線 (`Full-Market History Backfill & Reconciliation Pipeline`) *(V8.48.0)*
 - **加權指數大盤日曆唯一事實來源 (`Trading Calendar SSOT Alignment`)**：

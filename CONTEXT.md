@@ -1744,5 +1744,15 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Batch Automation Integration (`setup-windows-task.bat`)**:
   - 修復 Windows cmd UTF-8 指針跳行 Bug，修正 TPEx T86 單數路徑 (`daily_trade`) 與 `o=json`，並新增選項 `[5]` 一鍵執行全歷史回補。
 
+### 盤後同步彈窗 CSS 包含塊陷阱修復與視窗邊界防溢出約束 *(新增於 V8.48.1 / Spec #0135 / Issue #77)*
+
+- **CSS Containing Block Trap Fix (`MarketSyncStatusBadge.tsx`)**:
+  - 核心機制：根治祖先元素 `<header className="glass-card">` 的 `backdrop-filter: blur(16px)` 劫持 `position: fixed` 定位參照點之 CSS 包含塊陷阱。引入 React 原生 `createPortal` 將 Modal 傳送至 `document.body` 頂層，徹底脫離 Header 容器。
+- **Viewport Boundary Auto-Adaptation (`MODAL_VIEWPORT_STYLES`)**:
+  - 核心定義：彈窗遮罩外層設定 `padding: 24px 16px` 與 `overflowY: auto`；卡片本體限制 `maxHeight: min(90vh, 620px)`、`overflowY: auto` 與 `margin: auto`，確保在任何螢幕解析度或縱向窄視窗下，彈窗標題、台股/美股卡片與關閉按鈕 `X` 均完整可見可點。
+- **Keyboard Accessibility Guard (無障礙與 ESC 快捷鍵)**:
+  - 核心機制：註冊鍵盤事件監聽器，按下 `Escape` 鍵或點擊外部遮罩時自動關閉彈窗，並在卸載或關閉時精準釋放監聽器，落實鍵盤無障礙操作與防禦性開發。
+
+
 
 
