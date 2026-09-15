@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Clock,
   CheckCircle2,
@@ -39,6 +39,7 @@ export const MarketScheduleHubSection: React.FC = () => {
   const [usSummary, setUsSummary] = useState<MarketCacheSummary | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchSummaries = async () => {
     setIsLoading(true);
@@ -58,6 +59,11 @@ export const MarketScheduleHubSection: React.FC = () => {
 
   useEffect(() => {
     fetchSummaries();
+    return () => {
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current as any);
+      }
+    };
   }, []);
 
   const handleCopy = async (key: string, text: string) => {
@@ -73,8 +79,14 @@ export const MarketScheduleHubSection: React.FC = () => {
         document.execCommand('copy');
         document.body.removeChild(textArea);
       }
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current as any);
+      }
       setCopiedKey(key);
-      setTimeout(() => setCopiedKey(null), 2000);
+      copyTimerRef.current = setTimeout(() => {
+        setCopiedKey(null);
+        copyTimerRef.current = null;
+      }, 2000);
     } catch {
       alert(`請手動複製指令：\n${text}`);
     }
@@ -199,6 +211,8 @@ export const MarketScheduleHubSection: React.FC = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', color: 'var(--text-muted)', borderTop: '1px solid rgba(51, 65, 85, 0.5)', paddingTop: '8px', marginTop: '4px' }}>
             <span>任務名稱: <code style={{ color: '#38bdf8' }}>StockTracker_TW_Sync</code></span>
             <button
+              type="button"
+              aria-label="複製台股手動測試命令"
               onClick={() => handleCopy('test_tw', WINDOWS_SCHEDULE_COMMANDS.TEST_TW_CMD)}
               style={{
                 background: 'transparent',
@@ -242,6 +256,8 @@ export const MarketScheduleHubSection: React.FC = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', color: 'var(--text-muted)', borderTop: '1px solid rgba(51, 65, 85, 0.5)', paddingTop: '8px', marginTop: '4px' }}>
             <span>任務名稱: <code style={{ color: '#38bdf8' }}>StockTracker_US_Sync</code></span>
             <button
+              type="button"
+              aria-label="複製美股手動測試命令"
               onClick={() => handleCopy('test_us', WINDOWS_SCHEDULE_COMMANDS.TEST_US_CMD)}
               style={{
                 background: 'transparent',
@@ -291,6 +307,8 @@ export const MarketScheduleHubSection: React.FC = () => {
               </span>
             </div>
             <button
+              type="button"
+              aria-label="一鍵複製完整卸載排程指令"
               onClick={() => handleCopy('uninstall_all', WINDOWS_SCHEDULE_COMMANDS.UNINSTALL)}
               style={{
                 display: 'inline-flex',
@@ -339,6 +357,8 @@ export const MarketScheduleHubSection: React.FC = () => {
               <span>初次安裝或重新啟用排程</span>
             </div>
             <button
+              type="button"
+              aria-label="複製安裝批次檔相對路徑"
               onClick={() => handleCopy('bat_path', WINDOWS_SCHEDULE_COMMANDS.SETUP_BAT_PATH)}
               style={{
                 display: 'inline-flex',
