@@ -12,6 +12,20 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
+### 0. 全市場全歷史數據回補與四層容錯修復管線 (`Full-Market History Backfill & Reconciliation Pipeline`) *(V8.48.0)*
+- **加權指數大盤日曆唯一事實來源 (`Trading Calendar SSOT Alignment`)**：
+  - 讀取台股大盤指數（`TAIEX_history_all.csv`）的 7,158 個有效交易日作為全市場唯一日曆基準，解決長線指標回測與多標的對齊時的日期漂移問題。
+- **四層容錯修復機制 (`Four-Tier Reconciliation Architecture`)**：
+  - **第 1 層（差距稽核）**：自動比對個股與大盤日曆，精確識別日期斷層與落後天數，輸出 `backfill_gaps_audit.json`。
+  - **第 2 層（停牌無量前值填補）**：遇到減資或停牌無量時，開高低收沿用前日收盤價，成交量補 0 並標記 `isHalted: true`，籌碼補 0，確保全週期均線 (MA5/10/20/60)、RSI14 與 MACD 數列計算不產生 NaN 斷裂（全市場自動填補 4,266 筆）。
+  - **第 3 層（按日單次批次補漏）**：若全市場歷史日期缺漏，禁止逐檔爬取，統一調用交易所全市場單日總表 API（單日僅 4 次 HTTP 請求），徹底杜絕 429 速率封鎖。
+  - **第 4 層（除檔隔離）**：下市或失效標的（HTTP 404）自動歸入黑名單隔離清單，終止無效重試。
+- **二分搜尋加速日曆切片與 33 秒極速回補 (`Binary Search Optimization & 33s Pipeline`)**：
+  - 將日曆切片算法以二分搜尋取代全量 `filter`，複雜度降至 $O(\log M)$，全市場 2,359 檔標的歷史回補時間大幅降至 **33.5 秒（3.55x 加速）**。
+- **雙目的地沉澱與前端秒讀 (`Dual Persistence & Zero-Latency Cache`)**：
+  - 目的地 1：產出 `tw_market_summary.json` (1.26MB 全市場秒讀總表，含真實 Wilder RSI(14) 數值) 與 `tw_market_ohlcv_compact.json` (16.7MB 緊湊日 K 數列)，供前端 0 延遲瞬間秒讀並沉澱至 IndexedDB。
+  - 目的地 2：產出審計報告 `backfill_audit_report.json`，並在 Windows 排程管理工具 (`setup-windows-task.bat`) 中新增選項 `[5] 立即執行台股全市場全歷史回補`。
+
 ### 0. 頂部 Header 盤後快取狀態膠囊視覺重構與設定中心 Windows 排程管理中樞 (`Header Sync Capsule Redesign & Windows Schedule Hub`) *(V8.47.1 全新發布)*
 - **Header 盤後快取膠囊視覺收斂 (`Zero Tailwind & Glassmorphism Convergence`)**：
   - 徹底移除生硬的 Tailwind CSS 樣式與生硬白邊，改採專案原生黑金深色半透明毛玻璃 (`rgba(19, 29, 49, 0.7)`) 與 `var(--border-color)` 規格。
