@@ -1722,3 +1722,11 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Market Sync Status Badge (`src/components/MarketSyncStatusBadge.tsx`)**:
   - 頂部導航控制列即時展示台股與美股盤後同步時間與涵蓋檔數，點擊開啟毛玻璃彈窗查看完整審計報告與手動測試提示。
 
+### 頂部 Header 盤後快取膠囊視覺重構與設定中心 Windows 排程管理中樞 *(新增於 V8.47.1 / Spec #0133 / Issue #68)*
+
+- **Header Sync Badge Visual Convergence (頂部盤後快取狀態膠囊視覺收斂)**:
+  - 核心機制：全面拔除 Tailwind CSS 樣式與生硬白邊，改採與頂部 Header 一致之深色毛玻璃晶片風格（`rgba(19, 29, 49, 0.7)`、`var(--border-color)`）；文字精簡為緊湊膠囊格式（`🇹🇼 16:00 · 🇺🇸 08:00`），並自左側按鈕區移至右側狀態晶片組，與「台股盤中」狀態並列，恢復左側留白與黑金呼吸感。
+- **Windows Task Scheduler Hub (`MarketScheduleHubSection.tsx`)**:
+  - 核心定義：在「設定中心」獨立建立盤後自動化與 Windows 排程管理面板，提供台股（16:00）與美股（08:00）排程水線、一鍵複製 CMD/PowerShell 卸載指令（`schtasks /delete ... /f`）、批次檔選單執行指南以及專案路徑更名/搬遷重綁定防禦指引，恪守純前端沙盒安全邊界與 KISS 原則。
+
+

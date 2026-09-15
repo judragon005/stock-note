@@ -36,6 +36,7 @@ interface HeaderProps {
   onExportCSV: () => void;
   onImportFile?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onOpenImportModal?: () => void;
+  onNavigateToSettings?: () => void;
 }
 
 export function getColorThemeLabel(colorTheme: ColorThemeMode): string {
@@ -70,6 +71,7 @@ export const Header: React.FC<HeaderProps> = ({
   onExportCSV,
   onImportFile,
   onOpenImportModal,
+  onNavigateToSettings,
 }) => {
   return (
     <header
@@ -324,9 +326,6 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* 全市場每日盤後定時同步狀態徽章 (Spec 0132) */}
-          <MarketSyncStatusBadge />
-
           {/* Market Status & Time Chip */}
           <div
             style={{
@@ -363,6 +362,9 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             )}
           </div>
+
+          {/* 全市場每日盤後定時同步狀態徽章 (Spec 0132 & Spec 0133) */}
+          <MarketSyncStatusBadge onNavigateToSettings={onNavigateToSettings} />
 
           {/* Color Theme Toggle */}
           <button

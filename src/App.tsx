@@ -794,6 +794,7 @@ export const App: React.FC = () => {
         onExportJSON={handleExportJSON}
         onExportCSV={handleExportCSV}
         onOpenImportModal={() => setIsEnhancedImportModalOpen(true)}
+        onNavigateToSettings={() => setActiveTab('settings')}
       />
 
       {/* 活頁本標籤導覽列 */}

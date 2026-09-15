@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, CheckCircle2, Clock, Database, X } from 'lucide-react';
+import { RefreshCw, CheckCircle2, Clock, Database, X, ChevronRight } from 'lucide-react';
 import { MarketCacheSummary, loadMarketCacheSummary } from '../engine/marketCacheLoader';
 
-export const MarketSyncStatusBadge: React.FC = () => {
+interface MarketSyncStatusBadgeProps {
+  onNavigateToSettings?: () => void;
+}
+
+export const MarketSyncStatusBadge: React.FC<MarketSyncStatusBadgeProps> = ({
+  onNavigateToSettings,
+}) => {
   const [twSummary, setTwSummary] = useState<MarketCacheSummary | null>(null);
   const [usSummary, setUsSummary] = useState<MarketCacheSummary | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   const fetchStatus = async () => {
     setIsLoading(true);
@@ -29,128 +36,256 @@ export const MarketSyncStatusBadge: React.FC = () => {
   }, []);
 
   const formatTime = (timestamp?: number) => {
-    if (!timestamp) return '未同步';
+    if (!timestamp) return '';
     const d = new Date(timestamp);
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   };
+
+  const twTime = formatTime(twSummary?.updatedAt);
+  const usTime = formatTime(usSummary?.updatedAt);
+
+  const tooltipText = `全市場每日盤後排程快取 (Spec 0132)\n台股 (16:00)：${twSummary ? `已同步 (${twSummary.date} ${twTime}, ${twSummary.totalSymbols}檔)` : '等待排程'}\n美股 (08:00)：${usSummary ? `已同步 (${usSummary.date} ${usTime}, ${usSummary.totalSymbols}檔)` : '等待排程'}\n點擊查看完整稽核報告與排程設定`;
 
   return (
     <>
       <div
         onClick={() => setShowModal(true)}
-        className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer transition-all hover:opacity-90 shadow-sm border border-[var(--border-color)] bg-[var(--bg-card)]/80 backdrop-blur-sm"
-        title="點擊查看全市場每日定時同步狀態與稽核報告"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        title={tooltipText}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          background: isHovered ? 'rgba(30, 41, 59, 0.85)' : 'rgba(19, 29, 49, 0.7)',
+          padding: '5px 10px',
+          borderRadius: '8px',
+          border: isHovered ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid var(--border-color)',
+          fontSize: '0.72rem',
+          color: 'var(--text-secondary)',
+          cursor: 'pointer',
+          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          userSelect: 'none',
+        }}
       >
-        <Database className="w-3.5 h-3.5 text-emerald-400" />
-        <span className="text-[var(--text-muted)]">盤後快取:</span>
+        <Database size={12} color="#38bdf8" />
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem' }}>盤後:</span>
+
         {twSummary ? (
-          <span className="inline-flex items-center gap-1 text-emerald-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            台股 {formatTime(twSummary.updatedAt)} ({twSummary.totalSymbols}檔)
+          <span style={{ color: '#34d399', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+            <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#10b981' }} />
+            🇹🇼 {twTime}
           </span>
         ) : (
-          <span className="text-[var(--text-muted)]">台股等待排程</span>
+          <span style={{ color: 'var(--text-muted)', opacity: 0.7 }}>🇹🇼 待排程</span>
         )}
-        <span className="text-[var(--text-muted)] opacity-40">|</span>
+
+        <span style={{ color: 'var(--border-color)', opacity: 0.6 }}>|</span>
+
         {usSummary ? (
-          <span className="inline-flex items-center gap-1 text-sky-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-            美股 {formatTime(usSummary.updatedAt)} ({usSummary.totalSymbols}檔)
+          <span style={{ color: '#38bdf8', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+            <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#38bdf8' }} />
+            🇺🇸 {usTime}
           </span>
         ) : (
-          <span className="text-[var(--text-muted)]">美股等待排程</span>
+          <span style={{ color: 'var(--text-muted)', opacity: 0.7 }}>🇺🇸 待排程</span>
         )}
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-lg rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] p-6 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-3">
-              <div className="flex items-center gap-2">
-                <Database className="w-5 h-5 text-emerald-400" />
-                <h3 className="text-base font-bold text-[var(--text-main)]">
-                  全市場每日盤後定時同步狀態 (Spec 0132)
+        <div
+          onClick={() => setShowModal(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(8px)',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '520px',
+              borderRadius: '16px',
+              border: '1px solid rgba(51, 65, 85, 0.6)',
+              background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(10, 16, 30, 0.95) 100%)',
+              padding: '24px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '18px',
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'between', borderBottom: '1px solid rgba(51, 65, 85, 0.4)', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Database size={18} color="#10b981" />
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#f8fafc', margin: 0 }}>
+                  全市場每日盤後排程同步狀態 (Spec 0132)
                 </h3>
               </div>
               <button
                 onClick={() => setShowModal(false)}
-                className="p-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-secondary)]"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  borderRadius: '6px',
+                }}
               >
-                <X className="w-5 h-5" />
+                <X size={18} />
               </button>
             </div>
 
-            <div className="space-y-4 text-sm">
-              {/* 台股狀態卡片 */}
-              <div className="p-3.5 rounded-xl bg-[var(--bg-secondary)]/50 border border-[var(--border-color)] space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-emerald-400 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4" /> 台灣市場 (TWSE / TPEx)
+            {/* Content Cards */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.8rem' }}>
+              {/* 台股卡片 */}
+              <div
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  background: 'rgba(19, 29, 49, 0.6)',
+                  border: '1px solid rgba(51, 65, 85, 0.4)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ fontWeight: 700, color: '#34d399', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <CheckCircle2 size={15} /> 🇹🇼 台股市場 (TWSE / TPEx)
                   </span>
-                  <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    每日 16:00 定時同步
+                  <span style={{ fontSize: '0.68rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                    每日 16:00 定時排程
                   </span>
                 </div>
                 {twSummary ? (
-                  <div className="grid grid-cols-2 gap-2 text-xs text-[var(--text-muted)]">
-                    <div>資料日期: <span className="text-[var(--text-main)] font-medium">{twSummary.date}</span></div>
-                    <div>同步時間: <span className="text-[var(--text-main)] font-medium">{new Date(twSummary.updatedAt).toLocaleTimeString()}</span></div>
-                    <div>涵蓋標的: <span className="text-[var(--text-main)] font-medium">{twSummary.totalSymbols} 檔 (全市場)</span></div>
-                    <div>同步耗時: <span className="text-[var(--text-main)] font-medium">{(twSummary.durationMs / 1000).toFixed(1)} 秒</span></div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                    <div>資料日期: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{twSummary.date}</span></div>
+                    <div>同步時間: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{new Date(twSummary.updatedAt).toLocaleTimeString()}</span></div>
+                    <div>涵蓋標的: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{twSummary.totalSymbols} 檔 (全市場整包)</span></div>
+                    <div>執行耗時: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{(twSummary.durationMs / 1000).toFixed(1)} 秒</span></div>
                   </div>
                 ) : (
-                  <p className="text-xs text-[var(--text-muted)]">尚未偵測到今日台股盤後快取，系統將於 16:00 自動執行。</p>
+                  <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    尚未偵測到今日台股快取。已註冊排程將於每日 16:00 自動在背景執行。
+                  </p>
                 )}
               </div>
 
-              {/* 美股狀態卡片 */}
-              <div className="p-3.5 rounded-xl bg-[var(--bg-secondary)]/50 border border-[var(--border-color)] space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-sky-400 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4" /> 美國市場 (NYSE / NASDAQ)
+              {/* 美股卡片 */}
+              <div
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  background: 'rgba(19, 29, 49, 0.6)',
+                  border: '1px solid rgba(51, 65, 85, 0.4)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ fontWeight: 700, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <CheckCircle2 size={15} /> 🇺🇸 美股市場 (NYSE / NASDAQ)
                   </span>
-                  <span className="text-xs px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                    每日 08:00 定時同步
+                  <span style={{ fontSize: '0.68rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                    每日 08:00 定時排程
                   </span>
                 </div>
                 {usSummary ? (
-                  <div className="grid grid-cols-2 gap-2 text-xs text-[var(--text-muted)]">
-                    <div>資料日期: <span className="text-[var(--text-main)] font-medium">{usSummary.date}</span></div>
-                    <div>同步時間: <span className="text-[var(--text-main)] font-medium">{new Date(usSummary.updatedAt).toLocaleTimeString()}</span></div>
-                    <div>涵蓋標的: <span className="text-[var(--text-main)] font-medium">{usSummary.totalSymbols} 檔 (核心優先)</span></div>
-                    <div>同步耗時: <span className="text-[var(--text-main)] font-medium">{(usSummary.durationMs / 1000).toFixed(1)} 秒</span></div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                    <div>資料日期: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{usSummary.date}</span></div>
+                    <div>同步時間: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{new Date(usSummary.updatedAt).toLocaleTimeString()}</span></div>
+                    <div>涵蓋標的: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{usSummary.totalSymbols} 檔 (核心優先)</span></div>
+                    <div>執行耗時: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{(usSummary.durationMs / 1000).toFixed(1)} 秒</span></div>
                   </div>
                 ) : (
-                  <p className="text-xs text-[var(--text-muted)]">尚未偵測到今日美股盤後快取，系統將於 08:00 自動執行。</p>
+                  <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    尚未偵測到今日美股快取。已註冊排程將於每日 08:00 自動在背景執行。
+                  </p>
                 )}
               </div>
 
-              {/* 操作與手動指令提示 */}
-              <div className="p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] text-xs text-[var(--text-muted)] space-y-1.5">
-                <div className="font-medium text-[var(--text-main)] flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-amber-400" /> Windows 排程自動化提示
+              {/* 前往設定中心管理提示 */}
+              <div
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  border: '1px dashed rgba(51, 65, 85, 0.6)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '8px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                  <Clock size={13} color="#f59e0b" />
+                  <span>管理或卸載 Windows 背景排程？</span>
                 </div>
-                <p>已配置 Windows 工作排程器，每日 16:00 與 08:00 於背景靜默自動抓取。如需立即手動補跑更新，可執行：</p>
-                <div className="font-mono bg-[var(--bg-secondary)] p-2 rounded text-[var(--text-main)] select-all">
-                  node scripts/market-sync/sync-tw-market.cjs
-                </div>
+                {onNavigateToSettings && (
+                  <button
+                    onClick={() => {
+                      setShowModal(false);
+                      onNavigateToSettings();
+                    }}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#38bdf8',
+                      fontSize: '0.72rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '2px',
+                    }}
+                  >
+                    前往設定中心 <ChevronRight size={13} />
+                  </button>
+                )}
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            {/* Footer Buttons */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', paddingTop: '4px' }}>
               <button
                 onClick={fetchStatus}
                 disabled={isLoading}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--bg-secondary)] hover:bg-[var(--border-color)] text-[var(--text-main)] transition-colors flex items-center gap-1.5"
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  background: 'rgba(19, 29, 49, 0.8)',
+                  color: 'var(--text-secondary)',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                <RefreshCw size={12} className={isLoading ? 'spin-animation' : ''} />
                 重新整理狀態
               </button>
               <button
                 onClick={() => setShowModal(false)}
-                className="px-4 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+                style={{
+                  padding: '6px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: '#ffffff',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
               >
-                關閉
+                完成
               </button>
             </div>
           </div>
