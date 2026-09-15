@@ -1,6 +1,59 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { RefreshCw, CheckCircle2, Clock, Database, X, ChevronRight } from 'lucide-react';
 import { MarketCacheSummary, loadMarketCacheSummary } from '../engine/marketCacheLoader';
+
+/**
+ * Spec 0135: 彈窗視窗防溢出與包含塊隔離樣式定義
+ */
+export const MODAL_VIEWPORT_STYLES = {
+  overlay: {
+    position: 'fixed' as const,
+    inset: 0,
+    zIndex: 1000,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '24px 16px',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backdropFilter: 'blur(8px)',
+    overflowY: 'auto' as const,
+  },
+  card: {
+    width: '100%',
+    maxWidth: '520px',
+    maxHeight: 'min(90vh, 620px)',
+    overflowY: 'auto' as const,
+    margin: 'auto',
+    borderRadius: '16px',
+    border: '1px solid rgba(51, 65, 85, 0.6)',
+    background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(10, 16, 30, 0.95) 100%)',
+    padding: '24px',
+    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '18px',
+  },
+};
+
+/**
+ * 格式化同步晶片懸浮說明文案
+ */
+export const formatSyncBadgeTooltip = (
+  twSummary: MarketCacheSummary | null,
+  usSummary: MarketCacheSummary | null
+): string => {
+  const formatTime = (timestamp?: number) => {
+    if (!timestamp) return '';
+    const d = new Date(timestamp);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
+
+  const twTime = formatTime(twSummary?.updatedAt);
+  const usTime = formatTime(usSummary?.updatedAt);
+
+  return `全市場每日盤後排程快取 (Spec 0132)\n台股 (16:00)：${twSummary ? `已同步 (${twSummary.date} ${twTime}, ${twSummary.totalSymbols}檔)` : '等待排程'}\n美股 (08:00)：${usSummary ? `已同步 (${usSummary.date} ${usTime}, ${usSummary.totalSymbols}檔)` : '等待排程'}\n點擊查看完整稽核報告與排程設定`;
+};
 
 interface MarketSyncStatusBadgeProps {
   onNavigateToSettings?: () => void;
@@ -35,6 +88,18 @@ export const MarketSyncStatusBadge: React.FC<MarketSyncStatusBadgeProps> = ({
     fetchStatus();
   }, []);
 
+  // 鍵盤 Escape 快捷關閉防禦
+  useEffect(() => {
+    if (!showModal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showModal]);
+
   const formatTime = (timestamp?: number) => {
     if (!timestamp) return '';
     const d = new Date(timestamp);
@@ -44,7 +109,7 @@ export const MarketSyncStatusBadge: React.FC<MarketSyncStatusBadgeProps> = ({
   const twTime = formatTime(twSummary?.updatedAt);
   const usTime = formatTime(usSummary?.updatedAt);
 
-  const tooltipText = `全市場每日盤後排程快取 (Spec 0132)\n台股 (16:00)：${twSummary ? `已同步 (${twSummary.date} ${twTime}, ${twSummary.totalSymbols}檔)` : '等待排程'}\n美股 (08:00)：${usSummary ? `已同步 (${usSummary.date} ${usTime}, ${usSummary.totalSymbols}檔)` : '等待排程'}\n點擊查看完整稽核報告與排程設定`;
+  const tooltipText = formatSyncBadgeTooltip(twSummary, usSummary);
 
   return (
     <>
@@ -92,35 +157,14 @@ export const MarketSyncStatusBadge: React.FC<MarketSyncStatusBadgeProps> = ({
         )}
       </div>
 
-      {showModal && (
+      {showModal && typeof document !== 'undefined' && createPortal(
         <div
           onClick={() => setShowModal(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '16px',
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(8px)',
-          }}
+          style={MODAL_VIEWPORT_STYLES.overlay}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{
-              width: '100%',
-              maxWidth: '520px',
-              borderRadius: '16px',
-              border: '1px solid rgba(51, 65, 85, 0.6)',
-              background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(10, 16, 30, 0.95) 100%)',
-              padding: '24px',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '18px',
-            }}
+            style={MODAL_VIEWPORT_STYLES.card}
           >
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(51, 65, 85, 0.4)', paddingBottom: '12px' }}>
@@ -289,7 +333,8 @@ export const MarketSyncStatusBadge: React.FC<MarketSyncStatusBadgeProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
