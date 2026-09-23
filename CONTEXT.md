@@ -73,6 +73,14 @@ _Avoid_: Currency Mix, Mixed Gain
 台股單筆現金股利達 NT$ 20,000 元時事前預警 2.11% 補充保費；美股統計當年度已實現價差與股息，提供 100 萬基本所得額申報與 750 萬最低稅負制 (AMT) 進度條。
 _Avoid_: Tax Guess, Manual Audit
 
+**Effective Dividend Payment Date (實質入帳發放日時序 SSOT)** *(新增於 V8.49.0 / Spec 0136)*:
+股利現金流與日誌之時序唯一基準，嚴格以資金真正撥入銀行/交割帳戶之日期為準（`trade.payDate || estimatePaymentDate(...)`）。年度累計、月度現金流柱狀圖與個股貢獻排行榜全面以此時間軸歸屬，徹底消滅除息日至入帳日跨年/跨月之時序錯位。
+_Avoid_: Ex-Date Cash Flow, Trade Date Timing
+
+**Gross vs Net Dividend Reconciliation (股利應發毛額與實領淨額對帳體系)** *(新增於 V8.49.0 / Spec 0136)*:
+將現金股利清楚解耦為「應發毛額 (Gross = 股數 × 每股配息)」與「實領淨額 (Net = 毛額 - 二代健保 2.11% - 匯費 10 元 - 30% IRS 稅)」，支援使用者直接與券商 APP 之應發總額或實撥款項雙向無縫核帳。
+_Avoid_: Mixed Dividend Amount, Untracked Tax Deduction
+
 ### 視覺化與主題 (Visualization & Theme)  *(新增於 V1.1)*
 
 **Treemap (資產樹狀圖)**:

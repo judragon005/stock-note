@@ -15,8 +15,7 @@ import {
 } from 'lucide-react';
 import { TradeRecord, MarketType } from '../types/stock';
 import { ReceivableDividend, DividendSummaryReport } from '../types/dividend';
-import { aggregateDividendReport } from '../engine/dividendAggregator';
-import { estimatePaymentDate } from '../engine/receivableDividendEngine';
+import { aggregateDividendReport, getEffectiveDividendPayDate } from '../engine/dividendAggregator';
 import { resolveEffectiveDividendTaxAndNet } from '../engine/taxComplianceEngine';
 import { Tooltip } from './common/Tooltip';
 
@@ -43,6 +42,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [searchQuery, setSearchQuery] = useState('');
   const [rankMode, setRankMode] = useState<'YEAR' | 'ALL_TIME'>('YEAR');
+  const [tableYearFilter, setTableYearFilter] = useState<'SELECTED_YEAR' | 'ALL'>('SELECTED_YEAR');
 
   // 1. 依全域市場與帳戶過濾交易與應收股利
   const scopedTrades = useMemo(() => {
@@ -60,7 +60,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
     });
   }, [receivableDividends, market]);
 
-  // 2. 彙整股利分析報告
+  // 2. 彙整股利分析報告 (以實質入帳發放日為時序 SSOT)
   const report: DividendSummaryReport = useMemo(() => {
     return aggregateDividendReport(scopedTrades, scopedReceivables, selectedYear, usdToTwdRate);
   }, [scopedTrades, scopedReceivables, selectedYear, usdToTwdRate]);
@@ -74,13 +74,18 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // 歷史現金股利交易明細列表 (僅納入 payDate <= today 已實質到達發放日之款項)
+  // 歷史現金股利交易明細列表 (僅納入 effectivePayDate <= today 已實質到達發放日之款項，支援連動當年度切換)
   const dividendTrades = useMemo(() => {
+    const selectedYearStr = String(selectedYear);
     return scopedTrades
       .filter((t) => t.type === 'DIVIDEND')
       .filter((t) => {
-        const payDate = t.payDate || estimatePaymentDate(t.exDate || t.date, t.market);
-        return payDate <= todayStr;
+        const payDate = getEffectiveDividendPayDate(t);
+        if (payDate > todayStr) return false;
+        if (tableYearFilter === 'SELECTED_YEAR') {
+          return payDate.startsWith(selectedYearStr);
+        }
+        return true;
       })
       .filter((t) => {
         if (!searchQuery.trim()) return true;
@@ -88,13 +93,13 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         return t.symbol.toLowerCase().includes(q) || (t.name && t.name.toLowerCase().includes(q));
       })
       .sort((a, b) => {
-        const payA = a.payDate || estimatePaymentDate(a.exDate || a.date, a.market);
-        const payB = b.payDate || estimatePaymentDate(b.exDate || b.date, b.market);
+        const payA = getEffectiveDividendPayDate(a);
+        const payB = getEffectiveDividendPayDate(b);
         const comp = payB.localeCompare(payA);
         if (comp !== 0) return comp;
         return (b.exDate || b.date).localeCompare(a.exDate || a.date);
       });
-  }, [scopedTrades, searchQuery, todayStr]);
+  }, [scopedTrades, searchQuery, todayStr, tableYearFilter, selectedYear]);
 
   // 計算月度最大值以設定柱狀圖高度比例
   const maxMonthlyNet = useMemo(() => {
@@ -275,13 +280,39 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
               <DollarSign size={15} /> {selectedYear} 年度實領股息
             </span>
             <span style={{ fontSize: '0.68rem', color: '#10b981', background: 'rgba(16, 185, 129, 0.15)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
-              已實質入帳
+              實質入帳日口徑
             </span>
           </div>
           <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#34d399', lineHeight: 1.2 }}>
             NT$ {report.currentYearDividendsTWD.toLocaleString()}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', fontSize: '0.74rem', color: '#94a3b8' }}>
+
+          {/* 毛額與稅費對帳輔助列 (Gross vs Net Reconciliation) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', fontSize: '0.72rem', color: '#94a3b8', flexWrap: 'wrap' }}>
+            <span>
+              應發毛額 <b className="mono" style={{ color: '#ffffff' }}>NT$ {report.currentYearGrossTWD.toLocaleString()}</b>
+            </span>
+            {report.currentYearTaxTWD > 0 && (
+              <span className="mono" style={{ color: 'var(--loss-color)' }}>
+                (稅費 -NT$ {report.currentYearTaxTWD.toLocaleString()})
+              </span>
+            )}
+            <Tooltip
+              content={
+                <div style={{ padding: '4px', fontSize: '0.74rem', maxWidth: '240px', lineHeight: 1.4 }}>
+                  💡 <b>券商對帳提示 (Gross vs Net)</b>：<br />
+                  • 主金額為<b>實領入帳淨額</b>（已扣除台股二代健保 2.11%、匯費 10 元與美股 30% IRS 預扣稅）。<br />
+                  • 若券商 APP 統計為應發總額，請核對此處「應發毛額」。
+                </div>
+              }
+            >
+              <span style={{ cursor: 'pointer', color: '#34d399', textDecoration: 'underline dotted', fontSize: '0.68rem' }}>
+                對帳提示
+              </span>
+            </Tooltip>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', fontSize: '0.72rem', color: '#94a3b8' }}>
             <span>YoY 成長率：</span>
             <span
               style={{
@@ -1038,6 +1069,50 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {/* 當年度 vs 全歷史 切換開關 */}
+            <div
+              style={{
+                display: 'flex',
+                background: 'rgba(19, 29, 49, 0.8)',
+                padding: '2px',
+                borderRadius: '8px',
+                border: '1px solid var(--border-color)',
+              }}
+            >
+              <button
+                onClick={() => setTableYearFilter('SELECTED_YEAR')}
+                style={{
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: tableYearFilter === 'SELECTED_YEAR' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'transparent',
+                  color: tableYearFilter === 'SELECTED_YEAR' ? '#ffffff' : '#94a3b8',
+                  fontSize: '0.7rem',
+                  fontWeight: tableYearFilter === 'SELECTED_YEAR' ? 700 : 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {selectedYear} 年度
+              </button>
+              <button
+                onClick={() => setTableYearFilter('ALL')}
+                style={{
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: tableYearFilter === 'ALL' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'transparent',
+                  color: tableYearFilter === 'ALL' ? '#ffffff' : '#94a3b8',
+                  fontSize: '0.7rem',
+                  fontWeight: tableYearFilter === 'ALL' ? 700 : 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                全歷史
+              </button>
+            </div>
+
             {/* 搜尋標的 */}
             <div style={{ position: 'relative' }}>
               <Search size={14} color="#64748b" style={{ position: 'absolute', left: '10px', top: '9px' }} />
@@ -1054,7 +1129,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
                   fontSize: '0.75rem',
                   color: '#ffffff',
                   outline: 'none',
-                  width: '200px',
+                  width: '180px',
                 }}
               />
             </div>
@@ -1080,7 +1155,9 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
               {dividendTrades.length === 0 ? (
                 <tr>
                   <td colSpan={8} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
-                    尚無符合條件之現金股利入帳明細
+                    {tableYearFilter === 'SELECTED_YEAR'
+                      ? `${selectedYear} 年度尚無符合條件之現金股利入帳明細`
+                      : '尚無符合條件之現金股利入帳明細'}
                   </td>
                 </tr>
               ) : (
@@ -1091,7 +1168,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
                   const effectiveTax = res.effectiveTax;
                   const net = res.netCash;
                   const netTWD = isUS ? Math.round(net * usdToTwdRate) : Math.round(net);
-                  const effectivePayDate = t.payDate || estimatePaymentDate(t.exDate || t.date, t.market);
+                  const effectivePayDate = getEffectiveDividendPayDate(t);
                   const exDate = t.exDate || t.date;
                   const isFuture = effectivePayDate > todayStr;
 
