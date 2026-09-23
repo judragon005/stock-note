@@ -10,7 +10,7 @@ import { estimatePaymentDate } from './receivableDividendEngine';
 export function getEffectiveDividendPayDate(trade: TradeRecord): string {
   if (trade.payDate) return trade.payDate;
   const baseDate = trade.exDate || trade.date;
-  return estimatePaymentDate(baseDate, trade.market);
+  return estimatePaymentDate(baseDate, trade.market, trade.symbol);
 }
 
 /**

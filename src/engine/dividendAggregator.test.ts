@@ -265,6 +265,33 @@ describe('Dividend Aggregator Engine (股利數據聚合引擎)', () => {
       expect(report.currentYearDividendsTWD).toBe(4000);
       expect(report.monthlyDistribution[7].netTWD).toBe(4000); // 8 月
     });
+
+    it('若無顯式 payDate 但為台股主流標的（如 00919 於 2024-12-20 除息），應優先從 OFFICIAL_TW_PAY_DATE_MAP 讀取官方真實發放日 2025-01-13 並精確歸入 2025 年 1 月', () => {
+      const implicitTrade00919: TradeRecord = {
+        id: 't-00919-cross-year',
+        symbol: '00919',
+        market: 'TW',
+        type: 'DIVIDEND',
+        date: '2024-12-20', // 除息日 2024-12-20，無顯式 payDate
+        shares: 100000,
+        price: 0.72,
+        currency: 'TWD',
+        fee: 0,
+        tax: 0,
+        createdAt: 1,
+      };
+
+      const report2025 = aggregateDividendReport([implicitTrade00919], [], 2025, 32.0, '2025-12-31');
+      expect(report2025.currentYearGrossTWD).toBe(72000); // 應發毛額 72,000
+      expect(report2025.currentYearDividendsTWD).toBe(70481); // 實領淨額 (扣除 2.11% 健保 1519)
+      expect(report2025.monthlyDistribution[0].grossTWD).toBe(72000); // 歸入 2025 年 1 月毛額
+      expect(report2025.monthlyDistribution[0].netTWD).toBe(70481); // 歸入 2025 年 1 月淨額
+
+      // 且在 2024 年報告中不應存在
+      const report2024 = aggregateDividendReport([implicitTrade00919], [], 2024, 32.0, '2024-12-31');
+      expect(report2024.currentYearDividendsTWD).toBe(0);
+      expect(report2024.currentYearGrossTWD).toBe(0);
+    });
   });
 });
 
