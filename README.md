@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-953%2F953%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-958%2F958%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,16 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 盤後同步彈窗 CSS 包含塊陷阱修復與視窗邊界防溢出約束 (`Sync Status Badge Modal Containing Block Fix & Viewport Boundary Guard`) *(V8.48.1)*
+### 0. 股利收益日誌與現金流全景：實質入帳日時序 SSOT 對齊與毛淨額雙軌對帳系統 (`Dividend Log & Cash Flow Temporal SSOT & Gross-Net Reconciliation`) *(V8.49.0)*
+- **實質入帳發放日單一事實來源 (`Effective Payment Date SSOT`)**：
+  - 徹底終結過去 `dividendAggregator.ts` 依賴除息日 `trade.date` 計算之時序錯位。導出 `getEffectiveDividendPayDate`，年度累計、YoY、1~12 月月度現金流柱狀圖與 TTM 滾動計算全面以實質入帳日歸屬。
+  - 完美修復 2024 年底除息 2025 年初入帳之跨年漏計與跨年偷跑問題，精確勾稽券商 APP 統計之 600,745 元與專案 576,307 元差額（24,438 元）。
+- **股息貢獻排行榜嚴格入帳過濾 (`Contributor Ranking Settled Gate`)**：
+  - 當年度與全歷史 Top 貢獻榜累計一律強制限制 `effectivePayDate <= today`，杜絕未到期預約款項提前跑進排行榜打亂名次，分子分母口徑 100% 同步。
+- **毛額 vs 實領淨額雙軌對帳體系 (`Gross vs Net Reconciliation`)**：
+  - `DividendSummaryReport` 擴充 `currentYearGrossTWD` 與 `currentYearTaxTWD` 欄位。KPI 卡片呈現實領淨額主數字，並在副列清晰標示應發毛額與二代健保/稅費扣除額，搭配券商對帳提示 Tooltip。
+- **歷史明細表年度連動篩選 (`Dividend Trades Table Year Toggle`)**：
+  - 歷史明細表新增 `[當年度 (${selectedYear})] / [全歷史]` 切換 Toggle（預設連動當年度），提升檢視與對帳一致性。
 - **React Portal 脫離包含塊 (`createPortal`)**：
   - 徹底根治祖先元素 `<header className="glass-card">` 的 `backdrop-filter: blur(16px)` 劫持 `position: fixed` 定位參照點的 CSS 包含塊陷阱。透過 React 原生 `createPortal` 將 Modal 遮罩層渲染至 `document.body` 頂層。
 - **視窗上下邊界防溢出自適應 (`MODAL_VIEWPORT_STYLES`)**：
