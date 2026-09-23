@@ -3,13 +3,24 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-958%2F958%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-962%2F962%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 股利收益月度現金流 Tooltip 智慧避讓、券商毛淨額雙軌切換與官方發放日對照庫 (`Dividend Smart Tooltip, Gross-Net Toggle & Official Pay-Date Cache`) *(V8.50.0 全新發布)*
+- **長條圖 Tooltip 邊界碰撞智慧避讓 (`Smart Tooltip Edge Collision Avoidance`)**：
+  - 徹底修復月度現金流長條圖 12 月 Tooltip 向右溢出容器遮擋隔壁「股息貢獻排行 (Top)」卡片的 UI 破版問題。實作 `calculateMonthTooltipAlign` 演算法，1~2 月靠左向右展開、10~12 月靠右向左展開、3~9 月保持置中，達到極致細膩的邊界自適應。
+- **券商 APP「累積現金股利」對帳口徑雙軌切換 (`Broker Gross-to-Net Dual Perspective`)**：
+  - 證實券商 APP（國泰證券）之「累積現金股利」為「入帳發放日口徑之應發毛額 (Gross)」。
+  - 首張 KPI 卡片增設 `[券商對帳 (毛額)] / [存摺入帳 (實領)]` 一鍵切換按鈕，大字直覺對齊券商 APP，並在明細表頂部增設「年度各標的券商對帳小計」卡片，點擊標的即時聚焦過濾。
+- **官方除息入帳常態發放日快取對照庫 (`Official Dividend Payment Date Cache`)**：
+  - 建立 `OFFICIAL_TW_PAY_DATE_MAP`，收錄 00919, 0056, 00878, 00713, 00921, 00929, 00940, 2886, 2890, 9927 與核心債券 ETF。
+  - 當歷史交易缺乏真實 `payDate` 時，優先精準匹配官方入帳日（例如 2024 年底除息之 00919 精準於 2025-01-13 入帳認列），終結推估天數引發之跨年時序漂移。
+
 
 ### 0. 股利收益日誌與現金流全景：實質入帳日時序 SSOT 對齊與毛淨額雙軌對帳系統 (`Dividend Log & Cash Flow Temporal SSOT & Gross-Net Reconciliation`) *(V8.49.0)*
 - **實質入帳發放日單一事實來源 (`Effective Payment Date SSOT`)**：
