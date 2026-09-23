@@ -3,6 +3,7 @@ import { TradeRecord } from '../types/stock';
 import { ReceivableDividend } from '../types/dividend';
 import { calculateConsolidatedTwNhiTax } from '../engine/taxComplianceEngine';
 import { CorporateActionSessionCache, RawCorporateEvent } from '../engine/corporateActionScanner';
+import { calculateMonthTooltipAlign } from './DividendLogView';
 
 describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () => {
   describe('1. 歷史現金股利入帳明細：配股配息合併健保計算', () => {
@@ -265,4 +266,24 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
       expect(sorted[1].symbol).toBe('0050');
     });
   });
+
+  describe('4. 月度長條圖 Tooltip 智慧避讓演算法 (照片 1 UI Bug 防禦)', () => {
+    it('1~2 月 (索引 0~1) 應靠左對齊 (align=left)，避免被左邊界裁切', () => {
+      expect(calculateMonthTooltipAlign(0)).toBe('left');
+      expect(calculateMonthTooltipAlign(1)).toBe('left');
+    });
+
+    it('3~9 月 (索引 2~8) 應居中對齊 (align=center)', () => {
+      expect(calculateMonthTooltipAlign(2)).toBe('center');
+      expect(calculateMonthTooltipAlign(5)).toBe('center');
+      expect(calculateMonthTooltipAlign(8)).toBe('center');
+    });
+
+    it('10~12 月 (索引 9~11) 應靠右對齊 (align=right)，向左展開，徹底杜絕遮擋右側股息貢獻排行卡片', () => {
+      expect(calculateMonthTooltipAlign(9)).toBe('right');
+      expect(calculateMonthTooltipAlign(10)).toBe('right');
+      expect(calculateMonthTooltipAlign(11)).toBe('right');
+    });
+  });
 });
+

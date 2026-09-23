@@ -29,6 +29,20 @@ interface DividendLogViewProps {
   isSyncingCorporateActions?: boolean;
 }
 
+export type DividendDisplayMode = 'GROSS' | 'NET';
+
+/**
+ * 月度現金流長條圖 Tooltip 智慧避讓對齊演算法 (防禦照片 1 所示 Tooltip 跨卡片覆蓋 Bug)
+ * 1~2 月 (索引 0~1) 靠左展開 (align='left')
+ * 3~9 月 (索引 2~8) 居中展開 (align='center')
+ * 10~12 月 (索引 9~11) 靠右展開向左延伸 (align='right')
+ */
+export function calculateMonthTooltipAlign(monthIndex: number): 'left' | 'center' | 'right' {
+  if (monthIndex < 2) return 'left';
+  if (monthIndex >= 9) return 'right';
+  return 'center';
+}
+
 export const DividendLogView: React.FC<DividendLogViewProps> = ({
   trades,
   receivableDividends,
@@ -43,6 +57,8 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [rankMode, setRankMode] = useState<'YEAR' | 'ALL_TIME'>('YEAR');
   const [tableYearFilter, setTableYearFilter] = useState<'SELECTED_YEAR' | 'ALL'>('SELECTED_YEAR');
+  const [dividendDisplayMode, setDividendDisplayMode] = useState<DividendDisplayMode>('GROSS');
+  const [showReconciliationPanel, setShowReconciliationPanel] = useState(false);
 
   // 1. 依全域市場與帳戶過濾交易與應收股利
   const scopedTrades = useMemo(() => {
@@ -106,6 +122,49 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
     const maxVal = Math.max(...report.monthlyDistribution.map((m) => m.netTWD), 1000);
     return maxVal;
   }, [report.monthlyDistribution]);
+
+  // 3. 計算選定年度各標的毛額/淨額對帳摘要 (Reconciliation Breakdown)
+  const annualReconciliationList = useMemo(() => {
+    const map = new Map<string, {
+      symbol: string;
+      name: string;
+      market: MarketType;
+      count: number;
+      grossTWD: number;
+      netTWD: number;
+      taxTWD: number;
+    }>();
+
+    const selectedYearStr = String(selectedYear);
+    for (const trade of scopedTrades) {
+      if (trade.type !== 'DIVIDEND') continue;
+      const payDate = getEffectiveDividendPayDate(trade);
+      if (!payDate.startsWith(selectedYearStr)) continue;
+
+      const res = resolveEffectiveDividendTaxAndNet(trade, scopedTrades);
+      const grossTWD = trade.currency === 'USD' ? Math.round(res.gross * usdToTwdRate) : Math.round(res.gross);
+      const netTWD = trade.currency === 'USD' ? Math.round(res.netCash * usdToTwdRate) : Math.round(res.netCash);
+      const taxTWD = grossTWD - netTWD;
+
+      const key = trade.symbol.toUpperCase();
+      const existing = map.get(key) || {
+        symbol: trade.symbol,
+        name: trade.name || trade.symbol,
+        market: trade.market,
+        count: 0,
+        grossTWD: 0,
+        netTWD: 0,
+        taxTWD: 0,
+      };
+      existing.count += 1;
+      existing.grossTWD += grossTWD;
+      existing.netTWD += netTWD;
+      existing.taxTWD += taxTWD;
+      map.set(key, existing);
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.grossTWD - a.grossTWD);
+  }, [scopedTrades, selectedYear, usdToTwdRate]);
 
   // 當前排行的資料來源 (當年度 vs 全歷史)
   const activeContributors = rankMode === 'YEAR'
@@ -277,21 +336,71 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
             <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#34d399', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <DollarSign size={15} /> {selectedYear} 年度實領股息
+              <DollarSign size={15} /> {selectedYear} 年度{dividendDisplayMode === 'GROSS' ? '應發毛額' : '實領股息'}
             </span>
-            <span style={{ fontSize: '0.68rem', color: '#10b981', background: 'rgba(16, 185, 129, 0.15)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
-              實質入帳日口徑
-            </span>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                background: 'rgba(15, 23, 42, 0.7)',
+                borderRadius: '6px',
+                padding: '2px',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setDividendDisplayMode('GROSS')}
+                style={{
+                  border: 'none',
+                  background: dividendDisplayMode === 'GROSS' ? '#10b981' : 'transparent',
+                  color: dividendDisplayMode === 'GROSS' ? '#0f172a' : '#94a3b8',
+                  fontWeight: 700,
+                  fontSize: '0.66rem',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+                title="切換為券商 APP 對帳口徑（應發毛額）"
+              >
+                券商對帳
+              </button>
+              <button
+                type="button"
+                onClick={() => setDividendDisplayMode('NET')}
+                style={{
+                  border: 'none',
+                  background: dividendDisplayMode === 'NET' ? '#10b981' : 'transparent',
+                  color: dividendDisplayMode === 'NET' ? '#0f172a' : '#94a3b8',
+                  fontWeight: 700,
+                  fontSize: '0.66rem',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+                title="切換為銀行存摺實際入帳口徑（實領淨額）"
+              >
+                存摺實領
+              </button>
+            </div>
           </div>
           <div className="mono" style={{ fontSize: '1.65rem', fontWeight: 800, color: '#34d399', lineHeight: 1.2 }}>
-            NT$ {report.currentYearDividendsTWD.toLocaleString()}
+            NT$ {(dividendDisplayMode === 'GROSS' ? report.currentYearGrossTWD : report.currentYearDividendsTWD).toLocaleString()}
           </div>
 
           {/* 毛額與稅費對帳輔助列 (Gross vs Net Reconciliation) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', fontSize: '0.72rem', color: '#94a3b8', flexWrap: 'wrap' }}>
-            <span>
-              應發毛額 <b className="mono" style={{ color: '#ffffff' }}>NT$ {report.currentYearGrossTWD.toLocaleString()}</b>
-            </span>
+            {dividendDisplayMode === 'GROSS' ? (
+              <span>
+                實領入帳 <b className="mono" style={{ color: '#ffffff' }}>NT$ {report.currentYearDividendsTWD.toLocaleString()}</b>
+              </span>
+            ) : (
+              <span>
+                應發毛額 <b className="mono" style={{ color: '#ffffff' }}>NT$ {report.currentYearGrossTWD.toLocaleString()}</b>
+              </span>
+            )}
             {report.currentYearTaxTWD > 0 && (
               <span className="mono" style={{ color: 'var(--loss-color)' }}>
                 (稅費 -NT$ {report.currentYearTaxTWD.toLocaleString()})
@@ -299,10 +408,10 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
             )}
             <Tooltip
               content={
-                <div style={{ padding: '4px', fontSize: '0.74rem', maxWidth: '240px', lineHeight: 1.4 }}>
-                  💡 <b>券商對帳提示 (Gross vs Net)</b>：<br />
-                  • 主金額為<b>實領入帳淨額</b>（已扣除台股二代健保 2.11%、匯費 10 元與美股 30% IRS 預扣稅）。<br />
-                  • 若券商 APP 統計為應發總額，請核對此處「應發毛額」。
+                <div style={{ padding: '4px', fontSize: '0.74rem', maxWidth: '250px', lineHeight: 1.4 }}>
+                  💡 <b>券商對帳口徑 (Gross) vs 存摺實領 (Net)</b>：<br />
+                  • <b>券商對帳 (應發毛額)</b>：完全吻合國泰證券等 APP「累積現金股利」表頭總額（未扣除健保與稅費）。<br />
+                  • <b>存摺實領 (實領淨額)</b>：銀行帳戶實質入帳金額（已精準扣除台股二代健保 2.11%、匯費 10 元與美股 30% 預扣稅）。
                 </div>
               }
             >
@@ -465,6 +574,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
                   }}
                 >
                   <Tooltip
+                    align={calculateMonthTooltipAlign(idx)}
                     content={
                       <div style={{ padding: '4px', display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '170px' }}>
                         <div style={{ fontWeight: 700, color: '#34d399', borderBottom: '1px solid rgba(51,65,85,0.6)', paddingBottom: '4px' }}>
@@ -1113,6 +1223,30 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
               </button>
             </div>
 
+            {/* 券商對帳核對展開按鈕 */}
+            <button
+              type="button"
+              onClick={() => setShowReconciliationPanel((prev) => !prev)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '4px 10px',
+                borderRadius: '8px',
+                border: showReconciliationPanel ? '1px solid #10b981' : '1px solid var(--border-color)',
+                background: showReconciliationPanel ? 'rgba(16, 185, 129, 0.2)' : 'rgba(19, 29, 49, 0.8)',
+                color: showReconciliationPanel ? '#34d399' : '#cbd5e1',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+              title="展開或收合年度各標的券商對帳核對摘要"
+            >
+              <Award size={13} />
+              <span>{selectedYear} 券商對帳核對</span>
+            </button>
+
             {/* 搜尋標的 */}
             <div style={{ position: 'relative' }}>
               <Search size={14} color="#64748b" style={{ position: 'absolute', left: '10px', top: '9px' }} />
@@ -1135,6 +1269,89 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
             </div>
           </div>
         </div>
+
+        {/* 券商對帳核對面板 (Reconciliation Summary Panel) */}
+        {showReconciliationPanel && (
+          <div
+            style={{
+              background: 'rgba(15, 23, 42, 0.95)',
+              border: '1px solid rgba(16, 185, 129, 0.4)',
+              borderRadius: '12px',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#34d399' }}>
+                  📊 {selectedYear} 年度各標的券商對帳小計 (共 {annualReconciliationList.length} 檔)
+                </span>
+                <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                  （點擊標的卡片可快速於下方明細表過濾與編輯校對）
+                </span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>
+                專案應發毛額合計：<b className="mono" style={{ color: '#34d399', fontSize: '0.9rem' }}>NT$ {report.currentYearGrossTWD.toLocaleString()}</b>
+              </div>
+            </div>
+
+            {/* 標的對帳卡片網格 */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
+                gap: '8px',
+                maxHeight: '220px',
+                overflowY: 'auto',
+                paddingRight: '4px',
+              }}
+            >
+              {annualReconciliationList.map((item) => (
+                <div
+                  key={item.symbol}
+                  onClick={() => setSearchQuery(item.symbol)}
+                  style={{
+                    background: searchQuery.toUpperCase() === item.symbol.toUpperCase() ? 'rgba(16, 185, 129, 0.25)' : 'rgba(30, 41, 59, 0.6)',
+                    border: searchQuery.toUpperCase() === item.symbol.toUpperCase() ? '1px solid #10b981' : '1px solid rgba(51, 65, 85, 0.5)',
+                    borderRadius: '8px',
+                    padding: '8px 10px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    transition: 'all 0.15s',
+                  }}
+                  title={`點擊快速過濾 ${item.symbol} 之入帳紀錄`}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontWeight: 800, color: '#ffffff', fontSize: '0.82rem' }}>{item.symbol}</span>
+                      <span style={{ color: '#94a3b8', fontSize: '0.72rem', maxWidth: '75px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {item.name}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '0.68rem', color: '#64748b' }}>{item.count} 筆</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem' }}>
+                    <span style={{ color: '#94a3b8' }}>毛額：</span>
+                    <b className="mono" style={{ color: '#34d399' }}>NT$ {item.grossTWD.toLocaleString()}</b>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem', color: '#64748b' }}>
+                    <span>實領：NT$ {item.netTWD.toLocaleString()}</span>
+                    {item.taxTWD > 0 && <span className="mono" style={{ color: 'var(--loss-color)' }}>稅 -{item.taxTWD.toLocaleString()}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ fontSize: '0.7rem', color: '#94a3b8', background: 'rgba(30, 41, 59, 0.4)', padding: '6px 10px', borderRadius: '6px' }}>
+              💡 <b>券商對帳指引</b>：若個別標的與券商 APP 配息紀錄有差異，通常為除息日前買賣導致庫存股數不同。點選上方卡片可立即於下方明細表鎖定標的，並點選「編輯」快速調整股數或金額至 100% 吻合。
+            </div>
+          </div>
+        )}
 
         {/* 明細表格 */}
         <div style={{ overflowX: 'auto' }}>

@@ -81,6 +81,19 @@ _Avoid_: Ex-Date Cash Flow, Trade Date Timing
 將現金股利清楚解耦為「應發毛額 (Gross = 股數 × 每股配息)」與「實領淨額 (Net = 毛額 - 二代健保 2.11% - 匯費 10 元 - 30% IRS 稅)」，支援使用者直接與券商 APP 之應發總額或實撥款項雙向無縫核帳。
 _Avoid_: Mixed Dividend Amount, Untracked Tax Deduction
 
+**Smart Tooltip Edge Collision Avoidance (長條圖邊界碰撞智慧避讓)** *(新增於 V8.50.0 / Spec 0137)*:
+在月度現金流長條圖中，若 Tooltip 位於容器兩端（如第 10~12 月靠右或第 1~2 月靠左），依據月份索引動態調整浮窗對齊錨點（`right-aligned` 向左展開、`left-aligned` 向右展開），徹底杜絕浮窗超出圖表容器並遮擋相鄰 KPI/排行卡片的破版現象。
+_Avoid_: Static Center Tooltip, Overflow Tooltip
+
+**Official Dividend Payment Date Cache (官方除息入帳常態發放日快取對照庫)** *(新增於 V8.50.0 / Spec 0137)*:
+針對台股高息與權值指標標的（如 00919, 0056, 00878, 00713, 00921, 2886, 2890 等），建立標準常態除息日與入帳發放日查表庫 (`OFFICIAL_TW_PAY_DATE_MAP`)。當交易紀錄無顯式 `payDate` 時，優先精準匹配官方入帳日，終結純推估天數導致的跨年/跨月時序漂移。
+_Avoid_: Flat Estimate Guess, Ad-hoc Date Shifting
+
+**Broker Gross-to-Net Dual Perspective (券商應發毛額與存摺實領淨額雙軌切換視圖)** *(新增於 V8.50.0 / Spec 0137)*:
+在股息日誌檢視中提供 KPI 首張卡片切換按鈕，使用者可自由選擇以「券商 APP 統計口徑 (應發毛額)」或「銀行存摺實際入帳口徑 (實領淨額)」為主視覺大字展示，並提供年度標的級對帳小計明細，讓多來源財務核帳零障礙。
+_Avoid_: Monolithic Display, Confusing Discrepancy
+
+
 ### 視覺化與主題 (Visualization & Theme)  *(新增於 V1.1)*
 
 **Treemap (資產樹狀圖)**:
