@@ -105,7 +105,9 @@ export interface TaxComplianceStatus {
  */
 export interface DividendSummaryReport {
   totalHistoricalDividendsTWD: number; // 全歷史累計領取股息 (TWD)
-  currentYearDividendsTWD: number;     // 當年度累計領取股息 (TWD)
+  currentYearDividendsTWD: number;     // 當年度累計實領股息淨額 (TWD)
+  currentYearGrossTWD: number;         // 當年度應發股息毛額 (TWD，利於券商對帳)
+  currentYearTaxTWD: number;           // 當年度扣繳稅費與二代健保 (TWD)
   previousYearDividendsTWD: number;    // 去年同期累計 (TWD)
   yoyGrowthPercent: number;            // 年度成長率 %
   trailing12mDividendsTWD: number;     // 近 12 個月現金流合計
