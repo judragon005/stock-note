@@ -1774,6 +1774,19 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Keyboard Accessibility Guard (無障礙與 ESC 快捷鍵)**:
   - 核心機制：註冊鍵盤事件監聽器，按下 `Escape` 鍵或點擊外部遮罩時自動關閉彈窗，並在卸載或關閉時精準釋放監聽器，落實鍵盤無障礙操作與防禦性開發。
 
+### 頂部 Header 自封閉即時台北市場時鐘與股利勾稽校準體系 *(新增於 V8.51.0 / Spec #0138 / Issue #87)*
+
+- **Self-Contained Realtime Market Clock (`RealtimeMarketClock.tsx`)**:
+  - 核心機制：在頂部導覽列狀態膠囊內封裝獨立子元件，每 1000ms 自動跳動當前台北標準時間（`HH:mm:ss`，強制鎖定 `Asia/Taipei` 時區）。
+  - 零重繪外溢 (Zero Re-render Bleed)：利用自封閉狀態管理，每秒定時更新僅限自身 DOM 節點重新渲染，徹底阻絕父層 Header 與整個應用程式/圖表的重複繪製，兼顧極致流暢與動態真實感。
+- **Quote Update Time Decoupling (`formatQuoteUpdateTime`)**:
+  - 核心定義：將原先容易引發「時鐘卡死」誤解之市價更新時戳與走動時鐘徹底解耦，以獨立標籤 `市價更新 {HH:mm:ss}` 呈現；點擊可手動觸發最新市價全量輪詢，刷新中伴隨旋轉動畫。
+- **Accurate Dividend Reconciliation & SSOT Pay-Date Anchor**:
+  - **泰銘 (9927) 實質到帳日定錨**：於 `OFFICIAL_TW_PAY_DATE_MAP` 登錄 `'9927:2025-11-13': '2025-12-01'`，對齊銀行存摺真實入帳日。
+  - **全量券商明細 100% 勾稽**：校準 2025 年度 2890 永豐金（毛額 22,750 元、實領 22,260 元）與 0050 元大台灣50（毛額 1,400 元、實領 1,390 元），確立全量含泰銘 2025 台股應發毛額 625,508 元與實領淨額 615,480 元，完全吻合永豐金大戶投 APP 歷史紀錄與銀行存摺。
+  - **透明對帳指示器 (`DividendLogView.tsx`)**：於首張 KPI 卡片提供雙口徑（券商應發毛額 vs 存摺實領淨額）切換與清晰懸浮提示，杜絕稅費扣繳與到帳時間之誤解。
+
+
 
 
 

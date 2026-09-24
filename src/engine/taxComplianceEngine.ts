@@ -76,56 +76,62 @@ export function resolveEffectiveDividendTaxAndNet(
   const rawGross = (trade.shares && trade.price) ? trade.shares * trade.price : (trade.cashAmount || 0);
   const gross = isUS ? Number(rawGross.toFixed(2)) : Math.floor(rawGross);
 
-  // 1. 若已明確指定實收金額 (cashAmount)，以實收金額為準
-  if (trade.cashAmount !== undefined && trade.cashAmount > 0) {
+  // 1. 若使用者顯式填寫了扣繳稅款 (trade.tax) 或手續匯費 (trade.fee)，以顯式數據為最高 SSOT
+  if ((trade.tax !== undefined && trade.tax > 0) || (trade.fee !== undefined && trade.fee > 0)) {
+    const tax = trade.tax || 0;
+    const fee = trade.fee || 0;
+    const effectiveTax = tax + fee;
+    const netCash = Math.max(0, isUS ? Number((gross - effectiveTax).toFixed(2)) : gross - effectiveTax);
+    return { gross, effectiveTax, netCash, wireFee: fee };
+  }
+
+  // 2. 若已明確指定小於毛額之實收淨額 (cashAmount < gross)，以實收金額為準
+  if (trade.cashAmount !== undefined && trade.cashAmount > 0 && trade.cashAmount < gross) {
     const netCash = isUS ? Number(trade.cashAmount.toFixed(2)) : Math.floor(trade.cashAmount);
     const effectiveTax = Math.max(0, gross - netCash);
     return { gross, effectiveTax, netCash, wireFee: 0 };
   }
 
-  // 2. 若為美股市場
+  // 3. 若為美股市場且無顯式稅款，依 30% IRS 預扣稅推估
   if (isUS) {
-    const effectiveTax = (trade.tax !== undefined && trade.tax > 0)
-      ? Number(trade.tax.toFixed(2))
-      : Number((gross * 0.3).toFixed(2));
+    const effectiveTax = Number((gross * 0.3).toFixed(2));
     const netCash = Math.max(0, Number((gross - effectiveTax).toFixed(2)));
     return { gross, effectiveTax, netCash, wireFee: 0 };
   }
 
-  // 3. 若為台股市場
-  let effectiveTax = trade.tax || 0;
-  if (effectiveTax === 0) {
-    // 尋找同標的同除權息期別（相差 <= 7 天）之股票股利
-    let peerStockShares = 0;
-    const tTime = new Date(trade.date).getTime();
+  // 4. 若為台股市場
+  let effectiveTax = 0;
+  // 尋找同標的同除權息期別（相差 <= 7 天）之股票股利
+  let peerStockShares = 0;
+  const tTime = new Date(trade.date).getTime();
 
-    // 先比對交易紀錄中已存在的配股
-    const matchedStockTrade = allTrades.find((st) => {
-      if (st.symbol.toUpperCase() !== trade.symbol.toUpperCase()) return false;
-      if (st.type !== 'STOCK_DIVIDEND' && st.type !== 'STOCK_SPLIT') return false;
-      const stTime = new Date(st.date).getTime();
-      return Math.abs(tTime - stTime) / (1000 * 3600 * 24) <= 7;
-    });
+  // 先比對交易紀錄中已存在的配股
+  const matchedStockTrade = allTrades.find((st) => {
+    if (st.symbol.toUpperCase() !== trade.symbol.toUpperCase()) return false;
+    if (st.type !== 'STOCK_DIVIDEND' && st.type !== 'STOCK_SPLIT') return false;
+    const stTime = new Date(st.date).getTime();
+    return Math.abs(tTime - stTime) / (1000 * 3600 * 24) <= 7;
+  });
 
-    if (matchedStockTrade) {
-      peerStockShares = matchedStockTrade.shares;
-    } else {
-      // 官方除權息常態庫或 Session 快取備援比對 (以 2890 永豐金 2026-07-23 配股 0.02 為例)
-      if (trade.symbol.toUpperCase() === '2890' && trade.date.startsWith('2026')) {
-        peerStockShares = trade.shares * 0.02;
-      }
+  if (matchedStockTrade) {
+    peerStockShares = matchedStockTrade.shares;
+  } else {
+    // 官方除權息常態庫或 Session 快取備援比對 (以 2890 永豐金 2026-07-23 配股 0.02 為例)
+    if (trade.symbol.toUpperCase() === '2890' && trade.date.startsWith('2026')) {
+      peerStockShares = trade.shares * 0.02;
     }
-
-    const taxRes = calculateConsolidatedTwNhiTax({
-      cashDividendGross: gross,
-      stockDividendShares: Math.round(peerStockShares),
-    });
-    effectiveTax = taxRes.nhiFeeTWD;
   }
+
+  const taxRes = calculateConsolidatedTwNhiTax({
+    cashDividendGross: gross,
+    stockDividendShares: Math.round(peerStockShares),
+  });
+  effectiveTax = taxRes.nhiFeeTWD;
 
   const netCash = Math.max(0, gross - effectiveTax);
   return { gross, effectiveTax, netCash, wireFee: 0 };
 }
+
 
 /**
  * 檢查單筆股利是否觸發台股二代健保補充保費

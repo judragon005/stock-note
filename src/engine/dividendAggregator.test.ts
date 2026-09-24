@@ -292,6 +292,71 @@ describe('Dividend Aggregator Engine (股利數據聚合引擎)', () => {
       expect(report2024.currentYearDividendsTWD).toBe(0);
       expect(report2024.currentYearGrossTWD).toBe(0);
     });
+
+    it('真實場景：9927 泰銘 (2025-12-01 到帳)、2890 永豐金、0050 等全量台股 2025 年度聚合計算 (Ticket 03 / PRD #0138)', () => {
+      const sampleTrades2025: TradeRecord[] = [
+        {
+          id: 't-9927-2025',
+          symbol: '9927',
+          name: '泰銘',
+          market: 'TW',
+          type: 'DIVIDEND',
+          date: '2025-11-13',
+          payDate: '2025-12-01',
+          shares: 7171,
+          price: 3.94321,
+          currency: 'TWD',
+          tax: 596,
+          fee: 0,
+          createdAt: 1,
+        },
+        {
+          id: 't-2890-2025',
+          symbol: '2890',
+          name: '永豐金',
+          market: 'TW',
+          type: 'DIVIDEND',
+          date: '2025-08-21',
+          payDate: '2025-09-18',
+          shares: 25000,
+          price: 0.91,
+          currency: 'TWD',
+          tax: 480,
+          fee: 10,
+          createdAt: 2,
+        },
+        {
+          id: 't-0050-2025',
+          symbol: '0050',
+          name: '元大台灣50',
+          market: 'TW',
+          type: 'DIVIDEND',
+          date: '2025-01-17',
+          payDate: '2025-02-14',
+          shares: 2000,
+          price: 0.70,
+          currency: 'TWD',
+          tax: 0,
+          fee: 10,
+          createdAt: 3,
+        },
+      ];
+
+      const report = aggregateDividendReport(sampleTrades2025, [], 2025, 32.0, '2025-12-31');
+      // 泰銘毛額 28,276，實領 27,680 (稅費 596)
+      // 永豐金毛額 22,750，實領 22,260 (健保 480 + 匯費 10 = 490)
+      // 0050 毛額 1,400，實領 1,390 (匯費 10)
+      // 毛額加總: 28,276 + 22,750 + 1,400 = 52,426
+      // 實領加總: 27,680 + 22,260 + 1,390 = 51,330
+      expect(report.currentYearGrossTWD).toBe(52426);
+      expect(report.currentYearDividendsTWD).toBe(51330);
+      expect(report.currentYearTaxTWD).toBe(1096);
+      // 月份分佈精確判定：2 月 1,390、9 月 22,260、12 月 27,680
+      expect(report.monthlyDistribution[1].netTWD).toBe(1390); // 2 月
+      expect(report.monthlyDistribution[8].netTWD).toBe(22260); // 9 月
+      expect(report.monthlyDistribution[11].netTWD).toBe(27680); // 12 月
+    });
   });
 });
+
 

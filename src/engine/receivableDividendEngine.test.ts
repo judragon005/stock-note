@@ -496,6 +496,19 @@ describe('Receivable Dividend & Ex-Dividend Smoothing Engine (應收股利平滑
       expect(rec!.estimatedNetDividend).toBe(33240); // 34100 - 850 - 10 = 33240
     });
   });
+
+  describe('estimatePaymentDate 官方發放日對照與泰銘定錨 (Ticket 02 / PRD #0138)', () => {
+    it('9927 泰銘 2025-11-13 除息應精確定錨為銀行存摺官方入帳日 2025-12-01', () => {
+      const payDate = estimatePaymentDate('2025-11-13', 'TW', '9927');
+      expect(payDate).toBe('2025-12-01');
+    });
+
+    it('2890 永豐金 2025-08-21 除息應精確定錨為官方發放日 2025-09-18', () => {
+      const payDate = estimatePaymentDate('2025-08-21', 'TW', '2890');
+      expect(payDate).toBe('2025-09-18');
+    });
+  });
 });
+
 
 
