@@ -52,15 +52,18 @@ export function getColorThemeTooltip(colorTheme: ColorThemeMode): string {
 
 export function formatQuoteUpdateTime(lastUpdated?: number | null): string {
   if (!lastUpdated) return '';
-  return new Date(lastUpdated).toLocaleTimeString('zh-TW', {
+  const date = new Date(lastUpdated);
+  const formatter = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Asia/Taipei',
-    hourCycle: 'h23',
     hour12: false,
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
   });
+  const str = formatter.format(date);
+  return str.startsWith('24:') ? `00:${str.slice(3)}` : str;
 }
+
 
 
 export const Header: React.FC<HeaderProps> = ({

@@ -4,15 +4,17 @@ import React, { useState, useEffect } from 'react';
  * 將時間物件精確格式化為台北時區 (UTC+8) 的 24 小時制 HH:mm:ss 字串
  */
 export function formatTaipeiClock(date: Date): string {
-  return date.toLocaleTimeString('zh-TW', {
+  const formatter = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Asia/Taipei',
-    hourCycle: 'h23',
     hour12: false,
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
   });
+  const str = formatter.format(date);
+  return str.startsWith('24:') ? `00:${str.slice(3)}` : str;
 }
+
 
 
 /**
