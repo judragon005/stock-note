@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-962%2F962%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-971%2F971%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,17 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 股利收益月度現金流 Tooltip 智慧避讓、券商毛淨額雙軌切換與官方發放日對照庫 (`Dividend Smart Tooltip, Gross-Net Toggle & Official Pay-Date Cache`) *(V8.50.0 全新發布)*
+### 0. 頂部導覽列自封閉秒級市場時鐘、市價更新解耦與永豐金大戶投股利全量入帳勾稽 (`Header Real-time Market Clock, Price Sync Decoupling & Broker-Grade Dividend Reconciliation`) *(V8.51.0 全新發布)*
+- **自封閉秒級市場跳動時鐘 (`RealtimeMarketClock`)**：
+  - 徹底解決 Header 市場時鐘在靜態無行情變更時停止不動之痛點。提取獨立葉子元件封閉計時器，達成秒級流暢跳動且對父層與全站造成 **0 額外重繪 (Zero Re-render Spillover)**。
+- **跨平台 ICU 午夜格式跨環境相容加固 (`formatTaipeiClock`)**：
+  - 攻克 Linux / Ubuntu CI runner 下 `Intl.DateTimeFormat` 在午夜輸出 `24:00:00` 之規範邊界問題。模組單例快取搭配嚴格正規化，全作業系統與 CI 環境均 100% 穩定輸出 `00:00:00`。
+- **即時時鐘與市價更新時戳解耦 (`Price Sync Decoupling`)**：
+  - 頂部導覽列狀態文字清楚解耦為：「秒級即時市場時鐘（走動中）」與「市價更新 {HH:mm:ss}（靜態快照時戳）」，消除認知混淆。
+- **官方除息入帳常態日庫與永豐金大戶投全量勾稽 (`Broker Dividend Reconciliation`)**：
+  - `OFFICIAL_TW_PAY_DATE_MAP` 登錄泰銘 (9927) 銀行存摺真實到帳日 `2025-12-01`。確立以含泰銘為全量基準（2025 應發毛額 625,508 元、存摺實領 615,480 元），並在股利收益日誌提供清晰透明的券商對帳提示 Tooltip。
+
+### 0. 股利收益月度現金流 Tooltip 智慧避讓、券商毛淨額雙軌切換與官方發放日對照庫 (`Dividend Smart Tooltip, Gross-Net Toggle & Official Pay-Date Cache`) *(V8.50.0)*
 - **長條圖 Tooltip 邊界碰撞智慧避讓 (`Smart Tooltip Edge Collision Avoidance`)**：
   - 徹底修復月度現金流長條圖 12 月 Tooltip 向右溢出容器遮擋隔壁「股息貢獻排行 (Top)」卡片的 UI 破版問題。實作 `calculateMonthTooltipAlign` 演算法，1~2 月靠左向右展開、10~12 月靠右向左展開、3~9 月保持置中，達到極致細膩的邊界自適應。
 - **券商 APP「累積現金股利」對帳口徑雙軌切換 (`Broker Gross-to-Net Dual Perspective`)**：
