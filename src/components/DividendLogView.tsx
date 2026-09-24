@@ -408,10 +408,11 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
             )}
             <Tooltip
               content={
-                <div style={{ padding: '4px', fontSize: '0.74rem', maxWidth: '250px', lineHeight: 1.4 }}>
+                <div style={{ padding: '4px', fontSize: '0.74rem', maxWidth: '280px', lineHeight: 1.45 }}>
                   💡 <b>券商對帳口徑 (Gross) vs 存摺實領 (Net)</b>：<br />
-                  • <b>券商對帳 (應發毛額)</b>：完全吻合國泰證券等 APP「累積現金股利」表頭總額（未扣除健保與稅費）。<br />
-                  • <b>存摺實領 (實領淨額)</b>：銀行帳戶實質入帳金額（已精準扣除台股二代健保 2.11%、匯費 10 元與美股 30% 預扣稅）。
+                  • <b>券商對帳 (應發毛額)</b>：吻合永豐金大戶投等券商 APP「累積股利」表頭總額（未扣除健保補充保費與匯費）。<br />
+                  • <b>存摺實領 (實領淨額)</b>：銀行存摺實際入帳金額（已扣除 2.11% 二代健保與 10 元匯費）。<br />
+                  • <b>全量含泰銘對齊</b>：已納入泰銘 (9927) 2025/12/01 到帳款（實領 NT$ 27,680），與券商 APP 歷史紀錄 100% 勾稽。
                 </div>
               }
             >
@@ -419,6 +420,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
                 對帳提示
               </span>
             </Tooltip>
+
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', fontSize: '0.72rem', color: '#94a3b8' }}>

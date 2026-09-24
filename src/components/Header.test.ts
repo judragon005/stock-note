@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getColorThemeLabel, getColorThemeTooltip } from './Header';
+import { getColorThemeLabel, getColorThemeTooltip, formatQuoteUpdateTime } from './Header';
 
 describe('Header 頂部工具列漲跌配色按鈕與 Tooltip 規範測試 (PRD #0071)', () => {
   describe('getColorThemeLabel 標籤文案規範', () => {
@@ -27,4 +27,18 @@ describe('Header 頂部工具列漲跌配色按鈕與 Tooltip 規範測試 (PRD 
       expect(tooltip).toContain('點擊切換為：台股習慣 (紅漲綠跌)');
     });
   });
+
+  describe('formatQuoteUpdateTime 市價更新時間解耦格式化規範 (PRD #0138)', () => {
+    it('應正確將時戳格式化為 HH:mm:ss', () => {
+      const timestamp = new Date('2026-09-24T12:50:21+08:00').getTime();
+      const formatted = formatQuoteUpdateTime(timestamp);
+      expect(formatted).toBe('12:50:21');
+    });
+
+    it('時戳為 null 或 undefined 時應回傳空字串', () => {
+      expect(formatQuoteUpdateTime(null)).toBe('');
+      expect(formatQuoteUpdateTime(undefined)).toBe('');
+    });
+  });
 });
+

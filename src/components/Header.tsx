@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { MarketType, ColorThemeMode, ExchangeRateQuote, AccountingView, BrokerAccount } from '../types/stock';
 import { MarketSyncStatusBadge } from './MarketSyncStatusBadge';
+import { RealtimeMarketClock } from './RealtimeMarketClock';
 
 interface HeaderProps {
   currentMarket: 'ALL' | MarketType;
@@ -48,6 +49,22 @@ export function getColorThemeTooltip(colorTheme: ColorThemeMode): string {
     ? '目前模式：台股習慣 (紅漲綠跌)\n點擊切換為：國際/美股習慣 (綠漲紅跌)'
     : '目前模式：國際/美股習慣 (綠漲紅跌)\n點擊切換為：台股習慣 (紅漲綠跌)';
 }
+
+export function formatQuoteUpdateTime(lastUpdated?: number | null): string {
+  if (!lastUpdated) return '';
+  const date = new Date(lastUpdated);
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Taipei',
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  const str = formatter.format(date);
+  return str.startsWith('24:') ? `00:${str.slice(3)}` : str;
+}
+
+
 
 export const Header: React.FC<HeaderProps> = ({
   currentMarket,
@@ -339,7 +356,7 @@ export const Header: React.FC<HeaderProps> = ({
               fontSize: '0.72rem',
               color: 'var(--text-secondary)',
             }}
-            title="開盤時段系統每 60 秒自動輪詢最新市價"
+            title="開盤時段系統每 60 秒自動輪詢最新市價；左側為當前即時台北時間，右側為最新市價更新時戳"
           >
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
               {marketStatus?.isTWOpen ? (
@@ -355,10 +372,28 @@ export const Header: React.FC<HeaderProps> = ({
               ) : (
                 <span style={{ color: 'var(--text-muted)' }}>⚪ 休市中</span>
               )}
+              <RealtimeMarketClock />
             </span>
             {lastUpdated && (
-              <span className="mono" style={{ color: 'var(--text-muted)', borderLeft: '1px solid var(--border-color)', paddingLeft: '6px' }}>
-                {new Date(lastUpdated).toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              <span
+                data-testid="quote-last-updated"
+                className="mono"
+                onClick={onRefreshAll}
+                style={{
+                  color: 'var(--text-muted)',
+                  borderLeft: '1px solid var(--border-color)',
+                  paddingLeft: '6px',
+                  cursor: onRefreshAll ? 'pointer' : 'default',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+                title={onRefreshAll ? '市價更新時間，點擊手動刷新' : '最新市價更新時間'}
+              >
+                {isRefreshing ? (
+                  <RefreshCw size={11} className="spin" style={{ color: 'var(--primary-color)' }} />
+                ) : null}
+                <span>市價更新 {formatQuoteUpdateTime(lastUpdated)}</span>
               </span>
             )}
           </div>
