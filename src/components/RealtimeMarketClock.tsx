@@ -6,12 +6,14 @@ import React, { useState, useEffect } from 'react';
 export function formatTaipeiClock(date: Date): string {
   return date.toLocaleTimeString('zh-TW', {
     timeZone: 'Asia/Taipei',
+    hourCycle: 'h23',
     hour12: false,
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
   });
 }
+
 
 /**
  * 自封閉即時走動台北交易時鐘元件

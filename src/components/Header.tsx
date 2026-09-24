@@ -54,12 +54,14 @@ export function formatQuoteUpdateTime(lastUpdated?: number | null): string {
   if (!lastUpdated) return '';
   return new Date(lastUpdated).toLocaleTimeString('zh-TW', {
     timeZone: 'Asia/Taipei',
+    hourCycle: 'h23',
     hour12: false,
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
   });
 }
+
 
 export const Header: React.FC<HeaderProps> = ({
   currentMarket,
