@@ -10,5 +10,6 @@
 - [x] 於 `src/engine/dividendAggregator.test.ts` 驗證校正後的 2025 年度台股毛額 (625,508) 與實領淨額 (615,480)。
 - [x] 於 `src/components/DividendLogView.tsx` 更新對帳提示文本，呈現全量含泰銘勾稽邏輯。
 - [x] 執行 `npm test`（100% 綠燈，973 測試）與 `npm run build`（TypeScript 0 錯誤）。
-- [ ] 發起 PR 關聯 Issue #87，待 CI 通過後 Squash and Merge。
+- [x] 發起 PR 關聯 Issue #87，待 CI 通過後 Squash and Merge。
+
 
