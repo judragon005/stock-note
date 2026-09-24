@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { MarketType, ColorThemeMode, ExchangeRateQuote, AccountingView, BrokerAccount } from '../types/stock';
 import { MarketSyncStatusBadge } from './MarketSyncStatusBadge';
-import { RealtimeMarketClock } from './RealtimeMarketClock';
+import { RealtimeMarketClock, formatTaipeiClock } from './RealtimeMarketClock';
 
 interface HeaderProps {
   currentMarket: 'ALL' | MarketType;
@@ -52,16 +52,7 @@ export function getColorThemeTooltip(colorTheme: ColorThemeMode): string {
 
 export function formatQuoteUpdateTime(lastUpdated?: number | null): string {
   if (!lastUpdated) return '';
-  const date = new Date(lastUpdated);
-  const formatter = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Taipei',
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-  const str = formatter.format(date);
-  return str.startsWith('24:') ? `00:${str.slice(3)}` : str;
+  return formatTaipeiClock(new Date(lastUpdated));
 }
 
 
