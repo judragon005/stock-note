@@ -10,6 +10,7 @@ import { MultiDimensionRadarCard } from './cards/MultiDimensionRadarCard';
 import { VolumeProfileCard } from './cards/VolumeProfileCard';
 import { RiskSpiderCard } from './cards/RiskSpiderCard';
 import { ForecastConeCard } from './cards/ForecastConeCard';
+import { VwapCostStructureCard } from './cards/VwapCostStructureCard';
 import { resolveOfficialSecurityName } from '../../engine/stockNameResolver';
 
 export interface AiForceDashboardViewProps {
@@ -125,6 +126,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           {/* 06 累積型 AI 預測路徑圖 (Ticket 13) */}
           <div>
             <ForecastConeCard data={report.forecastCone} />
+          </div>
+
+          {/* 07 主力成本結構分布圖 (Ticket 15) */}
+          <div>
+            <VwapCostStructureCard data={report.vwapCostStructure} />
           </div>
         </div>
       </div>
