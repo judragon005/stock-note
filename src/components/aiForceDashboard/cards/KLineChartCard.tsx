@@ -55,8 +55,9 @@ export function projectPriceToY(
   bottomPadding: number = 30
 ): number {
   if (range.span <= 0) return (topPadding + (height - bottomPadding)) / 2;
+  const clampedPrice = Math.max(range.min, Math.min(range.max, price));
   const plotHeight = height - topPadding - bottomPadding;
-  const normalized = (price - range.min) / range.span;
+  const normalized = (clampedPrice - range.min) / range.span;
   return topPadding + plotHeight * (1 - normalized);
 }
 
@@ -82,6 +83,66 @@ export function buildMaPolylinePoints(
     }
   });
   return points.join(' ');
+}
+
+export interface KeyLevelOverlay {
+  type: 'resistance' | 'cost' | 'support';
+  price: number;
+  label: string;
+  color: string;
+  bgColor: string;
+  y: number;
+}
+
+/**
+ * 計算三大關鍵價位 (高檔壓力、主力成本、支撐區) 之 SVG 引線座標與文字標籤
+ */
+export function calculateKeyLevelOverlays(
+  keyLevels: { highResistance: number; mainForceCost: number; supportLevel: number },
+  range: PriceRange,
+  height: number,
+  topPadding: number = 20,
+  bottomPadding: number = 30
+): KeyLevelOverlay[] {
+  const result: KeyLevelOverlay[] = [];
+
+  if (keyLevels.highResistance) {
+    const y = projectPriceToY(keyLevels.highResistance, range, height, topPadding, bottomPadding);
+    result.push({
+      type: 'resistance',
+      price: keyLevels.highResistance,
+      label: `高檔壓力區 ${keyLevels.highResistance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      color: '#ef4444',
+      bgColor: 'rgba(239, 68, 68, 0.25)',
+      y,
+    });
+  }
+
+  if (keyLevels.mainForceCost) {
+    const y = projectPriceToY(keyLevels.mainForceCost, range, height, topPadding, bottomPadding);
+    result.push({
+      type: 'cost',
+      price: keyLevels.mainForceCost,
+      label: `主力成本 ${keyLevels.mainForceCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      color: '#10b981',
+      bgColor: 'rgba(16, 185, 129, 0.25)',
+      y,
+    });
+  }
+
+  if (keyLevels.supportLevel) {
+    const y = projectPriceToY(keyLevels.supportLevel, range, height, topPadding, bottomPadding);
+    result.push({
+      type: 'support',
+      price: keyLevels.supportLevel,
+      label: `支撐區 ${keyLevels.supportLevel.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      color: '#38bdf8',
+      bgColor: 'rgba(56, 189, 248, 0.25)',
+      y,
+    });
+  }
+
+  return result;
 }
 
 export interface KLineChartCardProps {
@@ -128,13 +189,13 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
   const priceRange = useMemo(() => calculatePriceRange(displayCandles), [displayCandles]);
 
   // SVG 畫布尺寸
-  const width = 640;
+  const width = 680;
   const klineHeight = 220;
   const volHeight = 70;
   const totalHeight = klineHeight + volHeight + 20;
 
   const leftPad = 20;
-  const rightPad = 70;
+  const rightPad = 120;
   const plotWidth = width - leftPad - rightPad;
   const count = displayCandles.length;
   const candleGap = plotWidth / Math.max(1, count);
@@ -168,6 +229,16 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
     () => buildMaPolylinePoints(displayCandles.map((c) => c.ma60), priceRange, getX, klineHeight, 15, 15),
     [displayCandles, priceRange]
   );
+
+  // 三大關鍵價位引線計算 (Ticket 05)
+  const keyLevelOverlays = useMemo(() => {
+    const levels = {
+      highResistance: data.keyLevels?.highResistance || priceRange.max * 0.98,
+      mainForceCost: data.keyLevels?.mainForceCost || (priceRange.max + priceRange.min) / 2,
+      supportLevel: data.keyLevels?.supportLevel || priceRange.min * 1.02,
+    };
+    return calculateKeyLevelOverlays(levels, priceRange, klineHeight, 15, 15);
+  }, [data.keyLevels, priceRange, klineHeight]);
 
   const isTaiwan = colorTheme === 'taiwan';
   const bullColor = isTaiwan ? '#ef4444' : '#10b981';
@@ -332,6 +403,45 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           <polyline points={ma20Points} fill="none" stroke="#c084fc" strokeWidth="1.5" opacity="0.85" />
           <polyline points={ma10Points} fill="none" stroke="#38bdf8" strokeWidth="1.5" opacity="0.85" />
           <polyline points={ma5Points} fill="none" stroke="#fbbf24" strokeWidth="1.6" />
+
+          {/* 三大水平關鍵價位引線 (Ticket 05) */}
+          {keyLevelOverlays.map((overlay) => (
+            <g key={overlay.type}>
+              {/* 水平虛線 */}
+              <line
+                x1={leftPad}
+                y1={overlay.y}
+                x2={width - rightPad}
+                y2={overlay.y}
+                stroke={overlay.color}
+                strokeWidth="1.2"
+                strokeDasharray="4 3"
+                opacity="0.85"
+              />
+              {/* 右側彩色徽章背景矩形 */}
+              <rect
+                x={width - rightPad + 4}
+                y={overlay.y - 7}
+                width="112"
+                height="15"
+                rx="3"
+                fill={overlay.bgColor}
+                stroke={overlay.color}
+                strokeWidth="0.8"
+              />
+              {/* 標籤文字 */}
+              <text
+                x={width - rightPad + 8}
+                y={overlay.y + 3.5}
+                fill={overlay.color}
+                fontSize="8.5"
+                fontWeight="700"
+                fontFamily="system-ui, -apple-system, sans-serif"
+              >
+                {overlay.label}
+              </text>
+            </g>
+          ))}
 
           {/* 底部時間軸標籤 (抽樣顯示) */}
           {displayCandles.map((c, idx) => {

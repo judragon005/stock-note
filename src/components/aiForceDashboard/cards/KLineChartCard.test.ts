@@ -3,6 +3,7 @@ import {
   calculatePriceRange,
   projectPriceToY,
   buildMaPolylinePoints,
+  calculateKeyLevelOverlays,
 } from './KLineChartCard';
 
 describe('KLineChartCard - 主 K 線與均線計算規範 (Ticket 04)', () => {
@@ -55,10 +56,71 @@ describe('KLineChartCard - 主 K 線與均線計算規範 (Ticket 04)', () => {
       const height = 200;
 
       const points = buildMaPolylinePoints(values, range, getX, height, 10, 10);
-      // 第一個 undefined 被略過，其餘 3 個點
       const segments = points.trim().split(' ');
       expect(segments.length).toBe(3);
       expect(segments[0]).toContain('10,');
     });
+  });
+});
+
+describe('KLineChartCard - 三大水平關鍵價位引線計算規範 (Ticket 05)', () => {
+  it('應正確產生高檔壓力、主力成本、支撐區之 Y 座標與樣式標籤', () => {
+    const keyLevels = {
+      highResistance: 2490.0,
+      mainForceCost: 2130.65,
+      supportLevel: 1875.0,
+    };
+    const range = { min: 1800, max: 2600, span: 800 };
+    const overlays = calculateKeyLevelOverlays(keyLevels, range, 220, 15, 15);
+
+    expect(overlays.length).toBe(3);
+
+    const resistance = overlays.find((o) => o.type === 'resistance')!;
+    expect(resistance.label).toBe('高檔壓力區 2,490.00');
+    expect(resistance.color).toBe('#ef4444');
+    expect(resistance.y).toBeGreaterThan(0);
+
+    const cost = overlays.find((o) => o.type === 'cost')!;
+    expect(cost.label).toBe('主力成本 2,130.65');
+    expect(cost.color).toBe('#10b981');
+
+    const support = overlays.find((o) => o.type === 'support')!;
+    expect(support.label).toBe('支撐區 1,875.00');
+    expect(support.color).toBe('#38bdf8');
+
+    // 順序由高至低：高檔壓力 Y < 主力成本 Y < 支撐區 Y
+    expect(resistance.y).toBeLessThan(cost.y);
+    expect(cost.y).toBeLessThan(support.y);
+  });
+
+  it('當特定價位為 0 或缺漏時，應安全略過該引線', () => {
+    const keyLevels = {
+      highResistance: 0,
+      mainForceCost: 2000,
+      supportLevel: 0,
+    };
+    const range = { min: 1800, max: 2200, span: 400 };
+    const overlays = calculateKeyLevelOverlays(keyLevels, range, 200);
+
+    expect(overlays.length).toBe(1);
+    expect(overlays[0].type).toBe('cost');
+  });
+
+  it('當價位高於上限或低於下限時，projectPriceToY 應安全夾取在可用高度內', () => {
+    const keyLevels = {
+      highResistance: 3000, // 高於 range.max (2500)
+      mainForceCost: 2000,
+      supportLevel: 1000, // 低於 range.min (1500)
+    };
+    const range = { min: 1500, max: 2500, span: 1000 };
+    const overlays = calculateKeyLevelOverlays(keyLevels, range, 200, 20, 30);
+
+    const resistance = overlays.find((o) => o.type === 'resistance')!;
+    const support = overlays.find((o) => o.type === 'support')!;
+
+    // 頂部 padding 是 20，故 resistance.y 應該被限制在 20
+    expect(resistance.y).toBe(20);
+    // 底部 padding 是 30，高度 200，故 support.y 應該被限制在 200 - 30 = 170
+    expect(support.y).toBe(170);
   });
 });
