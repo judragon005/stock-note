@@ -3,8 +3,14 @@ import { AiForceDashboardReport } from '../types/aiForceDashboard';
 import { calculateVolumeProfile } from './volumeProfileEngine';
 import { calculateRiskSpider } from './riskSpiderEngine';
 import { calculateForecastCone } from './forecastConeEngine';
+import { calculateVwapCostStructure } from './vwapCostEngine';
 
-export { calculateVolumeProfile, calculateRiskSpider, calculateForecastCone };
+export {
+  calculateVolumeProfile,
+  calculateRiskSpider,
+  calculateForecastCone,
+  calculateVwapCostStructure,
+};
 
 /**
  * 建立具備合理預設值的 AiForceDashboardReport
