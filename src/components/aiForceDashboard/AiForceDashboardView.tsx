@@ -8,6 +8,7 @@ import { KLineChartCard } from './cards/KLineChartCard';
 import { AiDecisionCoreCard } from './cards/AiDecisionCoreCard';
 import { MultiDimensionRadarCard } from './cards/MultiDimensionRadarCard';
 import { VolumeProfileCard } from './cards/VolumeProfileCard';
+import { RiskSpiderCard } from './cards/RiskSpiderCard';
 import { resolveOfficialSecurityName } from '../../engine/stockNameResolver';
 
 export interface AiForceDashboardViewProps {
@@ -113,6 +114,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           {/* 04 AI 籌碼熱區圖 (Ticket 09) */}
           <div>
             <VolumeProfileCard data={report.volumeProfile} />
+          </div>
+
+          {/* 05 風險雷達圖 (Ticket 11) */}
+          <div>
+            <RiskSpiderCard data={report.riskSpider} />
           </div>
         </div>
       </div>
