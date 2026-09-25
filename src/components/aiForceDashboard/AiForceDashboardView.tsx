@@ -4,6 +4,7 @@ import { AiForceDashboardReport } from '../../types/aiForceDashboard';
 import { createDefaultAiForceReport } from '../../engine/aiForceDashboardEngine';
 import { HeaderMarketBar } from './HeaderMarketBar';
 import { HeaderQueryBar } from './HeaderQueryBar';
+import { KLineChartCard } from './cards/KLineChartCard';
 import { resolveOfficialSecurityName } from '../../engine/stockNameResolver';
 import { Activity } from 'lucide-react';
 
@@ -68,24 +69,48 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         onAnalyze={handleAnalyze}
       />
 
-      {/* 內容區骨架 */}
-      <div
-        style={{
-          padding: '40px 20px',
-          textAlign: 'center',
-          background: 'rgba(15, 23, 42, 0.6)',
-          borderRadius: '14px',
-          border: '1px dashed rgba(59, 130, 246, 0.25)',
-          color: 'var(--text-secondary, #94a3b8)',
-        }}
-      >
-        <Activity size={36} color="#3b82f6" style={{ marginBottom: '12px', opacity: 0.8 }} />
-        <h3 style={{ margin: '0 0 8px 0', color: '#f1f5f9', fontSize: '1.05rem' }}>
-          AI 主力行為判讀與量化決策系統
-        </h3>
-        <p style={{ margin: 0, fontSize: '0.85rem' }}>
-          資料契約與工作區框架就緒，即將透過原子化票券依序渲染 18 大卡片與全景視覺。
-        </p>
+      {/* 核心網格佈局 (Bento Grid) */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
+        {/* Row 1: 主 K 線與決策卡片 */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(450px, 1.8fr) minmax(280px, 1.2fr)',
+            gap: '14px',
+            alignItems: 'stretch',
+          }}
+        >
+          {/* 01 主 K 線 */}
+          <div>
+            <KLineChartCard
+              data={report.klineSystem}
+              colorTheme={market === 'US' ? 'international' : 'taiwan'}
+            />
+          </div>
+
+          {/* 右側決策核心占位 (供 Ticket 06~11 依序替換) */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(15, 23, 42, 0.5)',
+              borderRadius: '14px',
+              border: '1px dashed rgba(59, 130, 246, 0.2)',
+              padding: '20px',
+              color: '#64748b',
+              fontSize: '0.85rem',
+              textAlign: 'center',
+            }}
+          >
+            <Activity size={28} color="#3b82f6" style={{ marginBottom: '8px', opacity: 0.6 }} />
+            <span>AI 決策核心、多維度雷達、籌碼熱區與風險蛛網</span>
+            <span style={{ fontSize: '0.72rem', color: '#475569', marginTop: '4px' }}>
+              即將由 Ticket 05 ~ 11 依序掛載
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );
