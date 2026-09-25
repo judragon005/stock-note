@@ -6,6 +6,7 @@ import { HeaderMarketBar } from './HeaderMarketBar';
 import { HeaderQueryBar } from './HeaderQueryBar';
 import { KLineChartCard } from './cards/KLineChartCard';
 import { AiDecisionCoreCard } from './cards/AiDecisionCoreCard';
+import { MultiDimensionRadarCard } from './cards/MultiDimensionRadarCard';
 import { resolveOfficialSecurityName } from '../../engine/stockNameResolver';
 
 export interface AiForceDashboardViewProps {
@@ -71,11 +72,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
 
       {/* 核心網格佈局 (Bento Grid) */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
-        {/* Row 1: 主 K 線與決策卡片 */}
+        {/* Row 1: 主 K 線、決策核心、多維度雷達 */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(450px, 1.8fr) minmax(280px, 1.2fr)',
+            gridTemplateColumns: 'minmax(450px, 2fr) minmax(280px, 1.1fr) minmax(280px, 1fr)',
             gap: '14px',
             alignItems: 'stretch',
           }}
@@ -91,6 +92,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           {/* 02 AI 決策核心 (Ticket 06) */}
           <div>
             <AiDecisionCoreCard data={report.decisionCore} />
+          </div>
+
+          {/* 03 多維度判讀 (Ticket 07) */}
+          <div>
+            <MultiDimensionRadarCard data={report.multiDimensionRadar} />
           </div>
         </div>
       </div>
