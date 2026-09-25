@@ -9,6 +9,7 @@ import { Tooltip } from './common/Tooltip';
 import { LotsBreakdownModal } from './LotsBreakdownModal';
 import { calculateHoldingPeriodMetrics } from '../engine/holdingPeriodEngine';
 import { HoldingSignalCapsules } from './common/HoldingSignalCapsules';
+import { compareHoldingsOrder } from '../utils/holdingsSort';
 import { logger } from '../utils/logger';
 
 interface HoldingsTableProps {
@@ -229,13 +230,8 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
           return activeWeightA - activeWeightB;
         }
       }
-      // 台股優先排前面
-      const marketWeightA = a.market === 'TW' ? 0 : 1;
-      const marketWeightB = b.market === 'TW' ? 0 : 1;
-      if (marketWeightA !== marketWeightB) {
-        return marketWeightA - marketWeightB;
-      }
-      return a.symbol.localeCompare(b.symbol);
+      // 台股優先排前面，依代碼自然升冪 (DRY 委託 compareHoldingsOrder)
+      return compareHoldingsOrder(a, b);
     });
 
   const startEditPrice = (symbol: string, currentPrice: number) => {

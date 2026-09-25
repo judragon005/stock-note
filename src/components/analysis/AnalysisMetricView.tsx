@@ -15,6 +15,7 @@ import {
   calculatePeterLynchValuation,
   calculateDcfValuation,
   calculateDdmValuation,
+  deriveSharesOutstanding,
 } from '../../engine/keyMetricsEngine';
 import { calculateTurnoverMetrics } from '../../engine/financialTurnoverEngine';
 import { formatFinancialAmount } from '../../utils/formatters';
@@ -674,10 +675,7 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
           {renderSimpleBars(
             chronological.map((r) => {
               const equity = r.balanceSheet?.totalEquity || 0;
-              let shares = r.balanceSheet?.capitalStock ? r.balanceSheet.capitalStock / 10 : 0;
-              if (shares <= 0 && r.income?.eps && r.income.eps > 0 && r.income?.netIncome && r.income.netIncome > 0) {
-                shares = r.income.netIncome / r.income.eps;
-              }
+              const shares = deriveSharesOutstanding(r);
               const bvps = shares > 0 && equity > 0 ? Number((equity / shares).toFixed(2)) : 0;
               return {
                 label: `${r.year % 100}Q${r.quarter}`,
@@ -1350,11 +1348,7 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
 
       {subTab === 'pb_valuation' && (() => {
         const latestEquity = latestRecord?.balanceSheet?.totalEquity || 0;
-        let shares = latestRecord?.balanceSheet?.capitalStock ? latestRecord.balanceSheet.capitalStock / 10 : 0;
-        if (shares <= 0 && latestRecord?.income?.eps && latestRecord.income.eps > 0 && latestRecord?.income?.netIncome) {
-          shares = latestRecord.income.netIncome / latestRecord.income.eps;
-        }
-        if (shares <= 0) shares = 7530000000; // 台泥 75.3 億股基準
+        const shares = deriveSharesOutstanding(latestRecord);
         const bvps = shares > 0 && latestEquity > 0 ? Number((latestEquity / shares).toFixed(2)) : 32.5;
         const currentPb = bvps > 0 && currentPrice > 0 ? Number((currentPrice / bvps).toFixed(2)) : 0;
         const pbSteps = [
@@ -1413,11 +1407,7 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
             chronological.map((r) => `${r.year % 100}Q${r.quarter}`),
             chronological.map((r) => {
               const equity = r.balanceSheet?.totalEquity || 0;
-              let shares = r.balanceSheet?.capitalStock ? r.balanceSheet.capitalStock / 10 : 0;
-              if (shares <= 0 && r.income?.eps && r.income.eps > 0 && r.income?.netIncome && r.income.netIncome > 0) {
-                shares = r.income.netIncome / r.income.eps;
-              }
-              if (shares <= 0) shares = 7530000000;
+              const shares = deriveSharesOutstanding(r);
               const bvps = shares > 0 && equity > 0 ? Number((equity / shares).toFixed(2)) : 0;
               return bvps > 0 ? bvps : 32.5;
             }),

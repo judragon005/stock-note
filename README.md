@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-971%2F971%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-982%2F982%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,15 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 頂部導覽列自封閉秒級市場時鐘、市價更新解耦與永豐金大戶投股利全量入帳勾稽 (`Header Real-time Market Clock, Price Sync Decoupling & Broker-Grade Dividend Reconciliation`) *(V8.51.0 全新發布)*
+### 0. 質押借貸 FULL_PAYOFF 全額結清統一委託法定沖償引擎、流通股數推導純函式集中化與持倉雙階排序 DRY 閉環重構 (`Unified Debt Repayment Engine, Shares Outstanding SSOT & Holdings Natural Sorter`) *(V8.52.0 全新發布)*
+- **質押借貸 FULL_PAYOFF 全額結清統一委託法定沖償引擎 (`Unified Debt Repayment Engine`)**：
+  - 徹底淘汰 `CashLedgerWorkspace.tsx` 中 60 餘行手工組裝舊版代碼。全額結清全面委託 `applyDebtRepayment` 核心純函式處理，嚴格遵照《民法》第 323 條（規費 ➔ 利息 ➔ 本金）法定清償順序，確保本金歸零、規費清零、利息全結與標準拆分流水（`WIRE_FEE` / `FINANCING_FEE` / `LOAN_REPAYMENT`）一致性，杜絕會計雙軌風險（徹底解決技術債 #0036 與 GitHub Issue #25）。
+- **第一性原理流通股數推導標準純函式 (`deriveSharesOutstanding SSOT`)**：
+  - 於 `src/engine/keyMetricsEngine.ts` 集中封裝並導出 `deriveSharesOutstanding` 純函式，統一「使用者指定覆寫 ➔ 資產負債表資本額 / 10 ➔ 稅後淨利 / EPS ➔ 保底 10 億股」三階推導階梯。重構 FCF Yield、DCF 估值模型與個股分析每股淨值河流圖，消滅重複寫死股數之 DRY 異味（徹底解決技術債 #0038）。
+- **美股與台股持倉雙階自然排序比較器 (`compareHoldingsOrder`)**：
+  - 於 `src/utils/holdingsSort.ts` 集中定義並導出 `compareHoldingsOrder` 純比較函式，以「台股權重 0 置前、美股權重 1 置底、同市場代碼自然字典序升冪」為統一標準，供核心計算引擎 `calculator.ts` 與持倉視圖 `HoldingsTable.tsx` 共享，消滅專案積存時間最久之比較器重複代碼（徹底解決技術債 #0001）。
+
+### 0. 頂部導覽列自封閉秒級市場時鐘、市價更新解耦與永豐金大戶投股利全量入帳勾稽 (`Header Real-time Market Clock, Price Sync Decoupling & Broker-Grade Dividend Reconciliation`) *(V8.51.0)*
 - **自封閉秒級市場跳動時鐘 (`RealtimeMarketClock`)**：
   - 徹底解決 Header 市場時鐘在靜態無行情變更時停止不動之痛點。提取獨立葉子元件封閉計時器，達成秒級流暢跳動且對父層與全站造成 **0 額外重繪 (Zero Re-render Spillover)**。
 - **跨平台 ICU 午夜格式跨環境相容加固 (`formatTaipeiClock`)**：

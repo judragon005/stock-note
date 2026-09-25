@@ -183,6 +183,31 @@ export function calculatePiotroskiFScore(
 }
 
 /**
+ * 提取第一性原理之流通股數推導純函式 (SSOT - Spec 0139 / Debt #0038)
+ * 1. 優先使用使用者自訂 overrideShares
+ * 2. 優先由資產負債表 capitalStock 推導 (台股面額 10 元，股數 = capitalStock / 10)
+ * 3. 次級由損益表淨利與 EPS 反推 (netIncome / eps)
+ * 4. 保底基準值 1,000,000,000 (10 億股)
+ */
+export function deriveSharesOutstanding(
+  recordOrRecords?: QuarterlyFinancialRecord | QuarterlyFinancialRecord[],
+  overrideShares?: number
+): number {
+  if (overrideShares && overrideShares > 0) return overrideShares;
+  const records = Array.isArray(recordOrRecords) ? recordOrRecords : (recordOrRecords ? [recordOrRecords] : []);
+  const latest = records[0] || records[records.length - 1];
+  if (!latest) return 1000000000;
+
+  if (latest.balanceSheet?.capitalStock && latest.balanceSheet.capitalStock > 0) {
+    return latest.balanceSheet.capitalStock / 10;
+  }
+  if (latest.income?.netIncome && latest.income.eps && latest.income.eps > 0) {
+    return latest.income.netIncome / latest.income.eps;
+  }
+  return 1000000000;
+}
+
+/**
  * 2. 自由現金流報酬率 (FCF Yield)
  */
 export function calculateFcfYield(
@@ -196,15 +221,7 @@ export function calculateFcfYield(
   if (records.length === 0) return 0;
 
   const latest = records[0] || records[records.length - 1];
-  let totalShares = overrideShares ?? 0;
-  if (totalShares <= 0) {
-    if (latest.balanceSheet?.capitalStock && latest.balanceSheet.capitalStock > 0) {
-      totalShares = latest.balanceSheet.capitalStock / 10;
-    } else if (latest.income?.netIncome && latest.income.eps && latest.income.eps > 0) {
-      totalShares = latest.income.netIncome / latest.income.eps;
-    }
-  }
-  if (totalShares <= 0) totalShares = 1000000000;
+  const totalShares = deriveSharesOutstanding(recordOrRecords, overrideShares);
 
   let fcf = 0;
   if (Array.isArray(recordOrRecords) && recordOrRecords.length > 1) {
@@ -312,16 +329,7 @@ export function calculateDcfValuation(
   const gn = options?.perpetualGrowthRate ?? 0.025;
   const g = options?.forecastGrowthRate ?? 0.05;
 
-  const latest = records?.[0] || records?.[records?.length - 1];
-  let shares = options?.totalShares ?? 0;
-  if (shares <= 0 && latest) {
-    if (latest.balanceSheet?.capitalStock && latest.balanceSheet.capitalStock > 0) {
-      shares = latest.balanceSheet.capitalStock / 10;
-    } else if (latest.income?.netIncome && latest.income.eps && latest.income.eps > 0) {
-      shares = latest.income.netIncome / latest.income.eps;
-    }
-  }
-  if (shares <= 0) shares = 1000000000;
+  const shares = deriveSharesOutstanding(records, options?.totalShares);
 
   // 計算近 4 季 TTM FCF
   let baseFcf = 50000000;

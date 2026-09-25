@@ -93,6 +93,20 @@ _Avoid_: Flat Estimate Guess, Ad-hoc Date Shifting
 在股息日誌檢視中提供 KPI 首張卡片切換按鈕，使用者可自由選擇以「券商 APP 統計口徑 (應發毛額)」或「銀行存摺實際入帳口徑 (實領淨額)」為主視覺大字展示，並提供年度標的級對帳小計明細，讓多來源財務核帳零障礙。
 _Avoid_: Monolithic Display, Confusing Discrepancy
 
+### 核心會計與純函式 DRY 閉環 (Unified Accounting & Engine DRY) *(新增於 V8.52.0 / Spec 0139)*
+
+**Unified Debt Repayment Engine (質押借貸法定清償統一委託體系)**:
+將質押借貸之全額結清 (`FULL_PAYOFF`) 與部分償還 (`PARTIAL_PAY`) 100% 統一委託純函式會計引擎 `applyDebtRepayment`。嚴格依據《民法》第 323 條（規費 ➔ 利息 ➔ 本金）進行法定沖償，自動扣抵已繳規費並維護計息日，徹底消除 UI 手工組裝與引擎分歧的雙軌風險。
+_Avoid_: Manual Payoff Assembly, Split Dual-Track Repayment
+
+**Shares Outstanding SSOT Derivation (第一性原理流通股數推導純函式)**:
+於 `keyMetricsEngine.ts` 集中導出 `deriveSharesOutstanding` 純函式。統一「使用者覆寫 ➔ 資產負債表資本額/10 ➔ 稅後淨利/EPS ➔ 保底 10 億股」三階推導階梯，供 FCF Yield、DCF 估值模型與個股分析河流圖等視圖層統一調用，杜絕重複寫死股數。
+_Avoid_: Ad-hoc Capital Division, Hardcoded Shares
+
+**Dual-Market Natural Order Sorter (美股台股雙階自然排序比較器)**:
+於 `src/utils/holdingsSort.ts` 集中導出 `compareHoldingsOrder` 純比較函式。以「台股權重 0 置前、美股權重 1 置底、同市場標的代碼自然字典序升冪」為統一標準，供核心計算引擎 `calculator.ts` 與持倉視圖 `HoldingsTable.tsx` 共享，消除專案積存之 DRY 比較器代碼。
+_Avoid_: Copy-Pasted Sorter, Inconsistent Market Weight
+
 
 ### 視覺化與主題 (Visualization & Theme)  *(新增於 V1.1)*
 

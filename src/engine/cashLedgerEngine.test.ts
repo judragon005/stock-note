@@ -1910,6 +1910,38 @@ describe('股票交易交割自動同步與流水關聯 (Trade Settlement Sync)'
       expect(res.isInterestFullyPaid).toBe(true);
       expect(res.newLastInterestPaymentDate).toBe('2026-09-11');
     });
+
+    it('案例 4: 全額結清 (FULL_PAYOFF) 場景 - 沖償金額等於本金+利息+規費時，本金歸零、規費清零、產生 3 筆拆分流水且合約標記 closedDate', () => {
+      // 9/9 借款 2,012,000，9/10 還款：規費 60，利息 224，本金 2,012,000 => 總結清額 2,012,284
+      const metrics = calculateLoanInterestAndPayoff(loan, '2026-09-10');
+      expect(metrics.totalPayoffAmount).toBe(2012000 + 224 + 60);
+
+      const res = applyDebtRepayment({
+        loan,
+        repaymentAmount: metrics.totalPayoffAmount,
+        repaymentDate: '2026-09-10',
+      });
+
+      expect(res.feesPaid).toBe(60);
+      expect(res.interestPaid).toBe(224);
+      expect(res.principalPaid).toBe(2012000);
+      expect(res.remainingPrincipal).toBe(0);
+      expect(res.remainingPledgeFees).toBe(0);
+      expect(res.isInterestFullyPaid).toBe(true);
+      expect(res.updatedLoan.principal).toBe(0);
+      expect(res.updatedLoan.closedDate).toBe('2026-09-10');
+      expect(res.updatedLoan.transferFee).toBe(0);
+      expect(res.updatedLoan.lastInterestPaymentDate).toBe('2026-09-10');
+
+      // 驗證拆分之 3 筆流水
+      expect(res.splitTransactions.length).toBe(3);
+      expect(res.splitTransactions[0].category).toBe('WIRE_FEE');
+      expect(res.splitTransactions[0].amount).toBe(-60);
+      expect(res.splitTransactions[1].category).toBe('FINANCING_FEE');
+      expect(res.splitTransactions[1].amount).toBe(-224);
+      expect(res.splitTransactions[2].category).toBe('LOAN_REPAYMENT');
+      expect(res.splitTransactions[2].amount).toBe(-2012000);
+    });
   });
 
   describe('Spec 0118: 質押借貸自訂還款日期與歷史補登計息防護', () => {
