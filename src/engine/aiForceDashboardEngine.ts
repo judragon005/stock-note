@@ -2,8 +2,9 @@ import { MarketType } from '../types/stock';
 import { AiForceDashboardReport } from '../types/aiForceDashboard';
 import { calculateVolumeProfile } from './volumeProfileEngine';
 import { calculateRiskSpider } from './riskSpiderEngine';
+import { calculateForecastCone } from './forecastConeEngine';
 
-export { calculateVolumeProfile, calculateRiskSpider };
+export { calculateVolumeProfile, calculateRiskSpider, calculateForecastCone };
 
 /**
  * 建立具備合理預設值的 AiForceDashboardReport
