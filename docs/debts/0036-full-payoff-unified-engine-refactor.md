@@ -1,9 +1,10 @@
 # 技術債 #0036: 質押借貸 FULL_PAYOFF 全額結清分支統一委託 applyDebtRepayment 引擎重構
 
-- **狀態**：`OPEN`
+- **狀態**：`RESOLVED` (已於 V8.52.0 / ADR #0139 完整解決)
 - **優先級**：`P2`
 - **發現來源**：[PR #24](https://github.com/judragon005/stock-note/pull/24) 雙軸程式碼審查 (Code Review Warning W1) / [Issue #25](https://github.com/judragon005/stock-note/issues/25)
 - **建立日期**：2026-09-11
+- **解決日期**：2026-09-25 (Spec 0139)
 - **標籤**：`Refactor` · `Accounting` · `Debt` · `DRY`
 
 ---

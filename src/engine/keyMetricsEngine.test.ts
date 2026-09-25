@@ -6,6 +6,7 @@ import {
   calculatePeterLynchValuation,
   calculateDcfValuation,
   calculateDdmValuation,
+  deriveSharesOutstanding,
 } from './keyMetricsEngine';
 
 type DeepPartial<T> = {
@@ -37,6 +38,7 @@ function createMockQuarter(
       accountsReceivable: overrides?.balanceSheet?.accountsReceivable ?? 20000000,
       inventory: overrides?.balanceSheet?.inventory ?? 15000000,
       cashAndEquivalents: overrides?.balanceSheet?.cashAndEquivalents ?? 80000000,
+      capitalStock: overrides?.balanceSheet?.capitalStock,
     },
     cashFlow: {
       operatingCashFlow: overrides?.cashFlow?.operatingCashFlow ?? 18000000,
@@ -166,6 +168,49 @@ describe('keyMetricsEngine (量化估值與關鍵指標計算引擎 TDD)', () =>
       const res = calculateDdmValuation(dividends, 100, 0.09, 0.05);
       expect(res.fairValue).toBeCloseTo(131.25, 1);
       expect(res.assessment).toBe('UNDERVALUED');
+    });
+  });
+
+  describe('deriveSharesOutstanding (第一性原理流通股數推導純函式 - Spec 0139 / Ticket 02)', () => {
+    it('1. 當傳入 overrideShares > 0 時，應優先採用自訂股數', () => {
+      const res = deriveSharesOutstanding(undefined, 50000000);
+      expect(res).toBe(50000000);
+    });
+
+    it('2. 當資產負債表具備資本額 capitalStock 時，應精確除以 10 (台股每股票面 10 元)', () => {
+      const record = createMockQuarter(2025, 4, {
+        balanceSheet: { capitalStock: 75311817420 }, // 753 億資本額 => 7,531,181,742 股
+      });
+      const res = deriveSharesOutstanding(record);
+      expect(res).toBe(7531181742);
+    });
+
+    it('3. 當傳入多季陣列時，應優先採用最新一季推導', () => {
+      const records = [
+        createMockQuarter(2025, 2, { balanceSheet: { capitalStock: 200000000 } }),
+        createMockQuarter(2025, 1, { balanceSheet: { capitalStock: 100000000 } }),
+      ];
+      const res = deriveSharesOutstanding(records);
+      expect(res).toBe(20000000); // 2 億 / 10 = 2000 萬股
+    });
+
+    it('4. 當無資本額但具備稅後淨利與正數 EPS 時，應由 netIncome / eps 反推股數', () => {
+      const record = createMockQuarter(2025, 4, {
+        balanceSheet: { capitalStock: 0 },
+        income: { netIncome: 30000000, eps: 3.0 },
+      });
+      const res = deriveSharesOutstanding(record);
+      expect(res).toBe(10000000); // 3000 萬 / 3.0 = 1000 萬股
+    });
+
+    it('5. 當財務資料皆缺乏時，應安全回傳保底預設值 10 億股', () => {
+      expect(deriveSharesOutstanding(undefined)).toBe(1000000000);
+      expect(deriveSharesOutstanding([])).toBe(1000000000);
+      const emptyRecord = createMockQuarter(2025, 4, {
+        balanceSheet: { capitalStock: 0 },
+        income: { netIncome: 0, eps: 0 },
+      });
+      expect(deriveSharesOutstanding(emptyRecord)).toBe(1000000000);
     });
   });
 });

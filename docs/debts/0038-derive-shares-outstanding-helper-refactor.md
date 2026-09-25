@@ -1,8 +1,9 @@
 # 技術債 0038: 提取流通股數推導共用輔助函式 (deriveSharesOutstanding)
 
 - **建立日期**: 2026-09-14
+- **解決日期**: 2026-09-25 (Spec 0139 / ADR #0139)
 - **來源**: Code Review (Spec 0131 / PR #62)
-- **狀態**: `OPEN`
+- **狀態**: `RESOLVED` (已於 V8.52.0 完整解決)
 - **優先級**: `P3 (Low)`
 - **標籤**: `Refactor` · `DRY` · `KeyMetricsEngine` · `Valuation`
 

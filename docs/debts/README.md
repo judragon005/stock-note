@@ -8,7 +8,7 @@
 
 | 編號 | 標題 | 優先級 | 狀態 | 發現來源 | 標籤 | 預計觸發時機 |
 | :---: | :--- | :--- | :--- | :--- | :--- | :--- |
-| [**0001**](0001-holdings-sort-dry-refactor.md) | 持倉雙階自然排序 DRY 集中化重構 | `P3` | `OPEN` | PR #83 審查 | `Refactor` | 新增第三交易市場或擴充自訂排序時 |
+| [**0001**](0001-holdings-sort-dry-refactor.md) | 持倉雙階自然排序 DRY 集中化重構 | `P3` | `RESOLVED` | PR #83 審查 | `Refactor` · `Clean Code` | **已於 v8.52.0 (ADR #0139) 完整解決** |
 | [**0002**](0002-trade-plan-and-discipline-review.md) | 交易計畫與紀律檢討模組 | `P2` | `RESOLVED` | 需求規格對齊 | `Feature` · `Journal` | **已於 v5.7 (ADR #0041) 完整解決** |
 | [**0003**](0003-cash-ledger-and-nav-tracking.md) | 現金帳本與資產淨值追蹤系統 | `P2` | `RESOLVED` | 需求規格對齊 | `Feature` · `Accounting` | **已於 v3.9 (ADR #0022) 完整解決** |
 | [**0004**](0004-dedicated-dividend-log-view.md) | 專屬股息日誌與年度配息視圖 | `P3` | `RESOLVED` | 需求規格對齊 | `Feature` · `Dividend` | **已於 v6.1.0 (PRD #0049) 完整解決** |
@@ -43,9 +43,9 @@
 | [**0033**](0033-csp-headers-and-browser-defense-hardening.md) | 內容安全策略 (CSP) 與瀏覽器端防禦加固 | `P1` | `OPEN` | 資安架構深度審查 | `Security` · `CSP` · `Headers` · `BrowserHardening` · `AntiClickjacking` | 發布正式生產版本或雲端託管部署時 |
 | [**0034**](0034-import-parser-prototype-pollution-and-schema-validation.md) | 匯入解析防護、原型污染防禦與數值邊界熔斷 | `P2` | `OPEN` | 資安架構深度審查 | `Security` · `PrototypePollution` · `Validation` · `Sanitization` · `Schema` | 升級匯入衝突消解器 (Debt #0028) 或快照校驗時 |
 | [**0035**](0035-client-side-rate-limiting-and-api-quota-guard.md) | 客戶端 API 速率限制 (Rate Limiting) 與防封禁配額保護 | `P2` | `RESOLVED` | 資安架構深度審查 | `Security` · `RateLimiting` · `Quota` · `Resilience` · `CircuitBreaker` | **已於 v8.9.0 (ADR #0090) 完整解決** |
-| [**0036**](0036-full-payoff-unified-engine-refactor.md) | 質押借貸 FULL_PAYOFF 全額結清分支統一委託 applyDebtRepayment 引擎重構 | `P2` | `OPEN` | PR #24 審查 (Issue #25) | `Refactor` · `Accounting` · `Debt` · `DRY` | 下次質押借貸模組迭代或結清功能優化時 |
+| [**0036**](0036-full-payoff-unified-engine-refactor.md) | 質押借貸 FULL_PAYOFF 全額結清分支統一委託 applyDebtRepayment 引擎重構 | `P2` | `RESOLVED` | PR #24 審查 (Issue #25) | `Refactor` · `Accounting` · `Debt` · `DRY` | **已於 v8.52.0 (ADR #0139) 完整解決** |
 | [**0037**](0037-equity-deep-dive-seven-step-framework.md) | 全市場個股 7 步深度投研與決策閉環引擎 | `P2` | `OPEN` | /grill-with-docs 需求調研 | `Feature` · `Research` · `AI-Advisor` · `EquityAnalysis` · `Discipline` | 基本面分析或個股投研輔助專題時 |
-| [**0038**](0038-derive-shares-outstanding-helper-refactor.md) | 提取流通股數推導共用輔助函式 (deriveSharesOutstanding) 消除 DRY 異味 | `P3` | `OPEN` | PR #62 雙軸代碼審查 (Spec 0131) | `Refactor` · `DRY` · `KeyMetricsEngine` · `Valuation` | 下次量化估值模型擴充或純函式庫重構時 |
+| [**0038**](0038-derive-shares-outstanding-helper-refactor.md) | 提取流通股數推導共用輔助函式 (deriveSharesOutstanding) 消除 DRY 異味 | `P3` | `RESOLVED` | PR #62 雙軸代碼審查 (Spec 0131) | `Refactor` · `DRY` · `KeyMetricsEngine` · `Valuation` | **已於 v8.52.0 (ADR #0139) 完整解決** |
 
 ---
 

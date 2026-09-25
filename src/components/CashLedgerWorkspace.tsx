@@ -469,74 +469,43 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
       onSaveLoans(updatedLoans);
       alert(`✅ 成功於 ${effectiveDate} 支付利息 ${currencySymbol} ${numAmount.toLocaleString()}，已記錄於現金帳本並更新付息日！`);
     } else if (actionType === 'FULL_PAYOFF') {
-      const metrics = calculateLoanInterestAndPayoff(loan, effectiveDate);
-      const splitTxs: CashTransaction[] = [];
+      // 統一委託 applyDebtRepayment 核心純函式處理法定清償與拆分流水 (Spec 0139 / Ticket 03)
+      const repaymentResult = applyDebtRepayment({
+        loan,
+        repaymentAmount: numAmount,
+        repaymentDate: effectiveDate,
+        targetAccountId,
+      });
 
-      if (loan.principal > 0) {
-        splitTxs.push({
-          id: `tx-repay-${loan.id}-${now}-1`,
-          accountId: targetAccountId,
-          currency: loan.currency || 'TWD',
-          type: 'LOAN_REPAYMENT',
-          category: 'LOAN_REPAYMENT',
-          amount: -loan.principal,
-          date: effectiveDate,
-          relatedLoanId: loan.id,
-          note: `結清償還質押本金: ${loan.name}`,
-          createdAt: now,
-        });
-      }
-
-      if (metrics.accruedInterest > 0) {
-        splitTxs.push({
-          id: `tx-interest-${loan.id}-${now}-2`,
-          accountId: targetAccountId,
-          currency: loan.currency || 'TWD',
-          type: 'FINANCING_FEE',
-          category: 'FINANCING_FEE',
-          amount: -metrics.accruedInterest,
-          date: effectiveDate,
-          relatedLoanId: loan.id,
-          note: `結清質押利息 (計息 ${metrics.daysElapsed} 天): ${loan.name}`,
-          createdAt: now + 1,
-        });
-      }
-
-      if (metrics.pledgeFees > 0) {
-        splitTxs.push({
-          id: `tx-fee-${loan.id}-${now}-3`,
-          accountId: targetAccountId,
-          currency: loan.currency || 'TWD',
-          type: 'WIRE_FEE',
-          category: 'WIRE_FEE',
-          amount: -metrics.pledgeFees,
-          date: effectiveDate,
-          relatedLoanId: loan.id,
-          note: `結清設質規費 (撥券/設質/手續費): ${loan.name}`,
-          createdAt: now + 2,
-        });
-      }
-
-      if (splitTxs.length === 0) {
-        splitTxs.push({
-          id: `tx-repay-${loan.id}-${now}-fallback`,
-          accountId: targetAccountId,
-          currency: loan.currency || 'TWD',
-          type: 'LOAN_REPAYMENT',
-          category: 'LOAN_REPAYMENT',
-          amount: -numAmount,
-          date: effectiveDate,
-          relatedLoanId: loan.id,
-          note: `結清借款: ${loan.name}`,
-          createdAt: now,
-        });
-      }
-
+      // 確保合約打上結清日標記、本金歸零、繳息日推進至結清日
       const updatedLoans = loans.map((l) =>
         l.id === loan.id
-          ? { ...l, principal: 0, closedDate: effectiveDate, lastInterestPaymentDate: effectiveDate }
+          ? {
+              ...repaymentResult.updatedLoan,
+              principal: 0,
+              closedDate: effectiveDate,
+              lastInterestPaymentDate: effectiveDate,
+            }
           : l
       );
+
+      // 若在極端零本息情況下無拆分流水，提供防禦性保底流水
+      const splitTxs: CashTransaction[] = repaymentResult.splitTransactions.length > 0
+        ? repaymentResult.splitTransactions
+        : [
+            {
+              id: `tx-repay-${loan.id}-${now}-fallback`,
+              accountId: targetAccountId,
+              currency: loan.currency || 'TWD',
+              type: 'LOAN_REPAYMENT',
+              category: 'LOAN_REPAYMENT',
+              amount: -numAmount,
+              date: effectiveDate,
+              relatedLoanId: loan.id,
+              note: `結清借款: ${loan.name}`,
+              createdAt: now,
+            },
+          ];
 
       onSaveTransactions([...splitTxs, ...transactions]);
       onSaveLoans(updatedLoans);

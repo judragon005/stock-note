@@ -23,6 +23,7 @@ import { buildHoldingRiskMetrics } from './riskAlertEngine';
 import { computeTechnicalIndicators, extractHoldingSignals } from './technicalIndicatorEngine';
 import { evaluateHoldingActionDirective } from './holdingAdvisorEngine';
 import { DailyCandle } from '../types/signal';
+import { compareHoldingsOrder } from '../utils/holdingsSort';
 
 export interface CalculationResult {
   holdings: HoldingPosition[];
@@ -915,14 +916,7 @@ export function calculateHoldingsAndSummary(
       });
     }
 
-  holdings.sort((a, b) => {
-    const marketWeightA = a.market === 'TW' ? 0 : 1;
-    const marketWeightB = b.market === 'TW' ? 0 : 1;
-    if (marketWeightA !== marketWeightB) {
-      return marketWeightA - marketWeightB;
-    }
-    return a.symbol.localeCompare(b.symbol);
-  });
+  holdings.sort(compareHoldingsOrder);
 
   const summary: PortfolioSummary = {
     twd: {
