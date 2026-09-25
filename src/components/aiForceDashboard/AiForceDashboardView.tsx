@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { MarketType, HoldingPosition } from '../../types/stock';
 import { AiForceDashboardReport } from '../../types/aiForceDashboard';
 import { createDefaultAiForceReport } from '../../engine/aiForceDashboardEngine';
-import { Sparkles, Activity } from 'lucide-react';
+import { HeaderMarketBar } from './HeaderMarketBar';
+import { Activity } from 'lucide-react';
 
 export interface AiForceDashboardViewProps {
   initialSymbol?: string;
@@ -40,39 +41,8 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         color: 'var(--text-primary, #ffffff)',
       }}
     >
-      {/* 頂部骨架占位 */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '12px 18px',
-          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(30, 58, 138, 0.4) 100%)',
-          borderRadius: '12px',
-          border: '1px solid rgba(59, 130, 246, 0.3)',
-          backdropFilter: 'blur(10px)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Sparkles size={20} color="#60a5fa" />
-          <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#f8fafc' }}>
-            主力戰情室 (AI Force Decision Dashboard)
-          </h2>
-          <span
-            style={{
-              fontSize: '0.75rem',
-              padding: '2px 8px',
-              borderRadius: '20px',
-              background: 'rgba(59, 130, 246, 0.2)',
-              color: '#93c5fd',
-              border: '1px solid rgba(147, 197, 253, 0.3)',
-              fontWeight: 600,
-            }}
-          >
-            {report.symbol} {report.name} ({market})
-          </span>
-        </div>
-      </div>
+      {/* 頂部即時行情總覽與系統狀態 Bar */}
+      <HeaderMarketBar data={report.marketBar} colorTheme={market === 'US' ? 'international' : 'taiwan'} />
 
       {/* 內容區骨架 */}
       <div
