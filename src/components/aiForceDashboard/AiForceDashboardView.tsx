@@ -7,6 +7,7 @@ import { HeaderQueryBar } from './HeaderQueryBar';
 import { KLineChartCard } from './cards/KLineChartCard';
 import { AiDecisionCoreCard } from './cards/AiDecisionCoreCard';
 import { MultiDimensionRadarCard } from './cards/MultiDimensionRadarCard';
+import { VolumeProfileCard } from './cards/VolumeProfileCard';
 import { resolveOfficialSecurityName } from '../../engine/stockNameResolver';
 
 export interface AiForceDashboardViewProps {
@@ -97,6 +98,21 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           {/* 03 多維度判讀 (Ticket 07) */}
           <div>
             <MultiDimensionRadarCard data={report.multiDimensionRadar} />
+          </div>
+        </div>
+
+        {/* Row 2: 籌碼熱區、風險蛛網、預測路徑等 */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: '14px',
+            alignItems: 'stretch',
+          }}
+        >
+          {/* 04 AI 籌碼熱區圖 (Ticket 09) */}
+          <div>
+            <VolumeProfileCard data={report.volumeProfile} />
           </div>
         </div>
       </div>
