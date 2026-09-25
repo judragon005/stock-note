@@ -1,5 +1,8 @@
 import { MarketType } from '../types/stock';
 import { AiForceDashboardReport } from '../types/aiForceDashboard';
+import { calculateVolumeProfile } from './volumeProfileEngine';
+
+export { calculateVolumeProfile };
 
 /**
  * 建立具備合理預設值的 AiForceDashboardReport
