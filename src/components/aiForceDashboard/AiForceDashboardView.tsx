@@ -5,8 +5,8 @@ import { createDefaultAiForceReport } from '../../engine/aiForceDashboardEngine'
 import { HeaderMarketBar } from './HeaderMarketBar';
 import { HeaderQueryBar } from './HeaderQueryBar';
 import { KLineChartCard } from './cards/KLineChartCard';
+import { AiDecisionCoreCard } from './cards/AiDecisionCoreCard';
 import { resolveOfficialSecurityName } from '../../engine/stockNameResolver';
-import { Activity } from 'lucide-react';
 
 export interface AiForceDashboardViewProps {
   initialSymbol?: string;
@@ -88,27 +88,9 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             />
           </div>
 
-          {/* 右側決策核心占位 (供 Ticket 06~11 依序替換) */}
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'rgba(15, 23, 42, 0.5)',
-              borderRadius: '14px',
-              border: '1px dashed rgba(59, 130, 246, 0.2)',
-              padding: '20px',
-              color: '#64748b',
-              fontSize: '0.85rem',
-              textAlign: 'center',
-            }}
-          >
-            <Activity size={28} color="#3b82f6" style={{ marginBottom: '8px', opacity: 0.6 }} />
-            <span>AI 決策核心、多維度雷達、籌碼熱區與風險蛛網</span>
-            <span style={{ fontSize: '0.72rem', color: '#475569', marginTop: '4px' }}>
-              即將由 Ticket 05 ~ 11 依序掛載
-            </span>
+          {/* 02 AI 決策核心 (Ticket 06) */}
+          <div>
+            <AiDecisionCoreCard data={report.decisionCore} />
           </div>
         </div>
       </div>
