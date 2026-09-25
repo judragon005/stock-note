@@ -3,6 +3,8 @@ import { MarketType, HoldingPosition } from '../../types/stock';
 import { AiForceDashboardReport } from '../../types/aiForceDashboard';
 import { createDefaultAiForceReport } from '../../engine/aiForceDashboardEngine';
 import { HeaderMarketBar } from './HeaderMarketBar';
+import { HeaderQueryBar } from './HeaderQueryBar';
+import { resolveOfficialSecurityName } from '../../engine/stockNameResolver';
 import { Activity } from 'lucide-react';
 
 export interface AiForceDashboardViewProps {
@@ -18,6 +20,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
 }) => {
   const [symbol, setSymbol] = useState(initialSymbol);
   const [market, setMarket] = useState<MarketType>(initialMarket);
+  const [isLoading, setIsLoading] = useState(false);
   const [report, setReport] = useState<AiForceDashboardReport>(() =>
     createDefaultAiForceReport(initialSymbol, '致茂', initialMarket)
   );
@@ -26,16 +29,28 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
     if (initialSymbol && initialSymbol !== symbol) {
       setSymbol(initialSymbol);
       setMarket(initialMarket);
-      setReport(createDefaultAiForceReport(initialSymbol, '致茂', initialMarket));
+      const name = resolveOfficialSecurityName(initialSymbol, initialMarket) || '致茂';
+      setReport(createDefaultAiForceReport(initialSymbol, name, initialMarket));
     }
   }, [initialSymbol, initialMarket, symbol]);
+
+  const handleAnalyze = (newSymbol: string, newMarket: MarketType) => {
+    setIsLoading(true);
+    setSymbol(newSymbol);
+    setMarket(newMarket);
+    const resolvedName = resolveOfficialSecurityName(newSymbol, newMarket) || newSymbol;
+    setReport(createDefaultAiForceReport(newSymbol, resolvedName, newMarket));
+    setTimeout(() => {
+      setIsLoading(false);
+    }, 250);
+  };
 
   return (
     <div
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '16px',
+        gap: '14px',
         width: '100%',
         minHeight: '80vh',
         color: 'var(--text-primary, #ffffff)',
@@ -43,6 +58,15 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
     >
       {/* 頂部即時行情總覽與系統狀態 Bar */}
       <HeaderMarketBar data={report.marketBar} colorTheme={market === 'US' ? 'international' : 'taiwan'} />
+
+      {/* 頂部標的搜尋輸入框與資料來源說明列 */}
+      <HeaderQueryBar
+        currentSymbol={symbol}
+        currentName={report.name}
+        currentMarket={market}
+        isLoading={isLoading}
+        onAnalyze={handleAnalyze}
+      />
 
       {/* 內容區骨架 */}
       <div
