@@ -9,6 +9,7 @@ import { AiDecisionCoreCard } from './cards/AiDecisionCoreCard';
 import { MultiDimensionRadarCard } from './cards/MultiDimensionRadarCard';
 import { VolumeProfileCard } from './cards/VolumeProfileCard';
 import { RiskSpiderCard } from './cards/RiskSpiderCard';
+import { ForecastConeCard } from './cards/ForecastConeCard';
 import { resolveOfficialSecurityName } from '../../engine/stockNameResolver';
 
 export interface AiForceDashboardViewProps {
@@ -119,6 +120,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           {/* 05 風險雷達圖 (Ticket 11) */}
           <div>
             <RiskSpiderCard data={report.riskSpider} />
+          </div>
+
+          {/* 06 累積型 AI 預測路徑圖 (Ticket 13) */}
+          <div>
+            <ForecastConeCard data={report.forecastCone} />
           </div>
         </div>
       </div>
