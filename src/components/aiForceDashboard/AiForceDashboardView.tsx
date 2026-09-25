@@ -11,6 +11,7 @@ import { VolumeProfileCard } from './cards/VolumeProfileCard';
 import { RiskSpiderCard } from './cards/RiskSpiderCard';
 import { ForecastConeCard } from './cards/ForecastConeCard';
 import { VwapCostStructureCard } from './cards/VwapCostStructureCard';
+import { InstitutionalFlowCard } from './cards/InstitutionalFlowCard';
 import { resolveOfficialSecurityName } from '../../engine/stockNameResolver';
 
 export interface AiForceDashboardViewProps {
@@ -131,6 +132,24 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           {/* 07 主力成本結構分布圖 (Ticket 15) */}
           <div>
             <VwapCostStructureCard data={report.vwapCostStructure} />
+          </div>
+        </div>
+
+        {/* Row 3: 法人行為計量、隔日沖風險、多空能量儀 */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(500px, 1.8fr) minmax(320px, 1fr)',
+            gap: '14px',
+            alignItems: 'stretch',
+          }}
+        >
+          {/* 08 法人行為計量 (Ticket 16 & 17) */}
+          <div>
+            <InstitutionalFlowCard
+              data={report.institutionalFlow}
+              colorTheme={market === 'US' ? 'international' : 'taiwan'}
+            />
           </div>
         </div>
       </div>
