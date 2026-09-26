@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1121%2F1121%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1124%2F1124%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,13 +11,19 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. AI 主力戰情室三大法人真實籌碼管線與 08/15 核心卡片動態化 (`AI Force Institutional Chips Live Pipeline & Dual-Card Synergy`) *(V8.56.0 全新發布)*
+### 0. AI 主力戰情室三大法人真實籌碼管線與中間量化卡片群 (Card 10~17) 真實指標動態化 (`AI Force Live Quant Pipeline & Full Bento Synergy`) *(V8.56.0 全新發布)*
 - **三大法人歷史籌碼真實管線 (`Institutional Historical Ingestion Pipeline`)**：
   - 串接 TWSE / TPEx 官方每日盤後買賣超日報庫與本地 IndexedDB settings 快取。切換台股標的（如 2330 台積電、2360 致茂）時，自動萃取歷史 20 日外資、投信、自營商真實淨買賣超數列（`RawInstitutionalRecord`），終結寫死靜態數值。
   - **美股與無資料代理降級保護 (`Proxy Volume Model`)**：針對美股或無法人進出之台股標的，以日 K 成交量與實體紅黑 K 計算量能多空代理值，保證 SVG 圖表與指標永不除零或拋錯。
 - **08 法人行為計量卡與 15 籌碼異動摘要雙卡動態連動 (`Card 08 & Card 15 Synergy`)**：
   - **08 法人行為計量**：左側動態繪製外資（藍）、投信（黃）、自營商（綠）每日買賣超柱狀圖與三大法人累計折線；右側明細表格列出近 3 日真實張數（最新日在最上方，顯示 `MM/DD` 格式）；底部即時彙總 20 日與 5 日累計量能文字。
   - **15 籌碼異動摘要**：同步更新最新交易日外資、投信、自營商張數與合計值，右側微型 Sparkline 繪製真實 10~20 日累計法人走勢，並動態產出短線研判標籤（土洋合買、土洋齊賣、土洋對作、偏多集結、偏空調節等）。
+- **中間量化卡片群 (Card 10~17) 真實日 K 與籌碼加權動態化 (`Quant Cards Dynamic Weighting`)**：
+  - **10 多空能量比 (`bullBearEnergy`)**：依 20 日紅黑 K 量能動態推算多空比值，具備黑 K 為 0 時自動封頂 `99.99` 之安全防護。
+  - **11 五環健康度評估 (`healthSummary`)**：整合均線多頭排列度、法人進出、資金動能、流動性風險與支撐力 5 維度動態評分與評等標籤。
+  - **12 主力動態信號 (`dynamicSignals`)**：結合 20 日 VWAP 乖離率、KD、RSI 與籌碼集中度動態判定趨勢與紅/黃/綠燈號。
+  - **16 買賣力分佈 (`forceDistribution`)**：依紅黑量能多空比動態推算大戶買盤、散戶買盤與散戶賣壓三環佔比。
+  - **17 多空強度評等 (`bullBearStrength`)**：多空強度與 1~5 級信號動態連動。
 
 ### 0. AI 主力戰情室 4 排 Bento-Grid 佈局矩陣與實拍像素級對齊 (`AI Force 4-Row Bento Grid`) *(V8.53.1 全新發布)*
 - **實拍像素級 4 排 Bento-Grid 矩陣佈局**：
