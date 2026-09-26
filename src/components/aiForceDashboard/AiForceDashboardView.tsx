@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MarketType, HoldingPosition } from '../../types/stock';
 import { AiForceDashboardReport } from '../../types/aiForceDashboard';
 import { createDefaultAiForceReport } from '../../engine/aiForceDashboardEngine';
@@ -46,6 +46,15 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
   const [report, setReport] = useState<AiForceDashboardReport>(() =>
     createDefaultAiForceReport(initialSymbol, '致茂', initialMarket)
   );
+  const analyzeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (analyzeTimerRef.current) {
+        clearTimeout(analyzeTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (initialSymbol && initialSymbol !== symbol) {
@@ -57,13 +66,17 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
   }, [initialSymbol, initialMarket, symbol]);
 
   const handleAnalyze = (newSymbol: string, newMarket: MarketType) => {
+    if (analyzeTimerRef.current) {
+      clearTimeout(analyzeTimerRef.current);
+    }
     setIsLoading(true);
     setSymbol(newSymbol);
     setMarket(newMarket);
     const resolvedName = resolveOfficialSecurityName(newSymbol, newMarket) || newSymbol;
     setReport(createDefaultAiForceReport(newSymbol, resolvedName, newMarket));
-    setTimeout(() => {
+    analyzeTimerRef.current = setTimeout(() => {
       setIsLoading(false);
+      analyzeTimerRef.current = null;
     }, 250);
   };
 
