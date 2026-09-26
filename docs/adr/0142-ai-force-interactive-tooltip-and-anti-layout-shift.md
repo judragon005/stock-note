@@ -2,7 +2,7 @@
 
 - **狀態**：Accepted
 - **日期**：2026-09-26
-- **關聯規格**：[Spec 0142 (docs/specs/0142-ai-force-live-pipeline-and-interactive-kline-spec.md)](../specs/0142-ai-force-live-pipeline-and-interactive-kline-spec.md)
+- **關聯規格**：[Spec 0142 (docs/specs/0142-ai-force-interactive-tooltip-and-anti-layout-shift-spec.md)](../specs/0142-ai-force-interactive-tooltip-and-anti-layout-shift-spec.md)
 - **關聯 Issue**：[#100](https://github.com/judragon005/stock-note/issues/100)
 
 ---
