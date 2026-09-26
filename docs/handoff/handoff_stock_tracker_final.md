@@ -1,15 +1,15 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Document)
 
-> **交接產生時間**：2026-09-26 09:58 (UTC+8)  
+> **交接產生時間**：2026-09-26 21:50 (UTC+8)  
 > **當前最新里程碑**：
-> - **V8.53.1 AI 主力戰情室 4 排 Bento-Grid 佈局矩陣與實拍像素級對齊**（ADR-0140, Spec 0140, Issue #95）：
->   - **4 排 Bento-Grid 佈局矩陣**：重構 18 張卡片為主視圖 4 排網格（Row 1: 5卡、Row 2: 4卡、Row 3: 6卡等寬、Row 4: 3卡），與實拍照片 100% 像素級對齊。
->   - **頂部雙列整合 Bar**：第一列橫排 4 狀態燈、發光代號即時輸入框、股票名稱、分析按鈕與 10 大行情指標；第二列左側資料來源說明、右側 5 大匯出按鈕。
->   - **圖表升級**：垂直價格階梯熱力圖 (1600~2400)、三次貝茲波形堆疊圖 (Wave Area Stack)、水平雙條對比能量棒、並排 3 獨立進度環 (大戶/散戶買/散戶賣)、全卡片右上角微型選單 `⋮`。
-> - **V8.53.0 AI 主力行為判讀與全功能量化決策儀表板**（ADR-0140, Spec 0140, Issue #93）：
->   - 18 張核心卡片 Bento-Grid 網格、全量原生 SVG 向量繪圖、5 大任務視圖與 5 大量化匯出管線。
-> - **V8.52.0 質押借貸 FULL_PAYOFF 統一委託 applyDebtRepayment 引擎與純函式 DRY 閉環**（ADR-0139, Spec 0139, Issue #25, PR #91）：根除全額結清手動拼裝狀態雙軌風險，集中流通股數與雙階自然排序共用函式。
-> **品質狀態**：全量單元測試 **1,110/1,110 通過 (100% Passed / 134 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過。
+> - **V8.58.0 AI 主力戰情室響應式 Bento-Grid 重構與雙層繁中行情列**（ADR 0145, Spec 0145, Issue #112, PR #113）：
+>   - **雙層全功能即時行情列 (Two-Tier Market Bar)**：上層整合加大代號輸入框與 4 大繁中科技感膠囊燈號（`AI 智慧掃描` 帶呼吸燈、`主力行為追蹤`、`市場即時狀態`、`波動異常預警`）；下層橫排 10 大即時行情指標（今日收盤價 1.3rem 大字、今日漲跌/漲幅、成交量、成交筆數等），徹底告別英文術語與橫向擠壓。
+>   - **01 主 K 線獨立全寬滿版 (100% Width Row 1)**：擺脫側邊卡片擠壓，提供 TradingView 等級專業看盤視野，週期切換與副圖指標展現從容。
+>   - **依序 01 ➔ 18 內容導向自然流 Bento-Grid**：Row 2 (02~05 均勻 4 卡)、Row 3 (06~08，08 享有 1.8fr 寬幅)、Row 4 (09~11，11 享有 1.6fr 寬幅)、Row 5 (12~15 緊湊監控 4 卡)、Row 6 (16~18，18 享有 1.8fr 壓軸決策大面板)。
+>   - **圖表細節抗碰撞與縮放修復**：修復 08 柱表重疊、11 五環放大至 54px 且字體清晰、04 熱區圖例防文字裁切。
+> - **V8.57.0 AI 主力戰情室卡片 06 與 07 照片精準對齊、動態波形面積圖與雙色發散錐**（ADR 0144, Spec 0144, Issue #109, PR #110）。
+> - **V8.56.0 AI 主力戰情室三大法人真實籌碼管線與全卡片/任務視圖全景動態驅動**（ADR 0143, Spec 0143, Issue #103, #105, #107）。
+> **品質狀態**：全量單元測試 **1,140/1,140 通過 (100% Passed / 135 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過 (7.12s)。
 
 ---
 
@@ -17,11 +17,11 @@
 
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
-- **當前工作分支**：`feature/95-ai-force-bento-grid-alignment` (已完成審查與 Auto-Fix，待合併至 `main`)
-- **單元測試套件**：**1,110/1,110 通過 (134 test suites / 100% 綠燈)**
+- **當前工作分支**：`feature/112-bento-grid-and-header-redesign` (已完成 PR #113，待合併至 `main`)
+- **單元測試套件**：**1,140/1,140 通過 (135 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V8.53.1**
+- **當前釋出版本**：**V8.58.0**
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
 ---
@@ -49,6 +49,9 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0145`](file:///d:/APP/股票紀錄/docs/specs/0145-ai-force-dashboard-responsive-bento-grid-and-header-redesign-spec.md) | [`ADR 0145`](file:///d:/APP/股票紀錄/docs/adr/0145-ai-force-dashboard-responsive-bento-grid-and-header-redesign.md) | [`.scratch/v8.58.0-ai-force-bento-grid-and-header-redesign/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.58.0-ai-force-bento-grid-and-header-redesign/issues/) | Issue #112 / PR #113 | V8.58.0 | 雙層全繁中即時行情列、01 主 K 線獨立全寬滿版、01➔18 內容導向自然流 Bento-Grid、圖表防碰撞修復 |
+| [`Spec 0144`](file:///d:/APP/股票紀錄/docs/specs/0144-ai-force-cards-06-07-photo-alignment-spec.md) | [`ADR 0144`](file:///d:/APP/股票紀錄/docs/adr/0144-ai-force-cards-06-07-photo-alignment.md) | [`.scratch/v8.57.0-ai-force-cards-06-07-photo-alignment/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.57.0-ai-force-cards-06-07-photo-alignment/issues/) | Issue #109 / PR #110 | V8.57.0 | 卡片 06 雙色發散錐與價格軸、卡片 07 多時段多層波形堆疊圖、卡片 09 籌碼換手率校準 |
+| [`Spec 0143`](file:///d:/APP/股票紀錄/docs/specs/0143-ai-force-institutional-chips-and-task-views-live-sync-spec.md) | [`ADR 0143`](file:///d:/APP/股票紀錄/docs/adr/0143-ai-force-institutional-chips-and-task-views-live-sync.md) | [`.scratch/v8.56.0-ai-force-institutional-chips-and-task-views/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.56.0-ai-force-institutional-chips-and-task-views/issues/) | Issue #103, #105, #107 | V8.56.0 | 三大法人真實籌碼管線、中間量化卡片群加權動態化、底部 5 大任務視圖全景連動 |
 | [`Spec 0140`](file:///d:/APP/股票紀錄/docs/specs/0140-ai-force-decision-dashboard-spec.md) | [`ADR 0140`](file:///d:/APP/股票紀錄/docs/adr/0140-ai-force-decision-dashboard-architecture.md) | [`.scratch/v8.53.0-ai-force-decision-dashboard/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.53.0-ai-force-decision-dashboard/issues/) | Issue #93 | V8.53.0 | 18 張卡片 Bento-Grid 網格、原生向量 SVG 圖表、5 大任務視圖、5 大量化匯出管線 |
 | [`Spec 0139`](file:///d:/APP/股票紀錄/docs/specs/0139-unified-full-payoff-and-engine-dry-refactor-spec.md) | [`ADR 0139`](file:///d:/APP/股票紀錄/docs/adr/0139-unified-full-payoff-and-engine-dry-refactor.md) | [`.scratch/v8.52.0-unified-full-payoff-and-dry-engine/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.52.0-unified-full-payoff-and-dry-engine/issues/) | Issue #25 / PR #91 | V8.52.0 | 質押借貸 FULL_PAYOFF 統一委託 applyDebtRepayment 引擎與純函式 DRY 閉環 |
 | [`Spec 0138`](file:///d:/APP/股票紀錄/docs/specs/0138-header-realtime-clock-and-accurate-dividend-reconciliation-spec.md) | [`ADR 0138`](file:///d:/APP/股票紀錄/docs/adr/0138-header-realtime-clock-and-accurate-dividend-reconciliation.md) | [`.scratch/v8.51.0-header-clock-and-dividend-reconciliation/`](file:///d:/APP/股票紀錄/.scratch/v8.51.0-header-clock-and-dividend-reconciliation/) | Issue #87 / PR #88 | V8.51.0 | 頂部 Header 即時盤中時鐘與股利收益對帳精準化 |

@@ -38,23 +38,29 @@ describe('HeaderMarketBar - 行情 Bar 格式化與狀態燈規範 (Ticket 02)',
   });
 
   describe('getSystemBadgeConfig - 4 大狀態指示燈配置', () => {
-    it('AI SCAN ACTIVE 啟用時應回傳綠色呼吸燈與 ACTIVE 標記', () => {
+    it('AI 智慧掃描啟用時應回傳綠色呼吸燈與繁體中文標籤', () => {
       const badge = getSystemBadgeConfig('AI_SCAN', true);
-      expect(badge.label).toBe('AI SCAN ACTIVE');
+      expect(badge.label).toBe('AI 智慧掃描');
       expect(badge.color).toBe('#10b981');
       expect(badge.dotAnimate).toBe(true);
     });
 
-    it('VOLATILITY ALERT 警戒時應回傳紅色警告色彩', () => {
+    it('波動異常預警警戒時應回傳紅色警告色彩與繁體中文標籤', () => {
       const badge = getSystemBadgeConfig('VOLATILITY', true);
-      expect(badge.label).toBe('VOLATILITY ALERT');
+      expect(badge.label).toBe('波動異常預警');
       expect(badge.color).toBe('#ef4444');
     });
 
-    it('MAIN FORCE TRACKING 啟用時應回傳藍色追蹤徽章', () => {
+    it('主力行為追蹤啟用時應回傳藍色追蹤徽章與繁體中文標籤', () => {
       const badge = getSystemBadgeConfig('MAIN_FORCE', true);
-      expect(badge.label).toBe('MAIN FORCE TRACKING');
+      expect(badge.label).toBe('主力行為追蹤');
       expect(badge.color).toBe('#38bdf8');
+    });
+
+    it('市場即時狀態啟用時應回傳紫色徽章與繁體中文標籤', () => {
+      const badge = getSystemBadgeConfig('MARKET_STATUS', true);
+      expect(badge.label).toBe('市場即時狀態');
+      expect(badge.color).toBe('#818cf8');
     });
   });
 

@@ -162,23 +162,23 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       {/* 依據任務頁籤條件渲染視圖 */}
       {activeTab === 'TASK_1_COMPREHENSIVE' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
-          {/* Row 1: 01 主K線, 02 AI決策核心, 03 多維度判讀, 04 籌碼熱區圖, 05 風險雷達圖 (共 5 卡) */}
+          {/* Row 1: 01 主K線 (100% 滿版獨立大視野，看盤完全不壓迫) */}
+          <div style={{ width: '100%', minWidth: 0 }}>
+            <KLineChartCard
+              data={report.klineSystem}
+              colorTheme={market === 'US' ? 'international' : 'taiwan'}
+            />
+          </div>
+
+          {/* Row 2: 02 AI決策核心, 03 多維度判讀, 04 籌碼熱區圖, 05 風險雷達圖 (4 卡戰略定調與位階) */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'minmax(360px, 2.3fr) minmax(210px, 1.25fr) minmax(180px, 1.1fr) minmax(160px, 1fr) minmax(180px, 1.1fr)',
+              gridTemplateColumns: 'minmax(240px, 1.15fr) minmax(200px, 1fr) minmax(200px, 1fr) minmax(200px, 1fr)',
               gap: '12px',
               alignItems: 'stretch',
             }}
           >
-            {/* 01 主 K 線 */}
-            <div style={{ minWidth: 0 }}>
-              <KLineChartCard
-                data={report.klineSystem}
-                colorTheme={market === 'US' ? 'international' : 'taiwan'}
-              />
-            </div>
-
             {/* 02 AI 決策核心 */}
             <div style={{ minWidth: 0 }}>
               <AiDecisionCoreCard data={report.decisionCore} />
@@ -200,11 +200,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             </div>
           </div>
 
-          {/* Row 2: 06 預測路徑圖, 07 成本結構分布圖, 08 法人行為計量, 09 隔日沖風險 (共 4 卡) */}
+          {/* Row 3: 06 累積型預測, 07 成本結構分布, 08 法人行為計量 (3 卡，08 享有 1.8fr 寬幅大空間) */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'minmax(220px, 1.15fr) minmax(200px, 1.05fr) minmax(350px, 1.8fr) minmax(200px, 1fr)',
+              gridTemplateColumns: 'minmax(240px, 1.1fr) minmax(240px, 1.1fr) minmax(380px, 1.8fr)',
               gap: '12px',
               alignItems: 'stretch',
             }}
@@ -226,22 +226,22 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 colorTheme={market === 'US' ? 'international' : 'taiwan'}
               />
             </div>
-
-            {/* 09 隔日沖風險分析 */}
-            <div style={{ minWidth: 0 }}>
-              <DayTradeRiskCard data={report.dayTradeRisk} />
-            </div>
           </div>
 
-          {/* Row 3: 10 多空能量棒, 11 健康度綜合評估, 12 動態信號判斷, 13 台股市場合情緒, 14 AI信心, 15 籌碼摘要 (共 6 卡等寬) */}
+          {/* Row 4: 09 隔日沖風險, 10 多空能量棒, 11 健康度綜合評估 (3 卡，11 享有 1.6fr 寬幅放 5 環) */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(6, minmax(150px, 1fr))',
+              gridTemplateColumns: 'minmax(240px, 1fr) minmax(240px, 1fr) minmax(360px, 1.6fr)',
               gap: '12px',
               alignItems: 'stretch',
             }}
           >
+            {/* 09 隔日沖風險分析 */}
+            <div style={{ minWidth: 0 }}>
+              <DayTradeRiskCard data={report.dayTradeRisk} />
+            </div>
+
             {/* 10 AI 多空能量棒 */}
             <div style={{ minWidth: 0 }}>
               <BullBearEnergyCard data={report.bullBearEnergy} />
@@ -251,7 +251,17 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             <div style={{ minWidth: 0 }}>
               <HealthSummaryCard data={report.healthSummary} />
             </div>
+          </div>
 
+          {/* Row 5: 12 動態信號, 13 台股市場情緒, 14 AI信心, 15 籌碼摘要 (4 卡緊湊型監控) */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(200px, 1fr) minmax(220px, 1.1fr) minmax(180px, 0.9fr) minmax(200px, 1fr)',
+              gap: '12px',
+              alignItems: 'stretch',
+            }}
+          >
             {/* 12 AI 主力動態信號判斷 */}
             <div style={{ minWidth: 0 }}>
               <DynamicSignalsCard data={report.dynamicSignals} />
@@ -273,11 +283,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             </div>
           </div>
 
-          {/* Row 4: 16 買賣力分布, 17 多空強度分布, 18 主力追蹤總評判 (共 3 卡) */}
+          {/* Row 6: 16 買賣力分布, 17 多空強度分布, 18 主力追蹤總評判 (3 卡，18 享有 1.8fr 壓軸大面板) */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'minmax(220px, 1fr) minmax(220px, 1fr) minmax(380px, 1.8fr)',
+              gridTemplateColumns: 'minmax(240px, 1.1fr) minmax(240px, 1.1fr) minmax(400px, 1.8fr)',
               gap: '12px',
               alignItems: 'stretch',
             }}

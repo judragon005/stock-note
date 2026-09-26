@@ -283,21 +283,22 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
         </div>
       </div>
 
-      {/* 主體區：左側雙軸 SVG 圖表 + 右側近 3 日明細表格 */}
+      {/* 主體區：左側雙軸 SVG 圖表 + 右側近 3 日明細表格 (防碰撞分欄) */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(280px, 1.3fr) minmax(240px, 1fr)',
-          gap: '12px',
+          gridTemplateColumns: 'minmax(0, 1.4fr) minmax(200px, 1fr)',
+          gap: '14px',
           flex: 1,
-          alignItems: 'stretch',
+          alignItems: 'center',
+          minWidth: 0,
         }}
       >
         {/* 左側雙軸 SVG 圖表 (Ticket 16) */}
-        <div style={{ width: '100%', minHeight: '170px', position: 'relative' }}>
+        <div style={{ width: '100%', minHeight: '160px', position: 'relative', minWidth: 0 }}>
           <svg
             viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-            style={{ width: '100%', height: '100%', overflow: 'visible' }}
+            style={{ width: '100%', height: '100%', display: 'block' }}
             preserveAspectRatio="none"
           >
             {/* 零軸基準線 */}
@@ -361,6 +362,9 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
             flexDirection: 'column',
             justifyContent: 'center',
             overflowX: 'auto',
+            borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
+            paddingLeft: '10px',
+            minWidth: 0,
           }}
         >
           <table

@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1139%2F1139%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1140%2F1140%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,24 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. AI 主力戰情室卡片 06 與 07 照片精準對齊、動態波形面積圖與雙色發散錐 (`AI Force Cards 06 & 07 Photo Alignment & Dynamic Wave Area`) *(V8.57.0 全新發布)*
+### 0. AI 主力戰情室響應式 Bento-Grid 重構與雙層繁中行情列 (`AI Force Responsive Bento-Grid & Two-Tier Market Bar`) *(V8.58.0 全新發布)*
+- **雙層全功能即時行情列 (`Two-Tier Market Bar`)**：
+  - **上層（操作與系統狀態列）**：左側整合大字體股票代號輸入框、股票名稱與「分析」按鈕；右側橫排 4 大全繁中科技感膠囊燈號（🟢 `AI 智慧掃描` 帶呼吸燈、🔵 `主力行為追蹤`、🟣 `市場即時狀態`、🔴 `波動異常預警`），徹底告別英文術語與擠壓。
+  - **下層（寬幅即時行情大面板）**：今日收盤價（1.3rem 特大粗體）、今日漲跌/漲幅（高對比雙色發光）、成交量(張)、成交筆數、開盤、最高、最低、最新交易日、資料筆數整齊橫排，告別橫向捲軸。
+- **01 主 K 線獨立全寬滿版 (`Full-Width Row 1 K-Line`)**：
+  - 抽離原 5 卡擠壓行，單獨設為第 1 排（100% 滿版獨立寬度），賦予完整橫向呼吸視野與專業看盤深度，週期（30D/60D/120D/250D）與副圖指標自由切換不受側邊卡片擠壓。
+- **依序 01 ➔ 18 內容導向自然流 Bento-Grid (`Content-Driven Sequential Bento-Grid`)**：
+  - 突破死板 4 行限制，依據每張卡片的圖表形態與資訊密度量身配置專屬寬度權重，且嚴格維持 01 ➔ 18 由左至右、由上而下自然順序：
+    - **Row 1**：`01 主 K 線圖` (100% 滿版獨立)
+    - **Row 2**：`02, 03, 04, 05` (4 卡均勻分佈，戰略決策與位階雷達)
+    - **Row 3**：`06, 07, 08` (3 卡，`08 法人行為計量` 獨享 1.8fr 寬幅，柱狀圖與 3 日表徹底隔開不重疊)
+    - **Row 4**：`09, 10, 11` (3 卡，`11 健康度綜合評估` 獨享 1.6fr 寬幅，5 環放大至 54px 且標籤清晰)
+    - **Row 5**：`12, 13, 14, 15` (4 卡緊湊型指標監控)
+    - **Row 6**：`16, 17, 18` (3 卡，`18 主力追蹤總評判` 獨享 1.8fr 壓軸決策大面板)
+- **圖表細節抗碰撞與縮放修復 (`Anti-Overlap & Scale Guards`)**：
+  - 修復 08 柱表重疊、11 五環縮放、04 熱區圖例防溢出，確保全解析度下的極致交易體驗。
+
+### 0. AI 主力戰情室卡片 06 與 07 照片精準對齊、動態波形面積圖與雙色發散錐 (`AI Force Cards 06 & 07 Photo Alignment & Dynamic Wave Area`) *(V8.57.0)*
 - **卡片 06 累積型 AI 預測路徑圖雙色發散扇形錐與價格標尺 (`Split Forecast Cone & Price Axis`)**：
   - **雙層發散面幾何分割**：依據中位數曲線向上閉合紅色/橙色半透明漸層「上漲發散扇形」，向下閉合翠綠色半透明漸層「下跌發散扇形」，完美直觀對齊上方多空機率圖例。
   - **動態 Y 軸價位標籤與格線**：自極值動態計算主要價位刻度（如 2500, 2000）並渲染水平參考線；主力方向機率標籤依多空映射台股鮮紅色 (`#ef4444`)。
