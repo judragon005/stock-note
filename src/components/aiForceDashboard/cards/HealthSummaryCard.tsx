@@ -61,34 +61,34 @@ interface GaugeItemProps {
 }
 
 const SingleGauge: React.FC<GaugeItemProps> = ({ label, percent, color }) => {
-  const radius = 17;
+  const radius = 21;
   const { circumference, strokeDashoffset, clamped } = calculateCircleProgress(percent, radius);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1 }}>
-      <div style={{ position: 'relative', width: '44px', height: '44px' }}>
-        <svg width="44" height="44" viewBox="0 0 44 44">
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
+      <div style={{ position: 'relative', width: '54px', height: '54px' }}>
+        <svg width="54" height="54" viewBox="0 0 54 54">
           {/* 背景軌道 */}
           <circle
-            cx="22"
-            cy="22"
+            cx="27"
+            cy="27"
             r={radius}
             fill="transparent"
             stroke="rgba(255, 255, 255, 0.08)"
-            strokeWidth="3.5"
+            strokeWidth="4"
           />
           {/* 進度環 */}
           <circle
-            cx="22"
-            cy="22"
+            cx="27"
+            cy="27"
             r={radius}
             fill="transparent"
             stroke={color}
-            strokeWidth="3.5"
+            strokeWidth="4"
             strokeDasharray={`${circumference} ${circumference}`}
             strokeDashoffset={strokeDashoffset}
             strokeLinecap="round"
-            transform="rotate(-90 22 22)"
+            transform="rotate(-90 27 27)"
             style={{ transition: 'stroke-dashoffset 0.6s ease' }}
           />
         </svg>
@@ -100,7 +100,7 @@ const SingleGauge: React.FC<GaugeItemProps> = ({ label, percent, color }) => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '10px',
+            fontSize: '12px',
             fontWeight: 800,
             fontFamily: 'monospace',
             color: '#f8fafc',
@@ -109,7 +109,7 @@ const SingleGauge: React.FC<GaugeItemProps> = ({ label, percent, color }) => {
           {clamped}%
         </div>
       </div>
-      <span style={{ fontSize: '0.62rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{ fontSize: '0.72rem', color: '#cbd5e1', whiteSpace: 'nowrap', fontWeight: 600 }}>{label}</span>
     </div>
   );
 };

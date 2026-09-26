@@ -271,6 +271,8 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
             height: '190px',
             fontSize: '0.72rem',
             gap: '4px',
+            minWidth: '85px',
+            whiteSpace: 'nowrap',
           }}
         >
           {buckets.map((b, idx) => {
