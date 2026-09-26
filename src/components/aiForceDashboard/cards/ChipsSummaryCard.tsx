@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ChipsSummaryData } from '../../../types/aiForceDashboard';
+import { MoreVertical } from 'lucide-react';
 
 export interface ChipsSummaryCardProps {
   data?: ChipsSummaryData;
@@ -47,12 +48,14 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
   const trust = data?.trustNetShares ?? 89;
   const dealer = data?.dealerNetShares ?? 82;
   const total = data?.threeInstitutionsTotal ?? 5;
-  const badge = data?.conclusionBadge ?? '偏空震盪';
-  const note = data?.verdictNote ?? '短線偏空 | 追價風險可控';
+  const conclusionBadge = data?.conclusionBadge ?? '偏空觀望';
+  const note = data?.verdictNote ?? '2026-09-18 短線偏空 | 借貸風險可控';
   const sparklineHistory = data?.sparklineHistory ?? [100, 250, 180, 420, 310, 520, 480, 620, 590, 600];
 
-  const { pathD, areaD, isUp } = normalizeSparklinePoints(sparklineHistory, 96, 36);
-  const sparkColor = isUp ? '#ef4444' : '#10b981';
+  const width = 80;
+  const height = 45;
+  const { pathD, areaD, isUp } = normalizeSparklinePoints(sparklineHistory, width, height);
+  const sparkColor = isUp ? '#38bdf8' : '#ef4444';
 
   const formatShares = (val: number) => {
     const sign = val > 0 ? '+' : '';
@@ -76,106 +79,145 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
     <div
       data-testid="chips-summary-card"
       style={{
-        background: 'rgba(30, 41, 59, 0.7)',
-        backdropFilter: 'blur(12px)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '12px',
-        padding: '16px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '12px',
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+        height: '100%',
+        padding: '14px',
+        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
+        borderRadius: '14px',
+        border: '1px solid rgba(59, 130, 246, 0.25)',
+        backdropFilter: 'blur(10px)',
+        boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
       }}
     >
-      {/* 標題與短評徽章 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '14px' }}>📊</span>
-          <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#f1f5f9' }}>
-            15 籌碼具體摘要
-          </h3>
-        </div>
-        <span
-          style={{
-            fontSize: '11px',
-            padding: '2px 8px',
-            borderRadius: '9999px',
-            backgroundColor: badge.includes('多') ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-            color: badge.includes('多') ? '#f87171' : '#34d399',
-            fontWeight: 600,
-            border: `1px solid ${badge.includes('多') ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
-          }}
-        >
-          {badge}
-        </span>
-      </div>
-
-      {/* 四大籌碼與 Sparkline 微圖 */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr) 96px',
-          gap: '8px',
-          alignItems: 'center',
-          padding: '2px 0',
-        }}
-      >
-        {chipItems.map((item) => (
-          <div
-            key={item.label}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              backgroundColor: 'rgba(15, 23, 42, 0.5)',
-              padding: '6px 8px',
-              borderRadius: '8px',
-              border: item.isMajor ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(255, 255, 255, 0.04)',
-            }}
-          >
-            <span style={{ fontSize: '10px', color: '#94a3b8' }}>{item.label}</span>
-            <span
-              style={{
-                fontSize: item.isMajor ? '13px' : '12px',
-                fontWeight: item.isMajor ? 700 : 600,
-                color: getShareColor(item.value),
-                marginTop: '2px',
-              }}
-            >
-              {formatShares(item.value)}
-            </span>
-          </div>
-        ))}
-
-        {/* Sparkline 迷你走勢圖 */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <svg width="96" height="36" viewBox="0 0 96 36">
-            <defs>
-              <linearGradient id="chipsSparklineGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor={sparkColor} stopOpacity="0.3" />
-                <stop offset="100%" stopColor={sparkColor} stopOpacity="0.0" />
-              </linearGradient>
-            </defs>
-            {areaD && <path d={areaD} fill="url(#chipsSparklineGrad)" />}
-            {pathD && <path d={pathD} fill="none" stroke={sparkColor} strokeWidth="1.8" strokeLinecap="round" />}
-          </svg>
-          <span style={{ fontSize: '9px', color: '#64748b' }}>近10日籌碼走勢</span>
-        </div>
-      </div>
-
-      {/* 底部短評說明 */}
+      {/* 頂部標題與選單 */}
       <div
         style={{
           display: 'flex',
-          justifyContent: 'space-between',
           alignItems: 'center',
-          fontSize: '11px',
-          color: '#94a3b8',
-          paddingTop: '6px',
-          borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+          justifyContent: 'space-between',
+          marginBottom: '10px',
         }}
       >
-        <span style={{ color: '#cbd5e1' }}>{note}</span>
-        <strong style={{ color: getShareColor(total), fontWeight: 600 }}>合計 {formatShares(total)}</strong>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span
+            style={{
+              padding: '2px 6px',
+              borderRadius: '5px',
+              background: 'rgba(59, 130, 246, 0.25)',
+              color: '#60a5fa',
+              fontSize: '0.72rem',
+              fontWeight: 800,
+            }}
+          >
+            15
+          </span>
+          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
+            籌碼異動摘要
+          </span>
+        </div>
+        <button
+          type="button"
+          aria-label="選項"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: '#64748b',
+            cursor: 'pointer',
+            padding: '2px',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          <MoreVertical size={14} />
+        </button>
+      </div>
+
+      {/* 主體：左側法人買賣張數明細 + 右側 Sparkline 微型走勢圖 */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr auto',
+          gap: '10px',
+          alignItems: 'center',
+          flex: 1,
+        }}
+      >
+        {/* 左側數值清單 */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          {chipItems.map((item) => (
+            <div
+              key={item.label}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: '0.74rem',
+              }}
+            >
+              <span style={{ color: item.isMajor ? '#e2e8f0' : '#94a3b8', fontWeight: item.isMajor ? 700 : 500 }}>
+                {item.label}
+              </span>
+              <span
+                style={{
+                  color: getShareColor(item.value),
+                  fontWeight: 800,
+                  fontFamily: 'monospace',
+                }}
+              >
+                {formatShares(item.value)}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* 右側 Sparkline 走勢圖與 Y 軸刻度 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{ width: `${width}px`, height: `${height}px`, position: 'relative' }}>
+            <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+              <defs>
+                <linearGradient id="chipsSparkGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor={sparkColor} stopOpacity="0.4" />
+                  <stop offset="100%" stopColor={sparkColor} stopOpacity="0.0" />
+                </linearGradient>
+              </defs>
+              {areaD && <path d={areaD} fill="url(#chipsSparkGrad)" />}
+              {pathD && <path d={pathD} fill="none" stroke={sparkColor} strokeWidth="1.8" />}
+            </svg>
+          </div>
+          {/* Y 軸刻度 */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              height: `${height}px`,
+              fontSize: '0.58rem',
+              color: '#64748b',
+              fontFamily: 'monospace',
+            }}
+          >
+            <span>2300</span>
+            <span>1300</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 底部摘要結論 */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingTop: '6px',
+          borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+          fontSize: '0.68rem',
+        }}
+      >
+        <span style={{ color: '#94a3b8' }}>{note}</span>
+        <span style={{ color: '#f87171', fontWeight: 800 }}>
+          結論：{conclusionBadge}
+        </span>
       </div>
     </div>
   );

@@ -139,6 +139,8 @@ export interface VwapCostStructureData {
     percentage: number;
     color: string;
   }[];
+  mainForceAvgCost?: number;
+  referenceVwapLabel?: string;
 }
 
 /**

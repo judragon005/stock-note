@@ -3,7 +3,6 @@ import { MarketType, HoldingPosition } from '../../types/stock';
 import { AiForceDashboardReport } from '../../types/aiForceDashboard';
 import { createDefaultAiForceReport } from '../../engine/aiForceDashboardEngine';
 import { HeaderMarketBar } from './HeaderMarketBar';
-import { HeaderQueryBar } from './HeaderQueryBar';
 import { KLineChartCard } from './cards/KLineChartCard';
 import { AiDecisionCoreCard } from './cards/AiDecisionCoreCard';
 import { MultiDimensionRadarCard } from './cards/MultiDimensionRadarCard';
@@ -91,168 +90,156 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         color: 'var(--text-primary, #ffffff)',
       }}
     >
-      {/* 頂部即時行情總覽與系統狀態 Bar */}
-      <HeaderMarketBar data={report.marketBar} colorTheme={market === 'US' ? 'international' : 'taiwan'} />
-
-      {/* 5 大量化工具與報告匯出工具列 (Ticket 32) */}
-      <HeaderExportBar report={report} />
-
-      {/* 頂部標的搜尋輸入框與資料來源說明列 */}
-      <HeaderQueryBar
+      {/* 頂部即時行情總覽、系統狀態與標的輸入 Bar (照片第 1 列) */}
+      <HeaderMarketBar
+        data={report.marketBar}
         currentSymbol={symbol}
         currentName={report.name}
-        currentMarket={market}
         isLoading={isLoading}
         onAnalyze={handleAnalyze}
+        colorTheme={market === 'US' ? 'international' : 'taiwan'}
       />
+
+      {/* 資料來源說明與 5 大量化匯出工具列 (照片第 2 列) */}
+      <HeaderExportBar report={report} />
 
       {/* 依據任務頁籤條件渲染視圖 */}
       {activeTab === 'TASK_1_COMPREHENSIVE' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
-          {/* Row 1: 主 K 線、決策核心、多維度雷達 */}
+          {/* Row 1: 01 主K線, 02 AI決策核心, 03 多維度判讀, 04 籌碼熱區圖, 05 風險雷達圖 (共 5 卡) */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'minmax(450px, 2fr) minmax(280px, 1.1fr) minmax(280px, 1fr)',
-              gap: '14px',
+              gridTemplateColumns: 'minmax(360px, 2.3fr) minmax(210px, 1.25fr) minmax(180px, 1.1fr) minmax(160px, 1fr) minmax(180px, 1.1fr)',
+              gap: '12px',
               alignItems: 'stretch',
             }}
           >
             {/* 01 主 K 線 */}
-            <div>
+            <div style={{ minWidth: 0 }}>
               <KLineChartCard
                 data={report.klineSystem}
                 colorTheme={market === 'US' ? 'international' : 'taiwan'}
               />
             </div>
 
-            {/* 02 AI 決策核心 (Ticket 06) */}
-            <div>
+            {/* 02 AI 決策核心 */}
+            <div style={{ minWidth: 0 }}>
               <AiDecisionCoreCard data={report.decisionCore} />
             </div>
 
-            {/* 03 多維度判讀 (Ticket 07) */}
-            <div>
+            {/* 03 多維度判讀 */}
+            <div style={{ minWidth: 0 }}>
               <MultiDimensionRadarCard data={report.multiDimensionRadar} />
             </div>
-          </div>
 
-          {/* Row 2: 籌碼熱區、風險蛛網、預測路徑等 */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-              gap: '14px',
-              alignItems: 'stretch',
-            }}
-          >
-            {/* 04 AI 籌碼熱區圖 (Ticket 09) */}
-            <div>
+            {/* 04 AI 籌碼熱區圖 */}
+            <div style={{ minWidth: 0 }}>
               <VolumeProfileCard data={report.volumeProfile} />
             </div>
 
-            {/* 05 風險雷達圖 (Ticket 11) */}
-            <div>
+            {/* 05 風險雷達圖 */}
+            <div style={{ minWidth: 0 }}>
               <RiskSpiderCard data={report.riskSpider} />
-            </div>
-
-            {/* 06 累積型 AI 預測路徑圖 (Ticket 13) */}
-            <div>
-              <ForecastConeCard data={report.forecastCone} />
-            </div>
-
-            {/* 07 主力成本結構分布圖 (Ticket 15) */}
-            <div>
-              <VwapCostStructureCard data={report.vwapCostStructure} />
             </div>
           </div>
 
-          {/* Row 3: 法人行為計量、隔日沖風險 */}
+          {/* Row 2: 06 預測路徑圖, 07 成本結構分布圖, 08 法人行為計量, 09 隔日沖風險 (共 4 卡) */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'minmax(500px, 1.8fr) minmax(320px, 1fr)',
-              gap: '14px',
+              gridTemplateColumns: 'minmax(220px, 1.15fr) minmax(200px, 1.05fr) minmax(350px, 1.8fr) minmax(200px, 1fr)',
+              gap: '12px',
               alignItems: 'stretch',
             }}
           >
-            {/* 08 法人行為計量 (Ticket 16 & 17) */}
-            <div>
+            {/* 06 累積型 AI 預測路徑圖 */}
+            <div style={{ minWidth: 0 }}>
+              <ForecastConeCard data={report.forecastCone} />
+            </div>
+
+            {/* 07 主力成本結構分布圖 */}
+            <div style={{ minWidth: 0 }}>
+              <VwapCostStructureCard data={report.vwapCostStructure} />
+            </div>
+
+            {/* 08 法人行為計量 */}
+            <div style={{ minWidth: 0 }}>
               <InstitutionalFlowCard
                 data={report.institutionalFlow}
                 colorTheme={market === 'US' ? 'international' : 'taiwan'}
               />
             </div>
 
-            {/* 09 隔日沖風險分析 (Ticket 19) */}
-            <div>
+            {/* 09 隔日沖風險分析 */}
+            <div style={{ minWidth: 0 }}>
               <DayTradeRiskCard data={report.dayTradeRisk} />
             </div>
           </div>
 
-          {/* Row 4: 多空能量儀、健康度評估表、動態信號判斷、市場情緒儀表板 */}
+          {/* Row 3: 10 多空能量棒, 11 健康度綜合評估, 12 動態信號判斷, 13 台股市場合情緒, 14 AI信心, 15 籌碼摘要 (共 6 卡等寬) */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '14px',
+              gridTemplateColumns: 'repeat(6, minmax(150px, 1fr))',
+              gap: '12px',
               alignItems: 'stretch',
             }}
           >
-            {/* 10 AI 多空能量儀 (Ticket 20) */}
-            <div>
+            {/* 10 AI 多空能量棒 */}
+            <div style={{ minWidth: 0 }}>
               <BullBearEnergyCard data={report.bullBearEnergy} />
             </div>
 
-            {/* 11 健康度綜合評估表 (Ticket 21) */}
-            <div>
+            {/* 11 健康度綜合評估表 */}
+            <div style={{ minWidth: 0 }}>
               <HealthSummaryCard data={report.healthSummary} />
             </div>
 
-            {/* 12 AI 主力動態信號判斷 (Ticket 22) */}
-            <div>
+            {/* 12 AI 主力動態信號判斷 */}
+            <div style={{ minWidth: 0 }}>
               <DynamicSignalsCard data={report.dynamicSignals} />
             </div>
 
-            {/* 13 台股市場合情緒儀表板 (Ticket 24) */}
-            <div>
+            {/* 13 台股市場合情緒儀表板 */}
+            <div style={{ minWidth: 0 }}>
               <MarketSentimentCard data={report.marketSentiment} />
             </div>
-          </div>
 
-          {/* Row 5: AI 信心維度、籌碼具體摘要、買賣力分布、多空強度分布 */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '14px',
-              alignItems: 'stretch',
-            }}
-          >
-            {/* 14 AI 信心維度 (Ticket 25) */}
-            <div>
+            {/* 14 AI 信心維度 */}
+            <div style={{ minWidth: 0 }}>
               <AiConfidenceCard data={report.aiConfidence} />
             </div>
 
-            {/* 15 籌碼具體摘要 (Ticket 26) */}
-            <div>
+            {/* 15 籌碼異動摘要 */}
+            <div style={{ minWidth: 0 }}>
               <ChipsSummaryCard data={report.chipsSummary} />
-            </div>
-
-            {/* 16 買賣力分布圖 (Ticket 27) */}
-            <div>
-              <ForceDistributionCard data={report.forceDistribution} />
-            </div>
-
-            {/* 17 多空強度分布 (Ticket 28) */}
-            <div>
-              <BullBearStrengthCard data={report.bullBearStrength} />
             </div>
           </div>
 
-          {/* Row 6: 18 主力追蹤總評判 (MLP-AI) (Ticket 30) */}
-          <div>
-            <MainForceVerdictCard data={report.mainForceVerdict} />
+          {/* Row 4: 16 買賣力分布, 17 多空強度分布, 18 主力追蹤總評判 (共 3 卡) */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(220px, 1fr) minmax(220px, 1fr) minmax(380px, 1.8fr)',
+              gap: '12px',
+              alignItems: 'stretch',
+            }}
+          >
+            {/* 16 買賣力分布圖 */}
+            <div style={{ minWidth: 0 }}>
+              <ForceDistributionCard data={report.forceDistribution} />
+            </div>
+
+            {/* 17 多空強度分布 */}
+            <div style={{ minWidth: 0 }}>
+              <BullBearStrengthCard data={report.bullBearStrength} />
+            </div>
+
+            {/* 18 主力追蹤總評判 (MLP-AI) */}
+            <div style={{ minWidth: 0 }}>
+              <MainForceVerdictCard data={report.mainForceVerdict} />
+            </div>
           </div>
         </div>
       )}

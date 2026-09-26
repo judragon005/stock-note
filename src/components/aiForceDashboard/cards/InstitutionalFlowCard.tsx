@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { InstitutionalFlowData } from '../../../types/aiForceDashboard';
 import { ColorThemeMode } from '../../../types/stock';
+import { MoreVertical } from 'lucide-react';
 
 export interface DualAxisScales {
   leftMin: number;
@@ -240,8 +241,8 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span
             style={{
-              padding: '2px 7px',
-              borderRadius: '6px',
+              padding: '2px 6px',
+              borderRadius: '5px',
               background: 'rgba(59, 130, 246, 0.25)',
               color: '#60a5fa',
               fontSize: '0.72rem',
@@ -250,17 +251,35 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
           >
             08
           </span>
-          <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#f8fafc' }}>
+          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
             法人行為計量
+          </span>
+          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+            | 三大法人買賣超 (張)
           </span>
         </div>
 
-        {/* 圖例 */}
+        {/* 圖例與選單 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem' }}>
           <span style={{ color: '#38bdf8' }}>■ 外資</span>
           <span style={{ color: '#f59e0b' }}>■ 投信</span>
           <span style={{ color: '#34d399' }}>■ 自營</span>
           <span style={{ color: '#fbbf24', fontWeight: 700 }}>— 累計折線</span>
+          <button
+            type="button"
+            aria-label="選項"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#64748b',
+              cursor: 'pointer',
+              padding: '2px',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <MoreVertical size={14} />
+          </button>
         </div>
       </div>
 

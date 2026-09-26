@@ -1,5 +1,6 @@
 import React from 'react';
 import type { AiConfidenceData } from '../../../types/aiForceDashboard';
+import { MoreVertical } from 'lucide-react';
 
 export interface AiConfidenceCardProps {
   data?: AiConfidenceData;
@@ -32,48 +33,68 @@ export const AiConfidenceCard: React.FC<AiConfidenceCardProps> = ({ data }) => {
 
   const bars = [
     { label: 'AI CONFIDENCE', percent: overall, color: '#38bdf8' },
-    { label: '模型準確度', percent: accuracy, color: '#f59e0b' },
-    { label: '資料完整度', percent: completeness, color: '#10b981' },
-    { label: '訊號穩定度', percent: stability, color: '#8b5cf6' },
-    { label: '策略適用度', percent: applicability, color: '#ec4899' },
+    { label: '模型準確度', percent: accuracy, color: '#38bdf8' },
+    { label: '資料完整度', percent: completeness, color: '#38bdf8' },
+    { label: '經驗穩定度', percent: stability, color: '#38bdf8' },
+    { label: '策略適用度', percent: applicability, color: '#38bdf8' },
   ];
 
   return (
     <div
       data-testid="ai-confidence-card"
       style={{
-        background: 'rgba(30, 41, 59, 0.7)',
-        backdropFilter: 'blur(12px)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '12px',
-        padding: '16px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '12px',
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+        height: '100%',
+        padding: '14px',
+        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
+        borderRadius: '14px',
+        border: '1px solid rgba(59, 130, 246, 0.25)',
+        backdropFilter: 'blur(10px)',
+        boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
       }}
     >
-      {/* 標題與等級標籤 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      {/* 頂部標題與選單 */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '10px',
+        }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '14px' }}>🎯</span>
-          <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#f1f5f9' }}>
-            14 AI 信心維度
-          </h3>
+          <span
+            style={{
+              padding: '2px 6px',
+              borderRadius: '5px',
+              background: 'rgba(59, 130, 246, 0.25)',
+              color: '#60a5fa',
+              fontSize: '0.72rem',
+              fontWeight: 800,
+            }}
+          >
+            14
+          </span>
+          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
+            AI 信心維度
+          </span>
         </div>
-        <span
+        <button
+          type="button"
+          aria-label="選項"
           style={{
-            fontSize: '11px',
-            padding: '2px 8px',
-            borderRadius: '9999px',
-            backgroundColor: grade.bg,
-            color: grade.color,
-            fontWeight: 600,
-            border: `1px solid ${grade.color}40`,
+            background: 'transparent',
+            border: 'none',
+            color: '#64748b',
+            cursor: 'pointer',
+            padding: '2px',
+            display: 'flex',
+            alignItems: 'center',
           }}
         >
-          {grade.label} ({overall}%)
-        </span>
+          <MoreVertical size={14} />
+        </button>
       </div>
 
       {/* 5 條水平進度條 */}

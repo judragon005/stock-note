@@ -1,6 +1,7 @@
 import React from 'react';
 import type { MarketSentimentData } from '../../../types/aiForceDashboard';
 import { calculateGaugeNeedleAngle } from '../../../engine/marketSentimentEngine';
+import { MoreVertical } from 'lucide-react';
 
 export interface MarketSentimentCardProps {
   data?: MarketSentimentData;
@@ -39,12 +40,10 @@ export function getSentimentBadgeMeta(
 
 export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }) => {
   const index = data?.overallSentimentIndex ?? 50;
-  const state = data?.sentimentState ?? 'NEUTRAL';
   const retail = data?.retailSentimentPercent ?? 59;
   const institutional = data?.institutionalSentimentPercent ?? 55;
   const mainForce = data?.mainForceSentimentPercent ?? 58;
 
-  const badgeMeta = getSentimentBadgeMeta(state, index);
   const needleAngle = calculateGaugeNeedleAngle(index);
 
   const participantBars = [
@@ -57,112 +56,132 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
     <div
       data-testid="market-sentiment-card"
       style={{
-        background: 'rgba(30, 41, 59, 0.7)',
-        backdropFilter: 'blur(12px)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '12px',
-        padding: '16px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '12px',
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+        height: '100%',
+        padding: '14px',
+        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
+        borderRadius: '14px',
+        border: '1px solid rgba(59, 130, 246, 0.25)',
+        backdropFilter: 'blur(10px)',
+        boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
       }}
     >
-      {/* 標題與狀態標籤 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      {/* 頂部標題與選單 */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '10px',
+        }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '14px' }}>🧭</span>
-          <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#f1f5f9' }}>
-            13 台股市場合情緒儀表板
-          </h3>
+          <span
+            style={{
+              padding: '2px 6px',
+              borderRadius: '5px',
+              background: 'rgba(59, 130, 246, 0.25)',
+              color: '#60a5fa',
+              fontSize: '0.72rem',
+              fontWeight: 800,
+            }}
+          >
+            13
+          </span>
+          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
+            台股市場情緒儀表板
+          </span>
         </div>
-        <span
+        <button
+          type="button"
+          aria-label="選項"
           style={{
-            fontSize: '11px',
-            padding: '2px 8px',
-            borderRadius: '9999px',
-            backgroundColor: badgeMeta.bg,
-            color: badgeMeta.color,
-            fontWeight: 600,
-            border: `1px solid ${badgeMeta.border}`,
+            background: 'transparent',
+            border: 'none',
+            color: '#64748b',
+            cursor: 'pointer',
+            padding: '2px',
+            display: 'flex',
+            alignItems: 'center',
           }}
         >
-          {badgeMeta.label}
-        </span>
+          <MoreVertical size={14} />
+        </button>
       </div>
 
-      {/* 主體：左側半圓指針速度計 + 右側三類參與者情緒水平條 */}
+      {/* 主體：左側半圓彩虹儀表 + 右側參與者情緒水平條 */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '120px 1fr',
+          gridTemplateColumns: '110px 1fr',
           gap: '12px',
           alignItems: 'center',
-          padding: '4px 0',
+          flex: 1,
         }}
       >
-        {/* 左側 SVG 半圓速度計 */}
+        {/* 左側半圓指針儀表 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <svg width="120" height="66" viewBox="0 0 120 66">
-            <defs>
-              <linearGradient id="sentimentGaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#38bdf8" />
-                <stop offset="50%" stopColor="#fbbf24" />
-                <stop offset="100%" stopColor="#ef4444" />
-              </linearGradient>
-            </defs>
-            {/* 底軌 */}
-            <path
-              d="M 15 58 A 45 45 0 0 1 105 58"
-              fill="none"
-              stroke="rgba(255, 255, 255, 0.08)"
-              strokeWidth="7"
-              strokeLinecap="round"
-            />
-            {/* 彩色漸層弧 */}
-            <path
-              d="M 15 58 A 45 45 0 0 1 105 58"
-              fill="none"
-              stroke="url(#sentimentGaugeGrad)"
-              strokeWidth="7"
-              strokeLinecap="round"
-            />
-            {/* 刻度文字 */}
-            <text x="12" y="65" fill="#64748b" fontSize="8" textAnchor="start">
-              恐慌
-            </text>
-            <text x="60" y="16" fill="#64748b" fontSize="8" textAnchor="middle">
-              50
-            </text>
-            <text x="108" y="65" fill="#64748b" fontSize="8" textAnchor="end">
-              貪婪
-            </text>
-            {/* 旋轉指針 */}
-            <g transform={`rotate(${needleAngle} 60 58)`} style={{ transition: 'transform 0.5s ease' }}>
-              <line x1="60" y1="58" x2="60" y2="24" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
-              <circle cx="60" cy="58" r="4" fill="#ffffff" />
-            </g>
-          </svg>
-          <span style={{ fontSize: '13px', fontWeight: 700, color: badgeMeta.color, marginTop: '2px' }}>
-            {index}
+          <div style={{ width: '100px', height: '58px', position: 'relative' }}>
+            <svg width="100" height="58" viewBox="0 0 100 58">
+              <defs>
+                <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#38bdf8" />
+                  <stop offset="35%" stopColor="#10b981" />
+                  <stop offset="50%" stopColor="#fbbf24" />
+                  <stop offset="75%" stopColor="#f97316" />
+                  <stop offset="100%" stopColor="#ef4444" />
+                </linearGradient>
+              </defs>
+              {/* 弧形軌道 */}
+              <path
+                d="M 12 50 A 38 38 0 0 1 88 50"
+                fill="none"
+                stroke="url(#gaugeGrad)"
+                strokeWidth="7"
+                strokeLinecap="round"
+              />
+              {/* 刻度點 50 */}
+              <circle cx="50" cy="12" r="1.5" fill="#ffffff" opacity="0.6" />
+              {/* 中心圓軸 */}
+              <circle cx="50" cy="50" r="5" fill="#f8fafc" />
+              {/* 指針 */}
+              <line
+                x1="50"
+                y1="50"
+                x2="50"
+                y2="18"
+                stroke="#f8fafc"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                transform={`rotate(${needleAngle} 50 50)`}
+                style={{ transition: 'transform 0.6s ease' }}
+              />
+            </svg>
+          </div>
+          <span style={{ fontSize: '0.72rem', color: '#cbd5e1', marginTop: '2px', fontWeight: 600 }}>
+            市場情緒：<span style={{ color: '#fbbf24', fontWeight: 800 }}>中性</span>
           </span>
         </div>
 
-        {/* 右側 3 類參與者情緒進度條 */}
+        {/* 右側 3 條水平情緒條 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {participantBars.map((bar) => (
             <div key={bar.label} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
-                <span style={{ color: '#94a3b8' }}>{bar.label}</span>
-                <span style={{ color: '#f8fafc', fontWeight: 600 }}>{bar.percent}%</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
+                <span style={{ color: '#94a3b8' }}>{bar.label}：</span>
+                <span style={{ color: '#f8fafc', fontWeight: 700, fontFamily: 'monospace' }}>
+                  {bar.percent}%
+                </span>
               </div>
               <div
                 style={{
                   width: '100%',
-                  height: '6px',
-                  backgroundColor: '#0f172a',
-                  borderRadius: '9999px',
+                  height: '5px',
+                  backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                  borderRadius: '3px',
                   overflow: 'hidden',
+                  border: '1px solid rgba(255, 255, 255, 0.05)',
                 }}
               >
                 <div
@@ -170,7 +189,8 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
                     width: `${bar.percent}%`,
                     height: '100%',
                     backgroundColor: bar.color,
-                    borderRadius: '9999px',
+                    borderRadius: '3px',
+                    boxShadow: `0 0 6px ${bar.color}66`,
                     transition: 'width 0.4s ease',
                   }}
                 />
@@ -178,22 +198,6 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
             </div>
           ))}
         </div>
-      </div>
-
-      {/* 底部說明 */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          fontSize: '11px',
-          color: '#94a3b8',
-          paddingTop: '6px',
-          borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-        }}
-      >
-        <span>綜合市場動態情緒指標</span>
-        <strong style={{ color: badgeMeta.color, fontWeight: 600 }}>{badgeMeta.label}</strong>
       </div>
     </div>
   );

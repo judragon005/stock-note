@@ -13,18 +13,24 @@ export interface ExportActionItem {
 }
 
 export const EXPORT_ACTIONS_CONFIG: ExportActionItem[] = [
-  { id: 'DASHBOARD_PNG', label: '下載儀表板 PNG', icon: '📸' },
-  { id: 'ALL_CHARTS_PNG', label: '下載全部圖表 PNG', icon: '🖼️' },
-  { id: 'CSV', label: '下載資料 CSV', icon: '📊' },
-  { id: 'HTML', label: '下載總結報告 HTML', icon: '📑' },
-  { id: 'PDF', label: '列印 / 匯出 PDF', icon: '🖨️' },
+  { id: 'DASHBOARD_PNG', label: '下載儀表板 PNG', icon: '⬇' },
+  { id: 'ALL_CHARTS_PNG', label: '下載全部圖表 PNG', icon: '⬇' },
+  { id: 'CSV', label: '下載資料 CSV', icon: '⬇' },
+  { id: 'HTML', label: '下載總結報告 HTML', icon: '⬇' },
+  { id: 'PDF', label: '列印 / PDF', icon: '🖨️' },
 ];
 
 export interface HeaderExportBarProps {
   report: AiForceDashboardReport;
+  sourcesText?: string;
+  rangeText?: string;
 }
 
-export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({ report }) => {
+export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
+  report,
+  sourcesText = '資料來源：日 K TWSE | 法人 TWSE | 融資券 FinMind',
+  rangeText = '區間 2026-05-04 ~ 2026-09-18，共 98 個交易日，法人資料 20 日',
+}) => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const handleAction = (id: ExportActionItem['id']) => {
@@ -62,15 +68,21 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({ report }) => {
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
-        gap: '8px',
-        padding: '6px 12px',
+        gap: '10px',
+        padding: '6px 14px',
         backgroundColor: 'rgba(15, 23, 42, 0.65)',
         borderRadius: '10px',
         border: '1px solid rgba(255, 255, 255, 0.06)',
       }}
     >
+      {/* 左側：資料來源與區間說明 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', flexWrap: 'wrap' }}>
+        <span style={{ color: '#38bdf8', fontWeight: 600 }}>{sourcesText}</span>
+        <span style={{ color: '#94a3b8' }}>{rangeText}</span>
+      </div>
+
+      {/* 右側：5 大匯出按鈕 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '11px', color: '#94a3b8', marginRight: '4px' }}>量化決策工具匯出：</span>
         {EXPORT_ACTIONS_CONFIG.map((act) => (
           <button
             key={act.id}
@@ -80,11 +92,11 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({ report }) => {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '5px',
-              padding: '4px 10px',
+              gap: '4px',
+              padding: '4px 8px',
               borderRadius: '6px',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              backgroundColor: 'rgba(30, 41, 59, 0.8)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              backgroundColor: 'rgba(30, 41, 59, 0.85)',
               color: '#cbd5e1',
               fontSize: '11px',
               fontWeight: 500,
@@ -97,12 +109,12 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({ report }) => {
               e.currentTarget.style.color = '#38bdf8';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(30, 41, 59, 0.8)';
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+              e.currentTarget.style.backgroundColor = 'rgba(30, 41, 59, 0.85)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
               e.currentTarget.style.color = '#cbd5e1';
             }}
           >
-            <span>{act.icon}</span>
+            <span style={{ fontSize: '11px' }}>{act.icon}</span>
             <span>{act.label}</span>
           </button>
         ))}

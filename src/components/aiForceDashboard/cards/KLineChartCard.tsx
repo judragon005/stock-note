@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { KlineSystemData } from '../../../types/aiForceDashboard';
 import { ColorThemeMode } from '../../../types/stock';
+import { MoreVertical } from 'lucide-react';
 
 export interface PriceRange {
   min: number;
@@ -290,13 +291,28 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           </span>
         </div>
 
-        {/* 均線圖例 */}
+        {/* 均線圖例與選單 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.72rem' }}>
           <span style={{ color: '#fbbf24', fontWeight: 600 }}>— MA5</span>
           <span style={{ color: '#38bdf8', fontWeight: 600 }}>— MA10</span>
           <span style={{ color: '#c084fc', fontWeight: 600 }}>— MA20</span>
           <span style={{ color: '#94a3b8', fontWeight: 600 }}>⋯ MA60</span>
           <span style={{ color: '#34d399', fontWeight: 600 }}>■ 成交量</span>
+          <button
+            type="button"
+            aria-label="選項"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#64748b',
+              cursor: 'pointer',
+              padding: '2px',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <MoreVertical size={14} />
+          </button>
         </div>
       </div>
 
