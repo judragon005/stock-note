@@ -1,6 +1,8 @@
 import React from 'react';
 import type { BullBearEnergyData } from '../../../types/aiForceDashboard';
 import { MoreVertical } from 'lucide-react';
+import { TermTooltip } from '../../common/TermTooltip';
+import { diagnoseBullBearEnergy } from '../../../constants/aiForceGlossary';
 
 export interface BullBearEnergyCardProps {
   data?: BullBearEnergyData;
@@ -103,9 +105,15 @@ export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({ data }) 
           >
             10
           </span>
-          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
-            AI 多空能量棒
-          </span>
+          <TermTooltip
+            termId="bullBearRatio"
+            dynamicDiagnosis={diagnoseBullBearEnergy(bull, bear, ratio)}
+            showIcon={true}
+          >
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
+              AI 多空能量棒
+            </span>
+          </TermTooltip>
         </div>
         <button
           type="button"
@@ -137,9 +145,11 @@ export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({ data }) 
       >
         {/* 多方能量 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '0.74rem', color: '#cbd5e1', width: '56px', whiteSpace: 'nowrap' }}>
-            多方能量
-          </span>
+          <TermTooltip termId="bullEnergy">
+            <span style={{ fontSize: '0.74rem', color: '#cbd5e1', width: '56px', whiteSpace: 'nowrap' }}>
+              多方能量
+            </span>
+          </TermTooltip>
           <div
             style={{
               flex: 1,
@@ -178,9 +188,11 @@ export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({ data }) 
 
         {/* 空方能量 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '0.74rem', color: '#cbd5e1', width: '56px', whiteSpace: 'nowrap' }}>
-            空方能量
-          </span>
+          <TermTooltip termId="bearEnergy">
+            <span style={{ fontSize: '0.74rem', color: '#cbd5e1', width: '56px', whiteSpace: 'nowrap' }}>
+              空方能量
+            </span>
+          </TermTooltip>
           <div
             style={{
               flex: 1,
@@ -229,7 +241,9 @@ export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({ data }) 
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>多空比：</span>
+          <TermTooltip termId="bullBearRatio" dynamicDiagnosis={diagnoseBullBearEnergy(bull, bear, ratio)}>
+            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>多空比：</span>
+          </TermTooltip>
           <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', fontFamily: 'monospace' }}>
             {ratio} 倍多
           </span>

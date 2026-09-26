@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { MainForceVerdictData } from '../../../types/aiForceDashboard';
 import { MoreVertical } from 'lucide-react';
+import { TermTooltip } from '../../common/TermTooltip';
 
 export interface MainForceVerdictCardProps {
   data?: MainForceVerdictData;
@@ -69,9 +70,11 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '18px' }}>🔮</span>
-          <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#f8fafc', letterSpacing: '0.2px' }}>
-            18 主力追蹤總評判 <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 500 }}>(MLP-AI)</span>
-          </h3>
+          <TermTooltip termId="mlpSemanticVerdict">
+            <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#f8fafc', letterSpacing: '0.2px', cursor: 'help' }}>
+              18 主力追蹤總評判 <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 500 }}>(MLP-AI)</span>
+            </h3>
+          </TermTooltip>
         </div>
         <MoreVertical size={14} style={{ color: '#64748b', cursor: 'pointer' }} />
       </div>
@@ -86,18 +89,23 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '16px', color: '#ffffff', fontWeight: 700 }}>主力語意：</span>
-          <span
-            style={{
-              fontSize: '22px',
-              fontWeight: 800,
-              color: verbStyle.color,
-              letterSpacing: '1px',
-              textShadow: `0 0 16px ${verbStyle.color}60`,
-            }}
-          >
-            {verb}
-          </span>
+          <TermTooltip termId="mlpSemanticVerdict">
+            <span style={{ fontSize: '16px', color: '#ffffff', fontWeight: 700, cursor: 'help' }}>主力語意：</span>
+          </TermTooltip>
+          <TermTooltip termId="mlpSemanticVerdict">
+            <span
+              style={{
+                fontSize: '22px',
+                fontWeight: 800,
+                color: verbStyle.color,
+                letterSpacing: '1px',
+                textShadow: `0 0 16px ${verbStyle.color}60`,
+                cursor: 'help',
+              }}
+            >
+              {verb}
+            </span>
+          </TermTooltip>
         </div>
 
         <button
@@ -120,19 +128,22 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
       </div>
 
       {/* 完整 AI 研判結論文字 */}
-      <div
-        style={{
-          fontSize: '12px',
-          lineHeight: 1.6,
-          color: '#cbd5e1',
-          padding: '10px 12px',
-          backgroundColor: 'rgba(15, 23, 42, 0.5)',
-          borderRadius: '8px',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-        }}
-      >
-        {verdictText}
-      </div>
+      <TermTooltip termId="mlpSemanticVerdict">
+        <div
+          style={{
+            fontSize: '12px',
+            lineHeight: 1.6,
+            color: '#cbd5e1',
+            padding: '10px 12px',
+            backgroundColor: 'rgba(15, 23, 42, 0.5)',
+            borderRadius: '8px',
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+            cursor: 'help',
+          }}
+        >
+          {verdictText}
+        </div>
+      </TermTooltip>
 
       {/* 法人動作彈窗 / 浮層 */}
       {showModal && (

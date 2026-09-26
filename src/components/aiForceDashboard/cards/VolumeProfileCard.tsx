@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { VolumeProfileData, VolumeProfileBucket } from '../../../types/aiForceDashboard';
 import { MoreVertical } from 'lucide-react';
+import { TermTooltip } from '../../common/TermTooltip';
 
 export interface BucketStyle {
   color: string;
@@ -170,9 +171,11 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
           >
             04
           </span>
-          <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#f8fafc' }}>
-            AI 籌碼熱區圖
-          </span>
+          <TermTooltip termId="volumeHeavy" showIcon={true}>
+            <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#f8fafc' }}>
+              AI 籌碼熱區圖
+            </span>
+          </TermTooltip>
         </div>
         <button
           type="button"
@@ -277,6 +280,13 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
         >
           {buckets.map((b, idx) => {
             const style = getBucketStyle(b.type);
+            const termMap: Record<VolumeProfileBucket['type'], string> = {
+              resistance: 'volumeResistance',
+              heavy: 'volumeHeavy',
+              dense: 'volumeDense',
+              flat: 'volumeBreakeven',
+              support: 'volumeSupport',
+            };
             return (
               <div key={idx} style={{ display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -289,7 +299,9 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
                       boxShadow: `0 0 6px ${style.color}66`,
                     }}
                   />
-                  <span style={{ color: '#cbd5e1', fontSize: '0.7rem' }}>{b.label}</span>
+                  <TermTooltip termId={termMap[b.type]}>
+                    <span style={{ color: '#cbd5e1', fontSize: '0.7rem' }}>{b.label}</span>
+                  </TermTooltip>
                 </div>
                 <span
                   style={{

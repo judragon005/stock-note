@@ -7,6 +7,8 @@ import {
 } from '../../../types/aiForceDashboard';
 import { ColorThemeMode } from '../../../types/stock';
 import { MoreVertical } from 'lucide-react';
+import { TermTooltip } from '../../common/TermTooltip';
+import { diagnoseMainForceCost } from '../../../constants/aiForceGlossary';
 
 export interface PriceRange {
   min: number;
@@ -425,9 +427,11 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           >
             01
           </span>
-          <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f8fafc' }}>
-            主K線圖
-          </span>
+          <TermTooltip termId="mainForceCost" dynamicDiagnosis={activeCandle ? diagnoseMainForceCost(activeCandle.close, data.keyLevels.mainForceCost) : undefined} showIcon={true}>
+            <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f8fafc' }}>
+              主K線圖
+            </span>
+          </TermTooltip>
           <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
             | AI 主力行為判讀系統
           </span>
@@ -470,10 +474,18 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
 
         {/* 均線圖例、副圖指標切換與選單 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem' }}>
-          <span style={{ color: '#fbbf24', fontWeight: 600 }}>— MA5</span>
-          <span style={{ color: '#38bdf8', fontWeight: 600 }}>— MA10</span>
-          <span style={{ color: '#c084fc', fontWeight: 600 }}>— MA20</span>
-          <span style={{ color: '#94a3b8', fontWeight: 600 }}>⋯ MA60</span>
+          <TermTooltip termId="ma5">
+            <span style={{ color: '#fbbf24', fontWeight: 600 }}>— MA5</span>
+          </TermTooltip>
+          <TermTooltip termId="ma10">
+            <span style={{ color: '#38bdf8', fontWeight: 600 }}>— MA10</span>
+          </TermTooltip>
+          <TermTooltip termId="ma20">
+            <span style={{ color: '#c084fc', fontWeight: 600 }}>— MA20</span>
+          </TermTooltip>
+          <TermTooltip termId="ma60">
+            <span style={{ color: '#94a3b8', fontWeight: 600 }}>⋯ MA60</span>
+          </TermTooltip>
 
           {/* 副圖指標切換按鈕 */}
           <div
@@ -487,26 +499,35 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
               gap: '2px',
             }}
           >
-            {(['VOL', 'KD', 'MACD', 'RSI'] as SubchartIndicatorMode[]).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setSubchartMode(m)}
-                style={{
-                  padding: '2px 6px',
-                  borderRadius: '4px',
-                  border: 'none',
-                  background: subchartMode === m ? 'rgba(16, 185, 129, 0.8)' : 'transparent',
-                  color: subchartMode === m ? '#ffffff' : '#94a3b8',
-                  fontSize: '0.68rem',
-                  fontWeight: subchartMode === m ? 700 : 500,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                {m === 'VOL' ? '量' : m}
-              </button>
-            ))}
+            {(['VOL', 'KD', 'MACD', 'RSI'] as SubchartIndicatorMode[]).map((m) => {
+              const termMap: Record<SubchartIndicatorMode, string> = {
+                VOL: 'volumeShares',
+                KD: 'kd',
+                MACD: 'macd',
+                RSI: 'rsi',
+              };
+              return (
+                <TermTooltip key={m} termId={termMap[m]} underline={false}>
+                  <button
+                    type="button"
+                    onClick={() => setSubchartMode(m)}
+                    style={{
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      border: 'none',
+                      background: subchartMode === m ? 'rgba(16, 185, 129, 0.8)' : 'transparent',
+                      color: subchartMode === m ? '#ffffff' : '#94a3b8',
+                      fontSize: '0.68rem',
+                      fontWeight: subchartMode === m ? 700 : 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {m === 'VOL' ? '量' : m}
+                  </button>
+                </TermTooltip>
+              );
+            })}
           </div>
 
           <button

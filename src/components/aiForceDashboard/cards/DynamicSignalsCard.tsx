@@ -1,6 +1,7 @@
 import React from 'react';
 import type { DynamicSignalsData } from '../../../types/aiForceDashboard';
 import { MoreVertical } from 'lucide-react';
+import { TermTooltip } from '../../common/TermTooltip';
 
 export interface DynamicSignalsCardProps {
   data?: DynamicSignalsData;
@@ -70,11 +71,11 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
   const verdictLabel = data?.verdictLabel ?? '紅燈 (高風險)';
 
   const signalItems = [
-    { title: '趨勢：', value: trendSignal, color: '#f87171' },
-    { title: '籌碼：', value: chipSignal, color: '#fbbf24' },
-    { title: '動能：', value: momentumSignal, color: '#f87171' },
-    { title: '風險：', value: riskSignal, color: '#f87171' },
-    { title: '燈號：', value: verdictLabel, color: '#ef4444' },
+    { title: '趨勢：', value: trendSignal, color: '#f87171', termId: 'decisionTrend' },
+    { title: '籌碼：', value: chipSignal, color: '#fbbf24', termId: 'chipStructure' },
+    { title: '動能：', value: momentumSignal, color: '#f87171', termId: 'radarMomentum' },
+    { title: '風險：', value: riskSignal, color: '#f87171', termId: 'volatilityRisk' },
+    { title: '燈號：', value: verdictLabel, color: '#ef4444', termId: 'trafficLight' },
   ];
 
   return (
@@ -114,9 +115,11 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
           >
             12
           </span>
-          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
-            AI 主力動態信號判斷
-          </span>
+          <TermTooltip termId="trafficLight">
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc', cursor: 'help' }}>
+              AI 主力動態信號判斷
+            </span>
+          </TermTooltip>
         </div>
         <button
           type="button"
@@ -155,7 +158,9 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
               fontSize: '0.74rem',
             }}
           >
-            <span style={{ color: '#94a3b8' }}>{item.title}</span>
+            <TermTooltip termId={item.termId}>
+              <span style={{ color: '#94a3b8', cursor: 'help' }}>{item.title}</span>
+            </TermTooltip>
             <span
               style={{
                 color: item.color,
@@ -179,19 +184,23 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
           fontSize: '0.72rem',
         }}
       >
-        <span style={{ color: '#94a3b8' }}>目前燈號：</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <span
-            style={{
-              width: '7px',
-              height: '7px',
-              borderRadius: '50%',
-              backgroundColor: '#ef4444',
-              boxShadow: '0 0 8px #ef4444',
-            }}
-          />
-          <span style={{ color: '#ef4444', fontWeight: 800 }}>紅燈</span>
-        </div>
+        <TermTooltip termId="trafficLight">
+          <span style={{ color: '#94a3b8', cursor: 'help' }}>目前燈號：</span>
+        </TermTooltip>
+        <TermTooltip termId="trafficLight">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'help' }}>
+            <span
+              style={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                backgroundColor: '#ef4444',
+                boxShadow: '0 0 8px #ef4444',
+              }}
+            />
+            <span style={{ color: '#ef4444', fontWeight: 800 }}>紅燈</span>
+          </div>
+        </TermTooltip>
       </div>
     </div>
   );

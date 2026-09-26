@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ChipsSummaryData } from '../../../types/aiForceDashboard';
 import { MoreVertical } from 'lucide-react';
+import { TermTooltip } from '../../common/TermTooltip';
 
 export interface ChipsSummaryCardProps {
   data?: ChipsSummaryData;
@@ -69,10 +70,10 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
   };
 
   const chipItems = [
-    { label: '外資', value: foreign },
-    { label: '投信', value: trust },
-    { label: '自營商', value: dealer },
-    { label: '三大法人', value: total, isMajor: true },
+    { label: '外資', value: foreign, termId: 'foreignFlow' },
+    { label: '投信', value: trust, termId: 'trustFlow' },
+    { label: '自營商', value: dealer, termId: 'dealerFlow' },
+    { label: '三大法人', value: total, isMajor: true, termId: 'totalInstFlow' },
   ];
 
   return (
@@ -112,9 +113,11 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
           >
             15
           </span>
-          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
-            籌碼異動摘要
-          </span>
+          <TermTooltip termId="totalInstFlow">
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc', cursor: 'help' }}>
+              籌碼異動摘要
+            </span>
+          </TermTooltip>
         </div>
         <button
           type="button"
@@ -155,9 +158,11 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
                 fontSize: '0.74rem',
               }}
             >
-              <span style={{ color: item.isMajor ? '#e2e8f0' : '#94a3b8', fontWeight: item.isMajor ? 700 : 500 }}>
-                {item.label}
-              </span>
+              <TermTooltip termId={item.termId}>
+                <span style={{ color: item.isMajor ? '#e2e8f0' : '#94a3b8', fontWeight: item.isMajor ? 700 : 500, cursor: 'help' }}>
+                  {item.label}
+                </span>
+              </TermTooltip>
               <span
                 style={{
                   color: getShareColor(item.value),
@@ -215,9 +220,11 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
         }}
       >
         <span style={{ color: '#94a3b8' }}>{note}</span>
-        <span style={{ color: '#f87171', fontWeight: 800 }}>
-          結論：{conclusionBadge}
-        </span>
+        <TermTooltip termId="totalInstFlow">
+          <span style={{ color: '#f87171', fontWeight: 800, cursor: 'help' }}>
+            結論：{conclusionBadge}
+          </span>
+        </TermTooltip>
       </div>
     </div>
   );

@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 import { ForecastConeData } from '../../../types/aiForceDashboard';
 import { MoreVertical } from 'lucide-react';
+import { TermTooltip } from '../../common/TermTooltip';
+import { diagnoseForecastCone } from '../../../constants/aiForceGlossary';
 
 export interface Point {
   x: number;
@@ -310,9 +312,15 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
           >
             06
           </span>
-          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
-            累積型 AI 預測路徑圖
-          </span>
+          <TermTooltip
+            termId="forecastUp"
+            dynamicDiagnosis={diagnoseForecastCone(data.bullishProb ?? 48, data.bearishProb ?? 44)}
+            showIcon={true}
+          >
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
+              累積型 AI 預測路徑圖
+            </span>
+          </TermTooltip>
           <span style={{ fontSize: '0.7rem', color: '#64748b' }}>
             | 依 60 日報酬統計推估
           </span>
@@ -345,9 +353,15 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
           marginBottom: '6px',
         }}
       >
-        <span style={{ color: '#ef4444', fontWeight: 600 }}>■ 紅色：上漲機率 {data.bullishProb}%</span>
-        <span style={{ color: '#fbbf24', fontWeight: 600 }}>■ 黃色：震盪機率 {data.rangeProb}%</span>
-        <span style={{ color: '#10b981', fontWeight: 600 }}>■ 綠色：下跌機率 {data.bearishProb}%</span>
+        <TermTooltip termId="forecastUp">
+          <span style={{ color: '#ef4444', fontWeight: 600 }}>■ 紅色：上漲機率 {data.bullishProb}%</span>
+        </TermTooltip>
+        <TermTooltip termId="forecastRange">
+          <span style={{ color: '#fbbf24', fontWeight: 600 }}>■ 黃色：震盪機率 {data.rangeProb}%</span>
+        </TermTooltip>
+        <TermTooltip termId="forecastDown">
+          <span style={{ color: '#10b981', fontWeight: 600 }}>■ 綠色：下跌機率 {data.bearishProb}%</span>
+        </TermTooltip>
       </div>
 
       {/* SVG 預測錐繪製區 */}
@@ -470,7 +484,9 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>主力方向機率：</span>
+          <TermTooltip termId="forecastUp" dynamicDiagnosis={diagnoseForecastCone(data.bullishProb ?? 48, data.bearishProb ?? 44)}>
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>主力方向機率：</span>
+          </TermTooltip>
           <span
             style={{
               fontSize: '0.78rem',
@@ -483,7 +499,9 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>強弱指標：</span>
+          <TermTooltip termId="annualDrift">
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>強弱指標：</span>
+          </TermTooltip>
           <span
             style={{
               fontSize: '0.78rem',

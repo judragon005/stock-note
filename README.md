@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1140%2F1140%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1169%2F1169%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,20 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. AI 主力戰情室響應式 Bento-Grid 重構與雙層繁中行情列 (`AI Force Responsive Bento-Grid & Two-Tier Market Bar`) *(V8.58.0 全新發布)*
+### 0. AI 主力戰情室新手白話決策字典與全模組自適應浮動提示視窗 (`AI Force Beginner Decision Glossary & TermTooltip`) *(V8.60.0 全新發布)*
+- **新手白話決策字典單一來源真相 (`Beginner Decision Glossary SSOT`)**：
+  - 收錄全戰情室 30+ 個關鍵量化與交易名詞，涵蓋頂部行情 Bar、18 張 Bento-Grid 卡片與 5 大任務視圖。
+  - **三段式直觀結構**：
+    - **【💡 白話比喻】**：以日常生活概念解釋金融本質（如「主力成本」即批發大老闆進貨的底牌進價）。
+    - **【📊 指標含義】**：說明統計公式與量化物理意義。
+    - **【🎯 買賣操作指引】**：明確劃分「🟢 偏多買訊（何時買或抱）」、「🔴 偏空賣訊（何時賣或停損）」與「🟡 觀望警戒」，新手一秒看懂當下該買該賣。
+  - **動態個股穿透診斷**：提供 5 大即時評估純函式（`diagnoseMainForceCost`、`diagnoseDayTradeRisk`、`diagnoseForecastCone`、`diagnoseBullBearEnergy`、`diagnoseHealthScore`），依據當前個股數據即時運算專屬買賣建議。
+- **自適應防抖動浮動元件 (`TermTooltip Component`)**：
+  - **零依賴與防跑版 (`Zero Dependency & Anti-Layout-Shift`)**：純 CSS 與原生 React 實作，外層 Trigger 設為 `display: 'inline-flex'`、`position: 'relative'`，浮動視窗採 `position: 'absolute'`，嚴禁動態插入 block 元素引起周圍容器抖動。
+  - **邊界智慧自動翻轉 (`Smart Flip & Anti-Overflow`)**：頂部空間不足時自動向下翻轉，靠近螢幕邊界時自動調整展開對齊方向，杜絕內容被切斷。
+  - **多端支援**：支援滑鼠 Hover、行動端 Tap 點擊鎖定、ESC 鍵退出與外層點擊自動關閉。
+
+### 0. AI 主力戰情室響應式 Bento-Grid 重構與雙層繁中行情列 (`AI Force Responsive Bento-Grid & Two-Tier Market Bar`) *(V8.58.0)*
 - **雙層全功能即時行情列 (`Two-Tier Market Bar`)**：
   - **上層（操作與系統狀態列）**：左側整合大字體股票代號輸入框、股票名稱與「分析」按鈕；右側橫排 4 大全繁中科技感膠囊燈號（🟢 `AI 智慧掃描` 帶呼吸燈、🔵 `主力行為追蹤`、🟣 `市場即時狀態`、🔴 `波動異常預警`），徹底告別英文術語與擠壓。
   - **下層（寬幅即時行情大面板）**：今日收盤價（1.3rem 特大粗體）、今日漲跌/漲幅（高對比雙色發光）、成交量(張)、成交筆數、開盤、最高、最低、最新交易日、資料筆數整齊橫排，告別橫向捲軸。
