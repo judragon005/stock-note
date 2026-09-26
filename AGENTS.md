@@ -39,7 +39,12 @@
    - **強制攜帶類別標籤**：PR 必須對齊關聯 Issue 帶上類別標籤（如 `--label "enhancement"`、`--label "bug"` 或 `--label "documentation"`），嚴禁建立無標籤之裸 PR。
    - **PR 描述內必須包含 `Closes #<issue-id>`**，確保 Squash and Merge 時 GitHub 自動關閉對應 Issue。
 6. **合併與分支清理**：經 GitHub Actions CI 綠燈驗證後，執行 Squash and Merge 合併回 `main`，並同步清理遠端與本地已合併分支。
-7. **交接自動補全 (Handoff & Auto-Sync)**：每次執行 `/handoff` 收尾時，Agent **必須主動檢查 `docs/specs/`、`docs/adr/` 與 `.scratch/`**。若本次迭代有新 PRD 但尚未建立 ADR 或 `.scratch/` 鏡像，Agent 必須主動自動生成對應 ADR、導出 `.scratch/v1.X/issues/` 本地票券鏡像，並同步更新 `README.md`、`CONTEXT.md` 與交接手冊，嚴禁等待人類提醒。
+7. **交接自動補全與全面清理 (Handoff, Auto-Sync & Full Cleanup)**：每次執行 `/handoff` 收尾時，Agent **必須主動依序執行以下閉環操作，無需等待人類提醒**：
+   - **主幹合併閉環 (Mainline Squash & Merge)**：確認 PR 綠燈通過後，以 `gh pr merge <id> --squash --delete-branch` 完成主幹合併，確保遠端關聯 Issue 自動關閉。
+   - **本地分支清理 (Local Branch Pruning)**：切換回 `main` 分支並執行 `git pull origin main` 同步最新狀態；執行 `git fetch -p` 清除遠端已刪除的追蹤分支；自動刪除本地所有已合併之 feature/fix 分支（如 `git branch -D`），確保本地僅保留單一且乾淨的 `main` 分支。
+   - **工作區乾淨驗證 (Workspace Sanitization)**：確認 `git status` 顯示 100% 乾淨（`working tree clean`），無任何未提交（uncommitted）之程式碼或遺留暫存變更。
+   - **專案內臨時檔案清理 (Temp File Cleanup)**：主動檢查並清理開發過程中產生的臨時檔案（如 `*.tmp`, `*.temp`, `*.log`, `*.bak`, 臨時備份檔 `.bundle`、暫存測試產物等），杜絕垃圾檔案污染工作區或膨脹容量。
+   - **ADR 與領域文件自動補全**：主動檢查 `docs/specs/`、`docs/adr/` 與 `.scratch/`。若本次迭代有新 PRD 但尚未建立 ADR 或 `.scratch/` 鏡像，Agent 必須主動自動生成對應 ADR、導出 `.scratch/v1.X/issues/` 本地票券鏡像，並同步更新 `README.md`、`CONTEXT.md` 與交接手冊。
 8. **技術債與改善建議管理 (Technical Debt Tracking)**：
    - 在程式碼審查 (`/code-review`) 或交接時，若存在識別出但「未在當期 PR 即時修改」之架構改善建議，Agent 必須主動建檔至 `docs/debts/` 並更新 `docs/debts/README.md` 索引。
    - 僅收錄未即時修改之建議；當期已修復完成者不建檔；已解決之技術債標記為 `RESOLVED`。
