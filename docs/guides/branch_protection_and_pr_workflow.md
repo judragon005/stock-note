@@ -136,6 +136,23 @@ gh pr merge --squash --delete-branch
 
 ---
 
+### 步驟 5：執行 /handoff 結案閉環（主幹合併、本地分支清理、工作區與臨時檔清理）
+每次任務完成發起 `/handoff` 收尾時，必須確保以下四大清理動作全量完成：
+1. **主幹合併確認**：PR 經 CI 綠燈後以 Squash & Merge 合併回 `main`，關聯 Issue 同步關閉。
+2. **本地分支清理**：
+   ```powershell
+   git checkout main
+   git pull origin main
+   git fetch -p
+   # 刪除本地所有已合併的分支，保持只有 main
+   git branch | Where-Object { $_ -notmatch "^\* main$" } | ForEach-Object { git branch -D $_.Trim() }
+   ```
+3. **工作區清理驗證**：執行 `git status` 確認輸出為 `nothing to commit, working tree clean`。
+4. **專案內臨時檔案清理**：主動清除開發過程中可能產生的 `*.tmp`, `*.temp`, `*.log`, `*.bak` 或臨時 `.bundle` 備份檔。
+5. **文檔與鏡像同步**：自動補齊 ADR、導出 `.scratch/v1.X/issues/` 票券鏡像並更新 `README.md`、`CONTEXT.md` 與交接手冊。
+
+---
+
 ## 第三部分：常見問題與防呆救援（FAQ）
 
 ### Q1：如果不小心在 `main` 分支寫了代碼且 `git push` 被拒絕，怎麼辦？
