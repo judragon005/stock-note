@@ -1862,6 +1862,13 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - **Card 16 (forceDistribution)**：依據 20 日紅黑 K 量能比例動態推算大戶買盤、散戶買盤與散戶賣壓三環佔比。
   - **Card 17 (bullBearStrength)**：依據 RSI、KD、月線位置與量能強度推算多空強度比與 1~5 級信號。
 
+- **Task Views Dynamic Binding & Native SVG Indicator Charts (底部 5 大任務視圖動態資料綁定與原生 SVG 繪圖)** *(新增於 V8.56.0 / Spec #0143 / Issue #107)*:
+  - **任務二 (TechnicalAlertsView)**：純函式 `generateTechnicalAlerts` 動態掃描均線排列發散、主力 VWAP 乖離突變、KD/RSI 動能過熱/超跌與隔日沖換手率，顯示真實數值與時戳，徹底消滅致茂寫死假數據。
+  - **任務三 (KdMaView)**：`deriveKdMaMetrics` 即時計算最新 K/D/MA20 數值與交叉狀態，以純原生 SVG 繪製近 30 日粉紅 K 線與橙黃 D 線折線及 80/20 刻度線。
+  - **任務四 (MacdView)**：`deriveMacdMetrics` 即時綁定最新 DIF/MACD/OSC 數值與紅綠柱擴張狀態，以純原生 SVG 繪製零軸、直方柱與雙線軌跡。
+  - **任務五 (RawDataView)**：`paginateCandles` 支援按日期降序排列與每頁 10 筆之客戶端分頁切換，顯示完整歷史日 K、成交量與多維指標明細。
+
+
 
 
 
