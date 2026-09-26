@@ -1802,22 +1802,31 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 
 ### AI 主力行為判讀與全功能量化決策儀表板 *(新增於 V8.53.0 / Spec #0140 / Issue #93)*
 
-- **AI Force Decision Dashboard (主力戰情室)**:
+- **AI Force Decision Dashboard (主力戰情室 4 排 Bento-Grid 佈局)**:
   - 核心定義：整合 18 張多維度分析卡片、5 大任務視圖切換與 5 大格式匯出之高階量化分析戰情室，單一聚合資料契約為 `AiForceDashboardReport`。
-- **Volume Profile (成交量價位分佈熱區)**:
-  - 核心機制：透過 `volumeProfileEngine` 統計歷史成交量在各價格區間之集中度，標示主力建倉與套牢籌碼峰值。
-- **VWAP Cost Structure (主力成本結構)**:
-  - 核心機制：依據 20 日成交量加權平均價格 (VWAP) 計算多頭突破區、大量成交區、主力成本區與套牢區之偏離帶。
+  - **4 排 Bento-Grid 視覺矩陣**：
+    - **Row 1 (5 卡)**：01 主 K 線（MA 均線與三大關鍵水線）、02 AI 決策核心（警告橫幅與 8 大項目）、03 多維度雷達（6 軸綜合評分）、04 垂直籌碼熱區（價格階梯熱力圖）、05 風險雷達（5 軸風險蛛網）。
+    - **Row 2 (4 卡)**：06 預測路徑圖（60日統計扇形錐體）、07 主力成本結構（波形堆疊圖）、08 法人行為計量（雙軸柱狀圖與近 3 日明細表）、09 隔日沖風險（5 大風險進度條與籌碼過手率）。
+    - **Row 3 (6 卡等寬)**：10 AI 多空能量棒（水平對比條與紅黑 K 量能比）、11 健康度綜合評估（5 環並排進度儀）、12 動態信號判斷（5 行狀態與紅綠燈號）、13 台股市場情緒儀表板（彩虹半圓指針速度計）、14 AI 信心維度（5 項演算法信心條）、15 籌碼異動摘要（法人淨額與 2300/1300 Sparkline）。
+    - **Row 4 (3 卡)**：16 買賣力分布圖（並排 3 個獨立進度環：大戶買盤、散戶買盤、散戶賣盤）、17 多空強度分布（並排 3 環進度與 1~5 級信號）、18 主力追蹤總評判（超大字語意看板、法人動作按鈕與情境分析文案）。
+- **Dual-Row Integrated Header Bar (頂部雙列整合列)**:
+  - **第 1 列**：整合 4 大狀態指示膠囊（AI SCAN ACTIVE、MAIN FORCE TRACKING、MARKET STATUS、VOLATILITY ALERT）、發光代號即時輸入框、股票名稱、分析按鈕與 10 大即時行情指標（收盤價、漲跌額、漲幅、成交量、成交筆數、開盤、最高、最低、最新交易日、資料筆數）。
+  - **第 2 列**：左側展示資料來源說明標籤（日 K TWSE | 法人 TWSE | 融資券 FinMind 與統計區間），右側排列 5 大匯出工具按鈕。
+- **Vertical Heatmap Volume Profile (垂直價格階梯熱區圖)**:
+  - 核心機制：透過 `volumeProfileEngine` 統計歷史成交量在 Y 軸價格階梯（如 1600~2400）之分佈密度，標示壓力區、大量成交區、密集成交區、價平區與去撐區 5 大分佈百分比。
+- **Wave Area Stack VWAP Cost Structure (主力成本結構波形堆疊圖)**:
+  - 核心機制：以平滑三次貝茲波形堆疊呈現倉儲成本、買平成本、主力成本區與大量成交區在時間軸上的動態滲透，並計算 20 日 VWAP 偏離強弱指標。
 - **Day Trade Risk Index (隔日沖風險指數)**:
-  - 核心機制：透過 `dayTradeRiskEngine` 計算主力賣出異常、換手率、沖銷比例、隔日回檔風險與日內波動率 5 大量化指標，輸出低/中/高風險指數。
-- **Market Sentiment Gauge (市場情緒速度計)**:
-  - 核心機制：透過 `marketSentimentEngine` 推估整體恐慌/中性/貪婪情緒指數，並細分散戶、法人與主力參與者情緒水平條。
+  - 核心機制：透過 `dayTradeRiskEngine` 計算主力賣出異常、籌碼過手率、沖銷比例、隔日回檔風險與日內波動率 5 大量化指標，輸出低/中/高風險等級與風險指數。
+- **Market Sentiment Gauge (台股市場情緒儀表板)**:
+  - 核心機制：校正標題移除多餘合字，透過 `marketSentimentEngine` 推估整體情緒指數，並細分散戶、法人與主力參與者情緒水平條。
 - **MLP-AI Main Force Semantic Synthesis (主力語意分析合成)**:
-  - 核心機制：由 `mainForceSemanticEngine` 綜合法人 5 日買賣超、VWAP 偏離與 RSI，動態生成核心語意動作動詞（調節減碼、積極進貨等）與自然語言研判結論。
+  - 核心機制：由 `mainForceSemanticEngine` 綜合法人 5 日買賣超、VWAP 偏離與 RSI，動態生成核心語意動作動詞（調節減碼、積極進貨等）與自然語言研判結論，右側提供法人動作彈窗互動。
 - **Task Views Switcher (5 大任務視圖切換器)**:
   - 包含任務一（綜合分析報告 18 卡 Bento Grid）、任務二（技術警示報告）、任務三（KD+MA 圖表）、任務四（MACD 圖表）與任務五（原始量化數據總表）。
 - **Safe Export Pipeline (5 大安全匯出管線)**:
   - 包含儀表板 PNG 快照、全部圖表 PNG、具備 DDE 巨集防禦之安全 CSV 數據報表、單檔離線 HTML 總結報告與原生 `@media print` PDF 匯出。
+
 
 
 

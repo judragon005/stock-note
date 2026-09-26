@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { MainForceVerdictData } from '../../../types/aiForceDashboard';
+import { MoreVertical } from 'lucide-react';
 
 export interface MainForceVerdictCardProps {
   data?: MainForceVerdictData;
@@ -56,85 +57,78 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
         backdropFilter: 'blur(16px)',
         border: '1px solid rgba(255, 255, 255, 0.12)',
         borderRadius: '14px',
-        padding: '20px',
+        padding: '16px 20px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '14px',
+        gap: '12px',
         boxShadow: '0 8px 32px rgba(0, 0, 0, 0.35)',
         position: 'relative',
       }}
     >
-      {/* 頂部標題與法人動作按鈕 */}
+      {/* 頂部標題與選單圖示 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '18px' }}>🔮</span>
-          <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#f8fafc', letterSpacing: '0.2px' }}>
-            18 主力追蹤總評判 (MLP-AI)
+          <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#f8fafc', letterSpacing: '0.2px' }}>
+            18 主力追蹤總評判 <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 500 }}>(MLP-AI)</span>
           </h3>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowModal(!showModal)}
-          style={{
-            fontSize: '11px',
-            fontWeight: 600,
-            padding: '4px 12px',
-            borderRadius: '9999px',
-            backgroundColor: 'rgba(56, 189, 248, 0.12)',
-            color: '#38bdf8',
-            border: '1px solid rgba(56, 189, 248, 0.3)',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-          }}
-        >
-          <span>{tag}</span>
-          <span style={{ fontSize: '10px' }}>▾</span>
-        </button>
+        <MoreVertical size={14} style={{ color: '#64748b', cursor: 'pointer' }} />
       </div>
 
-      {/* 醒目超大字核心語意看板 */}
+      {/* 醒目超大字核心語意看板與法人動作按鈕 */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '12px',
-          padding: '12px 16px',
-          borderRadius: '10px',
-          backgroundColor: 'rgba(15, 23, 42, 0.65)',
-          border: '1px solid rgba(255, 255, 255, 0.06)',
+          justifyContent: 'space-between',
+          padding: '6px 0',
         }}
       >
-        <span style={{ fontSize: '14px', color: '#94a3b8', fontWeight: 500 }}>主力語意：</span>
-        <span
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '16px', color: '#ffffff', fontWeight: 700 }}>主力語意：</span>
+          <span
+            style={{
+              fontSize: '22px',
+              fontWeight: 800,
+              color: verbStyle.color,
+              letterSpacing: '1px',
+              textShadow: `0 0 16px ${verbStyle.color}60`,
+            }}
+          >
+            {verb}
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowModal(!showModal)}
           style={{
-            fontSize: '24px',
-            fontWeight: 800,
-            color: verbStyle.color,
-            padding: '2px 14px',
+            fontSize: '12px',
+            fontWeight: 600,
+            padding: '5px 14px',
             borderRadius: '8px',
-            backgroundColor: verbStyle.bg,
-            border: `1px solid ${verbStyle.border}`,
-            letterSpacing: '1px',
-            textShadow: `0 0 16px ${verbStyle.color}60`,
+            backgroundColor: 'rgba(56, 189, 248, 0.15)',
+            color: '#38bdf8',
+            border: '1px solid rgba(56, 189, 248, 0.4)',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
           }}
         >
-          {verb}
-        </span>
+          {tag}
+        </button>
       </div>
 
       {/* 完整 AI 研判結論文字 */}
       <div
         style={{
-          fontSize: '13px',
-          lineHeight: 1.7,
+          fontSize: '12px',
+          lineHeight: 1.6,
           color: '#cbd5e1',
-          padding: '12px 14px',
-          backgroundColor: 'rgba(15, 23, 42, 0.4)',
+          padding: '10px 12px',
+          backgroundColor: 'rgba(15, 23, 42, 0.5)',
           borderRadius: '8px',
-          borderLeft: `3px solid ${verbStyle.color}`,
+          border: '1px solid rgba(255, 255, 255, 0.05)',
         }}
       >
         {verdictText}

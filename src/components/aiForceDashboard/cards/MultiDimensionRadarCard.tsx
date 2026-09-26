@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { MultiDimensionRadarData } from '../../../types/aiForceDashboard';
+import { MoreVertical } from 'lucide-react';
 
 export interface Point {
   x: number;
@@ -212,8 +213,8 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span
             style={{
-              padding: '2px 7px',
-              borderRadius: '6px',
+              padding: '2px 6px',
+              borderRadius: '5px',
               background: 'rgba(59, 130, 246, 0.25)',
               color: '#60a5fa',
               fontSize: '0.72rem',
@@ -222,34 +223,35 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
           >
             03
           </span>
-          <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#f8fafc' }}>
+          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
             多維度判讀
           </span>
         </div>
 
-        {/* 綜合評級徽章 */}
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '2px 9px',
-            borderRadius: '999px',
-            background: gradeStyle.bg,
-            border: `1px solid ${gradeStyle.borderColor}`,
-            color: gradeStyle.color,
-            fontSize: '0.74rem',
-            fontWeight: 800,
-          }}
-        >
-          <span>評級 {data.overallGrade} 級</span>
-          <span style={{ opacity: 0.6 }}>|</span>
-          <span>{data.overallScore} 分</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
+            綜合評分：<span style={{ color: '#38bdf8', fontWeight: 700, fontFamily: 'monospace' }}>{data.overallScore ?? 56} / 100</span>
+          </span>
+          <button
+            type="button"
+            aria-label="選項"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#64748b',
+              cursor: 'pointer',
+              padding: '2px',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <MoreVertical size={14} />
+          </button>
         </div>
       </div>
 
       {/* SVG 六角蛛網繪圖區 */}
-      <div style={{ width: '100%', flex: 1, minHeight: '260px', position: 'relative' }}>
+      <div style={{ width: '100%', flex: 1, minHeight: '220px', position: 'relative' }}>
         <svg
           viewBox="0 0 320 270"
           style={{ width: '100%', height: '100%', overflow: 'visible' }}
@@ -312,18 +314,29 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
             />
           ))}
 
-          {/* 中心評級微型環 */}
-          <circle cx={center.x} cy={center.y} r="18" fill="rgba(15, 23, 42, 0.85)" stroke={gradeStyle.borderColor} strokeWidth="1.5" />
+          {/* 中心評級微型環 (對齊照片：大字 C + 56/100) */}
+          <circle cx={center.x} cy={center.y} r="22" fill="rgba(15, 23, 42, 0.9)" stroke={gradeStyle.borderColor} strokeWidth="1.5" />
           <text
             x={center.x}
-            y={center.y + 4.5}
+            y={center.y - 1}
             textAnchor="middle"
             fill={gradeStyle.color}
-            fontSize="12"
+            fontSize="14"
             fontWeight="900"
             fontFamily="monospace"
           >
-            {data.overallGrade}
+            {data.overallGrade || 'C'}
+          </text>
+          <text
+            x={center.x}
+            y={center.y + 12}
+            textAnchor="middle"
+            fill="#94a3b8"
+            fontSize="8"
+            fontWeight="700"
+            fontFamily="monospace"
+          >
+            {data.overallScore ?? 56}/100
           </text>
 
           {/* 外圍 6 個維度標籤與分數 */}
@@ -337,7 +350,7 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
                 fontSize="10"
                 fontWeight="600"
               >
-                {lbl.icon} {lbl.label}
+                {lbl.label}
               </text>
               <text
                 x={lbl.x}
@@ -355,37 +368,30 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
         </svg>
       </div>
 
-      {/* 底部各維度微型條 */}
+      {/* 底部總評等級與總評分數 (對齊照片) */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '6px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
           marginTop: '6px',
-          paddingTop: '8px',
-          borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+          padding: '6px 10px',
+          borderRadius: '8px',
+          background: 'rgba(30, 41, 59, 0.45)',
+          border: '1px solid rgba(59, 130, 246, 0.15)',
+          fontSize: '0.74rem',
         }}
       >
-        {AXIS_CONFIG.map((cfg, idx) => (
-          <div
-            key={idx}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '3px 6px',
-              borderRadius: '5px',
-              background: 'rgba(30, 41, 59, 0.4)',
-              fontSize: '0.72rem',
-            }}
-          >
-            <span style={{ color: '#94a3b8' }}>{cfg.label}</span>
-            <span style={{ color: '#38bdf8', fontWeight: 700, fontFamily: 'monospace' }}>
-              {scoreValues[idx]}
-            </span>
-          </div>
-        ))}
+        <span style={{ color: '#cbd5e1' }}>
+          評級等級：<span style={{ color: gradeStyle.color, fontWeight: 800 }}>{data.overallGrade || 'C'} 級</span>
+        </span>
+        <span style={{ color: '#cbd5e1' }}>
+          評級分數：<span style={{ color: '#38bdf8', fontWeight: 800, fontFamily: 'monospace' }}>{data.overallScore ?? 56} / 100</span>
+        </span>
       </div>
     </div>
   );
 };
+
+export default MultiDimensionRadarCard;
+

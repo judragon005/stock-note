@@ -108,9 +108,11 @@ const FIVE_AXIS_CONFIG = [
   { key: 'trendRisk', label: '趨勢', icon: '📈' },
 ] as const;
 
+import { MoreVertical } from 'lucide-react';
+
 export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
-  const center: Point = { x: 160, y: 130 };
-  const maxRadius = 82;
+  const center: Point = { x: 160, y: 120 };
+  const maxRadius = 76;
 
   const scoreValues = useMemo(() => {
     return [
@@ -168,7 +170,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        padding: '16px',
+        padding: '14px',
         background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
         borderRadius: '14px',
         border: '1px solid rgba(59, 130, 246, 0.25)',
@@ -188,8 +190,8 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span
             style={{
-              padding: '2px 7px',
-              borderRadius: '6px',
+              padding: '2px 6px',
+              borderRadius: '5px',
               background: 'rgba(59, 130, 246, 0.25)',
               color: '#60a5fa',
               fontSize: '0.72rem',
@@ -198,20 +200,32 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
           >
             05
           </span>
-          <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#f8fafc' }}>
+          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
             風險雷達圖
           </span>
         </div>
 
-        <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
-          Risk Radar
-        </span>
+        <button
+          type="button"
+          aria-label="選項"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: '#64748b',
+            cursor: 'pointer',
+            padding: '2px',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          <MoreVertical size={14} />
+        </button>
       </div>
 
       {/* SVG 五角蛛網圖繪製區 */}
-      <div style={{ width: '100%', flex: 1, minHeight: '250px', position: 'relative' }}>
+      <div style={{ width: '100%', flex: 1, minHeight: '220px', position: 'relative' }}>
         <svg
-          viewBox="0 0 320 260"
+          viewBox="0 0 320 250"
           style={{ width: '100%', height: '100%', overflow: 'visible' }}
           preserveAspectRatio="xMidYMid meet"
         >

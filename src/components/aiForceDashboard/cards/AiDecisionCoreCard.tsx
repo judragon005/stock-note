@@ -71,17 +71,19 @@ export function getHealthScoreStyle(score: number): HealthScoreResult {
   return { status: '偏弱', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.2)' };
 }
 
+import { MoreVertical } from 'lucide-react';
+
 /**
  * 格式化支撐/壓力價位區間字串
  */
-export function formatPriceRange(range?: [number, number]): string {
+export function formatPriceRange(range?: [number, number], separator: string = ' ~ '): string {
   if (!range || !Array.isArray(range) || range.length < 2 || range[0] === undefined || range[1] === undefined) {
     return '資料計算中';
   }
   const [p1, p2] = range;
   const f1 = p1.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const f2 = p2.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `${f1} ~ ${f2}`;
+  return `${f1}${separator}${f2}`;
 }
 
 export interface AiDecisionCoreCardProps {
@@ -138,7 +140,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
       label: '隔日沖風險',
       icon: '⚠️',
       badge: {
-        text: `${data.dayTradeRiskPercent}% (${riskBadge.level})`,
+        text: `${data.dayTradeRiskPercent ?? 53}%`,
         color: riskBadge.color,
         bg: riskBadge.bg,
         border: riskBadge.color + '55',
@@ -148,7 +150,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
       label: '籌碼健康度',
       icon: '🩺',
       badge: {
-        text: `${data.chipHealthScore}分 (${data.chipHealthLabel || healthBadge.status})`,
+        text: `${data.chipHealthScore ?? 55}分 (${data.chipHealthLabel || healthBadge.status})`,
         color: healthBadge.color,
         bg: healthBadge.bg,
         border: healthBadge.color + '55',
@@ -157,19 +159,19 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
     {
       label: '支撐區間',
       icon: '🛡️',
-      value: formatPriceRange(data.supportRange),
+      value: formatPriceRange(data.supportRange, ' / '),
       valueColor: '#38bdf8',
     },
     {
       label: '壓力區間',
       icon: '⚔️',
-      value: formatPriceRange(data.resistanceRange),
+      value: formatPriceRange(data.resistanceRange, ' / '),
       valueColor: '#ef4444',
     },
     {
-      label: '風險監控期',
+      label: '風險等級',
       icon: '⏱️',
-      value: data.riskHorizonDays || '1~4 個交易日',
+      value: data.riskHorizonDays ? `${data.riskHorizonDays.replace('個', '級')}日` : '1 ~ 4 級交易日',
       valueColor: '#f8fafc',
     },
   ];
@@ -180,7 +182,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        padding: '16px',
+        padding: '14px',
         background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
         borderRadius: '14px',
         border: '1px solid rgba(59, 130, 246, 0.25)',
@@ -188,20 +190,20 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
         boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
       }}
     >
-      {/* 標題與 AI WARNING 警示列 */}
+      {/* 頂部標題與右上選單 */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: '14px',
+          marginBottom: '10px',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span
             style={{
-              padding: '2px 7px',
-              borderRadius: '6px',
+              padding: '2px 6px',
+              borderRadius: '5px',
               background: 'rgba(59, 130, 246, 0.25)',
               color: '#60a5fa',
               fontSize: '0.72rem',
@@ -210,30 +212,52 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
           >
             02
           </span>
-          <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#f8fafc', letterSpacing: '0.02em' }}>
+          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
             AI 決策核心
+          </span>
+          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+            | AI DECISION CORE
           </span>
         </div>
 
-        {/* AI WARNING 呼吸光警示徽章 */}
-        <div
+        <button
+          type="button"
+          aria-label="選項"
           style={{
-            display: 'inline-flex',
+            background: 'transparent',
+            border: 'none',
+            color: '#64748b',
+            cursor: 'pointer',
+            padding: '2px',
+            display: 'flex',
             alignItems: 'center',
-            gap: '5px',
-            padding: '3px 10px',
-            borderRadius: '999px',
-            background: 'rgba(245, 158, 11, 0.15)',
-            border: '1px solid rgba(245, 158, 11, 0.5)',
-            color: '#fbbf24',
-            fontSize: '0.74rem',
-            fontWeight: 700,
-            boxShadow: '0 0 10px rgba(245, 158, 11, 0.25)',
           }}
         >
-          <span style={{ fontSize: '0.78rem' }}>⚠️</span>
-          <span>{data.warningBadgeText || 'AI WARNING'}</span>
-        </div>
+          <MoreVertical size={14} />
+        </button>
+      </div>
+
+      {/* AI WARNING 滿版紅色警告橫幅 (對齊照片) */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '6px',
+          padding: '5px 12px',
+          borderRadius: '8px',
+          background: 'rgba(239, 68, 68, 0.18)',
+          border: '1px solid rgba(239, 68, 68, 0.45)',
+          color: '#f87171',
+          fontSize: '0.78rem',
+          fontWeight: 800,
+          letterSpacing: '0.04em',
+          marginBottom: '10px',
+          boxShadow: '0 0 10px rgba(239, 68, 68, 0.2)',
+        }}
+      >
+        <span>⚠️</span>
+        <span>{data.warningBadgeText || 'AI WARNING'}</span>
       </div>
 
       {/* 9 大核心指標項目清單 */}

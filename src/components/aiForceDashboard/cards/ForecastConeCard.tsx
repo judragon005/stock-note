@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { ForecastConeData } from '../../../types/aiForceDashboard';
+import { MoreVertical } from 'lucide-react';
 
 export interface Point {
   x: number;
@@ -167,7 +168,7 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        padding: '16px',
+        padding: '14px',
         background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
         borderRadius: '14px',
         border: '1px solid rgba(59, 130, 246, 0.25)',
@@ -175,20 +176,20 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
         boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
       }}
     >
-      {/* 標題與情境機率摘要列 */}
+      {/* 標題與選單列 */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: '10px',
+          marginBottom: '6px',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span
             style={{
-              padding: '2px 7px',
-              borderRadius: '6px',
+              padding: '2px 6px',
+              borderRadius: '5px',
               background: 'rgba(59, 130, 246, 0.25)',
               color: '#60a5fa',
               fontSize: '0.72rem',
@@ -197,27 +198,48 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
           >
             06
           </span>
-          <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#f8fafc' }}>
+          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
             累積型 AI 預測路徑圖
+          </span>
+          <span style={{ fontSize: '0.7rem', color: '#64748b' }}>
+            | 依 60 日報酬統計推估
           </span>
         </div>
 
-        {/* 三大多空機率徽章 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem' }}>
-          <span style={{ color: '#ef4444', fontWeight: 700 }}>
-            漲 {data.bullishProb}%
-          </span>
-          <span style={{ color: '#fbbf24', fontWeight: 700 }}>
-            盤 {data.rangeProb}%
-          </span>
-          <span style={{ color: '#10b981', fontWeight: 700 }}>
-            跌 {data.bearishProb}%
-          </span>
-        </div>
+        <button
+          type="button"
+          aria-label="選項"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: '#64748b',
+            cursor: 'pointer',
+            padding: '2px',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          <MoreVertical size={14} />
+        </button>
+      </div>
+
+      {/* 圖例說明列 (對齊照片) */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          fontSize: '0.68rem',
+          marginBottom: '6px',
+        }}
+      >
+        <span style={{ color: '#ef4444', fontWeight: 600 }}>■ 紅色：上漲機率 {data.bullishProb}%</span>
+        <span style={{ color: '#fbbf24', fontWeight: 600 }}>■ 黃色：震盪機率 {data.rangeProb}%</span>
+        <span style={{ color: '#10b981', fontWeight: 600 }}>■ 綠色：下跌機率 {data.bearishProb}%</span>
       </div>
 
       {/* SVG 預測錐繪製區 */}
-      <div style={{ width: '100%', flex: 1, minHeight: '190px', position: 'relative' }}>
+      <div style={{ width: '100%', flex: 1, minHeight: '180px', position: 'relative' }}>
         <svg
           viewBox={`0 0 ${width} ${height}`}
           style={{ width: '100%', height: '100%', overflow: 'visible' }}
@@ -315,7 +337,7 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>年化漂移：</span>
+          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>強弱指標：</span>
           <span
             style={{
               fontSize: '0.78rem',
@@ -324,7 +346,7 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
               color: data.annualizedDriftPercent >= 0 ? '#ef4444' : '#10b981',
             }}
           >
-            {data.annualizedDriftPercent >= 0 ? `+${data.annualizedDriftPercent}%` : `${data.annualizedDriftPercent}%`}
+            {data.annualizedDriftPercent >= 0 ? `+${data.annualizedDriftPercent}%` : `${data.annualizedDriftPercent}%`} (年化漂移)
           </span>
         </div>
       </div>

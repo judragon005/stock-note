@@ -67,6 +67,8 @@ export function getDayTradeRiskBadge(level: DayTradeRiskData['riskLevel']): DayT
   }
 }
 
+import { MoreVertical } from 'lucide-react';
+
 export interface DayTradeRiskCardProps {
   data: DayTradeRiskData;
 }
@@ -74,7 +76,7 @@ export interface DayTradeRiskCardProps {
 export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
   const items = useMemo(() => [
     { label: '主力賣出異常', value: data.abnormalSelling ?? 49, icon: '🚨' },
-    { label: '籌碼換手率', value: data.turnoverRate ?? 57, icon: '🔄' },
+    { label: '籌碼過手率', value: data.turnoverRate ?? 57, icon: '🔄' },
     { label: '沖銷比例', value: data.dayTradeRatio ?? 53, icon: '⚡' },
     { label: '隔日回檔風險', value: data.pullbackRisk ?? 45, icon: '📉' },
     { label: '日內波動率', value: data.intradayVolatility ?? 62, icon: '🌊' },
@@ -82,9 +84,8 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
 
   const riskBadge = useMemo(() => getDayTradeRiskBadge(data.riskLevel || 'MEDIUM'), [data.riskLevel]);
 
-  // 計算平均指數
   const avgIndex = useMemo(() => {
-    const sum = items.reduce((acc, item) => acc + item.value, 0);
+    const sum = items.reduce((acc, cur) => acc + cur.value, 0);
     return Math.round(sum / items.length);
   }, [items]);
 
@@ -94,7 +95,7 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        padding: '16px',
+        padding: '14px',
         background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
         borderRadius: '14px',
         border: '1px solid rgba(59, 130, 246, 0.25)',
@@ -108,14 +109,14 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: '12px',
+          marginBottom: '10px',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span
             style={{
-              padding: '2px 7px',
-              borderRadius: '6px',
+              padding: '2px 6px',
+              borderRadius: '5px',
               background: 'rgba(59, 130, 246, 0.25)',
               color: '#60a5fa',
               fontSize: '0.72rem',
@@ -124,14 +125,26 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
           >
             09
           </span>
-          <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#f8fafc' }}>
+          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
             隔日沖風險分析
           </span>
         </div>
 
-        <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
-          Day Trade Risk
-        </span>
+        <button
+          type="button"
+          aria-label="選項"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: '#64748b',
+            cursor: 'pointer',
+            padding: '2px',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          <MoreVertical size={14} />
+        </button>
       </div>
 
       {/* 5 條水平彩色進度條 */}
@@ -214,7 +227,7 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>綜合風險等級：</span>
+          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>隔日沖風險等級：</span>
           <span
             style={{
               padding: '2px 8px',

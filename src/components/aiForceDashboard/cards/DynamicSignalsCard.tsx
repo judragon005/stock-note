@@ -1,5 +1,6 @@
 import React from 'react';
 import type { DynamicSignalsData } from '../../../types/aiForceDashboard';
+import { MoreVertical } from 'lucide-react';
 
 export interface DynamicSignalsCardProps {
   data?: DynamicSignalsData;
@@ -65,136 +66,132 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
   const trendSignal = data?.trendSignal ?? '偏多偏強';
   const chipSignal = data?.chipSignal ?? '籌碼中性';
   const momentumSignal = data?.momentumSignal ?? '動能偏強';
-  const riskSignal = data?.riskSignal ?? '波動高特偏高';
-  const verdictLight = data?.verdictLight ?? 'RED';
+  const riskSignal = data?.riskSignal ?? '波動風險偏高';
   const verdictLabel = data?.verdictLabel ?? '紅燈 (高風險)';
 
-  const verdictConfig = getVerdictBadgeConfig(verdictLight);
-
   const signalItems = [
-    { title: '趨勢維度', value: trendSignal },
-    { title: '籌碼維度', value: chipSignal },
-    { title: '動能維度', value: momentumSignal },
-    { title: '風險維度', value: riskSignal },
+    { title: '趨勢：', value: trendSignal, color: '#f87171' },
+    { title: '籌碼：', value: chipSignal, color: '#fbbf24' },
+    { title: '動能：', value: momentumSignal, color: '#f87171' },
+    { title: '風險：', value: riskSignal, color: '#f87171' },
+    { title: '燈號：', value: verdictLabel, color: '#ef4444' },
   ];
 
   return (
     <div
       data-testid="dynamic-signals-card"
       style={{
-        background: 'rgba(30, 41, 59, 0.7)',
-        backdropFilter: 'blur(12px)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '12px',
-        padding: '16px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '12px',
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+        height: '100%',
+        padding: '14px',
+        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
+        borderRadius: '14px',
+        border: '1px solid rgba(59, 130, 246, 0.25)',
+        backdropFilter: 'blur(10px)',
+        boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
       }}
     >
-      {/* 頂部標題與主判定燈號 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '14px' }}>🚥</span>
-          <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#f1f5f9' }}>
-            12 AI 主力動態信號判斷
-          </h3>
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '3px 10px',
-            borderRadius: '9999px',
-            backgroundColor: verdictConfig.bg,
-            border: `1px solid ${verdictConfig.border}`,
-            boxShadow: verdictConfig.glow,
-          }}
-        >
-          <span
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: verdictConfig.color,
-              boxShadow: `0 0 8px ${verdictConfig.color}`,
-            }}
-          />
-          <span style={{ fontSize: '11px', fontWeight: 700, color: verdictConfig.color }}>
-            {verdictLabel}
-          </span>
-        </div>
-      </div>
-
-      {/* 4 大信號維度清單 */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(2, 1fr)',
-          gap: '8px',
-          padding: '4px 0',
-        }}
-      >
-        {signalItems.map((item) => {
-          const colorMeta = getSignalLightColor(item.value);
-          return (
-            <div
-              key={item.title}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '8px 10px',
-                borderRadius: '8px',
-                backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                border: '1px solid rgba(255, 255, 255, 0.04)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span
-                  style={{
-                    width: '6px',
-                    height: '6px',
-                    borderRadius: '50%',
-                    backgroundColor: colorMeta.dot,
-                    boxShadow: `0 0 6px ${colorMeta.dot}`,
-                  }}
-                />
-                <span style={{ fontSize: '11px', color: '#94a3b8' }}>{item.title}</span>
-              </div>
-              <span
-                style={{
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  color: colorMeta.color,
-                }}
-              >
-                {item.value}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* 底部總評判橫幅 */}
+      {/* 頂部標題與選單 */}
       <div
         style={{
           display: 'flex',
-          justifyContent: 'space-between',
           alignItems: 'center',
-          fontSize: '11px',
-          color: '#94a3b8',
-          paddingTop: '6px',
-          borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+          justifyContent: 'space-between',
+          marginBottom: '10px',
         }}
       >
-        <span>
-          結論：
-          <strong style={{ color: verdictConfig.color, marginLeft: '4px' }}>{verdictLabel}</strong>
-        </span>
-        <span style={{ color: '#64748b', fontSize: '10px' }}>4 維信號動態交叉比對</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span
+            style={{
+              padding: '2px 6px',
+              borderRadius: '5px',
+              background: 'rgba(59, 130, 246, 0.25)',
+              color: '#60a5fa',
+              fontSize: '0.72rem',
+              fontWeight: 800,
+            }}
+          >
+            12
+          </span>
+          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
+            AI 主力動態信號判斷
+          </span>
+        </div>
+        <button
+          type="button"
+          aria-label="選項"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: '#64748b',
+            cursor: 'pointer',
+            padding: '2px',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          <MoreVertical size={14} />
+        </button>
+      </div>
+
+      {/* 條目清單 (對齊照片) */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '6px',
+          flex: 1,
+          justifyContent: 'space-around',
+        }}
+      >
+        {signalItems.map((item, idx) => (
+          <div
+            key={idx}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              fontSize: '0.74rem',
+            }}
+          >
+            <span style={{ color: '#94a3b8' }}>{item.title}</span>
+            <span
+              style={{
+                color: item.color,
+                fontWeight: 700,
+              }}
+            >
+              {item.value}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* 底部目前燈號標註 */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingTop: '6px',
+          borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+          fontSize: '0.72rem',
+        }}
+      >
+        <span style={{ color: '#94a3b8' }}>目前燈號：</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <span
+            style={{
+              width: '7px',
+              height: '7px',
+              borderRadius: '50%',
+              backgroundColor: '#ef4444',
+              boxShadow: '0 0 8px #ef4444',
+            }}
+          />
+          <span style={{ color: '#ef4444', fontWeight: 800 }}>紅燈</span>
+        </div>
       </div>
     </div>
   );

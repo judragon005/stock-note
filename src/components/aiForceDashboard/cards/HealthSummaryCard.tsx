@@ -1,5 +1,6 @@
 import React from 'react';
 import type { HealthSummaryData } from '../../../types/aiForceDashboard';
+import { MoreVertical } from 'lucide-react';
 
 export interface HealthSummaryCardProps {
   data?: HealthSummaryData;
@@ -60,34 +61,34 @@ interface GaugeItemProps {
 }
 
 const SingleGauge: React.FC<GaugeItemProps> = ({ label, percent, color }) => {
-  const radius = 20;
+  const radius = 17;
   const { circumference, strokeDashoffset, clamped } = calculateCircleProgress(percent, radius);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-      <div style={{ position: 'relative', width: '52px', height: '52px' }}>
-        <svg width="52" height="52" viewBox="0 0 52 52">
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1 }}>
+      <div style={{ position: 'relative', width: '44px', height: '44px' }}>
+        <svg width="44" height="44" viewBox="0 0 44 44">
           {/* 背景軌道 */}
           <circle
-            cx="26"
-            cy="26"
+            cx="22"
+            cy="22"
             r={radius}
             fill="transparent"
             stroke="rgba(255, 255, 255, 0.08)"
-            strokeWidth="4"
+            strokeWidth="3.5"
           />
           {/* 進度環 */}
           <circle
-            cx="26"
-            cy="26"
+            cx="22"
+            cy="22"
             r={radius}
             fill="transparent"
             stroke={color}
-            strokeWidth="4"
+            strokeWidth="3.5"
             strokeDasharray={`${circumference} ${circumference}`}
             strokeDashoffset={strokeDashoffset}
             strokeLinecap="round"
-            transform="rotate(-90 26 26)"
+            transform="rotate(-90 22 22)"
             style={{ transition: 'stroke-dashoffset 0.6s ease' }}
           />
         </svg>
@@ -99,15 +100,16 @@ const SingleGauge: React.FC<GaugeItemProps> = ({ label, percent, color }) => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '11px',
-            fontWeight: 700,
+            fontSize: '10px',
+            fontWeight: 800,
+            fontFamily: 'monospace',
             color: '#f8fafc',
           }}
         >
           {clamped}%
         </div>
       </div>
-      <span style={{ fontSize: '11px', color: '#94a3b8', whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{ fontSize: '0.62rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>{label}</span>
     </div>
   );
 };
@@ -130,60 +132,80 @@ export const HealthSummaryCard: React.FC<HealthSummaryCardProps> = ({ data }) =>
   const ratingText = data?.overallRatingLabel ?? calculated.ratingLabel;
 
   const gauges = [
-    { label: '籌碼健康', percent: chipHealth, color: '#38bdf8' },
-    { label: '技術結構', percent: technicalStructure, color: '#10b981' },
-    { label: '資金動能', percent: capitalMomentum, color: '#f59e0b' },
-    { label: '流動風險', percent: liquidityRisk, color: '#ec4899' },
-    { label: '法人支撐', percent: institutionalSupport, color: '#8b5cf6' },
+    { label: '籌碼健康度', percent: chipHealth, color: '#38bdf8' },
+    { label: '技術結構度', percent: technicalStructure, color: '#10b981' },
+    { label: '資金動能度', percent: capitalMomentum, color: '#f59e0b' },
+    { label: '波動風險度', percent: liquidityRisk, color: '#ec4899' },
+    { label: '法人支撐度', percent: institutionalSupport, color: '#8b5cf6' },
   ];
 
   return (
     <div
       data-testid="health-summary-card"
       style={{
-        background: 'rgba(30, 41, 59, 0.7)',
-        backdropFilter: 'blur(12px)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '12px',
-        padding: '16px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '12px',
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+        height: '100%',
+        padding: '14px',
+        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
+        borderRadius: '14px',
+        border: '1px solid rgba(59, 130, 246, 0.25)',
+        backdropFilter: 'blur(10px)',
+        boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
       }}
     >
-      {/* 頂部標題與總評標籤 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      {/* 頂部標題與選單 */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '10px',
+        }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '14px' }}>🛡️</span>
-          <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#f1f5f9' }}>
-            11 健康度綜合評估表
-          </h3>
+          <span
+            style={{
+              padding: '2px 6px',
+              borderRadius: '5px',
+              background: 'rgba(59, 130, 246, 0.25)',
+              color: '#60a5fa',
+              fontSize: '0.72rem',
+              fontWeight: 800,
+            }}
+          >
+            11
+          </span>
+          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
+            健康度綜合評估表
+          </span>
         </div>
-        <span
+        <button
+          type="button"
+          aria-label="選項"
           style={{
-            fontSize: '11px',
-            padding: '2px 8px',
-            borderRadius: '9999px',
-            backgroundColor: 'rgba(56, 189, 248, 0.15)',
-            color: '#38bdf8',
-            fontWeight: 600,
-            border: '1px solid rgba(56, 189, 248, 0.3)',
+            background: 'transparent',
+            border: 'none',
+            color: '#64748b',
+            cursor: 'pointer',
+            padding: '2px',
+            display: 'flex',
+            alignItems: 'center',
           }}
         >
-          {ratingText}
-        </span>
+          <MoreVertical size={14} />
+        </button>
       </div>
 
       {/* 5 環橫向排列容器 */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(5, 1fr)',
-          gap: '8px',
+          display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          padding: '8px 0',
+          justifyContent: 'space-between',
+          gap: '2px',
+          flex: 1,
+          padding: '6px 0',
         }}
       >
         {gauges.map((g) => (
@@ -191,23 +213,21 @@ export const HealthSummaryCard: React.FC<HealthSummaryCardProps> = ({ data }) =>
         ))}
       </div>
 
-      {/* 底部總結說明列 */}
+      {/* 底部總評文字 */}
       <div
         style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          fontSize: '11px',
-          color: '#94a3b8',
           paddingTop: '6px',
           borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+          fontSize: '0.7rem',
+          textAlign: 'center',
+          color: '#cbd5e1',
         }}
       >
-        <span>多維量化健康度綜合評分</span>
-        <strong style={{ color: '#38bdf8', fontWeight: 600 }}>{ratingText}</strong>
+        總評：<span style={{ color: '#fbbf24', fontWeight: 700 }}>{ratingText}</span>
       </div>
     </div>
   );
 };
 
 export default HealthSummaryCard;
+

@@ -1,5 +1,6 @@
 import React from 'react';
 import type { BullBearEnergyData } from '../../../types/aiForceDashboard';
+import { MoreVertical } from 'lucide-react';
 
 export interface BullBearEnergyCardProps {
   data?: BullBearEnergyData;
@@ -60,150 +61,182 @@ export function calculateBullBearRatio(
 }
 
 export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({ data }) => {
-  // 兜底預設值
   const bull = data?.bullEnergyPercent ?? 53;
   const bear = data?.bearEnergyPercent ?? 47;
   const ratio = data?.bullBearRatio ?? 1.13;
-  const conclusion = data?.bullBearConclusion ?? '偏多';
   const note = data?.noteText ?? '(20日紅K量/黑K量)';
-
-  const isBullDominant = bull >= bear;
 
   return (
     <div
       data-testid="bull-bear-energy-card"
       style={{
-        background: 'rgba(30, 41, 59, 0.7)',
-        backdropFilter: 'blur(12px)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '12px',
-        padding: '16px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '12px',
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+        height: '100%',
+        padding: '14px',
+        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
+        borderRadius: '14px',
+        border: '1px solid rgba(59, 130, 246, 0.25)',
+        backdropFilter: 'blur(10px)',
+        boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
       }}
     >
-      {/* 標題與圖示 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      {/* 頂部標題與選單 */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '10px',
+        }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '14px' }}>⚡</span>
-          <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#f1f5f9' }}>
-            10 AI 多空能量儀
-          </h3>
+          <span
+            style={{
+              padding: '2px 6px',
+              borderRadius: '5px',
+              background: 'rgba(59, 130, 246, 0.25)',
+              color: '#60a5fa',
+              fontSize: '0.72rem',
+              fontWeight: 800,
+            }}
+          >
+            10
+          </span>
+          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
+            AI 多空能量棒
+          </span>
         </div>
-        <span
+        <button
+          type="button"
+          aria-label="選項"
           style={{
-            fontSize: '11px',
-            padding: '2px 8px',
-            borderRadius: '9999px',
-            backgroundColor: isBullDominant ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-            color: isBullDominant ? '#f87171' : '#34d399',
-            fontWeight: 600,
-            border: `1px solid ${isBullDominant ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
+            background: 'transparent',
+            border: 'none',
+            color: '#64748b',
+            cursor: 'pointer',
+            padding: '2px',
+            display: 'flex',
+            alignItems: 'center',
           }}
         >
-          {conclusion}
-        </span>
+          <MoreVertical size={14} />
+        </button>
       </div>
 
-      {/* 多空百分比大字看板 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '2px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '11px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#ef4444' }} />
+      {/* 主體：多空能量水平對比條 */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+          flex: 1,
+          justifyContent: 'center',
+          padding: '6px 0',
+        }}
+      >
+        {/* 多方能量 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '0.74rem', color: '#cbd5e1', width: '56px', whiteSpace: 'nowrap' }}>
             多方能量
           </span>
-          <span style={{ fontSize: '20px', fontWeight: 700, color: '#ef4444', letterSpacing: '-0.5px' }}>
+          <div
+            style={{
+              flex: 1,
+              height: '9px',
+              backgroundColor: 'rgba(15, 23, 42, 0.8)',
+              borderRadius: '5px',
+              overflow: 'hidden',
+              position: 'relative',
+              border: '1px solid rgba(255, 255, 255, 0.05)',
+            }}
+          >
+            <div
+              style={{
+                width: `${bull}%`,
+                height: '100%',
+                background: 'linear-gradient(90deg, #10b981 0%, #34d399 100%)',
+                borderRadius: '5px',
+                boxShadow: '0 0 8px rgba(16, 185, 129, 0.5)',
+                transition: 'width 0.5s ease',
+              }}
+            />
+          </div>
+          <span
+            style={{
+              fontSize: '0.78rem',
+              fontWeight: 800,
+              fontFamily: 'monospace',
+              color: '#34d399',
+              width: '36px',
+              textAlign: 'right',
+            }}
+          >
             {bull}%
           </span>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <span style={{ fontSize: '11px', color: '#64748b' }}>多空平衡 50%</span>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-          <span style={{ fontSize: '11px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+        {/* 空方能量 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '0.74rem', color: '#cbd5e1', width: '56px', whiteSpace: 'nowrap' }}>
             空方能量
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981' }} />
           </span>
-          <span style={{ fontSize: '20px', fontWeight: 700, color: '#10b981', letterSpacing: '-0.5px' }}>
+          <div
+            style={{
+              flex: 1,
+              height: '9px',
+              backgroundColor: 'rgba(15, 23, 42, 0.8)',
+              borderRadius: '5px',
+              overflow: 'hidden',
+              position: 'relative',
+              border: '1px solid rgba(255, 255, 255, 0.05)',
+            }}
+          >
+            <div
+              style={{
+                width: `${bear}%`,
+                height: '100%',
+                background: 'linear-gradient(90deg, #f87171 0%, #ef4444 100%)',
+                borderRadius: '5px',
+                boxShadow: '0 0 8px rgba(239, 68, 68, 0.5)',
+                transition: 'width 0.5s ease',
+              }}
+            />
+          </div>
+          <span
+            style={{
+              fontSize: '0.78rem',
+              fontWeight: 800,
+              fontFamily: 'monospace',
+              color: '#f87171',
+              width: '36px',
+              textAlign: 'right',
+            }}
+          >
             {bear}%
           </span>
         </div>
       </div>
 
-      {/* 雙色雙向橫向能量條 */}
-      <div
-        style={{
-          position: 'relative',
-          width: '100%',
-          height: '14px',
-          backgroundColor: '#0f172a',
-          borderRadius: '9999px',
-          overflow: 'hidden',
-          display: 'flex',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-        }}
-      >
-        {/* 多方能量條 */}
-        <div
-          data-testid="bull-bar"
-          style={{
-            width: `${bull}%`,
-            height: '100%',
-            background: 'linear-gradient(90deg, #dc2626 0%, #ef4444 100%)',
-            transition: 'width 0.4s ease',
-          }}
-        />
-
-        {/* 空方能量條 */}
-        <div
-          data-testid="bear-bar"
-          style={{
-            width: `${bear}%`,
-            height: '100%',
-            background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)',
-            transition: 'width 0.4s ease',
-          }}
-        />
-
-        {/* 50% 基準線指針 */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            bottom: 0,
-            left: '50%',
-            width: '2px',
-            backgroundColor: '#ffffff',
-            transform: 'translateX(-50%)',
-            boxShadow: '0 0 6px rgba(255, 255, 255, 0.8)',
-            zIndex: 2,
-          }}
-        />
-      </div>
-
-      {/* 底部說明資訊 */}
+      {/* 底部多空比與計算附註 */}
       <div
         style={{
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          fontSize: '11px',
-          color: '#94a3b8',
-          marginTop: '2px',
-          paddingTop: '6px',
+          flexDirection: 'column',
+          gap: '2px',
+          paddingTop: '8px',
           borderTop: '1px solid rgba(255, 255, 255, 0.05)',
         }}
       >
-        <div>
-          <span>多空比：</span>
-          <strong style={{ color: '#f8fafc', fontWeight: 600 }}>{ratio.toFixed(2)}</strong>
-          <span style={{ marginLeft: '4px', color: isBullDominant ? '#f87171' : '#34d399' }}>{conclusion}</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>多空比：</span>
+          <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', fontFamily: 'monospace' }}>
+            {ratio} 倍多
+          </span>
         </div>
-        <span style={{ color: '#64748b', fontSize: '10px' }}>{note}</span>
+        <div style={{ fontSize: '0.66rem', color: '#64748b', textAlign: 'right' }}>
+          {note}
+        </div>
       </div>
     </div>
   );
