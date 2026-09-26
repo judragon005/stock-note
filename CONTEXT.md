@@ -1827,6 +1827,24 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Safe Export Pipeline (5 大安全匯出管線)**:
   - 包含儀表板 PNG 快照、全部圖表 PNG、具備 DDE 巨集防禦之安全 CSV 數據報表、單檔離線 HTML 總結報告與原生 `@media print` PDF 匯出。
 
+### AI 主力戰情室即時資料管線與專業互動升級 *(新增於 V8.54.0 / Spec #0140 / Issue #97)*
+
+- **Live Market & Historical Candle Pipeline (即時行情與歷史日 K 真實資料管線)**:
+  - 核心機制：透過 `backfillSymbolOhlcvAndIndicators` 連接 Yahoo Finance 與本地 IndexedDB 快取，使用者在頂部輸入任意台美股代號（如 2330、2360、AAPL、TSLA）點擊分析時，自動載入真實 OHLCV 歷史日 K 數列與即時最新交易日行情（開高低收、真實成交量、漲跌額與漲跌幅），徹底終結寫死致茂假資料之展示狀態。
+  - 容錯防護：若外部網路受阻或無網路，自動啟動優雅降級（Graceful Fallback）載入最後有效快取或結構化防禦資料，維持界面穩定不崩潰。
+
+- **Interactive Crosshair & Candle Inspector (主 K 線十字游標與互動查價浮窗)**:
+  - 核心機制：在卡片 01 主 K 線圖 SVG 畫布中實作滑鼠懸停 (Hover) 動態吸附與雙軸虛線十字光標 (Crosshair)，精準對齊游標下方對應之歷史交易日，並於懸浮 Tooltip 中完整展示該日日期 (Date)、開盤價 (Open)、最高價 (High)、最低價 (Low)、收盤價 (Close)、漲跌額與幅度、真實成交量 (Volume) 及 MA5 / MA10 / MA20 / MA60 各均線數值。
+
+- **Multi-Period Viewport Selector (多週期視窗切換器)**:
+  - 核心機制：於主 K 線圖右上端提供 `30D` / `60D` / `120D` / `250D`（一個月、一季、半年、一年）動態切片視窗選擇器。切換時自動重新計算該區間之價格極值 (PriceRange) 與 Y 軸標尺，提供投資人不同時間尺度的趨勢視野。
+
+- **Subchart Technical Indicator Switcher (副圖技術指標切換器)**:
+  - 核心機制：主 K 線圖下方副圖區域支援「成交量 (Volume) / KD (隨機指標) / MACD (平滑異同移動平均線) / RSI (相對強弱指標)」快速切換顯示，支援雙色柱狀圖與多線向量走勢，解決單一副圖資訊貧瘠之問題。
+
+- **Dynamic Volume Profile & VWAP Level Projections (動態關鍵水線投影)**:
+  - 核心機制：高檔壓力區、主力成本線與支撐區告別靜態常數，由真實歷史日 K 之 Volume Profile 大量密集成交帶與 20 日 VWAP 即時計算推導，動態投影至 SVG 畫布並附帶數值引線標籤。
+
 
 
 

@@ -1,7 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MarketType, HoldingPosition } from '../../types/stock';
 import { AiForceDashboardReport } from '../../types/aiForceDashboard';
-import { createDefaultAiForceReport } from '../../engine/aiForceDashboardEngine';
+import {
+  createDefaultAiForceReport,
+  generateAiForceReportFromCandles,
+} from '../../engine/aiForceDashboardEngine';
+import { backfillSymbolOhlcvAndIndicators } from '../../engine/historicalOhlcvBackfill';
+import { fetchRealtimeQuote } from '../../engine/priceFetcher';
+import { logger } from '../../utils/logger';
 import { HeaderMarketBar } from './HeaderMarketBar';
 import { KLineChartCard } from './cards/KLineChartCard';
 import { AiDecisionCoreCard } from './cards/AiDecisionCoreCard';
@@ -45,38 +51,53 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
   const [report, setReport] = useState<AiForceDashboardReport>(() =>
     createDefaultAiForceReport(initialSymbol, '致茂', initialMarket)
   );
-  const analyzeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    return () => {
-      if (analyzeTimerRef.current) {
-        clearTimeout(analyzeTimerRef.current);
+  const loadDataForSymbol = async (targetSymbol: string, targetMarket: MarketType) => {
+    setIsLoading(true);
+    setSymbol(targetSymbol);
+    setMarket(targetMarket);
+    const resolvedName = resolveOfficialSecurityName(targetSymbol, targetMarket) || targetSymbol;
+
+    try {
+      // 1. 同步拉取歷史日 K (至少 60~180 根，支援本地 IndexedDB 快取與增量更新)
+      const res = await backfillSymbolOhlcvAndIndicators(targetSymbol, targetMarket, false);
+      const candles = res?.candles || [];
+
+      // 2. 嘗試抓取即時行情 (若失敗則由最新一根日 K 自適應)
+      let quote: any = undefined;
+      try {
+        quote = await fetchRealtimeQuote(targetSymbol, targetMarket);
+      } catch {
+        // 即時報價若失敗則安靜降級由日 K 替補
       }
-    };
-  }, []);
+
+      // 3. 以真實數據合成 18 張卡片 Report
+      if (candles.length >= 5) {
+        const fullReport = generateAiForceReportFromCandles(
+          targetSymbol,
+          resolvedName,
+          targetMarket,
+          candles,
+          quote
+        );
+        setReport(fullReport);
+      } else {
+        setReport(createDefaultAiForceReport(targetSymbol, resolvedName, targetMarket));
+      }
+    } catch (err) {
+      logger.warn(`Failed to backfill data for ${targetSymbol}, falling back to default:`, err);
+      setReport(createDefaultAiForceReport(targetSymbol, resolvedName, targetMarket));
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (initialSymbol && initialSymbol !== symbol) {
-      setSymbol(initialSymbol);
-      setMarket(initialMarket);
-      const name = resolveOfficialSecurityName(initialSymbol, initialMarket) || '致茂';
-      setReport(createDefaultAiForceReport(initialSymbol, name, initialMarket));
-    }
-  }, [initialSymbol, initialMarket, symbol]);
+    loadDataForSymbol(initialSymbol, initialMarket);
+  }, [initialSymbol, initialMarket]);
 
   const handleAnalyze = (newSymbol: string, newMarket: MarketType) => {
-    if (analyzeTimerRef.current) {
-      clearTimeout(analyzeTimerRef.current);
-    }
-    setIsLoading(true);
-    setSymbol(newSymbol);
-    setMarket(newMarket);
-    const resolvedName = resolveOfficialSecurityName(newSymbol, newMarket) || newSymbol;
-    setReport(createDefaultAiForceReport(newSymbol, resolvedName, newMarket));
-    analyzeTimerRef.current = setTimeout(() => {
-      setIsLoading(false);
-      analyzeTimerRef.current = null;
-    }, 250);
+    loadDataForSymbol(newSymbol, newMarket);
   };
 
   return (

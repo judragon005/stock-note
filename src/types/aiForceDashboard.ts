@@ -25,21 +25,42 @@ export interface MarketBarData {
 }
 
 /**
+ * 主 K 線週期切片模式
+ */
+export type KlinePeriodMode = '30D' | '60D' | '120D' | '250D';
+
+/**
+ * 主 K 線副圖指標切換模式
+ */
+export type SubchartIndicatorMode = 'VOL' | 'KD' | 'MACD' | 'RSI';
+
+/**
+ * 01 主 K 線單根資料項 (含均線與副圖技術指標)
+ */
+export interface KlineCandleItem {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  ma5?: number;
+  ma10?: number;
+  ma20?: number;
+  ma60?: number;
+  k?: number; // KD 之 K 值 (0~100)
+  d?: number; // KD 之 D 值 (0~100)
+  dif?: number; // MACD 快線 DIF
+  macd?: number; // MACD 慢線 DEA
+  macdHist?: number; // MACD 柱狀體
+  rsi?: number; // RSI (0~100)
+}
+
+/**
  * 01 主 K 線與關鍵價位
  */
 export interface KlineSystemData {
-  candles: {
-    date: string;
-    open: number;
-    high: number;
-    low: number;
-    close: number;
-    volume: number;
-    ma5?: number;
-    ma10?: number;
-    ma20?: number;
-    ma60?: number;
-  }[];
+  candles: KlineCandleItem[];
   keyLevels: {
     highResistance: number; // 高檔壓力區
     mainForceCost: number; // 主力成本
