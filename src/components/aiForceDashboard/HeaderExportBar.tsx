@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { AiForceDashboardReport } from '../../types/aiForceDashboard';
 import {
   triggerCsvDownload,
@@ -32,6 +32,15 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
   rangeText = '區間 2026-05-04 ~ 2026-09-18，共 98 個交易日，法人資料 20 日',
 }) => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleAction = (id: ExportActionItem['id']) => {
     switch (id) {
@@ -56,8 +65,14 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
   };
 
   const showToast = (msg: string) => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    toastTimerRef.current = setTimeout(() => {
+      setToastMessage(null);
+      toastTimerRef.current = null;
+    }, 3000);
   };
 
   return (

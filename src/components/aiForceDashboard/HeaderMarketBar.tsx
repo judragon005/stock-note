@@ -259,6 +259,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
           value={inputVal}
           onChange={(e) => setInputVal(e.target.value)}
           placeholder="代號"
+          aria-label="股票代號"
           style={{
             width: '65px',
             background: 'transparent',
