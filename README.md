@@ -3,13 +3,24 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-982%2F982%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1110%2F1110%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. AI 主力行為判讀與全功能量化決策儀表板 (`AI Force Decision Dashboard & Bento Grid`) *(V8.53.0 全新發布)*
+- **極致深色玻璃擬態 18 卡 Bento-Grid 網格佈局**：
+  - 完整重現頂級量化交易戰情室介面，整合主 K 線多空引線、AI 決策核心 (9 大指標 + AI WARNING 呼吸燈)、多維度 6 角蛛網雷達圖、成交量價位分佈 Volume Profile 熱區、五維風險蜘蛛網、60 日漂移率與機率預測錐、20 日 VWAP 主力成本結構、三大法人行為計量雙軸直方圖與 3 日明細、隔日沖 5 大風險量化指標進度條、AI 多空能量儀、健康度 5 環評估儀、動態信號紅綠燈矩陣、台股市場合情緒速度計、AI 信心維度、籌碼摘要與 Sparkline 走勢圖、買賣力分布甜甜圈、多空強度 3 環與主力追蹤總評判看板。
+- **純演算法引擎解耦與原生 SVG 向量繪製**：
+  - 全量演算法（Volume Profile、風險蛛網、預測錐、VWAP、隔日沖風險、市場情緒、主力語意合成）完全模組化封裝，零過度工程化；所有圖表皆由純原生 SVG 繪製，無肥大第三方圖表函式庫依賴。
+- **5 大任務視圖切換器 (`TaskViewsSwitcher`)**：
+  - 任務一（綜合分析報告 18 卡 Bento Grid）、任務二（技術警示報告）、任務三（KD + MA 圖表）、任務四（MACD 圖表）與任務五（原始量化數據總表）平滑切換。
+- **5 大安全格式匯出管線 (`exportReportPipeline`)**：
+  - 提供下載儀表板 PNG、全部圖表 PNG、具備 DDE 巨集防禦之安全 CSV 數據報表、單檔離線 HTML 總結報告與原生 `@media print` PDF 匯出。
+
 
 ### 0. 質押借貸 FULL_PAYOFF 全額結清統一委託法定沖償引擎、流通股數推導純函式集中化與持倉雙階排序 DRY 閉環重構 (`Unified Debt Repayment Engine, Shares Outstanding SSOT & Holdings Natural Sorter`) *(V8.52.0 全新發布)*
 - **質押借貸 FULL_PAYOFF 全額結清統一委託法定沖償引擎 (`Unified Debt Repayment Engine`)**：
