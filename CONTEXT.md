@@ -1845,6 +1845,17 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Dynamic Volume Profile & VWAP Level Projections (動態關鍵水線投影)**:
   - 核心機制：高檔壓力區、主力成本線與支撐區告別靜態常數，由真實歷史日 K 之 Volume Profile 大量密集成交帶與 20 日 VWAP 即時計算推導，動態投影至 SVG 畫布並附帶數值引線標籤。
 
+### AI 主力戰情室三大法人真實籌碼管線與全卡片/任務視圖連動 *(新增於 V8.56.0 / Spec #0143 / Issue #103)*
+
+- **Institutional Historical Chips Ingestion Pipeline (三大法人歷史籌碼管線)**:
+  - 核心定義：透過 `smartMoneyFetcher` 之 `fetchRecentTwseReports` 與 TWSE / TPEx 官方每日盤後日報資料庫，於標的載入時動態萃取當前個股歷史 20 日外資、投信、自營商買賣超張數（`RawInstitutionalRecord`），並以單一資料流傳遞至 `generateAiForceReportFromCandles`，杜絕寫死假數據。
+  - **Proxy Volume Momentum Fallback (多空量能代理降級模型)**：針對美股（US）或查無法人進出之台股特殊標的，以真實日 K 成交量乘以實體紅黑 K 多空係數生成代理數值，確保 SVG 座標投影與數列運算 100% 穩定，永不除以零或拋錯。
+
+- **Institutional Flow & Chips Summary Dual-Card Synergy (08 法人行為卡與 15 籌碼摘要雙卡動態連動)**:
+  - **08 法人行為計量卡**：左側真實呈現外資（藍）、投信（黃）、自營商（綠）歷史長條圖與三大法人累計折線；右側明細表格動態列出近 3 日張數（最新日在最上方，顯示 `MM/DD` 格式）；底部即時彙總 20 日與 5 日累計量能文字。
+  - **15 籌碼異動摘要卡**：同步綁定真實最新交易日之外資、投信、自營商張數與合計值，右側微型 Sparkline 繪製真實 10~20 日累計法人走勢，並動態產出短線研判標籤（如「土洋合買」、「土洋齊賣」、「土洋對作」等）。
+
+
 
 
 
