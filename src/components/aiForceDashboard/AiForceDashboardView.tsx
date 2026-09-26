@@ -6,7 +6,7 @@ import {
   generateAiForceReportFromCandles,
 } from '../../engine/aiForceDashboardEngine';
 import { backfillSymbolOhlcvAndIndicators } from '../../engine/historicalOhlcvBackfill';
-import { fetchRealtimeQuote } from '../../engine/priceFetcher';
+import { fetchStockQuote } from '../../engine/priceFetcher';
 import { logger } from '../../utils/logger';
 import { HeaderMarketBar } from './HeaderMarketBar';
 import { KLineChartCard } from './cards/KLineChartCard';
@@ -66,7 +66,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       // 2. 嘗試抓取即時行情 (若失敗則由最新一根日 K 自適應)
       let quote: any = undefined;
       try {
-        quote = await fetchRealtimeQuote(targetSymbol, targetMarket);
+        quote = await fetchStockQuote(targetSymbol, targetMarket);
       } catch {
         // 即時報價若失敗則安靜降級由日 K 替補
       }
