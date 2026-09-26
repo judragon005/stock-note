@@ -15,6 +15,8 @@ import { InstitutionalFlowCard } from './cards/InstitutionalFlowCard';
 import { DayTradeRiskCard } from './cards/DayTradeRiskCard';
 import { BullBearEnergyCard } from './cards/BullBearEnergyCard';
 import { HealthSummaryCard } from './cards/HealthSummaryCard';
+import { DynamicSignalsCard } from './cards/DynamicSignalsCard';
+import { MarketSentimentCard } from './cards/MarketSentimentCard';
 import { resolveOfficialSecurityName } from '../../engine/stockNameResolver';
 
 export interface AiForceDashboardViewProps {
@@ -178,6 +180,16 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           {/* 11 健康度綜合評估表 (Ticket 21) */}
           <div>
             <HealthSummaryCard data={report.healthSummary} />
+          </div>
+
+          {/* 12 AI 主力動態信號判斷 (Ticket 22) */}
+          <div>
+            <DynamicSignalsCard data={report.dynamicSignals} />
+          </div>
+
+          {/* 13 台股市場合情緒儀表板 (Ticket 24) */}
+          <div>
+            <MarketSentimentCard data={report.marketSentiment} />
           </div>
         </div>
       </div>
