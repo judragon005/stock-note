@@ -39,7 +39,8 @@ export function findClosestCandleIndex(
   candleGap: number,
   totalCount: number
 ): number {
-  if (totalCount <= 0) return 0;
+  if (totalCount <= 0) return -1;
+  if (candleGap <= 0) return 0;
   const rawIdx = Math.floor((mouseX - leftPad) / candleGap);
   return Math.max(0, Math.min(totalCount - 1, rawIdx));
 }
@@ -377,7 +378,13 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
   const bullColor = isTaiwan ? '#ef4444' : '#10b981';
   const bearColor = isTaiwan ? '#10b981' : '#ef4444';
 
-  const hoveredCandle = hoverIndex !== null && hoverIndex >= 0 && hoverIndex < count ? displayCandles[hoverIndex] : null;
+  const isHovering = hoverIndex !== null && hoverIndex >= 0 && hoverIndex < count;
+  const activeCandle = isHovering
+    ? displayCandles[hoverIndex!]
+    : count > 0
+    ? displayCandles[count - 1]
+    : null;
+  const hoveredCandle = isHovering ? activeCandle : null;
 
   return (
     <div
@@ -520,45 +527,63 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
         </div>
       </div>
 
-      {/* 互動查價浮窗狀態列 (當 hover 時展示，否則展示最新收盤資訊) */}
-      {hoveredCandle ? (
+      {/* 互動查價狀態列 (常駐容器，hover 時顯示吸附指標，否則顯示最新交易日，杜絕跳動) */}
+      {activeCandle ? (
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
+            gap: '10px',
             fontSize: '0.72rem',
             padding: '4px 8px',
-            background: 'rgba(30, 41, 59, 0.7)',
+            background: isHovering ? 'rgba(30, 41, 59, 0.9)' : 'rgba(30, 41, 59, 0.5)',
             borderRadius: '6px',
             marginBottom: '6px',
-            border: '1px solid rgba(59, 130, 246, 0.2)',
+            border: isHovering
+              ? '1px solid rgba(59, 130, 246, 0.4)'
+              : '1px solid rgba(255, 255, 255, 0.05)',
             flexWrap: 'wrap',
+            minHeight: '26px',
+            transition: 'background 0.15s ease, border-color 0.15s ease',
           }}
         >
-          <span style={{ color: '#38bdf8', fontWeight: 700 }}>📅 {hoveredCandle.date}</span>
-          <span>開: <b style={{ color: '#f8fafc' }}>{hoveredCandle.open}</b></span>
-          <span>高: <b style={{ color: '#ef4444' }}>{hoveredCandle.high}</b></span>
-          <span>低: <b style={{ color: '#10b981' }}>{hoveredCandle.low}</b></span>
-          <span>收: <b style={{ color: hoveredCandle.close >= hoveredCandle.open ? bullColor : bearColor }}>{hoveredCandle.close}</b></span>
-          <span>量: <b style={{ color: '#fbbf24' }}>{hoveredCandle.volume.toLocaleString()}</b></span>
-          {hoveredCandle.ma5 && <span style={{ color: '#fbbf24' }}>MA5:{hoveredCandle.ma5}</span>}
-          {hoveredCandle.ma20 && <span style={{ color: '#c084fc' }}>MA20:{hoveredCandle.ma20}</span>}
+          <span
+            style={{
+              padding: '1px 5px',
+              borderRadius: '4px',
+              background: isHovering ? 'rgba(59, 130, 246, 0.3)' : 'rgba(100, 116, 139, 0.2)',
+              color: isHovering ? '#60a5fa' : '#94a3b8',
+              fontWeight: 700,
+              fontSize: '0.65rem',
+            }}
+          >
+            {isHovering ? '🔍 查價' : '📌 最新'}
+          </span>
+          <span style={{ color: '#38bdf8', fontWeight: 700 }}>📅 {activeCandle.date}</span>
+          <span>開: <b style={{ color: '#f8fafc' }}>{activeCandle.open}</b></span>
+          <span>高: <b style={{ color: '#ef4444' }}>{activeCandle.high}</b></span>
+          <span>低: <b style={{ color: '#10b981' }}>{activeCandle.low}</b></span>
+          <span>收: <b style={{ color: activeCandle.close >= activeCandle.open ? bullColor : bearColor }}>{activeCandle.close}</b></span>
+          <span>量: <b style={{ color: '#fbbf24' }}>{activeCandle.volume.toLocaleString()}</b></span>
+          {activeCandle.ma5 && <span style={{ color: '#fbbf24' }}>MA5:{activeCandle.ma5}</span>}
+          {activeCandle.ma20 && <span style={{ color: '#c084fc' }}>MA20:{activeCandle.ma20}</span>}
           {subchartMode === 'KD' && (
             <span style={{ color: '#60a5fa' }}>
-              K:{hoveredCandle.k ?? '-'} D:{hoveredCandle.d ?? '-'}
+              K:{activeCandle.k ?? '-'} D:{activeCandle.d ?? '-'}
             </span>
           )}
           {subchartMode === 'MACD' && (
             <span style={{ color: '#34d399' }}>
-              DIF:{hoveredCandle.dif ?? '-'} MACD:{hoveredCandle.macd ?? '-'} 柱:{hoveredCandle.macdHist ?? '-'}
+              DIF:{activeCandle.dif ?? '-'} MACD:{activeCandle.macd ?? '-'} 柱:{activeCandle.macdHist ?? '-'}
             </span>
           )}
           {subchartMode === 'RSI' && (
-            <span style={{ color: '#c084fc' }}>RSI:{hoveredCandle.rsi ?? '-'}</span>
+            <span style={{ color: '#c084fc' }}>RSI:{activeCandle.rsi ?? '-'}</span>
           )}
         </div>
-      ) : null}
+      ) : (
+        <div style={{ minHeight: '26px', marginBottom: '6px' }} />
+      )}
 
       {/* SVG K 線圖與量能主繪圖區 */}
       <div style={{ width: '100%', flex: 1, minHeight: '260px', position: 'relative' }}>
