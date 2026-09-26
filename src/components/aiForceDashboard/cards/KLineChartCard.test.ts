@@ -4,6 +4,8 @@ import {
   projectPriceToY,
   buildMaPolylinePoints,
   calculateKeyLevelOverlays,
+  sliceCandlesByPeriod,
+  findClosestCandleIndex,
 } from './KLineChartCard';
 
 describe('KLineChartCard - 主 K 線與均線計算規範 (Ticket 04)', () => {
@@ -124,3 +126,50 @@ describe('KLineChartCard - 三大水平關鍵價位引線計算規範 (Ticket 05
     expect(support.y).toBe(170);
   });
 });
+
+describe('KLineChartCard - 專業互動與多功能副圖 (Ticket 35 / Stage 1)', () => {
+  describe('sliceCandlesByPeriod - 週期切片視窗選擇器', () => {
+    const candles = Array.from({ length: 100 }, (_, i) => ({
+      date: `2026-0${Math.floor(i / 30) + 1}-${String((i % 30) + 1).padStart(2, '0')}`,
+      open: 100 + i,
+      high: 105 + i,
+      low: 95 + i,
+      close: 102 + i,
+      volume: 1000 + i * 10,
+    }));
+
+    it('30D 週期應精確截取最後 30 根日 K', () => {
+      const sliced = sliceCandlesByPeriod(candles, '30D');
+      expect(sliced.length).toBe(30);
+      expect(sliced[sliced.length - 1].close).toBe(candles[candles.length - 1].close);
+    });
+
+    it('60D 週期應精確截取最後 60 根日 K', () => {
+      const sliced = sliceCandlesByPeriod(candles, '60D');
+      expect(sliced.length).toBe(60);
+    });
+
+    it('當總長度小於請求週期（如 100 根請求 250D），應安全回傳全部資料', () => {
+      const sliced = sliceCandlesByPeriod(candles, '250D');
+      expect(sliced.length).toBe(100);
+    });
+  });
+
+  describe('findClosestCandleIndex - 十字游標動態吸附計算', () => {
+    it('應依據滑鼠 X 座標精確計算最近的 K 棒索引', () => {
+      // 假設 leftPad = 20, candleGap = 10, count = 30
+      // 點在 x = 25 (落在第 0 根中心 25 處)
+      expect(findClosestCandleIndex(25, 20, 10, 30)).toBe(0);
+      // 點在 x = 35 (第 1 根)
+      expect(findClosestCandleIndex(35, 20, 10, 30)).toBe(1);
+      // 點在 x = 115 (第 9 根)
+      expect(findClosestCandleIndex(115, 20, 10, 30)).toBe(9);
+    });
+
+    it('滑鼠移出左右邊界時應安全 clamp 於 [0, count - 1]', () => {
+      expect(findClosestCandleIndex(-10, 20, 10, 30)).toBe(0);
+      expect(findClosestCandleIndex(1000, 20, 10, 30)).toBe(29);
+    });
+  });
+});
+

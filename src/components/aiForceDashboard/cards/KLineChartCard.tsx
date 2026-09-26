@@ -1,5 +1,10 @@
-import React, { useMemo } from 'react';
-import { KlineSystemData } from '../../../types/aiForceDashboard';
+import React, { useMemo, useState } from 'react';
+import {
+  KlineSystemData,
+  KlinePeriodMode,
+  SubchartIndicatorMode,
+  KlineCandleItem,
+} from '../../../types/aiForceDashboard';
 import { ColorThemeMode } from '../../../types/stock';
 import { MoreVertical } from 'lucide-react';
 
@@ -7,6 +12,36 @@ export interface PriceRange {
   min: number;
   max: number;
   span: number;
+}
+
+/**
+ * 依據週期切片提取蠟燭數列
+ */
+export function sliceCandlesByPeriod<T>(candles: T[], period: KlinePeriodMode = '60D'): T[] {
+  if (!candles || candles.length === 0) return [];
+  const limitMap: Record<KlinePeriodMode, number> = {
+    '30D': 30,
+    '60D': 60,
+    '120D': 120,
+    '250D': 250,
+  };
+  const count = limitMap[period] || 60;
+  if (candles.length <= count) return candles;
+  return candles.slice(-count);
+}
+
+/**
+ * 依據滑鼠 X 座標尋找最接近之 K 棒索引
+ */
+export function findClosestCandleIndex(
+  mouseX: number,
+  leftPad: number,
+  candleGap: number,
+  totalCount: number
+): number {
+  if (totalCount <= 0) return 0;
+  const rawIdx = Math.floor((mouseX - leftPad) / candleGap);
+  return Math.max(0, Math.min(totalCount - 1, rawIdx));
 }
 
 /**
@@ -155,12 +190,16 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
   data,
   colorTheme = 'taiwan',
 }) => {
-  // 若無真實歷史資料，建立 30 根示範 K 線
-  const displayCandles = useMemo(() => {
+  const [period, setPeriod] = useState<KlinePeriodMode>('60D');
+  const [subchartMode, setSubchartMode] = useState<SubchartIndicatorMode>('VOL');
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+
+  // 1. 若無真實歷史資料，建立 30 根示範 K 線
+  const rawCandles = useMemo(() => {
     if (data.candles && data.candles.length >= 5) {
       return data.candles;
     }
-    const synthetic = [];
+    const synthetic: KlineCandleItem[] = [];
     let basePrice = 2100;
     for (let i = 30; i >= 1; i--) {
       const isUp = i % 2 === 0;
@@ -182,10 +221,21 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
         ma10: close * 0.96,
         ma20: 2130,
         ma60: 2050,
+        k: 50 + (i % 20),
+        d: 48 + (i % 18),
+        dif: (i % 10) - 5,
+        macd: (i % 8) - 4,
+        macdHist: (i % 6) - 3,
+        rsi: 45 + (i % 30),
       });
     }
     return synthetic;
   }, [data.candles]);
+
+  // 2. 依據週期切片提取當前檢視蠟燭
+  const displayCandles = useMemo(() => {
+    return sliceCandlesByPeriod(rawCandles, period);
+  }, [rawCandles, period]);
 
   const priceRange = useMemo(() => calculatePriceRange(displayCandles), [displayCandles]);
 
@@ -200,7 +250,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
   const plotWidth = width - leftPad - rightPad;
   const count = displayCandles.length;
   const candleGap = plotWidth / Math.max(1, count);
-  const candleWidth = Math.max(3, candleGap * 0.65);
+  const candleWidth = Math.max(2.5, Math.min(14, candleGap * 0.7));
 
   const getX = (idx: number) => leftPad + idx * candleGap + candleGap / 2;
 
@@ -211,6 +261,17 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
       if (c.volume > max) max = c.volume;
     });
     return max;
+  }, [displayCandles]);
+
+  // MACD 極值
+  const maxMacdAbs = useMemo(() => {
+    let max = 1;
+    displayCandles.forEach((c) => {
+      if (c.dif !== undefined && Math.abs(c.dif) > max) max = Math.abs(c.dif);
+      if (c.macd !== undefined && Math.abs(c.macd) > max) max = Math.abs(c.macd);
+      if (c.macdHist !== undefined && Math.abs(c.macdHist) > max) max = Math.abs(c.macdHist);
+    });
+    return max || 1;
   }, [displayCandles]);
 
   // 均線 Points
@@ -231,7 +292,78 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
     [displayCandles, priceRange]
   );
 
-  // 三大關鍵價位引線計算 (Ticket 05)
+  // 副圖 Points (KD / MACD / RSI)
+  const subchartTop = klineHeight + 10;
+  const subchartPlotHeight = volHeight - 15;
+
+  const kdKPoints = useMemo(() => {
+    if (subchartMode !== 'KD') return '';
+    const points: string[] = [];
+    displayCandles.forEach((c, idx) => {
+      if (c.k !== undefined) {
+        const x = getX(idx);
+        const y = subchartTop + (1 - c.k / 100) * subchartPlotHeight;
+        points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+      }
+    });
+    return points.join(' ');
+  }, [displayCandles, subchartMode]);
+
+  const kdDPoints = useMemo(() => {
+    if (subchartMode !== 'KD') return '';
+    const points: string[] = [];
+    displayCandles.forEach((c, idx) => {
+      if (c.d !== undefined) {
+        const x = getX(idx);
+        const y = subchartTop + (1 - c.d / 100) * subchartPlotHeight;
+        points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+      }
+    });
+    return points.join(' ');
+  }, [displayCandles, subchartMode]);
+
+  const macdDifPoints = useMemo(() => {
+    if (subchartMode !== 'MACD') return '';
+    const points: string[] = [];
+    const midY = subchartTop + subchartPlotHeight / 2;
+    displayCandles.forEach((c, idx) => {
+      if (c.dif !== undefined) {
+        const x = getX(idx);
+        const y = midY - (c.dif / maxMacdAbs) * (subchartPlotHeight / 2 - 2);
+        points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+      }
+    });
+    return points.join(' ');
+  }, [displayCandles, subchartMode, maxMacdAbs]);
+
+  const macdDeaPoints = useMemo(() => {
+    if (subchartMode !== 'MACD') return '';
+    const points: string[] = [];
+    const midY = subchartTop + subchartPlotHeight / 2;
+    displayCandles.forEach((c, idx) => {
+      if (c.macd !== undefined) {
+        const x = getX(idx);
+        const y = midY - (c.macd / maxMacdAbs) * (subchartPlotHeight / 2 - 2);
+        points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+      }
+    });
+    return points.join(' ');
+  }, [displayCandles, subchartMode, maxMacdAbs]);
+
+  const rsiPoints = useMemo(() => {
+    if (subchartMode !== 'RSI') return '';
+    const points: string[] = [];
+    displayCandles.forEach((c, idx) => {
+      if (c.rsi !== undefined) {
+        const x = getX(idx);
+        const y = subchartTop + (1 - c.rsi / 100) * subchartPlotHeight;
+        points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+      }
+    });
+    return points.join(' ');
+  }, [displayCandles, subchartMode]);
+
+  // 三大關鍵價位引線
   const keyLevelOverlays = useMemo(() => {
     const levels = {
       highResistance: data.keyLevels?.highResistance || priceRange.max * 0.98,
@@ -245,6 +377,8 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
   const bullColor = isTaiwan ? '#ef4444' : '#10b981';
   const bearColor = isTaiwan ? '#10b981' : '#ef4444';
 
+  const hoveredCandle = hoverIndex !== null && hoverIndex >= 0 && hoverIndex < count ? displayCandles[hoverIndex] : null;
+
   return (
     <div
       style={{
@@ -257,9 +391,10 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
         border: '1px solid rgba(59, 130, 246, 0.25)',
         backdropFilter: 'blur(10px)',
         boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+        position: 'relative',
       }}
     >
-      {/* 標題與均線圖例列 */}
+      {/* 標題、週期切換、均線圖例與副圖指標列 */}
       <div
         style={{
           display: 'flex',
@@ -267,7 +402,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '8px',
-          marginBottom: '10px',
+          marginBottom: '8px',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -289,15 +424,84 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
             | AI 主力行為判讀系統
           </span>
+
+          {/* 多週期切換按鈕 */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              background: 'rgba(30, 41, 59, 0.8)',
+              padding: '2px 4px',
+              borderRadius: '6px',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              gap: '2px',
+              marginLeft: '6px',
+            }}
+          >
+            {(['30D', '60D', '120D', '250D'] as KlinePeriodMode[]).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPeriod(p)}
+                style={{
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  background: period === p ? 'rgba(59, 130, 246, 0.8)' : 'transparent',
+                  color: period === p ? '#ffffff' : '#94a3b8',
+                  fontSize: '0.68rem',
+                  fontWeight: period === p ? 700 : 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* 均線圖例與選單 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.72rem' }}>
+        {/* 均線圖例、副圖指標切換與選單 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem' }}>
           <span style={{ color: '#fbbf24', fontWeight: 600 }}>— MA5</span>
           <span style={{ color: '#38bdf8', fontWeight: 600 }}>— MA10</span>
           <span style={{ color: '#c084fc', fontWeight: 600 }}>— MA20</span>
           <span style={{ color: '#94a3b8', fontWeight: 600 }}>⋯ MA60</span>
-          <span style={{ color: '#34d399', fontWeight: 600 }}>■ 成交量</span>
+
+          {/* 副圖指標切換按鈕 */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              background: 'rgba(30, 41, 59, 0.8)',
+              padding: '2px 4px',
+              borderRadius: '6px',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              gap: '2px',
+            }}
+          >
+            {(['VOL', 'KD', 'MACD', 'RSI'] as SubchartIndicatorMode[]).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setSubchartMode(m)}
+                style={{
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  background: subchartMode === m ? 'rgba(16, 185, 129, 0.8)' : 'transparent',
+                  color: subchartMode === m ? '#ffffff' : '#94a3b8',
+                  fontSize: '0.68rem',
+                  fontWeight: subchartMode === m ? 700 : 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {m === 'VOL' ? '量' : m}
+              </button>
+            ))}
+          </div>
+
           <button
             type="button"
             aria-label="選項"
@@ -316,12 +520,59 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
         </div>
       </div>
 
+      {/* 互動查價浮窗狀態列 (當 hover 時展示，否則展示最新收盤資訊) */}
+      {hoveredCandle ? (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            fontSize: '0.72rem',
+            padding: '4px 8px',
+            background: 'rgba(30, 41, 59, 0.7)',
+            borderRadius: '6px',
+            marginBottom: '6px',
+            border: '1px solid rgba(59, 130, 246, 0.2)',
+            flexWrap: 'wrap',
+          }}
+        >
+          <span style={{ color: '#38bdf8', fontWeight: 700 }}>📅 {hoveredCandle.date}</span>
+          <span>開: <b style={{ color: '#f8fafc' }}>{hoveredCandle.open}</b></span>
+          <span>高: <b style={{ color: '#ef4444' }}>{hoveredCandle.high}</b></span>
+          <span>低: <b style={{ color: '#10b981' }}>{hoveredCandle.low}</b></span>
+          <span>收: <b style={{ color: hoveredCandle.close >= hoveredCandle.open ? bullColor : bearColor }}>{hoveredCandle.close}</b></span>
+          <span>量: <b style={{ color: '#fbbf24' }}>{hoveredCandle.volume.toLocaleString()}</b></span>
+          {hoveredCandle.ma5 && <span style={{ color: '#fbbf24' }}>MA5:{hoveredCandle.ma5}</span>}
+          {hoveredCandle.ma20 && <span style={{ color: '#c084fc' }}>MA20:{hoveredCandle.ma20}</span>}
+          {subchartMode === 'KD' && (
+            <span style={{ color: '#60a5fa' }}>
+              K:{hoveredCandle.k ?? '-'} D:{hoveredCandle.d ?? '-'}
+            </span>
+          )}
+          {subchartMode === 'MACD' && (
+            <span style={{ color: '#34d399' }}>
+              DIF:{hoveredCandle.dif ?? '-'} MACD:{hoveredCandle.macd ?? '-'} 柱:{hoveredCandle.macdHist ?? '-'}
+            </span>
+          )}
+          {subchartMode === 'RSI' && (
+            <span style={{ color: '#c084fc' }}>RSI:{hoveredCandle.rsi ?? '-'}</span>
+          )}
+        </div>
+      ) : null}
+
       {/* SVG K 線圖與量能主繪圖區 */}
       <div style={{ width: '100%', flex: 1, minHeight: '260px', position: 'relative' }}>
         <svg
           viewBox={`0 0 ${width} ${totalHeight}`}
-          style={{ width: '100%', height: '100%', overflow: 'visible' }}
+          style={{ width: '100%', height: '100%', overflow: 'visible', cursor: 'crosshair' }}
           preserveAspectRatio="none"
+          onMouseMove={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const svgX = ((e.clientX - rect.left) / rect.width) * width;
+            const idx = findClosestCandleIndex(svgX, leftPad, candleGap, count);
+            setHoverIndex(idx);
+          }}
+          onMouseLeave={() => setHoverIndex(null)}
         >
           {/* 背景參考格線 */}
           <line
@@ -369,7 +620,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
             {priceRange.min.toFixed(0)}
           </text>
 
-          {/* K 線蠟燭與量能直方柱 */}
+          {/* K 線蠟燭繪製 */}
           {displayCandles.map((c, idx) => {
             const cx = getX(idx);
             const isBull = c.close >= c.open;
@@ -384,10 +635,6 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
             const candleTop = Math.min(yOpen, yClose);
             const candleBodyHeight = Math.max(1.5, Math.abs(yClose - yOpen));
 
-            // 成交量直方柱 (位於 klineHeight + 10 之下)
-            const volBarHeight = Math.max(2, (c.volume / maxVol) * (volHeight - 10));
-            const volY = totalHeight - 15 - volBarHeight;
-
             return (
               <g key={idx}>
                 {/* 影線 */}
@@ -400,15 +647,6 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
                   height={candleBodyHeight}
                   fill={color}
                   rx="1"
-                />
-                {/* 成交量 */}
-                <rect
-                  x={cx - candleWidth / 2}
-                  y={volY}
-                  width={candleWidth}
-                  height={volBarHeight}
-                  fill={color}
-                  opacity="0.75"
                 />
               </g>
             );
@@ -459,9 +697,169 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
             </g>
           ))}
 
+          {/* 副圖分界線 */}
+          <line
+            x1={leftPad}
+            y1={subchartTop}
+            x2={width - rightPad}
+            y2={subchartTop}
+            stroke="rgba(255, 255, 255, 0.15)"
+          />
+
+          {/* 副圖：VOL (成交量直方柱) */}
+          {subchartMode === 'VOL' &&
+            displayCandles.map((c, idx) => {
+              const cx = getX(idx);
+              const isBull = c.close >= c.open;
+              const color = isBull ? bullColor : bearColor;
+              const volBarHeight = Math.max(2, (c.volume / maxVol) * (volHeight - 10));
+              const volY = totalHeight - 15 - volBarHeight;
+              return (
+                <rect
+                  key={'v' + idx}
+                  x={cx - candleWidth / 2}
+                  y={volY}
+                  width={candleWidth}
+                  height={volBarHeight}
+                  fill={color}
+                  opacity="0.75"
+                />
+              );
+            })}
+
+          {/* 副圖：KD 指標 (K9/D9 折線與 80/20 參考線) */}
+          {subchartMode === 'KD' && (
+            <g>
+              {/* 80 與 20 參考線 */}
+              <line
+                x1={leftPad}
+                y1={subchartTop + 0.2 * subchartPlotHeight}
+                x2={width - rightPad}
+                y2={subchartTop + 0.2 * subchartPlotHeight}
+                stroke="rgba(239, 68, 68, 0.3)"
+                strokeDasharray="2 2"
+              />
+              <line
+                x1={leftPad}
+                y1={subchartTop + 0.8 * subchartPlotHeight}
+                x2={width - rightPad}
+                y2={subchartTop + 0.8 * subchartPlotHeight}
+                stroke="rgba(16, 185, 129, 0.3)"
+                strokeDasharray="2 2"
+              />
+              <polyline points={kdKPoints} fill="none" stroke="#fbbf24" strokeWidth="1.5" />
+              <polyline points={kdDPoints} fill="none" stroke="#38bdf8" strokeWidth="1.5" />
+            </g>
+          )}
+
+          {/* 副圖：MACD 指標 (DIF, DEA, 柱狀體) */}
+          {subchartMode === 'MACD' && (
+            <g>
+              {/* 零軸線 */}
+              <line
+                x1={leftPad}
+                y1={subchartTop + subchartPlotHeight / 2}
+                x2={width - rightPad}
+                y2={subchartTop + subchartPlotHeight / 2}
+                stroke="rgba(255, 255, 255, 0.2)"
+              />
+              {/* 柱狀體 */}
+              {displayCandles.map((c, idx) => {
+                if (c.macdHist === undefined) return null;
+                const cx = getX(idx);
+                const midY = subchartTop + subchartPlotHeight / 2;
+                const barH = (Math.abs(c.macdHist) / maxMacdAbs) * (subchartPlotHeight / 2 - 2);
+                const y = c.macdHist >= 0 ? midY - barH : midY;
+                const color = c.macdHist >= 0 ? bullColor : bearColor;
+                return (
+                  <rect
+                    key={'mh' + idx}
+                    x={cx - candleWidth / 2}
+                    y={y}
+                    width={candleWidth}
+                    height={Math.max(1, barH)}
+                    fill={color}
+                    opacity="0.8"
+                  />
+                );
+              })}
+              <polyline points={macdDifPoints} fill="none" stroke="#60a5fa" strokeWidth="1.4" />
+              <polyline points={macdDeaPoints} fill="none" stroke="#f59e0b" strokeWidth="1.4" />
+            </g>
+          )}
+
+          {/* 副圖：RSI 指標 (RSI14 折線與 70/30 參考線) */}
+          {subchartMode === 'RSI' && (
+            <g>
+              <line
+                x1={leftPad}
+                y1={subchartTop + 0.3 * subchartPlotHeight}
+                x2={width - rightPad}
+                y2={subchartTop + 0.3 * subchartPlotHeight}
+                stroke="rgba(239, 68, 68, 0.3)"
+                strokeDasharray="2 2"
+              />
+              <line
+                x1={leftPad}
+                y1={subchartTop + 0.7 * subchartPlotHeight}
+                x2={width - rightPad}
+                y2={subchartTop + 0.7 * subchartPlotHeight}
+                stroke="rgba(16, 185, 129, 0.3)"
+                strokeDasharray="2 2"
+              />
+              <polyline points={rsiPoints} fill="none" stroke="#c084fc" strokeWidth="1.5" />
+            </g>
+          )}
+
+          {/* 十字光標 (Crosshair) 繪製 */}
+          {hoverIndex !== null && hoveredCandle && (
+            <g>
+              {/* 垂直線 */}
+              <line
+                x1={getX(hoverIndex)}
+                y1={10}
+                x2={getX(hoverIndex)}
+                y2={totalHeight - 15}
+                stroke="rgba(255, 255, 255, 0.45)"
+                strokeWidth="1"
+                strokeDasharray="3 3"
+              />
+              {/* 水平線 (指向收盤價) */}
+              <line
+                x1={leftPad}
+                y1={projectPriceToY(hoveredCandle.close, priceRange, klineHeight, 15, 15)}
+                x2={width - rightPad}
+                y2={projectPriceToY(hoveredCandle.close, priceRange, klineHeight, 15, 15)}
+                stroke="rgba(255, 255, 255, 0.45)"
+                strokeWidth="1"
+                strokeDasharray="3 3"
+              />
+              {/* Y 軸游標價格標籤 */}
+              <rect
+                x={width - rightPad + 2}
+                y={projectPriceToY(hoveredCandle.close, priceRange, klineHeight, 15, 15) - 8}
+                width="48"
+                height="16"
+                rx="3"
+                fill="#3b82f6"
+              />
+              <text
+                x={width - rightPad + 6}
+                y={projectPriceToY(hoveredCandle.close, priceRange, klineHeight, 15, 15) + 4}
+                fill="#ffffff"
+                fontSize="9"
+                fontWeight="700"
+                fontFamily="monospace"
+              >
+                {hoveredCandle.close.toFixed(0)}
+              </text>
+            </g>
+          )}
+
           {/* 底部時間軸標籤 (抽樣顯示) */}
           {displayCandles.map((c, idx) => {
-            if (idx % 6 !== 0 && idx !== count - 1) return null;
+            const step = Math.max(4, Math.floor(count / 7));
+            if (idx % step !== 0 && idx !== count - 1) return null;
             const cx = getX(idx);
             return (
               <text
