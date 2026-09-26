@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1124%2F1124%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1132%2F1132%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,7 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. AI 主力戰情室三大法人真實籌碼管線與中間量化卡片群 (Card 10~17) 真實指標動態化 (`AI Force Live Quant Pipeline & Full Bento Synergy`) *(V8.56.0 全新發布)*
+### 0. AI 主力戰情室三大法人真實籌碼管線、中間量化卡片群與底部任務視圖全景動態驅動 (`AI Force Live Quant Pipeline, Bento & Task Views Full Synergy`) *(V8.56.0 全新發布)*
 - **三大法人歷史籌碼真實管線 (`Institutional Historical Ingestion Pipeline`)**：
   - 串接 TWSE / TPEx 官方每日盤後買賣超日報庫與本地 IndexedDB settings 快取。切換台股標的（如 2330 台積電、2360 致茂）時，自動萃取歷史 20 日外資、投信、自營商真實淨買賣超數列（`RawInstitutionalRecord`），終結寫死靜態數值。
   - **美股與無資料代理降級保護 (`Proxy Volume Model`)**：針對美股或無法人進出之台股標的，以日 K 成交量與實體紅黑 K 計算量能多空代理值，保證 SVG 圖表與指標永不除零或拋錯。
@@ -24,6 +24,11 @@
   - **12 主力動態信號 (`dynamicSignals`)**：結合 20 日 VWAP 乖離率、KD、RSI 與籌碼集中度動態判定趨勢與紅/黃/綠燈號。
   - **16 買賣力分佈 (`forceDistribution`)**：依紅黑量能多空比動態推算大戶買盤、散戶買盤與散戶賣壓三環佔比。
   - **17 多空強度評等 (`bullBearStrength`)**：多空強度與 1~5 級信號動態連動。
+- **底部 5 大任務視圖動態資料綁定與原生 SVG 走勢繪圖 (`Task Views Full Synergy`)**：
+  - **任務二 (技術警示矩陣)**：動態計算均線發散/糾結、VWAP 乖離突變、KD/RSI 動能警戒與隔日沖換手率，顯示真實數值與時戳。
+  - **任務三 (KD + MA 圖表)**：即時連動最新真實 K/D/MA20 數值與交叉狀態，以純原生 SVG 繪製近 30 日走勢與 80/20 刻度。
+  - **任務四 (MACD 圖表)**：即時呈現 DIF/MACD/OSC 與紅綠柱擴張狀態，以純原生 SVG 繪製零軸雙線與動能柱狀圖。
+  - **任務五 (原始資料總表)**：完整展示歷史日 K 數列與多維技術指標，並支援每頁 10 筆之客戶端平滑分頁切換。
 
 ### 0. AI 主力戰情室 4 排 Bento-Grid 佈局矩陣與實拍像素級對齊 (`AI Force 4-Row Bento Grid`) *(V8.53.1 全新發布)*
 - **實拍像素級 4 排 Bento-Grid 矩陣佈局**：
