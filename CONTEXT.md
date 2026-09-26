@@ -1800,6 +1800,26 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - **全量券商明細 100% 勾稽**：校準 2025 年度 2890 永豐金（毛額 22,750 元、實領 22,260 元）與 0050 元大台灣50（毛額 1,400 元、實領 1,390 元），確立全量含泰銘 2025 台股應發毛額 625,508 元與實領淨額 615,480 元，完全吻合永豐金大戶投 APP 歷史紀錄與銀行存摺。
   - **透明對帳指示器 (`DividendLogView.tsx`)**：於首張 KPI 卡片提供雙口徑（券商應發毛額 vs 存摺實領淨額）切換與清晰懸浮提示，杜絕稅費扣繳與到帳時間之誤解。
 
+### AI 主力行為判讀與全功能量化決策儀表板 *(新增於 V8.53.0 / Spec #0140 / Issue #93)*
+
+- **AI Force Decision Dashboard (主力戰情室)**:
+  - 核心定義：整合 18 張多維度分析卡片、5 大任務視圖切換與 5 大格式匯出之高階量化分析戰情室，單一聚合資料契約為 `AiForceDashboardReport`。
+- **Volume Profile (成交量價位分佈熱區)**:
+  - 核心機制：透過 `volumeProfileEngine` 統計歷史成交量在各價格區間之集中度，標示主力建倉與套牢籌碼峰值。
+- **VWAP Cost Structure (主力成本結構)**:
+  - 核心機制：依據 20 日成交量加權平均價格 (VWAP) 計算多頭突破區、大量成交區、主力成本區與套牢區之偏離帶。
+- **Day Trade Risk Index (隔日沖風險指數)**:
+  - 核心機制：透過 `dayTradeRiskEngine` 計算主力賣出異常、換手率、沖銷比例、隔日回檔風險與日內波動率 5 大量化指標，輸出低/中/高風險指數。
+- **Market Sentiment Gauge (市場情緒速度計)**:
+  - 核心機制：透過 `marketSentimentEngine` 推估整體恐慌/中性/貪婪情緒指數，並細分散戶、法人與主力參與者情緒水平條。
+- **MLP-AI Main Force Semantic Synthesis (主力語意分析合成)**:
+  - 核心機制：由 `mainForceSemanticEngine` 綜合法人 5 日買賣超、VWAP 偏離與 RSI，動態生成核心語意動作動詞（調節減碼、積極進貨等）與自然語言研判結論。
+- **Task Views Switcher (5 大任務視圖切換器)**:
+  - 包含任務一（綜合分析報告 18 卡 Bento Grid）、任務二（技術警示報告）、任務三（KD+MA 圖表）、任務四（MACD 圖表）與任務五（原始量化數據總表）。
+- **Safe Export Pipeline (5 大安全匯出管線)**:
+  - 包含儀表板 PNG 快照、全部圖表 PNG、具備 DDE 巨集防禦之安全 CSV 數據報表、單檔離線 HTML 總結報告與原生 `@media print` PDF 匯出。
+
+
 
 
 

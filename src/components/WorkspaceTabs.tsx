@@ -1,6 +1,6 @@
-import { PieChart, TrendingUp, History, Settings, Wallet, Coins, Activity, Compass, Flame, Brain, BarChart3 } from 'lucide-react';
+import { PieChart, TrendingUp, History, Settings, Wallet, Coins, Activity, Compass, Flame, Brain, BarChart3, Sparkles } from 'lucide-react';
 
-export type WorkspaceTabKey = 'portfolio' | 'analysis' | 'health' | 'warroom' | 'musclebooker' | 'behavioral' | 'fire' | 'growth' | 'chips' | 'dividend' | 'cash' | 'ledger' | 'settings' | 'friction';
+export type WorkspaceTabKey = 'portfolio' | 'aiforce' | 'analysis' | 'health' | 'warroom' | 'musclebooker' | 'behavioral' | 'fire' | 'growth' | 'chips' | 'dividend' | 'cash' | 'ledger' | 'settings' | 'friction';
 
 interface WorkspaceTabsProps {
   activeTab: WorkspaceTabKey;
@@ -44,6 +44,14 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
       badge: `${holdingsCount} 標的`,
       badgeColor: '#60a5fa',
       badgeBg: 'rgba(59, 130, 246, 0.15)',
+    },
+    {
+      key: 'aiforce',
+      label: '主力戰情室',
+      icon: <Sparkles size={16} />,
+      badge: '全景 AI 決策',
+      badgeColor: '#38bdf8',
+      badgeBg: 'rgba(56, 189, 248, 0.15)',
     },
     {
       key: 'analysis',

@@ -69,6 +69,7 @@ import { FirePlanningWorkspace } from './components/FirePlanningWorkspace';
 import { SettingsWorkspace } from './components/SettingsWorkspace';
 import { BehavioralAuditWorkspace } from './components/BehavioralAuditWorkspace';
 import { StockAnalysisWorkspace } from './components/analysis/StockAnalysisWorkspace';
+import { AiForceDashboardView } from './components/aiForceDashboard/AiForceDashboardView';
 import { ReconciliationModal } from './components/ReconciliationModal';
 import { syncTradesWithCashTransactions, calculateAccountBalances, aggregateInterestIncomeDetails, reconcilePendingDividendTrades } from './engine/cashLedgerEngine';
 import { calculatePortfolioXirr, calculateSecurityXirr, XirrResult, CashFlowEvent } from './engine/xirrCalculator';
@@ -856,6 +857,15 @@ export const App: React.FC = () => {
             onOpenFinancialForensic={handleOpenFinancialForensic}
           />
         </>
+      )}
+
+      {/* 活頁: ⚡ 主力戰情室 (AI Force Decision Dashboard) */}
+      {activeTab === 'aiforce' && (
+        <AiForceDashboardView
+          initialSymbol="2360"
+          initialMarket="TW"
+          holdings={holdings}
+        />
       )}
 
       {/* 活頁: 📊 個股深度分析 (全面收編股票健診) */}
