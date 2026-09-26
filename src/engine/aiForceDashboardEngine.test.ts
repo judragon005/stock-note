@@ -177,6 +177,80 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
         expect(report.institutionalFlow.recent5DaysSummary).toBeDefined();
       });
     });
+
+    describe('中間量化卡片群 (Card 10~17) 真實指標加權與動態化 (Spec 0143 Ticket 2)', () => {
+      it('全紅 K 數列時，Card 10 多空能量比應正確反映 100% 偏多量能，比值大於 1', () => {
+        const bullCandles = Array.from({ length: 20 }, (_, i) => ({
+          date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+          open: 100 + i * 2,
+          high: 105 + i * 2,
+          low: 99 + i * 2,
+          close: 104 + i * 2, // 永遠 close > open (紅 K)
+          volume: 2000,
+        }));
+
+        const report = generateAiForceReportFromCandles('2330', '台積電', 'TW', bullCandles);
+
+        // Card 10 (bullBearEnergy)
+        expect(report.bullBearEnergy.bullEnergyPercent).toBe(100);
+        expect(report.bullBearEnergy.bearEnergyPercent).toBe(0);
+        expect(report.bullBearEnergy.bullBearRatio).toBeGreaterThan(1);
+        expect(report.bullBearEnergy.bullBearConclusion).toMatch(/(偏多|多方強勢|極度偏多)/);
+      });
+
+      it('全黑 K 數列時，Card 10 多空能量比應反映 100% 偏空量能', () => {
+        const bearCandles = Array.from({ length: 20 }, (_, i) => ({
+          date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+          open: 200 - i * 2,
+          high: 201 - i * 2,
+          low: 190 - i * 2,
+          close: 192 - i * 2, // 永遠 close < open (黑 K)
+          volume: 1500,
+        }));
+
+        const report = generateAiForceReportFromCandles('2330', '台積電', 'TW', bearCandles);
+
+        expect(report.bullBearEnergy.bullEnergyPercent).toBe(0);
+        expect(report.bullBearEnergy.bearEnergyPercent).toBe(100);
+        expect(report.bullBearEnergy.bullBearRatio).toBeLessThan(1);
+        expect(report.bullBearEnergy.bullBearConclusion).toMatch(/(偏空|極度偏空|空方強勢)/);
+      });
+
+      it('強勢多頭排列且法人買超時，Card 11 健康度與 Card 12 動態信號應客觀呈現偏多或優良評級', () => {
+        const strongCandles = Array.from({ length: 30 }, (_, i) => ({
+          date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+          open: 1000 + i * 20,
+          high: 1030 + i * 20,
+          low: 990 + i * 20,
+          close: 1025 + i * 20,
+          volume: 5000,
+        }));
+
+        const mockInst = Array.from({ length: 30 }, (_, i) => ({
+          date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+          foreignShares: 500,
+          trustShares: 300,
+          dealerShares: 100,
+        }));
+
+        const report = generateAiForceReportFromCandles('2330', '台積電', 'TW', strongCandles, undefined, mockInst);
+
+        // Card 11 (healthSummary)
+        expect(report.healthSummary.chipHealth).toBeGreaterThanOrEqual(60);
+        expect(report.healthSummary.technicalStructure).toBeGreaterThanOrEqual(70);
+        expect(report.healthSummary.overallRatingLabel).toMatch(/(良好|優良)/);
+
+        // Card 12 (dynamicSignals)
+        expect(report.dynamicSignals.trendSignal).toMatch(/多/);
+        expect(report.dynamicSignals.chipSignal).toMatch(/(集中|合買|偏強|偏多)/);
+        expect(report.dynamicSignals.verdictLight).not.toBe('RED');
+
+        // Card 16 (forceDistribution) & Card 17 (bullBearStrength)
+        expect(report.forceDistribution.largePlayerBuyPercent).toBeGreaterThanOrEqual(50);
+        expect(report.bullBearStrength.bullStrengthPercent).toBeGreaterThan(report.bullBearStrength.bearStrengthPercent);
+        expect(report.bullBearStrength.signalTierLevel).toBeLessThanOrEqual(3);
+      });
+    });
   });
 });
 

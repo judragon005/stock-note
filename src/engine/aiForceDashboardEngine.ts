@@ -1,5 +1,14 @@
 import { MarketType } from '../types/stock';
-import { AiForceDashboardReport, InstitutionalFlowData } from '../types/aiForceDashboard';
+import {
+  AiForceDashboardReport,
+  InstitutionalFlowData,
+  BullBearEnergyData,
+  HealthSummaryData,
+  DynamicSignalsData,
+  ForceDistributionData,
+  BullBearStrengthData,
+  KlineCandleItem,
+} from '../types/aiForceDashboard';
 import { calculateVolumeProfile } from './volumeProfileEngine';
 import { calculateRiskSpider } from './riskSpiderEngine';
 import { calculateForecastCone } from './forecastConeEngine';
@@ -332,6 +341,317 @@ export function buildInstitutionalFlow(
 }
 
 /**
+ * 依據紅 K 與黑 K 成交量計算多空能量比 (Card 10)
+ */
+export function calculateBullBearEnergyFromCandles(
+  candles: Array<{ open: number; close: number; volume: number }>
+): BullBearEnergyData {
+  const recent20 = candles.slice(-20);
+  let bullVol = 0;
+  let bearVol = 0;
+  for (const c of recent20) {
+    if (c.close >= c.open) {
+      bullVol += c.volume;
+    } else {
+      bearVol += c.volume;
+    }
+  }
+
+  if (bullVol <= 0 && bearVol <= 0) {
+    return {
+      bullEnergyPercent: 50,
+      bearEnergyPercent: 50,
+      bullBearRatio: 1,
+      bullBearConclusion: '均衡',
+      noteText: '(20日紅K量/黑K量)',
+    };
+  }
+
+  if (bearVol <= 0 && bullVol > 0) {
+    return {
+      bullEnergyPercent: 100,
+      bearEnergyPercent: 0,
+      bullBearRatio: 99.99,
+      bullBearConclusion: '極度偏多',
+      noteText: '(20日紅K量/黑K量)',
+    };
+  }
+
+  if (bullVol <= 0 && bearVol > 0) {
+    return {
+      bullEnergyPercent: 0,
+      bearEnergyPercent: 100,
+      bullBearRatio: 0,
+      bullBearConclusion: '極度偏空',
+      noteText: '(20日紅K量/黑K量)',
+    };
+  }
+
+  const total = bullVol + bearVol;
+  const bullEnergyPercent = Math.round((bullVol / total) * 100);
+  const bearEnergyPercent = 100 - bullEnergyPercent;
+  const bullBearRatio = Math.round((bullVol / bearVol) * 100) / 100;
+
+  let bullBearConclusion = '均衡';
+  if (bullBearRatio >= 1.5) {
+    bullBearConclusion = '多方強勢';
+  } else if (bullBearRatio > 1.05) {
+    bullBearConclusion = '偏多';
+  } else if (bullBearRatio <= 0.67) {
+    bullBearConclusion = '空方強勢';
+  } else if (bullBearRatio < 0.95) {
+    bullBearConclusion = '偏空';
+  }
+
+  return {
+    bullEnergyPercent,
+    bearEnergyPercent,
+    bullBearRatio,
+    bullBearConclusion,
+    noteText: '(20日紅K量/黑K量)',
+  };
+}
+
+/**
+ * 依據均線、量能與法人動向計算健康度 5 環綜合評估 (Card 11)
+ */
+export function calculateHealthSummaryFromCandles(
+  candles: KlineCandleItem[],
+  institutionalFlow: InstitutionalFlowData
+): HealthSummaryData {
+  const last = candles[candles.length - 1];
+
+  // 1. 籌碼健康度
+  let chipHealth = 50;
+  if (institutionalFlow.history.length > 0) {
+    const last5 = institutionalFlow.history.slice(-5);
+    const sum5 = last5.reduce((acc, cur) => acc + cur.foreignShares + cur.trustShares + cur.dealerShares, 0);
+    if (sum5 > 1000) chipHealth = 85;
+    else if (sum5 > 200) chipHealth = 70;
+    else if (sum5 > 0) chipHealth = 60;
+    else if (sum5 < -1000) chipHealth = 25;
+    else if (sum5 < -200) chipHealth = 35;
+    else chipHealth = 45;
+  }
+
+  // 2. 技術型態 (均線多頭排列度)
+  let technicalStructure = 50;
+  const ma5 = last.ma5 ?? last.close;
+  const ma10 = last.ma10 ?? last.close;
+  const ma20 = last.ma20 ?? last.close;
+  const ma60 = last.ma60 ?? last.close;
+  if (last.close > ma5 && ma5 > ma10 && ma10 > ma20 && ma20 > ma60) {
+    technicalStructure = 90;
+  } else if (last.close > ma20 && ma5 > ma20) {
+    technicalStructure = 75;
+  } else if (last.close < ma20 && last.close > ma60) {
+    technicalStructure = 45;
+  } else if (last.close < ma60) {
+    technicalStructure = 25;
+  }
+
+  // 3. 資金動能 (最新日成交量相對 20 日均量)
+  const recent20 = candles.slice(-20);
+  const avgVol20 = recent20.reduce((acc, c) => acc + c.volume, 0) / Math.max(1, recent20.length);
+  const volRatio = avgVol20 > 0 ? last.volume / avgVol20 : 1;
+  let capitalMomentum = 50;
+  const isUp = last.close >= last.open;
+  if (isUp && volRatio > 1.5) capitalMomentum = 85;
+  else if (isUp && volRatio > 1.0) capitalMomentum = 70;
+  else if (!isUp && volRatio > 1.5) capitalMomentum = 30;
+  else if (!isUp && volRatio > 1.0) capitalMomentum = 40;
+  else capitalMomentum = 55;
+
+  // 4. 流動性風險 (5日日均成交量)
+  const recent5 = candles.slice(-5);
+  const avgVol5 = recent5.reduce((acc, c) => acc + c.volume, 0) / Math.max(1, recent5.length);
+  let liquidityRisk = 15;
+  if (avgVol5 > 3000) liquidityRisk = 5;
+  else if (avgVol5 > 1000) liquidityRisk = 12;
+  else if (avgVol5 > 300) liquidityRisk = 28;
+  else liquidityRisk = 60;
+
+  // 5. 法人支撐力 (20日法人累計買賣超)
+  let institutionalSupport = 50;
+  if (institutionalFlow.history.length > 0) {
+    const lastInst = institutionalFlow.history[institutionalFlow.history.length - 1];
+    const cum = lastInst.cumulativeTotalShares;
+    if (cum > 2000) institutionalSupport = 85;
+    else if (cum > 500) institutionalSupport = 70;
+    else if (cum > 0) institutionalSupport = 58;
+    else if (cum < -2000) institutionalSupport = 20;
+    else if (cum < -500) institutionalSupport = 35;
+    else institutionalSupport = 45;
+  }
+
+  const values = [chipHealth, technicalStructure, capitalMomentum, liquidityRisk, institutionalSupport];
+  const averageScore = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+  let overallRatingLabel = '普通 (平均 50 分)';
+  if (averageScore >= 75) overallRatingLabel = `優良 (平均 ${averageScore} 分)`;
+  else if (averageScore >= 60) overallRatingLabel = `良好 (平均 ${averageScore} 分)`;
+  else if (averageScore >= 45) overallRatingLabel = `普通 (平均 ${averageScore} 分)`;
+  else overallRatingLabel = `偏弱 (平均 ${averageScore} 分)`;
+
+  return {
+    chipHealth,
+    technicalStructure,
+    capitalMomentum,
+    liquidityRisk,
+    institutionalSupport,
+    overallRatingLabel,
+  };
+}
+
+/**
+ * 依據收盤價、VWAP 乖離率與法人方向計算主力動態信號 (Card 12)
+ */
+export function calculateDynamicSignalsFromCandles(
+  candles: KlineCandleItem[],
+  mainForceCost: number,
+  institutionalFlow: InstitutionalFlowData
+): DynamicSignalsData {
+  const last = candles[candles.length - 1];
+  const vwapBias = mainForceCost > 0 ? ((last.close - mainForceCost) / mainForceCost) * 100 : 0;
+
+  // 1. 趨勢信號
+  let trendSignal = '區間整理';
+  if (vwapBias > 4) trendSignal = '偏多偏強';
+  else if (vwapBias > 0) trendSignal = '溫和偏多';
+  else if (vwapBias < -4) trendSignal = '破線偏空';
+  else trendSignal = '偏弱整理';
+
+  // 2. 籌碼信號
+  let chipSignal = '籌碼中性';
+  if (institutionalFlow.history.length > 0) {
+    const last5 = institutionalFlow.history.slice(-5);
+    const sum5 = last5.reduce((acc, cur) => acc + cur.foreignShares + cur.trustShares + cur.dealerShares, 0);
+    const lastInst = institutionalFlow.history[institutionalFlow.history.length - 1];
+    if (lastInst.foreignShares > 0 && lastInst.trustShares > 0) {
+      chipSignal = '土洋合買';
+    } else if (lastInst.foreignShares * lastInst.trustShares < 0) {
+      chipSignal = '土洋對作';
+    } else if (sum5 > 500) {
+      chipSignal = '籌碼集中';
+    } else if (sum5 < -500) {
+      chipSignal = '籌碼渙散';
+    }
+  }
+
+  // 3. 動能信號
+  let momentumSignal = '動能整理';
+  const k = last.k ?? 50;
+  const d = last.d ?? 50;
+  const rsi = last.rsi ?? 50;
+  if (rsi > 75) momentumSignal = '動能過熱';
+  else if (rsi < 30) momentumSignal = '動能超跌';
+  else if (k > d && rsi > 50) momentumSignal = '動能偏強';
+  else if (k < d && rsi < 50) momentumSignal = '動能偏弱';
+
+  // 4. 風險信號
+  let riskSignal = '風險可控';
+  const ma20 = last.ma20 ?? last.close;
+  if (last.close < ma20 && vwapBias < -5) {
+    riskSignal = '破位警戒';
+  } else if (rsi > 75 || Math.abs(vwapBias) > 8) {
+    riskSignal = '波動偏高';
+  }
+
+  // 5. 燈號
+  let verdictLight: 'GREEN' | 'YELLOW' | 'RED' = 'YELLOW';
+  if (riskSignal === '破位警戒') {
+    verdictLight = 'RED';
+  } else if (
+    (trendSignal.includes('多') || trendSignal.includes('強')) &&
+    (chipSignal.includes('合買') || chipSignal.includes('集中') || momentumSignal.includes('強'))
+  ) {
+    verdictLight = 'GREEN';
+  }
+
+  const verdictLabel =
+    verdictLight === 'RED'
+      ? '紅燈 (高風險)'
+      : verdictLight === 'YELLOW'
+      ? '黃燈 (觀望整理)'
+      : '綠燈 (多頭順風)';
+
+  return {
+    trendSignal,
+    chipSignal,
+    momentumSignal,
+    riskSignal,
+    verdictLight,
+    verdictLabel,
+  };
+}
+
+/**
+ * 依據日 K 紅黑量能動態推算買賣力分佈 (Card 16)
+ */
+export function calculateForceDistributionFromCandles(
+  candles: KlineCandleItem[],
+  asOfDate: string
+): ForceDistributionData {
+  const recent20 = candles.slice(-20);
+  let bullVol = 0;
+  let bearVol = 0;
+  for (const c of recent20) {
+    if (c.close >= c.open) bullVol += c.volume;
+    else bearVol += c.volume;
+  }
+  const total = bullVol + bearVol;
+  const bullRatio = total > 0 ? bullVol / total : 0.5;
+
+  const largePlayerBuyPercent = Math.min(85, Math.max(25, Math.round(bullRatio * 60 + 20)));
+  const retailBuyPercent = 100 - largePlayerBuyPercent;
+  const retailSellPressurePercent = Math.min(80, Math.max(20, Math.round((1 - bullRatio) * 55 + 20)));
+
+  return {
+    largePlayerBuyPercent,
+    retailBuyPercent,
+    retailSellPressurePercent,
+    asOfDateText: `${asOfDate} (法人買進/賣出佔成交量比例，依 20 日平均)`,
+  };
+}
+
+/**
+ * 依據 RSI、KD 與均線綜合計算多空強度分佈 (Card 17)
+ */
+export function calculateBullBearStrengthFromCandles(
+  candles: KlineCandleItem[]
+): BullBearStrengthData {
+  const last = candles[candles.length - 1];
+  const rsi = last.rsi ?? 50;
+  const k = last.k ?? 50;
+  const ma20 = last.ma20 ?? last.close;
+
+  let bullStrengthPercent = Math.round(rsi * 0.45 + k * 0.35 + (last.close >= ma20 ? 20 : 0));
+  bullStrengthPercent = Math.max(5, Math.min(95, bullStrengthPercent));
+  const bearStrengthPercent = 100 - bullStrengthPercent;
+
+  const recent20 = candles.slice(-20);
+  const avg20 = recent20.reduce((acc, c) => acc + c.volume, 0) / Math.max(1, recent20.length);
+  const recent5 = candles.slice(-5);
+  const avg5 = recent5.reduce((acc, c) => acc + c.volume, 0) / Math.max(1, recent5.length);
+  const volumeStrengthPercent = Math.max(10, Math.min(95, Math.round((avg20 > 0 ? avg5 / avg20 : 1) * 50)));
+
+  const compositeScore = Math.round(bullStrengthPercent * 0.6 + volumeStrengthPercent * 0.4);
+  let tier = 3;
+  if (compositeScore >= 80) tier = 1;
+  else if (compositeScore >= 65) tier = 2;
+  else if (compositeScore >= 50) tier = 3;
+  else if (compositeScore >= 35) tier = 4;
+  else tier = 5;
+
+  return {
+    bullStrengthPercent,
+    bearStrengthPercent,
+    volumeStrengthPercent,
+    signalTierLevel: tier,
+    compositeScore,
+  };
+}
+
+/**
  * 依據真實歷史日 K (OHLCV) 數列動態生成完整的 AiForceDashboardReport (Spec 0140 階段一 & Spec 0143 階段二)
  */
 export function generateAiForceReportFromCandles(
@@ -601,6 +921,11 @@ export function generateAiForceReportFromCandles(
     dayTradeRisk,
     institutionalFlow,
     chipsSummary,
+    bullBearEnergy: calculateBullBearEnergyFromCandles(candles),
+    healthSummary: calculateHealthSummaryFromCandles(klineCandles, institutionalFlow),
+    dynamicSignals: calculateDynamicSignalsFromCandles(klineCandles, mainForceCost, institutionalFlow),
+    forceDistribution: calculateForceDistributionFromCandles(klineCandles, last.date),
+    bullBearStrength: calculateBullBearStrengthFromCandles(klineCandles),
 
     mainForceVerdict: {
       primaryVerb,
