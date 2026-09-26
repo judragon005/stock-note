@@ -156,19 +156,32 @@ describe('KLineChartCard - 專業互動與多功能副圖 (Ticket 35 / Stage 1)'
   });
 
   describe('findClosestCandleIndex - 十字游標動態吸附計算', () => {
-    it('應依據滑鼠 X 座標精確計算最近的 K 棒索引', () => {
-      // 假設 leftPad = 20, candleGap = 10, count = 30
-      // 點在 x = 25 (落在第 0 根中心 25 處)
+    it('應依據滑鼠 X 座標精確計算最近的 K 棒索引（以 K 棒中心點對稱磁吸）', () => {
+      // leftPad = 20, candleGap = 10, count = 30
+      // 第 0 根中心在 25。在 20~29.9 之間均應穩定磁吸至第 0 根
+      expect(findClosestCandleIndex(21, 20, 10, 30)).toBe(0);
       expect(findClosestCandleIndex(25, 20, 10, 30)).toBe(0);
-      // 點在 x = 35 (第 1 根)
+      expect(findClosestCandleIndex(29, 20, 10, 30)).toBe(0);
+
+      // 第 1 根中心在 35。在 30~39.9 之間應磁吸至第 1 根
+      expect(findClosestCandleIndex(30, 20, 10, 30)).toBe(1);
       expect(findClosestCandleIndex(35, 20, 10, 30)).toBe(1);
-      // 點在 x = 115 (第 9 根)
-      expect(findClosestCandleIndex(115, 20, 10, 30)).toBe(9);
+      expect(findClosestCandleIndex(39, 20, 10, 30)).toBe(1);
     });
 
     it('滑鼠移出左右邊界時應安全 clamp 於 [0, count - 1]', () => {
       expect(findClosestCandleIndex(-10, 20, 10, 30)).toBe(0);
       expect(findClosestCandleIndex(1000, 20, 10, 30)).toBe(29);
+    });
+
+    it('當 count <= 0 時應防禦性回傳 -1，避免未定義陣列索引存取', () => {
+      expect(findClosestCandleIndex(50, 20, 10, 0)).toBe(-1);
+      expect(findClosestCandleIndex(50, 20, 10, -5)).toBe(-1);
+    });
+
+    it('當 candleGap <= 0 時應防禦除零錯誤，回傳 0', () => {
+      expect(findClosestCandleIndex(50, 20, 0, 10)).toBe(0);
+      expect(findClosestCandleIndex(50, 20, -2, 10)).toBe(0);
     });
   });
 });
