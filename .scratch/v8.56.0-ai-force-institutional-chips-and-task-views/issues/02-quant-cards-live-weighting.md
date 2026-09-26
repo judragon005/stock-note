@@ -9,9 +9,9 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] 在 `aiForceDashboardEngine.ts` 實作多空能量比、健康度 5 環評估、動態信號、買賣力分佈與多空強度的純函式計算邏輯。
-- [ ] 支援美股或特殊標的極限邊界（成交量全為 0、價格連續漲停/跌停無震幅等）安全防護。
-- [ ] 擴充單元測試驗證各卡片數值與邊界情況（100% 綠燈）。
-- [ ] 在 `AiForceDashboardView.tsx` 與各卡片無縫連動渲染。
+- [x] 在 `aiForceDashboardEngine.ts` 實作多空能量比、健康度 5 環評估、動態信號、買賣力分佈與多空強度的純函式計算邏輯。
+- [x] 支援美股或特殊標的極限邊界（成交量全為 0、價格連續漲停/跌停無震幅等）安全防護。
+- [x] 擴充單元測試驗證各卡片數值與邊界情況（100% 綠燈）。
+- [x] 在 `AiForceDashboardView.tsx` 與各卡片無縫連動渲染。
