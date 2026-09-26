@@ -6,8 +6,8 @@
 **Blocked by:**
 01 — 核心型態定義與工作區導航註冊
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] 清晰排版當日四大籌碼數字與增減色彩
-- [ ] 繪製輕量 SVG Sparkline 折線微圖
-- [ ] 單元測試覆蓋 Sparkline 座標歸一化計算
+- [x] 清晰排版當日四大籌碼數字與增減色彩
+- [x] 繪製輕量 SVG Sparkline 折線微圖
+- [x] 單元測試覆蓋 Sparkline 座標歸一化計算

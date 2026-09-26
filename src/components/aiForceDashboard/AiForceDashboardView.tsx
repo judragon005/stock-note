@@ -17,6 +17,10 @@ import { BullBearEnergyCard } from './cards/BullBearEnergyCard';
 import { HealthSummaryCard } from './cards/HealthSummaryCard';
 import { DynamicSignalsCard } from './cards/DynamicSignalsCard';
 import { MarketSentimentCard } from './cards/MarketSentimentCard';
+import { AiConfidenceCard } from './cards/AiConfidenceCard';
+import { ChipsSummaryCard } from './cards/ChipsSummaryCard';
+import { ForceDistributionCard } from './cards/ForceDistributionCard';
+import { BullBearStrengthCard } from './cards/BullBearStrengthCard';
 import { resolveOfficialSecurityName } from '../../engine/stockNameResolver';
 
 export interface AiForceDashboardViewProps {
@@ -190,6 +194,36 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           {/* 13 台股市場合情緒儀表板 (Ticket 24) */}
           <div>
             <MarketSentimentCard data={report.marketSentiment} />
+          </div>
+        </div>
+
+        {/* Row 5: AI 信心維度、籌碼具體摘要、買賣力分布、多空強度分布 */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: '14px',
+            alignItems: 'stretch',
+          }}
+        >
+          {/* 14 AI 信心維度 (Ticket 25) */}
+          <div>
+            <AiConfidenceCard data={report.aiConfidence} />
+          </div>
+
+          {/* 15 籌碼具體摘要 (Ticket 26) */}
+          <div>
+            <ChipsSummaryCard data={report.chipsSummary} />
+          </div>
+
+          {/* 16 買賣力分布圖 (Ticket 27) */}
+          <div>
+            <ForceDistributionCard data={report.forceDistribution} />
+          </div>
+
+          {/* 17 多空強度分布 (Ticket 28) */}
+          <div>
+            <BullBearStrengthCard data={report.bullBearStrength} />
           </div>
         </div>
       </div>
