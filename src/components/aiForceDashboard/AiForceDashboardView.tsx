@@ -13,6 +13,7 @@ import { ForecastConeCard } from './cards/ForecastConeCard';
 import { VwapCostStructureCard } from './cards/VwapCostStructureCard';
 import { InstitutionalFlowCard } from './cards/InstitutionalFlowCard';
 import { DayTradeRiskCard } from './cards/DayTradeRiskCard';
+import { BullBearEnergyCard } from './cards/BullBearEnergyCard';
 import { resolveOfficialSecurityName } from '../../engine/stockNameResolver';
 
 export interface AiForceDashboardViewProps {
@@ -156,6 +157,21 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           {/* 09 隔日沖風險分析 (Ticket 19) */}
           <div>
             <DayTradeRiskCard data={report.dayTradeRisk} />
+          </div>
+        </div>
+
+        {/* Row 4: 多空能量儀、健康度評估表、動態信號判斷、市場情緒儀表板 */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: '14px',
+            alignItems: 'stretch',
+          }}
+        >
+          {/* 10 AI 多空能量儀 (Ticket 20) */}
+          <div>
+            <BullBearEnergyCard data={report.bullBearEnergy} />
           </div>
         </div>
       </div>
