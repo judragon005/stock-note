@@ -174,7 +174,7 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
         ...style,
       }}
       className={`term-tooltip-trigger ${className}`}
-      role="tooltip"
+      aria-haspopup="dialog"
       aria-expanded={isOpen}
     >
       {children}
@@ -202,7 +202,14 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
       )}
 
       {isOpen && (
-        <div ref={tooltipRef} style={getTooltipStyle()} className="term-tooltip-popup" onClick={(e) => e.stopPropagation()}>
+        <div
+          ref={tooltipRef}
+          role="tooltip"
+          aria-live="polite"
+          style={getTooltipStyle()}
+          className="term-tooltip-popup"
+          onClick={(e) => e.stopPropagation()}
+        >
           {/* 標題列 */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '6px', marginBottom: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
