@@ -104,6 +104,79 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
       expect(fallbackReport.symbol).toBe('2330');
       expect(fallbackReport.marketBar).toBeDefined();
     });
+
+    describe('三大法人籌碼歷史管線動態驅動 (Spec 0143 Ticket 1)', () => {
+      it('傳入真實法人記錄時，應動態計算雙軸長條圖數列、累積淨買賣折線與近3日明細表格', () => {
+        const mockCandles = Array.from({ length: 25 }, (_, i) => ({
+          date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+          open: 1000 + i,
+          high: 1010 + i,
+          low: 990 + i,
+          close: 1005 + i,
+          volume: 2000 + i * 100,
+        }));
+
+        const mockInstitutions = Array.from({ length: 25 }, (_, i) => ({
+          date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+          foreignShares: 100 * (i % 2 === 0 ? 1 : -1),
+          trustShares: 50 * (i % 3 === 0 ? 1 : -1),
+          dealerShares: 20,
+        }));
+
+        const report = generateAiForceReportFromCandles(
+          '2330',
+          '台積電',
+          'TW',
+          mockCandles,
+          undefined,
+          mockInstitutions
+        );
+
+        // 1. 歷史雙軸長條圖數列
+        expect(report.institutionalFlow.history.length).toBe(25);
+        expect(report.institutionalFlow.history[0].date).toBe('2026-09-01');
+        expect(report.institutionalFlow.history[0].cumulativeTotalShares).toBe(100 + 50 + 20); // 170
+
+        // 2. 近 3 日明細表格
+        expect(report.institutionalFlow.recentDaysTable.length).toBe(3);
+        // 第一筆應為最新日 2026-09-25
+        expect(report.institutionalFlow.recentDaysTable[0].date).toContain('09/25');
+        expect(report.institutionalFlow.recentDaysTable[0].totalShares).toBeDefined();
+
+        // 3. 摘要統計字串
+        expect(report.institutionalFlow.cumulative20DaysSummary).toMatch(/20日/);
+        expect(report.institutionalFlow.recent5DaysSummary).toMatch(/張/);
+
+        // 4. Card 15 (chipsSummary) 連動校驗
+        expect(report.chipsSummary).toBeDefined();
+        expect(report.chipsSummary.foreignNetShares).toBe(mockInstitutions[24].foreignShares);
+        expect(report.chipsSummary.trustNetShares).toBe(mockInstitutions[24].trustShares);
+        expect(report.chipsSummary.dealerNetShares).toBe(mockInstitutions[24].dealerShares);
+        expect(report.chipsSummary.threeInstitutionsTotal).toBe(
+          mockInstitutions[24].foreignShares + mockInstitutions[24].trustShares + mockInstitutions[24].dealerShares
+        );
+        expect(report.chipsSummary.sparklineHistory.length).toBe(10);
+        expect(report.chipsSummary.conclusionBadge).toBeDefined();
+      });
+
+      it('當查詢美股或未傳入法人資料時，應以成交量多空代理模型安全降級，歷史數列非空且不拋錯', () => {
+        const mockCandles = Array.from({ length: 20 }, (_, i) => ({
+          date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+          open: 100,
+          high: 105,
+          low: 95,
+          close: 102,
+          volume: 5000,
+        }));
+
+        const report = generateAiForceReportFromCandles('NVDA', '輝達', 'US', mockCandles);
+
+        expect(report.institutionalFlow.history.length).toBeGreaterThan(0);
+        expect(report.institutionalFlow.recentDaysTable.length).toBe(3);
+        expect(report.institutionalFlow.cumulative20DaysSummary).toBeDefined();
+        expect(report.institutionalFlow.recent5DaysSummary).toBeDefined();
+      });
+    });
   });
 });
 

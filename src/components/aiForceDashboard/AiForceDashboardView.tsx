@@ -4,7 +4,9 @@ import { AiForceDashboardReport } from '../../types/aiForceDashboard';
 import {
   createDefaultAiForceReport,
   generateAiForceReportFromCandles,
+  RawInstitutionalRecord,
 } from '../../engine/aiForceDashboardEngine';
+import { fetchRecentTwseReports } from '../../engine/smartMoneyFetcher';
 import { backfillSymbolOhlcvAndIndicators } from '../../engine/historicalOhlcvBackfill';
 import { fetchStockQuote } from '../../engine/priceFetcher';
 import { logger } from '../../utils/logger';
@@ -71,14 +73,47 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         // 即時報價若失敗則安靜降級由日 K 替補
       }
 
-      // 3. 以真實數據合成 18 張卡片 Report
+      // 3. 嘗試讀取三大法人籌碼歷史記錄 (台股市場)
+      let institutionalRecords: RawInstitutionalRecord[] | undefined = undefined;
+      if (targetMarket === 'TW') {
+        try {
+          const reports = await fetchRecentTwseReports(20);
+          if (reports && reports.length > 0) {
+            const cleanSym = targetSymbol.replace(/\.(TW|TWO)$/i, '').trim();
+            const extracted: RawInstitutionalRecord[] = [];
+            for (const r of reports) {
+              const row = r.data[cleanSym] || r.data[targetSymbol];
+              if (row) {
+                const formattedDate =
+                  r.date.length === 8
+                    ? `${r.date.substring(0, 4)}-${r.date.substring(4, 6)}-${r.date.substring(6, 8)}`
+                    : r.date;
+                extracted.push({
+                  date: formattedDate,
+                  foreignShares: row.foreignNetShares,
+                  trustShares: row.trustNetShares,
+                  dealerShares: row.dealerNetShares,
+                });
+              }
+            }
+            if (extracted.length > 0) {
+              institutionalRecords = extracted;
+            }
+          }
+        } catch {
+          // 籌碼查詢靜默容錯降級
+        }
+      }
+
+      // 4. 以真實數據合成 18 張卡片 Report (含法人籌碼動態連動)
       if (candles.length >= 5) {
         const fullReport = generateAiForceReportFromCandles(
           targetSymbol,
           resolvedName,
           targetMarket,
           candles,
-          quote
+          quote,
+          institutionalRecords
         );
         setReport(fullReport);
       } else {
