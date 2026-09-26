@@ -1,5 +1,5 @@
 import { MarketType } from '../types/stock';
-import { AiForceDashboardReport } from '../types/aiForceDashboard';
+import { AiForceDashboardReport, InstitutionalFlowData } from '../types/aiForceDashboard';
 import { calculateVolumeProfile } from './volumeProfileEngine';
 import { calculateRiskSpider } from './riskSpiderEngine';
 import { calculateForecastCone } from './forecastConeEngine';
@@ -231,8 +231,108 @@ export function createDefaultAiForceReport(
   };
 }
 
+export interface RawInstitutionalRecord {
+  date: string;
+  foreignShares: number;
+  trustShares: number;
+  dealerShares: number;
+}
+
 /**
- * 依據真實歷史日 K (OHLCV) 數列動態生成完整的 AiForceDashboardReport
+ * 依據真實法人進出記錄或成交量多空模型建構卡片 08 之雙軸圖數列與明細 (Spec 0143 Ticket 1)
+ */
+export function buildInstitutionalFlow(
+  candles: Array<{ date: string; open: number; high: number; low: number; close: number; volume: number }>,
+  records?: RawInstitutionalRecord[],
+  _market: MarketType = 'TW'
+): InstitutionalFlowData {
+  const formatSigned = (num: number) => (num >= 0 ? `+${num.toLocaleString()}` : num.toLocaleString());
+
+  if (records && records.length > 0) {
+    const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
+    let cumulative = 0;
+    const history = sorted.map((r) => {
+      const net = r.foreignShares + r.trustShares + r.dealerShares;
+      cumulative += net;
+      return {
+        date: r.date,
+        foreignShares: r.foreignShares,
+        trustShares: r.trustShares,
+        dealerShares: r.dealerShares,
+        cumulativeTotalShares: cumulative,
+      };
+    });
+
+    const recent3 = sorted.slice(-3).reverse().map((r) => ({
+      date: r.date.includes('-') ? r.date.substring(5).replace('-', '/') : r.date,
+      foreignShares: r.foreignShares,
+      trustShares: r.trustShares,
+      dealerShares: r.dealerShares,
+      totalShares: r.foreignShares + r.trustShares + r.dealerShares,
+    }));
+
+    const last20 = sorted.slice(-20);
+    const sum20 = last20.reduce((acc, cur) => acc + cur.foreignShares + cur.trustShares + cur.dealerShares, 0);
+    const last5 = sorted.slice(-5);
+    const sum5 = last5.reduce((acc, cur) => acc + cur.foreignShares + cur.trustShares + cur.dealerShares, 0);
+
+    return {
+      history,
+      recentDaysTable: recent3,
+      cumulative20DaysSummary: `${sum20 >= 0 ? '多頭' : '偏空'} (20日 ${formatSigned(sum20)}張)`,
+      recent5DaysSummary: `${sum5 >= 0 ? '偏多' : '偏空'} (${formatSigned(sum5)}張)`,
+    };
+  }
+
+  // Fallback: 針對美股或無法人資料，以日 K 成交量多空拆解產生 proxy 歷史
+  const sliceCandles = candles.slice(-25);
+  let cumulative = 0;
+  const history = sliceCandles.map((c) => {
+    const isBull = c.close >= c.open;
+    const estTotal = Math.round((c.volume || 1000) * 0.12 * (isBull ? 1 : -1));
+    const foreignShares = Math.round(estTotal * 0.6);
+    const trustShares = Math.round(estTotal * 0.25);
+    const dealerShares = estTotal - foreignShares - trustShares;
+    cumulative += estTotal;
+    return {
+      date: c.date,
+      foreignShares,
+      trustShares,
+      dealerShares,
+      cumulativeTotalShares: cumulative,
+    };
+  });
+
+  const recent3 = sliceCandles.slice(-3).reverse().map((c) => {
+    const isBull = c.close >= c.open;
+    const estTotal = Math.round((c.volume || 1000) * 0.12 * (isBull ? 1 : -1));
+    const foreignShares = Math.round(estTotal * 0.6);
+    const trustShares = Math.round(estTotal * 0.25);
+    const dealerShares = estTotal - foreignShares - trustShares;
+    return {
+      date: c.date.includes('-') ? c.date.substring(5).replace('-', '/') : c.date,
+      foreignShares,
+      trustShares,
+      dealerShares,
+      totalShares: estTotal,
+    };
+  });
+
+  const last20 = history.slice(-20);
+  const sum20 = last20.reduce((acc, cur) => acc + cur.foreignShares + cur.trustShares + cur.dealerShares, 0);
+  const last5 = history.slice(-5);
+  const sum5 = last5.reduce((acc, cur) => acc + cur.foreignShares + cur.trustShares + cur.dealerShares, 0);
+
+  return {
+    history,
+    recentDaysTable: recent3,
+    cumulative20DaysSummary: `${sum20 >= 0 ? '多頭' : '偏空'} (20日 ${formatSigned(sum20)}張)`,
+    recent5DaysSummary: `${sum5 >= 0 ? '偏多' : '偏空'} (${formatSigned(sum5)}張)`,
+  };
+}
+
+/**
+ * 依據真實歷史日 K (OHLCV) 數列動態生成完整的 AiForceDashboardReport (Spec 0140 階段一 & Spec 0143 階段二)
  */
 export function generateAiForceReportFromCandles(
   symbol: string = '2360',
@@ -254,7 +354,8 @@ export function generateAiForceReportFromCandles(
     high?: number;
     low?: number;
     volume?: number;
-  }
+  },
+  institutionalRecords?: RawInstitutionalRecord[]
 ): AiForceDashboardReport {
   // 1. 安全邊界：不足 5 根時安全回退至預設 report
   if (!candles || candles.length < 5) {
@@ -401,7 +502,45 @@ export function generateAiForceReportFromCandles(
 
   const defaultTemplate = createDefaultAiForceReport(symbol, name, market);
 
-  // 6. 主力語意決策生成
+  // 6. 三大法人籌碼管線與 Card 08 / Card 15 連動計算
+  const institutionalFlow = buildInstitutionalFlow(candles, institutionalRecords, market);
+  let chipsSummary = defaultTemplate.chipsSummary;
+  if (institutionalFlow.history.length > 0) {
+    const lastInst = institutionalFlow.history[institutionalFlow.history.length - 1];
+    const foreignNetShares = lastInst.foreignShares;
+    const trustNetShares = lastInst.trustShares;
+    const dealerNetShares = lastInst.dealerShares;
+    const threeInstitutionsTotal = foreignNetShares + trustNetShares + dealerNetShares;
+
+    let conclusionBadge = '中性觀望';
+    if (foreignNetShares > 0 && trustNetShares > 0) {
+      conclusionBadge = '土洋合買';
+    } else if (foreignNetShares < 0 && trustNetShares < 0) {
+      conclusionBadge = '土洋齊賣';
+    } else if (foreignNetShares * trustNetShares < 0) {
+      conclusionBadge = '土洋對作';
+    } else if (threeInstitutionsTotal > 200) {
+      conclusionBadge = '偏多集結';
+    } else if (threeInstitutionsTotal < -200) {
+      conclusionBadge = '偏空調節';
+    }
+
+    const sparklineHistory = institutionalFlow.history
+      .slice(-10)
+      .map((h: { cumulativeTotalShares: number }) => h.cumulativeTotalShares);
+
+    chipsSummary = {
+      foreignNetShares,
+      trustNetShares,
+      dealerNetShares,
+      threeInstitutionsTotal,
+      verdictNote: `${last.date} ${conclusionBadge} | 20日法人累計 ${institutionalFlow.cumulative20DaysSummary}`,
+      conclusionBadge,
+      sparklineHistory,
+    };
+  }
+
+  // 7. 主力語意決策生成
   const vwapBias = mainForceCost > 0 ? ((currentPrice - mainForceCost) / mainForceCost) * 100 : 0;
   let primaryVerb = '區間觀望';
   if (vwapBias > 5) primaryVerb = '調節減碼';
@@ -460,6 +599,8 @@ export function generateAiForceReportFromCandles(
     vwapCostStructure,
     riskSpider,
     dayTradeRisk,
+    institutionalFlow,
+    chipsSummary,
 
     mainForceVerdict: {
       primaryVerb,
