@@ -149,7 +149,19 @@ export interface ForecastConeData {
 }
 
 /**
- * 07 主力成本結構分布圖 (VWAP 面積堆疊)
+ * 07 主力成本結構分佈圖 - 時序成本帶成交量節點 (Spec 0144)
+ */
+export interface CostBandTimeNode {
+  dateLabel: string; // e.g. "06/25", "07/10", "08/10", "08/31"
+  inventoryVol: number; // 倉儲區 (>5%)
+  trappedVol: number; // 套牢區 (-2~-5%)
+  costVol: number; // 主力成本區 (±2%)
+  heavyVol: number; // 大量成交區 (±2~5%)
+  totalVolume: number;
+}
+
+/**
+ * 07 主力成本結構分佈圖 (VWAP 面積堆疊)
  */
 export interface VwapCostStructureData {
   mainForceVwap: number; // 2131 (20日 VWAP)
@@ -162,7 +174,9 @@ export interface VwapCostStructureData {
   }[];
   mainForceAvgCost?: number;
   referenceVwapLabel?: string;
+  timeNodes?: CostBandTimeNode[];
 }
+
 
 /**
  * 08 法人行為計量 (三大法人雙軸與明細)

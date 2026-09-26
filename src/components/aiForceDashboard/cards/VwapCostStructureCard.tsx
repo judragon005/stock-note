@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { VwapCostStructureData } from '../../../types/aiForceDashboard';
+import { VwapCostStructureData, CostBandTimeNode } from '../../../types/aiForceDashboard';
+import { DEFAULT_TIME_NODES } from '../../../engine/vwapCostEngine';
 import { MoreVertical } from 'lucide-react';
 
 export interface StackedBandSegment {
@@ -39,7 +40,7 @@ export interface BiasMetricResult {
 }
 
 /**
- * 格式化強弱指標偏離度字串與色彩
+ * 格式化強弱指標偏離度字串與色彩 (Spec 0144 對齊照片天藍色冷調)
  */
 export function formatBiasMetric(biasPercent: number): BiasMetricResult {
   const isPositive = biasPercent > 0;
@@ -50,7 +51,121 @@ export function formatBiasMetric(biasPercent: number): BiasMetricResult {
   return {
     text,
     isPositive,
-    color: isPositive ? '#ef4444' : biasPercent < 0 ? '#10b981' : '#fbbf24',
+    color: isPositive ? '#38bdf8' : biasPercent < 0 ? '#10b981' : '#fbbf24',
+  };
+}
+
+export interface LegendItem {
+  label: string;
+  color: string;
+}
+
+export const DEFAULT_LEGEND_BANDS = [
+  { name: '倉儲區', biasLabel: '>5%', color: '#f97316' },
+  { name: '套牢區', biasLabel: '-2~-5%', color: '#10b981' },
+  { name: '主力成本區', biasLabel: '±2%', color: '#38bdf8' },
+  { name: '大量成交區', biasLabel: '±2~5%', color: '#1e40af' },
+];
+
+/**
+ * 格式化右上圖例項目 (Spec 0144 對齊照片)
+ */
+export function formatLegendItems(bands?: VwapCostStructureData['bands']): LegendItem[] {
+  const source = bands && bands.length === 4 ? bands : DEFAULT_LEGEND_BANDS;
+  return source.map((b) => ({
+    label: `${b.name}(${b.biasLabel.replace(/\s+/g, '')})`,
+    color: b.color,
+  }));
+}
+
+export interface StackedMountainPaths {
+  layer1Path: string; // 頂層 倉儲區 (橘黃)
+  layer2Path: string; // 第二層 套牢區 (翠綠)
+  layer3Path: string; // 第三層 主力成本區 (天藍)
+  layer4Path: string; // 底層 大量成交區 (深藍)
+}
+
+export interface ChartPadding {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+/**
+ * 依據 4 時點之成本帶數列計算 4 層平滑閉合面積路徑 (Spec 0144)
+ */
+export function buildStackedMountainPaths(
+  nodes: CostBandTimeNode[],
+  width: number,
+  height: number,
+  padding: ChartPadding = { left: 30, right: 10, top: 10, bottom: 25 }
+): StackedMountainPaths {
+  const n = nodes.length;
+  if (n === 0) {
+    return { layer1Path: '', layer2Path: '', layer3Path: '', layer4Path: '' };
+  }
+
+  const plotW = width - padding.left - padding.right;
+  const plotH = height - padding.top - padding.bottom;
+  const baseY = height - padding.bottom;
+
+  let maxVol = 0;
+  nodes.forEach((node) => {
+    const sum = node.heavyVol + node.costVol + node.trappedVol + node.inventoryVol;
+    if (sum > maxVol) maxVol = sum;
+  });
+  const maxScale = Math.max(65, maxVol * 1.1);
+
+  const xs: number[] = [];
+  const y0s: number[] = [];
+  const y1s: number[] = [];
+  const y2s: number[] = [];
+  const y3s: number[] = [];
+  const y4s: number[] = [];
+
+  nodes.forEach((node, i) => {
+    const x = padding.left + (n > 1 ? (plotW / (n - 1)) * i : plotW / 2);
+    const h1 = (node.heavyVol / maxScale) * plotH;
+    const h2 = h1 + (node.costVol / maxScale) * plotH;
+    const h3 = h2 + (node.trappedVol / maxScale) * plotH;
+    const h4 = h3 + (node.inventoryVol / maxScale) * plotH;
+
+    xs.push(Number(x.toFixed(1)));
+    y0s.push(baseY);
+    y1s.push(Number((baseY - h1).toFixed(1)));
+    y2s.push(Number((baseY - h2).toFixed(1)));
+    y3s.push(Number((baseY - h3).toFixed(1)));
+    y4s.push(Number((baseY - h4).toFixed(1)));
+  });
+
+  const buildBandPath = (topYs: number[], bottomYs: number[]) => {
+    let d = `M ${xs[0]},${topYs[0]}`;
+    for (let i = 1; i < n; i++) {
+      const cx1 = xs[i - 1] + (xs[i] - xs[i - 1]) * 0.5;
+      const cy1 = topYs[i - 1];
+      const cx2 = xs[i - 1] + (xs[i] - xs[i - 1]) * 0.5;
+      const cy2 = topYs[i];
+      d += ` C ${cx1},${cy1} ${cx2},${cy2} ${xs[i]},${topYs[i]}`;
+    }
+    // 連到底部曲線逆行
+    d += ` L ${xs[n - 1]},${bottomYs[n - 1]}`;
+    for (let i = n - 2; i >= 0; i--) {
+      const cx1 = xs[i + 1] - (xs[i + 1] - xs[i]) * 0.5;
+      const cy1 = bottomYs[i + 1];
+      const cx2 = xs[i + 1] - (xs[i + 1] - xs[i]) * 0.5;
+      const cy2 = bottomYs[i];
+      d += ` C ${cx1},${cy1} ${cx2},${cy2} ${xs[i]},${bottomYs[i]}`;
+    }
+    d += ' Z';
+    return d;
+  };
+
+  return {
+    layer4Path: buildBandPath(y1s, y0s),
+    layer3Path: buildBandPath(y2s, y1s),
+    layer2Path: buildBandPath(y3s, y2s),
+    layer1Path: buildBandPath(y4s, y3s),
   };
 }
 
@@ -59,21 +174,18 @@ export interface VwapCostStructureCardProps {
 }
 
 export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ data }) => {
-  const bands = data.bands || [
-    { name: '倉儲成本', biasLabel: '>5%', percentage: 38, color: '#f97316' },
-    { name: '買平成本', biasLabel: '-2~5%', percentage: 32, color: '#10b981' },
-    { name: '主力成本區', biasLabel: '±2%', percentage: 18, color: '#38bdf8' },
-    { name: '大量成交區', biasLabel: '±2-5%', percentage: 12, color: '#0284c7' },
-  ];
   const biasMetric = useMemo(() => formatBiasMetric(data.biasPercent ?? 7.5), [data.biasPercent]);
+  const legendItems = useMemo(() => formatLegendItems(data.bands), [data.bands]);
 
-  const legendItems = useMemo(
-    () =>
-      bands.map((b) => ({
-        label: `${b.name} (${b.biasLabel})`,
-        color: b.color,
-      })),
-    [bands]
+  const timeNodes = data.timeNodes && data.timeNodes.length >= 4 ? data.timeNodes : DEFAULT_TIME_NODES;
+
+  const width = 340;
+  const height = 130;
+  const padding: ChartPadding = { left: 30, right: 10, top: 10, bottom: 25 };
+
+  const mountainPaths = useMemo(
+    () => buildStackedMountainPaths(timeNodes, width, height, padding),
+    [timeNodes]
   );
 
   return (
@@ -90,7 +202,7 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
         boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
       }}
     >
-      {/* 頂部標題與右上選單 */}
+      {/* 頂部標題與右上選單 (校正繁體字「分佈圖」) */}
       <div
         style={{
           display: 'flex',
@@ -113,7 +225,7 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
             07
           </span>
           <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
-            主力成本結構分布圖
+            主力成本結構分佈圖
           </span>
         </div>
 
@@ -137,26 +249,26 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
       {/* SVG 多層次波形面積堆疊圖繪製區 (Area Chart) */}
       <div style={{ width: '100%', flex: 1, minHeight: '145px', position: 'relative' }}>
         <svg
-          viewBox="0 0 340 130"
+          viewBox={`0 0 ${width} ${height}`}
           style={{ width: '100%', height: '100%', overflow: 'visible' }}
           preserveAspectRatio="none"
         >
           <defs>
             <linearGradient id="areaGrad1" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#f97316" stopOpacity="0.85" />
-              <stop offset="100%" stopColor="#ea580c" stopOpacity="0.4" />
+              <stop offset="0%" stopColor="#f97316" stopOpacity="0.88" />
+              <stop offset="100%" stopColor="#ea580c" stopOpacity="0.45" />
             </linearGradient>
             <linearGradient id="areaGrad2" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#10b981" stopOpacity="0.85" />
-              <stop offset="100%" stopColor="#059669" stopOpacity="0.4" />
+              <stop offset="0%" stopColor="#10b981" stopOpacity="0.88" />
+              <stop offset="100%" stopColor="#059669" stopOpacity="0.45" />
             </linearGradient>
             <linearGradient id="areaGrad3" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.85" />
-              <stop offset="100%" stopColor="#0284c7" stopOpacity="0.4" />
+              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.88" />
+              <stop offset="100%" stopColor="#0284c7" stopOpacity="0.45" />
             </linearGradient>
             <linearGradient id="areaGrad4" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#0284c7" stopOpacity="0.8" />
-              <stop offset="100%" stopColor="#1e3a8a" stopOpacity="0.3" />
+              <stop offset="0%" stopColor="#1e40af" stopOpacity="0.85" />
+              <stop offset="100%" stopColor="#1e1b4b" stopOpacity="0.4" />
             </linearGradient>
           </defs>
 
@@ -164,34 +276,24 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
           <text x="5" y="20" fill="#64748b" fontSize="8" fontFamily="monospace">60k</text>
           <text x="5" y="50" fill="#64748b" fontSize="8" fontFamily="monospace">40k</text>
           <text x="5" y="80" fill="#64748b" fontSize="8" fontFamily="monospace">20k</text>
-          <text x="10" y="110" fill="#64748b" fontSize="8" fontFamily="monospace">0k</text>
+          <text x="10" y="108" fill="#64748b" fontSize="8" fontFamily="monospace">0k</text>
 
-          {/* 內部波形面積圖 */}
-          <g transform="translate(30, 10)">
-            {/* 底層 Layer 4 (深藍大量成交) */}
-            <path
-              d="M 0,95 Q 60,85 120,70 T 240,60 T 300,95 L 300,100 L 0,100 Z"
-              fill="url(#areaGrad4)"
-            />
-            {/* Layer 3 (天藍主力成本) */}
-            <path
-              d="M 0,80 Q 55,65 110,50 T 230,45 T 300,75 L 300,95 L 0,95 Z"
-              fill="url(#areaGrad3)"
-            />
-            {/* Layer 2 (翠綠買平成本) */}
-            <path
-              d="M 0,60 Q 60,40 120,30 T 220,35 T 300,55 L 300,75 L 0,75 Z"
-              fill="url(#areaGrad2)"
-            />
-            {/* Layer 1 (橘黃倉儲成本高峰) */}
-            <path
-              d="M 0,45 Q 60,15 115,10 T 210,25 T 300,45 L 300,55 L 0,55 Z"
-              fill="url(#areaGrad1)"
-            />
-          </g>
+          {/* 動態多峰平滑山峰面積圖 (Spec 0144) */}
+          {mountainPaths.layer4Path && (
+            <path d={mountainPaths.layer4Path} fill="url(#areaGrad4)" />
+          )}
+          {mountainPaths.layer3Path && (
+            <path d={mountainPaths.layer3Path} fill="url(#areaGrad3)" />
+          )}
+          {mountainPaths.layer2Path && (
+            <path d={mountainPaths.layer2Path} fill="url(#areaGrad2)" />
+          )}
+          {mountainPaths.layer1Path && (
+            <path d={mountainPaths.layer1Path} fill="url(#areaGrad1)" />
+          )}
 
           {/* 右上方浮動圖例 (對齊照片) */}
-          <g transform="translate(230, 12)">
+          <g transform="translate(230, 8)">
             {legendItems.map((item, idx) => (
               <g key={idx} transform={`translate(0, ${idx * 11})`}>
                 <rect x="0" y="0" width="6" height="6" fill={item.color} rx="1" />
@@ -202,11 +304,23 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
             ))}
           </g>
 
-          {/* 底部 X 軸時間刻度 */}
-          <text x="35" y="125" fill="#64748b" fontSize="7.5" fontFamily="monospace">06/20</text>
-          <text x="110" y="125" fill="#64748b" fontSize="7.5" fontFamily="monospace">07/20</text>
-          <text x="190" y="125" fill="#64748b" fontSize="7.5" fontFamily="monospace">08/10</text>
-          <text x="270" y="125" fill="#64748b" fontSize="7.5" fontFamily="monospace">08/31</text>
+          {/* 底部 X 軸時間刻度 (動態對齊 4 時點) */}
+          {timeNodes.map((n, idx) => {
+            const x = padding.left + (timeNodes.length > 1 ? ((width - padding.left - padding.right) / (timeNodes.length - 1)) * idx : 50);
+            return (
+              <text
+                key={'xdate-' + idx}
+                x={x}
+                y={height - 8}
+                textAnchor="middle"
+                fill="#64748b"
+                fontSize="7.5"
+                fontFamily="monospace"
+              >
+                {n.dateLabel}
+              </text>
+            );
+          })}
         </svg>
       </div>
 

@@ -12,7 +12,7 @@ import {
 import { calculateVolumeProfile } from './volumeProfileEngine';
 import { calculateRiskSpider } from './riskSpiderEngine';
 import { calculateForecastCone } from './forecastConeEngine';
-import { calculateVwapCostStructure } from './vwapCostEngine';
+import { calculateVwapCostStructure, DEFAULT_TIME_NODES } from './vwapCostEngine';
 import { calculateDayTradeRisk } from './dayTradeRiskEngine';
 
 export {
@@ -136,11 +136,12 @@ export function createDefaultAiForceReport(
       mainForceVwap: 2131,
       biasPercent: 7.5,
       bands: [
-        { name: '多頭突破區', biasLabel: '>+5%', percentage: 35, color: '#ef4444' },
-        { name: '大量成交區', biasLabel: '+2~5%', percentage: 25, color: '#f59e0b' },
-        { name: '主力成本區', biasLabel: '±2%', percentage: 25, color: '#3b82f6' },
-        { name: '套牢區', biasLabel: '-2~-5%', percentage: 15, color: '#10b981' },
+        { name: '倉儲區', biasLabel: '>5%', percentage: 38, color: '#f97316' },
+        { name: '套牢區', biasLabel: '-2~-5%', percentage: 32, color: '#10b981' },
+        { name: '主力成本區', biasLabel: '±2%', percentage: 18, color: '#38bdf8' },
+        { name: '大量成交區', biasLabel: '±2~5%', percentage: 12, color: '#1e40af' },
       ],
+      timeNodes: DEFAULT_TIME_NODES,
     },
 
     institutionalFlow: {

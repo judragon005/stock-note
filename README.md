@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1132%2F1132%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1139%2F1139%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,17 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. AI 主力戰情室三大法人真實籌碼管線、中間量化卡片群與底部任務視圖全景動態驅動 (`AI Force Live Quant Pipeline, Bento & Task Views Full Synergy`) *(V8.56.0 全新發布)*
+### 0. AI 主力戰情室卡片 06 與 07 照片精準對齊、動態波形面積圖與雙色發散錐 (`AI Force Cards 06 & 07 Photo Alignment & Dynamic Wave Area`) *(V8.57.0 全新發布)*
+- **卡片 06 累積型 AI 預測路徑圖雙色發散扇形錐與價格標尺 (`Split Forecast Cone & Price Axis`)**：
+  - **雙層發散面幾何分割**：依據中位數曲線向上閉合紅色/橙色半透明漸層「上漲發散扇形」，向下閉合翠綠色半透明漸層「下跌發散扇形」，完美直觀對齊上方多空機率圖例。
+  - **動態 Y 軸價位標籤與格線**：自極值動態計算主要價位刻度（如 2500, 2000）並渲染水平參考線；主力方向機率標籤依多空映射台股鮮紅色 (`#ef4444`)。
+- **卡片 07 主力成本結構分佈圖真實動態多時段堆疊波形面積圖 (`Dynamic Stacked Mountain Chart`)**：
+  - **歷史成本帶時序量化演算法**：於 `vwapCostEngine` 建立 4 個歷史時點採樣計算，動態依近 60 日真實成交量分佈推導 4 階成本帶高度（倉儲區 >5%、套牢區 -2~-5%、主力成本區 ±2%、大量成交區 ±2~5%）。
+  - **三次貝茲曲線平滑堆疊**：以純原生 SVG 平滑繪製「橙黃 ➔ 翠綠 ➔ 天藍 ➔ 深藍」4 層起伏山峰；右上圖例對齊 4 階定義、Y 軸標示 60k~0k、標題修正為「07 主力成本結構分佈圖」、底部強弱指標色彩對齊天藍色。
+- **卡片 09 隔日沖風險分析財經術語標準化 (`Day-Trade Risk Jargon Normalization`)**：
+  - 將第 2 項指標文案精準校正為標準金融術語「**籌碼換手率**」。
+
+### 0. AI 主力戰情室三大法人真實籌碼管線、中間量化卡片群與底部任務視圖全景動態驅動 (`AI Force Live Quant Pipeline, Bento & Task Views Full Synergy`) *(V8.56.0)*
 - **三大法人歷史籌碼真實管線 (`Institutional Historical Ingestion Pipeline`)**：
   - 串接 TWSE / TPEx 官方每日盤後買賣超日報庫與本地 IndexedDB settings 快取。切換台股標的（如 2330 台積電、2360 致茂）時，自動萃取歷史 20 日外資、投信、自營商真實淨買賣超數列（`RawInstitutionalRecord`），終結寫死靜態數值。
   - **美股與無資料代理降級保護 (`Proxy Volume Model`)**：針對美股或無法人進出之台股標的，以日 K 成交量與實體紅黑 K 計算量能多空代理值，保證 SVG 圖表與指標永不除零或拋錯。

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   getProgressBarStyle,
   getDayTradeRiskBadge,
+  getDayTradeRiskItems,
 } from './DayTradeRiskCard';
 
 describe('DayTradeRiskCard - 隔日沖風險進度條元件規範 (Ticket 19)', () => {
@@ -40,6 +41,16 @@ describe('DayTradeRiskCard - 隔日沖風險進度條元件規範 (Ticket 19)', 
 
       expect(getDayTradeRiskBadge('LOW').label).toBe('低');
       expect(getDayTradeRiskBadge('LOW').color).toBe('#10b981');
+    });
+  });
+
+  describe('getDayTradeRiskItems - 5大指標標籤校準', () => {
+    it('應正確輸出 5 項指標，且第 2 項標籤為「籌碼換手率」而非「籌碼過手率」', () => {
+      const items = getDayTradeRiskItems({ turnoverRate: 58 });
+      expect(items).toHaveLength(5);
+      expect(items[1].label).toBe('籌碼換手率');
+      expect(items[1].value).toBe(58);
+      expect(items.some(i => i.label === '籌碼過手率')).toBe(false);
     });
   });
 });

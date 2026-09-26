@@ -3,9 +3,12 @@ import {
   projectForecastNodesToPoints,
   buildForecastCurvePath,
   buildConeAreaPath,
+  buildSplitConePaths,
+  generateYAxisTicks,
+  getMainForceDirectionStyle,
 } from './ForecastConeCard';
 
-describe('ForecastConeCard - 預測路徑圖座標與 SVG 路徑計算規範 (Ticket 13)', () => {
+describe('ForecastConeCard - 預測路徑圖座標與 SVG 路徑計算規範 (Ticket 13 & Spec 0144)', () => {
   const sampleNodes = [
     { dayOffset: 0, label: '今日', upperPrice: 2000, medianPrice: 2000, lowerPrice: 2000 },
     { dayOffset: 3, label: '3日後', upperPrice: 2100, medianPrice: 2050, lowerPrice: 1950 },
@@ -62,5 +65,47 @@ describe('ForecastConeCard - 預測路徑圖座標與 SVG 路徑計算規範 (Ti
 
     expect(areaPath.startsWith('M')).toBe(true);
     expect(areaPath.endsWith('Z')).toBe(true);
+  });
+
+  it('buildSplitConePaths (Spec 0144) 應將發散錐依中軌拆分為上漲面(紅)與下跌面(綠)兩條獨立閉合路徑', () => {
+    const upperPoints = [
+      { x: 30, y: 100 },
+      { x: 100, y: 70 },
+      { x: 200, y: 50 },
+    ];
+    const medianPoints = [
+      { x: 30, y: 100 },
+      { x: 100, y: 100 },
+      { x: 200, y: 95 },
+    ];
+    const lowerPoints = [
+      { x: 30, y: 100 },
+      { x: 100, y: 130 },
+      { x: 200, y: 150 },
+    ];
+
+    const { bullAreaPath, bearAreaPath } = buildSplitConePaths(upperPoints, medianPoints, lowerPoints);
+
+    expect(bullAreaPath.startsWith('M')).toBe(true);
+    expect(bullAreaPath.endsWith('Z')).toBe(true);
+    expect(bearAreaPath.startsWith('M')).toBe(true);
+    expect(bearAreaPath.endsWith('Z')).toBe(true);
+  });
+
+  it('generateYAxisTicks (Spec 0144) 應動態生成整數價位刻度標籤與 Y 軸座標', () => {
+    const ticks = generateYAxisTicks(1880, 2520, 180, { top: 20, bottom: 25, left: 35, right: 35 });
+    expect(ticks.length).toBeGreaterThanOrEqual(2);
+    const labels = ticks.map((t) => t.label);
+    expect(labels.some((l) => l.includes('2,000') || l.includes('2,500') || l.includes('2000') || l.includes('2500'))).toBe(true);
+  });
+
+  it('getMainForceDirectionStyle (Spec 0144) 多頭時應回傳鮮紅色 #ef4444，對齊照片標準', () => {
+    const bullStyle = getMainForceDirectionStyle(52, 47, 42);
+    expect(bullStyle.color).toBe('#ef4444');
+    expect(bullStyle.label).toBe('多頭');
+
+    const bearStyle = getMainForceDirectionStyle(42, 30, 60);
+    expect(bearStyle.color).toBe('#10b981');
+    expect(bearStyle.label).toBe('空頭');
   });
 });
