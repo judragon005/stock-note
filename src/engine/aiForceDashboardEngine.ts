@@ -4,12 +4,14 @@ import { calculateVolumeProfile } from './volumeProfileEngine';
 import { calculateRiskSpider } from './riskSpiderEngine';
 import { calculateForecastCone } from './forecastConeEngine';
 import { calculateVwapCostStructure } from './vwapCostEngine';
+import { calculateDayTradeRisk } from './dayTradeRiskEngine';
 
 export {
   calculateVolumeProfile,
   calculateRiskSpider,
   calculateForecastCone,
   calculateVwapCostStructure,
+  calculateDayTradeRisk,
 };
 
 /**

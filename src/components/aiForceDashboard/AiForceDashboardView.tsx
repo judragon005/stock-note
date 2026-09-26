@@ -12,6 +12,7 @@ import { RiskSpiderCard } from './cards/RiskSpiderCard';
 import { ForecastConeCard } from './cards/ForecastConeCard';
 import { VwapCostStructureCard } from './cards/VwapCostStructureCard';
 import { InstitutionalFlowCard } from './cards/InstitutionalFlowCard';
+import { DayTradeRiskCard } from './cards/DayTradeRiskCard';
 import { resolveOfficialSecurityName } from '../../engine/stockNameResolver';
 
 export interface AiForceDashboardViewProps {
@@ -150,6 +151,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
               data={report.institutionalFlow}
               colorTheme={market === 'US' ? 'international' : 'taiwan'}
             />
+          </div>
+
+          {/* 09 隔日沖風險分析 (Ticket 19) */}
+          <div>
+            <DayTradeRiskCard data={report.dayTradeRisk} />
           </div>
         </div>
       </div>
