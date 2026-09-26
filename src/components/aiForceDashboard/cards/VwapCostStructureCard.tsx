@@ -2,6 +2,8 @@ import React, { useMemo } from 'react';
 import { VwapCostStructureData, CostBandTimeNode } from '../../../types/aiForceDashboard';
 import { DEFAULT_TIME_NODES } from '../../../engine/vwapCostEngine';
 import { MoreVertical } from 'lucide-react';
+import { TermTooltip } from '../../common/TermTooltip';
+import { diagnoseMainForceCost } from '../../../constants/aiForceGlossary';
 
 export interface StackedBandSegment {
   name: string;
@@ -224,9 +226,14 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
           >
             07
           </span>
-          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
-            主力成本結構分佈圖
-          </span>
+          <TermTooltip
+            termId="vwap20"
+            showIcon={true}
+          >
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
+              主力成本結構分佈圖
+            </span>
+          </TermTooltip>
         </div>
 
         <button
@@ -338,7 +345,12 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>主力平均成本：</span>
+          <TermTooltip
+            termId="vwap20"
+            dynamicDiagnosis={diagnoseMainForceCost(1240, data.mainForceAvgCost ?? data.mainForceVwap ?? 2131)}
+          >
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>主力平均成本：</span>
+          </TermTooltip>
           <span
             style={{
               fontSize: '0.82rem',
@@ -355,7 +367,9 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>強弱指標：</span>
+          <TermTooltip termId="annualDrift">
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>強弱指標：</span>
+          </TermTooltip>
           <span
             style={{
               fontSize: '0.82rem',

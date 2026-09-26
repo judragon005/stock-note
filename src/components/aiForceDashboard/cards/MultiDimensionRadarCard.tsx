@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 import { MultiDimensionRadarData } from '../../../types/aiForceDashboard';
 import { MoreVertical } from 'lucide-react';
+import { TermTooltip } from '../../common/TermTooltip';
+import { diagnoseHealthScore } from '../../../constants/aiForceGlossary';
 
 export interface Point {
   x: number;
@@ -223,15 +225,23 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
           >
             03
           </span>
-          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
-            多維度判讀
-          </span>
+          <TermTooltip
+            termId="radarInstitutional"
+            dynamicDiagnosis={diagnoseHealthScore(data.overallScore ?? 56)}
+            showIcon={true}
+          >
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
+              多維度判讀
+            </span>
+          </TermTooltip>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
-            綜合評分：<span style={{ color: '#38bdf8', fontWeight: 700, fontFamily: 'monospace' }}>{data.overallScore ?? 56} / 100</span>
-          </span>
+          <TermTooltip termId="chipsHealth" dynamicDiagnosis={diagnoseHealthScore(data.overallScore ?? 56)}>
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
+              綜合評分：<span style={{ color: '#38bdf8', fontWeight: 700, fontFamily: 'monospace' }}>{data.overallScore ?? 56} / 100</span>
+            </span>
+          </TermTooltip>
           <button
             type="button"
             aria-label="選項"

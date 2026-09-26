@@ -3,6 +3,7 @@ import { MarketBarData } from '../../types/aiForceDashboard';
 import { ColorThemeMode, MarketType } from '../../types/stock';
 import { Activity, ShieldAlert, Cpu, Radio, RefreshCw } from 'lucide-react';
 import { cleanSymbolInput, inferMarketType } from './HeaderQueryBar';
+import { TermTooltip } from '../common/TermTooltip';
 
 export type SystemBadgeType = 'AI_SCAN' | 'MAIN_FORCE' | 'MARKET_STATUS' | 'VOLATILITY';
 
@@ -223,90 +224,98 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
         {/* 右側：4 大全繁體中文科技感狀態指示燈 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           {/* 1. AI 智慧掃描 */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '5px 10px',
-              borderRadius: '7px',
-              background: scanBadge.bgColor,
-              border: `1px solid ${scanBadge.borderColor}`,
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              color: scanBadge.color,
-              letterSpacing: '0.3px',
-            }}
-          >
-            <Cpu size={13} />
-            <span>{scanBadge.label}</span>
-            <span
+          <TermTooltip termId="aiConfidence" underline={false}>
+            <div
               style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                backgroundColor: scanBadge.color,
-                boxShadow: `0 0 6px ${scanBadge.color}`,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '5px 10px',
+                borderRadius: '7px',
+                background: scanBadge.bgColor,
+                border: `1px solid ${scanBadge.borderColor}`,
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                color: scanBadge.color,
+                letterSpacing: '0.3px',
               }}
-            />
-          </div>
+            >
+              <Cpu size={13} />
+              <span>{scanBadge.label}</span>
+              <span
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: scanBadge.color,
+                  boxShadow: `0 0 6px ${scanBadge.color}`,
+                }}
+              />
+            </div>
+          </TermTooltip>
 
           {/* 2. 主力行為追蹤 */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '5px 10px',
-              borderRadius: '7px',
-              background: mainForceBadge.bgColor,
-              border: `1px solid ${mainForceBadge.borderColor}`,
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              color: mainForceBadge.color,
-            }}
-          >
-            <Radio size={13} />
-            <span>{mainForceBadge.label}</span>
-          </div>
+          <TermTooltip termId="mainForceAction" underline={false}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '5px 10px',
+                borderRadius: '7px',
+                background: mainForceBadge.bgColor,
+                border: `1px solid ${mainForceBadge.borderColor}`,
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                color: mainForceBadge.color,
+              }}
+            >
+              <Radio size={13} />
+              <span>{mainForceBadge.label}</span>
+            </div>
+          </TermTooltip>
 
           {/* 3. 市場即時狀態 */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '5px 10px',
-              borderRadius: '7px',
-              background: marketBadge.bgColor,
-              border: `1px solid ${marketBadge.borderColor}`,
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              color: marketBadge.color,
-            }}
-          >
-            <Activity size={13} />
-            <span>{marketBadge.label}</span>
-          </div>
+          <TermTooltip termId="shortTermState" underline={false}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '5px 10px',
+                borderRadius: '7px',
+                background: marketBadge.bgColor,
+                border: `1px solid ${marketBadge.borderColor}`,
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                color: marketBadge.color,
+              }}
+            >
+              <Activity size={13} />
+              <span>{marketBadge.label}</span>
+            </div>
+          </TermTooltip>
 
           {/* 4. 波動異常預警 */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '5px 10px',
-              borderRadius: '7px',
-              background: volBadge.bgColor,
-              border: `1px solid ${volBadge.borderColor}`,
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              color: volBadge.color,
-            }}
-          >
-            <ShieldAlert size={13} />
-            <span>{volBadge.label}</span>
-          </div>
+          <TermTooltip termId="radarVolatility" underline={false}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '5px 10px',
+                borderRadius: '7px',
+                background: volBadge.bgColor,
+                border: `1px solid ${volBadge.borderColor}`,
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                color: volBadge.color,
+              }}
+            >
+              <ShieldAlert size={13} />
+              <span>{volBadge.label}</span>
+            </div>
+          </TermTooltip>
         </div>
       </div>
 
@@ -325,7 +334,9 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
       >
         {/* 今日收盤價 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>今日收盤價</span>
+          <TermTooltip termId="closePrice">
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>今日收盤價</span>
+          </TermTooltip>
           <span style={{ fontSize: '1.3rem', fontWeight: 800, color: '#ffffff' }}>
             {formatMarketMetric(data.currentPrice, 2)}
           </span>
@@ -333,7 +344,9 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
 
         {/* 今日漲跌 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>今日漲跌</span>
+          <TermTooltip termId="closePrice">
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>今日漲跌</span>
+          </TermTooltip>
           <span style={{ fontSize: '1.15rem', fontWeight: 800, color: changeMeta.color }}>
             {changeMeta.changeText}
           </span>
@@ -341,7 +354,9 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
 
         {/* 今日漲幅 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>今日漲幅</span>
+          <TermTooltip termId="closePrice">
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>今日漲幅</span>
+          </TermTooltip>
           <span style={{ fontSize: '1.15rem', fontWeight: 800, color: changeMeta.color }}>
             {changeMeta.percentText}
           </span>
@@ -351,7 +366,9 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
 
         {/* 成交量 (張) */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>成交量(張)</span>
+          <TermTooltip termId="volumeShares">
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>成交量(張)</span>
+          </TermTooltip>
           <span style={{ fontSize: '1.02rem', fontWeight: 700, color: '#38bdf8' }}>
             {formatMarketMetric(data.volumeShares, 0)}
           </span>
@@ -359,7 +376,9 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
 
         {/* 成交筆數 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>成交筆數</span>
+          <TermTooltip termId="transactionCount">
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>成交筆數</span>
+          </TermTooltip>
           <span style={{ fontSize: '1.02rem', fontWeight: 700, color: '#f1f5f9' }}>
             {formatMarketMetric(data.transactionCount, 0)}
           </span>
@@ -367,21 +386,27 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
 
         {/* 開盤 / 最高 / 最低 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>開盤</span>
+          <TermTooltip termId="openPrice">
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>開盤</span>
+          </TermTooltip>
           <span style={{ fontSize: '0.98rem', fontWeight: 700, color: '#e2e8f0' }}>
             {formatMarketMetric(data.openPrice, 2)}
           </span>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>最高</span>
+          <TermTooltip termId="highPrice">
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>最高</span>
+          </TermTooltip>
           <span style={{ fontSize: '0.98rem', fontWeight: 700, color: '#f87171' }}>
             {formatMarketMetric(data.highPrice, 2)}
           </span>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>最低</span>
+          <TermTooltip termId="lowPrice">
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>最低</span>
+          </TermTooltip>
           <span style={{ fontSize: '0.98rem', fontWeight: 700, color: '#34d399' }}>
             {formatMarketMetric(data.lowPrice, 2)}
           </span>

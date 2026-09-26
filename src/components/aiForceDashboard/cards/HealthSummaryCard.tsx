@@ -1,6 +1,8 @@
 import React from 'react';
 import type { HealthSummaryData } from '../../../types/aiForceDashboard';
 import { MoreVertical } from 'lucide-react';
+import { TermTooltip } from '../../common/TermTooltip';
+import { diagnoseHealthScore } from '../../../constants/aiForceGlossary';
 
 export interface HealthSummaryCardProps {
   data?: HealthSummaryData;
@@ -58,9 +60,10 @@ interface GaugeItemProps {
   label: string;
   percent: number;
   color: string;
+  termId?: string;
 }
 
-const SingleGauge: React.FC<GaugeItemProps> = ({ label, percent, color }) => {
+const SingleGauge: React.FC<GaugeItemProps> = ({ label, percent, color, termId }) => {
   const radius = 21;
   const { circumference, strokeDashoffset, clamped } = calculateCircleProgress(percent, radius);
 
@@ -109,7 +112,9 @@ const SingleGauge: React.FC<GaugeItemProps> = ({ label, percent, color }) => {
           {clamped}%
         </div>
       </div>
-      <span style={{ fontSize: '0.72rem', color: '#cbd5e1', whiteSpace: 'nowrap', fontWeight: 600 }}>{label}</span>
+      <TermTooltip termId={termId}>
+        <span style={{ fontSize: '0.72rem', color: '#cbd5e1', whiteSpace: 'nowrap', fontWeight: 600 }}>{label}</span>
+      </TermTooltip>
     </div>
   );
 };
@@ -132,11 +137,11 @@ export const HealthSummaryCard: React.FC<HealthSummaryCardProps> = ({ data }) =>
   const ratingText = data?.overallRatingLabel ?? calculated.ratingLabel;
 
   const gauges = [
-    { label: '籌碼健康度', percent: chipHealth, color: '#38bdf8' },
-    { label: '技術結構度', percent: technicalStructure, color: '#10b981' },
-    { label: '資金動能度', percent: capitalMomentum, color: '#f59e0b' },
-    { label: '波動風險度', percent: liquidityRisk, color: '#ec4899' },
-    { label: '法人支撐度', percent: institutionalSupport, color: '#8b5cf6' },
+    { label: '籌碼健康度', percent: chipHealth, color: '#38bdf8', termId: 'chipsHealth' },
+    { label: '技術結構度', percent: technicalStructure, color: '#10b981', termId: 'techHealth' },
+    { label: '資金動能度', percent: capitalMomentum, color: '#f59e0b', termId: 'momentumHealth' },
+    { label: '波動風險度', percent: liquidityRisk, color: '#ec4899', termId: 'volatilityRisk' },
+    { label: '法人支撐度', percent: institutionalSupport, color: '#8b5cf6', termId: 'instSupport' },
   ];
 
   return (
@@ -176,9 +181,11 @@ export const HealthSummaryCard: React.FC<HealthSummaryCardProps> = ({ data }) =>
           >
             11
           </span>
-          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
-            健康度綜合評估表
-          </span>
+          <TermTooltip termId="healthScore">
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc', cursor: 'help' }}>
+              健康度綜合評估表
+            </span>
+          </TermTooltip>
         </div>
         <button
           type="button"
@@ -209,7 +216,7 @@ export const HealthSummaryCard: React.FC<HealthSummaryCardProps> = ({ data }) =>
         }}
       >
         {gauges.map((g) => (
-          <SingleGauge key={g.label} label={g.label} percent={g.percent} color={g.color} />
+          <SingleGauge key={g.label} label={g.label} percent={g.percent} color={g.color} termId={g.termId} />
         ))}
       </div>
 
@@ -223,7 +230,11 @@ export const HealthSummaryCard: React.FC<HealthSummaryCardProps> = ({ data }) =>
           color: '#cbd5e1',
         }}
       >
-        總評：<span style={{ color: '#fbbf24', fontWeight: 700 }}>{ratingText}</span>
+        <TermTooltip termId="healthScore" dynamicDiagnosis={diagnoseHealthScore(calculated.averageScore)}>
+          <span>
+            總評：<span style={{ color: '#fbbf24', fontWeight: 700, cursor: 'help' }}>{ratingText}</span>
+          </span>
+        </TermTooltip>
       </div>
     </div>
   );

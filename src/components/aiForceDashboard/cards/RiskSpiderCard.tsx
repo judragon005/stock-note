@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react';
 import { RiskSpiderData } from '../../../types/aiForceDashboard';
+import { TermTooltip } from '../../common/TermTooltip';
+import { diagnoseDayTradeRisk } from '../../../constants/aiForceGlossary';
 
 export interface Point {
   x: number;
@@ -200,9 +202,15 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
           >
             05
           </span>
-          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
-            風險雷達圖
-          </span>
+          <TermTooltip
+            termId="volatilityRisk"
+            dynamicDiagnosis={diagnoseDayTradeRisk(data.mainForceRiskIndex ?? 60, 50)}
+            showIcon={true}
+          >
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
+              風險雷達圖
+            </span>
+          </TermTooltip>
         </div>
 
         <button
@@ -329,7 +337,9 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>主力風險等級：</span>
+          <TermTooltip termId="dayTradeRisk" dynamicDiagnosis={diagnoseDayTradeRisk(data.mainForceRiskIndex ?? 60, 50)}>
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>主力風險等級：</span>
+          </TermTooltip>
           <span
             style={{
               padding: '2px 8px',
@@ -346,7 +356,9 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>主力風險指數：</span>
+          <TermTooltip termId="dayTradeRisk" dynamicDiagnosis={diagnoseDayTradeRisk(data.mainForceRiskIndex ?? 60, 50)}>
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>主力風險指數：</span>
+          </TermTooltip>
           <span
             style={{
               color: riskBadge.color,

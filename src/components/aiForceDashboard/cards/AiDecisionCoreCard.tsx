@@ -72,6 +72,8 @@ export function getHealthScoreStyle(score: number): HealthScoreResult {
 }
 
 import { MoreVertical } from 'lucide-react';
+import { TermTooltip } from '../../common/TermTooltip';
+import { diagnoseDayTradeRisk, diagnoseHealthScore } from '../../../constants/aiForceGlossary';
 
 /**
  * 格式化支撐/壓力價位區間字串
@@ -98,6 +100,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
   const items = [
     {
       label: '趨勢判斷',
+      termId: 'decisionTrend',
       icon: '🧭',
       badge: {
         text: data.trendJudgement || '中性偏多',
@@ -108,6 +111,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
     },
     {
       label: '短線狀態',
+      termId: 'shortTermState',
       icon: '⚡',
       badge: {
         text: data.shortTermState || '區間震盪',
@@ -118,6 +122,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
     },
     {
       label: '主力行為',
+      termId: 'mainForceAction',
       icon: '🏛️',
       badge: {
         text: data.mainForceAction || '調節減碼',
@@ -128,6 +133,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
     },
     {
       label: '籌碼結構',
+      termId: 'chipStructure',
       icon: '📊',
       badge: {
         text: data.chipStructure || '中性',
@@ -138,6 +144,8 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
     },
     {
       label: '隔日沖風險',
+      termId: 'dayTradeRisk',
+      dynamicDiagnosis: diagnoseDayTradeRisk(data.dayTradeRiskPercent ?? 53, 50),
       icon: '⚠️',
       badge: {
         text: `${data.dayTradeRiskPercent ?? 53}%`,
@@ -148,6 +156,8 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
     },
     {
       label: '籌碼健康度',
+      termId: 'chipsHealth',
+      dynamicDiagnosis: diagnoseHealthScore(data.chipHealthScore ?? 55),
       icon: '🩺',
       badge: {
         text: `${data.chipHealthScore ?? 55}分 (${data.chipHealthLabel || healthBadge.status})`,
@@ -158,18 +168,21 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
     },
     {
       label: '支撐區間',
+      termId: 'supportLevel',
       icon: '🛡️',
       value: formatPriceRange(data.supportRange, ' / '),
       valueColor: '#38bdf8',
     },
     {
       label: '壓力區間',
+      termId: 'highResistance',
       icon: '⚔️',
       value: formatPriceRange(data.resistanceRange, ' / '),
       valueColor: '#ef4444',
     },
     {
       label: '風險等級',
+      termId: 'volatilityRisk',
       icon: '⏱️',
       value: data.riskHorizonDays ? `${data.riskHorizonDays.replace('個', '級')}日` : '1 ~ 4 級交易日',
       valueColor: '#f8fafc',
@@ -212,9 +225,11 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
           >
             02
           </span>
-          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
-            AI 決策核心
-          </span>
+          <TermTooltip termId="decisionTrend" showIcon={true}>
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
+              AI 決策核心
+            </span>
+          </TermTooltip>
           <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
             | AI DECISION CORE
           </span>
@@ -287,9 +302,11 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
             {/* 左側名稱與圖示 */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
               <span style={{ fontSize: '0.85rem' }}>{item.icon}</span>
-              <span style={{ fontSize: '0.82rem', color: '#94a3b8', fontWeight: 500 }}>
-                {item.label}
-              </span>
+              <TermTooltip termId={item.termId} dynamicDiagnosis={item.dynamicDiagnosis}>
+                <span style={{ fontSize: '0.82rem', color: '#94a3b8', fontWeight: 500 }}>
+                  {item.label}
+                </span>
+              </TermTooltip>
             </div>
 
             {/* 右側徽章或數值 */}

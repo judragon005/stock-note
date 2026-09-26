@@ -2,6 +2,7 @@ import React from 'react';
 import type { MarketSentimentData } from '../../../types/aiForceDashboard';
 import { calculateGaugeNeedleAngle } from '../../../engine/marketSentimentEngine';
 import { MoreVertical } from 'lucide-react';
+import { TermTooltip } from '../../common/TermTooltip';
 
 export interface MarketSentimentCardProps {
   data?: MarketSentimentData;
@@ -47,9 +48,9 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
   const needleAngle = calculateGaugeNeedleAngle(index);
 
   const participantBars = [
-    { label: '散戶情緒', percent: retail, color: '#f59e0b' },
-    { label: '法人情緒', percent: institutional, color: '#38bdf8' },
-    { label: '主力情緒', percent: mainForce, color: '#ec4899' },
+    { label: '散戶情緒', percent: retail, color: '#f59e0b', termId: 'retailSentiment' },
+    { label: '法人情緒', percent: institutional, color: '#38bdf8', termId: 'instSentiment' },
+    { label: '主力情緒', percent: mainForce, color: '#ec4899', termId: 'mainSentiment' },
   ];
 
   return (
@@ -89,9 +90,11 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
           >
             13
           </span>
-          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
-            台股市場情緒儀表板
-          </span>
+          <TermTooltip termId="marketSentiment">
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc', cursor: 'help' }}>
+              台股市場情緒儀表板
+            </span>
+          </TermTooltip>
         </div>
         <button
           type="button"
@@ -159,9 +162,11 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
               />
             </svg>
           </div>
-          <span style={{ fontSize: '0.72rem', color: '#cbd5e1', marginTop: '2px', fontWeight: 600 }}>
-            市場情緒：<span style={{ color: '#fbbf24', fontWeight: 800 }}>中性</span>
-          </span>
+          <TermTooltip termId="marketSentiment">
+            <span style={{ fontSize: '0.72rem', color: '#cbd5e1', marginTop: '2px', fontWeight: 600, cursor: 'help' }}>
+              市場情緒：<span style={{ color: '#fbbf24', fontWeight: 800 }}>中性</span>
+            </span>
+          </TermTooltip>
         </div>
 
         {/* 右側 3 條水平情緒條 */}
@@ -169,7 +174,9 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
           {participantBars.map((bar) => (
             <div key={bar.label} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
-                <span style={{ color: '#94a3b8' }}>{bar.label}：</span>
+                <TermTooltip termId={bar.termId}>
+                  <span style={{ color: '#94a3b8', cursor: 'help' }}>{bar.label}：</span>
+                </TermTooltip>
                 <span style={{ color: '#f8fafc', fontWeight: 700, fontFamily: 'monospace' }}>
                   {bar.percent}%
                 </span>

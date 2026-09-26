@@ -1,19 +1,21 @@
 import React from 'react';
 import type { AiForceTaskTabKey } from '../../types/aiForceDashboard';
+import { TermTooltip } from '../common/TermTooltip';
 
 export interface TaskViewItem {
   key: AiForceTaskTabKey;
   label: string;
   icon: string;
   badge?: string;
+  termId?: string;
 }
 
 export const TASK_VIEWS_CONFIG: TaskViewItem[] = [
-  { key: 'TASK_1_COMPREHENSIVE', label: '任務一：綜合分析報告', icon: '📊', badge: '18 卡片' },
-  { key: 'TASK_2_TECHNICAL_ALERTS', label: '任務二：技術警示報告', icon: '⚠️', badge: '即時' },
-  { key: 'TASK_3_KD_MA', label: '任務三：KD + MA 圖表', icon: '📈' },
-  { key: 'TASK_4_MACD', label: '任務四：MACD 圖表', icon: '📉' },
-  { key: 'TASK_5_RAW_DATA', label: '原始資料表', icon: '📑' },
+  { key: 'TASK_1_COMPREHENSIVE', label: '任務一：綜合分析報告', icon: '📊', badge: '18 卡片', termId: 'viewTask1' },
+  { key: 'TASK_2_TECHNICAL_ALERTS', label: '任務二：技術警示報告', icon: '⚠️', badge: '即時', termId: 'viewTask2' },
+  { key: 'TASK_3_KD_MA', label: '任務三：KD + MA 圖表', icon: '📈', termId: 'viewTask3' },
+  { key: 'TASK_4_MACD', label: '任務四：MACD 圖表', icon: '📉', termId: 'viewTask4' },
+  { key: 'TASK_5_RAW_DATA', label: '原始資料表', icon: '📑', termId: 'viewTask5' },
 ];
 
 export interface TaskViewsSwitcherProps {
@@ -66,8 +68,12 @@ export const TaskViewsSwitcher: React.FC<TaskViewsSwitcherProps> = ({
               boxShadow: isActive ? '0 0 12px rgba(56, 189, 248, 0.2)' : 'none',
             }}
           >
-            <span>{task.icon}</span>
-            <span>{task.label}</span>
+            <TermTooltip termId={task.termId}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'help' }}>
+                <span>{task.icon}</span>
+                <span>{task.label}</span>
+              </span>
+            </TermTooltip>
             {task.badge && (
               <span
                 style={{

@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ForceDistributionData } from '../../../types/aiForceDashboard';
 import { MoreVertical } from 'lucide-react';
+import { TermTooltip } from '../../common/TermTooltip';
 
 export interface ForceDistributionCardProps {
   data?: ForceDistributionData;
@@ -31,9 +32,10 @@ interface SingleRingProps {
   label: string;
   percent: number;
   color: string;
+  termId?: string;
 }
 
-const SingleRing: React.FC<SingleRingProps> = ({ label, percent, color }) => {
+const SingleRing: React.FC<SingleRingProps> = ({ label, percent, color, termId }) => {
   const radius = 24;
   const circumference = 2 * Math.PI * radius;
   const clamped = Math.max(0, Math.min(100, percent));
@@ -84,9 +86,11 @@ const SingleRing: React.FC<SingleRingProps> = ({ label, percent, color }) => {
           {clamped}%
         </div>
       </div>
-      <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#cbd5e1' }}>
-        {label}
-      </span>
+      <TermTooltip termId={termId}>
+        <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#cbd5e1', cursor: 'help' }}>
+          {label}
+        </span>
+      </TermTooltip>
     </div>
   );
 };
@@ -134,9 +138,11 @@ export const ForceDistributionCard: React.FC<ForceDistributionCardProps> = ({ da
           >
             16
           </span>
-          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
-            買賣力分布圖
-          </span>
+          <TermTooltip termId="bigBuyerFlow">
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc', cursor: 'help' }}>
+              買賣力分布圖
+            </span>
+          </TermTooltip>
           <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
             | 法人 vs 散戶
           </span>
@@ -168,9 +174,9 @@ export const ForceDistributionCard: React.FC<ForceDistributionCardProps> = ({ da
           padding: '12px 0',
         }}
       >
-        <SingleRing label="大戶買盤" percent={large} color="#f97316" />
-        <SingleRing label="散戶買盤" percent={retailBuy} color="#fbbf24" />
-        <SingleRing label="散戶賣盤" percent={retailSell} color="#10b981" />
+        <SingleRing label="大戶買盤" percent={large} color="#f97316" termId="bigBuyerFlow" />
+        <SingleRing label="散戶買盤" percent={retailBuy} color="#fbbf24" termId="retailBuyerFlow" />
+        <SingleRing label="散戶賣盤" percent={retailSell} color="#10b981" termId="retailSellerFlow" />
       </div>
 
       {/* 底部時間與資料說明 */}

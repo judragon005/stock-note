@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { InstitutionalFlowData } from '../../../types/aiForceDashboard';
 import { ColorThemeMode } from '../../../types/stock';
 import { MoreVertical } from 'lucide-react';
+import { TermTooltip } from '../../common/TermTooltip';
 
 export interface DualAxisScales {
   leftMin: number;
@@ -251,9 +252,11 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
           >
             08
           </span>
-          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
-            法人行為計量
-          </span>
+          <TermTooltip termId="totalInstFlow" showIcon={true}>
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
+              法人行為計量
+            </span>
+          </TermTooltip>
           <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
             | 三大法人買賣超 (張)
           </span>
@@ -261,10 +264,18 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
 
         {/* 圖例與選單 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem' }}>
-          <span style={{ color: '#38bdf8' }}>■ 外資</span>
-          <span style={{ color: '#f59e0b' }}>■ 投信</span>
-          <span style={{ color: '#34d399' }}>■ 自營</span>
-          <span style={{ color: '#fbbf24', fontWeight: 700 }}>— 累計折線</span>
+          <TermTooltip termId="foreignFlow">
+            <span style={{ color: '#38bdf8' }}>■ 外資</span>
+          </TermTooltip>
+          <TermTooltip termId="trustFlow">
+            <span style={{ color: '#f59e0b' }}>■ 投信</span>
+          </TermTooltip>
+          <TermTooltip termId="dealerFlow">
+            <span style={{ color: '#34d399' }}>■ 自營</span>
+          </TermTooltip>
+          <TermTooltip termId="totalInstFlow">
+            <span style={{ color: '#fbbf24', fontWeight: 700 }}>— 累計折線</span>
+          </TermTooltip>
           <button
             type="button"
             aria-label="選項"
@@ -430,7 +441,9 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>累積買賣超：</span>
+          <TermTooltip termId="totalInstFlow">
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>累積買賣超：</span>
+          </TermTooltip>
           <span
             style={{
               padding: '2px 8px',
@@ -446,7 +459,9 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>近5日買賣超：</span>
+          <TermTooltip termId="totalInstFlow">
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>近5日買賣超：</span>
+          </TermTooltip>
           <span
             style={{
               padding: '2px 8px',

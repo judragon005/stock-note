@@ -1,6 +1,7 @@
 import React from 'react';
 import type { AiConfidenceData } from '../../../types/aiForceDashboard';
 import { MoreVertical } from 'lucide-react';
+import { TermTooltip } from '../../common/TermTooltip';
 
 export interface AiConfidenceCardProps {
   data?: AiConfidenceData;
@@ -32,7 +33,7 @@ export const AiConfidenceCard: React.FC<AiConfidenceCardProps> = ({ data }) => {
   const grade = calculateConfidenceGrade(overall);
 
   const bars = [
-    { label: 'AI CONFIDENCE', percent: overall, color: '#38bdf8' },
+    { label: 'AI CONFIDENCE', percent: overall, color: '#38bdf8', termId: 'aiConfidence' },
     { label: '模型準確度', percent: accuracy, color: '#38bdf8' },
     { label: '資料完整度', percent: completeness, color: '#38bdf8' },
     { label: '經驗穩定度', percent: stability, color: '#38bdf8' },
@@ -76,9 +77,11 @@ export const AiConfidenceCard: React.FC<AiConfidenceCardProps> = ({ data }) => {
           >
             14
           </span>
-          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
-            AI 信心維度
-          </span>
+          <TermTooltip termId="aiConfidence">
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc', cursor: 'help' }}>
+              AI 信心維度
+            </span>
+          </TermTooltip>
         </div>
         <button
           type="button"
@@ -102,7 +105,13 @@ export const AiConfidenceCard: React.FC<AiConfidenceCardProps> = ({ data }) => {
         {bars.map((item) => (
           <div key={item.label} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
-              <span style={{ color: '#94a3b8' }}>{item.label}</span>
+              {item.termId ? (
+                <TermTooltip termId={item.termId}>
+                  <span style={{ color: '#94a3b8', cursor: 'help' }}>{item.label}</span>
+                </TermTooltip>
+              ) : (
+                <span style={{ color: '#94a3b8' }}>{item.label}</span>
+              )}
               <span style={{ color: '#f8fafc', fontWeight: 600 }}>{item.percent}%</span>
             </div>
             <div
@@ -140,8 +149,12 @@ export const AiConfidenceCard: React.FC<AiConfidenceCardProps> = ({ data }) => {
           borderTop: '1px solid rgba(255, 255, 255, 0.05)',
         }}
       >
-        <span>多特徵模型信任係數</span>
-        <strong style={{ color: grade.color, fontWeight: 600 }}>{overall}% 綜合信心</strong>
+        <TermTooltip termId="aiConfidence">
+          <span style={{ cursor: 'help' }}>多特徵模型信任係數</span>
+        </TermTooltip>
+        <TermTooltip termId="aiConfidence">
+          <strong style={{ color: grade.color, fontWeight: 600, cursor: 'help' }}>{overall}% 綜合信心</strong>
+        </TermTooltip>
       </div>
     </div>
   );

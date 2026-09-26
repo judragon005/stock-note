@@ -1919,7 +1919,21 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     - **策略適用度 (`strategyApplicability`)**：流動性充足與波段明確度評估。
     - **總體信心度 (`overallConfidence`)**：4 項指標加權平均取整。
 
-- **Market Sentiment Live Pipeline Mount (卡片 13 市場情緒管線實裝接入)**:
-  - 將真實日 K 漲跌幅、近 5 日法人買賣超佔比與主力成本乖離率傳入 `estimateMarketSentiment()`，產出真實情緒狀態（`GREED` / `NEUTRAL` / `FEAR`）與指數，取代靜態常數。
+### AI 主力戰情室新手白話決策字典與全模組自適應浮動提示視窗 (TermTooltip) *(新增於 V8.60.0 / Spec #0147 / ADR #0147 / Issue #117)*
+
+- **Beginner Decision Glossary (新手白話決策字典單一來源真相)**:
+  - 核心模組：`src/constants/aiForceGlossary.ts`。
+  - 核心規格：全面收錄 30+ 個關鍵量化與交易名詞，涵蓋頂部行情 Bar、18 張 Bento-Grid 卡片與 5 大任務視圖。
+  - **三段式直觀結構**：
+    - **【💡 白話比喻】**：以日常生活淺顯概念解釋本質（如「主力成本」是批發大老闆進貨的底牌進價）。
+    - **【📊 指標含義】**：說明統計公式與物理量化原理。
+    - **【🎯 買賣操作指引】**：明確標明「🟢 偏多買訊（何時買或抱）」、「🔴 偏空賣訊（何時賣或停損）」與「🟡 觀望警戒」，新手一秒看懂當下該買該賣。
+  - **動態個股穿透診斷**：提供 5 大即時評估純函式（`diagnoseMainForceCost`、`diagnoseDayTradeRisk`、`diagnoseForecastCone`、`diagnoseBullBearEnergy`、`diagnoseHealthScore`），結合當前個股數據即時運算專屬買賣建議。
+
+- **TermTooltip (自適應防抖動浮動提示元件)**:
+  - 核心元件：`src/components/common/TermTooltip.tsx`。
+  - **Zero-Dependency & Zero-Layout-Shift**：零外部大型庫依賴，外層 Trigger 設為 `display: 'inline-flex'`、`position: 'relative'`，Popup 設為 `position: 'absolute'`，嚴禁動態插入 block 容器引起周圍 flex/grid 跳動。
+  - **Smart Flip & Anti-Overflow (邊界智慧翻轉演算法)**：透過 `calculateTooltipPlacement`，頂部空間不足 260px 自動翻轉至下方，右側超出螢幕時靠右對齊向左展開，杜絕內容被截斷。
+  - **多端支援**：支援滑鼠 Hover、行動端 Tap 點擊鎖定、ESC 鍵退出與外層點擊自動關閉。
 
 

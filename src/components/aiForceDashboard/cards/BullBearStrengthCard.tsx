@@ -2,6 +2,7 @@ import React from 'react';
 import type { BullBearStrengthData } from '../../../types/aiForceDashboard';
 import { calculateCircleProgress } from './HealthSummaryCard';
 import { MoreVertical } from 'lucide-react';
+import { TermTooltip } from '../../common/TermTooltip';
 
 export interface BullBearStrengthCardProps {
   data?: BullBearStrengthData;
@@ -30,9 +31,10 @@ interface StrengthRingProps {
   label: string;
   percent: number;
   color: string;
+  termId?: string;
 }
 
-const StrengthRing: React.FC<StrengthRingProps> = ({ label, percent, color }) => {
+const StrengthRing: React.FC<StrengthRingProps> = ({ label, percent, color, termId }) => {
   const radius = 22;
   const { circumference, strokeDashoffset, clamped } = calculateCircleProgress(percent, radius);
 
@@ -78,7 +80,9 @@ const StrengthRing: React.FC<StrengthRingProps> = ({ label, percent, color }) =>
           {clamped}%
         </div>
       </div>
-      <span style={{ fontSize: '0.72rem', color: '#cbd5e1' }}>{label}</span>
+      <TermTooltip termId={termId}>
+        <span style={{ fontSize: '0.72rem', color: '#cbd5e1', cursor: 'help' }}>{label}</span>
+      </TermTooltip>
     </div>
   );
 };
@@ -92,9 +96,9 @@ export const BullBearStrengthCard: React.FC<BullBearStrengthCardProps> = ({ data
   const tierMeta = calculateSignalTier(score);
 
   const rings = [
-    { label: '多方強度', percent: bull, color: '#f87171' },
-    { label: '空方強度', percent: bear, color: '#38bdf8' },
-    { label: '量能強度', percent: volume, color: '#10b981' },
+    { label: '多方強度', percent: bull, color: '#f87171', termId: 'bullStrength' },
+    { label: '空方強度', percent: bear, color: '#38bdf8', termId: 'bearStrength' },
+    { label: '量能強度', percent: volume, color: '#10b981', termId: 'bullEnergy' },
   ];
 
   return (
@@ -134,9 +138,11 @@ export const BullBearStrengthCard: React.FC<BullBearStrengthCardProps> = ({ data
           >
             17
           </span>
-          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
-            多空強度分布
-          </span>
+          <TermTooltip termId="bullStrength">
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc', cursor: 'help' }}>
+              多空強度分布
+            </span>
+          </TermTooltip>
         </div>
         <button
           type="button"
@@ -166,7 +172,7 @@ export const BullBearStrengthCard: React.FC<BullBearStrengthCardProps> = ({ data
         }}
       >
         {rings.map((r) => (
-          <StrengthRing key={r.label} label={r.label} percent={r.percent} color={r.color} />
+          <StrengthRing key={r.label} label={r.label} percent={r.percent} color={r.color} termId={r.termId} />
         ))}
       </div>
 
@@ -180,7 +186,11 @@ export const BullBearStrengthCard: React.FC<BullBearStrengthCardProps> = ({ data
           color: '#94a3b8',
         }}
       >
-        信號等級：<strong style={{ color: tierMeta.color }}>{tierMeta.tier} 級區</strong>
+        <TermTooltip termId="bullStrength">
+          <span style={{ cursor: 'help' }}>
+            信號等級：<strong style={{ color: tierMeta.color }}>{tierMeta.tier} 級區</strong>
+          </span>
+        </TermTooltip>
         <span style={{ color: '#64748b', marginLeft: '4px' }}>(1級最強 ~ 5級最弱，依綜合評分 {score})</span>
       </div>
     </div>

@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 import { DayTradeRiskData } from '../../../types/aiForceDashboard';
 import { MoreVertical } from 'lucide-react';
+import { TermTooltip } from '../../common/TermTooltip';
+import { diagnoseDayTradeRisk } from '../../../constants/aiForceGlossary';
 
 export interface ProgressBarStyle {
   color: string;
@@ -78,15 +80,16 @@ export interface DayTradeRiskMetricItem {
   label: string;
   value: number;
   icon: string;
+  termId?: string;
 }
 
 export function getDayTradeRiskItems(data?: Partial<DayTradeRiskData> | null): DayTradeRiskMetricItem[] {
   return [
-    { label: '主力賣出異常', value: data?.abnormalSelling ?? 49, icon: '🚨' },
-    { label: '籌碼換手率', value: data?.turnoverRate ?? 57, icon: '🔄' },
-    { label: '沖銷比例', value: data?.dayTradeRatio ?? 53, icon: '⚡' },
-    { label: '隔日回檔風險', value: data?.pullbackRisk ?? 45, icon: '📉' },
-    { label: '日內波動率', value: data?.intradayVolatility ?? 62, icon: '🌊' },
+    { label: '主力賣出異常', value: data?.abnormalSelling ?? 49, icon: '🚨', termId: 'dayTradeRisk' },
+    { label: '籌碼換手率', value: data?.turnoverRate ?? 57, icon: '🔄', termId: 'turnoverRate' },
+    { label: '沖銷比例', value: data?.dayTradeRatio ?? 53, icon: '⚡', termId: 'dayTradeRatio' },
+    { label: '隔日回檔風險', value: data?.pullbackRisk ?? 45, icon: '📉', termId: 'pullbackRisk' },
+    { label: '日內波動率', value: data?.intradayVolatility ?? 62, icon: '🌊', termId: 'intradayVolatility' },
   ];
 }
 
@@ -136,9 +139,15 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
           >
             09
           </span>
-          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
-            隔日沖風險分析
-          </span>
+          <TermTooltip
+            termId="dayTradeRisk"
+            dynamicDiagnosis={diagnoseDayTradeRisk(data.riskIndex ?? avgIndex, data.dayTradeRatio ?? 53)}
+            showIcon={true}
+          >
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
+              隔日沖風險分析
+            </span>
+          </TermTooltip>
         </div>
 
         <button
@@ -183,7 +192,9 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span style={{ fontSize: '0.8rem' }}>{item.icon}</span>
-                  <span style={{ color: '#cbd5e1', fontWeight: 600 }}>{item.label}</span>
+                  <TermTooltip termId={item.termId}>
+                    <span style={{ color: '#cbd5e1', fontWeight: 600 }}>{item.label}</span>
+                  </TermTooltip>
                 </div>
                 <span
                   style={{
@@ -238,7 +249,12 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>隔日沖風險等級：</span>
+          <TermTooltip
+            termId="dayTradeRisk"
+            dynamicDiagnosis={diagnoseDayTradeRisk(data.riskIndex ?? avgIndex, data.dayTradeRatio ?? 53)}
+          >
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>隔日沖風險等級：</span>
+          </TermTooltip>
           <span
             style={{
               padding: '2px 8px',
@@ -255,7 +271,12 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>風險指數：</span>
+          <TermTooltip
+            termId="dayTradeRisk"
+            dynamicDiagnosis={diagnoseDayTradeRisk(data.riskIndex ?? avgIndex, data.dayTradeRatio ?? 53)}
+          >
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>風險指數：</span>
+          </TermTooltip>
           <span
             style={{
               fontSize: '0.82rem',
