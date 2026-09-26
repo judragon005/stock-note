@@ -14,6 +14,9 @@ import { calculateRiskSpider } from './riskSpiderEngine';
 import { calculateForecastCone } from './forecastConeEngine';
 import { calculateVwapCostStructure, DEFAULT_TIME_NODES } from './vwapCostEngine';
 import { calculateDayTradeRisk } from './dayTradeRiskEngine';
+import { calculateMultiDimensionRadar } from './multiDimensionRadarEngine';
+import { estimateMarketSentiment } from './marketSentimentEngine';
+import { calculateAiConfidence } from './aiConfidenceEngine';
 
 export {
   calculateVolumeProfile,
@@ -21,6 +24,9 @@ export {
   calculateForecastCone,
   calculateVwapCostStructure,
   calculateDayTradeRisk,
+  calculateMultiDimensionRadar,
+  estimateMarketSentiment,
+  calculateAiConfidence,
 };
 
 /**
@@ -869,6 +875,36 @@ export function generateAiForceReportFromCandles(
   else if (vwapBias < -5) primaryVerb = '超跌反彈';
   else if (vwapBias < -2) primaryVerb = '低接吸籌';
 
+  // 8. Card 03 多維度判讀、Card 13 市場情緒與 Card 14 AI 信心度動態計算
+  const multiDimensionRadar = calculateMultiDimensionRadar({
+    candles,
+    klineCandles,
+    mainForceCost,
+    institutionalFlow,
+    market,
+  });
+
+  const recent5Flow = institutionalFlow.history.slice(-5);
+  const sum5Inst = recent5Flow.reduce((acc, cur) => acc + cur.foreignShares + cur.trustShares + cur.dealerShares, 0);
+  const recent5Candles = candles.slice(-5);
+  const totalVol5 = recent5Candles.reduce((acc, c) => acc + c.volume, 0);
+  const institutionalNetRatio = totalVol5 > 0 ? (sum5Inst / totalVol5) * 100 : 0;
+
+  const marketSentiment = estimateMarketSentiment({
+    priceChangePercent: changePercent,
+    institutionalNetRatio,
+    mainForceConcentration: vwapBias,
+    marginChangeRatio: 0,
+  });
+
+  const aiConfidence = calculateAiConfidence({
+    candles,
+    klineCandles,
+    hasInstitutionalData: institutionalFlow.history.length > 0,
+  });
+
+  const healthSummary = calculateHealthSummaryFromCandles(klineCandles, institutionalFlow);
+
   return {
     ...defaultTemplate,
     symbol,
@@ -911,10 +947,13 @@ export function generateAiForceReportFromCandles(
       trendJudgement: changePercent >= 0 ? '偏多強勢' : '偏弱整理',
       mainForceAction: primaryVerb,
       dayTradeRiskPercent: dayTradeRisk.riskIndex,
+      chipHealthScore: healthSummary.chipHealth,
+      chipHealthLabel: healthSummary.chipHealth >= 70 ? '良好' : healthSummary.chipHealth >= 50 ? '普通' : '偏弱',
       supportRange: [supportLevel, Number((supportLevel * 0.95).toFixed(2))],
       resistanceRange: [highResistance, Number((highResistance * 1.05).toFixed(2))],
     },
 
+    multiDimensionRadar,
     volumeProfile,
     forecastCone,
     vwapCostStructure,
@@ -923,8 +962,10 @@ export function generateAiForceReportFromCandles(
     institutionalFlow,
     chipsSummary,
     bullBearEnergy: calculateBullBearEnergyFromCandles(candles),
-    healthSummary: calculateHealthSummaryFromCandles(klineCandles, institutionalFlow),
+    healthSummary,
     dynamicSignals: calculateDynamicSignalsFromCandles(klineCandles, mainForceCost, institutionalFlow),
+    marketSentiment,
+    aiConfidence,
     forceDistribution: calculateForceDistributionFromCandles(klineCandles, last.date),
     bullBearStrength: calculateBullBearStrengthFromCandles(klineCandles),
 

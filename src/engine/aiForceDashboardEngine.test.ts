@@ -250,7 +250,74 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
         expect(report.bullBearStrength.bullStrengthPercent).toBeGreaterThan(report.bullBearStrength.bearStrengthPercent);
         expect(report.bullBearStrength.signalTierLevel).toBeLessThanOrEqual(3);
       });
+
+      it('Ticket 08: 驗證換股時 Card 03 多維度判讀、Card 13 市場情緒與 Card 14 AI 信心度全量動態響應', () => {
+        // 1. 強勢多頭標的（如 2330 台積電）
+        const bullCandles = Array.from({ length: 60 }, (_, i) => ({
+          date: `2026-09-${String((i % 28) + 1).padStart(2, '0')}`,
+          open: 1000 + i * 15,
+          high: 1020 + i * 15,
+          low: 995 + i * 15,
+          close: 1018 + i * 15,
+          volume: 6000,
+        }));
+        const bullInst = Array.from({ length: 20 }, (_, i) => ({
+          date: `2026-09-${String((i % 28) + 1).padStart(2, '0')}`,
+          foreignShares: 1200,
+          trustShares: 600,
+          dealerShares: 200,
+        }));
+        const bullReport = generateAiForceReportFromCandles(
+          '2330',
+          '台積電',
+          'TW',
+          bullCandles,
+          { price: 1918, change: 45, changePercent: 2.4 },
+          bullInst
+        );
+
+        // 2. 弱勢破底標的（如投機弱勢股）
+        const bearCandles = Array.from({ length: 60 }, (_, i) => ({
+          date: `2026-09-${String((i % 28) + 1).padStart(2, '0')}`,
+          open: 500 - i * 5,
+          high: 502 - i * 5,
+          low: 480 - i * 5,
+          close: 485 - i * 5,
+          volume: 150, // 低流動性
+        }));
+        const bearInst = Array.from({ length: 20 }, (_, i) => ({
+          date: `2026-09-${String((i % 28) + 1).padStart(2, '0')}`,
+          foreignShares: -800,
+          trustShares: -300,
+          dealerShares: -100,
+        }));
+        const bearReport = generateAiForceReportFromCandles(
+          '9999',
+          '弱勢股',
+          'TW',
+          bearCandles,
+          { price: 185, change: -10, changePercent: -5.1 },
+          bearInst
+        );
+
+        // Card 03 多維度判讀驗證：兩者不再固定為 56 分與 C 級！
+        expect(bullReport.multiDimensionRadar.overallScore).not.toBe(56);
+        expect(bullReport.multiDimensionRadar.overallScore).toBeGreaterThanOrEqual(75);
+        expect(['A', 'B']).toContain(bullReport.multiDimensionRadar.overallGrade);
+
+        expect(bearReport.multiDimensionRadar.overallScore).not.toBe(56);
+        expect(bearReport.multiDimensionRadar.overallScore).toBeLessThan(50);
+        expect(bearReport.multiDimensionRadar.overallGrade).toBe('D');
+
+        // Card 13 市場情緒驗證：不再卡在 50 中性
+        expect(bullReport.marketSentiment.sentimentState).toBe('GREED');
+        expect(bearReport.marketSentiment.sentimentState).toBe('FEAR');
+
+        // Card 14 AI 信心度驗證：強勢股清晰度顯著高於無量弱勢破底股
+        expect(bullReport.aiConfidence.overallConfidence).toBeGreaterThan(bearReport.aiConfidence.overallConfidence);
+      });
     });
   });
 });
+
 
