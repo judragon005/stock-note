@@ -14,6 +14,7 @@ import { VwapCostStructureCard } from './cards/VwapCostStructureCard';
 import { InstitutionalFlowCard } from './cards/InstitutionalFlowCard';
 import { DayTradeRiskCard } from './cards/DayTradeRiskCard';
 import { BullBearEnergyCard } from './cards/BullBearEnergyCard';
+import { HealthSummaryCard } from './cards/HealthSummaryCard';
 import { resolveOfficialSecurityName } from '../../engine/stockNameResolver';
 
 export interface AiForceDashboardViewProps {
@@ -172,6 +173,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           {/* 10 AI 多空能量儀 (Ticket 20) */}
           <div>
             <BullBearEnergyCard data={report.bullBearEnergy} />
+          </div>
+
+          {/* 11 健康度綜合評估表 (Ticket 21) */}
+          <div>
+            <HealthSummaryCard data={report.healthSummary} />
           </div>
         </div>
       </div>
