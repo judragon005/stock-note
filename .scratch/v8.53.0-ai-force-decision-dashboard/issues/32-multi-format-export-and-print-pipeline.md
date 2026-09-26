@@ -6,10 +6,10 @@
 **Blocked by:**
 31 — 底部 5 大任務視圖切換器與面板整合
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] 支援 SVG 轉 Canvas 匯出高解析度 PNG 圖片
-- [ ] CSV 匯出包含完整行情與量化數據，且具備防注入處理
-- [ ] 生成獨立可離線查看之 HTML 總結報告
-- [ ] 適配 `@media print` 列印與 PDF 匯出無遮擋排版
-- [ ] 單元測試覆蓋 CSV 與 HTML 導出內容生成
+- [x] 支援 SVG 轉 Canvas 匯出高解析度 PNG 圖片
+- [x] CSV 匯出包含完整行情與量化數據，且具備防注入處理
+- [x] 生成獨立可離線查看之 HTML 總結報告
+- [x] 適配 `@media print` 列印與 PDF 匯出無遮擋排版
+- [x] 單元測試覆蓋 CSV 與 HTML 導出內容生成
