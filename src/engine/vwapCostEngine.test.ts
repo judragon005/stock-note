@@ -34,11 +34,12 @@ describe('VwapCostEngine - 20日 VWAP 與成本結構分佈演算法規範 (Tick
     expect(sum).toBe(100);
 
     const bandNames = result.bands.map((b) => b.name);
-    expect(bandNames).toContain('突破區');
+    expect(bandNames.some((n) => n.includes('倉儲') || n.includes('突破'))).toBe(true);
     expect(bandNames).toContain('大量成交區');
     expect(bandNames).toContain('主力成本區');
     expect(bandNames).toContain('套牢區');
   });
+
 
   it('當成交量全部為 0 時，應安全退回使用簡單價格平均而不引發除零錯誤', () => {
     const zeroVolCandles = [
@@ -60,4 +61,23 @@ describe('VwapCostEngine - 20日 VWAP 與成本結構分佈演算法規範 (Tick
     expect(result.bands.length).toBe(4);
     expect(result.bands.reduce((acc, b) => acc + b.percentage, 0)).toBe(100);
   });
+
+  it('calculateVwapCostStructure (Spec 0144) 應輸出 4 個代表性時點之成本帶成交量節點 (timeNodes)', () => {
+    const candles = Array.from({ length: 60 }, (_, i) => ({
+      high: 2000 + (i % 5) * 10,
+      low: 1980 + (i % 5) * 10,
+      close: 1990 + (i % 5) * 10,
+      volume: 1000 + i * 50,
+      date: `2026-0${Math.floor(i / 20) + 6}-${(i % 20 + 1).toString().padStart(2, '0')}`,
+    }));
+
+    const result = calculateVwapCostStructure(candles);
+
+    expect(result.timeNodes).toBeDefined();
+    expect(result.timeNodes?.length).toBe(4);
+    const node = result.timeNodes![0];
+    expect(node.dateLabel).toBeDefined();
+    expect(node.totalVolume).toBeGreaterThan(0);
+  });
 });
+

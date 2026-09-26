@@ -140,26 +140,138 @@ export function buildConeAreaPath(upperPoints: Point[], lowerPoints: Point[]): s
   return path;
 }
 
+export interface SplitConePaths {
+  bullAreaPath: string;
+  bearAreaPath: string;
+}
+
+/**
+ * 依據中位數曲線將發散錐拆分為上漲面(紅)與下跌面(綠)兩條獨立閉合路徑 (Spec 0144)
+ */
+export function buildSplitConePaths(
+  upperPoints: Point[],
+  medianPoints: Point[],
+  lowerPoints: Point[]
+): SplitConePaths {
+  const bullAreaPath = buildConeAreaPath(upperPoints, medianPoints);
+  const bearAreaPath = buildConeAreaPath(medianPoints, lowerPoints);
+  return { bullAreaPath, bearAreaPath };
+}
+
+export interface YAxisTick {
+  price: number;
+  y: number;
+  label: string;
+}
+
+/**
+ * 動態計算整數 Y 軸刻度標籤與 Y 座標 (Spec 0144)
+ */
+export function generateYAxisTicks(
+  minPrice: number,
+  maxPrice: number,
+  height: number,
+  padding: PaddingConfig = { left: 35, right: 35, top: 20, bottom: 25 },
+  desiredCount: number = 3
+): YAxisTick[] {
+  if (!isFinite(minPrice) || !isFinite(maxPrice) || minPrice >= maxPrice) {
+    return [];
+  }
+  const span = maxPrice - minPrice;
+  const usableHeight = height - padding.top - padding.bottom;
+
+  const rawStep = span / (desiredCount + 1);
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep || 100)));
+  const normalized = rawStep / magnitude;
+  let step = magnitude;
+  if (normalized >= 5) step = magnitude * 5;
+  else if (normalized >= 2) step = magnitude * 2;
+
+  const ticks: YAxisTick[] = [];
+  const start = Math.ceil(minPrice / step) * step;
+  for (let p = start; p <= maxPrice; p += step) {
+    const ratio = (p - minPrice) / span;
+    if (ratio >= 0.08 && ratio <= 0.92) {
+      const y = Number((padding.top + usableHeight * (1 - ratio)).toFixed(1));
+      ticks.push({
+        price: p,
+        y,
+        label: p >= 1000 ? `${p.toLocaleString()}` : `${p}`,
+      });
+    }
+  }
+
+  if (ticks.length < 2) {
+    const mid1 = Math.round((minPrice + span * 0.3) / 50) * 50;
+    const mid2 = Math.round((minPrice + span * 0.7) / 50) * 50;
+    return [
+      {
+        price: mid1,
+        y: Number((padding.top + usableHeight * (1 - (mid1 - minPrice) / span)).toFixed(1)),
+        label: mid1.toLocaleString(),
+      },
+      {
+        price: mid2,
+        y: Number((padding.top + usableHeight * (1 - (mid2 - minPrice) / span)).toFixed(1)),
+        label: mid2.toLocaleString(),
+      },
+    ];
+  }
+
+  return ticks;
+}
+
+export interface MainForceDirectionStyle {
+  color: string;
+  label: string;
+}
+
+/**
+ * 取得主力方向機率色彩與標籤 (Spec 0144 對齊照片)
+ */
+export function getMainForceDirectionStyle(
+  directionProb: number,
+  bullishProb?: number,
+  bearishProb?: number
+): MainForceDirectionStyle {
+  const isBull = (bullishProb ?? directionProb) >= (bearishProb ?? 50);
+  return {
+    color: isBull ? '#ef4444' : '#10b981',
+    label: isBull ? '多頭' : '空頭',
+  };
+}
+
 export interface ForecastConeCardProps {
   data: ForecastConeData;
 }
 
-export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
-  const width = 340;
-  const height = 180;
-  const padding: PaddingConfig = { left: 35, right: 35, top: 20, bottom: 25 };
+const CONE_WIDTH = 340;
+const CONE_HEIGHT = 180;
+const CONE_PADDING: PaddingConfig = { left: 35, right: 35, top: 20, bottom: 25 };
 
-  const { upperPoints, medianPoints, lowerPoints } = useMemo(
-    () => projectForecastNodesToPoints(data.timeNodes, width, height, padding),
+export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
+  const { upperPoints, medianPoints, lowerPoints, priceRange } = useMemo(
+    () => projectForecastNodesToPoints(data.timeNodes, CONE_WIDTH, CONE_HEIGHT, CONE_PADDING),
     [data.timeNodes]
   );
 
   const upperPath = useMemo(() => buildForecastCurvePath(upperPoints), [upperPoints]);
   const medianPath = useMemo(() => buildForecastCurvePath(medianPoints), [medianPoints]);
   const lowerPath = useMemo(() => buildForecastCurvePath(lowerPoints), [lowerPoints]);
-  const coneAreaPath = useMemo(
-    () => buildConeAreaPath(upperPoints, lowerPoints),
-    [upperPoints, lowerPoints]
+
+  const { bullAreaPath, bearAreaPath } = useMemo(
+    () => buildSplitConePaths(upperPoints, medianPoints, lowerPoints),
+    [upperPoints, medianPoints, lowerPoints]
+  );
+
+  const yAxisTicks = useMemo(
+    () => generateYAxisTicks(priceRange.min, priceRange.max, CONE_HEIGHT, CONE_PADDING),
+    [priceRange.min, priceRange.max]
+  );
+
+  const directionStyle = useMemo(
+    () => getMainForceDirectionStyle(data.mainForceDirectionProb, data.bullishProb, data.bearishProb),
+    [data.mainForceDirectionProb, data.bullishProb, data.bearishProb]
   );
 
   return (
@@ -241,34 +353,62 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
       {/* SVG 預測錐繪製區 */}
       <div style={{ width: '100%', flex: 1, minHeight: '180px', position: 'relative' }}>
         <svg
-          viewBox={`0 0 ${width} ${height}`}
+          viewBox={`0 0 ${CONE_WIDTH} ${CONE_HEIGHT}`}
           style={{ width: '100%', height: '100%', overflow: 'visible' }}
           preserveAspectRatio="none"
         >
           <defs>
-            <linearGradient id="coneGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#c084fc" stopOpacity="0.12" />
+            {/* 上漲扇形紅色漸層 (對齊照片) */}
+            <linearGradient id="bullConeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.4" />
+              <stop offset="100%" stopColor="#f97316" stopOpacity="0.1" />
+            </linearGradient>
+            {/* 下跌扇形翠綠漸層 (對齊照片) */}
+            <linearGradient id="bearConeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#10b981" stopOpacity="0.4" />
+              <stop offset="100%" stopColor="#047857" stopOpacity="0.1" />
             </linearGradient>
           </defs>
 
-          {/* 背景參考格線 */}
-          <line
-            x1={padding.left}
-            y1={height / 2}
-            x2={width - padding.right}
-            y2={height / 2}
-            stroke="rgba(255, 255, 255, 0.05)"
-            strokeDasharray="3 3"
-          />
+          {/* Y 軸橫向參考格線與左側價位刻度 (Spec 0144 對齊照片) */}
+          {yAxisTicks.map((tick, idx) => (
+            <g key={'ytick-' + idx}>
+              <text
+                x={CONE_PADDING.left - 5}
+                y={tick.y + 3}
+                textAnchor="end"
+                fill="#64748b"
+                fontSize="8"
+                fontFamily="monospace"
+              >
+                {tick.label}
+              </text>
+              <line
+                x1={CONE_PADDING.left}
+                y1={tick.y}
+                x2={CONE_WIDTH - CONE_PADDING.right}
+                y2={tick.y}
+                stroke="rgba(255, 255, 255, 0.07)"
+                strokeDasharray="3 3"
+              />
+            </g>
+          ))}
 
-          {/* 扇形半透明填充 */}
-          {coneAreaPath && (
+          {/* 雙色扇形半透明填充 (Spec 0144 對齊照片紅/綠分區) */}
+          {bullAreaPath && (
             <path
-              d={coneAreaPath}
-              fill="url(#coneGrad)"
+              d={bullAreaPath}
+              fill="url(#bullConeGrad)"
               stroke="none"
-              style={{ filter: 'drop-shadow(0 0 10px rgba(56, 189, 248, 0.2))' }}
+              style={{ filter: 'drop-shadow(0 0 8px rgba(239, 68, 68, 0.2))' }}
+            />
+          )}
+          {bearAreaPath && (
+            <path
+              d={bearAreaPath}
+              fill="url(#bearConeGrad)"
+              stroke="none"
+              style={{ filter: 'drop-shadow(0 0 8px rgba(16, 185, 129, 0.2))' }}
             />
           )}
 
@@ -285,7 +425,7 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
           )}
           {lowerPath && <path d={lowerPath} fill="none" stroke="#10b981" strokeWidth="1.8" />}
 
-          {/* 節點圓點與價格文字標註 */}
+          {/* 節點圓點標註 */}
           {upperPoints.map((p, idx) => (
             <circle key={'u' + idx} cx={p.x} cy={p.y} r="3" fill="#ef4444" stroke="#fff" strokeWidth="1" />
           ))}
@@ -298,12 +438,12 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
 
           {/* 底部時間刻度標籤 */}
           {data.timeNodes.map((n, idx) => {
-            const x = upperPoints[idx]?.x ?? padding.left;
+            const x = upperPoints[idx]?.x ?? CONE_PADDING.left;
             return (
               <text
                 key={'t' + idx}
                 x={x}
-                y={height - 5}
+                y={CONE_HEIGHT - 5}
                 textAnchor="middle"
                 fill="#94a3b8"
                 fontSize="9"
@@ -331,8 +471,14 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>主力方向機率：</span>
-          <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#38bdf8' }}>
-            多頭 {data.mainForceDirectionProb}%
+          <span
+            style={{
+              fontSize: '0.78rem',
+              fontWeight: 800,
+              color: directionStyle.color,
+            }}
+          >
+            {directionStyle.label} {data.mainForceDirectionProb}%
           </span>
         </div>
 

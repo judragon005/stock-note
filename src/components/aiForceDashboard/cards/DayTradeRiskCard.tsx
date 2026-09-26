@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { DayTradeRiskData } from '../../../types/aiForceDashboard';
+import { MoreVertical } from 'lucide-react';
 
 export interface ProgressBarStyle {
   color: string;
@@ -67,20 +68,30 @@ export function getDayTradeRiskBadge(level: DayTradeRiskData['riskLevel']): DayT
   }
 }
 
-import { MoreVertical } from 'lucide-react';
+
 
 export interface DayTradeRiskCardProps {
   data: DayTradeRiskData;
 }
 
+export interface DayTradeRiskMetricItem {
+  label: string;
+  value: number;
+  icon: string;
+}
+
+export function getDayTradeRiskItems(data?: Partial<DayTradeRiskData> | null): DayTradeRiskMetricItem[] {
+  return [
+    { label: '主力賣出異常', value: data?.abnormalSelling ?? 49, icon: '🚨' },
+    { label: '籌碼換手率', value: data?.turnoverRate ?? 57, icon: '🔄' },
+    { label: '沖銷比例', value: data?.dayTradeRatio ?? 53, icon: '⚡' },
+    { label: '隔日回檔風險', value: data?.pullbackRisk ?? 45, icon: '📉' },
+    { label: '日內波動率', value: data?.intradayVolatility ?? 62, icon: '🌊' },
+  ];
+}
+
 export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
-  const items = useMemo(() => [
-    { label: '主力賣出異常', value: data.abnormalSelling ?? 49, icon: '🚨' },
-    { label: '籌碼過手率', value: data.turnoverRate ?? 57, icon: '🔄' },
-    { label: '沖銷比例', value: data.dayTradeRatio ?? 53, icon: '⚡' },
-    { label: '隔日回檔風險', value: data.pullbackRisk ?? 45, icon: '📉' },
-    { label: '日內波動率', value: data.intradayVolatility ?? 62, icon: '🌊' },
-  ], [data]);
+  const items = useMemo(() => getDayTradeRiskItems(data), [data]);
 
   const riskBadge = useMemo(() => getDayTradeRiskBadge(data.riskLevel || 'MEDIUM'), [data.riskLevel]);
 
