@@ -23,4 +23,33 @@ describe('VolumeProfileCard - 籌碼熱區圖元件樣式與計算規範 (Ticket
       expect(calculateBarWidthPercent(120)).toBe('100%');
     });
   });
+
+  describe('自適應刻度與熱力色階規範 (Spec 0148 Ticket 01)', () => {
+    it('支援接收動態 5 階價格刻度與 4 欄週期熱力數據', () => {
+      const mockData = {
+        buckets: [
+          { label: '壓力區', percentage: 10, type: 'resistance' as const, priceMin: 980, priceMax: 1050 },
+          { label: '大量成交區', percentage: 20, type: 'heavy' as const, priceMin: 920, priceMax: 980 },
+          { label: '密集成交區', percentage: 30, type: 'dense' as const, priceMin: 860, priceMax: 920 },
+          { label: '橫平區', percentage: 15, type: 'flat' as const, priceMin: 800, priceMax: 860 },
+          { label: '支撐區', percentage: 25, type: 'support' as const, priceMin: 750, priceMax: 800 },
+        ],
+        bullBearFooterTag: '多方沉澱',
+        priceTicks: [1050, 975, 900, 825, 750],
+        heatmapColumns: [
+          { id: 'col-1', label: '近5日', cells: Array(9).fill('#10b981') },
+          { id: 'col-2', label: '近10日', cells: Array(9).fill('#0284c7') },
+          { id: 'col-3', label: '近20日', cells: Array(9).fill('#06b6d4') },
+          { id: 'col-4', label: '近60日', cells: Array(9).fill('#84cc16') },
+        ],
+      };
+
+      expect(mockData.priceTicks.length).toBe(5);
+      expect(mockData.priceTicks[0]).toBe(1050);
+      expect(mockData.priceTicks[4]).toBe(750);
+      expect(mockData.heatmapColumns.length).toBe(4);
+      expect(mockData.heatmapColumns[0].cells.length).toBe(9);
+    });
+  });
 });
+

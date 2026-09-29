@@ -69,70 +69,51 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
     { label: '支撐區', percentage: 87, type: 'support', priceMin: 1730, priceMax: 1950 },
   ];
 
-  // 垂直價格刻度
-  const priceTicks = [2400, 2200, 2000, 1800, 1600];
+  // 自適應價格刻度 (優先使用 engine 計算出的 priceTicks，否則由 buckets 高低價推算)
+  const priceTicks = useMemo(() => {
+    if (data.priceTicks && data.priceTicks.length === 5) {
+      return data.priceTicks;
+    }
+    const maxP = buckets[0]?.priceMax ?? 2400;
+    const minP = buckets[buckets.length - 1]?.priceMin ?? 1600;
+    const step = (maxP - minP) / 4;
+    return [
+      Math.round(maxP),
+      Math.round(maxP - step),
+      Math.round(maxP - step * 2),
+      Math.round(maxP - step * 3),
+      Math.round(minP),
+    ];
+  }, [data.priceTicks, buckets]);
 
-  // 熱力欄位數據（模擬照片中的多列垂直熱力長條，由上而下各層價格階梯色階）
+  // 熱力欄位數據（優先使用 engine 動態計算的 4 欄週期熱力，否則回退）
   const heatmapColumns = useMemo(() => {
+    if (data.heatmapColumns && data.heatmapColumns.length === 4) {
+      return data.heatmapColumns;
+    }
     return [
       {
         id: 'col-1',
-        cells: [
-          '#1e293b',
-          '#1e3a8a',
-          '#2563eb',
-          '#0284c7',
-          '#06b6d4',
-          '#10b981',
-          '#047857',
-          '#1e3a8a',
-          '#0f172a',
-        ],
+        label: '近5日',
+        cells: ['#1e293b', '#1e3a8a', '#2563eb', '#0284c7', '#06b6d4', '#10b981', '#047857', '#1e3a8a', '#0f172a'],
       },
       {
         id: 'col-2',
-        cells: [
-          '#1e293b',
-          '#1d4ed8',
-          '#0284c7',
-          '#10b981',
-          '#84cc16',
-          '#06b6d4',
-          '#0369a1',
-          '#1e3a8a',
-          '#0f172a',
-        ],
+        label: '近10日',
+        cells: ['#1e293b', '#1d4ed8', '#0284c7', '#10b981', '#84cc16', '#06b6d4', '#0369a1', '#1e3a8a', '#0f172a'],
       },
       {
         id: 'col-3',
-        cells: [
-          '#1e3a8a',
-          '#2563eb',
-          '#0284c7',
-          '#06b6d4',
-          '#10b981',
-          '#047857',
-          '#0284c7',
-          '#1d4ed8',
-          '#1e293b',
-        ],
+        label: '近20日',
+        cells: ['#1e3a8a', '#2563eb', '#0284c7', '#06b6d4', '#10b981', '#047857', '#0284c7', '#1d4ed8', '#1e293b'],
       },
       {
         id: 'col-4',
-        cells: [
-          '#0f172a',
-          '#1e3a8a',
-          '#0369a1',
-          '#0284c7',
-          '#06b6d4',
-          '#047857',
-          '#10b981',
-          '#1e3a8a',
-          '#0f172a',
-        ],
+        label: '近60日',
+        cells: ['#0f172a', '#1e3a8a', '#0369a1', '#0284c7', '#06b6d4', '#047857', '#10b981', '#1e3a8a', '#0f172a'],
       },
     ];
-  }, []);
+  }, [data.heatmapColumns]);
 
   return (
     <div

@@ -1933,7 +1933,27 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **TermTooltip (自適應防抖動浮動提示元件)**:
   - 核心元件：`src/components/common/TermTooltip.tsx`。
   - **Zero-Dependency & Zero-Layout-Shift**：零外部大型庫依賴，外層 Trigger 設為 `display: 'inline-flex'`、`position: 'relative'`，Popup 設為 `position: 'absolute'`，嚴禁動態插入 block 容器引起周圍 flex/grid 跳動。
-  - **Smart Flip & Anti-Overflow (邊界智慧翻轉演算法)**：透過 `calculateTooltipPlacement`，頂部空間不足 260px 自動翻轉至下方，右側超出螢幕時靠右對齊向左展開，杜絕內容被截斷。
+  - **Smart Flip & Anti-Overflow (邊界智慧翻轉演算法)**：透過 `calculateTooltipPlacement`，頂部空間不足 280px 自動翻轉至下方，右側超出螢幕時靠右對齊向左展開，杜絕內容被截斷。
   - **多端支援**：支援滑鼠 Hover、行動端 Tap 點擊鎖定、ESC 鍵退出與外層點擊自動關閉。
+
+### AI 主力戰情室卡片視覺保真還原與說明小視窗抗遮蔽架構 *(新增於 V8.61.0 / Spec #0148 / ADR #0148 / Issue #121)*
+
+- **Volume Profile Adaptive Ticks & Dynamic Heatmap (卡片 04 AI 籌碼熱區圖自適應價格刻度與 4 欄週期熱力矩陣)**:
+  - 徹底拔除寫死的 `2400~1600` 價格刻度與靜態顏色十六進位陣列。
+  - 由歷史 K 線極值動態計算 5 階自適應價格刻度（最高價至最低價），並依近 5、10、20、60 日真實成交量密度動態映射 9 階垂直色階（深藍 ➔ 亮青 ➔ 鮮綠 ➔ 黃綠），確保輸入任何價格之標的均有即時反映。
+
+- **AI Decision Core Adaptive Banner (卡片 02 AI 決策核心多態橫幅狀態機)**:
+  - 終結靜態寫死紅色 `AI WARNING` 盲點。建立決策核心狀態評估器：
+    - 多頭優良（健康度 ≥ 70，隔日沖 < 40%）：翠綠色橫幅 `🚀 AI BULLISH`。
+    - 區間中性（健康度 50~69）：天藍色橫幅 `⚡ AI BALANCED`。
+    - 警戒防禦（健康度 < 50 或隔日沖 ≥ 60%）：紅色警告橫幅 `⚠️ AI WARNING`。
+
+- **High-Fidelity Visual Alignment for Cards 06 & 07 (卡片 06 與 07 像素級視覺還原)**:
+  - **卡片 06 累積型 AI 預測路徑圖**：圖例重構為左上角半透明深底小方塊，主體採用三色半透明扇形擴散充填 (Forecast Cone)，中央震盪軌道改為實線帶圓點。
+  - **卡片 07 主力成本結構分佈圖**：還原高聳波峰山脈堆疊面積圖 (Mountain Stacked Area)，四層色階與圖例由頂至底校準為：衰竭區(藍) ➔ 套牢區(綠) ➔ 主力成本區(黃) ➔ 大量成交區(橘)。
+
+- **TermTooltip Anti-Crop & Max Height Guard (字典說明視窗最大高度限制與平滑滾動保護)**:
+  - 設定 `maxHeight: '280px'` 與 `overflowY: 'auto'`，搭配細緻暗色自定義滾動條，確保長文案在任何視窗解析度下絕不遭裁切，並杜絕大面積覆蓋底層走勢圖表。
+
 
 

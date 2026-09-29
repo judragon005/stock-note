@@ -63,10 +63,10 @@ export interface LegendItem {
 }
 
 export const DEFAULT_LEGEND_BANDS = [
-  { name: '倉儲區', biasLabel: '>5%', color: '#f97316' },
+  { name: '衰竭區', biasLabel: '<-5%', color: '#2563eb' },
   { name: '套牢區', biasLabel: '-2~-5%', color: '#10b981' },
-  { name: '主力成本區', biasLabel: '±2%', color: '#38bdf8' },
-  { name: '大量成交區', biasLabel: '±2~5%', color: '#1e40af' },
+  { name: '主力成本區', biasLabel: '±2%', color: '#eab308' },
+  { name: '大量成交區', biasLabel: '+2~5%', color: '#ea580c' },
 ];
 
 /**
@@ -262,20 +262,20 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
         >
           <defs>
             <linearGradient id="areaGrad1" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#f97316" stopOpacity="0.88" />
-              <stop offset="100%" stopColor="#ea580c" stopOpacity="0.45" />
+              <stop offset="0%" stopColor="#2563eb" stopOpacity="0.88" />
+              <stop offset="100%" stopColor="#1e40af" stopOpacity="0.45" />
             </linearGradient>
             <linearGradient id="areaGrad2" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#10b981" stopOpacity="0.88" />
               <stop offset="100%" stopColor="#059669" stopOpacity="0.45" />
             </linearGradient>
             <linearGradient id="areaGrad3" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.88" />
-              <stop offset="100%" stopColor="#0284c7" stopOpacity="0.45" />
+              <stop offset="0%" stopColor="#eab308" stopOpacity="0.88" />
+              <stop offset="100%" stopColor="#ca8a04" stopOpacity="0.45" />
             </linearGradient>
             <linearGradient id="areaGrad4" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#1e40af" stopOpacity="0.85" />
-              <stop offset="100%" stopColor="#1e1b4b" stopOpacity="0.4" />
+              <stop offset="0%" stopColor="#ea580c" stopOpacity="0.88" />
+              <stop offset="100%" stopColor="#9a3412" stopOpacity="0.45" />
             </linearGradient>
           </defs>
 

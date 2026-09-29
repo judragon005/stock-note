@@ -34,7 +34,7 @@ describe('VwapCostEngine - 20日 VWAP 與成本結構分佈演算法規範 (Tick
     expect(sum).toBe(100);
 
     const bandNames = result.bands.map((b) => b.name);
-    expect(bandNames.some((n) => n.includes('倉儲') || n.includes('突破'))).toBe(true);
+    expect(bandNames.some((n) => n.includes('倉儲') || n.includes('突破') || n.includes('衰竭'))).toBe(true);
     expect(bandNames).toContain('大量成交區');
     expect(bandNames).toContain('主力成本區');
     expect(bandNames).toContain('套牢區');

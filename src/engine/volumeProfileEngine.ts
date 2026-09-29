@@ -132,8 +132,73 @@ export function calculateVolumeProfile(
     bullBearFooterTag = '高檔籌碼沉重，承壓震盪';
   }
 
+  // 5. 自適應 Y 軸 5 階價格刻度 (由大到小)
+  const tickStep = span / 4;
+  const priceTicks = [
+    Math.round(maxHigh),
+    Math.round(maxHigh - tickStep),
+    Math.round(maxHigh - tickStep * 2),
+    Math.round(maxHigh - tickStep * 3),
+    Math.round(minLow),
+  ];
+
+  // 6. 計算 4 欄週期熱力矩陣 (近5日、近10日、近20日、近60日)，每欄 9 格由高至低
+  const periods: { id: string; label: string; count: number }[] = [
+    { id: 'col-1', label: '近5日', count: 5 },
+    { id: 'col-2', label: '近10日', count: 10 },
+    { id: 'col-3', label: '近20日', count: 20 },
+    { id: 'col-4', label: '近60日', count: 60 },
+  ];
+
+  const cellCount = 9;
+  const cellSpan = span / cellCount;
+
+  const getHeatmapColor = (ratio: number): string => {
+    if (ratio <= 0.05) return '#0f172a';
+    if (ratio <= 0.2) return '#1e293b';
+    if (ratio <= 0.35) return '#1e3a8a';
+    if (ratio <= 0.5) return '#0284c7';
+    if (ratio <= 0.65) return '#06b6d4';
+    if (ratio <= 0.8) return '#10b981';
+    if (ratio <= 0.9) return '#84cc16';
+    return '#fbbf24';
+  };
+
+  const heatmapColumns = periods.map((p) => {
+    const subCandles = candles.slice(-p.count);
+    const cellVols = new Array(cellCount).fill(0);
+
+    subCandles.forEach((c) => {
+      const cSpan = Math.max(0.01, c.high - c.low);
+      for (let k = 0; k < cellCount; k++) {
+        const topP = maxHigh - k * cellSpan;
+        const botP = topP - cellSpan;
+        const overlapStart = Math.max(botP, c.low);
+        const overlapEnd = Math.min(topP, c.high);
+        if (overlapEnd > overlapStart) {
+          const w = (overlapEnd - overlapStart) / cSpan;
+          cellVols[k] += c.volume * w;
+        } else if (c.high === c.low && c.high >= botP && c.high <= topP) {
+          cellVols[k] += c.volume;
+        }
+      }
+    });
+
+    const maxCellVol = Math.max(1, ...cellVols);
+    const cells = cellVols.map((v) => getHeatmapColor(v / maxCellVol));
+
+    return {
+      id: p.id,
+      label: p.label,
+      cells,
+    };
+  });
+
   return {
     buckets,
     bullBearFooterTag,
+    priceTicks,
+    heatmapColumns,
   };
 }
+
