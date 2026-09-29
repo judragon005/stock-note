@@ -12,9 +12,9 @@ export interface TermTooltipPlacement {
 export function calculateTooltipPlacement(
   triggerRect: { left: number; top: number; right: number; bottom: number; width: number; height: number },
   viewport: { width: number; height: number },
-  tooltipSize = { width: 320, height: 260 }
+  tooltipSize = { width: 320, height: 280 }
 ): TermTooltipPlacement {
-  // 垂直判斷：若上方空間不足容納浮動卡片（預估 260px），則翻轉至下方
+  // 垂直判斷：若上方空間不足容納浮動卡片（預估 280px），則翻轉至下方
   const vertical: 'top' | 'bottom' = triggerRect.top < tooltipSize.height ? 'bottom' : 'top';
 
   // 水平判斷：置中時左右各需擴展 width / 2 (約 160px)
@@ -124,6 +124,8 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
       zIndex: 9999,
       width: '320px',
       maxWidth: '88vw',
+      maxHeight: '280px',
+      overflowY: 'auto',
       backgroundColor: 'rgba(15, 23, 42, 0.96)',
       backdropFilter: 'blur(12px)',
       WebkitBackdropFilter: 'blur(12px)',

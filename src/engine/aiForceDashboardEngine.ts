@@ -944,6 +944,12 @@ export function generateAiForceReportFromCandles(
 
     decisionCore: {
       ...defaultTemplate.decisionCore,
+      warningBadgeText:
+        changePercent >= 0 && healthSummary.chipHealth >= 70 && dayTradeRisk.riskIndex < 40
+          ? 'AI BULLISH'
+          : healthSummary.chipHealth < 50 || dayTradeRisk.riskIndex >= 60 || changePercent < -3
+          ? 'AI WARNING'
+          : 'AI BALANCED',
       trendJudgement: changePercent >= 0 ? '偏多強勢' : '偏弱整理',
       mainForceAction: primaryVerb,
       dayTradeRiskPercent: dayTradeRisk.riskIndex,

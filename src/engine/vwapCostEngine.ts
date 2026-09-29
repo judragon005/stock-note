@@ -9,17 +9,17 @@ export interface CandleVwapInput {
 }
 
 const BAND_TEMPLATES = [
-  { name: '倉儲區', biasLabel: '>5%', color: '#f97316' },
+  { name: '衰竭區', biasLabel: '<-5%', color: '#2563eb' },
   { name: '套牢區', biasLabel: '-2~-5%', color: '#10b981' },
-  { name: '主力成本區', biasLabel: '±2%', color: '#38bdf8' },
-  { name: '大量成交區', biasLabel: '±2~5%', color: '#1e40af' },
+  { name: '主力成本區', biasLabel: '±2%', color: '#eab308' },
+  { name: '大量成交區', biasLabel: '+2~5%', color: '#ea580c' },
 ];
 
 export const DEFAULT_TIME_NODES: CostBandTimeNode[] = [
-  { dateLabel: '06/25', inventoryVol: 15, trappedVol: 15, costVol: 15, heavyVol: 10, totalVolume: 55 },
-  { dateLabel: '07/10', inventoryVol: 10, trappedVol: 12, costVol: 10, heavyVol: 8, totalVolume: 40 },
-  { dateLabel: '08/10', inventoryVol: 18, trappedVol: 16, costVol: 14, heavyVol: 10, totalVolume: 58 },
-  { dateLabel: '08/31', inventoryVol: 8, trappedVol: 10, costVol: 12, heavyVol: 10, totalVolume: 40 },
+  { dateLabel: '06/26', inventoryVol: 8, trappedVol: 10, costVol: 14, heavyVol: 18, totalVolume: 50 },
+  { dateLabel: '07/20', inventoryVol: 6, trappedVol: 8, costVol: 12, heavyVol: 14, totalVolume: 40 },
+  { dateLabel: '08/10', inventoryVol: 12, trappedVol: 18, costVol: 20, heavyVol: 15, totalVolume: 65 },
+  { dateLabel: '08/31', inventoryVol: 15, trappedVol: 14, costVol: 12, heavyVol: 9, totalVolume: 50 },
 ];
 
 /**

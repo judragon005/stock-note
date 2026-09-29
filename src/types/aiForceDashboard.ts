@@ -112,9 +112,17 @@ export interface VolumeProfileBucket {
   type: 'resistance' | 'heavy' | 'dense' | 'flat' | 'support';
 }
 
+export interface HeatmapColumn {
+  id: string;
+  label: string;
+  cells: string[];
+}
+
 export interface VolumeProfileData {
   buckets: VolumeProfileBucket[];
   bullBearFooterTag: string; // "多多多多多"
+  priceTicks?: number[]; // 自適應 5 階 Y 軸價格刻度 (由大到小)
+  heatmapColumns?: HeatmapColumn[]; // 4 欄週期熱力數據 (5日/10日/20日/60日)
 }
 
 /**

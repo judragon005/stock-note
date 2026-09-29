@@ -44,4 +44,12 @@ describe('TermTooltip - 浮動小視窗防邊界溢出與定位演算法 (Ticket
     expect(placement.vertical).toBe('bottom');
     expect(placement.horizontal).toBe('left');
   });
+
+  it('當上方空間小於 280px 時，應智慧向下翻轉以避免超出視窗頂部裁切 (Spec 0148 Ticket 04)', () => {
+    const triggerRect = { left: 500, top: 200, right: 600, bottom: 220, width: 100, height: 20 };
+    const placement = calculateTooltipPlacement(triggerRect, mockViewport, { width: 320, height: 280 });
+
+    expect(placement.vertical).toBe('bottom');
+  });
 });
+

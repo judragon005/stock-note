@@ -75,6 +75,77 @@ import { MoreVertical } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseDayTradeRisk, diagnoseHealthScore } from '../../../constants/aiForceGlossary';
 
+export interface DecisionBannerStyle {
+  text: string;
+  icon: string;
+  color: string;
+  bg: string;
+  borderColor: string;
+  glow: string;
+}
+
+/**
+ * 依據決策結果、趨勢、健康度與隔日沖風險判定頂部橫幅樣式 (Spec 0148 Ticket 02)
+ */
+export function getDecisionBannerStyle(
+  warningBadgeText?: string,
+  trendJudgement?: string,
+  chipHealthScore?: number,
+  dayTradeRiskPercent?: number
+): DecisionBannerStyle {
+  const textUpper = (warningBadgeText || '').toUpperCase();
+  const trend = trendJudgement || '';
+  const health = chipHealthScore ?? 55;
+  const risk = dayTradeRiskPercent ?? 50;
+
+  // 1. 多頭優質評判
+  const isBull =
+    textUpper.includes('BULLISH') ||
+    textUpper.includes('OPTIMAL') ||
+    ((trend.includes('多頭') || trend.includes('偏多')) && health >= 70 && risk < 40);
+
+  if (isBull) {
+    return {
+      text: warningBadgeText && !textUpper.includes('WARNING') ? warningBadgeText : 'AI BULLISH',
+      icon: '🚀',
+      color: '#34d399',
+      bg: 'rgba(16, 185, 129, 0.18)',
+      borderColor: 'rgba(16, 185, 129, 0.45)',
+      glow: '0 0 10px rgba(16, 185, 129, 0.2)',
+    };
+  }
+
+  // 2. 警戒防禦評判
+  const isWarning =
+    textUpper.includes('WARNING') ||
+    textUpper.includes('DEFENSE') ||
+    trend.includes('偏空') ||
+    trend.includes('空頭') ||
+    health < 50 ||
+    risk >= 60;
+
+  if (isWarning) {
+    return {
+      text: warningBadgeText || 'AI WARNING',
+      icon: '⚠️',
+      color: '#f87171',
+      bg: 'rgba(239, 68, 68, 0.18)',
+      borderColor: 'rgba(239, 68, 68, 0.45)',
+      glow: '0 0 10px rgba(239, 68, 68, 0.2)',
+    };
+  }
+
+  // 3. 中性平衡評判 (Fallback)
+  return {
+    text: warningBadgeText || 'AI BALANCED',
+    icon: '⚡',
+    color: '#38bdf8',
+    bg: 'rgba(56, 189, 248, 0.16)',
+    borderColor: 'rgba(56, 189, 248, 0.4)',
+    glow: '0 0 10px rgba(56, 189, 248, 0.2)',
+  };
+}
+
 /**
  * 格式化支撐/壓力價位區間字串
  */
@@ -96,6 +167,12 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
   const trendStyle = getTrendBadgeStyle(data.trendJudgement || '中性偏多');
   const riskBadge = getRiskBadgeStyle(data.dayTradeRiskPercent ?? 50);
   const healthBadge = getHealthScoreStyle(data.chipHealthScore ?? 55);
+  const bannerStyle = getDecisionBannerStyle(
+    data.warningBadgeText,
+    data.trendJudgement,
+    data.chipHealthScore,
+    data.dayTradeRiskPercent
+  );
 
   const items = [
     {
@@ -252,8 +329,9 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
         </button>
       </div>
 
-      {/* AI WARNING 滿版紅色警告橫幅 (對齊照片) */}
+      {/* AI 決策核心自適應橫幅 (Spec 0148 Ticket 02: 支援多頭綠標/中性藍標/警戒紅標) */}
       <div
+        data-testid="decision-core-banner"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -261,18 +339,19 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
           gap: '6px',
           padding: '5px 12px',
           borderRadius: '8px',
-          background: 'rgba(239, 68, 68, 0.18)',
-          border: '1px solid rgba(239, 68, 68, 0.45)',
-          color: '#f87171',
+          background: bannerStyle.bg,
+          border: `1px solid ${bannerStyle.borderColor}`,
+          color: bannerStyle.color,
           fontSize: '0.78rem',
           fontWeight: 800,
           letterSpacing: '0.04em',
           marginBottom: '10px',
-          boxShadow: '0 0 10px rgba(239, 68, 68, 0.2)',
+          boxShadow: bannerStyle.glow,
+          transition: 'all 0.25s ease',
         }}
       >
-        <span>⚠️</span>
-        <span>{data.warningBadgeText || 'AI WARNING'}</span>
+        <span>{bannerStyle.icon}</span>
+        <span>{bannerStyle.text}</span>
       </div>
 
       {/* 9 大核心指標項目清單 */}

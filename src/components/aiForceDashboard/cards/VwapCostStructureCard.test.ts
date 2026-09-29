@@ -74,13 +74,17 @@ describe('VwapCostStructureCard - 主力成本結構分佈元件規範 (Ticket 1
     expect(paths.layer4Path.endsWith('Z')).toBe(true);
   });
 
-  it('formatLegendItems (Spec 0144) 應對齊照片圖例順序與名稱 (倉儲區/套牢區/主力成本區/大量成交區)', () => {
+  it('formatLegendItems (Spec 0148 Ticket 03) 應對齊照片四圖例順序與名稱 (衰竭區/套牢區/主力成本區/大量成交區)', () => {
     const items = formatLegendItems();
     expect(items.length).toBe(4);
-    expect(items[0].label).toContain('倉儲區');
+    expect(items[0].label).toContain('衰竭區');
+    expect(items[0].color).toBe('#2563eb');
     expect(items[1].label).toContain('套牢區');
+    expect(items[1].color).toBe('#10b981');
     expect(items[2].label).toContain('主力成本區');
+    expect(items[2].color).toBe('#eab308');
     expect(items[3].label).toContain('大量成交區');
+    expect(items[3].color).toBe('#ea580c');
   });
 });
 

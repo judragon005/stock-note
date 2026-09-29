@@ -4,6 +4,7 @@ import {
   getRiskBadgeStyle,
   getHealthScoreStyle,
   formatPriceRange,
+  getDecisionBannerStyle,
 } from './AiDecisionCoreCard';
 
 describe('AiDecisionCoreCard - 決策核心邏輯與樣式判定規範 (Ticket 06)', () => {
@@ -85,4 +86,29 @@ describe('AiDecisionCoreCard - 決策核心邏輯與樣式判定規範 (Ticket 0
       expect(formatted).toBe('資料計算中');
     });
   });
+
+  describe('getDecisionBannerStyle - 頂部決策橫幅自適應樣式 (Spec 0148 Ticket 02)', () => {
+    it('偏多優質狀態 (BULLISH 或 健康度>=70 且 隔日沖<40) 應呈現綠色/青色火箭橫幅', () => {
+      const banner = getDecisionBannerStyle('AI BULLISH', '偏多強勢', 85, 36);
+      expect(banner.color).toBe('#34d399');
+      expect(banner.icon).toBe('🚀');
+      expect(banner.bg).toContain('rgba(16, 185, 129');
+    });
+
+    it('中性震盪狀態 (BALANCED 或 健康度 50~69) 應呈現天藍色閃電橫幅', () => {
+      const banner = getDecisionBannerStyle('AI BALANCED', '區間震盪', 60, 45);
+      expect(banner.color).toBe('#38bdf8');
+      expect(banner.icon).toBe('⚡');
+      expect(banner.bg).toContain('rgba(56, 189, 248');
+    });
+
+    it('高風險警戒狀態 (WARNING 或 健康度<50 或 隔日沖>=60) 應呈現紅色警告橫幅', () => {
+      const banner = getDecisionBannerStyle('AI WARNING', '偏弱整理', 40, 75);
+      expect(banner.color).toBe('#f87171');
+      expect(banner.icon).toBe('⚠️');
+      expect(banner.bg).toContain('rgba(239, 68, 68');
+    });
+  });
 });
+
+

@@ -343,44 +343,58 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
         </button>
       </div>
 
-      {/* 圖例說明列 (對齊照片) */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          fontSize: '0.68rem',
-          marginBottom: '6px',
-        }}
-      >
-        <TermTooltip termId="forecastUp">
-          <span style={{ color: '#ef4444', fontWeight: 600 }}>■ 紅色：上漲機率 {data.bullishProb}%</span>
-        </TermTooltip>
-        <TermTooltip termId="forecastRange">
-          <span style={{ color: '#fbbf24', fontWeight: 600 }}>■ 黃色：震盪機率 {data.rangeProb}%</span>
-        </TermTooltip>
-        <TermTooltip termId="forecastDown">
-          <span style={{ color: '#10b981', fontWeight: 600 }}>■ 綠色：下跌機率 {data.bearishProb}%</span>
-        </TermTooltip>
-      </div>
-
       {/* SVG 預測錐繪製區 */}
       <div style={{ width: '100%', flex: 1, minHeight: '180px', position: 'relative' }}>
+        {/* 左上角精緻半透明深底方塊圖例 (對齊照片四) */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '8px',
+            left: '40px',
+            zIndex: 10,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '3px',
+            padding: '4px 8px',
+            backgroundColor: 'rgba(15, 23, 42, 0.88)',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            borderRadius: '6px',
+            fontSize: '0.64rem',
+            backdropFilter: 'blur(6px)',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+          }}
+        >
+          <TermTooltip termId="forecastUp">
+            <span style={{ color: '#f87171', fontWeight: 600 }}>■ 紅色：上漲機率 {data.bullishProb}%</span>
+          </TermTooltip>
+          <TermTooltip termId="forecastRange">
+            <span style={{ color: '#fbbf24', fontWeight: 600 }}>■ 黃色：震盪機率 {data.rangeProb}%</span>
+          </TermTooltip>
+          <TermTooltip termId="forecastDown">
+            <span style={{ color: '#34d399', fontWeight: 600 }}>■ 綠色：下跌機率 {data.bearishProb}%</span>
+          </TermTooltip>
+        </div>
+
         <svg
           viewBox={`0 0 ${CONE_WIDTH} ${CONE_HEIGHT}`}
           style={{ width: '100%', height: '100%', overflow: 'visible' }}
           preserveAspectRatio="none"
         >
           <defs>
-            {/* 上漲扇形紅色漸層 (對齊照片) */}
+            {/* 上漲扇形紅色漸層 (對齊照片四) */}
             <linearGradient id="bullConeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.4" />
-              <stop offset="100%" stopColor="#f97316" stopOpacity="0.1" />
+              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.45" />
+              <stop offset="100%" stopColor="#f97316" stopOpacity="0.2" />
             </linearGradient>
-            {/* 下跌扇形翠綠漸層 (對齊照片) */}
+            {/* 中間震盪黃色扇形漸層 */}
+            <linearGradient id="rangeConeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#eab308" stopOpacity="0.25" />
+              <stop offset="100%" stopColor="#ca8a04" stopOpacity="0.12" />
+            </linearGradient>
+            {/* 下跌扇形翠綠漸層 (對齊照片四) */}
             <linearGradient id="bearConeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#10b981" stopOpacity="0.4" />
-              <stop offset="100%" stopColor="#047857" stopOpacity="0.1" />
+              <stop offset="0%" stopColor="#10b981" stopOpacity="0.45" />
+              <stop offset="100%" stopColor="#047857" stopOpacity="0.2" />
             </linearGradient>
           </defs>
 
@@ -426,15 +440,14 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
             />
           )}
 
-          {/* 三條軌道曲線 */}
+          {/* 三條軌道曲線 (中線對齊照片四為實線加點) */}
           {upperPath && <path d={upperPath} fill="none" stroke="#ef4444" strokeWidth="1.8" />}
           {medianPath && (
             <path
               d={medianPath}
               fill="none"
               stroke="#fbbf24"
-              strokeWidth="1.5"
-              strokeDasharray="4 3"
+              strokeWidth="1.8"
             />
           )}
           {lowerPath && <path d={lowerPath} fill="none" stroke="#10b981" strokeWidth="1.8" />}

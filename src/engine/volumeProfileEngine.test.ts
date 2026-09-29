@@ -53,4 +53,42 @@ describe('VolumeProfileEngine - 成交量價位分佈演算法 (Ticket 08)', () 
     const sumPercent = result.buckets.reduce((acc, b) => acc + b.percentage, 0);
     expect(sumPercent).toBe(100);
   });
+
+  it('應依據價格範圍自適應產生 5 個由大到小排序的價格刻度 (priceTicks)', () => {
+    // 100~200 元的低價股
+    const lowPriceCandles = [
+      { high: 200, low: 180, close: 195, volume: 500 },
+      { high: 185, low: 150, close: 160, volume: 800 },
+      { high: 160, low: 120, close: 130, volume: 600 },
+      { high: 135, low: 100, close: 110, volume: 900 },
+      { high: 125, low: 95, close: 105, volume: 700 },
+    ];
+    const result = calculateVolumeProfile(lowPriceCandles);
+    expect(result.priceTicks).toBeDefined();
+    expect(result.priceTicks?.length).toBe(5);
+    // 必須由大到小排序
+    for (let i = 0; i < 4; i++) {
+      expect(result.priceTicks![i]).toBeGreaterThanOrEqual(result.priceTicks![i + 1]);
+    }
+    // 最大刻度應在 200 左右，而非硬編碼的 2400
+    expect(result.priceTicks![0]).toBeLessThan(300);
+    expect(result.priceTicks![4]).toBeGreaterThanOrEqual(80);
+  });
+
+  it('應動態生成 4 欄週期熱力矩陣 (近5日、近10日、近20日、近60日)，每欄各 9 個 cells', () => {
+    const candles = Array.from({ length: 30 }, (_, i) => ({
+      high: 1000 + i * 10,
+      low: 950 + i * 10,
+      close: 980 + i * 10,
+      volume: 1000 + (i % 5) * 500,
+    }));
+    const result = calculateVolumeProfile(candles);
+    expect(result.heatmapColumns).toBeDefined();
+    expect(result.heatmapColumns?.length).toBe(4);
+    expect(result.heatmapColumns?.[0].label).toBe('近5日');
+    expect(result.heatmapColumns?.[3].label).toBe('近60日');
+    // 每欄 9 個色塊階梯
+    expect(result.heatmapColumns?.[0].cells.length).toBe(9);
+  });
 });
+
