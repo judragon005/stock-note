@@ -1,15 +1,14 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Document)
 
-> **交接產生時間**：2026-09-26 21:50 (UTC+8)  
+> **交接產生時間**：2026-09-29 12:55 (UTC+8)  
 > **當前最新里程碑**：
-> - **V8.58.0 AI 主力戰情室響應式 Bento-Grid 重構與雙層繁中行情列**（ADR 0145, Spec 0145, Issue #112, PR #113）：
->   - **雙層全功能即時行情列 (Two-Tier Market Bar)**：上層整合加大代號輸入框與 4 大繁中科技感膠囊燈號（`AI 智慧掃描` 帶呼吸燈、`主力行為追蹤`、`市場即時狀態`、`波動異常預警`）；下層橫排 10 大即時行情指標（今日收盤價 1.3rem 大字、今日漲跌/漲幅、成交量、成交筆數等），徹底告別英文術語與橫向擠壓。
->   - **01 主 K 線獨立全寬滿版 (100% Width Row 1)**：擺脫側邊卡片擠壓，提供 TradingView 等級專業看盤視野，週期切換與副圖指標展現從容。
->   - **依序 01 ➔ 18 內容導向自然流 Bento-Grid**：Row 2 (02~05 均勻 4 卡)、Row 3 (06~08，08 享有 1.8fr 寬幅)、Row 4 (09~11，11 享有 1.6fr 寬幅)、Row 5 (12~15 緊湊監控 4 卡)、Row 6 (16~18，18 享有 1.8fr 壓軸決策大面板)。
->   - **圖表細節抗碰撞與縮放修復**：修復 08 柱表重疊、11 五環放大至 54px 且字體清晰、04 熱區圖例防文字裁切。
-> - **V8.57.0 AI 主力戰情室卡片 06 與 07 照片精準對齊、動態波形面積圖與雙色發散錐**（ADR 0144, Spec 0144, Issue #109, PR #110）。
-> - **V8.56.0 AI 主力戰情室三大法人真實籌碼管線與全卡片/任務視圖全景動態驅動**（ADR 0143, Spec 0143, Issue #103, #105, #107）。
-> **品質狀態**：全量單元測試 **1,140/1,140 通過 (100% Passed / 135 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過 (7.12s)。
+> - **V8.61.0 AI 主力戰情室卡片 04/02/06/07 視覺動態連動與字典說明小方塊抗遮蔽修復**（ADR 0148, Spec 0148, Issue #121, PR #122）：
+>   - **卡片 04 AI 籌碼熱區圖動態連動**：依個股歷史 K 線自適應計算 5 階價格刻度（`priceTicks`）與 5/10/20/60 日量價熱力矩陣（`heatmapColumns`），徹底解決切換股票後圖表不更新之歷史問題。
+>   - **卡片 02 AI 決策核心三態自適應橫幅**：頂部橫幅不再寫死紅色 `AI WARNING`，依多空綜合訊號自適應呈現多頭綠色 `🚀 AI BULLISH`、中性天藍 `⚡ AI BALANCED`、警戒紅色 `⚠️ AI WARNING`。
+>   - **卡片 06 & 07 像素級視覺還原**：06 採用左上角半透明懸浮方塊圖例、三層三色半透明扇面擴散錐與實線圓點震盪路徑；07 色階校準為衰竭藍 ➔ 套牢綠 ➔ 成本黃 ➔ 大量橘，並重塑山脈起伏波峰。
+>   - **TermTooltip 字典小視窗抗裁切與防遮蔽**：限制最大高度 280px 並加入微型自訂滾動條，優化智慧翻轉高度預估，支援 ESC 與點擊外部即時關閉。
+> - **V8.58.0 AI 主力戰情室響應式 Bento-Grid 重構與雙層繁中行情列**（ADR 0145, Spec 0145, Issue #112, PR #113）。
+> **品質狀態**：全量單元測試 **1,176/1,176 通過 (100% Passed / 139 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過 (8.14s)。
 
 ---
 
@@ -17,11 +16,11 @@
 
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
-- **當前工作分支**：`main` (PR #113 已完成 Squash & Merge 合併，本地分支已全量清理)
-- **單元測試套件**：**1,140/1,140 通過 (135 test suites / 100% 綠燈)**
+- **當前工作分支**：`main` (PR #122 已完成 Squash & Merge 合併，本地分支已全量清理)
+- **單元測試套件**：**1,176/1,176 通過 (139 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V8.58.0**
+- **當前釋出版本**：**V8.61.0**
 - **工作區與分支整潔度**：工作區 100% clean，本地過期 feature 分支已全數刪除，專案臨時備份檔案已全量清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -50,6 +49,7 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0148`](file:///d:/APP/股票紀錄/docs/specs/0148-ai-force-cards-visual-fidelity-and-popover-boundary-repair-spec.md) | [`ADR 0148`](file:///d:/APP/股票紀錄/docs/adr/0148-ai-force-cards-visual-fidelity-and-popover-boundary-repair.md) | [`.scratch/v8.61.0-ai-force-cards-visual-fidelity-and-popover-boundary-repair/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.61.0-ai-force-cards-visual-fidelity-and-popover-boundary-repair/issues/) | Issue #121 / PR #122 | V8.61.0 | 卡片 04/02/06/07 視覺動態連動、自適應刻度與熱力矩陣、三態橫幅、扇形預測錐與山脈堆疊、字典小方塊抗裁切防遮蔽 |
 | [`Spec 0145`](file:///d:/APP/股票紀錄/docs/specs/0145-ai-force-dashboard-responsive-bento-grid-and-header-redesign-spec.md) | [`ADR 0145`](file:///d:/APP/股票紀錄/docs/adr/0145-ai-force-dashboard-responsive-bento-grid-and-header-redesign.md) | [`.scratch/v8.58.0-ai-force-bento-grid-and-header-redesign/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.58.0-ai-force-bento-grid-and-header-redesign/issues/) | Issue #112 / PR #113 | V8.58.0 | 雙層全繁中即時行情列、01 主 K 線獨立全寬滿版、01➔18 內容導向自然流 Bento-Grid、圖表防碰撞修復 |
 | [`Spec 0144`](file:///d:/APP/股票紀錄/docs/specs/0144-ai-force-cards-06-07-photo-alignment-spec.md) | [`ADR 0144`](file:///d:/APP/股票紀錄/docs/adr/0144-ai-force-cards-06-07-photo-alignment.md) | [`.scratch/v8.57.0-ai-force-cards-06-07-photo-alignment/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.57.0-ai-force-cards-06-07-photo-alignment/issues/) | Issue #109 / PR #110 | V8.57.0 | 卡片 06 雙色發散錐與價格軸、卡片 07 多時段多層波形堆疊圖、卡片 09 籌碼換手率校準 |
 | [`Spec 0143`](file:///d:/APP/股票紀錄/docs/specs/0143-ai-force-institutional-chips-and-task-views-live-sync-spec.md) | [`ADR 0143`](file:///d:/APP/股票紀錄/docs/adr/0143-ai-force-institutional-chips-and-task-views-live-sync.md) | [`.scratch/v8.56.0-ai-force-institutional-chips-and-task-views/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.56.0-ai-force-institutional-chips-and-task-views/issues/) | Issue #103, #105, #107 | V8.56.0 | 三大法人真實籌碼管線、中間量化卡片群加權動態化、底部 5 大任務視圖全景連動 |
@@ -107,7 +107,7 @@
    - 當前位於分支 `main`，與 `origin/main` 保持一致，Working Tree Clean。
    - 所有變更均已透過 GitHub Actions CI 綠燈驗證並 Squash and Merge 回主幹。
 2. **日常驗證防線**：
-   - 接手前務必執行 `npm test`（確認 101 個測試檔案、962 個測試 100% 綠燈）與 `npm run build`（確認 0 型別錯誤）。
+   - 接手前務必執行 `npm test`（確認 139 個測試檔案、1,176 個測試 100% 綠燈）與 `npm run build`（確認 0 型別錯誤）。
 3. **工作流閉環準則**：
    - 嚴格遵循工作流藍圖：`/grill-with-docs` ➔ `/to-spec` ➔ `/to-tickets` ➔ `/triage` ➔ `/tdd & /implement` ➔ `/code-review` ➔ `/handoff`。
 

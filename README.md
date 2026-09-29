@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1169%2F1169%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1176%2F1176%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,19 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. AI 主力戰情室新手白話決策字典與全模組自適應浮動提示視窗 (`AI Force Beginner Decision Glossary & TermTooltip`) *(V8.60.0 全新發布)*
+### 0. AI 主力戰情室卡片 04/02/06/07 視覺動態連動與字典說明小方塊抗遮蔽修復 (`AI Force Cards Dynamic Ticks, Status Adaptive & Popover Boundary Repair`) *(V8.61.0 全新發布)*
+- **卡片 04 AI 籌碼熱區圖自適應價格刻度與 4 欄週期熱力矩陣**：
+  - 徹底終結寫死價格刻度與靜態色碼，依據當前個股歷史 K 線動態計算 5 階動態 Y 軸價格刻度（`priceTicks`）。
+  - 精算近 5/10/20/60 日 4 欄週期成交量價密度熱力矩陣（`heatmapColumns`），即時反映各價位帶籌碼密集程度。
+- **卡片 02 AI 決策核心三態自適應動態橫幅**：
+  - 頂部橫幅告別固定紅色 `AI WARNING`，依據多空綜合指標動態判定：多頭綠色 `🚀 AI BULLISH`、中性天藍 `⚡ AI BALANCED`、警戒紅色 `⚠️ AI WARNING`，與決策建議無縫聯動。
+- **卡片 06 累積型預測錐與卡片 07 主力成本山脈像素級視覺還原**：
+  - **卡片 06**：圖例重構為左上角半透明懸浮方塊（樂觀/基準/悲觀），實作三層三色半透明扇面擴散錐，中央實測震盪軌道改為實線帶圓點節點。
+  - **卡片 07**：色階校準為衰竭區(藍) ➔ 套牢區(綠) ➔ 主力成本區(黃) ➔ 大量成交區(橘)，重塑山脈起伏波峰。
+- **TermTooltip 字典說明小方塊抗裁切與防遮蔽**：
+  - 施加最大高度 280px 與微型平滑滾動條，優化智慧翻轉高度預估至 280px，支援 ESC 鍵與外部點擊即時退出，徹底解決視窗底部截斷與圖表過度遮蔽。
+
+### 0. AI 主力戰情室新手白話決策字典與全模組自適應浮動提示視窗 (`AI Force Beginner Decision Glossary & TermTooltip`) *(V8.60.0)*
 - **新手白話決策字典單一來源真相 (`Beginner Decision Glossary SSOT`)**：
   - 收錄全戰情室 30+ 個關鍵量化與交易名詞，涵蓋頂部行情 Bar、18 張 Bento-Grid 卡片與 5 大任務視圖。
   - **三段式直觀結構**：
