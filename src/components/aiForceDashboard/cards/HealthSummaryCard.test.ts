@@ -1,6 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { calculateCircleProgress, calculateOverallHealthScore } from './HealthSummaryCard';
+import { calculateCircleProgress, calculateOverallHealthScore, DONUT_GAUGE_CONFIG } from './HealthSummaryCard';
 import type { HealthSummaryData } from '../../../types/aiForceDashboard';
+
+describe('HealthSummaryCard - 甜甜圈進度環飽滿放大規範 (Ticket 04)', () => {
+  it('甜甜圈尺寸應擴大至 76px 以上，半徑 30px 以上，筆觸 6px 以上，且數值放大至 15px', () => {
+    expect(DONUT_GAUGE_CONFIG.size).toBeGreaterThanOrEqual(76);
+    expect(DONUT_GAUGE_CONFIG.radius).toBeGreaterThanOrEqual(30);
+    expect(DONUT_GAUGE_CONFIG.strokeWidth).toBeGreaterThanOrEqual(6);
+    expect(DONUT_GAUGE_CONFIG.percentFontSize).toBe('15px');
+  });
+});
 
 describe('HealthSummaryCard & calculateCircleProgress', () => {
   it('應該精確計算半徑 22 之圓周率與 strokeDashoffset', () => {

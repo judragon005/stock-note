@@ -6,7 +6,31 @@ import {
   calculateKeyLevelOverlays,
   sliceCandlesByPeriod,
   findClosestCandleIndex,
+  normalizeAndSortCandles,
 } from './KLineChartCard';
+
+describe('KLineChartCard - 時間軸由左至右升冪排序規範 (Ticket 02)', () => {
+  it('示範數列應按日期升冪排列，第一根為 09/01 (過去)，最後一根為 09/30 (最新)', () => {
+    const candles = normalizeAndSortCandles([]);
+    expect(candles.length).toBe(30);
+    expect(candles[0].date).toBe('09/01');
+    expect(candles[candles.length - 1].date).toBe('09/30');
+    expect(candles[0].date < candles[candles.length - 1].date).toBe(true);
+  });
+
+  it('若傳入倒序的蠟燭數列，應自動依據日期校正為升冪排列 (左舊右新)', () => {
+    const reversed = [
+      { date: '2026-09-30', open: 100, high: 105, low: 98, close: 102, volume: 1000 },
+      { date: '2026-09-20', open: 98, high: 101, low: 96, close: 99, volume: 1200 },
+      { date: '2026-09-10', open: 95, high: 99, low: 94, close: 97, volume: 1100 },
+      { date: '2026-09-01', open: 90, high: 96, low: 89, close: 95, volume: 900 },
+      { date: '2026-08-20', open: 88, high: 92, low: 87, close: 90, volume: 850 },
+    ];
+    const sorted = normalizeAndSortCandles(reversed);
+    expect(sorted[0].date).toBe('2026-08-20');
+    expect(sorted[sorted.length - 1].date).toBe('2026-09-30');
+  });
+});
 
 describe('KLineChartCard - 主 K 線與均線計算規範 (Ticket 04)', () => {
   describe('calculatePriceRange - 價格極值與安全邊界', () => {

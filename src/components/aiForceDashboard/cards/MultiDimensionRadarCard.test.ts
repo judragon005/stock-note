@@ -4,7 +4,17 @@ import {
   buildRadarGridPolygons,
   buildRadarDataPolygon,
   getGradeBadgeStyle,
+  RADAR_CHART_CONFIG,
 } from './MultiDimensionRadarCard';
+
+describe('MultiDimensionRadarCard - 六角雷達視覺放大規範 (Ticket 03)', () => {
+  it('雷達半徑應擴展至 100px 以上，且維度標籤與分數文字應放大提升判讀性', () => {
+    expect(RADAR_CHART_CONFIG.maxRadius).toBeGreaterThanOrEqual(100);
+    expect(RADAR_CHART_CONFIG.labelFontSize).toBeGreaterThanOrEqual(12);
+    expect(RADAR_CHART_CONFIG.scoreFontSize).toBeGreaterThanOrEqual(11);
+    expect(RADAR_CHART_CONFIG.gradeFontSize).toBeGreaterThanOrEqual(16);
+  });
+});
 
 describe('MultiDimensionRadarCard - 六角蛛網雷達圖數學與座標規範 (Ticket 07)', () => {
   const center = { x: 150, y: 150 };

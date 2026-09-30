@@ -43,6 +43,41 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
     expect(report.activeTaskTab).toBe('TASK_1_COMPREHENSIVE');
   });
 
+  it('createDefaultAiForceReport 應依據傳入之 basePrice 或標的特性自適應價格，杜絕致茂 2290 舊數據殘留', () => {
+    const report0050 = createDefaultAiForceReport('0050', '元大台灣50', 'TW', 195.0);
+
+    expect(report0050.symbol).toBe('0050');
+    expect(report0050.name).toBe('元大台灣50');
+    expect(report0050.marketBar.currentPrice).toBe(195.0);
+    expect(report0050.marketBar.highPrice).toBeLessThan(250);
+    expect(report0050.marketBar.lowPrice).toBeGreaterThan(150);
+    expect(report0050.klineSystem.keyLevels.highResistance).toBeLessThan(250);
+    expect(report0050.decisionCore.supportRange[0]).toBeLessThan(250);
+  });
+
+  it('generateAiForceReportFromCandles 在蠟燭不足但有 realtimeQuote 時，應完整同步即時報價之價差與開高低量', () => {
+    const quote = {
+      symbol: '0050',
+      market: 'TW' as const,
+      price: 198.5,
+      change: 1.5,
+      changePercent: 0.76,
+      open: 197.0,
+      high: 199.0,
+      low: 196.5,
+      volume: 15200,
+    };
+    const report = generateAiForceReportFromCandles('0050', '元大台灣50', 'TW', [], quote);
+
+    expect(report.marketBar.currentPrice).toBe(198.5);
+    expect(report.marketBar.change).toBe(1.5);
+    expect(report.marketBar.changePercent).toBe(0.76);
+    expect(report.marketBar.openPrice).toBe(197.0);
+    expect(report.marketBar.highPrice).toBe(199.0);
+    expect(report.marketBar.lowPrice).toBe(196.5);
+    expect(report.marketBar.volumeShares).toBe(15200);
+  });
+
   describe('generateAiForceReportFromCandles - 真實日 K 資料管線驅動 (Ticket 34 / Stage 1)', () => {
     it('應能將真實日 K 數列正確轉化為具備 MA、KD、MACD、RSI 與動態水線之完整 Report', () => {
       // 構造 30 根真實/模擬 OHLCV 日 K

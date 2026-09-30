@@ -1,6 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import { getVerbBadgeColor } from './MainForceVerdictCard';
+import { getVerbBadgeColor, parseVerdictMetrics } from './MainForceVerdictCard';
 import type { MainForceVerdictData } from '../../../types/aiForceDashboard';
+
+describe('MainForceVerdictCard - 等高與結構化三層佈局規範 (Ticket 05)', () => {
+  it('parseVerdictMetrics 應能從 AI 結論文字中精準解析法人張數、VWAP偏離度與 RSI', () => {
+    const text = 'AI 結論：經 5 日主力行為綜合研判（法人近 5 日合計 -64 張、收盤相對 20 日 VWAP +7.5%、RSI 60），法人小幅調節，短線宜區間操作。';
+    const metrics = parseVerdictMetrics(text);
+    expect(metrics.length).toBe(3);
+    expect(metrics[0].label).toBe('5日法人合計');
+    expect(metrics[0].value).toBe('-64 張');
+    expect(metrics[1].label).toBe('20日 VWAP 乖離');
+    expect(metrics[1].value).toBe('+7.5%');
+    expect(metrics[2].label).toBe('RSI 強度');
+    expect(metrics[2].value).toBe('60');
+  });
+});
 
 describe('MainForceVerdictCard & badge styling', () => {
   it('應該依據不同語意動詞給予對應的警示色彩', () => {
