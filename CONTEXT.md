@@ -69,6 +69,22 @@ _Avoid_: Unpaid Dividend, Accrued Profit
 將美股以台幣計價之總損益嚴格解耦為「股票本體價差 (Asset Gain)」與「美元匯率波動 (FX Gain/Loss)」，精確反映選股 Alpha 與外匯貢獻。
 _Avoid_: Currency Mix, Mixed Gain
 
+### 市場時間與結算定錨 (Market Settlement & Anchoring) *(新增於 Spec 0150)*
+
+**Market Settlement Status (市場結算狀態)**:
+判定標的所在市場是否已完成正式收盤與當日盤後完整籌碼數據（如三大法人、融資券）結算。
+- 台股 (TW)：週一至週五 15:00 (含) 之後為已結算；15:00 以前與週末為未結算。
+- 美股 (US)：台北時間每日早上 08:00 (含) 之後為已結算；08:00 前為未結算。
+_Avoid_: Market Open Status, Live Flag
+
+**Anchor Trading Date (量化定錨交易日)**:
+在市場處於未結算狀態時，量化模型、VWAP 主力成本與 AI 決策核心強制回退採用的「前一個已完成收盤之交易日」。
+_Avoid_: Yesterday, Fallback Date
+
+**Intraday Quote Reference (盤中即時參考價)**:
+在未收盤時段，即時抓取之最新市場價格僅作為 UI 輔助參考字段，與核心日 K 量化指標進行邏輯隔離，不參與歷史模型計算。
+_Avoid_: Live Price, Current Close
+
 **Tax Compliance & Threshold Alert (稅階合規與二代健保/海外所得預警)** *(新增於 V6.1.0)*:
 台股單筆現金股利達 NT$ 20,000 元時事前預警 2.11% 補充保費；美股統計當年度已實現價差與股息，提供 100 萬基本所得額申報與 750 萬最低稅負制 (AMT) 進度條。
 _Avoid_: Tax Guess, Manual Audit
