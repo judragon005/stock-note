@@ -17,6 +17,7 @@ import { calculateDayTradeRisk } from './dayTradeRiskEngine';
 import { calculateMultiDimensionRadar } from './multiDimensionRadarEngine';
 import { estimateMarketSentiment } from './marketSentimentEngine';
 import { calculateAiConfidence } from './aiConfidenceEngine';
+import { getMarketSettlementStatus } from './marketSettlementEngine';
 
 export {
   calculateVolumeProfile,
@@ -59,6 +60,8 @@ export function createDefaultAiForceReport(
       dataPointsCount: 98,
       dataSourceText: '日 K TWSE | 法人 TWSE | 融資券 FinMind',
       dataRangeText: `${todayStr} 共 98 個交易日，法人資料 20 日`,
+      isSettled: true,
+      anchorTradingDate: todayStr,
       statusBadges: {
         aiScanActive: true,
         mainForceTracking: true,
@@ -682,25 +685,47 @@ export function generateAiForceReportFromCandles(
     low?: number;
     volume?: number;
   },
-  institutionalRecords?: RawInstitutionalRecord[]
+  institutionalRecords?: RawInstitutionalRecord[],
+  referenceDate: Date = new Date()
 ): AiForceDashboardReport {
-  // 1. 安全邊界：不足 5 根時安全回退至預設 report
-  if (!candles || candles.length < 5) {
+  // 1. 市場結算狀態檢測 (Spec 0150)
+  const settlement = getMarketSettlementStatus(market, referenceDate);
+
+  // 若未結算，過濾掉超過 anchorTradingDate 的未結算或盤中日 K
+  let effectiveCandles = candles;
+  let effectiveInstRecords = institutionalRecords;
+  if (!settlement.isSettled && candles && candles.length > 0) {
+    const filtered = candles.filter((c) => c.date <= settlement.anchorTradingDate);
+    if (filtered.length >= 5) {
+      effectiveCandles = filtered;
+    }
+    if (institutionalRecords && institutionalRecords.length > 0) {
+      effectiveInstRecords = institutionalRecords.filter(
+        (r) => r.date <= settlement.anchorTradingDate
+      );
+    }
+  }
+
+  // 安全邊界：不足 5 根時安全回退至預設 report
+  if (!effectiveCandles || effectiveCandles.length < 5) {
     const fallback = createDefaultAiForceReport(symbol, name, market);
     if (realtimeQuote?.price) {
       fallback.marketBar.currentPrice = realtimeQuote.price;
     }
+    fallback.marketBar.isSettled = settlement.isSettled;
+    fallback.marketBar.anchorTradingDate = settlement.anchorTradingDate;
+    fallback.marketBar.settlementReason = settlement.reason;
     return fallback;
   }
 
-  const count = candles.length;
-  const last = candles[count - 1];
-  const prev = candles[count - 2];
+  const count = effectiveCandles.length;
+  const last = effectiveCandles[count - 1];
+  const prev = effectiveCandles[count - 2];
 
   // 2. 逐根計算均線 (MA5, MA10, MA20, MA60)、KD、MACD、RSI
-  const closes = candles.map((c) => c.close);
-  const highs = candles.map((c) => c.high);
-  const lows = candles.map((c) => c.low);
+  const closes = effectiveCandles.map((c) => c.close);
+  const highs = effectiveCandles.map((c) => c.high);
+  const lows = effectiveCandles.map((c) => c.low);
 
   // EMA 與 MACD 輔助
   let ema12 = closes[0];
@@ -710,7 +735,7 @@ export function generateAiForceReportFromCandles(
   let currentK = 50;
   let currentD = 50;
 
-  const klineCandles = candles.map((c, i) => {
+  const klineCandles = effectiveCandles.map((c, i) => {
     // 均線
     const getSma = (period: number) => {
       if (i < period - 1) return undefined;
@@ -792,7 +817,7 @@ export function generateAiForceReportFromCandles(
 
   // 3. 計算三大關鍵水線
   // 主力成本：近 20 根 VWAP
-  const recent20 = candles.slice(-20);
+  const recent20 = effectiveCandles.slice(-20);
   let totalVol20 = 0;
   let totalVal20 = 0;
   recent20.forEach((c) => {
@@ -802,7 +827,7 @@ export function generateAiForceReportFromCandles(
   const mainForceCost = totalVol20 > 0 ? Number((totalVal20 / totalVol20).toFixed(2)) : last.close;
 
   // 近 60 根最高與最低
-  const recent60 = candles.slice(-60);
+  const recent60 = effectiveCandles.slice(-60);
   let maxHigh60 = -Infinity;
   let minLow60 = Infinity;
   recent60.forEach((c) => {
@@ -812,25 +837,52 @@ export function generateAiForceReportFromCandles(
   const highResistance = maxHigh60 > -Infinity ? maxHigh60 : Number((last.close * 1.08).toFixed(2));
   const supportLevel = minLow60 < Infinity ? minLow60 : Number((last.close * 0.92).toFixed(2));
 
-  // 4. 計算頂部行情
-  const currentPrice = realtimeQuote?.price ?? last.close;
-  const change =
-    realtimeQuote?.change ?? Number((last.close - (prev ? prev.close : last.close)).toFixed(2));
-  const changePercent =
-    realtimeQuote?.changePercent ??
-    Number((prev && prev.close > 0 ? ((last.close - prev.close) / prev.close) * 100 : 0).toFixed(2));
+  // 4. 計算頂部行情與盤中隔離 (Spec 0150)
+  let currentPrice: number;
+  let change: number;
+  let changePercent: number;
+  let intradayQuote: { price: number; change: number; changePercent: number } | undefined = undefined;
+  let settlementNotice: string | undefined = undefined;
+
+  if (!settlement.isSettled) {
+    // 尚未結算：一律以定錨日完整收盤價為準
+    currentPrice = last.close;
+    change = prev ? Number((last.close - prev.close).toFixed(2)) : 0;
+    changePercent =
+      prev && prev.close > 0 ? Number((((last.close - prev.close) / prev.close) * 100).toFixed(2)) : 0;
+
+    if (realtimeQuote?.price) {
+      intradayQuote = {
+        price: realtimeQuote.price,
+        change: realtimeQuote.change ?? 0,
+        changePercent: realtimeQuote.changePercent ?? 0,
+      };
+    }
+
+    settlementNotice = `⚠️ 當前標的尚未收盤結算，為確保主力籌碼與 AI 模型之嚴謹性，本報告以 ${settlement.anchorTradingDate} 完整收盤數據為準。`;
+  } else {
+    // 已結算：採計最新行情
+    currentPrice = realtimeQuote?.price ?? last.close;
+    change =
+      realtimeQuote?.change ?? Number((last.close - (prev ? prev.close : last.close)).toFixed(2));
+    changePercent =
+      realtimeQuote?.changePercent ??
+      Number((prev && prev.close > 0 ? ((last.close - prev.close) / prev.close) * 100 : 0).toFixed(2));
+    intradayQuote = undefined;
+    settlementNotice = undefined;
+  }
 
   // 5. 調用各量化子引擎
-  const volumeProfile = calculateVolumeProfile(candles, currentPrice);
-  const forecastCone = calculateForecastCone(candles, currentPrice);
-  const vwapCostStructure = calculateVwapCostStructure(candles, currentPrice);
-  const riskSpider = calculateRiskSpider(candles);
-  const dayTradeRisk = calculateDayTradeRisk(candles);
+  const volumeProfile = calculateVolumeProfile(effectiveCandles, currentPrice);
+  const forecastCone = calculateForecastCone(effectiveCandles, currentPrice);
+  const vwapCostStructure = calculateVwapCostStructure(effectiveCandles, currentPrice);
+  const riskSpider = calculateRiskSpider(effectiveCandles);
+  const dayTradeRisk = calculateDayTradeRisk(effectiveCandles);
 
   const defaultTemplate = createDefaultAiForceReport(symbol, name, market);
 
   // 6. 三大法人籌碼管線與 Card 08 / Card 15 連動計算
-  const institutionalFlow = buildInstitutionalFlow(candles, institutionalRecords, market);
+  const institutionalFlow = buildInstitutionalFlow(effectiveCandles, effectiveInstRecords, market);
   let chipsSummary = defaultTemplate.chipsSummary;
   if (institutionalFlow.history.length > 0) {
     const lastInst = institutionalFlow.history[institutionalFlow.history.length - 1];
@@ -877,7 +929,7 @@ export function generateAiForceReportFromCandles(
 
   // 8. Card 03 多維度判讀、Card 13 市場情緒與 Card 14 AI 信心度動態計算
   const multiDimensionRadar = calculateMultiDimensionRadar({
-    candles,
+    candles: effectiveCandles,
     klineCandles,
     mainForceCost,
     institutionalFlow,
@@ -886,7 +938,7 @@ export function generateAiForceReportFromCandles(
 
   const recent5Flow = institutionalFlow.history.slice(-5);
   const sum5Inst = recent5Flow.reduce((acc, cur) => acc + cur.foreignShares + cur.trustShares + cur.dealerShares, 0);
-  const recent5Candles = candles.slice(-5);
+  const recent5Candles = effectiveCandles.slice(-5);
   const totalVol5 = recent5Candles.reduce((acc, c) => acc + c.volume, 0);
   const institutionalNetRatio = totalVol5 > 0 ? (sum5Inst / totalVol5) * 100 : 0;
 
@@ -898,7 +950,7 @@ export function generateAiForceReportFromCandles(
   });
 
   const aiConfidence = calculateAiConfidence({
-    candles,
+    candles: effectiveCandles,
     klineCandles,
     hasInstitutionalData: institutionalFlow.history.length > 0,
   });
@@ -916,19 +968,29 @@ export function generateAiForceReportFromCandles(
       currentPrice,
       change,
       changePercent,
-      volumeShares: realtimeQuote?.volume ?? last.volume,
-      transactionCount: Math.round((realtimeQuote?.volume ?? last.volume) * 2.3),
-      openPrice: realtimeQuote?.open ?? last.open,
-      highPrice: realtimeQuote?.high ?? last.high,
-      lowPrice: realtimeQuote?.low ?? last.low,
-      latestTradingDate: last.date,
+      volumeShares: !settlement.isSettled ? last.volume : (realtimeQuote?.volume ?? last.volume),
+      transactionCount: Math.round(
+        (!settlement.isSettled ? last.volume : (realtimeQuote?.volume ?? last.volume)) * 2.3
+      ),
+      openPrice: !settlement.isSettled ? last.open : (realtimeQuote?.open ?? last.open),
+      highPrice: !settlement.isSettled ? last.high : (realtimeQuote?.high ?? last.high),
+      lowPrice: !settlement.isSettled ? last.low : (realtimeQuote?.low ?? last.low),
+      latestTradingDate: settlement.anchorTradingDate,
       dataPointsCount: count,
-      dataSourceText: market === 'TW' ? '日 K TWSE | 法人 TWSE | 融資券 FinMind' : '日 K Yahoo Finance | 歷史報價',
-      dataRangeText: `${candles[0].date} ~ ${last.date}，共 ${count} 個交易日`,
+      dataSourceText:
+        market === 'TW'
+          ? '日 K TWSE | 法人 TWSE | 融資券 FinMind'
+          : '日 K Yahoo Finance | 歷史報價',
+      dataRangeText: `${effectiveCandles[0].date} ~ ${last.date}，共 ${count} 個交易日`,
+      isSettled: settlement.isSettled,
+      anchorTradingDate: settlement.anchorTradingDate,
+      settlementReason: settlement.reason,
+      intradayQuote,
       statusBadges: {
         aiScanActive: true,
         mainForceTracking: true,
-        marketStatus: Math.abs(changePercent) > 7 ? 'ALERT' : Math.abs(changePercent) > 3 ? 'VOLATILITY' : 'NORMAL',
+        marketStatus:
+          Math.abs(changePercent) > 7 ? 'ALERT' : Math.abs(changePercent) > 3 ? 'VOLATILITY' : 'NORMAL',
         volatilityAlert: Math.abs(changePercent) > 5,
       },
     },
@@ -944,6 +1006,7 @@ export function generateAiForceReportFromCandles(
 
     decisionCore: {
       ...defaultTemplate.decisionCore,
+      settlementNotice,
       warningBadgeText:
         changePercent >= 0 && healthSummary.chipHealth >= 70 && dayTradeRisk.riskIndex < 40
           ? 'AI BULLISH'

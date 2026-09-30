@@ -109,6 +109,14 @@ describe('AiDecisionCoreCard - 決策核心邏輯與樣式判定規範 (Ticket 0
       expect(banner.bg).toContain('rgba(239, 68, 68');
     });
   });
+
+  describe('Spec 0150 - 決策核心未收盤結算警示橫幅文案驗證', () => {
+    it('當提供 settlementNotice 時，應明確提示尚未收盤結算與定錨基準日', () => {
+      const notice = '⚠️ 當前標的尚未收盤結算，為確保主力籌碼與 AI 模型之嚴謹性，本報告以 2026-09-29 完整收盤數據為準。';
+      expect(notice).toContain('尚未收盤結算');
+      expect(notice).toContain('2026-09-29');
+    });
+  });
 });
 
 

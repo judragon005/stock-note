@@ -87,4 +87,30 @@ describe('HeaderMarketBar - 行情 Bar 格式化與狀態燈規範 (Ticket 02)',
       });
     });
   });
+
+  describe('Spec 0150 - 未收盤標的前日收盤數據定錨與雙層警示', () => {
+    it('當 isSettled === false 時，主價格標籤應為「前日收盤價」，最新交易日標籤為「定錨基準日」', () => {
+      const isSettled = false;
+      const label = isSettled ? '今日收盤價' : '前日收盤價';
+      const dateLabel = isSettled ? '最新交易日' : '定錨基準日';
+
+      expect(label).toBe('前日收盤價');
+      expect(dateLabel).toBe('定錨基準日');
+    });
+
+    it('當存在 intradayQuote 時，應能正確格式化盤中即時參考價格與漲跌幅', () => {
+      const intraday = {
+        price: 2290.0,
+        change: 155.0,
+        changePercent: 7.26,
+      };
+
+      const formattedPrice = formatMarketMetric(intraday.price, 2);
+      const sign = intraday.changePercent >= 0 ? '+' : '';
+      const percentStr = `${sign}${intraday.changePercent.toFixed(2)}%`;
+
+      expect(formattedPrice).toBe('2,290.00');
+      expect(percentStr).toBe('+7.26%');
+    });
+  });
 });

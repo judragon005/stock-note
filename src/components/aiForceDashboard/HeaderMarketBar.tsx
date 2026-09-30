@@ -335,20 +335,78 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
           paddingTop: '2px',
         }}
       >
-        {/* 今日收盤價 */}
+        {/* 今日收盤價 / 前日收盤價 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-          <TermTooltip termId="closePrice">
-            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>今日收盤價</span>
-          </TermTooltip>
-          <span style={{ fontSize: '1.3rem', fontWeight: 800, color: '#ffffff' }}>
-            {formatMarketMetric(data.currentPrice, 2)}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <TermTooltip termId="closePrice">
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                {data.isSettled === false ? '前日收盤價' : '今日收盤價'}
+              </span>
+            </TermTooltip>
+            {data.isSettled === false && (
+              <span
+                data-testid="market-unsettled-badge"
+                style={{
+                  fontSize: '0.62rem',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                  background: 'rgba(245, 158, 11, 0.18)',
+                  color: '#fbbf24',
+                  border: '1px solid rgba(245, 158, 11, 0.45)',
+                  fontWeight: 700,
+                  letterSpacing: '0.02em',
+                  whiteSpace: 'nowrap',
+                }}
+                title={data.settlementReason || '市場尚未收盤結算，以確定之前日收盤數據為準'}
+              >
+                ⚠️ 盤中未結算
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '1.3rem', fontWeight: 800, color: '#ffffff' }}>
+              {formatMarketMetric(data.currentPrice, 2)}
+            </span>
+            {data.isSettled === false && data.intradayQuote && (
+              <span
+                data-testid="market-intraday-reference"
+                style={{
+                  fontSize: '0.72rem',
+                  color: '#94a3b8',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                }}
+                title="盤中即時行情參考，不參與歷史量化模型運算"
+              >
+                盤中即時:{' '}
+                <span
+                  style={{
+                    color:
+                      data.intradayQuote.change > 0
+                        ? (colorTheme === 'international' ? '#10b981' : '#ef4444')
+                        : data.intradayQuote.change < 0
+                        ? (colorTheme === 'international' ? '#ef4444' : '#10b981')
+                        : '#94a3b8',
+                    fontWeight: 700,
+                  }}
+                >
+                  {formatMarketMetric(data.intradayQuote.price, 2)} (
+                  {data.intradayQuote.changePercent >= 0 ? '+' : ''}
+                  {data.intradayQuote.changePercent.toFixed(2)}%)
+                </span>
+              </span>
+            )}
+          </div>
         </div>
 
         {/* 今日漲跌 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
           <TermTooltip termId="closePrice">
-            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>今日漲跌</span>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+              {data.isSettled === false ? '前日漲跌' : '今日漲跌'}
+            </span>
           </TermTooltip>
           <span style={{ fontSize: '1.15rem', fontWeight: 800, color: changeMeta.color }}>
             {changeMeta.changeText}
@@ -358,7 +416,9 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
         {/* 今日漲幅 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
           <TermTooltip termId="closePrice">
-            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>今日漲幅</span>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+              {data.isSettled === false ? '前日漲幅' : '今日漲幅'}
+            </span>
           </TermTooltip>
           <span style={{ fontSize: '1.15rem', fontWeight: 800, color: changeMeta.color }}>
             {changeMeta.percentText}
@@ -370,7 +430,9 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
         {/* 成交量 (張) */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
           <TermTooltip termId="volumeShares">
-            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>成交量(張)</span>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+              {data.isSettled === false ? '前日成交量(張)' : '成交量(張)'}
+            </span>
           </TermTooltip>
           <span style={{ fontSize: '1.02rem', fontWeight: 700, color: '#38bdf8' }}>
             {formatMarketMetric(data.volumeShares, 0)}
@@ -380,7 +442,9 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
         {/* 成交筆數 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
           <TermTooltip termId="transactionCount">
-            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>成交筆數</span>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+              {data.isSettled === false ? '前日筆數' : '成交筆數'}
+            </span>
           </TermTooltip>
           <span style={{ fontSize: '1.02rem', fontWeight: 700, color: '#f1f5f9' }}>
             {formatMarketMetric(data.transactionCount, 0)}
@@ -419,10 +483,25 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
 
         {/* 最新交易日 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>最新交易日</span>
-          <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#94a3b8' }}>
-            {data.latestTradingDate}
+          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+            {data.isSettled === false ? '定錨基準日' : '最新交易日'}
           </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span
+              style={{
+                fontSize: '0.88rem',
+                fontWeight: 600,
+                color: data.isSettled === false ? '#fbbf24' : '#94a3b8',
+              }}
+            >
+              {data.latestTradingDate}
+            </span>
+            {data.isSettled === false && (
+              <span style={{ fontSize: '0.62rem', color: '#f59e0b', fontWeight: 700 }}>
+                [前日收盤]
+              </span>
+            )}
+          </div>
         </div>
 
         {/* 資料筆數 */}

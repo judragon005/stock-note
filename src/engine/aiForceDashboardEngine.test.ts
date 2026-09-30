@@ -318,6 +318,82 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
       });
     });
   });
+
+  describe('未收盤時點前日收盤數據定錨與雙層警示 (Spec 0150)', () => {
+    it('台股盤中 11:30 分析標的時，應定錨前一交易日收盤價，隔離盤中即時價，並出示警示文案', () => {
+      // 構造包含昨日 2026-09-29 與今日盤中 2026-09-30 的日 K
+      const mockCandles = [
+        { date: '2026-09-25', open: 2000, high: 2050, low: 1990, close: 2020, volume: 1000 },
+        { date: '2026-09-26', open: 2020, high: 2080, low: 2010, close: 2050, volume: 1200 },
+        { date: '2026-09-27', open: 2050, high: 2100, low: 2040, close: 2080, volume: 1100 },
+        { date: '2026-09-28', open: 2080, high: 2120, low: 2060, close: 2100, volume: 1300 },
+        { date: '2026-09-29', open: 2100, high: 2150, low: 2090, close: 2135, volume: 1500 }, // 前一交易日收盤
+        { date: '2026-09-30', open: 2150, high: 2290, low: 2135, close: 2290, volume: 2681 }, // 今日盤中未結算
+      ];
+
+      // 模擬盤中 11:30
+      const intradayTime = new Date('2026-09-30T11:30:00+08:00');
+      const realtimeQuote = { price: 2290, change: 155, changePercent: 7.26, volume: 2681 };
+
+      const report = generateAiForceReportFromCandles(
+        '2360',
+        '致茂',
+        'TW',
+        mockCandles,
+        realtimeQuote,
+        undefined,
+        intradayTime
+      );
+
+      // 1. 驗證結算狀態
+      expect(report.marketBar.isSettled).toBe(false);
+      expect(report.marketBar.anchorTradingDate).toBe('2026-09-29');
+
+      // 2. 核心行情必須定錨在前一收盤日 (2026-09-29 收盤價 2135)
+      expect(report.marketBar.currentPrice).toBe(2135);
+      expect(report.marketBar.latestTradingDate).toBe('2026-09-29');
+
+      // 3. 盤中即時報價被妥善隔離至 intradayQuote
+      expect(report.marketBar.intradayQuote).toBeDefined();
+      expect(report.marketBar.intradayQuote?.price).toBe(2290);
+      expect(report.marketBar.intradayQuote?.changePercent).toBe(7.26);
+
+      // 4. AI 決策核心 (Card 02) 必須包含警示橫幅文案
+      expect(report.decisionCore.settlementNotice).toBeDefined();
+      expect(report.decisionCore.settlementNotice).toContain('尚未收盤結算');
+      expect(report.decisionCore.settlementNotice).toContain('2026-09-29');
+    });
+
+    it('台股盤後 15:30 分析標的時，應視為已結算，採計當日完整收盤數據', () => {
+      const mockCandles = [
+        { date: '2026-09-25', open: 2000, high: 2050, low: 1990, close: 2020, volume: 1000 },
+        { date: '2026-09-26', open: 2020, high: 2080, low: 2010, close: 2050, volume: 1200 },
+        { date: '2026-09-27', open: 2050, high: 2100, low: 2040, close: 2080, volume: 1100 },
+        { date: '2026-09-28', open: 2080, high: 2120, low: 2060, close: 2100, volume: 1300 },
+        { date: '2026-09-29', open: 2100, high: 2150, low: 2090, close: 2135, volume: 1500 },
+        { date: '2026-09-30', open: 2150, high: 2290, low: 2135, close: 2290, volume: 2681 },
+      ];
+
+      const postMarketTime = new Date('2026-09-30T15:30:00+08:00');
+      const realtimeQuote = { price: 2290, change: 155, changePercent: 7.26, volume: 2681 };
+
+      const report = generateAiForceReportFromCandles(
+        '2360',
+        '致茂',
+        'TW',
+        mockCandles,
+        realtimeQuote,
+        undefined,
+        postMarketTime
+      );
+
+      expect(report.marketBar.isSettled).toBe(true);
+      expect(report.marketBar.anchorTradingDate).toBe('2026-09-30');
+      expect(report.marketBar.currentPrice).toBe(2290);
+      expect(report.marketBar.latestTradingDate).toBe('2026-09-30');
+      expect(report.decisionCore.settlementNotice).toBeUndefined();
+    });
+  });
 });
 
 
