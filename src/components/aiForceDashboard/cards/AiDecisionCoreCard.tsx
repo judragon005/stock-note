@@ -345,7 +345,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
           fontSize: '0.78rem',
           fontWeight: 800,
           letterSpacing: '0.04em',
-          marginBottom: '10px',
+          marginBottom: data.settlementNotice ? '6px' : '10px',
           boxShadow: bannerStyle.glow,
           transition: 'all 0.25s ease',
         }}
@@ -353,6 +353,29 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
         <span>{bannerStyle.icon}</span>
         <span>{bannerStyle.text}</span>
       </div>
+
+      {/* 盤中未結算安全定錨警示條 (Spec 0150) */}
+      {data.settlementNotice && (
+        <div
+          data-testid="decision-core-settlement-notice"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '5px 10px',
+            borderRadius: '6px',
+            background: 'rgba(245, 158, 11, 0.12)',
+            border: '1px solid rgba(245, 158, 11, 0.35)',
+            color: '#fbbf24',
+            fontSize: '0.68rem',
+            lineHeight: 1.35,
+            fontWeight: 600,
+            marginBottom: '10px',
+          }}
+        >
+          <span>{data.settlementNotice}</span>
+        </div>
+      )}
 
       {/* 9 大核心指標項目清單 */}
       <div

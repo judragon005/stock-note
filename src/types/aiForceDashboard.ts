@@ -16,6 +16,15 @@ export interface MarketBarData {
   dataPointsCount: number; // 資料筆數，例如 98 日
   dataSourceText: string; // 例如: "日 K TWSE | 法人 TWSE | 融資券 FinMind"
   dataRangeText: string; // 例如: "2026-05-04 ~ 2026-09-18，共 98 個交易日，法人資料 20 日"
+  isSettled?: boolean; // 是否已達正式收盤且盤後數據結算完畢
+  anchorTradingDate?: string; // 量化分析基準日 (YYYY-MM-DD)
+  settlementReason?: string; // 未結算之說明提示
+  intradayQuote?: {
+    price: number;
+    change: number;
+    changePercent: number;
+    updatedAt?: string;
+  };
   statusBadges: {
     aiScanActive: boolean;
     mainForceTracking: boolean;
@@ -83,6 +92,7 @@ export interface DecisionCoreData {
   supportRange: [number, number]; // [1875.0, 1730.0]
   resistanceRange: [number, number]; // [2490.0, 2490.0]
   riskHorizonDays: string; // "1~4 個交易日"
+  settlementNotice?: string; // 尚未收盤結算時之警示橫幅文案
 }
 
 /**
