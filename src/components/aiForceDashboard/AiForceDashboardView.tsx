@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MarketType, HoldingPosition } from '../../types/stock';
+import { MarketType, HoldingPosition, PriceQuote } from '../../types/stock';
 import { AiForceDashboardReport } from '../../types/aiForceDashboard';
 import {
   createDefaultAiForceReport,
@@ -59,7 +59,10 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
     setSymbol(targetSymbol);
     setMarket(targetMarket);
     const resolvedName = resolveOfficialSecurityName(targetSymbol, targetMarket) || targetSymbol;
-    let quote: any = undefined;
+    let quote:
+      | (PriceQuote & { open?: number; high?: number; low?: number; volume?: number })
+      | null
+      | undefined = undefined;
 
     try {
       // 1. 同步拉取歷史日 K (至少 60~180 根，支援本地 IndexedDB 快取與增量更新)
@@ -112,7 +115,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           resolvedName,
           targetMarket,
           candles,
-          quote,
+          quote || undefined,
           institutionalRecords
         );
         setReport(fullReport);
