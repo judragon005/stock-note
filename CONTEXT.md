@@ -2014,6 +2014,24 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 當查詢標的完全查無歷史日 K 時，K 線圖繪製「📊 尚無歷史交易日 K 數列·數據回補中」毛玻璃面板，不渲染破圖線條。
   - `AiForceDashboardView` 將 `dataSourceText` 與 `dataRangeText` 完整傳入 `HeaderExportBar`，中間資訊列徹底終結寫死「2026-05-04 ~ 2026-09-18」，與當前標的及最新交易日保持 100% 同步。
 
+### 全市場歷史日 K 本地緊湊快取注入 IndexedDB 與 Yahoo 代理防限流降級 *(新增於 V8.65.0 / Spec #0154 / ADR #0154 / Issue #136)*
+
+- **On-Demand Compact History Hydration & Cache (按需緊湊歷史日 K 提取與單例記憶體快取)**:
+  - 核心模組：`src/engine/marketCacheLoader.ts`。
+  - 函式：`loadSymbolCompactHistory(symbol: string): Promise<DailyCandle[] | null>`、`getLatestSummaryQuote(symbol: string): Promise<DailyCandle | null>`。
+  - 突破過去 17.5 MB `tw_market_ohlcv_compact.json` 斷鏈未被前端消費之架構孤島，支援按需提取指定台股個股（涵蓋 00403A 等 2,356 檔標的）並格式化為標準 `DailyCandle`。
+  - 採用模組級單例 Promise 快取，避免同一 Session 內重複觸發大型 JSON 之網路拉取與反序列化消耗；失敗時自動釋放快取支援後續自癒。
+
+- **History + Daily Summary Fusion & 429 Fast-Fail (歷史日 K 與當日收盤無縫合流與防限流降級)**:
+  - 核心模組：`src/engine/historicalOhlcvBackfill.ts`、`vite.config.ts`。
+  - 於 `vite.config.ts` 的 `/api/yahoo` 加入桌面瀏覽器 User-Agent 與 Referer 標頭，降低被 ATS 邊緣節點阻擋之機率。
+  - 當外部 Yahoo API 遭遇 429 限流或斷網且 IndexedDB 歷史不足（< 5 根）時，自動調用本地 compact 歷史日 K 與每日 16:00 盤後更新之 `tw_market_summary.json` 當日收盤價，透過 `mergeDailyCandles` 去重升冪合併，重新計算指標並持久化沉澱至 IndexedDB，提供 100% 不破圖、不空白之本機高可用底座。
+
+- **Invalid Symbol Diagnosis & Adaptive Guidance (無效標的代碼智慧診斷與指引)**:
+  - 核心模組：`src/components/aiForceDashboard/AiForceDashboardView.tsx`。
+  - 當使用者輸入查無資料且無官方對應名稱之代碼（如筆誤之 `004EA`）時，系統明確標註「⚠️ 查無此台股標的代碼，請確認代碼是否輸入正確（如 00403A、2330）」，消除使用者對系統故障之猜忌。
+
+
 
 
 

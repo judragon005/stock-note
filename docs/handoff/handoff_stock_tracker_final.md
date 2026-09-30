@@ -1,15 +1,13 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Document)
 
-> **交接產生時間**：2026-09-30 11:35 (UTC+8)  
+> **交接產生時間**：2026-09-30 16:50 (UTC+8)  
 > **當前最新里程碑**：
-> - **V8.62.0 全市場排程目錄絕對錨定、Tooltip Portal 穿透與 AI 戰情室視覺比例優化**（ADR 0149, Spec 0149, Issue #125, PR #126）：
->   - **排程目錄絕對錨定與資料庫同步閉環 (照片 1)**：廢除 `process.cwd()` 相對路徑依賴，改用 `path.resolve(__dirname, '../../')` 絕對錨定專案根目錄，徹底解決 Windows 工作排程器背景以 System32 啟動導致寫入失敗問題；補齊台股快取頂層 `date` 欄位並加入 0 標的空快取防覆蓋守門員，打通快取 ➔ IndexedDB 自動沉澱閉環。
->   - **搜尋輸入框彈性伸縮防截斷 (照片 2)**：重構 `HeaderMarketBar.tsx` 中的代碼 input 寬度，移除寫死 `75px`，改採 `minWidth: '95px'` 與動態字元寬度，完整支援 4~8 碼個股、ETF（如 004030）、權證或美股代碼零截斷。
->   - **Tooltip 全域 Portal 穿透與邊界防禦 (照片 3)**：重構 `TermTooltip.tsx`，使用 React `createPortal` 將浮動卡片直掛 `document.body`，採用 `position: fixed` 與螢幕絕對座標計算，徹底打破父級 `backdrop-filter` 造成的 CSS Stacking Context 限制，全站 15 張卡片與 Header Tooltip 一次性根治遮擋與邊界溢出。
->   - **Card 04 籌碼熱區圖高度自適應填滿 (照片 4)**：移除 `VolumeProfileCard.tsx` 中寫死的 `height: '190px'`，改為 `flex: 1` 結合 `height: 100%` 且 `alignItems: 'stretch'`，價格刻度、熱力柱方塊與右側圖例垂直撐滿卡片空間，徹底消除上下各 90px 留白。
->   - **Card 05 風險雷達圖面積與字級擴張 (照片 5)**：修改 `RiskSpiderCard.tsx`，五角蛛網圖半徑擴大至 `maxRadius = 96`（提升約 26% 半徑），標籤字級提升至 13px，數值提升至 12px，顯著提昇易讀性。
-> - **V8.61.0 AI 主力戰情室卡片 04/02/06/07 視覺動態連動與字典說明小方塊抗遮蔽修復**（ADR 0148, Spec 0148, Issue #121, PR #122）。
-> **品質狀態**：全量單元測試 **1,180/1,180 通過 (100% Passed / 139 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過 (9.25s)。
+> - **V8.65.0 全市場歷史日 K 本地緊湊快取注入 IndexedDB 與 Yahoo 代理防限流降級**（ADR 0154, Spec 0154, Issue #136）：
+>   - **按需緊湊歷史日 K 提取與單例記憶體快取**：實現 `loadSymbolCompactHistory`，按需從 `tw_market_ohlcv_compact.json` (17.5 MB) 解析特定標的並格式化為標準 `DailyCandle`，模組級單例 Promise 快取防重複請求。
+>   - **歷史日 K 與當日收盤無縫合流與防限流降級**：在 `vite.config.ts` 補齊桌面瀏覽器標頭，當 Yahoo API 429 失敗且本地快取不足時，自動調用本地 compact 歷史日 K 與每日 16:00 盤後更新之 `tw_market_summary.json` 當日收盤價，透過 `mergeDailyCandles` 去重升冪合併，重新計算指標並持久化沉澱至 IndexedDB，100% 杜絕圖表全空破圖。
+>   - **無效標的代碼智慧診斷與指引**：在戰情室精確標註「⚠️ 查無此台股標的代碼，請確認代碼是否輸入正確（如 00403A、2330）」，消除使用者對系統故障之猜忌。
+> - **V8.64.0 AI 主力戰情室單一真實數據來源校準、淘汰衝突硬編碼假資料與優雅 Empty State**（ADR 0152, Spec 0152, Issue #133）。
+> **品質狀態**：全量單元測試 **1,213/1,213 通過 (100% Passed / 141 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過 (11.15s)。
 
 ---
 
@@ -17,11 +15,11 @@
 
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
-- **當前工作分支**：`main` (PR #126 已完成 Squash & Merge 合併，本地分支已全量清理)
-- **單元測試套件**：**1,180/1,180 通過 (139 test suites / 100% 綠燈)**
+- **當前工作分支**：`feature/136-compact-history-indexeddb-hydration`
+- **單元測試套件**：**1,213/1,213 通過 (141 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V8.62.0**
+- **當前釋出版本**：**V8.65.0**
 - **工作區與分支整潔度**：工作區 100% clean，本地過期 feature 分支已全數刪除，專案臨時備份檔案已全量清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
