@@ -1971,5 +1971,32 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **TermTooltip Anti-Crop & Max Height Guard (字典說明視窗最大高度限制與平滑滾動保護)**:
   - 設定 `maxHeight: '280px'` 與 `overflowY: 'auto'`，搭配細緻暗色自定義滾動條，確保長文案在任何視窗解析度下絕不遭裁切，並杜絕大面積覆蓋底層走勢圖表。
 
+### AI 主力戰情室真實數據連動與視覺對齊重構 *(新增於 V8.63.0 / Spec #0151 / ADR #0151 / Issue #131)*
+
+- **Adaptive Dynamic Fallback & Base Price Scaling (數據管線自適應連動與基準價等比縮放)**:
+  - 核心模組：`src/engine/aiForceDashboardEngine.ts`。
+  - 徹底根除 `createDefaultAiForceReport` 寫死 2,290 元致茂假資料殘留，支援 `basePrice` 與 `realtimeQuote` 動態注入。
+  - 標的（如 `0050`）日 K 不足 5 根時，自動以即時報價（或基準價）為原點，等比例動態生成開高低收、成交量、支撐壓力帶、成交量熱區（Volume Profile）、預測扇形（Forecast Cone）與 VWAP 成本，保證 18 張卡片數值與頂部 MarketBar 100% 同步連動。
+
+- **KLine Temporal Direction Normalization (卡片 01 主力 K 線時間軸升冪校正)**:
+  - 核心模組：`src/components/aiForceDashboard/cards/KLineChartCard.tsx`。
+  - 實作 `normalizeAndSortCandles` 純函式，強制數列依據時間戳記由舊到新（升冪）排列，校正示範資料生成迴圈（09/01 ➔ 09/30），確保左側為歷史軌跡、右側為最新交易日，嚴格對齊專業金融技術線圖標準。
+
+- **Multi-Dimension Radar Chart Magnification (卡片 03 六角雷達圖尺寸與清晰度放大)**:
+  - 核心模組：`src/components/aiForceDashboard/cards/MultiDimensionRadarCard.tsx`。
+  - 建立 `RADAR_CHART_CONFIG` 集中管理圖表規格，有效半徑由 70px 擴大至 100px。
+  - 維度標籤（法人、趨勢、籌碼、流動、波動、動能）放大至 13px 加粗高對比，數值提升至 12px 科技藍高亮，中心綜合評級字級等比擴展，大幅提升可讀性與判讀效率。
+
+- **Health Gauge Doughnut Expansion & High Density (卡片 11 健康度綜合評估甜甜圈飽滿化)**:
+  - 核心模組：`src/components/aiForceDashboard/cards/HealthSummaryCard.tsx`。
+  - 建立 `DONUT_GAUGE_CONFIG`，圓環外直徑由 54px 擴大至 78px（半徑 31px、線寬 7px）。
+  - 中心健康度百分比放大至 15px，下方項目文字 0.82rem，縮減圖形水平間距無重疊，實現飽滿緊湊的專業儀表板視覺對齊。
+
+- **Main Force Verdict Equal Height & Bento Visual Hierarchy (卡片 18 總評判等高齊平與層次重構)**:
+  - 核心模組：`src/components/aiForceDashboard/cards/MainForceVerdictCard.tsx`、`src/components/aiForceDashboard/AiForceDashboardView.tsx`。
+  - Card 18 根容器與 Row 6 Grid 子項目設定 `height: 100%`，與 Card 16（籌碼集中度）、Card 17（多空力道平衡）底部完美齊平。
+  - 實作 `parseVerdictMetrics` 提煉「5日法人合計」、「20日 VWAP 乖離」、「RSI 強度」關鍵數據膠囊，重構為「頂部多空狀態 ➔ 核心決策看板 ➔ 量化指標膠囊 ➔ AI 深度論述」之層次分明排版。
+
+
 
 
