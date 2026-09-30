@@ -3,13 +3,24 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1176%2F1176%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1213%2F1213%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 全市場歷史日 K 本地緊湊快取注入 IndexedDB 與 Yahoo 代理防限流降級 (`Compact History IndexedDB Hydration & Yahoo Proxy Resilience`) *(V8.65.0 全新發布)*
+
+- **按需緊湊歷史日 K 提取與單例記憶體快取 (`On-Demand Compact History Hydration & Cache`)**：
+  - 在 `marketCacheLoader.ts` 中實作 `loadSymbolCompactHistory`，按需從 `tw_market_ohlcv_compact.json` (17.5MB) 解析特定標的並格式化為標準 `DailyCandle`。
+  - 導入單例記憶體 Promise 快取機制，避免多次重複發送 HTTP 請求與重複反序列化；失敗時自動重置支援後續自癒。
+- **歷史日 K 與當日盤後收盤無縫合流 (`History + Daily Summary Fusion & 429 Fast-Fail`)**：
+  - 於 `vite.config.ts` 的 `/api/yahoo` 加入桌面 Chrome User-Agent 與 Referer 標頭，降低被限流機率。
+  - 當外部 Yahoo API 遭遇 429 限流或斷網且 IndexedDB 歷史不足時，自動調用本地 compact 歷史日 K 與每日 16:00 盤後更新之 `tw_market_summary.json` 當日收盤價，透過 `mergeDailyCandles` 去重升冪合併，重新計算指標並持久化沉澱至 IndexedDB，提供 100% 不破圖、不空白之本機高可用底座。
+- **無效標的代碼智慧診斷與指引 (`Invalid Symbol Diagnosis & Adaptive Guidance`)**：
+  - 當使用者輸入查無資料且無官方名稱之代碼（如筆誤之 `004EA`）時，系統明確標註「⚠️ 查無此台股標的代碼，請確認代碼是否輸入正確（如 00403A、2330）」，消除使用者對系統故障之猜忌。
 
 ### 0. AI 主力戰情室單一真實數據來源校準、淘汰衝突硬編碼假資料與優雅 Empty State (`AI Force Real Data SSOT & Empty State`) *(V8.64.0)*
 

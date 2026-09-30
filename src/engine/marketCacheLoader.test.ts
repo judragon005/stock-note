@@ -113,4 +113,123 @@ describe('MarketCacheLoader (前端快取秒讀與 IndexedDB 沉澱引擎)', () 
     await syncMarketCacheToIndexedDB(emptySummary);
     expect(saveOhlcvSpy).not.toHaveBeenCalled();
   });
+
+  describe('Ticket 01: loadSymbolCompactHistory & getLatestSummaryQuote (本地緊湊日 K 載入)', () => {
+    it('應能從 compact JSON 中精準提取指定標的歷史日 K 並格式化為 DailyCandle[]', async () => {
+      // @ts-ignore
+      const { loadSymbolCompactHistory, resetCompactHistoryCache } = await import('./marketCacheLoader');
+      if (resetCompactHistoryCache) resetCompactHistoryCache();
+
+      const mockCompactData = {
+        '00403A': [
+          { d: '2026-09-14', o: 10.17, h: 10.17, l: 10.17, c: 10.17, v: 0 },
+          { d: '2026-09-15', o: 10.04, h: 10.13, l: 10.02, c: 10.03, v: 44852439 },
+        ],
+      };
+
+      // @ts-ignore
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => mockCompactData,
+      });
+
+      const candles = await loadSymbolCompactHistory('00403A');
+      expect(candles).toBeDefined();
+      expect(candles?.length).toBe(2);
+      expect(candles?.[0]).toEqual({
+        date: '2026-09-14',
+        open: 10.17,
+        high: 10.17,
+        low: 10.17,
+        close: 10.17,
+        volume: 0,
+      });
+      expect(candles?.[1]).toEqual({
+        date: '2026-09-15',
+        open: 10.04,
+        high: 10.13,
+        low: 10.02,
+        close: 10.03,
+        volume: 44852439,
+      });
+    });
+
+    it('連續調用時應走單例記憶體快取，不重複發送 fetch 請求', async () => {
+      // @ts-ignore
+      const { loadSymbolCompactHistory, resetCompactHistoryCache } = await import('./marketCacheLoader');
+      if (resetCompactHistoryCache) resetCompactHistoryCache();
+
+      const mockCompactData = {
+        '2330': [{ d: '2026-09-15', o: 1000, h: 1020, l: 995, c: 1015, v: 45000 }],
+        '0050': [{ d: '2026-09-15', o: 190, h: 192, l: 189, c: 191, v: 12000 }],
+      };
+
+      const fetchSpy = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => mockCompactData,
+      });
+      // @ts-ignore
+      global.fetch = fetchSpy;
+
+      const c1 = await loadSymbolCompactHistory('2330');
+      const c2 = await loadSymbolCompactHistory('0050');
+
+      expect(c1?.[0].close).toBe(1015);
+      expect(c2?.[0].close).toBe(191);
+      // 確保只調用了一次 fetch 取得整份 compact 表
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('若標的不在 compact 快取中，應安全回傳 null', async () => {
+      // @ts-ignore
+      const { loadSymbolCompactHistory, resetCompactHistoryCache } = await import('./marketCacheLoader');
+      if (resetCompactHistoryCache) resetCompactHistoryCache();
+
+      // @ts-ignore
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ '2330': [] }),
+      });
+
+      const candles = await loadSymbolCompactHistory('999999');
+      expect(candles).toBeNull();
+    });
+
+    it('getLatestSummaryQuote 應能從當日 summary 快取提取該標的最新日 K', async () => {
+      // @ts-ignore
+      const { getLatestSummaryQuote } = await import('./marketCacheLoader');
+
+      const mockSummary: MarketCacheSummary = {
+        date: '2026-09-30',
+        updatedAt: Date.now(),
+        market: 'TW',
+        totalSymbols: 1,
+        durationMs: 100,
+        stocks: {
+          '00403A': {
+            symbol: '00403A',
+            name: '統一升級50',
+            date: '2026-09-30',
+            quote: { date: '2026-09-30', open: 10.83, high: 10.9, low: 10.78, close: 10.79, volume: 144635371 },
+          },
+        },
+      };
+
+      // @ts-ignore
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => mockSummary,
+      });
+
+      const quote = await getLatestSummaryQuote('00403A');
+      expect(quote).toEqual({
+        date: '2026-09-30',
+        open: 10.83,
+        high: 10.9,
+        low: 10.78,
+        close: 10.79,
+        volume: 144635371,
+      });
+    });
+  });
 });

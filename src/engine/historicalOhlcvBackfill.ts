@@ -10,6 +10,7 @@ import {
   saveSymbolIndicators,
 } from '../utils/db';
 import { logger } from '../utils/logger';
+import { loadSymbolCompactHistory, getLatestSummaryQuote } from './marketCacheLoader';
 
 // 預設快取新鮮度：當日已收盤或 6 小時內不重複請求外部全量
 const CACHE_FRESHNESS_MS = 6 * 60 * 60 * 1000;
@@ -121,8 +122,56 @@ export async function backfillSymbolOhlcvAndIndicators(
     }
   }
 
-  // 若所有候選皆無新資料，嘗試退回讀取本地舊快取；若無舊快取則啟動保底合成日 K 防禦
+  // 若所有候選皆無新資料，嘗試退回讀取本地舊快取；若無舊快取或長度不足則啟動本地 compact 資料庫合流
   if (fetchedCandles.length === 0) {
+    if (existingStoreCandles.length >= 5) {
+      return {
+        candles: existingStoreCandles,
+        indicators: calculateMuscleBookerIndicators(existingStoreCandles),
+      };
+    }
+
+    // Ticket 02: 優先嘗試從本地緊湊歷史日 K 與當日盤後 summary 合流回補 (Spec 0154)
+    if (market === 'TW') {
+      try {
+        const compactCandles = await loadSymbolCompactHistory(cleanSymbol);
+        const latestQuote = await getLatestSummaryQuote(cleanSymbol);
+
+        let mergedLocal = compactCandles || [];
+        if (latestQuote) {
+          mergedLocal = mergeDailyCandles(mergedLocal, [latestQuote]);
+        }
+        if (existingStoreCandles.length > 0) {
+          mergedLocal = mergeDailyCandles(mergedLocal, existingStoreCandles);
+        }
+
+        if (mergedLocal.length > 0) {
+          const indicators = calculateMuscleBookerIndicators(mergedLocal);
+          try {
+            await saveSymbolOhlcv({
+              symbol: cleanSymbol,
+              market,
+              candles: mergedLocal,
+              updatedAt: Date.now(),
+            });
+            await saveSymbolIndicators({
+              symbol: cleanSymbol,
+              market,
+              points: indicators,
+              updatedAt: Date.now(),
+            });
+          } catch (saveErr) {
+            logger.warn(`Failed to persist compact OHLCV for ${cleanSymbol}:`, saveErr);
+          }
+
+          return { candles: mergedLocal, indicators };
+        }
+      } catch (compactErr) {
+        logger.warn(`Failed to load local compact history for ${cleanSymbol}:`, compactErr);
+      }
+    }
+
+    // 若本地已有舊快取 (即使少於 5 根)，優先返回真實舊快取，絕不偽造
     if (existingStoreCandles.length > 0) {
       return {
         candles: existingStoreCandles,

@@ -111,7 +111,6 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       // 4. 以真實數據合成 18 張卡片 Report (含法人籌碼動態連動，>= 1 根即可進行最後已知日 K 定錨)
       if (candles.length >= 1) {
         const fullReport = generateAiForceReportFromCandles(
-
           targetSymbol,
           resolvedName,
           targetMarket,
@@ -119,6 +118,9 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           quote || undefined,
           institutionalRecords
         );
+        if (!quote && targetMarket === 'TW') {
+          fullReport.marketBar.dataSourceText = `本地盤後歷史資料庫 (共 ${candles.length} 日 K)`;
+        }
         setReport(fullReport);
       } else {
         const fallback = createDefaultAiForceReport(targetSymbol, resolvedName, targetMarket, quote?.price);
@@ -130,6 +132,8 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           if (quote.high !== undefined) fallback.marketBar.highPrice = quote.high;
           if (quote.low !== undefined) fallback.marketBar.lowPrice = quote.low;
           if (quote.volume !== undefined) fallback.marketBar.volumeShares = quote.volume;
+        } else if (resolvedName === targetSymbol) {
+          fallback.marketBar.dataSourceText = `⚠️ 查無此台股標的代碼 (${targetSymbol})，請確認代碼是否輸入正確（如 00403A、2330）`;
         }
         setReport(fallback);
       }

@@ -84,3 +84,81 @@ export async function syncMarketCacheToIndexedDB(
     }
   }
 }
+
+/**
+ * 緊湊日 K 原始結構 { d, o, h, l, c, v }
+ */
+export interface RawCompactCandle {
+  d: string;
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+  v: number;
+}
+
+let compactHistoryPromise: Promise<Record<string, RawCompactCandle[]> | null> | null = null;
+
+/**
+ * 重設緊湊日 K 記憶體快取 (僅供測試或強制重載調用)
+ */
+export function resetCompactHistoryCache(): void {
+  compactHistoryPromise = null;
+}
+
+/**
+ * 按需載入台股全市場緊湊歷史日 K 數列並提取特定標的 (單例請求防重複)
+ */
+export async function loadSymbolCompactHistory(
+  symbol: string
+): Promise<DailyCandle[] | null> {
+  const cleanSym = symbol.replace(/\.(TW|TWO)$/i, '').trim().toUpperCase();
+
+  if (!compactHistoryPromise) {
+    compactHistoryPromise = (async () => {
+      try {
+        const res = await fetch('/market-cache/tw_market_ohlcv_compact.json');
+        if (!res.ok) {
+          logger.warn(`無法讀取 tw_market_ohlcv_compact.json (HTTP ${res.status})`);
+          compactHistoryPromise = null;
+          return null;
+        }
+        const data: Record<string, RawCompactCandle[]> = await res.json();
+        return data;
+      } catch (err) {
+        logger.warn('載入 tw_market_ohlcv_compact.json 失敗:', err);
+        compactHistoryPromise = null;
+        return null;
+      }
+    })();
+  }
+
+  const allCompact = await compactHistoryPromise;
+  if (!allCompact || !allCompact[cleanSym] || allCompact[cleanSym].length === 0) {
+    return null;
+  }
+
+  return allCompact[cleanSym].map((c) => ({
+    date: c.d,
+    open: c.o,
+    high: c.h,
+    low: c.l,
+    close: c.c,
+    volume: c.v,
+  }));
+}
+
+/**
+ * 從每日盤後總表快取取得標的當日最新單筆行情 (若存在)
+ */
+export async function getLatestSummaryQuote(
+  symbol: string
+): Promise<DailyCandle | null> {
+  const cleanSym = symbol.replace(/\.(TW|TWO)$/i, '').trim().toUpperCase();
+  const summary = await loadMarketCacheSummary('TW');
+  if (!summary || !summary.stocks) return null;
+
+  const stock = summary.stocks[cleanSym] || summary.stocks[symbol];
+  return stock?.quote || null;
+}
+
