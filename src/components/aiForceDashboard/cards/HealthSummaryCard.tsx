@@ -56,6 +56,14 @@ export function calculateOverallHealthScore(data: {
   return { averageScore, ratingLabel };
 }
 
+export const DONUT_GAUGE_CONFIG = {
+  size: 78,
+  radius: 31,
+  strokeWidth: 7,
+  percentFontSize: '15px',
+  labelFontSize: '0.82rem',
+};
+
 interface GaugeItemProps {
   label: string;
   percent: number;
@@ -64,34 +72,35 @@ interface GaugeItemProps {
 }
 
 const SingleGauge: React.FC<GaugeItemProps> = ({ label, percent, color, termId }) => {
-  const radius = 21;
+  const { size, radius, strokeWidth, percentFontSize, labelFontSize } = DONUT_GAUGE_CONFIG;
   const { circumference, strokeDashoffset, clamped } = calculateCircleProgress(percent, radius);
+  const centerCoord = size / 2;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
-      <div style={{ position: 'relative', width: '54px', height: '54px' }}>
-        <svg width="54" height="54" viewBox="0 0 54 54">
+      <div style={{ position: 'relative', width: `${size}px`, height: `${size}px` }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
           {/* 背景軌道 */}
           <circle
-            cx="27"
-            cy="27"
+            cx={centerCoord}
+            cy={centerCoord}
             r={radius}
             fill="transparent"
             stroke="rgba(255, 255, 255, 0.08)"
-            strokeWidth="4"
+            strokeWidth={strokeWidth}
           />
           {/* 進度環 */}
           <circle
-            cx="27"
-            cy="27"
+            cx={centerCoord}
+            cy={centerCoord}
             r={radius}
             fill="transparent"
             stroke={color}
-            strokeWidth="4"
+            strokeWidth={strokeWidth}
             strokeDasharray={`${circumference} ${circumference}`}
             strokeDashoffset={strokeDashoffset}
             strokeLinecap="round"
-            transform="rotate(-90 27 27)"
+            transform={`rotate(-90 ${centerCoord} ${centerCoord})`}
             style={{ transition: 'stroke-dashoffset 0.6s ease' }}
           />
         </svg>
@@ -103,17 +112,20 @@ const SingleGauge: React.FC<GaugeItemProps> = ({ label, percent, color, termId }
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '12px',
+            fontSize: percentFontSize,
             fontWeight: 800,
             fontFamily: 'monospace',
             color: '#f8fafc',
+            letterSpacing: '-0.3px',
           }}
         >
           {clamped}%
         </div>
       </div>
       <TermTooltip termId={termId}>
-        <span style={{ fontSize: '0.72rem', color: '#cbd5e1', whiteSpace: 'nowrap', fontWeight: 600 }}>{label}</span>
+        <span style={{ fontSize: labelFontSize, color: '#e2e8f0', whiteSpace: 'nowrap', fontWeight: 700, letterSpacing: '0.2px' }}>
+          {label}
+        </span>
       </TermTooltip>
     </div>
   );

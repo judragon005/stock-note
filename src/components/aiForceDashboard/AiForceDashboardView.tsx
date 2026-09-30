@@ -59,6 +59,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
     setSymbol(targetSymbol);
     setMarket(targetMarket);
     const resolvedName = resolveOfficialSecurityName(targetSymbol, targetMarket) || targetSymbol;
+    let quote: any = undefined;
 
     try {
       // 1. 同步拉取歷史日 K (至少 60~180 根，支援本地 IndexedDB 快取與增量更新)
@@ -66,7 +67,6 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       const candles = res?.candles || [];
 
       // 2. 嘗試抓取即時行情 (若失敗則由最新一根日 K 自適應)
-      let quote: any = undefined;
       try {
         quote = await fetchStockQuote(targetSymbol, targetMarket);
       } catch {
@@ -117,11 +117,21 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         );
         setReport(fullReport);
       } else {
-        setReport(createDefaultAiForceReport(targetSymbol, resolvedName, targetMarket));
+        const fallback = createDefaultAiForceReport(targetSymbol, resolvedName, targetMarket, quote?.price);
+        if (quote) {
+          fallback.marketBar.currentPrice = quote.price;
+          if (quote.change !== undefined) fallback.marketBar.change = quote.change;
+          if (quote.changePercent !== undefined) fallback.marketBar.changePercent = quote.changePercent;
+          if (quote.open !== undefined) fallback.marketBar.openPrice = quote.open;
+          if (quote.high !== undefined) fallback.marketBar.highPrice = quote.high;
+          if (quote.low !== undefined) fallback.marketBar.lowPrice = quote.low;
+          if (quote.volume !== undefined) fallback.marketBar.volumeShares = quote.volume;
+        }
+        setReport(fallback);
       }
     } catch (err) {
       logger.warn(`Failed to backfill data for ${targetSymbol}, falling back to default:`, err);
-      setReport(createDefaultAiForceReport(targetSymbol, resolvedName, targetMarket));
+      setReport(createDefaultAiForceReport(targetSymbol, resolvedName, targetMarket, quote?.price));
     } finally {
       setIsLoading(false);
     }
@@ -293,17 +303,17 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             }}
           >
             {/* 16 買賣力分布圖 */}
-            <div style={{ minWidth: 0 }}>
+            <div style={{ minWidth: 0, height: '100%' }}>
               <ForceDistributionCard data={report.forceDistribution} />
             </div>
 
             {/* 17 多空強度分布 */}
-            <div style={{ minWidth: 0 }}>
+            <div style={{ minWidth: 0, height: '100%' }}>
               <BullBearStrengthCard data={report.bullBearStrength} />
             </div>
 
             {/* 18 主力追蹤總評判 (MLP-AI) */}
-            <div style={{ minWidth: 0 }}>
+            <div style={{ minWidth: 0, height: '100%' }}>
               <MainForceVerdictCard data={report.mainForceVerdict} />
             </div>
           </div>

@@ -184,6 +184,47 @@ export function calculateKeyLevelOverlays(
   return result;
 }
 
+/**
+ * 正規化並按日期升冪排序 K 棒數列 (左側為歷史、右側為最新)
+ */
+export function normalizeAndSortCandles(candles?: KlineCandleItem[]): KlineCandleItem[] {
+  if (candles && candles.length >= 5) {
+    return [...candles].sort((a, b) => a.date.localeCompare(b.date));
+  }
+  const synthetic: KlineCandleItem[] = [];
+  let basePrice = 2100;
+  // 嚴格升冪生成：從 1 到 30 (09/01 ➔ 09/30)
+  for (let i = 1; i <= 30; i++) {
+    const isUp = i % 2 === 0;
+    const change = (i * 7) % 35;
+    const open = basePrice;
+    const close = isUp ? open + change : open - change;
+    const high = Math.max(open, close) + 15;
+    const low = Math.min(open, close) - 15;
+    const volume = 1200 + ((i * 123) % 1800);
+    basePrice = close;
+    synthetic.push({
+      date: `09/${i < 10 ? '0' + i : i}`,
+      open,
+      high,
+      low,
+      close,
+      volume,
+      ma5: close * 0.98,
+      ma10: close * 0.96,
+      ma20: 2130,
+      ma60: 2050,
+      k: 50 + (i % 20),
+      d: 48 + (i % 18),
+      dif: (i % 10) - 5,
+      macd: (i % 8) - 4,
+      macdHist: (i % 6) - 3,
+      rsi: 45 + (i % 30),
+    });
+  }
+  return synthetic;
+}
+
 export interface KLineChartCardProps {
   data: KlineSystemData;
   colorTheme?: ColorThemeMode;
@@ -197,42 +238,9 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
   const [subchartMode, setSubchartMode] = useState<SubchartIndicatorMode>('VOL');
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
-  // 1. 若無真實歷史資料，建立 30 根示範 K 線
+  // 1. 若無真實歷史資料，建立 30 根示範 K 線，並強制按日期升冪排序
   const rawCandles = useMemo(() => {
-    if (data.candles && data.candles.length >= 5) {
-      return data.candles;
-    }
-    const synthetic: KlineCandleItem[] = [];
-    let basePrice = 2100;
-    for (let i = 30; i >= 1; i--) {
-      const isUp = i % 2 === 0;
-      const change = (i * 7) % 35;
-      const open = basePrice;
-      const close = isUp ? open + change : open - change;
-      const high = Math.max(open, close) + 15;
-      const low = Math.min(open, close) - 15;
-      const volume = 1200 + ((i * 123) % 1800);
-      basePrice = close;
-      synthetic.push({
-        date: `09/${i < 10 ? '0' + i : i}`,
-        open,
-        high,
-        low,
-        close,
-        volume,
-        ma5: close * 0.98,
-        ma10: close * 0.96,
-        ma20: 2130,
-        ma60: 2050,
-        k: 50 + (i % 20),
-        d: 48 + (i % 18),
-        dif: (i % 10) - 5,
-        macd: (i % 8) - 4,
-        macdHist: (i % 6) - 3,
-        rsi: 45 + (i % 30),
-      });
-    }
-    return synthetic;
+    return normalizeAndSortCandles(data.candles);
   }, [data.candles]);
 
   // 2. 依據週期切片提取當前檢視蠟燭

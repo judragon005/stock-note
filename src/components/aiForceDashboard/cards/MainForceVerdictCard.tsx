@@ -39,6 +39,54 @@ export function getVerbBadgeColor(verb: string): { color: string; bg: string; bo
   };
 }
 
+export interface MetricCapsule {
+  label: string;
+  value: string;
+  color?: string;
+}
+
+/**
+ * 從 AI 結論文字中提取結構化量化數據指標
+ */
+export function parseVerdictMetrics(text: string): MetricCapsule[] {
+  const metrics: MetricCapsule[] = [];
+
+  // 法人累計匹配
+  const instMatch = text.match(/法人近\s*5\s*日合計\s*([+-]?\d+)\s*張/);
+  if (instMatch) {
+    const val = Number(instMatch[1]);
+    metrics.push({
+      label: '5日法人合計',
+      value: `${val > 0 ? '+' : ''}${val.toLocaleString()} 張`,
+      color: val > 0 ? '#ef4444' : val < 0 ? '#10b981' : '#94a3b8',
+    });
+  }
+
+  // VWAP 偏離匹配
+  const vwapMatch = text.match(/VWAP\s*([+-]?\d+(?:\.\d+)?%)/i);
+  if (vwapMatch) {
+    const val = vwapMatch[1];
+    const isPos = val.startsWith('+');
+    metrics.push({
+      label: '20日 VWAP 乖離',
+      value: val,
+      color: isPos ? '#f59e0b' : '#38bdf8',
+    });
+  }
+
+  // RSI 匹配
+  const rsiMatch = text.match(/RSI\s*(\d+(?:\.\d+)?)/i);
+  if (rsiMatch) {
+    metrics.push({
+      label: 'RSI 強度',
+      value: rsiMatch[1],
+      color: '#38bdf8',
+    });
+  }
+
+  return metrics;
+}
+
 export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data }) => {
   const [showModal, setShowModal] = useState(false);
 
@@ -49,6 +97,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
     'AI 結論：經 5 日主力行為綜合研判（法人近 5 日合計 -64 張、收盤相對 20 日 VWAP +7.5%、RSI 60），法人小幅調節，短線宜區間操作。';
 
   const verbStyle = getVerbBadgeColor(verb);
+  const metricCapsules = parseVerdictMetrics(verdictText);
 
   return (
     <div
@@ -61,12 +110,15 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
         padding: '16px 20px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '12px',
+        justifyContent: 'space-between',
+        height: '100%',
+        boxSizing: 'border-box',
+        gap: '10px',
         boxShadow: '0 8px 32px rgba(0, 0, 0, 0.35)',
         position: 'relative',
       }}
     >
-      {/* 頂部標題與選單圖示 */}
+      {/* 1. 頂部：標題與法人動作狀態徽章 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '18px' }}>🔮</span>
@@ -76,27 +128,49 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
             </h3>
           </TermTooltip>
         </div>
-        <MoreVertical size={14} style={{ color: '#64748b', cursor: 'pointer' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            type="button"
+            onClick={() => setShowModal(!showModal)}
+            style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              padding: '3px 10px',
+              borderRadius: '6px',
+              backgroundColor: 'rgba(56, 189, 248, 0.15)',
+              color: '#38bdf8',
+              border: '1px solid rgba(56, 189, 248, 0.4)',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            {tag}
+          </button>
+          <MoreVertical size={14} style={{ color: '#64748b', cursor: 'pointer' }} />
+        </div>
       </div>
 
-      {/* 醒目超大字核心語意看板與法人動作按鈕 */}
+      {/* 2. 中部：核心主力語意發光看板 */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '6px 0',
+          padding: '8px 14px',
+          background: 'rgba(15, 23, 42, 0.4)',
+          borderRadius: '10px',
+          border: `1px solid ${verbStyle.border}`,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <TermTooltip termId="mlpSemanticVerdict">
-            <span style={{ fontSize: '16px', color: '#ffffff', fontWeight: 700, cursor: 'help' }}>主力語意：</span>
+            <span style={{ fontSize: '14px', color: '#94a3b8', fontWeight: 700, cursor: 'help' }}>主力核心語意</span>
           </TermTooltip>
           <TermTooltip termId="mlpSemanticVerdict">
             <span
               style={{
                 fontSize: '22px',
-                fontWeight: 800,
+                fontWeight: 900,
                 color: verbStyle.color,
                 letterSpacing: '1px',
                 textShadow: `0 0 16px ${verbStyle.color}60`,
@@ -108,42 +182,66 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
           </TermTooltip>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowModal(!showModal)}
-          style={{
-            fontSize: '12px',
-            fontWeight: 600,
-            padding: '5px 14px',
-            borderRadius: '8px',
-            backgroundColor: 'rgba(56, 189, 248, 0.15)',
-            color: '#38bdf8',
-            border: '1px solid rgba(56, 189, 248, 0.4)',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-          }}
-        >
-          {tag}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span
+            style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: verbStyle.color,
+              boxShadow: `0 0 8px ${verbStyle.color}`,
+            }}
+          />
+          <span style={{ fontSize: '11px', color: verbStyle.color, fontWeight: 700 }}>
+            {verb.includes('進貨') || verb.includes('買') ? '偏多集結' : verb.includes('調節') ? '區間警戒' : '防禦觀望'}
+          </span>
+        </div>
       </div>
 
-      {/* 完整 AI 研判結論文字 */}
-      <TermTooltip termId="mlpSemanticVerdict">
-        <div
-          style={{
-            fontSize: '12px',
-            lineHeight: 1.6,
-            color: '#cbd5e1',
-            padding: '10px 12px',
-            backgroundColor: 'rgba(15, 23, 42, 0.5)',
-            borderRadius: '8px',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
-            cursor: 'help',
-          }}
-        >
-          {verdictText}
-        </div>
-      </TermTooltip>
+      {/* 3. 底層：結構化關鍵指標膠囊 + 完整 AI 論述 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {metricCapsules.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            {metricCapsules.map((m, idx) => (
+              <div
+                key={idx}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  fontSize: '11px',
+                }}
+              >
+                <span style={{ color: '#94a3b8' }}>{m.label}:</span>
+                <span style={{ color: m.color || '#38bdf8', fontWeight: 700, fontFamily: 'monospace' }}>
+                  {m.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <TermTooltip termId="mlpSemanticVerdict">
+          <div
+            style={{
+              fontSize: '12px',
+              lineHeight: 1.6,
+              color: '#cbd5e1',
+              padding: '10px 12px',
+              backgroundColor: 'rgba(15, 23, 42, 0.5)',
+              borderRadius: '8px',
+              border: '1px solid rgba(255, 255, 255, 0.05)',
+              cursor: 'help',
+            }}
+          >
+            {verdictText}
+          </div>
+        </TermTooltip>
+      </div>
 
       {/* 法人動作彈窗 / 浮層 */}
       {showModal && (

@@ -36,9 +36,32 @@ export {
 export function createDefaultAiForceReport(
   symbol: string = '2360',
   name: string = '致茂',
-  market: MarketType = 'TW'
+  market: MarketType = 'TW',
+  basePrice?: number
 ): AiForceDashboardReport {
   const todayStr = new Date().toISOString().split('T')[0];
+
+  let price = 2290.0;
+  if (basePrice !== undefined && basePrice > 0) {
+    price = basePrice;
+  } else if (symbol === '0050') {
+    price = 195.0;
+  } else if (symbol === '2330') {
+    price = 980.0;
+  } else if (symbol !== '2360') {
+    price = 150.0;
+  }
+
+  const isDefault2360 = symbol === '2360' && price === 2290.0;
+  const change = isDefault2360 ? 205.0 : Number((price * 0.012).toFixed(2));
+  const changePercent = isDefault2360 ? 9.83 : 1.2;
+  const openPrice = isDefault2360 ? 2135.0 : Number((price * 0.99).toFixed(2));
+  const highPrice = isDefault2360 ? 2290.0 : Number((price * 1.015).toFixed(2));
+  const lowPrice = isDefault2360 ? 2135.0 : Number((price * 0.985).toFixed(2));
+  const highResistance = isDefault2360 ? 2490.0 : Number((price * 1.08).toFixed(2));
+  const mainForceCost = isDefault2360 ? 2130.65 : Number((price * 0.96).toFixed(2));
+  const supportLevel = isDefault2360 ? 1875.0 : Number((price * 0.92).toFixed(2));
+  const supportLower = isDefault2360 ? 1730.0 : Number((price * 0.88).toFixed(2));
 
   return {
     symbol,
@@ -48,14 +71,14 @@ export function createDefaultAiForceReport(
     activeTaskTab: 'TASK_1_COMPREHENSIVE',
 
     marketBar: {
-      currentPrice: 2290.0,
-      change: 205.0,
-      changePercent: 9.83,
+      currentPrice: price,
+      change,
+      changePercent,
       volumeShares: 2681,
       transactionCount: 6260,
-      openPrice: 2135.0,
-      highPrice: 2290.0,
-      lowPrice: 2135.0,
+      openPrice,
+      highPrice,
+      lowPrice,
       latestTradingDate: todayStr,
       dataPointsCount: 98,
       dataSourceText: '日 K TWSE | 法人 TWSE | 融資券 FinMind',
@@ -73,9 +96,9 @@ export function createDefaultAiForceReport(
     klineSystem: {
       candles: [],
       keyLevels: {
-        highResistance: 2490.0,
-        mainForceCost: 2130.65,
-        supportLevel: 1875.0,
+        highResistance,
+        mainForceCost,
+        supportLevel,
       },
     },
 
@@ -88,8 +111,8 @@ export function createDefaultAiForceReport(
       dayTradeRiskPercent: 53,
       chipHealthScore: 55,
       chipHealthLabel: '普通',
-      supportRange: [1875.0, 1730.0],
-      resistanceRange: [2490.0, 2490.0],
+      supportRange: [supportLevel, supportLower],
+      resistanceRange: [highResistance, highResistance],
       riskHorizonDays: '1~4 個交易日',
     },
 
@@ -107,13 +130,21 @@ export function createDefaultAiForceReport(
     },
 
     volumeProfile: {
-      buckets: [
-        { label: '壓力區', priceMin: 2350, priceMax: 2490, percentage: 4, type: 'resistance' },
-        { label: '大量成交區', priceMin: 2200, priceMax: 2350, percentage: 17, type: 'heavy' },
-        { label: '密集成交區', priceMin: 2100, priceMax: 2200, percentage: 9, type: 'dense' },
-        { label: '橫平區', priceMin: 2000, priceMax: 2100, percentage: 9, type: 'flat' },
-        { label: '支撐區', priceMin: 1800, priceMax: 2000, percentage: 87, type: 'support' },
-      ],
+      buckets: isDefault2360
+        ? [
+            { label: '壓力區', priceMin: 2350, priceMax: 2490, percentage: 4, type: 'resistance' },
+            { label: '大量成交區', priceMin: 2200, priceMax: 2350, percentage: 17, type: 'heavy' },
+            { label: '密集成交區', priceMin: 2100, priceMax: 2200, percentage: 9, type: 'dense' },
+            { label: '橫平區', priceMin: 2000, priceMax: 2100, percentage: 9, type: 'flat' },
+            { label: '支撐區', priceMin: 1800, priceMax: 2000, percentage: 87, type: 'support' },
+          ]
+        : [
+            { label: '壓力區', priceMin: Number((price * 1.05).toFixed(1)), priceMax: highResistance, percentage: 4, type: 'resistance' },
+            { label: '大量成交區', priceMin: Number((price * 0.98).toFixed(1)), priceMax: Number((price * 1.05).toFixed(1)), percentage: 17, type: 'heavy' },
+            { label: '密集成交區', priceMin: Number((price * 0.94).toFixed(1)), priceMax: Number((price * 0.98).toFixed(1)), percentage: 9, type: 'dense' },
+            { label: '橫平區', priceMin: Number((price * 0.90).toFixed(1)), priceMax: Number((price * 0.94).toFixed(1)), percentage: 9, type: 'flat' },
+            { label: '支撐區', priceMin: supportLower, priceMax: Number((price * 0.90).toFixed(1)), percentage: 87, type: 'support' },
+          ],
       bullBearFooterTag: '多多多多多',
     },
 
@@ -134,15 +165,15 @@ export function createDefaultAiForceReport(
       mainForceDirectionProb: 52,
       annualizedDriftPercent: 19.7,
       timeNodes: [
-        { dayOffset: 0, label: '今日', upperPrice: 2290, medianPrice: 2290, lowerPrice: 2290 },
-        { dayOffset: 3, label: '3日後', upperPrice: 2380, medianPrice: 2310, lowerPrice: 2220 },
-        { dayOffset: 5, label: '5日後', upperPrice: 2440, medianPrice: 2330, lowerPrice: 2180 },
-        { dayOffset: 10, label: '10日後', upperPrice: 2520, medianPrice: 2350, lowerPrice: 2120 },
+        { dayOffset: 0, label: '今日', upperPrice: price, medianPrice: price, lowerPrice: price },
+        { dayOffset: 3, label: '3日後', upperPrice: Number((price * 1.035).toFixed(1)), medianPrice: Number((price * 1.008).toFixed(1)), lowerPrice: Number((price * 0.97).toFixed(1)) },
+        { dayOffset: 5, label: '5日後', upperPrice: Number((price * 1.065).toFixed(1)), medianPrice: Number((price * 1.017).toFixed(1)), lowerPrice: Number((price * 0.95).toFixed(1)) },
+        { dayOffset: 10, label: '10日後', upperPrice: Number((price * 1.10).toFixed(1)), medianPrice: Number((price * 1.026).toFixed(1)), lowerPrice: Number((price * 0.925).toFixed(1)) },
       ],
     },
 
     vwapCostStructure: {
-      mainForceVwap: 2131,
+      mainForceVwap: isDefault2360 ? 2131 : Number((price * 0.96).toFixed(1)),
       biasPercent: 7.5,
       bands: [
         { name: '倉儲區', biasLabel: '>5%', percentage: 38, color: '#f97316' },
@@ -708,9 +739,15 @@ export function generateAiForceReportFromCandles(
 
   // 安全邊界：不足 5 根時安全回退至預設 report
   if (!effectiveCandles || effectiveCandles.length < 5) {
-    const fallback = createDefaultAiForceReport(symbol, name, market);
+    const fallback = createDefaultAiForceReport(symbol, name, market, realtimeQuote?.price);
     if (realtimeQuote?.price) {
       fallback.marketBar.currentPrice = realtimeQuote.price;
+      if (realtimeQuote.change !== undefined) fallback.marketBar.change = realtimeQuote.change;
+      if (realtimeQuote.changePercent !== undefined) fallback.marketBar.changePercent = realtimeQuote.changePercent;
+      if (realtimeQuote.open !== undefined) fallback.marketBar.openPrice = realtimeQuote.open;
+      if (realtimeQuote.high !== undefined) fallback.marketBar.highPrice = realtimeQuote.high;
+      if (realtimeQuote.low !== undefined) fallback.marketBar.lowPrice = realtimeQuote.low;
+      if (realtimeQuote.volume !== undefined) fallback.marketBar.volumeShares = realtimeQuote.volume;
     }
     fallback.marketBar.isSettled = settlement.isSettled;
     fallback.marketBar.anchorTradingDate = settlement.anchorTradingDate;

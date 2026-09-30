@@ -144,9 +144,19 @@ const AXIS_CONFIG = [
   { key: 'momentum', label: '動能', icon: '🚀' },
 ] as const;
 
+export const RADAR_CHART_CONFIG = {
+  center: { x: 160, y: 140 },
+  maxRadius: 100,
+  labelOffset: 26,
+  labelFontSize: 13,
+  scoreFontSize: 12,
+  centerBadgeRadius: 25,
+  gradeFontSize: 17,
+  scoreDetailFontSize: 9.5,
+};
+
 export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = ({ data }) => {
-  const center: Point = { x: 160, y: 135 };
-  const maxRadius = 88;
+  const { center, maxRadius, labelOffset } = RADAR_CHART_CONFIG;
 
   const scoreValues = useMemo(() => {
     return [
@@ -179,7 +189,7 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
   // 計算文字標籤位置 (比 maxRadius 再稍遠一點)
   const labelPositions = useMemo(() => {
     return AXIS_CONFIG.map((cfg, idx) => {
-      const pos = calculateRadarVertex(center, maxRadius + 24, idx, 6);
+      const pos = calculateRadarVertex(center, maxRadius + labelOffset, idx, 6);
       return {
         ...cfg,
         x: pos.x,
@@ -187,7 +197,7 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
         score: scoreValues[idx],
       };
     });
-  }, [center, maxRadius, scoreValues]);
+  }, [center, maxRadius, labelOffset, scoreValues]);
 
   return (
     <div
@@ -325,13 +335,13 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
           ))}
 
           {/* 中心評級微型環 (對齊照片：大字 C + 56/100) */}
-          <circle cx={center.x} cy={center.y} r="22" fill="rgba(15, 23, 42, 0.9)" stroke={gradeStyle.borderColor} strokeWidth="1.5" />
+          <circle cx={center.x} cy={center.y} r={RADAR_CHART_CONFIG.centerBadgeRadius} fill="rgba(15, 23, 42, 0.9)" stroke={gradeStyle.borderColor} strokeWidth="1.5" />
           <text
             x={center.x}
             y={center.y - 1}
             textAnchor="middle"
             fill={gradeStyle.color}
-            fontSize="14"
+            fontSize={RADAR_CHART_CONFIG.gradeFontSize}
             fontWeight="900"
             fontFamily="monospace"
           >
@@ -339,10 +349,10 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
           </text>
           <text
             x={center.x}
-            y={center.y + 12}
+            y={center.y + 13}
             textAnchor="middle"
             fill="#94a3b8"
-            fontSize="8"
+            fontSize={RADAR_CHART_CONFIG.scoreDetailFontSize}
             fontWeight="700"
             fontFamily="monospace"
           >
@@ -356,18 +366,19 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
                 x={lbl.x}
                 y={lbl.y - 4}
                 textAnchor="middle"
-                fill="#94a3b8"
-                fontSize="10"
-                fontWeight="600"
+                fill="#f1f5f9"
+                fontSize={RADAR_CHART_CONFIG.labelFontSize}
+                fontWeight="700"
+                letterSpacing="0.2px"
               >
                 {lbl.label}
               </text>
               <text
                 x={lbl.x}
-                y={lbl.y + 8}
+                y={lbl.y + 11}
                 textAnchor="middle"
                 fill="#38bdf8"
-                fontSize="9.5"
+                fontSize={RADAR_CHART_CONFIG.scoreFontSize}
                 fontWeight="800"
                 fontFamily="monospace"
               >
