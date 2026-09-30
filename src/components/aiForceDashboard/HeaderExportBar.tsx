@@ -26,11 +26,37 @@ export interface HeaderExportBarProps {
   rangeText?: string;
 }
 
+/**
+ * 安全解析並動態綁定匯出列之來源與區間文字 (Ticket 01 - 淘汰死板假數據)
+ */
+export function resolveExportBarTexts(
+  report: AiForceDashboardReport,
+  customSources?: string,
+  customRange?: string
+): { sourcesText: string; rangeText: string } {
+  const sourcesText =
+    customSources ||
+    report.marketBar?.dataSourceText ||
+    '資料來源：日 K TWSE | 法人 TWSE | 融資券 FinMind';
+
+  const rangeText =
+    customRange ||
+    report.marketBar?.dataRangeText ||
+    '歷史行情資料';
+
+  return { sourcesText, rangeText };
+}
+
 export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
   report,
-  sourcesText = '資料來源：日 K TWSE | 法人 TWSE | 融資券 FinMind',
-  rangeText = '區間 2026-05-04 ~ 2026-09-18，共 98 個交易日，法人資料 20 日',
+  sourcesText: customSourcesText,
+  rangeText: customRangeText,
 }) => {
+  const { sourcesText, rangeText } = resolveExportBarTexts(
+    report,
+    customSourcesText,
+    customRangeText
+  );
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -41,6 +67,7 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
       }
     };
   }, []);
+
 
   const handleAction = (id: ExportActionItem['id']) => {
     switch (id) {

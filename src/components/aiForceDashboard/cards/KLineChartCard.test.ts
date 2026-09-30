@@ -9,14 +9,15 @@ import {
   normalizeAndSortCandles,
 } from './KLineChartCard';
 
-describe('KLineChartCard - 時間軸由左至右升冪排序規範 (Ticket 02)', () => {
-  it('示範數列應按日期升冪排列，第一根為 09/01 (過去)，最後一根為 09/30 (最新)', () => {
-    const candles = normalizeAndSortCandles([]);
-    expect(candles.length).toBe(30);
-    expect(candles[0].date).toBe('09/01');
-    expect(candles[candles.length - 1].date).toBe('09/30');
-    expect(candles[0].date < candles[candles.length - 1].date).toBe(true);
+describe('KLineChartCard - 淘汰偽造數列與單一真實來源規範 (Spec 0152 / Ticket 02)', () => {
+  it('當無日 K 資料時，normalizeAndSortCandles 應回傳空陣列，絕不偽造 2100 元或 30 根假 K 棒', () => {
+    const emptyCandles = normalizeAndSortCandles([]);
+    expect(emptyCandles).toEqual([]);
+
+    const undefinedCandles = normalizeAndSortCandles(undefined);
+    expect(undefinedCandles).toEqual([]);
   });
+
 
   it('若傳入倒序的蠟燭數列，應自動依據日期校正為升冪排列 (左舊右新)', () => {
     const reversed = [

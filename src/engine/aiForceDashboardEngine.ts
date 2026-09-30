@@ -37,31 +37,41 @@ export function createDefaultAiForceReport(
   symbol: string = '2360',
   name: string = '致茂',
   market: MarketType = 'TW',
-  basePrice?: number
+  basePrice?: number,
+  referenceDate: Date = new Date()
 ): AiForceDashboardReport {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const settlement = getMarketSettlementStatus(market, referenceDate);
+  const todayStr = settlement.anchorTradingDate;
 
-  let price = 2290.0;
+  // 判定是否處於無歷史資料且無即時行情之待命狀態 (Spec 0152: 淘汰 150 元假數據)
+  const isDataPending =
+    basePrice === undefined &&
+    symbol !== '2360' &&
+    symbol !== '0050' &&
+    symbol !== '2330';
+
+  let price: number | undefined = undefined;
   if (basePrice !== undefined && basePrice > 0) {
     price = basePrice;
   } else if (symbol === '0050') {
     price = 195.0;
   } else if (symbol === '2330') {
     price = 980.0;
-  } else if (symbol !== '2360') {
-    price = 150.0;
+  } else if (symbol === '2360') {
+    price = 2290.0;
   }
 
   const isDefault2360 = symbol === '2360' && price === 2290.0;
-  const change = isDefault2360 ? 205.0 : Number((price * 0.012).toFixed(2));
-  const changePercent = isDefault2360 ? 9.83 : 1.2;
-  const openPrice = isDefault2360 ? 2135.0 : Number((price * 0.99).toFixed(2));
-  const highPrice = isDefault2360 ? 2290.0 : Number((price * 1.015).toFixed(2));
-  const lowPrice = isDefault2360 ? 2135.0 : Number((price * 0.985).toFixed(2));
-  const highResistance = isDefault2360 ? 2490.0 : Number((price * 1.08).toFixed(2));
-  const mainForceCost = isDefault2360 ? 2130.65 : Number((price * 0.96).toFixed(2));
-  const supportLevel = isDefault2360 ? 1875.0 : Number((price * 0.92).toFixed(2));
-  const supportLower = isDefault2360 ? 1730.0 : Number((price * 0.88).toFixed(2));
+  const safePrice = price ?? 100;
+  const change = price !== undefined ? (isDefault2360 ? 205.0 : Number((price * 0.012).toFixed(2))) : undefined;
+  const changePercent = price !== undefined ? (isDefault2360 ? 9.83 : 1.2) : undefined;
+  const openPrice = price !== undefined ? (isDefault2360 ? 2135.0 : Number((price * 0.99).toFixed(2))) : undefined;
+  const highPrice = price !== undefined ? (isDefault2360 ? 2290.0 : Number((price * 1.015).toFixed(2))) : undefined;
+  const lowPrice = price !== undefined ? (isDefault2360 ? 2135.0 : Number((price * 0.985).toFixed(2))) : undefined;
+  const highResistance = price !== undefined ? (isDefault2360 ? 2490.0 : Number((price * 1.08).toFixed(2))) : 0;
+  const mainForceCost = price !== undefined ? (isDefault2360 ? 2130.65 : Number((price * 0.96).toFixed(2))) : 0;
+  const supportLevel = price !== undefined ? (isDefault2360 ? 1875.0 : Number((price * 0.92).toFixed(2))) : 0;
+  const supportLower = price !== undefined ? (isDefault2360 ? 1730.0 : Number((price * 0.88).toFixed(2))) : 0;
 
   return {
     symbol,
@@ -69,29 +79,32 @@ export function createDefaultAiForceReport(
     market,
     updatedAt: todayStr,
     activeTaskTab: 'TASK_1_COMPREHENSIVE',
+    isDataPending,
 
     marketBar: {
       currentPrice: price,
       change,
       changePercent,
-      volumeShares: 2681,
-      transactionCount: 6260,
+      volumeShares: isDataPending ? undefined : (isDefault2360 ? 2681 : 1200),
+      transactionCount: isDataPending ? undefined : (isDefault2360 ? 6260 : 3100),
       openPrice,
       highPrice,
       lowPrice,
-      latestTradingDate: todayStr,
-      dataPointsCount: 98,
-      dataSourceText: '日 K TWSE | 法人 TWSE | 融資券 FinMind',
-      dataRangeText: `${todayStr} 共 98 個交易日，法人資料 20 日`,
-      isSettled: true,
-      anchorTradingDate: todayStr,
+      latestTradingDate: settlement.anchorTradingDate,
+      dataPointsCount: isDataPending ? 0 : (isDefault2360 ? 98 : 30),
+      dataSourceText: market === 'TW' ? '日 K TWSE | 法人 TWSE | 融資券 FinMind' : 'Yahoo Finance',
+      dataRangeText: isDataPending ? '尚無歷史交易日資料' : `${todayStr} 共 ${isDefault2360 ? 98 : 30} 個交易日`,
+      isSettled: settlement.isSettled,
+      anchorTradingDate: settlement.anchorTradingDate,
+      settlementReason: settlement.reason,
       statusBadges: {
         aiScanActive: true,
-        mainForceTracking: true,
+        mainForceTracking: !isDataPending,
         marketStatus: 'NORMAL',
         volatilityAlert: false,
       },
     },
+
 
     klineSystem: {
       candles: [],
@@ -139,11 +152,11 @@ export function createDefaultAiForceReport(
             { label: '支撐區', priceMin: 1800, priceMax: 2000, percentage: 87, type: 'support' },
           ]
         : [
-            { label: '壓力區', priceMin: Number((price * 1.05).toFixed(1)), priceMax: highResistance, percentage: 4, type: 'resistance' },
-            { label: '大量成交區', priceMin: Number((price * 0.98).toFixed(1)), priceMax: Number((price * 1.05).toFixed(1)), percentage: 17, type: 'heavy' },
-            { label: '密集成交區', priceMin: Number((price * 0.94).toFixed(1)), priceMax: Number((price * 0.98).toFixed(1)), percentage: 9, type: 'dense' },
-            { label: '橫平區', priceMin: Number((price * 0.90).toFixed(1)), priceMax: Number((price * 0.94).toFixed(1)), percentage: 9, type: 'flat' },
-            { label: '支撐區', priceMin: supportLower, priceMax: Number((price * 0.90).toFixed(1)), percentage: 87, type: 'support' },
+            { label: '壓力區', priceMin: Number((safePrice * 1.05).toFixed(1)), priceMax: highResistance, percentage: 4, type: 'resistance' },
+            { label: '大量成交區', priceMin: Number((safePrice * 0.98).toFixed(1)), priceMax: Number((safePrice * 1.05).toFixed(1)), percentage: 17, type: 'heavy' },
+            { label: '密集成交區', priceMin: Number((safePrice * 0.94).toFixed(1)), priceMax: Number((safePrice * 0.98).toFixed(1)), percentage: 9, type: 'dense' },
+            { label: '橫平區', priceMin: Number((safePrice * 0.90).toFixed(1)), priceMax: Number((safePrice * 0.94).toFixed(1)), percentage: 9, type: 'flat' },
+            { label: '支撐區', priceMin: supportLower, priceMax: Number((safePrice * 0.90).toFixed(1)), percentage: 87, type: 'support' },
           ],
       bullBearFooterTag: '多多多多多',
     },
@@ -165,15 +178,15 @@ export function createDefaultAiForceReport(
       mainForceDirectionProb: 52,
       annualizedDriftPercent: 19.7,
       timeNodes: [
-        { dayOffset: 0, label: '今日', upperPrice: price, medianPrice: price, lowerPrice: price },
-        { dayOffset: 3, label: '3日後', upperPrice: Number((price * 1.035).toFixed(1)), medianPrice: Number((price * 1.008).toFixed(1)), lowerPrice: Number((price * 0.97).toFixed(1)) },
-        { dayOffset: 5, label: '5日後', upperPrice: Number((price * 1.065).toFixed(1)), medianPrice: Number((price * 1.017).toFixed(1)), lowerPrice: Number((price * 0.95).toFixed(1)) },
-        { dayOffset: 10, label: '10日後', upperPrice: Number((price * 1.10).toFixed(1)), medianPrice: Number((price * 1.026).toFixed(1)), lowerPrice: Number((price * 0.925).toFixed(1)) },
+        { dayOffset: 0, label: '今日', upperPrice: safePrice, medianPrice: safePrice, lowerPrice: safePrice },
+        { dayOffset: 3, label: '3日後', upperPrice: Number((safePrice * 1.035).toFixed(1)), medianPrice: Number((safePrice * 1.008).toFixed(1)), lowerPrice: Number((safePrice * 0.97).toFixed(1)) },
+        { dayOffset: 5, label: '5日後', upperPrice: Number((safePrice * 1.065).toFixed(1)), medianPrice: Number((safePrice * 1.017).toFixed(1)), lowerPrice: Number((safePrice * 0.95).toFixed(1)) },
+        { dayOffset: 10, label: '10日後', upperPrice: Number((safePrice * 1.10).toFixed(1)), medianPrice: Number((safePrice * 1.026).toFixed(1)), lowerPrice: Number((safePrice * 0.925).toFixed(1)) },
       ],
     },
 
     vwapCostStructure: {
-      mainForceVwap: isDefault2360 ? 2131 : Number((price * 0.96).toFixed(1)),
+      mainForceVwap: isDefault2360 ? 2131 : Number((safePrice * 0.96).toFixed(1)),
       biasPercent: 7.5,
       bands: [
         { name: '倉儲區', biasLabel: '>5%', percentage: 38, color: '#f97316' },
@@ -737,9 +750,13 @@ export function generateAiForceReportFromCandles(
     }
   }
 
-  // 安全邊界：不足 5 根時安全回退至預設 report
+  // 安全邊界：不足 5 根時安全回退至預設 report，若有 1~4 根歷史日 K，以最後一根真實日 K 填補收盤價與日期
   if (!effectiveCandles || effectiveCandles.length < 5) {
-    const fallback = createDefaultAiForceReport(symbol, name, market, realtimeQuote?.price);
+    const hasFewCandles = effectiveCandles && effectiveCandles.length > 0;
+    const lastValidCandle = hasFewCandles ? effectiveCandles[effectiveCandles.length - 1] : undefined;
+    const fallbackBasePrice = realtimeQuote?.price ?? lastValidCandle?.close;
+
+    const fallback = createDefaultAiForceReport(symbol, name, market, fallbackBasePrice, referenceDate);
     if (realtimeQuote?.price) {
       fallback.marketBar.currentPrice = realtimeQuote.price;
       if (realtimeQuote.change !== undefined) fallback.marketBar.change = realtimeQuote.change;
@@ -748,12 +765,28 @@ export function generateAiForceReportFromCandles(
       if (realtimeQuote.high !== undefined) fallback.marketBar.highPrice = realtimeQuote.high;
       if (realtimeQuote.low !== undefined) fallback.marketBar.lowPrice = realtimeQuote.low;
       if (realtimeQuote.volume !== undefined) fallback.marketBar.volumeShares = realtimeQuote.volume;
+    } else if (lastValidCandle) {
+      fallback.marketBar.currentPrice = lastValidCandle.close;
+      fallback.marketBar.openPrice = lastValidCandle.open;
+      fallback.marketBar.highPrice = lastValidCandle.high;
+      fallback.marketBar.lowPrice = lastValidCandle.low;
+      fallback.marketBar.volumeShares = lastValidCandle.volume;
+      fallback.marketBar.latestTradingDate = lastValidCandle.date;
+      fallback.marketBar.anchorTradingDate = lastValidCandle.date;
+      fallback.marketBar.dataPointsCount = effectiveCandles.length;
+      fallback.marketBar.dataRangeText = `${effectiveCandles[0].date} ~ ${lastValidCandle.date}，共 ${effectiveCandles.length} 個交易日`;
+      fallback.isDataPending = false;
     }
+
     fallback.marketBar.isSettled = settlement.isSettled;
-    fallback.marketBar.anchorTradingDate = settlement.anchorTradingDate;
+    if (!lastValidCandle) {
+      fallback.marketBar.anchorTradingDate = settlement.anchorTradingDate;
+      fallback.marketBar.latestTradingDate = settlement.anchorTradingDate;
+    }
     fallback.marketBar.settlementReason = settlement.reason;
     return fallback;
   }
+
 
   const count = effectiveCandles.length;
   const last = effectiveCandles[count - 1];

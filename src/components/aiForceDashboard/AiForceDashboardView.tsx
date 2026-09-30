@@ -108,9 +108,10 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         }
       }
 
-      // 4. 以真實數據合成 18 張卡片 Report (含法人籌碼動態連動)
-      if (candles.length >= 5) {
+      // 4. 以真實數據合成 18 張卡片 Report (含法人籌碼動態連動，>= 1 根即可進行最後已知日 K 定錨)
+      if (candles.length >= 1) {
         const fullReport = generateAiForceReportFromCandles(
+
           targetSymbol,
           resolvedName,
           targetMarket,
@@ -170,7 +171,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       />
 
       {/* 資料來源說明與 5 大量化匯出工具列 (照片第 2 列) */}
-      <HeaderExportBar report={report} />
+      <HeaderExportBar
+        report={report}
+        sourcesText={report.marketBar?.dataSourceText}
+        rangeText={report.marketBar?.dataRangeText}
+      />
 
       {/* 依據任務頁籤條件渲染視圖 */}
       {activeTab === 'TASK_1_COMPREHENSIVE' && (

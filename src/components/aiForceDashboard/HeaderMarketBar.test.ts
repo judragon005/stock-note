@@ -112,5 +112,16 @@ describe('HeaderMarketBar - 行情 Bar 格式化與狀態燈規範 (Ticket 02)',
       expect(formattedPrice).toBe('2,290.00');
       expect(percentStr).toBe('+7.26%');
     });
+
+    it('Spec 0152: 當無行情數據 (undefined) 時，formatMarketMetric 與 formatMarketChange 應安全呈現破折號「-」', () => {
+      expect(formatMarketMetric(undefined)).toBe('-');
+      expect(formatMarketMetric(NaN)).toBe('-');
+
+      const changeMeta = formatMarketChange(undefined, undefined);
+      expect(changeMeta.changeText).toBe('-');
+      expect(changeMeta.percentText).toBe('-');
+      expect(changeMeta.color).toBe('#94a3b8');
+    });
   });
 });
+
