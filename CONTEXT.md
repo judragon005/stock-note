@@ -1997,6 +1997,24 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - Card 18 根容器與 Row 6 Grid 子項目設定 `height: 100%`，與 Card 16（籌碼集中度）、Card 17（多空力道平衡）底部完美齊平。
   - 實作 `parseVerdictMetrics` 提煉「5日法人合計」、「20日 VWAP 乖離」、「RSI 強度」關鍵數據膠囊，重構為「頂部多空狀態 ➔ 核心決策看板 ➔ 量化指標膠囊 ➔ AI 深度論述」之層次分明排版。
 
+### AI 主力戰情室單一真實數據來源校準、淘汰衝突硬編碼假資料與優雅 Empty State *(新增於 V8.64.0 / Spec #0152 / ADR #0152 / Issue #133)*
+
+- **Eliminate Hardcoded Price Spoofing (徹底淘汰價格造假與偽造 K 線)**:
+  - 核心模組：`src/engine/aiForceDashboardEngine.ts`、`src/components/aiForceDashboard/cards/KLineChartCard.tsx`。
+  - 徹底移除 `createDefaultAiForceReport` 內寫死的 `price = 150.0` 與依此推算之 +1.80、成交量 2,681 張等捏造數值；無資料時安全標記 `isDataPending: true`，各數值回退為破折號 `-`。
+  - 徹底移除 `KLineChartCard` 內 `normalizeAndSortCandles` 之 `basePrice = 2100` 生成 30 根假 K 線的邏輯，終結 2100 元 K 棒與 138 元支撐線於同一 SVG 畫布衝突破圖之根本病灶。
+
+- **Last-Known-Close Anchor & Settlement Compliance (最後已知收盤價定錨與盤中未結算防禦)**:
+  - 核心模組：`src/engine/aiForceDashboardEngine.ts`、`src/engine/marketSettlementEngine.ts`。
+  - `createDefaultAiForceReport` 接入 `getMarketSettlementStatus`，當前時段為盤中（15:00 前）時一律標記 `isSettled: false`，頂部標籤呈現「前日收盤價」，並定錨於上一交易日。
+  - `generateAiForceReportFromCandles` 與 `AiForceDashboardView` 支援 `>= 1` 根日 K 即可提取「最後一根有效歷史日 K」填補昨收與日期，杜絕歷史資料因少於 5 根而全盤拋棄跳入假資料。
+
+- **Graceful Tech Empty State & Range Text Dynamic Binding (科技感 Empty State 與資料說明列真實綁定)**:
+  - 核心模組：`src/components/aiForceDashboard/cards/KLineChartCard.tsx`、`src/components/aiForceDashboard/HeaderExportBar.tsx`、`src/components/aiForceDashboard/AiForceDashboardView.tsx`。
+  - 當查詢標的完全查無歷史日 K 時，K 線圖繪製「📊 尚無歷史交易日 K 數列·數據回補中」毛玻璃面板，不渲染破圖線條。
+  - `AiForceDashboardView` 將 `dataSourceText` 與 `dataRangeText` 完整傳入 `HeaderExportBar`，中間資訊列徹底終結寫死「2026-05-04 ~ 2026-09-18」，與當前標的及最新交易日保持 100% 同步。
+
+
 
 
 

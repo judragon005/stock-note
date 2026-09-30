@@ -11,7 +11,20 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
+### 0. AI 主力戰情室單一真實數據來源校準、淘汰衝突硬編碼假資料與優雅 Empty State (`AI Force Real Data SSOT & Empty State`) *(V8.64.0)*
+
+- **徹底淘汰價格造假與偽造 K 線 (`Eliminate Hardcoded Price Spoofing`)**：
+  - 徹底移除 `createDefaultAiForceReport` 內寫死之 `price = 150.0` 與依此推算之 +1.80、成交量 2,681 張等捏造數值；無資料時安全標記 `isDataPending: true`，各數值安全回退為破折號 `-`。
+  - 徹底廢除 `KLineChartCard` 內寫死以 `basePrice = 2100` 生成 30 根假 K 線的邏輯，終結 2100 元 K 棒與 138 元支撐線於同一 SVG 畫布衝突破圖之根本病灶。
+- **最後已知收盤價定錨與盤中未結算防禦 (`Last-Known-Close Anchor & Settlement Compliance`)**：
+  - 接入 `marketSettlementEngine`：當前時段為盤中（15:00 前）時一律標記 `isSettled: false`，頂部價格標示為「前日收盤價」，並定錨於上一交易日。
+  - 支援 `>= 1` 根日 K 即可提取「最後一根有效歷史日 K」填補昨收與日期，杜絕歷史資料因少於 5 根而全盤拋棄跳入假資料。
+- **科技感 Empty State 與資料說明列真實綁定 (`Graceful Tech Empty State & Range Text Dynamic Binding`)**：
+  - 當查詢標的完全查無歷史日 K 時，K 線圖繪製「📊 尚無歷史交易日 K 數列·數據回補中」毛玻璃面板，不渲染破圖線條。
+  - 完整傳遞 `dataSourceText` 與 `dataRangeText` 至 `HeaderExportBar`，中間資訊列徹底終結寫死「2026-05-04 ~ 2026-09-18」，與當前標的及最新交易日保持 100% 同步。
+
 ### 0. AI 主力戰情室卡片 04/02/06/07 視覺動態連動與字典說明小方塊抗遮蔽修復 (`AI Force Cards Dynamic Ticks, Status Adaptive & Popover Boundary Repair`) *(V8.61.0 全新發布)*
+
 - **卡片 04 AI 籌碼熱區圖自適應價格刻度與 4 欄週期熱力矩陣**：
   - 徹底終結寫死價格刻度與靜態色碼，依據當前個股歷史 K 線動態計算 5 階動態 Y 軸價格刻度（`priceTicks`）。
   - 精算近 5/10/20/60 日 4 欄週期成交量價密度熱力矩陣（`heatmapColumns`），即時反映各價位帶籌碼密集程度。

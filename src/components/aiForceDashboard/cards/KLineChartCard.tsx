@@ -186,44 +186,15 @@ export function calculateKeyLevelOverlays(
 
 /**
  * 正規化並按日期升冪排序 K 棒數列 (左側為歷史、右側為最新)
+ * Spec 0152: 淘汰 2,100 元假 K 線偽造，若無日 K 則誠實回傳空陣列，由 UI 呈現 Empty State
  */
 export function normalizeAndSortCandles(candles?: KlineCandleItem[]): KlineCandleItem[] {
-  if (candles && candles.length >= 5) {
-    return [...candles].sort((a, b) => a.date.localeCompare(b.date));
+  if (!candles || candles.length === 0) {
+    return [];
   }
-  const synthetic: KlineCandleItem[] = [];
-  let basePrice = 2100;
-  // 嚴格升冪生成：從 1 到 30 (09/01 ➔ 09/30)
-  for (let i = 1; i <= 30; i++) {
-    const isUp = i % 2 === 0;
-    const change = (i * 7) % 35;
-    const open = basePrice;
-    const close = isUp ? open + change : open - change;
-    const high = Math.max(open, close) + 15;
-    const low = Math.min(open, close) - 15;
-    const volume = 1200 + ((i * 123) % 1800);
-    basePrice = close;
-    synthetic.push({
-      date: `09/${i < 10 ? '0' + i : i}`,
-      open,
-      high,
-      low,
-      close,
-      volume,
-      ma5: close * 0.98,
-      ma10: close * 0.96,
-      ma20: 2130,
-      ma60: 2050,
-      k: 50 + (i % 20),
-      d: 48 + (i % 18),
-      dif: (i % 10) - 5,
-      macd: (i % 8) - 4,
-      macdHist: (i % 6) - 3,
-      rsi: 45 + (i % 30),
-    });
-  }
-  return synthetic;
+  return [...candles].sort((a, b) => a.date.localeCompare(b.date));
 }
+
 
 export interface KLineChartCardProps {
   data: KlineSystemData;
@@ -614,20 +585,57 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
         <div style={{ minHeight: '26px', marginBottom: '6px' }} />
       )}
 
-      {/* SVG K 線圖與量能主繪圖區 */}
-      <div style={{ width: '100%', flex: 1, minHeight: '260px', position: 'relative' }}>
-        <svg
-          viewBox={`0 0 ${width} ${totalHeight}`}
-          style={{ width: '100%', height: '100%', overflow: 'visible', cursor: 'crosshair' }}
-          preserveAspectRatio="none"
-          onMouseMove={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const svgX = ((e.clientX - rect.left) / rect.width) * width;
-            const idx = findClosestCandleIndex(svgX, leftPad, candleGap, count);
-            setHoverIndex(idx);
+      {/* SVG K 線圖與量能主繪圖區或 Empty State */}
+      {count === 0 ? (
+        <div
+          data-testid="kline-empty-state"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '260px',
+            width: '100%',
+            background: 'rgba(15, 23, 42, 0.45)',
+            borderRadius: '10px',
+            border: '1px dashed rgba(59, 130, 246, 0.25)',
+            gap: '10px',
+            padding: '24px 16px',
+            color: '#94a3b8',
+            boxSizing: 'border-box',
           }}
-          onMouseLeave={() => setHoverIndex(null)}
         >
+          <div style={{ fontSize: '2rem' }}>📊</div>
+          <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#e2e8f0' }}>
+            尚無歷史交易日 K 數列
+          </div>
+          <div
+            style={{
+              fontSize: '0.78rem',
+              color: '#64748b',
+              maxWidth: '380px',
+              textAlign: 'center',
+              lineHeight: 1.5,
+            }}
+          >
+            此標的目前尚未沉澱足夠歷史交易日 K 線，系統正持續從官方數據庫連線回補中；請稍候或切換至其他已收錄個股。
+          </div>
+        </div>
+      ) : (
+        <div style={{ width: '100%', flex: 1, minHeight: '260px', position: 'relative' }}>
+          <svg
+            viewBox={`0 0 ${width} ${totalHeight}`}
+            style={{ width: '100%', height: '100%', overflow: 'visible', cursor: 'crosshair' }}
+            preserveAspectRatio="none"
+            onMouseMove={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const svgX = ((e.clientX - rect.left) / rect.width) * width;
+              const idx = findClosestCandleIndex(svgX, leftPad, candleGap, count);
+              setHoverIndex(idx);
+            }}
+            onMouseLeave={() => setHoverIndex(null)}
+          >
+
           {/* 背景參考格線 */}
           <line
             x1={leftPad}
@@ -930,6 +938,8 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           })}
         </svg>
       </div>
+      )}
     </div>
   );
 };
+

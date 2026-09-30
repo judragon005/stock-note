@@ -55,6 +55,43 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
     expect(report0050.decisionCore.supportRange[0]).toBeLessThan(250);
   });
 
+  describe('Spec 0152 / Ticket 03 - 淘汰硬編碼價格造假與盤中定錨規範', () => {
+    it('當查詢 00403A 且完全無報價與日 K 時，createDefaultAiForceReport 不得捏造 150.00 元與 2681 張成交量', () => {
+      const report = createDefaultAiForceReport('00403A', '主動統一升級50', 'TW');
+
+      expect(report.marketBar.currentPrice).toBeUndefined();
+      expect(report.marketBar.volumeShares).toBeUndefined();
+      expect(report.marketBar.transactionCount).toBeUndefined();
+      expect(report.marketBar.dataPointsCount).toBe(0);
+      expect(report.marketBar.dataRangeText).toBe('尚無歷史交易日資料');
+      expect((report as any).isDataPending).toBe(true);
+    });
+
+    it('盤中時段 (12:00) 呼叫 createDefaultAiForceReport 應正確標記 isSettled 為 false 並退回上一交易日定錨', () => {
+      const intradayWednesday = new Date('2026-09-30T12:00:00+08:00');
+      const report = createDefaultAiForceReport('00403A', '主動統一升級50', 'TW', undefined, intradayWednesday);
+
+      expect(report.marketBar.isSettled).toBe(false);
+      expect(report.marketBar.latestTradingDate).toBe('2026-09-29');
+      expect(report.marketBar.anchorTradingDate).toBe('2026-09-29');
+    });
+
+    it('若有少於 5 根但至少 1 根日 K 時，generateAiForceReportFromCandles 應以最後一根真實日 K 填補收盤價', () => {
+      const fewCandles = [
+        { date: '2026-09-28', open: 15.2, high: 15.5, low: 15.1, close: 15.3, volume: 5000 },
+        { date: '2026-09-29', open: 15.3, high: 15.6, low: 15.2, close: 15.5, volume: 6200 },
+      ];
+      const wednesdayAfternoon = new Date('2026-09-30T16:00:00+08:00');
+      const report = generateAiForceReportFromCandles('00403A', '主動統一升級50', 'TW', fewCandles, undefined, undefined, wednesdayAfternoon);
+
+      expect(report.marketBar.currentPrice).toBe(15.5);
+      expect(report.marketBar.latestTradingDate).toBe('2026-09-29');
+      expect(report.marketBar.dataPointsCount).toBe(2);
+      expect(report.marketBar.dataRangeText).toContain('2026-09-28 ~ 2026-09-29');
+    });
+  });
+
+
   it('generateAiForceReportFromCandles 在蠟燭不足但有 realtimeQuote 時，應完整同步即時報價之價差與開高低量', () => {
     const quote = {
       symbol: '0050',

@@ -19,13 +19,14 @@ export interface SystemBadgeConfig {
  * 格式化漲跌額與百分比色彩
  */
 export function formatMarketChange(
-  change: number,
-  changePercent: number,
+  change?: number,
+  changePercent?: number,
   theme: ColorThemeMode = 'taiwan'
 ): { changeText: string; percentText: string; color: string } {
-  if (isNaN(change) || isNaN(changePercent)) {
+  if (change === undefined || changePercent === undefined || isNaN(change) || isNaN(changePercent)) {
     return { changeText: '-', percentText: '-', color: '#94a3b8' };
   }
+
 
   const isZero = Math.abs(change) < 0.0001;
   if (isZero) {

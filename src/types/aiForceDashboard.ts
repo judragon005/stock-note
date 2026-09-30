@@ -4,18 +4,19 @@ import { MarketType } from './stock';
  * 頂部行情 Bar 資料模型
  */
 export interface MarketBarData {
-  currentPrice: number;
-  change: number;
-  changePercent: number;
-  volumeShares: number; // 成交量 (張)
-  transactionCount: number; // 成交筆數
-  openPrice: number;
-  highPrice: number;
-  lowPrice: number;
+  currentPrice?: number;
+  change?: number;
+  changePercent?: number;
+  volumeShares?: number; // 成交量 (張)
+  transactionCount?: number; // 成交筆數
+  openPrice?: number;
+  highPrice?: number;
+  lowPrice?: number;
   latestTradingDate: string; // YYYY-MM-DD
   dataPointsCount: number; // 資料筆數，例如 98 日
   dataSourceText: string; // 例如: "日 K TWSE | 法人 TWSE | 融資券 FinMind"
   dataRangeText: string; // 例如: "2026-05-04 ~ 2026-09-18，共 98 個交易日，法人資料 20 日"
+
   isSettled?: boolean; // 是否已達正式收盤且盤後數據結算完畢
   anchorTradingDate?: string; // 量化分析基準日 (YYYY-MM-DD)
   settlementReason?: string; // 未結算之說明提示
@@ -347,8 +348,10 @@ export interface AiForceDashboardReport {
   market: MarketType;
   updatedAt: string;
   activeTaskTab: AiForceTaskTabKey;
+  isDataPending?: boolean; // 是否處於無足夠歷史日 K 或數據回補中之待命狀態
 
   marketBar: MarketBarData;
+
   klineSystem: KlineSystemData;
   decisionCore: DecisionCoreData;
   multiDimensionRadar: MultiDimensionRadarData;
