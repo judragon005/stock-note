@@ -111,7 +111,6 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       // 4. 以真實數據合成 18 張卡片 Report (含法人籌碼動態連動，>= 1 根即可進行最後已知日 K 定錨)
       if (candles.length >= 1) {
         const fullReport = generateAiForceReportFromCandles(
-
           targetSymbol,
           resolvedName,
           targetMarket,
@@ -119,6 +118,9 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           quote || undefined,
           institutionalRecords
         );
+        if (!quote && targetMarket === 'TW') {
+          fullReport.marketBar.dataSourceText = `本地盤後歷史資料庫 (共 ${candles.length} 日 K)`;
+        }
         setReport(fullReport);
       } else {
         const fallback = createDefaultAiForceReport(targetSymbol, resolvedName, targetMarket, quote?.price);

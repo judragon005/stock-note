@@ -120,12 +120,14 @@ export async function loadSymbolCompactHistory(
         const res = await fetch('/market-cache/tw_market_ohlcv_compact.json');
         if (!res.ok) {
           logger.warn(`無法讀取 tw_market_ohlcv_compact.json (HTTP ${res.status})`);
+          compactHistoryPromise = null;
           return null;
         }
         const data: Record<string, RawCompactCandle[]> = await res.json();
         return data;
       } catch (err) {
         logger.warn('載入 tw_market_ohlcv_compact.json 失敗:', err);
+        compactHistoryPromise = null;
         return null;
       }
     })();
