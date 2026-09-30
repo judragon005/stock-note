@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { GlossaryEntry, getGlossaryEntry } from '../../constants/aiForceGlossary';
 
 export interface TermTooltipPlacement {
@@ -58,45 +59,73 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
 }) => {
   const dynamicDiagnosis = propDynamic ?? customDiagnosis;
   const [isOpen, setIsOpen] = useState(false);
-  const [placement, setPlacement] = useState<TermTooltipPlacement>({ vertical: 'top', horizontal: 'center' });
+  const [coords, setCoords] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const containerRef = useRef<HTMLSpanElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 取得字典條目
   const resolvedEntry: GlossaryEntry | undefined = customEntry || (termId ? getGlossaryEntry(termId) : undefined);
 
-  // 計算視窗位置
+  // 計算視窗螢幕絕對位置 (Portal Fixed Positioning)
   const updatePosition = useCallback(() => {
     if (!containerRef.current || typeof window === 'undefined') return;
     const rect = containerRef.current.getBoundingClientRect();
     const viewport = { width: window.innerWidth, height: window.innerHeight };
-    const newPlacement = calculateTooltipPlacement(rect, viewport);
-    setPlacement(newPlacement);
+    const tooltipSize = { width: 320, height: 280 };
+    const newPlacement = calculateTooltipPlacement(rect, viewport, tooltipSize);
+
+    let left = rect.left;
+    if (newPlacement.horizontal === 'center') {
+      left = rect.left + rect.width / 2 - tooltipSize.width / 2;
+    } else if (newPlacement.horizontal === 'right') {
+      left = rect.right - tooltipSize.width;
+    }
+    // 水平視窗安全邊界限制 (12px 留白)
+    left = Math.max(12, Math.min(viewport.width - tooltipSize.width - 12, left));
+
+    let top = rect.bottom + 8;
+    if (newPlacement.vertical === 'top') {
+      top = rect.top - tooltipSize.height - 8;
+      if (top < 12) {
+        top = rect.bottom + 8; // 若向上仍超出則回退下方
+      }
+    }
+
+    setCoords({ top, left });
   }, []);
 
   const handleMouseEnter = () => {
     if (!interactive) return;
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     updatePosition();
     setIsOpen(true);
   };
 
   const handleMouseLeave = () => {
     if (!interactive) return;
-    setIsOpen(false);
+    closeTimerRef.current = setTimeout(() => {
+      setIsOpen(false);
+    }, 150);
   };
 
   const handleClick = (e: React.MouseEvent) => {
     if (!interactive) return;
     e.stopPropagation();
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     updatePosition();
     setIsOpen((prev) => !prev);
   };
 
-  // 點擊外部自動關閉
+  // 點擊外部與 ESC 快捷鍵關閉
   useEffect(() => {
     if (!isOpen) return;
     const handleOutsideClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        tooltipRef.current && !tooltipRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     };
@@ -109,6 +138,7 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
       document.removeEventListener('keydown', handleKeyDown);
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     };
   }, [isOpen]);
 
@@ -117,20 +147,22 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
     return <span style={style} className={className}>{children}</span>;
   }
 
-  // 浮動卡片動態位置樣式
+  // 浮動卡片動態位置樣式 (Portal Fixed)
   const getTooltipStyle = (): React.CSSProperties => {
-    const baseStyle: React.CSSProperties = {
-      position: 'absolute',
-      zIndex: 9999,
+    return {
+      position: 'fixed',
+      top: `${coords.top}px`,
+      left: `${coords.left}px`,
+      zIndex: 999999,
       width: '320px',
-      maxWidth: '88vw',
+      maxWidth: 'calc(100vw - 24px)',
       maxHeight: '280px',
       overflowY: 'auto',
-      backgroundColor: 'rgba(15, 23, 42, 0.96)',
-      backdropFilter: 'blur(12px)',
-      WebkitBackdropFilter: 'blur(12px)',
-      border: '1px solid rgba(59, 130, 246, 0.35)',
-      boxShadow: '0 16px 36px rgba(0, 0, 0, 0.65), 0 0 16px rgba(59, 130, 246, 0.2)',
+      backgroundColor: 'rgba(15, 23, 42, 0.98)',
+      backdropFilter: 'blur(16px)',
+      WebkitBackdropFilter: 'blur(16px)',
+      border: '1px solid rgba(59, 130, 246, 0.4)',
+      boxShadow: '0 20px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(59, 130, 246, 0.25)',
       borderRadius: '10px',
       padding: '12px 14px',
       fontSize: '12px',
@@ -140,25 +172,6 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
       pointerEvents: 'auto',
       animation: 'fadeIn 0.15s ease-out',
     };
-
-    // 垂直方向
-    if (placement.vertical === 'top') {
-      baseStyle.bottom = 'calc(100% + 8px)';
-    } else {
-      baseStyle.top = 'calc(100% + 8px)';
-    }
-
-    // 水平方向
-    if (placement.horizontal === 'center') {
-      baseStyle.left = '50%';
-      baseStyle.transform = 'translateX(-50%)';
-    } else if (placement.horizontal === 'right') {
-      baseStyle.right = '0';
-    } else {
-      baseStyle.left = '0';
-    }
-
-    return baseStyle;
   };
 
   return (
@@ -203,13 +216,17 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
         </span>
       )}
 
-      {isOpen && (
+      {isOpen && typeof document !== 'undefined' && createPortal(
         <div
           ref={tooltipRef}
           role="tooltip"
           aria-live="polite"
           style={getTooltipStyle()}
           className="term-tooltip-popup"
+          onMouseEnter={() => {
+            if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+          }}
+          onMouseLeave={handleMouseLeave}
           onClick={(e) => e.stopPropagation()}
         >
           {/* 標題列 */}
@@ -278,7 +295,8 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
               <div style={{ color: '#fef08a', fontSize: '11px', fontWeight: 500 }}>{dynamicDiagnosis}</div>
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </span>
   );

@@ -97,4 +97,20 @@ describe('MarketCacheLoader (前端快取秒讀與 IndexedDB 沉澱引擎)', () 
     expect(saveOhlcvSpy).toHaveBeenCalledWith(expect.objectContaining({ symbol: '2330', market: 'TW' }));
     expect(saveIndicatorsSpy).toHaveBeenCalledWith(expect.objectContaining({ symbol: '2330', market: 'TW' }));
   });
+
+  it('當快取資料缺少 date 欄位或 totalSymbols 為 0 時，應具備防禦性保護', async () => {
+    const saveOhlcvSpy = vi.spyOn(db, 'saveSymbolOhlcv').mockResolvedValue();
+
+    const emptySummary: MarketCacheSummary = {
+      date: '',
+      updatedAt: Date.now(),
+      market: 'TW',
+      totalSymbols: 0,
+      durationMs: 0,
+      stocks: {},
+    };
+
+    await syncMarketCacheToIndexedDB(emptySummary);
+    expect(saveOhlcvSpy).not.toHaveBeenCalled();
+  });
 });

@@ -185,7 +185,10 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
             placeholder="代號"
             aria-label="股票代號"
             style={{
-              width: '75px',
+              minWidth: '95px',
+              maxWidth: '140px',
+              width: `${Math.max(6, inputVal.length + 1)}ch`,
+              padding: '0 4px',
               background: 'transparent',
               border: 'none',
               outline: 'none',

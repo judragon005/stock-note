@@ -158,6 +158,8 @@ async function runTwMarketSync(targetDateInput) {
   const allSymbols = new Set([...Object.keys(allQuotes), ...Object.keys(allChips)]);
   if (allSymbols.size === 0) {
     console.log(`[提示] 目標日期 (${dateStr}) 官方尚未發布盤後數據（TWSE/TPEx 通常於 15:30~16:00 結算產出）或該日為非交易休市日。`);
+    console.log(`[防禦保護] 本次未獲取到有效標的，安全退出且不覆蓋既有本地快取。`);
+    return;
   }
 
   const stocksMap = {};
@@ -193,8 +195,9 @@ async function runTwMarketSync(targetDateInput) {
   };
 
   console.log(`[4/4] 持久化寫入本地快取資料庫...`);
-  const targetPath1 = path.join(process.cwd(), '.scratch', 'market-cache', 'tw_market_summary.json');
-  const targetPath2 = path.join(process.cwd(), 'public', 'market-cache', 'tw_market_summary.json');
+  const projectRoot = path.resolve(__dirname, '../../');
+  const targetPath1 = path.join(projectRoot, '.scratch', 'market-cache', 'tw_market_summary.json');
+  const targetPath2 = path.join(projectRoot, 'public', 'market-cache', 'tw_market_summary.json');
 
   saveJsonAtomic(targetPath1, outputPayload);
   saveJsonAtomic(targetPath2, outputPayload);

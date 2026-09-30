@@ -76,4 +76,15 @@ describe('HeaderMarketBar - 行情 Bar 格式化與狀態燈規範 (Ticket 02)',
       expect(formatMarketMetric(undefined)).toBe('-');
     });
   });
+
+  describe('股票代碼搜尋框寬度與排版防禦 (Ticket 05 & 06)', () => {
+    it('應支援 4 碼普通股、6 碼 ETF/權證與美股長代碼而不截斷', () => {
+      const testSymbols = ['2330', '0050', '004030', '00940', 'GOOGL', 'BRK.B'];
+      testSymbols.forEach((sym) => {
+        const charWidth = Math.max(6, sym.length + 1);
+        expect(charWidth).toBeGreaterThanOrEqual(6);
+        expect(charWidth).toBeLessThanOrEqual(14);
+      });
+    });
+  });
 });

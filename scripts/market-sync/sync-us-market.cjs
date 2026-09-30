@@ -149,6 +149,11 @@ async function runUsMarketSync() {
     await new Promise((r) => setTimeout(r, 200));
   }
 
+  if (successCount === 0) {
+    console.log(`[提示] 目標日期 (${dateStr}) 美股未獲取到有效標的數據，安全退出且不覆蓋既有本地快取。`);
+    return;
+  }
+
   // 3. 持久化至本地快取
   const outputPayload = {
     date: dateStr,
@@ -161,8 +166,9 @@ async function runUsMarketSync() {
   };
 
   console.log(`[2/3] 持久化寫入本地快取資料庫...`);
-  const targetPath1 = path.join(process.cwd(), '.scratch', 'market-cache', 'us_market_summary.json');
-  const targetPath2 = path.join(process.cwd(), 'public', 'market-cache', 'us_market_summary.json');
+  const projectRoot = path.resolve(__dirname, '../../');
+  const targetPath1 = path.join(projectRoot, '.scratch', 'market-cache', 'us_market_summary.json');
+  const targetPath2 = path.join(projectRoot, 'public', 'market-cache', 'us_market_summary.json');
 
   saveJsonAtomic(targetPath1, outputPayload);
   saveJsonAtomic(targetPath2, outputPayload);
