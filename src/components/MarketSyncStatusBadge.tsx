@@ -210,7 +210,7 @@ export const MarketSyncStatusBadge: React.FC<MarketSyncStatusBadgeProps> = ({
                 </div>
                 {twSummary ? (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                    <div>資料日期: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{twSummary.date}</span></div>
+                    <div>資料日期: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{twSummary.date || Object.values(twSummary.stocks || {})[0]?.date || '已同步'}</span></div>
                     <div>同步時間: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{new Date(twSummary.updatedAt).toLocaleTimeString()}</span></div>
                     <div>涵蓋標的: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{twSummary.totalSymbols} 檔 (全市場整包)</span></div>
                     <div>執行耗時: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{(twSummary.durationMs / 1000).toFixed(1)} 秒</span></div>
@@ -241,7 +241,7 @@ export const MarketSyncStatusBadge: React.FC<MarketSyncStatusBadgeProps> = ({
                 </div>
                 {usSummary ? (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                    <div>資料日期: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{usSummary.date}</span></div>
+                    <div>資料日期: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{usSummary.date || Object.values(usSummary.stocks || {})[0]?.date || '已同步'}</span></div>
                     <div>同步時間: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{new Date(usSummary.updatedAt).toLocaleTimeString()}</span></div>
                     <div>涵蓋標的: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{usSummary.totalSymbols} 檔 (核心優先)</span></div>
                     <div>執行耗時: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{(usSummary.durationMs / 1000).toFixed(1)} 秒</span></div>

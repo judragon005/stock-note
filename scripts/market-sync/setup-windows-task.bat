@@ -39,7 +39,10 @@ echo.
 echo 正在註冊 Windows 工作排程任務...
 
 :: 尋找 node 執行檔路徑
-for /f "tokens=*" %%i in ('where node') do set NODE_PATH=%%i & goto FOUND_NODE
+for /f "tokens=*" %%i in ('where node') do (
+    set "NODE_PATH=%%i"
+    goto FOUND_NODE
+)
 :FOUND_NODE
 if "%NODE_PATH%"=="" (
     echo [錯誤] 找不到 node.exe，請確認已安裝 Node.js 並加入環境變數 PATH！
@@ -47,12 +50,12 @@ if "%NODE_PATH%"=="" (
     goto END
 )
 
-set VBS_SCRIPT="%PROJECT_DIR%\scripts\market-sync\run-sync-silent.vbs"
-set TW_SCRIPT="%PROJECT_DIR%\scripts\market-sync\sync-tw-market.cjs"
-set US_SCRIPT="%PROJECT_DIR%\scripts\market-sync\sync-us-market.cjs"
+set "VBS_SCRIPT=%PROJECT_DIR%\scripts\market-sync\run-sync-silent.vbs"
+set "TW_SCRIPT=%PROJECT_DIR%\scripts\market-sync\sync-tw-market.cjs"
+set "US_SCRIPT=%PROJECT_DIR%\scripts\market-sync\sync-us-market.cjs"
 
 :: 建立台股排程 (每日 16:00)
-schtasks /create /tn "StockTracker_TW_Sync" /tr "wscript.exe %VBS_SCRIPT% \"%NODE_PATH%\" \"%TW_SCRIPT%\"" /sc daily /st 16:00 /f >nul
+schtasks /create /tn "StockTracker_TW_Sync" /tr "wscript.exe \"%VBS_SCRIPT%\" \"%NODE_PATH%\" \"%TW_SCRIPT%\"" /sc daily /st 16:00 /f >nul
 if %errorlevel% equ 0 (
     echo  ✔ 台股排程已成功註冊：每日 16:00 自動執行
 ) else (
@@ -60,7 +63,7 @@ if %errorlevel% equ 0 (
 )
 
 :: 建立美股排程 (每日 08:00)
-schtasks /create /tn "StockTracker_US_Sync" /tr "wscript.exe %VBS_SCRIPT% \"%NODE_PATH%\" \"%US_SCRIPT%\"" /sc daily /st 08:00 /f >nul
+schtasks /create /tn "StockTracker_US_Sync" /tr "wscript.exe \"%VBS_SCRIPT%\" \"%NODE_PATH%\" \"%US_SCRIPT%\"" /sc daily /st 08:00 /f >nul
 if %errorlevel% equ 0 (
     echo  ✔ 美股排程已成功註冊：每日 08:00 自動執行
 ) else (

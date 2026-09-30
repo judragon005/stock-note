@@ -113,8 +113,8 @@ const FIVE_AXIS_CONFIG = [
 import { MoreVertical } from 'lucide-react';
 
 export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
-  const center: Point = { x: 160, y: 120 };
-  const maxRadius = 76;
+  const center: Point = { x: 160, y: 125 };
+  const maxRadius = 96;
 
   const scoreValues = useMemo(() => {
     return [
@@ -154,7 +154,8 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
   // 文字標籤坐標
   const labelPositions = useMemo(() => {
     return FIVE_AXIS_CONFIG.map((cfg, idx) => {
-      const pos = calculateFiveAxisVertex(center, maxRadius + 22, idx, 5);
+      const extraOffset = idx === 0 ? 18 : 22;
+      const pos = calculateFiveAxisVertex(center, maxRadius + extraOffset, idx, 5);
       return {
         ...cfg,
         x: pos.x,
@@ -231,9 +232,9 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
       </div>
 
       {/* SVG 五角蛛網圖繪製區 */}
-      <div style={{ width: '100%', flex: 1, minHeight: '220px', position: 'relative' }}>
+      <div style={{ width: '100%', flex: 1, minHeight: '230px', position: 'relative' }}>
         <svg
-          viewBox="0 0 320 250"
+          viewBox="0 0 320 260"
           style={{ width: '100%', height: '100%', overflow: 'visible' }}
           preserveAspectRatio="xMidYMid meet"
         >
@@ -287,7 +288,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
               key={idx}
               cx={v.x}
               cy={v.y}
-              r="3.5"
+              r="4"
               fill="#ef4444"
               stroke="#ffffff"
               strokeWidth="1.5"
@@ -301,18 +302,18 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
                 x={lbl.x}
                 y={lbl.y - 4}
                 textAnchor="middle"
-                fill="#94a3b8"
-                fontSize="10"
-                fontWeight="600"
+                fill="#cbd5e1"
+                fontSize="13"
+                fontWeight="700"
               >
                 {lbl.icon} {lbl.label}
               </text>
               <text
                 x={lbl.x}
-                y={lbl.y + 8}
+                y={lbl.y + 11}
                 textAnchor="middle"
                 fill="#ef4444"
-                fontSize="9.5"
+                fontSize="12"
                 fontWeight="800"
                 fontFamily="monospace"
               >

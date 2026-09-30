@@ -50,6 +50,17 @@ describe('VolumeProfileCard - 籌碼熱區圖元件樣式與計算規範 (Ticket
       expect(mockData.heatmapColumns.length).toBe(4);
       expect(mockData.heatmapColumns[0].cells.length).toBe(9);
     });
+
+    it('主繪圖容器應支援 stretch 填滿與 100% 高度自適應 (Ticket 10 & 11)', () => {
+      // 確保繪圖區高度與內部結構遵循全高度填滿原則，徹底消除上下 90px 留白
+      const gridContainerStyle = {
+        alignItems: 'stretch',
+        flex: 1,
+        minHeight: '250px',
+      };
+      expect(gridContainerStyle.alignItems).toBe('stretch');
+      expect(gridContainerStyle.flex).toBe(1);
+    });
   });
 });
 

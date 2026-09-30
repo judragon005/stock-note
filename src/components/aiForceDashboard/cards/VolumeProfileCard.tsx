@@ -181,9 +181,9 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
           display: 'grid',
           gridTemplateColumns: 'auto 1fr auto',
           gap: '10px',
-          alignItems: 'center',
+          alignItems: 'stretch',
           flex: 1,
-          minHeight: '230px',
+          minHeight: '250px',
         }}
       >
         {/* 1. Y 軸價格刻度 */}
@@ -192,12 +192,14 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
-            height: '190px',
+            height: '100%',
             fontSize: '0.68rem',
             color: '#64748b',
             fontFamily: 'monospace',
             textAlign: 'right',
             paddingRight: '4px',
+            paddingTop: '2px',
+            paddingBottom: '2px',
           }}
         >
           {priceTicks.map((p) => (
@@ -210,7 +212,7 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
           style={{
             display: 'flex',
             gap: '5px',
-            height: '190px',
+            height: '100%',
             background: 'rgba(15, 23, 42, 0.6)',
             borderRadius: '6px',
             padding: '4px',
@@ -251,12 +253,14 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
           style={{
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'space-around',
-            height: '190px',
+            justifyContent: 'space-between',
+            height: '100%',
             fontSize: '0.72rem',
-            gap: '4px',
+            gap: '2px',
             minWidth: '85px',
             whiteSpace: 'nowrap',
+            paddingTop: '2px',
+            paddingBottom: '2px',
           }}
         >
           {buckets.map((b, idx) => {
