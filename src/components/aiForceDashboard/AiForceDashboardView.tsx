@@ -130,6 +130,8 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           if (quote.high !== undefined) fallback.marketBar.highPrice = quote.high;
           if (quote.low !== undefined) fallback.marketBar.lowPrice = quote.low;
           if (quote.volume !== undefined) fallback.marketBar.volumeShares = quote.volume;
+        } else if (resolvedName === targetSymbol) {
+          fallback.marketBar.dataSourceText = `⚠️ 查無此台股標的代碼 (${targetSymbol})，請確認代碼是否輸入正確（如 00403A、2330）`;
         }
         setReport(fallback);
       }

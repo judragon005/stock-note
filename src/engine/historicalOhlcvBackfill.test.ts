@@ -184,6 +184,49 @@ describe('Historical OHLCV & Indicators Backfill Engine (回補引擎)', () => {
         })
       );
     });
+
+    it('Ticket 02: 當台股遭遇 Yahoo 429 限流且 IndexedDB 無資料時，應自動從本地 compact 快取與最新 summary 成功合流並沉澱', async () => {
+      vi.spyOn(db, 'getSymbolOhlcv').mockResolvedValue(null);
+      // 模擬 Yahoo 429 限流
+      vi.spyOn(priceFetcher, 'fetchWithCORSProxy').mockRejectedValue(new Error('HTTP 429 Too Many Requests'));
+      const saveOhlcvSpy = vi.spyOn(db, 'saveSymbolOhlcv').mockResolvedValue();
+      const saveIndicatorsSpy = vi.spyOn(db, 'saveSymbolIndicators').mockResolvedValue();
+
+      // Mock marketCacheLoader
+      const marketCacheLoader = await import('./marketCacheLoader');
+      vi.spyOn(marketCacheLoader, 'loadSymbolCompactHistory').mockResolvedValue([
+        { date: '2026-09-14', open: 10.17, high: 10.17, low: 10.17, close: 10.17, volume: 1000 },
+        { date: '2026-09-15', open: 10.04, high: 10.13, low: 10.02, close: 10.03, volume: 44852439 },
+      ]);
+      vi.spyOn(marketCacheLoader, 'getLatestSummaryQuote').mockResolvedValue({
+        date: '2026-09-30',
+        open: 10.83,
+        high: 10.9,
+        low: 10.78,
+        close: 10.79,
+        volume: 144635371,
+      });
+
+      const result = await backfillSymbolOhlcvAndIndicators('00403A', 'TW');
+
+      expect(result.candles.length).toBe(3);
+      expect(result.candles[0].date).toBe('2026-09-14');
+      expect(result.candles[1].date).toBe('2026-09-15');
+      expect(result.candles[2].date).toBe('2026-09-30');
+      expect(result.candles[2].close).toBe(10.79);
+      expect(result.indicators.length).toBe(3);
+
+      expect(saveOhlcvSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          symbol: '00403A',
+          market: 'TW',
+          candles: expect.arrayContaining([
+            expect.objectContaining({ date: '2026-09-30', close: 10.79 }),
+          ]),
+        })
+      );
+      expect(saveIndicatorsSpy).toHaveBeenCalled();
+    });
   });
 
 
