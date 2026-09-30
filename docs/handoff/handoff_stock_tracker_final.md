@@ -1,14 +1,15 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Document)
 
-> **交接產生時間**：2026-09-29 12:55 (UTC+8)  
+> **交接產生時間**：2026-09-30 11:35 (UTC+8)  
 > **當前最新里程碑**：
-> - **V8.61.0 AI 主力戰情室卡片 04/02/06/07 視覺動態連動與字典說明小方塊抗遮蔽修復**（ADR 0148, Spec 0148, Issue #121, PR #122）：
->   - **卡片 04 AI 籌碼熱區圖動態連動**：依個股歷史 K 線自適應計算 5 階價格刻度（`priceTicks`）與 5/10/20/60 日量價熱力矩陣（`heatmapColumns`），徹底解決切換股票後圖表不更新之歷史問題。
->   - **卡片 02 AI 決策核心三態自適應橫幅**：頂部橫幅不再寫死紅色 `AI WARNING`，依多空綜合訊號自適應呈現多頭綠色 `🚀 AI BULLISH`、中性天藍 `⚡ AI BALANCED`、警戒紅色 `⚠️ AI WARNING`。
->   - **卡片 06 & 07 像素級視覺還原**：06 採用左上角半透明懸浮方塊圖例、三層三色半透明扇面擴散錐與實線圓點震盪路徑；07 色階校準為衰竭藍 ➔ 套牢綠 ➔ 成本黃 ➔ 大量橘，並重塑山脈起伏波峰。
->   - **TermTooltip 字典小視窗抗裁切與防遮蔽**：限制最大高度 280px 並加入微型自訂滾動條，優化智慧翻轉高度預估，支援 ESC 與點擊外部即時關閉。
-> - **V8.58.0 AI 主力戰情室響應式 Bento-Grid 重構與雙層繁中行情列**（ADR 0145, Spec 0145, Issue #112, PR #113）。
-> **品質狀態**：全量單元測試 **1,176/1,176 通過 (100% Passed / 139 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過 (8.14s)。
+> - **V8.62.0 全市場排程目錄絕對錨定、Tooltip Portal 穿透與 AI 戰情室視覺比例優化**（ADR 0149, Spec 0149, Issue #125, PR #126）：
+>   - **排程目錄絕對錨定與資料庫同步閉環 (照片 1)**：廢除 `process.cwd()` 相對路徑依賴，改用 `path.resolve(__dirname, '../../')` 絕對錨定專案根目錄，徹底解決 Windows 工作排程器背景以 System32 啟動導致寫入失敗問題；補齊台股快取頂層 `date` 欄位並加入 0 標的空快取防覆蓋守門員，打通快取 ➔ IndexedDB 自動沉澱閉環。
+>   - **搜尋輸入框彈性伸縮防截斷 (照片 2)**：重構 `HeaderMarketBar.tsx` 中的代碼 input 寬度，移除寫死 `75px`，改採 `minWidth: '95px'` 與動態字元寬度，完整支援 4~8 碼個股、ETF（如 004030）、權證或美股代碼零截斷。
+>   - **Tooltip 全域 Portal 穿透與邊界防禦 (照片 3)**：重構 `TermTooltip.tsx`，使用 React `createPortal` 將浮動卡片直掛 `document.body`，採用 `position: fixed` 與螢幕絕對座標計算，徹底打破父級 `backdrop-filter` 造成的 CSS Stacking Context 限制，全站 15 張卡片與 Header Tooltip 一次性根治遮擋與邊界溢出。
+>   - **Card 04 籌碼熱區圖高度自適應填滿 (照片 4)**：移除 `VolumeProfileCard.tsx` 中寫死的 `height: '190px'`，改為 `flex: 1` 結合 `height: 100%` 且 `alignItems: 'stretch'`，價格刻度、熱力柱方塊與右側圖例垂直撐滿卡片空間，徹底消除上下各 90px 留白。
+>   - **Card 05 風險雷達圖面積與字級擴張 (照片 5)**：修改 `RiskSpiderCard.tsx`，五角蛛網圖半徑擴大至 `maxRadius = 96`（提升約 26% 半徑），標籤字級提升至 13px，數值提升至 12px，顯著提昇易讀性。
+> - **V8.61.0 AI 主力戰情室卡片 04/02/06/07 視覺動態連動與字典說明小方塊抗遮蔽修復**（ADR 0148, Spec 0148, Issue #121, PR #122）。
+> **品質狀態**：全量單元測試 **1,180/1,180 通過 (100% Passed / 139 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過 (9.25s)。
 
 ---
 
@@ -16,11 +17,11 @@
 
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
-- **當前工作分支**：`main` (PR #122 已完成 Squash & Merge 合併，本地分支已全量清理)
-- **單元測試套件**：**1,176/1,176 通過 (139 test suites / 100% 綠燈)**
+- **當前工作分支**：`main` (PR #126 已完成 Squash & Merge 合併，本地分支已全量清理)
+- **單元測試套件**：**1,180/1,180 通過 (139 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V8.61.0**
+- **當前釋出版本**：**V8.62.0**
 - **工作區與分支整潔度**：工作區 100% clean，本地過期 feature 分支已全數刪除，專案臨時備份檔案已全量清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -49,6 +50,7 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0149`](file:///d:/APP/股票紀錄/docs/specs/0149-scheduled-sync-anchor-repair-and-ai-force-cards-ux-enhancements-spec.md) | [`ADR 0149`](file:///d:/APP/股票紀錄/docs/adr/0149-scheduled-sync-anchor-repair-and-ai-force-cards-ux-enhancements.md) | [`.scratch/v8.62.0-scheduled-sync-anchor-repair-and-ai-force-cards-ux-enhancements/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.62.0-scheduled-sync-anchor-repair-and-ai-force-cards-ux-enhancements/issues/) | Issue #125 / PR #126 | V8.62.0 | 全市場排程工作目錄絕對錨定、空數據防清空守門員、搜尋代碼彈性防截斷、Tooltip Portal 穿透、Card 04 籌碼熱區圖自適應填滿、Card 05 風險雷達圖半徑擴大與大字級 |
 | [`Spec 0148`](file:///d:/APP/股票紀錄/docs/specs/0148-ai-force-cards-visual-fidelity-and-popover-boundary-repair-spec.md) | [`ADR 0148`](file:///d:/APP/股票紀錄/docs/adr/0148-ai-force-cards-visual-fidelity-and-popover-boundary-repair.md) | [`.scratch/v8.61.0-ai-force-cards-visual-fidelity-and-popover-boundary-repair/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.61.0-ai-force-cards-visual-fidelity-and-popover-boundary-repair/issues/) | Issue #121 / PR #122 | V8.61.0 | 卡片 04/02/06/07 視覺動態連動、自適應刻度與熱力矩陣、三態橫幅、扇形預測錐與山脈堆疊、字典小方塊抗裁切防遮蔽 |
 | [`Spec 0145`](file:///d:/APP/股票紀錄/docs/specs/0145-ai-force-dashboard-responsive-bento-grid-and-header-redesign-spec.md) | [`ADR 0145`](file:///d:/APP/股票紀錄/docs/adr/0145-ai-force-dashboard-responsive-bento-grid-and-header-redesign.md) | [`.scratch/v8.58.0-ai-force-bento-grid-and-header-redesign/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.58.0-ai-force-bento-grid-and-header-redesign/issues/) | Issue #112 / PR #113 | V8.58.0 | 雙層全繁中即時行情列、01 主 K 線獨立全寬滿版、01➔18 內容導向自然流 Bento-Grid、圖表防碰撞修復 |
 | [`Spec 0144`](file:///d:/APP/股票紀錄/docs/specs/0144-ai-force-cards-06-07-photo-alignment-spec.md) | [`ADR 0144`](file:///d:/APP/股票紀錄/docs/adr/0144-ai-force-cards-06-07-photo-alignment.md) | [`.scratch/v8.57.0-ai-force-cards-06-07-photo-alignment/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.57.0-ai-force-cards-06-07-photo-alignment/issues/) | Issue #109 / PR #110 | V8.57.0 | 卡片 06 雙色發散錐與價格軸、卡片 07 多時段多層波形堆疊圖、卡片 09 籌碼換手率校準 |
