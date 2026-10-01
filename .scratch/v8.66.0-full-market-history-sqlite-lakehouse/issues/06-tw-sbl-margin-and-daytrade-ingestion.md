@@ -10,10 +10,10 @@
 
 **Blocked by:** 05 — 台股三大法人 T86 批次入庫與籌碼表持久化
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] 支援批次抓取 TWSE `TWT93U`、`MI_MARGN` 與 `TWTB4U` 官方資料。
-- [ ] 準確解析借券賣出餘額、融資餘額、融券餘額與當沖百分比。
-- [ ] 更新 `tw_institutional_chips` 該交易日之擴展籌碼欄位。
-- [ ] 支援數據缺失時以 `0` 或前日餘額平滑填補。
-- [ ] 單元測試 `ingest-tw-extended-chips.test.cjs` 驗證擴展籌碼解析與資料庫持久化 100% 綠燈。
+- [x] 支援批次抓取 TWSE `TWT93U`、`MI_MARGN` 與 `TWTB4U` 官方資料。
+- [x] 準確解析借券賣出餘額、融資餘額、融券餘額與當沖百分比。
+- [x] 更新 `tw_institutional_chips` 該交易日之擴展籌碼欄位。
+- [x] 支援數據缺失時以 `0` 或前日餘額平滑填補。
+- [x] 單元測試 `src/engine/ingestTwExtendedChips.test.ts` 驗證擴展籌碼解析與資料庫持久化 100% 綠燈。
