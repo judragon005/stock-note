@@ -8,10 +8,10 @@
 
 **Blocked by:** 02 — 標的註冊表種子入庫與 30ms 模糊搜尋索引
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] 支援解析 TWSE 與 TPEx 官方注意股票公告。
-- [ ] 支援解析 TWSE 與 TPEx 官方處置股票公告。
-- [ ] 準確批次更新 `symbols_meta.status`，未在受處置名單內的標的確保維持或重置為 `NORMAL`。
-- [ ] 提供查詢介面 `getStockStatus(symbol: string): Promise<StockStatus>`。
-- [ ] 單元測試 `tag-tw-stock-status.test.cjs` 驗證處置股命中、狀態切換與復原行為 100% 通過。
+- [x] 支援解析 TWSE 與 TPEx 官方注意股票公告。
+- [x] 支援解析 TWSE 與 TPEx 官方處置股票公告。
+- [x] 準確批次更新 `symbols_meta.status`，未在受處置名單內的標的確保維持或重置為 `NORMAL`。
+- [x] 提供查詢介面 `getStockStatus(symbol: string): Promise<StockStatus>`。
+- [x] 單元測試 `src/engine/tagTwStockStatus.test.ts` 驗證處置股命中、狀態切換與復原行為 100% 通過。
