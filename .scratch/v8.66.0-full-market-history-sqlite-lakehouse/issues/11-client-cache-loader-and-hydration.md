@@ -10,10 +10,10 @@
 
 **Blocked by:** 10 — Vite 原生 Connect 中介層 API
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] `loadSymbolHistoryFromLakehouse` 成功從 `/api/market/history/:symbol` 取得日 K。
-- [ ] 自動將取得之日 K 寫入 IndexedDB。
-- [ ] 模擬 API 網路中斷時，能無縫降級回 IndexedDB 與既有本地快取。
-- [ ] 支援美股標的 (market='US') 正確格式化為標準 `DailyCandle`。
-- [ ] 單元測試 `src/engine/marketCacheLoader.test.ts` 驗證本地 API 優先與平滑降級邏輯 100% 通過。
+- [x] `loadSymbolHistoryFromLakehouse` 成功從 `/api/market/history/:symbol` 取得日 K。
+- [x] 自動將取得之日 K 寫入 IndexedDB。
+- [x] 模擬 API 網路中斷時，能無縫降級回 IndexedDB 與既有本地快取。
+- [x] 支援美股標的 (market='US') 正確格式化為標準 `DailyCandle`。
+- [x] 單元測試 `src/engine/marketCacheLoader.test.ts` 驗證本地 API 優先與平滑降級邏輯 100% 通過。

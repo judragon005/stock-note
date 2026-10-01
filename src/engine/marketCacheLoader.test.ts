@@ -232,4 +232,62 @@ describe('MarketCacheLoader (前端快取秒讀與 IndexedDB 沉澱引擎)', () 
       });
     });
   });
+
+  describe('loadSymbolHistoryFromLakehouse (Ticket 11)', () => {
+    it('優先從本地 API /api/market/history/:symbol 獲取日 K 並沉澱至 IndexedDB', async () => {
+      const mockApiResponse = {
+        symbol: '2330',
+        candles: [
+          { date: '2026-09-29', open: 980, high: 990, low: 975, close: 985, volume: 30000 },
+          { date: '2026-09-30', open: 985, high: 995, low: 980, close: 990, volume: 35000 },
+        ],
+        chips: {},
+      };
+
+      const saveOhlcvSpy = vi.spyOn(db, 'saveSymbolOhlcv').mockResolvedValue(undefined as any);
+
+      // @ts-ignore
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => mockApiResponse,
+      });
+
+      const { loadSymbolHistoryFromLakehouse } = await import('./marketCacheLoader');
+      const result = await loadSymbolHistoryFromLakehouse('2330', 'TW');
+
+      expect(result).toHaveLength(2);
+      expect(result?.[1].close).toBe(990);
+      expect(saveOhlcvSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          symbol: '2330',
+          market: 'TW',
+        })
+      );
+    });
+
+    it('當本地 API 離線 (404/Network Error) 時，應平滑降級為 compact 快取', async () => {
+      // @ts-ignore
+      global.fetch = vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/api/market/history/')) {
+          return Promise.resolve({ ok: false, status: 404 });
+        }
+        if (url.includes('tw_market_ohlcv_compact.json')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              '2330': [{ d: '2026-09-30', o: 980, h: 995, l: 978, c: 990, v: 35000 }],
+            }),
+          });
+        }
+        return Promise.reject(new Error('Unknown url'));
+      });
+
+      const { loadSymbolHistoryFromLakehouse, resetCompactHistoryCache } = await import('./marketCacheLoader');
+      resetCompactHistoryCache();
+
+      const result = await loadSymbolHistoryFromLakehouse('2330', 'TW');
+      expect(result).toHaveLength(1);
+      expect(result?.[0].close).toBe(990);
+    });
+  });
 });

@@ -162,3 +162,61 @@ export async function getLatestSummaryQuote(
   return stock?.quote || null;
 }
 
+/**
+ * 優先從本地 Vite SQLite 數據湖倉載入標的歷史 250 天日 K，並非同步沉澱至 IndexedDB；
+ * 若本地 API 不可用或處於離線環境，平滑降級為 Compact JSON 或已沉澱快取。
+ */
+export async function loadSymbolHistoryFromLakehouse(
+  symbol: string,
+  market: MarketType = 'TW'
+): Promise<DailyCandle[] | null> {
+  const cleanSym = symbol.replace(/\.(TW|TWO)$/i, '').trim().toUpperCase();
+
+  // 1. 優先嘗試請求本地 SQLite API
+  try {
+    const res = await fetch(`/api/market/history/${encodeURIComponent(cleanSym)}?limit=250`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.candles) && data.candles.length > 0) {
+        const candles: DailyCandle[] = data.candles.map((c: any) => ({
+          date: c.date,
+          open: Number(c.open),
+          high: Number(c.high),
+          low: Number(c.low),
+          close: Number(c.close),
+          volume: Number(c.volume),
+        }));
+
+        // 非同步沉澱至 IndexedDB
+        saveSymbolOhlcv({
+          symbol: cleanSym,
+          market,
+          candles,
+          updatedAt: Date.now(),
+        }).catch((err) => {
+          logger.warn(`[marketCacheLoader] IndexedDB 沉澱失敗 (${cleanSym}):`, err);
+        });
+
+        return candles;
+      }
+    }
+  } catch (err) {
+    // 忽略網路錯誤，準備平滑降級
+  }
+
+  // 2. 降級策略：台股標的嘗試使用既有 compact 快取
+  if (market === 'TW') {
+    try {
+      const compactCandles = await loadSymbolCompactHistory(cleanSym);
+      if (compactCandles && compactCandles.length > 0) {
+        return compactCandles;
+      }
+    } catch (err) {
+      // 忽略
+    }
+  }
+
+  return null;
+}
+
+
