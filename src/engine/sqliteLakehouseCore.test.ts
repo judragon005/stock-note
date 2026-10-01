@@ -1,9 +1,10 @@
 import { describe, it, expect, afterAll } from 'vitest';
-import { createRequire } from 'module';
-import fs from 'fs';
-import path from 'path';
 
-const require = createRequire(import.meta.url);
+declare const require: (id: string) => any;
+declare const process: { cwd: () => string };
+
+const fs = require('fs');
+const path = require('path');
 const {
   getSqliteDbConnection,
   initSqliteLakehouseDb,

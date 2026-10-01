@@ -8,10 +8,10 @@
 
 **Blocked by:** 01 — SQLite 資料庫引擎連線層與核心 Schema 初始化
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] 實作 `upsertSymbolsMeta(symbols: SymbolMeta[])` 批次寫入種子名單。
-- [ ] 匯入台股 2,400+ 檔與美股 1,500+ 檔基礎中英文代碼名稱。
-- [ ] 實作 `searchSymbolsMeta` 支援「台積」、「2330」、「NVDA」、「輝達」等模糊關鍵字查詢。
-- [ ] 驗證查詢延遲小於 30ms。
-- [ ] 單元測試 `symbols-universe.test.cjs` 驗證種子寫入完整性與模糊檢索準確率 100% 綠燈。
+- [x] 實作 `upsertSymbolsMeta(symbols: SymbolMeta[])` 批次寫入種子名單。
+- [x] 匯入台股 2,400+ 檔與美股 1,500+ 檔基礎中英文代碼名稱。
+- [x] 實作 `searchSymbolsMeta` 支援「台積」、「2330」、「NVDA」、「輝達」等模糊關鍵字查詢。
+- [x] 驗證查詢延遲小於 30ms。
+- [x] 單元測試 `src/engine/symbolsUniverse.test.ts` 驗證種子寫入完整性與模糊檢索準確率 100% 綠燈。
