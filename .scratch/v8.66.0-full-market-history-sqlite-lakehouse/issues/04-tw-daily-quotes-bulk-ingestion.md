@@ -8,10 +8,10 @@
 
 **Blocked by:** 01 — SQLite 資料庫引擎連線層與核心 Schema 初始化, 02 — 標的註冊表種子入庫與 30ms 模糊搜尋索引
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] 支援從 TWSE 與 TPEx 官方下載當日全市場收盤總表。
-- [ ] 將非數值字串（如 `--`、漲跌停記號）安全解析為合法浮點數。
-- [ ] 啟用 SQLite 批次事務寫入，全市場 2,400+ 檔標的於 15 秒內完成入庫。
-- [ ] 重複日期入庫時採用 `INSERT OR REPLACE` 冪等性覆蓋。
-- [ ] 單元測試 `ingest-tw-quotes.test.cjs` 驗證 mock TWSE/TPEx 官方封包解析與資料庫寫入正確性 100%。
+- [x] 支援從 TWSE 與 TPEx 官方下載當日全市場收盤總表。
+- [x] 將非數值字串（如 `--`、漲跌停記號）安全解析為合法浮點數。
+- [x] 啟用 SQLite 批次事務寫入，全市場 2,400+ 檔標的於 15 秒內完成入庫。
+- [x] 重複日期入庫時採用 `INSERT OR REPLACE` 冪等性覆蓋。
+- [x] 單元測試 `src/engine/ingestTwQuotes.test.ts` 驗證 mock TWSE/TPEx 官方封包解析與資料庫寫入正確性 100%。
