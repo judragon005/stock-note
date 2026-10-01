@@ -10,10 +10,10 @@
 
 **Blocked by:** 01 — SQLite 資料庫引擎連線層與核心 Schema 初始化, 02 — 標的註冊表種子入庫與 30ms 模糊搜尋索引, 04 — 台股官方 TWSE/TPEx 收盤日 K 批次入庫, 08 — 美股 Yahoo Chart 日 K 限流採集器與還原價計算
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] 在 `vite.config.ts` 成功注入 Connect Middleware。
-- [ ] 測試 `/api/market/history/2330?market=TW&limit=250` 能在 10ms 內回傳最新 250 根日 K JSON。
-- [ ] 測試 `/api/market/symbols?q=台積` 能回傳代碼 `2330` 與名稱 `台積電`。
-- [ ] 若標的不存在於資料庫，優雅回傳 404 與 `{ error: 'SYMBOL_NOT_FOUND' }`。
-- [ ] 單元測試 `vite-market-middleware.test.cjs` 驗證路由分派、參數過濾與 JSON 回應格式 100% 綠燈。
+- [x] 在 `vite.config.ts` 成功注入 Connect Middleware。
+- [x] 測試 `/api/market/history/2330?market=TW&limit=250` 能在 10ms 內回傳最新 250 根日 K JSON。
+- [x] 測試 `/api/market/symbols?q=台積` 能回傳代碼 `2330` 與名稱 `台積電`。
+- [x] 若標的不存在於資料庫，優雅回傳 404 與 `{ error: 'SYMBOL_NOT_FOUND' }`。
+- [x] 單元測試 `src/engine/viteMarketMiddleware.test.ts` 驗證路由分派、參數過濾與 JSON 回應格式 100% 綠燈。

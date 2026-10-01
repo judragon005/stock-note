@@ -12,7 +12,6 @@ const {
   getSyncCheckpointStatus,
 } = require('../../scripts/market-sync/us-sync-checkpoint-engine.cjs');
 const {
-  getSqliteDbConnection,
   initSqliteLakehouseDb,
   closeSqliteDb,
 } = require('../../scripts/market-sync/sqlite-db-core.cjs');
