@@ -10,10 +10,10 @@
 
 **Blocked by:** 11 — 前端 marketCacheLoader 接入本地 API 與離線降級
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] 實作 `calculateUsMicrostructureInstitutionalScore(candles: DailyCandle[]): number`。
-- [ ] 驗證當股價站上 VWAP 且 MFI > 60 時，主力籌碼分數顯著高於空頭排列標的。
-- [ ] 確保計算結果在 0~100 之間，不出現 NaN 或超出範圍異常。
-- [ ] 戰情室六維雷達在美股標的上能正確渲染出有意義的機構評分與等級。
-- [ ] 單元測試 `src/engine/multiDimensionRadarEngine.test.ts` 驗證美股量價替代演算法之準確性與邊界值 100%。
+- [x] 實作 `calculateUsMicrostructureInstitutionalScore(candles: DailyCandle[]): number`。
+- [x] 驗證當股價站上 VWAP 且 MFI > 60 時，主力籌碼分數顯著高於空頭排列標的。
+- [x] 確保計算結果在 0~100 之間，不出現 NaN 或超出範圍異常。
+- [x] 戰情室六維雷達在美股標的上能正確渲染出有意義的機構評分與等級。
+- [x] 單元測試 `src/engine/multiDimensionRadarEngine.test.ts` 驗證美股量價替代演算法之準確性與邊界值 100%。

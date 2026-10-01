@@ -7,6 +7,7 @@ import {
   calculateLiquidityScore,
   calculateVolatilityScore,
   calculateMultiDimensionRadar,
+  calculateUsMicrostructureInstitutionalScore,
 } from './multiDimensionRadarEngine';
 import type { InstitutionalFlowData, KlineCandleItem } from '../types/aiForceDashboard';
 
@@ -291,4 +292,118 @@ describe('multiDimensionRadarEngine (Card 03 量化引擎)', () => {
       expect(isNaN(fallback.dimensions.trend)).toBe(false);
     });
   });
+
+  describe('Ticket 12: 美股微觀量價主力替代演算法 (US Volume Microstructure Quant Engine)', () => {
+    it('資料為空或少於 5 根日 K 時，應回傳中性基準 50 分，不產生 NaN', () => {
+      expect(calculateUsMicrostructureInstitutionalScore([])).toBe(50);
+      expect(calculateUsMicrostructureInstitutionalScore([{ high: 100, low: 90, close: 95, volume: 1000 }])).toBe(50);
+    });
+
+    it('多頭格局：股價站上 20D/60D VWAP、MFI > 60、量增價漲且出現爆量紅棒時，分數應達 75 分以上', () => {
+      // 模擬 60 根多頭日 K，價格從 100 漲到 160，伴隨放量紅棒
+      const bullUsCandles = Array.from({ length: 60 }, (_, i) => {
+        const close = 100 + i * 1.0;
+        const open = close - 0.5;
+        const high = close + 1.0;
+        const low = open - 0.5;
+        // 近 5 日有爆量長紅棒
+        const volume = i >= 55 ? 500_000 : 100_000 + i * 2000;
+        return {
+          date: `2026-08-${String((i % 28) + 1).padStart(2, '0')}`,
+          open,
+          high,
+          low,
+          close,
+          volume,
+        };
+      });
+
+      const score = calculateUsMicrostructureInstitutionalScore(bullUsCandles);
+      expect(score).toBeGreaterThanOrEqual(75);
+      expect(score).toBeLessThanOrEqual(100);
+    });
+
+    it('空頭格局：股價跌破 20D/60D VWAP、MFI < 40、破位放量下跌時，分數應低於 40 分', () => {
+      // 模擬 60 根空頭日 K，價格從 150 跌到 90，陰線居多
+      const bearUsCandles = Array.from({ length: 60 }, (_, i) => {
+        const close = 150 - i * 1.0;
+        const open = close + 0.8;
+        const high = open + 0.5;
+        const low = close - 1.0;
+        const volume = 200_000 + (i % 5) * 50_000;
+        return {
+          date: `2026-08-${String((i % 28) + 1).padStart(2, '0')}`,
+          open,
+          high,
+          low,
+          close,
+          volume,
+        };
+      });
+
+      const score = calculateUsMicrostructureInstitutionalScore(bearUsCandles);
+      expect(score).toBeLessThanOrEqual(40);
+      expect(score).toBeGreaterThanOrEqual(0);
+    });
+
+    it('零量或平盤極端數值防禦：不出現 NaN 且數值嚴格在 0~100 區間', () => {
+      const flatCandles = Array.from({ length: 30 }, () => ({
+        open: 100,
+        high: 100,
+        low: 100,
+        close: 100,
+        volume: 0,
+      }));
+
+      const score = calculateUsMicrostructureInstitutionalScore(flatCandles);
+      expect(isNaN(score)).toBe(false);
+      expect(score).toBeGreaterThanOrEqual(0);
+      expect(score).toBeLessThanOrEqual(100);
+    });
+
+    it('calculateMultiDimensionRadar 在美股 market=US 時應自動整合微觀量價分數至法人與籌碼軸', () => {
+      const bullUsCandles = Array.from({ length: 60 }, (_, i) => {
+        const close = 100 + i * 1.0;
+        const open = close - 0.5;
+        const high = close + 1.0;
+        const low = open - 0.5;
+        const volume = i >= 55 ? 500_000 : 100_000 + i * 2000;
+        return {
+          date: `2026-08-${String((i % 28) + 1).padStart(2, '0')}`,
+          open,
+          high,
+          low,
+          close,
+          volume,
+        };
+      });
+
+      const klineCandles: KlineCandleItem[] = bullUsCandles.map((c) => ({
+        ...c,
+        open: c.open ?? c.close,
+        ma5: c.close,
+        ma10: c.close - 2,
+        ma20: c.close - 5,
+        ma60: c.close - 15,
+        k: 70,
+        d: 65,
+        rsi: 65,
+        dif: 2,
+        macd: 1,
+        macdHist: 1,
+      }));
+
+      const result = calculateMultiDimensionRadar({
+        candles: bullUsCandles,
+        klineCandles,
+        market: 'US',
+      });
+
+      // 美股多頭標的的法人軸與籌碼軸應高於預設基準 50 分
+      expect(result.dimensions.institutional).toBeGreaterThan(65);
+      expect(result.dimensions.chips).toBeGreaterThan(60);
+      expect(result.overallScore).toBeGreaterThanOrEqual(65);
+    });
+  });
 });
+
