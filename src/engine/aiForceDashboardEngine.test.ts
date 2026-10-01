@@ -466,6 +466,81 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
       expect(report.decisionCore.settlementNotice).toBeUndefined();
     });
   });
+
+  describe('Ticket 13: 主力戰情室端到端消費、盤中定錨、處置警示與白話文 XAI', () => {
+    const mock250Candles = Array.from({ length: 250 }, (_, i) => {
+      const price = 100 + i * 0.8;
+      const month = String(Math.floor(i / 22) + 1).padStart(2, '0');
+      const day = String((i % 22) + 1).padStart(2, '0');
+      return {
+        date: `2026-${month}-${day}`,
+        open: price - 0.5,
+        high: price + 1.2,
+        low: price - 0.8,
+        close: price,
+        volume: 3000 + (i % 10) * 100,
+      };
+    });
+
+    it('250 天真實日 K 應完整支撐所有關鍵卡片運算，無任何 NaN', () => {
+      const report = generateAiForceReportFromCandles(
+        '2330',
+        '台積電',
+        'TW',
+        mock250Candles,
+        undefined,
+        undefined,
+        new Date('2026-12-15T18:00:00+08:00')
+      );
+
+      expect(report.marketBar.dataPointsCount).toBe(250);
+      expect(report.klineSystem.candles.length).toBe(250);
+      expect(report.klineSystem.keyLevels.mainForceCost).toBeGreaterThan(0);
+      expect(report.multiDimensionRadar.overallScore).toBeGreaterThan(0);
+      expect(report.volumeProfile.buckets.length).toBe(5);
+      expect(report.forecastCone.timeNodes.length).toBeGreaterThan(0);
+      expect(report.riskSpider.mainForceRiskIndex).toBeGreaterThan(0);
+      expect(report.decisionCore.chipHealthScore).toBeGreaterThan(0);
+    });
+
+    it('台股多頭格局下應輸出包含三大法人與主力成本乖離之白話文因果 XAI', () => {
+      const report = generateAiForceReportFromCandles(
+        '2330',
+        '台積電',
+        'TW',
+        mock250Candles,
+        undefined,
+        undefined,
+        new Date('2026-12-15T18:00:00+08:00'),
+        { statusTag: 'DISPOSITION', currency: 'TWD', volumeUnit: '張' }
+      );
+
+      expect(report.marketBar.marketStatusTag).toBe('DISPOSITION');
+      expect(report.marketBar.currency).toBe('TWD');
+      expect(report.marketBar.volumeUnit).toBe('張');
+      expect(report.decisionCore.xaiExplanation).toBeDefined();
+      expect(typeof report.decisionCore.xaiExplanation).toBe('string');
+      expect(report.decisionCore.xaiExplanation!.length).toBeGreaterThan(10);
+    });
+
+    it('美股標的應自適應輸出美股微觀量價因果 XAI 與 USD 股數單位', () => {
+      const reportUs = generateAiForceReportFromCandles(
+        'NVDA',
+        'NVIDIA Corporation',
+        'US',
+        mock250Candles,
+        undefined,
+        undefined,
+        new Date('2026-12-15T23:00:00+08:00'),
+        { statusTag: 'ATTENTION', currency: 'USD', volumeUnit: '股' }
+      );
+
+      expect(reportUs.marketBar.marketStatusTag).toBe('ATTENTION');
+      expect(reportUs.marketBar.currency).toBe('USD');
+      expect(reportUs.marketBar.volumeUnit).toBe('股');
+      expect(reportUs.decisionCore.xaiExplanation).toContain('美股');
+    });
+  });
 });
 
 

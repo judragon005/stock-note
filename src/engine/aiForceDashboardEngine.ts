@@ -14,7 +14,10 @@ import { calculateRiskSpider } from './riskSpiderEngine';
 import { calculateForecastCone } from './forecastConeEngine';
 import { calculateVwapCostStructure, DEFAULT_TIME_NODES } from './vwapCostEngine';
 import { calculateDayTradeRisk } from './dayTradeRiskEngine';
-import { calculateMultiDimensionRadar } from './multiDimensionRadarEngine';
+import {
+  calculateMultiDimensionRadar,
+  calculateUsMicrostructureInstitutionalScore,
+} from './multiDimensionRadarEngine';
 import { estimateMarketSentiment } from './marketSentimentEngine';
 import { calculateAiConfidence } from './aiConfidenceEngine';
 import { getMarketSettlementStatus } from './marketSettlementEngine';
@@ -26,6 +29,7 @@ export {
   calculateVwapCostStructure,
   calculateDayTradeRisk,
   calculateMultiDimensionRadar,
+  calculateUsMicrostructureInstitutionalScore,
   estimateMarketSentiment,
   calculateAiConfidence,
 };
@@ -705,6 +709,12 @@ export function calculateBullBearStrengthFromCandles(
   };
 }
 
+export interface GenerateReportOptions {
+  statusTag?: 'NORMAL' | 'ATTENTION' | 'DISPOSITION';
+  currency?: 'TWD' | 'USD';
+  volumeUnit?: '張' | '股';
+}
+
 /**
  * 依據真實歷史日 K (OHLCV) 數列動態生成完整的 AiForceDashboardReport (Spec 0140 階段一 & Spec 0143 階段二)
  */
@@ -730,7 +740,8 @@ export function generateAiForceReportFromCandles(
     volume?: number;
   },
   institutionalRecords?: RawInstitutionalRecord[],
-  referenceDate: Date = new Date()
+  referenceDate: Date = new Date(),
+  options?: GenerateReportOptions
 ): AiForceDashboardReport {
   // 1. 市場結算狀態檢測 (Spec 0150)
   const settlement = getMarketSettlementStatus(market, referenceDate);
@@ -1027,6 +1038,31 @@ export function generateAiForceReportFromCandles(
 
   const healthSummary = calculateHealthSummaryFromCandles(klineCandles, institutionalFlow);
 
+  // 9. 白話文因果 XAI 生成 (Ticket 13)
+  let xaiExplanation = '';
+  if (market === 'TW') {
+    const lastInst = institutionalFlow.history[institutionalFlow.history.length - 1];
+    const cumInst = lastInst?.cumulativeTotalShares ?? 0;
+    if (cumInst > 1000 && vwapBias > 0) {
+      xaiExplanation = `因外資與投信近 20 日偏多集結 (+${cumInst.toLocaleString()}張)，且收盤價站穩主力成本線 (+${vwapBias.toFixed(1)}%)，量價微觀結構扎實，機構底倉厚實。`;
+    } else if (cumInst < -1000 && vwapBias < 0) {
+      xaiExplanation = `因三大法人持續擴大賣超調節 (${cumInst.toLocaleString()}張)，且跌破主力成本線 (${vwapBias.toFixed(1)}%)，籌碼呈現鬆動承壓，建議防禦觀望。`;
+    } else if (vwapBias > 5) {
+      xaiExplanation = `股價短線衝高大幅脫離主力成本線 (+${vwapBias.toFixed(1)}%)，技術指標偏熱，需留意獲利調節與拉回風險。`;
+    } else {
+      xaiExplanation = `當前股價於主力成本區間 (乖離 ${vwapBias >= 0 ? '+' : ''}${vwapBias.toFixed(1)}%) 震盪整理，法人買賣互見，等待方向表態。`;
+    }
+  } else {
+    const usMicroScore = calculateUsMicrostructureInstitutionalScore(effectiveCandles);
+    if (usMicroScore >= 70 && vwapBias > 0) {
+      xaiExplanation = `因美股微觀資金流 (MFI/OBV) 呈現淨流入且分數達 ${usMicroScore} 分，股價突破長天期 VWAP 成本階梯 (+${vwapBias.toFixed(1)}%)，量價結構扎實，顯示機構資金主動吸籌。`;
+    } else if (usMicroScore <= 40 || vwapBias < -3) {
+      xaiExplanation = `因美股微觀量價動能偏弱 (評分 ${usMicroScore} 分) 且跌破長天期 VWAP 成本階梯 (${vwapBias.toFixed(1)}%)，資金呈淨流出態勢，機構承接意願保守。`;
+    } else {
+      xaiExplanation = `美股量價結構處於均線與 VWAP 附近中性整理 (評分 ${usMicroScore} 分)，動能指標多空平衡，建議觀察突破時機。`;
+    }
+  }
+
   return {
     ...defaultTemplate,
     symbol,
@@ -1055,6 +1091,9 @@ export function generateAiForceReportFromCandles(
       isSettled: settlement.isSettled,
       anchorTradingDate: settlement.anchorTradingDate,
       settlementReason: settlement.reason,
+      marketStatusTag: options?.statusTag ?? (market === 'TW' ? 'NORMAL' : undefined),
+      currency: options?.currency ?? (market === 'US' ? 'USD' : 'TWD'),
+      volumeUnit: options?.volumeUnit ?? (market === 'US' ? '股' : '張'),
       intradayQuote,
       statusBadges: {
         aiScanActive: true,
@@ -1077,6 +1116,7 @@ export function generateAiForceReportFromCandles(
     decisionCore: {
       ...defaultTemplate.decisionCore,
       settlementNotice,
+      xaiExplanation,
       warningBadgeText:
         changePercent >= 0 && healthSummary.chipHealth >= 70 && dayTradeRisk.riskIndex < 40
           ? 'AI BULLISH'

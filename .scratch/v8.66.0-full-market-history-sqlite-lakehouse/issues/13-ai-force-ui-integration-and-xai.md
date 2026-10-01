@@ -11,11 +11,11 @@
 
 **Blocked by:** 06 — 台股借券賣出 SBL、信用交易與當沖資料入庫, 07 — 台股注意股票與處置股票狀態標記管線, 11 — 前端 marketCacheLoader 接入本地 API 與離線降級, 12 — 美股微觀量價主力替代演算法
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] 戰情室完整以 250 天真實歷史數據渲染主 K 線、Volume Profile、均線系統與六維雷達。
-- [ ] 處置股票頂部正確亮起「處置股票 (分盤撮合)」警示燈，注意股票亮起「注意股票」標籤。
-- [ ] 美股與台股單位與幣別切換正確（USD vs TWD，股 vs 張）。
-- [ ] 盤中與盤後定錨時點正確切換 `isSettled` 狀態。
-- [ ] 產出清晰易懂之白話文 XAI 判讀文案。
-- [ ] 單元與組件整合測試 `src/components/aiForceDashboard/HeaderMarketBar.test.tsx` 與 `src/engine/aiForceDashboardEngine.test.ts` 100% 綠燈。
+- [x] 戰情室完整以 250 天真實歷史數據渲染主 K 線、Volume Profile、均線系統與六維雷達。
+- [x] 處置股票頂部正確亮起「處置股票 (分盤撮合)」警示燈，注意股票亮起「注意股票」標籤。
+- [x] 美股與台股單位與幣別切換正確（USD vs TWD，股 vs 張）。
+- [x] 盤中與盤後定錨時點正確切換 `isSettled` 狀態。
+- [x] 產出清晰易懂之白話文 XAI 判讀文案。
+- [x] 單元與組件整合測試 `src/components/aiForceDashboard/HeaderMarketBar.test.ts` 與 `src/engine/aiForceDashboardEngine.test.ts` 100% 綠燈。
