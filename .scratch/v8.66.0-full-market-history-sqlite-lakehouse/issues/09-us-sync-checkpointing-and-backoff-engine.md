@@ -10,10 +10,10 @@
 
 **Blocked by:** 08 — 美股 Yahoo Chart 日 K 限流採集器與還原價計算
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] 實作 `getPendingUsSymbols(targetDate: string): Promise<string[]>`。
-- [ ] 實作 `recordSyncCheckpoint(symbol: string, status: string, error?: string): Promise<void>`。
-- [ ] 支援 429 觸發指數退避等待與佇列切換。
-- [ ] 模擬在中斷 50% 進度後重啟，能精確跳過前 50% 標的並繼續執行剩餘 50%。
-- [ ] 單元測試 `us-sync-checkpoint-engine.test.cjs` 驗證 Checkpoint 狀態切換與中斷恢復邏輯 100% 通過。
+- [x] 實作 `getPendingUsSymbols(targetDate: string): Promise<string[]>`。
+- [x] 實作 `recordSyncCheckpoint(symbol: string, status: string, error?: string): Promise<void>`。
+- [x] 支援 429 觸發指數退避等待與佇列切換。
+- [x] 模擬在中斷 50% 進度後重啟，能精確跳過前 50% 標的並繼續執行剩餘 50%。
+- [x] 單元測試 `src/engine/usSyncCheckpointEngine.test.ts` 驗證 Checkpoint 狀態切換與中斷恢復邏輯 100% 通過。
