@@ -2063,6 +2063,27 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 幣別與單位動態切換（台股 TWD / 張；美股 USD / 股）。
   - 注入 7 條市場因果白話文 XAI 解讀文案，讓散戶一眼看懂籌碼結構與主力動態。
 
+### 全市場個股 7 步深度投研、處置警示端到端與 Canvas 快照匯出 *(新增於 V8.67.0 / Spec #0156 / ADR #0156)*
+
+- **Equity Deep-Dive 7-Step Framework (個股 7 步深度投研決策閉環)**:
+  - 核心模組：`src/engine/equityDeepDiveEngine.ts`、`src/components/equityDeepDive/EquityDeepDiveModal.tsx`。
+  - 貫穿「商業定性 ➔ 財務定量 ➔ 同業對照 ➔ 風險避雷 ➔ 估值推演 ➔ 籌碼微觀 ➔ 交易紀律」的機構級分析框架。
+  - 整合本地湖倉數據（即時行情、本益比、殖利率、三大法人累計買賣超、箱底/箱頂關鍵防線、注意/處置警示），一鍵自動裝配生成結構化 Markdown Prompt Payload。
+
+- **Prompt Factory & Investment Memo Dual-Track Delivery (提示詞工廠與投資筆記雙軌交付)**:
+  - 核心模組：`src/engine/equityDeepDiveEngine.ts`、`src/utils/investmentMemoStorage.ts`。
+  - **模式 A (提示詞工廠)**：支援全量與分步複製，完美相容主流 LLM（ChatGPT、Claude、Gemini、DeepSeek），實現零 Token 外部消耗之本機安全分析。
+  - **模式 B (投資筆記本地沉澱)**：於本地儲存持久化 200 字極簡交易卡（買進理由、目標價、停損價、預計週期、3 大跟蹤指標）；若標的已在庫，支援一鍵雙向同步至持倉風控線。
+
+- **Disposition Effective Window (處置與注意有效判定視窗)**:
+  - 核心模組：`src/components/aiForceDashboard/AiForceDashboardView.tsx`、`src/engine/aiForceDashboardEngine.ts`。
+  - 嚴格比對參考基準日與資料庫處置事件起訖區間 (`[start_date, end_date]`)，解決處置到期後假警報問題，將真實 `statusTag` 注入戰情室 `generateAiForceReportFromCandles` 的 `options` 參數，點亮 `HeaderMarketBar` 警示徽章。
+
+- **Native Canvas Decision Memo Snapshot Exporter (原生 Canvas 決策快照圖檔匯出器)**:
+  - 核心模組：`src/engine/dashboardCanvasExporter.ts`、`src/components/aiForceDashboard/HeaderExportBar.tsx`。
+  - 純前端零外部套件依賴，以 HTML5 原生 `<canvas>` 向量繪製 1920x1080 (2x Retina) 機構級「主力戰情 × 7 步決策卡」高解析度合成圖片，支援一鍵直接下載 PNG。
+
+
 
 
 
