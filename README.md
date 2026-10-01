@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1213%2F1213%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1262%2F1262%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,23 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 全市場歷史日 K 本地緊湊快取注入 IndexedDB 與 Yahoo 代理防限流降級 (`Compact History IndexedDB Hydration & Yahoo Proxy Resilience`) *(V8.65.0 全新發布)*
+### 0. 全市場歷史數據本地 SQLite 湖倉與主力戰情室端到端量化管線 (`Full Market History SQLite Lakehouse & AI Force Pipeline`) *(V8.66.0 全新發布)*
+
+- **Node 22 原生 SQLite 湖倉單一真實數據來源 (`Node 22 Native SQLite Lakehouse SSOT`)**：
+  - 以 Node 22 內建 `node:sqlite` (`DatabaseSync`) 實作本機單一真實資料庫 (`market-lakehouse.db`)，零原生 addon 依賴，啟用 WAL 模式兼顧超高效能與可靠性。
+  - 建立 8 張正規化資料表（`symbols`, `daily_quotes`, `institutional_flows`, `sbl_margin_trades`, `disposition_attention_events`, `sync_checkpoints`, `sync_logs`, `lakehouse_metadata`）。
+- **滾動 250 日保留與空間防禦機制 (`Rolling Retention & Disk Vacuum Guard`)**：
+  - 自動維持滾動 250 個交易日最新視窗，修剪過期舊資料；累積修剪超過門檻筆數時自動觸發 `VACUUM`，徹底杜絕磁碟容量膨脹。
+- **美股微觀量價主力替代演算法 (`US Volume Microstructure Quant Engine`)**：
+  - 針對美股無官方集中法人報表特性，以 20D/60D VWAP 成本階梯乖離率、14D MFI 資金流量、10D OBV 能量潮趨勢與近 3 日異常大單爆量偵測，合成 0~100 之客觀機構主力評分，讓美股標的於六維雷達法人軸獲得無縫量化映射。
+- **Vite 原生 Connect 中介層 API 與客戶端自癒降級 (`Vite Middleware API & Client Hydration`)**：
+  - 於 Vite 開發伺服器掛載 `/api/lakehouse/*` 端點；前端 `marketCacheLoader` 優先讀取本地 Lakehouse API，離線或無服務時平滑降級至 IndexedDB/compact 快取。
+- **主力戰情室處置警示、單位自適應與白話文因果 XAI (`AI Force Causal XAI & Disposition Alerts`)**：
+  - 頂部行情 Bar 整合處置股票警示徽章（🚨 分盤撮合）與注意股票標籤（⚠️ 注意）。
+  - 自動區分台股（TWD / 張）與美股（USD / 股）之計價幣別與成交量單位。
+  - 注入 7 條市場因果白話文 XAI 解讀文案，一眼看清籌碼背後邏輯。
+
+### 0. 全市場歷史日 K 本地緊湊快取注入 IndexedDB 與 Yahoo 代理防限流降級 (`Compact History IndexedDB Hydration & Yahoo Proxy Resilience`) *(V8.65.0)*
 
 - **按需緊湊歷史日 K 提取與單例記憶體快取 (`On-Demand Compact History Hydration & Cache`)**：
   - 在 `marketCacheLoader.ts` 中實作 `loadSymbolCompactHistory`，按需從 `tw_market_ohlcv_compact.json` (17.5MB) 解析特定標的並格式化為標準 `DailyCandle`。

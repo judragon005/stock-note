@@ -2031,6 +2031,39 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 核心模組：`src/components/aiForceDashboard/AiForceDashboardView.tsx`。
   - 當使用者輸入查無資料且無官方對應名稱之代碼（如筆誤之 `004EA`）時，系統明確標註「⚠️ 查無此台股標的代碼，請確認代碼是否輸入正確（如 00403A、2330）」，消除使用者對系統故障之猜忌。
 
+### 全市場歷史數據本地 SQLite 湖倉與主力戰情室端到端量化管線 *(新增於 V8.66.0 / Spec #0155 / ADR #0155 / Issue #138)*
+
+- **Node 22 Native SQLite Lakehouse Architecture (Node 22 原生 SQLite 湖倉架構)**:
+  - 核心模組：`scripts/market-sync/lakehouse/sqliteLakehouseEngine.cjs`、`src/types/marketLakehouse.ts`。
+  - 採用 Node.js 22 內建 `node:sqlite` (`DatabaseSync`)，以 WAL 模式與 `NORMAL` synchronous 實作高效能、零原生 addon 依賴的本機單一真實資料庫 (`market-lakehouse.db`)。
+  - 建立 8 張正規化資料表，涵蓋台美股全市場代碼 (`symbols`)、收盤行情日 K (`daily_quotes`)、三大法人籌碼 (`institutional_flows`)、融資券與借券賣出 (`sbl_margin_trades`)、處置與注意事件 (`disposition_attention_events`)、斷點續傳 (`sync_checkpoints`)、日誌與湖倉元數據。
+
+- **Rolling Retention & Disk Vacuum Guard (滾動 250 日保留與空間防禦機制)**:
+  - 核心模組：`scripts/market-sync/lakehouse/retentionGuard.cjs`。
+  - 每次數據匯入自動修剪過期舊資料，嚴格維持最新 250 個交易日滾動視窗；累積修剪超過門檻筆數時自動觸發 `VACUUM`，徹底杜絕磁碟容量膨脹。
+
+- **Official Ingestion Pipelines & US Checkpoint Recovery (官方多源全量匯入與美股斷點續傳)**:
+  - 核心模組：`scripts/market-sync/lakehouse/twseBulkIngestion.cjs`、`scripts/market-sync/lakehouse/t86InstitutionalIngestion.cjs`、`scripts/market-sync/lakehouse/sblMarginIngestion.cjs`、`scripts/market-sync/lakehouse/dispositionStockTagger.cjs`、`scripts/market-sync/lakehouse/usYahooFetcher.cjs`、`scripts/market-sync/lakehouse/usSyncCheckpointEngine.cjs`。
+  - 涵蓋 TWSE/TPEx 官方收盤行情、T86 三大法人、借券賣出/融資券、處置與注意股票標籤全量寫入。
+  - 美股引入 Rate-Limited Yahoo Fetcher 搭配指數退避與斷點續傳狀態機；強制採用 Yahoo `adjclose`，徹底解決美股因除權息造成 VWAP 與主力成本斷崖跳空之瑕疵。
+
+- **Vite Connect Middleware API & Client Hydration (Vite 原生中介層 API 與客戶端平滑降級)**:
+  - 核心模組：`vite.config.ts`、`src/api/lakehouseMiddleware.ts`、`src/engine/marketCacheLoader.ts`。
+  - 於 Vite Dev Server 掛載 `/api/lakehouse/*` 端點，以高效能 SQL 提供行情與籌碼查詢。
+  - 前端 `marketCacheLoader` 優先讀取本地 Lakehouse API，離線或無服務時平滑降級至 IndexedDB/compact 快取，實現高可用自癒。
+
+- **US Microstructure Quant Engine & Main Force Replacement (美股微觀量價主力替代演算法)**:
+  - 核心模組：`src/engine/multiDimensionRadarEngine.ts`。
+  - 函式：`calculateUsMicrostructureInstitutionalScore(candles: MicrostructureCandleItem[]): number`。
+  - 針對美股無官方集中法人報表特性，以 20D/60D VWAP 成本階梯乖離率、14D MFI 資金流量、10D OBV 能量潮趨勢與近 3 日異常大單爆量偵測，合成 0~100 之客觀機構主力評分，讓美股標的於六維雷達法人軸獲得無縫量化映射。
+
+- **AI Force Bento UI Integration & Causal XAI (主力戰情室端到端整合、處置警示與白話文 XAI)**:
+  - 核心模組：`src/components/aiForceDashboard/HeaderMarketBar.tsx`、`src/engine/aiForceDashboardEngine.ts`、`src/types/aiForceDashboard.ts`。
+  - 支援處置股票（🚨 分盤撮合）與注意股票（⚠️ 注意）警示徽章渲染。
+  - 幣別與單位動態切換（台股 TWD / 張；美股 USD / 股）。
+  - 注入 7 條市場因果白話文 XAI 解讀文案，讓散戶一眼看懂籌碼結構與主力動態。
+
+
 
 
 
