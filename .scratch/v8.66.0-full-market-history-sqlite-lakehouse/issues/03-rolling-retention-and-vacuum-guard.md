@@ -7,10 +7,10 @@
 
 **Blocked by:** 01 — SQLite 資料庫引擎連線層與核心 Schema 初始化
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] 實作 `pruneExpiredCandles(symbol?: string, keepDays?: number): Promise<{ deletedCandles: number }>`。
-- [ ] 實作 `pruneExpiredChips(symbol?: string, keepDays?: number): Promise<{ deletedChips: number }>`。
-- [ ] 實作 `runIncrementalVacuum()` 定期釋放未使用的頁面。
-- [ ] 驗證當單檔股票注入 600 筆數據時，執行修剪後精確只保留最新 500 筆，舊筆數被安全刪除。
-- [ ] 單元測試 `retention-cleaner.test.cjs` 驗證修剪邏輯、邊界保留與 VACUUM 執行無異常。
+- [x] 實作 `pruneExpiredCandles(symbol?: string, keepDays?: number): Promise<{ deletedCandles: number }>`。
+- [x] 實作 `pruneExpiredChips(symbol?: string, keepDays?: number): Promise<{ deletedChips: number }>`。
+- [x] 實作 `runIncrementalVacuum()` 定期釋放未使用的頁面。
+- [x] 驗證當單檔股票注入 600 筆數據時，執行修剪後精確只保留最新 500 筆，舊筆數被安全刪除。
+- [x] 單元測試 `src/engine/retentionCleaner.test.ts` 驗證修剪邏輯、邊界保留與 VACUUM 執行無異常。
