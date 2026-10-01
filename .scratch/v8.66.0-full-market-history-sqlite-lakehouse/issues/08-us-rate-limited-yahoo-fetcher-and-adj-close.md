@@ -9,10 +9,10 @@
 
 **Blocked by:** 01 — SQLite 資料庫引擎連線層與核心 Schema 初始化, 02 — 標的註冊表種子入庫與 30ms 模糊搜尋索引
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] 支援從 Yahoo Finance 抓取指定標的 250 天日 K 與還原收盤價。
-- [ ] 驗證遇到股票分割（如 NVDA 拆股）時，還原收盤價與除權息因子計算正確，無價格斷層。
-- [ ] 內建 800ms~1200ms 自適應請求間隔防禦。
-- [ ] 成功寫入 SQLite `daily_candles`（標記 market='US'）。
-- [ ] 單元測試 `ingest-us-quotes.test.cjs` 驗證 mock Yahoo Chart 封包解析、還原價轉換與限流錯誤拋出 100%。
+- [x] 支援從 Yahoo Finance 抓取指定標的 250 天日 K 與還原收盤價。
+- [x] 驗證遇到股票分割（如 NVDA 拆股）時，還原收盤價與除權息因子計算正確，無價格斷層。
+- [x] 內建 800ms~1200ms 自適應請求間隔防禦。
+- [x] 成功寫入 SQLite `daily_candles`（標記 market='US'）。
+- [x] 單元測試 `src/engine/ingestUsQuotes.test.ts` 驗證 mock Yahoo Chart 封包解析、還原價轉換與限流錯誤拋出 100%。
