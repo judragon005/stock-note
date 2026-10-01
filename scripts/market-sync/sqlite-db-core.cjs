@@ -4,7 +4,14 @@
  * 基於 Node.js 22+ 原生 node:sqlite 模組，零第三方套件依賴
  */
 
-const { DatabaseSync } = require('node:sqlite');
+let DatabaseSync = null;
+try {
+  const sqlite = require('node:sqlite');
+  DatabaseSync = sqlite.DatabaseSync;
+} catch {
+  // 環境未支援 node:sqlite (如 Node < 22)
+}
+
 const fs = require('fs');
 const path = require('path');
 
@@ -13,6 +20,13 @@ const DEFAULT_DB_PATH = path.resolve(__dirname, '../../.scratch/market-cache/mar
 
 let globalDbInstance = null;
 let currentDbPath = null;
+
+/**
+ * 檢查當前執行階段是否支援 node:sqlite
+ */
+function isSqliteSupported() {
+  return typeof DatabaseSync === 'function';
+}
 
 /**
  * 取得或自訂 SQLite 儲存庫實體路徑
@@ -37,6 +51,10 @@ function ensureDirectoryExists(filePath) {
  * @returns {DatabaseSync}
  */
 function getSqliteDbConnection(customPath) {
+  if (!isSqliteSupported()) {
+    throw new Error('ERR_SQLITE_NOT_SUPPORTED: 當前 Node.js 執行階段不支援 node:sqlite (需 Node 22+)');
+  }
+
   const dbPath = getDbPath(customPath);
 
   if (globalDbInstance && currentDbPath === dbPath) {
@@ -154,6 +172,7 @@ function closeSqliteDb() {
 module.exports = {
   DEFAULT_DB_PATH,
   getDbPath,
+  isSqliteSupported,
   getSqliteDbConnection,
   initSqliteLakehouseDb,
   closeSqliteDb,

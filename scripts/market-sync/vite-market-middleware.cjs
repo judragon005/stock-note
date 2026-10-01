@@ -5,7 +5,7 @@
  */
 
 const url = require('url');
-const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+const { getSqliteDbConnection, initSqliteLakehouseDb, isSqliteSupported } = require('./sqlite-db-core.cjs');
 const { searchSymbolsMeta } = require('./seed-symbols-universe.cjs');
 
 /**
@@ -16,6 +16,16 @@ function createMarketApiMiddleware(customDbPath) {
   return function marketApiMiddleware(req, res, next) {
     if (!req.url || !req.url.startsWith('/api/market/')) {
       return next();
+    }
+
+    if (!isSqliteSupported()) {
+      res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(
+        JSON.stringify({
+          error: 'SQLITE_UNSUPPORTED',
+          message: '當前 Node.js 執行階段不支援 node:sqlite，請使用 Node.js 22+。',
+        })
+      );
     }
 
     const parsedUrl = url.parse(req.url, true);
