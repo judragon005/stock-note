@@ -1,9 +1,21 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const { createMarketApiMiddleware } = require('./scripts/market-sync/vite-market-middleware.cjs');
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'vite-plugin-market-sqlite-api',
+      configureServer(server) {
+        server.middlewares.use(createMarketApiMiddleware());
+      },
+    },
+  ],
   server: {
     port: 3000,
     open: false,

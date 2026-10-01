@@ -29,7 +29,7 @@ jobs:
       - name: 設定 Node.js 環境 (Set up Node.js)
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: 安裝相依套件 (Install dependencies)

@@ -123,5 +123,36 @@ describe('HeaderMarketBar - 行情 Bar 格式化與狀態燈規範 (Ticket 02)',
       expect(changeMeta.color).toBe('#94a3b8');
     });
   });
+
+  describe('Ticket 13: 處置股票警示徽章與美股單位適配', () => {
+    it('處置股票與注意股票狀態標籤正確判定', () => {
+      const getStatusBadgeText = (tag?: 'NORMAL' | 'ATTENTION' | 'DISPOSITION') => {
+        if (tag === 'DISPOSITION') return '🚨 處置股票 (分盤撮合)';
+        if (tag === 'ATTENTION') return '⚠️ 注意股票';
+        return null;
+      };
+
+      expect(getStatusBadgeText('DISPOSITION')).toBe('🚨 處置股票 (分盤撮合)');
+      expect(getStatusBadgeText('ATTENTION')).toBe('⚠️ 注意股票');
+      expect(getStatusBadgeText('NORMAL')).toBeNull();
+      expect(getStatusBadgeText(undefined)).toBeNull();
+    });
+
+    it('美股與台股成交量單位與幣別自適應切換', () => {
+      const getVolumeLabel = (isSettled: boolean, volumeUnit?: string, currency?: string) => {
+        const unit = volumeUnit ?? (currency === 'USD' ? '股' : '張');
+        return isSettled ? `成交量(${unit})` : `前日成交量(${unit})`;
+      };
+
+      // 台股已結算
+      expect(getVolumeLabel(true, '張', 'TWD')).toBe('成交量(張)');
+      // 台股未結算
+      expect(getVolumeLabel(false, '張', 'TWD')).toBe('前日成交量(張)');
+      // 美股已結算
+      expect(getVolumeLabel(true, '股', 'USD')).toBe('成交量(股)');
+      // 美股未結算
+      expect(getVolumeLabel(false, undefined, 'USD')).toBe('前日成交量(股)');
+    });
+  });
 });
 

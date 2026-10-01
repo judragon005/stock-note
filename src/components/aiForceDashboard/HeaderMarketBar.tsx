@@ -225,6 +225,52 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
           </button>
         </form>
 
+        {/* 處置/注意股票警示徽章 (Ticket 13) */}
+        {data.marketStatusTag === 'DISPOSITION' && (
+          <span
+            data-testid="market-disposition-badge"
+            style={{
+              padding: '4px 10px',
+              borderRadius: '6px',
+              background: 'rgba(239, 68, 68, 0.22)',
+              color: '#f87171',
+              border: '1px solid #ef4444',
+              fontSize: '0.75rem',
+              fontWeight: 800,
+              letterSpacing: '0.5px',
+              whiteSpace: 'nowrap',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 0 10px rgba(239, 68, 68, 0.2)',
+            }}
+          >
+            🚨 處置股票 (分盤撮合)
+          </span>
+        )}
+        {data.marketStatusTag === 'ATTENTION' && (
+          <span
+            data-testid="market-attention-badge"
+            style={{
+              padding: '4px 10px',
+              borderRadius: '6px',
+              background: 'rgba(245, 158, 11, 0.22)',
+              color: '#fbbf24',
+              border: '1px solid #f59e0b',
+              fontSize: '0.75rem',
+              fontWeight: 800,
+              letterSpacing: '0.5px',
+              whiteSpace: 'nowrap',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 0 10px rgba(245, 158, 11, 0.2)',
+            }}
+          >
+            ⚠️ 注意股票
+          </span>
+        )}
+
         {/* 右側：4 大全繁體中文科技感狀態指示燈 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           {/* 1. AI 智慧掃描 */}
@@ -368,6 +414,21 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
             <span style={{ fontSize: '1.3rem', fontWeight: 800, color: '#ffffff' }}>
               {formatMarketMetric(data.currentPrice, 2)}
             </span>
+            {data.currency && (
+              <span
+                data-testid="market-currency-badge"
+                style={{
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  color: '#94a3b8',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  padding: '1px 5px',
+                  borderRadius: '4px',
+                }}
+              >
+                {data.currency}
+              </span>
+            )}
             {data.isSettled === false && data.intradayQuote && (
               <span
                 data-testid="market-intraday-reference"
@@ -428,11 +489,13 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
 
         <div style={{ width: '1px', height: '26px', background: 'rgba(255,255,255,0.12)' }} />
 
-        {/* 成交量 (張) */}
+        {/* 成交量 (張/股) */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
           <TermTooltip termId="volumeShares">
             <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-              {data.isSettled === false ? '前日成交量(張)' : '成交量(張)'}
+              {data.isSettled === false
+                ? `前日成交量(${data.volumeUnit ?? (data.currency === 'USD' ? '股' : '張')})`
+                : `成交量(${data.volumeUnit ?? (data.currency === 'USD' ? '股' : '張')})`}
             </span>
           </TermTooltip>
           <span style={{ fontSize: '1.02rem', fontWeight: 700, color: '#38bdf8' }}>

@@ -12,15 +12,170 @@ function clamp(val: number, min: number = 0, max: number = 100): number {
   return Math.max(min, Math.min(max, Math.round(val)));
 }
 
+export interface MicrostructureCandleItem {
+  open?: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+/**
+ * Ticket 12: 美股微觀量價主力替代演算法 (US Volume Microstructure Quant Engine)
+ * 透過 20D/60D VWAP 成本階梯偏離率、14D MFI 資金流量、OBV 能量潮與異常爆量偵測，量化美股主力機構籌碼評分 (0~100)
+ */
+export function calculateUsMicrostructureInstitutionalScore(
+  candles: MicrostructureCandleItem[] = []
+): number {
+  if (!candles || candles.length < 5) {
+    return 50;
+  }
+
+  const n = candles.length;
+  const lastCandle = candles[n - 1];
+  const lastClose = lastCandle.close;
+
+  // 1. 計算 20D 與 60D VWAP
+  const recent20 = candles.slice(-20);
+  const recent60 = candles.slice(-60);
+
+  const calcVwap = (items: MicrostructureCandleItem[]) => {
+    let sumVp = 0;
+    let sumVol = 0;
+    for (const c of items) {
+      const tp = (c.high + c.low + c.close) / 3;
+      sumVp += tp * c.volume;
+      sumVol += c.volume;
+    }
+    if (sumVol <= 0) {
+      // 零成交量回退至 SMA(close)
+      return items.reduce((acc, c) => acc + c.close, 0) / items.length;
+    }
+    return sumVp / sumVol;
+  };
+
+  const vwap20 = calcVwap(recent20);
+  const vwap60 = calcVwap(recent60);
+
+  const bias20 = vwap20 > 0 ? ((lastClose - vwap20) / vwap20) * 100 : 0;
+  const bias60 = vwap60 > 0 ? ((lastClose - vwap60) / vwap60) * 100 : 0;
+
+  // 2. 計算 14D MFI (Money Flow Index)
+  let posMF = 0;
+  let negMF = 0;
+  const mfiWindow = candles.slice(-15);
+  for (let i = 1; i < mfiWindow.length; i++) {
+    const cur = mfiWindow[i];
+    const prev = mfiWindow[i - 1];
+    const curTp = (cur.high + cur.low + cur.close) / 3;
+    const prevTp = (prev.high + prev.low + prev.close) / 3;
+    const rawMF = curTp * cur.volume;
+
+    if (curTp > prevTp) {
+      posMF += rawMF;
+    } else if (curTp < prevTp) {
+      negMF += rawMF;
+    }
+  }
+
+  let mfi = 50;
+  if (posMF + negMF > 0) {
+    if (negMF === 0) {
+      mfi = 100;
+    } else if (posMF === 0) {
+      mfi = 0;
+    } else {
+      const mr = posMF / negMF;
+      mfi = 100 - (100 / (1 + mr));
+    }
+  }
+
+  // 3. 計算近 10 日 OBV 趨勢
+  const obvWindow = candles.slice(-11);
+  let obvChange = 0;
+  for (let i = 1; i < obvWindow.length; i++) {
+    const cur = obvWindow[i];
+    const prev = obvWindow[i - 1];
+    if (cur.close > prev.close) {
+      obvChange += cur.volume;
+    } else if (cur.close < prev.close) {
+      obvChange -= cur.volume;
+    }
+  }
+
+  // 4. 偵測大單異常量 (Volume Spikes)
+  const avgVol20 = recent20.reduce((acc, c) => acc + c.volume, 0) / recent20.length;
+  let hasBullishVolumeSpike = false;
+  let hasBearishVolumeSpike = false;
+  const recent3 = candles.slice(-3);
+  for (const c of recent3) {
+    const open = c.open ?? c.close;
+    if (avgVol20 > 0 && c.volume >= avgVol20 * 2.0) {
+      if (c.close > open) {
+        hasBullishVolumeSpike = true;
+      } else if (c.close < open) {
+        hasBearishVolumeSpike = true;
+      }
+    }
+  }
+
+  // 5. 綜合量化計分
+  let score = 50;
+
+  // VWAP 偏離評分
+  if (bias20 > 0 && bias60 > 0) {
+    score += bias20 > 5 ? 18 : 12;
+  } else if (bias20 < 0 && bias60 < 0) {
+    score -= bias20 < -5 ? 18 : 12;
+  } else if (bias20 > 0) {
+    score += 5;
+  } else {
+    score -= 5;
+  }
+
+  // MFI 資金流評分
+  if (mfi >= 60) {
+    score += mfi >= 75 ? 14 : 10;
+  } else if (mfi <= 40) {
+    score -= mfi <= 25 ? 14 : 10;
+  }
+
+  // OBV 能量潮評分
+  if (obvChange > 0) {
+    score += 8;
+  } else if (obvChange < 0) {
+    score -= 8;
+  }
+
+  // 爆量大單吸籌/出貨修正
+  if (hasBullishVolumeSpike) {
+    score += 8;
+  }
+  if (hasBearishVolumeSpike) {
+    score -= 8;
+  }
+
+  return clamp(score, 0, 100);
+}
+
 /**
  * Ticket 01: 法人軸量化子函式 (0~100)
  */
 export function calculateInstitutionalScore(
   flow: InstitutionalFlowData,
-  market: MarketType = 'TW'
+  market: MarketType = 'TW',
+  candles?: MicrostructureCandleItem[]
 ): number {
+  if (market === 'US') {
+    // 美股無集中三大法人，改採微觀量價主力替代演算法
+    if (candles && candles.length >= 5) {
+      return calculateUsMicrostructureInstitutionalScore(candles);
+    }
+    return 50; // 無日 K 資料時提供中性基準 50
+  }
+
   if (market !== 'TW' || !flow || !flow.history || flow.history.length === 0) {
-    return 50; // 美股或無三大法人資料時提供中性基準 50
+    return 50;
   }
 
   const lastInst = flow.history[flow.history.length - 1];
@@ -244,9 +399,13 @@ export function calculateMultiDimensionRadar(
 
   const lastKline = klineCandles[klineCandles.length - 1];
 
-  const institutional = calculateInstitutionalScore(institutionalFlow, market);
+  const institutional = calculateInstitutionalScore(institutionalFlow, market, candles);
   const trend = calculateTrendScore(lastKline, mainForceCost);
-  const chips = calculateChipsScore(institutionalFlow);
+  let chips = calculateChipsScore(institutionalFlow);
+  if (market === 'US') {
+    // 美股無官方集中三大法人，籌碼軸由量價微觀機構力道與趨勢結構共同映射
+    chips = clamp(Math.round(institutional * 0.85 + trend * 0.15), 0, 100);
+  }
   const liquidity = calculateLiquidityScore(candles, market);
   const volatility = calculateVolatilityScore(candles);
   const momentum = calculateMomentumScore(lastKline, candles);

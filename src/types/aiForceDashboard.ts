@@ -20,6 +20,9 @@ export interface MarketBarData {
   isSettled?: boolean; // 是否已達正式收盤且盤後數據結算完畢
   anchorTradingDate?: string; // 量化分析基準日 (YYYY-MM-DD)
   settlementReason?: string; // 未結算之說明提示
+  marketStatusTag?: 'NORMAL' | 'ATTENTION' | 'DISPOSITION'; // 注意股票或處置股票狀態標籤
+  currency?: 'TWD' | 'USD'; // 標的計價幣別
+  volumeUnit?: '張' | '股'; // 成交量單位
   intradayQuote?: {
     price: number;
     change: number;
@@ -94,6 +97,7 @@ export interface DecisionCoreData {
   resistanceRange: [number, number]; // [2490.0, 2490.0]
   riskHorizonDays: string; // "1~4 個交易日"
   settlementNotice?: string; // 尚未收盤結算時之警示橫幅文案
+  xaiExplanation?: string; // 白話文因果判讀文案 (XAI)
 }
 
 /**
