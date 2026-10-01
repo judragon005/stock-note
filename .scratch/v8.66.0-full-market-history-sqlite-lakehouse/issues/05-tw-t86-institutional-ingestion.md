@@ -8,10 +8,10 @@
 
 **Blocked by:** 04 — 台股官方 TWSE/TPEx 收盤日 K 批次入庫
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] 支援從 TWSE 與 TPEx 官方下載三大法人買賣超全市場日報。
-- [ ] 準確解析外資、投信、自營商三方淨買賣張數並轉換為合法數值。
-- [ ] 寫入 `tw_institutional_chips`（若該日期已存在收盤日 K 則更新其法人欄位）。
-- [ ] 遇到官方未結算或假日空封包時安全退出並記錄日誌。
-- [ ] 單元測試 `ingest-tw-t86.test.cjs` 驗證 mock T86 封包解析與三大法人數值累計 100% 通過。
+- [x] 支援從 TWSE 與 TPEx 官方下載三大法人買賣超全市場日報。
+- [x] 準確解析外資、投信、自營商三方淨買賣張數並轉換為合法數值。
+- [x] 寫入 `tw_institutional_chips`（若該日期已存在收盤日 K 則更新其法人欄位）。
+- [x] 遇到官方未結算或假日空封包時安全退出並記錄日誌。
+- [x] 單元測試 `src/engine/ingestTwT86.test.ts` 驗證 mock T86 封包解析與三大法人數值累計 100% 通過。
