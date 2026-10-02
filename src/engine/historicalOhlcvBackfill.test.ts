@@ -8,6 +8,7 @@ import {
 import { DailyCandle } from '../types/indicators';
 import * as db from '../utils/db';
 import * as priceFetcher from './priceFetcher';
+import * as marketCacheLoader from './marketCacheLoader';
 
 describe('Historical OHLCV & Indicators Backfill Engine (回補引擎)', () => {
   beforeEach(() => {
@@ -15,6 +16,7 @@ describe('Historical OHLCV & Indicators Backfill Engine (回補引擎)', () => {
     vi.spyOn(db, 'saveSymbolOhlcv').mockResolvedValue();
     vi.spyOn(db, 'saveSymbolIndicators').mockResolvedValue();
     vi.spyOn(db, 'getSymbolIndicators').mockResolvedValue(null);
+    vi.spyOn(marketCacheLoader, 'loadSymbolHistoryFromLakehouse').mockResolvedValue(null);
   });
 
   describe('1. mergeDailyCandles (增量 K 線合併與去重排序)', () => {
@@ -39,6 +41,28 @@ describe('Historical OHLCV & Indicators Backfill Engine (回補引擎)', () => {
   });
 
   describe('2. backfillSymbolOhlcvAndIndicators (單一標的回補流程)', () => {
+    it('優先從本地 SQLite 湖倉 (loadSymbolHistoryFromLakehouse) 讀取日 K，若 >= 5 根則直接返回，不走外部 Yahoo API', async () => {
+      const lakehouseCandles: DailyCandle[] = [
+        { date: '2026-09-25', open: 48.0, high: 48.5, low: 47.8, close: 48.2, volume: 15000 },
+        { date: '2026-09-26', open: 48.2, high: 48.8, low: 48.0, close: 48.6, volume: 18000 },
+        { date: '2026-09-27', open: 48.5, high: 49.0, low: 48.3, close: 48.4, volume: 22000 },
+        { date: '2026-09-28', open: 48.4, high: 48.9, low: 48.2, close: 48.7, volume: 19000 },
+        { date: '2026-10-01', open: 48.7, high: 49.2, low: 48.5, close: 48.85, volume: 30000 },
+      ];
+
+      const lakeSpy = vi
+        .spyOn(marketCacheLoader, 'loadSymbolHistoryFromLakehouse')
+        .mockResolvedValue(lakehouseCandles);
+      const fetchSpy = vi.spyOn(priceFetcher, 'fetchWithCORSProxy');
+
+      const result = await backfillSymbolOhlcvAndIndicators('2886', 'TW');
+      expect(lakeSpy).toHaveBeenCalledWith('2886', 'TW');
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(result.candles.length).toBe(5);
+      expect(result.indicators.length).toBe(5);
+      expect(result.candles[4].close).toBe(48.85);
+    });
+
     it('若本地已有快取且未過期，應直接讀取快取並返回，不重複發送網路請求', async () => {
       const mockCandles: DailyCandle[] = [
         { date: '2026-01-01', open: 100, high: 105, low: 98, close: 102, volume: 1000 },

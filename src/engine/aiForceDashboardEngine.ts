@@ -69,9 +69,6 @@ export function createDefaultAiForceReport(
   const safePrice = price ?? 100;
   const change = price !== undefined ? (isDefault2360 ? 205.0 : Number((price * 0.012).toFixed(2))) : undefined;
   const changePercent = price !== undefined ? (isDefault2360 ? 9.83 : 1.2) : undefined;
-  const openPrice = price !== undefined ? (isDefault2360 ? 2135.0 : Number((price * 0.99).toFixed(2))) : undefined;
-  const highPrice = price !== undefined ? (isDefault2360 ? 2290.0 : Number((price * 1.015).toFixed(2))) : undefined;
-  const lowPrice = price !== undefined ? (isDefault2360 ? 2135.0 : Number((price * 0.985).toFixed(2))) : undefined;
   const highResistance = price !== undefined ? (isDefault2360 ? 2490.0 : Number((price * 1.08).toFixed(2))) : 0;
   const mainForceCost = price !== undefined ? (isDefault2360 ? 2130.65 : Number((price * 0.96).toFixed(2))) : 0;
   const supportLevel = price !== undefined ? (isDefault2360 ? 1875.0 : Number((price * 0.92).toFixed(2))) : 0;
@@ -89,21 +86,21 @@ export function createDefaultAiForceReport(
       currentPrice: price,
       change,
       changePercent,
-      volumeShares: isDataPending ? undefined : (isDefault2360 ? 2681 : 1200),
-      transactionCount: isDataPending ? undefined : (isDefault2360 ? 6260 : 3100),
-      openPrice,
-      highPrice,
-      lowPrice,
+      volumeShares: isDefault2360 ? 2681 : undefined,
+      transactionCount: isDefault2360 ? 6260 : undefined,
+      openPrice: isDefault2360 ? 2135.0 : price,
+      highPrice: isDefault2360 ? 2290.0 : price,
+      lowPrice: isDefault2360 ? 2135.0 : price,
       latestTradingDate: settlement.anchorTradingDate,
-      dataPointsCount: isDataPending ? 0 : (isDefault2360 ? 98 : 30),
+      dataPointsCount: isDefault2360 ? 98 : 0,
       dataSourceText: market === 'TW' ? '日 K TWSE | 法人 TWSE | 融資券 FinMind' : 'Yahoo Finance',
-      dataRangeText: isDataPending ? '尚無歷史交易日資料' : `${todayStr} 共 ${isDefault2360 ? 98 : 30} 個交易日`,
+      dataRangeText: isDefault2360 ? `${todayStr} 共 98 個交易日` : '尚無歷史交易日資料',
       isSettled: settlement.isSettled,
       anchorTradingDate: settlement.anchorTradingDate,
       settlementReason: settlement.reason,
       statusBadges: {
         aiScanActive: true,
-        mainForceTracking: !isDataPending,
+        mainForceTracking: isDefault2360,
         marketStatus: 'NORMAL',
         volatilityAlert: false,
       },

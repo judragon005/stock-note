@@ -18,6 +18,52 @@ const {
   computeIncrementalIndicators,
   saveJsonAtomic,
 } = require('./market-sync-core.cjs');
+const { initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+
+/**
+ * 批次將單一標的歷史日 K 數列寫入 SQLite daily_candles 資料表 (Spec 0159)
+ */
+function saveTwHistoryToSqlite(symbol, candles, customDbPath) {
+  if (!symbol || !Array.isArray(candles) || candles.length === 0) return 0;
+  const db = initSqliteLakehouseDb(customDbPath);
+  const stmt = db.prepare(`
+    INSERT INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume, turnover)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(symbol, date) DO UPDATE SET
+      open = excluded.open,
+      high = excluded.high,
+      low = excluded.low,
+      close = excluded.close,
+      adj_close = excluded.adj_close,
+      volume = excluded.volume,
+      turnover = excluded.turnover
+  `);
+
+  db.exec('BEGIN TRANSACTION;');
+  let count = 0;
+  try {
+    for (const c of candles) {
+      if (!c || !c.date || !c.close) continue;
+      stmt.run(
+        String(symbol).trim(),
+        String(c.date).trim(),
+        Number(c.open) || Number(c.close),
+        Number(c.high) || Number(c.close),
+        Number(c.low) || Number(c.close),
+        Number(c.close),
+        Number(c.adj_close || c.close),
+        Number(c.volume) || 0,
+        Number(c.turnover) || 0
+      );
+      count++;
+    }
+    db.exec('COMMIT;');
+  } catch (err) {
+    db.exec('ROLLBACK;');
+    throw err;
+  }
+  return count;
+}
 
 // 本機數據庫路徑
 const HISTORICAL_BASE_DIR = 'D:\\APP\\諮詢\\私人\\股市\\台股加權指數_歷史數據\\上市櫃股票與債券_歷史數據';
@@ -356,6 +402,13 @@ async function runFullMarketHistoryBackfill() {
       v: c.volume,
     }));
 
+    // 寫入本地 SQLite 湖倉 (保留最近 250 根供戰情室毫秒級秒讀, Spec 0159)
+    try {
+      saveTwHistoryToSqlite(symbol, alignedCandles.slice(-250));
+    } catch (e) {
+      // 靜默容錯
+    }
+
     processedCount++;
   }
 
@@ -421,4 +474,5 @@ module.exports = {
   alignCandlesWithCalendar,
   parseChipHistoryCsv,
   runFullMarketHistoryBackfill,
+  saveTwHistoryToSqlite,
 };
