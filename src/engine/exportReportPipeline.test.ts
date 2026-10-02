@@ -65,4 +65,11 @@ describe('exportReportPipeline & DDE defense', () => {
     expect(html).toContain('主力語意：調節減碼');
     expect(html).toContain('AI 主力行為量化決策總結報告');
   });
+
+  it('triggerAllChartsDownload 在環境中無圖表時應安全回傳 0，不崩潰', async () => {
+    const { triggerAllChartsDownload } = await import('./exportReportPipeline');
+    const count = await triggerAllChartsDownload('2886');
+    expect(typeof count).toBe('number');
+    expect(count).toBe(0);
+  });
 });

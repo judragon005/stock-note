@@ -75,19 +75,25 @@ function auditUsLakehouseUniverse(targetDate, customDbPath) {
   const successCount = successRow?.count || 0;
   const failedCount = failedRow?.count || 0;
 
-  // 3. 今日存入之日 K 筆數
-  const candlesRow = db.prepare("SELECT count(DISTINCT symbol) as count FROM daily_candles WHERE date = ?").get(dateStr);
+  // 3. 最新交易日存入之日 K 標的數與總 K 線筆數
+  const latestDateRow = db.prepare("SELECT max(date) as maxDate FROM daily_candles").get();
+  const latestCandleDate = latestDateRow?.maxDate || dateStr;
+  const candlesRow = db.prepare("SELECT count(DISTINCT symbol) as count FROM daily_candles WHERE date = ?").get(latestCandleDate);
   const candlesCount = candlesRow?.count || 0;
+  const totalCandlesRow = db.prepare("SELECT count(*) as total FROM daily_candles").get();
+  const totalCandles = totalCandlesRow?.total || 0;
 
   const coverageRate = totalUsRegistered > 0 ? (successCount / totalUsRegistered) * 100 : 0;
 
   return {
     auditDate: dateStr,
+    latestCandleDate,
     market: 'US',
     totalUsRegistered,
     successCount,
     failedCount,
     candlesCount,
+    totalCandles,
     coverageRate: Number(coverageRate.toFixed(2)),
     status: totalUsRegistered >= 1500 ? 'HEALTHY_UNIVERSE' : 'TIER_1_ONLY',
   };
@@ -159,3 +165,35 @@ module.exports = {
   HOLIDAYS_TW_2026,
   HOLIDAYS_US_2026,
 };
+
+// 若作為 CLI 腳本直接執行
+if (require.main === module) {
+  console.log('🔍 [Lakehouse Audit] 正在稽核全市場 SQLite 湖倉與快取健康度...\n');
+  const audit = auditUsLakehouseUniverse();
+  console.log(`========================================`);
+  console.log(` 🏛️  美股湖倉資料完整度稽核報告 (${audit.auditDate})`);
+  console.log(`========================================`);
+  console.log(`- 湖倉註冊標的數 : ${audit.totalUsRegistered} 檔`);
+  console.log(`- 今日成功同步數 : ${audit.successCount} 檔`);
+  console.log(`- 同步失敗/空值  : ${audit.failedCount} 檔`);
+  console.log(`- 最新交易日標的 : ${audit.candlesCount} 檔 (美東收盤: ${audit.latestCandleDate})`);
+  console.log(`- 湖倉總日 K 筆數: ${audit.totalCandles.toLocaleString()} 筆`);
+  console.log(`- 當前採集涵蓋率 : ${audit.coverageRate}%`);
+  console.log(`- 湖倉健康狀態   : ${audit.status}`);
+  console.log(`========================================\n`);
+
+  // 嘗試讀取 JSON 快取以產出綜合稽核報表
+  let twSummary = null;
+  let usSummary = null;
+  const pTw = path.join(process.cwd(), 'public', 'market-cache', 'tw_market_summary.json');
+  const pUs = path.join(process.cwd(), 'public', 'market-cache', 'us_market_summary.json');
+  if (fs.existsSync(pTw)) {
+    try { twSummary = JSON.parse(fs.readFileSync(pTw, 'utf8')); } catch {}
+  }
+  if (fs.existsSync(pUs)) {
+    try { usSummary = JSON.parse(fs.readFileSync(pUs, 'utf8')); } catch {}
+  }
+  const fullReport = generateAuditReport(twSummary, usSummary);
+  console.log(`✔ 稽核報告已儲存至 public/market-cache/sync_audit_report.json (整體狀態: ${fullReport.systemOverall})`);
+}
+

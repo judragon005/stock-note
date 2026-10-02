@@ -67,6 +67,17 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
       expect((report as any).isDataPending).toBe(true);
     });
 
+    it('Spec 0159 / Ticket 03: 當查詢 2886 帶入即時行情但無日 K 時，不得捏造 1200 張成交量或 30 日筆數', () => {
+      const report = createDefaultAiForceReport('2886', '兆豐金', 'TW', 48.45);
+
+      expect(report.marketBar.currentPrice).toBe(48.45);
+      expect(report.marketBar.volumeShares).toBeUndefined();
+      expect(report.marketBar.transactionCount).toBeUndefined();
+      expect(report.marketBar.dataPointsCount).toBe(0);
+      expect(report.marketBar.dataRangeText).toBe('尚無歷史交易日資料');
+      expect(report.klineSystem.candles).toEqual([]);
+    });
+
     it('盤中時段 (12:00) 呼叫 createDefaultAiForceReport 應正確標記 isSettled 為 false 並退回上一交易日定錨', () => {
       const intradayWednesday = new Date('2026-09-30T12:00:00+08:00');
       const report = createDefaultAiForceReport('00403A', '主動統一升級50', 'TW', undefined, intradayWednesday);

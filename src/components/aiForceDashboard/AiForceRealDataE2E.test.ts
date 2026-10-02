@@ -89,4 +89,36 @@ describe('Ticket 03: AI 主力戰情室端到端資料庫注入與全視圖驗�
     expect(paged.items.length).toBe(15);
     expect(paged.items[0].date).toBe('2026-09-30'); // 降冪第一筆為最新
   });
+
+  it('Spec 0159: 查詢 2886 兆豐金時，系統優先經由本地湖倉加載 61 根日 K，頂部與主 K 線圖協同呈現真實行情', async () => {
+    const mock2886Candles = Array.from({ length: 61 }, (_, i) => ({
+      date: `2026-07-${String((i % 28) + 1).padStart(2, '0')}`,
+      open: 48 + i * 0.02,
+      high: 48.5 + i * 0.02,
+      low: 47.8 + i * 0.02,
+      close: 48.85,
+      volume: 30000000,
+    }));
+
+    vi.spyOn(marketCacheLoader, 'loadSymbolHistoryFromLakehouse').mockResolvedValue(mock2886Candles);
+    const fetchSpy = vi.spyOn(priceFetcher, 'fetchWithCORSProxy');
+
+    const backfillResult = await backfillSymbolOhlcvAndIndicators('2886', 'TW');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(backfillResult.candles.length).toBe(61);
+
+    const report = generateAiForceReportFromCandles(
+      '2886',
+      '兆豐金',
+      'TW',
+      backfillResult.candles,
+      { price: 48.85, volume: 30000 }
+    );
+
+    // 驗證頂部不再是假 1200 張或 30 日，而是真實 61 日與 48.85 元
+    expect(report.marketBar.currentPrice).toBe(48.85);
+    expect(report.marketBar.dataPointsCount).toBe(61);
+    expect(report.klineSystem.candles.length).toBe(61);
+    expect(report.klineSystem.candles[60].close).toBe(48.85);
+  });
 });

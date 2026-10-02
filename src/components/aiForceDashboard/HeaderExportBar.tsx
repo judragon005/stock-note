@@ -4,6 +4,7 @@ import {
   triggerCsvDownload,
   triggerHtmlDownload,
   triggerPrintPdf,
+  triggerAllChartsDownload,
 } from '../../engine/exportReportPipeline';
 import { triggerDashboardCanvasPngDownload } from '../../engine/dashboardCanvasExporter';
 import { getInvestmentMemo } from '../../utils/investmentMemoStorage';
@@ -92,9 +93,16 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
         showToast('已生成並下載高解析度 1920x1080 決策快照圖檔 (PNG)');
         break;
       }
-      case 'ALL_CHARTS_PNG':
-        showToast('已將全量 SVG 圖表打包快照至下載佇列');
+      case 'ALL_CHARTS_PNG': {
+        triggerAllChartsDownload(report.symbol).then((count) => {
+          showToast(
+            count > 0
+              ? `已成功生成並下載 ${count} 張核心量化圖表 (PNG)`
+              : '已啟動全量 SVG 圖表快照擷取...'
+          );
+        });
         break;
+      }
     }
   };
 

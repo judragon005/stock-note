@@ -15,6 +15,8 @@ const {
   computeIncrementalIndicators,
   saveJsonAtomic,
 } = require('./market-sync-core.cjs');
+const { saveTwQuotesToSqlite } = require('./ingest-tw-quotes.cjs');
+const { saveTwT86ToSqlite } = require('./ingest-tw-t86.cjs');
 
 function fetchJson(url, options = {}) {
   return new Promise((resolve, reject) => {
@@ -78,9 +80,9 @@ async function retryFetch(fn, retries = 3, delayMs = 1500) {
   throw lastErr;
 }
 
-async function runTwMarketSync(targetDateInput) {
+async function runTwMarketSync(targetDateInput, customDbPath) {
   const startTime = Date.now();
-  console.log(`[${new Date().toISOString()}] 開始執行台股全市場盤後自動同步 (Spec 0132)...`);
+  console.log(`[${new Date().toISOString()}] 開始執行台股全市場盤後自動同步 (Spec 0132 / 0159)...`);
 
   let targetDate = new Date();
   if (targetDateInput) {
@@ -194,13 +196,39 @@ async function runTwMarketSync(targetDateInput) {
     stocks: stocksMap,
   };
 
-  console.log(`[4/4] 持久化寫入本地快取資料庫...`);
+  console.log(`[4/4] 持久化寫入本地快取資料庫與 SQLite 湖倉...`);
   const projectRoot = path.resolve(__dirname, '../../');
   const targetPath1 = path.join(projectRoot, '.scratch', 'market-cache', 'tw_market_summary.json');
   const targetPath2 = path.join(projectRoot, 'public', 'market-cache', 'tw_market_summary.json');
 
   saveJsonAtomic(targetPath1, outputPayload);
   saveJsonAtomic(targetPath2, outputPayload);
+
+  // 寫入本地 SQLite 湖倉 (Spec 0159: daily_candles 與 tw_institutional_chips)
+  try {
+    const quoteRes = saveTwQuotesToSqlite(allQuotes, customDbPath);
+    console.log(`      ✔ SQLite 收盤日 K 成功入庫: ${quoteRes.savedCount} 筆`);
+  } catch (sqlErr) {
+    console.warn(`      ⚠️ SQLite 收盤日 K 入庫警告:`, sqlErr.message);
+  }
+
+  try {
+    const t86Formatted = {};
+    for (const [sym, c] of Object.entries(allChips)) {
+      if (c) {
+        t86Formatted[sym] = {
+          symbol: sym,
+          foreignNet: c.foreignNetShares || 0,
+          trustNet: c.trustNetShares || 0,
+          dealerNet: c.dealerNetShares || 0,
+        };
+      }
+    }
+    const t86Res = saveTwT86ToSqlite(t86Formatted, dateStr, customDbPath);
+    console.log(`      ✔ SQLite 三大法人籌碼成功入庫: ${t86Res.savedCount} 筆`);
+  } catch (t86Err) {
+    console.warn(`      ⚠️ SQLite 三大法人籌碼入庫警告:`, t86Err.message);
+  }
 
   console.log(`✔ 台股全市場盤後同步完成！共同步 ${successCount} 檔標的，耗時 ${Date.now() - startTime}ms。`);
   console.log(`快取儲存位置: ${targetPath2}`);

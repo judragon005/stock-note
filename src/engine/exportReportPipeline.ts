@@ -120,3 +120,86 @@ export function triggerPrintPdf() {
     window.print();
   }
 }
+
+/**
+ * 遍歷頁面中的 SVG 圖表並批次匯出為 PNG 檔案 (Spec 0159 / Ticket 04)
+ */
+export async function triggerAllChartsDownload(symbol: string): Promise<number> {
+  if (typeof document === 'undefined') return 0;
+
+  const svgElements = Array.from(document.querySelectorAll('svg'));
+  // 過濾掉微小圖標 (小於 100x50 的通常是按鈕內部小圖標)
+  const chartSvgs = svgElements.filter((svg) => {
+    const rect = svg.getBoundingClientRect();
+    const width = rect.width || svg.clientWidth || parseInt(svg.getAttribute('width') || '0', 10);
+    const height = rect.height || svg.clientHeight || parseInt(svg.getAttribute('height') || '0', 10);
+    return width >= 80 && height >= 40;
+  });
+
+  if (chartSvgs.length === 0) {
+    return 0;
+  }
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  let exportedCount = 0;
+
+  for (let i = 0; i < chartSvgs.length; i++) {
+    const svg = chartSvgs[i];
+    try {
+      const serializer = new XMLSerializer();
+      let source = serializer.serializeToString(svg);
+
+      if (!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
+        source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+      }
+
+      const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+      const img = new Image();
+
+      await new Promise<void>((resolve) => {
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = (img.width || 680) * 2;
+            canvas.height = (img.height || 300) * 2;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.fillStyle = '#0f172a';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+              canvas.toBlob((blob) => {
+                if (blob) {
+                  const pngUrl = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = pngUrl;
+                  a.download = `${symbol}_chart_${i + 1}_${dateStr}.png`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(pngUrl);
+                  exportedCount++;
+                }
+                resolve();
+              }, 'image/png');
+            } else {
+              resolve();
+            }
+          } catch {
+            resolve();
+          }
+        };
+        img.onerror = () => resolve();
+        img.src = url;
+      });
+
+      URL.revokeObjectURL(url);
+    } catch {
+      // 容錯跳過單一圖形
+    }
+  }
+
+  return exportedCount;
+}
+

@@ -10,7 +10,11 @@ import {
   saveSymbolIndicators,
 } from '../utils/db';
 import { logger } from '../utils/logger';
-import { loadSymbolCompactHistory, getLatestSummaryQuote } from './marketCacheLoader';
+import {
+  loadSymbolCompactHistory,
+  getLatestSummaryQuote,
+  loadSymbolHistoryFromLakehouse,
+} from './marketCacheLoader';
 
 // 預設快取新鮮度：當日已收盤或 6 小時內不重複請求外部全量
 const CACHE_FRESHNESS_MS = 6 * 60 * 60 * 1000;
@@ -68,6 +72,23 @@ export async function backfillSymbolOhlcvAndIndicators(
   indicators: MuscleBookerIndicatorPoint[];
 }> {
   const cleanSymbol = symbol.trim().toUpperCase();
+
+  // 0. Layer 1 (最高優先): 優先嘗試從本地 SQLite 湖倉毫秒級加載 (Spec 0159 / 0155)
+  if (!forceRefresh) {
+    try {
+      const lakehouseCandles = await loadSymbolHistoryFromLakehouse(cleanSymbol, market);
+      if (lakehouseCandles && lakehouseCandles.length >= 5) {
+        const indicators = calculateMuscleBookerIndicators(lakehouseCandles);
+        return {
+          candles: lakehouseCandles,
+          indicators,
+        };
+      }
+    } catch (lakeErr) {
+      logger.warn(`Failed to read SQLite lakehouse for ${cleanSymbol}:`, lakeErr);
+    }
+  }
+
   let existingStoreCandles: DailyCandle[] = [];
 
   // 1. 檢查本地 IndexedDB 快取

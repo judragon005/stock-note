@@ -208,6 +208,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
   const [period, setPeriod] = useState<KlinePeriodMode>('60D');
   const [subchartMode, setSubchartMode] = useState<SubchartIndicatorMode>('VOL');
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // 1. 若無真實歷史資料，建立 30 根示範 K 線，並強制按日期升冪排序
   const rawCandles = useMemo(() => {
@@ -509,21 +510,100 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
             })}
           </div>
 
-          <button
-            type="button"
-            aria-label="選項"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#64748b',
-              cursor: 'pointer',
-              padding: '2px',
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
-            <MoreVertical size={14} />
-          </button>
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              aria-label="選項"
+              onClick={() => setIsMenuOpen((prev) => !prev)}
+              style={{
+                background: isMenuOpen ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
+                border: 'none',
+                color: isMenuOpen ? '#38bdf8' : '#64748b',
+                cursor: 'pointer',
+                padding: '3px 5px',
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <MoreVertical size={14} />
+            </button>
+
+            {isMenuOpen && (
+              <div
+                data-testid="kline-options-popover"
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '4px',
+                  background: 'rgba(15, 23, 42, 0.95)',
+                  border: '1px solid rgba(59, 130, 246, 0.35)',
+                  borderRadius: '8px',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
+                  backdropFilter: 'blur(12px)',
+                  padding: '4px',
+                  zIndex: 50,
+                  minWidth: '150px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '2px',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPeriod('60D');
+                    setIsMenuOpen(false);
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#e2e8f0',
+                    fontSize: '0.72rem',
+                    padding: '6px 10px',
+                    textAlign: 'left',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <span>重設為 60D 週期</span>
+                  {period === '60D' && <span style={{ color: '#38bdf8' }}>✓</span>}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSubchartMode('VOL');
+                    setIsMenuOpen(false);
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#e2e8f0',
+                    fontSize: '0.72rem',
+                    padding: '6px 10px',
+                    textAlign: 'left',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <span>切換為量能副圖</span>
+                  {subchartMode === 'VOL' && <span style={{ color: '#10b981' }}>✓</span>}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
