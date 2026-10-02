@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1335%2F1335%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1340%2F1340%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,20 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 主力戰情室台股湖倉管線貫通、淘汰假數據污染與 UI 缺陷修復 (`AI Force TW Lakehouse Pipeline & UI Defect Repair`) *(V8.72.0 全新發布)*
+### 0. 市場數據過期自動追趕同步、湖倉全量推進至 10/02 與主 K 線單一真實來源 (SSOT) 縫合 (`Market Sync Catch-up & K-Line SSOT Alignment`) *(V8.73.0 全新發布)*
+
+- **開機與在線自適應追趕同步器 (`Startup & Online Catch-up Engine`) (Spec 0160)**：
+  - 徹底解決關機休眠錯過每日 16:00/08:00 定時排程的問題。Vite 中介層啟動時非同步巡檢台美股最新日期，若落後當前市場已結算交易日，背景自動觸發追趕任務，不阻塞主伺服器首屏響應。
+  - 前端以 `useMarketCatchupSync` 監聽分頁甦醒 (`visibilitychange`) 與網路連線 (`online`)，電腦喚醒時自動重查 `/api/market/sync-status`，追趕完成時戰情室靜默重載。
+- **全市場 2,361 檔歷史 CSV 數據庫全量灌入 SQLite 湖倉 (`Full Market Lakehouse Backfill to 2026-10-02`)**：
+  - 執行全量回補，將本機歷史 CSV 數據庫完整灌入 `.scratch/market-cache/market_history.db`，成功寫入 141,069 筆日 K，致茂 (2360) 與 0050 最新日 K 均推進至 2026-10-02。
+- **主力戰情室預載調整為 0050 元大台灣50 (`Default Symbol 0050 Alignment`)**：
+  - 將主力戰情室預設標的全面切換為旗艦指數 ETF「0050 (元大台灣50)」，提供更貼近大盤權重的初始看盤體驗。
+- **主 K 線圖防斷層自適應日 K 縫合與單一真實來源 (SSOT) 守護 (`Kline SSOT Auto-Stitch & Anti-Mosaic Guard`)**：
+  - 當市場已結算且外部即時報價已取得今日收盤價時，若湖倉日 K 稍有落後，引擎自動將該收盤行情作為最新一根日 K 縫合至主 K 線圖，確保頂部看板與主 K 線最後一根 100% 絕對對齊。
+  - 杜絕跨日期假數據拼裝：若即時報價缺乏開高低量且日期落後，嚴禁舊日 K 開高低量冒充今日數值。
+
+### 1. 主力戰情室台股湖倉管線貫通、淘汰假數據污染與 UI 缺陷修復 (`AI Force TW Lakehouse Pipeline & UI Defect Repair`) *(V8.72.0)*
 
 - **台股排程每日同步寫入 SQLite 本地湖倉 (`SQLite Lakehouse TW Ingestion & History Backfill`) (Spec 0159)**：
   - 每日 16:00 `sync-tw-market.cjs` 自動將全市場收盤行情與 T86 三大法人買賣超以事務寫入 SQLite 本地湖倉 `daily_candles` 與 `tw_institutional_chips`。

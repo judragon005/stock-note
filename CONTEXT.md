@@ -2153,3 +2153,15 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **K-Line Header Options Menu & Overlay Toggles (主 K 線圖選項選單與關鍵價位引線開關)**:
   - 核心模組：`src/components/aiForceDashboard/cards/KLineChartCard.tsx`。
   - 修復右上角無響應之死按鈕，實裝 Popover 互動選單，支援「顯示/隱藏關鍵價位引線（高檔壓力、主力成本、支撐區）」動態切換，以及「重設為 60D 週期與成交量副圖」一鍵復位。
+
+- **Startup & Online Catch-up Engine (啟動與在線自適應追趕同步器) (Spec 0160)**:
+  - 核心模組：`scripts/market-sync/vite-market-middleware.cjs` (`/api/market/sync-status`, `triggerCatchupTask`)、`src/hooks/useMarketCatchupSync.ts`。
+  - 在 Vite Connect 中介層啟動時非同步巡檢資料庫最新日期，若台美股落後當前市場已結算之錨定交易日，背景自動啟動追趕 Worker 補齊缺漏。
+  - 前端以 `useMarketCatchupSync` 監聽分頁甦醒 (`visibilitychange`) 與網路連線 (`online`)，電腦喚醒時自動重查 `/api/market/sync-status`，追趕完成時戰情室靜默重載。
+
+- **Kline SSOT Auto-Stitch & Anti-Mosaic Guard (主 K 線圖單一真實來源自適應縫合與防拼裝) (Spec 0160)**:
+  - 核心模組：`src/engine/aiForceDashboardEngine.ts` (`generateAiForceReportFromCandles`)、`src/components/aiForceDashboard/AiForceDashboardView.tsx`。
+  - 主力戰情室預載標的切換為旗艦指數 ETF「0050 (元大台灣50)」。
+  - 當市場已結算且外部即時報價已取得今日收盤價時，若湖倉日 K 稍有落後，引擎自動將該收盤行情作為最新一根日 K 縫合至主 K 線圖，確保頂部看板與主 K 線最後一根 100% 絕對對齊。
+  - 杜絕跨日期假數據拼裝：若即時報價缺乏開高低量且日期跨日落後，嚴禁舊日 K 開高低量冒充今日數值。
+

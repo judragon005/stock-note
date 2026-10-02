@@ -886,7 +886,7 @@ export const App: React.FC = () => {
       {/* 活頁: ⚡ 主力戰情室 (AI Force Decision Dashboard) */}
       {activeTab === 'aiforce' && (
         <AiForceDashboardView
-          initialSymbol="2360"
+          initialSymbol="0050"
           initialMarket="TW"
           holdings={holdings}
         />

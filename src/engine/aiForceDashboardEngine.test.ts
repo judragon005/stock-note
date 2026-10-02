@@ -553,6 +553,102 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
       expect(reportUs.decisionCore.xaiExplanation).toContain('美股');
     });
   });
+
+  describe('Spec 0160 - 日 K 防斷層自適應縫合與 SSOT 單一真實來源規範', () => {
+    it('1. 預設主力戰情室報表應以 0050 元大台灣50 為預設標的', () => {
+      const report = createDefaultAiForceReport();
+      expect(report.symbol).toBe('0050');
+      expect(report.name).toBe('元大台灣50');
+      expect(report.market).toBe('TW');
+    });
+
+    it('2. 當台股已結算且日 K 數列落後時，應自適應將外部即時收盤價縫合為最新一根日 K', () => {
+      // 模擬 10 根只到 2026-09-15 的日 K
+      const laggingCandles = [];
+      for (let i = 1; i <= 10; i++) {
+        laggingCandles.push({
+          date: `2026-09-${String(i).padStart(2, '0')}`,
+          open: 2000,
+          high: 2050,
+          low: 1980,
+          close: 2020,
+          volume: 50000,
+        });
+      }
+
+      // 基準時間為週五下午 16:30 (已結算，最新交易日為 2026-10-02)
+      const settledTime = new Date('2026-10-02T16:30:00+08:00');
+      const realtimeQuote = {
+        price: 2190,
+        change: 110,
+        changePercent: 5.29,
+        open: 2145,
+        high: 2225,
+        low: 2135,
+        volume: 3257024,
+      };
+
+      const report = generateAiForceReportFromCandles(
+        '2360',
+        '致茂',
+        'TW',
+        laggingCandles,
+        realtimeQuote,
+        undefined,
+        settledTime
+      );
+
+      // 主 K 線圖的最後一根日 K 應成功被縫合至 2026-10-02
+      const candles = report.klineSystem.candles;
+      const lastCandle = candles[candles.length - 1];
+
+      expect(lastCandle.date).toBe('2026-10-02');
+      expect(lastCandle.close).toBe(2190);
+      expect(lastCandle.open).toBe(2145);
+      expect(lastCandle.high).toBe(2225);
+      expect(lastCandle.low).toBe(2135);
+
+      // 頂部看板與主 K 線最後一根完全對齊
+      expect(report.marketBar.latestTradingDate).toBe('2026-10-02');
+      expect(report.marketBar.currentPrice).toBe(2190);
+      expect(report.marketBar.openPrice).toBe(2145);
+    });
+
+    it('3. 當即時報價缺乏開高低量且日期跨日落後時，嚴禁拿舊日 K 拼裝今日開高低量', () => {
+      const laggingCandles = [];
+      for (let i = 1; i <= 10; i++) {
+        laggingCandles.push({
+          date: `2026-09-${String(i).padStart(2, '0')}`,
+          open: 2100,
+          high: 2155,
+          low: 2090,
+          close: 2110,
+          volume: 410783,
+        });
+      }
+      // 僅提供價格，無開高低量，且日期相差超過 1 天
+      const settledTime = new Date('2026-10-02T16:30:00+08:00');
+      const quoteOnlyPrice = {
+        price: 2190,
+      };
+
+      const report = generateAiForceReportFromCandles(
+        '2360',
+        '致茂',
+        'TW',
+        laggingCandles,
+        quoteOnlyPrice,
+        undefined,
+        settledTime
+      );
+
+      expect(report.marketBar.currentPrice).toBe(2190);
+      // 嚴禁出現 9/15 舊日 K 之 2100、2155、2090 假數據冒充
+      expect(report.marketBar.openPrice).not.toBe(2100);
+      expect(report.marketBar.highPrice).not.toBe(2155);
+      expect(report.marketBar.lowPrice).not.toBe(2090);
+    });
+  });
 });
 
 

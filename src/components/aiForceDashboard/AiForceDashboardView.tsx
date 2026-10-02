@@ -38,6 +38,7 @@ import { TaskViewsSwitcher } from './TaskViewsSwitcher';
 import { TechnicalAlertsView, KdMaView, MacdView, RawDataView } from './TaskPanels';
 import { resolveOfficialSecurityName } from '../../engine/stockNameResolver';
 import { EquityDeepDiveModal } from '../equityDeepDive/EquityDeepDiveModal';
+import { useMarketCatchupSync } from '../../hooks/useMarketCatchupSync';
 import type { AiForceTaskTabKey } from '../../types/aiForceDashboard';
 
 export interface AiForceDashboardViewProps {
@@ -47,7 +48,7 @@ export interface AiForceDashboardViewProps {
 }
 
 export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
-  initialSymbol = '2360',
+  initialSymbol = '0050',
   initialMarket = 'TW',
   holdings: _holdings = [],
 }) => {
@@ -57,7 +58,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
   const [activeTab, setActiveTab] = useState<AiForceTaskTabKey>('TASK_1_COMPREHENSIVE');
   const [isDeepDiveOpen, setIsDeepDiveOpen] = useState(false);
   const [report, setReport] = useState<AiForceDashboardReport>(() =>
-    createDefaultAiForceReport(initialSymbol, '致茂', initialMarket)
+    createDefaultAiForceReport(
+      initialSymbol,
+      resolveOfficialSecurityName(initialSymbol, initialMarket) || '元大台灣50',
+      initialMarket
+    )
   );
 
   const loadDataForSymbol = async (targetSymbol: string, targetMarket: MarketType) => {
@@ -188,6 +193,12 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
   useEffect(() => {
     loadDataForSymbol(initialSymbol, initialMarket);
   }, [initialSymbol, initialMarket]);
+
+  useMarketCatchupSync({
+    onSyncCompleted: () => {
+      loadDataForSymbol(symbol, market);
+    },
+  });
 
   const handleAnalyze = (newSymbol: string, newMarket: MarketType) => {
     loadDataForSymbol(newSymbol, newMarket);

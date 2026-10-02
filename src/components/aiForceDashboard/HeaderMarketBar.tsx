@@ -110,8 +110,8 @@ export interface HeaderMarketBarProps {
 export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
   data,
   colorTheme = 'taiwan',
-  currentSymbol = '2360',
-  currentName = '致茂',
+  currentSymbol = '0050',
+  currentName = '元大台灣50',
   isLoading = false,
   onAnalyze,
 }) => {
