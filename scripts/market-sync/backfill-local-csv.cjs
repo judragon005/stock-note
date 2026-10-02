@@ -18,52 +18,6 @@ const {
   computeIncrementalIndicators,
   saveJsonAtomic,
 } = require('./market-sync-core.cjs');
-const { initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
-
-/**
- * 批次將單一標的歷史日 K 數列寫入 SQLite daily_candles 資料表 (Spec 0159)
- */
-function saveTwHistoryToSqlite(symbol, candles, customDbPath) {
-  if (!symbol || !Array.isArray(candles) || candles.length === 0) return 0;
-  const db = initSqliteLakehouseDb(customDbPath);
-  const stmt = db.prepare(`
-    INSERT INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume, turnover)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(symbol, date) DO UPDATE SET
-      open = excluded.open,
-      high = excluded.high,
-      low = excluded.low,
-      close = excluded.close,
-      adj_close = excluded.adj_close,
-      volume = excluded.volume,
-      turnover = excluded.turnover
-  `);
-
-  db.exec('BEGIN TRANSACTION;');
-  let count = 0;
-  try {
-    for (const c of candles) {
-      if (!c || !c.date || !c.close) continue;
-      stmt.run(
-        String(symbol).trim(),
-        String(c.date).trim(),
-        Number(c.open) || Number(c.close),
-        Number(c.high) || Number(c.close),
-        Number(c.low) || Number(c.close),
-        Number(c.close),
-        Number(c.adj_close || c.close),
-        Number(c.volume) || 0,
-        Number(c.turnover) || 0
-      );
-      count++;
-    }
-    db.exec('COMMIT;');
-  } catch (err) {
-    db.exec('ROLLBACK;');
-    throw err;
-  }
-  return count;
-}
 
 // 本機數據庫路徑
 const HISTORICAL_BASE_DIR = 'D:\\APP\\諮詢\\私人\\股市\\台股加權指數_歷史數據\\上市櫃股票與債券_歷史數據';
@@ -402,13 +356,6 @@ async function runFullMarketHistoryBackfill() {
       v: c.volume,
     }));
 
-    // 寫入本地 SQLite 湖倉 (保留最近 250 根供戰情室毫秒級秒讀, Spec 0159)
-    try {
-      saveTwHistoryToSqlite(symbol, alignedCandles.slice(-250));
-    } catch (e) {
-      // 靜默容錯
-    }
-
     processedCount++;
   }
 
@@ -441,6 +388,14 @@ async function runFullMarketHistoryBackfill() {
   saveJsonAtomic(targetSummaryPath, outputSummary);
   saveJsonAtomic(targetHistoryPath, compactHistoryMap);
 
+  // 同步寫入 SQLite 本地數據湖倉 (Spec 0159 / Ticket 01)
+  try {
+    const sqliteTotal = saveAlignedCandlesBatchToSqlite(compactHistoryMap);
+    console.log(`✔ SQLite 湖倉入庫：已將 ${processedCount} 檔標的共 ${sqliteTotal} 筆歷史日 K 寫入 daily_candles`);
+  } catch (sqliteErr) {
+    console.warn(`[SQLite 歷史回補寫入警告]:`, sqliteErr.message);
+  }
+
   const auditReport = {
     reportDate: new Date().toISOString(),
     totalSymbolsProcessed: processedCount,
@@ -461,6 +416,59 @@ async function runFullMarketHistoryBackfill() {
   console.log(`  - 稽核報告位置: ${auditReportPath}`);
 }
 
+/**
+ * 批次將對齊日曆後之日 K 寫入 SQLite 數據湖倉
+ * @param {Record<string, Array<{ d: string, o: number, h: number, l: number, c: number, v: number }>>} candlesMap
+ * @param {string} [customDbPath]
+ * @returns {number} 成功寫入筆數
+ */
+function saveAlignedCandlesBatchToSqlite(candlesMap, customDbPath) {
+  if (!candlesMap || typeof candlesMap !== 'object') return 0;
+  const { initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+  const db = initSqliteLakehouseDb(customDbPath);
+
+  const stmt = db.prepare(`
+    INSERT INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume, turnover)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(symbol, date) DO UPDATE SET
+      open = excluded.open,
+      high = excluded.high,
+      low = excluded.low,
+      close = excluded.close,
+      adj_close = excluded.adj_close,
+      volume = excluded.volume,
+      turnover = excluded.turnover
+  `);
+
+  db.exec('BEGIN TRANSACTION;');
+  let count = 0;
+  try {
+    for (const [sym, candles] of Object.entries(candlesMap)) {
+      if (!Array.isArray(candles)) continue;
+      for (const c of candles) {
+        if (!c || !c.d || !c.c) continue;
+        stmt.run(
+          String(sym).trim().toUpperCase(),
+          String(c.d).trim(),
+          Number(c.o) || Number(c.c),
+          Number(c.h) || Number(c.c),
+          Number(c.l) || Number(c.c),
+          Number(c.c),
+          Number(c.c),
+          Number(c.v) || 0,
+          0
+        );
+        count++;
+      }
+    }
+    db.exec('COMMIT;');
+  } catch (err) {
+    db.exec('ROLLBACK;');
+    throw err;
+  }
+  return count;
+}
+
 if (require.main === module) {
   runFullMarketHistoryBackfill().catch((err) => {
     console.error(`全歷史回補失敗:`, err);
@@ -474,5 +482,5 @@ module.exports = {
   alignCandlesWithCalendar,
   parseChipHistoryCsv,
   runFullMarketHistoryBackfill,
-  saveTwHistoryToSqlite,
+  saveAlignedCandlesBatchToSqlite,
 };

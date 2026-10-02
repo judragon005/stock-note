@@ -3,15 +3,31 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1325%2F1325%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1335%2F1335%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 美股全市場標的湖倉採集、自適應限流防禦與斷點續傳排程管線 (`US Market Lakehouse Full-Universe Ingestion & Checkpoint Pipeline`) *(V8.71.0 全新發布)*
+### 0. 主力戰情室台股湖倉管線貫通、淘汰假數據污染與 UI 缺陷修復 (`AI Force TW Lakehouse Pipeline & UI Defect Repair`) *(V8.72.0 全新發布)*
+
+- **台股排程每日同步寫入 SQLite 本地湖倉 (`SQLite Lakehouse TW Ingestion & History Backfill`) (Spec 0159)**：
+  - 每日 16:00 `sync-tw-market.cjs` 自動將全市場收盤行情與 T86 三大法人買賣超以事務寫入 SQLite 本地湖倉 `daily_candles` 與 `tw_institutional_chips`。
+  - `backfill-local-csv.cjs` 一次性將 2,361 檔歷史 CSV 數據（140,883 筆歷史日 K，含 2886 兆豐金 61 筆完整記錄）批量寫入 SQLite 數據湖倉，徹底解決資料庫無台股日 K 的問題。
+- **戰情室前端優先直連本地湖倉 (`Lakehouse-First Real-Data Hydration`)**：
+  - 於 `historicalOhlcvBackfill.ts` 建立 Layer 1 最高優先級：優先調用 `loadSymbolFullLakehouseData` 請求 `/api/market/history/:symbol?limit=250`。0 網路延遲瞬間載入歷史日 K 與三大法人歷史籌碼，終結查詢台股時「日 K 線短缺」的誤報。
+- **徹底淘汰寫死假數據，落實誠實空狀態 (`Sanitized Fallback & Honest Empty State`)**：
+  - 全面剔除先前 `createDefaultAiForceReport` 中寫死的 47.97 開盤、1,200 張成交量與 30 日筆數等幽靈數據。若標的查無歷史日 K，誠實呈現 0 筆空狀態與透明提示，與主 K 線圖視覺狀態保持 100% 協同一致。
+- **實體「下載全部圖表 PNG」批次匯出 (`Real All Charts PNG Batch Downloader`)**：
+  - 淘汰空 Toast Mock，透過 `XMLSerializer` 與 Canvas 深度遍歷主力戰情室全部 SVG 圖表（主 K 線圖、均線、法人買賣超雙軸圖、多空能量比、六維雷達等），實裝高解析度 PNG 實體批次下載。
+- **主 K 線圖右上角選單與關鍵價位引線開關 (`K-Line Header Options Menu & Overlay Toggles`)**：
+  - 淘汰無響應之死按鈕，實裝 Popover 互動選單，支援「顯示/隱藏關鍵價位引線（高檔壓力、主力成本、支撐區）」動態切換，以及「重設為 60D 週期與成交量副圖」一鍵復位。
+
+### 0. 美股全市場標的湖倉採集、自適應限流防禦與斷點續傳排程管線 (`US Market Lakehouse Full-Universe Ingestion & Checkpoint Pipeline`) *(V8.71.0)*
+
 
 - **打破 44 檔枷鎖，全市場 1,795 檔標的種子庫 (`1,795 US Symbols Seed & Lakehouse Ingestion`) (Spec 0158)**：
   - 整合 `STATIC_US_STOCKS` (599 檔) 與 S&P 1500 / NASDAQ 100 / 熱門成長股與旗艦 ETF，建置 `us-market-universe-data.cjs`，支援一鍵事務批次寫入 SQLite 本地湖倉 `symbols_meta`。

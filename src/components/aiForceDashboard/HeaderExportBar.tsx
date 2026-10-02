@@ -94,12 +94,13 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
         break;
       }
       case 'ALL_CHARTS_PNG': {
+        showToast('正在為您掃描並打包所有圖表快照...');
         triggerAllChartsDownload(report.symbol).then((count) => {
-          showToast(
-            count > 0
-              ? `已成功生成並下載 ${count} 張核心量化圖表 (PNG)`
-              : '已啟動全量 SVG 圖表快照擷取...'
-          );
+          if (count > 0) {
+            showToast(`已成功匯出 ${count} 張圖表 PNG 圖檔`);
+          } else {
+            showToast('未偵測到可匯出之圖表元素');
+          }
         });
         break;
       }

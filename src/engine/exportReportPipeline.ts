@@ -122,84 +122,105 @@ export function triggerPrintPdf() {
 }
 
 /**
- * 遍歷頁面中的 SVG 圖表並批次匯出為 PNG 檔案 (Spec 0159 / Ticket 04)
+ * 過濾出寬高 >= 60 的主要圖表 SVG (排除微小圖示)
+ */
+export function filterChartSvgElements<T extends { getBoundingClientRect?: () => { width: number; height: number }; getAttribute?: (name: string) => string | null }>(
+  svgElements: T[]
+): T[] {
+  return svgElements.filter((svg) => {
+    let width = 0;
+    let height = 0;
+    if (typeof svg.getBoundingClientRect === 'function') {
+      const rect = svg.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+    }
+    if (!width && typeof svg.getAttribute === 'function') {
+      width = parseFloat(svg.getAttribute('width') || '0');
+    }
+    if (!height && typeof svg.getAttribute === 'function') {
+      height = parseFloat(svg.getAttribute('height') || '0');
+    }
+    return width >= 60 && height >= 60;
+  });
+}
+
+/**
+ * 遍歷頁面所有主要 SVG 圖表節點，並批次轉換為 PNG 下載 (Ticket 04)
  */
 export async function triggerAllChartsDownload(symbol: string): Promise<number> {
-  if (typeof document === 'undefined') return 0;
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return 0;
+  }
 
-  const svgElements = Array.from(document.querySelectorAll('svg'));
-  // 過濾掉微小圖標 (小於 100x50 的通常是按鈕內部小圖標)
-  const chartSvgs = svgElements.filter((svg) => {
-    const rect = svg.getBoundingClientRect();
-    const width = rect.width || svg.clientWidth || parseInt(svg.getAttribute('width') || '0', 10);
-    const height = rect.height || svg.clientHeight || parseInt(svg.getAttribute('height') || '0', 10);
-    return width >= 80 && height >= 40;
-  });
-
+  const allSvgs = Array.from(document.querySelectorAll('svg'));
+  const chartSvgs = filterChartSvgElements(allSvgs);
   if (chartSvgs.length === 0) {
     return 0;
   }
 
-  const dateStr = new Date().toISOString().slice(0, 10);
-  let exportedCount = 0;
+  let downloadedCount = 0;
+  const serializer = new XMLSerializer();
 
   for (let i = 0; i < chartSvgs.length; i++) {
     const svg = chartSvgs[i];
-    try {
-      const serializer = new XMLSerializer();
-      let source = serializer.serializeToString(svg);
+    const rect = svg.getBoundingClientRect();
+    const width = rect.width || parseFloat(svg.getAttribute('width') || '0') || 300;
+    const height = rect.height || parseFloat(svg.getAttribute('height') || '0') || 150;
 
-      if (!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
-        source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+    try {
+      const svgStr = serializer.serializeToString(svg);
+      const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(width * 2, 400); // 2x 高解析度
+      canvas.height = Math.max(height * 2, 200);
+      const ctx = canvas.getContext('2d');
+
+      if (ctx) {
+        // 深色背景鋪底
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+
+        await new Promise<void>((resolve) => {
+          img.onload = () => {
+            try {
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            } catch {}
+            resolve();
+          };
+          img.onerror = () => resolve();
+          img.src = url;
+        });
+
+        if (typeof canvas.toBlob === 'function') {
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const pngUrl = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = pngUrl;
+              a.download = `${symbol}_chart_${i + 1}_${new Date().toISOString().slice(0, 10)}.png`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(pngUrl);
+            }
+          }, 'image/png');
+        }
       }
 
-      const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(svgBlob);
-      const img = new Image();
-
-      await new Promise<void>((resolve) => {
-        img.onload = () => {
-          try {
-            const canvas = document.createElement('canvas');
-            canvas.width = (img.width || 680) * 2;
-            canvas.height = (img.height || 300) * 2;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.fillStyle = '#0f172a';
-              ctx.fillRect(0, 0, canvas.width, canvas.height);
-              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-              canvas.toBlob((blob) => {
-                if (blob) {
-                  const pngUrl = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = pngUrl;
-                  a.download = `${symbol}_chart_${i + 1}_${dateStr}.png`;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  URL.revokeObjectURL(pngUrl);
-                  exportedCount++;
-                }
-                resolve();
-              }, 'image/png');
-            } else {
-              resolve();
-            }
-          } catch {
-            resolve();
-          }
-        };
-        img.onerror = () => resolve();
-        img.src = url;
-      });
-
       URL.revokeObjectURL(url);
+      downloadedCount++;
     } catch {
-      // 容錯跳過單一圖形
+      // 容錯跳過單一圖表
     }
   }
 
-  return exportedCount;
+  return downloadedCount;
 }
+
 

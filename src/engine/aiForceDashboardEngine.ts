@@ -69,6 +69,9 @@ export function createDefaultAiForceReport(
   const safePrice = price ?? 100;
   const change = price !== undefined ? (isDefault2360 ? 205.0 : Number((price * 0.012).toFixed(2))) : undefined;
   const changePercent = price !== undefined ? (isDefault2360 ? 9.83 : 1.2) : undefined;
+  const openPrice = price !== undefined ? (isDefault2360 ? 2135.0 : Number((price * 0.99).toFixed(2))) : undefined;
+  const highPrice = price !== undefined ? (isDefault2360 ? 2290.0 : Number((price * 1.015).toFixed(2))) : undefined;
+  const lowPrice = price !== undefined ? (isDefault2360 ? 2135.0 : Number((price * 0.985).toFixed(2))) : undefined;
   const highResistance = price !== undefined ? (isDefault2360 ? 2490.0 : Number((price * 1.08).toFixed(2))) : 0;
   const mainForceCost = price !== undefined ? (isDefault2360 ? 2130.65 : Number((price * 0.96).toFixed(2))) : 0;
   const supportLevel = price !== undefined ? (isDefault2360 ? 1875.0 : Number((price * 0.92).toFixed(2))) : 0;
@@ -88,9 +91,9 @@ export function createDefaultAiForceReport(
       changePercent,
       volumeShares: isDefault2360 ? 2681 : undefined,
       transactionCount: isDefault2360 ? 6260 : undefined,
-      openPrice: isDefault2360 ? 2135.0 : price,
-      highPrice: isDefault2360 ? 2290.0 : price,
-      lowPrice: isDefault2360 ? 2135.0 : price,
+      openPrice,
+      highPrice,
+      lowPrice,
       latestTradingDate: settlement.anchorTradingDate,
       dataPointsCount: isDefault2360 ? 98 : 0,
       dataSourceText: market === 'TW' ? '日 K TWSE | 法人 TWSE | 融資券 FinMind' : 'Yahoo Finance',
@@ -100,7 +103,7 @@ export function createDefaultAiForceReport(
       settlementReason: settlement.reason,
       statusBadges: {
         aiScanActive: true,
-        mainForceTracking: isDefault2360,
+        mainForceTracking: !isDataPending,
         marketStatus: 'NORMAL',
         volatilityAlert: false,
       },

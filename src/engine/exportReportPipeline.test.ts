@@ -66,10 +66,23 @@ describe('exportReportPipeline & DDE defense', () => {
     expect(html).toContain('AI 主力行為量化決策總結報告');
   });
 
-  it('triggerAllChartsDownload 在環境中無圖表時應安全回傳 0，不崩潰', async () => {
+  it('Ticket 04: filterChartSvgElements 應精準過濾掉小於 60x60 之微小圖示，保留主要圖表', async () => {
+    const { filterChartSvgElements } = await import('./exportReportPipeline');
+    const mockSvgs = [
+      { getBoundingClientRect: () => ({ width: 16, height: 16 }) },
+      { getBoundingClientRect: () => ({ width: 24, height: 24 }) },
+      { getBoundingClientRect: () => ({ width: 680, height: 280 }) }, // K線圖
+      { getBoundingClientRect: () => ({ width: 320, height: 220 }) }, // 雷達圖
+    ];
+
+    const filtered = filterChartSvgElements(mockSvgs);
+    expect(filtered.length).toBe(2);
+  });
+
+  it('Ticket 04: triggerAllChartsDownload 在 Node 離線環境下應安全返回 0 而不拋錯', async () => {
     const { triggerAllChartsDownload } = await import('./exportReportPipeline');
     const count = await triggerAllChartsDownload('2886');
-    expect(typeof count).toBe('number');
     expect(count).toBe(0);
   });
 });
+

@@ -16,3 +16,4 @@
 - [x] 修復 `KLineChartCard.tsx` 右上角按鈕之互動 Popover 選單。
 - [x] 撰寫整合測試驗證 2886 真實資料載入與虛擬標的誠實 Empty State。
 - [x] 執行全量 `npm test` 與 `npm run build` 確保測試 100% 通過與 TypeScript 0 錯誤。
+

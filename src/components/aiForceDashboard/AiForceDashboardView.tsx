@@ -9,7 +9,10 @@ import {
 import { fetchRecentTwseReports } from '../../engine/smartMoneyFetcher';
 import { backfillSymbolOhlcvAndIndicators } from '../../engine/historicalOhlcvBackfill';
 import { fetchStockQuote } from '../../engine/priceFetcher';
-import { loadSymbolDispositionStatus } from '../../engine/marketCacheLoader';
+import {
+  loadSymbolDispositionStatus,
+  loadSymbolFullLakehouseData,
+} from '../../engine/marketCacheLoader';
 import { logger } from '../../utils/logger';
 import { HeaderMarketBar } from './HeaderMarketBar';
 import { KLineChartCard } from './cards/KLineChartCard';
@@ -68,9 +71,27 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       | undefined = undefined;
 
     try {
-      // 1. 同步拉取歷史日 K (至少 60~180 根，支援本地 IndexedDB 快取與增量更新)
-      const res = await backfillSymbolOhlcvAndIndicators(targetSymbol, targetMarket, false);
-      const candles = res?.candles || [];
+      let candles: any[] = [];
+      let institutionalRecords: RawInstitutionalRecord[] | undefined = undefined;
+
+      // 1. Layer 1: 優先嘗試從本地 SQLite 數據湖倉直讀歷史日 K 與籌碼 (Spec 0159 / Ticket 02)
+      try {
+        const lakehouseData = await loadSymbolFullLakehouseData(targetSymbol, targetMarket);
+        if (lakehouseData && lakehouseData.candles.length >= 5) {
+          candles = lakehouseData.candles;
+          if (lakehouseData.institutionalRecords && lakehouseData.institutionalRecords.length > 0) {
+            institutionalRecords = lakehouseData.institutionalRecords;
+          }
+        }
+      } catch (err) {
+        logger.warn(`Lakehouse load failed for ${targetSymbol}, falling back to hybrid pipeline:`, err);
+      }
+
+      // 若湖倉無數據，降級走常規拉取管線 (Layer 2~3)
+      if (candles.length === 0) {
+        const res = await backfillSymbolOhlcvAndIndicators(targetSymbol, targetMarket, false);
+        candles = res?.candles || [];
+      }
 
       // 2. 嘗試抓取即時行情 (若失敗則由最新一根日 K 自適應)
       try {
@@ -79,9 +100,8 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         // 即時報價若失敗則安靜降級由日 K 替補
       }
 
-      // 3. 嘗試讀取三大法人籌碼歷史記錄 (台股市場)
-      let institutionalRecords: RawInstitutionalRecord[] | undefined = undefined;
-      if (targetMarket === 'TW') {
+      // 3. 若尚未取得法人籌碼且為台股市場，嘗試從網路拉取三大法人籌碼歷史記錄
+      if (!institutionalRecords && targetMarket === 'TW') {
         try {
           const reports = await fetchRecentTwseReports(20);
           if (reports && reports.length > 0) {

@@ -67,14 +67,15 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
       expect((report as any).isDataPending).toBe(true);
     });
 
-    it('Spec 0159 / Ticket 03: 當查詢 2886 帶入即時行情但無日 K 時，不得捏造 1200 張成交量或 30 日筆數', () => {
+    it('Ticket 03 (Spec 0159): 即使有即時價格 basePrice，若無真實歷史日 K (candles 為空)，不得造假 30 筆資料與 1200 張成交量', () => {
       const report = createDefaultAiForceReport('2886', '兆豐金', 'TW', 48.45);
 
       expect(report.marketBar.currentPrice).toBe(48.45);
-      expect(report.marketBar.volumeShares).toBeUndefined();
-      expect(report.marketBar.transactionCount).toBeUndefined();
+      // 不得偽造 30 日筆數與 1200 張成交量
       expect(report.marketBar.dataPointsCount).toBe(0);
       expect(report.marketBar.dataRangeText).toBe('尚無歷史交易日資料');
+      expect(report.marketBar.volumeShares).toBeUndefined();
+      expect(report.marketBar.transactionCount).toBeUndefined();
       expect(report.klineSystem.candles).toEqual([]);
     });
 

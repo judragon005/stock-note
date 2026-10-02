@@ -69,9 +69,9 @@ function getSqliteDbConnection(customPath) {
   ensureDirectoryExists(dbPath);
   const db = new DatabaseSync(dbPath);
 
-  // 啟用高效 WAL 模式與防鎖定逾時
-  db.exec('PRAGMA journal_mode = WAL;');
+  // 啟用防鎖定逾時與高效 WAL 模式
   db.exec('PRAGMA busy_timeout = 5000;');
+  db.exec('PRAGMA journal_mode = WAL;');
   db.exec('PRAGMA synchronous = NORMAL;');
 
   globalDbInstance = db;

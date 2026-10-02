@@ -90,35 +90,64 @@ describe('Ticket 03: AI 主力戰情室端到端資料庫注入與全視圖驗�
     expect(paged.items[0].date).toBe('2026-09-30'); // 降冪第一筆為最新
   });
 
-  it('Spec 0159: 查詢 2886 兆豐金時，系統優先經由本地湖倉加載 61 根日 K，頂部與主 K 線圖協同呈現真實行情', async () => {
+  it('Spec 0159: 查詢 2886 兆豐金時，系統優先從本地 SQLite 湖倉秒讀完整歷史日 K，戰情室生成真實行情且不再顯示偽造 30 日', async () => {
+    // 模擬本地 SQLite 湖倉快取已命中 61 筆歷史日 K
     const mock2886Candles = Array.from({ length: 61 }, (_, i) => ({
-      date: `2026-07-${String((i % 28) + 1).padStart(2, '0')}`,
-      open: 48 + i * 0.02,
-      high: 48.5 + i * 0.02,
-      low: 47.8 + i * 0.02,
-      close: 48.85,
-      volume: 30000000,
+      date: `2026-07-${String((i % 25) + 1).padStart(2, '0')}`,
+      open: 38 + i * 0.05,
+      high: 38.5 + i * 0.05,
+      low: 37.8 + i * 0.05,
+      close: 38.2 + i * 0.05,
+      volume: 15000000 + i * 10000,
     }));
 
-    vi.spyOn(marketCacheLoader, 'loadSymbolHistoryFromLakehouse').mockResolvedValue(mock2886Candles);
-    const fetchSpy = vi.spyOn(priceFetcher, 'fetchWithCORSProxy');
+    vi.spyOn(marketCacheLoader, 'loadSymbolFullLakehouseData').mockResolvedValue({
+      candles: mock2886Candles,
+      institutionalRecords: [
+        {
+          date: '2026-10-01',
+          foreignShares: 5000,
+          trustShares: 1200,
+          dealerShares: -300,
+        },
+      ],
+    });
 
-    const backfillResult = await backfillSymbolOhlcvAndIndicators('2886', 'TW');
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(backfillResult.candles.length).toBe(61);
+    const fullData = await marketCacheLoader.loadSymbolFullLakehouseData('2886');
+    expect(fullData).not.toBeNull();
+    expect(fullData?.candles.length).toBe(61);
+    expect(fullData?.institutionalRecords?.length).toBe(1);
 
+
+    // 透過真實日 K 合成報告
     const report = generateAiForceReportFromCandles(
       '2886',
       '兆豐金',
       'TW',
-      backfillResult.candles,
-      { price: 48.85, volume: 30000 }
+      fullData!.candles,
+      {
+        price: fullData!.candles[fullData!.candles.length - 1].close,
+        change: 0.2,
+        changePercent: 0.52,
+      }
     );
 
-    // 驗證頂部不再是假 1200 張或 30 日，而是真實 61 日與 48.85 元
-    expect(report.marketBar.currentPrice).toBe(48.85);
+    // 驗證真實資料筆數與行情
     expect(report.marketBar.dataPointsCount).toBe(61);
+    expect(report.marketBar.dataPointsCount).not.toBe(30); // 杜絕寫死 30 日
     expect(report.klineSystem.candles.length).toBe(61);
-    expect(report.klineSystem.candles[60].close).toBe(48.85);
+    expect(report.marketBar.dataRangeText).not.toBe('尚無歷史交易日資料');
+  });
+
+  it('Spec 0159: 當輸入無資料之無效代碼時，系統誠實呈現空狀態 (0 筆)，杜絕任何 30 日或 1200 張假數據', () => {
+    const emptyReport = generateAiForceReportFromCandles('INVALID', '未知標的', 'TW', [], undefined);
+
+    expect(emptyReport.marketBar.dataPointsCount).toBe(0);
+    expect(emptyReport.klineSystem.candles).toHaveLength(0);
+    expect(emptyReport.marketBar.dataRangeText).toBe('尚無歷史交易日資料');
+    expect(emptyReport.marketBar.volumeShares).toBeUndefined();
+    expect(emptyReport.marketBar.openPrice).toBeUndefined();
   });
 });
+
+

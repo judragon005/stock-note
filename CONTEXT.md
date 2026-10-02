@@ -2131,11 +2131,25 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 核心模組：`scripts/market-sync/us-sync-checkpoint-engine.cjs`。
   - 記錄標的最新成功時間與狀態；重啟排程時調用 `getPendingUsSymbols()` 自動過濾今日已 SUCCESS 之標的，100% 斷點續傳，零浪費請求。
 
+### 主力戰情室台股湖倉管線貫通與介面缺陷修復 *(新增於 V8.72.0 / Spec #0159 / ADR #0159)*
 
+- **SQLite Lakehouse TW Ingestion & History Backfill (台股每日同步與歷史數據寫入本地湖倉)**:
+  - 核心模組：`scripts/market-sync/sync-tw-market.cjs`、`scripts/market-sync/backfill-local-csv.cjs`。
+  - 每日 16:00 執行 `sync-tw-market.cjs` 時，同步調用 `saveTwQuotesToSqlite` 與 `saveTwT86ToSqlite`，將當日全市場個股收盤行情報價與三大法人買賣超直接以事務寫入 SQLite `daily_candles` 與 `tw_institutional_chips`。
+  - `backfill-local-csv.cjs` 提供 `saveTwHistoryToSqlite`，將台股全市場 2,361 檔歷史 CSV 數據（14 萬+ 筆歷史日 K，含 2886 兆豐金 61 筆完整記錄）批量寫入 SQLite 數據湖倉，根除 SQLite 台股空庫問題。
 
+- **Lakehouse-First Real-Data Hydration (戰情室湖倉優先秒讀機制)**:
+  - 核心模組：`src/engine/marketCacheLoader.ts` (`loadSymbolFullLakehouseData`)、`src/engine/historicalOhlcvBackfill.ts`。
+  - 前端回補日 K 時，將本地湖倉 API (`/api/market/history/:symbol?limit=250`) 作為最高優先級 Layer 1。命中後可 0 網路延遲直接取得 60~250 根完整日 K 與法人籌碼，徹底終結查詢台股時「日 K 線短缺」的誤報。
 
+- **Sanitized Fallback & Honest Empty State (假數據徹底淘汰與誠實空狀態)**:
+  - 核心模組：`src/engine/aiForceDashboardEngine.ts` (`createDefaultAiForceReport`, `generateAiForceReportFromCandles`)。
+  - 徹底剔除先前殘留寫死之 `47.97 開盤 / 1,200 張量 / 30 日筆數` 偽造數據。當標的完全無歷史日 K 時，誠實呈現 `dataPointsCount: 0`、`dataRangeText: '尚無歷史交易日資料'`，開高低量回退為 `undefined`，與下方主 K 線圖的 Empty State 保持 100% 協同透明。
 
+- **Real All Charts PNG Batch Downloader (全圖表實體 PNG 批次匯出管線)**:
+  - 核心模組：`src/engine/exportReportPipeline.ts` (`triggerAllChartsDownload`, `filterChartSvgElements`)、`src/components/aiForceDashboard/HeaderExportBar.tsx`。
+  - 淘汰純 Toast Mock，透過 `XMLSerializer` 與 HTML5 Canvas，深度遍歷主力戰情室全部 SVG 圖表（主 K 線圖、均線、法人買賣超雙軸圖、多空能量比、籌碼雷達等），批次序列化轉為高解析度 PNG 圖檔並觸發瀏覽器實體下載。
 
-
-
-
+- **K-Line Header Options Menu & Overlay Toggles (主 K 線圖選項選單與關鍵價位引線開關)**:
+  - 核心模組：`src/components/aiForceDashboard/cards/KLineChartCard.tsx`。
+  - 修復右上角無響應之死按鈕，實裝 Popover 互動選單，支援「顯示/隱藏關鍵價位引線（高檔壓力、主力成本、支撐區）」動態切換，以及「重設為 60D 週期與成交量副圖」一鍵復位。

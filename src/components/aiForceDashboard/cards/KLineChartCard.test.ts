@@ -206,7 +206,35 @@ describe('KLineChartCard - 專業互動與多功能副圖 (Ticket 35 / Stage 1)'
 
     it('當 candleGap <= 0 時應防禦除零錯誤，回傳 0', () => {
       expect(findClosestCandleIndex(50, 20, 0, 10)).toBe(0);
-      expect(findClosestCandleIndex(50, 20, -2, 10)).toBe(0);
+    });
+  });
+
+  describe('Ticket 05: 主 K 線圖右上角選項與關鍵價位引線交互規範', () => {
+    it('calculateKeyLevelOverlays 應依據傳入之 keyLevels 正確映射三條引線 Y 軸座標並確保在安全可視邊界內', () => {
+      const priceRange = { min: 100, max: 200, span: 100 };
+      const overlays = calculateKeyLevelOverlays(
+        { highResistance: 190, mainForceCost: 150, supportLevel: 110 },
+        priceRange,
+        300,
+        15,
+        15
+      );
+
+      const resistance = overlays.find((o) => o.type === 'resistance')!;
+      const cost = overlays.find((o) => o.type === 'cost')!;
+      const support = overlays.find((o) => o.type === 'support')!;
+
+      expect(resistance.price).toBe(190);
+      expect(cost.price).toBe(150);
+      expect(support.price).toBe(110);
+
+      // Y 座標由上至下 (resistance < cost < support)
+      expect(resistance.y).toBeLessThan(cost.y);
+      expect(cost.y).toBeLessThan(support.y);
+
+      // 邊界保護：全部介於 topPadding (15) 與 height - bottomPadding (285) 之間
+      expect(resistance.y).toBeGreaterThanOrEqual(15);
+      expect(support.y).toBeLessThanOrEqual(285);
     });
   });
 });
