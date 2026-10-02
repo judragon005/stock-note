@@ -19,6 +19,20 @@ const HOLIDAYS_TW_2026 = new Set([
   '2026-10-09', '2026-10-10', // 國慶日
 ]);
 
+// 美股 2026 紐約證交所 (NYSE) 法定休市日曆
+const HOLIDAYS_US_2026 = new Set([
+  '2026-01-01', // New Year's Day
+  '2026-01-19', // Martin Luther King Jr. Day
+  '2026-02-16', // Washington's Birthday (Presidents' Day)
+  '2026-04-03', // Good Friday
+  '2026-05-25', // Memorial Day
+  '2026-06-19', // Juneteenth National Independence Day
+  '2026-07-03', // Independence Day (Observed)
+  '2026-09-07', // Labor Day
+  '2026-11-26', // Thanksgiving Day
+  '2026-12-25', // Christmas Day
+]);
+
 function isMarketTradingDay(date = new Date(), market = 'TW') {
   const day = date.getDay();
   if (day === 0 || day === 6) return false; // 週末休市
@@ -27,7 +41,56 @@ function isMarketTradingDay(date = new Date(), market = 'TW') {
   if (market === 'TW' && HOLIDAYS_TW_2026.has(dateStr)) {
     return false;
   }
+  if (market === 'US' && HOLIDAYS_US_2026.has(dateStr)) {
+    return false;
+  }
   return true;
+}
+
+/**
+ * 稽核 SQLite 湖倉中美股標的涵蓋率與 Checkpoint 健康度
+ * @param {string} [targetDate]
+ * @param {string} [customDbPath]
+ * @returns {object}
+ */
+function auditUsLakehouseUniverse(targetDate, customDbPath) {
+  const { getSqliteDbConnection } = require('./sqlite-db-core.cjs');
+  let db;
+  try {
+    db = getSqliteDbConnection(customDbPath);
+  } catch {
+    return { status: 'NO_SQLITE', totalUsRegistered: 0 };
+  }
+
+  const dateStr = targetDate || formatDateYMD(new Date());
+
+  // 1. 美股總註冊標的數
+  const totalUsRow = db.prepare("SELECT count(*) as count FROM symbols_meta WHERE market = 'US'").get();
+  const totalUsRegistered = totalUsRow?.count || 0;
+
+  // 2. 當日 Checkpoint 統計
+  const successRow = db.prepare("SELECT count(*) as count FROM sync_checkpoints WHERE market = 'US' AND status = 'SUCCESS' AND last_success_date = ?").get(dateStr);
+  const failedRow = db.prepare("SELECT count(*) as count FROM sync_checkpoints WHERE market = 'US' AND status = 'FAILED'").get();
+
+  const successCount = successRow?.count || 0;
+  const failedCount = failedRow?.count || 0;
+
+  // 3. 今日存入之日 K 筆數
+  const candlesRow = db.prepare("SELECT count(DISTINCT symbol) as count FROM daily_candles WHERE date = ?").get(dateStr);
+  const candlesCount = candlesRow?.count || 0;
+
+  const coverageRate = totalUsRegistered > 0 ? (successCount / totalUsRegistered) * 100 : 0;
+
+  return {
+    auditDate: dateStr,
+    market: 'US',
+    totalUsRegistered,
+    successCount,
+    failedCount,
+    candlesCount,
+    coverageRate: Number(coverageRate.toFixed(2)),
+    status: totalUsRegistered >= 1500 ? 'HEALTHY_UNIVERSE' : 'TIER_1_ONLY',
+  };
 }
 
 function verifyMarketDataIntegrity(summaryData) {
@@ -92,4 +155,7 @@ module.exports = {
   isMarketTradingDay,
   verifyMarketDataIntegrity,
   generateAuditReport,
+  auditUsLakehouseUniverse,
+  HOLIDAYS_TW_2026,
+  HOLIDAYS_US_2026,
 };

@@ -2105,6 +2105,32 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 基於原生 Web Crypto API (`AES-GCM-256` + `PBKDF2 100,000` 次疊代)，將全庫 JSON 快照封裝為 `.e2ee.json` 密文備份檔。
   - 密文檔中絕不含任何可讀之交易與持倉明文；錯誤密碼安全阻斷並防範數據篡改，提供極致隱私保護。
 
+### 美股全市場標的湖倉採集與斷點續傳體系 *(新增於 V8.71.0 / Spec #0158 / ADR #0158)*
+
+- **Full-Universe US Symbols Seed (美股全市場 1,790+ 檔標的種子庫)**:
+  - 核心模組：`scripts/market-sync/us-market-universe-data.cjs`、`scripts/market-sync/seed-symbols-universe.cjs`。
+  - 整合 `STATIC_US_STOCKS` (599 檔) 與 S&P 1500 / NASDAQ 100 / 熱門成長股與主題 ETF，打破原先僅 44 檔的限制，一鍵事務注入 SQLite `symbols_meta`。
+
+- **Dual-Mode Lifecycle Pipeline (生命週期雙模態採集管線)**:
+  - 核心模組：`scripts/market-sync/sync-us-market.cjs`。
+  - **模態一 (Bootstrap 首次全量補齊)**：`--mode=bootstrap`，全量拉取 1,795 檔標的最近 250 天歷史日 K (含還原價) 寫入 SQLite `daily_candles`，一次性建置基準線。
+  - **模態二 (Daily 定時排程增量更新)**：`--mode=daily`，每日 08:00 定時排程無聲喚醒，僅追加當日收盤與滾動指標，極速刷新 `us_market_summary.json`。
+
+- **Three-Tier Prioritized Universe (三層動態優先級隊列)**:
+  - 核心模組：`scripts/market-sync/sync-us-market.cjs` (`buildPrioritizedUsUniverse`)。
+  - **Tier 0**：自動偵測本機持股與自選名單 (Watchlist)，強制置頂於隊列最前列（30 秒內秒級就緒）。
+  - **Tier 1**：核心指數與大型藍籌（44 檔，60 秒內就緒）。
+  - **Tier 2**：全市場擴充標的（1,700+ 檔，背景平滑執行）。
+
+- **Adaptive Throttling & Circuit Breaker (自適應抖動限流與熔斷退避狀態機)**:
+  - 核心模組：`scripts/market-sync/sync-us-market.cjs` (`calculateAdaptiveJitterDelay`, `calculateBackoffSleepMs`)。
+  - 請求間隔強制休眠 `800ms ~ 1200ms`（隨機 Jitter），限制單 IP 每秒請求 <= 1.2 次。
+  - 429 階梯式冷卻休眠（10s ➔ 30s ➔ 60s），連續 4 次 429 自動熔斷退出，保全寬頻公網 IP。
+
+- **Resumable SQLite Checkpointing Engine (SQLite 斷點續傳狀態機)**:
+  - 核心模組：`scripts/market-sync/us-sync-checkpoint-engine.cjs`。
+  - 記錄標的最新成功時間與狀態；重啟排程時調用 `getPendingUsSymbols()` 自動過濾今日已 SUCCESS 之標的，100% 斷點續傳，零浪費請求。
+
 
 
 
