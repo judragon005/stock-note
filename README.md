@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1262%2F1262%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1293%2F1293%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,23 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 全市場歷史數據本地 SQLite 湖倉與主力戰情室端到端量化管線 (`Full Market History SQLite Lakehouse & AI Force Pipeline`) *(V8.66.0 全新發布)*
+### 0. 全市場個股 7 步深度投研決策閉環、純前端 Canvas 向量快照與處置警示徽章端到端串接 (`Equity Deep-Dive & Canvas Snapshot`) *(V8.67.0 全新發布)*
+
+- **全市場通用「7 步個股深度投研決策閉環」提示詞工廠 (`7-Step Prompt Factory & Closed-Loop Engine`) (Debt #0037)**：
+  - 貫穿商業定性、財務定量、同業對照、未定價風險、估值情境、籌碼箱體、作戰紀律 7 大維度，依據標的行情與估值自適應生成高防禦性提示詞 Payload。
+  - 支援美股替代量化方案（無法人籌碼時無縫轉為微觀量價主力替代結構），零外部 Token 消耗。
+- **投資筆記本地持久化與持倉風控線雙向同步 (`Investment Memo Storage & Risk Line Sync`)**：
+  - 支援目標價、停損價、買進核心理由與關鍵指標本機儲存與觀察清單標籤；支援一鍵同步風控價格回填至庫存持股。
+- **純前端 1920x1080 原生 Canvas 向量決策快照下載 (`Zero-Dep Pure Canvas Snapshot Exporter`) (Debt #0039)**：
+  - 告別 `html2canvas` 依賴與相容性 Bug，以原生 HTML5 Canvas 向量繪製深色科技感決策卡片。
+  - 支援跨平台中英文字型降級回退與 `document.fonts.ready` 等待防破版防缺字。
+- **AI 主力戰情室處置股票與注意股票警示徽章端到端串接 (`Disposition & Attention Badge Pipeline`) (Debt #0040)**：
+  - 實作 `dispositionWindowEngine.ts`，支援 10~30 個營業日處置期間與多段注意累積精確判定。
+  - 頂部行情列動態連動顯著警示徽章，並於決策快照及 7 步投研視窗同步渲染。
+- **Vite 大型 Bundle 分割優化 (`Chunk Splitting & Zero Warnings`)**：
+  - 配置 `manualChunks` 拆解 `vendor-react`、`vendor-icons`、`app-engines`、`app-aiforce`，單一 chunk 全面降至 900 kB 以下，達到 0 警告。
+
+### 0. 全市場歷史數據本地 SQLite 湖倉與主力戰情室端到端量化管線 (`Full Market History SQLite Lakehouse & AI Force Pipeline`) *(V8.66.0)*
 
 - **Node 22 原生 SQLite 湖倉單一真實數據來源 (`Node 22 Native SQLite Lakehouse SSOT`)**：
   - 以 Node 22 內建 `node:sqlite` (`DatabaseSync`) 實作本機單一真實資料庫 (`market-lakehouse.db`)，零原生 addon 依賴，啟用 WAL 模式兼顧超高效能與可靠性。
