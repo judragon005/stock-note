@@ -10,8 +10,8 @@
 
 **Blocked by:** None
 
-**Status:** completed
+**Status:** pending
 
-- [x] 清理 `createDefaultAiForceReport` 內的所有硬編碼假數據。
-- [x] 標的無歷史資料時，`dataPointsCount` 誠實回傳 0，各項行情指標安全 fallback。
-- [x] 更新 `aiForceDashboardEngine.test.ts`，驗證無數據標的產生之 fallback 報告具備 100% 誠實 Empty State。
+- [ ] 清理 `createDefaultAiForceReport` 內的所有硬編碼假數據。
+- [ ] 標的無歷史資料時，`dataPointsCount` 誠實回傳 0，各項行情指標安全 fallback。
+- [ ] 更新 `aiForceDashboardEngine.test.ts`，驗證無數據標的產生之 fallback 報告具備 100% 誠實 Empty State。

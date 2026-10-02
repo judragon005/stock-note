@@ -219,6 +219,72 @@ export async function loadSymbolHistoryFromLakehouse(
   return null;
 }
 
+export interface LakehouseFullPayload {
+  candles: DailyCandle[];
+  institutionalRecords?: Array<{
+    date: string;
+    foreignShares: number;
+    trustShares: number;
+    dealerShares: number;
+  }>;
+}
+
+/**
+ * 從本地 SQLite 湖倉同時載入標的歷史日 K 與三大法人歷史籌碼 (Ticket 02)
+ */
+export async function loadSymbolFullLakehouseData(
+  symbol: string,
+  market: MarketType = 'TW'
+): Promise<LakehouseFullPayload | null> {
+  const cleanSym = symbol.replace(/\.(TW|TWO)$/i, '').trim().toUpperCase();
+
+  try {
+    const res = await fetch(`/api/market/history/${encodeURIComponent(cleanSym)}?limit=250`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.candles) && data.candles.length > 0) {
+        const candles: DailyCandle[] = data.candles.map((c: any) => ({
+          date: c.date,
+          open: Number(c.open),
+          high: Number(c.high),
+          low: Number(c.low),
+          close: Number(c.close),
+          volume: Number(c.volume),
+        }));
+
+        saveSymbolOhlcv({
+          symbol: cleanSym,
+          market,
+          candles,
+          updatedAt: Date.now(),
+        }).catch((err) => {
+          logger.warn(`[marketCacheLoader] IndexedDB 沉澱失敗 (${cleanSym}):`, err);
+        });
+
+        let institutionalRecords: any[] | undefined = undefined;
+        if (data.chips && typeof data.chips === 'object') {
+          const chipRows = Object.values(data.chips) as any[];
+          if (chipRows.length > 0) {
+            institutionalRecords = chipRows.map((r: any) => ({
+              date: r.date,
+              foreignShares: Number(r.foreign_net) || 0,
+              trustShares: Number(r.trust_net) || 0,
+              dealerShares: Number(r.dealer_net) || 0,
+            }));
+          }
+        }
+
+        return { candles, institutionalRecords };
+      }
+    }
+  } catch (err) {
+    // 忽略網路錯誤
+  }
+
+  return null;
+}
+
+
 /**
  * 載入指定標的之處置與注意狀態 (Ticket 03)
  */

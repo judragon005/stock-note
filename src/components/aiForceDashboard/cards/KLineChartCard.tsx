@@ -208,7 +208,8 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
   const [period, setPeriod] = useState<KlinePeriodMode>('60D');
   const [subchartMode, setSubchartMode] = useState<SubchartIndicatorMode>('VOL');
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showKeyLevels, setShowKeyLevels] = useState(true);
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false);
 
   // 1. 若無真實歷史資料，建立 30 根示範 K 線，並強制按日期升冪排序
   const rawCandles = useMemo(() => {
@@ -514,14 +515,15 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
             <button
               type="button"
               aria-label="選項"
-              onClick={() => setIsMenuOpen((prev) => !prev)}
+              data-testid="kline-options-button"
+              onClick={() => setIsOptionsOpen((prev) => !prev)}
               style={{
-                background: isMenuOpen ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
+                background: isOptionsOpen ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
                 border: 'none',
-                color: isMenuOpen ? '#38bdf8' : '#64748b',
-                cursor: 'pointer',
-                padding: '3px 5px',
                 borderRadius: '4px',
+                color: isOptionsOpen ? '#60a5fa' : '#64748b',
+                cursor: 'pointer',
+                padding: '3px',
                 display: 'flex',
                 alignItems: 'center',
                 transition: 'all 0.15s ease',
@@ -530,9 +532,10 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
               <MoreVertical size={14} />
             </button>
 
-            {isMenuOpen && (
+            {/* 快捷設定浮動選單 (Ticket 05) */}
+            {isOptionsOpen && (
               <div
-                data-testid="kline-options-popover"
+                data-testid="kline-options-menu"
                 style={{
                   position: 'absolute',
                   top: '100%',
@@ -542,64 +545,61 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
                   border: '1px solid rgba(59, 130, 246, 0.35)',
                   borderRadius: '8px',
                   boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
-                  backdropFilter: 'blur(12px)',
-                  padding: '4px',
+                  padding: '6px',
                   zIndex: 50,
-                  minWidth: '150px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '2px',
+                  gap: '4px',
+                  minWidth: '150px',
+                  backdropFilter: 'blur(10px)',
                 }}
               >
                 <button
                   type="button"
+                  data-testid="kline-toggle-key-levels"
                   onClick={() => {
-                    setPeriod('60D');
-                    setIsMenuOpen(false);
+                    setShowKeyLevels((prev) => !prev);
+                    setIsOptionsOpen(false);
                   }}
                   style={{
                     background: 'transparent',
                     border: 'none',
+                    borderRadius: '4px',
                     color: '#e2e8f0',
                     fontSize: '0.72rem',
-                    padding: '6px 10px',
+                    padding: '6px 8px',
                     textAlign: 'left',
-                    borderRadius: '4px',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 >
-                  <span>重設為 60D 週期</span>
-                  {period === '60D' && <span style={{ color: '#38bdf8' }}>✓</span>}
+                  <span>關鍵價位引線</span>
+                  <span style={{ color: showKeyLevels ? '#10b981' : '#64748b', fontWeight: 700 }}>
+                    {showKeyLevels ? '已開啟' : '已關閉'}
+                  </span>
                 </button>
                 <button
                   type="button"
+                  data-testid="kline-reset-period"
                   onClick={() => {
+                    setPeriod('60D');
                     setSubchartMode('VOL');
-                    setIsMenuOpen(false);
+                    setIsOptionsOpen(false);
                   }}
                   style={{
                     background: 'transparent',
                     border: 'none',
-                    color: '#e2e8f0',
-                    fontSize: '0.72rem',
-                    padding: '6px 10px',
-                    textAlign: 'left',
                     borderRadius: '4px',
+                    color: '#94a3b8',
+                    fontSize: '0.72rem',
+                    padding: '6px 8px',
+                    textAlign: 'left',
                     cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 >
-                  <span>切換為量能副圖</span>
-                  {subchartMode === 'VOL' && <span style={{ color: '#10b981' }}>✓</span>}
+                  ↺ 重設預設視圖 (60D+量)
                 </button>
               </div>
             )}
@@ -801,7 +801,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           <polyline points={ma5Points} fill="none" stroke="#fbbf24" strokeWidth="1.6" />
 
           {/* 三大水平關鍵價位引線 (Ticket 05) */}
-          {keyLevelOverlays.map((overlay) => (
+          {showKeyLevels && keyLevelOverlays.map((overlay) => (
             <g key={overlay.type}>
               {/* 水平虛線 */}
               <line

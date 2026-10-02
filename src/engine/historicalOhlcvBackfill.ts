@@ -72,8 +72,9 @@ export async function backfillSymbolOhlcvAndIndicators(
   indicators: MuscleBookerIndicatorPoint[];
 }> {
   const cleanSymbol = symbol.trim().toUpperCase();
+  let existingStoreCandles: DailyCandle[] = [];
 
-  // 0. Layer 1 (最高優先): 優先嘗試從本地 SQLite 湖倉毫秒級加載 (Spec 0159 / 0155)
+  // Layer 1: 優先嘗試從本地 SQLite 數據湖倉直讀歷史日 K (Spec 0159 / Ticket 02 - 0 網路延遲)
   if (!forceRefresh) {
     try {
       const lakehouseCandles = await loadSymbolHistoryFromLakehouse(cleanSymbol, market);
@@ -84,12 +85,10 @@ export async function backfillSymbolOhlcvAndIndicators(
           indicators,
         };
       }
-    } catch (lakeErr) {
-      logger.warn(`Failed to read SQLite lakehouse for ${cleanSymbol}:`, lakeErr);
+    } catch (lakehouseErr) {
+      logger.warn(`Failed to read SQLite Lakehouse for ${cleanSymbol}:`, lakehouseErr);
     }
   }
-
-  let existingStoreCandles: DailyCandle[] = [];
 
   // 1. 檢查本地 IndexedDB 快取
   try {

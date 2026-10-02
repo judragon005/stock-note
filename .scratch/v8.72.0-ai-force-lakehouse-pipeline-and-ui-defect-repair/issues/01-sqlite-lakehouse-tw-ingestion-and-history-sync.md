@@ -10,8 +10,8 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** completed
+**Status:** pending
 
-- [x] 於 `sync-tw-market.cjs` 中引入 `saveTwQuotesToSqlite`，完成收盤價與三大法人籌碼之 SQLite 入庫。
-- [x] 擴充 `backfill-local-csv.cjs` 將台股歷史 CSV 數據批次灌入 SQLite `daily_candles`。
-- [x] 撰寫單元/整合測試，驗證 SQLite `daily_candles` 與 `tw_institutional_chips` 寫入成功與冪等性 (UPSERT)。
+- [ ] 於 `sync-tw-market.cjs` 中引入 `saveTwQuotesToSqlite`，完成收盤價與三大法人籌碼之 SQLite 入庫。
+- [ ] 擴充 `backfill-local-csv.cjs` 將台股歷史 CSV 數據批次灌入 SQLite `daily_candles`。
+- [ ] 撰寫單元/整合測試，驗證 SQLite `daily_candles` 與 `tw_institutional_chips` 寫入成功與冪等性 (UPSERT)。

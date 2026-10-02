@@ -13,8 +13,8 @@
 
 **Blocked by:** Ticket 01
 
-**Status:** completed
+**Status:** pending
 
-- [x] 於 `historicalOhlcvBackfill.ts` 中將本地 `/api/market/history/:symbol` 設為 Layer 1 最高優先級。
-- [x] 整合成功後自動非同步沉澱至 IndexedDB (`saveSymbolOhlcv`)。
-- [x] 撰寫單元測試驗證 Layer 1 命中、Layer 2 降級與空資料誠實退避邏輯。
+- [ ] 於 `historicalOhlcvBackfill.ts` 中將本地 `/api/market/history/:symbol` 設為 Layer 1 最高優先級。
+- [ ] 整合成功後自動非同步沉澱至 IndexedDB (`saveSymbolOhlcv`)。
+- [ ] 撰寫單元測試驗證 Layer 1 命中、Layer 2 降級與空資料誠實退避邏輯。

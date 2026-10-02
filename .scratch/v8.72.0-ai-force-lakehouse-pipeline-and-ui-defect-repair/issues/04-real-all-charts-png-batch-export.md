@@ -11,8 +11,8 @@
 
 **Blocked by:** None
 
-**Status:** completed
+**Status:** pending
 
-- [x] 於 `exportReportPipeline.ts` 實作 `triggerAllChartsDownload` 實體圖表序列化與匯出邏輯。
-- [x] 於 `HeaderExportBar.tsx` 中將 `ALL_CHARTS_PNG` 動作完整綁定實體匯出函式。
-- [x] 撰寫單元測試驗證 SVG 抓取與 Canvas 匯出調用鏈。
+- [ ] 於 `exportReportPipeline.ts` 實作 `triggerAllChartsDownload` 實體圖表序列化與匯出邏輯。
+- [ ] 於 `HeaderExportBar.tsx` 中將 `ALL_CHARTS_PNG` 動作完整綁定實體匯出函式。
+- [ ] 撰寫單元測試驗證 SVG 抓取與 Canvas 匯出調用鏈。
