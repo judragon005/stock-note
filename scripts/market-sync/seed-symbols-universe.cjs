@@ -220,8 +220,9 @@ function seedDefaultSymbolsUniverse(customDbPath) {
     }
   }
 
-  // 嘗試從 src/data/stockDictionary.ts 擷取台股清單
-  if (seeds.length < 500) {
+  // 嘗試從 src/data/stockDictionary.ts 擷取台股清單 (若台股種子少於 500 檔)
+  const twSeedsCount = seeds.filter((s) => s.market === 'TW').length;
+  if (twSeedsCount < 500) {
     const dictPath = path.resolve(__dirname, '../../src/data/stockDictionary.ts');
     if (fs.existsSync(dictPath)) {
       try {
