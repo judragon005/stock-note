@@ -16,6 +16,7 @@ import { logger } from './logger';
 import { getStockDictionaryStats } from '../engine/stockNameResolver';
 import { SymbolOhlcvStore, SymbolIndicatorsStore } from '../types/indicators';
 import type { QuarterlyFinancialRecord } from '../types/financialForensic';
+import { validateFullDatabaseBackup, safeSanitizeObject } from '../engine/securitySanitizer';
 
 export const DB_NAME = 'StockTrackerDB';
 export const DB_VERSION = 4;
@@ -626,11 +627,12 @@ export async function exportFullDatabaseJSON(redactSensitive = false): Promise<s
  */
 export async function importFullDatabaseJSON(jsonStr: string): Promise<void> {
   const parsed = JSON.parse(jsonStr);
-  if (!parsed || !parsed.data) {
-    throw new Error('Invalid database backup format');
+  const validated = validateFullDatabaseBackup(parsed);
+  if (!validated || !validated.data) {
+    throw new Error('Invalid database backup format or failed security validation');
   }
 
-  const { trades, brokerAccounts, cashTransactions, loanRecords, snapshots, settings, corporateActions } = parsed.data;
+  const { trades, brokerAccounts, cashTransactions, loanRecords, snapshots, settings, corporateActions } = validated.data;
 
   if (trades) {
     await dbClear('trades');
@@ -638,27 +640,27 @@ export async function importFullDatabaseJSON(jsonStr: string): Promise<void> {
   }
   if (brokerAccounts) {
     await dbClear('brokerAccounts');
-    await dbBatchPut('brokerAccounts', brokerAccounts);
+    await dbBatchPut('brokerAccounts', safeSanitizeObject(brokerAccounts));
   }
   if (cashTransactions) {
     await dbClear('cashTransactions');
-    await dbBatchPut('cashTransactions', cashTransactions);
+    await dbBatchPut('cashTransactions', safeSanitizeObject(cashTransactions));
   }
   if (loanRecords) {
     await dbClear('loanRecords');
-    await dbBatchPut('loanRecords', loanRecords);
+    await dbBatchPut('loanRecords', safeSanitizeObject(loanRecords));
   }
   if (snapshots) {
     await dbClear('snapshots');
-    await dbBatchPut('snapshots', snapshots);
+    await dbBatchPut('snapshots', safeSanitizeObject(snapshots));
   }
   if (settings) {
     await dbClear('settings');
-    await dbBatchPut('settings', settings);
+    await dbBatchPut('settings', safeSanitizeObject(settings));
   }
   if (corporateActions) {
     await dbClear('corporateActions');
-    await dbBatchPut('corporateActions', corporateActions);
+    await dbBatchPut('corporateActions', safeSanitizeObject(corporateActions));
   }
 }
 

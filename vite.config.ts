@@ -19,6 +19,11 @@ export default defineConfig({
   server: {
     port: 3000,
     open: false,
+    headers: {
+      'X-Frame-Options': 'DENY',
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+    },
     proxy: {
       '/api/yahoo': {
         target: 'https://query1.finance.yahoo.com',
@@ -82,6 +87,14 @@ export default defineConfig({
           });
         },
       },
+    },
+  },
+  preview: {
+    port: 4173,
+    headers: {
+      'X-Frame-Options': 'DENY',
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
     },
   },
   build: {

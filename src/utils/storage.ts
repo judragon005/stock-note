@@ -28,6 +28,7 @@ import {
   STATIC_SECURITY_NAMES as OFFICIAL_SECURITY_NAMES,
 } from '../engine/stockNameResolver';
 import { sanitizeCSVCell } from '../engine/csvSanitizer';
+import { safeSanitizeObject } from '../engine/securitySanitizer';
 
 export { resolveOfficialSecurityName, OFFICIAL_SECURITY_NAMES };
 
@@ -439,9 +440,11 @@ export function validateTradesSchema(
   data: unknown,
   accounts?: BrokerAccount[]
 ): TradeRecord[] | null {
-  if (!Array.isArray(data) || data.length === 0) {
+  const sanitizedInput = safeSanitizeObject(data);
+  if (!Array.isArray(sanitizedInput) || sanitizedInput.length === 0) {
     return null;
   }
+  const cleanData = sanitizedInput;
 
   const validTypes = new Set<TradeType>([
     'BUY',
@@ -472,7 +475,7 @@ export function validateTradesSchema(
   const usDefaultId = usDefaultAcc ? usDefaultAcc.id : 'broker-us-default';
 
   const validTrades: TradeRecord[] = [];
-  for (const item of data) {
+  for (const item of cleanData) {
     if (!item || typeof item !== 'object') continue;
 
     const t = item as Partial<TradeRecord>;
@@ -508,6 +511,24 @@ export function validateTradesSchema(
       targetAccountId = market === 'TW' ? twDefaultId : usDefaultId;
     }
 
+    // 數值邊界校驗與截斷
+    const rawShares = typeof t.shares === 'number' ? t.shares : Number(t.shares);
+    const shares = Number.isFinite(rawShares) && rawShares > 0 ? Math.min(rawShares, 1e9) : 0;
+
+    const rawPrice = typeof t.price === 'number' ? t.price : Number(t.price);
+    const price = Number.isFinite(rawPrice) && rawPrice >= 0 ? Math.min(rawPrice, 1e7) : 0;
+
+    const rawFee = typeof t.fee === 'number' ? t.fee : 0;
+    const fee = Number.isFinite(rawFee) && rawFee >= 0 ? Math.min(rawFee, 1e8) : 0;
+
+    const rawTax = typeof t.tax === 'number' ? t.tax : 0;
+    const tax = Number.isFinite(rawTax) && rawTax >= 0 ? Math.min(rawTax, 1e8) : 0;
+
+    const note = typeof t.note === 'string' ? t.note.slice(0, 2000) : '';
+    const tags = Array.isArray(t.tags)
+      ? t.tags.filter((x): x is string => typeof x === 'string').slice(0, 20).map((s) => s.slice(0, 50))
+      : [];
+
     validTrades.push({
       id: t.id || `trade-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       date: t.date,
@@ -517,19 +538,19 @@ export function validateTradesSchema(
       currency: (t.currency || (market === 'TW' ? 'TWD' : 'USD')) as Currency,
       type,
       accountId: targetAccountId,
-      shares: typeof t.shares === 'number' && !isNaN(t.shares) ? t.shares : 0,
-      price: typeof t.price === 'number' && !isNaN(t.price) ? t.price : 0,
-      fee: typeof t.fee === 'number' ? t.fee : 0,
-      tax: typeof t.tax === 'number' ? t.tax : 0,
-      ratio: typeof t.ratio === 'number' ? t.ratio : undefined,
-      cashAmount: typeof t.cashAmount === 'number' ? t.cashAmount : undefined,
+      shares,
+      price,
+      fee,
+      tax,
+      ratio: typeof t.ratio === 'number' && Number.isFinite(t.ratio) ? t.ratio : undefined,
+      cashAmount: typeof t.cashAmount === 'number' && Number.isFinite(t.cashAmount) ? t.cashAmount : undefined,
       exDate: typeof t.exDate === 'string' ? t.exDate : undefined,
       targetSymbol: typeof t.targetSymbol === 'string' ? t.targetSymbol.toUpperCase() : undefined,
       targetName: typeof t.targetName === 'string' ? t.targetName : undefined,
-      allocationRatio: typeof t.allocationRatio === 'number' ? t.allocationRatio : undefined,
-      conversionPrice: typeof t.conversionPrice === 'number' ? t.conversionPrice : undefined,
-      tags: Array.isArray(t.tags) ? t.tags : [],
-      note: t.note || '',
+      allocationRatio: typeof t.allocationRatio === 'number' && Number.isFinite(t.allocationRatio) ? t.allocationRatio : undefined,
+      conversionPrice: typeof t.conversionPrice === 'number' && Number.isFinite(t.conversionPrice) ? t.conversionPrice : undefined,
+      tags,
+      note,
       createdAt: typeof t.createdAt === 'number' ? t.createdAt : Date.now(),
     });
   }

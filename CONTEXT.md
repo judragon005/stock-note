@@ -2083,6 +2083,29 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 核心模組：`src/engine/dashboardCanvasExporter.ts`、`src/components/aiForceDashboard/HeaderExportBar.tsx`。
   - 純前端零外部套件依賴，以 HTML5 原生 `<canvas>` 向量繪製 1920x1080 (2x Retina) 機構級「主力戰情 × 7 步決策卡」高解析度合成圖片，支援一鍵直接下載 PNG。
 
+### 金融級前端縱深防禦與離線主權體系 *(新增於 V8.70.0 / Spec #0157 / ADR #0157)*
+
+- **Content Security Policy & Browser Hardening (內容安全策略與瀏覽器防禦加固)**:
+  - 核心模組：`src/engine/cspSecurity.ts`、`index.html`、`vite.config.ts`。
+  - 實作最小權限 CSP Meta 與伺服器端 HTTP 標頭（`X-Frame-Options: DENY`、`X-Content-Type-Options: nosniff`、`Referrer-Policy: strict-origin-when-cross-origin`、`frame-ancestors 'none'`）。
+  - 精準鎖定已授權之金融行情 API（Yahoo、TWSE、TPEx、FinMind、FMP、AlphaVantage）與 CORS 代理池，徹底阻斷非授權外連數據外洩 (Data Exfiltration) 與點擊劫持 (Clickjacking)。
+
+- **Input Boundary Prototype Pollution & Schema Guard (輸入邊界原型防禦與數值熔斷)**:
+  - 核心模組：`src/engine/securitySanitizer.ts`、`src/utils/db.ts`、`src/utils/storage.ts`。
+  - 原生零依賴遞迴過濾並剝除 `__proto__`、`constructor`、`prototype` 惡意鍵名，保證全域原型鏈純淨。
+  - 數值邊界硬性熔斷：股數限制正數與十億股上限、價格與稅費非負數、備忘字串截斷至 2,000 字元以防 DoS 記憶體炸彈；全庫備份還原 (`importFullDatabaseJSON`) 強制執行前置安全查驗。
+
+- **PWA Offline-First & Native Service Worker (離線優先 PWA 與原生服務工作線程)**:
+  - 核心模組：`public/manifest.json`、`public/sw.js`、`src/main.tsx`。
+  - 配置 `standalone` 獨立視窗模式與深色主題 `#0f172a`，提供桌面與手機原生 App 般之無網址列體驗。
+  - 實作輕量級 `Stale-While-Revalidate` 快取策略，快取核心靜態資產與字型，實現無網路時秒開。
+
+- **Zero-Knowledge E2EE Client-Side Backup (零知識主密碼端對端加密備份)**:
+  - 核心模組：`src/engine/e2eeBackupEngine.ts`、`src/components/SettingsWorkspace.tsx`。
+  - 基於原生 Web Crypto API (`AES-GCM-256` + `PBKDF2 100,000` 次疊代)，將全庫 JSON 快照封裝為 `.e2ee.json` 密文備份檔。
+  - 密文檔中絕不含任何可讀之交易與持倉明文；錯誤密碼安全阻斷並防範數據篡改，提供極致隱私保護。
+
+
 
 
 
