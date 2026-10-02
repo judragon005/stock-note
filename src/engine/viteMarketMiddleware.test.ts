@@ -110,7 +110,20 @@ describe('Ticket 10 - Vite 原生 Connect 中介層 API (TDD Seam)', () => {
     expect(res.data.chips['2026-09-30'].foreign_net).toBe(5000);
   });
 
-  it('3. 非 /api/market 路由應直接調用 next() 放行至 Vite 靜態資源處理', async () => {
+  it('3. GET /api/market/sync-status 應能回傳各市場最新日期與陳舊度判定 (Spec 0160)', async () => {
+    const middleware = createMarketApiMiddleware(testDbPath);
+    const res = await simulateRequest(middleware, '/api/market/sync-status');
+
+    expect(res.status).toBe(200);
+    expect(res.data).toHaveProperty('tw');
+    expect(res.data).toHaveProperty('us');
+    expect(res.data.tw).toHaveProperty('latestDate');
+    expect(res.data.tw).toHaveProperty('anchorDate');
+    expect(res.data.tw).toHaveProperty('isStale');
+    expect(res.data).toHaveProperty('isCatchingUp');
+  });
+
+  it('4. 非 /api/market 路由應直接調用 next() 放行至 Vite 靜態資源處理', async () => {
     const middleware = createMarketApiMiddleware(testDbPath);
     const res = await simulateRequest(middleware, '/src/main.tsx');
     expect(res.data.error).toBe('PASSTHROUGH_NEXT');

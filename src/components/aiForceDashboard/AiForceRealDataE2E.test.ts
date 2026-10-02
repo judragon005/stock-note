@@ -132,11 +132,67 @@ describe('Ticket 03: AI 主力戰情室端到端資料庫注入與全視圖驗�
       }
     );
 
-    // 驗證真實資料筆數與行情
-    expect(report.marketBar.dataPointsCount).toBe(61);
+    // 驗證真實資料筆數與行情 (已推進至最新交易日 62 筆)
+    expect(report.marketBar.dataPointsCount).toBe(62);
     expect(report.marketBar.dataPointsCount).not.toBe(30); // 杜絕寫死 30 日
-    expect(report.klineSystem.candles.length).toBe(61);
+    expect(report.klineSystem.candles.length).toBe(62);
     expect(report.marketBar.dataRangeText).not.toBe('尚無歷史交易日資料');
+  });
+
+  it('Spec 0160: 致茂 (2360) 與 0050 湖倉真實日 K 推進至 2026-10-02 且與戰情室主 K 線圖完全對齊', async () => {
+    // 1. 若本機已存在實體 SQLite 湖倉數據，驗證 2360 與 0050 最新日期推進至 2026-10-02
+    // @ts-expect-error cjs module without type declaration
+    const { initSqliteLakehouseDb, isSqliteSupported } = await import('../../../scripts/market-sync/sqlite-db-core.cjs');
+    if (isSqliteSupported()) {
+      const db = initSqliteLakehouseDb();
+      const row2360 = db.prepare('SELECT date, open, high, low, close FROM daily_candles WHERE symbol = ? ORDER BY date DESC LIMIT 1').get('2360');
+      if (row2360) {
+        expect(row2360.date).toBe('2026-10-02');
+        expect(row2360.close).toBe(2190);
+        expect(row2360.open).toBe(2145);
+        expect(row2360.high).toBe(2225);
+        expect(row2360.low).toBe(2135);
+      }
+
+      const row0050 = db.prepare('SELECT date, close FROM daily_candles WHERE symbol = ? ORDER BY date DESC LIMIT 1').get('0050');
+      if (row0050) {
+        expect(row0050.date).toBe('2026-10-02');
+        expect(row0050.close).toBe(112.8);
+      }
+    }
+
+    // 2. 驗證戰情室合成 2360 報告時，頂部看板與主 K 線圖最後一根精準同為 2026-10-02
+    const mock2360Candles = [
+      { date: '2026-10-01', open: 2125, high: 2150, low: 2025, close: 2080, volume: 2414792 },
+      { date: '2026-10-02', open: 2145, high: 2225, low: 2135, close: 2190, volume: 3257024 },
+    ];
+    // 補足至 60 根
+    const full60Candles = Array.from({ length: 58 }, (_, i) => ({
+      date: `2026-07-${String((i % 25) + 1).padStart(2, '0')}`,
+      open: 2000,
+      high: 2050,
+      low: 1950,
+      close: 2000,
+      volume: 1000000,
+    })).concat(mock2360Candles);
+
+    const report2360 = generateAiForceReportFromCandles(
+      '2360',
+      '致茂',
+      'TW',
+      full60Candles,
+      { price: 2190, change: 110, changePercent: 5.29, open: 2145, high: 2225, low: 2135, volume: 3257024 },
+      undefined,
+      new Date('2026-10-02T16:30:00+08:00')
+    );
+
+    expect(report2360.marketBar.latestTradingDate).toBe('2026-10-02');
+    expect(report2360.marketBar.currentPrice).toBe(2190);
+    expect(report2360.marketBar.openPrice).toBe(2145);
+    expect(report2360.marketBar.highPrice).toBe(2225);
+    expect(report2360.marketBar.lowPrice).toBe(2135);
+    expect(report2360.klineSystem.candles[report2360.klineSystem.candles.length - 1].date).toBe('2026-10-02');
+    expect(report2360.klineSystem.candles[report2360.klineSystem.candles.length - 1].close).toBe(2190);
   });
 
   it('Spec 0159: 當輸入無資料之無效代碼時，系統誠實呈現空狀態 (0 筆)，杜絕任何 30 日或 1200 張假數據', () => {

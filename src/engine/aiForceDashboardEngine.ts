@@ -38,8 +38,8 @@ export {
  * 建立具備合理預設值的 AiForceDashboardReport
  */
 export function createDefaultAiForceReport(
-  symbol: string = '2360',
-  name: string = '致茂',
+  symbol: string = '0050',
+  name: string = '元大台灣50',
   market: MarketType = 'TW',
   basePrice?: number,
   referenceDate: Date = new Date()
@@ -719,8 +719,8 @@ export interface GenerateReportOptions {
  * 依據真實歷史日 K (OHLCV) 數列動態生成完整的 AiForceDashboardReport (Spec 0140 階段一 & Spec 0143 階段二)
  */
 export function generateAiForceReportFromCandles(
-  symbol: string = '2360',
-  name: string = '致茂',
+  symbol: string = '0050',
+  name: string = '元大台灣50',
   market: MarketType = 'TW',
   candles: Array<{
     date: string;
@@ -758,6 +758,20 @@ export function generateAiForceReportFromCandles(
       effectiveInstRecords = institutionalRecords.filter(
         (r) => r.date <= settlement.anchorTradingDate
       );
+    }
+  } else if (settlement.isSettled && effectiveCandles && effectiveCandles.length > 0) {
+    // Spec 0160: 若市場今日已結算且湖倉日 K 稍有落後，若有外部即時收盤價，進行日 K 自適應防斷層縫合
+    const lastDate = effectiveCandles[effectiveCandles.length - 1].date;
+    if (lastDate < settlement.anchorTradingDate && realtimeQuote?.price !== undefined) {
+      const stitchedCandle = {
+        date: settlement.anchorTradingDate,
+        open: realtimeQuote.open ?? realtimeQuote.price,
+        high: realtimeQuote.high ?? Math.max(realtimeQuote.price, realtimeQuote.open ?? realtimeQuote.price),
+        low: realtimeQuote.low ?? Math.min(realtimeQuote.price, realtimeQuote.open ?? realtimeQuote.price),
+        close: realtimeQuote.price,
+        volume: realtimeQuote.volume ?? 0,
+      };
+      effectiveCandles = [...effectiveCandles, stitchedCandle];
     }
   }
 
@@ -1081,13 +1095,23 @@ export function generateAiForceReportFromCandles(
       currentPrice,
       change,
       changePercent,
-      volumeShares: !settlement.isSettled ? last.volume : (realtimeQuote?.volume ?? last.volume),
+      volumeShares: !settlement.isSettled
+        ? last.volume
+        : (realtimeQuote?.volume ?? (realtimeQuote?.price && last.date !== settlement.anchorTradingDate ? undefined : last.volume)),
       transactionCount: Math.round(
-        (!settlement.isSettled ? last.volume : (realtimeQuote?.volume ?? last.volume)) * 2.3
+        (!settlement.isSettled
+          ? last.volume
+          : (realtimeQuote?.volume ?? (realtimeQuote?.price && last.date !== settlement.anchorTradingDate ? 0 : last.volume))) * 2.3
       ),
-      openPrice: !settlement.isSettled ? last.open : (realtimeQuote?.open ?? last.open),
-      highPrice: !settlement.isSettled ? last.high : (realtimeQuote?.high ?? last.high),
-      lowPrice: !settlement.isSettled ? last.low : (realtimeQuote?.low ?? last.low),
+      openPrice: !settlement.isSettled
+        ? last.open
+        : (realtimeQuote?.open ?? (realtimeQuote?.price && last.date !== settlement.anchorTradingDate ? undefined : last.open)),
+      highPrice: !settlement.isSettled
+        ? last.high
+        : (realtimeQuote?.high ?? (realtimeQuote?.price && last.date !== settlement.anchorTradingDate ? undefined : last.high)),
+      lowPrice: !settlement.isSettled
+        ? last.low
+        : (realtimeQuote?.low ?? (realtimeQuote?.price && last.date !== settlement.anchorTradingDate ? undefined : last.low)),
       latestTradingDate: settlement.anchorTradingDate,
       dataPointsCount: count,
       dataSourceText:
