@@ -1,9 +1,9 @@
 # 技術債 0040: AI 主力戰情室前端狀態標籤與處置警示徽章端到端串接
 
 - **建立日期**: 2026-10-01
-- **解決日期**: 待定
+- **解決日期**: 2026-10-01 (已於 v8.67.0 解決，詳見 ADR 0156 / PR #140)
 - **來源**: Code Review (Spec 0155 / Issue #138 Ticket 13)
-- **狀態**: `OPEN`
+- **狀態**: `RESOLVED`
 - **優先級**: `P3 (Low)`
 - **標籤**: `Feature` · `UI` · `AiForceDashboard` · `Lakehouse` · `Dispositions`
 

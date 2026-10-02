@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { backfillSymbolOhlcvAndIndicators } from '../../engine/historicalOhlcvBackfill';
 import { generateAiForceReportFromCandles } from '../../engine/aiForceDashboardEngine';
 import { paginateCandles } from './TaskPanels';
@@ -9,8 +9,14 @@ import * as marketCacheLoader from '../../engine/marketCacheLoader';
 describe('Ticket 03: AI 主力戰情室端到端資料庫注入與全視圖驗收 (E2E Verification)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-30T16:00:00+08:00'));
     vi.spyOn(db, 'saveSymbolOhlcv').mockResolvedValue();
     vi.spyOn(db, 'saveSymbolIndicators').mockResolvedValue();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('查詢 00403A 時，若 Yahoo API 遭遇 429，系統能無縫回退本地 compact 歷史資料庫並合流當日盤後行情', async () => {

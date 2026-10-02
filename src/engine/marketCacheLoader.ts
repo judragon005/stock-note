@@ -219,4 +219,33 @@ export async function loadSymbolHistoryFromLakehouse(
   return null;
 }
 
+/**
+ * 載入指定標的之處置與注意狀態 (Ticket 03)
+ */
+export async function loadSymbolDispositionStatus(
+  symbol: string,
+  market: MarketType = 'TW'
+): Promise<'NORMAL' | 'ATTENTION' | 'DISPOSITION'> {
+  if (market !== 'TW' || !symbol) {
+    return 'NORMAL';
+  }
+
+  const cleanSym = symbol.replace(/\.(TW|TWO)$/i, '').trim().toUpperCase();
+
+  try {
+    const res = await fetch(`/api/market/quote/${encodeURIComponent(cleanSym)}`);
+    if (res.ok) {
+      const data = await res.json();
+      const status = data?.meta?.status;
+      if (status === 'DISPOSITION' || status === 'ATTENTION') {
+        return status;
+      }
+    }
+  } catch (err) {
+    // 網路異常或伺服器無回應時，安全回退 NORMAL
+  }
+
+  return 'NORMAL';
+}
+
 

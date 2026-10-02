@@ -9,6 +9,7 @@ import {
 import { fetchRecentTwseReports } from '../../engine/smartMoneyFetcher';
 import { backfillSymbolOhlcvAndIndicators } from '../../engine/historicalOhlcvBackfill';
 import { fetchStockQuote } from '../../engine/priceFetcher';
+import { loadSymbolDispositionStatus } from '../../engine/marketCacheLoader';
 import { logger } from '../../utils/logger';
 import { HeaderMarketBar } from './HeaderMarketBar';
 import { KLineChartCard } from './cards/KLineChartCard';
@@ -33,6 +34,7 @@ import { HeaderExportBar } from './HeaderExportBar';
 import { TaskViewsSwitcher } from './TaskViewsSwitcher';
 import { TechnicalAlertsView, KdMaView, MacdView, RawDataView } from './TaskPanels';
 import { resolveOfficialSecurityName } from '../../engine/stockNameResolver';
+import { EquityDeepDiveModal } from '../equityDeepDive/EquityDeepDiveModal';
 import type { AiForceTaskTabKey } from '../../types/aiForceDashboard';
 
 export interface AiForceDashboardViewProps {
@@ -50,6 +52,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
   const [market, setMarket] = useState<MarketType>(initialMarket);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<AiForceTaskTabKey>('TASK_1_COMPREHENSIVE');
+  const [isDeepDiveOpen, setIsDeepDiveOpen] = useState(false);
   const [report, setReport] = useState<AiForceDashboardReport>(() =>
     createDefaultAiForceReport(initialSymbol, '致茂', initialMarket)
   );
@@ -108,7 +111,17 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         }
       }
 
-      // 4. 以真實數據合成 18 張卡片 Report (含法人籌碼動態連動，>= 1 根即可進行最後已知日 K 定錨)
+      // 4. 取得注意與處置狀態 (Ticket 04)
+      let resolvedStatusTag: 'NORMAL' | 'ATTENTION' | 'DISPOSITION' = 'NORMAL';
+      if (targetMarket === 'TW') {
+        try {
+          resolvedStatusTag = await loadSymbolDispositionStatus(targetSymbol, targetMarket);
+        } catch {
+          resolvedStatusTag = 'NORMAL';
+        }
+      }
+
+      // 5. 以真實數據合成 18 張卡片 Report (含法人籌碼動態連動，>= 1 根即可進行最後已知日 K 定錨)
       if (candles.length >= 1) {
         const fullReport = generateAiForceReportFromCandles(
           targetSymbol,
@@ -116,7 +129,13 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           targetMarket,
           candles,
           quote || undefined,
-          institutionalRecords
+          institutionalRecords,
+          undefined,
+          {
+            statusTag: resolvedStatusTag,
+            currency: targetMarket === 'US' ? 'USD' : 'TWD',
+            volumeUnit: targetMarket === 'US' ? '股' : '張',
+          }
         );
         if (!quote && targetMarket === 'TW') {
           fullReport.marketBar.dataSourceText = `本地盤後歷史資料庫 (共 ${candles.length} 日 K)`;
@@ -124,6 +143,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         setReport(fullReport);
       } else {
         const fallback = createDefaultAiForceReport(targetSymbol, resolvedName, targetMarket, quote?.price);
+        fallback.marketBar.marketStatusTag = resolvedStatusTag;
         if (quote) {
           fallback.marketBar.currentPrice = quote.price;
           if (quote.change !== undefined) fallback.marketBar.change = quote.change;
@@ -179,6 +199,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         report={report}
         sourcesText={report.marketBar?.dataSourceText}
         rangeText={report.marketBar?.dataRangeText}
+        onOpenDeepDive={() => setIsDeepDiveOpen(true)}
       />
 
       {/* 依據任務頁籤條件渲染視圖 */}
@@ -348,6 +369,15 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       <div style={{ marginTop: '8px', position: 'sticky', bottom: '12px', zIndex: 20 }}>
         <TaskViewsSwitcher activeTab={activeTab} onChangeTab={setActiveTab} />
       </div>
+
+      {/* 7 步深度投研與決策閉環 Modal (Debt #0037) */}
+      <EquityDeepDiveModal
+        isOpen={isDeepDiveOpen}
+        onClose={() => setIsDeepDiveOpen(false)}
+        symbol={symbol}
+        market={market}
+        name={report.name || symbol}
+      />
     </div>
   );
 };

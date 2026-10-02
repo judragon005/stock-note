@@ -30,6 +30,7 @@ interface HoldingsTableProps {
   onOpenReconciliation?: () => void;
   onOpenOmniInspector?: (symbol: string, market: MarketType) => void;
   onOpenFinancialForensic?: (symbol: string, market: MarketType, companyName?: string) => void;
+  onOpenDeepDive?: (symbol: string, market: MarketType, name?: string) => void;
   receivableDividends?: ReceivableDividend[];
   usdToTwdRate?: number;
 }
@@ -187,6 +188,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   onOpenReconciliation,
   onOpenOmniInspector,
   onOpenFinancialForensic,
+  onOpenDeepDive,
   receivableDividends = [],
   usdToTwdRate = 32.0,
 }) => {
@@ -1206,6 +1208,35 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                                 >
                                   <FileSpreadsheet size={13} />
                                   <span>📊 財報穿透</span>
+                                </button>
+                              )}
+
+                              {onOpenDeepDive && (
+                                <button
+                                  data-testid={`deep-dive-btn-${item.symbol}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    logger.info(`[HoldingsTable] Open Equity Deep Dive for ${item.symbol} (${item.name || ''})`);
+                                    onOpenDeepDive(item.symbol, item.market, item.name);
+                                  }}
+                                  style={{
+                                    background: 'rgba(56, 189, 248, 0.18)',
+                                    border: '1px solid rgba(56, 189, 248, 0.4)',
+                                    color: '#38bdf8',
+                                    borderRadius: '6px',
+                                    padding: '4px 10px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    transition: 'all 0.15s ease',
+                                  }}
+                                  title="開啟 7 步深度投研與決策閉環視窗"
+                                >
+                                  <Sparkles size={13} />
+                                  <span>🔍 7步深度投研</span>
                                 </button>
                               )}
                             </div>

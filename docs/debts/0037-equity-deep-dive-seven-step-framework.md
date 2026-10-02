@@ -1,9 +1,10 @@
 # 技術債 #0037: 全市場個股 7 步深度投研與決策閉環引擎 (Equity Deep-Dive 7-Step Framework)
 
-- **狀態**：`OPEN`
+- **狀態**：`RESOLVED` (已於 v8.67.0 解決，詳見 ADR 0156 / PR #140)
 - **優先級**：`P2`
 - **發現來源**：`/grill-with-docs` 需求調研
 - **建立日期**：2026-09-12
+- **解決日期**：2026-10-01
 - **標籤**：`Feature` · `Research` · `AI-Advisor` · `EquityAnalysis` · `Discipline`
 
 ---

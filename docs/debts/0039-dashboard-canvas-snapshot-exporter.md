@@ -1,9 +1,9 @@
 # 技術債 0039: AI 決策儀表板純前端 Canvas 快照下載演進
 
 - **建立日期**: 2026-09-26
-- **解決日期**: 待定
+- **解決日期**: 2026-10-01 (已於 v8.67.0 解決，詳見 ADR 0156 / PR #140)
 - **來源**: Code Review (Spec 0140 / Issue #93)
-- **狀態**: `OPEN`
+- **狀態**: `RESOLVED`
 - **優先級**: `P3 (Low)`
 - **標籤**: `Feature` · `Export` · `Canvas` · `UX` · `AiForceDashboard`
 
