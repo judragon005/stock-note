@@ -31,6 +31,7 @@ import {
 import { syncOfficialTaiwanStockList } from '../engine/stockDictionarySync';
 import { getStockDictionaryStats, clearCustomStockNames } from '../engine/stockNameResolver';
 import { validateCustomProxyUrl } from '../engine/secureProxyRouter';
+import { exportE2EEEncryptedBackup, decryptE2EEBackup } from '../engine/e2eeBackupEngine';
 import { StockDictionaryStats } from '../types/stockDictionary';
 import { LocalStorageInspectionStats } from '../types/stock';
 import { MarketScheduleHubSection } from './MarketScheduleHubSection';
@@ -1139,22 +1140,62 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
     }
   };
 
-  // 匯入全庫 JSON
+  // 匯出 E2EE 零知識加密備份
+  const handleExportE2EEDB = async () => {
+    try {
+      const passphrase = window.prompt('🔒 請設定 E2EE 備份解密主密碼（請牢記，遺失無法找回）：');
+      if (!passphrase) return;
+
+      const confirmPass = window.prompt('🔒 請再次輸入主密碼進行確認：');
+      if (passphrase !== confirmPass) {
+        showToast('兩次輸入的主密碼不一致，已取消加密匯出', true);
+        return;
+      }
+
+      const json = await exportFullDatabaseJSON(false);
+      const encrypted = await exportE2EEEncryptedBackup(json, passphrase);
+      const blob = new Blob([encrypted], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `stock-tracker-e2ee-backup-${new Date().toISOString().slice(0, 10)}.e2ee.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('🔒 E2EE 零知識主密碼加密備份檔案已成功導出！');
+    } catch (err) {
+      showToast(`加密匯出失敗: ${err instanceof Error ? err.message : String(err)}`, true);
+    }
+  };
+
+  // 匯入全庫 JSON (支援標準備份與 E2EE 密文備份)
   const handleImportFullDB = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!window.confirm('⚠️ 匯入全庫備份將會覆寫現有全部資料，確定要繼續嗎？')) {
-      e.target.value = '';
-      return;
-    }
+    const isE2EE = file.name.endsWith('.e2ee.json');
 
     const reader = new FileReader();
     reader.onload = async (ev) => {
       try {
         const content = ev.target?.result as string;
-        await importFullDatabaseJSON(content);
-        alert('🎉 全庫備份資料已成功匯入！');
+        let finalJson = content;
+
+        if (isE2EE || content.includes('STOCK_TRACKER_E2EE_BACKUP')) {
+          const passphrase = window.prompt('🔒 偵測到 E2EE 零知識加密備份檔案，請輸入主密碼進行解密：');
+          if (!passphrase) {
+            e.target.value = '';
+            return;
+          }
+          finalJson = await decryptE2EEBackup(content, passphrase);
+        }
+
+        if (!window.confirm('⚠️ 匯入備份將會覆寫現有全部資料，確定要繼續嗎？')) {
+          e.target.value = '';
+          return;
+        }
+
+        await importFullDatabaseJSON(finalJson);
+        alert('🎉 備份資料已成功安全匯入！');
         if (onDataRestored) {
           onDataRestored();
         } else {
@@ -1162,6 +1203,8 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
         }
       } catch (err) {
         alert(`匯入失敗: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        e.target.value = '';
       }
     };
     reader.readAsText(file, 'UTF-8');
@@ -1495,50 +1538,73 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
                 🛡️ 脫敏匯出 (自動抹除 API 金鑰以防外洩)
               </label>
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <button
                 type="button"
                 onClick={handleExportFullDB}
-              style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '5px',
-                padding: '6px 10px',
-                borderRadius: '8px',
-                background: 'rgba(59, 130, 246, 0.15)',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
-                color: '#93c5fd',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <Download size={13} />
-              匯出全庫 JSON
-            </button>
-            <label
-              style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '5px',
-                padding: '6px 10px',
-                borderRadius: '8px',
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid var(--border-color)',
-                color: 'var(--text-secondary)',
-                fontSize: '0.75rem',
-                cursor: 'pointer',
-              }}
-            >
-              <Upload size={13} />
-              匯入備份
-              <input type="file" accept=".json" onChange={handleImportFullDB} style={{ display: 'none' }} />
-            </label>
-          </div>
+                style={{
+                  flex: '1 1 120px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '5px',
+                  padding: '6px 10px',
+                  borderRadius: '8px',
+                  background: 'rgba(59, 130, 246, 0.15)',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  color: '#93c5fd',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                <Download size={13} />
+                匯出全庫 JSON
+              </button>
+              <button
+                type="button"
+                onClick={handleExportE2EEDB}
+                title="以自訂主密碼透過 AES-GCM-256 加密全庫備份，安全跨裝置同步"
+                style={{
+                  flex: '1 1 130px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '5px',
+                  padding: '6px 10px',
+                  borderRadius: '8px',
+                  background: 'rgba(168, 85, 247, 0.15)',
+                  border: '1px solid rgba(168, 85, 247, 0.35)',
+                  color: '#c084fc',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                <Lock size={13} />
+                🔒 E2EE 加密備份
+              </button>
+              <label
+                style={{
+                  flex: '1 1 100px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '5px',
+                  padding: '6px 10px',
+                  borderRadius: '8px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-secondary)',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                }}
+              >
+                <Upload size={13} />
+                匯入備份
+                <input type="file" accept=".json,.e2ee.json" onChange={handleImportFullDB} style={{ display: 'none' }} />
+              </label>
+            </div>
         </div>
       </div>
 

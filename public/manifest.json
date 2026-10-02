@@ -1,0 +1,18 @@
+{
+  "short_name": "股票分析儀",
+  "name": "股票交易紀錄與分析儀 | 繁中雙市場版",
+  "description": "離線優先、零伺服器、金融級安全防護之台美雙市場股票交易紀錄與量化戰情室",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "display": "standalone",
+  "orientation": "portrait-primary"
+}
