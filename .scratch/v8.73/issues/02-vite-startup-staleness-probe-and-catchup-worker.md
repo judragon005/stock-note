@@ -1,6 +1,11 @@
-# Ticket 02: 實裝 Vite 中介層啟動過期檢查與非同步自動追趕同步器 (/api/market/sync-status)
+# 02 — Vite 服務啟動時之過期巡檢與背景追趕端點
 
-## 目標
-在 `scripts/market-sync/vite-market-middleware.cjs` 實作：
-1. `GET /api/market/sync-status` 端點，回傳台股與美股的最新日 K 日期、結算狀態與是否正在追趕中。
-2. 啟動非同步追趕巡檢：若 `daily_candles` 中最新日期落後當前市場結算交易日，自動觸發背景追趕同步。
+**What to build:** 實作 `/api/market/sync-status` 端點與 Vite 開發伺服器啟動巡檢；若因關機錯過台股 (16:00) 或美股 (08:00) 排程，系統開機後自動在背景執行追趕補齊，不阻塞操作。
+
+**Blocked by:** 01 — 執行全市場歷史 CSV 全量回補至 SQLite 本機湖倉
+
+**Status:** done
+
+- [x] Vite 中介層新增 `/api/market/sync-status` 檢查湖倉與排程狀態
+- [x] 伺服器啟動時非同步觸發追趕檢查，若陳舊則自動喚醒 Worker 補齊
+- [x] 測試環境下跳過非同步背景同步，避免影響單元測試執行速度

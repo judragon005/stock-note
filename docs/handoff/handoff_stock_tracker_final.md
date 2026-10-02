@@ -1,13 +1,13 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Document)
 
-> **交接產生時間**：2026-09-30 16:50 (UTC+8)  
+> **交接產生時間**：2026-10-03 07:45 (UTC+8)  
 > **當前最新里程碑**：
-> - **V8.65.0 全市場歷史日 K 本地緊湊快取注入 IndexedDB 與 Yahoo 代理防限流降級**（ADR 0154, Spec 0154, Issue #136）：
->   - **按需緊湊歷史日 K 提取與單例記憶體快取**：實現 `loadSymbolCompactHistory`，按需從 `tw_market_ohlcv_compact.json` (17.5 MB) 解析特定標的並格式化為標準 `DailyCandle`，模組級單例 Promise 快取防重複請求。
->   - **歷史日 K 與當日收盤無縫合流與防限流降級**：在 `vite.config.ts` 補齊桌面瀏覽器標頭，當 Yahoo API 429 失敗且本地快取不足時，自動調用本地 compact 歷史日 K 與每日 16:00 盤後更新之 `tw_market_summary.json` 當日收盤價，透過 `mergeDailyCandles` 去重升冪合併，重新計算指標並持久化沉澱至 IndexedDB，100% 杜絕圖表全空破圖。
->   - **無效標的代碼智慧診斷與指引**：在戰情室精確標註「⚠️ 查無此台股標的代碼，請確認代碼是否輸入正確（如 00403A、2330）」，消除使用者對系統故障之猜忌。
-> - **V8.64.0 AI 主力戰情室單一真實數據來源校準、淘汰衝突硬編碼假資料與優雅 Empty State**（ADR 0152, Spec 0152, Issue #133）。
-> **品質狀態**：全量單元測試 **1,213/1,213 通過 (100% Passed / 141 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，Vite 生產環境打包順利通過 (11.15s)。
+> - **V8.73.0 市場數據過期自動追趕同步、湖倉推進至 10/02、主力戰情室預載 0050 與主 K 線 SSOT 縫合**（ADR 0160, Spec 0160, Issue #150, PR #151）：
+>   - **主力戰情室預設載入標的改為 0050**：使用者進入戰情室時，預設展示標的由 2360 切換為 0050 (元大台灣50)，全景看板、主 K 線與主力分析卡片均預設呈現 0050 真實數據。
+>   - **開機與在線過期自動追趕同步 (Catch-up Sync)**：Vite 中介層啟動時自動巡檢過期狀態；`/api/market/sync-status` 端點支援非同步追趕；前端 `useMarketCatchupSync` 監聽 `visibilitychange` 與 `online` 事件，喚醒後自動檢查與重載。
+>   - **全市場歷史 CSV 全量灌入 SQLite 本機湖倉**：成功將本機 2,361 檔標的共 141,069 筆真實日 K 灌入 SQLite (`.scratch/market-cache/market_history.db`)，致茂 (2360) 與 0050 最新日 K 均推進至 2026-10-02。
+>   - **日 K 單一真實來源 (SSOT) 防拼裝自適應縫合**：重構 `aiForceDashboardEngine.ts`，當即時報價缺少開高低量時，嚴禁拿舊日 K 拼裝；在收盤後自動將即時價格無縫縫合為最新一根日 K。
+> **品質狀態**：全量單元測試 **1,340/1,340 通過 (100% Passed / 162 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -15,12 +15,12 @@
 
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
-- **當前工作分支**：`feature/136-compact-history-indexeddb-hydration`
-- **單元測試套件**：**1,213/1,213 通過 (141 test suites / 100% 綠燈)**
+- **當前工作分支**：`main`
+- **單元測試套件**：**1,340/1,340 通過 (162 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V8.65.0**
-- **工作區與分支整潔度**：工作區 100% clean，本地過期 feature 分支已全數刪除，專案臨時備份檔案已全量清理。
+- **當前釋出版本**：**V8.73.0**
+- **工作區與分支整潔度**：工作區 100% clean，本地 feature/fix 分支已全數刪除，專案臨時備份檔案已全量清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
 ---
@@ -48,6 +48,7 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0160`](file:///d:/APP/股票紀錄/docs/specs/0160-market-sync-catchup-and-kline-ssot-alignment-spec.md) | [`ADR 0160`](file:///d:/APP/股票紀錄/docs/adr/0160-market-sync-catchup-and-kline-ssot-alignment.md) | [`.scratch/v8.73/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.73/issues/) | Issue #150 / PR #151 | V8.73.0 | 市場數據過期自動追趕同步、本機湖倉推進至 10/02、主力戰情室預載 0050、主 K 線 SSOT 自適應縫合防拼裝 |
 | [`Spec 0149`](file:///d:/APP/股票紀錄/docs/specs/0149-scheduled-sync-anchor-repair-and-ai-force-cards-ux-enhancements-spec.md) | [`ADR 0149`](file:///d:/APP/股票紀錄/docs/adr/0149-scheduled-sync-anchor-repair-and-ai-force-cards-ux-enhancements.md) | [`.scratch/v8.62.0-scheduled-sync-anchor-repair-and-ai-force-cards-ux-enhancements/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.62.0-scheduled-sync-anchor-repair-and-ai-force-cards-ux-enhancements/issues/) | Issue #125 / PR #126 | V8.62.0 | 全市場排程工作目錄絕對錨定、空數據防清空守門員、搜尋代碼彈性防截斷、Tooltip Portal 穿透、Card 04 籌碼熱區圖自適應填滿、Card 05 風險雷達圖半徑擴大與大字級 |
 | [`Spec 0148`](file:///d:/APP/股票紀錄/docs/specs/0148-ai-force-cards-visual-fidelity-and-popover-boundary-repair-spec.md) | [`ADR 0148`](file:///d:/APP/股票紀錄/docs/adr/0148-ai-force-cards-visual-fidelity-and-popover-boundary-repair.md) | [`.scratch/v8.61.0-ai-force-cards-visual-fidelity-and-popover-boundary-repair/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.61.0-ai-force-cards-visual-fidelity-and-popover-boundary-repair/issues/) | Issue #121 / PR #122 | V8.61.0 | 卡片 04/02/06/07 視覺動態連動、自適應刻度與熱力矩陣、三態橫幅、扇形預測錐與山脈堆疊、字典小方塊抗裁切防遮蔽 |
 | [`Spec 0145`](file:///d:/APP/股票紀錄/docs/specs/0145-ai-force-dashboard-responsive-bento-grid-and-header-redesign-spec.md) | [`ADR 0145`](file:///d:/APP/股票紀錄/docs/adr/0145-ai-force-dashboard-responsive-bento-grid-and-header-redesign.md) | [`.scratch/v8.58.0-ai-force-bento-grid-and-header-redesign/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.58.0-ai-force-bento-grid-and-header-redesign/issues/) | Issue #112 / PR #113 | V8.58.0 | 雙層全繁中即時行情列、01 主 K 線獨立全寬滿版、01➔18 內容導向自然流 Bento-Grid、圖表防碰撞修復 |

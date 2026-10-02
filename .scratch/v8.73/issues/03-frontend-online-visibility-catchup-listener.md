@@ -1,6 +1,11 @@
-# Ticket 03: 實裝前端分頁甦醒 (Visibility & Online) 自動重新檢查與靜默重載
+# 03 — 前端在線與分頁甦醒 (Visibility & Online) 自動檢查 Hook
 
-## 目標
-在前端全域監聽 `online` 與 `visibilitychange` 事件：
-1. 當電腦喚醒或重新連線時，呼叫 `/api/market/sync-status`。
-2. 若資料庫剛完成追趕同步，通知相關訂閱者（如戰情室）重新整理數據。
+**What to build:** 使用者休眠喚醒筆電或切回瀏覽器分頁時，自動向端點發送過期檢查；若發現過期或同步完畢，自動靜默更新最新報價與頂部同步徽章。
+
+**Blocked by:** 02 — Vite 服務啟動時之過期巡檢與背景追趕端點
+
+**Status:** done
+
+- [x] 建立 `useMarketCatchupSync` 自訂 Hook
+- [x] 掛載 `visibilitychange` 與 `online` 事件監聽
+- [x] 整合至 `AiForceDashboardView.tsx`，達成喚醒無感重新整理

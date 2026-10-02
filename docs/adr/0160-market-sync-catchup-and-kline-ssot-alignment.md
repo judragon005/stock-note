@@ -1,7 +1,7 @@
 # ADR-0160: 市場數據過期自動追趕同步與主 K 線單一真實來源對齊
 
 ## 狀態 (Status)
-已提議 (Proposed)
+已通過 (Accepted)
 
 ## 背景 (Context)
 在主力戰情室的實盤使用中，發現兩項嚴重的架構與數據同步缺陷：
@@ -28,6 +28,9 @@
 
 ### 4. 全市場歷史數據庫全量灌入 SQLite 湖倉
 - 執行 `backfill-local-csv.cjs`，將 2,360 檔台股最新歷史 CSV（包含 2026-10-02 最新日 K）全量寫入本機 SQLite `daily_candles` 與 `tw_institutional_chips`。
+
+### 5. 主力戰情室預載標的切換為 0050 (元大台灣50)
+- 依據使用者指引，將戰情室進入時的預載標的常數由個股 `2360` 統一更換為台股市場標竿指數 ETF `0050`，包含 `App.tsx`、`AiForceDashboardView.tsx`、`HeaderMarketBar.tsx` 與 `aiForceDashboardEngine.ts` 預設值，消除預設載入偏狹個股之突兀感。
 
 ## 影響 (Consequences)
 
