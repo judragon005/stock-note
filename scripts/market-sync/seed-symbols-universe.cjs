@@ -144,12 +144,59 @@ function searchSymbolsMeta(query, limit = 20, customDbPath) {
   return stmt.all(pattern, pattern, exactSym, prefixSym, pattern, Math.max(1, limit));
 }
 
+let FULL_US_MARKET_UNIVERSE = [];
+try {
+  const universeData = require('./us-market-universe-data.cjs');
+  FULL_US_MARKET_UNIVERSE = universeData.FULL_US_MARKET_UNIVERSE || [];
+} catch {
+  // 若尚未產生則回退為空
+}
+
 /**
- * 匯入預設全市場標的種子名單（台股 2,300+ 檔 + 美股核心清單）
+ * 取得完整美股標的種子清單 (涵蓋 S&P 1500、NASDAQ 100 與熱門 ETF，共 1,500+ 檔)
+ * @returns {Array<{ symbol: string, name: string, market: 'US', exchange: string, type: 'STOCK' | 'ETF', status: string }>}
+ */
+function getFullUsSeedUniverse() {
+  const symbolMap = new Map();
+
+  // 1. 核心 Tier 1 先加入
+  for (const item of DEFAULT_US_SEED) {
+    symbolMap.set(item.symbol.toUpperCase(), {
+      symbol: item.symbol.toUpperCase(),
+      name: item.name,
+      market: 'US',
+      exchange: item.exchange || 'NASDAQ',
+      type: item.type || 'STOCK',
+      status: 'NORMAL',
+    });
+  }
+
+  // 2. 擴充全市場標的
+  if (Array.isArray(FULL_US_MARKET_UNIVERSE)) {
+    for (const item of FULL_US_MARKET_UNIVERSE) {
+      const sym = String(item.symbol).toUpperCase();
+      if (!symbolMap.has(sym)) {
+        symbolMap.set(sym, {
+          symbol: sym,
+          name: item.name || sym,
+          market: 'US',
+          exchange: item.exchange || 'NASDAQ',
+          type: item.type || 'STOCK',
+          status: 'NORMAL',
+        });
+      }
+    }
+  }
+
+  return Array.from(symbolMap.values());
+}
+
+/**
+ * 匯入預設全市場標的種子名單（台股 2,300+ 檔 + 美股全市場 1,500+ 檔）
  * @param {string} [customDbPath]
  */
 function seedDefaultSymbolsUniverse(customDbPath) {
-  const seeds = [...DEFAULT_US_SEED];
+  const seeds = getFullUsSeedUniverse();
 
   // 嘗試讀取 public/market-cache/tw_market_summary.json
   const twSummaryPath = path.resolve(__dirname, '../../public/market-cache/tw_market_summary.json');
@@ -173,8 +220,9 @@ function seedDefaultSymbolsUniverse(customDbPath) {
     }
   }
 
-  // 嘗試從 src/data/stockDictionary.ts 擷取台股清單
-  if (seeds.length < 500) {
+  // 嘗試從 src/data/stockDictionary.ts 擷取台股清單 (若台股種子少於 500 檔)
+  const twSeedsCount = seeds.filter((s) => s.market === 'TW').length;
+  if (twSeedsCount < 500) {
     const dictPath = path.resolve(__dirname, '../../src/data/stockDictionary.ts');
     if (fs.existsSync(dictPath)) {
       try {
@@ -204,5 +252,6 @@ module.exports = {
   upsertSymbolsMeta,
   searchSymbolsMeta,
   seedDefaultSymbolsUniverse,
+  getFullUsSeedUniverse,
   DEFAULT_US_SEED,
 };
