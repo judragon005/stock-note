@@ -795,6 +795,13 @@ export function generateAiForceReportFromCandles(
       fallback.marketBar.latestTradingDate = settlement.anchorTradingDate;
     }
     fallback.marketBar.settlementReason = settlement.reason;
+    if (options?.statusTag !== undefined) {
+      fallback.marketBar.marketStatusTag = options.statusTag;
+    } else if (market === 'TW') {
+      fallback.marketBar.marketStatusTag = 'NORMAL';
+    }
+    if (options?.currency) fallback.marketBar.currency = options.currency;
+    if (options?.volumeUnit) fallback.marketBar.volumeUnit = options.volumeUnit;
     return fallback;
   }
 

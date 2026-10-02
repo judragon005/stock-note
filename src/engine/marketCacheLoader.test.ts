@@ -289,5 +289,49 @@ describe('MarketCacheLoader (前端快取秒讀與 IndexedDB 沉澱引擎)', () 
       expect(result).toHaveLength(1);
       expect(result?.[0].close).toBe(990);
     });
+
+    it('Ticket 03: loadSymbolDispositionStatus 能正確解析處置與注意狀態，並在美股或異常時安全回退 NORMAL', async () => {
+      // @ts-ignore
+      global.fetch = vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/api/market/quote/2330')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              symbol: '2330',
+              meta: { status: 'DISPOSITION' },
+            }),
+          });
+        }
+        if (url.includes('/api/market/quote/2603')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              symbol: '2603',
+              meta: { status: 'ATTENTION' },
+            }),
+          });
+        }
+        return Promise.resolve({ ok: false, status: 500 });
+      });
+
+      const { loadSymbolDispositionStatus } = await import('./marketCacheLoader');
+
+      // 1. 處置股票
+      const status2330 = await loadSymbolDispositionStatus('2330', 'TW');
+      expect(status2330).toBe('DISPOSITION');
+
+      // 2. 注意股票
+      const status2603 = await loadSymbolDispositionStatus('2603', 'TW');
+      expect(status2603).toBe('ATTENTION');
+
+      // 3. 美股直接回退 NORMAL
+      const statusNvda = await loadSymbolDispositionStatus('NVDA', 'US');
+      expect(statusNvda).toBe('NORMAL');
+
+      // 4. API 失敗時平滑回退 NORMAL
+      const statusErr = await loadSymbolDispositionStatus('9999', 'TW');
+      expect(statusErr).toBe('NORMAL');
+    });
   });
 });
+

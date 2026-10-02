@@ -60,6 +60,7 @@ import { FrictionCenterModal } from './components/FrictionCenterModal';
 import { XirrDetailModal } from './components/XirrDetailModal';
 import { OmniTechnicalInspectorModal } from './components/OmniTechnicalInspectorModal';
 import { FinancialForensicModal } from './components/financial/FinancialForensicModal';
+import { EquityDeepDiveModal } from './components/equityDeepDive/EquityDeepDiveModal';
 import { MarginStressModal } from './components/MarginStressModal';
 import { WorkspaceTabs, WorkspaceTabKey } from './components/WorkspaceTabs';
 import { WarRoomWorkspace } from './components/WarRoomWorkspace';
@@ -273,6 +274,28 @@ export const App: React.FC = () => {
       symbol,
       market,
       companyName: companyName || symbol,
+    });
+  }, []);
+
+  // 7 步深度投研與決策閉環彈窗狀態 (Debt #0037)
+  const [deepDiveState, setDeepDiveState] = useState<{
+    isOpen: boolean;
+    symbol: string;
+    market: MarketType;
+    name?: string;
+  }>({
+    isOpen: false,
+    symbol: '2330',
+    market: 'TW',
+    name: '台積電',
+  });
+
+  const handleOpenDeepDive = useCallback((symbol: string, market: MarketType, name?: string) => {
+    setDeepDiveState({
+      isOpen: true,
+      symbol,
+      market,
+      name,
     });
   }, []);
 
@@ -855,6 +878,7 @@ export const App: React.FC = () => {
             onOpenReconciliation={() => setIsReconciliationOpen(true)}
             onOpenOmniInspector={handleOpenOmniInspector}
             onOpenFinancialForensic={handleOpenFinancialForensic}
+            onOpenDeepDive={handleOpenDeepDive}
           />
         </>
       )}
@@ -1118,6 +1142,15 @@ export const App: React.FC = () => {
         companyName={financialForensicState.companyName}
         fmpApiKey={apiKeys.fmpApiKey}
         finmindToken={apiKeys.finmindToken}
+      />
+
+      {/* 全市場個股 7 步深度投研與決策閉環視窗 (Debt #0037) */}
+      <EquityDeepDiveModal
+        isOpen={deepDiveState.isOpen}
+        onClose={() => setDeepDiveState((prev) => ({ ...prev, isOpen: false }))}
+        symbol={deepDiveState.symbol}
+        market={deepDiveState.market}
+        name={deepDiveState.name}
       />
     </div>
   );

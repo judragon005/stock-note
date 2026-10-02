@@ -5,6 +5,8 @@ import {
   triggerHtmlDownload,
   triggerPrintPdf,
 } from '../../engine/exportReportPipeline';
+import { triggerDashboardCanvasPngDownload } from '../../engine/dashboardCanvasExporter';
+import { getInvestmentMemo } from '../../utils/investmentMemoStorage';
 
 export interface ExportActionItem {
   id: 'DASHBOARD_PNG' | 'ALL_CHARTS_PNG' | 'CSV' | 'HTML' | 'PDF';
@@ -24,6 +26,7 @@ export interface HeaderExportBarProps {
   report: AiForceDashboardReport;
   sourcesText?: string;
   rangeText?: string;
+  onOpenDeepDive?: () => void;
 }
 
 /**
@@ -51,6 +54,7 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
   report,
   sourcesText: customSourcesText,
   rangeText: customRangeText,
+  onOpenDeepDive,
 }) => {
   const { sourcesText, rangeText } = resolveExportBarTexts(
     report,
@@ -82,9 +86,12 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
       case 'PDF':
         triggerPrintPdf();
         break;
-      case 'DASHBOARD_PNG':
-        showToast('提示：可使用列印功能選擇「另存為 PDF/圖片」獲得高解析度全景');
+      case 'DASHBOARD_PNG': {
+        const memo = getInvestmentMemo(report.symbol);
+        triggerDashboardCanvasPngDownload(report, memo || undefined);
+        showToast('已生成並下載高解析度 1920x1080 決策快照圖檔 (PNG)');
         break;
+      }
       case 'ALL_CHARTS_PNG':
         showToast('已將全量 SVG 圖表打包快照至下載佇列');
         break;
@@ -123,8 +130,41 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
         <span style={{ color: '#94a3b8' }}>{rangeText}</span>
       </div>
 
-      {/* 右側：5 大匯出按鈕 */}
+      {/* 右側：7步投研按鈕與 5 大匯出按鈕 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+        {onOpenDeepDive && (
+          <button
+            type="button"
+            data-testid="export-btn-deep-dive"
+            onClick={onOpenDeepDive}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '4px 10px',
+              borderRadius: '6px',
+              border: '1px solid rgba(56, 189, 248, 0.4)',
+              backgroundColor: 'rgba(56, 189, 248, 0.15)',
+              color: '#38bdf8',
+              fontSize: '11px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(56, 189, 248, 0.25)';
+              e.currentTarget.style.borderColor = '#38bdf8';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(56, 189, 248, 0.15)';
+              e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.4)';
+            }}
+            title="開啟全市場個股 7 步深度投研與決策閉環視窗"
+          >
+            <span>🔍</span>
+            <span>7步深度投研</span>
+          </button>
+        )}
         {EXPORT_ACTIONS_CONFIG.map((act) => (
           <button
             key={act.id}

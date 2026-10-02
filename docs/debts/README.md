@@ -44,10 +44,10 @@
 | [**0034**](0034-import-parser-prototype-pollution-and-schema-validation.md) | 匯入解析防護、原型污染防禦與數值邊界熔斷 | `P2` | `OPEN` | 資安架構深度審查 | `Security` · `PrototypePollution` · `Validation` · `Sanitization` · `Schema` | 升級匯入衝突消解器 (Debt #0028) 或快照校驗時 |
 | [**0035**](0035-client-side-rate-limiting-and-api-quota-guard.md) | 客戶端 API 速率限制 (Rate Limiting) 與防封禁配額保護 | `P2` | `RESOLVED` | 資安架構深度審查 | `Security` · `RateLimiting` · `Quota` · `Resilience` · `CircuitBreaker` | **已於 v8.9.0 (ADR #0090) 完整解決** |
 | [**0036**](0036-full-payoff-unified-engine-refactor.md) | 質押借貸 FULL_PAYOFF 全額結清分支統一委託 applyDebtRepayment 引擎重構 | `P2` | `RESOLVED` | PR #24 審查 (Issue #25) | `Refactor` · `Accounting` · `Debt` · `DRY` | **已於 v8.52.0 (ADR #0139) 完整解決** |
-| [**0037**](0037-equity-deep-dive-seven-step-framework.md) | 全市場個股 7 步深度投研與決策閉環引擎 | `P2` | `OPEN` | /grill-with-docs 需求調研 | `Feature` · `Research` · `AI-Advisor` · `EquityAnalysis` · `Discipline` | 基本面分析或個股投研輔助專題時 |
+| [**0037**](0037-equity-deep-dive-seven-step-framework.md) | 全市場個股 7 步深度投研與決策閉環引擎 | `P2` | `RESOLVED` | /grill-with-docs 需求調研 | `Feature` · `Research` · `AI-Advisor` · `EquityAnalysis` · `Discipline` | **已於 v8.67.0 (ADR #0156) 完整解決** |
 | [**0038**](0038-derive-shares-outstanding-helper-refactor.md) | 提取流通股數推導共用輔助函式 (deriveSharesOutstanding) 消除 DRY 異味 | `P3` | `RESOLVED` | PR #62 雙軸代碼審查 (Spec 0131) | `Refactor` · `DRY` · `KeyMetricsEngine` · `Valuation` | **已於 v8.52.0 (ADR #0139) 完整解決** |
-| [**0039**](0039-dashboard-canvas-snapshot-exporter.md) | AI 決策儀表板純前端 Canvas 快照下載演進 | `P3` | `OPEN` | Code Review (Spec 0140 / Issue #93) | `Feature` · `Export` · `Canvas` · `UX` · `AiForceDashboard` | 需一鍵圖檔分享或社群導出時 |
-| [**0040**](0040-ai-force-frontend-status-tag-and-disposition-badge-wiring.md) | AI 主力戰情室前端狀態標籤與處置警示徽章端到端串接 | `P3` | `OPEN` | Code Review (Spec 0155 / Issue #138) | `Feature` · `UI` · `AiForceDashboard` · `Lakehouse` · `Dispositions` | 下期主力戰情室即時資料管線整合時 |
+| [**0039**](0039-dashboard-canvas-snapshot-exporter.md) | AI 決策儀表板純前端 Canvas 快照下載演進 | `P3` | `RESOLVED` | Code Review (Spec 0140 / Issue #93) | `Feature` · `Export` · `Canvas` · `UX` · `AiForceDashboard` | **已於 v8.67.0 (ADR #0156) 完整解決** |
+| [**0040**](0040-ai-force-frontend-status-tag-and-disposition-badge-wiring.md) | AI 主力戰情室前端狀態標籤與處置警示徽章端到端串接 | `P3` | `RESOLVED` | Code Review (Spec 0155 / Issue #138) | `Feature` · `UI` · `AiForceDashboard` · `Lakehouse` · `Dispositions` | **已於 v8.67.0 (ADR #0156) 完整解決** |
 
 ---
 
