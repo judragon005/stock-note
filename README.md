@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1293%2F1293%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1325%2F1325%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,7 +11,26 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 全市場個股 7 步深度投研決策閉環、純前端 Canvas 向量快照與處置警示徽章端到端串接 (`Equity Deep-Dive & Canvas Snapshot`) *(V8.67.0 全新發布)*
+### 0. 美股全市場標的湖倉採集、自適應限流防禦與斷點續傳排程管線 (`US Market Lakehouse Full-Universe Ingestion & Checkpoint Pipeline`) *(V8.71.0 全新發布)*
+
+- **打破 44 檔枷鎖，全市場 1,795 檔標的種子庫 (`1,795 US Symbols Seed & Lakehouse Ingestion`) (Spec 0158)**：
+  - 整合 `STATIC_US_STOCKS` (599 檔) 與 S&P 1500 / NASDAQ 100 / 熱門成長股與旗艦 ETF，建置 `us-market-universe-data.cjs`，支援一鍵事務批次寫入 SQLite 本地湖倉 `symbols_meta`。
+- **生命週期雙模態採集管線 (`Dual-Mode Lifecycle Architecture`)**：
+  - **模式 A (首次全量補齊 `--mode=bootstrap`)**：全量拉取 1,795 檔標的最近 250 天歷史日 K (含還原價) 寫入 SQLite `daily_candles`，一次性建置基準線。
+  - **模式 B (每日增量更新 `--mode=daily`)**：每日 08:00 定時排程無聲喚醒，僅追加當日最新行情與滾動指標，極速刷新 `us_market_summary.json`。
+- **三層動態優先級隊列 (`Three-Tier Prioritized Universe`)**：
+  - **Tier 0**：自動偵測本機真實持股與自選名單 (Watchlist)，強制置頂於隊列最前列（30 秒內秒級就緒）。
+  - **Tier 1**：核心指數與大型藍籌（44 檔，60 秒內就緒）。
+  - **Tier 2**：全市場擴充標的（1,700+ 檔，背景平滑執行）。
+- **自適應抖動限流與 429 階梯式熔斷退避 (`Anti-Ban Throttling & Circuit Breaker`)**：
+  - 請求間隔強制休眠 `800ms ~ 1200ms`（隨機 Jitter），限制單 IP 每秒請求 <= 1.2 次。
+  - 429 階梯式冷卻休眠（10s ➔ 30s ➔ 60s），連續 4 次 429 自動熔斷退出，保全寬頻公網 IP。
+- **SQLite 斷點續傳狀態機 (`Resumable Checkpoints Engine`)**：
+  - 串接 `sync_checkpoints`，自動過濾當日已 SUCCESS 標的，中斷重啟 100% 續傳，零浪費 API 額度。
+- **美股法定休市日曆與湖倉覆蓋率統計 (`Audit Verifier & NYSE Holidays`)**：
+  - 內建 2026 美股紐約證交所法定休市日，提供 `auditUsLakehouseUniverse()` 統計美股湖倉註冊數、當日成功數與覆蓋率。
+
+### 0. 全市場個股 7 步深度投研決策閉環、純前端 Canvas 向量快照與處置警示徽章端到端串接 (`Equity Deep-Dive & Canvas Snapshot`) *(V8.67.0)*
 
 - **全市場通用「7 步個股深度投研決策閉環」提示詞工廠 (`7-Step Prompt Factory & Closed-Loop Engine`) (Debt #0037)**：
   - 貫穿商業定性、財務定量、同業對照、未定價風險、估值情境、籌碼箱體、作戰紀律 7 大維度，依據標的行情與估值自適應生成高防禦性提示詞 Payload。
