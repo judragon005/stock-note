@@ -99,6 +99,65 @@ function auditUsLakehouseUniverse(targetDate, customDbPath) {
   };
 }
 
+/**
+ * 稽核 SQLite 湖倉中台股標的涵蓋率、三大法人籌碼歷史與擴展維度
+ * @param {string} [targetDate]
+ * @param {string} [customDbPath]
+ * @returns {object}
+ */
+function auditTwLakehouseUniverse(targetDate, customDbPath) {
+  const { getSqliteDbConnection } = require('./sqlite-db-core.cjs');
+  let db;
+  try {
+    db = getSqliteDbConnection(customDbPath);
+  } catch {
+    return { status: 'NO_SQLITE', totalTwRegistered: 0 };
+  }
+
+  const dateStr = targetDate || formatDateYMD(new Date());
+
+  // 1. 台股註冊標的數
+  const totalTwRow = db.prepare("SELECT count(*) as count FROM symbols_meta WHERE market = 'TW'").get();
+  const totalTwRegistered = totalTwRow?.count || 0;
+
+  // 2. 籌碼總記錄數與日期區間
+  const chipsStats = db.prepare("SELECT count(*) as count, min(date) as minDate, max(date) as maxDate, count(DISTINCT date) as days FROM tw_institutional_chips").get();
+  const totalChips = chipsStats?.count || 0;
+  const chipsMinDate = chipsStats?.minDate || 'N/A';
+  const chipsMaxDate = chipsStats?.maxDate || 'N/A';
+  const chipsDays = chipsStats?.days || 0;
+
+  // 3. 最新籌碼交易日之涵蓋標的數
+  const latestChipsSymRow = db.prepare("SELECT count(DISTINCT symbol) as count FROM tw_institutional_chips WHERE date = ?").get(chipsMaxDate);
+  const latestChipsSymbols = latestChipsSymRow?.count || 0;
+
+  // 4. 台股最新日 K 交易日與當日標的數
+  const latestDateRow = db.prepare("SELECT max(date) as maxDate FROM daily_candles WHERE symbol LIKE '%.TW' OR symbol NOT LIKE '%[A-Za-z]%'").get();
+  const latestCandleDate = latestDateRow?.maxDate || chipsMaxDate;
+  const twCandlesOnLatestRow = db.prepare("SELECT count(DISTINCT symbol) as count FROM daily_candles WHERE date = ? AND (symbol LIKE '%.TW' OR symbol NOT LIKE '%[A-Za-z]%')").get(latestCandleDate);
+  const candlesCount = twCandlesOnLatestRow?.count || 0;
+
+  // 5. 擴展維度：集保大戶與月營收
+  const tdccCount = db.prepare("SELECT count(*) as count FROM tw_tdcc_distribution").get()?.count || 0;
+  const revCount = db.prepare("SELECT count(*) as count FROM tw_monthly_revenue").get()?.count || 0;
+
+  return {
+    auditDate: dateStr,
+    latestCandleDate,
+    market: 'TW',
+    totalTwRegistered,
+    totalChips,
+    chipsMinDate,
+    chipsMaxDate,
+    chipsDays,
+    latestChipsSymbols,
+    candlesCount,
+    tdccCount,
+    revCount,
+    status: totalChips > 0 && chipsMaxDate >= '2026-09-01' ? 'HEALTHY_UNIVERSE' : 'NEEDS_BACKFILL',
+  };
+}
+
 function verifyMarketDataIntegrity(summaryData) {
   if (!summaryData || !summaryData.stocks) {
     return {
@@ -211,6 +270,7 @@ module.exports = {
   verifyMarketDataIntegrity,
   generateAuditReport,
   auditUsLakehouseUniverse,
+  auditTwLakehouseUniverse,
   auditFullLakehouseSpectrum,
   HOLIDAYS_TW_2026,
   HOLIDAYS_US_2026,
@@ -219,20 +279,51 @@ module.exports = {
 // 若作為 CLI 腳本直接執行
 if (require.main === module) {
   console.log('🔍 [Lakehouse Audit] 正在稽核全市場 SQLite 湖倉與快取健康度...\n');
-  const audit = auditUsLakehouseUniverse();
-  console.log(`========================================`);
-  console.log(` 🏛️  美股湖倉資料完整度稽核報告 (${audit.auditDate})`);
-  console.log(`========================================`);
-  console.log(`- 湖倉註冊標的數 : ${audit.totalUsRegistered} 檔`);
-  console.log(`- 今日成功同步數 : ${audit.successCount} 檔`);
-  console.log(`- 同步失敗/空值  : ${audit.failedCount} 檔`);
-  console.log(`- 最新交易日標的 : ${audit.candlesCount} 檔 (美東收盤: ${audit.latestCandleDate})`);
-  console.log(`- 湖倉總日 K 筆數: ${audit.totalCandles.toLocaleString()} 筆`);
-  console.log(`- 當前採集涵蓋率 : ${audit.coverageRate}%`);
-  console.log(`- 湖倉健康狀態   : ${audit.status}`);
-  console.log(`========================================\n`);
 
-  // 嘗試讀取 JSON 快取以產出綜合稽核報表
+  // 1. 台股稽核
+  const twAudit = auditTwLakehouseUniverse();
+  console.log(`================================================================================`);
+  console.log(` 🇹🇼  台股湖倉資料完整度稽核報告 (${twAudit.auditDate})`);
+  console.log(`================================================================================`);
+  console.log(`- 湖倉註冊標的數 : ${twAudit.totalTwRegistered.toLocaleString()} 檔`);
+  console.log(`- 最新籌碼交易日 : ${twAudit.chipsMaxDate} (當日覆蓋: ${twAudit.latestChipsSymbols.toLocaleString()} 檔)`);
+  console.log(`- 三大法人與資券 : ${twAudit.totalChips.toLocaleString()} 筆 (共 ${twAudit.chipsDays} 個交易日, ${twAudit.chipsMinDate} ~ ${twAudit.chipsMaxDate})`);
+  console.log(`- 最新日 K 交易日: ${twAudit.latestCandleDate} (當日涵蓋: ${twAudit.candlesCount.toLocaleString()} 檔)`);
+  console.log(`- 集保千張大戶數 : ${twAudit.tdccCount.toLocaleString()} 筆${twAudit.tdccCount === 0 ? ' (建議: node scripts/market-sync/ingest-tw-tdcc.cjs)' : ''}`);
+  console.log(`- 月營收歷史筆數 : ${twAudit.revCount.toLocaleString()} 筆${twAudit.revCount === 0 ? ' (建議: node scripts/market-sync/ingest-tw-monthly-revenue.cjs)' : ''}`);
+  console.log(`- 湖倉健康狀態   : ${twAudit.status}`);
+  console.log(`================================================================================\n`);
+
+  // 2. 美股稽核
+  const usAudit = auditUsLakehouseUniverse();
+  const pendingCount = Math.max(0, usAudit.totalUsRegistered - usAudit.successCount - usAudit.failedCount);
+  console.log(`================================================================================`);
+  console.log(` 🏛️  美股湖倉資料完整度稽核報告 (${usAudit.auditDate})`);
+  console.log(`================================================================================`);
+  console.log(`- 湖倉註冊標的數 : ${usAudit.totalUsRegistered.toLocaleString()} 檔`);
+  console.log(`- 今日成功同步數 : ${usAudit.successCount.toLocaleString()} 檔`);
+  console.log(`- 待同步 / 排程中: ${pendingCount.toLocaleString()} 檔 (已重置為 PENDING，可執行 sync-us-market.cjs)`);
+  console.log(`- 同步失敗 / 異常: ${usAudit.failedCount.toLocaleString()} 檔`);
+  console.log(`- 最新交易日標的 : ${usAudit.candlesCount.toLocaleString()} 檔 (美東收盤: ${usAudit.latestCandleDate})`);
+  console.log(`- 湖倉總日 K 筆數: ${usAudit.totalCandles.toLocaleString()} 筆`);
+  console.log(`- 當前採集涵蓋率 : ${usAudit.coverageRate}%`);
+  console.log(`- 湖倉健康狀態   : ${usAudit.status}`);
+  console.log(`================================================================================\n`);
+
+  // 3. 六大核心表全光譜統計
+  const spectrum = auditFullLakehouseSpectrum();
+  console.log(`================================================================================`);
+  console.log(` 📊  全市場數據湖倉 (SQLite) 六大核心表全光譜`);
+  console.log(`================================================================================`);
+  console.log(`- symbols_meta           : ${spectrum.tables.symbolsMeta.toLocaleString()} 檔`);
+  console.log(`- daily_candles          : ${spectrum.tables.dailyCandles.toLocaleString()} 筆`);
+  console.log(`- tw_institutional_chips : ${spectrum.tables.chips.toLocaleString()} 筆`);
+  console.log(`- tw_tdcc_distribution   : ${spectrum.tables.tdcc.toLocaleString()} 筆`);
+  console.log(`- tw_monthly_revenue     : ${spectrum.tables.revenue.toLocaleString()} 筆`);
+  console.log(`- sync_checkpoints       : ${spectrum.tables.checkpoints.toLocaleString()} 筆`);
+  console.log(`================================================================================\n`);
+
+  // 4. 嘗試讀取 JSON 快取以產出綜合稽核報表
   let twSummary = null;
   let usSummary = null;
   const pTw = path.join(process.cwd(), 'public', 'market-cache', 'tw_market_summary.json');
@@ -244,6 +335,6 @@ if (require.main === module) {
     try { usSummary = JSON.parse(fs.readFileSync(pUs, 'utf8')); } catch {}
   }
   const fullReport = generateAuditReport(twSummary, usSummary);
-  console.log(`✔ 稽核報告已儲存至 public/market-cache/sync_audit_report.json (整體狀態: ${fullReport.systemOverall})`);
+  console.log(`✔ 綜合稽核報告已儲存至 public/market-cache/sync_audit_report.json (整體狀態: ${fullReport.systemOverall})`);
 }
 

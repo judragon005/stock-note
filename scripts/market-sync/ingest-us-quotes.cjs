@@ -178,3 +178,33 @@ module.exports = {
   saveUsCandlesToSqlite,
   fetchYahooHistoricalQuotes,
 };
+
+// 若作為 CLI 腳本直接執行時提供友善指引與單檔測試
+if (require.main === module) {
+  const sym = process.argv[2];
+  if (sym) {
+    const cleanSym = String(sym).trim().toUpperCase();
+    console.log(`🔍 [CLI 測試] 正在抓取美股 ${cleanSym} 歷史行情...`);
+    fetchYahooHistoricalQuotes(cleanSym, 250)
+      .then((candles) => {
+        console.log(`✔ 成功自 Yahoo 取得 ${candles.length} 根日 K`);
+        const { savedCount } = saveUsCandlesToSqlite(cleanSym, candles);
+        console.log(`✔ 已將 ${savedCount} 根日 K 事務寫入 SQLite 數據湖倉！`);
+      })
+      .catch((err) => {
+        console.error(`❌ 抓取失敗:`, err.message);
+      });
+  } else {
+    console.log(`================================================================================`);
+    console.log(` ℹ️  [美股數據採集模組說明 - ingest-us-quotes.cjs]`);
+    console.log(`================================================================================`);
+    console.log(`本檔案為美股 Yahoo Chart 解析與入庫之底層函式庫。`);
+    console.log(``);
+    console.log(`👉 若要執行完整美股全市場日更排程，請執行:`);
+    console.log(`   node scripts/market-sync/sync-us-market.cjs`);
+    console.log(``);
+    console.log(`👉 若要單檔測試抓取與入庫，請帶入股票代碼:`);
+    console.log(`   node scripts/market-sync/ingest-us-quotes.cjs <SYMBOL> (例如: AAPL 或 BRK.B)`);
+    console.log(`================================================================================`);
+  }
+}
