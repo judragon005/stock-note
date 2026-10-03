@@ -2165,3 +2165,11 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 當市場已結算且外部即時報價已取得今日收盤價時，若湖倉日 K 稍有落後，引擎自動將該收盤行情作為最新一根日 K 縫合至主 K 線圖，確保頂部看板與主 K 線最後一根 100% 絕對對齊。
   - 杜絕跨日期假數據拼裝：若即時報價缺乏開高低量且日期跨日落後，嚴禁舊日 K 開高低量冒充今日數值。
 
+### 市場新鮮度服務解耦與中介層依戀重構 *(新增於 V8.74.0 / Spec #0161 / ADR #0161)*
+
+- **Market Freshness Domain Service (市場時區新鮮度領域服務)**:
+  - 核心模組：`scripts/market-sync/market-freshness-service.cjs` (`getMarketAnchorDate`, `checkMarketFreshness`)。
+  - 徹底抽離中介層原先所屬的 Feature Envy 依戀情結，純化交易日結算錨定與 SQLite 資料庫新鮮度判定為獨立領域服務，提供可受背景 Worker、CLI 工具與 HTTP 傳輸層共同調用之單一真實來源。
+  - 測試縫隙：`src/engine/marketFreshnessService.test.ts` 提供 100% 確定性跨時區與週末邊界單元測試。
+
+
