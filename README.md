@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1340%2F1340%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1344%2F1344%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,16 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 市場數據過期自動追趕同步、湖倉全量推進至 10/02 與主 K 線單一真實來源 (SSOT) 縫合 (`Market Sync Catch-up & K-Line SSOT Alignment`) *(V8.73.0 全新發布)*
+### 0. 市場時區新鮮度服務解耦與中介層依戀重構 (`Market Freshness Service Decoupling`) *(V8.74.0 全新發布)*
+
+- **消除 Feature Envy 代碼異味 (Spec 0161, ADR 0161)**：
+  - 獨立抽取 `scripts/market-sync/market-freshness-service.cjs`，提供純粹領域函數 `getMarketAnchorDate(market, now)` 與 `checkMarketFreshness(db, now)`。
+- **Connect 中介層單一職責純化**：
+  - `scripts/market-sync/vite-market-middleware.cjs` 全面委託新鮮度領域服務，中介層純化為 HTTP 路由與序列化層，既有端點 `/api/market/sync-status` 契約 100% 相容。
+- **獨立公開測試縫隙覆蓋**：
+  - 新增 `src/engine/marketFreshnessService.test.ts`，達成跨時區與週末邊界 100% 單元測試覆蓋 (4/4 綠燈)。
+
+### 1. 市場數據過期自動追趕同步、湖倉全量推進至 10/02 與主 K 線單一真實來源 (SSOT) 縫合 (`Market Sync Catch-up & K-Line SSOT Alignment`) *(V8.73.0)*
 
 - **開機與在線自適應追趕同步器 (`Startup & Online Catch-up Engine`) (Spec 0160)**：
   - 徹底解決關機休眠錯過每日 16:00/08:00 定時排程的問題。Vite 中介層啟動時非同步巡檢台美股最新日期，若落後當前市場已結算交易日，背景自動觸發追趕任務，不阻塞主伺服器首屏響應。
