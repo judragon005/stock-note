@@ -288,6 +288,31 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
             {avgIndex}%
           </span>
         </div>
+
+        {data.shortMarginRatio !== undefined && (
+          <div
+            data-testid="margin-ratio-badge"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              borderLeft: '1px solid rgba(255, 255, 255, 0.1)',
+              paddingLeft: '8px',
+            }}
+          >
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>券資比：</span>
+            <span
+              style={{
+                fontSize: '0.82rem',
+                fontWeight: 800,
+                fontFamily: 'monospace',
+                color: data.shortMarginRatio >= 30 ? '#f59e0b' : '#38bdf8',
+              }}
+            >
+              {data.shortMarginRatio}%
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

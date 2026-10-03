@@ -45,13 +45,13 @@ export function normalizeSparklinePoints(
 }
 
 export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
-  const foreign = data?.foreignNetShares ?? -166;
-  const trust = data?.trustNetShares ?? 89;
-  const dealer = data?.dealerNetShares ?? 82;
-  const total = data?.threeInstitutionsTotal ?? 5;
-  const conclusionBadge = data?.conclusionBadge ?? '偏空觀望';
-  const note = data?.verdictNote ?? '2026-09-18 短線偏空 | 借貸風險可控';
-  const sparklineHistory = data?.sparklineHistory ?? [100, 250, 180, 420, 310, 520, 480, 620, 590, 600];
+  const foreign = data?.foreignNetShares ?? 0;
+  const trust = data?.trustNetShares ?? 0;
+  const dealer = data?.dealerNetShares ?? 0;
+  const total = data?.threeInstitutionsTotal ?? (foreign + trust + dealer);
+  const conclusionBadge = data?.conclusionBadge ?? '待命觀望';
+  const note = data?.verdictNote ?? '尚無籌碼數據';
+  const sparklineHistory = data?.sparklineHistory ?? [];
 
   const width = 80;
   const height = 45;

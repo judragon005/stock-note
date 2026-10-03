@@ -322,11 +322,32 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
               strokeWidth="1"
             />
 
-            {/* 每日直方柱 (外資、投信、自營) */}
+            {/* 每日直方柱 (短天期三色並排，250日等長天期自適應合計單柱) */}
             {history.map((h, i) => {
               const usableWidth = chartWidth - 30;
+              const isDense = history.length > 60;
               const step = usableWidth / Math.max(1, history.length);
               const groupX = 15 + i * step;
+
+              if (isDense) {
+                // 密集長天期 (如 250 日)：繪製單一法人淨買賣直方柱 (買紅賣綠，不重疊)
+                const totalNet = h.foreignShares + h.trustShares + h.dealerShares;
+                const yNet = projectBarToY(totalNet, scales, chartHeight, padding);
+                const topNet = Math.min(yNet, scales.zeroY);
+                const heightNet = Math.max(1, Math.abs(yNet - scales.zeroY));
+                const isBull = totalNet >= 0;
+                const barColor = isBull
+                  ? (colorTheme === 'taiwan' ? '#ef4444' : '#10b981')
+                  : (colorTheme === 'taiwan' ? '#10b981' : '#ef4444');
+                const barW = Math.max(1, Math.min(3, step * 0.8));
+
+                return (
+                  <g key={i}>
+                    <rect x={groupX} y={topNet} width={barW} height={heightNet} fill={barColor} opacity="0.85" rx="0.3" />
+                  </g>
+                );
+              }
+
               const barW = Math.max(2, (step - 4) / 3);
 
               // 外資

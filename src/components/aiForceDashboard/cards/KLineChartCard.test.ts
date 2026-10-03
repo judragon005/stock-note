@@ -237,5 +237,41 @@ describe('KLineChartCard - 專業互動與多功能副圖 (Ticket 35 / Stage 1)'
       expect(support.y).toBeLessThanOrEqual(285);
     });
   });
+
+  describe('Ticket 08: 主 K 線圖 MA250 (年線) 指標演算法與視覺引線實裝 (Spec 0162)', () => {
+    it('buildMaPolylinePoints 應能將 250 根 K 棒中的 ma250 序列正確轉為 SVG polyline 折線點陣列', () => {
+      // 模擬前 248 根為 undefined，第 249、250 根具有有效 ma250 數值
+      const ma250Values: (number | undefined)[] = Array.from({ length: 250 }, (_, i) =>
+        i >= 249 ? 150 + (i - 249) * 0.5 : undefined
+      );
+      const priceRange = { min: 100, max: 200, span: 100 };
+      const getX = (idx: number) => idx * 2;
+      const height = 220;
+
+      const points = buildMaPolylinePoints(ma250Values, priceRange, getX, height, 15, 15);
+      const pointPairs = points.trim().split(' ');
+
+      // 只有具有有效數值的點會被轉為 SVG point
+      expect(pointPairs.length).toBe(1);
+      expect(pointPairs[0]).toContain('498,');
+    });
+
+    it('sliceCandlesByPeriod 支援 250D 期間完整切片 250 根真實蠟燭', () => {
+      const mockCandles = Array.from({ length: 300 }, (_, i) => ({
+        date: `2025-01-${String(i + 1).padStart(3, '0')}`,
+        open: 100,
+        high: 105,
+        low: 95,
+        close: 102,
+        volume: 1000,
+        ma250: 101.5,
+      }));
+
+      const sliced250 = sliceCandlesByPeriod(mockCandles, '250D');
+      expect(sliced250.length).toBe(250);
+      expect(sliced250[0].date).toBe('2025-01-051');
+      expect(sliced250[249].date).toBe('2025-01-300');
+    });
+  });
 });
 

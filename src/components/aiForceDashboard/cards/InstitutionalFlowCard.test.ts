@@ -82,4 +82,28 @@ describe('InstitutionalFlowCard - 三大法人雙軸圖表與明細表規範 (Ti
       expect(summary20Days).toContain('張');
     });
   });
+
+  describe('Ticket 09: 法人行為計量卡與籌碼卡片 250 日真實數據連動 (Spec 0162)', () => {
+    it('傳入 250 筆長天期歷史法人買賣超時，calculateDualAxisScales 應安全計算且無任何 NaN', () => {
+      const history250 = Array.from({ length: 250 }, (_, i) => ({
+        date: `2025-01-${String(i + 1).padStart(3, '0')}`,
+        foreignShares: (i % 2 === 0 ? 1 : -1) * (100 + i * 5),
+        trustShares: 50 + i * 2,
+        dealerShares: -20,
+        cumulativeTotalShares: 500 + i * 15,
+      }));
+
+      const scales = calculateDualAxisScales(history250, 180);
+      expect(isNaN(scales.leftMax)).toBe(false);
+      expect(isNaN(scales.leftMin)).toBe(false);
+      expect(isNaN(scales.rightMax)).toBe(false);
+      expect(isNaN(scales.rightMin)).toBe(false);
+      expect(isNaN(scales.zeroY)).toBe(false);
+
+      const summaries = computeInstitutionalSummaries(history250);
+      expect(summaries.summary5Days).toContain('張');
+      expect(summaries.summary20Days).toContain('張');
+    });
+  });
 });
+

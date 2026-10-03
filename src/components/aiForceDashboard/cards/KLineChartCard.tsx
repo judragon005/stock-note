@@ -275,6 +275,10 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
     () => buildMaPolylinePoints(displayCandles.map((c) => c.ma60), priceRange, getX, klineHeight, 15, 15),
     [displayCandles, priceRange]
   );
+  const ma250Points = useMemo(
+    () => buildMaPolylinePoints(displayCandles.map((c) => c.ma250), priceRange, getX, klineHeight, 15, 15),
+    [displayCandles, priceRange]
+  );
 
   // 副圖 Points (KD / MACD / RSI)
   const subchartTop = klineHeight + 10;
@@ -467,6 +471,9 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           <TermTooltip termId="ma60">
             <span style={{ color: '#94a3b8', fontWeight: 600 }}>⋯ MA60</span>
           </TermTooltip>
+          <span style={{ color: '#a855f7', fontWeight: 600 }} title="250日年線，長期多空分水嶺">
+            — MA250
+          </span>
 
           {/* 副圖指標切換按鈕 */}
           <div
@@ -647,6 +654,8 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           <span>量: <b style={{ color: '#fbbf24' }}>{activeCandle.volume.toLocaleString()}</b></span>
           {activeCandle.ma5 && <span style={{ color: '#fbbf24' }}>MA5:{activeCandle.ma5}</span>}
           {activeCandle.ma20 && <span style={{ color: '#c084fc' }}>MA20:{activeCandle.ma20}</span>}
+          {activeCandle.ma60 && <span style={{ color: '#94a3b8' }}>MA60:{activeCandle.ma60}</span>}
+          {activeCandle.ma250 && <span style={{ color: '#a855f7', fontWeight: 700 }}>MA250:{activeCandle.ma250}</span>}
           {subchartMode === 'KD' && (
             <span style={{ color: '#60a5fa' }}>
               K:{activeCandle.k ?? '-'} D:{activeCandle.d ?? '-'}
@@ -795,6 +804,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           })}
 
           {/* 均線 Polyline 折線 */}
+          <polyline points={ma250Points} fill="none" stroke="#a855f7" strokeWidth="1.6" opacity="0.9" />
           <polyline points={ma60Points} fill="none" stroke="#94a3b8" strokeWidth="1.2" strokeDasharray="3 3" opacity="0.6" />
           <polyline points={ma20Points} fill="none" stroke="#c084fc" strokeWidth="1.5" opacity="0.85" />
           <polyline points={ma10Points} fill="none" stroke="#38bdf8" strokeWidth="1.5" opacity="0.85" />

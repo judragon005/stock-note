@@ -623,6 +623,8 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
               <th style={{ textAlign: 'right', padding: '8px' }}>收盤</th>
               <th style={{ textAlign: 'right', padding: '8px' }}>成交量</th>
               <th style={{ textAlign: 'right', padding: '8px' }}>MA20</th>
+              <th style={{ textAlign: 'right', padding: '8px' }}>MA60</th>
+              <th style={{ textAlign: 'right', padding: '8px' }}>MA250</th>
               <th style={{ textAlign: 'right', padding: '8px' }}>KD (K/D)</th>
               <th style={{ textAlign: 'right', padding: '8px' }}>MACD (OSC)</th>
               <th style={{ textAlign: 'right', padding: '8px' }}>RSI</th>
@@ -640,8 +642,14 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
                 <td style={{ textAlign: 'right', padding: '8px' }}>${row.low.toLocaleString()}</td>
                 <td style={{ textAlign: 'right', padding: '8px', fontWeight: 600 }}>${row.close.toLocaleString()}</td>
                 <td style={{ textAlign: 'right', padding: '8px' }}>{row.volume.toLocaleString()}</td>
-                <td style={{ textAlign: 'right', padding: '8px', color: '#38bdf8' }}>
+                <td style={{ textAlign: 'right', padding: '8px', color: '#c084fc' }}>
                   {row.ma20 ? `$${row.ma20.toLocaleString()}` : '-'}
+                </td>
+                <td style={{ textAlign: 'right', padding: '8px', color: '#94a3b8' }}>
+                  {row.ma60 ? `$${row.ma60.toLocaleString()}` : '-'}
+                </td>
+                <td style={{ textAlign: 'right', padding: '8px', color: '#a855f7', fontWeight: 700 }}>
+                  {row.ma250 ? `$${row.ma250.toLocaleString()}` : '-'}
                 </td>
                 <td style={{ textAlign: 'right', padding: '8px' }}>
                   {row.k ?? '-'}/{row.d ?? '-'}
@@ -662,27 +670,69 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
         </table>
       </div>
 
-      {/* 客戶端分頁切換控制列 */}
+      {/* 客戶端分頁切換控制列 (Ticket 11: 支援 250 筆長天期 25 頁快速跳轉) */}
       <div
         style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '8px',
           paddingTop: '10px',
           borderTop: '1px solid rgba(255, 255, 255, 0.06)',
           fontSize: '12px',
         }}
       >
-        <span style={{ color: '#94a3b8' }}>
-          第 {currentPage} / {totalPages} 頁
-        </span>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#94a3b8' }}>
+          <span>
+            第 <b style={{ color: '#f8fafc' }}>{currentPage}</b> / {totalPages} 頁 (每頁 10 筆，共 {totalCount} 筆)
+          </span>
+          {totalPages > 1 && (
+            <select
+              aria-label="跳至指定頁碼"
+              value={currentPage}
+              onChange={(e) => setPage(Number(e.target.value))}
+              style={{
+                background: 'rgba(15, 23, 42, 0.8)',
+                color: '#38bdf8',
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+                borderRadius: '4px',
+                padding: '2px 6px',
+                fontSize: '11px',
+                cursor: 'pointer',
+              }}
+            >
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((pNum) => (
+                <option key={pNum} value={pNum}>
+                  第 {pNum} 頁
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <button
+            type="button"
+            disabled={currentPage <= 1}
+            onClick={() => setPage(1)}
+            style={{
+              padding: '3px 8px',
+              borderRadius: '6px',
+              backgroundColor: currentPage <= 1 ? 'rgba(255, 255, 255, 0.04)' : 'rgba(56, 189, 248, 0.15)',
+              color: currentPage <= 1 ? '#64748b' : '#38bdf8',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
+            }}
+          >
+            首頁
+          </button>
           <button
             type="button"
             disabled={currentPage <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             style={{
-              padding: '4px 12px',
+              padding: '3px 10px',
               borderRadius: '6px',
               backgroundColor: currentPage <= 1 ? 'rgba(255, 255, 255, 0.04)' : 'rgba(56, 189, 248, 0.15)',
               color: currentPage <= 1 ? '#64748b' : '#38bdf8',
@@ -697,7 +747,7 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
             disabled={currentPage >= totalPages}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             style={{
-              padding: '4px 12px',
+              padding: '3px 10px',
               borderRadius: '6px',
               backgroundColor:
                 currentPage >= totalPages ? 'rgba(255, 255, 255, 0.04)' : 'rgba(56, 189, 248, 0.15)',
@@ -707,6 +757,22 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
             }}
           >
             下一頁
+          </button>
+          <button
+            type="button"
+            disabled={currentPage >= totalPages}
+            onClick={() => setPage(totalPages)}
+            style={{
+              padding: '3px 8px',
+              borderRadius: '6px',
+              backgroundColor:
+                currentPage >= totalPages ? 'rgba(255, 255, 255, 0.04)' : 'rgba(56, 189, 248, 0.15)',
+              color: currentPage >= totalPages ? '#64748b' : '#38bdf8',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+            }}
+          >
+            末頁
           </button>
         </div>
       </div>

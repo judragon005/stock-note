@@ -278,10 +278,10 @@ describe('Historical OHLCV & Indicators Backfill Engine (回補引擎)', () => {
   });
 
   describe('4. calculateIncrementalPeriod1 (增量請求時間戳計算)', () => {
-    it('本地無日 K 時，預設請求過去 180 天 (~6 個月)', () => {
+    it('本地無日 K 時，預設請求過去 400 天 (~250+ 交易日，支撐 MA250 年線)', () => {
       const nowSec = 1750000000;
       const period1 = calculateIncrementalPeriod1(undefined, nowSec);
-      expect(period1).toBe(nowSec - 180 * 86400);
+      expect(period1).toBe(nowSec - 400 * 86400);
     });
 
     it('本地已有日 K 時，應以最後一根日期往前倒推 7 天作為緩衝增量拉取', () => {

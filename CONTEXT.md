@@ -2172,4 +2172,17 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 徹底抽離中介層原先所屬的 Feature Envy 依戀情結，純化交易日結算錨定與 SQLite 資料庫新鮮度判定為獨立領域服務，提供可受背景 Worker、CLI 工具與 HTTP 傳輸層共同調用之單一真實來源。
   - 測試縫隙：`src/engine/marketFreshnessService.test.ts` 提供 100% 確定性跨時區與週末邊界單元測試。
 
+### AI 主力戰情室全光譜 250+ 交易日數據湖倉與零假資料管線 *(新增於 V8.75.0 / Spec #0162 / ADR #0162 / Issue #156)*
+
+- **Full-Spectrum 250D Lakehouse Deep Ingestion (全光譜 250+ 交易日湖倉深層入庫)**:
+  - 核心模組：`scripts/market-sync/backfill-local-csv.cjs`、`scripts/market-sync/ingest-tw-t86.cjs`、`scripts/market-sync/ingest-tw-extended-chips.cjs`。
+  - 解除歷史回補僅截取最近 60 根之舊設計，全面自本機 2,361 檔歷史庫讀取並入庫最近 250~300 個交易日之真實日 K 至 `daily_candles`，原生支援 MA250（年線）、全年度 Volume Profile 與長期 Darvas 箱體。
+  - 全量深層入庫本機 642 檔三大法人全歷史 CSV 與 591 檔融資融券全歷史 CSV，將最近 250 日買賣超與餘額寫入 `tw_institutional_chips`，終結法人表 0 筆問題。
+
+- **Zero-Mock Policy & Pure Real-Data Seam (零假資料方針與純真實數據縫隙)**:
+  - 核心模組：`src/engine/aiForceDashboardEngine.ts` (`generateAiForceReportFromCandles`, `createDefaultAiForceReport`)、`src/components/aiForceDashboard/AiForceDashboardView.tsx`。
+  - 徹底拔除 5 根模擬日 K 的假 fallback。若市場查無此標的，誠實標註 `isDataPending = true` 並提供更正引導；若標的在線可查，優先在線即時拉取 250 日真實日 K 並沉澱入庫。
+  - 主力戰情室 18 張卡片與「任務五：原始量化數據總表 (RawDataView)」均以 250 筆真實數據為單一事實來源，支援 25 頁流暢分頁檢視。
+
+
 
