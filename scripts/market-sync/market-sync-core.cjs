@@ -234,6 +234,17 @@ function saveJsonAtomic(targetPath, data) {
   fs.renameSync(tempPath, targetPath);
 }
 
+/**
+ * 美股標的代碼正規化 (如 BRK.A -> BRK-A, BRK.B -> BRK-B, BF.B -> BF-B)
+ * @param {string} symbol
+ * @returns {string}
+ */
+function normalizeUsSymbol(symbol) {
+  if (!symbol || typeof symbol !== 'string') return '';
+  const clean = symbol.trim().toUpperCase();
+  return clean.replace(/\./g, '-');
+}
+
 module.exports = {
   formatDateYMD,
   parseCleanNumber,
@@ -244,4 +255,5 @@ module.exports = {
   computeIncrementalIndicators,
   ensureDirSync,
   saveJsonAtomic,
+  normalizeUsSymbol,
 };

@@ -202,16 +202,79 @@ async function runTwMarketSync(targetDateInput) {
   saveJsonAtomic(targetPath1, outputPayload);
   saveJsonAtomic(targetPath2, outputPayload);
 
-  // 同步寫入本機 SQLite 數據湖倉 (Spec 0159 / Ticket 01)
+  // 同步寫入本機 SQLite 數據湖倉 (Spec 0159 & Spec 0163)
   try {
     const { saveTwQuotesToSqlite } = require('./ingest-tw-quotes.cjs');
     const { saveTwT86ToSqlite } = require('./ingest-tw-t86.cjs');
+    const {
+      parseTwseMargin,
+      parseTwseSbl,
+      parseTwseDayTrade,
+      saveTwExtendedChipsToSqlite,
+    } = require('./ingest-tw-extended-chips.cjs');
 
     const quoteRes = saveTwQuotesToSqlite(allQuotes);
     console.log(`✔ SQLite 湖倉入庫：已寫入 ${quoteRes.savedCount} 檔台股日 K 收盤行情 (daily_candles)`);
 
     const chipRes = saveTwT86ToSqlite(allChips, dateStr);
     console.log(`✔ SQLite 湖倉入庫：已寫入 ${chipRes.savedCount} 檔三大法人買賣超記錄 (tw_institutional_chips)`);
+
+    // 抓取並解析 TWSE 擴展籌碼 (融資融券、借券賣出 SBL、當日沖銷)
+    console.log(`[*] 抓取 TWSE 信用交易、借券賣出與當沖日報...`);
+    let marginRaw = null;
+    let sblRaw = null;
+    let dayTradeRaw = null;
+
+    try {
+      marginRaw = await retryFetch(() =>
+        fetchJson(`https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=${yyyymmdd}&selectType=ALL&response=json`),
+        2, 1000
+      );
+    } catch (e) {
+      console.warn(`TWSE MI_MARGN 下載警告:`, e.message);
+    }
+
+    try {
+      sblRaw = await retryFetch(() =>
+        fetchJson(`https://www.twse.com.tw/rwd/zh/marginTrading/TWT93U?date=${yyyymmdd}&response=json`),
+        2, 1000
+      );
+    } catch (e) {
+      console.warn(`TWSE TWT93U 下載警告:`, e.message);
+    }
+
+    try {
+      dayTradeRaw = await retryFetch(() =>
+        fetchJson(`https://www.twse.com.tw/rwd/zh/dayTrading/TWTB4U?date=${yyyymmdd}&response=json`),
+        2, 1000
+      );
+    } catch (e) {
+      console.warn(`TWSE TWTB4U 下載警告:`, e.message);
+    }
+
+    const marginMap = parseTwseMargin(marginRaw);
+    const sblMap = parseTwseSbl(sblRaw);
+    const dayTradeMap = parseTwseDayTrade(dayTradeRaw);
+
+    const extSymbols = new Set([
+      ...Object.keys(marginMap),
+      ...Object.keys(sblMap),
+      ...Object.keys(dayTradeMap),
+    ]);
+
+    const combinedExtMap = {};
+    for (const sym of extSymbols) {
+      combinedExtMap[sym] = {
+        symbol: sym,
+        marginBalance: marginMap[sym]?.marginBalance,
+        shortBalance: marginMap[sym]?.shortBalance,
+        sblBalance: sblMap[sym]?.sblBalance,
+        dayTradeRate: dayTradeMap[sym]?.dayTradeRate,
+      };
+    }
+
+    const extRes = saveTwExtendedChipsToSqlite(combinedExtMap, dateStr);
+    console.log(`✔ SQLite 湖倉入庫：已寫入 ${extRes.savedCount} 檔擴展籌碼記錄 (資券/SBL/當沖) 至 tw_institutional_chips`);
   } catch (sqliteErr) {
     console.warn(`[SQLite 寫入警告]:`, sqliteErr.message);
   }

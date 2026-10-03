@@ -13,14 +13,16 @@ echo 執行方式: 背景靜默執行 (不彈出黑視窗)
 echo 資料儲存: 本地快取秒讀 (Zero Latency Cache)
 echo.
 echo 請選擇操作：
-echo  [1] 安裝 / 更新排程任務
+echo  [1] 安裝 / 更新排程任務 (每日台股16:00、美股08:00)
 echo  [2] 移除排程任務
-echo  [3] 立即手動測試台股同步 (16:00 腳本)
-echo  [4] 立即手動測試美股同步 (08:00 腳本)
-echo  [5] 立即執行台股全市場全歷史回補 (導入本機數據庫與日曆對齊)
-echo  [6] 離開
+echo  [3] 立即手動測試台股同步 (16:00 腳本：日K/三大法人/資券/當沖)
+echo  [4] 立即手動測試美股同步 (08:00 腳本：標普與主流日K)
+echo  [5] 立即執行台股歷史 CSV 全量日K回補 (250+日)
+echo  [6] 立即執行三大法人與信用交易斷層全量回補 (2026-08-15 至 2026-10-02)
+echo  [7] 立即執行 SQLite 數據湖倉全光譜健康度稽核
+echo  [8] 離開
 echo ======================================================================
-set /p choice="請輸入選項 (1-6): "
+set /p choice="請輸入選項 (1-8): "
 
 set PROJECT_DIR=%~dp0..\..
 cd /d "%PROJECT_DIR%"
@@ -30,8 +32,10 @@ if "%choice%"=="1" goto INSTALL
 if "%choice%"=="2" goto UNINSTALL
 if "%choice%"=="3" goto TEST_TW
 if "%choice%"=="4" goto TEST_US
-if "%choice%"=="5" goto BACKFILL
-if "%choice%"=="6" goto END
+if "%choice%"=="5" goto BACKFILL_CSV
+if "%choice%"=="6" goto BACKFILL_CHIPS
+if "%choice%"=="7" goto AUDIT
+if "%choice%"=="8" goto END
 goto END
 
 :INSTALL
@@ -98,10 +102,24 @@ node "%PROJECT_DIR%\scripts\market-sync\sync-us-market.cjs"
 pause
 goto END
 
-:BACKFILL
+:BACKFILL_CSV
 echo.
-echo 正在執行台股全市場全歷史回補 (導入本機數據庫、日曆對齊與指標計算)...
+echo 正在執行台股全市場 250+ 日 K 歷史 CSV 回補...
 node "%PROJECT_DIR%\scripts\market-sync\backfill-local-csv.cjs"
+pause
+goto END
+
+:BACKFILL_CHIPS
+echo.
+echo 正在執行台股三大法人與信用交易斷層全量回補 (2026-08-15 至 2026-10-02)...
+node "%PROJECT_DIR%\scripts\market-sync\backfill-historical-chips-gap.cjs"
+pause
+goto END
+
+:AUDIT
+echo.
+echo 正在執行 SQLite 數據湖倉全光譜健康度稽核...
+node "%PROJECT_DIR%\scripts\market-sync\audit-verifier.cjs"
 pause
 goto END
 
