@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1344%2F1344%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1365%2F1365%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,16 +12,16 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. AI 主力戰情室全光譜 250+ 交易日數據湖倉與零假資料管線 (`AI Force Full-Spectrum Lakehouse & Zero-Mock Pipeline`) *(V8.75.0 規劃實施中 / Spec #0162 / Issue #156)*
+### 0. AI 主力戰情室全光譜 250+ 交易日數據湖倉與零假資料管線 (`AI Force Full-Spectrum Lakehouse & Zero-Mock Pipeline`) *(V8.75.0 全新發布 / Spec #0162 / ADR #0162 / Issue #156)*
 
 - **全市場日 K 湖倉擴展至 250+ 交易日 (支援 MA250 年線與全年度指標)**：
-  - 解除歷史回補僅截取最近 60 根之舊設計，自本機 2,361 檔歷史庫讀取並入庫最近 250~300 個交易日之真實日 K 至 `daily_candles`，原生支援 MA250（年線）、全年度 Volume Profile 與長期 Darvas 箱體。
+  - 解除歷史回補僅截取最近 60 根之舊設計，自本機 2,361 檔歷史庫讀取並入庫最近 250~300 個交易日（260 根）之真實日 K 至 `daily_candles`（累計寫入 603,665 筆），原生支援 MA250（年線）、全年度 Volume Profile 與長期 Darvas 箱體。
 - **三大法人與信用交易全量歷史深層入庫 (`Institutional Chips & Margin Deep Ingestion`)**：
-  - 批次解析本機 642 檔三大法人全歷史 CSV 與 591 檔融資融券全歷史 CSV，將最近 250 日買賣超與餘額寫入 `tw_institutional_chips`，徹底終結法人表 0 筆與聯網中斷問題。
+  - 批次解析本機 642 檔三大法人全歷史 CSV 與 591 檔融資融券全歷史 CSV，將 704 檔核心標的最近 250 日買賣超與餘額寫入 `tw_institutional_chips`（累計寫入 177,551 筆），徹底終結法人表 0 筆與聯網中斷問題。
 - **零假資料方針 (Zero-Mock Policy)**：
-  - 徹底拔除 5 根模擬日 K 的假 fallback。若市場查無此標的，誠實標註 `isDataPending = true` 並提供更正引導；若標的在線可查，優先在線即時拉取 250 日真實日 K 並沉澱入庫。
+  - 徹底拔除 5 根模擬日 K 的假 fallback 與 150/980/2290 寫死假價格。若市場查無此標的，誠實標註 `isDataPending = true` 並呈現科技毛玻璃空狀態與線上即時拉取引導。
 - **主力戰情室 18 張卡片與分頁總表 100% 真實數據閉環**：
-  - 原始量化數據總表 (RawDataView) 呈現 250 筆真實日 K 降序分頁，所有分析卡片均由真實數據驅動。
+  - 主 K 線圖支援 MA250 年線紫色折線軌道與查價列；法人行為計量卡支援 250 日自適應單柱與全年度累積折線；信用風險卡連動真實券資比；原始量化數據總表 (RawDataView) 呈現 250 筆真實日 K 降序 25 頁跳轉分頁。
 
 ### 1. 市場時區新鮮度服務解耦與中介層依戀重構 (`Market Freshness Service Decoupling`) *(V8.74.0 全新發布)*
 

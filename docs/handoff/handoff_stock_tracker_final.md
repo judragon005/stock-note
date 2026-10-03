@@ -1,13 +1,15 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Document)
 
-> **交接產生時間**：2026-10-03 07:55 (UTC+8)  
+> **交接產生時間**：2026-10-03 09:25 (UTC+8)  
 > **當前最新里程碑**：
-> - **V8.74.0 市場時區新鮮度服務解耦與中介層依戀重構**（ADR 0161, Spec 0161, Issue #153）：
->   - **消除 Feature Envy 代碼異味**：獨立抽取 `scripts/market-sync/market-freshness-service.cjs`，提供純粹之 `getMarketAnchorDate` 與 `checkMarketFreshness` 函數。
->   - **精簡 Vite Connect 中介層**：中介層全面委託新鮮度領域服務，純化為 HTTP 轉發與序列化層，既有端點 `/api/market/sync-status` 契約 100% 相容。
->   - **獨立公開測試縫隙覆蓋**：新增 `marketFreshnessService.test.ts`，達成跨時區與週末邊界 100% 單元測試覆蓋。
-> - **V8.73.0 市場數據過期自動追趕同步、湖倉推進至 10/02、主力戰情室預載 0050 與主 K 線 SSOT 縫合**（ADR 0160, Spec 0160, Issue #150, PR #151）。
-> **品質狀態**：全量單元測試 **1,344/1,344 通過 (100% Passed / 163 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> - **V8.75.0 AI 主力戰情室全光譜 250+ 交易日數據湖倉與零假資料 (Zero-Mock) 整合工程**（ADR 0162, Spec 0162, Issue #156, PR #157）：
+>   - **全市場 250+ 日 K 深層入庫**：解除 60 根截斷，全市場 2,361 檔標的共 **603,665 筆歷史日 K**（260 根深度）寫入 SQLite `daily_candles`，原生支援 MA250（年線）與全年度 Volume Profile 指標。
+>   - **三大法人與融資融券全歷史入庫**：解析本機 642 檔三大法人全歷史 CSV 與 591 檔融資融券 CSV，全量將 704 檔核心標的共 **177,551 筆歷史籌碼記錄** 寫入 `tw_institutional_chips`。
+>   - **API 聚合穿透與 1~2ms 離線響應**：`/api/market/history/:symbol?limit=250` 與前端 `loadSymbolFullLakehouseData` 支援 250 筆日 K 升冪檢索與 IndexedDB 沉澱。
+>   - **徹底拔除假資料 (Zero-Mock)**：全面移除 5 根假 K 線與寫死假價格（150/980/2290），查無真實標的時回傳待命狀態，搭配高質感誠實空狀態與即時拉取按鈕。
+>   - **主力戰情室 18 張卡片全面真實數據連動**：主 K 線圖支援 MA250 紫色折線軌道、頂部圖例引線與查價資訊列；法人行為計量卡支援 250 日自適應單柱與全年度累積折線；當沖信用風險卡連動真實券資比；任務五數據總表支援 25 頁跳轉分頁。
+> - **V8.74.0 市場時區新鮮度服務解耦與中介層依戀重構**（ADR 0161, Spec 0161, Issue #153, PR #154）。
+> **品質狀態**：全量單元測試 **1,365/1,365 通過 (100% Passed / 168 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -15,11 +17,11 @@
 
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
-- **當前工作分支**：`feature/153-market-freshness-service-decoupling`
-- **單元測試套件**：**1,344/1,344 通過 (163 test suites / 100% 綠燈)**
+- **當前工作分支**：`main`
+- **單元測試套件**：**1,365/1,365 通過 (168 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V8.74.0**
+- **當前釋出版本**：**V8.75.0**
 - **工作區與分支整潔度**：工作區 100% clean，本地 feature/fix 分支已全數刪除，專案臨時備份檔案已全量清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
