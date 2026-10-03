@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1365%2F1365%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1377%2F1377%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,20 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. AI 主力戰情室全光譜 250+ 交易日數據湖倉與零假資料管線 (`AI Force Full-Spectrum Lakehouse & Zero-Mock Pipeline`) *(V8.75.0 全新發布 / Spec #0162 / ADR #0162 / Issue #156)*
+### 0. 券商法人級全維度數據湖倉稽核、歷史籌碼斷層回補與台美雙軌自動化日更管線 (`Broker-Grade Lakehouse Audit, Full Backfill & Dual-Market Sync`) *(V8.76.0 全新發布 / Spec #0163 / ADR #0163 / Issue #159)*
+
+- **三大法人歷史籌碼斷層無縫回補 (`Historical Chips Gap Backfill Engine`)**：
+  - 專用回補引擎 `backfill-historical-chips-gap.cjs`，自動計算 2026-08-15 至 2026-10-02 之 34 個交易日斷層，自動拉取 TWSE T86 三大法人買賣超全市場數據，具備非阻塞批次入庫與指數退避防封鎖機制，徹底縫合歷史籌碼真空。
+- **T86 鍵名映射修復與擴展籌碼每日管線串聯 (`T86 Key Mapping Repair & Daily Stream Integration`)**：
+  - 修復每日同步鍵名不匹配 (`foreignNetShares` vs `foreignNet`) 導致數值歸零之致命問題；每日定時管線自動串接 TWSE 融資融券 (MI_MARGN)、借券賣出 (TWT93U) 與當沖率 (TWTB4U)，日更時即時計算並同步沉澱。
+- **美股含點代碼自動轉譯與斷點重置 (`US Dot-Symbol Yahoo Normalizer & Checkpoint Reset`)**：
+  - 修正 Yahoo Finance 特殊代碼（如 `BRK.B`, `BF.B`）連線 404 問題，自動轉譯為連字符格式（`BRK-B`, `BF-B`）；提供斷點恢復腳本將 348 檔 FAILED 標的安全重置為 PENDING 繼續回補。
+- **集保千張大戶持股與月營收全光譜數據庫 (`TDCC Distribution & Monthly Revenue Dimensions`)**：
+  - 資料庫擴展 `tw_tdcc_distribution`（千張大戶持股比例、總股東人數）與 `tw_monthly_revenue`（月營收、MoM、YoY、累計 YoY），建立複合覆蓋索引，提供毫秒級基本面與籌碼面多維交叉檢索。
+- **Windows 雙軌日更排程與湖倉全光譜審計報告 (`Dual-Market Windows Task Scheduler & Spectrum Verifier`)**：
+  - 擴展 `setup-windows-task.bat` 選單，一鍵配置台股盤後日更 (15:30) 與美股開盤前日更 (06:00)；`audit-verifier.cjs` 提供 `auditFullLakehouseSpectrum`，自動產出湖倉全光譜健康度報告 `sync_audit_report.json`。
+
+### 1. AI 主力戰情室全光譜 250+ 交易日數據湖倉與零假資料管線 (`AI Force Full-Spectrum Lakehouse & Zero-Mock Pipeline`) *(V8.75.0 全新發布 / Spec #0162 / ADR #0162 / Issue #156)*
 
 - **全市場日 K 湖倉擴展至 250+ 交易日 (支援 MA250 年線與全年度指標)**：
   - 解除歷史回補僅截取最近 60 根之舊設計，自本機 2,361 檔歷史庫讀取並入庫最近 250~300 個交易日（260 根）之真實日 K 至 `daily_candles`（累計寫入 603,665 筆），原生支援 MA250（年線）、全年度 Volume Profile 與長期 Darvas 箱體。

@@ -2184,5 +2184,31 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 徹底拔除 5 根模擬日 K 的假 fallback。若市場查無此標的，誠實標註 `isDataPending = true` 並提供更正引導；若標的在線可查，優先在線即時拉取 250 日真實日 K 並沉澱入庫。
   - 主力戰情室 18 張卡片與「任務五：原始量化數據總表 (RawDataView)」均以 250 筆真實數據為單一事實來源，支援 25 頁流暢分頁檢視。
 
+### 券商法人級全維度數據湖倉稽核、歷史籌碼斷層回補與台美雙軌自動化日更管線 *(新增於 V8.76.0 / Spec #0163 / ADR #0163 / Issue #159)*
+
+- **Historical Chips Gap Backfill Engine (歷史籌碼斷層回補引擎)**:
+  - 核心模組：`scripts/market-sync/backfill-historical-chips-gap.cjs`。
+  - 自動偵測本機 SQLite 數據湖倉內籌碼資料最新日期至當前日期之間的所有有效交易日，按日拉取全市場三大法人 T86 買賣超，並具備非阻塞批次入庫、指數退避與防封鎖機制，徹底縫合 34 個交易日的籌碼歷史斷層。
+
+- **Bidirectional T86 Key Mapping Repair (T86 鍵名雙向相容映射)**:
+  - 核心模組：`scripts/market-sync/ingest-tw-t86.cjs`。
+  - 修復每日同步腳本將 `foreignNetShares` 傳入但接收端僅讀取 `foreignNet` 導致數值被洗為 0 之重大缺陷，採雙向兼顧相容映射，確保三大法人籌碼寫入精確性。
+
+- **Extended Chips Daily Stream Integration (擴展籌碼每日管線串聯)**:
+  - 核心模組：`scripts/market-sync/sync-tw-market.cjs`。
+  - 每日盤後同步管線自動整合 TWSE 融資融券 (MI_MARGN)、借券賣出 (TWT93U) 與當沖率 (TWTB4U) API，日更時即時計算並同步沉澱至 `tw_institutional_chips` 湖倉。
+
+- **US Dot-Symbol Yahoo Normalizer & Checkpoint Reset (美股特殊符號轉譯與斷點重置)**:
+  - 核心模組：`scripts/market-sync/market-sync-core.cjs` (`normalizeUsSymbol`)、`scripts/market-sync/ingest-us-quotes.cjs`。
+  - 將 Yahoo Finance 不相容之含點符號（如 `BRK.A`, `BRK.B`, `BF.B`）自動轉譯為連字符格式（`BRK-A`, `BRK-B`, `BF-B`），並提供重置 348 檔 FAILED 標的為 PENDING 之安全恢復工具。
+
+- **TDCC Distribution & Monthly Revenue Dimensions (集保千張大戶持股與月營收成長數據庫)**:
+  - 核心模組：`scripts/market-sync/sqlite-db-core.cjs`、`scripts/market-sync/ingest-tw-tdcc.cjs`、`scripts/market-sync/ingest-tw-monthly-revenue.cjs`。
+  - 新增 `tw_tdcc_distribution`（千張大戶比例、總持股比例與股東人數）與 `tw_monthly_revenue`（月營收、MoM、YoY 與累計營收），建立複合索引提供毫秒級基本面與籌碼面多維度交叉檢索。
+
+- **Dual-Market Windows Task Scheduler & Spectrum Verifier (台美雙軌排程與全光譜審計報告)**:
+  - 核心模組：`scripts/market-sync/setup-windows-task.bat`、`scripts/market-sync/audit-verifier.cjs` (`auditFullLakehouseSpectrum`)。
+  - 支援 Windows 工作排程器一鍵建立「台股盤後日更 (15:30)」與「美股開盤前日更 (06:00)」，並可透過審計驗證器一鍵輸出 `sync_audit_report.json` 數據湖倉健康度報告。
+
 
 

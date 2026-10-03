@@ -117,9 +117,9 @@ function saveTwT86ToSqlite(t86Map, dateStr, customDbPath) {
       stmt.run(
         String(item.symbol).trim(),
         String(dateStr).trim(),
-        Number(item.foreignNet) || 0,
-        Number(item.trustNet) || 0,
-        Number(item.dealerNet) || 0
+        item.foreignNet !== undefined ? (Number(item.foreignNet) || 0) : (item.foreignNetShares !== undefined ? (Number(item.foreignNetShares) || 0) : 0),
+        item.trustNet !== undefined ? (Number(item.trustNet) || 0) : (item.trustNetShares !== undefined ? (Number(item.trustNetShares) || 0) : 0),
+        item.dealerNet !== undefined ? (Number(item.dealerNet) || 0) : (item.dealerNetShares !== undefined ? (Number(item.dealerNetShares) || 0) : 0)
       );
       count++;
     }

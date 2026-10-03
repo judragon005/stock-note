@@ -67,3 +67,4 @@ docs/json/
 # Local Market Data Caches (Background Schedule Output)
 public/market-cache/
 .scratch/market-cache/
+.scratch/test-*/

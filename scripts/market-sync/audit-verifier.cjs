@@ -157,11 +157,61 @@ function generateAuditReport(twSummary, usSummary) {
   return report;
 }
 
+/**
+ * 稽核 SQLite 湖倉六大核心表之全光譜資料量與健康度 (Spec 0163)
+ * @param {string} [customDbPath]
+ * @returns {object}
+ */
+function auditFullLakehouseSpectrum(customDbPath) {
+  const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+  const db = initSqliteLakehouseDb(customDbPath);
+
+  const getCount = (table) => {
+    try {
+      const row = db.prepare(`SELECT count(*) as c FROM "${table}"`).get();
+      return row?.c || 0;
+    } catch {
+      return 0;
+    }
+  };
+
+  const totalSymbols = getCount('symbols_meta');
+  const dailyCandles = getCount('daily_candles');
+  const chips = getCount('tw_institutional_chips');
+  const tdcc = getCount('tw_tdcc_distribution');
+  const revenue = getCount('tw_monthly_revenue');
+  const checkpoints = getCount('sync_checkpoints');
+
+  const report = {
+    auditedAt: new Date().toISOString(),
+    totalSymbols,
+    tables: {
+      symbolsMeta: totalSymbols,
+      dailyCandles,
+      chips,
+      tdcc,
+      revenue,
+      checkpoints,
+    },
+    status: totalSymbols > 0 && dailyCandles > 0 ? 'HEALTHY' : 'NEEDS_ATTENTION',
+  };
+
+  const p1 = path.join(process.cwd(), '.scratch', 'market-cache', 'sync_audit_report.json');
+  const p2 = path.join(process.cwd(), 'public', 'market-cache', 'sync_audit_report.json');
+  try {
+    saveJsonAtomic(p1, report);
+    saveJsonAtomic(p2, report);
+  } catch {}
+
+  return report;
+}
+
 module.exports = {
   isMarketTradingDay,
   verifyMarketDataIntegrity,
   generateAuditReport,
   auditUsLakehouseUniverse,
+  auditFullLakehouseSpectrum,
   HOLIDAYS_TW_2026,
   HOLIDAYS_US_2026,
 };

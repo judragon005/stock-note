@@ -5,6 +5,7 @@
 
 const https = require('https');
 const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+const { normalizeUsSymbol } = require('./market-sync-core.cjs');
 
 function formatDateYMD(d) {
   const yyyy = d.getFullYear();
@@ -129,7 +130,8 @@ function fetchYahooHistoricalQuotes(symbol, days = 250) {
   return new Promise((resolve, reject) => {
     const endSec = Math.floor(Date.now() / 1000);
     const startSec = endSec - days * 86400 * 1.5; // 往前多推算週末假日
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${Math.floor(startSec)}&period2=${endSec}&interval=1d`;
+    const requestSym = normalizeUsSymbol(symbol) || symbol;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(requestSym)}?period1=${Math.floor(startSec)}&period2=${endSec}&interval=1d`;
 
     const req = https.get(
       url,

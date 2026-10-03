@@ -148,6 +148,33 @@ function initSqliteLakehouseDb(customPath) {
       PRIMARY KEY (market, symbol)
     );
     CREATE INDEX IF NOT EXISTS idx_checkpoints_status ON sync_checkpoints(market, status);
+
+    -- 5. 台灣集保結算所 (TDCC) 每週股權分散與大戶持股比率表 (Spec 0163)
+    CREATE TABLE IF NOT EXISTS tw_tdcc_distribution (
+      symbol TEXT NOT NULL,
+      date TEXT NOT NULL,                -- YYYY-MM-DD (通常為每週五結算日)
+      total_shareholders INTEGER,        -- 總股東人數
+      over_400_ratio REAL,               -- 400 張以上大戶持股比例 (%)
+      over_1000_ratio REAL,              -- 1000 張以上大戶持股比例 (%)
+      under_10_ratio REAL,               -- 10 張以下散戶持股比例 (%)
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (symbol, date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_tdcc_symbol_date ON tw_tdcc_distribution(symbol, date DESC);
+
+    -- 6. 公開資訊觀測站 (MOPS) 全市場月營收與成長表 (Spec 0163)
+    CREATE TABLE IF NOT EXISTS tw_monthly_revenue (
+      symbol TEXT NOT NULL,
+      year_month TEXT NOT NULL,          -- YYYY-MM
+      revenue REAL NOT NULL,             -- 當月營收 (千元)
+      last_year_revenue REAL,            -- 去年同月營收 (千元)
+      yoy_rate REAL,                     -- 年增率 (%)
+      mom_rate REAL,                     -- 月增率 (%)
+      is_all_time_high INTEGER DEFAULT 0,-- 是否創歷史新高 (1/0)
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (symbol, year_month)
+    );
+    CREATE INDEX IF NOT EXISTS idx_revenue_symbol ON tw_monthly_revenue(symbol, year_month DESC);
   `);
 
   return db;
