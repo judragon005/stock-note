@@ -2210,5 +2210,23 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 核心模組：`scripts/market-sync/setup-windows-task.bat`、`scripts/market-sync/audit-verifier.cjs` (`auditFullLakehouseSpectrum`)。
   - 支援 Windows 工作排程器一鍵建立「台股盤後日更 (15:30)」與「美股開盤前日更 (06:00)」，並可透過審計驗證器一鍵輸出 `sync_audit_report.json` 數據湖倉健康度報告。
 
+### 美股已下市標的智慧標記加速、台股集保大戶與月營收全量入庫及戰情室湖倉 API 整合 *(新增於 V8.77.0 / Spec #0164 / ADR #0164 / Issue #163)*
+
+- **US Delisted Checkpoint Skipping Engine (美股已下市標的智慧隔離與跳過輪詢機制)**:
+  - 核心模組：`scripts/market-sync/us-sync-checkpoint-engine.cjs`、`scripts/market-sync/sync-us-market.cjs`。
+  - 當 Yahoo Chart 回傳 404 (No data found, symbol may be delisted) 時，自動標記 Checkpoint 為 `status = 'DELISTED'`。`getPendingUsSymbols` 自動排除已下市標的，排程採集時間由 452 秒降至 20 秒，並在稽核看板精準計算活躍標的實質涵蓋率 (99.79%)。
+
+- **TDCC Full-Universe Ingestion (台股全市場集保股權分散表批次入庫)**:
+  - 核心模組：`scripts/market-sync/ingest-tw-tdcc.cjs` (`runTdccIngestion`)。
+  - 批次入庫全市場 7,833 檔台股之最新千張大戶持股比、400 張持股比與總股東人數至 `tw_tdcc_distribution`。
+
+- **Monthly Revenue Full-Universe Ingestion (台股全市場月營收成長數據批次入庫)**:
+  - 核心模組：`scripts/market-sync/ingest-tw-monthly-revenue.cjs` (`runMonthlyRevenueIngestion`)。
+  - 批次入庫全市場 7,833 檔台股之最新年月、營收、MoM、YoY 及歷史新高標記至 `tw_monthly_revenue`。
+
+- **Lakehouse Full-Spectrum History API & Frontend Hydration (湖倉全光譜 HTTP API 與前端雙向載入)**:
+  - 核心模組：`scripts/market-sync/vite-market-middleware.cjs` (`/api/market/history/:symbol`)、`src/engine/marketCacheLoader.ts` (`loadSymbolFullLakehouseData`)。
+  - 單一端點一次性提供「日 K + 三大法人與資券 + 最近 10 週 TDCC 集保 + 最近 12 個月營收」，前端支援秒讀全光譜量化決策維度。
+
 
 

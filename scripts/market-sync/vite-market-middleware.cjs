@@ -160,6 +160,24 @@ function createMarketApiMiddleware(customDbPath) {
         }
       }
 
+      // 新增查詢 TDCC 集保股權分散表 (最近 10 筆週別資料)
+      let tdccRows = [];
+      try {
+        tdccRows = db
+          .prepare('SELECT * FROM tw_tdcc_distribution WHERE symbol = ? ORDER BY date DESC LIMIT 10')
+          .all(symbol);
+        tdccRows.reverse();
+      } catch {}
+
+      // 新增查詢月營收 (最近 12 個月)
+      let revenueRows = [];
+      try {
+        revenueRows = db
+          .prepare('SELECT * FROM tw_monthly_revenue WHERE symbol = ? ORDER BY year_month DESC LIMIT 12')
+          .all(symbol);
+        revenueRows.reverse();
+      } catch {}
+
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(
         JSON.stringify({
@@ -167,6 +185,8 @@ function createMarketApiMiddleware(customDbPath) {
           meta: meta || null,
           candles,
           chips: chipsMap,
+          tdcc: tdccRows,
+          revenue: revenueRows,
         })
       );
     }

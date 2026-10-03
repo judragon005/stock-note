@@ -74,6 +74,8 @@ function auditUsLakehouseUniverse(targetDate, customDbPath) {
 
   const successCount = successRow?.count || 0;
   const failedCount = failedRow?.count || 0;
+  const delistedRow = db.prepare("SELECT count(*) as count FROM sync_checkpoints WHERE market = 'US' AND status = 'DELISTED'").get();
+  const delistedCount = delistedRow?.count || 0;
 
   // 3. 最新交易日存入之日 K 標的數與總 K 線筆數
   const latestDateRow = db.prepare("SELECT max(date) as maxDate FROM daily_candles").get();
@@ -83,18 +85,21 @@ function auditUsLakehouseUniverse(targetDate, customDbPath) {
   const totalCandlesRow = db.prepare("SELECT count(*) as total FROM daily_candles").get();
   const totalCandles = totalCandlesRow?.total || 0;
 
-  const coverageRate = totalUsRegistered > 0 ? (successCount / totalUsRegistered) * 100 : 0;
+  const activeUniverse = Math.max(1, totalUsRegistered - delistedCount);
+  const coverageRate = activeUniverse > 0 ? (successCount / activeUniverse) * 100 : 0;
 
   return {
     auditDate: dateStr,
     latestCandleDate,
     market: 'US',
     totalUsRegistered,
+    delistedCount,
+    activeUniverse,
     successCount,
     failedCount,
     candlesCount,
     totalCandles,
-    coverageRate: Number(coverageRate.toFixed(2)),
+    coverageRate: Number(Math.min(100, coverageRate).toFixed(2)),
     status: totalUsRegistered >= 1500 ? 'HEALTHY_UNIVERSE' : 'TIER_1_ONLY',
   };
 }
@@ -296,17 +301,19 @@ if (require.main === module) {
 
   // 2. 美股稽核
   const usAudit = auditUsLakehouseUniverse();
-  const pendingCount = Math.max(0, usAudit.totalUsRegistered - usAudit.successCount - usAudit.failedCount);
+  const pendingCount = Math.max(0, usAudit.totalUsRegistered - usAudit.successCount - usAudit.failedCount - usAudit.delistedCount);
   console.log(`================================================================================`);
   console.log(` 🏛️  美股湖倉資料完整度稽核報告 (${usAudit.auditDate})`);
   console.log(`================================================================================`);
-  console.log(`- 湖倉註冊標的數 : ${usAudit.totalUsRegistered.toLocaleString()} 檔`);
+  console.log(`- 湖倉註冊母體   : ${usAudit.totalUsRegistered.toLocaleString()} 檔`);
+  console.log(`- 活躍上市標的   : ${usAudit.activeUniverse.toLocaleString()} 檔 (已排除下市/併購標的)`);
   console.log(`- 今日成功同步數 : ${usAudit.successCount.toLocaleString()} 檔`);
-  console.log(`- 待同步 / 排程中: ${pendingCount.toLocaleString()} 檔 (已重置為 PENDING，可執行 sync-us-market.cjs)`);
+  console.log(`- 已下市/併購隔離: ${usAudit.delistedCount.toLocaleString()} 檔 (標記為 DELISTED，日更自動跳過)`);
+  console.log(`- 待同步 / 排程中: ${pendingCount.toLocaleString()} 檔`);
   console.log(`- 同步失敗 / 異常: ${usAudit.failedCount.toLocaleString()} 檔`);
   console.log(`- 最新交易日標的 : ${usAudit.candlesCount.toLocaleString()} 檔 (美東收盤: ${usAudit.latestCandleDate})`);
   console.log(`- 湖倉總日 K 筆數: ${usAudit.totalCandles.toLocaleString()} 筆`);
-  console.log(`- 當前採集涵蓋率 : ${usAudit.coverageRate}%`);
+  console.log(`- 活躍標的涵蓋率 : ${usAudit.coverageRate}%`);
   console.log(`- 湖倉健康狀態   : ${usAudit.status}`);
   console.log(`================================================================================\n`);
 

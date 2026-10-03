@@ -66,21 +66,33 @@ function getPendingUsSymbols(symbolsList, targetDate, customDbPath) {
   const db = initSqliteLakehouseDb(customDbPath);
   const cleanDate = String(targetDate).trim();
 
-  // 查詢當天已成功的標的集合
-  const successRows = db
-    .prepare("SELECT symbol FROM sync_checkpoints WHERE market = 'US' AND status = 'SUCCESS' AND last_success_date = ?")
+  // 查詢當天已成功或已下市的標的集合 (予以排除)
+  const skipRows = db
+    .prepare("SELECT symbol FROM sync_checkpoints WHERE market = 'US' AND ((status = 'SUCCESS' AND last_success_date = ?) OR status = 'DELISTED')")
     .all(cleanDate);
 
-  const successSet = new Set(successRows.map((r) => r.symbol.toUpperCase()));
+  const skipSet = new Set(skipRows.map((r) => r.symbol.toUpperCase()));
 
   return symbolsList.filter((s) => {
     const sym = String(s).trim().toUpperCase();
-    return !successSet.has(sym);
+    return !skipSet.has(sym);
   });
+}
+
+/**
+ * 將歷史因 404 失敗的美股標的批次標記為 DELISTED
+ * @param {string} [customDbPath]
+ * @returns {number}
+ */
+function markFailed404AsDelisted(customDbPath) {
+  const db = initSqliteLakehouseDb(customDbPath);
+  const info = db.prepare("UPDATE sync_checkpoints SET status = 'DELISTED' WHERE market = 'US' AND (error_msg LIKE '%404%' OR error_msg LIKE '%delisted%')").run();
+  return info.changes || 0;
 }
 
 module.exports = {
   recordSyncCheckpoint,
   getSyncCheckpointStatus,
   getPendingUsSymbols,
+  markFailed404AsDelisted,
 };
