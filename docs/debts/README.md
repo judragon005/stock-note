@@ -48,6 +48,8 @@
 | [**0038**](0038-derive-shares-outstanding-helper-refactor.md) | 提取流通股數推導共用輔助函式 (deriveSharesOutstanding) 消除 DRY 異味 | `P3` | `RESOLVED` | PR #62 雙軸代碼審查 (Spec 0131) | `Refactor` · `DRY` · `KeyMetricsEngine` · `Valuation` | **已於 v8.52.0 (ADR #0139) 完整解決** |
 | [**0039**](0039-dashboard-canvas-snapshot-exporter.md) | AI 決策儀表板純前端 Canvas 快照下載演進 | `P3` | `RESOLVED` | Code Review (Spec 0140 / Issue #93) | `Feature` · `Export` · `Canvas` · `UX` · `AiForceDashboard` | **已於 v8.67.0 (ADR #0156) 完整解決** |
 | [**0040**](0040-ai-force-frontend-status-tag-and-disposition-badge-wiring.md) | AI 主力戰情室前端狀態標籤與處置警示徽章端到端串接 | `P3` | `RESOLVED` | Code Review (Spec 0155 / Issue #138) | `Feature` · `UI` · `AiForceDashboard` · `Lakehouse` · `Dispositions` | **已於 v8.67.0 (ADR #0156) 完整解決** |
+| [**0041**](0041-sync-checkpoints-composite-index-optimization.md) | 同步檢查點表 (sync_checkpoints) 複合狀態索引優化 | `P3` | `OPEN` | Code Review (Spec 0164 / Issue #163) | `Performance` · `Database` · `Lakehouse` · `Indexing` | 待處理 |
+| [**0042**](0042-ai-force-tdcc-and-monthly-revenue-card-visualizations.md) | AI 主力戰情室集保大戶散戶比與月營收趨勢卡片視覺化串接 | `P2` | `OPEN` | Code Review (Spec 0164 / Issue #163) | `Feature` · `UI` · `AiForceDashboard` · `TDCC` · `Revenue` | 待處理 |
 
 ---
 
