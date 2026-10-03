@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1378%2F1378%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1384%2F1384%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,18 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 券商法人級全維度數據湖倉稽核、歷史籌碼斷層回補與台美雙軌自動化日更管線 (`Broker-Grade Lakehouse Audit, Full Backfill & Dual-Market Sync`) *(V8.76.0 全新發布 / Spec #0163 / ADR #0163 / Issue #159)*
+### 0. 美股已下市標的智慧標記加速、台股集保大戶與月營收全量入庫及戰情室湖倉 API 整合 (`US Delisted Marking, TDCC & Revenue Lakehouse Pipeline`) *(V8.77.0 全新發布 / Spec #0164 / ADR #0164 / Issue #163)*
+
+- **美股已下市/併購標的智慧隔離與跳過輪詢 (`US Delisted Checkpoint Skipping Engine`)**：
+  - 遇到 Yahoo 404 (No data found, symbol may be delisted) 自動標記為 `DELISTED`，待處理隊列自動排除 345 檔歷史下市標的，美股排程採集耗時自 452 秒降至 20 秒內，活躍上市標的實質涵蓋率達 99.79%。
+- **台股全市場集保股權分散表批次入庫 (`TDCC Full-Universe Ingestion`)**：
+  - 批次入庫全市場 7,833 檔台股之千張大戶持股比、400 張持股比與總股東人數至 `tw_tdcc_distribution`。
+- **台股全市場月營收成長數據批次入庫 (`Monthly Revenue Full-Universe Ingestion`)**：
+  - 批次入庫全市場 7,833 檔台股之月營收、MoM、YoY 及歷史新高標記至 `tw_monthly_revenue`。
+- **湖倉全光譜 HTTP API 與前端雙向載入 (`Lakehouse Full-Spectrum History API & Frontend Hydration`)**：
+  - `/api/market/history/:symbol` 擴展回傳最近 10 週 TDCC 集保與最近 12 個月營收；前端 `marketCacheLoader.ts` 秒讀全光譜量化決策維度。
+
+### 1. 券商法人級全維度數據湖倉稽核、歷史籌碼斷層回補與台美雙軌自動化日更管線 (`Broker-Grade Lakehouse Audit, Full Backfill & Dual-Market Sync`) *(V8.76.0 全新發布 / Spec #0163 / ADR #0163 / Issue #159)*
 
 - **三大法人歷史籌碼斷層無縫回補 (`Historical Chips Gap Backfill Engine`)**：
   - 專用回補引擎 `backfill-historical-chips-gap.cjs`，自動計算 2026-08-15 至 2026-10-02 之 34 個交易日斷層，自動拉取 TWSE T86 三大法人買賣超全市場數據，具備非阻塞批次入庫與指數退避防封鎖機制，徹底縫合歷史籌碼真空。

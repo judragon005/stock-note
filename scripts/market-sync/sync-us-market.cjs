@@ -292,10 +292,12 @@ async function runUsMarketSync(config = {}) {
       failCount++;
       failedSymbols.push(sym);
       const is429 = String(err.message).includes('429');
+      const is404 = String(err.message).includes('404') || String(err.message).toLowerCase().includes('delisted');
+      const cpStatus = is404 ? 'DELISTED' : 'FAILED';
       recordSyncCheckpoint(
         'US',
         sym,
-        'FAILED',
+        cpStatus,
         dateStr,
         is429 ? '429_RATE_LIMITED' : err.message,
         customDbPath

@@ -233,10 +233,25 @@ export interface LakehouseFullPayload {
   marginBalance?: number;
   shortBalance?: number;
   dayTradeRate?: number;
+  tdccRecords?: Array<{
+    date: string;
+    totalShareholders?: number;
+    over400Ratio?: number;
+    over1000Ratio?: number;
+    under10Ratio?: number;
+  }>;
+  revenueRecords?: Array<{
+    yearMonth: string;
+    revenue: number;
+    lastYearRevenue?: number;
+    yoyRate?: number;
+    momRate?: number;
+    isAllTimeHigh?: number;
+  }>;
 }
 
 /**
- * 從本地 SQLite 湖倉同時載入標的歷史日 K 與三大法人歷史籌碼 (Ticket 02 & Ticket 05)
+ * 從本地 SQLite 湖倉同時載入標的歷史日 K、三大法人籌碼、集保大戶與月營收 (Spec 0164)
  */
 export async function loadSymbolFullLakehouseData(
   symbol: string,
@@ -283,6 +298,29 @@ export async function loadSymbolFullLakehouseData(
           }
         }
 
+        let tdccRecords: LakehouseFullPayload['tdccRecords'] = undefined;
+        if (Array.isArray(data.tdcc) && data.tdcc.length > 0) {
+          tdccRecords = data.tdcc.map((r: any) => ({
+            date: r.date,
+            totalShareholders: r.total_shareholders != null ? Number(r.total_shareholders) : undefined,
+            over400Ratio: r.over_400_ratio != null ? Number(r.over_400_ratio) : undefined,
+            over1000Ratio: r.over_1000_ratio != null ? Number(r.over_1000_ratio) : undefined,
+            under10Ratio: r.under_10_ratio != null ? Number(r.under_10_ratio) : undefined,
+          }));
+        }
+
+        let revenueRecords: LakehouseFullPayload['revenueRecords'] = undefined;
+        if (Array.isArray(data.revenue) && data.revenue.length > 0) {
+          revenueRecords = data.revenue.map((r: any) => ({
+            yearMonth: r.year_month,
+            revenue: Number(r.revenue) || 0,
+            lastYearRevenue: r.last_year_revenue != null ? Number(r.last_year_revenue) : undefined,
+            yoyRate: r.yoy_rate != null ? Number(r.yoy_rate) : undefined,
+            momRate: r.mom_rate != null ? Number(r.mom_rate) : undefined,
+            isAllTimeHigh: r.is_all_time_high != null ? Number(r.is_all_time_high) : 0,
+          }));
+        }
+
         const latestChipRow =
           institutionalRecords && institutionalRecords.length > 0
             ? institutionalRecords[institutionalRecords.length - 1]
@@ -294,6 +332,8 @@ export async function loadSymbolFullLakehouseData(
           marginBalance: latestChipRow?.marginBalance,
           shortBalance: latestChipRow?.shortBalance,
           dayTradeRate: latestChipRow?.dayTradeRate,
+          tdccRecords,
+          revenueRecords,
         };
       }
     }
