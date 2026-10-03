@@ -226,11 +226,17 @@ export interface LakehouseFullPayload {
     foreignShares: number;
     trustShares: number;
     dealerShares: number;
+    marginBalance?: number;
+    shortBalance?: number;
+    dayTradeRate?: number;
   }>;
+  marginBalance?: number;
+  shortBalance?: number;
+  dayTradeRate?: number;
 }
 
 /**
- * 從本地 SQLite 湖倉同時載入標的歷史日 K 與三大法人歷史籌碼 (Ticket 02)
+ * 從本地 SQLite 湖倉同時載入標的歷史日 K 與三大法人歷史籌碼 (Ticket 02 & Ticket 05)
  */
 export async function loadSymbolFullLakehouseData(
   symbol: string,
@@ -261,7 +267,7 @@ export async function loadSymbolFullLakehouseData(
           logger.warn(`[marketCacheLoader] IndexedDB 沉澱失敗 (${cleanSym}):`, err);
         });
 
-        let institutionalRecords: any[] | undefined = undefined;
+        let institutionalRecords: LakehouseFullPayload['institutionalRecords'] = undefined;
         if (data.chips && typeof data.chips === 'object') {
           const chipRows = Object.values(data.chips) as any[];
           if (chipRows.length > 0) {
@@ -270,11 +276,25 @@ export async function loadSymbolFullLakehouseData(
               foreignShares: Number(r.foreign_net) || 0,
               trustShares: Number(r.trust_net) || 0,
               dealerShares: Number(r.dealer_net) || 0,
+              marginBalance: r.margin_balance != null ? Number(r.margin_balance) : undefined,
+              shortBalance: r.short_balance != null ? Number(r.short_balance) : undefined,
+              dayTradeRate: r.day_trade_rate != null ? Number(r.day_trade_rate) : undefined,
             }));
           }
         }
 
-        return { candles, institutionalRecords };
+        const latestChipRow =
+          institutionalRecords && institutionalRecords.length > 0
+            ? institutionalRecords[institutionalRecords.length - 1]
+            : undefined;
+
+        return {
+          candles,
+          institutionalRecords,
+          marginBalance: latestChipRow?.marginBalance,
+          shortBalance: latestChipRow?.shortBalance,
+          dayTradeRate: latestChipRow?.dayTradeRate,
+        };
       }
     }
   } catch (err) {

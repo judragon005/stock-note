@@ -61,6 +61,7 @@ export interface KlineCandleItem {
   ma10?: number;
   ma20?: number;
   ma60?: number;
+  ma250?: number; // MA250 (年線)
   k?: number; // KD 之 K 值 (0~100)
   d?: number; // KD 之 D 值 (0~100)
   dif?: number; // MACD 快線 DIF
@@ -234,6 +235,10 @@ export interface DayTradeRiskData {
   intradayVolatility: number; // 62%
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; // "中"
   riskIndex: number; // 53%
+  marginBalance?: number; // 融資餘額 (張)
+  shortBalance?: number; // 融券餘額 (張)
+  shortMarginRatio?: number; // 券資比 (%)
+  dayTradeRate?: number; // 當沖率 (%)
 }
 
 /**

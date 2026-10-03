@@ -56,8 +56,8 @@ export function calculateIncrementalPeriod1(
       return Math.max(0, lastSec - 7 * 86400);
     }
   }
-  // 本地無資料時，預設抓取最近 180 天 (約 6 個月，~120 根日 K)，足以計算 MA60 與 Darvas 箱體
-  return Math.max(0, nowSec - 180 * 86400);
+  // Spec 0162: 本地無資料時，預設抓取最近 400 天 (約 250+ 交易日，完整支撐 MA250 年線與 250D 全年度分析)
+  return Math.max(0, nowSec - 400 * 86400);
 }
 
 /**

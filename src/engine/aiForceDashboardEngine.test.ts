@@ -13,11 +13,12 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
     expect(report.name).toBe('致茂');
     expect(report.market).toBe('TW');
 
-    // 檢查頂部行情 Bar
+    // 檢查頂部行情 Bar (Spec 0162: 無 basePrice 時應為待命狀態)
     expect(report.marketBar).toBeDefined();
-    expect(report.marketBar.currentPrice).toBeGreaterThanOrEqual(0);
+    expect(report.isDataPending).toBe(true);
+    expect(report.marketBar.currentPrice).toBeUndefined();
     expect(report.marketBar.statusBadges.aiScanActive).toBe(true);
-    expect(report.marketBar.statusBadges.mainForceTracking).toBe(true);
+    expect(report.marketBar.statusBadges.mainForceTracking).toBe(false); // 待命狀態下主力追蹤為 false
 
     // 檢查 18 個模組 payload 均完整存在
     expect(report.klineSystem).toBeDefined();

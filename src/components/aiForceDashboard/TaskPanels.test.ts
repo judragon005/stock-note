@@ -154,9 +154,37 @@ describe('TaskPanels 底部任務視圖真實資料動態連動 (Spec 0143 Ticke
       const latestDate = mockCandles[mockCandles.length - 1].date;
       expect(html).toContain(latestDate);
 
-      // 應包含分頁指示與按鈕
-      expect(html).toMatch(/第 1/);
+      // 應包含分頁指示與首頁、末頁按鈕
+      expect(html).toMatch(/第 .*1.* 頁/);
       expect(html).toContain('下一頁');
+      expect(html).toContain('首頁');
+      expect(html).toContain('末頁');
+      expect(html).toContain('MA250');
+    });
+
+    it('Ticket 11: 250 筆長天期歷史日 K 應精確分為 25 頁且翻頁功能正確', () => {
+      const candles250 = Array.from({ length: 250 }, (_, i) => ({
+        date: `2025-01-${String(i + 1).padStart(3, '0')}`,
+        open: 100 + i * 0.1,
+        high: 102 + i * 0.1,
+        low: 99 + i * 0.1,
+        close: 101 + i * 0.1,
+        volume: 5000,
+        ma20: 100,
+        ma60: 98,
+        ma250: 95,
+      }));
+
+      const pageInfo = paginateCandles(candles250, 1, 10);
+      expect(pageInfo.totalCount).toBe(250);
+      expect(pageInfo.totalPages).toBe(25);
+      expect(pageInfo.items.length).toBe(10);
+
+      // 第 25 頁應包含最後 10 筆歷史日 K
+      const page25 = paginateCandles(candles250, 25, 10);
+      expect(page25.items.length).toBe(10);
+      expect(page25.currentPage).toBe(25);
     });
   });
 });
+

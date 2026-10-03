@@ -53,4 +53,37 @@ describe('DayTradeRiskEngine - 隔日沖 5 大風險量化指標演算法規範 
     expect(Number.isNaN(result.intradayVolatility)).toBe(false);
     expect(result.riskLevel).toBeDefined();
   });
+
+  describe('Ticket 10: 融資融券與真實券資比計算 (Spec 0162)', () => {
+    it('傳入融資餘額與融券餘額時，應精確計算 shortMarginRatio 券資比 (%)', () => {
+      const candles = [
+        { open: 100, high: 102, low: 99, close: 101, volume: 1000 },
+      ];
+      // 融資 10,000 張，融券 2,500 張 => 券資比 25.00%
+      const result = calculateDayTradeRisk(candles, {
+        marginBalance: 10000,
+        shortBalance: 2500,
+        dayTradeRate: 42.5,
+      });
+
+      expect(result.shortMarginRatio).toBe(25.0);
+      expect(result.marginBalance).toBe(10000);
+      expect(result.shortBalance).toBe(2500);
+      expect(result.dayTradeRate).toBe(42.5);
+      expect(result.dayTradeRatio).toBe(43);
+    });
+
+    it('當融資餘額為 0 或缺漏時，shortMarginRatio 應安全為 undefined 避免除零錯誤', () => {
+      const candles = [
+        { open: 100, high: 102, low: 99, close: 101, volume: 1000 },
+      ];
+      const result = calculateDayTradeRisk(candles, {
+        marginBalance: 0,
+        shortBalance: 50,
+      });
+
+      expect(result.shortMarginRatio).toBeUndefined();
+    });
+  });
 });
+

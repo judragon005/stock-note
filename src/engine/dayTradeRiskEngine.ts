@@ -11,10 +11,13 @@ export interface CandleDayTradeInput {
 export interface DayTradeQuoteInput {
   turnoverRate?: number;
   dayTradeRatio?: number;
+  marginBalance?: number;
+  shortBalance?: number;
+  dayTradeRate?: number;
 }
 
 /**
- * 依據價格與量能特徵計算隔日沖 5 大風險量化指標
+ * 依據價格與量能特徵計算隔日沖 5 大風險量化指標 (含真實券資比與信用浮額評估)
  */
 export function calculateDayTradeRisk(
   candles: CandleDayTradeInput[],
@@ -29,6 +32,13 @@ export function calculateDayTradeRisk(
       intradayVolatility: 62,
       riskLevel: 'MEDIUM',
       riskIndex: 53,
+      marginBalance: quote?.marginBalance,
+      shortBalance: quote?.shortBalance,
+      shortMarginRatio:
+        quote?.marginBalance && quote?.shortBalance && quote.marginBalance > 0
+          ? Number(((quote.shortBalance / quote.marginBalance) * 100).toFixed(2))
+          : undefined,
+      dayTradeRate: quote?.dayTradeRate,
     };
   }
 
@@ -72,7 +82,9 @@ export function calculateDayTradeRisk(
 
   // 4. 沖銷比例 (Day Trade Ratio)
   let dayTradeRatio = 53;
-  if (quote?.dayTradeRatio !== undefined && quote.dayTradeRatio > 0) {
+  if (quote?.dayTradeRate !== undefined && quote.dayTradeRate > 0) {
+    dayTradeRatio = Math.round(Math.min(95, quote.dayTradeRate));
+  } else if (quote?.dayTradeRatio !== undefined && quote.dayTradeRatio > 0) {
     dayTradeRatio = Math.round(Math.min(95, quote.dayTradeRatio));
   } else {
     const intradayAmp = (latest.high - latest.low) / (latest.close > 0 ? latest.close : 1);
@@ -99,7 +111,17 @@ export function calculateDayTradeRisk(
   let intradayVolatility = Math.round(ampPct * 1000);
   intradayVolatility = Math.max(10, Math.min(95, intradayVolatility));
 
-  // 7. 綜合風險等級 (Risk Level)
+  // 7. 券資比計算 (Ticket 10)
+  let shortMarginRatio: number | undefined = undefined;
+  if (
+    quote?.marginBalance !== undefined &&
+    quote?.shortBalance !== undefined &&
+    quote.marginBalance > 0
+  ) {
+    shortMarginRatio = Number(((quote.shortBalance / quote.marginBalance) * 100).toFixed(2));
+  }
+
+  // 8. 綜合風險等級 (Risk Level)
   const avgRisk =
     (abnormalSelling + turnoverRate + dayTradeRatio + pullbackRisk + intradayVolatility) / 5;
 
@@ -120,5 +142,9 @@ export function calculateDayTradeRisk(
     intradayVolatility,
     riskLevel,
     riskIndex: Math.round(avgRisk),
+    marginBalance: quote?.marginBalance,
+    shortBalance: quote?.shortBalance,
+    shortMarginRatio,
+    dayTradeRate: quote?.dayTradeRate ?? dayTradeRatio,
   };
 }

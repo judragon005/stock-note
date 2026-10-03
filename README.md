@@ -12,7 +12,18 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 市場時區新鮮度服務解耦與中介層依戀重構 (`Market Freshness Service Decoupling`) *(V8.74.0 全新發布)*
+### 0. AI 主力戰情室全光譜 250+ 交易日數據湖倉與零假資料管線 (`AI Force Full-Spectrum Lakehouse & Zero-Mock Pipeline`) *(V8.75.0 規劃實施中 / Spec #0162 / Issue #156)*
+
+- **全市場日 K 湖倉擴展至 250+ 交易日 (支援 MA250 年線與全年度指標)**：
+  - 解除歷史回補僅截取最近 60 根之舊設計，自本機 2,361 檔歷史庫讀取並入庫最近 250~300 個交易日之真實日 K 至 `daily_candles`，原生支援 MA250（年線）、全年度 Volume Profile 與長期 Darvas 箱體。
+- **三大法人與信用交易全量歷史深層入庫 (`Institutional Chips & Margin Deep Ingestion`)**：
+  - 批次解析本機 642 檔三大法人全歷史 CSV 與 591 檔融資融券全歷史 CSV，將最近 250 日買賣超與餘額寫入 `tw_institutional_chips`，徹底終結法人表 0 筆與聯網中斷問題。
+- **零假資料方針 (Zero-Mock Policy)**：
+  - 徹底拔除 5 根模擬日 K 的假 fallback。若市場查無此標的，誠實標註 `isDataPending = true` 並提供更正引導；若標的在線可查，優先在線即時拉取 250 日真實日 K 並沉澱入庫。
+- **主力戰情室 18 張卡片與分頁總表 100% 真實數據閉環**：
+  - 原始量化數據總表 (RawDataView) 呈現 250 筆真實日 K 降序分頁，所有分析卡片均由真實數據驅動。
+
+### 1. 市場時區新鮮度服務解耦與中介層依戀重構 (`Market Freshness Service Decoupling`) *(V8.74.0 全新發布)*
 
 - **消除 Feature Envy 代碼異味 (Spec 0161, ADR 0161)**：
   - 獨立抽取 `scripts/market-sync/market-freshness-service.cjs`，提供純粹領域函數 `getMarketAnchorDate(market, now)` 與 `checkMarketFreshness(db, now)`。

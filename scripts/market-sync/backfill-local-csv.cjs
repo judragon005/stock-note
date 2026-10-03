@@ -260,6 +260,7 @@ async function runFullMarketHistoryBackfill() {
 
   const stocksSummaryMap = {};
   const compactHistoryMap = {};
+  const lakehouseHistoryMap = {};
   const gapsAuditList = [];
 
   let processedCount = 0;
@@ -356,6 +357,16 @@ async function runFullMarketHistoryBackfill() {
       v: c.volume,
     }));
 
+    // 湖倉深度歷史序列 (取最近 260 根供 SQLite 湖倉與主力戰情室年線/長線分析，Spec 0162 / Ticket 01)
+    lakehouseHistoryMap[symbol] = extractCandlesForLakehouse(alignedCandles, 260).map((c) => ({
+      d: c.date,
+      o: c.open,
+      h: c.high,
+      l: c.low,
+      c: c.close,
+      v: c.volume,
+    }));
+
     processedCount++;
   }
 
@@ -388,10 +399,10 @@ async function runFullMarketHistoryBackfill() {
   saveJsonAtomic(targetSummaryPath, outputSummary);
   saveJsonAtomic(targetHistoryPath, compactHistoryMap);
 
-  // 同步寫入 SQLite 本地數據湖倉 (Spec 0159 / Ticket 01)
+  // 同步寫入 SQLite 本地數據湖倉 (Spec 0159 & Spec 0162 / Ticket 01 - 支援 250+ 交易日深層湖倉)
   try {
-    const sqliteTotal = saveAlignedCandlesBatchToSqlite(compactHistoryMap);
-    console.log(`✔ SQLite 湖倉入庫：已將 ${processedCount} 檔標的共 ${sqliteTotal} 筆歷史日 K 寫入 daily_candles`);
+    const sqliteTotal = saveAlignedCandlesBatchToSqlite(lakehouseHistoryMap);
+    console.log(`✔ SQLite 湖倉入庫：已將 ${processedCount} 檔標的共 ${sqliteTotal} 筆歷史日 K 寫入 daily_candles (250+ 交易日深度)`);
   } catch (sqliteErr) {
     console.warn(`[SQLite 歷史回補寫入警告]:`, sqliteErr.message);
   }
@@ -469,6 +480,18 @@ function saveAlignedCandlesBatchToSqlite(candlesMap, customDbPath) {
   return count;
 }
 
+/**
+ * 截取供 SQLite 湖倉入庫之深度日 K 序列 (預設 260 根，支援年線與全年度指標)
+ * @param {Array<any>} candles
+ * @param {number} [limit=260]
+ * @returns {Array<any>}
+ */
+function extractCandlesForLakehouse(candles, limit = 260) {
+  if (!Array.isArray(candles)) return [];
+  if (candles.length <= limit) return [...candles];
+  return candles.slice(-limit);
+}
+
 if (require.main === module) {
   runFullMarketHistoryBackfill().catch((err) => {
     console.error(`全歷史回補失敗:`, err);
@@ -483,4 +506,5 @@ module.exports = {
   parseChipHistoryCsv,
   runFullMarketHistoryBackfill,
   saveAlignedCandlesBatchToSqlite,
+  extractCandlesForLakehouse,
 };

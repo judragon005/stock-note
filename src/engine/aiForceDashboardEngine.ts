@@ -47,35 +47,23 @@ export function createDefaultAiForceReport(
   const settlement = getMarketSettlementStatus(market, referenceDate);
   const todayStr = settlement.anchorTradingDate;
 
-  // 判定是否處於無歷史資料且無即時行情之待命狀態 (Spec 0152: 淘汰 150 元假數據)
-  const isDataPending =
-    basePrice === undefined &&
-    symbol !== '2360' &&
-    symbol !== '0050' &&
-    symbol !== '2330';
+  // 判定是否處於無歷史資料且無即時行情之待命狀態 (Spec 0162: Zero-Mock Policy 嚴禁硬編碼造假)
+  const isDataPending = basePrice === undefined || basePrice <= 0;
 
   let price: number | undefined = undefined;
   if (basePrice !== undefined && basePrice > 0) {
     price = basePrice;
-  } else if (symbol === '0050') {
-    price = 195.0;
-  } else if (symbol === '2330') {
-    price = 980.0;
-  } else if (symbol === '2360') {
-    price = 2290.0;
   }
 
-  const isDefault2360 = symbol === '2360' && price === 2290.0;
-  const safePrice = price ?? 100;
-  const change = price !== undefined ? (isDefault2360 ? 205.0 : Number((price * 0.012).toFixed(2))) : undefined;
-  const changePercent = price !== undefined ? (isDefault2360 ? 9.83 : 1.2) : undefined;
-  const openPrice = price !== undefined ? (isDefault2360 ? 2135.0 : Number((price * 0.99).toFixed(2))) : undefined;
-  const highPrice = price !== undefined ? (isDefault2360 ? 2290.0 : Number((price * 1.015).toFixed(2))) : undefined;
-  const lowPrice = price !== undefined ? (isDefault2360 ? 2135.0 : Number((price * 0.985).toFixed(2))) : undefined;
-  const highResistance = price !== undefined ? (isDefault2360 ? 2490.0 : Number((price * 1.08).toFixed(2))) : 0;
-  const mainForceCost = price !== undefined ? (isDefault2360 ? 2130.65 : Number((price * 0.96).toFixed(2))) : 0;
-  const supportLevel = price !== undefined ? (isDefault2360 ? 1875.0 : Number((price * 0.92).toFixed(2))) : 0;
-  const supportLower = price !== undefined ? (isDefault2360 ? 1730.0 : Number((price * 0.88).toFixed(2))) : 0;
+  const change = price !== undefined ? Number((price * 0.012).toFixed(2)) : undefined;
+  const changePercent = price !== undefined ? 1.2 : undefined;
+  const openPrice = price !== undefined ? Number((price * 0.99).toFixed(2)) : undefined;
+  const highPrice = price !== undefined ? Number((price * 1.015).toFixed(2)) : undefined;
+  const lowPrice = price !== undefined ? Number((price * 0.985).toFixed(2)) : undefined;
+  const highResistance = price !== undefined ? Number((price * 1.08).toFixed(2)) : 0;
+  const mainForceCost = price !== undefined ? Number((price * 0.96).toFixed(2)) : 0;
+  const supportLevel = price !== undefined ? Number((price * 0.92).toFixed(2)) : 0;
+  const supportLower = price !== undefined ? Number((price * 0.88).toFixed(2)) : 0;
 
   return {
     symbol,
@@ -89,15 +77,15 @@ export function createDefaultAiForceReport(
       currentPrice: price,
       change,
       changePercent,
-      volumeShares: isDefault2360 ? 2681 : undefined,
-      transactionCount: isDefault2360 ? 6260 : undefined,
+      volumeShares: undefined,
+      transactionCount: undefined,
       openPrice,
       highPrice,
       lowPrice,
       latestTradingDate: settlement.anchorTradingDate,
-      dataPointsCount: isDefault2360 ? 98 : 0,
+      dataPointsCount: 0,
       dataSourceText: market === 'TW' ? '日 K TWSE | 法人 TWSE | 融資券 FinMind' : 'Yahoo Finance',
-      dataRangeText: isDefault2360 ? `${todayStr} 共 98 個交易日` : '尚無歷史交易日資料',
+      dataRangeText: '尚無歷史交易日資料',
       isSettled: settlement.isSettled,
       anchorTradingDate: settlement.anchorTradingDate,
       settlementReason: settlement.reason,
@@ -147,22 +135,8 @@ export function createDefaultAiForceReport(
     },
 
     volumeProfile: {
-      buckets: isDefault2360
-        ? [
-            { label: '壓力區', priceMin: 2350, priceMax: 2490, percentage: 4, type: 'resistance' },
-            { label: '大量成交區', priceMin: 2200, priceMax: 2350, percentage: 17, type: 'heavy' },
-            { label: '密集成交區', priceMin: 2100, priceMax: 2200, percentage: 9, type: 'dense' },
-            { label: '橫平區', priceMin: 2000, priceMax: 2100, percentage: 9, type: 'flat' },
-            { label: '支撐區', priceMin: 1800, priceMax: 2000, percentage: 87, type: 'support' },
-          ]
-        : [
-            { label: '壓力區', priceMin: Number((safePrice * 1.05).toFixed(1)), priceMax: highResistance, percentage: 4, type: 'resistance' },
-            { label: '大量成交區', priceMin: Number((safePrice * 0.98).toFixed(1)), priceMax: Number((safePrice * 1.05).toFixed(1)), percentage: 17, type: 'heavy' },
-            { label: '密集成交區', priceMin: Number((safePrice * 0.94).toFixed(1)), priceMax: Number((safePrice * 0.98).toFixed(1)), percentage: 9, type: 'dense' },
-            { label: '橫平區', priceMin: Number((safePrice * 0.90).toFixed(1)), priceMax: Number((safePrice * 0.94).toFixed(1)), percentage: 9, type: 'flat' },
-            { label: '支撐區', priceMin: supportLower, priceMax: Number((safePrice * 0.90).toFixed(1)), percentage: 87, type: 'support' },
-          ],
-      bullBearFooterTag: '多多多多多',
+      buckets: [],
+      bullBearFooterTag: '中性整理',
     },
 
     riskSpider: {
@@ -181,17 +155,19 @@ export function createDefaultAiForceReport(
       bearishProb: 42,
       mainForceDirectionProb: 52,
       annualizedDriftPercent: 19.7,
-      timeNodes: [
-        { dayOffset: 0, label: '今日', upperPrice: safePrice, medianPrice: safePrice, lowerPrice: safePrice },
-        { dayOffset: 3, label: '3日後', upperPrice: Number((safePrice * 1.035).toFixed(1)), medianPrice: Number((safePrice * 1.008).toFixed(1)), lowerPrice: Number((safePrice * 0.97).toFixed(1)) },
-        { dayOffset: 5, label: '5日後', upperPrice: Number((safePrice * 1.065).toFixed(1)), medianPrice: Number((safePrice * 1.017).toFixed(1)), lowerPrice: Number((safePrice * 0.95).toFixed(1)) },
-        { dayOffset: 10, label: '10日後', upperPrice: Number((safePrice * 1.10).toFixed(1)), medianPrice: Number((safePrice * 1.026).toFixed(1)), lowerPrice: Number((safePrice * 0.925).toFixed(1)) },
-      ],
+      timeNodes: price
+        ? [
+            { dayOffset: 0, label: '今日', upperPrice: price, medianPrice: price, lowerPrice: price },
+            { dayOffset: 3, label: '3日後', upperPrice: Number((price * 1.035).toFixed(1)), medianPrice: Number((price * 1.008).toFixed(1)), lowerPrice: Number((price * 0.97).toFixed(1)) },
+            { dayOffset: 5, label: '5日後', upperPrice: Number((price * 1.065).toFixed(1)), medianPrice: Number((price * 1.017).toFixed(1)), lowerPrice: Number((price * 0.95).toFixed(1)) },
+            { dayOffset: 10, label: '10日後', upperPrice: Number((price * 1.10).toFixed(1)), medianPrice: Number((price * 1.026).toFixed(1)), lowerPrice: Number((price * 0.925).toFixed(1)) },
+          ]
+        : [],
     },
 
     vwapCostStructure: {
-      mainForceVwap: isDefault2360 ? 2131 : Number((safePrice * 0.96).toFixed(1)),
-      biasPercent: 7.5,
+      mainForceVwap: price ? Number((price * 0.96).toFixed(1)) : 0,
+      biasPercent: 0,
       bands: [
         { name: '倉儲區', biasLabel: '>5%', percentage: 38, color: '#f97316' },
         { name: '套牢區', biasLabel: '-2~-5%', percentage: 32, color: '#10b981' },
@@ -713,6 +689,11 @@ export interface GenerateReportOptions {
   statusTag?: 'NORMAL' | 'ATTENTION' | 'DISPOSITION';
   currency?: 'TWD' | 'USD';
   volumeUnit?: '張' | '股';
+  marginData?: {
+    marginBalance?: number;
+    shortBalance?: number;
+    dayTradeRate?: number;
+  };
 }
 
 /**
@@ -852,6 +833,7 @@ export function generateAiForceReportFromCandles(
     const ma10 = getSma(10);
     const ma20 = getSma(20);
     const ma60 = getSma(60);
+    const ma250 = getSma(250);
 
     // MACD 計算 (12, 26, 9)
     if (i > 0) {
@@ -908,6 +890,7 @@ export function generateAiForceReportFromCandles(
       ma10,
       ma20,
       ma60,
+      ma250,
       k: Number(currentK.toFixed(1)),
       d: Number(currentD.toFixed(1)),
       dif,
@@ -979,7 +962,7 @@ export function generateAiForceReportFromCandles(
   const forecastCone = calculateForecastCone(effectiveCandles, currentPrice);
   const vwapCostStructure = calculateVwapCostStructure(effectiveCandles, currentPrice);
   const riskSpider = calculateRiskSpider(effectiveCandles);
-  const dayTradeRisk = calculateDayTradeRisk(effectiveCandles);
+  const dayTradeRisk = calculateDayTradeRisk(effectiveCandles, options?.marginData);
 
   const defaultTemplate = createDefaultAiForceReport(symbol, name, market);
 
@@ -1090,6 +1073,7 @@ export function generateAiForceReportFromCandles(
     name,
     market,
     updatedAt: last.date,
+    isDataPending: false,
 
     marketBar: {
       currentPrice,

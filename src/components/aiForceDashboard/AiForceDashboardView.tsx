@@ -78,6 +78,9 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
     try {
       let candles: any[] = [];
       let institutionalRecords: RawInstitutionalRecord[] | undefined = undefined;
+      let marginData:
+        | { marginBalance?: number; shortBalance?: number; dayTradeRate?: number }
+        | undefined = undefined;
 
       // 1. Layer 1: 優先嘗試從本地 SQLite 數據湖倉直讀歷史日 K 與籌碼 (Spec 0159 / Ticket 02)
       try {
@@ -86,6 +89,16 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           candles = lakehouseData.candles;
           if (lakehouseData.institutionalRecords && lakehouseData.institutionalRecords.length > 0) {
             institutionalRecords = lakehouseData.institutionalRecords;
+          }
+          if (
+            lakehouseData.marginBalance !== undefined ||
+            lakehouseData.shortBalance !== undefined
+          ) {
+            marginData = {
+              marginBalance: lakehouseData.marginBalance,
+              shortBalance: lakehouseData.shortBalance,
+              dayTradeRate: lakehouseData.dayTradeRate,
+            };
           }
         }
       } catch (err) {
@@ -160,6 +173,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             statusTag: resolvedStatusTag,
             currency: targetMarket === 'US' ? 'USD' : 'TWD',
             volumeUnit: targetMarket === 'US' ? '股' : '張',
+            marginData,
           }
         );
         if (!quote && targetMarket === 'TW') {
@@ -244,7 +258,100 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             />
           </div>
 
-          {/* Row 2: 02 AI決策核心, 03 多維度判讀, 04 籌碼熱區圖, 05 風險雷達圖 (4 卡戰略定調與位階) */}
+          {/* 若處於無真實資料待命狀態 (report.isDataPending)，展示高質感毛玻璃空狀態引導面板 (Ticket 07 / Spec 0162) */}
+          {report.isDataPending ? (
+            <div
+              data-testid="ai-force-empty-state-card"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '48px 24px',
+                background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(30, 41, 59, 0.75) 100%)',
+                borderRadius: '16px',
+                border: '1px solid rgba(59, 130, 246, 0.25)',
+                backdropFilter: 'blur(12px)',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+                textAlign: 'center',
+                gap: '16px',
+                margin: '12px 0',
+              }}
+            >
+              <div style={{ fontSize: '3rem' }}>🛰️</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f8fafc' }}>
+                查無此標的真實數據（{symbol}）
+              </div>
+              <div style={{ fontSize: '0.88rem', color: '#94a3b8', maxWidth: '520px', lineHeight: 1.6 }}>
+                系統嚴格秉持 <b>Zero-Mock Policy</b>（杜絕任何捏造之假價格與假 K 棒），標的【{symbol}】目前在本地歷史數據湖倉中尚無足夠之 250 日真實日 K 或籌碼資料。您可以點擊下方按鈕嘗試在線連線回補，或切換至已收錄的核心個股。
+              </div>
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center', marginTop: '8px' }}>
+                <button
+                  type="button"
+                  data-testid="btn-online-backfill"
+                  disabled={isLoading}
+                  onClick={async () => {
+                    setIsLoading(true);
+                    try {
+                      const res = await backfillSymbolOhlcvAndIndicators(symbol, market, true);
+                      if (res && res.candles.length >= 1) {
+                        await loadDataForSymbol(symbol, market);
+                      }
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                  style={{
+                    padding: '8px 18px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(59, 130, 246, 0.5)',
+                    background: 'rgba(59, 130, 246, 0.2)',
+                    color: '#60a5fa',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.85rem',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {isLoading ? '📡 數據回補中...' : '📡 嘗試在線即時回補 250 日數據'}
+                </button>
+                <button
+                  type="button"
+                  data-testid="btn-quick-switch-0050"
+                  onClick={() => handleAnalyze('0050', 'TW')}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    color: '#cbd5e1',
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  切換至 0050
+                </button>
+                <button
+                  type="button"
+                  data-testid="btn-quick-switch-2330"
+                  onClick={() => handleAnalyze('2330', 'TW')}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    color: '#cbd5e1',
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  切換至 2330
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Row 2: 02 AI決策核心, 03 多維度判讀, 04 籌碼熱區圖, 05 風險雷達圖 (4 卡戰略定調與位階) */}
           <div
             style={{
               display: 'grid',
@@ -381,8 +488,10 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
               <MainForceVerdictCard data={report.mainForceVerdict} />
             </div>
           </div>
-        </div>
+        </>
       )}
+    </div>
+  )}
 
       {/* 任務二：技術警示報告 */}
       {activeTab === 'TASK_2_TECHNICAL_ALERTS' && <TechnicalAlertsView report={report} />}
