@@ -220,4 +220,11 @@ export class SmartKeyRotator {
 }
 
 // 匯出全域單例 (可視需要注入)
-export const globalKeyRotator = new SmartKeyRotator();
+export let globalKeyRotator = new SmartKeyRotator();
+
+/**
+ * 僅供單元測試隔離用途重置全域金鑰輪替器單例
+ */
+export function resetGlobalKeyRotatorForTest(): void {
+  globalKeyRotator = new SmartKeyRotator();
+}

@@ -89,7 +89,7 @@ export const ApiKeyPoolManager: React.FC = () => {
   const filteredKeys = keys.filter((k) => k.provider === selectedProvider);
 
   return (
-    <div className="bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-800 p-6 shadow-xl mb-8">
+    <div id="api-key-pool-section" className="bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-800 p-6 shadow-xl mb-8">
       {/* 標題與簡介 */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
