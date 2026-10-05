@@ -108,4 +108,14 @@ describe('Ticket 02 & 03: SmartKeyRotator Core Engine', () => {
     expect(result).toEqual({ data: 'success_from_k2' });
     expect(mockFetcher).toHaveBeenCalledTimes(2);
   });
+
+  it('支援 resetGlobalKeyRotatorForTest 重新初始化單例', async () => {
+    const { globalKeyRotator, resetGlobalKeyRotatorForTest } = await import('./smartKeyRotator');
+    globalKeyRotator.registerKey('finmind', 'singleton-test-key');
+    expect(globalKeyRotator.getStatistics('finmind').totalKeys).toBe(1);
+
+    resetGlobalKeyRotatorForTest();
+    const { globalKeyRotator: newRotator } = await import('./smartKeyRotator');
+    expect(newRotator.getStatistics('finmind').totalKeys).toBe(0);
+  });
 });
