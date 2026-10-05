@@ -20,6 +20,14 @@ describe('Ticket 01 (Seam 1): 市場新鮮度領域服務 marketFreshnessService
     // 2026-10-04 (週日) 20:00 台北時間 (週末，應回退至週五 2026-10-02)
     const twSunday = new Date('2026-10-04T20:00:00+08:00');
     expect(getMarketAnchorDate('TW', twSunday)).toBe('2026-10-02');
+
+    // 2026-10-05 (週一) 10:00 台北時間 (尚未 15:00 結算，應回退 3 天至上週五 2026-10-02，Spec 0165)
+    const twMondayBeforeClose = new Date('2026-10-05T10:00:00+08:00');
+    expect(getMarketAnchorDate('TW', twMondayBeforeClose)).toBe('2026-10-02');
+
+    // 2026-10-05 (週一) 15:30 台北時間 (已過 15:00 結算，應回傳當日 2026-10-05)
+    const twMondayAfterClose = new Date('2026-10-05T15:30:00+08:00');
+    expect(getMarketAnchorDate('TW', twMondayAfterClose)).toBe('2026-10-05');
   });
 
   it('2. 應正確計算美股 (US) 平日盤中、盤後與週末之錨定交易日', async () => {
@@ -37,6 +45,14 @@ describe('Ticket 01 (Seam 1): 市場新鮮度領域服務 marketFreshnessService
     // 2026-10-04 (週日) 14:00 紐約時間 (週末，應回退至週五 2026-10-02)
     const usSunday = new Date('2026-10-04T14:00:00-04:00');
     expect(getMarketAnchorDate('US', usSunday)).toBe('2026-10-02');
+
+    // 2026-10-05 (週一) 12:00 紐約時間 (尚未 17:00 結算，應回退 3 天至上週五 2026-10-02，Spec 0165)
+    const usMondayBeforeClose = new Date('2026-10-05T12:00:00-04:00');
+    expect(getMarketAnchorDate('US', usMondayBeforeClose)).toBe('2026-10-02');
+
+    // 2026-10-05 (週一) 18:00 紐約時間 (已結算，應回傳當日 2026-10-05)
+    const usMondayAfterClose = new Date('2026-10-05T18:00:00-04:00');
+    expect(getMarketAnchorDate('US', usMondayAfterClose)).toBe('2026-10-05');
   });
 
   it('3. 應能檢驗資料庫陳舊度並回傳標準結構化狀態', async () => {

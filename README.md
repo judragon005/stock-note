@@ -47,7 +47,18 @@
 - **主力戰情室 18 張卡片與分頁總表 100% 真實數據閉環**：
   - 主 K 線圖支援 MA250 年線紫色折線軌道與查價列；法人行為計量卡支援 250 日自適應單柱與全年度累積折線；信用風險卡連動真實券資比；原始量化數據總表 (RawDataView) 呈現 250 筆真實日 K 降序 25 頁跳轉分頁。
 
-### 1. 市場時區新鮮度服務解耦與中介層依戀重構 (`Market Freshness Service Decoupling`) *(V8.74.0 全新發布)*
+### 1. 市場新鮮度週一定錨修復與追趕回補冷卻防線 (`Market Freshness Monday Anchor Fix and Catchup Cooldown`) *(V8.78.0 全新發布)*
+
+- **週一定錨非交易日回退缺陷修復 (Spec 0165, ADR 0165, Issue #167)**：
+  - 修復 `market-freshness-service.cjs` 在週一盤前/盤中未達結算時間時無條件減 1 天回退至週日（非交易日）的邏輯缺陷。
+  - 明確加入週一（`day === 1`）回退 3 天至上週五的規則，確保基準日與日 K 資料庫最新交易日對齊，徹底根除永久誤判資料庫過期的問題。
+- **背景追趕回補冷卻防禦門檻 (`Catchup Cooldown Guard`)**：
+  - 於 `vite-market-middleware.cjs` 建立 `CATCHUP_COOLDOWN_MS = 10 * 60 * 1000`（10 分鐘冷卻保護）。
+  - 若兩次回補間隔未滿冷卻期，防禦性略過執行，終結終端機每隔 40 秒重複執行全市場回補的死循環。
+- **完備單元測試防禦網**：
+  - 於 `marketFreshnessService.test.ts` 與 `viteMarketMiddleware.test.ts` 補齊台美股週一邊界與 10 分鐘冷卻期判定測試，全案 1386 測試 100% 綠燈。
+
+### 2. 市場時區新鮮度服務解耦與中介層依戀重構 (`Market Freshness Service Decoupling`) *(V8.74.0)*
 
 - **消除 Feature Envy 代碼異味 (Spec 0161, ADR 0161)**：
   - 獨立抽取 `scripts/market-sync/market-freshness-service.cjs`，提供純粹領域函數 `getMarketAnchorDate(market, now)` 與 `checkMarketFreshness(db, now)`。

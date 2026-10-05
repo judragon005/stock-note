@@ -128,4 +128,47 @@ describe('Ticket 10 - Vite 原生 Connect 中介層 API (TDD Seam)', () => {
     const res = await simulateRequest(middleware, '/src/main.tsx');
     expect(res.data.error).toBe('PASSTHROUGH_NEXT');
   });
+
+  it('5. isCatchupInCooldown 應準確判定 10 分鐘冷卻門檻 (Spec 0165)', () => {
+    const {
+      CATCHUP_COOLDOWN_MS,
+      isCatchupInCooldown,
+    } = require('../../scripts/market-sync/vite-market-middleware.cjs');
+
+    expect(CATCHUP_COOLDOWN_MS).toBe(10 * 60 * 1000);
+
+    const now = 1000000;
+    // 剛執行完 (0 秒前)：應在冷卻期內
+    expect(isCatchupInCooldown(now, now)).toBe(true);
+    // 執行後 5 分鐘：應在冷卻期內
+    expect(isCatchupInCooldown(now - 5 * 60 * 1000, now)).toBe(true);
+    // 執行後 9 分鐘 59 秒：應在冷卻期內
+    expect(isCatchupInCooldown(now - (10 * 60 * 1000 - 1000), now)).toBe(true);
+    // 執行後 10 分鐘整：已過冷卻期
+    expect(isCatchupInCooldown(now - 10 * 60 * 1000, now)).toBe(false);
+    // 執行後 15 分鐘：已過冷卻期
+    expect(isCatchupInCooldown(now - 15 * 60 * 1000, now)).toBe(false);
+    // 從未執行過 (lastCatchupTime = 0)：不可視為冷卻期
+    expect(isCatchupInCooldown(0, now)).toBe(false);
+  });
+
+  it('6. triggerCatchupTask 應具備冷卻門檻防禦，冷卻期內應回傳 false 且不重複觸發 (Spec 0165)', () => {
+    const {
+      triggerCatchupTask,
+      setLastCatchupTimeForTest,
+      resetCatchupStateForTest,
+    } = require('../../scripts/market-sync/vite-market-middleware.cjs');
+
+    resetCatchupStateForTest();
+
+    // 模擬 1 分鐘前剛回補過
+    setLastCatchupTimeForTest(Date.now() - 60 * 1000);
+
+    // 在冷卻期內呼叫 triggerCatchupTask (即便 bypassTestEnv 也應被冷卻攔截)
+    const triggered = triggerCatchupTask(testDbPath, { bypassTestEnv: true });
+    expect(triggered).toBe(false);
+
+    // 重設狀態模擬未執行過
+    resetCatchupStateForTest();
+  });
 });
