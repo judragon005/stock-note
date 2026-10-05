@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1384%2F1384%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1390%2F1390%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,16 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 美股已下市標的智慧標記加速、台股集保大戶與月營收全量入庫及戰情室湖倉 API 整合 (`US Delisted Marking, TDCC & Revenue Lakehouse Pipeline`) *(V8.77.0 全新發布 / Spec #0164 / ADR #0164 / Issue #163)*
+### 0. 市場追趕渲染死循環修復、零偽造筆數與台股成交量張數對齊 (`Market Catchup Render Loop Fix, Zero Mock Transactions, and TW Volume Alignment`) *(V8.79.0 全新發布 / Spec #0166 / ADR #0166 / Issue #172)*
+
+- **React 追趕同步閉包解耦與終端機日誌節流 (`useMarketCatchupSync & Middleware Throttling`)**：
+  - 使用 `useRef` 保存回呼引用，徹底解決父組件重繪時引發的 `checkStatus` 無限循環請求；中介層冷卻期移除無條件 `console.log`，終結終端機洗版問題。
+- **台股成交量依「張 / 股」正確換算 (`TW Volume Unit Alignment: Lots vs Shares`)**：
+  - 歷史日 K 原始成交股數在台股頂部 Bar 依張數精確換算（`Math.round(volume / 1000)`），0050 於 2026-10-02 正確由 68,606,769 修正為 68,607 張；美股維持股數。
+- **徹底拔除 `volume * 2.3` 偽造代碼，貫徹 Zero Mock Policy (`Strict Zero-Mock Enforcement`)**：
+  - 徹底刪除隨意以 2.3 倍捏造假筆數的代碼。歷史 CSV 無筆數時誠實回傳 `undefined` 並於 UI 顯示 `-`；全案 1390 個測試 100% 綠燈通過。
+
+### 1. 美股已下市標的智慧標記加速、台股集保大戶與月營收全量入庫及戰情室湖倉 API 整合 (`US Delisted Marking, TDCC & Revenue Lakehouse Pipeline`) *(V8.77.0 / Spec #0164 / ADR #0164 / Issue #163)*
 
 - **美股已下市/併購標的智慧隔離與跳過輪詢 (`US Delisted Checkpoint Skipping Engine`)**：
   - 遇到 Yahoo 404 (No data found, symbol may be delisted) 自動標記為 `DELISTED`，待處理隊列自動排除 345 檔歷史下市標的，美股排程採集耗時自 452 秒降至 20 秒內，活躍上市標的實質涵蓋率達 99.79%。
