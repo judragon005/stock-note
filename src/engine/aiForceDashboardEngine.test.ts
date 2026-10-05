@@ -125,7 +125,8 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
     expect(report.marketBar.openPrice).toBe(197.0);
     expect(report.marketBar.highPrice).toBe(199.0);
     expect(report.marketBar.lowPrice).toBe(196.5);
-    expect(report.marketBar.volumeShares).toBe(15200);
+    // Spec 0166: 台股成交量由股精確換算為張 (15200 股 -> 15 張)
+    expect(report.marketBar.volumeShares).toBe(15);
   });
 
   describe('generateAiForceReportFromCandles - 真實日 K 資料管線驅動 (Ticket 34 / Stage 1)', () => {
@@ -159,7 +160,8 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
       expect(report.marketBar.openPrice).toBe(last.open);
       expect(report.marketBar.highPrice).toBe(last.high);
       expect(report.marketBar.lowPrice).toBe(last.low);
-      expect(report.marketBar.volumeShares).toBe(last.volume);
+      // Spec 0166: 台股單位為張，由股數換算為張數
+      expect(report.marketBar.volumeShares).toBe(Math.round(last.volume / 1000));
       expect(report.marketBar.change).toBe(Number((last.close - prev.close).toFixed(2)));
       expect(report.marketBar.dataPointsCount).toBe(30);
 

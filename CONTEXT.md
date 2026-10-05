@@ -85,6 +85,14 @@ _Avoid_: Yesterday, Fallback Date
 在未收盤時段，即時抓取之最新市場價格僅作為 UI 輔助參考字段，與核心日 K 量化指標進行邏輯隔離，不參與歷史模型計算。
 _Avoid_: Live Price, Current Close
 
+**Catchup Render Loop Decoupling (市場追趕渲染閉包解耦)** *(新增於 V8.79.0 / Spec 0166)*:
+在 React 自適應追趕 Hook (`useMarketCatchupSync`) 中，使用 `useRef` 保存外部傳入之完成回呼，徹底切斷 `checkStatus` 對回呼實例的閉包依賴，使 `checkStatus` 引用永恆穩定，杜絕因父組件重新渲染而反覆觸發後端 API 請求的無限渲染死循環。
+_Avoid_: Runaway Hook Loop, Inline Callback Invalidation
+
+**Taiwan Market Volume Lots Alignment (台股成交量張數精準換算)** *(新增於 V8.79.0 / Spec 0166)*:
+明確區分台股（以「張」為展示單位，1 張 = 1000 股）與美股（以「股」為展示單位）。自本機歷史日 K 資料庫提取原始成交股數後，依標的市場屬性執行換算（`Math.round(rawVolume / 1000)`），杜絕將股數直接填入 UI 導致個股成交量放大 1000 倍的嚴重錯誤。
+_Avoid_: Raw Volume Passthrough, Unit Mismatch
+
 **Tax Compliance & Threshold Alert (稅階合規與二代健保/海外所得預警)** *(新增於 V6.1.0)*:
 台股單筆現金股利達 NT$ 20,000 元時事前預警 2.11% 補充保費；美股統計當年度已實現價差與股息，提供 100 萬基本所得額申報與 750 萬最低稅負制 (AMT) 進度條。
 _Avoid_: Tax Guess, Manual Audit

@@ -208,10 +208,12 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
     loadDataForSymbol(initialSymbol, initialMarket);
   }, [initialSymbol, initialMarket]);
 
+  const handleMarketCatchupCompleted = React.useCallback(() => {
+    loadDataForSymbol(symbol, market);
+  }, [symbol, market]);
+
   useMarketCatchupSync({
-    onSyncCompleted: () => {
-      loadDataForSymbol(symbol, market);
-    },
+    onSyncCompleted: handleMarketCatchupCompleted,
   });
 
   const handleAnalyze = (newSymbol: string, newMarket: MarketType) => {
