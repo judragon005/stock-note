@@ -95,4 +95,34 @@ describe('Ticket 08: SEC EDGAR US-GAAP Tri-Statement Parser', () => {
     expect(parseSecCompanyFactsToRecords('AAPL', {})).toEqual([]);
     expect(parseSecCompanyFactsToRecords('AAPL', { facts: {} })).toEqual([]);
   });
+
+  it('3. 支援特殊 ADR / IFRS 與多樣化營收認列標籤解析', () => {
+    const mockIfrsFacts = {
+      facts: {
+        'ifrs-full': {
+          Revenue: {
+            units: {
+              USD: [{ end: '2025-06-30', val: 5000000000, fy: 2025, fp: 'Q2', form: '6-K' }],
+            },
+          },
+          GrossProfit: {
+            units: {
+              USD: [{ end: '2025-06-30', val: 2000000000, fy: 2025, fp: 'Q2', form: '6-K' }],
+            },
+          },
+          ProfitLoss: {
+            units: {
+              USD: [{ end: '2025-06-30', val: 1000000000, fy: 2025, fp: 'Q2', form: '6-K' }],
+            },
+          },
+        },
+      },
+    };
+
+    const records = parseSecCompanyFactsToRecords('TSM', mockIfrsFacts);
+    expect(records.length).toBe(1);
+    expect(records[0].income.revenue).toBe(5000000000);
+    expect(records[0].income.grossProfit).toBe(2000000000);
+    expect(records[0].income.netIncome).toBe(1000000000);
+  });
 });

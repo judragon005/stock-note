@@ -14,14 +14,61 @@ export interface KeyProbeResult {
   latencyMs: number;
 }
 
+export interface KeyProbeOptions {
+  enforceCooldown?: boolean;
+  cooldownMs?: number;
+}
+
+const DEFAULT_COOLDOWN_MS = 30000;
+const lastProbeTimestampMap = new Map<string, number>();
+
+/**
+ * 取得特定金鑰探針的剩餘冷卻秒數
+ */
+export function getProbeCooldownRemaining(
+  provider: ProviderType,
+  key: string,
+  now: number = Date.now(),
+  cooldownMs: number = DEFAULT_COOLDOWN_MS
+): number {
+  const cacheKey = `${provider}:${key}`;
+  const lastTime = lastProbeTimestampMap.get(cacheKey) || 0;
+  const elapsed = now - lastTime;
+  return elapsed < cooldownMs ? Math.ceil((cooldownMs - elapsed) / 1000) : 0;
+}
+
+/**
+ * 僅供單元測試用途重置探針冷卻快取
+ */
+export function resetProbeCooldownForTest(): void {
+  lastProbeTimestampMap.clear();
+}
+
 /**
  * 對特定金鑰進行輕量 Ping 連線檢測
  */
 export async function probeApiKey(
   provider: ProviderType,
   key: string,
-  fetcher: typeof fetch = fetch
+  fetcher: typeof fetch = fetch,
+  options?: KeyProbeOptions
 ): Promise<KeyProbeResult> {
+  const cacheKey = `${provider}:${key}`;
+  const cooldownMs = options?.cooldownMs ?? DEFAULT_COOLDOWN_MS;
+
+  if (options?.enforceCooldown) {
+    const remainingSec = getProbeCooldownRemaining(provider, key, Date.now(), cooldownMs);
+    if (remainingSec > 0) {
+      return {
+        provider,
+        status: 'COOLING_DOWN',
+        httpStatus: 429,
+        message: `測試間隔冷卻中 (剩餘 ${remainingSec} 秒)，避免過度消耗額度`,
+        latencyMs: 0,
+      };
+    }
+  }
+
   const start = Date.now();
 
   try {
@@ -50,6 +97,7 @@ export async function probeApiKey(
     }
 
     const res = await fetcher(testUrl, { headers });
+    lastProbeTimestampMap.set(cacheKey, Date.now());
     const latencyMs = Date.now() - start;
 
     if (res.status === 200) {
