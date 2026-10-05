@@ -1,0 +1,103 @@
+/**
+ * API 金鑰健康探針與連線檢測模組 (Spec 0167 / Ticket 06)
+ * API Key Health Probe Engine
+ */
+
+import { ProviderType, KeyHealthStatus } from './apiKeyPoolTypes';
+import { logger } from '../utils/logger';
+
+export interface KeyProbeResult {
+  provider: ProviderType;
+  status: KeyHealthStatus;
+  httpStatus: number;
+  message: string;
+  latencyMs: number;
+}
+
+/**
+ * 對特定金鑰進行輕量 Ping 連線檢測
+ */
+export async function probeApiKey(
+  provider: ProviderType,
+  key: string,
+  fetcher: typeof fetch = fetch
+): Promise<KeyProbeResult> {
+  const start = Date.now();
+
+  try {
+    let testUrl = '';
+    let headers: Record<string, string> = {};
+
+    switch (provider) {
+      case 'finmind':
+        testUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo&token=${encodeURIComponent(key)}`;
+        break;
+      case 'finnhub':
+        testUrl = `https://finnhub.io/api/v1/stock/profile2?symbol=AAPL&token=${encodeURIComponent(key)}`;
+        break;
+      case 'fred':
+        testUrl = `https://api.stlouisfed.org/fred/series?series_id=DGS10&api_key=${encodeURIComponent(key)}&file_type=json`;
+        break;
+      case 'polygon':
+        testUrl = `https://api.polygon.io/v1/meta/symbols/AAPL/company?apiKey=${encodeURIComponent(key)}`;
+        break;
+      case 'sec':
+        testUrl = `https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json`;
+        headers = { 'User-Agent': 'StockTracker/1.0 (local-test@stocknote.org)' };
+        break;
+      default:
+        testUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo&token=${encodeURIComponent(key)}`;
+    }
+
+    const res = await fetcher(testUrl, { headers });
+    const latencyMs = Date.now() - start;
+
+    if (res.status === 200) {
+      return {
+        provider,
+        status: 'HEALTHY',
+        httpStatus: 200,
+        message: '連線成功，金鑰健康正常',
+        latencyMs,
+      };
+    }
+
+    if (res.status === 429) {
+      return {
+        provider,
+        status: 'COOLING_DOWN',
+        httpStatus: 429,
+        message: '請求過於頻繁 (429 Too Many Requests)，金鑰冷卻中',
+        latencyMs,
+      };
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      return {
+        provider,
+        status: 'INVALID',
+        httpStatus: res.status,
+        message: `金鑰無效或未獲授權 (${res.status} Unauthorized/Forbidden)`,
+        latencyMs,
+      };
+    }
+
+    return {
+      provider,
+      status: 'HEALTHY',
+      httpStatus: res.status,
+      message: `HTTP 狀態: ${res.status}`,
+      latencyMs,
+    };
+  } catch (err: any) {
+    const latencyMs = Date.now() - start;
+    logger.warn(`[KeyHealthProbe] 探針檢測異常 (${provider}):`, err);
+    return {
+      provider,
+      status: 'INVALID',
+      httpStatus: 0,
+      message: `連線失敗: ${err.message || '網路逾時'}`,
+      latencyMs,
+    };
+  }
+}

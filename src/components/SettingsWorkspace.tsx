@@ -35,6 +35,7 @@ import { exportE2EEEncryptedBackup, decryptE2EEBackup } from '../engine/e2eeBack
 import { StockDictionaryStats } from '../types/stockDictionary';
 import { LocalStorageInspectionStats } from '../types/stock';
 import { MarketScheduleHubSection } from './MarketScheduleHubSection';
+import { ApiKeyPoolManager } from './ApiKeyPoolManager';
 import {
   Zap,
   Building2,
@@ -926,6 +927,9 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
           <span>隱私保護保證：所有 API 金鑰均儲存在您瀏覽器的本機 LocalStorage / IndexedDB 中，絕不傳送至任何中央伺服器。</span>
         </div>
       </div>
+
+      {/* 多金鑰池智慧輪替管理面板 (Ticket 05) */}
+      <ApiKeyPoolManager />
 
       {/* --- 第三區塊：🗄️ IndexedDB 資料庫狀態與時光機快照管理 --- */}
       <DatabaseAndSnapshotsSection

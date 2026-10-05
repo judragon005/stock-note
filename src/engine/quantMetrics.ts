@@ -81,6 +81,19 @@ export function calculateSharpeRatio(
 }
 
 /**
+ * 依據外部宏觀日報動態解析無風險利率 (FRED 3M 美債殖利率優先) (Ticket 15)
+ */
+export function resolveDynamicRiskFreeRate(
+  sentimentRate?: number | null,
+  fallbackRate = 1.5
+): number {
+  if (typeof sentimentRate === 'number' && Number.isFinite(sentimentRate) && sentimentRate > 0) {
+    return Number(sentimentRate.toFixed(2));
+  }
+  return fallbackRate;
+}
+
+/**
  * 計算貝塔係數 (Beta) 與 皮爾森相關係數 (Correlation)
  */
 export function calculateBetaAndCorrelation(
