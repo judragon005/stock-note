@@ -397,3 +397,74 @@ export function calculateSmoothedHoldingPnL(
     hasReceivable,
   };
 }
+
+/**
+ * 結合官方前瞻日曆與使用者實際持倉，預估未來 30 天內即將除息產生的應發股息 (Ticket 12)
+ */
+export function projectFutureDividends(
+  holdings: HoldingPosition[],
+  calendarRecords: Array<{
+    symbol: string;
+    exDate: string;
+    paymentDate?: string;
+    cashDividendPerShare?: number;
+    stockDividendRatio?: number;
+  }>
+): ReceivableDividend[] {
+  const results: ReceivableDividend[] = [];
+  const holdingMap = new Map<string, HoldingPosition>();
+  for (const h of holdings) {
+    holdingMap.set(h.symbol.toUpperCase(), h);
+  }
+
+  for (const cal of calendarRecords) {
+    const symbolUpper = cal.symbol.toUpperCase();
+    const holding = holdingMap.get(symbolUpper);
+    if (!holding || holding.shares <= 0) continue;
+
+    const cashPerShare = cal.cashDividendPerShare || 0;
+    const grossDividend = Math.round(holding.shares * cashPerShare);
+    if (grossDividend <= 0) continue;
+
+    // 台股二代健保預估
+    const isTw = holding.market === 'TW';
+    const estimatedNhi = isTw && grossDividend >= 20000 ? Math.round(grossDividend * 0.0211) : 0;
+    const netDividend = grossDividend - estimatedNhi;
+
+    results.push({
+      id: `proj_${symbolUpper}_${cal.exDate}`,
+      symbol: symbolUpper,
+      name: holding.name || symbolUpper,
+      market: holding.market,
+      currency: holding.currency,
+      exDate: cal.exDate,
+      payDate: cal.paymentDate || cal.exDate,
+      sharesHeldOnExDate: holding.shares,
+      cashDividendPerShare: cashPerShare,
+      estimatedGrossDividend: grossDividend,
+      stockDividendShares: cal.stockDividendRatio ? Math.round(holding.shares * cal.stockDividendRatio) : undefined,
+      estimatedTaxOrFee: estimatedNhi,
+      estimatedNhiTax: estimatedNhi > 0 ? estimatedNhi : undefined,
+      estimatedNetDividend: netDividend,
+      estimatedNetDividendInTWD: netDividend,
+      status: 'UPCOMING_EX',
+    });
+  }
+
+  return results;
+}
+
+/**
+ * 計算除權除息參考基準價
+ * 公式：(前日收盤價 - 每股現金股利) / (1 + 每股配股率)
+ */
+export function computeExDividendReferencePrice(
+  lastClose: number,
+  cashDividend: number = 0,
+  stockDividendRatio: number = 0
+): number {
+  if (lastClose <= 0) return 0;
+  const denominator = 1 + (stockDividendRatio > 0 ? stockDividendRatio : 0);
+  const adjusted = (lastClose - cashDividend) / denominator;
+  return Math.max(0, adjusted);
+}

@@ -190,3 +190,47 @@ export function detectForensicAnomalies(
 
   return anomalies;
 }
+
+export interface DirectorPledgeRiskResult {
+  severity: 'WARNING' | 'DANGEROUS';
+  title: string;
+  summary: string;
+  penaltyPoints: number;
+}
+
+/**
+ * 評估董監事持股質押斷頭風險與內部人大量減持轉讓 (Ticket 14)
+ */
+export function evaluateDirectorPledgeRisk(
+  pledgeRatio: number,
+  insiderTransferShares: number = 0
+): DirectorPledgeRiskResult | null {
+  if (pledgeRatio >= 50) {
+    return {
+      severity: 'DANGEROUS',
+      title: '董監事持股高比例質押斷頭風險 (質押率 >= 50%)',
+      summary: `公司董監事持股質押比例高達 ${pledgeRatio.toFixed(1)}% (門檻值 >= 50%)。一旦大盤回檔或個股股價下跌觸及維持率，極易引發銀行無情斷頭拋售，造成連續無量跌停之系統性流動性崩潰。`,
+      penaltyPoints: 30,
+    };
+  }
+
+  if (pledgeRatio >= 30) {
+    return {
+      severity: 'WARNING',
+      title: '董監事持股質押比率偏高警戒 (質押率 30%~50%)',
+      summary: `董監事持股質押比例達 ${pledgeRatio.toFixed(1)}% (介於 30% 至 50%)，顯示經營階層資金鏈偏緊，對股價下行壓力容忍度低。`,
+      penaltyPoints: 15,
+    };
+  }
+
+  if (insiderTransferShares >= 500) {
+    return {
+      severity: 'WARNING',
+      title: '內部人大量申報轉讓持股警示 (>= 500 張)',
+      summary: `當月董監高管或大股東申報轉讓高達 ${insiderTransferShares} 張持股，可能預告內部人對公司中短期營運或估值持保留態度，具籌碼鬆動隱憂。`,
+      penaltyPoints: 10,
+    };
+  }
+
+  return null;
+}

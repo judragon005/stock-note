@@ -85,4 +85,41 @@ describe('US Financial Ingestion Pipeline (TDD Seam)', () => {
     expect(result).toEqual(mockCached);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it('3. fetchUSQuarterlyFinancials 在未傳入 apiKey 時應優先請求 SEC EDGAR 官方端點', async () => {
+    vi.spyOn(db, 'getStoredFinancialRecords').mockResolvedValue([]);
+    const saveSpy = vi.spyOn(db, 'saveFinancialRecords').mockResolvedValue();
+
+    const mockSecJson = {
+      cik: 320193,
+      entityName: 'Apple Inc.',
+      facts: {
+        'us-gaap': {
+          Revenues: {
+            units: { USD: [{ end: '2025-03-31', val: 90000000000, fy: 2025, fp: 'Q2', form: '10-Q' }] },
+          },
+          GrossProfit: {
+            units: { USD: [{ end: '2025-03-31', val: 40000000000, fy: 2025, fp: 'Q2', form: '10-Q' }] },
+          },
+        },
+      },
+    };
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+      if (String(url).includes('sec.gov')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => mockSecJson,
+        } as any;
+      }
+      return { ok: false, status: 404 } as any;
+    });
+
+    const records = await fetchUSQuarterlyFinancials('AAPL');
+    expect(records.length).toBeGreaterThan(0);
+    expect(records[0].symbol).toBe('AAPL');
+    expect(records[0].income.revenue).toBe(90000000000);
+    expect(saveSpy).toHaveBeenCalled();
+  });
 });

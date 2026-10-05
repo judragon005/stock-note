@@ -175,6 +175,49 @@ function initSqliteLakehouseDb(customPath) {
       PRIMARY KEY (symbol, year_month)
     );
     CREATE INDEX IF NOT EXISTS idx_revenue_symbol ON tw_monthly_revenue(symbol, year_month DESC);
+
+    -- 7. 公司除權除息與重大行動預告表 (Spec 0167 / Ticket 10)
+    CREATE TABLE IF NOT EXISTS corporate_action_calendar (
+      symbol TEXT NOT NULL,
+      market TEXT NOT NULL,              -- 'TW' | 'US'
+      action_type TEXT NOT NULL,         -- 'DIVIDEND' | 'SPLIT' | 'CAPITAL_REDUCTION' | 'EARNINGS'
+      ex_date TEXT NOT NULL,             -- 除權息日 (YYYY-MM-DD)
+      payment_date TEXT,                 -- 現金股利發放日 (YYYY-MM-DD)
+      cash_dividend_per_share REAL,      -- 每股現金股利
+      stock_dividend_ratio REAL,         -- 每股配股比例
+      split_ratio REAL,                  -- 股票分割比例
+      reference_price REAL,              -- 除權息參考價
+      announcement_date TEXT,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (symbol, action_type, ex_date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ca_symbol ON corporate_action_calendar(symbol, ex_date);
+    CREATE INDEX IF NOT EXISTS idx_ca_ex_date ON corporate_action_calendar(ex_date);
+
+    -- 8. 台股董監事持股質押與申報轉讓明細表 (Spec 0167 / Ticket 13)
+    CREATE TABLE IF NOT EXISTS tw_insider_pledge_records (
+      symbol TEXT NOT NULL,
+      report_date TEXT NOT NULL,         -- 申報年月 (YYYY-MM)
+      pledged_shares INTEGER,            -- 質押股數
+      total_director_shares INTEGER,     -- 董監總持股數
+      pledge_ratio REAL,                 -- 質押比例 (%)
+      insider_transfer_shares INTEGER,   -- 當月申報轉讓股數
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (symbol, report_date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_pledge_symbol ON tw_insider_pledge_records(symbol, report_date DESC);
+
+    -- 9. 宏觀指標與市場情緒日序表 (Spec 0167 / Ticket 15)
+    CREATE TABLE IF NOT EXISTS macro_sentiment_daily (
+      date TEXT PRIMARY KEY,             -- YYYY-MM-DD
+      risk_free_rate_3m REAL,            -- 3 個月美債殖利率 (FRED DGS3MO)
+      treasury_yield_10y REAL,           -- 10 年美債殖利率 (FRED DGS10)
+      yield_spread_10y_2y REAL,          -- 10Y-2Y 利差
+      cnn_fear_greed_score REAL,         -- 恐懼貪婪分數 (0-100)
+      vix_close REAL,                    -- VIX 收盤價
+      tw_put_call_ratio REAL,            -- 台指期 P/C Ratio
+      updated_at INTEGER NOT NULL
+    );
   `);
 
   return db;

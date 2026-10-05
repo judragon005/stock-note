@@ -9,6 +9,8 @@ import type {
 import { getStoredFinancialRecords, saveFinancialRecords } from '../utils/db';
 import { isFinancialRecordsCacheValid } from './financialCacheValidator';
 import { logger } from '../utils/logger';
+import { fetchSecCompanyFacts } from './secEdgarTransport';
+import { parseSecCompanyFactsToRecords } from './secEdgarParser';
 
 /**
  * 輔助函式：從結算日期推算年度與季度 (e.g., '2025-03-31' -> { year: 2025, quarter: 1 })
@@ -162,7 +164,24 @@ export async function fetchUSQuarterlyFinancials(
     }
   }
 
-  // 2. 外部 API 請求
+  // 2. 優先嘗試 SEC EDGAR 官方端點 (100% 免費、免 API Key)
+  try {
+    const secFacts = await fetchSecCompanyFacts(cleanSymbol);
+    const secParsed = parseSecCompanyFactsToRecords(cleanSymbol, secFacts);
+    if (secParsed.length > 0) {
+      try {
+        await saveFinancialRecords(secParsed);
+      } catch {
+        // 快取容錯
+      }
+      return secParsed;
+    }
+  } catch (secErr) {
+    // SEC 失敗 (如找不到 CIK 或網路異常)，平滑降級至次選
+    logger.info(`[US Financial] SEC EDGAR 端點無資料或失敗 (${cleanSymbol})，準備切換備援來源:`, secErr);
+  }
+
+  // 3. 次選：若提供 FMP API Key，嘗試 FMP 端點
   if (!apiKey) {
     return [];
   }

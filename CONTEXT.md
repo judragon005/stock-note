@@ -132,6 +132,27 @@ _Avoid_: Ad-hoc Capital Division, Hardcoded Shares
 _Avoid_: Copy-Pasted Sorter, Inconsistent Market Weight
 
 
+### 外部資料網格與 API 金鑰池 (External Data Mesh & API Key Pool) *(新增於 V8.80.0 / Spec 0167)*
+
+**Smart Key Rotator with Exponential Backoff (智能輪替指數退避調度器)**:
+在客戶端維護各金融資料來源（如 FinMind、FMP、FRED 等）的 API Key 池，採用 Round-Robin 負載均衡。當遭遇 HTTP 429 速率限制時，自動進入指數退避冷卻（5s ~ 60s）並切換至下一個有效 Key；若遇 401/403 授權無效則永久拉黑並通知使用者；跨日自動重置配額。
+_Avoid_: Static Single Key, Hardcoded Token
+
+**SEC EDGAR Official Direct Pipeline (SEC EDGAR 官方美股財報管線)**:
+遵循美國證券交易委員會 (SEC) 合規存取標準（嚴格限速 10 req/s 與合規 User-Agent），透過 CIK 映射直連 SEC Company Facts API 獲取美股官方 10-K / 10-Q GAAP 財報，並與 FMP 免費 Key 池形成雙軌自動降級備援。
+_Avoid_: Paid US Fundamental API, Unregulated Scraper
+
+**Corporate Action Calendar & Ex-Dividend Reference (前瞻除權息與平盤參考價推算)**:
+自 TWSE / TPEX OpenAPI 即時同步除權除息預告日程至本地 Lakehouse。針對持倉部位精準前瞻推算未來現金股利入帳額，並依主管機關規範精確計算除息/除權/現金增資除權後的平盤開盤參考價。
+_Avoid_: Historical-Only Dividend, Ad-hoc Reference Calculation
+
+**Director & Supervisor Pledge Forensic Radar (董監事質押比例法證防雷)**:
+每日入庫全市場董監事持股質押比例統計。當個股董監質押率超過 50% 之高危門檻時，法證雷達即時亮起紅燈預警並強烈扣除法證健康分（-30 分），警示潛在董監斷頭賣壓與財務危機。
+_Avoid_: Ignored Pledge Ratio, Manual Insider Check
+
+**Dynamic Macro Sentiment & Risk-Free Rate (動態總經情緒與無風險利率管線)**:
+自 FRED 官方開放 API 抓取 10 年期美國公債殖利率 (DGS10) 與 CNN 恐慌與貪婪指數，注入量化指標引擎動態計算夏普比率 (Sharpe Ratio)，取代固定死板之利率常數。
+_Avoid_: Hardcoded Risk Free Rate, Fixed 2% Assumption
 ### 視覺化與主題 (Visualization & Theme)  *(新增於 V1.1)*
 
 **Treemap (資產樹狀圖)**:
