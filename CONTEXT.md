@@ -2228,5 +2228,16 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 核心模組：`scripts/market-sync/vite-market-middleware.cjs` (`/api/market/history/:symbol`)、`src/engine/marketCacheLoader.ts` (`loadSymbolFullLakehouseData`)。
   - 單一端點一次性提供「日 K + 三大法人與資券 + 最近 10 週 TDCC 集保 + 最近 12 個月營收」，前端支援秒讀全光譜量化決策維度。
 
+### 市場新鮮度週一定錨修復與追趕回補冷卻防線 *(新增於 V8.78.0 / Spec #0165 / ADR #0165 / Issue #167)*
+
+- **Monday Market Anchor Fix (週一定錨交易日回退缺陷修復)**:
+  - 核心模組：`scripts/market-sync/market-freshness-service.cjs` (`getMarketAnchorDate`)。
+  - 修復週一盤前與盤中（未滿 15:00 / 17:00 結算）無條件減 1 天回退至週日（非交易日）之缺陷；修正為若當日為週一（`day === 1`）則回退 3 天至上週五，確保交易日基準與資料庫真實日 K 對齊，終結永久判定資料庫過期之誤判。
+
+- **Catchup Cooldown Guard (背景追趕回補冷卻防禦門檻)**:
+  - 核心模組：`scripts/market-sync/vite-market-middleware.cjs` (`triggerCatchupTask`, `isCatchupInCooldown`)。
+  - 引入 10 分鐘（`CATCHUP_COOLDOWN_MS = 600000`）最低執行間隔防線。若兩次觸發未滿冷卻時間，自動防禦性略過回補任務，徹底終結前端組件反覆打查引發之無窮背景回補死循環。
+
+
 
 

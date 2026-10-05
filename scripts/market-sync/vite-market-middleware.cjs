@@ -9,19 +9,37 @@ const { getSqliteDbConnection, initSqliteLakehouseDb, isSqliteSupported } = requ
 const { searchSymbolsMeta } = require('./seed-symbols-universe.cjs');
 const { getMarketAnchorDate, checkMarketFreshness } = require('./market-freshness-service.cjs');
 
+const CATCHUP_COOLDOWN_MS = 10 * 60 * 1000; // 10 分鐘冷卻保護防線 (Spec 0165)
 let isCatchingUp = false;
 let lastCatchupTime = 0;
 
 /**
- * 啟動非同步追趕任務
+ * 判定是否仍在回補冷卻時間內
  */
-function triggerCatchupTask(customDbPath) {
-  if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
-    return;
+function isCatchupInCooldown(lastTime, now = Date.now(), cooldownMs = CATCHUP_COOLDOWN_MS) {
+  if (!lastTime || lastTime <= 0) return false;
+  return now - lastTime < cooldownMs;
+}
+
+/**
+ * 啟動非同步追趕任務 (具備冷卻門檻防禦)
+ */
+function triggerCatchupTask(customDbPath, options = {}) {
+  const { bypassTestEnv = false, force = false } = options;
+  if (!bypassTestEnv && (process.env.NODE_ENV === 'test' || process.env.VITEST)) {
+    return false;
   }
-  if (isCatchingUp) return;
+  if (isCatchingUp) return false;
+
+  const now = Date.now();
+  if (!force && isCatchupInCooldown(lastCatchupTime, now)) {
+    const elapsedSec = Math.round((now - lastCatchupTime) / 1000);
+    console.log(`[MarketCatchup] 距離上次同步未滿 10 分鐘冷卻時間 (${elapsedSec}s / 600s)，防禦性略過回補。`);
+    return false;
+  }
+
   isCatchingUp = true;
-  lastCatchupTime = Date.now();
+  lastCatchupTime = now;
 
   setImmediate(async () => {
     try {
@@ -35,6 +53,16 @@ function triggerCatchupTask(customDbPath) {
       isCatchingUp = false;
     }
   });
+  return true;
+}
+
+function resetCatchupStateForTest() {
+  isCatchingUp = false;
+  lastCatchupTime = 0;
+}
+
+function setLastCatchupTimeForTest(time) {
+  lastCatchupTime = time;
 }
 
 /**
@@ -198,4 +226,9 @@ function createMarketApiMiddleware(customDbPath) {
 
 module.exports = {
   createMarketApiMiddleware,
+  CATCHUP_COOLDOWN_MS,
+  isCatchupInCooldown,
+  triggerCatchupTask,
+  resetCatchupStateForTest,
+  setLastCatchupTimeForTest,
 };

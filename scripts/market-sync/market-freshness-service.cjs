@@ -37,7 +37,8 @@ function getMarketAnchorDate(market = 'TW', now = new Date()) {
     const target = new Date(local);
     if (day === 0) target.setDate(target.getDate() - 2); // 週日退至週五
     else if (day === 6) target.setDate(target.getDate() - 1); // 週六退至週五
-    else target.setDate(target.getDate() - 1); // 平日盤前退至前一交易日
+    else if (day === 1) target.setDate(target.getDate() - 3); // 週一盤前/盤中退至上週五 (Spec 0165)
+    else target.setDate(target.getDate() - 1); // 其餘平日退至前一交易日
     return formatDate(target);
   } else {
     // 美股 17:00 盤後定錨結算
@@ -47,6 +48,7 @@ function getMarketAnchorDate(market = 'TW', now = new Date()) {
     const target = new Date(local);
     if (day === 0) target.setDate(target.getDate() - 2);
     else if (day === 6) target.setDate(target.getDate() - 1);
+    else if (day === 1) target.setDate(target.getDate() - 3); // 週一盤前/盤中退至上週五 (Spec 0165)
     else target.setDate(target.getDate() - 1);
     return formatDate(target);
   }
