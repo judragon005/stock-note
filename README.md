@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1390%2F1390%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1428%2F1428%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,20 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 市場追趕渲染死循環修復、零偽造筆數與台股成交量張數對齊 (`Market Catchup Render Loop Fix, Zero Mock Transactions, and TW Volume Alignment`) *(V8.79.0 全新發布 / Spec #0166 / ADR #0166 / Issue #172)*
+### 0. 多來源免費金融資料網格、API Key 池負載均衡與關鍵外部資料補強 (`Multi-Source Free API Key Pool, SEC Direct & External Data Mesh`) *(V8.80.0 全新發布 / Spec #0167 / ADR #0167 / Issue #174, #176, #178)*
+
+- **智能金鑰輪替與 429 退避冷卻 (`SmartKeyRotator & Key Pool Engine`)**：
+  - 支援 Round-Robin 負載均衡調度、429 指數退避（5s ~ 60s）、401/403 永久拉黑、跨日自動重置配額與本地加密持久化；連線測試具備 30 秒冷卻防連點保護與 UI 倒數展示，保護 API 日額度。
+- **SEC EDGAR 官方美股財報直接管線 (`SEC EDGAR Direct Pipeline & GAAP/IFRS Parser`)**：
+  - 遵循 SEC 10 req/s 與合規 User-Agent 限制，直連美國 SEC 官方財報，全面支援 US-GAAP 與 IFRS-full (ADR) 之 16 大標準財務科目；實施 SEC 官方直連第一優先、FMP 免費池自動降級備援策略。
+- **台股除權除息預告與平盤參考價推算 (`Corporate Action Calendar & Ex-Dividend Reference Engine`)**：
+  - 對接 TWSE / TPEX OpenAPI 即時預告日程；針對持股部位前瞻推算未來應收股利現金流，並精準推算除權除息平盤開盤參考價。
+- **董監事質押法證雷達防雷 (`Director Pledge Forensic Radar`)**：
+  - 入庫全市場董監事持股質押比例統計；個股質押率超過 50% 即刻觸發紅燈高危預警並扣除法證健康分（-30 分），警示斷頭賣壓。
+- **FRED 總經指標與動態真實無風險利率 (`Macro Sentiment & Dynamic Rf Engine`)**：
+  - 自 FRED 官方免費 API 抓取 10 年期美國公債殖利率 (DGS10) 與 CNN 恐慌指數，注入量化引擎動態計算夏普比率，徹底消除死板常數假設。
+
+### 1. 市場追趕渲染死循環修復、零偽造筆數與台股成交量張數對齊 (`Market Catchup Render Loop Fix, Zero Mock Transactions, and TW Volume Alignment`) *(V8.79.0 / Spec #0166 / ADR #0166 / Issue #172)*
 
 - **React 追趕同步閉包解耦與終端機日誌節流 (`useMarketCatchupSync & Middleware Throttling`)**：
   - 使用 `useRef` 保存回呼引用，徹底解決父組件重繪時引發的 `checkStatus` 無限循環請求；中介層冷卻期移除無條件 `console.log`，終結終端機洗版問題。
