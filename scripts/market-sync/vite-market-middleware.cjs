@@ -9,7 +9,8 @@ const { getSqliteDbConnection, initSqliteLakehouseDb, isSqliteSupported } = requ
 const { searchSymbolsMeta } = require('./seed-symbols-universe.cjs');
 const { getMarketAnchorDate, checkMarketFreshness } = require('./market-freshness-service.cjs');
 
-const CATCHUP_COOLDOWN_MS = 10 * 60 * 1000; // 10 分鐘冷卻保護防線 (Spec 0165)
+const DEFAULT_CATCHUP_COOLDOWN_MS = 10 * 60 * 1000; // 預設 10 分鐘冷卻保護防線 (Spec 0165)
+const CATCHUP_COOLDOWN_MS = Number(process.env.MARKET_CATCHUP_COOLDOWN_MS) || DEFAULT_CATCHUP_COOLDOWN_MS;
 let isCatchingUp = false;
 let lastCatchupTime = 0;
 
@@ -34,7 +35,9 @@ function triggerCatchupTask(customDbPath, options = {}) {
   const now = Date.now();
   if (!force && isCatchupInCooldown(lastCatchupTime, now)) {
     const elapsedSec = Math.round((now - lastCatchupTime) / 1000);
-    console.log(`[MarketCatchup] 距離上次同步未滿 10 分鐘冷卻時間 (${elapsedSec}s / 600s)，防禦性略過回補。`);
+    const cooldownSec = Math.round(CATCHUP_COOLDOWN_MS / 1000);
+    const remainingSec = Math.max(0, cooldownSec - elapsedSec);
+    console.log(`[MarketCatchup] 距離上次同步未滿冷卻時間 (${elapsedSec}s / ${cooldownSec}s，尚餘 ${remainingSec} 秒)，防禦性略過回補。`);
     return false;
   }
 
@@ -226,6 +229,7 @@ function createMarketApiMiddleware(customDbPath) {
 
 module.exports = {
   createMarketApiMiddleware,
+  DEFAULT_CATCHUP_COOLDOWN_MS,
   CATCHUP_COOLDOWN_MS,
   isCatchupInCooldown,
   triggerCatchupTask,
