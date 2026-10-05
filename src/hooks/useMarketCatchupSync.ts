@@ -14,6 +14,13 @@ export interface UseMarketCatchupSyncOptions {
 }
 
 /**
+ * 判定追趕完成狀態切換純邏輯 (Spec 0166)
+ */
+export function shouldNotifySyncCompleted(prevIsCatchingUp: boolean, currentIsCatchingUp: boolean): boolean {
+  return prevIsCatchingUp && !currentIsCatchingUp;
+}
+
+/**
  * 監聽系統在線與分頁甦醒 (Visibility & Online) 之自適應追趕同步 Hook (Spec 0160)
  */
 export function useMarketCatchupSync(options: UseMarketCatchupSyncOptions = {}) {
@@ -21,6 +28,9 @@ export function useMarketCatchupSync(options: UseMarketCatchupSyncOptions = {}) 
   const [syncStatus, setSyncStatus] = useState<MarketSyncStatusResponse | null>(null);
   const [isCatchingUp, setIsCatchingUp] = useState(false);
   const prevCatchingUpRef = useRef(false);
+
+  const onSyncCompletedRef = useRef(onSyncCompleted);
+  onSyncCompletedRef.current = onSyncCompleted;
 
   const checkStatus = useCallback(async (triggerCatchup = true) => {
     try {
@@ -32,9 +42,9 @@ export function useMarketCatchupSync(options: UseMarketCatchupSyncOptions = {}) 
         setIsCatchingUp(data.isCatchingUp);
 
         // 若前次正在追趕，本次完成，通知回呼重新載入日 K
-        if (prevCatchingUpRef.current && !data.isCatchingUp) {
-          if (onSyncCompleted) {
-            onSyncCompleted();
+        if (shouldNotifySyncCompleted(prevCatchingUpRef.current, data.isCatchingUp)) {
+          if (onSyncCompletedRef.current) {
+            onSyncCompletedRef.current();
           }
         }
         prevCatchingUpRef.current = data.isCatchingUp;
@@ -42,7 +52,7 @@ export function useMarketCatchupSync(options: UseMarketCatchupSyncOptions = {}) 
     } catch {
       // 離線或網路失敗時靜默降級
     }
-  }, [onSyncCompleted]);
+  }, []);
 
   useEffect(() => {
     if (!enabled) return;
@@ -51,7 +61,7 @@ export function useMarketCatchupSync(options: UseMarketCatchupSyncOptions = {}) 
     checkStatus(true);
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         checkStatus(true);
       }
     };
@@ -60,12 +70,20 @@ export function useMarketCatchupSync(options: UseMarketCatchupSyncOptions = {}) 
       checkStatus(true);
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('online', handleOnline);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', handleOnline);
+    }
 
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('online', handleOnline);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', handleOnline);
+      }
     };
   }, [enabled, checkStatus]);
 

@@ -719,6 +719,7 @@ export function generateAiForceReportFromCandles(
     high?: number;
     low?: number;
     volume?: number;
+    transactions?: number;
   },
   institutionalRecords?: RawInstitutionalRecord[],
   referenceDate: Date = new Date(),
@@ -770,13 +771,18 @@ export function generateAiForceReportFromCandles(
       if (realtimeQuote.open !== undefined) fallback.marketBar.openPrice = realtimeQuote.open;
       if (realtimeQuote.high !== undefined) fallback.marketBar.highPrice = realtimeQuote.high;
       if (realtimeQuote.low !== undefined) fallback.marketBar.lowPrice = realtimeQuote.low;
-      if (realtimeQuote.volume !== undefined) fallback.marketBar.volumeShares = realtimeQuote.volume;
+      if (realtimeQuote.volume !== undefined) {
+        fallback.marketBar.volumeShares = market === 'TW' ? Math.round(realtimeQuote.volume / 1000) : realtimeQuote.volume;
+      }
+      if (realtimeQuote.transactions !== undefined) {
+        fallback.marketBar.transactionCount = realtimeQuote.transactions;
+      }
     } else if (lastValidCandle) {
       fallback.marketBar.currentPrice = lastValidCandle.close;
       fallback.marketBar.openPrice = lastValidCandle.open;
       fallback.marketBar.highPrice = lastValidCandle.high;
       fallback.marketBar.lowPrice = lastValidCandle.low;
-      fallback.marketBar.volumeShares = lastValidCandle.volume;
+      fallback.marketBar.volumeShares = market === 'TW' ? Math.round(lastValidCandle.volume / 1000) : lastValidCandle.volume;
       fallback.marketBar.latestTradingDate = lastValidCandle.date;
       fallback.marketBar.anchorTradingDate = lastValidCandle.date;
       fallback.marketBar.dataPointsCount = effectiveCandles.length;
@@ -1079,14 +1085,14 @@ export function generateAiForceReportFromCandles(
       currentPrice,
       change,
       changePercent,
-      volumeShares: !settlement.isSettled
-        ? last.volume
-        : (realtimeQuote?.volume ?? (realtimeQuote?.price && last.date !== settlement.anchorTradingDate ? undefined : last.volume)),
-      transactionCount: Math.round(
-        (!settlement.isSettled
+      volumeShares: (() => {
+        const rawVol = !settlement.isSettled
           ? last.volume
-          : (realtimeQuote?.volume ?? (realtimeQuote?.price && last.date !== settlement.anchorTradingDate ? 0 : last.volume))) * 2.3
-      ),
+          : (realtimeQuote?.volume ?? (realtimeQuote?.price && last.date !== settlement.anchorTradingDate ? undefined : last.volume));
+        if (rawVol === undefined) return undefined;
+        return market === 'TW' ? Math.round(rawVol / 1000) : rawVol;
+      })(),
+      transactionCount: realtimeQuote?.transactions,
       openPrice: !settlement.isSettled
         ? last.open
         : (realtimeQuote?.open ?? (realtimeQuote?.price && last.date !== settlement.anchorTradingDate ? undefined : last.open)),

@@ -34,10 +34,12 @@ function triggerCatchupTask(customDbPath, options = {}) {
 
   const now = Date.now();
   if (!force && isCatchupInCooldown(lastCatchupTime, now)) {
-    const elapsedSec = Math.round((now - lastCatchupTime) / 1000);
-    const cooldownSec = Math.round(CATCHUP_COOLDOWN_MS / 1000);
-    const remainingSec = Math.max(0, cooldownSec - elapsedSec);
-    console.log(`[MarketCatchup] 距離上次同步未滿冷卻時間 (${elapsedSec}s / ${cooldownSec}s，尚餘 ${remainingSec} 秒)，防禦性略過回補。`);
+    if (process.env.DEBUG_MARKET_CATCHUP === 'true') {
+      const elapsedSec = Math.round((now - lastCatchupTime) / 1000);
+      const cooldownSec = Math.round(CATCHUP_COOLDOWN_MS / 1000);
+      const remainingSec = Math.max(0, cooldownSec - elapsedSec);
+      console.log(`[MarketCatchup] 距離上次同步未滿冷卻時間 (${elapsedSec}s / ${cooldownSec}s，尚餘 ${remainingSec} 秒)，防禦性略過回補。`);
+    }
     return false;
   }
 
