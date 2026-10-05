@@ -14,17 +14,21 @@ interface SecFactUnitItem {
 }
 
 export function parseSecCompanyFactsToRecords(symbol: string, rawJson: any): QuarterlyFinancialRecord[] {
-  if (!rawJson || !rawJson.facts || !rawJson.facts['us-gaap']) {
+  if (!rawJson || !rawJson.facts) {
     return [];
   }
 
-  const usGaap = rawJson.facts['us-gaap'];
+  // 優先支援 US-GAAP，若無則降級備援 IFRS-full (常見於 ADR 與外國發行人申報)
+  const factsStore = rawJson.facts['us-gaap'] || rawJson.facts['ifrs-full'];
+  if (!factsStore) {
+    return [];
+  }
 
   // 輔助函式：提取特定概念在特定季度單位下的數值映射 (key: "YYYY-Q", value: number)
   const extractConceptMap = (conceptNames: string[]): Map<string, { val: number; end: string; year: number; quarter: number }> => {
     const map = new Map<string, { val: number; end: string; year: number; quarter: number }>();
     for (const name of conceptNames) {
-      const concept = usGaap[name];
+      const concept = factsStore[name];
       if (!concept || !concept.units) continue;
       // 取 USD 或 USD/shares
       const unitArray: SecFactUnitItem[] = concept.units.USD || concept.units['USD/shares'] || [];
@@ -46,17 +50,26 @@ export function parseSecCompanyFactsToRecords(symbol: string, rawJson: any): Qua
     return map;
   };
 
-  const revenueMap = extractConceptMap(['Revenues', 'SalesRevenueNet', 'RevenueFromContractWithCustomerExcludingAssessedTax']);
-  const grossProfitMap = extractConceptMap(['GrossProfit']);
-  const opIncomeMap = extractConceptMap(['OperatingIncomeLoss']);
-  const netIncomeMap = extractConceptMap(['NetIncomeLoss', 'ProfitLoss']);
+  const revenueMap = extractConceptMap([
+    'Revenues',
+    'SalesRevenueNet',
+    'RevenueFromContractWithCustomerExcludingAssessedTax',
+    'RevenueFromContractWithCustomerIncludingAssessedTax',
+    'OperatingRevenue',
+    'Revenue',
+    'SalesRevenueGoodsNet',
+    'InterestAndDividendIncomeOperating',
+  ]);
+  const grossProfitMap = extractConceptMap(['GrossProfit', 'GrossProfitLoss']);
+  const opIncomeMap = extractConceptMap(['OperatingIncomeLoss', 'OperatingProfitLoss']);
+  const netIncomeMap = extractConceptMap(['NetIncomeLoss', 'ProfitLoss', 'NetIncomeLossAvailableToCommonStockholdersBasic']);
   const assetsMap = extractConceptMap(['Assets']);
-  const liabilitiesMap = extractConceptMap(['Liabilities']);
-  const arMap = extractConceptMap(['AccountsReceivableNetCurrent', 'ReceivablesNetCurrent']);
-  const invMap = extractConceptMap(['InventoryNet']);
-  const cashMap = extractConceptMap(['CashAndCashEquivalentsAtCarryingValue']);
-  const epsMap = extractConceptMap(['EarningsPerShareDiluted', 'EarningsPerShareBasic']);
-  const cfoMap = extractConceptMap(['NetCashProvidedByUsedInOperatingActivities']);
+  const liabilitiesMap = extractConceptMap(['Liabilities', 'LiabilitiesCurrentAndNoncurrent']);
+  const arMap = extractConceptMap(['AccountsReceivableNetCurrent', 'ReceivablesNetCurrent', 'AccountsAndOtherReceivablesNetCurrent']);
+  const invMap = extractConceptMap(['InventoryNet', 'InventoryGross']);
+  const cashMap = extractConceptMap(['CashAndCashEquivalentsAtCarryingValue', 'CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents']);
+  const epsMap = extractConceptMap(['EarningsPerShareDiluted', 'EarningsPerShareBasic', 'DilutedEarningsLossPerShare', 'BasicEarningsLossPerShare']);
+  const cfoMap = extractConceptMap(['NetCashProvidedByUsedInOperatingActivities', 'CashFlowsFromUsedInOperatingActivities']);
   const capexMap = extractConceptMap(['PaymentsToAcquirePropertyPlantAndEquipment', 'PaymentsToAcquireProductiveAssets']);
 
   // 收集所有出現過的季度鍵

@@ -11,7 +11,7 @@ import {
   saveEncryptedKeyPool,
   maskApiKey,
 } from '../engine/apiKeyStorage';
-import { probeApiKey } from '../engine/apiKeyHealthProbe';
+import { probeApiKey, getProbeCooldownRemaining } from '../engine/apiKeyHealthProbe';
 import { KeyRound, Plus, Trash2, RefreshCw, CheckCircle2 } from 'lucide-react';
 
 const PROVIDER_NAMES: Record<ProviderType, { label: string; desc: string; defaultQuota: number }> = {
@@ -32,12 +32,34 @@ export const ApiKeyPoolManager: React.FC = () => {
   const [isProbing, setIsProbing] = useState<Record<string, boolean>>({});
   const [probeResults, setProbeResults] = useState<Record<string, { status: KeyHealthStatus; message: string }>>({});
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [cooldownSecs, setCooldownSecs] = useState<Record<string, number>>({});
 
   useEffect(() => {
     loadEncryptedKeyPool().then((loaded) => {
       setKeys(loaded);
     });
   }, []);
+
+  // 每秒更新各金鑰探針冷卻倒數
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = Date.now();
+      const updatedCooldowns: Record<string, number> = {};
+      let hasActiveCooldown = false;
+
+      for (const k of keys) {
+        const remaining = getProbeCooldownRemaining(k.provider, k.key, now);
+        if (remaining > 0) {
+          updatedCooldowns[k.id] = remaining;
+          hasActiveCooldown = true;
+        }
+      }
+
+      setCooldownSecs(hasActiveCooldown ? updatedCooldowns : {});
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [keys]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -76,7 +98,7 @@ export const ApiKeyPoolManager: React.FC = () => {
   const handleProbeKey = async (item: ApiKeyItem) => {
     setIsProbing((prev) => ({ ...prev, [item.id]: true }));
     try {
-      const res = await probeApiKey(item.provider, item.key);
+      const res = await probeApiKey(item.provider, item.key, fetch, { enforceCooldown: true });
       setProbeResults((prev) => ({
         ...prev,
         [item.id]: { status: res.status, message: res.message },
@@ -104,7 +126,7 @@ export const ApiKeyPoolManager: React.FC = () => {
               </span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              支援註冊多組免費帳號金鑰，自動輪替調度 (Round-Robin) 與 429 限流退避，杜絕抓取中斷。
+              支援註冊多組免費帳號金鑰，自動輪替調度 (Round-Robin) 與 429 限流退避。連線測試設有 30 秒冷卻保護避免消耗外部呼叫配額。
             </p>
           </div>
         </div>
@@ -247,16 +269,27 @@ export const ApiKeyPoolManager: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleProbeKey(item)}
-                    disabled={probing}
-                    className="p-2 rounded-lg bg-slate-700/40 hover:bg-slate-700 text-slate-300 transition-colors text-xs flex items-center gap-1"
-                    title="測試連線"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${probing ? 'animate-spin' : ''}`} />
-                    <span className="hidden sm:inline">測試</span>
-                  </button>
+                  {(() => {
+                    const cooldown = cooldownSecs[item.id] || 0;
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => handleProbeKey(item)}
+                        disabled={probing || cooldown > 0}
+                        className={`p-2 rounded-lg text-xs flex items-center gap-1 transition-colors ${
+                          cooldown > 0
+                            ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50'
+                            : 'bg-slate-700/40 hover:bg-slate-700 text-slate-300'
+                        }`}
+                        title={cooldown > 0 ? `防連點保護中，剩餘 ${cooldown} 秒` : '測試連線 (消耗 1 次請求)'}
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${probing ? 'animate-spin' : ''}`} />
+                        <span className="hidden sm:inline">
+                          {probing ? '檢測中' : cooldown > 0 ? `冷卻 (${cooldown}s)` : '測試'}
+                        </span>
+                      </button>
+                    );
+                  })()}
                   <button
                     type="button"
                     onClick={() => handleDeleteKey(item.id)}
