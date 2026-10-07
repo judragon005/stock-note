@@ -16,11 +16,11 @@ export function cleanSymbolInput(raw: string): string {
 
 /**
  * 依據代號特徵推斷市場別 (TW vs US)
+ * 台股：4~6 碼數字 + 可選單一英文字尾 (如 2330、00411A 主動式 ETF、00679B 債券 ETF、00632R 槓反、2881A 特別股)
  */
 export function inferMarketType(symbol: string): MarketType {
   const clean = cleanSymbolInput(symbol);
-  // 純數字代表台股 (上市或上櫃)
-  if (/^\d+$/.test(clean)) {
+  if (/^\d{4,6}[A-Z]?$/.test(clean)) {
     return 'TW';
   }
   return 'US';

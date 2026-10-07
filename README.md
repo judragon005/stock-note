@@ -12,7 +12,20 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 多來源免費金融資料網格、API Key 池負載均衡與關鍵外部資料補強 (`Multi-Source Free API Key Pool, SEC Direct & External Data Mesh`) *(V8.80.0 全新發布 / Spec #0167 / ADR #0167 / Issue #174, #176, #178)*
+### 0. 台美雙軌零 CSV 歷史回補、真實成交筆數入庫與統一金融金鑰控制中心 (`Zero-CSV Dual-Market Backfill, Real Transactions & Unified API Key Console`) *(V8.81.0 全新發布 / Spec #0168 / ADR #0168 / Issue #182)*
+
+- **主動式 ETF / 債券代碼精準推斷與市場路由 (`00411A / 00679B TW Market Routing`)**：
+  - 增強代碼正則匹配，支援 `/^[0-9]{4,6}[A-Z]?$/` 後綴字母代碼；`00411A`、`00679B` 等精準識別為台股 `TW`，鎖定計價幣別為 `NT$`，量能為「張」，終結被誤判為美股 USD 之錯誤。
+- **SQLite daily_candles 擴充 transactions 欄位與無損標準化 (技術債 0043 結案)**：
+  - 收盤日 K 擴充官方真實成交筆數（`transactions INTEGER`），未提供時誠實為 NULL，杜絕虛假倍率；將歷史資料庫中結尾帶 `O` 之櫃買標的（如 `3293O`、`00411AO`）執行無損歸併標準化，並於日 K 查詢支援雙向別名回退探測。
+- **主力戰情室短天期智慧自適應深度與誠實空白 (`Smart Adaptive Depth & Honest Empty State`)**：
+  - 戰情室 18 張卡片全面連動真實資料庫，針對未滿 250 天之新掛牌標的（如 `00411A`），短天期指標正常輸出；MA60/250 遵循 Zero Mock 原則，呈現「新上市數據累積中」誠實空白，杜絕崩潰與偽造。
+- **依供應商統一卡片式金融金鑰控制台 (`UnifiedApiKeyManager`)**：
+  - 徹底移除舊版重複的單一金鑰輸入表單與舊版金鑰池獨立面板；導入全新暗黑毛玻璃金融控制台，依供應商分頁切換管理，支援 Web Crypto 256-bit 本機隔離保護、全域 Proxy URL 與單鍵測活防連點。
+- **台美雙軌零 CSV 日期驅動歷史全回補 (`Zero-CSV Date-Driven Backfill & Scheduler Hub UI`)**：
+  - 捨棄本地 CSV 依賴，以日期驅動直接連線 TWSE/TPEx 官方 4 大每日全市場日報端點；Vite 中介層提供 `POST /api/market/backfill-all` 與 `GET /api/market/backfill-status`；前端排程中心提供動態毛玻璃控制面板，支援一鍵背景啟動、電腦不關機持續執行、SQLite 斷點續傳與即時動態進度條。
+
+### 1. 多來源免費金融資料網格、API Key 池負載均衡與關鍵外部資料補強 (`Multi-Source Free API Key Pool, SEC Direct & External Data Mesh`) *(V8.80.0 / Spec #0167 / ADR #0167 / Issue #174, #176, #178)*
 
 - **智能金鑰輪替與 429 退避冷卻 (`SmartKeyRotator & Key Pool Engine`)**：
   - 支援 Round-Robin 負載均衡調度、429 指數退避（5s ~ 60s）、401/403 永久拉黑、跨日自動重置配額與本地加密持久化；連線測試具備 30 秒冷卻防連點保護與 UI 倒數展示，保護 API 日額度。

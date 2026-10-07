@@ -163,6 +163,24 @@ export async function getLatestSummaryQuote(
 }
 
 /**
+ * 取得台股櫃買別名候選清單 (Debt 0043 / Spec 0168 防禦性探測)
+ * 若以標準代碼查無數據，自動嘗試尾綴 O；若帶 O 查無數據，嘗試去 O。
+ */
+export function getOtcAliasCandidates(symbol: string, market: MarketType = 'TW'): string[] {
+  const clean = symbol.replace(/\.(TW|TWO)$/i, '').trim().toUpperCase();
+  if (!clean) return [];
+  if (market !== 'TW') return [clean];
+
+  if (/^\d{2,}[A-Z0-9]*$/.test(clean)) {
+    if (clean.endsWith('O') && clean.length >= 4) {
+      return [clean, clean.slice(0, -1)];
+    }
+    return [clean, `${clean}O`];
+  }
+  return [clean];
+}
+
+/**
  * 優先從本地 Vite SQLite 數據湖倉載入標的歷史 250 天日 K，並非同步沉澱至 IndexedDB；
  * 若本地 API 不可用或處於離線環境，平滑降級為 Compact JSON 或已沉澱快取。
  */
@@ -171,37 +189,41 @@ export async function loadSymbolHistoryFromLakehouse(
   market: MarketType = 'TW'
 ): Promise<DailyCandle[] | null> {
   const cleanSym = symbol.replace(/\.(TW|TWO)$/i, '').trim().toUpperCase();
+  const candidates = getOtcAliasCandidates(cleanSym, market);
 
-  // 1. 優先嘗試請求本地 SQLite API
-  try {
-    const res = await fetch(`/api/market/history/${encodeURIComponent(cleanSym)}?limit=250`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && Array.isArray(data.candles) && data.candles.length > 0) {
-        const candles: DailyCandle[] = data.candles.map((c: any) => ({
-          date: c.date,
-          open: Number(c.open),
-          high: Number(c.high),
-          low: Number(c.low),
-          close: Number(c.close),
-          volume: Number(c.volume),
-        }));
+  // 1. 優先嘗試請求本地 SQLite API (支援別名探測)
+  for (const candidate of candidates) {
+    try {
+      const res = await fetch(`/api/market/history/${encodeURIComponent(candidate)}?limit=250`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.candles) && data.candles.length > 0) {
+          const candles: DailyCandle[] = data.candles.map((c: any) => ({
+            date: c.date,
+            open: Number(c.open),
+            high: Number(c.high),
+            low: Number(c.low),
+            close: Number(c.close),
+            volume: Number(c.volume),
+            transactions: c.transactions != null ? Number(c.transactions) : undefined,
+          }));
 
-        // 非同步沉澱至 IndexedDB
-        saveSymbolOhlcv({
-          symbol: cleanSym,
-          market,
-          candles,
-          updatedAt: Date.now(),
-        }).catch((err) => {
-          logger.warn(`[marketCacheLoader] IndexedDB 沉澱失敗 (${cleanSym}):`, err);
-        });
+          // 非同步沉澱至 IndexedDB (統一以請求標準代碼沉澱)
+          saveSymbolOhlcv({
+            symbol: cleanSym,
+            market,
+            candles,
+            updatedAt: Date.now(),
+          }).catch((err) => {
+            logger.warn(`[marketCacheLoader] IndexedDB 沉澱失敗 (${cleanSym}):`, err);
+          });
 
-        return candles;
+          return candles;
+        }
       }
+    } catch (err) {
+      // 忽略網路錯誤，繼續下一個別名候選或平滑降級
     }
-  } catch (err) {
-    // 忽略網路錯誤，準備平滑降級
   }
 
   // 2. 降級策略：台股標的嘗試使用既有 compact 快取
@@ -258,29 +280,32 @@ export async function loadSymbolFullLakehouseData(
   market: MarketType = 'TW'
 ): Promise<LakehouseFullPayload | null> {
   const cleanSym = symbol.replace(/\.(TW|TWO)$/i, '').trim().toUpperCase();
+  const candidates = getOtcAliasCandidates(cleanSym, market);
 
-  try {
-    const res = await fetch(`/api/market/history/${encodeURIComponent(cleanSym)}?limit=250`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && Array.isArray(data.candles) && data.candles.length > 0) {
-        const candles: DailyCandle[] = data.candles.map((c: any) => ({
-          date: c.date,
-          open: Number(c.open),
-          high: Number(c.high),
-          low: Number(c.low),
-          close: Number(c.close),
-          volume: Number(c.volume),
-        }));
+  for (const candidate of candidates) {
+    try {
+      const res = await fetch(`/api/market/history/${encodeURIComponent(candidate)}?limit=250`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.candles) && data.candles.length > 0) {
+          const candles: DailyCandle[] = data.candles.map((c: any) => ({
+            date: c.date,
+            open: Number(c.open),
+            high: Number(c.high),
+            low: Number(c.low),
+            close: Number(c.close),
+            volume: Number(c.volume),
+            transactions: c.transactions != null ? Number(c.transactions) : undefined,
+          }));
 
-        saveSymbolOhlcv({
-          symbol: cleanSym,
-          market,
-          candles,
-          updatedAt: Date.now(),
-        }).catch((err) => {
-          logger.warn(`[marketCacheLoader] IndexedDB 沉澱失敗 (${cleanSym}):`, err);
-        });
+          saveSymbolOhlcv({
+            symbol: cleanSym,
+            market,
+            candles,
+            updatedAt: Date.now(),
+          }).catch((err) => {
+            logger.warn(`[marketCacheLoader] IndexedDB 沉澱失敗 (${cleanSym}):`, err);
+          });
 
         let institutionalRecords: LakehouseFullPayload['institutionalRecords'] = undefined;
         if (data.chips && typeof data.chips === 'object') {
@@ -326,19 +351,20 @@ export async function loadSymbolFullLakehouseData(
             ? institutionalRecords[institutionalRecords.length - 1]
             : undefined;
 
-        return {
-          candles,
-          institutionalRecords,
-          marginBalance: latestChipRow?.marginBalance,
-          shortBalance: latestChipRow?.shortBalance,
-          dayTradeRate: latestChipRow?.dayTradeRate,
-          tdccRecords,
-          revenueRecords,
-        };
+          return {
+            candles,
+            institutionalRecords,
+            marginBalance: latestChipRow?.marginBalance,
+            shortBalance: latestChipRow?.shortBalance,
+            dayTradeRate: latestChipRow?.dayTradeRate,
+            tdccRecords,
+            revenueRecords,
+          };
+        }
       }
+    } catch (err) {
+      // 忽略網路錯誤，繼續嘗試下一別名
     }
-  } catch (err) {
-    // 忽略網路錯誤
   }
 
   return null;

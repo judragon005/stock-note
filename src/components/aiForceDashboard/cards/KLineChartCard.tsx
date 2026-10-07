@@ -654,8 +654,16 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           <span>量: <b style={{ color: '#fbbf24' }}>{activeCandle.volume.toLocaleString()}</b></span>
           {activeCandle.ma5 && <span style={{ color: '#fbbf24' }}>MA5:{activeCandle.ma5}</span>}
           {activeCandle.ma20 && <span style={{ color: '#c084fc' }}>MA20:{activeCandle.ma20}</span>}
-          {activeCandle.ma60 && <span style={{ color: '#94a3b8' }}>MA60:{activeCandle.ma60}</span>}
-          {activeCandle.ma250 && <span style={{ color: '#a855f7', fontWeight: 700 }}>MA250:{activeCandle.ma250}</span>}
+          {activeCandle.ma60 !== undefined ? (
+            <span style={{ color: '#94a3b8' }}>MA60:{activeCandle.ma60}</span>
+          ) : (
+            <span style={{ color: '#64748b' }} title="上市未滿60日，數據累積中">MA60:數據累積中</span>
+          )}
+          {activeCandle.ma250 !== undefined ? (
+            <span style={{ color: '#a855f7', fontWeight: 700 }}>MA250:{activeCandle.ma250}</span>
+          ) : (
+            <span style={{ color: '#64748b' }} title="上市未滿250日，數據累積中">MA250:數據累積中</span>
+          )}
           {subchartMode === 'KD' && (
             <span style={{ color: '#60a5fa' }}>
               K:{activeCandle.k ?? '-'} D:{activeCandle.d ?? '-'}

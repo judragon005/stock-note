@@ -113,11 +113,18 @@ function initSqliteLakehouseDb(customPath) {
       adj_close REAL NOT NULL,
       volume REAL NOT NULL,
       turnover REAL,
+      transactions INTEGER,       -- 官方真實成交筆數 (來源未提供時為 NULL，嚴禁偽造)
       PRIMARY KEY (symbol, date)
     );
     CREATE INDEX IF NOT EXISTS idx_candles_date ON daily_candles(date);
     CREATE INDEX IF NOT EXISTS idx_candles_symbol_date ON daily_candles(symbol, date DESC);
   `);
+
+  // 2.1 無損遷移：舊版資料庫缺少 transactions 欄位時動態補上 (冪等，Spec 0168)
+  const candleColumns = db.prepare('PRAGMA table_info(daily_candles)').all();
+  if (!candleColumns.some((c) => c.name === 'transactions')) {
+    db.exec('ALTER TABLE daily_candles ADD COLUMN transactions INTEGER;');
+  }
 
   // 3. 台股法人籌碼、信用交易與當沖表 (tw_institutional_chips)
   db.exec(`

@@ -85,6 +85,15 @@ export async function probeApiKey(
       case 'fred':
         testUrl = `https://api.stlouisfed.org/fred/series?series_id=DGS10&api_key=${encodeURIComponent(key)}&file_type=json`;
         break;
+      case 'fmp':
+        testUrl = `https://financialmodelingprep.com/api/v3/profile/AAPL?apikey=${encodeURIComponent(key)}`;
+        break;
+      case 'alphavantage':
+        testUrl = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=IBM&apikey=${encodeURIComponent(key)}`;
+        break;
+      case 'coingecko':
+        testUrl = `https://api.coingecko.com/api/v3/ping`;
+        break;
       case 'polygon':
         testUrl = `https://api.polygon.io/v1/meta/symbols/AAPL/company?apiKey=${encodeURIComponent(key)}`;
         break;

@@ -50,7 +50,7 @@
 | [**0040**](0040-ai-force-frontend-status-tag-and-disposition-badge-wiring.md) | AI 主力戰情室前端狀態標籤與處置警示徽章端到端串接 | `P3` | `RESOLVED` | Code Review (Spec 0155 / Issue #138) | `Feature` · `UI` · `AiForceDashboard` · `Lakehouse` · `Dispositions` | **已於 v8.67.0 (ADR #0156) 完整解決** |
 | [**0041**](0041-sync-checkpoints-composite-index-optimization.md) | 同步檢查點表 (sync_checkpoints) 複合狀態索引優化 | `P3` | `OPEN` | Code Review (Spec 0164 / Issue #163) | `Performance` · `Database` · `Lakehouse` · `Indexing` | 待處理 |
 | [**0042**](0042-ai-force-tdcc-and-monthly-revenue-card-visualizations.md) | AI 主力戰情室集保大戶散戶比與月營收趨勢卡片視覺化串接 | `P2` | `OPEN` | Code Review (Spec 0164 / Issue #163) | `Feature` · `UI` · `AiForceDashboard` · `TDCC` · `Revenue` | 待處理 |
-| [**0043**](0043-tw-tpex-otc-and-bond-etf-daily-candles-normalization.md) | 台股上櫃股票與櫃買債券 ETF 代碼清洗標準化、盤後日 K 入庫物件修復與交易所元數據校準 | `P1` | `OPEN` | /grill-with-docs 深度調研 | `DataIntegrity` · `Lakehouse` · `DailyCandles` · `Normalization` · `TPEx` | 待處理 |
+| [**0043**](0043-tw-tpex-otc-and-bond-etf-daily-candles-normalization.md) | 台股上櫃股票與櫃買債券 ETF 代碼清洗標準化、盤後日 K 入庫物件修復與交易所元數據校準 | `P1` | `RESOLVED` | /grill-with-docs 深度調研 | `DataIntegrity` · `Lakehouse` · `DailyCandles` · `Normalization` · `TPEx` | **已於 v8.81.0 (Spec 0168 / Issue #182) 完整解決** |
 | [**0044**](0044-ai-force-war-room-feature-gaps-and-quant-enhancements.md) | 波段與中長線存股導向之主力戰情室功能演進與美股專屬微觀結構架構 | `P2` | `OPEN` | /grill-with-docs 深度調研 (對齊波段存股客群與美股獨立戰情室) | `AiForceWarRoom` · `SwingTrading` · `DividendInvesting` · `US-Market` | 待處理 |
 
 ---

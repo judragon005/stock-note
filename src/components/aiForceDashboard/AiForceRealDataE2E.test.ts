@@ -145,7 +145,7 @@ describe('Ticket 03: AI 主力戰情室端到端資料庫注入與全視圖驗�
     const { initSqliteLakehouseDb, isSqliteSupported } = await import('../../../scripts/market-sync/sqlite-db-core.cjs');
     if (isSqliteSupported()) {
       const db = initSqliteLakehouseDb();
-      const row2360 = db.prepare('SELECT date, open, high, low, close FROM daily_candles WHERE symbol = ? ORDER BY date DESC LIMIT 1').get('2360');
+      const row2360 = db.prepare('SELECT date, open, high, low, close FROM daily_candles WHERE symbol = ? AND date = ?').get('2360', '2026-10-02');
       if (row2360) {
         expect(row2360.date).toBe('2026-10-02');
         expect(row2360.close).toBe(2190);
@@ -154,7 +154,7 @@ describe('Ticket 03: AI 主力戰情室端到端資料庫注入與全視圖驗�
         expect(row2360.low).toBe(2135);
       }
 
-      const row0050 = db.prepare('SELECT date, close FROM daily_candles WHERE symbol = ? ORDER BY date DESC LIMIT 1').get('0050');
+      const row0050 = db.prepare('SELECT date, close FROM daily_candles WHERE symbol = ? AND date = ?').get('0050', '2026-10-02');
       if (row0050) {
         expect(row0050.date).toBe('2026-10-02');
         expect(row0050.close).toBe(112.8);
@@ -203,6 +203,76 @@ describe('Ticket 03: AI 主力戰情室端到端資料庫注入與全視圖驗�
     expect(emptyReport.marketBar.dataRangeText).toBe('尚無歷史交易日資料');
     expect(emptyReport.marketBar.volumeShares).toBeUndefined();
     expect(emptyReport.marketBar.openPrice).toBeUndefined();
+  });
+
+  it('Ticket 04 (Spec 0168): 查詢 00411A 主動統一前沿科技時，精準識別為台股 TWD，張數單位與 37 筆真實日 K 自適應連動 18 張卡片', () => {
+    // 模擬 00411A 自 2026-08-11 掛牌以來的 37 筆真實日 K (含真實 transactions)
+    const candles37 = Array.from({ length: 37 }, (_, i) => ({
+      date: `2026-08-${String((i % 20) + 1).padStart(2, '0')}`,
+      open: 10.0 + i * 0.02,
+      high: 10.1 + i * 0.02,
+      low: 9.95 + i * 0.02,
+      close: 10.05 + i * 0.02,
+      volume: 8000000 + i * 50000,
+      transactions: 1200 + i * 15,
+    }));
+    // 最後一根
+    candles37[36] = {
+      date: '2026-10-02',
+      open: 10.79,
+      high: 10.79,
+      low: 10.68,
+      close: 10.71,
+      volume: 9935014,
+      transactions: 1450,
+    };
+
+    const report = generateAiForceReportFromCandles(
+      '00411A',
+      '主動統一前沿科技',
+      'TW',
+      candles37,
+      undefined,
+      undefined,
+      new Date('2026-10-02T16:00:00+08:00'),
+      {
+        currency: 'TWD',
+        volumeUnit: '張',
+      }
+    );
+
+    // 1. 頂部 Bar 驗證 (照片一缺陷全數修復)
+    expect(report.marketBar.currency).toBe('TWD');
+    expect(report.marketBar.volumeUnit).toBe('張');
+    expect(report.marketBar.currentPrice).toBe(10.71);
+    expect(report.marketBar.volumeShares).toBe(9935); // 9935014 / 1000 四捨五入
+    expect(report.marketBar.transactionCount).toBe(1450); // 真實成交筆數映射
+    expect(report.marketBar.dataPointsCount).toBe(37);
+    expect(report.isDataPending).toBe(false);
+
+    // 2. 主 K 線自適應：MA5/10/20 有值，MA60/MA250 嚴格為 undefined (Honest Empty State)
+    expect(report.klineSystem.candles).toHaveLength(37);
+    const lastKline = report.klineSystem.candles[36];
+    expect(lastKline.close).toBe(10.71);
+    expect(lastKline.ma5).toBeDefined();
+    expect(lastKline.ma10).toBeDefined();
+    expect(lastKline.ma20).toBeDefined();
+    expect(lastKline.ma60).toBeUndefined(); // 上市未滿 60 日
+    expect(lastKline.ma250).toBeUndefined(); // 上市未滿 250 日
+
+    // 3. 18 張卡片全面運算正常，零崩潰
+    expect(report.decisionCore).toBeDefined();
+    expect(report.multiDimensionRadar.overallScore).toBeGreaterThan(0);
+    expect(report.volumeProfile.buckets.length).toBe(5);
+    expect(report.riskSpider.mainForceRiskIndex).toBeGreaterThan(0);
+    expect(report.forecastCone.timeNodes.length).toBeGreaterThan(0);
+    expect(report.vwapCostStructure.mainForceVwap).toBeGreaterThan(0);
+    expect(report.dayTradeRisk.riskIndex).toBeGreaterThan(0);
+    expect(report.bullBearEnergy.bullBearRatio).toBeGreaterThan(0);
+    expect(report.healthSummary.chipHealth).toBeGreaterThan(0);
+    expect(report.dynamicSignals.verdictLight).toBeDefined();
+    expect(report.forceDistribution.largePlayerBuyPercent).toBeGreaterThan(0);
+    expect(report.bullBearStrength.compositeScore).toBeGreaterThan(0);
   });
 });
 

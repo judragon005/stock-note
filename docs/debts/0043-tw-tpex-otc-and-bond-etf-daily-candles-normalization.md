@@ -1,10 +1,14 @@
 # 技術債 0043: 台股上櫃股票與櫃買債券 ETF 代碼清洗標準化、盤後日 K 入庫物件修復與交易所元數據校準
 
 - **建立日期**: 2026-10-03
+- **結案日期**: 2026-10-05 (Spec 0168 / Ticket 03)
 - **來源**: /grill-with-docs 深度調研 (日 K 完整度與終端機執行異常診斷)
-- **狀態**: `OPEN`
+- **狀態**: `RESOLVED`
 - **優先級**: `P1 (High)`
 - **標籤**: `DataIntegrity` · `Lakehouse` · `DailyCandles` · `Normalization` · `TPEx`
+- **解決方案**:
+  - 建立 `scripts/market-sync/normalize-otc-symbols.cjs` 實裝冪等代碼標準化遷移腳本，將 `00411AO`、`3293O` 等櫃買標的遷移歸正為標準代碼。
+  - 在 `src/engine/marketCacheLoader.ts` 與 `vite-market-middleware.cjs` 實裝 `getOtcAliasCandidates` 雙向別名回退探測，確保前端與後端湖倉查詢 100% 命中歷史日 K。
 
 ---
 

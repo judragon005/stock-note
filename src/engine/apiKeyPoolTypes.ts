@@ -3,7 +3,7 @@
  * ApiKeyPool Types and State Schema
  */
 
-export type ProviderType = 'finmind' | 'finnhub' | 'fred' | 'polygon' | 'coingecko' | 'sec';
+export type ProviderType = 'finmind' | 'finnhub' | 'fred' | 'polygon' | 'coingecko' | 'sec' | 'fmp' | 'alphavantage';
 
 export type KeyHealthStatus = 'HEALTHY' | 'COOLING_DOWN' | 'QUOTA_EXHAUSTED' | 'INVALID';
 

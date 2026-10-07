@@ -16,6 +16,7 @@ export const STATIC_TW_STOCKS: StockDictionaryItem[] = [
   { symbol: '00408A', name: '主動第一金優股息', market: 'TW', category: 'ETF', source: 'TWSE' },
   { symbol: '00409A', name: '主動復華全球50', market: 'TW', category: 'ETF', source: 'TWSE' },
   { symbol: '00410A', name: '主動永豐科技趨勢', market: 'TW', category: 'ETF', source: 'TWSE' },
+  { symbol: '00411A', name: '主動統一前沿科技', market: 'TW', category: '主動型ETF', source: 'TWSE' },
   { symbol: '0050', name: '元大台灣50', market: 'TW', category: '市值型ETF', source: 'TWSE' },
   { symbol: '0051', name: '元大中型100', market: 'TW', category: '市值型ETF', source: 'TWSE' },
   { symbol: '0052', name: '富邦科技', market: 'TW', category: '產業型ETF', source: 'TWSE' },

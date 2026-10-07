@@ -30,6 +30,19 @@ describe('HeaderQueryBar - 標的檢索與資料來源格式化 (Ticket 03)', ()
       expect(inferMarketType('AAPL')).toBe('US');
       expect(inferMarketType('NVDA')).toBe('US');
       expect(inferMarketType('TSLA')).toBe('US');
+      expect(inferMarketType('SPY')).toBe('US');
+      expect(inferMarketType('BRK-B')).toBe('US');
+    });
+
+    it('帶英文字尾之合法台股代號 (主動式 ETF / 債券 ETF / 特別股 / 槓反) 應推斷為台股 TW (Spec 0168)', () => {
+      expect(inferMarketType('00411A')).toBe('TW');
+      expect(inferMarketType('00403A')).toBe('TW');
+      expect(inferMarketType('00679B')).toBe('TW');
+      expect(inferMarketType('00632R')).toBe('TW');
+      expect(inferMarketType('2881A')).toBe('TW');
+      expect(inferMarketType('00411a')).toBe('TW');
+      expect(inferMarketType('00411A.TW')).toBe('TW');
+      expect(inferMarketType('00411A.TWO')).toBe('TW');
     });
   });
 

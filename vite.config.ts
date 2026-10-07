@@ -16,6 +16,9 @@ export default defineConfig({
       },
     },
   ],
+  test: {
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+  },
   server: {
     port: 3000,
     open: false,

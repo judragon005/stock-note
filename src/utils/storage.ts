@@ -905,6 +905,7 @@ export function getDefaultSampleTrades(): TradeRecord[] {
 
 export function loadApiKeysConfigFromStorage(): ApiKeysConfig {
   try {
+    if (typeof localStorage === 'undefined') return {};
     const raw = localStorage.getItem(API_KEYS_STORAGE_KEY);
     if (!raw) return {};
     return JSON.parse(raw) as ApiKeysConfig;
@@ -916,6 +917,7 @@ export function loadApiKeysConfigFromStorage(): ApiKeysConfig {
 
 export function saveApiKeysConfigToStorage(config: ApiKeysConfig): void {
   try {
+    if (typeof localStorage === 'undefined') return;
     localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(config));
     if (typeof indexedDB !== 'undefined') {
       dbPut('settings', { key: 'apiKeys', value: config }).catch((err) =>

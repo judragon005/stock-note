@@ -333,5 +333,46 @@ describe('MarketCacheLoader (前端快取秒讀與 IndexedDB 沉澱引擎)', () 
       expect(statusErr).toBe('NORMAL');
     });
   });
+
+  describe('Spec 0168 / Ticket 03: getOtcAliasCandidates 與湖倉別名回退探測', () => {
+    it('getOtcAliasCandidates 應為台股產生標準與 O 尾綴雙向候選，美股則維持原樣', async () => {
+      const { getOtcAliasCandidates } = await import('./marketCacheLoader');
+      expect(getOtcAliasCandidates('00411A', 'TW')).toEqual(['00411A', '00411AO']);
+      expect(getOtcAliasCandidates('00411AO', 'TW')).toEqual(['00411AO', '00411A']);
+      expect(getOtcAliasCandidates('3293', 'TW')).toEqual(['3293', '3293O']);
+      expect(getOtcAliasCandidates('AAPL', 'US')).toEqual(['AAPL']);
+    });
+
+    it('loadSymbolHistoryFromLakehouse 查詢 00411A 查無資料時，應自動探測 00411AO 並成功載入日 K', async () => {
+      // @ts-ignore
+      global.fetch = vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/api/market/history/00411A?')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ candles: [] }),
+          });
+        }
+        if (url.includes('/api/market/history/00411AO?')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              candles: [
+                { date: '2026-10-02', open: 10.79, high: 10.79, low: 10.68, close: 10.71, volume: 9935014 },
+              ],
+            }),
+          });
+        }
+        return Promise.resolve({ ok: false, status: 404 });
+      });
+
+      const { loadSymbolHistoryFromLakehouse } = await import('./marketCacheLoader');
+      const candles = await loadSymbolHistoryFromLakehouse('00411A', 'TW');
+      expect(candles).toHaveLength(1);
+      expect(candles?.[0].close).toBe(10.71);
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/market/history/00411A?limit=250');
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/market/history/00411AO?limit=250');
+    });
+  });
 });
+
 

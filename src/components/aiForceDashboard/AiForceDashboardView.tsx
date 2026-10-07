@@ -85,7 +85,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       // 1. Layer 1: 優先嘗試從本地 SQLite 數據湖倉直讀歷史日 K 與籌碼 (Spec 0159 / Ticket 02)
       try {
         const lakehouseData = await loadSymbolFullLakehouseData(targetSymbol, targetMarket);
-        if (lakehouseData && lakehouseData.candles.length >= 5) {
+        if (lakehouseData && lakehouseData.candles.length >= 1) {
           candles = lakehouseData.candles;
           if (lakehouseData.institutionalRecords && lakehouseData.institutionalRecords.length > 0) {
             institutionalRecords = lakehouseData.institutionalRecords;

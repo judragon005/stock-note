@@ -12,7 +12,8 @@
     "guard:pre-push": "node scripts/pre-push-guard.cjs",
     "sync:us:bootstrap": "node scripts/market-sync/sync-us-market.cjs --mode=bootstrap",
     "sync:us:daily": "node scripts/market-sync/sync-us-market.cjs --mode=daily",
-    "audit:us-lakehouse": "node scripts/market-sync/audit-verifier.cjs"
+    "audit:us-lakehouse": "node scripts/market-sync/audit-verifier.cjs",
+    "market:backfill-all": "node scripts/market-sync/backfill-full-market-history.cjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",

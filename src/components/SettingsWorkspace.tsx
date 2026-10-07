@@ -30,12 +30,11 @@ import {
 } from '../utils/db';
 import { syncOfficialTaiwanStockList } from '../engine/stockDictionarySync';
 import { getStockDictionaryStats, clearCustomStockNames } from '../engine/stockNameResolver';
-import { validateCustomProxyUrl } from '../engine/secureProxyRouter';
 import { exportE2EEEncryptedBackup, decryptE2EEBackup } from '../engine/e2eeBackupEngine';
 import { StockDictionaryStats } from '../types/stockDictionary';
 import { LocalStorageInspectionStats } from '../types/stock';
 import { MarketScheduleHubSection } from './MarketScheduleHubSection';
-import { ApiKeyPoolManager } from './ApiKeyPoolManager';
+import { UnifiedApiKeyManager } from './UnifiedApiKeyManager';
 import {
   Zap,
   Building2,
@@ -47,12 +46,7 @@ import {
   Coins,
   TrendingDown,
   Percent,
-  KeyRound,
-  Eye,
-  EyeOff,
-  Save,
   CheckCircle2,
-  ShieldAlert,
   ShieldCheck,
   Landmark,
   Receipt,
@@ -73,12 +67,15 @@ import {
 
 interface SettingsWorkspaceProps {
   accounts: BrokerAccount[];
-  onSaveAccounts: (accounts: BrokerAccount[]) => void;
+  onSaveAccounts?: (accounts: BrokerAccount[]) => void;
+  onUpdateAccounts?: (accounts: BrokerAccount[]) => void;
   frictionSummary?: FrictionSummary;
-  selectedAccountId: string;
-  onSelectAccount: (id: string) => void;
+  selectedAccountId?: string;
+  onSelectAccount?: (id: string) => void;
   apiKeys: ApiKeysConfig;
-  onSaveApiKeys: (apiKeys: ApiKeysConfig) => void;
+  onSaveApiKeys?: (apiKeys: ApiKeysConfig) => void;
+  onUpdateApiKeys?: (apiKeys: ApiKeysConfig) => void;
+  onUpdateFrictionSummary?: (friction: FrictionSummary) => void;
   trades?: TradeRecord[];
   cashTransactions?: CashTransaction[];
   loanRecords?: LoanRecord[];
@@ -91,11 +88,13 @@ interface SettingsWorkspaceProps {
 export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
   accounts,
   onSaveAccounts,
+  onUpdateAccounts,
   frictionSummary,
-  selectedAccountId,
+  selectedAccountId = '',
   onSelectAccount,
   apiKeys,
   onSaveApiKeys,
+  onUpdateApiKeys,
   trades = [],
   cashTransactions = [],
   loanRecords = [],
@@ -104,6 +103,8 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
   currentMarket = 'ALL',
   usdRate = 32.0,
 }) => {
+  const handleSaveAccounts = onSaveAccounts || onUpdateAccounts || (() => {});
+
   // --- 券商帳戶表單狀態 ---
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -115,38 +116,6 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
   const [usFeeType, setUsFeeType] = useState<USFeeType>('ZERO_COMMISSION');
   const [color, setColor] = useState('#10b981');
   const [isAdding, setIsAdding] = useState(false);
-
-  // --- API Key 設定狀態 ---
-  const [finmindToken, setFinmindToken] = useState(apiKeys.finmindToken || '');
-  const [fmpApiKey, setFmpApiKey] = useState(apiKeys.fmpApiKey || '');
-  const [alphaVantageKey, setAlphaVantageKey] = useState(apiKeys.alphaVantageKey || '');
-  const [customProxyUrl, setCustomProxyUrl] = useState(apiKeys.customProxyUrl || '');
-  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
-  const [keySavedToast, setKeySavedToast] = useState(false);
-
-  const toggleShowKey = (field: string) => {
-    setShowKeys((prev) => ({ ...prev, [field]: !prev[field] }));
-  };
-
-  const proxyValidation = customProxyUrl.trim()
-    ? validateCustomProxyUrl(customProxyUrl.trim())
-    : { valid: true };
-
-  const handleSaveApiKeys = () => {
-    if (!proxyValidation.valid) {
-      alert(`⚠️ 自訂 Proxy 網址不合規：${proxyValidation.error}。請修正後再儲存。`);
-      return;
-    }
-
-    onSaveApiKeys({
-      finmindToken: finmindToken.trim() || undefined,
-      fmpApiKey: fmpApiKey.trim() || undefined,
-      alphaVantageKey: alphaVantageKey.trim() || undefined,
-      customProxyUrl: customProxyUrl.trim() || undefined,
-    });
-    setKeySavedToast(true);
-    setTimeout(() => setKeySavedToast(false), 3000);
-  };
 
   const startEdit = (acc: BrokerAccount) => {
     setEditingId(acc.id);
@@ -209,9 +178,9 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
     };
 
     if (editingId) {
-      onSaveAccounts(accounts.map((a) => (a.id === editingId ? updatedAccount : a)));
+      handleSaveAccounts(accounts.map((a) => (a.id === editingId ? updatedAccount : a)));
     } else {
-      onSaveAccounts([...accounts, updatedAccount]);
+      handleSaveAccounts([...accounts, updatedAccount]);
     }
     cancelEdit();
   };
@@ -222,8 +191,8 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
       return;
     }
     if (confirm('確定要刪除此券商帳戶嗎？既有綁定此帳戶之歷史紀錄將改由預設帳戶計費。')) {
-      onSaveAccounts(accounts.filter((a) => a.id !== id));
-      if (selectedAccountId === id) {
+      handleSaveAccounts(accounts.filter((a) => a.id !== id));
+      if (selectedAccountId === id && onSelectAccount) {
         onSelectAccount('ALL');
       }
     }
@@ -592,7 +561,7 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <button
                       className="btn btn-secondary btn-sm"
-                      onClick={() => onSelectAccount(isSelected ? 'ALL' : acc.id)}
+                      onClick={() => onSelectAccount?.(isSelected ? 'ALL' : acc.id)}
                       style={{
                         fontSize: '0.72rem',
                         padding: '3px 8px',
@@ -748,188 +717,14 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
         </div>
       </div>
 
-      {/* 底部第三模組：外部金融資料 API 金鑰管理 */}
-      <div
-        className="glass-card"
-        style={{
-          padding: '22px',
-          borderRadius: '14px',
-          border: '1px solid rgba(139, 92, 246, 0.3)',
-          background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.7) 100%)',
+      {/* --- 底部第三模組：🔑 外部金融 API 整合控制台 (Spec 0168 / UnifiedApiKeyManager) --- */}
+      <UnifiedApiKeyManager
+        initialApiKeys={apiKeys}
+        onApiKeysChange={(updatedKeys) => {
+          if (onSaveApiKeys) onSaveApiKeys(updatedKeys);
+          if (onUpdateApiKeys) onUpdateApiKeys(updatedKeys);
         }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div
-              style={{
-                padding: '6px',
-                borderRadius: '8px',
-                background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(59, 130, 246, 0.2))',
-                border: '1px solid rgba(139, 92, 246, 0.4)',
-              }}
-            >
-              <KeyRound size={18} color="#a78bfa" />
-            </div>
-            <div>
-              <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: '#ffffff' }}>
-                🔑 外部金融資料 API 金鑰管理 (API Keys Configuration)
-              </h3>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
-                支援日後擴充台美股高階即時報價、官方除權息與歷史回測端點。金鑰將安全隔離於本機 LocalStorage。
-              </p>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                fontSize: '0.7rem',
-                padding: '3px 8px',
-                borderRadius: '6px',
-                background: 'rgba(56, 189, 248, 0.15)',
-                border: '1px solid rgba(56, 189, 248, 0.3)',
-                color: '#38bdf8',
-                fontWeight: 600,
-              }}
-            >
-              <ShieldCheck size={12} />
-              Web Crypto 256-bit 保護中
-            </span>
-            {keySavedToast && (
-              <span style={{ fontSize: '0.78rem', color: '#34d399', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <CheckCircle2 size={14} /> 金鑰設定已儲存！
-              </span>
-            )}
-            <button className="btn btn-primary btn-sm" onClick={handleSaveApiKeys} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Save size={14} /> 儲存金鑰設定
-            </button>
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
-          {/* FinMind Token */}
-          <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#93c5fd' }}>
-                🇹🇼 FinMind API Token (台股)
-              </label>
-              <button
-                type="button"
-                onClick={() => toggleShowKey('finmind')}
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-              >
-                {showKeys['finmind'] ? <EyeOff size={13} /> : <Eye size={13} />}
-              </button>
-            </div>
-            <input
-              type={showKeys['finmind'] ? 'text' : 'password'}
-              value={finmindToken}
-              onChange={(e) => setFinmindToken(e.target.value)}
-              placeholder="輸入 FinMind Token (選填，每日 600 次免費額度)"
-              style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', background: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border-color)', color: '#fff', fontSize: '0.82rem' }}
-            />
-            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              用於台股歷史 10 年除權息與減資事件深度回填 (支援免費 Token，每日 600 次額度，可至 <a href="https://finmind.github.io/" target="_blank" rel="noreferrer" style={{ color: '#38bdf8' }}>FinMind 官網</a> 免費申請)。
-            </div>
-          </div>
-
-
-          {/* FMP (Financial Modeling Prep) API Key */}
-          <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#a78bfa' }}>
-                🇺🇸 FMP API Key (美股)
-              </label>
-              <button
-                type="button"
-                onClick={() => toggleShowKey('fmp')}
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-              >
-                {showKeys['fmp'] ? <EyeOff size={13} /> : <Eye size={13} />}
-              </button>
-            </div>
-            <input
-              type={showKeys['fmp'] ? 'text' : 'password'}
-              value={fmpApiKey}
-              onChange={(e) => setFmpApiKey(e.target.value)}
-              placeholder="輸入 FMP API Key (選填)"
-              style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', background: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border-color)', color: '#fff', fontSize: '0.82rem' }}
-            />
-            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Financial Modeling Prep 全市場美股歷史股利與分割資料。
-            </div>
-          </div>
-
-          {/* Alpha Vantage API Key */}
-          <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#fcd34d' }}>
-                🌐 Alpha Vantage API Key (外匯/總經)
-              </label>
-              <button
-                type="button"
-                onClick={() => toggleShowKey('alphavantage')}
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-              >
-                {showKeys['alphavantage'] ? <EyeOff size={13} /> : <Eye size={13} />}
-              </button>
-            </div>
-            <input
-              type={showKeys['alphavantage'] ? 'text' : 'password'}
-              value={alphaVantageKey}
-              onChange={(e) => setAlphaVantageKey(e.target.value)}
-              placeholder="輸入 Alpha Vantage Key (選填)"
-              style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', background: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border-color)', color: '#fff', fontSize: '0.82rem' }}
-            />
-            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              全球匯率、貨幣對與大盤總經數據備援端點。
-            </div>
-          </div>
-
-          {/* 自訂 Proxy 端點 */}
-          <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#6ee7b7' }}>
-                🔌 自訂代理伺服器端點 (Proxy URL)
-              </label>
-              <button
-                type="button"
-                onClick={() => toggleShowKey('proxy')}
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-              >
-                {showKeys['proxy'] ? <EyeOff size={13} /> : <Eye size={13} />}
-              </button>
-            </div>
-            <input
-              type="text"
-              value={customProxyUrl}
-              onChange={(e) => setCustomProxyUrl(e.target.value)}
-              placeholder="例: https://my-custom-proxy.workers.dev (選填)"
-              style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', background: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border-color)', color: '#fff', fontSize: '0.82rem' }}
-            />
-            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              自建 Cloudflare Worker 或私人反向代理轉發通道。
-            </div>
-            {!proxyValidation.valid && (
-              <div style={{ fontSize: '0.72rem', color: '#f87171', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <ShieldAlert size={13} color="#f87171" />
-                <span>{proxyValidation.error}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '12px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-          <ShieldAlert size={13} color="#94a3b8" />
-          <span>隱私保護保證：所有 API 金鑰均儲存在您瀏覽器的本機 LocalStorage / IndexedDB 中，絕不傳送至任何中央伺服器。</span>
-        </div>
-      </div>
-
-      {/* 多金鑰池智慧輪替管理面板 (Ticket 05) */}
-      <ApiKeyPoolManager />
+      />
 
       {/* --- 第三區塊：🗄️ IndexedDB 資料庫狀態與時光機快照管理 --- */}
       <DatabaseAndSnapshotsSection
