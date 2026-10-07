@@ -8,8 +8,26 @@ import {
   Terminal,
   RefreshCw,
   FolderGit2,
+  Zap,
+  Play,
+  Database,
 } from 'lucide-react';
 import { MarketCacheSummary, loadMarketCacheSummary } from '../engine/marketCacheLoader';
+
+export interface BackfillStatus {
+  isRunning: boolean;
+  market: 'ALL' | 'TW' | 'US';
+  progressPct: number;
+  currentTask: string;
+  currentDate: string | null;
+  completedDays: number;
+  totalDays: number;
+  tw: { status: string; totalQuotes: number; totalChips: number };
+  us: { status: string; totalQuotes: number; successCount: number; failCount: number };
+  error: string | null;
+  startedAt: number | null;
+  updatedAt: number;
+}
 
 // 系統命令與腳本路徑常數 (Spec 0133)
 export const WINDOWS_SCHEDULE_COMMANDS = {
@@ -41,6 +59,13 @@ export const MarketScheduleHubSection: React.FC = () => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // --- Spec 0168 / Ticket 09: 台美雙軌全歷史回補狀態 ---
+  const [backfillMarket, setBackfillMarket] = useState<'ALL' | 'TW' | 'US'>('ALL');
+  const [backfillDays, setBackfillDays] = useState<number>(250);
+  const [backfillStatus, setBackfillStatus] = useState<BackfillStatus | null>(null);
+  const [isStartingBackfill, setIsStartingBackfill] = useState<boolean>(false);
+  const [backfillFeedback, setBackfillFeedback] = useState<string | null>(null);
+
   const fetchSummaries = async () => {
     setIsLoading(true);
     try {
@@ -57,9 +82,53 @@ export const MarketScheduleHubSection: React.FC = () => {
     }
   };
 
+  const fetchBackfillStatus = async () => {
+    try {
+      if (typeof fetch === 'function') {
+        const res = await fetch('/api/market/backfill-status');
+        if (res.ok) {
+          const data = await res.json();
+          setBackfillStatus(data);
+        }
+      }
+    } catch {
+      // 容錯降級
+    }
+  };
+
+  const handleStartBackfill = async () => {
+    setIsStartingBackfill(true);
+    setBackfillFeedback(null);
+    try {
+      if (typeof fetch === 'function') {
+        const res = await fetch(`/api/market/backfill-all?market=${backfillMarket}&days=${backfillDays}`, {
+          method: 'POST',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setBackfillFeedback(data.message || '回補任務已在背景啟動！');
+          await fetchBackfillStatus();
+        } else {
+          setBackfillFeedback('啟動失敗，請稍後再試。');
+        }
+      }
+    } catch (err: any) {
+      setBackfillFeedback(`連線錯誤: ${err.message}`);
+    } finally {
+      setIsStartingBackfill(false);
+    }
+  };
+
   useEffect(() => {
     fetchSummaries();
+    fetchBackfillStatus();
+
+    const interval = setInterval(() => {
+      fetchBackfillStatus();
+    }, 3000);
+
     return () => {
+      clearInterval(interval);
       if (copyTimerRef.current) {
         clearTimeout(copyTimerRef.current as any);
       }
@@ -276,6 +345,227 @@ export const MarketScheduleHubSection: React.FC = () => {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* --- Spec 0168 / Ticket 09: 台美雙軌零 CSV 背景全歷史回補控制台 --- */}
+      <div
+        className="glass-card"
+        style={{
+          marginTop: '20px',
+          padding: '20px',
+          borderRadius: '14px',
+          border: '1px solid rgba(139, 92, 246, 0.35)',
+          background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.85) 100%)',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div
+              style={{
+                padding: '7px',
+                borderRadius: '8px',
+                background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(59, 130, 246, 0.25))',
+                border: '1px solid rgba(139, 92, 246, 0.4)',
+                color: '#c084fc',
+              }}
+            >
+              <Zap size={18} />
+            </div>
+            <div>
+              <h4 style={{ fontSize: '0.98rem', fontWeight: 700, margin: 0, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>台美雙軌零 CSV 背景全歷史回補</span>
+                <span style={{ fontSize: '0.7rem', color: '#a78bfa', fontWeight: 500 }}>(Zero-CSV Full History Backfill)</span>
+              </h4>
+              <p style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                直接連線 TWSE/TPEx 官方 4 大每日全市場日報與美股分級隊列。用時間換空間，電腦不關機即可無痛補齊歷史至 SQLite 湖倉，支援 SQLite 斷點續傳。
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                fontSize: '0.72rem',
+                padding: '3px 10px',
+                borderRadius: '6px',
+                background: backfillStatus?.isRunning
+                  ? 'rgba(245, 158, 11, 0.15)'
+                  : backfillStatus?.progressPct === 100
+                  ? 'rgba(16, 185, 129, 0.15)'
+                  : 'rgba(148, 163, 184, 0.12)',
+                border: backfillStatus?.isRunning
+                  ? '1px solid rgba(245, 158, 11, 0.4)'
+                  : backfillStatus?.progressPct === 100
+                  ? '1px solid rgba(16, 185, 129, 0.4)'
+                  : '1px solid rgba(148, 163, 184, 0.25)',
+                color: backfillStatus?.isRunning ? '#fbbf24' : backfillStatus?.progressPct === 100 ? '#34d399' : '#94a3b8',
+                fontWeight: 600,
+              }}
+            >
+              <Database size={12} />
+              {backfillStatus?.isRunning
+                ? `⚡ 背景回補運行中 (${backfillStatus.currentTask === 'TW' ? '🇹🇼 台股' : '🇺🇸 美股'})`
+                : backfillStatus?.progressPct === 100
+                ? '✔ 全歷史回補已完成'
+                : '⚪ 待命就緒'}
+            </span>
+          </div>
+        </div>
+
+        {/* 控制設定列 */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px',
+            padding: '12px 14px',
+            borderRadius: '10px',
+            background: 'rgba(15, 23, 42, 0.6)',
+            border: '1px solid var(--border-color)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>目標市場：</span>
+              <select
+                value={backfillMarket}
+                onChange={(e) => setBackfillMarket(e.target.value as any)}
+                disabled={backfillStatus?.isRunning}
+                style={{
+                  padding: '5px 8px',
+                  borderRadius: '6px',
+                  background: 'rgba(30, 41, 59, 0.8)',
+                  border: '1px solid var(--border-color)',
+                  color: '#fff',
+                  fontSize: '0.76rem',
+                }}
+              >
+                <option value="ALL">🇹🇼 + 🇺🇸 台美雙軌全市場</option>
+                <option value="TW">🇹🇼 僅台股官方全市場</option>
+                <option value="US">🇺🇸 僅美股分級隊列</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>回補交易日數：</span>
+              <select
+                value={backfillDays}
+                onChange={(e) => setBackfillDays(Number(e.target.value))}
+                disabled={backfillStatus?.isRunning}
+                style={{
+                  padding: '5px 8px',
+                  borderRadius: '6px',
+                  background: 'rgba(30, 41, 59, 0.8)',
+                  border: '1px solid var(--border-color)',
+                  color: '#fff',
+                  fontSize: '0.76rem',
+                }}
+              >
+                <option value="60">60 交易日 (約一季短天期)</option>
+                <option value="120">120 交易日 (約半年中天期)</option>
+                <option value="250">250 交易日 (約一年完整年線)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {backfillFeedback && (
+              <span style={{ fontSize: '0.74rem', color: '#38bdf8' }}>{backfillFeedback}</span>
+            )}
+            <button
+              type="button"
+              onClick={handleStartBackfill}
+              disabled={backfillStatus?.isRunning || isStartingBackfill}
+              className="btn btn-primary btn-sm"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 14px',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                opacity: backfillStatus?.isRunning ? 0.7 : 1,
+              }}
+            >
+              {backfillStatus?.isRunning ? (
+                <>
+                  <RefreshCw size={13} className="spin" />
+                  <span>背景回補運行中 (可隨時關閉網頁)...</span>
+                </>
+              ) : (
+                <>
+                  <Play size={13} />
+                  <span>啟動背景全回補</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* 即時進度條與指標數據 (若有任務在執行或已執行過) */}
+        {(backfillStatus?.isRunning || (backfillStatus && backfillStatus.completedDays > 0)) && (
+          <div
+            style={{
+              marginTop: '14px',
+              padding: '14px',
+              borderRadius: '10px',
+              background: 'rgba(15, 23, 42, 0.5)',
+              border: '1px solid rgba(139, 92, 246, 0.25)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '0.76rem' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>
+                {backfillStatus.isRunning
+                  ? `正在回補 ${backfillStatus.currentTask === 'TW' ? '🇹🇼 台股' : '🇺🇸 美股'} (日期: ${backfillStatus.currentDate || '計算中...'})`
+                  : '歷史回補進度：'}
+              </span>
+              <span style={{ fontWeight: 700, color: '#38bdf8' }}>
+                {backfillStatus.progressPct}% ({backfillStatus.completedDays} / {backfillStatus.totalDays} 天)
+              </span>
+            </div>
+
+            {/* 進度條 */}
+            <div style={{ width: '100%', height: '8px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '4px', overflow: 'hidden', marginBottom: '12px' }}>
+              <div
+                style={{
+                  width: `${Math.min(100, Math.max(0, backfillStatus.progressPct))}%`,
+                  height: '100%',
+                  background: 'linear-gradient(90deg, #8b5cf6 0%, #3b82f6 50%, #10b981 100%)',
+                  borderRadius: '4px',
+                  transition: 'width 0.4s ease',
+                }}
+              />
+            </div>
+
+            {/* 數據小徽章 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px' }}>
+              <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '8px 10px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>🇹🇼 台股收盤日 K 筆數</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#34d399', marginTop: '2px' }}>
+                  {backfillStatus.tw.totalQuotes.toLocaleString()} 筆
+                </div>
+              </div>
+              <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '8px 10px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>🏛️ 三大法人籌碼記錄</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#c084fc', marginTop: '2px' }}>
+                  {backfillStatus.tw.totalChips.toLocaleString()} 筆
+                </div>
+              </div>
+              <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '8px 10px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>🇺🇸 美股採集標的</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#38bdf8', marginTop: '2px' }}>
+                  {backfillStatus.us.successCount.toLocaleString()} 檔
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 排程管理核心專案與卸載專區 (使用者痛點直接解答) */}

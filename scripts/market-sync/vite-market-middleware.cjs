@@ -129,6 +129,35 @@ function createMarketApiMiddleware(customDbPath) {
       );
     }
 
+    // 0.1 GET /api/market/backfill-status (Spec 0168 / Ticket 08)
+    if (pathname === '/api/market/backfill-status') {
+      const { getBackfillGlobalStatus } = require('./backfill-full-market-history.cjs');
+      const status = getBackfillGlobalStatus();
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify(status));
+    }
+
+    // 0.2 POST /api/market/backfill-all (Spec 0168 / Ticket 08)
+    if (pathname === '/api/market/backfill-all') {
+      const { triggerBackfillTask, getBackfillGlobalStatus } = require('./backfill-full-market-history.cjs');
+      const targetMarket = (query.market || 'ALL').toUpperCase();
+      const targetDays = parseInt(query.days, 10) || 250;
+      const resData = triggerBackfillTask({
+        market: targetMarket,
+        days: targetDays,
+        dbPath: customDbPath,
+      });
+
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(
+        JSON.stringify({
+          success: resData.started,
+          message: resData.message,
+          status: getBackfillGlobalStatus(),
+        })
+      );
+    }
+
     // 1. GET /api/market/symbols?q=...
     if (pathname === '/api/market/symbols') {
       const q = String(query.q || '').trim();
@@ -168,10 +197,24 @@ function createMarketApiMiddleware(customDbPath) {
       const symbol = historyMatch[1].toUpperCase();
       const limit = parseInt(query.limit, 10) || 250;
 
-      const meta = db.prepare('SELECT * FROM symbols_meta WHERE symbol = ?').get(symbol);
-      const candles = db
+      let meta = db.prepare('SELECT * FROM symbols_meta WHERE symbol = ?').get(symbol);
+      let candles = db
         .prepare('SELECT * FROM daily_candles WHERE symbol = ? ORDER BY date DESC LIMIT ?')
         .all(symbol, limit);
+
+      // 若查無日 K 且符合台股特徵，嘗試別名回退探測 (Debt 0043 / Spec 0168)
+      if (candles.length === 0 && /^\d{2,}/.test(symbol)) {
+        const aliasSym = symbol.endsWith('O') ? symbol.slice(0, -1) : `${symbol}O`;
+        const aliasCandles = db
+          .prepare('SELECT * FROM daily_candles WHERE symbol = ? ORDER BY date DESC LIMIT ?')
+          .all(aliasSym, limit);
+        if (aliasCandles.length > 0) {
+          candles = aliasCandles;
+          if (!meta) {
+            meta = db.prepare('SELECT * FROM symbols_meta WHERE symbol = ?').get(aliasSym);
+          }
+        }
+      }
 
       // 轉為由舊至新
       candles.reverse();

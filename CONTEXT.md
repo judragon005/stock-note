@@ -93,6 +93,32 @@ _Avoid_: Runaway Hook Loop, Inline Callback Invalidation
 明確區分台股（以「張」為展示單位，1 張 = 1000 股）與美股（以「股」為展示單位）。自本機歷史日 K 資料庫提取原始成交股數後，依標的市場屬性執行換算（`Math.round(rawVolume / 1000)`），杜絕將股數直接填入 UI 導致個股成交量放大 1000 倍的嚴重錯誤。
 _Avoid_: Raw Volume Passthrough, Unit Mismatch
 
+### 雙軌回補與統一金鑰網關 (Dual-Market Backfill & Unified Key Gateway) *(新增於 V8.81.0 / Spec 0168)*
+
+**Taiwan Active ETF & Bond Symbol Recognition (台股後綴字母標的精準識別)**:
+針對主動式基金（如 `00411A` 統一前沿科技）與債券 ETF（如 `00679B` 元大美債20年）等代碼結尾帶字母之標的，在市場路由 `inferMarketType` 與正規化引擎中支援 `/^[0-9]{4,6}[A-Z]?$/` 匹配。100% 精準識別為台股 `TW`，強制鎖定計價幣別為 `TWD`、量能為「張」，終結被誤判為美股或幣別混淆之錯誤。
+_Avoid_: Fallback-To-US, Letter Suffix Mistreatment
+
+**True Transactions Ingestion (官方真實成交筆數入庫)**:
+於 `daily_candles` 資料表擴充 `transactions INTEGER` 欄位。自 TWSE `MI_INDEX` 第 4 欄與 TPEx `1430` 精準擷取官方真實成交筆數，嚴格遵循 Zero Mock 原則（未提供時為 NULL，嚴禁捏造），作為巨量換手與短線當沖籌碼的重要量化依據。
+_Avoid_: Mock Transactions, Estimated Trade Count
+
+**OTC Symbol Normalization (櫃買 O 代碼標準化與雙向探測)**:
+自動將歷史庫中帶 `O` 尾綴之櫃買中心標的（如 `3293O`、`00411AO`）執行無損歸併遷移至標準純代碼（`3293`、`00411A`）。同時在日 K 查詢中提供雙向別名回退探測（`symbol` / `symbol + 'O'`），徹底解決技術債 0043。
+_Avoid_: Split OTC Symbols, O-Suffix Proliferation
+
+**Smart Adaptive Depth for Short Histories (短天期標的智慧自適應降級與 Honest Empty State)**:
+針對掛牌天數未滿 250 天之新上市櫃標的（如掛牌僅 37 天之 `00411A`），戰情室 18 張卡片全面即時連動本地資料庫。短天期指標（MA5/10/20、短線量價）正常運算呈現；需 60D 季線或 250D 年線之長天期指標嚴格遵循 Zero Mock 原則，以 Honest Empty State 標註「新上市數據累積中」，杜絕虛構或破版。
+_Avoid_: Artificial 250D Padding, Crash on Short Data
+
+**Unified Provider-Centric API Key Console (依供應商統一卡片式金融金鑰控制台)**:
+在設定中心徹底整併舊版重複之單一金鑰輸入表單與獨立金鑰池標籤，提供單一現代化 Dark Glassmorphism 控制台。依供應商（FinMind, Finnhub, FMP, FRED, CoinGecko, SEC EDGAR 等）切換卡片，支援 Web Crypto 256-bit 本機隔離保護、全域 Proxy URL 與單鍵測活防連點。
+_Avoid_: Duplicate Inputs, White Plain Inputs
+
+**Zero-CSV Date-Driven Dual Market Backfill (台美雙軌零 CSV 日期驅動歷史全回補)**:
+完全不依賴本地任何外部 CSV 檔案，以「日期驅動 (Date-Driven)」連線 TWSE/TPEx 官方 4 大每日全市場日報端點（`MI_INDEX`, `T86`, `1430`, `3itrade_hedge`）。250 交易日僅需 1,000 次官方請求即可補全全市場 2,361+ 檔股票一年歷史。搭配後端中介層 `POST /api/market/backfill-all` 與 `sync_checkpoints`，支援電腦不關機背景執行、中斷隨時續傳與前端即時動態進度條。
+_Avoid_: CSV-Dependent Backfill, Monolithic Heavy Crawling
+
 **Tax Compliance & Threshold Alert (稅階合規與二代健保/海外所得預警)** *(新增於 V6.1.0)*:
 台股單筆現金股利達 NT$ 20,000 元時事前預警 2.11% 補充保費；美股統計當年度已實現價差與股息，提供 100 萬基本所得額申報與 750 萬最低稅負制 (AMT) 進度條。
 _Avoid_: Tax Guess, Manual Audit

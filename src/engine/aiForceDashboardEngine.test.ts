@@ -652,6 +652,87 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
       expect(report.marketBar.lowPrice).not.toBe(2090);
     });
   });
+
+  describe('Ticket 04: 短天期標的智慧自適應降級與照片一缺陷對齊 (Spec 0168)', () => {
+    it('1. 當傳入 00411A 之 37 筆真實日 K (含 transactions) 時，幣別為 TWD、單位為張、成交筆數真實呈現', () => {
+      const candles37 = Array.from({ length: 37 }, (_, i) => ({
+        date: `2026-08-${String((i % 20) + 1).padStart(2, '0')}`,
+        open: 10.0 + i * 0.02,
+        high: 10.1 + i * 0.02,
+        low: 9.95 + i * 0.02,
+        close: 10.05 + i * 0.02,
+        volume: 8000000 + i * 50000,
+        transactions: 1200 + i * 15,
+      }));
+      candles37[36] = {
+        date: '2026-10-02',
+        open: 10.79,
+        high: 10.79,
+        low: 10.68,
+        close: 10.71,
+        volume: 9935014,
+        transactions: 1450,
+      };
+
+      const report = generateAiForceReportFromCandles(
+        '00411A',
+        '主動統一前沿科技',
+        'TW',
+        candles37,
+        undefined,
+        undefined,
+        new Date('2026-10-02T16:00:00+08:00'),
+        {
+          currency: 'TWD',
+          volumeUnit: '張',
+        }
+      );
+
+      expect(report.marketBar.currency).toBe('TWD');
+      expect(report.marketBar.volumeUnit).toBe('張');
+      expect(report.marketBar.currentPrice).toBe(10.71);
+      expect(report.marketBar.volumeShares).toBe(9935);
+      expect(report.marketBar.transactionCount).toBe(1450);
+      expect(report.marketBar.dataPointsCount).toBe(37);
+      expect(report.isDataPending).toBe(false);
+
+      // K 線指標驗證
+      const lastKline = report.klineSystem.candles[36];
+      expect(lastKline.close).toBe(10.71);
+      expect(lastKline.ma5).toBeDefined();
+      expect(lastKline.ma10).toBeDefined();
+      expect(lastKline.ma20).toBeDefined();
+      expect(lastKline.ma60).toBeUndefined(); // < 60 筆嚴格為 undefined
+      expect(lastKline.ma250).toBeUndefined(); // < 250 筆嚴格為 undefined
+    });
+
+    it('2. 當傳入少於 5 根日 K (如 2 根) 時，fallback report 應正確保留 transactions 與 TWD 幣別', () => {
+      const fewCandles = [
+        { date: '2026-10-01', open: 10.5, high: 10.6, low: 10.4, close: 10.55, volume: 5000000, transactions: 800 },
+        { date: '2026-10-02', open: 10.55, high: 10.7, low: 10.5, close: 10.65, volume: 6000000, transactions: 950 },
+      ];
+
+      const report = generateAiForceReportFromCandles(
+        '00411A',
+        '主動統一前沿科技',
+        'TW',
+        fewCandles,
+        undefined,
+        undefined,
+        new Date('2026-10-02T16:00:00+08:00'),
+        {
+          currency: 'TWD',
+          volumeUnit: '張',
+        }
+      );
+
+      expect(report.marketBar.currency).toBe('TWD');
+      expect(report.marketBar.volumeUnit).toBe('張');
+      expect(report.marketBar.currentPrice).toBe(10.65);
+      expect(report.marketBar.transactionCount).toBe(950);
+      expect(report.marketBar.dataPointsCount).toBe(2);
+    });
+  });
 });
 
 

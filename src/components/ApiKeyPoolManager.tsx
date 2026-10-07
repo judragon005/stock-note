@@ -21,6 +21,8 @@ const PROVIDER_NAMES: Record<ProviderType, { label: string; desc: string; defaul
   polygon: { label: 'Polygon.io (美股盤後備援)', desc: '免費 5 次/分鐘', defaultQuota: 200 },
   coingecko: { label: 'CoinGecko (加密貨幣/穩定幣)', desc: '免費 30 次/分鐘', defaultQuota: 500 },
   sec: { label: 'SEC EDGAR (美股官方財報)', desc: '100% 免費無 Key (需合規 User-Agent)', defaultQuota: -1 },
+  fmp: { label: 'FMP (美股官方財報/股利)', desc: '全市場美股歷史股利與三表財報', defaultQuota: 250 },
+  alphavantage: { label: 'Alpha Vantage (外匯/總經)', desc: '全球外匯牌告與總經備援', defaultQuota: 25 },
 };
 
 export const ApiKeyPoolManager: React.FC = () => {

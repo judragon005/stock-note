@@ -23,6 +23,7 @@ export interface DailyCandle {
   low: number;
   close: number;
   volume: number;
+  transactions?: number;           // 當日真實成交筆數 (Spec 0168 / Ticket 02)
 }
 
 export interface TechnicalIndicators {

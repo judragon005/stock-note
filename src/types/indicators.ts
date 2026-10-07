@@ -12,6 +12,7 @@ export interface DailyCandle {
   close: number;
   adjClose?: number;
   volume: number;
+  transactions?: number;    // 當日真實成交筆數 (Spec 0168 / Ticket 02)
   // 台股籌碼選填擴充欄位
   foreignNetBuy?: number;   // 外資買賣超張數
   trustNetBuy?: number;     // 投信買賣超張數

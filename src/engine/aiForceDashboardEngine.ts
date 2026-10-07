@@ -710,6 +710,7 @@ export function generateAiForceReportFromCandles(
     low: number;
     close: number;
     volume: number;
+    transactions?: number;
   }> = [],
   realtimeQuote?: {
     price?: number;
@@ -776,6 +777,8 @@ export function generateAiForceReportFromCandles(
       }
       if (realtimeQuote.transactions !== undefined) {
         fallback.marketBar.transactionCount = realtimeQuote.transactions;
+      } else if (lastValidCandle && (lastValidCandle as any).transactions !== undefined) {
+        fallback.marketBar.transactionCount = (lastValidCandle as any).transactions;
       }
     } else if (lastValidCandle) {
       fallback.marketBar.currentPrice = lastValidCandle.close;
@@ -783,6 +786,9 @@ export function generateAiForceReportFromCandles(
       fallback.marketBar.highPrice = lastValidCandle.high;
       fallback.marketBar.lowPrice = lastValidCandle.low;
       fallback.marketBar.volumeShares = market === 'TW' ? Math.round(lastValidCandle.volume / 1000) : lastValidCandle.volume;
+      if ((lastValidCandle as any).transactions !== undefined) {
+        fallback.marketBar.transactionCount = (lastValidCandle as any).transactions;
+      }
       fallback.marketBar.latestTradingDate = lastValidCandle.date;
       fallback.marketBar.anchorTradingDate = lastValidCandle.date;
       fallback.marketBar.dataPointsCount = effectiveCandles.length;
@@ -1092,7 +1098,7 @@ export function generateAiForceReportFromCandles(
         if (rawVol === undefined) return undefined;
         return market === 'TW' ? Math.round(rawVol / 1000) : rawVol;
       })(),
-      transactionCount: realtimeQuote?.transactions,
+      transactionCount: realtimeQuote?.transactions ?? (last as any)?.transactions,
       openPrice: !settlement.isSettled
         ? last.open
         : (realtimeQuote?.open ?? (realtimeQuote?.price && last.date !== settlement.anchorTradingDate ? undefined : last.open)),
