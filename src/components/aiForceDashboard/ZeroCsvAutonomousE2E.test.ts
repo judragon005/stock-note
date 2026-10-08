@@ -42,13 +42,13 @@ describe('Spec 0170 E2E: 零本地 CSV 依賴、全自主聯網回補與櫃買�
     const hasChips = db.prepare('SELECT 1 FROM tw_institutional_chips WHERE symbol = ? LIMIT 1').get('2330');
     if (!hasChips) {
       db.prepare(`
-        INSERT OR IGNORE INTO tw_institutional_chips (symbol, date, foreign_buy, foreign_sell, foreign_net, trust_buy, trust_sell, trust_net, dealer_buy, dealer_sell, dealer_net, total_net)
+        INSERT OR IGNORE INTO tw_institutional_chips (symbol, date, foreign_net, trust_net, dealer_net)
         VALUES
-          ('2330', '2026-10-01', 10000, 5000, 5000, 2000, 500, 1500, 1000, 200, 800, 7300),
-          ('2330', '2026-10-02', 12000, 6000, 6000, 1500, 300, 1200, 800, 300, 500, 7700),
-          ('2330', '2026-10-05', 15000, 8000, 7000, 3000, 1000, 2000, 500, 100, 400, 9400),
-          ('2330', '2026-10-06', 11000, 7000, 4000, 1000, 200, 800, 600, 200, 400, 5200),
-          ('2330', '2026-10-07', 18000, 9000, 9000, 2500, 500, 2000, 1200, 300, 900, 11900)
+          ('2330', '2026-10-01', 5000, 1500, 800),
+          ('2330', '2026-10-02', 6000, 1200, 500),
+          ('2330', '2026-10-05', 7000, 2000, 400),
+          ('2330', '2026-10-06', 4000, 800, 400),
+          ('2330', '2026-10-07', 9000, 2000, 900)
       `).run();
     }
   });
