@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { AiForceDashboardReport, KlineCandleItem } from '../../types/aiForceDashboard';
 
 export interface TaskPanelProps {
@@ -184,7 +184,7 @@ export function generateTechnicalAlerts(report: AiForceDashboardReport): Technic
  * 任務二：技術警示報告面板 (含處置/注意警示與信用維持率壓力測試)
  */
 export const TechnicalAlertsView: React.FC<TaskPanelProps> = ({ report }) => {
-  const alerts = generateTechnicalAlerts(report);
+  const alerts = useMemo(() => generateTechnicalAlerts(report), [report]);
   const statusTag = report.marketBar?.statusTag ?? report.marketBar?.marketStatusTag ?? 'NORMAL';
 
   const isDisposition = statusTag === 'DISPOSITION';
@@ -446,7 +446,7 @@ export function deriveKdMaMetrics(report: AiForceDashboardReport) {
  */
 export const KdMaView: React.FC<TaskPanelProps> = ({ report }) => {
   const { k, d, ma20, kdCrossingState, multiTimeframeResonance, historicalOversoldStats, recentCandles } =
-    deriveKdMaMetrics(report);
+    useMemo(() => deriveKdMaMetrics(report), [report]);
 
   // SVG 座標繪製計算 (寬 100%, 高 220px, 邊界 20px)
   const svgWidth = 600;
@@ -713,7 +713,7 @@ export function deriveMacdMetrics(report: AiForceDashboardReport) {
  */
 export const MacdView: React.FC<TaskPanelProps> = ({ report }) => {
   const { dif, macd, macdHist, statusText, divergenceInfo, zeroAxisState, momentumAlert, recentCandles } =
-    deriveMacdMetrics(report);
+    useMemo(() => deriveMacdMetrics(report), [report]);
 
   const svgWidth = 600;
   const svgHeight = 220;
