@@ -37,25 +37,33 @@ export function calculateVolumeProfile(
     return {
       buckets: defaultBuckets,
       bullBearFooterTag: '多空平衡',
+      currentPrice: defaultBasePrice,
+      currentPriceYRatio: 0.5,
     };
   }
 
-  // 1. 找出極值
-  let maxHigh = -Infinity;
-  let minLow = Infinity;
-  candles.forEach((c) => {
-    if (c.high > maxHigh) maxHigh = c.high;
-    if (c.low < minLow) minLow = c.low;
+  // 1. 找出近 60 日極值 (Ticket 05: 聚焦近 60 日價格震盪區間，排除過往 250 天極端離群值)
+  const recentCandles = candles.slice(-60);
+  let rawMaxHigh = -Infinity;
+  let rawMinLow = Infinity;
+  recentCandles.forEach((c) => {
+    if (c.high > rawMaxHigh) rawMaxHigh = c.high;
+    if (c.low < rawMinLow) rawMinLow = c.low;
   });
 
-  // 邊界防禦：若價格平盤或異常
-  if (!isFinite(maxHigh) || !isFinite(minLow) || maxHigh <= minLow) {
-    const center = isFinite(maxHigh) && maxHigh > 0 ? maxHigh : defaultBasePrice;
-    maxHigh = center * 1.05;
-    minLow = center * 0.95;
+  // 邊界防禦與 ±5% 緩衝空間
+  let maxHigh: number;
+  let minLow: number;
+  if (isFinite(rawMaxHigh) && isFinite(rawMinLow) && rawMaxHigh > rawMinLow) {
+    maxHigh = Number((rawMaxHigh * 1.05).toFixed(2));
+    minLow = Number((rawMinLow * 0.95).toFixed(2));
+  } else {
+    const center = isFinite(rawMaxHigh) && rawMaxHigh > 0 ? rawMaxHigh : defaultBasePrice;
+    maxHigh = Number((center * 1.05).toFixed(2));
+    minLow = Number((center * 0.95).toFixed(2));
   }
 
-  const span = maxHigh - minLow;
+  const span = Math.max(0.01, maxHigh - minLow);
   const bucketCount = 5;
   const bucketSpan = span / bucketCount;
 
@@ -121,9 +129,14 @@ export function calculateVolumeProfile(
   });
 
   // 4. 計算多空底部分析標籤
+  // 4. 計算多空底部分析標籤與最新現價指針高度比例
   // 找出 POC (成交量佔比最大之桶)
   const maxBucket = [...buckets].sort((a, b) => b.percentage - a.percentage)[0];
   const latestClose = candles[candles.length - 1]?.close ?? defaultBasePrice;
+  const currentPrice = Number(latestClose.toFixed(2));
+  const currentPriceYRatio = Number(
+    Math.max(0, Math.min(1, (maxHigh - currentPrice) / span)).toFixed(4)
+  );
   let bullBearFooterTag = '多空均衡';
 
   if (latestClose > (maxBucket.priceMin + maxBucket.priceMax) / 2) {
@@ -199,6 +212,8 @@ export function calculateVolumeProfile(
     bullBearFooterTag,
     priceTicks,
     heatmapColumns,
+    currentPrice,
+    currentPriceYRatio,
   };
 }
 

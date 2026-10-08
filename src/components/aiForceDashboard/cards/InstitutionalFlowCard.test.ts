@@ -131,5 +131,15 @@ describe('InstitutionalFlowCard - 三大法人雙軸圖表與明細表規範 (Ti
       expect(usData.usMicrostructure.note).toContain('美股無三大法人日報');
     });
   });
+
+  describe('Ticket 06: 表格日期精簡化與 5 欄零溢出排版規範', () => {
+    it('formatShortDate 應將 YYYY-MM-DD 或 YYYY/MM/DD 精簡為 MM/DD', async () => {
+      const { formatShortDate } = await import('./InstitutionalFlowCard');
+      expect(formatShortDate('2026-09-18')).toBe('09/18');
+      expect(formatShortDate('2026/10/05')).toBe('10/05');
+      expect(formatShortDate('09/18')).toBe('09/18');
+      expect(formatShortDate('')).toBe('');
+    });
+  });
 });
 

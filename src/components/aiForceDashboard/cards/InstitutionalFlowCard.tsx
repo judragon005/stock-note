@@ -141,6 +141,18 @@ export function formatSharesCell(shares: number, colorTheme: ColorThemeMode = 't
 }
 
 /**
+ * 精簡日期格式為 MM/DD (Ticket 06: 防止 5 欄明細表格溢出擠壓)
+ */
+export function formatShortDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const parts = dateStr.split(/[-/]/);
+  if (parts.length >= 3) {
+    return `${parts[1]}/${parts[2]}`;
+  }
+  return dateStr;
+}
+
+/**
  * 依據歷史計算近 20 日與近 5 日總結
  */
 export function computeInstitutionalSummaries(history: InstitutionalFlowData['history']): {
@@ -468,8 +480,8 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1.4fr) minmax(200px, 1fr)',
-          gap: '14px',
+          gridTemplateColumns: 'minmax(0, 1.25fr) minmax(180px, 1fr)',
+          gap: '12px',
           flex: 1,
           alignItems: 'center',
           minWidth: 0,
@@ -557,15 +569,15 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
           </svg>
         </div>
 
-        {/* 右側近 3 日明細表格 (Ticket 17) */}
+        {/* 右側近 3 日明細表格 (Ticket 17 / Ticket 06 5 欄零溢出) */}
         <div
           style={{
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
-            overflowX: 'auto',
+            overflowX: 'hidden',
             borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
-            paddingLeft: '10px',
+            paddingLeft: '8px',
             minWidth: 0,
           }}
         >
@@ -573,17 +585,17 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
             style={{
               width: '100%',
               borderCollapse: 'collapse',
-              fontSize: '0.73rem',
+              fontSize: '0.70rem',
               fontFamily: 'monospace',
             }}
           >
             <thead>
               <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', color: '#94a3b8' }}>
-                <th style={{ padding: '4px', textAlign: 'left' }}>日期</th>
-                <th style={{ padding: '4px', textAlign: 'right' }}>外資</th>
-                <th style={{ padding: '4px', textAlign: 'right' }}>投信</th>
-                <th style={{ padding: '4px', textAlign: 'right' }}>自營</th>
-                <th style={{ padding: '4px', textAlign: 'right' }}>合計</th>
+                <th style={{ padding: '2px 4px', textAlign: 'left', whiteSpace: 'nowrap' }}>日期</th>
+                <th style={{ padding: '2px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>外資</th>
+                <th style={{ padding: '2px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>投信</th>
+                <th style={{ padding: '2px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>自營</th>
+                <th style={{ padding: '2px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>合計</th>
               </tr>
             </thead>
             <tbody>
@@ -601,11 +613,11 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
                       background: idx % 2 === 0 ? 'rgba(255, 255, 255, 0.015)' : 'transparent',
                     }}
                   >
-                    <td style={{ padding: '4px', color: '#cbd5e1' }}>{row.date}</td>
-                    <td style={{ padding: '4px', textAlign: 'right', color: fF.color }}>{fF.text}</td>
-                    <td style={{ padding: '4px', textAlign: 'right', color: fT.color }}>{fT.text}</td>
-                    <td style={{ padding: '4px', textAlign: 'right', color: fD.color }}>{fD.text}</td>
-                    <td style={{ padding: '4px', textAlign: 'right', color: fTotal.color, fontWeight: 700 }}>
+                    <td style={{ padding: '2px 4px', color: '#cbd5e1', whiteSpace: 'nowrap' }}>{formatShortDate(row.date)}</td>
+                    <td style={{ padding: '2px 4px', textAlign: 'right', color: fF.color, whiteSpace: 'nowrap' }}>{fF.text}</td>
+                    <td style={{ padding: '2px 4px', textAlign: 'right', color: fT.color, whiteSpace: 'nowrap' }}>{fT.text}</td>
+                    <td style={{ padding: '2px 4px', textAlign: 'right', color: fD.color, whiteSpace: 'nowrap' }}>{fD.text}</td>
+                    <td style={{ padding: '2px 4px', textAlign: 'right', color: fTotal.color, fontWeight: 700, whiteSpace: 'nowrap' }}>
                       {fTotal.text}
                     </td>
                   </tr>

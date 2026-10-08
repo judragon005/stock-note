@@ -22,4 +22,13 @@ describe('BullBearStrengthCard & signal tier calculations', () => {
     expect(mockData.bullStrengthPercent).toBe(58);
     expect(mockData.compositeScore).toBe(70);
   });
+
+  describe('Ticket 06: 多空強度圓環 68px 規格統一', () => {
+    it('圓環直徑應為 68px，半徑 r=26，文字 14px', async () => {
+      const { BULL_BEAR_RING_CONFIG } = await import('./BullBearStrengthCard');
+      expect(BULL_BEAR_RING_CONFIG.size).toBe(68);
+      expect(BULL_BEAR_RING_CONFIG.radius).toBe(26);
+      expect(BULL_BEAR_RING_CONFIG.fontSize).toBe(14);
+    });
+  });
 });

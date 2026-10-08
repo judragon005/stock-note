@@ -10,12 +10,20 @@ describe('Ticket 02 & 03 - 台股 TDCC 集保與月營收批次入庫管線 (Spe
   const testDbPath = path.resolve(process.cwd(), '.scratch/market-cache/test_tdcc_rev.db');
 
   beforeEach(() => {
+    try {
+      const { closeSqliteDb } = require('../../scripts/market-sync/sqlite-db-core.cjs');
+      closeSqliteDb();
+    } catch {}
     if (fs.existsSync(testDbPath)) {
       try { fs.unlinkSync(testDbPath); } catch {}
     }
   });
 
   afterEach(() => {
+    try {
+      const { closeSqliteDb } = require('../../scripts/market-sync/sqlite-db-core.cjs');
+      closeSqliteDb();
+    } catch {}
     if (fs.existsSync(testDbPath)) {
       try { fs.unlinkSync(testDbPath); } catch {}
     }
@@ -26,8 +34,8 @@ describe('Ticket 02 & 03 - 台股 TDCC 集保與月營收批次入庫管線 (Spe
     const { runTdccIngestion } = require('../../scripts/market-sync/ingest-tw-tdcc.cjs');
 
     const db = initSqliteLakehouseDb(testDbPath);
-    db.prepare("INSERT INTO symbols_meta (symbol, name, market, updated_at) VALUES ('2330', '台積電', 'TW', 12345)").run();
-    db.prepare("INSERT INTO symbols_meta (symbol, name, market, updated_at) VALUES ('2454', '聯發科', 'TW', 12345)").run();
+    db.prepare("INSERT OR REPLACE INTO symbols_meta (symbol, name, market, updated_at) VALUES ('2330', '台積電', 'TW', 12345)").run();
+    db.prepare("INSERT OR REPLACE INTO symbols_meta (symbol, name, market, updated_at) VALUES ('2454', '聯發科', 'TW', 12345)").run();
 
     const { savedCount, targetDate } = await runTdccIngestion(testDbPath, '2026-10-02');
     expect(savedCount).toBe(2);
@@ -45,8 +53,8 @@ describe('Ticket 02 & 03 - 台股 TDCC 集保與月營收批次入庫管線 (Spe
     const { runMonthlyRevenueIngestion } = require('../../scripts/market-sync/ingest-tw-monthly-revenue.cjs');
 
     const db = initSqliteLakehouseDb(testDbPath);
-    db.prepare("INSERT INTO symbols_meta (symbol, name, market, updated_at) VALUES ('2330', '台積電', 'TW', 12345)").run();
-    db.prepare("INSERT INTO symbols_meta (symbol, name, market, updated_at) VALUES ('2454', '聯發科', 'TW', 12345)").run();
+    db.prepare("INSERT OR REPLACE INTO symbols_meta (symbol, name, market, updated_at) VALUES ('2330', '台積電', 'TW', 12345)").run();
+    db.prepare("INSERT OR REPLACE INTO symbols_meta (symbol, name, market, updated_at) VALUES ('2454', '聯發科', 'TW', 12345)").run();
 
     const { savedCount, yearMonth } = await runMonthlyRevenueIngestion(testDbPath, '2026-08');
     expect(savedCount).toBe(2);

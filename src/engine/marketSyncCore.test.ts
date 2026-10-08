@@ -3,6 +3,7 @@ import {
   parseTwseT86BulkData,
   parseTpexT86BulkData,
   parseTwseDailyQuotesBulk,
+  parseTpexDailyQuotesBulk,
   computeIncrementalIndicators,
   formatDateYMD,
 } from './marketSyncCore';
@@ -78,7 +79,7 @@ describe('Market Sync Core Engine (全市場批次同步核心)', () => {
   });
 
   describe('3. parseTwseDailyQuotesBulk & parseTpexDailyQuotesBulk (全市場收盤行情)', () => {
-    it('應能從 TWSE 每日收盤行情 (MI_INDEX) 萃取全個股當日 OHLCV', () => {
+    it('應能從 TWSE 每日收盤行情 (MI_INDEX) 萃取全個股當日 OHLCV 與成交筆數', () => {
       const mockMiIndex = {
         stat: 'OK',
         date: '20260915',
@@ -101,6 +102,29 @@ describe('Market Sync Core Engine (全市場批次同步核心)', () => {
       expect(quotes['2330'].low).toBe(995);
       expect(quotes['2330'].close).toBe(1015);
       expect(quotes['2330'].volume).toBe(45123456);
+      expect(quotes['2330'].transactions).toBe(35000);
+    });
+
+    it('應能從 TPEx 每日收盤行情 (1430) 萃取全個股當日行情與真實成交筆數', () => {
+      const mockTpex = {
+        tables: [
+          {
+            data: [
+              ['3260', '威剛', '365.0', '+5.0', '360.0', '368.0', '358.0', '5,620,000', '2,050,000,000', '3,958'],
+            ],
+          },
+        ],
+      };
+
+      const quotes = parseTpexDailyQuotesBulk(mockTpex, '2026-09-15');
+      expect(quotes['3260']).toBeDefined();
+      expect(quotes['3260'].date).toBe('2026-09-15');
+      expect(quotes['3260'].open).toBe(360);
+      expect(quotes['3260'].high).toBe(368);
+      expect(quotes['3260'].low).toBe(358);
+      expect(quotes['3260'].close).toBe(365);
+      expect(quotes['3260'].transactions).toBe(3958);
+      expect(quotes['3260'].volume).toBe(5620000);
     });
   });
 

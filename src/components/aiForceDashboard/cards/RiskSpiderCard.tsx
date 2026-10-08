@@ -112,9 +112,15 @@ const FIVE_AXIS_CONFIG = [
 
 import { MoreVertical } from 'lucide-react';
 
+export const RISK_SPIDER_CONFIG = {
+  center: { x: 175, y: 155 },
+  maxRadius: 120,
+  labelFontSize: 15,
+  scoreFontSize: 14,
+};
+
 export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
-  const center: Point = { x: 160, y: 125 };
-  const maxRadius = 96;
+  const { center, maxRadius, labelFontSize, scoreFontSize } = RISK_SPIDER_CONFIG;
 
   const scoreValues = useMemo(() => {
     return [
@@ -154,7 +160,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
   // 文字標籤坐標
   const labelPositions = useMemo(() => {
     return FIVE_AXIS_CONFIG.map((cfg, idx) => {
-      const extraOffset = idx === 0 ? 18 : 22;
+      const extraOffset = idx === 0 ? 22 : 28;
       const pos = calculateFiveAxisVertex(center, maxRadius + extraOffset, idx, 5);
       return {
         ...cfg,
@@ -188,9 +194,10 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
           alignItems: 'center',
           justifyContent: 'space-between',
           marginBottom: '10px',
+          whiteSpace: 'nowrap',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
           <span
             style={{
               padding: '2px 6px',
@@ -199,6 +206,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
               color: '#60a5fa',
               fontSize: '0.72rem',
               fontWeight: 800,
+              flexShrink: 0,
             }}
           >
             05
@@ -208,7 +216,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
             dynamicDiagnosis={diagnoseDayTradeRisk(data.mainForceRiskIndex ?? 60, 50)}
             showIcon={true}
           >
-            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc', whiteSpace: 'nowrap' }}>
               風險雷達圖
             </span>
           </TermTooltip>
@@ -225,6 +233,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
             padding: '2px',
             display: 'flex',
             alignItems: 'center',
+            flexShrink: 0,
           }}
         >
           <MoreVertical size={14} />
@@ -234,7 +243,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
       {/* SVG 五角蛛網圖繪製區 */}
       <div style={{ width: '100%', flex: 1, minHeight: '230px', position: 'relative' }}>
         <svg
-          viewBox="0 0 320 260"
+          viewBox="0 0 350 310"
           style={{ width: '100%', height: '100%', overflow: 'visible' }}
           preserveAspectRatio="xMidYMid meet"
         >
@@ -303,7 +312,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
                 y={lbl.y - 4}
                 textAnchor="middle"
                 fill="#cbd5e1"
-                fontSize="13"
+                fontSize={labelFontSize}
                 fontWeight="700"
               >
                 {lbl.icon} {lbl.label}
@@ -313,7 +322,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
                 y={lbl.y + 11}
                 textAnchor="middle"
                 fill="#ef4444"
-                fontSize="12"
+                fontSize={scoreFontSize}
                 fontWeight="800"
                 fontFamily="monospace"
               >
@@ -335,11 +344,13 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
           borderRadius: '8px',
           background: 'rgba(30, 41, 59, 0.45)',
           border: '1px solid rgba(59, 130, 246, 0.15)',
+          whiteSpace: 'nowrap',
+          gap: '8px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', flexShrink: 0 }}>
           <TermTooltip termId="dayTradeRisk" dynamicDiagnosis={diagnoseDayTradeRisk(data.mainForceRiskIndex ?? 60, 50)}>
-            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>主力風險等級：</span>
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>主力風險等級：</span>
           </TermTooltip>
           <span
             style={{
@@ -350,15 +361,16 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
               border: `1px solid ${riskBadge.border}`,
               fontSize: '0.74rem',
               fontWeight: 800,
+              whiteSpace: 'nowrap',
             }}
           >
             {riskBadge.label}
           </span>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap', flexShrink: 0 }}>
           <TermTooltip termId="dayTradeRisk" dynamicDiagnosis={diagnoseDayTradeRisk(data.mainForceRiskIndex ?? 60, 50)}>
-            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>主力風險指數：</span>
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>主力風險指數：</span>
           </TermTooltip>
           <span
             style={{
@@ -366,6 +378,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
               fontSize: '0.82rem',
               fontWeight: 800,
               fontFamily: 'monospace',
+              whiteSpace: 'nowrap',
             }}
           >
             {data.mainForceRiskIndex ?? 60}%

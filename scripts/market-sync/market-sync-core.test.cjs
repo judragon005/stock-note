@@ -39,18 +39,20 @@ d('scripts/market-sync/market-sync-core.test.cjs (Ticket 03)', () => {
     exp(res['2330']).toBeDefined();
     exp(res['2330'].symbol).toBe('2330');
     exp(res['2330'].close).toBe(985);
+    exp(res['2330'].transactions).toBe(30000);
     exp(res['0050']).toBeDefined();
     exp(res['0050'].symbol).toBe('0050');
     exp(res['0050'].close).toBe(181);
+    exp(res['0050'].transactions).toBe(8000);
   });
 
-  t('2. parseTpexDailyQuotesBulk 產出的行情物件必須具備非空 symbol 屬性，且去除 O 尾綴', () => {
+  t('2. parseTpexDailyQuotesBulk 產出的行情物件必須具備非空 symbol 屬性，且去除 O 尾綴與正確提取 transactions', () => {
     const mockTpexData = {
       tables: [
         {
           data: [
-            ['3293', '鈊象', '750', '10', '740', '755', '735', '1,500,000'],
-            ['00679BO', '元大美債20年', '31.5', '0.2', '31.4', '31.6', '31.3', '50,000,000'],
+            ['3293', '鈊象', '750', '10', '740', '755', '735', '1,500,000', '1,125,000,000', '1,500'],
+            ['00679BO', '元大美債20年', '31.5', '0.2', '31.4', '31.6', '31.3', '50,000,000', '1,575,000,000', '50,000'],
           ],
         },
       ],
@@ -60,10 +62,14 @@ d('scripts/market-sync/market-sync-core.test.cjs (Ticket 03)', () => {
     exp(res['3293']).toBeDefined();
     exp(res['3293'].symbol).toBe('3293');
     exp(res['3293'].close).toBe(750);
+    exp(res['3293'].transactions).toBe(1500);
+    exp(res['3293'].volume).toBe(1500000);
 
     // 00679BO 應自動正規化為 00679B
     exp(res['00679B']).toBeDefined();
     exp(res['00679B'].symbol).toBe('00679B');
     exp(res['00679B'].close).toBe(31.5);
+    exp(res['00679B'].transactions).toBe(50000);
+    exp(res['00679B'].volume).toBe(50000000);
   });
 });

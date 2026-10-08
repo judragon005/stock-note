@@ -21,6 +21,7 @@ export interface MarketBarData {
   anchorTradingDate?: string; // 量化分析基準日 (YYYY-MM-DD)
   settlementReason?: string; // 未結算之說明提示
   marketStatusTag?: 'NORMAL' | 'ATTENTION' | 'DISPOSITION'; // 注意股票或處置股票狀態標籤
+  statusTag?: 'NORMAL' | 'ATTENTION' | 'DISPOSITION'; // 相容處置狀態標記別名
   currency?: 'TWD' | 'USD'; // 標的計價幣別
   volumeUnit?: '張' | '股'; // 成交量單位
   intradayQuote?: {
@@ -141,6 +142,8 @@ export interface VolumeProfileData {
   bullBearFooterTag: string; // "多多多多多"
   priceTicks?: number[]; // 自適應 5 階 Y 軸價格刻度 (由大到小)
   heatmapColumns?: HeatmapColumn[]; // 4 欄週期熱力數據 (5日/10日/20日/60日)
+  currentPrice?: number; // 最新收盤價
+  currentPriceYRatio?: number; // 最新現價落於熱區圖之相對高度比例 (0~1)
 }
 
 /**

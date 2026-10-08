@@ -90,5 +90,44 @@ describe('VolumeProfileEngine - 成交量價位分佈演算法 (Ticket 08)', () 
     // 每欄 9 個色塊階梯
     expect(result.heatmapColumns?.[0].cells.length).toBe(9);
   });
+
+  describe('Ticket 05: 近 60 日動態價格聚焦與現價指針線比例', () => {
+    it('縱軸刻度應聚焦於近 60 日最高最低價 ±5% 緩衝，而非全歷史 250 日極值', () => {
+      // 模擬威剛 3260: 歷史有 500 元，但近 60 日在 350~380 元
+      const historicalCandles = Array.from({ length: 60 }, () => ({
+        high: 525,
+        low: 500,
+        close: 510,
+        volume: 1000,
+      }));
+      const recent60Candles = Array.from({ length: 60 }, () => ({
+        high: 380,
+        low: 350,
+        close: 362.5,
+        volume: 2000,
+      }));
+      const allCandles = [...historicalCandles, ...recent60Candles];
+
+      const result = calculateVolumeProfile(allCandles);
+
+      // 近 60 日最高 380 * 1.05 = 399，最低 350 * 0.95 = 332.5
+      expect(result.priceTicks![0]).toBeLessThan(450); // 不應是歷史 525
+      expect(result.priceTicks![0]).toBeCloseTo(399, -1);
+      expect(result.priceTicks![4]).toBeGreaterThan(300); // 不應受歷史影響
+      expect(result.priceTicks![4]).toBeCloseTo(332.5, -1);
+    });
+
+    it('應正確計算最新現價與熱區圖相對高度比例 currentPriceYRatio (0~1)', () => {
+      const candles = [
+        { high: 380, low: 350, close: 365, volume: 1000 },
+      ];
+      const result = calculateVolumeProfile(candles);
+
+      expect(result.currentPrice).toBe(365);
+      expect(result.currentPriceYRatio).toBeDefined();
+      expect(result.currentPriceYRatio!).toBeGreaterThan(0);
+      expect(result.currentPriceYRatio!).toBeLessThan(1);
+    });
+  });
 });
 
