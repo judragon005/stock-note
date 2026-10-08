@@ -274,6 +274,133 @@ describe('Ticket 03: AI 主力戰情室端到端資料庫注入與全視圖驗�
     expect(report.forceDistribution.largePlayerBuyPercent).toBeGreaterThan(0);
     expect(report.bullBearStrength.compositeScore).toBeGreaterThan(0);
   });
+
+  it('Spec 0169 / ADR 0169 (Ticket 07): 0050 ETF、2330 個股與 NVDA 美股全頻譜端到端 E2E 驗收', () => {
+    // 1. 2330 台積電：TDCC 集保與月營收雙卡貫通
+    const mock2330Candles = Array.from({ length: 60 }, (_, i) => ({
+      date: `2026-07-${String((i % 25) + 1).padStart(2, '0')}`,
+      open: 900 + i * 2,
+      high: 910 + i * 2,
+      low: 895 + i * 2,
+      close: 905 + i * 2,
+      volume: 25000000,
+    }));
+    const mock2330Tdcc = [
+      { date: '2026-09-18', totalShareholders: 1400000, over1000Ratio: 62.5 },
+      { date: '2026-09-25', totalShareholders: 1390000, over1000Ratio: 63.8 },
+    ];
+    const mock2330Revenue = [
+      { yearMonth: '2026-07', revenue: 250000000, yoyGrowth: 28.5, momGrowth: 5.2 },
+      { yearMonth: '2026-08', revenue: 265000000, yoyGrowth: 33.1, momGrowth: 6.0 },
+    ];
+    const mock2330Inst = [
+      { date: '2026-09-25', foreignShares: 12000, trustShares: 3500, dealerShares: -500 },
+    ];
+
+    const report2330 = generateAiForceReportFromCandles(
+      '2330',
+      '台積電',
+      'TW',
+      mock2330Candles,
+      { price: 1025, change: 15, changePercent: 1.48 },
+      undefined,
+      undefined,
+      {
+        tdccRecords: mock2330Tdcc,
+        revenueRecords: mock2330Revenue,
+        institutionalRecords: mock2330Inst,
+        currency: 'TWD',
+        volumeUnit: '張',
+      }
+    );
+
+    // 驗證 Card 19 TDCC 數據存在且正確計算
+    expect(report2330.tdccDistribution).toBeDefined();
+    expect(report2330.tdccDistribution?.history.length).toBe(2);
+    expect(report2330.tdccDistribution?.history[1].over1000Ratio).toBe(63.8);
+    expect(report2330.tdccDistribution?.isEmpty).toBe(false);
+
+    // 驗證 Card 20 月營收數據存在且非 ETF
+    expect(report2330.monthlyRevenue).toBeDefined();
+    expect(report2330.monthlyRevenue?.isEtf).toBe(false);
+    expect(report2330.monthlyRevenue?.history.length).toBe(2);
+    expect(report2330.monthlyRevenue?.latestYoyRate).toBe(33.1);
+
+    // 驗證 Card 08 法人買賣超：真實數據非假張數
+    expect(report2330.institutionalFlow.history.length).toBe(1);
+    expect(report2330.institutionalFlow.history[0].foreignShares).toBe(12000);
+
+    // 2. 0050 元大台灣50：ETF 自適應模式驗收
+    const mock0050Candles = Array.from({ length: 60 }, (_, i) => ({
+      date: `2026-07-${String((i % 25) + 1).padStart(2, '0')}`,
+      open: 180 + i * 0.2,
+      high: 182 + i * 0.2,
+      low: 179 + i * 0.2,
+      close: 181 + i * 0.2,
+      volume: 15000000,
+    }));
+
+    const report0050 = generateAiForceReportFromCandles(
+      '0050',
+      '元大台灣50',
+      'TW',
+      mock0050Candles,
+      { price: 195, change: 1.5, changePercent: 0.78 },
+      undefined,
+      undefined,
+      {
+        tdccRecords: [],
+        revenueRecords: [],
+        currency: 'TWD',
+        volumeUnit: '張',
+      }
+    );
+
+    // 驗證 0050 正確自適應為 ETF 視圖
+    expect(report0050.monthlyRevenue?.isEtf).toBe(true);
+    expect(report0050.monthlyRevenue?.etfData?.aumBillion).toBeDefined();
+    expect(report0050.monthlyRevenue?.etfData?.dividendYield).toBeDefined();
+
+    // 3. NVDA 美股：微觀動能與零假數據驗收
+    const mockNvdaCandles = Array.from({ length: 60 }, (_, i) => ({
+      date: `2026-07-${String((i % 25) + 1).padStart(2, '0')}`,
+      open: 120 + i * 0.5,
+      high: 125 + i * 0.5,
+      low: 118 + i * 0.5,
+      close: 122 + i * 0.5,
+      volume: 45000000,
+    }));
+
+    const reportNvda = generateAiForceReportFromCandles(
+      'NVDA',
+      'NVIDIA Corporation',
+      'US',
+      mockNvdaCandles,
+      { price: 150, change: 3.5, changePercent: 2.39 },
+      undefined,
+      undefined,
+      {
+        currency: 'USD',
+        volumeUnit: '股',
+      }
+    );
+
+    // 驗證美股市場資訊
+    expect(reportNvda.marketBar.currency).toBe('USD');
+    expect(reportNvda.marketBar.volumeUnit).toBe('股');
+
+    // 驗證微觀動能指標
+    expect(reportNvda.institutionalFlow.usMicrostructure).toBeDefined();
+    expect(reportNvda.institutionalFlow.usMicrostructure?.score).toBeGreaterThanOrEqual(0);
+    expect(reportNvda.institutionalFlow.usMicrostructure?.mfi).toBeGreaterThanOrEqual(0);
+
+    // 驗證徹底杜絕假張數 (history 應為空陣列)
+    expect(reportNvda.institutionalFlow.history).toHaveLength(0);
+
+    // 驗證美股集保與月營收空狀態標註
+    expect(reportNvda.tdccDistribution?.isEmpty).toBe(true);
+    expect(reportNvda.tdccDistribution?.concentrationBadge).toContain('美股');
+  });
 });
 
 

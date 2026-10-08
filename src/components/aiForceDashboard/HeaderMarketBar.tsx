@@ -98,6 +98,54 @@ export function formatMarketMetric(val?: number, fractionDigits: number = 0): st
   });
 }
 
+/**
+ * 核心常駐快速切換標籤 (Spec 0169 Ticket 05)
+ */
+export const QUICK_CHIPS: Array<{ symbol: string; name: string; market: MarketType }> = [
+  { symbol: '0050', name: '元大台灣50', market: 'TW' },
+  { symbol: '2330', name: '台積電', market: 'TW' },
+  { symbol: '2454', name: '聯發科', market: 'TW' },
+  { symbol: 'NVDA', name: '輝達', market: 'US' },
+  { symbol: 'AAPL', name: '蘋果', market: 'US' },
+];
+
+/**
+ * 本地備援模糊搜尋候選標的 (支援代碼與中文名稱)
+ */
+export function searchCandidateSymbols(
+  query: string,
+  extraList?: Array<{ symbol: string; name: string; market: MarketType }>
+): Array<{ symbol: string; name: string; market: MarketType }> {
+  if (!query || query.trim().length === 0) return [];
+  const q = query.trim().toLowerCase();
+  const pool = [
+    ...QUICK_CHIPS,
+    { symbol: '2317', name: '鴻海', market: 'TW' as const },
+    { symbol: '0056', name: '元大高股息', market: 'TW' as const },
+    { symbol: '00878', name: '國泰永續高股息', market: 'TW' as const },
+    { symbol: '2308', name: '台達電', market: 'TW' as const },
+    { symbol: '2382', name: '廣達', market: 'TW' as const },
+    { symbol: '2603', name: '長榮', market: 'TW' as const },
+    { symbol: 'TSLA', name: '特斯拉', market: 'US' as const },
+    { symbol: 'MSFT', name: '微軟', market: 'US' as const },
+    ...(extraList || []),
+  ];
+
+  const seen = new Set<string>();
+  const results: Array<{ symbol: string; name: string; market: MarketType }> = [];
+  for (const item of pool) {
+    if (seen.has(item.symbol)) continue;
+    if (
+      item.symbol.toLowerCase().includes(q) ||
+      item.name.toLowerCase().includes(q)
+    ) {
+      seen.add(item.symbol);
+      results.push(item);
+    }
+  }
+  return results.slice(0, 8);
+}
+
 export interface HeaderMarketBarProps {
   data: MarketBarData;
   colorTheme?: ColorThemeMode;
@@ -116,10 +164,69 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
   onAnalyze,
 }) => {
   const [inputVal, setInputVal] = useState(currentSymbol);
+  const [suggestions, setSuggestions] = useState<Array<{ symbol: string; name: string; market: MarketType }>>([]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const searchContainerRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setInputVal(currentSymbol);
   }, [currentSymbol]);
+
+  // 監聽全域點擊事件，點擊外部時關閉下拉選單 (Ticket 05 UX 強化)
+  useEffect(() => {
+    const handleDocumentClick = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentClick);
+    };
+  }, []);
+
+  // 30ms 防抖搜尋下拉補全 (Ticket 05)
+  useEffect(() => {
+    let isCancelled = false;
+    const trimmed = inputVal.trim();
+    if (!trimmed) {
+      setSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/market/symbols?q=${encodeURIComponent(trimmed)}`);
+        if (res.ok && !isCancelled) {
+          const list = await res.json();
+          if (Array.isArray(list) && list.length > 0) {
+            setSuggestions(
+              list.slice(0, 8).map((s: any) => ({
+                symbol: s.symbol,
+                name: s.name,
+                market: (s.market as MarketType) || inferMarketType(s.symbol),
+              }))
+            );
+            return;
+          }
+        }
+      } catch {
+        // 忽略網路錯誤，降級使用本地備援搜尋
+      }
+
+      if (!isCancelled) {
+        // 本地模糊匹配
+        const fallbackList = searchCandidateSymbols(trimmed);
+        setSuggestions(fallbackList);
+      }
+    }, 30);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [inputVal]);
 
   const changeMeta = formatMarketChange(data.change, data.changePercent, colorTheme);
 
@@ -128,8 +235,15 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
   const marketBadge = getSystemBadgeConfig('MARKET_STATUS', true);
   const volBadge = getSystemBadgeConfig('VOLATILITY', data.statusBadges.volatilityAlert);
 
+  const handleSelectSymbol = (sym: string, mkt: MarketType) => {
+    setInputVal(sym);
+    setIsDropdownOpen(false);
+    onAnalyze?.(sym, mkt);
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setIsDropdownOpen(false);
     const clean = cleanSymbolInput(inputVal);
     if (!clean || !onAnalyze) return;
     const inferred = inferMarketType(clean);
@@ -152,7 +266,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
         boxSizing: 'border-box',
       }}
     >
-      {/* 1. 第一層：股票搜尋操作與 4 大全繁中科技感狀態燈號 */}
+      {/* 1. 第一層：股票搜尋操作、常駐快捷膠囊與 4 大狀態指示燈 */}
       <div
         style={{
           display: 'flex',
@@ -165,65 +279,168 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
           borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
         }}
       >
-        {/* 左側：股票代號輸入框、股票名稱與分析按鈕 */}
-        <form
-          onSubmit={handleSearchSubmit}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'rgba(30, 41, 59, 0.85)',
-            padding: '3px 10px 3px 6px',
-            borderRadius: '8px',
-            border: '1px solid rgba(59, 130, 246, 0.4)',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.25)',
-          }}
-        >
-          <input
-            type="text"
-            value={inputVal}
-            onChange={(e) => setInputVal(e.target.value)}
-            placeholder="代號"
-            aria-label="股票代號"
-            style={{
-              minWidth: '95px',
-              maxWidth: '140px',
-              width: `${Math.max(6, inputVal.length + 1)}ch`,
-              padding: '0 4px',
-              background: 'transparent',
-              border: 'none',
-              outline: 'none',
-              color: '#38bdf8',
-              fontSize: '1.15rem',
-              fontWeight: 800,
-              textAlign: 'center',
-              letterSpacing: '0.8px',
-            }}
-          />
-          <span style={{ fontSize: '1.05rem', fontWeight: 700, color: '#f8fafc', whiteSpace: 'nowrap' }}>
-            {currentName}
-          </span>
-          <button
-            type="submit"
-            disabled={isLoading}
-            style={{
-              padding: '4px 10px',
-              borderRadius: '6px',
-              background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-              border: 'none',
-              color: '#ffffff',
-              fontSize: '0.78rem',
-              fontWeight: 700,
-              cursor: isLoading ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              boxShadow: '0 2px 6px rgba(37, 99, 235, 0.4)',
-            }}
+        {/* 左側：股票代號輸入框、即時下拉提示與常駐快速切換膠囊 */}
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+          <div ref={searchContainerRef} style={{ position: 'relative' }}>
+            <form
+              onSubmit={handleSearchSubmit}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'rgba(30, 41, 59, 0.85)',
+                padding: '3px 10px 3px 6px',
+                borderRadius: '8px',
+                border: '1px solid rgba(59, 130, 246, 0.4)',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.25)',
+              }}
+            >
+              <input
+                type="text"
+                value={inputVal}
+                onChange={(e) => {
+                  setInputVal(e.target.value);
+                  setIsDropdownOpen(true);
+                }}
+                onFocus={() => setIsDropdownOpen(true)}
+                placeholder="代號/中文"
+                aria-label="股票代號"
+                style={{
+                  minWidth: '95px',
+                  maxWidth: '140px',
+                  width: `${Math.max(6, inputVal.length + 1)}ch`,
+                  padding: '0 4px',
+                  background: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  color: '#38bdf8',
+                  fontSize: '1.15rem',
+                  fontWeight: 800,
+                  textAlign: 'center',
+                  letterSpacing: '0.8px',
+                }}
+              />
+              <span style={{ fontSize: '1.05rem', fontWeight: 700, color: '#f8fafc', whiteSpace: 'nowrap' }}>
+                {currentName}
+              </span>
+              <button
+                type="submit"
+                disabled={isLoading}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                  border: 'none',
+                  color: '#ffffff',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  cursor: isLoading ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  boxShadow: '0 2px 6px rgba(37, 99, 235, 0.4)',
+                }}
+              >
+                {isLoading ? <RefreshCw size={12} className="animate-spin" /> : <span>分析</span>}
+              </button>
+            </form>
+
+            {/* 即時搜尋下拉補全卡片 (Ticket 05) */}
+            {isDropdownOpen && suggestions.length > 0 && (
+              <div
+                data-testid="search-autocomplete-dropdown"
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 4px)',
+                  left: 0,
+                  width: '280px',
+                  background: '#0f172a',
+                  border: '1px solid rgba(59, 130, 246, 0.4)',
+                  borderRadius: '8px',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.6)',
+                  zIndex: 50,
+                  overflow: 'hidden',
+                }}
+              >
+                {suggestions.map((item) => (
+                  <div
+                    key={`${item.market}-${item.symbol}`}
+                    data-testid={`suggestion-item-${item.symbol}`}
+                    onClick={() => handleSelectSymbol(item.symbol, item.market)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                      transition: 'background 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = 'rgba(59, 130, 246, 0.2)';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = 'transparent';
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: '#38bdf8', fontWeight: 800, fontSize: '0.9rem' }}>
+                        {item.symbol}
+                      </span>
+                      <span style={{ color: '#f8fafc', fontSize: '0.85rem' }}>{item.name}</span>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: '0.68rem',
+                        padding: '1px 5px',
+                        borderRadius: '4px',
+                        background: item.market === 'US' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                        color: item.market === 'US' ? '#34d399' : '#60a5fa',
+                      }}
+                    >
+                      {item.market}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 常駐核心標的快速切換膠囊 (Ticket 05) */}
+          <div
+            data-testid="header-quick-chips"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}
           >
-            {isLoading ? <RefreshCw size={12} className="animate-spin" /> : <span>分析</span>}
-          </button>
-        </form>
+            {QUICK_CHIPS.map((chip) => {
+              const isActive = chip.symbol === currentSymbol;
+              return (
+                <button
+                  key={chip.symbol}
+                  type="button"
+                  data-testid={`quick-chip-${chip.symbol}`}
+                  onClick={() => handleSelectSymbol(chip.symbol, chip.market)}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: '6px',
+                    border: `1px solid ${isActive ? '#38bdf8' : 'rgba(255, 255, 255, 0.12)'}`,
+                    background: isActive ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                    color: isActive ? '#38bdf8' : '#cbd5e1',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <span>{chip.symbol}</span>
+                  <span style={{ fontSize: '0.68rem', opacity: 0.8 }}>{chip.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         {/* 處置/注意股票警示徽章 (Ticket 13) */}
         {data.marketStatusTag === 'DISPOSITION' && (

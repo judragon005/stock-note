@@ -273,5 +273,30 @@ describe('KLineChartCard - 專業互動與多功能副圖 (Ticket 35 / Stage 1)'
       expect(sliced250[249].date).toBe('2025-01-300');
     });
   });
+
+  describe('Ticket 06: 主 K 線多週期聚合切換 (日 K / 週 K / 月 K) 與 As-of Date (Spec 0169)', () => {
+    const dailyCandles = [
+      { date: '2026-09-01', open: 100, high: 105, low: 98, close: 102, volume: 1000 },
+      { date: '2026-09-02', open: 102, high: 108, low: 101, close: 106, volume: 1200 },
+      { date: '2026-09-03', open: 106, high: 107, low: 103, close: 104, volume: 800 },
+      { date: '2026-09-04', open: 104, high: 110, low: 103, close: 109, volume: 1500 },
+      { date: '2026-09-07', open: 109, high: 112, low: 107, close: 111, volume: 1100 },
+      { date: '2026-09-08', open: 111, high: 115, low: 110, close: 113, volume: 1300 },
+    ];
+
+    it('發布基準日 As-of Date 應精確鎖定最新有效交易日', () => {
+      const sorted = normalizeAndSortCandles(dailyCandles);
+      const latestDate = sorted[sorted.length - 1]?.date;
+      expect(latestDate).toBe('2026-09-08');
+    });
+
+    it('切片與聚合後的價格極值能正確支撐畫布渲染', () => {
+      const sliced = sliceCandlesByPeriod(dailyCandles, '30D');
+      const range = calculatePriceRange(sliced);
+      expect(range.min).toBeLessThan(98);
+      expect(range.max).toBeGreaterThan(115);
+      expect(range.span).toBe(range.max - range.min);
+    });
+  });
 });
 

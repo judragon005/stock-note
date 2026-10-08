@@ -9,6 +9,7 @@ import { ColorThemeMode } from '../../../types/stock';
 import { MoreVertical } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseMainForceCost } from '../../../constants/aiForceGlossary';
+import { aggregateCandlesToTimeframe, KlineTimeframe } from '../../../engine/klineAggregationEngine';
 
 export interface PriceRange {
   min: number;
@@ -205,21 +206,27 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
   data,
   colorTheme = 'taiwan',
 }) => {
+  const [timeframe, setTimeframe] = useState<KlineTimeframe>('DAY');
   const [period, setPeriod] = useState<KlinePeriodMode>('60D');
   const [subchartMode, setSubchartMode] = useState<SubchartIndicatorMode>('VOL');
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [showKeyLevels, setShowKeyLevels] = useState(true);
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
 
-  // 1. 若無真實歷史資料，建立 30 根示範 K 線，並強制按日期升冪排序
+  // 1. 若無真實歷史資料，強制按日期升冪排序
   const rawCandles = useMemo(() => {
     return normalizeAndSortCandles(data.candles);
   }, [data.candles]);
 
-  // 2. 依據週期切片提取當前檢視蠟燭
+  // 2. 依據 timeframe (日 K / 週 K / 月 K) 毫秒級聚合蠟燭
+  const aggregatedCandles = useMemo(() => {
+    return aggregateCandlesToTimeframe(rawCandles, timeframe);
+  }, [rawCandles, timeframe]);
+
+  // 3. 依據週期切片提取當前檢視蠟燭
   const displayCandles = useMemo(() => {
-    return sliceCandlesByPeriod(rawCandles, period);
-  }, [rawCandles, period]);
+    return sliceCandlesByPeriod(aggregatedCandles, period);
+  }, [aggregatedCandles, period]);
 
   const priceRange = useMemo(() => calculatePriceRange(displayCandles), [displayCandles]);
 
@@ -421,8 +428,9 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
             | AI 主力行為判讀系統
           </span>
 
-          {/* 多週期切換按鈕 */}
+          {/* 日K / 週K / 月K 切換工具列 */}
           <div
+            data-testid="kline-timeframe-selector"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -432,6 +440,49 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
               border: '1px solid rgba(255, 255, 255, 0.08)',
               gap: '2px',
               marginLeft: '6px',
+            }}
+          >
+            {(['DAY', 'WEEK', 'MONTH'] as KlineTimeframe[]).map((tf) => {
+              const labelMap: Record<KlineTimeframe, string> = {
+                DAY: '日K',
+                WEEK: '週K',
+                MONTH: '月K',
+              };
+              return (
+                <button
+                  key={tf}
+                  type="button"
+                  data-testid={`kline-timeframe-${tf.toLowerCase()}`}
+                  onClick={() => setTimeframe(tf)}
+                  style={{
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: timeframe === tf ? 'rgba(16, 185, 129, 0.8)' : 'transparent',
+                    color: timeframe === tf ? '#ffffff' : '#94a3b8',
+                    fontSize: '0.68rem',
+                    fontWeight: timeframe === tf ? 700 : 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {labelMap[tf]}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* 週期長度切換按鈕 */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              background: 'rgba(30, 41, 59, 0.8)',
+              padding: '2px 4px',
+              borderRadius: '6px',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              gap: '2px',
+              marginLeft: '4px',
             }}
           >
             {(['30D', '60D', '120D', '250D'] as KlinePeriodMode[]).map((p) => (
@@ -455,6 +506,21 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
               </button>
             ))}
           </div>
+
+          {/* 發布基準日 (As-of Date) */}
+          {displayCandles.length > 0 && (
+            <span
+              data-testid="kline-as-of-date"
+              style={{
+                fontSize: '0.68rem',
+                color: '#64748b',
+                marginLeft: '6px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              基準日: {displayCandles[displayCandles.length - 1].date}
+            </span>
+          )}
         </div>
 
         {/* 均線圖例、副圖指標切換與選單 */}

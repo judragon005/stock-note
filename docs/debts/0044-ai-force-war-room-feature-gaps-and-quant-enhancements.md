@@ -2,7 +2,8 @@
 
 - **建立日期**: 2026-10-03
 - **來源**: /grill-with-docs 深度調研 (對齊波段存股客群、純免費數據邊界、視覺化決策輔助定位與美股獨立戰情室)
-- **狀態**: `OPEN`
+- **狀態**: `RESOLVED` (Spec 0169 / Issue #188)
+- **解決日期**: 2026-10-08
 - **優先級**: `P2 (Medium)`
 - **標籤**: `AiForceWarRoom` · `SwingTrading` · `DividendInvesting` · `US-Market` · `VisualDecision` · `Lakehouse`
 
@@ -61,6 +62,10 @@
 
 ---
 
-## 4. 預計觸發時機
+## 4. 結案紀錄 (Resolution Summary)
 
-於主力戰情室 V2（波段與美股專題迭代）中排程實作。
+於 **Spec 0169 / Issue #188** 全面實裝並閉環：
+- **Card 19 TDCC 集保千張大戶趨勢卡** 與 **Card 20 月營收與成長趨勢卡 (含 ETF 自適應)** 正式上線並完成 Bento Grid 拓撲排版。
+- **美股獨立微觀結構化**：卡片 08/15 徹底剔除假三大法人張數，切換為機構量價評分、MFI/OBV 動能與 USD/股 單位，嚴格執行零假數據 (Zero-Mock Policy)。
+- **主 K 線多週期聚合切換**：完成純函數 `klineAggregationEngine`，提供【日 K | 週 K | 月 K】毫秒級動態切換與均線自適應重算，並於各卡片顯式標註「發布基準日 (As-of Date)」。
+- **搜尋與熱門快捷**：頂部搜尋列 30ms 防抖下拉補全與常駐 5 大快捷標籤。

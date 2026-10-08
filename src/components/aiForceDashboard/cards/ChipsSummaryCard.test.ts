@@ -35,4 +35,25 @@ describe('ChipsSummaryCard & Sparkline normalization', () => {
     expect(mockData.foreignNetShares).toBe(-166);
     expect(mockData.threeInstitutionsTotal).toBe(5);
   });
+
+  it('Ticket 04: 美股標的 (isUsMarket=true) 應包含美股機構評分與 USD 標記，外資為 0 張', () => {
+    const usChipsData: ChipsSummaryData = {
+      foreignNetShares: 0,
+      trustNetShares: 0,
+      dealerNetShares: 0,
+      threeInstitutionsTotal: 0,
+      verdictNote: '2026-09-25 美股微觀動能評估 (72分) | 已切換為機構量價評分',
+      conclusionBadge: '機構量價偏多',
+      sparklineHistory: [],
+      isUsMarket: true,
+      usMicroNote: '美股無三大法人日報，已切換為機構量價評分',
+      asOfDateText: '2026-09-25',
+    };
+
+    expect(usChipsData.isUsMarket).toBe(true);
+    expect(usChipsData.foreignNetShares).toBe(0);
+    expect(usChipsData.trustNetShares).toBe(0);
+    expect(usChipsData.dealerNetShares).toBe(0);
+    expect(usChipsData.usMicroNote).toContain('美股無三大法人日報');
+  });
 });

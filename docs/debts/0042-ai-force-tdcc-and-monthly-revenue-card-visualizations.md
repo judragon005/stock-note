@@ -2,7 +2,8 @@
 
 - **建立日期**: 2026-10-03
 - **來源**: Code Review (Spec 0164 / Issue #163)
-- **狀態**: `OPEN`
+- **狀態**: `RESOLVED` (Spec 0169 / Issue #188)
+- **解決日期**: 2026-10-08
 - **優先級**: `P2 (Medium)`
 - **標籤**: `Feature` · `UI` · `AiForceDashboard` · `TDCC` · `Revenue`
 
@@ -25,6 +26,9 @@
 
 ---
 
-## 3. 預計觸發時機
+## 3. 結案紀錄 (Resolution Summary)
 
-下一期主力戰情室卡片視覺化增強或基本面計量升級迭代時觸發。
+於 **Spec 0169 / Issue #188** 全面實裝並閉環：
+- **Card 19 TDCC 集保千張大戶趨勢卡** (`TdccDistributionCard.tsx`): 實裝雙軸投影（千張大戶持股比折線 + 總股東人數柱狀圖）、波段起漲/散戶接刀徽章、As-of Date 發布基準日。
+- **Card 20 月營收與成長趨勢卡** (`MonthlyRevenueCard.tsx`): 實裝等比縮放長條圖、YoY 正負成長顏色、ATH 創歷史新高標籤、0050 等 ETF 規模/殖利率河流自適應視圖。
+- **SQLite 湖倉端到端貫通**: `AiForceDashboardView.tsx` 與 `aiForceDashboardEngine.ts` 完整貫通 `tdccRecords` 與 `revenueRecords`，E2E 驗證 100% 綠燈通過。

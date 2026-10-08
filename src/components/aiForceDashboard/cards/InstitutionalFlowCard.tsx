@@ -214,6 +214,176 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
       .join(' ');
   }, [history, scales, chartHeight]);
 
+  // Ticket 04 (Spec 0169): 美股標的獨立微觀量價動能視圖 (徹底根除外資/投信/自營商假數據)
+  if (data.isUsMarket || data.usMicrostructure) {
+    const micro = data.usMicrostructure || {
+      score: 50,
+      sentimentLabel: '動能中性',
+      mfi: 50,
+      obvTrend: 'FLAT',
+      volumeRatio: 1.0,
+      note: '美股無三大法人日報，已切換為機構量價評分',
+    };
+
+    const scoreColor =
+      micro.score >= 65 ? '#34d399' : micro.score <= 40 ? '#f87171' : '#38bdf8';
+
+    return (
+      <div
+        data-testid="us-institutional-flow-card"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          padding: '16px',
+          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
+          borderRadius: '14px',
+          border: '1px solid rgba(59, 130, 246, 0.25)',
+          backdropFilter: 'blur(10px)',
+          boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '8px',
+            marginBottom: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span
+              style={{
+                padding: '2px 6px',
+                borderRadius: '5px',
+                background: 'rgba(59, 130, 246, 0.25)',
+                color: '#60a5fa',
+                fontSize: '0.72rem',
+                fontWeight: 800,
+              }}
+            >
+              08
+            </span>
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
+              美股微觀量價動能 (Microstructure)
+            </span>
+            <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+              | 機構量價評分
+            </span>
+          </div>
+
+          <span
+            style={{
+              padding: '3px 8px',
+              borderRadius: '999px',
+              background: 'rgba(56, 189, 248, 0.15)',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
+              color: scoreColor,
+              fontSize: '0.75rem',
+              fontWeight: 700,
+            }}
+          >
+            {micro.sentimentLabel}
+          </span>
+        </div>
+
+        {/* 3 大指標卡片 */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '8px',
+            marginBottom: '12px',
+          }}
+        >
+          <div
+            style={{
+              background: 'rgba(15, 23, 42, 0.55)',
+              padding: '8px 10px',
+              borderRadius: '8px',
+              border: '1px solid rgba(59, 130, 246, 0.2)',
+            }}
+          >
+            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>機構量價評分</div>
+            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: scoreColor }}>
+              {micro.score} 分
+            </div>
+          </div>
+
+          <div
+            style={{
+              background: 'rgba(15, 23, 42, 0.55)',
+              padding: '8px 10px',
+              borderRadius: '8px',
+              border: '1px solid rgba(56, 189, 248, 0.2)',
+            }}
+          >
+            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>資金流量 MFI</div>
+            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#38bdf8' }}>
+              {micro.mfi}
+            </div>
+          </div>
+
+          <div
+            style={{
+              background: 'rgba(15, 23, 42, 0.55)',
+              padding: '8px 10px',
+              borderRadius: '8px',
+              border: '1px solid rgba(148, 163, 184, 0.2)',
+            }}
+          >
+            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>5D/20D 量能比</div>
+            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f8fafc' }}>
+              {micro.volumeRatio}x
+            </div>
+          </div>
+        </div>
+
+        {/* OBV 能量潮態勢 */}
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            padding: '10px 12px',
+            borderRadius: '8px',
+            background: 'rgba(30, 41, 59, 0.5)',
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+            gap: '4px',
+          }}
+        >
+          <div style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
+            <span>能量潮態勢 (OBV Trend)</span>
+            <span style={{ color: micro.obvTrend === 'UP' ? '#34d399' : micro.obvTrend === 'DOWN' ? '#f87171' : '#94a3b8', fontWeight: 700 }}>
+              {micro.obvTrend === 'UP' ? '資金主動進駐 (累積偏多)' : micro.obvTrend === 'DOWN' ? '資金逢高調節 (承壓)' : '多空動能平衡'}
+            </span>
+          </div>
+          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+            {micro.note}
+          </div>
+        </div>
+
+        {/* 腳註 */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginTop: '8px',
+            fontSize: '0.72rem',
+            color: '#64748b',
+          }}
+        >
+          <span>量能單位: 股 | 計價: USD</span>
+          <span>{data.asOfDateText ? `基準日: ${data.asOfDateText}` : '美股交易日'}</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -496,6 +666,15 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
             {data.recent5DaysSummary || summaries.summary5Days}
           </span>
         </div>
+
+        {data.history && data.history.length > 0 && (
+          <span
+            data-testid="inst-flow-as-of-date"
+            style={{ fontSize: '0.72rem', color: '#64748b', marginLeft: 'auto' }}
+          >
+            基準日: {data.history[data.history.length - 1].date}
+          </span>
+        )}
       </div>
     </div>
   );

@@ -76,6 +76,96 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
     { label: '三大法人', value: total, isMajor: true, termId: 'totalInstFlow' },
   ];
 
+  if (data?.isUsMarket) {
+    return (
+      <div
+        data-testid="chips-summary-card"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          padding: '14px',
+          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
+          borderRadius: '14px',
+          border: '1px solid rgba(59, 130, 246, 0.25)',
+          backdropFilter: 'blur(10px)',
+          boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '10px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span
+              style={{
+                padding: '2px 6px',
+                borderRadius: '5px',
+                background: 'rgba(59, 130, 246, 0.25)',
+                color: '#60a5fa',
+                fontSize: '0.72rem',
+                fontWeight: 800,
+              }}
+            >
+              15
+            </span>
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
+              美股微觀量價摘要
+            </span>
+          </div>
+          <span
+            style={{
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              color: '#38bdf8',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              background: 'rgba(56, 189, 248, 0.15)',
+            }}
+          >
+            {data?.conclusionBadge || '美股量價評分'}
+          </span>
+        </div>
+
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            gap: '8px',
+            color: '#94a3b8',
+            fontSize: '0.78rem',
+          }}
+        >
+          <div>{data?.usMicroNote || '美股無三大法人日報，已切換為機構量價評分'}</div>
+          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+            量能單位: 股 | 計價幣別: USD
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingTop: '6px',
+            borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+            fontSize: '0.68rem',
+            color: '#64748b',
+          }}
+        >
+          <span>{note}</span>
+          <span>{data?.asOfDateText ? `基準日: ${data.asOfDateText}` : ''}</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       data-testid="chips-summary-card"

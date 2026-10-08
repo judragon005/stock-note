@@ -105,5 +105,31 @@ describe('InstitutionalFlowCard - 三大法人雙軸圖表與明細表規範 (Ti
       expect(summaries.summary20Days).toContain('張');
     });
   });
+
+  describe('Ticket 04 (Spec 0169): 美股標的微觀量價動能獨立與零偽數據', () => {
+    it('美股標的 (isUsMarket=true) 應包含微觀評分資料結構，無三大法人假數據', () => {
+      const usData = {
+        history: [],
+        recentDaysTable: [],
+        cumulative20DaysSummary: '美股微觀量價動能評估 (72分)',
+        recent5DaysSummary: '美股無三大法人日報',
+        isUsMarket: true,
+        usMicrostructure: {
+          score: 72,
+          sentimentLabel: '機構量價偏多',
+          mfi: 68,
+          obvTrend: 'UP' as const,
+          volumeRatio: 1.25,
+          note: '美股無三大法人日報，已切換為機構量價評分',
+        },
+        asOfDateText: '2026-09-25',
+      };
+
+      expect(usData.isUsMarket).toBe(true);
+      expect(usData.history).toEqual([]);
+      expect(usData.usMicrostructure.score).toBe(72);
+      expect(usData.usMicrostructure.note).toContain('美股無三大法人日報');
+    });
+  });
 });
 

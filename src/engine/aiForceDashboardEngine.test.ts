@@ -246,7 +246,7 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
         expect(report.chipsSummary.conclusionBadge).toBeDefined();
       });
 
-      it('當查詢美股或未傳入法人資料時，應以成交量多空代理模型安全降級，歷史數列非空且不拋錯', () => {
+      it('當查詢美股或未傳入法人資料時，應遵循 Spec 0169 零假數據規範，不捏造假張數並啟用微觀動能評估', () => {
         const mockCandles = Array.from({ length: 20 }, (_, i) => ({
           date: `2026-09-${String(i + 1).padStart(2, '0')}`,
           open: 100,
@@ -258,8 +258,9 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
 
         const report = generateAiForceReportFromCandles('NVDA', '輝達', 'US', mockCandles);
 
-        expect(report.institutionalFlow.history.length).toBeGreaterThan(0);
-        expect(report.institutionalFlow.recentDaysTable.length).toBe(3);
+        expect(report.institutionalFlow.history).toEqual([]);
+        expect(report.institutionalFlow.isUsMarket).toBe(true);
+        expect(report.institutionalFlow.usMicrostructure).toBeDefined();
         expect(report.institutionalFlow.cumulative20DaysSummary).toBeDefined();
         expect(report.institutionalFlow.recent5DaysSummary).toBeDefined();
       });
@@ -733,6 +734,144 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
       expect(report.marketBar.dataPointsCount).toBe(2);
     });
   });
+
+  describe('Ticket 01 (Spec 0169): TDCC 集保、月營收與美股零假數據端到端數據管線', () => {
+    const mockCandles = [
+      { date: '2026-09-21', open: 100, high: 105, low: 99, close: 103, volume: 10000 },
+      { date: '2026-09-22', open: 103, high: 106, low: 102, close: 104, volume: 12000 },
+      { date: '2026-09-23', open: 104, high: 108, low: 103, close: 107, volume: 15000 },
+      { date: '2026-09-24', open: 107, high: 110, low: 105, close: 109, volume: 14000 },
+      { date: '2026-09-25', open: 109, high: 112, low: 108, close: 111, volume: 16000 },
+    ];
+
+    it('1. generateAiForceReportFromCandles 注入 tdccRecords 應正確組裝 TDCC 集保雙軸數據與籌碼集中度', () => {
+      const mockTdcc = [
+        { date: '2026-09-04', totalShareholders: 850000, over1000Ratio: 65.2 },
+        { date: '2026-09-11', totalShareholders: 848000, over1000Ratio: 65.8 },
+        { date: '2026-09-18', totalShareholders: 845000, over1000Ratio: 66.5 },
+        { date: '2026-09-25', totalShareholders: 840000, over1000Ratio: 67.4 },
+      ];
+
+      const report = generateAiForceReportFromCandles(
+        '2330',
+        '台積電',
+        'TW',
+        mockCandles,
+        undefined,
+        undefined,
+        new Date('2026-09-25T16:00:00+08:00'),
+        { tdccRecords: mockTdcc }
+      );
+
+      expect(report.tdccDistribution).toBeDefined();
+      expect(report.tdccDistribution.isEmpty).toBe(false);
+      expect(report.tdccDistribution.latestOver1000Ratio).toBe(67.4);
+      expect(report.tdccDistribution.latestShareholders).toBe(840000);
+      expect(report.tdccDistribution.change4WeeksRatio).toBe(2.2); // 67.4 - 65.2
+      expect(report.tdccDistribution.change4WeeksShareholders).toBe(-10000); // 840000 - 850000
+      expect(report.tdccDistribution.concentrationBadge).toBe('籌碼高度集中 (波段起漲)');
+      expect(report.tdccDistribution.asOfDateText).toBe('集保基準日: 2026-09-25');
+    });
+
+    it('2. generateAiForceReportFromCandles 注入 revenueRecords 應計算連續雙增與 YoY 成長率', () => {
+      const mockRevenue = [
+        { yearMonth: '2026-07', revenue: 250000000, yoyRate: 25.4, momRate: 10.2 },
+        { yearMonth: '2026-08', revenue: 260000000, yoyRate: 28.1, momRate: 4.0 },
+        { yearMonth: '2026-09', revenue: 275000000, yoyRate: 32.5, momRate: 5.7, isAllTimeHigh: 1 },
+      ];
+
+      const report = generateAiForceReportFromCandles(
+        '2330',
+        '台積電',
+        'TW',
+        mockCandles,
+        undefined,
+        undefined,
+        new Date('2026-09-25T16:00:00+08:00'),
+        { revenueRecords: mockRevenue }
+      );
+
+      expect(report.monthlyRevenue).toBeDefined();
+      expect(report.monthlyRevenue.isEtf).toBe(false);
+      expect(report.monthlyRevenue.isEmpty).toBe(false);
+      expect(report.monthlyRevenue.latestRevenueText).toContain('億元');
+      expect(report.monthlyRevenue.latestYoyRate).toBe(32.5);
+      expect(report.monthlyRevenue.growthStreakMonths).toBe(3);
+      expect(report.monthlyRevenue.growthBadge).toBe('連續 3 個月年月雙增');
+      expect(report.monthlyRevenue.asOfDateText).toBe('營收基準: 2026-09');
+    });
+
+    it('3. 當標的為 ETF (0050) 時，monthlyRevenue 應自動切換為 ETF 資產規模與收益分配，杜絕空白與錯誤', () => {
+      const report = generateAiForceReportFromCandles(
+        '0050',
+        '元大台灣50',
+        'TW',
+        mockCandles,
+        undefined,
+        undefined,
+        new Date('2026-09-25T16:00:00+08:00')
+      );
+
+      expect(report.monthlyRevenue.isEtf).toBe(true);
+      expect(report.monthlyRevenue.isEmpty).toBe(false);
+      expect(report.monthlyRevenue.growthBadge).toBe('ETF 規模穩健');
+      expect(report.monthlyRevenue.etfData).toBeDefined();
+      expect(report.monthlyRevenue.etfData?.aumBillion).toBeGreaterThan(0);
+      expect(report.monthlyRevenue.etfData?.quarterlyDividends.length).toBeGreaterThan(0);
+    });
+
+    it('4. 美股 NVDA 應徹底剔除假外資投信張數，啟動美股微觀動能評分且集保標記為美股不適用 (Zero-Mock)', () => {
+      const report = generateAiForceReportFromCandles(
+        'NVDA',
+        'NVIDIA Corporation',
+        'US',
+        mockCandles,
+        undefined,
+        undefined,
+        new Date('2026-09-25T16:00:00+08:00')
+      );
+
+      // 法人籌碼完全不得捏造假張數
+      expect(report.institutionalFlow.history).toEqual([]);
+      expect(report.institutionalFlow.recentDaysTable).toEqual([]);
+      expect(report.institutionalFlow.isUsMarket).toBe(true);
+      expect(report.institutionalFlow.usMicrostructure).toBeDefined();
+      expect(report.institutionalFlow.usMicrostructure?.note).toBe('美股無三大法人日報，已切換為機構量價評分');
+      expect(report.institutionalFlow.usMicrostructure?.score).toBeGreaterThan(0);
+
+      // ChipsSummary 零假數據
+      expect(report.chipsSummary.foreignNetShares).toBe(0);
+      expect(report.chipsSummary.trustNetShares).toBe(0);
+      expect(report.chipsSummary.dealerNetShares).toBe(0);
+      expect(report.chipsSummary.isUsMarket).toBe(true);
+      expect(['機構量價偏多', '美股量價評分', '動能中性', '機構調節中']).toContain(report.chipsSummary.conclusionBadge);
+
+      // TDCC 集保在美股誠實為空
+      expect(report.tdccDistribution.isEmpty).toBe(true);
+      expect(report.tdccDistribution.emptyMessage).toBe('美股無集保機制');
+      expect(report.tdccDistribution.concentrationBadge).toBe('美股不適用');
+    });
+
+    it('5. 台股標的若無三大法人資料，嚴禁使用 volume * 0.12 * 0.6 捏造假張數', () => {
+      const report = generateAiForceReportFromCandles(
+        '1234',
+        '黑松',
+        'TW',
+        mockCandles,
+        undefined,
+        undefined, // 無法人記錄
+        new Date('2026-09-25T16:00:00+08:00')
+      );
+
+      expect(report.institutionalFlow.history).toEqual([]);
+      expect(report.institutionalFlow.recentDaysTable).toEqual([]);
+      expect(report.institutionalFlow.cumulative20DaysSummary).toBe('尚無法人日報數據');
+      expect(report.chipsSummary.foreignNetShares).toBe(0);
+      expect(report.chipsSummary.trustNetShares).toBe(0);
+      expect(report.chipsSummary.dealerNetShares).toBe(0);
+    });
+  });
 });
+
 
 
