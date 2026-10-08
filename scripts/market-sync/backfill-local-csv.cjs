@@ -240,9 +240,17 @@ async function runFullMarketHistoryBackfill() {
   const latestMarketDate = calendar[calendar.length - 1] || formatDateYMD(new Date());
   console.log(`[1/5] 已載入加權指數交易日曆，共 ${calendar.length} 個交易日 (最新日: ${latestMarketDate})`);
 
-  // 2. 掃描個股 CSV 目錄
+  // 2. 掃描個股 CSV 目錄 (若目錄不存在則優雅略過，不中斷正式環境)
   if (!fs.existsSync(STOCKS_DIR)) {
-    throw new Error(`找不到個股歷史數據庫目錄: ${STOCKS_DIR}`);
+    console.warn(`[回補略過] 找不到個股歷史數據庫目錄 (非本機或本機路徑已除役): ${STOCKS_DIR}`);
+    return {
+      success: false,
+      skipped: true,
+      reason: 'LOCAL_CSV_NOT_FOUND',
+      processedCount: 0,
+      totalStocks: 0,
+      durationMs: Date.now() - startTime,
+    };
   }
   const stockFiles = fs.readdirSync(STOCKS_DIR).filter((f) => f.endsWith('.csv'));
   console.log(`[2/5] 偵測到本機個股歷史數據庫共 ${stockFiles.length} 檔標的，開始批次剖析與日曆對齊...`);

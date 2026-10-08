@@ -185,6 +185,33 @@ describe('TaskPanels 底部任務視圖真實資料動態連動 (Spec 0143 Ticke
       expect(page25.items.length).toBe(10);
       expect(page25.currentPage).toBe(25);
     });
+
+    it('Spec 0170 / Ticket 09: 當含有 isIntraday 盤中縫合 K 棒時，日期旁應渲染「⚡ 即時」徽章', () => {
+      const candlesWithIntraday: KlineCandleItem[] = [
+        ...mockCandles,
+        {
+          date: '2026-10-08',
+          open: 1260,
+          high: 1280,
+          low: 1255,
+          close: 1275,
+          volume: 25000,
+          isIntraday: true,
+        },
+      ];
+
+      const reportWithIntraday = {
+        ...mockReport,
+        klineSystem: {
+          ...mockReport.klineSystem,
+          candles: candlesWithIntraday,
+        },
+      };
+
+      const html = renderToStaticMarkup(React.createElement(RawDataView, { report: reportWithIntraday }));
+      expect(html).toContain('2026-10-08');
+      expect(html).toContain('⚡ 即時');
+    });
   });
 });
 

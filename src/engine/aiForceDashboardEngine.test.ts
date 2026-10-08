@@ -871,6 +871,60 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
       expect(report.chipsSummary.dealerNetShares).toBe(0);
     });
   });
+
+  describe('Spec 0170 / Ticket 08 - 盤中與未結算時態即時 K 棒動態縫合', () => {
+    it('1. 模擬週四 13:40 (未達 15:00 結算門檻)，當傳入有效即時行情時，應動態縫合當日盤中即時 K 棒至最末端', () => {
+      // 基準日 2026-10-08 週四 13:40 (盤後撮合/未到 15:00 結算)
+      const intradayTime = new Date('2026-10-08T13:40:00+08:00');
+      const baseCandles = [
+        { date: '2026-10-01', open: 740, high: 750, low: 735, close: 745, volume: 1000000 },
+        { date: '2026-10-02', open: 745, high: 755, low: 740, close: 750, volume: 1100000 },
+        { date: '2026-10-05', open: 750, high: 760, low: 745, close: 755, volume: 1200000 },
+        { date: '2026-10-06', open: 755, high: 765, low: 750, close: 760, volume: 1300000 },
+        { date: '2026-10-07', open: 760, high: 770, low: 755, close: 765, volume: 1400000 },
+      ];
+
+      const realtimeQuote = {
+        price: 780,
+        change: 15,
+        changePercent: 1.96,
+        open: 765,
+        high: 785,
+        low: 762,
+        volume: 2500000,
+        transactions: 18500,
+      };
+
+      const report = generateAiForceReportFromCandles(
+        '3293',
+        '鈊象',
+        'TW',
+        baseCandles,
+        realtimeQuote,
+        undefined,
+        intradayTime
+      );
+
+      // 驗證最新日 K 是否縫合為 2026-10-08
+      const candles = report.klineSystem.candles;
+      expect(candles.length).toBe(6);
+      const lastCandle = candles[candles.length - 1];
+      expect(lastCandle.date).toBe('2026-10-08');
+      expect(lastCandle.close).toBe(780);
+      expect(lastCandle.open).toBe(765);
+      expect(lastCandle.high).toBe(785);
+      expect(lastCandle.low).toBe(762);
+      expect(lastCandle.volume).toBe(2500000);
+      expect(lastCandle.transactions).toBe(18500);
+      expect(lastCandle.isIntraday).toBe(true);
+
+      // 驗證頂部行情 Bar
+      expect(report.marketBar.currentPrice).toBe(765); // 定錨在前一交易日 10/07 收盤價
+      expect(report.marketBar.intradayQuote?.price).toBe(780); // 盤中即時價妥善記錄於 intradayQuote
+      expect(report.marketBar.anchorTradingDate).toBe('2026-10-07');
+      expect(report.marketBar.isSettled).toBe(false);
+    });
+  });
 });
 
 

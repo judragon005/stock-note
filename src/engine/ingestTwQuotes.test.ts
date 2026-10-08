@@ -138,4 +138,41 @@ describe('Ticket 04 - 台股官方 TWSE/TPEx 收盤日 K 批次入庫 (TDD Seam)
     expect(parseTpexDailyQuotes(null, '2026-09-30')).toEqual({});
     expect(saveTwQuotesToSqlite({}, testDbPath)).toEqual({ savedCount: 0 });
   });
+
+  it('5. 當物件缺漏 symbol 鍵時應自動從 Map Key 補齊，且自動剝除 O 尾綴 (Spec 0170)', () => {
+    initSqliteLakehouseDb(testDbPath);
+    const legacyQuotesMap = {
+      '3293O': {
+        // 故意無 symbol 鍵
+        date: '2026-10-07',
+        open: 740,
+        high: 755,
+        low: 735,
+        close: 750,
+        volume: 2000000,
+      },
+      '00679B': {
+        // 故意無 symbol 鍵
+        date: '2026-10-07',
+        open: 31.4,
+        high: 31.6,
+        low: 31.3,
+        close: 31.5,
+        volume: 50000000,
+      },
+    };
+
+    const result = saveTwQuotesToSqlite(legacyQuotesMap, testDbPath);
+    expect(result.savedCount).toBe(2);
+
+    const db = getSqliteDbConnection(testDbPath);
+    // 3293O 應被自動正規化為 3293 入庫
+    const rowOtc = db.prepare('SELECT * FROM daily_candles WHERE symbol = ? AND date = ?').get('3293', '2026-10-07');
+    expect(rowOtc).toBeDefined();
+    expect(rowOtc.close).toBe(750);
+
+    const rowEtf = db.prepare('SELECT * FROM daily_candles WHERE symbol = ? AND date = ?').get('00679B', '2026-10-07');
+    expect(rowEtf).toBeDefined();
+    expect(rowEtf.close).toBe(31.5);
+  });
 });

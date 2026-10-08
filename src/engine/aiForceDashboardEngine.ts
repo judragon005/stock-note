@@ -22,7 +22,7 @@ import {
 } from './multiDimensionRadarEngine';
 import { estimateMarketSentiment } from './marketSentimentEngine';
 import { calculateAiConfidence } from './aiConfidenceEngine';
-import { getMarketSettlementStatus } from './marketSettlementEngine';
+import { getMarketSettlementStatus, formatDateToYMD } from './marketSettlementEngine';
 
 export {
   calculateVolumeProfile,
@@ -961,6 +961,7 @@ export function generateAiForceReportFromCandles(
     close: number;
     volume: number;
     transactions?: number;
+    isIntraday?: boolean;
   }> = [],
   realtimeQuote?: {
     price?: number;
@@ -979,7 +980,7 @@ export function generateAiForceReportFromCandles(
   // 1. 市場結算狀態檢測 (Spec 0150)
   const settlement = getMarketSettlementStatus(market, referenceDate);
 
-  // 若未結算，過濾掉超過 anchorTradingDate 的未結算或盤中日 K
+  // 若未結算，基礎日 K 先過濾至 anchorTradingDate 確保指標計算嚴謹性
   let effectiveCandles = candles;
   let effectiveInstRecords = institutionalRecords ?? options?.institutionalRecords;
   if (!settlement.isSettled && candles && candles.length > 0) {
@@ -992,6 +993,27 @@ export function generateAiForceReportFromCandles(
         (r) => r.date <= settlement.anchorTradingDate
       );
     }
+
+    // Spec 0170 / Ticket 08: 盤中 (09:00~13:30) 與盤後未結算 (13:30~15:00) 時態行情動態縫合
+    // 當外部傳入有效即時行情 realtimeQuote?.price > 0 時，動態構造當日虛擬日 K 並追加至有效數列
+    const todayYmd = settlement.currentTradingDate || formatDateToYMD(referenceDate);
+    const lastDate = effectiveCandles.length > 0 ? effectiveCandles[effectiveCandles.length - 1].date : '';
+    if (realtimeQuote?.price !== undefined && realtimeQuote.price > 0 && lastDate < todayYmd) {
+      const openPrice = realtimeQuote.open ?? realtimeQuote.price;
+      const highPrice = realtimeQuote.high ?? Math.max(realtimeQuote.price, openPrice);
+      const lowPrice = realtimeQuote.low ?? Math.min(realtimeQuote.price, openPrice);
+      const stitchedIntradayCandle = {
+        date: todayYmd,
+        open: openPrice,
+        high: highPrice,
+        low: lowPrice,
+        close: realtimeQuote.price,
+        volume: realtimeQuote.volume ?? 0,
+        transactions: realtimeQuote.transactions,
+        isIntraday: true,
+      };
+      effectiveCandles = [...effectiveCandles, stitchedIntradayCandle];
+    }
   } else if (settlement.isSettled && effectiveCandles && effectiveCandles.length > 0) {
     // Spec 0160: 若市場今日已結算且湖倉日 K 稍有落後，若有外部即時收盤價，進行日 K 自適應防斷層縫合
     const lastDate = effectiveCandles[effectiveCandles.length - 1].date;
@@ -1003,6 +1025,7 @@ export function generateAiForceReportFromCandles(
         low: realtimeQuote.low ?? Math.min(realtimeQuote.price, realtimeQuote.open ?? realtimeQuote.price),
         close: realtimeQuote.price,
         volume: realtimeQuote.volume ?? 0,
+        transactions: realtimeQuote.transactions,
       };
       effectiveCandles = [...effectiveCandles, stitchedCandle];
     }
@@ -1150,6 +1173,8 @@ export function generateAiForceReportFromCandles(
       low: c.low,
       close: c.close,
       volume: c.volume,
+      transactions: c.transactions,
+      isIntraday: c.isIntraday,
       ma5,
       ma10,
       ma20,
@@ -1194,11 +1219,14 @@ export function generateAiForceReportFromCandles(
   let settlementNotice: string | undefined = undefined;
 
   if (!settlement.isSettled) {
-    // 尚未結算：一律以定錨日完整收盤價為準
-    currentPrice = last.close;
-    change = prev ? Number((last.close - prev.close).toFixed(2)) : 0;
+    // 尚未結算：頂部主看板行情一律以定錨日完整收盤價為準 (隔離盤中波動，Spec 0150)
+    const anchorCandle = last?.isIntraday ? (prev ?? last) : last;
+    const prevAnchorCandle = last?.isIntraday ? (count >= 3 ? effectiveCandles[count - 3] : undefined) : prev;
+
+    currentPrice = anchorCandle.close;
+    change = prevAnchorCandle ? Number((anchorCandle.close - prevAnchorCandle.close).toFixed(2)) : 0;
     changePercent =
-      prev && prev.close > 0 ? Number((((last.close - prev.close) / prev.close) * 100).toFixed(2)) : 0;
+      prevAnchorCandle && prevAnchorCandle.close > 0 ? Number((((anchorCandle.close - prevAnchorCandle.close) / prevAnchorCandle.close) * 100).toFixed(2)) : 0;
 
     if (realtimeQuote?.price) {
       intradayQuote = {
