@@ -57,6 +57,8 @@ export interface KlineCandleItem {
   low: number;
   close: number;
   volume: number;
+  transactions?: number;
+  isIntraday?: boolean;
   ma5?: number;
   ma10?: number;
   ma20?: number;

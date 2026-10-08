@@ -2315,6 +2315,20 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 核心模組：`src/components/aiForceDashboard/HeaderMarketBar.tsx`。
   - 整合本地 SQLite `/api/market/symbols` 端點，實裝 30ms 防抖即時模糊搜尋（代碼與中文名稱模糊比對），彈出浮動下拉清單秒選即跳轉；常駐 `0050`、`2330`、`2454`、`NVDA`、`AAPL` 五大熱門快捷膠囊標籤。
 
+### 零本地 CSV 依賴、全自主聯網回補管線與櫃買代碼撕裂治理 *(新增於 V8.83.0 / Spec #0170 / ADR #0170 / Issue #191)*
 
+- **Algorithmic Trading Calendar Engine (純演算法法定交易日曆引擎)**:
+  - 核心模組：`scripts/market-sync/trading-calendar-engine.cjs` (`isTwTradingDay`, `getPreviousTradingDay`, `getNextTradingDay`, `generateTwTradingDaysList`)。
+  - 徹底除役對本地 `HISTORICAL_BASE_DIR` 目錄與 CSV 檔案掃描的強依賴。實裝純演算法計算台灣國定假日（元旦、春節、二二八、清明、端午、中秋、國慶）及彈性補假/補班規則，零外部 I/O 讀寫，耗時 < 1ms。
 
+- **Safe Local CSV Retirement & Ingestion Resilience (本地 CSV 平滑除役與入庫防呆)**:
+  - 核心模組：`scripts/market-sync/backfill-local-csv.cjs`、`scripts/market-sync/ingest-tw-quotes.cjs`、`scripts/market-sync/market-sync-core.cjs`。
+  - 本地目錄不存在時優雅警告跳過，不拋出未捕獲錯誤；日 K 行情解析時強制為 TWSE/TPEx 標的補齊 `symbol` 屬性並過濾 `O` 尾綴；SQLite 入庫改為遍歷 `Object.entries(quotesMap)`，缺少代碼時自動自鍵值填補。
 
+- **Transactional OTC Split Symbol Migration (櫃買上櫃標的去 O 事務性安全遷移)**:
+  - 核心模組：`scripts/market-sync/merge-otc-split-symbols.cjs` (`mergeOtcSplitSymbolsInDb`, `normalizeOtcSymbolString`)。
+  - 解決技術債 0043 遺留之 `GLOB '[0-9]*O'` 歷史代碼斷層。在單一資料庫 Transaction 內將 1,000 檔上櫃標的與 257,087 筆日 K 安全 upsert 至標準乾淨代碼（取極值與最新值），並徹底刪除帶 `O` 的孤兒紀錄。
+
+- **Intraday Live Candle Splicing & Dynamic Pinning (戰情室盤中即時 K 棒動態縫合與置頂)**:
+  - 核心模組：`src/engine/aiForceDashboardEngine.ts`、`src/types/aiForceDashboard.ts`、`src/components/aiForceDashboard/TaskPanels.tsx`。
+  - 嚴格相容 Spec 0150 主定錨隔離：未結算時態下 `marketBar.currentPrice` 定錨前一結算日；同時若傳入 `liveQuote`，動態構造當日 `isIntraday: true` K 棒縫合至 `klineSystem.candles` 最末端。任務五原始資料表首行置頂展示「⚡ 即時」徽章。

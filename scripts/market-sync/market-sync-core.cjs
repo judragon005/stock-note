@@ -116,6 +116,7 @@ function parseTwseDailyQuotesBulk(rawData, dateStr) {
 
       if (close > 0) {
         result[symbol] = {
+          symbol,
           date: dateStr,
           open: open > 0 ? open : close,
           high: high > 0 ? high : close,
@@ -140,7 +141,13 @@ function parseTpexDailyQuotesBulk(rawData, dateStr) {
 
     for (const row of dataRows) {
       if (!Array.isArray(row) || row.length < 7) continue;
-      const symbol = String(row[0]).trim();
+      const rawSymbol = String(row[0]).trim();
+      if (rawSymbol.length > 7) continue;
+
+      // 剝除櫃買可能的 'O' 尾綴 (如 3293O -> 3293, 00679BO -> 00679B)
+      const symbol = rawSymbol.endsWith('O') && /^\d+[A-Z]?O$/.test(rawSymbol)
+        ? rawSymbol.slice(0, -1)
+        : rawSymbol;
       if (symbol.length > 6) continue;
 
       const close = parseCleanNumber(row[2]);
@@ -151,6 +158,7 @@ function parseTpexDailyQuotesBulk(rawData, dateStr) {
 
       if (close > 0) {
         result[symbol] = {
+          symbol,
           date: dateStr,
           open: open > 0 ? open : close,
           high: high > 0 ? high : close,

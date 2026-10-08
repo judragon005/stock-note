@@ -636,7 +636,25 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
                 key={row.date}
                 style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)', color: '#f1f5f9' }}
               >
-                <td style={{ padding: '8px' }}>{row.date}</td>
+                <td style={{ padding: '8px' }}>
+                  {row.date}
+                  {row.isIntraday && (
+                    <span
+                      style={{
+                        marginLeft: '6px',
+                        padding: '1px 5px',
+                        fontSize: '10px',
+                        borderRadius: '4px',
+                        backgroundColor: 'rgba(56, 189, 248, 0.2)',
+                        color: '#38bdf8',
+                        border: '1px solid rgba(56, 189, 248, 0.4)',
+                        fontWeight: 600,
+                      }}
+                    >
+                      ⚡ 即時
+                    </span>
+                  )}
+                </td>
                 <td style={{ textAlign: 'right', padding: '8px' }}>${row.open.toLocaleString()}</td>
                 <td style={{ textAlign: 'right', padding: '8px' }}>${row.high.toLocaleString()}</td>
                 <td style={{ textAlign: 'right', padding: '8px' }}>${row.low.toLocaleString()}</td>

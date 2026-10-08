@@ -3,6 +3,7 @@ import { MarketType } from '../types/stock';
 export interface MarketSettlementStatus {
   isSettled: boolean; // 是否已結算完成
   anchorTradingDate: string; // 量化分析基準日 (YYYY-MM-DD)
+  currentTradingDate?: string; // 當日自然日或交易日 (YYYY-MM-DD) (Spec 0170)
   reason?: string; // 尚未結算原因說明
   isTradingHours: boolean; // 是否處於盤中交易時段
 }
@@ -10,7 +11,7 @@ export interface MarketSettlementStatus {
 /**
  * 格式化 Date 為 YYYY-MM-DD
  */
-function formatDateToYMD(d: Date): string {
+export function formatDateToYMD(d: Date): string {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
@@ -113,6 +114,7 @@ export function getMarketSettlementStatus(
       return {
         isSettled: true,
         anchorTradingDate: formatDateToYMD(tp.twDate),
+        currentTradingDate: formatDateToYMD(tp.twDate),
         isTradingHours: false,
       };
     }
@@ -139,6 +141,7 @@ export function getMarketSettlementStatus(
     return {
       isSettled: false,
       anchorTradingDate: formatDateToYMD(anchorDate),
+      currentTradingDate: formatDateToYMD(tp.twDate),
       reason,
       isTradingHours,
     };

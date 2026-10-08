@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1491%2F1491%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1498%2F1498%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,20 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. AI 主力戰情室法人籌碼與 TDCC 大戶端到端貫通、月營收與 ETF 自適應、美股微觀結構獨立化與搜尋體驗全面補強 (`AI Force War Room TDCC, Revenue & US Microstructure Alignment`) *(V8.82.0 全新發布 / Spec #0169 / ADR #0169 / Issue #188)*
+### 0. 徹底移除本地 CSV 依賴、全自主聯網回補管線與櫃買代碼撕裂治理 (`Zero-Local-CSV Autonomous Sync & OTC Split Repair`) *(V8.83.0 全新發布 / Spec #0170 / ADR #0170 / Issue #191)*
+
+- **純演算法法定交易日曆引擎 (`trading-calendar-engine.cjs`)**：
+  - 徹底移除對本地硬編碼 CSV 目錄（`HISTORICAL_BASE_DIR`）的掃描依賴，實作純演算法台灣法定休假日與彈性補假規則，零檔案 I/O，耗時 < 1ms，在任何乾淨無本機 CSV 環境均能 100% 自主運作。
+- **日常盤後同步日 K 物件結構修復與入庫防呆 (`market-sync-core.cjs` & `ingest-tw-quotes.cjs`)**：
+  - 修復 `parseTwseDailyQuotesBulk` 與 `parseTpexDailyQuotesBulk` 物件結構漏賦 `symbol` 鍵之缺陷；SQLite 入庫改為遍歷 `Object.entries(quotesMap)`，若物件漏代碼則由 Key 自動補齊並過濾 `O` 尾綴，日 K 入庫率由 0% 提昇至 100%。
+- **櫃買上櫃股票與債券 ETF 去 O 事務性安全遷移 (`merge-otc-split-symbols.cjs`)**：
+  - 徹底消除技術債 0043 遺留之 `GLOB '[0-9]*O'` 代碼斷層，單一 Transaction 內安全遷移 1,000 檔標的、257,087 筆歷史日 K 至乾淨代碼（取極值與最新值），徹底刪除帶 `O` 的孤兒紀錄。
+- **上市權值股 (2330 / 0050) 法人籌碼連續性補齊**：
+  - 自主聯網同步 10/05~10/07 TWSE T86 三大法人買賣超與信用交易，連續無缺漏。
+- **主力戰情室盤中即時 K 棒動態縫合與置頂 (`aiForceDashboardEngine.ts` & `TaskPanels.tsx`)**：
+  - 嚴格相容 Spec 0150 主定錨隔離：未結算時態下 `marketBar.currentPrice` 定錨前一結算日；同時若傳入 `liveQuote`，動態構造當日 `isIntraday: true` K 棒縫合至 `klineSystem.candles` 最末端。任務五原始資料表首行置頂展示「⚡ 即時」徽章。
+
+### 0. AI 主力戰情室法人籌碼與 TDCC 大戶端到端貫通、月營收與 ETF 自適應、美股微觀結構獨立化與搜尋體驗全面補強 (`AI Force War Room TDCC, Revenue & US Microstructure Alignment`) *(V8.82.0 / Spec #0169 / ADR #0169 / Issue #188)*
 
 - **湖倉真實數據端到端貫通 (技術債 0042 與 0044 正式結案)**：
   - 完整串接本地 SQLite `tw_tdcc_distribution` 與 `tw_monthly_revenue` 歷史管線，戰情室正式啟用 **Card 19「TDCC 集保千張大戶趨勢卡」** 與 **Card 20「月營收 YoY 成長與創高卡」**。

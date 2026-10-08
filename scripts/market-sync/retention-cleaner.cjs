@@ -5,12 +5,12 @@
 
 const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
 
-const DEFAULT_KEEP_DAYS = 500;
+const DEFAULT_KEEP_DAYS = 260;
 
 /**
  * 修剪超過保留天數的過期日 K 線數據
  * @param {string} [symbol] - 若指定則修剪單檔，未指定則修剪全市場標的
- * @param {number} [keepDays=500] - 保留最新天數
+ * @param {number} [keepDays=260] - 保留最新天數
  * @param {string} [customDbPath]
  * @returns {{ deletedCandles: number }}
  */

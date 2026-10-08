@@ -48,10 +48,10 @@ function triggerCatchupTask(customDbPath, options = {}) {
 
   setImmediate(async () => {
     try {
-      console.log(`[MarketCatchup] 偵測到本機資料庫過期，啟動背景追趕回補...`);
-      const { runFullMarketHistoryBackfill } = require('./backfill-local-csv.cjs');
-      await runFullMarketHistoryBackfill();
-      console.log(`[MarketCatchup] ✔ 背景追趕同步完成！`);
+      console.log(`[MarketCatchup] 偵測到本機資料庫過期，啟動背景聯網追趕同步 (Spec 0170)...`);
+      const { runTwMarketSync } = require('./sync-tw-market.cjs');
+      await runTwMarketSync();
+      console.log(`[MarketCatchup] ✔ 背景聯網追趕同步完成！`);
     } catch (err) {
       console.warn(`[MarketCatchup] 背景追趕回補警告:`, err.message);
     } finally {
@@ -197,23 +197,23 @@ function createMarketApiMiddleware(customDbPath) {
       const symbol = historyMatch[1].toUpperCase();
       const limit = parseInt(query.limit, 10) || 250;
 
-      let meta = db.prepare('SELECT * FROM symbols_meta WHERE symbol = ?').get(symbol);
-      let candles = db
-        .prepare('SELECT * FROM daily_candles WHERE symbol = ? ORDER BY date DESC LIMIT ?')
-        .all(symbol, limit);
+      const aliasSym = symbol.endsWith('O') ? symbol.slice(0, -1) : `${symbol}O`;
+      let meta = db.prepare('SELECT * FROM symbols_meta WHERE symbol IN (?, ?)').get(symbol, aliasSym);
 
-      // 若查無日 K 且符合台股特徵，嘗試別名回退探測 (Debt 0043 / Spec 0168)
-      if (candles.length === 0 && /^\d{2,}/.test(symbol)) {
-        const aliasSym = symbol.endsWith('O') ? symbol.slice(0, -1) : `${symbol}O`;
-        const aliasCandles = db
-          .prepare('SELECT * FROM daily_candles WHERE symbol = ? ORDER BY date DESC LIMIT ?')
-          .all(aliasSym, limit);
-        if (aliasCandles.length > 0) {
-          candles = aliasCandles;
-          if (!meta) {
-            meta = db.prepare('SELECT * FROM symbols_meta WHERE symbol = ?').get(aliasSym);
-          }
+      // 雙向別名日 K 查詢與防斷層合併 (Spec 0170)
+      const rawCandleRows = db
+        .prepare('SELECT * FROM daily_candles WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT ?')
+        .all(symbol, aliasSym, limit * 2);
+
+      const dateMap = new Map();
+      for (const row of rawCandleRows) {
+        if (!dateMap.has(row.date)) {
+          dateMap.set(row.date, { ...row, symbol });
         }
+      }
+      let candles = Array.from(dateMap.values());
+      if (candles.length > limit) {
+        candles = candles.slice(0, limit);
       }
 
       // 轉為由舊至新
@@ -227,30 +227,30 @@ function createMarketApiMiddleware(customDbPath) {
         const maxDate = dates[dates.length - 1];
         const chipsRows = db
           .prepare(
-            'SELECT * FROM tw_institutional_chips WHERE symbol = ? AND date >= ? AND date <= ? ORDER BY date ASC'
+            'SELECT * FROM tw_institutional_chips WHERE symbol IN (?, ?) AND date >= ? AND date <= ? ORDER BY date ASC'
           )
-          .all(symbol, minDate, maxDate);
+          .all(symbol, aliasSym, minDate, maxDate);
 
         for (const row of chipsRows) {
-          chipsMap[row.date] = row;
+          chipsMap[row.date] = { ...row, symbol };
         }
       }
 
-      // 新增查詢 TDCC 集保股權分散表 (最近 10 筆週別資料)
+      // 新增查詢 TDCC 集保股權分散表 (最近 10 筆週別資料，支援雙向別名防斷層)
       let tdccRows = [];
       try {
         tdccRows = db
-          .prepare('SELECT * FROM tw_tdcc_distribution WHERE symbol = ? ORDER BY date DESC LIMIT 10')
-          .all(symbol);
+          .prepare('SELECT * FROM tw_tdcc_distribution WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 10')
+          .all(symbol, aliasSym);
         tdccRows.reverse();
       } catch {}
 
-      // 新增查詢月營收 (最近 12 個月)
+      // 新增查詢月營收 (最近 12 個月，支援雙向別名防斷層)
       let revenueRows = [];
       try {
         revenueRows = db
-          .prepare('SELECT * FROM tw_monthly_revenue WHERE symbol = ? ORDER BY year_month DESC LIMIT 12')
-          .all(symbol);
+          .prepare('SELECT * FROM tw_monthly_revenue WHERE symbol IN (?, ?) ORDER BY year_month DESC LIMIT 12')
+          .all(symbol, aliasSym);
         revenueRows.reverse();
       } catch {}
 

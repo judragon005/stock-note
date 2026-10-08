@@ -113,7 +113,7 @@ function saveTwQuotesToSqlite(quotesMap, customDbPath) {
     return { savedCount: 0 };
   }
 
-  const entries = Object.values(quotesMap);
+  const entries = Object.entries(quotesMap);
   if (entries.length === 0) {
     return { savedCount: 0 };
   }
@@ -135,18 +135,42 @@ function saveTwQuotesToSqlite(quotesMap, customDbPath) {
   db.exec('BEGIN TRANSACTION;');
   let count = 0;
   try {
-    for (const item of entries) {
-      if (!item || !item.symbol || !item.date || !item.close) continue;
+    for (const [keySymbol, item] of entries) {
+      if (!item || !item.date || !item.close) continue;
+      const rawSymbol = item.symbol || keySymbol;
+      if (!rawSymbol) continue;
+
+      const cleanSymbol = String(rawSymbol).trim().toUpperCase();
+      // 剝除櫃買可能的 'O' 尾綴 (如 3293O -> 3293, 00679BO -> 00679B)
+      const symbol = cleanSymbol.endsWith('O') && /^\d+[A-Z]?O$/.test(cleanSymbol)
+        ? cleanSymbol.slice(0, -1)
+        : cleanSymbol;
+
+      const close = Number(item.close);
+      if (!close || isNaN(close) || close <= 0) continue;
+
+      const open = Number(item.open) > 0 ? Number(item.open) : close;
+      let high = Number(item.high) > 0 ? Number(item.high) : Math.max(open, close);
+      let low = Number(item.low) > 0 ? Number(item.low) : Math.min(open, close);
+
+      // 防呆平滑
+      high = Math.max(high, open, close);
+      low = Math.min(low, open, close);
+
+      const adjClose = Number(item.adj_close || item.adjClose || close);
+      const volume = Number(item.volume) || 0;
+      const turnover = Number(item.turnover) || 0;
+
       stmt.run(
-        String(item.symbol).trim(),
+        symbol,
         String(item.date).trim(),
-        Number(item.open) || Number(item.close),
-        Number(item.high) || Number(item.close),
-        Number(item.low) || Number(item.close),
-        Number(item.close),
-        Number(item.adj_close || item.close),
-        Number(item.volume) || 0,
-        Number(item.turnover) || 0
+        open,
+        high,
+        low,
+        close,
+        adjClose,
+        volume,
+        turnover
       );
       count++;
     }

@@ -1,7 +1,11 @@
-# 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Document)
-
-> **交接產生時間**：2026-10-08 13:20 (UTC+8)  
+# 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手> **交接產生時間**：2026-10-08 15:10 (UTC+8)  
 > **當前最新里程碑**：
+> - **V8.83.0 徹底移除本地 CSV 依賴、全自主聯網回補管線與櫃買代碼撕裂治理**（ADR 0170, Spec 0170, Issue #191）：
+>   - **Algorithmic Trading Calendar Engine (純演算法法定交易日曆引擎)**：徹底移除對本地硬編碼 CSV 目錄（`HISTORICAL_BASE_DIR`）的掃描依賴，實作純演算法台灣法定休假日與彈性補假規則，零檔案 I/O，耗時 < 1ms，在任何乾淨無本機 CSV 環境均能 100% 自主運作。
+>   - **日常盤後同步日 K 物件結構修復與入庫防呆**：修復 `parseTwseDailyQuotesBulk` 與 `parseTpexDailyQuotesBulk` 物件結構漏賦 `symbol` 鍵之缺陷；SQLite 入庫改為遍歷 `Object.entries(quotesMap)`，若物件漏代碼則由 Key 自動補齊並過濾 `O` 尾綴，日 K 入庫率由 0% 提昇至 100%。
+>   - **櫃買上櫃股票與債券 ETF 去 O 事務性安全遷移**：徹底消除技術債 0043 遺留之 `GLOB '[0-9]*O'` 代碼斷層，單一 Transaction 內安全遷移 1,000 檔標的、257,087 筆歷史日 K 至乾淨代碼（取極值與最新值），徹底刪除帶 `O` 的孤兒紀錄。
+>   - **上市權值股 (2330 / 0050) 法人籌碼連續性補齊**：自主聯網同步 10/05~10/07 TWSE T86 三大法人買賣超與信用交易，連續無缺漏。
+>   - **主力戰情室盤中即時 K 棒動態縫合與置頂**：嚴格相容 Spec 0150 主定錨隔離：未結算時態下 `marketBar.currentPrice` 定錨前一結算日；同時若傳入 `liveQuote`，動態構造當日 `isIntraday: true` K 棒縫合至 `klineSystem.candles` 最末端。任務五原始資料表首行置頂展示「⚡ 即時」徽章。
 > - **V8.82.0 AI 主力戰情室法人籌碼與 TDCC 大戶端到端貫通、月營收與 ETF 自適應、美股微觀結構獨立化與搜尋體驗全面補強**（ADR 0169, Spec 0169, Issue #188, PR #189）：
 >   - **本地 SQLite 湖倉數據端到端貫通**：完整串接 `tw_tdcc_distribution` 與 `tw_monthly_revenue` 歷史數據，技術債 Debt 0042 與 Debt 0044 正式結案 (RESOLVED)。
 >   - **Card 19 TDCC 集保千張大戶趨勢卡**：左軸千張大戶持股比折線 + 4 週 MA 均線，右軸總股東人數柱狀圖，具備「籌碼高度集中」與「散戶接刀警戒」量化徽章。
@@ -11,7 +15,7 @@
 >   - **主 K 線日 K / 週 K / 月 K 動態聚合**：純函式前端毫秒級聚合日 K 數列並自適應重算 MA5~MA250 均線，各卡片標註 As-of Date 資料發布基準日。
 > - **V8.81.0 台美雙軌零 CSV 背景全歷史回補、真實成交筆數、櫃買代碼標準化與統一金鑰控制中心**（ADR 0168, Spec 0168, Issue #182, PR #183）：
 >   - 台股代碼推斷修復（`00411A`、`00679B`）、SQLite 擴充 `transactions` 欄位、櫃買代碼標準化（Debt 0043 RESOLVED）、UnifiedApiKeyManager 暗黑毛玻璃控制台、台美雙軌零 CSV 日期驅動歷史全回補。
-> **品質狀態**：全量單元測試 **1,491/1,491 通過 (100% Passed / 202 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> **品質狀態**：全量單元測試 **1,498/1,498 通過 (100% Passed / 203 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -20,10 +24,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main`
-- **單元測試套件**：**1,491/1,491 通過 (202 test suites / 100% 綠燈)**
+- **單元測試套件**：**1,498/1,498 通過 (203 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V8.82.0**
+- **當前釋出版本**：**V8.83.0**
 - **工作區與分支整潔度**：工作區 100% clean，本地 feature/fix 分支已全數刪除，專案臨時備份檔案已全量清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -51,7 +55,6 @@
 ## 🏗️ 3. 規格、架構決策與版本鏡像對照 (Specs, ADRs & Local Tickets)
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
-| :--- | :--- | :--- | :--- | :--- | :--- |
 | [`Spec 0169`](file:///d:/APP/股票紀錄/docs/specs/0169-ai-force-war-room-institutional-tdcc-revenue-and-us-microstructure-spec.md) | [`ADR 0169`](file:///d:/APP/股票紀錄/docs/adr/0169-ai-force-war-room-institutional-tdcc-revenue-and-us-microstructure.md) | [`.scratch/v8.82/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.82/issues/) | Issue #188 / PR #189 | V8.82.0 | AI 主力戰情室法人籌碼與 TDCC 大戶端到端貫通、月營收與 ETF 自適應、美股微觀結構獨立化與搜尋體驗全面補強 |
 | [`Spec 0168`](file:///d:/APP/股票紀錄/docs/specs/0168-zero-csv-dual-market-backfill-and-unified-api-key-console-spec.md) | [`ADR 0168`](file:///d:/APP/股票紀錄/docs/adr/0168-zero-csv-dual-market-backfill-and-unified-api-key-console.md) | [`.scratch/v8.81/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.81/issues/) | Issue #182 / PR #183 | V8.81.0 | 台美雙軌零 CSV 歷史全回補、真實成交筆數入庫、櫃買代碼標準化與統一金融金鑰控制中心 |
 | [`Spec 0161`](file:///d:/APP/股票紀錄/docs/specs/0161-market-freshness-service-decoupling-spec.md) | [`ADR 0161`](file:///d:/APP/股票紀錄/docs/adr/0161-market-freshness-service-decoupling.md) | [`.scratch/v8.74/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.74/issues/) | Issue #153 | V8.74.0 | 市場時區新鮮度服務解耦、中介層消除 Feature Envy 依戀情結、獨立公開測試縫隙 |
