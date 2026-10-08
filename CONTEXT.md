@@ -2332,3 +2332,17 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Intraday Live Candle Splicing & Dynamic Pinning (戰情室盤中即時 K 棒動態縫合與置頂)**:
   - 核心模組：`src/engine/aiForceDashboardEngine.ts`、`src/types/aiForceDashboard.ts`、`src/components/aiForceDashboard/TaskPanels.tsx`。
   - 嚴格相容 Spec 0150 主定錨隔離：未結算時態下 `marketBar.currentPrice` 定錨前一結算日；同時若傳入 `liveQuote`，動態構造當日 `isIntraday: true` K 棒縫合至 `klineSystem.candles` 最末端。任務五原始資料表首行置頂展示「⚡ 即時」徽章。
+
+### 技術債批次清理、同步檢查點複合狀態索引與金鑰管理員視圖解耦 *(新增於 V8.83.0 / Spec #0171 / ADR #0171 / Issue #193)*
+
+- **Sync Checkpoints Composite Index Optimization (同步檢查點複合狀態索引)**:
+  - 核心模組：`scripts/market-sync/sqlite-db-core.cjs`、`src/engine/sqliteLakehouseCore.test.ts`。
+  - 終結 Debt #0041。於 SQLite 湖倉核心資料庫追加 `idx_sync_checkpoints_lookup(market, status, last_success_date)` 複合索引，使全市場斷點續傳機制在萬級標的規模下，待同步標的查詢完全利用覆蓋索引掃描，保持 $O(1)$ 常數時間效能。
+
+- **Unified Api Key Manager Subcomponent Decomposition (金鑰管理員視圖模組化解耦)**:
+  - 核心模組：`src/components/GlobalProxyConfigCard.tsx`、`src/components/ApiKeyProviderCard.tsx`、`src/components/UnifiedApiKeyManager.tsx`。
+  - 終結 Debt #0045。依單一職責原則 (SRP) 拆解原逾千行之巨石視圖：提取獨立之全域反向代理伺服器端點配置元件 (`GlobalProxyConfigCard`) 與通用供應商金鑰池呈現元件 (`ApiKeyProviderCard`)。主元件聚焦於金鑰池生命週期與加密存儲排程，行數自 1,014 行縮減至 390 行，公開 Props 與匯出物件維持 100% 向後相容。
+
+- **Zero Open Technical Debts Milestone (技術債全數結清里程碑)**:
+  - 技術債看板 (`docs/debts/README.md`) 中之 Debt #0041 與 Debt #0045 正式標記為 `RESOLVED`，專案達成未結架構技術債歸零 (0 OPEN Debts) 里程碑。
+

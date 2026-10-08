@@ -155,6 +155,7 @@ function initSqliteLakehouseDb(customPath) {
       PRIMARY KEY (market, symbol)
     );
     CREATE INDEX IF NOT EXISTS idx_checkpoints_status ON sync_checkpoints(market, status);
+    CREATE INDEX IF NOT EXISTS idx_sync_checkpoints_lookup ON sync_checkpoints(market, status, last_success_date);
 
     -- 5. 台灣集保結算所 (TDCC) 每週股權分散與大戶持股比率表 (Spec 0163)
     CREATE TABLE IF NOT EXISTS tw_tdcc_distribution (

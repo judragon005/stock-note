@@ -114,4 +114,22 @@ describe('Ticket 01 - SQLite 核心儲存庫與 Schema 初始化 (Vitest Seam)',
     expect(db).toBeDefined();
     closeSqliteDb();
   });
+
+  it('6. 應能建立 sync_checkpoints 複合狀態索引 (idx_sync_checkpoints_lookup) 並命中覆蓋查詢', () => {
+    const db = initSqliteLakehouseDb(testDbPath);
+
+    // 驗證複合索引 idx_sync_checkpoints_lookup 存在
+    const indexRow = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_sync_checkpoints_lookup';")
+      .get();
+    expect(indexRow).toBeDefined();
+    expect(indexRow.name).toBe('idx_sync_checkpoints_lookup');
+
+    // 驗證 EXPLAIN QUERY PLAN 命中此索引
+    const plan = db
+      .prepare("EXPLAIN QUERY PLAN SELECT symbol FROM sync_checkpoints WHERE market = 'US' AND status = 'SUCCESS' AND last_success_date = ?")
+      .all('2026-10-08');
+    const planDetails = plan.map((p: any) => p.detail).join(' ');
+    expect(planDetails).toContain('idx_sync_checkpoints_lookup');
+  });
 });

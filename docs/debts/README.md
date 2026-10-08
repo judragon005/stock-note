@@ -48,11 +48,11 @@
 | [**0038**](0038-derive-shares-outstanding-helper-refactor.md) | 提取流通股數推導共用輔助函式 (deriveSharesOutstanding) 消除 DRY 異味 | `P3` | `RESOLVED` | PR #62 雙軸代碼審查 (Spec 0131) | `Refactor` · `DRY` · `KeyMetricsEngine` · `Valuation` | **已於 v8.52.0 (ADR #0139) 完整解決** |
 | [**0039**](0039-dashboard-canvas-snapshot-exporter.md) | AI 決策儀表板純前端 Canvas 快照下載演進 | `P3` | `RESOLVED` | Code Review (Spec 0140 / Issue #93) | `Feature` · `Export` · `Canvas` · `UX` · `AiForceDashboard` | **已於 v8.67.0 (ADR #0156) 完整解決** |
 | [**0040**](0040-ai-force-frontend-status-tag-and-disposition-badge-wiring.md) | AI 主力戰情室前端狀態標籤與處置警示徽章端到端串接 | `P3` | `RESOLVED` | Code Review (Spec 0155 / Issue #138) | `Feature` · `UI` · `AiForceDashboard` · `Lakehouse` · `Dispositions` | **已於 v8.67.0 (ADR #0156) 完整解決** |
-| [**0041**](0041-sync-checkpoints-composite-index-optimization.md) | 同步檢查點表 (sync_checkpoints) 複合狀態索引優化 | `P3` | `OPEN` | Code Review (Spec 0164 / Issue #163) | `Performance` · `Database` · `Lakehouse` · `Indexing` | 待處理 |
+| [**0041**](0041-sync-checkpoints-composite-index-optimization.md) | 同步檢查點表 (sync_checkpoints) 複合狀態索引優化 | `P3` | `RESOLVED` | Code Review (Spec 0164 / Issue #163) | `Performance` · `Database` · `Lakehouse` · `Indexing` | **已於 v8.83.0 (Spec 0171 / Issue #193) 完整解決** |
 | [**0042**](0042-ai-force-tdcc-and-monthly-revenue-card-visualizations.md) | AI 主力戰情室集保大戶散戶比與月營收趨勢卡片視覺化串接 | `P2` | `RESOLVED` | Code Review (Spec 0164 / Issue #163) | `Feature` · `UI` · `AiForceDashboard` · `TDCC` · `Revenue` | **已於 v8.82.0 (Spec 0169 / Issue #188) 完整解決** |
 | [**0043**](0043-tw-tpex-otc-and-bond-etf-daily-candles-normalization.md) | 台股上櫃股票與櫃買債券 ETF 代碼清洗標準化、盤後日 K 入庫物件修復與交易所元數據校準 | `P1` | `RESOLVED` | /grill-with-docs 深度調研 | `DataIntegrity` · `Lakehouse` · `DailyCandles` · `Normalization` · `TPEx` | **已於 v8.81.0 (Spec 0168 / Issue #182) 完整解決** |
 | [**0044**](0044-ai-force-war-room-feature-gaps-and-quant-enhancements.md) | 波段與中長線存股導向之主力戰情室功能演進與美股專屬微觀結構架構 | `P2` | `RESOLVED` | /grill-with-docs 深度調研 (對齊波段存股客群與美股獨立戰情室) | `AiForceWarRoom` · `SwingTrading` · `DividendInvesting` · `US-Market` | **已於 v8.82.0 (Spec 0169 / Issue #188) 完整解決** |
-| [**0045**](0045-unified-api-key-manager-subcomponent-decomposition.md) | UnifiedApiKeyManager 視圖子元件模組化解耦重構 | `P3` | `OPEN` | Code Review (Spec 0168 / Issue #182) | `Refactor` · `UI` · `CleanCode` · `SettingsWorkspace` | 待處理 |
+| [**0045**](0045-unified-api-key-manager-subcomponent-decomposition.md) | UnifiedApiKeyManager 視圖子元件模組化解耦重構 | `P3` | `RESOLVED` | Code Review (Spec 0168 / Issue #182) | `Refactor` · `UI` · `CleanCode` · `SettingsWorkspace` | **已於 v8.83.0 (Spec 0171 / Issue #193) 完整解決** |
 
 ---
 
