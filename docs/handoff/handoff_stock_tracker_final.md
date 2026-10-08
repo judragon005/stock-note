@@ -1,16 +1,17 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Document)
 
-> **交接產生時間**：2026-10-07 14:35 (UTC+8)  
+> **交接產生時間**：2026-10-08 13:20 (UTC+8)  
 > **當前最新里程碑**：
+> - **V8.82.0 AI 主力戰情室法人籌碼與 TDCC 大戶端到端貫通、月營收與 ETF 自適應、美股微觀結構獨立化與搜尋體驗全面補強**（ADR 0169, Spec 0169, Issue #188, PR #189）：
+>   - **本地 SQLite 湖倉數據端到端貫通**：完整串接 `tw_tdcc_distribution` 與 `tw_monthly_revenue` 歷史數據，技術債 Debt 0042 與 Debt 0044 正式結案 (RESOLVED)。
+>   - **Card 19 TDCC 集保千張大戶趨勢卡**：左軸千張大戶持股比折線 + 4 週 MA 均線，右軸總股東人數柱狀圖，具備「籌碼高度集中」與「散戶接刀警戒」量化徽章。
+>   - **Card 20 月營收 YoY 成長與創高走勢卡 (含 ETF 自適應)**：個股展示近 12 個月營收長條圖與 ATH 創高標籤；ETF 智慧切換為「ETF 資產規模與收益分配」，連動真實股東人數為受益人人數，徹底終結營收空白報錯。
+>   - **美股微觀結構獨立化與 Zero-Mock Policy**：徹底根除美股捏造外資投信假張數不良代碼，切換為機構量價評分 (Microstructure Score / MFI / OBV / Volume Ratio)，單位切換為「股」與「USD」。
+>   - **頂部搜尋框 30ms 防抖即時下拉補全與快捷標籤**：串接 SQLite `/api/market/symbols` 模糊搜尋，支援代碼與中文名稱秒搜尋、非同步取消保護與點擊外部自動收合；常駐 `0050`、`2330`、`2454`、`NVDA`、`AAPL` 快捷膠囊。
+>   - **主 K 線日 K / 週 K / 月 K 動態聚合**：純函式前端毫秒級聚合日 K 數列並自適應重算 MA5~MA250 均線，各卡片標註 As-of Date 資料發布基準日。
 > - **V8.81.0 台美雙軌零 CSV 背景全歷史回補、真實成交筆數、櫃買代碼標準化與統一金鑰控制中心**（ADR 0168, Spec 0168, Issue #182, PR #183）：
->   - **台股代碼推斷修復**：`inferMarketType` 正式支援帶字母後綴標的（如 `00411A`、`00679B`），鎖定台幣與張數計價。
->   - **SQLite daily_candles 擴充 transactions 欄位**：官方真實成交筆數入庫，徹底落實 Zero Mock Policy。
->   - **歷史櫃買代碼標準化歸併**：消除歷史 `xxxxO` 尾綴，Vite 中介層提供雙向別名相容，技術債 Debt 0043 標記為 RESOLVED。
->   - **主力戰情室 18 張卡片智慧自適應深度**：短天期新上市股自適應降級，長天期指標顯示「新上市數據累積中」誠實空白。
->   - **現代暗黑毛玻璃統一金鑰控制中心**：`UnifiedApiKeyManager` 全面整併舊版割裂之單一金鑰與多金鑰池，移除原生白底輸入框，支援 Web Crypto 256-bit 本地加密與單鍵測活。
->   - **零 CSV 台美雙軌日期驅動全歷史回補**：支援 TWSE/TPEx 4 大官方端點聚合日報、斷點續傳（`sync_checkpoints`），前端排程中心提供一鍵觸發與動態進度條。
->   - **架構技術債治理**：登錄 Debt 0045（`UnifiedApiKeyManager 視圖子元件模組化解耦重構`，Issue #185, PR #186）。
-> **品質狀態**：全量單元測試 **1,462/1,462 通過 (100% Passed / 199 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+>   - 台股代碼推斷修復（`00411A`、`00679B`）、SQLite 擴充 `transactions` 欄位、櫃買代碼標準化（Debt 0043 RESOLVED）、UnifiedApiKeyManager 暗黑毛玻璃控制台、台美雙軌零 CSV 日期驅動歷史全回補。
+> **品質狀態**：全量單元測試 **1,491/1,491 通過 (100% Passed / 202 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -19,10 +20,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main`
-- **單元測試套件**：**1,462/1,462 通過 (199 test suites / 100% 綠燈)**
+- **單元測試套件**：**1,491/1,491 通過 (202 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V8.81.0**
+- **當前釋出版本**：**V8.82.0**
 - **工作區與分支整潔度**：工作區 100% clean，本地 feature/fix 分支已全數刪除，專案臨時備份檔案已全量清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -51,6 +52,8 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0169`](file:///d:/APP/股票紀錄/docs/specs/0169-ai-force-war-room-institutional-tdcc-revenue-and-us-microstructure-spec.md) | [`ADR 0169`](file:///d:/APP/股票紀錄/docs/adr/0169-ai-force-war-room-institutional-tdcc-revenue-and-us-microstructure.md) | [`.scratch/v8.82/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.82/issues/) | Issue #188 / PR #189 | V8.82.0 | AI 主力戰情室法人籌碼與 TDCC 大戶端到端貫通、月營收與 ETF 自適應、美股微觀結構獨立化與搜尋體驗全面補強 |
+| [`Spec 0168`](file:///d:/APP/股票紀錄/docs/specs/0168-zero-csv-dual-market-backfill-and-unified-api-key-console-spec.md) | [`ADR 0168`](file:///d:/APP/股票紀錄/docs/adr/0168-zero-csv-dual-market-backfill-and-unified-api-key-console.md) | [`.scratch/v8.81/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.81/issues/) | Issue #182 / PR #183 | V8.81.0 | 台美雙軌零 CSV 歷史全回補、真實成交筆數入庫、櫃買代碼標準化與統一金融金鑰控制中心 |
 | [`Spec 0161`](file:///d:/APP/股票紀錄/docs/specs/0161-market-freshness-service-decoupling-spec.md) | [`ADR 0161`](file:///d:/APP/股票紀錄/docs/adr/0161-market-freshness-service-decoupling.md) | [`.scratch/v8.74/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.74/issues/) | Issue #153 | V8.74.0 | 市場時區新鮮度服務解耦、中介層消除 Feature Envy 依戀情結、獨立公開測試縫隙 |
 | [`Spec 0160`](file:///d:/APP/股票紀錄/docs/specs/0160-market-sync-catchup-and-kline-ssot-alignment-spec.md) | [`ADR 0160`](file:///d:/APP/股票紀錄/docs/adr/0160-market-sync-catchup-and-kline-ssot-alignment.md) | [`.scratch/v8.73/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.73/issues/) | Issue #150 / PR #151 | V8.73.0 | 市場數據過期自動追趕同步、本機湖倉推進至 10/02、主力戰情室預載 0050、主 K 線 SSOT 自適應縫合防拼裝 |
 | [`Spec 0149`](file:///d:/APP/股票紀錄/docs/specs/0149-scheduled-sync-anchor-repair-and-ai-force-cards-ux-enhancements-spec.md) | [`ADR 0149`](file:///d:/APP/股票紀錄/docs/adr/0149-scheduled-sync-anchor-repair-and-ai-force-cards-ux-enhancements.md) | [`.scratch/v8.62.0-scheduled-sync-anchor-repair-and-ai-force-cards-ux-enhancements/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.62.0-scheduled-sync-anchor-repair-and-ai-force-cards-ux-enhancements/issues/) | Issue #125 / PR #126 | V8.62.0 | 全市場排程工作目錄絕對錨定、空數據防清空守門員、搜尋代碼彈性防截斷、Tooltip Portal 穿透、Card 04 籌碼熱區圖自適應填滿、Card 05 風險雷達圖半徑擴大與大字級 |
