@@ -2,7 +2,7 @@
  * ZeroCsvAutonomousE2E.test.ts
  * 全自主聯網回補、櫃買去 O 治理與盤中動態縫合全鏈路 E2E 驗收測試 (Spec 0170 / Ticket 10)
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { generateAiForceReportFromCandles } from '../../engine/aiForceDashboardEngine';
@@ -13,6 +13,45 @@ import { isTwTradingDay, getPreviousTradingDay } from '../../../scripts/market-s
 import { initSqliteLakehouseDb } from '../../../scripts/market-sync/sqlite-db-core.cjs';
 
 describe('Spec 0170 E2E: 零本地 CSV 依賴、全自主聯網回補與櫃買去 O 治理端到端驗收', () => {
+  beforeAll(() => {
+    const db = initSqliteLakehouseDb();
+
+    // 在 CI 乾淨環境中自動確保具備必要的驗收 fixture
+    const hasCandle3293 = db.prepare('SELECT 1 FROM daily_candles WHERE symbol = ? LIMIT 1').get('3293');
+    if (!hasCandle3293) {
+      db.prepare(`
+        INSERT OR IGNORE INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume, transactions)
+        VALUES 
+          ('3293', '2026-10-01', 750, 760, 745, 755, 755, 1200000, 8000),
+          ('3293', '2026-10-02', 755, 765, 750, 760, 760, 1500000, 9500),
+          ('3293', '2026-10-05', 760, 770, 755, 765, 765, 1800000, 11000),
+          ('3293', '2026-10-06', 765, 775, 760, 770, 770, 2100000, 13000),
+          ('3293', '2026-10-07', 770, 785, 768, 780, 780, 2500000, 15000)
+      `).run();
+    }
+
+    const has00679B = db.prepare('SELECT 1 FROM daily_candles WHERE symbol = ? LIMIT 1').get('00679B');
+    if (!has00679B) {
+      db.prepare(`
+        INSERT OR IGNORE INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume, transactions)
+        VALUES 
+          ('00679B', '2026-10-07', 29.5, 29.8, 29.4, 29.6, 29.6, 5000000, 3200)
+      `).run();
+    }
+
+    const hasChips = db.prepare('SELECT 1 FROM tw_institutional_chips WHERE symbol = ? LIMIT 1').get('2330');
+    if (!hasChips) {
+      db.prepare(`
+        INSERT OR IGNORE INTO tw_institutional_chips (symbol, date, foreign_buy, foreign_sell, foreign_net, trust_buy, trust_sell, trust_net, dealer_buy, dealer_sell, dealer_net, total_net)
+        VALUES
+          ('2330', '2026-10-01', 10000, 5000, 5000, 2000, 500, 1500, 1000, 200, 800, 7300),
+          ('2330', '2026-10-02', 12000, 6000, 6000, 1500, 300, 1200, 800, 300, 500, 7700),
+          ('2330', '2026-10-05', 15000, 8000, 7000, 3000, 1000, 2000, 500, 100, 400, 9400),
+          ('2330', '2026-10-06', 11000, 7000, 4000, 1000, 200, 800, 600, 200, 400, 5200),
+          ('2330', '2026-10-07', 18000, 9000, 9000, 2500, 500, 2000, 1200, 300, 900, 11900)
+      `).run();
+    }
+  });
   it('1. 驗證演算法交易日曆 100% 自主運作，零外部檔案讀寫依賴', () => {
     // 驗證 2026 年法定交易日與假日判定
     expect(isTwTradingDay('2026-10-07')).toBe(true); // 週三
