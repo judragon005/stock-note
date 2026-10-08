@@ -14,7 +14,7 @@
 3. 執行入庫腳本，將本機 SQLite 數據湖倉中的 `tw_tdcc_distribution` 與 `tw_monthly_revenue` 補齊時間序列。
 
 ## 驗收標準
-- [ ] SQLite 中 3260 之 `tw_tdcc_distribution` 擁有至少 8~10 筆歷史週次記錄。
-- [ ] SQLite 中 3260 之 `tw_monthly_revenue` 擁有 12 筆歷史月份記錄。
-- [ ] 卡片 19 展現多週柱狀圖與折線，近 4 週大戶變動率真實計算非固定 +0.00%。
-- [ ] 卡片 20 展現 12 個月營收長條圖與 YoY 折線，連續雙增月數動態反映。
+- [x] SQLite 中 3260 之 `tw_tdcc_distribution` 擁有至少 8~10 筆歷史週次記錄。
+- [x] SQLite 中 3260 之 `tw_monthly_revenue` 擁有 12 筆歷史月份記錄。
+- [x] 卡片 19 展現多週柱狀圖與折線，近 4 週大戶變動率真實計算非固定 +0.00%。
+- [x] 卡片 20 展現 12 個月營收長條圖與 YoY 折線，連續雙增月數動態反映。

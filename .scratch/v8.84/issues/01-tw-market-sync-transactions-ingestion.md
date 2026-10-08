@@ -15,6 +15,6 @@
 3. 提供快速修復或遷移腳本，將本機資料庫 `daily_candles` 中最新交易日之台股標的補充真實 transactions。
 
 ## 驗收標準
-- [ ] 執行 `npm test` 相關行情解析與入庫測試 100% 通過。
-- [ ] 查詢本機 SQLite `daily_candles` 中 3260、2330 最新日 K，`transactions` 具備有效正整數（如 1000 筆以上，非 NULL 或 0）。
-- [ ] 戰情室頂部 `HeaderMarketBar` 正確顯示千分位格式成交筆數（如 `3,958` 或真實筆數），不再是 `-`。
+- [x] 執行 `npm test` 相關行情解析與入庫測試 100% 通過。
+- [x] 查詢本機 SQLite `daily_candles` 中 3260、2330 最新日 K，`transactions` 具備有效正整數（如 1000 筆以上，非 NULL 或 0）。
+- [x] 戰情室頂部 `HeaderMarketBar` 正確顯示千分位格式成交筆數（如 `3,958` 或真實筆數），不再是 `-`。
