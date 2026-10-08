@@ -1,7 +1,7 @@
 # ADR 0172: 主力戰情室全景佈局重構、量化引擎修復與專業任務視圖升級架構決策 (AI Force War Room Comprehensive Layout, Quant Pipeline Repair & Professional Task Views)
 
 ## 狀態
-已提議 / 部分實施 (Phase 1 已完成)
+已採納 / 全量實施完成 (Phase 1, 2, 3 全量交付)
 
 ## 背景與問題陳述
 在「⚡ 主力戰情室 (AI Force War Room)」中，隨著功能逐步迭代，系統暴露了三大類架構痛點：

@@ -83,6 +83,28 @@ describe('TaskPanels 底部任務視圖真實資料動態連動 (Spec 0143 Ticke
       expect(html).not.toContain('2345');
       expect(html).not.toContain('2280');
     });
+
+    it('Ticket 07: 應整合交易所處置股票預警、注意股票標記與信用維持率壓力測試看板', () => {
+      // 測試處置狀態回報
+      const dispositionReport = {
+        ...mockReport,
+        marketBar: {
+          ...mockReport.marketBar,
+          statusTag: 'DISPOSITION' as const,
+        },
+      };
+      const alerts = generateTechnicalAlerts(dispositionReport);
+      const hasDisposalAlert = alerts.some((a) => a.title.includes('處置') || a.message.includes('分盤撮合'));
+      expect(hasDisposalAlert).toBe(true);
+
+      const html = renderToStaticMarkup(React.createElement(TechnicalAlertsView, { report: dispositionReport }));
+      // 應包含處置分盤撮合或預收款券相關描述
+      expect(html).toMatch(/處置|分盤撮合|預收款券/);
+      // 應包含信用維持率壓力測試矩陣（130% 追繳線與 140% 警戒線）
+      expect(html).toContain('信用維持率');
+      expect(html).toContain('130%');
+      expect(html).toContain('140%');
+    });
   });
 
   describe('任務三：KD + MA 視圖 (KdMaView & deriveKdMaMetrics)', () => {
@@ -96,7 +118,24 @@ describe('TaskPanels 底部任務視圖真實資料動態連動 (Spec 0143 Ticke
       expect(metrics.kdCrossingState).toBeDefined();
     });
 
-    it('KdMaView 渲染時應包含真實指標數值並繪製原生 SVG 走勢圖', () => {
+    it('Ticket 07: deriveKdMaMetrics 應包含日/週/月多週期共振判定與歷史低檔金叉勝率統計', () => {
+      const metrics = deriveKdMaMetrics(mockReport);
+
+      // 多週期共振
+      expect(metrics.multiTimeframeResonance).toBeDefined();
+      expect(metrics.multiTimeframeResonance.dailyKd).toBeDefined();
+      expect(metrics.multiTimeframeResonance.weeklyKd).toBeDefined();
+      expect(metrics.multiTimeframeResonance.monthlyKd).toBeDefined();
+      expect(typeof metrics.multiTimeframeResonance.resonanceLabel).toBe('string');
+
+      // 歷史低檔金叉勝率統計
+      expect(metrics.historicalOversoldStats).toBeDefined();
+      expect(typeof metrics.historicalOversoldStats.winRate).toBe('number');
+      expect(typeof metrics.historicalOversoldStats.sampleCount).toBe('number');
+      expect(typeof metrics.historicalOversoldStats.avgReturnPercent).toBe('number');
+    });
+
+    it('KdMaView 渲染時應包含真實指標數值並繪製原生 SVG 走勢圖與多週期共振看板', () => {
       const last = mockCandles[mockCandles.length - 1];
       const html = renderToStaticMarkup(React.createElement(KdMaView, { report: mockReport }));
 
@@ -107,6 +146,11 @@ describe('TaskPanels 底部任務視圖真實資料動態連動 (Spec 0143 Ticke
       // 應包含 <svg> 向量圖形元素，而非舊版的純文字 placeholder
       expect(html).toContain('<svg');
       expect(html).not.toContain('視覺化已就緒');
+
+      // Ticket 07: 應渲染日週月多週期共振與勝率標籤
+      expect(html).toMatch(/日 KD|週 KD|月 KD/);
+      expect(html).toContain('勝率');
+      expect(html).toContain('多週期共振');
     });
   });
 
@@ -120,7 +164,24 @@ describe('TaskPanels 底部任務視圖真實資料動態連動 (Spec 0143 Ticke
       expect(metrics.macdHist).toBe(last.macdHist);
     });
 
-    it('MacdView 渲染時應包含真實 DIF/MACD 數值並繪製原生 SVG 圖表', () => {
+    it('Ticket 07: deriveMacdMetrics 應具備自動頂底背離量化偵測與零軸多空分水嶺判定', () => {
+      const metrics = deriveMacdMetrics(mockReport);
+
+      // 頂底背離量化狀態
+      expect(metrics.divergenceInfo).toBeDefined();
+      expect(['BEARISH_DIVERGENCE', 'BULLISH_DIVERGENCE', 'NONE']).toContain(metrics.divergenceInfo.type);
+      expect(typeof metrics.divergenceInfo.label).toBe('string');
+      expect(typeof metrics.divergenceInfo.description).toBe('string');
+
+      // 零軸多空分水嶺
+      expect(metrics.zeroAxisState).toBeDefined();
+      expect(typeof metrics.zeroAxisState.label).toBe('string');
+
+      // 動能預警
+      expect(metrics.momentumAlert).toBeDefined();
+    });
+
+    it('MacdView 渲染時應包含真實 DIF/MACD 數值並繪製原生 SVG 圖表與頂底背離警報卡', () => {
       const last = mockCandles[mockCandles.length - 1];
       const html = renderToStaticMarkup(React.createElement(MacdView, { report: mockReport }));
 
@@ -130,6 +191,10 @@ describe('TaskPanels 底部任務視圖真實資料動態連動 (Spec 0143 Ticke
       // 應包含原生 <svg> 圖表
       expect(html).toContain('<svg');
       expect(html).not.toContain('零軸向上發散中');
+
+      // Ticket 07: 應包含背離偵測與零軸分水嶺
+      expect(html).toMatch(/頂底背離|背離量化/);
+      expect(html).toContain('零軸');
     });
   });
 

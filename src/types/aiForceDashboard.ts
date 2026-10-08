@@ -21,6 +21,7 @@ export interface MarketBarData {
   anchorTradingDate?: string; // 量化分析基準日 (YYYY-MM-DD)
   settlementReason?: string; // 未結算之說明提示
   marketStatusTag?: 'NORMAL' | 'ATTENTION' | 'DISPOSITION'; // 注意股票或處置股票狀態標籤
+  statusTag?: 'NORMAL' | 'ATTENTION' | 'DISPOSITION'; // 相容處置狀態標記別名
   currency?: 'TWD' | 'USD'; // 標的計價幣別
   volumeUnit?: '張' | '股'; // 成交量單位
   intradayQuote?: {
