@@ -55,15 +55,12 @@ describe('RiskSpiderCard - 五角蛛網風險雷達圖規範 (Ticket 11)', () =>
     });
   });
 
-  describe('五角蛛網放大與大字級易讀性規範 (Ticket 12 & 13)', () => {
-    it('雷達圖半徑應放大至 96 且標籤字級提升至 13px / 數值 12px', () => {
-      const enlargedMaxRadius = 96;
-      expect(enlargedMaxRadius).toBe(96);
-
-      const labelFontSize = 13;
-      const scoreFontSize = 12;
-      expect(labelFontSize).toBeGreaterThanOrEqual(13);
-      expect(scoreFontSize).toBeGreaterThanOrEqual(12);
+  describe('五角蛛網全景放大與大字級易讀性規範 (Ticket 04)', () => {
+    it('雷達圖半徑應放大至 120 且標籤字級提升至 15px / 數值 14px', async () => {
+      const { RISK_SPIDER_CONFIG } = await import('./RiskSpiderCard');
+      expect(RISK_SPIDER_CONFIG.maxRadius).toBeGreaterThanOrEqual(120);
+      expect(RISK_SPIDER_CONFIG.labelFontSize).toBeGreaterThanOrEqual(15);
+      expect(RISK_SPIDER_CONFIG.scoreFontSize).toBeGreaterThanOrEqual(14);
     });
   });
 });

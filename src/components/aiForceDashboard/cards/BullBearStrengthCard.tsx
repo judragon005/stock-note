@@ -27,6 +27,12 @@ export function calculateSignalTier(compositeScore: number): { tier: number; lab
   return { tier: 5, label: '5 級區 (極弱空頭)', color: '#10b981' };
 }
 
+export const BULL_BEAR_RING_CONFIG = {
+  size: 68,
+  radius: 26,
+  fontSize: 14,
+};
+
 interface StrengthRingProps {
   label: string;
   percent: number;
@@ -35,24 +41,25 @@ interface StrengthRingProps {
 }
 
 const StrengthRing: React.FC<StrengthRingProps> = ({ label, percent, color, termId }) => {
-  const radius = 22;
+  const { size, radius, fontSize } = BULL_BEAR_RING_CONFIG;
+  const half = size / 2;
   const { circumference, strokeDashoffset, clamped } = calculateCircleProgress(percent, radius);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', flex: 1 }}>
-      <div style={{ position: 'relative', width: '56px', height: '56px' }}>
-        <svg width="56" height="56" viewBox="0 0 56 56">
+      <div style={{ position: 'relative', width: `${size}px`, height: `${size}px` }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
           <circle
-            cx="28"
-            cy="28"
+            cx={half}
+            cy={half}
             r={radius}
             fill="transparent"
             stroke="rgba(255, 255, 255, 0.08)"
             strokeWidth="5"
           />
           <circle
-            cx="28"
-            cy="28"
+            cx={half}
+            cy={half}
             r={radius}
             fill="transparent"
             stroke={color}
@@ -60,7 +67,7 @@ const StrengthRing: React.FC<StrengthRingProps> = ({ label, percent, color, term
             strokeDasharray={`${circumference} ${circumference}`}
             strokeDashoffset={strokeDashoffset}
             strokeLinecap="round"
-            transform="rotate(-90 28 28)"
+            transform={`rotate(-90 ${half} ${half})`}
             style={{ transition: 'stroke-dashoffset 0.6s ease' }}
           />
         </svg>
@@ -71,7 +78,7 @@ const StrengthRing: React.FC<StrengthRingProps> = ({ label, percent, color, term
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '12px',
+            fontSize: `${fontSize}px`,
             fontWeight: 800,
             fontFamily: 'monospace',
             color: '#f8fafc',

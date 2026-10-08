@@ -141,6 +141,8 @@ export interface VolumeProfileData {
   bullBearFooterTag: string; // "多多多多多"
   priceTicks?: number[]; // 自適應 5 階 Y 軸價格刻度 (由大到小)
   heatmapColumns?: HeatmapColumn[]; // 4 欄週期熱力數據 (5日/10日/20日/60日)
+  currentPrice?: number; // 最新收盤價
+  currentPriceYRatio?: number; // 最新現價落於熱區圖之相對高度比例 (0~1)
 }
 
 /**

@@ -20,4 +20,13 @@ describe('ForceDistributionCard & Donut math', () => {
     expect(mockData.largePlayerBuyPercent).toBe(65);
     expect(mockData.retailBuyPercent).toBe(35);
   });
+
+  describe('Ticket 06: 買賣力圓環 68px 規格統一', () => {
+    it('圓環直徑應為 68px，半徑 r=26，文字 14px', async () => {
+      const { FORCE_DISTRIBUTION_RING_CONFIG } = await import('./ForceDistributionCard');
+      expect(FORCE_DISTRIBUTION_RING_CONFIG.size).toBe(68);
+      expect(FORCE_DISTRIBUTION_RING_CONFIG.radius).toBe(26);
+      expect(FORCE_DISTRIBUTION_RING_CONFIG.fontSize).toBe(14);
+    });
+  });
 });

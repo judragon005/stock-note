@@ -28,6 +28,12 @@ export function calculateDonutSegments(
   };
 }
 
+export const FORCE_DISTRIBUTION_RING_CONFIG = {
+  size: 68,
+  radius: 26,
+  fontSize: 14,
+};
+
 interface SingleRingProps {
   label: string;
   percent: number;
@@ -36,26 +42,27 @@ interface SingleRingProps {
 }
 
 const SingleRing: React.FC<SingleRingProps> = ({ label, percent, color, termId }) => {
-  const radius = 24;
+  const { size, radius, fontSize } = FORCE_DISTRIBUTION_RING_CONFIG;
+  const half = size / 2;
   const circumference = 2 * Math.PI * radius;
   const clamped = Math.max(0, Math.min(100, percent));
   const strokeDashoffset = circumference * (1 - clamped / 100);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: 1 }}>
-      <div style={{ position: 'relative', width: '64px', height: '64px' }}>
-        <svg width="64" height="64" viewBox="0 0 64 64">
+      <div style={{ position: 'relative', width: `${size}px`, height: `${size}px` }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
           <circle
-            cx="32"
-            cy="32"
+            cx={half}
+            cy={half}
             r={radius}
             fill="transparent"
             stroke="rgba(255, 255, 255, 0.08)"
             strokeWidth="5"
           />
           <circle
-            cx="32"
-            cy="32"
+            cx={half}
+            cy={half}
             r={radius}
             fill="transparent"
             stroke={color}
@@ -63,7 +70,7 @@ const SingleRing: React.FC<SingleRingProps> = ({ label, percent, color, termId }
             strokeDasharray={`${circumference} ${circumference}`}
             strokeDashoffset={strokeDashoffset}
             strokeLinecap="round"
-            transform="rotate(-90 32 32)"
+            transform={`rotate(-90 ${half} ${half})`}
             style={{
               transition: 'stroke-dashoffset 0.6s ease',
               filter: `drop-shadow(0 0 6px ${color}66)`,
@@ -77,7 +84,7 @@ const SingleRing: React.FC<SingleRingProps> = ({ label, percent, color, termId }
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '14px',
+            fontSize: `${fontSize}px`,
             fontWeight: 800,
             fontFamily: 'monospace',
             color: '#f8fafc',

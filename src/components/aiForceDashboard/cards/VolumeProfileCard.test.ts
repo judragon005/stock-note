@@ -62,5 +62,33 @@ describe('VolumeProfileCard - 籌碼熱區圖元件樣式與計算規範 (Ticket
       expect(gridContainerStyle.flex).toBe(1);
     });
   });
+
+  describe('Ticket 05: 幽靈網格、現價指針與大量成交峰/籌碼真空帶規範', () => {
+    it('應定義 Ghost Grid 邊框為微光透明度 rgba(255, 255, 255, 0.05)', async () => {
+      const { GHOST_GRID_STYLE } = await import('./VolumeProfileCard');
+      expect(GHOST_GRID_STYLE.border).toBe('1px solid rgba(255, 255, 255, 0.05)');
+    });
+
+    it('應準確識別大量成交峰 (POC) 與籌碼真空帶', async () => {
+      const { identifyPocAndVacuum } = await import('./VolumeProfileCard');
+      const buckets = [
+        { label: '壓力區', percentage: 10, type: 'resistance' as const, priceMin: 390, priceMax: 410 },
+        { label: '大量成交區', percentage: 55, type: 'heavy' as const, priceMin: 370, priceMax: 390 },
+        { label: '密集成交區', percentage: 20, type: 'dense' as const, priceMin: 350, priceMax: 370 },
+        { label: '橫平區', percentage: 12, type: 'flat' as const, priceMin: 330, priceMax: 350 },
+        { label: '支撐區', percentage: 3, type: 'support' as const, priceMin: 310, priceMax: 330 },
+      ];
+      const { pocBucketIndex, vacuumBucketIndex } = identifyPocAndVacuum(buckets);
+      expect(pocBucketIndex).toBe(1); // 55% 是大量成交峰
+      expect(vacuumBucketIndex).toBe(4); // 3% 是籌碼真空帶
+    });
+
+    it('應計算最新收盤價之指針線 Y 軸比例', async () => {
+      const { calculateCurrentPricePointer } = await import('./VolumeProfileCard');
+      const pointer = calculateCurrentPricePointer([400, 375, 350, 325, 300], 375);
+      expect(pointer.ratio).toBeCloseTo(0.25, 2);
+      expect(pointer.displayPrice).toBe('375');
+    });
+  });
 });
 

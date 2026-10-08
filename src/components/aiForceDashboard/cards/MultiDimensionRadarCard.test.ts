@@ -7,12 +7,13 @@ import {
   RADAR_CHART_CONFIG,
 } from './MultiDimensionRadarCard';
 
-describe('MultiDimensionRadarCard - 六角雷達視覺放大規範 (Ticket 03)', () => {
-  it('雷達半徑應擴展至 100px 以上，且維度標籤與分數文字應放大提升判讀性', () => {
-    expect(RADAR_CHART_CONFIG.maxRadius).toBeGreaterThanOrEqual(100);
-    expect(RADAR_CHART_CONFIG.labelFontSize).toBeGreaterThanOrEqual(12);
-    expect(RADAR_CHART_CONFIG.scoreFontSize).toBeGreaterThanOrEqual(11);
-    expect(RADAR_CHART_CONFIG.gradeFontSize).toBeGreaterThanOrEqual(16);
+describe('MultiDimensionRadarCard - 六角雷達全景放大規範 (Ticket 04)', () => {
+  it('雷達半徑應擴展至 125px，中心徽章半徑 30px，且標籤文字 15px / 分數文字 14px', () => {
+    expect(RADAR_CHART_CONFIG.maxRadius).toBeGreaterThanOrEqual(125);
+    expect(RADAR_CHART_CONFIG.centerBadgeRadius).toBeGreaterThanOrEqual(30);
+    expect(RADAR_CHART_CONFIG.labelFontSize).toBeGreaterThanOrEqual(15);
+    expect(RADAR_CHART_CONFIG.scoreFontSize).toBeGreaterThanOrEqual(14);
+    expect(RADAR_CHART_CONFIG.gradeFontSize).toBeGreaterThanOrEqual(18);
   });
 });
 

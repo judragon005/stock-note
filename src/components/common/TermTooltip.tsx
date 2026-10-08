@@ -45,6 +45,12 @@ export interface TermTooltipProps {
   className?: string;
 }
 
+export const TOOLTIP_POPUP_CONFIG = {
+  maxHeight: '400px',
+  overflowY: 'auto' as const,
+  width: '320px',
+};
+
 export const TermTooltip: React.FC<TermTooltipProps> = ({
   termId,
   entry: customEntry,
@@ -154,10 +160,12 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
       top: `${coords.top}px`,
       left: `${coords.left}px`,
       zIndex: 999999,
-      width: '320px',
+      width: TOOLTIP_POPUP_CONFIG.width,
       maxWidth: 'calc(100vw - 24px)',
-      maxHeight: '280px',
-      overflowY: 'auto',
+      maxHeight: TOOLTIP_POPUP_CONFIG.maxHeight,
+      overflowY: TOOLTIP_POPUP_CONFIG.overflowY,
+      scrollbarWidth: 'thin',
+      scrollbarColor: 'rgba(59, 130, 246, 0.4) rgba(15, 23, 42, 0.6)',
       backgroundColor: 'rgba(15, 23, 42, 0.98)',
       backdropFilter: 'blur(16px)',
       WebkitBackdropFilter: 'blur(16px)',

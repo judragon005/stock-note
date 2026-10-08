@@ -140,4 +140,15 @@ describe('AI Force Glossary 領域字典', () => {
       expect(diagnoseHealthScore(50)).toContain('體質偏弱');
     });
   });
+
+  describe('Ticket 06: 主力追蹤總評判 (mlpSemanticVerdict) 超跌反彈操盤指南規範', () => {
+    it('mlpSemanticVerdict 應包含「超跌反彈」的 20MA 負乖離定義與實戰操作指引', () => {
+      const entry = AI_FORCE_GLOSSARY.mlpSemanticVerdict;
+      expect(entry).toBeDefined();
+      expect(entry.meaning).toContain('超跌反彈');
+      expect(entry.meaning).toContain('20MA');
+      expect(entry.buySignal).toContain('超跌反彈');
+      expect(entry.buySignal).toContain('停損');
+    });
+  });
 });

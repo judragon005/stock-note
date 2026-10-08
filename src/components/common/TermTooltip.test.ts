@@ -51,5 +51,13 @@ describe('TermTooltip - 浮動小視窗防邊界溢出與定位演算法 (Ticket
 
     expect(placement.vertical).toBe('bottom');
   });
+
+  describe('Ticket 06: Tooltip 防截斷與 400px 最大高度規範', () => {
+    it('TOOLTIP_POPUP_CONFIG 應設定 maxHeight 為 400px 且啟用暗黑滾動條', async () => {
+      const { TOOLTIP_POPUP_CONFIG } = await import('./TermTooltip');
+      expect(TOOLTIP_POPUP_CONFIG.maxHeight).toBe('400px');
+      expect(TOOLTIP_POPUP_CONFIG.overflowY).toBe('auto');
+    });
+  });
 });
 

@@ -145,14 +145,14 @@ const AXIS_CONFIG = [
 ] as const;
 
 export const RADAR_CHART_CONFIG = {
-  center: { x: 160, y: 140 },
-  maxRadius: 100,
-  labelOffset: 26,
-  labelFontSize: 13,
-  scoreFontSize: 12,
-  centerBadgeRadius: 25,
-  gradeFontSize: 17,
-  scoreDetailFontSize: 9.5,
+  center: { x: 180, y: 165 },
+  maxRadius: 125,
+  labelOffset: 28,
+  labelFontSize: 15,
+  scoreFontSize: 14,
+  centerBadgeRadius: 30,
+  gradeFontSize: 19,
+  scoreDetailFontSize: 10.5,
 };
 
 export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = ({ data }) => {
@@ -220,9 +220,10 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
           alignItems: 'center',
           justifyContent: 'space-between',
           marginBottom: '10px',
+          whiteSpace: 'nowrap',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
           <span
             style={{
               padding: '2px 6px',
@@ -231,6 +232,7 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
               color: '#60a5fa',
               fontSize: '0.72rem',
               fontWeight: 800,
+              flexShrink: 0,
             }}
           >
             03
@@ -240,15 +242,15 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
             dynamicDiagnosis={diagnoseHealthScore(data.overallScore ?? 56)}
             showIcon={true}
           >
-            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc', whiteSpace: 'nowrap' }}>
               多維度判讀
             </span>
           </TermTooltip>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
           <TermTooltip termId="chipsHealth" dynamicDiagnosis={diagnoseHealthScore(data.overallScore ?? 56)}>
-            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
               綜合評分：<span style={{ color: '#38bdf8', fontWeight: 700, fontFamily: 'monospace' }}>{data.overallScore ?? 56} / 100</span>
             </span>
           </TermTooltip>
@@ -263,6 +265,7 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
               padding: '2px',
               display: 'flex',
               alignItems: 'center',
+              flexShrink: 0,
             }}
           >
             <MoreVertical size={14} />
@@ -273,7 +276,7 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
       {/* SVG 六角蛛網繪圖區 */}
       <div style={{ width: '100%', flex: 1, minHeight: '220px', position: 'relative' }}>
         <svg
-          viewBox="0 0 320 270"
+          viewBox="0 0 360 330"
           style={{ width: '100%', height: '100%', overflow: 'visible' }}
           preserveAspectRatio="xMidYMid meet"
         >
@@ -401,12 +404,13 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
           background: 'rgba(30, 41, 59, 0.45)',
           border: '1px solid rgba(59, 130, 246, 0.15)',
           fontSize: '0.74rem',
+          whiteSpace: 'nowrap',
         }}
       >
-        <span style={{ color: '#cbd5e1' }}>
+        <span style={{ color: '#cbd5e1', whiteSpace: 'nowrap' }}>
           評級等級：<span style={{ color: gradeStyle.color, fontWeight: 800 }}>{data.overallGrade || 'C'} 級</span>
         </span>
-        <span style={{ color: '#cbd5e1' }}>
+        <span style={{ color: '#cbd5e1', whiteSpace: 'nowrap' }}>
           評級分數：<span style={{ color: '#38bdf8', fontWeight: 800, fontFamily: 'monospace' }}>{data.overallScore ?? 56} / 100</span>
         </span>
       </div>
