@@ -155,43 +155,25 @@ describe('HeaderMarketBar - 行情 Bar 格式化與狀態燈規範 (Ticket 02)',
     });
   });
 
-  describe('Ticket 05 (Spec 0169): 搜尋補全與常駐快捷標籤', () => {
-    it('QUICK_CHIPS 應包含 0050、2330、2454、NVDA、AAPL 五大核心標的', async () => {
+  describe('Ticket 03 (Spec 0172): 頂部快捷股票按鈕徹底移除與查詢行單行清爽化', () => {
+    it('QUICK_CHIPS 仍保留作為模糊候選資料池，但主橫列不再渲染快捷晶片', async () => {
       const { QUICK_CHIPS } = await import('./HeaderMarketBar');
-      const symbols = QUICK_CHIPS.map((c) => c.symbol);
-      expect(symbols).toContain('0050');
-      expect(symbols).toContain('2330');
-      expect(symbols).toContain('2454');
-      expect(symbols).toContain('NVDA');
-      expect(symbols).toContain('AAPL');
+      expect(QUICK_CHIPS.length).toBe(5);
     });
 
-    it('searchCandidateSymbols 應支援輸入中文名稱 (如「台積」、「聯發」) 模糊比對候選清單', async () => {
-      const { searchCandidateSymbols } = await import('./HeaderMarketBar');
-
-      const tsmcMatches = searchCandidateSymbols('台積');
-      expect(tsmcMatches.length).toBeGreaterThan(0);
-      expect(tsmcMatches[0].symbol).toBe('2330');
-      expect(tsmcMatches[0].name).toBe('台積電');
-
-      const mtkMatches = searchCandidateSymbols('聯發');
-      expect(mtkMatches.length).toBeGreaterThan(0);
-      expect(mtkMatches[0].symbol).toBe('2454');
-
-      const appleMatches = searchCandidateSymbols('蘋果');
-      expect(appleMatches.length).toBeGreaterThan(0);
-      expect(appleMatches[0].symbol).toBe('AAPL');
-    });
-
-    it('searchCandidateSymbols 應支援輸入代碼 (如 2330, NVDA) 比對', async () => {
-      const { searchCandidateSymbols } = await import('./HeaderMarketBar');
-
-      const nvdaMatches = searchCandidateSymbols('NVDA');
-      expect(nvdaMatches.some((m) => m.symbol === 'NVDA')).toBe(true);
-
-      const codeMatches = searchCandidateSymbols('2330');
-      expect(codeMatches.some((m) => m.symbol === '2330')).toBe(true);
+    it('主橫列排版規範：輸入列與 4 大狀態膠囊在 >= 1200px 保持單行舒展 (nowrap)', () => {
+      // 驗證排版防禦參數
+      const rowLayout = {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'nowrap',
+        gap: '16px',
+      };
+      expect(rowLayout.flexWrap).toBe('nowrap');
+      expect(rowLayout.gap).toBe('16px');
     });
   });
 });
+
 

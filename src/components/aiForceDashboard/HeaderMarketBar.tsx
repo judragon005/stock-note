@@ -266,21 +266,22 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
         boxSizing: 'border-box',
       }}
     >
-      {/* 1. 第一層：股票搜尋操作、常駐快捷膠囊與 4 大狀態指示燈 */}
+      {/* 1. 第一層：股票搜尋操作、處置/注意警示與 4 大狀態指示燈 (Ticket 03: 單行清爽化) */}
       <div
+        data-testid="header-market-bar-row1"
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '12px',
+          flexWrap: 'nowrap',
+          gap: '16px',
           width: '100%',
           paddingBottom: '8px',
           borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
         }}
       >
-        {/* 左側：股票代號輸入框、即時下拉提示與常駐快速切換膠囊 */}
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+        {/* 左側：股票代號輸入框、即時下拉提示與分析按鈕 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
           <div ref={searchContainerRef} style={{ position: 'relative' }}>
             <form
               onSubmit={handleSearchSubmit}
@@ -288,11 +289,11 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                background: 'rgba(30, 41, 59, 0.85)',
-                padding: '3px 10px 3px 6px',
-                borderRadius: '8px',
-                border: '1px solid rgba(59, 130, 246, 0.4)',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.25)',
+                background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.9) 100%)',
+                padding: '4px 12px 4px 8px',
+                borderRadius: '10px',
+                border: '1px solid rgba(59, 130, 246, 0.45)',
+                boxShadow: '0 0 12px rgba(59, 130, 246, 0.15)',
               }}
             >
               <input
@@ -327,18 +328,20 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
                 type="submit"
                 disabled={isLoading}
                 style={{
-                  padding: '4px 10px',
+                  padding: '4px 12px',
                   borderRadius: '6px',
                   background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
                   border: 'none',
                   color: '#ffffff',
-                  fontSize: '0.78rem',
+                  fontSize: '0.8rem',
                   fontWeight: 700,
                   cursor: isLoading ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '4px',
                   boxShadow: '0 2px 6px rgba(37, 99, 235, 0.4)',
+                  transition: 'all 0.15s ease',
+                  flexShrink: 0,
                 }}
               >
                 {isLoading ? <RefreshCw size={12} className="animate-spin" /> : <span>分析</span>}
@@ -405,41 +408,6 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
               </div>
             )}
           </div>
-
-          {/* 常駐核心標的快速切換膠囊 (Ticket 05) */}
-          <div
-            data-testid="header-quick-chips"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}
-          >
-            {QUICK_CHIPS.map((chip) => {
-              const isActive = chip.symbol === currentSymbol;
-              return (
-                <button
-                  key={chip.symbol}
-                  type="button"
-                  data-testid={`quick-chip-${chip.symbol}`}
-                  onClick={() => handleSelectSymbol(chip.symbol, chip.market)}
-                  style={{
-                    padding: '3px 8px',
-                    borderRadius: '6px',
-                    border: `1px solid ${isActive ? '#38bdf8' : 'rgba(255, 255, 255, 0.12)'}`,
-                    background: isActive ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255, 255, 255, 0.04)',
-                    color: isActive ? '#38bdf8' : '#cbd5e1',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  <span>{chip.symbol}</span>
-                  <span style={{ fontSize: '0.68rem', opacity: 0.8 }}>{chip.name}</span>
-                </button>
-              );
-            })}
-          </div>
         </div>
 
         {/* 處置/注意股票警示徽章 (Ticket 13) */}
@@ -460,6 +428,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
               alignItems: 'center',
               gap: '4px',
               boxShadow: '0 0 10px rgba(239, 68, 68, 0.2)',
+              flexShrink: 0,
             }}
           >
             🚨 處置股票 (分盤撮合)
@@ -482,14 +451,15 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
               alignItems: 'center',
               gap: '4px',
               boxShadow: '0 0 10px rgba(245, 158, 11, 0.2)',
+              flexShrink: 0,
             }}
           >
             ⚠️ 注意股票
           </span>
         )}
 
-        {/* 右側：4 大全繁體中文科技感狀態指示燈 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        {/* 右側：4 大全繁體中文科技感狀態指示燈 (Ticket 03: 單行不折行保護) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap', flexShrink: 0 }}>
           {/* 1. AI 智慧掃描 */}
           <TermTooltip termId="aiConfidence" underline={false}>
             <div

@@ -33,6 +33,7 @@ function parseTwseDailyQuotes(rawData, dateStr) {
       if (symbol.length > 6) continue;
 
       const volume = parseCleanNumber(row[2]);
+      const transactions = parseCleanNumber(row[3]);
       const turnover = parseCleanNumber(row[4]);
       const open = parseCleanNumber(row[5]);
       const high = parseCleanNumber(row[6]);
@@ -50,6 +51,7 @@ function parseTwseDailyQuotes(rawData, dateStr) {
           adj_close: close,
           volume,
           turnover: turnover > 0 ? turnover : 0,
+          transactions: transactions > 0 ? transactions : undefined,
         };
       }
     }
@@ -74,15 +76,25 @@ function parseTpexDailyQuotes(rawData, dateStr) {
 
     for (const row of dataRows) {
       if (!Array.isArray(row) || row.length < 8) continue;
-      const symbol = String(row[0]).trim();
+      const rawSymbol = String(row[0]).trim();
+      if (rawSymbol.length > 7) continue;
+
+      // 剝除櫃買可能的 'O' 尾綴 (如 3293O -> 3293, 00679BO -> 00679B)
+      const symbol = rawSymbol.endsWith('O') && /^\d+[A-Z]?O$/.test(rawSymbol)
+        ? rawSymbol.slice(0, -1)
+        : rawSymbol;
       if (symbol.length > 6) continue;
 
+      const isSplitSign = row[3] === '+' || row[3] === '-' || row[3] === 'X' || row[3] === ' ';
       const close = parseCleanNumber(row[2]);
-      const open = parseCleanNumber(row[5] || row[4]);
-      const high = parseCleanNumber(row[6] || row[5]);
-      const low = parseCleanNumber(row[7] || row[6]);
-      const volume = parseCleanNumber(row[8] || row[7]);
-      const turnover = parseCleanNumber(row[9] || row[8]);
+      const open = isSplitSign ? parseCleanNumber(row[5]) : parseCleanNumber(row[4]);
+      const high = isSplitSign ? parseCleanNumber(row[6]) : parseCleanNumber(row[5]);
+      const low = isSplitSign ? parseCleanNumber(row[7]) : parseCleanNumber(row[6]);
+      const volume = isSplitSign ? parseCleanNumber(row[8]) : parseCleanNumber(row[7]);
+      const turnover = isSplitSign ? parseCleanNumber(row[9]) : (row.length >= 9 ? parseCleanNumber(row[8]) : 0);
+      const transactions = isSplitSign
+        ? (row.length >= 11 ? parseCleanNumber(row[10]) : undefined)
+        : (row.length >= 10 ? parseCleanNumber(row[9]) : undefined);
 
       if (close > 0) {
         result[symbol] = {
@@ -95,6 +107,7 @@ function parseTpexDailyQuotes(rawData, dateStr) {
           adj_close: close,
           volume,
           turnover: turnover > 0 ? turnover : 0,
+          transactions: transactions && transactions > 0 ? transactions : undefined,
         };
       }
     }
@@ -120,8 +133,8 @@ function saveTwQuotesToSqlite(quotesMap, customDbPath) {
 
   const db = initSqliteLakehouseDb(customDbPath);
   const stmt = db.prepare(`
-    INSERT INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume, turnover)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume, turnover, transactions)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(symbol, date) DO UPDATE SET
       open = excluded.open,
       high = excluded.high,
@@ -129,7 +142,8 @@ function saveTwQuotesToSqlite(quotesMap, customDbPath) {
       close = excluded.close,
       adj_close = excluded.adj_close,
       volume = excluded.volume,
-      turnover = excluded.turnover
+      turnover = excluded.turnover,
+      transactions = COALESCE(excluded.transactions, daily_candles.transactions)
   `);
 
   db.exec('BEGIN TRANSACTION;');
@@ -160,6 +174,7 @@ function saveTwQuotesToSqlite(quotesMap, customDbPath) {
       const adjClose = Number(item.adj_close || item.adjClose || close);
       const volume = Number(item.volume) || 0;
       const turnover = Number(item.turnover) || 0;
+      const transactions = item.transactions && Number(item.transactions) > 0 ? Math.round(Number(item.transactions)) : null;
 
       stmt.run(
         symbol,
@@ -170,7 +185,8 @@ function saveTwQuotesToSqlite(quotesMap, customDbPath) {
         close,
         adjClose,
         volume,
-        turnover
+        turnover,
+        transactions
       );
       count++;
     }

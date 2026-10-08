@@ -133,6 +133,7 @@ export function parseTwseDailyQuotesBulk(
       if (symbol.length > 6) continue;
 
       const volume = parseCleanNumber(row[2]);
+      const transactions = parseCleanNumber(row[3]);
       const open = parseCleanNumber(row[5]);
       const high = parseCleanNumber(row[6]);
       const low = parseCleanNumber(row[7]);
@@ -147,6 +148,7 @@ export function parseTwseDailyQuotesBulk(
           low: low > 0 ? low : close,
           close,
           volume,
+          transactions: transactions > 0 ? transactions : undefined,
         };
       }
     }
@@ -181,11 +183,15 @@ export function parseTpexDailyQuotesBulk(
         : rawSymbol;
       if (symbol.length > 6) continue;
 
+      const isSplitSign = row[3] === '+' || row[3] === '-' || row[3] === 'X' || row[3] === ' ';
       const close = parseCleanNumber(row[2]);
-      const open = parseCleanNumber(row[4]);
-      const high = parseCleanNumber(row[5]);
-      const low = parseCleanNumber(row[6]);
-      const volume = parseCleanNumber(row[7]);
+      const open = isSplitSign ? parseCleanNumber(row[5]) : parseCleanNumber(row[4]);
+      const high = isSplitSign ? parseCleanNumber(row[6]) : parseCleanNumber(row[5]);
+      const low = isSplitSign ? parseCleanNumber(row[7]) : parseCleanNumber(row[6]);
+      const volume = isSplitSign ? parseCleanNumber(row[8]) : parseCleanNumber(row[7]);
+      const transactions = isSplitSign
+        ? (row.length >= 11 ? parseCleanNumber(row[10]) : undefined)
+        : (row.length >= 10 ? parseCleanNumber(row[9]) : undefined);
 
       if (close > 0) {
         result[symbol] = {
@@ -196,6 +202,7 @@ export function parseTpexDailyQuotesBulk(
           low: low > 0 ? low : close,
           close,
           volume,
+          transactions: transactions && transactions > 0 ? transactions : undefined,
         };
       }
     }
