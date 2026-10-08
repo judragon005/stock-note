@@ -1,21 +1,18 @@
-# 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手> **交接產生時間**：2026-10-08 15:10 (UTC+8)  
+# 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
+
+> **交接產生時間**：2026-10-08 16:00 (UTC+8)  
 > **當前最新里程碑**：
+> - **V8.83.0 技術債批次清理與架構收斂（0 OPEN Debts 里程碑達成）**（ADR 0171, Spec 0171, Issue #193）：
+>   - **SQLite 斷點檢查點複合狀態索引優化 (Debt 0041 RESOLVED)**：於 `sync_checkpoints` 追加 `idx_sync_checkpoints_lookup(market, status, last_success_date)` 複合索引，使美股與台股萬檔規模斷點續傳狀態過濾完全利用覆蓋索引掃描，保持常數時間 ($O(1)$) 效能。
+>   - **金鑰管理員視圖模組化解耦 (Debt 0045 RESOLVED)**：依單一職責原則 (SRP) 將超過 1,000 行之巨石視圖拆解為 `GlobalProxyConfigCard.tsx` 與 `ApiKeyProviderCard.tsx` 兩個獨立呈現元件，主元件行數縮減至 390 行，公開 Props 與匯出物件 100% 向後相容。
+>   - **全專案未結技術債歸零**：技術債看板 (`docs/debts/README.md`) 45 項技術債全部標記為 `RESOLVED`，達成 0 OPEN Debts 乾淨架構里程碑。
 > - **V8.83.0 徹底移除本地 CSV 依賴、全自主聯網回補管線與櫃買代碼撕裂治理**（ADR 0170, Spec 0170, Issue #191）：
 >   - **Algorithmic Trading Calendar Engine (純演算法法定交易日曆引擎)**：徹底移除對本地硬編碼 CSV 目錄（`HISTORICAL_BASE_DIR`）的掃描依賴，實作純演算法台灣法定休假日與彈性補假規則，零檔案 I/O，耗時 < 1ms，在任何乾淨無本機 CSV 環境均能 100% 自主運作。
 >   - **日常盤後同步日 K 物件結構修復與入庫防呆**：修復 `parseTwseDailyQuotesBulk` 與 `parseTpexDailyQuotesBulk` 物件結構漏賦 `symbol` 鍵之缺陷；SQLite 入庫改為遍歷 `Object.entries(quotesMap)`，若物件漏代碼則由 Key 自動補齊並過濾 `O` 尾綴，日 K 入庫率由 0% 提昇至 100%。
 >   - **櫃買上櫃股票與債券 ETF 去 O 事務性安全遷移**：徹底消除技術債 0043 遺留之 `GLOB '[0-9]*O'` 代碼斷層，單一 Transaction 內安全遷移 1,000 檔標的、257,087 筆歷史日 K 至乾淨代碼（取極值與最新值），徹底刪除帶 `O` 的孤兒紀錄。
 >   - **上市權值股 (2330 / 0050) 法人籌碼連續性補齊**：自主聯網同步 10/05~10/07 TWSE T86 三大法人買賣超與信用交易，連續無缺漏。
 >   - **主力戰情室盤中即時 K 棒動態縫合與置頂**：嚴格相容 Spec 0150 主定錨隔離：未結算時態下 `marketBar.currentPrice` 定錨前一結算日；同時若傳入 `liveQuote`，動態構造當日 `isIntraday: true` K 棒縫合至 `klineSystem.candles` 最末端。任務五原始資料表首行置頂展示「⚡ 即時」徽章。
-> - **V8.82.0 AI 主力戰情室法人籌碼與 TDCC 大戶端到端貫通、月營收與 ETF 自適應、美股微觀結構獨立化與搜尋體驗全面補強**（ADR 0169, Spec 0169, Issue #188, PR #189）：
->   - **本地 SQLite 湖倉數據端到端貫通**：完整串接 `tw_tdcc_distribution` 與 `tw_monthly_revenue` 歷史數據，技術債 Debt 0042 與 Debt 0044 正式結案 (RESOLVED)。
->   - **Card 19 TDCC 集保千張大戶趨勢卡**：左軸千張大戶持股比折線 + 4 週 MA 均線，右軸總股東人數柱狀圖，具備「籌碼高度集中」與「散戶接刀警戒」量化徽章。
->   - **Card 20 月營收 YoY 成長與創高走勢卡 (含 ETF 自適應)**：個股展示近 12 個月營收長條圖與 ATH 創高標籤；ETF 智慧切換為「ETF 資產規模與收益分配」，連動真實股東人數為受益人人數，徹底終結營收空白報錯。
->   - **美股微觀結構獨立化與 Zero-Mock Policy**：徹底根除美股捏造外資投信假張數不良代碼，切換為機構量價評分 (Microstructure Score / MFI / OBV / Volume Ratio)，單位切換為「股」與「USD」。
->   - **頂部搜尋框 30ms 防抖即時下拉補全與快捷標籤**：串接 SQLite `/api/market/symbols` 模糊搜尋，支援代碼與中文名稱秒搜尋、非同步取消保護與點擊外部自動收合；常駐 `0050`、`2330`、`2454`、`NVDA`、`AAPL` 快捷膠囊。
->   - **主 K 線日 K / 週 K / 月 K 動態聚合**：純函式前端毫秒級聚合日 K 數列並自適應重算 MA5~MA250 均線，各卡片標註 As-of Date 資料發布基準日。
-> - **V8.81.0 台美雙軌零 CSV 背景全歷史回補、真實成交筆數、櫃買代碼標準化與統一金鑰控制中心**（ADR 0168, Spec 0168, Issue #182, PR #183）：
->   - 台股代碼推斷修復（`00411A`、`00679B`）、SQLite 擴充 `transactions` 欄位、櫃買代碼標準化（Debt 0043 RESOLVED）、UnifiedApiKeyManager 暗黑毛玻璃控制台、台美雙軌零 CSV 日期驅動歷史全回補。
-> **品質狀態**：全量單元測試 **1,498/1,498 通過 (100% Passed / 203 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> **品質狀態**：全量單元測試 **1,502/1,502 通過 (100% Passed / 205 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -23,8 +20,8 @@
 
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
-- **當前工作分支**：`main`
-- **單元測試套件**：**1,498/1,498 通過 (203 test suites / 100% 綠燈)**
+- **當前工作分支**：`feature/193-tech-debt-batch-cleanup`
+- **單元測試套件**：**1,502/1,502 通過 (205 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
 - **當前釋出版本**：**V8.83.0**

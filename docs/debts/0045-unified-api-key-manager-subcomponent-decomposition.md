@@ -2,7 +2,8 @@
 
 - **建立日期**: 2026-10-07
 - **來源**: /code-review 雙軸審查 (Spec 0168 / Issue #182 / PR #183)
-- **狀態**: `OPEN`
+- **狀態**: `RESOLVED`
+- **解決版本**: v8.83.0 (Spec 0171 / Issue #193)
 - **優先級**: `P3 (Low)`
 - **標籤**: `Refactor` · `UI` · `CleanCode` · `SettingsWorkspace` · `UnifiedApiKeyManager`
 
@@ -37,3 +38,11 @@
 
 - 當專案規劃引入第 7 組以上全新金融資料源（如 Polygon、Tiingo、MacroMicro 等）時。
 - 或當金鑰池需要支援多環境配置、匯出匯入等新功能時順手實施，避免無業務價值之過度工程化純重構。
+
+---
+
+## 4. 解決紀錄 (Resolution)
+
+- **實作日期**: 2026-10-08
+- **實作 PR**: Issue #193 (Spec 0171)
+- **變更詳情**: 將 `UnifiedApiKeyManager.tsx` 依職責拆解為 `GlobalProxyConfigCard.tsx` 與 `ApiKeyProviderCard.tsx` 兩個獨立子元件，檔案大小由 1,014 行縮減至 390 行，公開 Props 與常數匯出保持 100% 向後相容，測試 100% 通過。

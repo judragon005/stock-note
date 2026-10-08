@@ -2,55 +2,74 @@
  * ZeroCsvAutonomousE2E.test.ts
  * 全自主聯網回補、櫃買去 O 治理與盤中動態縫合全鏈路 E2E 驗收測試 (Spec 0170 / Ticket 10)
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { generateAiForceReportFromCandles } from '../../engine/aiForceDashboardEngine';
 import { RawDataView, paginateCandles } from './TaskPanels';
+
+declare const require: (id: string) => any;
+declare const process: { cwd: () => string };
+
+const fs = require('fs');
+const path = require('path');
+
 // @ts-ignore
 import { isTwTradingDay, getPreviousTradingDay } from '../../../scripts/market-sync/trading-calendar-engine.cjs';
 // @ts-ignore
-import { initSqliteLakehouseDb } from '../../../scripts/market-sync/sqlite-db-core.cjs';
+import { initSqliteLakehouseDb, closeSqliteDb } from '../../../scripts/market-sync/sqlite-db-core.cjs';
 
 describe('Spec 0170 E2E: 零本地 CSV 依賴、全自主聯網回補與櫃買去 O 治理端到端驗收', () => {
+  const testDbPath = path.resolve(process.cwd(), '.scratch/market-cache/test_zero_csv_e2e.db');
+
   beforeAll(() => {
-    const db = initSqliteLakehouseDb();
+    try {
+      if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
+      const wal = `${testDbPath}-wal`;
+      const shm = `${testDbPath}-shm`;
+      if (fs.existsSync(wal)) fs.unlinkSync(wal);
+      if (fs.existsSync(shm)) fs.unlinkSync(shm);
+    } catch {}
 
-    // 在 CI 乾淨環境中自動確保具備必要的驗收 fixture
-    const hasCandle3293 = db.prepare('SELECT 1 FROM daily_candles WHERE symbol = ? LIMIT 1').get('3293');
-    if (!hasCandle3293) {
-      db.prepare(`
-        INSERT OR IGNORE INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume, transactions)
-        VALUES 
-          ('3293', '2026-10-01', 750, 760, 745, 755, 755, 1200000, 8000),
-          ('3293', '2026-10-02', 755, 765, 750, 760, 760, 1500000, 9500),
-          ('3293', '2026-10-05', 760, 770, 755, 765, 765, 1800000, 11000),
-          ('3293', '2026-10-06', 765, 775, 760, 770, 770, 2100000, 13000),
-          ('3293', '2026-10-07', 770, 785, 768, 780, 780, 2500000, 15000)
-      `).run();
-    }
+    const db = initSqliteLakehouseDb(testDbPath);
 
-    const has00679B = db.prepare('SELECT 1 FROM daily_candles WHERE symbol = ? LIMIT 1').get('00679B');
-    if (!has00679B) {
-      db.prepare(`
-        INSERT OR IGNORE INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume, transactions)
-        VALUES 
-          ('00679B', '2026-10-07', 29.5, 29.8, 29.4, 29.6, 29.6, 5000000, 3200)
-      `).run();
-    }
+    // 建立隔離之驗收 fixture
+    db.prepare(`
+      INSERT OR IGNORE INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume, transactions)
+      VALUES 
+        ('3293', '2026-10-01', 750, 760, 745, 755, 755, 1200000, 8000),
+        ('3293', '2026-10-02', 755, 765, 750, 760, 760, 1500000, 9500),
+        ('3293', '2026-10-05', 760, 770, 755, 765, 765, 1800000, 11000),
+        ('3293', '2026-10-06', 765, 775, 760, 770, 770, 2100000, 13000),
+        ('3293', '2026-10-07', 770, 785, 768, 780, 780, 2500000, 15000)
+    `).run();
 
-    const hasChips = db.prepare('SELECT 1 FROM tw_institutional_chips WHERE symbol = ? LIMIT 1').get('2330');
-    if (!hasChips) {
-      db.prepare(`
-        INSERT OR IGNORE INTO tw_institutional_chips (symbol, date, foreign_net, trust_net, dealer_net)
-        VALUES
-          ('2330', '2026-10-01', 5000, 1500, 800),
-          ('2330', '2026-10-02', 6000, 1200, 500),
-          ('2330', '2026-10-05', 7000, 2000, 400),
-          ('2330', '2026-10-06', 4000, 800, 400),
-          ('2330', '2026-10-07', 9000, 2000, 900)
-      `).run();
-    }
+    db.prepare(`
+      INSERT OR IGNORE INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume, transactions)
+      VALUES 
+        ('00679B', '2026-10-07', 29.5, 29.8, 29.4, 29.6, 29.6, 5000000, 3200)
+    `).run();
+
+    db.prepare(`
+      INSERT OR IGNORE INTO tw_institutional_chips (symbol, date, foreign_net, trust_net, dealer_net)
+      VALUES
+        ('2330', '2026-10-01', 5000, 1500, 800),
+        ('2330', '2026-10-02', 6000, 1200, 500),
+        ('2330', '2026-10-05', 7000, 2000, 400),
+        ('2330', '2026-10-06', 4000, 800, 400),
+        ('2330', '2026-10-07', 9000, 2000, 900)
+    `).run();
+  });
+
+  afterAll(() => {
+    closeSqliteDb();
+    try {
+      if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
+      const wal = `${testDbPath}-wal`;
+      const shm = `${testDbPath}-shm`;
+      if (fs.existsSync(wal)) fs.unlinkSync(wal);
+      if (fs.existsSync(shm)) fs.unlinkSync(shm);
+    } catch {}
   });
   it('1. 驗證演算法交易日曆 100% 自主運作，零外部檔案讀寫依賴', () => {
     // 驗證 2026 年法定交易日與假日判定
@@ -63,7 +82,7 @@ describe('Spec 0170 E2E: 零本地 CSV 依賴、全自主聯網回補與櫃買�
   });
 
   it('2. 驗證 SQLite 數據湖倉中 3293 與 00679B 等櫃買標的已徹底去 O 且最新日期推進至 2026-10-07', () => {
-    const db = initSqliteLakehouseDb();
+    const db = initSqliteLakehouseDb(testDbPath);
 
     // 驗證 3293 (上櫃鈊象)
     const candle3293 = db
@@ -89,7 +108,7 @@ describe('Spec 0170 E2E: 零本地 CSV 依賴、全自主聯網回補與櫃買�
   });
 
   it('3. 驗證 2330 台積電上市三大法人籌碼 10/05~10/07 連續無斷層', () => {
-    const db = initSqliteLakehouseDb();
+    const db = initSqliteLakehouseDb(testDbPath);
 
     const chipsRows = db
       .prepare(
@@ -106,7 +125,7 @@ describe('Spec 0170 E2E: 零本地 CSV 依賴、全自主聯網回補與櫃買�
   });
 
   it('4. 驗證主力戰情室盤中即時 K 棒動態縫合與任務五原始資料表首行置頂', () => {
-    const db = initSqliteLakehouseDb();
+    const db = initSqliteLakehouseDb(testDbPath);
 
     // 讀取 3293 歷史日 K (截至 10/07)
     const historyCandles = db
