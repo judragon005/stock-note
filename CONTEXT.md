@@ -2346,3 +2346,37 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - **Zero Open Technical Debts Milestone (技術債全數結清里程碑)**:
   - 技術債看板 (`docs/debts/README.md`) 中之 Debt #0041 與 Debt #0045 正式標記為 `RESOLVED`，專案達成未結架構技術債歸零 (0 OPEN Debts) 里程碑。
 
+### 主力戰情室 7 層 Bento-Grid 全景佈局重構、量化引擎修復與專業任務視圖升級 *(新增於 V8.84.0 / Spec #0172 / ADR #0172 / Issue #195)*
+
+- **AI Force War Room 7-Layer Bento-Grid Layout (主力戰情室 7 層 Bento-Grid 架構)**:
+  - 核心模組：`src/components/aiForceDashboard/AiForceDashboardView.tsx`。
+  - 符合交易心理學由宏觀至微觀、由防禦至進攻之 7 層資訊動線：
+    1. Layer 1: 全盤態勢與趨勢主圖（卡片 01 主 K 線獨立全寬大視野）
+    2. Layer 2: AI 核心定調與雙雷達全景（卡片 03 體質六角大雷達 + 卡片 05 風控五角大蛛網，雙欄 `minmax(440px, 1fr)` 展開，字體不折行）
+    3. Layer 3: 價格位階與籌碼戰場（卡片 02 AI 決策核心 + 卡片 04 AI 籌碼熱區圖）
+    4. Layer 4: 主力籌碼與基本面大數據（卡片 08 法人行為 + 卡片 19 TDCC 集保千張大戶 + 卡片 20 月營收 YoY 柱圖，3 卡寬幅矩陣）
+    5. Layer 5: 預測路徑與成本結構（卡片 06 AI 預測 Cone + 卡片 07 主力 VWAP 成本結構）
+    6. Layer 6: 短線能量、市場情緒與風控指標（卡片 10 多空能量棒 + 卡片 11 健康度 + 卡片 12 動態信號 + 卡片 13 台股市場合情緒 + 卡片 14 AI 信心）
+    7. Layer 7: 籌碼收斂與終極作戰指令（卡片 15+09 籌碼/隔日沖、卡片 16+17 買賣力/多空強度 68px 緊湊欄、卡片 18 主力追蹤總評判操盤指令）
+
+- **Multi-Timeframe Resonance & Win-Rate Statistics (多級別共振判定與勝率統計)**:
+  - 核心模組：`src/components/aiForceDashboard/TaskPanels.tsx` (`KdMaView`, `deriveKdMaMetrics`)。
+  - 整合日 KD、週 KD、月 KD 多級別共振判定徽章（如「日週月中長線三重共振」、「日週雙金叉」或「日金週死弱反彈」），並依據歷史低檔黃金交叉回測樣本計算未來上漲勝率與平均預期報酬。
+
+- **Automated MACD Divergence Quant Engine (MACD 自動頂底背離量化偵測器)**:
+  - 核心模組：`src/components/aiForceDashboard/TaskPanels.tsx` (`MacdView`, `deriveMacdMetrics`)。
+  - 依據近 20 交易日極值自動掃描「頂背離警戒」（股價創高但 DIF 未過高）與「底背離醞釀」（股價破底但 DIF 墊高），結合零軸多空分水嶺與動能擴張/收斂預警。
+
+- **Regulatory Disposition & Margin Maintenance Stress Matrix (處置股票管制與信用維持率壓力測試)**:
+  - 核心模組：`src/components/aiForceDashboard/TaskPanels.tsx` (`TechnicalAlertsView`, `generateTechnicalAlerts`)。
+  - 整合證交所處置股票機制（5 分鐘/20 分鐘分盤撮合、預收款券要求與出關日預估）與注意股票列管監控，並呈現券商融資 130% 追繳警戒線與 140% 斷頭防守警戒線壓力測試。
+
+- **Dynamic Volume Profile Focus & Price Pointer (籌碼熱區動態聚焦與現價指針線)**:
+  - 核心模組：`src/components/aiForceDashboard/cards/VolumeProfileCard.tsx`、`src/engine/volumeProfileEngine.ts`。
+  - 籌碼熱區圖自適應當前 60 交易日之最高價與最低價動態劃分價位區間，縱軸價格刻度自動縮放；利用 `currentPriceYRatio` 精確繪製水平現價指針線與右側氣泡標籤。
+
+- **TW Market Historical Lakehouse Backfill Pipeline (台股歷史湖倉交易筆數與多週期回補管線)**:
+  - 核心模組：`scripts/market-sync/market-sync-core.cjs`、`scripts/market-sync/ingest-tw-tdcc.cjs`、`scripts/market-sync/ingest-tw-monthly-revenue.cjs`。
+  - 盤後批次同步管線正式補齊 TWSE/TPEX 成交筆數 (`transactions`) 入庫，並擴充 TDCC 10 週持股比例序列與近 12 個月營收 YoY 歷史序列回補機制。
+
+

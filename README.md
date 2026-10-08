@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1498%2F1498%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1518%2F1518%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,26 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 徹底移除本地 CSV 依賴、全自主聯網回補管線與櫃買代碼撕裂治理 (`Zero-Local-CSV Autonomous Sync & OTC Split Repair`) *(V8.83.0 全新發布 / Spec #0170 / ADR #0170 / Issue #191)*
+### 0. 主力戰情室 7 層 Bento-Grid 全景佈局重構、量化引擎修復與專業任務視圖升級 (`AI Force War Room 7-Layer Bento-Grid & Quant Engine Refactor`) *(V8.84.0 全新發布 / Spec #0172 / ADR #0172 / Issue #195)*
+
+- **交易心理學 7 層 Bento-Grid 全景資訊動線重構 (`AiForceDashboardView.tsx`)**：
+  - 徹底告別舊版硬塞擠壓與視覺過載，依據「宏觀到微觀、防禦到進攻」打造 7 層專業戰情動線：
+    - **Layer 1: 全盤態勢與趨勢主圖**：卡片 01 主 K 線獨立全寬大視野，大器無壓迫。
+    - **Layer 2: AI 核心定調與雙雷達全景**：卡片 03 體質六角大雷達 + 卡片 05 風控五角大蛛網，雙欄 `minmax(440px, 1fr)` 展開，字體放大且防折行。
+    - **Layer 3: 價格位階與籌碼戰場**：卡片 02 AI 決策核心 + 卡片 04 AI 籌碼熱區圖（動態 60 日聚焦與現價指針）。
+    - **Layer 4: 主力籌碼與基本面大數據**：卡片 08 法人行為 + 卡片 19 TDCC 集保千張大戶 + 卡片 20 月營收 YoY 柱圖，3 卡寬幅矩陣，5 欄表格無擠壓。
+    - **Layer 5: 預測路徑與成本結構**：卡片 06 AI 預測 Cone + 卡片 07 主力 VWAP 成本結構。
+    - **Layer 6: 短線能量、市場情緒與風控指標**：卡片 10 多空能量棒 + 卡片 11 健康度 + 卡片 12 動態信號 + 卡片 13 台股市場合情緒 + 卡片 14 AI 信心。
+    - **Layer 7: 籌碼收斂與終極作戰指令**：卡片 15+09 籌碼/隔日沖、卡片 16+17 買賣力/多空強度 68px 緊湊欄、卡片 18 主力追蹤總評判操盤指令。
+- **任務二至四活頁專業量化維度重塑 (`TaskPanels.tsx`)**：
+  - **任務二 (即時技術警示)**：整合證交所「處置股票」分盤撮合/預收款券/出關日預估與「注意股票」列管標記，並提供券商融資 130% 追繳令與 140% 斷頭線壓力測試。
+  - **任務三 (KD 均線系統)**：實裝日 KD、週 KD、月 KD 多級別共振判定徽章（如主升段/弱反彈），並依據歷史低檔黃金交叉回測樣本計算未來勝率與平均漲幅。
+  - **任務四 (MACD 指標系統)**：演算法自動頂底背離量化偵測器，即時預警「頂背離」與「底背離」，結合零軸多空分水嶺與 OSC 動能衰竭分析。
+- **AI 籌碼熱區圖自適應聚焦與現價指針線 (`VolumeProfileCard.tsx` & `volumeProfileEngine.ts`)**：
+  - 籌碼熱區圖自適應當前 60 交易日之最高價與最低價動態劃分價位區間，縱軸價格刻度自動縮放；利用 `currentPriceYRatio` 精確繪製水平現價指針線與右側氣泡標籤。
+- **台股日行情成交筆數 (`transactions`) 與多週期資料回補管線 (`market-sync-core.cjs` & `ingest-tw-tdcc.cjs`)**：
+  - 盤後批次同步管線正式補齊 TWSE/TPEX 成交筆數入庫，並支援 TDCC 10 週持股比例序列與近 12 個月營收 YoY 歷史序列回補機制。
+
 
 - **純演算法法定交易日曆引擎 (`trading-calendar-engine.cjs`)**：
   - 徹底移除對本地硬編碼 CSV 目錄（`HISTORICAL_BASE_DIR`）的掃描依賴，實作純演算法台灣法定休假日與彈性補假規則，零檔案 I/O，耗時 < 1ms，在任何乾淨無本機 CSV 環境均能 100% 自主運作。
