@@ -154,5 +154,44 @@ describe('HeaderMarketBar - 行情 Bar 格式化與狀態燈規範 (Ticket 02)',
       expect(getVolumeLabel(false, undefined, 'USD')).toBe('前日成交量(股)');
     });
   });
+
+  describe('Ticket 05 (Spec 0169): 搜尋補全與常駐快捷標籤', () => {
+    it('QUICK_CHIPS 應包含 0050、2330、2454、NVDA、AAPL 五大核心標的', async () => {
+      const { QUICK_CHIPS } = await import('./HeaderMarketBar');
+      const symbols = QUICK_CHIPS.map((c) => c.symbol);
+      expect(symbols).toContain('0050');
+      expect(symbols).toContain('2330');
+      expect(symbols).toContain('2454');
+      expect(symbols).toContain('NVDA');
+      expect(symbols).toContain('AAPL');
+    });
+
+    it('searchCandidateSymbols 應支援輸入中文名稱 (如「台積」、「聯發」) 模糊比對候選清單', async () => {
+      const { searchCandidateSymbols } = await import('./HeaderMarketBar');
+
+      const tsmcMatches = searchCandidateSymbols('台積');
+      expect(tsmcMatches.length).toBeGreaterThan(0);
+      expect(tsmcMatches[0].symbol).toBe('2330');
+      expect(tsmcMatches[0].name).toBe('台積電');
+
+      const mtkMatches = searchCandidateSymbols('聯發');
+      expect(mtkMatches.length).toBeGreaterThan(0);
+      expect(mtkMatches[0].symbol).toBe('2454');
+
+      const appleMatches = searchCandidateSymbols('蘋果');
+      expect(appleMatches.length).toBeGreaterThan(0);
+      expect(appleMatches[0].symbol).toBe('AAPL');
+    });
+
+    it('searchCandidateSymbols 應支援輸入代碼 (如 2330, NVDA) 比對', async () => {
+      const { searchCandidateSymbols } = await import('./HeaderMarketBar');
+
+      const nvdaMatches = searchCandidateSymbols('NVDA');
+      expect(nvdaMatches.some((m) => m.symbol === 'NVDA')).toBe(true);
+
+      const codeMatches = searchCandidateSymbols('2330');
+      expect(codeMatches.some((m) => m.symbol === '2330')).toBe(true);
+    });
+  });
 });
 

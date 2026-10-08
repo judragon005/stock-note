@@ -33,6 +33,8 @@ import { ChipsSummaryCard } from './cards/ChipsSummaryCard';
 import { ForceDistributionCard } from './cards/ForceDistributionCard';
 import { BullBearStrengthCard } from './cards/BullBearStrengthCard';
 import { MainForceVerdictCard } from './cards/MainForceVerdictCard';
+import { TdccDistributionCard } from './cards/TdccDistributionCard';
+import { MonthlyRevenueCard } from './cards/MonthlyRevenueCard';
 import { HeaderExportBar } from './HeaderExportBar';
 import { TaskViewsSwitcher } from './TaskViewsSwitcher';
 import { TechnicalAlertsView, KdMaView, MacdView, RawDataView } from './TaskPanels';
@@ -81,14 +83,22 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       let marginData:
         | { marginBalance?: number; shortBalance?: number; dayTradeRate?: number }
         | undefined = undefined;
+      let tdccRecords: any[] | undefined = undefined;
+      let revenueRecords: any[] | undefined = undefined;
 
-      // 1. Layer 1: 優先嘗試從本地 SQLite 數據湖倉直讀歷史日 K 與籌碼 (Spec 0159 / Ticket 02)
+      // 1. Layer 1: 優先嘗試從本地 SQLite 數據湖倉直讀歷史日 K、籌碼、集保與月營收 (Spec 0169)
       try {
         const lakehouseData = await loadSymbolFullLakehouseData(targetSymbol, targetMarket);
         if (lakehouseData && lakehouseData.candles.length >= 1) {
           candles = lakehouseData.candles;
           if (lakehouseData.institutionalRecords && lakehouseData.institutionalRecords.length > 0) {
             institutionalRecords = lakehouseData.institutionalRecords;
+          }
+          if (lakehouseData.tdccRecords && lakehouseData.tdccRecords.length > 0) {
+            tdccRecords = lakehouseData.tdccRecords;
+          }
+          if (lakehouseData.revenueRecords && lakehouseData.revenueRecords.length > 0) {
+            revenueRecords = lakehouseData.revenueRecords;
           }
           if (
             lakehouseData.marginBalance !== undefined ||
@@ -174,6 +184,8 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             currency: targetMarket === 'US' ? 'USD' : 'TWD',
             volumeUnit: targetMarket === 'US' ? '股' : '張',
             marginData,
+            tdccRecords,
+            revenueRecords,
           }
         );
         if (!quote && targetMarket === 'TW') {
@@ -383,11 +395,45 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             </div>
           </div>
 
-          {/* Row 3: 06 累積型預測, 07 成本結構分布, 08 法人行為計量 (3 卡，08 享有 1.8fr 寬幅大空間) */}
+          {/* Row 3: 08 法人行為計量, 19 TDCC 集保千張大戶趨勢, 20 月營收與成長趨勢 (3 卡主力籌碼與基本面核心戰區) */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'minmax(240px, 1.1fr) minmax(240px, 1.1fr) minmax(380px, 1.8fr)',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+              gap: '12px',
+              alignItems: 'stretch',
+            }}
+          >
+            {/* 08 法人行為計量 */}
+            <div style={{ minWidth: 0, height: '100%' }}>
+              <InstitutionalFlowCard
+                data={report.institutionalFlow}
+                colorTheme={market === 'US' ? 'international' : 'taiwan'}
+              />
+            </div>
+
+            {/* 19 TDCC 集保千張大戶趨勢 */}
+            <div style={{ minWidth: 0, height: '100%' }}>
+              <TdccDistributionCard
+                data={report.tdccDistribution}
+                colorTheme={market === 'US' ? 'international' : 'taiwan'}
+              />
+            </div>
+
+            {/* 20 月營收與營運成長走勢 (含 ETF 自適應) */}
+            <div style={{ minWidth: 0, height: '100%' }}>
+              <MonthlyRevenueCard
+                data={report.monthlyRevenue}
+                colorTheme={market === 'US' ? 'international' : 'taiwan'}
+              />
+            </div>
+          </div>
+
+          {/* Row 4: 06 累積型預測, 07 成本結構分布, 10 多空能量棒, 11 健康度綜合評估 (4 卡量化動態) */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(220px, 1fr) minmax(220px, 1fr) minmax(200px, 0.9fr) minmax(260px, 1.1fr)',
               gap: '12px',
               alignItems: 'stretch',
             }}
@@ -402,29 +448,6 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
               <VwapCostStructureCard data={report.vwapCostStructure} />
             </div>
 
-            {/* 08 法人行為計量 */}
-            <div style={{ minWidth: 0 }}>
-              <InstitutionalFlowCard
-                data={report.institutionalFlow}
-                colorTheme={market === 'US' ? 'international' : 'taiwan'}
-              />
-            </div>
-          </div>
-
-          {/* Row 4: 09 隔日沖風險, 10 多空能量棒, 11 健康度綜合評估 (3 卡，11 享有 1.6fr 寬幅放 5 環) */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(240px, 1fr) minmax(240px, 1fr) minmax(360px, 1.6fr)',
-              gap: '12px',
-              alignItems: 'stretch',
-            }}
-          >
-            {/* 09 隔日沖風險分析 */}
-            <div style={{ minWidth: 0 }}>
-              <DayTradeRiskCard data={report.dayTradeRisk} />
-            </div>
-
             {/* 10 AI 多空能量棒 */}
             <div style={{ minWidth: 0 }}>
               <BullBearEnergyCard data={report.bullBearEnergy} />
@@ -436,15 +459,20 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             </div>
           </div>
 
-          {/* Row 5: 12 動態信號, 13 台股市場情緒, 14 AI信心, 15 籌碼摘要 (4 卡緊湊型監控) */}
+          {/* Row 5: 09 隔日沖風險, 12 動態信號, 13 台股市場情緒, 14 AI信心 (4 卡短線風控與情緒) */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'minmax(200px, 1fr) minmax(220px, 1.1fr) minmax(180px, 0.9fr) minmax(200px, 1fr)',
+              gridTemplateColumns: 'minmax(200px, 1fr) minmax(200px, 1fr) minmax(220px, 1.1fr) minmax(180px, 0.9fr)',
               gap: '12px',
               alignItems: 'stretch',
             }}
           >
+            {/* 09 隔日沖風險分析 */}
+            <div style={{ minWidth: 0 }}>
+              <DayTradeRiskCard data={report.dayTradeRisk} />
+            </div>
+
             {/* 12 AI 主力動態信號判斷 */}
             <div style={{ minWidth: 0 }}>
               <DynamicSignalsCard data={report.dynamicSignals} />
@@ -459,22 +487,22 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             <div style={{ minWidth: 0 }}>
               <AiConfidenceCard data={report.aiConfidence} />
             </div>
-
-            {/* 15 籌碼異動摘要 */}
-            <div style={{ minWidth: 0 }}>
-              <ChipsSummaryCard data={report.chipsSummary} />
-            </div>
           </div>
 
-          {/* Row 6: 16 買賣力分布, 17 多空強度分布, 18 主力追蹤總評判 (3 卡，18 享有 1.8fr 壓軸大面板) */}
+          {/* Row 6: 15 籌碼摘要, 16 買賣力分布, 17 多空強度分布, 18 主力追蹤總評判 (4 卡壓軸籌碼總結) */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'minmax(240px, 1.1fr) minmax(240px, 1.1fr) minmax(400px, 1.8fr)',
+              gridTemplateColumns: 'minmax(220px, 1fr) minmax(220px, 1fr) minmax(220px, 1fr) minmax(320px, 1.4fr)',
               gap: '12px',
               alignItems: 'stretch',
             }}
           >
+            {/* 15 籌碼異動摘要 */}
+            <div style={{ minWidth: 0, height: '100%' }}>
+              <ChipsSummaryCard data={report.chipsSummary} />
+            </div>
+
             {/* 16 買賣力分布圖 */}
             <div style={{ minWidth: 0, height: '100%' }}>
               <ForceDistributionCard data={report.forceDistribution} />

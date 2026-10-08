@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1428%2F1428%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1491%2F1491%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,22 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 台美雙軌零 CSV 歷史回補、真實成交筆數入庫與統一金融金鑰控制中心 (`Zero-CSV Dual-Market Backfill, Real Transactions & Unified API Key Console`) *(V8.81.0 全新發布 / Spec #0168 / ADR #0168 / Issue #182)*
+### 0. AI 主力戰情室法人籌碼與 TDCC 大戶端到端貫通、月營收與 ETF 自適應、美股微觀結構獨立化與搜尋體驗全面補強 (`AI Force War Room TDCC, Revenue & US Microstructure Alignment`) *(V8.82.0 全新發布 / Spec #0169 / ADR #0169 / Issue #188)*
+
+- **湖倉真實數據端到端貫通 (技術債 0042 與 0044 正式結案)**：
+  - 完整串接本地 SQLite `tw_tdcc_distribution` 與 `tw_monthly_revenue` 歷史管線，戰情室正式啟用 **Card 19「TDCC 集保千張大戶趨勢卡」** 與 **Card 20「月營收 YoY 成長與創高卡」**。
+- **波段核心 TDCC 大戶趨勢卡 (`Card 19: TdccDistributionCard`)**：
+  - 左軸繪製千張大戶持股比率（%）折線圖 + 4 週 MA 均線；右軸繪製總股東人數柱狀圖；實時量化徽章自動識別「籌碼高度集中 (大戶增/人數減)」與「散戶接刀警戒」。
+- **月營收成長走勢與 0050 等 ETF 智慧自適應 (`Card 20: MonthlyRevenueCard`)**：
+  - 個股呈現近 12 個月單月營收長條圖、YoY 成長率與「連續 3 個月年月雙增」/「創歷史新高 (ATH)」量化標記；ETF 自動無縫切換為「ETF 資產規模與收益分配」，連動真實股東人數為受益人人數，終結 ETF 無營收報錯。
+- **美股微觀量價結構獨立化與 Zero-Mock 貫徹 (`Card 08 / 15: US Microstructure Engine`)**：
+  - 徹底剔除美股「外資/投信/自營商」假造張數代碼，自適應切換為「機構量價評分 (Microstructure Score / MFI / OBV)」；量能單位自適應為「股」，計價幣別自適應為「USD」。
+- **標的搜尋 30ms 防抖即時下拉補全與快捷標籤 (`HeaderMarketBar Autocomplete & Quick Chips`)**：
+  - 串接 SQLite `/api/market/symbols` 模糊搜尋 API，支援股票代號與中文名稱即時下拉補全，內建非同步取消與點擊外部自動收合；常駐 `0050`、`2330`、`2454`、`NVDA`、`AAPL` 一鍵切換膠囊。
+- **主 K 線日 K / 週 K / 月 K 動態聚合 (`KLineChartCard Multi-Timeframe`)**：
+  - 純前端毫秒級聚合日 K 數列為自然週與自然月 K 棒，自動重新計算 MA5~MA250 均線；各卡片微觀腳註標明資料發布基準日（如「集保: 2026-10-02」、「營收: 2026-09」）。
+
+### 1. 台美雙軌零 CSV 歷史回補、真實成交筆數入庫與統一金融金鑰控制中心 (`Zero-CSV Dual-Market Backfill, Real Transactions & Unified API Key Console`) *(V8.81.0 / Spec #0168 / ADR #0168 / Issue #182)*
 
 - **主動式 ETF / 債券代碼精準推斷與市場路由 (`00411A / 00679B TW Market Routing`)**：
   - 增強代碼正則匹配，支援 `/^[0-9]{4,6}[A-Z]?$/` 後綴字母代碼；`00411A`、`00679B` 等精準識別為台股 `TW`，鎖定計價幣別為 `NT$`，量能為「張」，終結被誤判為美股 USD 之錯誤。

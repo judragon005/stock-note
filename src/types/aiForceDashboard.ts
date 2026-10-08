@@ -222,6 +222,16 @@ export interface InstitutionalFlowData {
   }[];
   cumulative20DaysSummary: string; // "多頭 (20日 +1,621張)"
   recent5DaysSummary: string; // "偏空 (-64張)"
+  isUsMarket?: boolean;
+  usMicrostructure?: {
+    score: number;
+    sentimentLabel: string;
+    mfi: number;
+    obvTrend: 'UP' | 'DOWN' | 'FLAT';
+    volumeRatio: number;
+    note: string;
+  };
+  asOfDateText?: string;
 }
 
 /**
@@ -309,6 +319,9 @@ export interface ChipsSummaryData {
   verdictNote: string; // "2026-09-18 短線偏空 | 追價風險可控"
   conclusionBadge: string; // "偏空震盪"
   sparklineHistory: number[]; // 近 10 日累計籌碼走勢
+  isUsMarket?: boolean;
+  usMicroNote?: string; // "美股無三大法人日報，已切換為機構量價評分"
+  asOfDateText?: string;
 }
 
 /**
@@ -339,6 +352,66 @@ export interface MainForceVerdictData {
   primaryVerb: string; // "調節減碼"
   semanticTag: string; // "法人動作"
   fullVerdictText: string; // "AI 結論：經 5 日主力行為綜合研判（法人近 5 日合計 -64 張、收盤相對 20 日 VWAP +7.5%、RSI 60），法人小幅調節，短線宜區間操作。"
+}
+
+/**
+ * 19 TDCC 集保千張大戶趨勢卡資料模型 (Card 19, Spec 0169)
+ */
+export interface TdccDistributionItem {
+  date: string; // YYYY-MM-DD
+  totalShareholders: number; // 總股東人數
+  over1000Ratio: number; // 持股 > 1000 張大戶比率 (%)
+  over400Ratio?: number; // 持股 > 400 張大戶比率 (%)
+  under10Ratio?: number; // 持股 < 10 張散戶比率 (%)
+}
+
+export interface TdccDistributionData {
+  history: TdccDistributionItem[];
+  latestOver1000Ratio?: number;
+  latestShareholders?: number;
+  change4WeeksRatio?: number; // 近 4 週千張大戶持股比例變化率 (%，如 +1.25%)
+  change4WeeksShareholders?: number; // 近 4 週股東人數變化 (如 -3210 人)
+  concentrationBadge: string; // '籌碼高度集中 (波段起漲)' | '散戶接刀警戒' | '大戶持續增持' | '大戶明顯調節' | '籌碼中性整理' | '美股不適用'
+  asOfDateText: string; // e.g. "集保基準日: 2026-10-02"
+  isEmpty: boolean;
+  emptyMessage?: string; // "美股無集保機制" | "集保數據累積中 (週五盤後結算)"
+}
+
+/**
+ * 20 月營收與成長趨勢卡資料模型 (Card 20, Spec 0169 - 含 ETF 智慧自適應)
+ */
+export interface MonthlyRevenueItem {
+  yearMonth: string; // YYYY-MM
+  revenue: number; // 單月營業收入 (千元)
+  lastYearRevenue?: number; // 去年同期營收 (千元)
+  yoyRate?: number; // 營收年增率 YoY (%)
+  momRate?: number; // 營收月增率 MoM (%)
+  isAllTimeHigh?: boolean; // 是否創歷史新高
+}
+
+export interface EtfYieldItem {
+  quarter: string; // e.g. "2026 Q3"
+  amount: number; // 配息金額 (元)
+  yieldRate: number; // 年化殖利率 (%)
+}
+
+export interface MonthlyRevenueData {
+  isEtf: boolean;
+  history: MonthlyRevenueItem[];
+  latestRevenueText?: string; // "2,548 億元" 或 "5,620 萬元"
+  latestYoyRate?: number; // +32.4%
+  growthStreakMonths?: number; // 連續年月雙增月數
+  athCount?: number; // 創歷史新高次數
+  growthBadge: string; // '連續 3 個月年月雙增' | '創歷史新高 (ATH)' | '營收強勁雙位數成長' | '營收穩健成長' | '營收年減衰退' | 'ETF 規模穩健'
+  asOfDateText: string; // e.g. "營收基準: 2026-09"
+  etfData?: {
+    aumBillion: number; // 資產規模 (十億 TWD 或 USD)
+    dividendYield: number; // 平均殖利率 (%)
+    beneficiaries: number; // 受益人人數 (人)
+    quarterlyDividends: EtfYieldItem[];
+  };
+  isEmpty: boolean;
+  emptyMessage?: string;
 }
 
 export type AiForceTaskTabKey =
@@ -379,4 +452,8 @@ export interface AiForceDashboardReport {
   forceDistribution: ForceDistributionData;
   bullBearStrength: BullBearStrengthData;
   mainForceVerdict: MainForceVerdictData;
+
+  // Spec 0169 新增 Card 19 & Card 20
+  tdccDistribution: TdccDistributionData;
+  monthlyRevenue: MonthlyRevenueData;
 }

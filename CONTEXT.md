@@ -2293,6 +2293,28 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 核心模組：`scripts/market-sync/vite-market-middleware.cjs` (`triggerCatchupTask`, `isCatchupInCooldown`)。
   - 引入 10 分鐘（`CATCHUP_COOLDOWN_MS = 600000`）最低執行間隔防線。若兩次觸發未滿冷卻時間，自動防禦性略過回補任務，徹底終結前端組件反覆打查引發之無窮背景回補死循環。
 
+### AI 主力戰情室法人籌碼與 TDCC 大戶端到端貫通、月營收與 ETF 自適應、美股微觀結構獨立化與搜尋體驗全面補強 *(新增於 V8.82.0 / Spec #0169 / ADR #0169 / Issue #188)*
+
+- **Card 19 TDCC Distribution Trend Card (TDCC 集保千張大戶趨勢卡)**:
+  - 核心模組：`src/components/aiForceDashboard/cards/TdccDistributionCard.tsx`、`src/engine/aiForceDashboardEngine.ts` (`buildTdccDistribution`)。
+  - 終結 Debt #0042。端到端貫通本地 SQLite 湖倉 `tw_tdcc_distribution` 資料，實裝雙軸圖（左軸千張大戶持股比折線 + 右軸總股東人數柱狀圖）、波段起漲徽章（大戶增+散戶減 ➔ 籌碼高度集中）與 As-of Date 發布基準日說明。美股則誠實標示「美股不適用/無集保機制」空狀態。
+
+- **Card 20 Monthly Revenue & ETF Adaptive Card (月營收成長走勢與 ETF 規模河流自適應卡)**:
+  - 核心模組：`src/components/aiForceDashboard/cards/MonthlyRevenueCard.tsx`、`src/engine/aiForceDashboardEngine.ts` (`buildMonthlyRevenue`, `isEtfSymbol`)。
+  - 終結 Debt #0044 存股痛點。端到端貫通本地 SQLite 湖倉 `tw_monthly_revenue` 資料，個股展示等比長條圖、YoY 顏色區分與 ATH 創歷史新高標籤。當識別為 ETF（以 `00` 開頭或名稱含 `ETF/元大台灣50`）時，智慧自適應為 AUM 規模、受益人人數與歷季配息河流圖，徹底解決 0050 無營收報錯問題。
+
+- **US Microstructure Institutional Decoupling & Zero-Mock Policy (美股微觀動能結構獨立化與零假數據)**:
+  - 核心模組：`src/engine/aiForceDashboardEngine.ts` (`buildInstitutionalFlow`, `calculateUsMicrostructureInstitutionalScore`)、`src/components/aiForceDashboard/cards/InstitutionalFlowCard.tsx`、`src/components/aiForceDashboard/cards/ChipsSummaryCard.tsx`。
+  - 徹底剔除舊架構對美股以 `Math.round(volume * 0.12 * 0.6)` 捏造假外資投信張數之不良設計。美股標的切換為機構量價評分、資金流量 MFI、OBV 趨勢、量能比，計價單位嚴格標定為 USD、數量單位為股，恪守零假數據 (Zero-Mock Policy)。
+
+- **Client-Side Multi-Timeframe Kline Aggregation (主 K 線多週期純函式聚合引擎與基準日標籤)**:
+  - 核心模組：`src/engine/klineAggregationEngine.ts` (`aggregateCandlesToTimeframe`)、`src/components/aiForceDashboard/cards/KLineChartCard.tsx`。
+  - 提供【日 K | 週 K | 月 K】毫秒級動態切換，純函式精準聚合 Open/High/Low/Close/Volume 並重算 MA5/MA10/MA20/MA60/MA250 均線，十字游標動態同步支援，並於標題列右上角顯式標示「基準日: YYYY-MM-DD (As-of Date)」，透明呈現數據時效。
+
+- **30ms Debounced Autocomplete Search & Quick Switch Chips (頂部搜尋防抖下拉與熱門快捷標籤)**:
+  - 核心模組：`src/components/aiForceDashboard/HeaderMarketBar.tsx`。
+  - 整合本地 SQLite `/api/market/symbols` 端點，實裝 30ms 防抖即時模糊搜尋（代碼與中文名稱模糊比對），彈出浮動下拉清單秒選即跳轉；常駐 `0050`、`2330`、`2454`、`NVDA`、`AAPL` 五大熱門快捷膠囊標籤。
+
 
 
 
