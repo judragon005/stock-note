@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  stock-tracker:
+    image: judragon003/stock-tracker:latest
+    container_name: stock-tracker
+    restart: unless-stopped
+    ports:
+      - "13000:3000"
+    environment:
+      - TZ=Asia/Taipei
+      - NODE_ENV=production
+    volumes:
+      # 掛載 NAS 上存放 SQLite 資料庫的實體資料夾
+      - /share/Container/stock-data:/app/.scratch/market-cache

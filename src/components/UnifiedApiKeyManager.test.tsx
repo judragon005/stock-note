@@ -113,7 +113,7 @@ describe('UnifiedApiKeyManager - 統一金融 API 金鑰控制台 (Spec 0168 / T
 
       const fmpRes = await probeApiKey('fmp', 'test_fmp_key_123', mockFetcher);
       expect(mockFetcher).toHaveBeenCalledWith(
-        expect.stringContaining('financialmodelingprep.com/api/v3/profile/AAPL?apikey=test_fmp_key_123'),
+        expect.stringContaining('financialmodelingprep.com/stable/quote?symbol=AAPL&apikey=test_fmp_key_123'),
         expect.anything()
       );
       expect(fmpRes.status).toBe('HEALTHY');

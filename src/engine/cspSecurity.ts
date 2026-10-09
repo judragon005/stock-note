@@ -12,6 +12,11 @@ export const WHITELISTED_CONNECT_DOMAINS = [
   'https://corsproxy.io',
   'https://api.allorigins.win',
   'https://api.codetabs.com',
+  'https://finnhub.io',
+  'https://api.stlouisfed.org',
+  'https://api.polygon.io',
+  'https://api.coingecko.com',
+  'https://data.sec.gov',
 ];
 
 /**

@@ -17,6 +17,7 @@ export interface KeyProbeResult {
 export interface KeyProbeOptions {
   enforceCooldown?: boolean;
   cooldownMs?: number;
+  proxyUrl?: string;
 }
 
 const DEFAULT_COOLDOWN_MS = 30000;
@@ -86,7 +87,7 @@ export async function probeApiKey(
         testUrl = `https://api.stlouisfed.org/fred/series?series_id=DGS10&api_key=${encodeURIComponent(key)}&file_type=json`;
         break;
       case 'fmp':
-        testUrl = `https://financialmodelingprep.com/api/v3/profile/AAPL?apikey=${encodeURIComponent(key)}`;
+        testUrl = `https://financialmodelingprep.com/stable/quote?symbol=AAPL&apikey=${encodeURIComponent(key)}`;
         break;
       case 'alphavantage':
         testUrl = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=IBM&apikey=${encodeURIComponent(key)}`;
@@ -105,7 +106,16 @@ export async function probeApiKey(
         testUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo&token=${encodeURIComponent(key)}`;
     }
 
-    const res = await fetcher(testUrl, { headers });
+    let finalUrl = testUrl;
+    if (options?.proxyUrl && options.proxyUrl.trim()) {
+      const custom = options.proxyUrl.trim();
+      const separator = custom.includes('?')
+        ? (custom.endsWith('=') || custom.endsWith('&') ? '' : '&url=')
+        : '?url=';
+      finalUrl = `${custom}${separator}${encodeURIComponent(testUrl)}`;
+    }
+
+    const res = await fetcher(finalUrl, { headers });
     lastProbeTimestampMap.set(cacheKey, Date.now());
     const latencyMs = Date.now() - start;
 
@@ -130,11 +140,14 @@ export async function probeApiKey(
     }
 
     if (res.status === 401 || res.status === 403) {
+      const is403 = res.status === 403;
       return {
         provider,
         status: 'INVALID',
         httpStatus: res.status,
-        message: `金鑰無效或未獲授權 (${res.status} Unauthorized/Forbidden)`,
+        message: is403
+          ? `金鑰無效、未獲授權或當前方案無權存取該端點 (403 Forbidden)`
+          : `金鑰無效或未獲授權 (401 Unauthorized)`,
         latencyMs,
       };
     }
