@@ -55,9 +55,31 @@ describe('TermTooltip - 浮動小視窗防邊界溢出與定位演算法 (Ticket
   describe('Ticket 06: Tooltip 防截斷與 400px 最大高度規範', () => {
     it('TOOLTIP_POPUP_CONFIG 應設定 maxHeight 為 400px 且啟用暗黑滾動條', async () => {
       const { TOOLTIP_POPUP_CONFIG } = await import('./TermTooltip');
-      expect(TOOLTIP_POPUP_CONFIG.maxHeight).toBe('400px');
       expect(TOOLTIP_POPUP_CONFIG.overflowY).toBe('auto');
     });
   });
+
+  describe('Spec 0174 Ticket 02: 500px 寬幅旗艦彈窗與防溢出定位規範', () => {
+    it('TOOLTIP_POPUP_CONFIG 應升級為 500px 寬幅與 580px 最大高度', async () => {
+      const { TOOLTIP_POPUP_CONFIG } = await import('./TermTooltip');
+      expect(TOOLTIP_POPUP_CONFIG.width).toBe('500px');
+      expect(TOOLTIP_POPUP_CONFIG.maxHeight).toBe('580px');
+    });
+
+    it('calculateTooltipPlacement 預設尺寸應以 500px 寬度防溢出判斷', () => {
+      // 在 1440 螢幕下，觸發點在 left: 1100, width: 100，centerX = 1150
+      // halfWidth = 250, centerX + 250 = 1400，雖小於 1420，但若更靠右 left: 1200, width: 100，centerX = 1250, 1250 + 250 = 1500 > 1420，應判定為 'right'
+      const triggerNearRight = { left: 1200, top: 400, right: 1300, bottom: 420, width: 100, height: 20 };
+      const placement = calculateTooltipPlacement(triggerNearRight, mockViewport);
+      expect(placement.horizontal).toBe('right');
+    });
+
+    it('當上方空間小於 380px 時，預設應智慧向下翻轉 (bottom)', () => {
+      const triggerTop300 = { left: 500, top: 300, right: 600, bottom: 320, width: 100, height: 20 };
+      const placement = calculateTooltipPlacement(triggerTop300, mockViewport);
+      expect(placement.vertical).toBe('bottom');
+    });
+  });
 });
+
 

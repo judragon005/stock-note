@@ -153,6 +153,14 @@ export function formatShortDate(dateStr: string): string {
 }
 
 /**
+ * 取得近 N 日明細資料切片 (Spec 0174: 升級為近 5 日)
+ */
+export function getRecentDaysSlice<T>(history: T[], count = 5): T[] {
+  if (!history || history.length === 0) return [];
+  return history.slice(-count);
+}
+
+/**
  * 依據歷史計算近 20 日與近 5 日總結
  */
 export function computeInstitutionalSummaries(history: InstitutionalFlowData['history']): {
@@ -476,19 +484,18 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
         </div>
       </div>
 
-      {/* 主體區：左側雙軸 SVG 圖表 + 右側近 3 日明細表格 (防碰撞分欄) */}
+      {/* 主體區：上下結構 (Spec 0174: 上方雙軸 SVG 全寬展開 + 下方近 5 日明細表格) */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1.25fr) minmax(180px, 1fr)',
-          gap: '12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
           flex: 1,
-          alignItems: 'center',
           minWidth: 0,
         }}
       >
-        {/* 左側雙軸 SVG 圖表 (Ticket 16) */}
-        <div style={{ width: '100%', minHeight: '160px', position: 'relative', minWidth: 0 }}>
+        {/* 上方雙軸 SVG 圖表 (全寬展開，釋放解析度) */}
+        <div style={{ width: '100%', minHeight: '140px', position: 'relative', minWidth: 0 }}>
           <svg
             viewBox={`0 0 ${chartWidth} ${chartHeight}`}
             style={{ width: '100%', height: '100%', display: 'block' }}
@@ -521,7 +528,7 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
                 const barColor = isBull
                   ? (colorTheme === 'taiwan' ? '#ef4444' : '#10b981')
                   : (colorTheme === 'taiwan' ? '#10b981' : '#ef4444');
-                const barW = Math.max(1, Math.min(3, step * 0.8));
+                const barW = Math.max(1, Math.min(4, step * 0.85));
 
                 return (
                   <g key={i}>
@@ -569,15 +576,16 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
           </svg>
         </div>
 
-        {/* 右側近 3 日明細表格 (Ticket 17 / Ticket 06 5 欄零溢出) */}
+        {/* 下方近 5 日明細表格 (Spec 0174: 全寬呈現、字體放大、對齊 5 日總結) */}
         <div
           style={{
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'center',
             overflowX: 'hidden',
-            borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
-            paddingLeft: '8px',
+            background: 'rgba(15, 23, 42, 0.55)',
+            borderRadius: '8px',
+            padding: '6px 8px',
+            border: '1px solid rgba(255, 255, 255, 0.06)',
             minWidth: 0,
           }}
         >
@@ -585,21 +593,21 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
             style={{
               width: '100%',
               borderCollapse: 'collapse',
-              fontSize: '0.70rem',
+              fontSize: '0.80rem',
               fontFamily: 'monospace',
             }}
           >
             <thead>
               <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', color: '#94a3b8' }}>
-                <th style={{ padding: '2px 4px', textAlign: 'left', whiteSpace: 'nowrap' }}>日期</th>
-                <th style={{ padding: '2px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>外資</th>
-                <th style={{ padding: '2px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>投信</th>
-                <th style={{ padding: '2px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>自營</th>
-                <th style={{ padding: '2px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>合計</th>
+                <th style={{ padding: '3px 6px', textAlign: 'left', whiteSpace: 'nowrap' }}>日期</th>
+                <th style={{ padding: '3px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>外資</th>
+                <th style={{ padding: '3px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>投信</th>
+                <th style={{ padding: '3px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>自營</th>
+                <th style={{ padding: '3px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>合計</th>
               </tr>
             </thead>
             <tbody>
-              {recentDays.slice(-3).map((row, idx) => {
+              {getRecentDaysSlice(recentDays, 5).map((row, idx) => {
                 const fF = formatSharesCell(row.foreignShares, colorTheme);
                 const fT = formatSharesCell(row.trustShares, colorTheme);
                 const fD = formatSharesCell(row.dealerShares, colorTheme);
@@ -610,14 +618,14 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
                     key={idx}
                     style={{
                       borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
-                      background: idx % 2 === 0 ? 'rgba(255, 255, 255, 0.015)' : 'transparent',
+                      background: idx % 2 === 0 ? 'rgba(255, 255, 255, 0.02)' : 'transparent',
                     }}
                   >
-                    <td style={{ padding: '2px 4px', color: '#cbd5e1', whiteSpace: 'nowrap' }}>{formatShortDate(row.date)}</td>
-                    <td style={{ padding: '2px 4px', textAlign: 'right', color: fF.color, whiteSpace: 'nowrap' }}>{fF.text}</td>
-                    <td style={{ padding: '2px 4px', textAlign: 'right', color: fT.color, whiteSpace: 'nowrap' }}>{fT.text}</td>
-                    <td style={{ padding: '2px 4px', textAlign: 'right', color: fD.color, whiteSpace: 'nowrap' }}>{fD.text}</td>
-                    <td style={{ padding: '2px 4px', textAlign: 'right', color: fTotal.color, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '3px 6px', color: '#cbd5e1', whiteSpace: 'nowrap' }}>{formatShortDate(row.date)}</td>
+                    <td style={{ padding: '3px 6px', textAlign: 'right', color: fF.color, whiteSpace: 'nowrap' }}>{fF.text}</td>
+                    <td style={{ padding: '3px 6px', textAlign: 'right', color: fT.color, whiteSpace: 'nowrap' }}>{fT.text}</td>
+                    <td style={{ padding: '3px 6px', textAlign: 'right', color: fD.color, whiteSpace: 'nowrap' }}>{fD.text}</td>
+                    <td style={{ padding: '3px 6px', textAlign: 'right', color: fTotal.color, fontWeight: 700, whiteSpace: 'nowrap' }}>
                       {fTotal.text}
                     </td>
                   </tr>
@@ -627,6 +635,7 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
           </table>
         </div>
       </div>
+
 
       {/* 底部總結標籤列 (Ticket 17) */}
       <div

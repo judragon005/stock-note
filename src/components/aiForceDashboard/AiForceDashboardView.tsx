@@ -467,12 +467,12 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 </div>
               </div>
 
-              {/* Layer 6: 短線能量、市場情緒與風控指標 (5 卡整齊矩陣) */}
+              {/* Layer 6: 短線能量、市場情緒與風控指標 (Spec 0174: 4 卡等寬矩陣，解除擠壓) */}
               <div
                 data-layer="6-energy-sentiment"
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
                   gap: '12px',
                   alignItems: 'stretch',
                 }}
@@ -480,11 +480,6 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 {/* 10 AI 多空能量棒 */}
                 <div style={{ minWidth: 0 }}>
                   <BullBearEnergyCard data={report.bullBearEnergy} />
-                </div>
-
-                {/* 11 健康度綜合評估表 */}
-                <div style={{ minWidth: 0 }}>
-                  <HealthSummaryCard data={report.healthSummary} />
                 </div>
 
                 {/* 12 AI 主力動態信號判斷 */}
@@ -503,7 +498,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 </div>
               </div>
 
-              {/* Layer 7: 籌碼收斂與終極作戰指令 (壓軸決策區，3 欄佈局) */}
+              {/* Layer 7: 籌碼收斂與終極作戰指令 (Spec 0174: 3 欄緊湊作戰區，中間欄 3 卡矩陣) */}
               <div
                 data-layer="7-verdict-command"
                 style={{
@@ -511,10 +506,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
                   gap: '12px',
                   alignItems: 'stretch',
+                  minHeight: '480px',
                 }}
               >
-                {/* 欄 1: 15 籌碼異動摘要 + 09 隔日沖風險 */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', minWidth: 0 }}>
+                {/* 欄 1: 15 籌碼異動摘要 + 09 隔日沖風險 (2 卡均衡呼吸) */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, height: '100%' }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <ChipsSummaryCard data={report.chipsSummary} />
                   </div>
@@ -523,8 +519,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   </div>
                 </div>
 
-                {/* 欄 2: 16 買賣力分布 (68px) + 17 多空強度 (68px) */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', minWidth: 0 }}>
+                {/* 欄 2: 11 健康度綜合評估表 + 16 買賣力分布 + 17 多空強度 (Spec 0174: 3 卡矩陣，消除疊字) */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, height: '100%' }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <HealthSummaryCard data={report.healthSummary} />
+                  </div>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <ForceDistributionCard data={report.forceDistribution} />
                   </div>
@@ -533,7 +532,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   </div>
                 </div>
 
-                {/* 欄 3: 18 主力追蹤總評判 (MLP-AI 作戰命令與操盤指南) */}
+                {/* 欄 3: 18 主力追蹤總評判 (MLP-AI 作戰命令與操盤指南，滿高舒展) */}
                 <div style={{ minWidth: 0, height: '100%' }}>
                   <MainForceVerdictCard data={report.mainForceVerdict} />
                 </div>

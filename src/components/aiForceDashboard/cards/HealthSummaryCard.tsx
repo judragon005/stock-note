@@ -57,11 +57,11 @@ export function calculateOverallHealthScore(data: {
 }
 
 export const DONUT_GAUGE_CONFIG = {
-  size: 78,
-  radius: 31,
-  strokeWidth: 7,
+  size: 76,
+  radius: 30,
+  strokeWidth: 6,
   percentFontSize: '15px',
-  labelFontSize: '0.82rem',
+  labelFontSize: '0.74rem',
 };
 
 interface GaugeItemProps {
@@ -77,7 +77,7 @@ const SingleGauge: React.FC<GaugeItemProps> = ({ label, percent, color, termId }
   const centerCoord = size / 2;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1, minWidth: 0 }}>
       <div style={{ position: 'relative', width: `${size}px`, height: `${size}px` }}>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
           {/* 背景軌道 */}
@@ -163,7 +163,7 @@ export const HealthSummaryCard: React.FC<HealthSummaryCardProps> = ({ data }) =>
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        padding: '14px',
+        padding: '10px 12px',
         background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
         borderRadius: '14px',
         border: '1px solid rgba(59, 130, 246, 0.25)',
@@ -171,6 +171,7 @@ export const HealthSummaryCard: React.FC<HealthSummaryCardProps> = ({ data }) =>
         boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
       }}
     >
+
       {/* 頂部標題與選單 */}
       <div
         style={{
