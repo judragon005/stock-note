@@ -60,10 +60,11 @@ describe('TermTooltip - 浮動小視窗防邊界溢出與定位演算法 (Ticket
   });
 
   describe('Spec 0174 Ticket 02: 500px 寬幅旗艦彈窗與防溢出定位規範', () => {
-    it('TOOLTIP_POPUP_CONFIG 應升級為 500px 寬幅與 580px 最大高度', async () => {
+    it('TOOLTIP_POPUP_CONFIG 應升級為 500px 寬幅與 580px 最大高度，並具備滾動穿透隔離', async () => {
       const { TOOLTIP_POPUP_CONFIG } = await import('./TermTooltip');
       expect(TOOLTIP_POPUP_CONFIG.width).toBe('500px');
       expect(TOOLTIP_POPUP_CONFIG.maxHeight).toBe('580px');
+      expect(TOOLTIP_POPUP_CONFIG.overscrollBehavior).toBe('contain');
     });
 
     it('calculateTooltipPlacement 預設尺寸應以 500px 寬度防溢出判斷', () => {
