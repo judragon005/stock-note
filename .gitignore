@@ -68,3 +68,9 @@ docs/json/
 public/market-cache/
 .scratch/market-cache/
 .scratch/test-*/
+
+# Deployment Artifacts & Binary Archives (> 50MB)
+docs/deployment/artifacts/
+docs/deployment/logs/
+*.tar
+*.tar.gz

@@ -55,7 +55,7 @@ export function buildStep4LatentRisksPrompt(input: EquityDeepDiveInput): string 
   const { symbol, name, market, statusTag = 'NORMAL' } = input;
   let statusWarning = '';
   if (statusTag === 'DISPOSITION') {
-    statusWarning = `⚠️ 【重大警示】此標的當前正處於「證交所處置股票（分盤撮合）」期間，流動性凍結且交易摩擦高，請重點評估資金流通性風險！\n`;
+    statusWarning = `⚠️ 【重大警示】此標的當前正處於「證交所處置股票（分盤撮合）」期間，流動性凍結且交易摩擦高，請預留額外滑價空間，並重點評估流動性折價與停損執行風險！\n`;
   } else if (statusTag === 'ATTENTION') {
     statusWarning = `⚠️ 【短線警示】此標的當前被列為「注意股票」，近期周轉率或振幅過熱，需嚴防主力倒貨追高套牢！\n`;
   }
@@ -120,11 +120,12 @@ ${boxInfo}
 請根據上述真實籌碼與技術價位，分析：
 1. 外資、投信近期是同向買超吃貨、還是土洋對作或主力倒貨結帳？
 2. 融資餘額與散戶動向：是否有融資高檔多殺多風險？
-3. 綜合研判當前處於主力吃貨吸籌、壓盤洗盤、突破推升、還是拉高出貨？`;
+3. 外資借券賣出 (SBL) 與券資比動態：外資現貨買超背後是否同步大幅借券放空？融券與借券餘額是否有軋空或避險鎖單？
+4. 綜合研判當前處於主力吃貨吸籌、壓盤洗盤、突破推升、還是拉高出貨？`;
 }
 
 /**
- * Ticket 15: 步驟 7 投資筆記結構範本
+ * Ticket 15: 步驟 7 投資筆記結構範本 (券商法人級擴充 Spec 0173)
  */
 export function buildStep7InvestmentMemoTemplate(symbol: string, name: string): string {
   return `### 【第 7 步】投資筆記（200 字極簡交易卡）(${name} - ${symbol})
@@ -132,6 +133,7 @@ export function buildStep7InvestmentMemoTemplate(symbol: string, name: string): 
 - **買進核心理由**：以一句話說明最強催化劑（如：同業競爭力強大、估值具安全邊際、主力剛突破箱頂）。
 - **目標價區間**：未來 6~12 個月合理獲利了結價位。
 - **停損價底線**：跌破即無條件出場之紀律價位（如：跌破關鍵箱底或虧損達 8%）。
+- **核心論點失效條件（證偽開關 Kill-Switch）**：若發生何種基本面或產業逆風，原始進場假設即被證偽，必須無條件立即清倉（如：大客戶轉單、毛利連續兩季低於 30%）。
 - **預計持有週期**：短線波段 (1~3 週) / 中期波段 (1~3 個月) / 長期投資 (半年以上)。
 - **3 個追蹤觀察指標**：次月營收年增率、外資累計買超連續性、毛利率是否維持高檔。`;
 }

@@ -560,13 +560,26 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         <TaskViewsSwitcher activeTab={activeTab} onChangeTab={setActiveTab} />
       </div>
 
-      {/* 7 步深度投研與決策閉環 Modal (Debt #0037) */}
+      {/* 7 步深度投研與決策閉環 Modal (Debt #0037 / Spec 0173) */}
       <EquityDeepDiveModal
         isOpen={isDeepDiveOpen}
         onClose={() => setIsDeepDiveOpen(false)}
         symbol={symbol}
         market={market}
         name={report.name || symbol}
+        reportContext={report}
+        holdings={_holdings}
+        input={{
+          symbol,
+          name: report.name || symbol,
+          market,
+          quote: {
+            price: report.marketBar?.currentPrice || 0,
+            change: report.marketBar?.change || 0,
+            changePercent: report.marketBar?.changePercent || 0,
+          },
+          statusTag: report.marketBar?.marketStatusTag || 'NORMAL',
+        }}
       />
     </div>
   );

@@ -81,20 +81,23 @@ describe('equityDeepDiveEngine - 7 步驟獨立 Prompt 與全量聚合 (Ticket 0
     expect(twPrompt).toContain('籌碼微觀解讀');
     expect(twPrompt).toContain('3700');
     expect(twPrompt).toContain('950');
+    expect(twPrompt).toContain('借券賣出');
 
     const usPrompt = buildStep6ChipsAnalysisPrompt(mockUsInput);
     expect(usPrompt).toContain('量能分佈');
   });
 
-  it('Ticket 15: 步驟 7 投資筆記與全量 Prompt 聚合產生器', () => {
+  it('Ticket 15 / Spec 0173: 步驟 7 投資筆記與全量 Prompt 聚合產生器包含證偽條件與法人風控', () => {
     const template = buildStep7InvestmentMemoTemplate(mockTwInput.symbol, mockTwInput.name);
     expect(template).toContain('200 字極簡交易卡');
     expect(template).toContain('買進核心理由');
     expect(template).toContain('目標價');
+    expect(template).toContain('核心論點失效條件（證偽開關 Kill-Switch）');
 
     const report = generateFull7StepsPromptPayload(mockTwInput);
     expect(report.fullPayloadPrompt).toContain('深度投研決策閉環');
     expect(report.fullPayloadPrompt).toContain('【第 1 步】商業模式拆解');
     expect(report.fullPayloadPrompt).toContain('【第 7 步】投資筆記');
+    expect(report.fullPayloadPrompt).toContain('核心論點失效條件');
   });
 });

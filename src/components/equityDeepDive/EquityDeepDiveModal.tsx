@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { MarketType, HoldingPosition } from '../../types/stock';
 import { EquityDeepDiveInput, InvestmentMemoRecord } from '../../types/equityDeepDive';
 import { generateFull7StepsPromptPayload } from '../../engine/equityDeepDiveEngine';
@@ -11,6 +11,8 @@ import {
 } from '../../utils/investmentMemoStorage';
 import { triggerDashboardCanvasPngDownload } from '../../engine/dashboardCanvasExporter';
 import { AiForceDashboardReport } from '../../types/aiForceDashboard';
+import { copyTextToClipboard } from '../../utils/clipboard';
+import { parseLlmResponseToMemoDraft } from '../../utils/memoSmartParser';
 
 export interface EquityDeepDiveModalProps {
   isOpen: boolean;
@@ -47,15 +49,46 @@ export const EquityDeepDiveModal: React.FC<EquityDeepDiveModalProps> = ({
   const [allCopied, setAllCopied] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // 投資筆記表單狀態
+  // 投資筆記表單狀態 (Spec 0173 法人級擴充)
   const [buyReason, setBuyReason] = useState('');
+  const [thesisInvalidation, setThesisInvalidation] = useState('');
   const [targetPrice, setTargetPrice] = useState<string>('');
   const [stopLossPrice, setStopLossPrice] = useState<string>('');
   const [holdingDays, setHoldingDays] = useState<string>('60');
   const [trackingMetrics, setTrackingMetrics] = useState<string>('');
   const [syncToHoldings, setSyncToHoldings] = useState(false);
 
+  // 智慧貼上外部研報狀態
+  const [isSmartPasteOpen, setIsSmartPasteOpen] = useState(false);
+  const [smartPasteText, setSmartPasteText] = useState('');
+
   const isInHoldings = isSymbolInHoldings(resolvedInput.symbol, holdings);
+
+  // 當前市價與機構級 R-Multiple 風報比計算
+  const currentPriceNum =
+    resolvedInput.quote?.price ||
+    (resolvedInput.candles && resolvedInput.candles.length > 0
+      ? resolvedInput.candles[resolvedInput.candles.length - 1].close
+      : 0);
+
+  const targetPriceNum = parseFloat(targetPrice) || 0;
+  const stopLossPriceNum = parseFloat(stopLossPrice) || 0;
+
+  const riskRewardRatio = useMemo(() => {
+    if (
+      currentPriceNum > 0 &&
+      targetPriceNum > currentPriceNum &&
+      stopLossPriceNum > 0 &&
+      stopLossPriceNum < currentPriceNum
+    ) {
+      const reward = targetPriceNum - currentPriceNum;
+      const risk = currentPriceNum - stopLossPriceNum;
+      if (risk > 0) {
+        return Math.round((reward / risk) * 100) / 100;
+      }
+    }
+    return null;
+  }, [currentPriceNum, targetPriceNum, stopLossPriceNum]);
 
   // 載入既有筆記與預設風控數值
   useEffect(() => {
@@ -63,6 +96,7 @@ export const EquityDeepDiveModal: React.FC<EquityDeepDiveModalProps> = ({
     const existing = getInvestmentMemo(resolvedInput.symbol);
     if (existing) {
       setBuyReason(existing.buyReason || '');
+      setThesisInvalidation(existing.thesisInvalidation || '');
       setTargetPrice(existing.targetPrice !== undefined ? String(existing.targetPrice) : '');
       setStopLossPrice(existing.stopLossPrice !== undefined ? String(existing.stopLossPrice) : '');
       setHoldingDays(existing.holdingPeriodDays ? String(existing.holdingPeriodDays) : '60');
@@ -78,6 +112,7 @@ export const EquityDeepDiveModal: React.FC<EquityDeepDiveModalProps> = ({
         setStopLossPrice('');
       }
       setBuyReason('');
+      setThesisInvalidation('');
       setHoldingDays('60');
       setTrackingMetrics('');
     }
@@ -88,12 +123,14 @@ export const EquityDeepDiveModal: React.FC<EquityDeepDiveModalProps> = ({
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleCopyAll = () => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(report.fullPayloadPrompt);
+  const handleCopyAll = async () => {
+    const success = await copyTextToClipboard(report.fullPayloadPrompt);
+    if (success) {
       setAllCopied(true);
       showToast('已複製 7 步全量投研 Prompt Payload！可直接貼入 Claude/ChatGPT');
       setTimeout(() => setAllCopied(false), 2500);
+    } else {
+      showToast('⚠️ 瀏覽器限制自動複製，請展開下方卡片手動複製文字');
     }
   };
 
@@ -119,8 +156,10 @@ export const EquityDeepDiveModal: React.FC<EquityDeepDiveModalProps> = ({
       name: resolvedInput.name,
       market: resolvedInput.market,
       buyReason,
+      thesisInvalidation,
       targetPrice: parseFloat(targetPrice) || 0,
       stopLossPrice: parseFloat(stopLossPrice) || 0,
+      calculatedRiskRewardRatio: riskRewardRatio || undefined,
       holdingPeriodDays: parseInt(holdingDays, 10) || 60,
       trackingMetrics: trackingMetrics ? trackingMetrics.split(/[,，、]/).map((s) => s.trim()).filter(Boolean) : [],
       isWatchlist: !isInHoldings,
@@ -132,14 +171,50 @@ export const EquityDeepDiveModal: React.FC<EquityDeepDiveModalProps> = ({
     showToast('已生成並觸發下載 1920x1080 向量決策快照圖檔 (PNG)');
   };
 
+  const handleSmartPasteApply = () => {
+    if (!smartPasteText.trim()) return;
+    const draft = parseLlmResponseToMemoDraft(smartPasteText);
+    let filledCount = 0;
+    if (draft.buyReason) { setBuyReason(draft.buyReason); filledCount++; }
+    if (draft.thesisInvalidation) { setThesisInvalidation(draft.thesisInvalidation); filledCount++; }
+    if (draft.targetPrice) { setTargetPrice(String(draft.targetPrice)); filledCount++; }
+    if (draft.stopLossPrice) { setStopLossPrice(String(draft.stopLossPrice)); filledCount++; }
+    if (draft.holdingPeriodDays) { setHoldingDays(String(draft.holdingPeriodDays)); filledCount++; }
+    if (draft.trackingMetrics && draft.trackingMetrics.length > 0) {
+      setTrackingMetrics(draft.trackingMetrics.join(', '));
+      filledCount++;
+    }
+    setIsSmartPasteOpen(false);
+    setSmartPasteText('');
+    showToast(`✨ 成功智慧解析並自動填入 ${filledCount} 個欄位！`);
+  };
+
+  const handleApplySystemQuantDraft = () => {
+    if (resolvedInput.boxFloorPrice) {
+      setStopLossPrice(String(resolvedInput.boxFloorPrice));
+    }
+    if (resolvedInput.boxCeilingPrice) {
+      setTargetPrice(String(resolvedInput.boxCeilingPrice));
+    }
+    if (!buyReason) {
+      setBuyReason(`突破近期箱體關鍵防線，法人量能增溫，基本面具安全邊際`);
+    }
+    if (!trackingMetrics) {
+      setTrackingMetrics('外資買賣超連續性, 次月營收年增率, 箱底防線不破');
+    }
+    showToast(`🪄 已帶入系統量化支撐/箱體防線草稿！`);
+  };
+
   const handleSaveMemo = () => {
     const memo: InvestmentMemoRecord = {
       symbol: resolvedInput.symbol,
       name: resolvedInput.name,
       market: resolvedInput.market,
       buyReason: buyReason.trim(),
+      thesisInvalidation: thesisInvalidation.trim(),
       targetPrice: parseFloat(targetPrice) || 0,
       stopLossPrice: parseFloat(stopLossPrice) || 0,
+      calculatedRiskRewardRatio: riskRewardRatio || undefined,
       holdingPeriodDays: parseInt(holdingDays, 10) || 60,
       trackingMetrics: trackingMetrics
         ? trackingMetrics.split(/[,，、]/).map((s) => s.trim()).filter(Boolean)
@@ -355,32 +430,142 @@ export const EquityDeepDiveModal: React.FC<EquityDeepDiveModalProps> = ({
               marginTop: '12px',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '8px',
-                  backgroundColor: '#38bdf8',
-                  color: '#0f172a',
-                  fontSize: '14px',
-                  fontWeight: 'bold',
-                }}
-              >
-                7
-              </span>
-              <div>
-                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#f8fafc' }}>
-                  第 7 步：投資筆記（200 字極簡交易卡沉澱）
-                </div>
-                <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                  建立進場劇本與嚴格紀律，並持久化至本機儲存
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '8px',
+                    backgroundColor: '#38bdf8',
+                    color: '#0f172a',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  7
+                </span>
+                <div>
+                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#f8fafc' }}>
+                    第 7 步：投資筆記（200 字極簡交易卡沉澱）
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                    建立進場劇本與嚴格紀律，並持久化至本機儲存
+                  </div>
                 </div>
               </div>
+
+              {/* 智慧輔助按鈕組 (Spec 0173 / Ticket 05) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  data-testid="smart-paste-toggle-btn"
+                  onClick={() => setIsSmartPasteOpen(!isSmartPasteOpen)}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    borderRadius: '6px',
+                    backgroundColor: isSmartPasteOpen ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.08)',
+                    color: '#38bdf8',
+                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  📋 智能貼上研報
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="apply-system-quant-btn"
+                  onClick={handleApplySystemQuantDraft}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    borderRadius: '6px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    color: '#e2e8f0',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  🪄 帶入系統草稿
+                </button>
+              </div>
             </div>
+
+            {/* Smart Paste 折疊輸入區域 (Spec 0173 / Ticket 05) */}
+            {isSmartPasteOpen && (
+              <div
+                data-testid="smart-paste-panel"
+                style={{
+                  padding: '12px',
+                  backgroundColor: 'rgba(15, 23, 42, 0.7)',
+                  borderRadius: '8px',
+                  border: '1px dashed rgba(56, 189, 248, 0.4)',
+                  marginBottom: '14px',
+                }}
+              >
+                <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>
+                  貼入外部 AI（Claude/ChatGPT）輸出的第 7 步或全量研報，系統將自動解析填入各欄位：
+                </div>
+                <textarea
+                  data-testid="smart-paste-textarea"
+                  value={smartPasteText}
+                  onChange={(e) => setSmartPasteText(e.target.value)}
+                  placeholder="在此貼上 AI 回覆的文字（包含目標價、停損價、買進理由、論點失效條件等）..."
+                  rows={4}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    backgroundColor: 'rgba(30, 41, 59, 0.8)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    color: '#f8fafc',
+                    fontSize: '12px',
+                    fontFamily: 'monospace',
+                  }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => { setIsSmartPasteOpen(false); setSmartPasteText(''); }}
+                    style={{
+                      padding: '4px 12px',
+                      fontSize: '12px',
+                      borderRadius: '6px',
+                      backgroundColor: 'transparent',
+                      color: '#94a3b8',
+                      border: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="apply-smart-paste-btn"
+                    onClick={handleSmartPasteApply}
+                    style={{
+                      padding: '4px 14px',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      borderRadius: '6px',
+                      backgroundColor: '#38bdf8',
+                      color: '#0f172a',
+                      border: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    ✨ 一鍵解析回填
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div style={{ gridColumn: '1 / -1' }}>
@@ -399,6 +584,29 @@ export const EquityDeepDiveModal: React.FC<EquityDeepDiveModalProps> = ({
                     borderRadius: '8px',
                     backgroundColor: 'rgba(15, 23, 42, 0.6)',
                     border: '1px solid rgba(255, 255, 255, 0.1)',
+                    color: '#f8fafc',
+                    fontSize: '13px',
+                  }}
+                />
+              </div>
+
+              {/* 核心論點失效條件 (Kill-Switch) (Ticket 04) */}
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ display: 'block', fontSize: '13px', color: '#f87171', marginBottom: '6px', fontWeight: 'bold' }}>
+                  🛡️ 核心論點失效條件（證偽開關 Kill-Switch）：
+                </label>
+                <input
+                  type="text"
+                  data-testid="memo-kill-switch-input"
+                  value={thesisInvalidation}
+                  onChange={(e) => setThesisInvalidation(e.target.value)}
+                  placeholder="例如：台積電宣布 2nm 導入非鑽石碟方案，或單月營收年增率轉負..."
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                    border: '1px solid rgba(248, 113, 113, 0.3)',
                     color: '#f8fafc',
                     fontSize: '13px',
                   }}
@@ -448,6 +656,50 @@ export const EquityDeepDiveModal: React.FC<EquityDeepDiveModalProps> = ({
                   }}
                 />
               </div>
+
+              {/* R-Multiple 即時風報比徽章 (Ticket 04) */}
+              {riskRewardRatio !== null && (
+                <div
+                  data-testid="memo-risk-reward-badge"
+                  style={{
+                    gridColumn: '1 / -1',
+                    padding: '8px 14px',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    backgroundColor:
+                      riskRewardRatio >= 3.0
+                        ? 'rgba(34, 197, 94, 0.15)'
+                        : riskRewardRatio >= 2.0
+                        ? 'rgba(56, 189, 248, 0.15)'
+                        : 'rgba(239, 68, 68, 0.15)',
+                    border: `1px solid ${
+                      riskRewardRatio >= 3.0
+                        ? 'rgba(34, 197, 94, 0.3)'
+                        : riskRewardRatio >= 2.0
+                        ? 'rgba(56, 189, 248, 0.3)'
+                        : 'rgba(239, 68, 68, 0.3)'
+                    }`,
+                  }}
+                >
+                  {riskRewardRatio >= 3.0 ? (
+                    <span style={{ color: '#4ade80' }}>
+                      🚀 機構級優良風報比：{riskRewardRatio}R（≥ 3.0，符合買方非對稱報酬紀律）
+                    </span>
+                  ) : riskRewardRatio >= 2.0 ? (
+                    <span style={{ color: '#38bdf8' }}>
+                      ⚖️ 合理風報比：{riskRewardRatio}R（介於 2.0 ~ 3.0 之間）
+                    </span>
+                  ) : (
+                    <span style={{ color: '#f87171' }}>
+                      ⚠️ 風報比過低：{riskRewardRatio}R（&lt; 2.0R，潛在報酬小於風險空間，不符機構紀律）
+                    </span>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', color: '#cbd5e1', marginBottom: '6px' }}>

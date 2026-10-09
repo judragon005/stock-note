@@ -2379,4 +2379,13 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 核心模組：`scripts/market-sync/market-sync-core.cjs`、`scripts/market-sync/ingest-tw-tdcc.cjs`、`scripts/market-sync/ingest-tw-monthly-revenue.cjs`。
   - 盤後批次同步管線正式補齊 TWSE/TPEX 成交筆數 (`transactions`) 入庫，並擴充 TDCC 10 週持股比例序列與近 12 個月營收 YoY 歷史序列回補機制。
 
+- **Hardened Dual-Pipeline Clipboard & Institutional Workflow (全市場個股 7 步深度投研高容錯雙軌剪貼簿與法人風控閉環)**:
+  - 核心模組：`src/utils/clipboard.ts`、`src/utils/memoSmartParser.ts`、`src/components/equityDeepDive/EquityDeepDiveModal.tsx`、`src/engine/equityDeepDiveEngine.ts`。
+  - 規範依據：Spec 0173 (v8.85.0) 與 ADR 0173。
+  - 核心特性：
+    1. **雙軌剪貼簿工具 (Dual-Pipeline Clipboard)**：實作 `copyTextToClipboard`，優先使用非同步原生 `navigator.clipboard`，於非安全上下文（如 NAS HTTP 局域網環境）自動降級採用隱藏 `textarea` + `document.execCommand('copy')` 容錯機制，杜絕按鈕靜默失效。
+    2. **端到端數據管線無縫注入**：於父層 `App.tsx` 與 `AiForceDashboardView.tsx` 注入即時 `quote`、歷史 `candles`、當前在庫 `holdings` 與 `reportContext`，消除現價為 0、停損目標價被重置與持倉無法同步之問題。
+    3. **券商買方法人級風控升級**：在 `InvestmentMemoRecord` 擴充核心論點失效條件（證偽開關 `thesisInvalidation`）與即時 R-Multiple 風報比徽章（$\ge 3.0R$ 綠色優質、$< 2.0R$ 警示），Prompt 模板全面納入外資借券賣出、券資比與流動性折價評估。
+    4. **外部研報智慧解析回填器 (Smart Paste)**：以正則表達式快速解析外部 LLM 生成之長篇投研報告，一鍵自動萃取回填至備忘錄表單各欄位，建立導出 ➔ 推理 ➔ 智慧回填 ➔ 歸檔建倉操盤閉環。
+
 

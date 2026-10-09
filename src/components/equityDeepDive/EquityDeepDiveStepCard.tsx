@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { copyTextToClipboard } from '../../utils/clipboard';
 
 export interface EquityDeepDiveStepCardProps {
   stepNumber: number;
@@ -18,10 +19,10 @@ export const EquityDeepDiveStepCard: React.FC<EquityDeepDiveStepCardProps> = ({
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = (e: React.MouseEvent) => {
+  const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(promptContent);
+    const success = await copyTextToClipboard(promptContent);
+    if (success) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }

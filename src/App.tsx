@@ -372,6 +372,30 @@ export const App: React.FC = () => {
     );
   }, [displayedTrades, currentPrices, usdToTwdRate, accountingView, accounts, selectedAccountId, quotes, accountingMethod, historicalCandlesMap]);
 
+  // 7 步深度投研數據裝配 (Spec 0173 / Ticket 03)
+  const deepDiveResolvedInput = useMemo<import('./types/equityDeepDive').EquityDeepDiveInput | undefined>(() => {
+    if (!deepDiveState.isOpen || !deepDiveState.symbol) return undefined;
+    const sym = deepDiveState.symbol;
+    const q = quotes ? quotes[sym] : undefined;
+    const holding = holdings.find((h) => h.symbol.toUpperCase().trim() === sym.toUpperCase().trim());
+    const currentPrice = q?.price || holding?.currentPrice || (currentPrices ? currentPrices[sym] : undefined) || 0;
+
+    return {
+      symbol: sym,
+      name: deepDiveState.name || holding?.name || sym,
+      market: deepDiveState.market,
+      quote: {
+        price: currentPrice,
+        change: q?.change,
+        changePercent: q?.changePercent,
+        pe: (q as any)?.pe,
+        pb: (q as any)?.pb,
+        dividendYield: (q as any)?.dividendYield,
+      },
+      candles: q?.candles || historicalCandlesMap[sym] || [],
+    };
+  }, [deepDiveState, quotes, holdings, currentPrices, historicalCandlesMap]);
+
   // 整戶總體 XIRR 計算 (考慮外部出入金與期末淨資產)
   const portfolioXirr = useMemo(() => {
     const scopedTrades = currentMarket === 'ALL'
@@ -1144,13 +1168,15 @@ export const App: React.FC = () => {
         finmindToken={apiKeys.finmindToken}
       />
 
-      {/* 全市場個股 7 步深度投研與決策閉環視窗 (Debt #0037) */}
+      {/* 全市場個股 7 步深度投研與決策閉環視窗 (Debt #0037 / Spec 0173) */}
       <EquityDeepDiveModal
         isOpen={deepDiveState.isOpen}
         onClose={() => setDeepDiveState((prev) => ({ ...prev, isOpen: false }))}
         symbol={deepDiveState.symbol}
         market={deepDiveState.market}
         name={deepDiveState.name}
+        holdings={holdings}
+        input={deepDiveResolvedInput}
       />
     </div>
   );
