@@ -2388,4 +2388,14 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     3. **券商買方法人級風控升級**：在 `InvestmentMemoRecord` 擴充核心論點失效條件（證偽開關 `thesisInvalidation`）與即時 R-Multiple 風報比徽章（$\ge 3.0R$ 綠色優質、$< 2.0R$ 警示），Prompt 模板全面納入外資借券賣出、券資比與流動性折價評估。
     4. **外部研報智慧解析回填器 (Smart Paste)**：以正則表達式快速解析外部 LLM 生成之長篇投研報告，一鍵自動萃取回填至備忘錄表單各欄位，建立導出 ➔ 推理 ➔ 智慧回填 ➔ 歸檔建倉操盤閉環。
 
+- **AI Force War Room Visual Master Layout & TermTooltip 500px Flagship (主力戰情室視覺大師級版面重構與 TermTooltip 500px 旗艦升級)**:
+  - 核心模組：`src/components/aiForceDashboard/AiForceDashboardView.tsx`、`src/components/common/TermTooltip.tsx`、`src/components/aiForceDashboard/cards/InstitutionalFlowCard.tsx`、`src/components/aiForceDashboard/cards/VolumeProfileCard.tsx`。
+  - 規範依據：Spec 0174 (v8.86.0) 與 ADR 0174。
+  - 核心特性：
+    1. **卡片 08 法人行為計量上下結構重構**：雙軸走勢 SVG 圖表 100% 寬幅橫向延展；明細表格升級為近 5 日全寬清單，日期精簡為 `MM/DD`，字體加大至 `0.80rem`，徹底解決舊版左右分欄之圖形擠壓。
+    2. **TermTooltip 500px 寬幅旗艦彈窗**：寬度擴展至 500px、最大高度 580px，標題 16px、內文 13~14px，行高 1.65；重構 `calculateTooltipPlacement` 智慧防出界邊界算法，配置 80ms 懸浮進入防抖與 `overscrollBehavior: 'contain'` 滾動穿透隔離防護。
+    3. **戰情室 Layer 6 & Layer 7 Bento-Grid 佈局重整與疊字缺陷根治**：卡片 11 (健康度綜合評估) 移至 Layer 7 中間欄，與買賣力 (16)、多空強度 (17) 構成 3 卡垂直矩陣，寬度由 240px 擴展至 340~420px，內距精修為 `10px 12px`，徹底根除圓環下方文字互相重疊遮蔽缺陷；Layer 6 收斂為 4 卡等寬（10, 12, 13, 14）。
+    4. **AI 籌碼熱區圖時間軸翻轉與 1:1 像素置中垂直對位**：熱區天期由遠及近排序（`近60日 ➔ 近20日 ➔ 近10日 ➔ 近5日`）嚴格對齊日 K 線時間流向；底層時間標籤改用 `auto 1fr auto` Grid 佈局，中間以 4 個 `flex: 1` 居中對位，達成熱力方塊與文字標籤 1:1 垂直像素精確對位。
+
+
 

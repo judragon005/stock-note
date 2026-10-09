@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1530%2F1530%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1536%2F1536%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,22 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 全市場個股 7 步深度投研高容錯雙軌剪貼簿與法人風控閉環 (`Equity Deep-Dive Hardened Dual-Pipeline Clipboard & Institutional Workflow`) *(V8.85.0 全新發布 / Spec #0173 / ADR #0173 / Issues #197, #199)*
+### 0. 主力戰情室視覺大師級版面重構、TermTooltip 500px 旗艦升級與籌碼熱區 1:1 對位 (`AI Force War Room Visual Master Layout & TermTooltip 500px Flagship`) *(V8.86.0 最新發布 / Spec #0174 / ADR #0174 / Issues #203, #205)*
+
+- **卡片 08 法人行為計量上下結構重構 (`InstitutionalFlowCard.tsx`)**：
+  - 徹底告別左右壓縮擁擠，改採上下結構：上方雙軸 SVG 圖表 100% 滿版橫向舒展；下方升級為近 5 日全寬明細清單，日期精簡為 `MM/DD`，字體加大至 `0.80rem`，數值絕不折行。
+- **名詞說明彈窗 500px 旗艦升級與智慧防出界定位 (`TermTooltip.tsx`)**：
+  - 專為電腦桌面端打造，寬度由 320px 大幅擴增至 **500px**，最大高度 580px。標題 16px 加粗亮青色，內文 13~14px，行高 1.65。
+  - 重構智慧防出界邊界演算函式 `calculateTooltipPlacement`，支援自動偵測螢幕上下左右安全留白與向下智慧翻轉；實作 80ms 進入防抖與 `overscrollBehavior: 'contain'` 滾動隔離防護。
+- **戰情室 7 層 Bento-Grid 佈局重整與疊字缺陷根除 (`AiForceDashboardView.tsx`)**：
+  - **Layer 6**：移出卡片 11，收斂為 4 卡等寬矩陣（10 多空能量棒、12 動態信號、13 市場合情緒、14 AI 信心），橫向空間充足。
+  - **Layer 7**：中間欄升級為 3 卡矩陣（11 健康度 ➔ 16 買賣力 ➔ 17 多空強度），設置 `minHeight: 480px` 平衡右欄 Card 18。
+  - **卡片 11 (健康度評估)**：由 240px 擴展至 340~420px，內距精修為 `10px 12px`，圓環下方 5 個文字標籤完整橫向舒展，**徹底根治疊字遮蔽 Bug**。
+- **卡片 04 AI 籌碼熱區圖時間軸翻轉與 1:1 像素級置中對位 (`VolumeProfileCard.tsx`)**：
+  - 時間軸嚴格對齊日 K 圖時間流向，由遠及近排列（`近60日 ➔ 近20日 ➔ 近10日 ➔ 近5日`）。
+  - 底層時間標籤改用 `auto 1fr auto` Grid 佈局，中間以 4 個 `flex: 1` 對齊熱力方塊，達成熱力方塊與文字標籤 1:1 垂直像素精確對位。
+
+### 1. 全市場個股 7 步深度投研高容錯雙軌剪貼簿與法人風控閉環 (`Equity Deep-Dive Hardened Dual-Pipeline Clipboard & Institutional Workflow`) *(V8.85.0 / Spec #0173 / ADR #0173 / Issues #197, #199)*
 
 - **NAS / 局域網非安全上下文雙軌高容錯剪貼簿 (`src/utils/clipboard.ts`)**：
   - 第一軌優先使用現代原生 `navigator.clipboard.writeText`；非安全上下文（如 NAS HTTP 私有網段 `http://192.168.x.x`）自動降級至隱藏 `textarea` + `document.execCommand('copy')`。
