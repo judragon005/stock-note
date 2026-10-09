@@ -10,28 +10,29 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-// 向上逐層探索專案根目錄 (無縫相容 Docker /app 與本機任意層級目錄)
-function findProjectRoot(startDir) {
+/**
+ * 自動探測專案根目錄 (相容容器內部 /app 與本地原始碼 docs/deployment/server 目錄層級)
+ */
+function findProjectRoot(startDir = __dirname) {
   let curr = startDir;
-  while (curr && curr !== path.dirname(curr)) {
-    if (fs.existsSync(path.join(curr, 'scripts', 'market-sync', 'vite-market-middleware.cjs'))) {
+  for (let i = 0; i < 5; i++) {
+    const candidateMiddleware = path.join(curr, 'scripts', 'market-sync', 'vite-market-middleware.cjs');
+    if (fs.existsSync(candidateMiddleware)) {
       return curr;
     }
-    curr = path.dirname(curr);
+    const parent = path.dirname(curr);
+    if (parent === curr) break;
+    curr = parent;
   }
   return startDir;
 }
 
-const ROOT_DIR = findProjectRoot(__dirname);
-const scriptsPath = path.join(ROOT_DIR, 'scripts', 'market-sync', 'vite-market-middleware.cjs');
-
-if (!fs.existsSync(scriptsPath)) {
-  throw new Error(`無法找到 vite-market-middleware.cjs (搜尋根目錄: ${ROOT_DIR})`);
-}
-const { createMarketApiMiddleware } = require(scriptsPath);
+const PROJECT_ROOT = findProjectRoot();
+const middlewarePath = path.join(PROJECT_ROOT, 'scripts', 'market-sync', 'vite-market-middleware.cjs');
+const { createMarketApiMiddleware } = require(middlewarePath);
 
 const PORT = process.env.PORT || 3000;
-const DIST_DIR = path.join(ROOT_DIR, 'dist');
+const DIST_DIR = path.join(PROJECT_ROOT, 'dist');
 const marketApi = createMarketApiMiddleware();
 
 // 常用 MIME 類型對應
