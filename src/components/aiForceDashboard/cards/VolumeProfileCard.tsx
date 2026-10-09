@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { VolumeProfileData, VolumeProfileBucket } from '../../../types/aiForceDashboard';
+import { VolumeProfileData, VolumeProfileBucket, HeatmapColumn } from '../../../types/aiForceDashboard';
 import { MoreVertical } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 
@@ -110,6 +110,40 @@ export interface VolumeProfileCardProps {
   data: VolumeProfileData;
 }
 
+export const DEFAULT_HEATMAP_COLUMNS: HeatmapColumn[] = [
+  {
+    id: 'col-4',
+    label: '近60日',
+    cells: ['#0f172a', '#1e3a8a', '#0369a1', '#0284c7', '#06b6d4', '#047857', '#10b981', '#1e3a8a', '#0f172a'],
+  },
+  {
+    id: 'col-3',
+    label: '近20日',
+    cells: ['#1e3a8a', '#2563eb', '#0284c7', '#06b6d4', '#10b981', '#047857', '#0284c7', '#1d4ed8', '#1e293b'],
+  },
+  {
+    id: 'col-2',
+    label: '近10日',
+    cells: ['#1e293b', '#1d4ed8', '#0284c7', '#10b981', '#84cc16', '#06b6d4', '#0369a1', '#1e3a8a', '#0f172a'],
+  },
+  {
+    id: 'col-1',
+    label: '近5日',
+    cells: ['#1e293b', '#1e3a8a', '#2563eb', '#0284c7', '#06b6d4', '#10b981', '#047857', '#1e3a8a', '#0f172a'],
+  },
+];
+
+/**
+ * 保證熱區欄位由遠及近順序 (Spec 0174: 近60日 -> 近20日 -> 近10日 -> 近5日，對齊日K)
+ */
+export function normalizeHeatmapColumns(cols?: HeatmapColumn[]): HeatmapColumn[] {
+  if (!cols || cols.length !== 4) return DEFAULT_HEATMAP_COLUMNS;
+  if (cols[0]?.label.includes('5') && cols[3]?.label.includes('60')) {
+    return [...cols].reverse();
+  }
+  return cols;
+}
+
 export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) => {
   const buckets = data.buckets || [
     { label: '壓力區', percentage: 4, type: 'resistance', priceMin: 2350, priceMax: 2490 },
@@ -138,32 +172,9 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
 
   // 熱力欄位數據（優先使用 engine 動態計算的 4 欄週期熱力，否則回退）
   const heatmapColumns = useMemo(() => {
-    if (data.heatmapColumns && data.heatmapColumns.length === 4) {
-      return data.heatmapColumns;
-    }
-    return [
-      {
-        id: 'col-1',
-        label: '近5日',
-        cells: ['#1e293b', '#1e3a8a', '#2563eb', '#0284c7', '#06b6d4', '#10b981', '#047857', '#1e3a8a', '#0f172a'],
-      },
-      {
-        id: 'col-2',
-        label: '近10日',
-        cells: ['#1e293b', '#1d4ed8', '#0284c7', '#10b981', '#84cc16', '#06b6d4', '#0369a1', '#1e3a8a', '#0f172a'],
-      },
-      {
-        id: 'col-3',
-        label: '近20日',
-        cells: ['#1e3a8a', '#2563eb', '#0284c7', '#06b6d4', '#10b981', '#047857', '#0284c7', '#1d4ed8', '#1e293b'],
-      },
-      {
-        id: 'col-4',
-        label: '近60日',
-        cells: ['#0f172a', '#1e3a8a', '#0369a1', '#0284c7', '#06b6d4', '#047857', '#10b981', '#1e3a8a', '#0f172a'],
-      },
-    ];
+    return normalizeHeatmapColumns(data.heatmapColumns);
   }, [data.heatmapColumns]);
+
 
   // 識別大量成交峰 (POC) 與籌碼真空帶 (Ticket 05)
   const { pocBucketIndex, vacuumBucketIndex } = useMemo(
@@ -335,7 +346,7 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
                 overflow: 'hidden',
               }}
             >
-              {col.cells.map((c, i) => {
+              {col.cells.map((c: string, i: number) => {
                 const isDim = !c || c === '#0f172a' || c === 'transparent';
                 return (
                   <div
@@ -451,23 +462,48 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
         </div>
       </div>
 
-      {/* 底部時間軸標籤 */}
+      {/* 底部時間軸標籤 (Spec 0174: 與上方熱力柱 1:1 像素級精準置中對位) */}
       <div
         style={{
-          display: 'flex',
-          justifyContent: 'flex-start',
-          gap: '8px',
-          paddingLeft: '32px',
+          display: 'grid',
+          gridTemplateColumns: 'auto 1fr auto',
+          gap: '10px',
           marginTop: '6px',
-          fontSize: '0.66rem',
+          fontSize: '0.68rem',
           color: '#64748b',
           fontFamily: 'monospace',
         }}
       >
-        <span>近5日</span>
-        <span>近10日</span>
-        <span>近20日</span>
-        <span>近60日</span>
+        {/* 左側佔位：與 Y 軸價格刻度完全同寬度隱藏對齊 */}
+        <div style={{ visibility: 'hidden', paddingRight: '4px', textAlign: 'right' }}>
+          {priceTicks[0] ?? '000'}
+        </div>
+
+        {/* 中間時間軸：與熱力方塊欄位 1:1 置中 */}
+        <div
+          style={{
+            display: 'flex',
+            gap: '5px',
+            padding: '0 4px',
+            alignItems: 'center',
+          }}
+        >
+          {heatmapColumns.map((col) => (
+            <div
+              key={col.id}
+              style={{
+                flex: 1,
+                textAlign: 'center',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {col.label}
+            </div>
+          ))}
+        </div>
+
+        {/* 右側佔位：與圖例區完全同寬度 */}
+        <div style={{ visibility: 'hidden', minWidth: '85px' }} />
       </div>
     </div>
   );

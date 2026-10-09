@@ -13,12 +13,12 @@ export interface TermTooltipPlacement {
 export function calculateTooltipPlacement(
   triggerRect: { left: number; top: number; right: number; bottom: number; width: number; height: number },
   viewport: { width: number; height: number },
-  tooltipSize = { width: 320, height: 280 }
+  tooltipSize = { width: 500, height: 380 }
 ): TermTooltipPlacement {
-  // 垂直判斷：若上方空間不足容納浮動卡片（預估 280px），則翻轉至下方
+  // 垂直判斷：若上方空間不足容納浮動卡片（預估 380px），則翻轉至下方
   const vertical: 'top' | 'bottom' = triggerRect.top < tooltipSize.height ? 'bottom' : 'top';
 
-  // 水平判斷：置中時左右各需擴展 width / 2 (約 160px)
+  // 水平判斷：置中時左右各需擴展 width / 2 (約 250px)
   const halfWidth = tooltipSize.width / 2;
   const centerX = triggerRect.left + triggerRect.width / 2;
 
@@ -46,9 +46,9 @@ export interface TermTooltipProps {
 }
 
 export const TOOLTIP_POPUP_CONFIG = {
-  maxHeight: '400px',
+  maxHeight: '580px',
   overflowY: 'auto' as const,
-  width: '320px',
+  width: '500px',
 };
 
 export const TermTooltip: React.FC<TermTooltipProps> = ({
@@ -69,6 +69,7 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
   const containerRef = useRef<HTMLSpanElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 取得字典條目
   const resolvedEntry: GlossaryEntry | undefined = customEntry || (termId ? getGlossaryEntry(termId) : undefined);
@@ -78,7 +79,7 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
     if (!containerRef.current || typeof window === 'undefined') return;
     const rect = containerRef.current.getBoundingClientRect();
     const viewport = { width: window.innerWidth, height: window.innerHeight };
-    const tooltipSize = { width: 320, height: 280 };
+    const tooltipSize = { width: 500, height: 380 };
     const newPlacement = calculateTooltipPlacement(rect, viewport, tooltipSize);
 
     let left = rect.left;
@@ -104,12 +105,17 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
   const handleMouseEnter = () => {
     if (!interactive) return;
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-    updatePosition();
-    setIsOpen(true);
+    if (enterTimerRef.current) clearTimeout(enterTimerRef.current);
+    // Spec 0174: 80ms 懸浮防抖，避免滑鼠快速劃過時大卡片閃爍遮擋
+    enterTimerRef.current = setTimeout(() => {
+      updatePosition();
+      setIsOpen(true);
+    }, 80);
   };
 
   const handleMouseLeave = () => {
     if (!interactive) return;
+    if (enterTimerRef.current) clearTimeout(enterTimerRef.current);
     closeTimerRef.current = setTimeout(() => {
       setIsOpen(false);
     }, 150);
@@ -119,6 +125,7 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
     if (!interactive) return;
     e.stopPropagation();
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    if (enterTimerRef.current) clearTimeout(enterTimerRef.current);
     updatePosition();
     setIsOpen((prev) => !prev);
   };
@@ -145,6 +152,7 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
       document.removeEventListener('mousedown', handleOutsideClick);
       document.removeEventListener('keydown', handleKeyDown);
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+      if (enterTimerRef.current) clearTimeout(enterTimerRef.current);
     };
   }, [isOpen]);
 
@@ -167,14 +175,14 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
       scrollbarWidth: 'thin',
       scrollbarColor: 'rgba(59, 130, 246, 0.4) rgba(15, 23, 42, 0.6)',
       backgroundColor: 'rgba(15, 23, 42, 0.98)',
-      backdropFilter: 'blur(16px)',
-      WebkitBackdropFilter: 'blur(16px)',
-      border: '1px solid rgba(59, 130, 246, 0.4)',
-      boxShadow: '0 20px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(59, 130, 246, 0.25)',
-      borderRadius: '10px',
-      padding: '12px 14px',
-      fontSize: '12px',
-      lineHeight: '1.5',
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+      border: '1px solid rgba(59, 130, 246, 0.45)',
+      boxShadow: '0 24px 48px rgba(0, 0, 0, 0.85), 0 0 24px rgba(59, 130, 246, 0.3)',
+      borderRadius: '12px',
+      padding: '16px 18px',
+      fontSize: '13px',
+      lineHeight: '1.65',
       color: '#e2e8f0',
       textAlign: 'left',
       pointerEvents: 'auto',
@@ -237,12 +245,12 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
           onMouseLeave={handleMouseLeave}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* 標題列 */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '6px', marginBottom: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontWeight: 700, fontSize: '13px', color: '#67e8f9' }}>{resolvedEntry.term}</span>
+          {/* 標題列 (Spec 0174: 16px 加粗青色大標) */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.12)', paddingBottom: '8px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontWeight: 800, fontSize: '16px', color: '#67e8f9' }}>{resolvedEntry.term}</span>
               {resolvedEntry.enTerm && (
-                <span style={{ fontSize: '10px', color: '#94a3b8', fontStyle: 'italic' }}>({resolvedEntry.enTerm})</span>
+                <span style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>({resolvedEntry.enTerm})</span>
               )}
             </div>
             <button
@@ -253,9 +261,10 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
                 border: 'none',
                 color: '#94a3b8',
                 cursor: 'pointer',
-                fontSize: '12px',
-                padding: '0 2px',
+                fontSize: '15px',
+                padding: '2px 6px',
                 lineHeight: 1,
+                borderRadius: '4px',
               }}
               title="關閉"
             >
@@ -263,44 +272,44 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
             </button>
           </div>
 
-          {/* 1. 白話比喻 */}
-          <div style={{ marginBottom: '8px', padding: '6px 8px', backgroundColor: 'rgba(59, 130, 246, 0.08)', borderRadius: '6px', borderLeft: '3px solid #3b82f6' }}>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: '#93c5fd', marginBottom: '2px' }}>💡 白話比喻</div>
-            <div style={{ color: '#cbd5e1', fontSize: '11px' }}>{resolvedEntry.metaphor}</div>
+          {/* 1. 白話比喻 (Spec 0174: 13px，行高 1.65，寬敞呈現) */}
+          <div style={{ marginBottom: '10px', padding: '10px 12px', backgroundColor: 'rgba(59, 130, 246, 0.08)', borderRadius: '8px', borderLeft: '3px solid #3b82f6' }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#93c5fd', marginBottom: '4px' }}>💡 白話比喻</div>
+            <div style={{ color: '#cbd5e1', fontSize: '13px', lineHeight: '1.65' }}>{resolvedEntry.metaphor}</div>
           </div>
 
-          {/* 2. 指標含義 */}
-          <div style={{ marginBottom: '8px', padding: '6px 8px', backgroundColor: 'rgba(255, 255, 255, 0.04)', borderRadius: '6px' }}>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: '#e2e8f0', marginBottom: '2px' }}>📊 指標含義</div>
-            <div style={{ color: '#94a3b8', fontSize: '11px' }}>{resolvedEntry.meaning}</div>
+          {/* 2. 指標含義 (Spec 0174: 12.5px) */}
+          <div style={{ marginBottom: '10px', padding: '10px 12px', backgroundColor: 'rgba(255, 255, 255, 0.04)', borderRadius: '8px' }}>
+            <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#e2e8f0', marginBottom: '4px' }}>📊 指標含義</div>
+            <div style={{ color: '#94a3b8', fontSize: '12.5px', lineHeight: '1.6' }}>{resolvedEntry.meaning}</div>
           </div>
 
-          {/* 3. 買賣操作指引 */}
-          <div style={{ marginBottom: dynamicDiagnosis ? '8px' : '0', padding: '6px 8px', backgroundColor: 'rgba(16, 185, 129, 0.06)', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: '#34d399', marginBottom: '4px' }}>🎯 買賣操作指引（如何決定買賣？）</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px' }}>
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-start' }}>
+          {/* 3. 買賣操作指引 (Spec 0174: 12.5px 獨立徽章對比) */}
+          <div style={{ marginBottom: dynamicDiagnosis ? '10px' : '0', padding: '10px 12px', backgroundColor: 'rgba(16, 185, 129, 0.06)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#34d399', marginBottom: '6px' }}>🎯 買賣操作指引（如何決定買賣？）</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12.5px' }}>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
                 <span style={{ color: '#10b981', fontWeight: 700, flexShrink: 0 }}>🟢 偏多買訊:</span>
-                <span style={{ color: '#d1fae5' }}>{resolvedEntry.buySignal}</span>
+                <span style={{ color: '#d1fae5', lineHeight: '1.5' }}>{resolvedEntry.buySignal}</span>
               </div>
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
                 <span style={{ color: '#ef4444', fontWeight: 700, flexShrink: 0 }}>🔴 偏空賣訊:</span>
-                <span style={{ color: '#fee2e2' }}>{resolvedEntry.sellSignal}</span>
+                <span style={{ color: '#fee2e2', lineHeight: '1.5' }}>{resolvedEntry.sellSignal}</span>
               </div>
               {resolvedEntry.neutralWarning && (
-                <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
                   <span style={{ color: '#f59e0b', fontWeight: 700, flexShrink: 0 }}>🟡 觀望警戒:</span>
-                  <span style={{ color: '#fef3c7' }}>{resolvedEntry.neutralWarning}</span>
+                  <span style={{ color: '#fef3c7', lineHeight: '1.5' }}>{resolvedEntry.neutralWarning}</span>
                 </div>
               )}
             </div>
           </div>
 
-          {/* 4. 當前個股即時診斷 (若有傳入) */}
+          {/* 4. 當前個股即時診斷 (若有傳入，Spec 0174: 13px，金黃高亮卡 0 截斷) */}
           {dynamicDiagnosis && (
-            <div style={{ padding: '6px 8px', backgroundColor: 'rgba(234, 179, 8, 0.08)', borderRadius: '6px', border: '1px solid rgba(234, 179, 8, 0.35)' }}>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: '#fde047', marginBottom: '2px' }}>⚡ 當前個股即時診斷</div>
-              <div style={{ color: '#fef08a', fontSize: '11px', fontWeight: 500 }}>{dynamicDiagnosis}</div>
+            <div style={{ padding: '10px 12px', backgroundColor: 'rgba(234, 179, 8, 0.08)', borderRadius: '8px', border: '1px solid rgba(234, 179, 8, 0.4)' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#fde047', marginBottom: '4px' }}>⚡ 當前個股即時診斷</div>
+              <div style={{ color: '#fef08a', fontSize: '13px', fontWeight: 500, lineHeight: '1.6' }}>{dynamicDiagnosis}</div>
             </div>
           )}
         </div>,
@@ -309,3 +318,4 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
     </span>
   );
 };
+

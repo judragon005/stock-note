@@ -115,7 +115,7 @@ export const ForceDistributionCard: React.FC<ForceDistributionCardProps> = ({ da
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        padding: '14px',
+        padding: '10px 12px',
         background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
         borderRadius: '14px',
         border: '1px solid rgba(59, 130, 246, 0.25)',

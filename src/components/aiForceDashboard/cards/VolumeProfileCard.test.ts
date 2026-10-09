@@ -90,5 +90,29 @@ describe('VolumeProfileCard - 籌碼熱區圖元件樣式與計算規範 (Ticket
       expect(pointer.displayPrice).toBe('375');
     });
   });
+
+  describe('Spec 0174 Ticket 04: AI 籌碼熱區圖時間軸由遠及近翻轉與 1:1 像素對位', () => {
+    it('DEFAULT_HEATMAP_COLUMNS 應由遠到近排列 (近60日 -> 近20日 -> 近10日 -> 近5日)', async () => {
+      const { DEFAULT_HEATMAP_COLUMNS } = await import('./VolumeProfileCard');
+      expect(DEFAULT_HEATMAP_COLUMNS[0].label).toBe('近60日');
+      expect(DEFAULT_HEATMAP_COLUMNS[1].label).toBe('近20日');
+      expect(DEFAULT_HEATMAP_COLUMNS[2].label).toBe('近10日');
+      expect(DEFAULT_HEATMAP_COLUMNS[3].label).toBe('近5日');
+    });
+
+    it('normalizeHeatmapColumns 應保證輸出永遠是由遠及近順序', async () => {
+      const { normalizeHeatmapColumns } = await import('./VolumeProfileCard');
+      const oldOrder = [
+        { id: 'c1', label: '近5日', cells: [] },
+        { id: 'c2', label: '近10日', cells: [] },
+        { id: 'c3', label: '近20日', cells: [] },
+        { id: 'c4', label: '近60日', cells: [] },
+      ];
+      const normalized = normalizeHeatmapColumns(oldOrder);
+      expect(normalized[0].label).toBe('近60日');
+      expect(normalized[3].label).toBe('近5日');
+    });
+  });
 });
+
 

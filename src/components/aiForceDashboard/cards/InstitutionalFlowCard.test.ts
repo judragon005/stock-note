@@ -141,5 +141,32 @@ describe('InstitutionalFlowCard - 三大法人雙軸圖表與明細表規範 (Ti
       expect(formatShortDate('')).toBe('');
     });
   });
+
+  describe('Spec 0174 Ticket 01: Card 08 上下佈局與近 5 日明細表格規範', () => {
+    it('getRecentDaysSlice 應預設切片近 5 日資料，資料少於 5 日時安全返回全部', async () => {
+      const { getRecentDaysSlice } = await import('./InstitutionalFlowCard');
+      const testList = [
+        { date: '09/28' },
+        { date: '09/29' },
+        { date: '09/30' },
+        { date: '10/01' },
+        { date: '10/02' },
+        { date: '10/05' },
+        { date: '10/06' },
+      ];
+
+      const sliced5 = getRecentDaysSlice(testList, 5);
+      expect(sliced5.length).toBe(5);
+      expect(sliced5[0].date).toBe('09/30');
+      expect(sliced5[4].date).toBe('10/06');
+
+      const slicedShort = getRecentDaysSlice(testList.slice(0, 2), 5);
+      expect(slicedShort.length).toBe(2);
+
+      const empty = getRecentDaysSlice([], 5);
+      expect(empty).toEqual([]);
+    });
+  });
 });
+
 
