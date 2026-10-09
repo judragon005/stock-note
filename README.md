@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1536%2F1536%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1538%2F1538%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,18 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 主力戰情室視覺大師級版面重構、TermTooltip 500px 旗艦升級與籌碼熱區 1:1 對位 (`AI Force War Room Visual Master Layout & TermTooltip 500px Flagship`) *(V8.86.0 最新發布 / Spec #0174 / ADR #0174 / Issues #203, #205)*
+### 0. 外部金融 API 控制台探針修復、CSP/CORS 網路防禦與 NAS 通用反向代理 (`API Key Health Probe CSP/CORS Repair & NAS Reverse Proxy Mesh`) *(V8.87.0 最新發布 / Spec #0175 / ADR #0175 / Issue #209 / PR #212)*
+
+- **W3C CSP 內容安全策略白名單全量對齊 (`cspSecurity.ts` / `index.html`)**：
+  - 在 `connect-src` 白名單中全面補齊 `finnhub.io`、`api.stlouisfed.org`、`api.polygon.io`、`api.coingecko.com`、`data.sec.gov`，徹底根治瀏覽器沙盒掐斷合法金融端點引發的 `Failed to fetch` 錯誤。
+- **FMP 探針相容端點升級 (`apiKeyHealthProbe.ts`)**：
+  - 探針測試端點遷移至新版免費層相容的 `/stable/quote?symbol=AAPL`，避開舊版 `/api/v3/profile` 端點之 Special Endpoint 403 方案限制，並優化錯誤提示。
+- **探針代理感知與 NAS 通用安全反向代理 (`prod-server.cjs`)**：
+  - 探針支援讀取使用者自訂代理；在 QNAP NAS 生產伺服器增設 `/api/proxy?url=...` 通用安全反向代理（自帶 SSRF 白名單防禦與自動注入 CORS 標頭），徹底瓦解聯準會 FRED 官方無 CORS 標頭之跨域障礙。
+- **架構演進防禦隔離 (`Debt 0046`)**：
+  - 將私有雲跨裝置金鑰共享、後端 SQLite 金鑰保險箱與 SEC 合規 User-Agent 伺服器代發收錄至技術債追蹤，確保架構演進方向清晰。
+
+### 1. 主力戰情室視覺大師級版面重構、TermTooltip 500px 旗艦升級與籌碼熱區 1:1 對位 (`AI Force War Room Visual Master Layout & TermTooltip 500px Flagship`) *(V8.86.0 / Spec #0174 / ADR #0174 / Issues #203, #205)*
 
 - **卡片 08 法人行為計量上下結構重構 (`InstitutionalFlowCard.tsx`)**：
   - 徹底告別左右壓縮擁擠，改採上下結構：上方雙軸 SVG 圖表 100% 滿版橫向舒展；下方升級為近 5 日全寬明細清單，日期精簡為 `MM/DD`，字體加大至 `0.80rem`，數值絕不折行。

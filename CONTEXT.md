@@ -2397,5 +2397,15 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     3. **戰情室 Layer 6 & Layer 7 Bento-Grid 佈局重整與疊字缺陷根治**：卡片 11 (健康度綜合評估) 移至 Layer 7 中間欄，與買賣力 (16)、多空強度 (17) 構成 3 卡垂直矩陣，寬度由 240px 擴展至 340~420px，內距精修為 `10px 12px`，徹底根除圓環下方文字互相重疊遮蔽缺陷；Layer 6 收斂為 4 卡等寬（10, 12, 13, 14）。
     4. **AI 籌碼熱區圖時間軸翻轉與 1:1 像素置中垂直對位**：熱區天期由遠及近排序（`近60日 ➔ 近20日 ➔ 近10日 ➔ 近5日`）嚴格對齊日 K 線時間流向；底層時間標籤改用 `auto 1fr auto` Grid 佈局，中間以 4 個 `flex: 1` 居中對位，達成熱力方塊與文字標籤 1:1 垂直像素精確對位。
 
+- **API Key Health Probe CSP/CORS Repair & NAS Reverse Proxy Mesh (外部金融 API 控制台探針修復、CSP/CORS 網路防禦與 NAS 通用反向代理)**:
+  - 核心模組：`src/engine/cspSecurity.ts`、`src/engine/apiKeyHealthProbe.ts`、`src/components/UnifiedApiKeyManager.tsx`、`docs/deployment/server/prod-server.cjs`。
+  - 規範依據：Spec 0175 (v8.87.0) 與 ADR 0175。
+  - 核心特性：
+    1. **W3C CSP 內容安全策略白名單全量對齊**：在 `connect-src` 白名單中完整補齊 Finnhub、FRED、Polygon、CoinGecko、SEC 等外部金融資料來源，根除瀏覽器沙盒掐斷連線所引發之 `Failed to fetch` 錯誤。
+    2. **FMP 探針相容端點升級**：將探針測試端點遷至新版免費方案相容的 `/stable/quote?symbol=AAPL`，避開舊版 `/api/v3/profile` 鎖付費之 403 Forbidden 限制，並優化權限錯誤提示。
+    3. **探針代理感知與 NAS 通用反向代理**：`probeApiKey` 支援傳入 `proxyUrl` 選項；在 NAS `prod-server.cjs` 建立通用 `/api/proxy` 反向代理（內建 SSRF 白名單防禦與自動注入 CORS 標頭），一舉解決聯準會 FRED 等官方無 CORS 標頭服務的跨域難題。
+    4. **架構演進防禦隔離 (Debt 0046)**：將跨裝置 LocalStorage 儲存隔離、後端 SQLite 金鑰保險箱與 SEC 合規 User-Agent 伺服器代發完整收錄至技術債追蹤。
+
+
 
 
