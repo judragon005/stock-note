@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1518%2F1518%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1530%2F1530%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,21 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 主力戰情室 7 層 Bento-Grid 全景佈局重構、量化引擎修復與專業任務視圖升級 (`AI Force War Room 7-Layer Bento-Grid & Quant Engine Refactor`) *(V8.84.0 全新發布 / Spec #0172 / ADR #0172 / Issue #195)*
+### 0. 全市場個股 7 步深度投研高容錯雙軌剪貼簿與法人風控閉環 (`Equity Deep-Dive Hardened Dual-Pipeline Clipboard & Institutional Workflow`) *(V8.85.0 全新發布 / Spec #0173 / ADR #0173 / Issues #197, #199)*
+
+- **NAS / 局域網非安全上下文雙軌高容錯剪貼簿 (`src/utils/clipboard.ts`)**：
+  - 第一軌優先使用現代原生 `navigator.clipboard.writeText`；非安全上下文（如 NAS HTTP 私有網段 `http://192.168.x.x`）自動降級至隱藏 `textarea` + `document.execCommand('copy')`。
+  - 全流程以 `try ... finally` 封裝，保證暫存節點 100% 銷毀（支援 `remove()`、`parentNode` 與 `removeChild` 防禦），杜絕按鈕靜默失效與 DOM 洩漏。
+- **全鏈路端到端數據管線無縫注入 (`App.tsx` & `AiForceDashboardView.tsx`)**：
+  - 父層完整注入最新行情 (`quote`)、K 線歷史 (`candles`)、在庫持倉 (`holdings`) 與戰情室情境 (`reportContext`)，徹底消除現價為 0、目標/停損價被重置為空與在庫判定失效之斷鏈缺陷。
+- **券商與買方法人級風控模型升級 (`EquityDeepDiveModal.tsx` & `equityDeepDiveEngine.ts`)**：
+  - 實體擴充證偽開關（核心論點失效條件 `thesisInvalidation`）。
+  - 前端即時試算並動態渲染機構級 **R-Multiple 風報比徽章**（$\ge 3.0R$ 綠色優質、$< 2.0R$ 橘紅色警示）。
+  - 投研 Prompt 模板全面注入外資借券賣出 (SBL)、融資融券資券比與處置股票流動性折價評估。
+- **外部研報智慧解析回填器 (`memoSmartParser.ts`)**：
+  - 支援以正規表達式智慧萃取外部 LLM（ChatGPT / Claude / Gemini）生成之長文研報，一鍵回填表單欄位，並支援自動帶入系統量化支撐/箱體防線草稿。
+
+### 1. 主力戰情室 7 層 Bento-Grid 全景佈局重構、量化引擎修復與專業任務視圖升級 (`AI Force War Room 7-Layer Bento-Grid & Quant Engine Refactor`) *(V8.84.0 全新發布 / Spec #0172 / ADR #0172 / Issue #195)*
 
 - **交易心理學 7 層 Bento-Grid 全景資訊動線重構 (`AiForceDashboardView.tsx`)**：
   - 徹底告別舊版硬塞擠壓與視覺過載，依據「宏觀到微觀、防禦到進攻」打造 7 層專業戰情動線：
