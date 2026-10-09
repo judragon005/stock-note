@@ -69,6 +69,11 @@ export interface InvestmentMemoRecord {
   syncedToHoldings?: boolean;
   createdAt: number;
   updatedAt: number;
+
+  // 新增券商與買方法人欄位 (Spec 0173 / Ticket 04)
+  thesisInvalidation?: string; // 核心論點失效條件 (證偽開關 Kill-Switch)
+  targetPositionWeight?: number; // 目標配置權重 (%)
+  calculatedRiskRewardRatio?: number; // 預估 R-Multiple (報酬風險比)
 }
 
 export interface EquityDeepDiveInput {
