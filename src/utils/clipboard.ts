@@ -42,17 +42,31 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
       textArea.style.opacity = '0';
       textArea.setAttribute('readonly', '');
 
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
+      let successful = false;
+      try {
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
 
-      // 相容 iOS Safari 選取範圍
-      if (textArea.setSelectionRange) {
-        textArea.setSelectionRange(0, text.length);
+        // 相容 iOS Safari 選取範圍
+        if (textArea.setSelectionRange) {
+          textArea.setSelectionRange(0, text.length);
+        }
+
+        successful = document.execCommand('copy');
+      } finally {
+        if (typeof textArea.remove === 'function') {
+          textArea.remove();
+        } else if (textArea.parentNode) {
+          textArea.parentNode.removeChild(textArea);
+        } else if (document.body && typeof document.body.removeChild === 'function') {
+          try {
+            document.body.removeChild(textArea);
+          } catch {
+            // 忽略非掛載節點例外
+          }
+        }
       }
-
-      const successful = document.execCommand('copy');
-      document.body.removeChild(textArea);
 
       if (successful) {
         return true;

@@ -144,4 +144,47 @@ describe('clipboard - copyTextToClipboard 跨環境高容錯剪貼簿工具 (Spe
     const result = await copyTextToClipboard('失敗案例測試');
     expect(result).toBe(false);
   });
+
+  it('當 execCommand 執行過程中拋出例外時，finally 區塊應保證臨時 DOM 節點 100% 被銷毀且回傳 false', async () => {
+    Object.defineProperty(globalThis, 'navigator', {
+      value: {},
+      writable: true,
+      configurable: true,
+    });
+
+    const mockTextArea = {
+      value: '',
+      style: {},
+      setAttribute: vi.fn(),
+      focus: vi.fn(),
+      select: vi.fn(),
+      setSelectionRange: vi.fn(),
+      remove: vi.fn(),
+    };
+
+    const appendChildMock = vi.fn();
+    const removeChildMock = vi.fn();
+
+    Object.defineProperty(globalThis, 'document', {
+      value: {
+        createElement: vi.fn().mockReturnValue(mockTextArea),
+        body: {
+          appendChild: appendChildMock,
+          removeChild: removeChildMock,
+        },
+        execCommand: vi.fn().mockImplementation(() => {
+          throw new Error('Security Error in execCommand');
+        }),
+      },
+      writable: true,
+      configurable: true,
+    });
+
+    const result = await copyTextToClipboard('異常降級測試');
+
+    expect(result).toBe(false);
+    expect(appendChildMock).toHaveBeenCalledWith(mockTextArea);
+    expect(mockTextArea.remove).toHaveBeenCalled();
+  });
 });
+
