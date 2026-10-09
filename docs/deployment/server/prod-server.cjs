@@ -10,10 +10,29 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-const { createMarketApiMiddleware } = require('../../scripts/market-sync/vite-market-middleware.cjs');
+/**
+ * 自動探測專案根目錄 (相容容器內部 /app 與本地原始碼 docs/deployment/server 目錄層級)
+ */
+function findProjectRoot(startDir = __dirname) {
+  let curr = startDir;
+  for (let i = 0; i < 5; i++) {
+    const candidateMiddleware = path.join(curr, 'scripts', 'market-sync', 'vite-market-middleware.cjs');
+    if (fs.existsSync(candidateMiddleware)) {
+      return curr;
+    }
+    const parent = path.dirname(curr);
+    if (parent === curr) break;
+    curr = parent;
+  }
+  return startDir;
+}
+
+const PROJECT_ROOT = findProjectRoot();
+const middlewarePath = path.join(PROJECT_ROOT, 'scripts', 'market-sync', 'vite-market-middleware.cjs');
+const { createMarketApiMiddleware } = require(middlewarePath);
 
 const PORT = process.env.PORT || 3000;
-const DIST_DIR = path.resolve(__dirname, '../../dist');
+const DIST_DIR = path.join(PROJECT_ROOT, 'dist');
 const marketApi = createMarketApiMiddleware();
 
 // 常用 MIME 類型對應
