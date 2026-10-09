@@ -153,7 +153,12 @@ export function formatShortDate(dateStr: string): string {
 }
 
 /**
- * 取得近 N 日明細資料切片 (Spec 0174: 升級為近 5 日)
+ * 取得近 N 日明細資料切片 (Spec 0174: 升級為近 5 日全寬明細清單)
+ *
+ * @template T 泛型陣列元素型別
+ * @param {T[]} history 原始依時間排序之歷史明細陣列
+ * @param {number} [count=5] 取出最近的日數，預設為 5 日
+ * @returns {T[]} 截取出的最近 N 筆資料切片；若傳入空陣列或無效資料則回傳空陣列
  */
 export function getRecentDaysSlice<T>(history: T[], count = 5): T[] {
   if (!history || history.length === 0) return [];

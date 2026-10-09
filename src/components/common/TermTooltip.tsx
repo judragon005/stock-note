@@ -48,6 +48,7 @@ export interface TermTooltipProps {
 export const TOOLTIP_POPUP_CONFIG = {
   maxHeight: '580px',
   overflowY: 'auto' as const,
+  overscrollBehavior: 'contain' as const,
   width: '500px',
 };
 
@@ -172,6 +173,7 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
       maxWidth: 'calc(100vw - 24px)',
       maxHeight: TOOLTIP_POPUP_CONFIG.maxHeight,
       overflowY: TOOLTIP_POPUP_CONFIG.overflowY,
+      overscrollBehavior: TOOLTIP_POPUP_CONFIG.overscrollBehavior,
       scrollbarWidth: 'thin',
       scrollbarColor: 'rgba(59, 130, 246, 0.4) rgba(15, 23, 42, 0.6)',
       backgroundColor: 'rgba(15, 23, 42, 0.98)',
