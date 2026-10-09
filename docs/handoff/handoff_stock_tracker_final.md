@@ -1,17 +1,19 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-10-09 14:15 (UTC+8)  
+> **交接產生時間**：2026-10-09 16:35 (UTC+8)  
 > **當前最新里程碑**：
-> - **V8.85.0 全市場個股深度投研高容錯雙軌剪貼簿、全鏈路數據管線與券商法人風控閉環**（ADR 0173, Spec 0173, Issues #197 / #199, PRs #198 / #200）：
->   - **雙軌降級高容錯剪貼簿工具 (`src/utils/clipboard.ts`)**：第一軌優先使用原生非同步 `navigator.clipboard`；非安全上下文（如 NAS HTTP 局域網 `http://192.168.x.x`）自動降級至隱藏 `textarea` + `document.execCommand('copy')`。生命週期以 `try ... finally` 強制執行 `remove()` 節點銷毀，杜絕 DOM 洩漏與按鈕靜默失效。
->   - **父層呼叫端數據管線端到端串接**：在 `App.tsx` 與 `AiForceDashboardView.tsx` 注入即時 `quote`、歷史 `candles`、當前在庫 `holdings` 與 `reportContext`，徹底消除現價為 0、停損目標價被重置與持倉無法同步問題。
->   - **券商買方法人級風控升級**：擴充 `InvestmentMemoRecord`，新增證偽開關（`thesisInvalidation`）與即時 R-Multiple 風報比徽章（$\ge 3.0R$ 綠色優質、$< 2.0R$ 警示），Prompt 模板全面納入外資借券賣出 SBL、券資比與處置折價評估。
->   - **外部研報智慧解析回填器 (`memoSmartParser.ts`)**：以正則表達式快速解析外部 LLM 生成之長篇投研報告，一鍵自動萃取回填至備忘錄表單各欄位，建立「導出 Prompt ➔ 外部推理 ➔ 智慧回填 ➔ 歸檔建倉」操盤閉環。
-> - **V8.84.0 主力戰情室全景佈局重構、量化引擎修復與專業任務視圖升級**（ADR 0172, Spec 0172, Issue #195, PR #196）：
->   - **成交筆數與歷史序列數據湖倉修復**：TWSE MI_INDEX 與 TPEx 1430 全量補齊成交筆數入庫；擴充 TDCC 10 週持股比例序列與近 12 個月營收 YoY 歷史序列回補機制。
->   - **7 層 Bento-Grid 資料處理工作流**：Layer 2 升格卡片 03 體質六角大雷達與卡片 05 風控五角大蛛網，半徑放大至 120~125px，杜絕字體折行；頂部導航列舒展清爽；熱區圖縱軸動態 60 日真實價格聚焦。
->   - **任務視圖深度升級**：處置股票出關倒數、日週月 KD 多級別共振判定與 MACD 自動頂底背離量化偵測器。
-> **品質狀態**：全量單元測試 **1,530/1,530 通過 (100% Passed / 210 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> - **V8.87.0 外部金融 API 控制台探針修復、CSP/CORS 網路防禦與 NAS 通用反向代理**（ADR 0175, Spec 0175, Issue #209, PRs #212, #213, #215）：
+>   - **W3C CSP 內容安全策略白名單全量對齊 (`cspSecurity.ts` / `index.html`)**：在 `connect-src` 白名單中全面補齊 `finnhub.io`、`api.stlouisfed.org`、`api.polygon.io`、`api.coingecko.com`、`data.sec.gov`，徹底根除瀏覽器沙盒掐斷合法金融端點引發的 `Failed to fetch` 錯誤。
+>   - **FMP 探針相容端點升級 (`apiKeyHealthProbe.ts`)**：探針測試端點遷移至新版免費層相容的 `/stable/quote?symbol=AAPL`，避開舊版 `/api/v3/profile` 端點之 Special Endpoint 403 方案限制，並優化錯誤提示。
+>   - **探針代理感知與 NAS 通用安全反向代理 (`prod-server.cjs`)**：探針支援讀取使用者自訂代理；在 QNAP NAS 生產伺服器增設 `/api/proxy?url=...` 通用安全反向代理（自帶 SSRF 白名單防禦與自動注入 CORS 標頭），徹底瓦解聯準會 FRED 官方無 CORS 標頭之跨域障礙。
+>   - **架構演進防禦隔離 (`Debt 0046`)**：將私有雲跨裝置金鑰共享、後端 SQLite 金鑰保險箱與 SEC 合規 User-Agent 伺服器代發收錄至技術債追蹤，確保架構演進方向清晰。
+> - **V8.86.0 主力戰情室視覺大師級版面重構、TermTooltip 500px 旗艦升級與籌碼熱區 1:1 對位**（ADR 0174, Spec 0174, Issues #203, #205, PRs #204, #206）：
+>   - **卡片 08 法人行為計量上下結構重構 (`InstitutionalFlowCard.tsx`)**：雙軸走勢 SVG 圖表 100% 寬幅橫向延展；明細表格升級為近 5 日全寬清單，日期精簡為 `MM/DD`，字體加大至 `0.80rem`。
+>   - **名詞說明彈窗 500px 旗艦升級與智慧防出界定位 (`TermTooltip.tsx`)**：寬度擴展至 500px、最大高度 580px；重構邊界算法防止截斷，支援 80ms 防抖與 `overscrollBehavior: 'contain'`。
+>   - **戰情室 7 層 Bento-Grid 佈局重整與疊字缺陷根除 (`AiForceDashboardView.tsx`)**：卡片 11 移至 Layer 7 垂直矩陣，擴展至 340~420px，徹底根除文字疊字缺陷。
+>   - **卡片 04 AI 籌碼熱區圖時間軸翻轉與 1:1 像素級置中對位 (`VolumeProfileCard.tsx`)**：熱區天期由遠及近排序（近60日 ➔ 近5日）對齊日 K，時間標籤達成 1:1 垂直像素精確對位。
+> - **V8.85.0 全市場個股深度投研高容錯雙軌剪貼簿、全鏈路數據管線與券商法人風控閉環**（ADR 0173, Spec 0173, Issues #197 / #199, PRs #198 / #200）
+> **品質狀態**：全量單元測試 **1,538/1,538 通過 (100% Passed / 210 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -20,10 +22,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main`
-- **單元測試套件**：**1,530/1,530 通過 (210 test suites / 100% 綠燈)**
+- **單元測試套件**：**1,538/1,538 通過 (210 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
-- **生產環境構建**：`npm run build` 打包順利通過，0 錯誤 (打包時間 6.88s)
-- **當前釋出版本**：**V8.85.0**
+- **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
+- **當前釋出版本**：**V8.87.0**
 - **工作區與分支整潔度**：工作區 100% clean，本地 feature/fix 分支已全數刪除，專案臨時備份檔案已全量清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -51,6 +53,8 @@
 ## 🏗️ 3. 規格、架構決策與版本鏡像對照 (Specs, ADRs & Local Tickets)
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
+| [`Spec 0175`](file:///d:/APP/股票紀錄/docs/specs/0175-api-key-probe-csp-cors-and-endpoint-repair-spec.md) | [`ADR 0175`](file:///d:/APP/股票紀錄/docs/adr/0175-api-key-probe-csp-cors-and-endpoint-repair.md) | [`.scratch/v8.87/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.87/issues/) | Issue #209 / PR #212, #213, #215 | V8.87.0 | 外部金融 API 控制台探針修復、CSP/CORS 網路防禦與 NAS 通用反向代理 |
+| [`Spec 0174`](file:///d:/APP/股票紀錄/docs/specs/0174-ai-force-dashboard-visual-master-layout-and-tooltip-spec.md) | [`ADR 0174`](file:///d:/APP/股票紀錄/docs/adr/0174-ai-force-dashboard-visual-master-layout-and-tooltip.md) | [`.scratch/v8.86/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.86/issues/) | Issue #203, #205 / PR #204, #206 | V8.86.0 | 主力戰情室視覺大師級版面重構、TermTooltip 500px 旗艦升級與籌碼熱區 1:1 對位 |
 | [`Spec 0173`](file:///d:/APP/股票紀錄/docs/specs/0173-equity-deep-dive-hardened-clipboard-and-institutional-workflow-spec.md) | [`ADR 0173`](file:///d:/APP/股票紀錄/docs/adr/0173-equity-deep-dive-hardened-clipboard-and-institutional-workflow.md) | [`.scratch/v8.85/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.85/issues/) | Issue #197, #199 / PR #198, #200 | V8.85.0 | 全市場個股深度投研高容錯雙軌剪貼簿、全鏈路數據管線與券商法人風控閉環 |
 | [`Spec 0172`](file:///d:/APP/股票紀錄/docs/specs/0172-ai-force-war-room-comprehensive-layout-and-quant-engine-refactor-spec.md) | [`ADR 0172`](file:///d:/APP/股票紀錄/docs/adr/0172-ai-force-war-room-comprehensive-layout-and-quant-engine-refactor.md) | [`.scratch/v8.84/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.84/issues/) | Issue #195 / PR #196 | V8.84.0 | 主力戰情室全景佈局重構、量化引擎修復與專業任務視圖升級 |
 | [`Spec 0171`](file:///d:/APP/股票紀錄/docs/specs/0171-sync-checkpoints-index-and-api-key-manager-decomposition-spec.md) | [`ADR 0171`](file:///d:/APP/股票紀錄/docs/adr/0171-sync-checkpoints-index-and-api-key-manager-decomposition.md) | [`.scratch/v8.83/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.83/issues/) | Issue #193 / PR #194 | V8.83.0 | SQLite 斷點檢查點複合狀態索引優化與金鑰管理員視圖模組化解耦 (0 OPEN Debts) |
