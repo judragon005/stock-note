@@ -1,18 +1,17 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-10-08 16:00 (UTC+8)  
+> **交接產生時間**：2026-10-09 14:15 (UTC+8)  
 > **當前最新里程碑**：
-> - **V8.83.0 技術債批次清理與架構收斂（0 OPEN Debts 里程碑達成）**（ADR 0171, Spec 0171, Issue #193）：
->   - **SQLite 斷點檢查點複合狀態索引優化 (Debt 0041 RESOLVED)**：於 `sync_checkpoints` 追加 `idx_sync_checkpoints_lookup(market, status, last_success_date)` 複合索引，使美股與台股萬檔規模斷點續傳狀態過濾完全利用覆蓋索引掃描，保持常數時間 ($O(1)$) 效能。
->   - **金鑰管理員視圖模組化解耦 (Debt 0045 RESOLVED)**：依單一職責原則 (SRP) 將超過 1,000 行之巨石視圖拆解為 `GlobalProxyConfigCard.tsx` 與 `ApiKeyProviderCard.tsx` 兩個獨立呈現元件，主元件行數縮減至 390 行，公開 Props 與匯出物件 100% 向後相容。
->   - **全專案未結技術債歸零**：技術債看板 (`docs/debts/README.md`) 45 項技術債全部標記為 `RESOLVED`，達成 0 OPEN Debts 乾淨架構里程碑。
-> - **V8.83.0 徹底移除本地 CSV 依賴、全自主聯網回補管線與櫃買代碼撕裂治理**（ADR 0170, Spec 0170, Issue #191）：
->   - **Algorithmic Trading Calendar Engine (純演算法法定交易日曆引擎)**：徹底移除對本地硬編碼 CSV 目錄（`HISTORICAL_BASE_DIR`）的掃描依賴，實作純演算法台灣法定休假日與彈性補假規則，零檔案 I/O，耗時 < 1ms，在任何乾淨無本機 CSV 環境均能 100% 自主運作。
->   - **日常盤後同步日 K 物件結構修復與入庫防呆**：修復 `parseTwseDailyQuotesBulk` 與 `parseTpexDailyQuotesBulk` 物件結構漏賦 `symbol` 鍵之缺陷；SQLite 入庫改為遍歷 `Object.entries(quotesMap)`，若物件漏代碼則由 Key 自動補齊並過濾 `O` 尾綴，日 K 入庫率由 0% 提昇至 100%。
->   - **櫃買上櫃股票與債券 ETF 去 O 事務性安全遷移**：徹底消除技術債 0043 遺留之 `GLOB '[0-9]*O'` 代碼斷層，單一 Transaction 內安全遷移 1,000 檔標的、257,087 筆歷史日 K 至乾淨代碼（取極值與最新值），徹底刪除帶 `O` 的孤兒紀錄。
->   - **上市權值股 (2330 / 0050) 法人籌碼連續性補齊**：自主聯網同步 10/05~10/07 TWSE T86 三大法人買賣超與信用交易，連續無缺漏。
->   - **主力戰情室盤中即時 K 棒動態縫合與置頂**：嚴格相容 Spec 0150 主定錨隔離：未結算時態下 `marketBar.currentPrice` 定錨前一結算日；同時若傳入 `liveQuote`，動態構造當日 `isIntraday: true` K 棒縫合至 `klineSystem.candles` 最末端。任務五原始資料表首行置頂展示「⚡ 即時」徽章。
-> **品質狀態**：全量單元測試 **1,502/1,502 通過 (100% Passed / 205 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> - **V8.85.0 全市場個股深度投研高容錯雙軌剪貼簿、全鏈路數據管線與券商法人風控閉環**（ADR 0173, Spec 0173, Issues #197 / #199, PRs #198 / #200）：
+>   - **雙軌降級高容錯剪貼簿工具 (`src/utils/clipboard.ts`)**：第一軌優先使用原生非同步 `navigator.clipboard`；非安全上下文（如 NAS HTTP 局域網 `http://192.168.x.x`）自動降級至隱藏 `textarea` + `document.execCommand('copy')`。生命週期以 `try ... finally` 強制執行 `remove()` 節點銷毀，杜絕 DOM 洩漏與按鈕靜默失效。
+>   - **父層呼叫端數據管線端到端串接**：在 `App.tsx` 與 `AiForceDashboardView.tsx` 注入即時 `quote`、歷史 `candles`、當前在庫 `holdings` 與 `reportContext`，徹底消除現價為 0、停損目標價被重置與持倉無法同步問題。
+>   - **券商買方法人級風控升級**：擴充 `InvestmentMemoRecord`，新增證偽開關（`thesisInvalidation`）與即時 R-Multiple 風報比徽章（$\ge 3.0R$ 綠色優質、$< 2.0R$ 警示），Prompt 模板全面納入外資借券賣出 SBL、券資比與處置折價評估。
+>   - **外部研報智慧解析回填器 (`memoSmartParser.ts`)**：以正則表達式快速解析外部 LLM 生成之長篇投研報告，一鍵自動萃取回填至備忘錄表單各欄位，建立「導出 Prompt ➔ 外部推理 ➔ 智慧回填 ➔ 歸檔建倉」操盤閉環。
+> - **V8.84.0 主力戰情室全景佈局重構、量化引擎修復與專業任務視圖升級**（ADR 0172, Spec 0172, Issue #195, PR #196）：
+>   - **成交筆數與歷史序列數據湖倉修復**：TWSE MI_INDEX 與 TPEx 1430 全量補齊成交筆數入庫；擴充 TDCC 10 週持股比例序列與近 12 個月營收 YoY 歷史序列回補機制。
+>   - **7 層 Bento-Grid 資料處理工作流**：Layer 2 升格卡片 03 體質六角大雷達與卡片 05 風控五角大蛛網，半徑放大至 120~125px，杜絕字體折行；頂部導航列舒展清爽；熱區圖縱軸動態 60 日真實價格聚焦。
+>   - **任務視圖深度升級**：處置股票出關倒數、日週月 KD 多級別共振判定與 MACD 自動頂底背離量化偵測器。
+> **品質狀態**：全量單元測試 **1,530/1,530 通過 (100% Passed / 210 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -20,11 +19,11 @@
 
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
-- **當前工作分支**：`feature/193-tech-debt-batch-cleanup`
-- **單元測試套件**：**1,502/1,502 通過 (205 test suites / 100% 綠燈)**
+- **當前工作分支**：`main`
+- **單元測試套件**：**1,530/1,530 通過 (210 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
-- **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V8.83.0**
+- **生產環境構建**：`npm run build` 打包順利通過，0 錯誤 (打包時間 6.88s)
+- **當前釋出版本**：**V8.85.0**
 - **工作區與分支整潔度**：工作區 100% clean，本地 feature/fix 分支已全數刪除，專案臨時備份檔案已全量清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -52,6 +51,9 @@
 ## 🏗️ 3. 規格、架構決策與版本鏡像對照 (Specs, ADRs & Local Tickets)
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
+| [`Spec 0173`](file:///d:/APP/股票紀錄/docs/specs/0173-equity-deep-dive-hardened-clipboard-and-institutional-workflow-spec.md) | [`ADR 0173`](file:///d:/APP/股票紀錄/docs/adr/0173-equity-deep-dive-hardened-clipboard-and-institutional-workflow.md) | [`.scratch/v8.85/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.85/issues/) | Issue #197, #199 / PR #198, #200 | V8.85.0 | 全市場個股深度投研高容錯雙軌剪貼簿、全鏈路數據管線與券商法人風控閉環 |
+| [`Spec 0172`](file:///d:/APP/股票紀錄/docs/specs/0172-ai-force-war-room-comprehensive-layout-and-quant-engine-refactor-spec.md) | [`ADR 0172`](file:///d:/APP/股票紀錄/docs/adr/0172-ai-force-war-room-comprehensive-layout-and-quant-engine-refactor.md) | [`.scratch/v8.84/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.84/issues/) | Issue #195 / PR #196 | V8.84.0 | 主力戰情室全景佈局重構、量化引擎修復與專業任務視圖升級 |
+| [`Spec 0171`](file:///d:/APP/股票紀錄/docs/specs/0171-sync-checkpoints-index-and-api-key-manager-decomposition-spec.md) | [`ADR 0171`](file:///d:/APP/股票紀錄/docs/adr/0171-sync-checkpoints-index-and-api-key-manager-decomposition.md) | [`.scratch/v8.83/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.83/issues/) | Issue #193 / PR #194 | V8.83.0 | SQLite 斷點檢查點複合狀態索引優化與金鑰管理員視圖模組化解耦 (0 OPEN Debts) |
 | [`Spec 0169`](file:///d:/APP/股票紀錄/docs/specs/0169-ai-force-war-room-institutional-tdcc-revenue-and-us-microstructure-spec.md) | [`ADR 0169`](file:///d:/APP/股票紀錄/docs/adr/0169-ai-force-war-room-institutional-tdcc-revenue-and-us-microstructure.md) | [`.scratch/v8.82/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.82/issues/) | Issue #188 / PR #189 | V8.82.0 | AI 主力戰情室法人籌碼與 TDCC 大戶端到端貫通、月營收與 ETF 自適應、美股微觀結構獨立化與搜尋體驗全面補強 |
 | [`Spec 0168`](file:///d:/APP/股票紀錄/docs/specs/0168-zero-csv-dual-market-backfill-and-unified-api-key-console-spec.md) | [`ADR 0168`](file:///d:/APP/股票紀錄/docs/adr/0168-zero-csv-dual-market-backfill-and-unified-api-key-console.md) | [`.scratch/v8.81/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.81/issues/) | Issue #182 / PR #183 | V8.81.0 | 台美雙軌零 CSV 歷史全回補、真實成交筆數入庫、櫃買代碼標準化與統一金融金鑰控制中心 |
 | [`Spec 0161`](file:///d:/APP/股票紀錄/docs/specs/0161-market-freshness-service-decoupling-spec.md) | [`ADR 0161`](file:///d:/APP/股票紀錄/docs/adr/0161-market-freshness-service-decoupling.md) | [`.scratch/v8.74/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.74/issues/) | Issue #153 | V8.74.0 | 市場時區新鮮度服務解耦、中介層消除 Feature Envy 依戀情結、獨立公開測試縫隙 |
