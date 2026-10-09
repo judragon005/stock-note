@@ -349,7 +349,10 @@ export const UnifiedApiKeyManager: React.FC<UnifiedApiKeyManagerProps> = ({
   const handleProbeKey = async (item: ApiKeyItem) => {
     setIsProbing((prev) => ({ ...prev, [item.id]: true }));
     try {
-      const res = await probeApiKey(item.provider, item.key, fetch, { enforceCooldown: true });
+      const res = await probeApiKey(item.provider, item.key, fetch, {
+        enforceCooldown: true,
+        proxyUrl: customProxyUrl.trim() || undefined,
+      });
       setProbeResults((prev) => ({
         ...prev,
         [item.id]: { status: res.status, message: res.message },

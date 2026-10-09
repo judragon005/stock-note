@@ -44,4 +44,31 @@ describe('Ticket 06: API Key Health Probe Engine', () => {
     expect(remaining).toBeGreaterThan(0);
     expect(remaining).toBeLessThanOrEqual(30);
   });
+
+  it('5. 當提供 proxyUrl 時，probeApiKey 應將請求正確導向自訂代理端點', async () => {
+    const mockFetcher = vi.fn().mockResolvedValue({ status: 200 });
+    const result = await probeApiKey('fred', 'my_fred_key', mockFetcher as any, {
+      proxyUrl: 'https://my-proxy.workers.dev',
+    });
+
+    expect(result.status).toBe('HEALTHY');
+    expect(mockFetcher).toHaveBeenCalledWith(
+      expect.stringContaining('https://my-proxy.workers.dev?url='),
+      expect.anything()
+    );
+    expect(mockFetcher).toHaveBeenCalledWith(
+      expect.stringContaining(encodeURIComponent('https://api.stlouisfed.org/fred/series')),
+      expect.anything()
+    );
+  });
+
+  it('6. FMP 探針應指向相容之 stable quote 端點以避開付費 403 限制', async () => {
+    const mockFetcher = vi.fn().mockResolvedValue({ status: 200 });
+    await probeApiKey('fmp', 'test_key', mockFetcher as any);
+
+    expect(mockFetcher).toHaveBeenCalledWith(
+      expect.stringContaining('financialmodelingprep.com/stable/quote?symbol=AAPL&apikey=test_key'),
+      expect.anything()
+    );
+  });
 });

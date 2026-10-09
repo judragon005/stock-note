@@ -38,6 +38,11 @@ describe('CSP Security Engine (Seam: 內容安全策略與連線白名單)', () 
         'https://corsproxy.io',
         'https://api.allorigins.win',
         'https://api.codetabs.com',
+        'https://finnhub.io',
+        'https://api.stlouisfed.org',
+        'https://api.polygon.io',
+        'https://api.coingecko.com',
+        'https://data.sec.gov',
       ];
 
       for (const domain of expectedDomains) {

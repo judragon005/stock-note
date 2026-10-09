@@ -53,6 +53,7 @@
 | [**0043**](0043-tw-tpex-otc-and-bond-etf-daily-candles-normalization.md) | 台股上櫃股票與櫃買債券 ETF 代碼清洗標準化、盤後日 K 入庫物件修復與交易所元數據校準 | `P1` | `RESOLVED` | /grill-with-docs 深度調研 | `DataIntegrity` · `Lakehouse` · `DailyCandles` · `Normalization` · `TPEx` | **已於 v8.81.0 (Spec 0168 / Issue #182) 完整解決** |
 | [**0044**](0044-ai-force-war-room-feature-gaps-and-quant-enhancements.md) | 波段與中長線存股導向之主力戰情室功能演進與美股專屬微觀結構架構 | `P2` | `RESOLVED` | /grill-with-docs 深度調研 (對齊波段存股客群與美股獨立戰情室) | `AiForceWarRoom` · `SwingTrading` · `DividendInvesting` · `US-Market` | **已於 v8.82.0 (Spec 0169 / Issue #188) 完整解決** |
 | [**0045**](0045-unified-api-key-manager-subcomponent-decomposition.md) | UnifiedApiKeyManager 視圖子元件模組化解耦重構 | `P3` | `RESOLVED` | Code Review (Spec 0168 / Issue #182) | `Refactor` · `UI` · `CleanCode` · `SettingsWorkspace` | **已於 v8.83.0 (Spec 0171 / Issue #193) 完整解決** |
+| [**0046**](0046-centralized-key-vault-and-nas-proxy-mesh.md) | 中央金鑰庫與私有雲全端代理架構 (跨裝置同步與安全邊界防禦) | `P2` | `OPEN` | /grill-with-docs 深度架構診斷 (NAS 部署與外部 API) | `Security` · `NAS` · `Architecture` · `Proxy` · `Vault` | 待下期私有雲演進時實作 |
 
 ---
 
