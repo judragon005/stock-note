@@ -10,7 +10,7 @@
 
 ## 1. 背景與現狀代碼 (Context & Current Code)
 
-目前系統具備強大的純前端無伺服器架構與 IndexedDB 儲存引擎（[src/db/stockTrackerDB.ts](file:///d:/APP/股票紀錄/src/db/stockTrackerDB.ts)）：
+目前系統具備強大的純前端無伺服器架構與 IndexedDB 儲存引擎（`src/db/stockTrackerDB.ts`）：
 1. **單一瀏覽器本機隔離限制**：
    - 目前所有持倉、交易紀錄、現金帳本與快照均儲存於單一瀏覽器的 IndexedDB 中。
    - 若使用者在不同裝置間切換（例如：桌面電腦記帳、外出使用手機或 iPad 查閱行情與損益），必須透過「時光機快照 JSON 匯出 ➔ 手動傳送檔案 ➔ 另一裝置匯入」，體驗破碎且易因覆寫導致版本分歧。

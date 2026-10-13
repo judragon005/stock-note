@@ -845,7 +845,7 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 - [ADR-0046: V5.8.0 零負債槓桿歸零、利息膠囊券商聚合與預扣稅分離、流水帳股息雙向同步全域連動](docs/adr/0046-zero-debt-leverage-zeroing-and-bidirectional-cash-trade-sync.md)
 - [ADR-0047: V5.9.0 嘉信理財對帳單像素級對齊、利息智能正規化與美股股息毛額雙筆記帳架構](docs/adr/0047-schwab-drip-reconciliation-smart-interest-normalization-and-gross-dividend.md)
 - [ADR-0048: V6.0.0 官方台美股標的字典庫與智能代碼/名稱模糊搜尋引擎](docs/adr/0048-official-stock-dictionary-and-smart-autocomplete.md)
-- [ADR-0049: V6.1.0 除息空窗期真實損益平滑補償、專屬股息紀錄視圖與外幣匯率損益獨立揭露系統](docs/adr/0049-ex-dividend-smoothing-dividend-log-and-fx-tax-system.md)
+- [ADR-0049: V6.1.0 除息空窗期真實損益平滑補償、專屬股息紀錄視圖與外幣匯率損益獨立揭露系統](docs/adr/0049-ex-dividend-smoothing-and-dividend-log-architecture.md)
 - [ADR-0050: V6.2.0 除息日與發放日時間軸分離入帳與 SSOT 除權息行事曆](docs/adr/0050-ex-date-pay-date-temporal-separation-and-ssot-dividend-calendar.md)
 - [ADR-0051: V6.3.0 跨模組股息帳本與持股稽核對帳系統](docs/adr/0051-cross-module-ledger-dividend-portfolio-audit-and-reconciliation.md)
 - [ADR-0052: V6.4.0 智慧掃描除息與發放日對齊及待入帳股息行事曆](docs/adr/0052-smart-scan-dividend-ex-date-pay-date-alignment-and-pending-ledger.md)

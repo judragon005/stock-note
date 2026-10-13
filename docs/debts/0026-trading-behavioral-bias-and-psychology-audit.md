@@ -10,7 +10,7 @@
 
 ## 1. 背景與現狀代碼 (Context & Current Code)
 
-目前系統已具備交易計畫與紀律檢討模組（[src/components/TradePlanModal.tsx](file:///d:/APP/股票紀錄/src/components/TradePlanModal.tsx)）與部位持有天數統計（[src/engine/holdingPeriodEngine.ts](file:///d:/APP/股票紀錄/src/engine/holdingPeriodEngine.ts)）：
+目前系統已具備交易計畫與紀律檢討模組（`src/components/TradePlanModal.tsx`）與部位持有天數統計（`src/engine/holdingPeriodEngine.ts`）：
 1. **靜態文字日誌 vs. 數據驅動之行為金融偏誤**：
    - 現有檢討功能主要依賴使用者主觀填寫文字備註與停損執行結果。
    - **實質盲區**：多數散戶投資人無法察覺自己深層的交易心理偏誤，如「處置效應（賺錢急著賣、賠錢死命凹）」、「FOMO 追高情緒進場」以及「過度交易摩擦成本拖累」等。

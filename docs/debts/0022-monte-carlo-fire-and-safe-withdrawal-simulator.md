@@ -10,7 +10,7 @@
 
 ## 1. 背景與現狀代碼 (Context & Current Code)
 
-目前系統已具備完整的資產成長折線圖（[src/engine/historicalNavEngine.ts](file:///d:/APP/股票紀錄/src/engine/historicalNavEngine.ts)）、XIRR 內部報酬率（[src/engine/xirrEngine.ts](file:///d:/APP/股票紀錄/src/engine/xirrEngine.ts)）與股息日誌（[src/engine/dividendCalendarEngine.ts](file:///d:/APP/股票紀錄/src/engine/dividendCalendarEngine.ts)）：
+目前系統已具備完整的資產成長折線圖（`src/engine/historicalNavEngine.ts`）、XIRR 內部報酬率（`src/engine/xirrEngine.ts`）與股息日誌（`src/engine/dividendCalendarEngine.ts`）：
 1. **回顧性指標完備，前瞻性模擬缺失**：
    - 現有系統能精確呈現「過去到現在」賺了多少錢、累積多少股息與資產淨值。
    - 但無法回答長期投資人與退休族最關心的核心命題：「**以我目前的投資組合規模與波動度，未來 20~40 年每年提領生活費，資產耗盡（破產）的機率是多少？**」。

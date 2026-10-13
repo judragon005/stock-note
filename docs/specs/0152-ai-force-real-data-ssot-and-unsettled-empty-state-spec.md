@@ -3,7 +3,7 @@
 - **規格編號**：`SPEC-0152`
 - **狀態**：`READY_FOR_AGENT`
 - **領域上下文**：`AI 主力戰情室 (AI Force Decision Dashboard)`、`市場結算引擎 (Market Settlement Engine)`、`日 K 圖表渲染 (K-Line Chart System)`
-- **關聯 PRD / ADR**：[ADR-0140](../adr/0140-ai-force-decision-dashboard.md)、[ADR-0150](../adr/0150-pending-market-close-pre-close-anchor-and-alert.md)、[ADR-0151](../adr/0151-ai-force-data-pipeline-sync-and-visual-alignment.md)
+- **關聯 PRD / ADR**：[ADR-0140](../adr/0140-ai-force-decision-dashboard-architecture.md)、[ADR-0150](../adr/0150-pending-market-close-pre-close-anchor-and-alert.md)、[ADR-0151](../adr/0151-ai-force-data-pipeline-sync-and-visual-alignment.md)
 
 ---
 
