@@ -2416,5 +2416,26 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     3. **主 K 線雙平行灰線徹底消除**：移除 Y=220 主圖多餘底部分界線，保留 Y=230 副圖單一微光分割線，視覺純淨化。
     4. **券商法人級 5 軌 MA 標準光譜 (`KLINE_MA_COLORS`)**：定義 `ma5` (#eab308 亮黃)、`ma10` (#06b6d4 青藍)、`ma20` (#ec4899 洋紅)、`ma60` (#f97316 亮橘實線)、`ma250` (#a855f7 尊爵紫) 完全色相互斥體系，並將圖例、查價列與 Polyline 100% 同步。
 
+- **TDCC Card Stale State Sanitization & Multi-Perspective Dynamic Signals (TDCC 集保卡片狀態殘留修復與 AI 動態信號四重視角全維度重構)**:
+  - 核心模組：`src/components/aiForceDashboard/AiForceDashboardView.tsx`、`src/components/aiForceDashboard/cards/DynamicSignalsCard.tsx`、`src/components/aiForceDashboard/cards/TdccDistributionCard.tsx`、`src/engine/aiForceDashboardEngine.ts`。
+  - 規範依據：Spec 0179 (v8.90.0) 與 ADR 0179。
+  - 核心特性：
+    1. **鍵值綁定狀態洗淨 (Key-Bound State Sanitization)**：為 `TdccDistributionCard` 綁定 `key={symbol}`，阻斷跨標的渲染時之舊狀態殘留；在查詢觸發當下洗淨待命狀態，美股與無資料標的嚴格實施 Honest Empty State。
+    2. **四重視角全維度信號模型 (Four-Perspective Dynamic Signal Model)**：全面整合交易所（注意/處置狀態、集合競價撮合、當沖過熱）、券商（融資維持率斷頭警戒、借券賣出異動）、法人（多因子百分制得分、VWAP 20日成本標準差乖離）與個人使用者維度。
+    3. **多空矛盾智能仲裁機制 (Conflict Resolution Matrix)**：實作純領域仲裁演算法，精準識別「洗盤破底翻」、「誘多高檔出貨」、「共振主升」與「共振主跌」，為個人投資人提供情境化白話指引與關鍵防守價。
+    4. **動態呼吸光暈燈號**：徹底廢除硬編碼純紅燈，依據綜合量化總分動態對齊綠燈（偏多 $\ge 60$）、黃燈（觀望 $40\sim 59$）與紅燈（偏空 $< 40$）。
 
-
+- **Strategic Prompt & Six Thinking Hats Decision Engine (智策精煉多維提示詞引擎與六頂思考帽決策體系)**:
+  - 核心模組：`src/types/strategicPrompt.ts`、`src/engine/strategicPromptDigest.ts`、`src/engine/strategicPromptEngine.ts`、`src/components/analysis/StrategicPromptPanel.tsx`。
+  - 規範依據：Spec 0153 (v8.91.0) 與 ADR 0153。
+  - 核心特性：
+    1. **個股與 ETF 雙軌特徵壓縮 (Dual-Track Semantic Compression)**：將行情量價、法人籌碼、月營收成長、總體經濟與個股基本面/ETF治理穿透指標高密度濃縮，缺失指標一律標註 `N/A`，遵循 Zero-Mock Policy。
+    2. **六頂思考帽多維投資決策框架 (Six Thinking Hats Framework)**：
+       - 白帽 (White Hat)：客觀事實與量化數據審計。
+       - 紅帽 (Red Hat)：直覺情緒、恐慌貪婪與市場心理。
+       - 黑帽 (Black Hat)：魔鬼代言人反向質詢、最壞情境壓力測試與脆弱性批判。
+       - 黃帽 (Yellow Hat)：樂觀價值發現、成長催化劑與最佳情境上檔空間。
+       - 綠帽 (Green Hat)：創新戰術、另類對沖與非對稱性回報方案。
+       - 藍帽 (Blue Hat)：全局決策收斂、操作指引、倉位控管與覆盤回饋機制。
+    3. **雙層 Token 預算防護守門 (Token Budget Gatekeeper)**：單頂思考帽 < 1,200 tokens（單帽採用緊湊型 Fact Sheet 精簡至 700~1,000 tokens）；全量 Master Prompt < 4,500 tokens。
+    4. **零信任海關與隱私部位脫敏 (Zero-Trust Customs & Privacy Desensitization)**：純前端組合組裝，預設部位金額脫敏，僅導出市場與量化事實，杜絕個人敏感財務隱私外洩。
