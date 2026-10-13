@@ -95,6 +95,7 @@
 | **指標審計測試套件** | [`src/engine/analysisMetricsAudit.test.ts`](file:///d:/APP/股票紀錄/src/engine/analysisMetricsAudit.test.ts) | 5 大核心金融審計檢驗：基期缺失平整化、毛利暴衝真實性與離群高度維持、動態股數 >70 億股、FCF Yield 合理區間、DCF 25~55 元。 | 9 tests |
 | **市場結算狀態與定錨引擎** | [`src/engine/marketSettlementEngine.ts`](file:///d:/APP/股票紀錄/src/engine/marketSettlementEngine.ts) | Asia/Taipei 時區感知純函式，判定台股 15:00 籌碼發布門檻與美股 08:00 結算門檻，未收盤時自適應回退前一收盤交易日定錨日。 | 8 tests |
 | **AI 主力戰情室決策報告引擎** | [`src/engine/aiForceDashboardEngine.ts`](file:///d:/APP/股票紀錄/src/engine/aiForceDashboardEngine.ts) | 支援 `basePrice` 與 `realtimeQuote` 動態注入與自適應回退，杜絕 2290 寫死假資料，實現 18 張卡片與即時行情等比動態同步。 | 13 tests |
+| **AI 主力動態信號與多空智能仲裁引擎** | [`src/engine/aiForceDashboardEngine.ts`](file:///d:/APP/股票紀錄/src/engine/aiForceDashboardEngine.ts) | 實作多因子加權量化評分純函式（0.35籌碼+0.3趨勢+0.2動能-0.15風險，支援 `CompositeQuantWeights`）、動態燈號映射、多空矛盾智能仲裁演算法（精準識別洗盤破底翻、誘多出貨、共振主升、共振主跌四大實戰型態）。 | 21 tests |
 | **智策多維提示詞決策引擎** | [`src/engine/strategicPromptEngine.ts`](file:///d:/APP/股票紀錄/src/engine/strategicPromptEngine.ts) | 實作個股/ETF雙軌特徵壓榨、六頂思考帽決策 Prompt 生成、Token 預算守門 (<1200 / <4500) 與零信任數據海關。 | 11 tests |
 
 ### 4.2 前端工作台與核心組件 (`src/components/`)
@@ -109,8 +110,10 @@
 | **AI 決策核心卡片** | [`src/components/aiForceDashboard/cards/AiDecisionCoreCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/AiDecisionCoreCard.tsx) | 未結算時頂部出示顯著防禦警示橫幅，明確宣告量化基準日，確保決策透明度。 |
 | **主力 K 線卡片 (Card 01)** | [`src/components/aiForceDashboard/cards/KLineChartCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/KLineChartCard.tsx) | 實作 `normalizeAndSortCandles` 升冪排序守護，校正時間軸為左側歷史軌跡、右側最新交易日。 |
 | **多維度六角雷達 (Card 03)** | [`src/components/aiForceDashboard/cards/MultiDimensionRadarCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/MultiDimensionRadarCard.tsx) | `RADAR_CHART_CONFIG` 有效半徑擴展至 100px，標籤 13px 加粗高對比，數值 12px 高亮，判讀體驗顯著提升。 |
+| **AI 主力動態信號判斷 (Card 12)** | [`src/components/aiForceDashboard/cards/DynamicSignalsCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/DynamicSignalsCard.tsx) | 徹底廢除寫死純紅燈，依量化分連動三色動態呼吸光暈；整合交易所處置/注意、券商融資警戒、法人 VWAP 標準差偏離與個人關鍵價位之 Bento 資訊流。 |
 | **健康度綜合評估 (Card 11)** | [`src/components/aiForceDashboard/cards/HealthSummaryCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/HealthSummaryCard.tsx) | `DONUT_GAUGE_CONFIG` 甜甜圈直徑擴大至 78px，間距緊湊無重疊，數值字級 15px，對齊照片 4 飽滿風格。 |
 | **主力追蹤總評判 (Card 18)** | [`src/components/aiForceDashboard/cards/MainForceVerdictCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/MainForceVerdictCard.tsx) | 容器 100% 高度與 Card 16、17 齊平，Bento 佈局重新層次化（狀態 ➔ 核心看板 ➔ 數據膠囊 ➔ 論述）。 |
+| **TDCC 集保千張大戶趨勢 (Card 19)** | [`src/components/aiForceDashboard/cards/TdccDistributionCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/TdccDistributionCard.tsx) | 綁定 `key={symbol}` 生命週期隔離，換股時即刻洗淨待命狀態；美股市場標的展示合規之「美股無集保機制 (採 13F 機構申報)」Honest Empty State。 |
 
 ---
 
@@ -119,6 +122,7 @@
 依據專案規範與 [`docs/debts/README.md`](file:///d:/APP/股票紀錄/docs/debts/README.md)，當前重點如下：
 
 - **待進行評估之架構改善 (Backlog / Open)**：
+  - `DEBT-0049`：[AI 動態信號判斷卡片 (Card 12) 專業層與決策層子元件模組化解耦重構](file:///d:/APP/股票紀錄/docs/debts/0049-dynamic-signals-card-subcomponent-decomposition.md) (`P3`)。
   - `DEBT-0048`：[個股分析工作區已載入之量化財務報表與本益比深度注入智策提示詞事實清單](file:///d:/APP/股票紀錄/docs/debts/0048-strategic-prompt-workspace-financial-records-injection.md) (`P3`，待下期個股財務深探或即時估值欄位對齊時實作)。
   - `DEBT-0047`：[Pre-push Guard 整合文檔完整性與死鏈自動化守門 (verify-docs)](file:///d:/APP/股票紀錄/docs/debts/0047-pre-push-guard-docs-integrity-linter-integration.md) (`P3`)。
   - `DEBT-0046`：[中央金鑰庫與私有雲全端代理架構](file:///d:/APP/股票紀錄/docs/debts/0046-centralized-key-vault-and-nas-proxy-mesh.md) (`P2`)。
@@ -134,7 +138,7 @@
    - 當前位於分支 `main`，與 `origin/main` 保持一致，Working Tree Clean。
    - 所有變更均已透過 GitHub Actions CI 綠燈驗證並 Squash and Merge 回主幹。
 2. **日常驗證防線**：
-   - 接手前務必執行 `npm test`（確認 149 個測試檔案、1,248 個測試 100% 綠燈）與 `npm run build`（確認 0 型別錯誤）。
+   - 接手前務必執行 `npm test`（確認 215 個測試檔案、1,585 個測試 100% 綠燈）與 `npm run build`（確認 0 型別錯誤）。
 3. **工作流閉環準則**：
    - 嚴格遵循工作流藍圖：`/grill-with-docs` ➔ `/to-spec` ➔ `/to-tickets` ➔ `/triage` ➔ `/tdd & /implement` ➔ `/code-review` ➔ `/handoff`。
 

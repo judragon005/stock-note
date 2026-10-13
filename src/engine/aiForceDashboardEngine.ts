@@ -1014,18 +1014,31 @@ export function calculateDynamicSignalsFromCandles(
   };
 }
 
+export interface CompositeQuantWeights {
+  chipWeight?: number;
+  trendWeight?: number;
+  momentumWeight?: number;
+  riskWeight?: number;
+}
+
 /**
  * 多因子量化評分純函式 (Spec 0179 / Ticket 02)
- * 公式：0.35 * 籌碼 + 0.30 * 趨勢 + 0.20 * 動能 - 0.15 * 風險
+ * 公式：0.35 * 籌碼 + 0.30 * 趨勢 + 0.20 * 動能 - 0.15 * 風險 (支援自訂策略權重)
  * 範圍截斷為 0~100 分整數
  */
 export function calculateCompositeQuantScore(
   trendScore: number,
   chipScore: number,
   momentumScore: number,
-  riskScore: number
+  riskScore: number,
+  weights?: CompositeQuantWeights
 ): number {
-  const raw = 0.35 * chipScore + 0.30 * trendScore + 0.20 * momentumScore - 0.15 * riskScore;
+  const wChip = weights?.chipWeight ?? 0.35;
+  const wTrend = weights?.trendWeight ?? 0.30;
+  const wMomentum = weights?.momentumWeight ?? 0.20;
+  const wRisk = weights?.riskWeight ?? 0.15;
+
+  const raw = wChip * chipScore + wTrend * trendScore + wMomentum * momentumScore - wRisk * riskScore;
   const clamped = Math.max(0, Math.min(100, Math.round(raw)));
   return clamped;
 }
