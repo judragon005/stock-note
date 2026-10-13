@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1553%2F1553%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1598%2F1598%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -11,6 +11,22 @@
 ---
 
 ## ✨ 核心特色與功能 (Key Features)
+
+### 0. 個股深度財報法務會計排雷、ETF 物理隔離與智策引擎 UI 重構 (`Forensic Accounting, ETF Isolation & Analysis UI Repair`) *(V8.93.0 最新發布 / Spec #0180 / ADR #0180 / Issue #230)*
+
+- **智策精煉多維提示詞引擎 UI 原生深色 Glassmorphism 重構 (`StrategicPromptPanel.tsx`)**：
+  - 徹底清除專案不支援的 Tailwind classes，回歸純原生 CSS 變數（`var(--bg-card)`, `var(--border-color)`）與細緻水平 6 欄自適應思考帽網格。
+  - 頂部導航列收斂為標題、思考帽顆粒度、全量 Master Prompt 與即時 Token 預算徽章。
+- **個股分析標的快捷列清理與 ETF 物理隔離 (`StockAnalysisWorkspace.tsx`)**：
+  - 移除冗餘快捷標的膠囊列；標的選單物理阻斷 ETF 標的。
+  - 若誤查 ETF 標的，橫幅明確提示「此標的為 ETF，不具備個股財務報表，建議前往【主力戰情室】檢視」，並提供一鍵轉發跳轉按鈕。
+- **全模組零偽造原則 (Zero-Mock Policy)**：
+  - 徹底移除營運週轉天數 (42/56/68 天)、借款科目 (台泥 227.6 億 / 1,454.2 億)、現金轉換循環 (68 天) 寫死假資料，缺漏科目誠實展示 `-` 或 `N/A`。
+- **會計公式精準年化與特殊產業豁免 (`AnalysisMetricView.tsx`)**：
+  - 杜邦總資產週轉率年化 ($\times 4$)、營業週轉率年化；現金股利發放率改以全年 4 季累計 EPS 為分母；美股季配息殖利率年化 ($\times 4$)。
+  - 金融保險股負債比率專業豁免；景氣循環股在 P/E 河流圖頂部展示 P/B 河流圖優先引導警示橫幅。
+- **法務會計五大排雷排毒燈 (Forensic Accounting Warning Lights)**：
+  - 嚴格依據跨表勾稽準則，檢測：應收帳款剪刀差、營業現金流獲利純度 (CFO/NI < 80%)、自由現金流連續失血、存貨週轉壓力與高槓桿負債結構。
 
 ### 0. TDCC 集保大戶與月營收全自動新鮮度管線、主 K 線雙灰線修復與券商法人色譜 (`TDCC & Revenue Auto Freshness Pipeline & K-Line Institutional Spectrum`) *(V8.89.0 最新發布 / Spec #0177 / ADR #0177 / Issue #217)*
 
