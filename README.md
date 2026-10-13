@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1536%2F1536%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1549%2F1549%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,21 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 主力戰情室視覺大師級版面重構、TermTooltip 500px 旗艦升級與籌碼熱區 1:1 對位 (`AI Force War Room Visual Master Layout & TermTooltip 500px Flagship`) *(V8.86.0 最新發布 / Spec #0174 / ADR #0174 / Issues #203, #205)*
+### 0. 主力戰情室 Card 18 主力追蹤總評判操盤指引升級、5 態作戰光譜圖例與機構級風控門檻 (`AI Force Card 18 MLP Verdict Action Playbook & Micro Spectrum Bar`) *(V8.88.0 最新發布 / Spec #0176 / ADR #0176 / Issue #214 / PR #215)*
+
+- **三軌色彩認知體系精準對齊 (`MainForceVerdictCard.tsx`)**：
+  - 將「低接吸籌」徹底從矛盾的「防禦觀望 (黃色)」校正為科技藍 (`#38bdf8`)，右側徽章標示為「● 偏多承接」，消除視覺認知矛盾。
+- **26px 5 態微型作戰光譜圖例條 (Micro Spectrum Bar)**：
+  - 卡片頂部呈現連續態光譜（超跌反彈 ➔ 低接吸籌 ➔ 鎖碼推升 ➔ 高檔調節 ➔ 區間震盪），命中狀態自動高亮發光，非命中狀態自動 40% 半透明。
+- **中央雙層 Bento 操盤指引矩陣 (Action Playbook)**：
+  - **語意微觀解析 (Market Context)**：深度解構當前籌碼量價情境。
+  - **實戰操盤指引 (Action Playbook 四合一)**：操作週期、建倉步調、關鍵三欄錨點（防守停損、目標滿足、預估風報比）與 Invalidation Gate 失效門檻。
+- **360px 深度指南彈窗與流動性守門員 (`checkLiquidityGate`)**：
+  - 整合 5 態主力作戰量化條件對照表、日均量 `< 300 張` 防作線警示守門員與合規免責宣告。
+- **端對端 Null-Safe 防禦性強化**：
+  - 徹底移除寫死常數 `367.5`，缺乏價位時安全回退 `-- (待價位確認)`，容器補齊 `overflowY: 'auto'` 滿高防溢流防禦。
+
+### 1. 主力戰情室視覺大師級版面重構、TermTooltip 500px 旗艦升級與籌碼熱區 1:1 對位 (`AI Force War Room Visual Master Layout & TermTooltip 500px Flagship`) *(V8.86.0 / Spec #0174 / ADR #0174 / Issues #203, #205)*
 
 - **卡片 08 法人行為計量上下結構重構 (`InstitutionalFlowCard.tsx`)**：
   - 徹底告別左右壓縮擁擠，改採上下結構：上方雙軸 SVG 圖表 100% 滿版橫向舒展；下方升級為近 5 日全寬明細清單，日期精簡為 `MM/DD`，字體加大至 `0.80rem`，數值絕不折行。
