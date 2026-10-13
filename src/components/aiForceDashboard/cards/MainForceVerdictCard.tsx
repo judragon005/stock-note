@@ -178,18 +178,23 @@ export function getMainForcePlaybook(verb: string, metrics: MetricCapsule[] = []
   const closeNum = closeMetric ? parseFloat(closeMetric.value.replace(/[^\d.]/g, '')) : null;
   const vwapNum = vwapMetric ? parseFloat(vwapMetric.value.replace(/[^\d.]/g, '')) : null;
 
-  const basePrice = closeNum || (vwapNum ? vwapNum * 0.96 : 367.5);
+  const basePrice = closeNum ?? (vwapNum ? vwapNum * 0.96 : null);
 
   if (verb.includes('吸籌') || verb.includes('逢低') || verb.includes('低接') || verb.includes('承接')) {
-    const stopLoss = (basePrice * 0.966).toFixed(1);
-    const target = (vwapNum ? vwapNum : basePrice * 1.045).toFixed(1);
+    const stopLoss = basePrice !== null ? `${(basePrice * 0.966).toFixed(1)} 元 (-3.4%)` : '-- (待價位確認)';
+    const target = vwapNum
+      ? `${vwapNum.toFixed(1)} 元`
+      : basePrice !== null
+      ? `${(basePrice * 1.045).toFixed(1)} 元 (+4.5%)`
+      : '-- (待價位確認)';
+    const priceText = basePrice !== null ? ` (${basePrice} 元)` : '';
     return {
-      marketContext: `現價 (${basePrice} 元) 回落至主力成本線負乖離區，短線跌幅已深；大戶賣壓逐步衰竭，機構資金於關鍵支撐帶低掛買盤吸納浮額，籌碼進行沉澱。`,
+      marketContext: `現價${priceText} 回落至主力成本線負乖離區，短線跌幅已深；大戶賣壓逐步衰竭，機構資金於關鍵支撐帶低掛買盤吸納浮額，籌碼進行沉澱。`,
       horizon: '3~5 日短線波段',
       executionDirective: '分批金字塔掛單，切忌市價追擊',
-      stopLossPrice: `${stopLoss} 元 (-3.4%)`,
-      targetPrice: `${target} 元 (+4.5%)`,
-      riskRewardRatio: '2.4 : 1',
+      stopLossPrice: stopLoss,
+      targetPrice: target,
+      riskRewardRatio: basePrice !== null ? '2.4 : 1' : '--',
       invalidationGate: '若盤中放量摜破防守價或外資單日大幅賣超，吸籌邏輯宣告失效',
     };
   }
@@ -202,57 +207,57 @@ export function getMainForcePlaybook(verb: string, metrics: MetricCapsule[] = []
     verb.includes('強勢') ||
     verb.includes('買')
   ) {
-    const stopLoss = (basePrice * 0.975).toFixed(1);
-    const target = (basePrice * 1.08).toFixed(1);
+    const stopLoss = basePrice !== null ? `${(basePrice * 0.975).toFixed(1)} 元 (-2.5%)` : '-- (待價位確認)';
+    const target = basePrice !== null ? `${(basePrice * 1.08).toFixed(1)} 元 (+8.0%)` : '-- (待價位確認)';
     return {
       marketContext: '股價突破主力成本區並持續站穩，量增價揚；法人買超籌碼高度集中，多頭結構維持強勢推升態勢。',
       horizon: '波段順勢續抱',
       executionDirective: '順勢加碼並沿 5 日線移動停利',
-      stopLossPrice: `${stopLoss} 元 (-2.5%)`,
-      targetPrice: `${target} 元 (+8.0%)`,
-      riskRewardRatio: '3.2 : 1',
+      stopLossPrice: stopLoss,
+      targetPrice: target,
+      riskRewardRatio: basePrice !== null ? '3.2 : 1' : '--',
       invalidationGate: '跌破 5 日線或主力成本線且爆大量未過高，推升攻勢暫告段落',
     };
   }
 
   if (verb.includes('超跌') || verb.includes('反彈') || verb.includes('反抽')) {
-    const stopLoss = (basePrice * 0.98).toFixed(1);
-    const target = (basePrice * 1.038).toFixed(1);
+    const stopLoss = basePrice !== null ? `${(basePrice * 0.98).toFixed(1)} 元 (-2.0%)` : '-- (待價位確認)';
+    const target = basePrice !== null ? `${(basePrice * 1.038).toFixed(1)} 元 (+3.8%)` : '-- (待價位確認)';
     return {
       marketContext: '短線技術指標與成本乖離率呈現極度超跌，空方動能減弱；急跌後迎來技術性修復反抽，短線波動加劇。',
       horizon: '極短線搶反彈 (1~2日)',
       executionDirective: '嚴格小部位快進快出，見好即收',
-      stopLossPrice: `${stopLoss} 元 (-2.0%)`,
-      targetPrice: `${target} 元 (+3.8%)`,
-      riskRewardRatio: '1.9 : 1',
+      stopLossPrice: stopLoss,
+      targetPrice: target,
+      riskRewardRatio: basePrice !== null ? '1.9 : 1' : '--',
       invalidationGate: '盤中創波段新低未見下影線，即刻撤退停損',
     };
   }
 
   if (verb.includes('調節') || verb.includes('出貨') || verb.includes('減碼')) {
-    const stopLoss = (basePrice * 0.98).toFixed(1);
-    const target = (basePrice * 1.015).toFixed(1);
+    const stopLoss = basePrice !== null ? `${(basePrice * 0.98).toFixed(1)} 元 (-2.0%)` : '-- (待價位確認)';
+    const target = basePrice !== null ? `${(basePrice * 1.015).toFixed(1)} 元 (+1.5%)` : '-- (待價位確認)';
     return {
       marketContext: '股價處於高檔震盪，法人主力逢高分批調節獲利部位，追價意願謹慎，防範假突破拉回風險。',
       horizon: '逢高分批減碼',
       executionDirective: '分批拔檔獲利，保留現金部位',
-      stopLossPrice: `${stopLoss} 元 (-2.0%)`,
-      targetPrice: `${target} 元 (+1.5%)`,
-      riskRewardRatio: '1.2 : 1',
+      stopLossPrice: stopLoss,
+      targetPrice: target,
+      riskRewardRatio: basePrice !== null ? '1.2 : 1' : '--',
       invalidationGate: '爆大量長黑摜破短均線，全數出清離場',
     };
   }
 
   // 區間震盪 / 預設
-  const stopLoss = (basePrice * 0.97).toFixed(1);
-  const target = (basePrice * 1.03).toFixed(1);
+  const stopLoss = basePrice !== null ? `${(basePrice * 0.97).toFixed(1)} 元 (-3.0%)` : '-- (待價位確認)';
+  const target = basePrice !== null ? `${(basePrice * 1.03).toFixed(1)} 元 (+3.0%)` : '-- (待價位確認)';
   return {
     marketContext: '量能萎縮且籌碼無單向集中跡象，均線糾纏；主力維持區間來回洗盤，等待趨勢表態。',
     horizon: '區間觀望等待',
     executionDirective: '靜待均線收斂突破，不躁進建倉',
-    stopLossPrice: `${stopLoss} 元 (-3.0%)`,
-    targetPrice: `${target} 元 (+3.0%)`,
-    riskRewardRatio: '1.0 : 1',
+    stopLossPrice: stopLoss,
+    targetPrice: target,
+    riskRewardRatio: basePrice !== null ? '1.0 : 1' : '--',
     invalidationGate: '跌破區間下緣支撐帶，多方結構轉弱',
   };
 }

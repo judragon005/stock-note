@@ -209,10 +209,21 @@ describe('Ticket 05: 邊界保護與向後相容優雅降級 (Fallback Defense)'
 
     const defaultPlaybook = getMainForcePlaybook('');
     expect(defaultPlaybook.horizon).toContain('觀望');
-    expect(defaultPlaybook.riskRewardRatio).toBe('1.0 : 1');
+    expect(defaultPlaybook.stopLossPrice).toContain('待價位確認');
+    expect(defaultPlaybook.targetPrice).toContain('待價位確認');
+    expect(defaultPlaybook.riskRewardRatio).toBe('--');
 
     const emptyMetrics = parseVerdictMetrics('');
     expect(emptyMetrics).toEqual([]);
+  });
+
+  it('當完全無收盤價與 VWAP 數據時，操盤指引應安全回退為「-- (待價位確認)」且不含寫死價格 367.5', () => {
+    const playbook = getMainForcePlaybook('低接吸籌', []);
+    expect(playbook.stopLossPrice).toBe('-- (待價位確認)');
+    expect(playbook.targetPrice).toBe('-- (待價位確認)');
+    expect(playbook.riskRewardRatio).toBe('--');
+    expect(playbook.marketContext).not.toContain('367.5');
+    expect(playbook.marketContext).toContain('現價 回落至主力成本線負乖離區');
   });
 });
 
