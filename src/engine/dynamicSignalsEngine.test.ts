@@ -32,6 +32,18 @@ describe('Ticket 02: DynamicSignalsEngine 量化評分與燈號映射 (TDD)', ()
       const score = calculateCompositeQuantScore(150, 150, 150, 0);
       expect(score).toBe(100);
     });
+
+    it('支援自訂策略權重 weights 參數', () => {
+      // chip=100, trend=50, momentum=50, risk=0
+      // 0.6*100 (60) + 0.2*50 (10) + 0.1*50 (5) - 0.1*0 (0) = 75
+      const score = calculateCompositeQuantScore(50, 100, 50, 0, {
+        chipWeight: 0.6,
+        trendWeight: 0.2,
+        momentumWeight: 0.1,
+        riskWeight: 0.1,
+      });
+      expect(score).toBe(75);
+    });
   });
 
   describe('mapScoreToVerdictLight - 分數映射至動態燈號', () => {

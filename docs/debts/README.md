@@ -56,6 +56,7 @@
 | [**0046**](0046-centralized-key-vault-and-nas-proxy-mesh.md) | 中央金鑰庫與私有雲全端代理架構 (跨裝置同步與安全邊界防禦) | `P2` | `OPEN` | /grill-with-docs 深度架構診斷 (NAS 部署與外部 API) | `Security` · `NAS` · `Architecture` · `Proxy` · `Vault` | 待下期私有雲演進時實作 |
 | [**0047**](0047-pre-push-guard-docs-integrity-linter-integration.md) | Pre-push Guard 整合文檔完整性與死鏈自動化守門 (verify-docs) | `P3` | `OPEN` | Code Review (Spec 0178 / Issue #220) | `CI-CD` · `Documentation` · `GitHooks` · `AntiAbuse` | 待下次 CI/CD 腳本維護或 Git Hooks 重構時一併整合 |
 | [**0048**](0048-strategic-prompt-workspace-financial-records-injection.md) | 個股分析工作區已載入之量化財務報表與本益比深度注入智策提示詞事實清單 | `P3` | `OPEN` | Code Review (Spec 0153 / Issue #135) | `Feature` · `AI-Advisor` · `PromptEngine` · `FinancialRecords` · `Workspace` | 待下期個股工作區財務深探或即時估值欄位對齊時實作 |
+| [**0049**](0049-dynamic-signals-card-subcomponent-decomposition.md) | AI 動態信號判斷卡片 (Card 12) 專業層與決策層子元件模組化解耦重構 | `P3` | `OPEN` | Code Review (Spec 0179 / Issue #224) | `Refactor` · `CleanCode` · `AiForceDashboard` · `DynamicSignals` · `Architecture` | 待未來自訂多因子權重偏好或處置倒數器演進時實作 |
 
 ---
 
