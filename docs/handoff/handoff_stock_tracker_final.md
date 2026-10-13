@@ -1,13 +1,14 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-10-13 12:15 (UTC+8)  
+> **交接產生時間**：2026-10-13 13:20 (UTC+8)  
 > **當前最新里程碑**：
-> - **V8.89.0 TDCC 集保大戶與月營收全自動新鮮度管線、主 K 線雙灰線修復與券商法人均線色譜**（ADR 0177, Spec 0177, Issue #217, PR #218）：
->   - **動態擬真時間序列自動推進 (Dynamic Settlement Anchors)**：集保大戶每週五 21:00 動態錨定最新週五基準日（`getLatestSettledTdccFriday`）；月營收每月 10 日 17:30 動態截止上月申報（`getLatestSettledRevenueMonth`）；新鮮度檢測函式整合多源狀態，終結手動執行腳本。
->   - **中介層靜默入庫與 10 分鐘冷卻保護 (`vite-market-middleware.cjs`)**：背景非同步佇列靜默補齊數據，配置 `CATCHUP_COOLDOWN_MS = 600,000` 防抖冷卻保護鎖，杜絕高頻競爭，對外提供 `/api/market/sync-status` 透明指標。
->   - **主 K 線雙平行灰線修復 (`KLineChartCard.tsx`)**：移除主圖底部 Y=220 處多餘分界線，保留副圖頂部 Y=230 單一微光分割線，視覺純淨化。
->   - **券商法人級 5 軌 MA 均線標準色譜 (`KLINE_MA_COLORS`)**：定義 `ma5` (#eab308 亮黃)、`ma10` (#06b6d4 青藍)、`ma20` (#ec4899 洋紅生命線)、`ma60` (#f97316 亮橘實線，廢除灰色虛線)、`ma250` (#a855f7 尊爵紫)，MA20 與 MA250 徹底色相互斥，圖例、查價狀態列與折線 100% 同步。
->   - **實機數據庫推進**：全市場 TDCC 推進至 2026-10-09（78,330 筆），月營收推進至 2026-09（93,996 筆）。
+> - **V8.90.0 專案全量文檔完整性稽核、死鏈全數修復、變更日誌補齊與自動化守門機制**（ADR 0178, Spec 0178, Issue #220, PR #221）：
+>   - **全量文檔完整性守門機制 (`scripts/verify-docs.cjs` / `npm run lint:docs`)**：掃描專案 553 份 Markdown 文檔，自動過濾代碼區塊，徹底防禦死鏈與成對性遺漏。
+>   - **0153 歷史跳號謎題與 ADR 缺漏修復**：補齊 Issue #135 待開發規格檔 `Spec 0153` 與 `ADR 0153`，並補齊 `ADR 0175`。
+>   - **目錄結構純淨化與割裂消除**：將歷史 `docs/handover/` 完整收斂至 `docs/handoff/`；將根目錄備份檔案隔離至受 `.gitignore` 保護的 `docs/json/`；補齊標準 MIT `LICENSE`。
+>   - **斷更近百版之 CHANGELOG 復甦**：全量補齊自 V5.9.0 至 V8.90.0 所有核心里程碑變更歷史。
+>   - **死鏈徹底清零**：修復交接總手冊、`CONTEXT.md`、Spec 0151/0152 及歷史債務文檔內共 23 處無效超連結。
+> - **V8.89.0 TDCC 集保大戶與月營收全自動新鮮度管線、主 K 線雙灰線修復與券商法人均線色譜**（ADR 0177, Spec 0177, Issue #217, PR #218）
 > - **V8.88.0 主力戰情室 Card 18 主力追蹤總評判操盤指引升級、5 態作戰光譜圖例與機構級風控門檻**（ADR 0176, Spec 0176, Issue #214, PR #215）
 > - **V8.87.0 外部金融 API 控制台探針修復、CSP/CORS 網路防禦與 NAS 通用反向代理**（ADR 0175, Spec 0175, Issue #209, PRs #212, #213）
 > **品質狀態**：全量單元測試 **1,553/1,553 通過 (100% Passed / 210 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
@@ -22,7 +23,7 @@
 - **單元測試套件**：**1,553/1,553 通過 (210 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V8.89.0**
+- **當前釋出版本**：**V8.90.0**
 - **工作區與分支整潔度**：工作區 100% clean，本地 feature/fix 分支已全數刪除，專案臨時備份檔案已全量清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -51,9 +52,8 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0178`](file:///d:/APP/股票紀錄/docs/specs/0178-documentation-integrity-audit-broken-links-repair-and-linter-spec.md) | [`ADR 0178`](file:///d:/APP/股票紀錄/docs/adr/0178-documentation-integrity-audit-broken-links-repair-and-linter.md) | [`.scratch/v8.90/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.90/issues/) | Issue #220 / PR #221 | V8.90.0 | 專案全量文檔完整性稽核、死鏈全數修復、變更日誌補齊與自動化守門機制 |
 | [`Spec 0177`](file:///d:/APP/股票紀錄/docs/specs/0177-auto-sync-tdcc-revenue-and-kline-institutional-spectrum-spec.md) | [`ADR 0177`](file:///d:/APP/股票紀錄/docs/adr/0177-auto-sync-tdcc-revenue-and-kline-institutional-spectrum.md) | [`.scratch/v8.89/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.89/issues/) | Issue #217 / PR #218 | V8.89.0 | TDCC 集保大戶與月營收全自動新鮮度管線、主 K 線雙灰線修復與券商法人色譜 |
-| [`Spec 0178`](file:///d:/APP/股票紀錄/docs/specs/0178-documentation-integrity-audit-broken-links-repair-and-linter-spec.md) | [`ADR 0178`](file:///d:/APP/股票紀錄/docs/adr/0178-documentation-integrity-audit-broken-links-repair-and-linter.md) | [`.scratch/v8.90/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.90/issues/) | Issue #220 | V8.90.0 | 專案全量文檔完整性稽核、死鏈全數修復、變更日誌補齊與自動化守門機制 |
-| [`Spec 0177`](file:///d:/APP/股票紀錄/docs/specs/0177-auto-sync-tdcc-revenue-and-kline-institutional-spectrum-spec.md) | [`ADR 0177`](file:///d:/APP/股票紀錄/docs/adr/0177-auto-sync-tdcc-revenue-and-kline-institutional-spectrum.md) | [`.scratch/v8.89/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.89/issues/) | Issue #217 / PR #218 | V8.89.0 | TDCC 與月營收全自動新鮮度自癒入庫與主 K 線圖法人級色譜重構 |
 | [`Spec 0176`](file:///d:/APP/股票紀錄/docs/specs/0176-ai-force-card18-verdict-playbook-color-spectrum-and-institutional-gate-spec.md) | [`ADR 0176`](file:///d:/APP/股票紀錄/docs/adr/0176-card18-verdict-playbook-and-color-spectrum.md) | [`.scratch/v8.88/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.88/issues/) | Issue #214 / PR #215 | V8.88.0 | 主力戰情室 Card 18 主力追蹤總評判操盤指引升級、5 態作戰光譜圖例與機構級風控門檻 |
 | [`Spec 0175`](file:///d:/APP/股票紀錄/docs/specs/0175-api-key-probe-csp-cors-and-endpoint-repair-spec.md) | [`ADR 0175`](file:///d:/APP/股票紀錄/docs/adr/0175-api-key-probe-csp-cors-and-endpoint-repair.md) | [`.scratch/v8.87/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.87/issues/) | Issue #209 / PR #212, #213 | V8.87.0 | 外部金融 API 控制台探針修復、CSP/CORS 網路防禦與 NAS 通用反向代理 |
 | [`Spec 0174`](file:///d:/APP/股票紀錄/docs/specs/0174-ai-force-dashboard-visual-master-layout-and-tooltip-spec.md) | [`ADR 0174`](file:///d:/APP/股票紀錄/docs/adr/0174-ai-force-dashboard-visual-master-layout-and-tooltip.md) | [`.scratch/v8.86/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.86/issues/) | Issue #203, #205 / PR #204, #206 | V8.86.0 | 主力戰情室視覺大師級版面重構、TermTooltip 500px 旗艦升級與籌碼熱區 1:1 對位 |
