@@ -5,6 +5,7 @@
 
 const https = require('https');
 const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+const { getLatestSettledTdccFriday } = require('./market-freshness-service.cjs');
 
 /**
  * 解析 TDCC 分級記錄，聚合各標的大戶與散戶比例
@@ -140,7 +141,7 @@ function saveTdccDistributionToSqlite(distributionMap, dateStr, customDbPath) {
  */
 async function runTdccIngestion(customDbPath, targetDate, backfillWeeks) {
   const db = initSqliteLakehouseDb(customDbPath);
-  const anchorDateStr = targetDate || '2026-10-02'; // 最新結算週五
+  const anchorDateStr = targetDate || getLatestSettledTdccFriday(); // 動態最新結算週五 (Spec 0177)
   const anchorDate = new Date(anchorDateStr);
   const weeksToRun = backfillWeeks !== undefined ? backfillWeeks : (targetDate ? 1 : 10);
 

@@ -48,10 +48,25 @@ function triggerCatchupTask(customDbPath, options = {}) {
 
   setImmediate(async () => {
     try {
-      console.log(`[MarketCatchup] 偵測到本機資料庫過期，啟動背景聯網追趕同步 (Spec 0170)...`);
+      console.log(`[MarketCatchup] 偵測到本機資料庫過期，啟動背景聯網追趕同步 (Spec 0170 & Spec 0177)...`);
       const { runTwMarketSync } = require('./sync-tw-market.cjs');
       await runTwMarketSync();
-      console.log(`[MarketCatchup] ✔ 背景聯網追趕同步完成！`);
+
+      try {
+        const { runTdccIngestion } = require('./ingest-tw-tdcc.cjs');
+        await runTdccIngestion(customDbPath);
+      } catch (tdccErr) {
+        console.warn(`[MarketCatchup] TDCC 入庫警示:`, tdccErr.message);
+      }
+
+      try {
+        const { runMonthlyRevenueIngestion } = require('./ingest-tw-monthly-revenue.cjs');
+        await runMonthlyRevenueIngestion(customDbPath);
+      } catch (revErr) {
+        console.warn(`[MarketCatchup] 月營收入庫警示:`, revErr.message);
+      }
+
+      console.log(`[MarketCatchup] ✔ 背景聯網追趕同步完成 (含 TDCC 與月營收)！`);
     } catch (err) {
       console.warn(`[MarketCatchup] 背景追趕回補警告:`, err.message);
     } finally {
@@ -80,7 +95,7 @@ function createMarketApiMiddleware(customDbPath) {
     try {
       const db = initSqliteLakehouseDb(customDbPath);
       const freshness = checkMarketFreshness(db);
-      if (freshness.tw.isStale || freshness.us.isStale) {
+      if (freshness.tw.isStale || freshness.us.isStale || freshness.tdcc?.isStale || freshness.revenue?.isStale) {
         triggerCatchupTask(customDbPath);
       }
     } catch (e) {
@@ -113,7 +128,7 @@ function createMarketApiMiddleware(customDbPath) {
     if (pathname === '/api/market/sync-status') {
       const freshness = checkMarketFreshness(db);
 
-      if (query.catchup === 'true' && (freshness.tw.isStale || freshness.us.isStale)) {
+      if (query.catchup === 'true' && (freshness.tw.isStale || freshness.us.isStale || freshness.tdcc?.isStale || freshness.revenue?.isStale)) {
         triggerCatchupTask(customDbPath);
       }
 
@@ -122,6 +137,8 @@ function createMarketApiMiddleware(customDbPath) {
         JSON.stringify({
           tw: freshness.tw,
           us: freshness.us,
+          tdcc: freshness.tdcc,
+          revenue: freshness.revenue,
           isCatchingUp,
           lastCatchupTime,
           timestamp: Date.now(),

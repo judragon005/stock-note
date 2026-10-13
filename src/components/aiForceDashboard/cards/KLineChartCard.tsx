@@ -11,6 +11,17 @@ import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseMainForceCost } from '../../../constants/aiForceGlossary';
 import { aggregateCandlesToTimeframe, KlineTimeframe } from '../../../engine/klineAggregationEngine';
 
+/**
+ * 券商法人級標準均線色彩光譜 (Spec 0177)
+ */
+export const KLINE_MA_COLORS = {
+  ma5: '#eab308',   // 亮黃 (短期動能)
+  ma10: '#06b6d4',  // 青藍 (雙週轉折)
+  ma20: '#ec4899',  // 洋紅 (月線生命線，與紫色徹底分離)
+  ma60: '#f97316',  // 亮橘實線 (季線決策線，廢除灰色虛線)
+  ma250: '#a855f7', // 尊爵紫 (年線多空分水嶺)
+} as const;
+
 export interface PriceRange {
   min: number;
   max: number;
@@ -526,18 +537,18 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
         {/* 均線圖例、副圖指標切換與選單 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem' }}>
           <TermTooltip termId="ma5">
-            <span style={{ color: '#fbbf24', fontWeight: 600 }}>— MA5</span>
+            <span style={{ color: KLINE_MA_COLORS.ma5, fontWeight: 600 }}>— MA5</span>
           </TermTooltip>
           <TermTooltip termId="ma10">
-            <span style={{ color: '#38bdf8', fontWeight: 600 }}>— MA10</span>
+            <span style={{ color: KLINE_MA_COLORS.ma10, fontWeight: 600 }}>— MA10</span>
           </TermTooltip>
           <TermTooltip termId="ma20">
-            <span style={{ color: '#c084fc', fontWeight: 600 }}>— MA20</span>
+            <span style={{ color: KLINE_MA_COLORS.ma20, fontWeight: 600 }}>— MA20</span>
           </TermTooltip>
           <TermTooltip termId="ma60">
-            <span style={{ color: '#94a3b8', fontWeight: 600 }}>⋯ MA60</span>
+            <span style={{ color: KLINE_MA_COLORS.ma60, fontWeight: 600 }}>— MA60</span>
           </TermTooltip>
-          <span style={{ color: '#a855f7', fontWeight: 600 }} title="250日年線，長期多空分水嶺">
+          <span style={{ color: KLINE_MA_COLORS.ma250, fontWeight: 600 }} title="250日年線，長期多空分水嶺">
             — MA250
           </span>
 
@@ -718,15 +729,15 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           <span>低: <b style={{ color: '#10b981' }}>{activeCandle.low}</b></span>
           <span>收: <b style={{ color: activeCandle.close >= activeCandle.open ? bullColor : bearColor }}>{activeCandle.close}</b></span>
           <span>量: <b style={{ color: '#fbbf24' }}>{activeCandle.volume.toLocaleString()}</b></span>
-          {activeCandle.ma5 && <span style={{ color: '#fbbf24' }}>MA5:{activeCandle.ma5}</span>}
-          {activeCandle.ma20 && <span style={{ color: '#c084fc' }}>MA20:{activeCandle.ma20}</span>}
+          {activeCandle.ma5 && <span style={{ color: KLINE_MA_COLORS.ma5 }}>MA5:{activeCandle.ma5}</span>}
+          {activeCandle.ma20 && <span style={{ color: KLINE_MA_COLORS.ma20 }}>MA20:{activeCandle.ma20}</span>}
           {activeCandle.ma60 !== undefined ? (
-            <span style={{ color: '#94a3b8' }}>MA60:{activeCandle.ma60}</span>
+            <span style={{ color: KLINE_MA_COLORS.ma60 }}>MA60:{activeCandle.ma60}</span>
           ) : (
             <span style={{ color: '#64748b' }} title="上市未滿60日，數據累積中">MA60:數據累積中</span>
           )}
           {activeCandle.ma250 !== undefined ? (
-            <span style={{ color: '#a855f7', fontWeight: 700 }}>MA250:{activeCandle.ma250}</span>
+            <span style={{ color: KLINE_MA_COLORS.ma250, fontWeight: 700 }}>MA250:{activeCandle.ma250}</span>
           ) : (
             <span style={{ color: '#64748b' }} title="上市未滿250日，數據累積中">MA250:數據累積中</span>
           )}
@@ -808,13 +819,6 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
             stroke="rgba(255, 255, 255, 0.06)"
             strokeDasharray="3 3"
           />
-          <line
-            x1={leftPad}
-            y1={klineHeight}
-            x2={width - rightPad}
-            y2={klineHeight}
-            stroke="rgba(255, 255, 255, 0.12)"
-          />
 
           {/* 右側價格刻度 */}
           <text
@@ -878,11 +882,11 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           })}
 
           {/* 均線 Polyline 折線 */}
-          <polyline points={ma250Points} fill="none" stroke="#a855f7" strokeWidth="1.6" opacity="0.9" />
-          <polyline points={ma60Points} fill="none" stroke="#94a3b8" strokeWidth="1.2" strokeDasharray="3 3" opacity="0.6" />
-          <polyline points={ma20Points} fill="none" stroke="#c084fc" strokeWidth="1.5" opacity="0.85" />
-          <polyline points={ma10Points} fill="none" stroke="#38bdf8" strokeWidth="1.5" opacity="0.85" />
-          <polyline points={ma5Points} fill="none" stroke="#fbbf24" strokeWidth="1.6" />
+          <polyline points={ma250Points} fill="none" stroke={KLINE_MA_COLORS.ma250} strokeWidth="1.6" opacity="0.9" />
+          <polyline points={ma60Points} fill="none" stroke={KLINE_MA_COLORS.ma60} strokeWidth="1.5" opacity="0.85" />
+          <polyline points={ma20Points} fill="none" stroke={KLINE_MA_COLORS.ma20} strokeWidth="1.5" opacity="0.85" />
+          <polyline points={ma10Points} fill="none" stroke={KLINE_MA_COLORS.ma10} strokeWidth="1.5" opacity="0.85" />
+          <polyline points={ma5Points} fill="none" stroke={KLINE_MA_COLORS.ma5} strokeWidth="1.6" />
 
           {/* 三大水平關鍵價位引線 (Ticket 05) */}
           {showKeyLevels && keyLevelOverlays.map((overlay) => (

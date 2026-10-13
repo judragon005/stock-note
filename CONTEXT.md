@@ -2407,5 +2407,14 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     4. **量化研判深度指南彈窗 (360px Deep-Dive, 方案 B)**：整合 5 態量化門檻對照表、日均量 < 300 張流動性守門員防作線警示與合規免責宣告。
     5. **關鍵指標膠囊正則修復**：精準萃取收盤價、20日 VWAP 主力成本與成本乖離率，向下相容舊版法人與 RSI 指標。
 
+- **TDCC & Revenue Auto Freshness Pipeline & K-Line Institutional Spectrum (TDCC 集保與月營收自動新鮮度管線、主 K 線雙灰線修復與券商法人均線色譜)**:
+  - 核心模組：`scripts/market-sync/market-freshness-service.cjs`、`scripts/market-sync/vite-market-middleware.cjs`、`src/components/aiForceDashboard/cards/KLineChartCard.tsx`。
+  - 規範依據：Spec 0177 (v8.89.0) 與 ADR 0177。
+  - 核心特性：
+    1. **動態擬真時間序列推進 (Dynamic Settlement Anchors)**：集保大戶每週五 21:00 動態錨定最新週五基準日（`getLatestSettledTdccFriday`）；月營收每月 10 日 17:30 動態截止上月申報（`getLatestSettledRevenueMonth`）；`checkMarketFreshness` 整合多源新鮮度指標。
+    2. **中介層靜默入庫與 10 分鐘冷卻保護**：Vite 中介層後台異步排隊靜默入庫，並透過 `CATCHUP_COOLDOWN_MS = 600,000` 防禦性避免高頻重複更新，對外暴露 `/api/market/sync-status` 透明指標。
+    3. **主 K 線雙平行灰線徹底消除**：移除 Y=220 主圖多餘底部分界線，保留 Y=230 副圖單一微光分割線，視覺純淨化。
+    4. **券商法人級 5 軌 MA 標準光譜 (`KLINE_MA_COLORS`)**：定義 `ma5` (#eab308 亮黃)、`ma10` (#06b6d4 青藍)、`ma20` (#ec4899 洋紅)、`ma60` (#f97316 亮橘實線)、`ma250` (#a855f7 尊爵紫) 完全色相互斥體系，並將圖例、查價列與 Polyline 100% 同步。
+
 
 
