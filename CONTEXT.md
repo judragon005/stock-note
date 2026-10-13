@@ -2439,3 +2439,13 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
        - 藍帽 (Blue Hat)：全局決策收斂、操作指引、倉位控管與覆盤回饋機制。
     3. **雙層 Token 預算防護守門 (Token Budget Gatekeeper)**：單頂思考帽 < 1,200 tokens（單帽採用緊湊型 Fact Sheet 精簡至 700~1,000 tokens）；全量 Master Prompt < 4,500 tokens。
     4. **零信任海關與隱私部位脫敏 (Zero-Trust Customs & Privacy Desensitization)**：純前端組合組裝，預設部位金額脫敏，僅導出市場與量化事實，杜絕個人敏感財務隱私外洩。
+
+- **Forensic Accounting, ETF Isolation & Analysis UI Repair (個股深度財報法務會計排雷、ETF 物理隔離與智策引擎 UI 重構)**:
+  - 核心模組：`src/components/analysis/StockAnalysisWorkspace.tsx`、`src/components/analysis/AnalysisMetricView.tsx`、`src/components/analysis/StrategicPromptPanel.tsx`。
+  - 規範依據：Spec 0180 (v8.93.0) 與 ADR 0180。
+  - 核心特性：
+    1. **智策多維提示詞引擎 UI 原生重構**：清除無效 Tailwind classes，採用原生深色 Glassmorphism 與 CSS 變數體系，水平 6 欄思考帽自適應網格。
+    2. **個股分析標的快捷列清理與 ETF 物理隔離**：移除冗餘快捷標的膠囊列；標的選單物理阻斷 ETF 標的；若誤查 ETF 提示改為「此標的為 ETF，不具備個股財務報表，建議前往【主力戰情室】檢視」並附轉發跳轉按鈕。
+    3. **零偽造原則 (Zero-Mock)**：徹底移除營運週轉天數 (42/56/68 天)、借款科目 (台泥 227.6 億 / 1,454.2 億)、現金轉換循環 (68 天) 寫死數值，缺漏科目誠實顯示 `-` 或 `N/A`。
+    4. **會計計算與年化修正**：杜邦總資產週轉率年化 ($\times 4$)、營業週轉率年化、現金股利發放率改以全年 4 季累計 EPS 為分母、美股季配息殖利率年化 ($\times 4$)、金融保險業負債比率專業豁免、景氣循環股 P/B 河流圖優先引導。
+    5. **法務會計五大排雷排毒燈**：跨表勾稽應收帳款剪刀差、營業現金流獲利純度 (CFO/NI < 80%)、自由現金流連續失血、存貨週轉壓力與高槓桿負債結構。

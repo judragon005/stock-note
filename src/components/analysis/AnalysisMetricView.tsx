@@ -41,6 +41,11 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
   stockName,
   symbol,
 }) => {
+  // 市場與產業屬性判定
+  const isUsMarket = !/^\d+$/.test(symbol) && !symbol.startsWith('00');
+  const isFinancialStock = /^28\d{2}/.test(symbol) || ['JPM', 'BAC', 'GS', 'MS', 'WFC', 'C'].includes(symbol.toUpperCase());
+  const isCyclicalStock = ['1101', '1102', '2002', '2603', '2609', '2409', '3481', 'MU', 'X'].includes(symbol.toUpperCase());
+
   // DCF 互動滑桿狀態
   const [dcfWacc, setDcfWacc] = useState<number>(0.09);
   const [dcfGrowth, setDcfGrowth] = useState<number>(0.025);
@@ -953,15 +958,19 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
               </div>
             </div>
             <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '10px' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>2. 總資產週轉率 (Asset Turnover)</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>2. 總資產週轉率 (年化 Asset Turnover)</span>
               <div style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', marginTop: '4px' }}>
-                {latestRecord?.balanceSheet?.totalAssets ? (latestRecord.income.revenue / latestRecord.balanceSheet.totalAssets).toFixed(2) : 0}次
+                {latestRecord?.balanceSheet?.totalAssets && latestRecord.balanceSheet.totalAssets > 0
+                  ? (((latestRecord.income?.revenue || 0) * 4) / latestRecord.balanceSheet.totalAssets).toFixed(2)
+                  : '0.00'}次
               </div>
             </div>
             <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '10px' }}>
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>3. 權益乘數 (Equity Multiplier)</span>
               <div style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', marginTop: '4px' }}>
-                {latestRecord?.balanceSheet?.totalEquity ? (latestRecord.balanceSheet.totalAssets / latestRecord.balanceSheet.totalEquity).toFixed(2) : 1.0}x
+                {latestRecord?.balanceSheet?.totalEquity && latestRecord.balanceSheet.totalEquity > 0
+                  ? (latestRecord.balanceSheet.totalAssets / latestRecord.balanceSheet.totalEquity).toFixed(2)
+                  : '1.00'}x
               </div>
             </div>
           </div>
@@ -970,21 +979,21 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
 
       {subTab === 'turnover_capability' && (
         <div>
-          <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 12px 0' }}>經營週轉能力 (次數)</h3>
+          <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 12px 0' }}>經營週轉能力 (年化次數)</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
             <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '10px' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>應收帳款週轉率</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>應收帳款週轉率 (年化)</span>
               <div style={{ fontSize: '22px', fontWeight: 800, color: '#3b82f6', marginTop: '4px' }}>
                 {latestRecord?.balanceSheet?.accountsReceivable && latestRecord.balanceSheet.accountsReceivable > 0
-                  ? ((latestRecord.income.revenue / latestRecord.balanceSheet.accountsReceivable)).toFixed(1) + '次/年'
+                  ? ((((latestRecord.income?.revenue || 0) * 4) / latestRecord.balanceSheet.accountsReceivable)).toFixed(1) + '次/年'
                   : '暫無資料'}
               </div>
             </div>
             <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '10px' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>存貨週轉率</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>存貨週轉率 (年化)</span>
               <div style={{ fontSize: '22px', fontWeight: 800, color: '#10b981', marginTop: '4px' }}>
                 {latestRecord?.balanceSheet?.inventory && latestRecord.balanceSheet.inventory > 0
-                  ? (((latestRecord.income.revenue - latestRecord.income.grossProfit) / latestRecord.balanceSheet.inventory)).toFixed(1) + '次/年'
+                  ? (((((latestRecord.income?.revenue || 0) - (latestRecord.income?.grossProfit || 0)) * 4) / latestRecord.balanceSheet.inventory)).toFixed(1) + '次/年'
                   : '暫無資料'}
               </div>
             </div>
@@ -999,19 +1008,19 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
             <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '10px' }}>
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>應收帳款週轉天數 (DSO)</span>
               <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-primary)', marginTop: '4px' }}>
-                {turnoverMetrics?.dsoDays ? `${turnoverMetrics.dsoDays.toFixed(0)} 天` : '42 天'}
+                {turnoverMetrics?.dsoDays ? `${turnoverMetrics.dsoDays.toFixed(0)} 天` : '-'}
               </div>
             </div>
             <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '10px' }}>
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>存貨週轉天數 (DIO)</span>
               <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-primary)', marginTop: '4px' }}>
-                {turnoverMetrics?.dioDays ? `${turnoverMetrics.dioDays.toFixed(0)} 天` : '56 天'}
+                {turnoverMetrics?.dioDays ? `${turnoverMetrics.dioDays.toFixed(0)} 天` : '-'}
               </div>
             </div>
             <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '10px' }}>
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>現金轉換週期 (CCC)</span>
               <div style={{ fontSize: '24px', fontWeight: 800, color: '#10b981', marginTop: '4px' }}>
-                {turnoverMetrics?.cccDays ? `${turnoverMetrics.cccDays.toFixed(0)} 天` : '68 天'}
+                {turnoverMetrics?.cccDays ? `${turnoverMetrics.cccDays.toFixed(0)} 天` : '-'}
               </div>
             </div>
           </div>
@@ -1023,17 +1032,19 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
           <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 12px 0' }}>現金股利發放率 (DPS / EPS)</h3>
           {renderSimpleBars(
             companyDividends.map((d) => {
-              const matchedQuarter = records.find((r) => r.year === d.year);
-              const eps = matchedQuarter?.income?.eps || 1.2;
-              const payout = eps > 0 ? Number(((d.cashDividend / eps) * 100).toFixed(0)) : 0;
+              // 聚合該年度所有季度 EPS
+              const yearRecords = records.filter((r) => r.year === d.year);
+              const totalYearEps = yearRecords.reduce((sum, r) => sum + (r.income?.eps || 0), 0);
+              const payout = totalYearEps > 0 ? Number(((d.cashDividend / totalYearEps) * 100).toFixed(0)) : null;
               return {
                 label: `${d.year}年`,
-                value: payout > 0 ? payout : 65,
-                displayValue: `${payout > 0 ? payout : 65}%`,
+                value: payout ?? 0,
+                displayValue: payout != null ? `${payout}%` : '-',
+                isNoData: payout == null,
               };
             }),
             '#10b981',
-            '發放率維持在 50%~80% 屬穩健定存股'
+            '發放率維持在 50%~80% 屬穩健定存股 (分母為全年累計 EPS)'
           )}
         </div>
       )}
@@ -1041,7 +1052,14 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
       {/* ==================== 3. 安全性分析 (solvency) ==================== */}
       {subTab === 'capital_structure' && (
         <div>
-          <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 12px 0' }}>財務結構比率 (負債比率走勢)</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>財務結構比率 (負債比率走勢)</h3>
+            {isFinancialStock && (
+              <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 8px', borderRadius: '6px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                金融保險業：吸收存款與承保資金為營運核心，高負債比屬法規常態，免於一般製造業負債警報
+              </span>
+            )}
+          </div>
           {renderSimpleBars(
             chronological.map((r) => {
               const as = r.balanceSheet?.totalAssets || 0;
@@ -1054,11 +1072,11 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
                 label: `${r.year % 100}Q${r.quarter}`,
                 value: debtRatio,
                 displayValue: `${debtRatio}%`,
-                isNegative: debtRatio > 65,
+                isNegative: isFinancialStock ? false : debtRatio > 65,
               };
             }),
             '#f59e0b',
-            '負債比率 = 負債總額 / 總資產 (低於 50% 最佳)'
+            isFinancialStock ? '金融保險業負債結構正常 (免於製造業門檻)' : '負債比率 = 負債總額 / 總資產 (低於 50% 最佳)'
           )}
         </div>
       )}
@@ -1288,6 +1306,22 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {isCyclicalStock && (
+              <div
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  background: 'rgba(245, 158, 11, 0.12)',
+                  border: '1px solid rgba(245, 158, 11, 0.35)',
+                  color: '#f59e0b',
+                  fontSize: '12px',
+                  lineHeight: 1.6,
+                }}
+              >
+                <strong>🚨 景氣循環股警示：</strong>
+                此標的具高度景氣循環特性，獲利高點時 P/E 常處於歷史低位（低 P/E 陷阱），獲利低谷或虧損時 P/E 往往飆高或失效。強烈建議優先切換至【股價淨值比 P/B 河流圖】評估歷史景氣位階。
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
               <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>本益比評價模型 (P/E Valuation)</h3>
               <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
@@ -1328,7 +1362,23 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
       })()}
 
       {subTab === 'pe_river' && (
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {isCyclicalStock && (
+            <div
+              style={{
+                padding: '12px 16px',
+                borderRadius: '8px',
+                background: 'rgba(245, 158, 11, 0.12)',
+                border: '1px solid rgba(245, 158, 11, 0.35)',
+                color: '#f59e0b',
+                fontSize: '12px',
+                lineHeight: 1.6,
+              }}
+            >
+              <strong>🚨 景氣循環股警示：</strong>
+              此標的具高度景氣循環特性，獲利高點時 P/E 常處於歷史低位（低 P/E 陷阱），獲利低谷或虧損時 P/E 往往飆高或失效。強烈建議優先切換至【股價淨值比 P/B 河流圖】評估歷史景氣位階。
+            </div>
+          )}
           <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 12px 0' }}>本益比河流圖 (P/E River Bands)</h3>
           {renderValuationRiver(
             chronological.map((r) => `${r.year % 100}Q${r.quarter}`),
@@ -1419,7 +1469,9 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
       )}
 
       {subTab === 'dividend_yield' && (() => {
-        const latestDiv = companyDividends.length > 0 ? companyDividends[companyDividends.length - 1].cashDividend : 1.0;
+        const latestDivRaw = companyDividends.length > 0 ? companyDividends[companyDividends.length - 1].cashDividend : 1.0;
+        // 若為美股標的，通常為季配息，自動年化 (x4) 計算真實現金殖利率
+        const latestDiv = isUsMarket && companyDividends.length > 0 ? latestDivRaw * 4 : latestDivRaw;
         const curYield = currentPrice > 0 ? Number(((latestDiv / currentPrice) * 100).toFixed(2)) : 4.18;
 
         return (
@@ -1614,13 +1666,17 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
             <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '10px' }}>
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>短期借款 (Short-Term Debt)</span>
               <div style={{ fontSize: '22px', fontWeight: 800, color: '#f59e0b', marginTop: '4px' }}>
-                {latestRecord?.balanceSheet?.shortTermDebt ? formatFinancialAmount(latestRecord.balanceSheet.shortTermDebt) : '227.6 億'}
+                {latestRecord?.balanceSheet?.shortTermDebt && latestRecord.balanceSheet.shortTermDebt > 0
+                  ? formatFinancialAmount(latestRecord.balanceSheet.shortTermDebt)
+                  : '未單獨揭露'}
               </div>
             </div>
             <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '10px' }}>
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>長期借款 (Long-Term Debt)</span>
               <div style={{ fontSize: '22px', fontWeight: 800, color: '#3b82f6', marginTop: '4px' }}>
-                {latestRecord?.balanceSheet?.longTermDebt ? formatFinancialAmount(latestRecord.balanceSheet.longTermDebt) : '1,454.2 億'}
+                {latestRecord?.balanceSheet?.longTermDebt && latestRecord.balanceSheet.longTermDebt > 0
+                  ? formatFinancialAmount(latestRecord.balanceSheet.longTermDebt)
+                  : '未單獨揭露'}
               </div>
             </div>
           </div>
@@ -1633,11 +1689,12 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
           {renderSimpleBars(
             chronological.map((r) => {
               const tm = calculateTurnoverMetrics(r);
-              const ccc = Math.round(tm?.cccDays || 68);
+              const ccc = tm?.cccDays != null && !isNaN(tm.cccDays) && isFinite(tm.cccDays) ? Math.round(tm.cccDays) : null;
               return {
                 label: `${r.year % 100}Q${r.quarter}`,
-                value: ccc,
-                displayValue: `${ccc}天`,
+                value: ccc ?? 0,
+                displayValue: ccc != null ? `${ccc}天` : '-',
+                isNoData: ccc == null,
               };
             }),
             '#0284c7',
@@ -1790,6 +1847,172 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
           </p>
         </div>
       )}
+
+      {subTab === 'forensic_warning' && (() => {
+        const cur = latestRecord;
+        const prev = chronological.length >= 2 ? chronological[chronological.length - 2] : null;
+
+        // 1. 應收帳款剪刀差檢測
+        const curRev = cur?.income?.revenue || 0;
+        const prevRev = prev?.income?.revenue || 0;
+        const revGrowth = prev && prevRev > 0 ? (curRev - prevRev) / prevRev : 0;
+
+        const curAr = cur?.balanceSheet?.accountsReceivable || 0;
+        const prevAr = prev?.balanceSheet?.accountsReceivable || 0;
+        const arGrowth = prev && prevAr > 0 ? (curAr - prevAr) / prevAr : 0;
+
+        const isScissorRisk = !!(prev && arGrowth - revGrowth > 0.2);
+
+        // 2. 獲利純度檢測 (CFO / NI)
+        const cfo = cur?.cashFlow?.operatingCashFlow || 0;
+        const ni = cur?.income?.netIncome || 0;
+        let cfoQualityStatus: 'PASS' | 'WARNING' | 'ALERT' = 'PASS';
+        let cfoRatioText = '-';
+        if (ni > 0) {
+          const ratio = (cfo / ni) * 100;
+          cfoRatioText = `${ratio.toFixed(0)}%`;
+          if (ratio < 80) {
+            cfoQualityStatus = 'ALERT';
+          } else if (ratio < 100) {
+            cfoQualityStatus = 'WARNING';
+          }
+        } else if (cfo < 0) {
+          cfoQualityStatus = 'ALERT';
+        }
+
+        // 3. 自由現金流造血能力 (近 2 季 FCF)
+        const recent2 = chronological.slice(-2);
+        const fcfNegativeCount = recent2.filter(
+          (r) => ((r.cashFlow?.operatingCashFlow || 0) - (r.cashFlow?.capitalExpenditure || 0)) < 0
+        ).length;
+        const isFcfBleeding = recent2.length >= 2 && fcfNegativeCount === 2;
+
+        // 4. 存貨積壓風險
+        const curInv = cur?.balanceSheet?.inventory || 0;
+        const prevInv = prev?.balanceSheet?.inventory || 0;
+        const invGrowth = prev && prevInv > 0 ? (curInv - prevInv) / prevInv : 0;
+        const isInvRisk = !!(prev && curInv > 0 && invGrowth - revGrowth > 0.25);
+
+        // 5. 股本膨脹與負債比率
+        const totalLiabilities = cur?.balanceSheet?.totalLiabilities || 0;
+        const totalAssets = cur?.balanceSheet?.totalAssets || 0;
+        const debtRatio = totalAssets > 0 ? (totalLiabilities / totalAssets) * 100 : 0;
+        const isDebtRisk = !isFinancialStock && debtRatio > 70;
+
+        const warningCount = [
+          isScissorRisk,
+          cfoQualityStatus === 'ALERT',
+          isFcfBleeding,
+          isInvRisk,
+          isDebtRisk,
+        ].filter(Boolean).length;
+
+        const checks = [
+          {
+            title: '應收帳款剪刀差',
+            isAlert: isScissorRisk,
+            desc: isScissorRisk
+              ? `剪刀差警訊：應收帳款增速 (${(arGrowth * 100).toFixed(1)}%) 顯著超越營收增速 (${(revGrowth * 100).toFixed(1)}%)，提防塞貨或認列虛增營收`
+              : `營收與應收帳款增長匹配正常（營收 YoY: ${(revGrowth * 100).toFixed(1)}%，應收 YoY: ${(arGrowth * 100).toFixed(1)}%）`,
+          },
+          {
+            title: '營業現金流獲利純度',
+            isAlert: cfoQualityStatus === 'ALERT',
+            desc: cfoQualityStatus === 'ALERT'
+              ? `獲利純度不足：營業現金流僅佔稅後淨利 ${cfoRatioText} (< 80%)，獲利多停留在帳面未轉化為真實真金白銀`
+              : `獲利純度優良：營業現金流充足 (${cfoRatioText})，淨利具備高度現金轉化率`,
+          },
+          {
+            title: '自由現金流造血能力',
+            isAlert: isFcfBleeding,
+            desc: isFcfBleeding
+              ? '自由現金流連續失血：近 2 季自由現金流持續為負，企業需仰賴舉債或現增維持運作'
+              : '自由現金流自主造血正常：營運產生之現金足以覆蓋資本支出，具備健全自體造血機能',
+          },
+          {
+            title: '存貨週轉壓力',
+            isAlert: isInvRisk,
+            desc: isInvRisk
+              ? `存貨積壓警訊：存貨增速 (${(invGrowth * 100).toFixed(1)}%) 遠超營收增速，恐面臨存貨跌價與滯銷打銷損失`
+              : curInv === 0
+              ? '無顯著實體存貨風險（輕資產或無存貨型商業模式）'
+              : '存貨水平健康，未見異常庫存囤積',
+          },
+          {
+            title: '股本膨脹與負債結構',
+            isAlert: isDebtRisk,
+            desc: isFinancialStock
+              ? '金融保險業受高槓桿資產負債特性豁免，由資本適足率 (BIS) 與逾放比監管'
+              : isDebtRisk
+              ? `財務槓桿偏高：負債比率達 ${debtRatio.toFixed(1)}% (> 70%)，抗景氣逆風緩衝空間狹窄`
+              : `資本結構健康：負債比率為 ${debtRatio.toFixed(1)}%，處於合理安全邊際內`,
+          },
+        ];
+
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+              <div>
+                <h3 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>法務會計五大排雷排毒燈</h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
+                  嚴格依據美台法務會計 (Forensic Accounting) 跨表勾稽準則，主動排查財報造假與粉飾徵兆
+                </p>
+              </div>
+              <div
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  fontWeight: 800,
+                  fontSize: '13px',
+                  background: warningCount === 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                  color: warningCount === 0 ? '#10b981' : '#ef4444',
+                  border: `1px solid ${warningCount === 0 ? '#10b98140' : '#ef444440'}`,
+                }}
+              >
+                {warningCount === 0 ? '全數安全無異常 (0 雷點)' : `觸發 ${warningCount} 項排雷警報`}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
+              {checks.map((c, i) => (
+                <div
+                  key={i}
+                  style={{
+                    padding: '16px',
+                    borderRadius: '12px',
+                    background: c.isAlert ? 'rgba(239, 68, 68, 0.08)' : 'var(--bg-secondary)',
+                    border: `1px solid ${c.isAlert ? '#ef444450' : 'var(--border-color)'}`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {i + 1}. {c.title}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        background: c.isAlert ? '#ef444420' : '#10b98120',
+                        color: c.isAlert ? '#ef4444' : '#10b981',
+                      }}
+                    >
+                      {c.isAlert ? '紅燈警戒' : '綠燈安全'}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '12px', color: c.isAlert ? '#ef4444' : 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
+                    {c.desc}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ==================== 7. 最新動態 (news) ==================== */}
       {(subTab === 'news_feed' || subTab === 'news_events') && (

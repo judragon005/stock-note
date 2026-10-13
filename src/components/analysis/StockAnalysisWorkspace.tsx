@@ -11,7 +11,6 @@ import {
   Search,
   RefreshCw,
   AlertTriangle,
-  Flame,
   Check,
   Plus,
 } from 'lucide-react';
@@ -138,6 +137,7 @@ export const CATEGORY_TOPOLOGY: Record<
     label: '關鍵指標',
     icon: <Sparkles size={18} />,
     items: [
+      { id: 'forensic_warning', label: '法務會計排雷燈' },
       { id: 'fcf_yield', label: '自由現金流報酬率' },
       { id: 'piotroski_f', label: 'Piotroski F 分數' },
       { id: 'debt_structure', label: '長短期金融借款' },
@@ -167,6 +167,8 @@ interface StockAnalysisWorkspaceProps {
   finmindToken?: string;
   usdToTwdRate?: number;
   defaultPrimaryTab?: PrimaryCategoryKey;
+  initialSymbol?: string;
+  onNavigateTab?: (tab: string) => void;
 }
 
 export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
@@ -176,16 +178,23 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
   fmpApiKey,
   finmindToken,
   defaultPrimaryTab,
+  initialSymbol: initialSymbolProp,
+  onNavigateTab,
 }) => {
-  // 1. 預設標的優先選擇非 ETF 普通股
-  const initialSymbol = useMemo(() => {
+  // 1. 預設標的優先選擇非 ETF 普通股 (若外部指定或無普通股持倉，安全回退，絕不主動預設 ETF)
+  const resolvedInitialSymbol = useMemo(() => {
+    if (initialSymbolProp) return initialSymbolProp;
     const normalHolding = holdings.find((h) => !isEtfSymbol(h.symbol));
     if (normalHolding) return normalHolding.symbol;
-    if (holdings.length > 0) return holdings[0].symbol;
     return '2330';
+  }, [initialSymbolProp, holdings]);
+
+  // 普通股持倉列表 (全域過濾排除 ETF)
+  const stockHoldings = useMemo(() => {
+    return holdings.filter((h) => !isEtfSymbol(h.symbol));
   }, [holdings]);
 
-  const [selectedSymbol, setSelectedSymbol] = useState<string>(initialSymbol);
+  const [selectedSymbol, setSelectedSymbol] = useState<string>(resolvedInitialSymbol);
   const [searchInput, setSearchInput] = useState<string>('');
 
   // 雙層選單導航狀態
@@ -333,28 +342,6 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
     }
   };
 
-  // 統合快捷膠囊 (持倉 + 熱門標的，嚴格 Set 去重)
-  const quickPills = useMemo(() => {
-    const pills: Array<{ symbol: string; name: string; isHolding?: boolean }> = [];
-    const seen = new Set<string>();
-
-    holdings.forEach((h) => {
-      if (!seen.has(h.symbol)) {
-        seen.add(h.symbol);
-        pills.push({ symbol: h.symbol, name: h.name || h.symbol, isHolding: true });
-      }
-    });
-
-    POPULAR_STOCKS.forEach((p) => {
-      if (!seen.has(p.symbol)) {
-        seen.add(p.symbol);
-        pills.push(p);
-      }
-    });
-
-    return pills;
-  }, [holdings]);
-
   // 智策提示詞事實特徵組裝 (Spec 0153 / Issue #135)
   const strategicDigest = useMemo(() => {
     const currentHolding = holdings.find((h) => h.symbol === selectedSymbol);
@@ -396,84 +383,7 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '48px' }}>
-      {/* 1. 快捷標的膠囊列 (Stock Pills) */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          overflowX: 'auto',
-          paddingBottom: '2px',
-          scrollbarWidth: 'thin',
-        }}
-      >
-        <span
-          style={{
-            fontSize: '12px',
-            fontWeight: 700,
-            color: 'var(--text-secondary)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            whiteSpace: 'nowrap',
-            paddingRight: '4px',
-          }}
-        >
-          <Flame size={14} style={{ color: '#f59e0b' }} /> 快捷標的:
-        </span>
-        {quickPills.map((pill) => {
-          const isCurrent = pill.symbol === selectedSymbol;
-          return (
-            <button
-              key={pill.symbol}
-              type="button"
-              onClick={() => setSelectedSymbol(pill.symbol)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                borderRadius: '20px',
-                fontSize: '12px',
-                fontWeight: isCurrent ? 700 : 500,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.15s ease',
-                background: isCurrent ? 'var(--accent-primary, #3b82f6)' : 'var(--bg-card)',
-                color: isCurrent ? '#ffffff' : 'var(--text-primary)',
-                border: isCurrent
-                  ? '1px solid var(--accent-primary, #3b82f6)'
-                  : '1px solid var(--border-color)',
-                boxShadow: isCurrent ? '0 2px 8px rgba(59, 130, 246, 0.3)' : 'none',
-              }}
-            >
-              <span>{pill.name}</span>
-              <span
-                style={{
-                  fontSize: '10px',
-                  opacity: 0.8,
-                  fontFamily: 'var(--font-mono, monospace)',
-                }}
-              >
-                {pill.symbol}
-              </span>
-              {pill.isHolding && (
-                <span
-                  style={{
-                    width: '6px',
-                    height: '6px',
-                    borderRadius: '50%',
-                    background: isCurrent ? '#a7f3d0' : '#10b981',
-                  }}
-                  title="持倉中"
-                />
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* 2. 標的 Header (原生深色毛玻璃卡片) */}
+      {/* 1. 標的 Header (原生深色毛玻璃卡片) */}
       <div
         style={{
           display: 'flex',
@@ -598,7 +508,7 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
 
         {/* 右側：持倉快速選單、代碼搜尋與重新整理 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {holdings.length > 0 && (
+          {stockHoldings.length > 0 && (
             <select
               value={selectedSymbol}
               onChange={(e) => setSelectedSymbol(e.target.value)}
@@ -613,7 +523,7 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
                 outline: 'none',
               }}
             >
-              {holdings.map((h) => (
+              {stockHoldings.map((h) => (
                 <option key={h.symbol} value={h.symbol}>
                   {h.symbol} - {h.name || h.symbol}
                 </option>
@@ -680,6 +590,7 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
       </div>
 
       {/* 3. ETF 智慧防呆橫幅 */}
+      {/* 2. ETF 標的防呆與戰情室導引橫幅 */}
       {isCurrentEtf && (
         <div
           style={{
@@ -699,9 +610,35 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
               ⚠️ 注意：{stockName} ({selectedSymbol}) 為指數型基金 (ETF)
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              ETF 本身為一籃子投資組合，不具備一般企業損益表與資產負債表。建議點擊切換至個股檢視深度財務報表與量化估值：
+              此標的為 ETF，不具備個股財務報表，建議前往【主力戰情室】檢視。或點擊切換至熱門普通股：
             </div>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onNavigateTab) {
+                    onNavigateTab('aiforce');
+                  } else {
+                    window.dispatchEvent(new CustomEvent('navigate-tab', { detail: 'aiforce' }));
+                  }
+                }}
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  background: '#f59e0b',
+                  color: '#080c14',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)',
+                }}
+              >
+                前往【主力戰情室】檢視
+              </button>
               {POPULAR_STOCKS.slice(0, 4).map((stk) => (
                 <button
                   key={stk.symbol}
@@ -710,7 +647,7 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
                   style={{
                     fontSize: '11px',
                     fontWeight: 700,
-                    padding: '4px 10px',
+                    padding: '5px 10px',
                     borderRadius: '6px',
                     background: 'rgba(245, 158, 11, 0.18)',
                     border: '1px solid rgba(245, 158, 11, 0.4)',

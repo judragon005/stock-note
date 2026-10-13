@@ -83,54 +83,92 @@ export const StrategicPromptPanel: React.FC<StrategicPromptPanelProps> = ({
 
   return (
     <div
-      className={`strategic-prompt-panel rounded-2xl p-5 border border-slate-700/60 shadow-2xl backdrop-blur-md ${className}`}
+      className={`strategic-prompt-panel ${className}`}
       style={{
-        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(30, 41, 59, 0.8) 100%)',
-        color: '#f8fafc',
+        background: 'var(--bg-card, rgba(15, 23, 42, 0.72))',
+        border: '1px solid var(--border-color, rgba(51, 65, 85, 0.45))',
+        borderRadius: 'var(--radius-md, 14px)',
+        padding: '16px 20px',
+        boxShadow: 'var(--shadow-card, 0 10px 30px -5px rgba(0, 0, 0, 0.45))',
+        backdropFilter: 'blur(12px)',
+        color: 'var(--text-primary, #f8fafc)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '14px',
       }}
     >
       {/* 頂部控制列 */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-700/60">
-        <div className="flex items-center gap-3">
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          paddingBottom: '14px',
+          borderBottom: '1px solid var(--border-color, rgba(51, 65, 85, 0.45))',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div
-            className="p-2.5 rounded-xl flex items-center justify-center shadow-lg"
             style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
               background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
               color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+              flexShrink: 0,
             }}
           >
             <BrainCircuit size={22} />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-base font-bold tracking-tight text-white m-0">智策多維提示詞引擎</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: 800, margin: 0, letterSpacing: '-0.01em' }}>
+                智策多維提示詞引擎
+              </h3>
               <span
-                className="px-2 py-0.5 text-xs font-semibold rounded-full border"
                 style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: '12px',
                   background: isEtf ? 'rgba(56, 189, 248, 0.15)' : 'rgba(139, 92, 246, 0.15)',
                   color: isEtf ? '#38bdf8' : '#c084fc',
-                  borderColor: isEtf ? 'rgba(56, 189, 248, 0.4)' : 'rgba(139, 92, 246, 0.4)',
+                  border: `1px solid ${isEtf ? 'rgba(56, 189, 248, 0.4)' : 'rgba(139, 92, 246, 0.4)'}`,
                 }}
               >
                 {isEtf ? 'ETF 模式 (V3.0)' : '個股大師 (V12.0)'}
               </span>
             </div>
-            <p className="text-xs text-slate-400 m-0 mt-0.5">
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary, #94a3b8)', margin: '3px 0 0 0' }}>
               對齊華爾街六頂思考帽決策框架 · 零信任海關定錨 · 外部 LLM 深度覆盤
             </p>
           </div>
         </div>
 
         {/* 右側操作徽章群 */}
-        <div className="flex items-center gap-3">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           {/* 部位脫敏切換開關 */}
           <button
             type="button"
             onClick={() => setDesensitized((prev) => !prev)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer"
             style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
               background: desensitized ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-              borderColor: desensitized ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)',
+              border: `1px solid ${desensitized ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
               color: desensitized ? '#34d399' : '#f87171',
             }}
             title={desensitized ? '隱私保護開啟：隱去帳戶金額與真實股數' : '注意：當前將匯出部位明細'}
@@ -141,8 +179,19 @@ export const StrategicPromptPanel: React.FC<StrategicPromptPanelProps> = ({
 
           {/* Token 守門徽章 */}
           <div
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium border border-slate-700 bg-slate-900/60"
-            style={{ color: tokenColor }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 10px',
+              borderRadius: '8px',
+              fontSize: '12px',
+              fontFamily: 'var(--font-mono, monospace)',
+              fontWeight: 600,
+              border: '1px solid var(--border-color)',
+              background: 'var(--bg-secondary)',
+              color: tokenColor,
+            }}
           >
             <span>約 {tokenCount} Tokens</span>
           </div>
@@ -151,40 +200,73 @@ export const StrategicPromptPanel: React.FC<StrategicPromptPanelProps> = ({
           <button
             type="button"
             onClick={() => handleCopy(activePromptResult.promptText, 'MASTER')}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-lg cursor-pointer border-none text-white"
             style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 16px',
+              borderRadius: '10px',
+              fontSize: '12px',
+              fontWeight: 800,
+              border: 'none',
+              cursor: 'pointer',
+              color: '#ffffff',
+              transition: 'all 0.15s ease',
               background:
                 copiedKey === 'MASTER'
                   ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
                   : 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-              boxShadow: '0 4px 14px rgba(59, 130, 246, 0.35)',
+              boxShadow: copiedKey === 'MASTER' ? '0 4px 14px rgba(16, 185, 129, 0.35)' : '0 4px 14px rgba(59, 130, 246, 0.35)',
             }}
           >
-            {copiedKey === 'MASTER' ? <Check size={16} /> : <Copy size={16} />}
+            {copiedKey === 'MASTER' ? <Check size={15} /> : <Copy size={15} />}
             <span>{copiedKey === 'MASTER' ? '已複製到剪貼簿！' : selectedHat ? '複製當前思考帽' : '一鍵複製 Master Prompt'}</span>
           </button>
         </div>
       </div>
 
       {/* 六頂思考帽分頁切換卡片區 */}
-      <div className="mt-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-            <SlidersHorizontal size={14} className="text-indigo-400" />
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <span
+            style={{
+              fontSize: '12px',
+              fontWeight: 700,
+              color: 'var(--text-secondary, #94a3b8)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <SlidersHorizontal size={14} style={{ color: '#818cf8' }} />
             六頂思考帽平行認知矩陣 (點選可單獨抽離複製)：
           </span>
           {selectedHat && (
             <button
               type="button"
               onClick={() => setSelectedHat(null)}
-              className="text-xs text-indigo-400 hover:text-indigo-300 bg-transparent border-none cursor-pointer underline p-0"
+              style={{
+                fontSize: '12px',
+                color: 'var(--accent-primary, #3b82f6)',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                padding: 0,
+              }}
             >
               切換回 Master 全量視野
             </button>
           )}
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+            gap: '10px',
+          }}
+        >
           {(Object.keys(SIX_HATS_CONFIG) as SixThinkingHatDimension[]).map((hatKey) => {
             const cfg = SIX_HATS_CONFIG[hatKey];
             const isSelected = selectedHat === hatKey;
@@ -194,39 +276,78 @@ export const StrategicPromptPanel: React.FC<StrategicPromptPanelProps> = ({
               <div
                 key={hatKey}
                 onClick={() => setSelectedHat(isSelected ? null : hatKey)}
-                className={`p-3 rounded-xl border transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
-                  isSelected ? 'ring-2 ring-indigo-500' : 'hover:border-slate-500'
-                }`}
                 style={{
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  border: isSelected
+                    ? '2px solid #6366f1'
+                    : isBlackHat
+                    ? '1px solid rgba(239, 68, 68, 0.35)'
+                    : '1px solid var(--border-color)',
                   background: isSelected
                     ? 'rgba(30, 41, 59, 0.95)'
                     : isBlackHat
-                    ? 'rgba(15, 23, 42, 0.9)'
-                    : 'rgba(30, 41, 59, 0.5)',
-                  borderColor: isSelected
-                    ? '#6366f1'
-                    : isBlackHat
-                    ? 'rgba(239, 68, 68, 0.4)'
-                    : 'rgba(71, 85, 105, 0.4)',
+                    ? 'rgba(239, 68, 68, 0.08)'
+                    : 'var(--bg-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  boxShadow: isSelected ? '0 0 12px rgba(99, 102, 241, 0.3)' : 'none',
                 }}
               >
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-base">{cfg.emoji}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '18px' }}>{cfg.emoji}</span>
                     {isBlackHat && (
-                      <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          fontWeight: 800,
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          background: 'rgba(239, 68, 68, 0.2)',
+                          color: '#f87171',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                        }}
+                      >
                         紅隊批判
                       </span>
                     )}
                   </div>
-                  <h4 className="text-xs font-bold text-white m-0">{cfg.nameZh}</h4>
-                  <p className="text-[11px] text-slate-400 m-0 mt-1 line-clamp-2 leading-relaxed">
+                  <h4 style={{ fontSize: '13px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
+                    {cfg.nameZh}
+                  </h4>
+                  <p
+                    style={{
+                      fontSize: '11px',
+                      color: 'var(--text-secondary, #94a3b8)',
+                      margin: '4px 0 0 0',
+                      lineHeight: 1.4,
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
                     {cfg.coreFocus.split('(')[0]}
                   </p>
                 </div>
 
-                <div className="mt-2.5 pt-2 border-t border-slate-700/50 flex items-center justify-between">
-                  <span className="text-[10px] text-slate-500">{cfg.label}</span>
+                <div
+                  style={{
+                    marginTop: '10px',
+                    paddingTop: '8px',
+                    borderTop: '1px solid var(--border-color)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <span style={{ fontSize: '10px', color: 'var(--text-muted, #64748b)', fontFamily: 'var(--font-mono, monospace)' }}>
+                    {cfg.label}
+                  </span>
                   <button
                     type="button"
                     onClick={(e) => {
@@ -238,11 +359,21 @@ export const StrategicPromptPanel: React.FC<StrategicPromptPanelProps> = ({
                       });
                       handleCopy(singleRes.promptText, `HAT_${hatKey}`);
                     }}
-                    className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors border-none bg-transparent cursor-pointer"
+                    style={{
+                      padding: '4px',
+                      borderRadius: '4px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
                     title={`單獨複製 ${cfg.nameZh} 提示詞`}
                   >
                     {copiedKey === `HAT_${hatKey}` ? (
-                      <Check size={13} className="text-emerald-400" />
+                      <Check size={13} style={{ color: '#10b981' }} />
                     ) : (
                       <Copy size={13} />
                     )}
@@ -255,14 +386,27 @@ export const StrategicPromptPanel: React.FC<StrategicPromptPanelProps> = ({
       </div>
 
       {/* 可折疊式 XML 提示詞預覽器 */}
-      <div className="mt-4 pt-3 border-t border-slate-700/50">
+      <div style={{ paddingTop: '4px', borderTop: '1px solid var(--border-color)' }}>
         <button
           type="button"
           onClick={() => setShowXmlPreview((prev) => !prev)}
-          className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/50 hover:bg-slate-900/80 text-xs text-slate-300 transition-colors border border-slate-800 cursor-pointer"
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '8px 12px',
+            borderRadius: '8px',
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-color)',
+            color: 'var(--text-secondary)',
+            fontSize: '12px',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+          }}
         >
-          <span className="flex items-center gap-2">
-            <Code2 size={15} className="text-indigo-400" />
+          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Code2 size={15} style={{ color: '#818cf8' }} />
             <span>
               檢視即將注入之結構化 XML 語意提示詞 (
               {selectedHat ? `當前：${SIX_HATS_CONFIG[selectedHat].nameZh}` : 'Master 全量視野'})
@@ -272,19 +416,60 @@ export const StrategicPromptPanel: React.FC<StrategicPromptPanelProps> = ({
         </button>
 
         {showXmlPreview && (
-          <div className="mt-2.5 rounded-xl overflow-hidden border border-slate-800 bg-slate-950/90 p-3.5">
-            <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800/80 text-[11px] text-slate-500 font-mono">
+          <div
+            style={{
+              marginTop: '10px',
+              borderRadius: '10px',
+              border: '1px solid var(--border-color)',
+              background: '#040711',
+              padding: '12px 16px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingBottom: '8px',
+                marginBottom: '8px',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                fontSize: '11px',
+                color: 'var(--text-secondary)',
+                fontFamily: 'var(--font-mono, monospace)',
+              }}
+            >
               <span>XML Semantic Prompt Preview</span>
               <button
                 type="button"
                 onClick={() => handleCopy(activePromptResult.promptText, 'PREVIEW_COPY')}
-                className="text-indigo-400 hover:text-indigo-300 bg-transparent border-none cursor-pointer flex items-center gap-1"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--accent-primary, #3b82f6)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '11px',
+                }}
               >
                 {copiedKey === 'PREVIEW_COPY' ? <Check size={12} /> : <Copy size={12} />}
                 <span>{copiedKey === 'PREVIEW_COPY' ? '已複製' : '複製代碼'}</span>
               </button>
             </div>
-            <pre className="text-xs font-mono text-emerald-400/90 whitespace-pre-wrap max-h-72 overflow-y-auto leading-relaxed select-all">
+            <pre
+              style={{
+                fontSize: '12px',
+                fontFamily: 'var(--font-mono, monospace)',
+                color: '#34d399',
+                whiteSpace: 'pre-wrap',
+                maxHeight: '260px',
+                overflowY: 'auto',
+                lineHeight: 1.6,
+                margin: 0,
+                userSelect: 'all',
+              }}
+            >
               {activePromptResult.promptText}
             </pre>
           </div>
