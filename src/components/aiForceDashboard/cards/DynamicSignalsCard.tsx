@@ -153,6 +153,7 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
               borderRadius: '50%',
               backgroundColor: verdictConfig.color,
               boxShadow: verdictConfig.glow,
+              transition: 'box-shadow 0.3s ease, background-color 0.3s ease',
             }}
           />
           <span>{verdictLabel}</span>
@@ -367,6 +368,7 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
                 borderRadius: '50%',
                 backgroundColor: verdictConfig.color,
                 boxShadow: verdictConfig.glow,
+                transition: 'box-shadow 0.3s ease, background-color 0.3s ease',
               }}
             />
             <span style={{ color: verdictConfig.color, fontWeight: 800 }}>{verdictLabel}</span>
