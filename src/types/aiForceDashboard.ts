@@ -287,8 +287,15 @@ export interface DynamicSignalsData {
   chipSignal: string; // "籌碼中性"
   momentumSignal: string; // "動能偏強"
   riskSignal: string; // "波動高特偏高"
-  verdictLight: 'GREEN' | 'YELLOW' | 'RED'; // "RED"
+  verdictLight: 'GREEN' | 'YELLOW' | 'RED'; // 動態結論燈號
   verdictLabel: string; // "紅燈 (高風險)"
+  compositeScore?: number; // 0~100 綜合量化分
+  regulatoryBadge?: string; // 交易所監理標籤 (如：處置 5分盤)
+  brokerMarginAlert?: string; // 券商融資/浮額警戒 (如：融資浮額沉重)
+  vwapBiasStdText?: string; // 法人 VWAP 乖離 (如：-2.1σ 超跌)
+  actionableAdvice?: string; // 白話情境化操作指引
+  keySupportPrice?: number; // 關鍵防守支撐價
+  keyPressurePrice?: number; // 轉強壓力價
 }
 
 /**

@@ -848,7 +848,7 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
 
       // TDCC 集保在美股誠實為空
       expect(report.tdccDistribution.isEmpty).toBe(true);
-      expect(report.tdccDistribution.emptyMessage).toBe('美股無集保機制');
+      expect(report.tdccDistribution.emptyMessage).toContain('美股無集保機制');
       expect(report.tdccDistribution.concentrationBadge).toBe('美股不適用');
     });
 

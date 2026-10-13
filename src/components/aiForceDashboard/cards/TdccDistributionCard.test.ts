@@ -53,10 +53,31 @@ describe('TdccDistributionCard - TDD Unit Tests', () => {
       concentrationBadge: '美股不適用',
       asOfDateText: '美股市場',
       isEmpty: true,
-      emptyMessage: '美股無集保機制',
+      emptyMessage: '美股無集保機制 (採 13F 機構申報)',
     };
 
     expect(emptyData.isEmpty).toBe(true);
-    expect(emptyData.emptyMessage).toBe('美股無集保機制');
+    expect(emptyData.emptyMessage).toBe('美股無集保機制 (採 13F 機構申報)');
+  });
+
+  it('6. 當 history 為空或標註 isEmpty 時，應渲染帶有 data-testid="tdcc-empty-state" 的 Honest Empty State 節點', async () => {
+    const React = await import('react');
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const { TdccDistributionCard } = await import('./TdccDistributionCard');
+
+    const emptyData: TdccDistributionData = {
+      history: [],
+      concentrationBadge: '美股不適用',
+      asOfDateText: '美股市場',
+      isEmpty: true,
+      emptyMessage: '美股無集保機制 (採 13F 機構申報)',
+    };
+
+    const html = renderToStaticMarkup(
+      React.createElement(TdccDistributionCard, { data: emptyData, colorTheme: 'international' })
+    );
+
+    expect(html).toContain('data-testid="tdcc-empty-state"');
+    expect(html).toContain('美股無集保機制 (採 13F 機構申報)');
   });
 });
