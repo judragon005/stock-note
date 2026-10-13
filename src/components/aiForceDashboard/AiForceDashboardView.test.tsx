@@ -62,4 +62,18 @@ describe('Ticket 08: 主力戰情室 7 層 Bento-Grid 專業動線架構驗收 (
     expect(html).toContain('多維度判讀');
     expect(html).toContain('風險雷達圖');
   });
+
+  it('Ticket 01 (Spec 0179): 美股標的之 Card 19 TDCC 集保趨勢應呈現 Honest Empty State 與 13F 提示', () => {
+    const usReport = createDefaultAiForceReport('AAPL', '蘋果公司', 'US', 230);
+    const html = renderToStaticMarkup(
+      React.createElement(AiForceDashboardView, {
+        initialSymbol: 'AAPL',
+        initialMarket: 'US',
+        initialReport: usReport,
+      })
+    );
+
+    expect(html).toContain('data-testid="tdcc-empty-state"');
+    expect(html).toContain('美股無集保機制 (採 13F 機構申報)');
+  });
 });

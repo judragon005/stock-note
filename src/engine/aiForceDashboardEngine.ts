@@ -279,7 +279,7 @@ export function createDefaultAiForceReport(
       concentrationBadge: market === 'US' ? '美股不適用' : '集保待補',
       asOfDateText: market === 'US' ? '美股市場' : '集保無資料',
       isEmpty: true,
-      emptyMessage: market === 'US' ? '美股無集保機制' : '集保數據累積中 (週五盤後結算)',
+      emptyMessage: market === 'US' ? '美股無集保機制 (採 13F 機構申報)' : '集保數據累積中 (週五盤後結算)',
     },
 
     monthlyRevenue: {
@@ -347,7 +347,7 @@ export function buildTdccDistribution(
       concentrationBadge: '美股不適用',
       asOfDateText: '美股市場',
       isEmpty: true,
-      emptyMessage: '美股無集保機制',
+      emptyMessage: '美股無集保機制 (採 13F 機構申報)',
     };
   }
 
@@ -773,74 +773,229 @@ export function calculateHealthSummaryFromCandles(
 /**
  * 依據收盤價、VWAP 乖離率與法人方向計算主力動態信號 (Card 12)
  */
+export type DynamicArbitrationPattern =
+  | 'BEAR_TRAP'
+  | 'BULL_TRAP'
+  | 'HARMONIC_SURGE'
+  | 'HARMONIC_COLLAPSE'
+  | 'NEUTRAL_RANGE';
+
+export interface SignalArbitrationResult {
+  patternType: DynamicArbitrationPattern;
+  actionableAdvice: string;
+}
+
+/**
+ * 多空矛盾智能仲裁演算法 (Spec 0179 / Ticket 03)
+ */
+export function arbitrateSignals(
+  trendSignal: string,
+  chipSignal: string,
+  momentumSignal: string,
+  riskSignal: string
+): SignalArbitrationResult {
+  // 1. 洗盤破底翻 (Bear Trap)
+  if (
+    (trendSignal.includes('破線') || trendSignal.includes('偏弱')) &&
+    (chipSignal.includes('集中') || chipSignal.includes('合買')) &&
+    (momentumSignal.includes('超跌') || momentumSignal.includes('偏弱') || riskSignal.includes('破位'))
+  ) {
+    return {
+      patternType: 'BEAR_TRAP',
+      actionableAdvice:
+        '主力逆勢吸籌但短線破線，疑似洗盤破底翻觀察區。建議觀望勿殺低，待放量站回 5 日線轉強再行加碼。',
+    };
+  }
+
+  // 2. 誘多高檔出貨 (Bull Trap)
+  if (
+    (trendSignal.includes('偏多') || trendSignal.includes('強')) &&
+    (chipSignal.includes('渙散') || chipSignal.includes('調節') || chipSignal.includes('對作')) &&
+    (riskSignal.includes('偏高') || riskSignal.includes('警戒') || momentumSignal.includes('過熱'))
+  ) {
+    return {
+      patternType: 'BULL_TRAP',
+      actionableAdvice:
+        '股價雖處多頭，但主力持續調節，呈現出貨背離。切勿追高，嚴防主力倒貨引發快速回檔。',
+    };
+  }
+
+  // 3. 共振主升段 (Harmonic Surge)
+  if (
+    (trendSignal.includes('多') || trendSignal.includes('強')) &&
+    (chipSignal.includes('集中') || chipSignal.includes('合買')) &&
+    (momentumSignal.includes('強') || momentumSignal.includes('過熱'))
+  ) {
+    return {
+      patternType: 'HARMONIC_SURGE',
+      actionableAdvice:
+        '量價齊揚、籌碼高度集中，波段多頭共振主升趨勢明確，順勢持有或沿 5 日線偏多操作。',
+    };
+  }
+
+  // 4. 共振破位主跌段 (Harmonic Collapse)
+  if (
+    (trendSignal.includes('破線') || trendSignal.includes('偏弱')) &&
+    (chipSignal.includes('渙散') || chipSignal.includes('調節')) &&
+    (riskSignal.includes('破位') || riskSignal.includes('偏高'))
+  ) {
+    return {
+      patternType: 'HARMONIC_COLLAPSE',
+      actionableAdvice:
+        '均線全數跌破，籌碼外資投信同步砍倉，主跌段殺盤風險極高。嚴格執行停損退場，切勿猜底。',
+    };
+  }
+
+  // 5. 預設區間整理 (Neutral Range)
+  return {
+    patternType: 'NEUTRAL_RANGE',
+    actionableAdvice:
+      '指標多空分歧，短線處於區間整理。建議觀望等待方向確認，切忌追漲殺跌。',
+  };
+}
+
+/**
+ * 依據收盤價、VWAP 乖離率與法人方向計算主力動態信號 (Card 12，升級四重視角整合)
+ */
 export function calculateDynamicSignalsFromCandles(
   candles: KlineCandleItem[],
   mainForceCost: number,
-  institutionalFlow: InstitutionalFlowData
+  institutionalFlow: InstitutionalFlowData,
+  options?: {
+    dispositionStatus?: 'NORMAL' | 'ATTENTION' | 'DISPOSITION';
+    marginBalance?: number;
+    marginBalanceChange?: number;
+    dayTradeRate?: number;
+  }
 ): DynamicSignalsData {
   const last = candles[candles.length - 1];
   const vwapBias = mainForceCost > 0 ? ((last.close - mainForceCost) / mainForceCost) * 100 : 0;
 
   // 1. 趨勢信號
   let trendSignal = '區間整理';
-  if (vwapBias > 4) trendSignal = '偏多偏強';
-  else if (vwapBias > 0) trendSignal = '溫和偏多';
-  else if (vwapBias < -4) trendSignal = '破線偏空';
-  else trendSignal = '偏弱整理';
+  let trendScore = 50;
+  if (vwapBias > 4) {
+    trendSignal = '偏多偏強';
+    trendScore = 85;
+  } else if (vwapBias > 0) {
+    trendSignal = '溫和偏多';
+    trendScore = 70;
+  } else if (vwapBias < -4) {
+    trendSignal = '破線偏空';
+    trendScore = 20;
+  } else {
+    trendSignal = '偏弱整理';
+    trendScore = 35;
+  }
 
   // 2. 籌碼信號
   let chipSignal = '籌碼中性';
+  let chipScore = 50;
   if (institutionalFlow.history.length > 0) {
     const last5 = institutionalFlow.history.slice(-5);
     const sum5 = last5.reduce((acc, cur) => acc + cur.foreignShares + cur.trustShares + cur.dealerShares, 0);
     const lastInst = institutionalFlow.history[institutionalFlow.history.length - 1];
     if (lastInst.foreignShares > 0 && lastInst.trustShares > 0) {
       chipSignal = '土洋合買';
+      chipScore = 85;
     } else if (lastInst.foreignShares * lastInst.trustShares < 0) {
       chipSignal = '土洋對作';
+      chipScore = 40;
     } else if (sum5 > 500) {
       chipSignal = '籌碼集中';
+      chipScore = 80;
     } else if (sum5 < -500) {
       chipSignal = '籌碼渙散';
+      chipScore = 20;
     }
   }
 
   // 3. 動能信號
   let momentumSignal = '動能整理';
+  let momentumScore = 50;
   const k = last.k ?? 50;
   const d = last.d ?? 50;
   const rsi = last.rsi ?? 50;
-  if (rsi > 75) momentumSignal = '動能過熱';
-  else if (rsi < 30) momentumSignal = '動能超跌';
-  else if (k > d && rsi > 50) momentumSignal = '動能偏強';
-  else if (k < d && rsi < 50) momentumSignal = '動能偏弱';
+  if (rsi > 75) {
+    momentumSignal = '動能過熱';
+    momentumScore = 80;
+  } else if (rsi < 30) {
+    momentumSignal = '動能超跌';
+    momentumScore = 25;
+  } else if (k > d && rsi > 50) {
+    momentumSignal = '動能偏強';
+    momentumScore = 75;
+  } else if (k < d && rsi < 50) {
+    momentumSignal = '動能偏弱';
+    momentumScore = 30;
+  }
 
   // 4. 風險信號
   let riskSignal = '風險可控';
+  let riskScore = 20;
   const ma20 = last.ma20 ?? last.close;
   if (last.close < ma20 && vwapBias < -5) {
     riskSignal = '破位警戒';
+    riskScore = 85;
   } else if (rsi > 75 || Math.abs(vwapBias) > 8) {
     riskSignal = '波動偏高';
+    riskScore = 60;
   }
 
-  // 5. 燈號
-  let verdictLight: 'GREEN' | 'YELLOW' | 'RED' = 'YELLOW';
-  if (riskSignal === '破位警戒') {
-    verdictLight = 'RED';
-  } else if (
-    (trendSignal.includes('多') || trendSignal.includes('強')) &&
-    (chipSignal.includes('合買') || chipSignal.includes('集中') || momentumSignal.includes('強'))
-  ) {
-    verdictLight = 'GREEN';
-  }
+  // 5. 多因子綜合評分與動態燈號 (Spec 0179)
+  const compositeScore = calculateCompositeQuantScore(trendScore, chipScore, momentumScore, riskScore);
+  const verdictLight = mapScoreToVerdictLight(compositeScore);
 
   const verdictLabel =
     verdictLight === 'RED'
-      ? '紅燈 (高風險)'
+      ? '紅燈 (偏空 / 高風險)'
       : verdictLight === 'YELLOW'
-      ? '黃燈 (觀望整理)'
-      : '綠燈 (多頭順風)';
+      ? '黃燈 (觀望 / 中性)'
+      : '綠燈 (偏多 / 安全)';
+
+  // 6. 多空矛盾智能仲裁
+  const arbitration = arbitrateSignals(trendSignal, chipSignal, momentumSignal, riskSignal);
+
+  // 7. 交易所視角監理標籤
+  let regulatoryBadge: string | undefined = undefined;
+  if (options?.dispositionStatus === 'DISPOSITION') {
+    regulatoryBadge = '處置股票 (分盤撮合)';
+  } else if (options?.dispositionStatus === 'ATTENTION') {
+    regulatoryBadge = '列注意股票';
+  } else if ((options?.dayTradeRate ?? 0) > 60) {
+    regulatoryBadge = '當沖過熱投機警戒';
+  }
+
+  // 8. 券商視角融資警戒
+  let brokerMarginAlert: string | undefined = undefined;
+  if (
+    (options?.marginBalanceChange ?? 0) > 0 &&
+    (trendSignal.includes('破線') || trendSignal.includes('偏弱'))
+  ) {
+    brokerMarginAlert = '融資浮額沉重 / 斷頭防守警戒';
+  } else if ((options?.dayTradeRate ?? 0) > 60) {
+    brokerMarginAlert = '當沖高比率 浮額劇烈震盪';
+  }
+
+  // 9. 法人視角 VWAP 標準差偏離
+  const last20Candles = candles.slice(-20);
+  const meanClose = last20Candles.reduce((acc, c) => acc + c.close, 0) / Math.max(1, last20Candles.length);
+  const variance =
+    last20Candles.reduce((acc, c) => acc + Math.pow(c.close - meanClose, 2), 0) / Math.max(1, last20Candles.length);
+  const stdDev = Math.sqrt(variance);
+  let vwapBiasStdText: string | undefined = undefined;
+  if (stdDev > 0) {
+    const zScore = (last.close - mainForceCost) / stdDev;
+    vwapBiasStdText = `${zScore >= 0 ? '+' : ''}${zScore.toFixed(1)}σ ${
+      zScore > 2 ? '超買過熱' : zScore < -2 ? '超跌' : '常態'
+    }`;
+  } else {
+    vwapBiasStdText = `${vwapBias >= 0 ? '+' : ''}${vwapBias.toFixed(1)}% (成本乖離)`;
+  }
+
+  // 10. 個人投資者關鍵價位
+  const keySupportPrice = last.ma20 ? Number(last.ma20.toFixed(2)) : Number((last.close * 0.95).toFixed(2));
+  const keyPressurePrice = last.ma5 ? Number(last.ma5.toFixed(2)) : Number((last.close * 1.05).toFixed(2));
 
   return {
     trendSignal,
@@ -849,7 +1004,42 @@ export function calculateDynamicSignalsFromCandles(
     riskSignal,
     verdictLight,
     verdictLabel,
+    compositeScore,
+    regulatoryBadge,
+    brokerMarginAlert,
+    vwapBiasStdText,
+    actionableAdvice: arbitration.actionableAdvice,
+    keySupportPrice,
+    keyPressurePrice,
   };
+}
+
+/**
+ * 多因子量化評分純函式 (Spec 0179 / Ticket 02)
+ * 公式：0.35 * 籌碼 + 0.30 * 趨勢 + 0.20 * 動能 - 0.15 * 風險
+ * 範圍截斷為 0~100 分整數
+ */
+export function calculateCompositeQuantScore(
+  trendScore: number,
+  chipScore: number,
+  momentumScore: number,
+  riskScore: number
+): number {
+  const raw = 0.35 * chipScore + 0.30 * trendScore + 0.20 * momentumScore - 0.15 * riskScore;
+  const clamped = Math.max(0, Math.min(100, Math.round(raw)));
+  return clamped;
+}
+
+/**
+ * 將綜合量化分映射至結論燈號 (Spec 0179 / Ticket 02)
+ * >= 60 -> 'GREEN'
+ * 40~59 -> 'YELLOW'
+ * < 40  -> 'RED'
+ */
+export function mapScoreToVerdictLight(score: number): 'GREEN' | 'YELLOW' | 'RED' {
+  if (score >= 60) return 'GREEN';
+  if (score >= 40) return 'YELLOW';
+  return 'RED';
 }
 
 /**
@@ -1475,7 +1665,11 @@ export function generateAiForceReportFromCandles(
     chipsSummary,
     bullBearEnergy: calculateBullBearEnergyFromCandles(candles),
     healthSummary,
-    dynamicSignals: calculateDynamicSignalsFromCandles(klineCandles, mainForceCost, institutionalFlow),
+    dynamicSignals: calculateDynamicSignalsFromCandles(klineCandles, mainForceCost, institutionalFlow, {
+      dispositionStatus: options?.statusTag,
+      marginBalance: options?.marginData?.marginBalance,
+      dayTradeRate: options?.marginData?.dayTradeRate,
+    }),
     marketSentiment,
     aiConfidence,
     forceDistribution: calculateForceDistributionFromCandles(klineCandles, last.date),

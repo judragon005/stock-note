@@ -95,10 +95,12 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
   data,
   colorTheme: _colorTheme = 'taiwan',
 }) => {
-  const history = data.history || [];
+  const history = data?.history || [];
   const chartWidth = 340;
   const chartHeight = 170;
   const padding = { top: 20, bottom: 25 };
+
+  const isDataEmpty = Boolean(data?.isEmpty || !data?.history || data.history.length === 0);
 
   const scales = useMemo(
     () => calculateTdccScales(history, chartHeight, padding),
@@ -119,14 +121,15 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
   }, [history, scales, chartHeight]);
 
   const badgeColor = useMemo(() => {
-    if (data.concentrationBadge.includes('高度集中') || data.concentrationBadge.includes('增持')) {
+    const badge = data?.concentrationBadge || '';
+    if (badge.includes('高度集中') || badge.includes('增持')) {
       return { bg: 'rgba(16, 185, 129, 0.2)', text: '#34d399', border: 'rgba(16, 185, 129, 0.4)' };
     }
-    if (data.concentrationBadge.includes('警戒') || data.concentrationBadge.includes('調節')) {
+    if (badge.includes('警戒') || badge.includes('調節')) {
       return { bg: 'rgba(239, 68, 68, 0.2)', text: '#f87171', border: 'rgba(239, 68, 68, 0.4)' };
     }
     return { bg: 'rgba(148, 163, 184, 0.15)', text: '#94a3b8', border: 'rgba(148, 163, 184, 0.3)' };
-  }, [data.concentrationBadge]);
+  }, [data?.concentrationBadge]);
 
   return (
     <div
@@ -198,20 +201,21 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
             fontWeight: 700,
           }}
         >
-          {data.concentrationBadge.includes('高度集中') ? (
+          {data?.concentrationBadge?.includes('高度集中') ? (
             <ShieldCheck size={13} />
-          ) : data.concentrationBadge.includes('警戒') ? (
+          ) : data?.concentrationBadge?.includes('警戒') ? (
             <AlertTriangle size={13} />
           ) : (
             <TrendingUp size={13} />
           )}
-          <span>{data.concentrationBadge}</span>
+          <span>{data?.concentrationBadge || '暫無資料'}</span>
         </div>
       </div>
 
-      {/* 空狀態防禦 */}
-      {data.isEmpty ? (
+      {/* 空狀態防禦 (Honest Empty State) */}
+      {isDataEmpty ? (
         <div
+          data-testid="tdcc-empty-state"
           style={{
             flex: 1,
             display: 'flex',
@@ -226,10 +230,10 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
         >
           <Users size={32} opacity={0.3} />
           <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#cbd5e1' }}>
-            {data.emptyMessage || '尚無集保分散資料'}
+            {data?.emptyMessage || '尚無集保分散資料'}
           </div>
           <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-            {data.asOfDateText || '集保每週五收盤後更新'}
+            {data?.asOfDateText || '集保每週五收盤後更新'}
           </div>
         </div>
       ) : (

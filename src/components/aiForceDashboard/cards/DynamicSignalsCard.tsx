@@ -1,6 +1,6 @@
 import React from 'react';
 import type { DynamicSignalsData } from '../../../types/aiForceDashboard';
-import { MoreVertical } from 'lucide-react';
+import { ShieldAlert, AlertTriangle } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 
 export interface DynamicSignalsCardProps {
@@ -15,6 +15,8 @@ export function getSignalLightColor(signalText: string): { color: string; bg: st
     signalText.includes('強') ||
     signalText.includes('多') ||
     signalText.includes('偏強') ||
+    signalText.includes('合買') ||
+    signalText.includes('集中') ||
     signalText.includes('低風險')
   ) {
     return { color: '#34d399', bg: 'rgba(16, 185, 129, 0.15)', dot: '#10b981' };
@@ -23,6 +25,10 @@ export function getSignalLightColor(signalText: string): { color: string; bg: st
     signalText.includes('高') ||
     signalText.includes('空') ||
     signalText.includes('弱') ||
+    signalText.includes('渙散') ||
+    signalText.includes('破線') ||
+    signalText.includes('破位') ||
+    signalText.includes('超跌') ||
     signalText.includes('偏高')
   ) {
     return { color: '#f87171', bg: 'rgba(239, 68, 68, 0.15)', dot: '#ef4444' };
@@ -33,32 +39,32 @@ export function getSignalLightColor(signalText: string): { color: string; bg: st
 /**
  * 依據結論燈號取得總評判徽章設定
  */
-export function getVerdictBadgeConfig(verdictLight: 'GREEN' | 'YELLOW' | 'RED') {
+export function getVerdictBadgeConfig(verdictLight?: 'GREEN' | 'YELLOW' | 'RED') {
   switch (verdictLight) {
-    case 'RED':
+    case 'GREEN':
       return {
-        color: '#ef4444',
-        bg: 'rgba(239, 68, 68, 0.2)',
-        border: 'rgba(239, 68, 68, 0.4)',
-        glow: '0 0 10px rgba(239, 68, 68, 0.5)',
-        text: '高風險 / 偏空',
+        color: '#10b981',
+        bg: 'rgba(16, 185, 129, 0.2)',
+        border: 'rgba(16, 185, 129, 0.4)',
+        glow: '0 0 10px #10b981',
+        text: '綠燈 (偏多 / 安全)',
       };
     case 'YELLOW':
       return {
         color: '#f59e0b',
         bg: 'rgba(245, 158, 11, 0.2)',
         border: 'rgba(245, 158, 11, 0.4)',
-        glow: '0 0 10px rgba(245, 158, 11, 0.5)',
-        text: '中度風險 / 觀望',
+        glow: '0 0 10px #f59e0b',
+        text: '黃燈 (觀望 / 中性)',
       };
-    case 'GREEN':
+    case 'RED':
     default:
       return {
-        color: '#10b981',
-        bg: 'rgba(16, 185, 129, 0.2)',
-        border: 'rgba(16, 185, 129, 0.4)',
-        glow: '0 0 10px rgba(16, 185, 129, 0.5)',
-        text: '低風險 / 偏多',
+        color: '#ef4444',
+        bg: 'rgba(239, 68, 68, 0.2)',
+        border: 'rgba(239, 68, 68, 0.4)',
+        glow: '0 0 10px #ef4444',
+        text: '紅燈 (偏空 / 高風險)',
       };
   }
 }
@@ -68,14 +74,17 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
   const chipSignal = data?.chipSignal ?? '籌碼中性';
   const momentumSignal = data?.momentumSignal ?? '動能偏強';
   const riskSignal = data?.riskSignal ?? '波動風險偏高';
-  const verdictLabel = data?.verdictLabel ?? '紅燈 (高風險)';
+
+  const verdictLight = data?.verdictLight ?? 'RED';
+  const verdictConfig = getVerdictBadgeConfig(verdictLight);
+  const verdictLabel = data?.verdictLabel || verdictConfig.text;
+  const compositeScore = data?.compositeScore;
 
   const signalItems = [
-    { title: '趨勢：', value: trendSignal, color: '#f87171', termId: 'decisionTrend' },
-    { title: '籌碼：', value: chipSignal, color: '#fbbf24', termId: 'chipStructure' },
-    { title: '動能：', value: momentumSignal, color: '#f87171', termId: 'radarMomentum' },
-    { title: '風險：', value: riskSignal, color: '#f87171', termId: 'volatilityRisk' },
-    { title: '燈號：', value: verdictLabel, color: '#ef4444', termId: 'trafficLight' },
+    { title: '趨勢：', value: trendSignal, color: getSignalLightColor(trendSignal).color, termId: 'decisionTrend' },
+    { title: '籌碼：', value: chipSignal, color: getSignalLightColor(chipSignal).color, termId: 'chipStructure' },
+    { title: '動能：', value: momentumSignal, color: getSignalLightColor(momentumSignal).color, termId: 'radarMomentum' },
+    { title: '風險：', value: riskSignal, color: getSignalLightColor(riskSignal).color, termId: 'volatilityRisk' },
   ];
 
   return (
@@ -86,11 +95,12 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
         flexDirection: 'column',
         height: '100%',
         padding: '14px',
-        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
+        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.88) 0%, rgba(20, 30, 52, 0.82) 100%)',
         borderRadius: '14px',
         border: '1px solid rgba(59, 130, 246, 0.25)',
         backdropFilter: 'blur(10px)',
         boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+        gap: '8px',
       }}
     >
       {/* 頂部標題與選單 */}
@@ -99,7 +109,6 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: '10px',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -113,7 +122,7 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
               fontWeight: 800,
             }}
           >
-            12
+            CARD 12
           </span>
           <TermTooltip termId="trafficLight">
             <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc', cursor: 'help' }}>
@@ -121,31 +130,88 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
             </span>
           </TermTooltip>
         </div>
-        <button
-          type="button"
-          aria-label="選項"
+
+        {/* 頂部綜合結論徽章 */}
+        <div
           style={{
-            background: 'transparent',
-            border: 'none',
-            color: '#64748b',
-            cursor: 'pointer',
-            padding: '2px',
             display: 'flex',
             alignItems: 'center',
+            gap: '6px',
+            padding: '3px 8px',
+            borderRadius: '999px',
+            background: verdictConfig.bg,
+            border: `1px solid ${verdictConfig.border}`,
+            fontSize: '0.72rem',
+            fontWeight: 700,
+            color: verdictConfig.color,
           }}
         >
-          <MoreVertical size={14} />
-        </button>
+          <span
+            style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: verdictConfig.color,
+              boxShadow: verdictConfig.glow,
+            }}
+          />
+          <span>{verdictLabel}</span>
+        </div>
       </div>
 
-      {/* 條目清單 (對齊照片) */}
+      {/* 綜合量化進度條 (0~100 分) */}
+      {compositeScore !== undefined && (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px',
+            padding: '6px 8px',
+            background: 'rgba(15, 23, 42, 0.5)',
+            borderRadius: '6px',
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: '0.7rem',
+              color: '#94a3b8',
+            }}
+          >
+            <span>多因子綜合量化分</span>
+            <span style={{ color: verdictConfig.color, fontWeight: 800 }}>{compositeScore} 分</span>
+          </div>
+          <div
+            style={{
+              width: '100%',
+              height: '5px',
+              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              borderRadius: '3px',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                width: `${Math.min(100, Math.max(0, compositeScore))}%`,
+                height: '100%',
+                backgroundColor: verdictConfig.color,
+                boxShadow: verdictConfig.glow,
+                borderRadius: '3px',
+                transition: 'width 0.4s ease',
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* 中部四維核心條目 */}
       <div
         style={{
-          display: 'flex',
-          flexDirection: 'column',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, 1fr)',
           gap: '6px',
-          flex: 1,
-          justifyContent: 'space-around',
         }}
       >
         {signalItems.map((item, idx) => (
@@ -155,25 +221,129 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              fontSize: '0.74rem',
+              padding: '4px 8px',
+              background: 'rgba(15, 23, 42, 0.4)',
+              borderRadius: '6px',
+              fontSize: '0.72rem',
+              border: '1px solid rgba(255, 255, 255, 0.03)',
             }}
           >
             <TermTooltip termId={item.termId}>
               <span style={{ color: '#94a3b8', cursor: 'help' }}>{item.title}</span>
             </TermTooltip>
-            <span
-              style={{
-                color: item.color,
-                fontWeight: 700,
-              }}
-            >
-              {item.value}
-            </span>
+            <span style={{ color: item.color, fontWeight: 700 }}>{item.value}</span>
           </div>
         ))}
       </div>
 
-      {/* 底部目前燈號標註 */}
+      {/* 專業層：交易所監理標籤 & 券商融資警戒 */}
+      {(data?.regulatoryBadge || data?.brokerMarginAlert) && (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '6px',
+          }}
+        >
+          {data?.regulatoryBadge && (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '2px 6px',
+                borderRadius: '4px',
+                background: 'rgba(245, 158, 11, 0.15)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                color: '#fbbf24',
+                fontSize: '0.68rem',
+                fontWeight: 700,
+              }}
+            >
+              <AlertTriangle size={11} />
+              <span>{data.regulatoryBadge}</span>
+            </div>
+          )}
+          {data?.brokerMarginAlert && (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '2px 6px',
+                borderRadius: '4px',
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: '#f87171',
+                fontSize: '0.68rem',
+                fontWeight: 700,
+              }}
+            >
+              <ShieldAlert size={11} />
+              <span>{data.brokerMarginAlert}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 決策層：法人 VWAP 偏離 & 關鍵價位 */}
+      {(data?.vwapBiasStdText || data?.keySupportPrice || data?.keyPressurePrice) && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '5px 8px',
+            background: 'rgba(30, 41, 59, 0.45)',
+            borderRadius: '6px',
+            fontSize: '0.69rem',
+            color: '#cbd5e1',
+          }}
+        >
+          {data?.vwapBiasStdText && (
+            <div>
+              <span style={{ color: '#94a3b8' }}>VWAP: </span>
+              <span style={{ fontWeight: 700, color: '#38bdf8' }}>{data.vwapBiasStdText}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {data?.keySupportPrice !== undefined && (
+              <div>
+                <span style={{ color: '#94a3b8' }}>防守: </span>
+                <span style={{ fontWeight: 700, color: '#34d399' }}>{data.keySupportPrice}</span>
+              </div>
+            )}
+            {data?.keyPressurePrice !== undefined && (
+              <div>
+                <span style={{ color: '#94a3b8' }}>壓力: </span>
+                <span style={{ fontWeight: 700, color: '#f87171' }}>{data.keyPressurePrice}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 白話指引情境解析 (Actionable Advice) */}
+      {data?.actionableAdvice && (
+        <div
+          style={{
+            padding: '6px 8px',
+            borderRadius: '6px',
+            background: 'rgba(15, 23, 42, 0.6)',
+            borderLeft: `3px solid ${verdictConfig.color}`,
+            fontSize: '0.7rem',
+            lineHeight: 1.45,
+            color: '#e2e8f0',
+          }}
+        >
+          <div style={{ color: verdictConfig.color, fontWeight: 800, marginBottom: '2px', fontSize: '0.68rem' }}>
+            【AI 決策情境解析】
+          </div>
+          <div>{data.actionableAdvice}</div>
+        </div>
+      )}
+
+      {/* 底部目前燈號 (完全動態化，廢除硬編碼純紅燈) */}
       <div
         style={{
           display: 'flex',
@@ -182,6 +352,7 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
           paddingTop: '6px',
           borderTop: '1px solid rgba(255, 255, 255, 0.05)',
           fontSize: '0.72rem',
+          marginTop: 'auto',
         }}
       >
         <TermTooltip termId="trafficLight">
@@ -194,11 +365,11 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
                 width: '7px',
                 height: '7px',
                 borderRadius: '50%',
-                backgroundColor: '#ef4444',
-                boxShadow: '0 0 8px #ef4444',
+                backgroundColor: verdictConfig.color,
+                boxShadow: verdictConfig.glow,
               }}
             />
-            <span style={{ color: '#ef4444', fontWeight: 800 }}>紅燈</span>
+            <span style={{ color: verdictConfig.color, fontWeight: 800 }}>{verdictLabel}</span>
           </div>
         </TermTooltip>
       </div>

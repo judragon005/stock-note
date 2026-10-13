@@ -76,6 +76,19 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
     setSymbol(targetSymbol);
     setMarket(targetMarket);
     const resolvedName = resolveOfficialSecurityName(targetSymbol, targetMarket) || targetSymbol;
+    setReport((prev) => ({
+      ...prev,
+      symbol: targetSymbol,
+      name: resolvedName,
+      market: targetMarket,
+      tdccDistribution: {
+        history: [],
+        concentrationBadge: targetMarket === 'US' ? '美股不適用' : '數據加載中...',
+        asOfDateText: targetMarket === 'US' ? '美股市場' : '更新中...',
+        isEmpty: true,
+        emptyMessage: targetMarket === 'US' ? '美股無集保機制 (採 13F 機構申報)' : '正在獲取集保數據...',
+      },
+    }));
     let quote:
       | (PriceQuote & { open?: number; high?: number; low?: number; volume?: number })
       | null
@@ -432,6 +445,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 {/* 19 TDCC 集保千張大戶趨勢 (近 10 週持股比變動) */}
                 <div style={{ minWidth: 0, height: '100%' }}>
                   <TdccDistributionCard
+                    key={symbol}
                     data={report.tdccDistribution}
                     colorTheme={market === 'US' ? 'international' : 'taiwan'}
                   />
