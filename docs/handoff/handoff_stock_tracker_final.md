@@ -1,17 +1,17 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-10-13 13:20 (UTC+8)  
+> **交接產生時間**：2026-10-13 15:10 (UTC+8)  
 > **當前最新里程碑**：
-> - **V8.90.0 專案全量文檔完整性稽核、死鏈全數修復、變更日誌補齊與自動化守門機制**（ADR 0178, Spec 0178, Issue #220, PR #221）：
->   - **全量文檔完整性守門機制 (`scripts/verify-docs.cjs` / `npm run lint:docs`)**：掃描專案 553 份 Markdown 文檔，自動過濾代碼區塊，徹底防禦死鏈與成對性遺漏。
->   - **0153 歷史跳號謎題與 ADR 缺漏修復**：補齊 Issue #135 待開發規格檔 `Spec 0153` 與 `ADR 0153`，並補齊 `ADR 0175`。
->   - **目錄結構純淨化與割裂消除**：將歷史 `docs/handover/` 完整收斂至 `docs/handoff/`；將根目錄備份檔案隔離至受 `.gitignore` 保護的 `docs/json/`；補齊標準 MIT `LICENSE`。
->   - **斷更近百版之 CHANGELOG 復甦**：全量補齊自 V5.9.0 至 V8.90.0 所有核心里程碑變更歷史。
->   - **死鏈徹底清零**：修復交接總手冊、`CONTEXT.md`、Spec 0151/0152 及歷史債務文檔內共 23 處無效超連結。
+> - **V8.91.0 智策精煉投資決策多維提示詞引擎與六頂思考帽工作區生成器**（ADR 0153, Spec 0153, Issue #135, PR #225）：
+>   - **雙軌特徵語意壓榨與零信任數據海關 (`strategicPromptDigest.ts`)**：支援個股（量價/籌碼/營收/質押警戒）與 ETF（四大分類/穿透持股/折溢價/平準金）分流，遵循 Zero-Mock Policy。
+>   - **六頂思考帽多維投資決策框架 (`strategicPromptEngine.ts`)**：白帽、紅帽、黑帽（魔鬼代言/下檔批判）、黃帽、綠帽、藍帽，支援全量 Master Prompt 與單頂思考帽專屬 Prompt 生成。
+>   - **雙層嚴格 Token 預算防護守門**：單頂思考帽 700~1,000 tokens (< 1,200 上限)；全量 Master Prompt 2,500~3,800 tokens (< 4,500 上限)。
+>   - **工作台 UI 面板無縫整合 (`StrategicPromptPanel.tsx`)**：無縫嵌入 `StockAnalysisWorkspace`，具備六頂思考帽膠囊切換、Token 儀表板、部位隱私脫敏開關與一鍵複製。
+> - **V8.90.0 專案全量文檔完整性稽核、死鏈全數修復、變更日誌補齊與自動化守門機制**（ADR 0178, Spec 0178, Issue #220, PR #221）
 > - **V8.89.0 TDCC 集保大戶與月營收全自動新鮮度管線、主 K 線雙灰線修復與券商法人均線色譜**（ADR 0177, Spec 0177, Issue #217, PR #218）
 > - **V8.88.0 主力戰情室 Card 18 主力追蹤總評判操盤指引升級、5 態作戰光譜圖例與機構級風控門檻**（ADR 0176, Spec 0176, Issue #214, PR #215）
 > - **V8.87.0 外部金融 API 控制台探針修復、CSP/CORS 網路防禦與 NAS 通用反向代理**（ADR 0175, Spec 0175, Issue #209, PRs #212, #213）
-> **品質狀態**：全量單元測試 **1,553/1,553 通過 (100% Passed / 210 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> **品質狀態**：全量單元測試 **1,568/1,568 通過 (100% Passed / 213 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -20,10 +20,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main`
-- **單元測試套件**：**1,553/1,553 通過 (210 test suites / 100% 綠燈)**
+- **單元測試套件**：**1,568/1,568 通過 (213 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V8.90.0**
+- **當前釋出版本**：**V8.91.0**
 - **工作區與分支整潔度**：工作區 100% clean，本地 feature/fix 分支已全數刪除，專案臨時備份檔案已全量清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -52,6 +52,7 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0153`](file:///d:/APP/股票紀錄/docs/specs/0153-smart-strategic-prompt-engine-and-workspace-generator-spec.md) | [`ADR 0153`](file:///d:/APP/股票紀錄/docs/adr/0153-smart-strategic-prompt-engine.md) | [`.scratch/v8.91/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.91/issues/) | Issue #135 / PR #225 | V8.91.0 | 智策精煉投資決策多維提示詞引擎與六頂思考帽工作區生成器 |
 | [`Spec 0178`](file:///d:/APP/股票紀錄/docs/specs/0178-documentation-integrity-audit-broken-links-repair-and-linter-spec.md) | [`ADR 0178`](file:///d:/APP/股票紀錄/docs/adr/0178-documentation-integrity-audit-broken-links-repair-and-linter.md) | [`.scratch/v8.90/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.90/issues/) | Issue #220 / PR #221 | V8.90.0 | 專案全量文檔完整性稽核、死鏈全數修復、變更日誌補齊與自動化守門機制 |
 | [`Spec 0177`](file:///d:/APP/股票紀錄/docs/specs/0177-auto-sync-tdcc-revenue-and-kline-institutional-spectrum-spec.md) | [`ADR 0177`](file:///d:/APP/股票紀錄/docs/adr/0177-auto-sync-tdcc-revenue-and-kline-institutional-spectrum.md) | [`.scratch/v8.89/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.89/issues/) | Issue #217 / PR #218 | V8.89.0 | TDCC 集保大戶與月營收全自動新鮮度管線、主 K 線雙灰線修復與券商法人色譜 |
 | [`Spec 0176`](file:///d:/APP/股票紀錄/docs/specs/0176-ai-force-card18-verdict-playbook-color-spectrum-and-institutional-gate-spec.md) | [`ADR 0176`](file:///d:/APP/股票紀錄/docs/adr/0176-card18-verdict-playbook-and-color-spectrum.md) | [`.scratch/v8.88/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.88/issues/) | Issue #214 / PR #215 | V8.88.0 | 主力戰情室 Card 18 主力追蹤總評判操盤指引升級、5 態作戰光譜圖例與機構級風控門檻 |
@@ -94,6 +95,7 @@
 | **指標審計測試套件** | [`src/engine/analysisMetricsAudit.test.ts`](file:///d:/APP/股票紀錄/src/engine/analysisMetricsAudit.test.ts) | 5 大核心金融審計檢驗：基期缺失平整化、毛利暴衝真實性與離群高度維持、動態股數 >70 億股、FCF Yield 合理區間、DCF 25~55 元。 | 9 tests |
 | **市場結算狀態與定錨引擎** | [`src/engine/marketSettlementEngine.ts`](file:///d:/APP/股票紀錄/src/engine/marketSettlementEngine.ts) | Asia/Taipei 時區感知純函式，判定台股 15:00 籌碼發布門檻與美股 08:00 結算門檻，未收盤時自適應回退前一收盤交易日定錨日。 | 8 tests |
 | **AI 主力戰情室決策報告引擎** | [`src/engine/aiForceDashboardEngine.ts`](file:///d:/APP/股票紀錄/src/engine/aiForceDashboardEngine.ts) | 支援 `basePrice` 與 `realtimeQuote` 動態注入與自適應回退，杜絕 2290 寫死假資料，實現 18 張卡片與即時行情等比動態同步。 | 13 tests |
+| **智策多維提示詞決策引擎** | [`src/engine/strategicPromptEngine.ts`](file:///d:/APP/股票紀錄/src/engine/strategicPromptEngine.ts) | 實作個股/ETF雙軌特徵壓榨、六頂思考帽決策 Prompt 生成、Token 預算守門 (<1200 / <4500) 與零信任數據海關。 | 11 tests |
 
 ### 4.2 前端工作台與核心組件 (`src/components/`)
 
@@ -101,6 +103,7 @@
 | :--- | :--- | :--- |
 | **股利收益日誌與現金流** | [`src/components/DividendLogView.tsx`](file:///d:/APP/股票紀錄/src/components/DividendLogView.tsx) | `calculateMonthTooltipAlign` 智慧避讓演算法（1~2月靠左、10~12月靠右、3~9月居中）、KPI 首卡券商對帳毛淨額雙軌切換、明細表標的對帳小計卡片網格與單點過濾。 |
 | **個股分析工作台** | [`src/components/analysis/StockAnalysisWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/analysis/StockAnalysisWorkspace.tsx) | 整合 6 大核心指標分頁（獲利力、安全性、成長力、現金流、價值評估、公開股利），提供股票代碼搜尋、快顯膠囊、自適應響應式佈局。 |
+| **智策提示詞生成面板** | [`src/components/analysis/StrategicPromptPanel.tsx`](file:///d:/APP/股票紀錄/src/components/analysis/StrategicPromptPanel.tsx) | 嵌入個股分析工作台，提供六頂思考帽色彩切換、Token 儀表板、隱私脫敏開關、一鍵複製與 XML 展開預覽。 |
 | **指標圖表與河流圖** | [`src/components/analysis/AnalysisMetricView.tsx`](file:///d:/APP/股票紀錄/src/components/analysis/AnalysisMetricView.tsx) | 向量 SVG 估值河流圖引擎（`<polygon>` 漸層色帶 + 通道邊界 + 現價脈衝）、成長率離群值視覺封頂防禦演算法、7 大價值評估子分頁獨立分流渲染。 |
 | **AI 主力頂部行情與雙層警示** | [`src/components/aiForceDashboard/HeaderMarketBar.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/HeaderMarketBar.tsx) | 未結算時動態切換「前日收盤價」、出示橘黃警示徽章、定錨基準日標示，並次級輔助顯示盤中即時參考價。 |
 | **AI 決策核心卡片** | [`src/components/aiForceDashboard/cards/AiDecisionCoreCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/AiDecisionCoreCard.tsx) | 未結算時頂部出示顯著防禦警示橫幅，明確宣告量化基準日，確保決策透明度。 |
@@ -116,11 +119,10 @@
 依據專案規範與 [`docs/debts/README.md`](file:///d:/APP/股票紀錄/docs/debts/README.md)，當前重點如下：
 
 - **待進行評估之架構改善 (Backlog / Open)**：
-  - `DEBT-0038`：[提取流通股數推導共用輔助函式 (deriveSharesOutstanding) 消除 DRY 異味](file:///d:/APP/股票紀錄/docs/debts/0038-derive-shares-outstanding-helper-refactor.md) (`P3`，待量化估值模型擴充時一併重構)。
-  - `DEBT-0037`：全市場個股 7 步深度投研與決策閉環引擎 (`P2`)。
-  - `DEBT-0036`：質押借貸 FULL_PAYOFF 全額結清分支統一委託 applyDebtRepayment 引擎重構 (`P2`, Issue #25)。
-  - `DEBT-0033`：靜態資源 Content-Security-Policy (CSP) 安全標頭與 XSS 深度防護 (`P1`)。
-  - `DEBT-0034`：JSON / CSV 匯入解析的原型鏈污染防禦 (`P2`)。
+  - `DEBT-0048`：[個股分析工作區已載入之量化財務報表與本益比深度注入智策提示詞事實清單](file:///d:/APP/股票紀錄/docs/debts/0048-strategic-prompt-workspace-financial-records-injection.md) (`P3`，待下期個股財務深探或即時估值欄位對齊時實作)。
+  - `DEBT-0047`：[Pre-push Guard 整合文檔完整性與死鏈自動化守門 (verify-docs)](file:///d:/APP/股票紀錄/docs/debts/0047-pre-push-guard-docs-integrity-linter-integration.md) (`P3`)。
+  - `DEBT-0046`：[中央金鑰庫與私有雲全端代理架構](file:///d:/APP/股票紀錄/docs/debts/0046-centralized-key-vault-and-nas-proxy-mesh.md) (`P2`)。
+  - `DEBT-0038`：[提取流通股數推導共用輔助函式 (deriveSharesOutstanding) 消除 DRY 異味](file:///d:/APP/股票紀錄/docs/debts/0038-derive-shares-outstanding-helper-refactor.md) (`P3`)。
 
 ---
 
