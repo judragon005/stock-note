@@ -29,6 +29,8 @@ import {
   type CompanyDividendPolicyRecord,
 } from '../../engine/dividendService';
 import { logger } from '../../utils/logger';
+import { StrategicPromptPanel } from './StrategicPromptPanel';
+import { synthesizeStockDigest } from '../../engine/strategicPromptDigest';
 
 // 8 大一級主題
 export type PrimaryCategoryKey =
@@ -352,6 +354,45 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
 
     return pills;
   }, [holdings]);
+
+  // 智策提示詞事實特徵組裝 (Spec 0153 / Issue #135)
+  const strategicDigest = useMemo(() => {
+    const currentHolding = holdings.find((h) => h.symbol === selectedSymbol);
+    const totalPortfolioVal = holdings.reduce(
+      (sum, h) => sum + (h.shares || 0) * (currentPrices[h.symbol] || h.avgCost || 0),
+      0
+    );
+    const holdingVal = currentHolding
+      ? (currentHolding.shares || 0) * (currentPrice || currentHolding.avgCost || 0)
+      : 0;
+    const portfolioWeightPct =
+      totalPortfolioVal > 0 && holdingVal > 0
+        ? Number(((holdingVal / totalPortfolioVal) * 100).toFixed(1))
+        : undefined;
+
+    const unrealizedSign: 'PROFIT' | 'LOSS' | 'BREAKEVEN' | undefined =
+      currentHolding && currentPrice > 0
+        ? currentPrice > (currentHolding.avgCost || 0)
+          ? 'PROFIT'
+          : currentPrice < (currentHolding.avgCost || 0)
+          ? 'LOSS'
+          : 'BREAKEVEN'
+        : undefined;
+
+    return synthesizeStockDigest({
+      symbol: selectedSymbol,
+      name: stockName || selectedSymbol,
+      market,
+      isEtf: isCurrentEtf,
+      quote: {
+        price: currentPrice,
+      },
+      userPortfolio: {
+        portfolioWeightPct,
+        unrealizedGainLossSign: unrealizedSign,
+      },
+    });
+  }, [selectedSymbol, stockName, market, isCurrentEtf, currentPrice, holdings, currentPrices]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '48px' }}>
@@ -684,6 +725,9 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
           </div>
         </div>
       )}
+
+      {/* 3.1 智策多維提示詞引擎面板 (Spec 0153 / Issue #135) */}
+      <StrategicPromptPanel digest={strategicDigest} />
 
       {/* 4. 核心雙層導航工作台佈局 */}
       <div

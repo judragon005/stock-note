@@ -4,6 +4,16 @@
 
 ---
 
+## [V8.91.0] - 2026-10-13
+### 智策精煉投資決策多維提示詞引擎與六頂思考帽工作區生成器
+- **個股與 ETF 雙軌提示詞特徵壓縮與零信任海關 (`strategicPromptDigest.ts`)**：提供雙軌結構化特徵壓榨、零信任真實性審計、部位金額自動脫敏機制，數據缺失一律以 `N/A` 標註，杜絕 AI 幻覺。
+- **六頂思考帽多維投資決策引擎 (`strategicPromptEngine.ts`)**：白帽客觀事實、紅帽直覺情緒、黑帽魔鬼代言批判、黃帽樂觀價值、綠帽創新策略、藍帽決策總結，支援全量 Master Prompt 與單頂思考帽專屬 Prompt 生成。
+- **嚴格 Token 預算防護機制**：單頂思考帽採用專屬緊湊型 Fact Sheet，將 Token 嚴格控制在 700~1,000 tokens（合規 < 1,200 tokens）；全量 Master Prompt 控制在 < 4,500 tokens。
+- **工作區整合面板 (`StrategicPromptPanel.tsx`)**：無縫嵌入 `StockAnalysisWorkspace`，支援六頂思考帽切換、Token 儀表板、隱私脫敏開關與一鍵複製。
+- **關聯文件**：[SPEC-0153](docs/specs/0153-smart-strategic-prompt-engine-and-workspace-generator-spec.md) · [ADR-0153](docs/adr/0153-smart-strategic-prompt-engine.md) · Issue #135。
+
+---
+
 ## [V8.90.0] - 2026-10-13
 ### 專案全量文檔完整性稽核、死鏈全數修復、變更日誌補齊與自動化守門機制
 - **歷史跳號與決策斷層閉環**：對齊 Issue #135 建立 `Spec 0153` 與 `ADR 0153`，補齊 `ADR 0175` 與 `.scratch/v8.87/` 鏡像。

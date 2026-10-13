@@ -1,0 +1,143 @@
+import { describe, it, expect } from 'vitest';
+import { synthesizeStockDigest } from './strategicPromptDigest';
+import {
+  generateStrategicPrompt,
+  generateMasterPrompt,
+  generateSingleHatPrompt,
+} from './strategicPromptEngine';
+
+describe('Ticket 03: strategicPromptEngine 雙軌路由與六頂思考帽組裝引擎核心', () => {
+  const stockDigest = synthesizeStockDigest({
+    symbol: '2330',
+    name: '台積電',
+    market: 'TW',
+    candles: [
+      { date: '2026-10-13', open: 1020, high: 1050, low: 1015, close: 1045, volume: 40000, transactions: 28000 },
+    ],
+    quote: { price: 1045, pe: 24.5, pb: 6.2, dividendYield: 1.8 },
+    institutionalRecords: [
+      { date: '2026-10-13', foreignShares: 5000, trustShares: 800, dealerShares: -200 },
+    ],
+    monthlyRevenue: {
+      yearMonth: '2026-09',
+      revenue: 250000000,
+      yoyRate: 34.2,
+      momRate: 4.8,
+      isAllTimeHigh: true,
+    },
+    tdccDistribution: {
+      over400Ratio: 78.5,
+      over1000Ratio: 65.2,
+      under10Ratio: 12.1,
+      totalShareholders: 1450000,
+    },
+    macroSentiment: {
+      treasuryYield10Y: 4.05,
+      cnnFearGreedScore: 68,
+    },
+    vwapCost: {
+      mainForceVwap: 1010,
+      biasPercent: 3.46,
+    },
+    directorPledgeRatioPct: 1.2,
+    userPortfolio: {
+      portfolioWeightPct: 15,
+      unrealizedGainLossSign: 'PROFIT',
+    },
+  });
+
+  const etfDigest = synthesizeStockDigest({
+    symbol: '0050',
+    name: '元大台灣50',
+    market: 'TW',
+    candles: [
+      { date: '2026-10-13', open: 180, high: 186, low: 179, close: 185, volume: 12000 },
+    ],
+    quote: { price: 185 },
+    etfDetails: {
+      category: 'CORE_MARKET',
+      totalExpenseRatioPct: 0.43,
+      trackingDifferencePct: -0.15,
+      discountPremiumPct: 0.08,
+      topHoldings: [
+        { symbol: '2330', name: '台積電', weightPct: 54.2 },
+        { symbol: '2454', name: '聯發科', weightPct: 4.8 },
+      ],
+      topSectorConcentration: '半導體 62.1%',
+    },
+  });
+
+  it('1. 個股 Master 提示詞組裝：應產出個股大師 V12.0 框架、XML 標籤、六頂思考帽與反思閘門', () => {
+    const result = generateMasterPrompt(stockDigest, {
+      mode: 'FULL_MASTER',
+      desensitized: true,
+    });
+
+    expect(result.assetClass).toBe('EQUITY');
+    expect(result.promptText).toContain('<system_role>');
+    expect(result.promptText).toContain('<data_customs_audit>');
+    expect(result.promptText).toContain('<fact_sheet asset_type="EQUITY">');
+    expect(result.promptText).toContain('好生意與市場集中度 (CR4/CR8)');
+    expect(result.promptText).toContain('好公司護城河與財務鑑識');
+    expect(result.promptText).toContain('<six_thinking_hats_instruction>');
+    expect(result.promptText).toContain('【⚫ 黑帽 - 魔鬼代言人 / 紅隊質詢】');
+    expect(result.promptText).toContain('<agentic_reflection_gate>');
+    expect(result.promptText).toContain('NO_MOCK_DATA_ZERO_TOLERANCE');
+
+    // Token 守門員：Master Prompt 必須嚴格小於 4,500 tokens
+    expect(result.estimatedTokens).toBeLessThan(4500);
+    expect(result.estimatedTokens).toBeGreaterThan(500);
+  });
+
+  it('2. ETF Master 提示詞組裝：應產出 ETF 大師 V3.0 框架，包含動態權重與成分股穿透', () => {
+    const result = generateMasterPrompt(etfDigest, {
+      mode: 'FULL_MASTER',
+      desensitized: true,
+    });
+
+    expect(result.assetClass).toBe('ETF');
+    expect(result.promptText).toContain('<fact_sheet asset_type="ETF">');
+    expect(result.promptText).toContain('動態權重感知稽核 (Core Market)');
+    expect(result.promptText).toContain('指數品質與跟蹤偏離 (TD)');
+    expect(result.promptText).toContain('前十大成分股穿透');
+    expect(result.promptText).not.toContain('董監事持股質押'); // ETF 不應有董監質押
+    expect(result.estimatedTokens).toBeLessThan(4500);
+  });
+
+  it('3. 單頂思考帽抽離模式 (黑帽)：應精準聚焦於紅隊魔鬼代言人，Token 嚴格小於 1,200', () => {
+    const result = generateSingleHatPrompt(stockDigest, 'BLACK', {
+      mode: 'SINGLE_HAT',
+      targetHat: 'BLACK',
+      desensitized: true,
+    });
+
+    expect(result.activeMode).toBe('SINGLE_HAT');
+    expect(result.targetHat).toBe('BLACK');
+    expect(result.promptText).toContain('【⚫ 黑帽 - 魔鬼代言人 / 紅隊質詢】');
+    expect(result.promptText).not.toContain('【🟡 黃帽'); // 其他思考帽不重複展開
+    expect(result.promptText).not.toContain('【🟢 綠帽');
+    expect(result.estimatedTokens).toBeLessThan(1200);
+  });
+
+  it('4. 隱私脫敏守護：預設模式絕不洩漏個人資金金額', () => {
+    const result = generateMasterPrompt(stockDigest, {
+      mode: 'FULL_MASTER',
+      desensitized: true,
+      userPortfolioWeightPct: 15,
+    });
+
+    expect(result.promptText).toContain('部位佔比: 15%');
+    expect(result.promptText).not.toContain('$');
+    expect(result.promptText).not.toContain('萬元');
+    expect(result.promptText).not.toContain('股數:');
+  });
+
+  it('5. 統一入口 generateStrategicPrompt 分流行為正確', () => {
+    const masterRes = generateStrategicPrompt(stockDigest, { mode: 'FULL_MASTER', desensitized: true });
+    expect(masterRes.activeMode).toBe('FULL_MASTER');
+
+    const singleRes = generateStrategicPrompt(stockDigest, { mode: 'SINGLE_HAT', targetHat: 'WHITE', desensitized: true });
+    expect(singleRes.activeMode).toBe('SINGLE_HAT');
+    expect(singleRes.targetHat).toBe('WHITE');
+  });
+});
