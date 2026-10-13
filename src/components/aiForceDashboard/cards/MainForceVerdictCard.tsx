@@ -413,7 +413,6 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
     'AI 結論：經 5 日主力行為綜合研判（法人近 5 日合計 -64 張、收盤相對 20 日 VWAP +7.5%、RSI 60），法人小幅調節，短線宜區間操作。';
 
   const statusInfo = getVerdictStatusInfo(verb);
-  const verbStyle = statusInfo;
   const spectrumPhases = getMainForceSpectrumPhases(verb);
   const metricCapsules = parseVerdictMetrics(verdictText);
   const playbook = getMainForcePlaybook(verb, metricCapsules);
@@ -480,7 +479,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
           padding: '8px 14px',
           background: 'rgba(15, 23, 42, 0.4)',
           borderRadius: '10px',
-          border: `1px solid ${verbStyle.border}`,
+          border: `1px solid ${statusInfo.border}`,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -492,9 +491,9 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
               style={{
                 fontSize: '22px',
                 fontWeight: 900,
-                color: verbStyle.color,
+                color: statusInfo.color,
                 letterSpacing: '1px',
-                textShadow: `0 0 16px ${verbStyle.color}60`,
+                textShadow: `0 0 16px ${statusInfo.color}60`,
                 cursor: 'help',
               }}
             >
@@ -509,11 +508,11 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
               width: '8px',
               height: '8px',
               borderRadius: '50%',
-              backgroundColor: verbStyle.color,
-              boxShadow: `0 0 8px ${verbStyle.color}`,
+              backgroundColor: statusInfo.color,
+              boxShadow: `0 0 8px ${statusInfo.color}`,
             }}
           />
-          <span style={{ fontSize: '11px', color: verbStyle.color, fontWeight: 700 }}>
+          <span style={{ fontSize: '11px', color: statusInfo.color, fontWeight: 700 }}>
             {statusInfo.statusText}
           </span>
         </div>
@@ -588,7 +587,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
           data-testid="market-context-panel"
           style={{
             background: 'rgba(30, 41, 59, 0.45)',
-            borderLeft: `3px solid ${verbStyle.color}`,
+            borderLeft: `3px solid ${statusInfo.color}`,
             borderRadius: '6px',
             padding: '7px 11px',
             display: 'flex',
@@ -596,7 +595,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
             gap: '3px',
           }}
         >
-          <div style={{ fontSize: '11px', fontWeight: 800, color: verbStyle.color, letterSpacing: '0.3px' }}>
+          <div style={{ fontSize: '11px', fontWeight: 800, color: statusInfo.color, letterSpacing: '0.3px' }}>
             ▌ 語意微觀解析 (Market Context)
           </div>
           <div style={{ fontSize: '11px', lineHeight: 1.5, color: '#cbd5e1' }}>
@@ -627,9 +626,9 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
                 fontWeight: 700,
                 padding: '2px 7px',
                 borderRadius: '4px',
-                background: `${verbStyle.color}25`,
-                color: verbStyle.color,
-                border: `1px solid ${verbStyle.color}50`,
+                background: `${statusInfo.color}25`,
+                color: statusInfo.color,
+                border: `1px solid ${statusInfo.color}50`,
               }}
             >
               {playbook.horizon}
@@ -694,9 +693,9 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {metricCapsules.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-            {metricCapsules.map((m, idx) => (
+            {metricCapsules.map((m) => (
               <div
-                key={idx}
+                key={m.label}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -800,7 +799,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
             >
               {QUANT_VERDICT_THRESHOLDS.map((item, idx) => (
                 <div
-                  key={idx}
+                  key={item.phase}
                   style={{
                     display: 'grid',
                     gridTemplateColumns: '70px 1fr',
