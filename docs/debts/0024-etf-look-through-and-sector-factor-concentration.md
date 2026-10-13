@@ -10,7 +10,7 @@
 
 ## 1. 背景與現狀代碼 (Context & Current Code)
 
-目前系統已具備完善的持倉表格（[src/components/HoldingsTable.tsx](file:///d:/APP/股票紀錄/src/components/HoldingsTable.tsx)）與資產樹狀圖（[src/components/Treemap.tsx](file:///d:/APP/股票紀錄/src/components/Treemap.tsx)）：
+目前系統已具備完善的持倉表格（`src/components/HoldingsTable.tsx`）與資產樹狀圖（`src/components/Treemap.tsx`）：
 1. **表層標的分散 vs. 底層實質過度集中 (False Diversification)**：
    - 使用者帳戶內常同時配置：個股（如 `2330 台積電`）、市值型 ETF（如 `0050 元大台灣50`、`00923 群益台ESG低碳50`、`00403A 主動統一升級50`）與全球 ETF（如 `VT`）。
    - 在既有持倉表格與 Treemap 中，這些標的被視為「獨立個體」。

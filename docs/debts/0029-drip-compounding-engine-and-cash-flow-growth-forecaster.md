@@ -10,7 +10,7 @@
 
 ## 1. 背景與現狀代碼 (Context & Current Code)
 
-目前系統已具備專屬股息日誌（[src/components/DividendTracker.tsx](file:///d:/APP/股票紀錄/src/components/DividendTracker.tsx)）與應收股息平滑機制（[src/engine/receivableDividendEngine.ts](file:///d:/APP/股票紀錄/src/engine/receivableDividendEngine.ts)）：
+目前系統已具備專屬股息日誌（`src/components/DividendTracker.tsx`）與應收股息平滑機制（`src/engine/receivableDividendEngine.ts`）：
 1. **股利沉澱 vs. 股利自動再投資 (Dividend Cashout vs. DRIP Compounding)**：
    - 目前配息入帳後，預設直接進入現金帳本（Cash Ledger）。
    - **實質盲區**：長期存股與高股息/指數投資人（如持有 0050、0056、00878、00919、SCHD、VYM、VOO）的核心增長動力在於「股息自動再買進（DRIP）所產生的指數型複利滾雪球效應」。現有介面無法直觀呈現「若每次股息皆全數再投資，10 年後總市值與每年被動現金流會增加多少倍」。

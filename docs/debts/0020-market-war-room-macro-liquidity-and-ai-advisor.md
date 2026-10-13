@@ -12,7 +12,7 @@
 ## 1. 背景與現狀代碼 (Context & Current Code)
 
 目前系統已具備完善的個人資產管理與微觀層級交易功能：
-1. **微觀與個股帳本完備**：包含持倉雙軌記帳、現金帳本（[src/engine/cashLedgerEngine.ts](file:///d:/APP/股票紀錄/src/engine/cashLedgerEngine.ts)）、股票質押借貸風控（[src/engine/loanInterestEngine.ts](file:///d:/APP/股票紀錄/src/engine/loanInterestEngine.ts)）、XIRR 內部報酬率（[src/engine/xirrEngine.ts](file:///d:/APP/股票紀錄/src/engine/xirrEngine.ts)）、在途交割資金管理（[src/engine/inTransitEngine.ts](file:///d:/APP/股票紀錄/src/engine/inTransitEngine.ts)）與目標資產偏離度再平衡（[src/engine/rebalancingEngine.ts](file:///d:/APP/股票紀錄/src/engine/rebalancingEngine.ts)）。
+1. **微觀與個股帳本完備**：包含持倉雙軌記帳、現金帳本（`src/engine/cashLedgerEngine.ts`）、股票質押借貸風控（`src/engine/loanInterestEngine.ts`）、XIRR 內部報酬率（`src/engine/xirrEngine.ts`）、在途交割資金管理（`src/engine/inTransitEngine.ts`）與目標資產偏離度再平衡（`src/engine/rebalancingEngine.ts`）。
 2. **缺乏「宏觀總體經濟與市場情緒戰情室」**：
    - 使用者登入系統後，能看清「自己的口袋損益」，但**無法一目瞭然當前總體經濟景氣位階、全球資金流動性水位、跨資產風險偏好與市場極端恐慌度**。
    - 缺乏將「宏觀大盤環境 (Macro)」與「個人持倉防禦力 (Micro Portfolio)」進行交叉診斷的統一視圖。
@@ -191,9 +191,9 @@ export interface MacroIndicatorSnapshot {
 - **實施 PRD**：[docs/specs/0094-macro-war-room-and-ai-advisor-spec.md](file:///d:/APP/股票紀錄/docs/specs/0094-macro-war-room-and-ai-advisor-spec.md)
 - **架構決策**：[docs/adr/0094-market-war-room-macro-liquidity-and-ai-advisor.md](file:///d:/APP/股票紀錄/docs/adr/0094-market-war-room-macro-liquidity-and-ai-advisor.md)
 - **實作代碼**：
-  - 型別定義：[src/types/macro.ts](file:///d:/APP/股票紀錄/src/types/macro.ts)
-  - 核心引擎：[src/engine/macroAdvisorEngine.ts](file:///d:/APP/股票紀錄/src/engine/macroAdvisorEngine.ts)
-  - 單元測試：[src/engine/macroAdvisorEngine.test.ts](file:///d:/APP/股票紀錄/src/engine/macroAdvisorEngine.test.ts)
+  - 型別定義：`src/types/macro.ts`
+  - 核心引擎：`src/engine/macroAdvisorEngine.ts`
+  - 單元測試：`src/engine/macroAdvisorEngine.test.ts`
 - **交付功能亮點**：
   1. **個人投資組合宏觀防護盾 (Portfolio Macro Shield)**：精確提煉實質現金購買力比率（緊繃/適中/充裕）、質押借貸槓桿維持率等級（安全/警戒/追繳/零借款）與配置最大偏離度。
   2. **關鍵財經催化劑倒數計算器**：動態計算 FOMC、美國 CPI、非農與央行會議之倒數天數並過濾過期事件。

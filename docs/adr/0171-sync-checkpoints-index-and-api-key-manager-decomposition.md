@@ -3,7 +3,7 @@
 - **狀態 (Status)**: 已採納 (Accepted)
 - **日期 (Date)**: 2026-10-08
 - **決策者 (Deciders)**: 專案架構團隊
-- **關聯規格 (Spec)**: [0171-technical-debt-batch-cleanup-sync-checkpoints-and-api-key-manager.md](../specs/0171-technical-debt-batch-cleanup-sync-checkpoints-and-api-key-manager.md)
+- **關聯規格 (Spec)**: [0171-technical-debt-batch-cleanup-sync-checkpoints-and-api-key-manager-spec.md](../specs/0171-technical-debt-batch-cleanup-sync-checkpoints-and-api-key-manager-spec.md)
 - **關聯任務 (Issue)**: #193
 - **關聯技術債**: [Debt 0041](../debts/0041-sync-checkpoints-composite-index-optimization.md) (RESOLVED), [Debt 0045](../debts/0045-unified-api-key-manager-subcomponent-decomposition.md) (RESOLVED)
 

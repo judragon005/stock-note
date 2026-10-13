@@ -11,7 +11,7 @@
 
 ## 1. 背景與現狀代碼 (Context & Current Code)
 
-目前系統已具備股票質押借貸維持率計算與利息引擎（[src/engine/loanInterestEngine.ts](file:///d:/APP/股票紀錄/src/engine/loanInterestEngine.ts)）：
+目前系統已具備股票質押借貸維持率計算與利息引擎（`src/engine/loanInterestEngine.ts`）：
 1. **靜態維持率 vs. 實戰非線性複合衝擊**：
    - 目前維持率公式為：$\text{維持率} = \frac{\text{擔保品總市值}}{\text{借款本金}} \times 100\%$。
    - 該計算在「平穩行情」下運作正常，但在台股真實實戰中，存在兩大引發非預期追繳或斷頭的重大盲區：
@@ -105,9 +105,9 @@ export interface LiquidationPriceThreshold {
 - **實施 PRD**：[docs/specs/0093-black-swan-margin-stress-matrix-spec.md](file:///d:/APP/股票紀錄/docs/specs/0093-black-swan-margin-stress-matrix-spec.md)
 - **架構決策**：[docs/adr/0093-black-swan-margin-stress-matrix-and-liquidation-simulator.md](file:///d:/APP/股票紀錄/docs/adr/0093-black-swan-margin-stress-matrix-and-liquidation-simulator.md)
 - **實作代碼**：
-  - 型別定義：[src/types/marginStress.ts](file:///d:/APP/股票紀錄/src/types/marginStress.ts)
-  - 核心引擎：[src/engine/marginStressMatrixEngine.ts](file:///d:/APP/股票紀錄/src/engine/marginStressMatrixEngine.ts)
-  - 單元測試：[src/engine/marginStressMatrixEngine.test.ts](file:///d:/APP/股票紀錄/src/engine/marginStressMatrixEngine.test.ts)
+  - 型別定義：`src/types/marginStress.ts`
+  - 核心引擎：`src/engine/marginStressMatrixEngine.ts`
+  - 單元測試：`src/engine/marginStressMatrixEngine.test.ts`
 - **交付功能亮點**：
   1. **除權息價格跳水扣減模型**：$P_{\text{stressed}} = \max(0, (P_{\text{current}} - D_{\text{cash}}) \times (1 - d))$，精確模擬股息尚未入帳之空窗期市值衝擊。
   2. **標準 6 維動態情境壓力矩陣**：涵蓋 -5%、-10%、-20%、-30%、純除息跳水、以及最嚴苛之「-20% + 除息跳水」黑天鵝複合情境。

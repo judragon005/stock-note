@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "guard:pre-push": "node scripts/pre-push-guard.cjs",
+    "lint:docs": "node scripts/verify-docs.cjs",
     "sync:us:bootstrap": "node scripts/market-sync/sync-us-market.cjs --mode=bootstrap",
     "sync:us:daily": "node scripts/market-sync/sync-us-market.cjs --mode=daily",
     "audit:us-lakehouse": "node scripts/market-sync/audit-verifier.cjs",

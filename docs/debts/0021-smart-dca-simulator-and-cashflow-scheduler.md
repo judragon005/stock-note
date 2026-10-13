@@ -10,13 +10,13 @@
 
 ## 1. 背景與現狀代碼 (Context & Current Code)
 
-目前系統已具備完善的單次交易紀錄、多批次沖銷會計與目標資產偏離度再平衡推薦器（[src/engine/rebalancingEngine.ts](file:///d:/APP/股票紀錄/src/engine/rebalancingEngine.ts)）：
+目前系統已具備完善的單次交易紀錄、多批次沖銷會計與目標資產偏離度再平衡推薦器（`src/engine/rebalancingEngine.ts`）：
 1. **靜態與已發生交易導向**：現有會計模型以「已經成交的交易明細 (`TradeRecord`)」為基底計算持倉成本與損益。
 2. **缺乏定期定額計畫 (DCA Plan) 生命週期追蹤**：
    - 多數指數化投資人（如持有 0050、006208、00878、00919、VT 等）採用每月固定日期（如 6 日、16 日、26 日）自動扣款定期定額或定期定股。
    - 目前使用者必須手動在扣款成交後一筆筆補登交易，無法預設定投合約計畫，亦無法量化「設定的定投計畫 vs 實際執行的完成度 (Execution Adherence Rate)」。
 3. **現金帳本無法預防定期定額交割透支**：
-   - 現金帳本（[src/engine/cashLedgerEngine.ts](file:///d:/APP/股票紀錄/src/engine/cashLedgerEngine.ts)）與在途資金引擎（[src/engine/inTransitEngine.ts](file:///d:/APP/股票紀錄/src/engine/inTransitEngine.ts)）僅能反映「已委託/已成交」的交割扣款。
+   - 現金帳本（`src/engine/cashLedgerEngine.ts`）與在途資金引擎（`src/engine/inTransitEngine.ts`）僅能反映「已委託/已成交」的交割扣款。
    - 無法提前排程預估未來 7~30 天定期定額預扣款項，導致投資人可能在交割戶餘額不足時產生違約交割風險。
 
 ---

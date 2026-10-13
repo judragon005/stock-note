@@ -3,7 +3,7 @@
 - **規格編號**：`SPEC-0151`
 - **狀態**：`READY_FOR_AGENT`
 - **領域上下文**：`AI 主力儀表板 (AI Force Decision Dashboard)`、`技術指標管線 (Indicator Pipeline)`
-- **關聯 PRD / ADR**：[ADR-0140](../adr/0140-ai-force-decision-dashboard.md)
+- **關聯 PRD / ADR**：[ADR-0140](../adr/0140-ai-force-decision-dashboard-architecture.md)
 
 ---
 

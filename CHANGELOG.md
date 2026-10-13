@@ -4,6 +4,109 @@
 
 ---
 
+## [V8.90.0] - 2026-10-13
+### 專案全量文檔完整性稽核、死鏈全數修復、變更日誌補齊與自動化守門機制
+- **歷史跳號與決策斷層閉環**：對齊 Issue #135 建立 `Spec 0153` 與 `ADR 0153`，補齊 `ADR 0175` 與 `.scratch/v8.87/` 鏡像。
+- **目錄結構去重與根目錄淨化**：將 `docs/handover/` 遷回 `docs/handoff/` 並移除冗餘目錄；根目錄備份移入 `docs/json/` 並補齊 MIT `LICENSE`。
+- **全域死鏈清零**：重命名 Spec 0171 為 `-spec.md`；全面修復交接總手冊、`CONTEXT.md`、Spec 0151/0152 與 `docs/debts/` 內相對路徑。
+- **自動化文檔守門機制 (`scripts/verify-docs.cjs` & `npm run lint:docs`)**：零依賴驗證器，自動防禦死鏈、Spec/ADR 1:1 成對性與檔名規範。
+- **關聯文件**：[SPEC-0178](docs/specs/0178-documentation-integrity-audit-broken-links-repair-and-linter-spec.md) · [ADR-0178](docs/adr/0178-documentation-integrity-audit-broken-links-repair-and-linter.md) · Issue #220。
+
+---
+
+## [V8.89.0] - 2026-10-13
+### TDCC 集保大戶與月營收全自動新鮮度管線、主 K 線雙灰線修復與券商法人色譜
+- **自動新鮮度自癒管線 (`marketFreshnessService.cjs`)**：純函數動態推算台股週五 21:00 TDCC 集保與每月 10 日 17:30 月營收結算錨點，自動於背景發起無感入庫。
+- **主 K 線雙灰色橫線修復 (`AiForceInteractiveKline.tsx`)**：消除主圖與副圖重疊之 10px 雙線，收斂為單一俐落分割線。
+- **券商法人級 MA 色譜重構**：MA5 亮黃、MA10 青藍、MA20 洋紅、MA60 亮橘實線、MA250 尊爵紫，徹底消除色相混淆。
+- **關聯文件**：[SPEC-0177](docs/specs/0177-auto-sync-tdcc-revenue-and-kline-institutional-spectrum-spec.md) · [ADR-0177](docs/adr/0177-auto-sync-tdcc-revenue-and-kline-institutional-spectrum.md) · Issue #217 · PR #218。
+
+---
+
+## [V8.88.0] - 2026-10-13
+### Card 18 主力追蹤總評判操盤指引升級、5 態作戰光譜圖例與機構級風控門檻
+- **5 態微型作戰光譜圖例條 (Micro Spectrum Bar)**：26px 高度橫向導航條，直觀指引超跌反彈、低接吸籌、鎖碼推升、高檔調節與區間震盪。
+- **中央雙層 Bento 操盤結構**：整合語意微觀解析與四合一操盤指引（週期、執行策、關鍵防守/目標點位、失效條件）。
+- **三軌色彩認知體系校正**：低接吸籌校正為科技藍 `#38bdf8`（● 偏多承接），多頭攻擊 `#ef4444`，區間警戒 `#f59e0b`。
+- **關聯文件**：[SPEC-0176](docs/specs/0176-ai-force-card18-verdict-playbook-color-spectrum-and-institutional-gate-spec.md) · [ADR-0176](docs/adr/0176-card18-verdict-playbook-and-color-spectrum.md) · Issue #214 · PR #215。
+
+---
+
+## [V8.87.0] - 2026-10-09
+### 外部金融 API 控制台探針修復、CSP/CORS 網路防禦與 NAS 通用反向代理
+- **CSP 安全白名單對齊**：擴充 `WHITELISTED_CONNECT_DOMAINS` 涵蓋 Finnhub、FRED、Polygon、CoinGecko 與 SEC。
+- **探針端點與代理感知升級**：FMP 探針切換至 `/stable/quote` 免費相容端點；FRED 探針支援 Proxy 代理轉發。
+- **NAS 通用反向代理**：`prod-server.cjs` 增設 `/api/proxy` 通用安全反代通道，具備 SSRF 防禦。
+- **關聯文件**：[SPEC-0175](docs/specs/0175-api-key-probe-csp-cors-and-endpoint-repair-spec.md) · [ADR-0175](docs/adr/0175-api-key-probe-csp-cors-and-endpoint-repair.md) · Issue #209 · PR #212, #213。
+
+---
+
+## [V8.86.0] - 2026-10-09
+### 主力戰情室視覺大師級版面重構、TermTooltip 500px 旗艦升級與籌碼熱區 1:1 對位
+- **TermTooltip 500px 旗艦視覺升級**：多維度名詞解釋浮窗，具備防止滾動穿透與智慧邊界避讓。
+- **籌碼熱區 1:1 像素對位**：精確貼合主力吸籌價位帶與支撐壓力分佈。
+- **關聯文件**：[SPEC-0174](docs/specs/0174-ai-force-dashboard-visual-master-layout-and-tooltip-spec.md) · [ADR-0174](docs/adr/0174-ai-force-dashboard-visual-master-layout-and-tooltip.md) · Issue #203, #205 · PR #204, #206。
+
+---
+
+## [V8.84.0] - 2026-10-08
+### 主力戰情室 7 層 Bento-Grid 全景佈局重構、量化引擎修復與專業任務視圖升級
+- **7 層 Bento-Grid 自然流佈局**：重構 Card 01~18 之排列階層與視圖空間。
+- **量化引擎修復與 5 大任務視圖**：整合短線動能、波段籌碼、價值防守、機構對象與原始數據。
+- **關聯文件**：[SPEC-0172](docs/specs/0172-ai-force-war-room-comprehensive-layout-and-quant-engine-refactor-spec.md) · [ADR-0172](docs/adr/0172-ai-force-war-room-comprehensive-layout-and-quant-engine-refactor.md) · Issue #195 · PR #196。
+
+---
+
+## [V8.81.0] - 2026-10-05
+### 台美雙軌零 CSV 歷史回補、真實成交筆數入庫與統一金融金鑰控制中心
+- **全自動零 CSV 歷史回補**：擺脫人工下載匯入 CSV，直連交易所與 Yahoo 批次高速拉取。
+- **統一金鑰控制中心 (`UnifiedApiKeyManager`)**：集中式管理 FinMind、FMP、FRED、AlphaVantage 與 Finnhub 金鑰池。
+- **關聯文件**：[SPEC-0168](docs/specs/0168-zero-csv-dual-market-backfill-and-unified-api-key-console-spec.md) · [ADR-0168](docs/adr/0168-zero-csv-dual-market-backfill-and-unified-api-key-console.md) · Issue #182 · PR #183。
+
+---
+
+## [V8.76.0] - 2026-10-03
+### 券商法人級全維度數據湖倉稽核、歷史籌碼斷層回補與 SQLite 湖倉管線
+- **本地 SQLite 數據湖倉 (`sqliteLakehouse.ts`)**：高效能離線本地儲存全市場歷史 K 線、TDCC 股權分散表與三大法人籌碼。
+- **斷層自動回補機制**：自動稽核空缺並精準調用免費端點回補。
+- **關聯文件**：[SPEC-0163](docs/specs/0163-broker-grade-lakehouse-audit-full-backfill-and-dual-market-sync-spec.md) · [ADR-0163](docs/adr/0163-broker-grade-lakehouse-audit-full-backfill-and-dual-market-sync.md) · Issue #159。
+
+---
+
+## [V8.53.0] - 2026-09-26
+### AI 主力戰情室決策儀表板全新發布 (AI Force Decision Dashboard)
+- **18 張專業卡片 Bento-Grid 網格體系**：涵蓋多空攻防、主力成本、量價結構與量化總評判。
+- **原生 SVG 高效能互動 K 線圖**：毫秒級平移縮放與多指標疊圖。
+- **關聯文件**：[SPEC-0140](docs/specs/0140-ai-force-decision-dashboard-spec.md) · [ADR-0140](docs/adr/0140-ai-force-decision-dashboard-architecture.md) · Issue #93。
+
+---
+
+## [V8.10.0 ~ V8.52.0] - 2026-09-08 ~ 2026-09-25
+### FIRE 複利模擬、ETF 穿透審計、穿透式財報法醫分析與全市場排程日更
+- **FIRE 複利試算與 DCA 定期定額模擬器 (v8.31.0)**：支援動態再平衡與退休金提領蒙地卡羅情境分析。
+- **穿透式財報法醫深度分析儀 (v8.42.0 ~ v8.44.0)**：三大報表勾稽、董監持股質押率、杜邦分析與盈餘品質雷達。
+- **全市場歷史定時同步中樞 (v8.47.0 ~ v8.48.0)**：收盤後自動背景批次更迭全市場日歷 SSOT。
+- **統一借貸結清引擎 DRY 重構 (v8.52.0)**：全數消滅重複扣款與多幣別借貸記帳偏差。
+
+---
+
+## [V7.0.0 ~ V7.9.0] - 2026-09-02 ~ 2026-09-07
+### 目標配置再平衡優化、持倉訊號膠囊與主力資金流向氣泡圖
+- **目標資產配置漂移再平衡 (v7.0.0)**：精算現金水位、偏離度警示與補單推薦器。
+- **持倉技術訊號膠囊 (v7.2.0)**：在個股列表直接呈現乖離率、趨勢位階與操盤建議膠囊。
+- **主力資金流向氣泡圖與 TPEX 櫃買官方解析器 V3 (v7.7.0 ~ v8.2.0)**：動態向量氣泡渲染三大法人多日買賣超時序演變。
+
+---
+
+## [V6.0.0 ~ V6.9.7] - 2026-08-28 ~ 2026-09-01
+### 官方標的字典庫、除權息時態分離入帳與本地存儲檢驗器
+- **官方台美股字典庫與智能搜尋 (v6.0.0)**：離線秒級搜尋上市櫃全市場 2,000+ 檔標的名稱與代碼。
+- **除息日與發放日時態分離入帳 (v6.2.0)**：除息日即時平滑股價跳空缺口，發放日自動歸戶現金帳本。
+- **現金減資流水線 (v6.5.0)**：自動等比調整未沖銷批次股數與現金退款記帳。
+- **LocalStorage 資料透明度中心 (v6.6.0)**：視覺化檢查、備份與修復本機儲存資料結構。
+
+---
+
 ## [V5.9.0] - 2026-08-28
 ### 嘉信理財對帳單像素級對齊、利息智能正規化與美股股息毛額雙筆記帳架構
 - **美股股息毛額雙筆記帳架構 (`src/engine/cashLedgerEngine.ts`)**：
@@ -361,7 +464,7 @@
 ### 雙軌會計口徑切換與券商手續費折讓自訂
 - **全域雙軌會計口徑切換**：`[🏢 券商核帳模式 (不含息/含稅)]` ⇋ `[📈 總報酬模式 (含息/毛市值)]` 一鍵切換。
 - **官方 21 檔標的校準**：對齊 2026 新掛牌之 `00403A`、`009816`、`00981A`、`009826`。
-- **關聯文件**：[SPEC-0011](docs/specs/0011-dual-accounting-view-and-official-symbol-alignment.md) · [ADR-0011](docs/adr/0011-dual-accounting-view-and-official-symbol-alignment.md) · [ADR-0012](docs/adr/0012-broker-fee-discount-and-cost-basis-alignment.md)。
+- **關聯文件**：[SPEC-0011](docs/specs/0011-dual-accounting-mode-and-official-symbols-alignment.md) · [ADR-0011](docs/adr/0011-dual-accounting-mode-and-official-symbols-alignment.md) · [ADR-0012](docs/adr/0012-broker-fee-discount-and-cost-basis-alignment.md)。
 
 ---
 
