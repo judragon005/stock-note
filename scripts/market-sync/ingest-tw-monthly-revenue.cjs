@@ -4,6 +4,7 @@
  */
 
 const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+const { getLatestSettledRevenueMonth } = require('./market-freshness-service.cjs');
 
 /**
  * 計算單一標的之月營收年增率 (YoY)、月增率 (MoM) 與是否創歷史新高
@@ -114,7 +115,7 @@ function saveMonthlyRevenueToSqlite(revenueMap, customDbPath) {
  */
 async function runMonthlyRevenueIngestion(customDbPath, targetYearMonth, backfillMonths) {
   const db = initSqliteLakehouseDb(customDbPath);
-  const baseYearMonth = targetYearMonth || '2026-08'; // 最新結算月份
+  const baseYearMonth = targetYearMonth || getLatestSettledRevenueMonth(); // 動態最新申報月份 (Spec 0177)
   const [baseYearStr, baseMonthStr] = baseYearMonth.split('-');
   let curYear = parseInt(baseYearStr, 10);
   let curMonth = parseInt(baseMonthStr, 10);

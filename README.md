@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1549%2F1549%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1553%2F1553%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,23 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 主力戰情室 Card 18 主力追蹤總評判操盤指引升級、5 態作戰光譜圖例與機構級風控門檻 (`AI Force Card 18 MLP Verdict Action Playbook & Micro Spectrum Bar`) *(V8.88.0 最新發布 / Spec #0176 / ADR #0176 / Issue #214 / PR #215)*
+### 0. TDCC 集保大戶與月營收全自動新鮮度管線、主 K 線雙灰線修復與券商法人色譜 (`TDCC & Revenue Auto Freshness Pipeline & K-Line Institutional Spectrum`) *(V8.89.0 最新發布 / Spec #0177 / ADR #0177 / Issue #217)*
+
+- **動態擬真時間序列推進 (Dynamic Settlement Anchors)**：
+  - **TDCC 集保大戶**：每週五 21:00 動態錨定最新有效週五基準日，實裝 `getLatestSettledTdccFriday`。
+  - **月營收成長走勢**：每月 10 日 17:30 動態結算最新截止月份，實裝 `getLatestSettledRevenueMonth`。
+  - 新鮮度統一檢驗 (`checkMarketFreshness`) 整合 TDCC 與月營收狀態物件，全面終結手動執行腳本困擾。
+- **中介層靜默入庫與 10 分鐘冷卻保護 (`vite-market-middleware.cjs`)**：
+  - 服務端背景非同步靜默補齊數據，結合 10 分鐘冷卻鎖 (`CATCHUP_COOLDOWN_MS = 600,000`)，防止前端頻繁切換股票觸發高頻競爭。
+  - `/api/market/sync-status` 介面序列化 TDCC 與月營收最新健康狀況，提供透明監控。
+- **主 K 線雙平行灰線修復與單一微光分割 (`KLineChartCard.tsx`)**：
+  - 移除主圖底部 Y=220 多餘水平線，保留副圖頂部 Y=230 單一微光分割線，徹底根治平行鐵軌干擾。
+- **券商法人級 5 軌 MA 均線標準色譜 (`KLINE_MA_COLORS`)**：
+  - `MA5`: `#eab308` (亮黃) | `MA10`: `#06b6d4` (青藍) | `MA20`: `#ec4899` (洋紅生命線，與紫色徹底分離)
+  - `MA60`: `#f97316` (亮橘實線，粗度 1.5，廢除灰色虛線) | `MA250`: `#a855f7` (尊爵紫年線)
+  - 圖例、查價列 Tooltip 與 SVG Polyline 折線 100% 嚴格同步標準色譜。
+
+### 1. 主力戰情室 Card 18 主力追蹤總評判操盤指引升級、5 態作戰光譜圖例與機構級風控門檻 (`AI Force Card 18 MLP Verdict Action Playbook & Micro Spectrum Bar`) *(V8.88.0 / Spec #0176 / ADR #0176 / Issue #214 / PR #215)*
 
 - **三軌色彩認知體系精準對齊 (`MainForceVerdictCard.tsx`)**：
   - 將「低接吸籌」徹底從矛盾的「防禦觀望 (黃色)」校正為科技藍 (`#38bdf8`)，右側徽章標示為「● 偏多承接」，消除視覺認知矛盾。

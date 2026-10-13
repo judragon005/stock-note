@@ -106,4 +106,95 @@ describe('Ticket 01 (Seam 1): 市場新鮮度領域服務 marketFreshnessService
     expect(result.us.latestDate).toBeNull();
     expect(result.us.isStale).toBe(false);
   });
+
+  it('5. 應正確計算 TDCC 週五結算錨定日期 (getLatestSettledTdccFriday)', async () => {
+    // @ts-expect-error cjs import
+    const { getLatestSettledTdccFriday } = await import('../../scripts/market-sync/market-freshness-service.cjs');
+
+    // 2026-10-09 (週五) 20:00 (尚未 21:00 結算，應回退至上週五 2026-10-02)
+    const friBeforeSettle = new Date('2026-10-09T20:00:00+08:00');
+    expect(getLatestSettledTdccFriday(friBeforeSettle)).toBe('2026-10-02');
+
+    // 2026-10-09 (週五) 21:30 (已過 21:00 結算，應回傳當日 2026-10-09)
+    const friAfterSettle = new Date('2026-10-09T21:30:00+08:00');
+    expect(getLatestSettledTdccFriday(friAfterSettle)).toBe('2026-10-09');
+
+    // 2026-10-13 (週二) 11:00 (平日，應回退至剛過去之週五 2026-10-09)
+    const tueNoon = new Date('2026-10-13T11:00:00+08:00');
+    expect(getLatestSettledTdccFriday(tueNoon)).toBe('2026-10-09');
+
+    // 2026-10-11 (週日) 15:00 (週末，應回退至剛過去之週五 2026-10-09)
+    const sunAfternoon = new Date('2026-10-11T15:00:00+08:00');
+    expect(getLatestSettledTdccFriday(sunAfternoon)).toBe('2026-10-09');
+  });
+
+  it('6. 應正確計算月營收申報截止錨定月份 (getLatestSettledRevenueMonth)', async () => {
+    // @ts-expect-error cjs import
+    const { getLatestSettledRevenueMonth } = await import('../../scripts/market-sync/market-freshness-service.cjs');
+
+    // 2026-10-05 10:00 (10 號前，9 月營收尚未全數截止申報，錨定應為 2026-08)
+    const beforeDeadline = new Date('2026-10-05T10:00:00+08:00');
+    expect(getLatestSettledRevenueMonth(beforeDeadline)).toBe('2026-08');
+
+    // 2026-10-10 16:00 (10 號 17:30 前，仍為 2026-08)
+    const onDeadlineDayBefore = new Date('2026-10-10T16:00:00+08:00');
+    expect(getLatestSettledRevenueMonth(onDeadlineDayBefore)).toBe('2026-08');
+
+    // 2026-10-10 18:00 (10 號 17:30 後，9 月營收已截止申報，錨定應為 2026-09)
+    const onDeadlineDayAfter = new Date('2026-10-10T18:00:00+08:00');
+    expect(getLatestSettledRevenueMonth(onDeadlineDayAfter)).toBe('2026-09');
+
+    // 2026-10-13 11:00 (中旬，錨定應為 2026-09)
+    const midMonth = new Date('2026-10-13T11:00:00+08:00');
+    expect(getLatestSettledRevenueMonth(midMonth)).toBe('2026-09');
+
+    // 跨年邊界：2027-01-05 (10 號前，應為 2026-11)
+    const earlyJan = new Date('2027-01-05T10:00:00+08:00');
+    expect(getLatestSettledRevenueMonth(earlyJan)).toBe('2026-11');
+
+    // 跨年邊界：2027-01-11 (10 號後，應為 2026-12)
+    const midJan = new Date('2027-01-11T10:00:00+08:00');
+    expect(getLatestSettledRevenueMonth(midJan)).toBe('2026-12');
+  });
+
+  it('7. checkMarketFreshness 應包含 tdcc 與 revenue 狀態判定', async () => {
+    // @ts-expect-error cjs import
+    const { checkMarketFreshness } = await import('../../scripts/market-sync/market-freshness-service.cjs');
+
+    const mockDb = {
+      prepare: (sql: string) => ({
+        get: () => {
+          if (sql.includes('tw_tdcc_distribution')) {
+            return { maxDate: '2026-10-02' };
+          }
+          if (sql.includes('tw_monthly_revenue')) {
+            return { maxMonth: '2026-08' };
+          }
+          if (sql.includes('0050')) {
+            return { maxDate: '2026-10-13' };
+          }
+          if (sql.includes('SPY')) {
+            return { maxDate: '2026-10-13' };
+          }
+          return null;
+        },
+      }),
+    };
+
+    // 當前為 2026-10-13 盤中 (週二)
+    // tdcc 錨點應為 2026-10-09 -> 資料庫只有 2026-10-02 -> isStale = true
+    // revenue 錨點應為 2026-09 -> 資料庫只有 2026-08 -> isStale = true
+    const now = new Date('2026-10-13T11:00:00+08:00');
+    const result = checkMarketFreshness(mockDb, now);
+
+    expect(result.tdcc).toBeDefined();
+    expect(result.tdcc.latestDate).toBe('2026-10-02');
+    expect(result.tdcc.anchorDate).toBe('2026-10-09');
+    expect(result.tdcc.isStale).toBe(true);
+
+    expect(result.revenue).toBeDefined();
+    expect(result.revenue.latestMonth).toBe('2026-08');
+    expect(result.revenue.anchorMonth).toBe('2026-09');
+    expect(result.revenue.isStale).toBe(true);
+  });
 });

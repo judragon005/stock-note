@@ -298,5 +298,21 @@ describe('KLineChartCard - 專業互動與多功能副圖 (Ticket 35 / Stage 1)'
       expect(range.span).toBe(range.max - range.min);
     });
   });
+
+  describe('Ticket 07: 券商法人級 MA 均線標準光譜與色相分離 (Spec 0177)', () => {
+    it('應定義互斥之高辨識度均線色彩，且 MA20 與 MA250 不可使用相同紫色系', async () => {
+      const { KLINE_MA_COLORS } = await import('./KLineChartCard');
+      expect(KLINE_MA_COLORS).toBeDefined();
+      expect(KLINE_MA_COLORS.ma5).toBe('#eab308');   // 亮黃
+      expect(KLINE_MA_COLORS.ma10).toBe('#06b6d4');  // 青藍
+      expect(KLINE_MA_COLORS.ma20).toBe('#ec4899');  // 洋紅 (杜絕紫色)
+      expect(KLINE_MA_COLORS.ma60).toBe('#f97316');  // 亮橘 (杜絕灰色虛線)
+      expect(KLINE_MA_COLORS.ma250).toBe('#a855f7'); // 尊爵紫
+
+      // 驗證 5 種均線顏色完全互斥且無重複
+      const uniqueColors = new Set(Object.values(KLINE_MA_COLORS));
+      expect(uniqueColors.size).toBe(5);
+    });
+  });
 });
 
