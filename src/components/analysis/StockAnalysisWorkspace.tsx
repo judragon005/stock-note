@@ -615,6 +615,7 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px', alignItems: 'center' }}>
               <button
                 type="button"
+                aria-label="前往主力戰情室檢視該標的"
                 onClick={() => {
                   if (onNavigateTab) {
                     onNavigateTab('aiforce');
