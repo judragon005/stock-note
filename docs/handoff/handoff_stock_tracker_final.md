@@ -103,9 +103,10 @@
 | 類別 | 檔案路徑 | 核心職責與特性 |
 | :--- | :--- | :--- |
 | **股利收益日誌與現金流** | [`src/components/DividendLogView.tsx`](file:///d:/APP/股票紀錄/src/components/DividendLogView.tsx) | `calculateMonthTooltipAlign` 智慧避讓演算法（1~2月靠左、10~12月靠右、3~9月居中）、KPI 首卡券商對帳毛淨額雙軌切換、明細表標的對帳小計卡片網格與單點過濾。 |
-| **個股分析工作台** | [`src/components/analysis/StockAnalysisWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/analysis/StockAnalysisWorkspace.tsx) | 整合 6 大核心指標分頁（獲利力、安全性、成長力、現金流、價值評估、公開股利），提供股票代碼搜尋、快顯膠囊、自適應響應式佈局。 |
-| **智策提示詞生成面板** | [`src/components/analysis/StrategicPromptPanel.tsx`](file:///d:/APP/股票紀錄/src/components/analysis/StrategicPromptPanel.tsx) | 嵌入個股分析工作台，提供六頂思考帽色彩切換、Token 儀表板、隱私脫敏開關、一鍵複製與 XML 展開預覽。 |
-| **指標圖表與河流圖** | [`src/components/analysis/AnalysisMetricView.tsx`](file:///d:/APP/股票紀錄/src/components/analysis/AnalysisMetricView.tsx) | 向量 SVG 估值河流圖引擎（`<polygon>` 漸層色帶 + 通道邊界 + 現價脈衝）、成長率離群值視覺封頂防禦演算法、7 大價值評估子分頁獨立分流渲染。 |
+| **個股分析工作台** | [`src/components/analysis/StockAnalysisWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/analysis/StockAnalysisWorkspace.tsx) | 整合 6 大核心指標分頁（獲利力、安全性、成長力、現金流、價值評估、公開股利），落實 ETF 物理隔離與【主力戰情室】導流橫幅、自適應響應式佈局。 |
+| **法務會計排雷排毒燈** | [`src/components/analysis/ForensicWarningSection.tsx`](file:///d:/APP/股票紀錄/src/components/analysis/ForensicWarningSection.tsx) | 獨立抽離法務會計五大排雷子模組（應收帳款剪刀差、獲利純度、FCF 失血、存貨積壓、負債比率），列表渲染語意唯一穩定 Key，金融業享負債比率豁免。 |
+| **智策提示詞生成面板** | [`src/components/analysis/StrategicPromptPanel.tsx`](file:///d:/APP/股票紀錄/src/components/analysis/StrategicPromptPanel.tsx) | 嵌入個股分析工作台，提供六頂思考帽 3x2 Bento 網格與彩色動態發光選取態、Token 儀表板、隱私脫敏開關、一鍵複製與 XML 展開預覽。 |
+| **指標圖表與河流圖** | [`src/components/analysis/AnalysisMetricView.tsx`](file:///d:/APP/股票紀錄/src/components/analysis/AnalysisMetricView.tsx) | 向量 SVG 估值河流圖引擎、成長率離群值視覺封頂防禦演算法、全面整合 `industryGate.ts` 產業權威字典判定、景氣循環股 PB 估值指引與零假資料杜邦年化計算。 |
 | **AI 主力頂部行情與雙層警示** | [`src/components/aiForceDashboard/HeaderMarketBar.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/HeaderMarketBar.tsx) | 未結算時動態切換「前日收盤價」、出示橘黃警示徽章、定錨基準日標示，並次級輔助顯示盤中即時參考價。 |
 | **AI 決策核心卡片** | [`src/components/aiForceDashboard/cards/AiDecisionCoreCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/AiDecisionCoreCard.tsx) | 未結算時頂部出示顯著防禦警示橫幅，明確宣告量化基準日，確保決策透明度。 |
 | **主力 K 線卡片 (Card 01)** | [`src/components/aiForceDashboard/cards/KLineChartCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/KLineChartCard.tsx) | 實作 `normalizeAndSortCandles` 升冪排序守護，校正時間軸為左側歷史軌跡、右側最新交易日。 |
@@ -122,6 +123,7 @@
 依據專案規範與 [`docs/debts/README.md`](file:///d:/APP/股票紀錄/docs/debts/README.md)，當前重點如下：
 
 - **待進行評估之架構改善 (Backlog / Open)**：
+  - `DEBT-0050`：[個股分析指標視圖 (AnalysisMetricView) 子元件模組化解耦重構](file:///d:/APP/股票紀錄/docs/debts/0050-analysis-metric-view-subcomponent-decomposition.md) (`P3`，已完成排雷燈子模組解耦，持續追蹤四大構面拆解)。
   - `DEBT-0049`：[AI 動態信號判斷卡片 (Card 12) 專業層與決策層子元件模組化解耦重構](file:///d:/APP/股票紀錄/docs/debts/0049-dynamic-signals-card-subcomponent-decomposition.md) (`P3`)。
   - `DEBT-0048`：[個股分析工作區已載入之量化財務報表與本益比深度注入智策提示詞事實清單](file:///d:/APP/股票紀錄/docs/debts/0048-strategic-prompt-workspace-financial-records-injection.md) (`P3`，待下期個股財務深探或即時估值欄位對齊時實作)。
   - `DEBT-0047`：[Pre-push Guard 整合文檔完整性與死鏈自動化守門 (verify-docs)](file:///d:/APP/股票紀錄/docs/debts/0047-pre-push-guard-docs-integrity-linter-integration.md) (`P3`)。
@@ -138,7 +140,7 @@
    - 當前位於分支 `main`，與 `origin/main` 保持一致，Working Tree Clean。
    - 所有變更均已透過 GitHub Actions CI 綠燈驗證並 Squash and Merge 回主幹。
 2. **日常驗證防線**：
-   - 接手前務必執行 `npm test`（確認 215 個測試檔案、1,585 個測試 100% 綠燈）與 `npm run build`（確認 0 型別錯誤）。
+   - 接手前務必執行 `npm test`（確認 217 個測試檔案、1,599 個測試 100% 綠燈）與 `npm run build`（確認 0 型別錯誤）。
 3. **工作流閉環準則**：
    - 嚴格遵循工作流藍圖：`/grill-with-docs` ➔ `/to-spec` ➔ `/to-tickets` ➔ `/triage` ➔ `/tdd & /implement` ➔ `/code-review` ➔ `/handoff`。
 
