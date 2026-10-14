@@ -7,6 +7,16 @@ interface ForensicWarningSectionProps {
   isFinancialStock: boolean;
 }
 
+/**
+ * 法務會計五大排雷排毒燈子模組
+ *
+ * 依據法人機構法務會計 (Forensic Accounting) 跨表勾稽準則：
+ * 1. 應收帳款剪刀差：應收增速與營收增速背離檢測 (塞貨/虛增營收)
+ * 2. 獲利純度：營業現金流 (CFO) 與稅後淨利 (NI) 勾稽檢測 (帳面獲利轉化率)
+ * 3. 自由現金流造血能力：連續季度 FCF 是否失血
+ * 4. 存貨週轉壓力：存貨增速與營收增速偏離度 (滯銷與打銷跌價風險)
+ * 5. 股本膨脹與負債結構：負債比率檢測 (金融保險業享豁免)
+ */
 export const ForensicWarningSection: React.FC<ForensicWarningSectionProps> = ({
   latestRecord,
   chronological,
@@ -139,7 +149,7 @@ export const ForensicWarningSection: React.FC<ForensicWarningSectionProps> = ({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
         {checks.map((c, i) => (
           <div
-            key={i}
+            key={c.title}
             style={{
               padding: '16px',
               borderRadius: '12px',
