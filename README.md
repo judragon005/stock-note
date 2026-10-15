@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1609%2F1609%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1631%2F1631%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,25 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 主力戰情室外聯 AI 提示詞中樞、防幻覺定錨與個股分析純粹化 (`War Room Prompt Hub & Grounding Architecture`) *(V8.94.0 最新發布 / Spec #0181 / ADR #0181 / Issue #243)*
+### 0. 個人投資者法人級微觀防禦、現金流預算與極簡風控強化 (`Personal Investor Institutional Edge & Lean Enhancements`) *(V8.96.0 最新發布 / Spec #0183 / ADR #0183 / Issue #254)*
+
+- **未來 12 個月現金流投影日曆與枯水期互補 (`DividendLogView.tsx`)**：
+  - 精準整合月配、季配、半年配與年配標的，投影未來一年每月預估實領股息。
+  - 自動標記月收入低於 3,000 元之「枯水期」，並動態推薦互補配息月份之高股息 ETF 或穩健股。
+- **質押解質先還本金精算與補水救援 (`MarginStressModal.tsx`)**：
+  - 股票質押維持率大於 130% 時，精算欲解質領回指定股票所須先行償還之最小本金：$\text{Required Payoff} = \lceil \text{Principal} - (\text{Remaining Collateral} / 1.30) \rceil$。
+  - 精確向上取整（`Math.ceil`），確保解質後剩餘質押維持率嚴格大於等於 130%，徹底消除浮點數斷頭邊界風險。
+- **行為金融審計：交易初衷連動與凹單標籤 (`HoldingsTable.tsx` / `BehavioralAuditWorkspace.tsx`)**：
+  - 記帳彈窗加入交易初衷 (`DIVIDEND` 存股 / `SWING` 短波段 / `DAY_TRADE` 當沖)。
+  - 若原定短波段持股長抱超過 60 天且未實現虧損超過 15%，持股清單與行為覆盤自動觸發「⚠️ 凹單警示」紅標；存股標的永久豁免。
+  - 將交易摩擦成本（手續費與證交稅）直觀實體化為「iPhone 16 Pro 頂配機」與「高級聚餐」次數，發揮震撼警醒效果。
+- **二代健保單筆 2 萬拆單防禦與 8.5% 所得稅抵減護欄 (`DividendLogView.tsx`)**：
+  - 單筆股息達 20,000 元門檻時預警 2.11% 補充保費扣繳；於 20,000 ~ 25,000 元敏感區間自動提供微調賣出或借券建言。
+  - 實時監控 8.5% 綜合所得稅 80,000 元上限使用進度。
+- **輕量級 SQLite 擴展與期貨未平倉／ETF 淨值落庫 (`sqlite-db-core.cjs`)**：
+  - 本地 SQLite 擴展 `etf_daily_nav`，無損升級 `macro_sentiment_daily` (支援三大法人台指期未平倉 OI) 與 `corporate_action_calendar` (融券最後回補日)，零付費 API、完全本機端運算。
+
+### 1. 主力戰情室外聯 AI 提示詞中樞、防幻覺定錨與個股分析純粹化 (`War Room Prompt Hub & Grounding Architecture`) *(V8.94.0 / Spec #0181 / ADR #0181 / Issue #243)*
 
 - **個股深度分析純粹化 (`StockAnalysisWorkspace.tsx`)**：
   - 徹底拔除原本擠在頁面頂部的提示詞面板，還原 100% 純粹的財務報表、估值模型與法務會計排雷燈號。

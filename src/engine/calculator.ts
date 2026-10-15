@@ -14,6 +14,7 @@ import {
   TradePlan,
   TradeMistakeType,
   DisciplineSummary,
+  TradeIntent,
 } from '../types/stock';
 import { AccountingMethod } from '../types/lot';
 import { processLots } from './lotEngine';
@@ -24,6 +25,7 @@ import { computeTechnicalIndicators, extractHoldingSignals } from './technicalIn
 import { evaluateHoldingActionDirective } from './holdingAdvisorEngine';
 import { DailyCandle } from '../types/signal';
 import { compareHoldingsOrder } from '../utils/holdingsSort';
+import { detectBagHoldings } from './behavioralAuditEngine';
 
 export interface CalculationResult {
   holdings: HoldingPosition[];
@@ -473,6 +475,7 @@ export function calculateHoldingsAndSummary(
     lastTradeDate?: string;
     lastExitPrice?: number;
     latestPlan?: TradePlan;
+    lastIntent?: TradeIntent;
   }
 
   const map = new Map<string, Accumulator>();
@@ -539,6 +542,9 @@ export function calculateHoldingsAndSummary(
         item.totalCostBasis += netCost;
         if (trade.plan) {
           item.latestPlan = trade.plan;
+        }
+        if (trade.intent) {
+          item.lastIntent = trade.intent;
         }
         break;
       }
@@ -910,6 +916,7 @@ export function calculateHoldingsAndSummary(
         openLotsCount,
         lots: lotEngineResult ? lotEngineResult.openLots.filter((l) => l.symbol === item.symbol) : [],
         plan: item.latestPlan,
+        intent: item.lastIntent || 'DIVIDEND',
         riskMetrics,
         signals,
         actionDirective,
@@ -917,6 +924,7 @@ export function calculateHoldingsAndSummary(
     }
 
   holdings.sort(compareHoldingsOrder);
+  detectBagHoldings(holdings, sortedTrades);
 
   const summary: PortfolioSummary = {
     twd: {

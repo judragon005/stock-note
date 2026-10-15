@@ -25,10 +25,32 @@ export interface FrictionCostMetrics {
   annualizedDragRatePercent: number;// 佔淨資產之年化侵蝕率 %
 }
 
+import { TradeIntent } from './stock';
+
+export interface BagHoldingAlert {
+  symbol: string;
+  name: string;
+  holdingDays: number;
+  unrealizedPnLPercent: number;
+  unrealizedPnLTwd: number;
+  intent: TradeIntent;
+  message: string;
+}
+
+export interface FrictionEquivalence {
+  totalFrictionTwd: number;
+  iphoneCount: number; // 相當於幾支頂配 iPhone (以 40,000 元/支計)
+  diningCount: number; // 相當於幾次高級大餐 (以 2,500 元/次計)
+  impactText: string;
+}
+
 export interface BehavioralAuditReport {
   period: { startDate: string; endDate: string };
   disposition: DispositionEffectMetrics;
   fomo: FOMOEntryAuditMetrics;
   friction: FrictionCostMetrics;
   actionableInsights: string[];     // 客觀交易紀律覆盤建議清單
+  bagHoldings?: BagHoldingAlert[];  // Spec 0183: 波段凹單警報標的清單
+  frictionEquivalence?: FrictionEquivalence; // Spec 0183: 摩擦成本實體化對照
 }
+

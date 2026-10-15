@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { TradeRecord, MarketType, TradeType, Currency, BrokerAccount, TradePlan } from '../types/stock';
+import { TradeRecord, MarketType, TradeType, Currency, BrokerAccount, TradePlan, TradeIntent } from '../types/stock';
 import { calculateTaiwanFee, calculateTaiwanTax, getHoldingsAsOfDate } from '../engine/calculator';
 import { calculatePlannedRiskRewardRatio } from '../engine/riskAlertEngine';
 import { searchStockSuggestions, resolveOfficialSecurityName, registerCustomStockName } from '../engine/stockNameResolver';
@@ -79,6 +79,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
   const [tagInput, setTagInput] = useState<string>('');
   const [tags, setTags] = useState<string[]>(['核心持股']);
   const [note, setNote] = useState<string>('');
+  const [intent, setIntent] = useState<TradeIntent>('SWING'); // Spec 0183: 交易初衷
 
   // 交易計畫與風控狀態 (Trade Plan)
   const [entryReason, setEntryReason] = useState<string>('');
@@ -139,6 +140,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
         setConversionPrice(editingTrade.conversionPrice !== undefined ? editingTrade.conversionPrice.toString() : '');
         setTags(editingTrade.tags || []);
         setNote(editingTrade.note || '');
+        setIntent(editingTrade.intent || 'SWING');
         if (editingTrade.plan) {
           setEntryReason(editingTrade.plan.entryReason || '');
           setStopLossPrice(editingTrade.plan.stopLossPrice !== undefined ? editingTrade.plan.stopLossPrice.toString() : '');
@@ -415,6 +417,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
         conversionPrice: conversionPrice ? parseFloat(conversionPrice) : undefined,
         tags,
         note: note.trim(),
+        intent: (type === 'BUY' || type === 'MARGIN_BUY') ? intent : editingTrade?.intent,
         plan: tradePlan,
       },
       editingTrade?.id
@@ -440,6 +443,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
       setAllocationRatio('0.2');
       setConversionPrice('');
       setNote('');
+      setIntent('SWING');
       setEntryReason('');
       setStopLossPrice('');
       setTakeProfitPrice('');
@@ -655,6 +659,47 @@ export const TradeModal: React.FC<TradeModalProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* Spec 0183: 交易初衷 (Intent) 選擇器 */}
+            {(type === 'BUY' || type === 'MARGIN_BUY') && (
+              <div style={{ marginBottom: '12px', background: 'rgba(56, 189, 248, 0.08)', padding: '10px 12px', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.25)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '0.78rem', color: '#38bdf8', fontWeight: 700, margin: 0 }}>
+                    🎯 交易初衷（用以啟動紀律防護與凹單攔截）
+                  </label>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                    {intent === 'SWING' ? '超過 60 天虧損 >15% 將啟動凹單警報' : intent === 'DIVIDEND' ? '長期存股領息，豁免凹單警示' : '短線當沖快進出'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {[
+                    { key: 'SWING', label: '🌊 短線波段 (預設)', activeBg: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' },
+                    { key: 'DIVIDEND', label: '🎯 長期存股收息', activeBg: 'linear-gradient(135deg, #059669 0%, #047857 100%)' },
+                    { key: 'DAY_TRADE', label: '⚡ 當沖快進出', activeBg: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)' },
+                  ].map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setIntent(item.key as TradeIntent)}
+                      style={{
+                        flex: 1,
+                        padding: '6px 8px',
+                        borderRadius: '8px',
+                        border: '1px solid ' + (intent === item.key ? 'rgba(255,255,255,0.4)' : 'transparent'),
+                        background: intent === item.key ? item.activeBg : 'rgba(15, 23, 42, 0.6)',
+                        color: intent === item.key ? '#fff' : 'var(--text-secondary)',
+                        fontSize: '0.78rem',
+                        fontWeight: intent === item.key ? 700 : 500,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Corporate Actions Tabs */}
             <div style={{ background: 'rgba(30, 41, 59, 0.4)', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '8px' }}>

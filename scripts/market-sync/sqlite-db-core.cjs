@@ -184,7 +184,7 @@ function initSqliteLakehouseDb(customPath) {
     );
     CREATE INDEX IF NOT EXISTS idx_revenue_symbol ON tw_monthly_revenue(symbol, year_month DESC);
 
-    -- 7. 公司除權除息與重大行動預告表 (Spec 0167 / Ticket 10)
+    -- 7. 公司除權除息與重大行動預告表 (Spec 0167 / Spec 0183)
     CREATE TABLE IF NOT EXISTS corporate_action_calendar (
       symbol TEXT NOT NULL,
       market TEXT NOT NULL,              -- 'TW' | 'US'
@@ -196,6 +196,9 @@ function initSqliteLakehouseDb(customPath) {
       split_ratio REAL,                  -- 股票分割比例
       reference_price REAL,              -- 除權息參考價
       announcement_date TEXT,
+      mandatory_buyback_date TEXT,       -- 融券最後強制回補日 (YYYY-MM-DD, Spec 0183)
+      halt_start_date TEXT,              -- 停止過戶/交易起日 (YYYY-MM-DD, Spec 0183)
+      halt_end_date TEXT,                -- 停止過戶/交易迄日 (YYYY-MM-DD, Spec 0183)
       updated_at INTEGER NOT NULL,
       PRIMARY KEY (symbol, action_type, ex_date)
     );
@@ -215,7 +218,7 @@ function initSqliteLakehouseDb(customPath) {
     );
     CREATE INDEX IF NOT EXISTS idx_pledge_symbol ON tw_insider_pledge_records(symbol, report_date DESC);
 
-    -- 9. 宏觀指標與市場情緒日序表 (Spec 0167 / Ticket 15)
+    -- 9. 宏觀指標與市場情緒日序表 (Spec 0167 / Spec 0183)
     CREATE TABLE IF NOT EXISTS macro_sentiment_daily (
       date TEXT PRIMARY KEY,             -- YYYY-MM-DD
       risk_free_rate_3m REAL,            -- 3 個月美債殖利率 (FRED DGS3MO)
@@ -224,9 +227,47 @@ function initSqliteLakehouseDb(customPath) {
       cnn_fear_greed_score REAL,         -- 恐懼貪婪分數 (0-100)
       vix_close REAL,                    -- VIX 收盤價
       tw_put_call_ratio REAL,            -- 台指期 P/C Ratio
+      tw_foreign_futures_oi INTEGER,     -- 外資台指期淨未平倉口數 (Spec 0183)
+      tw_trust_futures_oi INTEGER,       -- 投信台指期淨未平倉口數 (Spec 0183)
       updated_at INTEGER NOT NULL
     );
+
+    -- 10. ETF 每日收盤官方淨值與折溢價歷史表 (Spec 0183)
+    CREATE TABLE IF NOT EXISTS etf_daily_nav (
+      symbol TEXT NOT NULL,
+      date TEXT NOT NULL,                  -- YYYY-MM-DD
+      close_price REAL NOT NULL,           -- 當日市價收盤
+      nav REAL NOT NULL,                   -- 官方淨值
+      premium_discount_ratio REAL NOT NULL,-- 折溢價率 (%)
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (symbol, date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_etf_nav_symbol_date ON etf_daily_nav(symbol, date DESC);
   `);
+
+  // 動態無損補齊既有資料庫之新欄位 (冪等遷移)
+  try {
+    const caColumns = db.prepare('PRAGMA table_info(corporate_action_calendar)').all();
+    if (!caColumns.some((c) => c.name === 'mandatory_buyback_date')) {
+      db.exec('ALTER TABLE corporate_action_calendar ADD COLUMN mandatory_buyback_date TEXT;');
+    }
+    if (!caColumns.some((c) => c.name === 'halt_start_date')) {
+      db.exec('ALTER TABLE corporate_action_calendar ADD COLUMN halt_start_date TEXT;');
+    }
+    if (!caColumns.some((c) => c.name === 'halt_end_date')) {
+      db.exec('ALTER TABLE corporate_action_calendar ADD COLUMN halt_end_date TEXT;');
+    }
+
+    const macroColumns = db.prepare('PRAGMA table_info(macro_sentiment_daily)').all();
+    if (!macroColumns.some((c) => c.name === 'tw_foreign_futures_oi')) {
+      db.exec('ALTER TABLE macro_sentiment_daily ADD COLUMN tw_foreign_futures_oi INTEGER;');
+    }
+    if (!macroColumns.some((c) => c.name === 'tw_trust_futures_oi')) {
+      db.exec('ALTER TABLE macro_sentiment_daily ADD COLUMN tw_trust_futures_oi INTEGER;');
+    }
+  } catch (e) {
+    // 忽略表尚未建立時的遷移檢查錯誤
+  }
 
   return db;
 }

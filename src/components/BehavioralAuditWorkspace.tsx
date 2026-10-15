@@ -241,8 +241,70 @@ export const BehavioralAuditWorkspace: React.FC<BehavioralAuditWorkspaceProps> =
           >
             總摩擦成本支出：<strong>NT$ {friction.totalFrictionCost.toLocaleString()}</strong>
           </div>
+
+          {/* Spec 0183: 摩擦成本實體化 iPhone 震撼對照 */}
+          {report.frictionEquivalence && report.frictionEquivalence.totalFrictionTwd > 0 && (
+            <div
+              style={{
+                marginTop: '10px',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                fontSize: '12px',
+                color: '#fca5a5',
+                lineHeight: 1.5,
+              }}
+            >
+              📱 <strong>實體代價震撼：</strong> {report.frictionEquivalence.impactText}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Spec 0183: 波段凹單警報專區 */}
+      {report.bagHoldings && report.bagHoldings.length > 0 && (
+        <div
+          className="glass-card animate-fade-in"
+          style={{
+            padding: '20px',
+            borderRadius: '16px',
+            backgroundColor: 'rgba(153, 27, 27, 0.2)',
+            border: '1px solid rgba(239, 68, 68, 0.4)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            <span style={{ fontSize: '20px' }}>⚠️</span>
+            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#f87171' }}>
+              偵測到 {report.bagHoldings.length} 檔【波段凹單】違規標的（短線變長抱）
+            </h3>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px' }}>
+            {report.bagHoldings.map((bag) => (
+              <div
+                key={bag.symbol}
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  backgroundColor: 'rgba(30, 41, 59, 0.8)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ fontWeight: 700, color: '#ffffff' }}>{bag.name} ({bag.symbol})</span>
+                  <span style={{ color: '#ef4444', fontWeight: 800 }}>{bag.unrealizedPnLPercent.toFixed(1)}%</span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>
+                  已長抱 {bag.holdingDays} 天 · 帳面虧損 NT$ {Math.abs(bag.unrealizedPnLTwd).toLocaleString()}
+                </div>
+                <div style={{ fontSize: '11px', color: '#fca5a5' }}>
+                  {bag.message}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 動態客觀交易紀律建議卡片 */}
       <div

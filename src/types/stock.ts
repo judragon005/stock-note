@@ -131,6 +131,8 @@ export interface MetricDiagnosis {
 export type QuantDiagnosisMap = Record<QuantMetricId, MetricDiagnosis>;
 
 
+export type TradeIntent = 'DIVIDEND' | 'SWING' | 'DAY_TRADE'; // Spec 0183: 交易初衷 (存股/波段/當沖)
+
 export interface TradeRecord {
   id: string;
   date: string; // YYYY-MM-DD
@@ -155,6 +157,7 @@ export interface TradeRecord {
   conversionPrice?: number; // 可轉債轉換價格
   isMargin?: boolean; // 是否為信用交易融資買進/賣出
   marginRate?: number; // 融資自備款比例 (預設台股現股融資為 0.4 即 40% 自備款)
+  intent?: TradeIntent; // Spec 0183: 交易初衷
   note?: string; // 交易備註
   tags?: string[]; // 標籤（如：長期核心、波段動能、股息成長）
   plan?: TradePlan; // 交易計畫 (事前)
@@ -209,6 +212,8 @@ export interface HoldingPosition {
   riskMetrics?: HoldingRiskMetrics; // 即時風控與觸價指標
   signals?: import('./signal').HoldingSignal[]; // 技術面與量價警示訊號膠囊清單
   actionDirective?: import('./signal').HoldingActionDirective; // 智慧操作建議四字定調與紀律指引
+  intent?: TradeIntent; // Spec 0183: 交易初衷 (存股/波段/當沖)
+  isBagHolding?: boolean; // Spec 0183: 是否觸發波段凹單警報
 }
 
 export type PositionFilter = 'ACTIVE' | 'CLOSED' | 'ALL';

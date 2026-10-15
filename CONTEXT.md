@@ -2477,3 +2477,18 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
        - 自動感知記憶體（如華邦電）、晶圓代工、航運等景氣循環股標籤，在黑帽質詢中強制啟動「循環高峰殺估值陷阱」排查。
     5. **數據同步防呆與複製微降級保障 (Data Sync Guard & Copy Fallback)**：
        - 標的切換或回補期間，戰情室複製按鈕進入禁用待命態（提示「⏳ 數據同步校準中...」），防範複製未就緒資料；複製失敗時自動展開抽屜並顯示提示橫幅。
+
+- **Personal Investor Institutional Edge & Lean Enhancements (個人投資者法人級微觀防禦、現金流預算與極簡風控強化)**:
+  - 核心模組：`src/engine/projectedCashflowEngine.ts`、`src/engine/marginRescueCalculator.ts`、`src/engine/behavioralAuditEngine.ts`、`src/engine/taxOptimizationGuard.ts`、`src/components/HoldingsTable.tsx`、`src/components/DividendLogView.tsx`、`src/components/MarginStressModal.tsx`、`src/components/BehavioralAuditWorkspace.tsx`、`src/components/TradeModal.tsx`。
+  - 規範依據：Spec 0183 (v8.96.0) 與 ADR 0183，對應 GitHub Issue #254。
+  - 核心特性：
+    1. **本機數據擴展與無損遷移 (SQLite Lakehouse Extension)**：
+       - 擴充 `etf_daily_nav` 儲存 TWSE/TPEx 官方 ETF 淨值與折溢價；擴充 `macro_sentiment_daily` 支援期交所三大法人台指期未平倉 OI；擴充 `corporate_action_calendar` 支援融券最後回補日與停止過戶過期防禦。
+    2. **未來 12 個月現金流投影與枯水期互補 (Projected Cashflow & Dry-Season Balancing)**：
+       - 依持股配息頻率（月配/季配/半年配/年配）精算未來 12 個月現金流日曆；自動標記收入顯著低於均值之枯水月份（預算不足 3,000 元）；動態推薦補水標的配息組態。
+    3. **質押解質先還本金精算與補水救援 (Margin Rescue & Collateral Release Calculator)**：
+       - 支援股票質押在維持率大於 130% 時，精算欲領回指定股票所須先行償還之最小本金：$\text{Required Payoff} = \lceil \text{Principal} - (\text{Remaining Collateral} / 1.30) \rceil$，無縫整合維持率補水金額試算。
+    4. **行為金融審計：交易初衷連動與凹單標籤 (Trade Intent & Bag-Holding Defense)**：
+       - 記帳彈窗新增交易初衷（`DIVIDEND` 存股 / `SWING` 短波段 / `DAY_TRADE` 當沖）；波段單長抱超過 60 天且虧損超過 15% 時於庫存清單自動觸發「⚠️ 凹單警示」紅標，存股標的豁免；提供實體化摩擦成本對照（iPhone / 高級聚餐）。
+    5. **稅務微調護欄：二代健保 2 萬拆單防禦與所得稅 8.5% 抵減監控 (Tax Optimization Guard)**：
+       - 單筆現金股利達 20,000 元時提示 2.11% 補充保費，於 20,000 ~ 25,000 元敏感區間自動提供微調賣出或借券建言；實時監控 8.5% 綜合所得稅 8 萬元上限使用進度。
