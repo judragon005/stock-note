@@ -65,33 +65,33 @@ export interface QuoteAndTrendDigest {
  * 籌碼與主力意圖特徵切片
  */
 export interface ChipsAndMicrostructureDigest {
-  foreignNetShares1D?: number;
-  trustNetShares1D?: number;
-  dealerNetShares1D?: number;
-  totalNetShares1D?: number;
-  foreignNetShares20D?: number;
-  trustNetShares20D?: number;
-  dealerNetShares20D?: number;
-  totalNetShares20D?: number;
+  foreignNetShares1D?: number; // 單日外資買賣超 (張/股)
+  trustNetShares1D?: number; // 單日投信買賣超 (張/股)
+  dealerNetShares1D?: number; // 單日自營商買賣超 (張/股)
+  totalNetShares1D?: number; // 單日三大法人合計買賣超 (張/股)
+  foreignNetShares20D?: number; // 近20日外資累計買賣超 (張/股)
+  trustNetShares20D?: number; // 近20日投信累計買賣超 (張/股)
+  dealerNetShares20D?: number; // 近20日自營商累計買賣超 (張/股)
+  totalNetShares20D?: number; // 近20日三大法人合計累計買賣超 (張/股)
   institutionalStreakText?: string; // e.g. "外資連買 4 日 (+1,250張)"
   marginBalanceChangeText?: string; // e.g. "融資 5 日增加 820 張"
-  marginBalance?: number; // 融資餘額
-  shortBalance?: number; // 融券餘額
+  marginBalance?: number; // 融資餘額 (張)
+  shortBalance?: number; // 融券餘額 (張)
   dayTradeRatioPct?: number; // 當沖比率 (%)
-  bigHolderRatioChange400?: number; // 400張大戶比例變化 (%)
-  bigHolderRatioChange1000?: number; // 1000張大戶比例變化 (%)
-  retailHolderCountChange?: number; // 散戶人數變化
-  mainForceVwap20D?: number; // 主力成本
+  bigHolderRatioChange400?: number; // 400張大戶比例 (%)
+  bigHolderRatioChange1000?: number; // 1000張大戶比例 (%)
+  retailHolderCountChange?: number; // 散戶持股比例 (<10張) (%)
+  mainForceVwap20D?: number; // 主力20日 VWAP 成本價
   currentVwapBiasPct?: number; // 現價相對主力成本乖離率 (%)
-  boxResistancePrice?: number; // 箱頂壓力
-  boxSupportPrice?: number; // 箱底防線
+  boxResistancePrice?: number; // 箱頂壓力價位
+  boxSupportPrice?: number; // 箱底防守價位
   limitUpPrice?: number; // 當日漲停價
   limitDownPrice?: number; // 當日跌停價
-  marketStatusTag?: string; // 'NORMAL' | 'ATTENTION' | 'DISPOSITION'
-  isCyclical?: boolean; // 景氣循環股標記
-  unitText?: string; // 計量單位 (e.g. "張" 或 "股")
+  marketStatusTag?: string; // 'NORMAL' | 'ATTENTION' | 'DISPOSITION' (市場監理狀態)
+  isCyclical?: boolean; // 景氣循環股識別標記 (記憶體/半導體/原物料等)
+  unitText?: string; // 計量單位文字 (e.g. "張" 或 "股")
   turnoverAmountTwdHundredMillion?: number; // 當日成交金額 (億元)
-  microstructureSummary?: string; // 美股量能/動能摘要
+  microstructureSummary?: string; // 美股量能/動能微觀結構摘要
 }
 
 /**

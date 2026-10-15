@@ -111,17 +111,20 @@ function buildPrecalculatedPivotsXml(digest: StrategicFactDigest): string {
     const breakevenLine = portfolio?.breakevenPrice ?? costBasis;
     const isBigProfit = (portfolio?.unrealizedPnLPercent ?? 0) >= 8.0;
 
-    return `  <pre_calculated_pivots mode="HOLDING_DEFENSE">
-    <exact_cost_basis>${costBasis}</exact_cost_basis>
-    <breakeven_line>${breakevenLine}</breakeven_line>
-    <unrealized_pnl_percent>${portfolio?.unrealizedPnLPercent ?? 0}%</unrealized_pnl_percent>
-    ${isBigProfit ? `<trailing_stop_line>${Number((currentPrice * 0.94).toFixed(2))}</trailing_stop_line>` : ''}
-    <stop_loss_conservative_3pct>${pivots.stopLossConservative3Pct}</stop_loss_conservative_3pct>
-    <stop_loss_defensive_5pct>${pivots.stopLossDefensive5Pct}</stop_loss_defensive_5pct>
-    <target_profit_r2_ratio>${pivots.targetProfitR2Ratio}</target_profit_r2_ratio>
-    <friction_threshold_pct>${frictionThresholdPct}%</friction_threshold_pct>
-    <!-- 指令：此標的在庫持有中，優先評估持倉防禦、保本停損或移動停利線，嚴禁盲目凹單 -->
-  </pre_calculated_pivots>`;
+    const lines = [
+      '  <pre_calculated_pivots mode="HOLDING_DEFENSE">',
+      `    <exact_cost_basis>${costBasis}</exact_cost_basis>`,
+      `    <breakeven_line>${breakevenLine}</breakeven_line>`,
+      `    <unrealized_pnl_percent>${portfolio?.unrealizedPnLPercent ?? 0}%</unrealized_pnl_percent>`,
+      isBigProfit ? `    <trailing_stop_line>${Number((currentPrice * 0.94).toFixed(2))}</trailing_stop_line>` : null,
+      `    <stop_loss_conservative_3pct>${pivots.stopLossConservative3Pct}</stop_loss_conservative_3pct>`,
+      `    <stop_loss_defensive_5pct>${pivots.stopLossDefensive5Pct}</stop_loss_defensive_5pct>`,
+      `    <target_profit_r2_ratio>${pivots.targetProfitR2Ratio}</target_profit_r2_ratio>`,
+      `    <friction_threshold_pct>${frictionThresholdPct}%</friction_threshold_pct>`,
+      '    <!-- 指令：此標的在庫持有中，優先評估持倉防禦、保本停損或移動停利線，嚴禁盲目凹單 -->',
+      '  </pre_calculated_pivots>',
+    ];
+    return lines.filter(Boolean).join('\n');
   }
 
   // 空手觀望模式 (ZERO_POSITION)
@@ -195,24 +198,30 @@ function buildInvestorContextXml(digest: StrategicFactDigest, options: Strategic
   const pnlPercent = portfolio?.unrealizedPnLPercent;
 
   if (isInPosition) {
-    return `  <investor_context status="IN_POSITION" desensitized="${options.desensitized}">
-    <holding_status>持有在庫</holding_status>
-    ${weight !== undefined ? `<portfolio_allocation_ratio>部位佔比: ${weight}%</portfolio_allocation_ratio>` : ''}
-    ${!options.desensitized && portfolio?.avgCost ? `<exact_avg_cost>平均買進成本: ${portfolio.avgCost}</exact_avg_cost>` : ''}
-    ${!options.desensitized && portfolio?.breakevenPrice ? `<exact_breakeven_price>精確保本價: ${portfolio.breakevenPrice}</exact_breakeven_price>` : ''}
-    ${pnlPercent !== undefined ? `<unrealized_pnl_percent>未實現報酬率: ${pnlPercent}%</unrealized_pnl_percent>` : ''}
-    ${sign !== undefined ? `<position_status>部位狀態: ${sign}</position_status>` : ''}
-    ${horizon !== undefined ? `<holding_period>持有天數: ${horizon}日</holding_period>` : ''}
-    ${options.userNotes ? `<user_notes>${options.userNotes}</user_notes>` : ''}
-  </investor_context>`;
+    const lines = [
+      `  <investor_context status="IN_POSITION" desensitized="${options.desensitized}">`,
+      '    <holding_status>持有在庫</holding_status>',
+      weight !== undefined ? `    <portfolio_allocation_ratio>部位佔比: ${weight}%</portfolio_allocation_ratio>` : null,
+      !options.desensitized && portfolio?.avgCost ? `    <exact_avg_cost>平均買進成本: ${portfolio.avgCost}</exact_avg_cost>` : null,
+      !options.desensitized && portfolio?.breakevenPrice ? `    <exact_breakeven_price>精確保本價: ${portfolio.breakevenPrice}</exact_breakeven_price>` : null,
+      pnlPercent !== undefined ? `    <unrealized_pnl_percent>未實現報酬率: ${pnlPercent}%</unrealized_pnl_percent>` : null,
+      sign !== undefined ? `    <position_status>部位狀態: ${sign}</position_status>` : null,
+      horizon !== undefined ? `    <holding_period>持有天數: ${horizon}日</holding_period>` : null,
+      options.userNotes ? `    <user_notes>${options.userNotes}</user_notes>` : null,
+      '  </investor_context>',
+    ];
+    return lines.filter(Boolean).join('\n');
   }
 
-  return `  <investor_context status="ZERO_POSITION" desensitized="${options.desensitized}">
-    <holding_status>空手觀望中 (未建倉 / 自選監控)</holding_status>
-    <portfolio_allocation_ratio>0%</portfolio_allocation_ratio>
-    <cost_basis>無 (尚未買進)</cost_basis>
-    ${options.userNotes ? `<user_notes>${options.userNotes}</user_notes>` : ''}
-  </investor_context>`;
+  const zeroLines = [
+    `  <investor_context status="ZERO_POSITION" desensitized="${options.desensitized}">`,
+    '    <holding_status>空手觀望中 (未建倉 / 自選監控)</holding_status>',
+    '    <portfolio_allocation_ratio>0%</portfolio_allocation_ratio>',
+    '    <cost_basis>無 (尚未買進)</cost_basis>',
+    options.userNotes ? `    <user_notes>${options.userNotes}</user_notes>` : null,
+    '  </investor_context>',
+  ];
+  return zeroLines.filter(Boolean).join('\n');
 }
 
 /**

@@ -334,6 +334,13 @@ export interface ChipsSummaryData {
   isUsMarket?: boolean;
   usMicroNote?: string; // "美股無三大法人日報，已切換為機構量價評分"
   asOfDateText?: string;
+  // 相容歷史與擴充欄位別名
+  foreignInvestorsNetBuyShares?: number;
+  investmentTrustNetBuyShares?: number;
+  dealerNetBuyShares?: number;
+  marginBalance?: number;
+  shortBalance?: number;
+  foreignConsecutiveDays?: number;
 }
 
 /**
