@@ -994,6 +994,7 @@ export const App: React.FC = () => {
       {activeTab === 'dividend' && (
         <DividendLogView
           trades={trades}
+          holdings={holdings}
           receivableDividends={receivableDividends}
           usdToTwdRate={usdToTwdRate}
           market={currentMarket}

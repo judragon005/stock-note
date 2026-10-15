@@ -112,4 +112,101 @@ describe('TDD Seam: behavioralAuditEngine (交易心理學與情緒偏誤量化�
     expect(reportFromReversed.disposition.avgHoldingDaysLoss).toBe(reportFromOrdered.disposition.avgHoldingDaysLoss);
     expect(reportFromReversed.disposition.severity).toBe(reportFromOrdered.disposition.severity);
   });
+
+  it('Spec 0183 (Ticket 04): 凹單行為審計應精準辨識波段套牢，並豁免存股標的', () => {
+    const testHoldings: HoldingPosition[] = [
+      {
+        symbol: '2603',
+        name: '長榮',
+        shares: 1000,
+        avgCost: 200,
+        currentPrice: 160,
+        marketValue: 160000,
+        unrealizedPnL: -40000,
+        unrealizedPnLPercent: -20,
+        lastTradeDate: '2026-07-01',
+        intent: 'SWING', // 波段單
+        market: 'TW',
+        currency: 'TWD',
+        totalCostBasis: 200000,
+        adjustedCostBasis: 200000,
+        grossMarketValue: 160000,
+        netMarketValue: 159000,
+        estimatedSellFee: 200,
+        estimatedSellTax: 800,
+        unrealizedPnLBroker: -41000,
+        unrealizedPnLBrokerPercent: -20.5,
+        realizedPnL: 0,
+        totalDividends: 0,
+        totalCapitalReturned: 0,
+        totalStockDividendsShares: 0,
+        totalReturnPnL: -40000,
+        totalReturnPercent: -20,
+        yieldOnCostPercent: 0,
+      },
+      {
+        symbol: '00878',
+        name: '國泰永續高股息',
+        shares: 5000,
+        avgCost: 24,
+        currentPrice: 18,
+        marketValue: 90000,
+        unrealizedPnL: -30000,
+        unrealizedPnLPercent: -25,
+        lastTradeDate: '2026-05-01',
+        intent: 'DIVIDEND', // 存股單
+        market: 'TW',
+        currency: 'TWD',
+        totalCostBasis: 120000,
+        adjustedCostBasis: 120000,
+        grossMarketValue: 90000,
+        netMarketValue: 89000,
+        estimatedSellFee: 100,
+        estimatedSellTax: 900,
+        unrealizedPnLBroker: -31000,
+        unrealizedPnLBrokerPercent: -25.8,
+        realizedPnL: 0,
+        totalDividends: 0,
+        totalCapitalReturned: 0,
+        totalStockDividendsShares: 0,
+        totalReturnPnL: -30000,
+        totalReturnPercent: -25,
+        yieldOnCostPercent: 0,
+      },
+    ];
+
+    const report = calculateBehavioralAuditReport([], testHoldings, 1000000);
+    expect(report.bagHoldings).toBeDefined();
+    expect(report.bagHoldings).toHaveLength(1);
+    expect(report.bagHoldings![0].symbol).toBe('2603');
+    expect(report.bagHoldings![0].intent).toBe('SWING');
+    expect(testHoldings[0].isBagHolding).toBe(true);
+
+    // 存股標的 00878 不應觸發凹單警報
+    expect(testHoldings[1].isBagHolding).toBeFalsy();
+  });
+
+  it('Spec 0183 (Ticket 04): 摩擦成本實體化換算應正確計算 iPhone 等價物與產生震撼文案', () => {
+    const customTrades: TradeRecord[] = [
+      {
+        id: 't-heavy',
+        date: '2026-01-01',
+        symbol: '2330',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        shares: 10000,
+        price: 1000,
+        fee: 40000,
+        tax: 80000, // 總摩擦 12 萬
+        createdAt: 1,
+      },
+    ];
+
+    const report = calculateBehavioralAuditReport(customTrades, [], 1000000);
+    expect(report.frictionEquivalence).toBeDefined();
+    expect(report.frictionEquivalence!.totalFrictionTwd).toBe(120000);
+    expect(report.frictionEquivalence!.iphoneCount).toBe(3.0); // 120,000 / 40,000 = 3
+    expect(report.frictionEquivalence!.impactText).toContain('3 支頂配旗艦手機');
+  });
 });

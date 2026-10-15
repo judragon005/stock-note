@@ -669,9 +669,42 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                               return null;
                             })()
                           )}
+                          {/* 凹單警示標籤 (Spec 0183 / Ticket 04 / 07) */}
+                          {!isClosed && item.isBagHolding && (
+                            <span
+                              style={{
+                                fontSize: '0.65rem',
+                                padding: '1px 6px',
+                                borderRadius: '4px',
+                                background: 'rgba(239, 68, 68, 0.25)',
+                                color: '#f87171',
+                                border: '1px solid rgba(239, 68, 68, 0.5)',
+                                fontWeight: 700,
+                              }}
+                              title="⚠️ 波段凹單警報：原短波段操作但套牢超過 60 天且虧損逾 15%"
+                            >
+                              ⚠️ 凹單警示
+                            </span>
+                          )}
                         </div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                           <span>{item.name}</span>
+                          {item.intent && item.intent !== 'DIVIDEND' && (
+                            <span
+                              style={{
+                                fontSize: '0.625rem',
+                                padding: '1px 5px',
+                                borderRadius: '3px',
+                                background: 'rgba(99, 102, 241, 0.15)',
+                                color: '#a5b4fc',
+                                border: '1px solid rgba(99, 102, 241, 0.3)',
+                                fontWeight: 600,
+                              }}
+                              title={`交易初衷：${item.intent === 'SWING' ? '短波段操作' : '當沖隔日沖'}`}
+                            >
+                              {item.intent === 'SWING' ? '短波段' : '當沖'}
+                            </span>
+                          )}
                           {!isClosed && item.shares > 0 && (() => {
                             const hp = calculateHoldingPeriodMetrics(item.lots || [], item.symbol);
                             if (hp.weightedHoldingDays <= 0 && hp.activeLotsCount === 0) return null;

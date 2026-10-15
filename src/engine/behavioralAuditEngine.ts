@@ -195,6 +195,16 @@ export function calculateBehavioralAuditReport(
     actionableInsights.push('👏 表現優異：您的各項行為心理指標均在健康範圍內，請繼續嚴格維持目前的交易紀律！');
   }
 
+  // 5. 凹單行為審計與摩擦成本實體化對照 (Spec 0183 / Ticket 04)
+  const bagHoldings = detectBagHoldingPositions(holdings, trades, today);
+  const frictionEquivalence = calculateFrictionEquivalence(friction.totalFrictionCost);
+
+  if (bagHoldings.length > 0) {
+    actionableInsights.unshift(
+      `⚠️ 偵測到 ${bagHoldings.length} 檔波段凹單標的（${bagHoldings.map((b) => b.symbol).join('、')}），抱牢超過 60 天且虧損逾 15%，已偏離初衷，請強制落實停損！`
+    );
+  }
+
   return {
     period: {
       startDate: trades.length > 0 ? trades[0].date : today,
@@ -204,5 +214,85 @@ export function calculateBehavioralAuditReport(
     fomo,
     friction,
     actionableInsights,
+    bagHoldings,
+    frictionEquivalence,
   };
 }
+
+/**
+ * 凹單行為審計：判定短線波段卻長抱嚴重套牢之標的 (Spec 0183)
+ * 規則：intent 為 SWING 或 DAY_TRADE，持有天數 > 60 天，且未實現虧損超過 15%
+ */
+export function detectBagHoldingPositions(
+  holdings: HoldingPosition[],
+  trades: TradeRecord[] = [],
+  referenceDate?: string
+): import('../types/behavioralAudit').BagHoldingAlert[] {
+  const today = referenceDate || new Date().toISOString().split('T')[0];
+  const alerts: import('../types/behavioralAudit').BagHoldingAlert[] = [];
+
+  // 建立標的最新買進交易初衷索引
+  const symbolIntentMap = new Map<string, import('../types/stock').TradeIntent>();
+  for (const t of trades) {
+    if ((t.type === 'BUY' || t.type === 'MARGIN_BUY') && t.intent) {
+      symbolIntentMap.set(t.symbol.trim().toUpperCase(), t.intent);
+    }
+  }
+
+  for (const h of holdings) {
+    if (h.shares <= 0) continue;
+
+    // 優先取持倉上的 intent，若無則自交易紀錄回溯，預設未標註者不強加凹單警報
+    const intent = h.intent || symbolIntentMap.get(h.symbol.trim().toUpperCase());
+    if (!intent || intent === 'DIVIDEND') {
+      continue; // 存股標的豁免
+    }
+
+    const buyDate = h.lastTradeDate || today;
+    const holdingDays = Math.max(1, diffDays(buyDate, today));
+    const unrealizedLossPercent = h.unrealizedPnLPercent ?? 0;
+
+    // 條件：持有超過 60 天且虧損超過 15% (即 unrealizedPnLPercent <= -15)
+    if (holdingDays > 60 && unrealizedLossPercent <= -15) {
+      h.isBagHolding = true; // 同步標註持股物件
+      alerts.push({
+        symbol: h.symbol,
+        name: h.name,
+        holdingDays,
+        unrealizedPnLPercent: unrealizedLossPercent,
+        unrealizedPnLTwd: h.unrealizedPnL ?? 0,
+        intent,
+        message: `原定【${intent === 'SWING' ? '短線波段' : '短線當沖'}】策略，已長抱 ${holdingDays} 天且虧損 ${Math.abs(unrealizedLossPercent).toFixed(1)}%，請謹慎評估停損！`,
+      });
+    }
+  }
+
+  return alerts;
+}
+
+export const detectBagHoldings = detectBagHoldingPositions;
+
+/**
+ * 摩擦成本實體化換算 (Spec 0183)
+ * 以頂配 iPhone 16 Pro (約 40,000 元/支) 與 高級聚餐 (約 2,500 元/次) 進行震撼對照
+ */
+export function calculateFrictionEquivalence(totalFrictionTwd: number): import('../types/behavioralAudit').FrictionEquivalence {
+  const cost = Math.max(0, totalFrictionTwd);
+  const iphoneCount = Number((cost / 40000).toFixed(1));
+  const diningCount = Math.floor(cost / 2500);
+
+  let impactText = '手續費與稅金控制極佳。';
+  if (cost >= 40000) {
+    impactText = `您今年累計支付摩擦成本 NT$ ${Math.round(cost).toLocaleString()}，相當於向券商與政府貢獻了 ${iphoneCount} 支頂配旗艦手機！`;
+  } else if (cost >= 5000) {
+    impactText = `您今年累計支付摩擦成本 NT$ ${Math.round(cost).toLocaleString()}，相當於少了 ${diningCount} 次米其林星級饗宴。`;
+  }
+
+  return {
+    totalFrictionTwd: cost,
+    iphoneCount,
+    diningCount,
+    impactText,
+  };
+}
+

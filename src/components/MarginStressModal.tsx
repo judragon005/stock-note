@@ -3,6 +3,7 @@ import { X, TrendingDown, RefreshCw, CheckCircle, Info, Calculator, ShieldCheck,
 import { HoldingPosition, LoanRecord } from '../types/stock';
 import { calculateMarginStress } from '../engine/marginStressEngine';
 import { evaluateMarginStressMatrix } from '../engine/marginStressMatrixEngine';
+import { calculateUnpledgeRequirement } from '../engine/marginRescueCalculator';
 
 interface MarginStressModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ export const MarginStressModal: React.FC<MarginStressModalProps> = ({
   const [customDrops, setCustomDrops] = useState<Record<string, number>>({});
   const [targetRecoveryRatio, setTargetRecoveryRatio] = useState<130 | 160>(160);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
+  const [unpledgeValueInput, setUnpledgeValueInput] = useState<number>(100000); // Spec 0183
 
   const matrixResult = useMemo(() => {
     return evaluateMarginStressMatrix({
@@ -538,6 +540,72 @@ export const MarginStressModal: React.FC<MarginStressModalProps> = ({
                     <span>在此情境下維持率仍高於 {targetRecoveryRatio}%，無需補繳任何保證金。</span>
                   </div>
                 )}
+              </div>
+
+              {/* Spec 0183: 股票解質領回變現試算 (Unpledge & Liquidation Calculator) */}
+              <div
+                style={{
+                  backgroundColor: 'rgba(30, 41, 59, 0.7)',
+                  padding: '16px 20px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(56, 189, 248, 0.25)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <LifeBuoy size={18} color="#38bdf8" />
+                    <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f8fafc' }}>
+                      🔓 股票解質領回變現試算 (Unpledge Calculator)
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                    最低安全防守線: 130%
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>擬解質領回股票市值: NT$</span>
+                    <input
+                      type="number"
+                      step="10000"
+                      min="0"
+                      value={unpledgeValueInput}
+                      onChange={(e) => setUnpledgeValueInput(Math.max(0, parseFloat(e.target.value) || 0))}
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border-color)',
+                        backgroundColor: 'var(--bg-input, #0f172a)',
+                        color: '#f8fafc',
+                        width: '130px',
+                        fontSize: '0.85rem',
+                        fontWeight: 700,
+                      }}
+                    />
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                    {(() => {
+                      const res = calculateUnpledgeRequirement({
+                        totalLoanPrincipalTwd: totalLoanDebtTWD,
+                        totalCollateralValueTwd: stressedCollateralValueTWD,
+                        unpledgeStockMarketValueTwd: unpledgeValueInput,
+                        minimumSafeMarginRatio: 1.3,
+                      });
+                      if (res.canUnpledgeDirectlyWithoutPayoff) {
+                        return (
+                          <span style={{ color: '#34d399', fontWeight: 600 }}>
+                            ✅ 剩餘擔保品仍充足 (維持率 {(res.postUnpledgeMarginRatio * 100).toFixed(1)}%)，可直接無痛解質，無需先還款！
+                          </span>
+                        );
+                      }
+                      return (
+                        <span style={{ color: '#f87171', fontWeight: 600 }}>
+                          ⚠️ 解質後將低於 130%：需先償還借款本金 <strong>NT$ {res.requiredPrincipalRepayTwd.toLocaleString()}</strong>，券商才允許放行股票賣出。
+                        </span>
+                      );
+                    })()}
+                  </div>
+                </div>
               </div>
 
               {/* 斷頭臨界價格逆推表格 (Liquidation Price Solver) */}
