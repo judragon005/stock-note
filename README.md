@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1598%2F1598%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1609%2F1609%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,23 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 個股深度財報法務會計排雷、ETF 物理隔離與智策引擎 UI 重構 (`Forensic Accounting, ETF Isolation & Analysis UI Repair`) *(V8.93.0 最新發布 / Spec #0180 / ADR #0180 / Issue #230)*
+### 0. 主力戰情室外聯 AI 提示詞中樞、防幻覺定錨與個股分析純粹化 (`War Room Prompt Hub & Grounding Architecture`) *(V8.94.0 最新發布 / Spec #0181 / ADR #0181 / Issue #243)*
+
+- **個股深度分析純粹化 (`StockAnalysisWorkspace.tsx`)**：
+  - 徹底拔除原本擠在頁面頂部的提示詞面板，還原 100% 純粹的財務報表、估值模型與法務會計排雷燈號。
+- **主力戰情室外聯 AI 提示詞中樞 (`WarRoomPromptCard.tsx`)**：
+  - 掛載於 `AiForceDashboardView.tsx` 最底層（Sticky 吸附列上方安全避讓），跨 5 大任務視圖常駐可用。
+  - 原生深色毛玻璃卡片風格，提供一鍵複製按鈕、持股脫敏切換膠囊與折疊式高對比 Prompt 預覽抽屜。
+- **時態分割防幻覺協議 (Temporal Grounding Protocol)**：
+  - 提示詞注入 `<market_time_dimension>`，明確區隔盤中即時 (Intraday Live) 與昨日盤後結算 (Settled EOD)，阻斷外部 LLM 時空錯亂。
+- **前端確定性算術代勞 (Precalculated Pivots)**：
+  - 預算精確停損價 (-3%/-5%) 與風報比目標價 (1:2.0/1:2.5)，直接塞入 `<pre_calculated_pivots>`，封死 LLM 浮點數算術翻車。
+- **客觀反討好紅隊指令 (Anti-Sycophancy Directive)**：
+  - 注入 `<adversarial_red_team_instruction>`，強制外部 AI 扮演冷酷風控長，打破迎合偏見，直接挑出下檔風險點。
+- **台美雙軌自動隔離與剪貼簿降級**：
+  - 美股標的 (US) 自動剔除三大法人與資券欄位；實作 `navigator.clipboard` ➔ `document.execCommand` 兩階段安全降級與 2 秒微引導反饋。
+
+### 1. 個股深度財報法務會計排雷、ETF 物理隔離與智策引擎 UI 重構 (`Forensic Accounting, ETF Isolation & Analysis UI Repair`) *(V8.93.0 / Spec #0180 / ADR #0180 / Issue #230)*
 
 - **智策精煉多維提示詞引擎 UI 原生深色 Glassmorphism 重構 (`StrategicPromptPanel.tsx`)**：
   - 徹底清除專案不支援的 Tailwind classes，回歸純原生 CSS 變數（`var(--bg-card)`, `var(--border-color)`）與細緻水平 6 欄自適應思考帽網格。

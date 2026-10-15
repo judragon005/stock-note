@@ -140,4 +140,59 @@ describe('Ticket 03: strategicPromptEngine 雙軌路由與六頂思考帽組裝�
     expect(singleRes.activeMode).toBe('SINGLE_HAT');
     expect(singleRes.targetHat).toBe('WHITE');
   });
+
+  describe('Spec 0181 專用增強測試 (Tickets 07 ~ 10)', () => {
+    it('Ticket 07: 應包含前端算好之停損與風報比數值 (<pre_calculated_pivots>)', () => {
+      const result = generateMasterPrompt(stockDigest, {
+        mode: 'FULL_MASTER',
+        desensitized: true,
+      });
+
+      expect(result.promptText).toContain('<pre_calculated_pivots>');
+      expect(result.promptText).toContain('stop_loss_conservative_3pct');
+      expect(result.promptText).toContain('target_profit_r2_ratio');
+      expect(result.promptText).toContain('1013.');
+    });
+
+    it('Ticket 08: 應包含時態分割聲明與盤中/昨日結算時間戳 (<market_time_dimension>)', () => {
+      const result = generateMasterPrompt(stockDigest, {
+        mode: 'FULL_MASTER',
+        desensitized: true,
+      });
+
+      expect(result.promptText).toContain('<market_time_dimension>');
+      expect(result.promptText).toContain('【時態說明】');
+      expect(result.promptText).toContain('三大法人、融資融券為昨日收盤結算資料');
+    });
+
+    it('Ticket 09: 應注入客觀反討好紅隊指令 (<adversarial_red_team_instruction>)', () => {
+      const result = generateMasterPrompt(stockDigest, {
+        mode: 'FULL_MASTER',
+        desensitized: true,
+      });
+
+      expect(result.promptText).toContain('<adversarial_red_team_instruction>');
+      expect(result.promptText).toContain('【強制反思反討好規則】');
+      expect(result.promptText).toContain('嚴禁為了迎合使用者');
+    });
+
+    it('Ticket 10: 美股標的 (market=US) 應自動剔除三大法人與融資券字樣', () => {
+      const usDigest = synthesizeStockDigest({
+        symbol: 'NVDA',
+        name: 'NVIDIA Corp',
+        market: 'US',
+        candles: [{ date: '2026-10-14', open: 130, high: 136, low: 129, close: 135.5, volume: 50000000 }],
+        quote: { price: 135.5 },
+      });
+
+      const result = generateMasterPrompt(usDigest, {
+        mode: 'FULL_MASTER',
+        desensitized: true,
+      });
+
+      expect(result.promptText).toContain('<market>US</market>');
+      expect(result.promptText).not.toContain('三大法人買賣超');
+      expect(result.promptText).not.toContain('融資餘額');
+    });
+  });
 });

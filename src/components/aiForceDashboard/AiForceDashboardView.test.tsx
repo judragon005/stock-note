@@ -76,4 +76,37 @@ describe('Ticket 08: 主力戰情室 7 層 Bento-Grid 專業動線架構驗收 (
     expect(html).toContain('data-testid="tdcc-empty-state"');
     expect(html).toContain('美股無集保機制 (採 13F 機構申報)');
   });
+
+  describe('Spec 0181 Ticket 17: 主力戰情室底層 AI 戰情提示詞中樞驗收', () => {
+    it('主力戰情室底層應渲染 AI 戰情提示詞中樞且具備一鍵複製按鈕', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(AiForceDashboardView, {
+          initialSymbol: '2330',
+          initialMarket: 'TW',
+          initialReport: readyReport,
+        })
+      );
+
+      expect(html).toContain('data-layer="war-room-prompt-hub"');
+      expect(html).toContain('一鍵複製 AI 戰情提示詞');
+      expect(html).toContain('已脫敏');
+    });
+
+    it('切換至任務二技術警示視圖時，底層 AI 提示詞卡片依然常駐', () => {
+      const task2Report = {
+        ...readyReport,
+        activeTaskTab: 'TASK_2_TECHNICAL_ALERTS' as const,
+      };
+
+      const html = renderToStaticMarkup(
+        React.createElement(AiForceDashboardView, {
+          initialSymbol: '2330',
+          initialMarket: 'TW',
+          initialReport: task2Report,
+        })
+      );
+
+      expect(html).toContain('data-layer="war-room-prompt-hub"');
+    });
+  });
 });

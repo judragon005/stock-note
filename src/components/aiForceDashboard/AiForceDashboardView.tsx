@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { MarketType, HoldingPosition, PriceQuote } from '../../types/stock';
 import { AiForceDashboardReport } from '../../types/aiForceDashboard';
 import {
@@ -42,6 +42,8 @@ import { resolveOfficialSecurityName } from '../../engine/stockNameResolver';
 import { EquityDeepDiveModal } from '../equityDeepDive/EquityDeepDiveModal';
 import { useMarketCatchupSync } from '../../hooks/useMarketCatchupSync';
 import type { AiForceTaskTabKey } from '../../types/aiForceDashboard';
+import { WarRoomPromptCard } from './WarRoomPromptCard';
+import { createWarRoomPromptDigest } from '../../engine/aiForcePromptAdapter';
 
 export interface AiForceDashboardViewProps {
   initialSymbol?: string;
@@ -70,6 +72,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         initialMarket
       )
   );
+
+  // ⚡ 戰情室專屬高濃度提示詞特徵模型 (Spec 0181 / Ticket 16)
+  const warRoomDigest = useMemo(() => {
+    return createWarRoomPromptDigest(report, _holdings);
+  }, [report, _holdings]);
 
   const loadDataForSymbol = async (targetSymbol: string, targetMarket: MarketType) => {
     setIsLoading(true);
@@ -567,6 +574,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
 
       {/* 任務五：原始資料表 */}
       {activeTab === 'TASK_5_RAW_DATA' && <RawDataView report={report} />}
+
+      {/* ⚡ 全域外聯 AI 戰情提示詞中樞 (Spec 0181 / Issue #243) */}
+      <div style={{ marginTop: '16px', marginBottom: '16px' }}>
+        <WarRoomPromptCard digest={warRoomDigest} />
+      </div>
 
       {/* 底部 5 大任務視圖切換器 (Ticket 31) */}
       <div style={{ marginTop: '8px', position: 'sticky', bottom: '12px', zIndex: 20 }}>

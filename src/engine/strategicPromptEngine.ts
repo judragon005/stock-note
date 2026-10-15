@@ -57,6 +57,89 @@ export const SIX_HATS_CONFIG: Record<
 };
 
 /**
+ * 前端確定性算術核心：預先計算停損價位與風報比目標價 (Spec 0181 / Ticket 07)
+ */
+export interface PrecalculatedPivots {
+  price: number;
+  stopLossConservative3Pct: number;
+  stopLossDefensive5Pct: number;
+  targetProfitR2Ratio: number;
+  frictionThresholdPct: number;
+}
+
+export function calculateDeterministicPivots(price: number, market: string = 'TW'): PrecalculatedPivots {
+  if (!price || price <= 0) {
+    return {
+      price: 0,
+      stopLossConservative3Pct: 0,
+      stopLossDefensive5Pct: 0,
+      targetProfitR2Ratio: 0,
+      frictionThresholdPct: market === 'US' ? 0.1 : 0.585,
+    };
+  }
+  const stopLossConservative3Pct = Number((price * 0.97).toFixed(2));
+  const stopLossDefensive5Pct = Number((price * 0.95).toFixed(2));
+  const r1Risk = price * 0.03;
+  const targetProfitR2Ratio = Number((price + r1Risk * 2.0).toFixed(2));
+  const frictionThresholdPct = market === 'US' ? 0.1 : 0.585;
+
+  return {
+    price,
+    stopLossConservative3Pct,
+    stopLossDefensive5Pct,
+    targetProfitR2Ratio,
+    frictionThresholdPct,
+  };
+}
+
+/**
+ * 組裝前端確定性算術防線 XML (Ticket 07)
+ */
+function buildPrecalculatedPivotsXml(digest: StrategicFactDigest): string {
+  const price = digest.quote?.currentPrice || 0;
+  const market = digest.audit?.market || 'TW';
+  const pivots = calculateDeterministicPivots(price, market);
+
+  return `  <pre_calculated_pivots>
+    <exact_cost_basis>${pivots.price}</exact_cost_basis>
+    <stop_loss_conservative_3pct>${pivots.stopLossConservative3Pct}</stop_loss_conservative_3pct>
+    <stop_loss_defensive_5pct>${pivots.stopLossDefensive5Pct}</stop_loss_defensive_5pct>
+    <target_profit_r2_ratio>${pivots.targetProfitR2Ratio}</target_profit_r2_ratio>
+    <friction_threshold_pct>${pivots.frictionThresholdPct}%</friction_threshold_pct>
+    <!-- 指令：直接引用上述預先計算之絕對數值，嚴禁自行進行浮點數運算 -->
+  </pre_calculated_pivots>`;
+}
+
+/**
+ * 組裝時態分割防幻覺聲明 XML (Spec 0181 / Ticket 08)
+ */
+function buildTemporalGroundingXml(digest: StrategicFactDigest): string {
+  const settledDate = digest.warRoomFeatures?.settledDate || digest.audit?.anchorTradingDate || '最新交易日';
+  const intradayTime = digest.warRoomFeatures?.intradayTime || digest.audit?.verificationTimestamp || '即時';
+
+  return `  <system_grounding_declaration>
+    【資料基準日】：${settledDate}
+    【時態說明】：現價與盤中均線為當前即時數據；三大法人、融資融券為昨日收盤結算資料；集保為週末結算。
+    【強制指令】：嚴禁猜測未提供之歷史價格，所有分析必須百分之百依據下方客觀數據。
+  </system_grounding_declaration>
+  <market_time_dimension>
+    <intraday_snapshot time="${intradayTime}">現價、當日盤中即時量、均線偏離</intraday_snapshot>
+    <latest_settled_eod date="${settledDate}">外資/投信籌碼、融資融券、借券賣出（昨日結算）</latest_settled_eod>
+  </market_time_dimension>`;
+}
+
+/**
+ * 組裝反討好紅隊指令 (Spec 0181 / Ticket 09)
+ */
+function buildAntiSycophancyXml(): string {
+  return `  <adversarial_red_team_instruction>
+    【強制反思反討好規則】：
+    嚴禁為了迎合使用者偏多持倉而給予模糊的樂觀判斷！
+    你必須扮演冷酷的避險基金風控長（CRO），強制指出當前最致命的 2~3 個下檔暴雷風險點與硬性停損失效條件。
+  </adversarial_red_team_instruction>`;
+}
+
+/**
  * 組裝零信任數據海關 XML
  */
 function buildCustomsAuditXml(digest: StrategicFactDigest): string {
@@ -88,10 +171,11 @@ function buildInvestorContextXml(digest: StrategicFactDigest, options: Strategic
 }
 
 /**
- * 組裝個股事實清單 (對齊個股大師 V12.0)
+ * 組裝個股事實清單 (對齊個股大師 V12.0 + 台美雙軌隔離)
  */
 function buildEquityFactSheet(digest: StrategicFactDigest): string {
-  const { quote, chips, fundamental, macro } = digest;
+  const { quote, chips, fundamental, macro, audit } = digest;
+  const isUS = audit.market === 'US';
 
   return `  <fact_sheet asset_type="EQUITY">
     <!-- 1. 行情與趨勢 -->
@@ -108,14 +192,14 @@ function buildEquityFactSheet(digest: StrategicFactDigest): string {
       <volume_surge_ratio_20d>${quote.volumeRatio20D}倍</volume_surge_ratio_20d>
     </quote_and_trend>
 
-    <!-- 2. 籌碼微觀與主力防線 -->
+    <!-- 2. 籌碼微觀與主力防線 (台美雙軌隔離) -->
     <chips_and_microstructure>
-      <total_institutional_net_20d>${chips.totalNetShares20D ?? 'N/A'}</total_institutional_net_20d>
+      ${!isUS ? `<total_institutional_net_20d>${chips.totalNetShares20D ?? 'N/A'}</total_institutional_net_20d>
       <foreign_net_shares_20d>${chips.foreignNetShares20D ?? 'N/A'}</foreign_net_shares_20d>
       <trust_net_shares_20d>${chips.trustNetShares20D ?? 'N/A'}</trust_net_shares_20d>
       <big_holder_ratio_400>${chips.bigHolderRatioChange400 ?? 'N/A'}%</big_holder_ratio_400>
       <big_holder_ratio_1000>${chips.bigHolderRatioChange1000 ?? 'N/A'}%</big_holder_ratio_1000>
-      <retail_holder_ratio_under_10>${chips.retailHolderCountChange ?? 'N/A'}%</retail_holder_ratio_under_10>
+      <retail_holder_ratio_under_10>${chips.retailHolderCountChange ?? 'N/A'}%</retail_holder_ratio_under_10>` : `<us_market_structure>美股採 13F 機構季度申報與 SEC Form 4 內部人申報，無台股盤後籌碼與融資券機制</us_market_structure>`}
       <main_force_vwap_20d>${chips.mainForceVwap20D ?? 'N/A'}</main_force_vwap_20d>
       <vwap_bias_percent>${chips.currentVwapBiasPct ?? 'N/A'}%</vwap_bias_percent>
       <box_resistance>${chips.boxResistancePrice ?? 'N/A'}</box_resistance>
@@ -306,9 +390,12 @@ export function generateMasterPrompt(
 
   const promptText = `<investment_decision_prompt version="1.0" system="SmartStrategyEngine">
   <system_role>${systemRole}</system_role>
+${buildTemporalGroundingXml(digest)}
 ${buildCustomsAuditXml(digest)}
 ${isEtf ? buildEtfFactSheet(digest) : buildEquityFactSheet(digest)}
+${buildPrecalculatedPivotsXml(digest)}
 ${buildInvestorContextXml(digest, options)}
+${buildAntiSycophancyXml()}
 ${buildFullSixHatsInstructions(digest)}
 ${buildReflectionGateXml()}
   <output_format>
@@ -346,6 +433,7 @@ export function generateSingleHatPrompt(
   <system_role>你是一位資深量化風控與投資策略師，當前正以【${cfg.emoji} ${cfg.nameZh}】專屬心智模式進行單點極限穿透覆盤。</system_role>
 ${buildCustomsAuditXml(digest)}
 ${buildSingleHatCompactFactSheet(digest)}
+${buildPrecalculatedPivotsXml(digest)}
 ${buildInvestorContextXml(digest, options)}
 ${buildSingleHatInstruction(hat, digest)}
 ${buildReflectionGateXml()}

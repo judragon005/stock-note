@@ -150,6 +150,18 @@ export interface StrategicFactDigest {
     holdingHorizonDays?: number; // 已持有天數
     unrealizedGainLossSign?: 'PROFIT' | 'LOSS' | 'BREAKEVEN'; // 僅輸出正負，不洩漏金額
   };
+  warRoomFeatures?: {
+    maArrangement?: string;
+    foreignNetDays?: number;
+    foreignNetShares?: number;
+    investmentTrustNetShares?: number;
+    marginTrend?: 'INCREASING' | 'DECREASING' | 'STABLE';
+    tdccLargeShareholdersPct?: number;
+    dayTradeRiskLevel?: string;
+    statusTag?: string;
+    settledDate?: string;
+    intradayTime?: string;
+  };
 }
 
 /**
