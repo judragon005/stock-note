@@ -39,6 +39,7 @@ async function safeCopyToClipboard(text: string): Promise<boolean> {
     textArea.style.position = 'fixed';
     textArea.style.left = '-999999px';
     textArea.style.top = '-999999px';
+    textArea.setAttribute('readonly', '');
     document.body.appendChild(textArea);
     textArea.focus();
     textArea.select();
@@ -211,6 +212,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({ digest, cl
       >
         <button
           type="button"
+          aria-label="一鍵複製 AI 戰情提示詞"
           onClick={handleCopy}
           style={{
             flex: 1,
@@ -245,6 +247,8 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({ digest, cl
 
         <button
           type="button"
+          aria-label="切換 Prompt 預覽抽屜"
+          aria-expanded={showPreview}
           onClick={() => setShowPreview(!showPreview)}
           style={{
             display: 'flex',
