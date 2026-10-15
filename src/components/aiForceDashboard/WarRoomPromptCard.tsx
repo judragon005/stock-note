@@ -16,6 +16,8 @@ import { logger } from '../../utils/logger';
 export interface WarRoomPromptCardProps {
   digest: StrategicFactDigest;
   className?: string;
+  isLoading?: boolean;
+  isDataPending?: boolean;
 }
 
 /**
@@ -55,8 +57,14 @@ async function safeCopyToClipboard(text: string): Promise<boolean> {
 /**
  * 主力戰情室底層：AI 戰情提示詞與外聯中樞 (Spec 0181 / Tickets 12~15)
  */
-export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({ digest, className = '' }) => {
+export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
+  digest,
+  className = '',
+  isLoading = false,
+  isDataPending = false,
+}) => {
   const [copied, setCopied] = useState<boolean>(false);
+  const [copyError, setCopyError] = useState<boolean>(false);
   const [desensitized, setDesensitized] = useState<boolean>(true);
   const [showPreview, setShowPreview] = useState<boolean>(false);
 
@@ -73,6 +81,18 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({ digest, cl
     };
   }, [copied]);
 
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (copyError) {
+      timer = setTimeout(() => {
+        setCopyError(false);
+      }, 4000);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [copyError]);
+
   // 生成高濃度 Master Prompt
   const promptResult: StrategicPromptResult = useMemo(() => {
     return generateStrategicPrompt(digest, {
@@ -81,13 +101,18 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({ digest, cl
     });
   }, [digest, desensitized]);
 
-  // 複製處理函式
+  // 複製處理函式 (若失敗自動展開預覽抽屜防死寂)
   const handleCopy = useCallback(async () => {
+    if (isLoading || isDataPending) return;
     const success = await safeCopyToClipboard(promptResult.promptText);
     if (success) {
       setCopied(true);
+      setCopyError(false);
+    } else {
+      setCopyError(true);
+      setShowPreview(true); // 自動展開抽屜供手動複製
     }
-  }, [promptResult.promptText]);
+  }, [promptResult.promptText, isLoading, isDataPending]);
 
   return (
     <div
@@ -213,6 +238,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({ digest, cl
         <button
           type="button"
           aria-label="一鍵複製 AI 戰情提示詞"
+          disabled={isLoading || isDataPending}
           onClick={handleCopy}
           style={{
             flex: 1,
@@ -225,14 +251,19 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({ digest, cl
             borderRadius: '8px',
             fontSize: '14px',
             fontWeight: 600,
-            cursor: 'pointer',
+            cursor: isLoading || isDataPending ? 'not-allowed' : 'pointer',
+            opacity: isLoading || isDataPending ? 0.6 : 1,
             background: copied
               ? 'linear-gradient(135deg, #059669 0%, #10b981 100%)'
+              : isLoading || isDataPending
+              ? '#374151'
               : 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
             color: '#ffffff',
             border: 'none',
             boxShadow: copied
               ? '0 2px 10px rgba(16, 185, 129, 0.35)'
+              : isLoading || isDataPending
+              ? 'none'
               : '0 2px 10px rgba(59, 130, 246, 0.35)',
             transition: 'all 0.2s ease',
           }}
@@ -241,6 +272,10 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({ digest, cl
           <span>
             {copied
               ? '✅ 已複製！可直接按 Ctrl+V 貼入 ChatGPT / Claude'
+              : isLoading
+              ? '⏳ 數據同步校準中...'
+              : isDataPending
+              ? '⚠️ 標的數據待命中 (請在線回補)'
               : `一鍵複製 AI 戰情提示詞 (${digest.quote.symbol} ${digest.quote.name})`}
           </span>
         </button>
@@ -270,6 +305,26 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({ digest, cl
           {showPreview ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </button>
       </div>
+
+      {/* 複製失敗安全引導橫幅 (Ticket 03) */}
+      {copyError && (
+        <div
+          data-testid="copy-error-toast"
+          style={{
+            padding: '8px 12px',
+            borderRadius: '6px',
+            background: 'rgba(239, 68, 68, 0.15)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            color: '#f87171',
+            fontSize: '13px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <span>⚠️ 瀏覽器安全性限制自動寫入剪貼簿，已為您自動展開下方預覽，請直接手動選取複製。</span>
+        </div>
+      )}
 
       {/* 可折疊 Prompt 預覽抽屜 (Ticket 15) */}
       {showPreview && (

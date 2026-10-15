@@ -83,19 +83,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
     setSymbol(targetSymbol);
     setMarket(targetMarket);
     const resolvedName = resolveOfficialSecurityName(targetSymbol, targetMarket) || targetSymbol;
-    setReport((prev) => ({
-      ...prev,
-      symbol: targetSymbol,
-      name: resolvedName,
-      market: targetMarket,
-      tdccDistribution: {
-        history: [],
-        concentrationBadge: targetMarket === 'US' ? '美股不適用' : '數據加載中...',
-        asOfDateText: targetMarket === 'US' ? '美股市場' : '更新中...',
-        isEmpty: true,
-        emptyMessage: targetMarket === 'US' ? '美股無集保機制 (採 13F 機構申報)' : '正在獲取集保數據...',
-      },
-    }));
+    setReport(createDefaultAiForceReport(targetSymbol, resolvedName, targetMarket));
     let quote:
       | (PriceQuote & { open?: number; high?: number; low?: number; volume?: number })
       | null
@@ -575,9 +563,13 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       {/* 任務五：原始資料表 */}
       {activeTab === 'TASK_5_RAW_DATA' && <RawDataView report={report} />}
 
-      {/* ⚡ 全域外聯 AI 戰情提示詞中樞 (Spec 0181 / Issue #243) */}
+      {/* ⚡ 全域外聯 AI 戰情提示詞中樞 (Spec 0181 / Issue #243 / Spec 0182) */}
       <div style={{ marginTop: '16px', marginBottom: '16px' }}>
-        <WarRoomPromptCard digest={warRoomDigest} />
+        <WarRoomPromptCard
+          digest={warRoomDigest}
+          isLoading={isLoading}
+          isDataPending={report.isDataPending}
+        />
       </div>
 
       {/* 底部 5 大任務視圖切換器 (Ticket 31) */}

@@ -150,7 +150,74 @@ describe('Spec 0181 Ticket 06: aiForcePromptAdapter - 主力戰情室特徵轉�
     const digest = createWarRoomPromptDigest(mockReportTw, holdings);
 
     expect(digest.desensitizedPortfolioContext).toBeDefined();
+    expect(digest.desensitizedPortfolioContext?.status).toBe('IN_POSITION');
+    expect(digest.desensitizedPortfolioContext?.avgCost).toBe(950);
+    expect(digest.desensitizedPortfolioContext?.breakevenPrice).toBe(955.56);
     expect(digest.desensitizedPortfolioContext?.unrealizedGainLossSign).toBe('PROFIT');
     expect(digest.desensitizedPortfolioContext?.portfolioWeightPct).toBeGreaterThan(0);
+  });
+
+  describe('Spec 0182 專屬強化驗證 (Tickets 04 ~ 16)', () => {
+    it('Ticket 04 & 06: 空手未建倉標的應標記為 ZERO_POSITION，持倉欄位均為 undefined', () => {
+      const holdings: HoldingPosition[] = [
+        {
+          symbol: '2330',
+          name: '台積電',
+          shares: 1000,
+          avgCost: 1000,
+          currentPrice: 1045,
+          market: 'TW',
+        } as unknown as HoldingPosition,
+      ];
+
+      // 查詢 2344 華邦電，不在持股中
+      const winbondReport: AiForceDashboardReport = {
+        ...mockReportTw,
+        symbol: '2344',
+        name: '華邦電',
+      };
+
+      const digest = createWarRoomPromptDigest(winbondReport, holdings);
+
+      expect(digest.desensitizedPortfolioContext).toBeDefined();
+      expect(digest.desensitizedPortfolioContext?.status).toBe('ZERO_POSITION');
+      expect(digest.desensitizedPortfolioContext?.avgCost).toBeUndefined();
+      expect(digest.desensitizedPortfolioContext?.breakevenPrice).toBeUndefined();
+      expect(digest.desensitizedPortfolioContext?.portfolioWeightPct).toBe(0);
+    });
+
+    it('Ticket 11 & 12: 景氣循環股 (如 2344 華邦電) 應正確標記 isCyclical=true 與單位 unitText="張"', () => {
+      const winbondReport: AiForceDashboardReport = {
+        ...mockReportTw,
+        symbol: '2344',
+        name: '華邦電',
+      };
+
+      const digest = createWarRoomPromptDigest(winbondReport);
+
+      expect(digest.chips?.isCyclical).toBe(true);
+      expect(digest.chips?.unitText).toContain('張');
+      expect(digest.audit.isEtf).toBe(false);
+    });
+
+    it('Ticket 13: 拆分三大法人 1D 與 20D 籌碼累計，避免大模型誤解時態', () => {
+      const winbondReport: AiForceDashboardReport = {
+        ...mockReportTw,
+        symbol: '2344',
+        name: '華邦電',
+        chipsSummary: {
+          foreignInvestorsNetBuyShares: 1500,
+          investmentTrustNetBuyShares: 300,
+          dealerNetBuyShares: 200,
+        } as any,
+      };
+
+      const digest = createWarRoomPromptDigest(winbondReport);
+
+      expect(digest.chips?.totalNetShares1D).toBe(2000);
+      expect(digest.chips?.foreignNetShares1D).toBe(1500);
+      expect(digest.chips?.trustNetShares1D).toBe(300);
+      expect(digest.chips?.unitText).toContain('張');
+    });
   });
 });

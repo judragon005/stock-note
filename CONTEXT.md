@@ -2460,4 +2460,20 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     4. **前端確定性算術代勞 (Precalculated Pivots)**：精準預算 -3%/-5% 停損價與 1:2.0/1:2.5 風報比目標價，注入 `<pre_calculated_pivots>`，封死 LLM 浮點數算術翻車。
     5. **反討好紅隊指令 (Anti-Sycophancy Directive)**：注入 `<adversarial_red_team_instruction>`，強制外部 AI 扮演冷酷風控官，打破迎合偏見，揭露下檔暴雷風險。
     6. **台美雙軌自動隔離 (US Market Isolation)**：美股標的 (US) 自動剔除三大法人與融資券字樣，切換為美股機構持倉。
-    7. **兩階段剪貼簿降級與微引導**：優先 `navigator.clipboard.writeText`，失敗降級 `document.execCommand('copy')`，點擊後呈現 2 秒「`✅ 已複製！可直接按 Ctrl+V 貼入 ChatGPT / Claude`」微引導。
+- **War Room Prompt Grounding, Stale State & Portfolio Isolation (戰情室提示詞防幽靈定錨、庫存自動錨定與時態籌碼細化)**:
+  - 核心模組：`src/components/aiForceDashboard/AiForceDashboardView.tsx`、`src/components/aiForceDashboard/WarRoomPromptCard.tsx`、`src/engine/aiForcePromptAdapter.ts`、`src/engine/strategicPromptEngine.ts`、`src/types/strategicPrompt.ts`。
+  - 規範依據：Spec 0182 (v8.95.0) 與 ADR 0182。
+  - 核心特性：
+    1. **標的切換狀態原子重置 (Stale State Elimination)**：徹底修正 `AiForceDashboardView` 在標的切換時的狀態殘留，以 `createDefaultAiForceReport` 阻斷 0050 預設價格與歷史資料幽靈拷貝。
+    2. **方案 1：全自動庫存比對與雙態分流 (Auto-Portfolio Grounding & Dual-Pivots Mode)**：
+       - 自動跨帳戶精算持有成本 (`avgCost`) 與保本價 (`breakevenPrice`)。
+       - **在庫持有 (`IN_POSITION`)**：生成 `<pre_calculated_pivots mode="HOLDING_DEFENSE">` 指令評估持倉防禦與保本移動停利；脫敏開關預設保護，僅輸出未實現報酬率 `%` 與部位佔比 `%`，杜絕金額外洩。
+       - **空手觀望 (`ZERO_POSITION`)**：生成 `<pre_calculated_pivots mode="HYPOTHETICAL_ENTRY">`，明確宣告部位佔比為 0%，從買方視角評估潛在建倉位階，嚴禁發出停損割肉指令。
+    3. **時態籌碼物理拆分與單位明載 (Chips Timeframe Separation & Explicit Units)**：
+       - 嚴格分離單日三大法人買賣超 (`totalNetShares1D`) 與基於歷史真實累計之 20 日法人數據 (`totalNetShares20D`)，避免外部大語言模型時態錯亂。
+       - 所有量價與籌碼欄位明確標記單位（台股：`unit="張"`，美股：`unit="股"`；成交額：`unit="億元"`）。
+    4. **日 K 均線真實驗算與景氣循環股紅隊質詢 (True MA Calculation & Cyclical Peak Risk)**：
+       - 日 K 均線 MA20/MA60 由日線歷史資料動態驗算，嚴禁依賴現價重複填值。
+       - 自動感知記憶體（如華邦電）、晶圓代工、航運等景氣循環股標籤，在黑帽質詢中強制啟動「循環高峰殺估值陷阱」排查。
+    5. **數據同步防呆與複製微降級保障 (Data Sync Guard & Copy Fallback)**：
+       - 標的切換或回補期間，戰情室複製按鈕進入禁用待命態（提示「⏳ 數據同步校準中...」），防範複製未就緒資料；複製失敗時自動展開抽屜並顯示提示橫幅。

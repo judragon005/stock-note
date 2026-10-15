@@ -148,7 +148,7 @@ describe('Ticket 03: strategicPromptEngine 雙軌路由與六頂思考帽組裝�
         desensitized: true,
       });
 
-      expect(result.promptText).toContain('<pre_calculated_pivots>');
+      expect(result.promptText).toMatch(/<pre_calculated_pivots/);
       expect(result.promptText).toContain('stop_loss_conservative_3pct');
       expect(result.promptText).toContain('target_profit_r2_ratio');
       expect(result.promptText).toContain('1013.');
@@ -193,6 +193,46 @@ describe('Ticket 03: strategicPromptEngine 雙軌路由與六頂思考帽組裝�
       expect(result.promptText).toContain('<market>US</market>');
       expect(result.promptText).not.toContain('三大法人買賣超');
       expect(result.promptText).not.toContain('融資餘額');
+    });
+  });
+
+  describe('Spec 0182 專用增強測試 (Tickets 17 ~ 18)', () => {
+    it('Ticket 17: 空手標的應產生 HYPOTHETICAL_ENTRY 模式與禁止停損指令', () => {
+      const zeroPositionDigest = {
+        ...stockDigest,
+        desensitizedPortfolioContext: {
+          status: 'ZERO_POSITION' as const,
+          portfolioWeightPct: 0,
+        },
+      };
+
+      const result = generateMasterPrompt(zeroPositionDigest, {
+        mode: 'FULL_MASTER',
+        desensitized: true,
+      });
+
+      expect(result.promptText).toContain('mode="HYPOTHETICAL_ENTRY"');
+      expect(result.promptText).toContain('<holding_status>空手觀望中 (未建倉 / 自選監控)</holding_status>');
+      expect(result.promptText).toContain('嚴禁發出停損清算命令');
+      expect(result.promptText).not.toContain('<exact_cost_basis>');
+    });
+
+    it('Ticket 18: 景氣循環股應在黑帽指令中強制提示週期高峰反轉風險', () => {
+      const cyclicalDigest = {
+        ...stockDigest,
+        chips: {
+          ...stockDigest.chips,
+          isCyclical: true,
+        },
+      };
+
+      const result = generateMasterPrompt(cyclicalDigest, {
+        mode: 'FULL_MASTER',
+        desensitized: true,
+      });
+
+      expect(result.promptText).toContain('景氣循環週期股');
+      expect(result.promptText).toContain('Cycle Peak 殺估值陷阱');
     });
   });
 });

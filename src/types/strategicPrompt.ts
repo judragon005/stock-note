@@ -65,12 +65,18 @@ export interface QuoteAndTrendDigest {
  * 籌碼與主力意圖特徵切片
  */
 export interface ChipsAndMicrostructureDigest {
+  foreignNetShares1D?: number;
+  trustNetShares1D?: number;
+  dealerNetShares1D?: number;
+  totalNetShares1D?: number;
   foreignNetShares20D?: number;
   trustNetShares20D?: number;
   dealerNetShares20D?: number;
   totalNetShares20D?: number;
   institutionalStreakText?: string; // e.g. "外資連買 4 日 (+1,250張)"
   marginBalanceChangeText?: string; // e.g. "融資 5 日增加 820 張"
+  marginBalance?: number; // 融資餘額
+  shortBalance?: number; // 融券餘額
   dayTradeRatioPct?: number; // 當沖比率 (%)
   bigHolderRatioChange400?: number; // 400張大戶比例變化 (%)
   bigHolderRatioChange1000?: number; // 1000張大戶比例變化 (%)
@@ -79,6 +85,12 @@ export interface ChipsAndMicrostructureDigest {
   currentVwapBiasPct?: number; // 現價相對主力成本乖離率 (%)
   boxResistancePrice?: number; // 箱頂壓力
   boxSupportPrice?: number; // 箱底防線
+  limitUpPrice?: number; // 當日漲停價
+  limitDownPrice?: number; // 當日跌停價
+  marketStatusTag?: string; // 'NORMAL' | 'ATTENTION' | 'DISPOSITION'
+  isCyclical?: boolean; // 景氣循環股標記
+  unitText?: string; // 計量單位 (e.g. "張" 或 "股")
+  turnoverAmountTwdHundredMillion?: number; // 當日成交金額 (億元)
   microstructureSummary?: string; // 美股量能/動能摘要
 }
 
@@ -146,9 +158,13 @@ export interface StrategicFactDigest {
   fundamental?: FundamentalAndEarningsDigest; // 個股存在
   etf?: EtfGovernanceAndLookThroughDigest; // ETF 存在
   desensitizedPortfolioContext?: {
+    status?: 'IN_POSITION' | 'ZERO_POSITION';
     portfolioWeightPct?: number; // 持倉佔總資金比 (0~100%)
     holdingHorizonDays?: number; // 已持有天數
     unrealizedGainLossSign?: 'PROFIT' | 'LOSS' | 'BREAKEVEN'; // 僅輸出正負，不洩漏金額
+    unrealizedPnLPercent?: number; // 未實現報酬率 %
+    avgCost?: number; // 平均買進成本 (非脫敏時輸出)
+    breakevenPrice?: number; // 精確保本價 (非脫敏時輸出)
   };
   warRoomFeatures?: {
     maArrangement?: string;

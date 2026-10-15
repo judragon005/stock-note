@@ -93,20 +93,46 @@ export function calculateDeterministicPivots(price: number, market: string = 'TW
 }
 
 /**
- * 組裝前端確定性算術防線 XML (Ticket 07)
+ * 組裝前端確定性算術防線 XML (Spec 0181 / Spec 0182)
  */
 function buildPrecalculatedPivotsXml(digest: StrategicFactDigest): string {
-  const price = digest.quote?.currentPrice || 0;
+  const currentPrice = digest.quote?.currentPrice || 0;
   const market = digest.audit?.market || 'TW';
-  const pivots = calculateDeterministicPivots(price, market);
+  const portfolio = digest.desensitizedPortfolioContext;
+  const isInPosition =
+    portfolio?.status === 'IN_POSITION' ||
+    (portfolio?.portfolioWeightPct !== undefined && portfolio.portfolioWeightPct > 0) ||
+    portfolio?.unrealizedGainLossSign !== undefined;
+  const frictionThresholdPct = market === 'US' ? 0.1 : 0.585;
 
-  return `  <pre_calculated_pivots>
-    <exact_cost_basis>${pivots.price}</exact_cost_basis>
+  if (isInPosition) {
+    const costBasis = portfolio?.avgCost ?? currentPrice;
+    const pivots = calculateDeterministicPivots(costBasis, market);
+    const breakevenLine = portfolio?.breakevenPrice ?? costBasis;
+    const isBigProfit = (portfolio?.unrealizedPnLPercent ?? 0) >= 8.0;
+
+    return `  <pre_calculated_pivots mode="HOLDING_DEFENSE">
+    <exact_cost_basis>${costBasis}</exact_cost_basis>
+    <breakeven_line>${breakevenLine}</breakeven_line>
+    <unrealized_pnl_percent>${portfolio?.unrealizedPnLPercent ?? 0}%</unrealized_pnl_percent>
+    ${isBigProfit ? `<trailing_stop_line>${Number((currentPrice * 0.94).toFixed(2))}</trailing_stop_line>` : ''}
     <stop_loss_conservative_3pct>${pivots.stopLossConservative3Pct}</stop_loss_conservative_3pct>
     <stop_loss_defensive_5pct>${pivots.stopLossDefensive5Pct}</stop_loss_defensive_5pct>
     <target_profit_r2_ratio>${pivots.targetProfitR2Ratio}</target_profit_r2_ratio>
-    <friction_threshold_pct>${pivots.frictionThresholdPct}%</friction_threshold_pct>
-    <!-- 指令：直接引用上述預先計算之絕對數值，嚴禁自行進行浮點數運算 -->
+    <friction_threshold_pct>${frictionThresholdPct}%</friction_threshold_pct>
+    <!-- 指令：此標的在庫持有中，優先評估持倉防禦、保本停損或移動停利線，嚴禁盲目凹單 -->
+  </pre_calculated_pivots>`;
+  }
+
+  // 空手觀望模式 (ZERO_POSITION)
+  const pivots = calculateDeterministicPivots(currentPrice, market);
+  return `  <pre_calculated_pivots mode="HYPOTHETICAL_ENTRY">
+    <reference_market_price>${currentPrice}</reference_market_price>
+    <stop_loss_conservative_3pct>${pivots.stopLossConservative3Pct}</stop_loss_conservative_3pct>
+    <stop_loss_defensive_5pct>${pivots.stopLossDefensive5Pct}</stop_loss_defensive_5pct>
+    <target_profit_r2_ratio>${pivots.targetProfitR2Ratio}</target_profit_r2_ratio>
+    <friction_threshold_pct>${frictionThresholdPct}%</friction_threshold_pct>
+    <!-- 強制指令：此標的當前為【空手觀望 (未建倉)】，請從買方視角評估當前位階是否適合建倉、回測支撐位與潛在風報比，嚴禁發出停損清算命令！ -->
   </pre_calculated_pivots>`;
 }
 
@@ -155,27 +181,47 @@ function buildCustomsAuditXml(digest: StrategicFactDigest): string {
 }
 
 /**
- * 組裝投資人上下文 XML (預設脫敏)
+ * 組裝投資人上下文 XML (Spec 0182: 雙態分流與脫敏成本)
  */
 function buildInvestorContextXml(digest: StrategicFactDigest, options: StrategicPromptOptions): string {
-  const weight = options.userPortfolioWeightPct ?? digest.desensitizedPortfolioContext?.portfolioWeightPct;
-  const horizon = digest.desensitizedPortfolioContext?.holdingHorizonDays;
-  const sign = digest.desensitizedPortfolioContext?.unrealizedGainLossSign;
+  const portfolio = digest.desensitizedPortfolioContext;
+  const isInPosition =
+    portfolio?.status === 'IN_POSITION' ||
+    (portfolio?.portfolioWeightPct !== undefined && portfolio.portfolioWeightPct > 0) ||
+    portfolio?.unrealizedGainLossSign !== undefined;
+  const weight = options.userPortfolioWeightPct ?? portfolio?.portfolioWeightPct;
+  const horizon = portfolio?.holdingHorizonDays;
+  const sign = portfolio?.unrealizedGainLossSign;
+  const pnlPercent = portfolio?.unrealizedPnLPercent;
 
-  return `  <investor_context desensitized="${options.desensitized}">
+  if (isInPosition) {
+    return `  <investor_context status="IN_POSITION" desensitized="${options.desensitized}">
+    <holding_status>持有在庫</holding_status>
     ${weight !== undefined ? `<portfolio_allocation_ratio>部位佔比: ${weight}%</portfolio_allocation_ratio>` : ''}
-    ${horizon !== undefined ? `<holding_period>持有天數: ${horizon}日</holding_period>` : ''}
+    ${!options.desensitized && portfolio?.avgCost ? `<exact_avg_cost>平均買進成本: ${portfolio.avgCost}</exact_avg_cost>` : ''}
+    ${!options.desensitized && portfolio?.breakevenPrice ? `<exact_breakeven_price>精確保本價: ${portfolio.breakevenPrice}</exact_breakeven_price>` : ''}
+    ${pnlPercent !== undefined ? `<unrealized_pnl_percent>未實現報酬率: ${pnlPercent}%</unrealized_pnl_percent>` : ''}
     ${sign !== undefined ? `<position_status>部位狀態: ${sign}</position_status>` : ''}
+    ${horizon !== undefined ? `<holding_period>持有天數: ${horizon}日</holding_period>` : ''}
+    ${options.userNotes ? `<user_notes>${options.userNotes}</user_notes>` : ''}
+  </investor_context>`;
+  }
+
+  return `  <investor_context status="ZERO_POSITION" desensitized="${options.desensitized}">
+    <holding_status>空手觀望中 (未建倉 / 自選監控)</holding_status>
+    <portfolio_allocation_ratio>0%</portfolio_allocation_ratio>
+    <cost_basis>無 (尚未買進)</cost_basis>
     ${options.userNotes ? `<user_notes>${options.userNotes}</user_notes>` : ''}
   </investor_context>`;
 }
 
 /**
- * 組裝個股事實清單 (對齊個股大師 V12.0 + 台美雙軌隔離)
+ * 組裝個股事實清單 (對齊個股大師 V12.0 + 台美雙軌隔離 + 景氣循環股)
  */
 function buildEquityFactSheet(digest: StrategicFactDigest): string {
   const { quote, chips, fundamental, macro, audit } = digest;
   const isUS = audit.market === 'US';
+  const unit = chips.unitText || (isUS ? '股' : '張');
 
   return `  <fact_sheet asset_type="EQUITY">
     <!-- 1. 行情與趨勢 -->
@@ -184,19 +230,28 @@ function buildEquityFactSheet(digest: StrategicFactDigest): string {
       <name>${quote.name}</name>
       <current_price>${quote.currentPrice}</current_price>
       <price_change>${quote.change} (${quote.changePercent}%)</price_change>
-      <volume_shares>${quote.volumeShares}</volume_shares>
+      <volume_shares unit="${unit}">${quote.volumeShares}</volume_shares>
+      ${chips.turnoverAmountTwdHundredMillion ? `<turnover_amount_twd unit="億元">${chips.turnoverAmountTwdHundredMillion}</turnover_amount_twd>` : ''}
       <official_transactions>${quote.transactionsCount ?? 'N/A'}</official_transactions>
       <ma_alignment>${quote.maArrangement}</ma_alignment>
       <ma20>${quote.ma20}</ma20>
       <ma60>${quote.ma60}</ma60>
       <volume_surge_ratio_20d>${quote.volumeRatio20D}倍</volume_surge_ratio_20d>
+      ${chips.limitUpPrice && chips.limitDownPrice ? `<price_limits limit_up="${chips.limitUpPrice}" limit_down="${chips.limitDownPrice}" price_limit_pct="10%" />` : ''}
+      <market_status_tag>${chips.marketStatusTag || 'NORMAL'}</market_status_tag>
     </quote_and_trend>
 
     <!-- 2. 籌碼微觀與主力防線 (台美雙軌隔離) -->
     <chips_and_microstructure>
-      ${!isUS ? `<total_institutional_net_20d>${chips.totalNetShares20D ?? 'N/A'}</total_institutional_net_20d>
-      <foreign_net_shares_20d>${chips.foreignNetShares20D ?? 'N/A'}</foreign_net_shares_20d>
-      <trust_net_shares_20d>${chips.trustNetShares20D ?? 'N/A'}</trust_net_shares_20d>
+      ${!isUS ? `<total_institutional_net_1d unit="${unit}">${chips.totalNetShares1D ?? 'N/A'}</total_institutional_net_1d>
+      <foreign_net_shares_1d unit="${unit}">${chips.foreignNetShares1D ?? 'N/A'}</foreign_net_shares_1d>
+      <trust_net_shares_1d unit="${unit}">${chips.trustNetShares1D ?? 'N/A'}</trust_net_shares_1d>
+      <total_institutional_net_20d unit="${unit}">${chips.totalNetShares20D ?? 'N/A'}</total_institutional_net_20d>
+      <foreign_net_shares_20d unit="${unit}">${chips.foreignNetShares20D ?? 'N/A'}</foreign_net_shares_20d>
+      <trust_net_shares_20d unit="${unit}">${chips.trustNetShares20D ?? 'N/A'}</trust_net_shares_20d>
+      <margin_balance unit="${unit}">${chips.marginBalance ?? 'N/A'}</margin_balance>
+      <short_balance unit="${unit}">${chips.shortBalance ?? 'N/A'}</short_balance>
+      <day_trade_ratio_pct>${chips.dayTradeRatioPct ?? 'N/A'}%</day_trade_ratio_pct>
       <big_holder_ratio_400>${chips.bigHolderRatioChange400 ?? 'N/A'}%</big_holder_ratio_400>
       <big_holder_ratio_1000>${chips.bigHolderRatioChange1000 ?? 'N/A'}%</big_holder_ratio_1000>
       <retail_holder_ratio_under_10>${chips.retailHolderCountChange ?? 'N/A'}%</retail_holder_ratio_under_10>` : `<us_market_structure>美股採 13F 機構季度申報與 SEC Form 4 內部人申報，無台股盤後籌碼與融資券機制</us_market_structure>`}
@@ -209,6 +264,7 @@ function buildEquityFactSheet(digest: StrategicFactDigest): string {
 
     <!-- 3. 基本面與月營收 (好生意與好公司) -->
     <fundamental_and_governance>
+      <is_cyclical_stock is_cyclical="${chips.isCyclical ? 'true' : 'false'}">${chips.isCyclical ? '景氣循環週期股 (記憶體/半導體/原物料，注意高點估值陷阱)' : '一般非循環股'}</is_cyclical_stock>
       <pe_ratio>${fundamental?.pe ?? 'N/A'}</pe_ratio>
       <pb_ratio>${fundamental?.pb ?? 'N/A'}</pb_ratio>
       <dividend_yield>${fundamental?.dividendYield ?? 'N/A'}%</dividend_yield>
@@ -326,7 +382,7 @@ function buildFullSixHatsInstructions(digest: StrategicFactDigest): string {
     ${
       isEtf
         ? '- 質詢：指數是否過度集中單一產業？追蹤誤差是否侵蝕長期回報？折溢價是否偏高？'
-        : '- 質詢：好生意與市場集中度 (CR4/CR8) 是否正遭顛覆？董監質押率是否暗藏地雷？好公司護城河與財務鑑識是否存在假帳疑慮？'
+        : `- 質詢：好生意與市場集中度 (CR4/CR8) 是否正遭顛覆？董監質押率是否暗藏地雷？${digest.chips?.isCyclical ? '景氣循環股營收暴衝是否正處循環高峰反轉點 (Cycle Peak 殺估值陷阱)？' : '好公司護城河與財務鑑識是否存在假帳疑慮？'}`
     }
 
     【🟡 黃帽 - 核心價值與上檔催化劑】
@@ -355,7 +411,7 @@ function buildSingleHatInstruction(hat: SixThinkingHatDimension, digest: Strateg
       hat === 'BLACK'
         ? `【魔鬼代言人 / 紅隊核心任務】：
     1. 專門挑刺，列出這檔標的可能破底重挫的所有結構性弱點。
-    ${isEtf ? '2. 審查指數品質與跟蹤偏離 (TD)，評估成分股黑天鵝衝擊。' : '2. 檢驗好生意競爭格局 (CR4/CR8) 與好公司財務鑑識的隱形雷區。'}
+    ${isEtf ? '2. 審查指數品質與跟蹤偏離 (TD)，評估成分股黑天鵝衝擊。' : `2. 檢驗競爭格局 (CR4/CR8) 與財務鑑識隱形雷區。${digest.chips?.isCyclical ? '質詢景氣循環高峰反轉風險。' : ''}`}
     3. 指出市場當前樂觀共識中最致命的盲點。`
         : `請專注於 ${cfg.nameZh} 的核心目標，對上方 <fact_sheet> 進行透徹剖析。`
     }
@@ -368,9 +424,9 @@ function buildSingleHatInstruction(hat: SixThinkingHatDimension, digest: Strateg
 function buildReflectionGateXml(): string {
   return `  <agentic_reflection_gate>
     在輸出最終建議前，請進行強制自我審查 (Self-Correction)：
-    1. 我的黃帽樂觀論點，是否已被黑帽的風險徹底否定？
-    2. 給出的目標價或防守位，是否具備堅實的數學與湖倉 VWAP 安全邊際？
-    3. 若明日大盤因外部黑天鵝崩跌 3%，本標的的下檔防禦是否依然成立？
+    1. 黃帽樂觀論點是否已被黑帽風險徹底否定？
+    2. 給出的目標價或防守位是否具備湖倉 VWAP 安全邊際？
+    3. 若明日大盤崩跌 3%，本標的下檔防禦是否依然成立？
   </agentic_reflection_gate>`;
 }
 
@@ -400,8 +456,9 @@ ${buildFullSixHatsInstructions(digest)}
 ${buildReflectionGateXml()}
   <output_format>
     請以「結論先行 (Actionable Matrix)」輸出：
+    0. 【前置：資料真實性與時態海關稽核】(若發現數據矛盾、過期或單日/20日資訊有疑慮，第一時間提出警示；明確依據持倉狀態 IN_POSITION 或 ZERO_POSITION 制定方案，空手標的嚴禁發布停損割肉指令)
     1. 綜合決策評級 (強力買進 / 謹慎分批 / 觀望停看聽 / 減碼逃生)
-    2. 六頂思考帽精華結論條列
+    2. 六頂思考帽精華結論條列 (若為景氣循環股，黑帽請強制質詢週期高峰殺估值風險)
     3. 實戰防守價位與出場 Checkpoint 矩陣
   </output_format>
 </investment_decision_prompt>`;
