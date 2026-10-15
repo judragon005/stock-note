@@ -1,17 +1,15 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-10-13 15:10 (UTC+8)  
+> **交接產生時間**：2026-10-15 11:45 (UTC+8)  
 > **當前最新里程碑**：
-> - **V8.91.0 智策精煉投資決策多維提示詞引擎與六頂思考帽工作區生成器**（ADR 0153, Spec 0153, Issue #135, PR #225）：
->   - **雙軌特徵語意壓榨與零信任數據海關 (`strategicPromptDigest.ts`)**：支援個股（量價/籌碼/營收/質押警戒）與 ETF（四大分類/穿透持股/折溢價/平準金）分流，遵循 Zero-Mock Policy。
->   - **六頂思考帽多維投資決策框架 (`strategicPromptEngine.ts`)**：白帽、紅帽、黑帽（魔鬼代言/下檔批判）、黃帽、綠帽、藍帽，支援全量 Master Prompt 與單頂思考帽專屬 Prompt 生成。
->   - **雙層嚴格 Token 預算防護守門**：單頂思考帽 700~1,000 tokens (< 1,200 上限)；全量 Master Prompt 2,500~3,800 tokens (< 4,500 上限)。
->   - **工作台 UI 面板無縫整合 (`StrategicPromptPanel.tsx`)**：無縫嵌入 `StockAnalysisWorkspace`，具備六頂思考帽膠囊切換、Token 儀表板、部位隱私脫敏開關與一鍵複製。
-> - **V8.90.0 專案全量文檔完整性稽核、死鏈全數修復、變更日誌補齊與自動化守門機制**（ADR 0178, Spec 0178, Issue #220, PR #221）
-> - **V8.89.0 TDCC 集保大戶與月營收全自動新鮮度管線、主 K 線雙灰線修復與券商法人均線色譜**（ADR 0177, Spec 0177, Issue #217, PR #218）
-> - **V8.88.0 主力戰情室 Card 18 主力追蹤總評判操盤指引升級、5 態作戰光譜圖例與機構級風控門檻**（ADR 0176, Spec 0176, Issue #214, PR #215）
-> - **V8.87.0 外部金融 API 控制台探針修復、CSP/CORS 網路防禦與 NAS 通用反向代理**（ADR 0175, Spec 0175, Issue #209, PRs #212, #213）
-> **品質狀態**：全量單元測試 **1,568/1,568 通過 (100% Passed / 213 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> - **V8.94.0 個股深度提示詞物理遷移至主力戰情室與外聯 AI 防幻覺定錨架構**（ADR 0181, Spec 0181, Issues #243 / #245, PRs #244 / #246）：
+>   - **個股深度分析純粹化**：從 `StockAnalysisWorkspace.tsx` 徹底移除 `StrategicPromptPanel`，還原其 100% 純粹的技術指標與財報估值。
+>   - **戰情室轉接適配器 (`aiForcePromptAdapter.ts`)**：貫通戰情室五大維度特徵（多空能量、籌碼集中度、VWAP 乖離率、當沖風險係數、AI 信心度），實施持股部位零曝險脫敏。
+>   - **防幻覺字串工程與算術代勞 (`strategicPromptEngine.ts`)**：前端代勞計算 3% 與 5% 硬性停損價、1:2 與 1:3 風報比目標價；注入 `<market_time_dimension>` 時態分割；注入 `<adversarial_red_team_instruction>` 客觀反討好紅隊指令；台美雙軌隔離。
+>   - **主力戰情室底層卡片 UI (`WarRoomPromptCard.tsx`)**：常駐 5 大任務視圖下方，避讓 Sticky 吸附工具列，支援兩階段安全剪貼簿降級、2 秒複製微反饋、折疊預覽抽屜與 a11y 語意屬性。
+> - **V8.93.0 個股深度財報法務會計排雷、ETF 物理隔離與智策引擎 UI 重構**（ADR 0180, Spec 0180, Issues #230, #237, #239, PRs #236, #238, #240）
+> - **V8.91.0 智策精煉投資決策多維提示詞引擎與六頂思考帽工作區生成器**（ADR 0153, Spec 0153, Issue #135, PR #225）
+> **品質狀態**：全量單元測試 **1,609/1,609 通過 (100% Passed / 218 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -20,10 +18,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main`
-- **單元測試套件**：**1,568/1,568 通過 (213 test suites / 100% 綠燈)**
+- **單元測試套件**：**1,609/1,609 通過 (218 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V8.91.0**
+- **當前釋出版本**：**V8.94.0**
 - **工作區與分支整潔度**：工作區 100% clean，本地 feature/fix 分支已全數刪除，專案臨時備份檔案已全量清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -52,6 +50,8 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0181`](file:///d:/APP/股票紀錄/docs/specs/0181-strategic-prompt-war-room-relocation-and-grounding-spec.md) | [`ADR 0181`](file:///d:/APP/股票紀錄/docs/adr/0181-strategic-prompt-war-room-relocation.md) | [`.scratch/v8.94/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.94/issues/) | Issue #243, #245 / PR #244, #246 | V8.94.0 | 個股深度提示詞物理遷移至主力戰情室、外聯 AI 防幻覺定錨與極簡作戰中樞 |
+| [`Spec 0180`](file:///d:/APP/股票紀錄/docs/specs/0180-forensic-accounting-etf-isolation-and-ui-repair-spec.md) | [`ADR 0180`](file:///d:/APP/股票紀錄/docs/adr/0180-forensic-accounting-etf-isolation-and-ui-repair.md) | [`.scratch/v8.93/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.93/issues/) | Issue #230, #237, #239 / PR #236, #238, #240 | V8.93.0 | 個股深度財報法務會計排雷、ETF 物理隔離與智策引擎 UI 重構 |
 | [`Spec 0153`](file:///d:/APP/股票紀錄/docs/specs/0153-smart-strategic-prompt-engine-and-workspace-generator-spec.md) | [`ADR 0153`](file:///d:/APP/股票紀錄/docs/adr/0153-smart-strategic-prompt-engine.md) | [`.scratch/v8.91/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.91/issues/) | Issue #135 / PR #225 | V8.91.0 | 智策精煉投資決策多維提示詞引擎與六頂思考帽工作區生成器 |
 | [`Spec 0178`](file:///d:/APP/股票紀錄/docs/specs/0178-documentation-integrity-audit-broken-links-repair-and-linter-spec.md) | [`ADR 0178`](file:///d:/APP/股票紀錄/docs/adr/0178-documentation-integrity-audit-broken-links-repair-and-linter.md) | [`.scratch/v8.90/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.90/issues/) | Issue #220 / PR #221 | V8.90.0 | 專案全量文檔完整性稽核、死鏈全數修復、變更日誌補齊與自動化守門機制 |
 | [`Spec 0177`](file:///d:/APP/股票紀錄/docs/specs/0177-auto-sync-tdcc-revenue-and-kline-institutional-spectrum-spec.md) | [`ADR 0177`](file:///d:/APP/股票紀錄/docs/adr/0177-auto-sync-tdcc-revenue-and-kline-institutional-spectrum.md) | [`.scratch/v8.89/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.89/issues/) | Issue #217 / PR #218 | V8.89.0 | TDCC 集保大戶與月營收全自動新鮮度管線、主 K 線雙灰線修復與券商法人色譜 |
