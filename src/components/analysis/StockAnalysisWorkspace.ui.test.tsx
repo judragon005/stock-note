@@ -99,4 +99,34 @@ describe('StockAnalysisWorkspace UI & ETF Gatekeeper (Ticket 01, 02, 03)', () =>
     // 橫幅文字應符合規格書規定
     expect(html).toContain('建議前往【主力戰情室】檢視');
   });
+
+  it('Spec 0181 Ticket 03: 驗證個股深度分析工作區不再渲染智策多維提示詞引擎面板與 XML 抽屜', () => {
+    const holdings = [
+      {
+        symbol: '2330',
+        name: '台積電',
+        shares: 1000,
+        avgCost: 900,
+        currentPrice: 1000,
+        market: 'TW',
+        totalCostBasis: 900000,
+        marketValue: 1000000,
+        unrealizedPnL: 100000,
+        unrealizedPnLPercent: 11.11,
+      },
+    ] as unknown as HoldingPosition[];
+
+    const html = renderToStaticMarkup(
+      <StockAnalysisWorkspace
+        holdings={holdings}
+        trades={[]}
+        currentPrices={{ '2330': 1000 }}
+        initialSymbol="2330"
+      />
+    );
+
+    // 提示詞相關面板應完全不在此工作區渲染
+    expect(html).not.toContain('智策多維提示詞引擎');
+    expect(html).not.toContain('檢視即將注入之結構化 XML 語意提示詞');
+  });
 });

@@ -2449,3 +2449,15 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     3. **零偽造原則 (Zero-Mock)**：徹底移除營運週轉天數 (42/56/68 天)、借款科目 (台泥 227.6 億 / 1,454.2 億)、現金轉換循環 (68 天) 寫死數值，缺漏科目誠實顯示 `-` 或 `N/A`。
     4. **會計計算與年化修正**：杜邦總資產週轉率年化 ($\times 4$)、營業週轉率年化、現金股利發放率改以全年 4 季累計 EPS 為分母、美股季配息殖利率年化 ($\times 4$)、金融保險業負債比率專業豁免、景氣循環股 P/B 河流圖優先引導。
     5. **法務會計五大排雷排毒燈**：跨表勾稽應收帳款剪刀差、營業現金流獲利純度 (CFO/NI < 80%)、自由現金流連續失血、存貨週轉壓力與高槓桿負債結構。
+
+- **War Room Prompt Hub & Grounding Architecture (主力戰情室外聯 AI 提示詞中樞、防幻覺定錨與純粹化架構)**:
+  - 核心模組：`src/components/aiForceDashboard/WarRoomPromptCard.tsx`、`src/components/aiForceDashboard/AiForceDashboardView.tsx`、`src/engine/aiForcePromptAdapter.ts`、`src/engine/strategicPromptEngine.ts`。
+  - 規範依據：Spec 0181 (v8.94.0) 與 ADR 0181。
+  - 核心特性：
+    1. **個股分析純粹化 (StockAnalysis Decoupling)**：從 `StockAnalysisWorkspace.tsx` 徹底移除提示詞面板與冗餘計算，讓個股分析 100% 聚焦於財報三表、河流圖估值與排雷燈號。
+    2. **外聯 AI 戰情提示詞中樞 (WarRoom Grounding Hub)**：遷移至 `AiForceDashboardView.tsx` 最底層（Sticky 吸附列上方避讓，`marginBottom: 16px`），跨 5 大任務視圖常駐可用。
+    3. **時態分割防幻覺協議 (Temporal Grounding Protocol)**：注入 `<market_time_dimension>`，明確分割盤中即時 (Intraday Live) 與昨日盤後結算 (Settled EOD)，阻斷外部 LLM 時空錯亂。
+    4. **前端確定性算術代勞 (Precalculated Pivots)**：精準預算 -3%/-5% 停損價與 1:2.0/1:2.5 風報比目標價，注入 `<pre_calculated_pivots>`，封死 LLM 浮點數算術翻車。
+    5. **反討好紅隊指令 (Anti-Sycophancy Directive)**：注入 `<adversarial_red_team_instruction>`，強制外部 AI 扮演冷酷風控官，打破迎合偏見，揭露下檔暴雷風險。
+    6. **台美雙軌自動隔離 (US Market Isolation)**：美股標的 (US) 自動剔除三大法人與融資券字樣，切換為美股機構持倉。
+    7. **兩階段剪貼簿降級與微引導**：優先 `navigator.clipboard.writeText`，失敗降級 `document.execCommand('copy')`，點擊後呈現 2 秒「`✅ 已複製！可直接按 Ctrl+V 貼入 ChatGPT / Claude`」微引導。
