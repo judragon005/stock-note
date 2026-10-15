@@ -164,7 +164,7 @@ export function createWarRoomPromptDigest(
     maArrangement,
     foreignNetShares: !isUS ? chipsSummary?.foreignNetShares : undefined,
     investmentTrustNetShares: !isUS ? chipsSummary?.trustNetShares : undefined,
-    foreignNetDays: (chipsSummary as any)?.foreignConsecutiveDays,
+    foreignNetDays: chipsSummary?.foreignConsecutiveDays,
     tdccLargeShareholdersPct: !isUS && !tdcc?.isEmpty ? tdcc?.latestOver1000Ratio : undefined,
     dayTradeRiskLevel: dayTrade?.dayTradeRatio ? `${dayTrade.dayTradeRatio}%` : undefined,
     statusTag: report.marketBar?.marketStatusTag || report.marketBar?.statusTag || 'NORMAL',
@@ -226,28 +226,28 @@ export function createWarRoomPromptDigest(
     },
     chips: {
       foreignNetShares1D: !isUS
-        ? (chipsSummary?.foreignNetShares ?? (chipsSummary as any)?.foreignInvestorsNetBuyShares)
+        ? (chipsSummary?.foreignNetShares ?? chipsSummary?.foreignInvestorsNetBuyShares)
         : undefined,
       trustNetShares1D: !isUS
-        ? (chipsSummary?.trustNetShares ?? (chipsSummary as any)?.investmentTrustNetBuyShares)
+        ? (chipsSummary?.trustNetShares ?? chipsSummary?.investmentTrustNetBuyShares)
         : undefined,
       dealerNetShares1D: !isUS
-        ? (chipsSummary?.dealerNetShares ?? (chipsSummary as any)?.dealerNetBuyShares)
+        ? (chipsSummary?.dealerNetShares ?? chipsSummary?.dealerNetBuyShares)
         : undefined,
       totalNetShares1D: !isUS
         ? (chipsSummary?.threeInstitutionsTotal ??
-            ((chipsSummary as any)?.foreignInvestorsNetBuyShares !== undefined
-              ? ((chipsSummary as any)?.foreignInvestorsNetBuyShares || 0) +
-                ((chipsSummary as any)?.investmentTrustNetBuyShares || 0) +
-                ((chipsSummary as any)?.dealerNetBuyShares || 0)
+            (chipsSummary?.foreignInvestorsNetBuyShares !== undefined
+              ? (chipsSummary.foreignInvestorsNetBuyShares || 0) +
+                (chipsSummary.investmentTrustNetBuyShares || 0) +
+                (chipsSummary.dealerNetBuyShares || 0)
               : undefined))
         : undefined,
       foreignNetShares20D,
       trustNetShares20D,
       dealerNetShares20D,
       totalNetShares20D,
-      marginBalance: dayTrade?.marginBalance ?? (chipsSummary as any)?.marginBalance,
-      shortBalance: dayTrade?.shortBalance ?? (chipsSummary as any)?.shortBalance,
+      marginBalance: dayTrade?.marginBalance ?? chipsSummary?.marginBalance,
+      shortBalance: dayTrade?.shortBalance ?? chipsSummary?.shortBalance,
       dayTradeRatioPct: dayTrade?.dayTradeRatio,
       bigHolderRatioChange1000: tdcc?.latestOver1000Ratio,
       bigHolderRatioChange400: tdcc?.history?.[0]?.over400Ratio,
