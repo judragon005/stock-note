@@ -71,7 +71,7 @@
 flowchart TD
     A[1. 初始化配置 /setup-matt-pocock-skills] --> B[2. 需求壓力測試 /grill-with-docs]
     B --> C[3. 產出需求規格 /to-spec]
-    C --> D[4. 票券任務拆解 /to-tickets]
+    C --> D[4. 票券任務拆解 /to-tickets] /to-tickets & /triage
     D --> E[5. 任務分流與領取 /triage]
     E --> F[6. 紅綠測試驅動開發 /tdd & /implement]
     F --> G[7. 雙軸程式碼審查 /code-review]

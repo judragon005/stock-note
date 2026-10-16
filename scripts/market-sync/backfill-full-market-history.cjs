@@ -60,7 +60,7 @@ let backfillGlobalStatus = {
   estimatedRemainingMs: null,
   etaFormatted: null,
   tw: { status: 'idle', totalQuotes: 0, totalChips: 0 },
-  us: { status: 'idle', totalQuotes: 0, successCount: 0, failCount: 0 },
+  us: { status: 'idle', totalQuotes: 0, successCount: 0, failCount: 0, totalInLakehouse: 0 },
   error: null,
   startedAt: null,
   updatedAt: Date.now(),
@@ -88,12 +88,13 @@ function resetBackfillStateForTest() {
     estimatedRemainingMs: null,
     etaFormatted: null,
     tw: { status: 'idle', totalQuotes: 0, totalChips: 0 },
-    us: { status: 'idle', totalQuotes: 0, successCount: 0, failCount: 0 },
+    us: { status: 'idle', totalQuotes: 0, successCount: 0, failCount: 0, totalInLakehouse: 0 },
     error: null,
     startedAt: null,
     updatedAt: Date.now(),
   };
 }
+
 
 
 /**
@@ -291,12 +292,22 @@ async function runFullMarketHistoryBackfill(options = {}) {
       backfillGlobalStatus.us.successCount = usRes?.successCount || 0;
       backfillGlobalStatus.us.failCount = usRes?.failCount || 0;
       backfillGlobalStatus.us.totalQuotes = (usRes?.successCount || 0) * days;
-      console.log(`✔ [美股軌道] 全量採集完成！成功: ${usRes?.successCount} 檔, 失敗: ${usRes?.failCount} 檔。`);
+
+      // 查詢 SQLite sync_checkpoints 統計美股在庫標的總數 (Spec 0186 / Ticket 02)
+      try {
+        const cpRow = db.prepare("SELECT count(*) AS n FROM sync_checkpoints WHERE market = 'US' AND status = 'SUCCESS'").get();
+        backfillGlobalStatus.us.totalInLakehouse = cpRow ? Number(cpRow.n) : 0;
+      } catch {
+        backfillGlobalStatus.us.totalInLakehouse = backfillGlobalStatus.us.successCount;
+      }
+
+      console.log(`✔ [美股軌道] 全量採集完成！本次成功: ${usRes?.successCount} 檔, 失敗: ${usRes?.failCount} 檔, 湖倉在庫標的: ${backfillGlobalStatus.us.totalInLakehouse} 檔。`);
     } catch (err) {
       backfillGlobalStatus.us.status = 'error';
       console.warn(`[美股軌道] 執行警告:`, err.message);
     }
   }
+
 
   backfillGlobalStatus.progressPct = 100;
   backfillGlobalStatus.currentTask = 'DONE';

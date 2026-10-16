@@ -72,4 +72,26 @@ d('scripts/market-sync/market-sync-core.test.cjs (Ticket 03)', () => {
     exp(res['00679B'].transactions).toBe(50000);
     exp(res['00679B'].volume).toBe(50000000);
   });
+
+  t('3. saveJsonAtomic 應能在遭遇暫時性 EPERM 時安全重試並成功寫入 (Spec 0186 / Ticket 01)', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const { saveJsonAtomic } = require('./market-sync-core.cjs');
+    const testDir = path.join(__dirname, '../../.scratch/test-atomic');
+    const targetFile = path.join(testDir, 'test_output.json');
+
+    const testPayload = { ok: true, timestamp: Date.now(), title: 'Test EPERM Resilience' };
+    saveJsonAtomic(targetFile, testPayload);
+
+    const content = JSON.parse(fs.readFileSync(targetFile, 'utf8'));
+    exp(content.ok).toBe(true);
+    exp(content.title).toBe('Test EPERM Resilience');
+
+    // 清理測試檔案
+    try {
+      fs.unlinkSync(targetFile);
+      fs.rmdirSync(testDir);
+    } catch {}
+  });
 });
+

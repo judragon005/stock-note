@@ -25,11 +25,12 @@ export interface BackfillStatus {
   estimatedRemainingMs?: number | null;
   etaFormatted?: string | null;
   tw: { status: string; totalQuotes: number; totalChips: number };
-  us: { status: string; totalQuotes: number; successCount: number; failCount: number };
+  us: { status: string; totalQuotes: number; successCount: number; failCount: number; totalInLakehouse?: number };
   error: string | null;
   startedAt: number | null;
   updatedAt: number;
 }
+
 
 
 // 系統命令與腳本路徑常數 (Spec 0133)
@@ -581,9 +582,31 @@ export const MarketScheduleHubSection: React.FC = () => {
               <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '8px 10px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
                 <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>🇺🇸 美股採集標的</div>
                 <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#38bdf8', marginTop: '2px' }}>
-                  {backfillStatus.us.successCount.toLocaleString()} 檔
+                  {(() => {
+                    const lakehouseCount = backfillStatus.us.totalInLakehouse || 0;
+                    const deltaCount = backfillStatus.us.successCount;
+                    if (lakehouseCount > 0) {
+                      return (
+                        <span>
+                          {lakehouseCount.toLocaleString()} 檔
+                          {deltaCount > 0 && (
+                            <span style={{ fontSize: '0.72rem', color: '#34d399', marginLeft: '4px', fontWeight: 500 }}>
+                              (+{deltaCount})
+                            </span>
+                          )}
+                        </span>
+                      );
+                    }
+                    return `${deltaCount.toLocaleString()} 檔`;
+                  })()}
                 </div>
+                {(backfillStatus.us.totalInLakehouse || 0) > 0 && (
+                  <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    ⚡ 斷點/快取在庫
+                  </div>
+                )}
               </div>
+
             </div>
           </div>
         )}
