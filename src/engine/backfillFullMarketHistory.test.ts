@@ -137,4 +137,32 @@ describe('Spec 0168 / Ticket 08: 台美雙軌全歷史回補總控與中介層�
       expect(res2.message).toContain('已在背景執行中');
     });
   });
+
+  describe('4. [Spec 0184 / Ticket 05] ETA 預估計算器 (calculateEta)', () => {
+    const { calculateEta } = require('../../scripts/market-sync/backfill-full-market-history.cjs');
+
+    it('當剛開始 (completedDays=0) 時，應回傳預估中或計算中', () => {
+      const eta = calculateEta(Date.now(), 0, 250);
+      expect(eta.remainingMs).toBe(0);
+      expect(eta.etaFormatted).toBe('計算中...');
+    });
+
+    it('當已完成 10 天耗時 30 秒，總計 100 天，應能正確推算剩餘 270 秒 (約 5 分鐘)', () => {
+      const fakeStartedAt = Date.now() - 30000; // 30秒前
+      const eta = calculateEta(fakeStartedAt, 10, 100);
+      // 平均 3 秒/天，剩餘 90 天 => 270,000ms => 約 5 分鐘 (4.5 min rounds to 5 min)
+      expect(eta.remainingMs).toBeGreaterThan(260000);
+      expect(eta.remainingMs).toBeLessThan(280000);
+      expect(eta.etaFormatted).toContain('剩餘約 5 分鐘');
+      expect(eta.etaFormatted).toContain('預計');
+      expect(eta.etaFormatted).toContain('完成');
+    });
+
+    it('當已全數完成時，應回傳已完成', () => {
+      const eta = calculateEta(Date.now() - 10000, 250, 250);
+      expect(eta.remainingMs).toBe(0);
+      expect(eta.etaFormatted).toBe('已完成');
+    });
+  });
 });
+

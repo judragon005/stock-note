@@ -39,13 +39,21 @@ export default defineConfig({
           Accept: 'application/json, text/plain, */*',
         },
         configure: (proxy) => {
-          proxy.on('error', (err, _req, res) => {
+          proxy.on('error', (err: any, req, res) => {
+            const isConnReset = err?.code === 'ECONNRESET' || String(err?.message || '').includes('ECONNRESET');
+            if (isConnReset) {
+              // Spec 0184 / Ticket 06: 降噪處理，以簡短警告取代紅色堆疊追蹤
+              console.warn(`[Proxy Warning] Yahoo 連線暫態重置 (${err.code || 'ECONNRESET'}): ${req?.url || ''}`);
+            } else {
+              console.warn(`[Proxy Error] 代理轉發異常: ${err?.message || err}`);
+            }
             if (res && 'writeHead' in res && !(res as any).headersSent) {
               (res as any).writeHead(502, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: 'Proxy Gateway Error', message: err.message }));
+              res.end(JSON.stringify({ error: 'Proxy Gateway Error', code: err?.code, message: err?.message }));
             }
           });
         },
+
       },
       '/api/twse-www': {
         target: 'https://www.twse.com.tw',

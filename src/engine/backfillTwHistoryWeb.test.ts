@@ -158,5 +158,172 @@ describe('Spec 0168 / Ticket 07: 台股日期驅動歷史回補模組 (backfill-
       }
     });
   });
+
+  describe('6. [Spec 0184 / Ticket 01] 盤中時間守衛與交易日曆重用', () => {
+    it('generateTradeDateCandidates 應排除法定休市日 (如 2026-10-09 國慶補假)', () => {
+      // 基準從 2026-10-12 (週一) 往前推 5 個交易日
+      // 2026-10-12 (一), 2026-10-09 (五為法定國慶休市), 2026-10-08 (四), 2026-10-07 (三), 2026-10-06 (二), 2026-10-05 (一)
+      const dates = generateTradeDateCandidates(5, '2026-10-12');
+      expect(dates).not.toContain('2026-10-09'); // 國慶連假必須排除
+      expect(dates).not.toContain('2026-10-10'); // 週六
+      expect(dates).not.toContain('2026-10-11'); // 週日
+      expect(dates).toEqual(['2026-10-12', '2026-10-08', '2026-10-07', '2026-10-06', '2026-10-05']);
+    });
+
+    it('未給定基準日且當前時間小於 15:30 時，候選起始日應自動定錨至昨日 (T-1)', () => {
+      // 模擬上午 10:00 (盤中)
+      const mockNow = new Date('2026-10-16T10:00:00+08:00');
+      const dates = generateTradeDateCandidates(3, undefined, mockNow);
+      expect(dates[0]).not.toBe('2026-10-16'); // 盤中未收盤不可將今天排入
+      expect(dates[0]).toBe('2026-10-15');
+    });
+
+    it('未給定基準日且當前時間大於等於 15:30 時，候選起始日應包含今日 (T)', () => {
+      // 模擬下午 16:00 (盤後)
+      const mockNow = new Date('2026-10-16T16:00:00+08:00');
+      const dates = generateTradeDateCandidates(3, undefined, mockNow);
+      expect(dates[0]).toBe('2026-10-16');
+    });
+  });
+
+  describe('7. [Spec 0184 / Ticket 02] TPEx 1430 權證標的排除 (6 碼 7 開頭)', () => {
+    it('應過濾排除 6 碼以 7 開頭之認購/認售權證，保留股票、ETF 與可轉債', () => {
+      const mockTpexWithWarrants = {
+        tables: [
+          {
+            data: [
+              ['3293', '鈊象', '1,050.00', '+10.00', '1,040.00', '1,060.00', '1,035.00', '4,512', '1,234,567', '1,296,000,000'],
+              ['700001', '群益01', '1.25', '+0.05', '1.20', '1.28', '1.20', '120', '50,000', '62,500'], // 權證應被排除
+              ['739999', '元大99', '0.85', '-0.02', '0.87', '0.87', '0.85', '80', '30,000', '25,500'], // 權證應被排除
+              ['00411A', '主動統一', '15.68', '+0.12', '15.55', '15.72', '15.50', '1,892', '12,500,000', '196,000,000'],
+              ['15601', '中砂一', '120.00', '+1.50', '118.50', '121.00', '118.50', '50', '10,000', '1,200,000'], // 5 碼可轉債應保留
+            ],
+          },
+        ],
+      };
+
+      const quotes = parseTpexDailyQuotesWithTransactions(mockTpexWithWarrants, '2026-10-07');
+      expect(quotes['700001']).toBeUndefined();
+      expect(quotes['739999']).toBeUndefined();
+      expect(quotes['3293']).toBeDefined();
+      expect(quotes['00411A']).toBeDefined();
+      expect(quotes['15601']).toBeDefined();
+    });
+  });
+
+  describe('8. [Spec 0184 / Ticket 04] SQLite 雙指標健康快取秒級略過 (Smart Cache Skip)', () => {
+    it('當日普通股 >= 1800 且籌碼 >= 2000 時，fetchAndIngestTwDailyData 應回傳 cached: true 且不發起網路請求', async () => {
+      const fs = require('fs');
+      const path = require('path');
+      const os = require('os');
+      const { initSqliteLakehouseDb } = require('../../scripts/market-sync/sqlite-db-core.cjs');
+
+      const tempDbPath = path.join(os.tmpdir(), `test_cache_skip_${Date.now()}.db`);
+      const db = initSqliteLakehouseDb(tempDbPath);
+
+      // 預先插入 1850 檔 4 碼股票與 2050 檔籌碼
+      db.exec('BEGIN TRANSACTION;');
+      const candleStmt = db.prepare('INSERT INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+      for (let i = 1000; i < 2850; i++) {
+        candleStmt.run(String(i), '2026-10-15', 100, 105, 95, 100, 100, 1000);
+      }
+      const chipStmt = db.prepare('INSERT INTO tw_institutional_chips (symbol, date, foreign_net) VALUES (?, ?, ?)');
+      for (let i = 1000; i < 3050; i++) {
+        chipStmt.run(String(i), '2026-10-15', 10);
+      }
+      db.exec('COMMIT;');
+
+      const mockFetcher = vi.fn();
+      try {
+        const res = await fetchAndIngestTwDailyData('2026-10-15', {
+          fetcher: mockFetcher,
+          dbPath: tempDbPath,
+          throttleMs: 0,
+        });
+
+        expect(res.cached).toBe(true);
+        expect(mockFetcher).not.toHaveBeenCalled(); // 100% 略過網路請求！
+      } finally {
+        if (fs.existsSync(tempDbPath)) {
+          try { fs.unlinkSync(tempDbPath); } catch {}
+        }
+      }
+    });
+
+    it('若帶入 force: true，即使快取命中也應強制連網重新抓取', async () => {
+      const fs = require('fs');
+      const path = require('path');
+      const os = require('os');
+      const { initSqliteLakehouseDb } = require('../../scripts/market-sync/sqlite-db-core.cjs');
+
+      const tempDbPath = path.join(os.tmpdir(), `test_cache_force_${Date.now()}.db`);
+      const db = initSqliteLakehouseDb(tempDbPath);
+
+      db.exec('BEGIN TRANSACTION;');
+      const candleStmt = db.prepare('INSERT INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+      for (let i = 1000; i < 2850; i++) {
+        candleStmt.run(String(i), '2026-10-15', 100, 105, 95, 100, 100, 1000);
+      }
+      const chipStmt = db.prepare('INSERT INTO tw_institutional_chips (symbol, date, foreign_net) VALUES (?, ?, ?)');
+      for (let i = 1000; i < 3050; i++) {
+        chipStmt.run(String(i), '2026-10-15', 10);
+      }
+      db.exec('COMMIT;');
+
+      const mockFetcher = vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('MI_INDEX')) return { stat: 'OK', tables: [{ data: [['2330', '台積電', '100', '10', '1000', '900', '910', '890', '905']] }] };
+        return { data: [] };
+      });
+
+      try {
+        const res = await fetchAndIngestTwDailyData('2026-10-15', {
+          fetcher: mockFetcher,
+          dbPath: tempDbPath,
+          throttleMs: 0,
+          force: true, // 強制穿透！
+        });
+
+        expect(res.cached).toBeFalsy();
+        expect(mockFetcher).toHaveBeenCalled();
+      } finally {
+        if (fs.existsSync(tempDbPath)) {
+          try { fs.unlinkSync(tempDbPath); } catch {}
+        }
+      }
+    });
+  });
+
+  describe('9. [Spec 0184 / Ticket 03] 單邊缺失保護與隔離', () => {
+    it('當上市有資料但上櫃完全無資料時，應標記為單邊缺失異常且 hasError: true', async () => {
+      const mockFetcher = vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('MI_INDEX')) {
+          return {
+            stat: 'OK',
+            tables: [
+              {
+                fields: ['證券代號', '證券名稱', '收盤價', '成交筆數', '開盤價', '最高價', '最低價', '成交股數', '成交金額'],
+                data: [['2330', '台積電', '950', '25000', '940', '955', '938', '35000000', '33000000000']],
+              },
+            ],
+          };
+        }
+        // 上櫃與籌碼端點回傳空或無資料
+        return { tables: [], data: [] };
+      });
+
+      const res = await fetchAndIngestTwDailyData('2026-10-15', {
+        fetcher: mockFetcher,
+        inMemoryOnly: true,
+        throttleMs: 0,
+      });
+
+      expect(res.hasError).toBe(true);
+      expect(res.errorReason).toContain('單邊缺失');
+      expect(res.twseQuotesCount).toBeGreaterThan(0);
+      expect(res.tpexQuotesCount).toBe(0);
+    });
+  });
 });
+
+
 

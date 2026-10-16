@@ -13,6 +13,40 @@ const { initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
 const { runTwDateDrivenBackfill } = require('./backfill-tw-history-web.cjs');
 
 /**
+ * 預估剩餘時間 (ETA) 計算器 (Spec 0184 / Ticket 05)
+ * @param {number} startedAt
+ * @param {number} completedDays
+ * @param {number} totalDays
+ * @returns {{ remainingMs: number, etaFormatted: string }}
+ */
+function calculateEta(startedAt, completedDays, totalDays) {
+  if (!startedAt || completedDays <= 0 || completedDays >= totalDays) {
+    return {
+      remainingMs: 0,
+      etaFormatted: completedDays >= totalDays ? '已完成' : '計算中...',
+    };
+  }
+
+  const elapsedMs = Date.now() - startedAt;
+  const avgMsPerDay = elapsedMs / completedDays;
+  const remainingDays = totalDays - completedDays;
+  const remainingMs = Math.max(0, Math.round(remainingDays * avgMsPerDay));
+
+  const remMinutes = Math.round(remainingMs / 60000);
+  const etaDate = new Date(Date.now() + remainingMs);
+  const hh = String(etaDate.getHours()).padStart(2, '0');
+  const mm = String(etaDate.getMinutes()).padStart(2, '0');
+
+  const remText = remMinutes <= 0 ? '剩餘不到 1 分鐘' : `剩餘約 ${remMinutes} 分鐘`;
+  const etaFormatted = `${remText} (預計 ${hh}:${mm} 完成)`;
+
+  return {
+    remainingMs,
+    etaFormatted,
+  };
+}
+
+/**
  * 全域回補進度狀態
  */
 let backfillGlobalStatus = {
@@ -23,6 +57,8 @@ let backfillGlobalStatus = {
   currentDate: null,
   completedDays: 0,
   totalDays: 250,
+  estimatedRemainingMs: null,
+  etaFormatted: null,
   tw: { status: 'idle', totalQuotes: 0, totalChips: 0 },
   us: { status: 'idle', totalQuotes: 0, successCount: 0, failCount: 0 },
   error: null,
@@ -49,6 +85,8 @@ function resetBackfillStateForTest() {
     currentDate: null,
     completedDays: 0,
     totalDays: 250,
+    estimatedRemainingMs: null,
+    etaFormatted: null,
     tw: { status: 'idle', totalQuotes: 0, totalChips: 0 },
     us: { status: 'idle', totalQuotes: 0, successCount: 0, failCount: 0 },
     error: null,
@@ -56,6 +94,7 @@ function resetBackfillStateForTest() {
     updatedAt: Date.now(),
   };
 }
+
 
 /**
  * 解析 CLI 參數
@@ -153,6 +192,8 @@ function triggerBackfillTask(options = {}) {
   backfillGlobalStatus.totalDays = days;
   backfillGlobalStatus.completedDays = 0;
   backfillGlobalStatus.progressPct = 0;
+  backfillGlobalStatus.estimatedRemainingMs = null;
+  backfillGlobalStatus.etaFormatted = '計算中...';
   backfillGlobalStatus.startedAt = Date.now();
   backfillGlobalStatus.updatedAt = Date.now();
   backfillGlobalStatus.error = null;
@@ -170,6 +211,8 @@ function triggerBackfillTask(options = {}) {
       console.error(`[BackfillDaemon] 背景回補任務發生錯誤:`, err);
     } finally {
       backfillGlobalStatus.isRunning = false;
+      backfillGlobalStatus.estimatedRemainingMs = 0;
+      backfillGlobalStatus.etaFormatted = '已完成';
       backfillGlobalStatus.updatedAt = Date.now();
     }
   });
@@ -184,6 +227,10 @@ function triggerBackfillTask(options = {}) {
 async function runFullMarketHistoryBackfill(options = {}) {
   const { market = 'ALL', days = 250, throttleMs = 3000, dbPath } = options;
   const db = initSqliteLakehouseDb(dbPath);
+
+  if (!backfillGlobalStatus.startedAt) {
+    backfillGlobalStatus.startedAt = Date.now();
+  }
 
   console.log(`\n======================================================`);
   console.log(`🚀 [Spec 0168] 啟動台美雙軌全市場日 K 歷史回補總控引擎`);
@@ -201,12 +248,18 @@ async function runFullMarketHistoryBackfill(options = {}) {
       days,
       throttleMs,
       dbPath,
+      startedAt: backfillGlobalStatus.startedAt,
       onProgress: (p) => {
         backfillGlobalStatus.completedDays = p.index;
         backfillGlobalStatus.currentDate = p.date;
         backfillGlobalStatus.progressPct = Math.round((p.index / p.total) * (market === 'ALL' ? 50 : 100));
         backfillGlobalStatus.tw.totalQuotes += p.quotesCount;
         backfillGlobalStatus.tw.totalChips += p.chipsCount;
+        
+        // Spec 0184 / Ticket 05: 即時計算 ETA
+        const eta = calculateEta(backfillGlobalStatus.startedAt, p.index, p.total);
+        backfillGlobalStatus.estimatedRemainingMs = eta.remainingMs;
+        backfillGlobalStatus.etaFormatted = eta.etaFormatted;
         backfillGlobalStatus.updatedAt = Date.now();
 
         // 定期記錄至 SQLite Checkpoint
@@ -216,6 +269,7 @@ async function runFullMarketHistoryBackfill(options = {}) {
           totalDays: p.total,
           totalQuotes: backfillGlobalStatus.tw.totalQuotes,
           totalChips: backfillGlobalStatus.tw.totalChips,
+          etaFormatted: eta.etaFormatted,
         });
       },
     });
@@ -246,6 +300,8 @@ async function runFullMarketHistoryBackfill(options = {}) {
 
   backfillGlobalStatus.progressPct = 100;
   backfillGlobalStatus.currentTask = 'DONE';
+  backfillGlobalStatus.estimatedRemainingMs = 0;
+  backfillGlobalStatus.etaFormatted = '已完成';
   backfillGlobalStatus.updatedAt = Date.now();
 
   console.log(`\n======================================================`);
@@ -254,6 +310,7 @@ async function runFullMarketHistoryBackfill(options = {}) {
 }
 
 module.exports = {
+  calculateEta,
   parseBackfillCliArgs,
   getBackfillCheckpoint,
   saveBackfillCheckpoint,
@@ -262,6 +319,7 @@ module.exports = {
   resetBackfillStateForTest,
   runFullMarketHistoryBackfill,
 };
+
 
 // 若由 CLI 直接啟動
 if (require.main === module) {
