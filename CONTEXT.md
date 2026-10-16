@@ -2519,3 +2519,14 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
        - 記帳彈窗新增交易初衷（`DIVIDEND` 存股 / `SWING` 短波段 / `DAY_TRADE` 當沖）；波段單長抱超過 60 天且虧損超過 15% 時於庫存清單自動觸發「⚠️ 凹單警示」紅標，存股標的豁免；提供實體化摩擦成本對照（iPhone / 高級聚餐）。
     5. **稅務微調護欄：二代健保 2 萬拆單防禦與所得稅 8.5% 抵減監控 (Tax Optimization Guard)**：
        - 單筆現金股利達 20,000 元時提示 2.11% 補充保費，於 20,000 ~ 25,000 元敏感區間自動提供微調賣出或借券建言；實時監控 8.5% 綜合所得稅 8 萬元上限使用進度。
+
+- **Full-Market All-History Decoupling & Lakehouse-First Routing (全市場全歷史數據湖倉架構解耦、250日預載視窗與跨模組本地優先整合工程)**:
+  - 核心模組：`scripts/market-sync/sqlite-db-core.cjs`、`scripts/market-sync/retention-cleaner.cjs`、`scripts/market-sync/backfill-local-csv.cjs`、`scripts/market-sync/ingest-historical-chips.cjs`、`scripts/market-sync/vite-market-middleware.cjs`、`scripts/market-sync/backfill-full-market-history.cjs`、`scripts/market-sync/backfill-tw-history-web.cjs`、`src/engine/benchmarkData.ts`、`src/engine/historicalPriceFetcher.ts`、`src/engine/dividendService.ts`、`src/components/MarketScheduleHubSection.tsx`。
+  - 規範依據：Spec 0188 (v8.101.0) 與 ADR 0188，對應 GitHub Issue #271。
+  - 核心特性：
+    1. **儲存深度徹底解耦 (Append-Only Lakehouse)**：解除歷史 CSV 與籌碼入庫腳本的 260 根截斷（`limit=0` 全量入庫），修剪器永久封印日 K 與籌碼之 `DELETE` 語句，確保十餘年歷史行情終身永存。
+    2. **應用層 250 天預載視窗秒開 (250-Day Preload Window)**：API 中介層預設回傳最新 250 根日 K，支援 `limit=all` 或動態天數查詢，確保主力戰情室在全歷史百萬筆資料下維持 <10ms 零延遲。
+    3. **大盤基準直讀真實日 K (Zero-Mock Benchmark)**：拔除手動寫死數值，`benchmarkData.ts` 直讀本機 SQLite 湖倉之 SPY 與 TAIEX 真實歷史行情。
+    4. **跨模組 Lakehouse-First 本地路由**：歷史淨值回推 (`historicalPriceFetcher`) 與歷年除權息政策 (`dividendService`) 優先直查本地湖倉，消除外部 Yahoo Finance 與 FinMind 網路逾時破圖。
+    5. **進度口徑分離與看門狗尾盤自動補漏**：全域回補狀態與前端卡片清楚分離總進度與台股單軌進度天數；主循環加入尾盤熔斷天數（$\le 5$ 天）冷卻後自動單輪補漏重試，達成 100% 收斂閉環。
+    6. **降序複合索引優化**：建立 `tw_institutional_chips(symbol, date DESC)` 複合索引，提升併發寫入逾時至 15,000ms。
