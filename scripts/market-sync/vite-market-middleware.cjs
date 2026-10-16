@@ -175,6 +175,35 @@ function createMarketApiMiddleware(customDbPath) {
       );
     }
 
+    // 0.3 POST /api/market/backfill-cancel (Spec 0187 / Ticket 03)
+    if (pathname === '/api/market/backfill-cancel') {
+      const { cancelBackfillTask, getBackfillGlobalStatus } = require('./backfill-full-market-history.cjs');
+      const cancelRes = cancelBackfillTask();
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(
+        JSON.stringify({
+          success: cancelRes.cancelled,
+          message: cancelRes.message,
+          status: getBackfillGlobalStatus(),
+        })
+      );
+    }
+
+    // 0.4 POST /api/market/backfill-reset (Spec 0187 / Ticket 03)
+    if (pathname === '/api/market/backfill-reset') {
+      const { resetBackfillGlobalStatus, getBackfillGlobalStatus } = require('./backfill-full-market-history.cjs');
+      const resetRes = resetBackfillGlobalStatus();
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(
+        JSON.stringify({
+          success: resetRes.reset,
+          message: resetRes.message,
+          status: getBackfillGlobalStatus(),
+        })
+      );
+    }
+
+
     // 1. GET /api/market/symbols?q=...
     if (pathname === '/api/market/symbols') {
       const q = String(query.q || '').trim();

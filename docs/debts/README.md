@@ -59,6 +59,7 @@
 | [**0049**](0049-dynamic-signals-card-subcomponent-decomposition.md) | AI 動態信號判斷卡片 (Card 12) 專業層與決策層子元件模組化解耦重構 | `P3` | `OPEN` | Code Review (Spec 0179 / Issue #224) | `Refactor` · `CleanCode` · `AiForceDashboard` · `DynamicSignals` · `Architecture` | 待未來自訂多因子權重偏好或處置倒數器演進時實作 |
 | [**0050**](0050-analysis-metric-view-subcomponent-decomposition.md) | AnalysisMetricView 深度財報單體元件子模組解耦重構 | `P3` | `OPEN` | Code Review (Spec 0180 / Issue #230) | `Refactor` · `UI` · `CleanCode` · `StockAnalysis` · `ForensicAccounting` | 待下期個股分析財務指標擴充或自訂視圖時實作 |
 | [**0051**](0051-projected-cashflow-dynamic-calendar-profile-learning.md) | 未來現金流投影慣性配息庫動態學習與跨市場擴展 | `P3` | `OPEN` | Code Review (Spec 0183 / Issue #254) | `Feature` · `Refactor` · `ProjectedCashflow` · `Dividend` · `Lakehouse` | 待下期跨市場現金流或自動化公司行動深度整合時實作 |
+| [**0052**](0052-default-fetch-json-compound-abort-signal.md) | defaultFetchJson 雙重信號複合支援 (Compound AbortSignal) | `P3` | `OPEN` | Code Review (Spec 0187 / Issue #268) | `Refactor` · `Architecture` · `Resilience` · `Network` | 待下次網路中介層全面重構或跨市場爬蟲架構升級時一併引入 |
 
 ---
 

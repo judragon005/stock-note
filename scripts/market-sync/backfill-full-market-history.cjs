@@ -174,6 +174,60 @@ function saveBackfillCheckpoint(db, taskKey, payload) {
   }
 }
 
+let activeAbortController = null;
+
+/**
+ * 取消當前執行中之歷史回補任務 (Spec 0187 / Ticket 03)
+ * @returns {{ cancelled: boolean, message: string }}
+ */
+function cancelBackfillTask() {
+  if (activeAbortController) {
+    try {
+      activeAbortController.abort();
+    } catch (e) {
+      // 容錯
+    }
+    activeAbortController = null;
+  }
+
+  const wasRunning = backfillGlobalStatus.isRunning;
+  backfillGlobalStatus.isRunning = false;
+  backfillGlobalStatus.error = '任務已被手動取消';
+  backfillGlobalStatus.etaFormatted = '已取消';
+  backfillGlobalStatus.updatedAt = Date.now();
+
+  return {
+    cancelled: true,
+    message: wasRunning ? '背景回補任務已成功發出取消信號並停止' : '目前無進行中任務，狀態已重設為非執行中',
+  };
+}
+
+/**
+ * 強制重設全域回補狀態 (Spec 0187 / Ticket 03)
+ * @returns {{ reset: boolean, message: string }}
+ */
+function resetBackfillGlobalStatus() {
+  if (activeAbortController) {
+    try {
+      activeAbortController.abort();
+    } catch {}
+    activeAbortController = null;
+  }
+
+  backfillGlobalStatus.isRunning = false;
+  backfillGlobalStatus.progressPct = 0;
+  backfillGlobalStatus.currentTask = 'IDLE';
+  backfillGlobalStatus.currentDate = null;
+  backfillGlobalStatus.completedDays = 0;
+  backfillGlobalStatus.estimatedRemainingMs = null;
+  backfillGlobalStatus.etaFormatted = null;
+  backfillGlobalStatus.error = null;
+  backfillGlobalStatus.startedAt = null;
+  backfillGlobalStatus.updatedAt = Date.now();
+
+  return { reset: true, message: '全域回補狀態與鎖定已強制重設釋放' };
+}
+
 /**
  * 啟動非同步背景回補任務
  * @param {object} [options]
@@ -183,6 +237,9 @@ function triggerBackfillTask(options = {}) {
   if (backfillGlobalStatus.isRunning) {
     return { started: false, message: '歷史回補任務已在背景執行中' };
   }
+
+  activeAbortController = new AbortController();
+  const currentSignal = activeAbortController.signal;
 
   const market = options.market || 'ALL';
   const days = options.days || 250;
@@ -206,20 +263,29 @@ function triggerBackfillTask(options = {}) {
         days,
         throttleMs,
         dbPath: options.dbPath,
+        signal: currentSignal,
       });
     } catch (err) {
-      backfillGlobalStatus.error = err.message;
-      console.error(`[BackfillDaemon] 背景回補任務發生錯誤:`, err);
+      if (currentSignal.aborted) {
+        backfillGlobalStatus.error = '任務已被手動取消';
+      } else {
+        backfillGlobalStatus.error = err.message;
+        console.error(`[BackfillDaemon] 背景回補任務發生錯誤:`, err);
+      }
     } finally {
       backfillGlobalStatus.isRunning = false;
       backfillGlobalStatus.estimatedRemainingMs = 0;
-      backfillGlobalStatus.etaFormatted = '已完成';
+      if (!currentSignal.aborted) {
+        backfillGlobalStatus.etaFormatted = '已完成';
+      }
       backfillGlobalStatus.updatedAt = Date.now();
+      activeAbortController = null;
     }
   });
 
   return { started: true, message: `台美雙軌歷史回補任務已啟動 (市場: ${market}, 交易日: ${days} 天)` };
 }
+
 
 /**
  * 完整執行台美雙軌回補
@@ -327,9 +393,12 @@ module.exports = {
   saveBackfillCheckpoint,
   getBackfillGlobalStatus,
   triggerBackfillTask,
+  cancelBackfillTask,
+  resetBackfillGlobalStatus,
   resetBackfillStateForTest,
   runFullMarketHistoryBackfill,
 };
+
 
 
 // 若由 CLI 直接啟動

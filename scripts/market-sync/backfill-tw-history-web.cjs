@@ -118,54 +118,39 @@ function normalizeTwSymbol(symbol) {
 }
 
 /**
- * 預設官方 JSON 請求
+ * 預設官方 JSON 請求 (Spec 0187 / Ticket 01: 原生 fetch + AbortSignal.timeout 全生命週期超時)
  */
-function defaultFetchJson(url, options = {}) {
-  return new Promise((resolve, reject) => {
-    const client = url.startsWith('https') ? https : http;
-    const req = client.get(
-      url,
-      {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-          Accept: 'application/json, text/javascript, */*; q=0.01',
-          ...options.headers,
-        },
-        timeout: 20000,
-      },
-      (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          reject(new Error(`HTTP 重定向 (${res.statusCode}) 至: ${res.headers.location}`));
-          return;
-        }
-        if (res.statusCode < 200 || res.statusCode >= 300) {
-          reject(new Error(`HTTP 異常狀態碼: ${res.statusCode}`));
-          return;
-        }
-        let raw = '';
-        res.on('data', (chunk) => (raw += chunk));
-        res.on('end', () => {
-          if (!raw || !raw.trim()) {
-            resolve({});
-            return;
-          }
-          try {
-            const data = JSON.parse(raw);
-            resolve(data);
-          } catch (err) {
-            reject(new Error(`JSON 解析失敗 (${res.statusCode}): ${err.message}`));
-          }
-        });
-      }
-    );
+async function defaultFetchJson(url, options = {}) {
+  const timeoutMs = options.timeoutMs || 20000;
+  const signal = options.signal || (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined);
 
-    req.on('error', reject);
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error(`HTTP 請求逾時 (20000ms)`));
-    });
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
+      Accept: 'application/json, text/javascript, */*; q=0.01',
+      ...options.headers,
+    },
+    signal,
   });
+
+  if (response.status >= 300 && response.status < 400 && response.headers.get('location')) {
+    throw new Error(`HTTP 重定向 (${response.status}) 至: ${response.headers.get('location')}`);
+  }
+  if (!response.ok) {
+    throw new Error(`HTTP 異常狀態碼: ${response.status}`);
+  }
+
+  const raw = await response.text();
+  if (!raw || !raw.trim()) {
+    return {};
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`JSON 解析失敗 (${response.status}): ${err.message}`);
+  }
 }
+
 
 /**
  * 解析 TWSE MI_INDEX 收盤行情總表 (含真實 transactions 成交筆數)
@@ -404,7 +389,8 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
     twseQuotesRaw = await retryFetch(
       () =>
         fetcher(
-          `https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=${yyyymmdd}&type=ALLBUT0999&response=json`
+          `https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=${yyyymmdd}&type=ALLBUT0999&response=json`,
+          { signal: options.signal }
         ),
       retries,
       retryDelayMs
@@ -422,7 +408,8 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
     twseT86Raw = await retryFetch(
       () =>
         fetcher(
-          `https://www.twse.com.tw/rwd/zh/fund/T86?date=${yyyymmdd}&selectType=ALLBUT0999&response=json`
+          `https://www.twse.com.tw/rwd/zh/fund/T86?date=${yyyymmdd}&selectType=ALLBUT0999&response=json`,
+          { signal: options.signal }
         ),
       retries,
       retryDelayMs
@@ -439,7 +426,8 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
     tpexQuotesRaw = await retryFetch(
       () =>
         fetcher(
-          `https://www.tpex.org.tw/web/stock/aftertrading/otc_quotes_no1430/stk_wn1430_result.php?l=zh-tw&d=${rocDateStr}&se=AL&_=${Date.now()}`
+          `https://www.tpex.org.tw/web/stock/aftertrading/otc_quotes_no1430/stk_wn1430_result.php?l=zh-tw&d=${rocDateStr}&se=AL&_=${Date.now()}`,
+          { signal: options.signal }
         ),
       retries,
       retryDelayMs
@@ -456,7 +444,8 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
     tpexT86Raw = await retryFetch(
       () =>
         fetcher(
-          `https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=json&se=EW&t=D&d=${rocDateStr}&_=${Date.now()}`
+          `https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=json&se=EW&t=D&d=${rocDateStr}&_=${Date.now()}`,
+          { signal: options.signal }
         ),
       retries,
       retryDelayMs
@@ -464,6 +453,7 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
   } catch (e) {
     console.warn(`[TPEx T86] 下載跳過:`, e.message);
   }
+
 
   // 休市日辨識
   const twseStat = twseQuotesRaw?.stat || '';
@@ -576,11 +566,32 @@ async function runTwDateDrivenBackfill(options = {}) {
 
     process.stdout.write(`[進度 ${progressPct}% | ${i + 1}/${dates.length} | ${etaStr}] 處理日期: ${dateStr} ... `);
 
+    // 檢查外部取消信號 (Ticket 03)
+    if (options.signal && options.signal.aborted) {
+      console.log(`⚠️ 任務已收到外部取消信號，終止後續處理`);
+      break;
+    }
+
     try {
-      const res = await fetchAndIngestTwDailyData(dateStr, {
-        throttleMs,
-        dbPath: options.dbPath,
-        force: options.force,
+      // Spec 0187 / Ticket 02: 單日看門狗熔斷保護 (限時 45 秒)
+      const perDateTimeoutMs = options.perDateTimeoutMs || 45000;
+      let watchdogTimer = null;
+      const watchdogPromise = new Promise((_, reject) => {
+        watchdogTimer = setTimeout(() => {
+          reject(new Error(`單日處理逾時超過 ${perDateTimeoutMs}ms (觸發看門狗熔斷)`));
+        }, perDateTimeoutMs);
+      });
+
+      const res = await Promise.race([
+        fetchAndIngestTwDailyData(dateStr, {
+          throttleMs,
+          dbPath: options.dbPath,
+          force: options.force,
+          signal: options.signal,
+        }),
+        watchdogPromise,
+      ]).finally(() => {
+        if (watchdogTimer) clearTimeout(watchdogTimer);
       });
 
       if (res.cached) {
@@ -652,6 +663,7 @@ async function runTwDateDrivenBackfill(options = {}) {
 
 module.exports = {
   sleep,
+  defaultFetchJson,
   generateTradeDateCandidates,
   formatRocDate,
   normalizeTwSymbol,

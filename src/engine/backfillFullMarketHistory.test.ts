@@ -173,6 +173,67 @@ describe('Spec 0168 / Ticket 08: 台美雙軌全歷史回補總控與中介層�
       expect(status.us.totalInLakehouse).toBe(0);
     });
   });
+
+  describe('6. [Spec 0187 / Ticket 01 & 02 & 03] 全生命週期逾時、單日看門狗與任務取消重設控制', () => {
+    const {
+      cancelBackfillTask,
+      resetBackfillGlobalStatus,
+    } = require('../../scripts/market-sync/backfill-full-market-history.cjs');
+    const { defaultFetchJson } = require('../../scripts/market-sync/backfill-tw-history-web.cjs');
+
+    it('Ticket 01: defaultFetchJson 應支援超時拋錯 (AbortSignal.timeout)', async () => {
+      // 請求一個超時的位址，傳入 100ms 超時
+      const start = Date.now();
+      await expect(
+        defaultFetchJson('http://10.255.255.1', { timeoutMs: 100 })
+      ).rejects.toThrow();
+      const elapsed = Date.now() - start;
+      expect(elapsed).toBeLessThan(1000); // 應在 1 秒內迅速超時，不掛起
+    });
+
+    it('Ticket 03: cancelBackfillTask 應能中斷進行中任務並將 isRunning 設為 false', () => {
+      triggerBackfillTask({ market: 'TW', days: 20 });
+      expect(getBackfillGlobalStatus().isRunning).toBe(true);
+
+      const cancelRes = cancelBackfillTask();
+      expect(cancelRes.cancelled).toBe(true);
+      expect(getBackfillGlobalStatus().isRunning).toBe(false);
+      expect(getBackfillGlobalStatus().error).toContain('取消');
+    });
+
+    it('Ticket 03: resetBackfillGlobalStatus 應能強制重設狀態鎖與清除錯誤', () => {
+      const resetRes = resetBackfillGlobalStatus();
+      expect(resetRes.reset).toBe(true);
+      const status = getBackfillGlobalStatus();
+      expect(status.isRunning).toBe(false);
+      expect(status.error).toBeNull();
+    });
+
+    it('Ticket 03: 中介層應註冊 POST /api/market/backfill-cancel 與 POST /api/market/backfill-reset', () => {
+      const middleware = createMarketApiMiddleware();
+      let responseBody = '';
+      let statusCode = 0;
+
+      const req: any = {
+        url: '/api/market/backfill-cancel',
+        method: 'POST',
+      };
+      const res: any = {
+        writeHead: vi.fn((code: number) => {
+          statusCode = code;
+        }),
+        end: vi.fn((data: string) => {
+          responseBody = data;
+        }),
+      };
+      const next = vi.fn();
+
+      middleware(req, res, next);
+      expect(statusCode).toBe(200);
+      const json = JSON.parse(responseBody);
+      expect(json.success).toBe(true);
+    });
+  });
 });
 
 

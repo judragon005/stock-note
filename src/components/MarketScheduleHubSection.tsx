@@ -123,6 +123,39 @@ export const MarketScheduleHubSection: React.FC = () => {
     }
   };
 
+  const handleCancelBackfill = async () => {
+    setBackfillFeedback('正在發送取消信號...');
+    try {
+      if (typeof fetch === 'function') {
+        const res = await fetch('/api/market/backfill-cancel', { method: 'POST' });
+        if (res.ok) {
+          const data = await res.json();
+          setBackfillFeedback(data.message || '任務已取消');
+          await fetchBackfillStatus();
+        }
+      }
+    } catch (err: any) {
+      setBackfillFeedback(`取消失敗: ${err.message}`);
+    }
+  };
+
+  const handleResetBackfill = async () => {
+    setBackfillFeedback('正在強制重設鎖定狀態...');
+    try {
+      if (typeof fetch === 'function') {
+        const res = await fetch('/api/market/backfill-reset', { method: 'POST' });
+        if (res.ok) {
+          const data = await res.json();
+          setBackfillFeedback(data.message || '狀態鎖已釋放');
+          await fetchBackfillStatus();
+        }
+      }
+    } catch (err: any) {
+      setBackfillFeedback(`重設失敗: ${err.message}`);
+    }
+  };
+
+
   useEffect(() => {
     fetchSummaries();
     fetchBackfillStatus();
@@ -478,7 +511,7 @@ export const MarketScheduleHubSection: React.FC = () => {
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             {backfillFeedback && (
               <span style={{ fontSize: '0.74rem', color: '#38bdf8' }}>{backfillFeedback}</span>
             )}
@@ -509,8 +542,48 @@ export const MarketScheduleHubSection: React.FC = () => {
                 </>
               )}
             </button>
+
+            {backfillStatus?.isRunning && (
+              <button
+                type="button"
+                onClick={handleCancelBackfill}
+                className="btn btn-secondary btn-sm"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '6px 10px',
+                  fontSize: '0.74rem',
+                  color: '#f87171',
+                  borderColor: 'rgba(239, 68, 68, 0.3)',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                }}
+                title="中止當前背景回補任務"
+              >
+                <span>停止任務</span>
+              </button>
+            )}
+
+            {/* 若發生異常或卡死，提供一鍵釋放狀態鎖 */}
+            <button
+              type="button"
+              onClick={handleResetBackfill}
+              className="btn btn-secondary btn-sm"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '6px 8px',
+                fontSize: '0.72rem',
+                color: 'var(--text-muted)',
+              }}
+              title="強制清除全域執行中鎖定"
+            >
+              <span>重設狀態鎖</span>
+            </button>
           </div>
         </div>
+
 
         {/* 即時進度條與指標數據 (若有任務在執行或已執行過) */}
         {(backfillStatus?.isRunning || (backfillStatus && backfillStatus.completedDays > 0)) && (
