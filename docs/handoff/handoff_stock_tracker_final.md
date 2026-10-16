@@ -1,15 +1,16 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-10-15 11:45 (UTC+8)  
+> **交接產生時間**：2026-10-16 10:05 (UTC+8)  
 > **當前最新里程碑**：
-> - **V8.94.0 個股深度提示詞物理遷移至主力戰情室與外聯 AI 防幻覺定錨架構**（ADR 0181, Spec 0181, Issues #243 / #245, PRs #244 / #246）：
->   - **個股深度分析純粹化**：從 `StockAnalysisWorkspace.tsx` 徹底移除 `StrategicPromptPanel`，還原其 100% 純粹的技術指標與財報估值。
->   - **戰情室轉接適配器 (`aiForcePromptAdapter.ts`)**：貫通戰情室五大維度特徵（多空能量、籌碼集中度、VWAP 乖離率、當沖風險係數、AI 信心度），實施持股部位零曝險脫敏。
->   - **防幻覺字串工程與算術代勞 (`strategicPromptEngine.ts`)**：前端代勞計算 3% 與 5% 硬性停損價、1:2 與 1:3 風報比目標價；注入 `<market_time_dimension>` 時態分割；注入 `<adversarial_red_team_instruction>` 客觀反討好紅隊指令；台美雙軌隔離。
->   - **主力戰情室底層卡片 UI (`WarRoomPromptCard.tsx`)**：常駐 5 大任務視圖下方，避讓 Sticky 吸附工具列，支援兩階段安全剪貼簿降級、2 秒複製微反饋、折疊預覽抽屜與 a11y 語意屬性。
-> - **V8.93.0 個股深度財報法務會計排雷、ETF 物理隔離與智策引擎 UI 重構**（ADR 0180, Spec 0180, Issues #230, #237, #239, PRs #236, #238, #240）
-> - **V8.91.0 智策精煉投資決策多維提示詞引擎與六頂思考帽工作區生成器**（ADR 0153, Spec 0153, Issue #135, PR #225）
-> **品質狀態**：全量單元測試 **1,609/1,609 通過 (100% Passed / 218 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> - **V8.96.0 個人投資者法人級微觀防禦、現金流預算與極簡風控強化**（ADR 0183, Spec 0183, Issue #254, PRs #255, #256）：
+>   - **未來 12 個月現金流投影與枯水期互補**：精算月配/季配/半年配/年配未來一年每月現金流，自動標記月收入低於 3,000 元之枯水期，推薦互補月份標的。
+>   - **股票質押解質先還本金精算與補水救援**：維持率補水無負數保底；解質股票先還本金 $\text{ceil}(\text{Principal} - \text{Remaining} / 1.30)$ 消除斷頭邊界風險。
+>   - **行為金融審計：交易初衷與凹單警報**：新增交易初衷（`DIVIDEND` / `SWING` / `DAY_TRADE`）；波段持股逾 60 天虧損逾 15% 觸發「⚠️ 凹單警示」紅標（存股豁免）；iPhone 16 Pro 摩擦成本震撼換算。
+>   - **稅務微調護欄**：單筆股息達 20,000 元預警二代健保，20,000~25,000 元敏感區間自動提供除息前微調賣出或借券拆單建議；實時監控 8.5% 所得稅 8 萬元抵減上限。
+>   - **數據湖倉擴展與每日開放排程**：擴充 `etf_daily_nav`、三大法人台指期未平倉 OI 與融券回補日曆，完全本機算力、零付費 API。
+> - **V8.95.0 戰情室 Prompt 標的時態隔離、庫存自動錨定與時態籌碼細化**（ADR 0182, Spec 0182, Issues #248, #251, PRs #250, #252）
+> - **V8.94.0 個股深度提示詞物理遷移至主力戰情室與外聯 AI 防幻覺定錨架構**（ADR 0181, Spec 0181, Issues #243, #245, PRs #244, #246）
+> **品質狀態**：全量單元測試 **1,631/1,631 通過 (100% Passed / 222 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -18,10 +19,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main`
-- **單元測試套件**：**1,609/1,609 通過 (218 test suites / 100% 綠燈)**
+- **單元測試套件**：**1,631/1,631 通過 (222 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V8.94.0**
+- **當前釋出版本**：**V8.96.0**
 - **工作區與分支整潔度**：工作區 100% clean，本地 feature/fix 分支已全數刪除，專案臨時備份檔案已全量清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -50,6 +51,8 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0183`](file:///d:/APP/股票紀錄/docs/specs/0183-personal-investor-institutional-edge-and-lean-enhancements-spec.md) | [`ADR 0183`](file:///d:/APP/股票紀錄/docs/adr/0183-personal-investor-institutional-edge-and-lean-enhancements.md) | [`.scratch/v8.96.0-personal-investor-institutional-edge-and-lean-enhancements/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.96.0-personal-investor-institutional-edge-and-lean-enhancements/issues/) | Issue #254 / PR #255, #256 | V8.96.0 | 個人投資者法人級微觀防禦、現金流預算與極簡風控強化 (7 大 Micro-Tickets) |
+| [`Spec 0182`](file:///d:/APP/股票紀錄/docs/specs/0182-strategic-prompt-grounding-stale-state-and-portfolio-isolation-spec.md) | [`ADR 0182`](file:///d:/APP/股票紀錄/docs/adr/0182-strategic-prompt-grounding-and-portfolio-isolation.md) | [`.scratch/v8.95/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.95/issues/) | Issue #248, #251 / PR #250, #252 | V8.95.0 | 戰情室 Prompt 標的時態隔離、庫存自動錨定與時態籌碼細化 |
 | [`Spec 0181`](file:///d:/APP/股票紀錄/docs/specs/0181-strategic-prompt-war-room-relocation-and-grounding-spec.md) | [`ADR 0181`](file:///d:/APP/股票紀錄/docs/adr/0181-strategic-prompt-war-room-relocation.md) | [`.scratch/v8.94/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.94/issues/) | Issue #243, #245 / PR #244, #246 | V8.94.0 | 個股深度提示詞物理遷移至主力戰情室、外聯 AI 防幻覺定錨與極簡作戰中樞 |
 | [`Spec 0180`](file:///d:/APP/股票紀錄/docs/specs/0180-forensic-accounting-etf-isolation-and-ui-repair-spec.md) | [`ADR 0180`](file:///d:/APP/股票紀錄/docs/adr/0180-forensic-accounting-etf-isolation-and-ui-repair.md) | [`.scratch/v8.93/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.93/issues/) | Issue #230, #237, #239 / PR #236, #238, #240 | V8.93.0 | 個股深度財報法務會計排雷、ETF 物理隔離與智策引擎 UI 重構 |
 | [`Spec 0153`](file:///d:/APP/股票紀錄/docs/specs/0153-smart-strategic-prompt-engine-and-workspace-generator-spec.md) | [`ADR 0153`](file:///d:/APP/股票紀錄/docs/adr/0153-smart-strategic-prompt-engine.md) | [`.scratch/v8.91/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.91/issues/) | Issue #135 / PR #225 | V8.91.0 | 智策精煉投資決策多維提示詞引擎與六頂思考帽工作區生成器 |
