@@ -50,10 +50,17 @@ function generateTradeDateCandidates(daysCount = 250, endDateStr, customNow) {
     cursorStr = normalizeDateStr(endDateStr);
   } else {
     const now = customNow || new Date();
-    const localHour = now.getHours();
-    const localMin = now.getMinutes();
-    const totalMinutes = localHour * 60 + localMin;
-    const todayStr = normalizeDateStr(now);
+    // 鎖定台北時間 (UTC+8) 以確保跨時區 (如 GitHub Actions Runner UTC) 判定一致
+    const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+    const twTime = new Date(utcMs + 8 * 3600000);
+    const twHour = twTime.getHours();
+    const twMin = twTime.getMinutes();
+    const totalMinutes = twHour * 60 + twMin;
+
+    const y = twTime.getFullYear();
+    const m = String(twTime.getMonth() + 1).padStart(2, '0');
+    const d = String(twTime.getDate()).padStart(2, '0');
+    const todayStr = `${y}-${m}-${d}`;
 
     // 若今日為法定交易日且當前時間已過盤後發布門檻 (15:30)，則起始日為今日；否則退至前一交易日
     if (isTwTradingDay(todayStr) && totalMinutes >= 15 * 60 + 30) {
@@ -62,6 +69,7 @@ function generateTradeDateCandidates(daysCount = 250, endDateStr, customNow) {
       cursorStr = getPreviousTradingDay(todayStr);
     }
   }
+
 
   // 往前回溯收集足額法定實質交易日
   const [y, m, d] = cursorStr.split('-').map(Number);
