@@ -10,11 +10,14 @@ describe('Spec 0168 / Ticket 08: 台美雙軌全歷史回補總控與中介層�
     getBackfillGlobalStatus,
     triggerBackfillTask,
     resetBackfillStateForTest,
+    resetBackfillGlobalStatus,
+    cancelBackfillTask,
   } = require('../../scripts/market-sync/backfill-full-market-history.cjs');
 
   const { createMarketApiMiddleware } = require('../../scripts/market-sync/vite-market-middleware.cjs');
 
   beforeEach(() => {
+    cancelBackfillTask();
     resetBackfillStateForTest();
     vi.restoreAllMocks();
   });
@@ -232,6 +235,47 @@ describe('Spec 0168 / Ticket 08: 台美雙軌全歷史回補總控與中介層�
       expect(statusCode).toBe(200);
       const json = JSON.parse(responseBody);
       expect(json.success).toBe(true);
+    });
+  });
+
+  describe('7. [Spec 0189 / Ticket 03] 自適應智慧缺口回補 (days=auto) 與美股日常連動', () => {
+    it('中介層 POST /api/market/backfill-all 支援 days=auto 參數，並正確啟動智慧補缺模式', async () => {
+      resetBackfillGlobalStatus();
+      const middleware = createMarketApiMiddleware();
+      let responseBody = '';
+      let statusCode = 0;
+
+      const req: any = {
+        url: '/api/market/backfill-all?market=TW&days=auto',
+        method: 'POST',
+      };
+      const res: any = {
+        writeHead: vi.fn((code: number) => {
+          statusCode = code;
+        }),
+        end: vi.fn((data: string) => {
+          responseBody = data;
+        }),
+      };
+      const next = vi.fn();
+
+      middleware(req, res, next);
+      expect(statusCode).toBe(200);
+      const json = JSON.parse(responseBody);
+      expect(json.success).toBe(true);
+      expect(json.message).toContain('智慧自動補缺');
+
+      const status = getBackfillGlobalStatus();
+      expect(status.daysMode).toBe('auto');
+      cancelBackfillTask();
+      resetBackfillGlobalStatus();
+    });
+
+    it('parseBackfillCliArgs 應正確解析 --days=auto', () => {
+      const { parseBackfillCliArgs } = require('../../scripts/market-sync/backfill-full-market-history.cjs');
+      const res = parseBackfillCliArgs(['node', 'script.cjs', '--market=TW', '--days=auto']);
+      expect(res.days).toBe('auto');
+      expect(res.market).toBe('TW');
     });
   });
 });

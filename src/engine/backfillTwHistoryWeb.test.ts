@@ -10,6 +10,8 @@ describe('Spec 0168 / Ticket 07: 台股日期驅動歷史回補模組 (backfill-
     parseTpexDailyQuotesWithTransactions,
     fetchAndIngestTwDailyData,
     saveTwDailyQuotesBatch,
+    detectTwDateGaps,
+    runTwDateDrivenBackfill,
   } = require('../../scripts/market-sync/backfill-tw-history-web.cjs');
 
   describe('1. 日期迭代器與民國年格式化', () => {
@@ -321,6 +323,159 @@ describe('Spec 0168 / Ticket 07: 台股日期驅動歷史回補模組 (backfill-
       expect(res.errorReason).toContain('單邊缺失');
       expect(res.twseQuotesCount).toBeGreaterThan(0);
       expect(res.tpexQuotesCount).toBe(0);
+    });
+  });
+
+  describe('10. [Spec 0189 / Ticket 01] 台股湖倉水位線與缺口自動探測核心 (detectTwDateGaps)', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const os = require('os');
+    const { initSqliteLakehouseDb, closeSqliteDb } = require('../../scripts/market-sync/sqlite-db-core.cjs');
+
+    it('當湖倉完全為空時，應將所有法定候選日期判定為缺失缺口 (gapDates)', () => {
+      const tempDbPath = path.join(os.tmpdir(), `test_gaps_empty_${Date.now()}.db`);
+      try {
+        initSqliteLakehouseDb(tempDbPath);
+
+        const res = detectTwDateGaps({
+          dbPath: tempDbPath,
+          maxLookbackDays: 5,
+          customNow: new Date('2026-10-16T16:00:00+08:00'),
+        });
+
+        expect(res.hasGaps).toBe(true);
+        expect(res.gapDates.length).toBe(5);
+        expect(res.totalChecked).toBe(5);
+        expect(res.validCount).toBe(0);
+        expect(res.latestInDbDate).toBeNull();
+      } finally {
+        closeSqliteDb();
+        try { fs.unlinkSync(tempDbPath); } catch {}
+      }
+    });
+
+    it('當湖倉在指定區間內完整具備普通股 >= 1800 且籌碼 >= 2000 時，應判定無缺口 (hasGaps: false)', () => {
+      const tempDbPath = path.join(os.tmpdir(), `test_gaps_full_${Date.now()}.db`);
+      try {
+        const db = initSqliteLakehouseDb(tempDbPath);
+        // 模擬候選日 3 天
+        const candidates = generateTradeDateCandidates(3, '2026-10-16');
+        
+        // 灌入足額普通股 (1800 筆) 與籌碼 (2000 筆)
+        db.exec('BEGIN TRANSACTION;');
+        for (const dateStr of candidates) {
+          const candleStmt = db.prepare(`
+            INSERT INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume, turnover)
+            VALUES (?, ?, 100, 105, 95, 100, 100, 1000, 100000)
+          `);
+          for (let s = 1000; s < 2805; s++) {
+            candleStmt.run(String(s), dateStr);
+          }
+
+          const chipStmt = db.prepare(`
+            INSERT INTO tw_institutional_chips (symbol, date, foreign_net)
+            VALUES (?, ?, 5)
+          `);
+          for (let s = 1000; s < 3005; s++) {
+            chipStmt.run(String(s), dateStr);
+          }
+        }
+        db.exec('COMMIT;');
+
+        const res = detectTwDateGaps({
+          dbPath: tempDbPath,
+          maxLookbackDays: 3,
+          endDate: '2026-10-16',
+        });
+
+        expect(res.hasGaps).toBe(false);
+        expect(res.gapDates).toEqual([]);
+        expect(res.validCount).toBe(3);
+        expect(res.latestInDbDate).toBe(candidates[0]);
+      } finally {
+        closeSqliteDb();
+        try { fs.unlinkSync(tempDbPath); } catch {}
+      }
+    });
+
+    it('當特定某一天缺少籌碼或普通股未達標時，應精準將該天識別為缺口', () => {
+      const tempDbPath = path.join(os.tmpdir(), `test_gaps_partial_${Date.now()}.db`);
+      try {
+        const db = initSqliteLakehouseDb(tempDbPath);
+        const candidates = ['2026-10-16', '2026-10-15', '2026-10-14'];
+
+        // 僅灌入 2026-10-16 與 2026-10-14，刻意留空 2026-10-15
+        db.exec('BEGIN TRANSACTION;');
+        for (const dateStr of ['2026-10-16', '2026-10-14']) {
+          const candleStmt = db.prepare(`
+            INSERT INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume, turnover)
+            VALUES (?, ?, 100, 105, 95, 100, 100, 1000, 100000)
+          `);
+          for (let s = 1000; s < 2805; s++) {
+            candleStmt.run(String(s), dateStr);
+          }
+          const chipStmt = db.prepare(`
+            INSERT INTO tw_institutional_chips (symbol, date, foreign_net)
+            VALUES (?, ?, 5)
+          `);
+          for (let s = 1000; s < 3005; s++) {
+            chipStmt.run(String(s), dateStr);
+          }
+        }
+        db.exec('COMMIT;');
+
+        const res = detectTwDateGaps({
+          dbPath: tempDbPath,
+          datesOverride: candidates,
+        });
+
+        expect(res.hasGaps).toBe(true);
+        expect(res.gapDates).toEqual(['2026-10-15']);
+        expect(res.totalChecked).toBe(3);
+        expect(res.validCount).toBe(2);
+      } finally {
+        closeSqliteDb();
+        try { fs.unlinkSync(tempDbPath); } catch {}
+      }
+    });
+  });
+
+  describe('11. [Spec 0189 / Ticket 02] 真·零延遲快取跳過 (Zero-Delay Cache Skip)', () => {
+    it('當日期為快取命中 (cached: true) 時，應瞬間略過且不執行 throttleMs 延遲', async () => {
+      const dates = [
+        '2026-10-16', '2026-10-15', '2026-10-14', '2026-10-13', '2026-10-12',
+        '2026-10-09', '2026-10-08', '2026-10-07', '2026-10-06', '2026-10-05',
+      ];
+
+      // 模擬所有日期皆為 cached: true
+      const mockCachedFetcher = vi.fn().mockImplementation(async (dateStr: string) => {
+        return {
+          date: dateStr,
+          isTradingDay: true,
+          cached: true,
+          quotesCount: 2350,
+          stockCount: 1950,
+          etfCount: 350,
+          chipsCount: 2200,
+        };
+      });
+
+      const startTime = Date.now();
+      // 設置 throttleMs: 1500ms，如果 10 天中有 9 次 sleep，耗時會超過 13500ms
+      const res = await runTwDateDrivenBackfill({
+        datesOverride: dates,
+        customFetchDayQuotes: mockCachedFetcher,
+        throttleMs: 1500,
+      });
+      const elapsedMs = Date.now() - startTime;
+
+      expect(res.totalTradingDays).toBe(10);
+      expect(res.totalQuotesIngested).toBe(2350 * 10);
+      expect(res.totalChipsIngested).toBe(2200 * 10);
+      expect(res.failedDates.length).toBe(0);
+
+      // 驗證真·零延遲：10 天全快取命中耗時應小於 500ms
+      expect(elapsedMs).toBeLessThan(500);
     });
   });
 });

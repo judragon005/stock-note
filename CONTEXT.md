@@ -139,6 +139,19 @@ _Avoid_: Silent Timeout Swallow, Pseudo-Success Ingestion
 全域狀態與終端機即時依據 $(\text{total} - \text{completed}) \times (\Delta T / \text{completed})$ 動態推算剩餘分鐘數與預計完成時刻（如 `剩餘約 8 分鐘 (預計 11:25 完成)`），並於前端進度條百分比旁渲染高對比彩色徽章。
 _Avoid_: Static Percentage Only, Blind Long Wait
 
+**Smart Incremental Gap Backfill (智慧增量水位線缺口補漏)** *(新增於 V8.99.0 / Spec 0189)*:
+完全擺脫每次強制 250 交易日輪詢之沉重開銷。在回補啟動前，透過 `detectTwDateGaps` 比對系統法定交易日曆與 SQLite 湖倉在庫雙指標健康狀態，自動檢出最新水位線至今日之間的「缺漏交易日 (Gap Dates)」。若無缺口則 0 秒退出；若有缺口僅對缺失天數（日常通常 1~2 天）發起官方抓取，使日常盤後同步於數秒內輕量完成。
+_Avoid_: Monolithic Fixed 250D Loop, Blind Re-crawling
+
+**Zero-Delay Cache Skip (真·零延遲快取跳過)** *(新增於 V8.99.0 / Spec 0189)*:
+徹底修復主迴圈中快取命中依舊強制執行 `throttleMs` 延遲的偽略過缺陷。在庫數據達標日（`cached: true`）以 0ms 瞬間跳過且不計入網路防爬蟲冷卻，將 250 天在庫校驗壓縮至 0.5 秒內完成，ETA 估算器僅針對實際需發起網路請求之天數計算真實剩餘耗時。
+_Avoid_: False Cache Skipping, Sleeping On Cached Rows
+
+**Adaptive Schedule Hub Granularity (自適應排程控制台梯度)** *(新增於 V8.99.0 / Spec 0189)*:
+排程控制台全面升級為自適應顆粒度選單，以 `auto` (⚡ 智慧自動補缺) 為第一預設，並提供 `5` (近一週)、`20` (近一月)、`60` (近一季)、`120` (半年) 與 `250` (全量年線冷啟動)。雙軌模式下美股連動執行日常增量 (`--mode=daily`)，兼顧輕量補漏與冷啟動需求。
+_Avoid_: Rigid Fixed Options, Heavy Bootstrap In Daily Usage
+
+
 **US Market Lakehouse Transparency & EPERM Resilience (美股歷史回補透明度透視與 Windows EPERM 韌性強化)** *(新增於 V8.99.0 / Spec 0186)*:
 1. **湖倉與斷點庫存透視**：解決美股回補卡片僅展示「當次增量」導致全庫在庫時顯示 `0 檔` 的語意盲區。藉由 `sync_checkpoints` 索引極速（< 5ms）提取在庫成功標的總數，並於前端展示累計在庫檔數（如 `1,448 檔`）與當次增量註記。
 2. **Windows 檔案原子置換抗鎖韌性**：在 `saveJsonAtomic` 針對 `fs.renameSync` 遭遇之 Windows `EPERM` / `EBUSY` 檔案鎖定，提供自旋指數退避重試與安全回退覆寫機制，杜絕崩潰與未捕獲例外。
