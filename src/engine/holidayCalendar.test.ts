@@ -3,9 +3,15 @@ import {
   isMarketHoliday,
   isBusinessDay,
   getNextBusinessDay,
+  isTradingDay,
+  getHolidayReason,
+  getSettlementDate,
+  isDerivativesExpiryDay,
+  isEarlyCloseDay,
   TW_MARKET_HOLIDAYS,
   US_MARKET_HOLIDAYS,
 } from './holidayCalendar';
+
 
 describe('法定國定假日休市日曆與營業日引擎 (Holiday & Business Day Engine)', () => {
   describe('常數與資料結構驗證', () => {
@@ -122,4 +128,37 @@ describe('法定國定假日休市日曆與營業日引擎 (Holiday & Business D
       expect(getNextBusinessDay('invalid-date', 'TW')).toBe('invalid-date');
     });
   });
+
+  describe('Ticket 06: 新 API 與向後相容擴展驗證', () => {
+    it('isTradingDay alias 與 getHolidayReason 應正確運作', () => {
+      expect(isTradingDay('2026-09-28', 'TW')).toBe(false);
+      expect(getHolidayReason('2026-09-28', 'TW')).toBe('教師節');
+
+      expect(isTradingDay('2026-07-10', 'TW')).toBe(false);
+      expect(getHolidayReason('2026-07-10', 'TW')).toBe('巴威颱風停市');
+
+      expect(isTradingDay('2026-10-07', 'TW')).toBe(true);
+      expect(getHolidayReason('2026-10-07', 'TW')).toBe(null);
+    });
+
+    it('getSettlementDate 應支援台股 T+2 與美股 T+1', () => {
+      expect(getSettlementDate('2026-10-06', 'TW')).toBe('2026-10-08');
+      expect(getSettlementDate('2026-10-06', 'US')).toBe('2026-10-07');
+    });
+
+    it('isDerivativesExpiryDay 應正確識別四巫日', () => {
+      const usQuad = isDerivativesExpiryDay('2026-09-18', 'US');
+      expect(usQuad.isExpiry).toBe(true);
+      expect(usQuad.isQuadrupleWitching).toBe(true);
+    });
+
+    it('isEarlyCloseDay 應正確識別半日市', () => {
+      expect(isEarlyCloseDay('2026-11-27', 'US')).toBe(true);
+      expect(isEarlyCloseDay('2026-11-26', 'US')).toBe(false);
+      // 黑色星期五為半日市，但依然是營業日
+      expect(isBusinessDay('2026-11-27', 'US')).toBe(true);
+    });
+  });
 });
+
+

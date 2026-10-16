@@ -478,7 +478,43 @@ describe('Spec 0168 / Ticket 07: 台股日期驅動歷史回補模組 (backfill-
       expect(elapsedMs).toBeLessThan(500);
     });
   });
+
+  describe('12. [Spec 0190 / Ticket 11] 法定休市日與天災停市日候選排除與 failedDates 防污染', () => {
+    it('generateTradeDateCandidates 回溯 250 天應嚴格排除 4 個特定休市日', () => {
+      // 從 2026-10-07 開始往前回溯 250 天（涵蓋 2026-09-28, 2026-07-10, 2025-12-25, 2025-10-24）
+      const candidates = generateTradeDateCandidates(250, '2026-10-07');
+      expect(candidates.length).toBe(250);
+
+      // 嚴格驗證這 4 個日期絕不存在於候選名單中
+      expect(candidates).not.toContain('2026-09-28'); // 教師節
+      expect(candidates).not.toContain('2026-07-10'); // 巴威颱風
+      expect(candidates).not.toContain('2025-12-25'); // 行憲紀念日
+      expect(candidates).not.toContain('2025-10-24'); // 光復節補假
+    });
+
+    it('若手動傳入休市日，runTwDateDrivenBackfill 應優雅略過且不污染 failedDates', async () => {
+      const mockHolidays = ['2026-09-28', '2026-07-10'];
+      const mockHolidayFetcher = vi.fn().mockImplementation(async (dateStr: string) => {
+        return {
+          date: dateStr,
+          isTradingDay: false,
+          quotesCount: 0,
+          chipsCount: 0,
+        };
+      });
+
+      const res = await runTwDateDrivenBackfill({
+        datesOverride: mockHolidays,
+        customFetchDayQuotes: mockHolidayFetcher,
+        throttleMs: 0,
+      });
+
+      expect(res.failedDates.length).toBe(0);
+      expect(res.totalTradingDays).toBe(0);
+    });
+  });
 });
+
 
 
 

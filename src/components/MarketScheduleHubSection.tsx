@@ -13,6 +13,7 @@ import {
   Database,
 } from 'lucide-react';
 import { MarketCacheSummary, loadMarketCacheSummary } from '../engine/marketCacheLoader';
+import { getTwMarketStatus, getUsMarketStatus } from '../engine/marketStatusEngine';
 
 export interface BackfillStatus {
   isRunning: boolean;
@@ -63,6 +64,18 @@ export const MarketScheduleHubSection: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const twStatus = getTwMarketStatus(currentTime);
+  const usStatus = getUsMarketStatus(currentTime);
 
   // --- Spec 0168 / Ticket 09 / Spec 0189: 台美雙軌自適應歷史回補狀態 ---
   const [backfillMarket, setBackfillMarket] = useState<'ALL' | 'TW' | 'US'>('ALL');
@@ -306,11 +319,27 @@ export const MarketScheduleHubSection: React.FC = () => {
             gap: '8px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: '#34d399', fontSize: '0.88rem' }}>
               <CheckCircle2 size={16} /> 🇹🇼 台股盤後排程 (TWSE / TPEx)
             </div>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>每日 16:00 執行</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span
+                data-testid="tw-market-status-badge"
+                style={{
+                  fontSize: '0.68rem',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  background: twStatus.isOpen ? 'rgba(16, 185, 129, 0.2)' : twStatus.isHoliday ? 'rgba(239, 68, 68, 0.15)' : 'rgba(148, 163, 184, 0.15)',
+                  color: twStatus.isOpen ? '#34d399' : twStatus.isHoliday ? '#f87171' : '#94a3b8',
+                  border: `1px solid ${twStatus.isOpen ? 'rgba(16, 185, 129, 0.3)' : twStatus.isHoliday ? 'rgba(239, 68, 68, 0.25)' : 'rgba(148, 163, 184, 0.25)'}`,
+                  fontWeight: 600,
+                }}
+              >
+                {twStatus.statusLabel} {twStatus.isHoliday && twStatus.holidayReason ? `[${twStatus.holidayReason}]` : ''}
+              </span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>每日 16:00 執行</span>
+            </div>
           </div>
           <div style={{ fontSize: '0.78rem', color: twSummary ? '#f8fafc' : 'var(--text-muted)', lineHeight: 1.5 }}>
             {formatScheduleSummaryText(twSummary, 'TW')}
@@ -351,11 +380,27 @@ export const MarketScheduleHubSection: React.FC = () => {
             gap: '8px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: '#38bdf8', fontSize: '0.88rem' }}>
               <CheckCircle2 size={16} /> 🇺🇸 美股盤後排程 (NYSE / NASDAQ)
             </div>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>每日 08:00 執行</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span
+                data-testid="us-market-status-badge"
+                style={{
+                  fontSize: '0.68rem',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  background: usStatus.isOpen ? 'rgba(56, 189, 248, 0.2)' : usStatus.isHoliday ? 'rgba(239, 68, 68, 0.15)' : 'rgba(148, 163, 184, 0.15)',
+                  color: usStatus.isOpen ? '#38bdf8' : usStatus.isHoliday ? '#f87171' : '#94a3b8',
+                  border: `1px solid ${usStatus.isOpen ? 'rgba(56, 189, 248, 0.3)' : usStatus.isHoliday ? 'rgba(239, 68, 68, 0.25)' : 'rgba(148, 163, 184, 0.25)'}`,
+                  fontWeight: 600,
+                }}
+              >
+                {usStatus.statusLabel} {usStatus.isHoliday && usStatus.holidayReason ? `[${usStatus.holidayReason}]` : ''}
+              </span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>每日 08:00 執行</span>
+            </div>
           </div>
           <div style={{ fontSize: '0.78rem', color: usSummary ? '#f8fafc' : 'var(--text-muted)', lineHeight: 1.5 }}>
             {formatScheduleSummaryText(usSummary, 'US')}

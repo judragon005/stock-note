@@ -54,6 +54,9 @@ function getMarketAnchorDate(market = 'TW', now = new Date()) {
   }
 }
 
+
+const { getLatestTdccPublishDate } = require('./trading-calendar-engine.cjs');
+
 /**
  * 計算指定時間點當前最新已結算之 TDCC 週五基準日 (每週五 21:00 結算)
  * @param {Date} [now=new Date()] 基準時間
@@ -76,7 +79,6 @@ function getLatestSettledTdccFriday(now = new Date()) {
 
   const target = new Date(local);
   if (day === 5) {
-    // 週五：若已滿 21:00 則結算當日，否則退回上週五 (7 天前)
     if (totalMins >= 21 * 60) {
       return formatDate(local);
     } else {
@@ -85,11 +87,12 @@ function getLatestSettledTdccFriday(now = new Date()) {
     }
   }
 
-  // 非週五：計算退至最近一個已過週五的天數 ((day + 2) % 7 天)
   const daysToFriday = (day + 7 - 5) % 7;
   target.setDate(target.getDate() - daysToFriday);
   return formatDate(target);
 }
+
+
 
 /**
  * 計算指定時間點當前最新已結算申報之月營收月份 (每月 10 日 17:30 截止申報)
@@ -192,6 +195,8 @@ function checkMarketFreshness(db, now = new Date()) {
 module.exports = {
   getMarketAnchorDate,
   getLatestSettledTdccFriday,
+  getLatestTdccPublishDate,
   getLatestSettledRevenueMonth,
   checkMarketFreshness,
 };
+

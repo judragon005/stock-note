@@ -25,6 +25,7 @@ const {
   isTwTradingDay,
   getPreviousTradingDay,
   normalizeDateStr,
+  getHolidayReason,
 } = require('./trading-calendar-engine.cjs');
 
 /**
@@ -461,9 +462,11 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
   const tpexHasData = tpexQuotesRaw?.tables?.[0]?.data?.length > 0 || tpexQuotesRaw?.aaData?.length > 0;
 
   if (!twseHasData && !tpexHasData) {
+    const reason = getHolidayReason(dateStr, 'TW');
     return {
       date: dateStr,
       isTradingDay: false,
+      holidayReason: reason,
       quotesCount: 0,
       chipsCount: 0,
     };
@@ -619,8 +622,13 @@ async function runTwDateDrivenBackfill(options = {}) {
           `✔ 成功 [上市: ${res.twseQuotesCount || '-'} 檔 | 上櫃: ${res.tpexQuotesCount || '-'} 檔] [籌碼: ${res.chipsCount} 檔]`
         );
       } else {
-        console.log(`⚠️ [官方無資料（異常）] 略過`);
-        failedDates.push({ date: dateStr, reason: '官方回傳無資料或非交易日' });
+        const holidayReason = res.holidayReason || getHolidayReason(dateStr, 'TW');
+        if (holidayReason) {
+          console.log(`ℹ️ [休市日 (${holidayReason})] 略過`);
+        } else {
+          console.log(`⚠️ [官方無資料（異常）] 略過`);
+          failedDates.push({ date: dateStr, reason: '官方回傳無資料或非交易日' });
+        }
       }
 
       if (typeof options.onProgress === 'function') {
