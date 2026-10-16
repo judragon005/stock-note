@@ -583,6 +583,7 @@ async function runTwDateDrivenBackfill(options = {}) {
       break;
     }
 
+    let isCachedDate = false;
     try {
       // Spec 0187 / Ticket 02: 單日看門狗熔斷保護 (限時 45 秒)
       const perDateTimeoutMs = options.perDateTimeoutMs || 45000;
@@ -601,6 +602,7 @@ async function runTwDateDrivenBackfill(options = {}) {
       });
 
       if (res.cached) {
+        isCachedDate = true;
         totalTradingDays++;
         totalQuotesIngested += res.quotesCount;
         totalChipsIngested += res.chipsCount;
@@ -639,8 +641,8 @@ async function runTwDateDrivenBackfill(options = {}) {
       failedDates.push({ date: dateStr, reason: err.message });
     }
 
-    // 每一天處理完畢後的防爬蟲冷卻 (快取命中時不冷卻)
-    if (throttleMs > 0 && i < dates.length - 1) {
+    // 每一天處理完畢後的防爬蟲冷卻 (Spec 0189 / Ticket 02: 快取命中時 0ms 零延遲略過)
+    if (!isCachedDate && throttleMs > 0 && i < dates.length - 1) {
       await sleep(throttleMs);
     }
   }
@@ -698,6 +700,58 @@ async function runTwDateDrivenBackfill(options = {}) {
 }
 
 
+/**
+ * 探測台股歷史數據庫中之缺漏交易日 (Spec 0189 / Ticket 01)
+ * @param {object} [options]
+ * @param {number} [options.maxLookbackDays=250]
+ * @param {string} [options.endDate]
+ * @param {Date} [options.customNow]
+ * @param {string[]} [options.datesOverride]
+ * @param {string} [options.dbPath]
+ * @returns {{ hasGaps: boolean, gapDates: string[], totalChecked: number, validCount: number, latestInDbDate: string | null }}
+ */
+function detectTwDateGaps(options = {}) {
+  const maxLookbackDays = options.maxLookbackDays || 250;
+  const dates = Array.isArray(options.datesOverride) && options.datesOverride.length > 0
+    ? options.datesOverride
+    : generateTradeDateCandidates(maxLookbackDays, options.endDate, options.customNow);
+
+  const db = initSqliteLakehouseDb(options.dbPath);
+  const { stockStmt, chipStmt } = getVerificationStmts(db);
+
+  const gapDates = [];
+  let validCount = 0;
+  let latestInDbDate = null;
+
+  for (const dateStr of dates) {
+    try {
+      const stockRow = stockStmt.get(dateStr);
+      const chipRow = chipStmt.get(dateStr);
+      const stockCount = stockRow ? Number(stockRow.stockCount) : 0;
+      const chipCount = chipRow ? Number(chipRow.n) : 0;
+
+      if (stockCount >= 1800 && chipCount >= 2000) {
+        validCount++;
+        if (!latestInDbDate) {
+          latestInDbDate = dateStr;
+        }
+      } else {
+        gapDates.push(dateStr);
+      }
+    } catch {
+      gapDates.push(dateStr);
+    }
+  }
+
+  return {
+    hasGaps: gapDates.length > 0,
+    gapDates,
+    totalChecked: dates.length,
+    validCount,
+    latestInDbDate,
+  };
+}
+
 module.exports = {
   sleep,
   defaultFetchJson,
@@ -709,6 +763,7 @@ module.exports = {
   saveTwDailyQuotesBatch,
   getVerificationStmts,
   fetchAndIngestTwDailyData,
+  detectTwDateGaps,
   runTwDateDrivenBackfill,
 };
 

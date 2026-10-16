@@ -10,7 +10,7 @@
  */
 
 const { initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
-const { runTwDateDrivenBackfill } = require('./backfill-tw-history-web.cjs');
+const { runTwDateDrivenBackfill, detectTwDateGaps } = require('./backfill-tw-history-web.cjs');
 
 /**
  * 預估剩餘時間 (ETA) 計算器 (Spec 0184 / Ticket 05)
@@ -47,17 +47,18 @@ function calculateEta(startedAt, completedDays, totalDays) {
 }
 
 /**
- * 全域回補進度狀態 (Spec 0188 / Ticket 06: 分軌進度分離)
+ * 全域回補進度狀態 (Spec 0188 / Ticket 06: 分軌進度分離; Spec 0189 / Ticket 03: daysMode)
  */
 let backfillGlobalStatus = {
   isRunning: false,
   market: 'ALL',
+  daysMode: 'auto',
   progressPct: 0,
   globalProgressPct: 0,
   currentTask: 'IDLE',
   currentDate: null,
   completedDays: 0,
-  totalDays: 250,
+  totalDays: 0,
   estimatedRemainingMs: null,
   etaFormatted: null,
   tw: { status: 'idle', progressPct: 0, totalQuotes: 0, totalChips: 0 },
@@ -81,12 +82,13 @@ function resetBackfillStateForTest() {
   backfillGlobalStatus = {
     isRunning: false,
     market: 'ALL',
+    daysMode: 'auto',
     progressPct: 0,
     globalProgressPct: 0,
     currentTask: 'IDLE',
     currentDate: null,
     completedDays: 0,
-    totalDays: 250,
+    totalDays: 0,
     estimatedRemainingMs: null,
     etaFormatted: null,
     tw: { status: 'idle', progressPct: 0, totalQuotes: 0, totalChips: 0 },
@@ -102,7 +104,7 @@ function resetBackfillStateForTest() {
 /**
  * 解析 CLI 參數
  * @param {string[]} [argv=process.argv]
- * @returns {{ market: 'ALL' | 'TW' | 'US', days: number, throttleMs: number }}
+ * @returns {{ market: 'ALL' | 'TW' | 'US', days: number | 'auto', throttleMs: number }}
  */
 function parseBackfillCliArgs(argv = process.argv) {
   let market = 'ALL';
@@ -118,9 +120,11 @@ function parseBackfillCliArgs(argv = process.argv) {
       const val = argv[i + 1].toUpperCase();
       if (val === 'TW' || val === 'US' || val === 'ALL') market = val;
     } else if (arg.startsWith('--days=')) {
-      days = parseInt(arg.split('=')[1], 10) || 250;
+      const val = arg.split('=')[1].toLowerCase();
+      days = val === 'auto' ? 'auto' : (parseInt(val, 10) || 250);
     } else if (arg === '--days' && argv[i + 1]) {
-      days = parseInt(argv[i + 1], 10) || 250;
+      const val = String(argv[i + 1]).toLowerCase();
+      days = val === 'auto' ? 'auto' : (parseInt(val, 10) || 250);
     } else if (arg.startsWith('--throttle=')) {
       throttleMs = parseInt(arg.split('=')[1], 10) || 3000;
     } else if (arg === '--throttle' && argv[i + 1]) {
@@ -217,10 +221,13 @@ function resetBackfillGlobalStatus() {
   }
 
   backfillGlobalStatus.isRunning = false;
+  backfillGlobalStatus.daysMode = 'auto';
   backfillGlobalStatus.progressPct = 0;
+  backfillGlobalStatus.globalProgressPct = 0;
   backfillGlobalStatus.currentTask = 'IDLE';
   backfillGlobalStatus.currentDate = null;
   backfillGlobalStatus.completedDays = 0;
+  backfillGlobalStatus.totalDays = 0;
   backfillGlobalStatus.estimatedRemainingMs = null;
   backfillGlobalStatus.etaFormatted = null;
   backfillGlobalStatus.error = null;
@@ -244,12 +251,15 @@ function triggerBackfillTask(options = {}) {
   const currentSignal = activeAbortController.signal;
 
   const market = options.market || 'ALL';
-  const days = options.days || 250;
+  const rawDays = options.days;
+  const isAuto = rawDays === 'auto' || rawDays === undefined || rawDays === '' || rawDays === null;
+  const days = isAuto ? 'auto' : (parseInt(rawDays, 10) || 250);
   const throttleMs = options.throttleMs !== undefined ? options.throttleMs : 3000;
 
   backfillGlobalStatus.isRunning = true;
   backfillGlobalStatus.market = market;
-  backfillGlobalStatus.totalDays = days;
+  backfillGlobalStatus.daysMode = isAuto ? 'auto' : 'fixed';
+  backfillGlobalStatus.totalDays = isAuto ? 0 : days;
   backfillGlobalStatus.completedDays = 0;
   backfillGlobalStatus.progressPct = 0;
   backfillGlobalStatus.estimatedRemainingMs = null;
@@ -285,7 +295,11 @@ function triggerBackfillTask(options = {}) {
     }
   });
 
-  return { started: true, message: `台美雙軌歷史回補任務已啟動 (市場: ${market}, 交易日: ${days} 天)` };
+  const launchMsg = isAuto
+    ? `台美雙軌歷史回補任務已啟動 (市場: ${market}, 模式: ⚡ 智慧自動補缺)`
+    : `台美雙軌歷史回補任務已啟動 (市場: ${market}, 交易日: ${days} 天)`;
+
+  return { started: true, message: launchMsg };
 }
 
 
@@ -294,17 +308,19 @@ function triggerBackfillTask(options = {}) {
  * @param {object} [options]
  */
 async function runFullMarketHistoryBackfill(options = {}) {
-  const { market = 'ALL', days = 250, throttleMs = 3000, dbPath } = options;
+  const { market = 'ALL', days = 'auto', throttleMs = 3000, dbPath } = options;
   const db = initSqliteLakehouseDb(dbPath);
 
   if (!backfillGlobalStatus.startedAt) {
     backfillGlobalStatus.startedAt = Date.now();
   }
 
+  const isAutoMode = days === 'auto';
+
   console.log(`\n======================================================`);
-  console.log(`🚀 [Spec 0168] 啟動台美雙軌全市場日 K 歷史回補總控引擎`);
+  console.log(`🚀 [Spec 0168 / Spec 0189] 啟動台美雙軌全市場歷史回補總控引擎`);
   console.log(`- 模式目標市場: ${market}`);
-  console.log(`- 回補交易日數: ${days} 天`);
+  console.log(`- 回補模式: ${isAutoMode ? '⚡ 智慧自動補缺 (Smart Gap Catch-up)' : `📅 固定 ${days} 交易日`}`);
   console.log(`- 請求節流延遲: ${throttleMs}ms`);
   console.log(`======================================================\n`);
 
@@ -313,17 +329,17 @@ async function runFullMarketHistoryBackfill(options = {}) {
     backfillGlobalStatus.currentTask = 'TW';
     backfillGlobalStatus.tw.status = 'running';
 
-    const twRes = await runTwDateDrivenBackfill({
-      days,
+    let twOptions = {
       throttleMs,
       dbPath,
+      signal: options.signal,
       startedAt: backfillGlobalStatus.startedAt,
       onProgress: (p) => {
         backfillGlobalStatus.completedDays = p.index;
         backfillGlobalStatus.currentDate = p.date;
-        const twPct = Math.round((p.index / p.total) * 100);
+        const twPct = Math.round((p.index / (p.total || 1)) * 100);
         backfillGlobalStatus.tw.progressPct = twPct;
-        const globalPct = Math.round((p.index / p.total) * (market === 'ALL' ? 50 : 100));
+        const globalPct = Math.round((p.index / (p.total || 1)) * (market === 'ALL' ? 50 : 100));
         backfillGlobalStatus.progressPct = globalPct;
         backfillGlobalStatus.globalProgressPct = globalPct;
         backfillGlobalStatus.tw.totalQuotes += p.quotesCount;
@@ -345,11 +361,38 @@ async function runFullMarketHistoryBackfill(options = {}) {
           etaFormatted: eta.etaFormatted,
         });
       },
-    });
+    };
 
-    backfillGlobalStatus.tw.status = 'completed';
-    backfillGlobalStatus.tw.progressPct = 100;
-    console.log(`✔ [台股軌道] 回補完成！入庫日 K: ${twRes.totalQuotesIngested} 筆, 籌碼: ${twRes.totalChipsIngested} 筆。`);
+    if (isAutoMode) {
+      console.log(`🔍 [智慧補缺] 正在探測 SQLite 湖倉歷史數據水位線與缺口...`);
+      const twGaps = detectTwDateGaps({ dbPath, maxLookbackDays: 250 });
+      if (!twGaps.hasGaps) {
+        console.log(`✔ [智慧補缺] 本地湖倉數據已是最新 (最新在庫: ${twGaps.latestInDbDate || '今日'})，無缺漏交易日！`);
+        backfillGlobalStatus.tw.status = 'completed';
+        backfillGlobalStatus.tw.progressPct = 100;
+        backfillGlobalStatus.completedDays = 0;
+        backfillGlobalStatus.totalDays = 0;
+        if (market === 'TW') {
+          backfillGlobalStatus.progressPct = 100;
+          backfillGlobalStatus.globalProgressPct = 100;
+        }
+      } else {
+        console.log(`🔍 [智慧補缺] 檢測到 ${twGaps.gapDates.length} 個缺失交易日 (${twGaps.gapDates.join(', ')})，啟動自適應補漏...`);
+        backfillGlobalStatus.totalDays = twGaps.gapDates.length;
+        twOptions.datesOverride = twGaps.gapDates;
+        const twRes = await runTwDateDrivenBackfill(twOptions);
+        backfillGlobalStatus.tw.status = 'completed';
+        backfillGlobalStatus.tw.progressPct = 100;
+        console.log(`✔ [台股軌道] 智慧補漏完成！入庫日 K: ${twRes.totalQuotesIngested} 筆, 籌碼: ${twRes.totalChipsIngested} 筆。`);
+      }
+    } else {
+      backfillGlobalStatus.totalDays = Number(days);
+      twOptions.days = Number(days);
+      const twRes = await runTwDateDrivenBackfill(twOptions);
+      backfillGlobalStatus.tw.status = 'completed';
+      backfillGlobalStatus.tw.progressPct = 100;
+      console.log(`✔ [台股軌道] 回補完成！入庫日 K: ${twRes.totalQuotesIngested} 筆, 籌碼: ${twRes.totalChipsIngested} 筆。`);
+    }
   }
 
   // 2. 美股回補軌道
@@ -359,13 +402,16 @@ async function runFullMarketHistoryBackfill(options = {}) {
 
     try {
       const { runUsMarketSync } = require('./sync-us-market.cjs');
-      const usRes = await runUsMarketSync(['--bootstrap']);
+      const isDailyMode = isAutoMode || (typeof days === 'number' && days <= 20);
+      const usArgs = isDailyMode ? ['--mode=daily'] : ['--bootstrap'];
+      console.log(`[*] 美股軌道啟動 [模式: ${isDailyMode ? 'DAILY 增量同步' : 'BOOTSTRAP 全量建置'}]...`);
+      const usRes = await runUsMarketSync(usArgs);
 
       backfillGlobalStatus.us.status = 'completed';
       backfillGlobalStatus.us.progressPct = 100;
       backfillGlobalStatus.us.successCount = usRes?.successCount || 0;
       backfillGlobalStatus.us.failCount = usRes?.failCount || 0;
-      backfillGlobalStatus.us.totalQuotes = (usRes?.successCount || 0) * days;
+      backfillGlobalStatus.us.totalQuotes = (usRes?.successCount || 0) * (isAutoMode ? 1 : Number(days));
 
       // 查詢 SQLite sync_checkpoints 統計美股在庫標的總數 (Spec 0186 / Ticket 02)
       try {
@@ -375,7 +421,7 @@ async function runFullMarketHistoryBackfill(options = {}) {
         backfillGlobalStatus.us.totalInLakehouse = backfillGlobalStatus.us.successCount;
       }
 
-      console.log(`✔ [美股軌道] 全量採集完成！本次成功: ${usRes?.successCount} 檔, 失敗: ${usRes?.failCount} 檔, 湖倉在庫標的: ${backfillGlobalStatus.us.totalInLakehouse} 檔。`);
+      console.log(`✔ [美股軌道] 採集完成！本次成功: ${usRes?.successCount} 檔, 失敗: ${usRes?.failCount} 檔, 湖倉在庫標的: ${backfillGlobalStatus.us.totalInLakehouse} 檔。`);
     } catch (err) {
       backfillGlobalStatus.us.status = 'error';
       console.warn(`[美股軌道] 執行警告:`, err.message);

@@ -158,7 +158,7 @@ function createMarketApiMiddleware(customDbPath) {
     if (pathname === '/api/market/backfill-all') {
       const { triggerBackfillTask, getBackfillGlobalStatus } = require('./backfill-full-market-history.cjs');
       const targetMarket = (query.market || 'ALL').toUpperCase();
-      const targetDays = parseInt(query.days, 10) || 250;
+      const targetDays = query.days === 'auto' || !query.days ? 'auto' : (parseInt(query.days, 10) || 250);
       const resData = triggerBackfillTask({
         market: targetMarket,
         days: targetDays,

@@ -43,5 +43,16 @@ describe('MarketScheduleHubSection - 台美雙軌背景全回補控制台 (Spec 
     expect(lakehouseCount).toBe(1448);
     expect(deltaCount).toBe(0);
   });
+
+  it('3. [Spec 0189 / Ticket 04] 控制台下拉選單應支援 auto 智慧自動補缺與多級天數梯度 (5, 20, 60, 120, 250)', () => {
+    const html = renderToStaticMarkup(<MarketScheduleHubSection />);
+    expect(html).toContain('value="auto"');
+    expect(html).toContain('智慧自動補缺');
+    expect(html).toContain('value="5"');
+    expect(html).toContain('value="20"');
+    expect(html).toContain('value="60"');
+    expect(html).toContain('value="120"');
+    expect(html).toContain('value="250"');
+  });
 });
 

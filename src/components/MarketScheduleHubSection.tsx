@@ -64,9 +64,9 @@ export const MarketScheduleHubSection: React.FC = () => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // --- Spec 0168 / Ticket 09: 台美雙軌全歷史回補狀態 ---
+  // --- Spec 0168 / Ticket 09 / Spec 0189: 台美雙軌自適應歷史回補狀態 ---
   const [backfillMarket, setBackfillMarket] = useState<'ALL' | 'TW' | 'US'>('ALL');
-  const [backfillDays, setBackfillDays] = useState<number>(250);
+  const [backfillDays, setBackfillDays] = useState<number | 'auto'>('auto');
   const [backfillStatus, setBackfillStatus] = useState<BackfillStatus | null>(null);
   const [isStartingBackfill, setIsStartingBackfill] = useState<boolean>(false);
   const [backfillFeedback, setBackfillFeedback] = useState<string | null>(null);
@@ -413,10 +413,10 @@ export const MarketScheduleHubSection: React.FC = () => {
             <div>
               <h4 style={{ fontSize: '0.98rem', fontWeight: 700, margin: 0, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span>台美雙軌零 CSV 背景全歷史回補</span>
-                <span style={{ fontSize: '0.7rem', color: '#a78bfa', fontWeight: 500 }}>(Zero-CSV Full History Backfill)</span>
+                <span style={{ fontSize: '0.7rem', color: '#a78bfa', fontWeight: 500 }}>(Zero-CSV Adaptive Backfill)</span>
               </h4>
               <p style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
-                直接連線 TWSE/TPEx 官方 4 大每日全市場日報與美股分級隊列。用時間換空間，電腦不關機即可無痛補齊歷史至 SQLite 湖倉，支援 SQLite 斷點續傳。
+                預設【⚡ 智慧自動補缺】僅探測並補齊最新缺漏交易日（通常數秒內完成）；電腦不關機可隨時擴展歷史，支援 SQLite 斷點續傳。
               </p>
             </div>
           </div>
@@ -491,10 +491,13 @@ export const MarketScheduleHubSection: React.FC = () => {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>回補交易日數：</span>
+              <span style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>回補範圍：</span>
               <select
                 value={backfillDays}
-                onChange={(e) => setBackfillDays(Number(e.target.value))}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setBackfillDays(val === 'auto' ? 'auto' : Number(val));
+                }}
                 disabled={backfillStatus?.isRunning}
                 style={{
                   padding: '5px 8px',
@@ -505,7 +508,10 @@ export const MarketScheduleHubSection: React.FC = () => {
                   fontSize: '0.76rem',
                 }}
               >
-                <option value="60">60 交易日 (約一季短天期)</option>
+                <option value="auto">⚡ 智慧自動補缺 (Smart Catch-up - 預設)</option>
+                <option value="5">5 交易日 (約一週短天期)</option>
+                <option value="20">20 交易日 (約一月月線級)</option>
+                <option value="60">60 交易日 (約一季短波段)</option>
                 <option value="120">120 交易日 (約半年中天期)</option>
                 <option value="250">250 交易日 (約一年完整年線)</option>
               </select>
