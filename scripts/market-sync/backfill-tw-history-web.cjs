@@ -18,8 +18,14 @@ const {
   parseCleanNumber,
   parseTwseT86BulkData,
   parseTpexT86BulkData,
+  retryFetch,
 } = require('./market-sync-core.cjs');
 const { saveTwT86ToSqlite } = require('./ingest-tw-t86.cjs');
+const {
+  isTwTradingDay,
+  getPreviousTradingDay,
+  normalizeDateStr,
+} = require('./trading-calendar-engine.cjs');
 
 /**
  * 簡易非同步延遲
@@ -30,29 +36,56 @@ function sleep(ms) {
 }
 
 /**
- * 日期候選迭代器：往前取得 N 個非週末之交易日候選
- * @param {number} daysCount
+ * 日期候選迭代器：往前取得 N 個法定實質交易日候選 (Spec 0184 / Ticket 01)
+ * @param {number} [daysCount=250]
  * @param {string} [endDateStr] - YYYY-MM-DD
+ * @param {Date} [customNow] - 外部注入時間 (測試用)
  * @returns {string[]}
  */
-function generateTradeDateCandidates(daysCount = 250, endDateStr) {
+function generateTradeDateCandidates(daysCount = 250, endDateStr, customNow) {
   const result = [];
-  const current = endDateStr ? new Date(endDateStr) : new Date();
+  let cursorStr = '';
+
+  if (endDateStr) {
+    cursorStr = normalizeDateStr(endDateStr);
+  } else {
+    const now = customNow || new Date();
+    // 鎖定台北時間 (UTC+8) 以確保跨時區 (如 GitHub Actions Runner UTC) 判定一致
+    const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+    const twTime = new Date(utcMs + 8 * 3600000);
+    const twHour = twTime.getHours();
+    const twMin = twTime.getMinutes();
+    const totalMinutes = twHour * 60 + twMin;
+
+    const y = twTime.getFullYear();
+    const m = String(twTime.getMonth() + 1).padStart(2, '0');
+    const d = String(twTime.getDate()).padStart(2, '0');
+    const todayStr = `${y}-${m}-${d}`;
+
+    // 若今日為法定交易日且當前時間已過盤後發布門檻 (15:30)，則起始日為今日；否則退至前一交易日
+    if (isTwTradingDay(todayStr) && totalMinutes >= 15 * 60 + 30) {
+      cursorStr = todayStr;
+    } else {
+      cursorStr = getPreviousTradingDay(todayStr);
+    }
+  }
+
+
+  // 往前回溯收集足額法定實質交易日
+  const [y, m, d] = cursorStr.split('-').map(Number);
+  const cursor = new Date(Date.UTC(y, m - 1, d));
 
   while (result.length < daysCount) {
-    const dayOfWeek = current.getDay();
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      const y = current.getFullYear();
-      const m = String(current.getMonth() + 1).padStart(2, '0');
-      const d = String(current.getDate()).padStart(2, '0');
-      result.push(`${y}-${m}-${d}`);
+    const dStr = cursor.toISOString().slice(0, 10);
+    if (isTwTradingDay(dStr)) {
+      result.push(dStr);
     }
-    // 往前推算 1 天
-    current.setDate(current.getDate() - 1);
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
   }
 
   return result;
 }
+
 
 /**
  * 西元年轉民國年字串 (YYYY-MM-DD -> YYY/MM/DD)
@@ -210,6 +243,9 @@ function parseTpexDailyQuotesWithTransactions(rawData, dateStr) {
       const symbol = normalizeTwSymbol(rawSymbol);
       if (!symbol || symbol.length > 6) continue;
 
+      // Spec 0184 / Ticket 02: 排除 6 碼以 7 開頭之櫃買認購/認售權證，對齊上市 ALLBUT0999
+      if (/^7[0-9]{5}$/.test(symbol)) continue;
+
       const close = parseCleanNumber(row[2]);
       const open = parseCleanNumber(row[4]);
       const high = parseCleanNumber(row[5]);
@@ -300,19 +336,53 @@ function saveTwDailyQuotesBatch(quotesMap, customDbPath) {
  * 單日官方資料抓取與入庫
  * @param {string} dateStr - YYYY-MM-DD
  * @param {object} [options]
- * @returns {Promise<{ date: string, isTradingDay: boolean, quotesCount: number, chipsCount: number }>}
+ * @returns {Promise<{ date: string, isTradingDay: boolean, quotesCount: number, chipsCount: number, cached?: boolean, hasError?: boolean, errorReason?: string, twseQuotesCount?: number, tpexQuotesCount?: number }>}
  */
 async function fetchAndIngestTwDailyData(dateStr, options = {}) {
+  // Spec 0184 / Ticket 04: SQLite 雙指標健康快取秒級略過 (Smart Cache Skip)
+  if (!options.force && !options.inMemoryOnly) {
+    try {
+      const db = initSqliteLakehouseDb(options.dbPath);
+      const stockRow = db
+        .prepare("SELECT count(*) AS n FROM daily_candles WHERE date = ? AND symbol GLOB '[1-9][0-9][0-9][0-9]'")
+        .get(dateStr);
+      const chipRow = db
+        .prepare("SELECT count(*) AS n FROM tw_institutional_chips WHERE date = ?")
+        .get(dateStr);
+      const stockCount = stockRow ? Number(stockRow.n) : 0;
+      const chipCount = chipRow ? Number(chipRow.n) : 0;
+
+      if (stockCount >= 1800 && chipCount >= 2000) {
+        return {
+          date: dateStr,
+          isTradingDay: true,
+          cached: true,
+          quotesCount: stockCount,
+          chipsCount: chipCount,
+        };
+      }
+    } catch (e) {
+      // 容錯降級：若 DB 快取查詢失敗，則繼續執行網路抓取
+    }
+  }
+
   const fetcher = options.fetcher || defaultFetchJson;
   const throttleMs = options.throttleMs !== undefined ? options.throttleMs : 3000;
   const yyyymmdd = dateStr.replace(/-/g, '');
   const rocDateStr = formatRocDate(dateStr);
+  const retries = options.retries !== undefined ? options.retries : 3;
+  const retryDelayMs = options.retryDelayMs !== undefined ? options.retryDelayMs : 2000;
 
-  // 1. TWSE MI_INDEX (上市收盤價量與成交筆數)
+  // 1. TWSE MI_INDEX (上市收盤價量與成交筆數) - Spec 0184 / Ticket 03: 指數退避重試
   let twseQuotesRaw = null;
   try {
-    twseQuotesRaw = await fetcher(
-      `https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=${yyyymmdd}&type=ALLBUT0999&response=json`
+    twseQuotesRaw = await retryFetch(
+      () =>
+        fetcher(
+          `https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=${yyyymmdd}&type=ALLBUT0999&response=json`
+        ),
+      retries,
+      retryDelayMs
     );
   } catch (e) {
     console.warn(`[TWSE MI_INDEX] 下載跳過:`, e.message);
@@ -324,8 +394,13 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
   // 2. TWSE T86 (上市三大法人)
   let twseT86Raw = null;
   try {
-    twseT86Raw = await fetcher(
-      `https://www.twse.com.tw/rwd/zh/fund/T86?date=${yyyymmdd}&selectType=ALLBUT0999&response=json`
+    twseT86Raw = await retryFetch(
+      () =>
+        fetcher(
+          `https://www.twse.com.tw/rwd/zh/fund/T86?date=${yyyymmdd}&selectType=ALLBUT0999&response=json`
+        ),
+      retries,
+      retryDelayMs
     );
   } catch (e) {
     console.warn(`[TWSE T86] 下載跳過:`, e.message);
@@ -336,8 +411,13 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
   // 3. TPEx 1430 (上櫃收盤價量與成交筆數)
   let tpexQuotesRaw = null;
   try {
-    tpexQuotesRaw = await fetcher(
-      `https://www.tpex.org.tw/web/stock/aftertrading/otc_quotes_no1430/stk_wn1430_result.php?l=zh-tw&d=${rocDateStr}&se=AL&_=${Date.now()}`
+    tpexQuotesRaw = await retryFetch(
+      () =>
+        fetcher(
+          `https://www.tpex.org.tw/web/stock/aftertrading/otc_quotes_no1430/stk_wn1430_result.php?l=zh-tw&d=${rocDateStr}&se=AL&_=${Date.now()}`
+        ),
+      retries,
+      retryDelayMs
     );
   } catch (e) {
     console.warn(`[TPEx 1430] 下載跳過:`, e.message);
@@ -348,8 +428,13 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
   // 4. TPEx T86 (上櫃三大法人)
   let tpexT86Raw = null;
   try {
-    tpexT86Raw = await fetcher(
-      `https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=json&se=EW&t=D&d=${rocDateStr}&_=${Date.now()}`
+    tpexT86Raw = await retryFetch(
+      () =>
+        fetcher(
+          `https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=json&se=EW&t=D&d=${rocDateStr}&_=${Date.now()}`
+        ),
+      retries,
+      retryDelayMs
     );
   } catch (e) {
     console.warn(`[TPEx T86] 下載跳過:`, e.message);
@@ -372,6 +457,23 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
   // 解析行情
   const twseQuotes = parseTwseDailyQuotesWithTransactions(twseQuotesRaw, dateStr);
   const tpexQuotes = parseTpexDailyQuotesWithTransactions(tpexQuotesRaw, dateStr);
+  const twseQuotesCount = Object.keys(twseQuotes).length;
+  const tpexQuotesCount = Object.keys(tpexQuotes).length;
+
+  // Spec 0184 / Ticket 03: 單邊缺失保護
+  if ((twseQuotesCount > 0 && tpexQuotesCount === 0) || (twseQuotesCount === 0 && tpexQuotesCount > 0)) {
+    return {
+      date: dateStr,
+      isTradingDay: true,
+      hasError: true,
+      errorReason: `單邊缺失 (上市: ${twseQuotesCount} 檔, 上櫃: ${tpexQuotesCount} 檔)`,
+      quotesCount: twseQuotesCount + tpexQuotesCount,
+      chipsCount: 0,
+      twseQuotesCount,
+      tpexQuotesCount,
+    };
+  }
+
   const allQuotes = { ...twseQuotes, ...tpexQuotes };
 
   // 解析籌碼並正規化 TPEx 代碼
@@ -401,11 +503,14 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
     isTradingDay: true,
     quotesCount,
     chipsCount,
+    twseQuotesCount,
+    tpexQuotesCount,
   };
 }
 
+
 /**
- * 執行完整日期驅動歷史回補循環
+ * 執行完整日期驅動歷史回補循環 (Spec 0184 / Ticket 05)
  * @param {object} [options]
  * @returns {Promise<object>}
  */
@@ -413,33 +518,64 @@ async function runTwDateDrivenBackfill(options = {}) {
   const days = options.days || 250;
   const throttleMs = options.throttleMs !== undefined ? options.throttleMs : 3000;
   const dates = generateTradeDateCandidates(days, options.endDate);
+  const startedAt = options.startedAt || Date.now();
 
-  console.log(`[Spec 0168 / Ticket 07] 啟動台股日期驅動歷史全回補管線...`);
+  console.log(`[Spec 0168 / Spec 0184] 啟動台股日期驅動歷史全回補管線...`);
   console.log(`[*] 目標交易日數: ${days} 天 (${dates[dates.length - 1]} ~ ${dates[0]})`);
   console.log(`[*] 防爬蟲間隔: ${throttleMs}ms / 請求`);
 
   let totalTradingDays = 0;
   let totalQuotesIngested = 0;
   let totalChipsIngested = 0;
+  const failedDates = [];
 
   for (let i = 0; i < dates.length; i++) {
     const dateStr = dates[i];
     const progressPct = (((i + 1) / dates.length) * 100).toFixed(1);
-    process.stdout.write(`[進度 ${progressPct}% | ${i + 1}/${dates.length}] 處理日期: ${dateStr} ... `);
+
+    // 計算 ETA 字串
+    let etaStr = '';
+    if (i > 0) {
+      const elapsedMs = Date.now() - startedAt;
+      const avgMs = elapsedMs / i;
+      const remMs = Math.max(0, Math.round((dates.length - i) * avgMs));
+      const remMin = Math.round(remMs / 60000);
+      const etaDate = new Date(Date.now() + remMs);
+      const hh = String(etaDate.getHours()).padStart(2, '0');
+      const mm = String(etaDate.getMinutes()).padStart(2, '0');
+      const remText = remMin <= 0 ? '剩餘不到 1 分鐘' : `剩餘約 ${remMin} 分鐘`;
+      etaStr = `${remText} (預計 ${hh}:${mm} 完成)`;
+    } else {
+      etaStr = '預估中...';
+    }
+
+    process.stdout.write(`[進度 ${progressPct}% | ${i + 1}/${dates.length} | ${etaStr}] 處理日期: ${dateStr} ... `);
 
     try {
       const res = await fetchAndIngestTwDailyData(dateStr, {
         throttleMs,
         dbPath: options.dbPath,
+        force: options.force,
       });
 
-      if (res.isTradingDay) {
+      if (res.cached) {
         totalTradingDays++;
         totalQuotesIngested += res.quotesCount;
         totalChipsIngested += res.chipsCount;
-        console.log(`✔ 成功 (收盤行情: ${res.quotesCount} 檔, 籌碼: ${res.chipsCount} 檔)`);
+        console.log(`✔ 快取命中已在庫 ⚡ 略過 (4碼股票: ${res.quotesCount} 檔, 籌碼: ${res.chipsCount} 筆)`);
+      } else if (res.hasError) {
+        console.log(`⚠️ 異常: ${res.errorReason} (已推入補漏清單)`);
+        failedDates.push({ date: dateStr, reason: res.errorReason });
+      } else if (res.isTradingDay) {
+        totalTradingDays++;
+        totalQuotesIngested += res.quotesCount;
+        totalChipsIngested += res.chipsCount;
+        console.log(
+          `✔ 成功 [上市: ${res.twseQuotesCount || '-'} 檔 | 上櫃: ${res.tpexQuotesCount || '-'} 檔] [籌碼: ${res.chipsCount} 檔]`
+        );
       } else {
-        console.log(`[休市日] 略過`);
+        console.log(`⚠️ [官方無資料（異常）] 略過`);
+        failedDates.push({ date: dateStr, reason: '官方回傳無資料或非交易日' });
       }
 
       if (typeof options.onProgress === 'function') {
@@ -448,15 +584,17 @@ async function runTwDateDrivenBackfill(options = {}) {
           total: dates.length,
           date: dateStr,
           isTradingDay: res.isTradingDay,
+          cached: res.cached,
           quotesCount: res.quotesCount,
           chipsCount: res.chipsCount,
         });
       }
     } catch (err) {
       console.log(`❌ 失敗: ${err.message}`);
+      failedDates.push({ date: dateStr, reason: err.message });
     }
 
-    // 每一天處理完畢後的防爬蟲冷卻
+    // 每一天處理完畢後的防爬蟲冷卻 (快取命中時不冷卻)
     if (throttleMs > 0 && i < dates.length - 1) {
       await sleep(throttleMs);
     }
@@ -467,14 +605,22 @@ async function runTwDateDrivenBackfill(options = {}) {
   console.log(`- 實際交易日數: ${totalTradingDays} 天`);
   console.log(`- 累計入庫收盤日 K: ${totalQuotesIngested} 筆`);
   console.log(`- 累計入庫籌碼紀錄: ${totalChipsIngested} 筆`);
+  if (failedDates.length > 0) {
+    console.log(`\n⚠️ 以下日期 (${failedDates.length} 天) 存在單邊缺失或異常，請稍後重試或單獨補漏：`);
+    for (const f of failedDates) {
+      console.log(`  - ${f.date}: ${f.reason}`);
+    }
+  }
   console.log(`========================================\n`);
 
   return {
     totalTradingDays,
     totalQuotesIngested,
     totalChipsIngested,
+    failedDates,
   };
 }
+
 
 module.exports = {
   sleep,

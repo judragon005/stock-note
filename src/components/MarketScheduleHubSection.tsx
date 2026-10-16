@@ -22,12 +22,15 @@ export interface BackfillStatus {
   currentDate: string | null;
   completedDays: number;
   totalDays: number;
+  estimatedRemainingMs?: number | null;
+  etaFormatted?: string | null;
   tw: { status: string; totalQuotes: number; totalChips: number };
   us: { status: string; totalQuotes: number; successCount: number; failCount: number };
   error: string | null;
   startedAt: number | null;
   updatedAt: number;
 }
+
 
 // 系統命令與腳本路徑常數 (Spec 0133)
 export const WINDOWS_SCHEDULE_COMMANDS = {
@@ -519,16 +522,34 @@ export const MarketScheduleHubSection: React.FC = () => {
               border: '1px solid rgba(139, 92, 246, 0.25)',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '0.76rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '0.76rem', flexWrap: 'wrap', gap: '8px' }}>
               <span style={{ color: 'var(--text-secondary)' }}>
                 {backfillStatus.isRunning
                   ? `正在回補 ${backfillStatus.currentTask === 'TW' ? '🇹🇼 台股' : '🇺🇸 美股'} (日期: ${backfillStatus.currentDate || '計算中...'})`
                   : '歷史回補進度：'}
               </span>
-              <span style={{ fontWeight: 700, color: '#38bdf8' }}>
-                {backfillStatus.progressPct}% ({backfillStatus.completedDays} / {backfillStatus.totalDays} 天)
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {backfillStatus.isRunning && backfillStatus.etaFormatted && (
+                  <span
+                    style={{
+                      fontSize: '0.72rem',
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      background: 'rgba(56, 189, 248, 0.15)',
+                      border: '1px solid rgba(56, 189, 248, 0.3)',
+                      color: '#38bdf8',
+                      fontWeight: 500,
+                    }}
+                  >
+                    ⏱️ {backfillStatus.etaFormatted}
+                  </span>
+                )}
+                <span style={{ fontWeight: 700, color: '#38bdf8' }}>
+                  {backfillStatus.progressPct}% ({backfillStatus.completedDays} / {backfillStatus.totalDays} 天)
+                </span>
+              </div>
             </div>
+
 
             {/* 進度條 */}
             <div style={{ width: '100%', height: '8px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '4px', overflow: 'hidden', marginBottom: '12px' }}>

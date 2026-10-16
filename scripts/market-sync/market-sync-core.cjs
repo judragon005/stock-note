@@ -259,6 +259,27 @@ function normalizeUsSymbol(symbol) {
   const clean = symbol.trim().toUpperCase();
   return clean.replace(/\./g, '-');
 }
+/**
+ * 具有指數退避的非同步重試器 (Spec 0184)
+ * @param {Function} fn
+ * @param {number} [retries=3]
+ * @param {number} [delayMs=1500]
+ * @returns {Promise<any>}
+ */
+async function retryFetch(fn, retries = 3, delayMs = 1500) {
+  let lastErr;
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (i < retries - 1) {
+        await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
+      }
+    }
+  }
+  throw lastErr;
+}
 
 module.exports = {
   formatDateYMD,
@@ -271,4 +292,6 @@ module.exports = {
   ensureDirSync,
   saveJsonAtomic,
   normalizeUsSymbol,
+  retryFetch,
 };
+
