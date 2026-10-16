@@ -16,52 +16,37 @@ const {
   saveJsonAtomic,
 } = require('./market-sync-core.cjs');
 
-function fetchJson(url, options = {}) {
-  return new Promise((resolve, reject) => {
-    const client = url.startsWith('https') ? https : http;
-    const req = client.get(
-      url,
-      {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-          Accept: 'application/json, text/javascript, */*; q=0.01',
-          ...options.headers,
-        },
-        timeout: 15000,
-      },
-      (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          reject(new Error(`HTTP 重定向 (${res.statusCode}) 至: ${res.headers.location}`));
-          return;
-        }
-        if (res.statusCode < 200 || res.statusCode >= 300) {
-          reject(new Error(`HTTP 異常狀態碼: ${res.statusCode}`));
-          return;
-        }
-        let raw = '';
-        res.on('data', (chunk) => (raw += chunk));
-        res.on('end', () => {
-          if (!raw || !raw.trim()) {
-            reject(new Error(`回應內容為空 (0 bytes)`));
-            return;
-          }
-          try {
-            const data = JSON.parse(raw);
-            resolve(data);
-          } catch (err) {
-            reject(new Error(`JSON 解析失敗 (${res.statusCode}): ${err.message}`));
-          }
-        });
-      }
-    );
+async function fetchJson(url, options = {}) {
+  const timeoutMs = options.timeoutMs || 15000;
+  const signal = options.signal || (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined);
 
-    req.on('error', reject);
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error(`請求逾時 (15s): ${url}`));
-    });
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
+      Accept: 'application/json, text/javascript, */*; q=0.01',
+      ...options.headers,
+    },
+    signal,
   });
+
+  if (response.status >= 300 && response.status < 400 && response.headers.get('location')) {
+    throw new Error(`HTTP 重定向 (${response.status}) 至: ${response.headers.get('location')}`);
+  }
+  if (!response.ok) {
+    throw new Error(`HTTP 異常狀態碼: ${response.status}`);
+  }
+
+  const raw = await response.text();
+  if (!raw || !raw.trim()) {
+    throw new Error(`回應內容為空 (0 bytes)`);
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`JSON 解析失敗 (${response.status}): ${err.message}`);
+  }
 }
+
 
 async function retryFetch(fn, retries = 3, delayMs = 1500) {
   let lastErr;
