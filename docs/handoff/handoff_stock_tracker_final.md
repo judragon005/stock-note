@@ -1,17 +1,16 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-10-16 11:45 (UTC+8)  
+> **交接產生時間**：2026-10-16 15:35 (UTC+8)  
 > **當前最新里程碑**：
-> - **V8.97.0 台股歷史回補智慧快取略過、盤中時間定錨、權證排除與即時 ETA 引擎**（ADR 0184, Spec 0184, Issues #258, #260, PRs #259, #261）：
->   - **盤中時間守衛與交易日曆重用**：鎖定台北時間 (UTC+8)，15:30 前自動定錨至昨日 (T-1)，15:30 始納入今日；法定休市日 0 請求排除，消滅誤判「[休市日] 略過」之語意混淆。
->   - **TPEx 1430 櫃買權證排除**：過濾排除 6 碼 7 開頭認購售權證，與上市 `ALLBUT0999` 標準齊平，單日有效入庫收盤檔數收斂至 ~2,400 檔核心標的，**削減 70% 無效記錄**。
->   - **官方端點指數退避與單邊缺失隔離**：共用 `retryFetch`（重試 3 次，指數退避）；平日單邊網路中斷隔離至 `failedDates` 集中補漏清單，拒絕偽成功入庫。
->   - **SQLite 雙指標健康快取秒級略過與 WeakMap Statement 快取**：普通股 $\ge 1,800$ 且籌碼 $\ge 2,000$ 秒級跳過，重複回補 250 天由 50 分鐘壓縮至數秒鐘；WeakMap 快取 prepared statement 杜絕 500 次重複 SQL 編譯。
->   - **即時 ETA 預估與前端彩色徽章**：終端機與前端進度條同步輸出預計剩餘時間與完成時刻（如 `⏱️ 剩餘約 8 分鐘 (預計 11:25 完成)`）；Vite proxy 攔截 `ECONNRESET` 消除紅字堆疊追蹤。
-> - **V8.96.0 個人投資者法人級微觀防禦、現金流預算與極簡風控強化**（ADR 0183, Spec 0183, Issue #254, PRs #255, #256）
-> - **V8.95.0 戰情室 Prompt 標的時態隔離、庫存自動錨定與時態籌碼細化**（ADR 0182, Spec 0182, Issues #248, #251, PRs #250, #252）
-> - **V8.94.0 個股深度提示詞物理遷移至主力戰情室與外聯 AI 防幻覺定錨架構**（ADR 0181, Spec 0181, Issues #243, #245, PRs #244, #246）
-> **品質狀態**：全量單元測試 **1,641/1,641 通過 (100% Passed / 222 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> - **V8.100.0 歷史回補端到端全生命週期超時、單日看門狗與任務取消重設控制**（ADR 0187, Spec 0187, Issue #268, PR #269）：
+>   - **原生 fetch 與全生命週期超時**：全面升級 `defaultFetchJson` 採用原生 `fetch` 搭配 `AbortSignal.timeout(20000)`，徹底根除 Response 串流傳輸中的靜默 Socket 掛起。
+>   - **單日主迴圈看門狗熔斷**：外層以 `Promise.race` 實作 45 秒保護機制，單日超時自動推入 `failedDates` 並平滑推進至下一交易日，絕不死結。
+>   - **後端取消與重設 API**：實作 `cancelBackfillTask()` 與 `resetBackfillGlobalStatus()`，Vite 中介層註冊 `POST /api/market/backfill-cancel` 與 `POST /api/market/backfill-reset`。
+>   - **前端排程中心可觀測性加固**：面板提供「停止任務」與「重設狀態鎖」按鈕，使用者可自主解除卡死與控制排程。
+> - **V8.99.0 美股歷史回補透明度透視、斷點庫存對齊與 Windows EPERM 韌性強化**（ADR 0186, Spec 0186, Issue #266, PR #267）
+> - **V8.98.0 台股歷史回補 ETF 快取查驗納入、法人現貨口徑對齊與透視化可觀測性**（ADR 0185, Spec 0185, Issue #264, PR #265）
+> - **V8.97.0 台股歷史回補智慧快取略過、盤中時間定錨、權證排除與即時 ETA 引擎**（ADR 0184, Spec 0184, Issues #258, #260, PRs #259, #261）
+> **品質狀態**：全量單元測試 **1,647/1,647 通過 (100% Passed / 222 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -52,6 +51,7 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0187`](file:///d:/APP/股票紀錄/docs/specs/0187-backfill-timeout-watchdog-and-cancellation-control-spec.md) | [`ADR 0187`](file:///d:/APP/股票紀錄/docs/adr/0187-backfill-timeout-watchdog-and-cancellation-control.md) | [`.scratch/issues/issue-268.md`](file:///d:/APP/股票紀錄/.scratch/issues/issue-268.md) | Issue #268 / PR #269 | V8.100.0 | 歷史回補端到端全生命週期超時、單日看門狗與任務取消重設控制 (5 大 Micro-Tickets) |
 | [`Spec 0186`](file:///d:/APP/股票紀錄/docs/specs/0186-us-market-backfill-transparency-lakehouse-alignment-and-eperm-resilience-spec.md) | [`ADR 0186`](file:///d:/APP/股票紀錄/docs/adr/0186-us-market-backfill-transparency-lakehouse-alignment-and-eperm-resilience.md) | [`.scratch/v8.99.0-us-market-backfill-transparency/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.99.0-us-market-backfill-transparency/issues/) | Issue #266 | V8.99.0 | 美股歷史回補透明度透視、斷點庫存對齊與 Windows EPERM 韌性強化 (4 大 Micro-Tickets) |
 | [`Spec 0185`](file:///d:/APP/股票紀錄/docs/specs/0185-market-backfill-etf-cache-verification-and-transparency-spec.md) | [`ADR 0185`](file:///d:/APP/股票紀錄/docs/adr/0185-etf-cache-verification-and-transparency.md) | [`.scratch/v8.98.0-market-backfill-etf-cache-verification/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.98.0-market-backfill-etf-cache-verification/issues/) | Issue #264 / PR #265 | V8.98.0 | 台股歷史回補 ETF 快取查驗納入、法人現貨口徑對齊與透視化可觀測性 (4 大 Micro-Tickets) |
 | [`Spec 0184`](file:///d:/APP/股票紀錄/docs/specs/0184-market-backfill-smart-skip-retry-and-eta-spec.md) | [`ADR 0184`](file:///d:/APP/股票紀錄/docs/adr/0184-market-backfill-smart-skip-retry-and-eta.md) | [`.scratch/v8.97.0-market-backfill-smart-skip-retry-and-eta/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.97.0-market-backfill-smart-skip-retry-and-eta/issues/) | Issue #258, #260 / PR #259, #261 | V8.97.0 | 台股歷史回補智慧快取略過、盤中時間定錨、權證排除與即時 ETA 引擎 (6 大 Micro-Tickets) |
