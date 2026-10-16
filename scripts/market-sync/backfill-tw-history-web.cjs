@@ -332,6 +332,23 @@ function saveTwDailyQuotesBatch(quotesMap, customDbPath) {
   return { savedCount: count };
 }
 
+// Prepared Statement 快取登錄表 (以 db 實例為 key，隔離且無記憶體洩漏)
+const verificationStmtsCache = new WeakMap();
+
+function getVerificationStmts(db) {
+  let stmts = verificationStmtsCache.get(db);
+  if (!stmts) {
+    stmts = {
+      stockStmt: db.prepare(
+        "SELECT count(*) AS n FROM daily_candles WHERE date = ? AND symbol GLOB '[1-9][0-9][0-9][0-9]'"
+      ),
+      chipStmt: db.prepare("SELECT count(*) AS n FROM tw_institutional_chips WHERE date = ?"),
+    };
+    verificationStmtsCache.set(db, stmts);
+  }
+  return stmts;
+}
+
 /**
  * 單日官方資料抓取與入庫
  * @param {string} dateStr - YYYY-MM-DD
@@ -343,12 +360,9 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
   if (!options.force && !options.inMemoryOnly) {
     try {
       const db = initSqliteLakehouseDb(options.dbPath);
-      const stockRow = db
-        .prepare("SELECT count(*) AS n FROM daily_candles WHERE date = ? AND symbol GLOB '[1-9][0-9][0-9][0-9]'")
-        .get(dateStr);
-      const chipRow = db
-        .prepare("SELECT count(*) AS n FROM tw_institutional_chips WHERE date = ?")
-        .get(dateStr);
+      const { stockStmt, chipStmt } = getVerificationStmts(db);
+      const stockRow = stockStmt.get(dateStr);
+      const chipRow = chipStmt.get(dateStr);
       const stockCount = stockRow ? Number(stockRow.n) : 0;
       const chipCount = chipRow ? Number(chipRow.n) : 0;
 
@@ -365,6 +379,7 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
       // 容錯降級：若 DB 快取查詢失敗，則繼續執行網路抓取
     }
   }
+
 
   const fetcher = options.fetcher || defaultFetchJson;
   const throttleMs = options.throttleMs !== undefined ? options.throttleMs : 3000;
