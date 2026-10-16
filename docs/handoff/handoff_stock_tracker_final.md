@@ -1,16 +1,17 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-10-16 10:05 (UTC+8)  
+> **交接產生時間**：2026-10-16 11:45 (UTC+8)  
 > **當前最新里程碑**：
-> - **V8.96.0 個人投資者法人級微觀防禦、現金流預算與極簡風控強化**（ADR 0183, Spec 0183, Issue #254, PRs #255, #256）：
->   - **未來 12 個月現金流投影與枯水期互補**：精算月配/季配/半年配/年配未來一年每月現金流，自動標記月收入低於 3,000 元之枯水期，推薦互補月份標的。
->   - **股票質押解質先還本金精算與補水救援**：維持率補水無負數保底；解質股票先還本金 $\text{ceil}(\text{Principal} - \text{Remaining} / 1.30)$ 消除斷頭邊界風險。
->   - **行為金融審計：交易初衷與凹單警報**：新增交易初衷（`DIVIDEND` / `SWING` / `DAY_TRADE`）；波段持股逾 60 天虧損逾 15% 觸發「⚠️ 凹單警示」紅標（存股豁免）；iPhone 16 Pro 摩擦成本震撼換算。
->   - **稅務微調護欄**：單筆股息達 20,000 元預警二代健保，20,000~25,000 元敏感區間自動提供除息前微調賣出或借券拆單建議；實時監控 8.5% 所得稅 8 萬元抵減上限。
->   - **數據湖倉擴展與每日開放排程**：擴充 `etf_daily_nav`、三大法人台指期未平倉 OI 與融券回補日曆，完全本機算力、零付費 API。
+> - **V8.97.0 台股歷史回補智慧快取略過、盤中時間定錨、權證排除與即時 ETA 引擎**（ADR 0184, Spec 0184, Issues #258, #260, PRs #259, #261）：
+>   - **盤中時間守衛與交易日曆重用**：鎖定台北時間 (UTC+8)，15:30 前自動定錨至昨日 (T-1)，15:30 始納入今日；法定休市日 0 請求排除，消滅誤判「[休市日] 略過」之語意混淆。
+>   - **TPEx 1430 櫃買權證排除**：過濾排除 6 碼 7 開頭認購售權證，與上市 `ALLBUT0999` 標準齊平，單日有效入庫收盤檔數收斂至 ~2,400 檔核心標的，**削減 70% 無效記錄**。
+>   - **官方端點指數退避與單邊缺失隔離**：共用 `retryFetch`（重試 3 次，指數退避）；平日單邊網路中斷隔離至 `failedDates` 集中補漏清單，拒絕偽成功入庫。
+>   - **SQLite 雙指標健康快取秒級略過與 WeakMap Statement 快取**：普通股 $\ge 1,800$ 且籌碼 $\ge 2,000$ 秒級跳過，重複回補 250 天由 50 分鐘壓縮至數秒鐘；WeakMap 快取 prepared statement 杜絕 500 次重複 SQL 編譯。
+>   - **即時 ETA 預估與前端彩色徽章**：終端機與前端進度條同步輸出預計剩餘時間與完成時刻（如 `⏱️ 剩餘約 8 分鐘 (預計 11:25 完成)`）；Vite proxy 攔截 `ECONNRESET` 消除紅字堆疊追蹤。
+> - **V8.96.0 個人投資者法人級微觀防禦、現金流預算與極簡風控強化**（ADR 0183, Spec 0183, Issue #254, PRs #255, #256）
 > - **V8.95.0 戰情室 Prompt 標的時態隔離、庫存自動錨定與時態籌碼細化**（ADR 0182, Spec 0182, Issues #248, #251, PRs #250, #252）
 > - **V8.94.0 個股深度提示詞物理遷移至主力戰情室與外聯 AI 防幻覺定錨架構**（ADR 0181, Spec 0181, Issues #243, #245, PRs #244, #246）
-> **品質狀態**：全量單元測試 **1,631/1,631 通過 (100% Passed / 222 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> **品質狀態**：全量單元測試 **1,641/1,641 通過 (100% Passed / 222 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -19,10 +20,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main`
-- **單元測試套件**：**1,631/1,631 通過 (222 test suites / 100% 綠燈)**
+- **單元測試套件**：**1,641/1,641 通過 (222 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V8.96.0**
+- **當前釋出版本**：**V8.97.0**
 - **工作區與分支整潔度**：工作區 100% clean，本地 feature/fix 分支已全數刪除，專案臨時備份檔案已全量清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -51,7 +52,9 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0184`](file:///d:/APP/股票紀錄/docs/specs/0184-market-backfill-smart-skip-retry-and-eta-spec.md) | [`ADR 0184`](file:///d:/APP/股票紀錄/docs/adr/0184-market-backfill-smart-skip-retry-and-eta.md) | [`.scratch/v8.97.0-market-backfill-smart-skip-retry-and-eta/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.97.0-market-backfill-smart-skip-retry-and-eta/issues/) | Issue #258, #260 / PR #259, #261 | V8.97.0 | 台股歷史回補智慧快取略過、盤中時間定錨、權證排除與即時 ETA 引擎 (6 大 Micro-Tickets) |
 | [`Spec 0183`](file:///d:/APP/股票紀錄/docs/specs/0183-personal-investor-institutional-edge-and-lean-enhancements-spec.md) | [`ADR 0183`](file:///d:/APP/股票紀錄/docs/adr/0183-personal-investor-institutional-edge-and-lean-enhancements.md) | [`.scratch/v8.96.0-personal-investor-institutional-edge-and-lean-enhancements/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.96.0-personal-investor-institutional-edge-and-lean-enhancements/issues/) | Issue #254 / PR #255, #256 | V8.96.0 | 個人投資者法人級微觀防禦、現金流預算與極簡風控強化 (7 大 Micro-Tickets) |
+
 | [`Spec 0182`](file:///d:/APP/股票紀錄/docs/specs/0182-strategic-prompt-grounding-stale-state-and-portfolio-isolation-spec.md) | [`ADR 0182`](file:///d:/APP/股票紀錄/docs/adr/0182-strategic-prompt-grounding-and-portfolio-isolation.md) | [`.scratch/v8.95/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.95/issues/) | Issue #248, #251 / PR #250, #252 | V8.95.0 | 戰情室 Prompt 標的時態隔離、庫存自動錨定與時態籌碼細化 |
 | [`Spec 0181`](file:///d:/APP/股票紀錄/docs/specs/0181-strategic-prompt-war-room-relocation-and-grounding-spec.md) | [`ADR 0181`](file:///d:/APP/股票紀錄/docs/adr/0181-strategic-prompt-war-room-relocation.md) | [`.scratch/v8.94/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.94/issues/) | Issue #243, #245 / PR #244, #246 | V8.94.0 | 個股深度提示詞物理遷移至主力戰情室、外聯 AI 防幻覺定錨與極簡作戰中樞 |
 | [`Spec 0180`](file:///d:/APP/股票紀錄/docs/specs/0180-forensic-accounting-etf-isolation-and-ui-repair-spec.md) | [`ADR 0180`](file:///d:/APP/股票紀錄/docs/adr/0180-forensic-accounting-etf-isolation-and-ui-repair.md) | [`.scratch/v8.93/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.93/issues/) | Issue #230, #237, #239 / PR #236, #238, #240 | V8.93.0 | 個股深度財報法務會計排雷、ETF 物理隔離與智策引擎 UI 重構 |
