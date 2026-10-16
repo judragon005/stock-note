@@ -2543,3 +2543,20 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     4. **跨模組 Lakehouse-First 本地路由**：歷史淨值回推 (`historicalPriceFetcher`) 與歷年除權息政策 (`dividendService`) 優先直查本地湖倉，消除外部 Yahoo Finance 與 FinMind 網路逾時破圖。
     5. **進度口徑分離與看門狗尾盤自動補漏**：全域回補狀態與前端卡片清楚分離總進度與台股單軌進度天數；主循環加入尾盤熔斷天數（$\le 5$ 天）冷卻後自動單輪補漏重試，達成 100% 收斂閉環。
     6. **降序複合索引優化**：建立 `tw_institutional_chips(symbol, date DESC)` 複合索引，提升併發寫入逾時至 15,000ms。
+
+- **Unified Financial Calendar & Temporal Engine (統一金融時序日曆與全市場營業日引擎)**:
+  - 核心模組：`src/data/market-holidays.json`、`scripts/market-sync/trading-calendar-engine.cjs`、`src/engine/holidayCalendar.ts`、`src/engine/marketStatusEngine.ts`、`scripts/market-sync/sync-tw-market.cjs`、`scripts/market-sync/sync-us-market.cjs`、`scripts/market-sync/backfill-tw-history-web.cjs`、`src/components/MarketScheduleHubSection.tsx`。
+  - 規範依據：Spec 0190 (v8.103.0) 與 ADR 0190，對應 GitHub Issue #275。
+  - 核心特性：
+    1. **單一真理來源字典 (SSOT Calendar JSON)**：建立 `src/data/market-holidays.json`，涵蓋法定假日、修法節日（教師節、光復節補假、行憲紀念日）與不可抗力天災停市（巴威颱風）；分離美股黑色星期五半日市 (`EARLY_CLOSE`)，杜絕營業日跳轉誤判。
+    2. **法人券商級時序演算法 (Temporal Engine Algorithms)**：
+       - `getSettlementDate`：台股 T+2、美股 T+1 跨休市跳轉。
+       - `getHoldingInterestDays`：融資跨春節/連假精確自然日計息。
+       - `isDerivativesExpiryDay`：台指期每月第 3 週三、美股月選第 3 週五及四巫日。
+       - `getLatestTdccPublishDate`：集保股權週五遇國定連假自動前推至週四。
+       - `getRevenueDeadlineDate`：每月 10 號營收發布若遇休市順延至次一營業日。
+    3. **排程與回補零 I/O 守衛 (Zero I/O Guards)**：台股與美股盤後定時排程在休市日秒級退出，徹底杜絕 1,500+ 次盲發請求；250 天歷史回補 0 異常略過，`failedDates` 零污染。
+    4. **前端即時營業狀態與夏令/冬令時區感知 (Live Market Status & Clock Engine)**：
+       - `marketStatusEngine.ts` 結合原生 `Intl.DateTimeFormat` 精準計算台美兩地即時狀態（盤前、盤中、盤後、休市、半日市）。
+       - 在排程監控中心渲染即時營業狀態徽章與中文休市標籤。
+

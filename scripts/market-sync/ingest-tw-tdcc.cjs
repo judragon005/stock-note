@@ -5,7 +5,8 @@
 
 const https = require('https');
 const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
-const { getLatestSettledTdccFriday } = require('./market-freshness-service.cjs');
+const { getLatestTdccPublishDate } = require('./trading-calendar-engine.cjs');
+
 
 /**
  * 解析 TDCC 分級記錄，聚合各標的大戶與散戶比例
@@ -141,8 +142,9 @@ function saveTdccDistributionToSqlite(distributionMap, dateStr, customDbPath) {
  */
 async function runTdccIngestion(customDbPath, targetDate, backfillWeeks) {
   const db = initSqliteLakehouseDb(customDbPath);
-  const anchorDateStr = targetDate || getLatestSettledTdccFriday(); // 動態最新結算週五 (Spec 0177)
+  const anchorDateStr = targetDate || getLatestTdccPublishDate(); // 動態最新結算日 (遇連假自動提前至週四，Spec 0190)
   const anchorDate = new Date(anchorDateStr);
+
   const weeksToRun = backfillWeeks !== undefined ? backfillWeeks : (targetDate ? 1 : 10);
 
   // 取得所有台股標的

@@ -27,6 +27,22 @@ const {
   parseYahooChartData,
 } = require('./ingest-us-quotes.cjs');
 const { initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+const { isTradingDay, getHolidayReason } = require('./trading-calendar-engine.cjs');
+
+/**
+ * 取得對應的美東交易日期字串 (YYYY-MM-DD)
+ * @param {Date} [date=new Date()]
+ * @returns {string}
+ */
+function getUsMarketDate(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return formatter.format(date);
+}
 
 // Tier 1 核心美股清單 (涵蓋主要指數 ETF、大型權值股與高頻持股)
 const US_TIER_1_CORE = [
@@ -172,11 +188,27 @@ async function runUsMarketSync(config = {}) {
     `[${new Date().toISOString()}] 開始執行美股數據管線 [模式: ${mode.toUpperCase()}] (Spec 0158)...`
   );
 
-  // 0. 確保本地 SQLite 湖倉表結構已初始化
-  initSqliteLakehouseDb(customDbPath);
-
   const today = new Date();
   const dateStr = formatDateYMD(today);
+
+  // 美東昨日/當前收盤日計算與休市守衛 (排程 daily 模式下檢驗昨夜美東是否為美股休市日，Spec 0190)
+  const targetDateInput = config.targetDate;
+  const usDateStr = targetDateInput || getUsMarketDate(config.currentDate || today);
+
+  if (!isBootstrap && !config.force && !targetDateInput && !isTradingDay(usDateStr, 'US')) {
+    const reason = getHolidayReason(usDateStr, 'US') || '非營業日';
+    console.log(`[略過] 美股昨夜 (${usDateStr}) 為休市日 [${reason}]，無交易數據，安全退出。`);
+    return {
+      date: usDateStr,
+      market: 'US',
+      mode,
+      skipped: true,
+      reason: `美股昨夜為休市日 [${reason}]`,
+      successCount: 0,
+      skippedCount: 0,
+      total: 0,
+    };
+  }
 
   // 1. 構建三層優先級標的隊列
   const localTargets = detectLocalUsHoldingsAndWatchlist();
@@ -363,6 +395,7 @@ if (require.main === module) {
 
 module.exports = {
   runUsMarketSync,
+  getUsMarketDate,
   parseSyncExecutionMode,
   calculateAdaptiveJitterDelay,
   calculateBackoffSleepMs,

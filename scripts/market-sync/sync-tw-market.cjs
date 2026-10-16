@@ -15,6 +15,8 @@ const {
   computeIncrementalIndicators,
   saveJsonAtomic,
 } = require('./market-sync-core.cjs');
+const { isTradingDay, getHolidayReason } = require('./trading-calendar-engine.cjs');
+
 
 async function fetchJson(url, options = {}) {
   const timeoutMs = options.timeoutMs || 15000;
@@ -78,15 +80,17 @@ async function runTwMarketSync(targetDateInput) {
     }
   }
 
-  // 檢查是否週末
-  const day = targetDate.getDay();
-  if (!targetDateInput && (day === 0 || day === 6)) {
-    console.log(`[略過] 今日為週末 (Day ${day})，台股休市無交易數據。`);
+  const dateStr = formatDateYMD(targetDate);
+
+  // 營業日與休市守衛 (排除週末、法定休市與天災停市，Spec 0190)
+  if (!targetDateInput && !isTradingDay(dateStr, 'TW')) {
+    const reason = getHolidayReason(dateStr, 'TW') || '非營業日';
+    console.log(`[略過] 今日 (${dateStr}) 為台股休市日 [${reason}]，無交易數據，安全退出。`);
     return;
   }
 
-  const dateStr = formatDateYMD(targetDate);
   const yyyymmdd = dateStr.replace(/-/g, '');
+
 
   console.log(`[1/4] 抓取 TWSE 台灣證交所全市場收盤行情與 T86 籌碼日報 (日期: ${yyyymmdd})...`);
   let twseQuotesRaw = null;
