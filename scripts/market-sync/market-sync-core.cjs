@@ -244,10 +244,40 @@ function ensureDirSync(dirPath) {
 function saveJsonAtomic(targetPath, data) {
   const dir = path.dirname(targetPath);
   ensureDirSync(dir);
-  const tempPath = `${targetPath}.${Date.now()}.tmp`;
+  const tempPath = `${targetPath}.${Date.now()}.${Math.random().toString(36).substring(2, 6)}.tmp`;
   fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf-8');
-  fs.renameSync(tempPath, targetPath);
+
+  // Windows EPERM / EBUSY 檔案鎖定退避重試與安全覆寫 (Spec 0186 / Ticket 01)
+  let renamed = false;
+  for (let i = 0; i < 5; i++) {
+    try {
+      fs.renameSync(tempPath, targetPath);
+      renamed = true;
+      break;
+    } catch (err) {
+      if (err.code === 'EPERM' || err.code === 'EBUSY') {
+        const end = Date.now() + 30 * (i + 1);
+        while (Date.now() < end) {}
+      } else {
+        break;
+      }
+    }
+  }
+
+  if (!renamed) {
+    try {
+      fs.copyFileSync(tempPath, targetPath);
+      fs.unlinkSync(tempPath);
+    } catch {
+      // 最終保底覆寫
+      fs.writeFileSync(targetPath, JSON.stringify(data, null, 2), 'utf-8');
+      try {
+        fs.unlinkSync(tempPath);
+      } catch {}
+    }
+  }
 }
+
 
 /**
  * 美股標的代碼正規化 (如 BRK.A -> BRK-A, BRK.B -> BRK-B, BF.B -> BF-B)

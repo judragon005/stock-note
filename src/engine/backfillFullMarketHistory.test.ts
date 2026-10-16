@@ -164,5 +164,15 @@ describe('Spec 0168 / Ticket 08: 台美雙軌全歷史回補總控與中介層�
       expect(eta.etaFormatted).toBe('已完成');
     });
   });
+
+  describe('5. [Spec 0186 / Ticket 02] 美股湖倉在庫標的統計透視', () => {
+    it('backfillGlobalStatus.us 應包含 totalInLakehouse 欄位且預設為 0', () => {
+      const status = getBackfillGlobalStatus();
+      expect(status.us).toBeDefined();
+      expect(typeof status.us.totalInLakehouse).toBe('number');
+      expect(status.us.totalInLakehouse).toBe(0);
+    });
+  });
 });
+
 

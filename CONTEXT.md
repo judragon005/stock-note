@@ -139,6 +139,12 @@ _Avoid_: Silent Timeout Swallow, Pseudo-Success Ingestion
 全域狀態與終端機即時依據 $(\text{total} - \text{completed}) \times (\Delta T / \text{completed})$ 動態推算剩餘分鐘數與預計完成時刻（如 `剩餘約 8 分鐘 (預計 11:25 完成)`），並於前端進度條百分比旁渲染高對比彩色徽章。
 _Avoid_: Static Percentage Only, Blind Long Wait
 
+**US Market Lakehouse Transparency & EPERM Resilience (美股歷史回補透明度透視與 Windows EPERM 韌性強化)** *(新增於 V8.99.0 / Spec 0186)*:
+1. **湖倉與斷點庫存透視**：解決美股回補卡片僅展示「當次增量」導致全庫在庫時顯示 `0 檔` 的語意盲區。藉由 `sync_checkpoints` 索引極速（< 5ms）提取在庫成功標的總數，並於前端展示累計在庫檔數（如 `1,448 檔`）與當次增量註記。
+2. **Windows 檔案原子置換抗鎖韌性**：在 `saveJsonAtomic` 針對 `fs.renameSync` 遭遇之 Windows `EPERM` / `EBUSY` 檔案鎖定，提供自旋指數退避重試與安全回退覆寫機制，杜絕崩潰與未捕獲例外。
+_Avoid_: Single-Run Delta Only Blind Spot, Windows EPERM Unhandled Exception
+
+
 
 **Tax Compliance & Threshold Alert (稅階合規與二代健保/海外所得預警)** *(新增於 V6.1.0)*:
 台股單筆現金股利達 NT$ 20,000 元時事前預警 2.11% 補充保費；美股統計當年度已實現價差與股息，提供 100 萬基本所得額申報與 750 萬最低稅負制 (AMT) 進度條。
