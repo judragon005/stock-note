@@ -1,127 +1,52 @@
 /**
  * retention-cleaner.cjs
- * 歷史數據滾動視窗修剪與增量空間釋放 (VACUUM Guard)
+ * 歷史數據生命週期安全維護與空間重整 (Spec 0188 / Ticket 02)
+ * 核心原則：SQLite 湖倉定位為「全市場全歷史 Append-Only」資料庫，
+ * 永久封印對 daily_candles 與 tw_institutional_chips 之硬刪除，杜絕歷史數據被排程誤刪。
  */
 
 const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
 
-const DEFAULT_KEEP_DAYS = 260;
+const DEFAULT_KEEP_DAYS = 0; // 0 代表全量保留，永不截斷
 
 /**
- * 修剪超過保留天數的過期日 K 線數據
- * @param {string} [symbol] - 若指定則修剪單檔，未指定則修剪全市場標的
- * @param {number} [keepDays=260] - 保留最新天數
+ * 修剪超過保留天數的過期日 K 線數據 (Spec 0188: 永久封印刪除，守護全歷史)
+ * @param {string} [_symbol]
+ * @param {number} [_keepDays=0]
  * @param {string} [customDbPath]
- * @returns {{ deletedCandles: number }}
+ * @returns {{ deletedCandles: number, protected: boolean }}
  */
-function pruneExpiredCandles(symbol, keepDays = DEFAULT_KEEP_DAYS, customDbPath) {
-  const db = initSqliteLakehouseDb(customDbPath);
-  const targetDays = Math.max(1, keepDays);
-  let totalDeleted = 0;
-
-  if (symbol && typeof symbol === 'string') {
-    const cleanSym = symbol.trim().toUpperCase();
-    // 找出第 keepDays 個最新日期的 cutoff
-    const cutoffRow = db
-      .prepare('SELECT date FROM daily_candles WHERE symbol = ? ORDER BY date DESC LIMIT 1 OFFSET ?')
-      .get(cleanSym, targetDays - 1);
-
-    if (cutoffRow && cutoffRow.date) {
-      const deleteStmt = db.prepare('DELETE FROM daily_candles WHERE symbol = ? AND date < ?');
-      const info = deleteStmt.run(cleanSym, cutoffRow.date);
-      totalDeleted = info.changes || 0;
-    }
-    return { deletedCandles: totalDeleted };
-  }
-
-  // 全市場批量修剪
-  const symbols = db.prepare('SELECT DISTINCT symbol FROM daily_candles').all();
-  const cutoffStmt = db.prepare(
-    'SELECT date FROM daily_candles WHERE symbol = ? ORDER BY date DESC LIMIT 1 OFFSET ?'
-  );
-  const deleteStmt = db.prepare('DELETE FROM daily_candles WHERE symbol = ? AND date < ?');
-
-  db.exec('BEGIN TRANSACTION;');
-  try {
-    for (const row of symbols) {
-      const cutoff = cutoffStmt.get(row.symbol, targetDays - 1);
-      if (cutoff && cutoff.date) {
-        const info = deleteStmt.run(row.symbol, cutoff.date);
-        totalDeleted += info.changes || 0;
-      }
-    }
-    db.exec('COMMIT;');
-  } catch (err) {
-    db.exec('ROLLBACK;');
-    throw err;
-  }
-
-  return { deletedCandles: totalDeleted };
+function pruneExpiredCandles(_symbol, _keepDays = DEFAULT_KEEP_DAYS, customDbPath) {
+  // 安全守護：確保 DB 可正常初始化連線，但不執行任何 DELETE 指令
+  initSqliteLakehouseDb(customDbPath);
+  return { deletedCandles: 0, protected: true };
 }
 
 /**
- * 修剪超過保留天數的過期法人與信用交易籌碼數據
- * @param {string} [symbol]
- * @param {number} [keepDays=500]
+ * 修剪超過保留天數的過期法人與信用交易籌碼數據 (Spec 0188: 永久封印刪除，守護全歷史籌碼)
+ * @param {string} [_symbol]
+ * @param {number} [_keepDays=0]
  * @param {string} [customDbPath]
- * @returns {{ deletedChips: number }}
+ * @returns {{ deletedChips: number, protected: boolean }}
  */
-function pruneExpiredChips(symbol, keepDays = DEFAULT_KEEP_DAYS, customDbPath) {
-  const db = initSqliteLakehouseDb(customDbPath);
-  const targetDays = Math.max(1, keepDays);
-  let totalDeleted = 0;
-
-  if (symbol && typeof symbol === 'string') {
-    const cleanSym = symbol.trim().toUpperCase();
-    const cutoffRow = db
-      .prepare('SELECT date FROM tw_institutional_chips WHERE symbol = ? ORDER BY date DESC LIMIT 1 OFFSET ?')
-      .get(cleanSym, targetDays - 1);
-
-    if (cutoffRow && cutoffRow.date) {
-      const deleteStmt = db.prepare('DELETE FROM tw_institutional_chips WHERE symbol = ? AND date < ?');
-      const info = deleteStmt.run(cleanSym, cutoffRow.date);
-      totalDeleted = info.changes || 0;
-    }
-    return { deletedChips: totalDeleted };
-  }
-
-  const symbols = db.prepare('SELECT DISTINCT symbol FROM tw_institutional_chips').all();
-  const cutoffStmt = db.prepare(
-    'SELECT date FROM tw_institutional_chips WHERE symbol = ? ORDER BY date DESC LIMIT 1 OFFSET ?'
-  );
-  const deleteStmt = db.prepare('DELETE FROM tw_institutional_chips WHERE symbol = ? AND date < ?');
-
-  db.exec('BEGIN TRANSACTION;');
-  try {
-    for (const row of symbols) {
-      const cutoff = cutoffStmt.get(row.symbol, targetDays - 1);
-      if (cutoff && cutoff.date) {
-        const info = deleteStmt.run(row.symbol, cutoff.date);
-        totalDeleted += info.changes || 0;
-      }
-    }
-    db.exec('COMMIT;');
-  } catch (err) {
-    db.exec('ROLLBACK;');
-    throw err;
-  }
-
-  return { deletedChips: totalDeleted };
+function pruneExpiredChips(_symbol, _keepDays = DEFAULT_KEEP_DAYS, customDbPath) {
+  initSqliteLakehouseDb(customDbPath);
+  return { deletedChips: 0, protected: true };
 }
 
 /**
- * 執行增量空間釋放 (Incremental VACUUM)
+ * 執行增量空間釋放與磁碟重組 (Incremental VACUUM / VACUUM)
  * @param {number} [pages=500]
  * @param {string} [customDbPath]
- * @returns {{ success: boolean, pages: number }}
+ * @returns {{ success: boolean, pages: number, error?: string }}
  */
 function runIncrementalVacuum(pages = 500, customDbPath) {
   const db = getSqliteDbConnection(customDbPath);
   try {
     db.exec(`PRAGMA incremental_vacuum(${Math.max(1, pages)});`);
     return { success: true, pages };
-  } catch (err) {
-    // 若非 auto_vacuum=incremental 模式，以標準 VACUUM 降級處理或忽略
+  } catch {
+    // 若非 auto_vacuum=incremental 模式，以標準 VACUUM 降級處理
     try {
       db.exec('VACUUM;');
       return { success: true, pages };
@@ -131,9 +56,26 @@ function runIncrementalVacuum(pages = 500, customDbPath) {
   }
 }
 
+/**
+ * 執行全量維護任務：守護歷史日 K 與籌碼零刪除，並整理資料庫空間 (Spec 0188)
+ * @param {string} [customDbPath]
+ * @returns {{ deletedCandles: number, deletedChips: number, vacuum: boolean }}
+ */
+function runFullRetentionMaintenance(customDbPath) {
+  pruneExpiredCandles(undefined, 0, customDbPath);
+  pruneExpiredChips(undefined, 0, customDbPath);
+  const vacRes = runIncrementalVacuum(500, customDbPath);
+  return {
+    deletedCandles: 0,
+    deletedChips: 0,
+    vacuum: vacRes.success,
+  };
+}
+
 module.exports = {
   DEFAULT_KEEP_DAYS,
   pruneExpiredCandles,
   pruneExpiredChips,
   runIncrementalVacuum,
+  runFullRetentionMaintenance,
 };

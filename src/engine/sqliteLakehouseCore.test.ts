@@ -42,9 +42,9 @@ describe('Ticket 01 - SQLite 核心儲存庫與 Schema 初始化 (Vitest Seam)',
     const journalModeRow = db.prepare('PRAGMA journal_mode;').get();
     expect(String(journalModeRow.journal_mode).toLowerCase()).toBe('wal');
 
-    // 檢查 busy_timeout
+    // 檢查 busy_timeout (Spec 0188: 提升至 15000ms 杜絕並發逾時)
     const busyTimeoutRow = db.prepare('PRAGMA busy_timeout;').get();
-    expect(busyTimeoutRow.timeout).toBe(5000);
+    expect(busyTimeoutRow.timeout).toBe(15000);
   });
 
   it('2. 應能正確初始化四大核心資料表及其索引', () => {

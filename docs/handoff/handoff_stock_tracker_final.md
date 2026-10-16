@@ -1,7 +1,13 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-10-16 15:35 (UTC+8)  
+> **交接產生時間**：2026-10-16 21:12 (UTC+8)  
 > **當前最新里程碑**：
+> - **V8.101.0 全市場全歷史數據湖倉架構解耦、250日預載視窗與跨模組本地優先整合工程**（ADR 0188, Spec 0188, Issue #271）：
+>   - **儲存深度徹底解耦 (Append-Only)**：入庫腳本解除 260 根截斷（`limit=0` 全量入庫），修剪器永久封印日 K 與籌碼之 `DELETE` 語句，確保十餘年歷史行情永不刪除。
+>   - **應用層 250 天預載視窗秒開**：API 中介層預設回傳 250 筆，支援 `limit=all` 或動態天數，主力戰情室秒開無延遲。
+>   - **大盤基準 SPY 真實數據直連**：拔除手動寫死假資料，`benchmarkData.ts` 直讀本機湖倉真實日 K。
+>   - **Lakehouse-First 本地路由**：歷史淨值回推與除權息政策直查本地湖倉，消除外部 Yahoo Finance 與 FinMind 網路逾時破圖。
+>   - **雙軌回補進度口徑分離與看門狗尾盤自動補漏**：全域狀態與前端卡片清楚分離總進度與台股單軌天數；主循環加入尾盤熔斷天數（$\le 5$ 天）冷卻後自動單輪補漏重試，100% 收斂閉環。
 > - **V8.100.0 歷史回補端到端全生命週期超時、單日看門狗與任務取消重設控制**（ADR 0187, Spec 0187, Issue #268, PR #269）：
 >   - **原生 fetch 與全生命週期超時**：全面升級 `defaultFetchJson` 採用原生 `fetch` 搭配 `AbortSignal.timeout(20000)`，徹底根除 Response 串流傳輸中的靜默 Socket 掛起。
 >   - **單日主迴圈看門狗熔斷**：外層以 `Promise.race` 實作 45 秒保護機制，單日超時自動推入 `failedDates` 並平滑推進至下一交易日，絕不死結。
@@ -10,7 +16,7 @@
 > - **V8.99.0 美股歷史回補透明度透視、斷點庫存對齊與 Windows EPERM 韌性強化**（ADR 0186, Spec 0186, Issue #266, PR #267）
 > - **V8.98.0 台股歷史回補 ETF 快取查驗納入、法人現貨口徑對齊與透視化可觀測性**（ADR 0185, Spec 0185, Issue #264, PR #265）
 > - **V8.97.0 台股歷史回補智慧快取略過、盤中時間定錨、權證排除與即時 ETA 引擎**（ADR 0184, Spec 0184, Issues #258, #260, PRs #259, #261）
-> **品質狀態**：全量單元測試 **1,647/1,647 通過 (100% Passed / 222 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> **品質狀態**：全量單元測試 **1,659/1,659 通過 (100% Passed / 228 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -18,12 +24,12 @@
 
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
-- **當前工作分支**：`main`
-- **單元測試套件**：**1,641/1,641 通過 (222 test suites / 100% 綠燈)**
+- **當前工作分支**：`feature/271-lakehouse-full-history-and-preload`
+- **單元測試套件**：**1,659/1,659 通過 (228 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V8.97.0**
-- **工作區與分支整潔度**：工作區 100% clean，本地 feature/fix 分支已全數刪除，專案臨時備份檔案已全量清理。
+- **當前釋出版本**：**V8.101.0**
+- **工作區與分支整潔度**：工作區乾淨受控，本地 feature 分支已集中提交。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
 ---
@@ -51,6 +57,7 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0188`](file:///d:/APP/股票紀錄/docs/specs/0188-full-market-all-history-lakehouse-and-preload-decoupling-spec.md) | [`ADR 0188`](file:///d:/APP/股票紀錄/docs/adr/0188-full-market-all-history-lakehouse-and-preload-decoupling.md) | [`.scratch/v8.101.0-lakehouse-full-history-and-preload/`](file:///d:/APP/股票紀錄/.scratch/v8.101.0-lakehouse-full-history-and-preload/) | Issue #271 | V8.101.0 | 全市場全歷史數據湖倉架構解耦、250日預載視窗與跨模組本地優先整合工程 (6 大 Tickets) |
 | [`Spec 0187`](file:///d:/APP/股票紀錄/docs/specs/0187-backfill-timeout-watchdog-and-cancellation-control-spec.md) | [`ADR 0187`](file:///d:/APP/股票紀錄/docs/adr/0187-backfill-timeout-watchdog-and-cancellation-control.md) | [`.scratch/issues/issue-268.md`](file:///d:/APP/股票紀錄/.scratch/issues/issue-268.md) | Issue #268 / PR #269 | V8.100.0 | 歷史回補端到端全生命週期超時、單日看門狗與任務取消重設控制 (5 大 Micro-Tickets) |
 | [`Spec 0186`](file:///d:/APP/股票紀錄/docs/specs/0186-us-market-backfill-transparency-lakehouse-alignment-and-eperm-resilience-spec.md) | [`ADR 0186`](file:///d:/APP/股票紀錄/docs/adr/0186-us-market-backfill-transparency-lakehouse-alignment-and-eperm-resilience.md) | [`.scratch/v8.99.0-us-market-backfill-transparency/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.99.0-us-market-backfill-transparency/issues/) | Issue #266 | V8.99.0 | 美股歷史回補透明度透視、斷點庫存對齊與 Windows EPERM 韌性強化 (4 大 Micro-Tickets) |
 | [`Spec 0185`](file:///d:/APP/股票紀錄/docs/specs/0185-market-backfill-etf-cache-verification-and-transparency-spec.md) | [`ADR 0185`](file:///d:/APP/股票紀錄/docs/adr/0185-etf-cache-verification-and-transparency.md) | [`.scratch/v8.98.0-market-backfill-etf-cache-verification/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.98.0-market-backfill-etf-cache-verification/issues/) | Issue #264 / PR #265 | V8.98.0 | 台股歷史回補 ETF 快取查驗納入、法人現貨口徑對齊與透視化可觀測性 (4 大 Micro-Tickets) |

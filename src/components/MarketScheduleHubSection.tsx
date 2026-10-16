@@ -18,14 +18,15 @@ export interface BackfillStatus {
   isRunning: boolean;
   market: 'ALL' | 'TW' | 'US';
   progressPct: number;
+  globalProgressPct?: number;
   currentTask: string;
   currentDate: string | null;
   completedDays: number;
   totalDays: number;
   estimatedRemainingMs?: number | null;
   etaFormatted?: string | null;
-  tw: { status: string; totalQuotes: number; totalChips: number };
-  us: { status: string; totalQuotes: number; successCount: number; failCount: number; totalInLakehouse?: number };
+  tw: { status: string; progressPct?: number; totalQuotes: number; totalChips: number };
+  us: { status: string; progressPct?: number; totalQuotes: number; successCount: number; failCount: number; totalInLakehouse?: number };
   error: string | null;
   startedAt: number | null;
   updatedAt: number;
@@ -619,7 +620,15 @@ export const MarketScheduleHubSection: React.FC = () => {
                   </span>
                 )}
                 <span style={{ fontWeight: 700, color: '#38bdf8' }}>
-                  {backfillStatus.progressPct}% ({backfillStatus.completedDays} / {backfillStatus.totalDays} 天)
+                  {backfillStatus.market === 'ALL' ? (
+                    <>
+                      總進度: {backfillStatus.globalProgressPct ?? backfillStatus.progressPct}%
+                      <span style={{ margin: '0 6px', color: 'rgba(255,255,255,0.3)' }}>|</span>
+                      台股階段: {backfillStatus.tw?.progressPct ?? Math.round((backfillStatus.completedDays / (backfillStatus.totalDays || 1)) * 100)}% ({backfillStatus.completedDays}/{backfillStatus.totalDays}天)
+                    </>
+                  ) : (
+                    <>{backfillStatus.progressPct}% ({backfillStatus.completedDays} / {backfillStatus.totalDays} 天)</>
+                  )}
                 </span>
               </div>
             </div>

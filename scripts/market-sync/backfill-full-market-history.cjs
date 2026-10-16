@@ -47,20 +47,21 @@ function calculateEta(startedAt, completedDays, totalDays) {
 }
 
 /**
- * 全域回補進度狀態
+ * 全域回補進度狀態 (Spec 0188 / Ticket 06: 分軌進度分離)
  */
 let backfillGlobalStatus = {
   isRunning: false,
   market: 'ALL',
   progressPct: 0,
+  globalProgressPct: 0,
   currentTask: 'IDLE',
   currentDate: null,
   completedDays: 0,
   totalDays: 250,
   estimatedRemainingMs: null,
   etaFormatted: null,
-  tw: { status: 'idle', totalQuotes: 0, totalChips: 0 },
-  us: { status: 'idle', totalQuotes: 0, successCount: 0, failCount: 0, totalInLakehouse: 0 },
+  tw: { status: 'idle', progressPct: 0, totalQuotes: 0, totalChips: 0 },
+  us: { status: 'idle', progressPct: 0, totalQuotes: 0, successCount: 0, failCount: 0, totalInLakehouse: 0 },
   error: null,
   startedAt: null,
   updatedAt: Date.now(),
@@ -81,14 +82,15 @@ function resetBackfillStateForTest() {
     isRunning: false,
     market: 'ALL',
     progressPct: 0,
+    globalProgressPct: 0,
     currentTask: 'IDLE',
     currentDate: null,
     completedDays: 0,
     totalDays: 250,
     estimatedRemainingMs: null,
     etaFormatted: null,
-    tw: { status: 'idle', totalQuotes: 0, totalChips: 0 },
-    us: { status: 'idle', totalQuotes: 0, successCount: 0, failCount: 0, totalInLakehouse: 0 },
+    tw: { status: 'idle', progressPct: 0, totalQuotes: 0, totalChips: 0 },
+    us: { status: 'idle', progressPct: 0, totalQuotes: 0, successCount: 0, failCount: 0, totalInLakehouse: 0 },
     error: null,
     startedAt: null,
     updatedAt: Date.now(),
@@ -319,7 +321,11 @@ async function runFullMarketHistoryBackfill(options = {}) {
       onProgress: (p) => {
         backfillGlobalStatus.completedDays = p.index;
         backfillGlobalStatus.currentDate = p.date;
-        backfillGlobalStatus.progressPct = Math.round((p.index / p.total) * (market === 'ALL' ? 50 : 100));
+        const twPct = Math.round((p.index / p.total) * 100);
+        backfillGlobalStatus.tw.progressPct = twPct;
+        const globalPct = Math.round((p.index / p.total) * (market === 'ALL' ? 50 : 100));
+        backfillGlobalStatus.progressPct = globalPct;
+        backfillGlobalStatus.globalProgressPct = globalPct;
         backfillGlobalStatus.tw.totalQuotes += p.quotesCount;
         backfillGlobalStatus.tw.totalChips += p.chipsCount;
         
@@ -342,6 +348,7 @@ async function runFullMarketHistoryBackfill(options = {}) {
     });
 
     backfillGlobalStatus.tw.status = 'completed';
+    backfillGlobalStatus.tw.progressPct = 100;
     console.log(`✔ [台股軌道] 回補完成！入庫日 K: ${twRes.totalQuotesIngested} 筆, 籌碼: ${twRes.totalChipsIngested} 筆。`);
   }
 
@@ -355,6 +362,7 @@ async function runFullMarketHistoryBackfill(options = {}) {
       const usRes = await runUsMarketSync(['--bootstrap']);
 
       backfillGlobalStatus.us.status = 'completed';
+      backfillGlobalStatus.us.progressPct = 100;
       backfillGlobalStatus.us.successCount = usRes?.successCount || 0;
       backfillGlobalStatus.us.failCount = usRes?.failCount || 0;
       backfillGlobalStatus.us.totalQuotes = (usRes?.successCount || 0) * days;
@@ -376,6 +384,7 @@ async function runFullMarketHistoryBackfill(options = {}) {
 
 
   backfillGlobalStatus.progressPct = 100;
+  backfillGlobalStatus.globalProgressPct = 100;
   backfillGlobalStatus.currentTask = 'DONE';
   backfillGlobalStatus.estimatedRemainingMs = 0;
   backfillGlobalStatus.etaFormatted = '已完成';

@@ -20,7 +20,14 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 小時
 const MAX_CACHE_ENTRIES = 100; // 最大快取標的數，防止記憶體膨脹
 
 /**
- * 查詢公開市場上市公司歷年每股配息政策
+ * 測試輔助：重設記憶體快取
+ */
+export function resetDividendCacheForTesting(): void {
+  memoryCache.clear();
+}
+
+/**
+ * 查詢公開市場上市公司歷年每股配息政策 (Spec 0188 Lakehouse-First 本地優先)
  */
 export async function fetchCompanyDividendHistory(
   symbol: string,
@@ -33,6 +40,25 @@ export async function fetchCompanyDividendHistory(
   const cached = memoryCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return cached.records;
+  }
+
+  // 1. Lakehouse-First 本地優先檢索 (Spec 0188 Ticket 05)
+  try {
+    const localRes = await fetch(`/api/market/corporate-actions/${encodeURIComponent(cleanSymbol)}`);
+    if (localRes.ok) {
+      const localData = await localRes.json();
+      if (Array.isArray(localData?.actions) && localData.actions.length > 0) {
+        const records = localData.actions as CompanyDividendPolicyRecord[];
+        if (memoryCache.size >= MAX_CACHE_ENTRIES) {
+          const oldestKey = memoryCache.keys().next().value;
+          if (oldestKey) memoryCache.delete(oldestKey);
+        }
+        memoryCache.set(cacheKey, { records, timestamp: Date.now() });
+        return records;
+      }
+    }
+  } catch (err) {
+    // 本地中介層未啟動或查無時，優雅降級
   }
 
   if (market === 'TW') {

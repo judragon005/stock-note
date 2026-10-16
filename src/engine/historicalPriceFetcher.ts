@@ -116,7 +116,7 @@ export function mergeHistoricalPrices(
 }
 
 /**
- * 抓取單一標的之歷史每日收盤價 (支援增量抓取)
+ * 抓取單一標的之歷史每日收盤價 (支援增量抓取與 Lakehouse-First 本地湖倉優先)
  */
 export async function fetchSymbolHistoricalPrices(
   symbol: string,
@@ -126,9 +126,31 @@ export async function fetchSymbolHistoricalPrices(
   existingCache: Record<string, number> = {},
   customFetch: (url: string, timeoutMs?: number) => Promise<any> = fetchWithCORSProxy
 ): Promise<Record<string, number>> {
-  const missingRange = findMissingDateRanges(startDate, endDate, existingCache);
+  let currentCache = { ...existingCache };
+
+  // 1. Lakehouse-First: 優先檢查本機 SQLite 湖倉 (Spec 0188 Ticket 05)
+  try {
+    const cleanSym = symbol.trim().toUpperCase();
+    const localRes = await fetch(`/api/market/history/${encodeURIComponent(cleanSym)}?limit=all`);
+    if (localRes.ok) {
+      const localData = await localRes.json();
+      if (Array.isArray(localData?.candles) && localData.candles.length > 0) {
+        const localPrices: Record<string, number> = {};
+        for (const c of localData.candles) {
+          if (c.date && typeof c.close === 'number' && c.close > 0) {
+            localPrices[c.date] = c.close;
+          }
+        }
+        currentCache = mergeHistoricalPrices(currentCache, localPrices);
+      }
+    }
+  } catch (err) {
+    // 本機湖倉中介層若未運行或出錯，靜默降級至外部網路請求
+  }
+
+  const missingRange = findMissingDateRanges(startDate, endDate, currentCache);
   if (!missingRange) {
-    return existingCache;
+    return currentCache;
   }
 
   const yahooSymbol = normalizeYahooSymbol(symbol, market);
@@ -140,10 +162,10 @@ export async function fetchSymbolHistoricalPrices(
   try {
     const data = await customFetch(url, 6000);
     const newPrices = parseYahooHistoricalChartResponse(data);
-    return mergeHistoricalPrices(existingCache, newPrices);
+    return mergeHistoricalPrices(currentCache, newPrices);
   } catch (err) {
     logger.warn(`Failed to fetch historical prices for ${symbol}:`, err);
-    return existingCache;
+    return currentCache;
   }
 }
 

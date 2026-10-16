@@ -532,17 +532,28 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
 async function runTwDateDrivenBackfill(options = {}) {
   const days = options.days || 250;
   const throttleMs = options.throttleMs !== undefined ? options.throttleMs : 3000;
-  const dates = generateTradeDateCandidates(days, options.endDate);
+  const dates = Array.isArray(options.datesOverride) && options.datesOverride.length > 0
+    ? options.datesOverride
+    : generateTradeDateCandidates(days, options.endDate);
   const startedAt = options.startedAt || Date.now();
 
   console.log(`[Spec 0168 / Spec 0184] 啟動台股日期驅動歷史全回補管線...`);
-  console.log(`[*] 目標交易日數: ${days} 天 (${dates[dates.length - 1]} ~ ${dates[0]})`);
+  console.log(`[*] 目標交易日數: ${dates.length} 天 (${dates[dates.length - 1]} ~ ${dates[0]})`);
   console.log(`[*] 防爬蟲間隔: ${throttleMs}ms / 請求`);
 
   let totalTradingDays = 0;
   let totalQuotesIngested = 0;
   let totalChipsIngested = 0;
-  const failedDates = [];
+  let failedDates = [];
+
+  const fetchHandler = typeof options.customFetchDayQuotes === 'function'
+    ? options.customFetchDayQuotes
+    : (d) => fetchAndIngestTwDailyData(d, {
+        throttleMs,
+        dbPath: options.dbPath,
+        force: options.force,
+        signal: options.signal,
+      });
 
   for (let i = 0; i < dates.length; i++) {
     const dateStr = dates[i];
@@ -583,12 +594,7 @@ async function runTwDateDrivenBackfill(options = {}) {
       });
 
       const res = await Promise.race([
-        fetchAndIngestTwDailyData(dateStr, {
-          throttleMs,
-          dbPath: options.dbPath,
-          force: options.force,
-          signal: options.signal,
-        }),
+        fetchHandler(dateStr),
         watchdogPromise,
       ]).finally(() => {
         if (watchdogTimer) clearTimeout(watchdogTimer);
@@ -637,6 +643,37 @@ async function runTwDateDrivenBackfill(options = {}) {
     if (throttleMs > 0 && i < dates.length - 1) {
       await sleep(throttleMs);
     }
+  }
+
+  // Spec 0188 / Ticket 06: 看門狗尾盤自動補漏閉環 (少數失敗天數 <= 5 天時發起單輪重試)
+  const enableAutoCatchup = options.enableAutoCatchupRetry !== false;
+  if (enableAutoCatchup && failedDates.length > 0 && failedDates.length <= 5 && (!options.signal || !options.signal.aborted)) {
+    console.log(`\n🔄 [看門狗尾盤自動補漏] 檢測到 ${failedDates.length} 個熔斷或異常天數，啟動冷卻後單輪重試閉環...`);
+    if (throttleMs > 0) {
+      await sleep(Math.min(throttleMs, 5000));
+    }
+
+    const remainingFailed = [];
+    for (const failItem of failedDates) {
+      const retryDate = failItem.date;
+      process.stdout.write(`  [尾盤重試] 重新抓取 ${retryDate} ... `);
+      try {
+        const retryRes = await fetchHandler(retryDate);
+        if (retryRes && !retryRes.hasError && (retryRes.isTradingDay || retryRes.cached)) {
+          console.log(`✔ 補漏成功！`);
+          totalTradingDays++;
+          totalQuotesIngested += retryRes.quotesCount || 0;
+          totalChipsIngested += retryRes.chipsCount || 0;
+        } else {
+          console.log(`❌ 依然失敗: ${retryRes?.errorReason || '無資料'}`);
+          remainingFailed.push(failItem);
+        }
+      } catch (retryErr) {
+        console.log(`❌ 依然異常: ${retryErr.message}`);
+        remainingFailed.push(failItem);
+      }
+    }
+    failedDates = remainingFailed;
   }
 
   console.log(`\n========================================`);
