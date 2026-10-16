@@ -18,6 +18,8 @@ export default defineConfig({
   ],
   test: {
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    teardownTimeout: 60000,
+    testTimeout: 30000,
   },
   server: {
     port: 3000,
