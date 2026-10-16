@@ -339,9 +339,14 @@ function getVerificationStmts(db) {
   let stmts = verificationStmtsCache.get(db);
   if (!stmts) {
     stmts = {
-      stockStmt: db.prepare(
-        "SELECT count(*) AS n FROM daily_candles WHERE date = ? AND symbol GLOB '[1-9][0-9][0-9][0-9]'"
-      ),
+      stockStmt: db.prepare(`
+        SELECT 
+          count(*) AS totalCount,
+          count(CASE WHEN symbol GLOB '[1-9][0-9][0-9][0-9]' THEN 1 END) AS stockCount,
+          count(CASE WHEN symbol GLOB '00*' THEN 1 END) AS etfCount
+        FROM daily_candles 
+        WHERE date = ? AND (symbol GLOB '[1-9][0-9][0-9][0-9]' OR symbol GLOB '00*')
+      `),
       chipStmt: db.prepare("SELECT count(*) AS n FROM tw_institutional_chips WHERE date = ?"),
     };
     verificationStmtsCache.set(db, stmts);
@@ -353,25 +358,30 @@ function getVerificationStmts(db) {
  * 單日官方資料抓取與入庫
  * @param {string} dateStr - YYYY-MM-DD
  * @param {object} [options]
- * @returns {Promise<{ date: string, isTradingDay: boolean, quotesCount: number, chipsCount: number, cached?: boolean, hasError?: boolean, errorReason?: string, twseQuotesCount?: number, tpexQuotesCount?: number }>}
+ * @returns {Promise<{ date: string, isTradingDay: boolean, quotesCount: number, chipsCount: number, stockCount?: number, etfCount?: number, cached?: boolean, hasError?: boolean, errorReason?: string, twseQuotesCount?: number, tpexQuotesCount?: number }>}
  */
 async function fetchAndIngestTwDailyData(dateStr, options = {}) {
-  // Spec 0184 / Ticket 04: SQLite 雙指標健康快取秒級略過 (Smart Cache Skip)
+  // Spec 0184 & Spec 0185: SQLite 雙指標健康快取秒級略過 (Smart Cache Skip)
   if (!options.force && !options.inMemoryOnly) {
     try {
       const db = initSqliteLakehouseDb(options.dbPath);
       const { stockStmt, chipStmt } = getVerificationStmts(db);
       const stockRow = stockStmt.get(dateStr);
       const chipRow = chipStmt.get(dateStr);
-      const stockCount = stockRow ? Number(stockRow.n) : 0;
+      const totalCount = stockRow ? Number(stockRow.totalCount) : 0;
+      const stockCount = stockRow ? Number(stockRow.stockCount) : 0;
+      const etfCount = stockRow ? Number(stockRow.etfCount) : 0;
       const chipCount = chipRow ? Number(chipRow.n) : 0;
 
+      // 雙指標安全快取判定：普通股 >= 1800 且 籌碼 >= 2000 (Spec 0185)
       if (stockCount >= 1800 && chipCount >= 2000) {
         return {
           date: dateStr,
           isTradingDay: true,
           cached: true,
-          quotesCount: stockCount,
+          quotesCount: totalCount,
+          stockCount,
+          etfCount,
           chipsCount: chipCount,
         };
       }
@@ -577,7 +587,8 @@ async function runTwDateDrivenBackfill(options = {}) {
         totalTradingDays++;
         totalQuotesIngested += res.quotesCount;
         totalChipsIngested += res.chipsCount;
-        console.log(`✔ 快取命中已在庫 ⚡ 略過 (4碼股票: ${res.quotesCount} 檔, 籌碼: ${res.chipsCount} 筆)`);
+        const stockInfo = res.stockCount !== undefined ? ` [股票: ${res.stockCount}, ETF: ${res.etfCount}]` : '';
+        console.log(`✔ 快取命中已在庫 ⚡ 略過 (有效標的: ${res.quotesCount} 檔${stockInfo}, 籌碼: ${res.chipsCount} 筆)`);
       } else if (res.hasError) {
         console.log(`⚠️ 異常: ${res.errorReason} (已推入補漏清單)`);
         failedDates.push({ date: dateStr, reason: res.errorReason });
@@ -601,6 +612,8 @@ async function runTwDateDrivenBackfill(options = {}) {
           isTradingDay: res.isTradingDay,
           cached: res.cached,
           quotesCount: res.quotesCount,
+          stockCount: res.stockCount,
+          etfCount: res.etfCount,
           chipsCount: res.chipsCount,
         });
       }
@@ -645,6 +658,7 @@ module.exports = {
   parseTwseDailyQuotesWithTransactions,
   parseTpexDailyQuotesWithTransactions,
   saveTwDailyQuotesBatch,
+  getVerificationStmts,
   fetchAndIngestTwDailyData,
   runTwDateDrivenBackfill,
 };

@@ -119,9 +119,9 @@ _Avoid_: Duplicate Inputs, White Plain Inputs
 完全不依賴本地任何外部 CSV 檔案，以「日期驅動 (Date-Driven)」連線 TWSE/TPEx 官方 4 大每日全市場日報端點（`MI_INDEX`, `T86`, `1430`, `3itrade_hedge`）。250 交易日僅需 1,000 次官方請求即可補全全市場 2,361+ 檔股票一年歷史。搭配後端中介層 `POST /api/market/backfill-all` 與 `sync_checkpoints`，支援電腦不關機背景執行、中斷隨時續傳與前端即時動態進度條。
 _Avoid_: CSV-Dependent Backfill, Monolithic Heavy Crawling
 
-**Smart Dual-Metric Cache Skip (雙指標健康快取秒級略過)** *(新增於 V8.97.0 / Spec 0184)*:
-在回補單日進入網路抓取前，以 SQLite 雙指標（`daily_candles` 4 碼普通股 `symbol GLOB '[1-9][0-9][0-9][0-9]'` 筆數 $\ge 1,800$ 且 `tw_institutional_chips` 籌碼筆數 $\ge 2,000$）作為已在庫完整憑證。達標即回傳 `cached: true`，跳過 4 次官方請求與 3 秒節流延遲，將重複回補 250 天由 50 分鐘大幅壓縮至數秒鐘。
-_Avoid_: Total Row Count Guess, Blind Redundant Crawling
+**Smart Dual-Metric Cache Skip & ETF Transparency (雙指標健康快取秒級略過與 ETF 透視可觀測性)** *(更新於 V8.98.0 / Spec 0185)*:
+在回補單日進入網路抓取前，以 SQLite 雙指標單次掃描（`daily_candles` 之 `symbol GLOB '[1-9][0-9][0-9][0-9]' OR symbol GLOB '00*'`，包含 4 碼普通股、創新板與全量 ETF，普通股筆數 $\ge 1,800$ 且 `tw_institutional_chips` 籌碼筆數 $\ge 2,000$）作為已在庫完整憑證。排除權證干擾，單次掃描同時精準提取總數、普通股數（~1,979 檔）與 ETF 數（~348 檔）。達標即回傳 `cached: true` 並透明輸出分層標的明細，跳過 4 次官方請求與 3 秒節流延遲，將重複回補 250 天大幅壓縮至數秒鐘。
+_Avoid_: Total Row Count Guess, Blind Redundant Crawling, Hidden ETF Blind Spot
 
 **Intraday Anchor Guard (盤中時間定錨守衛)** *(新增於 V8.97.0 / Spec 0184)*:
 重用 `trading-calendar-engine.cjs` 法定交易日曆。在盤中執行回補且當前本地時間未滿 15:30（盤後日報結算門檻）時，候選起始日強制自動定錨退回前一法定交易日（T-1）；15:30 後才納入今日。法定休市日直接 0 請求排除，杜絕將盤中未出報誤判為「[休市日] 略過」之語意混淆。
