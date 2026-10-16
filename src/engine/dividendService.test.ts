@@ -84,15 +84,22 @@ describe('fetchCompanyDividendHistory', () => {
       ],
     };
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      json: async () => mockData,
-    } as Response);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any) => {
+      const url = String(input);
+      if (url.includes('/api/market/corporate-actions/')) {
+        return { ok: false, status: 404 } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => mockData,
+      } as Response;
+    });
 
     const res1 = await fetchCompanyDividendHistory('2454', 'TW');
     const res2 = await fetchCompanyDividendHistory('2454', 'TW');
 
     expect(res1).toEqual(res2);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    // 第一次呼叫抓取（1次本地失敗 + 1次外部成功 = 2次），第二次呼叫直接命中 memoryCache（0次），總共仍為 2 次
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 });

@@ -5,10 +5,65 @@ import {
   US_SPY_BENCHMARK_HISTORY,
 } from './benchmarkConstants';
 
+// 動態基準日 K 快取 (優先自本地 SQLite 湖倉提取真實日 K，Spec 0188)
+const dynamicBenchmarkCache = new Map<BenchmarkType, Record<string, number>>();
+
+export function resetBenchmarkCacheForTesting(): void {
+  dynamicBenchmarkCache.clear();
+}
+
 /**
- * 取得指定基準之歷史每日收盤價字典
+ * 非同步從本地 SQLite 湖倉載入真實基準日 K 走勢
+ * @param type - 基準類型 (TAIEX | 0050 | SPY)
+ * @param customFetch - 自訂 fetch 函式 (測試用)
+ */
+export async function loadBenchmarkDailyPricesAsync(
+  type: BenchmarkType,
+  customFetch: (url: string) => Promise<any> = globalThis.fetch
+): Promise<Record<string, number>> {
+  if (dynamicBenchmarkCache.has(type)) {
+    return dynamicBenchmarkCache.get(type)!;
+  }
+
+  const fallback = getBenchmarkDailyPrices(type);
+  let symbol = '';
+  if (type === 'SPY') symbol = 'SPY';
+  else if (type === '0050') symbol = '0050';
+  else if (type === 'TAIEX') symbol = 'TAIEX';
+  else return fallback;
+
+  try {
+    const res = await customFetch(`/api/market/history/${encodeURIComponent(symbol)}?limit=all`);
+    if (res && res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data?.candles) && data.candles.length > 0) {
+        const prices: Record<string, number> = {};
+        for (const c of data.candles) {
+          if (c && c.date && typeof c.close === 'number' && c.close > 0) {
+            prices[c.date] = c.close;
+          }
+        }
+        if (Object.keys(prices).length > 0) {
+          dynamicBenchmarkCache.set(type, prices);
+          return prices;
+        }
+      }
+    }
+  } catch {
+    // 網路或 API 異常時安全降級為備份常數
+  }
+
+  return fallback;
+}
+
+/**
+ * 取得指定基準之歷史每日收盤價字典 (優先命中動態真實日 K 快取，查無時降級靜態常數)
  */
 export function getBenchmarkDailyPrices(type: BenchmarkType): Record<string, number> {
+  if (dynamicBenchmarkCache.has(type)) {
+    return dynamicBenchmarkCache.get(type)!;
+  }
+
   switch (type) {
     case 'TAIEX':
       return TW_TAIEX_BENCHMARK_HISTORY;

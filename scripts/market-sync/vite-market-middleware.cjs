@@ -237,19 +237,73 @@ function createMarketApiMiddleware(customDbPath) {
       );
     }
 
+    // 2.1 GET /api/market/corporate-actions/:symbol (Spec 0188 / Ticket 05)
+    const caMatch = pathname.match(/^\/api\/market\/corporate-actions\/([A-Za-z0-9\-_]+)$/);
+    if (caMatch) {
+      const symbol = caMatch[1].toUpperCase();
+      const aliasSym = symbol.endsWith('O') ? symbol.slice(0, -1) : `${symbol}O`;
+      try {
+        const rows = db
+          .prepare(
+            'SELECT * FROM corporate_action_calendar WHERE symbol IN (?, ?) ORDER BY ex_date ASC'
+          )
+          .all(symbol, aliasSym);
+
+        if (rows.length === 0) {
+          res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ symbol, actions: [] }));
+        }
+
+        const mapByYear = new Map();
+        for (const r of rows) {
+          const exDate = r.ex_date || '';
+          const year = exDate ? new Date(exDate).getFullYear() : 0;
+          if (!year) continue;
+
+          const cash = Number(r.cash_dividend_per_share || 0);
+          const stock = Number(r.stock_dividend_ratio || 0);
+
+          if (mapByYear.has(year)) {
+            const item = mapByYear.get(year);
+            item.cashDividend = Number((item.cashDividend + cash).toFixed(2));
+            item.stockDividend = Number((item.stockDividend + stock).toFixed(2));
+            item.totalDividend = Number((item.cashDividend + item.stockDividend).toFixed(2));
+          } else {
+            mapByYear.set(year, {
+              year,
+              cashDividend: cash,
+              stockDividend: stock,
+              totalDividend: Number((cash + stock).toFixed(2)),
+              exDividendDate: r.ex_date || undefined,
+              payDate: r.payment_date || undefined,
+            });
+          }
+        }
+
+        const actions = Array.from(mapByYear.values()).sort((a, b) => a.year - b.year);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ symbol, actions }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ error: err.message, actions: [] }));
+      }
+    }
+
     // 3. GET /api/market/history/:symbol?limit=250
     const historyMatch = pathname.match(/^\/api\/market\/history\/([A-Za-z0-9\-_]+)$/);
     if (historyMatch) {
       const symbol = historyMatch[1].toUpperCase();
-      const limit = parseInt(query.limit, 10) || 250;
+      const isAll = String(query.limit || '').trim().toLowerCase() === 'all';
+      const limit = isAll ? 0 : (parseInt(query.limit, 10) || 250);
 
       const aliasSym = symbol.endsWith('O') ? symbol.slice(0, -1) : `${symbol}O`;
       let meta = db.prepare('SELECT * FROM symbols_meta WHERE symbol IN (?, ?)').get(symbol, aliasSym);
 
-      // 雙向別名日 K 查詢與防斷層合併 (Spec 0170)
+      // 雙向別名日 K 查詢與防斷層合併 (Spec 0170 & Spec 0188: 支援全量與動態天數)
+      const sqlLimit = isAll || limit <= 0 ? -1 : limit * 2;
       const rawCandleRows = db
         .prepare('SELECT * FROM daily_candles WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT ?')
-        .all(symbol, aliasSym, limit * 2);
+        .all(symbol, aliasSym, sqlLimit);
 
       const dateMap = new Map();
       for (const row of rawCandleRows) {
@@ -258,7 +312,7 @@ function createMarketApiMiddleware(customDbPath) {
         }
       }
       let candles = Array.from(dateMap.values());
-      if (candles.length > limit) {
+      if (!isAll && limit > 0 && candles.length > limit) {
         candles = candles.slice(0, limit);
       }
 

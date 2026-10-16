@@ -365,8 +365,8 @@ async function runFullMarketHistoryBackfill() {
       v: c.volume,
     }));
 
-    // 湖倉深度歷史序列 (取最近 260 根供 SQLite 湖倉與主力戰情室年線/長線分析，Spec 0162 / Ticket 01)
-    lakehouseHistoryMap[symbol] = extractCandlesForLakehouse(alignedCandles, 260).map((c) => ({
+    // 湖倉全歷史序列 (解除 260 根截斷，全量沉澱供 SQLite 湖倉，Spec 0188 / Ticket 01)
+    lakehouseHistoryMap[symbol] = extractCandlesForLakehouse(alignedCandles, 0).map((c) => ({
       d: c.date,
       o: c.open,
       h: c.high,
@@ -489,14 +489,14 @@ function saveAlignedCandlesBatchToSqlite(candlesMap, customDbPath) {
 }
 
 /**
- * 截取供 SQLite 湖倉入庫之深度日 K 序列 (預設 260 根，支援年線與全年度指標)
+ * 截取供 SQLite 湖倉入庫之深度日 K 序列 (預設 0 代表全量保留，Spec 0188)
  * @param {Array<any>} candles
- * @param {number} [limit=260]
+ * @param {number} [limit=0]
  * @returns {Array<any>}
  */
-function extractCandlesForLakehouse(candles, limit = 260) {
+function extractCandlesForLakehouse(candles, limit = 0) {
   if (!Array.isArray(candles)) return [];
-  if (candles.length <= limit) return [...candles];
+  if (limit <= 0 || candles.length <= limit) return [...candles];
   return candles.slice(-limit);
 }
 

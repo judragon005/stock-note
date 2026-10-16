@@ -69,8 +69,8 @@ function getSqliteDbConnection(customPath) {
   ensureDirectoryExists(dbPath);
   const db = new DatabaseSync(dbPath);
 
-  // 啟用防鎖定逾時與高效 WAL 模式
-  db.exec('PRAGMA busy_timeout = 5000;');
+  // 啟用防鎖定逾時與高效 WAL 模式 (Spec 0188: 提升至 15000ms 避免鎖衝突)
+  db.exec('PRAGMA busy_timeout = 15000;');
   db.exec('PRAGMA journal_mode = WAL;');
   db.exec('PRAGMA synchronous = NORMAL;');
 
@@ -141,6 +141,7 @@ function initSqliteLakehouseDb(customPath) {
       PRIMARY KEY (symbol, date)
     );
     CREATE INDEX IF NOT EXISTS idx_chips_date ON tw_institutional_chips(date);
+    CREATE INDEX IF NOT EXISTS idx_chips_symbol_date ON tw_institutional_chips(symbol, date DESC);
   `);
 
   // 4. 美股與全市場斷點續傳狀態表 (sync_checkpoints)

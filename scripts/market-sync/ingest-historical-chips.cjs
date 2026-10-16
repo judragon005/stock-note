@@ -14,10 +14,11 @@ const CHIPS_DIR = path.join(HISTORICAL_BASE_DIR, '全歷史籌碼與融資融券
 /**
  * 解析三大法人歷史 CSV 文本內容，聚合為按日期排列的張數清單
  * @param {string} content - CSV 檔案內容
- * @param {number} [limit=260] - 最大保留交易日天數
+ * @param {string} content - CSV 檔案內容
+ * @param {number} [limit=0] - 保留交易日天數 (預設 0 代表全量保留，Spec 0188)
  * @returns {Array<{ date: string, foreign_net: number, trust_net: number, dealer_net: number }>}
  */
-function parseHistoricalInstitutionalContent(content, limit = 260) {
+function parseHistoricalInstitutionalContent(content, limit = 0) {
   if (!content || typeof content !== 'string') return [];
   const lines = content.split(/\r?\n/);
   if (lines.length <= 1) return [];
@@ -70,10 +71,11 @@ function parseHistoricalInstitutionalContent(content, limit = 260) {
 /**
  * 解析融資融券歷史 CSV 文本內容
  * @param {string} content - CSV 檔案內容
- * @param {number} [limit=260] - 最大保留交易日天數
+ * @param {string} content - CSV 檔案內容
+ * @param {number} [limit=0] - 保留交易日天數 (預設 0 代表全量保留，Spec 0188)
  * @returns {Array<{ date: string, margin_balance: number, short_balance: number }>}
  */
-function parseHistoricalMarginContent(content, limit = 260) {
+function parseHistoricalMarginContent(content, limit = 0) {
   if (!content || typeof content !== 'string') return [];
   const lines = content.split(/\r?\n/);
   if (lines.length <= 1) return [];
@@ -197,11 +199,11 @@ function saveHistoricalChipsBatchToSqlite(symbol, instRecords = [], marginRecord
 /**
  * 批次掃描本機 CHIPS_DIR 下全部三大法人與融資融券 CSV 並入庫 SQLite (全市場歷史籌碼沉澱)
  * @param {string} [chipsDir]
- * @param {number} [limit=260]
+ * @param {number} [limit=0] - 預設 0 全量入庫 (Spec 0188)
  * @param {string} [customDbPath]
  * @returns {{ processedSymbols: number, totalRecords: number }}
  */
-function runAllHistoricalChipsIngestion(chipsDir = CHIPS_DIR, limit = 260, customDbPath) {
+function runAllHistoricalChipsIngestion(chipsDir = CHIPS_DIR, limit = 0, customDbPath) {
   if (!fs.existsSync(chipsDir)) {
     console.warn(`[籌碼入庫警告] 找不到籌碼歷史目錄: ${chipsDir}`);
     return { processedSymbols: 0, totalRecords: 0 };
