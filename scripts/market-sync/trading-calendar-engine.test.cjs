@@ -120,8 +120,12 @@ d('scripts/market-sync/trading-calendar-engine.test.cjs', () => {
     exp(getSettlementDate('2026-10-09', 'US')).toBe('2026-10-12');
   });
 
-  t('11. Ticket 04: 跨長假融資計息日曆天計算 (getHoldingInterestDays)', () => {
-    const { getHoldingInterestDays } = require('./trading-calendar-engine.cjs');
+  t('11. Ticket 04: 跨長假融資計息日曆天計算 (getHoldingInterestDays) 與利息金額精算', () => {
+    const {
+      getHoldingInterestDays,
+      DEFAULT_MARGIN_ANNUAL_INTEREST_RATE,
+      calculateMarginInterest,
+    } = require('./trading-calendar-engine.cjs');
     // 常態週末跨 3 天 (週五 10/09 至 週一 10/12)
     exp(getHoldingInterestDays('2026-10-09', '2026-10-12')).toBe(3);
 
@@ -130,6 +134,17 @@ d('scripts/market-sync/trading-calendar-engine.test.cjs', () => {
 
     // 2026 春節長假：2026-02-11 (封關最後交易日) 至 2026-02-23 (開紅盤首日)，橫跨 12 個日曆天
     exp(getHoldingInterestDays('2026-02-11', '2026-02-23')).toBe(12);
+
+    // 驗證融資年利率預設基準為 6.45%
+    exp(DEFAULT_MARGIN_ANNUAL_INTEREST_RATE).toBe(0.0645);
+
+    // 驗證融資利息精算：借款 1,000,000 元，借 12 天，年利率 6.45%
+    // 1,000,000 * 0.0645 * (12 / 365) = 2120.5479... -> Math.floor = 2120 元
+    exp(calculateMarginInterest(1000000, 12)).toBe(2120);
+
+    // 借款 0 元或 0 天應為 0 元
+    exp(calculateMarginInterest(0, 12)).toBe(0);
+    exp(calculateMarginInterest(1000000, 0)).toBe(0);
   });
 
   t('12. Ticket 05: 台美衍生品期指結算日與四巫日感知 (isDerivativesExpiryDay)', () => {

@@ -195,6 +195,23 @@ function getHoldingInterestDays(startDateInput, endDateInput) {
 }
 
 /**
+ * 台灣券商融資標準年利率基準 (6.45%)
+ */
+const DEFAULT_MARGIN_ANNUAL_INTEREST_RATE = 0.0645;
+
+/**
+ * 計算融資利息金額 (公式: 融資金額 * 年利率 * (計息天數 / 365)，取整數)
+ * @param {number} borrowAmount - 融資借貸本金
+ * @param {number} days - 計息日曆天數
+ * @param {number} [annualRate=0.0645] - 融資年利率
+ * @returns {number} 融資利息金額 (元)
+ */
+function calculateMarginInterest(borrowAmount, days, annualRate = DEFAULT_MARGIN_ANNUAL_INTEREST_RATE) {
+  if (!borrowAmount || borrowAmount <= 0 || !days || days <= 0) return 0;
+  return Math.floor(borrowAmount * annualRate * (days / 365));
+}
+
+/**
  * 判定指定日期是否為台美衍生品結算日 (台指期每月第 3 個週三 / 美股月選第 3 個週五，3/6/9/12月為四巫日)
  * @param {Date|string} dateInput
  * @param {'TW' | 'US'} [market='TW']
@@ -301,6 +318,8 @@ module.exports = {
   getNextTradingDay,
   getSettlementDate,
   getHoldingInterestDays,
+  DEFAULT_MARGIN_ANNUAL_INTEREST_RATE,
+  calculateMarginInterest,
   isDerivativesExpiryDay,
   getLatestTdccPublishDate,
   getRevenueDeadlineDate,
