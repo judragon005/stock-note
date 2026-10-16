@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1631%2F1631%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1641%2F1641%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,21 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 個人投資者法人級微觀防禦、現金流預算與極簡風控強化 (`Personal Investor Institutional Edge & Lean Enhancements`) *(V8.96.0 最新發布 / Spec #0183 / ADR #0183 / Issue #254)*
+### 0. 台股歷史回補智慧快取略過、盤中時間定錨、權證排除與即時 ETA 引擎 (`Market Backfill Smart Skip, Retry & ETA Engine`) *(V8.97.0 最新發布 / Spec #0184 / ADR #0184 / Issue #258)*
+
+- **盤中時間守衛與交易日曆重用 (`backfill-tw-history-web.cjs`)**：
+  - 鎖定台北時間 (UTC+8)，15:30 盤後收盤日報出爐前自動定錨至昨日 (T-1)，15:30 後始納入今日；法定休市日 0 請求排除，消滅誤判「[休市日] 略過」之語意混淆。
+- **TPEx 1430 櫃買權證排除與兩市口徑對齊 (`backfill-tw-history-web.cjs`)**：
+  - 遍歷行情時過濾排除 6 碼以 7 開頭之櫃買認購/認售權證，與上市 `ALLBUT0999` 標準齊平，單日有效入庫收盤檔數收斂至 ~2,400 檔核心標的，**削減 70% 無效記錄**。
+- **官方端點指數退避與單邊缺失隔離 (`market-sync-core.cjs`)**：
+  - 共用 `retryFetch`（重試 3 次，間隔指數退避）；平日單邊網路中斷隔離至 `failedDates` 集中補漏清單，拒絕偽成功入庫。
+- **SQLite 雙指標健康快取秒級略過與 WeakMap Statement 快取 (`backfill-tw-history-web.cjs`)**：
+  - 4 碼普通股 $\ge 1,800$ 檔且三大法人籌碼 $\ge 2,000$ 筆秒級跳過，重複回補 250 天由 50 分鐘壓縮至數秒鐘；WeakMap 快取 prepared statement 杜絕 500 次重複 SQL 編譯。
+- **即時 ETA 預估與前端進度條彩色徽章 (`MarketScheduleHubSection.tsx` / `vite.config.ts`)**：
+  - 終端機與前端進度條同步輸出預計剩餘時間與完成時刻（如 `⏱️ 剩餘約 8 分鐘 (預計 11:25 完成)`）；Vite proxy 攔截 `ECONNRESET` 消除紅字堆疊追蹤。
+
+### 1. 個人投資者法人級微觀防禦、現金流預算與極簡風控強化 (`Personal Investor Institutional Edge & Lean Enhancements`) *(V8.96.0 / Spec #0183 / ADR #0183 / Issue #254)*
+
 
 - **未來 12 個月現金流投影日曆與枯水期互補 (`DividendLogView.tsx`)**：
   - 精準整合月配、季配、半年配與年配標的，投影未來一年每月預估實領股息。
