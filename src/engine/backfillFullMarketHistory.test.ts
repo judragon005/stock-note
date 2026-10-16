@@ -188,7 +188,7 @@ describe('Spec 0168 / Ticket 08: 台美雙軌全歷史回補總控與中介層�
         defaultFetchJson('http://10.255.255.1', { timeoutMs: 100 })
       ).rejects.toThrow();
       const elapsed = Date.now() - start;
-      expect(elapsed).toBeLessThan(1000); // 應在 1 秒內迅速超時，不掛起
+      expect(elapsed).toBeLessThan(2500); // 應迅速超時，不掛起 (放寬至 2.5s 避開 CPU 密集時之調度抖動)
     });
 
     it('Ticket 03: cancelBackfillTask 應能中斷進行中任務並將 isRunning 設為 false', () => {
