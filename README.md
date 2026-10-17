@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1641%2F1641%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1690%2F1690%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,25 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 台股歷史回補智慧快取略過、盤中時間定錨、權證排除與即時 ETA 引擎 (`Market Backfill Smart Skip, Retry & ETA Engine`) *(V8.97.0 最新發布 / Spec #0184 / ADR #0184 / Issue #258)*
+### 0. 統一金融時序日曆與全市場營業日引擎 (`Unified Financial Calendar & Temporal Engine`) *(V8.103.0 最新發布 / Spec #0190 / ADR #0190 / Issue #275)*
+
+- **單一真理來源日曆字典 (`src/data/market-holidays.json`)**：
+  - 徹底解決回補在 `2026-09-28` (教師節)、`2026-07-10` (巴威颱風假)、`2025-12-25` (行憲紀念日)、`2025-10-24` (光復節補假) 誤報官方無資料異常之根因。
+  - 跨前後端宣告式維護，結構化分離美股黑色星期五半日市 (`EARLY_CLOSE`)，杜絕營業日跳轉誤判。
+- **法人券商級時序演算法 (`trading-calendar-engine.cjs`)**：
+  - `getSettlementDate`：台股 T+2 / 美股 T+1 跨休市跳轉。
+  - `getHoldingInterestDays` & `calculateMarginInterest`：融資跨春節/長假精確自然日計息（預設年利率基準 6.45%）。
+  - `isDerivativesExpiryDay`：台指期每月第 3 週三、美股月選第 3 週五與四巫日感知。
+  - `getLatestTdccPublishDate`：集保股權週五遇國定連假自動前推至週四。
+  - `getRevenueDeadlineDate`：每月 10 號營收發布若遇休市順延至次一營業日。
+- **排程與回補零 I/O 守衛 (Zero I/O Guards)**：
+  - 台美盤後定時同步排程在休市日秒級退出，徹底消滅 1,500+ 次盲發 HTTP 請求與 SQLite 磁碟 I/O。
+  - 250 天歷史回補候選日事前排除休市日，合法休市 0 異常略過，`failedDates` 零污染。
+- **前端即時營業狀態看板與頁面能耗感知 (`MarketScheduleHubSection.tsx` / `marketStatusEngine.ts`)**：
+  - 原生 `Intl.DateTimeFormat` 自動感知美東夏令/冬令時區，排程卡片即時呈現營業狀態徽章與中文休市標籤。
+  - 導入 Page Visibility API，分頁在背景休眠時暫停定時器，分頁切回前景時立即校準時間並重啟，兼具即時性與零無效 CPU 喚醒能耗。
+
+### 0. 台股歷史回補智慧快取略過、盤中時間定錨、權證排除與即時 ETA 引擎 (`Market Backfill Smart Skip, Retry & ETA Engine`) *(V8.97.0 / Spec #0184 / ADR #0184 / Issue #258)*
 
 - **盤中時間守衛與交易日曆重用 (`backfill-tw-history-web.cjs`)**：
   - 鎖定台北時間 (UTC+8)，15:30 盤後收盤日報出爐前自動定錨至昨日 (T-1)，15:30 後始納入今日；法定休市日 0 請求排除，消滅誤判「[休市日] 略過」之語意混淆。

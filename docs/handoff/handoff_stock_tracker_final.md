@@ -113,6 +113,7 @@
 | **AI 主力戰情室決策報告引擎** | [`src/engine/aiForceDashboardEngine.ts`](file:///d:/APP/股票紀錄/src/engine/aiForceDashboardEngine.ts) | 支援 `basePrice` 與 `realtimeQuote` 動態注入與自適應回退，杜絕 2290 寫死假資料，實現 18 張卡片與即時行情等比動態同步。 | 13 tests |
 | **AI 主力動態信號與多空智能仲裁引擎** | [`src/engine/aiForceDashboardEngine.ts`](file:///d:/APP/股票紀錄/src/engine/aiForceDashboardEngine.ts) | 實作多因子加權量化評分純函式（0.35籌碼+0.3趨勢+0.2動能-0.15風險，支援 `CompositeQuantWeights`）、動態燈號映射、多空矛盾智能仲裁演算法（精準識別洗盤破底翻、誘多出貨、共振主升、共振主跌四大實戰型態）。 | 21 tests |
 | **智策多維提示詞決策引擎** | [`src/engine/strategicPromptEngine.ts`](file:///d:/APP/股票紀錄/src/engine/strategicPromptEngine.ts) | 實作個股/ETF雙軌特徵壓榨、六頂思考帽決策 Prompt 生成、Token 預算守門 (<1200 / <4500) 與零信任數據海關。 | 11 tests |
+| **統一金融時序日曆與營業日引擎** | [`scripts/market-sync/trading-calendar-engine.cjs`](file:///d:/APP/股票紀錄/scripts/market-sync/trading-calendar-engine.cjs)<br>[`src/engine/holidayCalendar.ts`](file:///d:/APP/股票紀錄/src/engine/holidayCalendar.ts)<br>[`src/engine/marketStatusEngine.ts`](file:///d:/APP/股票紀錄/src/engine/marketStatusEngine.ts) | 接入 `market-holidays.json` SSOT 字典。實作 T+2/T+1 交割日跳轉、融資長假計息天數與金額、台指期/美股四巫結算感知、TDCC 提前至週四、營收 10 號遇假順延、排程零 I/O 守衛與夏令/冬令時區即時時鐘。 | 46 tests |
 
 ### 4.2 前端工作台與核心組件 (`src/components/`)
 
@@ -156,7 +157,7 @@
    - 當前位於分支 `main`，與 `origin/main` 保持一致，Working Tree Clean。
    - 所有變更均已透過 GitHub Actions CI 綠燈驗證並 Squash and Merge 回主幹。
 2. **日常驗證防線**：
-   - 接手前務必執行 `npm test`（確認 217 個測試檔案、1,599 個測試 100% 綠燈）與 `npm run build`（確認 0 型別錯誤）。
+   - 接手前務必執行 `npm test`（確認 231 個測試檔案、1,690 個測試 100% 綠燈）與 `npm run build`（確認 0 型別錯誤）。
 3. **工作流閉環準則**：
    - 嚴格遵循工作流藍圖：`/grill-with-docs` ➔ `/to-spec` ➔ `/to-tickets` ➔ `/triage` ➔ `/tdd & /implement` ➔ `/code-review` ➔ `/handoff`。
 
