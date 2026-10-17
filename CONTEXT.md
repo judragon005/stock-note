@@ -2560,13 +2560,15 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
        - `marketStatusEngine.ts` 結合原生 `Intl.DateTimeFormat` 精準計算台美兩地即時狀態（盤前、盤中、盤後、休市、半日市）。
        - 在排程監控中心渲染即時營業狀態徽章與中文休市標籤。
 
-- **Vite Proxy Resilience, Circuit Breaker & Symbol Routing (Vite 代理彈性容錯、前端短路熔斷與標的市場精準路由架構)**:
-  - 核心模組：`vite.config.ts`、`src/engine/priceFetcher.ts`、`src/engine/historicalOhlcvBackfill.ts`。
-  - 規範依據：Spec 0191 (v8.104.0) 與 ADR 0191，對應 GitHub Issue #279。
+- **Upcoming Catalysts Auto-Update & War Room Calendar (宏觀戰情室關鍵財經催化劑倒數日曆修復、自適應滾動種子與外部免費資料中樞)**:
+  - 核心模組：`src/types/macro.ts`、`src/engine/periodicCatalystEngine.ts`、`src/data/defaultCatalysts.ts`、`src/utils/catalystStorage.ts`、`src/engine/catalystSyncService.ts`、`src/engine/macroAdvisorEngine.ts`、`src/components/WarRoomWorkspace.tsx`。
+  - 規範依據：Spec 0192 (v8.105.0) 與 ADR 0192，對應 GitHub Issue #281。
   - 核心特性：
-    1. **代理層錯誤抑制與安靜降噪 (Proxy Noise Suppression)**：在 `vite.config.ts` 配置 `customLogger` 與錯誤處理器，將 `ENOTFOUND`、`EAI_AGAIN`、`ETIMEDOUT` 與 `ECONNRESET` 納入安靜降噪，以單行精簡警告代替多行紅色堆疊追蹤，並標準化回傳 HTTP 502 JSON。
-    2. **標的市場權威後綴守衛 (Authoritative Market Suffix Router)**：結合官方字典建立 `resolveAuthoritativeMarketSuffix`，鎖定證交所上市標的為 `.TW`，櫃買/債券 ETF 為 `.TWO`，嚴禁對上市標的（如 `0050`、`2330`）盲目探測 `.TWO`，立即削減 50% 無效外部請求。
-    3. **前端輕量短路熔斷器 (In-Memory Circuit Breaker)**：實現 `ProxyCircuitBreaker` 狀態機（`CLOSED` ➔ `OPEN` ➔ `HALF-OPEN`），代理 502/ENOTFOUND 異常時秒級短路 Fast-Fail，直接平滑回退本機 IndexedDB / compact 快取資料庫，載入時間在 300ms 內，無介面卡頓。
+    1. **催化劑倒數日曆留白徹底修復**：徹底移除寫死過期常數，結合純 Date 原生數學推算週期性事件（台指結算、四巫日、非農、CPI）與 2026~2027 官方種子，無論任何基準日開啟戰情室皆有足量未來事件。
+    2. **在庫持股除息匯流 (Holdings Dividend Integration)**：自動將使用者在除權息行事曆中登記之預計配息日轉換為催化劑節點，並標註股票代號與每股金額，彌補個人現金流缺口。
+    3. **外部免費資料中樞 (TWSE OpenAPI Sync)**：解析證交所公開除權息預告 (`TWT48U`)，支援本地 Vite 代理模式優先規避 CORS，全流程 0 API Key、0 成本。
+    4. **風控警戒與持股質押聯動**：距高衝擊事件（`HIGH` impact）<= 3 天且維持率 < 160% 時，觸發質押保證金警示 (`MARGIN_EXPIRY_COLLISION`)。
+    5. **宏觀戰情室 UI 重構**：加入快速分類標籤（央行利率、經濟數據、期權結算、持股除息）、Empty State 導引卡片與自訂事件新增彈窗，賦予完全自主權。
 
 
 

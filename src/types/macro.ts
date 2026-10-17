@@ -48,6 +48,17 @@ export interface MacroPortfolioShield {
   portfolioBeta?: number;            // 投資組合對大盤 Beta
 }
 
+export type CatalystCategory =
+  | 'CENTRAL_BANK'
+  | 'INFLATION'
+  | 'EMPLOYMENT'
+  | 'EARNINGS'
+  | 'EARNINGS_DIVIDEND'
+  | 'DERIVATIVE_SETTLEMENT'
+  | 'CUSTOM';
+
+export type CatalystImpact = 'HIGH' | 'MEDIUM' | 'LOW';
+
 /**
  * 關鍵宏觀財經事件
  */
@@ -56,8 +67,13 @@ export interface UpcomingCatalyst {
   name: string;
   date: string;                      // YYYY-MM-DD
   daysLeft: number;                  // 倒數天數 (0 為今日, 負數表示已過期)
-  category: 'CENTRAL_BANK' | 'INFLATION' | 'EMPLOYMENT' | 'EARNINGS';
+  category: CatalystCategory;
+  impact?: CatalystImpact;           // 衝擊度等級 (券商/法人維度)
+  targetMarket?: 'ALL' | 'TW' | 'US';// 影響市場
+  symbol?: string;                   // 關聯個股代號 (如 2330.TW)
   description: string;
+  isCustom?: boolean;                // 是否為使用者手動新增
+  sourceUrl?: string;                // 官方來源連結
 }
 
 /**
