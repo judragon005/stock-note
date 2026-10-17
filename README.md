@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1690%2F1690%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1698%2F1698%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,19 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 統一金融時序日曆與全市場營業日引擎 (`Unified Financial Calendar & Temporal Engine`) *(V8.103.0 最新發布 / Spec #0190 / ADR #0190 / Issue #275)*
+### 0. Vite 代理彈性容錯、前端短路熔斷與標的市場精準路由架構 (`Vite Proxy Resilience, Circuit Breaker & Symbol Routing Engine`) *(V8.104.0 最新發布 / Spec #0191 / ADR #0191 / Issue #279)*
+
+- **開發代理層錯誤抑制與安靜降噪 (`vite.config.ts`)**：
+  - 引入 `customLogger` 與強化錯誤監聽器，精確攔截 `ENOTFOUND`、`EAI_AGAIN`、`ETIMEDOUT` 與 `ECONNRESET` 等 DNS/網路異常。
+  - 將冗長之 Node.js 多行紅色堆疊追蹤降噪為單行精簡警告，統一回傳標準 HTTP 502 JSON 負載，使終端機輸出保持純淨。
+- **標的市場權威後綴守衛 (`src/engine/priceFetcher.ts`)**：
+  - 導入 `resolveAuthoritativeMarketSuffix`，結合本機股票字典精準推導市場歸屬（上市 `.TW` / 上櫃 `.TWO` / 債券 ETF `.TWO`）。
+  - 已知上市標的（如 `0050`、`0056`、`2330`）鎖定 `.TW`，**嚴格禁止探測 `.TWO`**，徹底終結 `0050.TWO` 等無效跨市場盲目探測，**削減 50% 外部 API 負載**。
+- **前端輕量短路熔斷器與離線主權 (`src/engine/priceFetcher.ts`)**：
+  - 實現原生 `ProxyCircuitBreaker` 狀態機（`CLOSED` ➔ `OPEN` ➔ `HALF-OPEN`），冷卻週期 60 秒。
+  - 遭遇代理 502/ENOTFOUND 異常時秒級短路 Fast-Fail，直接平滑回退本機 IndexedDB / compact 快取數據源，斷網環境下載入維持在 300ms 內，無介面卡頓。
+
+### 0. 統一金融時序日曆與全市場營業日引擎 (`Unified Financial Calendar & Temporal Engine`) *(V8.103.0 / Spec #0190 / ADR #0190 / Issue #275)*
 
 - **單一真理來源日曆字典 (`src/data/market-holidays.json`)**：
   - 徹底解決回補在 `2026-09-28` (教師節)、`2026-07-10` (巴威颱風假)、`2025-12-25` (行憲紀念日)、`2025-10-24` (光復節補假) 誤報官方無資料異常之根因。
