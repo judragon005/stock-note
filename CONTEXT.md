@@ -157,6 +157,14 @@ _Avoid_: Rigid Fixed Options, Heavy Bootstrap In Daily Usage
 2. **Windows 檔案原子置換抗鎖韌性**：在 `saveJsonAtomic` 針對 `fs.renameSync` 遭遇之 Windows `EPERM` / `EBUSY` 檔案鎖定，提供自旋指數退避重試與安全回退覆寫機制，杜絕崩潰與未捕獲例外。
 _Avoid_: Single-Run Delta Only Blind Spot, Windows EPERM Unhandled Exception
 
+**Institutional Macro War Room 2.0 (法人旗艦級宏觀戰情室 2.0)** *(新增於 V9.00.0 / Spec 0193 / ADR 0193)*:
+1. **0~100 宏觀水溫計 (Macro Thermometer)**：綜合殖利率倒掛、VIX、高收益債信用利差 (HY OAS) 與外資台指期淨空單，動態給出作戰姿態（防禦/平衡/進攻）與建議股票總持倉上限 (20%~90%)。
+2. **台美全球專屬雙軌切換 (TW / US / Global)**：台股聚焦期貨空單、全市場融資維持率（130% 斷頭警戒線）、台幣匯率與在線月營收倒數；美股聚焦利差倒掛、HY OAS、CDS 信用違約互換保險指數與 VIX。
+3. **100% Zero Mock 湖倉日 K 驅動**：徹底剷除 `MOCK_MOMENTUM_PRICES` 假數據，以本機 SQLite 湖倉真實收盤價序列動態計算 12-1M 雙重動能與無風險避風港狀態。
+4. **法人風控在險 (1-Day 95% VaR) 與 3 階急速黑天鵝壓力測試**：秒算 95% 信心水準之單日極限潛在損失與台幣 FX Delta 敏感度，支援 `[-10%]`, `[-20%]`, `[-30%]` 即刻斷頭維持率與追繳保證金精算。
+5. **彭博式三段時序雷達與配額守衛**：收斂催化劑至「今日登場 / 7 日焦點 / 30 日遠端」，注入每月 10 號營收截止倒數；實作 24H 當日快取鎖與舊版 Schema 自動消毒，達成 0 浪費與 0 白屏崩潰。
+_Avoid_: Mock Momentum Prices, Conflated Market Views, High Quota Waste, Undefined Crash On Stale Storage
+
 
 
 **Tax Compliance & Threshold Alert (稅階合規與二代健保/海外所得預警)** *(新增於 V6.1.0)*:

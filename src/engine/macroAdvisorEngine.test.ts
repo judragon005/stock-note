@@ -4,7 +4,20 @@ import {
   calculateUpcomingCatalysts,
   generateAiMorningBrief,
   buildLlmPromptPayload,
+  calculateMacroThermometer,
+  evaluateCreditRisk,
+  evaluateTwMarketRisk,
+  calculate1DayVaR95,
+  calculateFxDelta,
+  calculateQuickStressMatrix,
+  groupCatalystsByTimeline,
+  generateMonthlyRevenueDeadlineCatalyst,
+  estimateExDividendIndexImpactPoints,
 } from './macroAdvisorEngine';
+
+
+
+
 import {
   MacroIndicatorSnapshot,
   MacroPortfolioShield,
@@ -367,4 +380,211 @@ describe('MacroAdvisorEngine (TDD Seam)', () => {
       expect(parsed.upcomingEvents[0].daysLeft).toBe(10);
     });
   });
+
+  describe('5. 宏觀水溫計合成與股票倉位建議 (calculateMacroThermometer - Ticket 01)', () => {
+    it('平穩繁榮環境應評定為進攻姿態 (AGGRESSIVE) 且倉位上限達 75% 以上', () => {
+      const macro = createBaseMacro({
+        yieldSpread: 0.8,
+        isYieldInverted: false,
+        vix: 13.5,
+        vixLevel: 'NORMAL',
+        fearAndGreedIndex: 68,
+        fearAndGreedLevel: 'GREED',
+        creditSpreadOAS: 3.1,
+        cdsInsuranceIndex: 50,
+        twFuturesNetOi: 5000,
+        twMarginMaintenance: 172.5,
+      });
+
+      const thermo = calculateMacroThermometer(macro);
+      expect(thermo.score).toBeGreaterThanOrEqual(70);
+      expect(thermo.stance).toBe('AGGRESSIVE');
+      expect(thermo.suggestedEquityAllocationPercent).toBeGreaterThanOrEqual(75);
+      expect(thermo.rationale.length).toBeGreaterThan(0);
+    });
+
+    it('多重風暴環境（利差倒掛、VIX飆升、外資重度淨空單）應評定為防禦姿態 (DEFENSIVE)', () => {
+      const macro = createBaseMacro({
+        yieldSpread: -0.65,
+        isYieldInverted: true,
+        vix: 33.0,
+        vixLevel: 'PANIC',
+        fearAndGreedIndex: 18,
+        fearAndGreedLevel: 'EXTREME_FEAR',
+        creditSpreadOAS: 6.2,
+        cdsInsuranceIndex: 125,
+        twFuturesNetOi: -46000,
+        twMarginMaintenance: 134.0,
+      });
+
+      const thermo = calculateMacroThermometer(macro);
+      expect(thermo.score).toBeLessThanOrEqual(40);
+      expect(thermo.stance).toBe('DEFENSIVE');
+      expect(thermo.suggestedEquityAllocationPercent).toBeLessThanOrEqual(40);
+      expect(thermo.rationale.some((r) => r.includes('倒掛') || r.includes('恐慌'))).toBe(true);
+    });
+
+    it('極端數值輸入時，分數應鎖定在 0 ~ 100 區間內', () => {
+      const extremeMacro = createBaseMacro({
+        yieldSpread: -5.0,
+        vix: 99.0,
+        creditSpreadOAS: 20.0,
+        twFuturesNetOi: -100000,
+      });
+      const thermo = calculateMacroThermometer(extremeMacro);
+      expect(thermo.score).toBeGreaterThanOrEqual(0);
+      expect(thermo.score).toBeLessThanOrEqual(100);
+    });
+  });
+
+  describe('6. 美股機構級信用金絲雀指標 (evaluateCreditRisk - Ticket 02)', () => {
+    it('低利差與平穩 CDS 應回傳 LOW 風險等級', () => {
+      const risk = evaluateCreditRisk(3.2, 55);
+      expect(risk.cdsRiskLevel).toBe('LOW');
+      expect(risk.isAlert).toBe(false);
+    });
+
+    it('高收益債利差飆破 5% 或 CDS 指數突破 100 時應啟動 HIGH 或 CRITICAL 警報', () => {
+      const riskHigh = evaluateCreditRisk(5.5, 95);
+      expect(riskHigh.cdsRiskLevel).toBe('HIGH');
+      expect(riskHigh.isAlert).toBe(true);
+
+      const riskCritical = evaluateCreditRisk(6.8, 120);
+      expect(riskCritical.cdsRiskLevel).toBe('CRITICAL');
+      expect(riskCritical.isAlert).toBe(true);
+    });
+
+    it('缺漏值時應安全回退為 LOW 且不噴錯', () => {
+      const riskEmpty = evaluateCreditRisk(undefined, undefined);
+      expect(riskEmpty.cdsRiskLevel).toBe('LOW');
+      expect(riskEmpty.isAlert).toBe(false);
+    });
+  });
+
+  describe('7. 台股專屬籌碼金絲雀指標 (evaluateTwMarketRisk - Ticket 03)', () => {
+    it('外資空單突破 3 萬口標記 HIGH_ALERT，突破 4.5 萬口標記 EXTREME_SHORT', () => {
+      const alertRisk = evaluateTwMarketRisk(-32000, 165);
+      expect(alertRisk.twFuturesRiskLevel).toBe('HIGH_ALERT');
+
+      const extremeRisk = evaluateTwMarketRisk(-48000, 160);
+      expect(extremeRisk.twFuturesRiskLevel).toBe('EXTREME_SHORT');
+    });
+
+    it('融資維持率低於 140% 為 WARNING，低於 130% 斷頭線為 LIQUIDATION_RISK', () => {
+      const warn = evaluateTwMarketRisk(-10000, 138);
+      expect(warn.twMarginRiskLevel).toBe('WARNING');
+
+      const liquidation = evaluateTwMarketRisk(-10000, 128);
+      expect(liquidation.twMarginRiskLevel).toBe('LIQUIDATION_RISK');
+    });
+  });
+
+  describe('8. 個人防護盾 1-Day 95% 在險價值與匯率敏感度 (calculate1DayVaR95 & calculateFxDelta - Ticket 04)', () => {
+    it('遵循 1.65 * (vol / sqrt(252)) * NAV 公式精準計算 95% VaR', () => {
+      // NAV = 10,000,000, 年化波動度 16% => 1.65 * (0.16 / sqrt(252)) * 10,000,000
+      // sqrt(252) 約 15.8745
+      // dailyVol = 0.16 / 15.874507866 = 0.01007905
+      // VaR = 1.65 * 0.01007905 * 10,000,000 = 166,304
+      const varTWD = calculate1DayVaR95(10000000, 0.16);
+      expect(varTWD).toBeCloseTo(166304, -2); // 允許百元內誤差
+    });
+
+    it('零或負淨值時 VaR 應安全為 0', () => {
+      expect(calculate1DayVaR95(0)).toBe(0);
+      expect(calculate1DayVaR95(-500000)).toBe(0);
+    });
+
+    it('計算台幣升值 1 元對美股資產之匯損敏感度 (FX Delta)', () => {
+      // 假設持有 100,000 USD 美股資產，台幣每升值 1 元即損失 100,000 TWD
+      const delta = calculateFxDelta(100000);
+      expect(delta).toBe(100000);
+      expect(calculateFxDelta(0)).toBe(0);
+    });
+  });
+
+  describe('9. 個人防護盾 3 階急速壓力測試矩陣 (calculateQuickStressMatrix - Ticket 05)', () => {
+    it('無負債借款時，各階維持率均為安全上限 (999.9%) 且追繳缺口為 0', () => {
+      const scenarios = calculateQuickStressMatrix(2000000, 0);
+      expect(scenarios).toHaveLength(3);
+      expect(scenarios[0].stressedMarginRatioPercent).toBe(999.9);
+      expect(scenarios[0].marginCallShortfallTWD).toBe(0);
+      expect(scenarios[0].status).toBe('SAFE');
+    });
+
+    it('有借款時，應精確試算 -10%、-20%、-30% 擔保品市值與 130% 追繳缺口', () => {
+      // 擔保品 1,000,000，質押借款 700,000 (初始維持率 142.8% WARNING)
+      // 130% 追繳門檻為 700,000 * 1.3 = 910,000
+      // -10%: 市值 900,000 (< 910,000) => 維持率 128.6% (MARGIN_CALL), 缺口 910,000 - 900,000 = 10,000
+      // -20%: 市值 800,000 => 維持率 114.3% (MARGIN_CALL), 缺口 910,000 - 800,000 = 110,000
+      // -30%: 市值 700,000 => 維持率 100.0% (MARGIN_CALL), 缺口 910,000 - 700,000 = 210,000
+      const scenarios = calculateQuickStressMatrix(1000000, 700000);
+      expect(scenarios).toHaveLength(3);
+
+      expect(scenarios[0].dropPercent).toBe(-10);
+      expect(scenarios[0].stressedCollateralTWD).toBe(900000);
+      expect(scenarios[0].stressedMarginRatioPercent).toBe(128.6);
+      expect(scenarios[0].marginCallShortfallTWD).toBe(10000);
+      expect(scenarios[0].status).toBe('MARGIN_CALL');
+
+      expect(scenarios[1].dropPercent).toBe(-20);
+      expect(scenarios[1].stressedCollateralTWD).toBe(800000);
+      expect(scenarios[1].stressedMarginRatioPercent).toBe(114.3);
+      expect(scenarios[1].marginCallShortfallTWD).toBe(110000);
+
+      expect(scenarios[2].dropPercent).toBe(-30);
+      expect(scenarios[2].stressedCollateralTWD).toBe(700000);
+      expect(scenarios[2].stressedMarginRatioPercent).toBe(100);
+      expect(scenarios[2].marginCallShortfallTWD).toBe(210000);
+    });
+  });
+
+  describe('10. 彭博式三段時序雷達與營收除息 (groupCatalystsByTimeline - Ticket 07)', () => {
+    it('應精確將事件分類為今日、7日內、30日內三段區間', () => {
+      const catalysts: UpcomingCatalyst[] = [
+        { id: '1', name: '台指結算', date: '2026-10-17', daysLeft: 0, category: 'DERIVATIVE_SETTLEMENT', description: '' },
+        { id: '2', name: '台積電法說', date: '2026-10-20', daysLeft: 3, category: 'EARNINGS', description: '' },
+        { id: '3', name: 'FOMC', date: '2026-11-05', daysLeft: 19, category: 'CENTRAL_BANK', description: '' },
+        { id: '4', name: '遠端事件', date: '2026-12-01', daysLeft: 45, category: 'CUSTOM', description: '' },
+      ];
+
+      const grouped = groupCatalystsByTimeline(catalysts);
+      expect(grouped.today).toHaveLength(1);
+      expect(grouped.today[0].name).toBe('台指結算');
+      expect(grouped.within7Days).toHaveLength(1);
+      expect(grouped.within7Days[0].name).toBe('台積電法說');
+      expect(grouped.within30Days).toHaveLength(1);
+      expect(grouped.within30Days[0].name).toBe('FOMC');
+    });
+
+    it('自動生成每月 10 號在線持股營收公布截止倒數催化劑', () => {
+      // 基準日 2026-10-17，下一個 10 號是 2026-11-10 (相差 24 天)
+      const event = generateMonthlyRevenueDeadlineCatalyst('2026-10-17');
+      expect(event.id).toBe('monthly-revenue-deadline');
+      expect(event.category).toBe('EARNINGS');
+      expect(event.impact).toBe('HIGH');
+      expect(event.daysLeft).toBe(24);
+      expect(event.date).toBe('2026-11-10');
+
+      // 基準日 2026-10-05，當月 10 號是 2026-10-10 (相差 5 天)
+      const eventThisMonth = generateMonthlyRevenueDeadlineCatalyst('2026-10-05');
+      expect(eventThisMonth.daysLeft).toBe(5);
+      expect(eventThisMonth.date).toBe('2026-10-10');
+    });
+
+    it('試算持股除息預估蒸發點數 (防大盤假跌破)', () => {
+      // 2330 除息 4 元，發行股數 25,930,380,000 股
+      // 總蒸發市值約 103,721,520,000 TWD
+      // 若大盤目前 22,000 點，大盤總市值約 70 兆 (70,000,000,000,000)
+      // 蒸發點數 = 22,000 * (103,721,520,000 / 70,000,000,000,000) ≈ 32.6 點
+      const points = estimateExDividendIndexImpactPoints({
+        cashDividendPerShare: 4.0,
+        sharesOutstanding: 25930380000,
+        taiexCurrentIndex: 22000,
+        taiexTotalMarketCapTWD: 70000000000000,
+      });
+      expect(points).toBeCloseTo(32.6, 1);
+    });
+  });
 });
+
+

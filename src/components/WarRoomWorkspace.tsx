@@ -15,17 +15,27 @@ import {
   Plus,
   Trash2,
   X,
+  Thermometer,
+  Layers,
+  Globe2,
+  AlertTriangle,
 } from 'lucide-react';
+
 import { HoldingPosition, LoanRecord } from '../types/stock';
 import {
   MacroIndicatorSnapshot,
   UpcomingCatalyst,
   CatalystCategory,
   CatalystImpact,
+  MarketViewTab,
+  TimelineHorizon,
 } from '../types/macro';
 import {
   calculatePortfolioMacroShield,
   generateAiMorningBrief,
+  calculateMacroThermometer,
+  groupCatalystsByTimeline,
+  generateMonthlyRevenueDeadlineCatalyst,
 } from '../engine/macroAdvisorEngine';
 import {
   evaluateDualMomentum,
@@ -41,8 +51,10 @@ import {
   getLatestMacroPulseRecord,
   exportMacroPulseHistoryAsCsv,
   generateSampleHistoricalMacroData,
+  isSameDayCacheValid,
   MacroPulseHistoryRecord,
 } from '../utils/macroPulseStorage';
+
 import {
   getAggregatedCatalysts,
   saveCustomCatalyst,
@@ -80,173 +92,19 @@ const DEFAULT_MACRO_SNAPSHOT: MacroIndicatorSnapshot = {
   usdToTwd: 32.15,
   usM2GrowthYoY: 2.3,
   twM2GrowthYoY: 5.6,
+  creditSpreadOAS: 3.5,
+  cdsInsuranceIndex: 65,
+  cdsRiskLevel: 'LOW',
+  twFuturesNetOi: -15000,
+  twMarginMaintenance: 165.2,
+  twFuturesRiskLevel: 'NEUTRAL',
+  twMarginRiskLevel: 'SAFE',
   updatedAt: Date.now(),
 };
 
-// 預設資產池之代表性歷史走勢快照 (用於雙重動能展示)
-const MOCK_MOMENTUM_PRICES: Record<string, { date: string; close: number }[]> = {
-  SPY: [
-    { date: '2025-08-01', close: 450 },
-    { date: '2026-02-01', close: 490 },
-    { date: '2026-05-01', close: 510 },
-    { date: '2026-08-01', close: 540 },
-    { date: '2026-09-08', close: 550 },
-  ],
-  QQQ: [
-    { date: '2025-08-01', close: 380 },
-    { date: '2026-02-01', close: 420 },
-    { date: '2026-05-01', close: 450 },
-    { date: '2026-08-01', close: 480 },
-    { date: '2026-09-08', close: 495 },
-  ],
-  TLT: [
-    { date: '2025-08-01', close: 95 },
-    { date: '2026-02-01', close: 92 },
-    { date: '2026-05-01', close: 90 },
-    { date: '2026-08-01', close: 96 },
-    { date: '2026-09-08', close: 98 },
-  ],
-  GLD: [
-    { date: '2025-08-01', close: 180 },
-    { date: '2026-02-01', close: 195 },
-    { date: '2026-05-01', close: 215 },
-    { date: '2026-08-01', close: 230 },
-    { date: '2026-09-08', close: 235 },
-  ],
-  '0050.TW': [
-    { date: '2025-08-01', close: 140 },
-    { date: '2026-02-01', close: 155 },
-    { date: '2026-05-01', close: 170 },
-    { date: '2026-08-01', close: 185 },
-    { date: '2026-09-08', close: 192 },
-  ],
-  '0056.TW': [
-    { date: '2025-08-01', close: 35 },
-    { date: '2026-02-01', close: 37 },
-    { date: '2026-05-01', close: 38 },
-    { date: '2026-08-01', close: 39 },
-    { date: '2026-09-08', close: 39.5 },
-  ],
-  '00878.TW': [
-    { date: '2025-08-01', close: 21 },
-    { date: '2026-02-01', close: 22 },
-    { date: '2026-05-01', close: 23 },
-    { date: '2026-08-01', close: 23.5 },
-    { date: '2026-09-08', close: 23.8 },
-  ],
-  '00713.TW': [
-    { date: '2025-08-01', close: 50 },
-    { date: '2026-02-01', close: 53 },
-    { date: '2026-05-01', close: 56 },
-    { date: '2026-08-01', close: 58 },
-    { date: '2026-09-08', close: 58.8 },
-  ],
-  SMH: [
-    { date: '2025-08-01', close: 200 },
-    { date: '2026-02-01', close: 230 },
-    { date: '2026-05-01', close: 250 },
-    { date: '2026-08-01', close: 270 },
-    { date: '2026-09-08', close: 285 },
-  ],
-  XLV: [
-    { date: '2025-08-01', close: 140 },
-    { date: '2026-02-01', close: 145 },
-    { date: '2026-05-01', close: 148 },
-    { date: '2026-08-01', close: 152 },
-    { date: '2026-09-08', close: 154 },
-  ],
-  '2330.TW': [
-    { date: '2025-08-01', close: 780 },
-    { date: '2026-02-01', close: 850 },
-    { date: '2026-05-01', close: 920 },
-    { date: '2026-08-01', close: 980 },
-    { date: '2026-09-08', close: 1010 },
-  ],
-  '2454.TW': [
-    { date: '2025-08-01', close: 950 },
-    { date: '2026-02-01', close: 1080 },
-    { date: '2026-05-01', close: 1150 },
-    { date: '2026-08-01', close: 1220 },
-    { date: '2026-09-08', close: 1280 },
-  ],
-  '2317.TW': [
-    { date: '2025-08-01', close: 110 },
-    { date: '2026-02-01', close: 140 },
-    { date: '2026-05-01', close: 165 },
-    { date: '2026-08-01', close: 178 },
-    { date: '2026-09-08', close: 185 },
-  ],
-  '2382.TW': [
-    { date: '2025-08-01', close: 210 },
-    { date: '2026-02-01', close: 240 },
-    { date: '2026-05-01', close: 260 },
-    { date: '2026-08-01', close: 275 },
-    { date: '2026-09-08', close: 280 },
-  ],
-  '2881.TW': [
-    { date: '2025-08-01', close: 68 },
-    { date: '2026-02-01', close: 75 },
-    { date: '2026-05-01', close: 80 },
-    { date: '2026-08-01', close: 85 },
-    { date: '2026-09-08', close: 88 },
-  ],
-  '2308.TW': [
-    { date: '2025-08-01', close: 310 },
-    { date: '2026-02-01', close: 340 },
-    { date: '2026-05-01', close: 365 },
-    { date: '2026-08-01', close: 385 },
-    { date: '2026-09-08', close: 395 },
-  ],
-  NVDA: [
-    { date: '2025-08-01', close: 60 },
-    { date: '2026-02-01', close: 85 },
-    { date: '2026-05-01', close: 105 },
-    { date: '2026-08-01', close: 118 },
-    { date: '2026-09-08', close: 125 },
-  ],
-  AAPL: [
-    { date: '2025-08-01', close: 180 },
-    { date: '2026-02-01', close: 195 },
-    { date: '2026-05-01', close: 205 },
-    { date: '2026-08-01', close: 215 },
-    { date: '2026-09-08', close: 220 },
-  ],
-  MSFT: [
-    { date: '2025-08-01', close: 350 },
-    { date: '2026-02-01', close: 380 },
-    { date: '2026-05-01', close: 405 },
-    { date: '2026-08-01', close: 418 },
-    { date: '2026-09-08', close: 425 },
-  ],
-  AMZN: [
-    { date: '2025-08-01', close: 140 },
-    { date: '2026-02-01', close: 155 },
-    { date: '2026-05-01', close: 168 },
-    { date: '2026-08-01', close: 175 },
-    { date: '2026-09-08', close: 180 },
-  ],
-  GOOGL: [
-    { date: '2025-08-01', close: 135 },
-    { date: '2026-02-01', close: 145 },
-    { date: '2026-05-01', close: 155 },
-    { date: '2026-08-01', close: 162 },
-    { date: '2026-09-08', close: 165 },
-  ],
-  META: [
-    { date: '2025-08-01', close: 320 },
-    { date: '2026-02-01', close: 410 },
-    { date: '2026-05-01', close: 460 },
-    { date: '2026-08-01', close: 495 },
-    { date: '2026-09-08', close: 515 },
-  ],
-  TSLA: [
-    { date: '2025-08-01', close: 240 },
-    { date: '2026-02-01', close: 190 },
-    { date: '2026-05-01', close: 180 },
-    { date: '2026-08-01', close: 205 },
-    { date: '2026-09-08', close: 215 },
-  ],
-};
+
+
+
 
 export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
   holdings,
@@ -286,19 +144,22 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     setIsRefreshing(true);
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
+    const isCachedToday = isSameDayCacheValid(macroSnapshot.updatedAt, Date.now());
+
     const updated: MacroIndicatorSnapshot = {
       ...macroSnapshot,
       date: dateStr,
       updatedAt: Date.now(),
-      goldPrice: Math.round((macroSnapshot.goldPrice + (Math.random() - 0.5) * 4) * 10) / 10,
-      oilPrice: Math.round((macroSnapshot.oilPrice + (Math.random() - 0.5) * 0.8) * 10) / 10,
-      vix: Math.round((macroSnapshot.vix + (Math.random() - 0.5) * 0.4) * 10) / 10,
+      goldPrice: Math.round((macroSnapshot.goldPrice + (isCachedToday ? 0.2 : (Math.random() - 0.5) * 4)) * 10) / 10,
+      oilPrice: Math.round((macroSnapshot.oilPrice + (isCachedToday ? 0.1 : (Math.random() - 0.5) * 0.8)) * 10) / 10,
+      vix: Math.round((macroSnapshot.vix + (isCachedToday ? 0 : (Math.random() - 0.5) * 0.4)) * 10) / 10,
     };
     saveMacroPulseRecord(updated, true);
     setMacroSnapshot(updated);
     setMacroHistoryList(loadMacroPulseHistory());
     setTimeout(() => setIsRefreshing(false), 500);
   };
+
 
   // 0. 持股技術訊號萃取 (嚴格鎖定在倉標的 shares > 0，杜絕已閉倉標的干擾晨報)
   const holdingSignals = useMemo<MacroHoldingSignalInput[]>(() => {
@@ -368,14 +229,31 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
       }
     }
 
+    const usStockUSD = holdings
+      .filter((h) => h.market === 'US' || h.currency === 'USD')
+      .reduce((acc, h) => acc + (h.currentPrice || h.avgCost || 0) * (h.shares || 0), 0);
+
+
     return calculatePortfolioMacroShield({
       navTWD: totalNavTwd,
       cashTWD: cashBalanceTwd,
       totalLoanDebtTWD: totalDebt,
       collateralValueTWD: totalCollateral,
       maxDriftPercent: 2.8,
+      usStockValueUSD: usStockUSD,
     });
   }, [holdings, loans, cashBalanceTwd, totalNavTwd, usdToTwdRate]);
+
+  // --- 0193 旗艦戰情室 2.0 狀態 ---
+  const [marketView, setMarketView] = useState<MarketViewTab>('GLOBAL');
+  const [activeStressDrop, setActiveStressDrop] = useState<-10 | -20 | -30>(-10);
+  const [timelineHorizon, setTimelineHorizon] = useState<TimelineHorizon | 'ALL'>('ALL');
+  const [copiedBrief, setCopiedBrief] = useState(false);
+
+  // 宏觀水溫計試算 (0~100 分與三秒作戰姿態)
+  const macroThermometer = useMemo(() => {
+    return calculateMacroThermometer(macroSnapshot);
+  }, [macroSnapshot]);
 
   // 催化劑日曆狀態管理
   const [catalystFilter, setCatalystFilter] = useState<string>('ALL');
@@ -389,6 +267,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
   const [newCustomCategory, setNewCustomCategory] = useState<CatalystCategory>('CUSTOM');
   const [newCustomImpact, setNewCustomImpact] = useState<CatalystImpact>('MEDIUM');
   const [newCustomDesc, setNewCustomDesc] = useState('');
+
 
   // 背景自動嘗試同步外部免費端點
   useEffect(() => {
@@ -432,23 +311,56 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     }
   };
 
-  // 2. 財經事件倒數 (四階梯多源聚合)
+  // 2. 財經事件倒數 (四階梯多源聚合 + 每月 10 號營收截止倒數)
   const catalysts = useMemo(() => {
-    return getAggregatedCatalysts({
+    const list = getAggregatedCatalysts({
       asOfDate: macroSnapshot.date,
       receivableDividends,
       remoteCatalysts,
     });
+    // 自動注入每月 10 號營收截止倒數催化劑
+    const revenueDeadlineEvent = generateMonthlyRevenueDeadlineCatalyst(macroSnapshot.date);
+    if (!list.some((c) => c.id === revenueDeadlineEvent.id)) {
+      list.push(revenueDeadlineEvent);
+      list.sort((a, b) => a.daysLeft - b.daysLeft);
+    }
+    return list;
   }, [macroSnapshot.date, receivableDividends, remoteCatalysts, catalystRefreshKey]);
 
-  // 分類篩選
+  // 三段時序分組 (用於徽章計數與統計)
+  const groupedCatalysts = useMemo(() => {
+    return groupCatalystsByTimeline(catalysts);
+  }, [catalysts]);
+
+  // 分類、市場視角與時序雷達多維度篩選
   const filteredCatalysts = useMemo(() => {
-    if (catalystFilter === 'ALL') return catalysts;
-    if (catalystFilter === 'INFLATION_EMPLOYMENT') {
-      return catalysts.filter((c) => c.category === 'INFLATION' || c.category === 'EMPLOYMENT');
+    let result = catalysts;
+    // 依市場視角過濾
+    if (marketView === 'TW') {
+      result = result.filter((c) => c.targetMarket === 'TW' || c.targetMarket === 'ALL' || !c.targetMarket);
+    } else if (marketView === 'US') {
+      result = result.filter((c) => c.targetMarket === 'US' || c.targetMarket === 'ALL' || !c.targetMarket);
     }
-    return catalysts.filter((c) => c.category === catalystFilter);
-  }, [catalysts, catalystFilter]);
+
+    // 依類別過濾
+    if (catalystFilter === 'INFLATION_EMPLOYMENT') {
+      result = result.filter((c) => c.category === 'INFLATION' || c.category === 'EMPLOYMENT');
+    } else if (catalystFilter !== 'ALL') {
+      result = result.filter((c) => c.category === catalystFilter);
+    }
+
+    // 依時序雷達過濾 (今日/7日/30日)
+    if (timelineHorizon === 'TODAY') {
+      result = result.filter((c) => c.daysLeft === 0);
+    } else if (timelineHorizon === 'WEEK') {
+      result = result.filter((c) => c.daysLeft >= 1 && c.daysLeft <= 7);
+    } else if (timelineHorizon === 'MONTH') {
+      result = result.filter((c) => c.daysLeft >= 8 && c.daysLeft <= 30);
+    }
+
+    return result;
+  }, [catalysts, catalystFilter, marketView, timelineHorizon]);
+
 
   // 3. 生成 AI 作戰方針 (依據本地持久化宏觀數據 + 個人防護盾 + 持股動態 + 股息入帳全量診斷)
   const morningBrief = useMemo(() => {
@@ -472,22 +384,27 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
 
   const momentumSignal = useMemo(() => {
     const quotesMap: Record<string, DailyCandle[]> = {};
-    for (const [sym, arr] of Object.entries(MOCK_MOMENTUM_PRICES)) {
-      quotesMap[sym] = arr.map((item) => ({
-        date: item.date,
-        open: item.close,
-        high: item.close,
-        low: item.close,
-        close: item.close,
-        volume: 10000,
-      }));
+    if (historicalDailyPrices && Object.keys(historicalDailyPrices).length > 0) {
+      for (const [sym, dateMap] of Object.entries(historicalDailyPrices)) {
+        if (!dateMap) continue;
+        const sortedDates = Object.keys(dateMap).sort();
+        quotesMap[sym] = sortedDates.map((d) => ({
+          date: d,
+          open: dateMap[d],
+          high: dateMap[d],
+          low: dateMap[d],
+          close: dateMap[d],
+          volume: 10000,
+        }));
+      }
     }
     return evaluateDualMomentum({
       universeConfig: selectedUniverse,
       quotesMap,
       riskFreeRateAnnualized: 0.04,
     });
-  }, [selectedUniverse]);
+  }, [selectedUniverse, historicalDailyPrices]);
+
 
   // 5. 距當月底倒數天數 (雙動能月結調倉檢視日)
   const daysUntilMonthEnd = useMemo(() => {
@@ -513,6 +430,44 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     setTimeout(() => setCopiedLlm(false), 2000);
   };
 
+  const handleCopyMorningBriefReport = () => {
+    const stanceLabel =
+      macroThermometer.stance === 'AGGRESSIVE'
+        ? '進攻・積極擴張'
+        : macroThermometer.stance === 'DEFENSIVE'
+        ? '防禦・現金為王'
+        : '平衡・區間操作';
+
+    const report = [
+      `# 🏦 宏觀戰情室每日晨會簡報 (${macroSnapshot.date})`,
+      `> 作戰定調：${morningBrief.headline} (${morningBrief.tone})`,
+      '',
+      `## 🌡️ 宏觀水溫計：${macroThermometer.score} 分【${stanceLabel}】`,
+      `- 建議股票總倉位上限：${macroThermometer.suggestedEquityAllocationPercent}%`,
+      `- 決策推論：${macroThermometer.rationale.join('；')}`,
+      '',
+      `## 🛡️ 個人在險與風控 (1-Day 95% VaR)`,
+      `- 帳戶總淨值：NT$ ${Math.round(shield.totalNavTWD).toLocaleString()}`,
+      `- 單日 95% 最大在險價值 (VaR)：NT$ ${(shield.valueAtRisk95TWD || 0).toLocaleString()} (佔總淨值 ${shield.varRatioPercent || 0}%)`,
+      `- 美股匯率敏感度 (FX Delta)：NT$ ${(shield.fxDeltaTWD || 0).toLocaleString()} / 每升值 1 元`,
+      `- 質押維持率：${shield.hasLoans ? `${shield.marginMaintenanceRatio}% (${shield.marginStatus})` : '零負債安全'}`,
+      '',
+      `## 🎯 今日執行要點`,
+      ...morningBrief.actionPoints.map((p, idx) => `${idx + 1}. ${p}`),
+      '',
+      `## 🌐 台美關鍵金絲雀`,
+      `- 美債 10Y/2Y：${macroSnapshot.us10y}% / ${macroSnapshot.us2y}% (利差 ${macroSnapshot.yieldSpread}% ${macroSnapshot.isYieldInverted ? '倒掛' : '正常'})`,
+      `- VIX 恐慌指數：${macroSnapshot.vix} (${macroSnapshot.vixLevel})`,
+      `- 高收益債利差 (OAS)：${macroSnapshot.creditSpreadOAS ?? 3.5}% | CDS 指數：${macroSnapshot.cdsInsuranceIndex ?? 65} (${macroSnapshot.cdsRiskLevel ?? 'LOW'})`,
+      `- 外資台指期未平倉：${(macroSnapshot.twFuturesNetOi ?? 0).toLocaleString()} 口 | 全市場融資維持率：${macroSnapshot.twMarginMaintenance ?? 165.2}%`,
+    ].join('\n');
+
+    navigator.clipboard.writeText(report);
+    setCopiedBrief(true);
+    setTimeout(() => setCopiedBrief(false), 2000);
+  };
+
+
   return (
     <div className="warroom-container animate-fade-in">
       {/* 頂部戰情室標題與狀態 */}
@@ -524,31 +479,170 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <h1 style={{ fontSize: '1.45rem', fontWeight: 800, margin: 0, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
-                宏觀總體戰情室
+                法人旗艦級宏觀戰情室 2.0
               </h1>
               <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--gain-color)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
                 <span className="pulse-dot-green" style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'currentColor', display: 'inline-block' }} />
-                全球即時監控
+                雙軌即時監控
               </span>
             </div>
             <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              宏觀景氣位階 × 全球流動性水庫 × 個人防護盾 × 雙軌制 AI 戰略決策中心
+              台美專屬指針 × 0~100 宏觀水溫計 × 1-Day 95% 在險價值 × 3階急速壓力測試
             </p>
           </div>
         </div>
 
-        <div>
+        {/* 頂部切換與操作區 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {/* 台美雙軌切換按鈕組 */}
+          <div style={{ display: 'inline-flex', background: 'rgba(30, 41, 59, 0.8)', padding: '3px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+            <button
+              onClick={() => setMarketView('GLOBAL')}
+              className={`btn btn-sm ${marketView === 'GLOBAL' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: '0.78rem', padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+            >
+              <Globe2 size={13} />
+              🌐 全球綜觀
+            </button>
+            <button
+              onClick={() => setMarketView('TW')}
+              className={`btn btn-sm ${marketView === 'TW' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: '0.78rem', padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+            >
+              🇹🇼 台股視角
+            </button>
+            <button
+              onClick={() => setMarketView('US')}
+              className={`btn btn-sm ${marketView === 'US' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: '0.78rem', padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+            >
+              🇺🇸 美股視角
+            </button>
+          </div>
+
+          {/* 複製按鈕組 */}
+          <button
+            onClick={handleCopyMorningBriefReport}
+            className="btn btn-primary btn-sm"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.78rem' }}
+            title="一鍵複製繁體中文晨會每日作戰報告"
+          >
+            {copiedBrief ? <Check size={14} /> : <Copy size={14} />}
+            {copiedBrief ? '已複製晨會簡報' : '📋 複製晨會簡報'}
+          </button>
+
           <button
             onClick={handleCopyLlmJson}
             className="btn btn-secondary btn-sm"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.78rem' }}
             title="複製結構化 Prompt JSON 供外部 LLM 使用"
           >
             {copiedLlm ? <Check size={14} style={{ color: 'var(--gain-color)' }} /> : <Copy size={14} />}
-            {copiedLlm ? '已複製 JSON' : '複製 LLM Payload'}
+            {copiedLlm ? '已複製 JSON' : 'LLM Payload'}
           </button>
         </div>
       </div>
+
+      {/* 🌡️ 宏觀水溫計與作戰姿態卡片 (Macro Thermometer) */}
+      <div className="card" style={{ padding: '20px 24px', background: 'rgba(15, 23, 42, 0.75)', border: '1px solid rgba(51, 65, 85, 0.6)' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ padding: '8px', background: 'rgba(245, 158, 11, 0.15)', color: 'var(--accent-amber)', borderRadius: 'var(--radius-md)' }}>
+              <Thermometer size={22} />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  宏觀綜合水溫計 (Macro Thermometer)
+                </span>
+                <span
+                  className="badge"
+                  style={{
+                    fontWeight: 800,
+                    padding: '3px 8px',
+                    fontSize: '0.78rem',
+                    background:
+                      macroThermometer.stance === 'AGGRESSIVE'
+                        ? 'rgba(34, 197, 94, 0.2)'
+                        : macroThermometer.stance === 'DEFENSIVE'
+                        ? 'rgba(239, 68, 68, 0.2)'
+                        : 'rgba(245, 158, 11, 0.2)',
+                    color:
+                      macroThermometer.stance === 'AGGRESSIVE'
+                        ? '#4ade80'
+                        : macroThermometer.stance === 'DEFENSIVE'
+                        ? '#f87171'
+                        : '#fbbf24',
+                    border: `1px solid ${
+                      macroThermometer.stance === 'AGGRESSIVE'
+                        ? 'rgba(34, 197, 94, 0.4)'
+                        : macroThermometer.stance === 'DEFENSIVE'
+                        ? 'rgba(239, 68, 68, 0.4)'
+                        : 'rgba(245, 158, 11, 0.4)'
+                    }`,
+                  }}
+                >
+                  {macroThermometer.stance === 'AGGRESSIVE'
+                    ? '【進攻・積極擴張】'
+                    : macroThermometer.stance === 'DEFENSIVE'
+                    ? '【防禦・現金為王】'
+                    : '【平衡・區間操作】'}
+                </span>
+              </div>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                基於長短債利差、恐慌情緒、高收益信用利差、外資期貨空單與融資維持率綜合量化合成
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>水溫得分</div>
+              <div className="mono" style={{ fontSize: '1.75rem', fontWeight: 800, color: macroThermometer.score >= 70 ? '#4ade80' : macroThermometer.score <= 40 ? '#f87171' : '#fbbf24', lineHeight: 1 }}>
+                {macroThermometer.score} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>/ 100</span>
+              </div>
+            </div>
+
+            <div style={{ textAlign: 'right', borderLeft: '1px solid var(--border-color)', paddingLeft: '18px' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>建議股票總倉位上限</div>
+              <div className="mono" style={{ fontSize: '1.75rem', fontWeight: 800, color: '#38bdf8', lineHeight: 1 }}>
+                {macroThermometer.suggestedEquityAllocationPercent}%
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 水溫條進度 */}
+        <div style={{ width: '100%', height: '8px', background: 'rgba(30, 41, 59, 0.8)', borderRadius: '999px', overflow: 'hidden', marginBottom: '12px' }}>
+          <div
+            style={{
+              width: `${macroThermometer.score}%`,
+              height: '100%',
+              background:
+                macroThermometer.score >= 70
+                  ? 'linear-gradient(90deg, #10b981 0%, #22c55e 100%)'
+                  : macroThermometer.score <= 40
+                  ? 'linear-gradient(90deg, #ef4444 0%, #f97316 100%)'
+                  : 'linear-gradient(90deg, #eab308 0%, #f59e0b 100%)',
+              transition: 'width 0.4s ease',
+            }}
+          />
+        </div>
+
+        {/* 推論清單 */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          {macroThermometer.rationale.map((r, idx) => (
+            <span
+              key={idx}
+              className="badge"
+              style={{ fontSize: '0.75rem', padding: '3px 8px', background: 'rgba(30, 41, 59, 0.6)', color: 'var(--text-secondary)', border: '1px solid rgba(51, 65, 85, 0.5)' }}
+            >
+              • {r}
+            </span>
+          ))}
+        </div>
+      </div>
+
 
       {/* 🤖 AI 智慧每日作戰方針 (AI Morning Brief) */}
       <div className="warroom-hero-card">
@@ -674,7 +768,146 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
         </div>
       </div>
 
-      {/* 📡 第一層：市場四柱脈搏 (Market Pulse 4 Pillars) */}
+      {/* 🛡️ 個人在險價值與 3 階急速黑天鵝壓力測試 (VaR & Stress Testing - Ticket 10) */}
+      <div className="card" style={{ padding: '20px 24px', background: 'rgba(15, 23, 42, 0.75)', border: '1px solid rgba(51, 65, 85, 0.6)' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '14px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ padding: '8px', background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', borderRadius: 'var(--radius-md)' }}>
+              <ShieldCheck size={20} />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                個人在險價值 (1-Day 95% VaR) 與急速壓力測試
+              </h3>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                機構級風控模型：年化 18% 波動度在險損失推估與台幣升貶敏感度
+              </span>
+            </div>
+          </div>
+
+          {/* 3 階壓力切換按鈕 */}
+          <div style={{ display: 'inline-flex', background: 'rgba(30, 41, 59, 0.8)', padding: '3px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+            <button
+              onClick={() => setActiveStressDrop(-10)}
+              className={`btn btn-sm ${activeStressDrop === -10 ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+            >
+              -10% 震盪
+            </button>
+            <button
+              onClick={() => setActiveStressDrop(-20)}
+              className={`btn btn-sm ${activeStressDrop === -20 ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+            >
+              -20% 回檔
+            </button>
+            <button
+              onClick={() => setActiveStressDrop(-30)}
+              className={`btn btn-sm ${activeStressDrop === -30 ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+            >
+              -30% 崩盤
+            </button>
+          </div>
+        </div>
+
+        {/* 核心風控指標網格 */}
+        <div className="warroom-grid-3" style={{ marginBottom: '16px' }}>
+          {/* 1-Day 95% VaR */}
+          <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)' }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+              單日 95% 在險價值 (1-Day 95% VaR)
+            </div>
+            <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: '#f87171' }}>
+              NT$ {(shield.valueAtRisk95TWD || 0).toLocaleString()}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+              佔整戶總淨值約 <span className="mono" style={{ color: 'var(--text-primary)' }}>{shield.varRatioPercent || 0}%</span> (95% 信心水準下單日最大損失)
+            </div>
+          </div>
+
+          {/* 美股匯率敏感度 (FX Delta) */}
+          <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)' }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+              美股部位匯率敏感度 (FX Delta)
+            </div>
+            <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: '#38bdf8' }}>
+              ± NT$ {(shield.fxDeltaTWD || 0).toLocaleString()}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+              台幣每升值 1 元，美股持倉實質匯損金額
+            </div>
+          </div>
+
+          {/* 質押維持率現況 */}
+          <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)' }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+              質押借款現況與維持率
+            </div>
+            <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: shield.hasLoans ? (shield.marginMaintenanceRatio < 130 ? '#ef4444' : shield.marginMaintenanceRatio < 166 ? '#f59e0b' : '#22c55e') : '#22c55e' }}>
+              {shield.hasLoans ? `${shield.marginMaintenanceRatio}%` : '無負債借款'}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+              狀態：
+              <span
+                style={{
+                  fontWeight: 700,
+                  color:
+                    shield.marginStatus === 'SAFE' || shield.marginStatus === 'NO_LOAN'
+                      ? '#4ade80'
+                      : shield.marginStatus === 'WARNING'
+                      ? '#fbbf24'
+                      : '#f87171',
+                }}
+              >
+                {shield.marginStatus === 'SAFE'
+                  ? '安全無虞 (>=166%)'
+                  : shield.marginStatus === 'NO_LOAN'
+                  ? '整戶零負債・安全無虞'
+                  : shield.marginStatus === 'WARNING'
+                  ? '警戒水位 (130%~166%)'
+                  : '追繳斷頭紅線 (<130%)'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 壓力測試情境預估結果展示 */}
+        {(() => {
+          const activeScenario = shield.quickStressTest?.find((s) => s.dropPercent === activeStressDrop);
+          if (!activeScenario) return null;
+
+          return (
+            <div style={{ background: 'rgba(30, 41, 59, 0.65)', border: `1px solid ${activeScenario.status === 'MARGIN_CALL' ? 'rgba(239, 68, 68, 0.4)' : activeScenario.status === 'WARNING' ? 'rgba(245, 158, 11, 0.4)' : 'rgba(34, 197, 94, 0.4)'}`, borderRadius: 'var(--radius-md)', padding: '14px 18px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span className="badge" style={{ background: activeScenario.status === 'MARGIN_CALL' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(245, 158, 11, 0.25)', color: activeScenario.status === 'MARGIN_CALL' ? '#f87171' : '#fbbf24', fontWeight: 800, padding: '4px 8px' }}>
+                  {activeScenario.label}
+                </span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                  壓力後擔保品市值：<strong className="mono">NT$ {activeScenario.stressedCollateralTWD.toLocaleString()}</strong>
+                </span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                  試算維持率：<strong className="mono" style={{ color: activeScenario.status === 'MARGIN_CALL' ? '#f87171' : activeScenario.status === 'WARNING' ? '#fbbf24' : '#4ade80' }}>{activeScenario.stressedMarginRatioPercent}%</strong>
+                </span>
+              </div>
+
+              <div>
+                {activeScenario.marginCallShortfallTWD > 0 ? (
+                  <span style={{ fontSize: '0.85rem', color: '#f87171', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <AlertTriangle size={15} />
+                    觸發追繳！需補繳保證金缺口：NT$ {activeScenario.marginCallShortfallTWD.toLocaleString()}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '0.85rem', color: '#4ade80', fontWeight: 700 }}>
+                    ✔ 維持率仍高於 130% 斷頭線，無追繳補繳缺口
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
       <div className="card">
         <div className="warroom-section-header">
           <div>
@@ -793,6 +1026,66 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
             </div>
           </div>
         </div>
+
+        {/* 🦅 台美機構金絲雀雙軌專屬指針 (Institutional Canaries - Ticket 02 & 03) */}
+        <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
+          {(marketView === 'US' || marketView === 'GLOBAL') && (
+            <div style={{ background: 'rgba(30, 41, 59, 0.45)', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🇺🇸 美高收益債信用利差 (HY OAS)</div>
+                <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: (macroSnapshot.creditSpreadOAS ?? 3.5) >= 5.0 ? '#f87171' : '#38bdf8' }}>
+                  {macroSnapshot.creditSpreadOAS ?? 3.5}%
+                </div>
+              </div>
+              <span className="badge" style={{ background: (macroSnapshot.creditSpreadOAS ?? 3.5) >= 5.0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(56, 189, 248, 0.15)', color: (macroSnapshot.creditSpreadOAS ?? 3.5) >= 5.0 ? '#f87171' : '#38bdf8' }}>
+                {(macroSnapshot.creditSpreadOAS ?? 3.5) >= 5.0 ? '⚠️ 利差走擴' : '平穩健康'}
+              </span>
+            </div>
+          )}
+
+          {(marketView === 'US' || marketView === 'GLOBAL') && (
+            <div style={{ background: 'rgba(30, 41, 59, 0.45)', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🇺🇸 CDS 債券違約保險指數 (CDX)</div>
+                <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: (macroSnapshot.cdsInsuranceIndex ?? 65) >= 100 ? '#f87171' : '#a78bfa' }}>
+                  {macroSnapshot.cdsInsuranceIndex ?? 65} 點
+                </div>
+              </div>
+              <span className="badge" style={{ background: (macroSnapshot.cdsInsuranceIndex ?? 65) >= 100 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(167, 139, 250, 0.15)', color: (macroSnapshot.cdsInsuranceIndex ?? 65) >= 100 ? '#f87171' : '#a78bfa' }}>
+                風控位階：{macroSnapshot.cdsRiskLevel ?? 'LOW'}
+              </span>
+            </div>
+          )}
+
+          {(marketView === 'TW' || marketView === 'GLOBAL') && (
+            <div style={{ background: 'rgba(30, 41, 59, 0.45)', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🇹🇼 外資台指期淨未平倉 (Net OI)</div>
+                <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: (macroSnapshot.twFuturesNetOi ?? 0) <= -30000 ? '#f87171' : '#4ade80' }}>
+                  {(macroSnapshot.twFuturesNetOi ?? -15000).toLocaleString()} 口
+                </div>
+              </div>
+              <span className="badge" style={{ background: (macroSnapshot.twFuturesNetOi ?? 0) <= -30000 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.15)', color: (macroSnapshot.twFuturesNetOi ?? 0) <= -30000 ? '#f87171' : '#4ade80' }}>
+                {(macroSnapshot.twFuturesNetOi ?? 0) <= -45000 ? '🚨 重度放空' : (macroSnapshot.twFuturesNetOi ?? 0) <= -30000 ? '⚠️ 避險警戒' : '中性多空'}
+              </span>
+            </div>
+          )}
+
+          {(marketView === 'TW' || marketView === 'GLOBAL') && (
+            <div style={{ background: 'rgba(30, 41, 59, 0.45)', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🇹🇼 全市場融資維持率 (130% 斷頭)</div>
+                <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: (macroSnapshot.twMarginMaintenance ?? 165.2) < 140 ? '#f87171' : '#22c55e' }}>
+                  {macroSnapshot.twMarginMaintenance ?? 165.2}%
+                </div>
+              </div>
+              <span className="badge" style={{ background: (macroSnapshot.twMarginMaintenance ?? 165.2) < 130 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.15)', color: (macroSnapshot.twMarginMaintenance ?? 165.2) < 130 ? '#f87171' : '#4ade80' }}>
+                {(macroSnapshot.twMarginMaintenance ?? 165.2) < 130 ? '🚨 斷頭追繳潮' : (macroSnapshot.twMarginMaintenance ?? 165.2) < 140 ? '⚠️ 警戒水位' : '安全無虞'}
+              </span>
+            </div>
+          )}
+        </div>
+
 
         {/* 展開之歷史數據表格檢視器 */}
         {showHistoryTable && (
@@ -1094,7 +1387,42 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           </div>
         </div>
 
+        {/* ⏱️ 彭博式三段時序雷達切換 (Timeline Horizon Radar - Ticket 07 & 11) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', margin: '14px 0 6px 0', padding: '10px 14px', background: 'rgba(30, 41, 59, 0.5)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.4)' }}>
+          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+            <Layers size={13} />
+            時序雷達：
+          </span>
+          {[
+            { id: 'ALL', label: `全時序 (${catalysts.length})` },
+            { id: 'TODAY', label: `🔥 今日登場 (${groupedCatalysts.today.length})` },
+            { id: 'WEEK', label: `⚡ 7 日焦點 (${groupedCatalysts.within7Days.length})` },
+            { id: 'MONTH', label: `📅 30 日遠端 (${groupedCatalysts.within30Days.length})` },
+          ].map((tab) => {
+            const active = timelineHorizon === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setTimelineHorizon(tab.id as any)}
+                style={{
+                  fontSize: '0.75rem',
+                  padding: '4px 10px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: active ? '1px solid var(--accent-purple)' : '1px solid transparent',
+                  background: active ? 'rgba(139, 92, 246, 0.25)' : 'rgba(15, 23, 42, 0.5)',
+                  color: active ? '#c084fc' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontWeight: active ? 700 : 500,
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
         {/* 快速分類篩選籤 (Filter Tabs) */}
+
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '14px 0 16px 0' }}>
           {[
             { id: 'ALL', label: `全部 (${catalysts.length})` },
