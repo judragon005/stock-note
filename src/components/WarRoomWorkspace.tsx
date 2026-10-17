@@ -54,6 +54,7 @@ import {
   isSameDayCacheValid,
   MacroPulseHistoryRecord,
 } from '../utils/macroPulseStorage';
+import { copyTextToClipboard } from '../utils/clipboard';
 
 import {
   getAggregatedCatalysts,
@@ -424,13 +425,15 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
   }, [holdings, currentUniverseSymbols]);
 
 
-  const handleCopyLlmJson = () => {
-    navigator.clipboard.writeText(morningBrief.llmPayloadJson);
-    setCopiedLlm(true);
-    setTimeout(() => setCopiedLlm(false), 2000);
+  const handleCopyLlmJson = async () => {
+    const ok = await copyTextToClipboard(morningBrief.llmPayloadJson);
+    if (ok) {
+      setCopiedLlm(true);
+      setTimeout(() => setCopiedLlm(false), 2000);
+    }
   };
 
-  const handleCopyMorningBriefReport = () => {
+  const handleCopyMorningBriefReport = async () => {
     const stanceLabel =
       macroThermometer.stance === 'AGGRESSIVE'
         ? '進攻・積極擴張'
@@ -462,9 +465,11 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
       `- 外資台指期未平倉：${(macroSnapshot.twFuturesNetOi ?? 0).toLocaleString()} 口 | 全市場融資維持率：${macroSnapshot.twMarginMaintenance ?? 165.2}%`,
     ].join('\n');
 
-    navigator.clipboard.writeText(report);
-    setCopiedBrief(true);
-    setTimeout(() => setCopiedBrief(false), 2000);
+    const ok = await copyTextToClipboard(report);
+    if (ok) {
+      setCopiedBrief(true);
+      setTimeout(() => setCopiedBrief(false), 2000);
+    }
   };
 
 
@@ -656,9 +661,53 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
               {morningBrief.headline}
             </span>
           </div>
-          <span className="mono" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            基準日：{DEFAULT_MACRO_SNAPSHOT.date}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={handleCopyMorningBriefReport}
+              className="btn btn-secondary"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                background: copiedBrief ? 'rgba(34, 197, 94, 0.2)' : 'rgba(30, 41, 59, 0.7)',
+                borderColor: copiedBrief ? 'var(--accent-green)' : 'rgba(51, 65, 85, 0.6)',
+                color: copiedBrief ? '#4ade80' : 'var(--text-primary)',
+                transition: 'all 0.2s ease',
+              }}
+              title="一鍵複製 Markdown 格式繁體中文晨會作戰簡報"
+            >
+              {copiedBrief ? <Check size={14} /> : <Copy size={14} />}
+              {copiedBrief ? '已複製簡報！' : '📋 複製晨會簡報'}
+            </button>
+            <button
+              type="button"
+              onClick={handleCopyLlmJson}
+              className="btn btn-secondary"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                background: copiedLlm ? 'rgba(34, 197, 94, 0.2)' : 'rgba(30, 41, 59, 0.7)',
+                borderColor: copiedLlm ? 'var(--accent-green)' : 'rgba(51, 65, 85, 0.6)',
+                color: copiedLlm ? '#4ade80' : 'var(--text-primary)',
+                transition: 'all 0.2s ease',
+              }}
+              title="複製結構化 Prompt Payload 供外部 LLM 使用"
+            >
+              {copiedLlm ? <Check size={14} /> : <Zap size={14} />}
+              {copiedLlm ? '已複製 Payload！' : '🤖 LLM 提示詞'}
+            </button>
+            <span className="mono" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+              基準日：{DEFAULT_MACRO_SNAPSHOT.date}
+            </span>
+          </div>
         </div>
 
         <div style={{ background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(51, 65, 85, 0.6)', borderRadius: 'var(--radius-md)', padding: '14px 18px', marginBottom: '18px', lineHeight: 1.6, fontSize: '0.92rem' }}>
