@@ -3,8 +3,12 @@ import {
   MacroAdvisorInput,
   MacroIndicatorSnapshot,
   MacroPortfolioShield,
+  MacroThermometer,
+  QuickStressScenario,
   UpcomingCatalyst,
+  GroupedCatalysts,
 } from '../types/macro';
+
 
 /**
  * 計算個人投資組合宏觀防護盾 (Calculate Portfolio Macro Shield)
@@ -16,6 +20,8 @@ export function calculatePortfolioMacroShield(params: {
   collateralValueTWD: number;
   maxDriftPercent?: number;
   portfolioBeta?: number;
+  usStockValueUSD?: number;
+  annualizedVolatility?: number;
 }): MacroPortfolioShield {
   const {
     navTWD,
@@ -24,7 +30,10 @@ export function calculatePortfolioMacroShield(params: {
     collateralValueTWD,
     maxDriftPercent = 0,
     portfolioBeta,
+    usStockValueUSD = 0,
+    annualizedVolatility = 0.18,
   } = params;
+
 
   const totalNavTWD = Math.max(0, navTWD);
   const cashBalanceTWD = Math.max(0, cashTWD);
@@ -57,6 +66,12 @@ export function calculatePortfolioMacroShield(params: {
     }
   }
 
+  const valueAtRisk95TWD = calculate1DayVaR95(totalNavTWD, annualizedVolatility);
+  const varRatioPercent =
+    totalNavTWD > 0 ? Math.round((valueAtRisk95TWD / totalNavTWD) * 1000) / 10 : 0;
+  const fxDeltaTWD = calculateFxDelta(usStockValueUSD);
+  const quickStressTest = calculateQuickStressMatrix(collateralValueTWD, totalLoanDebtTWD);
+
   return {
     totalNavTWD,
     cashBalanceTWD,
@@ -67,8 +82,13 @@ export function calculatePortfolioMacroShield(params: {
     marginStatus,
     maxAllocationDriftPercent: Math.round(maxDriftPercent * 10) / 10,
     portfolioBeta,
+    valueAtRisk95TWD,
+    varRatioPercent,
+    fxDeltaTWD,
+    quickStressTest,
   };
 }
+
 
 /**
  * 試算關鍵財經事件倒數 (Calculate Upcoming Catalysts)
@@ -329,3 +349,370 @@ export function generateAiMorningBrief(
     llmPayloadJson,
   };
 }
+
+/**
+ * 試算法人風控 1-Day 95% 在險價值 (1-Day 95% VaR)
+ * 公式：1.65 * (annualizedVolatility / sqrt(252)) * NAV
+ */
+export function calculate1DayVaR95(navTWD: number, annualizedVolatility: number = 0.18): number {
+  if (navTWD <= 0) return 0;
+  const tradingDaysPerYear = 252;
+  const dailyVolatility = annualizedVolatility / Math.sqrt(tradingDaysPerYear);
+  const var95 = 1.65 * dailyVolatility * navTWD;
+  return Math.round(var95);
+}
+
+/**
+ * 試算美股持倉對台幣匯率敏感度 (FX Delta)
+ * 定義：台幣每升值 1 元，美股持倉折合台幣淨值之帳面變動額
+ */
+export function calculateFxDelta(usStockValueUSD: number): number {
+  if (usStockValueUSD <= 0) return 0;
+  return Math.round(usStockValueUSD);
+}
+
+/**
+ * 試算美股機構級信用金絲雀 (HY OAS & CDS 履約保險指數)
+ */
+export function evaluateCreditRisk(
+  oas?: number,
+  cds?: number
+): {
+  cdsRiskLevel: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+  isAlert: boolean;
+  description: string;
+} {
+  const oasVal = oas ?? 3.5;
+  const cdsVal = cds ?? 65;
+
+  if (oasVal > 6.0 || cdsVal >= 110) {
+    return {
+      cdsRiskLevel: 'CRITICAL',
+      isAlert: true,
+      description: `高收益債利差 (${oasVal.toFixed(1)}%) 或 CDS 違約保險指數 (${cdsVal}) 飆升至危急水位，企業違約與流動性枯竭風險極高。`,
+    };
+  }
+
+  if (oasVal >= 5.0 || cdsVal >= 90) {
+    return {
+      cdsRiskLevel: 'HIGH',
+      isAlert: true,
+      description: `高收益債利差 (${oasVal.toFixed(1)}%) 突破 5% 風控警戒線，信用利差走擴暗示企業融資成本劇增。`,
+    };
+  }
+
+  if (oasVal >= 4.0 || cdsVal >= 75) {
+    return {
+      cdsRiskLevel: 'MODERATE',
+      isAlert: false,
+      description: `信用利差與 CDS 處於溫和區間，信用市場尚維持中性流動性。`,
+    };
+  }
+
+  return {
+    cdsRiskLevel: 'LOW',
+    isAlert: false,
+    description: `信用利差 (${oasVal.toFixed(1)}%) 與 CDS (${cdsVal}) 平穩健康，企業債違約保險成本極低。`,
+  };
+}
+
+/**
+ * 試算台股專屬籌碼風控指標 (外資台指期空單 & 融資維持率)
+ */
+export function evaluateTwMarketRisk(
+  netOi?: number,
+  marginRatio?: number
+): {
+  twFuturesRiskLevel: 'BULLISH' | 'NEUTRAL' | 'HIGH_ALERT' | 'EXTREME_SHORT';
+  twMarginRiskLevel: 'SAFE' | 'WARNING' | 'LIQUIDATION_RISK';
+  description: string;
+} {
+  let twFuturesRiskLevel: 'BULLISH' | 'NEUTRAL' | 'HIGH_ALERT' | 'EXTREME_SHORT' = 'NEUTRAL';
+  let twMarginRiskLevel: 'SAFE' | 'WARNING' | 'LIQUIDATION_RISK' = 'SAFE';
+
+  if (netOi !== undefined) {
+    if (netOi <= -45000) {
+      twFuturesRiskLevel = 'EXTREME_SHORT';
+    } else if (netOi <= -30000) {
+      twFuturesRiskLevel = 'HIGH_ALERT';
+    } else if (netOi >= 0) {
+      twFuturesRiskLevel = 'BULLISH';
+    } else {
+      twFuturesRiskLevel = 'NEUTRAL';
+    }
+  }
+
+  if (marginRatio !== undefined) {
+    if (marginRatio < 130) {
+      twMarginRiskLevel = 'LIQUIDATION_RISK';
+    } else if (marginRatio < 140) {
+      twMarginRiskLevel = 'WARNING';
+    } else {
+      twMarginRiskLevel = 'SAFE';
+    }
+  }
+
+  const parts: string[] = [];
+  if (twFuturesRiskLevel === 'EXTREME_SHORT') {
+    parts.push(`外資台指期淨空單高達 ${Math.abs(netOi!).toLocaleString()} 口 (重度避險壓制)`);
+  } else if (twFuturesRiskLevel === 'HIGH_ALERT') {
+    parts.push(`外資淨空單超過 3 萬口警戒線 (${Math.abs(netOi!).toLocaleString()} 口)`);
+  }
+
+  if (twMarginRiskLevel === 'LIQUIDATION_RISK') {
+    parts.push(`全市場融資維持率跌破 130% 斷頭追繳紅線 (${marginRatio!.toFixed(1)}%)，提防多殺多融資斷頭潮`);
+  } else if (twMarginRiskLevel === 'WARNING') {
+    parts.push(`融資維持率降至 140% 警戒區間 (${marginRatio!.toFixed(1)}%)`);
+  }
+
+  return {
+    twFuturesRiskLevel,
+    twMarginRiskLevel,
+    description: parts.length > 0 ? parts.join('；') : '台股籌碼面目前無重大極端風險警報。',
+  };
+}
+
+/**
+ * 試算 0~100 宏觀水溫計 (Macro Thermometer) 與作戰姿態
+ */
+export function calculateMacroThermometer(macro: MacroIndicatorSnapshot): MacroThermometer {
+  let score = 50; // 中性基準分
+  const rationale: string[] = [];
+
+  // 1. 殖利率利差
+  if (macro.isYieldInverted || macro.yieldSpread < 0) {
+    score -= 15;
+    rationale.push(`美債殖利率利差倒掛 (${macro.yieldSpread}%) 壓抑成長估值`);
+  } else if (macro.yieldSpread >= 0.5) {
+    score += 10;
+    rationale.push(`殖利率利差正向健康 (+${macro.yieldSpread}%) 提供總經支撐`);
+  }
+
+  // 2. VIX 恐慌指數
+  if (macro.vix >= 30) {
+    score -= 20;
+    rationale.push(`VIX 恐慌指數狂飆至 ${macro.vix} (重度恐慌)`);
+  } else if (macro.vix >= 22) {
+    score -= 10;
+    rationale.push(`VIX 處於警戒位階 (${macro.vix})`);
+  } else if (macro.vix <= 15) {
+    score += 10;
+    rationale.push(`VIX 低位運行 (${macro.vix}) 市場平穩樂觀`);
+  } else if (macro.vix <= 19) {
+    score += 5;
+  }
+
+  // 3. 恐懼與貪婪指數
+  if (macro.fearAndGreedIndex <= 25) {
+    score -= 10;
+    rationale.push(`市場情緒極度恐慌 (${macro.fearAndGreedIndex})`);
+  } else if (macro.fearAndGreedIndex >= 65) {
+    score += 10;
+    rationale.push(`市場情緒樂觀正向 (${macro.fearAndGreedIndex})`);
+  }
+
+  // 4. 美股信用利差 (OAS) 與 CDS
+  if (macro.creditSpreadOAS !== undefined) {
+    if (macro.creditSpreadOAS >= 5.0) {
+      score -= 15;
+      rationale.push(`高收益債信用利差大幅走擴 (${macro.creditSpreadOAS}%) 資金緊縮`);
+    } else if (macro.creditSpreadOAS <= 3.5) {
+      score += 5;
+    }
+  }
+
+  if (macro.cdsInsuranceIndex !== undefined && macro.cdsInsuranceIndex >= 100) {
+    score -= 10;
+    rationale.push(`CDS 違約保險指數升溫 (${macro.cdsInsuranceIndex})`);
+  }
+
+  // 5. 台股期貨空單與融資維持率
+  if (macro.twFuturesNetOi !== undefined) {
+    if (macro.twFuturesNetOi <= -40000) {
+      score -= 15;
+      rationale.push(`外資期貨大額避險空單壓制 (${macro.twFuturesNetOi.toLocaleString()} 口)`);
+    } else if (macro.twFuturesNetOi <= -25000) {
+      score -= 8;
+    } else if (macro.twFuturesNetOi >= 0) {
+      score += 5;
+    }
+  }
+
+  if (macro.twMarginMaintenance !== undefined) {
+    if (macro.twMarginMaintenance < 135) {
+      score -= 15;
+      rationale.push(`融資維持率瀕臨斷頭線 (${macro.twMarginMaintenance}%)`);
+    } else if (macro.twMarginMaintenance >= 165) {
+      score += 5;
+    }
+  }
+
+  // 夾止於 0 ~ 100
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  let stance: 'DEFENSIVE' | 'NEUTRAL' | 'AGGRESSIVE';
+  let suggestedEquityAllocationPercent: number;
+
+  if (score >= 70) {
+    stance = 'AGGRESSIVE';
+    // 70~100 分對應 75%~90% 倉位
+    suggestedEquityAllocationPercent = Math.min(90, Math.round(75 + (score - 70) * 0.5));
+  } else if (score <= 40) {
+    stance = 'DEFENSIVE';
+    // 0~40 分對應 20%~40% 倉位
+    suggestedEquityAllocationPercent = Math.max(20, Math.round(20 + score * 0.5));
+  } else {
+    stance = 'NEUTRAL';
+    // 41~69 分對應 45%~70% 倉位
+    suggestedEquityAllocationPercent = Math.round(45 + (score - 40) * 0.85);
+  }
+
+  return {
+    score,
+    stance,
+    suggestedEquityAllocationPercent,
+    rationale: rationale.length > 0 ? rationale : ['各項宏觀指標均落於歷史常態中位數區間。'],
+  };
+}
+
+/**
+ * 試算個人防護盾 3 階急速黑天鵝壓力測試矩陣
+ * 模擬在 [-10%, -20%, -30%] 急跌下的擔保品市值、質押維持率與 130% 斷頭追繳缺口
+ */
+export function calculateQuickStressMatrix(
+  collateralTWD: number,
+  totalLoanDebtTWD: number
+): QuickStressScenario[] {
+  const drops = [-10, -20, -30];
+  const safeCollateral = Math.max(0, collateralTWD);
+  const safeDebt = Math.max(0, totalLoanDebtTWD);
+
+  return drops.map((drop) => {
+    const label = `${drop}% ${drop === -10 ? '震盪' : drop === -20 ? '回檔' : '崩盤'}`;
+
+    if (safeDebt === 0) {
+      return {
+        dropPercent: drop,
+        label,
+        stressedCollateralTWD: Math.round(safeCollateral * (1 + drop / 100)),
+        stressedMarginRatioPercent: 999.9,
+        marginCallShortfallTWD: 0,
+        status: 'SAFE',
+      };
+    }
+
+    const stressedCollateralTWD = Math.round(safeCollateral * (1 + drop / 100));
+    const stressedMarginRatioPercent =
+      Math.round((stressedCollateralTWD / safeDebt) * 1000) / 10;
+
+    // 130% 斷頭線追繳缺口
+    const threshold130 = safeDebt * 1.3;
+    const marginCallShortfallTWD = Math.max(
+      0,
+      Math.round(threshold130 - stressedCollateralTWD)
+    );
+
+    let status: QuickStressScenario['status'] = 'SAFE';
+    if (stressedMarginRatioPercent < 130) {
+      status = 'MARGIN_CALL';
+    } else if (stressedMarginRatioPercent < 166) {
+      status = 'WARNING';
+    }
+
+    return {
+      dropPercent: drop,
+      label,
+      stressedCollateralTWD,
+      stressedMarginRatioPercent,
+      marginCallShortfallTWD,
+      status,
+    };
+  });
+}
+
+/**
+ * 將關鍵財經催化劑按時序劃分為三段 (彭博式時序雷達：今日登場 / 7日焦點 / 30日遠端)
+ */
+export function groupCatalystsByTimeline(catalysts: UpcomingCatalyst[]): GroupedCatalysts {
+  const today: UpcomingCatalyst[] = [];
+  const within7Days: UpcomingCatalyst[] = [];
+  const within30Days: UpcomingCatalyst[] = [];
+
+  for (const c of catalysts) {
+    if (c.daysLeft === 0) {
+      today.push(c);
+    } else if (c.daysLeft >= 1 && c.daysLeft <= 7) {
+      within7Days.push(c);
+    } else if (c.daysLeft >= 8 && c.daysLeft <= 30) {
+      within30Days.push(c);
+    }
+  }
+
+  return { today, within7Days, within30Days };
+}
+
+/**
+ * 自動生成每月 10 號在線持股營收公布截止倒數催化劑
+ */
+export function generateMonthlyRevenueDeadlineCatalyst(asOfDateStr: string): UpcomingCatalyst {
+  const [yearStr, monthStr, dayStr] = asOfDateStr.split('-');
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10); // 1-indexed
+  const day = parseInt(dayStr, 10);
+
+  let targetYear = year;
+  let targetMonth = month;
+
+  // 若當日已超過 10 號，則下一個截止日為下個月 10 號
+  if (day > 10) {
+    targetMonth += 1;
+    if (targetMonth > 12) {
+      targetMonth = 1;
+      targetYear += 1;
+    }
+  }
+
+  const targetDateStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-10`;
+  const baseTime = new Date(`${asOfDateStr}T00:00:00`).getTime();
+  const targetTime = new Date(`${targetDateStr}T00:00:00`).getTime();
+  const diffDays = Math.max(0, Math.round((targetTime - baseTime) / (1000 * 60 * 60 * 24)));
+
+  return {
+    id: 'monthly-revenue-deadline',
+    name: '持股月營收公告截止倒數',
+    date: targetDateStr,
+    daysLeft: diffDays,
+    category: 'EARNINGS',
+    impact: 'HIGH',
+    targetMarket: 'TW',
+    description: `法規規範每月 10 號前需完成上月營收申報，留意在線個股業績開獎與開盤反應。`,
+  };
+}
+
+/**
+ * 試算持股除息預估蒸發點數 (防大盤假跌破)
+ * 公式：大盤指數 * (現金除息總額 / 大盤總市值)
+ */
+export function estimateExDividendIndexImpactPoints(params: {
+  cashDividendPerShare: number;
+  sharesOutstanding: number;
+  taiexCurrentIndex: number;
+  taiexTotalMarketCapTWD?: number;
+}): number {
+  const {
+    cashDividendPerShare,
+    sharesOutstanding,
+    taiexCurrentIndex,
+    taiexTotalMarketCapTWD = 70000000000000, // 台股約 70 兆
+  } = params;
+
+  if (cashDividendPerShare <= 0 || sharesOutstanding <= 0 || taiexTotalMarketCapTWD <= 0) {
+    return 0;
+  }
+
+  const totalDividendCash = cashDividendPerShare * sharesOutstanding;
+  const impactPoints = taiexCurrentIndex * (totalDividendCash / taiexTotalMarketCapTWD);
+  return Math.round(impactPoints * 10) / 10;
+}
+
+

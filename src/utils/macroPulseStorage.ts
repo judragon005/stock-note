@@ -8,20 +8,107 @@ export interface MacroPulseHistoryRecord extends MacroIndicatorSnapshot {
 }
 
 /**
- * 從本地持久化儲存載入全量市場四柱歷史快照 (依日期由新至舊排序)
+ * 判定給定快取時間戳記是否為同日有效（同一自然日且非零，防止跨日數據過期）
+ */
+export function isSameDayCacheValid(
+  lastUpdatedTimestamp: number,
+  nowTimestamp: number = Date.now()
+): boolean {
+  if (!lastUpdatedTimestamp || lastUpdatedTimestamp <= 0) return false;
+  const lastDate = new Date(lastUpdatedTimestamp).toISOString().split('T')[0];
+  const currentDate = new Date(nowTimestamp).toISOString().split('T')[0];
+  return lastDate === currentDate;
+}
+
+/**
+ * 升級相容清洗：將可能缺少新增欄位之歷史快照安全補齊，防止 undefined 導致白屏崩潰
+ */
+export function sanitizeMacroRecord(
+  raw: Partial<MacroIndicatorSnapshot>
+): MacroIndicatorSnapshot {
+  const us10y = typeof raw.us10y === 'number' ? raw.us10y : 3.85;
+  const us2y = typeof raw.us2y === 'number' ? raw.us2y : 3.98;
+  const rawSpread =
+    typeof raw.yieldSpread === 'number'
+      ? raw.yieldSpread
+      : Math.round((us10y - us2y) * 100) / 100;
+  const isYieldInverted =
+    raw.isYieldInverted !== undefined ? raw.isYieldInverted : rawSpread < 0;
+
+  const creditSpreadOAS = typeof raw.creditSpreadOAS === 'number' ? raw.creditSpreadOAS : 3.5;
+  const cdsInsuranceIndex =
+    typeof raw.cdsInsuranceIndex === 'number' ? raw.cdsInsuranceIndex : 65;
+  const cdsRiskLevel =
+    raw.cdsRiskLevel ??
+    (creditSpreadOAS >= 5.0 || cdsInsuranceIndex >= 90 ? 'HIGH' : 'LOW');
+
+  const twFuturesNetOi = typeof raw.twFuturesNetOi === 'number' ? raw.twFuturesNetOi : -15000;
+  const twMarginMaintenance =
+    typeof raw.twMarginMaintenance === 'number' ? raw.twMarginMaintenance : 165.0;
+  const twFuturesRiskLevel =
+    raw.twFuturesRiskLevel ??
+    (twFuturesNetOi <= -45000
+      ? 'EXTREME_SHORT'
+      : twFuturesNetOi <= -30000
+      ? 'HIGH_ALERT'
+      : 'NEUTRAL');
+  const twMarginRiskLevel =
+    raw.twMarginRiskLevel ??
+    (twMarginMaintenance < 130
+      ? 'LIQUIDATION_RISK'
+      : twMarginMaintenance < 140
+      ? 'WARNING'
+      : 'SAFE');
+
+  return {
+    date: raw.date || new Date().toISOString().split('T')[0],
+    us10y,
+    us2y,
+    yieldSpread: rawSpread,
+    isYieldInverted,
+    vix: typeof raw.vix === 'number' ? raw.vix : 18.0,
+    vixLevel: raw.vixLevel || 'NORMAL',
+    fearAndGreedIndex: typeof raw.fearAndGreedIndex === 'number' ? raw.fearAndGreedIndex : 50,
+    fearAndGreedLevel: raw.fearAndGreedLevel || 'NEUTRAL',
+    goldPrice: typeof raw.goldPrice === 'number' ? raw.goldPrice : 2500,
+    oilPrice: typeof raw.oilPrice === 'number' ? raw.oilPrice : 75,
+    dxy: typeof raw.dxy === 'number' ? raw.dxy : 101.5,
+    usdToTwd: typeof raw.usdToTwd === 'number' ? raw.usdToTwd : 32.0,
+    usM2GrowthYoY: raw.usM2GrowthYoY ?? 2.1,
+    twM2GrowthYoY: raw.twM2GrowthYoY ?? 5.5,
+    creditSpreadOAS,
+    cdsInsuranceIndex,
+    cdsRiskLevel,
+    twFuturesNetOi,
+    twMarginMaintenance,
+    twFuturesRiskLevel,
+    twMarginRiskLevel,
+    updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : Date.now(),
+  };
+}
+
+/**
+ * 從本地持久化儲存載入全量市場四柱歷史快照 (依日期由新至舊排序，並經過自動清洗升級)
  */
 export function loadMacroPulseHistory(): MacroPulseHistoryRecord[] {
   try {
     const raw = localStorage.getItem(MACRO_PULSE_STORAGE_KEY);
     if (!raw) return [];
-    const parsed: MacroPulseHistoryRecord[] = JSON.parse(raw);
+    const parsed: Partial<MacroPulseHistoryRecord>[] = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.sort((a, b) => b.date.localeCompare(a.date));
+    return parsed
+      .map((p) => ({
+        ...sanitizeMacroRecord(p),
+        id: p.date || new Date().toISOString().split('T')[0],
+        isManual: p.isManual,
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date));
   } catch (e) {
     console.error('Failed to load macro pulse history:', e);
     return [];
   }
 }
+
 
 /**
  * 儲存或更新單日市場四柱紀錄 (冪等去重，以 date 為唯一鍵值)

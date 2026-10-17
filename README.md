@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1698%2F1698%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1739%2F1739%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,25 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. Vite 代理彈性容錯、前端短路熔斷與標的市場精準路由架構 (`Vite Proxy Resilience, Circuit Breaker & Symbol Routing Engine`) *(V8.104.0 最新發布 / Spec #0191 / ADR #0191 / Issue #279)*
+### 0. 法人旗艦級宏觀戰情室 2.0 (`Institutional Macro War Room 2.0`) *(V9.00.0 最新發布 / Spec #0193 / ADR #0193 / Issue #283)*
+
+- **0~100 宏觀水溫計與作戰姿態模型 (`Macro Thermometer`)**：
+  - 純數學算法綜合利差倒掛、VIX、高收益債利差 (HY OAS) 與外資台指期空單部位，動態輸出 0~100 水溫分。
+  - 即刻判定【防禦 / 平衡 / 進攻】姿態，並給出建議股票總曝險上限 (20%~90%) 與實戰決策推論。
+- **頂部雙軌視角分流 (`MarketViewTab: GLOBAL / TW / US`)**：
+  - 🇹🇼 台股視角：外資台指期淨未平倉空單口數、全市場融資維持率（130% 斷頭警戒線）、台幣匯率與在線月營收倒數。
+  - 🇺🇸 美股視角：10Y/2Y 殖利率利差倒掛、高收益債利差 (HY OAS)、CDS 債券履約違約互換保險指數 (CDX) 與 VIX 恐慌指標。
+- **100% Zero Mock 湖倉日 K 雙重動能輪動 (`Zero Mock Dual Momentum`)**：
+  - 徹底剷除過去寫死之假數據，直接連動 SQLite 本機湖倉真實收盤日 K 序列，動態計算 12-1M 跨資產滾動動能與 4% 無風險避風港狀態。
+- **機構級風控在險 (1-Day 95% VaR) 與 3 階黑天鵝急速壓力測試**：
+  - 純數學公式秒算 95% 信心水準下個人部位之單日最大極端潛在損失（VaR），以及台幣每升值 1 元之美股 FX Delta 匯損衝擊。
+  - 支援 `[-10% 震盪]`, `[-20% 回檔]`, `[-30% 崩盤]` 快速切換，即時推算各階融資質押維持率與保證金追繳缺口。
+- **彭博式三段時序雷達、API 配額守衛與一鍵晨會簡報**：
+  - 催化劑日曆收斂為「今日登場 / 7 日焦點 / 30 日遠端」，注入每月 10 號營收開獎倒數與除息扣點防假跌破。
+  - 實作 24H 快取鎖與舊版 Schema 自動消毒，切換 0 請求消耗免費配額且絕不白屏。
+  - 支援「📋 複製晨會簡報」一鍵產出完整繁體中文戰情報告。
+
+### 0. Vite 代理彈性容錯、前端短路熔斷與標的市場精準路由架構 (`Vite Proxy Resilience, Circuit Breaker & Symbol Routing Engine`) *(V8.104.0 / Spec #0191 / ADR #0191 / Issue #279)*
 
 - **開發代理層錯誤抑制與安靜降噪 (`vite.config.ts`)**：
   - 引入 `customLogger` 與強化錯誤監聽器，精確攔截 `ENOTFOUND`、`EAI_AGAIN`、`ETIMEDOUT` 與 `ECONNRESET` 等 DNS/網路異常。

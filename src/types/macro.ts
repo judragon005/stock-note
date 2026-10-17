@@ -30,8 +30,29 @@ export interface MacroIndicatorSnapshot {
   usdToTwd: number;           // 美元兌台幣匯率
   usM2GrowthYoY?: number;     // 美國 M2 貨幣年增率 %
   twM2GrowthYoY?: number;     // 台灣 M2 貨幣年增率 %
+  // --- 0193 法人金絲雀與籌碼擴充 ---
+  creditSpreadOAS?: number;   // 美國高收益債期權調整利差 % (如 3.5%)
+  cdsInsuranceIndex?: number; // CDS/CDX 債券履約違約互換保險指數 (點數，如 65)
+  cdsRiskLevel?: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+  twFuturesNetOi?: number;    // 外資台指期淨未平倉口數 (負數為淨空單，如 -35000)
+  twMarginMaintenance?: number; // 全市場融資維持率 % (如 165.2，130% 為斷頭線)
+  twFuturesRiskLevel?: 'BULLISH' | 'NEUTRAL' | 'HIGH_ALERT' | 'EXTREME_SHORT';
+  twMarginRiskLevel?: 'SAFE' | 'WARNING' | 'LIQUIDATION_RISK';
   updatedAt: number;
 }
+
+/**
+ * 宏觀水溫計與作戰姿態 (Macro Thermometer)
+ */
+export interface MacroThermometer {
+  score: number;                              // 0 ~ 100 綜合水溫分
+  stance: 'DEFENSIVE' | 'NEUTRAL' | 'AGGRESSIVE'; // 【防禦・現金為王】/【平衡・區間操作】/【進攻・積極擴張】
+  suggestedEquityAllocationPercent: number;  // 建議股票總倉位上限 % (例如 30%、50%、80%)
+  rationale: string[];                       // 綜合評分推論要點清單
+}
+
+export type MarketViewTab = 'GLOBAL' | 'TW' | 'US';
+
 
 /**
  * 個人投資組合宏觀防護盾 (Portfolio Macro Shield)
@@ -46,7 +67,25 @@ export interface MacroPortfolioShield {
   marginStatus: 'SAFE' | 'WARNING' | 'MARGIN_CALL' | 'NO_LOAN'; // 安全 (>=166%) / 警戒 (130~166%) / 追繳 (<130%) / 無借款
   maxAllocationDriftPercent: number; // 目標資產配置最大偏離度 %
   portfolioBeta?: number;            // 投資組合對大盤 Beta
+  // --- 0193 法人風控擴充 ---
+  valueAtRisk95TWD?: number;         // 單日 95% 信心水準在險價值 (TWD)
+  varRatioPercent?: number;          // VaR 佔總淨值百分比 %
+  fxDeltaTWD?: number;               // 台幣每升值 1 元之美股淨值變動額 (TWD)
+  quickStressTest?: QuickStressScenario[]; // 3 階急速黑天鵝壓力測試
 }
+
+/**
+ * 急速黑天鵝壓力測試情境
+ */
+export interface QuickStressScenario {
+  dropPercent: number;               // 跌幅 % (-10, -20, -30)
+  label: string;                     // 標籤 (如 "-10% 震盪")
+  stressedCollateralTWD: number;     // 壓力後擔保品總市值 (TWD)
+  stressedMarginRatioPercent: number;// 壓力後質押維持率 %
+  marginCallShortfallTWD: number;    // 追繳保證金缺口 (TWD，達 130% 斷頭線需補足之金額)
+  status: 'SAFE' | 'WARNING' | 'MARGIN_CALL';
+}
+
 
 export type CatalystCategory =
   | 'CENTRAL_BANK'
@@ -59,9 +98,18 @@ export type CatalystCategory =
 
 export type CatalystImpact = 'HIGH' | 'MEDIUM' | 'LOW';
 
+export type TimelineHorizon = 'TODAY' | 'WEEK' | 'MONTH';
+
+export interface GroupedCatalysts {
+  today: UpcomingCatalyst[];
+  within7Days: UpcomingCatalyst[];
+  within30Days: UpcomingCatalyst[];
+}
+
 /**
  * 關鍵宏觀財經事件
  */
+
 export interface UpcomingCatalyst {
   id: string;
   name: string;
