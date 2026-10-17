@@ -207,6 +207,7 @@ async function runUsMarketSync(config = {}) {
       successCount: 0,
       skippedCount: 0,
       total: 0,
+      durationMs: Date.now() - startTime,
     };
   }
 
