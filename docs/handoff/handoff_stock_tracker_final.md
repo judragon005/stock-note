@@ -1,17 +1,16 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-10-17 19:21 (UTC+8)  
+> **交接產生時間**：2026-10-17 22:15 (UTC+8)  
 > **當前最新里程碑**：
-> - **V8.104.0 Vite 代理彈性容錯、前端短路熔斷與標的市場精準路由架構**（ADR 0191, Spec 0191, Issue #279）：
->   - **終端機錯誤降噪**：透過 `customLogger` 與強化錯誤監聽器，精確攔截 `ENOTFOUND`、`EAI_AGAIN`、`ETIMEDOUT` 與 `ECONNRESET` 等 DNS/網路異常，以單行警告取代多行紅色堆疊追蹤，終端機輸出恢復純淨。
->   - **消除無效跨市場重試**：導入 `resolveAuthoritativeMarketSuffix`，結合官方字典鎖定證交所上市標的為 `.TW`，櫃買/債券 ETF 為 `.TWO`，嚴禁對上市標的（如 `0050`、`2330`）盲目探測 `.TWO`，立即削減 50% 無效外部請求。
->   - **前端輕量短路熔斷器**：實現原生 `ProxyCircuitBreaker` 狀態機（`CLOSED` ➔ `OPEN` ➔ `HALF-OPEN`），冷卻週期 60 秒。代理異常時秒級短路 Fast-Fail，直接平滑回退本機 IndexedDB / compact 快取數據源，斷網環境下載入維持在 300ms 內，無介面卡頓。
-> - **V8.103.0 統一金融時序日曆與全市場營業日引擎**（ADR 0190, Spec 0190, Issue #275, PR #276, #277）：
->   - **單一真理來源日曆字典**：徹底解決歷史回補在教師節、颱風假等法定休市日誤報官方無資料異常之問題。
->   - **法人券商級時序演算法**：T+2 / T+1 交割日、融資計息天數、期指/四巫日、集保提前發布與營收順延。
->   - **零 I/O 守衛與即時營業看板**：盤後排程休市秒退，前端即時渲染台美營業狀態徽章與休市標籤。
-> - **V8.101.0 全市場全歷史數據湖倉架構解耦、250日預載視窗與跨模組本地優先整合工程**（ADR 0188, Spec 0188, Issue #271）
-> **品質狀態**：全量單元測試 **1,698/1,698 通過 (100% Passed / 231 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> - **V9.00.0 法人旗艦級宏觀戰情室 2.0**（ADR 0193, Spec 0193, Issue #283, PR #284, Issue #285, PR #286）：
+>   - **0~100 宏觀水溫計 (`Macro Thermometer`)**：以美債利差倒掛、VIX、高收益債利差 (HY OAS) 與外資台指期空單部位純數學加權，輸出作戰姿態（防禦/平衡/進攻）與建議股票總曝險上限 (20%~90%)。
+>   - **台美全球專屬雙軌切換 (`MarketViewTab: GLOBAL / TW / US`)**：台股聚焦期貨空單、全市場融資維持率（130% 斷頭警戒線）、台幣匯率與在線月營收倒數；美股聚焦利差倒掛、HY OAS、CDS 債券履約違約互換保險指數與 VIX。
+>   - **100% Zero Mock 湖倉日 K 雙重動能輪動**：徹底剷除 145 行寫死假數據，全面介接 SQLite 湖倉真實收盤日 K 序列，動態計算 12-1M 滾動動能與 4% 現金避風港狀態。
+>   - **機構級風控在險 (1-Day 95% VaR) 與 3 階急速黑天鵝壓力測試**：秒算 95% 信心水準之單日極限潛在損失與台幣 FX Delta 敏感度，支援 `[-10% 震盪]`, `[-20% 回檔]`, `[-30% 崩盤]` 即刻斷頭維持率與保證金追繳缺口精算。
+>   - **彭博式三段時序雷達、API 配額守衛與一鍵晨會簡報**：催化劑日曆收斂至「今日登場 / 7 日焦點 / 30 日遠端」，注入每月 10 號營收開獎倒數；實作 24H 快取鎖與舊版 Schema 自動消毒（0 配額浪費、0 白屏崩潰）；晨報區塊提供整合雙軌高容錯降級（`copyTextToClipboard`）之一鍵繁中晨會簡報與 LLM 提示詞複製。
+> - **V8.104.0 Vite 代理彈性容錯、前端短路熔斷與標的市場精準路由架構**（ADR 0191, Spec 0191, Issue #279, PR #280）
+> - **V8.103.0 統一金融時序日曆與全市場營業日引擎**（ADR 0190, Spec 0190, Issue #275, PR #276, #277）
+> **品質狀態**：全量單元測試 **1,739/1,739 通過 (100% Passed / 235 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -19,12 +18,12 @@
 
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
-- **當前工作分支**：`feature/271-lakehouse-full-history-and-preload`
-- **單元測試套件**：**1,659/1,659 通過 (228 test suites / 100% 綠燈)**
+- **當前工作分支**：`main` (已完全同步)
+- **單元測試套件**：**1,739/1,739 通過 (235 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
-- **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V8.101.0**
-- **工作區與分支整潔度**：工作區乾淨受控，本地 feature 分支已集中提交。
+- **生產環境構建**：`npm run build` 打包順利通過，0 錯誤 (10.71s)
+- **當前釋出版本**：**V9.00.0**
+- **工作區與分支整潔度**：工作區乾淨受控，本地 feature/fix 分支已完全合併並清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
 ---
@@ -52,6 +51,7 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0193`](file:///d:/APP/股票紀錄/docs/specs/0193-institutional-macro-war-room-2-spec.md) | [`ADR 0193`](file:///d:/APP/股票紀錄/docs/adr/0193-institutional-macro-war-room-2.md) | [`.scratch/0193-institutional-macro-war-room-2/`](file:///d:/APP/股票紀錄/.scratch/0193-institutional-macro-war-room-2/) | Issue #283, #285 / PR #284, #286 | V9.00.0 | 法人旗艦級宏觀戰情室 2.0（宏觀水溫計、台美分流、1-Day VaR、3 階壓力測試、Zero Mock 雙動能、三段時序雷達、晨會簡報雙軌複製） |
 | [`Spec 0188`](file:///d:/APP/股票紀錄/docs/specs/0188-full-market-all-history-lakehouse-and-preload-decoupling-spec.md) | [`ADR 0188`](file:///d:/APP/股票紀錄/docs/adr/0188-full-market-all-history-lakehouse-and-preload-decoupling.md) | [`.scratch/v8.101.0-lakehouse-full-history-and-preload/`](file:///d:/APP/股票紀錄/.scratch/v8.101.0-lakehouse-full-history-and-preload/) | Issue #271 | V8.101.0 | 全市場全歷史數據湖倉架構解耦、250日預載視窗與跨模組本地優先整合工程 (6 大 Tickets) |
 | [`Spec 0187`](file:///d:/APP/股票紀錄/docs/specs/0187-backfill-timeout-watchdog-and-cancellation-control-spec.md) | [`ADR 0187`](file:///d:/APP/股票紀錄/docs/adr/0187-backfill-timeout-watchdog-and-cancellation-control.md) | [`.scratch/issues/issue-268.md`](file:///d:/APP/股票紀錄/.scratch/issues/issue-268.md) | Issue #268 / PR #269 | V8.100.0 | 歷史回補端到端全生命週期超時、單日看門狗與任務取消重設控制 (5 大 Micro-Tickets) |
 | [`Spec 0186`](file:///d:/APP/股票紀錄/docs/specs/0186-us-market-backfill-transparency-lakehouse-alignment-and-eperm-resilience-spec.md) | [`ADR 0186`](file:///d:/APP/股票紀錄/docs/adr/0186-us-market-backfill-transparency-lakehouse-alignment-and-eperm-resilience.md) | [`.scratch/v8.99.0-us-market-backfill-transparency/issues/`](file:///d:/APP/股票紀錄/.scratch/v8.99.0-us-market-backfill-transparency/issues/) | Issue #266 | V8.99.0 | 美股歷史回補透明度透視、斷點庫存對齊與 Windows EPERM 韌性強化 (4 大 Micro-Tickets) |
