@@ -140,8 +140,31 @@ describe('MacroAdvisorEngine (TDD Seam)', () => {
       expect(upcoming).toHaveLength(2);
       expect(upcoming[0].id).toBe('cpi-aug');
       expect(upcoming[0].daysLeft).toBe(3);
+      expect(upcoming[0].impact).toBe('MEDIUM'); // 預設降級
+      expect(upcoming[0].targetMarket).toBe('ALL'); // 預設降級
       expect(upcoming[1].id).toBe('fomc-sep');
       expect(upcoming[1].daysLeft).toBe(10);
+    });
+
+    it('應正確透傳自訂 impact、targetMarket 與 isCustom 屬性', () => {
+      const customCatalysts = [
+        {
+          id: 'futures-settle',
+          name: '台指期結算',
+          date: '2026-10-21',
+          category: 'DERIVATIVE_SETTLEMENT' as const,
+          impact: 'HIGH' as const,
+          targetMarket: 'TW' as const,
+          description: '月結算日波動劇烈',
+        },
+      ];
+
+      const res = calculateUpcomingCatalysts(customCatalysts, '2026-10-17');
+      expect(res).toHaveLength(1);
+      expect(res[0].daysLeft).toBe(4);
+      expect(res[0].impact).toBe('HIGH');
+      expect(res[0].targetMarket).toBe('TW');
+      expect(res[0].category).toBe('DERIVATIVE_SETTLEMENT');
     });
   });
 
@@ -285,6 +308,37 @@ describe('MacroAdvisorEngine (TDD Seam)', () => {
       expect(brief.actionPoints.some((p) => p.includes('2330') && p.includes('動能突破'))).toBe(true);
       expect(brief.actionPoints.some((p) => p.includes('CPI') && p.includes('2 天'))).toBe(true);
       expect(brief.actionPoints.some((p) => p.includes('股息') && p.includes('15,000'))).toBe(true);
+    });
+
+    it('情境 6：高衝擊事件倒數 <= 3 天 + 質押維持率警戒 => 【重大事件逼近・嚴控質押槓桿】', () => {
+      const macro = createBaseMacro();
+      const shield = createBaseShield({
+        hasLoans: true,
+        marginMaintenanceRatio: 162,
+        marginStatus: 'WARNING',
+      });
+
+      const brief = generateAiMorningBrief({
+        macro,
+        shield,
+        asOfDate: '2026-10-17',
+        catalysts: [
+          {
+            id: 'fomc-urgent',
+            name: 'FOMC 利率決議',
+            date: '2026-10-19',
+            daysLeft: 2,
+            category: 'CENTRAL_BANK',
+            impact: 'HIGH',
+            targetMarket: 'US',
+            description: '決議即將公布',
+          },
+        ],
+      });
+
+      expect(brief.headline).toBe('【重大事件逼近・嚴控質押槓桿】');
+      expect(brief.tone).toBe('CAUTION');
+      expect(brief.actionPoints.some((p) => p.includes('槓桿警戒') && p.includes('FOMC'))).toBe(true);
     });
   });
 

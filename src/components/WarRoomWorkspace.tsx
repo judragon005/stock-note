@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Compass,
   TrendingUp,
@@ -12,15 +12,19 @@ import {
   Download,
   RefreshCw,
   History,
+  Plus,
+  Trash2,
+  X,
 } from 'lucide-react';
 import { HoldingPosition, LoanRecord } from '../types/stock';
 import {
   MacroIndicatorSnapshot,
   UpcomingCatalyst,
+  CatalystCategory,
+  CatalystImpact,
 } from '../types/macro';
 import {
   calculatePortfolioMacroShield,
-  calculateUpcomingCatalysts,
   generateAiMorningBrief,
 } from '../engine/macroAdvisorEngine';
 import {
@@ -39,6 +43,13 @@ import {
   generateSampleHistoricalMacroData,
   MacroPulseHistoryRecord,
 } from '../utils/macroPulseStorage';
+import {
+  getAggregatedCatalysts,
+  saveCustomCatalyst,
+  deleteCustomCatalyst,
+  resetCatalystsToDefault,
+} from '../utils/catalystStorage';
+import { syncExternalCatalystsAsync } from '../engine/catalystSyncService';
 
 
 interface WarRoomWorkspaceProps {
@@ -71,38 +82,6 @@ const DEFAULT_MACRO_SNAPSHOT: MacroIndicatorSnapshot = {
   twM2GrowthYoY: 5.6,
   updatedAt: Date.now(),
 };
-
-// 預設財經催化劑日曆
-const DEFAULT_RAW_CATALYSTS: Omit<UpcomingCatalyst, 'daysLeft'>[] = [
-  {
-    id: 'cpi-us',
-    name: '美國 8 月 CPI 通膨公布',
-    date: '2026-09-11',
-    category: 'INFLATION',
-    description: '市場評估聯準會降息碼數之關鍵物價指標。',
-  },
-  {
-    id: 'fomc-meeting',
-    name: 'FOMC 聯準會利率決議',
-    date: '2026-09-18',
-    category: 'CENTRAL_BANK',
-    description: '下半年貨幣政策方向與經濟預測點陣圖 (Dot Plot)。',
-  },
-  {
-    id: 'cbc-tw',
-    name: '台灣央行理監事聯席會議',
-    date: '2026-09-24',
-    category: 'CENTRAL_BANK',
-    description: '評估台灣通膨、房貸選擇性信用管制與台幣利差走向。',
-  },
-  {
-    id: 'nfp-us',
-    name: '美國 9 月非農就業報告',
-    date: '2026-10-02',
-    category: 'EMPLOYMENT',
-    description: '勞動力市場韌性與失業率變化檢驗。',
-  },
-];
 
 // 預設資產池之代表性歷史走勢快照 (用於雙重動能展示)
 const MOCK_MOMENTUM_PRICES: Record<string, { date: string; close: number }[]> = {
@@ -398,10 +377,78 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     });
   }, [holdings, loans, cashBalanceTwd, totalNavTwd, usdToTwdRate]);
 
-  // 2. 財經事件倒數
-  const catalysts = useMemo(() => {
-    return calculateUpcomingCatalysts(DEFAULT_RAW_CATALYSTS);
+  // 催化劑日曆狀態管理
+  const [catalystFilter, setCatalystFilter] = useState<string>('ALL');
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
+  const [remoteCatalysts, setRemoteCatalysts] = useState<Omit<UpcomingCatalyst, 'daysLeft'>[]>([]);
+  const [catalystRefreshKey, setCatalystRefreshKey] = useState(0);
+
+  // 新增自訂事件表單狀態
+  const [newCustomName, setNewCustomName] = useState('');
+  const [newCustomDate, setNewCustomDate] = useState(macroSnapshot.date);
+  const [newCustomCategory, setNewCustomCategory] = useState<CatalystCategory>('CUSTOM');
+  const [newCustomImpact, setNewCustomImpact] = useState<CatalystImpact>('MEDIUM');
+  const [newCustomDesc, setNewCustomDesc] = useState('');
+
+  // 背景自動嘗試同步外部免費端點
+  useEffect(() => {
+    let isMounted = true;
+    syncExternalCatalystsAsync().then((list) => {
+      if (isMounted && list.length > 0) {
+        setRemoteCatalysts(list);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
   }, []);
+
+  const handleSaveCustomCatalyst = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCustomName.trim() || !newCustomDate) return;
+    saveCustomCatalyst({
+      name: newCustomName.trim(),
+      date: newCustomDate,
+      category: newCustomCategory,
+      impact: newCustomImpact,
+      description: newCustomDesc.trim() || '使用者自訂重要財經日程。',
+    });
+    setNewCustomName('');
+    setNewCustomDesc('');
+    setIsCustomModalOpen(false);
+    setCatalystRefreshKey((k) => k + 1);
+  };
+
+  const handleDeleteCustomCatalyst = (id: string) => {
+    deleteCustomCatalyst(id);
+    setCatalystRefreshKey((k) => k + 1);
+  };
+
+  const handleResetCatalysts = () => {
+    if (window.confirm('確定要清除所有自訂催化劑事件並恢復官方預設日曆嗎？')) {
+      resetCatalystsToDefault();
+      setRemoteCatalysts([]);
+      setCatalystRefreshKey((k) => k + 1);
+    }
+  };
+
+  // 2. 財經事件倒數 (四階梯多源聚合)
+  const catalysts = useMemo(() => {
+    return getAggregatedCatalysts({
+      asOfDate: macroSnapshot.date,
+      receivableDividends,
+      remoteCatalysts,
+    });
+  }, [macroSnapshot.date, receivableDividends, remoteCatalysts, catalystRefreshKey]);
+
+  // 分類篩選
+  const filteredCatalysts = useMemo(() => {
+    if (catalystFilter === 'ALL') return catalysts;
+    if (catalystFilter === 'INFLATION_EMPLOYMENT') {
+      return catalysts.filter((c) => c.category === 'INFLATION' || c.category === 'EMPLOYMENT');
+    }
+    return catalysts.filter((c) => c.category === catalystFilter);
+  }, [catalysts, catalystFilter]);
 
   // 3. 生成 AI 作戰方針 (依據本地持久化宏觀數據 + 個人防護盾 + 持股動態 + 股息入帳全量診斷)
   const morningBrief = useMemo(() => {
@@ -1011,51 +1058,445 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
 
       {/* 📅 第四層：關鍵財經催化劑倒數日曆 (Catalyst Calendar) */}
       <div className="card">
-        <div className="warroom-section-header">
+        <div className="warroom-section-header" style={{ flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Calendar size={18} style={{ color: 'var(--accent-purple)' }} />
               關鍵財經事件倒數日曆 (Upcoming Catalysts)
             </h3>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              央行決議 · 通膨 CPI · 就業報告 · 市場流動性關鍵轉折
+              央行決議 · 通膨 CPI · 就業報告 · 市場流動性關鍵轉折 · 在庫除息日程
             </span>
           </div>
-          <span className="badge" style={{ background: 'rgba(139, 92, 246, 0.15)', color: 'var(--accent-purple)', border: '1px solid rgba(139, 92, 246, 0.3)' }}>
-            倒數雷達
-          </span>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setIsCustomModalOpen(true)}
+              style={{ fontSize: '0.78rem', padding: '5px 12px', display: 'flex', alignItems: 'center', gap: '5px' }}
+              title="新增自訂關注事件"
+            >
+              <Plus size={14} />
+              新增事件
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={handleResetCatalysts}
+              style={{ fontSize: '0.78rem', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: '4px' }}
+              title="一鍵清除自訂並重置為官方預設日曆"
+            >
+              <RefreshCw size={13} />
+              重置
+            </button>
+            <span className="badge" style={{ background: 'rgba(139, 92, 246, 0.15)', color: 'var(--accent-purple)', border: '1px solid rgba(139, 92, 246, 0.3)' }}>
+              倒數雷達 ({filteredCatalysts.length})
+            </span>
+          </div>
         </div>
 
-        <div className="warroom-grid-4">
-          {catalysts.map((event) => (
-            <div
-              key={event.id}
-              className="warroom-stat-card"
-              style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
-            >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span className="badge" style={{ background: 'rgba(51, 65, 85, 0.5)', color: 'var(--text-secondary)' }}>
-                    {event.category}
-                  </span>
-                  <span className="mono" style={{ fontSize: '0.8rem', fontWeight: 700, color: event.daysLeft <= 3 ? 'var(--profit-color)' : 'var(--accent-primary)' }}>
-                    {event.daysLeft === 0 ? '🔥 今日登場' : `倒數 ${event.daysLeft} 天`}
-                  </span>
+        {/* 快速分類篩選籤 (Filter Tabs) */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '14px 0 16px 0' }}>
+          {[
+            { id: 'ALL', label: `全部 (${catalysts.length})` },
+            { id: 'CENTRAL_BANK', label: `🏛️ 央行利率 (${catalysts.filter((c) => c.category === 'CENTRAL_BANK').length})` },
+            { id: 'INFLATION_EMPLOYMENT', label: `📊 通膨就業 (${catalysts.filter((c) => c.category === 'INFLATION' || c.category === 'EMPLOYMENT').length})` },
+            { id: 'EARNINGS_DIVIDEND', label: `🎯 持股除息 (${catalysts.filter((c) => c.category === 'EARNINGS_DIVIDEND' || c.category === 'EARNINGS').length})` },
+            { id: 'DERIVATIVE_SETTLEMENT', label: `⚡ 期貨結算 (${catalysts.filter((c) => c.category === 'DERIVATIVE_SETTLEMENT').length})` },
+            { id: 'CUSTOM', label: `✏️ 自訂備忘 (${catalysts.filter((c) => c.isCustom).length})` },
+          ].map((tab) => {
+            const active = catalystFilter === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setCatalystFilter(tab.id)}
+                style={{
+                  fontSize: '0.76rem',
+                  padding: '5px 12px',
+                  borderRadius: '20px',
+                  border: active ? '1px solid var(--accent-primary, #3b82f6)' : '1px solid rgba(148, 163, 184, 0.2)',
+                  background: active ? 'rgba(59, 130, 246, 0.2)' : 'rgba(30, 41, 59, 0.4)',
+                  color: active ? 'var(--accent-primary, #3b82f6)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontWeight: active ? 700 : 500,
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 空狀態防禦卡片 (Empty State Fallback) */}
+        {filteredCatalysts.length === 0 ? (
+          <div
+            style={{
+              textAlign: 'center',
+              padding: '40px 16px',
+              background: 'rgba(15, 23, 42, 0.4)',
+              borderRadius: '12px',
+              border: '1px dashed rgba(148, 163, 184, 0.25)',
+            }}
+          >
+            <Calendar size={36} style={{ color: 'var(--text-muted)', margin: '0 auto 10px auto' }} />
+            <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)', marginBottom: '6px' }}>
+              近期無特定分類之重大財經事件
+            </div>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0 auto 16px auto', maxWidth: '380px', lineHeight: 1.6 }}>
+              當前分類下暫無待登場事件。您可以切換回「全部」視圖，或點擊下方按鈕手動新增法說會、除息日或理財規劃日。
+            </p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setCatalystFilter('ALL')}
+                style={{ fontSize: '0.78rem', padding: '6px 14px' }}
+              >
+                查看全部事件
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => setIsCustomModalOpen(true)}
+                style={{ fontSize: '0.78rem', padding: '6px 14px' }}
+              >
+                ＋ 新增自訂事件
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="warroom-grid-4">
+            {filteredCatalysts.map((event) => {
+              const isUrgent = event.daysLeft <= 3;
+              const isToday = event.daysLeft === 0;
+              const isHighImpact = event.impact === 'HIGH';
+
+              return (
+                <div
+                  key={event.id}
+                  className="warroom-stat-card"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    position: 'relative',
+                    borderColor: isToday
+                      ? 'rgba(239, 68, 68, 0.6)'
+                      : isUrgent && isHighImpact
+                      ? 'rgba(245, 158, 11, 0.5)'
+                      : undefined,
+                    boxShadow: isToday ? '0 0 14px rgba(239, 68, 68, 0.2)' : undefined,
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span
+                          className="badge"
+                          style={{
+                            background:
+                              event.category === 'CENTRAL_BANK'
+                                ? 'rgba(139, 92, 246, 0.15)'
+                                : event.category === 'INFLATION'
+                                ? 'rgba(245, 158, 11, 0.15)'
+                                : event.category === 'EMPLOYMENT'
+                                ? 'rgba(59, 130, 246, 0.15)'
+                                : event.category === 'EARNINGS_DIVIDEND'
+                                ? 'rgba(16, 185, 129, 0.15)'
+                                : event.category === 'DERIVATIVE_SETTLEMENT'
+                                ? 'rgba(236, 72, 153, 0.15)'
+                                : 'rgba(6, 182, 212, 0.15)',
+                            color:
+                              event.category === 'CENTRAL_BANK'
+                                ? '#a78bfa'
+                                : event.category === 'INFLATION'
+                                ? '#fbbf24'
+                                : event.category === 'EMPLOYMENT'
+                                ? '#60a5fa'
+                                : event.category === 'EARNINGS_DIVIDEND'
+                                ? '#34d399'
+                                : event.category === 'DERIVATIVE_SETTLEMENT'
+                                ? '#f472b6'
+                                : '#22d3ee',
+                          }}
+                        >
+                          {event.category === 'CENTRAL_BANK'
+                            ? '🏛️ 央行'
+                            : event.category === 'INFLATION'
+                            ? '📊 通膨'
+                            : event.category === 'EMPLOYMENT'
+                            ? '💼 就業'
+                            : event.category === 'EARNINGS_DIVIDEND'
+                            ? '🎯 除息'
+                            : event.category === 'DERIVATIVE_SETTLEMENT'
+                            ? '⚡ 結算'
+                            : '✏️ 自訂'}
+                        </span>
+
+                        {event.impact && (
+                          <span
+                            className="badge"
+                            style={{
+                              fontSize: '0.68rem',
+                              padding: '2px 6px',
+                              background:
+                                event.impact === 'HIGH'
+                                  ? 'rgba(239, 68, 68, 0.15)'
+                                  : event.impact === 'MEDIUM'
+                                  ? 'rgba(245, 158, 11, 0.12)'
+                                  : 'rgba(148, 163, 184, 0.12)',
+                              color:
+                                event.impact === 'HIGH'
+                                  ? 'var(--profit-color, #ef4444)'
+                                  : event.impact === 'MEDIUM'
+                                  ? '#f59e0b'
+                                  : 'var(--text-muted)',
+                              border: event.impact === 'HIGH' ? '1px solid rgba(239, 68, 68, 0.3)' : undefined,
+                            }}
+                          >
+                            {event.impact === 'HIGH' ? '🔴 高衝擊' : event.impact === 'MEDIUM' ? '🟡 中度' : '🟢 溫和'}
+                          </span>
+                        )}
+
+                        {event.targetMarket && event.targetMarket !== 'ALL' && (
+                          <span className="badge" style={{ fontSize: '0.68rem', padding: '2px 5px', background: 'rgba(51, 65, 85, 0.4)', color: 'var(--text-muted)' }}>
+                            {event.targetMarket === 'TW' ? '台股' : '美股'}
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span
+                          className="mono"
+                          style={{
+                            fontSize: '0.8rem',
+                            fontWeight: 700,
+                            color: isToday
+                              ? 'var(--profit-color)'
+                              : isUrgent
+                              ? 'var(--profit-color)'
+                              : 'var(--accent-primary)',
+                          }}
+                        >
+                          {isToday ? '🔥 今日登場' : `倒數 ${event.daysLeft} 天`}
+                        </span>
+
+                        {event.isCustom && (
+                          <button
+                            onClick={() => handleDeleteCustomCatalyst(event.id)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--text-muted)',
+                              cursor: 'pointer',
+                              padding: '2px',
+                              display: 'flex',
+                              alignItems: 'center',
+                            }}
+                            title="刪除此自訂事件"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                      {event.name}
+                    </div>
+
+                    <div className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                      日期：{event.date}
+                    </div>
+                  </div>
+
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                    {event.description}
+                  </p>
                 </div>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '4px' }}>
-                  {event.name}
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ✏️ 快速新增自訂催化劑彈窗 (Quick Custom Catalyst Modal) */}
+      {isCustomModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '16px',
+            backdropFilter: 'blur(4px)',
+          }}
+          onClick={() => setIsCustomModalOpen(false)}
+        >
+          <div
+            style={{
+              background: 'var(--bg-secondary, #1e293b)',
+              border: '1px solid rgba(148, 163, 184, 0.25)',
+              borderRadius: '14px',
+              padding: '24px',
+              width: '100%',
+              maxWidth: '440px',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Calendar size={18} style={{ color: 'var(--accent-primary)' }} />
+                新增自訂關鍵財經事件
+              </h3>
+              <button
+                onClick={() => setIsCustomModalOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCustomCatalyst}>
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  事件名稱 *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="例如：台積電北美技術論壇、個人信貸撥款"
+                  value={newCustomName}
+                  onChange={(e) => setNewCustomName(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(148, 163, 184, 0.25)',
+                    background: 'var(--bg-primary, #0f172a)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.85rem',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    發生日期 *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={newCustomDate}
+                    onChange={(e) => setNewCustomDate(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(148, 163, 184, 0.25)',
+                      background: 'var(--bg-primary, #0f172a)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.85rem',
+                    }}
+                  />
                 </div>
-                <div className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                  日期：{event.date}
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    衝擊等級
+                  </label>
+                  <select
+                    value={newCustomImpact}
+                    onChange={(e) => setNewCustomImpact(e.target.value as CatalystImpact)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(148, 163, 184, 0.25)',
+                      background: 'var(--bg-primary, #0f172a)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    <option value="HIGH">🔴 高衝擊 (HIGH)</option>
+                    <option value="MEDIUM">🟡 中度 (MEDIUM)</option>
+                    <option value="LOW">🟢 溫和 (LOW)</option>
+                  </select>
                 </div>
               </div>
-              <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                {event.description}
-              </p>
-            </div>
-          ))}
+
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  事件類別
+                </label>
+                <select
+                  value={newCustomCategory}
+                  onChange={(e) => setNewCustomCategory(e.target.value as CatalystCategory)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(148, 163, 184, 0.25)',
+                    background: 'var(--bg-primary, #0f172a)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  <option value="CUSTOM">✏️ 自訂備忘事件</option>
+                  <option value="CENTRAL_BANK">🏛️ 央行與利率決議</option>
+                  <option value="INFLATION">📊 通膨與物價指數</option>
+                  <option value="EMPLOYMENT">💼 勞動與就業報告</option>
+                  <option value="EARNINGS_DIVIDEND">🎯 持股除息與法說會</option>
+                  <option value="DERIVATIVE_SETTLEMENT">⚡ 期貨與衍生品結算</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  說明備忘
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="備註具體細節、觀察重點或操作規劃..."
+                  value={newCustomDesc}
+                  onChange={(e) => setNewCustomDesc(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(148, 163, 184, 0.25)',
+                    background: 'var(--bg-primary, #0f172a)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.82rem',
+                    resize: 'none',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsCustomModalOpen(false)}
+                  style={{ fontSize: '0.82rem', padding: '7px 16px' }}
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ fontSize: '0.82rem', padding: '7px 18px' }}
+                >
+                  確認儲存
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

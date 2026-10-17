@@ -86,6 +86,8 @@ export function calculateUpcomingCatalysts(
       return {
         ...c,
         daysLeft: diffDays,
+        impact: c.impact || 'MEDIUM',
+        targetMarket: c.targetMarket || 'ALL',
       };
     })
     .filter((c) => c.daysLeft >= 0)
@@ -179,11 +181,20 @@ export function generateAiMorningBrief(
   let summary = '';
   const actionPoints: string[] = [];
 
+  const urgentHighImpactCatalyst = urgentCatalysts.find((c) => c.impact === 'HIGH');
+  const isHighRiskMargin =
+    shield.hasLoans &&
+    (isMarginFragile || (shield.marginMaintenanceRatio > 0 && shield.marginMaintenanceRatio < 180));
+
   // 動態決定方針基調與標題
   if (sellSignals.length > 0) {
     headline = '【破線警戒・汰弱留強】';
     tone = 'DEFENSIVE';
     summary = `在倉持股有 ${sellSignals.length} 檔跌破箱底關鍵支撐，首要之務為落實停損紀律，保全資金防守戰線。`;
+  } else if (urgentHighImpactCatalyst && isHighRiskMargin) {
+    headline = '【重大事件逼近・嚴控質押槓桿】';
+    tone = 'CAUTION';
+    summary = `距離重大高衝擊事件 ${urgentHighImpactCatalyst.name} 僅剩 ${urgentHighImpactCatalyst.daysLeft === 0 ? '今天' : `${urgentHighImpactCatalyst.daysLeft} 天`}，且個人質押槓桿維持率偏緊 (${shield.marginMaintenanceRatio}%)，務必嚴控部位曝險防範黑天鵝。`;
   } else if (buySignals.length > 0 && !isPanic) {
     headline = '【強者恆強・突破進攻】';
     tone = 'OPPORTUNISTIC';
@@ -234,7 +245,14 @@ export function generateAiMorningBrief(
     );
   }
 
-  // B. 持股買進突破點名
+  // B. 高衝擊事件 × 質押槓桿警戒聯動點名
+  if (urgentHighImpactCatalyst && isHighRiskMargin) {
+    actionPoints.push(
+      `🚨【槓桿警戒】距離重大高衝擊事件 (${urgentHighImpactCatalyst.name}) 僅剩 ${urgentHighImpactCatalyst.daysLeft === 0 ? '今天' : `${urgentHighImpactCatalyst.daysLeft} 天`}，且質押維持率處於警戒水位 (${shield.marginMaintenanceRatio}%)，強烈建議暫停追價加碼，優先提高現金水位或提撥擔保品以防範流動性黑天鵝。`
+    );
+  }
+
+  // C. 持股買進突破點名
   if (buySignals.length > 0) {
     const symbolsText = buySignals.map((s) => `${s.symbol}${s.name ? `(${s.name})` : ''}`).join('、');
     const firstBuy = buySignals[0];
@@ -244,8 +262,8 @@ export function generateAiMorningBrief(
     );
   }
 
-  // C. 關鍵財經催化劑倒數提醒
-  if (urgentCatalysts.length > 0) {
+  // D. 關鍵財經催化劑倒數提醒 (若尚未被槓桿警戒點名)
+  if (urgentCatalysts.length > 0 && !(urgentHighImpactCatalyst && isHighRiskMargin)) {
     const catalyst = urgentCatalysts[0];
     actionPoints.push(
       `⏳【催化劑倒數】距離 ${catalyst.name} 僅剩 ${catalyst.daysLeft === 0 ? '今天' : `${catalyst.daysLeft} 天`}，短線避免大額單筆重押，預留至少 15% 機動資金以防數據超預期波動。`
