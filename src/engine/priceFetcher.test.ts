@@ -10,6 +10,8 @@ import {
   parseYahooExchangeRateResponse,
   fetchExchangeRate,
   fetchWithCORSProxy,
+  resolveAuthoritativeMarketSuffix,
+  proxyCircuitBreaker,
 } from './priceFetcher';
 import { MarketType } from '../types/stock';
 
@@ -60,14 +62,42 @@ describe('PriceFetcher Engine (TDD Seam)', () => {
       expect(normalizeYahooSymbol('BRK.B', 'US')).toBe('BRK-B');
     });
 
-    it('getYahooCandidateSymbols 應為台股產生上市與上櫃雙軌備援候選代碼', () => {
-      const candidates6204 = getYahooCandidateSymbols('6204', 'TW');
-      expect(candidates6204).toContain('6204.TWO');
-      expect(candidates6204).toContain('6204.TW');
+    it('resolveAuthoritativeMarketSuffix 應能依官方字典精準判定上市、上櫃與未知', () => {
+      expect(resolveAuthoritativeMarketSuffix('2330')).toBe('.TW');
+      expect(resolveAuthoritativeMarketSuffix('0050')).toBe('.TW');
+      expect(resolveAuthoritativeMarketSuffix('0056')).toBe('.TW');
+      expect(resolveAuthoritativeMarketSuffix('2330.TW')).toBe('.TW');
 
+      expect(resolveAuthoritativeMarketSuffix('00679B')).toBe('.TWO');
+      expect(resolveAuthoritativeMarketSuffix('6547')).toBe('.TWO');
+      expect(resolveAuthoritativeMarketSuffix('6547.TWO')).toBe('.TWO');
+
+      expect(resolveAuthoritativeMarketSuffix('99999XYZ')).toBe('UNKNOWN');
+    });
+
+    it('getYahooCandidateSymbols 對已知上市標的應鎖定 .TW，嚴格杜絕無效的 .TWO 重試', () => {
       const candidates2330 = getYahooCandidateSymbols('2330', 'TW');
-      expect(candidates2330[0]).toBe('2330.TW');
-      expect(candidates2330).toContain('2330.TWO');
+      expect(candidates2330).toEqual(['2330.TW']);
+      expect(candidates2330).not.toContain('2330.TWO');
+
+      const candidates0050 = getYahooCandidateSymbols('0050.TW', 'TW');
+      expect(candidates0050).toEqual(['0050.TW']);
+      expect(candidates0050).not.toContain('0050.TWO');
+    });
+
+    it('getYahooCandidateSymbols 對已知上櫃標的應鎖定 .TWO，嚴格杜絕無效的 .TW 重試', () => {
+      const candidatesOtc = getYahooCandidateSymbols('00679B', 'TW');
+      expect(candidatesOtc).toEqual(['00679B.TWO']);
+      expect(candidatesOtc).not.toContain('00679B.TW');
+
+      const candidates6547 = getYahooCandidateSymbols('6547.TWO', 'TW');
+      expect(candidates6547).toEqual(['6547.TWO']);
+      expect(candidates6547).not.toContain('6547.TW');
+    });
+
+    it('getYahooCandidateSymbols 對未知自訂標的應保留雙軌探測', () => {
+      const candidatesUnknown = getYahooCandidateSymbols('99999XYZ', 'TW');
+      expect(candidatesUnknown).toEqual(['99999XYZ.TW', '99999XYZ.TWO']);
     });
 
     it('getYahooCandidateSymbols 應為美股特殊代碼產生連字號與去點備援', () => {
@@ -411,6 +441,62 @@ describe('PriceFetcher Engine (TDD Seam)', () => {
         (globalThis as any).window = originalWindow;
         globalThis.fetch = originalFetch;
       }
+    });
+  });
+
+  describe('9. proxyCircuitBreaker (代理短路熔斷狀態機與離線防禦)', () => {
+    it('熔斷器初始狀態應為 CLOSED，且 isOpen() 回傳 false', () => {
+      proxyCircuitBreaker.reset();
+      expect(proxyCircuitBreaker.getState()).toBe('CLOSED');
+      expect(proxyCircuitBreaker.isOpen()).toBe(false);
+    });
+
+    it('當收到 502 DNS 或連線失敗時應觸發 OPEN 熔斷狀態', () => {
+      proxyCircuitBreaker.reset();
+      proxyCircuitBreaker.recordFailure({ status: 502, code: 'ENOTFOUND' });
+
+      expect(proxyCircuitBreaker.getState()).toBe('OPEN');
+      expect(proxyCircuitBreaker.isOpen()).toBe(true);
+    });
+
+    it('在 OPEN 熔斷生效期間，fetchWithCORSProxy 應立即 Fast-Fail 且不發送外部網路請求', async () => {
+      const originalWindow = (globalThis as any).window;
+      const originalFetch = globalThis.fetch;
+
+      try {
+        (globalThis as any).window = {};
+        const mockFetch = vi.fn();
+        globalThis.fetch = mockFetch;
+
+        proxyCircuitBreaker.reset();
+        proxyCircuitBreaker.recordFailure({ status: 502, code: 'ENOTFOUND' });
+
+        await expect(
+          fetchWithCORSProxy('https://query1.finance.yahoo.com/v8/finance/chart/2330.TW')
+        ).rejects.toThrow(/Circuit Breaker is OPEN/);
+
+        // 核心驗證：熔斷器直接攔截，fetch 呼叫次數為 0
+        expect(mockFetch).not.toHaveBeenCalled();
+      } finally {
+        (globalThis as any).window = originalWindow;
+        globalThis.fetch = originalFetch;
+        proxyCircuitBreaker.reset();
+      }
+    });
+
+    it('冷卻時間到期後應轉入 HALF-OPEN 允許單次試探，成功後復原為 CLOSED', () => {
+      proxyCircuitBreaker.reset();
+      // 模擬 61 秒前觸發失敗
+      const pastTime = Date.now() - 65000;
+      proxyCircuitBreaker.recordFailure({ status: 502, code: 'ENOTFOUND' }, pastTime);
+
+      expect(proxyCircuitBreaker.getState()).toBe('HALF-OPEN');
+      expect(proxyCircuitBreaker.isOpen()).toBe(false);
+
+      // 試探成功
+      proxyCircuitBreaker.recordSuccess();
+      expect(proxyCircuitBreaker.getState()).toBe('CLOSED');
+      expect(proxyCircuitBreaker.isOpen()).toBe(false);
     });
   });
 });

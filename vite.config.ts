@@ -1,12 +1,31 @@
-import { defineConfig } from 'vite';
+import { createLogger, defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 const { createMarketApiMiddleware } = require('./scripts/market-sync/vite-market-middleware.cjs');
 
+// Spec 0191 / Ticket 01: 抑制外部 DNS 解析失敗 (ENOTFOUND) 與連線重置的終端機紅色堆疊追蹤刷屏
+const customLogger = createLogger();
+const originalLoggerError = customLogger.error;
+customLogger.error = (msg, options) => {
+  const isIgnorableProxyError =
+    typeof msg === 'string' &&
+    msg.includes('http proxy error') &&
+    (msg.includes('ENOTFOUND') ||
+      msg.includes('EAI_AGAIN') ||
+      msg.includes('ETIMEDOUT') ||
+      msg.includes('ECONNRESET') ||
+      msg.includes('ECONNREFUSED'));
+  if (isIgnorableProxyError) {
+    return;
+  }
+  originalLoggerError(msg, options);
+};
+
 // https://vitejs.dev/config/
 export default defineConfig({
+  customLogger,
   plugins: [
     react(),
     {
@@ -42,20 +61,39 @@ export default defineConfig({
         },
         configure: (proxy) => {
           proxy.on('error', (err: any, req, res) => {
-            const isConnReset = err?.code === 'ECONNRESET' || String(err?.message || '').includes('ECONNRESET');
-            if (isConnReset) {
-              // Spec 0184 / Ticket 06: 降噪處理，以簡短警告取代紅色堆疊追蹤
-              console.warn(`[Proxy Warning] Yahoo 連線暫態重置 (${err.code || 'ECONNRESET'}): ${req?.url || ''}`);
+            const errCode = err?.code || '';
+            const errMsg = String(err?.message || '');
+            const isDnsOrNetworkFailure =
+              errCode === 'ENOTFOUND' ||
+              errCode === 'EAI_AGAIN' ||
+              errCode === 'ETIMEDOUT' ||
+              errCode === 'ECONNRESET' ||
+              errCode === 'ECONNREFUSED' ||
+              errMsg.includes('ENOTFOUND') ||
+              errMsg.includes('ECONNRESET') ||
+              errMsg.includes('ETIMEDOUT');
+
+            if (isDnsOrNetworkFailure) {
+              // Spec 0191 / Ticket 01: 降噪為精簡警告，消除紅色堆疊追蹤
+              console.warn(
+                `[Proxy Warning] Yahoo 網路/DNS 暫態異常 (${errCode || 'NETWORK_FAILURE'}): ${req?.url || ''}`
+              );
             } else {
-              console.warn(`[Proxy Error] 代理轉發異常: ${err?.message || err}`);
+              console.warn(`[Proxy Error] 代理轉發異常: ${errMsg || err}`);
             }
+
             if (res && 'writeHead' in res && !(res as any).headersSent) {
               (res as any).writeHead(502, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: 'Proxy Gateway Error', code: err?.code, message: err?.message }));
+              res.end(
+                JSON.stringify({
+                  error: 'Proxy Gateway Error',
+                  code: errCode || 'GATEWAY_ERROR',
+                  message: errMsg || 'External Gateway DNS/Network Failure',
+                })
+              );
             }
           });
         },
-
       },
       '/api/twse-www': {
         target: 'https://www.twse.com.tw',

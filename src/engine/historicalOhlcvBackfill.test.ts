@@ -117,10 +117,10 @@ describe('Historical OHLCV & Indicators Backfill Engine (回補引擎)', () => {
       expect(saveIndicatorsSpy).toHaveBeenCalled();
     });
 
-    it('當台股首選 .TW 遭遇 404 失敗時，應自動嘗試 .TWO 備援並成功回傳上櫃日 K', async () => {
+    it('當未知自訂台股首選 .TW 遭遇 404 失敗時，應自動嘗試 .TWO 備援並成功回傳上櫃日 K', async () => {
       vi.spyOn(db, 'getSymbolOhlcv').mockResolvedValue(null);
 
-      // 第一次調用 (6204.TW) 拋出 404 異常，第二次調用 (6204.TWO) 成功回傳
+      // 未知標的：第一次調用 (.TW) 拋出 404 異常，第二次調用 (.TWO) 成功回傳
       const mockSuccessResponse = {
         chart: {
           result: [
@@ -146,12 +146,45 @@ describe('Historical OHLCV & Indicators Backfill Engine (回補引擎)', () => {
         .mockRejectedValueOnce(new Error('HTTP 404 Not Found'))
         .mockResolvedValueOnce(mockSuccessResponse);
 
-      const result = await backfillSymbolOhlcvAndIndicators('6204', 'TW');
+      const result = await backfillSymbolOhlcvAndIndicators('99999XYZ', 'TW');
 
       expect(fetchSpy).toHaveBeenCalledTimes(2);
       expect(result.candles.length).toBe(1);
       expect(result.candles[0].close).toBe(87.3);
       expect(result.indicators.length).toBe(1);
+    });
+
+    it('Spec 0191: 當查詢已知上櫃標的 (如 6204) 時，應直接精準鎖定 .TWO，不浪費請求探測 .TW', async () => {
+      vi.spyOn(db, 'getSymbolOhlcv').mockResolvedValue(null);
+
+      const mockSuccessResponse = {
+        chart: {
+          result: [
+            {
+              timestamp: [1767225600],
+              indicators: {
+                quote: [
+                  {
+                    open: [85],
+                    high: [88],
+                    low: [84],
+                    close: [87.3],
+                    volume: [1200],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      };
+
+      const fetchSpy = vi.spyOn(priceFetcher, 'fetchWithCORSProxy').mockResolvedValueOnce(mockSuccessResponse);
+
+      const result = await backfillSymbolOhlcvAndIndicators('6204', 'TW');
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(result.candles.length).toBe(1);
+      expect(result.candles[0].close).toBe(87.3);
     });
 
     it('當查詢美股點號代碼 (如 BRK.B) 時，應首選轉換為 BRK-B 成功拉取', async () => {

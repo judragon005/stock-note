@@ -13,8 +13,70 @@ const CORS_PROXIES = [
 /**
  * 透過本地代理、直連或 CORS 代理池發送請求，包含多代理重試與超時熔斷 (三層平滑降級)，並受全域速率限制保護
  */
+export type CircuitBreakerState = 'CLOSED' | 'OPEN' | 'HALF-OPEN';
+
+/**
+ * Spec 0191 / Ticket 03: 前端輕量短路熔斷器 (Client-Side In-Memory Circuit Breaker)
+ * 當外部代理或 DNS 連鎖解析失敗 (502 / ENOTFOUND) 時，立即短路後續外部請求，直接平滑回退本機資料庫
+ */
+export class ProxyCircuitBreaker {
+  private state: CircuitBreakerState = 'CLOSED';
+  private lastFailureTime: number = 0;
+  private readonly cooldownMs: number;
+
+  constructor(cooldownMs: number = 60000) {
+    this.cooldownMs = cooldownMs;
+  }
+
+  public getState(): CircuitBreakerState {
+    if (this.state === 'OPEN') {
+      if (Date.now() - this.lastFailureTime >= this.cooldownMs) {
+        return 'HALF-OPEN';
+      }
+      return 'OPEN';
+    }
+    return this.state;
+  }
+
+  public isOpen(): boolean {
+    return this.getState() === 'OPEN';
+  }
+
+  public recordFailure(_err?: any, overrideTime?: number): void {
+    this.state = 'OPEN';
+    this.lastFailureTime = overrideTime ?? Date.now();
+  }
+
+  public recordSuccess(): void {
+    this.state = 'CLOSED';
+    this.lastFailureTime = 0;
+  }
+
+  public reset(): void {
+    this.state = 'CLOSED';
+    this.lastFailureTime = 0;
+  }
+}
+
+export const proxyCircuitBreaker = new ProxyCircuitBreaker(60000);
+
+/**
+ * 代理輔助函式：透過多層代理嘗試獲取資料 (解決瀏覽器 CORS 與限流限制)
+ * 1. 優先透過 Vite 本地開發代理 (例如 /api/yahoo, /api/twse-www)
+ * 2. 直連 (Node 環境)
+ * 3. 外部公共 CORS 代理池 (安全邊界：嚴禁外發含金鑰請求)
+ */
 export async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 4000): Promise<any> {
+  // Spec 0191 / Ticket 03: 熔斷器檢查 - 若目前處於 OPEN 熔斷狀態，直接 Fast-Fail 拋出例外，杜絕無謂的網路等待與洗版
+  if (proxyCircuitBreaker.isOpen()) {
+    throw new Error(`[ProxyCircuitBreaker] Circuit Breaker is OPEN due to recent DNS/gateway failure: ${targetUrl}`);
+  }
+
   return globalRequestScheduler.schedule(targetUrl, async () => {
+    if (proxyCircuitBreaker.isOpen()) {
+      throw new Error(`[ProxyCircuitBreaker] Circuit Breaker is OPEN due to recent DNS/gateway failure: ${targetUrl}`);
+    }
+
     // 1. 優先嘗試 Vite 本地開發代理路由
     let localProxyUrl: string | null = null;
     if (targetUrl.startsWith('https://query1.finance.yahoo.com')) {
@@ -31,6 +93,7 @@ export async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 
       try {
         const res = await fetch(localProxyUrl, { signal: AbortSignal.timeout(timeoutMs) });
         if (res.ok) {
+          proxyCircuitBreaker.recordSuccess();
           const text = await res.text();
           try {
             return JSON.parse(text);
@@ -42,8 +105,24 @@ export async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 
         if (res.status === 404) {
           throw new Error(`HTTP 404 Not Found: Target resource not found for ${targetUrl}`);
         }
+        // 若代理回傳 502 Gateway Error，解析並記錄熔斷失敗
+        if (res.status === 502) {
+          let errData: any = null;
+          try {
+            errData = await res.json();
+          } catch {
+            // ignore
+          }
+          proxyCircuitBreaker.recordFailure(errData);
+          throw new Error(
+            `[ProxyCircuitBreaker] Proxy Gateway Failure (${errData?.code || '502'}): ${targetUrl}`
+          );
+        }
       } catch (err: any) {
         if (err?.message?.includes('404')) {
+          throw err;
+        }
+        if (err?.message?.includes('Circuit Breaker is OPEN') || err?.message?.includes('Proxy Gateway Failure')) {
           throw err;
         }
         // fallback
@@ -123,25 +202,82 @@ export function inferMarketFromSymbol(rawInput: string): MarketType {
   return 'US';
 }
 
-/// 上櫃標的快取集合，提供 O(1) 極致查詢效能與防禦性初始化
+/// 上市與上櫃標的快取集合，提供 O(1) 極致查詢效能與防禦性初始化
+let twseSymbolSet: Set<string> | null = null;
 let otcSymbolSet: Set<string> | null = null;
+
 function getOtcSymbolSet(): Set<string> {
   if (!otcSymbolSet && typeof STATIC_TW_STOCKS !== 'undefined' && Array.isArray(STATIC_TW_STOCKS)) {
-    otcSymbolSet = new Set(
-      STATIC_TW_STOCKS
-        .filter((item) => item.source === 'TPEX' || item.category?.includes('上櫃'))
-        .map((item) => item.symbol.toUpperCase())
-    );
+    otcSymbolSet = new Set();
+    for (const item of STATIC_TW_STOCKS) {
+      const sym = item.symbol.toUpperCase();
+      const isOtc =
+        item.source === 'TPEX' ||
+        item.category?.includes('上櫃') ||
+        item.category?.includes('債券') ||
+        /^00\d{3}B$/i.test(sym);
+      if (isOtc) {
+        otcSymbolSet.add(sym);
+        otcSymbolSet.add(sym.replace(/O$/i, ''));
+      }
+    }
   }
   return otcSymbolSet || new Set();
 }
 
+function getTwseSymbolSet(): Set<string> {
+  if (!twseSymbolSet && typeof STATIC_TW_STOCKS !== 'undefined' && Array.isArray(STATIC_TW_STOCKS)) {
+    twseSymbolSet = new Set();
+    const otcSet = getOtcSymbolSet();
+    for (const item of STATIC_TW_STOCKS) {
+      const sym = item.symbol.toUpperCase();
+      const base = sym.replace(/O$/i, '');
+      if (otcSet.has(base)) continue;
+      if (item.source === 'TWSE' || item.category?.includes('上市')) {
+        twseSymbolSet.add(sym);
+        twseSymbolSet.add(base);
+      }
+    }
+  }
+  return twseSymbolSet || new Set();
+}
+
 /**
- * 依據標的與市場類型，產生 Yahoo Finance 候選查詢代碼清單 (支援雙軌與備援重試)
- * 例如台股 6204 -> ['6204.TWO', '6204.TW']
- * 例如台股 2330 -> ['2330.TW', '2330.TWO']
- * 例如美股 BRK.B -> ['BRK-B', 'BRK.B']
- * 例如美股 BRKB -> ['BRKB', 'BRK-B', 'BRK.B']
+ * Spec 0191 / Ticket 02: 依據官方字典精準推導標的所屬市場權威後綴 (.TW 或 .TWO)
+ * 若明確屬於證交所上市回傳 .TW，明確屬於櫃買上櫃回傳 .TWO，未知自訂標的回傳 UNKNOWN
+ */
+export function resolveAuthoritativeMarketSuffix(symbol: string): '.TW' | '.TWO' | 'UNKNOWN' {
+  const clean = (symbol || '').trim().toUpperCase();
+  if (!clean) return 'UNKNOWN';
+
+  // 1. 若顯式指定 .TWO，表示指定櫃買市場
+  if (clean.endsWith('.TWO')) {
+    return '.TWO';
+  }
+
+  const base = clean.replace(/\.(TW|TWO)$/i, '');
+
+  // 2. 檢查是否已知為上櫃（包含去 O 後的 TPEx 標的與債券 ETF）
+  if (getOtcSymbolSet().has(base)) {
+    return '.TWO';
+  }
+
+  // 3. 檢查是否已知為上市 (TWSE)
+  if (getTwseSymbolSet().has(base)) {
+    return '.TW';
+  }
+
+  // 4. 若顯式指定 .TW 且字典查無上櫃
+  if (clean.endsWith('.TW')) {
+    return '.TW';
+  }
+
+  return 'UNKNOWN';
+}
+
+/**
+ * 依據標的與市場類型，產生 Yahoo Finance 候選查詢代碼清單
+ * Spec 0191: 對已知市場的標的強制鎖定單一後綴，嚴禁跨市場盲目重試；僅對未知自訂標的保留雙軌備援
  */
 export function getYahooCandidateSymbols(symbol: string, market: MarketType): string[] {
   let clean = symbol.trim().toUpperCase();
@@ -151,23 +287,23 @@ export function getYahooCandidateSymbols(symbol: string, market: MarketType): st
   clean = clean.replace(/^(NASDAQ|NYSE|AMEX):/i, '');
 
   if (market === 'TW') {
-    // 若已有顯式指定後綴
+    const base = clean.replace(/\.(TW|TWO)$/i, '');
+    const authoritativeSuffix = resolveAuthoritativeMarketSuffix(clean);
+
+    // 已知上市標的：強制鎖定 .TW，絕對不探測 .TWO
+    if (authoritativeSuffix === '.TW') {
+      return [`${base}.TW`];
+    }
+    // 已知上櫃標的：強制鎖定 .TWO，絕對不探測 .TW
+    if (authoritativeSuffix === '.TWO') {
+      return [`${base}.TWO`];
+    }
+
+    // 未知自訂標的：保留安全雙軌備援探測
     if (clean.endsWith('.TWO')) {
-      const base = clean.replace(/\.TWO$/i, '');
       return [clean, `${base}.TW`];
     }
-    if (clean.endsWith('.TW')) {
-      const base = clean.replace(/\.TW$/i, '');
-      return [clean, `${base}.TWO`];
-    }
-
-    // 檢查字典是否已知為上櫃 (TPEX)
-    const isKnownOtc = getOtcSymbolSet().has(clean);
-
-    if (isKnownOtc) {
-      return [`${clean}.TWO`, `${clean}.TW`];
-    }
-    return [`${clean}.TW`, `${clean}.TWO`];
+    return [`${base}.TW`, `${base}.TWO`];
   }
 
   // 美股處理
@@ -338,16 +474,19 @@ export async function fetchStockQuote(
     const quote = parseYahooQuoteResponse(data, symbol, market);
     if (quote) return quote;
   } catch {
-    // 若為台股且上櫃可能為 .TWO，嘗試切換後綴
+    // 若為台股且非確定上市標的（即未知或上櫃），才嘗試切換 .TWO 後綴
     if (market === 'TW' && yahooSymbol.endsWith('.TW')) {
-      const otcSymbol = `${symbol.replace(/\.TW$/i, '')}.TWO`;
-      const otcUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${otcSymbol}?interval=1d&range=3mo`;
-      try {
-        const otcData = await customFetch(otcUrl, 3000);
-        const otcQuote = parseYahooQuoteResponse(otcData, symbol, market);
-        if (otcQuote) return otcQuote;
-      } catch {
-        // Continue to fallback
+      const authSuffix = resolveAuthoritativeMarketSuffix(symbol);
+      if (authSuffix !== '.TW') {
+        const otcSymbol = `${symbol.replace(/\.TW$/i, '')}.TWO`;
+        const otcUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${otcSymbol}?interval=1d&range=3mo`;
+        try {
+          const otcData = await customFetch(otcUrl, 3000);
+          const otcQuote = parseYahooQuoteResponse(otcData, symbol, market);
+          if (otcQuote) return otcQuote;
+        } catch {
+          // Continue to fallback
+        }
       }
     }
   }
