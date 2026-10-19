@@ -2588,6 +2588,18 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     4. **停損防線實質觸發預算**：在庫庫存現價跌破保守停損線時，明確標註 `is_triggered="true"`，引導外部 AI CRO 給予直球防守決策。
     5. **外資借券賣出 (SBL) 維度擴充**：於台股籌碼補齊借券賣出標記，防範僅以散戶融券評估市場空方壓力的盲區。
 
+- **AI Force Dashboard Layout Reorganization, Card 21 Valuation & Chips Sparkline Alignment (戰情室 Layer 6 雙子堆疊重構、Card 21 估值卡導入與 Card 15 寬幅 Sparkline 對稱)**:
+  - 核心模組：`src/components/aiForceDashboard/cards/ValuationMetricsCard.tsx`、`src/components/aiForceDashboard/cards/EnergySentimentTwinCard.tsx`、`src/components/aiForceDashboard/cards/ChipsSummaryCard.tsx`、`src/components/aiForceDashboard/cards/TdccDistributionCard.tsx`、`src/components/aiForceDashboard/cards/MarketSentimentCard.tsx`、`src/components/aiForceDashboard/AiForceDashboardView.tsx`、`src/engine/aiForcePromptAdapter.ts`、`src/engine/strategicPromptEngine.ts`。
+  - 規範依據：Spec 0195 (v8.108.0) 與 ADR 0195，對齊 GitHub Issue #290。
+  - 核心特性：
+    1. **Card 19 TDCC 標的確認與美股 13F / 放空籌碼**：台股標題鎖定 `{symbol} TDCC 集保趨勢` 並引入散戶持股剪刀差；美股自適應為機構持股、空單佔流通比 (Short Float) 與內部人持股，>10% 觸發軋空警戒，徹底根除美股空白佔位符。
+    2. **Card 15 籌碼摘要 50%:50% 寬幅對稱與美股微觀量價**：重構為 `1fr 1fr` 等寬對稱，monospace 數值防折行，Sparkline 加入 0 軸水平分水嶺基準線；美股呈現 RVOL、VWAP 偏離、MFI 機構量能與 ATR 日振幅。
+    3. **Card 13 美股宏觀情緒激活 (Zero New Dependencies)**：直讀本地 SQLite `macro_sentiment_daily`，展示 CNN Fear & Greed (半圓指針映射)、VIX 恐慌指數與 10Y 美債殖利率。
+    4. **Card 21 估值與殖利率量化矩陣四態自適應**：台股個股（盤中動態 PE/PB/年化殖利率 + 歷史位階條）、美股個股（Forward PE/PB/扣 30% IRS 稅後殖利率）、虧損轉機股（市銷率 PS）、ETF 標的（即時折溢價率 >0.5% 警戒、總費用率、年化配息率）。
+    5. **Layer 6 雙子容器 (`EnergySentimentTwinCard`) 封裝與 250px 鎖定**：垂直緊湊封裝 Card 10 + 13，中段計算產出 Alpha 共振仲裁標籤（如逆勢抗跌、拉指數出個股）；Layer 6 四欄高度鎖定 250px 像素級齊平，消除拉長破版。
+    6. **外聯提示詞與金融字典閉環**：提示詞中樞注入 `<valuation_status>` 與美股宏觀情緒，字典齊備 6 項新術語解釋，全量 228 個單元測試 100% 綠燈。
+
+
 
 
 

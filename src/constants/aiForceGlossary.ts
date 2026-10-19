@@ -7,7 +7,7 @@ export interface GlossaryEntry {
   id: string;
   term: string; // 繁體中文術語名稱
   enTerm?: string; // 英文術語
-  category: 'quote' | 'kline' | 'core' | 'radar' | 'volume' | 'risk' | 'forecast' | 'cost' | 'institution' | 'daytrade' | 'energy' | 'health' | 'signal' | 'sentiment' | 'confidence' | 'summary' | 'distribution' | 'strength' | 'verdict' | 'view';
+  category: 'quote' | 'kline' | 'core' | 'radar' | 'volume' | 'risk' | 'forecast' | 'cost' | 'institution' | 'daytrade' | 'energy' | 'health' | 'signal' | 'sentiment' | 'confidence' | 'summary' | 'distribution' | 'strength' | 'verdict' | 'view' | 'valuation';
   metaphor: string; // 💡 白話比喻（日常概念）
   meaning: string; // 📊 指標含義（統計物理本質）
   buySignal: string; // 🟢 偏多買訊（何時買或抱）
@@ -783,6 +783,68 @@ export const AI_FORCE_GLOSSARY: Record<string, GlossaryEntry> = {
     meaning: '依日期逐筆列出開高低收、成交量、融資融券與三大法人淨買賣超之完整數值。',
     buySignal: '可核對法人連續買超張數與股價漲幅是否相符。',
     sellSignal: '發現數據中法人連日大賣但股價假拉抬時，應防範誘多陷阱。',
+  },
+
+  // ==================== Card 21 估值矩陣與量價新名詞 (Spec 0195) ====================
+  valuationMetrics: {
+    id: 'valuationMetrics',
+    term: '估值與殖利率量化矩陣',
+    enTerm: 'Valuation & Yield Metrics Matrix (Card 21)',
+    category: 'valuation',
+    metaphor: '標籤上的真實身價尺，衡量買進是否買貴或撿到便宜。',
+    meaning: '動態整合同步即時股價之 PE (本益比)、PB (股價淨值比)、年化現金殖利率與三段位階（低估/合理/偏高）。',
+    buySignal: '歷史位階落於「低估便宜區間」且基本面營收向上，具備極高安全邊際。',
+    sellSignal: '歷史位階衝入「高估偏貴區間」或股價透支未來三年成長，應逢高分批獲利出場。',
+  },
+  psRatio: {
+    id: 'psRatio',
+    term: '市銷率 / 股價營收比 (PS)',
+    enTerm: 'Price-to-Sales Ratio (P/S)',
+    category: 'valuation',
+    metaphor: '衡量高成長或虧損公司「每一塊錢營業額」被市場定價多少錢。',
+    meaning: '總市值除以年營收，適用於未獲利但營收爆發的高成長股或轉機股。',
+    buySignal: 'PS 處於歷史低檔且營收年增率 (YoY) 顯著加速向上，代表估值未充分反映成長。',
+    sellSignal: 'PS 飆至極端高檔（如 >20~30 倍）但營收動能開始放緩，殺估值風險極高。',
+  },
+  etfDiscountPremium: {
+    id: 'etfDiscountPremium',
+    term: 'ETF 即時折溢價率',
+    enTerm: 'ETF Premium / Discount Rate',
+    category: 'valuation',
+    metaphor: '市面上二手市場買價與商品內部真實成分價值的差額。',
+    meaning: '市價減去基金淨值 (NAV) 之百分比。正值代表溢價（買貴），負值代表折價（便宜）。',
+    buySignal: '折價幅度較大（如折價 > 0.5%）且標的趨勢向上，有收斂折價之超額獲利機會。',
+    sellSignal: '溢價超過 0.5%~1% 時發出追價警戒，代表買盤過度亢奮，極易遭遇套利賣壓拉回。',
+  },
+  shortFloat: {
+    id: 'shortFloat',
+    term: '空單佔流通比 (Short Float %)',
+    enTerm: 'Short % of Float',
+    category: 'distribution',
+    metaphor: '市場有多少人在借這家公司的股票來押注它下跌。',
+    meaning: '已賣空之股數佔市場自由流通股本 (Float) 的百分比。',
+    buySignal: 'Short Float > 10%~15% 且股價逆勢放量突破，極易誘發空頭認賠回補的「軋空風暴 (Short Squeeze)」。',
+    sellSignal: '放空比率持續攀升且股價破位下跌，代表大空頭機構持續加碼做空。',
+  },
+  rvol: {
+    id: 'rvol',
+    term: '相對成交量 (RVOL)',
+    enTerm: 'Relative Volume (RVOL)',
+    category: 'volume',
+    metaphor: '今天這檔股票的熱鬧程度是平時同一個時間點的幾倍。',
+    meaning: '當前即時成交量相對於過去同時間平均成交量之比值。',
+    buySignal: 'RVOL > 2.0 倍且價格向上突破關鍵壓力，為主力機構真金白銀大舉介入之確定性訊號。',
+    sellSignal: 'RVOL 極高但價格在高檔大幅震盪留長上影線，代表主力在爆量倒貨給散戶。',
+  },
+  energySentimentTwin: {
+    id: 'energySentimentTwin',
+    term: 'AI 多空 × 市場情緒雙子容器',
+    enTerm: 'Energy & Sentiment Twin Card (Card 10 · 13)',
+    category: 'energy',
+    metaphor: '個股引擎馬力與外在大海風浪的「共振導航儀」。',
+    meaning: '整合個股多空力量 (Card 10) 與大盤情緒指數 (Card 13)，中段計算 Alpha 共振仲裁（如逆勢抗跌、拉指數出個股）。',
+    buySignal: '個股多方優勢而大盤極度恐慌時觸發「逆勢抗跌 (Alpha 領頭羊)」，為最強抗跌買訊。',
+    sellSignal: '大盤極度貪婪但個股量能偏空時觸發「拉指數出個股 (主力背離)」，應戒備誘多倒貨。',
   },
 };
 

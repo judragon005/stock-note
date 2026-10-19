@@ -100,7 +100,10 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
   const chartHeight = 170;
   const padding = { top: 20, bottom: 25 };
 
-  const isDataEmpty = Boolean(data?.isEmpty || !data?.history || data.history.length === 0);
+  const isUsMode = Boolean(data?.isUsMarket || data?.us13fData);
+  const isDataEmpty = isUsMode
+    ? Boolean(data?.isEmpty || !data?.us13fData)
+    : Boolean(data?.isEmpty || !data?.history || data.history.length === 0);
 
   const scales = useMemo(
     () => calculateTdccScales(history, chartHeight, padding),
@@ -122,10 +125,10 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
 
   const badgeColor = useMemo(() => {
     const badge = data?.concentrationBadge || '';
-    if (badge.includes('高度集中') || badge.includes('增持')) {
+    if (badge.includes('高度集中') || badge.includes('增持') || badge.includes('控盤')) {
       return { bg: 'rgba(16, 185, 129, 0.2)', text: '#34d399', border: 'rgba(16, 185, 129, 0.4)' };
     }
-    if (badge.includes('警戒') || badge.includes('調節')) {
+    if (badge.includes('警戒') || badge.includes('調節') || badge.includes('軋空')) {
       return { bg: 'rgba(239, 68, 68, 0.2)', text: '#f87171', border: 'rgba(239, 68, 68, 0.4)' };
     }
     return { bg: 'rgba(148, 163, 184, 0.15)', text: '#94a3b8', border: 'rgba(148, 163, 184, 0.3)' };
@@ -168,7 +171,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
               letterSpacing: '0.5px',
             }}
           >
-            CARD 19
+            {data?.symbol ? `CARD 19 · ${data.symbol}` : 'CARD 19'}
           </span>
           <h3
             style={{
@@ -182,7 +185,13 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
             }}
           >
             <Users size={16} color="#a78bfa" />
-            <TermTooltip termId="tdccDistribution">TDCC 集保千張大戶趨勢</TermTooltip>
+            {isUsMode ? (
+              <TermTooltip termId="usInstitutionalHoldings">美股機構持股與放空籌碼</TermTooltip>
+            ) : (
+              <TermTooltip termId="tdccDistribution">
+                {data?.symbol ? 'TDCC 集保趨勢' : 'TDCC 集保千張大戶趨勢'}
+              </TermTooltip>
+            )}
           </h3>
         </div>
 
@@ -201,9 +210,9 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
             fontWeight: 700,
           }}
         >
-          {data?.concentrationBadge?.includes('高度集中') ? (
+          {data?.concentrationBadge?.includes('高度集中') || data?.concentrationBadge?.includes('控盤') ? (
             <ShieldCheck size={13} />
-          ) : data?.concentrationBadge?.includes('警戒') ? (
+          ) : data?.concentrationBadge?.includes('警戒') || data?.concentrationBadge?.includes('軋空') ? (
             <AlertTriangle size={13} />
           ) : (
             <TrendingUp size={13} />
@@ -236,15 +245,185 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
             {data?.asOfDateText || '集保每週五收盤後更新'}
           </div>
         </div>
-      ) : (
+      ) : isUsMode && data?.us13fData ? (
         <>
-          {/* 指標概覽卡片 */}
+          {/* 美股 13F 與放空籌碼三宮格指標 */}
           <div
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(3, 1fr)',
               gap: '8px',
               marginBottom: '12px',
+            }}
+          >
+            <div
+              style={{
+                background: 'rgba(15, 23, 42, 0.55)',
+                padding: '8px 10px',
+                borderRadius: '8px',
+                border: '1px solid rgba(139, 92, 246, 0.2)',
+              }}
+            >
+              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>機構持股比 (13F)</div>
+              <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#c084fc' }}>
+                {data.us13fData.institutionalRatio !== undefined
+                  ? `${data.us13fData.institutionalRatio.toFixed(2)}%`
+                  : '--'}
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(15, 23, 42, 0.55)',
+                padding: '8px 10px',
+                borderRadius: '8px',
+                border: `1px solid ${
+                  (data.us13fData.shortFloatRatio ?? 0) > 10
+                    ? 'rgba(239, 68, 68, 0.35)'
+                    : 'rgba(59, 130, 246, 0.2)'
+                }`,
+              }}
+            >
+              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                空單佔流通比 (Short Float)
+              </div>
+              <div
+                style={{
+                  fontSize: '1.05rem',
+                  fontWeight: 800,
+                  color:
+                    (data.us13fData.shortFloatRatio ?? 0) > 10 ? '#f87171' : '#38bdf8',
+                }}
+              >
+                {data.us13fData.shortFloatRatio !== undefined
+                  ? `${data.us13fData.shortFloatRatio.toFixed(2)}%`
+                  : '--'}
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(15, 23, 42, 0.55)',
+                padding: '8px 10px',
+                borderRadius: '8px',
+                border: '1px solid rgba(148, 163, 184, 0.2)',
+              }}
+            >
+              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>內部人持股比</div>
+              <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#f8fafc' }}>
+                {data.us13fData.insiderRatio !== undefined
+                  ? `${data.us13fData.insiderRatio.toFixed(2)}%`
+                  : '--'}
+              </div>
+            </div>
+          </div>
+
+          {/* 持股結構分佈水平長條圖 */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: '6px' }}>
+              持股結構分佈 (機構 / 內部人 / 公眾流通)
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                height: '24px',
+                width: '100%',
+                borderRadius: '6px',
+                overflow: 'hidden',
+                background: 'rgba(30, 41, 59, 0.6)',
+              }}
+            >
+              <div
+                style={{
+                  width: `${data.us13fData.institutionalRatio ?? 50}%`,
+                  background: 'linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.68rem',
+                  color: '#fff',
+                  fontWeight: 700,
+                }}
+                title={`機構: ${data.us13fData.institutionalRatio ?? 0}%`}
+              >
+                {(data.us13fData.institutionalRatio ?? 0) > 15 &&
+                  `${(data.us13fData.institutionalRatio ?? 0).toFixed(0)}%`}
+              </div>
+              <div
+                style={{
+                  width: `${data.us13fData.insiderRatio ?? 10}%`,
+                  background: 'linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.68rem',
+                  color: '#fff',
+                  fontWeight: 700,
+                }}
+                title={`內部人: ${data.us13fData.insiderRatio ?? 0}%`}
+              >
+                {(data.us13fData.insiderRatio ?? 0) > 10 &&
+                  `${(data.us13fData.insiderRatio ?? 0).toFixed(0)}%`}
+              </div>
+              <div
+                style={{
+                  flex: 1,
+                  background: 'linear-gradient(90deg, #0ea5e9 0%, #38bdf8 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.68rem',
+                  color: '#fff',
+                  fontWeight: 700,
+                }}
+                title={`公眾流通: ${data.us13fData.publicFloatRatio ?? 40}%`}
+              >
+                {(data.us13fData.publicFloatRatio ?? 40) > 15 &&
+                  `${(data.us13fData.publicFloatRatio ?? 40).toFixed(0)}%`}
+              </div>
+            </div>
+
+            {/* 圖例說明 */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginTop: '10px',
+                fontSize: '0.72rem',
+                color: '#64748b',
+              }}
+            >
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#a78bfa' }} />
+                  機構 (13F)
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#60a5fa' }} />
+                  內部人
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#38bdf8' }} />
+                  公眾流通
+                </span>
+              </div>
+              <span>{data.us13fData.asOfQuarterText || data.asOfDateText}</span>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* 指標概覽卡片 (自適應 3 欄或 4 欄) */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns:
+                data.latestUnder10Ratio !== undefined
+                  ? 'repeat(auto-fit, minmax(75px, 1fr))'
+                  : 'repeat(3, 1fr)',
+              gap: '8px',
+              marginBottom: data.retailScissorsText ? '8px' : '12px',
             }}
           >
             <div
@@ -298,7 +477,45 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                   : '--'}
               </div>
             </div>
+
+            {data.latestUnder10Ratio !== undefined && (
+              <div
+                style={{
+                  background: 'rgba(15, 23, 42, 0.55)',
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(245, 158, 11, 0.15)',
+                }}
+              >
+                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>散戶持股比 (10張以下)</div>
+                <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fbbf24' }}>
+                  {data.latestUnder10Ratio.toFixed(2)}%
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* 散戶剪刀差狀態標籤 */}
+          {data.retailScissorsText && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '4px 8px',
+                marginBottom: '10px',
+                borderRadius: '6px',
+                background: 'rgba(139, 92, 246, 0.12)',
+                border: '1px solid rgba(139, 92, 246, 0.3)',
+                fontSize: '0.72rem',
+                color: '#e2e8f0',
+                fontWeight: 600,
+              }}
+            >
+              <span style={{ color: '#94a3b8' }}>籌碼剪刀差判定</span>
+              <span style={{ color: '#c084fc' }}>{data.retailScissorsText}</span>
+            </div>
+          )}
 
           {/* 雙軸 SVG 趨勢圖 */}
           <div style={{ flex: 1, position: 'relative', minHeight: '130px' }}>

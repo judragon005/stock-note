@@ -24,11 +24,11 @@ import { ForecastConeCard } from './cards/ForecastConeCard';
 import { VwapCostStructureCard } from './cards/VwapCostStructureCard';
 import { InstitutionalFlowCard } from './cards/InstitutionalFlowCard';
 import { DayTradeRiskCard } from './cards/DayTradeRiskCard';
-import { BullBearEnergyCard } from './cards/BullBearEnergyCard';
 import { HealthSummaryCard } from './cards/HealthSummaryCard';
 import { DynamicSignalsCard } from './cards/DynamicSignalsCard';
-import { MarketSentimentCard } from './cards/MarketSentimentCard';
 import { AiConfidenceCard } from './cards/AiConfidenceCard';
+import { EnergySentimentTwinCard } from './cards/EnergySentimentTwinCard';
+import { ValuationMetricsCard } from './cards/ValuationMetricsCard';
 import { ChipsSummaryCard } from './cards/ChipsSummaryCard';
 import { ForceDistributionCard } from './cards/ForceDistributionCard';
 import { BullBearStrengthCard } from './cards/BullBearStrengthCard';
@@ -476,7 +476,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 </div>
               </div>
 
-              {/* Layer 6: 短線能量、市場情緒與風控指標 (Spec 0174: 4 卡等寬矩陣，解除擠壓) */}
+              {/* Layer 6: AI 多空 × 市場情緒雙子容器、主力動態信號、估值矩陣、AI 信心維度 (Spec 0195: 四欄等高 250px 鎖定) */}
               <div
                 data-layer="6-energy-sentiment"
                 style={{
@@ -486,23 +486,27 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   alignItems: 'stretch',
                 }}
               >
-                {/* 10 AI 多空能量棒 */}
-                <div style={{ minWidth: 0 }}>
-                  <BullBearEnergyCard data={report.bullBearEnergy} />
+                {/* 欄 1: 10 + 13 AI 多空 × 市場情緒雙子容器 */}
+                <div style={{ minWidth: 0, height: '250px' }}>
+                  <EnergySentimentTwinCard
+                    bullBearData={report.bullBearEnergy}
+                    sentimentData={report.marketSentiment}
+                    market={market}
+                  />
                 </div>
 
-                {/* 12 AI 主力動態信號判斷 */}
-                <div style={{ minWidth: 0 }}>
+                {/* 欄 2: 12 AI 主力動態信號判斷 */}
+                <div style={{ minWidth: 0, height: '250px' }}>
                   <DynamicSignalsCard data={report.dynamicSignals} />
                 </div>
 
-                {/* 13 台股市場合情緒儀表板 */}
-                <div style={{ minWidth: 0 }}>
-                  <MarketSentimentCard data={report.marketSentiment} />
+                {/* 欄 3: 21 估值與殖利率量化矩陣 */}
+                <div style={{ minWidth: 0, height: '250px' }}>
+                  <ValuationMetricsCard data={report.valuationMetrics} market={market} />
                 </div>
 
-                {/* 14 AI 信心維度 */}
-                <div style={{ minWidth: 0 }}>
+                {/* 欄 4: 14 AI 信心維度 */}
+                <div style={{ minWidth: 0, height: '250px' }}>
                   <AiConfidenceCard data={report.aiConfidence} />
                 </div>
               </div>

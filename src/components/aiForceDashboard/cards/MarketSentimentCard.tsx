@@ -40,18 +40,33 @@ export function getSentimentBadgeMeta(
 }
 
 export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }) => {
-  const index = data?.overallSentimentIndex ?? 50;
+  const isUs = Boolean(data?.isUsMarket || data?.usMacroData);
+  const usMacro = data?.usMacroData;
+
+  const index = isUs
+    ? (usMacro?.cnnScore ?? data?.overallSentimentIndex ?? 50)
+    : (data?.overallSentimentIndex ?? 50);
+
   const retail = data?.retailSentimentPercent ?? 59;
   const institutional = data?.institutionalSentimentPercent ?? 55;
   const mainForce = data?.mainForceSentimentPercent ?? 58;
 
   const needleAngle = calculateGaugeNeedleAngle(index);
+  const badgeMeta = getSentimentBadgeMeta(data?.sentimentState || 'NEUTRAL', index);
 
   const participantBars = [
     { label: '散戶情緒', percent: retail, color: '#f59e0b', termId: 'retailSentiment' },
     { label: '法人情緒', percent: institutional, color: '#38bdf8', termId: 'instSentiment' },
     { label: '主力情緒', percent: mainForce, color: '#ec4899', termId: 'mainSentiment' },
   ];
+
+  const usMacroRows = usMacro
+    ? [
+        { label: 'CNN 恐懼貪婪', value: `${usMacro.cnnScore ?? 50} 分`, color: badgeMeta.color },
+        { label: 'VIX 恐慌指數', value: `${usMacro.vixValue !== undefined ? usMacro.vixValue.toFixed(1) : '--'}`, color: (usMacro.vixValue ?? 0) > 20 ? '#ef4444' : '#38bdf8' },
+        { label: '10Y 美債殖利率', value: `${usMacro.us10yYield !== undefined ? usMacro.us10yYield.toFixed(2) + '%' : '--'}`, color: '#f59e0b' },
+      ]
+    : [];
 
   return (
     <div
@@ -92,7 +107,7 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
           </span>
           <TermTooltip termId="marketSentiment">
             <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc', cursor: 'help' }}>
-              台股市場情緒儀表板
+              {isUs ? '美股宏觀情緒 (CNN Fear & Greed / VIX)' : '台股市場合情緒儀表板'}
             </span>
           </TermTooltip>
         </div>
@@ -113,7 +128,7 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
         </button>
       </div>
 
-      {/* 主體：左側半圓彩虹儀表 + 右側參與者情緒水平條 */}
+      {/* 主體：左側半圓彩虹儀表 + 右側參與者情緒水平條或美股宏觀數據 */}
       <div
         style={{
           display: 'grid',
@@ -164,47 +179,72 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
           </div>
           <TermTooltip termId="marketSentiment">
             <span style={{ fontSize: '0.72rem', color: '#cbd5e1', marginTop: '2px', fontWeight: 600, cursor: 'help' }}>
-              市場情緒：<span style={{ color: '#fbbf24', fontWeight: 800 }}>中性</span>
+              市場情緒：<span style={{ color: badgeMeta.color, fontWeight: 800 }}>{isUs && usMacro?.cnnStateText ? usMacro.cnnStateText : badgeMeta.label}</span>
             </span>
           </TermTooltip>
         </div>
 
-        {/* 右側 3 條水平情緒條 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {participantBars.map((bar) => (
-            <div key={bar.label} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
-                <TermTooltip termId={bar.termId}>
-                  <span style={{ color: '#94a3b8', cursor: 'help' }}>{bar.label}：</span>
-                </TermTooltip>
-                <span style={{ color: '#f8fafc', fontWeight: 700, fontFamily: 'monospace' }}>
-                  {bar.percent}%
-                </span>
-              </div>
+        {/* 右側：美股宏觀數據行 或 台股 3 條水平情緒條 */}
+        {isUs && usMacro ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {usMacroRows.map((row) => (
               <div
+                key={row.label}
                 style={{
-                  width: '100%',
-                  height: '5px',
-                  backgroundColor: 'rgba(15, 23, 42, 0.8)',
-                  borderRadius: '3px',
-                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: '0.72rem',
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  background: 'rgba(15, 23, 42, 0.55)',
                   border: '1px solid rgba(255, 255, 255, 0.05)',
                 }}
               >
+                <span style={{ color: '#94a3b8' }}>{row.label}</span>
+                <span style={{ color: row.color, fontWeight: 800, fontFamily: 'monospace' }}>
+                  {row.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {participantBars.map((bar) => (
+              <div key={bar.label} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
+                  <TermTooltip termId={bar.termId}>
+                    <span style={{ color: '#94a3b8', cursor: 'help' }}>{bar.label}：</span>
+                  </TermTooltip>
+                  <span style={{ color: '#f8fafc', fontWeight: 700, fontFamily: 'monospace' }}>
+                    {bar.percent}%
+                  </span>
+                </div>
                 <div
                   style={{
-                    width: `${bar.percent}%`,
-                    height: '100%',
-                    backgroundColor: bar.color,
+                    width: '100%',
+                    height: '5px',
+                    backgroundColor: 'rgba(15, 23, 42, 0.8)',
                     borderRadius: '3px',
-                    boxShadow: `0 0 6px ${bar.color}66`,
-                    transition: 'width 0.4s ease',
+                    overflow: 'hidden',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
                   }}
-                />
+                >
+                  <div
+                    style={{
+                      width: `${bar.percent}%`,
+                      height: '100%',
+                      backgroundColor: bar.color,
+                      borderRadius: '3px',
+                      boxShadow: `0 0 6px ${bar.color}66`,
+                      transition: 'width 0.4s ease',
+                    }}
+                  />
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

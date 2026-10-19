@@ -179,14 +179,16 @@ export function createWarRoomPromptDigest(
     intradayTime: report.updatedAt,
   };
 
-  // 4. 基本面與月營收映射 (Ticket 12)
+  // 4. 基本面與月營收映射 (Ticket 12, Spec 0195 注入 Card 21 估值矩陣)
   const rev = report.monthlyRevenue;
   const latestRevItem = rev?.history && rev.history.length > 0 ? rev.history[0] : undefined;
+  const val = report.valuationMetrics;
+
   const fundamental: StrategicFactDigest['fundamental'] = !isEtf
     ? {
-        pe: undefined,
-        pb: undefined,
-        dividendYield: undefined,
+        pe: val?.pe,
+        pb: val?.pb,
+        dividendYield: val?.dividendYield,
         monthlyRevenueYearMonth: latestRevItem?.yearMonth || rev?.asOfDateText,
         monthlyRevenueYoY: rev?.latestYoyRate ?? latestRevItem?.yoyRate,
         monthlyRevenueMoM: latestRevItem?.momRate,
@@ -195,7 +197,7 @@ export function createWarRoomPromptDigest(
       }
     : undefined;
 
-  // 5. ETF 成分股穿透 (Ticket 16)
+  // 5. ETF 成分股穿透 (Ticket 16, Spec 0195 注入折溢價率與費用率)
   const etf: StrategicFactDigest['etf'] = isEtf
     ? {
         category: 'CORE_MARKET',
@@ -205,6 +207,8 @@ export function createWarRoomPromptDigest(
           costEfficiency: 25,
           practicalDecision: 25,
         },
+        totalExpenseRatioPct: val?.etfExpenseRatio,
+        discountPremiumPct: val?.etfPremiumDiscountRate,
         topHoldings: [],
       }
     : undefined;
@@ -274,11 +278,30 @@ export function createWarRoomPromptDigest(
         : undefined,
     },
     macro: {
-      macroRegimeText: isUS ? '美股市場正常交易' : '台股市場加權指數位階正常',
+      treasuryYield10Y: report.marketSentiment?.usMacroData?.tenYearTreasury,
+      cnnFearGreedScore: report.marketSentiment?.usMacroData?.cnnScore ?? (isUS ? report.marketSentiment?.overallSentimentIndex : undefined),
+      vixClose: report.marketSentiment?.usMacroData?.vix,
+      twPutCallRatio: undefined,
+      macroRegimeText: isUS
+        ? (report.marketSentiment?.usMacroData?.cnnRatingText
+            ? `美股情緒: CNN ${report.marketSentiment.usMacroData.cnnRatingText} (${report.marketSentiment.usMacroData.cnnScore ?? ''}), VIX: ${report.marketSentiment.usMacroData.vix ?? ''}`
+            : '美股市場正常交易')
+        : (report.marketSentiment?.overallSentimentIndex
+            ? `台股市場合情緒指數: ${report.marketSentiment.overallSentimentIndex} (${report.marketSentiment.sentimentState || '中性'})`
+            : '台股市場加權指數位階正常'),
     },
     fundamental,
     etf,
     desensitizedPortfolioContext,
     warRoomFeatures,
+    valuationStatus: val ? {
+      tier: val.valuationTierText || val.valuationTier || '合理估值區間',
+      pe: val.pe,
+      pb: val.pb,
+      ps: val.psRatio,
+      yield: val.dividendYield,
+      discountPremium: val.etfPremiumDiscountRate,
+      isLossMaking: val.isLossMaking,
+    } : undefined,
   };
 }

@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1744%2F1744%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1769%2F1769%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,30 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 戰情室外聯提示詞時態一致性、景氣循環判定與法人風控對齊 (`War Room Strategic Prompt Temporal & Cyclical Alignment`) *(V9.10.0 最新發布 / Spec #0194 / ADR #0194 / Issue #288)*
+### 0. AI 主力戰情室 Layer 6 雙子堆疊重構、Card 21 估值卡導入與 Card 15 寬幅 Sparkline 對稱對齊 (`AI Force Dashboard Layout Reorganization, Card 21 Valuation & Chips Sparkline Alignment`) *(V9.11.0 最新發布 / Spec #0195 / ADR #0195 / Issue #290)*
+
+- **Card 19 TDCC 集保趨勢標的確認與美股 13F / 放空籌碼卡 (`TDCC Symbol Lock & US 13F Squeeze Alert`)**：
+  - 台股標題明確綁定標的代碼（`CARD 19 · {symbol} TDCC 集保趨勢`），概覽區自動計算「散戶持股比 (10張以下)」與「大戶增持·散戶退場 (籌碼集中)」剪刀差。
+  - 美股模式自適應切換為機構持股比、空單佔流通比 (Short Float) 與內部人持股結構三宮格及 SVG 堆疊條；當 Short Float > 10% 時精準觸發「軋空警戒 (Squeeze Alert)」，徹底根除美股空白佔位符。
+- **Card 15 籌碼摘要 50%:50% 寬幅對稱與美股微觀量價 (`Chips Summary 1fr 1fr & US Microstructure`)**：
+  - 重構為 `1fr 1fr` 等寬對稱，左側數值區採用 monospace 與 `whiteSpace: 'nowrap'`，徹底杜絕窄螢幕文字溢出折行。
+  - 右側 Sparkline 走勢圖加入 0 軸水平分水嶺基準虛線與連續性動能標籤；美股模式呈現 RVOL、VWAP 偏離、MFI 機構量能與 ATR 日振幅，達成雙市場 100% 視覺對稱。
+- **Card 13 美股宏觀情緒激活 (`US Macro Sentiment Activation`)**：
+  - 100% 複用本地 Lakehouse SQLite `macro_sentiment_daily`，自適應切換為 CNN Fear & Greed 半圓指針儀表、VIX 恐慌指數與 10Y 美債殖利率，零新外部依賴。
+- **Card 21 全新估值與殖利率量化矩陣四態自適應 (`ValuationMetricsCard`)**：
+  - 填補原 Card 13 騰出的第 3 欄空間，支援四態切換：
+    1. 台股個股：盤中即時動態 PE、PB、年化現金殖利率與歷史三段位階條（低估便宜 / 合理 / 高估偏貴）。
+    2. 美股個股：Forward PE / TTM PE、PB 與為台灣投資人標註之「扣除 30% IRS 預扣稅後之實質殖利率」。
+    3. 虧損轉機股：遇負本益比自動切換為「市銷率 (PS)」並標記虧損轉機期。
+    4. ETF 標的：自動切換為「即時折溢價率 (Premium %，>0.5% 追價警戒)」、總費用率與年化配息率。
+- **Layer 6 雙子容器 (`EnergySentimentTwinCard`) 封裝與 250px 鎖定 (`Layer 6 250px Anti-Break Layout`)**：
+  - 將 Card 10 (AI 多空能量棒) 與 Card 13 (市場情緒儀表板) 垂直緊湊封裝於同一欄位雙子容器中。
+  - 兩卡中段實作「Alpha 共振仲裁標籤」（如：`逆勢抗跌 (Alpha 領頭羊)`、`拉指數出個股 (主力背離)`、`順風主升 (共振多頭)`）。
+  - Layer 6 網格四欄高度鎖定在 **250px**，徹底解決縱向拉長破版問題。
+- **全域外聯提示詞中樞連動與金融術語庫補全 (`Prompt Digest & Glossary Sync`)**：
+  - 戰情室外聯提示詞中樞成功注入 `<valuation_status>` 節點與美股 CNN / VIX 宏觀情緒；金融字典齊備 6 項新術語解釋。
+
+### 1. 戰情室外聯提示詞時態一致性、景氣循環判定與法人風控對齊 (`War Room Strategic Prompt Temporal & Cyclical Alignment`) *(V9.10.0 / Spec #0194 / ADR #0194 / Issue #288)*
 
 - **盤中成交量回退與量價一致性護欄 (`Intraday Volume-Price Consistency`)**：
   - 在主力戰情室尚未達到正式收盤結算時，若即時報價有跳動與成交，自動自 `realtimeQuote.volume` 回退並依台股規則換算為張數，徹底消滅「現價上漲但成交量為 0」之風控海關矛盾。

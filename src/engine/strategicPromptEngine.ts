@@ -290,6 +290,16 @@ function buildEquityFactSheet(digest: StrategicFactDigest): string {
       ${fundamental?.governanceRiskWarning ? `<governance_warning>${fundamental.governanceRiskWarning}</governance_warning>` : ''}
     </fundamental_and_governance>
 
+    <!-- 3.5 估值量化矩陣 (Card 21, Spec 0195) -->
+    <valuation_status>
+      <valuation_tier>${digest.valuationStatus?.tier || '合理估值區間'}</valuation_tier>
+      <pe_ratio>${digest.valuationStatus?.pe ?? fundamental?.pe ?? 'N/A'}</pe_ratio>
+      <pb_ratio>${digest.valuationStatus?.pb ?? fundamental?.pb ?? 'N/A'}</pb_ratio>
+      <ps_ratio>${digest.valuationStatus?.ps ?? 'N/A'}</ps_ratio>
+      <dividend_yield>${digest.valuationStatus?.yield ?? fundamental?.dividendYield ?? 'N/A'}%</dividend_yield>
+      ${digest.valuationStatus?.discountPremium !== undefined ? `<discount_premium_rate>${digest.valuationStatus.discountPremium}%</discount_premium_rate>` : ''}
+    </valuation_status>
+
     <!-- 4. 宏觀與流動性環境 (WACC 感測) -->
     <macro_environment>
       <us_10y_yield>${macro.treasuryYield10Y ?? 'N/A'}%</us_10y_yield>
@@ -342,7 +352,15 @@ function buildEtfFactSheet(digest: StrategicFactDigest): string {
       <sector_concentration>${etf?.topSectorConcentration ?? 'N/A'}</sector_concentration>
     </look_through_holdings>
 
-    <!-- 4. 宏觀與流動性 -->
+    <!-- 4. 估值量化與折溢價狀態 (Card 21, Spec 0195) -->
+    <valuation_status>
+      <valuation_tier>${digest.valuationStatus?.tier || '合理估值區間'}</valuation_tier>
+      <discount_premium_rate>${digest.valuationStatus?.discountPremium ?? etf?.discountPremiumPct ?? 'N/A'}%</discount_premium_rate>
+      <total_expense_ratio>${etf?.totalExpenseRatioPct ?? 'N/A'}%</total_expense_ratio>
+      <dividend_yield>${digest.valuationStatus?.yield ?? 'N/A'}%</dividend_yield>
+    </valuation_status>
+
+    <!-- 5. 宏觀與流動性 -->
     <macro_environment>
       <us_10y_yield>${macro.treasuryYield10Y ?? 'N/A'}%</us_10y_yield>
       <cnn_fear_greed_score>${macro.cnnFearGreedScore ?? 'N/A'}</cnn_fear_greed_score>

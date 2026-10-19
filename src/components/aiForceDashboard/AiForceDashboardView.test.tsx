@@ -109,4 +109,24 @@ describe('Ticket 08: 主力戰情室 7 層 Bento-Grid 專業動線架構驗收 (
       expect(html).toContain('data-layer="war-room-prompt-hub"');
     });
   });
+
+  describe('Spec 0195 Ticket 05B: Layer 6 四欄等高 250px 拓撲驗收', () => {
+    it('Layer 6 應包含雙子容器、Card 12 動態信號、Card 21 估值矩陣、Card 14 信心維度四欄', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(AiForceDashboardView, {
+          initialSymbol: '2330',
+          initialMarket: 'TW',
+          initialReport: readyReport,
+        })
+      );
+
+      expect(html).toContain('data-layer="6-energy-sentiment"');
+      expect(html).toContain('data-testid="energy-sentiment-twin-card"');
+      expect(html).toContain('data-testid="dynamic-signals-card"');
+      expect(html).toContain('data-testid="valuation-metrics-card"');
+      expect(html).toContain('data-testid="ai-confidence-card"');
+      expect(html).toContain('height:250px');
+    });
+  });
 });
+

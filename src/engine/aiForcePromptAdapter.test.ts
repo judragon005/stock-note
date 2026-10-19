@@ -246,5 +246,76 @@ describe('Spec 0181 Ticket 06: aiForcePromptAdapter - 主力戰情室特徵轉�
       expect(digest.quote.volumeShares).toBeGreaterThan(0);
       expect(digest.chips.turnoverAmountTwdHundredMillion).toBeDefined();
     });
+
+    it('Spec 0195 Ticket 06A: 戰情室外聯提示詞應注入 Card 21 估值狀態與 Card 13 美股宏觀情緒', () => {
+      const reportWithValuation: AiForceDashboardReport = {
+        ...mockReportTw,
+        symbol: '2330',
+        name: '台積電',
+        valuationMetrics: {
+          isEtf: false,
+          isUsMarket: false,
+          pe: 22.4,
+          pb: 4.8,
+          dividendYield: 2.1,
+          valuationTier: 'FAIR',
+          valuationTierText: '合理偏多估值',
+          asOfDateText: '2026-10-16',
+        },
+        marketSentiment: {
+          overallSentimentIndex: 72,
+          sentimentState: 'GREED',
+          retailSentimentPercent: 65,
+          institutionalSentimentPercent: 70,
+          mainForceSentimentPercent: 75,
+        },
+      } as any;
+
+      const digest = createWarRoomPromptDigest(reportWithValuation);
+
+      expect(digest.valuationStatus).toBeDefined();
+      expect(digest.valuationStatus?.pe).toBe(22.4);
+      expect(digest.valuationStatus?.pb).toBe(4.8);
+      expect(digest.valuationStatus?.tier).toBe('合理偏多估值');
+      expect(digest.fundamental?.pe).toBe(22.4);
+      expect(digest.fundamental?.pb).toBe(4.8);
+      expect(digest.fundamental?.dividendYield).toBe(2.1);
+      expect(digest.macro.macroRegimeText).toContain('台股市場合情緒指數: 72 (GREED)');
+    });
+
+    it('Spec 0195 Ticket 06A: 美股模式下外聯提示詞應包含 CNN Fear & Greed 與 VIX', () => {
+      const usReport: AiForceDashboardReport = {
+        symbol: 'NVDA',
+        name: 'NVIDIA Corp',
+        market: 'US',
+        marketBar: {
+          currentPrice: 138,
+          change: 2,
+          changePercent: 1.47,
+          latestTradingDate: '2026-10-16',
+        },
+        marketSentiment: {
+          overallSentimentIndex: 68,
+          sentimentState: 'GREED',
+          isUsMarket: true,
+          usMacroData: {
+            cnnScore: 68,
+            cnnRatingText: 'Greed',
+            vix: 15.2,
+            tenYearTreasury: 4.12,
+            asOfDateText: '2026-10-16',
+          },
+        },
+      } as any;
+
+      const digest = createWarRoomPromptDigest(usReport);
+
+      expect(digest.macro.cnnFearGreedScore).toBe(68);
+      expect(digest.macro.vixClose).toBe(15.2);
+      expect(digest.macro.treasuryYield10Y).toBe(4.12);
+      expect(digest.macro.macroRegimeText).toContain('CNN Greed (68)');
+      expect(digest.macro.macroRegimeText).toContain('VIX: 15.2');
+    });
   });
 });
+

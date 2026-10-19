@@ -178,6 +178,15 @@ export interface StrategicFactDigest {
     settledDate?: string;
     intradayTime?: string;
   };
+  valuationStatus?: {
+    tier?: string;
+    pe?: number;
+    pb?: number;
+    ps?: number;
+    yield?: number;
+    discountPremium?: number;
+    isLossMaking?: boolean;
+  };
 }
 
 /**
