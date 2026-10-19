@@ -61,9 +61,11 @@ describe('Industry Gate & Cyclical Guard Engine (TDD Seam)', () => {
       expect(isCyclicalIndustry('1301')).toBe(true); // 台塑
       expect(isCyclicalIndustry('1303')).toBe(true); // 南亞
 
-      // 記憶體
+      // 記憶體族群與控制晶片/模組龍頭 (Spec 0194)
       expect(isCyclicalIndustry('2408')).toBe(true); // 南亞科
       expect(isCyclicalIndustry('2344')).toBe(true); // 華邦電
+      expect(isCyclicalIndustry('3260')).toBe(true); // 威剛科技
+      expect(isCyclicalIndustry('8299')).toBe(true); // 群聯電子
     });
 
     it('應能識別美股強週期航運、原物料與半導體週期標的', () => {

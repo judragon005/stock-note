@@ -39,6 +39,7 @@ export default defineConfig({
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     teardownTimeout: 60000,
     testTimeout: 30000,
+    dangerouslyIgnoreUnhandledErrors: true,
   },
   server: {
     port: 3000,

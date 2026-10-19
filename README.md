@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1739%2F1739%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1744%2F1744%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,21 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 法人旗艦級宏觀戰情室 2.0 (`Institutional Macro War Room 2.0`) *(V9.00.0 最新發布 / Spec #0193 / ADR #0193 / Issue #283)*
+### 0. 戰情室外聯提示詞時態一致性、景氣循環判定與法人風控對齊 (`War Room Strategic Prompt Temporal & Cyclical Alignment`) *(V9.10.0 最新發布 / Spec #0194 / ADR #0194 / Issue #288)*
+
+- **盤中成交量回退與量價一致性護欄 (`Intraday Volume-Price Consistency`)**：
+  - 在主力戰情室尚未達到正式收盤結算時，若即時報價有跳動與成交，自動自 `realtimeQuote.volume` 回退並依台股規則換算為張數，徹底消滅「現價上漲但成交量為 0」之風控海關矛盾。
+- **記憶體模組龍頭景氣循環股歸屬 (`Cyclical Symbols Expansion`)**：
+  - 於 `industryGate.ts` 補入威剛（3260）與群聯（8299），保證外部 AI 風控長能準確識別記憶體週期特性，觸發黑帽紅隊對「週期高峰殺估值（Cycle Peak Valuation Trap）」之深度質詢。
+- **時態因果隔離與待同步免責宣告 (`Temporal & Pending Declarations`)**：
+  - 宣告現價為即時盤中，而三大法人與融資券為前一日盤後結算，強制外部 AI 不得將昨日籌碼因果直接套用於盤中走勢。
+  - 明確宣告指標 N/A 係因系統管線尚待同步，杜絕將工程待同步過度推論為假帳或財務危機。
+- **在庫持倉停損防線實質觸發狀態前置預算 (`Deterministic Stop-Loss Status`)**：
+  - 由引擎前端預算並輸出 `<stop_loss_conservative_status is_triggered="true|false">`，在跌破 3% 保守停損線時給出確定性防守標籤，杜絕外部 AI 模棱兩可的空話。
+- **外資借券賣出（SBL）維度擴充 (`SBL Borrowing Dimension`)**：
+  - 於台股籌碼補齊借券賣出維度與註解，提醒外資空單主要採用借券賣出，補全空方壓力維度。
+
+### 0. 法人旗艦級宏觀戰情室 2.0 (`Institutional Macro War Room 2.0`) *(V9.00.0 / Spec #0193 / ADR #0193 / Issue #283)*
 
 - **0~100 宏觀水溫計與作戰姿態模型 (`Macro Thermometer`)**：
   - 純數學算法綜合利差倒掛、VIX、高收益債利差 (HY OAS) 與外資台指期空單部位，動態輸出 0~100 水溫分。

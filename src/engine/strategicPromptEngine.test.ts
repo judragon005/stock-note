@@ -5,6 +5,7 @@ import {
   generateMasterPrompt,
   generateSingleHatPrompt,
 } from './strategicPromptEngine';
+import { createWarRoomPromptDigest } from './aiForcePromptAdapter';
 
 describe('Ticket 03: strategicPromptEngine 雙軌路由與六頂思考帽組裝引擎核心', () => {
   const stockDigest = synthesizeStockDigest({
@@ -233,6 +234,169 @@ describe('Ticket 03: strategicPromptEngine 雙軌路由與六頂思考帽組裝�
 
       expect(result.promptText).toContain('景氣循環週期股');
       expect(result.promptText).toContain('Cycle Peak 殺估值陷阱');
+    });
+  });
+
+  describe('Spec 0194 戰情室外聯提示詞風控對齊測試 (Tickets 03 ~ 05)', () => {
+    it('Ticket 03: 提示詞系統接地宣告應包含時態因果隔離與待同步免責聲明', () => {
+      const result = generateMasterPrompt(stockDigest, {
+        mode: 'FULL_MASTER',
+        desensitized: true,
+      });
+
+      expect(result.promptText).toContain('【時態因果隔離】：現價為盤中即時行情，三大法人與融資券為前一交易日盤後結算數據');
+      expect(result.promptText).toContain('【待同步宣告】：若部分財務估值（PE/PB）或公司治理指標標註為 N/A');
+    });
+
+    it('Ticket 04: 在庫持倉若現價跌破保守停損線應標記 is_triggered="true"，否則為 false', () => {
+      // 情境 A：跌破停損線（如成本 377.44，停損線 366.12，現價 360）
+      const breachedDigest = {
+        ...stockDigest,
+        quote: {
+          ...stockDigest.quote,
+          currentPrice: 360,
+        },
+        desensitizedPortfolioContext: {
+          status: 'IN_POSITION' as const,
+          avgCost: 377.44,
+          portfolioWeightPct: 20,
+          unrealizedGainLossSign: 'LOSS' as const,
+          unrealizedPnLPercent: -4.62,
+        },
+      };
+
+      const breachedResult = generateMasterPrompt(breachedDigest, {
+        mode: 'FULL_MASTER',
+        desensitized: true,
+      });
+
+      expect(breachedResult.promptText).toContain(
+        '<stop_loss_conservative_status is_triggered="true">已實質跌破保守停損線 (觸發紀律防守條件)</stop_loss_conservative_status>'
+      );
+
+      // 情境 B：位於防線之上安全（如現價 1045，成本 1000）
+      const safeDigest = {
+        ...stockDigest,
+        quote: {
+          ...stockDigest.quote,
+          currentPrice: 1045,
+        },
+        desensitizedPortfolioContext: {
+          status: 'IN_POSITION' as const,
+          avgCost: 1000,
+          portfolioWeightPct: 15,
+          unrealizedGainLossSign: 'PROFIT' as const,
+          unrealizedPnLPercent: 4.5,
+        },
+      };
+
+      const safeResult = generateMasterPrompt(safeDigest, {
+        mode: 'FULL_MASTER',
+        desensitized: true,
+      });
+
+      expect(safeResult.promptText).toContain(
+        '<stop_loss_conservative_status is_triggered="false">位於防線之上安全</stop_loss_conservative_status>'
+      );
+    });
+
+    it('Ticket 05: 台股籌碼應輸出外資借券賣出 (sbl_balance) 維度，美股標的維持隔離', () => {
+      const twResult = generateMasterPrompt(stockDigest, {
+        mode: 'FULL_MASTER',
+        desensitized: true,
+      });
+
+      expect(twResult.promptText).toContain('<sbl_balance unit="張">N/A (外資借券賣出待結算)</sbl_balance>');
+      expect(twResult.promptText).toContain('外資主力空方部位以借券賣出為主');
+
+      const usDigest = synthesizeStockDigest({
+        symbol: 'NVDA',
+        name: 'NVIDIA Corp',
+        market: 'US',
+        candles: [{ date: '2026-10-14', open: 130, high: 136, low: 129, close: 135.5, volume: 50000000 }],
+        quote: { price: 135.5 },
+      });
+
+      const usResult = generateMasterPrompt(usDigest, {
+        mode: 'FULL_MASTER',
+        desensitized: true,
+      });
+
+      expect(usResult.promptText).not.toContain('<sbl_balance');
+    });
+
+    it('Ticket 06: 威剛 (3260) 實戰場景端到端驗證（景氣循環、量價一致性、時態宣告、停損實質觸發、借券賣出）', () => {
+      const adataReport: any = {
+        symbol: '3260',
+        name: '威剛',
+        market: 'TW',
+        updatedAt: '2026-10-19 11:30:00',
+        activeTaskTab: 'TASK_1_COMPREHENSIVE',
+        marketBar: {
+          currentPrice: 360,
+          change: 10,
+          changePercent: 2.86,
+          volumeShares: 0, // 盤中未結算
+          latestTradingDate: '2026-10-19',
+          dataPointsCount: 120,
+          dataSourceText: 'TWSE Official',
+          dataRangeText: '120 Trading Days',
+          statusBadges: {
+            aiScanActive: true,
+            mainForceTracking: true,
+            marketStatus: 'NORMAL',
+            volatilityAlert: false,
+          },
+        },
+        realtimeQuote: {
+          price: 360,
+          change: 10,
+          changePercent: 2.86,
+          volume: 25410000, // 25,410 張
+        },
+        chipsSummary: {
+          foreignNetShares: -1200,
+          trustNetShares: 400,
+          dealerNetShares: -150,
+        },
+      };
+
+      const adataHoldings: any[] = [
+        {
+          symbol: '3260',
+          name: '威剛',
+          shares: 2000,
+          avgCost: 377.44,
+          currentPrice: 360,
+          market: 'TW',
+        },
+      ];
+
+      const digest = createWarRoomPromptDigest(adataReport, adataHoldings);
+      const result = generateStrategicPrompt(digest, {
+        mode: 'FULL_MASTER',
+        desensitized: true,
+      });
+
+      // 1. 景氣循環股驗證
+      expect(result.promptText).toContain('<is_cyclical_stock is_cyclical="true">');
+      expect(result.promptText).toContain('景氣循環週期股');
+
+      // 2. 盤中量價一致性驗證 (25,410 張，非 0)
+      expect(result.promptText).toContain('>25410</volume_shares>');
+
+      // 3. 時態隔離與 N/A 待同步宣告
+      expect(result.promptText).toContain('【時態因果隔離】：現價為盤中即時行情');
+      expect(result.promptText).toContain('【待同步宣告】：若部分財務估值（PE/PB）');
+
+      // 4. 停損防線實質觸發狀態預算 (現價 360 低於 366.12 保守停損線)
+      expect(result.promptText).toContain(
+        '<stop_loss_conservative_status is_triggered="true">已實質跌破保守停損線 (觸發紀律防守條件)</stop_loss_conservative_status>'
+      );
+
+      // 5. 外資借券賣出維度擴充
+      expect(result.promptText).toContain('N/A (外資借券賣出待結算)</sbl_balance>');
+      expect(result.promptText).toContain('外資主力空方部位以借券賣出為主');
     });
   });
 });
