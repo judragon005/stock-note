@@ -12,9 +12,9 @@ export interface ChipsSummaryCardProps {
  */
 export function normalizeSparklinePoints(
   points: number[],
-  width = 90,
-  height = 30
-): { pathD: string; areaD: string; isUp: boolean } {
+  width = 160,
+  height = 50
+): { pathD: string; areaD: string; isUp: boolean; zeroY?: number } {
   if (!points || points.length === 0) {
     return { pathD: '', areaD: '', isUp: true };
   }
@@ -23,6 +23,7 @@ export function normalizeSparklinePoints(
       pathD: `M 0 ${height / 2} L ${width} ${height / 2}`,
       areaD: `M 0 ${height / 2} L ${width} ${height / 2} L ${width} ${height} L 0 ${height} Z`,
       isUp: true,
+      zeroY: height / 2,
     };
   }
 
@@ -41,7 +42,12 @@ export function normalizeSparklinePoints(
   const areaD = `${pathD} L ${width},${height} L 0,${height} Z`;
   const isUp = points[points.length - 1] >= points[0];
 
-  return { pathD, areaD, isUp };
+  let zeroY: number | undefined = undefined;
+  if (min <= 0 && max >= 0) {
+    zeroY = Math.round((height - ((0 - min) / range) * (height - 6) - 3) * 10) / 10;
+  }
+
+  return { pathD, areaD, isUp, zeroY };
 }
 
 export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
@@ -53,9 +59,9 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
   const note = data?.verdictNote ?? '尚無籌碼數據';
   const sparklineHistory = data?.sparklineHistory ?? [];
 
-  const width = 80;
-  const height = 45;
-  const { pathD, areaD, isUp } = normalizeSparklinePoints(sparklineHistory, width, height);
+  const width = 160;
+  const height = 50;
+  const { pathD, areaD, isUp, zeroY } = normalizeSparklinePoints(sparklineHistory, width, height);
   const sparkColor = isUp ? '#38bdf8' : '#ef4444';
 
   const formatShares = (val: number) => {
@@ -77,6 +83,18 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
   ];
 
   if (data?.isUsMarket) {
+    const micro = data.usMicroMetrics;
+    const hasMicroMetrics = Boolean(micro);
+
+    const usItems = micro
+      ? [
+          { label: 'RVOL 相對均量', value: micro.rvol !== undefined ? `${micro.rvol.toFixed(2)}x` : '--', color: (micro.rvol ?? 0) >= 1.2 ? '#ef4444' : '#94a3b8' },
+          { label: 'VWAP 偏離', value: micro.vwapBiasPct !== undefined ? `${micro.vwapBiasPct >= 0 ? '+' : ''}${micro.vwapBiasPct.toFixed(2)}%` : '--', color: (micro.vwapBiasPct ?? 0) >= 0 ? '#ef4444' : '#10b981' },
+          { label: 'MFI 機構量能', value: micro.mfiScore !== undefined ? `${micro.mfiScore.toFixed(0)}分` : '--', color: (micro.mfiScore ?? 0) >= 60 ? '#c084fc' : '#94a3b8' },
+          { label: 'ATR 日振幅', value: micro.atrValue !== undefined ? `$${micro.atrValue.toFixed(2)}` : '--', color: '#38bdf8' },
+        ]
+      : [];
+
     return (
       <div
         data-testid="chips-summary-card"
@@ -127,26 +145,117 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
               background: 'rgba(56, 189, 248, 0.15)',
             }}
           >
-            {data?.conclusionBadge || '美股量價評分'}
+            {micro?.conclusionLabel || data?.conclusionBadge || '美股量價評分'}
           </span>
         </div>
 
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            gap: '8px',
-            color: '#94a3b8',
-            fontSize: '0.78rem',
-          }}
-        >
-          <div>{data?.usMicroNote || '美股無三大法人日報，已切換為機構量價評分'}</div>
-          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-            量能單位: 股 | 計價幣別: USD
+        {hasMicroMetrics ? (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '12px',
+              alignItems: 'center',
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
+            {/* 左側美股微觀量價清單 (50%) */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+              {usItems.map((item) => (
+                <div
+                  key={item.label}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: '0.74rem',
+                    minWidth: 0,
+                  }}
+                >
+                  <span style={{ color: '#94a3b8', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                    {item.label}
+                  </span>
+                  <span
+                    style={{
+                      color: item.color,
+                      fontWeight: 800,
+                      fontFamily: 'monospace',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {item.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* 右側 Sparkline 寬幅走勢圖 (50%) */}
+            <div style={{ display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0, gap: '2px' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+                <span
+                  style={{
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    color: isUp ? '#38bdf8' : '#f87171',
+                    background: isUp ? 'rgba(56, 189, 248, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                    padding: '1px 6px',
+                    borderRadius: '4px',
+                  }}
+                >
+                  {micro?.conclusionLabel || conclusionBadge}
+                </span>
+              </div>
+
+              <div style={{ width: '100%', height: `${height}px`, position: 'relative' }}>
+                <svg
+                  width="100%"
+                  height={height}
+                  viewBox={`0 0 ${width} ${height}`}
+                  preserveAspectRatio="none"
+                  style={{ overflow: 'visible' }}
+                >
+                  <defs>
+                    <linearGradient id="usChipsSparkGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor={sparkColor} stopOpacity="0.4" />
+                      <stop offset="100%" stopColor={sparkColor} stopOpacity="0.0" />
+                    </linearGradient>
+                  </defs>
+                  {zeroY !== undefined && (
+                    <line
+                      data-testid="chips-zero-axis"
+                      x1="0"
+                      y1={zeroY}
+                      x2={width}
+                      y2={zeroY}
+                      stroke="rgba(148, 163, 184, 0.35)"
+                      strokeDasharray="3 3"
+                    />
+                  )}
+                  {areaD && <path d={areaD} fill="url(#usChipsSparkGrad)" />}
+                  {pathD && <path d={pathD} fill="none" stroke={sparkColor} strokeWidth="1.8" />}
+                </svg>
+              </div>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              gap: '8px',
+              color: '#94a3b8',
+              fontSize: '0.78rem',
+            }}
+          >
+            <div>{data?.usMicroNote || '美股無三大法人日報，已切換為機構量價評分'}</div>
+            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+              量能單位: 股 | 計價幣別: USD
+            </div>
+          </div>
+        )}
 
         <div
           style={{
@@ -226,18 +335,19 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
         </button>
       </div>
 
-      {/* 主體：左側法人買賣張數明細 + 右側 Sparkline 微型走勢圖 */}
+      {/* 主體：等寬 50%:50% (左側法人買賣張數明細 + 右側寬幅 Sparkline 走勢圖) */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr auto',
-          gap: '10px',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '12px',
           alignItems: 'center',
           flex: 1,
+          minWidth: 0,
         }}
       >
-        {/* 左側數值清單 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {/* 左側數值清單 (50%) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
           {chipItems.map((item) => (
             <div
               key={item.label}
@@ -246,10 +356,11 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 fontSize: '0.74rem',
+                minWidth: 0,
               }}
             >
               <TermTooltip termId={item.termId}>
-                <span style={{ color: item.isMajor ? '#e2e8f0' : '#94a3b8', fontWeight: item.isMajor ? 700 : 500, cursor: 'help' }}>
+                <span style={{ color: item.isMajor ? '#e2e8f0' : '#94a3b8', fontWeight: item.isMajor ? 700 : 500, cursor: 'help', whiteSpace: 'nowrap' }}>
                   {item.label}
                 </span>
               </TermTooltip>
@@ -258,6 +369,7 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
                   color: getShareColor(item.value),
                   fontWeight: 800,
                   fontFamily: 'monospace',
+                  whiteSpace: 'nowrap',
                 }}
               >
                 {formatShares(item.value)}
@@ -266,34 +378,53 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
           ))}
         </div>
 
-        {/* 右側 Sparkline 走勢圖與 Y 軸刻度 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <div style={{ width: `${width}px`, height: `${height}px`, position: 'relative' }}>
-            <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+        {/* 右側 Sparkline 寬幅走勢圖與 0 軸分水嶺 (50%) */}
+        <div style={{ display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0, gap: '2px' }}>
+          {/* 頂部動態結論標籤 */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+            <span
+              style={{
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                color: isUp ? '#38bdf8' : '#f87171',
+                background: isUp ? 'rgba(56, 189, 248, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                padding: '1px 6px',
+                borderRadius: '4px',
+              }}
+            >
+              {conclusionBadge}
+            </span>
+          </div>
+
+          <div style={{ width: '100%', height: `${height}px`, position: 'relative' }}>
+            <svg
+              width="100%"
+              height={height}
+              viewBox={`0 0 ${width} ${height}`}
+              preserveAspectRatio="none"
+              style={{ overflow: 'visible' }}
+            >
               <defs>
                 <linearGradient id="chipsSparkGrad" x1="0%" y1="0%" x2="0%" y2="100%">
                   <stop offset="0%" stopColor={sparkColor} stopOpacity="0.4" />
                   <stop offset="100%" stopColor={sparkColor} stopOpacity="0.0" />
                 </linearGradient>
               </defs>
+              {/* 0 軸水平分水嶺基準線 */}
+              {zeroY !== undefined && (
+                <line
+                  data-testid="chips-zero-axis"
+                  x1="0"
+                  y1={zeroY}
+                  x2={width}
+                  y2={zeroY}
+                  stroke="rgba(148, 163, 184, 0.35)"
+                  strokeDasharray="3 3"
+                />
+              )}
               {areaD && <path d={areaD} fill="url(#chipsSparkGrad)" />}
               {pathD && <path d={pathD} fill="none" stroke={sparkColor} strokeWidth="1.8" />}
             </svg>
-          </div>
-          {/* Y 軸刻度 */}
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              height: `${height}px`,
-              fontSize: '0.58rem',
-              color: '#64748b',
-              fontFamily: 'monospace',
-            }}
-          >
-            <span>2300</span>
-            <span>1300</span>
           </div>
         </div>
       </div>

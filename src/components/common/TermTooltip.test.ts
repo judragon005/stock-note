@@ -81,6 +81,18 @@ describe('TermTooltip - 浮動小視窗防邊界溢出與定位演算法 (Ticket
       expect(placement.vertical).toBe('bottom');
     });
   });
+
+  describe('Spec 0195 Ticket 06B: Card 21 與美股籌碼量價金融術語條目驗證', () => {
+    it('應能正確檢索 valuationMetrics, psRatio, etfDiscountPremium, shortFloat, rvol, energySentimentTwin', async () => {
+      const { getGlossaryEntry } = await import('../../constants/aiForceGlossary');
+      expect(getGlossaryEntry('valuationMetrics')?.term).toContain('估值與殖利率量化矩陣');
+      expect(getGlossaryEntry('psRatio')?.term).toContain('市銷率');
+      expect(getGlossaryEntry('etfDiscountPremium')?.term).toContain('折溢價率');
+      expect(getGlossaryEntry('shortFloat')?.term).toContain('空單佔流通比');
+      expect(getGlossaryEntry('rvol')?.term).toContain('相對成交量');
+      expect(getGlossaryEntry('energySentimentTwin')?.term).toContain('雙子容器');
+    });
+  });
 });
 
 

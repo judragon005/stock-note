@@ -1,7 +1,14 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-10-19 14:00 (UTC+8)  
+> **交接產生時間**：2026-10-19 16:00 (UTC+8)  
 > **當前最新里程碑**：
+> - **V9.11.0 AI 主力戰情室 Layer 6 雙子堆疊重構、Card 21 估值卡導入與 Card 15 寬幅 Sparkline 對稱對齊**（ADR 0195, Spec 0195, Issue #290）：
+>   - **Card 19 TDCC 集保趨勢標的確認與美股 13F / 放空籌碼卡**：台股綁定代碼標題與散戶持股剪刀差；美股自適應為機構持股、空單佔流通比 (Short Float) 與內部人持股，>10% 觸發軋空警戒，徹底根除空白佔位。
+>   - **Card 15 籌碼摘要 50%:50% 寬幅對稱與美股微觀量價**：重構為 `1fr 1fr` 等寬對稱，monospace 數值防折行，Sparkline 加入 0 軸水平分水嶺基準線；美股呈現 RVOL、VWAP 偏離、MFI 機構量能與 ATR 日振幅。
+>   - **Card 13 美股宏觀情緒激活**：直讀本地 SQLite `macro_sentiment_daily`，展示 CNN Fear & Greed (半圓指針映射)、VIX 恐慌指數與 10Y 美債殖利率。
+>   - **Card 21 全新估值與殖利率量化矩陣四態自適應**：台股個股（盤中動態 PE/PB/年化殖利率 + 歷史位階條）、美股個股（Forward PE/PB/扣 30% IRS 稅後殖利率）、虧損轉機股（市銷率 PS）、ETF 標的（折溢價率 >0.5% 警戒、總費用率、年化配息率）。
+>   - **Layer 6 雙子容器 (`EnergySentimentTwinCard`) 封裝與 250px 鎖定**：垂直緊湊封裝 Card 10 + 13，中段計算產出 Alpha 共振仲裁標籤；四欄高度鎖定 250px 像素級齊平，消除拉長破版。
+>   - **全域外聯提示詞中樞連動與金融字典閉環**：提示詞中樞注入 `<valuation_status>` 節點與美股宏觀情緒，字典齊備 6 項新術語解釋。
 > - **V9.10.0 戰情室外聯提示詞時態一致性、景氣循環判定與法人風控對齊**（ADR 0194, Spec 0194, Issue #288）：
 >   - **盤中成交量回退與量價一致性護欄**：盤中未結算時若即時報價有成交量，優先回退並換算為張數，終結「現價跳動成交量為 0」之矛盾。
 >   - **記憶體模組龍頭景氣循環股歸屬**：威剛（3260）與群聯（8299）補入循環股清單，觸發黑帽紅隊對「週期高峰殺估值」之防禦質詢。
@@ -16,7 +23,7 @@
 >   - **彭博式三段時序雷達、API 配額守衛與一鍵晨會簡報**：催化劑日曆收斂至「今日登場 / 7 日焦點 / 30 日遠端」，注入每月 10 號營收開獎倒數；實作 24H 快取鎖與舊版 Schema 自動消毒（0 配額浪費、0 白屏崩潰）；晨報區塊提供整合雙軌高容錯降級（`copyTextToClipboard`）之一鍵繁中晨會簡報與 LLM 提示詞複製。
 > - **V8.104.0 Vite 代理彈性容錯、前端短路熔斷與標的市場精準路由架構**（ADR 0191, Spec 0191, Issue #279, PR #280）
 > - **V8.103.0 統一金融時序日曆與全市場營業日引擎**（ADR 0190, Spec 0190, Issue #275, PR #276, #277）
-> **品質狀態**：全量單元測試 **1,744/1,744 通過 (100% Passed / 235 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> **品質狀態**：全量單元測試 **1,769/1,769 通過 (100% Passed / 237 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -25,10 +32,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main` (已完全同步)
-- **單元測試套件**：**1,744/1,744 通過 (235 test suites / 100% 綠燈)**
+- **單元測試套件**：**1,769/1,769 通過 (237 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
-- **生產環境構建**：`npm run build` 打包順利通過，0 錯誤 (10.78s)
-- **當前釋出版本**：**V9.10.0**
+- **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
+- **當前釋出版本**：**V9.11.0**
 - **工作區與分支整潔度**：工作區乾淨受控，本地 feature/fix 分支已完全合併並清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -57,6 +64,7 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0195`](file:///d:/APP/股票紀錄/docs/specs/0195-ai-force-dashboard-layout-reorganization-card21-valuation-and-chips-sparkline-spec.md) | [`ADR 0195`](file:///d:/APP/股票紀錄/docs/adr/0195-ai-force-dashboard-layout-reorganization-card21-valuation.md) | [`.scratch/0195-ai-force-dashboard-layout-reorganization-card21/`](file:///d:/APP/股票紀錄/.scratch/0195-ai-force-dashboard-layout-reorganization-card21/) | Issue #290 | V9.11.0 | 戰情室 Layer 6 雙子堆疊重構、Card 21 估值卡導入與 Card 15 寬幅 Sparkline 對稱對齊 (12 大 Micro-Tickets) |
 | [`Spec 0194`](file:///d:/APP/股票紀錄/docs/specs/0194-war-room-prompt-temporal-and-cyclical-alignment-spec.md) | [`ADR 0194`](file:///d:/APP/股票紀錄/docs/adr/0194-war-room-prompt-temporal-and-cyclical-alignment.md) | [`.scratch/0194-war-room-prompt-temporal-and-cyclical-alignment/`](file:///d:/APP/股票紀錄/.scratch/0194-war-room-prompt-temporal-and-cyclical-alignment/) | Issue #288 | V9.10.0 | 戰情室外聯提示詞時態一致性、景氣循環判定與法人風控對齊（量價一致性、威剛/群聯循環股、時態隔離宣告、停損實質預算、借券賣出） |
 | [`Spec 0193`](file:///d:/APP/股票紀錄/docs/specs/0193-institutional-macro-war-room-2-spec.md) | [`ADR 0193`](file:///d:/APP/股票紀錄/docs/adr/0193-institutional-macro-war-room-2.md) | [`.scratch/0193-institutional-macro-war-room-2/`](file:///d:/APP/股票紀錄/.scratch/0193-institutional-macro-war-room-2/) | Issue #283, #285 / PR #284, #286 | V9.00.0 | 法人旗艦級宏觀戰情室 2.0（宏觀水溫計、台美分流、1-Day VaR、3 階壓力測試、Zero Mock 雙動能、三段時序雷達、晨會簡報雙軌複製） |
 | [`Spec 0188`](file:///d:/APP/股票紀錄/docs/specs/0188-full-market-all-history-lakehouse-and-preload-decoupling-spec.md) | [`ADR 0188`](file:///d:/APP/股票紀錄/docs/adr/0188-full-market-all-history-lakehouse-and-preload-decoupling.md) | [`.scratch/v8.101.0-lakehouse-full-history-and-preload/`](file:///d:/APP/股票紀錄/.scratch/v8.101.0-lakehouse-full-history-and-preload/) | Issue #271 | V8.101.0 | 全市場全歷史數據湖倉架構解耦、250日預載視窗與跨模組本地優先整合工程 (6 大 Tickets) |

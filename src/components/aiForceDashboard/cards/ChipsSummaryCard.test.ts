@@ -56,4 +56,72 @@ describe('ChipsSummaryCard & Sparkline normalization', () => {
     expect(usChipsData.dealerNetShares).toBe(0);
     expect(usChipsData.usMicroNote).toContain('美股無三大法人日報');
   });
+
+  it('6. Ticket 02A: normalizeSparklinePoints 應計算 0 軸基準線座標 zeroY', () => {
+    // 當有正有負時，0 軸應該介於 0 與 height 之間
+    const points = [-100, 200];
+    const { zeroY } = normalizeSparklinePoints(points, 160, 50);
+    expect(zeroY).toBeDefined();
+    expect(zeroY).toBeGreaterThan(0);
+    expect(zeroY).toBeLessThan(50);
+  });
+
+  it('7. Ticket 02A: ChipsSummaryCard 應採用 1fr 1fr 等寬 50%:50% 網格佈局', async () => {
+    const React = await import('react');
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const { ChipsSummaryCard } = await import('./ChipsSummaryCard');
+
+    const mockData: ChipsSummaryData = {
+      foreignNetShares: -166,
+      trustNetShares: 89,
+      dealerNetShares: 82,
+      threeInstitutionsTotal: 5,
+      verdictNote: '2026-09-18 短線偏多',
+      conclusionBadge: '投信連 3 買',
+      sparklineHistory: [-100, 50, 120, -30, 200],
+    };
+
+    const html = renderToStaticMarkup(React.createElement(ChipsSummaryCard, { data: mockData }));
+    expect(html).toContain('grid-template-columns:1fr 1fr');
+    expect(html).toContain('data-testid="chips-zero-axis"');
+    expect(html).toContain('投信連 3 買');
+  });
+
+  it('8. Ticket 02B: 美股模式具備 usMicroMetrics 時應對稱渲染 50%:50% 佈局，包含 RVOL, VWAP, MFI, ATR', async () => {
+    const React = await import('react');
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const { ChipsSummaryCard } = await import('./ChipsSummaryCard');
+
+    const usData: ChipsSummaryData = {
+      foreignNetShares: 0,
+      trustNetShares: 0,
+      dealerNetShares: 0,
+      threeInstitutionsTotal: 0,
+      verdictNote: '美股機構微觀動態評估',
+      conclusionBadge: '機構量價增溫',
+      sparklineHistory: [40, 52, 48, 65, 72, 80],
+      isUsMarket: true,
+      asOfDateText: '2026-09-25',
+      usMicroMetrics: {
+        rvol: 1.45,
+        vwapBiasPct: 2.3,
+        mfiScore: 68,
+        atrValue: 4.85,
+        conclusionLabel: '機構量價增溫',
+      },
+    };
+
+    const html = renderToStaticMarkup(React.createElement(ChipsSummaryCard, { data: usData }));
+
+    expect(html).toContain('grid-template-columns:1fr 1fr');
+    expect(html).toContain('RVOL 相對均量');
+    expect(html).toContain('1.45x');
+    expect(html).toContain('VWAP 偏離');
+    expect(html).toContain('+2.30%');
+    expect(html).toContain('MFI 機構量能');
+    expect(html).toContain('ATR 日振幅');
+    expect(html).toContain('機構量價增溫');
+  });
 });
+
+

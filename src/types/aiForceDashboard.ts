@@ -265,6 +265,11 @@ export interface BullBearEnergyData {
   bullBearRatio: number; // 1.13
   bullBearConclusion: string; // "偏多"
   noteText: string; // "(20日紅K量/黑K量)"
+  bullPercent?: number; // 相容別名
+  bearPercent?: number; // 相容別名
+  conclusion?: string; // 相容別名
+  bullVolume?: number; // 輔助成交量
+  bearVolume?: number; // 輔助成交量
 }
 
 /**
@@ -299,7 +304,21 @@ export interface DynamicSignalsData {
 }
 
 /**
- * 13 台股市場合情緒儀表板
+ * 美股宏觀情緒資料模型 (Spec 0195)
+ */
+export interface UsMacroSentimentData {
+  cnnScore?: number; // CNN 恐懼貪婪分數 (0-100)
+  cnnStateText?: string; // "極度恐懼" | "恐懼" | "中性" | "貪婪" | "極度貪婪"
+  cnnRatingText?: string; // 相容英文評級 (e.g. "Greed")
+  vixValue?: number; // VIX 恐慌指數 (e.g. 18.5)
+  vix?: number; // 相容別名
+  us10yYield?: number; // 10Y 美債殖利率 (e.g. 4.12%)
+  tenYearTreasury?: number; // 相容別名
+  asOfDateText?: string;
+}
+
+/**
+ * 13 市場情緒儀表板 (支援台股與美股 CNN/VIX 宏觀情緒)
  */
 export interface MarketSentimentData {
   overallSentimentIndex: number; // 50
@@ -307,6 +326,8 @@ export interface MarketSentimentData {
   retailSentimentPercent: number; // 59%
   institutionalSentimentPercent: number; // 55%
   mainForceSentimentPercent: number; // 58%
+  isUsMarket?: boolean;
+  usMacroData?: UsMacroSentimentData;
 }
 
 /**
@@ -318,6 +339,17 @@ export interface AiConfidenceData {
   dataCompleteness: number; // 100%
   signalStability: number; // 80%
   strategyApplicability: number; // 44%
+}
+
+/**
+ * 美股微觀量價模型 (Spec 0195)
+ */
+export interface UsMicroMetricsData {
+  rvol?: number; // 相對均量比 (e.g. 1.45x)
+  vwapBiasPct?: number; // VWAP 偏離幅 (%)
+  mfiScore?: number; // MFI 機構量能評分 (0-100)
+  atrValue?: number; // ATR 日振幅
+  conclusionLabel?: string; // "機構量價增溫"
 }
 
 /**
@@ -333,6 +365,7 @@ export interface ChipsSummaryData {
   sparklineHistory: number[]; // 近 10 日累計籌碼走勢
   isUsMarket?: boolean;
   usMicroNote?: string; // "美股無三大法人日報，已切換為機構量價評分"
+  usMicroMetrics?: UsMicroMetricsData; // 美股微觀量價 (Spec 0195)
   asOfDateText?: string;
   // 相容歷史與擴充欄位別名
   foreignInvestorsNetBuyShares?: number;
@@ -384,13 +417,31 @@ export interface TdccDistributionItem {
   under10Ratio?: number; // 持股 < 10 張散戶比率 (%)
 }
 
+/**
+ * 美股 13F 機構與放空籌碼資料模型 (Spec 0195)
+ */
+export interface Us13fChipData {
+  institutionalRatio?: number; // 機構持股比 (%)
+  shortFloatRatio?: number; // 空單佔流通比 (Short Float %，>10% 警示)
+  insiderRatio?: number; // 內部人持股比 (%)
+  publicFloatRatio?: number; // 公眾流通比 (%)
+  isSqueezeRisk?: boolean; // 軋空警戒 (shortFloatRatio > 10)
+  asOfQuarterText?: string; // "SEC 13F / FINRA 放空結算"
+}
+
 export interface TdccDistributionData {
+  symbol?: string; // 標的代碼確認 (Spec 0195)
+  isUsMarket?: boolean; // 是否為美股市場 (Spec 0195)
+  us13fData?: Us13fChipData; // 美股 13F 機構與放空籌碼 (Spec 0195)
   history: TdccDistributionItem[];
   latestOver1000Ratio?: number;
+  latestUnder10Ratio?: number; // 最新散戶 (<10張) 持股比率 (%)
   latestShareholders?: number;
   change4WeeksRatio?: number; // 近 4 週千張大戶持股比例變化率 (%，如 +1.25%)
+  change4WeeksUnder10Ratio?: number; // 近 4 週散戶持股比例變化率 (%)
   change4WeeksShareholders?: number; // 近 4 週股東人數變化 (如 -3210 人)
-  concentrationBadge: string; // '籌碼高度集中 (波段起漲)' | '散戶接刀警戒' | '大戶持續增持' | '大戶明顯調節' | '籌碼中性整理' | '美股不適用'
+  retailScissorsText?: string; // 散戶剪刀差狀態，如 "大戶增持·散戶退場 (籌碼集中)"
+  concentrationBadge: string; // '籌碼高度集中 (波段起漲)' | '散戶接刀警戒' | '大戶持續增持' | '大戶明顯調節' | '籌碼中性整理' | '美股不適用' | '機構高度控盤' | '軋空警戒 (Squeeze Alert)'
   asOfDateText: string; // e.g. "集保基準日: 2026-10-02"
   isEmpty: boolean;
   emptyMessage?: string; // "美股無集保機制" | "集保數據累積中 (週五盤後結算)"
@@ -475,4 +526,30 @@ export interface AiForceDashboardReport {
   // Spec 0169 新增 Card 19 & Card 20
   tdccDistribution: TdccDistributionData;
   monthlyRevenue: MonthlyRevenueData;
+
+  // Spec 0195 新增 Card 21 估值與殖利率量化矩陣卡
+  valuationMetrics?: ValuationMetricsData;
+}
+
+/**
+ * 21 估值與殖利率量化卡資料模型 (Card 21, Spec 0195)
+ */
+export interface ValuationMetricsData {
+  isEtf: boolean;
+  isUsMarket?: boolean;
+  // 一般個股欄位
+  pe?: number;
+  forwardPe?: number;
+  pb?: number;
+  psRatio?: number;
+  dividendYield?: number;
+  netDividendYieldUs?: number; // 美股扣除 30% 稅後實質殖利率
+  valuationTier?: 'UNDERVALUED' | 'FAIR' | 'OVERVALUED'; // 便宜 / 合理 / 偏高
+  valuationTierText?: string;
+  isLossMaking?: boolean; // 是否處於虧損轉機期
+  // ETF 自適應欄位
+  etfPremiumDiscountRate?: number; // 折溢價率 (%)
+  etfExpenseRatio?: number; // 總費用率 (%)
+  asOfDateText?: string;
+  isEmpty?: boolean;
 }

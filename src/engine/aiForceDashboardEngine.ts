@@ -9,6 +9,7 @@ import {
   BullBearStrengthData,
   KlineCandleItem,
   TdccDistributionData,
+  Us13fChipData,
   MonthlyRevenueData,
 } from '../types/aiForceDashboard';
 import { calculateVolumeProfile } from './volumeProfileEngine';
@@ -339,10 +340,34 @@ export function buildTdccDistribution(
     over1000Ratio?: number;
     under10Ratio?: number;
   }>,
-  market: MarketType = 'TW'
+  market: MarketType = 'TW',
+  symbol?: string,
+  us13fData?: Us13fChipData
 ): TdccDistributionData {
   if (market === 'US') {
+    if (us13fData) {
+      const isSqueeze = us13fData.isSqueezeRisk ?? ((us13fData.shortFloatRatio ?? 0) > 10);
+      const isConcentrated = (us13fData.institutionalRatio ?? 0) > 60;
+      return {
+        symbol,
+        isUsMarket: true,
+        us13fData: {
+          ...us13fData,
+          isSqueezeRisk: isSqueeze,
+        },
+        history: [],
+        concentrationBadge: isSqueeze
+          ? '軋空警戒 (Squeeze Alert)'
+          : isConcentrated
+          ? '機構高度控盤'
+          : '籌碼正常分散',
+        asOfDateText: us13fData.asOfQuarterText || 'SEC 13F 最新申報',
+        isEmpty: false,
+      };
+    }
     return {
+      symbol,
+      isUsMarket: true,
       history: [],
       concentrationBadge: '美股不適用',
       asOfDateText: '美股市場',
@@ -353,6 +378,7 @@ export function buildTdccDistribution(
 
   if (!records || records.length === 0) {
     return {
+      symbol,
       history: [],
       concentrationBadge: '集保待補',
       asOfDateText: '集保無資料',
@@ -377,6 +403,24 @@ export function buildTdccDistribution(
   const change4WeeksRatio = Number((latest.over1000Ratio - baseline.over1000Ratio).toFixed(2));
   const change4WeeksShareholders = latest.totalShareholders - baseline.totalShareholders;
 
+  const latestUnder10Ratio = latest.under10Ratio !== undefined ? Number(latest.under10Ratio.toFixed(2)) : undefined;
+  const baselineUnder10Ratio = baseline.under10Ratio;
+  const change4WeeksUnder10Ratio =
+    latestUnder10Ratio !== undefined && baselineUnder10Ratio !== undefined
+      ? Number((latestUnder10Ratio - baselineUnder10Ratio).toFixed(2))
+      : undefined;
+
+  let retailScissorsText: string | undefined = undefined;
+  if (change4WeeksRatio > 0 && change4WeeksUnder10Ratio !== undefined && change4WeeksUnder10Ratio < 0) {
+    retailScissorsText = '大戶增持·散戶退場 (籌碼集中)';
+  } else if (change4WeeksRatio < 0 && change4WeeksUnder10Ratio !== undefined && change4WeeksUnder10Ratio > 0) {
+    retailScissorsText = '大戶調節·散戶接刀 (籌碼渙散)';
+  } else if (change4WeeksRatio > 0) {
+    retailScissorsText = '大戶積極增持';
+  } else if (change4WeeksRatio < 0) {
+    retailScissorsText = '大戶持續減碼';
+  }
+
   let concentrationBadge = '籌碼中性整理';
   if (change4WeeksRatio > 0 && change4WeeksShareholders < 0) {
     concentrationBadge = '籌碼高度集中 (波段起漲)';
@@ -389,11 +433,15 @@ export function buildTdccDistribution(
   }
 
   return {
+    symbol,
     history,
     latestOver1000Ratio: latest.over1000Ratio,
+    latestUnder10Ratio,
     latestShareholders: latest.totalShareholders,
     change4WeeksRatio,
+    change4WeeksUnder10Ratio,
     change4WeeksShareholders,
+    retailScissorsText,
     concentrationBadge,
     asOfDateText: `集保基準日: ${latest.date}`,
     isEmpty: false,
@@ -1147,6 +1195,7 @@ export interface GenerateReportOptions {
     isAllTimeHigh?: number;
   }>;
   institutionalRecords?: RawInstitutionalRecord[];
+  us13fData?: Us13fChipData;
 }
 
 /**
@@ -1285,7 +1334,7 @@ export function generateAiForceReportFromCandles(
     }
     if (options?.currency) fallback.marketBar.currency = options.currency;
     if (options?.volumeUnit) fallback.marketBar.volumeUnit = options.volumeUnit;
-    fallback.tdccDistribution = buildTdccDistribution(options?.tdccRecords, market);
+    fallback.tdccDistribution = buildTdccDistribution(options?.tdccRecords, market, symbol, options?.us13fData);
     fallback.monthlyRevenue = buildMonthlyRevenue(symbol, name, market, options?.revenueRecords, options?.tdccRecords);
     return fallback;
   }
@@ -1694,7 +1743,7 @@ export function generateAiForceReportFromCandles(
       fullVerdictText: `AI 結論：經 ${count} 日日 K 數列與量能動態研判，最新收盤價 ${currentPrice.toLocaleString()} 元，相對 20 日 VWAP 主力成本 (${mainForceCost.toLocaleString()} 元) 乖離 ${vwapBias >= 0 ? '+' : ''}${vwapBias.toFixed(1)}%。系統建議執行「${primaryVerb}」策略。`,
     },
 
-    tdccDistribution: buildTdccDistribution(options?.tdccRecords, market),
+    tdccDistribution: buildTdccDistribution(options?.tdccRecords, market, symbol, options?.us13fData),
     monthlyRevenue: buildMonthlyRevenue(symbol, name, market, options?.revenueRecords, options?.tdccRecords),
   };
 }
