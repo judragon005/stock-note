@@ -118,10 +118,11 @@ function buildPrecalculatedPivotsXml(digest: StrategicFactDigest): string {
       `    <unrealized_pnl_percent>${portfolio?.unrealizedPnLPercent ?? 0}%</unrealized_pnl_percent>`,
       isBigProfit ? `    <trailing_stop_line>${Number((currentPrice * 0.94).toFixed(2))}</trailing_stop_line>` : null,
       `    <stop_loss_conservative_3pct>${pivots.stopLossConservative3Pct}</stop_loss_conservative_3pct>`,
+      `    <stop_loss_conservative_status is_triggered="${currentPrice > 0 && currentPrice < pivots.stopLossConservative3Pct}">${currentPrice > 0 && currentPrice < pivots.stopLossConservative3Pct ? '已實質跌破保守停損線 (觸發紀律防守條件)' : '位於防線之上安全'}</stop_loss_conservative_status>`,
       `    <stop_loss_defensive_5pct>${pivots.stopLossDefensive5Pct}</stop_loss_defensive_5pct>`,
       `    <target_profit_r2_ratio>${pivots.targetProfitR2Ratio}</target_profit_r2_ratio>`,
       `    <friction_threshold_pct>${frictionThresholdPct}%</friction_threshold_pct>`,
-      '    <!-- 指令：此標的在庫持有中，優先評估持倉防禦、保本停損或移動停利線，嚴禁盲目凹單 -->',
+      '    <!-- 指令：在庫持倉優先評估防禦或保本停損，嚴禁盲目凹單 -->',
       '  </pre_calculated_pivots>',
     ];
     return lines.filter(Boolean).join('\n');
@@ -149,6 +150,8 @@ function buildTemporalGroundingXml(digest: StrategicFactDigest): string {
   return `  <system_grounding_declaration>
     【資料基準日】：${settledDate}
     【時態說明】：現價與盤中均線為當前即時數據；三大法人、融資融券為昨日收盤結算資料；集保為週末結算。
+    【時態因果隔離】：現價為盤中即時行情，三大法人與融資券為前一交易日盤後結算數據，嚴禁將前一日籌碼因果直接套用於盤中即時走勢。
+    【待同步宣告】：若部分財務估值（PE/PB）或公司治理指標標註為 N/A，係因當前系統管線尚待同步，嚴禁直接推定為公司財務舞弊或無價值。
     【強制指令】：嚴禁猜測未提供之歷史價格，所有分析必須百分之百依據下方客觀數據。
   </system_grounding_declaration>
   <market_time_dimension>
@@ -260,6 +263,8 @@ function buildEquityFactSheet(digest: StrategicFactDigest): string {
       <trust_net_shares_20d unit="${unit}">${chips.trustNetShares20D ?? 'N/A'}</trust_net_shares_20d>
       <margin_balance unit="${unit}">${chips.marginBalance ?? 'N/A'}</margin_balance>
       <short_balance unit="${unit}">${chips.shortBalance ?? 'N/A'}</short_balance>
+      <sbl_balance unit="${unit}">N/A (外資借券賣出待結算)</sbl_balance>
+      <!-- 提示：台股外資主力空方部位以借券賣出為主，不能單憑融券餘額斷定市場無放空賣壓 -->
       <day_trade_ratio_pct>${chips.dayTradeRatioPct ?? 'N/A'}%</day_trade_ratio_pct>
       <big_holder_ratio_400>${chips.bigHolderRatioChange400 ?? 'N/A'}%</big_holder_ratio_400>
       <big_holder_ratio_1000>${chips.bigHolderRatioChange1000 ?? 'N/A'}%</big_holder_ratio_1000>

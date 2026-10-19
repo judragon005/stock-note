@@ -2578,5 +2578,16 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     4. **風控警戒與持股質押聯動**：距高衝擊事件（`HIGH` impact）<= 3 天且維持率 < 160% 時，觸發質押保證金警示 (`MARGIN_EXPIRY_COLLISION`)。
     5. **宏觀戰情室 UI 重構**：加入快速分類標籤（央行利率、經濟數據、期權結算、持股除息）、Empty State 導引卡片與自訂事件新增彈窗，賦予完全自主權。
 
+- **War Room Strategic Prompt Temporal & Cyclical Alignment (戰情室外聯提示詞時態一致性、景氣循環判定與法人風控對齊)**:
+  - 核心模組：`src/engine/industryGate.ts`、`src/engine/aiForcePromptAdapter.ts`、`src/engine/strategicPromptEngine.ts`。
+  - 規範依據：Spec 0194 (v8.107.0)，對齊 GitHub Issue #288。
+  - 核心特性：
+    1. **盤中量價一致性護欄**：在盤中未結算時，若即時報價有成交量，強制優先提取累積成交張數，徹底終結「現價上漲但成交量為 0」之風控海關矛盾。
+    2. **記憶體模組景氣循環股歸屬**：將威剛（3260）與群聯（8299）補入 `CYCLICAL_SYMBOLS`，精準觸發黑帽紅隊之週期高峰殺估值防禦。
+    3. **時態隔離與 N/A 待同步免責宣告**：於系統宣告中強制隔離今日盤中走勢與昨日結算籌碼之因果，並宣告 N/A 僅代表管線待同步，杜絕假帳與舞弊幻覺。
+    4. **停損防線實質觸發預算**：在庫庫存現價跌破保守停損線時，明確標註 `is_triggered="true"`，引導外部 AI CRO 給予直球防守決策。
+    5. **外資借券賣出 (SBL) 維度擴充**：於台股籌碼補齊借券賣出標記，防範僅以散戶融券評估市場空方壓力的盲區。
+
+
 
 

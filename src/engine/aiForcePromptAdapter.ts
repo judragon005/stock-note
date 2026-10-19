@@ -16,8 +16,15 @@ export function createWarRoomPromptDigest(
   const market = report.market || 'TW';
   const currentPrice = report.marketBar?.currentPrice || 0;
   const changePercent = report.marketBar?.changePercent || 0;
-  const volumeShares = report.marketBar?.volumeShares || 0;
   const isUS = market === 'US';
+  let volumeShares = report.marketBar?.volumeShares || 0;
+  // 盤中即時成交量回退與量價一致性護欄 (Spec 0194 Ticket 02)
+  if (volumeShares <= 0) {
+    const realtimeVol = (report as any).realtimeQuote?.volume;
+    if (realtimeVol && realtimeVol > 0) {
+      volumeShares = !isUS ? Math.round(realtimeVol / 1000) : realtimeVol;
+    }
+  }
   const isEtf = isEtfSymbol(symbol);
   const isCyclical = !isUS && !isEtf ? isCyclicalIndustry(symbol) : false;
 

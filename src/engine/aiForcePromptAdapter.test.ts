@@ -219,5 +219,32 @@ describe('Spec 0181 Ticket 06: aiForcePromptAdapter - 主力戰情室特徵轉�
       expect(digest.chips?.trustNetShares1D).toBe(300);
       expect(digest.chips?.unitText).toContain('張');
     });
+
+    it('Spec 0194 Ticket 02: 盤中未結算成交量回退防禦，若 volumeShares 為 0 應由 realtimeQuote 回退補正', () => {
+      const intradayReport: AiForceDashboardReport = {
+        ...mockReportTw,
+        symbol: '3260',
+        name: '威剛',
+        marketBar: {
+          ...mockReportTw.marketBar,
+          currentPrice: 360,
+          change: 10,
+          changePercent: 2.86,
+          volumeShares: 0, // 盤中未結算或暫時為 0
+        },
+        realtimeQuote: {
+          price: 360,
+          change: 10,
+          changePercent: 2.86,
+          volume: 25410000, // 即時累計 25,410,000 股 = 25,410 張
+        },
+      } as any;
+
+      const digest = createWarRoomPromptDigest(intradayReport);
+
+      expect(digest.quote.volumeShares).toBe(25410);
+      expect(digest.quote.volumeShares).toBeGreaterThan(0);
+      expect(digest.chips.turnoverAmountTwdHundredMillion).toBeDefined();
+    });
   });
 });
