@@ -44,6 +44,7 @@ import { useMarketCatchupSync } from '../../hooks/useMarketCatchupSync';
 import type { AiForceTaskTabKey } from '../../types/aiForceDashboard';
 import { WarRoomPromptCard } from './WarRoomPromptCard';
 import { createWarRoomPromptDigest } from '../../engine/aiForcePromptAdapter';
+import { loadOrFetchFinancialReport } from '../../engine/financialReportService';
 
 export interface AiForceDashboardViewProps {
   initialSymbol?: string;
@@ -181,6 +182,35 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         }
       }
 
+      // 4.5 非阻塞嘗試載入單季財報 EPS/毛利 (Spec 0196 Ticket 03)
+      let quarterlyValuationData: {
+        eps?: number | null;
+        quarterName?: string;
+        grossMargin?: number | null;
+        operatingMargin?: number | null;
+      } | undefined = undefined;
+
+      try {
+        const forensic = await loadOrFetchFinancialReport(targetSymbol, targetMarket, resolvedName);
+        if (forensic && forensic.historicalRecords && forensic.historicalRecords.length > 0) {
+          const sorted = [...forensic.historicalRecords].sort((a, b) => (b.year * 10 + b.quarter) - (a.year * 10 + a.quarter));
+          const latestQ = sorted[0];
+          if (latestQ && latestQ.income) {
+            const rev = latestQ.income.revenue || 0;
+            const grossMargin = rev > 0 ? Number(((latestQ.income.grossProfit / rev) * 100).toFixed(2)) : undefined;
+            const operatingMargin = rev > 0 ? Number(((latestQ.income.operatingIncome / rev) * 100).toFixed(2)) : undefined;
+            quarterlyValuationData = {
+              eps: latestQ.income.eps,
+              quarterName: `${latestQ.year}Q${latestQ.quarter}`,
+              grossMargin,
+              operatingMargin,
+            };
+          }
+        }
+      } catch {
+        // 財報載入靜默降級容錯
+      }
+
       // 5. 以真實數據合成 18 張卡片 Report (含法人籌碼動態連動，>= 1 根即可進行最後已知日 K 定錨)
       if (candles.length >= 1) {
         const fullReport = generateAiForceReportFromCandles(
@@ -198,6 +228,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             marginData,
             tdccRecords,
             revenueRecords,
+            valuationData: quarterlyValuationData,
           }
         );
         if (!quote && targetMarket === 'TW') {

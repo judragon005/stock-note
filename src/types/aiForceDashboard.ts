@@ -547,6 +547,11 @@ export interface ValuationMetricsData {
   valuationTier?: 'UNDERVALUED' | 'FAIR' | 'OVERVALUED'; // 便宜 / 合理 / 偏高
   valuationTierText?: string;
   isLossMaking?: boolean; // 是否處於虧損轉機期
+  // 單季財報串接欄位 (Spec 0196 Ticket 03)
+  latestQuarterEps?: number;
+  latestQuarterName?: string;
+  grossMargin?: number;
+  operatingMargin?: number;
   // ETF 自適應欄位
   etfPremiumDiscountRate?: number; // 折溢價率 (%)
   etfExpenseRatio?: number; // 總費用率 (%)

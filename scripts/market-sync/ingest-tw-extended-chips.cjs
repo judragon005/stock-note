@@ -64,6 +64,35 @@ function parseTwseMargin(rawData) {
 }
 
 /**
+ * 解析 TPEx 櫃買中心 OpenAPI 融資融券餘額表 (tpex_mainboard_margin_balance)
+ * @param {Array<object>|object} rawData
+ * @returns {Record<string, { symbol: string, marginBalance: number, shortBalance: number }>}
+ */
+function parseTpexMargin(rawData) {
+  const result = {};
+  if (!rawData) return result;
+
+  const list = Array.isArray(rawData) ? rawData : Array.isArray(rawData.data) ? rawData.data : [];
+  if (!Array.isArray(list) || list.length === 0) return result;
+
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    const symbol = String(item.SecuritiesCompanyCode || item.Code || item.symbol || '').trim();
+    if (!symbol || symbol.length > 6) continue;
+
+    const marginBalance = parseCleanNumber(item.MarginPurchaseBalance);
+    const shortBalance = parseCleanNumber(item.ShortSaleBalance);
+
+    result[symbol] = {
+      symbol,
+      marginBalance,
+      shortBalance,
+    };
+  }
+  return result;
+}
+
+/**
  * 解析 TWSE TWTB4U 當日沖銷交易標的及統計
  * @param {object} rawData
  * @returns {Record<string, { symbol: string, dayTradeRate: number }>}
@@ -144,6 +173,7 @@ function saveTwExtendedChipsToSqlite(extMap, dateStr, customDbPath) {
 module.exports = {
   parseTwseSbl,
   parseTwseMargin,
+  parseTpexMargin,
   parseTwseDayTrade,
   saveTwExtendedChipsToSqlite,
 };

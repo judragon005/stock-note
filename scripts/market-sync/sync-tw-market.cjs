@@ -197,10 +197,16 @@ async function runTwMarketSync(targetDateInput) {
     const { saveTwT86ToSqlite } = require('./ingest-tw-t86.cjs');
     const {
       parseTwseMargin,
+      parseTpexMargin,
       parseTwseSbl,
       parseTwseDayTrade,
       saveTwExtendedChipsToSqlite,
     } = require('./ingest-tw-extended-chips.cjs');
+    const {
+      parseTwseBwibbu,
+      parseTpexPeratio,
+      saveTwValuationToSqlite,
+    } = require('./ingest-tw-valuation.cjs');
 
     const quoteRes = saveTwQuotesToSqlite(allQuotes);
     console.log(`✔ SQLite 湖倉入庫：已寫入 ${quoteRes.savedCount} 檔台股日 K 收盤行情 (daily_candles)`);
@@ -208,9 +214,10 @@ async function runTwMarketSync(targetDateInput) {
     const chipRes = saveTwT86ToSqlite(allChips, dateStr);
     console.log(`✔ SQLite 湖倉入庫：已寫入 ${chipRes.savedCount} 檔三大法人買賣超記錄 (tw_institutional_chips)`);
 
-    // 抓取並解析 TWSE 擴展籌碼 (融資融券、借券賣出 SBL、當日沖銷)
-    console.log(`[*] 抓取 TWSE 信用交易、借券賣出與當沖日報...`);
+    // 抓取並解析 TWSE/TPEx 擴展籌碼 (融資融券、借券賣出 SBL、當日沖銷) (Spec 0196 Ticket 01)
+    console.log(`[*] 抓取 TWSE/TPEx 信用交易、借券賣出與當沖日報...`);
     let marginRaw = null;
+    let tpexMarginRaw = null;
     let sblRaw = null;
     let dayTradeRaw = null;
 
@@ -221,6 +228,15 @@ async function runTwMarketSync(targetDateInput) {
       );
     } catch (e) {
       console.warn(`TWSE MI_MARGN 下載警告:`, e.message);
+    }
+
+    try {
+      tpexMarginRaw = await retryFetch(() =>
+        fetchJson(`https://www.tpex.org.tw/openapi/v1/tpex_mainboard_margin_balance`),
+        2, 1000
+      );
+    } catch (e) {
+      console.warn(`TPEx Margin OpenAPI 下載警告:`, e.message);
     }
 
     try {
@@ -241,7 +257,9 @@ async function runTwMarketSync(targetDateInput) {
       console.warn(`TWSE TWTB4U 下載警告:`, e.message);
     }
 
-    const marginMap = parseTwseMargin(marginRaw);
+    const twseMarginMap = parseTwseMargin(marginRaw);
+    const tpexMarginMap = parseTpexMargin(tpexMarginRaw);
+    const marginMap = { ...twseMarginMap, ...tpexMarginMap };
     const sblMap = parseTwseSbl(sblRaw);
     const dayTradeMap = parseTwseDayTrade(dayTradeRaw);
 
@@ -263,7 +281,55 @@ async function runTwMarketSync(targetDateInput) {
     }
 
     const extRes = saveTwExtendedChipsToSqlite(combinedExtMap, dateStr);
-    console.log(`✔ SQLite 湖倉入庫：已寫入 ${extRes.savedCount} 檔擴展籌碼記錄 (資券/SBL/當沖) 至 tw_institutional_chips`);
+    console.log(`✔ SQLite 湖倉入庫：已寫入 ${extRes.savedCount} 檔擴展籌碼記錄 (上市+上櫃資券/SBL/當沖) 至 tw_institutional_chips`);
+
+    // 抓取並解析 TWSE/TPEx 官方每日個股估值 (PE/PB/殖利率) (Spec 0196 Ticket 02)
+    console.log(`[*] 抓取 TWSE/TPEx 官方每日個股估值 (PE/PB/殖利率)...`);
+    let bwibbuRaw = null;
+    let tpexValuationRaw = null;
+
+    try {
+      bwibbuRaw = await retryFetch(() =>
+        fetchJson(`https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_d?date=${yyyymmdd}&selectType=ALL&response=json`),
+        2, 1000
+      );
+    } catch (e) {
+      console.warn(`TWSE BWIBBU 下載警告:`, e.message);
+    }
+
+    try {
+      tpexValuationRaw = await retryFetch(() =>
+        fetchJson(`https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis`),
+        2, 1000
+      );
+    } catch (e) {
+      console.warn(`TPEx PERATIO OpenAPI 下載警告:`, e.message);
+    }
+
+    const twseValMap = parseTwseBwibbu(bwibbuRaw);
+    const tpexValMap = parseTpexPeratio(tpexValuationRaw);
+    const combinedValMap = { ...twseValMap, ...tpexValMap };
+
+    const valRes = saveTwValuationToSqlite(combinedValMap, dateStr);
+    console.log(`✔ SQLite 湖倉入庫：已寫入 ${valRes.savedCount} 檔官方估值 (PE/PB/殖利率) 至 tw_valuation_daily`);
+
+    // 同步注入到 stocksMap 並更新 tw_market_summary.json
+    let valEnrichCount = 0;
+    for (const [sym, valObj] of Object.entries(combinedValMap)) {
+      if (stocksMap[sym]) {
+        stocksMap[sym].valuation = {
+          pe: valObj.pe,
+          pb: valObj.pb,
+          dividendYield: valObj.dividendYield,
+        };
+        valEnrichCount++;
+      }
+    }
+    if (valEnrichCount > 0) {
+      saveJsonAtomic(targetPath1, outputPayload);
+      saveJsonAtomic(targetPath2, outputPayload);
+      console.log(`✔ 市場摘要更新：已將 ${valEnrichCount} 檔官方估值注入 tw_market_summary.json`);
+    }
   } catch (sqliteErr) {
     console.warn(`[SQLite 寫入警告]:`, sqliteErr.message);
   }

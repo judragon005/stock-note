@@ -112,6 +112,15 @@ export function createWarRoomPromptDigest(
     }
   }
 
+  // 盤中成交量回退標籤 (Spec 0196 Ticket 05)
+  let intradayVolumeNote: string | undefined = undefined;
+  if (!report.marketBar?.isSettled && volumeShares <= 0) {
+    const lastSettledVolume = candles.length > 0 ? (candles[candles.length - 1].volume || 0) : 0;
+    intradayVolumeNote = lastSettledVolume > 0
+      ? `盤中撮合中 (前一交易日收盤量: ${lastSettledVolume} 張)`
+      : '盤中撮合中';
+  }
+
   if (candles.length >= 60) {
     const last60 = candles.slice(-60);
     const sumClose60 = last60.reduce((acc, c) => acc + (c.close || 0), 0);
@@ -132,6 +141,25 @@ export function createWarRoomPromptDigest(
   const chipsSummary = report.chipsSummary;
   const tdcc = report.tdccDistribution;
   const dayTrade = report.dayTradeRisk;
+
+  // 籌碼均量比例尺計算 (Spec 0196 Ticket 04)
+  let foreignRatio20D: number | undefined = undefined;
+  let trustRatio20D: number | undefined = undefined;
+  if (candles.length >= 20) {
+    const last20 = candles.slice(-20);
+    const sumVol20 = last20.reduce((acc, c) => acc + (c.volume || 0), 0);
+    const avgVol20 = sumVol20 / 20;
+    if (avgVol20 > 0) {
+      const foreignNet = chipsSummary?.foreignNetShares ?? chipsSummary?.foreignInvestorsNetBuyShares;
+      const trustNet = chipsSummary?.trustNetShares ?? chipsSummary?.investmentTrustNetBuyShares;
+      if (foreignNet !== undefined) {
+        foreignRatio20D = Number(((foreignNet / avgVol20) * 100).toFixed(1));
+      }
+      if (trustNet !== undefined) {
+        trustRatio20D = Number(((trustNet / avgVol20) * 100).toFixed(1));
+      }
+    }
+  }
 
   // 若有 20D 歷史記錄加總；若無則保留 undefined，嚴禁以 1D 代替 20D
   let foreignNetShares20D: number | undefined = undefined;
@@ -179,7 +207,7 @@ export function createWarRoomPromptDigest(
     intradayTime: report.updatedAt,
   };
 
-  // 4. 基本面與月營收映射 (Ticket 12, Spec 0195 注入 Card 21 估值矩陣)
+  // 4. 基本面與月營收映射 (Ticket 12, Spec 0195 注入 Card 21 估值矩陣, Spec 0196 注入單季 EPS)
   const rev = report.monthlyRevenue;
   const latestRevItem = rev?.history && rev.history.length > 0 ? rev.history[0] : undefined;
   const val = report.valuationMetrics;
@@ -189,6 +217,10 @@ export function createWarRoomPromptDigest(
         pe: val?.pe,
         pb: val?.pb,
         dividendYield: val?.dividendYield,
+        latestQuarterEps: val?.latestQuarterEps,
+        latestQuarterName: val?.latestQuarterName,
+        grossMarginPct: val?.grossMargin,
+        operatingMarginPct: val?.operatingMargin,
         monthlyRevenueYearMonth: latestRevItem?.yearMonth || rev?.asOfDateText,
         monthlyRevenueYoY: rev?.latestYoyRate ?? latestRevItem?.yoyRate,
         monthlyRevenueMoM: latestRevItem?.momRate,
@@ -230,6 +262,7 @@ export function createWarRoomPromptDigest(
       change: report.marketBar?.change || 0,
       changePercent,
       volumeShares,
+      intradayVolumeNote,
       maArrangement,
       ma20,
       ma60,
@@ -253,6 +286,8 @@ export function createWarRoomPromptDigest(
                 (chipsSummary.dealerNetBuyShares || 0)
               : undefined))
         : undefined,
+      foreignRatio20D,
+      trustRatio20D,
       foreignNetShares20D,
       trustNetShares20D,
       dealerNetShares20D,

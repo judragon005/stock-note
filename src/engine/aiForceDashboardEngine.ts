@@ -1196,6 +1196,15 @@ export interface GenerateReportOptions {
   }>;
   institutionalRecords?: RawInstitutionalRecord[];
   us13fData?: Us13fChipData;
+  valuationData?: {
+    pe?: number | null;
+    pb?: number | null;
+    dividendYield?: number | null;
+    eps?: number | null;
+    quarterName?: string;
+    grossMargin?: number | null;
+    operatingMargin?: number | null;
+  };
 }
 
 /**
@@ -1745,6 +1754,19 @@ export function generateAiForceReportFromCandles(
 
     tdccDistribution: buildTdccDistribution(options?.tdccRecords, market, symbol, options?.us13fData),
     monthlyRevenue: buildMonthlyRevenue(symbol, name, market, options?.revenueRecords, options?.tdccRecords),
+    valuationMetrics: {
+      isEtf: isEtfSymbol(symbol),
+      isUsMarket: market === 'US',
+      pe: options?.valuationData?.pe ?? undefined,
+      pb: options?.valuationData?.pb ?? undefined,
+      dividendYield: options?.valuationData?.dividendYield ?? undefined,
+      latestQuarterEps: options?.valuationData?.eps ?? undefined,
+      latestQuarterName: options?.valuationData?.quarterName ?? undefined,
+      grossMargin: options?.valuationData?.grossMargin ?? undefined,
+      operatingMargin: options?.valuationData?.operatingMargin ?? undefined,
+      asOfDateText: last.date,
+      isEmpty: !options?.valuationData,
+    },
   };
 }
 

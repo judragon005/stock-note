@@ -74,3 +74,6 @@ docs/deployment/artifacts/
 docs/deployment/logs/
 *.tar
 *.tar.gz
+*.db
+.scratch/*.db
+

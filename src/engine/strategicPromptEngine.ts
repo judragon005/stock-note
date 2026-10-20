@@ -147,11 +147,15 @@ function buildTemporalGroundingXml(digest: StrategicFactDigest): string {
   const settledDate = digest.warRoomFeatures?.settledDate || digest.audit?.anchorTradingDate || '最新交易日';
   const intradayTime = digest.warRoomFeatures?.intradayTime || digest.audit?.verificationTimestamp || '即時';
 
-  return `  <system_grounding_declaration>
+  return `  <temporal_grounding_anchor>
+    【世界當前時間】：2026 年 10 月。
+    【防幻覺硬指令】：所有標註 2026 年之數據均為當前真實客觀事實，嚴禁將 2026 年誤判為未來，亦嚴禁倒退推論為 2024 或 2025 年！
+  </temporal_grounding_anchor>
+  <system_grounding_declaration>
     【資料基準日】：${settledDate}
     【時態說明】：現價與盤中均線為當前即時數據；三大法人、融資融券為昨日收盤結算資料；集保為週末結算。
     【時態因果隔離】：現價為盤中即時行情，三大法人與融資券為前一交易日盤後結算數據，嚴禁將前一日籌碼因果直接套用於盤中即時走勢。
-    【待同步宣告】：若部分財務估值（PE/PB）或公司治理指標標註為 N/A，係因當前系統管線尚待同步，嚴禁直接推定為公司財務舞弊或無價值。
+    【待同步宣告】：若部分財務估值（PE/PB）或公司治理指標標註為 N/A 或待同步，係因當前系統管線尚待同步，嚴禁直接推定為公司財務舞弊或無價值。
     【強制指令】：嚴禁猜測未提供之歷史價格，所有分析必須百分之百依據下方客觀數據。
   </system_grounding_declaration>
   <market_time_dimension>
@@ -242,7 +246,7 @@ function buildEquityFactSheet(digest: StrategicFactDigest): string {
       <name>${quote.name}</name>
       <current_price>${quote.currentPrice}</current_price>
       <price_change>${quote.change} (${quote.changePercent}%)</price_change>
-      <volume_shares unit="${unit}">${quote.volumeShares}</volume_shares>
+      <volume_shares unit="${unit}">${quote.intradayVolumeNote || quote.volumeShares}</volume_shares>
       ${chips.turnoverAmountTwdHundredMillion ? `<turnover_amount_twd unit="億元">${chips.turnoverAmountTwdHundredMillion}</turnover_amount_twd>` : ''}
       <official_transactions>${quote.transactionsCount ?? 'N/A'}</official_transactions>
       <ma_alignment>${quote.maArrangement}</ma_alignment>
@@ -256,8 +260,8 @@ function buildEquityFactSheet(digest: StrategicFactDigest): string {
     <!-- 2. 籌碼微觀與主力防線 (台美雙軌隔離) -->
     <chips_and_microstructure>
       ${!isUS ? `<total_institutional_net_1d unit="${unit}">${chips.totalNetShares1D ?? 'N/A'}</total_institutional_net_1d>
-      <foreign_net_shares_1d unit="${unit}">${chips.foreignNetShares1D ?? 'N/A'}</foreign_net_shares_1d>
-      <trust_net_shares_1d unit="${unit}">${chips.trustNetShares1D ?? 'N/A'}</trust_net_shares_1d>
+      <foreign_net_shares_1d unit="${unit}">${chips.foreignNetShares1D !== undefined ? `${chips.foreignNetShares1D}${chips.foreignRatio20D !== undefined ? ` (佔 20 日均量 ${chips.foreignRatio20D}%)` : ''}` : 'N/A'}</foreign_net_shares_1d>
+      <trust_net_shares_1d unit="${unit}">${chips.trustNetShares1D !== undefined ? `${chips.trustNetShares1D}${chips.trustRatio20D !== undefined ? ` (佔 20 日均量 ${chips.trustRatio20D}%)` : ''}` : 'N/A'}</trust_net_shares_1d>
       <total_institutional_net_20d unit="${unit}">${chips.totalNetShares20D ?? 'N/A'}</total_institutional_net_20d>
       <foreign_net_shares_20d unit="${unit}">${chips.foreignNetShares20D ?? 'N/A'}</foreign_net_shares_20d>
       <trust_net_shares_20d unit="${unit}">${chips.trustNetShares20D ?? 'N/A'}</trust_net_shares_20d>
@@ -282,6 +286,7 @@ function buildEquityFactSheet(digest: StrategicFactDigest): string {
       <pe_ratio>${fundamental?.pe ?? 'N/A'}</pe_ratio>
       <pb_ratio>${fundamental?.pb ?? 'N/A'}</pb_ratio>
       <dividend_yield>${fundamental?.dividendYield ?? 'N/A'}%</dividend_yield>
+      ${fundamental?.latestQuarterEps !== undefined ? `<latest_quarter_financials quarter="${fundamental.latestQuarterName || '最新季度'}"><eps unit="元">${fundamental.latestQuarterEps}</eps>${fundamental.grossMarginPct !== undefined ? `<gross_margin unit="%">${fundamental.grossMarginPct}%</gross_margin>` : ''}${fundamental.operatingMarginPct !== undefined ? `<operating_margin unit="%">${fundamental.operatingMarginPct}%</operating_margin>` : ''}</latest_quarter_financials>` : ''}
       <monthly_revenue_period>${fundamental?.monthlyRevenueYearMonth ?? 'N/A'}</monthly_revenue_period>
       <revenue_yoy_growth>${fundamental?.monthlyRevenueYoY ?? 'N/A'}%</revenue_yoy_growth>
       <revenue_mom_growth>${fundamental?.monthlyRevenueMoM ?? 'N/A'}%</revenue_mom_growth>
@@ -401,30 +406,16 @@ function buildFullSixHatsInstructions(digest: StrategicFactDigest): string {
 
   return `  <six_thinking_hats_instruction>
     請以六頂思考帽框架進行無偏見、高防禦性之全景分析：
-
-    【⚪ 白帽 - 客觀硬數據事實】
-    - 僅依據上方 <fact_sheet> 所列硬數據，總結當前價格位階、成交量能、營收動能或成分股持倉集中度。
-    - 嚴禁加入任何預測或主觀形容詞。
-
-    【🔴 紅帽 - 市場情緒與直覺預感】
-    - 結合恐懼貪婪指數、當沖熱度與散戶動向，診斷當前市場是否處於群體非理性追價或過度悲觀。
-
-    【⚫ 黑帽 - 魔鬼代言人 / 紅隊質詢】
-    - 作為嚴苛的首席風控長，專門找出這筆投資可能產生毀滅性虧損的所有死因。
-    ${
+    【⚪ 白帽 - 客觀硬數據】僅依據上方事實清單總結當前價格位階、成交量能與營收動能，嚴禁加入主觀臆測。
+    【🔴 紅帽 - 市場情緒直覺】結合恐懼貪婪、當沖熱度與散戶動向，診斷市場是否處於非理性追價或過度悲觀。
+    【⚫ 黑帽 - 魔鬼代言人 / 紅隊質詢】作為嚴苛首席風控長，專門找出可能引發毀滅性虧損的所有死因。${
       isEtf
-        ? '- 質詢：指數是否過度集中單一產業？追蹤誤差是否侵蝕長期回報？折溢價是否偏高？'
-        : `- 質詢：好生意與市場集中度 (CR4/CR8) 是否正遭顛覆？董監質押率是否暗藏地雷？${digest.chips?.isCyclical ? '景氣循環股營收暴衝是否正處循環高峰反轉點 (Cycle Peak 殺估值陷阱)？' : '好公司護城河與財務鑑識是否存在假帳疑慮？'}`
+        ? '質詢指數產業集中度與追蹤偏離 (TD) 是否侵蝕長期回報。'
+        : `質詢好生意與市場集中度 (CR4/CR8) 是否正遭顛覆？好公司護城河與財務鑑識隱形雷區。${digest.chips?.isCyclical ? '景氣循環股營收暴衝是否正處循環高峰反轉點 (Cycle Peak 殺估值陷阱)？' : ''}`
     }
-
-    【🟡 黃帽 - 核心價值與上檔催化劑】
-    - 評估在最嚴格安全邊際下，這檔標的具備哪些實質護城河、營收創高動能或被低估的催化劑 (Catalyst)。
-
-    【🟢 綠帽 - 非對稱創新策略】
-    - 提出不對稱風險報酬的佈局方案（如：跌破箱底防禦方案、金字塔分批佈局、跨市場替代資產）。
-
-    【🔵 藍帽 - 元認知與風控紀律】
-    - 制定明確的操作紀律 Checkpoint：保本停損點位、移動停利防線，以及何種觸價條件下必須無條件砍倉。
+    【🟡 黃帽 - 核心價值與上檔催化劑】評估在最嚴格安全邊際下，具備哪些實質護城河、營收創高動能或被低估催化劑。
+    【🟢 綠帽 - 非對稱創新策略】提出風險有限但報酬非對稱的佈局方案（如跌破箱底防禦、金字塔分批佈局）。
+    【🔵 藍帽 - 元認知與風控紀律】制定明確的操作紀律 Checkpoint：保本停損點位、移動停利線與觸價砍倉清單。
   </six_thinking_hats_instruction>`;
 }
 
@@ -463,6 +454,20 @@ function buildReflectionGateXml(): string {
 }
 
 /**
+ * 組裝受控聯網獵犬協議 XML (Spec 0196 Ticket 07)
+ */
+function buildWebHuntProtocolXml(): string {
+  return `  <web_retrieval_instructions>
+    【受控聯網獵犬協議 (Web Hunt Protocol)】：
+    1. 僅允許在發現【待同步】或 N/A 欄位時啟動聯網搜尋補全。
+    2. 搜尋來源限定官方白名單：公開資訊觀測站 (MOPS)、臺灣證券交易所 (TWSE)、證券櫃檯買賣中心 (TPEx)、Yahoo 股市、權威財經日報。
+    3. 資料效期自證：搜尋到之營收、財報與重大訊息發布日必須為 2026 年，非 2026 舊文強制無效。
+    4. 本地 SSOT 最高優先級：禁止覆蓋本提示詞提供的當前現價、均線價格、箱型支撐與主力 VWAP 成本。
+    5. 預估與實績強制隔離：機構投顧預估值必須標註【法人推估（未實現）】，嚴禁混淆為官方公告實績。
+  </web_retrieval_instructions>`;
+}
+
+/**
  * 生成全維度 Master 智策提示詞
  */
 export function generateMasterPrompt(
@@ -485,13 +490,23 @@ ${buildPrecalculatedPivotsXml(digest)}
 ${buildInvestorContextXml(digest, options)}
 ${buildAntiSycophancyXml()}
 ${buildFullSixHatsInstructions(digest)}
+${buildWebHuntProtocolXml()}
 ${buildReflectionGateXml()}
   <output_format>
-    請以「結論先行 (Actionable Matrix)」輸出：
-    0. 【前置：資料真實性與時態海關稽核】(若發現數據矛盾、過期或單日/20日資訊有疑慮，第一時間提出警示；明確依據持倉狀態 IN_POSITION 或 ZERO_POSITION 制定方案，空手標的嚴禁發布停損割肉指令)
-    1. 綜合決策評級 (強力買進 / 謹慎分批 / 觀望停看聽 / 減碼逃生)
-    2. 六頂思考帽精華結論條列 (若為景氣循環股，黑帽請強制質詢週期高峰殺估值風險)
-    3. 實戰防守價位與出場 Checkpoint 矩陣
+    請嚴格遵守以下輸出契約，以「結論先行 (Actionable Matrix)」輸出：
+    【第一行唯一指令】：必須為以下三者之一（加粗獨立成行）：
+      🟢 建議建立部位（買進/分批佈局）
+      🟡 觀望等待確認（暫不動作/防守觀望）
+      🔴 嚴禁進場（或庫存跌破停損砍倉逃生）
+    【前置：資料真實性與時態海關稽核】(若發現數據矛盾、過期或單日/20日資訊有疑慮，第一時間提出警示；明確依據持倉狀態 IN_POSITION 或 ZERO_POSITION 制定方案，空手標的嚴禁發布停損割肉指令)
+    【實戰作戰點位表】：必須以 Markdown 表格輸出 3 欄式點位作戰表：
+      | 關鍵位階 | 參考價格 | 技術/籌碼依據 | 失效/破位條件 |
+      | :--- | :--- | :--- | :--- |
+      | 進場防守位 | ... | ... | ... |
+      | 反彈目標價 | ... | ... | ... |
+      | 保命停損價 | ... | ... | ... |
+    【六頂思考帽精華結論條列】(若為景氣循環股，黑帽請強制質詢週期高峰殺估值風險)
+    【下檔暴雷風險質詢】：條列指出當前最致命的 2 個暴雷點（如殺估值、大戶出貨、技術破位）。
   </output_format>
 </investment_decision_prompt>`;
 
