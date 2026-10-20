@@ -192,23 +192,32 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
 
       try {
         const forensic = await loadOrFetchFinancialReport(targetSymbol, targetMarket, resolvedName);
-        if (forensic && forensic.historicalRecords && forensic.historicalRecords.length > 0) {
+        if (forensic && Array.isArray(forensic.historicalRecords) && forensic.historicalRecords.length > 0) {
           const sorted = [...forensic.historicalRecords].sort((a, b) => (b.year * 10 + b.quarter) - (a.year * 10 + a.quarter));
           const latestQ = sorted[0];
           if (latestQ && latestQ.income) {
-            const rev = latestQ.income.revenue || 0;
-            const grossMargin = rev > 0 ? Number(((latestQ.income.grossProfit / rev) * 100).toFixed(2)) : undefined;
-            const operatingMargin = rev > 0 ? Number(((latestQ.income.operatingIncome / rev) * 100).toFixed(2)) : undefined;
+            const rev = typeof latestQ.income.revenue === 'number' ? latestQ.income.revenue : 0;
+            const grossProfit = typeof latestQ.income.grossProfit === 'number' ? latestQ.income.grossProfit : undefined;
+            const operatingIncome = typeof latestQ.income.operatingIncome === 'number' ? latestQ.income.operatingIncome : undefined;
+
+            const grossMargin = rev > 0 && grossProfit !== undefined
+              ? Number(((grossProfit / rev) * 100).toFixed(2))
+              : undefined;
+            const operatingMargin = rev > 0 && operatingIncome !== undefined
+              ? Number(((operatingIncome / rev) * 100).toFixed(2))
+              : undefined;
+
             quarterlyValuationData = {
-              eps: latestQ.income.eps,
-              quarterName: `${latestQ.year}Q${latestQ.quarter}`,
+              eps: typeof latestQ.income.eps === 'number' ? latestQ.income.eps : null,
+              quarterName: latestQ.year && latestQ.quarter ? `${latestQ.year}Q${latestQ.quarter}` : undefined,
               grossMargin,
               operatingMargin,
             };
           }
         }
-      } catch {
-        // 財報載入靜默降級容錯
+      } catch (err) {
+        // 財報載入靜默降級容錯，保留除錯觀測性
+        logger.warn(`[AiForceDashboard] 載入 ${targetSymbol} 歷史單季財報時發生非致命異常，優雅降級為空:`, err);
       }
 
       // 5. 以真實數據合成 18 張卡片 Report (含法人籌碼動態連動，>= 1 根即可進行最後已知日 K 定錨)
