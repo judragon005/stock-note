@@ -9,14 +9,17 @@ const { parseCleanNumber } = require('./ingest-tw-quotes.cjs');
 /**
  * 安全轉換數值，若為 '-'、空字串或無效值則回傳 null
  * @param {any} val
+ * @param {{ allowZero?: boolean }} [options]
  * @returns {number|null}
  */
-function cleanValuationNumber(val) {
+function cleanValuationNumber(val, { allowZero = true } = {}) {
   if (val === undefined || val === null) return null;
   const str = String(val).trim();
   if (!str || str === '-' || str === 'N/A' || str === '--') return null;
   const num = parseCleanNumber(str);
-  return isNaN(num) ? null : num;
+  if (isNaN(num)) return null;
+  if (!allowZero && num <= 0) return null;
+  return num;
 }
 
 /**
@@ -34,9 +37,9 @@ function parseTwseBwibbu(rawData) {
     if (!symbol || symbol.length > 6) continue;
 
     // 0: 證券代號, 3: 殖利率(%), 5: 本益比, 6: 股價淨值比
-    const dividendYield = cleanValuationNumber(row[3]);
-    const pe = cleanValuationNumber(row[5]);
-    const pb = cleanValuationNumber(row[6]);
+    const dividendYield = cleanValuationNumber(row[3], { allowZero: true });
+    const pe = cleanValuationNumber(row[5], { allowZero: false });
+    const pb = cleanValuationNumber(row[6], { allowZero: false });
 
     result[symbol] = {
       symbol,
@@ -65,9 +68,9 @@ function parseTpexPeratio(rawData) {
     const symbol = String(item.SecuritiesCompanyCode || item.Code || item.symbol || '').trim();
     if (!symbol || symbol.length > 6) continue;
 
-    const pe = cleanValuationNumber(item.PriceEarningRatio);
-    const pb = cleanValuationNumber(item.PriceBookRatio);
-    const dividendYield = cleanValuationNumber(item.YieldRatio);
+    const pe = cleanValuationNumber(item.PriceEarningRatio, { allowZero: false });
+    const pb = cleanValuationNumber(item.PriceBookRatio, { allowZero: false });
+    const dividendYield = cleanValuationNumber(item.YieldRatio, { allowZero: true });
 
     result[symbol] = {
       symbol,

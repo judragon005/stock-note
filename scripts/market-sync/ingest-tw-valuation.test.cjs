@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const {
+  cleanValuationNumber,
   parseTwseBwibbu,
   parseTpexPeratio,
   saveTwValuationToSqlite,
@@ -10,14 +11,34 @@ const {
 const { initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
 
 describe('ingest-tw-valuation: TWSE/TPEx Daily Valuation Sync (Spec 0196 / Ticket 02)', () => {
-  it('應正確解析 TWSE BWIBBU_d 官方每日估值', () => {
+  it('cleanValuationNumber: 應正確處理字串、允許零與防禦性非零 (allowZero)', () => {
+    // 預設 allowZero = true
+    assert.equal(cleanValuationNumber('0.00'), 0);
+    assert.equal(cleanValuationNumber('0'), 0);
+    assert.equal(cleanValuationNumber(0), 0);
+    assert.equal(cleanValuationNumber('28.5'), 28.5);
+    assert.equal(cleanValuationNumber('-'), null);
+    assert.equal(cleanValuationNumber('--'), null);
+    assert.equal(cleanValuationNumber('N/A'), null);
+    assert.equal(cleanValuationNumber(null), null);
+    assert.equal(cleanValuationNumber(undefined), null);
+
+    // allowZero = false (用於本益比、股價淨值比等，<= 0 應轉化為 null)
+    assert.equal(cleanValuationNumber('0.00', { allowZero: false }), null);
+    assert.equal(cleanValuationNumber('0', { allowZero: false }), null);
+    assert.equal(cleanValuationNumber('-5.2', { allowZero: false }), null);
+    assert.equal(cleanValuationNumber('15.8', { allowZero: false }), 15.8);
+  });
+
+  it('應正確解析 TWSE BWIBBU_d 官方每日估值（含 0.00 本益比安全轉為 null）', () => {
     const mockTwseData = {
       stat: 'OK',
       date: '20261019',
       data: [
         ['1101', '台泥', '27.15', '2.95', 114, '15.2', '0.88', '115/2'],
         ['2330', '台積電', '1080.00', '1.50', 114, '28.5', '6.80', '115/2'],
-        ['9999', '虧損股', '10.00', '0.00', 114, '-', '0.50', '115/2'],
+        ['9999', '虧損股A', '10.00', '0.00', 114, '-', '0.50', '115/2'],
+        ['9998', '虧損股B', '5.00', '0.00', 114, '0.00', '0.30', '115/2'],
       ],
     };
 
@@ -33,7 +54,12 @@ describe('ingest-tw-valuation: TWSE/TPEx Daily Valuation Sync (Spec 0196 / Ticke
 
     // 虧損股本益比為 '-' 應安全解析為 null
     assert.equal(result['9999'].pe, null);
+    assert.equal(result['9999'].dividendYield, 0); // 殖利率 0.00 合法保留為 0
     assert.equal(result['9999'].pb, 0.5);
+
+    // 虧損股本益比為 '0.00' 亦應安全轉化為 null
+    assert.equal(result['9998'].pe, null);
+    assert.equal(result['9998'].dividendYield, 0);
   });
 
   it('應正確解析 TPEx OpenAPI peratio 官方每日估值', () => {
