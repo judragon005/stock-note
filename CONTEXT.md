@@ -437,9 +437,9 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0101: V8.20.0 三色導航儀動作歸併對齊、借貸卡片雙欄佈局與未到除息日預估股息動態重算](docs/adr/0101-traffic-light-hold-alignment-loan-grid-and-pending-dividend-sync.md)
 - [ADR-0102: V8.21.0 肌肉書僮動能雷達任意代碼即時外部回補診斷與自訂觀察清單架構](docs/adr/0102-muscle-booker-adhoc-scanner-and-custom-watchlist.md)
 - [ADR-0115: V8.34.0 ETF 穿透透視、交易心理覆盤與跨券商持倉對賬審計](docs/adr/0115-etf-look-through-behavioral-audit-and-reconciliation.md)
-- [ADR-0116: V8.35.0 Web Crypto 敏感金鑰加密、CORS 代理零憑證防洩漏與 CSV DDE 公式注入防禦](docs/adr/0116-web-crypto-cors-guard-and-csv-dde-sanitization.md)
 - [ADR-0127: V8.45.0 股票健診系統純運算診斷引擎、穿透報告與專屬工作區架構](docs/adr/0127-stock-health-check-diagnosis-engine-and-workspace.md)
 - [ADR-0128: V8.45.1 股票健診系統原生毛玻璃擬態、ETF防呆與標的快捷膠囊全面重構](docs/adr/0128-stock-health-check-ux-redesign-and-glassmorphism.md)
+- [ADR-0196: V8.109.0 AI 主力戰情室外聯提示詞受控聯網獵犬協議、上櫃資券與官方 PE/PB 湖倉管線](docs/adr/0196-ai-war-room-prompt-web-hunt-and-tpex-valuation.md)
 
 ### 股票健診系統原生毛玻璃擬態、ETF智慧防呆與標的快捷膠囊 (Stock Health Check & Native Glassmorphism) *(新增於 V8.45.1)*
 - **原生 Glassmorphism 擬態與排版防禦**：
@@ -2597,7 +2597,16 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     3. **Card 13 美股宏觀情緒激活 (Zero New Dependencies)**：直讀本地 SQLite `macro_sentiment_daily`，展示 CNN Fear & Greed (半圓指針映射)、VIX 恐慌指數與 10Y 美債殖利率。
     4. **Card 21 估值與殖利率量化矩陣四態自適應**：台股個股（盤中動態 PE/PB/年化殖利率 + 歷史位階條）、美股個股（Forward PE/PB/扣 30% IRS 稅後殖利率）、虧損轉機股（市銷率 PS）、ETF 標的（即時折溢價率 >0.5% 警戒、總費用率、年化配息率）。
     5. **Layer 6 雙子容器 (`EnergySentimentTwinCard`) 封裝與 250px 鎖定**：垂直緊湊封裝 Card 10 + 13，中段計算產出 Alpha 共振仲裁標籤（如逆勢抗跌、拉指數出個股）；Layer 6 四欄高度鎖定 250px 像素級齊平，消除拉長破版。
-    6. **外聯提示詞與金融字典閉環**：提示詞中樞注入 `<valuation_status>` 與美股宏觀情緒，字典齊備 6 項新術語解釋，全量 228 個單元測試 100% 綠燈。
+- **War Room Strategic Prompt Web Hunt Protocol & TPEx Official Valuation Pipeline (戰情室外聯提示詞受控聯網獵犬協議、上櫃資券與官方 PE/PB 湖倉管線)**:
+  - 核心模組：`scripts/market-sync/ingest-tw-extended-chips.cjs`、`scripts/market-sync/ingest-tw-valuation.cjs`、`scripts/market-sync/sqlite-db-core.cjs`、`src/types/aiForceDashboard.ts`、`src/types/strategicPrompt.ts`、`src/engine/aiForcePromptAdapter.ts`、`src/engine/strategicPromptEngine.ts`、`src/components/aiForceDashboard/AiForceDashboardView.tsx`。
+  - 規範依據：Spec 0196 (v8.109.0) 與 ADR 0196，對齊 GitHub Issue #292。
+  - 核心特性：
+    1. **2026 時空錨點 (<temporal_grounding_anchor>)**：鎖定世界基準時間為 2026 年，提供錨定日期與盤中撮合時間戳，嚴禁外部 AI 倒退至 2024~2025 年推論。
+    2. **受控聯網獵犬協議 (<web_retrieval_instructions>)**：限定僅在【待同步】或 N/A 欄位觸發搜尋；限定官方白名單來源（MOPS、TWSE、TPEx、Yahoo 股市、權威財經日報）；資訊發布日必須為 2026 年自證；禁止覆蓋本地現價/均線/VWAP SSOT；強制隔離機構推估與官方實績。
+    3. **輸出格式契約升級與 Token 門禁**：強制第一行唯一方向燈號（🟢/🟡/🔴）；Markdown 3 欄式點位作戰表（進場/目標/停損/失效）；下檔致命暴雷點質詢；精煉文本確保 Master Prompt 嚴格 < 4,500 tokens。
+    4. **TPEx OpenAPI 官方融資融券同步**：介接櫃買中心官方 OpenAPI 全市場整包同步，補齊 4979、3260 等上櫃標的之信用交易數據孤島。
+    5. **TWSE / TPEx 每日官方 PE / PB / 殖利率沉澱至 SQLite**：建立 `tw_valuation_daily` 資料表，每日盤後全市場整包存入 SQLite 並整合進 `tw_market_summary.json`。
+    6. **戰情室單季財報貫通與籌碼均量比**：非阻塞提取最新單季 EPS 與毛利率；計算外資/投信佔 20 日均量比率；盤中量 <= 0 時自動回退標記前一交易日收盤量。
 
 
 

@@ -316,6 +316,94 @@ describe('Spec 0181 Ticket 06: aiForcePromptAdapter - 主力戰情室特徵轉�
       expect(digest.macro.macroRegimeText).toContain('CNN Greed (68)');
       expect(digest.macro.macroRegimeText).toContain('VIX: 15.2');
     });
+
+    it('Spec 0196 Ticket 03: 戰情室外聯提示詞應連通單季財報 EPS 與毛利率', () => {
+      const reportWithQuarterlyEps: AiForceDashboardReport = {
+        symbol: '4979',
+        name: '華星光',
+        market: 'TW',
+        marketBar: {
+          currentPrice: 150,
+          change: 5,
+          changePercent: 3.45,
+          latestTradingDate: '2026-10-19',
+        },
+        valuationMetrics: {
+          isEtf: false,
+          pe: 78.56,
+          pb: 15.39,
+          dividendYield: 0.45,
+          latestQuarterEps: 2.15,
+          latestQuarterName: '2025Q3',
+          grossMargin: 42.8,
+          operatingMargin: 21.5,
+        },
+      } as any;
+
+      const digest = createWarRoomPromptDigest(reportWithQuarterlyEps);
+
+      expect(digest.fundamental?.latestQuarterEps).toBe(2.15);
+      expect(digest.fundamental?.latestQuarterName).toBe('2025Q3');
+      expect(digest.fundamental?.grossMarginPct).toBe(42.8);
+      expect(digest.fundamental?.operatingMarginPct).toBe(21.5);
+    });
+
+    it('Spec 0196 Ticket 04: 外資與投信籌碼應計算佔 20 日均量比率', () => {
+      const mockCandles = Array.from({ length: 20 }, (_, i) => ({
+        date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+        open: 100,
+        high: 105,
+        low: 95,
+        close: 100,
+        volume: 2000, // 20 日均量 2000 張
+      }));
+
+      const reportWithChips: AiForceDashboardReport = {
+        symbol: '2330',
+        name: '台積電',
+        market: 'TW',
+        marketBar: {
+          currentPrice: 1000,
+          volumeShares: 3000,
+          latestTradingDate: '2026-10-19',
+        },
+        klineSystem: {
+          candles: mockCandles,
+        },
+        chipsSummary: {
+          foreignNetShares: 500, // 500 / 2000 = 25.0%
+          trustNetShares: -200,  // -200 / 2000 = -10.0%
+        },
+      } as any;
+
+      const digest = createWarRoomPromptDigest(reportWithChips);
+
+      expect(digest.chips.foreignRatio20D).toBe(25.0);
+      expect(digest.chips.trustRatio20D).toBe(-10.0);
+    });
+
+    it('Spec 0196 Ticket 05: 盤中即時量 <= 0 時應回退標記前一交易日收盤量', () => {
+      const intradayZeroVolReport: AiForceDashboardReport = {
+        symbol: '4979',
+        name: '華星光',
+        market: 'TW',
+        marketBar: {
+          currentPrice: 155,
+          volumeShares: 0,
+          isSettled: false,
+          latestTradingDate: '2026-10-20',
+        },
+        klineSystem: {
+          candles: [
+            { date: '2026-10-19', open: 150, high: 152, low: 148, close: 150, volume: 8520 },
+          ],
+        },
+      } as any;
+
+      const digest = createWarRoomPromptDigest(intradayZeroVolReport);
+
+      expect(digest.quote.intradayVolumeNote).toBe('盤中撮合中 (前一交易日收盤量: 8520 張)');
+    });
   });
 });
 

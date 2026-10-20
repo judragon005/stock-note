@@ -244,6 +244,18 @@ function initSqliteLakehouseDb(customPath) {
       PRIMARY KEY (symbol, date)
     );
     CREATE INDEX IF NOT EXISTS idx_etf_nav_symbol_date ON etf_daily_nav(symbol, date DESC);
+
+    -- 11. 台股每日官方估值表 (PE/PB/殖利率 - Spec 0196)
+    CREATE TABLE IF NOT EXISTS tw_valuation_daily (
+      symbol TEXT NOT NULL,
+      date TEXT NOT NULL,                  -- YYYY-MM-DD
+      pe REAL,                             -- 官方本益比 (Price-to-Earnings)
+      pb REAL,                             -- 官方淨值比 (Price-to-Book)
+      dividend_yield REAL,                 -- 官方殖利率 (%) (Dividend Yield)
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (symbol, date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_valuation_symbol_date ON tw_valuation_daily(symbol, date DESC);
   `);
 
   // 動態無損補齊既有資料庫之新欄位 (冪等遷移)

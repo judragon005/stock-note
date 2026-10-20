@@ -6,6 +6,7 @@ import {
   generateSingleHatPrompt,
 } from './strategicPromptEngine';
 import { createWarRoomPromptDigest } from './aiForcePromptAdapter';
+import type { AiForceDashboardReport } from '../types/aiForceDashboard';
 
 describe('Ticket 03: strategicPromptEngine 雙軌路由與六頂思考帽組裝引擎核心', () => {
   const stockDigest = synthesizeStockDigest({
@@ -397,6 +398,56 @@ describe('Ticket 03: strategicPromptEngine 雙軌路由與六頂思考帽組裝�
       // 5. 外資借券賣出維度擴充
       expect(result.promptText).toContain('N/A (外資借券賣出待結算)</sbl_balance>');
       expect(result.promptText).toContain('外資主力空方部位以借券賣出為主');
+    });
+
+    it('Spec 0196 Tickets 06~08: 外聯提示詞應具備 2026 時空錨點、受控聯網獵犬協議與 3 欄操盤劇本合約', () => {
+      const adataReport: AiForceDashboardReport = {
+        symbol: '4979',
+        name: '華星光',
+        market: 'TW',
+        marketBar: {
+          currentPrice: 150,
+          change: -2,
+          changePercent: -1.32,
+          volumeShares: 3500,
+          isSettled: false,
+          latestTradingDate: '2026-10-19',
+        },
+        valuationMetrics: {
+          isEtf: false,
+          pe: 78.56,
+          pb: 15.39,
+          dividendYield: 0.45,
+          latestQuarterEps: 2.15,
+          latestQuarterName: '2025Q3',
+          grossMargin: 42.8,
+        },
+      } as any;
+
+      const digest = createWarRoomPromptDigest(adataReport, []);
+      const result = generateStrategicPrompt(digest, { mode: 'FULL_MASTER', desensitized: false });
+
+      // Ticket 06: 2026 時空錨點
+      expect(result.promptText).toContain('<temporal_grounding_anchor>');
+      expect(result.promptText).toContain('【世界當前時間】：2026 年');
+      expect(result.promptText).toContain('嚴禁倒退推論為 2024 或 2025 年');
+
+      // Ticket 07: 受控聯網獵犬協議
+      expect(result.promptText).toContain('<web_retrieval_instructions>');
+      expect(result.promptText).toContain('【受控聯網獵犬協議 (Web Hunt Protocol)】');
+      expect(result.promptText).toContain('公開資訊觀測站 (MOPS)');
+      expect(result.promptText).toContain('禁止覆蓋本提示詞提供的當前現價');
+      expect(result.promptText).toContain('【法人推估（未實現）】');
+
+      // Ticket 08: 3 欄操盤劇本與唯一結論燈號
+      expect(result.promptText).toContain('【第一行唯一指令】：必須為以下三者之一');
+      expect(result.promptText).toContain('🟢 建議建立部位');
+      expect(result.promptText).toContain('🟡 觀望等待確認');
+      expect(result.promptText).toContain('🔴 嚴禁進場');
+      expect(result.promptText).toContain('| 關鍵位階 | 參考價格 | 技術/籌碼依據 | 失效/破位條件 |');
+      expect(result.promptText).toContain('進場防守位');
+      expect(result.promptText).toContain('反彈目標價');
+      expect(result.promptText).toContain('保命停損價');
     });
   });
 });

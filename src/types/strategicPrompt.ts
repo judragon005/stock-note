@@ -58,6 +58,7 @@ export interface QuoteAndTrendDigest {
   ma60: number;
   ma250?: number;
   volumeRatio20D: number; // 今日量 / 20日均量
+  intradayVolumeNote?: string; // 盤中成交量回退標籤 (Spec 0196 Ticket 05)
   isAllTimeHighOrLowNotice?: string;
 }
 
@@ -69,6 +70,8 @@ export interface ChipsAndMicrostructureDigest {
   trustNetShares1D?: number; // 單日投信買賣超 (張/股)
   dealerNetShares1D?: number; // 單日自營商買賣超 (張/股)
   totalNetShares1D?: number; // 單日三大法人合計買賣超 (張/股)
+  foreignRatio20D?: number; // 外資單日買賣佔 20 日均量比率 (%) (Spec 0196 Ticket 04)
+  trustRatio20D?: number; // 投信單日買賣佔 20 日均量比率 (%) (Spec 0196 Ticket 04)
   foreignNetShares20D?: number; // 近20日外資累計買賣超 (張/股)
   trustNetShares20D?: number; // 近20日投信累計買賣超 (張/股)
   dealerNetShares20D?: number; // 近20日自營商累計買賣超 (張/股)
@@ -101,6 +104,8 @@ export interface FundamentalAndEarningsDigest {
   pe?: number;
   pb?: number;
   dividendYield?: number;
+  latestQuarterEps?: number; // 最新單季 EPS (Spec 0196 Ticket 03)
+  latestQuarterName?: string; // 最新季別名稱 (e.g. 2025Q3, Spec 0196 Ticket 03)
   monthlyRevenueYearMonth?: string;
   monthlyRevenueYoY?: number;
   monthlyRevenueMoM?: number;
