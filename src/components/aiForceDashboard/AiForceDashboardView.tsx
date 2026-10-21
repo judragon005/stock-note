@@ -98,8 +98,9 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         | undefined = undefined;
       let tdccRecords: any[] | undefined = undefined;
       let revenueRecords: any[] | undefined = undefined;
+      let quarterlyValuationData: any = undefined;
 
-      // 1. Layer 1: 優先嘗試從本地 SQLite 數據湖倉直讀歷史日 K、籌碼、集保與月營收 (Spec 0169)
+      // 1. Layer 1: 優先嘗試從本地 SQLite 數據湖倉直讀歷史日 K、籌碼、集保與月營收 (Spec 0169 & Spec 0197)
       try {
         const lakehouseData = await loadSymbolFullLakehouseData(targetSymbol, targetMarket);
         if (lakehouseData && lakehouseData.candles.length >= 1) {
@@ -123,6 +124,13 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
               dayTradeRate: lakehouseData.dayTradeRate,
             };
           }
+          if (lakehouseData.valuation) {
+            quarterlyValuationData = {
+              pe: lakehouseData.valuation.pe,
+              pb: lakehouseData.valuation.pb,
+              dividendYield: lakehouseData.valuation.dividendYield,
+            };
+          }
         }
       } catch (err) {
         logger.warn(`Lakehouse load failed for ${targetSymbol}, falling back to hybrid pipeline:`, err);
@@ -134,7 +142,34 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         candles = res?.candles || [];
       }
 
-      // 2. 嘗試抓取即時行情 (若失敗則由最新一根日 K 自適應)
+      // ⚡ 階段一：若日 K 在庫 (>= 1 根)，0.3 秒立即首屏渲染，結束等待 (Spec 0197 Ticket 03)
+      if (candles.length >= 1) {
+        const firstPaintReport = generateAiForceReportFromCandles(
+          targetSymbol,
+          resolvedName,
+          targetMarket,
+          candles,
+          undefined,
+          institutionalRecords,
+          undefined,
+          {
+            statusTag: 'NORMAL',
+            currency: targetMarket === 'US' ? 'USD' : 'TWD',
+            volumeUnit: targetMarket === 'US' ? '股' : '張',
+            marginData,
+            tdccRecords,
+            revenueRecords,
+            valuationData: quarterlyValuationData,
+          }
+        );
+        firstPaintReport.marketBar.dataSourceText = `本地盤後歷史資料庫 (共 ${candles.length} 日 K)`;
+        setReport(firstPaintReport);
+        setIsLoading(false);
+      }
+
+      // ⚡ 階段二：背景非同步增量增強（即時報價、處置狀態與單季財報）
+      // 2. 嘗試抓取即時行情 (非阻塞背景執行)
+      let resolvedStatusTag: 'NORMAL' | 'ATTENTION' | 'DISPOSITION' = 'NORMAL';
       try {
         quote = await fetchStockQuote(targetSymbol, targetMarket);
       } catch {
@@ -172,8 +207,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         }
       }
 
-      // 4. 取得注意與處置狀態 (Ticket 04)
-      let resolvedStatusTag: 'NORMAL' | 'ATTENTION' | 'DISPOSITION' = 'NORMAL';
+      // 4. 取得注意與處置狀態
       if (targetMarket === 'TW') {
         try {
           resolvedStatusTag = await loadSymbolDispositionStatus(targetSymbol, targetMarket);
@@ -182,14 +216,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         }
       }
 
-      // 4.5 非阻塞嘗試載入單季財報 EPS/毛利 (Spec 0196 Ticket 03)
-      let quarterlyValuationData: {
-        eps?: number | null;
-        quarterName?: string;
-        grossMargin?: number | null;
-        operatingMargin?: number | null;
-      } | undefined = undefined;
-
+      // 4.5 嘗試載入單季財報 EPS/毛利 (Spec 0196 & Spec 0197)
       try {
         const forensic = await loadOrFetchFinancialReport(targetSymbol, targetMarket, resolvedName);
         if (forensic && Array.isArray(forensic.historicalRecords) && forensic.historicalRecords.length > 0) {
@@ -208,6 +235,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
               : undefined;
 
             quarterlyValuationData = {
+              ...(quarterlyValuationData || {}),
               eps: typeof latestQ.income.eps === 'number' ? latestQ.income.eps : null,
               quarterName: latestQ.year && latestQ.quarter ? `${latestQ.year}Q${latestQ.quarter}` : undefined,
               grossMargin,
@@ -216,11 +244,10 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           }
         }
       } catch (err) {
-        // 財報載入靜默降級容錯，保留除錯觀測性
-        logger.warn(`[AiForceDashboard] 載入 ${targetSymbol} 歷史單季財報時發生非致命異常，優雅降級為空:`, err);
+        logger.warn(`[AiForceDashboard] 載入 ${targetSymbol} 歷史單季財報時發生非致命異常，優雅降級:`, err);
       }
 
-      // 5. 以真實數據合成 18 張卡片 Report (含法人籌碼動態連動，>= 1 根即可進行最後已知日 K 定錨)
+      // 5. 背景增量補強後二次渲染
       if (candles.length >= 1) {
         const fullReport = generateAiForceReportFromCandles(
           targetSymbol,

@@ -86,4 +86,60 @@ describe('Ticket 04 - 湖倉 API 擴展與前端載入整合 (Spec 0164)', () =>
     expect(result?.revenueRecords?.[0].yoyRate).toBe(33.5);
     expect(result?.revenueRecords?.[0].isAllTimeHigh).toBe(1);
   });
+
+  it('3. /api/market/history/:symbol 應能連帶查詢並回傳 tw_valuation_daily 官方估值 (Spec 0197 Ticket 01)', async () => {
+    const { initSqliteLakehouseDb, closeSqliteDb } = require('../../scripts/market-sync/sqlite-db-core.cjs');
+    const { createMarketApiMiddleware } = require('../../scripts/market-sync/vite-market-middleware.cjs');
+
+    const db = initSqliteLakehouseDb(testDbPath);
+    db.prepare("INSERT INTO symbols_meta (symbol, name, market, updated_at) VALUES ('4979', '華星光', 'TW', 12345)").run();
+    db.prepare("INSERT INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume) VALUES ('4979', '2026-10-20', 480, 485, 466, 470, 470, 1376000)").run();
+    db.prepare("INSERT INTO tw_valuation_daily (symbol, date, pe, pb, dividend_yield, updated_at) VALUES ('4979', '2026-10-20', 78.56, 15.39, 0.45, 12345)").run();
+
+    const middleware = createMarketApiMiddleware(testDbPath);
+
+    let responseData = '';
+    const req = { url: '/api/market/history/4979?limit=250', method: 'GET' };
+    const res = {
+      writeHead: vi.fn(),
+      end: (data: string) => { responseData = data; },
+    };
+    const next = vi.fn();
+
+    await middleware(req, res, next);
+
+    expect(responseData).toBeTruthy();
+    const json = JSON.parse(responseData);
+    expect(json.symbol).toBe('4979');
+    expect(json.valuation).toBeDefined();
+    expect(json.valuation.pe).toBe(78.56);
+    expect(json.valuation.pb).toBe(15.39);
+    expect(json.valuation.dividend_yield).toBe(0.45);
+
+    closeSqliteDb();
+  });
+
+  it('4. loadSymbolFullLakehouseData 應能精確映射 valuation 物件 (Spec 0197 Ticket 01)', async () => {
+    const { loadSymbolFullLakehouseData } = await import('./marketCacheLoader');
+
+    const fakePayload = {
+      symbol: '4979',
+      candles: [{ date: '2026-10-20', open: 480, high: 485, low: 466, close: 470, volume: 1376000 }],
+      chips: {},
+      valuation: { pe: 78.56, pb: 15.39, dividend_yield: 0.45 }
+    };
+
+    // @ts-ignore
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => fakePayload,
+    });
+
+    const result = await loadSymbolFullLakehouseData('4979', 'TW');
+    expect(result).not.toBeNull();
+    expect(result?.valuation).toBeDefined();
+    expect(result?.valuation?.pe).toBe(78.56);
+    expect(result?.valuation?.pb).toBe(15.39);
+    expect(result?.valuation?.dividendYield).toBe(0.45);
+  });
 });

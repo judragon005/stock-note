@@ -270,6 +270,11 @@ export interface LakehouseFullPayload {
     momRate?: number;
     isAllTimeHigh?: number;
   }>;
+  valuation?: {
+    pe?: number | null;
+    pb?: number | null;
+    dividendYield?: number | null;
+  };
 }
 
 /**
@@ -346,6 +351,18 @@ export async function loadSymbolFullLakehouseData(
           }));
         }
 
+        let valuation: LakehouseFullPayload['valuation'] = undefined;
+        if (data.valuation && typeof data.valuation === 'object') {
+          valuation = {
+            pe: data.valuation.pe != null ? Number(data.valuation.pe) : null,
+            pb: data.valuation.pb != null ? Number(data.valuation.pb) : null,
+            dividendYield:
+              data.valuation.dividend_yield != null
+                ? Number(data.valuation.dividend_yield)
+                : (data.valuation.dividendYield != null ? Number(data.valuation.dividendYield) : null),
+          };
+        }
+
         const latestChipRow =
           institutionalRecords && institutionalRecords.length > 0
             ? institutionalRecords[institutionalRecords.length - 1]
@@ -359,6 +376,7 @@ export async function loadSymbolFullLakehouseData(
             dayTradeRate: latestChipRow?.dayTradeRate,
             tdccRecords,
             revenueRecords,
+            valuation,
           };
         }
       }
