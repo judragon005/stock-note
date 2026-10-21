@@ -86,8 +86,8 @@ describe('Ticket 03: strategicPromptEngine 雙軌路由與六頂思考帽組裝�
     expect(result.promptText).toContain('<agentic_reflection_gate>');
     expect(result.promptText).toContain('NO_MOCK_DATA_ZERO_TOLERANCE');
 
-    // Token 守門員：Master Prompt 必須嚴格小於 4,500 tokens
-    expect(result.estimatedTokens).toBeLessThan(4500);
+    // Token 守門員：Master Prompt 必須嚴格小於 5,500 tokens (涵蓋外聯契約與回流協議)
+    expect(result.estimatedTokens).toBeLessThan(5500);
     expect(result.estimatedTokens).toBeGreaterThan(500);
   });
 
@@ -448,6 +448,91 @@ describe('Ticket 03: strategicPromptEngine 雙軌路由與六頂思考帽組裝�
       expect(result.promptText).toContain('進場防守位');
       expect(result.promptText).toContain('反彈目標價');
       expect(result.promptText).toContain('保命停損價');
+    });
+
+    it('Ticket 02: 語意防護、真脫敏修復與回流指令 (Spec 0200)', () => {
+      const mockWinbondReport = {
+        symbol: '2344',
+        name: '華邦電',
+        market: 'TW',
+        marketBar: {
+          currentPrice: 159.5,
+          change: 7.0,
+          changePercent: 4.59,
+          volumeShares: 49816,
+          isSettled: true,
+          latestTradingDate: '2026-10-21',
+        },
+        klineSystem: {
+          candles: [
+            { date: '2026-10-20', open: 153, high: 157.5, low: 151, close: 152.5, volume: 42095000 },
+            { date: '2026-10-21', open: 157.5, high: 161.5, low: 156, close: 159.5, volume: 49816000 }
+          ],
+          keyLevels: { highResistance: 193.0, supportLevel: 117.0, mainForceCost: 170.71 }
+        },
+        chipsSummary: {
+          foreignNetShares: 423,
+          trustNetShares: -478,
+          dealerNetShares: 567,
+          threeInstitutionsTotal: 512,
+        },
+        institutionalFlow: {
+          history: Array.from({ length: 20 }, () => ({
+            date: '2026-10-20',
+            foreignShares: 3440,
+            trustShares: 5752,
+            dealerShares: 127,
+          }))
+        },
+        valuationMetrics: {
+          pe: 16.81,
+          pb: 4.16,
+          dividendYield: 0.33,
+          latestQuarterEps: 5.4,
+          latestQuarterName: '2026Q2',
+        }
+      } as any;
+
+      const holdings = [
+        {
+          symbol: '2344',
+          shares: 2000,
+          avgCost: 158.21,
+          market: 'TW',
+          unrealizedPnLPercent: 0.82,
+        }
+      ] as any;
+
+      const digest = createWarRoomPromptDigest(mockWinbondReport, holdings);
+
+      // 1. 脫敏模式 (desensitized: true)
+      const desensitizedResult = generateStrategicPrompt(digest, {
+        mode: 'FULL_MASTER',
+        desensitized: true,
+      });
+
+      // 驗證真脫敏：絕對不能出現買進成本 158.21
+      expect(desensitizedResult.promptText).not.toContain('158.21');
+      expect(desensitizedResult.promptText).toContain('HOLDING_DEFENSE_DESENSITIZED');
+      expect(desensitizedResult.promptText).toContain('成本基準線 (100.0%)');
+
+      // 驗證語意標籤：不再出現 20d，改用 cumulative
+      expect(desensitizedResult.promptText).not.toContain('<foreign_net_shares_20d>');
+      expect(desensitizedResult.promptText).toContain('<foreign_net_shares_cumulative period="LAST_20_TRADING_DAYS"');
+
+      // 驗證 PE TTM 口徑說明
+      expect(desensitizedResult.promptText).toContain('calculation_basis="TRAILING_TWELVE_MONTHS_TTM"');
+
+      // 驗證波段波動區間
+      expect(desensitizedResult.promptText).toContain('<swing_range_60d_resistance>');
+
+      // 驗證回流指令代碼塊
+      expect(desensitizedResult.promptText).toContain('<loopback_protocol_directive>');
+      expect(desensitizedResult.promptText).toContain('"aiModel"');
+      expect(desensitizedResult.promptText).toContain('"stopLoss"');
+
+      // 驗證外聯查核契約
+      expect(desensitizedResult.promptText).toContain('<external_audit_contract>');
     });
   });
 });

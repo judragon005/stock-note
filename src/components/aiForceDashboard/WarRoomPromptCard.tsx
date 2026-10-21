@@ -8,10 +8,28 @@ import {
   ShieldCheck,
   ShieldAlert,
   Code2,
+  ClipboardList,
+  Trophy,
+  Trash2,
+  AlertTriangle,
+  Sparkles,
+  X,
 } from 'lucide-react';
 import { StrategicFactDigest, StrategicPromptResult } from '../../types/strategicPrompt';
 import { generateStrategicPrompt } from '../../engine/strategicPromptEngine';
 import { logger } from '../../utils/logger';
+import { PinnedStrategy, StrategyOutcomeRecord } from '../../types/strategyPin';
+import {
+  parseLoopbackContent,
+  createPinnedStrategy,
+  evaluateStrategyTrigger,
+  savePinnedStrategy,
+  getPinnedStrategy,
+  clearPinnedStrategy,
+  recordStrategyOutcome,
+  getStrategyOutcomeRecords,
+  calculateModelWinRates,
+} from '../../engine/strategyPinEngine';
 
 export interface WarRoomPromptCardProps {
   digest: StrategicFactDigest;
@@ -24,7 +42,6 @@ export interface WarRoomPromptCardProps {
  * 兩階段安全剪貼簿複製器 (Spec 0181 / Ticket 13)
  */
 async function safeCopyToClipboard(text: string): Promise<boolean> {
-  // 1. 優先使用標準 Clipboard API
   if (navigator?.clipboard?.writeText) {
     try {
       await navigator.clipboard.writeText(text);
@@ -34,7 +51,6 @@ async function safeCopyToClipboard(text: string): Promise<boolean> {
     }
   }
 
-  // 2. 降級使用 textarea execCommand
   try {
     const textArea = document.createElement('textarea');
     textArea.value = text;
@@ -55,7 +71,7 @@ async function safeCopyToClipboard(text: string): Promise<boolean> {
 }
 
 /**
- * 主力戰情室底層：AI 戰情提示詞與外聯中樞 (Spec 0181 / Tickets 12~15)
+ * 主力戰情室底層：AI 戰情提示詞與外部 AI 回流釘選中樞 (Spec 0181 & Spec 0200)
  */
 export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
   digest,
@@ -63,18 +79,40 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
   isLoading = false,
   isDataPending = false,
 }) => {
+  const symbol = digest.quote.symbol;
+  const currentPrice = digest.quote.currentPrice;
+
+  // 提示詞複製與預覽狀態
   const [copied, setCopied] = useState<boolean>(false);
   const [copyError, setCopyError] = useState<boolean>(false);
   const [desensitized, setDesensitized] = useState<boolean>(true);
   const [showPreview, setShowPreview] = useState<boolean>(false);
 
-  // 2 秒定時器清理防記憶體洩漏 (Ticket 14)
+  // 回流協議與釘選狀態
+  const [pinnedStrategy, setPinnedStrategy] = useState<PinnedStrategy | null>(() =>
+    getPinnedStrategy(symbol)
+  );
+  const [showPasteModal, setShowPasteModal] = useState<boolean>(false);
+  const [pasteInputText, setPasteInputText] = useState<string>('');
+  const [pasteError, setPasteError] = useState<string | null>(null);
+  const [pasteSuccess, setPasteSuccess] = useState<boolean>(false);
+
+  // 智囊團勝率榜抽屜狀態
+  const [showLeaderboard, setShowLeaderboard] = useState<boolean>(false);
+  const [outcomeRecords, setOutcomeRecords] = useState<StrategyOutcomeRecord[]>(() =>
+    getStrategyOutcomeRecords()
+  );
+
+  // 當 symbol 切換時重新載入對應釘選策略
+  useEffect(() => {
+    setPinnedStrategy(getPinnedStrategy(symbol));
+  }, [symbol]);
+
+  // 定時器清理
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     if (copied) {
-      timer = setTimeout(() => {
-        setCopied(false);
-      }, 2000);
+      timer = setTimeout(() => setCopied(false), 2000);
     }
     return () => {
       if (timer) clearTimeout(timer);
@@ -83,15 +121,13 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    if (copyError) {
-      timer = setTimeout(() => {
-        setCopyError(false);
-      }, 4000);
+    if (pasteSuccess) {
+      timer = setTimeout(() => setPasteSuccess(false), 2500);
     }
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [copyError]);
+  }, [pasteSuccess]);
 
   // 生成高濃度 Master Prompt
   const promptResult: StrategicPromptResult = useMemo(() => {
@@ -101,7 +137,18 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
     });
   }, [digest, desensitized]);
 
-  // 複製處理函式 (若失敗自動展開預覽抽屜防死寂)
+  // 盤中觸價評估
+  const triggerStatus = useMemo(() => {
+    if (!pinnedStrategy) return null;
+    return evaluateStrategyTrigger(pinnedStrategy, currentPrice);
+  }, [pinnedStrategy, currentPrice]);
+
+  // 勝率計算
+  const modelWinRates = useMemo(() => {
+    return calculateModelWinRates(outcomeRecords);
+  }, [outcomeRecords]);
+
+  // 提示詞複製處理
   const handleCopy = useCallback(async () => {
     if (isLoading || isDataPending) return;
     const success = await safeCopyToClipboard(promptResult.promptText);
@@ -110,9 +157,87 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
       setCopyError(false);
     } else {
       setCopyError(true);
-      setShowPreview(true); // 自動展開抽屜供手動複製
+      setShowPreview(true);
     }
   }, [promptResult.promptText, isLoading, isDataPending]);
+
+  // 套用貼入之回流內容
+  const handleApplyLoopback = useCallback(
+    (textToParse: string) => {
+      setPasteError(null);
+      const parsed = parseLoopbackContent(textToParse, symbol);
+      if (!parsed.success || !parsed.data) {
+        setPasteError(parsed.error || '解析回流數據失敗');
+        return false;
+      }
+
+      const newPin = createPinnedStrategy(parsed.data);
+      savePinnedStrategy(newPin);
+      setPinnedStrategy(newPin);
+      setPasteInputText('');
+      setShowPasteModal(false);
+      setPasteSuccess(true);
+      return true;
+    },
+    [symbol]
+  );
+
+  // 嘗試一鍵讀取系統剪貼簿直接套用
+  const handleQuickPasteClipboard = useCallback(async () => {
+    if (navigator?.clipboard?.readText) {
+      try {
+        const clipText = await navigator.clipboard.readText();
+        if (clipText && clipText.trim()) {
+          const ok = handleApplyLoopback(clipText);
+          if (ok) return;
+        }
+      } catch (err) {
+        logger.info('無法直接讀取剪貼簿，切換為手動貼上抽屜:', err);
+      }
+    }
+    setShowPasteModal(true);
+  }, [handleApplyLoopback]);
+
+  // 清除目前標的的釘選
+  const handleClearPin = useCallback(() => {
+    clearPinnedStrategy(symbol);
+    setPinnedStrategy(null);
+  }, [symbol]);
+
+  // 點擊確認警報（避免疲勞）
+  const handleAcknowledgeAlert = useCallback(() => {
+    if (!pinnedStrategy) return;
+    const updated: PinnedStrategy = { ...pinnedStrategy, acknowledgedAlert: true };
+    savePinnedStrategy(updated);
+    setPinnedStrategy(updated);
+  }, [pinnedStrategy]);
+
+  // 結案並記錄勝率
+  const handleCloseOutcome = useCallback(
+    (outcome: 'WIN' | 'LOSS' | 'EXPIRED') => {
+      if (!pinnedStrategy) return;
+      const record: StrategyOutcomeRecord = {
+        id: `outcome_${Date.now()}`,
+        symbol: pinnedStrategy.symbol,
+        aiModel: pinnedStrategy.aiModel,
+        createdAt: pinnedStrategy.createdAt,
+        closedAt: new Date().toISOString(),
+        outcome,
+      };
+      recordStrategyOutcome(record);
+      clearPinnedStrategy(symbol);
+      setPinnedStrategy(null);
+      setOutcomeRecords(getStrategyOutcomeRecords());
+    },
+    [pinnedStrategy, symbol]
+  );
+
+  // 計算釘選策略剩餘天數
+  const remainingDays = useMemo(() => {
+    if (!pinnedStrategy) return 0;
+    const diffMs = new Date(pinnedStrategy.expiresAt).getTime() - Date.now();
+    return Math.max(0, Math.ceil(diffMs / 86400000));
+  }, [pinnedStrategy]);
 
   return (
     <div
@@ -182,8 +307,31 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
           </div>
         </div>
 
-        {/* 右側控制項：脫敏開關與 Token 預估 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* 右側控制項：脫敏開關、勝率榜入口與 Token 預估 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => setShowLeaderboard(!showLeaderboard)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '4px 10px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              background: 'rgba(234, 179, 8, 0.12)',
+              color: '#facc15',
+              border: '1px solid rgba(234, 179, 8, 0.3)',
+              transition: 'all 0.2s ease',
+            }}
+            title="查看外部各 AI 模型歷史勝率榜"
+          >
+            <Trophy size={13} />
+            <span>智囊團勝率榜</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setDesensitized(!desensitized)}
@@ -222,13 +370,13 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
         </div>
       </div>
 
-      {/* 主操作列：大按鈕一鍵複製與成功微反饋 (Ticket 14) */}
+      {/* 主操作列：一鍵複製 + 貼入外部 AI 裁決 + Prompt 預覽 */}
       <div
         style={{
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',
-          gap: '12px',
+          gap: '10px',
           background: 'var(--bg-secondary, rgba(255, 255, 255, 0.02))',
           padding: '12px 14px',
           borderRadius: '10px',
@@ -241,13 +389,13 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
           disabled={isLoading || isDataPending}
           onClick={handleCopy}
           style={{
-            flex: 1,
-            minWidth: '240px',
+            flex: 2,
+            minWidth: '220px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: '8px',
-            padding: '10px 18px',
+            padding: '10px 16px',
             borderRadius: '8px',
             fontSize: '14px',
             fontWeight: 600,
@@ -276,8 +424,38 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
               ? '⏳ 數據同步校準中...'
               : isDataPending
               ? '⚠️ 標的數據待命中 (請在線回補)'
-              : `一鍵複製 AI 戰情提示詞 (${digest.quote.symbol} ${digest.quote.name})`}
+              : `一鍵複製 AI 戰情提示詞 (${symbol} ${digest.quote.name})`}
           </span>
+        </button>
+
+        {/* 外部 AI 裁決回流按鈕 */}
+        <button
+          type="button"
+          aria-label="貼入外部 AI 裁決"
+          onClick={handleQuickPasteClipboard}
+          style={{
+            flex: 1,
+            minWidth: '170px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            padding: '10px 14px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            background: pasteSuccess
+              ? 'rgba(16, 185, 129, 0.2)'
+              : 'linear-gradient(135deg, rgba(147, 51, 234, 0.2) 0%, rgba(79, 70, 229, 0.2) 100%)',
+            color: pasteSuccess ? '#34d399' : '#c084fc',
+            border: `1px solid ${pasteSuccess ? 'rgba(16, 185, 129, 0.4)' : 'rgba(147, 51, 234, 0.4)'}`,
+            transition: 'all 0.2s ease',
+          }}
+          title="支援一鍵讀取剪貼簿或貼上外部 AI 回覆長文，自動提取 JSON 釘選"
+        >
+          {pasteSuccess ? <Check size={15} /> : <ClipboardList size={15} />}
+          <span>{pasteSuccess ? '✅ 裁決已釘選生效' : '📋 貼入外部 AI 裁決'}</span>
         </button>
 
         <button
@@ -306,7 +484,450 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
         </button>
       </div>
 
-      {/* 複製失敗安全引導橫幅 (Ticket 03) */}
+      {/* 盤中觸價警報橫幅 (若觸價且使用者尚未確認) */}
+      {triggerStatus?.triggerMessage && !pinnedStrategy?.acknowledgedAlert && (
+        <div
+          data-testid="intraday-trigger-alert"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            padding: '10px 14px',
+            borderRadius: '8px',
+            background: triggerStatus.isStopLossTriggered
+              ? 'rgba(239, 68, 68, 0.2)'
+              : 'rgba(16, 185, 129, 0.2)',
+            border: `1px solid ${
+              triggerStatus.isStopLossTriggered
+                ? 'rgba(239, 68, 68, 0.5)'
+                : 'rgba(16, 185, 129, 0.5)'
+            }`,
+            color: triggerStatus.isStopLossTriggered ? '#fca5a5' : '#86efac',
+            fontSize: '13px',
+            fontWeight: 600,
+            animation: 'pulse 2s infinite',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertTriangle size={18} />
+            <span>{triggerStatus.triggerMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleAcknowledgeAlert}
+            style={{
+              padding: '3px 8px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              cursor: 'pointer',
+              background: 'rgba(0, 0, 0, 0.4)',
+              color: '#ffffff',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+            }}
+          >
+            我已知悉
+          </button>
+        </div>
+      )}
+
+      {/* 外部 AI 裁決釘選卡片 (若已釘選) */}
+      {pinnedStrategy && (
+        <div
+          data-testid="pinned-strategy-card"
+          style={{
+            background: 'rgba(17, 24, 39, 0.75)',
+            border: '1px solid rgba(147, 51, 234, 0.35)',
+            borderRadius: '10px',
+            padding: '12px 14px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '8px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  background: 'rgba(147, 51, 234, 0.25)',
+                  color: '#d8b4fe',
+                  border: '1px solid rgba(147, 51, 234, 0.4)',
+                }}
+              >
+                🤖 {pinnedStrategy.aiModel}
+              </span>
+              <span
+                style={{
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: '#f3f4f6',
+                }}
+              >
+                {pinnedStrategy.verdict}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span
+                style={{
+                  fontSize: '11px',
+                  color: pinnedStrategy.isExpired ? '#f87171' : '#9ca3af',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  background: pinnedStrategy.isExpired
+                    ? 'rgba(239, 68, 68, 0.15)'
+                    : 'rgba(255, 255, 255, 0.05)',
+                }}
+              >
+                {pinnedStrategy.isExpired ? '⚠️ 策略已逾期 (建議重新診斷)' : `效期剩餘 ${remainingDays} 天`}
+              </span>
+              <button
+                type="button"
+                onClick={handleClearPin}
+                title="放棄此釘選"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#9ca3af',
+                  cursor: 'pointer',
+                  padding: '2px',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </div>
+
+          {/* 關鍵點位三欄橫幅 */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+              gap: '8px',
+              fontSize: '12px',
+            }}
+          >
+            <div
+              style={{
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.2)',
+                borderRadius: '6px',
+                padding: '6px 10px',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <span style={{ color: '#f87171', fontSize: '11px' }}>🛡️ 保命停損價</span>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: '#fca5a5' }}>
+                {pinnedStrategy.stopLoss.toFixed(2)}
+              </span>
+            </div>
+
+            {pinnedStrategy.takeProfit !== undefined && (
+              <div
+                style={{
+                  background: 'rgba(16, 185, 129, 0.08)',
+                  border: '1px solid rgba(16, 185, 129, 0.2)',
+                  borderRadius: '6px',
+                  padding: '6px 10px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                <span style={{ color: '#34d399', fontSize: '11px' }}>🎯 停利目標價</span>
+                <span style={{ fontSize: '14px', fontWeight: 700, color: '#86efac' }}>
+                  {pinnedStrategy.takeProfit.toFixed(2)}
+                </span>
+              </div>
+            )}
+
+            {pinnedStrategy.trendReversal !== undefined && (
+              <div
+                style={{
+                  background: 'rgba(59, 130, 246, 0.08)',
+                  border: '1px solid rgba(59, 130, 246, 0.2)',
+                  borderRadius: '6px',
+                  padding: '6px 10px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                <span style={{ color: '#60a5fa', fontSize: '11px' }}>🚀 突破翻多點</span>
+                <span style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd' }}>
+                  {pinnedStrategy.trendReversal.toFixed(2)}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* 結案記錄操作組 */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: '6px',
+              fontSize: '11px',
+              color: '#9ca3af',
+              borderTop: '1px dashed rgba(255, 255, 255, 0.1)',
+              paddingTop: '8px',
+            }}
+          >
+            <span>結案回報勝率：</span>
+            <button
+              type="button"
+              onClick={() => handleCloseOutcome('WIN')}
+              style={{
+                background: 'rgba(16, 185, 129, 0.15)',
+                color: '#34d399',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                borderRadius: '4px',
+                padding: '2px 6px',
+                cursor: 'pointer',
+                fontSize: '11px',
+              }}
+            >
+              獲利達標 (WIN)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleCloseOutcome('LOSS')}
+              style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                color: '#f87171',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '4px',
+                padding: '2px 6px',
+                cursor: 'pointer',
+                fontSize: '11px',
+              }}
+            >
+              停損出場 (LOSS)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleCloseOutcome('EXPIRED')}
+              style={{
+                background: 'rgba(107, 114, 128, 0.2)',
+                color: '#9ca3af',
+                border: '1px solid rgba(107, 114, 128, 0.3)',
+                borderRadius: '4px',
+                padding: '2px 6px',
+                cursor: 'pointer',
+                fontSize: '11px',
+              }}
+            >
+              時間逾期 (EXPIRED)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 手動貼上回流彈窗/抽屜 */}
+      {showPasteModal && (
+        <div
+          data-testid="paste-modal"
+          style={{
+            background: 'rgba(0, 0, 0, 0.4)',
+            border: '1px solid rgba(147, 51, 234, 0.4)',
+            borderRadius: '10px',
+            padding: '14px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Sparkles size={16} color="#c084fc" />
+              <span style={{ fontSize: '13px', fontWeight: 600, color: '#f3f4f6' }}>
+                貼入外部 AI 分析長文或 JSON 代碼塊
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPasteModal(false)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#9ca3af',
+                cursor: 'pointer',
+              }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          <textarea
+            rows={4}
+            value={pasteInputText}
+            onChange={(e) => setPasteInputText(e.target.value)}
+            placeholder="請直接將 Claude / ChatGPT / Gemini 輸出的整篇分析貼在此處，系統將自動提取最後的 JSON 釘選點位..."
+            style={{
+              width: '100%',
+              background: '#090d16',
+              border: '1px solid var(--border-color, #374151)',
+              borderRadius: '6px',
+              color: '#e5e7eb',
+              padding: '8px',
+              fontSize: '12px',
+              fontFamily: 'inherit',
+              boxSizing: 'border-box',
+              resize: 'vertical',
+            }}
+          />
+
+          {pasteError && (
+            <div
+              style={{
+                color: '#f87171',
+                fontSize: '12px',
+                background: 'rgba(239, 68, 68, 0.1)',
+                padding: '6px 10px',
+                borderRadius: '6px',
+              }}
+            >
+              {pasteError}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={() => setShowPasteModal(false)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                background: 'transparent',
+                color: '#9ca3af',
+                border: '1px solid #4b5563',
+                cursor: 'pointer',
+              }}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApplyLoopback(pasteInputText)}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: 600,
+                background: 'linear-gradient(135deg, #7c3aed 0%, #9333ea 100%)',
+                color: '#ffffff',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              解析並釘選
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 智囊團勝率榜抽屜 */}
+      {showLeaderboard && (
+        <div
+          data-testid="leaderboard-drawer"
+          style={{
+            background: 'rgba(0, 0, 0, 0.45)',
+            border: '1px solid rgba(234, 179, 8, 0.35)',
+            borderRadius: '10px',
+            padding: '14px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Trophy size={16} color="#facc15" />
+              <span style={{ fontSize: '13px', fontWeight: 600, color: '#f3f4f6' }}>
+                外部 AI 智囊團實戰勝率榜 (近 20 筆記錄)
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowLeaderboard(false)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#9ca3af',
+                cursor: 'pointer',
+              }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          {modelWinRates.length === 0 ? (
+            <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af', textAlign: 'center', padding: '12px 0' }}>
+              尚無結案記錄。在釘選策略後，點擊「獲利達標」或「停損出場」即可開始累積智囊團戰績！
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {modelWinRates.map((stat, idx) => (
+                <div
+                  key={stat.aiModel}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                    fontSize: '12px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span
+                      style={{
+                        fontWeight: 700,
+                        color: idx === 0 ? '#facc15' : idx === 1 ? '#cbd5e1' : '#b45309',
+                      }}
+                    >
+                      #{idx + 1}
+                    </span>
+                    <span style={{ fontWeight: 600, color: '#e5e7eb' }}>{stat.aiModel}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ color: '#9ca3af' }}>
+                      {stat.total} 場 ({stat.wins} 勝 / {stat.losses} 敗)
+                    </span>
+                    <span
+                      style={{
+                        fontWeight: 700,
+                        color: stat.winRatePct >= 60 ? '#4ade80' : stat.winRatePct >= 50 ? '#facc15' : '#f87171',
+                      }}
+                    >
+                      勝率 {stat.winRatePct}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 複製失敗安全引導橫幅 */}
       {copyError && (
         <div
           data-testid="copy-error-toast"
@@ -326,7 +947,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
         </div>
       )}
 
-      {/* 可折疊 Prompt 預覽抽屜 (Ticket 15) */}
+      {/* 可折疊 Prompt 預覽抽屜 */}
       {showPreview && (
         <div
           style={{

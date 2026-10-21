@@ -95,10 +95,11 @@ export function calculateDeterministicPivots(price: number, market: string = 'TW
 /**
  * 組裝前端確定性算術防線 XML (Spec 0181 / Spec 0182)
  */
-function buildPrecalculatedPivotsXml(digest: StrategicFactDigest): string {
+function buildPrecalculatedPivotsXml(digest: StrategicFactDigest, options?: StrategicPromptOptions): string {
   const currentPrice = digest.quote?.currentPrice || 0;
   const market = digest.audit?.market || 'TW';
   const portfolio = digest.desensitizedPortfolioContext;
+  const isDesensitized = options?.desensitized ?? true;
   const isInPosition =
     portfolio?.status === 'IN_POSITION' ||
     (portfolio?.portfolioWeightPct !== undefined && portfolio.portfolioWeightPct > 0) ||
@@ -111,6 +112,27 @@ function buildPrecalculatedPivotsXml(digest: StrategicFactDigest): string {
     const breakevenLine = portfolio?.breakevenPrice ?? costBasis;
     const isBigProfit = (portfolio?.unrealizedPnLPercent ?? 0) >= 8.0;
 
+    if (isDesensitized) {
+      const isTriggered =
+        (portfolio?.unrealizedPnLPercent ?? 0) <= -3.0 ||
+        (currentPrice > 0 && currentPrice < pivots.stopLossConservative3Pct);
+      const lines = [
+        '  <pre_calculated_pivots mode="HOLDING_DEFENSE_DESENSITIZED">',
+        '    <cost_basis_reference>成本基準線 (100.0%)</cost_basis_reference>',
+        `    <unrealized_pnl_percent>${portfolio?.unrealizedPnLPercent ?? 0}%</unrealized_pnl_percent>`,
+        isBigProfit ? `    <trailing_stop_line>${Number((currentPrice * 0.94).toFixed(2))}</trailing_stop_line>` : null,
+        `    <stop_loss_conservative_3pct>${pivots.stopLossConservative3Pct}</stop_loss_conservative_3pct>`,
+        `    <stop_loss_conservative_status is_triggered="${isTriggered}">${isTriggered ? '已實質跌破保守停損線 (觸發紀律防守條件)' : '位於防線之上安全'}</stop_loss_conservative_status>`,
+        `    <stop_loss_defensive_5pct>${pivots.stopLossDefensive5Pct}</stop_loss_defensive_5pct>`,
+        `    <target_profit_r2_ratio>${pivots.targetProfitR2Ratio}</target_profit_r2_ratio>`,
+        `    <friction_threshold_pct>${frictionThresholdPct}%</friction_threshold_pct>`,
+        digest.chips?.limitDownPrice ? `    <extreme_stress_scenario><tw_limit_down_price>${digest.chips.limitDownPrice}</tw_limit_down_price><lockup_risk_warning>若遭遇系統性黑天鵝直接跌停鎖死，停損單將無法成交，請評估隔夜跳空風險</lockup_risk_warning></extreme_stress_scenario>` : null,
+        '    <!-- 指令：在庫持倉優先評估防禦或保本停損，嚴禁盲目凹單 -->',
+        '  </pre_calculated_pivots>',
+      ];
+      return lines.filter(Boolean).join('\n');
+    }
+
     const lines = [
       '  <pre_calculated_pivots mode="HOLDING_DEFENSE">',
       `    <exact_cost_basis>${costBasis}</exact_cost_basis>`,
@@ -122,6 +144,7 @@ function buildPrecalculatedPivotsXml(digest: StrategicFactDigest): string {
       `    <stop_loss_defensive_5pct>${pivots.stopLossDefensive5Pct}</stop_loss_defensive_5pct>`,
       `    <target_profit_r2_ratio>${pivots.targetProfitR2Ratio}</target_profit_r2_ratio>`,
       `    <friction_threshold_pct>${frictionThresholdPct}%</friction_threshold_pct>`,
+      digest.chips?.limitDownPrice ? `    <extreme_stress_scenario><tw_limit_down_price>${digest.chips.limitDownPrice}</tw_limit_down_price><lockup_risk_warning>若遭遇系統性黑天鵝直接跌停鎖死，停損單將無法成交，請評估隔夜跳空風險</lockup_risk_warning></extreme_stress_scenario>` : null,
       '    <!-- 指令：在庫持倉優先評估防禦或保本停損，嚴禁盲目凹單 -->',
       '  </pre_calculated_pivots>',
     ];
@@ -136,6 +159,7 @@ function buildPrecalculatedPivotsXml(digest: StrategicFactDigest): string {
     <stop_loss_defensive_5pct>${pivots.stopLossDefensive5Pct}</stop_loss_defensive_5pct>
     <target_profit_r2_ratio>${pivots.targetProfitR2Ratio}</target_profit_r2_ratio>
     <friction_threshold_pct>${frictionThresholdPct}%</friction_threshold_pct>
+    ${digest.chips?.limitDownPrice ? `<extreme_stress_scenario><tw_limit_down_price>${digest.chips.limitDownPrice}</tw_limit_down_price><lockup_risk_warning>若遭遇系統性黑天鵝直接跌停鎖死，停損單將無法成交，請評估隔夜跳空風險</lockup_risk_warning></extreme_stress_scenario>` : ''}
     <!-- 強制指令：此標的當前為【空手觀望 (未建倉)】，請從買方視角評估當前位階是否適合建倉、回測支撐位與潛在風報比，嚴禁發出停損清算命令！ -->
   </pre_calculated_pivots>`;
 }
@@ -262,9 +286,9 @@ function buildEquityFactSheet(digest: StrategicFactDigest): string {
       ${!isUS ? `<total_institutional_net_1d unit="${unit}">${chips.totalNetShares1D ?? 'N/A'}</total_institutional_net_1d>
       <foreign_net_shares_1d unit="${unit}">${chips.foreignNetShares1D !== undefined ? `${chips.foreignNetShares1D}${chips.foreignRatio20D !== undefined ? ` (佔 20 日均量 ${chips.foreignRatio20D}%)` : ''}` : 'N/A'}</foreign_net_shares_1d>
       <trust_net_shares_1d unit="${unit}">${chips.trustNetShares1D !== undefined ? `${chips.trustNetShares1D}${chips.trustRatio20D !== undefined ? ` (佔 20 日均量 ${chips.trustRatio20D}%)` : ''}` : 'N/A'}</trust_net_shares_1d>
-      <total_institutional_net_20d unit="${unit}">${chips.totalNetShares20D ?? 'N/A'}</total_institutional_net_20d>
-      <foreign_net_shares_20d unit="${unit}">${chips.foreignNetShares20D ?? 'N/A'}</foreign_net_shares_20d>
-      <trust_net_shares_20d unit="${unit}">${chips.trustNetShares20D ?? 'N/A'}</trust_net_shares_20d>
+      <total_institutional_net_cumulative period="LAST_20_TRADING_DAYS" unit="${unit}">${chips.totalNetShares20D ?? 'N/A'}</total_institutional_net_cumulative>
+      <foreign_net_shares_cumulative period="LAST_20_TRADING_DAYS" unit="${unit}">${chips.foreignNetShares20D ?? 'N/A'}</foreign_net_shares_cumulative>
+      <trust_net_shares_cumulative period="LAST_20_TRADING_DAYS" unit="${unit}">${chips.trustNetShares20D ?? 'N/A'}</trust_net_shares_cumulative>
       <margin_balance unit="${unit}">${chips.marginBalance ?? 'N/A'}</margin_balance>
       <short_balance unit="${unit}">${chips.shortBalance ?? 'N/A'}</short_balance>
       <sbl_balance unit="${unit}">N/A (外資借券賣出待結算)</sbl_balance>
@@ -275,15 +299,15 @@ function buildEquityFactSheet(digest: StrategicFactDigest): string {
       <retail_holder_ratio_under_10>${chips.retailHolderCountChange ?? 'N/A'}%</retail_holder_ratio_under_10>` : `<us_market_structure>美股採 13F 機構季度申報與 SEC Form 4 內部人申報，無台股盤後籌碼與融資券機制</us_market_structure>`}
       <main_force_vwap_20d>${chips.mainForceVwap20D ?? 'N/A'}</main_force_vwap_20d>
       <vwap_bias_percent>${chips.currentVwapBiasPct ?? 'N/A'}%</vwap_bias_percent>
-      <box_resistance>${chips.boxResistancePrice ?? 'N/A'}</box_resistance>
-      <box_support>${chips.boxSupportPrice ?? 'N/A'}</box_support>
+      <swing_range_60d_resistance>${chips.boxResistancePrice ?? 'N/A'}</swing_range_60d_resistance>
+      <swing_range_60d_support>${chips.boxSupportPrice ?? 'N/A'}</swing_range_60d_support>
       ${chips.microstructureSummary ? `<us_microstructure>${chips.microstructureSummary}</us_microstructure>` : ''}
     </chips_and_microstructure>
 
     <!-- 3. 基本面與月營收 (好生意與好公司) -->
     <fundamental_and_governance>
       <is_cyclical_stock is_cyclical="${chips.isCyclical ? 'true' : 'false'}">${chips.isCyclical ? '景氣循環週期股 (記憶體/半導體/原物料，注意高點估值陷阱)' : '一般非循環股'}</is_cyclical_stock>
-      <pe_ratio>${fundamental?.pe ?? 'N/A'}</pe_ratio>
+      <pe_ratio calculation_basis="TRAILING_TWELVE_MONTHS_TTM" note="證交所官方每日盤後公布值，採近四季滾動累計EPS計算">${fundamental?.pe ?? 'N/A'}</pe_ratio>
       <pb_ratio>${fundamental?.pb ?? 'N/A'}</pb_ratio>
       <dividend_yield>${fundamental?.dividendYield ?? 'N/A'}%</dividend_yield>
       ${fundamental?.latestQuarterEps !== undefined ? `<latest_quarter_financials quarter="${fundamental.latestQuarterName || '最新季度'}"><eps unit="元">${fundamental.latestQuarterEps}</eps>${fundamental.grossMarginPct !== undefined ? `<gross_margin unit="%">${fundamental.grossMarginPct}%</gross_margin>` : ''}${fundamental.operatingMarginPct !== undefined ? `<operating_margin unit="%">${fundamental.operatingMarginPct}%</operating_margin>` : ''}</latest_quarter_financials>` : ''}
@@ -291,7 +315,7 @@ function buildEquityFactSheet(digest: StrategicFactDigest): string {
       <revenue_yoy_growth>${fundamental?.monthlyRevenueYoY ?? 'N/A'}%</revenue_yoy_growth>
       <revenue_mom_growth>${fundamental?.monthlyRevenueMoM ?? 'N/A'}%</revenue_mom_growth>
       <is_all_time_high_revenue>${fundamental?.isMonthlyRevenueAllTimeHigh ? '是 (歷史新高)' : '否'}</is_all_time_high_revenue>
-      <director_pledge_ratio>${fundamental?.directorPledgeRatioPct ?? 'N/A'}%</director_pledge_ratio>
+      ${fundamental?.directorPledgeRatioPct !== undefined ? `<director_pledge_ratio>${fundamental.directorPledgeRatioPct}%</director_pledge_ratio>` : ''}
       ${fundamental?.governanceRiskWarning ? `<governance_warning>${fundamental.governanceRiskWarning}</governance_warning>` : ''}
     </fundamental_and_governance>
 
@@ -468,6 +492,38 @@ function buildWebHuntProtocolXml(): string {
 }
 
 /**
+ * 組裝外聯查核邊界契約 (Spec 0200 Ticket 02)
+ */
+function buildExternalAuditContractXml(): string {
+  return `  <external_audit_contract>
+    【數據法定基準】：本 Prompt 所載之即時行情、均線數列、三大法人與財務估值皆通過本地數據海關稽核，為唯一法定基準。
+    【聯網邊界約束】：若啟用外部聯網，僅限於查核產業動向、法說會紀要與質化新聞；嚴禁以第三方網站非同口徑數值覆蓋或推翻本給定數據！
+  </external_audit_contract>`;
+}
+
+/**
+ * 組裝外部 AI 回流協議規範代碼塊 (Spec 0200 Ticket 02 & Ticket 03)
+ */
+function buildLoopbackProtocolDirectiveXml(digest: StrategicFactDigest): string {
+  const sym = digest.quote?.symbol || 'STOCK';
+  return `  <loopback_protocol_directive>
+    【強制輸出規範】：
+    請在分析長文最末尾，單獨輸出一個標準 JSON 代碼區塊（\`\`\`json ... \`\`\`），嚴禁在代碼塊內添加任何 markdown 註解，格式如下：
+    \`\`\`json
+    {
+      "symbol": "${sym}",
+      "aiModel": "填入你當前所屬模型名稱 (如 Claude 3.5 Sonnet / ChatGPT-4o / Gemini 1.5 Pro)",
+      "verdict": "一句話核心裁決 (如 有條件持倉防守/暫不加碼)",
+      "stopLoss": 153.46,
+      "takeProfit": 167.70,
+      "trendReversal": 170.71,
+      "validityDays": 5
+    }
+    \`\`\`
+  </loopback_protocol_directive>`;
+}
+
+/**
  * 生成全維度 Master 智策提示詞
  */
 export function generateMasterPrompt(
@@ -486,11 +542,13 @@ export function generateMasterPrompt(
 ${buildTemporalGroundingXml(digest)}
 ${buildCustomsAuditXml(digest)}
 ${isEtf ? buildEtfFactSheet(digest) : buildEquityFactSheet(digest)}
-${buildPrecalculatedPivotsXml(digest)}
+${buildPrecalculatedPivotsXml(digest, options)}
 ${buildInvestorContextXml(digest, options)}
 ${buildAntiSycophancyXml()}
 ${buildFullSixHatsInstructions(digest)}
 ${buildWebHuntProtocolXml()}
+${buildExternalAuditContractXml()}
+${buildLoopbackProtocolDirectiveXml(digest)}
 ${buildReflectionGateXml()}
   <output_format>
     請嚴格遵守以下輸出契約，以「結論先行 (Actionable Matrix)」輸出：
@@ -537,7 +595,7 @@ export function generateSingleHatPrompt(
   <system_role>你是一位資深量化風控與投資策略師，當前正以【${cfg.emoji} ${cfg.nameZh}】專屬心智模式進行單點極限穿透覆盤。</system_role>
 ${buildCustomsAuditXml(digest)}
 ${buildSingleHatCompactFactSheet(digest)}
-${buildPrecalculatedPivotsXml(digest)}
+${buildPrecalculatedPivotsXml(digest, options)}
 ${buildInvestorContextXml(digest, options)}
 ${buildSingleHatInstruction(hat, digest)}
 ${buildReflectionGateXml()}

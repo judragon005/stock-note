@@ -1211,6 +1211,7 @@ export interface GenerateReportOptions {
       date?: string;
     }>;
   };
+  macroData?: any;
 }
 
 /**
@@ -1618,6 +1619,26 @@ export function generateAiForceReportFromCandles(
     mainForceConcentration: vwapBias,
     marginChangeRatio: 0,
   });
+
+  // 注入宏觀真實數據 (Spec 0200 Ticket 01)
+  if (options?.macroData) {
+    marketSentiment.usMacroData = {
+      tenYearTreasury: options.macroData.treasury_yield_10y,
+      cnnScore: options.macroData.cnn_fear_greed_score,
+      vix: options.macroData.vix_close,
+      cnnRatingText:
+        options.macroData.cnn_fear_greed_score > 60
+          ? '貪婪'
+          : options.macroData.cnn_fear_greed_score < 40
+          ? '恐懼'
+          : '中性',
+    };
+    (marketSentiment as any).twMacroData = {
+      putCallRatio: options.macroData.tw_put_call_ratio,
+      foreignFuturesOi: options.macroData.tw_foreign_futures_oi,
+      trustFuturesOi: options.macroData.tw_trust_futures_oi,
+    };
+  }
 
   const aiConfidence = calculateAiConfidence({
     candles: effectiveCandles,

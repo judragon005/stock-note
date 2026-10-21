@@ -142,4 +142,75 @@ describe('Ticket 04 - 湖倉 API 擴展與前端載入整合 (Spec 0164)', () =>
     expect(result?.valuation?.pb).toBe(15.39);
     expect(result?.valuation?.dividendYield).toBe(0.45);
   });
+
+  it('5. /api/market/history/:symbol 應能連帶回傳 macro 宏觀數據 (Spec 0200 Ticket 01)', async () => {
+    const { initSqliteLakehouseDb, closeSqliteDb } = require('../../scripts/market-sync/sqlite-db-core.cjs');
+    const { createMarketApiMiddleware } = require('../../scripts/market-sync/vite-market-middleware.cjs');
+
+    const db = initSqliteLakehouseDb(testDbPath);
+    db.prepare("INSERT INTO symbols_meta (symbol, name, market, updated_at) VALUES ('2344', '華邦電', 'TW', 12345)").run();
+    db.prepare("INSERT INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume) VALUES ('2344', '2026-10-21', 157.5, 161.5, 156, 159.5, 159.5, 49816848)").run();
+    db.prepare("INSERT INTO macro_sentiment_daily (date, treasury_yield_10y, tw_put_call_ratio, cnn_fear_greed_score, vix_close, updated_at) VALUES ('2026-10-20', 4.12, 105.4, 54, 18.25, 12345)").run();
+
+    const middleware = createMarketApiMiddleware(testDbPath);
+
+    let responseData = '';
+    const req = { url: '/api/market/history/2344?limit=250', method: 'GET' };
+    const res = {
+      writeHead: vi.fn(),
+      end: (data: string) => { responseData = data; },
+    };
+    const next = vi.fn();
+
+    await middleware(req, res, next);
+
+    expect(responseData).toBeTruthy();
+    const json = JSON.parse(responseData);
+    expect(json.symbol).toBe('2344');
+    expect(json.macro).toBeDefined();
+    expect(json.macro.treasury_yield_10y).toBe(4.12);
+    expect(json.macro.tw_put_call_ratio).toBe(105.4);
+    expect(json.macro.vix_close).toBe(18.25);
+
+    closeSqliteDb();
+  });
+
+  it('6. loadSymbolFullLakehouseData 當最新日資券為 null 時應能向前回溯最新有效資券 (Spec 0200 Ticket 01)', async () => {
+    const { loadSymbolFullLakehouseData } = await import('./marketCacheLoader');
+
+    const fakePayload = {
+      symbol: '2344',
+      candles: [
+        { date: '2026-10-16', open: 153, high: 157.5, low: 151, close: 152.5, volume: 42095409 },
+        { date: '2026-10-20', open: 157.5, high: 161.5, low: 156, close: 159.5, volume: 49816848 }
+      ],
+      chips: {
+        '2026-10-16': { date: '2026-10-16', foreign_net: 12224, margin_balance: 112612, short_balance: 670, day_trade_rate: 60.5 },
+        '2026-10-20': { date: '2026-10-20', foreign_net: 423, margin_balance: null, short_balance: null, day_trade_rate: null }
+      },
+      macro: {
+        date: '2026-10-20',
+        treasury_yield_10y: 4.12,
+        tw_put_call_ratio: 105.4,
+        cnn_fear_greed_score: 54,
+        vix_close: 18.25
+      }
+    };
+
+    // @ts-ignore
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => fakePayload,
+    });
+
+    const result = await loadSymbolFullLakehouseData('2344', 'TW');
+    expect(result).not.toBeNull();
+    // 最新一筆 (10-20) 資券為 null，應自動回退至 10-16 的有效值
+    expect(result?.marginBalance).toBe(112612);
+    expect(result?.shortBalance).toBe(670);
+    expect(result?.dayTradeRate).toBe(60.5);
+    expect((result as any)?.marginAsOfDate).toBe('2026-10-16');
+    expect((result as any)?.macro).toBeDefined();
+    expect((result as any)?.macro.treasury_yield_10y).toBe(4.12);
+  });
 });
