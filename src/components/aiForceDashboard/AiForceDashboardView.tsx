@@ -557,7 +557,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 }}
               >
                 {/* 欄 1: 10 + 13 AI 多空 × 市場情緒雙子容器 */}
-                <div style={{ minWidth: 0, height: '250px' }}>
+                <div style={{ minWidth: 0, height: '295px' }}>
                   <EnergySentimentTwinCard
                     bullBearData={report.bullBearEnergy}
                     sentimentData={report.marketSentiment}
@@ -566,17 +566,17 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 </div>
 
                 {/* 欄 2: 12 AI 主力動態信號判斷 */}
-                <div style={{ minWidth: 0, height: '250px' }}>
+                <div style={{ minWidth: 0, height: '295px' }}>
                   <DynamicSignalsCard data={report.dynamicSignals} />
                 </div>
 
                 {/* 欄 3: 21 估值與殖利率量化矩陣 */}
-                <div style={{ minWidth: 0, height: '250px' }}>
+                <div style={{ minWidth: 0, height: '295px' }}>
                   <ValuationMetricsCard data={report.valuationMetrics} market={market} />
                 </div>
 
                 {/* 欄 4: 14 AI 信心維度 */}
-                <div style={{ minWidth: 0, height: '250px' }}>
+                <div style={{ minWidth: 0, height: '295px' }}>
                   <AiConfidenceCard data={report.aiConfidence} />
                 </div>
               </div>

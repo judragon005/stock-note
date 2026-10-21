@@ -80,7 +80,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
               fontWeight: 800,
             }}
           >
-            CARD 21
+            21
           </span>
           <h3
             style={{

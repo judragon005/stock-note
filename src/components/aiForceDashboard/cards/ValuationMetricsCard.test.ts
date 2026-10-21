@@ -22,7 +22,8 @@ describe('ValuationMetricsCard - TDD Unit Tests', () => {
       React.createElement(ValuationMetricsCard, { data, market: 'TW' })
     );
 
-    expect(html).toContain('CARD 21');
+    expect(html).toContain('>21<');
+    expect(html).not.toContain('CARD 21');
     expect(html).toContain('估值與殖利率量化矩陣');
     expect(html).toContain('本益比 (PE)');
     expect(html).toContain('18.50');

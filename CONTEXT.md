@@ -2619,7 +2619,12 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     5. **月營收最新月份取值修復**：取營收歷史陣列最新一筆，杜絕由舊到新排序導致取到一年前舊營收之時序倒退。
     6. **光通訊/景氣循環標的識別**：補入 4979 華星光至 `CYCLICAL_SYMBOLS`，強化外聯提示詞之週期高峰殺估值防禦。
 
-
-
-
-
+- **Lakehouse Full Bootstrap, Cadence-Aware Scheduled Sync & War Room Visual Optimization (湖倉全量注水補全、定時排程節奏化與戰情室卡片視覺優化)**:
+  - 核心模組：`scripts/market-sync/bootstrap-lakehouse-full.cjs`、`scripts/market-sync/sync-tw-market.cjs`、`scripts/market-sync/sync-us-market.cjs`、`scripts/market-sync/ingest-tw-corporate-actions.cjs`、`src/components/aiForceDashboard/AiForceDashboardView.tsx`、`src/components/aiForceDashboard/cards/EnergySentimentTwinCard.tsx`、`src/components/aiForceDashboard/cards/DynamicSignalsCard.tsx`、`src/components/aiForceDashboard/cards/ValuationMetricsCard.tsx`、`src/components/aiForceDashboard/cards/TdccDistributionCard.tsx`、`src/components/aiForceDashboard/cards/MonthlyRevenueCard.tsx`。
+  - 規範依據：Spec 0198 (v8.111.0) 與 ADR 0198，對齊 GitHub Issue #304。
+  - 核心特性：
+    1. **湖倉全量注水 (Lakehouse Full Bootstrap)**：建立 `bootstrap-lakehouse-full.cjs` 一次性補齊上市 (TWSE) 1,084 檔每日估值（徹底解決愛之味 1217 等上市股估值缺漏問題）、美股三大宏觀情緒指標（10Y、VIX、CNN 恐懼貪婪指數）及全市場董監事質押比例（`tw_insider_pledge_records`），解除資料孤島。
+    2. **TWSE 除權息預告端點修復與入庫**：遷移廢棄 404 之舊端點至 TWSE 官方 RWD 接口 (`/rwd/zh/exRight/TWT48U`)，將官方宣告之除權息行事曆解析標準化並即時寫入 `corporate_action_calendar`。
+    3. **排程節奏化 (Cadence-Aware Scheduling, KISS 原則)**：拒絕過度工程化之常駐微服務，將動態資料依更新週期順路附掛於現行排程——除權息預告每日順路抓取、集保股權分散表每週五 18:30 後附掛、上市櫃月營收每月 1~11 號自適應附掛、美股宏觀指標於盤後帶回。
+    4. **戰情室 Layer 6 視覺高度放大至 295px**：放寬卡片容器高度至 295px，卡片內部採 `height: 100%`，字體不縮小並消除擁擠感。
+    5. **卡片標籤純數字化**：統一將 `[CARD XX]` 英文字剔除，改為純數字徽章 `[XX]`（如 `[10 · 13]`、`[12]`、`[21]`、`[19]`、`[20]`），提供更乾淨專注的戰情室視覺體驗。

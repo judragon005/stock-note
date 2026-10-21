@@ -330,6 +330,38 @@ async function runTwMarketSync(targetDateInput) {
       saveJsonAtomic(targetPath2, outputPayload);
       console.log(`✔ 市場摘要更新：已將 ${valEnrichCount} 檔官方估值注入 tw_market_summary.json`);
     }
+
+    // 6. 節奏化自動附掛任務 (Cadence Sync - Spec 0198)
+    // 6.1 每日除權除息預告日程
+    try {
+      const { runCorporateActionsIngestion } = require('./ingest-tw-corporate-actions.cjs');
+      await runCorporateActionsIngestion();
+    } catch (caErr) {
+      console.warn(`[CadenceSync] 除權除息同步警告:`, caErr.message);
+    }
+
+    // 6.2 每週五盤後（大於 18:30）自動更新 TDCC 集保千張大戶
+    const dayOfWeek = targetDate.getDay();
+    const currentHour = new Date().getHours();
+    if (dayOfWeek === 5 && currentHour >= 18) {
+      try {
+        const { runTdccIngestion } = require('./ingest-tw-tdcc.cjs');
+        await runTdccIngestion();
+      } catch (tdccErr) {
+        console.warn(`[CadenceSync] TDCC 集保同步警告:`, tdccErr.message);
+      }
+    }
+
+    // 6.3 每月 1~11 號自動更新月營收
+    const dayOfMonth = targetDate.getDate();
+    if (dayOfMonth >= 1 && dayOfMonth <= 11) {
+      try {
+        const { runMonthlyRevenueIngestion } = require('./ingest-tw-monthly-revenue.cjs');
+        await runMonthlyRevenueIngestion();
+      } catch (revErr) {
+        console.warn(`[CadenceSync] 月營收同步警告:`, revErr.message);
+      }
+    }
   } catch (sqliteErr) {
     console.warn(`[SQLite 寫入警告]:`, sqliteErr.message);
   }

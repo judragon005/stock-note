@@ -115,8 +115,7 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        height: '250px',
-        maxHeight: '250px',
+        height: '100%',
         boxSizing: 'border-box',
         overflow: 'hidden',
         padding: '12px 14px',
@@ -147,7 +146,7 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
               fontWeight: 800,
             }}
           >
-            CARD 10 · 13
+            10 · 13
           </span>
           <h3
             style={{
