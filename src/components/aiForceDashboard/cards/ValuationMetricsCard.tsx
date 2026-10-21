@@ -398,15 +398,53 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                 )}
               </div>
 
+              {/* 機構級自身歷史倍數區間 (Spec 0199 Ticket 04) */}
+              {(current.peMin !== undefined || current.pbMin !== undefined) && (
+                <div
+                  data-testid="valuation-institutional-band"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '4px 8px',
+                    borderRadius: '6px',
+                    background: 'rgba(30, 41, 59, 0.45)',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    fontSize: '0.68rem',
+                    marginBottom: '8px',
+                  }}
+                >
+                  <span style={{ color: '#94a3b8' }}>
+                    {current.peMin !== undefined ? '自身 PE 區間' : '自身 PB 區間'}
+                  </span>
+                  <div style={{ display: 'flex', gap: '6px', fontFamily: 'monospace' }}>
+                    <span style={{ color: '#34d399' }}>
+                      {current.peMin !== undefined ? `${current.peMin}x` : `${current.pbMin}x`}{' '}
+                      <span style={{ fontSize: '0.62rem', color: '#64748b' }}>低</span>
+                    </span>
+                    <span style={{ color: '#64748b' }}>—</span>
+                    <span style={{ color: '#fbbf24' }}>
+                      {current.peMedian !== undefined ? `${current.peMedian}x` : `${current.pbMedian}x`}{' '}
+                      <span style={{ fontSize: '0.62rem', color: '#64748b' }}>中</span>
+                    </span>
+                    <span style={{ color: '#64748b' }}>—</span>
+                    <span style={{ color: '#f87171' }}>
+                      {current.peMax !== undefined ? `${current.peMax}x` : `${current.pbMax}x`}{' '}
+                      <span style={{ fontSize: '0.62rem', color: '#64748b' }}>高</span>
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* 歷史估值三段位階條 */}
               <div
                 data-testid="valuation-tier-bar"
                 style={{
-                  flex: 1,
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'center',
                   gap: '4px',
+                  marginBottom: '10px',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', color: '#94a3b8' }}>
@@ -452,6 +490,45 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                 </div>
               </div>
 
+              {/* 最新單季獲利基石 (EPS / 毛利率 / 營利率，Spec 0199 Ticket 04) */}
+              {(current.latestQuarterEps !== undefined || current.grossMargin !== undefined) && (
+                <div
+                  data-testid="valuation-quarterly-financials"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '5px 8px',
+                    borderRadius: '6px',
+                    background: 'rgba(15, 23, 42, 0.55)',
+                    border: '1px solid rgba(139, 92, 246, 0.18)',
+                    fontSize: '0.68rem',
+                    marginBottom: '8px',
+                  }}
+                >
+                  <span style={{ color: '#a78bfa', fontWeight: 700 }}>
+                    {current.latestQuarterName ? `${current.latestQuarterName} 季報` : '最新單季獲利'}
+                  </span>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    {current.latestQuarterEps !== undefined && (
+                      <span style={{ color: '#f8fafc' }}>
+                        EPS: <strong style={{ color: current.latestQuarterEps >= 0 ? '#38bdf8' : '#f87171' }}>{current.latestQuarterEps}</strong>元
+                      </span>
+                    )}
+                    {current.grossMargin !== undefined && (
+                      <span style={{ color: '#cbd5e1' }}>
+                        毛利: <strong style={{ color: '#34d399' }}>{current.grossMargin}%</strong>
+                      </span>
+                    )}
+                    {current.operatingMargin !== undefined && (
+                      <span style={{ color: '#94a3b8' }}>
+                        營利: <strong>{current.operatingMargin}%</strong>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* 底部基準日與提示 */}
               <div
                 style={{
@@ -462,6 +539,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                   borderTop: '1px solid rgba(255, 255, 255, 0.05)',
                   fontSize: '0.68rem',
                   color: '#64748b',
+                  marginTop: 'auto',
                 }}
               >
                 <span>

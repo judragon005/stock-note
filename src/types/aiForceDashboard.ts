@@ -547,6 +547,16 @@ export interface ValuationMetricsData {
   valuationTier?: 'UNDERVALUED' | 'FAIR' | 'OVERVALUED'; // 便宜 / 合理 / 偏高
   valuationTierText?: string;
   isLossMaking?: boolean; // 是否處於虧損轉機期
+  // 機構級歷史倍數分位數 (Spec 0199 Ticket 03)
+  pePercentile?: number; // 0 ~ 100%
+  peMin?: number;
+  peMedian?: number;
+  peMax?: number;
+  pbPercentile?: number; // 0 ~ 100%
+  pbMin?: number;
+  pbMedian?: number;
+  pbMax?: number;
+  historySampleSize?: number;
   // 單季財報串接欄位 (Spec 0196 Ticket 03)
   latestQuarterEps?: number;
   latestQuarterName?: string;

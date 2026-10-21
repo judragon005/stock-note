@@ -119,5 +119,41 @@ describe('ValuationMetricsCard - TDD Unit Tests', () => {
     expect(html).toContain('年化配息率');
     expect(html).toContain('5.20%');
   });
+
+  it('6. Ticket 04D: 機構級自身倍數區間與最新單季財報展示 (Spec 0199)', () => {
+    const data: ValuationMetricsData = {
+      isEtf: false,
+      pe: 76.92,
+      pb: 15.07,
+      dividendYield: 0.46,
+      peMin: 18.5,
+      peMedian: 42.0,
+      peMax: 85.0,
+      pePercentile: 88,
+      valuationTier: 'OVERVALUED',
+      valuationTierText: '自身歷史偏高 (PR 88%)',
+      latestQuarterName: '2024Q3',
+      latestQuarterEps: 2.15,
+      grossMargin: 48.5,
+      operatingMargin: 24.2,
+      asOfDateText: '2026-10-20',
+      isEmpty: false,
+    };
+
+    const html = renderToStaticMarkup(
+      React.createElement(ValuationMetricsCard, { data, market: 'TW' })
+    );
+
+    expect(html).toContain('data-testid="valuation-institutional-band"');
+    expect(html).toContain('自身 PE 區間');
+    expect(html).toContain('18.5x');
+    expect(html).toContain('42x');
+    expect(html).toContain('85x');
+    expect(html).toContain('data-testid="valuation-quarterly-financials"');
+    expect(html).toContain('2024Q3 季報');
+    expect(html).toContain('2.15');
+    expect(html).toContain('48.5%');
+    expect(html).toContain('自身歷史偏高 (PR 88%)');
+  });
 });
 

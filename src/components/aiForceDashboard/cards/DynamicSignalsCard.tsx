@@ -328,16 +328,18 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
       {data?.actionableAdvice && (
         <div
           style={{
-            padding: '6px 8px',
+            padding: '8px 10px',
             borderRadius: '6px',
             background: 'rgba(15, 23, 42, 0.6)',
             borderLeft: `3px solid ${verdictConfig.color}`,
-            fontSize: '0.7rem',
-            lineHeight: 1.45,
+            fontSize: '0.72rem',
+            lineHeight: 1.55,
             color: '#e2e8f0',
+            marginTop: '2px',
+            marginBottom: '4px',
           }}
         >
-          <div style={{ color: verdictConfig.color, fontWeight: 800, marginBottom: '2px', fontSize: '0.68rem' }}>
+          <div style={{ color: verdictConfig.color, fontWeight: 800, marginBottom: '4px', fontSize: '0.7rem' }}>
             【AI 決策情境解析】
           </div>
           <div>{data.actionableAdvice}</div>

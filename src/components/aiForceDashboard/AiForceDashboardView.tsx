@@ -132,6 +132,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
               pe: lakehouseData.valuation.pe,
               pb: lakehouseData.valuation.pb,
               dividendYield: lakehouseData.valuation.dividendYield,
+              history: lakehouseData.valuation.history,
             };
           }
         }
@@ -546,7 +547,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 </div>
               </div>
 
-              {/* Layer 6: AI 多空 × 市場情緒雙子容器、主力動態信號、估值矩陣、AI 信心維度 (Spec 0195: 四欄等高 250px 鎖定) */}
+              {/* Layer 6: AI 多空 × 市場情緒雙子容器、主力動態信號、估值矩陣、AI 信心維度 (Spec 0199: 升級至 minHeight 315px 自適應拉伸) */}
               <div
                 data-layer="6-energy-sentiment"
                 style={{
@@ -554,10 +555,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
                   gap: '12px',
                   alignItems: 'stretch',
+                  minHeight: '315px',
                 }}
               >
                 {/* 欄 1: 10 + 13 AI 多空 × 市場情緒雙子容器 */}
-                <div style={{ minWidth: 0, height: '295px' }}>
+                <div style={{ minWidth: 0, height: '100%', minHeight: '315px', display: 'flex', flexDirection: 'column' }}>
                   <EnergySentimentTwinCard
                     bullBearData={report.bullBearEnergy}
                     sentimentData={report.marketSentiment}
@@ -566,17 +568,17 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 </div>
 
                 {/* 欄 2: 12 AI 主力動態信號判斷 */}
-                <div style={{ minWidth: 0, height: '295px' }}>
+                <div style={{ minWidth: 0, height: '100%', minHeight: '315px', display: 'flex', flexDirection: 'column' }}>
                   <DynamicSignalsCard data={report.dynamicSignals} />
                 </div>
 
                 {/* 欄 3: 21 估值與殖利率量化矩陣 */}
-                <div style={{ minWidth: 0, height: '295px' }}>
+                <div style={{ minWidth: 0, height: '100%', minHeight: '315px', display: 'flex', flexDirection: 'column' }}>
                   <ValuationMetricsCard data={report.valuationMetrics} market={market} />
                 </div>
 
                 {/* 欄 4: 14 AI 信心維度 */}
-                <div style={{ minWidth: 0, height: '295px' }}>
+                <div style={{ minWidth: 0, height: '100%', minHeight: '315px', display: 'flex', flexDirection: 'column' }}>
                   <AiConfidenceCard data={report.aiConfidence} />
                 </div>
               </div>

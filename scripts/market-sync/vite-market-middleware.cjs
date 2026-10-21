@@ -354,12 +354,17 @@ function createMarketApiMiddleware(customDbPath) {
         revenueRows.reverse();
       } catch {}
 
-      // 新增查詢官方每日估值 (PE/PB/Yield，Spec 0197 Ticket 01)
+      // 新增查詢官方每日估值與自身歷史倍數數列 (PE/PB/Yield，Spec 0197 & Spec 0199)
       let valRow = null;
+      let valHistory = [];
       try {
         valRow = db
           .prepare('SELECT pe, pb, dividend_yield FROM tw_valuation_daily WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 1')
           .get(symbol, aliasSym) || null;
+
+        valHistory = db
+          .prepare('SELECT pe, pb, dividend_yield, date FROM tw_valuation_daily WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 250')
+          .all(symbol, aliasSym) || [];
       } catch {}
 
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -371,7 +376,7 @@ function createMarketApiMiddleware(customDbPath) {
           chips: chipsMap,
           tdcc: tdccRows,
           revenue: revenueRows,
-          valuation: valRow,
+          valuation: valRow ? { ...valRow, history: valHistory } : null,
         })
       );
     }

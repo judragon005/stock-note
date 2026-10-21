@@ -3,7 +3,20 @@ import react from '@vitejs/plugin-react';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
-const { createMarketApiMiddleware } = require('./scripts/market-sync/vite-market-middleware.cjs');
+
+// 動態載入 market API 中介層（具備熱模組快取失效機制，Spec 0199 Ticket 01）
+function getMarketApiMiddlewareDynamic() {
+  const middlewarePath = require.resolve('./scripts/market-sync/vite-market-middleware.cjs');
+  return (req: any, res: any, next: any) => {
+    try {
+      const { createMarketApiMiddleware } = require(middlewarePath);
+      return createMarketApiMiddleware()(req, res, next);
+    } catch (err: any) {
+      console.warn('[Market Middleware Error]:', err?.message || err);
+      return next();
+    }
+  };
+}
 
 // Spec 0191 / Ticket 01: 抑制外部 DNS 解析失敗 (ENOTFOUND) 與連線重置的終端機紅色堆疊追蹤刷屏
 const customLogger = createLogger();
@@ -31,7 +44,17 @@ export default defineConfig({
     {
       name: 'vite-plugin-market-sqlite-api',
       configureServer(server) {
-        server.middlewares.use(createMarketApiMiddleware());
+        // 監聽 scripts/market-sync/ 檔案變動，動態清理 require.cache 實現熱載入
+        server.watcher.on('change', (file) => {
+          if (file.includes('scripts/market-sync') || file.includes('scripts\\market-sync')) {
+            for (const key of Object.keys(require.cache)) {
+              if (key.includes('scripts/market-sync') || key.includes('scripts\\market-sync')) {
+                delete require.cache[key];
+              }
+            }
+          }
+        });
+        server.middlewares.use(getMarketApiMiddlewareDynamic());
       },
     },
   ],

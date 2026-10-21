@@ -101,9 +101,9 @@ export const AiConfidenceCard: React.FC<AiConfidenceCardProps> = ({ data }) => {
       </div>
 
       {/* 5 條水平進度條 */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '2px 0' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '11px', padding: '4px 0', flex: 1, justifyContent: 'center' }}>
         {bars.map((item) => (
-          <div key={item.label} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <div key={item.label} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
               {item.termId ? (
                 <TermTooltip termId={item.termId}>

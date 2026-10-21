@@ -1204,6 +1204,12 @@ export interface GenerateReportOptions {
     quarterName?: string;
     grossMargin?: number | null;
     operatingMargin?: number | null;
+    history?: Array<{
+      pe?: number | null;
+      pb?: number | null;
+      dividendYield?: number | null;
+      date?: string;
+    }>;
   };
 }
 
@@ -1754,19 +1760,156 @@ export function generateAiForceReportFromCandles(
 
     tdccDistribution: buildTdccDistribution(options?.tdccRecords, market, symbol, options?.us13fData),
     monthlyRevenue: buildMonthlyRevenue(symbol, name, market, options?.revenueRecords, options?.tdccRecords),
-    valuationMetrics: {
-      isEtf: isEtfSymbol(symbol),
-      isUsMarket: market === 'US',
-      pe: options?.valuationData?.pe ?? undefined,
-      pb: options?.valuationData?.pb ?? undefined,
-      dividendYield: options?.valuationData?.dividendYield ?? undefined,
-      latestQuarterEps: options?.valuationData?.eps ?? undefined,
-      latestQuarterName: options?.valuationData?.quarterName ?? undefined,
-      grossMargin: options?.valuationData?.grossMargin ?? undefined,
-      operatingMargin: options?.valuationData?.operatingMargin ?? undefined,
-      asOfDateText: last.date,
-      isEmpty: !options?.valuationData,
-    },
+    valuationMetrics: (() => {
+      const pe = options?.valuationData?.pe ?? undefined;
+      const pb = options?.valuationData?.pb ?? undefined;
+      const dividendYield = options?.valuationData?.dividendYield ?? undefined;
+      const isEtf = isEtfSymbol(symbol);
+      const isUsMarket = market === 'US';
+      const isEmpty = !options?.valuationData;
+
+      const percentileStats = calculateValuationPercentile(
+        pe,
+        pb,
+        options?.valuationData?.history || []
+      );
+
+      return {
+        isEtf,
+        isUsMarket,
+        pe,
+        pb,
+        dividendYield,
+        latestQuarterEps: options?.valuationData?.eps ?? undefined,
+        latestQuarterName: options?.valuationData?.quarterName ?? undefined,
+        grossMargin: options?.valuationData?.grossMargin ?? undefined,
+        operatingMargin: options?.valuationData?.operatingMargin ?? undefined,
+        asOfDateText: last.date,
+        isEmpty,
+        valuationTier: percentileStats.valuationTier,
+        valuationTierText: percentileStats.valuationTierText,
+        pePercentile: percentileStats.pePercentile,
+        peMin: percentileStats.peMin,
+        peMedian: percentileStats.peMedian,
+        peMax: percentileStats.peMax,
+        pbPercentile: percentileStats.pbPercentile,
+        pbMin: percentileStats.pbMin,
+        pbMedian: percentileStats.pbMedian,
+        pbMax: percentileStats.pbMax,
+        historySampleSize: percentileStats.sampleCount,
+      };
+    })(),
+  };
+}
+
+/**
+ * 機構級歷史估值百分位數 (Percentile Rank) 演算法 (Spec 0199 Ticket 03)
+ */
+export function calculateValuationPercentile(
+  currentPe: number | null | undefined,
+  currentPb: number | null | undefined,
+  history: Array<{ pe?: number | null; pb?: number | null }> = []
+): {
+  peMin?: number;
+  peMedian?: number;
+  peMax?: number;
+  pePercentile?: number;
+  pbMin?: number;
+  pbMedian?: number;
+  pbMax?: number;
+  pbPercentile?: number;
+  valuationTier: 'UNDERVALUED' | 'FAIR' | 'OVERVALUED';
+  valuationTierText: string;
+  sampleCount: number;
+} {
+  // 1. 抽取有效 PE (排除 null, undefined, <= 0)
+  const validPes = history
+    .map((h) => h.pe)
+    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0)
+    .sort((a, b) => a - b);
+
+  // 2. 抽取有效 PB
+  const validPbs = history
+    .map((h) => h.pb)
+    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0)
+    .sort((a, b) => a - b);
+
+  const getMedian = (arr: number[]): number | undefined => {
+    if (arr.length === 0) return undefined;
+    const mid = Math.floor(arr.length / 2);
+    return arr.length % 2 !== 0 ? arr[mid] : Number(((arr[mid - 1] + arr[mid]) / 2).toFixed(2));
+  };
+
+  const getPercentile = (val: number, arr: number[]): number => {
+    if (arr.length === 0) return 50;
+    const belowCount = arr.filter((x) => x < val).length;
+    return Math.round((belowCount / arr.length) * 100);
+  };
+
+  const hasValidPe = typeof currentPe === 'number' && Number.isFinite(currentPe) && currentPe > 0;
+  const hasValidPb = typeof currentPb === 'number' && Number.isFinite(currentPb) && currentPb > 0;
+
+  // 優先使用 PE 數列
+  if (hasValidPe && validPes.length >= 1) {
+    const min = validPes[0];
+    const max = validPes[validPes.length - 1];
+    const med = getMedian(validPes);
+    const pr = getPercentile(currentPe, validPes);
+
+    let tier: 'UNDERVALUED' | 'FAIR' | 'OVERVALUED' = 'FAIR';
+    let text = `自身歷史常態 (PR ${pr}%)`;
+    if (pr <= 20) {
+      tier = 'UNDERVALUED';
+      text = `自身歷史偏低 (PR ${pr}%)`;
+    } else if (pr >= 80) {
+      tier = 'OVERVALUED';
+      text = `自身歷史偏高 (PR ${pr}%)`;
+    }
+
+    return {
+      peMin: min,
+      peMax: max,
+      peMedian: med,
+      pePercentile: pr,
+      valuationTier: tier,
+      valuationTierText: text,
+      sampleCount: validPes.length,
+    };
+  }
+
+  // 虧損股或無有效 PE，防禦降級使用 PB 數列
+  if (hasValidPb && validPbs.length >= 1) {
+    const min = validPbs[0];
+    const max = validPbs[validPbs.length - 1];
+    const med = getMedian(validPbs);
+    const pr = getPercentile(currentPb, validPbs);
+
+    let tier: 'UNDERVALUED' | 'FAIR' | 'OVERVALUED' = 'FAIR';
+    let text = `PB 自身歷史常態 (PR ${pr}%)`;
+    if (pr <= 20) {
+      tier = 'UNDERVALUED';
+      text = `PB 自身歷史偏低 (PR ${pr}%)`;
+    } else if (pr >= 80) {
+      tier = 'OVERVALUED';
+      text = `PB 自身歷史偏高 (PR ${pr}%)`;
+    }
+
+    return {
+      pbMin: min,
+      pbMax: max,
+      pbMedian: med,
+      pbPercentile: pr,
+      valuationTier: tier,
+      valuationTierText: text,
+      sampleCount: validPbs.length,
+    };
+  }
+
+  // 若無歷史樣本，提供安全常態
+  return {
+    valuationTier: 'FAIR',
+    valuationTierText: '合理估值區間',
+    sampleCount: 0,
   };
 }
 

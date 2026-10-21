@@ -274,6 +274,12 @@ export interface LakehouseFullPayload {
     pe?: number | null;
     pb?: number | null;
     dividendYield?: number | null;
+    history?: Array<{
+      pe?: number | null;
+      pb?: number | null;
+      dividendYield?: number | null;
+      date?: string;
+    }>;
   };
 }
 
@@ -360,6 +366,14 @@ export async function loadSymbolFullLakehouseData(
               data.valuation.dividend_yield != null
                 ? Number(data.valuation.dividend_yield)
                 : (data.valuation.dividendYield != null ? Number(data.valuation.dividendYield) : null),
+            history: Array.isArray(data.valuation.history)
+              ? data.valuation.history.map((h: any) => ({
+                  pe: h.pe != null ? Number(h.pe) : null,
+                  pb: h.pb != null ? Number(h.pb) : null,
+                  dividendYield: h.dividend_yield != null ? Number(h.dividend_yield) : null,
+                  date: h.date,
+                }))
+              : [],
           };
         }
 
