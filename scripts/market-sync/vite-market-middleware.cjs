@@ -367,6 +367,12 @@ function createMarketApiMiddleware(customDbPath) {
           .all(symbol, aliasSym) || [];
       } catch {}
 
+      // 新增查詢最新 1 筆宏觀情緒指標 (Spec 0200 Ticket 01)
+      let macroRow = null;
+      try {
+        macroRow = db.prepare('SELECT * FROM macro_sentiment_daily ORDER BY date DESC LIMIT 1').get() || null;
+      } catch {}
+
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(
         JSON.stringify({
@@ -377,6 +383,7 @@ function createMarketApiMiddleware(customDbPath) {
           tdcc: tdccRows,
           revenue: revenueRows,
           valuation: valRow ? { ...valRow, history: valHistory } : null,
+          macro: macroRow,
         })
       );
     }

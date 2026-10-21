@@ -102,6 +102,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       let tdccRecords: any[] | undefined = undefined;
       let revenueRecords: any[] | undefined = undefined;
       let quarterlyValuationData: DashboardValuationCombinedData | undefined = undefined;
+      let macroData: any = undefined;
 
       // 1. Layer 1: 優先嘗試從本地 SQLite 數據湖倉直讀歷史日 K、籌碼、集保與月營收 (Spec 0169 & Spec 0197)
       try {
@@ -135,6 +136,9 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
               history: lakehouseData.valuation.history,
             };
           }
+          if (lakehouseData.macro) {
+            macroData = lakehouseData.macro;
+          }
         }
       } catch (err) {
         logger.warn(`Lakehouse load failed for ${targetSymbol}, falling back to hybrid pipeline:`, err);
@@ -164,6 +168,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             tdccRecords,
             revenueRecords,
             valuationData: quarterlyValuationData,
+            macroData,
           }
         );
         firstPaintReport.marketBar.dataSourceText = `本地盤後歷史資料庫 (共 ${candles.length} 日 K)`;
@@ -269,6 +274,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             tdccRecords,
             revenueRecords,
             valuationData: quarterlyValuationData,
+            macroData,
           }
         );
         if (!quote && targetMarket === 'TW') {

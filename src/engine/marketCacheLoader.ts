@@ -270,6 +270,8 @@ export interface LakehouseFullPayload {
     momRate?: number;
     isAllTimeHigh?: number;
   }>;
+  marginAsOfDate?: string;
+  macro?: any;
   valuation?: {
     pe?: number | null;
     pb?: number | null;
@@ -377,20 +379,23 @@ export async function loadSymbolFullLakehouseData(
           };
         }
 
-        const latestChipRow =
+        // 資券有效值向前回退演算法 (Spec 0200 Ticket 01)
+        const validMarginRow =
           institutionalRecords && institutionalRecords.length > 0
-            ? institutionalRecords[institutionalRecords.length - 1]
+            ? [...institutionalRecords].reverse().find((r) => r.marginBalance != null)
             : undefined;
 
           return {
             candles,
             institutionalRecords,
-            marginBalance: latestChipRow?.marginBalance,
-            shortBalance: latestChipRow?.shortBalance,
-            dayTradeRate: latestChipRow?.dayTradeRate,
+            marginBalance: validMarginRow?.marginBalance,
+            shortBalance: validMarginRow?.shortBalance,
+            dayTradeRate: validMarginRow?.dayTradeRate,
+            marginAsOfDate: validMarginRow?.date,
             tdccRecords,
             revenueRecords,
             valuation,
+            macro: data.macro,
           };
         }
       }

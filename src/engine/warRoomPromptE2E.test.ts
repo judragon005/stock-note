@@ -116,8 +116,8 @@ describe('Spec 0196 Ticket 09: 戰情室外聯提示詞受控聯網獵犬協議�
     expect(prompt).toContain('佔 20 日均量 30%');
     expect(prompt).toContain('佔 20 日均量 12%');
 
-    // 驗證 Token 門禁 (< 4800，因 4979 納入景氣循環標的增列循環股估值指引)
-    expect(result.estimatedTokens).toBeLessThan(4800);
+    // 驗證 Token 門禁 (< 5800，因 4979 納入景氣循環標的增列循環股估值指引、外聯契約與回流協議)
+    expect(result.estimatedTokens).toBeLessThan(5800);
   });
 
   it('E2E-2: 上櫃 3260 威剛（盤中量為 0 回退標記前日收盤量與官方估值）', () => {
