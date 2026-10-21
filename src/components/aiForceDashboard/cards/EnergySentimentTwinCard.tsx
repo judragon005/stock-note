@@ -132,7 +132,7 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: '4px',
+          marginBottom: '8px',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -180,9 +180,10 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
       <div
         style={{
           background: 'rgba(15, 23, 42, 0.5)',
-          padding: '6px 8px',
+          padding: '8px 10px',
           borderRadius: '8px',
           border: '1px solid rgba(255, 255, 255, 0.05)',
+          marginBottom: '8px',
         }}
       >
         <div
@@ -191,7 +192,7 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
             justifyContent: 'space-between',
             alignItems: 'center',
             fontSize: '0.68rem',
-            marginBottom: '4px',
+            marginBottom: '6px',
           }}
         >
           <span style={{ color: '#f87171', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
@@ -241,7 +242,7 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
           alignItems: 'center',
           justifyContent: 'center',
           gap: '5px',
-          padding: '3px 8px',
+          padding: '6px 10px',
           borderRadius: '999px',
           background: resonance.bg,
           border: `1px solid ${resonance.border}`,
@@ -249,6 +250,7 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
           fontSize: '0.72rem',
           fontWeight: 800,
           boxShadow: `0 0 10px ${resonance.bg}`,
+          marginBottom: '8px',
         }}
       >
         {resonance.type === 'ALPHA_LEADER' ? (
