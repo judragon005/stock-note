@@ -1,13 +1,13 @@
 /**
  * ingest-tw-corporate-actions.cjs
- * 台股官方除權除息預告日程批次入庫模組 (Spec 0167 / Ticket 11)
- * 來源：TWSE OpenAPI (TWT48U) 與 TPEX OpenAPI，100% 免費、免 API Key
+ * 台股官方除權除息預告日程批次入庫模組 (Spec 0167 / Ticket 11 & Spec 0198 / Ticket 02)
+ * 來源：TWSE RWD (TWT48U)，100% 免費、免 API Key、零第三方相依
  */
 
 const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
 
 /**
- * 民國年月日 (如 '1150318' 或 '115/03/18') 轉化為 ISO 日期 (YYYY-MM-DD)
+ * 民國年月日 (如 '1150318', '115/03/18' 或 '115年11月06日') 轉化為 ISO 日期 (YYYY-MM-DD)
  */
 function convertRocToIsoDate(rocDateStr) {
   if (!rocDateStr) return '';
@@ -32,29 +32,56 @@ function convertRocToIsoDate(rocDateStr) {
 }
 
 /**
- * 解析 TWSE TWT48U 除權除息預告表原始數據
+ * 安全解析現金或股票股利數值
+ */
+function parseCleanDividend(val) {
+  if (val === undefined || val === null) return 0;
+  const str = String(val).replace(/<[^>]*>/g, '').replace(/,/g, '').trim();
+  const num = parseFloat(str);
+  return isNaN(num) || num < 0 ? 0 : num;
+}
+
+/**
+ * 解析 TWSE TWT48U 除權除息預告表原始數據 (支援 RWD 二維陣列與物件陣列)
  */
 function parseTwseExDividendReport(rawData) {
-  if (!Array.isArray(rawData) || rawData.length === 0) {
-    return [];
-  }
+  if (!rawData) return [];
+
+  const rows = Array.isArray(rawData)
+    ? rawData
+    : Array.isArray(rawData.data)
+      ? rawData.data
+      : [];
+
+  if (rows.length === 0) return [];
 
   const results = [];
-  for (const row of rawData) {
-    if (!row || typeof row !== 'object') continue;
+  for (const row of rows) {
+    if (!row) continue;
 
-    const symbol = String(row.Code || row['證券代號'] || '').trim();
-    if (!symbol) continue;
+    let symbol = '';
+    let exDate = '';
+    let paymentDate = undefined;
+    let cashDiv = 0;
+    let stockDiv = 0;
 
-    const rawExDate = row.Date || row['除權息日期'] || '';
-    const exDate = convertRocToIsoDate(rawExDate);
-    if (!exDate) continue;
+    if (Array.isArray(row)) {
+      // TWSE RWD 二維陣列:
+      // 0: 除權除息日期, 1: 股票代號, 2: 名稱, 3: 除權息, 4: 無償配股率, 7: 現金股利
+      if (row.length < 5) continue;
+      symbol = String(row[1] || '').trim();
+      exDate = convertRocToIsoDate(row[0]);
+      stockDiv = parseCleanDividend(row[4]);
+      cashDiv = parseCleanDividend(row[7]);
+    } else if (typeof row === 'object') {
+      symbol = String(row.Code || row['證券代號'] || '').trim();
+      exDate = convertRocToIsoDate(row.Date || row['除權息日期'] || '');
+      paymentDate = convertRocToIsoDate(row.PaymentDate || row['現金股利發放日'] || '') || undefined;
+      cashDiv = parseCleanDividend(row['Dividend(Cash)'] || row['權利分派內容-現金股利']);
+      stockDiv = parseCleanDividend(row['Dividend(Stock)'] || row['權利分派內容-無償配股率']);
+    }
 
-    const rawPayDate = row.PaymentDate || row['現金股利發放日'] || '';
-    const paymentDate = convertRocToIsoDate(rawPayDate) || undefined;
-
-    const cashDiv = parseFloat(String(row['Dividend(Cash)'] || row['權利分派內容-現金股利'] || 0));
-    const stockDiv = parseFloat(String(row['Dividend(Stock)'] || row['權利分派內容-無償配股率'] || 0));
+    if (!symbol || !exDate) continue;
 
     results.push({
       symbol,
@@ -62,8 +89,8 @@ function parseTwseExDividendReport(rawData) {
       actionType: 'DIVIDEND',
       exDate,
       paymentDate,
-      cashDividendPerShare: isNaN(cashDiv) ? 0 : cashDiv,
-      stockDividendRatio: isNaN(stockDiv) ? 0 : stockDiv,
+      cashDividendPerShare: cashDiv,
+      stockDividendRatio: stockDiv,
     });
   }
 
@@ -115,8 +142,36 @@ function ingestCorporateActionsToDb(records, customDbPath) {
   return count;
 }
 
+/**
+ * 聯網抓取並同步 TWSE 最新除權除息預告表 (一鍵執行)
+ */
+async function runCorporateActionsIngestion(customDbPath) {
+  const url = 'https://www.twse.com.tw/rwd/zh/exRight/TWT48U?response=json';
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
+        Accept: 'application/json, text/javascript, */*; q=0.01',
+      },
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP 異常 ${res.status}`);
+    }
+    const json = await res.json();
+    const records = parseTwseExDividendReport(json);
+    const count = ingestCorporateActionsToDb(records, customDbPath);
+    console.log(`✔ [CorporateActions] 成功寫入 ${count} 筆已宣告除權除息行事曆至 corporate_action_calendar`);
+    return count;
+  } catch (err) {
+    console.warn(`[CorporateActions] 除權除息同步警告:`, err.message);
+    return 0;
+  }
+}
+
 module.exports = {
   convertRocToIsoDate,
+  parseCleanDividend,
   parseTwseExDividendReport,
   ingestCorporateActionsToDb,
+  runCorporateActionsIngestion,
 };

@@ -53,12 +53,12 @@ describe('EnergySentimentTwinCard & Alpha Resonance - TDD Unit Tests', () => {
       })
     );
 
-    expect(html).toContain('CARD 10 · 13');
+    expect(html).toContain('>10 · 13<');
+    expect(html).not.toContain('CARD 10 · 13');
     expect(html).toContain('AI多空 × 市場情緒');
     expect(html).toContain('data-testid="energy-sentiment-twin-card"');
     expect(html).toContain('data-testid="alpha-resonance-badge"');
     expect(html).toContain('逆勢抗跌 (Alpha 領頭羊)');
-    expect(html).toContain('250px');
   });
 
   it('5. 美股模式下應連動 CNN Fear & Greed 情緒數值', () => {

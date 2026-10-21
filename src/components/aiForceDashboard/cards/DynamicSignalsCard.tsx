@@ -122,7 +122,7 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
               fontWeight: 800,
             }}
           >
-            CARD 12
+            12
           </span>
           <TermTooltip termId="trafficLight">
             <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc', cursor: 'help' }}>

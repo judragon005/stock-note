@@ -171,7 +171,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
               letterSpacing: '0.5px',
             }}
           >
-            {data?.symbol ? `CARD 19 · ${data.symbol}` : 'CARD 19'}
+            {data?.symbol ? `19 · ${data.symbol}` : '19'}
           </span>
           <h3
             style={{

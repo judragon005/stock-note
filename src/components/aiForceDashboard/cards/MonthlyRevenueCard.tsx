@@ -81,7 +81,7 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
               letterSpacing: '0.5px',
             }}
           >
-            CARD 20
+            20
           </span>
           <h3
             style={{

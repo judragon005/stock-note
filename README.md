@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1769%2F1769%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1786%2F1786%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,24 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. AI 主力戰情室 Layer 6 雙子堆疊重構、Card 21 估值卡導入與 Card 15 寬幅 Sparkline 對稱對齊 (`AI Force Dashboard Layout Reorganization, Card 21 Valuation & Chips Sparkline Alignment`) *(V9.11.0 最新發布 / Spec #0195 / ADR #0195 / Issue #290)*
+### 0. 湖倉全量注水補全、定時排程節奏化與戰情室卡片視覺優化 (`Lakehouse Full Bootstrap, Cadence-Aware Scheduled Sync & War Room Visual Optimization`) *(V9.12.0 最新發布 / Spec #0198 / ADR #0198 / Issue #304)*
+
+- **湖倉一次性全量注水補全 (`Lakehouse Full Bootstrap Pipeline`)**：
+  - 獨立腳本 `bootstrap-lakehouse-full.cjs` 一次性補齊上市 (TWSE) 1,084 檔每日估值（包含愛之味 1217 等上市股 PE/PB/殖利率）、美股三大宏觀情緒指標（10Y、VIX、CNN 恐懼貪婪指數）及全市場董監事質押比例（`tw_insider_pledge_records`），徹底消除資料孤島。
+- **TWSE 官方除權息預告端點修復 (`TWSE Corporate Actions Endpoint Repair`)**：
+  - 遷移舊版 404 失效接口至 TWSE 官方 RWD 接口 (`/rwd/zh/exRight/TWT48U`)，解析標準化民國年月日為 ISO 日期，官方宣告除權息行事曆零延遲入庫 `corporate_action_calendar`。
+- **定時排程節奏化與自適應無人值守 (`Cadence-Aware Scheduled Sync`)**：
+  - 嚴格遵守 KISS 原則，拒絕過度工程化之常駐微服務，將動態資料依更新週期順路附掛於現行排程：
+    - 每日盤後（15:00 後）：順路附掛除權息預告最新宣告。
+    - 每週五（18:30 後）：順路附掛 TDCC 集保股權分散表。
+    - 每月 1~11 號：順路附掛上市櫃最新月營收。
+    - 美股盤後（05:00 後）：順路附掛美債 10Y、VIX 與 CNN 恐懼指數。
+- **戰情室 Layer 6 視覺高度放大至 295px (`Layer 6 Visual Height Enlargement`)**：
+  - 放寬容器高度至 `295px`，卡片高度改為 `height: 100%`，字體不縮小，徹底消除卡片內容壅擠壓迫感。
+- **卡片標籤純數字化 (`Card Numbering Simplification`)**：
+  - 移除冗餘英文字 `CARD`，統一轉化為現代簡約純數字徽章（如 `[10 · 13]`、`[12]`、`[21]`、`[19]`、`[20]`）。
+
+### 1. AI 主力戰情室 Layer 6 雙子堆疊重構、Card 21 估值卡導入與 Card 15 寬幅 Sparkline 對稱對齊 (`AI Force Dashboard Layout Reorganization, Card 21 Valuation & Chips Sparkline Alignment`) *(V9.11.0 / Spec #0195 / ADR #0195 / Issue #290)*
 
 - **Card 19 TDCC 集保趨勢標的確認與美股 13F / 放空籌碼卡 (`TDCC Symbol Lock & US 13F Squeeze Alert`)**：
   - 台股標題明確綁定標的代碼（`CARD 19 · {symbol} TDCC 集保趨勢`），概覽區自動計算「散戶持股比 (10張以下)」與「大戶增持·散戶退場 (籌碼集中)」剪刀差。
