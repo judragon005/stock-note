@@ -2619,12 +2619,24 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     5. **月營收最新月份取值修復**：取營收歷史陣列最新一筆，杜絕由舊到新排序導致取到一年前舊營收之時序倒退。
     6. **光通訊/景氣循環標的識別**：補入 4979 華星光至 `CYCLICAL_SYMBOLS`，強化外聯提示詞之週期高峰殺估值防禦。
 
-- **Lakehouse Full Bootstrap, Cadence-Aware Scheduled Sync & War Room Visual Optimization (湖倉全量注水補全、定時排程節奏化與戰情室卡片視覺優化)**:
-  - 核心模組：`scripts/market-sync/bootstrap-lakehouse-full.cjs`、`scripts/market-sync/sync-tw-market.cjs`、`scripts/market-sync/sync-us-market.cjs`、`scripts/market-sync/ingest-tw-corporate-actions.cjs`、`src/components/aiForceDashboard/AiForceDashboardView.tsx`、`src/components/aiForceDashboard/cards/EnergySentimentTwinCard.tsx`、`src/components/aiForceDashboard/cards/DynamicSignalsCard.tsx`、`src/components/aiForceDashboard/cards/ValuationMetricsCard.tsx`、`src/components/aiForceDashboard/cards/TdccDistributionCard.tsx`、`src/components/aiForceDashboard/cards/MonthlyRevenueCard.tsx`。
-  - 規範依據：Spec 0198 (v8.111.0) 與 ADR 0198，對齊 GitHub Issue #304。
+- **War Room Strategic Prompt Semantic Grounding, Macro Pipeline & Strategy Loopback Pinning (戰情室外聯提示詞語意防護、宏觀資券穿透與實戰裁決釘選回流)**:
+  - 核心模組：`scripts/market-sync/vite-market-middleware.cjs`、`src/engine/marketCacheLoader.ts`、`src/engine/strategicPromptEngine.ts`、`src/types/strategyPin.ts`、`src/engine/strategyPinEngine.ts`、`src/components/aiForceDashboard/WarRoomPromptCard.tsx`。
+  - 規範依據：Spec 0200 (v8.113.0)，對齊 GitHub Issue #312。
   - 核心特性：
-    1. **湖倉全量注水 (Lakehouse Full Bootstrap)**：建立 `bootstrap-lakehouse-full.cjs` 一次性補齊上市 (TWSE) 1,084 檔每日估值（徹底解決愛之味 1217 等上市股估值缺漏問題）、美股三大宏觀情緒指標（10Y、VIX、CNN 恐懼貪婪指數）及全市場董監事質押比例（`tw_insider_pledge_records`），解除資料孤島。
-    2. **TWSE 除權息預告端點修復與入庫**：遷移廢棄 404 之舊端點至 TWSE 官方 RWD 接口 (`/rwd/zh/exRight/TWT48U`)，將官方宣告之除權息行事曆解析標準化並即時寫入 `corporate_action_calendar`。
-    3. **排程節奏化 (Cadence-Aware Scheduling, KISS 原則)**：拒絕過度工程化之常駐微服務，將動態資料依更新週期順路附掛於現行排程——除權息預告每日順路抓取、集保股權分散表每週五 18:30 後附掛、上市櫃月營收每月 1~11 號自適應附掛、美股宏觀指標於盤後帶回。
-    4. **戰情室 Layer 6 視覺高度放大至 295px**：放寬卡片容器高度至 295px，卡片內部採 `height: 100%`，字體不縮小並消除擁擠感。
-    5. **卡片標籤純數字化**：統一將 `[CARD XX]` 英文字剔除，改為純數字徽章 `[XX]`（如 `[10 · 13]`、`[12]`、`[21]`、`[19]`、`[20]`），提供更乾淨專注的戰情室視覺體驗。
+    1. **宏觀數據中介層順路附掛 (Vite Connect Macro Row)**：在 `/api/market/history/:symbol` 順路連帶查詢 `macro_market_daily` 最新一筆宏觀紀錄（CNN 恐懼貪婪指數、美債 10Y 殖利率、VIX）並回傳，戰情室 Card 19 與外聯提示詞直連真實宏觀體制，徹底告別宏觀 N/A。
+    2. **最新有效資券向前回溯機制 (Margin Non-Null Fallback)**：當前交易日為盤中或剛收盤、官方信用交易尚未結算發布（null）時，向前回退尋找最近一個非 null 的有效資券交易日，並標註 `marginAsOfDate`，徹底消除資料天窗。
+    3. **外聯提示詞語意防護與真脫敏守護**：
+       - 籌碼累計標籤改為明確的 `<foreign_net_shares_cumulative period="LAST_20_TRADING_DAYS">`，消滅 20d 縮寫誤讀。
+       - 官方本益比標明 `calculation_basis="TRAILING_TWELVE_MONTHS_TTM"`，避免外部 AI 與單季 EPS 混淆。
+       - 60 日支撐壓力重命名為 `swing_range_60d_resistance` / `support`，排除靜態歷史極值誤導。
+       - 脫敏模式 (`desensitized: true`) 徹底隱藏 `exact_cost_basis` 與 `breakeven_line`，僅輸出百分比，杜絕個人財務真實成本洩漏。
+       - 注入 `<external_audit_contract>` 與 `<loopback_protocol_directive>`，要求外部 AI 於文末輸出標準 JSON 代碼區塊。
+    4. **外部 AI 裁決回流協議引擎 (strategyPinEngine)**：
+       - `parseLoopbackContent`：正則秒級抽取長篇 Markdown 中的 JSON 代碼區塊，支援標的代號自動校驗。
+       - `sanitizePriceNumber`：防呆去除「元」、「$」、逗點與空白，精確清洗停損、停利與翻多點位。
+       - 時效天數動態倒數（預設 5 天），過期自動標註建議重新診斷。
+       - 盤中即時觸價評估（跌破停損、達到停利、突破翻多點位）。
+    5. **戰情室策略釘選列與智囊團實戰勝率榜**：
+       - 一鍵讀取系統剪貼簿或展開手動貼入解析抽屜。
+       - 盤中高對比度觸價警報橫幅，支援一鍵確認已知悉（防提示疲勞）。
+       - 結案回報按鈕（獲利達標 WIN / 停損出場 LOSS / 時間逾期 EXPIRED），以 LocalStorage 保存最近 20 筆戰績，自動統計 Claude / ChatGPT / Gemini 等外部模型的實戰勝率榜。
