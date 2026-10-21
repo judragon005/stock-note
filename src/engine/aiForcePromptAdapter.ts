@@ -106,18 +106,25 @@ export function createWarRoomPromptDigest(
     ma20 = Number((sumClose20 / 20).toFixed(2));
 
     const sumVol20 = last20.reduce((acc, c) => acc + (c.volume || 0), 0);
-    const avgVol20 = sumVol20 / 20;
-    if (avgVol20 > 0 && volumeShares > 0) {
-      volumeRatio20D = Number((volumeShares / avgVol20).toFixed(2));
+    const rawAvgVol20 = sumVol20 / 20;
+    // 依市場自適應度量衡校準 (Spec 0197 Ticket 02)：台股日 K volume 原始單位通常為「股」，若大於等於 10,000 則除以 1000 換算為張數
+    const avgVol20Shares = !isUS && (rawAvgVol20 >= 10000 || (volumeShares > 0 && rawAvgVol20 > volumeShares * 50))
+      ? rawAvgVol20 / 1000
+      : rawAvgVol20;
+    if (avgVol20Shares > 0 && volumeShares > 0) {
+      volumeRatio20D = Number((volumeShares / avgVol20Shares).toFixed(2));
     }
   }
 
-  // 盤中成交量回退標籤 (Spec 0196 Ticket 05)
+  // 盤中成交量回退標籤 (Spec 0196 Ticket 05 & Spec 0197)
   let intradayVolumeNote: string | undefined = undefined;
   if (!report.marketBar?.isSettled && volumeShares <= 0) {
     const lastSettledVolume = candles.length > 0 ? (candles[candles.length - 1].volume || 0) : 0;
-    intradayVolumeNote = lastSettledVolume > 0
-      ? `盤中撮合中 (前一交易日收盤量: ${lastSettledVolume} 張)`
+    const lastSettledVolumeShares = !isUS && lastSettledVolume >= 10000
+      ? Math.round(lastSettledVolume / 1000)
+      : lastSettledVolume;
+    intradayVolumeNote = lastSettledVolumeShares > 0
+      ? `盤中撮合中 (前一交易日收盤量: ${lastSettledVolumeShares} 張)`
       : '盤中撮合中';
   }
 
@@ -142,21 +149,24 @@ export function createWarRoomPromptDigest(
   const tdcc = report.tdccDistribution;
   const dayTrade = report.dayTradeRisk;
 
-  // 籌碼均量比例尺計算 (Spec 0196 Ticket 04)
+  // 籌碼均量比例尺計算 (Spec 0196 Ticket 04 & Spec 0197 Ticket 02)
   let foreignRatio20D: number | undefined = undefined;
   let trustRatio20D: number | undefined = undefined;
   if (candles.length >= 20) {
     const last20 = candles.slice(-20);
     const sumVol20 = last20.reduce((acc, c) => acc + (c.volume || 0), 0);
-    const avgVol20 = sumVol20 / 20;
-    if (avgVol20 > 0) {
+    const rawAvgVol20 = sumVol20 / 20;
+    const avgVol20Shares = !isUS && (rawAvgVol20 >= 10000 || (volumeShares > 0 && rawAvgVol20 > volumeShares * 50))
+      ? rawAvgVol20 / 1000
+      : rawAvgVol20;
+    if (avgVol20Shares > 0) {
       const foreignNet = chipsSummary?.foreignNetShares ?? chipsSummary?.foreignInvestorsNetBuyShares;
       const trustNet = chipsSummary?.trustNetShares ?? chipsSummary?.investmentTrustNetBuyShares;
       if (foreignNet !== undefined) {
-        foreignRatio20D = Number(((foreignNet / avgVol20) * 100).toFixed(1));
+        foreignRatio20D = Number(((foreignNet / avgVol20Shares) * 100).toFixed(1));
       }
       if (trustNet !== undefined) {
-        trustRatio20D = Number(((trustNet / avgVol20) * 100).toFixed(1));
+        trustRatio20D = Number(((trustNet / avgVol20Shares) * 100).toFixed(1));
       }
     }
   }
@@ -207,9 +217,10 @@ export function createWarRoomPromptDigest(
     intradayTime: report.updatedAt,
   };
 
-  // 4. 基本面與月營收映射 (Ticket 12, Spec 0195 注入 Card 21 估值矩陣, Spec 0196 注入單季 EPS)
+  // 4. 基本面與月營收映射 (Ticket 12, Spec 0195 注入 Card 21 估值矩陣, Spec 0196 注入單季 EPS, Spec 0197 校準最新月份)
   const rev = report.monthlyRevenue;
-  const latestRevItem = rev?.history && rev.history.length > 0 ? rev.history[0] : undefined;
+  // 取陣列最新月份 (Spec 0197 Ticket 02: 避免由舊到新排序誤取最舊月份)
+  const latestRevItem = rev?.history && rev.history.length > 0 ? rev.history[rev.history.length - 1] : undefined;
   const val = report.valuationMetrics;
 
   const fundamental: StrategicFactDigest['fundamental'] = !isEtf
@@ -314,7 +325,7 @@ export function createWarRoomPromptDigest(
     },
     macro: {
       treasuryYield10Y: report.marketSentiment?.usMacroData?.tenYearTreasury,
-      cnnFearGreedScore: report.marketSentiment?.usMacroData?.cnnScore ?? (isUS ? report.marketSentiment?.overallSentimentIndex : undefined),
+      cnnFearGreedScore: report.marketSentiment?.usMacroData?.cnnScore ?? report.marketSentiment?.overallSentimentIndex,
       vixClose: report.marketSentiment?.usMacroData?.vix,
       twPutCallRatio: undefined,
       macroRegimeText: isUS
@@ -330,7 +341,10 @@ export function createWarRoomPromptDigest(
     desensitizedPortfolioContext,
     warRoomFeatures,
     valuationStatus: val ? {
-      tier: val.valuationTierText || val.valuationTier || '合理估值區間',
+      tier:
+        val.valuationTierText ||
+        val.valuationTier ||
+        (val.pe != null || val.pb != null ? '合理估值區間' : '待同步'),
       pe: val.pe,
       pb: val.pb,
       ps: val.psRatio,

@@ -261,13 +261,20 @@ export async function fetchTaiwanQuarterlyFinancials(
     ];
 
     const fetchDataset = async (dataset: string): Promise<FinmindFinancialItem[]> => {
-      const url = `https://api.finmindtrade.com/api/v4/data?dataset=${dataset}&data_id=${encodeURIComponent(
-        cleanSymbol
-      )}&start_date=2021-01-01${tokenParam}`;
-      const res = await fetch(url);
-      if (!res.ok) return [];
-      const json = await res.json();
-      return Array.isArray(json?.data) ? json.data : [];
+      try {
+        const url = `https://api.finmindtrade.com/api/v4/data?dataset=${dataset}&data_id=${encodeURIComponent(
+          cleanSymbol
+        )}&start_date=2021-01-01${tokenParam}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (!res.ok) return [];
+        const json = await res.json();
+        return Array.isArray(json?.data) ? json.data : [];
+      } catch {
+        return [];
+      }
     };
 
     const results = await Promise.allSettled(datasets.map(fetchDataset));

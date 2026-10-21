@@ -116,8 +116,8 @@ describe('Spec 0196 Ticket 09: 戰情室外聯提示詞受控聯網獵犬協議�
     expect(prompt).toContain('佔 20 日均量 30%');
     expect(prompt).toContain('佔 20 日均量 12%');
 
-    // 驗證 Token 門禁 (< 4500)
-    expect(result.estimatedTokens).toBeLessThan(4500);
+    // 驗證 Token 門禁 (< 4800，因 4979 納入景氣循環標的增列循環股估值指引)
+    expect(result.estimatedTokens).toBeLessThan(4800);
   });
 
   it('E2E-2: 上櫃 3260 威剛（盤中量為 0 回退標記前日收盤量與官方估值）', () => {
@@ -222,4 +222,99 @@ describe('Spec 0196 Ticket 09: 戰情室外聯提示詞受控聯網獵犬協議�
     expect(prompt).toContain('<output_format>');
     expect(prompt).toContain('【第一行唯一指令】');
   });
+
+  it('E2E-4: Spec 0197 華星光 4979 官方估值注入、月營收最新月份、自適應度量衡與光通訊景氣循環全量整合驗收', () => {
+    // 模擬 20 根日 K，每根 volume 為「股數」1,500,000 股（即 1,500 張）
+    const mockCandlesInShares = Array.from({ length: 20 }, (_, i) => ({
+      date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+      open: 150,
+      high: 155,
+      low: 148,
+      close: 152,
+      volume: 1500000, // 股數
+    }));
+
+    const mockReport4979: AiForceDashboardReport = {
+      symbol: '4979',
+      name: '華星光',
+      market: 'TW',
+      updatedAt: '2026-10-20 13:30:00',
+      activeTaskTab: 'TASK_1_COMPREHENSIVE',
+      marketBar: {
+        currentPrice: 158.5,
+        change: 6.5,
+        changePercent: 4.28,
+        volumeShares: 1376, // 1376 張
+        latestTradingDate: '2026-10-20',
+        dataPointsCount: 250,
+        dataSourceText: 'TPEx Official',
+        dataRangeText: '250 Trading Days',
+        statusBadges: {
+          aiScanActive: true,
+          mainForceTracking: true,
+          marketStatus: 'NORMAL',
+          volatilityAlert: false,
+        },
+        marketStatusTag: 'NORMAL',
+        isSettled: true,
+      },
+      klineSystem: {
+        candles: mockCandlesInShares,
+      },
+      chipsSummary: {
+        foreignNetShares: 355, // 355 張
+        trustNetShares: 45,    // 45 張
+        marginTradingBalanceShares: 12500,
+        shortSellingBalanceShares: 850,
+        marginShortRatio: 6.8,
+        foreignConsecutiveDays: 4,
+        foreignAction: 'BUY',
+        investmentTrustConsecutiveDays: 3,
+        investmentTrustAction: 'BUY',
+        asOfDateText: '2026-10-20',
+      } as any,
+      valuationMetrics: {
+        pe: 78.56,
+        pb: 15.39,
+        dividendYield: 0.0,
+      },
+      monthlyRevenue: {
+        history: [
+          { yearMonth: '2025-10', revenue: 210000000, mom: -5.2, yoy: 15.3 },
+          { yearMonth: '2026-08', revenue: 310000000, mom: 8.5, yoy: 45.2 },
+          { yearMonth: '2026-09', revenue: 350000000, mom: 12.9, yoy: 66.7 },
+        ],
+      } as any,
+    } as unknown as AiForceDashboardReport;
+
+    const digest = createWarRoomPromptDigest(mockReport4979);
+
+    // 1. 驗證特徵轉接器之循環股判定
+    expect(digest.chips.isCyclical).toBe(true);
+
+    // 2. 驗證度量衡自動校準：日 K 均量 1,500,000 股自動轉 1,500 張，外資 355 張 / 1500 張 = 23.7%
+    expect(digest.chips.foreignRatio20D).toBe(23.7);
+    expect(digest.quote.volumeRatio20D).toBe(0.92);
+
+    // 3. 驗證月營收最新月份取 2026-09，絕不取 2025-10
+    expect(digest.fundamental?.monthlyRevenueYearMonth).toBe('2026-09');
+
+    // 4. 驗證官方估值 PE/PB
+    expect(digest.fundamental?.pe).toBe(78.56);
+    expect(digest.fundamental?.pb).toBe(15.39);
+
+    // 生成 Master Prompt
+    const result = generateStrategicPrompt(digest, { mode: 'FULL_MASTER', desensitized: false });
+    const prompt = result.promptText;
+
+    // 5. 驗證 Master Prompt 輸出
+    expect(prompt).toContain('<pe_ratio>78.56</pe_ratio>');
+    expect(prompt).toContain('<pb_ratio>15.39</pb_ratio>');
+    expect(prompt).toContain('<monthly_revenue_period>2026-09</monthly_revenue_period>');
+    expect(prompt).not.toContain('2025-10');
+    expect(prompt).toContain('23.7%');
+    expect(prompt).toContain('景氣循環週期股');
+    expect(prompt).not.toContain('待評估 / 待評估');
+  });
 });
+

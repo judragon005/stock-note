@@ -404,6 +404,74 @@ describe('Spec 0181 Ticket 06: aiForcePromptAdapter - 主力戰情室特徵轉�
 
       expect(digest.quote.intradayVolumeNote).toBe('盤中撮合中 (前一交易日收盤量: 8520 張)');
     });
+
+    it('Spec 0197 Ticket 02: 華星光 4979 應判定為景氣循環股，月營收應取最新一筆而非最舊一筆', () => {
+      const report4979: AiForceDashboardReport = {
+        symbol: '4979',
+        name: '華星光',
+        market: 'TW',
+        marketBar: { currentPrice: 470, volumeShares: 1376 },
+        monthlyRevenue: {
+          history: [
+            { yearMonth: '2025-10', revenue: 200000, yoyRate: 10 },
+            { yearMonth: '2026-08', revenue: 280000, yoyRate: 15 },
+            { yearMonth: '2026-09', revenue: 310000, yoyRate: 20 },
+          ],
+        },
+        valuationMetrics: {
+          pe: undefined,
+          pb: undefined,
+        },
+      } as any;
+
+      const digest = createWarRoomPromptDigest(report4979);
+
+      // 驗證 4979 為循環股
+      expect(digest.chips.isCyclical).toBe(true);
+      // 驗證月營收取最新一筆 2026-09 而非最舊一筆 2025-10
+      expect(digest.fundamental?.monthlyRevenueYearMonth).toBe('2026-09');
+      expect(digest.fundamental?.monthlyRevenueYoY).toBe(20);
+      // 驗證 PE/PB 為空時 tier 誠實輸出 '待同步'
+      expect(digest.valuationStatus?.tier).toBe('待同步');
+    });
+
+    it('Spec 0197 Ticket 02: 面對真實世界股數單位 (如 1,500,000 股)，自適應換算為張數消除 0% 均量佔比 Bug', () => {
+      const realCandles = Array.from({ length: 20 }).map((_, i) => ({
+        date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+        open: 450,
+        high: 480,
+        low: 440,
+        close: 470,
+        volume: 1500000, // 20 日均量約 150 萬股 = 1500 張
+      }));
+
+      const reportWithRealShares: AiForceDashboardReport = {
+        symbol: '4979',
+        name: '華星光',
+        market: 'TW',
+        marketBar: {
+          currentPrice: 470,
+          volumeShares: 1376, // 1376 張
+          latestTradingDate: '2026-10-20',
+        },
+        klineSystem: {
+          candles: realCandles,
+        },
+        chipsSummary: {
+          foreignNetShares: 355, // 外資買超 355 張
+          trustNetShares: -601,  // 投信賣超 601 張
+        },
+      } as any;
+
+      const digest = createWarRoomPromptDigest(reportWithRealShares);
+
+      // 1376 張 / 1500 張 = 0.92 倍
+      expect(digest.quote.volumeRatio20D).toBe(0.92);
+      // (355 / 1500) * 100 = 23.7% (不再是 0.0%)
+      expect(digest.chips.foreignRatio20D).toBe(23.7);
+      // (-601 / 1500) * 100 = -40.1% (不再是 0.0%)
+      expect(digest.chips.trustRatio20D).toBe(-40.1);
+    });
   });
 });
 
