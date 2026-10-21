@@ -5,7 +5,10 @@ import {
   createDefaultAiForceReport,
   generateAiForceReportFromCandles,
   RawInstitutionalRecord,
+  GenerateReportOptions,
 } from '../../engine/aiForceDashboardEngine';
+
+export type DashboardValuationCombinedData = NonNullable<GenerateReportOptions['valuationData']>;
 import { fetchRecentTwseReports } from '../../engine/smartMoneyFetcher';
 import { backfillSymbolOhlcvAndIndicators } from '../../engine/historicalOhlcvBackfill';
 import { fetchStockQuote } from '../../engine/priceFetcher';
@@ -98,7 +101,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         | undefined = undefined;
       let tdccRecords: any[] | undefined = undefined;
       let revenueRecords: any[] | undefined = undefined;
-      let quarterlyValuationData: any = undefined;
+      let quarterlyValuationData: DashboardValuationCombinedData | undefined = undefined;
 
       // 1. Layer 1: 優先嘗試從本地 SQLite 數據湖倉直讀歷史日 K、籌碼、集保與月營收 (Spec 0169 & Spec 0197)
       try {
