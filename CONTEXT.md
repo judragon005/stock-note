@@ -2608,6 +2608,17 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     5. **TWSE / TPEx 每日官方 PE / PB / 殖利率沉澱至 SQLite**：建立 `tw_valuation_daily` 資料表，每日盤後全市場整包存入 SQLite 並整合進 `tw_market_summary.json`。
     6. **戰情室單季財報貫通與籌碼均量比**：非阻塞提取最新單季 EPS 與毛利率；計算外資/投信佔 20 日均量比率；盤中量 <= 0 時自動回退標記前一交易日收盤量。
 
+- **War Room Subsecond Progressive Rendering, Lakehouse Valuation & Units Normalization (戰情室次秒級漸進式渲染、官方估值連通與度量衡校準)**:
+  - 核心模組：`scripts/market-sync/vite-market-middleware.cjs`、`src/engine/marketCacheLoader.ts`、`src/engine/taiwanFinancialPipeline.ts`、`src/engine/industryGate.ts`、`src/engine/aiForcePromptAdapter.ts`、`src/components/aiForceDashboard/AiForceDashboardView.tsx`。
+  - 規範依據：Spec 0197 (v8.110.0) 與 ADR 0197，對齊 GitHub Issue #297。
+  - 核心特性：
+    1. **兩階段次秒級秒開架構 (Subsecond Progressive Rendering)**：本地 SQLite 數據湖倉（< 300ms）優先首屏開出，即時報價、處置狀態與單季財報改由背景非同步增量增強，輸入新標的徹底告別 > 90 秒白屏假死。
+    2. **3 秒超時保護與熔斷 (3s Timeout Circuit Breaker)**：外部 FinMind 單季財報請求注入 3000ms `AbortController` 守衛，防止外部 API 延遲或 429 阻礙介面渲染。
+    3. **官方每日估值中介層連通 (Vite Valuation Daily Route)**：`/api/market/history/:symbol` 擴展查詢 `tw_valuation_daily` 表並附掛回傳，直連戰情室 Card 21 與外聯 AI 提示詞，徹底消滅幽靈標籤與 PE/PB N/A。
+    4. **日 K 股數/張數自適應度量衡 (Adaptive Metric Units)**：台股日 K volume 原始單位為股數（>= 10,000 判定為股數自動除以 1000 轉為張數），與三大法人張數對齊，外資佔均量比率與 20 日量增比恢復真實客觀數據（不再為 0% 或 0 倍）。
+    5. **月營收最新月份取值修復**：取營收歷史陣列最新一筆，杜絕由舊到新排序導致取到一年前舊營收之時序倒退。
+    6. **光通訊/景氣循環標的識別**：補入 4979 華星光至 `CYCLICAL_SYMBOLS`，強化外聯提示詞之週期高峰殺估值防禦。
+
 
 
 
