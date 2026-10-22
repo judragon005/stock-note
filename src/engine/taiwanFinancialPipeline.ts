@@ -9,6 +9,10 @@ import type {
 import { getStoredFinancialRecords, saveFinancialRecords } from '../utils/db';
 import { isFinancialRecordsCacheValid } from './financialCacheValidator';
 import { logger } from '../utils/logger';
+import {
+  fetchLakehouseFinancials,
+  backfillLakehouseFinancials,
+} from './lakehouseFinancialClient';
 
 export interface FinmindFinancialItem {
   date: string;
@@ -251,6 +255,17 @@ export async function fetchTaiwanQuarterlyFinancials(
     } catch {
       // 忽略環境不支援 IndexedDB 的快取錯誤
     }
+
+    // 1.1 Lakehouse SQLite 本地湖倉秒開優先
+    try {
+      const lakehouseData = await fetchLakehouseFinancials(cleanSymbol, 'TW');
+      if (lakehouseData && lakehouseData.length > 0 && isFinancialRecordsCacheValid(lakehouseData)) {
+        saveFinancialRecords(lakehouseData).catch(() => {});
+        return lakehouseData;
+      }
+    } catch {
+      // 忽略湖倉查詢錯誤
+    }
   }
 
   // 2. 外部 API 並行請求三大報表 (綜合損益表、資產負債表、現金流量表)
@@ -291,7 +306,13 @@ export async function fetchTaiwanQuarterlyFinancials(
     if (allItems.length > 0) {
       const parsed = parseTaiwanFinancialStatements(cleanSymbol, allItems);
       if (parsed.length > 0) {
-        await saveFinancialRecords(parsed);
+        try {
+          await saveFinancialRecords(parsed);
+        } catch {
+          // 快取寫入容錯 (如環境無 IndexedDB)
+        }
+        // 自動觸發非同步回填至本地 Lakehouse SQLite
+        backfillLakehouseFinancials(parsed, 'FinMind').catch(() => {});
         return parsed;
       }
     }

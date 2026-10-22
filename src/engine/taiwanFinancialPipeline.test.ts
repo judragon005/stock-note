@@ -4,6 +4,7 @@ import {
   fetchTaiwanQuarterlyFinancials,
 } from './taiwanFinancialPipeline';
 import * as db from '../utils/db';
+import * as lakehouseClient from './lakehouseFinancialClient';
 
 describe('Taiwan Financial Ingestion Pipeline (TDD Seam)', () => {
   beforeEach(() => {
@@ -134,4 +135,58 @@ describe('Taiwan Financial Ingestion Pipeline (TDD Seam)', () => {
     const healed = parseTaiwanFinancialStatements('1101', brokenData);
     expect(healed[0].balanceSheet.totalEquity).toBe(3000);
   });
+
+  it('5. fetchTaiwanQuarterlyFinancials 若本地 Lakehouse 有數據應優先讀取，不調用外部 API', async () => {
+    vi.spyOn(db, 'getStoredFinancialRecords').mockResolvedValue([]);
+    const lakehouseSpy = vi.spyOn(lakehouseClient, 'fetchLakehouseFinancials').mockResolvedValue([
+      {
+        symbol: '2330',
+        market: 'TW',
+        year: 2024,
+        quarter: 3,
+        periodDate: '2024-09-30',
+        income: { revenue: 759692, grossProfit: 439265, operatingIncome: 360000, netIncome: 325258, eps: 12.54 },
+        balanceSheet: { totalAssets: 6000000, totalLiabilities: 2000000, totalEquity: 4000000, accountsReceivable: 250000, inventory: 300000, cashAndEquivalents: 1800000 },
+        cashFlow: { operatingCashFlow: 400000, capitalExpenditure: 200000 },
+        updatedAt: Date.now(),
+      },
+    ]);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    const res = await fetchTaiwanQuarterlyFinancials('2330');
+    expect(lakehouseSpy).toHaveBeenCalledWith('2330', 'TW');
+    expect(res).toHaveLength(1);
+    expect(res[0].income.revenue).toBe(759692);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('6. fetchTaiwanQuarterlyFinancials 在外部抓取成功後應自動觸發 backfillLakehouseFinancials 回填', async () => {
+    vi.spyOn(db, 'getStoredFinancialRecords').mockResolvedValue([]);
+    vi.spyOn(lakehouseClient, 'fetchLakehouseFinancials').mockResolvedValue(null);
+    const backfillSpy = vi.spyOn(lakehouseClient, 'backfillLakehouseFinancials').mockResolvedValue(true);
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+      const urlStr = String(url);
+      if (urlStr.includes('TaiwanStockFinancialStatements')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: [
+              { date: '2024-09-30', type: 'Revenue', value: 759692 },
+              { date: '2024-09-30', type: 'GrossProfit', value: 439265 },
+              { date: '2024-09-30', type: 'OperatingIncome', value: 360000 },
+              { date: '2024-09-30', type: 'NetIncome', value: 325258 },
+              { date: '2024-09-30', type: 'EPS', value: 12.54 },
+            ],
+          }),
+        } as any;
+      }
+      return { ok: true, json: async () => ({ data: [] }) } as any;
+    });
+
+    const res = await fetchTaiwanQuarterlyFinancials('2330');
+    expect(res).toHaveLength(1);
+    expect(backfillSpy).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ symbol: '2330' })]), 'FinMind');
+  });
 });
+
