@@ -122,13 +122,15 @@
 | **市場結算狀態與定錨引擎** | [`src/engine/marketSettlementEngine.ts`](file:///d:/APP/股票紀錄/src/engine/marketSettlementEngine.ts) | Asia/Taipei 時區感知純函式，判定台股 15:00 籌碼發布門檻與美股 08:00 結算門檻，未收盤時自適應回退前一收盤交易日定錨日。 | 8 tests |
 | **AI 主力戰情室決策報告引擎** | [`src/engine/aiForceDashboardEngine.ts`](file:///d:/APP/股票紀錄/src/engine/aiForceDashboardEngine.ts) | 支援 `basePrice` 與 `realtimeQuote` 動態注入與自適應回退，杜絕 2290 寫死假資料，實現 18 張卡片與即時行情等比動態同步。 | 13 tests |
 | **AI 主力動態信號與多空智能仲裁引擎** | [`src/engine/aiForceDashboardEngine.ts`](file:///d:/APP/股票紀錄/src/engine/aiForceDashboardEngine.ts) | 實作多因子加權量化評分純函式（0.35籌碼+0.3趨勢+0.2動能-0.15風險，支援 `CompositeQuantWeights`）、動態燈號映射、多空矛盾智能仲裁演算法（精準識別洗盤破底翻、誘多出貨、共振主升、共振主跌四大實戰型態）。 | 21 tests |
-| **智策多維提示詞決策引擎** | [`src/engine/strategicPromptEngine.ts`](file:///d:/APP/股票紀錄/src/engine/strategicPromptEngine.ts) | 實作個股/ETF雙軌特徵壓榨、六頂思考帽決策 Prompt 生成、Token 預算守門 (<1200 / <4500) 與零信任數據海關。 | 11 tests |
+| **智策多維提示詞決策引擎** | [`src/engine/strategicPromptEngine.ts`](file:///d:/APP/股票紀錄/src/engine/strategicPromptEngine.ts) | 實作個股/ETF雙軌特徵壓榨、六頂思考帽決策 Prompt 生成、Token 預算守門 (<1200 / <5500)、語意防護（LAST_20_TRADING_DAYS、TTM 四季滾動）、真脫敏防洩漏與文末外部 AI 回流協議代碼塊指令。 | 17 tests |
+| **外部 AI 裁決回流協議引擎** | [`src/engine/strategyPinEngine.ts`](file:///d:/APP/股票紀錄/src/engine/strategyPinEngine.ts)<br>[`src/types/strategyPin.ts`](file:///d:/APP/股票紀錄/src/types/strategyPin.ts) | 支援長篇 Markdown 中正則秒級提純標準 JSON、價格文字（「元」、「$」）防呆清洗、時效 5 天過期計算、盤中觸價評估（跌破停損、達到停利、突破翻多點位）、LocalStorage 持久化與 AI 模型實戰勝率統計（上限 20 筆 FIFO）。 | 13 tests |
 | **統一金融時序日曆與營業日引擎** | [`scripts/market-sync/trading-calendar-engine.cjs`](file:///d:/APP/股票紀錄/scripts/market-sync/trading-calendar-engine.cjs)<br>[`src/engine/holidayCalendar.ts`](file:///d:/APP/股票紀錄/src/engine/holidayCalendar.ts)<br>[`src/engine/marketStatusEngine.ts`](file:///d:/APP/股票紀錄/src/engine/marketStatusEngine.ts) | 接入 `market-holidays.json` SSOT 字典。實作 T+2/T+1 交割日跳轉、融資長假計息天數與金額、台指期/美股四巫結算感知、TDCC 提前至週四、營收 10 號遇假順延、排程零 I/O 守衛與夏令/冬令時區即時時鐘。 | 46 tests |
 
 ### 4.2 前端工作台與核心組件 (`src/components/`)
 
 | 類別 | 檔案路徑 | 核心職責與特性 |
 | :--- | :--- | :--- |
+| **AI 戰情提示詞與回流釘選中樞** | [`src/components/aiForceDashboard/WarRoomPromptCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/WarRoomPromptCard.tsx) | 一鍵複製戰情提示詞、支援一鍵讀取剪貼簿直接解析與安全降級手動輸入抽屜、釘選當前 AI 策略（停損/目標/翻多）、盤中觸價高對比警報（含我已知悉防疲勞）、結案回報勝率與外部 AI 智囊團勝率榜抽屜。 | 4 tests |
 | **股利收益日誌與現金流** | [`src/components/DividendLogView.tsx`](file:///d:/APP/股票紀錄/src/components/DividendLogView.tsx) | `calculateMonthTooltipAlign` 智慧避讓演算法（1~2月靠左、10~12月靠右、3~9月居中）、KPI 首卡券商對帳毛淨額雙軌切換、明細表標的對帳小計卡片網格與單點過濾。 |
 | **個股分析工作台** | [`src/components/analysis/StockAnalysisWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/analysis/StockAnalysisWorkspace.tsx) | 整合 6 大核心指標分頁（獲利力、安全性、成長力、現金流、價值評估、公開股利），落實 ETF 物理隔離與【主力戰情室】導流橫幅、自適應響應式佈局。 |
 | **法務會計排雷排毒燈** | [`src/components/analysis/ForensicWarningSection.tsx`](file:///d:/APP/股票紀錄/src/components/analysis/ForensicWarningSection.tsx) | 獨立抽離法務會計五大排雷子模組（應收帳款剪刀差、獲利純度、FCF 失血、存貨積壓、負債比率），列表渲染語意唯一穩定 Key，金融業享負債比率豁免。 |
@@ -165,9 +167,15 @@
 
 1. **確認當前工作分支與儲存庫狀態**：
    - 當前位於分支 `main`，與 `origin/main` 保持一致，Working Tree Clean。
-   - 所有變更均已透過 GitHub Actions CI 綠燈驗證並 Squash and Merge 回主幹。
+   - 所有變更均已透過 GitHub Actions CI 綠燈驗證並 Squash and Merge 回主幹（近期已合併 PR #313, #314, #316）。
 2. **日常驗證防線**：
-   - 接手前務必執行 `npm test`（確認 231 個測試檔案、1,690 個測試 100% 綠燈）與 `npm run build`（確認 0 型別錯誤）。
+   - 接手前務必執行 `npm test`（確認 243 個測試檔案、1,810 個測試 100% 綠燈）與 `npm run build`（確認 0 型別錯誤）。
 3. **工作流閉環準則**：
    - 嚴格遵循工作流藍圖：`/grill-with-docs` ➔ `/to-spec` ➔ `/to-tickets` ➔ `/triage` ➔ `/tdd & /implement` ➔ `/code-review` ➔ `/handoff`。
+
+### 建議後續技能 (Suggested Skills for Next Agent)
+- `/grill-with-docs`：在承接新需求或架構調整前，進行深度的文檔壓力測試與隱性假設梳理。
+- `/tdd & /implement`：新功能實作嚴格遵循測試驅動開發紅-綠-重構循環。
+- `/code-review`：每次合併前執行標準與規格雙軸代碼審查。
+- `架構感知與防禦性開發 (Defensive Development)`：確保修改 A 不會破壞 B，防止任何資料回溯或破壞性重構。
 
