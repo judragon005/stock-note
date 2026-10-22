@@ -39,6 +39,8 @@ function createMockQuarter(
       inventory: overrides?.balanceSheet?.inventory ?? 15000000,
       cashAndEquivalents: overrides?.balanceSheet?.cashAndEquivalents ?? 80000000,
       capitalStock: overrides?.balanceSheet?.capitalStock,
+      currentAssets: overrides?.balanceSheet?.currentAssets,
+      currentLiabilities: overrides?.balanceSheet?.currentLiabilities,
     },
     cashFlow: {
       operatingCashFlow: overrides?.cashFlow?.operatingCashFlow ?? 18000000,
@@ -105,6 +107,51 @@ describe('keyMetricsEngine (量化估值與關鍵指標計算引擎 TDD)', () =>
       expect(res.details.f_roa.passed).toBe(false);
       expect(res.details.f_cfo.passed).toBe(false);
       expect(res.rating).toBe('WEAK');
+    });
+
+    it('當股本大幅增資稀釋超過 5% 時，f_eq_offer 應扣分判定為 false', () => {
+      const records: QuarterlyFinancialRecord[] = [
+        createMockQuarter(2024, 4, {
+          balanceSheet: { capitalStock: 100000000 },
+        }),
+        createMockQuarter(2025, 4, {
+          balanceSheet: { capitalStock: 120000000 }, // 增資 20%
+        }),
+      ];
+
+      const res = calculatePiotroskiFScore(records);
+      expect(res.details.f_eq_offer.passed).toBe(false);
+      expect(res.details.f_eq_offer.actualDesc).toContain('增資膨脹 20.0%');
+    });
+
+    it('當資產負債表缺乏流動負債時，不應使用 0.5 係數捏造，f_dliquid 應標註未單獨揭露且不給分', () => {
+      const records: QuarterlyFinancialRecord[] = [
+        createMockQuarter(2024, 4, {
+          balanceSheet: { currentLiabilities: undefined },
+        }),
+        createMockQuarter(2025, 4, {
+          balanceSheet: { currentLiabilities: undefined },
+        }),
+      ];
+
+      const res = calculatePiotroskiFScore(records);
+      expect(res.details.f_dliquid.passed).toBe(false);
+      expect(res.details.f_dliquid.actualDesc).toContain('未單獨揭露');
+    });
+
+    it('當具備完整流動資產與流動負債且流動比率提升時，f_dliquid 應客觀給分', () => {
+      const records: QuarterlyFinancialRecord[] = [
+        createMockQuarter(2024, 4, {
+          balanceSheet: { currentAssets: 200000000, currentLiabilities: 100000000 }, // 2.0
+        }),
+        createMockQuarter(2025, 4, {
+          balanceSheet: { currentAssets: 250000000, currentLiabilities: 100000000 }, // 2.5
+        }),
+      ];
+
+      const res = calculatePiotroskiFScore(records);
+      expect(res.details.f_dliquid.passed).toBe(true);
+      expect(res.details.f_dliquid.actualDesc).toContain('250% vs 去年 200%');
     });
   });
 
