@@ -263,6 +263,33 @@ function initSqliteLakehouseDb(customPath) {
       PRIMARY KEY (symbol, date)
     );
     CREATE INDEX IF NOT EXISTS idx_valuation_symbol_date ON tw_valuation_daily(symbol, date DESC);
+
+    -- 12. 財務三表核心科目表 (Spec 0203 Ticket 08)
+    CREATE TABLE IF NOT EXISTS financial_statements_quarterly (
+      symbol TEXT NOT NULL,
+      market TEXT NOT NULL,              -- 'TW' | 'US'
+      year INTEGER NOT NULL,
+      quarter INTEGER NOT NULL,          -- 1 | 2 | 3 | 4
+      revenue REAL,                      -- 營業收入
+      gross_profit REAL,                 -- 營業毛利
+      operating_income REAL,             -- 營業利益
+      net_income REAL,                   -- 母公司業主淨利 (最高優先級)
+      eps REAL,                          -- 每股盈餘
+      total_assets REAL,                 -- 資產總額
+      total_liabilities REAL,            -- 負債總額
+      total_equity REAL,                 -- 權益總額
+      current_assets REAL,               -- 流動資產
+      current_liabilities REAL,          -- 流動負債
+      accounts_receivable REAL,          -- 應收帳款與票據
+      inventory REAL,                    -- 存貨
+      operating_cash_flow REAL,          -- 營業活動現金流 (CFO)
+      capital_expenditure REAL,          -- 資本支出 (CapEx)
+      free_cash_flow REAL,               -- 自由現金流 (FCF)
+      cash_dividends_paid REAL,          -- 現金股利發放
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (symbol, year, quarter)
+    );
+    CREATE INDEX IF NOT EXISTS idx_fsq_symbol ON financial_statements_quarterly(symbol, year DESC, quarter DESC);
   `);
 
   // 動態無損補齊既有資料庫之新欄位 (冪等遷移)
