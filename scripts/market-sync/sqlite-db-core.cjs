@@ -96,10 +96,17 @@ function initSqliteLakehouseDb(customPath) {
       exchange TEXT,              -- 'TWSE' | 'TPEX' | 'NYSE' | 'NASDAQ' 等
       type TEXT DEFAULT 'STOCK',  -- 'STOCK' | 'ETF'
       status TEXT DEFAULT 'NORMAL',-- 'NORMAL' | 'ATTENTION' | 'DISPOSITION' | 'FULL_CASH'
+      industry TEXT,              -- 官方產業別代碼 (例如 '24' 半導體, Spec 0203)
       updated_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_symbols_lookup ON symbols_meta(market, type, status);
   `);
+
+  // 1.1 無損遷移：舊版資料庫缺少 industry 欄位時動態補上 (冪等，Spec 0203)
+  const symbolColumns = db.prepare('PRAGMA table_info(symbols_meta)').all();
+  if (!symbolColumns.some((c) => c.name === 'industry')) {
+    db.exec('ALTER TABLE symbols_meta ADD COLUMN industry TEXT;');
+  }
 
   // 2. 全市場日 K 線表 (daily_candles)
   db.exec(`

@@ -69,14 +69,15 @@ function upsertSymbolsMeta(symbols, customDbPath) {
   const now = Date.now();
 
   const stmt = db.prepare(`
-    INSERT INTO symbols_meta (symbol, name, market, exchange, type, status, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO symbols_meta (symbol, name, market, exchange, type, status, industry, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(symbol) DO UPDATE SET
       name = excluded.name,
       market = excluded.market,
       exchange = COALESCE(excluded.exchange, symbols_meta.exchange),
       type = COALESCE(excluded.type, symbols_meta.type),
       status = COALESCE(symbols_meta.status, excluded.status),
+      industry = COALESCE(excluded.industry, symbols_meta.industry),
       updated_at = excluded.updated_at
   `);
 
@@ -91,8 +92,9 @@ function upsertSymbolsMeta(symbols, customDbPath) {
       const exchange = item.exchange ? String(item.exchange).trim() : (market === 'TW' ? 'TWSE' : 'US');
       const type = item.type ? String(item.type).trim() : (cleanSym.startsWith('00') ? 'ETF' : 'STOCK');
       const status = item.status ? String(item.status).trim() : 'NORMAL';
+      const industry = item.industry ? String(item.industry).trim() : null;
 
-      stmt.run(cleanSym, cleanName, market, exchange, type, status, now);
+      stmt.run(cleanSym, cleanName, market, exchange, type, status, industry, now);
       count++;
     }
     db.exec('COMMIT;');
@@ -127,7 +129,7 @@ function searchSymbolsMeta(query, limit = 20, customDbPath) {
   const prefixSym = `${exactSym}%`;
 
   const stmt = db.prepare(`
-    SELECT symbol, name, market, exchange, type, status
+    SELECT symbol, name, market, exchange, type, status, industry
     FROM symbols_meta
     WHERE symbol LIKE ? OR name LIKE ?
     ORDER BY
@@ -143,6 +145,60 @@ function searchSymbolsMeta(query, limit = 20, customDbPath) {
 
   return stmt.all(pattern, pattern, exactSym, prefixSym, pattern, Math.max(1, limit));
 }
+
+/**
+ * 聯網自證交所 OpenAPI (t187ap03_L) 抓取並更新全體上市櫃標的產業代碼 (Spec 0203 Ticket 07)
+ */
+async function fetchAndIngestTwIndustries(customDbPath, fetcher = fetch) {
+  try {
+    const url = 'https://openapi.twse.com.tw/v1/opendata/t187ap03_L';
+    const res = await fetcher(url, {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'StockTracker/1.0 (local-sync)',
+      },
+    });
+
+    if (!res.ok) {
+      return { success: false, count: 0, error: `HTTP ${res.status}` };
+    }
+
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      return { success: false, count: 0, error: 'NO_DATA' };
+    }
+
+    const db = initSqliteLakehouseDb(customDbPath);
+    const updateStmt = db.prepare(`
+      UPDATE symbols_meta
+      SET industry = ?, updated_at = ?
+      WHERE symbol = ?
+    `);
+
+    const now = Date.now();
+    let count = 0;
+    db.exec('BEGIN TRANSACTION;');
+    try {
+      for (const row of data) {
+        if (!row || typeof row !== 'object') continue;
+        const symbol = String(row['公司代號'] || row.CompanyCode || row.Code || '').trim().toUpperCase();
+        const industry = String(row['產業別'] || row.Industry || row['產業代碼'] || '').trim();
+        if (symbol && industry) {
+          updateStmt.run(industry, now, symbol);
+          count++;
+        }
+      }
+      db.exec('COMMIT;');
+      return { success: true, count };
+    } catch (err) {
+      db.exec('ROLLBACK;');
+      throw err;
+    }
+  } catch (err) {
+    return { success: false, count: 0, error: err.message };
+  }
+}
+
 
 let FULL_US_MARKET_UNIVERSE = [];
 try {
@@ -253,5 +309,6 @@ module.exports = {
   searchSymbolsMeta,
   seedDefaultSymbolsUniverse,
   getFullUsSeedUniverse,
+  fetchAndIngestTwIndustries,
   DEFAULT_US_SEED,
 };
