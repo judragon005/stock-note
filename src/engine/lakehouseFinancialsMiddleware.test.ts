@@ -2,6 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 
 declare const require: (id: string) => any;
 declare const process: { cwd: () => string };
+declare const setImmediate: any;
 
 const fs = require('fs');
 const path = require('path');
@@ -10,7 +11,6 @@ const {
   createMarketApiMiddleware,
 } = require('../../scripts/market-sync/vite-market-middleware.cjs');
 const {
-  getSqliteDbConnection,
   initSqliteLakehouseDb,
   closeSqliteDb,
 } = require('../../scripts/market-sync/sqlite-db-core.cjs');

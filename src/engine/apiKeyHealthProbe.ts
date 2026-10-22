@@ -258,7 +258,7 @@ export async function probeApiKey(
       provider,
       status: 'HEALTHY',
       httpStatus,
-      message: extractedErr ? `HTTP ${httpStatus}: ${extractedErr}` : `HTTP 狀態: ${httpStatus}`,
+      message: extractedErr ? `HTTP ${httpStatus}: ${extractedErr}` : `HTTP 狀態: ${httpStatus} ${statusText}`.trim(),
       latencyMs,
     };
   } catch (err: any) {

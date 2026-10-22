@@ -10,8 +10,6 @@ const {
   parseYahooChartData,
   parseTiingoDailyData,
   saveUsCandlesToSqlite,
-  fetchYahooHistoricalQuotes,
-  fetchTiingoHistoricalQuotes,
 } = require('../../scripts/market-sync/ingest-us-quotes.cjs');
 const {
   getSqliteDbConnection,

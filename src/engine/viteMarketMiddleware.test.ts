@@ -2,6 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 
 declare const require: (id: string) => any;
 declare const process: { cwd: () => string };
+declare const setImmediate: any;
 
 const fs = require('fs');
 const path = require('path');
@@ -203,11 +204,11 @@ describe('Ticket 10 - Vite 原生 Connect 中介層 API (TDD Seam)', () => {
     });
 
     it('應能代發請求並穿透第三方之 HTTP Status 與 Response Body (成功 200)', async () => {
-      const originalFetch = global.fetch;
+      const originalFetch = (globalThis as any).fetch;
       try {
         let capturedUrl = '';
         let capturedHeaders: any = {};
-        global.fetch = async (url: any, opts: any) => {
+        (globalThis as any).fetch = async (url: any, opts: any) => {
           capturedUrl = String(url);
           capturedHeaders = opts?.headers || {};
           return {
@@ -237,14 +238,14 @@ describe('Ticket 10 - Vite 原生 Connect 中介層 API (TDD Seam)', () => {
         expect(capturedHeaders['User-Agent'] || capturedHeaders['user-agent']).toContain('StockTracker/1.0 (local-probe)');
         expect(capturedUrl).toBe('https://api.stlouisfed.org/fred/series?series_id=DGS10');
       } finally {
-        global.fetch = originalFetch;
+        (globalThis as any).fetch = originalFetch;
       }
     });
 
     it('應如實穿透第三方 403 Forbidden 錯誤與原始 Body，不吞噬錯誤', async () => {
-      const originalFetch = global.fetch;
+      const originalFetch = (globalThis as any).fetch;
       try {
-        global.fetch = async () => {
+        (globalThis as any).fetch = async () => {
           return {
             status: 403,
             statusText: 'Forbidden',
@@ -266,14 +267,14 @@ describe('Ticket 10 - Vite 原生 Connect 中介層 API (TDD Seam)', () => {
         expect(res.data.statusText).toBe('Forbidden');
         expect(res.data.body).toContain('Invalid API KEY.');
       } finally {
-        global.fetch = originalFetch;
+        (globalThis as any).fetch = originalFetch;
       }
     });
 
     it('發生連線異常或網路錯誤時，應回傳 httpStatus 0 與原始例外訊息', async () => {
-      const originalFetch = global.fetch;
+      const originalFetch = (globalThis as any).fetch;
       try {
-        global.fetch = async () => {
+        (globalThis as any).fetch = async () => {
           throw new Error('getaddrinfo ENOTFOUND api.stlouisfed.org');
         };
 
@@ -291,7 +292,7 @@ describe('Ticket 10 - Vite 原生 Connect 中介層 API (TDD Seam)', () => {
         expect(res.data.statusText).toBe('Network Error');
         expect(res.data.error).toContain('ENOTFOUND');
       } finally {
-        global.fetch = originalFetch;
+        (globalThis as any).fetch = originalFetch;
       }
     });
   });

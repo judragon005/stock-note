@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 declare const require: (id: string) => any;
+declare const process: any;
 
 describe('Ticket 13: Ingest TW Insider Pledge Records Pipeline', () => {
   const { parseTwPledgeReport, computePledgeRatio } = require('../../scripts/market-sync/ingest-tw-pledge.cjs');

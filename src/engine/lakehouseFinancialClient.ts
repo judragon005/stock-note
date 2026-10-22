@@ -148,7 +148,7 @@ export async function fetchLakehouseFinancials(
       });
     }
   } catch (err) {
-    logger.debug(`[LakehouseClient] Fetch financials failed for ${cleanSymbol}:`, err);
+    logger.info(`[LakehouseClient] Fetch financials failed for ${cleanSymbol}:`, err);
   }
   return null;
 }
