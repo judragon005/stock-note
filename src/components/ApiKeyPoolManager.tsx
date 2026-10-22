@@ -23,6 +23,7 @@ const PROVIDER_NAMES: Record<ProviderType, { label: string; desc: string; defaul
   sec: { label: 'SEC EDGAR (美股官方財報)', desc: '100% 免費無 Key (需合規 User-Agent)', defaultQuota: -1 },
   fmp: { label: 'FMP (美股官方財報/股利)', desc: '全市場美股歷史股利與三表財報', defaultQuota: 250 },
   alphavantage: { label: 'Alpha Vantage (外匯/總經)', desc: '全球外匯牌告與總經備援', defaultQuota: 25 },
+  tiingo: { label: 'Tiingo (美股日 K/除息拆股備援)', desc: '免費層 500 次/日，官方精準行情', defaultQuota: 500 },
 };
 
 export const ApiKeyPoolManager: React.FC = () => {

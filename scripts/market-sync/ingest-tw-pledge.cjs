@@ -107,9 +107,40 @@ function ingestTwPledgeToDb(records, customDbPath) {
   return count;
 }
 
+/**
+ * 聯網自證交所 OpenAPI 抓取全市場董監設質月報並入庫 (Spec 0203 Ticket 06)
+ */
+async function fetchAndIngestTwPledge(customDbPath, fetcher = fetch) {
+  try {
+    const url = 'https://openapi.twse.com.tw/v1/opendata/t187ap11_L';
+    const res = await fetcher(url, {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'StockTracker/1.0 (local-sync)',
+      },
+    });
+
+    if (!res.ok) {
+      return { success: false, count: 0, error: `HTTP ${res.status}` };
+    }
+
+    const data = await res.json();
+    const records = parseTwPledgeReport(data);
+    if (records.length > 0) {
+      const count = ingestTwPledgeToDb(records, customDbPath);
+      return { success: true, count };
+    }
+    return { success: false, count: 0, error: 'NO_VALID_RECORDS' };
+  } catch (err) {
+    return { success: false, count: 0, error: err.message };
+  }
+}
+
 module.exports = {
   computePledgeRatio,
   convertRocToYearMonth,
   parseTwPledgeReport,
   ingestTwPledgeToDb,
+  fetchAndIngestTwPledge,
 };
+

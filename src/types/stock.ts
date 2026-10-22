@@ -307,6 +307,7 @@ export interface ApiKeysConfig {
   finmindToken?: string;
   fmpApiKey?: string;
   alphaVantageKey?: string;
+  tiingoToken?: string;
   customProxyUrl?: string;
 }
 

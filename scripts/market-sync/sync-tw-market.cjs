@@ -340,6 +340,17 @@ async function runTwMarketSync(targetDateInput) {
       console.warn(`[CadenceSync] 除權除息同步警告:`, caErr.message);
     }
 
+    // 6.1.1 每日全市場 ETF 收盤官方淨值與折溢價 (Spec 0203 Ticket 05)
+    try {
+      const { fetchAndIngestEtfDailyNav } = require('./ingest-macro-sentiment.cjs');
+      const etfNavRes = await fetchAndIngestEtfDailyNav(null, dateStr);
+      if (etfNavRes.success) {
+        console.log(`✔ [CadenceSync] 成功入庫 ${etfNavRes.count} 檔 ETF 官方每日淨值與折溢價至 etf_daily_nav`);
+      }
+    } catch (etfNavErr) {
+      console.warn(`[CadenceSync] ETF 淨值同步警告:`, etfNavErr.message);
+    }
+
     // 6.2 每週五盤後（大於 18:30）自動更新 TDCC 集保千張大戶
     const dayOfWeek = targetDate.getDay();
     const currentHour = new Date().getHours();

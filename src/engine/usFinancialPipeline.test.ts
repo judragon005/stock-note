@@ -4,6 +4,7 @@ import {
   fetchUSQuarterlyFinancials,
 } from './usFinancialPipeline';
 import * as db from '../utils/db';
+import * as lakehouseClient from './lakehouseFinancialClient';
 
 describe('US Financial Ingestion Pipeline (TDD Seam)', () => {
   beforeEach(() => {
@@ -122,4 +123,65 @@ describe('US Financial Ingestion Pipeline (TDD Seam)', () => {
     expect(records[0].income.revenue).toBe(90000000000);
     expect(saveSpy).toHaveBeenCalled();
   });
+
+  it('4. fetchUSQuarterlyFinancials 若本地 Lakehouse 有數據應秒開返回，不調用外部 SEC/FMP', async () => {
+    vi.spyOn(db, 'getStoredFinancialRecords').mockResolvedValue([]);
+    const lakehouseSpy = vi.spyOn(lakehouseClient, 'fetchLakehouseFinancials').mockResolvedValue([
+      {
+        symbol: 'AAPL',
+        market: 'US',
+        year: 2025,
+        quarter: 1,
+        periodDate: '2025-03-31',
+        income: { revenue: 90000000000, grossProfit: 40000000000, operatingIncome: 30000000000, netIncome: 25000000000, eps: 1.5 },
+        balanceSheet: { totalAssets: 350000000000, totalLiabilities: 280000000000, totalEquity: 70000000000, accountsReceivable: 20000000000, inventory: 6000000000, cashAndEquivalents: 30000000000 },
+        cashFlow: { operatingCashFlow: 35000000000, capitalExpenditure: 3000000000 },
+        updatedAt: Date.now(),
+      },
+    ]);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    const res = await fetchUSQuarterlyFinancials('AAPL');
+    expect(lakehouseSpy).toHaveBeenCalledWith('AAPL', 'US');
+    expect(res).toHaveLength(1);
+    expect(res[0].income.revenue).toBe(90000000000);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('5. fetchUSQuarterlyFinancials 在 SEC/FMP 獲取成功時應自動觸發 backfillLakehouseFinancials', async () => {
+    vi.spyOn(db, 'getStoredFinancialRecords').mockResolvedValue([]);
+    vi.spyOn(lakehouseClient, 'fetchLakehouseFinancials').mockResolvedValue(null);
+    const backfillSpy = vi.spyOn(lakehouseClient, 'backfillLakehouseFinancials').mockResolvedValue(true);
+
+    const mockSecJson = {
+      cik: 320193,
+      entityName: 'Apple Inc.',
+      facts: {
+        'us-gaap': {
+          Revenues: {
+            units: { USD: [{ end: '2025-03-31', val: 90000000000, fy: 2025, fp: 'Q2', form: '10-Q' }] },
+          },
+          GrossProfit: {
+            units: { USD: [{ end: '2025-03-31', val: 40000000000, fy: 2025, fp: 'Q2', form: '10-Q' }] },
+          },
+        },
+      },
+    };
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+      if (String(url).includes('sec.gov')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => mockSecJson,
+        } as any;
+      }
+      return { ok: false, status: 404 } as any;
+    });
+
+    const records = await fetchUSQuarterlyFinancials('AAPL');
+    expect(records.length).toBeGreaterThan(0);
+    expect(backfillSpy).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ symbol: 'AAPL' })]), 'SEC');
+  });
 });
+

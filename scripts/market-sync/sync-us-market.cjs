@@ -24,6 +24,7 @@ const {
 const {
   saveUsCandlesToSqlite,
   fetchYahooHistoricalQuotes,
+  fetchTiingoHistoricalQuotes,
   parseYahooChartData,
 } = require('./ingest-us-quotes.cjs');
 const { initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
@@ -271,6 +272,8 @@ async function runUsMarketSync(config = {}) {
   const baseDelay = config.baseDelayMs !== undefined ? config.baseDelayMs : 800;
   const jitter = config.jitterMs !== undefined ? config.jitterMs : 400;
 
+  const tiingoToken = config.tiingoToken || process.env.TIINGO_API_KEY || null;
+
   // 4. 受控單檔順序採集 (避開高頻限流)
   for (let i = 0; i < pendingSymbols.length; i++) {
     const sym = pendingSymbols[i];
@@ -278,7 +281,22 @@ async function runUsMarketSync(config = {}) {
     try {
       // 依模態決定請求歷史天數：bootstrap 抓 250 天歷史；daily 抓 90 天足以計算指標
       const fetchDays = isBootstrap ? 250 : 90;
-      const candles = await fetchYahooHistoricalQuotes(sym, fetchDays);
+      let candles;
+
+      try {
+        candles = await fetchYahooHistoricalQuotes(sym, fetchDays);
+      } catch (yahooErr) {
+        // 若偵測到 429 限流或錯誤，且配置有 Tiingo API Token，則自動降級備援切換
+        if (tiingoToken) {
+          console.warn(
+            `[降級備援] ${sym} Yahoo 抓取異常 (${yahooErr.message})，正在切換至 Tiingo 官方 API...`
+          );
+          candles = await fetchTiingoHistoricalQuotes(sym, tiingoToken, fetchDays);
+          console.log(`✔ [Tiingo 備援成功] ${sym} 已由 Tiingo 取得 ${candles.length} 根日 K`);
+        } else {
+          throw yahooErr;
+        }
+      }
 
       if (Array.isArray(candles) && candles.length > 0) {
         // A. 事務持久化至 SQLite daily_candles

@@ -22,6 +22,16 @@ const {
 } = require('./market-sync-core.cjs');
 const { saveTwT86ToSqlite } = require('./ingest-tw-t86.cjs');
 const {
+  parseTwseMargin,
+  parseTpexMargin,
+  saveTwExtendedChipsToSqlite,
+} = require('./ingest-tw-extended-chips.cjs');
+const {
+  parseTwseBwibbu,
+  parseTpexPeratio,
+  saveTwValuationToSqlite,
+} = require('./ingest-tw-valuation.cjs');
+const {
   isTwTradingDay,
   getPreviousTradingDay,
   normalizeDateStr,
@@ -455,6 +465,66 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
     console.warn(`[TPEx T86] 下載跳過:`, e.message);
   }
 
+  // 5. TWSE MI_MARGN & BWIBBU / TPEx Margin & PE (資券與估值日報)
+  let twseMarginRaw = null;
+  let twseBwibbuRaw = null;
+  let tpexMarginRaw = null;
+  let tpexPeratioRaw = null;
+
+  if (options.includeValuationAndMargin !== false) {
+    if (throttleMs > 0) await sleep(throttleMs);
+    try {
+      twseMarginRaw = await retryFetch(
+        () =>
+          fetcher(
+            `https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=${yyyymmdd}&selectType=ALL&response=json`,
+            { signal: options.signal }
+          ),
+        retries,
+        retryDelayMs
+      );
+    } catch (e) {}
+
+    if (throttleMs > 0) await sleep(throttleMs);
+    try {
+      twseBwibbuRaw = await retryFetch(
+        () =>
+          fetcher(
+            `https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_d?date=${yyyymmdd}&selectType=ALL&response=json`,
+            { signal: options.signal }
+          ),
+        retries,
+        retryDelayMs
+      );
+    } catch (e) {}
+
+    if (throttleMs > 0) await sleep(throttleMs);
+    try {
+      tpexMarginRaw = await retryFetch(
+        () =>
+          fetcher(
+            `https://www.tpex.org.tw/openapi/v1/tpex_mainboard_margin_balance?l=zh-tw&d=${rocDateStr}`,
+            { signal: options.signal }
+          ),
+        retries,
+        retryDelayMs
+      );
+    } catch (e) {}
+
+    if (throttleMs > 0) await sleep(throttleMs);
+    try {
+      tpexPeratioRaw = await retryFetch(
+        () =>
+          fetcher(
+            `https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis?l=zh-tw&d=${rocDateStr}`,
+            { signal: options.signal }
+          ),
+        retries,
+        retryDelayMs
+      );
+    } catch (e) {}
+  }
+
 
   // 休市日辨識
   const twseStat = twseQuotesRaw?.stat || '';
@@ -507,12 +577,29 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
   const quotesCount = Object.keys(allQuotes).length;
   const chipsCount = Object.keys(allChips).length;
 
+  // 解析資券與估值
+  const twseMargin = parseTwseMargin(twseMarginRaw);
+  const tpexMargin = parseTpexMargin(tpexMarginRaw);
+  const allMargin = { ...twseMargin, ...tpexMargin };
+  const marginCount = Object.keys(allMargin).length;
+
+  const twseValuation = parseTwseBwibbu(twseBwibbuRaw);
+  const tpexValuation = parseTpexPeratio(tpexPeratioRaw);
+  const allValuation = { ...twseValuation, ...tpexValuation };
+  const valuationCount = Object.keys(allValuation).length;
+
   if (!options.inMemoryOnly) {
     if (quotesCount > 0) {
       saveTwDailyQuotesBatch(allQuotes, options.dbPath);
     }
     if (chipsCount > 0) {
       saveTwT86ToSqlite(allChips, dateStr, options.dbPath);
+    }
+    if (marginCount > 0) {
+      saveTwExtendedChipsToSqlite(allMargin, dateStr, options.dbPath);
+    }
+    if (valuationCount > 0) {
+      saveTwValuationToSqlite(allValuation, dateStr, options.dbPath);
     }
   }
 
@@ -521,6 +608,8 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
     isTradingDay: true,
     quotesCount,
     chipsCount,
+    marginCount,
+    valuationCount,
     twseQuotesCount,
     tpexQuotesCount,
   };

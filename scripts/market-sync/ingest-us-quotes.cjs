@@ -172,11 +172,119 @@ function fetchYahooHistoricalQuotes(symbol, days = 250) {
   });
 }
 
+/**
+ * 解析 Tiingo Daily 歷史日 K 數據
+ * 精準映射：date, open, high, low, close, adjClose, adjVolume, divCash, splitFactor
+ * @param {Array<object>} items
+ * @returns {Array<{ date: string, open: number, high: number, low: number, close: number, adjClose: number, volume: number, turnover: number, divCash: number, splitFactor: number }>}
+ */
+function parseTiingoDailyData(items) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+
+  const candles = [];
+  for (const item of items) {
+    if (!item || !item.date || item.close === null || item.close === undefined) continue;
+
+    const closePrice = Number(item.close);
+    const openPrice = item.open !== null && !isNaN(item.open) ? Number(item.open) : closePrice;
+    const highPrice = item.high !== null && !isNaN(item.high) ? Number(item.high) : closePrice;
+    const lowPrice = item.low !== null && !isNaN(item.low) ? Number(item.low) : closePrice;
+    const adjClosePrice =
+      item.adjClose !== null && item.adjClose !== undefined && !isNaN(item.adjClose)
+        ? Number(item.adjClose)
+        : closePrice;
+    const volumeShares =
+      item.adjVolume !== null && item.adjVolume !== undefined && !isNaN(item.adjVolume)
+        ? Number(item.adjVolume)
+        : Number(item.volume) || 0;
+    const turnover = volumeShares * closePrice;
+    const date = String(item.date).substring(0, 10);
+
+    candles.push({
+      date,
+      open: openPrice,
+      high: highPrice,
+      low: lowPrice,
+      close: closePrice,
+      adjClose: adjClosePrice,
+      volume: volumeShares,
+      turnover,
+      divCash: item.divCash !== undefined && item.divCash !== null ? Number(item.divCash) : 0,
+      splitFactor:
+        item.splitFactor !== undefined && item.splitFactor !== null ? Number(item.splitFactor) : 1,
+    });
+  }
+
+  return candles;
+}
+
+/**
+ * 透過 Tiingo 官方 API 抓取美股歷史日 K
+ * @param {string} symbol
+ * @param {string} apiKey
+ * @param {number} [days=250]
+ * @returns {Promise<Array<object>>}
+ */
+function fetchTiingoHistoricalQuotes(symbol, apiKey, days = 250) {
+  return new Promise((resolve, reject) => {
+    if (!apiKey) {
+      return reject(new Error('TIINGO_KEY_REQUIRED'));
+    }
+
+    const cleanSym = String(symbol).trim().toUpperCase();
+    const endSec = Math.floor(Date.now() / 1000);
+    const startSec = endSec - days * 86400 * 1.5;
+    const startDate = formatDateYMD(new Date(startSec * 1000));
+    const url = `https://api.tiingo.com/tiingo/daily/${encodeURIComponent(cleanSym)}/prices?startDate=${startDate}&token=${encodeURIComponent(apiKey)}`;
+
+    const req = https.get(
+      url,
+      {
+        headers: {
+          'User-Agent': 'StockTracker/1.0 (Tiingo-Ingest)',
+          Accept: 'application/json',
+        },
+        timeout: 12000,
+      },
+      (res) => {
+        if (res.statusCode === 429) {
+          return reject(new Error(`429_RATE_LIMITED: ${cleanSym}`));
+        }
+        if (res.statusCode === 401 || res.statusCode === 403) {
+          return reject(new Error(`AUTH_INVALID: ${res.statusCode}`));
+        }
+        if (res.statusCode >= 400) {
+          return reject(new Error(`HTTP_${res.statusCode}: ${cleanSym}`));
+        }
+        let raw = '';
+        res.on('data', (chunk) => (raw += chunk));
+        res.on('end', () => {
+          try {
+            const data = JSON.parse(raw);
+            const candles = parseTiingoDailyData(data);
+            resolve(candles);
+          } catch (e) {
+            reject(new Error(`JSON_PARSE_ERROR: ${cleanSym}`));
+          }
+        });
+      }
+    );
+
+    req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error(`TIMEOUT: ${cleanSym}`));
+    });
+  });
+}
+
 module.exports = {
   formatDateYMD,
   parseYahooChartData,
+  parseTiingoDailyData,
   saveUsCandlesToSqlite,
   fetchYahooHistoricalQuotes,
+  fetchTiingoHistoricalQuotes,
 };
 
 // 若作為 CLI 腳本直接執行時提供友善指引與單檔測試

@@ -94,4 +94,41 @@ describe('Ticket 02 - 標的註冊表種子入庫與 30ms 模糊搜尋索引 (TD
     expect(searchSymbolsMeta('   ', 10, testDbPath)).toEqual([]);
     expect(searchSymbolsMeta("'; DROP TABLE symbols_meta; --", 10, testDbPath)).toEqual([]);
   });
+
+  it('5. upsertSymbolsMeta 與 searchSymbolsMeta 應支援官方 industry 產業分類代碼 (Spec 0203 Ticket 07)', () => {
+    const mockSymbolsWithIndustry = [
+      { symbol: '2330', name: '台積電', market: 'TW', exchange: 'TWSE', type: 'STOCK', industry: '24' },
+      { symbol: '1101', name: '台泥', market: 'TW', exchange: 'TWSE', type: 'STOCK', industry: '01' },
+    ];
+
+    upsertSymbolsMeta(mockSymbolsWithIndustry, testDbPath);
+    const searchRes = searchSymbolsMeta('台積電', 1, testDbPath);
+    expect(searchRes.length).toBe(1);
+    expect(searchRes[0].symbol).toBe('2330');
+    expect(searchRes[0].industry).toBe('24');
+  });
+
+  it('6. fetchAndIngestTwIndustries 應自證交所 OpenAPI (t187ap03_L) 抓取並批次注入產業代碼 (Spec 0203 Ticket 07)', async () => {
+    const { fetchAndIngestTwIndustries } = require('../../scripts/market-sync/seed-symbols-universe.cjs');
+
+    const mockFetcher = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => [
+        { 公司代號: '2330', 公司名稱: '台積電', 產業別: '24' },
+        { 公司代號: '1101', 公司名稱: '台泥', 產業別: '01' },
+      ],
+    });
+
+    const res = await fetchAndIngestTwIndustries(testDbPath, mockFetcher);
+    expect(res.success).toBe(true);
+    expect(res.count).toBe(2);
+
+    const db = getSqliteDbConnection(testDbPath);
+    const row2330 = db.prepare('SELECT industry FROM symbols_meta WHERE symbol = ?').get('2330');
+    expect(row2330.industry).toBe('24');
+    const row1101 = db.prepare('SELECT industry FROM symbols_meta WHERE symbol = ?').get('1101');
+    expect(row1101.industry).toBe('01');
+  });
 });
+

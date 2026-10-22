@@ -2,6 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 
 declare const require: (id: string) => any;
 declare const process: { cwd: () => string };
+declare const setImmediate: any;
 
 const fs = require('fs');
 const path = require('path');
@@ -34,9 +35,18 @@ describe('Ticket 10 - Vite 原生 Connect 中介層 API (TDD Seam)', () => {
   });
 
   // 輔助函式：模擬 HTTP 請求與回應
-  function simulateRequest(middleware: any, url: string): Promise<{ status: number, headers: any, data: any }> {
+  function simulateRequest(
+    middleware: any,
+    url: string,
+    options?: { method?: string; body?: any; headers?: Record<string, string> }
+  ): Promise<{ status: number, headers: any, data: any }> {
     return new Promise((resolve) => {
-      const req = { url, method: 'GET' };
+      const { EventEmitter } = require('events');
+      const req = new EventEmitter();
+      req.url = url;
+      req.method = options?.method || 'GET';
+      req.headers = options?.headers || {};
+
       let statusCode = 200;
       let headers: any = {};
       let body = '';
@@ -67,6 +77,14 @@ describe('Ticket 10 - Vite 原生 Connect 中介層 API (TDD Seam)', () => {
       };
 
       middleware(req, res, next);
+
+      if (options?.body !== undefined) {
+        setImmediate(() => {
+          const payload = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+          req.emit('data', payload);
+          req.emit('end');
+        });
+      }
     });
   }
 
@@ -171,4 +189,112 @@ describe('Ticket 10 - Vite 原生 Connect 中介層 API (TDD Seam)', () => {
     // 重設狀態模擬未執行過
     resetCatchupStateForTest();
   });
+
+  describe('Spec 0203 Ticket 01 - POST /api/market/probe-key 本地測活代理中繼路由 (TDD)', () => {
+    it('應在未提供 targetUrl 時回傳 400 錯誤與說明', async () => {
+      const middleware = createMarketApiMiddleware(testDbPath);
+      const res = await simulateRequest(middleware, '/api/market/probe-key', {
+        method: 'POST',
+        body: {},
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.data.error).toBe('MISSING_TARGET_URL');
+      expect(res.data.message).toContain('targetUrl');
+    });
+
+    it('應能代發請求並穿透第三方之 HTTP Status 與 Response Body (成功 200)', async () => {
+      const originalFetch = (globalThis as any).fetch;
+      try {
+        let capturedUrl = '';
+        let capturedHeaders: any = {};
+        (globalThis as any).fetch = async (url: any, opts: any) => {
+          capturedUrl = String(url);
+          capturedHeaders = opts?.headers || {};
+          return {
+            status: 200,
+            statusText: 'OK',
+            text: async () => JSON.stringify({ message: 'FRED API works' }),
+          } as any;
+        };
+
+        const middleware = createMarketApiMiddleware(testDbPath);
+        const res = await simulateRequest(middleware, '/api/market/probe-key', {
+          method: 'POST',
+          body: {
+            targetUrl: 'https://api.stlouisfed.org/fred/series?series_id=DGS10',
+            headers: { Accept: 'application/json' },
+          },
+        });
+
+        expect(res.status).toBe(200);
+        expect(res.data.ok).toBe(true);
+        expect(res.data.httpStatus).toBe(200);
+        expect(res.data.statusText).toBe('OK');
+        expect(res.data.body).toContain('FRED API works');
+        expect(res.data.latencyMs).toBeGreaterThanOrEqual(0);
+
+        // 驗證 User-Agent 預設包含合規標頭
+        expect(capturedHeaders['User-Agent'] || capturedHeaders['user-agent']).toContain('StockTracker/1.0 (local-probe)');
+        expect(capturedUrl).toBe('https://api.stlouisfed.org/fred/series?series_id=DGS10');
+      } finally {
+        (globalThis as any).fetch = originalFetch;
+      }
+    });
+
+    it('應如實穿透第三方 403 Forbidden 錯誤與原始 Body，不吞噬錯誤', async () => {
+      const originalFetch = (globalThis as any).fetch;
+      try {
+        (globalThis as any).fetch = async () => {
+          return {
+            status: 403,
+            statusText: 'Forbidden',
+            text: async () => JSON.stringify({ 'Error Message': 'Invalid API KEY.' }),
+          } as any;
+        };
+
+        const middleware = createMarketApiMiddleware(testDbPath);
+        const res = await simulateRequest(middleware, '/api/market/probe-key', {
+          method: 'POST',
+          body: {
+            targetUrl: 'https://financialmodelingprep.com/api/v3/profile/AAPL?apikey=bad_key',
+          },
+        });
+
+        expect(res.status).toBe(200); // 中介層本身正常回應
+        expect(res.data.ok).toBe(false);
+        expect(res.data.httpStatus).toBe(403);
+        expect(res.data.statusText).toBe('Forbidden');
+        expect(res.data.body).toContain('Invalid API KEY.');
+      } finally {
+        (globalThis as any).fetch = originalFetch;
+      }
+    });
+
+    it('發生連線異常或網路錯誤時，應回傳 httpStatus 0 與原始例外訊息', async () => {
+      const originalFetch = (globalThis as any).fetch;
+      try {
+        (globalThis as any).fetch = async () => {
+          throw new Error('getaddrinfo ENOTFOUND api.stlouisfed.org');
+        };
+
+        const middleware = createMarketApiMiddleware(testDbPath);
+        const res = await simulateRequest(middleware, '/api/market/probe-key', {
+          method: 'POST',
+          body: {
+            targetUrl: 'https://api.stlouisfed.org/invalid',
+          },
+        });
+
+        expect(res.status).toBe(200);
+        expect(res.data.ok).toBe(false);
+        expect(res.data.httpStatus).toBe(0);
+        expect(res.data.statusText).toBe('Network Error');
+        expect(res.data.error).toContain('ENOTFOUND');
+      } finally {
+        (globalThis as any).fetch = originalFetch;
+      }
+    });
+  });
 });
+

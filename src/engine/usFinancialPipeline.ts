@@ -11,6 +11,10 @@ import { isFinancialRecordsCacheValid } from './financialCacheValidator';
 import { logger } from '../utils/logger';
 import { fetchSecCompanyFacts } from './secEdgarTransport';
 import { parseSecCompanyFactsToRecords } from './secEdgarParser';
+import {
+  fetchLakehouseFinancials,
+  backfillLakehouseFinancials,
+} from './lakehouseFinancialClient';
 
 /**
  * 輔助函式：從結算日期推算年度與季度 (e.g., '2025-03-31' -> { year: 2025, quarter: 1 })
@@ -162,6 +166,17 @@ export async function fetchUSQuarterlyFinancials(
     } catch {
       // 忽略環境不支援 IndexedDB
     }
+
+    // 1.1 Lakehouse SQLite 本地湖倉秒開優先
+    try {
+      const lakehouseData = await fetchLakehouseFinancials(cleanSymbol, 'US');
+      if (lakehouseData && lakehouseData.length > 0 && isFinancialRecordsCacheValid(lakehouseData)) {
+        saveFinancialRecords(lakehouseData).catch(() => {});
+        return lakehouseData;
+      }
+    } catch {
+      // 忽略湖倉查詢錯誤
+    }
   }
 
   // 2. 優先嘗試 SEC EDGAR 官方端點 (100% 免費、免 API Key)
@@ -174,6 +189,8 @@ export async function fetchUSQuarterlyFinancials(
       } catch {
         // 快取容錯
       }
+      // 自動非同步回填本地 Lakehouse SQLite
+      backfillLakehouseFinancials(secParsed, 'SEC').catch(() => {});
       return secParsed;
     }
   } catch (secErr) {
@@ -209,6 +226,8 @@ export async function fetchUSQuarterlyFinancials(
       } catch {
         // 快取寫入容錯
       }
+      // 自動非同步回填本地 Lakehouse SQLite
+      backfillLakehouseFinancials(parsed, 'FMP').catch(() => {});
       return parsed;
     }
   } catch (err) {

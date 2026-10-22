@@ -94,4 +94,62 @@ describe('Spec 0183 Ticket 06: syncFuturesOiAndEtfNav (期貨未平倉與 ETF �
     const macroRow = db.prepare('SELECT tw_foreign_futures_oi FROM macro_sentiment_daily WHERE date = ?').get('2026-10-15');
     expect(macroRow.tw_foreign_futures_oi).toBe(-38500);
   });
+
+  it('4. parseTwseEtfNavResponse 應能解包證交所真實 all_etf.txt 之 { a1: [{ msgArray: [...] }] } 結構並正確映射 e, f, g (Spec 0203 Ticket 05)', () => {
+    const mockOfficialTwsePayload = {
+      a1: [
+        {
+          msgArray: [
+            { a: '0050', b: '元大台灣50', e: '195.50', f: '195.42', g: '0.04%' },
+            { a: '0056', b: '元大高股息', e: '38.20', f: '38.35', g: '-0.39%' },
+            { a: '00878', b: '國泰永續高股息', e: '22.80', f: '22.75', g: '0.22%' },
+          ],
+        },
+      ],
+    };
+
+    const records = ingestMacroSentiment.parseTwseEtfNavResponse(mockOfficialTwsePayload, '2026-10-22');
+    expect(records).toHaveLength(3);
+    expect(records[0].symbol).toBe('0050');
+    expect(records[0].closePrice).toBe(195.5);
+    expect(records[0].nav).toBe(195.42);
+    expect(records[0].premiumDiscountRatio).toBe(0.04);
+
+    expect(records[1].symbol).toBe('0056');
+    expect(records[1].closePrice).toBe(38.2);
+    expect(records[1].nav).toBe(38.35);
+    expect(records[1].premiumDiscountRatio).toBe(-0.39);
+  });
+
+  it('5. fetchAndIngestEtfDailyNav 應成功抓取並寫入 SQLite 湖倉 etf_daily_nav (Spec 0203 Ticket 05)', async () => {
+    if (!sqliteDbCore.isSqliteSupported()) return;
+
+    const mockFetcher = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        a1: [
+          {
+            msgArray: [
+              { a: '0050', b: '元大台灣50', e: '195.50', f: '195.42', g: '0.04%' },
+              { a: '006208', b: '富邦台50', e: '115.00', f: '114.90', g: '0.09%' },
+            ],
+          },
+        ],
+      }),
+    });
+
+    const res = await ingestMacroSentiment.fetchAndIngestEtfDailyNav(testDbPath, '2026-10-22', mockFetcher);
+    expect(res.success).toBe(true);
+    expect(res.count).toBe(2);
+
+    const db = sqliteDbCore.getSqliteDbConnection(testDbPath);
+    const rows = db.prepare('SELECT * FROM etf_daily_nav WHERE date = ? ORDER BY symbol ASC').all('2026-10-22');
+    expect(rows.length).toBe(2);
+    expect(rows[0].symbol).toBe('0050');
+    expect(rows[0].close_price).toBe(195.5);
+    expect(rows[0].nav).toBe(195.42);
+    expect(rows[0].premium_discount_ratio).toBe(0.04);
+  });
 });
+

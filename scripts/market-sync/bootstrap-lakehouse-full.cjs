@@ -8,7 +8,7 @@ const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-co
 const { parseTwseBwibbu, parseTpexPeratio, saveTwValuationToSqlite } = require('./ingest-tw-valuation.cjs');
 const { runCorporateActionsIngestion } = require('./ingest-tw-corporate-actions.cjs');
 const { ingestMacroSentimentToDb, parseTaifexInstitutionalFuturesCsv } = require('./ingest-macro-sentiment.cjs');
-const { ingestTwPledgeToDb } = require('./ingest-tw-pledge.cjs');
+const { ingestTwPledgeToDb, fetchAndIngestTwPledge } = require('./ingest-tw-pledge.cjs');
 
 async function fetchJsonSafely(url) {
   try {
@@ -122,19 +122,18 @@ async function runBootstrapFull(customDbPath, options = {}) {
     console.warn(`  × 宏觀指標注水異常:`, macroErr.message);
   }
 
-  // 4. 全市場董監持股質押注水
+  // 4. 全市場董監持股質押注水 (Spec 0203 Ticket 06 官方開放資料 OpenAPI 注水，拔除 5 筆假資料)
   console.log('\n[4/4] 同步台股董監持股設質與內部人申報轉讓月報...');
   try {
-    const samplePledges = options.pledges || [
-      { symbol: '2330', reportDate: '2026-09', pledgedShares: 0, totalDirectorShares: 175000000, pledgeRatio: 0.0, insiderTransferShares: 0 },
-      { symbol: '1217', reportDate: '2026-09', pledgedShares: 12000000, totalDirectorShares: 154000000, pledgeRatio: 7.8, insiderTransferShares: 0 },
-      { symbol: '4979', reportDate: '2026-09', pledgedShares: 450000, totalDirectorShares: 15800000, pledgeRatio: 2.8, insiderTransferShares: 0 },
-      { symbol: '2454', reportDate: '2026-09', pledgedShares: 0, totalDirectorShares: 42000000, pledgeRatio: 0.0, insiderTransferShares: 0 },
-      { symbol: '2317', reportDate: '2026-09', pledgedShares: 25000000, totalDirectorShares: 220000000, pledgeRatio: 11.4, insiderTransferShares: 0 },
-    ];
-    const pCount = ingestTwPledgeToDb(samplePledges, customDbPath);
+    let pCount = 0;
+    if (options.pledges && Array.isArray(options.pledges)) {
+      pCount = ingestTwPledgeToDb(options.pledges, customDbPath);
+    } else {
+      const pledgeRes = await fetchAndIngestTwPledge(customDbPath);
+      pCount = pledgeRes.count || 0;
+    }
     results.pledgeCount = pCount;
-    console.log(`  ✔ 成功寫入 ${pCount} 筆董監質押基準指標`);
+    console.log(`  ✔ 成功寫入 ${pCount} 筆全市場董監質押指標 (無 Mock 殘留)`);
   } catch (pErr) {
     console.warn(`  × 董監質押注水異常:`, pErr.message);
   }

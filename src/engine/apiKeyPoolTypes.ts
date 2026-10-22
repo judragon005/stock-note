@@ -3,7 +3,7 @@
  * ApiKeyPool Types and State Schema
  */
 
-export type ProviderType = 'finmind' | 'finnhub' | 'fred' | 'polygon' | 'coingecko' | 'sec' | 'fmp' | 'alphavantage';
+export type ProviderType = 'finmind' | 'finnhub' | 'fred' | 'polygon' | 'coingecko' | 'sec' | 'fmp' | 'alphavantage' | 'tiingo';
 
 export type KeyHealthStatus = 'HEALTHY' | 'COOLING_DOWN' | 'QUOTA_EXHAUSTED' | 'INVALID';
 
@@ -53,7 +53,7 @@ export function createDefaultApiKeyItem(
     key,
     alias: options?.alias,
     weight: options?.weight ?? 1,
-    dailyQuotaLimit: options?.dailyQuotaLimit ?? 300,
+    dailyQuotaLimit: options?.dailyQuotaLimit ?? (provider === 'tiingo' ? 500 : 300),
     totalRequestsToday: options?.totalRequestsToday ?? 0,
     rateLimitPerMin: options?.rateLimitPerMin ?? 30,
     consecutiveFailures: options?.consecutiveFailures ?? 0,

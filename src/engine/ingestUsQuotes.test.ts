@@ -8,6 +8,7 @@ const path = require('path');
 
 const {
   parseYahooChartData,
+  parseTiingoDailyData,
   saveUsCandlesToSqlite,
 } = require('../../scripts/market-sync/ingest-us-quotes.cjs');
 const {
@@ -135,4 +136,67 @@ describe('Ticket 08 - 美股 Yahoo Chart 日 K 限流採集器與還原價計算
     expect(parseYahooChartData(null)).toEqual([]);
     expect(saveUsCandlesToSqlite('TEST', [], testDbPath)).toEqual({ savedCount: 0 });
   });
+
+  it('4. parseTiingoDailyData 應能精確映射 9 項關鍵欄位 (含 adjClose, adjVolume, divCash, splitFactor)', () => {
+    const rawTiingo = [
+      {
+        date: '2024-01-02T00:00:00.000Z',
+        close: 185.64,
+        high: 188.44,
+        low: 183.885,
+        open: 187.15,
+        volume: 82488674,
+        adjClose: 184.86,
+        adjHigh: 187.65,
+        adjLow: 183.11,
+        adjOpen: 186.36,
+        adjVolume: 82000000,
+        divCash: 0.24,
+        splitFactor: 1.0,
+      },
+    ];
+
+    const candles = parseTiingoDailyData(rawTiingo);
+    expect(candles).toHaveLength(1);
+    const c = candles[0];
+    expect(c.date).toBe('2024-01-02');
+    expect(c.open).toBe(187.15);
+    expect(c.high).toBe(188.44);
+    expect(c.low).toBe(183.885);
+    expect(c.close).toBe(185.64);
+    expect(c.adjClose).toBe(184.86);
+    expect(c.volume).toBe(82000000);
+    expect(c.divCash).toBe(0.24);
+    expect(c.splitFactor).toBe(1.0);
+    expect(c.turnover).toBe(82000000 * 185.64);
+  });
+
+  it('5. 模擬 Yahoo 429 限流狀況下，Tiingo 備援抓取日 K 能成功寫入 SQLite', () => {
+    initSqliteLakehouseDb(testDbPath);
+    const rawTiingo = [
+      {
+        date: '2026-10-20T00:00:00.000Z',
+        close: 230.5,
+        high: 232.0,
+        low: 228.0,
+        open: 229.0,
+        volume: 30000000,
+        adjClose: 230.5,
+        adjVolume: 30000000,
+        divCash: 0,
+        splitFactor: 1,
+      },
+    ];
+
+    const candles = parseTiingoDailyData(rawTiingo);
+    const res = saveUsCandlesToSqlite('AAPL', candles, testDbPath);
+    expect(res.savedCount).toBe(1);
+
+    const db = getSqliteDbConnection(testDbPath);
+    const row = db.prepare('SELECT * FROM daily_candles WHERE symbol = ? AND date = ?').get('AAPL', '2026-10-20');
+    expect(row.close).toBe(230.5);
+    expect(row.adj_close).toBe(230.5);
+    expect(row.volume).toBe(30000000);
+  });
 });
+

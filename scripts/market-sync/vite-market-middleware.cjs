@@ -86,6 +86,33 @@ function setLastCatchupTimeForTest(time) {
 }
 
 /**
+ * 安全解析請求之 JSON Body (防 DoS 1MB 上限)
+ */
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    if (req.body && typeof req.body === 'object') {
+      return resolve(req.body);
+    }
+    let data = '';
+    req.on('data', (chunk) => {
+      data += chunk;
+      if (data.length > 1e6) {
+        reject(new Error('Payload Too Large'));
+      }
+    });
+    req.on('end', () => {
+      if (!data) return resolve({});
+      try {
+        resolve(JSON.parse(data));
+      } catch (err) {
+        reject(new Error('Invalid JSON Payload'));
+      }
+    });
+    req.on('error', (err) => reject(err));
+  });
+}
+
+/**
  * 建立 Vite Connect 中介層
  * @param {string} [customDbPath]
  */
@@ -203,6 +230,82 @@ function createMarketApiMiddleware(customDbPath) {
       );
     }
 
+    // 0.5 POST /api/market/probe-key (Spec 0203 / Ticket 01)
+    if (pathname === '/api/market/probe-key' && (req.method || 'GET').toUpperCase() === 'POST') {
+      readJsonBody(req)
+        .then(async (body) => {
+          const targetUrl = body.targetUrl || body.url;
+          if (!targetUrl || typeof targetUrl !== 'string') {
+            res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(
+              JSON.stringify({
+                error: 'MISSING_TARGET_URL',
+                message: '請提供有效的 targetUrl 參數',
+              })
+            );
+          }
+
+          const method = (body.method || 'GET').toUpperCase();
+          const incomingHeaders = body.headers || {};
+          const headers = {
+            'User-Agent': 'StockTracker/1.0 (local-probe)',
+            ...incomingHeaders,
+          };
+
+          const start = Date.now();
+          const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+          const timeout = setTimeout(() => {
+            if (controller) controller.abort();
+          }, 10000);
+
+          try {
+            const fetchOpts = {
+              method,
+              headers,
+              signal: controller ? controller.signal : undefined,
+            };
+            if (body.payload && method !== 'GET') {
+              fetchOpts.body = typeof body.payload === 'string' ? body.payload : JSON.stringify(body.payload);
+            }
+
+            const response = await fetch(targetUrl, fetchOpts);
+            clearTimeout(timeout);
+            const latencyMs = Date.now() - start;
+            const text = await response.text();
+
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(
+              JSON.stringify({
+                ok: response.status >= 200 && response.status < 300,
+                httpStatus: response.status,
+                statusText: response.statusText || '',
+                body: text,
+                latencyMs,
+              })
+            );
+          } catch (fetchErr) {
+            clearTimeout(timeout);
+            const latencyMs = Date.now() - start;
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(
+              JSON.stringify({
+                ok: false,
+                httpStatus: 0,
+                statusText: 'Network Error',
+                error: fetchErr.message || 'Fetch failed',
+                latencyMs,
+              })
+            );
+          }
+        })
+        .catch((err) => {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ error: 'BODY_PARSE_ERROR', message: err.message }));
+        });
+      return;
+    }
+
+
 
     // 1. GET /api/market/symbols?q=...
     if (pathname === '/api/market/symbols') {
@@ -287,6 +390,146 @@ function createMarketApiMiddleware(customDbPath) {
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         return res.end(JSON.stringify({ error: err.message, actions: [] }));
       }
+    }
+
+    // 2.2 GET /api/market/financials/:symbol (Spec 0203 / Ticket 08)
+    const finMatch = pathname.match(/^\/api\/market\/financials\/([A-Za-z0-9\-_]+)$/);
+    if (finMatch && (req.method || 'GET').toUpperCase() === 'GET') {
+      const symbol = finMatch[1].toUpperCase();
+      const aliasSym = symbol.endsWith('O') ? symbol.slice(0, -1) : `${symbol}O`;
+      const isAll = String(query.limit || '').trim().toLowerCase() === 'all';
+      const limit = isAll ? -1 : (parseInt(query.limit, 10) || 8);
+
+      try {
+        const sql = `SELECT * FROM financial_statements_quarterly
+             WHERE symbol IN (?, ?)
+             ORDER BY year DESC, quarter DESC
+             ${limit > 0 ? 'LIMIT ?' : ''}`;
+        const params = limit > 0 ? [symbol, aliasSym, limit] : [symbol, aliasSym];
+        const rows = db.prepare(sql).all(...params);
+
+        const financials = rows.map((r) => ({
+          symbol: r.symbol,
+          market: r.market,
+          year: r.year,
+          quarter: r.quarter,
+          revenue: r.revenue,
+          grossProfit: r.gross_profit,
+          operatingIncome: r.operating_income,
+          netIncome: r.net_income,
+          eps: r.eps,
+          totalAssets: r.total_assets,
+          totalLiabilities: r.total_liabilities,
+          totalEquity: r.total_equity,
+          currentAssets: r.current_assets,
+          currentLiabilities: r.current_liabilities,
+          accountsReceivable: r.accounts_receivable,
+          inventory: r.inventory,
+          operatingCashFlow: r.operating_cash_flow,
+          capitalExpenditure: r.capital_expenditure,
+          freeCashFlow: r.free_cash_flow,
+          cashDividendsPaid: r.cash_dividends_paid,
+          updatedAt: r.updated_at,
+        }));
+
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(
+          JSON.stringify({
+            symbol,
+            count: financials.length,
+            financials,
+          })
+        );
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ error: err.message, financials: [] }));
+      }
+    }
+
+    // 2.3 POST /api/market/financials (Spec 0203 / Ticket 08 批次寫入)
+    if (pathname === '/api/market/financials' && (req.method || 'GET').toUpperCase() === 'POST') {
+      readJsonBody(req)
+        .then((body) => {
+          const records = Array.isArray(body) ? body : body.records;
+          if (!Array.isArray(records) || records.length === 0) {
+            res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(JSON.stringify({ error: 'EMPTY_RECORDS', message: 'records 必須為非空陣列' }));
+          }
+
+          const stmt = db.prepare(`
+            INSERT INTO financial_statements_quarterly (
+              symbol, market, year, quarter, revenue, gross_profit, operating_income,
+              net_income, eps, total_assets, total_liabilities, total_equity,
+              current_assets, current_liabilities, accounts_receivable, inventory,
+              operating_cash_flow, capital_expenditure, free_cash_flow, cash_dividends_paid, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(symbol, year, quarter) DO UPDATE SET
+              revenue = COALESCE(excluded.revenue, financial_statements_quarterly.revenue),
+              gross_profit = COALESCE(excluded.gross_profit, financial_statements_quarterly.gross_profit),
+              operating_income = COALESCE(excluded.operating_income, financial_statements_quarterly.operating_income),
+              net_income = COALESCE(excluded.net_income, financial_statements_quarterly.net_income),
+              eps = COALESCE(excluded.eps, financial_statements_quarterly.eps),
+              total_assets = COALESCE(excluded.total_assets, financial_statements_quarterly.total_assets),
+              total_liabilities = COALESCE(excluded.total_liabilities, financial_statements_quarterly.total_liabilities),
+              total_equity = COALESCE(excluded.total_equity, financial_statements_quarterly.total_equity),
+              current_assets = COALESCE(excluded.current_assets, financial_statements_quarterly.current_assets),
+              current_liabilities = COALESCE(excluded.current_liabilities, financial_statements_quarterly.current_liabilities),
+              accounts_receivable = COALESCE(excluded.accounts_receivable, financial_statements_quarterly.accounts_receivable),
+              inventory = COALESCE(excluded.inventory, financial_statements_quarterly.inventory),
+              operating_cash_flow = COALESCE(excluded.operating_cash_flow, financial_statements_quarterly.operating_cash_flow),
+              capital_expenditure = COALESCE(excluded.capital_expenditure, financial_statements_quarterly.capital_expenditure),
+              free_cash_flow = COALESCE(excluded.free_cash_flow, financial_statements_quarterly.free_cash_flow),
+              cash_dividends_paid = COALESCE(excluded.cash_dividends_paid, financial_statements_quarterly.cash_dividends_paid),
+              updated_at = excluded.updated_at
+          `);
+
+          const now = Date.now();
+          let count = 0;
+          db.exec('BEGIN TRANSACTION;');
+          try {
+            for (const r of records) {
+              if (!r || !r.symbol || !r.year || !r.quarter) continue;
+              const sym = String(r.symbol).trim().toUpperCase();
+              const market = String(r.market || (sym.length === 4 && /^\d+$/.test(sym) ? 'TW' : 'US')).toUpperCase();
+              stmt.run(
+                sym,
+                market,
+                r.year,
+                r.quarter,
+                r.revenue ?? r.grossRevenue ?? null,
+                r.grossProfit ?? null,
+                r.operatingIncome ?? null,
+                r.netIncome ?? null,
+                r.eps ?? null,
+                r.totalAssets ?? null,
+                r.totalLiabilities ?? null,
+                r.totalEquity ?? null,
+                r.currentAssets ?? null,
+                r.currentLiabilities ?? null,
+                r.accountsReceivable ?? null,
+                r.inventory ?? null,
+                r.operatingCashFlow ?? null,
+                r.capitalExpenditure ?? null,
+                r.freeCashFlow ?? null,
+                r.cashDividendsPaid ?? null,
+                now
+              );
+              count++;
+            }
+            db.exec('COMMIT;');
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(JSON.stringify({ success: true, count }));
+          } catch (dbErr) {
+            db.exec('ROLLBACK;');
+            res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(JSON.stringify({ error: dbErr.message }));
+          }
+        })
+        .catch((err) => {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ error: err.message }));
+        });
+      return;
     }
 
     // 3. GET /api/market/history/:symbol?limit=250
