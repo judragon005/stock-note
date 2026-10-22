@@ -76,4 +76,22 @@ describe('financialCacheValidator (TDD Seam)', () => {
     };
     expect(isFinancialRecordsCacheValid([emptyRecord])).toBe(false);
   });
+
+  it('6. 當快取 updatedAt 距今超過 120 天時，應判定為過期無效以防死水 (Spec 0202 - Ticket 05)', () => {
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const expiredRecord: QuarterlyFinancialRecord = {
+      ...validRecord,
+      updatedAt: Date.now() - 121 * ONE_DAY_MS, // 121 天前
+    };
+    expect(isFinancialRecordsCacheValid([expiredRecord])).toBe(false);
+  });
+
+  it('7. 當快取 updatedAt 在 120 天有效期內 (例如 30 天前) 且內容完整時，應判定為有效', () => {
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const freshRecord: QuarterlyFinancialRecord = {
+      ...validRecord,
+      updatedAt: Date.now() - 30 * ONE_DAY_MS, // 30 天前
+    };
+    expect(isFinancialRecordsCacheValid([freshRecord])).toBe(true);
+  });
 });

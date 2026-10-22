@@ -19,8 +19,8 @@ function createMockQuarter(
   overrides?: DeepPartial<QuarterlyFinancialRecord>
 ): QuarterlyFinancialRecord {
   return {
-    symbol: 'TEST',
-    market: 'TW',
+    symbol: overrides?.symbol ?? 'TEST',
+    market: overrides?.market ?? 'TW',
     year,
     quarter,
     periodDate: `${year}-${String(quarter * 3).padStart(2, '0')}-30`,
@@ -258,6 +258,27 @@ describe('keyMetricsEngine (量化估值與關鍵指標計算引擎 TDD)', () =>
         income: { netIncome: 0, eps: 0 },
       });
       expect(deriveSharesOutstanding(emptyRecord)).toBe(1000000000);
+    });
+
+    it('6. 美股標的 (market: US) 絕不除以 10 元面額，應優先由 netIncome / eps 反推股數 (Spec 0202 - Ticket 02)', () => {
+      const usRecord = createMockQuarter(2025, 4, {
+        symbol: 'AAPL',
+        market: 'US',
+        balanceSheet: { capitalStock: 50000000 }, // 美股股本欄位絕非每股 10 元
+        income: { netIncome: 100000000, eps: 2.5 },
+      });
+      const res = deriveSharesOutstanding(usRecord);
+      expect(res).toBe(40000000); // 1 億 / 2.5 = 4000 萬股，非 500 萬股 (50,000,000 / 10)
+    });
+
+    it('7. 美股虧損轉機股 (netIncome < 0 且 eps < 0) 時，應以絕對值安全反推流通股數', () => {
+      const usLossRecord = createMockQuarter(2025, 4, {
+        symbol: 'TSLA',
+        market: 'US',
+        income: { netIncome: -50000000, eps: -0.5 },
+      });
+      const res = deriveSharesOutstanding(usLossRecord);
+      expect(res).toBe(100000000); // 5000 萬 / 0.5 = 1 億股
     });
   });
 });

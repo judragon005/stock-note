@@ -102,4 +102,50 @@ describe('fetchCompanyDividendHistory', () => {
     // 第一次呼叫抓取（1次本地失敗 + 1次外部成功 = 2次），第二次呼叫直接命中 memoryCache（0次），總共仍為 2 次
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
+
+  describe('deriveUsDividendsFromFinancials (Spec 0202 - Ticket 06)', () => {
+    it('應能從美股現金流量表 dividendPaid 與推導股數精準反推歷年每股股利', async () => {
+      const { deriveUsDividendsFromFinancials } = await import('./dividendService');
+      const mockUsRecords: any[] = [
+        {
+          symbol: 'AAPL',
+          market: 'US',
+          year: 2024,
+          quarter: 4,
+          income: { netIncome: 25000000, eps: 2.5 }, // 股數 = 10,000,000 股
+          cashFlow: { dividendPaid: 5000000 }, // 每季每股 0.5 元
+        },
+        {
+          symbol: 'AAPL',
+          market: 'US',
+          year: 2024,
+          quarter: 3,
+          income: { netIncome: 25000000, eps: 2.5 },
+          cashFlow: { dividendPaid: 5000000 },
+        },
+        {
+          symbol: 'AAPL',
+          market: 'US',
+          year: 2024,
+          quarter: 2,
+          income: { netIncome: 25000000, eps: 2.5 },
+          cashFlow: { dividendPaid: 5000000 },
+        },
+        {
+          symbol: 'AAPL',
+          market: 'US',
+          year: 2024,
+          quarter: 1,
+          income: { netIncome: 25000000, eps: 2.5 },
+          cashFlow: { dividendPaid: 5000000 },
+        },
+      ];
+
+      const res = deriveUsDividendsFromFinancials(mockUsRecords);
+      expect(res).toHaveLength(1);
+      expect(res[0].year).toBe(2024);
+      expect(res[0].cashDividend).toBeCloseTo(2.0, 2); // 4 季各 0.5 = 2.0 元
+      expect(res[0].totalDividend).toBeCloseTo(2.0, 2);
+    });
+  });
 });

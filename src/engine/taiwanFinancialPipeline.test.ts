@@ -46,7 +46,20 @@ describe('Taiwan Financial Ingestion Pipeline (TDD Seam)', () => {
     expect(rec.balanceSheet.cashAndEquivalents).toBe(1500000);
     expect(rec.cashFlow.operatingCashFlow).toBe(300000);
     expect(rec.cashFlow.capitalExpenditure).toBe(150000);
-    expect(rec.auditInfo?.opinionType).toBe('UNQUALIFIED');
+    expect(rec.auditInfo?.opinionType).toBe('UNREVIEWED');
+    expect(rec.auditInfo?.cpaFirm).not.toBe('四大聯合會計師事務所');
+  });
+
+  it('1.1 parseTaiwanFinancialStatements 應將「歸屬於母公司業主淨利」列為最高優先級，防止少數股權虛增淨利 (Spec 0202 - Ticket 03)', () => {
+    const rawHoldingData = [
+      { date: '2025-06-30', type: 'Revenue', value: 1000000 },
+      { date: '2025-06-30', type: 'IncomeAfterTaxes', value: 500000 }, // 合併淨利
+      { date: '2025-06-30', type: 'EquityAttributableToOwnersOfParent', value: 380000 }, // 母公司業主淨利 (第一優先)
+    ];
+
+    const records = parseTaiwanFinancialStatements('2330', rawHoldingData);
+    expect(records).toHaveLength(1);
+    expect(records[0].income.netIncome).toBe(380000); // 必須是 380,000 而非 500,000
   });
 
   it('2. fetchTaiwanQuarterlyFinancials 若本地已有快取應優先讀取，不觸發網路請求', async () => {

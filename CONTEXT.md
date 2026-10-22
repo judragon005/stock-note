@@ -227,6 +227,29 @@ _Avoid_: Ignored Pledge Ratio, Manual Insider Check
 **Dynamic Macro Sentiment & Risk-Free Rate (動態總經情緒與無風險利率管線)**:
 自 FRED 官方開放 API 抓取 10 年期美國公債殖利率 (DGS10) 與 CNN 恐慌與貪婪指數，注入量化指標引擎動態計算夏普比率 (Sharpe Ratio)，取代固定死板之利率常數。
 _Avoid_: Hardcoded Risk Free Rate, Fixed 2% Assumption
+
+### 個股深度財報全域資料治理與湖倉打通 (Stock Analysis Forensic Accounting & Lakehouse) *(新增於 V9.20.0 / Spec 0202 / ADR 0202)*
+
+**Zero-Mock Cleanse (零造假真實性防護)**:
+徹底拔除所有寫死假資料（例如 Piotroski F-Score 第 5 項寫死 passed、流動負債係數寫死 0.5、本益比寫死 1.16、淨值寫死 32.5、美股除以 10 元面額或保底 10 億股等）。客觀查無數據時誠實展示 `-` 或 `N/A`，杜絕任何虛假指標干擾使用者決策。
+_Avoid_: Hardcoded Mock Metric, Synthetic Fallback Guess
+
+**Lakehouse-First Routing & 120D TTL (湖倉優先檢索與季度 TTL 機制)**:
+個股深度財報優先自本地 SQLite 湖倉查詢，離線或網路超時時具備健全容錯防禦；快取層導入 120 天季度時效性 TTL 與新季報發布之增量更新機制，徹底杜絕 429 速率限制白畫面與快取死水。
+_Avoid_: Direct API Monolith, Infinite Stale Cache
+
+**Controlling Interest Net Income (母公司業主淨利第一優先級)**:
+台股綜合損益表計算與每股獲利指標評估時，嚴格以「歸屬於母公司業主淨利」為最高優先級，徹底剔除非控制權益干擾，避免合併報表獲利虛胖。
+_Avoid_: Consolidated Net Income Hijack, Non-controlling Overstatement
+
+**Forensic YoY Scissors & IFRS 16 Filter (法務會計真實 YoY 剪刀差與租賃負債過濾)**:
+應收帳款與存貨剪刀差嚴格對齊「去年同季 (YoY)」，徹底解決以上一季 (QoQ) 計算引發淡旺季假塞貨警報的缺陷；負債分析中過濾 IFRS 16 營業租賃資本化負債，專注於金融性有息負債，並標記良性擴產型資本支出。
+_Avoid_: False QoQ Scissors Warning, IFRS 16 Lease Confusion
+
+**Five Highly-Cohesive Views (5 大專業高凝聚視圖架構)**:
+將個股分析工作區原先 46 個碎裂標籤收斂為 5 大核心視圖：財務三表全貌（含 8 季橫向對比）、獲利純度與杜邦分析、營運週轉與訂單動能、實戰估值與配息分析、法務會計排雷燈（整合董監質押風控），並支援最近瀏覽 5 檔膠囊切換與行動端 RWD 自適應。
+_Avoid_: Fragmented 46 Tabs, Monolithic Clutter
+
 ### 視覺化與主題 (Visualization & Theme)  *(新增於 V1.1)*
 
 **Treemap (資產樹狀圖)**:
