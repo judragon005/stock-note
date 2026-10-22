@@ -148,5 +148,26 @@ describe('Ticket 06: API Key Health Probe Engine', () => {
       expect(res.httpStatus).toBe(0);
       expect(res.message).toContain('瀏覽器 CORS 限制，後端排程可正常調用');
     });
+
+    it('11. Tiingo 探針應正確呼叫官方端點並支援 200 成功與 401/403 錯誤穿透 (Spec 0203 Ticket 04)', async () => {
+      const mockFetcher = vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('api.tiingo.com/tiingo/daily/aapl/prices')) {
+          return {
+            status: 200,
+            text: async () => JSON.stringify([{ date: '2026-10-21', close: 235.5 }]),
+          };
+        }
+        return { status: 404 };
+      });
+
+      const res = await probeApiKey('tiingo', 'test_tiingo_token', mockFetcher as any, { skipRelay: true });
+      expect(res.status).toBe('HEALTHY');
+      expect(res.httpStatus).toBe(200);
+      expect(mockFetcher).toHaveBeenCalledWith(
+        expect.stringContaining('https://api.tiingo.com/tiingo/daily/aapl/prices?token=test_tiingo_token'),
+        expect.anything()
+      );
+    });
   });
 });
+

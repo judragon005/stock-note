@@ -122,6 +122,9 @@ export async function probeApiKey(
         testUrl = `https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json`;
         headers = { 'User-Agent': 'StockTracker/1.0 (local-test@stocknote.org)' };
         break;
+      case 'tiingo':
+        testUrl = `https://api.tiingo.com/tiingo/daily/aapl/prices?token=${encodeURIComponent(key)}`;
+        break;
       default:
         testUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo&token=${encodeURIComponent(key)}`;
     }

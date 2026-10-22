@@ -64,4 +64,11 @@ describe('Ticket 01: API Key Pool Types and State Schema', () => {
     // 配額未達上限 (-1 代表無上限) 可用
     expect(isKeyUsable({ ...baseItem, dailyQuotaLimit: -1, totalRequestsToday: 9999 }, 1000)).toBe(true);
   });
+
+  it('4. createDefaultApiKeyItem 針對 tiingo 應預設給予 500 次/日配額 (Spec 0203 Ticket 03)', () => {
+    const tiingoItem = createDefaultApiKeyItem('tiingo', 'tiingo_token_abc');
+    expect(tiingoItem.provider).toBe('tiingo');
+    expect(tiingoItem.dailyQuotaLimit).toBe(500);
+  });
 });
+

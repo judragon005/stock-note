@@ -15,16 +15,17 @@ describe('UnifiedApiKeyManager - 統一金融 API 金鑰控制台 (Spec 0168 / T
   });
 
   describe('1. 供應商配置規格檢驗 (PROVIDER_CONFIGS & DISPLAYED_PROVIDERS)', () => {
-    it('應正確涵蓋 6 大核心金融與總經供應商', () => {
+    it('應正確涵蓋核心金融與總經供應商 (含 Tiingo 美股備援)', () => {
       expect(DISPLAYED_PROVIDERS).toContain('finmind');
       expect(DISPLAYED_PROVIDERS).toContain('finnhub');
       expect(DISPLAYED_PROVIDERS).toContain('fmp');
       expect(DISPLAYED_PROVIDERS).toContain('fred');
+      expect(DISPLAYED_PROVIDERS).toContain('tiingo');
       expect(DISPLAYED_PROVIDERS).toContain('coingecko');
       expect(DISPLAYED_PROVIDERS).toContain('sec');
     });
 
-    it('各核心供應商配置應具備正確中文標籤與預設配額', () => {
+    it('各核心供應商配置應具備正確中文標籤與預設配額 (含 Tiingo)', () => {
       expect(PROVIDER_CONFIGS.finmind.label).toBe('FinMind');
       expect(PROVIDER_CONFIGS.finmind.defaultQuota).toBe(300);
       expect(PROVIDER_CONFIGS.finmind.keyName).toBe('finmindToken');
@@ -32,6 +33,10 @@ describe('UnifiedApiKeyManager - 統一金融 API 金鑰控制台 (Spec 0168 / T
       expect(PROVIDER_CONFIGS.fmp.label).toContain('FMP');
       expect(PROVIDER_CONFIGS.fmp.defaultQuota).toBe(250);
       expect(PROVIDER_CONFIGS.fmp.keyName).toBe('fmpApiKey');
+
+      expect(PROVIDER_CONFIGS.tiingo.label).toBe('Tiingo');
+      expect(PROVIDER_CONFIGS.tiingo.defaultQuota).toBe(500);
+      expect(PROVIDER_CONFIGS.tiingo.keyName).toBe('tiingoToken');
 
       expect(PROVIDER_CONFIGS.sec.defaultQuota).toBe(-1); // 免費無限制
       expect(PROVIDER_CONFIGS.sec.keyName).toBeNull(); // 免 Key
@@ -57,11 +62,12 @@ describe('UnifiedApiKeyManager - 統一金融 API 金鑰控制台 (Spec 0168 / T
       expect(html).toContain('自訂代理伺服器端點 (Proxy URL):');
       expect(html).toContain('https://proxy.example.workers.dev');
 
-      // 驗證 6 大供應商 Tabs 均在 HTML 中渲染
+      // 驗證供應商 Tabs 均在 HTML 中渲染
       expect(html).toContain('data-testid="tab-provider-finmind"');
       expect(html).toContain('data-testid="tab-provider-finnhub"');
       expect(html).toContain('data-testid="tab-provider-fmp"');
       expect(html).toContain('data-testid="tab-provider-fred"');
+      expect(html).toContain('data-testid="tab-provider-tiingo"');
       expect(html).toContain('data-testid="tab-provider-coingecko"');
       expect(html).toContain('data-testid="tab-provider-sec"');
 
@@ -106,25 +112,32 @@ describe('UnifiedApiKeyManager - 統一金融 API 金鑰控制台 (Spec 0168 / T
       expect(item.isBlacklisted).toBe(false);
     });
 
-    it('probeApiKey 能正確映射 FMP 與 FinMind 等供應商端點發起探針', async () => {
+    it('probeApiKey 能正確映射 FMP、FinMind 與 Tiingo 等供應商端點發起探針', async () => {
       const mockFetcher = vi.fn().mockResolvedValue({
         status: 200,
       } as Response);
 
-      const fmpRes = await probeApiKey('fmp', 'test_fmp_key_123', mockFetcher);
+      const fmpRes = await probeApiKey('fmp', 'test_fmp_key_123', mockFetcher, { skipRelay: true });
       expect(mockFetcher).toHaveBeenCalledWith(
-        expect.stringContaining('financialmodelingprep.com/stable/quote?symbol=AAPL&apikey=test_fmp_key_123'),
+        expect.stringContaining('financialmodelingprep.com/api/v3/profile/AAPL?apikey=test_fmp_key_123'),
         expect.anything()
       );
       expect(fmpRes.status).toBe('HEALTHY');
       expect(fmpRes.httpStatus).toBe(200);
 
-      const finmindRes = await probeApiKey('finmind', 'test_fm_token_456', mockFetcher);
+      const finmindRes = await probeApiKey('finmind', 'test_fm_token_456', mockFetcher, { skipRelay: true });
       expect(mockFetcher).toHaveBeenCalledWith(
         expect.stringContaining('api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo&token=test_fm_token_456'),
         expect.anything()
       );
       expect(finmindRes.status).toBe('HEALTHY');
+
+      const tiingoRes = await probeApiKey('tiingo', 'test_tiingo_token_789', mockFetcher, { skipRelay: true });
+      expect(mockFetcher).toHaveBeenCalledWith(
+        expect.stringContaining('api.tiingo.com/tiingo/daily/aapl/prices?token=test_tiingo_token_789'),
+        expect.anything()
+      );
+      expect(tiingoRes.status).toBe('HEALTHY');
     });
   });
 });

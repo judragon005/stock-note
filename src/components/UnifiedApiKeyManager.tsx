@@ -103,6 +103,15 @@ export const PROVIDER_CONFIGS: Record<ProviderType, ProviderMeta> = {
     docUrl: 'https://www.alphavantage.co/support/#api-key',
     keyName: 'alphaVantageKey',
   },
+  tiingo: {
+    id: 'tiingo',
+    label: 'Tiingo',
+    tag: '🇺🇸 美股高品質報價 / 拆股除息',
+    desc: '提供高精準度美股還原價、拆股除息因子與歷史日 K 數據，每日 500 次免費額度。',
+    defaultQuota: 500,
+    docUrl: 'https://www.tiingo.com/account/api/token',
+    keyName: 'tiingoToken',
+  },
 };
 
 export const DISPLAYED_PROVIDERS: ProviderType[] = [
@@ -110,6 +119,7 @@ export const DISPLAYED_PROVIDERS: ProviderType[] = [
   'finnhub',
   'fmp',
   'fred',
+  'tiingo',
   'coingecko',
   'sec',
   'alphavantage',
