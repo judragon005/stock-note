@@ -127,27 +127,51 @@ function parseTaifexInstitutionalFuturesCsv(csvText) {
 }
 
 /**
- * 解析證交所/投信公會 ETF 官方收盤淨值與折溢價 (Spec 0183)
+ * 解析證交所/投信公會 ETF 官方收盤淨值與折溢價 (Spec 0183 & Spec 0203)
+ * 支援證交所官方真實 all_etf.txt 之 { a1: [{ msgArray: [...] }] } 結構與扁平陣列
+ * 欄位精準映射：a=代碼, e=市價, f=官方淨值 (NAV), g=折溢價率 (%)
  */
 function parseTwseEtfNavResponse(rawData, dateStr) {
-  if (!Array.isArray(rawData)) return [];
+  if (!rawData) return [];
+
+  let items = [];
+  if (Array.isArray(rawData)) {
+    items = rawData;
+  } else if (rawData.a1 && Array.isArray(rawData.a1) && rawData.a1[0] && Array.isArray(rawData.a1[0].msgArray)) {
+    items = rawData.a1[0].msgArray;
+  } else if (Array.isArray(rawData.msgArray)) {
+    items = rawData.msgArray;
+  }
 
   const results = [];
-  for (const item of rawData) {
+  for (const item of items) {
     const symbol = String(item.a || item.symbol || '').trim();
     if (!symbol) continue;
 
-    const closePrice = parseFloat(item.c || item.close || '0');
-    const nav = parseFloat(item.d || item.nav || '0');
-    const ratio = parseFloat(item.e || item.ratio || '0');
+    // 官方 all_etf.txt: e=市價, f=淨值, g=折溢價率; 舊相容: c=市價, d=淨值, e=折溢價
+    let closePrice = 0;
+    let nav = 0;
+    let premiumDiscountRatio = 0;
 
-    if (closePrice > 0 && nav > 0) {
+    if (item.f !== undefined || item.g !== undefined) {
+      closePrice = parseFloat(String(item.e || '0').replace(/,/g, ''));
+      nav = parseFloat(String(item.f || '0').replace(/,/g, ''));
+      const ratioStr = String(item.g || '0').replace(/,/g, '').replace('%', '').trim();
+      premiumDiscountRatio = parseFloat(ratioStr);
+    } else {
+      closePrice = parseFloat(String(item.c || item.close || '0').replace(/,/g, ''));
+      nav = parseFloat(String(item.d || item.nav || '0').replace(/,/g, ''));
+      const ratioStr = String(item.e || item.ratio || '0').replace(/,/g, '').replace('%', '').trim();
+      premiumDiscountRatio = parseFloat(ratioStr);
+    }
+
+    if (!isNaN(closePrice) && closePrice > 0 && !isNaN(nav) && nav > 0) {
       results.push({
         symbol,
         date: dateStr,
         closePrice,
         nav,
-        premiumDiscountRatio: ratio,
+        premiumDiscountRatio: isNaN(premiumDiscountRatio) ? 0 : premiumDiscountRatio,
       });
     }
   }
@@ -181,6 +205,33 @@ function ingestEtfDailyNavToDb(records, customDbPath) {
   }
 }
 
+/**
+ * 聯網抓取並入庫全市場 ETF 淨值與折溢價 (Spec 0203 Ticket 05)
+ */
+async function fetchAndIngestEtfDailyNav(customDbPath, targetDateStr = new Date().toISOString().split('T')[0], fetcher = fetch) {
+  try {
+    const url = 'https://mis.twse.com.tw/stock/data/all_etf.txt';
+    const res = await fetcher(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json, text/plain, */*',
+      },
+    });
+    if (!res.ok) {
+      return { success: false, count: 0, error: `HTTP ${res.status}` };
+    }
+    const data = await res.json();
+    const records = parseTwseEtfNavResponse(data, targetDateStr);
+    if (records.length > 0) {
+      ingestEtfDailyNavToDb(records, customDbPath);
+      return { success: true, count: records.length };
+    }
+    return { success: false, count: 0, error: 'NO_VALID_RECORDS' };
+  } catch (err) {
+    return { success: false, count: 0, error: err.message };
+  }
+}
+
 module.exports = {
   parseFredObservations,
   computeYieldSpread,
@@ -189,5 +240,7 @@ module.exports = {
   parseTaifexInstitutionalFuturesCsv,
   parseTwseEtfNavResponse,
   ingestEtfDailyNavToDb,
+  fetchAndIngestEtfDailyNav,
 };
+
 
