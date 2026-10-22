@@ -18,13 +18,13 @@ import {
 import { StrategicFactDigest, StrategicPromptResult } from '../../types/strategicPrompt';
 import { generateStrategicPrompt } from '../../engine/strategicPromptEngine';
 import { logger } from '../../utils/logger';
-import { PinnedStrategy, StrategyOutcomeRecord } from '../../types/strategyPin';
+import { PinnedStrategy, StrategyOutcomeRecord, MultiStrategyTriggerStatus } from '../../types/strategyPin';
 import {
-  parseLoopbackContent,
+  parseLoopbackContentBatch,
   createPinnedStrategy,
-  evaluateStrategyTrigger,
+  evaluateMultiStrategyTriggers,
   savePinnedStrategy,
-  getPinnedStrategy,
+  getPinnedStrategies,
   clearPinnedStrategy,
   recordStrategyOutcome,
   getStrategyOutcomeRecords,
@@ -88,9 +88,9 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
   const [desensitized, setDesensitized] = useState<boolean>(true);
   const [showPreview, setShowPreview] = useState<boolean>(false);
 
-  // 回流協議與釘選狀態
-  const [pinnedStrategy, setPinnedStrategy] = useState<PinnedStrategy | null>(() =>
-    getPinnedStrategy(symbol)
+  // 回流協議與多模型釘選狀態 (Spec 0201 / Ticket 04)
+  const [pinnedStrategies, setPinnedStrategies] = useState<PinnedStrategy[]>(() =>
+    getPinnedStrategies(symbol)
   );
   const [showPasteModal, setShowPasteModal] = useState<boolean>(false);
   const [pasteInputText, setPasteInputText] = useState<string>('');
@@ -104,9 +104,9 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
     getStrategyOutcomeRecords()
   );
 
-  // 當 symbol 切換時重新載入對應釘選策略
+  // 當 symbol 切換時重新載入對應釘選策略清單
   useEffect(() => {
-    setPinnedStrategy(getPinnedStrategy(symbol));
+    setPinnedStrategies(getPinnedStrategies(symbol));
   }, [symbol]);
 
   // 定時器清理
@@ -138,11 +138,11 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
     });
   }, [digest, desensitized]);
 
-  // 盤中觸價評估
-  const triggerStatus = useMemo(() => {
-    if (!pinnedStrategy) return null;
-    return evaluateStrategyTrigger(pinnedStrategy, currentPrice);
-  }, [pinnedStrategy, currentPrice]);
+  // 多模型盤中觸價評估 (最嚴格停損優先 + 共識/分歧指標)
+  const multiTriggerStatus: MultiStrategyTriggerStatus | null = useMemo(() => {
+    if (pinnedStrategies.length === 0) return null;
+    return evaluateMultiStrategyTriggers(pinnedStrategies, currentPrice);
+  }, [pinnedStrategies, currentPrice]);
 
   // 勝率計算
   const modelWinRates = useMemo(() => {
@@ -162,19 +162,23 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
     }
   }, [promptResult.promptText, isLoading, isDataPending]);
 
-  // 套用貼入之回流內容
+  // 套用貼入之回流內容 (支援單筆或多筆批次抽取)
   const handleApplyLoopback = useCallback(
     (textToParse: string) => {
       setPasteError(null);
-      const parsed = parseLoopbackContent(textToParse, symbol);
-      if (!parsed.success || !parsed.data) {
-        setPasteError(parsed.error || '解析回流數據失敗');
+      const batch = parseLoopbackContentBatch(textToParse, symbol);
+      if (batch.length === 0) {
+        setPasteError('未在內容中解析到有效之 AI 裁決代碼塊 (需包含 stopLoss 欄位)');
         return false;
       }
 
-      const newPin = createPinnedStrategy(parsed.data);
-      savePinnedStrategy(newPin);
-      setPinnedStrategy(newPin);
+      batch.forEach((payload) => {
+        const newPin = createPinnedStrategy(payload);
+        savePinnedStrategy(newPin);
+      });
+
+      const updated = getPinnedStrategies(symbol);
+      setPinnedStrategies(updated);
       setPasteInputText('');
       setPasteModalNotice(null);
       setShowPasteModal(false);
@@ -201,46 +205,68 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
     setShowPasteModal(true);
   }, [handleApplyLoopback]);
 
-  // 清除目前標的的釘選
-  const handleClearPin = useCallback(() => {
-    clearPinnedStrategy(symbol);
-    setPinnedStrategy(null);
-  }, [symbol]);
+  // 清除目前標的的單一模型或全部釘選
+  const handleClearPin = useCallback(
+    (targetModel?: string) => {
+      clearPinnedStrategy(symbol, targetModel);
+      setPinnedStrategies(getPinnedStrategies(symbol));
+    },
+    [symbol]
+  );
 
   // 點擊確認警報（避免疲勞）
   const handleAcknowledgeAlert = useCallback(() => {
-    if (!pinnedStrategy) return;
-    const updated: PinnedStrategy = { ...pinnedStrategy, acknowledgedAlert: true };
-    savePinnedStrategy(updated);
-    setPinnedStrategy(updated);
-  }, [pinnedStrategy]);
+    pinnedStrategies.forEach((pin) => {
+      savePinnedStrategy({ ...pin, acknowledgedAlert: true });
+    });
+    setPinnedStrategies(getPinnedStrategies(symbol));
+  }, [pinnedStrategies, symbol]);
 
-  // 結案並記錄勝率
+  // 單卡結案並記錄勝率
   const handleCloseOutcome = useCallback(
-    (outcome: 'WIN' | 'LOSS' | 'EXPIRED') => {
-      if (!pinnedStrategy) return;
+    (targetPin: PinnedStrategy, outcome: 'WIN' | 'LOSS' | 'EXPIRED') => {
       const record: StrategyOutcomeRecord = {
-        id: `outcome_${Date.now()}`,
-        symbol: pinnedStrategy.symbol,
-        aiModel: pinnedStrategy.aiModel,
-        createdAt: pinnedStrategy.createdAt,
+        id: `outcome_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+        symbol: targetPin.symbol,
+        aiModel: targetPin.aiModel,
+        createdAt: targetPin.createdAt,
         closedAt: new Date().toISOString(),
         outcome,
       };
       recordStrategyOutcome(record);
-      clearPinnedStrategy(symbol);
-      setPinnedStrategy(null);
+      clearPinnedStrategy(symbol, targetPin.aiModel);
+      setPinnedStrategies(getPinnedStrategies(symbol));
       setOutcomeRecords(getStrategyOutcomeRecords());
     },
-    [pinnedStrategy, symbol]
+    [symbol]
   );
 
-  // 計算釘選策略剩餘天數
-  const remainingDays = useMemo(() => {
-    if (!pinnedStrategy) return 0;
-    const diffMs = new Date(pinnedStrategy.expiresAt).getTime() - Date.now();
-    return Math.max(0, Math.ceil(diffMs / 86400000));
-  }, [pinnedStrategy]);
+  // 全隊全員結案
+  const handleCloseAllOutcomes = useCallback(
+    (outcome: 'WIN' | 'LOSS' | 'EXPIRED') => {
+      const now = new Date().toISOString();
+      pinnedStrategies.forEach((p) => {
+        const record: StrategyOutcomeRecord = {
+          id: `outcome_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+          symbol: p.symbol,
+          aiModel: p.aiModel,
+          createdAt: p.createdAt,
+          closedAt: now,
+          outcome,
+        };
+        recordStrategyOutcome(record);
+      });
+      clearPinnedStrategy(symbol);
+      setPinnedStrategies([]);
+      setOutcomeRecords(getStrategyOutcomeRecords());
+    },
+    [pinnedStrategies, symbol]
+  );
+
+  // 是否有任一模型尚未知悉警報
+  const hasUnacknowledgedAlert = useMemo(() => {
+    return pinnedStrategies.some((p) => !p.acknowledgedAlert);
+  }, [pinnedStrategies]);
 
   return (
     <div
@@ -487,8 +513,8 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
         </button>
       </div>
 
-      {/* 盤中觸價警報橫幅 (若觸價且使用者尚未確認) */}
-      {triggerStatus?.triggerMessage && !pinnedStrategy?.acknowledgedAlert && (
+      {/* 盤中觸價警報橫幅 (取最嚴格保命停損優先報警，防範主觀凹單) */}
+      {multiTriggerStatus?.triggerMessage && hasUnacknowledgedAlert && (
         <div
           data-testid="intraday-trigger-alert"
           style={{
@@ -498,15 +524,15 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
             gap: '12px',
             padding: '10px 14px',
             borderRadius: '8px',
-            background: triggerStatus.isStopLossTriggered
+            background: multiTriggerStatus.isStopLossTriggered
               ? 'rgba(239, 68, 68, 0.2)'
               : 'rgba(16, 185, 129, 0.2)',
             border: `1px solid ${
-              triggerStatus.isStopLossTriggered
+              multiTriggerStatus.isStopLossTriggered
                 ? 'rgba(239, 68, 68, 0.5)'
                 : 'rgba(16, 185, 129, 0.5)'
             }`,
-            color: triggerStatus.isStopLossTriggered ? '#fca5a5' : '#86efac',
+            color: multiTriggerStatus.isStopLossTriggered ? '#fca5a5' : '#86efac',
             fontSize: '13px',
             fontWeight: 600,
             animation: 'pulse 2s infinite',
@@ -514,7 +540,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <AlertTriangle size={18} />
-            <span>{triggerStatus.triggerMessage}</span>
+            <span>{multiTriggerStatus.triggerMessage}</span>
           </div>
           <button
             type="button"
@@ -534,20 +560,21 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
         </div>
       )}
 
-      {/* 外部 AI 裁決釘選卡片 (若已釘選) */}
-      {pinnedStrategy && (
+      {/* 外部 AI 智囊團多模型緊湊釘選條列 (Spec 0201 / Ticket 04) */}
+      {pinnedStrategies.length > 0 && (
         <div
-          data-testid="pinned-strategy-card"
+          data-testid="pinned-strategies-container"
           style={{
             background: 'rgba(17, 24, 39, 0.75)',
             border: '1px solid rgba(147, 51, 234, 0.35)',
             borderRadius: '10px',
-            padding: '12px 14px',
+            padding: '10px 14px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '10px',
+            gap: '8px',
           }}
         >
+          {/* 頂部一覽列：共識防線/分歧指標與全隊結案 */}
           <div
             style={{
               display: 'flex',
@@ -555,6 +582,8 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
               justifyContent: 'space-between',
               flexWrap: 'wrap',
               gap: '8px',
+              paddingBottom: '6px',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -564,178 +593,206 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
                   fontWeight: 600,
                   padding: '2px 8px',
                   borderRadius: '4px',
-                  background: 'rgba(147, 51, 234, 0.25)',
-                  color: '#d8b4fe',
-                  border: '1px solid rgba(147, 51, 234, 0.4)',
+                  background:
+                    multiTriggerStatus?.consensusLevel === 'DIVERGENT'
+                      ? 'rgba(239, 68, 68, 0.2)'
+                      : 'rgba(147, 51, 234, 0.25)',
+                  color:
+                    multiTriggerStatus?.consensusLevel === 'DIVERGENT' ? '#fca5a5' : '#d8b4fe',
+                  border: `1px solid ${
+                    multiTriggerStatus?.consensusLevel === 'DIVERGENT'
+                      ? 'rgba(239, 68, 68, 0.4)'
+                      : 'rgba(147, 51, 234, 0.4)'
+                  }`,
                 }}
               >
-                🤖 {pinnedStrategy.aiModel}
+                👥 智囊團 ({pinnedStrategies.length})
               </span>
-              <span
-                style={{
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: '#f3f4f6',
-                }}
-              >
-                {pinnedStrategy.verdict}
-              </span>
+              {multiTriggerStatus?.consensusMessage && (
+                <span
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color:
+                      multiTriggerStatus.consensusLevel === 'DIVERGENT' ? '#fca5a5' : '#c084fc',
+                  }}
+                >
+                  {multiTriggerStatus.consensusMessage}
+                </span>
+              )}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span
-                style={{
-                  fontSize: '11px',
-                  color: pinnedStrategy.isExpired ? '#f87171' : '#9ca3af',
-                  padding: '2px 6px',
-                  borderRadius: '4px',
-                  background: pinnedStrategy.isExpired
-                    ? 'rgba(239, 68, 68, 0.15)'
-                    : 'rgba(255, 255, 255, 0.05)',
-                }}
-              >
-                {pinnedStrategy.isExpired ? '⚠️ 策略已逾期 (建議重新診斷)' : `效期剩餘 ${remainingDays} 天`}
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '11px', color: '#9ca3af' }}>全隊結案：</span>
               <button
                 type="button"
-                onClick={handleClearPin}
-                title="放棄此釘選"
+                onClick={() => handleCloseAllOutcomes('WIN')}
+                style={{
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  color: '#34d399',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  borderRadius: '4px',
+                  padding: '2px 6px',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                }}
+                title="全隊獲利了結"
+              >
+                全隊達標
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCloseAllOutcomes('LOSS')}
+                style={{
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  color: '#f87171',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '4px',
+                  padding: '2px 6px',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                }}
+                title="全隊停損出場"
+              >
+                全隊停損
+              </button>
+              <button
+                type="button"
+                onClick={() => handleClearPin()}
+                title="全隊清空"
                 style={{
                   background: 'transparent',
                   border: 'none',
                   color: '#9ca3af',
                   cursor: 'pointer',
-                  padding: '2px',
+                  padding: '2px 4px',
                   display: 'flex',
                   alignItems: 'center',
                 }}
               >
-                <Trash2 size={14} />
+                <Trash2 size={13} />
               </button>
             </div>
           </div>
 
-          {/* 關鍵點位三欄橫幅 */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-              gap: '8px',
-              fontSize: '12px',
-            }}
-          >
-            <div
-              style={{
-                background: 'rgba(239, 68, 68, 0.08)',
-                border: '1px solid rgba(239, 68, 68, 0.2)',
-                borderRadius: '6px',
-                padding: '6px 10px',
-                display: 'flex',
-                flexDirection: 'column',
-              }}
-            >
-              <span style={{ color: '#f87171', fontSize: '11px' }}>🛡️ 保命停損價</span>
-              <span style={{ fontSize: '14px', fontWeight: 700, color: '#fca5a5' }}>
-                {pinnedStrategy.stopLoss.toFixed(2)}
-              </span>
-            </div>
+          {/* 緊湊型多模型條列清單 (每行單一 AI，高密度不擠佔空間) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {pinnedStrategies.map((pin) => {
+              const diffMs = new Date(pin.expiresAt).getTime() - Date.now();
+              const daysLeft = Math.max(0, Math.ceil(diffMs / 86400000));
 
-            {pinnedStrategy.takeProfit !== undefined && (
-              <div
-                style={{
-                  background: 'rgba(16, 185, 129, 0.08)',
-                  border: '1px solid rgba(16, 185, 129, 0.2)',
-                  borderRadius: '6px',
-                  padding: '6px 10px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-              >
-                <span style={{ color: '#34d399', fontSize: '11px' }}>🎯 停利目標價</span>
-                <span style={{ fontSize: '14px', fontWeight: 700, color: '#86efac' }}>
-                  {pinnedStrategy.takeProfit.toFixed(2)}
-                </span>
-              </div>
-            )}
+              return (
+                <div
+                  key={pin.id || pin.aiModel}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '8px',
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                    fontSize: '12px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '220px' }}>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        background: 'rgba(147, 51, 234, 0.2)',
+                        color: '#d8b4fe',
+                        border: '1px solid rgba(147, 51, 234, 0.3)',
+                      }}
+                    >
+                      🤖 {pin.aiModel}
+                    </span>
+                    <span style={{ fontWeight: 600, color: '#f3f4f6' }}>{pin.verdict}</span>
+                  </div>
 
-            {pinnedStrategy.trendReversal !== undefined && (
-              <div
-                style={{
-                  background: 'rgba(59, 130, 246, 0.08)',
-                  border: '1px solid rgba(59, 130, 246, 0.2)',
-                  borderRadius: '6px',
-                  padding: '6px 10px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-              >
-                <span style={{ color: '#60a5fa', fontSize: '11px' }}>🚀 突破翻多點</span>
-                <span style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd' }}>
-                  {pinnedStrategy.trendReversal.toFixed(2)}
-                </span>
-              </div>
-            )}
-          </div>
+                  {/* 關鍵點位組 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ color: '#fca5a5' }}>
+                      停損 <strong style={{ fontWeight: 700 }}>{pin.stopLoss.toFixed(2)}</strong>
+                    </span>
+                    {pin.takeProfit !== undefined && (
+                      <span style={{ color: '#86efac' }}>
+                        目標 <strong style={{ fontWeight: 700 }}>{pin.takeProfit.toFixed(2)}</strong>
+                      </span>
+                    )}
+                    {pin.trendReversal !== undefined && (
+                      <span style={{ color: '#93c5fd' }}>
+                        翻多 <strong style={{ fontWeight: 700 }}>{pin.trendReversal.toFixed(2)}</strong>
+                      </span>
+                    )}
+                  </div>
 
-          {/* 結案記錄操作組 */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              gap: '6px',
-              fontSize: '11px',
-              color: '#9ca3af',
-              borderTop: '1px dashed rgba(255, 255, 255, 0.1)',
-              paddingTop: '8px',
-            }}
-          >
-            <span>結案回報勝率：</span>
-            <button
-              type="button"
-              onClick={() => handleCloseOutcome('WIN')}
-              style={{
-                background: 'rgba(16, 185, 129, 0.15)',
-                color: '#34d399',
-                border: '1px solid rgba(16, 185, 129, 0.3)',
-                borderRadius: '4px',
-                padding: '2px 6px',
-                cursor: 'pointer',
-                fontSize: '11px',
-              }}
-            >
-              獲利達標 (WIN)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleCloseOutcome('LOSS')}
-              style={{
-                background: 'rgba(239, 68, 68, 0.15)',
-                color: '#f87171',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                borderRadius: '4px',
-                padding: '2px 6px',
-                cursor: 'pointer',
-                fontSize: '11px',
-              }}
-            >
-              停損出場 (LOSS)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleCloseOutcome('EXPIRED')}
-              style={{
-                background: 'rgba(107, 114, 128, 0.2)',
-                color: '#9ca3af',
-                border: '1px solid rgba(107, 114, 128, 0.3)',
-                borderRadius: '4px',
-                padding: '2px 6px',
-                cursor: 'pointer',
-                fontSize: '11px',
-              }}
-            >
-              時間逾期 (EXPIRED)
-            </button>
+                  {/* 效期與單卡結案操作組 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        color: pin.isExpired ? '#f87171' : '#9ca3af',
+                      }}
+                    >
+                      {pin.isExpired ? '⚠️ 逾期' : `${daysLeft}天`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCloseOutcome(pin, 'WIN')}
+                      style={{
+                        background: 'rgba(16, 185, 129, 0.1)',
+                        color: '#34d399',
+                        border: '1px solid rgba(16, 185, 129, 0.25)',
+                        borderRadius: '3px',
+                        padding: '1px 5px',
+                        cursor: 'pointer',
+                        fontSize: '10px',
+                      }}
+                      title="該模型獲利達標"
+                    >
+                      WIN
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCloseOutcome(pin, 'LOSS')}
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        color: '#f87171',
+                        border: '1px solid rgba(239, 68, 68, 0.25)',
+                        borderRadius: '3px',
+                        padding: '1px 5px',
+                        cursor: 'pointer',
+                        fontSize: '10px',
+                      }}
+                      title="該模型停損出場"
+                    >
+                      LOSS
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleClearPin(pin.aiModel)}
+                      title="刪除此模型"
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#9ca3af',
+                        cursor: 'pointer',
+                        padding: '1px',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

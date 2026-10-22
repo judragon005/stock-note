@@ -55,6 +55,7 @@ describe('Spec 0200 / Ticket 04: WarRoomPromptCard 戰情室外聯提示詞與�
       isExpired: false,
     };
 
+    vi.spyOn(strategyPinEngine, 'getPinnedStrategies').mockReturnValue([mockPin]);
     vi.spyOn(strategyPinEngine, 'getPinnedStrategy').mockReturnValue(mockPin);
     vi.spyOn(strategyPinEngine, 'getStrategyOutcomeRecords').mockReturnValue([]);
 
@@ -85,6 +86,7 @@ describe('Spec 0200 / Ticket 04: WarRoomPromptCard 戰情室外聯提示詞與�
       isExpired: false,
     };
 
+    vi.spyOn(strategyPinEngine, 'getPinnedStrategies').mockReturnValue([mockPin]);
     vi.spyOn(strategyPinEngine, 'getPinnedStrategy').mockReturnValue(mockPin);
     vi.spyOn(strategyPinEngine, 'getStrategyOutcomeRecords').mockReturnValue([]);
 
@@ -109,5 +111,51 @@ describe('Spec 0200 / Ticket 04: WarRoomPromptCard 戰情室外聯提示詞與�
 
     // 驗證組件已就緒，且具備手動貼入解析按鈕
     expect(html).toContain('貼入外部 AI 裁決');
+  });
+
+  it('5. Spec 0201: 應能同時渲染多個 AI 模型之緊湊條列與共識防線指標', () => {
+    const pins: PinnedStrategy[] = [
+      {
+        id: 'pin-claude',
+        symbol: '2344',
+        aiModel: 'Claude 3.5 Sonnet',
+        verdict: '防守型持倉',
+        stopLoss: 153.0,
+        takeProfit: 168.0,
+        validityDays: 5,
+        createdAt: '2026-10-21T00:00:00.000Z',
+        expiresAt: '2026-10-26T00:00:00.000Z',
+        isExpired: false,
+      },
+      {
+        id: 'pin-ppx',
+        symbol: '2344',
+        aiModel: 'Perplexity',
+        verdict: '突破加碼',
+        stopLoss: 152.0,
+        trendReversal: 160.0,
+        validityDays: 3,
+        createdAt: '2026-10-21T00:00:00.000Z',
+        expiresAt: '2026-10-24T00:00:00.000Z',
+        isExpired: false,
+      },
+    ];
+
+    vi.spyOn(strategyPinEngine, 'getPinnedStrategies').mockReturnValue(pins);
+    vi.spyOn(strategyPinEngine, 'getStrategyOutcomeRecords').mockReturnValue([]);
+
+    const html = renderToStaticMarkup(
+      React.createElement(WarRoomPromptCard, {
+        digest: mockDigest,
+      })
+    );
+
+    // 驗證兩家模型皆緊湊並存於畫面中
+    expect(html).toContain('Claude 3.5 Sonnet');
+    expect(html).toContain('Perplexity');
+    expect(html).toContain('防守型持倉');
+    expect(html).toContain('突破加碼');
+    expect(html).toContain('共識防線');
+    expect(html).toContain('全隊結案');
   });
 });
