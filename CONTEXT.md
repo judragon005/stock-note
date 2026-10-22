@@ -2640,3 +2640,16 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
        - 一鍵讀取系統剪貼簿或展開手動貼入解析抽屜。
        - 盤中高對比度觸價警報橫幅，支援一鍵確認已知悉（防提示疲勞）。
        - 結案回報按鈕（獲利達標 WIN / 停損出場 LOSS / 時間逾期 EXPIRED），以 LocalStorage 保存最近 20 筆戰績，自動統計 Claude / ChatGPT / Gemini 等外部模型的實戰勝率榜。
+
+- **War Room Multi-AI Syndicate Loopback & Consensus Defense (戰情室外部 AI 多智囊團並行回流、模型去重覆蓋與法人風控共識防線)**:
+  - 核心模組：`src/types/strategyPin.ts`、`src/engine/strategyPinEngine.ts`、`src/components/aiForceDashboard/WarRoomPromptCard.tsx`。
+  - 規範依據：Spec 0201 (v8.114.0) 與 ADR 0201，對齊 GitHub Issue #318，PR #319, #320。
+  - 核心特性：
+    1. **AI 模型名稱語意正規化 (normalizeAiModelName)**：採用正規表達式字典，將常見變體標準化映射至 `Claude 3.5 Sonnet`, `ChatGPT-4o`, `Perplexity`, `Gemini 1.5 Pro`，未知模型保留清洗字串，同名去重覆蓋率 100%。
+    2. **多模型並存與同名覆蓋儲存 (savePinnedStrategy)**：同標的下以 `normalizedModel` 為鍵值，同名模型後者覆蓋更新，異名模型追加並存於 LocalStorage，杜絕單一模型覆蓋遺失。
+    3. **向下相容讀取機制 (getPinnedStrategies)**：自動將舊版 Legacy 單一物件包裹為陣列回傳，零資料庫遷移成本、零升級白屏風險。
+    4. **全域正則批次抽取 (parseLoopbackContentBatch)**：支援單次貼入包含多家模型長篇 Markdown 回覆，一次提純多個 JSON 策略代碼塊。
+    5. **法人風控最嚴格停損優先警報 (evaluateMultiStrategyTriggers)**：盤中取所有有效模型中最高停損價（`Math.max(...stopLosses)`）作為第一道保命防線，市價跌破即刻高對比閃爍報警並指名發起模型，徹底封死主觀凹單。
+    6. **智囊團共識與分歧度量化 (Consensus Level)**：停損落差比率 $<2\%$ 評定為「🛡️ 智囊團共識防線」；$>5\%$ 評定為「⚡ 智囊團分歧警告 (建議縮小部位)」。
+    7. **獨立與全員結案回報**：支援單卡模型獨立結案與全隊一鍵結案（WIN / LOSS），戰績精確歸屬累積勝率榜。
+    8. **緊湊條列排版 (Compact Layout)**：單行約 38px 緊湊呈現，提取樣式常數 Tokens，保護上方戰情室 K 線與籌碼視野。

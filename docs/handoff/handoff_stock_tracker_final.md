@@ -2,6 +2,15 @@
 
 > **交接產生時間**：2026-10-19 16:00 (UTC+8)  
 > **當前最新里程碑**：
+> - **V8.114.0 戰情室外部 AI 多智囊團並行回流、模型去重覆蓋與法人風控共識防線**（ADR 0201, Spec 0201, Issue #318, PR #319, #320）：
+>   - **多模型並存與同名覆蓋機制**：同標的下以正規化模型名稱為識別鍵，同名模型後者覆蓋更新，異名模型追加並列展示，徹底打破單一 AI 裁決限制。
+>   - **AI 模型名稱語意正規化 (normalizeAiModelName)**：精確映射 Claude, ChatGPT, Perplexity, Gemini 等頂級模型，未知模型安全清洗去重。
+>   - **全域正則批次抽取 (parseLoopbackContentBatch)**：單次貼入長篇 Markdown 即可批次提純多個 JSON 策略代碼塊。
+>   - **法人風控最嚴格停損優先警報 (evaluateMultiStrategyTriggers)**：盤中取所有有效模型中最高停損價（`Math.max(...stopLosses)`）作為第一道保命防線，市價跌破即刻閃爍報警並指名發起模型，徹底封死主觀凹單。
+>   - **智囊團共識與分歧度量化 (Consensus Level)**：停損落差比率 $<2\%$ 標註「🛡️ 智囊團共識防線」；$>5\%$ 標註「⚡ 智囊團分歧警告 (建議縮小部位)」。
+>   - **獨立與全隊結案回報**：支援單卡獨立與全員一鍵（WIN / LOSS）結案，戰績精準歸屬累積勝率榜。
+>   - **緊湊條列排版 (38px/行)**：提取樣式 Tokens，排版緊湊高密度，保護戰情室核心線圖與籌碼視野。
+>   - **雙軌向下相容讀取**：舊版單一物件無縫自動包裹為陣列，零 Migration 成本與零升級白屏風險。
 > - **V9.11.0 AI 主力戰情室 Layer 6 雙子堆疊重構、Card 21 估值卡導入與 Card 15 寬幅 Sparkline 對稱對齊**（ADR 0195, Spec 0195, Issue #290）：
 >   - **Card 19 TDCC 集保趨勢標的確認與美股 13F / 放空籌碼卡**：台股綁定代碼標題與散戶持股剪刀差；美股自適應為機構持股、空單佔流通比 (Short Float) 與內部人持股，>10% 觸發軋空警戒，徹底根除空白佔位。
 >   - **Card 15 籌碼摘要 50%:50% 寬幅對稱與美股微觀量價**：重構為 `1fr 1fr` 等寬對稱，monospace 數值防折行，Sparkline 加入 0 軸水平分水嶺基準線；美股呈現 RVOL、VWAP 偏離、MFI 機構量能與 ATR 日振幅。
@@ -23,7 +32,7 @@
 >   - **彭博式三段時序雷達、API 配額守衛與一鍵晨會簡報**：催化劑日曆收斂至「今日登場 / 7 日焦點 / 30 日遠端」，注入每月 10 號營收開獎倒數；實作 24H 快取鎖與舊版 Schema 自動消毒（0 配額浪費、0 白屏崩潰）；晨報區塊提供整合雙軌高容錯降級（`copyTextToClipboard`）之一鍵繁中晨會簡報與 LLM 提示詞複製。
 > - **V8.104.0 Vite 代理彈性容錯、前端短路熔斷與標的市場精準路由架構**（ADR 0191, Spec 0191, Issue #279, PR #280）
 > - **V8.103.0 統一金融時序日曆與全市場營業日引擎**（ADR 0190, Spec 0190, Issue #275, PR #276, #277）
-> **品質狀態**：全量單元測試 **1,769/1,769 通過 (100% Passed / 237 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> **品質狀態**：全量單元測試 **1,818/1,818 通過 (100% Passed / 243 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -32,10 +41,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main` (已完全同步)
-- **單元測試套件**：**1,769/1,769 通過 (237 test suites / 100% 綠燈)**
+- **單元測試套件**：**1,818/1,818 通過 (243 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V9.11.0**
+- **當前釋出版本**：**V8.114.0**
 - **工作區與分支整潔度**：工作區乾淨受控，本地 feature/fix 分支已完全合併並清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -64,6 +73,7 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0201`](file:///d:/APP/股票紀錄/docs/specs/0201-war-room-multi-ai-syndicate-loopback-and-consensus-defense-spec.md) | [`ADR 0201`](file:///d:/APP/股票紀錄/docs/adr/0201-war-room-multi-ai-syndicate-loopback-and-consensus-defense.md) | [`.scratch/v8.114.0-war-room-multi-ai-syndicate-loopback-and-consensus-defense/`](file:///d:/APP/股票紀錄/.scratch/v8.114.0-war-room-multi-ai-syndicate-loopback-and-consensus-defense/) | Issue #318 / PR #319, #320 | V8.114.0 | 戰情室外部 AI 多智囊團並行回流、模型去重覆蓋與法人風控共識防線架構 (4 大 Micro-Tickets) |
 | [`Spec 0195`](file:///d:/APP/股票紀錄/docs/specs/0195-ai-force-dashboard-layout-reorganization-card21-valuation-and-chips-sparkline-spec.md) | [`ADR 0195`](file:///d:/APP/股票紀錄/docs/adr/0195-ai-force-dashboard-layout-reorganization-card21-valuation.md) | [`.scratch/0195-ai-force-dashboard-layout-reorganization-card21/`](file:///d:/APP/股票紀錄/.scratch/0195-ai-force-dashboard-layout-reorganization-card21/) | Issue #290 | V9.11.0 | 戰情室 Layer 6 雙子堆疊重構、Card 21 估值卡導入與 Card 15 寬幅 Sparkline 對稱對齊 (12 大 Micro-Tickets) |
 | [`Spec 0194`](file:///d:/APP/股票紀錄/docs/specs/0194-war-room-prompt-temporal-and-cyclical-alignment-spec.md) | [`ADR 0194`](file:///d:/APP/股票紀錄/docs/adr/0194-war-room-prompt-temporal-and-cyclical-alignment.md) | [`.scratch/0194-war-room-prompt-temporal-and-cyclical-alignment/`](file:///d:/APP/股票紀錄/.scratch/0194-war-room-prompt-temporal-and-cyclical-alignment/) | Issue #288 | V9.10.0 | 戰情室外聯提示詞時態一致性、景氣循環判定與法人風控對齊（量價一致性、威剛/群聯循環股、時態隔離宣告、停損實質預算、借券賣出） |
 | [`Spec 0193`](file:///d:/APP/股票紀錄/docs/specs/0193-institutional-macro-war-room-2-spec.md) | [`ADR 0193`](file:///d:/APP/股票紀錄/docs/adr/0193-institutional-macro-war-room-2.md) | [`.scratch/0193-institutional-macro-war-room-2/`](file:///d:/APP/股票紀錄/.scratch/0193-institutional-macro-war-room-2/) | Issue #283, #285 / PR #284, #286 | V9.00.0 | 法人旗艦級宏觀戰情室 2.0（宏觀水溫計、台美分流、1-Day VaR、3 階壓力測試、Zero Mock 雙動能、三段時序雷達、晨會簡報雙軌複製） |
@@ -123,14 +133,14 @@
 | **AI 主力戰情室決策報告引擎** | [`src/engine/aiForceDashboardEngine.ts`](file:///d:/APP/股票紀錄/src/engine/aiForceDashboardEngine.ts) | 支援 `basePrice` 與 `realtimeQuote` 動態注入與自適應回退，杜絕 2290 寫死假資料，實現 18 張卡片與即時行情等比動態同步。 | 13 tests |
 | **AI 主力動態信號與多空智能仲裁引擎** | [`src/engine/aiForceDashboardEngine.ts`](file:///d:/APP/股票紀錄/src/engine/aiForceDashboardEngine.ts) | 實作多因子加權量化評分純函式（0.35籌碼+0.3趨勢+0.2動能-0.15風險，支援 `CompositeQuantWeights`）、動態燈號映射、多空矛盾智能仲裁演算法（精準識別洗盤破底翻、誘多出貨、共振主升、共振主跌四大實戰型態）。 | 21 tests |
 | **智策多維提示詞決策引擎** | [`src/engine/strategicPromptEngine.ts`](file:///d:/APP/股票紀錄/src/engine/strategicPromptEngine.ts) | 實作個股/ETF雙軌特徵壓榨、六頂思考帽決策 Prompt 生成、Token 預算守門 (<1200 / <5500)、語意防護（LAST_20_TRADING_DAYS、TTM 四季滾動）、真脫敏防洩漏與文末外部 AI 回流協議代碼塊指令。 | 17 tests |
-| **外部 AI 裁決回流協議引擎** | [`src/engine/strategyPinEngine.ts`](file:///d:/APP/股票紀錄/src/engine/strategyPinEngine.ts)<br>[`src/types/strategyPin.ts`](file:///d:/APP/股票紀錄/src/types/strategyPin.ts) | 支援長篇 Markdown 中正則秒級提純標準 JSON、價格文字（「元」、「$」）防呆清洗、時效 5 天過期計算、盤中觸價評估（跌破停損、達到停利、突破翻多點位）、LocalStorage 持久化與 AI 模型實戰勝率統計（上限 20 筆 FIFO）。 | 13 tests |
+| **外部 AI 裁決回流與多智囊團共識引擎** | [`src/engine/strategyPinEngine.ts`](file:///d:/APP/股票紀錄/src/engine/strategyPinEngine.ts)<br>[`src/types/strategyPin.ts`](file:///d:/APP/股票紀錄/src/types/strategyPin.ts) | 支援長篇 Markdown 中正則秒級批次提純標準 JSON、模型名稱語意正規化（去重覆蓋率 100%）、同標的多模型並存與同名覆蓋、向下相容適配器、最高停損優先風控警報（`Math.max(...stopLosses)`）、共識與分歧度量化評級、LocalStorage 持久化與 AI 模型實戰勝率統計。 | 20 tests |
 | **統一金融時序日曆與營業日引擎** | [`scripts/market-sync/trading-calendar-engine.cjs`](file:///d:/APP/股票紀錄/scripts/market-sync/trading-calendar-engine.cjs)<br>[`src/engine/holidayCalendar.ts`](file:///d:/APP/股票紀錄/src/engine/holidayCalendar.ts)<br>[`src/engine/marketStatusEngine.ts`](file:///d:/APP/股票紀錄/src/engine/marketStatusEngine.ts) | 接入 `market-holidays.json` SSOT 字典。實作 T+2/T+1 交割日跳轉、融資長假計息天數與金額、台指期/美股四巫結算感知、TDCC 提前至週四、營收 10 號遇假順延、排程零 I/O 守衛與夏令/冬令時區即時時鐘。 | 46 tests |
 
 ### 4.2 前端工作台與核心組件 (`src/components/`)
 
 | 類別 | 檔案路徑 | 核心職責與特性 |
 | :--- | :--- | :--- |
-| **AI 戰情提示詞與回流釘選中樞** | [`src/components/aiForceDashboard/WarRoomPromptCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/WarRoomPromptCard.tsx) | 一鍵複製戰情提示詞、支援一鍵讀取剪貼簿直接解析與安全降級手動輸入抽屜、釘選當前 AI 策略（停損/目標/翻多）、盤中觸價高對比警報（含我已知悉防疲勞）、結案回報勝率與外部 AI 智囊團勝率榜抽屜。 | 4 tests |
+| **AI 戰情提示詞與多智囊團釘選中樞** | [`src/components/aiForceDashboard/WarRoomPromptCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/WarRoomPromptCard.tsx) | 一鍵複製戰情提示詞、支援一鍵讀取剪貼簿直接解析與手動輸入抽屜、多模型緊湊條列清單排版（38px/行）、共識防線指標、最嚴格停損優先警報、單卡與全隊獨立結案回報（WIN/LOSS）及外部 AI 智囊團勝率榜抽屜。 | 5 tests |
 | **股利收益日誌與現金流** | [`src/components/DividendLogView.tsx`](file:///d:/APP/股票紀錄/src/components/DividendLogView.tsx) | `calculateMonthTooltipAlign` 智慧避讓演算法（1~2月靠左、10~12月靠右、3~9月居中）、KPI 首卡券商對帳毛淨額雙軌切換、明細表標的對帳小計卡片網格與單點過濾。 |
 | **個股分析工作台** | [`src/components/analysis/StockAnalysisWorkspace.tsx`](file:///d:/APP/股票紀錄/src/components/analysis/StockAnalysisWorkspace.tsx) | 整合 6 大核心指標分頁（獲利力、安全性、成長力、現金流、價值評估、公開股利），落實 ETF 物理隔離與【主力戰情室】導流橫幅、自適應響應式佈局。 |
 | **法務會計排雷排毒燈** | [`src/components/analysis/ForensicWarningSection.tsx`](file:///d:/APP/股票紀錄/src/components/analysis/ForensicWarningSection.tsx) | 獨立抽離法務會計五大排雷子模組（應收帳款剪刀差、獲利純度、FCF 失血、存貨積壓、負債比率），列表渲染語意唯一穩定 Key，金融業享負債比率豁免。 |
