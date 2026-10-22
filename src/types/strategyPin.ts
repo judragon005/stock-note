@@ -44,4 +44,14 @@ export interface StrategyTriggerStatus {
   isTakeProfitTriggered: boolean;
   isReversalTriggered: boolean;
   triggerMessage?: string;
+  triggeredModel?: string;
+}
+
+export type ConsensusLevel = 'CONSENSUS' | 'DIVERGENT' | 'NEUTRAL';
+
+export interface MultiStrategyTriggerStatus extends StrategyTriggerStatus {
+  strictestStopLoss?: number;
+  stopLossSpreadPct?: number; // 停損價點位最大差幅百分比
+  consensusLevel: ConsensusLevel;
+  consensusMessage?: string;
 }
