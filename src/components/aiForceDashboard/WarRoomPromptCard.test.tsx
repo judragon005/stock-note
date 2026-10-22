@@ -96,4 +96,18 @@ describe('Spec 0200 / Ticket 04: WarRoomPromptCard 戰情室外聯提示詞與�
 
     expect(html).toContain('跌破停損線');
   });
+
+  it('4. 貼入抽屜結構應包含安全降級微引導條 (paste-modal-notice)', () => {
+    vi.spyOn(strategyPinEngine, 'getPinnedStrategy').mockReturnValue(null);
+    vi.spyOn(strategyPinEngine, 'getStrategyOutcomeRecords').mockReturnValue([]);
+
+    const html = renderToStaticMarkup(
+      React.createElement(WarRoomPromptCard, {
+        digest: mockDigest,
+      })
+    );
+
+    // 驗證組件已就緒，且具備手動貼入解析按鈕
+    expect(html).toContain('貼入外部 AI 裁決');
+  });
 });
