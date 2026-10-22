@@ -38,6 +38,50 @@ export interface WarRoomPromptCardProps {
   isDataPending?: boolean;
 }
 
+// 緊湊條列清單共用樣式 Tokens (Spec 0201 / Nitpick Refactor)
+const SYNDICATE_ROW_STYLE: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  flexWrap: 'wrap',
+  gap: '8px',
+  padding: '6px 10px',
+  borderRadius: '6px',
+  background: 'rgba(255, 255, 255, 0.03)',
+  border: '1px solid rgba(255, 255, 255, 0.06)',
+  fontSize: '12px',
+};
+
+const OUTCOME_BTN_WIN_STYLE: React.CSSProperties = {
+  background: 'rgba(16, 185, 129, 0.1)',
+  color: '#34d399',
+  border: '1px solid rgba(16, 185, 129, 0.25)',
+  borderRadius: '3px',
+  padding: '1px 5px',
+  cursor: 'pointer',
+  fontSize: '10px',
+};
+
+const OUTCOME_BTN_LOSS_STYLE: React.CSSProperties = {
+  background: 'rgba(239, 68, 68, 0.1)',
+  color: '#f87171',
+  border: '1px solid rgba(239, 68, 68, 0.25)',
+  borderRadius: '3px',
+  padding: '1px 5px',
+  cursor: 'pointer',
+  fontSize: '10px',
+};
+
+const MODEL_BADGE_STYLE: React.CSSProperties = {
+  fontSize: '11px',
+  fontWeight: 700,
+  padding: '1px 6px',
+  borderRadius: '4px',
+  background: 'rgba(147, 51, 234, 0.2)',
+  color: '#d8b4fe',
+  border: '1px solid rgba(147, 51, 234, 0.3)',
+};
+
 /**
  * 兩階段安全剪貼簿複製器 (Spec 0181 / Ticket 13)
  */
@@ -684,31 +728,10 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
               return (
                 <div
                   key={pin.id || pin.aiModel}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: '8px',
-                    padding: '6px 10px',
-                    borderRadius: '6px',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    border: '1px solid rgba(255, 255, 255, 0.06)',
-                    fontSize: '12px',
-                  }}
+                  style={SYNDICATE_ROW_STYLE}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '220px' }}>
-                    <span
-                      style={{
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        padding: '1px 6px',
-                        borderRadius: '4px',
-                        background: 'rgba(147, 51, 234, 0.2)',
-                        color: '#d8b4fe',
-                        border: '1px solid rgba(147, 51, 234, 0.3)',
-                      }}
-                    >
+                    <span style={MODEL_BADGE_STYLE}>
                       🤖 {pin.aiModel}
                     </span>
                     <span style={{ fontWeight: 600, color: '#f3f4f6' }}>{pin.verdict}</span>
@@ -744,15 +767,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
                     <button
                       type="button"
                       onClick={() => handleCloseOutcome(pin, 'WIN')}
-                      style={{
-                        background: 'rgba(16, 185, 129, 0.1)',
-                        color: '#34d399',
-                        border: '1px solid rgba(16, 185, 129, 0.25)',
-                        borderRadius: '3px',
-                        padding: '1px 5px',
-                        cursor: 'pointer',
-                        fontSize: '10px',
-                      }}
+                      style={OUTCOME_BTN_WIN_STYLE}
                       title="該模型獲利達標"
                     >
                       WIN
@@ -760,15 +775,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
                     <button
                       type="button"
                       onClick={() => handleCloseOutcome(pin, 'LOSS')}
-                      style={{
-                        background: 'rgba(239, 68, 68, 0.1)',
-                        color: '#f87171',
-                        border: '1px solid rgba(239, 68, 68, 0.25)',
-                        borderRadius: '3px',
-                        padding: '1px 5px',
-                        cursor: 'pointer',
-                        fontSize: '10px',
-                      }}
+                      style={OUTCOME_BTN_LOSS_STYLE}
                       title="該模型停損出場"
                     >
                       LOSS
