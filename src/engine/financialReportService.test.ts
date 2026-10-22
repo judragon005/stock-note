@@ -97,4 +97,28 @@ describe('financialReportService (TDD Seam)', () => {
     expect(saveSpy).toHaveBeenCalledWith([dummyRecord]);
     expect(report.trafficLights.cashFlow).not.toBe('GRAY');
   });
+
+  it('4. 當遠端 API 拋出 429 或網路斷線時，若本地有既有資料應降級回傳，絕不拋錯白屏 (Spec 0202 - Ticket 04)', async () => {
+    vi.spyOn(db, 'getStoredFinancialRecords').mockResolvedValue([dummyRecord]);
+    // 強制刷新以觸發遠端請求，但遠端模擬 429 限流拋錯
+    vi.spyOn(twPipeline, 'fetchTaiwanQuarterlyFinancials').mockRejectedValue(new Error('HTTP 429: Too Many Requests'));
+
+    const report = await loadOrFetchFinancialReport('2330', 'TW', '台積電', { forceRefresh: true });
+
+    // 應捕捉錯誤並降級回退既有快取，保證報告可用
+    expect(report.symbol).toBe('2330');
+    expect(report.historicalRecords).toHaveLength(1);
+    expect(report.overallScore).toBeGreaterThan(0);
+  });
+
+  it('5. 當遠端 API 失敗且完全無本地快取時，應優雅回傳安全保底空報告，防止畫面崩潰', async () => {
+    vi.spyOn(db, 'getStoredFinancialRecords').mockResolvedValue([]);
+    vi.spyOn(twPipeline, 'fetchTaiwanQuarterlyFinancials').mockRejectedValue(new Error('Network Offline / 429'));
+
+    const report = await loadOrFetchFinancialReport('2330', 'TW', '台積電');
+
+    expect(report.symbol).toBe('2330');
+    expect(report.historicalRecords).toHaveLength(0);
+    expect(report.overallScore).toBe(0);
+  });
 });

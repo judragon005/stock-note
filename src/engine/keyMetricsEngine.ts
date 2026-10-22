@@ -231,12 +231,27 @@ export function deriveSharesOutstanding(
   const latest = records[0] || records[records.length - 1];
   if (!latest) return 1000000000;
 
-  if (latest.balanceSheet?.capitalStock && latest.balanceSheet.capitalStock > 0) {
-    return latest.balanceSheet.capitalStock / 10;
+  const isUsMarket = latest.market === 'US';
+
+  // 1. 若為美股，絕對禁止除以 10 元面額，優先由淨利與 EPS 反推流通股數
+  if (isUsMarket) {
+    if (typeof latest.income?.netIncome === 'number' && typeof latest.income?.eps === 'number' && latest.income.eps !== 0) {
+      const shares = Math.abs(latest.income.netIncome) / Math.abs(latest.income.eps);
+      if (shares > 0) return Math.round(shares);
+    }
   }
-  if (latest.income?.netIncome && latest.income.eps && latest.income.eps > 0) {
-    return latest.income.netIncome / latest.income.eps;
+
+  // 2. 台股優先由資產負債表 capitalStock 推導 (台股法定每股票面 10 元)
+  if (!isUsMarket && latest.balanceSheet?.capitalStock && latest.balanceSheet.capitalStock > 0) {
+    return Math.round(latest.balanceSheet.capitalStock / 10);
   }
+
+  // 3. 通用由損益表淨利與 EPS 反推 (netIncome / eps，支援虧損股絕對值反推)
+  if (typeof latest.income?.netIncome === 'number' && typeof latest.income?.eps === 'number' && latest.income.eps !== 0) {
+    const shares = Math.abs(latest.income.netIncome) / Math.abs(latest.income.eps);
+    if (shares > 0) return Math.round(shares);
+  }
+
   return 1000000000;
 }
 

@@ -64,10 +64,12 @@ export function parseTaiwanFinancialStatements(
     const grossProfit = values['GrossProfit'] || values['營業毛利'] || values['營業毛利（毛損）'] || 0;
     const operatingIncome = values['OperatingIncome'] || values['營業利益'] || values['營業利益（損失）'] || 0;
     const netIncome =
-      values['IncomeAfterTaxes'] ||
-      values['NetIncome'] ||
       values['EquityAttributableToOwnersOfParent'] ||
       values['歸屬於母公司業主之本期淨利（淨損）'] ||
+      values['歸屬於母公司業主之本期淨利'] ||
+      values['母公司業主淨利'] ||
+      values['IncomeAfterTaxes'] ||
+      values['NetIncome'] ||
       values['本期淨利（淨損）'] ||
       values['本期淨利'] ||
       values['稅後淨利'] ||
@@ -213,9 +215,9 @@ export function parseTaiwanFinancialStatements(
         interestPaid,
       },
       auditInfo: {
-        opinionType: 'UNQUALIFIED',
-        cpaFirm: '四大聯合會計師事務所',
-        isBigFour: true,
+        opinionType: 'UNREVIEWED',
+        cpaFirm: undefined,
+        isBigFour: false,
       },
       updatedAt: Date.now(),
     });

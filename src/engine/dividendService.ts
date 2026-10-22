@@ -4,6 +4,8 @@
  */
 
 import { logger } from '../utils/logger';
+import type { QuarterlyFinancialRecord } from '../types/financialForensic';
+import { deriveSharesOutstanding } from './keyMetricsEngine';
 
 export interface CompanyDividendPolicyRecord {
   year: number;
@@ -18,6 +20,47 @@ export interface CompanyDividendPolicyRecord {
 const memoryCache = new Map<string, { records: CompanyDividendPolicyRecord[]; timestamp: number }>();
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 小時
 const MAX_CACHE_ENTRIES = 100; // 最大快取標的數，防止記憶體膨脹
+
+/**
+ * 從美股歷史季度財報 (現金流量表 dividendPaid) 反推歷年每股配息 (Spec 0202 - Ticket 06)
+ */
+export function deriveUsDividendsFromFinancials(
+  records: QuarterlyFinancialRecord[]
+): CompanyDividendPolicyRecord[] {
+  if (!records || records.length === 0) return [];
+
+  const yearMap = new Map<number, { totalDividendsPaid: number; shares: number }>();
+
+  for (const r of records) {
+    if (!r.year) continue;
+    const divPaid = Math.abs(r.cashFlow?.dividendPaid ?? 0);
+    if (divPaid <= 0) continue;
+
+    const shares = deriveSharesOutstanding(r);
+    if (!yearMap.has(r.year)) {
+      yearMap.set(r.year, { totalDividendsPaid: 0, shares });
+    }
+    const bucket = yearMap.get(r.year)!;
+    bucket.totalDividendsPaid += divPaid;
+    if (shares > 0) bucket.shares = shares;
+  }
+
+  const result: CompanyDividendPolicyRecord[] = [];
+  for (const [year, data] of yearMap.entries()) {
+    if (data.shares <= 0) continue;
+    const perShareDividend = Number((data.totalDividendsPaid / data.shares).toFixed(2));
+    if (perShareDividend > 0) {
+      result.push({
+        year,
+        cashDividend: perShareDividend,
+        stockDividend: 0,
+        totalDividend: perShareDividend,
+      });
+    }
+  }
+
+  return result.sort((a, b) => a.year - b.year);
+}
 
 /**
  * 測試輔助：重設記憶體快取

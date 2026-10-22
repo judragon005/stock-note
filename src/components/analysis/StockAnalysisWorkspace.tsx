@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Check,
   Plus,
+  Download,
 } from 'lucide-react';
 import type { MarketType, HoldingPosition, TradeRecord } from '../../types/stock';
 import type { HealthCheckCategoryResult, StockHealthDiagnosis } from '../../types/stockHealth';
@@ -23,13 +24,76 @@ import { HealthCard } from '../health/HealthCard';
 import { HealthReportModal } from '../health/HealthReportModal';
 import { isEtfSymbol } from '../health/StockHealthWorkspace';
 import { AnalysisMetricView } from './AnalysisMetricView';
+import { EightQuarterStatementTable } from './EightQuarterStatementTable';
+import {
+  generateStockForensicMarkdownReport,
+  downloadMarkdownFile,
+} from '../../engine/stockReportExporter';
 import {
   fetchCompanyDividendHistory,
   type CompanyDividendPolicyRecord,
 } from '../../engine/dividendService';
 import { logger } from '../../utils/logger';
 
-// 8 大一級主題
+// 5 大高凝聚頂級主題 (Ticket 13 UX 減法)
+export type ConsolidatedViewKey =
+  | 'overview'             // 戰情總覽 (四大指標、健診總覽、排雷雷達)
+  | 'profitability_growth' // 獲利與成長體質 (利潤三率、ROE/ROA、營收淨利成長)
+  | 'statements_full'      // 三大財務報表全貌 (8 季橫向對比表)
+  | 'valuation_river'      // 價值評估與河流圖 (PE/PB 河流圖、股利殖利率)
+  | 'turnover_safety';     // 營運週轉與風控 (週轉天數、負債結構、董監質押風控)
+
+export const CONSOLIDATED_TABS: {
+  key: ConsolidatedViewKey;
+  label: string;
+  icon: React.ReactNode;
+  primaryMapping: PrimaryCategoryKey;
+  defaultSub: string;
+  description: string;
+}[] = [
+  {
+    key: 'overview',
+    label: '戰情核心總覽',
+    icon: <Sparkles size={16} />,
+    primaryMapping: 'health',
+    defaultSub: 'health_overview',
+    description: '核心四格卡片、Piotroski F 分數與四大健診幫手',
+  },
+  {
+    key: 'profitability_growth',
+    label: '獲利與成長體質',
+    icon: <TrendingUp size={16} />,
+    primaryMapping: 'profitability',
+    defaultSub: 'margins_trio',
+    description: '利潤比率三率三升、ROE/ROA 與營收淨利成長率',
+  },
+  {
+    key: 'statements_full',
+    label: '三大財務報表 (8季全貌)',
+    icon: <FileText size={16} />,
+    primaryMapping: 'statements',
+    defaultSub: 'income_statement',
+    description: '8 季損益表、資產負債表與現金流量表橫向對照表',
+  },
+  {
+    key: 'valuation_river',
+    label: '價值評估與河流圖',
+    icon: <Scale size={16} />,
+    primaryMapping: 'valuation',
+    defaultSub: 'pe_river',
+    description: '本益比河流圖、PB 河流圖、現金殖利率與平均股息估價',
+  },
+  {
+    key: 'turnover_safety',
+    label: '營運週轉與風控',
+    icon: <ShieldCheck size={16} />,
+    primaryMapping: 'solvency',
+    defaultSub: 'turnover_days',
+    description: '營運週轉天數、現金循環、負債結構與董監質押風控',
+  },
+];
+
+// 原 8 大主題保留作為子層相容
 export type PrimaryCategoryKey =
   | 'news'
   | 'health'
@@ -195,13 +259,53 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
   const [selectedSymbol, setSelectedSymbol] = useState<string>(resolvedInitialSymbol);
   const [searchInput, setSearchInput] = useState<string>('');
 
-  // 雙層選單導航狀態
+  // 5 大高凝聚頂級主題狀態 (Ticket 13)
+  const initialConsolidated: ConsolidatedViewKey = useMemo(() => {
+    if (!defaultPrimaryTab) return 'overview';
+    if (defaultPrimaryTab === 'health') return 'overview';
+    if (defaultPrimaryTab === 'profitability' || defaultPrimaryTab === 'growth') return 'profitability_growth';
+    if (defaultPrimaryTab === 'statements') return 'statements_full';
+    if (defaultPrimaryTab === 'valuation') return 'valuation_river';
+    if (defaultPrimaryTab === 'solvency' || defaultPrimaryTab === 'key_metrics') return 'turnover_safety';
+    return 'overview';
+  }, [defaultPrimaryTab]);
+
+  const [consolidatedTab, setConsolidatedTab] = useState<ConsolidatedViewKey>(initialConsolidated);
+
+  // 雙層選單導航狀態 (相容子項目切換)
   const [primaryTab, setPrimaryTab] = useState<PrimaryCategoryKey>(
-    defaultPrimaryTab || 'statements'
+    defaultPrimaryTab || 'health'
   );
   const [subTab, setSubTab] = useState<string>(
-    defaultPrimaryTab === 'health' ? 'health_overview' : 'eps'
+    defaultPrimaryTab === 'statements' ? 'income_statement' : 'health_overview'
   );
+
+  // 最近瀏覽 5 檔標的膠囊標籤狀態 (Ticket 16)
+  const [recentSymbols, setRecentSymbols] = useState<string[]>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('stock_analysis_recent_symbols') || '[]');
+      if (Array.isArray(stored) && stored.length > 0) return stored.slice(0, 5);
+    } catch {}
+    return ['2330', 'NVDA', '2454', '2317', 'AAPL'];
+  });
+
+  // 當選取標的變更時，自動更新最近瀏覽紀錄
+  const recordRecentSymbol = useCallback((sym: string) => {
+    setRecentSymbols((prev) => {
+      const filtered = prev.filter((s) => s !== sym);
+      const updated = [sym, ...filtered].slice(0, 5);
+      try {
+        localStorage.setItem('stock_analysis_recent_symbols', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (selectedSymbol) {
+      recordRecentSymbol(selectedSymbol);
+    }
+  }, [selectedSymbol, recordRecentSymbol]);
 
   // 健診與財報數據狀態
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -320,6 +424,23 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // 匯出 Markdown 深度研報 (Ticket 15)
+  const handleExportMarkdown = () => {
+    const totalPassed = diagnosis?.categories.reduce((s, c) => s + c.passedItems, 0) || 0;
+    const totalItems = diagnosis?.categories.reduce((s, c) => s + c.totalItems, 0) || 1;
+    const piotroskiScore = Math.max(1, Math.min(9, Math.round((totalPassed / totalItems) * 9)));
+
+    const md = generateStockForensicMarkdownReport({
+      symbol: selectedSymbol,
+      stockName,
+      market,
+      currentPrice,
+      records: financialRecords,
+      piotroskiScore,
+    });
+    downloadMarkdownFile(`${selectedSymbol}_${stockName}_深度財務鑑識研報.md`, md);
+  };
 
   // 標的搜尋切換提交
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -465,8 +586,36 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
           </button>
         </div>
 
-        {/* 右側：持倉快速選單、代碼搜尋與重新整理 */}
+        {/* 右側：持倉快速選單、代碼搜尋、導出研報與重新整理 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {/* 最近瀏覽 5 檔膠囊 (Ticket 16) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>最近:</span>
+            {recentSymbols.map((sym) => {
+              const isCur = sym === selectedSymbol;
+              return (
+                <button
+                  key={sym}
+                  type="button"
+                  onClick={() => setSelectedSymbol(sym)}
+                  style={{
+                    fontSize: '11px',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    border: isCur ? '1px solid var(--accent-primary, #3b82f6)' : '1px solid var(--border-color)',
+                    background: isCur ? 'rgba(59, 130, 246, 0.2)' : 'var(--bg-secondary)',
+                    color: isCur ? 'var(--accent-primary, #3b82f6)' : 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    fontWeight: isCur ? 700 : 500,
+                  }}
+                  title={`快速切換至 ${sym}`}
+                >
+                  {sym}
+                </button>
+              );
+            })}
+          </div>
+
           {stockHoldings.length > 0 && (
             <select
               value={selectedSymbol}
@@ -497,7 +646,7 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               style={{
-                width: '190px',
+                width: '180px',
                 fontSize: '13px',
                 background: 'var(--bg-secondary)',
                 border: '1px solid var(--border-color)',
@@ -519,6 +668,31 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
               }}
             />
           </form>
+
+          {/* 導出研報按鈕 (Ticket 15) */}
+          <button
+            type="button"
+            onClick={handleExportMarkdown}
+            disabled={isLoading || financialRecords.length === 0}
+            style={{
+              padding: '7px 12px',
+              borderRadius: '8px',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              color: 'var(--text-primary)',
+              fontSize: '12px',
+              fontWeight: 700,
+              cursor: isLoading || financialRecords.length === 0 ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              opacity: financialRecords.length === 0 ? 0.6 : 1,
+            }}
+            title="匯出深度財務鑑識研報 (Markdown 格式)"
+          >
+            <Download size={14} style={{ color: '#10b981' }} />
+            導出研報
+          </button>
 
           <button
             type="button"
@@ -623,11 +797,61 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
         </div>
       )}
 
-      {/* 4. 核心雙層導航工作台佈局 */}
+      {/* 5 大凝聚核心主題導航條 (Ticket 13 UX 減法) */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '8px',
+          overflowX: 'auto',
+          padding: '6px',
+          background: 'var(--bg-card)',
+          borderRadius: '12px',
+          border: '1px solid var(--border-color)',
+          boxShadow: 'var(--shadow-card)',
+        }}
+      >
+        {CONSOLIDATED_TABS.map((tab) => {
+          const isActive = consolidatedTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => {
+                setConsolidatedTab(tab.key);
+                setPrimaryTab(tab.primaryMapping);
+                setSubTab(tab.defaultSub);
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 16px',
+                borderRadius: '8px',
+                border: isActive
+                  ? '1px solid var(--accent-primary, #3b82f6)'
+                  : '1px solid transparent',
+                background: isActive ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
+                color: isActive ? 'var(--accent-primary, #3b82f6)' : 'var(--text-secondary)',
+                fontWeight: isActive ? 800 : 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.15s ease',
+              }}
+              title={tab.description}
+            >
+              {tab.icon}
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 4. 核心雙層導航工作台佈局 (支援 RWD 自適應) */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '110px 170px minmax(0, 1fr)',
+          gridTemplateColumns: 'minmax(90px, 110px) minmax(130px, 170px) minmax(0, 1fr)',
           gap: '16px',
           alignItems: 'start',
           minHeight: '680px',
@@ -997,6 +1221,17 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
                   </p>
                 </div>
               </div>
+
+              {/* 三大財務報表 8 季橫向對比全貌 (Ticket 14) */}
+              {consolidatedTab === 'statements_full' && (
+                <div style={{ marginBottom: '24px' }}>
+                  <EightQuarterStatementTable
+                    records={financialRecords}
+                    stockName={stockName}
+                    symbol={selectedSymbol}
+                  />
+                </div>
+              )}
 
               {/* 渲染深度指標與量化估值視圖 */}
               <AnalysisMetricView

@@ -393,7 +393,8 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
     baseMetrics: number[], // 每股 EPS 或 每股淨值 或 每股股息
     multipliers: number[], // 倍數階梯，如 [10, 14, 18, 22, 26]
     metricName: string,
-    unitSuffix = 'x'
+    unitSuffix = 'x',
+    historicalPrices?: (number | null)[]
   ) => {
     if (!labels || labels.length === 0 || !baseMetrics || baseMetrics.length === 0) {
       return <div style={{ color: 'var(--text-secondary)', padding: '24px', textAlign: 'center' }}>暫無足夠歷史數據產生河流圖</div>;
@@ -562,45 +563,90 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
               );
             })}
 
-            {/* 當前股價基準水平線 */}
-            <line
-              x1={padLeft}
-              y1={getY(currentPrice)}
-              x2={svgWidth - padRight}
-              y2={getY(currentPrice)}
-              stroke="#f43f5e"
-              strokeWidth="2"
-              strokeDasharray="5 3"
-            />
+            {/* 歷史收盤價折線 (若有提供歷史季度收盤價) */}
+            {(() => {
+              const prices = historicalPrices;
+              const validPrices = prices?.filter((p): p is number => typeof p === 'number' && p > 0);
+              if (prices && validPrices && validPrices.length > 1) {
+                const pathParts: string[] = [];
+                prices.forEach((p, i) => {
+                  if (typeof p === 'number' && p > 0) {
+                    pathParts.push(`${pathParts.length === 0 ? 'M' : 'L'} ${getX(i)} ${getY(p)}`);
+                  }
+                });
+                return (
+                  <g>
+                    <path
+                      d={pathParts.join(' ')}
+                      fill="none"
+                      stroke="#f43f5e"
+                      strokeWidth="2.5"
+                    />
+                    {prices.map((p, i) => {
+                      if (typeof p !== 'number' || p <= 0) return null;
+                      return (
+                        <circle
+                          key={`hp-${i}`}
+                          cx={getX(i)}
+                          cy={getY(p)}
+                          r="3"
+                          fill="#f43f5e"
+                          stroke="#ffffff"
+                          strokeWidth="1.5"
+                        />
+                      );
+                    })}
+                  </g>
+                );
+              }
+              return null;
+            })()}
 
-            {/* 最新股價現值標記點 */}
-            <circle
-              cx={getX(labels.length - 1)}
-              cy={getY(currentPrice)}
-              r="5"
-              fill="#f43f5e"
-              stroke="#ffffff"
-              strokeWidth="2"
-            />
-            <rect
-              x={getX(labels.length - 1) - 48}
-              y={getY(currentPrice) - 26}
-              width="54"
-              height="18"
-              rx="4"
-              fill="#f43f5e"
-            />
-            <text
-              x={getX(labels.length - 1) - 21}
-              y={getY(currentPrice) - 14}
-              fill="#ffffff"
-              fontSize="10"
-              fontWeight="bold"
-              textAnchor="middle"
-              fontFamily="monospace"
-            >
-              {currentPrice}元
-            </text>
+            {/* 最新季度垂直對齊輔助線 */}
+            {currentPrice > 0 && (
+              <line
+                x1={getX(labels.length - 1)}
+                y1={padTop}
+                x2={getX(labels.length - 1)}
+                y2={padTop + chartH}
+                stroke="rgba(244, 63, 94, 0.35)"
+                strokeWidth="1.5"
+                strokeDasharray="3 3"
+              />
+            )}
+
+            {/* 最新股價現值標記點與膠囊 (僅錨定在最新季) */}
+            {currentPrice > 0 && (
+              <g>
+                <circle
+                  cx={getX(labels.length - 1)}
+                  cy={getY(currentPrice)}
+                  r="5.5"
+                  fill="#f43f5e"
+                  stroke="#ffffff"
+                  strokeWidth="2"
+                />
+                <rect
+                  x={getX(labels.length - 1) - 48}
+                  y={Math.max(padTop, getY(currentPrice) - 26)}
+                  width="54"
+                  height="18"
+                  rx="4"
+                  fill="#f43f5e"
+                />
+                <text
+                  x={getX(labels.length - 1) - 21}
+                  y={Math.max(padTop, getY(currentPrice) - 26) + 12}
+                  fill="#ffffff"
+                  fontSize="10"
+                  fontWeight="bold"
+                  textAnchor="middle"
+                  fontFamily="monospace"
+                >
+                  {currentPrice}元
+                </text>
+              </g>
+            )}
 
             {/* X 軸標籤 */}
             {riverData.map((d, i) => {
@@ -1091,7 +1137,7 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
             {
               name: '流動比率 (Current)',
               values: chronological.map((r) => {
-                const curLiab = r.balanceSheet?.currentLiabilities || (r.balanceSheet?.totalLiabilities ? r.balanceSheet.totalLiabilities * 0.45 : 0);
+                const curLiab = r.balanceSheet?.currentLiabilities || 0;
                 const curAssets = r.balanceSheet?.currentAssets || (r.balanceSheet?.cashAndEquivalents || 0) + (r.balanceSheet?.accountsReceivable || 0) + (r.balanceSheet?.inventory || 0);
                 if (curLiab <= 0 || curAssets <= 0) return 0;
                 const ratio = (curAssets / curLiab) * 100;
@@ -1103,7 +1149,7 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
             {
               name: '速動比率 (Quick)',
               values: chronological.map((r) => {
-                const curLiab = r.balanceSheet?.currentLiabilities || (r.balanceSheet?.totalLiabilities ? r.balanceSheet.totalLiabilities * 0.45 : 0);
+                const curLiab = r.balanceSheet?.currentLiabilities || 0;
                 const inv = r.balanceSheet?.inventory || 0;
                 const curAssets = r.balanceSheet?.currentAssets || (r.balanceSheet?.cashAndEquivalents || 0) + (r.balanceSheet?.accountsReceivable || 0) + inv;
                 const quickAssets = r.balanceSheet?.currentAssets ? Math.max(0, curAssets - inv) : (r.balanceSheet?.cashAndEquivalents || 0) + (r.balanceSheet?.accountsReceivable || 0);
@@ -1296,7 +1342,7 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
         // 計算近 4 季滾動 TTM EPS
         const recent4 = chronological.slice(-4);
         const ttmEps = Number(recent4.reduce((acc, q) => acc + (q.income?.eps || 0), 0).toFixed(2));
-        const effectiveEps = ttmEps > 0 ? ttmEps : (latestRecord?.income?.eps ? latestRecord.income.eps * 4 : 1.16);
+        const effectiveEps = ttmEps > 0 ? ttmEps : (latestRecord?.income?.eps && latestRecord.income.eps > 0 ? latestRecord.income.eps * 4 : 0);
         const currentPe = effectiveEps > 0 && currentPrice > 0 ? Number((currentPrice / effectiveEps).toFixed(1)) : 0;
         const peSteps = [
           { mult: 10, label: '便宜', price: Number((effectiveEps * 10).toFixed(1)), color: '#10b981' },
@@ -1308,6 +1354,22 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {effectiveEps <= 0 && (
+              <div
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                  color: '#ef4444',
+                  fontSize: '12px',
+                  lineHeight: 1.6,
+                }}
+              >
+                <strong>⚠️ 虧損股/無數據提示：</strong>
+                此標的近 4 季累計 TTM EPS 處於虧損狀態 ({ttmEps.toFixed(2)} 元)，不適用傳統本益比評價模型，請切換至【股價淨值比 P/B】或【現金流折現 DCF】進行估值。
+              </div>
+            )}
             {isCyclicalStock && (
               <div
                 style={{
@@ -1401,7 +1463,7 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
       {subTab === 'pb_valuation' && (() => {
         const latestEquity = latestRecord?.balanceSheet?.totalEquity || 0;
         const shares = deriveSharesOutstanding(latestRecord);
-        const bvps = shares > 0 && latestEquity > 0 ? Number((latestEquity / shares).toFixed(2)) : 32.5;
+        const bvps = shares > 0 && latestEquity > 0 ? Number((latestEquity / shares).toFixed(2)) : 0;
         const currentPb = bvps > 0 && currentPrice > 0 ? Number((currentPrice / bvps).toFixed(2)) : 0;
         const pbSteps = [
           { mult: 0.8, label: '特價超跌', price: Number((bvps * 0.8).toFixed(1)), color: '#10b981' },
@@ -1413,6 +1475,22 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {bvps <= 0 && (
+              <div
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                  color: '#ef4444',
+                  fontSize: '12px',
+                  lineHeight: 1.6,
+                }}
+              >
+                <strong>⚠️ 無淨值數據提示：</strong>
+                未單獨揭露股東權益或流通股數，無法客觀推估每股淨值 (BVPS) 與股價淨值比。
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
               <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>股價淨值比評價模型 (P/B Valuation)</h3>
               <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
@@ -1461,7 +1539,7 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
               const equity = r.balanceSheet?.totalEquity || 0;
               const shares = deriveSharesOutstanding(r);
               const bvps = shares > 0 && equity > 0 ? Number((equity / shares).toFixed(2)) : 0;
-              return bvps > 0 ? bvps : 32.5;
+              return bvps;
             }),
             [0.8, 1.0, 1.2, 1.4, 1.6],
             '每股淨值 BVPS',
@@ -1471,37 +1549,59 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
       )}
 
       {subTab === 'dividend_yield' && (() => {
-        const latestDivRaw = companyDividends.length > 0 ? companyDividends[companyDividends.length - 1].cashDividend : 1.0;
+        if (!companyDividends || companyDividends.length === 0) {
+          return (
+            <div style={{ background: 'var(--bg-secondary)', padding: '32px', borderRadius: '12px', textAlign: 'center', border: '1px solid var(--border-color)' }}>
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: 0 }}>
+                ⚠️ 該標的查無歷史現金股息配發記錄或尚未宣告配息，無法計算現金殖利率評價。
+              </p>
+            </div>
+          );
+        }
+
+        const latestDivRaw = companyDividends[companyDividends.length - 1]?.cashDividend || 0;
         // 若為美股標的，通常為季配息，自動年化 (x4) 計算真實現金殖利率
-        const latestDiv = isUsMarket && companyDividends.length > 0 ? latestDivRaw * 4 : latestDivRaw;
-        const curYield = currentPrice > 0 ? Number(((latestDiv / currentPrice) * 100).toFixed(2)) : 4.18;
+        const latestDiv = isUsMarket ? latestDivRaw * 4 : latestDivRaw;
+        const curYield = currentPrice > 0 && latestDiv > 0 ? Number(((latestDiv / currentPrice) * 100).toFixed(2)) : 0;
+        const afterTaxYield = isUsMarket && curYield > 0 ? Number((curYield * 0.7).toFixed(2)) : curYield;
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
               <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>現金股利殖利率評價 (Dividend Yield)</h3>
-              <span
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  padding: '3px 10px',
-                  borderRadius: '6px',
-                  background: curYield >= 5 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                  color: curYield >= 5 ? '#10b981' : '#3b82f6',
-                }}
-              >
-                {curYield >= 5 ? '高殖利率標的 (>= 5%)' : '穩健防守型'}
-              </span>
+              {curYield > 0 ? (
+                <span
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    padding: '3px 10px',
+                    borderRadius: '6px',
+                    background: curYield >= 5 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                    color: curYield >= 5 ? '#10b981' : '#3b82f6',
+                  }}
+                >
+                  {curYield >= 5 ? '高殖利率標的 (>= 5%)' : '穩健防守型'}
+                </span>
+              ) : (
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>無配息</span>
+              )}
             </div>
 
             <div style={{ background: 'var(--bg-secondary)', padding: '24px', borderRadius: '12px', textAlign: 'center', border: '1px solid var(--border-color)' }}>
               <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>當前現金殖利率 (Cash Dividend Yield)</span>
               <div style={{ fontSize: '38px', fontWeight: 900, color: curYield >= 5 ? '#10b981' : '#3b82f6', margin: '6px 0', fontFamily: 'monospace' }}>
-                {curYield.toFixed(2)}%
+                {curYield > 0 ? `${curYield.toFixed(2)}%` : '-'}
               </div>
               <p style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '440px', margin: '0 auto' }}>
-                以最新年度發放之每股現金股利 {latestDiv.toFixed(2)} 元除以當前市價 {currentPrice} 元計算。
+                {curYield > 0
+                  ? `以最新年度發放之每股現金股利 ${latestDiv.toFixed(2)} 元除以當前市價 ${currentPrice} 元計算。`
+                  : '目前市價或每股現金股利為 0，暫無法推算殖利率。'}
               </p>
+              {isUsMarket && curYield > 0 && (
+                <div style={{ marginTop: '10px', fontSize: '12px', color: '#f59e0b', background: 'rgba(245, 158, 11, 0.1)', padding: '6px 12px', borderRadius: '6px', display: 'inline-block' }}>
+                  🇺🇸 美股海外投資人扣繳 30% 股息稅：稅後預估實拿殖利率約 <strong>{afterTaxYield.toFixed(2)}%</strong>
+                </div>
+              )}
             </div>
 
             {companyDividends.length > 0 && (
@@ -1522,7 +1622,7 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
                         <td style={{ padding: '6px 8px', color: '#10b981', fontWeight: 700 }}>{d.cashDividend.toFixed(2)}元</td>
                         <td style={{ padding: '6px 8px', color: 'var(--text-secondary)' }}>{d.stockDividend.toFixed(2)}元</td>
                         <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>
-                          {currentPrice > 0 ? `${((d.cashDividend / currentPrice) * 100).toFixed(1)}%` : '-'}
+                          {currentPrice > 0 && d.cashDividend > 0 ? `${((d.cashDividend / currentPrice) * 100).toFixed(1)}%` : '-'}
                         </td>
                       </tr>
                     ))}
@@ -1535,7 +1635,27 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
       })()}
 
       {subTab === 'avg_dividend_yield' && (() => {
-        const divs = companyDividends.length > 0 ? companyDividends.map((d) => d.cashDividend) : [1.0, 1.0, 1.2, 1.5, 1.0];
+        if (!companyDividends || companyDividends.length === 0) {
+          return (
+            <div style={{ background: 'var(--bg-secondary)', padding: '32px', borderRadius: '12px', textAlign: 'center', border: '1px solid var(--border-color)' }}>
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: 0 }}>
+                ⚠️ 該標的查無歷史現金股息記錄，無法進行平均現金股息殖利率估價。
+              </p>
+            </div>
+          );
+        }
+
+        const divs = companyDividends.map((d) => d.cashDividend).filter((v) => v > 0);
+        if (divs.length === 0) {
+          return (
+            <div style={{ background: 'var(--bg-secondary)', padding: '32px', borderRadius: '12px', textAlign: 'center', border: '1px solid var(--border-color)' }}>
+              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: 0 }}>
+                ⚠️ 該標的無有效現金股息發放記錄，無法進行平均股息估價。
+              </p>
+            </div>
+          );
+        }
+
         const avg3 = Number((divs.slice(-3).reduce((a, b) => a + b, 0) / Math.min(3, divs.length)).toFixed(2));
         const avg5 = Number((divs.slice(-5).reduce((a, b) => a + b, 0) / Math.min(5, divs.length)).toFixed(2));
         const baseAvg = avg5 > 0 ? avg5 : avg3;
@@ -1855,6 +1975,7 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
           latestRecord={latestRecord}
           chronological={chronological}
           isFinancialStock={isFinancialStock}
+          sharesOutstanding={latestRecord ? deriveSharesOutstanding(latestRecord) : undefined}
         />
       )}
 
