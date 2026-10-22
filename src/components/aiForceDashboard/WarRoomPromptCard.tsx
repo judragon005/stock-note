@@ -96,6 +96,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
   const [pasteInputText, setPasteInputText] = useState<string>('');
   const [pasteError, setPasteError] = useState<string | null>(null);
   const [pasteSuccess, setPasteSuccess] = useState<boolean>(false);
+  const [pasteModalNotice, setPasteModalNotice] = useState<string | null>(null);
 
   // 智囊團勝率榜抽屜狀態
   const [showLeaderboard, setShowLeaderboard] = useState<boolean>(false);
@@ -175,6 +176,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
       savePinnedStrategy(newPin);
       setPinnedStrategy(newPin);
       setPasteInputText('');
+      setPasteModalNotice(null);
       setShowPasteModal(false);
       setPasteSuccess(true);
       return true;
@@ -195,6 +197,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
         logger.info('無法直接讀取剪貼簿，切換為手動貼上抽屜:', err);
       }
     }
+    setPasteModalNotice('💡 因瀏覽器安全性或隱私限制無法自動讀取剪貼簿，請直接在下方按 Ctrl+V 貼上外部 AI 分析或代碼塊');
     setShowPasteModal(true);
   }, [handleApplyLoopback]);
 
@@ -760,7 +763,10 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
             </div>
             <button
               type="button"
-              onClick={() => setShowPasteModal(false)}
+              onClick={() => {
+                setShowPasteModal(false);
+                setPasteModalNotice(null);
+              }}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -771,6 +777,23 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
               <X size={16} />
             </button>
           </div>
+
+          {pasteModalNotice && (
+            <div
+              data-testid="paste-modal-notice"
+              style={{
+                fontSize: '12px',
+                color: '#93c5fd',
+                background: 'rgba(59, 130, 246, 0.12)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: '6px',
+                padding: '8px 10px',
+                lineHeight: 1.4,
+              }}
+            >
+              {pasteModalNotice}
+            </div>
+          )}
 
           <textarea
             rows={4}
@@ -808,7 +831,10 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
             <button
               type="button"
-              onClick={() => setShowPasteModal(false)}
+              onClick={() => {
+                setShowPasteModal(false);
+                setPasteModalNotice(null);
+              }}
               style={{
                 padding: '6px 12px',
                 borderRadius: '6px',
