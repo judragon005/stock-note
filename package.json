@@ -14,6 +14,7 @@
     "sync:us:bootstrap": "node scripts/market-sync/sync-us-market.cjs --mode=bootstrap",
     "sync:us:daily": "node scripts/market-sync/sync-us-market.cjs --mode=daily",
     "audit:us-lakehouse": "node scripts/market-sync/audit-verifier.cjs",
+    "backfill:tw:250d": "node scripts/market-sync/backfill-tw-history-web.cjs --days 250",
     "market:backfill-all": "node scripts/market-sync/backfill-full-market-history.cjs"
   },
   "dependencies": {

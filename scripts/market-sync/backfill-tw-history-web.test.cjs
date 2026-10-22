@@ -132,5 +132,53 @@ d('scripts/market-sync/backfill-tw-history-web.test.cjs', () => {
     exp(Number(stockRow.etfCount)).toBe(300);
     exp(Number(chipRow.n)).toBe(2050);
   });
+
+  t('8. 驗證台股歷史回補完整性，涵蓋價量、法人籌碼、資券與估值日報入庫 (Ticket 12)', () => {
+    const { initSqliteLakehouseDb, getSqliteDbConnection } = require('./sqlite-db-core.cjs');
+    const { saveTwDailyQuotesBatch } = require('./backfill-tw-history-web.cjs');
+    const { saveTwT86ToSqlite } = require('./ingest-tw-t86.cjs');
+    const { saveTwExtendedChipsToSqlite } = require('./ingest-tw-extended-chips.cjs');
+    const { saveTwValuationToSqlite } = require('./ingest-tw-valuation.cjs');
+
+    const dbPath = ':memory:';
+    const db = initSqliteLakehouseDb(dbPath);
+    const dateStr = '2026-10-21';
+
+    // 1. 價量日報
+    saveTwDailyQuotesBatch({
+      '2330': { symbol: '2330', date: dateStr, open: 980, high: 990, low: 975, close: 985, volume: 20000000, turnover: 19700000000, transactions: 35000 },
+    }, dbPath);
+
+    // 2. 三大法人 T86
+    saveTwT86ToSqlite({
+      '2330': { symbol: '2330', foreignNet: 5000, trustNet: 1000, dealerNet: -500 },
+    }, dateStr, dbPath);
+
+    // 3. 資券日報
+    saveTwExtendedChipsToSqlite({
+      '2330': { symbol: '2330', marginBalance: 12000, shortBalance: 500, sblBalance: 3000 },
+    }, dateStr, dbPath);
+
+    // 4. 估值日報
+    saveTwValuationToSqlite({
+      '2330': { symbol: '2330', pe: 24.5, pb: 6.2, dividendYield: 2.1 },
+    }, dateStr, dbPath);
+
+    // 驗證四表均有數據
+    const candleRow = db.prepare('SELECT close, transactions FROM daily_candles WHERE symbol = ? AND date = ?').get('2330', dateStr);
+    exp(candleRow.close).toBe(985);
+    exp(candleRow.transactions).toBe(35000);
+
+    const chipRow = db.prepare('SELECT foreign_net, margin_balance, sbl_balance FROM tw_institutional_chips WHERE symbol = ? AND date = ?').get('2330', dateStr);
+    exp(chipRow.foreign_net).toBe(5000);
+    exp(chipRow.margin_balance).toBe(12000);
+    exp(chipRow.sbl_balance).toBe(3000);
+
+    const valRow = db.prepare('SELECT pe, pb, dividend_yield FROM tw_valuation_daily WHERE symbol = ? AND date = ?').get('2330', dateStr);
+    exp(valRow.pe).toBe(24.5);
+    exp(valRow.pb).toBe(6.2);
+    exp(valRow.dividend_yield).toBe(2.1);
+  });
 });
+
 
