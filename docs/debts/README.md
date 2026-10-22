@@ -60,6 +60,7 @@
 | [**0050**](0050-analysis-metric-view-subcomponent-decomposition.md) | AnalysisMetricView 深度財報單體元件子模組解耦重構 | `P3` | `OPEN` | Code Review (Spec 0180 / Issue #230) | `Refactor` · `UI` · `CleanCode` · `StockAnalysis` · `ForensicAccounting` | 待下期個股分析財務指標擴充或自訂視圖時實作 |
 | [**0051**](0051-projected-cashflow-dynamic-calendar-profile-learning.md) | 未來現金流投影慣性配息庫動態學習與跨市場擴展 | `P3` | `OPEN` | Code Review (Spec 0183 / Issue #254) | `Feature` · `Refactor` · `ProjectedCashflow` · `Dividend` · `Lakehouse` | 待下期跨市場現金流或自動化公司行動深度整合時實作 |
 | [**0052**](0052-default-fetch-json-compound-abort-signal.md) | defaultFetchJson 雙重信號複合支援 (Compound AbortSignal) | `P3` | `OPEN` | Code Review (Spec 0187 / Issue #268) | `Refactor` · `Architecture` · `Resilience` · `Network` | 待下次網路中介層全面重構或跨市場爬蟲架構升級時一併引入 |
+| [**0053**](0053-eight-quarter-statement-table-style-constants-extraction.md) | EightQuarterStatementTable 樣式常數與子儲存格抽取 | `P3` | `OPEN` | Code Review (Spec 0202 / Issue #322) | `Refactor` · `UI` · `CleanCode` · `StockAnalysis` · `EightQuarterStatementTable` | 待下次財務三表欄位擴充或 UI 重構時一併引入 |
 
 ---
 
