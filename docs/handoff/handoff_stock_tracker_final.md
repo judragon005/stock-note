@@ -1,7 +1,12 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-10-19 16:00 (UTC+8)  
+> **交接產生時間**：2026-10-22 13:08 (UTC+8)  
 > **當前最新里程碑**：
+> - **V8.115.0 個股分析深度財報全域資料治理、湖倉對齊與極簡重構**（ADR 0202, Spec 0202, Issue #322, #323, PR #324）：
+>   - **Ticket 01 Piotroski F-Score 增資稀釋動態評分與流動負債係數剔除**：
+>     - 徹底拔除第 5 項未增資稀釋寫死 `passed: true`，改依近 4 季/去年同期股本增資膨脹率 (>5%) 動態評估股權稀釋，並呈現真實膨脹幅度。
+>     - 徹底移除流動負債 `總負債 * 0.5` 偽造係數，財報未單獨揭露時誠實標註無法客觀評估並不予給分，落實 Zero-Mock Protocol。
+>     - 單元測試於公開測試縫隙全覆蓋，14/14 測試通過。
 > - **V8.114.0 戰情室外部 AI 多智囊團並行回流、模型去重覆蓋與法人風控共識防線**（ADR 0201, Spec 0201, Issue #318, PR #319, #320）：
 >   - **多模型並存與同名覆蓋機制**：同標的下以正規化模型名稱為識別鍵，同名模型後者覆蓋更新，異名模型追加並列展示，徹底打破單一 AI 裁決限制。
 >   - **AI 模型名稱語意正規化 (normalizeAiModelName)**：精確映射 Claude, ChatGPT, Perplexity, Gemini 等頂級模型，未知模型安全清洗去重。
@@ -18,21 +23,7 @@
 >   - **Card 21 全新估值與殖利率量化矩陣四態自適應**：台股個股（盤中動態 PE/PB/年化殖利率 + 歷史位階條）、美股個股（Forward PE/PB/扣 30% IRS 稅後殖利率）、虧損轉機股（市銷率 PS）、ETF 標的（折溢價率 >0.5% 警戒、總費用率、年化配息率）。
 >   - **Layer 6 雙子容器 (`EnergySentimentTwinCard`) 封裝與 250px 鎖定**：垂直緊湊封裝 Card 10 + 13，中段計算產出 Alpha 共振仲裁標籤；四欄高度鎖定 250px 像素級齊平，消除拉長破版。
 >   - **全域外聯提示詞中樞連動與金融字典閉環**：提示詞中樞注入 `<valuation_status>` 節點與美股宏觀情緒，字典齊備 6 項新術語解釋。
-> - **V9.10.0 戰情室外聯提示詞時態一致性、景氣循環判定與法人風控對齊**（ADR 0194, Spec 0194, Issue #288）：
->   - **盤中成交量回退與量價一致性護欄**：盤中未結算時若即時報價有成交量，優先回退並換算為張數，終結「現價跳動成交量為 0」之矛盾。
->   - **記憶體模組龍頭景氣循環股歸屬**：威剛（3260）與群聯（8299）補入循環股清單，觸發黑帽紅隊對「週期高峰殺估值」之防禦質詢。
->   - **時態因果隔離與待同步免責宣告**：強制隔離即時盤中現價與昨日結算籌碼因果，並宣告 N/A 僅因管線待同步，阻斷假帳與舞弊幻覺。
->   - **在庫持倉停損防線實質觸發狀態前置預算**：引擎前端預算 `<stop_loss_conservative_status is_triggered="true|false">`，給出確定性防守指令。
->   - **外資借券賣出（SBL）維度擴充**：補齊外資空單主要借券賣出標記與提示，防範僅憑融券餘額評估空方壓力的盲區。
-> - **V9.00.0 法人旗艦級宏觀戰情室 2.0**（ADR 0193, Spec 0193, Issue #283, PR #284, Issue #285, PR #286）：
->   - **0~100 宏觀水溫計 (`Macro Thermometer`)**：以美債利差倒掛、VIX、高收益債利差 (HY OAS) 與外資台指期空單部位純數學加權，輸出作戰姿態（防禦/平衡/進攻）與建議股票總曝險上限 (20%~90%)。
->   - **台美全球專屬雙軌切換 (`MarketViewTab: GLOBAL / TW / US`)**：台股聚焦期貨空單、全市場融資維持率（130% 斷頭警戒線）、台幣匯率與在線月營收倒數；美股聚焦利差倒掛、HY OAS、CDS 債券履約違約互換保險指數與 VIX。
->   - **100% Zero Mock 湖倉日 K 雙重動能輪動**：徹底剷除 145 行寫死假數據，全面介接 SQLite 湖倉真實收盤日 K 序列，動態計算 12-1M 滾動動能與 4% 現金避風港狀態。
->   - **機構級風控在險 (1-Day 95% VaR) 與 3 階急速黑天鵝壓力測試**：秒算 95% 信心水準之單日極限潛在損失與台幣 FX Delta 敏感度，支援 `[-10% 震盪]`, `[-20% 回檔]`, `[-30% 崩盤]` 即刻斷頭維持率與保證金追繳缺口精算。
->   - **彭博式三段時序雷達、API 配額守衛與一鍵晨會簡報**：催化劑日曆收斂至「今日登場 / 7 日焦點 / 30 日遠端」，注入每月 10 號營收開獎倒數；實作 24H 快取鎖與舊版 Schema 自動消毒（0 配額浪費、0 白屏崩潰）；晨報區塊提供整合雙軌高容錯降級（`copyTextToClipboard`）之一鍵繁中晨會簡報與 LLM 提示詞複製。
-> - **V8.104.0 Vite 代理彈性容錯、前端短路熔斷與標的市場精準路由架構**（ADR 0191, Spec 0191, Issue #279, PR #280）
-> - **V8.103.0 統一金融時序日曆與全市場營業日引擎**（ADR 0190, Spec 0190, Issue #275, PR #276, #277）
-> **品質狀態**：全量單元測試 **1,818/1,818 通過 (100% Passed / 243 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> > **品質狀態**：全量單元測試 **1,821/1,821 通過 (100% Passed / 243 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -41,10 +32,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main` (已完全同步)
-- **單元測試套件**：**1,818/1,818 通過 (243 test suites / 100% 綠燈)**
+- **單元測試套件**：**1,821/1,821 通過 (243 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V8.114.0**
+- **當前釋出版本**：**V8.115.0**
 - **工作區與分支整潔度**：工作區乾淨受控，本地 feature/fix 分支已完全合併並清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -73,6 +64,7 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0202`](file:///d:/APP/股票紀錄/docs/specs/0202-stock-analysis-forensic-accounting-cleanse-and-lakehouse-spec.md) | [`ADR 0202`](file:///d:/APP/股票紀錄/docs/adr/0202-stock-analysis-forensic-accounting-cleanse-and-lakehouse.md) | [`.scratch/v8.115.0-stock-analysis-forensic-accounting-cleanse-and-lakehouse/`](file:///d:/APP/股票紀錄/.scratch/v8.115.0-stock-analysis-forensic-accounting-cleanse-and-lakehouse/) | Issue #322, #323 / PR #324 | V8.115.0 | 個股深度財報假資料清零、湖倉打通、會計勾稽修復與極簡架構重構 (Ticket 01 完成) |
 | [`Spec 0201`](file:///d:/APP/股票紀錄/docs/specs/0201-war-room-multi-ai-syndicate-loopback-and-consensus-defense-spec.md) | [`ADR 0201`](file:///d:/APP/股票紀錄/docs/adr/0201-war-room-multi-ai-syndicate-loopback-and-consensus-defense.md) | [`.scratch/v8.114.0-war-room-multi-ai-syndicate-loopback-and-consensus-defense/`](file:///d:/APP/股票紀錄/.scratch/v8.114.0-war-room-multi-ai-syndicate-loopback-and-consensus-defense/) | Issue #318 / PR #319, #320 | V8.114.0 | 戰情室外部 AI 多智囊團並行回流、模型去重覆蓋與法人風控共識防線架構 (4 大 Micro-Tickets) |
 | [`Spec 0195`](file:///d:/APP/股票紀錄/docs/specs/0195-ai-force-dashboard-layout-reorganization-card21-valuation-and-chips-sparkline-spec.md) | [`ADR 0195`](file:///d:/APP/股票紀錄/docs/adr/0195-ai-force-dashboard-layout-reorganization-card21-valuation.md) | [`.scratch/0195-ai-force-dashboard-layout-reorganization-card21/`](file:///d:/APP/股票紀錄/.scratch/0195-ai-force-dashboard-layout-reorganization-card21/) | Issue #290 | V9.11.0 | 戰情室 Layer 6 雙子堆疊重構、Card 21 估值卡導入與 Card 15 寬幅 Sparkline 對稱對齊 (12 大 Micro-Tickets) |
 | [`Spec 0194`](file:///d:/APP/股票紀錄/docs/specs/0194-war-room-prompt-temporal-and-cyclical-alignment-spec.md) | [`ADR 0194`](file:///d:/APP/股票紀錄/docs/adr/0194-war-room-prompt-temporal-and-cyclical-alignment.md) | [`.scratch/0194-war-room-prompt-temporal-and-cyclical-alignment/`](file:///d:/APP/股票紀錄/.scratch/0194-war-room-prompt-temporal-and-cyclical-alignment/) | Issue #288 | V9.10.0 | 戰情室外聯提示詞時態一致性、景氣循環判定與法人風控對齊（量價一致性、威剛/群聯循環股、時態隔離宣告、停損實質預算、借券賣出） |
