@@ -63,13 +63,44 @@ export function calculatePiotroskiFScore(
   const currLeverage = currLongTermDebt / currAssets;
   const prevLeverage = prevLongTermDebt / prevAssets;
 
-  const currCurrentAssets = curr.balanceSheet?.cashAndEquivalents + (curr.balanceSheet?.accountsReceivable ?? 0) + (curr.balanceSheet?.inventory ?? 0);
-  const currCurrentLiab = curr.balanceSheet?.totalLiabilities * 0.5 || 1; // 估計流動負債
-  const prevCurrentAssets = prevYearSameQuarter.balanceSheet?.cashAndEquivalents + (prevYearSameQuarter.balanceSheet?.accountsReceivable ?? 0) + (prevYearSameQuarter.balanceSheet?.inventory ?? 0);
-  const prevCurrentLiab = prevYearSameQuarter.balanceSheet?.totalLiabilities * 0.5 || 1;
+  const currCurrentAssets = curr.balanceSheet?.currentAssets ?? (
+    (curr.balanceSheet?.cashAndEquivalents ?? 0) +
+    (curr.balanceSheet?.accountsReceivable ?? 0) +
+    (curr.balanceSheet?.inventory ?? 0)
+  );
+  const prevCurrentAssets = prevYearSameQuarter.balanceSheet?.currentAssets ?? (
+    (prevYearSameQuarter.balanceSheet?.cashAndEquivalents ?? 0) +
+    (prevYearSameQuarter.balanceSheet?.accountsReceivable ?? 0) +
+    (prevYearSameQuarter.balanceSheet?.inventory ?? 0)
+  );
 
-  const currCurrentRatio = currCurrentAssets / currCurrentLiab;
-  const prevCurrentRatio = prevCurrentAssets / prevCurrentLiab;
+  const currCurrentLiab = curr.balanceSheet?.currentLiabilities;
+  const prevCurrentLiab = prevYearSameQuarter.balanceSheet?.currentLiabilities;
+  const hasValidLiquidityData = typeof currCurrentLiab === 'number' && currCurrentLiab > 0 &&
+                                typeof prevCurrentLiab === 'number' && prevCurrentLiab > 0;
+
+  const currCurrentRatio = hasValidLiquidityData ? currCurrentAssets / currCurrentLiab : 0;
+  const prevCurrentRatio = hasValidLiquidityData ? prevCurrentAssets / prevCurrentLiab : 0;
+
+  // 增資稀釋判定 (近一年/去年同期股本變動)
+  const currCapital = curr.balanceSheet?.capitalStock;
+  const prevCapital = prevYearSameQuarter.balanceSheet?.capitalStock;
+  let isDiluted = false;
+  let eqOfferDesc = '未偵測到股本大幅膨脹稀釋';
+
+  if (typeof currCapital === 'number' && typeof prevCapital === 'number' && prevCapital > 0) {
+    const dilutionRate = (currCapital - prevCapital) / prevCapital;
+    if (dilutionRate > 0.05) {
+      isDiluted = true;
+      eqOfferDesc = `股本較去年同期增資膨脹 ${(dilutionRate * 100).toFixed(1)}%，存在股權稀釋`;
+    } else if (dilutionRate < -0.01) {
+      eqOfferDesc = `股本較去年同期縮減 ${Math.abs(dilutionRate * 100).toFixed(1)}%（庫藏股註銷/減資）`;
+    } else {
+      eqOfferDesc = `股本持平或微幅變動 ${(dilutionRate * 100).toFixed(1)}%（無顯著稀釋）`;
+    }
+  } else {
+    eqOfferDesc = '無股本增資異常記錄';
+  }
 
   const currRev = curr.income?.revenue || 1;
   const prevRev = prevYearSameQuarter.income?.revenue || 1;
@@ -124,16 +155,18 @@ export function calculatePiotroskiFScore(
       id: 'f_dliquid',
       name: '流動比率提升 (ΔCurrent > 0)',
       description: '短期償債流動性較去年提升',
-      passed: currCurrentRatio >= prevCurrentRatio,
-      actualDesc: `流動比率 ${(currCurrentRatio * 100).toFixed(0)}% vs 去年 ${(prevCurrentRatio * 100).toFixed(0)}%`,
+      passed: hasValidLiquidityData && currCurrentRatio >= prevCurrentRatio,
+      actualDesc: hasValidLiquidityData
+        ? `流動比率 ${(currCurrentRatio * 100).toFixed(0)}% vs 去年 ${(prevCurrentRatio * 100).toFixed(0)}%`
+        : '流動負債未單獨揭露，無法客觀評估',
       category: 'LEVERAGE',
     },
     f_eq_offer: {
       id: 'f_eq_offer',
       name: '未增資稀釋 (No Dilution)',
       description: '近一年無大幅增資發行新股稀釋股東權益',
-      passed: true, // 保守給予通過
-      actualDesc: '未偵測到股本大幅膨脹稀釋',
+      passed: !isDiluted,
+      actualDesc: eqOfferDesc,
       category: 'LEVERAGE',
     },
     f_dmargin: {
