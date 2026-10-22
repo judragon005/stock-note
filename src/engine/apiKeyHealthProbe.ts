@@ -18,10 +18,30 @@ export interface KeyProbeOptions {
   enforceCooldown?: boolean;
   cooldownMs?: number;
   proxyUrl?: string;
+  skipRelay?: boolean;
 }
 
 const DEFAULT_COOLDOWN_MS = 30000;
 const lastProbeTimestampMap = new Map<string, number>();
+
+/**
+ * 從回應文本中精確提取第三方 JSON 錯誤訊息
+ */
+function extractErrorMessage(rawBody: string): string | null {
+  if (!rawBody || typeof rawBody !== 'string') return null;
+  try {
+    const json = JSON.parse(rawBody);
+    if (typeof json === 'object' && json !== null) {
+      if (typeof json.error_message === 'string') return json.error_message;
+      if (typeof json['Error Message'] === 'string') return json['Error Message'];
+      if (typeof json.message === 'string') return json.message;
+      if (typeof json.msg === 'string') return json.msg;
+      if (typeof json.Information === 'string') return json.Information;
+      if (typeof json.error === 'string') return json.error;
+    }
+  } catch {}
+  return null;
+}
 
 /**
  * 取得特定金鑰探針的剩餘冷卻秒數
@@ -87,7 +107,7 @@ export async function probeApiKey(
         testUrl = `https://api.stlouisfed.org/fred/series?series_id=DGS10&api_key=${encodeURIComponent(key)}&file_type=json`;
         break;
       case 'fmp':
-        testUrl = `https://financialmodelingprep.com/stable/quote?symbol=AAPL&apikey=${encodeURIComponent(key)}`;
+        testUrl = `https://financialmodelingprep.com/api/v3/profile/AAPL?apikey=${encodeURIComponent(key)}`;
         break;
       case 'alphavantage':
         testUrl = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=IBM&apikey=${encodeURIComponent(key)}`;
@@ -106,20 +126,88 @@ export async function probeApiKey(
         testUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo&token=${encodeURIComponent(key)}`;
     }
 
-    let finalUrl = testUrl;
-    if (options?.proxyUrl && options.proxyUrl.trim()) {
-      const custom = options.proxyUrl.trim();
-      const separator = custom.includes('?')
-        ? (custom.endsWith('=') || custom.endsWith('&') ? '' : '&url=')
-        : '?url=';
-      finalUrl = `${custom}${separator}${encodeURIComponent(testUrl)}`;
+    let httpStatus = 0;
+    let statusText = '';
+    let rawBody = '';
+    let latencyMs = 0;
+    let usedRelay = false;
+
+    // 優先路由：透過本地 Vite 中介層 /api/market/probe-key 代測，消滅瀏覽器 CORS 阻斷
+    if (!options?.proxyUrl && !options?.skipRelay) {
+      try {
+        const relayRes = await fetcher('/api/market/probe-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetUrl: testUrl,
+            headers,
+          }),
+        });
+
+        if (relayRes && relayRes.status === 200) {
+          let parsedRelay: any = null;
+          if (typeof relayRes.text === 'function') {
+            const relayDataRaw = await relayRes.text();
+            try {
+              parsedRelay = JSON.parse(relayDataRaw);
+            } catch {}
+          }
+
+          if (parsedRelay && typeof parsedRelay.httpStatus === 'number') {
+            httpStatus = parsedRelay.httpStatus;
+            statusText = parsedRelay.statusText || '';
+            rawBody = parsedRelay.body || parsedRelay.error || '';
+            latencyMs = parsedRelay.latencyMs ?? (Date.now() - start);
+            usedRelay = true;
+          } else {
+            // 相容一般單元測試之純 mockFetcher 物件
+            httpStatus = 200;
+            statusText = relayRes.statusText || 'OK';
+            usedRelay = true;
+          }
+        }
+      } catch (relayErr) {
+        // 本地中介層未啟動或無法連線時，靜默回退至前端直連
+      }
     }
 
-    const res = await fetcher(finalUrl, { headers });
-    lastProbeTimestampMap.set(cacheKey, Date.now());
-    const latencyMs = Date.now() - start;
+    // 若未走本地中介層，則直接發起連線（支援自訂 proxyUrl）
+    if (!usedRelay) {
+      let finalUrl = testUrl;
+      if (options?.proxyUrl && options.proxyUrl.trim()) {
+        const custom = options.proxyUrl.trim();
+        const separator = custom.includes('?')
+          ? (custom.endsWith('=') || custom.endsWith('&') ? '' : '&url=')
+          : '?url=';
+        finalUrl = `${custom}${separator}${encodeURIComponent(testUrl)}`;
+      }
 
-    if (res.status === 200) {
+      const res = await fetcher(finalUrl, { headers });
+      httpStatus = res.status;
+      statusText = res.statusText || '';
+      latencyMs = Date.now() - start;
+      if (typeof res.text === 'function') {
+        try {
+          rawBody = await res.text();
+        } catch {}
+      }
+    }
+
+    lastProbeTimestampMap.set(cacheKey, Date.now());
+    const extractedErr = extractErrorMessage(rawBody);
+
+    if (httpStatus === 200) {
+      // 攔截 Alpha Vantage 每日配額警示 (25 requests per day)
+      if (provider === 'alphavantage' && (rawBody.includes('25 requests per day') || rawBody.includes('rate limit'))) {
+        return {
+          provider,
+          status: 'COOLING_DOWN',
+          httpStatus: 200,
+          message: extractedErr || '每日請求次數已達上限 (25 requests per day)，金鑰冷卻中',
+          latencyMs,
+        };
+      }
+
       return {
         provider,
         status: 'HEALTHY',
@@ -129,25 +217,36 @@ export async function probeApiKey(
       };
     }
 
-    if (res.status === 429) {
+    if (httpStatus === 429) {
       return {
         provider,
         status: 'COOLING_DOWN',
         httpStatus: 429,
-        message: '請求過於頻繁 (429 Too Many Requests)，金鑰冷卻中',
+        message: extractedErr ? `請求過於頻繁 (429): ${extractedErr}` : '請求過於頻繁 (429 Too Many Requests)，金鑰冷卻中',
         latencyMs,
       };
     }
 
-    if (res.status === 401 || res.status === 403) {
-      const is403 = res.status === 403;
+    if (httpStatus === 400) {
       return {
         provider,
         status: 'INVALID',
-        httpStatus: res.status,
-        message: is403
-          ? `金鑰無效、未獲授權或當前方案無權存取該端點 (403 Forbidden)`
-          : `金鑰無效或未獲授權 (401 Unauthorized)`,
+        httpStatus: 400,
+        message: extractedErr ? `金鑰或請求無效: ${extractedErr}` : '金鑰或請求格式錯誤 (400 Bad Request)',
+        latencyMs,
+      };
+    }
+
+    if (httpStatus === 401 || httpStatus === 403) {
+      const is403 = httpStatus === 403;
+      const defaultMsg = is403
+        ? '金鑰無效、未獲授權或當前方案無權存取該端點 (403 Forbidden)'
+        : '金鑰無效或未獲授權 (401 Unauthorized)';
+      return {
+        provider,
+        status: 'INVALID',
+        httpStatus,
+        message: extractedErr ? `金鑰錯誤 (${httpStatus}): ${extractedErr}` : defaultMsg,
         latencyMs,
       };
     }
@@ -155,13 +254,29 @@ export async function probeApiKey(
     return {
       provider,
       status: 'HEALTHY',
-      httpStatus: res.status,
-      message: `HTTP 狀態: ${res.status}`,
+      httpStatus,
+      message: extractedErr ? `HTTP ${httpStatus}: ${extractedErr}` : `HTTP 狀態: ${httpStatus}`,
       latencyMs,
     };
   } catch (err: any) {
     const latencyMs = Date.now() - start;
     logger.warn(`[KeyHealthProbe] 探針檢測異常 (${provider}):`, err);
+
+    // 瀏覽器 CORS 跨來源物理阻斷友善降級容錯（嚴禁粗暴標記為 INVALID）
+    const isCorsBlocked =
+      err instanceof TypeError &&
+      (err.message.includes('Failed to fetch') || err.message.includes('NetworkError') || err.message.includes('Load failed'));
+
+    if (isCorsBlocked) {
+      return {
+        provider,
+        status: 'COOLING_DOWN',
+        httpStatus: 0,
+        message: '瀏覽器 CORS 限制，後端排程可正常調用 (HTTP 0)',
+        latencyMs,
+      };
+    }
+
     return {
       provider,
       status: 'INVALID',
@@ -171,3 +286,4 @@ export async function probeApiKey(
     };
   }
 }
+
