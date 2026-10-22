@@ -403,9 +403,13 @@ async function runFullMarketHistoryBackfill(options = {}) {
     try {
       const { runUsMarketSync } = require('./sync-us-market.cjs');
       const isDailyMode = isAutoMode || (typeof days === 'number' && days <= 20);
-      const usArgs = isDailyMode ? ['--mode=daily'] : ['--bootstrap'];
+      const syncConfig = {
+        mode: isDailyMode ? 'daily' : 'bootstrap',
+        customDbPath: dbPath,
+        tiingoToken: process.env.TIINGO_API_KEY || null,
+      };
       console.log(`[*] 美股軌道啟動 [模式: ${isDailyMode ? 'DAILY 增量同步' : 'BOOTSTRAP 全量建置'}]...`);
-      const usRes = await runUsMarketSync(usArgs);
+      const usRes = await runUsMarketSync(syncConfig);
 
       backfillGlobalStatus.us.status = 'completed';
       backfillGlobalStatus.us.progressPct = 100;
