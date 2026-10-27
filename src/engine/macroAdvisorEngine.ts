@@ -123,6 +123,11 @@ export function buildLlmPromptPayload(
   catalysts: UpcomingCatalyst[] = []
 ): string {
   const payload = {
+    systemDirective: {
+      role: 'Chief Risk Officer (CRO) & Hedge Fund Portfolio Manager',
+      mandate: '嚴格基於所提供之基準日客觀數據進行極端壓力測試與策略審查。資料為封閉本地模型推演快照，請勿質疑歷史數據時效性。',
+      mode: 'DEFENSIVE_AND_EXECUTION_AUDIT',
+    },
     macro: {
       date: macro.date,
       us10yYield: macro.us10y,
@@ -139,6 +144,13 @@ export function buildLlmPromptPayload(
       usdToTwd: macro.usdToTwd,
       usM2GrowthYoY: macro.usM2GrowthYoY,
       twM2GrowthYoY: macro.twM2GrowthYoY,
+      creditSpreadOAS: macro.creditSpreadOAS,
+      cdsInsuranceIndex: macro.cdsInsuranceIndex,
+      cdsRiskLevel: macro.cdsRiskLevel,
+      twFuturesNetOi: macro.twFuturesNetOi,
+      twMarginMaintenance: macro.twMarginMaintenance,
+      twFuturesRiskLevel: macro.twFuturesRiskLevel,
+      twMarginRiskLevel: macro.twMarginRiskLevel,
     },
     portfolio: {
       totalNavTWD: shield.totalNavTWD,
@@ -150,6 +162,10 @@ export function buildLlmPromptPayload(
       marginStatus: shield.marginStatus,
       maxAllocationDriftPercent: shield.maxAllocationDriftPercent,
       portfolioBeta: shield.portfolioBeta,
+      valueAtRisk95TWD: shield.valueAtRisk95TWD,
+      varRatioPercent: shield.varRatioPercent,
+      fxDeltaTWD: shield.fxDeltaTWD,
+      quickStressTest: shield.quickStressTest,
     },
     upcomingEvents: catalysts.map((c) => ({
       name: c.name,
@@ -256,33 +272,78 @@ export function generateAiMorningBrief(
   }
 
   // 2. 注入具體個人化實戰行動要點 (Action Points)
-  // A. 持股賣出停損優先點名
+  // A. 持股賣出破線獨立標註 (Ticket 03 & 04) - 徹底根除單一價格共用 Bug
   if (sellSignals.length > 0) {
-    const symbolsText = sellSignals.map((s) => `${s.symbol}${s.name ? `(${s.name})` : ''}`).join('、');
-    const stopPriceText = sellSignals[0].stopLossPrice ? ` (防守價 $${sellSignals[0].stopLossPrice})` : '';
+    const sortedSells = [...sellSignals].sort((a, b) => (b.weightPercent || 0) - (a.weightPercent || 0));
+    const top4 = sortedSells.slice(0, 4);
+    const detailList = top4
+      .map((s) => `${s.symbol}${s.name ? `(${s.name})` : ''}${s.stopLossPrice ? ` (防守線 $${s.stopLossPrice})` : ''}`)
+      .join('、');
+    const etcText = sortedSells.length > 4 ? ` 等共 ${sortedSells.length} 檔` : '';
     actionPoints.push(
-      `⚠️【破線停損】持股 ${symbolsText} 已跌破三日箱底防守線${stopPriceText}，嚴格執行肌肉記憶紀律，立即停損減碼，切忌凹單。`
+      `⚠️【破線觀察】持股 ${detailList}${etcText} 跌破個別箱底支撐，建議依紀律檢視停損點，避免情緒化凹單。`
     );
   }
 
-  // B. 高衝擊事件 × 質押槓桿警戒聯動點名
-  if (urgentHighImpactCatalyst && isHighRiskMargin) {
+  // B. 晨報 45%/50%/54% 情境調倉減碼金額試算 (Ticket 05 Trade Blotter)
+  const totalStockValueTWD = holdingSignals.reduce((acc, s) => acc + (s.marketValueTWD || 0), 0);
+  const currentEquityRatio =
+    shield.totalNavTWD > 0
+      ? Math.round((totalStockValueTWD / shield.totalNavTWD) * 1000) / 10
+      : 0;
+  const currentThermometer = calculateMacroThermometer(macro);
+  if (
+    totalStockValueTWD > 0 &&
+    currentEquityRatio > currentThermometer.suggestedEquityAllocationPercent
+  ) {
+    const targetEquityTWD =
+      (shield.totalNavTWD * currentThermometer.suggestedEquityAllocationPercent) / 100;
+    const deltaTWD = totalStockValueTWD - targetEquityTWD;
+    if (deltaTWD > 10000) {
+      actionPoints.push(
+        `📌【情境調倉目標】當前股票水位約 ${currentEquityRatio}% (約 NT$ ${Math.round(totalStockValueTWD / 10000)} 萬)，若降至 ${currentThermometer.suggestedEquityAllocationPercent}% 防禦上限，需降低股票額度約 NT$ ${Math.round(deltaTWD).toLocaleString()}；優先自 P1 週期敏感標的檢核減碼。`
+      );
+    }
+  }
+
+  // C. 質押法規死線與自救指引 (Ticket 06)
+  if (shield.hasLoans && shield.marginMaintenanceRatio > 0 && shield.marginMaintenanceRatio < 130) {
+    actionPoints.push(
+      `🚨【質押追繳死線】維持率已跌破 130% (${shield.marginMaintenanceRatio}%)，依券商法規需於 T+2 日 12:00 前補足至 166%，否則面臨開盤強制斷頭處分。`
+    );
+  } else if (urgentHighImpactCatalyst && isHighRiskMargin) {
     actionPoints.push(
       `🚨【槓桿警戒】距離重大高衝擊事件 (${urgentHighImpactCatalyst.name}) 僅剩 ${urgentHighImpactCatalyst.daysLeft === 0 ? '今天' : `${urgentHighImpactCatalyst.daysLeft} 天`}，且質押維持率處於警戒水位 (${shield.marginMaintenanceRatio}%)，強烈建議暫停追價加碼，優先提高現金水位或提撥擔保品以防範流動性黑天鵝。`
     );
   }
 
-  // C. 持股買進突破點名
+  // D. ETF 穿透重複曝險警示 (Ticket 06)
+  const overlapSymbols = holdingSignals.filter((s) =>
+    ['0050', '00923', '009816', '2330'].includes(s.symbol)
+  );
+  if (overlapSymbols.length >= 2) {
+    const overlapWeight = overlapSymbols.reduce((acc, s) => acc + (s.weightPercent || 0), 0);
+    if (overlapWeight >= 20) {
+      actionPoints.push(
+        `💡【成份穿透警示】0050、00923 等 ETF 與 2330 存在高度半導體權重重疊，實質曝險高度集中，切勿誤判為充分分散；若遇極端下殺切忌掛市價單踩踏。`
+      );
+    }
+  }
+
+  // E. 持股買進突破獨立標註 (Ticket 03) - 徹底根除 00919 共用 56.56 元 Bug
   if (buySignals.length > 0) {
-    const symbolsText = buySignals.map((s) => `${s.symbol}${s.name ? `(${s.name})` : ''}`).join('、');
-    const firstBuy = buySignals[0];
-    const defenseText = firstBuy.stopLossPrice ? `，以 $${firstBuy.stopLossPrice} 作為第一道移動防守點` : '';
+    const detailList = buySignals
+      .map(
+        (b) =>
+          `${b.symbol}${b.name ? `(${b.name})` : ''}${b.stopLossPrice ? ` (防守線 $${b.stopLossPrice})` : ''}`
+      )
+      .join('、');
     actionPoints.push(
-      `🔥【動能突破】持股 ${symbolsText} 帶量站上箱頂主升段發動${defenseText}，可把握量縮回測箱頂時分批加碼。`
+      `🔥【動能突破】持股 ${detailList} 帶量站上箱頂主升段發動，可把握量縮回測箱頂時分批加碼。`
     );
   }
 
-  // D. 關鍵財經催化劑倒數提醒 (若尚未被槓桿警戒點名)
+  // F. 關鍵財經催化劑倒數提醒 (若尚未被槓桿警戒點名)
   if (urgentCatalysts.length > 0 && !(urgentHighImpactCatalyst && isHighRiskMargin)) {
     const catalyst = urgentCatalysts[0];
     actionPoints.push(
@@ -290,7 +351,7 @@ export function generateAiMorningBrief(
     );
   }
 
-  // D. 待收股息活水提醒
+  // G. 待收股息活水提醒
   if (nearDividends.length > 0) {
     const div = nearDividends[0];
     actionPoints.push(
@@ -343,7 +404,7 @@ export function generateAiMorningBrief(
     headline,
     tone,
     summary,
-    actionPoints: actionPoints.slice(0, 4),
+    actionPoints: actionPoints.slice(0, 6),
     macroDiagnosis,
     shieldDiagnosis,
     llmPayloadJson,

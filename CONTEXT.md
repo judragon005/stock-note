@@ -2698,5 +2698,16 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     7. **標準化 16 核心財務三表湖倉表與雙向路由**：建立 `financial_statements_quarterly` 表與複合主鍵，提供 `GET /api/market/financials/:symbol` 高速查詢與 `POST /api/market/financials` 批次寫入端點。
     8. **台美雙軌財報 Lakehouse-First 重構**：優先毫秒級自本地湖倉載入，未命中時抓取外部 API 並自動非同步回填 SQLite，具備離線可用性與防止重送。
     9. **台股 250 交易日官方日報歷史全注水**：一次性注水 250 交易日價量（含真實成交筆數）、三大法人 T86、融資融券資券與 BWIBBU 估值日報。
-    10. **全市場歷史冷啟動與日常增量調度閉環**：配置 `npm run backfill:full` 與 `npm run sync:incremental`，實現「一次全量注水、日常 5 秒極速補漏」。
+- **War Room Morning Brief Data Seal, Isolated Stops, Privacy Masking & Lean Alignment (戰情室宏觀晨會數據認證戳記、獨立防守價修復、隱私脫敏與實戰極簡對齊)**:
+  - 核心模組：`src/types/macro.ts`、`src/engine/macroAdvisorEngine.ts`、`src/components/WarRoomWorkspace.tsx`。
+  - 規範依據：Spec 0204 (v9.01.0) 與 ADR 0204，對齊 GitHub Issue #332。
+  - 核心特性：
+    1. **系統認證戳記與 CRO 提示詞前綴 (Data Seal)**：晨會簡報開頭前綴 `System Directive`，明確賦予外部 LLM 首席風險官 (CRO) 角色，並標明此為封閉本地模型推演快照，嚴格杜絕外部 AI 質疑歷史時效性與重複要求核實之循環。
+    2. **根除跨標的幽靈共用防守價 Bug (Isolated Stops)**：重構 `generateAiMorningBrief`，將陣列取首項之 Bug 全面修復為逐檔嚴格提取各自之 `stopLossPrice` 或箱底價格，徹底根除 18 檔標的共用 $10.9593 及 00919 共用 0056 之 $56.56 防守價。
+    3. **實戰風控資料注入與真實權重計算 (Real Weights & PnL)**：全面清除 `volume: 10000` 與 `±1%` 偽造 K 線，為 `MacroHoldingSignalInput` 注入股數、成本基準、部位市值、帳戶權重百分比與未實現損益百分比。
+    4. **權重差異化賣出訊號 (Differentiate Sell Signals)**：依據部位權重自動區分處置層級（超大型權重股優先掛限價單階梯減碼，防大單滑價；小型股破線果斷市價停損），並加入台股 ETF (0050/00923/2330) 穿透集中度風控警戒。
+    5. **情境股票倉位超配減碼試算單 (Scenario Trade Blotter)**：當實際股票倉位高於建議上限時，自動依權重佔比精確試算需削減之金額（$\Delta \text{TWD}$）或減碼比例，外部 AI 無需通靈猜測。
+    6. **質押維持率法規死線警示 (Margin Statutory Deadlines)**：個人質押維持率跌破 130% 斷頭線時，自動標註「T+2 日 12:00 補回 166%」之法規死線與追繳金額試算。
+    7. **全市場籌碼與信用指標結構化外聯 (LLM Payload CRO System Prompt Expansion)**：將 OAS 信用利差、CDS 指數、外資台指期未平倉淨口數、全市場融資維持率、1-Day 95% VaR、外匯敏感度 (FX Delta) 及 3 階急速壓力測試無損序列化。
+    8. **隱私脫敏模式與 10 秒快速校準 (Privacy Masking & Quick Calibration Modal)**：支援一鍵複製脫敏晨報（隱藏千萬資產真實金額，僅輸出權重% 與損益%），並提供 10 秒快速校準彈窗，隨時動態更新美債、VIX、台指期空單與維持率。
 

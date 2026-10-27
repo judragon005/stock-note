@@ -19,6 +19,8 @@ import {
   Layers,
   Globe2,
   AlertTriangle,
+  Sliders,
+  EyeOff,
 } from 'lucide-react';
 
 import { HoldingPosition, LoanRecord } from '../types/stock';
@@ -162,36 +164,55 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
   };
 
 
-  // 0. 持股技術訊號萃取 (嚴格鎖定在倉標的 shares > 0，杜絕已閉倉標的干擾晨報)
+  // 0. 持股技術訊號萃取 (嚴格鎖定在倉標的 shares > 0，杜絕假量假影線，並注入部位權重與實戰損益)
   const holdingSignals = useMemo<MacroHoldingSignalInput[]>(() => {
     return holdings
       .filter((h) => h.shares > 0)
       .map((h) => {
-      const localDailyMap = historicalDailyPrices[h.symbol];
-      let candles: DailyCandle[] | undefined = undefined;
-      if (localDailyMap && Object.keys(localDailyMap).length >= 5) {
-        const sortedDates = Object.keys(localDailyMap).sort();
-        candles = sortedDates.slice(-30).map((d) => {
-          const c = localDailyMap[d];
-          return { date: d, open: c, high: c * 1.01, low: c * 0.99, close: c, volume: 10000 };
-        });
-      }
-      const scanned = scanMuscleBookerItem(
-        h.symbol,
-        h.name,
-        h.market,
-        h.currentPrice || 100,
-        candles
-      );
-      return {
-        symbol: h.symbol,
-        name: h.name,
-        action: scanned.actionDecision.action,
-        stopLossPrice: scanned.actionDecision.stopLossPrice,
-        targetPrice: scanned.actionDecision.targetPrice,
-      };
-    });
-  }, [holdings, historicalDailyPrices]);
+        const localDailyMap = historicalDailyPrices[h.symbol];
+        let candles: DailyCandle[] | undefined = undefined;
+        if (localDailyMap && Object.keys(localDailyMap).length >= 5) {
+          const sortedDates = Object.keys(localDailyMap).sort();
+          candles = sortedDates.slice(-30).map((d) => {
+            const c = localDailyMap[d];
+            // 忠於真實歷史收盤價，杜絕人為捏造 10000 成交量與 ±1% 假上下影線
+            return { date: d, open: c, high: c, low: c, close: c, volume: 0 };
+          });
+        }
+        const currentPrice = h.currentPrice || h.avgCost || 100;
+        const scanned = scanMuscleBookerItem(
+          h.symbol,
+          h.name,
+          h.market,
+          currentPrice,
+          candles
+        );
+
+        const fx = h.currency === 'USD' ? usdToTwdRate : 1;
+        const marketValueTWD = (h.shares || 0) * currentPrice * fx;
+        const weightPercent = totalNavTwd > 0 ? (marketValueTWD / totalNavTwd) * 100 : 0;
+        const unrealizedPnlPercent =
+          h.avgCost && h.avgCost > 0
+            ? ((currentPrice - h.avgCost) / h.avgCost) * 100
+            : 0;
+
+        return {
+          symbol: h.symbol,
+          name: h.name,
+          action: scanned.actionDecision.action,
+          stopLossPrice: scanned.actionDecision.stopLossPrice,
+          targetPrice: scanned.actionDecision.targetPrice,
+          shares: h.shares,
+          costBasis: h.avgCost || 0,
+          currentPrice,
+          marketValueTWD,
+          weightPercent: Math.round(weightPercent * 10) / 10,
+          unrealizedPnlPercent: Math.round(unrealizedPnlPercent * 10) / 10,
+          boxTop: scanned.boxUpper,
+          boxBottom: scanned.boxLower,
+        };
+      });
+  }, [holdings, historicalDailyPrices, totalNavTwd, usdToTwdRate]);
 
   // 0.1 待收股息進度轉換
   const upcomingDividends = useMemo<UpcomingDividendInput[]>(() => {
@@ -250,6 +271,18 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
   const [activeStressDrop, setActiveStressDrop] = useState<-10 | -20 | -30>(-10);
   const [timelineHorizon, setTimelineHorizon] = useState<TimelineHorizon | 'ALL'>('ALL');
   const [copiedBrief, setCopiedBrief] = useState(false);
+  const [copiedPrivacyBrief, setCopiedPrivacyBrief] = useState(false);
+
+  // --- 0204 快速校準 Modal 狀態 ---
+  const [isCalibrateModalOpen, setIsCalibrateModalOpen] = useState(false);
+  const [calibUs10y, setCalibUs10y] = useState('');
+  const [calibUs2y, setCalibUs2y] = useState('');
+  const [calibVix, setCalibVix] = useState('');
+  const [calibFearGreed, setCalibFearGreed] = useState('');
+  const [calibTwFuturesNetOi, setCalibTwFuturesNetOi] = useState('');
+  const [calibTwMarginMaintenance, setCalibTwMarginMaintenance] = useState('');
+  const [calibCreditSpreadOAS, setCalibCreditSpreadOAS] = useState('');
+  const [calibCdsIndex, setCalibCdsIndex] = useState('');
 
   // 宏觀水溫計試算 (0~100 分與三秒作戰姿態)
   const macroThermometer = useMemo(() => {
@@ -433,7 +466,54 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     }
   };
 
-  const handleCopyMorningBriefReport = async () => {
+  const handleOpenCalibrateModal = () => {
+    setCalibUs10y(macroSnapshot.us10y.toString());
+    setCalibUs2y(macroSnapshot.us2y.toString());
+    setCalibVix(macroSnapshot.vix.toString());
+    setCalibFearGreed(macroSnapshot.fearAndGreedIndex.toString());
+    setCalibTwFuturesNetOi((macroSnapshot.twFuturesNetOi ?? -15000).toString());
+    setCalibTwMarginMaintenance((macroSnapshot.twMarginMaintenance ?? 165.2).toString());
+    setCalibCreditSpreadOAS((macroSnapshot.creditSpreadOAS ?? 3.5).toString());
+    setCalibCdsIndex((macroSnapshot.cdsInsuranceIndex ?? 65).toString());
+    setIsCalibrateModalOpen(true);
+  };
+
+  const handleSaveCalibration = (e: React.FormEvent) => {
+    e.preventDefault();
+    const us10yNum = parseFloat(calibUs10y) || 3.85;
+    const us2yNum = parseFloat(calibUs2y) || 3.95;
+    const vixNum = parseFloat(calibVix) || 18.5;
+    const fgNum = parseInt(calibFearGreed, 10) || 50;
+    const oiNum = parseInt(calibTwFuturesNetOi, 10) || -15000;
+    const marginNum = parseFloat(calibTwMarginMaintenance) || 165.2;
+    const oasNum = parseFloat(calibCreditSpreadOAS) || 3.5;
+    const cdsNum = parseFloat(calibCdsIndex) || 65;
+
+    const yieldSpread = Math.round((us10yNum - us2yNum) * 100) / 100;
+    const updated: MacroIndicatorSnapshot = {
+      ...macroSnapshot,
+      us10y: us10yNum,
+      us2y: us2yNum,
+      yieldSpread,
+      isYieldInverted: yieldSpread < 0,
+      vix: vixNum,
+      vixLevel: vixNum >= 30 ? 'PANIC' : vixNum >= 20 ? 'ELEVATED' : 'NORMAL',
+      fearAndGreedIndex: fgNum,
+      fearAndGreedLevel: fgNum <= 25 ? 'EXTREME_FEAR' : fgNum <= 45 ? 'FEAR' : fgNum <= 55 ? 'NEUTRAL' : fgNum <= 75 ? 'GREED' : 'EXTREME_GREED',
+      twFuturesNetOi: oiNum,
+      twMarginMaintenance: marginNum,
+      creditSpreadOAS: oasNum,
+      cdsInsuranceIndex: cdsNum,
+      date: new Date().toISOString().split('T')[0],
+      updatedAt: Date.now(),
+    };
+    saveMacroPulseRecord(updated, true);
+    setMacroSnapshot(updated);
+    setMacroHistoryList(loadMacroPulseHistory());
+    setIsCalibrateModalOpen(false);
+  };
+
+  const handleCopyMorningBriefReport = async (isMasked = false) => {
     const stanceLabel =
       macroThermometer.stance === 'AGGRESSIVE'
         ? '進攻・積極擴張'
@@ -441,7 +521,19 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
         ? '防禦・現金為王'
         : '平衡・區間操作';
 
+    // 依權重降序排序持股風險矩陣
+    const sortedSignals = [...holdingSignals].sort((a, b) => (b.weightPercent || 0) - (a.weightPercent || 0));
+    const matrixLines = sortedSignals.map((s) => {
+      const pnlSign = (s.unrealizedPnlPercent || 0) >= 0 ? '+' : '';
+      const stopPriceStr = s.stopLossPrice ? `$${s.stopLossPrice.toFixed(2)}` : (s.boxBottom ? `$${s.boxBottom.toFixed(2)} (箱底)` : '動態移動');
+      const actionBadge = s.action === 'SELL' ? '⚠️ 減碼/停損' : s.action === 'BUY' ? '⚡ 突破加碼' : s.action === 'AVOID' ? '🛑 弱勢觀望' : '🟢 續抱';
+      return `| ${s.symbol} | ${s.name || ''} | ${s.weightPercent || 0}% | ${pnlSign}${s.unrealizedPnlPercent || 0}% | $${(s.currentPrice || 0).toFixed(2)} | ${stopPriceStr} | ${actionBadge} |`;
+    });
+
     const report = [
+      `> 【系統指令 (System Directive)】：`,
+      `> 你現在是首席風險官 (CRO) 與高階避險基金投資經理。本報告為個人投資組合「戰情室本地模型推演簡報」，所有宏觀數據、籌碼指標與持股風控防守價均為本地歷史快照與特定推演情境。請嚴格基於報告內給定的客觀數據進行壓力測試、調倉驗算與極端風險審核，請勿質疑數據歷史時效性或重複要求核實，直接產出具體執行決策。`,
+      '',
       `# 🏦 宏觀戰情室每日晨會簡報 (${macroSnapshot.date})`,
       `> 作戰定調：${morningBrief.headline} (${morningBrief.tone})`,
       '',
@@ -450,9 +542,15 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
       `- 決策推論：${macroThermometer.rationale.join('；')}`,
       '',
       `## 🛡️ 個人在險與風控 (1-Day 95% VaR)`,
-      `- 帳戶總淨值：NT$ ${Math.round(shield.totalNavTWD).toLocaleString()}`,
-      `- 單日 95% 最大在險價值 (VaR)：NT$ ${(shield.valueAtRisk95TWD || 0).toLocaleString()} (佔總淨值 ${shield.varRatioPercent || 0}%)`,
-      `- 美股匯率敏感度 (FX Delta)：NT$ ${(shield.fxDeltaTWD || 0).toLocaleString()} / 每升值 1 元`,
+      isMasked
+        ? `- 帳戶總淨值：NT$ [已隱私遮蔽] (約 ${sortedSignals.length} 檔持股組合)`
+        : `- 帳戶總淨值：NT$ ${Math.round(shield.totalNavTWD).toLocaleString()}`,
+      isMasked
+        ? `- 單日 95% 最大在險價值 (VaR)：佔總淨值 ${shield.varRatioPercent || 0}% (金額已隱私遮蔽)`
+        : `- 單日 95% 最大在險價值 (VaR)：NT$ ${(shield.valueAtRisk95TWD || 0).toLocaleString()} (佔總淨值 ${shield.varRatioPercent || 0}%)`,
+      isMasked
+        ? `- 美股匯率敏感度 (FX Delta)：每升值 1 元影響約 ${(((shield.fxDeltaTWD || 0) / (shield.totalNavTWD || 1)) * 100).toFixed(2)}% 總資產`
+        : `- 美股匯率敏感度 (FX Delta)：NT$ ${(shield.fxDeltaTWD || 0).toLocaleString()} / 每升值 1 元`,
       `- 質押維持率：${shield.hasLoans ? `${shield.marginMaintenanceRatio}% (${shield.marginStatus})` : '零負債安全'}`,
       '',
       `## 🎯 今日執行要點`,
@@ -463,12 +561,22 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
       `- VIX 恐慌指數：${macroSnapshot.vix} (${macroSnapshot.vixLevel})`,
       `- 高收益債利差 (OAS)：${macroSnapshot.creditSpreadOAS ?? 3.5}% | CDS 指數：${macroSnapshot.cdsInsuranceIndex ?? 65} (${macroSnapshot.cdsRiskLevel ?? 'LOW'})`,
       `- 外資台指期未平倉：${(macroSnapshot.twFuturesNetOi ?? 0).toLocaleString()} 口 | 全市場融資維持率：${macroSnapshot.twMarginMaintenance ?? 165.2}%`,
+      '',
+      `## 📋 持股技術防守與權重矩陣 (按權重排序)`,
+      `| 代號 | 名稱 | 權重 | 損益% | 市價 | 防守價/箱底 | 建議動作 |`,
+      `|---|---|---|---|---|---|---|`,
+      ...matrixLines,
     ].join('\n');
 
     const ok = await copyTextToClipboard(report);
     if (ok) {
-      setCopiedBrief(true);
-      setTimeout(() => setCopiedBrief(false), 2000);
+      if (isMasked) {
+        setCopiedPrivacyBrief(true);
+        setTimeout(() => setCopiedPrivacyBrief(false), 2000);
+      } else {
+        setCopiedBrief(true);
+        setTimeout(() => setCopiedBrief(false), 2000);
+      }
     }
   };
 
@@ -525,15 +633,43 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
             </button>
           </div>
 
-          {/* 複製按鈕組 */}
+          {/* 數據校準與複製按鈕組 */}
           <button
-            onClick={handleCopyMorningBriefReport}
+            onClick={handleOpenCalibrateModal}
+            className="btn btn-secondary btn-sm"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.78rem' }}
+            title="快速手動校準美債、VIX、外資空單與融資維持率"
+          >
+            <Sliders size={14} />
+            ✏️ 數據校準
+          </button>
+
+          <button
+            onClick={() => handleCopyMorningBriefReport(false)}
             className="btn btn-primary btn-sm"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.78rem' }}
-            title="一鍵複製繁體中文晨會每日作戰報告"
+            title="一鍵複製繁體中文晨會每日作戰報告 (含 Data Seal 與持股矩陣)"
           >
             {copiedBrief ? <Check size={14} /> : <Copy size={14} />}
-            {copiedBrief ? '已複製晨會簡報' : '📋 複製晨會簡報'}
+            {copiedBrief ? '已複製簡報' : '📋 複製簡報'}
+          </button>
+
+          <button
+            onClick={() => handleCopyMorningBriefReport(true)}
+            className="btn btn-ghost btn-sm"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              fontSize: '0.78rem',
+              background: 'rgba(30, 41, 59, 0.6)',
+              border: '1px solid rgba(148, 163, 184, 0.3)',
+            }}
+            title="隱私遮蔽總淨值與金額，僅保留權重%與損益%，安心複製給外部 AI"
+          >
+            {copiedPrivacyBrief ? <Check size={14} style={{ color: 'var(--gain-color)' }} /> : <EyeOff size={14} />}
+            {copiedPrivacyBrief ? '已複製脫敏版' : '🔒 脫敏複製'}
           </button>
 
           <button
@@ -664,7 +800,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <button
               type="button"
-              onClick={handleCopyMorningBriefReport}
+              onClick={() => handleCopyMorningBriefReport(false)}
               className="btn btn-secondary"
               style={{
                 display: 'inline-flex',
@@ -678,10 +814,31 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                 color: copiedBrief ? '#4ade80' : 'var(--text-primary)',
                 transition: 'all 0.2s ease',
               }}
-              title="一鍵複製 Markdown 格式繁體中文晨會作戰簡報"
+              title="一鍵複製 Markdown 格式繁體中文晨會作戰簡報 (含 Data Seal 與持股矩陣)"
             >
               {copiedBrief ? <Check size={14} /> : <Copy size={14} />}
               {copiedBrief ? '已複製簡報！' : '📋 複製晨會簡報'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleCopyMorningBriefReport(true)}
+              className="btn btn-secondary"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                background: copiedPrivacyBrief ? 'rgba(34, 197, 94, 0.2)' : 'rgba(30, 41, 59, 0.7)',
+                borderColor: copiedPrivacyBrief ? 'var(--accent-green)' : 'rgba(51, 65, 85, 0.6)',
+                color: copiedPrivacyBrief ? '#4ade80' : 'var(--text-primary)',
+                transition: 'all 0.2s ease',
+              }}
+              title="隱私遮蔽總淨值與金額，僅保留權重%與損益%，安心複製給外部 AI"
+            >
+              {copiedPrivacyBrief ? <Check size={14} /> : <EyeOff size={14} />}
+              {copiedPrivacyBrief ? '已複製脫敏版！' : '🔒 脫敏複製'}
             </button>
             <button
               type="button"
@@ -1868,6 +2025,260 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                   style={{ fontSize: '0.82rem', padding: '7px 18px' }}
                 >
                   確認儲存
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* ✏️ 快速數據校準 Modal (Ticket 08) */}
+      {isCalibrateModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '16px',
+          }}
+          onClick={() => setIsCalibrateModalOpen(false)}
+        >
+          <div
+            className="card animate-scale-up"
+            style={{
+              width: '100%',
+              maxWidth: '560px',
+              padding: '24px',
+              background: '#0f172a',
+              border: '1px solid rgba(148, 163, 184, 0.25)',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sliders size={20} style={{ color: 'var(--accent-amber)' }} />
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  宏觀數據快速校準 (Quick Calibration)
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCalibrateModalOpen(false)}
+                className="btn-icon"
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p style={{ margin: '0 0 16px 0', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              隨時修正美債殖利率、恐慌指數與台股期貨籌碼，系統將立即重新計算宏觀水溫計分數、建議股票倉位與晨會作戰方針。
+            </p>
+
+            <form onSubmit={handleSaveCalibration}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    美債 10 年期殖利率 (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={calibUs10y}
+                    onChange={(e) => setCalibUs10y(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(148, 163, 184, 0.25)',
+                      background: 'var(--bg-primary, #0f172a)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.85rem',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    美債 2 年期殖利率 (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={calibUs2y}
+                    onChange={(e) => setCalibUs2y(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(148, 163, 184, 0.25)',
+                      background: 'var(--bg-primary, #0f172a)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.85rem',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    VIX 恐慌指數
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    required
+                    value={calibVix}
+                    onChange={(e) => setCalibVix(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(148, 163, 184, 0.25)',
+                      background: 'var(--bg-primary, #0f172a)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.85rem',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    CNN 恐懼貪婪指數 (0~100)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    required
+                    value={calibFearGreed}
+                    onChange={(e) => setCalibFearGreed(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(148, 163, 184, 0.25)',
+                      background: 'var(--bg-primary, #0f172a)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.85rem',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    外資台指期未平倉淨口數 (負為空單)
+                  </label>
+                  <input
+                    type="number"
+                    step="100"
+                    placeholder="如 -45000"
+                    value={calibTwFuturesNetOi}
+                    onChange={(e) => setCalibTwFuturesNetOi(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(148, 163, 184, 0.25)',
+                      background: 'var(--bg-primary, #0f172a)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.85rem',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    全市場融資維持率 (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="如 165.2"
+                    value={calibTwMarginMaintenance}
+                    onChange={(e) => setCalibTwMarginMaintenance(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(148, 163, 184, 0.25)',
+                      background: 'var(--bg-primary, #0f172a)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.85rem',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    高收益債信用利差 OAS (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="如 3.5"
+                    value={calibCreditSpreadOAS}
+                    onChange={(e) => setCalibCreditSpreadOAS(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(148, 163, 184, 0.25)',
+                      background: 'var(--bg-primary, #0f172a)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.85rem',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    CDS 信用違約交換指數 (基點)
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    placeholder="如 65"
+                    value={calibCdsIndex}
+                    onChange={(e) => setCalibCdsIndex(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(148, 163, 184, 0.25)',
+                      background: 'var(--bg-primary, #0f172a)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.85rem',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsCalibrateModalOpen(false)}
+                  style={{ fontSize: '0.82rem', padding: '7px 16px' }}
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ fontSize: '0.82rem', padding: '7px 18px' }}
+                >
+                  💾 儲存並即時重算
                 </button>
               </div>
             </form>

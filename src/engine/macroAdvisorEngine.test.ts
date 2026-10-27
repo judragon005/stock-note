@@ -22,6 +22,7 @@ import {
   MacroIndicatorSnapshot,
   MacroPortfolioShield,
   UpcomingCatalyst,
+  MacroHoldingSignalInput,
 } from '../types/macro';
 
 describe('MacroAdvisorEngine (TDD Seam)', () => {
@@ -43,6 +44,9 @@ describe('MacroAdvisorEngine (TDD Seam)', () => {
     usdToTwd: 32.0,
     usM2GrowthYoY: 2.1,
     twM2GrowthYoY: 5.5,
+    creditSpreadOAS: 3.2,
+    cdsInsuranceIndex: 65,
+    twFuturesNetOi: -15000,
     updatedAt: Date.now(),
     ...overrides,
   });
@@ -59,6 +63,9 @@ describe('MacroAdvisorEngine (TDD Seam)', () => {
     marginStatus: 'NO_LOAN',
     maxAllocationDriftPercent: 2.5,
     portfolioBeta: 0.95,
+    valueAtRisk95TWD: 39682,
+    varRatioPercent: 1.98,
+    fxDeltaTWD: -50000,
     ...overrides,
   });
 
@@ -296,6 +303,107 @@ describe('MacroAdvisorEngine (TDD Seam)', () => {
       expect(brief.actionPoints.some((p) => p.includes('2881') && p.includes('富邦金') && p.includes('$85'))).toBe(true);
     });
 
+    it('情境 5.1 (Ticket 03)：多檔破線標的必須獨立標註防守價，絕不可跨標的共用第一檔價格 (根除幽靈防守價 Bug)', () => {
+      const macro = createBaseMacro();
+      const shield = createBaseShield();
+
+      const brief = generateAiMorningBrief({
+        macro,
+        shield,
+        asOfDate: '2026-10-27',
+        holdingSignals: [
+          { symbol: '3260', name: '威剛', action: 'SELL', stopLossPrice: 122.5, weightPercent: 5.2 },
+          { symbol: '2344', name: '華邦電', action: 'SELL', stopLossPrice: 24.8, weightPercent: 4.1 },
+          { symbol: '8105', name: '凌巨', action: 'SELL', stopLossPrice: 10.95, weightPercent: 1.5 },
+        ],
+      });
+
+      const sellPoint = brief.actionPoints.find((p) => p.includes('破線'));
+      expect(sellPoint).toBeDefined();
+      // 驗證 3260 帶自身防守價 122.5，絕非 10.95
+      expect(sellPoint).toContain('3260');
+      expect(sellPoint).toContain('122.5');
+      // 驗證 2344 帶自身防守價 24.8，絕非 10.95
+      expect(sellPoint).toContain('2344');
+      expect(sellPoint).toContain('24.8');
+      // 驗證 8105 帶自身防守價 10.95
+      expect(sellPoint).toContain('8105');
+      expect(sellPoint).toContain('10.95');
+      // 驗證絕不出現「(防守價 $10.95)」共用單一價格的字樣
+      expect(sellPoint).not.toMatch(/已跌破三日箱底防守線 \(防守價 \$10\.95\)/);
+    });
+
+    it('情境 5.2 (Ticket 03)：多檔突破標的必須獨立標註各自移動防守點，00919 絕不可共用 0056 的 56.56 元 (根除幽靈共用價 Bug)', () => {
+      const macro = createBaseMacro();
+      const shield = createBaseShield();
+
+      const brief = generateAiMorningBrief({
+        macro,
+        shield,
+        asOfDate: '2026-10-27',
+        holdingSignals: [
+          { symbol: '0056', name: '元大高股息', action: 'BUY', stopLossPrice: 56.56 },
+          { symbol: '00919', name: '群益台灣精選高息', action: 'BUY', stopLossPrice: 32.2 },
+        ],
+      });
+
+      const buyPoint = brief.actionPoints.find((p) => p.includes('動能突破'));
+      expect(buyPoint).toBeDefined();
+      expect(buyPoint).toContain('0056');
+      expect(buyPoint).toContain('56.56');
+      expect(buyPoint).toContain('00919');
+      expect(buyPoint).toContain('32.2');
+      // 絕不能出現整句只有單一「以 $56.56 作為第一道移動防守點」套給兩檔
+      expect(buyPoint).not.toContain('持股 0056(元大高股息)、00919(群益台灣精選高息) 帶量站上箱頂主升段發動，以 $56.56 作為第一道移動防守點');
+    });
+
+    it('情境 5.3 (Ticket 05)：持股佔比超配時自動試算 45% 情境調倉需減碼之金額單 (Trade Blotter)', () => {
+      const macro = createBaseMacro({ vix: 26, vixLevel: 'ELEVATED' });
+      // 總淨值 10,000,000 元
+      const shield = createBaseShield({ totalNavTWD: 10000000 });
+
+      // 當前在倉股票總計 6,800,000 元 (68% 水位)
+      const holdingSignals: MacroHoldingSignalInput[] = [
+        { symbol: '2330', name: '台積電', action: 'HOLD', marketValueTWD: 4000000, weightPercent: 40 },
+        { symbol: '0050', name: '元大台灣50', action: 'HOLD', marketValueTWD: 2000000, weightPercent: 20 },
+        { symbol: '3260', name: '威剛', action: 'SELL', marketValueTWD: 800000, weightPercent: 8, stopLossPrice: 120 },
+      ];
+
+      const brief = generateAiMorningBrief({
+        macro,
+        shield,
+        asOfDate: '2026-10-27',
+        holdingSignals,
+      });
+
+      // 檢查是否包含具體情境調倉減碼金額
+      const blotterPoint = brief.actionPoints.find((p) => p.includes('調倉') || p.includes('減碼') || p.includes('額度'));
+      expect(blotterPoint).toBeDefined();
+      expect(blotterPoint).toContain('68%');
+      expect(blotterPoint).toContain('需降低股票額度');
+    });
+
+    it('情境 5.4 (Ticket 06)：質押維持率跌破 130% 時，明確標記 T+2 日 12:00 補回 166% 法規死線與補足金額', () => {
+      const macro = createBaseMacro();
+      // 質押維持率 125% 破 130% 斷頭線
+      const shield = createBaseShield({
+        hasLoans: true,
+        marginMaintenanceRatio: 125,
+        marginStatus: 'MARGIN_CALL',
+      });
+
+      const brief = generateAiMorningBrief({
+        macro,
+        shield,
+        asOfDate: '2026-10-27',
+      });
+
+      const marginPoint = brief.actionPoints.find((p) => p.includes('T+2') || p.includes('166%') || p.includes('斷頭'));
+      expect(marginPoint).toBeDefined();
+      expect(marginPoint).toContain('T+2');
+      expect(marginPoint).toContain('166%');
+    });
+
     it('情境 6：持股突破 + 重大催化劑 + 股息入帳多因子複合驅動', () => {
       const macro = createBaseMacro();
       const shield = createBaseShield();
@@ -375,7 +483,12 @@ describe('MacroAdvisorEngine (TDD Seam)', () => {
 
       const parsed = JSON.parse(jsonStr);
       expect(parsed.macro.vix).toBe(18.5);
+      expect(parsed.macro.creditSpreadOAS).toBe(3.2);
+      expect(parsed.macro.cdsInsuranceIndex).toBe(65);
+      expect(parsed.macro.twFuturesNetOi).toBe(-15000);
       expect(parsed.portfolio.cashRatioPercent).toBe(20);
+      expect(parsed.portfolio.valueAtRisk95TWD).toBeDefined();
+      expect(parsed.systemDirective.role).toContain('CRO');
       expect(parsed.upcomingEvents).toHaveLength(1);
       expect(parsed.upcomingEvents[0].daysLeft).toBe(10);
     });

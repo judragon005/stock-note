@@ -146,6 +146,15 @@ export interface MacroHoldingSignalInput {
   action: 'BUY' | 'AVOID' | 'SELL' | 'HOLD';
   stopLossPrice?: number;
   targetPrice?: number;
+  // --- 0204 實戰風控擴充 ---
+  shares?: number;               // 持有股數 (如 2000 股 = 2 張)
+  costBasis?: number;            // 平均買進成本
+  currentPrice?: number;         // 最新市價
+  marketValueTWD?: number;       // 部位總市值 (TWD)
+  weightPercent?: number;        // 佔帳戶總資產權重百分比 % (例如 8.5%)
+  unrealizedPnlPercent?: number; // 未實現損益百分比 % (例如 -4.2%)
+  boxTop?: number;               // 三日箱頂價格
+  boxBottom?: number;            // 三日箱底價格
 }
 
 /**
