@@ -128,7 +128,7 @@ describe('Spec 0158: 美股全市場標的湖倉採集與斷點續傳流水線 (
 
     it('getPendingUsSymbols 應正確跳過當日已 SUCCESS 的標的 (斷點續傳)', () => {
       expect(typeof checkpointEngineModule.getPendingUsSymbols).toBe('function');
-      const tempDbPath = path.resolve(process.cwd(), '.scratch/market-cache/test_checkpoint.db');
+      const tempDbPath = path.resolve(process.cwd(), '.scratch/market-cache/test_checkpoint_pipeline.db');
 
       // 測試用隔離 DB
       const { initSqliteLakehouseDb } = require('../../scripts/market-sync/sqlite-db-core.cjs');

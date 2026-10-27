@@ -61,6 +61,7 @@
 | [**0051**](0051-projected-cashflow-dynamic-calendar-profile-learning.md) | 未來現金流投影慣性配息庫動態學習與跨市場擴展 | `P3` | `OPEN` | Code Review (Spec 0183 / Issue #254) | `Feature` · `Refactor` · `ProjectedCashflow` · `Dividend` · `Lakehouse` | 待下期跨市場現金流或自動化公司行動深度整合時實作 |
 | [**0052**](0052-default-fetch-json-compound-abort-signal.md) | defaultFetchJson 雙重信號複合支援 (Compound AbortSignal) | `P3` | `OPEN` | Code Review (Spec 0187 / Issue #268) | `Refactor` · `Architecture` · `Resilience` · `Network` | 待下次網路中介層全面重構或跨市場爬蟲架構升級時一併引入 |
 | [**0053**](0053-eight-quarter-statement-table-style-constants-extraction.md) | EightQuarterStatementTable 樣式常數與子儲存格抽取 | `P3` | `OPEN` | Code Review (Spec 0202 / Issue #322) | `Refactor` · `UI` · `CleanCode` · `StockAnalysis` · `EightQuarterStatementTable` | 待下次財務三表欄位擴充或 UI 重構時一併引入 |
+| [**0054**](0054-war-room-quick-calibration-modal-decomposition.md) | WarRoomWorkspace 快速校準表單聚合與子元件解耦 (MacroQuickCalibrationModal) | `P3` | `OPEN` | Code Review (Spec 0204 / Issue #332) | `Refactor` · `UI` · `CleanCode` · `WarRoom` · `ComponentDecomposition` | 待下一次戰情室 UI 重構或宏觀指標擴充時一併執行 |
 
 ---
 
