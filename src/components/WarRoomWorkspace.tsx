@@ -22,6 +22,7 @@ import {
   Sliders,
   EyeOff,
 } from 'lucide-react';
+import { MacroQuickCalibrationModal } from './warRoom/MacroQuickCalibrationModal';
 
 import { HoldingPosition, LoanRecord } from '../types/stock';
 import {
@@ -273,16 +274,8 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
   const [copiedBrief, setCopiedBrief] = useState(false);
   const [copiedPrivacyBrief, setCopiedPrivacyBrief] = useState(false);
 
-  // --- 0204 快速校準 Modal 狀態 ---
+  // --- 0204 快速校準 Modal 狀態 (Spec 0205 / 技術債 0054: 表單狀態下沉自治) ---
   const [isCalibrateModalOpen, setIsCalibrateModalOpen] = useState(false);
-  const [calibUs10y, setCalibUs10y] = useState('');
-  const [calibUs2y, setCalibUs2y] = useState('');
-  const [calibVix, setCalibVix] = useState('');
-  const [calibFearGreed, setCalibFearGreed] = useState('');
-  const [calibTwFuturesNetOi, setCalibTwFuturesNetOi] = useState('');
-  const [calibTwMarginMaintenance, setCalibTwMarginMaintenance] = useState('');
-  const [calibCreditSpreadOAS, setCalibCreditSpreadOAS] = useState('');
-  const [calibCdsIndex, setCalibCdsIndex] = useState('');
 
   // 宏觀水溫計試算 (0~100 分與三秒作戰姿態)
   const macroThermometer = useMemo(() => {
@@ -467,50 +460,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
   };
 
   const handleOpenCalibrateModal = () => {
-    setCalibUs10y(macroSnapshot.us10y.toString());
-    setCalibUs2y(macroSnapshot.us2y.toString());
-    setCalibVix(macroSnapshot.vix.toString());
-    setCalibFearGreed(macroSnapshot.fearAndGreedIndex.toString());
-    setCalibTwFuturesNetOi((macroSnapshot.twFuturesNetOi ?? -15000).toString());
-    setCalibTwMarginMaintenance((macroSnapshot.twMarginMaintenance ?? 165.2).toString());
-    setCalibCreditSpreadOAS((macroSnapshot.creditSpreadOAS ?? 3.5).toString());
-    setCalibCdsIndex((macroSnapshot.cdsInsuranceIndex ?? 65).toString());
     setIsCalibrateModalOpen(true);
-  };
-
-  const handleSaveCalibration = (e: React.FormEvent) => {
-    e.preventDefault();
-    const us10yNum = parseFloat(calibUs10y) || 3.85;
-    const us2yNum = parseFloat(calibUs2y) || 3.95;
-    const vixNum = parseFloat(calibVix) || 18.5;
-    const fgNum = parseInt(calibFearGreed, 10) || 50;
-    const oiNum = parseInt(calibTwFuturesNetOi, 10) || -15000;
-    const marginNum = parseFloat(calibTwMarginMaintenance) || 165.2;
-    const oasNum = parseFloat(calibCreditSpreadOAS) || 3.5;
-    const cdsNum = parseFloat(calibCdsIndex) || 65;
-
-    const yieldSpread = Math.round((us10yNum - us2yNum) * 100) / 100;
-    const updated: MacroIndicatorSnapshot = {
-      ...macroSnapshot,
-      us10y: us10yNum,
-      us2y: us2yNum,
-      yieldSpread,
-      isYieldInverted: yieldSpread < 0,
-      vix: vixNum,
-      vixLevel: vixNum >= 30 ? 'PANIC' : vixNum >= 20 ? 'ELEVATED' : 'NORMAL',
-      fearAndGreedIndex: fgNum,
-      fearAndGreedLevel: fgNum <= 25 ? 'EXTREME_FEAR' : fgNum <= 45 ? 'FEAR' : fgNum <= 55 ? 'NEUTRAL' : fgNum <= 75 ? 'GREED' : 'EXTREME_GREED',
-      twFuturesNetOi: oiNum,
-      twMarginMaintenance: marginNum,
-      creditSpreadOAS: oasNum,
-      cdsInsuranceIndex: cdsNum,
-      date: new Date().toISOString().split('T')[0],
-      updatedAt: Date.now(),
-    };
-    saveMacroPulseRecord(updated, true);
-    setMacroSnapshot(updated);
-    setMacroHistoryList(loadMacroPulseHistory());
-    setIsCalibrateModalOpen(false);
   };
 
   const handleCopyMorningBriefReport = async (isMasked = false) => {
@@ -2032,259 +1982,16 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
         </div>
       )}
       {/* ✏️ 快速數據校準 Modal (Ticket 08) */}
-      {isCalibrateModalOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '16px',
-          }}
-          onClick={() => setIsCalibrateModalOpen(false)}
-        >
-          <div
-            className="card animate-scale-up"
-            style={{
-              width: '100%',
-              maxWidth: '560px',
-              padding: '24px',
-              background: '#0f172a',
-              border: '1px solid rgba(148, 163, 184, 0.25)',
-              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Sliders size={20} style={{ color: 'var(--accent-amber)' }} />
-                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                  宏觀數據快速校準 (Quick Calibration)
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsCalibrateModalOpen(false)}
-                className="btn-icon"
-                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <p style={{ margin: '0 0 16px 0', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              隨時修正美債殖利率、恐慌指數與台股期貨籌碼，系統將立即重新計算宏觀水溫計分數、建議股票倉位與晨會作戰方針。
-            </p>
-
-            <form onSubmit={handleSaveCalibration}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                    美債 10 年期殖利率 (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={calibUs10y}
-                    onChange={(e) => setCalibUs10y(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(148, 163, 184, 0.25)',
-                      background: 'var(--bg-primary, #0f172a)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.85rem',
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                    美債 2 年期殖利率 (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={calibUs2y}
-                    onChange={(e) => setCalibUs2y(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(148, 163, 184, 0.25)',
-                      background: 'var(--bg-primary, #0f172a)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.85rem',
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                    VIX 恐慌指數
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    required
-                    value={calibVix}
-                    onChange={(e) => setCalibVix(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(148, 163, 184, 0.25)',
-                      background: 'var(--bg-primary, #0f172a)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.85rem',
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                    CNN 恐懼貪婪指數 (0~100)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    required
-                    value={calibFearGreed}
-                    onChange={(e) => setCalibFearGreed(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(148, 163, 184, 0.25)',
-                      background: 'var(--bg-primary, #0f172a)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.85rem',
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                    外資台指期未平倉淨口數 (負為空單)
-                  </label>
-                  <input
-                    type="number"
-                    step="100"
-                    placeholder="如 -45000"
-                    value={calibTwFuturesNetOi}
-                    onChange={(e) => setCalibTwFuturesNetOi(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(148, 163, 184, 0.25)',
-                      background: 'var(--bg-primary, #0f172a)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.85rem',
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                    全市場融資維持率 (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    placeholder="如 165.2"
-                    value={calibTwMarginMaintenance}
-                    onChange={(e) => setCalibTwMarginMaintenance(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(148, 163, 184, 0.25)',
-                      background: 'var(--bg-primary, #0f172a)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.85rem',
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                    高收益債信用利差 OAS (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="如 3.5"
-                    value={calibCreditSpreadOAS}
-                    onChange={(e) => setCalibCreditSpreadOAS(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(148, 163, 184, 0.25)',
-                      background: 'var(--bg-primary, #0f172a)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.85rem',
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                    CDS 信用違約交換指數 (基點)
-                  </label>
-                  <input
-                    type="number"
-                    step="1"
-                    placeholder="如 65"
-                    value={calibCdsIndex}
-                    onChange={(e) => setCalibCdsIndex(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(148, 163, 184, 0.25)',
-                      background: 'var(--bg-primary, #0f172a)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.85rem',
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setIsCalibrateModalOpen(false)}
-                  style={{ fontSize: '0.82rem', padding: '7px 16px' }}
-                >
-                  取消
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  style={{ fontSize: '0.82rem', padding: '7px 18px' }}
-                >
-                  💾 儲存並即時重算
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <MacroQuickCalibrationModal
+        isOpen={isCalibrateModalOpen}
+        onClose={() => setIsCalibrateModalOpen(false)}
+        macroSnapshot={macroSnapshot}
+        onSave={(updated) => {
+          saveMacroPulseRecord(updated, true);
+          setMacroSnapshot(updated);
+          setMacroHistoryList(loadMacroPulseHistory());
+        }}
+      />
     </div>
   );
 };

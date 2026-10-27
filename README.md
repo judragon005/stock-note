@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1869%2F1869%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1876%2F1876%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,18 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 戰情室宏觀晨會數據認證戳記、獨立防守價修復、隱私脫敏與實戰極簡對齊 (`War Room Morning Brief Data Seal, Isolated Stop-Loss Repair, Privacy Masking & Lean Alignment`) *(V9.01.0 最新發布 / Spec #0204 / ADR #0204 / Issue #332)*
+### 0. 第一梯隊高性價比架構技術債清理與精實重構 (`Technical Debt Batch 1: Guardrails, Compound Timeout, Component Decomposition & Style Cleanup`) *(V9.02.0 最新發布 / Spec #0205 / ADR #0205 / Issue #336)*
+
+- **Pre-push Guard 整合文檔完整性與死鏈守門 (`Documentation Integrity Guard Integration`)**：
+  - 將全專案文檔稽核腳本 `verify-docs.cjs` 整合至 `pre-push-guard.cjs` 本地阻斷關卡，以 1 秒超低延遲在推播前強制驗證 630+ 份文檔超連結實體與 Spec/ADR 1:1 成對性，徹底阻斷壞鏈外洩 (技術債 0047)。
+- **網路請求取消與連線超時雙重信號複合 (`Compound AbortSignal Integration`)**：
+  - 重構 `defaultFetchJson`，引入 `AbortSignal.any` 複合外部取消信號與 20 秒連線超時，並附帶三元優雅降級防護，消滅遠端官方伺服器連線掛起風險 (技術債 0052)。
+- **戰情室巨石元件資料泥團收斂與 Modal 狀態自治 (`War Room Quick Calibration Modal Decomposition`)**：
+  - 抽取獨立子元件 `MacroQuickCalibrationModal.tsx`，表單 8 個欄位編輯狀態完全在 Modal 內部自治 (State Colocation)，點擊儲存才通知父層，精簡 `WarRoomWorkspace.tsx` 約 250 行程式碼並消滅父元件全域無效重繪 (技術債 0054)。
+- **財務三表樣式常數與純展示儲存格抽取 (`Eight-Quarter Statement Table Style Constants`)**：
+  - 於 `EightQuarterStatementTable.tsx` 提取 `STATEMENT_TABLE_STYLES` 與展示元件 `<StatementDataCell />`，消滅重複內聯樣式宣告，保持 8 季財務三表對比全貌無損相容 (技術債 0053)。
+
+### 1. 戰情室宏觀晨會數據認證戳記、獨立防守價修復、隱私脫敏與實戰極簡對齊 (`War Room Morning Brief Data Seal, Isolated Stop-Loss Repair, Privacy Masking & Lean Alignment`) *(V9.01.0 / Spec #0204 / ADR #0204 / Issue #332)*
 
 - **系統認證戳記與 CRO 提示詞前綴 (`Data Seal & CRO Prompt Directive`)**：
   - 晨會簡報開頭前綴 `System Directive`，明確賦予外部 LLM 首席風險官 (CRO) 角色，並標明此為封閉本地模型推演快照，嚴格杜絕外部 AI 質疑歷史時效性與重複要求核實之循環。

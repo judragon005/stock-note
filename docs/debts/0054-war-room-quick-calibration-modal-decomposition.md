@@ -1,6 +1,7 @@
 # 技術債 0054: WarRoomWorkspace 快速校準表單聚合與子元件解耦 (MacroQuickCalibrationModal)
 
 ## 📌 基本資訊
+- **狀態**: `RESOLVED` (已於 v9.02.0 Spec 0205 完整解決)
 - **建立日期**: 2026-10-27
 - **發現來源**: Code Review (Spec 0204 / Issue #332)
 - **優先級別**: `P3` (非阻擋性代碼整潔與維護性改進)

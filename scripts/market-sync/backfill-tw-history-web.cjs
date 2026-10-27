@@ -133,7 +133,15 @@ function normalizeTwSymbol(symbol) {
  */
 async function defaultFetchJson(url, options = {}) {
   const timeoutMs = options.timeoutMs || 20000;
-  const signal = options.signal || (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined);
+  const timeoutSignal = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined;
+  
+  // Spec 0205 / 技術債 0052: 雙重信號複合支援 (Compound AbortSignal Integration)
+  let signal;
+  if (options.signal && timeoutSignal && typeof AbortSignal.any === 'function') {
+    signal = AbortSignal.any([options.signal, timeoutSignal]);
+  } else {
+    signal = options.signal || timeoutSignal;
+  }
 
   const response = await fetch(url, {
     headers: {

@@ -194,6 +194,24 @@ describe('Spec 0168 / Ticket 08: 台美雙軌全歷史回補總控與中介層�
       expect(elapsed).toBeLessThan(2500); // 應迅速超時，不掛起 (放寬至 2.5s 避開 CPU 密集時之調度抖動)
     });
 
+    it('Spec 0205 / Ticket 02: defaultFetchJson 支援外部 AbortSignal 手動取消', async () => {
+      const controller = new AbortController();
+      controller.abort();
+      await expect(
+        defaultFetchJson('http://10.255.255.1', { signal: controller.signal, timeoutMs: 5000 })
+      ).rejects.toThrow();
+    });
+
+    it('Spec 0205 / Ticket 02: defaultFetchJson 傳入外部 signal 時仍能透過複合超時拋錯 (AbortSignal.any)', async () => {
+      const controller = new AbortController(); // 未 abort 的外部 controller
+      const start = Date.now();
+      await expect(
+        defaultFetchJson('http://10.255.255.1', { signal: controller.signal, timeoutMs: 100 })
+      ).rejects.toThrow();
+      const elapsed = Date.now() - start;
+      expect(elapsed).toBeLessThan(2500);
+    });
+
     it('Ticket 03: cancelBackfillTask 應能中斷進行中任務並將 isRunning 設為 false', () => {
       triggerBackfillTask({ market: 'TW', days: 20 });
       expect(getBackfillGlobalStatus().isRunning).toBe(true);

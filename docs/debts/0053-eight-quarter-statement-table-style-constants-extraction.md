@@ -25,7 +25,7 @@
 
 ## 3. 優先級與觸發時機
 - **優先級**: `P3 (Low)`
-- **狀態**: `OPEN`
+- **狀態**: `RESOLVED` (已於 v9.02.0 Spec 0205 完整解決)
 - **收錄來源**: Code Review (Spec 0202 / PR #326 / Issue #322)
 - **標籤**: `Refactor` · `UI` · `CleanCode` · `StockAnalysis` · `EightQuarterStatementTable`
-- **觸發時機**: 待下次財務三表欄位擴充（如自訂季別比對或匯出 Excel）或個股分析工作區 UI 重構時一併引入。
+- **觸發時機**: 已於 Spec 0205 整合完成。
