@@ -1,7 +1,14 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-10-27 10:05 (UTC+8)  
+> **交接產生時間**：2026-10-27 12:45 (UTC+8)  
 > **當前最新里程碑**：
+> - **V9.01.0 戰情室宏觀晨會數據認證戳記、獨立防守價修復、隱私脫敏與實戰極簡對齊**（ADR 0204, Spec 0204, Issue #332, PR #333, PR #334）：
+>   - **晨會數據認證戳記 (Data Seal)**：晨報開頭前綴 `System Directive` 賦予外部 LLM 首席風險官 (CRO) 角色與封閉模型推演宣告，阻斷無效挑刺。
+>   - **獨立技術防守價 (Isolated Stops)**：徹底根除 18 檔標的共用 $10.9593 及 00919 共用 0056 之 $56.56 防守價 Bug，逐檔嚴格計算自身真實 MA20/MA60 或箱底防守線。
+>   - **實戰風控資料注入與真實權重 (Real Weights & PnL)**：清理偽造量價，注入股數、市值、帳戶權重% 與未實現損益%。
+>   - **權重差異化賣出訊號與情境調倉執行單 (Trade Blotter)**：超大型權重股階梯限價減碼防滑價，小型股破線果斷停損，並自動試算超配需減碼金額與建議賣出張數。
+>   - **質押法規死線與台股 ETF 穿透警戒 (Margin Deadlines & ETF Lookthrough)**：維持率跌破 130% 時標註「T+2 日 12:00 補回 166%」追繳金額；標註台積電高穿透集中風險。
+>   - **全市場籌碼結構化外聯與 10 秒快速校準 (LLM Payload & Quick Calibration Modal)**：序列化 OAS 信用利差、CDS 指數、台指期淨空單、全市場維持率、1-Day 95% VaR、外匯敏感度與 3 階壓力矩陣；提供一鍵脫敏複製與 10 秒快速覆寫彈窗。
 > - **V8.116.0 數據湖倉全量補足、API 金鑰測活代理中繼與 Tiingo 備援整合**（ADR 0203, Spec 0203, Issue #329, PR #330）：
 >   - **切片 01 本地測活代理端點**：於 `vite-market-middleware.cjs` 實作 `POST /api/market/probe-key`，具備逾時看門狗與合規 User-Agent，徹底消滅瀏覽器 CORS 物理阻斷。
 >   - **切片 02 探針真實錯誤穿透**：重構 `apiKeyHealthProbe.ts`，FMP 切換至免費 profile 端點，真實錯誤直接穿透至 UI，CORS 阻斷時友善降級為 `COOLING_DOWN` 不誤判為 `INVALID`。
@@ -14,9 +21,7 @@
 >   - **切片 11 Tiingo 美股日 K 抓取管線與 Yahoo 429 降級備援**：實作 Tiingo 日 K 解析，在 `sync-us-market.cjs` 建立 429 降級備援守衛，平滑切換保護公網 IP。
 >   - **切片 12 台股 250 天歷史回補排程擴充**：一次性注水 250 交易日價量（含真實成交筆數）、三大法人 T86、融資融券資券與 BWIBBU 估值日報。
 >   - **切片 13 全市場歷史冷啟動與日常增量調度**：配置 `npm run backfill:full` 與 `npm run sync:incremental`，實現「一次全量注水、日常 5 秒極速補漏」。
-> - **V8.115.0 個股深度財報假資料清零、湖倉打通、會計勾稽修復與極簡架構重構**（ADR 0202, Spec 0202, Issue #322, PR #326, PR #327）：
->   - **全量 16 個垂直票券 100% 落地**：Piotroski F-Score 動態增資稀釋評分、美股股數推導修正、台股母公司淨利第一優先、本地湖倉優先讀取、120 天快取 TTL、法務會計真實 YoY 剪刀差、5 大專業視圖收斂、8 季對比表與研報導出。
-> - **品質狀態**：全量單元測試 **1,865/1,865 通過 (100% Passed / 247 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> - **品質狀態**：全量單元測試 **1,869/1,869 通過 (100% Passed / 247 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -25,10 +30,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main` (已完全同步)
-- **單元測試套件**：**1,865/1,865 通過 (247 test suites / 100% 綠燈)**
+- **單元測試套件**：**1,869/1,869 通過 (247 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V8.116.0**
+- **當前釋出版本**：**V9.01.0**
 - **工作區與分支整潔度**：工作區乾淨受控，本地 feature/fix 分支已完全合併並清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -57,6 +62,7 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0204`](file:///d:/APP/股票紀錄/docs/specs/0204-war-room-morning-brief-data-seal-and-lean-alignment.md) | [`ADR 0204`](file:///d:/APP/股票紀錄/docs/adr/0204-war-room-morning-brief-data-seal-and-lean-alignment.md) | [`.scratch/v9.01.0-war-room-morning-brief-data-seal-and-lean-alignment/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.01.0-war-room-morning-brief-data-seal-and-lean-alignment/issues/) | Issue #332 / PR #333, #334 | V9.01.0 | 戰情室宏觀晨會數據認證戳記、獨立防守價修復、隱私脫敏與實戰極簡對齊 (8 大 Micro-Tickets 閉環) |
 | [`Spec 0203`](file:///d:/APP/股票紀錄/docs/specs/0203-lakehouse-bootstrap-api-probe-proxy-and-tiingo-backup-spec.md) | [`ADR 0203`](file:///d:/APP/股票紀錄/docs/adr/0203-lakehouse-bootstrap-api-probe-proxy-and-tiingo-backup.md) | [`.scratch/v8.116.0-lakehouse-bootstrap-api-probe-proxy-and-tiingo-backup/`](file:///d:/APP/股票紀錄/.scratch/v8.116.0-lakehouse-bootstrap-api-probe-proxy-and-tiingo-backup/) | Issue #329 / PR #330 | V8.116.0 | 數據湖倉全量補足、API 金鑰測活代理中繼與 Tiingo 備援整合 (切片 01~13 閉環) |
 | [`Spec 0202`](file:///d:/APP/股票紀錄/docs/specs/0202-stock-analysis-forensic-accounting-cleanse-and-lakehouse-spec.md) | [`ADR 0202`](file:///d:/APP/股票紀錄/docs/adr/0202-stock-analysis-forensic-accounting-cleanse-and-lakehouse.md) | [`.scratch/v8.115.0-stock-analysis-forensic-accounting-cleanse-and-lakehouse/`](file:///d:/APP/股票紀錄/.scratch/v8.115.0-stock-analysis-forensic-accounting-cleanse-and-lakehouse/) | Issue #322, #323 / PR #324 | V8.115.0 | 個股深度財報假資料清零、湖倉打通、會計勾稽修復與極簡架構重構 (Ticket 01 完成) |
 | [`Spec 0201`](file:///d:/APP/股票紀錄/docs/specs/0201-war-room-multi-ai-syndicate-loopback-and-consensus-defense-spec.md) | [`ADR 0201`](file:///d:/APP/股票紀錄/docs/adr/0201-war-room-multi-ai-syndicate-loopback-and-consensus-defense.md) | [`.scratch/v8.114.0-war-room-multi-ai-syndicate-loopback-and-consensus-defense/`](file:///d:/APP/股票紀錄/.scratch/v8.114.0-war-room-multi-ai-syndicate-loopback-and-consensus-defense/) | Issue #318 / PR #319, #320 | V8.114.0 | 戰情室外部 AI 多智囊團並行回流、模型去重覆蓋與法人風控共識防線架構 (4 大 Micro-Tickets) |

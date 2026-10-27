@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1865%2F1865%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1869%2F1869%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,23 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 湖倉全量注水補全、定時排程節奏化與戰情室卡片視覺優化 (`Lakehouse Full Bootstrap, Cadence-Aware Scheduled Sync & War Room Visual Optimization`) *(V9.12.0 最新發布 / Spec #0198 / ADR #0198 / Issue #304)*
+### 0. 戰情室宏觀晨會數據認證戳記、獨立防守價修復、隱私脫敏與實戰極簡對齊 (`War Room Morning Brief Data Seal, Isolated Stop-Loss Repair, Privacy Masking & Lean Alignment`) *(V9.01.0 最新發布 / Spec #0204 / ADR #0204 / Issue #332)*
+
+- **系統認證戳記與 CRO 提示詞前綴 (`Data Seal & CRO Prompt Directive`)**：
+  - 晨會簡報開頭前綴 `System Directive`，明確賦予外部 LLM 首席風險官 (CRO) 角色，並標明此為封閉本地模型推演快照，嚴格杜絕外部 AI 質疑歷史時效性與重複要求核實之循環。
+- **根除跨標的幽靈共用防守價 Bug (`Isolated Stop-Loss Calculation`)**：
+  - 重構 `macroAdvisorEngine.ts`，將陣列取首項之 Bug 全面修復為逐檔嚴格提取各自之 `stopLossPrice` 或箱底價格，徹底根除 18 檔標的共用 $10.9593 及 00919 共用 0056 之 $56.56 防守價。
+- **實戰風控資料注入與真實權重計算 (`Real Weights, PnL & Volume Cleanse`)**：
+  - 全面清除 `volume: 10000` 與 `±1%` 偽造 K 線，為 `MacroHoldingSignalInput` 注入股數、成本基準、部位市值、帳戶權重百分比與未實現損益百分比。
+- **權重差異化賣出訊號與情境調倉執行單 (`Differentiate Sell Signals & Scenario Trade Blotter`)**：
+  - 依據部位權重自動區分處置層級（超大型權重股階梯減碼防滑價，小型股破線果斷市價停損），並精確試算股票倉位高於上限時需削減之金額（$\Delta \text{TWD}$）與建議賣出張數。
+- **質押維持率法規死線與台股 ETF 穿透警戒 (`Margin Statutory Deadlines & ETF Lookthrough`)**：
+  - 個人維持率跌破 130% 斷頭線時自動標註「T+2 日 12:00 補回 166%」之法規死線與追繳金額；標註台積電高穿透集中風險。
+- **全市場籌碼結構化外聯與 10 秒快速校準 (`LLM Payload CRO Expansion & Quick Calibration Modal`)**：
+  - 將 OAS 信用利差、CDS 指數、外資期貨空單、全市場維持率、1-Day 95% VaR、外匯敏感度 (FX Delta) 及 3 階急速壓力測試無損序列化。
+  - 支援一鍵複製脫敏晨報（隱藏千萬資產真實金額，僅輸出權重% 與損益%），並提供 10 秒快速校準彈窗，動態覆寫美債、VIX、台指期空單與維持率。
+
+### 1. 湖倉全量注水補全、定時排程節奏化與戰情室卡片視覺優化 (`Lakehouse Full Bootstrap, Cadence-Aware Scheduled Sync & War Room Visual Optimization`) *(V9.12.0 / Spec #0198 / ADR #0198 / Issue #304)*
 
 - **湖倉一次性全量注水補全 (`Lakehouse Full Bootstrap Pipeline`)**：
   - 獨立腳本 `bootstrap-lakehouse-full.cjs` 一次性補齊上市 (TWSE) 1,084 檔每日估值（包含愛之味 1217 等上市股 PE/PB/殖利率）、美股三大宏觀情緒指標（10Y、VIX、CNN 恐懼貪婪指數）及全市場董監事質押比例（`tw_insider_pledge_records`），徹底消除資料孤島。
