@@ -2676,3 +2676,27 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     6. **智囊團共識與分歧度量化 (Consensus Level)**：停損落差比率 $<2\%$ 評定為「🛡️ 智囊團共識防線」；$>5\%$ 評定為「⚡ 智囊團分歧警告 (建議縮小部位)」。
     7. **獨立與全員結案回報**：支援單卡模型獨立結案與全隊一鍵結案（WIN / LOSS），戰績精確歸屬累積勝率榜。
     8. **緊湊條列排版 (Compact Layout)**：單行約 38px 緊湊呈現，提取樣式常數 Tokens，保護上方戰情室 K 線與籌碼視野。
+
+- **Stock Analysis Forensic Accounting Cleanse & Lakehouse Alignment (個股分析深度財報全域資料治理、湖倉對齊與極簡重構)**:
+  - 核心模組：`src/engine/taiwanFinancialPipeline.ts`、`src/engine/usFinancialPipeline.ts`、`src/engine/financialCacheValidator.ts`、`src/engine/financialSafetyEngine.ts`、`src/components/analysis/StockAnalysisWorkspace.tsx`。
+  - 規範依據：Spec 0202 (v8.115.0) 與 ADR 0202，對齊 GitHub Issue #322, #323。
+  - 核心特性：
+    1. **Zero-Mock 與真脫敏**：徹底剷除 Piotroski F-Score、河流圖假資料與寫死會計師事務所等偽數，查無資料誠實填入 N/A。
+    2. **會計真實勾稽與母公司淨利第一優先**：以「歸屬於母公司業主淨利」優先評級，存貨與應收剪刀差嚴格以去年同季 (YoY) 為比對基準。
+    3. **五大專業視圖極簡收斂**：將原本碎裂之 46 個標籤收斂為「三表全貌、獲利純度與杜邦、營運週轉、實戰估值、排雷燈」，降低認知負擔。
+
+- **Lakehouse Full Bootstrap, API Probe Relay Middleware & Tiingo Backup Integration (數據湖倉全量補足、API 金鑰測活代理中繼與 Tiingo 備援整合)**:
+  - 核心模組：`scripts/market-sync/vite-market-middleware.cjs`、`src/engine/apiKeyHealthProbe.ts`、`src/components/UnifiedApiKeyManager.tsx`、`scripts/market-sync/ingest-macro-sentiment.cjs`、`scripts/market-sync/ingest-tw-pledge.cjs`、`scripts/market-sync/seed-symbols-universe.cjs`、`src/engine/lakehouseFinancialClient.ts`、`scripts/market-sync/ingest-us-quotes.cjs`、`scripts/market-sync/backfill-tw-history-web.cjs`、`scripts/market-sync/backfill-full-market-history.cjs`。
+  - 規範依據：Spec 0203 (v8.116.0) 與 ADR 0203，對齊 GitHub Issue #329，PR #330。
+  - 核心特性：
+    1. **本地中繼測活代理端點 (`POST /api/market/probe-key`)**：利用 Vite 原生 Connect 中介層在 Node.js 執行階段代發請求，完美穿透第三方 HTTP Status 與 Response Body，消滅瀏覽器 CORS 物理阻斷。
+    2. **API 金鑰探針錯誤穿透與 FMP 免費端點修正**：FMP 切換至免費 profile 端點，遭遇 CORS 時降級為 `COOLING_DOWN` 並提供友善說明，不誤判為 `INVALID`。
+    3. **Tiingo 備援供應商與專屬測活探針**：擴充 `ProviderType = 'tiingo'`、金鑰池管理、UI 設定卡片與專屬行情探針，美股同步遭遇 Yahoo 429 時無縫降級切換至 Tiingo，保護公網 IP。
+    4. **證交所 ETF 每日淨值修復 (消滅 0 筆)**：解包 `all_etf.txt` 巢狀 `{ a1: [{ msgArray }] }` 結構，精準映射市價、淨值與折溢價率。
+    5. **官方開放資料注水 (徹底消滅 5 檔寫死 Mock)**：介接證交所 OpenAPI `t187ap11_L` 批次注水全市場董監持股設質，落實 Zero-Mock 原則。
+    6. **證交所官方產業分類代碼注入**：字典表 `symbols_meta` 擴充 `industry TEXT` 欄位並無損遷移，介接 `t187ap03_L` 自動注水產業代碼。
+    7. **標準化 16 核心財務三表湖倉表與雙向路由**：建立 `financial_statements_quarterly` 表與複合主鍵，提供 `GET /api/market/financials/:symbol` 高速查詢與 `POST /api/market/financials` 批次寫入端點。
+    8. **台美雙軌財報 Lakehouse-First 重構**：優先毫秒級自本地湖倉載入，未命中時抓取外部 API 並自動非同步回填 SQLite，具備離線可用性與防止重送。
+    9. **台股 250 交易日官方日報歷史全注水**：一次性注水 250 交易日價量（含真實成交筆數）、三大法人 T86、融資融券資券與 BWIBBU 估值日報。
+    10. **全市場歷史冷啟動與日常增量調度閉環**：配置 `npm run backfill:full` 與 `npm run sync:incremental`，實現「一次全量注水、日常 5 秒極速補漏」。
+
