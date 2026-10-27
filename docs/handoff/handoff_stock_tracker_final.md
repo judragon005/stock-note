@@ -1,43 +1,22 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-10-22 14:35 (UTC+8)  
+> **交接產生時間**：2026-10-27 10:05 (UTC+8)  
 > **當前最新里程碑**：
-> - **V8.116.0 個股深度財報假資料清零、湖倉打通、會計勾稽修復與極簡架構重構**（ADR 0202, Spec 0202, Issue #322, PR #326, PR #327）：
->   - **全量 16 個垂直票券 100% 落地**：
->     - **Ticket 01 Piotroski F-Score 增資稀釋動態評分**：依據近 4 季流通股數或股本 YoY 增長率動態評定增資稀釋；流動負債未單獨揭露時誠實標註無法客觀評估，剔除 0.5 偽造係數。
->     - **Ticket 02 美股股數推導修正**：美股徹底剔除台股 10 元面額與 10 億股硬編碼，使用 Diluted Shares 與 Net Income / EPS 純函式精確反推。
->     - **Ticket 03 台股損益表母公司淨利優先**：綜合損益表以「歸屬於母公司業主淨利」為第一優先級；去偽寫死四大會計師事務所查核意見。
->     - **Ticket 04 本地 SQLite 湖倉優先檢索**：深度財報優先讀取本地湖倉資料庫，失敗降級遠端 API，徹底根除 429 限流噴白畫面與離線崩潰。
->     - **Ticket 05 財報快取 120 天季度 TTL**：實作 `financialCacheValidator` 模組，導入 120 天季度時效 TTL 與新季報背景增量更新機制。
->     - **Ticket 06 美股現金流股利反推機制**：增強 `dividendService` 針對美股現金流量表「融資活動中支付股利」進行現金股利真實反推。
->     - **Ticket 07 評價估值假資料徹底清零 (Zero-Mock)**：拔除本益比 `1.16`、淨值 `32.5`、殖利率 `4.18%` 等臆測值，無資料誠實呈現 `-` 或 `N/A`。
->     - **Ticket 08 估值河流圖歷史收盤折線修復**：修復單一收盤價畫成水平直線的缺陷，正確繪製與各季財報對齊的真實歷史收盤價折線。
->     - **Ticket 09 法務會計真實 YoY 剪刀差**：建立 `forensicAuditor` 引擎，應收與存貨剪刀差嚴格對齊去年同季（YoY），消除淡旺季假塞貨警報。
->     - **Ticket 10 IFRS 16 租賃過濾與資本擴張期**：負債結構排除營業租賃資本化負債，專注金融有息負債，並自動標註良性擴產型資本支出。
->     - **Ticket 11 實戰法人排雷指標**：實作合約負債 8 季走勢領先指標、自由現金流 (FCF) 股息覆蓋率、每股淨現金 (Net-Net) 排雷指標。
->     - **Ticket 12 董監事質押風控雷達**：整合本地 SQLite 董監持股質押資料庫，質押比 > 50% 時自動亮紅燈並扣除法證健康分。
->     - **Ticket 13 5 大高凝聚專業視圖收斂**：將 46 個碎裂標籤收斂為 5 大高凝聚視圖（三表全貌、獲利與杜邦、營運與訂單、估值與配息、法務會計排雷燈）。
->     - **Ticket 14 財務三表 8 季橫向對比表**：實作 `EightQuarterStatementTable` 元件，支援資產負債表、綜合損益表、現金流量表 8 季展開與 YoY/QoQ 比較。
->     - **Ticket 15 活化 Markdown 深度研報導出**：實作 `stockReportExporter` 模組，一鍵導出完整深度財報與董監質押 Markdown 研報。
->     - **Ticket 16 最近 5 檔膠囊與 RWD 自適應**：增加最近瀏覽 5 檔股票極速切換膠囊，修復行動端 `< 768px` 窄螢幕卡片自適應佈局。
->   - **技術債 0053 登錄**：將 `EightQuarterStatementTable` 內聯樣式常數抽取建議登記至 `docs/debts/0053-*.md`，並更新索引表。
-> - **V8.114.0 戰情室外部 AI 多智囊團並行回流、模型去重覆蓋與法人風控共識防線**（ADR 0201, Spec 0201, Issue #318, PR #319, #320）：
->   - **多模型並存與同名覆蓋機制**：同標的下以正規化模型名稱為識別鍵，同名模型後者覆蓋更新，異名模型追加並列展示，徹底打破單一 AI 裁決限制。
->   - **AI 模型名稱語意正規化 (normalizeAiModelName)**：精確映射 Claude, ChatGPT, Perplexity, Gemini 等頂級模型，未知模型安全清洗去重。
->   - **全域正則批次抽取 (parseLoopbackContentBatch)**：單次貼入長篇 Markdown 即可批次提純多個 JSON 策略代碼塊。
->   - **法人風控最嚴格停損優先警報 (evaluateMultiStrategyTriggers)**：盤中取所有有效模型中最高停損價（`Math.max(...stopLosses)`）作為第一道保命防線，市價跌破即刻閃爍報警並指名發起模型，徹底封死主觀凹單。
->   - **智囊團共識與分歧度量化 (Consensus Level)**：停損落差比率 $<2\%$ 標註「🛡️ 智囊團共識防線」；$>5\%$ 標註「⚡ 智囊團分歧警告 (建議縮小部位)」。
->   - **獨立與全隊結案回報**：支援單卡獨立與全員一鍵（WIN / LOSS）結案，戰績精準歸屬累積勝率榜。
->   - **緊湊條列排版 (38px/行)**：提取樣式 Tokens，排版緊湊高密度，保護戰情室核心線圖與籌碼視野。
->   - **雙軌向下相容讀取**：舊版單一物件無縫自動包裹為陣列，零 Migration 成本與零升級白屏風險。
-> - **V9.11.0 AI 主力戰情室 Layer 6 雙子堆疊重構、Card 21 估值卡導入與 Card 15 寬幅 Sparkline 對稱對齊**（ADR 0195, Spec 0195, Issue #290）：
->   - **Card 19 TDCC 集保趨勢標的確認與美股 13F / 放空籌碼卡**：台股綁定代碼標題與散戶持股剪刀差；美股自適應為機構持股、空單佔流通比 (Short Float) 與內部人持股，>10% 觸發軋空警戒，徹底根除空白佔位。
->   - **Card 15 籌碼摘要 50%:50% 寬幅對稱與美股微觀量價**：重構為 `1fr 1fr` 等寬對稱，monospace 數值防折行，Sparkline 加入 0 軸水平分水嶺基準線；美股呈現 RVOL、VWAP 偏離、MFI 機構量能與 ATR 日振幅。
->   - **Card 13 美股宏觀情緒激活**：直讀本地 SQLite `macro_sentiment_daily`，展示 CNN Fear & Greed (半圓指針映射)、VIX 恐慌指數與 10Y 美債殖利率。
->   - **Card 21 全新估值與殖利率量化矩陣四態自適應**：台股個股（盤中動態 PE/PB/年化殖利率 + 歷史位階條）、美股個股（Forward PE/PB/扣 30% IRS 稅後殖利率）、虧損轉機股（市銷率 PS）、ETF 標的（折溢價率 >0.5% 警戒、總費用率、年化配息率）。
->   - **Layer 6 雙子容器 (`EnergySentimentTwinCard`) 封裝與 250px 鎖定**：垂直緊湊封裝 Card 10 + 13，中段計算產出 Alpha 共振仲裁標籤；四欄高度鎖定 250px 像素級齊平，消除拉長破版。
->   - **全域外聯提示詞中樞連動與金融字典閉環**：提示詞中樞注入 `<valuation_status>` 節點與美股宏觀情緒，字典齊備 6 項新術語解釋。
-> > **品質狀態**：全量單元測試 **1,837/1,837 通過 (100% Passed / 245 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> - **V8.116.0 數據湖倉全量補足、API 金鑰測活代理中繼與 Tiingo 備援整合**（ADR 0203, Spec 0203, Issue #329, PR #330）：
+>   - **切片 01 本地測活代理端點**：於 `vite-market-middleware.cjs` 實作 `POST /api/market/probe-key`，具備逾時看門狗與合規 User-Agent，徹底消滅瀏覽器 CORS 物理阻斷。
+>   - **切片 02 探針真實錯誤穿透**：重構 `apiKeyHealthProbe.ts`，FMP 切換至免費 profile 端點，真實錯誤直接穿透至 UI，CORS 阻斷時友善降級為 `COOLING_DOWN` 不誤判為 `INVALID`。
+>   - **切片 03 & 04 Tiingo 金鑰池與專屬測活探針**：擴充 `ProviderType = 'tiingo'`、預設配額 500 次/日，整合 UI 設定卡片與 `/tiingo/daily/aapl/prices` 專屬測活端點。
+>   - **切片 05 證交所 ETF 每日淨值修復**：解包官方 `all_etf.txt` 之 `{ a1: [{ msgArray }] }` 巢狀結構，消滅「0 筆淨值」瑕疵，真實入庫 `etf_daily_nav`。
+>   - **切片 06 董監設質開放資料注水 (Zero-Mock)**：對接證交所 OpenAPI `t187ap11_L`，徹底剷除 `bootstrap-lakehouse-full.cjs` 中寫死的 5 檔假資料。
+>   - **切片 07 官方產業別代碼注入**：字典表 `symbols_meta` 擴充 `industry TEXT` 欄位並無損遷移，介接 `t187ap03_L` 自動填入官方產業分類。
+>   - **切片 08 16 核心財務三表湖倉表與查詢路由**：建立 `financial_statements_quarterly` 表與複合主鍵，於中介層實作 `GET /api/market/financials/:symbol` 高速查詢與 `POST /api/market/financials` 寫入路由。
+>   - **切片 09 & 10 台美雙軌財報 Lakehouse-First 重構**：優先毫秒級載入本地 SQLite 湖倉，未命中時抓取外部 API 並自動非同步回填 SQLite，具備離線可用性與防止重送。
+>   - **切片 11 Tiingo 美股日 K 抓取管線與 Yahoo 429 降級備援**：實作 Tiingo 日 K 解析，在 `sync-us-market.cjs` 建立 429 降級備援守衛，平滑切換保護公網 IP。
+>   - **切片 12 台股 250 天歷史回補排程擴充**：一次性注水 250 交易日價量（含真實成交筆數）、三大法人 T86、融資融券資券與 BWIBBU 估值日報。
+>   - **切片 13 全市場歷史冷啟動與日常增量調度**：配置 `npm run backfill:full` 與 `npm run sync:incremental`，實現「一次全量注水、日常 5 秒極速補漏」。
+> - **V8.115.0 個股深度財報假資料清零、湖倉打通、會計勾稽修復與極簡架構重構**（ADR 0202, Spec 0202, Issue #322, PR #326, PR #327）：
+>   - **全量 16 個垂直票券 100% 落地**：Piotroski F-Score 動態增資稀釋評分、美股股數推導修正、台股母公司淨利第一優先、本地湖倉優先讀取、120 天快取 TTL、法務會計真實 YoY 剪刀差、5 大專業視圖收斂、8 季對比表與研報導出。
+> - **品質狀態**：全量單元測試 **1,865/1,865 通過 (100% Passed / 247 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -46,7 +25,7 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main` (已完全同步)
-- **單元測試套件**：**1,837/1,837 通過 (245 test suites / 100% 綠燈)**
+- **單元測試套件**：**1,865/1,865 通過 (247 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
 - **當前釋出版本**：**V8.116.0**
@@ -78,6 +57,7 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0203`](file:///d:/APP/股票紀錄/docs/specs/0203-lakehouse-bootstrap-api-probe-proxy-and-tiingo-backup-spec.md) | [`ADR 0203`](file:///d:/APP/股票紀錄/docs/adr/0203-lakehouse-bootstrap-api-probe-proxy-and-tiingo-backup.md) | [`.scratch/v8.116.0-lakehouse-bootstrap-api-probe-proxy-and-tiingo-backup/`](file:///d:/APP/股票紀錄/.scratch/v8.116.0-lakehouse-bootstrap-api-probe-proxy-and-tiingo-backup/) | Issue #329 / PR #330 | V8.116.0 | 數據湖倉全量補足、API 金鑰測活代理中繼與 Tiingo 備援整合 (切片 01~13 閉環) |
 | [`Spec 0202`](file:///d:/APP/股票紀錄/docs/specs/0202-stock-analysis-forensic-accounting-cleanse-and-lakehouse-spec.md) | [`ADR 0202`](file:///d:/APP/股票紀錄/docs/adr/0202-stock-analysis-forensic-accounting-cleanse-and-lakehouse.md) | [`.scratch/v8.115.0-stock-analysis-forensic-accounting-cleanse-and-lakehouse/`](file:///d:/APP/股票紀錄/.scratch/v8.115.0-stock-analysis-forensic-accounting-cleanse-and-lakehouse/) | Issue #322, #323 / PR #324 | V8.115.0 | 個股深度財報假資料清零、湖倉打通、會計勾稽修復與極簡架構重構 (Ticket 01 完成) |
 | [`Spec 0201`](file:///d:/APP/股票紀錄/docs/specs/0201-war-room-multi-ai-syndicate-loopback-and-consensus-defense-spec.md) | [`ADR 0201`](file:///d:/APP/股票紀錄/docs/adr/0201-war-room-multi-ai-syndicate-loopback-and-consensus-defense.md) | [`.scratch/v8.114.0-war-room-multi-ai-syndicate-loopback-and-consensus-defense/`](file:///d:/APP/股票紀錄/.scratch/v8.114.0-war-room-multi-ai-syndicate-loopback-and-consensus-defense/) | Issue #318 / PR #319, #320 | V8.114.0 | 戰情室外部 AI 多智囊團並行回流、模型去重覆蓋與法人風控共識防線架構 (4 大 Micro-Tickets) |
 | [`Spec 0195`](file:///d:/APP/股票紀錄/docs/specs/0195-ai-force-dashboard-layout-reorganization-card21-valuation-and-chips-sparkline-spec.md) | [`ADR 0195`](file:///d:/APP/股票紀錄/docs/adr/0195-ai-force-dashboard-layout-reorganization-card21-valuation.md) | [`.scratch/0195-ai-force-dashboard-layout-reorganization-card21/`](file:///d:/APP/股票紀錄/.scratch/0195-ai-force-dashboard-layout-reorganization-card21/) | Issue #290 | V9.11.0 | 戰情室 Layer 6 雙子堆疊重構、Card 21 估值卡導入與 Card 15 寬幅 Sparkline 對稱對齊 (12 大 Micro-Tickets) |
