@@ -2710,4 +2710,14 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     6. **質押維持率法規死線警示 (Margin Statutory Deadlines)**：個人質押維持率跌破 130% 斷頭線時，自動標註「T+2 日 12:00 補回 166%」之法規死線與追繳金額試算。
     7. **全市場籌碼與信用指標結構化外聯 (LLM Payload CRO System Prompt Expansion)**：將 OAS 信用利差、CDS 指數、外資台指期未平倉淨口數、全市場融資維持率、1-Day 95% VaR、外匯敏感度 (FX Delta) 及 3 階急速壓力測試無損序列化。
     8. **隱私脫敏模式與 10 秒快速校準 (Privacy Masking & Quick Calibration Modal)**：支援一鍵複製脫敏晨報（隱藏千萬資產真實金額，僅輸出權重% 與損益%），並提供 10 秒快速校準彈窗，隨時動態更新美債、VIX、台指期空單與維持率。
+- **Technical Debt Batch 1: Guardrails, Compound Timeout, Component Decomposition & Style Cleanup (第一梯隊高性價比架構技術債清理與精實重構)**:
+  - 核心模組：`scripts/pre-push-guard.cjs`、`scripts/market-sync/backfill-tw-history-web.cjs`、`scripts/market-sync/sync-tw-market.cjs`、`src/components/warRoom/MacroQuickCalibrationModal.tsx`、`src/components/WarRoomWorkspace.tsx`、`src/components/analysis/EightQuarterStatementTable.tsx`。
+  - 規範依據：Spec 0205 (v9.02.0) 與 ADR 0205，對齊 GitHub Issue #336。
+  - 核心特性：
+    1. **Pre-push Guard 整合文檔完整性守門 (技術債 0047)**：於本地推送阻斷防線加入 `verify-docs.cjs` 驗證，確保 630+ 份文檔零死鏈。
+    2. **defaultFetchJson 雙重信號複合支援 (技術債 0052)**：使用 `AbortSignal.any` 複合外部取消信號與 20 秒逾時熔斷，具備優雅降級。
+    3. **戰情室快速校準 Modal 抽取與狀態自治 (技術債 0054)**：將分散之 8 個 State 泥團封裝至 `MacroQuickCalibrationModal.tsx`，達成父元件零無效重繪。
+    4. **財務三表樣式常數與純展示儲存格抽取 (技術債 0053)**：抽取 `STATEMENT_TABLE_STYLES` 與 `<StatementDataCell />`，消滅重複內聯樣式。
+    5. **技術債看板更新**：`docs/debts/README.md` 將 0047, 0052, 0053, 0054 標記為 `RESOLVED`。
+
 

@@ -11,6 +11,74 @@ interface EightQuarterStatementTableProps {
 
 type StatementViewType = 'ALL' | 'INCOME' | 'BALANCE' | 'CASHFLOW';
 
+export const STATEMENT_TABLE_STYLES = {
+  headerCol: {
+    position: 'sticky' as const,
+    left: 0,
+    background: 'var(--bg-secondary)',
+    zIndex: 3,
+    padding: '10px 12px',
+    textAlign: 'left' as const,
+    fontWeight: 700,
+    color: 'var(--text-secondary)',
+    borderRight: '1px solid var(--border-color)',
+    minWidth: '150px',
+  },
+  headerCell: {
+    padding: '10px 12px',
+    textAlign: 'right' as const,
+    fontWeight: 700,
+    color: 'var(--text-primary)',
+    minWidth: '95px',
+    fontFamily: 'var(--font-mono, monospace)',
+  },
+  stickyLabelCol: {
+    position: 'sticky' as const,
+    left: 0,
+    background: 'var(--bg-card)',
+    zIndex: 2,
+    padding: '8px 12px',
+    textAlign: 'left' as const,
+    borderRight: '1px solid var(--border-color)',
+    whiteSpace: 'nowrap' as const,
+  },
+  dataCell: {
+    padding: '8px 10px',
+    textAlign: 'right' as const,
+    fontFamily: 'var(--font-mono, monospace)',
+    fontSize: '12px',
+    whiteSpace: 'nowrap' as const,
+  },
+} as const;
+
+interface StatementDataCellProps {
+  value: string | number;
+  isHighlight?: boolean;
+  colorOverride?: string;
+}
+
+export const StatementDataCell: React.FC<StatementDataCellProps> = ({
+  value,
+  isHighlight = false,
+  colorOverride,
+}) => {
+  const isNum = typeof value === 'number';
+  const isNeg = isNum && value < 0;
+  const display = isNum ? formatFinancialAmount(value) : value;
+
+  return (
+    <td
+      style={{
+        ...STATEMENT_TABLE_STYLES.dataCell,
+        fontWeight: isHighlight ? 700 : 400,
+        color: isNeg ? '#ef4444' : colorOverride || 'var(--text-primary)',
+      }}
+    >
+      {display}
+    </td>
+  );
+};
+
 export const EightQuarterStatementTable: React.FC<EightQuarterStatementTableProps> = ({
   records,
   stockName = '',
@@ -68,42 +136,22 @@ export const EightQuarterStatementTable: React.FC<EightQuarterStatementTableProp
     >
       <td
         style={{
-          position: 'sticky',
-          left: 0,
-          background: 'var(--bg-card)',
-          zIndex: 2,
-          padding: '8px 12px',
-          textAlign: 'left',
+          ...STATEMENT_TABLE_STYLES.stickyLabelCol,
           fontWeight: isHighlight ? 700 : 500,
           fontSize: '12px',
           color: colorOverride || (isHighlight ? 'var(--text-primary)' : 'var(--text-secondary)'),
-          borderRight: '1px solid var(--border-color)',
-          whiteSpace: 'nowrap',
         }}
       >
         {label}
       </td>
-      {values.map((v, i) => {
-        const isNum = typeof v === 'number';
-        const isNeg = isNum && v < 0;
-        const display = isNum ? formatFinancialAmount(v) : v;
-        return (
-          <td
-            key={i}
-            style={{
-              padding: '8px 10px',
-              textAlign: 'right',
-              fontFamily: 'var(--font-mono, monospace)',
-              fontSize: '12px',
-              fontWeight: isHighlight ? 700 : 400,
-              color: isNeg ? '#ef4444' : colorOverride || 'var(--text-primary)',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {display}
-          </td>
-        );
-      })}
+      {values.map((v, i) => (
+        <StatementDataCell
+          key={i}
+          value={v}
+          isHighlight={isHighlight}
+          colorOverride={colorOverride}
+        />
+      ))}
     </tr>
   );
 

@@ -2,6 +2,12 @@
 
 > **交接產生時間**：2026-10-27 12:45 (UTC+8)  
 > **當前最新里程碑**：
+> - **V9.02.0 第一梯隊高性價比架構技術債清理與精實重構**（ADR 0205, Spec 0205, Issue #336）：
+>   - **Pre-push Guard 整合文檔完整性守門 (技術債 0047)**：在 `scripts/pre-push-guard.cjs` 插入 `node scripts/verify-docs.cjs`，強制本地推送前 100% 阻斷死鏈與 Spec/ADR 脫鉤。
+>   - **defaultFetchJson 雙重信號複合支援 (技術債 0052)**：在 `backfill-tw-history-web.cjs` 與 `sync-tw-market.cjs` 引入 `AbortSignal.any` 複合取消與逾時信號，具備三元降級兜底，徹底消除連線掛起風險。
+>   - **戰情室快速校準 Modal 抽取與狀態自治 (技術債 0054)**：將分散之 8 個 State 泥團封裝至獨立元件 `MacroQuickCalibrationModal.tsx`，表單自治管理，父層零無效重繪，`WarRoomWorkspace.tsx` 精簡約 250 行。
+>   - **財務三表樣式常數與純展示儲存格抽取 (技術債 0053)**：於 `EightQuarterStatementTable.tsx` 抽取 `STATEMENT_TABLE_STYLES` 與 `<StatementDataCell />`，消滅重複內聯宣告。
+>   - **技術債看板閉環**：`docs/debts/README.md` 將 0047, 0052, 0053, 0054 標記為 `RESOLVED`。
 > - **V9.01.0 戰情室宏觀晨會數據認證戳記、獨立防守價修復、隱私脫敏與實戰極簡對齊**（ADR 0204, Spec 0204, Issue #332, PR #333, PR #334）：
 >   - **晨會數據認證戳記 (Data Seal)**：晨報開頭前綴 `System Directive` 賦予外部 LLM 首席風險官 (CRO) 角色與封閉模型推演宣告，阻斷無效挑刺。
 >   - **獨立技術防守價 (Isolated Stops)**：徹底根除 18 檔標的共用 $10.9593 及 00919 共用 0056 之 $56.56 防守價 Bug，逐檔嚴格計算自身真實 MA20/MA60 或箱底防守線。
@@ -9,19 +15,7 @@
 >   - **權重差異化賣出訊號與情境調倉執行單 (Trade Blotter)**：超大型權重股階梯限價減碼防滑價，小型股破線果斷停損，並自動試算超配需減碼金額與建議賣出張數。
 >   - **質押法規死線與台股 ETF 穿透警戒 (Margin Deadlines & ETF Lookthrough)**：維持率跌破 130% 時標註「T+2 日 12:00 補回 166%」追繳金額；標註台積電高穿透集中風險。
 >   - **全市場籌碼結構化外聯與 10 秒快速校準 (LLM Payload & Quick Calibration Modal)**：序列化 OAS 信用利差、CDS 指數、台指期淨空單、全市場維持率、1-Day 95% VaR、外匯敏感度與 3 階壓力矩陣；提供一鍵脫敏複製與 10 秒快速覆寫彈窗。
-> - **V8.116.0 數據湖倉全量補足、API 金鑰測活代理中繼與 Tiingo 備援整合**（ADR 0203, Spec 0203, Issue #329, PR #330）：
->   - **切片 01 本地測活代理端點**：於 `vite-market-middleware.cjs` 實作 `POST /api/market/probe-key`，具備逾時看門狗與合規 User-Agent，徹底消滅瀏覽器 CORS 物理阻斷。
->   - **切片 02 探針真實錯誤穿透**：重構 `apiKeyHealthProbe.ts`，FMP 切換至免費 profile 端點，真實錯誤直接穿透至 UI，CORS 阻斷時友善降級為 `COOLING_DOWN` 不誤判為 `INVALID`。
->   - **切片 03 & 04 Tiingo 金鑰池與專屬測活探針**：擴充 `ProviderType = 'tiingo'`、預設配額 500 次/日，整合 UI 設定卡片與 `/tiingo/daily/aapl/prices` 專屬測活端點。
->   - **切片 05 證交所 ETF 每日淨值修復**：解包官方 `all_etf.txt` 之 `{ a1: [{ msgArray }] }` 巢狀結構，消滅「0 筆淨值」瑕疵，真實入庫 `etf_daily_nav`。
->   - **切片 06 董監設質開放資料注水 (Zero-Mock)**：對接證交所 OpenAPI `t187ap11_L`，徹底剷除 `bootstrap-lakehouse-full.cjs` 中寫死的 5 檔假資料。
->   - **切片 07 官方產業別代碼注入**：字典表 `symbols_meta` 擴充 `industry TEXT` 欄位並無損遷移，介接 `t187ap03_L` 自動填入官方產業分類。
->   - **切片 08 16 核心財務三表湖倉表與查詢路由**：建立 `financial_statements_quarterly` 表與複合主鍵，於中介層實作 `GET /api/market/financials/:symbol` 高速查詢與 `POST /api/market/financials` 寫入路由。
->   - **切片 09 & 10 台美雙軌財報 Lakehouse-First 重構**：優先毫秒級載入本地 SQLite 湖倉，未命中時抓取外部 API 並自動非同步回填 SQLite，具備離線可用性與防止重送。
->   - **切片 11 Tiingo 美股日 K 抓取管線與 Yahoo 429 降級備援**：實作 Tiingo 日 K 解析，在 `sync-us-market.cjs` 建立 429 降級備援守衛，平滑切換保護公網 IP。
->   - **切片 12 台股 250 天歷史回補排程擴充**：一次性注水 250 交易日價量（含真實成交筆數）、三大法人 T86、融資融券資券與 BWIBBU 估值日報。
->   - **切片 13 全市場歷史冷啟動與日常增量調度**：配置 `npm run backfill:full` 與 `npm run sync:incremental`，實現「一次全量注水、日常 5 秒極速補漏」。
-> - **品質狀態**：全量單元測試 **1,869/1,869 通過 (100% Passed / 247 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> - **品質狀態**：全量單元測試 **1,876/1,876 通過 (100% Passed / 250 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
 
 ---
 
@@ -29,11 +23,11 @@
 
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
-- **當前工作分支**：`main` (已完全同步)
-- **單元測試套件**：**1,869/1,869 通過 (247 test suites / 100% 綠燈)**
+- **當前工作分支**：`main` (待合併)
+- **單元測試套件**：**1,876/1,876 通過 (250 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V9.01.0**
+- **當前釋出版本**：**V9.02.0**
 - **工作區與分支整潔度**：工作區乾淨受控，本地 feature/fix 分支已完全合併並清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 

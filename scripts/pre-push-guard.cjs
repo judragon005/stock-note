@@ -68,8 +68,13 @@ try {
   }
   console.log('  ✅ 明文金鑰掃描通過。');
 
-  // 3. 執行 TypeScript 與 Vitest 測試驗證
-  console.log('🔍 [3/3] 執行本地型別與單元測試校驗 (確保 CI 不被濫用)...');
+  // 3. 執行全量文檔完整性與死鏈守門驗證 (Spec 0178 / 技術債 0047)
+  console.log('🔍 [3/4] 執行文檔完整性與死鏈守門驗證 (npm run lint:docs)...');
+  execSync('node scripts/verify-docs.cjs', { stdio: 'inherit' });
+  console.log('  ✅ 文檔完整性與成對性 100% 通過！');
+
+  // 4. 執行 TypeScript 與 Vitest 測試驗證
+  console.log('🔍 [4/4] 執行本地型別與單元測試校驗 (確保 CI 不被濫用)...');
   execSync('npx tsc --noEmit', { stdio: 'inherit' });
   execSync('npm test', { stdio: 'inherit' });
   console.log('  ✅ 本地型別與單元測試 100% 綠燈通過！');

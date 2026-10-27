@@ -27,5 +27,5 @@ if (options.signal && typeof AbortSignal.any === 'function') {
 
 ## 3. 優先級與觸發時機
 - **優先級**: `P3 (Low)`
-- **狀態**: `OPEN`
-- **觸發時機**: 待下次網路中介層全面重構或跨市場爬蟲架構升級時一併引入。
+- **狀態**: `RESOLVED` (已於 v9.02.0 Spec 0205 完整解決)
+- **觸發時機**: 已於 Spec 0205 整合完成。
