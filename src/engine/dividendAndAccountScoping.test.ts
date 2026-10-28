@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { calculateReceivableDividends, estimatePaymentDate } from './receivableDividendEngine';
-import { HoldingPosition, TradeRecord } from '../types/stock';
-import { RawCorporateEvent } from '../types/dividend';
+import { generateAuditAdjustmentTrade } from './reconciliationEngine';
+import { calculateAccountBalances } from './cashLedgerEngine';
+import { HoldingPosition, TradeRecord, BrokerAccount, CashTransaction } from '../types/stock';
+import { RawCorporateEvent } from './corporateActionScanner';
 
 describe('Ticket 03: 除息生命週期修復與在籍股利保護 (Spec 0208)', () => {
   it('estimatePaymentDate 應傳入 symbol 並精確匹配官方字典發放日，而非預設 28~30 天推估', () => {
@@ -15,9 +17,6 @@ describe('Ticket 03: 除息生命週期修復與在籍股利保護 (Spec 0208)',
   });
 
   it('在除息基準日前一日在籍持有，除息後全數賣出股票，未入帳前依然能計算出應收股利權益', () => {
-    // 2024-03-15 買進 10,000 股 00919 (除息日前在籍)
-    // 2024-03-18 除息 (0.66 TWD / 股)
-    // 2024-03-19 全數賣出 10,000 股 00919 (在倉 0 股)
     const trades: TradeRecord[] = [
       {
         id: 't-buy-00919',
@@ -47,7 +46,6 @@ describe('Ticket 03: 除息生命週期修復與在籍股利保護 (Spec 0208)',
       },
     ];
 
-    // 當前在庫持股 (已平倉，shares: 0)
     const holdings: HoldingPosition[] = [
       {
         symbol: '00919',
@@ -81,7 +79,6 @@ describe('Ticket 03: 除息生命週期修復與在籍股利保護 (Spec 0208)',
 
     const events: RawCorporateEvent[] = [
       {
-        id: 'ev-00919-20240318',
         symbol: '00919',
         market: 'TW',
         type: 'DIVIDEND',
@@ -90,7 +87,6 @@ describe('Ticket 03: 除息生命週期修復與在籍股利保護 (Spec 0208)',
       },
     ];
 
-    // 當前日期在除息後、入帳日前 (2024-03-25)
     const receivables = calculateReceivableDividends(
       holdings,
       events,
@@ -106,7 +102,7 @@ describe('Ticket 03: 除息生命週期修復與在籍股利保護 (Spec 0208)',
     expect(rec.sharesHeldOnExDate).toBe(10000);
     expect(rec.cashDividendPerShare).toBe(0.66);
     expect(rec.estimatedGrossDividend).toBe(6600);
-    expect(rec.payDate).toBe('2024-04-15'); // 官方字典匹配成功
+    expect(rec.payDate).toBe('2024-04-15');
     expect(rec.status).toBe('PENDING_PAYMENT');
   });
 
@@ -125,7 +121,6 @@ describe('Ticket 03: 除息生命週期修復與在籍股利保護 (Spec 0208)',
         tax: 0,
         createdAt: 1,
       },
-      // 使用者手動登記了該次股利
       {
         id: 't-div-00919',
         date: '2024-04-15',
@@ -174,7 +169,6 @@ describe('Ticket 03: 除息生命週期修復與在籍股利保護 (Spec 0208)',
 
     const events: RawCorporateEvent[] = [
       {
-        id: 'ev-00919-20240318',
         symbol: '00919',
         market: 'TW',
         type: 'DIVIDEND',
@@ -183,7 +177,6 @@ describe('Ticket 03: 除息生命週期修復與在籍股利保護 (Spec 0208)',
       },
     ];
 
-    // 在入帳日前檢測
     const receivables = calculateReceivableDividends(
       holdings,
       events,
@@ -193,7 +186,83 @@ describe('Ticket 03: 除息生命週期修復與在籍股利保護 (Spec 0208)',
       events
     );
 
-    // 因為 trades 內已有該除息日 exDate: 2024-03-18 的 DIVIDEND 紀錄，應收股利沖銷歸零
     expect(receivables).toHaveLength(0);
+  });
+});
+
+describe('Ticket 04: 多券商帳戶全鏈路嚴密隔離與調整單綁定 (Spec 0208)', () => {
+  it('generateAuditAdjustmentTrade 應支援傳入 accountId 參數並正確寫入調整單', () => {
+    const adj = generateAuditAdjustmentTrade(
+      '2330',
+      10,
+      'TW',
+      'TWD',
+      '國泰盤點調整',
+      'broker-cathay'
+    );
+
+    expect(adj.symbol).toBe('2330');
+    expect(adj.shares).toBe(10);
+    expect(adj.type).toBe('ADJUSTMENT');
+    expect(adj.accountId).toBe('broker-cathay');
+  });
+
+  it('calculateAccountBalances 當傳入經 selectedAccountId 過濾之帳戶與金流時，僅統計該帳戶餘額', () => {
+    const accounts: BrokerAccount[] = [
+      {
+        id: 'broker-tw-1',
+        name: '國泰證券',
+        market: 'TW',
+        feeRate: 0.001425,
+        discountRate: 0.28,
+        minFee: 1,
+        taxRate: 0.003,
+      },
+      {
+        id: 'broker-tw-2',
+        name: '富邦證券',
+        market: 'TW',
+        feeRate: 0.001425,
+        discountRate: 0.18,
+        minFee: 20,
+        taxRate: 0.003,
+      },
+    ];
+
+    const cashTransactions: CashTransaction[] = [
+      {
+        id: 'c-1',
+        accountId: 'broker-tw-1',
+        date: '2026-01-01',
+        amount: 100000,
+        currency: 'TWD',
+        type: 'DEPOSIT',
+        category: 'DEPOSIT',
+        createdAt: 1,
+      },
+      {
+        id: 'c-2',
+        accountId: 'broker-tw-2',
+        date: '2026-01-01',
+        amount: 500000,
+        currency: 'TWD',
+        type: 'DEPOSIT',
+        category: 'DEPOSIT',
+        createdAt: 2,
+      },
+    ];
+
+    // 全戶模式
+    const allSummary = calculateAccountBalances(accounts, cashTransactions, 32.0);
+    expect(allSummary.totalTWD).toBe(600000);
+
+    // 依 selectedAccountId = 'broker-tw-1' 過濾
+    const scopedAccounts = accounts.filter((a) => a.id === 'broker-tw-1');
+    const scopedCash = cashTransactions.filter((c) => c.accountId === 'broker-tw-1');
+    const scopedSummary = calculateAccountBalances(scopedAccounts, scopedCash, 32.0);
+
+    expect(scopedSummary.totalTWD).toBe(100000);
+    expect(scopedSummary.byAccount['broker-tw-1'].balance).toBe(100000);
+    expect(scopedSummary.byAccount['broker-tw-2']).toBeUndefined();
   });
 });

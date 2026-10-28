@@ -14,6 +14,7 @@ export interface ReconciliationModalProps {
   holdings: HoldingPosition[];
   onAddTrade: (trade: TradeRecord) => void;
   colorTheme?: 'taiwan' | 'international';
+  selectedAccountId?: string;
 }
 
 export const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
@@ -21,6 +22,7 @@ export const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
   onClose,
   holdings,
   onAddTrade,
+  selectedAccountId,
 }) => {
   const [brokerName, setBrokerName] = useState('國泰證券');
   const [rawText, setRawText] = useState('');
@@ -46,12 +48,14 @@ export const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
     if (item.diffShares === 0) return;
     const market = inferMarketFromSymbol(item.symbol);
     const currency = inferCurrencyFromMarket(market);
+    const targetAccountId = selectedAccountId !== 'ALL' ? selectedAccountId : undefined;
     const adjTrade = generateAuditAdjustmentTrade(
       item.symbol,
       item.diffShares,
       market,
       currency,
-      `${item.broker} 對賬校準`
+      `${item.broker} 對賬校準`,
+      targetAccountId
     );
     onAddTrade(adjTrade);
     showToast(`✅ 已自動生成 ${item.symbol} 調整單 (${item.diffShares > 0 ? '+' : ''}${item.diffShares} 股)`);

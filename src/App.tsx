@@ -397,15 +397,23 @@ export const App: React.FC = () => {
     };
   }, [deepDiveState, quotes, holdings, currentPrices, historicalCandlesMap]);
 
-  // 整戶總體 XIRR 計算 (考慮外部出入金與期末淨資產)
+  // 整戶總體 XIRR 計算 (考慮外部出入金與期末淨資產，嚴密過濾券商帳戶與市場)
   const portfolioXirr = useMemo(() => {
-    const scopedTrades = currentMarket === 'ALL'
+    let scopedTrades = currentMarket === 'ALL'
       ? trades
       : trades.filter((t) => t.market === currentMarket);
 
-    const scopedCash = currentMarket === 'ALL'
+    if (selectedAccountId !== 'ALL') {
+      scopedTrades = scopedTrades.filter((t) => (t.accountId || (t.market === 'TW' ? 'broker-tw-default' : 'broker-us-default')) === selectedAccountId);
+    }
+
+    let scopedCash = currentMarket === 'ALL'
       ? cashTransactions
       : cashTransactions.filter((c) => (currentMarket === 'US' ? c.currency === 'USD' : c.currency === 'TWD'));
+
+    if (selectedAccountId !== 'ALL') {
+      scopedCash = scopedCash.filter((c) => c.accountId === selectedAccountId);
+    }
 
     const terminalNAV = currentMarket === 'US'
       ? summary.usd.marketValue
@@ -419,19 +427,29 @@ export const App: React.FC = () => {
       terminalNAV,
       baseCurrency: currentMarket === 'US' ? 'USD' : 'TWD',
     });
-  }, [trades, cashTransactions, summary, currentMarket, usdToTwdRate]);
+  }, [trades, cashTransactions, summary, currentMarket, usdToTwdRate, selectedAccountId]);
 
-  // 整戶現金帳本與可用餘額匯總
+  // 整戶現金帳本與可用餘額匯總（嚴密過濾券商帳戶）
   const cashLedgerSummary = useMemo(() => {
-    return calculateAccountBalances(accounts, cashTransactions, usdToTwdRate);
-  }, [accounts, cashTransactions, usdToTwdRate]);
+    const scopedAccounts = selectedAccountId === 'ALL'
+      ? accounts
+      : accounts.filter((a) => a.id === selectedAccountId);
+    const scopedCash = selectedAccountId === 'ALL'
+      ? cashTransactions
+      : cashTransactions.filter((c) => c.accountId === selectedAccountId);
+    return calculateAccountBalances(scopedAccounts, scopedCash, usdToTwdRate);
+  }, [accounts, cashTransactions, usdToTwdRate, selectedAccountId]);
 
-  // 依當前市場過濾借貸紀錄
+  // 依當前市場與選定券商過濾借貸紀錄
   const scopedLoans = useMemo(() => {
-    return currentMarket === 'ALL'
+    let filtered = currentMarket === 'ALL'
       ? loanRecords
       : loanRecords.filter((l) => (currentMarket === 'US' ? l.currency === 'USD' : l.currency === 'TWD'));
-  }, [currentMarket, loanRecords]);
+    if (selectedAccountId !== 'ALL') {
+      filtered = filtered.filter((l) => l.accountId === selectedAccountId);
+    }
+    return filtered;
+  }, [currentMarket, loanRecords, selectedAccountId]);
 
   // 整戶/分市場總曝險與淨槓桿率 (Net Leverage) 計算（依當前市場隔離持股、現金與負債）
   const exposureMetrics = useMemo(() => {
@@ -876,7 +894,13 @@ export const App: React.FC = () => {
           <AllocationChart
             holdings={holdings}
             usdToTwdRate={usdToTwdRate}
-            cashBalanceTwd={cashLedgerSummary.totalCashInTWD}
+            cashBalanceTwd={
+              currentMarket === 'TW'
+                ? cashLedgerSummary.totalTWD
+                : currentMarket === 'US'
+                ? Math.round(cashLedgerSummary.totalUSD * usdToTwdRate)
+                : cashLedgerSummary.totalCashInTWD
+            }
             totalDebtTwd={exposureMetrics.totalDebtTWD}
             loans={scopedLoans}
             colorTheme={colorTheme}
@@ -1159,6 +1183,7 @@ export const App: React.FC = () => {
         onClose={() => setIsReconciliationOpen(false)}
         holdings={holdings}
         onAddTrade={handleSaveTrade}
+        selectedAccountId={selectedAccountId}
       />
 
       {/* 全市場個股全技術指標透視分析彈窗 */}
