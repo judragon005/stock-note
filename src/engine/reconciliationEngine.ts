@@ -241,7 +241,8 @@ export function generateAuditAdjustmentTrade(
   diffShares: number,
   market: MarketType = 'TW',
   currency: Currency = 'TWD',
-  reason: string = '對賬差額自動校準'
+  reason: string = '對賬差額自動校準',
+  accountId?: string
 ): TradeRecord {
   const cleanSymbol = symbol.trim().toUpperCase();
   const today = new Date().toISOString().split('T')[0];
@@ -259,6 +260,7 @@ export function generateAuditAdjustmentTrade(
     price: 0,
     fee: 0,
     tax: 0,
+    accountId,
     note: `[對賬審計調整] ${reason} (${diffShares > 0 ? '+' : ''}${diffShares} 股)`,
     createdAt: Date.now(),
   };

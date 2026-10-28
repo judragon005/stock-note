@@ -1,3 +1,63 @@
+/**
+ * 計算在席融資買進之未償還券商負債 (TWD)
+ */
+export function calculateActiveMarginDebt(
+  trades: import('../types/stock').TradeRecord[] = [],
+  usdToTwdRate: number = 32.0
+): number {
+  const marginLotsBySymbol: Record<string, { shares: number; debtPerShare: number; currency: string }[]> = {};
+
+  const sortedTrades = [...trades].sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return a.createdAt - b.createdAt;
+  });
+
+  for (const trade of sortedTrades) {
+    const sym = trade.symbol.trim().toUpperCase();
+    const isMarginBuy = trade.type === 'MARGIN_BUY' || (trade.type === 'BUY' && Boolean(trade.isMargin));
+    const isMarginSell = trade.type === 'MARGIN_SELL' || (trade.type === 'SELL' && Boolean(trade.isMargin));
+
+    if (isMarginBuy && trade.shares > 0) {
+      const marginRate = trade.marginRate ?? 0.4;
+      const totalCost = trade.shares * trade.price;
+      const debtAmount = totalCost * (1 - marginRate);
+      if (!marginLotsBySymbol[sym]) {
+        marginLotsBySymbol[sym] = [];
+      }
+      marginLotsBySymbol[sym].push({
+        shares: trade.shares,
+        debtPerShare: debtAmount / trade.shares,
+        currency: trade.currency || (trade.market === 'US' ? 'USD' : 'TWD'),
+      });
+    } else if (isMarginSell && trade.shares > 0) {
+      let remainingToSell = trade.shares;
+      const lots = marginLotsBySymbol[sym] || [];
+      while (remainingToSell > 0 && lots.length > 0) {
+        const lot = lots[0];
+        const match = Math.min(remainingToSell, lot.shares);
+        lot.shares -= match;
+        remainingToSell -= match;
+        if (lot.shares <= 1e-6) {
+          lots.shift();
+        }
+      }
+    }
+  }
+
+  let totalMarginDebtTWD = 0;
+  for (const lots of Object.values(marginLotsBySymbol)) {
+    for (const lot of lots) {
+      if (lot.shares > 1e-6) {
+        const debtNative = lot.shares * lot.debtPerShare;
+        const debtTWD = lot.currency === 'USD' ? debtNative * usdToTwdRate : debtNative;
+        totalMarginDebtTWD += debtTWD;
+      }
+    }
+  }
+
+  return Math.round(totalMarginDebtTWD);
+}
+
 import {
   CalculateExposureParams,
   PortfolioExposureMetrics,
@@ -64,7 +124,7 @@ export function calculatePortfolioExposure(params: CalculateExposureParams): Por
   const inTransitNet = inTransitSummary?.netSettlementTWD || 0;
   const totalAvailableCashTWD = twdCash + usdCashInTWD + inTransitNet;
 
-  // 3. 計算總借款負債 (本金 + 應計利息 + 設質規費)
+  // 3. 計算總借款負債 (本金 + 應計利息 + 設質規費 + 在席融資買進未償借款)
   let totalDebtTWD = 0;
   for (const loan of loans) {
     if (!loan.principal || loan.principal <= 0) continue;
@@ -74,43 +134,37 @@ export function calculatePortfolioExposure(params: CalculateExposureParams): Por
     totalDebtTWD += debtTWD;
   }
 
+  const marginDebtTWD = params.trades ? calculateActiveMarginDebt(params.trades, usdToTwdRate) : 0;
+  totalDebtTWD += marginDebtTWD;
+
   // 4. 計算帳戶淨資產 NAV
   const isZeroDebt = totalDebtTWD <= 0;
   let effectiveNavTWD = totalStockValueTWD + totalAvailableCashTWD - totalDebtTWD;
+  if (isZeroDebt && totalAvailableCashTWD <= 0) {
+    effectiveNavTWD = totalStockValueTWD;
+  }
   let isUnderwater = !isZeroDebt && effectiveNavTWD <= 0;
 
   // 5. 總曝險額 (等同總股票市值)
   const grossExposureTWD = totalStockValueTWD;
 
-  // 6. 計算槓桿率（零負債現貨保護與防除以零邊界）
-  let grossLeverage = 0;
-  let netLeverage = 0;
+  // 6. 計算槓桿率與淨曝險比率（基底現貨為 1.00x，非 0.00x 跳變）
+  let grossLeverage = 1.0;
+  let netLeverage = 1.0;
 
-  if (isZeroDebt) {
-    // 零借貸負債保護：
-    // 若無負債且現金小於等於 0 (因未補錄入金)，將淨資產視為現貨股票足額持有
-    if (totalAvailableCashTWD <= 0) {
-      effectiveNavTWD = totalStockValueTWD;
-    } else {
-      // 現金大於 0 時，正常計算 NAV
-      effectiveNavTWD = totalStockValueTWD + totalAvailableCashTWD;
-    }
-    // 零借貸現貨狀態下，無任何借款槓桿，槓桿率評定為 0.00x
-    grossLeverage = 0;
-    netLeverage = 0;
-  } else {
-    // 存在真實借款/質押負債
-    if (effectiveNavTWD > 0) {
-      grossLeverage = totalStockValueTWD / effectiveNavTWD;
-      const netExposure = totalStockValueTWD - Math.max(0, totalAvailableCashTWD);
-      netLeverage = Math.max(0, netExposure / effectiveNavTWD);
-    } else {
-      // 真實負債且資不抵債時設定為極大值警示
-      grossLeverage = totalStockValueTWD > 0 ? 99.99 : 0;
-      netLeverage = 99.99;
-      isUnderwater = true;
-    }
+  if (effectiveNavTWD > 0) {
+    grossLeverage = totalStockValueTWD / effectiveNavTWD;
+    const netExposure = totalStockValueTWD - Math.max(0, totalAvailableCashTWD);
+    netLeverage = Math.max(0, netExposure / effectiveNavTWD);
+  } else if (!isZeroDebt) {
+    grossLeverage = totalStockValueTWD > 0 ? 99.99 : 0;
+    netLeverage = 99.99;
+    isUnderwater = true;
   }
+
+  const netExposureRatioPercent = effectiveNavTWD > 0
+    ? ((totalStockValueTWD - Math.max(0, totalAvailableCashTWD)) / effectiveNavTWD) * 100
+    : 100;
 
   // 7. 現金佔淨資產比率
   const navTWD = isZeroDebt && totalAvailableCashTWD <= 0 ? totalStockValueTWD : (totalStockValueTWD + totalAvailableCashTWD - totalDebtTWD);
@@ -142,6 +196,9 @@ export function calculatePortfolioExposure(params: CalculateExposureParams): Por
     riskTier,
     riskInfo,
     isUnderwater,
+    effectiveNavTWD,
+    marginDebtTWD,
+    netExposureRatioPercent,
   };
 }
 

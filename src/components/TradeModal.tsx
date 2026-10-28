@@ -158,7 +158,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
       let targetMkt: MarketType = initialMarket || 'TW';
       if (initialSymbol) {
         setSymbol(initialSymbol);
-        if (/^[0-9]+$/.test(initialSymbol)) {
+        if (/^[0-9]{4,6}[A-Za-z]?$/.test(initialSymbol)) {
           targetMkt = 'TW';
           setShares('1000');
         } else {
@@ -326,7 +326,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
     if (!clean) return;
 
     // 自動切換市場
-    if (/^\d+$/.test(clean) && market !== 'TW') {
+    if (/^[0-9]{4,6}[A-Za-z]?$/.test(clean) && market !== 'TW') {
       handleMarketChange('TW');
     }
 

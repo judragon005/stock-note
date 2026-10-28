@@ -53,7 +53,7 @@ export const RebalancingView: React.FC<RebalancingViewProps> = ({
 
   // 2. 再平衡模式與注水金額
   const [mode, setMode] = useState<RebalanceMode>('CASH_IN');
-  const [cashInflow, setCashInflow] = useState<number>(() => Math.max(0, cashBalanceTwd));
+  const [cashInflow, setCashInflow] = useState<number>(0);
 
   // 監聽並保存
   useEffect(() => {

@@ -435,7 +435,8 @@ export function calculateHoldingsAndSummary(
   selectedAccountId: 'ALL' | string = 'ALL',
   quotes?: Record<string, PriceQuote>,
   accountingMethod: AccountingMethod = 'MOVING_AVERAGE',
-  historicalCandlesMap?: Record<string, DailyCandle[]>
+  historicalCandlesMap?: Record<string, DailyCandle[]>,
+  historicalFx?: Record<string, number>
 ): CalculationResult {
   const accountMap = new Map<string, BrokerAccount>();
   for (const acc of accounts) {
@@ -476,6 +477,9 @@ export function calculateHoldingsAndSummary(
     lastExitPrice?: number;
     latestPlan?: TradePlan;
     lastIntent?: TradeIntent;
+    historicalTotalInvestedCost: number;
+    totalBuyCostUSD: number;
+    totalBuyCostTWD: number;
   }
 
   const map = new Map<string, Accumulator>();
@@ -502,6 +506,9 @@ export function calculateHoldingsAndSummary(
         totalDividends: 0,
         totalCapitalReturned: 0,
         totalStockDividendsShares: 0,
+        historicalTotalInvestedCost: 0,
+        totalBuyCostUSD: 0,
+        totalBuyCostTWD: 0,
       });
     }
     return map.get(cleanSym)!;
@@ -540,6 +547,12 @@ export function calculateHoldingsAndSummary(
         item.shares += shares;
         item.originalBuyShares += shares;
         item.totalCostBasis += netCost;
+        item.historicalTotalInvestedCost += netCost;
+        const currentTradeFx = (trade.date && historicalFx && historicalFx[trade.date]) || usdToTwdRate || 32.0;
+        if (item.currency === 'USD' || item.market === 'US') {
+          item.totalBuyCostUSD += netCost;
+          item.totalBuyCostTWD += netCost * currentTradeFx;
+        }
         if (trade.plan) {
           item.latestPlan = trade.plan;
         }
@@ -623,6 +636,12 @@ export function calculateHoldingsAndSummary(
         item.shares += shares;
         item.originalBuyShares += shares;
         item.totalCostBasis += netCost;
+        item.historicalTotalInvestedCost += netCost;
+        const currentTradeFx = (trade.date && historicalFx && historicalFx[trade.date]) || usdToTwdRate || 32.0;
+        if (item.currency === 'USD' || item.market === 'US') {
+          item.totalBuyCostUSD += netCost;
+          item.totalBuyCostTWD += netCost * currentTradeFx;
+        }
         break;
       }
 
@@ -751,7 +770,11 @@ export function calculateHoldingsAndSummary(
     const unrealizedPnLBrokerPercent = finalCostBasis > 0 ? (unrealizedPnLBroker / finalCostBasis) * 100 : 0;
 
     const totalReturnPnL = (grossMarketValue - finalCostBasis) + item.totalDividends + finalRealizedPnL;
-    const totalReturnPercent = finalCostBasis > 0 ? (totalReturnPnL / finalCostBasis) * 100 : 0;
+    const returnDenominator = item.historicalTotalInvestedCost > 0 ? item.historicalTotalInvestedCost : finalCostBasis;
+    const totalReturnPercent = returnDenominator > 0 ? (totalReturnPnL / returnDenominator) * 100 : 0;
+    const avgCostFxRate = (item.currency === 'USD' || item.market === 'US')
+      ? (item.totalBuyCostUSD > 0 ? item.totalBuyCostTWD / item.totalBuyCostUSD : usdToTwdRate)
+      : undefined;
     const adjustedCostBasis = Math.max(0, finalCostBasis - item.totalDividends);
     const yieldOnCostPercent = finalCostBasis > 0 ? (item.totalDividends / finalCostBasis) * 100 : 0;
 
@@ -902,6 +925,8 @@ export function calculateHoldingsAndSummary(
         totalStockDividendsShares: item.totalStockDividendsShares,
         totalReturnPnL,
         totalReturnPercent,
+        historicalTotalInvestedCost: item.historicalTotalInvestedCost,
+        avgCostFxRate,
         yieldOnCostPercent,
         xirrPercent: secXirr.ratePercent,
         isXirrAnnualized: secXirr.isAnnualized,

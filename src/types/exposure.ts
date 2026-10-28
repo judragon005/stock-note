@@ -23,6 +23,9 @@ export interface PortfolioExposureMetrics {
   totalAvailableCashTWD: number;      // 總可用現金 (含在途淨額，折合 TWD)
   totalDebtTWD: number;               // 總借款負債 (質押 + 融資，折合 TWD)
   navTWD: number;                     // 帳戶淨資產 NAV (總資產 - 總負債)
+  effectiveNavTWD?: number;           // 實質淨資產 (TWD)
+  marginDebtTWD?: number;             // 融資未償借款總額 (TWD)
+  netExposureRatioPercent?: number;   // 淨曝險比率 % (Net Exposure / NAV * 100)
   grossExposureTWD: number;           // 總曝險額 (等同股票總市值)
   grossLeverage: number;              // 總槓桿率 (總股票市值 / NAV)
   netLeverage: number;                // 淨槓桿率 ((總股票市值 - max(0, 現金)) / NAV)
@@ -51,4 +54,5 @@ export interface CalculateExposureParams {
   loans: LoanRecord[];
   usdToTwdRate: number;
   asOfDate?: string;
+  trades?: import('./stock').TradeRecord[];
 }

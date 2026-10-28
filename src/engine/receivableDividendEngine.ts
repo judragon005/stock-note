@@ -190,9 +190,7 @@ export function calculateReceivableDividends(
   const receivables: ReceivableDividend[] = [];
   const activeHoldingsMap = new Map<string, HoldingPosition>();
   holdings.forEach((h) => {
-    if (h.shares > 0) {
-      activeHoldingsMap.set(h.symbol.toUpperCase(), h);
-    }
+    activeHoldingsMap.set(h.symbol.toUpperCase(), h);
   });
 
   const processedKeys = new Set<string>();
@@ -219,14 +217,25 @@ export function calculateReceivableDividends(
     if (!holding) continue;
 
     const exDate = event.date;
-    const payDate = estimatePaymentDate(exDate, event.market);
+    const payDate = estimatePaymentDate(exDate, event.market, symbol);
+    const key = `${symbol}-${exDate}`;
 
-    // 線性時序判定：若發放日已過，代表已實質落袋
-    if (currentDateStr >= payDate) {
+    // 檢查 trades 中是否已手動或自動登記該次除息之股利收入，杜絕雙重計算
+    const isAlreadyLogged = trades.some((t) => {
+      if (t.type !== 'DIVIDEND' || t.symbol.toUpperCase() !== symbol) return false;
+      return t.exDate === exDate || (t.date >= exDate && t.date <= payDate);
+    });
+    if (isAlreadyLogged) {
+      processedKeys.add(key);
       continue;
     }
 
-    const key = `${symbol}-${exDate}`;
+    // 線性時序判定：若發放日已過，代表已實質落袋
+    if (currentDateStr >= payDate) {
+      processedKeys.add(key);
+      continue;
+    }
+
     processedKeys.add(key);
 
     // 依證券法規：以除息日前一日收盤在籍股數為準 (完整計入配股、增減資等公司行動)
@@ -303,7 +312,10 @@ export function calculateReceivableDividends(
   // 3. 補充帳本中非官方涵蓋之自訂未來預約 DIVIDEND 記錄
   const customFutureTrades = trades.filter((t) => {
     if (t.type !== 'DIVIDEND') return false;
-    const effectivePayDate = t.payDate || (t.date > currentDateStr ? t.date : estimatePaymentDate(t.exDate || t.date, t.market));
+    const exDate = t.exDate || t.date;
+    const key = `${t.symbol.toUpperCase()}-${exDate}`;
+    if (processedKeys.has(key)) return false;
+    const effectivePayDate = t.payDate || (t.date > currentDateStr ? t.date : estimatePaymentDate(exDate, t.market, t.symbol));
     return effectivePayDate > currentDateStr;
   });
 

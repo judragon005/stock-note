@@ -38,6 +38,8 @@ interface HeaderProps {
   onImportFile?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onOpenImportModal?: () => void;
   onNavigateToSettings?: () => void;
+  onOpenBrokerAccounts?: () => void;
+  onOpenFrictionCenter?: () => void;
 }
 
 export function getColorThemeLabel(colorTheme: ColorThemeMode): string {
@@ -80,6 +82,8 @@ export const Header: React.FC<HeaderProps> = ({
   onImportFile,
   onOpenImportModal,
   onNavigateToSettings,
+  onOpenBrokerAccounts,
+  onOpenFrictionCenter,
 }) => {
   return (
     <header
@@ -518,6 +522,48 @@ export const Header: React.FC<HeaderProps> = ({
               <span style={{ fontSize: '0.75rem' }}>匯入</span>
               <input type="file" accept=".json,.csv" onChange={onImportFile} style={{ display: 'none' }} value="" />
             </label>
+          )}
+
+          {/* Broker Accounts Management Modal Button */}
+          {onOpenBrokerAccounts && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={onOpenBrokerAccounts}
+              title="管理券商帳戶與費率折讓設定"
+              style={{
+                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.2) 100%)',
+                border: '1px solid rgba(59, 130, 246, 0.4)',
+                color: '#93c5fd',
+                fontWeight: 600,
+                padding: '6px 12px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}
+            >
+              <span>🏦 券商帳戶</span>
+            </button>
+          )}
+
+          {/* Friction Center Modal Button */}
+          {onOpenFrictionCenter && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={onOpenFrictionCenter}
+              title="檢視交易摩擦成本中心（含稅費、二代健保與海外所得雷達）"
+              style={{
+                background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.2) 0%, rgba(202, 138, 4, 0.2) 100%)',
+                border: '1px solid rgba(234, 179, 8, 0.4)',
+                color: '#fde047',
+                fontWeight: 600,
+                padding: '6px 12px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}
+            >
+              <span>⚖️ 摩擦中心</span>
+            </button>
           )}
 
           {/* Smart Corporate Action Scanner Button */}

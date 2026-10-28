@@ -189,11 +189,12 @@ export function calculateAllocationDrift(
   }
 
   // 2. 個股維度試算 (Symbol-level)
-  return config.items.map((item) => {
+  const targetSymbolSet = new Set(config.items.map((i) => i.key.toUpperCase()));
+  const directItems: RebalanceItemRecommendation[] = config.items.map((item) => {
     const symbolKey = item.key.toUpperCase();
     const holding = activeHoldings.find((h) => h.symbol.toUpperCase() === symbolKey);
 
-    const market: MarketType = holding ? holding.market : symbolKey.match(/^\d{4,6}$/) ? 'TW' : 'US';
+    const market: MarketType = holding ? holding.market : symbolKey.match(/^\d{4,6}[A-Za-z]?$/) ? 'TW' : 'US';
     const currency: Currency = holding ? holding.currency : market === 'US' ? 'USD' : 'TWD';
     const currentPrice = holding ? holding.currentPrice : 0;
     const rate = currency === 'USD' ? usdToTwdRate : 1;
@@ -222,6 +223,36 @@ export function calculateAllocationDrift(
       recommendedShares: 0,
     };
   });
+
+  // 納入不在目標配置中但在席持有的標的 (目標 0%，建議出清)
+  const nonTargetItems: RebalanceItemRecommendation[] = activeHoldings
+    .filter((h) => !targetSymbolSet.has(h.symbol.toUpperCase()))
+    .map((h) => {
+      const rate = h.currency === 'USD' ? usdToTwdRate : 1;
+      const currentValueTwd = h.marketValue * rate;
+      const currentPercent =
+        totalPortfolioValueTwd > 0 ? (currentValueTwd / totalPortfolioValueTwd) * 100 : 0;
+      const driftPercent = Number(currentPercent.toFixed(2));
+
+      return {
+        key: h.symbol,
+        name: h.name || h.symbol,
+        market: h.market,
+        currency: h.currency,
+        currentPrice: h.currentPrice,
+        currentValueTwd,
+        currentPercent: Number(currentPercent.toFixed(2)),
+        targetPercent: 0,
+        driftPercent,
+        status: 'SEVERE_DRIFT',
+        action: 'HOLD',
+        recommendedAmountTwd: 0,
+        recommendedAmountOriginal: 0,
+        recommendedShares: 0,
+      };
+    });
+
+  return [...directItems, ...nonTargetItems];
 }
 
 /**
@@ -236,6 +267,7 @@ export function generateCashInRebalancePlan(
   usdToTwdRate: number = 32
 ): RebalancePlanResult {
   const driftItems = calculateAllocationDrift(config, holdings, cashBalanceTwd, usdToTwdRate);
+
   const { totalPortfolioValueTwd } = calculateTotalPortfolioValue(holdings, cashBalanceTwd, usdToTwdRate);
   const newTotalValueTwd = totalPortfolioValueTwd + cashInflowTwd;
   const tolerance = config.toleranceBandPercent || 5.0;
@@ -335,6 +367,7 @@ export function generateFullRebalancePlan(
   cashBalanceTwd: number = 0,
   usdToTwdRate: number = 32
 ): RebalancePlanResult {
+  const activeHoldings = holdings.filter((h) => h.shares > 0);
   const driftItems = calculateAllocationDrift(config, holdings, cashBalanceTwd, usdToTwdRate);
   const { totalPortfolioValueTwd } = calculateTotalPortfolioValue(holdings, cashBalanceTwd, usdToTwdRate);
   const tolerance = config.toleranceBandPercent || 5.0;
@@ -350,8 +383,11 @@ export function generateFullRebalancePlan(
     let action: RebalanceAction = 'HOLD';
     let recommendedAmountTwd = 0;
 
-    // 偏離超過容忍帶或金額顯著時建議調倉
-    if (Math.abs(item.driftPercent) > tolerance || Math.abs(diffTwd) >= 1000) {
+    // 偏離超過容忍帶且金額顯著時建議調倉；若為非目標在倉持股 (targetPercent === 0 且在席持有)，一律建議出清
+    const isExceededDrift = Math.abs(item.driftPercent) > tolerance && Math.abs(diffTwd) >= 1000;
+    const isNonTargetLiquidate = item.targetPercent === 0 && item.currentValueTwd > 0;
+
+    if (isExceededDrift || isNonTargetLiquidate) {
       if (diffTwd > 0) {
         action = 'BUY';
         recommendedAmountTwd = Math.round(diffTwd);
@@ -368,13 +404,23 @@ export function generateFullRebalancePlan(
     const effectiveRate = item.currency === 'USD' ? usdToTwdRate : 1;
     const recommendedAmountOriginal = Number((recommendedAmountTwd / effectiveRate).toFixed(2));
 
-    const units = convertAmountToOrderUnits(
+    let units = convertAmountToOrderUnits(
       item.market,
       item.currentPrice,
       recommendedAmountTwd,
       item.currency,
       usdToTwdRate
     );
+
+    if (isNonTargetLiquidate && action === 'SELL') {
+      const pos = activeHoldings.find((h) => h.symbol.toUpperCase() === item.key.toUpperCase());
+      if (pos && pos.shares > 0) {
+        units = {
+          shares: pos.shares,
+          lotsSummary: `${pos.shares} 股`,
+        };
+      }
+    }
 
     return {
       key: item.key,

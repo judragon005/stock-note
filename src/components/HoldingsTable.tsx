@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { calculateHoldingsAttribution, sortHoldingsByInstitutionalField, formatPrivacyMasked, AttributionSortField, SortDirection } from '../engine/attributionEngine';
 import React, { useState } from 'react';
 import { HoldingPosition, TradeRecord, PriceQuote, MarketType, AccountingView, PositionFilter } from '../types/stock';
 import { AccountingMethod, ACCOUNTING_METHOD_LABELS } from '../types/lot';
@@ -9,7 +11,6 @@ import { Tooltip } from './common/Tooltip';
 import { LotsBreakdownModal } from './LotsBreakdownModal';
 import { calculateHoldingPeriodMetrics } from '../engine/holdingPeriodEngine';
 import { HoldingSignalCapsules } from './common/HoldingSignalCapsules';
-import { compareHoldingsOrder } from '../utils/holdingsSort';
 import { logger } from '../utils/logger';
 
 interface HoldingsTableProps {
@@ -202,6 +203,20 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   const [selectedLotHolding, setSelectedLotHolding] = useState<HoldingPosition | null>(null);
   const isBroker = accountingView === 'BROKER';
 
+  // 法人控制項狀態
+  const [densityMode, setDensityMode] = useState<'standard' | 'institutional'>('standard');
+  const [isPrivacyMasked, setIsPrivacyMasked] = useState<boolean>(false);
+  const [sortField, setSortField] = useState<AttributionSortField>('DEFAULT');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('DESC');
+
+  // 計算法人歸因指標
+  const attribution = useMemo(
+    () => calculateHoldingsAttribution(holdings, usdToTwdRate),
+    [holdings, usdToTwdRate]
+  );
+
+  const mask = (val: string | number) => formatPrivacyMasked(val, isPrivacyMasked);
+
   // 數量統計
   const activeCount = holdings.filter((h) => h.shares > 0).length;
   const closedCount = holdings.filter(
@@ -212,29 +227,23 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   ).length;
 
   // 依據當前選取的檢視模式過濾
-  const displayedHoldings = holdings
-    .filter((h) => {
-      if (currentFilter === 'ACTIVE') {
-        return h.shares > 0;
-      }
-      if (currentFilter === 'CLOSED') {
-        return h.shares === 0 && (h.realizedPnL !== 0 || (h.totalDividends || 0) > 0 || (h.originalBuyShares || 0) > 0);
-      }
-      // ALL
-      return h.shares > 0 || h.realizedPnL !== 0 || (h.totalDividends || 0) > 0 || (h.originalBuyShares || 0) > 0;
-    })
-    .sort((a, b) => {
-      // 總覽模式下：若有持股優先排在前面
-      if (currentFilter === 'ALL') {
-        const activeWeightA = a.shares > 0 ? 0 : 1;
-        const activeWeightB = b.shares > 0 ? 0 : 1;
-        if (activeWeightA !== activeWeightB) {
-          return activeWeightA - activeWeightB;
-        }
-      }
-      // 台股優先排前面，依代碼自然升冪 (DRY 委託 compareHoldingsOrder)
-      return compareHoldingsOrder(a, b);
-    });
+  const rawFiltered = holdings.filter((h) => {
+    if (currentFilter === 'ACTIVE') {
+      return h.shares > 0;
+    }
+    if (currentFilter === 'CLOSED') {
+      return h.shares === 0 && (h.realizedPnL !== 0 || (h.totalDividends || 0) > 0 || (h.originalBuyShares || 0) > 0);
+    }
+    // ALL
+    return h.shares > 0 || h.realizedPnL !== 0 || (h.totalDividends || 0) > 0 || (h.originalBuyShares || 0) > 0;
+  });
+
+  const displayedHoldings = sortHoldingsByInstitutionalField(
+    rawFiltered,
+    attribution.items,
+    sortField,
+    sortDirection
+  );
 
   const startEditPrice = (symbol: string, currentPrice: number) => {
     setEditingSymbol(symbol);
@@ -391,8 +400,85 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
           </div>
         </div>
 
-        {/* 右側：會計口徑與沖銷模式 */}
+        {/* 右側：會計口徑、法人雙態與隱私控制 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {/* 排序選擇器 */}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(19, 29, 49, 0.8)', padding: '4px 8px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '0.75rem' }}>
+            <span style={{ color: 'var(--text-muted)' }}>排序:</span>
+            <select
+              value={sortField}
+              onChange={(e) => setSortField(e.target.value as AttributionSortField)}
+              style={{ background: 'transparent', border: 'none', color: '#93c5fd', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', outline: 'none' }}
+            >
+              <option value="DEFAULT" style={{ background: '#1e293b', color: '#ffffff' }}>預設代碼</option>
+              <option value="WEIGHT" style={{ background: '#1e293b', color: '#ffffff' }}>持股權重 (%)</option>
+              <option value="CONTRIBUTION_BPS" style={{ background: '#1e293b', color: '#ffffff' }}>今日貢獻 (bps)</option>
+              <option value="MARKET_VALUE" style={{ background: '#1e293b', color: '#ffffff' }}>市值規模</option>
+              <option value="RETURN_PERCENT" style={{ background: '#1e293b', color: '#ffffff' }}>報酬率 (%)</option>
+            </select>
+            <button
+              onClick={() => setSortDirection((d) => (d === 'DESC' ? 'ASC' : 'DESC'))}
+              style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '0 2px' }}
+              title={sortDirection === 'DESC' ? '點擊切換為升冪' : '點擊切換為降冪'}
+            >
+              {sortDirection === 'DESC' ? '▼' : '▲'}
+            </button>
+          </div>
+
+          {/* 雙態密度切換 [ 標準清爽 | 法人深研 ] */}
+          <div style={{ display: 'inline-flex', background: 'rgba(19, 29, 49, 0.8)', padding: '2px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+            <button
+              onClick={() => setDensityMode('standard')}
+              style={{
+                padding: '4px 10px',
+                borderRadius: '6px',
+                border: 'none',
+                background: densityMode === 'standard' ? 'rgba(59, 130, 246, 0.3)' : 'transparent',
+                color: densityMode === 'standard' ? '#93c5fd' : 'var(--text-secondary)',
+                fontWeight: densityMode === 'standard' ? 700 : 500,
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+              }}
+            >
+              📄 標準清爽
+            </button>
+            <button
+              onClick={() => setDensityMode('institutional')}
+              style={{
+                padding: '4px 10px',
+                borderRadius: '6px',
+                border: 'none',
+                background: densityMode === 'institutional' ? 'rgba(139, 92, 246, 0.3)' : 'transparent',
+                color: densityMode === 'institutional' ? '#c4b5fd' : 'var(--text-secondary)',
+                fontWeight: densityMode === 'institutional' ? 700 : 500,
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+              }}
+            >
+              🔬 法人深研
+            </button>
+          </div>
+
+          {/* 隱私遮罩 [ 👁️ 隱私遮罩 ] */}
+          <button
+            onClick={() => setIsPrivacyMasked((m) => !m)}
+            style={{
+              padding: '4px 10px',
+              borderRadius: '8px',
+              border: isPrivacyMasked ? '1px solid #38bdf8' : '1px solid var(--border-color)',
+              background: isPrivacyMasked ? 'rgba(56, 189, 248, 0.2)' : 'rgba(19, 29, 49, 0.8)',
+              color: isPrivacyMasked ? '#38bdf8' : 'var(--text-secondary)',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
+            title={isPrivacyMasked ? '已開啟隱私遮罩，點擊還原金額' : '點擊開啟隱私遮罩，隱藏所有敏感財務數據'}
+          >
+            <span>{isPrivacyMasked ? '👁️‍🗨️ 隱私已開' : '👁️ 隱私遮罩'}</span>
+          </button>
           {/* 沖銷會計模式 (AccountingMethod) 切換器 */}
           {onChangeAccountingMethod && (
             <div
@@ -856,7 +942,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
 
                       {/* 總成本 */}
                       <td className="mono" style={{ padding: '14px', textAlign: 'right', color: 'var(--text-secondary)' }}>
-                        <div>{Math.round(item.totalCostBasis).toLocaleString('en-US')}</div>
+                        <div>{mask(Math.round(item.totalCostBasis).toLocaleString('en-US'))}</div>
                         {item.totalCapitalReturned && item.totalCapitalReturned > 0 ? (
                           <div style={{ fontSize: '0.7rem', color: '#fb923c' }}>
                             退還 -{currencyPrefix}{Math.round(item.totalCapitalReturned).toLocaleString()}
@@ -866,7 +952,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
 
                       {/* 當前市值 */}
                       <td className="mono" style={{ padding: '14px', textAlign: 'right', fontWeight: 600, color: '#ffffff' }}>
-                        <div>{isClosed ? '-' : Math.round(item.marketValue).toLocaleString('en-US')}</div>
+                        <div>{isClosed ? '-' : mask(Math.round(item.marketValue).toLocaleString('en-US'))}</div>
                         {!isClosed && (
                           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400, marginTop: '2px' }}>
                             {isBroker
@@ -888,8 +974,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                                 fontSize: '0.92rem',
                               }}
                             >
-                              {item.realizedPnL >= 0 ? '+' : ''}
-                              {Math.round(item.realizedPnL).toLocaleString('en-US')}
+                              {mask((item.realizedPnL >= 0 ? '+' : '') + Math.round(item.realizedPnL).toLocaleString('en-US'))}
                             </div>
                             <div
                               style={{
@@ -912,8 +997,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                                 fontSize: '0.92rem',
                               }}
                             >
-                              {isGain ? '+' : ''}
-                              {Math.round(isBroker ? item.unrealizedPnL : item.unrealizedPnL).toLocaleString('en-US')}
+                              {mask((isGain ? '+' : '') + Math.round(isBroker ? item.unrealizedPnL : item.unrealizedPnL).toLocaleString('en-US'))}
                             </div>
                             <div
                               style={{
@@ -928,7 +1012,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
 
                             {/* 應收股利平滑補償提示 */}
                             {(() => {
-                              const rec = receivableDividends?.find((r) => r.symbol.toUpperCase() === item.symbol.toUpperCase());
+                              const rec = receivableDividends?.find((r) => r.symbol.toUpperCase() === item.symbol.toUpperCase() && r.status === 'PENDING_PAYMENT');
                               if (!rec) return null;
                               const smoothedPnL = item.unrealizedPnL + (item.currency === 'USD' ? rec.estimatedNetDividend : rec.estimatedNetDividendInTWD);
                               return (
@@ -958,7 +1042,8 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
 
                             {/* 美股外匯匯差與本體價差拆解 Tooltip */}
                             {item.market === 'US' && item.shares > 0 && (() => {
-                              const fx = calculateHoldingFxBreakdown(item, 32.0, usdToTwdRate || 32.0);
+                              const costFx = item.avgCostFxRate || usdToTwdRate || 32.0;
+                              const fx = calculateHoldingFxBreakdown(item, costFx, usdToTwdRate || 32.0);
                               return (
                                 <Tooltip
                                   content={`🇺🇸 美股雙軸損益拆解 (TWD 計價)：\n• 股票本體價差：${fx.assetGainTWD >= 0 ? '+' : ''}NT$ ${fx.assetGainTWD.toLocaleString()} (${fx.assetGainPercent}%)\n• 外匯匯差波動：${fx.fxGainTWD >= 0 ? '+' : ''}NT$ ${fx.fxGainTWD.toLocaleString()} (${fx.fxGainPercent}%)\n• 總計台幣損益：${fx.totalGainTWD >= 0 ? '+' : ''}NT$ ${fx.totalGainTWD.toLocaleString()}`}
