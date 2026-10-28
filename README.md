@@ -12,7 +12,20 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 資產成長與單位淨值會計及量化風控引擎重構 (`Portfolio NAV Unitized Accounting & Quant Risk Engine`) *(V9.03.0 最新發布 / Spec #0206 / ADR #0206 / Issue #338)*
+### 0. 資產成長全歷史管線修復、券商隔離與量化複利指標 (`Portfolio NAV Pipeline Repair & Compounding Metrics`) *(V9.04.0 最新發布 / Spec #0207 / ADR #0207 / Issue #340)*
+
+- **App 頂層管線縫隙貫通與券商金流隔離**：
+  - 補通 `receivableDividends` 平滑參數，消滅除息日至發放日之間的假性跌幅；傳入 `selectedAccountId` 篩選單一券商持股，並導出 `growthScopedCash` 隔離現金流，徹底解決多券商混雜金流與除息空窗期假凹洞。
+- **動態無風險利率接軌 ($R_f$)**：
+  - 替換硬編碼 1.5%，動態適配美元 (4.5%) 與台幣 (1.8%) 殖利率標準，消滅美股夏普率與索提諾率系統性虛高。
+- **長期複利 CAGR 指標增設**：
+  - 實作年化複合成長率（CAGR %）公式 `((endingNAV / beginningCost) ** (365.25 / totalDays) - 1) * 100`，並於累計總損益卡片清晰呈現標籤。
+- **大盤日 K 本機湖倉非同步水合**：
+  - 切換大盤基準時自本機 SQLite 湖倉 `/api/market/history/` 載入真實日 K 數據並自動重繪，告別靜態備份常數。
+- **實戰出入金跳空打點與歷史最長水下天數**：
+  - Hover Crosshair 與累計本金卡片中動態呈現「💵 入金: +金額」與「💸 出金: -金額」標籤；水下回撤面板計算並呈現「最長水下: N 天」歷史極端套牢週期防禦指標。
+
+### 1. 資產成長與單位淨值會計及量化風控引擎重構 (`Portfolio NAV Unitized Accounting & Quant Risk Engine`) *(V9.03.0 / Spec #0206 / ADR #0206 / Issue #338)*
 
 - **單位淨值會計法 (GIPS Unit NAV / TWR) 狀態機**：
   - 起點歸一化為 100.00，外部大額出入金等比增減總份額，單位淨值維持連續，徹底根除出入金扭曲真實操盤績效之金融失真。
