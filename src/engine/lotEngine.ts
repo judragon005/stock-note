@@ -124,10 +124,19 @@ export function processLots(
         const totalCurrentShares = lots.reduce((sum, l) => sum + l.remainingShares, 0);
         if (totalCurrentShares > 0) {
           const addedTotal = shares > 0 ? shares : (ratio > 0 ? totalCurrentShares * ratio : 0);
-          for (const lot of lots) {
-            const weight = lot.remainingShares / totalCurrentShares;
-            const addedForLot = addedTotal * weight;
-            const finalAdded = isTW ? Math.round(addedForLot) : roundFractionalShares(addedForLot);
+          let accumulatedAdded = 0;
+          for (let i = 0; i < lots.length; i++) {
+            const lot = lots[i];
+            const isLast = i === lots.length - 1;
+            let finalAdded: number;
+            if (isLast) {
+              finalAdded = Math.max(0, addedTotal - accumulatedAdded);
+            } else {
+              const weight = lot.remainingShares / totalCurrentShares;
+              const addedForLot = addedTotal * weight;
+              finalAdded = isTW ? Math.round(addedForLot) : roundFractionalShares(addedForLot);
+              accumulatedAdded += finalAdded;
+            }
             lot.remainingShares += finalAdded;
             lot.originalShares += finalAdded;
             lot.unitCost = lot.remainingShares > 0 ? lot.totalCostBasis / lot.remainingShares : 0;
@@ -141,13 +150,22 @@ export function processLots(
         if (totalCurrentShares > 0) {
           const reducedTotal = shares > 0 ? Math.min(shares, totalCurrentShares) : (ratio > 0 ? totalCurrentShares * ratio : 0);
           const refundTotal = cashAmount > 0 ? cashAmount : (price > 0 ? reducedTotal * price : 0);
+          let accumulatedReduced = 0;
 
-          for (const lot of lots) {
+          for (let i = 0; i < lots.length; i++) {
+            const lot = lots[i];
+            const isLast = i === lots.length - 1;
             const weight = lot.remainingShares / totalCurrentShares;
-            const reducedForLot = reducedTotal * weight;
-            const refundForLot = refundTotal * weight;
+            let finalReduced: number;
+            if (isLast) {
+              finalReduced = Math.min(lot.remainingShares, Math.max(0, reducedTotal - accumulatedReduced));
+            } else {
+              const reducedForLot = reducedTotal * weight;
+              finalReduced = Math.min(lot.remainingShares, isTW ? Math.round(reducedForLot) : roundFractionalShares(reducedForLot));
+              accumulatedReduced += finalReduced;
+            }
 
-            const finalReduced = isTW ? Math.round(reducedForLot) : roundFractionalShares(reducedForLot);
+            const refundForLot = refundTotal * weight;
             lot.remainingShares = Math.max(0, lot.remainingShares - finalReduced);
 
             if (refundForLot > 0) {
@@ -335,6 +353,110 @@ export function processLots(
             const closed = lots.splice(i, 1)[0];
             closedLots.push(closed);
           }
+        }
+        break;
+      }
+
+      case 'ADJUSTMENT': {
+        if (shares > 0) {
+          const newLot: TaxLot = {
+            id: `lot-${trade.id}`,
+            buyTradeId: trade.id,
+            symbol: sym,
+            market,
+            currency,
+            accountId: trade.accountId,
+            buyDate: trade.date,
+            buyPrice: 0,
+            originalShares: shares,
+            remainingShares: shares,
+            fee: 0,
+            totalCostBasis: 0,
+            unitCost: 0,
+            createdAt: trade.createdAt || Date.now(),
+          };
+          lots.push(newLot);
+        } else if (shares < 0) {
+          let toDeduct = Math.abs(shares);
+          for (let i = lots.length - 1; i >= 0 && toDeduct > 0; i--) {
+            const lot = lots[i];
+            const deduct = Math.min(lot.remainingShares, toDeduct);
+            lot.remainingShares -= deduct;
+            toDeduct -= deduct;
+          }
+          for (let i = lots.length - 1; i >= 0; i--) {
+            if (lots[i].remainingShares <= 1e-6) {
+              closedLots.push(lots.splice(i, 1)[0]);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'STOCK_MERGER': {
+        const targetSym = (trade.targetSymbol || '').trim().toUpperCase();
+        if (targetSym && targetSym !== sym) {
+          const totalCost = lots.reduce((sum, l) => sum + l.totalCostBasis, 0);
+          const transferCost = Math.max(0, totalCost - cashAmount);
+          if (cashAmount > 0) {
+            realizedPnLBySymbol[sym] += cashAmount;
+          }
+          while (lots.length > 0) {
+            closedLots.push(lots.pop()!);
+          }
+          const mergedShares = shares > 0 ? shares : (ratio > 0 ? trade.shares : 0);
+          const targetLots = getOpenLots(targetSym);
+          const newLot: TaxLot = {
+            id: `lot-${trade.id}-${targetSym}`,
+            buyTradeId: trade.id,
+            symbol: targetSym,
+            market,
+            currency,
+            accountId: trade.accountId,
+            buyDate: trade.date,
+            buyPrice: mergedShares > 0 ? transferCost / mergedShares : 0,
+            originalShares: mergedShares,
+            remainingShares: mergedShares,
+            fee: 0,
+            totalCostBasis: transferCost,
+            unitCost: mergedShares > 0 ? transferCost / mergedShares : 0,
+            createdAt: trade.createdAt || Date.now(),
+          };
+          targetLots.push(newLot);
+        }
+        break;
+      }
+
+      case 'SPIN_OFF': {
+        const targetSym = (trade.targetSymbol || '').trim().toUpperCase();
+        const alloc = trade.allocationRatio || 0;
+        if (targetSym && targetSym !== sym && alloc > 0 && alloc < 1) {
+          let totalSplitCost = 0;
+          for (const lot of lots) {
+            const splitCost = lot.totalCostBasis * alloc;
+            lot.totalCostBasis -= splitCost;
+            lot.unitCost = lot.remainingShares > 0 ? lot.totalCostBasis / lot.remainingShares : 0;
+            totalSplitCost += splitCost;
+          }
+          const newShares = shares > 0 ? shares : (ratio > 0 ? trade.shares : 0);
+          const targetLots = getOpenLots(targetSym);
+          const newLot: TaxLot = {
+            id: `lot-${trade.id}-${targetSym}`,
+            buyTradeId: trade.id,
+            symbol: targetSym,
+            market,
+            currency,
+            accountId: trade.accountId,
+            buyDate: trade.date,
+            buyPrice: newShares > 0 ? totalSplitCost / newShares : 0,
+            originalShares: newShares,
+            remainingShares: newShares,
+            fee: 0,
+            totalCostBasis: totalSplitCost,
+            unitCost: newShares > 0 ? totalSplitCost / newShares : 0,
+            createdAt: trade.createdAt || Date.now(),
+          };
+          targetLots.push(newLot);
         }
         break;
       }
