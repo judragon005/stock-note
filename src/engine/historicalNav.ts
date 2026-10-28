@@ -9,6 +9,7 @@ import {
   PortfolioPerformanceMetrics,
   Currency,
 } from '../types/stock';
+import { ReceivableDividend } from '../types/dividend';
 
 /**
  * 產生兩個 YYYY-MM-DD 日期之間所有連續日期的字串陣列
@@ -67,12 +68,14 @@ export interface CalculateHistoricalNavOptions {
   trades: TradeRecord[];
   cashTransactions?: CashTransaction[];
   loanRecords?: LoanRecord[];
+  receivableDividends?: ReceivableDividend[];
   priceMap: HistoricalDailyPriceMap;
   fxMap?: HistoricalFxRateMap;
   currentPrices?: Record<string, number>;
   startDate?: string;
   endDate?: string;
   baseCurrency?: Currency;
+  selectedAccountId?: string;
 }
 
 /**
@@ -80,14 +83,22 @@ export interface CalculateHistoricalNavOptions {
  */
 export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOptions): PortfolioDailySnapshot[] {
   const {
-    trades,
-    cashTransactions = [],
-    loanRecords = [],
+    trades: rawTrades,
+    cashTransactions: rawCash = [],
+    loanRecords: rawLoans = [],
+    receivableDividends: rawDividends = [],
     priceMap,
     fxMap = {},
     currentPrices = {},
     baseCurrency = 'TWD',
+    selectedAccountId,
   } = options;
+
+  const isFiltered = Boolean(selectedAccountId && selectedAccountId !== 'ALL');
+  const trades = isFiltered ? rawTrades.filter((t) => t.accountId === selectedAccountId) : rawTrades;
+  const cashTransactions = isFiltered ? rawCash.filter((c) => c.accountId === selectedAccountId) : rawCash;
+  const loanRecords = isFiltered ? rawLoans.filter((l) => l.accountId === selectedAccountId) : rawLoans;
+  const receivableDividends = isFiltered ? rawDividends.filter((r) => !r.accountId || r.accountId === selectedAccountId) : rawDividends;
 
   if (trades.length === 0 && cashTransactions.length === 0 && loanRecords.length === 0) {
     return [];
@@ -163,6 +174,14 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
   });
 
   // 5. 狀態機變數 (State Machine Variables)
+  interface MarginLot {
+    buyDate: string;
+    shares: number;
+    priceInBase: number;
+    debtInBase: number;
+    interestRate: number;
+  }
+  const marginLotsBySymbol: Record<string, MarginLot[]> = {};
   const currentShares: Record<string, number> = {};
   let currentCashBalance = 0; // 統一折算為 baseCurrency (TWD)
   let currentLoanBalance = 0; // 統一折算為 baseCurrency (TWD)
@@ -170,11 +189,15 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
   const hasExplicitCashBook = cashTransactions.length > 0;
 
   const series: PortfolioDailySnapshot[] = [];
-  let prevNAV: number | null = null;
+  let prevTotalNAV: number | null = null;
+  let currentUnitNAV = 100.0;
+  let peakUnitNAV = 100.0;
+  let currentUnits = 0;
 
   for (const date of dateSequence) {
     const dailyEvents: string[] = [];
     const fxRate = filledFxMap[date] || 32.0;
+    let dailyNetExternalFlow = 0;
 
     // (A) 處理當日現金帳本出入金 (過濾掉已由股票交易在 (C) 步驟處理的連動流水)
     if (cashByDate[date]) {
@@ -191,10 +214,12 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
         if (cat === 'DEPOSIT') {
           currentCashBalance += Math.abs(cashAmountInBase);
           netInvestedCapital += Math.abs(cashAmountInBase);
+          dailyNetExternalFlow += Math.abs(cashAmountInBase);
           dailyEvents.push(`入金: ${cash.amount.toLocaleString()} ${cash.currency}`);
         } else if (cat === 'WITHDRAWAL') {
           currentCashBalance -= Math.abs(cashAmountInBase);
           netInvestedCapital -= Math.abs(cashAmountInBase);
+          dailyNetExternalFlow -= Math.abs(cashAmountInBase);
           dailyEvents.push(`出金: ${cash.amount.toLocaleString()} ${cash.currency}`);
         } else if (cat === 'INTEREST_INCOME' || cat === 'INTEREST') {
           currentCashBalance += Math.abs(cashAmountInBase);
@@ -269,13 +294,27 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
             currentShares[sym] = (currentShares[sym] || 0) + trade.shares;
             if (isMarginBuy) {
               const marginRate = trade.marginRate ?? 0.4;
+              const marginInterestRate = trade.marginInterestRate ?? 0.065;
               const downPaymentInBase = tradeAmountInBase * marginRate + feeTaxInBase;
               const marginDebtInBase = tradeAmountInBase * (1 - marginRate);
               currentLoanBalance += marginDebtInBase;
+
+              if (!marginLotsBySymbol[sym]) {
+                marginLotsBySymbol[sym] = [];
+              }
+              marginLotsBySymbol[sym].push({
+                buyDate: trade.date,
+                shares: trade.shares,
+                priceInBase: tradeAmountInBase / trade.shares,
+                debtInBase: marginDebtInBase,
+                interestRate: marginInterestRate,
+              });
+
               if (hasExplicitCashBook) {
                 currentCashBalance -= downPaymentInBase;
               } else {
                 netInvestedCapital += downPaymentInBase;
+                dailyNetExternalFlow += downPaymentInBase;
               }
               dailyEvents.push(`融資買進 ${sym}: ${trade.shares.toLocaleString()}股 (自備款 ${marginRate * 100}%)`);
             } else {
@@ -284,6 +323,7 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
               } else {
                 // 若無獨立現金帳本，則每次買進直接視同新增投入本金
                 netInvestedCapital += totalCostInBase;
+                dailyNetExternalFlow += totalCostInBase;
               }
               dailyEvents.push(`買進 ${sym}: ${trade.shares.toLocaleString()}股 @ ${trade.price}`);
             }
@@ -294,23 +334,64 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
             currentShares[sym] = Math.max(0, (currentShares[sym] || 0) - trade.shares);
             const netSellProceeds = tradeAmountInBase - feeTaxInBase;
             if (isMarginSell) {
-              // 融資賣出：扣除融資借款後淨額入現金帳
-              const marginRate = trade.marginRate ?? 0.4;
-              const debtToRepay = tradeAmountInBase * (1 - marginRate);
+              // 融資賣出：依照 FIFO 沖銷融資批次，精準計算利息並扣除借款
+              let remainingSharesToSell = trade.shares;
+              let debtToRepay = 0;
+              let financingInterest = 0;
+
+              const lots = marginLotsBySymbol[sym] || [];
+              while (remainingSharesToSell > 0 && lots.length > 0) {
+                const currentLot = lots[0];
+                const matchedShares = Math.min(remainingSharesToSell, currentLot.shares);
+                const proportion = matchedShares / currentLot.shares;
+                const debtPortion = currentLot.debtInBase * proportion;
+
+                const sellTime = new Date(date).getTime();
+                const buyTime = new Date(currentLot.buyDate).getTime();
+                const holdDays = Math.max(0, Math.round((sellTime - buyTime) / 86400000));
+
+                const interest = debtPortion * currentLot.interestRate * (holdDays / 365);
+
+                debtToRepay += debtPortion;
+                financingInterest += interest;
+
+                currentLot.shares -= matchedShares;
+                currentLot.debtInBase -= debtPortion;
+                remainingSharesToSell -= matchedShares;
+
+                if (currentLot.shares <= 0.00001) {
+                  lots.shift();
+                }
+              }
+
+              if (remainingSharesToSell > 0) {
+                const marginRate = trade.marginRate ?? 0.4;
+                const unmatchedAmount = (remainingSharesToSell * trade.price);
+                const unmatchedAmountInBase = trade.currency === 'USD' && baseCurrency === 'TWD'
+                  ? unmatchedAmount * fxRate
+                  : trade.currency === 'TWD' && baseCurrency === 'USD'
+                  ? unmatchedAmount / fxRate
+                  : unmatchedAmount;
+                debtToRepay += unmatchedAmountInBase * (1 - marginRate);
+              }
+
               currentLoanBalance = Math.max(0, currentLoanBalance - debtToRepay);
-              const netToCash = netSellProceeds - debtToRepay;
+              const netToCash = netSellProceeds - debtToRepay - financingInterest;
               if (hasExplicitCashBook) {
                 currentCashBalance += netToCash;
               } else {
                 netInvestedCapital -= Math.max(0, netToCash);
+                dailyNetExternalFlow -= Math.max(0, netToCash);
               }
-              dailyEvents.push(`融資賣出 ${sym}: ${trade.shares.toLocaleString()}股`);
+              const interestNote = financingInterest > 0 ? ` (利息: ${Math.round(financingInterest).toLocaleString()} ${baseCurrency})` : '';
+              dailyEvents.push(`融資賣出 ${sym}: ${trade.shares.toLocaleString()}股${interestNote}`);
             } else {
               if (hasExplicitCashBook) {
                 currentCashBalance += netSellProceeds;
               } else {
                 // 無獨立現金帳本時，賣出變現視為回收部分本金或結算
                 netInvestedCapital -= netSellProceeds;
+                dailyNetExternalFlow -= netSellProceeds;
               }
               dailyEvents.push(`賣出 ${sym}: ${trade.shares.toLocaleString()}股 @ ${trade.price}`);
             }
@@ -382,27 +463,87 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
       }
     }
 
-    // (E) 計算總資產淨值 (NAV = 持股市值 + 現金餘額 - 借貸負債)
-    const totalNAV = Math.round((totalStockMarketValue + currentCashBalance - currentLoanBalance) * 100) / 100;
+    // (D.2) 計算當日應收未入帳股利 (除息日至發放日之間平滑補償)
+    let dailyReceivableDividends = 0;
+    if (receivableDividends && receivableDividends.length > 0) {
+      for (const div of receivableDividends) {
+        if (date >= div.exDate && date < div.payDate) {
+          const divAmountInBase = div.estimatedNetDividendInTWD && baseCurrency === 'TWD'
+            ? div.estimatedNetDividendInTWD
+            : div.currency === 'USD' && baseCurrency === 'TWD'
+            ? div.estimatedNetDividend * fxRate
+            : div.currency === 'TWD' && baseCurrency === 'USD'
+            ? div.estimatedNetDividend / fxRate
+            : div.estimatedNetDividend;
+          dailyReceivableDividends += divAmountInBase;
+        }
+      }
+    }
+    dailyReceivableDividends = Math.round(dailyReceivableDividends * 100) / 100;
+
+    // (E) 計算總資產淨值 (NAV = 持股市值 + 現金餘額 + 應收股利 - 借貸負債)
+    const totalNAV = Math.round((totalStockMarketValue + currentCashBalance + dailyReceivableDividends - currentLoanBalance) * 100) / 100;
     const effectiveCostBasis = Math.max(0, Math.round(netInvestedCapital * 100) / 100);
     const cumulativeReturnPnL = Math.round((totalNAV - effectiveCostBasis) * 100) / 100;
     const cumulativeReturnPercent = effectiveCostBasis > 0
       ? Math.round((cumulativeReturnPnL / effectiveCostBasis) * 10000) / 100
       : 0;
 
+    // GIPS 單位淨值法 (Unit NAV / TWR) 狀態機
+    const preFlowNAV = totalNAV - dailyNetExternalFlow;
+
     let dailyPnL = 0;
     let dailyReturnPercent = 0;
-    if (prevNAV !== null && prevNAV > 0) {
-      dailyPnL = Math.round((totalNAV - prevNAV) * 100) / 100;
-      dailyReturnPercent = Math.round((dailyPnL / prevNAV) * 10000) / 100;
+
+    if (prevTotalNAV !== null && prevTotalNAV > 0) {
+      dailyPnL = Math.round((preFlowNAV - prevTotalNAV) * 100) / 100;
+      const dailyReturnRate = (preFlowNAV - prevTotalNAV) / prevTotalNAV;
+      dailyReturnPercent = Math.round(dailyReturnRate * 10000) / 100;
+
+      // 更新當日單位淨值
+      currentUnitNAV = currentUnitNAV * (1 + dailyReturnRate);
+    } else {
+      currentUnitNAV = 100.0;
+      dailyPnL = 0;
+      dailyReturnPercent = 0;
     }
-    prevNAV = totalNAV;
+
+    // 處理當日外部出入金增減份額
+    if (dailyNetExternalFlow !== 0 && currentUnitNAV > 0) {
+      currentUnits += dailyNetExternalFlow / currentUnitNAV;
+    } else if (currentUnits === 0 && totalNAV > 0 && currentUnitNAV > 0) {
+      currentUnits = totalNAV / currentUnitNAV;
+    }
+
+    if (currentUnits < 0) {
+      currentUnits = 0;
+    }
+
+    prevTotalNAV = totalNAV;
+
+    const roundedUnitNAV = Math.round(currentUnitNAV * 100) / 100;
+    if (roundedUnitNAV > peakUnitNAV) {
+      peakUnitNAV = roundedUnitNAV;
+    }
+
+    let underwaterDrawdownPercent = 0.0;
+    if (peakUnitNAV > 0) {
+      const dd = (roundedUnitNAV - peakUnitNAV) / peakUnitNAV;
+      underwaterDrawdownPercent = Math.round(dd * 10000) / 100;
+      if (underwaterDrawdownPercent >= 0) {
+        underwaterDrawdownPercent = 0.0;
+      }
+    }
 
     series.push({
       date,
       totalNAV,
+      unitNAV: roundedUnitNAV,
+      units: Math.round(currentUnits * 1000) / 1000,
+      underwaterDrawdownPercent,
       stockMarketValue: Math.round(totalStockMarketValue * 100) / 100,
       cashBalance: Math.round(currentCashBalance * 100) / 100,
+      receivableDividends: dailyReceivableDividends,
       loanBalance: Math.round(currentLoanBalance * 100) / 100,
       netCostBasis: effectiveCostBasis,
       cumulativeReturnPnL,

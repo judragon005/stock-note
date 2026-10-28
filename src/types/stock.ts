@@ -103,14 +103,17 @@ export interface QuantPerformanceMetrics {
   sharpeRatio: number;            // 夏普值 Sharpe Ratio
   sortinoRatio?: number;          // 索提諾比 Sortino Ratio
   annualizedVolatility: number;   // 年化波動度 %
+  downsideVolatility?: number;    // 下行年化波動度 %
   benchmarkMaxDrawdown: number | null; // 基準最大回撤 % (無基準時為 null)
   portfolioMaxDrawdown: number;   // 投資組合最大回撤 %
+  currentDrawdownPercent?: number;// 當前距最高點水下深度 % (Ticket 10)
+  riskFreeRate?: number;          // 所套用之無風險利率 Rf %
   correlation: number | null;     // 與基準之相關係數 r (無基準時為 null)
 }
 
 export type DiagnosisHealthLevel = 'EXCELLENT' | 'GOOD' | 'FAIR' | 'ATTENTION' | 'NEUTRAL';
 
-export type QuantMetricId = 'alpha' | 'beta' | 'sharpe' | 'mdd' | 'volatility';
+export type QuantMetricId = 'alpha' | 'beta' | 'sharpe' | 'mdd' | 'volatility' | 'sortino';
 
 export interface MetricDiagnosis {
   id: QuantMetricId;
@@ -157,6 +160,7 @@ export interface TradeRecord {
   conversionPrice?: number; // 可轉債轉換價格
   isMargin?: boolean; // 是否為信用交易融資買進/賣出
   marginRate?: number; // 融資自備款比例 (預設台股現股融資為 0.4 即 40% 自備款)
+  marginInterestRate?: number; // 融資年利率 (預設 0.065 即 6.5%)
   intent?: TradeIntent; // Spec 0183: 交易初衷
   note?: string; // 交易備註
   tags?: string[]; // 標籤（如：長期核心、波段動能、股息成長）
@@ -404,15 +408,19 @@ export interface SettledLoanSummary {
 
 export interface PortfolioDailySnapshot {
   date: string; // YYYY-MM-DD
-  totalNAV: number; // 持股市值 + 現金餘額 - 借貸負債
+  totalNAV: number; // 持股市值 + 現金餘額 - 借貸負債 (AUM)
+  unitNAV: number; // 單位淨值 (起點 100.00，隔離外部出入金干擾)
+  units?: number; // 當前累積總份額
   stockMarketValue: number; // 股票持股市值
   cashBalance: number; // 現金帳戶總餘額
+  receivableDividends?: number; // 當日尚未入帳之應收股利資產 (折合基幣)
   loanBalance: number; // 借貸負債總餘額
   netCostBasis: number; // 累計外部投入本金 (入金 - 出金)
   cumulativeReturnPnL: number; // 累計總損益 (NAV - netCostBasis)
   cumulativeReturnPercent: number; // 累計總報酬率 %
-  dailyPnL?: number; // 當日損益變動
-  dailyReturnPercent?: number; // 當日漲跌幅 %
+  dailyPnL?: number; // 當日純投資損益變動 (扣除外部出入金)
+  dailyReturnPercent?: number; // 當日純投資報酬率 % (對齊單位淨值漲跌)
+  underwaterDrawdownPercent?: number; // 當日距歷史最高淨值 (ATH) 之水下回撤百分比 % (0 為新高，負數如 -5.2% 為水下)
   events: string[]; // 當日重大交易與事件摘要
 }
 

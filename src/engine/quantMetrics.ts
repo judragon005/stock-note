@@ -1,4 +1,4 @@
-import { QuantPerformanceMetrics, MetricDiagnosis, QuantDiagnosisMap } from '../types/stock';
+import { QuantPerformanceMetrics, MetricDiagnosis, QuantDiagnosisMap, Currency } from '../types/stock';
 
 /**
  * 計算序列之日報酬率數列: r_t = (P_t - P_{t-1}) / P_{t-1}
@@ -32,6 +32,31 @@ export function calculateAnnualizedVolatility(dailyReturns: number[]): number {
   const mean = dailyReturns.reduce((acc, r) => acc + r, 0) / dailyReturns.length;
   const variance =
     dailyReturns.reduce((acc, r) => acc + Math.pow(r - mean, 2), 0) / (dailyReturns.length - 1);
+  const std = Math.sqrt(variance);
+  const annualized = std * Math.sqrt(252) * 100;
+
+  return Math.round(annualized * 100) / 100;
+}
+
+/**
+ * 計算年化下行波動度 (Downside Volatility %):
+ * 僅衡量負報酬率之半變異數：sqrt( sum(min(0, r_i)^2) / (N - 1) ) * sqrt(252) * 100
+ */
+export function calculateDownsideVolatility(dailyReturns: number[]): number {
+  if (!dailyReturns || dailyReturns.length < 2) {
+    return 0;
+  }
+
+  const negativeReturns = dailyReturns.filter((r) => r < 0);
+  if (negativeReturns.length === 0) {
+    return 0;
+  }
+
+  const sumOfSquaredNegative = dailyReturns.reduce((acc, r) => {
+    return r < 0 ? acc + Math.pow(r, 2) : acc;
+  }, 0);
+
+  const variance = sumOfSquaredNegative / (dailyReturns.length - 1);
   const std = Math.sqrt(variance);
   const annualized = std * Math.sqrt(252) * 100;
 
@@ -81,16 +106,37 @@ export function calculateSharpeRatio(
 }
 
 /**
- * 依據外部宏觀日報動態解析無風險利率 (FRED 3M 美債殖利率優先) (Ticket 15)
+ * 計算索提諾比率 (Sortino Ratio)
+ * (年化總報酬率% - 年化無風險利率%) / 年化下行波動度%
+ */
+export function calculateSortinoRatio(
+  annualizedReturnPercent: number,
+  downsideVolatilityPercent: number,
+  riskFreeRatePercent = 1.5
+): number {
+  const excessReturn = annualizedReturnPercent - riskFreeRatePercent;
+  if (downsideVolatilityPercent <= 0) {
+    return excessReturn > 0 ? 99.99 : 0;
+  }
+  const sortino = excessReturn / downsideVolatilityPercent;
+  return Math.round(sortino * 100) / 100;
+}
+
+/**
+ * 依據計價幣別與外部宏觀日報動態解析無風險利率 (FRED 3M 美債殖利率優先) (Ticket 06)
  */
 export function resolveDynamicRiskFreeRate(
   sentimentRate?: number | null,
-  fallbackRate = 1.5
+  currency: Currency = 'TWD',
+  fallbackRate?: number
 ): number {
   if (typeof sentimentRate === 'number' && Number.isFinite(sentimentRate) && sentimentRate > 0) {
     return Number(sentimentRate.toFixed(2));
   }
-  return fallbackRate;
+  if (fallbackRate !== undefined) {
+    return fallbackRate;
+  }
+  return currency === 'USD' ? 4.5 : 1.8;
 }
 
 /**
@@ -173,7 +219,7 @@ export function calculateQuantMetrics(
       ? portfolioPrices[portfolioPrices.length - 1] / portfolioPrices[0]
       : 1;
 
-  const years = Math.max(days / 252, 1 / 252);
+  const years = Math.max(days / 365.25, 1 / 365.25);
   const annualizedReturnPercent = (Math.pow(totalReturnRatio, 1 / years) - 1) * 100;
 
   const sharpeRatio = calculateSharpeRatio(
@@ -182,7 +228,22 @@ export function calculateQuantMetrics(
     riskFreeRatePercent
   );
 
+  const downsideVolatility = calculateDownsideVolatility(pReturns);
+  const sortinoRatio = calculateSortinoRatio(
+    annualizedReturnPercent,
+    downsideVolatility,
+    riskFreeRatePercent
+  );
+
   const hasBenchmark = benchmarkPrices && benchmarkPrices.length >= 2;
+
+  let peakPrice = 0;
+  for (const p of portfolioPrices) {
+    if (p > peakPrice) peakPrice = p;
+  }
+  const lastPrice = portfolioPrices.length > 0 ? portfolioPrices[portfolioPrices.length - 1] : 0;
+  const currentDrawdownPercent =
+    peakPrice > 0 ? Math.round(((lastPrice - peakPrice) / peakPrice) * 10000) / 100 : 0;
 
   if (!hasBenchmark) {
     return {
@@ -190,9 +251,13 @@ export function calculateQuantMetrics(
       alpha: null,
       beta: null,
       sharpeRatio,
+      sortinoRatio,
       annualizedVolatility,
+      downsideVolatility,
       benchmarkMaxDrawdown: null,
       portfolioMaxDrawdown,
+      currentDrawdownPercent,
+      riskFreeRate: riskFreeRatePercent,
       correlation: null,
     };
   }
@@ -205,7 +270,7 @@ export function calculateQuantMetrics(
     benchmarkPrices.length > 0 && benchmarkPrices[0] > 0
       ? benchmarkPrices[benchmarkPrices.length - 1] / benchmarkPrices[0]
       : 1;
-  const bYears = Math.max(bDays / 252, 1 / 252);
+  const bYears = Math.max(bDays / 365.25, 1 / 365.25);
   const benchmarkAnnualizedReturnPercent = (Math.pow(bTotalReturnRatio, 1 / bYears) - 1) * 100;
 
   const { beta, correlation } = calculateBetaAndCorrelation(pReturns, bReturns);
@@ -221,9 +286,13 @@ export function calculateQuantMetrics(
     alpha,
     beta,
     sharpeRatio,
+    sortinoRatio,
     annualizedVolatility,
+    downsideVolatility,
     benchmarkMaxDrawdown,
     portfolioMaxDrawdown,
+    currentDrawdownPercent,
+    riskFreeRate: riskFreeRatePercent,
     correlation,
   };
 }
@@ -576,12 +645,77 @@ export function getQuantMetricDiagnosis(
     };
   }
 
+  // 6. 索提諾比率 (Sortino Ratio)
+  let sortinoDiag: MetricDiagnosis;
+  const sortinoVal = metrics.sortinoRatio ?? 0;
+  const dVolStr = metrics.downsideVolatility !== undefined ? metrics.downsideVolatility.toFixed(2) : '0.00';
+  const rfStr = metrics.riskFreeRate !== undefined ? metrics.riskFreeRate.toFixed(1) : '1.5';
+
+  if (sortinoVal >= 2.0) {
+    sortinoDiag = {
+      id: 'sortino',
+      title: '索提諾比率 (Sortino)',
+      fullName: 'Sortino Ratio',
+      definition: '衡量每多承受 1% 下行波動度所換取的超額年化報酬率（專注懲罰實質虧損，不懲罰向上波動）。',
+      formula: 'Sortino = (Rp - Rf) / σd',
+      benchmarkNote: `無風險利率 Rf = ${rfStr}%，下行波動度 σd = ${dVolStr}%`,
+      level: 'EXCELLENT',
+      levelBadge: '🌟 極致抗跌',
+      badgeColor: '#10b981',
+      summary: `索提諾比率高達 ${sortinoVal.toFixed(2)}，下行防守與超額報酬表現極為頂尖！`,
+      suggestion: '承擔每單位下行虧損風險換取豐厚超額報酬，下檔防禦性極佳。',
+    };
+  } else if (sortinoVal >= 1.0) {
+    sortinoDiag = {
+      id: 'sortino',
+      title: '索提諾比率 (Sortino)',
+      fullName: 'Sortino Ratio',
+      definition: '衡量每多承受 1% 下行波動度所換取的超額年化報酬率（專注懲罰實質虧損，不懲罰向上波動）。',
+      formula: 'Sortino = (Rp - Rf) / σd',
+      benchmarkNote: `無風險利率 Rf = ${rfStr}%，下行波動度 σd = ${dVolStr}%`,
+      level: 'GOOD',
+      levelBadge: '🟢 防禦良好',
+      badgeColor: '#34d399',
+      summary: `索提諾比率為 ${sortinoVal.toFixed(2)}，下行風險回報比健康。`,
+      suggestion: '在下檔震盪時維持優良報酬吸收能力，符合穩健投資標準。',
+    };
+  } else if (sortinoVal >= 0.0) {
+    sortinoDiag = {
+      id: 'sortino',
+      title: '索提諾比率 (Sortino)',
+      fullName: 'Sortino Ratio',
+      definition: '衡量每多承受 1% 下行波動度所換取的超額年化報酬率（專注懲罰實質虧損，不懲罰向上波動）。',
+      formula: 'Sortino = (Rp - Rf) / σd',
+      benchmarkNote: `無風險利率 Rf = ${rfStr}%，下行波動度 σd = ${dVolStr}%`,
+      level: 'FAIR',
+      levelBadge: '🟡 防禦偏弱',
+      badgeColor: '#fbbf24',
+      summary: `索提諾比率為 ${sortinoVal.toFixed(2)}，下行波動對報酬率具一定程度侵蝕。`,
+      suggestion: '建議檢視高下行波動標的，加強停損保護以提升防禦性。',
+    };
+  } else {
+    sortinoDiag = {
+      id: 'sortino',
+      title: '索提諾比率 (Sortino)',
+      fullName: 'Sortino Ratio',
+      definition: '衡量每多承受 1% 下行波動度所換取的超額年化報酬率（專注懲罰實質虧損，不懲罰向上波動）。',
+      formula: 'Sortino = (Rp - Rf) / σd',
+      benchmarkNote: `無風險利率 Rf = ${rfStr}%，下行波動度 σd = ${dVolStr}%`,
+      level: 'ATTENTION',
+      levelBadge: '🔴 下行脆弱',
+      badgeColor: '#f87171',
+      summary: `索提諾比率為負數 (${sortinoVal.toFixed(2)})，未能抵禦下行虧損風險。`,
+      suggestion: '投資組合承擔過度劇烈的下跌虧損，應立即縮減投機部位並啟動避險機制。',
+    };
+  }
+
   return {
     alpha: alphaDiag,
     beta: betaDiag,
     sharpe: sharpeDiag,
     mdd: mddDiag,
     volatility: volDiag,
+    sortino: sortinoDiag,
   };
 }
 

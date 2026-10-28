@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1876%2F1876%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1903%2F1903%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,26 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 第一梯隊高性價比架構技術債清理與精實重構 (`Technical Debt Batch 1: Guardrails, Compound Timeout, Component Decomposition & Style Cleanup`) *(V9.02.0 最新發布 / Spec #0205 / ADR #0205 / Issue #336)*
+### 0. 資產成長與單位淨值會計及量化風控引擎重構 (`Portfolio NAV Unitized Accounting & Quant Risk Engine`) *(V9.03.0 最新發布 / Spec #0206 / ADR #0206 / Issue #338)*
+
+- **單位淨值會計法 (GIPS Unit NAV / TWR) 狀態機**：
+  - 起點歸一化為 100.00，外部大額出入金等比增減總份額，單位淨值維持連續，徹底根除出入金扭曲真實操盤績效之金融失真。
+- **除息空窗應收股利平滑補償 (`Receivable Dividends Smoothing`)**：
+  - 除息基準日至發放日之間以權責發生制認列應收資產加計至總淨值，發放日自動沖銷，撫平除權息假凹洞。
+- **融資利息扣除與實戰逐日水下深度計算 (`Margin Interest & Drawdown Series`)**：
+  - 平倉時依天數與利率扣除利息支出；逐日追蹤歷史最高淨值 (Peak ATH)，推演 `underwaterDrawdownPercent` 數列。
+- **大盤真數據直連本機 SQLite 湖倉 API 與動態無風險利率 ($R_f$)**：
+  - 徹底清除 2025/2026 年捏造的 SPY 線性偽常數，直連 `/api/market/history/:symbol?limit=all` 並具備記憶體快取；依計價幣別 (USD 4.5%, TWD 1.8%) 與外部 FRED 動態注入無風險利率。
+- **時間除數校準 (`days/365.25`) 與索提諾比率 (Sortino Ratio)**：
+  - 時間除數統一校準為 365.25 日曆天；量化看板新增第 6 張卡片「🛡️ 索提諾比率 (Sortino)」，專注懲罰下行虧損風險並具備多階層智能診斷。
+- **前台資產走勢雙模切換視圖與原生向量 SVG 水下回撤圖**：
+  - 走勢圖支援「資產金額 (AUM)」與「淨值走勢 (Unit NAV %)」膠囊切換；提供原生向量 SVG 實戰水下回撤圖面板與落水天數統計。
+- **SVG 畫布穿倉負淨值防禦與破產警戒紅線 (Y = 0)**：
+  - 移除負淨值截斷，當遭遇融資穿倉淨值跌破 0 時繪製紅色虛線基準線，座標計算防禦 NaN 崩潰。
+- **操作管線閉環（透視金流移位、帳戶篩選器、一鍵隱私遮罩）**：
+  - 將「透視金流」移至「累計投入本金」卡片並連動週期；打通券商篩選器 (`selectedAccountId`)；頂部新增 `[ 👁️ 隱私遮罩 ]`，一鍵遮蔽全頁敏感金額（`NT$******`）且保留報酬率百分比。
+
+### 1. 第一梯隊高性價比架構技術債清理與精實重構 (`Technical Debt Batch 1: Guardrails, Compound Timeout, Component Decomposition & Style Cleanup`) *(V9.02.0 / Spec #0205 / ADR #0205 / Issue #336)*
 
 - **Pre-push Guard 整合文檔完整性與死鏈守門 (`Documentation Integrity Guard Integration`)**：
   - 將全專案文檔稽核腳本 `verify-docs.cjs` 整合至 `pre-push-guard.cjs` 本地阻斷關卡，以 1 秒超低延遲在推播前強制驗證 630+ 份文檔超連結實體與 Spec/ADR 1:1 成對性，徹底阻斷壞鏈外洩 (技術債 0047)。

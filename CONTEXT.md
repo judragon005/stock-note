@@ -2720,4 +2720,20 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     4. **財務三表樣式常數與純展示儲存格抽取 (技術債 0053)**：抽取 `STATEMENT_TABLE_STYLES` 與 `<StatementDataCell />`，消滅重複內聯樣式。
     5. **技術債看板更新**：`docs/debts/README.md` 將 0047, 0052, 0053, 0054 標記為 `RESOLVED`。
 
+- **Portfolio NAV Unitized Accounting & Quant Risk Engine (資產成長與單位淨值會計及量化風控引擎重構)**:
+  - 核心模組：`src/engine/historicalNav.ts`、`src/engine/quantMetrics.ts`、`src/engine/benchmarkData.ts`、`src/engine/benchmarkConstants.ts`、`src/components/PortfolioGrowthChart.tsx`。
+  - 規範依據：Spec 0206 (v9.03.0) 與 ADR 0206，對齊 GitHub Issue #338。
+  - 核心特性：
+    1. **單位淨值會計法 (GIPS Unit NAV / TWR) 狀態機**：以 $NAV_0 = 100.00$ 與初始份額起算，大額外部出入金等比縮放累積總份額，單位淨值保持連續，徹底消滅大額入金導致報酬率跳水、大額出金導致績效虛增之扭曲。
+    2. **除息空窗應收股利平滑補償 (Receivable Dividends)**：在除息日與發放日之間以權責發生制認列應收資產加計至當日總淨值，發放日自動沖銷，撫平除息假凹洞。
+    3. **融資賣出利息精確扣除與逐日水下深度計算**：平倉時維護 FIFO 融資批次，依天數與利率扣除利息支出；逐日追蹤歷史最高淨值 (Peak ATH) 推演 `underwaterDrawdownPercent` 數列。
+    4. **大盤真數據直連本機 SQLite 湖倉 API 與動態無風險利率 ($R_f$)**：清除 2025/2026 年捏造的 SPY 偽常數，直連 `/api/market/history/:symbol?limit=all` 並具備記憶體快取；依計價幣別 (USD 4.5%, TWD 1.8%) 與外部 FRED 動態注入無風險利率。
+    5. **量化風控指標時間除數校準與索提諾比率 (Sortino Ratio)**：時間除數統一校準為 `days / 365.25`，新增下行波動度與索提諾比率計算與多階層智能診斷（>2 🌟 極致抗跌、1~2 🟢 防禦良好、<1 🟡 防禦偏弱、<0 🔴 下行脆弱）。
+    6. **資產走勢金額 (AUM) 與淨值 (Unit NAV %) 雙模切換視圖**：提供膠囊切換按鈕，Unit NAV 模式下資產與大盤起點歸一化為 100%，Y 軸切換為百分比刻度（如 `+15.2%`）。
+    7. **SVG 畫布穿倉負淨值防禦與破產警戒紅線 (Y = 0)**：移除 `Math.max(0, ...)` 負淨值截斷，當融資穿倉淨值破產時繪製紅色虛線基準線，座標計算防禦 NaN 崩潰。
+    8. **原生向量 SVG 實戰水下回撤圖與落水修復天數指標**：面板支援展開/收合、向下面積陰影、0.0% 基準線，即時統計當前水下深度與落水天數，並與上方主圖指針連動。
+    9. **風控指標看板雙指標升級**：新增第 6 張「索提諾 (Sortino)」卡片；最大回撤卡片升級為雙重動態指標，同時展示「歷史最大回撤」與「當前距新高水下深度」，新高時標註綠色 `ATH 新高`。
+    10. **操作管線閉環（透視金流移位、帳戶篩選器、一鍵隱私遮罩）**：將「透視金流」移至「累計投入本金」卡片右上角並連動選取週期傳入；打通券商篩選器 (`selectedAccountId`)；頂部新增 `[ 👁️ 隱私遮罩 ]` 開關按鈕，一鍵將全頁敏感金額（總資產 NAV、本金、損益金額、ATH 峰值）遮蔽為 `NT$******` 且保留報酬率百分比，滿足社群分享需求。
+
+
 

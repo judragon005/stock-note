@@ -13,6 +13,7 @@ import {
   HistoricalDailyPriceMap,
   HistoricalFxRateMap,
 } from '../types/stock';
+import { ReceivableDividend } from '../types/dividend';
 
 describe('歷史行情補值與日期序列引擎 (Forward-Fill & Date Sequence)', () => {
   it('應能正確生成連續日曆天日期序列 (YYYY-MM-DD)', () => {
@@ -273,6 +274,7 @@ describe('週期篩選與績效統計指標 (Metrics & Time Range Filter)', () =
       {
         date: '2026-01-01',
         totalNAV: 100,
+        unitNAV: 100,
         stockMarketValue: 100,
         cashBalance: 0,
         loanBalance: 0,
@@ -284,6 +286,7 @@ describe('週期篩選與績效統計指標 (Metrics & Time Range Filter)', () =
       {
         date: '2026-01-02',
         totalNAV: 150, // Peak ATH
+        unitNAV: 150,
         stockMarketValue: 150,
         cashBalance: 0,
         loanBalance: 0,
@@ -295,6 +298,7 @@ describe('週期篩選與績效統計指標 (Metrics & Time Range Filter)', () =
       {
         date: '2026-01-03',
         totalNAV: 120, // Drawdown from 150 to 120: (120 - 150) / 150 = -20%
+        unitNAV: 120,
         stockMarketValue: 120,
         cashBalance: 0,
         loanBalance: 0,
@@ -317,6 +321,7 @@ describe('週期篩選與績效統計指標 (Metrics & Time Range Filter)', () =
       {
         date: '2025-01-01',
         totalNAV: 100,
+        unitNAV: 100,
         stockMarketValue: 100,
         cashBalance: 0,
         loanBalance: 0,
@@ -328,6 +333,7 @@ describe('週期篩選與績效統計指標 (Metrics & Time Range Filter)', () =
       {
         date: '2026-01-01',
         totalNAV: 150,
+        unitNAV: 150,
         stockMarketValue: 150,
         cashBalance: 0,
         loanBalance: 0,
@@ -532,5 +538,410 @@ describe('週期篩選與績效統計指標 (Metrics & Time Range Filter)', () =
       expect(day20!.totalNAV).toBe(500000);
     });
   });
+
+  describe('GIPS 單位淨值法 (Unit NAV / TWR) 狀態機與外部出入金解耦 (Ticket 02)', () => {
+    it('外部大額入金與出金時，unitNAV 應保持連續，杜絕虛假 MDD 與假性暴賺', () => {
+      // Day 1 (01-01): 入金 100 萬，買入 2330 1,000 股 @ 600 (花費 60 萬，現金剩 40 萬)，NAV = 100 萬
+      // Day 2 (01-02): 2330 漲至 660 (+10%)，市值 66 萬，現金 40 萬 -> 總 NAV 106 萬 (+6%)
+      // Day 3 (01-03): 外部大額加碼入金 300 萬，股價維持 660 -> 總 NAV 406 萬，但當天純投資報酬率應為 0%，unitNAV 不變！
+      // Day 4 (01-04): 外部大額出金 200 萬，股價維持 660 -> 總 NAV 206 萬，當天純投資報酬率應為 0%，unitNAV 不變！
+      const trades: TradeRecord[] = [
+        {
+          id: 't1',
+          date: '2026-01-01',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 600,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+      ];
+
+      const cashTransactions: CashTransaction[] = [
+        {
+          id: 'c1',
+          accountId: 'broker-tw-default',
+          currency: 'TWD',
+          type: 'DEPOSIT',
+          amount: 1000000,
+          date: '2026-01-01',
+          createdAt: 1,
+        },
+        {
+          id: 'c2',
+          accountId: 'broker-tw-default',
+          currency: 'TWD',
+          type: 'DEPOSIT',
+          amount: 3000000,
+          date: '2026-01-03',
+          createdAt: 3,
+        },
+        {
+          id: 'c3',
+          accountId: 'broker-tw-default',
+          currency: 'TWD',
+          type: 'WITHDRAWAL',
+          amount: 2000000,
+          date: '2026-01-04',
+          createdAt: 4,
+        },
+      ];
+
+      const priceMap: HistoricalDailyPriceMap = {
+        '2330': {
+          '2026-01-01': 600,
+          '2026-01-02': 660,
+          '2026-01-03': 660,
+          '2026-01-04': 660,
+        },
+      };
+
+      const series = calculateHistoricalNavSeries({
+        trades,
+        cashTransactions,
+        loanRecords: [],
+        priceMap,
+        startDate: '2026-01-01',
+        endDate: '2026-01-04',
+        baseCurrency: 'TWD',
+      });
+
+      expect(series.length).toBe(4);
+
+      // Day 1: 首日 unitNAV 為 100.00
+      expect(series[0].date).toBe('2026-01-01');
+      expect(series[0].totalNAV).toBe(1000000);
+      expect(series[0].unitNAV).toBe(100.00);
+
+      // Day 2: 股票上漲 6 萬 (60萬 -> 66萬)，總資產 100萬 -> 106萬，純收益率 +6%
+      expect(series[1].date).toBe('2026-01-02');
+      expect(series[1].totalNAV).toBe(1060000);
+      expect(series[1].unitNAV).toBe(106.00);
+      expect(series[1].dailyReturnPercent).toBe(6.00);
+
+      // Day 3: 大額入金 300 萬，總資產由 106 萬暴增至 406 萬
+      // 但單位淨值絕不能跳增，必須維持 106.00，當日純投資報酬率必須為 0%！
+      expect(series[2].date).toBe('2026-01-03');
+      expect(series[2].totalNAV).toBe(4060000);
+      expect(series[2].unitNAV).toBe(106.00);
+      expect(series[2].dailyReturnPercent).toBe(0.00);
+
+      // Day 4: 大額出金 200 萬，總資產由 406 萬降至 206 萬
+      // 單位淨值絕不能暴跌，必須維持 106.00，當日純投資報酬率必須為 0%！
+      expect(series[3].date).toBe('2026-01-04');
+      expect(series[3].totalNAV).toBe(2060000);
+      expect(series[3].unitNAV).toBe(106.00);
+      expect(series[3].dailyReturnPercent).toBe(0.00);
+    });
+  });
+
+  describe('應收股利 (Receivable Dividends) 除息空窗平滑補償 (Ticket 03)', () => {
+    it('在除息日 (Ex-Date) 至發放日 (Pay-Date) 之間，NAV 曲線應平滑過渡無假性跳水', () => {
+      // 07-01: 持有 2330 1,000 股 @ 1000 元，市值 100 萬，現金 0，NAV = 100 萬
+      // 07-02: 除息日 Ex-Date，配息 30 元/股 (30,000 元)，股價因除息扣減變為 970 元
+      //        若未補償：NAV 會假摔至 97 萬 (-3%)！
+      //        有平滑補償：認列應收股利 30,000 元，NAV 依然為 1,000,000 元，unitNAV 保持 100.00！
+      // 07-30: 發放日 Pay-Date，配息現金 30,000 元正式入帳，沖銷應收股利
+      //        持股市值 97 萬 + 現金 3 萬 = 100 萬，NAV 依然平滑為 1,000,000 元，unitNAV 保持 100.00！
+      const trades: TradeRecord[] = [
+        {
+          id: 't-buy',
+          date: '2026-07-01',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 1000,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 't-div-pay',
+          date: '2026-07-30',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'DIVIDEND',
+          shares: 1000,
+          price: 30,
+          cashAmount: 30000,
+          fee: 0,
+          tax: 0,
+          createdAt: 30,
+        },
+      ];
+
+      const receivableDividends: ReceivableDividend[] = [
+        {
+          id: '2330-2026-07-02',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-07-02',
+          payDate: '2026-07-30',
+          sharesHeldOnExDate: 1000,
+          cashDividendPerShare: 30,
+          estimatedGrossDividend: 30000,
+          estimatedTaxOrFee: 0,
+          estimatedNetDividend: 30000,
+          estimatedNetDividendInTWD: 30000,
+          status: 'PENDING_PAYMENT',
+        },
+      ];
+
+      const priceMap: HistoricalDailyPriceMap = {
+        '2330': {
+          '2026-07-01': 1000,
+          '2026-07-02': 970, // 除息日自然下調
+          '2026-07-15': 970, // 空窗期維持 970
+          '2026-07-30': 970, // 發放日維持 970
+        },
+      };
+
+      const series = calculateHistoricalNavSeries({
+        trades,
+        receivableDividends,
+        priceMap,
+        startDate: '2026-07-01',
+        endDate: '2026-07-30',
+        baseCurrency: 'TWD',
+      });
+
+      // 07-01 (除息前一日)
+      const day01 = series.find((s) => s.date === '2026-07-01');
+      expect(day01).toBeDefined();
+      expect(day01!.totalNAV).toBe(1000000);
+      expect(day01!.unitNAV).toBe(100.00);
+
+      // 07-02 (除息日): 市值變 97 萬，但應收股利為 3 萬，總 NAV 依然為 100 萬，unitNAV 維持 100.00
+      const day02 = series.find((s) => s.date === '2026-07-02');
+      expect(day02).toBeDefined();
+      expect(day02!.stockMarketValue).toBe(970000);
+      expect(day02!.receivableDividends).toBe(30000);
+      expect(day02!.totalNAV).toBe(1000000);
+      expect(day02!.unitNAV).toBe(100.00);
+      expect(day02!.dailyReturnPercent).toBe(0.00);
+
+      // 07-15 (空窗期間): 應收股利持續平滑補償
+      const day15 = series.find((s) => s.date === '2026-07-15');
+      expect(day15).toBeDefined();
+      expect(day15!.receivableDividends).toBe(30000);
+      expect(day15!.totalNAV).toBe(1000000);
+      expect(day15!.unitNAV).toBe(100.00);
+
+      // 07-30 (發放日): 應收股利自動沖銷為 0，現金入帳 3 萬，總 NAV 依然為 100 萬
+      const day30 = series.find((s) => s.date === '2026-07-30');
+      expect(day30).toBeDefined();
+      expect(day30!.receivableDividends).toBe(0);
+      expect(day30!.cashBalance).toBe(30000);
+      expect(day30!.stockMarketValue).toBe(970000);
+      expect(day30!.totalNAV).toBe(1000000);
+      expect(day30!.unitNAV).toBe(100.00);
+    });
+  });
+
+  describe('信用交易融資賣出利息扣除與逐日水下深度計算 (Ticket 04)', () => {
+    it('融資賣出時應依據持股天數精準扣除融資利息，避免平倉變現虛高', () => {
+      // 08-01: 融資買進 2330 1,000 股 @ 1000 元，自備款 40 萬，借款 60 萬 (利率 6.5%)
+      // 初始現金 50 萬 -> 買後剩餘現金 10 萬，負債 60 萬，市值 100 萬 -> NAV = 50 萬
+      // 08-31 (持股 30 天): 融資賣出 2330 1,000 股 @ 1000 元 (無手續費稅金以利精準核帳)
+      // 融資借款本金 60 萬應還清。
+      // 融資利息 = 600,000 * 0.065 * (30 / 365) = 3205.479... -> 約 3205 元
+      // 淨入現金帳 = 賣出 100 萬 - 還款 60 萬 - 利息 3205 = 396,795 元
+      // 賣出後最終現金餘額 = 10 萬 + 396,795 = 496,795 元 (NAV = 496,795 元，精準扣減利息 3205 元)
+      const trades: TradeRecord[] = [
+        {
+          id: 't-mbuy',
+          date: '2026-08-01',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'MARGIN_BUY',
+          shares: 1000,
+          price: 1000,
+          marginRate: 0.4,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 't-msell',
+          date: '2026-08-31',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'MARGIN_SELL',
+          shares: 1000,
+          price: 1000,
+          marginRate: 0.4,
+          fee: 0,
+          tax: 0,
+          createdAt: 31,
+        },
+      ];
+
+      const initialCash: CashTransaction[] = [
+        {
+          id: 'c-init',
+          currency: 'TWD',
+          type: 'DEPOSIT',
+          amount: 500000,
+          date: '2026-08-01',
+          createdAt: 0,
+          accountId: 'broker-tw-default',
+        },
+      ];
+
+      const priceMap: HistoricalDailyPriceMap = {
+        '2330': {
+          '2026-08-01': 1000,
+          '2026-08-31': 1000,
+        },
+      };
+
+      const series = calculateHistoricalNavSeries({
+        trades,
+        cashTransactions: initialCash,
+        priceMap,
+        startDate: '2026-08-01',
+        endDate: '2026-08-31',
+        baseCurrency: 'TWD',
+      });
+
+      const day31 = series.find((s) => s.date === '2026-08-31');
+      expect(day31).toBeDefined();
+      expect(day31!.stockMarketValue).toBe(0);
+      expect(day31!.loanBalance).toBe(0);
+      // 現金餘額應精準扣除約 3205 元利息
+      expect(day31!.cashBalance).toBeCloseTo(496795, -1);
+      expect(day31!.totalNAV).toBeCloseTo(496795, -1);
+    });
+
+    it('應逐日正確推演 underwaterDrawdownPercent (當日距 ATH 之水下回撤百分比)', () => {
+      // 01-01: 買進持股，NAV = 100, unitNAV = 100 -> 在最高點，underwaterDrawdownPercent = 0.00
+      // 01-02: 股價漲 10%，unitNAV = 110 -> 創 ATH，underwaterDrawdownPercent = 0.00
+      // 01-03: 股價回調至 99，unitNAV = 99 -> 距 ATH 110 之跌幅: (99 - 110)/110 = -10.00%
+      // 01-04: 股價修復至 104.5，unitNAV = 104.5 -> 距 ATH 110 之跌幅: (104.5 - 110)/110 = -5.00%
+      const trades: TradeRecord[] = [
+        {
+          id: 't-buy',
+          date: '2026-01-01',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 100,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+      ];
+
+      const priceMap: HistoricalDailyPriceMap = {
+        '2330': {
+          '2026-01-01': 100,
+          '2026-01-02': 110,
+          '2026-01-03': 99,
+          '2026-01-04': 104.5,
+        },
+      };
+
+      const series = calculateHistoricalNavSeries({
+        trades,
+        priceMap,
+        startDate: '2026-01-01',
+        endDate: '2026-01-04',
+        baseCurrency: 'TWD',
+      });
+
+      expect(series.length).toBe(4);
+      // Day 1: 0%
+      expect(series[0].underwaterDrawdownPercent).toBe(0.00);
+      // Day 2: 0% (新高 110)
+      expect(series[1].underwaterDrawdownPercent).toBe(0.00);
+      // Day 3: (99 - 110)/110 = -10%
+      expect(series[2].underwaterDrawdownPercent).toBe(-10.00);
+      // Day 4: (104.5 - 110)/110 = -5%
+      expect(series[3].underwaterDrawdownPercent).toBe(-5.00);
+    });
+  });
+
+  describe('Ticket 11: 帳戶篩選器 (selectedAccountId) 連動', () => {
+    it('當指定 selectedAccountId 時，應只納入該券商帳戶之交易與資金流水', () => {
+      const trades: TradeRecord[] = [
+        {
+          id: 't-cathay',
+          date: '2026-01-01',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          accountId: 'broker-cathay',
+          shares: 1000,
+          price: 500,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 't-fubon',
+          date: '2026-01-01',
+          symbol: '2317',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          accountId: 'broker-fubon',
+          shares: 2000,
+          price: 100,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+      ];
+
+      const priceMap: HistoricalDailyPriceMap = {
+        '2330': { '2026-01-01': 500 },
+        '2317': { '2026-01-01': 100 },
+      };
+
+      // 1. 篩選國泰帳戶 -> 僅 2330 (50 萬市值)
+      const cathaySeries = calculateHistoricalNavSeries({
+        trades,
+        priceMap,
+        selectedAccountId: 'broker-cathay',
+      });
+      expect(cathaySeries.length).toBe(1);
+      expect(cathaySeries[0].stockMarketValue).toBe(500000);
+      expect(cathaySeries[0].totalNAV).toBe(500000);
+
+      // 2. 篩選富邦帳戶 -> 僅 2317 (20 萬市值)
+      const fubonSeries = calculateHistoricalNavSeries({
+        trades,
+        priceMap,
+        selectedAccountId: 'broker-fubon',
+      });
+      expect(fubonSeries.length).toBe(1);
+      expect(fubonSeries[0].stockMarketValue).toBe(200000);
+      expect(fubonSeries[0].totalNAV).toBe(200000);
+
+      // 3. 全帳戶合併 (未傳或 'ALL') -> 50 萬 + 20 萬 = 70 萬
+      const allSeries = calculateHistoricalNavSeries({
+        trades,
+        priceMap,
+        selectedAccountId: 'ALL',
+      });
+      expect(allSeries.length).toBe(1);
+      expect(allSeries[0].stockMarketValue).toBe(700000);
+    });
+  });
 });
+
 

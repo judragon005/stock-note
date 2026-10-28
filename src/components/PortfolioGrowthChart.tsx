@@ -19,6 +19,8 @@ import {
   Compass,
   HelpCircle,
   Eye,
+  EyeOff,
+  ShieldCheck,
 } from 'lucide-react';
 import { filterNavSeriesByRange, calculatePerformanceMetrics } from '../engine/historicalNav';
 import {
@@ -36,8 +38,10 @@ interface PortfolioGrowthChartProps {
   baseCurrency?: Currency;
   isSyncing?: boolean;
   syncProgressText?: string;
+  initialChartMode?: 'AUM' | 'UNIT_NAV';
+  initialIsIncognito?: boolean;
   onRefreshHistory?: () => void;
-  onInspectXirr?: () => void;
+  onInspectXirr?: (timeRange?: TimeRangeFilter) => void;
 }
 
 export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
@@ -46,13 +50,33 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
   baseCurrency = 'TWD',
   isSyncing = false,
   syncProgressText = '',
+  initialChartMode = 'AUM',
+  initialIsIncognito = false,
   onRefreshHistory,
   onInspectXirr,
 }) => {
+  const [chartMode, setChartMode] = useState<'AUM' | 'UNIT_NAV'>(initialChartMode);
   const [timeRange, setTimeRange] = useState<TimeRangeFilter>('ALL');
+  const [isIncognito, setIsIncognito] = useState<boolean>(initialIsIncognito);
   const [benchmarkType, setBenchmarkType] = useState<BenchmarkType>('NONE');
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [activeTooltipMetric, setActiveTooltipMetric] = useState<QuantMetricId | null>(null);
+
+  const currencySymbol = baseCurrency === 'USD' ? 'US$' : 'NT$';
+
+  const formatMoney = (val: number, isPnL = false) => {
+    if (isIncognito) {
+      if (isPnL) {
+        return `${val >= 0 ? '+' : '-'}${currencySymbol}******`;
+      }
+      return `${currencySymbol}******`;
+    }
+    const sign = isPnL && val >= 0 ? '+' : isPnL && val < 0 ? '-' : '';
+    return `${sign}${currencySymbol}${Math.abs(val).toLocaleString()}`;
+  };
+
+  // 水下回撤圖展開/收合開關 (Ticket 09)
+  const [showUnderwaterChart, setShowUnderwaterChart] = useState(true);
 
   // 曲線顯示開關
   const [visibleLines, setVisibleLines] = useState({
@@ -137,6 +161,84 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
     return filteredSeries[filteredSeries.length - 1];
   }, [filteredSeries, hoverIndex]);
 
+  // 水下回撤圖狀態與 SVG 座標推演 (Ticket 09)
+  const {
+    underwaterPath,
+    underwaterArea,
+    minUnderwaterDd,
+    underwaterWidth,
+    underwaterHeight,
+    underwaterPadding,
+    currentDrawdownVal,
+    drawdownDaysCount,
+  } = useMemo(() => {
+    const uwW = 1000;
+    const uwH = 160;
+    const uwPad = { top: 20, right: 30, bottom: 25, left: 70 };
+
+    if (filteredSeries.length === 0) {
+      return {
+        underwaterPath: '',
+        underwaterArea: '',
+        minUnderwaterDd: -10,
+        underwaterWidth: uwW,
+        underwaterHeight: uwH,
+        underwaterPadding: uwPad,
+        currentDrawdownVal: 0,
+        drawdownDaysCount: 0,
+      };
+    }
+
+    const ddValues = filteredSeries.map((s) => s.underwaterDrawdownPercent ?? 0);
+    // 找出最深回撤 (負數，例如 -25.5)，保底至少 -5% 以免畫布扁平
+    let deepest = Math.min(-5, ...ddValues);
+    deepest = deepest * 1.1; // 留 10% 緩衝
+
+    const plotW = uwW - uwPad.left - uwPad.right;
+    const plotH = uwH - uwPad.top - uwPad.bottom;
+
+    const getUwX = (idx: number) => {
+      if (filteredSeries.length <= 1) return uwPad.left + plotW / 2;
+      return uwPad.left + (idx / (filteredSeries.length - 1)) * plotW;
+    };
+
+    const getUwY = (dd: number) => {
+      // 0% 在最上方 (uwPad.top)，deepest 在最下方 (uwPad.top + plotH)
+      const ratio = (0 - dd) / (0 - deepest);
+      return uwPad.top + Math.max(0, Math.min(plotH, ratio * plotH));
+    };
+
+    const linePoints = ddValues
+      .map((val, i) => `${i === 0 ? 'M' : 'L'} ${getUwX(i).toFixed(1)} ${getUwY(val).toFixed(1)}`)
+      .join(' ');
+
+    const areaPoints = `${linePoints} L ${getUwX(filteredSeries.length - 1).toFixed(1)} ${uwPad.top.toFixed(1)} L ${getUwX(0).toFixed(1)} ${uwPad.top.toFixed(1)} Z`;
+
+    // 計算當前指針或最新點的水下深度與落水天數
+    const activeIdx =
+      hoverIndex !== null && hoverIndex >= 0 && hoverIndex < filteredSeries.length
+        ? hoverIndex
+        : filteredSeries.length - 1;
+    const currentDrawdownVal = ddValues[activeIdx] ?? 0;
+
+    let drawdownDaysCount = 0;
+    for (let i = activeIdx; i >= 0; i--) {
+      if (ddValues[i] >= -0.001) break;
+      drawdownDaysCount++;
+    }
+
+    return {
+      underwaterPath: linePoints,
+      underwaterArea: areaPoints,
+      minUnderwaterDd: deepest,
+      underwaterWidth: uwW,
+      underwaterHeight: uwH,
+      underwaterPadding: uwPad,
+      currentDrawdownVal,
+      drawdownDaysCount,
+    };
+  }, [filteredSeries, hoverIndex]);
+
   // 計算 SVG 座標與比例
   const { pathNav, pathCost, pathStock, pathCash, pathLoan, pathBenchmark, areaNav, minVal, maxVal, width, height, padding } =
     useMemo(() => {
@@ -164,35 +266,53 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
       let min = Infinity;
       let max = -Infinity;
 
-      filteredSeries.forEach((pt) => {
-        if (visibleLines.nav) {
-          min = Math.min(min, pt.totalNAV);
-          max = Math.max(max, pt.totalNAV);
+      const initialUnitNAV = filteredSeries[0]?.unitNAV || 100;
+      const normalizedUnitNavSeries = filteredSeries.map((pt) =>
+        initialUnitNAV > 0 ? (pt.unitNAV / initialUnitNAV) * 100 : 100
+      );
+
+      if (chartMode === 'UNIT_NAV') {
+        normalizedUnitNavSeries.forEach((v) => {
+          min = Math.min(min, v);
+          max = Math.max(max, v);
+        });
+        if (benchmarkType !== 'NONE' && benchmarkGrowth.length > 0) {
+          benchmarkGrowth.forEach((v) => {
+            min = Math.min(min, v);
+            max = Math.max(max, v);
+          });
         }
-        if (visibleLines.costBasis) {
-          min = Math.min(min, pt.netCostBasis);
-          max = Math.max(max, pt.netCostBasis);
-        }
-        if (visibleLines.stockValue) {
-          min = Math.min(min, pt.stockMarketValue);
-          max = Math.max(max, pt.stockMarketValue);
-        }
-        if (visibleLines.cash) {
-          min = Math.min(min, pt.cashBalance);
-          max = Math.max(max, pt.cashBalance);
-        }
-        if (visibleLines.loan) {
-          min = Math.min(min, pt.loanBalance);
-          max = Math.max(max, pt.loanBalance);
-        }
-      });
+      } else {
+        filteredSeries.forEach((pt) => {
+          if (visibleLines.nav) {
+            min = Math.min(min, pt.totalNAV);
+            max = Math.max(max, pt.totalNAV);
+          }
+          if (visibleLines.costBasis) {
+            min = Math.min(min, pt.netCostBasis);
+            max = Math.max(max, pt.netCostBasis);
+          }
+          if (visibleLines.stockValue) {
+            min = Math.min(min, pt.stockMarketValue);
+            max = Math.max(max, pt.stockMarketValue);
+          }
+          if (visibleLines.cash) {
+            min = Math.min(min, pt.cashBalance);
+            max = Math.max(max, pt.cashBalance);
+          }
+          if (visibleLines.loan) {
+            min = Math.min(min, pt.loanBalance);
+            max = Math.max(max, pt.loanBalance);
+          }
+        });
+      }
 
       if (min === Infinity || max === -Infinity || min === max) {
         min = Math.min(0, min);
         max = max === -Infinity ? 100000 : max * 1.1;
       } else {
         const span = max - min;
-        min = Math.max(0, min - span * 0.05);
+        min = min - span * 0.05;
         max = max + span * 0.08;
       }
 
@@ -215,24 +335,32 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
           .join(' ');
       };
 
-      // 產生基準折線 (若是基準模式，將基準等比對齊自身 NAV 起始高度繪製)
       let pBenchmark = '';
       if (benchmarkType !== 'NONE' && benchmarkGrowth.length > 0) {
-        const initialNav = filteredSeries[0]?.totalNAV || 1;
-        const bScaled = benchmarkGrowth.map((g) => (g / 100) * initialNav);
-        pBenchmark = buildPath(bScaled);
+        if (chartMode === 'UNIT_NAV') {
+          pBenchmark = buildPath(benchmarkGrowth);
+        } else {
+          const initialNav = filteredSeries[0]?.totalNAV || 1;
+          const bScaled = benchmarkGrowth.map((g) => (g / 100) * initialNav);
+          pBenchmark = buildPath(bScaled);
+        }
       }
 
+      const primaryNavValues =
+        chartMode === 'UNIT_NAV'
+          ? normalizedUnitNavSeries
+          : filteredSeries.map((d) => d.totalNAV);
+
       return {
-        pathNav: buildPath(filteredSeries.map((d) => d.totalNAV)),
-        pathCost: buildPath(filteredSeries.map((d) => d.netCostBasis)),
-        pathStock: buildPath(filteredSeries.map((d) => d.stockMarketValue)),
-        pathCash: buildPath(filteredSeries.map((d) => d.cashBalance)),
-        pathLoan: buildPath(filteredSeries.map((d) => d.loanBalance)),
+        pathNav: buildPath(primaryNavValues),
+        pathCost: chartMode === 'AUM' ? buildPath(filteredSeries.map((d) => d.netCostBasis)) : '',
+        pathStock: chartMode === 'AUM' ? buildPath(filteredSeries.map((d) => d.stockMarketValue)) : '',
+        pathCash: chartMode === 'AUM' ? buildPath(filteredSeries.map((d) => d.cashBalance)) : '',
+        pathLoan: chartMode === 'AUM' ? buildPath(filteredSeries.map((d) => d.loanBalance)) : '',
         pathBenchmark: pBenchmark,
         areaNav:
           filteredSeries.length > 0
-            ? `${buildPath(filteredSeries.map((d) => d.totalNAV))} L ${getX(filteredSeries.length - 1).toFixed(1)} ${(pad.top + plotH).toFixed(1)} L ${getX(0).toFixed(1)} ${(pad.top + plotH).toFixed(1)} Z`
+            ? `${buildPath(primaryNavValues)} L ${getX(filteredSeries.length - 1).toFixed(1)} ${(pad.top + plotH).toFixed(1)} L ${getX(0).toFixed(1)} ${(pad.top + plotH).toFixed(1)} Z`
             : '',
         minVal: min,
         maxVal: max,
@@ -240,7 +368,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
         height: h,
         padding: pad,
       };
-    }, [filteredSeries, visibleLines, benchmarkType, benchmarkGrowth]);
+    }, [filteredSeries, visibleLines, benchmarkType, benchmarkGrowth, chartMode]);
 
   if (series.length === 0) {
     return (
@@ -253,8 +381,6 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
       </div>
     );
   }
-
-  const currencySymbol = baseCurrency === 'USD' ? '$' : 'NT$';
 
   return (
     <div
@@ -302,8 +428,53 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
           </div>
         </div>
 
-        {/* 週期篩選器與同步按鈕 */}
+        {/* 雙模切換、週期篩選器與同步按鈕 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {/* 走勢圖模式切換膠囊 */}
+          <div
+            style={{
+              display: 'flex',
+              background: 'rgba(19, 29, 49, 0.8)',
+              padding: '3px',
+              borderRadius: '9px',
+              border: '1px solid var(--border-color)',
+            }}
+          >
+            <button
+              onClick={() => setChartMode('AUM')}
+              style={{
+                padding: '4px 10px',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                borderRadius: '6px',
+                border: 'none',
+                cursor: 'pointer',
+                background: chartMode === 'AUM' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'transparent',
+                color: chartMode === 'AUM' ? '#fff' : 'var(--text-muted)',
+                transition: 'all 0.2s',
+                boxShadow: chartMode === 'AUM' ? '0 2px 8px rgba(16, 185, 129, 0.3)' : 'none',
+              }}
+            >
+              💰 資產金額 (AUM)
+            </button>
+            <button
+              onClick={() => setChartMode('UNIT_NAV')}
+              style={{
+                padding: '4px 10px',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                borderRadius: '6px',
+                border: 'none',
+                cursor: 'pointer',
+                background: chartMode === 'UNIT_NAV' ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : 'transparent',
+                color: chartMode === 'UNIT_NAV' ? '#fff' : 'var(--text-muted)',
+                transition: 'all 0.2s',
+                boxShadow: chartMode === 'UNIT_NAV' ? '0 2px 8px rgba(59, 130, 246, 0.3)' : 'none',
+              }}
+            >
+              📊 淨值走勢 (Unit NAV %)
+            </button>
+          </div>
           {/* 基準對照選單 */}
           <div
             style={{
@@ -400,6 +571,29 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
               <span>{isSyncing ? syncProgressText || '同步中...' : '同步日 K'}</span>
             </button>
           )}
+
+          {/* 隱私遮罩 (Incognito Mode) 開關按鈕 (Ticket 11) */}
+          <button
+            onClick={() => setIsIncognito((prev) => !prev)}
+            className="btn btn-secondary btn-sm"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              color: isIncognito ? '#38bdf8' : 'var(--text-muted)',
+              border: isIncognito ? '1px solid rgba(56, 189, 248, 0.5)' : '1px solid var(--border-color)',
+              background: isIncognito ? 'rgba(56, 189, 248, 0.15)' : 'rgba(30, 41, 59, 0.5)',
+              fontWeight: 600,
+              padding: '5px 11px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            title="一鍵遮蔽或顯示敏感金額，保護隱私便於分享"
+          >
+            {isIncognito ? <EyeOff size={13} /> : <Eye size={13} />}
+            <span>{isIncognito ? '隱私遮罩 (開)' : '隱私遮罩'}</span>
+          </button>
         </div>
       </div>
 
@@ -426,8 +620,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
             {activeSnapshot ? `${activeSnapshot.date} 淨資產 (NAV)` : '當前淨資產 (NAV)'}
           </div>
           <div className="mono" style={{ fontSize: '1.45rem', fontWeight: 800, color: '#34d399', lineHeight: 1.2 }}>
-            {currencySymbol}
-            {activeSnapshot ? activeSnapshot.totalNAV.toLocaleString() : metrics.currentNAV.toLocaleString()}
+            {formatMoney(activeSnapshot ? activeSnapshot.totalNAV : metrics.currentNAV)}
           </div>
           {activeSnapshot && activeSnapshot.dailyPnL !== undefined && (
             <div
@@ -443,8 +636,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
             >
               {activeSnapshot.dailyPnL >= 0 ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
               <span>
-                {activeSnapshot.dailyPnL >= 0 ? '+' : ''}
-                {activeSnapshot.dailyPnL.toLocaleString()} ({activeSnapshot.dailyReturnPercent}%)
+                {formatMoney(activeSnapshot.dailyPnL, true)} ({activeSnapshot.dailyReturnPercent}%)
               </span>
             </div>
           )}
@@ -460,10 +652,32 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
             border: '1px solid rgba(245, 158, 11, 0.3)',
           }}
         >
-          <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '4px' }}>累計投入本金</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>累計投入本金</span>
+            {onInspectXirr && (
+              <button
+                onClick={() => onInspectXirr(timeRange)}
+                style={{
+                  background: 'rgba(245, 158, 11, 0.15)',
+                  border: '1px solid rgba(245, 158, 11, 0.4)',
+                  color: '#fbbf24',
+                  borderRadius: '5px',
+                  padding: '2px 7px',
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                }}
+                title={`點擊透視 ${timeRange} 週期之在席現金流`}
+              >
+                <Eye size={11} /> 透視金流
+              </button>
+            )}
+          </div>
           <div className="mono" style={{ fontSize: '1.45rem', fontWeight: 800, color: '#fbbf24', lineHeight: 1.2 }}>
-            {currencySymbol}
-            {activeSnapshot ? activeSnapshot.netCostBasis.toLocaleString() : metrics.netCostBasis.toLocaleString()}
+            {formatMoney(activeSnapshot ? activeSnapshot.netCostBasis : metrics.netCostBasis)}
           </div>
           <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
             本金超額比率: {activeSnapshot && activeSnapshot.netCostBasis > 0
@@ -492,9 +706,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
               lineHeight: 1.2,
             }}
           >
-            {(activeSnapshot?.cumulativeReturnPnL || 0) >= 0 ? '+' : ''}
-            {currencySymbol}
-            {activeSnapshot ? activeSnapshot.cumulativeReturnPnL.toLocaleString() : metrics.totalProfitPnL.toLocaleString()}
+            {formatMoney(activeSnapshot ? activeSnapshot.cumulativeReturnPnL : metrics.totalProfitPnL, true)}
           </div>
           <div style={{ fontSize: '0.74rem', fontWeight: 700, color: (activeSnapshot?.cumulativeReturnPercent || 0) >= 0 ? 'var(--gain-color)' : 'var(--loss-color)', marginTop: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>
@@ -524,31 +736,10 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
             最高淨值 (ATH) / 最大回撤 (MDD)
           </div>
           <div className="mono" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#38bdf8', lineHeight: 1.2 }}>
-            {currencySymbol}{metrics.allTimeHighNAV.toLocaleString()}
+            {formatMoney(metrics.allTimeHighNAV)}
           </div>
-          <div style={{ fontSize: '0.74rem', color: '#f43f5e', marginTop: '4px', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: '0.74rem', color: '#f43f5e', marginTop: '4px', fontWeight: 700 }}>
             <span>最大回撤: -{metrics.maxDrawdownPercent.toFixed(1)}%</span>
-            {onInspectXirr && (
-              <button
-                onClick={onInspectXirr}
-                style={{
-                  background: 'rgba(56, 189, 248, 0.12)',
-                  border: '1px solid rgba(56, 189, 248, 0.35)',
-                  color: '#38bdf8',
-                  borderRadius: '5px',
-                  padding: '2px 7px',
-                  fontSize: '0.68rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '3px',
-                }}
-                title="點擊透視此週期之歷史現金流"
-              >
-                <Eye size={11} /> 透視金流
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -680,11 +871,50 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
                   textAnchor="end"
                   fontFamily="monospace"
                 >
-                  {Math.round(val).toLocaleString()}
+                  {chartMode === 'UNIT_NAV'
+                    ? `${val - 100 >= 0 ? '+' : ''}${(val - 100).toFixed(1)}%`
+                    : isIncognito
+                    ? '***'
+                    : Math.round(val).toLocaleString()}
                 </text>
               </g>
             );
           })}
+
+          {/* 破產警示紅線 (Y = 0 基準線，防禦穿倉崩潰) */}
+          {minVal < 0 && maxVal > 0 && (
+            <g>
+              {(() => {
+                const zeroRatio = (0 - minVal) / (maxVal - minVal);
+                const plotH = height - padding.top - padding.bottom;
+                const zeroY = padding.top + plotH - zeroRatio * plotH;
+                return (
+                  <>
+                    <line
+                      x1={padding.left}
+                      y1={zeroY}
+                      x2={width - padding.right}
+                      y2={zeroY}
+                      stroke="#ef4444"
+                      strokeWidth="2"
+                      strokeDasharray="6 4"
+                    />
+                    <text
+                      x={width - padding.right}
+                      y={zeroY - 5}
+                      fill="#ef4444"
+                      fontSize="11"
+                      fontWeight="bold"
+                      textAnchor="end"
+                      fontFamily="monospace"
+                    >
+                      破產警戒線 (0)
+                    </text>
+                  </>
+                );
+              })()}
+            </g>
+          )}
 
           {/* X 軸日期刻度 */}
           {filteredSeries.length > 0 &&
@@ -775,7 +1005,158 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
         </svg>
       </div>
 
-      {/* 4.1 當日事件標籤與備註 */}
+      {/* 4.1 實戰水下回撤分析面板 (Underwater Drawdown Chart - Ticket 09) */}
+      <div
+        className="glass-card"
+        style={{
+          marginTop: '14px',
+          padding: '14px 16px',
+          borderRadius: '12px',
+          border: '1px solid rgba(244, 63, 94, 0.25)',
+          background: 'linear-gradient(180deg, rgba(20, 15, 25, 0.7) 0%, rgba(10, 12, 20, 0.8) 100%)',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: showUnderwaterChart ? '12px' : '0',
+            cursor: 'pointer',
+          }}
+          onClick={() => setShowUnderwaterChart((v) => !v)}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fb7185', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              🌊 水下回撤分析 (Underwater Drawdown)
+            </span>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              距歷史高點 (Peak ATH) 回撤深度與套牢修復歷程
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{ fontSize: '0.82rem', fontFamily: 'monospace' }}>
+              <span style={{ color: 'var(--text-muted)' }}>當前水下: </span>
+              <span style={{ fontWeight: 800, color: currentDrawdownVal < 0 ? '#f43f5e' : '#34d399' }}>
+                {currentDrawdownVal.toFixed(1)}%
+              </span>
+              {drawdownDaysCount > 0 && (
+                <span style={{ color: '#fbbf24', marginLeft: '6px', fontSize: '0.74rem' }}>
+                  (落水 {drawdownDaysCount} 天)
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              style={{
+                background: 'rgba(255, 255, 255, 0.06)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-muted)',
+                borderRadius: '6px',
+                padding: '3px 8px',
+                fontSize: '0.72rem',
+                cursor: 'pointer',
+              }}
+            >
+              {showUnderwaterChart ? '收合' : '展開'}
+            </button>
+          </div>
+        </div>
+
+        {showUnderwaterChart && filteredSeries.length > 0 && (
+          <div
+            style={{
+              position: 'relative',
+              width: '100%',
+              background: 'rgba(8, 10, 16, 0.85)',
+              borderRadius: '10px',
+              border: '1px solid rgba(244, 63, 94, 0.2)',
+              overflow: 'hidden',
+            }}
+          >
+            <svg
+              viewBox={`0 0 ${underwaterWidth} ${underwaterHeight}`}
+              style={{ width: '100%', height: 'auto', display: 'block' }}
+            >
+              <defs>
+                <linearGradient id="underwaterGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.4" />
+                  <stop offset="100%" stopColor="#991b1b" stopOpacity="0.05" />
+                </linearGradient>
+              </defs>
+
+              {/* 網格刻度線：0.0%, 50%, 100% */}
+              {[0, 0.5, 1].map((r) => {
+                const plotH = underwaterHeight - underwaterPadding.top - underwaterPadding.bottom;
+                const y = underwaterPadding.top + plotH * r;
+                const val = 0 - (0 - minUnderwaterDd) * r;
+                return (
+                  <g key={r}>
+                    <line
+                      x1={underwaterPadding.left}
+                      y1={y}
+                      x2={underwaterWidth - underwaterPadding.right}
+                      y2={y}
+                      stroke={r === 0 ? 'rgba(52, 211, 153, 0.4)' : 'rgba(71, 85, 105, 0.25)'}
+                      strokeWidth={r === 0 ? 1.5 : 1}
+                      strokeDasharray={r === 0 ? 'none' : '3 3'}
+                    />
+                    <text
+                      x={underwaterPadding.left - 8}
+                      y={y + 4}
+                      fill={r === 0 ? '#34d399' : '#94a3b8'}
+                      fontSize="10"
+                      textAnchor="end"
+                      fontFamily="monospace"
+                      fontWeight={r === 0 ? 'bold' : 'normal'}
+                    >
+                      {val.toFixed(1)}%
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* 陰影填充面積 */}
+              {underwaterArea && <path d={underwaterArea} fill="url(#underwaterGradient)" />}
+
+              {/* 回撤紅色邊界折線 */}
+              {underwaterPath && (
+                <path d={underwaterPath} fill="none" stroke="#f43f5e" strokeWidth="2.2" strokeLinecap="round" />
+              )}
+
+              {/* 同步指針 Hover 垂線與指示點 */}
+              {hoverIndex !== null && hoverIndex >= 0 && hoverIndex < filteredSeries.length && (
+                <g>
+                  {(() => {
+                    const plotW = underwaterWidth - underwaterPadding.left - underwaterPadding.right;
+                    const plotH = underwaterHeight - underwaterPadding.top - underwaterPadding.bottom;
+                    const x = underwaterPadding.left + (hoverIndex / Math.max(1, filteredSeries.length - 1)) * plotW;
+                    const val = filteredSeries[hoverIndex]?.underwaterDrawdownPercent ?? 0;
+                    const ratio = (0 - val) / (0 - minUnderwaterDd);
+                    const y = underwaterPadding.top + Math.max(0, Math.min(plotH, ratio * plotH));
+                    return (
+                      <>
+                        <line
+                          x1={x}
+                          y1={underwaterPadding.top}
+                          x2={x}
+                          y2={underwaterHeight - underwaterPadding.bottom}
+                          stroke="#cbd5e1"
+                          strokeWidth="1.2"
+                          strokeDasharray="3 3"
+                        />
+                        <circle cx={x} cy={y} r="4.5" fill="#f43f5e" stroke="#fff" strokeWidth="1.5" />
+                      </>
+                    );
+                  })()}
+                </g>
+              )}
+            </svg>
+          </div>
+        )}
+      </div>
+
+      {/* 4.2 當日事件標籤與備註 */}
       <div
         style={{
           marginTop: '16px',
@@ -1086,7 +1467,85 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
               )}
             </div>
 
-            {/* 4. Volatility */}
+            {/* 4. Sortino */}
+            <div
+              style={{
+                position: 'relative',
+                background: 'rgba(30, 41, 59, 0.5)',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: activeTooltipMetric === 'sortino' ? '1px solid rgba(16, 185, 129, 0.6)' : '1px solid rgba(16, 185, 129, 0.2)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: activeTooltipMetric === 'sortino' ? '0 0 12px rgba(16, 185, 129, 0.25)' : 'none',
+              }}
+              onMouseEnter={() => setActiveTooltipMetric('sortino')}
+              onMouseLeave={() => setActiveTooltipMetric((prev) => (prev === 'sortino' ? null : prev))}
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveTooltipMetric((prev) => (prev === 'sortino' ? null : 'sortino'));
+              }}
+            >
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <ShieldCheck size={13} color="#10b981" /> 索提諾 (Sortino)
+                </span>
+                <HelpCircle size={12} color="var(--text-muted)" style={{ opacity: 0.6 }} />
+              </div>
+              <div
+                className="mono"
+                style={{
+                  fontSize: '1.25rem',
+                  fontWeight: 800,
+                  color: quantDiagnosis.sortino.badgeColor,
+                }}
+              >
+                {(quantMetrics.sortinoRatio ?? 0).toFixed(2)}
+              </div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                專注下行虧損之超額性價比
+              </div>
+
+              {/* Sortino Tooltip */}
+              {activeTooltipMetric === 'sortino' && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: 'calc(100% + 8px)',
+                    left: '0',
+                    width: '290px',
+                    background: 'rgba(15, 23, 42, 0.97)',
+                    backdropFilter: 'blur(16px)',
+                    border: '1px solid rgba(16, 185, 129, 0.4)',
+                    boxShadow: '0 12px 30px -4px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+                    borderRadius: '10px',
+                    padding: '12px 14px',
+                    zIndex: 100,
+                    pointerEvents: 'none',
+                    textAlign: 'left',
+                    animation: 'fadeIn 0.15s ease-out',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#34d399' }}>
+                      🛡️ {quantDiagnosis.sortino.title}
+                    </span>
+                    <span style={{ fontSize: '0.65rem', color: quantDiagnosis.sortino.badgeColor }}>{quantDiagnosis.sortino.levelBadge}</span>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.4' }}>
+                    {quantDiagnosis.sortino.definition}
+                  </div>
+                  <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed rgba(51, 65, 85, 0.5)', fontSize: '0.7rem' }}>
+                    <div style={{ color: quantDiagnosis.sortino.badgeColor, fontWeight: 700 }}>
+                      👉 {quantDiagnosis.sortino.summary}
+                    </div>
+                    <div style={{ color: '#cbd5e1', marginTop: '2px' }}>{quantDiagnosis.sortino.suggestion}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 5. Volatility */}
             <div
               style={{
                 position: 'relative',
@@ -1157,7 +1616,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
               )}
             </div>
 
-            {/* 5. Max Drawdown */}
+            {/* 6. Max Drawdown */}
             <div
               style={{
                 position: 'relative',
@@ -1182,11 +1641,38 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
                 </span>
                 <HelpCircle size={12} color="var(--text-muted)" style={{ opacity: 0.6 }} />
               </div>
-              <div className="mono" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fb7185' }}>
-                -{quantMetrics.portfolioMaxDrawdown.toFixed(1)}%
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
+                <span className="mono" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fb7185' }}>
+                  -{quantMetrics.portfolioMaxDrawdown.toFixed(1)}%
+                </span>
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    background:
+                      (quantMetrics.currentDrawdownPercent ?? 0) === 0
+                        ? 'rgba(16, 185, 129, 0.15)'
+                        : 'rgba(244, 63, 94, 0.15)',
+                    color:
+                      (quantMetrics.currentDrawdownPercent ?? 0) === 0
+                        ? '#34d399'
+                        : '#f87171',
+                    border:
+                      (quantMetrics.currentDrawdownPercent ?? 0) === 0
+                        ? '1px solid rgba(16, 185, 129, 0.3)'
+                        : '1px solid rgba(244, 63, 94, 0.3)',
+                  }}
+                >
+                  {(quantMetrics.currentDrawdownPercent ?? 0) === 0
+                    ? 'ATH 新高'
+                    : `水下 ${(quantMetrics.currentDrawdownPercent ?? 0).toFixed(1)}%`}
+                </span>
               </div>
               <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                從歷史峰值最大拉回幅度
+                歷史極值 / 當前水下深度
               </div>
 
               {/* MDD Tooltip */}

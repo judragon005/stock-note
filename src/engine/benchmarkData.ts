@@ -18,22 +18,33 @@ export function resetBenchmarkCacheForTesting(): void {
  * @param customFetch - 自訂 fetch 函式 (測試用)
  */
 export async function loadBenchmarkDailyPricesAsync(
-  type: BenchmarkType,
-  customFetch: (url: string) => Promise<any> = globalThis.fetch
+  type: BenchmarkType | string,
+  customFetch: (url: string, init?: any) => Promise<any> = globalThis.fetch
 ): Promise<Record<string, number>> {
-  if (dynamicBenchmarkCache.has(type)) {
-    return dynamicBenchmarkCache.get(type)!;
+  const cacheKey = type as BenchmarkType;
+  if (dynamicBenchmarkCache.has(cacheKey)) {
+    return dynamicBenchmarkCache.get(cacheKey)!;
   }
 
-  const fallback = getBenchmarkDailyPrices(type);
+  const fallback = getBenchmarkDailyPrices(cacheKey);
   let symbol = '';
   if (type === 'SPY') symbol = 'SPY';
   else if (type === '0050') symbol = '0050';
-  else if (type === 'TAIEX') symbol = 'TAIEX';
-  else return fallback;
+  else if (type === 'TAIEX' || type === '^TWII') symbol = 'TAIEX';
+  else symbol = String(type);
+
+  if (!symbol || symbol === 'NONE') return fallback;
 
   try {
-    const res = await customFetch(`/api/market/history/${encodeURIComponent(symbol)}?limit=all`);
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 3000) : null;
+
+    const res = await customFetch(
+      `/api/market/history/${encodeURIComponent(symbol)}?limit=all`,
+      controller ? { signal: controller.signal } : undefined
+    );
+    if (timeoutId) clearTimeout(timeoutId);
+
     if (res && res.ok) {
       const data = await res.json();
       if (Array.isArray(data?.candles) && data.candles.length > 0) {
@@ -44,13 +55,13 @@ export async function loadBenchmarkDailyPricesAsync(
           }
         }
         if (Object.keys(prices).length > 0) {
-          dynamicBenchmarkCache.set(type, prices);
+          dynamicBenchmarkCache.set(cacheKey, prices);
           return prices;
         }
       }
     }
   } catch {
-    // 網路或 API 異常時安全降級為備份常數
+    // 網路、超時或 API 異常時安全降級為備份常數
   }
 
   return fallback;

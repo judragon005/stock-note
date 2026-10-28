@@ -2,12 +2,15 @@ import { describe, it, expect } from 'vitest';
 import {
   calculateDailyReturns,
   calculateAnnualizedVolatility,
+  calculateDownsideVolatility,
   calculateMaxDrawdown,
   calculateSharpeRatio,
+  calculateSortinoRatio,
   calculateBetaAndCorrelation,
   calculateJensensAlpha,
   calculateQuantMetrics,
   getQuantMetricDiagnosis,
+  resolveDynamicRiskFreeRate,
 } from './quantMetrics';
 import { QuantPerformanceMetrics } from '../types/stock';
 
@@ -67,6 +70,34 @@ describe('量化統計與風險調整指標計算引擎 (quantMetrics)', () => {
     });
   });
 
+  describe('3.1 下行波動度與索提諾比率 (calculateDownsideVolatility & calculateSortinoRatio)', () => {
+    it('全為正報酬或零報酬時，下行波動度應為 0', () => {
+      const returns = [0.01, 0.02, 0.005, 0.03];
+      expect(calculateDownsideVolatility(returns)).toBe(0);
+    });
+
+    it('包含負報酬時，應正確計算年化下行波動度', () => {
+      const returns = [0.02, -0.01, 0.03, -0.02];
+      const downsideVol = calculateDownsideVolatility(returns);
+      expect(downsideVol).toBeGreaterThan(0);
+      // 下行波動度應小於或等於全樣本波動度
+      const fullVol = calculateAnnualizedVolatility(returns);
+      expect(downsideVol).toBeLessThanOrEqual(fullVol);
+    });
+
+    it('無下行波動度且超額報酬 > 0 時，索提諾比率應回傳 99.99 極優評級', () => {
+      expect(calculateSortinoRatio(20, 0, 1.5)).toBe(99.99);
+    });
+
+    it('應正確計算標準索提諾比率 (年化報酬 25%, 無風險利率 1.5%, 下行波動度 10% -> 2.35)', () => {
+      expect(calculateSortinoRatio(25, 10, 1.5)).toBe(2.35);
+    });
+
+    it('負超額報酬且下行波動度為 0 時應回傳 0', () => {
+      expect(calculateSortinoRatio(1.0, 0, 1.5)).toBe(0);
+    });
+  });
+
   describe('4. 貝塔係數、相關係數與阿爾法 (Beta, Correlation, Alpha)', () => {
     it('完全同向波動時 Beta 應接近 1.0，相關係數為 1.0', () => {
       const portfolioReturns = [0.01, 0.02, -0.01, 0.03];
@@ -122,6 +153,16 @@ describe('量化統計與風險調整指標計算引擎 (quantMetrics)', () => {
       expect(metrics.sharpeRatio).toBe(0);
       expect(metrics.portfolioMaxDrawdown).toBe(0);
     });
+
+    it('應支援 365.25 日曆天除數校準，並輸出 sortinoRatio 與 downsideVolatility', () => {
+      // 模擬整整 365 天日曆天數列，起點 100，終點 120 (總報酬 20%)
+      const oneYearPrices = Array.from({ length: 365 }, (_, i) => 100 + (20 * i) / 364);
+      const metrics = calculateQuantMetrics(oneYearPrices, []);
+      expect(metrics.sortinoRatio).toBeDefined();
+      expect(metrics.downsideVolatility).toBeDefined();
+      // 單調上升時下行波動度為 0，超額報酬 > 0，sortinoRatio 應為 99.99
+      expect(metrics.sortinoRatio).toBe(99.99);
+    });
   });
 
   describe('6. 量化指標動態診斷分析器 (getQuantMetricDiagnosis)', () => {
@@ -136,13 +177,33 @@ describe('量化統計與風險調整指標計算引擎 (quantMetrics)', () => {
       correlation: 0.06,
     };
 
-    it('應產出全部 5 大指標之診斷結構', () => {
+    it('應產出全部 6 大指標之診斷結構（含 Sortino）', () => {
       const diagnosis = getQuantMetricDiagnosis(mockMetrics, 'us SPY 標普500 ETF');
       expect(diagnosis.alpha).toBeDefined();
       expect(diagnosis.beta).toBeDefined();
       expect(diagnosis.sharpe).toBeDefined();
       expect(diagnosis.mdd).toBeDefined();
       expect(diagnosis.volatility).toBeDefined();
+      expect(diagnosis.sortino).toBeDefined();
+    });
+
+    it('應正確診斷 Sortino Ratio 評級', () => {
+      const highSortinoMetrics = { ...mockMetrics, sortinoRatio: 2.45, downsideVolatility: 5.2 };
+      const diagHigh = getQuantMetricDiagnosis(highSortinoMetrics, 'us SPY');
+      expect(diagHigh.sortino.level).toBe('EXCELLENT');
+      expect(diagHigh.sortino.levelBadge).toContain('極致抗跌');
+
+      const lowSortinoMetrics = { ...mockMetrics, sortinoRatio: -0.8, downsideVolatility: 15.0 };
+      const diagLow = getQuantMetricDiagnosis(lowSortinoMetrics, 'us SPY');
+      expect(diagLow.sortino.level).toBe('ATTENTION');
+      expect(diagLow.sortino.levelBadge).toContain('下行脆弱');
+    });
+
+    it('應正確計算並輸出 currentDrawdownPercent', () => {
+      // 峰值 100，跌到 90 -> 當前回撤 -10%
+      const series = [100, 110, 105, 99];
+      const metrics = calculateQuantMetrics(series, []);
+      expect(metrics.currentDrawdownPercent).toBe(-10);
     });
 
     it('應正確診斷當前數值（Alpha=3.23% -> 🟢 穩健超額）', () => {
@@ -193,6 +254,25 @@ describe('量化統計與風險調整指標計算引擎 (quantMetrics)', () => {
       expect(diagnosis.alpha.levelBadge).toContain('需大盤基準');
       expect(diagnosis.beta.level).toBe('NEUTRAL');
       expect(diagnosis.beta.levelBadge).toContain('需大盤基準');
+    });
+  });
+
+  describe('Ticket 06: 動態幣別無風險利率 ($R_f$) 注入與 SPY 假數字清除', () => {
+    it('resolveDynamicRiskFreeRate 應依據計價幣別與外部宏觀動態注入', () => {
+      // 1. 外部 FRED 3M 美債殖利率優先
+      expect(resolveDynamicRiskFreeRate(4.85, 'USD')).toBe(4.85);
+      expect(resolveDynamicRiskFreeRate(5.21, 'TWD')).toBe(5.21);
+
+      // 2. 無外部宏觀時，美金預設 4.5%
+      expect(resolveDynamicRiskFreeRate(undefined, 'USD')).toBe(4.5);
+      expect(resolveDynamicRiskFreeRate(null, 'USD')).toBe(4.5);
+
+      // 3. 無外部宏觀時，台幣預設 1.8%
+      expect(resolveDynamicRiskFreeRate(undefined, 'TWD')).toBe(1.8);
+      expect(resolveDynamicRiskFreeRate(null, 'TWD')).toBe(1.8);
+
+      // 4. 自訂 fallback 優先於幣別預設
+      expect(resolveDynamicRiskFreeRate(undefined, 'TWD', 2.0)).toBe(2.0);
     });
   });
 });

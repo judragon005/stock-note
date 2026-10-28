@@ -1,21 +1,24 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-10-27 12:45 (UTC+8)  
+> **交接產生時間**：2026-10-28 13:00 (UTC+8)  
 > **當前最新里程碑**：
+> - **V9.03.0 資產成長與單位淨值會計及量化風控引擎重構**（ADR 0206, Spec 0206, Issue #338）：
+>   - **GIPS 單位淨值狀態機 (Unit NAV / TWR)**：起點 100.00，外部大額出入金等比增減總份額，淨值連續不跳水，徹底消滅資金進出對投資實力的假性稀釋與膨脹。
+>   - **除息空窗應收股利平滑機制 (Receivable Dividends)**：在除息基準日與發放日之間以權責發生制認列應收資產加計至當日總淨值，發放日自動沖銷，撫平除權息假凹洞。
+>   - **融資賣出利息扣除與全歷史水下回撤數列 (Drawdown Series)**：平倉時 FIFO 逐筆扣除融資利息；逐日追蹤歷史最高淨值 (Peak ATH)，推演 `underwaterDrawdownPercent` 數列。
+>   - **真大盤數據直連本機 SQLite 湖倉 API**：清除 2025/2026 年捏造的 SPY 偽常數，直連 `/api/market/history/:symbol?limit=all` 並具備記憶體快取；依計價幣別 (USD 4.5%, TWD 1.8%) 與外部 FRED 動態注入無風險利率 ($R_f$)。
+>   - **時間除數校準 (`days/365.25`) 與索提諾比率 (Sortino Ratio)**：時間除數統一校準為 365.25 日曆天；量化風控看板新增「🛡️ 索提諾比率 (Sortino)」卡片並具備多階層智能診斷（>2 🌟 極致抗跌、1~2 🟢 防禦良好、<1 🟡 防禦偏弱、<0 🔴 下行脆弱）。
+>   - **資產走勢 AUM 金額與 Unit NAV % 雙模切換視圖**：提供膠囊切換按鈕，Unit NAV 模式下資產與大盤起點歸一化為 100%，Y 軸切換為百分比刻度（如 `+15.2%`）。
+>   - **SVG 畫布穿倉負淨值防禦與破產警戒紅線 (Y = 0)**：移除負淨值截斷，當遭遇融資穿倉淨值跌破 0 時繪製紅色虛線基準線，座標計算防禦 NaN 崩潰。
+>   - **原生向量 SVG 實戰水下回撤圖與落水修復天數指標**：面板支援展開/收合、向下面積陰影、0.0% 基準線，即時統計當前水下深度與落水天數，並與上方主圖指針連動。
+>   - **操作管線閉環（透視金流移位、帳戶篩選器、一鍵隱私遮罩）**：將「透視金流」移至「累計投入本金」卡片並連動週期；打通券商篩選器 (`selectedAccountId`)；頂部新增 `[ 👁️ 隱私遮罩 ]`，一鍵遮蔽全頁敏感金額（`NT$******`）且保留報酬率百分比。
 > - **V9.02.0 第一梯隊高性價比架構技術債清理與精實重構**（ADR 0205, Spec 0205, Issue #336）：
 >   - **Pre-push Guard 整合文檔完整性守門 (技術債 0047)**：在 `scripts/pre-push-guard.cjs` 插入 `node scripts/verify-docs.cjs`，強制本地推送前 100% 阻斷死鏈與 Spec/ADR 脫鉤。
 >   - **defaultFetchJson 雙重信號複合支援 (技術債 0052)**：在 `backfill-tw-history-web.cjs` 與 `sync-tw-market.cjs` 引入 `AbortSignal.any` 複合取消與逾時信號，具備三元降級兜底，徹底消除連線掛起風險。
 >   - **戰情室快速校準 Modal 抽取與狀態自治 (技術債 0054)**：將分散之 8 個 State 泥團封裝至獨立元件 `MacroQuickCalibrationModal.tsx`，表單自治管理，父層零無效重繪，`WarRoomWorkspace.tsx` 精簡約 250 行。
 >   - **財務三表樣式常數與純展示儲存格抽取 (技術債 0053)**：於 `EightQuarterStatementTable.tsx` 抽取 `STATEMENT_TABLE_STYLES` 與 `<StatementDataCell />`，消滅重複內聯宣告。
 >   - **技術債看板閉環**：`docs/debts/README.md` 將 0047, 0052, 0053, 0054 標記為 `RESOLVED`。
-> - **V9.01.0 戰情室宏觀晨會數據認證戳記、獨立防守價修復、隱私脫敏與實戰極簡對齊**（ADR 0204, Spec 0204, Issue #332, PR #333, PR #334）：
->   - **晨會數據認證戳記 (Data Seal)**：晨報開頭前綴 `System Directive` 賦予外部 LLM 首席風險官 (CRO) 角色與封閉模型推演宣告，阻斷無效挑刺。
->   - **獨立技術防守價 (Isolated Stops)**：徹底根除 18 檔標的共用 $10.9593 及 00919 共用 0056 之 $56.56 防守價 Bug，逐檔嚴格計算自身真實 MA20/MA60 或箱底防守線。
->   - **實戰風控資料注入與真實權重 (Real Weights & PnL)**：清理偽造量價，注入股數、市值、帳戶權重% 與未實現損益%。
->   - **權重差異化賣出訊號與情境調倉執行單 (Trade Blotter)**：超大型權重股階梯限價減碼防滑價，小型股破線果斷停損，並自動試算超配需減碼金額與建議賣出張數。
->   - **質押法規死線與台股 ETF 穿透警戒 (Margin Deadlines & ETF Lookthrough)**：維持率跌破 130% 時標註「T+2 日 12:00 補回 166%」追繳金額；標註台積電高穿透集中風險。
->   - **全市場籌碼結構化外聯與 10 秒快速校準 (LLM Payload & Quick Calibration Modal)**：序列化 OAS 信用利差、CDS 指數、台指期淨空單、全市場維持率、1-Day 95% VaR、外匯敏感度與 3 階壓力矩陣；提供一鍵脫敏複製與 10 秒快速覆寫彈窗。
-> - **品質狀態**：全量單元測試 **1,876/1,876 通過 (100% Passed / 250 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，GitHub Actions CI 綠燈通過。
+> - **品質狀態**：全量單元測試 **1,903/1,903 通過 (100% Passed / 251 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，生產打包 `npm run build` 100% 綠燈。
 
 ---
 
@@ -24,10 +27,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main` (待合併)
-- **單元測試套件**：**1,876/1,876 通過 (250 test suites / 100% 綠燈)**
+- **單元測試套件**：**1,903/1,903 通過 (251 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V9.02.0**
+- **當前釋出版本**：**V9.03.0**
 - **工作區與分支整潔度**：工作區乾淨受控，本地 feature/fix 分支已完全合併並清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -41,7 +44,7 @@
    - 適用時機：開發任何新功能、修復 Bug 或重構前。
    - 核心準則：強制遵循 TDD 紅-綠-重構循環，堅持公開介面測試縫隙 (Test Seams)，禁止編寫脆性內部測試。
 2. **`架構感知與防禦性開發 (Defensive Development)`**：
-   - 適用時機：修改任何共用引擎（如 `aiForceDashboardEngine.ts`、`volumeProfileEngine.ts`、`forecastConeEngine.ts`、`keyMetricsEngine.ts`、`taiwanFinancialPipeline.ts`、`cryptoEngine.ts`、`secureProxyRouter.ts`）前。
+   - 適用時機：修改任何共用引擎（如 `aiForceDashboardEngine.ts`、`historicalNav.ts`、`quantMetrics.ts`、`benchmarkData.ts`、`cryptoEngine.ts`、`secureProxyRouter.ts`）前。
    - 核心準則：進行全量影響評估，杜絕「修復 A 損壞 B」。
 3. **`GitHub 工作流顧問 (GitHub Workflow Consultant)`**：
    - 適用時機：建立分支、管理 Issue、發起 PR、Squash & Merge 與分支清理。
@@ -56,6 +59,8 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0206`](file:///d:/APP/股票紀錄/docs/specs/0206-portfolio-nav-unitized-accounting-and-quant-risk-engine-spec.md) | [`ADR 0206`](file:///d:/APP/股票紀錄/docs/adr/0206-portfolio-nav-unitized-accounting-and-quant-risk-engine.md) | [`.scratch/v9.03.0-portfolio-nav-unitized-accounting-and-quant-risk-engine/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.03.0-portfolio-nav-unitized-accounting-and-quant-risk-engine/issues/) | Issue #338 / 待發 PR | V9.03.0 | 資產成長與單位淨值會計及量化風控引擎重構 (11 大 Micro-Tickets 閉環) |
+| [`Spec 0205`](file:///d:/APP/股票紀錄/docs/specs/0205-tech-debts-guardrails-and-lean-refactor-spec.md) | [`ADR 0205`](file:///d:/APP/股票紀錄/docs/adr/0205-tech-debts-guardrails-and-lean-refactor.md) | [`.scratch/v9.02.0-tech-debts-guardrails-and-lean-refactor/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.02.0-tech-debts-guardrails-and-lean-refactor/issues/) | Issue #336 / PR #337 | V9.02.0 | 第一梯隊高性價比架構技術債清理與精實重構 (4 大 Micro-Tickets 閉環) |
 | [`Spec 0204`](file:///d:/APP/股票紀錄/docs/specs/0204-war-room-morning-brief-data-seal-and-lean-alignment.md) | [`ADR 0204`](file:///d:/APP/股票紀錄/docs/adr/0204-war-room-morning-brief-data-seal-and-lean-alignment.md) | [`.scratch/v9.01.0-war-room-morning-brief-data-seal-and-lean-alignment/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.01.0-war-room-morning-brief-data-seal-and-lean-alignment/issues/) | Issue #332 / PR #333, #334 | V9.01.0 | 戰情室宏觀晨會數據認證戳記、獨立防守價修復、隱私脫敏與實戰極簡對齊 (8 大 Micro-Tickets 閉環) |
 | [`Spec 0203`](file:///d:/APP/股票紀錄/docs/specs/0203-lakehouse-bootstrap-api-probe-proxy-and-tiingo-backup-spec.md) | [`ADR 0203`](file:///d:/APP/股票紀錄/docs/adr/0203-lakehouse-bootstrap-api-probe-proxy-and-tiingo-backup.md) | [`.scratch/v8.116.0-lakehouse-bootstrap-api-probe-proxy-and-tiingo-backup/`](file:///d:/APP/股票紀錄/.scratch/v8.116.0-lakehouse-bootstrap-api-probe-proxy-and-tiingo-backup/) | Issue #329 / PR #330 | V8.116.0 | 數據湖倉全量補足、API 金鑰測活代理中繼與 Tiingo 備援整合 (切片 01~13 閉環) |
 | [`Spec 0202`](file:///d:/APP/股票紀錄/docs/specs/0202-stock-analysis-forensic-accounting-cleanse-and-lakehouse-spec.md) | [`ADR 0202`](file:///d:/APP/股票紀錄/docs/adr/0202-stock-analysis-forensic-accounting-cleanse-and-lakehouse.md) | [`.scratch/v8.115.0-stock-analysis-forensic-accounting-cleanse-and-lakehouse/`](file:///d:/APP/股票紀錄/.scratch/v8.115.0-stock-analysis-forensic-accounting-cleanse-and-lakehouse/) | Issue #322, #323 / PR #324 | V8.115.0 | 個股深度財報假資料清零、湖倉打通、會計勾稽修復與極簡架構重構 (Ticket 01 完成) |
