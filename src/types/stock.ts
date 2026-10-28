@@ -199,6 +199,8 @@ export interface HoldingPosition {
   totalStockDividendsShares: number; // 累計除權配股股數
   totalReturnPnL: number; // 含息總損益 ((grossMarketValue - totalCostBasis) + totalDividends + realizedPnL)
   totalReturnPercent: number; // 含息總報酬率 %
+  historicalTotalInvestedCost?: number; // 累計歷史總買入本金 (作為總報酬率之不變分母)
+  avgCostFxRate?: number; // 買進加權平均成本匯率 (美股/外幣)
   yieldOnCostPercent: number; // 成本殖利率 % (totalDividends / totalCostBasis * 100)
   xirrPercent?: number; // 含息資金加權年化報酬率 XIRR %
   isXirrAnnualized?: boolean; // XIRR 是否已年化 (天數 >= 30 為 true，< 30 為 false 標註非年化)

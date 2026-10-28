@@ -2735,5 +2735,17 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     9. **風控指標看板雙指標升級**：新增第 6 張「索提諾 (Sortino)」卡片；最大回撤卡片升級為雙重動態指標，同時展示「歷史最大回撤」與「當前距新高水下深度」，新高時標註綠色 `ATH 新高`。
     10. **操作管線閉環（透視金流移位、帳戶篩選器、一鍵隱私遮罩）**：將「透視金流」移至「累計投入本金」卡片右上角並連動選取週期傳入；打通券商篩選器 (`selectedAccountId`)；頂部新增 `[ 👁️ 隱私遮罩 ]` 開關按鈕，一鍵將全頁敏感金額（總資產 NAV、本金、損益金額、ATH 峰值）遮蔽為 `NT$******` 且保留報酬率百分比，滿足社群分享需求。
 
+- **Portfolio & Inventory Institutional Accounting, Scope Isolation & Risk Attribution (投資組合與庫存法人級會計修復、跨帳戶隔離、斷頭管線貫通與風控歸因升級)**:
+  - 核心模組：`src/App.tsx`、`src/engine/calculator.ts`、`src/engine/lotEngine.ts`、`src/engine/receivableDividendEngine.ts`、`src/engine/riskExposureEngine.ts`、`src/engine/rebalancingEngine.ts`、`src/engine/lookThroughEngine.ts`、`src/engine/behavioralAuditEngine.ts`、`src/components/HoldingsTable.tsx`、`src/components/SummaryCards.tsx`、`src/components/AllocationChart.tsx`、`src/components/TreemapChart.tsx`、`src/components/ReconciliationModal.tsx`、`src/components/TradeModal.tsx`。
+  - 規範依據：Spec 0208 (v9.05.0) 與 ADR 0208，對齊 GitHub Issue #342。
+  - 核心術語與特性：
+    1. **Historical Total Invested Cost (歷史累計總買入成本)**：每檔標的歷次買進與增資之累計總投入本金（扣除分拆移轉成本）。作為已平倉 (`CLOSED`) 與含已實現損益之累計總報酬率 (`totalReturnPercent`) 的唯一分母，根除已清倉顯示 `+0.00%` 與部分減碼留零股導致的分母失真。
+    2. **Weighted Cost FX Rate (加權買進成本匯率)**：美股持倉依據各批次買進日對齊 `historicalFx` 加權計算之真實換匯成本基準，廢除寫死之 `32.0` 常數，精確解耦美股本體 Alpha 與匯差損益。
+    3. **Net Exposure Ratio vs. LTV (股票淨曝險率與負債槓桿比)**：明確定義股票淨曝險率為 `總股票市值 / 實質總淨值 (NAV)`（滿倉現貨無借貸為 `1.00x`，空手全現金為 `0.00x`），並將融資買進 (`isMargin`) 負債與待入帳應收股利納入整戶 NAV，消除無借貸強制 `0.00x` 的公式矛盾並與資產成長頁期末 NAV 100% 恆等。
+    4. **Portfolio Attribution in Basis Points (今日損益基點貢獻 bps)**：個股今日損益除以昨日整戶總淨值乘以 $10,000$（$\text{bps}$），直觀量化單一持股對整體投組單日波動的實質拉動或拖累。
+    5. **Herfindahl-Hirschman Index, HHI (赫芬達爾投組集中度指數)**：以各部位佔總資產權重百分比平方和（$\sum (w_i \times 100)^2$）量化集中風險（$<1,500$ 健康分散、$1,500\sim 2,500$ 中度集中、$\ge 2,500$ 高度集中）。
+    6. **Total Capital at Risk, CaR (整戶停損最大承擔風險)**：匯總所有已設定停損價 (`stopLossPrice`) 之在倉部位，計算若同時觸及停損價時之總潛在回撤金額與佔總淨值比例，並標示未設停損之裸露部位佔比。
+
+
 
 

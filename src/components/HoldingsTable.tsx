@@ -958,7 +958,8 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
 
                             {/* 美股外匯匯差與本體價差拆解 Tooltip */}
                             {item.market === 'US' && item.shares > 0 && (() => {
-                              const fx = calculateHoldingFxBreakdown(item, 32.0, usdToTwdRate || 32.0);
+                              const costFx = item.avgCostFxRate || usdToTwdRate || 32.0;
+                              const fx = calculateHoldingFxBreakdown(item, costFx, usdToTwdRate || 32.0);
                               return (
                                 <Tooltip
                                   content={`🇺🇸 美股雙軸損益拆解 (TWD 計價)：\n• 股票本體價差：${fx.assetGainTWD >= 0 ? '+' : ''}NT$ ${fx.assetGainTWD.toLocaleString()} (${fx.assetGainPercent}%)\n• 外匯匯差波動：${fx.fxGainTWD >= 0 ? '+' : ''}NT$ ${fx.fxGainTWD.toLocaleString()} (${fx.fxGainPercent}%)\n• 總計台幣損益：${fx.totalGainTWD >= 0 ? '+' : ''}NT$ ${fx.totalGainTWD.toLocaleString()}`}

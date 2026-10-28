@@ -368,9 +368,10 @@ export const App: React.FC = () => {
       selectedAccountId,
       quotes,
       accountingMethod,
-      historicalCandlesMap
+      historicalCandlesMap,
+      historicalFx
     );
-  }, [displayedTrades, currentPrices, usdToTwdRate, accountingView, accounts, selectedAccountId, quotes, accountingMethod, historicalCandlesMap]);
+  }, [displayedTrades, currentPrices, usdToTwdRate, accountingView, accounts, selectedAccountId, quotes, accountingMethod, historicalCandlesMap, historicalFx]);
 
   // 7 步深度投研數據裝配 (Spec 0173 / Ticket 03)
   const deepDiveResolvedInput = useMemo<import('./types/equityDeepDive').EquityDeepDiveInput | undefined>(() => {
