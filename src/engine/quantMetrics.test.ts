@@ -177,13 +177,33 @@ describe('量化統計與風險調整指標計算引擎 (quantMetrics)', () => {
       correlation: 0.06,
     };
 
-    it('應產出全部 5 大指標之診斷結構', () => {
+    it('應產出全部 6 大指標之診斷結構（含 Sortino）', () => {
       const diagnosis = getQuantMetricDiagnosis(mockMetrics, 'us SPY 標普500 ETF');
       expect(diagnosis.alpha).toBeDefined();
       expect(diagnosis.beta).toBeDefined();
       expect(diagnosis.sharpe).toBeDefined();
       expect(diagnosis.mdd).toBeDefined();
       expect(diagnosis.volatility).toBeDefined();
+      expect(diagnosis.sortino).toBeDefined();
+    });
+
+    it('應正確診斷 Sortino Ratio 評級', () => {
+      const highSortinoMetrics = { ...mockMetrics, sortinoRatio: 2.45, downsideVolatility: 5.2 };
+      const diagHigh = getQuantMetricDiagnosis(highSortinoMetrics, 'us SPY');
+      expect(diagHigh.sortino.level).toBe('EXCELLENT');
+      expect(diagHigh.sortino.levelBadge).toContain('極致抗跌');
+
+      const lowSortinoMetrics = { ...mockMetrics, sortinoRatio: -0.8, downsideVolatility: 15.0 };
+      const diagLow = getQuantMetricDiagnosis(lowSortinoMetrics, 'us SPY');
+      expect(diagLow.sortino.level).toBe('ATTENTION');
+      expect(diagLow.sortino.levelBadge).toContain('下行脆弱');
+    });
+
+    it('應正確計算並輸出 currentDrawdownPercent', () => {
+      // 峰值 100，跌到 90 -> 當前回撤 -10%
+      const series = [100, 110, 105, 99];
+      const metrics = calculateQuantMetrics(series, []);
+      expect(metrics.currentDrawdownPercent).toBe(-10);
     });
 
     it('應正確診斷當前數值（Alpha=3.23% -> 🟢 穩健超額）', () => {

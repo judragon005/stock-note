@@ -115,4 +115,60 @@ describe('PortfolioGrowthChart - 資產走勢與雙模切換 (Ticket 07)', () =>
       expect(html).toContain('0.0%');
     });
   });
+
+  describe('Ticket 10: 風控指標看板升級（Sortino 卡片與當前水下深度）', () => {
+    it('應展示索提諾比率 (Sortino) 卡片', () => {
+      const html = renderToStaticMarkup(
+        <PortfolioGrowthChart series={mockSeries} baseCurrency="TWD" />
+      );
+
+      expect(html).toContain('索提諾 (Sortino)');
+      expect(html).toContain('專注下行虧損之超額性價比');
+    });
+
+    it('MDD 卡片應同時展示歷史最大回撤與當前水下深度或 ATH 狀態', () => {
+      const html = renderToStaticMarkup(
+        <PortfolioGrowthChart series={mockSeries} baseCurrency="TWD" />
+      );
+
+      expect(html).toContain('最大回撤 (MDD)');
+      expect(html).toContain('ATH 新高');
+    });
+
+    it('當處於水下時，MDD 卡片應標註水下深度百分比', () => {
+      const drawdownSeries: PortfolioDailySnapshot[] = [
+        {
+          date: '2026-01-01',
+          totalNAV: 1000000,
+          unitNAV: 100.0,
+          stockMarketValue: 1000000,
+          cashBalance: 0,
+          loanBalance: 0,
+          netCostBasis: 1000000,
+          cumulativeReturnPnL: 0,
+          cumulativeReturnPercent: 0,
+          events: [],
+        },
+        {
+          date: '2026-01-02',
+          totalNAV: 950000,
+          unitNAV: 95.0,
+          stockMarketValue: 950000,
+          cashBalance: 0,
+          loanBalance: 0,
+          netCostBasis: 1000000,
+          cumulativeReturnPnL: -50000,
+          cumulativeReturnPercent: -5.0,
+          events: [],
+        },
+      ];
+
+      const html = renderToStaticMarkup(
+        <PortfolioGrowthChart series={drawdownSeries} baseCurrency="TWD" />
+      );
+
+      expect(html).toContain('水下 -5.0%');
+    });
+  });
 });
+

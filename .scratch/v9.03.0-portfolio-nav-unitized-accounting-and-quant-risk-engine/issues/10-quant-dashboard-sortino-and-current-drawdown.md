@@ -5,9 +5,9 @@
 
 **Blocked by:** Ticket 01, Ticket 04, Ticket 07
 
-**Status:** ready-for-agent
+**Status:** DONE
 
-- [ ] 在 `quantMetrics.ts` 的 `calculateQuantMetrics` 中計算並輸出 `sortinoRatio` 與 `currentDrawdownPercent`
-- [ ] 在 `PortfolioGrowthChart.tsx`（或其子看板元件）加入 Sortino Ratio 指標卡片與顏色評級（>2 優秀，1~2 良好，<1 需警惕）
-- [ ] 升級 MDD 卡片佈局，呈現「歷史最大: -18.5%」與「當前水下: -3.2%」
-- [ ] 單元測試驗證指標看板傳入數據解析正確且無渲染崩潰
+- [x] 在 `quantMetrics.ts` 的 `calculateQuantMetrics` 中計算並輸出 `sortinoRatio` 與 `currentDrawdownPercent`
+- [x] 在 `PortfolioGrowthChart.tsx`（或其子看板元件）加入 Sortino Ratio 指標卡片與顏色評級（>2 優秀，1~2 良好，<1 需警惕）
+- [x] 升級 MDD 卡片佈局，呈現「歷史最大: -18.5%」與「當前水下: -3.2%」
+- [x] 單元測試驗證指標看板傳入數據解析正確且無渲染崩潰

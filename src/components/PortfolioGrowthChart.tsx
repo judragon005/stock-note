@@ -19,6 +19,7 @@ import {
   Compass,
   HelpCircle,
   Eye,
+  ShieldCheck,
 } from 'lucide-react';
 import { filterNavSeriesByRange, calculatePerformanceMetrics } from '../engine/historicalNav';
 import {
@@ -1429,7 +1430,85 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
               )}
             </div>
 
-            {/* 4. Volatility */}
+            {/* 4. Sortino */}
+            <div
+              style={{
+                position: 'relative',
+                background: 'rgba(30, 41, 59, 0.5)',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: activeTooltipMetric === 'sortino' ? '1px solid rgba(16, 185, 129, 0.6)' : '1px solid rgba(16, 185, 129, 0.2)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: activeTooltipMetric === 'sortino' ? '0 0 12px rgba(16, 185, 129, 0.25)' : 'none',
+              }}
+              onMouseEnter={() => setActiveTooltipMetric('sortino')}
+              onMouseLeave={() => setActiveTooltipMetric((prev) => (prev === 'sortino' ? null : prev))}
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveTooltipMetric((prev) => (prev === 'sortino' ? null : 'sortino'));
+              }}
+            >
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <ShieldCheck size={13} color="#10b981" /> 索提諾 (Sortino)
+                </span>
+                <HelpCircle size={12} color="var(--text-muted)" style={{ opacity: 0.6 }} />
+              </div>
+              <div
+                className="mono"
+                style={{
+                  fontSize: '1.25rem',
+                  fontWeight: 800,
+                  color: quantDiagnosis.sortino.badgeColor,
+                }}
+              >
+                {(quantMetrics.sortinoRatio ?? 0).toFixed(2)}
+              </div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                專注下行虧損之超額性價比
+              </div>
+
+              {/* Sortino Tooltip */}
+              {activeTooltipMetric === 'sortino' && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: 'calc(100% + 8px)',
+                    left: '0',
+                    width: '290px',
+                    background: 'rgba(15, 23, 42, 0.97)',
+                    backdropFilter: 'blur(16px)',
+                    border: '1px solid rgba(16, 185, 129, 0.4)',
+                    boxShadow: '0 12px 30px -4px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+                    borderRadius: '10px',
+                    padding: '12px 14px',
+                    zIndex: 100,
+                    pointerEvents: 'none',
+                    textAlign: 'left',
+                    animation: 'fadeIn 0.15s ease-out',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#34d399' }}>
+                      🛡️ {quantDiagnosis.sortino.title}
+                    </span>
+                    <span style={{ fontSize: '0.65rem', color: quantDiagnosis.sortino.badgeColor }}>{quantDiagnosis.sortino.levelBadge}</span>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.4' }}>
+                    {quantDiagnosis.sortino.definition}
+                  </div>
+                  <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed rgba(51, 65, 85, 0.5)', fontSize: '0.7rem' }}>
+                    <div style={{ color: quantDiagnosis.sortino.badgeColor, fontWeight: 700 }}>
+                      👉 {quantDiagnosis.sortino.summary}
+                    </div>
+                    <div style={{ color: '#cbd5e1', marginTop: '2px' }}>{quantDiagnosis.sortino.suggestion}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 5. Volatility */}
             <div
               style={{
                 position: 'relative',
@@ -1500,7 +1579,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
               )}
             </div>
 
-            {/* 5. Max Drawdown */}
+            {/* 6. Max Drawdown */}
             <div
               style={{
                 position: 'relative',
@@ -1525,11 +1604,38 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
                 </span>
                 <HelpCircle size={12} color="var(--text-muted)" style={{ opacity: 0.6 }} />
               </div>
-              <div className="mono" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fb7185' }}>
-                -{quantMetrics.portfolioMaxDrawdown.toFixed(1)}%
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
+                <span className="mono" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fb7185' }}>
+                  -{quantMetrics.portfolioMaxDrawdown.toFixed(1)}%
+                </span>
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    background:
+                      (quantMetrics.currentDrawdownPercent ?? 0) === 0
+                        ? 'rgba(16, 185, 129, 0.15)'
+                        : 'rgba(244, 63, 94, 0.15)',
+                    color:
+                      (quantMetrics.currentDrawdownPercent ?? 0) === 0
+                        ? '#34d399'
+                        : '#f87171',
+                    border:
+                      (quantMetrics.currentDrawdownPercent ?? 0) === 0
+                        ? '1px solid rgba(16, 185, 129, 0.3)'
+                        : '1px solid rgba(244, 63, 94, 0.3)',
+                  }}
+                >
+                  {(quantMetrics.currentDrawdownPercent ?? 0) === 0
+                    ? 'ATH 新高'
+                    : `水下 ${(quantMetrics.currentDrawdownPercent ?? 0).toFixed(1)}%`}
+                </span>
               </div>
               <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                從歷史峰值最大拉回幅度
+                歷史極值 / 當前水下深度
               </div>
 
               {/* MDD Tooltip */}

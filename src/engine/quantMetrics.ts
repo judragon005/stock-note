@@ -237,6 +237,14 @@ export function calculateQuantMetrics(
 
   const hasBenchmark = benchmarkPrices && benchmarkPrices.length >= 2;
 
+  let peakPrice = 0;
+  for (const p of portfolioPrices) {
+    if (p > peakPrice) peakPrice = p;
+  }
+  const lastPrice = portfolioPrices.length > 0 ? portfolioPrices[portfolioPrices.length - 1] : 0;
+  const currentDrawdownPercent =
+    peakPrice > 0 ? Math.round(((lastPrice - peakPrice) / peakPrice) * 10000) / 100 : 0;
+
   if (!hasBenchmark) {
     return {
       hasBenchmark: false,
@@ -248,6 +256,8 @@ export function calculateQuantMetrics(
       downsideVolatility,
       benchmarkMaxDrawdown: null,
       portfolioMaxDrawdown,
+      currentDrawdownPercent,
+      riskFreeRate: riskFreeRatePercent,
       correlation: null,
     };
   }
@@ -281,6 +291,8 @@ export function calculateQuantMetrics(
     downsideVolatility,
     benchmarkMaxDrawdown,
     portfolioMaxDrawdown,
+    currentDrawdownPercent,
+    riskFreeRate: riskFreeRatePercent,
     correlation,
   };
 }
@@ -633,12 +645,77 @@ export function getQuantMetricDiagnosis(
     };
   }
 
+  // 6. 索提諾比率 (Sortino Ratio)
+  let sortinoDiag: MetricDiagnosis;
+  const sortinoVal = metrics.sortinoRatio ?? 0;
+  const dVolStr = metrics.downsideVolatility !== undefined ? metrics.downsideVolatility.toFixed(2) : '0.00';
+  const rfStr = metrics.riskFreeRate !== undefined ? metrics.riskFreeRate.toFixed(1) : '1.5';
+
+  if (sortinoVal >= 2.0) {
+    sortinoDiag = {
+      id: 'sortino',
+      title: '索提諾比率 (Sortino)',
+      fullName: 'Sortino Ratio',
+      definition: '衡量每多承受 1% 下行波動度所換取的超額年化報酬率（專注懲罰實質虧損，不懲罰向上波動）。',
+      formula: 'Sortino = (Rp - Rf) / σd',
+      benchmarkNote: `無風險利率 Rf = ${rfStr}%，下行波動度 σd = ${dVolStr}%`,
+      level: 'EXCELLENT',
+      levelBadge: '🌟 極致抗跌',
+      badgeColor: '#10b981',
+      summary: `索提諾比率高達 ${sortinoVal.toFixed(2)}，下行防守與超額報酬表現極為頂尖！`,
+      suggestion: '承擔每單位下行虧損風險換取豐厚超額報酬，下檔防禦性極佳。',
+    };
+  } else if (sortinoVal >= 1.0) {
+    sortinoDiag = {
+      id: 'sortino',
+      title: '索提諾比率 (Sortino)',
+      fullName: 'Sortino Ratio',
+      definition: '衡量每多承受 1% 下行波動度所換取的超額年化報酬率（專注懲罰實質虧損，不懲罰向上波動）。',
+      formula: 'Sortino = (Rp - Rf) / σd',
+      benchmarkNote: `無風險利率 Rf = ${rfStr}%，下行波動度 σd = ${dVolStr}%`,
+      level: 'GOOD',
+      levelBadge: '🟢 防禦良好',
+      badgeColor: '#34d399',
+      summary: `索提諾比率為 ${sortinoVal.toFixed(2)}，下行風險回報比健康。`,
+      suggestion: '在下檔震盪時維持優良報酬吸收能力，符合穩健投資標準。',
+    };
+  } else if (sortinoVal >= 0.0) {
+    sortinoDiag = {
+      id: 'sortino',
+      title: '索提諾比率 (Sortino)',
+      fullName: 'Sortino Ratio',
+      definition: '衡量每多承受 1% 下行波動度所換取的超額年化報酬率（專注懲罰實質虧損，不懲罰向上波動）。',
+      formula: 'Sortino = (Rp - Rf) / σd',
+      benchmarkNote: `無風險利率 Rf = ${rfStr}%，下行波動度 σd = ${dVolStr}%`,
+      level: 'FAIR',
+      levelBadge: '🟡 防禦偏弱',
+      badgeColor: '#fbbf24',
+      summary: `索提諾比率為 ${sortinoVal.toFixed(2)}，下行波動對報酬率具一定程度侵蝕。`,
+      suggestion: '建議檢視高下行波動標的，加強停損保護以提升防禦性。',
+    };
+  } else {
+    sortinoDiag = {
+      id: 'sortino',
+      title: '索提諾比率 (Sortino)',
+      fullName: 'Sortino Ratio',
+      definition: '衡量每多承受 1% 下行波動度所換取的超額年化報酬率（專注懲罰實質虧損，不懲罰向上波動）。',
+      formula: 'Sortino = (Rp - Rf) / σd',
+      benchmarkNote: `無風險利率 Rf = ${rfStr}%，下行波動度 σd = ${dVolStr}%`,
+      level: 'ATTENTION',
+      levelBadge: '🔴 下行脆弱',
+      badgeColor: '#f87171',
+      summary: `索提諾比率為負數 (${sortinoVal.toFixed(2)})，未能抵禦下行虧損風險。`,
+      suggestion: '投資組合承擔過度劇烈的下跌虧損，應立即縮減投機部位並啟動避險機制。',
+    };
+  }
+
   return {
     alpha: alphaDiag,
     beta: betaDiag,
     sharpe: sharpeDiag,
     mdd: mddDiag,
     volatility: volDiag,
+    sortino: sortinoDiag,
   };
 }
 

@@ -106,12 +106,14 @@ export interface QuantPerformanceMetrics {
   downsideVolatility?: number;    // 下行年化波動度 %
   benchmarkMaxDrawdown: number | null; // 基準最大回撤 % (無基準時為 null)
   portfolioMaxDrawdown: number;   // 投資組合最大回撤 %
+  currentDrawdownPercent?: number;// 當前距最高點水下深度 % (Ticket 10)
+  riskFreeRate?: number;          // 所套用之無風險利率 Rf %
   correlation: number | null;     // 與基準之相關係數 r (無基準時為 null)
 }
 
 export type DiagnosisHealthLevel = 'EXCELLENT' | 'GOOD' | 'FAIR' | 'ATTENTION' | 'NEUTRAL';
 
-export type QuantMetricId = 'alpha' | 'beta' | 'sharpe' | 'mdd' | 'volatility';
+export type QuantMetricId = 'alpha' | 'beta' | 'sharpe' | 'mdd' | 'volatility' | 'sortino';
 
 export interface MetricDiagnosis {
   id: QuantMetricId;
