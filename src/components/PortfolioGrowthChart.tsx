@@ -57,6 +57,9 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [activeTooltipMetric, setActiveTooltipMetric] = useState<QuantMetricId | null>(null);
 
+  // 水下回撤圖展開/收合開關 (Ticket 09)
+  const [showUnderwaterChart, setShowUnderwaterChart] = useState(true);
+
   // 曲線顯示開關
   const [visibleLines, setVisibleLines] = useState({
     nav: true,
@@ -138,6 +141,84 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
       return filteredSeries[hoverIndex];
     }
     return filteredSeries[filteredSeries.length - 1];
+  }, [filteredSeries, hoverIndex]);
+
+  // 水下回撤圖狀態與 SVG 座標推演 (Ticket 09)
+  const {
+    underwaterPath,
+    underwaterArea,
+    minUnderwaterDd,
+    underwaterWidth,
+    underwaterHeight,
+    underwaterPadding,
+    currentDrawdownVal,
+    drawdownDaysCount,
+  } = useMemo(() => {
+    const uwW = 1000;
+    const uwH = 160;
+    const uwPad = { top: 20, right: 30, bottom: 25, left: 70 };
+
+    if (filteredSeries.length === 0) {
+      return {
+        underwaterPath: '',
+        underwaterArea: '',
+        minUnderwaterDd: -10,
+        underwaterWidth: uwW,
+        underwaterHeight: uwH,
+        underwaterPadding: uwPad,
+        currentDrawdownVal: 0,
+        drawdownDaysCount: 0,
+      };
+    }
+
+    const ddValues = filteredSeries.map((s) => s.underwaterDrawdownPercent ?? 0);
+    // 找出最深回撤 (負數，例如 -25.5)，保底至少 -5% 以免畫布扁平
+    let deepest = Math.min(-5, ...ddValues);
+    deepest = deepest * 1.1; // 留 10% 緩衝
+
+    const plotW = uwW - uwPad.left - uwPad.right;
+    const plotH = uwH - uwPad.top - uwPad.bottom;
+
+    const getUwX = (idx: number) => {
+      if (filteredSeries.length <= 1) return uwPad.left + plotW / 2;
+      return uwPad.left + (idx / (filteredSeries.length - 1)) * plotW;
+    };
+
+    const getUwY = (dd: number) => {
+      // 0% 在最上方 (uwPad.top)，deepest 在最下方 (uwPad.top + plotH)
+      const ratio = (0 - dd) / (0 - deepest);
+      return uwPad.top + Math.max(0, Math.min(plotH, ratio * plotH));
+    };
+
+    const linePoints = ddValues
+      .map((val, i) => `${i === 0 ? 'M' : 'L'} ${getUwX(i).toFixed(1)} ${getUwY(val).toFixed(1)}`)
+      .join(' ');
+
+    const areaPoints = `${linePoints} L ${getUwX(filteredSeries.length - 1).toFixed(1)} ${uwPad.top.toFixed(1)} L ${getUwX(0).toFixed(1)} ${uwPad.top.toFixed(1)} Z`;
+
+    // 計算當前指針或最新點的水下深度與落水天數
+    const activeIdx =
+      hoverIndex !== null && hoverIndex >= 0 && hoverIndex < filteredSeries.length
+        ? hoverIndex
+        : filteredSeries.length - 1;
+    const currentDrawdownVal = ddValues[activeIdx] ?? 0;
+
+    let drawdownDaysCount = 0;
+    for (let i = activeIdx; i >= 0; i--) {
+      if (ddValues[i] >= -0.001) break;
+      drawdownDaysCount++;
+    }
+
+    return {
+      underwaterPath: linePoints,
+      underwaterArea: areaPoints,
+      minUnderwaterDd: deepest,
+      underwaterWidth: uwW,
+      underwaterHeight: uwH,
+      underwaterPadding: uwPad,
+      currentDrawdownVal,
+      drawdownDaysCount,
+    };
   }, [filteredSeries, hoverIndex]);
 
   // 計算 SVG 座標與比例
@@ -886,7 +967,158 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
         </svg>
       </div>
 
-      {/* 4.1 當日事件標籤與備註 */}
+      {/* 4.1 實戰水下回撤分析面板 (Underwater Drawdown Chart - Ticket 09) */}
+      <div
+        className="glass-card"
+        style={{
+          marginTop: '14px',
+          padding: '14px 16px',
+          borderRadius: '12px',
+          border: '1px solid rgba(244, 63, 94, 0.25)',
+          background: 'linear-gradient(180deg, rgba(20, 15, 25, 0.7) 0%, rgba(10, 12, 20, 0.8) 100%)',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: showUnderwaterChart ? '12px' : '0',
+            cursor: 'pointer',
+          }}
+          onClick={() => setShowUnderwaterChart((v) => !v)}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fb7185', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              🌊 水下回撤分析 (Underwater Drawdown)
+            </span>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              距歷史高點 (Peak ATH) 回撤深度與套牢修復歷程
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{ fontSize: '0.82rem', fontFamily: 'monospace' }}>
+              <span style={{ color: 'var(--text-muted)' }}>當前水下: </span>
+              <span style={{ fontWeight: 800, color: currentDrawdownVal < 0 ? '#f43f5e' : '#34d399' }}>
+                {currentDrawdownVal.toFixed(1)}%
+              </span>
+              {drawdownDaysCount > 0 && (
+                <span style={{ color: '#fbbf24', marginLeft: '6px', fontSize: '0.74rem' }}>
+                  (落水 {drawdownDaysCount} 天)
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              style={{
+                background: 'rgba(255, 255, 255, 0.06)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-muted)',
+                borderRadius: '6px',
+                padding: '3px 8px',
+                fontSize: '0.72rem',
+                cursor: 'pointer',
+              }}
+            >
+              {showUnderwaterChart ? '收合' : '展開'}
+            </button>
+          </div>
+        </div>
+
+        {showUnderwaterChart && filteredSeries.length > 0 && (
+          <div
+            style={{
+              position: 'relative',
+              width: '100%',
+              background: 'rgba(8, 10, 16, 0.85)',
+              borderRadius: '10px',
+              border: '1px solid rgba(244, 63, 94, 0.2)',
+              overflow: 'hidden',
+            }}
+          >
+            <svg
+              viewBox={`0 0 ${underwaterWidth} ${underwaterHeight}`}
+              style={{ width: '100%', height: 'auto', display: 'block' }}
+            >
+              <defs>
+                <linearGradient id="underwaterGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.4" />
+                  <stop offset="100%" stopColor="#991b1b" stopOpacity="0.05" />
+                </linearGradient>
+              </defs>
+
+              {/* 網格刻度線：0.0%, 50%, 100% */}
+              {[0, 0.5, 1].map((r) => {
+                const plotH = underwaterHeight - underwaterPadding.top - underwaterPadding.bottom;
+                const y = underwaterPadding.top + plotH * r;
+                const val = 0 - (0 - minUnderwaterDd) * r;
+                return (
+                  <g key={r}>
+                    <line
+                      x1={underwaterPadding.left}
+                      y1={y}
+                      x2={underwaterWidth - underwaterPadding.right}
+                      y2={y}
+                      stroke={r === 0 ? 'rgba(52, 211, 153, 0.4)' : 'rgba(71, 85, 105, 0.25)'}
+                      strokeWidth={r === 0 ? 1.5 : 1}
+                      strokeDasharray={r === 0 ? 'none' : '3 3'}
+                    />
+                    <text
+                      x={underwaterPadding.left - 8}
+                      y={y + 4}
+                      fill={r === 0 ? '#34d399' : '#94a3b8'}
+                      fontSize="10"
+                      textAnchor="end"
+                      fontFamily="monospace"
+                      fontWeight={r === 0 ? 'bold' : 'normal'}
+                    >
+                      {val.toFixed(1)}%
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* 陰影填充面積 */}
+              {underwaterArea && <path d={underwaterArea} fill="url(#underwaterGradient)" />}
+
+              {/* 回撤紅色邊界折線 */}
+              {underwaterPath && (
+                <path d={underwaterPath} fill="none" stroke="#f43f5e" strokeWidth="2.2" strokeLinecap="round" />
+              )}
+
+              {/* 同步指針 Hover 垂線與指示點 */}
+              {hoverIndex !== null && hoverIndex >= 0 && hoverIndex < filteredSeries.length && (
+                <g>
+                  {(() => {
+                    const plotW = underwaterWidth - underwaterPadding.left - underwaterPadding.right;
+                    const plotH = underwaterHeight - underwaterPadding.top - underwaterPadding.bottom;
+                    const x = underwaterPadding.left + (hoverIndex / Math.max(1, filteredSeries.length - 1)) * plotW;
+                    const val = filteredSeries[hoverIndex]?.underwaterDrawdownPercent ?? 0;
+                    const ratio = (0 - val) / (0 - minUnderwaterDd);
+                    const y = underwaterPadding.top + Math.max(0, Math.min(plotH, ratio * plotH));
+                    return (
+                      <>
+                        <line
+                          x1={x}
+                          y1={underwaterPadding.top}
+                          x2={x}
+                          y2={underwaterHeight - underwaterPadding.bottom}
+                          stroke="#cbd5e1"
+                          strokeWidth="1.2"
+                          strokeDasharray="3 3"
+                        />
+                        <circle cx={x} cy={y} r="4.5" fill="#f43f5e" stroke="#fff" strokeWidth="1.5" />
+                      </>
+                    );
+                  })()}
+                </g>
+              )}
+            </svg>
+          </div>
+        )}
+      </div>
+
+      {/* 4.2 當日事件標籤與備註 */}
       <div
         style={{
           marginTop: '16px',

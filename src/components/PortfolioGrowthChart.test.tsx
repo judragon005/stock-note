@@ -102,4 +102,17 @@ describe('PortfolioGrowthChart - 資產走勢與雙模切換 (Ticket 07)', () =>
       expect(html).not.toContain('NaN');
     });
   });
+
+  describe('Ticket 09: 原生向量 SVG 實戰水下回撤圖 (Underwater Chart)', () => {
+    it('應渲染實戰水下回撤圖面板與向下的回撤陰影折線', () => {
+      const html = renderToStaticMarkup(
+        <PortfolioGrowthChart series={mockSeries} baseCurrency="TWD" />
+      );
+
+      // 應包含水下回撤面板標題
+      expect(html).toContain('水下回撤分析');
+      // 應包含水下回撤圖的 0% 基準線或標示
+      expect(html).toContain('0.0%');
+    });
+  });
 });
