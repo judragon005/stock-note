@@ -19,6 +19,7 @@ import {
   Compass,
   HelpCircle,
   Eye,
+  EyeOff,
   ShieldCheck,
 } from 'lucide-react';
 import { filterNavSeriesByRange, calculatePerformanceMetrics } from '../engine/historicalNav';
@@ -38,8 +39,9 @@ interface PortfolioGrowthChartProps {
   isSyncing?: boolean;
   syncProgressText?: string;
   initialChartMode?: 'AUM' | 'UNIT_NAV';
+  initialIsIncognito?: boolean;
   onRefreshHistory?: () => void;
-  onInspectXirr?: () => void;
+  onInspectXirr?: (timeRange?: TimeRangeFilter) => void;
 }
 
 export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
@@ -49,14 +51,29 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
   isSyncing = false,
   syncProgressText = '',
   initialChartMode = 'AUM',
+  initialIsIncognito = false,
   onRefreshHistory,
   onInspectXirr,
 }) => {
   const [chartMode, setChartMode] = useState<'AUM' | 'UNIT_NAV'>(initialChartMode);
   const [timeRange, setTimeRange] = useState<TimeRangeFilter>('ALL');
+  const [isIncognito, setIsIncognito] = useState<boolean>(initialIsIncognito);
   const [benchmarkType, setBenchmarkType] = useState<BenchmarkType>('NONE');
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [activeTooltipMetric, setActiveTooltipMetric] = useState<QuantMetricId | null>(null);
+
+  const currencySymbol = baseCurrency === 'USD' ? 'US$' : 'NT$';
+
+  const formatMoney = (val: number, isPnL = false) => {
+    if (isIncognito) {
+      if (isPnL) {
+        return `${val >= 0 ? '+' : '-'}${currencySymbol}******`;
+      }
+      return `${currencySymbol}******`;
+    }
+    const sign = isPnL && val >= 0 ? '+' : isPnL && val < 0 ? '-' : '';
+    return `${sign}${currencySymbol}${Math.abs(val).toLocaleString()}`;
+  };
 
   // 水下回撤圖展開/收合開關 (Ticket 09)
   const [showUnderwaterChart, setShowUnderwaterChart] = useState(true);
@@ -365,8 +382,6 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
     );
   }
 
-  const currencySymbol = baseCurrency === 'USD' ? '$' : 'NT$';
-
   return (
     <div
       className="glass-card"
@@ -556,6 +571,29 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
               <span>{isSyncing ? syncProgressText || '同步中...' : '同步日 K'}</span>
             </button>
           )}
+
+          {/* 隱私遮罩 (Incognito Mode) 開關按鈕 (Ticket 11) */}
+          <button
+            onClick={() => setIsIncognito((prev) => !prev)}
+            className="btn btn-secondary btn-sm"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              color: isIncognito ? '#38bdf8' : 'var(--text-muted)',
+              border: isIncognito ? '1px solid rgba(56, 189, 248, 0.5)' : '1px solid var(--border-color)',
+              background: isIncognito ? 'rgba(56, 189, 248, 0.15)' : 'rgba(30, 41, 59, 0.5)',
+              fontWeight: 600,
+              padding: '5px 11px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            title="一鍵遮蔽或顯示敏感金額，保護隱私便於分享"
+          >
+            {isIncognito ? <EyeOff size={13} /> : <Eye size={13} />}
+            <span>{isIncognito ? '隱私遮罩 (開)' : '隱私遮罩'}</span>
+          </button>
         </div>
       </div>
 
@@ -582,8 +620,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
             {activeSnapshot ? `${activeSnapshot.date} 淨資產 (NAV)` : '當前淨資產 (NAV)'}
           </div>
           <div className="mono" style={{ fontSize: '1.45rem', fontWeight: 800, color: '#34d399', lineHeight: 1.2 }}>
-            {currencySymbol}
-            {activeSnapshot ? activeSnapshot.totalNAV.toLocaleString() : metrics.currentNAV.toLocaleString()}
+            {formatMoney(activeSnapshot ? activeSnapshot.totalNAV : metrics.currentNAV)}
           </div>
           {activeSnapshot && activeSnapshot.dailyPnL !== undefined && (
             <div
@@ -599,8 +636,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
             >
               {activeSnapshot.dailyPnL >= 0 ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
               <span>
-                {activeSnapshot.dailyPnL >= 0 ? '+' : ''}
-                {activeSnapshot.dailyPnL.toLocaleString()} ({activeSnapshot.dailyReturnPercent}%)
+                {formatMoney(activeSnapshot.dailyPnL, true)} ({activeSnapshot.dailyReturnPercent}%)
               </span>
             </div>
           )}
@@ -616,10 +652,32 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
             border: '1px solid rgba(245, 158, 11, 0.3)',
           }}
         >
-          <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '4px' }}>累計投入本金</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>累計投入本金</span>
+            {onInspectXirr && (
+              <button
+                onClick={() => onInspectXirr(timeRange)}
+                style={{
+                  background: 'rgba(245, 158, 11, 0.15)',
+                  border: '1px solid rgba(245, 158, 11, 0.4)',
+                  color: '#fbbf24',
+                  borderRadius: '5px',
+                  padding: '2px 7px',
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                }}
+                title={`點擊透視 ${timeRange} 週期之在席現金流`}
+              >
+                <Eye size={11} /> 透視金流
+              </button>
+            )}
+          </div>
           <div className="mono" style={{ fontSize: '1.45rem', fontWeight: 800, color: '#fbbf24', lineHeight: 1.2 }}>
-            {currencySymbol}
-            {activeSnapshot ? activeSnapshot.netCostBasis.toLocaleString() : metrics.netCostBasis.toLocaleString()}
+            {formatMoney(activeSnapshot ? activeSnapshot.netCostBasis : metrics.netCostBasis)}
           </div>
           <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
             本金超額比率: {activeSnapshot && activeSnapshot.netCostBasis > 0
@@ -648,9 +706,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
               lineHeight: 1.2,
             }}
           >
-            {(activeSnapshot?.cumulativeReturnPnL || 0) >= 0 ? '+' : ''}
-            {currencySymbol}
-            {activeSnapshot ? activeSnapshot.cumulativeReturnPnL.toLocaleString() : metrics.totalProfitPnL.toLocaleString()}
+            {formatMoney(activeSnapshot ? activeSnapshot.cumulativeReturnPnL : metrics.totalProfitPnL, true)}
           </div>
           <div style={{ fontSize: '0.74rem', fontWeight: 700, color: (activeSnapshot?.cumulativeReturnPercent || 0) >= 0 ? 'var(--gain-color)' : 'var(--loss-color)', marginTop: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>
@@ -680,31 +736,10 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
             最高淨值 (ATH) / 最大回撤 (MDD)
           </div>
           <div className="mono" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#38bdf8', lineHeight: 1.2 }}>
-            {currencySymbol}{metrics.allTimeHighNAV.toLocaleString()}
+            {formatMoney(metrics.allTimeHighNAV)}
           </div>
-          <div style={{ fontSize: '0.74rem', color: '#f43f5e', marginTop: '4px', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: '0.74rem', color: '#f43f5e', marginTop: '4px', fontWeight: 700 }}>
             <span>最大回撤: -{metrics.maxDrawdownPercent.toFixed(1)}%</span>
-            {onInspectXirr && (
-              <button
-                onClick={onInspectXirr}
-                style={{
-                  background: 'rgba(56, 189, 248, 0.12)',
-                  border: '1px solid rgba(56, 189, 248, 0.35)',
-                  color: '#38bdf8',
-                  borderRadius: '5px',
-                  padding: '2px 7px',
-                  fontSize: '0.68rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '3px',
-                }}
-                title="點擊透視此週期之歷史現金流"
-              >
-                <Eye size={11} /> 透視金流
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -838,6 +873,8 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
                 >
                   {chartMode === 'UNIT_NAV'
                     ? `${val - 100 >= 0 ? '+' : ''}${(val - 100).toFixed(1)}%`
+                    : isIncognito
+                    ? '***'
                     : Math.round(val).toLocaleString()}
                 </text>
               </g>

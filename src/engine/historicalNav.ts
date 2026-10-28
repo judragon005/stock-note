@@ -75,6 +75,7 @@ export interface CalculateHistoricalNavOptions {
   startDate?: string;
   endDate?: string;
   baseCurrency?: Currency;
+  selectedAccountId?: string;
 }
 
 /**
@@ -82,15 +83,22 @@ export interface CalculateHistoricalNavOptions {
  */
 export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOptions): PortfolioDailySnapshot[] {
   const {
-    trades,
-    cashTransactions = [],
-    loanRecords = [],
-    receivableDividends = [],
+    trades: rawTrades,
+    cashTransactions: rawCash = [],
+    loanRecords: rawLoans = [],
+    receivableDividends: rawDividends = [],
     priceMap,
     fxMap = {},
     currentPrices = {},
     baseCurrency = 'TWD',
+    selectedAccountId,
   } = options;
+
+  const isFiltered = Boolean(selectedAccountId && selectedAccountId !== 'ALL');
+  const trades = isFiltered ? rawTrades.filter((t) => t.accountId === selectedAccountId) : rawTrades;
+  const cashTransactions = isFiltered ? rawCash.filter((c) => c.accountId === selectedAccountId) : rawCash;
+  const loanRecords = isFiltered ? rawLoans.filter((l) => l.accountId === selectedAccountId) : rawLoans;
+  const receivableDividends = isFiltered ? rawDividends.filter((r) => !r.accountId || r.accountId === selectedAccountId) : rawDividends;
 
   if (trades.length === 0 && cashTransactions.length === 0 && loanRecords.length === 0) {
     return [];

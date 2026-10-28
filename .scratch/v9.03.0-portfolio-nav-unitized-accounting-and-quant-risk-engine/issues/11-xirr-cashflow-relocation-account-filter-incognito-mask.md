@@ -8,9 +8,9 @@
 
 **Blocked by:** Ticket 07, Ticket 10
 
-**Status:** ready-for-agent
+**Status:** DONE
 
-- [ ] 將「透視金流」按鈕移入「累計投入本金」卡片右上角，點擊時將當前選中之 `timeRange` 傳入金流檢視器
-- [ ] 傳遞 `selectedAccountId` 篩選參數至 `calculateHistoricalNavSeries`，過濾 trades、cash、loans
-- [ ] 實作 `isIncognito` 狀態開關，頂部新增按鈕，支援千萬金額隱私遮蔽
-- [ ] 撰寫單元測試驗證篩選器連動與隱私遮罩格式轉換
+- [x] 將「透視金流」按鈕移入「累計投入本金」卡片右上角，點擊時將當前選中之 `timeRange` 傳入金流檢視器
+- [x] 傳遞 `selectedAccountId` 篩選參數至 `calculateHistoricalNavSeries`，過濾 trades、cash、loans
+- [x] 實作 `isIncognito` 狀態開關，頂部新增按鈕，支援千萬金額隱私遮蔽
+- [x] 撰寫單元測試驗證篩選器連動與隱私遮罩格式轉換

@@ -9,6 +9,7 @@ export interface ReceivableDividend {
   name: string;
   market: MarketType;
   currency: Currency;
+  accountId?: string;             // 所屬券商帳戶 ID (Ticket 11)
   exDate: string;                 // 除息日 / 除權日 (YYYY-MM-DD)
   payDate: string;                // 預計現金發放日 (YYYY-MM-DD)
   sharesHeldOnExDate: number;     // 除息基準日持有股數

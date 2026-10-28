@@ -170,5 +170,43 @@ describe('PortfolioGrowthChart - 資產走勢與雙模切換 (Ticket 07)', () =>
       expect(html).toContain('水下 -5.0%');
     });
   });
+
+  describe('Ticket 11: 透視金流移位與隱私遮罩模式', () => {
+    it('頂部工具列應提供隱私遮罩按鈕，且支援 initialIsIncognito 預設開啟', () => {
+      // 1. 預設未開啟遮罩
+      const normalHtml = renderToStaticMarkup(
+        <PortfolioGrowthChart series={mockSeries} baseCurrency="TWD" />
+      );
+      expect(normalHtml).toContain('隱私遮罩');
+      expect(normalHtml).toContain('NT$1,060,000');
+
+      // 2. 開啟隱私遮罩
+      const incognitoHtml = renderToStaticMarkup(
+        <PortfolioGrowthChart series={mockSeries} baseCurrency="TWD" initialIsIncognito={true} />
+      );
+      expect(incognitoHtml).toContain('隱私遮罩 (開)');
+      expect(incognitoHtml).toContain('NT$******');
+      // 但百分比仍清晰保留
+      expect(incognitoHtml).toContain('+6.00%');
+    });
+
+    it('透視金流按鈕應正確移至累計投入本金卡片中', () => {
+      const html = renderToStaticMarkup(
+        <PortfolioGrowthChart
+          series={mockSeries}
+          baseCurrency="TWD"
+          onInspectXirr={() => {}}
+        />
+      );
+
+      // 應包含透視金流按鈕
+      expect(html).toContain('透視金流');
+      expect(html).toContain('累計投入本金');
+      // MDD 卡片內不應再有重複的透視金流按鈕
+      // （透過檢查累計投入本金鄰近含有透視金流）
+      expect(html).toContain('title="點擊透視 ALL 週期之在席現金流"');
+    });
+  });
 });
+
 

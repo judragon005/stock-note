@@ -873,5 +873,75 @@ describe('週期篩選與績效統計指標 (Metrics & Time Range Filter)', () =
       expect(series[3].underwaterDrawdownPercent).toBe(-5.00);
     });
   });
+
+  describe('Ticket 11: 帳戶篩選器 (selectedAccountId) 連動', () => {
+    it('當指定 selectedAccountId 時，應只納入該券商帳戶之交易與資金流水', () => {
+      const trades: TradeRecord[] = [
+        {
+          id: 't-cathay',
+          date: '2026-01-01',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          accountId: 'broker-cathay',
+          shares: 1000,
+          price: 500,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 't-fubon',
+          date: '2026-01-01',
+          symbol: '2317',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          accountId: 'broker-fubon',
+          shares: 2000,
+          price: 100,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+      ];
+
+      const priceMap: HistoricalDailyPriceMap = {
+        '2330': { '2026-01-01': 500 },
+        '2317': { '2026-01-01': 100 },
+      };
+
+      // 1. 篩選國泰帳戶 -> 僅 2330 (50 萬市值)
+      const cathaySeries = calculateHistoricalNavSeries({
+        trades,
+        priceMap,
+        selectedAccountId: 'broker-cathay',
+      });
+      expect(cathaySeries.length).toBe(1);
+      expect(cathaySeries[0].stockMarketValue).toBe(500000);
+      expect(cathaySeries[0].totalNAV).toBe(500000);
+
+      // 2. 篩選富邦帳戶 -> 僅 2317 (20 萬市值)
+      const fubonSeries = calculateHistoricalNavSeries({
+        trades,
+        priceMap,
+        selectedAccountId: 'broker-fubon',
+      });
+      expect(fubonSeries.length).toBe(1);
+      expect(fubonSeries[0].stockMarketValue).toBe(200000);
+      expect(fubonSeries[0].totalNAV).toBe(200000);
+
+      // 3. 全帳戶合併 (未傳或 'ALL') -> 50 萬 + 20 萬 = 70 萬
+      const allSeries = calculateHistoricalNavSeries({
+        trades,
+        priceMap,
+        selectedAccountId: 'ALL',
+      });
+      expect(allSeries.length).toBe(1);
+      expect(allSeries[0].stockMarketValue).toBe(700000);
+    });
+  });
 });
+
 
