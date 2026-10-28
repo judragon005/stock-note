@@ -928,7 +928,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
 
                             {/* 應收股利平滑補償提示 */}
                             {(() => {
-                              const rec = receivableDividends?.find((r) => r.symbol.toUpperCase() === item.symbol.toUpperCase());
+                              const rec = receivableDividends?.find((r) => r.symbol.toUpperCase() === item.symbol.toUpperCase() && r.status === 'PENDING_PAYMENT');
                               if (!rec) return null;
                               const smoothedPnL = item.unrealizedPnL + (item.currency === 'USD' ? rec.estimatedNetDividend : rec.estimatedNetDividendInTWD);
                               return (
