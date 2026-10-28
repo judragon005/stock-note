@@ -103,6 +103,7 @@ export interface QuantPerformanceMetrics {
   sharpeRatio: number;            // 夏普值 Sharpe Ratio
   sortinoRatio?: number;          // 索提諾比 Sortino Ratio
   annualizedVolatility: number;   // 年化波動度 %
+  downsideVolatility?: number;    // 下行年化波動度 %
   benchmarkMaxDrawdown: number | null; // 基準最大回撤 % (無基準時為 null)
   portfolioMaxDrawdown: number;   // 投資組合最大回撤 %
   correlation: number | null;     // 與基準之相關係數 r (無基準時為 null)

@@ -39,6 +39,31 @@ export function calculateAnnualizedVolatility(dailyReturns: number[]): number {
 }
 
 /**
+ * 計算年化下行波動度 (Downside Volatility %):
+ * 僅衡量負報酬率之半變異數：sqrt( sum(min(0, r_i)^2) / (N - 1) ) * sqrt(252) * 100
+ */
+export function calculateDownsideVolatility(dailyReturns: number[]): number {
+  if (!dailyReturns || dailyReturns.length < 2) {
+    return 0;
+  }
+
+  const negativeReturns = dailyReturns.filter((r) => r < 0);
+  if (negativeReturns.length === 0) {
+    return 0;
+  }
+
+  const sumOfSquaredNegative = dailyReturns.reduce((acc, r) => {
+    return r < 0 ? acc + Math.pow(r, 2) : acc;
+  }, 0);
+
+  const variance = sumOfSquaredNegative / (dailyReturns.length - 1);
+  const std = Math.sqrt(variance);
+  const annualized = std * Math.sqrt(252) * 100;
+
+  return Math.round(annualized * 100) / 100;
+}
+
+/**
  * 計算歷史最大回撤 (Max Drawdown, MDD %)
  */
 export function calculateMaxDrawdown(prices: number[]): number {
@@ -78,6 +103,23 @@ export function calculateSharpeRatio(
   const excessReturn = annualizedReturnPercent - riskFreeRatePercent;
   const sharpe = excessReturn / annualizedVolatilityPercent;
   return Math.round(sharpe * 100) / 100;
+}
+
+/**
+ * 計算索提諾比率 (Sortino Ratio)
+ * (年化總報酬率% - 年化無風險利率%) / 年化下行波動度%
+ */
+export function calculateSortinoRatio(
+  annualizedReturnPercent: number,
+  downsideVolatilityPercent: number,
+  riskFreeRatePercent = 1.5
+): number {
+  const excessReturn = annualizedReturnPercent - riskFreeRatePercent;
+  if (downsideVolatilityPercent <= 0) {
+    return excessReturn > 0 ? 99.99 : 0;
+  }
+  const sortino = excessReturn / downsideVolatilityPercent;
+  return Math.round(sortino * 100) / 100;
 }
 
 /**
@@ -173,12 +215,19 @@ export function calculateQuantMetrics(
       ? portfolioPrices[portfolioPrices.length - 1] / portfolioPrices[0]
       : 1;
 
-  const years = Math.max(days / 252, 1 / 252);
+  const years = Math.max(days / 365.25, 1 / 365.25);
   const annualizedReturnPercent = (Math.pow(totalReturnRatio, 1 / years) - 1) * 100;
 
   const sharpeRatio = calculateSharpeRatio(
     annualizedReturnPercent,
     annualizedVolatility,
+    riskFreeRatePercent
+  );
+
+  const downsideVolatility = calculateDownsideVolatility(pReturns);
+  const sortinoRatio = calculateSortinoRatio(
+    annualizedReturnPercent,
+    downsideVolatility,
     riskFreeRatePercent
   );
 
@@ -190,7 +239,9 @@ export function calculateQuantMetrics(
       alpha: null,
       beta: null,
       sharpeRatio,
+      sortinoRatio,
       annualizedVolatility,
+      downsideVolatility,
       benchmarkMaxDrawdown: null,
       portfolioMaxDrawdown,
       correlation: null,
@@ -205,7 +256,7 @@ export function calculateQuantMetrics(
     benchmarkPrices.length > 0 && benchmarkPrices[0] > 0
       ? benchmarkPrices[benchmarkPrices.length - 1] / benchmarkPrices[0]
       : 1;
-  const bYears = Math.max(bDays / 252, 1 / 252);
+  const bYears = Math.max(bDays / 365.25, 1 / 365.25);
   const benchmarkAnnualizedReturnPercent = (Math.pow(bTotalReturnRatio, 1 / bYears) - 1) * 100;
 
   const { beta, correlation } = calculateBetaAndCorrelation(pReturns, bReturns);
@@ -221,7 +272,9 @@ export function calculateQuantMetrics(
     alpha,
     beta,
     sharpeRatio,
+    sortinoRatio,
     annualizedVolatility,
+    downsideVolatility,
     benchmarkMaxDrawdown,
     portfolioMaxDrawdown,
     correlation,

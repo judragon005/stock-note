@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   calculateDailyReturns,
   calculateAnnualizedVolatility,
+  calculateDownsideVolatility,
   calculateMaxDrawdown,
   calculateSharpeRatio,
+  calculateSortinoRatio,
   calculateBetaAndCorrelation,
   calculateJensensAlpha,
   calculateQuantMetrics,
@@ -67,6 +69,34 @@ describe('量化統計與風險調整指標計算引擎 (quantMetrics)', () => {
     });
   });
 
+  describe('3.1 下行波動度與索提諾比率 (calculateDownsideVolatility & calculateSortinoRatio)', () => {
+    it('全為正報酬或零報酬時，下行波動度應為 0', () => {
+      const returns = [0.01, 0.02, 0.005, 0.03];
+      expect(calculateDownsideVolatility(returns)).toBe(0);
+    });
+
+    it('包含負報酬時，應正確計算年化下行波動度', () => {
+      const returns = [0.02, -0.01, 0.03, -0.02];
+      const downsideVol = calculateDownsideVolatility(returns);
+      expect(downsideVol).toBeGreaterThan(0);
+      // 下行波動度應小於或等於全樣本波動度
+      const fullVol = calculateAnnualizedVolatility(returns);
+      expect(downsideVol).toBeLessThanOrEqual(fullVol);
+    });
+
+    it('無下行波動度且超額報酬 > 0 時，索提諾比率應回傳 99.99 極優評級', () => {
+      expect(calculateSortinoRatio(20, 0, 1.5)).toBe(99.99);
+    });
+
+    it('應正確計算標準索提諾比率 (年化報酬 25%, 無風險利率 1.5%, 下行波動度 10% -> 2.35)', () => {
+      expect(calculateSortinoRatio(25, 10, 1.5)).toBe(2.35);
+    });
+
+    it('負超額報酬且下行波動度為 0 時應回傳 0', () => {
+      expect(calculateSortinoRatio(1.0, 0, 1.5)).toBe(0);
+    });
+  });
+
   describe('4. 貝塔係數、相關係數與阿爾法 (Beta, Correlation, Alpha)', () => {
     it('完全同向波動時 Beta 應接近 1.0，相關係數為 1.0', () => {
       const portfolioReturns = [0.01, 0.02, -0.01, 0.03];
@@ -121,6 +151,16 @@ describe('量化統計與風險調整指標計算引擎 (quantMetrics)', () => {
       expect(metrics.beta).toBeNull();
       expect(metrics.sharpeRatio).toBe(0);
       expect(metrics.portfolioMaxDrawdown).toBe(0);
+    });
+
+    it('應支援 365.25 日曆天除數校準，並輸出 sortinoRatio 與 downsideVolatility', () => {
+      // 模擬整整 365 天日曆天數列，起點 100，終點 120 (總報酬 20%)
+      const oneYearPrices = Array.from({ length: 365 }, (_, i) => 100 + (20 * i) / 364);
+      const metrics = calculateQuantMetrics(oneYearPrices, []);
+      expect(metrics.sortinoRatio).toBeDefined();
+      expect(metrics.downsideVolatility).toBeDefined();
+      // 單調上升時下行波動度為 0，超額報酬 > 0，sortinoRatio 應為 99.99
+      expect(metrics.sortinoRatio).toBe(99.99);
     });
   });
 
