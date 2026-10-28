@@ -170,11 +170,14 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
   const hasExplicitCashBook = cashTransactions.length > 0;
 
   const series: PortfolioDailySnapshot[] = [];
-  let prevNAV: number | null = null;
+  let prevTotalNAV: number | null = null;
+  let currentUnitNAV = 100.0;
+  let currentUnits = 0;
 
   for (const date of dateSequence) {
     const dailyEvents: string[] = [];
     const fxRate = filledFxMap[date] || 32.0;
+    let dailyNetExternalFlow = 0;
 
     // (A) 處理當日現金帳本出入金 (過濾掉已由股票交易在 (C) 步驟處理的連動流水)
     if (cashByDate[date]) {
@@ -191,10 +194,12 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
         if (cat === 'DEPOSIT') {
           currentCashBalance += Math.abs(cashAmountInBase);
           netInvestedCapital += Math.abs(cashAmountInBase);
+          dailyNetExternalFlow += Math.abs(cashAmountInBase);
           dailyEvents.push(`入金: ${cash.amount.toLocaleString()} ${cash.currency}`);
         } else if (cat === 'WITHDRAWAL') {
           currentCashBalance -= Math.abs(cashAmountInBase);
           netInvestedCapital -= Math.abs(cashAmountInBase);
+          dailyNetExternalFlow -= Math.abs(cashAmountInBase);
           dailyEvents.push(`出金: ${cash.amount.toLocaleString()} ${cash.currency}`);
         } else if (cat === 'INTEREST_INCOME' || cat === 'INTEREST') {
           currentCashBalance += Math.abs(cashAmountInBase);
@@ -276,6 +281,7 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
                 currentCashBalance -= downPaymentInBase;
               } else {
                 netInvestedCapital += downPaymentInBase;
+                dailyNetExternalFlow += downPaymentInBase;
               }
               dailyEvents.push(`融資買進 ${sym}: ${trade.shares.toLocaleString()}股 (自備款 ${marginRate * 100}%)`);
             } else {
@@ -284,6 +290,7 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
               } else {
                 // 若無獨立現金帳本，則每次買進直接視同新增投入本金
                 netInvestedCapital += totalCostInBase;
+                dailyNetExternalFlow += totalCostInBase;
               }
               dailyEvents.push(`買進 ${sym}: ${trade.shares.toLocaleString()}股 @ ${trade.price}`);
             }
@@ -303,6 +310,7 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
                 currentCashBalance += netToCash;
               } else {
                 netInvestedCapital -= Math.max(0, netToCash);
+                dailyNetExternalFlow -= Math.max(0, netToCash);
               }
               dailyEvents.push(`融資賣出 ${sym}: ${trade.shares.toLocaleString()}股`);
             } else {
@@ -311,6 +319,7 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
               } else {
                 // 無獨立現金帳本時，賣出變現視為回收部分本金或結算
                 netInvestedCapital -= netSellProceeds;
+                dailyNetExternalFlow -= netSellProceeds;
               }
               dailyEvents.push(`賣出 ${sym}: ${trade.shares.toLocaleString()}股 @ ${trade.price}`);
             }
@@ -390,17 +399,43 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
       ? Math.round((cumulativeReturnPnL / effectiveCostBasis) * 10000) / 100
       : 0;
 
+    // GIPS 單位淨值法 (Unit NAV / TWR) 狀態機
+    const preFlowNAV = totalNAV - dailyNetExternalFlow;
+
     let dailyPnL = 0;
     let dailyReturnPercent = 0;
-    if (prevNAV !== null && prevNAV > 0) {
-      dailyPnL = Math.round((totalNAV - prevNAV) * 100) / 100;
-      dailyReturnPercent = Math.round((dailyPnL / prevNAV) * 10000) / 100;
+
+    if (prevTotalNAV !== null && prevTotalNAV > 0) {
+      dailyPnL = Math.round((preFlowNAV - prevTotalNAV) * 100) / 100;
+      const dailyReturnRate = (preFlowNAV - prevTotalNAV) / prevTotalNAV;
+      dailyReturnPercent = Math.round(dailyReturnRate * 10000) / 100;
+
+      // 更新當日單位淨值
+      currentUnitNAV = currentUnitNAV * (1 + dailyReturnRate);
+    } else {
+      currentUnitNAV = 100.0;
+      dailyPnL = 0;
+      dailyReturnPercent = 0;
     }
-    prevNAV = totalNAV;
+
+    // 處理當日外部出入金增減份額
+    if (dailyNetExternalFlow !== 0 && currentUnitNAV > 0) {
+      currentUnits += dailyNetExternalFlow / currentUnitNAV;
+    } else if (currentUnits === 0 && totalNAV > 0 && currentUnitNAV > 0) {
+      currentUnits = totalNAV / currentUnitNAV;
+    }
+
+    if (currentUnits < 0) {
+      currentUnits = 0;
+    }
+
+    prevTotalNAV = totalNAV;
 
     series.push({
       date,
       totalNAV,
+      unitNAV: Math.round(currentUnitNAV * 100) / 100,
+      units: Math.round(currentUnits * 1000) / 1000,
       stockMarketValue: Math.round(totalStockMarketValue * 100) / 100,
       cashBalance: Math.round(currentCashBalance * 100) / 100,
       loanBalance: Math.round(currentLoanBalance * 100) / 100,

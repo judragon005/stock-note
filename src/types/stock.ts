@@ -405,15 +405,17 @@ export interface SettledLoanSummary {
 
 export interface PortfolioDailySnapshot {
   date: string; // YYYY-MM-DD
-  totalNAV: number; // 持股市值 + 現金餘額 - 借貸負債
+  totalNAV: number; // 持股市值 + 現金餘額 - 借貸負債 (AUM)
+  unitNAV: number; // 單位淨值 (起點 100.00，隔離外部出入金干擾)
+  units?: number; // 當前累積總份額
   stockMarketValue: number; // 股票持股市值
   cashBalance: number; // 現金帳戶總餘額
   loanBalance: number; // 借貸負債總餘額
   netCostBasis: number; // 累計外部投入本金 (入金 - 出金)
   cumulativeReturnPnL: number; // 累計總損益 (NAV - netCostBasis)
   cumulativeReturnPercent: number; // 累計總報酬率 %
-  dailyPnL?: number; // 當日損益變動
-  dailyReturnPercent?: number; // 當日漲跌幅 %
+  dailyPnL?: number; // 當日純投資損益變動 (扣除外部出入金)
+  dailyReturnPercent?: number; // 當日純投資報酬率 % (對齊單位淨值漲跌)
   events: string[]; // 當日重大交易與事件摘要
 }
 

@@ -273,6 +273,7 @@ describe('週期篩選與績效統計指標 (Metrics & Time Range Filter)', () =
       {
         date: '2026-01-01',
         totalNAV: 100,
+        unitNAV: 100,
         stockMarketValue: 100,
         cashBalance: 0,
         loanBalance: 0,
@@ -284,6 +285,7 @@ describe('週期篩選與績效統計指標 (Metrics & Time Range Filter)', () =
       {
         date: '2026-01-02',
         totalNAV: 150, // Peak ATH
+        unitNAV: 150,
         stockMarketValue: 150,
         cashBalance: 0,
         loanBalance: 0,
@@ -295,6 +297,7 @@ describe('週期篩選與績效統計指標 (Metrics & Time Range Filter)', () =
       {
         date: '2026-01-03',
         totalNAV: 120, // Drawdown from 150 to 120: (120 - 150) / 150 = -20%
+        unitNAV: 120,
         stockMarketValue: 120,
         cashBalance: 0,
         loanBalance: 0,
@@ -317,6 +320,7 @@ describe('週期篩選與績效統計指標 (Metrics & Time Range Filter)', () =
       {
         date: '2025-01-01',
         totalNAV: 100,
+        unitNAV: 100,
         stockMarketValue: 100,
         cashBalance: 0,
         loanBalance: 0,
@@ -328,6 +332,7 @@ describe('週期篩選與績效統計指標 (Metrics & Time Range Filter)', () =
       {
         date: '2026-01-01',
         totalNAV: 150,
+        unitNAV: 150,
         stockMarketValue: 150,
         cashBalance: 0,
         loanBalance: 0,
@@ -530,6 +535,106 @@ describe('週期篩選與績效統計指標 (Metrics & Time Range Filter)', () =
       expect(day20!.loanBalance).toBe(600000);
       // 總 NAV = 1,000,000 + 100,000 - 600,000 = 500,000 (與原始入金 500,000 守恆)
       expect(day20!.totalNAV).toBe(500000);
+    });
+  });
+
+  describe('GIPS 單位淨值法 (Unit NAV / TWR) 狀態機與外部出入金解耦 (Ticket 02)', () => {
+    it('外部大額入金與出金時，unitNAV 應保持連續，杜絕虛假 MDD 與假性暴賺', () => {
+      // Day 1 (01-01): 入金 100 萬，買入 2330 1,000 股 @ 600 (花費 60 萬，現金剩 40 萬)，NAV = 100 萬
+      // Day 2 (01-02): 2330 漲至 660 (+10%)，市值 66 萬，現金 40 萬 -> 總 NAV 106 萬 (+6%)
+      // Day 3 (01-03): 外部大額加碼入金 300 萬，股價維持 660 -> 總 NAV 406 萬，但當天純投資報酬率應為 0%，unitNAV 不變！
+      // Day 4 (01-04): 外部大額出金 200 萬，股價維持 660 -> 總 NAV 206 萬，當天純投資報酬率應為 0%，unitNAV 不變！
+      const trades: TradeRecord[] = [
+        {
+          id: 't1',
+          date: '2026-01-01',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 600,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+      ];
+
+      const cashTransactions: CashTransaction[] = [
+        {
+          id: 'c1',
+          accountId: 'broker-tw-default',
+          currency: 'TWD',
+          type: 'DEPOSIT',
+          amount: 1000000,
+          date: '2026-01-01',
+          createdAt: 1,
+        },
+        {
+          id: 'c2',
+          accountId: 'broker-tw-default',
+          currency: 'TWD',
+          type: 'DEPOSIT',
+          amount: 3000000,
+          date: '2026-01-03',
+          createdAt: 3,
+        },
+        {
+          id: 'c3',
+          accountId: 'broker-tw-default',
+          currency: 'TWD',
+          type: 'WITHDRAWAL',
+          amount: 2000000,
+          date: '2026-01-04',
+          createdAt: 4,
+        },
+      ];
+
+      const priceMap: HistoricalDailyPriceMap = {
+        '2330': {
+          '2026-01-01': 600,
+          '2026-01-02': 660,
+          '2026-01-03': 660,
+          '2026-01-04': 660,
+        },
+      };
+
+      const series = calculateHistoricalNavSeries({
+        trades,
+        cashTransactions,
+        loanRecords: [],
+        priceMap,
+        startDate: '2026-01-01',
+        endDate: '2026-01-04',
+        baseCurrency: 'TWD',
+      });
+
+      expect(series.length).toBe(4);
+
+      // Day 1: 首日 unitNAV 為 100.00
+      expect(series[0].date).toBe('2026-01-01');
+      expect(series[0].totalNAV).toBe(1000000);
+      expect(series[0].unitNAV).toBe(100.00);
+
+      // Day 2: 股票上漲 6 萬 (60萬 -> 66萬)，總資產 100萬 -> 106萬，純收益率 +6%
+      expect(series[1].date).toBe('2026-01-02');
+      expect(series[1].totalNAV).toBe(1060000);
+      expect(series[1].unitNAV).toBe(106.00);
+      expect(series[1].dailyReturnPercent).toBe(6.00);
+
+      // Day 3: 大額入金 300 萬，總資產由 106 萬暴增至 406 萬
+      // 但單位淨值絕不能跳增，必須維持 106.00，當日純投資報酬率必須為 0%！
+      expect(series[2].date).toBe('2026-01-03');
+      expect(series[2].totalNAV).toBe(4060000);
+      expect(series[2].unitNAV).toBe(106.00);
+      expect(series[2].dailyReturnPercent).toBe(0.00);
+
+      // Day 4: 大額出金 200 萬，總資產由 406 萬降至 206 萬
+      // 單位淨值絕不能暴跌，必須維持 106.00，當日純投資報酬率必須為 0%！
+      expect(series[3].date).toBe('2026-01-04');
+      expect(series[3].totalNAV).toBe(2060000);
+      expect(series[3].unitNAV).toBe(106.00);
+      expect(series[3].dailyReturnPercent).toBe(0.00);
     });
   });
 });

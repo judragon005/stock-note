@@ -5,10 +5,10 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** DONE
 
-- [ ] 擴充 `src/types/stock.ts` 中 `PortfolioDailySnapshot` 新增 `unitNAV: number` 欄位
-- [ ] 在 `historicalNav.ts` 中實作 Units 與 UnitNAV 逐日狀態機推演
-- [ ] 每日報酬率計算與外部出入金隔離：`UnitNAV_t = UnitNAV_{t-1} * (1 + R_t)`
-- [ ] 外部出入金等比折算增減份額：`Units_t = Units_{t-1} + NetExternalFlow / UnitNAV_t`
-- [ ] 在 `src/engine/__tests__/historicalNav.test.ts` 驗證外部大額入金（如 100 萬加碼至 400 萬）時，當日 `unitNAV` 維持不變，報酬率為 0%
+- [x] 擴充 `src/types/stock.ts` 中 `PortfolioDailySnapshot` 新增 `unitNAV: number` 欄位
+- [x] 在 `historicalNav.ts` 中實作 Units 與 UnitNAV 逐日狀態機推演
+- [x] 每日報酬率計算與外部出入金隔離：`UnitNAV_t = UnitNAV_{t-1} * (1 + R_t)`
+- [x] 外部出入金等比折算增減份額：`Units_t = Units_{t-1} + NetExternalFlow / UnitNAV_t`
+- [x] 在 `src/engine/historicalNav.test.ts` 驗證外部大額入金（如 100 萬加碼至 400 萬）時，當日 `unitNAV` 維持不變，報酬率為 0%

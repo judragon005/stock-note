@@ -13,7 +13,7 @@
 | 票券編號 | 檔案 | 模組 | 核心職責 | 依賴 | 狀態 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Ticket 01** | [`01-quant-calendar-days-and-sortino-ratio.md`](issues/01-quant-calendar-days-and-sortino-ratio.md) | `quantMetrics.ts` | 時間除數校準 (`days/365.25`)、下行波動度與 Sortino 比率純函式 | 無 | `DONE` |
-| **Ticket 02** | [`02-unit-nav-state-machine-and-capital-flow-decoupling.md`](issues/02-unit-nav-state-machine-and-capital-flow-decoupling.md) | `historicalNav.ts` | 單位淨值法 (Unit NAV / TWR) 狀態機，隔離外部出入金干擾 | 無 | `ready-for-agent` |
+| **Ticket 02** | [`02-unit-nav-state-machine-and-capital-flow-decoupling.md`](issues/02-unit-nav-state-machine-and-capital-flow-decoupling.md) | `historicalNav.ts` | 單位淨值法 (Unit NAV / TWR) 狀態機，隔離外部出入金干擾 | 無 | `DONE` |
 | **Ticket 03** | [`03-receivable-dividends-ex-dividend-smoothing.md`](issues/03-receivable-dividends-ex-dividend-smoothing.md) | `historicalNav.ts` | 應收股利 (`receivableDividends`) 平滑補償，撫平除息旺季假跳水 | Ticket 02 | `ready-for-agent` |
 | **Ticket 04** | [`04-margin-interest-deduction-and-ath-drawdown-series.md`](issues/04-margin-interest-deduction-and-ath-drawdown-series.md) | `historicalNav.ts` | 融資賣出利息精確扣除，快照新增 `underwaterDrawdownPercent` 數列 | Ticket 02 | `ready-for-agent` |
 | **Ticket 05** | [`05-lakehouse-sqlite-benchmark-api-and-cache.md`](issues/05-lakehouse-sqlite-benchmark-api-and-cache.md) | `benchmarkData.ts` | 大盤基準直連本機 SQLite 湖倉 API (`/api/market/history/`) 與記憶體快取 | 無 | `ready-for-agent` |
