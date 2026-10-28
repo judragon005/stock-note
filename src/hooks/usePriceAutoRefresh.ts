@@ -308,6 +308,20 @@ export function usePriceAutoRefresh({
     isAnyOpen: isAnyMarketOpen(),
   };
 
+  const hydrateQuotes = useCallback((cachedQuotes: Record<string, PriceQuote>) => {
+    setQuotes((prev) => {
+      const next = { ...prev };
+      let updated = false;
+      for (const [sym, q] of Object.entries(cachedQuotes)) {
+        if (!next[sym] || next[sym].status === 'CACHED') {
+          next[sym] = q;
+          updated = true;
+        }
+      }
+      return updated ? next : prev;
+    });
+  }, []);
+
   return {
     quotes,
     exchangeRateQuote,
@@ -318,6 +332,7 @@ export function usePriceAutoRefresh({
     refreshAll,
     refreshSymbol,
     toggleSymbolLock,
+    hydrateQuotes,
   };
 }
 

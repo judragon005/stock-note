@@ -137,36 +137,46 @@ export const App: React.FC = () => {
         setHistoricalFx(data.historicalFx);
       }
 
-      // 盤後全市場快取秒讀熱載入 (Spec 0132: 打開網頁秒讀 0 延遲)
-      loadMarketCacheSummary('TW').then((twCache) => {
-        if (twCache && twCache.stocks) {
-          setCurrentPrices((prev) => {
-            const next = { ...prev };
-            for (const [sym, item] of Object.entries(twCache.stocks)) {
-              if (item.quote && item.quote.close > 0) {
-                next[sym] = item.quote.close;
-              }
+      // 盤後全市場快取秒讀熱載入與日 K / 昨收價水合 (Spec 0208 Ticket 06)
+      const hydrateCacheIntoState = (cache: import('./engine/marketCacheLoader').MarketCacheSummary | null) => {
+        if (!cache || !cache.stocks) return;
+        setCurrentPrices((prev) => {
+          const next = { ...prev };
+          for (const [sym, item] of Object.entries(cache.stocks)) {
+            if (item.quote && item.quote.close > 0) {
+              next[sym] = item.quote.close;
             }
-            return next;
-          });
-          syncMarketCacheToIndexedDB(twCache);
-        }
-      });
+          }
+          return next;
+        });
 
-      loadMarketCacheSummary('US').then((usCache) => {
-        if (usCache && usCache.stocks) {
-          setCurrentPrices((prev) => {
-            const next = { ...prev };
-            for (const [sym, item] of Object.entries(usCache.stocks)) {
-              if (item.quote && item.quote.close > 0) {
-                next[sym] = item.quote.close;
-              }
-            }
-            return next;
-          });
-          syncMarketCacheToIndexedDB(usCache);
+        const quotesToHydrate: Record<string, import('./types/stock').PriceQuote> = {};
+        for (const [sym, item] of Object.entries(cache.stocks)) {
+          if (item.quote && item.quote.close > 0) {
+            const prevClose = item.quote.open || item.quote.close;
+            const isUS = /^[A-Za-z]{1,5}$/.test(sym);
+            quotesToHydrate[sym] = {
+              symbol: sym,
+              market: isUS ? 'US' : 'TW',
+              currency: isUS ? 'USD' : 'TWD',
+              source: 'CACHE',
+              price: item.quote.close,
+              previousClose: prevClose,
+              change: item.quote.close - prevClose,
+              changePercent: prevClose > 0 ? ((item.quote.close - prevClose) / prevClose) * 100 : 0,
+              updatedAt: Date.now(),
+              status: 'CACHED',
+              candles: [item.quote],
+            };
+          }
         }
-      });
+        hydrateQuotes(quotesToHydrate);
+
+        syncMarketCacheToIndexedDB(cache);
+      };
+
+      loadMarketCacheSummary('TW').then(hydrateCacheIntoState);
+      loadMarketCacheSummary('US').then(hydrateCacheIntoState);
     } finally {
       setIsStorageInitialized(true);
     }
@@ -338,6 +348,7 @@ export const App: React.FC = () => {
     refreshAll,
     refreshSymbol,
     toggleSymbolLock,
+    hydrateQuotes,
   } = usePriceAutoRefresh({
     trades: displayedTrades,
     onPricesCalculated: handlePricesCalculated,
@@ -397,38 +408,6 @@ export const App: React.FC = () => {
     };
   }, [deepDiveState, quotes, holdings, currentPrices, historicalCandlesMap]);
 
-  // 整戶總體 XIRR 計算 (考慮外部出入金與期末淨資產，嚴密過濾券商帳戶與市場)
-  const portfolioXirr = useMemo(() => {
-    let scopedTrades = currentMarket === 'ALL'
-      ? trades
-      : trades.filter((t) => t.market === currentMarket);
-
-    if (selectedAccountId !== 'ALL') {
-      scopedTrades = scopedTrades.filter((t) => (t.accountId || (t.market === 'TW' ? 'broker-tw-default' : 'broker-us-default')) === selectedAccountId);
-    }
-
-    let scopedCash = currentMarket === 'ALL'
-      ? cashTransactions
-      : cashTransactions.filter((c) => (currentMarket === 'US' ? c.currency === 'USD' : c.currency === 'TWD'));
-
-    if (selectedAccountId !== 'ALL') {
-      scopedCash = scopedCash.filter((c) => c.accountId === selectedAccountId);
-    }
-
-    const terminalNAV = currentMarket === 'US'
-      ? summary.usd.marketValue
-      : currentMarket === 'TW'
-      ? summary.twd.marketValue
-      : summary.combinedTWD.netAssetValue || (summary.twd.marketValue + summary.usd.marketValue * usdToTwdRate);
-
-    return calculatePortfolioXirr({
-      cashTransactions: scopedCash,
-      trades: scopedTrades,
-      terminalNAV,
-      baseCurrency: currentMarket === 'US' ? 'USD' : 'TWD',
-    });
-  }, [trades, cashTransactions, summary, currentMarket, usdToTwdRate, selectedAccountId]);
-
   // 整戶現金帳本與可用餘額匯總（嚴密過濾券商帳戶）
   const cashLedgerSummary = useMemo(() => {
     const scopedAccounts = selectedAccountId === 'ALL'
@@ -466,6 +445,39 @@ export const App: React.FC = () => {
       trades: displayedTrades,
     });
   }, [holdings, cashLedgerSummary, scopedLoans, usdToTwdRate, currentMarket, displayedTrades]);
+
+  // 整戶總體 XIRR 計算 (考慮外部出入金與期末淨資產，嚴密過濾券商帳戶與市場)
+  const portfolioXirr = useMemo(() => {
+    let scopedTrades = currentMarket === 'ALL'
+      ? trades
+      : trades.filter((t) => t.market === currentMarket);
+
+    if (selectedAccountId !== 'ALL') {
+      scopedTrades = scopedTrades.filter((t) => (t.accountId || (t.market === 'TW' ? 'broker-tw-default' : 'broker-us-default')) === selectedAccountId);
+    }
+
+    let scopedCash = currentMarket === 'ALL'
+      ? cashTransactions
+      : cashTransactions.filter((c) => (currentMarket === 'US' ? c.currency === 'USD' : c.currency === 'TWD'));
+
+    if (selectedAccountId !== 'ALL') {
+      scopedCash = scopedCash.filter((c) => c.accountId === selectedAccountId);
+    }
+
+    const terminalNAV = currentMarket === 'US'
+      ? Math.max(0, summary.usd.marketValue + cashLedgerSummary.totalUSD - (scopedLoans.find((l) => l.currency === 'USD')?.principal || 0))
+      : currentMarket === 'TW'
+      ? Math.max(0, summary.twd.marketValue + cashLedgerSummary.totalTWD - (scopedLoans.find((l) => l.currency === 'TWD')?.principal || 0))
+      : (exposureMetrics.effectiveNavTWD ?? exposureMetrics.navTWD) || (summary.combinedTWD.netAssetValue || (summary.twd.marketValue + summary.usd.marketValue * usdToTwdRate));
+
+    return calculatePortfolioXirr({
+      cashTransactions: scopedCash,
+      trades: scopedTrades,
+      terminalNAV,
+      baseCurrency: currentMarket === 'US' ? 'USD' : 'TWD',
+      fxMap: historicalFx,
+    });
+  }, [trades, cashTransactions, summary, currentMarket, usdToTwdRate, selectedAccountId, cashLedgerSummary, scopedLoans, exposureMetrics, historicalFx]);
 
   // 各項利息收入明細與總額聚合 (依當前市場過濾)
   const interestIncomeSummary = useMemo(() => {

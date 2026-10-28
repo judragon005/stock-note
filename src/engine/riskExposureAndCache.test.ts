@@ -1,11 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { calculatePortfolioExposure, calculateActiveMarginDebt } from './riskExposureEngine';
+import { calculatePortfolioXirr } from './xirrCalculator';
 import { HoldingPosition, TradeRecord } from '../types/stock';
 
 describe('Ticket 05: 融資買進負債對齊與淨曝險比率重構 (Spec 0208)', () => {
   it('calculateActiveMarginDebt 應精確計算在席融資買進之未償還券商負債', () => {
-    // 買進 10,000 股 2330 @ 1,000 元，融資自備款 40% (負債 60% = 6,000,000)
-    // 融資賣出 5,000 股 2330 (沖銷一半融資負債，剩餘負債 3,000,000)
     const marginTrades: TradeRecord[] = [
       {
         id: 't-mbuy-1',
@@ -83,7 +82,6 @@ describe('Ticket 05: 融資買進負債對齊與淨曝險比率重構 (Spec 0208
     expect(result.totalStockValueTWD).toBe(1000000);
     expect(result.effectiveNavTWD).toBe(1000000);
     expect(result.totalDebtTWD).toBe(0);
-    // 過去硬設為 0.00x，現在應為標準的 1.00x
     expect(result.grossLeverage).toBeCloseTo(1.0, 2);
     expect(result.netLeverage).toBeCloseTo(1.0, 2);
     expect(result.netExposureRatioPercent).toBeCloseTo(100.0, 1);
@@ -99,7 +97,7 @@ describe('Ticket 05: 融資買進負債對齊與淨曝險比率重構 (Spec 0208
         currency: 'TWD',
         shares: 10000,
         avgCost: 1000,
-        totalCostBasis: 4000000, // 自備款 40%
+        totalCostBasis: 4000000,
         adjustedCostBasis: 4000000,
         currentPrice: 1000,
         marketValue: 10000000,
@@ -147,11 +145,48 @@ describe('Ticket 05: 融資買進負債對齊與淨曝險比率重構 (Spec 0208
       trades: marginTrades,
     });
 
-    // 總負債應包含融資借款 6,000,000 元
     expect(result.totalDebtTWD).toBe(6000000);
-    // NAV = 10,000,000 - 6,000,000 = 4,000,000
     expect(result.effectiveNavTWD).toBe(4000000);
-    // 槓桿 = 10,000,000 / 4,000,000 = 2.5x
     expect(result.grossLeverage).toBeCloseTo(2.5, 2);
+  });
+});
+
+describe('Ticket 06: 首屏快取日 K 水合與 XIRR 匯率期末資產修復 (Spec 0208)', () => {
+  it('calculatePortfolioXirr 應正確採用 fxMap 歷史匯率折算美元入金，而非退回 32.0', () => {
+    // 2026-01-01 存入 1,000 USD，當日匯率 30.0 (30,000 TWD)
+    // 2026-06-01 期末 NAV 45,000 TWD
+    const cashTransactions = [
+      {
+        id: 'c-dep-usd',
+        accountId: 'broker-us-1',
+        date: '2026-01-01',
+        amount: 1000,
+        currency: 'USD' as const,
+        type: 'DEPOSIT' as const,
+        category: 'DEPOSIT' as const,
+        createdAt: 1,
+      },
+    ];
+
+    const fxMap = {
+      '2026-01-01': 30.0,
+      '2026-06-01': 30.0,
+    };
+
+    const res = calculatePortfolioXirr({
+      cashTransactions,
+      trades: [],
+      terminalNAV: 45000,
+      baseCurrency: 'TWD',
+      today: '2026-06-01',
+      fxMap,
+    });
+
+    // 投資 30,000 半年後成長至 45,000，回報率應為顯著正數 (非零)
+    expect(res.ratePercent).toBeGreaterThan(0);
+    const flow = res.cashFlows?.find((f) => f.category === 'DEPOSIT');
+    expect(flow).toBeDefined();
+    // 1,000 USD * 30.0 = -30,000 TWD (入金為負流出)
+    expect(flow?.amount).toBe(-30000);
   });
 });
