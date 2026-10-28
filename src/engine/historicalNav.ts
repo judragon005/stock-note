@@ -166,6 +166,14 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
   });
 
   // 5. 狀態機變數 (State Machine Variables)
+  interface MarginLot {
+    buyDate: string;
+    shares: number;
+    priceInBase: number;
+    debtInBase: number;
+    interestRate: number;
+  }
+  const marginLotsBySymbol: Record<string, MarginLot[]> = {};
   const currentShares: Record<string, number> = {};
   let currentCashBalance = 0; // 統一折算為 baseCurrency (TWD)
   let currentLoanBalance = 0; // 統一折算為 baseCurrency (TWD)
@@ -175,6 +183,7 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
   const series: PortfolioDailySnapshot[] = [];
   let prevTotalNAV: number | null = null;
   let currentUnitNAV = 100.0;
+  let peakUnitNAV = 100.0;
   let currentUnits = 0;
 
   for (const date of dateSequence) {
@@ -277,9 +286,22 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
             currentShares[sym] = (currentShares[sym] || 0) + trade.shares;
             if (isMarginBuy) {
               const marginRate = trade.marginRate ?? 0.4;
+              const marginInterestRate = trade.marginInterestRate ?? 0.065;
               const downPaymentInBase = tradeAmountInBase * marginRate + feeTaxInBase;
               const marginDebtInBase = tradeAmountInBase * (1 - marginRate);
               currentLoanBalance += marginDebtInBase;
+
+              if (!marginLotsBySymbol[sym]) {
+                marginLotsBySymbol[sym] = [];
+              }
+              marginLotsBySymbol[sym].push({
+                buyDate: trade.date,
+                shares: trade.shares,
+                priceInBase: tradeAmountInBase / trade.shares,
+                debtInBase: marginDebtInBase,
+                interestRate: marginInterestRate,
+              });
+
               if (hasExplicitCashBook) {
                 currentCashBalance -= downPaymentInBase;
               } else {
@@ -304,18 +326,57 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
             currentShares[sym] = Math.max(0, (currentShares[sym] || 0) - trade.shares);
             const netSellProceeds = tradeAmountInBase - feeTaxInBase;
             if (isMarginSell) {
-              // 融資賣出：扣除融資借款後淨額入現金帳
-              const marginRate = trade.marginRate ?? 0.4;
-              const debtToRepay = tradeAmountInBase * (1 - marginRate);
+              // 融資賣出：依照 FIFO 沖銷融資批次，精準計算利息並扣除借款
+              let remainingSharesToSell = trade.shares;
+              let debtToRepay = 0;
+              let financingInterest = 0;
+
+              const lots = marginLotsBySymbol[sym] || [];
+              while (remainingSharesToSell > 0 && lots.length > 0) {
+                const currentLot = lots[0];
+                const matchedShares = Math.min(remainingSharesToSell, currentLot.shares);
+                const proportion = matchedShares / currentLot.shares;
+                const debtPortion = currentLot.debtInBase * proportion;
+
+                const sellTime = new Date(date).getTime();
+                const buyTime = new Date(currentLot.buyDate).getTime();
+                const holdDays = Math.max(0, Math.round((sellTime - buyTime) / 86400000));
+
+                const interest = debtPortion * currentLot.interestRate * (holdDays / 365);
+
+                debtToRepay += debtPortion;
+                financingInterest += interest;
+
+                currentLot.shares -= matchedShares;
+                currentLot.debtInBase -= debtPortion;
+                remainingSharesToSell -= matchedShares;
+
+                if (currentLot.shares <= 0.00001) {
+                  lots.shift();
+                }
+              }
+
+              if (remainingSharesToSell > 0) {
+                const marginRate = trade.marginRate ?? 0.4;
+                const unmatchedAmount = (remainingSharesToSell * trade.price);
+                const unmatchedAmountInBase = trade.currency === 'USD' && baseCurrency === 'TWD'
+                  ? unmatchedAmount * fxRate
+                  : trade.currency === 'TWD' && baseCurrency === 'USD'
+                  ? unmatchedAmount / fxRate
+                  : unmatchedAmount;
+                debtToRepay += unmatchedAmountInBase * (1 - marginRate);
+              }
+
               currentLoanBalance = Math.max(0, currentLoanBalance - debtToRepay);
-              const netToCash = netSellProceeds - debtToRepay;
+              const netToCash = netSellProceeds - debtToRepay - financingInterest;
               if (hasExplicitCashBook) {
                 currentCashBalance += netToCash;
               } else {
                 netInvestedCapital -= Math.max(0, netToCash);
                 dailyNetExternalFlow -= Math.max(0, netToCash);
               }
-              dailyEvents.push(`融資賣出 ${sym}: ${trade.shares.toLocaleString()}股`);
+              const interestNote = financingInterest > 0 ? ` (利息: ${Math.round(financingInterest).toLocaleString()} ${baseCurrency})` : '';
+              dailyEvents.push(`融資賣出 ${sym}: ${trade.shares.toLocaleString()}股${interestNote}`);
             } else {
               if (hasExplicitCashBook) {
                 currentCashBalance += netSellProceeds;
@@ -452,11 +513,26 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
 
     prevTotalNAV = totalNAV;
 
+    const roundedUnitNAV = Math.round(currentUnitNAV * 100) / 100;
+    if (roundedUnitNAV > peakUnitNAV) {
+      peakUnitNAV = roundedUnitNAV;
+    }
+
+    let underwaterDrawdownPercent = 0.0;
+    if (peakUnitNAV > 0) {
+      const dd = (roundedUnitNAV - peakUnitNAV) / peakUnitNAV;
+      underwaterDrawdownPercent = Math.round(dd * 10000) / 100;
+      if (underwaterDrawdownPercent >= 0) {
+        underwaterDrawdownPercent = 0.0;
+      }
+    }
+
     series.push({
       date,
       totalNAV,
-      unitNAV: Math.round(currentUnitNAV * 100) / 100,
+      unitNAV: roundedUnitNAV,
       units: Math.round(currentUnits * 1000) / 1000,
+      underwaterDrawdownPercent,
       stockMarketValue: Math.round(totalStockMarketValue * 100) / 100,
       cashBalance: Math.round(currentCashBalance * 100) / 100,
       receivableDividends: dailyReceivableDividends,

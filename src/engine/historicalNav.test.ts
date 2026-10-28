@@ -746,5 +746,132 @@ describe('週期篩選與績效統計指標 (Metrics & Time Range Filter)', () =
       expect(day30!.unitNAV).toBe(100.00);
     });
   });
+
+  describe('信用交易融資賣出利息扣除與逐日水下深度計算 (Ticket 04)', () => {
+    it('融資賣出時應依據持股天數精準扣除融資利息，避免平倉變現虛高', () => {
+      // 08-01: 融資買進 2330 1,000 股 @ 1000 元，自備款 40 萬，借款 60 萬 (利率 6.5%)
+      // 初始現金 50 萬 -> 買後剩餘現金 10 萬，負債 60 萬，市值 100 萬 -> NAV = 50 萬
+      // 08-31 (持股 30 天): 融資賣出 2330 1,000 股 @ 1000 元 (無手續費稅金以利精準核帳)
+      // 融資借款本金 60 萬應還清。
+      // 融資利息 = 600,000 * 0.065 * (30 / 365) = 3205.479... -> 約 3205 元
+      // 淨入現金帳 = 賣出 100 萬 - 還款 60 萬 - 利息 3205 = 396,795 元
+      // 賣出後最終現金餘額 = 10 萬 + 396,795 = 496,795 元 (NAV = 496,795 元，精準扣減利息 3205 元)
+      const trades: TradeRecord[] = [
+        {
+          id: 't-mbuy',
+          date: '2026-08-01',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'MARGIN_BUY',
+          shares: 1000,
+          price: 1000,
+          marginRate: 0.4,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 't-msell',
+          date: '2026-08-31',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'MARGIN_SELL',
+          shares: 1000,
+          price: 1000,
+          marginRate: 0.4,
+          fee: 0,
+          tax: 0,
+          createdAt: 31,
+        },
+      ];
+
+      const initialCash: CashTransaction[] = [
+        {
+          id: 'c-init',
+          currency: 'TWD',
+          type: 'DEPOSIT',
+          amount: 500000,
+          date: '2026-08-01',
+          createdAt: 0,
+          accountId: 'broker-tw-default',
+        },
+      ];
+
+      const priceMap: HistoricalDailyPriceMap = {
+        '2330': {
+          '2026-08-01': 1000,
+          '2026-08-31': 1000,
+        },
+      };
+
+      const series = calculateHistoricalNavSeries({
+        trades,
+        cashTransactions: initialCash,
+        priceMap,
+        startDate: '2026-08-01',
+        endDate: '2026-08-31',
+        baseCurrency: 'TWD',
+      });
+
+      const day31 = series.find((s) => s.date === '2026-08-31');
+      expect(day31).toBeDefined();
+      expect(day31!.stockMarketValue).toBe(0);
+      expect(day31!.loanBalance).toBe(0);
+      // 現金餘額應精準扣除約 3205 元利息
+      expect(day31!.cashBalance).toBeCloseTo(496795, -1);
+      expect(day31!.totalNAV).toBeCloseTo(496795, -1);
+    });
+
+    it('應逐日正確推演 underwaterDrawdownPercent (當日距 ATH 之水下回撤百分比)', () => {
+      // 01-01: 買進持股，NAV = 100, unitNAV = 100 -> 在最高點，underwaterDrawdownPercent = 0.00
+      // 01-02: 股價漲 10%，unitNAV = 110 -> 創 ATH，underwaterDrawdownPercent = 0.00
+      // 01-03: 股價回調至 99，unitNAV = 99 -> 距 ATH 110 之跌幅: (99 - 110)/110 = -10.00%
+      // 01-04: 股價修復至 104.5，unitNAV = 104.5 -> 距 ATH 110 之跌幅: (104.5 - 110)/110 = -5.00%
+      const trades: TradeRecord[] = [
+        {
+          id: 't-buy',
+          date: '2026-01-01',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 100,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+      ];
+
+      const priceMap: HistoricalDailyPriceMap = {
+        '2330': {
+          '2026-01-01': 100,
+          '2026-01-02': 110,
+          '2026-01-03': 99,
+          '2026-01-04': 104.5,
+        },
+      };
+
+      const series = calculateHistoricalNavSeries({
+        trades,
+        priceMap,
+        startDate: '2026-01-01',
+        endDate: '2026-01-04',
+        baseCurrency: 'TWD',
+      });
+
+      expect(series.length).toBe(4);
+      // Day 1: 0%
+      expect(series[0].underwaterDrawdownPercent).toBe(0.00);
+      // Day 2: 0% (新高 110)
+      expect(series[1].underwaterDrawdownPercent).toBe(0.00);
+      // Day 3: (99 - 110)/110 = -10%
+      expect(series[2].underwaterDrawdownPercent).toBe(-10.00);
+      // Day 4: (104.5 - 110)/110 = -5%
+      expect(series[3].underwaterDrawdownPercent).toBe(-5.00);
+    });
+  });
 });
 

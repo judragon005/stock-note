@@ -5,9 +5,9 @@
 
 **Blocked by:** Ticket 02
 
-**Status:** ready-for-agent
+**Status:** DONE
 
-- [ ] 擴充 `src/types/stock.ts` 中 `PortfolioDailySnapshot` 新增 `underwaterDrawdownPercent?: number` 欄位
-- [ ] 在 `historicalNav.ts` 中融資賣出結算時，扣除持股期間融資利息：`FinancingInterest = DebtAmount * Rate * (HoldDays / 365)`
-- [ ] 在狀態機中維護 `peakUnitNAV`，計算當日水下百分比：`underwaterDrawdownPercent = ((peakUnitNAV - currentUnitNAV) / peakUnitNAV) * 100`
-- [ ] 於 `src/engine/__tests__/historicalNav.test.ts` 驗證融資平倉真實扣息與水下回撤數列正確性
+- [x] 擴充 `src/types/stock.ts` 中 `PortfolioDailySnapshot` 新增 `underwaterDrawdownPercent?: number` 欄位
+- [x] 在 `historicalNav.ts` 中融資賣出結算時，扣除持股期間融資利息：`FinancingInterest = DebtAmount * Rate * (HoldDays / 365)`
+- [x] 在狀態機中維護 `peakUnitNAV`，計算當日水下百分比：`underwaterDrawdownPercent = ((peakUnitNAV - currentUnitNAV) / peakUnitNAV) * 100`
+- [x] 於 `src/engine/__tests__/historicalNav.test.ts` 驗證融資平倉真實扣息與水下回撤數列正確性
