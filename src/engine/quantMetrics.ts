@@ -1,4 +1,4 @@
-import { QuantPerformanceMetrics, MetricDiagnosis, QuantDiagnosisMap } from '../types/stock';
+import { QuantPerformanceMetrics, MetricDiagnosis, QuantDiagnosisMap, Currency } from '../types/stock';
 
 /**
  * 計算序列之日報酬率數列: r_t = (P_t - P_{t-1}) / P_{t-1}
@@ -123,16 +123,20 @@ export function calculateSortinoRatio(
 }
 
 /**
- * 依據外部宏觀日報動態解析無風險利率 (FRED 3M 美債殖利率優先) (Ticket 15)
+ * 依據計價幣別與外部宏觀日報動態解析無風險利率 (FRED 3M 美債殖利率優先) (Ticket 06)
  */
 export function resolveDynamicRiskFreeRate(
   sentimentRate?: number | null,
-  fallbackRate = 1.5
+  currency: Currency = 'TWD',
+  fallbackRate?: number
 ): number {
   if (typeof sentimentRate === 'number' && Number.isFinite(sentimentRate) && sentimentRate > 0) {
     return Number(sentimentRate.toFixed(2));
   }
-  return fallbackRate;
+  if (fallbackRate !== undefined) {
+    return fallbackRate;
+  }
+  return currency === 'USD' ? 4.5 : 1.8;
 }
 
 /**

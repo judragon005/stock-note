@@ -10,6 +10,7 @@ import {
   calculateJensensAlpha,
   calculateQuantMetrics,
   getQuantMetricDiagnosis,
+  resolveDynamicRiskFreeRate,
 } from './quantMetrics';
 import { QuantPerformanceMetrics } from '../types/stock';
 
@@ -233,6 +234,25 @@ describe('量化統計與風險調整指標計算引擎 (quantMetrics)', () => {
       expect(diagnosis.alpha.levelBadge).toContain('需大盤基準');
       expect(diagnosis.beta.level).toBe('NEUTRAL');
       expect(diagnosis.beta.levelBadge).toContain('需大盤基準');
+    });
+  });
+
+  describe('Ticket 06: 動態幣別無風險利率 ($R_f$) 注入與 SPY 假數字清除', () => {
+    it('resolveDynamicRiskFreeRate 應依據計價幣別與外部宏觀動態注入', () => {
+      // 1. 外部 FRED 3M 美債殖利率優先
+      expect(resolveDynamicRiskFreeRate(4.85, 'USD')).toBe(4.85);
+      expect(resolveDynamicRiskFreeRate(5.21, 'TWD')).toBe(5.21);
+
+      // 2. 無外部宏觀時，美金預設 4.5%
+      expect(resolveDynamicRiskFreeRate(undefined, 'USD')).toBe(4.5);
+      expect(resolveDynamicRiskFreeRate(null, 'USD')).toBe(4.5);
+
+      // 3. 無外部宏觀時，台幣預設 1.8%
+      expect(resolveDynamicRiskFreeRate(undefined, 'TWD')).toBe(1.8);
+      expect(resolveDynamicRiskFreeRate(null, 'TWD')).toBe(1.8);
+
+      // 4. 自訂 fallback 優先於幣別預設
+      expect(resolveDynamicRiskFreeRate(undefined, 'TWD', 2.0)).toBe(2.0);
     });
   });
 });

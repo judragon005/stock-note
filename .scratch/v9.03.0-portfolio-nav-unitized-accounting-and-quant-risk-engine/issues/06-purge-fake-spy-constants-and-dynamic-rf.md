@@ -5,9 +5,9 @@
 
 **Blocked by:** Ticket 05
 
-**Status:** ready-for-agent
+**Status:** DONE
 
-- [ ] 清理 `benchmarkConstants.ts` 內 2025/2026 年 SPY 偽造常數，改為以湖倉為單一真實資料來源 (SSOT)
-- [ ] 補齊 0050 與 TAIEX 斷頭日 K，確保至最新交易日走勢連續
-- [ ] 實作依據帳戶/組合幣別動態切換 $R_f$：TWD 1.8% / USD 4.5% (或動態讀取 FRED)
-- [ ] 單元測試驗證雙幣別下的基準序列與無風險利率對齊正確
+- [x] 清理 `benchmarkConstants.ts` 內 2025/2026 年 SPY 偽造常數，改為以湖倉為單一真實資料來源 (SSOT)
+- [x] 補齊 0050 與 TAIEX 斷頭日 K，確保至最新交易日走勢連續
+- [x] 實作依據帳戶/組合幣別動態切換 $R_f$：TWD 1.8% / USD 4.5% (或動態讀取 FRED)
+- [x] 單元測試驗證雙幣別下的基準序列與無風險利率對齊正確
