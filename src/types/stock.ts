@@ -85,6 +85,7 @@ export type RiskAlertStatus =
   | 'TAKE_PROFIT_TRIGGERED'; // 觸及/超越停利 (🎯)
 
 export interface HoldingRiskMetrics {
+  currentPrice?: number;
   stopLossPrice?: number;
   takeProfitPrice?: number;
   riskStatus: RiskAlertStatus;
@@ -92,6 +93,8 @@ export interface HoldingRiskMetrics {
   distanceToTakeProfitPercent?: number; // 離停利價百分比 % (正數代表低於停利，負數代表已超越)
   plannedRiskRewardRatio?: number;
   entryReason?: string;
+  isChasingHigh?: boolean;
+  notes?: string;
 }
 
 export type BenchmarkType = 'NONE' | '0050' | 'SPY' | 'BALANCED_50_50' | 'TAIEX';
@@ -166,6 +169,7 @@ export interface TradeRecord {
   tags?: string[]; // 標籤（如：長期核心、波段動能、股息成長）
   plan?: TradePlan; // 交易計畫 (事前)
   review?: TradeReview; // 賽後覆盤 (事後)
+  riskMetrics?: HoldingRiskMetrics; // 進場風險指標 (如 isChasingHigh)
   createdAt: number;
 }
 

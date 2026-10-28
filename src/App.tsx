@@ -154,7 +154,9 @@ export const App: React.FC = () => {
         const quotesToHydrate: Record<string, import('./types/stock').PriceQuote> = {};
         for (const [sym, item] of Object.entries(cache.stocks)) {
           if (item.quote && item.quote.close > 0) {
-            const prevClose = item.quote.open || item.quote.close;
+            const prevClose = (item.quote.adjClose && item.quote.adjClose > 0 && item.quote.adjClose !== item.quote.close)
+              ? item.quote.adjClose
+              : item.quote.close;
             const isUS = /^[A-Za-z]{1,5}$/.test(sym);
             quotesToHydrate[sym] = {
               symbol: sym,
@@ -940,6 +942,7 @@ export const App: React.FC = () => {
             onOpenMarginStressModal={() => setIsMarginStressOpen(true)}
             interestIncomeSummary={interestIncomeSummary}
             attributionSummary={attributionSummary}
+            onOpenFrictionCenter={() => setActiveTab('behavioral')}
           />
           <HoldingsTable
             holdings={holdings}
@@ -962,6 +965,10 @@ export const App: React.FC = () => {
             onOpenOmniInspector={handleOpenOmniInspector}
             onOpenFinancialForensic={handleOpenFinancialForensic}
             onOpenDeepDive={handleOpenDeepDive}
+            onEditTrade={(trade) => {
+              setEditingTrade(trade);
+              setIsModalOpen(true);
+            }}
           />
         </>
       )}

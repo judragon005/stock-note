@@ -19,6 +19,7 @@ interface SummaryCardsProps {
   onOpenMarginStressModal?: () => void;
   interestIncomeSummary?: InterestIncomeSummary;
   attributionSummary?: PortfolioAttributionSummary;
+  onOpenFrictionCenter?: () => void;
 }
 
 export const SummaryCards: React.FC<SummaryCardsProps> = ({
@@ -34,6 +35,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
   onOpenMarginStressModal,
   interestIncomeSummary,
   attributionSummary,
+  onOpenFrictionCenter,
 }) => {
   const isTW = currentMarket === 'TW';
   const isUS = currentMarket === 'US';
@@ -220,6 +222,31 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
             ) : (
               <span style={{ color: 'var(--text-muted)' }}>無獲利標的</span>
             )}
+
+          {onOpenFrictionCenter && (
+            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed rgba(251, 191, 36, 0.2)', display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+              <button
+                onClick={onOpenFrictionCenter}
+                style={{
+                  background: 'rgba(251, 191, 36, 0.15)',
+                  border: '1px solid rgba(251, 191, 36, 0.35)',
+                  color: '#fbbf24',
+                  borderRadius: '6px',
+                  padding: '3px 8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease',
+                }}
+                title="前往摩擦成本與行為覆盤中心"
+              >
+                ⚖️ 摩擦中心
+              </button>
+            </div>
+          )}
             {closedSummary?.worstLoser && closedSummary.worstLoser.pnl < 0 ? (
               <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--loss-color)', fontSize: '0.8rem' }}>
                 <span>📉 {closedSummary.worstLoser.symbol} {closedSummary.worstLoser.name}</span>
@@ -284,11 +311,61 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                 健保 -NT${Math.round(totalTWDividendTax).toLocaleString()}
               </span>
             )}
+
+          {onOpenFrictionCenter && (
+            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed rgba(251, 191, 36, 0.2)', display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+              <button
+                onClick={onOpenFrictionCenter}
+                style={{
+                  background: 'rgba(251, 191, 36, 0.15)',
+                  border: '1px solid rgba(251, 191, 36, 0.35)',
+                  color: '#fbbf24',
+                  borderRadius: '6px',
+                  padding: '3px 8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease',
+                }}
+                title="前往摩擦成本與行為覆盤中心"
+              >
+                ⚖️ 摩擦中心
+              </button>
+            </div>
+          )}
             {(isUS || isALL) && totalUSDividendTax > 0 && (
               <span style={{ fontSize: '0.66rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(244, 63, 94, 0.15)', color: '#fb7185', border: '1px solid rgba(244, 63, 94, 0.3)' }}>
                 美股預扣 30% -${totalUSDividendTax.toLocaleString()} USD
               </span>
             )}
+
+          {onOpenFrictionCenter && (
+            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed rgba(251, 191, 36, 0.2)', display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+              <button
+                onClick={onOpenFrictionCenter}
+                style={{
+                  background: 'rgba(251, 191, 36, 0.15)',
+                  border: '1px solid rgba(251, 191, 36, 0.35)',
+                  color: '#fbbf24',
+                  borderRadius: '6px',
+                  padding: '3px 8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease',
+                }}
+                title="前往摩擦成本與行為覆盤中心"
+              >
+                ⚖️ 摩擦中心
+              </button>
+            </div>
+          )}
           </div>
         </div>
 
@@ -348,6 +425,31 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                   ))}
                 </div>
               )}
+
+          {onOpenFrictionCenter && (
+            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed rgba(251, 191, 36, 0.2)', display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+              <button
+                onClick={onOpenFrictionCenter}
+                style={{
+                  background: 'rgba(251, 191, 36, 0.15)',
+                  border: '1px solid rgba(251, 191, 36, 0.35)',
+                  color: '#fbbf24',
+                  borderRadius: '6px',
+                  padding: '3px 8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease',
+                }}
+                title="前往摩擦成本與行為覆盤中心"
+              >
+                ⚖️ 摩擦中心
+              </button>
+            </div>
+          )}
             </>
           ) : (
             <div>
@@ -355,6 +457,31 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
               <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
                 展開下方已平倉標的即可填寫賽後覆盤與檢討
               </div>
+            </div>
+          )}
+
+          {onOpenFrictionCenter && (
+            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed rgba(251, 191, 36, 0.2)', display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+              <button
+                onClick={onOpenFrictionCenter}
+                style={{
+                  background: 'rgba(251, 191, 36, 0.15)',
+                  border: '1px solid rgba(251, 191, 36, 0.35)',
+                  color: '#fbbf24',
+                  borderRadius: '6px',
+                  padding: '3px 8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease',
+                }}
+                title="前往摩擦成本與行為覆盤中心"
+              >
+                ⚖️ 摩擦中心
+              </button>
             </div>
           )}
         </div>
@@ -438,6 +565,31 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
               <span>今日 {isTodayGain ? '▲' : '▼'} {isTodayGain ? '+' : ''}{currencySymbol} {formatNumber(todayPnL)} ({isTodayGain ? '+' : ''}{todayPnLPercent.toFixed(2)}%)</span>
             </div>
           )}
+
+          {onOpenFrictionCenter && (
+            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed rgba(251, 191, 36, 0.2)', display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+              <button
+                onClick={onOpenFrictionCenter}
+                style={{
+                  background: 'rgba(251, 191, 36, 0.15)',
+                  border: '1px solid rgba(251, 191, 36, 0.35)',
+                  color: '#fbbf24',
+                  borderRadius: '6px',
+                  padding: '3px 8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease',
+                }}
+                title="前往摩擦成本與行為覆盤中心"
+              >
+                ⚖️ 摩擦中心
+              </button>
+            </div>
+          )}
         </div>
         <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
           <div>
@@ -508,6 +660,31 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                 <TrendingDown size={11} /> 壓力模擬
               </button>
             )}
+
+          {onOpenFrictionCenter && (
+            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed rgba(251, 191, 36, 0.2)', display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+              <button
+                onClick={onOpenFrictionCenter}
+                style={{
+                  background: 'rgba(251, 191, 36, 0.15)',
+                  border: '1px solid rgba(251, 191, 36, 0.35)',
+                  color: '#fbbf24',
+                  borderRadius: '6px',
+                  padding: '3px 8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease',
+                }}
+                title="前往摩擦成本與行為覆盤中心"
+              >
+                ⚖️ 摩擦中心
+              </button>
+            </div>
+          )}
           </div>
         )}
 
@@ -670,6 +847,31 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                 <Eye size={11} /> 透視金流
               </button>
             )}
+
+          {onOpenFrictionCenter && (
+            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed rgba(251, 191, 36, 0.2)', display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+              <button
+                onClick={onOpenFrictionCenter}
+                style={{
+                  background: 'rgba(251, 191, 36, 0.15)',
+                  border: '1px solid rgba(251, 191, 36, 0.35)',
+                  color: '#fbbf24',
+                  borderRadius: '6px',
+                  padding: '3px 8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease',
+                }}
+                title="前往摩擦成本與行為覆盤中心"
+              >
+                ⚖️ 摩擦中心
+              </button>
+            </div>
+          )}
           </div>
         )}
       </div>
@@ -775,11 +977,61 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
             </span>
           )}
 
+          {onOpenFrictionCenter && (
+            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed rgba(251, 191, 36, 0.2)', display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+              <button
+                onClick={onOpenFrictionCenter}
+                style={{
+                  background: 'rgba(251, 191, 36, 0.15)',
+                  border: '1px solid rgba(251, 191, 36, 0.35)',
+                  color: '#fbbf24',
+                  borderRadius: '6px',
+                  padding: '3px 8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease',
+                }}
+                title="前往摩擦成本與行為覆盤中心"
+              >
+                ⚖️ 摩擦中心
+              </button>
+            </div>
+          )}
+
           {/* 健保補充保費膠囊 */}
           {(isTW || isALL) && totalTWDividendTax > 0 && (
             <span style={{ fontSize: '0.66rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.35)' }}>
               健保 -NT${Math.round(totalTWDividendTax).toLocaleString()}
             </span>
+          )}
+
+          {onOpenFrictionCenter && (
+            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed rgba(251, 191, 36, 0.2)', display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+              <button
+                onClick={onOpenFrictionCenter}
+                style={{
+                  background: 'rgba(251, 191, 36, 0.15)',
+                  border: '1px solid rgba(251, 191, 36, 0.35)',
+                  color: '#fbbf24',
+                  borderRadius: '6px',
+                  padding: '3px 8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease',
+                }}
+                title="前往摩擦成本與行為覆盤中心"
+              >
+                ⚖️ 摩擦中心
+              </button>
+            </div>
           )}
 
           {/* 美股股票股息 30% 預扣稅膠囊 */}
@@ -792,6 +1044,31 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
             </span>
           )}
 
+          {onOpenFrictionCenter && (
+            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed rgba(251, 191, 36, 0.2)', display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+              <button
+                onClick={onOpenFrictionCenter}
+                style={{
+                  background: 'rgba(251, 191, 36, 0.15)',
+                  border: '1px solid rgba(251, 191, 36, 0.35)',
+                  color: '#fbbf24',
+                  borderRadius: '6px',
+                  padding: '3px 8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease',
+                }}
+                title="前往摩擦成本與行為覆盤中心"
+              >
+                ⚖️ 摩擦中心
+              </button>
+            </div>
+          )}
+
           {/* 美元現金利息預扣稅膠囊 */}
           {(isUS || isALL) && (interestIncomeSummary?.totalInterestTaxUSD ?? 0) > 0 && (
             <span
@@ -800,6 +1077,31 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
             >
               利息預扣 -${interestIncomeSummary!.totalInterestTaxUSD.toLocaleString()} USD
             </span>
+          )}
+
+          {onOpenFrictionCenter && (
+            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed rgba(251, 191, 36, 0.2)', display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+              <button
+                onClick={onOpenFrictionCenter}
+                style={{
+                  background: 'rgba(251, 191, 36, 0.15)',
+                  border: '1px solid rgba(251, 191, 36, 0.35)',
+                  color: '#fbbf24',
+                  borderRadius: '6px',
+                  padding: '3px 8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease',
+                }}
+                title="前往摩擦成本與行為覆盤中心"
+              >
+                ⚖️ 摩擦中心
+              </button>
+            </div>
           )}
 
           {/* 台幣利息預扣稅膠囊 */}
@@ -811,7 +1113,55 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
               利息扣繳 -NT${interestIncomeSummary!.totalInterestTaxTWD.toLocaleString()}
             </span>
           )}
+
+          {onOpenFrictionCenter && (
+            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed rgba(251, 191, 36, 0.2)', display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+              <button
+                onClick={onOpenFrictionCenter}
+                style={{
+                  background: 'rgba(251, 191, 36, 0.15)',
+                  border: '1px solid rgba(251, 191, 36, 0.35)',
+                  color: '#fbbf24',
+                  borderRadius: '6px',
+                  padding: '3px 8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease',
+                }}
+                title="前往摩擦成本與行為覆盤中心"
+              >
+                ⚖️ 摩擦中心
+              </button>
+            </div>
+          )}
         </div>
+        {onOpenFrictionCenter && (
+          <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed rgba(251, 191, 36, 0.2)', display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              onClick={onOpenFrictionCenter}
+              style={{
+                background: 'rgba(251, 191, 36, 0.15)',
+                border: '1px solid rgba(251, 191, 36, 0.35)',
+                color: '#fbbf24',
+                borderRadius: '6px',
+                padding: '3px 8px',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+              title="前往摩擦成本與行為覆盤中心"
+            >
+              ⚖️ 摩擦中心
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

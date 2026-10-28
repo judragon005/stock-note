@@ -49,6 +49,11 @@ export function calculateBehavioralAuditReport(
   }
 
   // 遍歷所有賣出平倉紀錄
+  let chasingClosedCount = 0;
+  let chasingGainCount = 0;
+  let calmClosedCount = 0;
+  let calmGainCount = 0;
+
   for (const t of sortedTrades) {
     if (t.type === 'SELL' || t.type === 'MARGIN_SELL') {
       const sym = t.symbol.trim().toUpperCase();
@@ -67,6 +72,20 @@ export function calculateBehavioralAuditReport(
       } else {
         lossDaysList.push(holdingDays);
         realizedLossTradesCount++;
+      }
+
+      // 動態追高平倉 vs 冷靜平倉勝率統計
+      if (buyTrade) {
+        const isChasing =
+          buyTrade.riskMetrics?.isChasingHigh === true ||
+          Boolean(buyTrade.riskMetrics?.notes && buyTrade.riskMetrics.notes.includes('追高'));
+        if (isChasing) {
+          chasingClosedCount++;
+          if (profit >= 0) chasingGainCount++;
+        } else {
+          calmClosedCount++;
+          if (profit >= 0) calmGainCount++;
+        }
       }
     }
   }
@@ -138,27 +157,38 @@ export function calculateBehavioralAuditReport(
     annualizedDragRatePercent,
   };
 
-  // 3. FOMO 追高情緒進場審計 (依賴買進價格與平均價粗略正乖離)
+  // 3. FOMO 追高情緒進場審計 (依賴買進價格與平均價粗略正乖離或風險指標)
   let totalBuyTradesCount = 0;
   let chasingHighTradesCount = 0;
 
   for (const t of sortedTrades) {
     if (t.type === 'BUY' || t.type === 'MARGIN_BUY') {
       totalBuyTradesCount++;
-      // 若無真實歷史 K 線，檢視當前持倉成本與買進價之相對偏離
-      const holding = holdings.find((h) => h.symbol === t.symbol);
-      if (holding && holding.avgCost > 0) {
-        const biasPercent = ((t.price - holding.avgCost) / holding.avgCost) * 100;
-        if (biasPercent > 15) {
-          chasingHighTradesCount++;
+      const isDirectChasing =
+        t.riskMetrics?.isChasingHigh === true ||
+        Boolean(t.riskMetrics?.notes && t.riskMetrics.notes.includes('追高'));
+      if (isDirectChasing) {
+        chasingHighTradesCount++;
+      } else {
+        const holding = holdings.find((h) => h.symbol === t.symbol);
+        if (holding && holding.avgCost > 0) {
+          const biasPercent = ((t.price - holding.avgCost) / holding.avgCost) * 100;
+          if (biasPercent > 15) {
+            chasingHighTradesCount++;
+          }
         }
       }
     }
   }
 
   const chasingHighRatio = totalBuyTradesCount > 0 ? (chasingHighTradesCount / totalBuyTradesCount) * 100 : 0;
-  const chasingHighWinRate = 35.0; // 預設追高平均勝率基準
-  const calmEntryWinRate = 65.0; // 冷靜進場勝率基準
+  // 若有已平倉追高/冷靜樣本，依真實交易歷史動態計算勝率；無樣本時退回預設基準
+  const chasingHighWinRate = chasingClosedCount > 0
+    ? (chasingGainCount / chasingClosedCount) * 100
+    : 35.0;
+  const calmEntryWinRate = calmClosedCount > 0
+    ? (calmGainCount / calmClosedCount) * 100
+    : 65.0;
   const alphaDragPercentage = Math.max(0, calmEntryWinRate - chasingHighWinRate);
 
   const fomo: FOMOEntryAuditMetrics = {
@@ -212,6 +242,7 @@ export function calculateBehavioralAuditReport(
     },
     disposition,
     fomo,
+    fomoEntryAudit: fomo,
     friction,
     actionableInsights,
     bagHoldings,
@@ -248,7 +279,25 @@ export function detectBagHoldingPositions(
       continue; // 存股標的豁免
     }
 
-    const buyDate = h.lastTradeDate || today;
+    // 優先依批次最早建倉日 (lots) 或買單歷史計算真實在席天數，防止因配息/分批交易重置 lastTradeDate
+    let earliestBuyDate = '';
+    if (h.lots && h.lots.length > 0) {
+      const dates = h.lots.map((l: any) => l.date || l.buyDate).filter(Boolean).sort();
+      if (dates.length > 0) earliestBuyDate = dates[0];
+    }
+    if (!earliestBuyDate) {
+      const buyDates = trades
+        .filter(
+          (t) =>
+            (t.type === 'BUY' || t.type === 'MARGIN_BUY') &&
+            t.symbol.trim().toUpperCase() === h.symbol.trim().toUpperCase() &&
+            t.date
+        )
+        .map((t) => t.date)
+        .sort();
+      if (buyDates.length > 0) earliestBuyDate = buyDates[0];
+    }
+    const buyDate = earliestBuyDate || h.lastTradeDate || today;
     const holdingDays = Math.max(1, diffDays(buyDate, today));
     const unrealizedLossPercent = h.unrealizedPnLPercent ?? 0;
 
@@ -271,6 +320,36 @@ export function detectBagHoldingPositions(
 }
 
 export const detectBagHoldings = detectBagHoldingPositions;
+
+/**
+ * 彈性多型行為審計入口 (相容多元參數組合)
+ */
+export function calculateBehavioralAudit(
+  p1: any,
+  p2: any = [],
+  p3: any = 1000000
+): BehavioralAuditReport & { fomoEntryAudit: FOMOEntryAuditMetrics } {
+  let trades: TradeRecord[] = [];
+  let holdings: HoldingPosition[] = [];
+  let nav = 1000000;
+
+  if (Array.isArray(p1) && p1.length > 0 && 'type' in p1[0]) {
+    trades = p1;
+    holdings = Array.isArray(p2) ? p2 : [];
+  } else if (Array.isArray(p2) && p2.length > 0 && 'type' in p2[0]) {
+    trades = p2;
+    holdings = Array.isArray(p1) ? p1 : [];
+  } else if (Array.isArray(p1)) {
+    trades = p1;
+    holdings = p2;
+  }
+
+  if (typeof p3 === 'number') {
+    nav = p3;
+  }
+
+  return calculateBehavioralAuditReport(trades, holdings, nav) as any;
+}
 
 /**
  * 摩擦成本實體化換算 (Spec 0183)

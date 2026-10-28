@@ -48,6 +48,7 @@ export interface BehavioralAuditReport {
   period: { startDate: string; endDate: string };
   disposition: DispositionEffectMetrics;
   fomo: FOMOEntryAuditMetrics;
+  fomoEntryAudit?: FOMOEntryAuditMetrics;
   friction: FrictionCostMetrics;
   actionableInsights: string[];     // 客觀交易紀律覆盤建議清單
   bagHoldings?: BagHoldingAlert[];  // Spec 0183: 波段凹單警報標的清單
