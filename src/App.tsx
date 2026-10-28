@@ -1,3 +1,4 @@
+import { calculateHoldingsAttribution } from './engine/attributionEngine';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   TradeRecord,
@@ -431,6 +432,12 @@ export const App: React.FC = () => {
   }, [currentMarket, loanRecords, selectedAccountId]);
 
   // 整戶/分市場總曝險與淨槓桿率 (Net Leverage) 計算（依當前市場隔離持股、現金與負債）
+  // 法人歸因指標與 HHI 集中度
+  const attributionSummary = useMemo(
+    () => calculateHoldingsAttribution(holdings, usdToTwdRate),
+    [holdings, usdToTwdRate]
+  );
+
   const exposureMetrics = useMemo(() => {
     const scopedCashBalances = {
       TWD: currentMarket === 'US' ? 0 : cashLedgerSummary.totalTWD,
@@ -882,6 +889,8 @@ export const App: React.FC = () => {
         onRefreshAll={refreshAll}
         onOpenTradeModal={handleOpenNewTrade}
         onOpenScannerModal={() => setIsScannerOpen(true)}
+        onOpenBrokerAccounts={() => setIsBrokerAccountsOpen(true)}
+        onOpenFrictionCenter={() => setIsFrictionCenterOpen(true)}
         onExportJSON={handleExportJSON}
         onExportCSV={handleExportCSV}
         onOpenImportModal={() => setIsEnhancedImportModalOpen(true)}
@@ -930,6 +939,7 @@ export const App: React.FC = () => {
             exposureMetrics={exposureMetrics}
             onOpenMarginStressModal={() => setIsMarginStressOpen(true)}
             interestIncomeSummary={interestIncomeSummary}
+            attributionSummary={attributionSummary}
           />
           <HoldingsTable
             holdings={holdings}

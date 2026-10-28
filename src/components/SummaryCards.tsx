@@ -1,3 +1,4 @@
+import { PortfolioAttributionSummary } from '../engine/attributionEngine';
 import React from 'react';
 import { PortfolioSummary, MarketType, AccountingView, PositionFilter, ClosedPositionsSummary, FrictionSummary } from '../types/stock';
 import { XirrResult } from '../engine/xirrCalculator';
@@ -17,6 +18,7 @@ interface SummaryCardsProps {
   exposureMetrics?: PortfolioExposureMetrics;
   onOpenMarginStressModal?: () => void;
   interestIncomeSummary?: InterestIncomeSummary;
+  attributionSummary?: PortfolioAttributionSummary;
 }
 
 export const SummaryCards: React.FC<SummaryCardsProps> = ({
@@ -31,6 +33,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
   exposureMetrics,
   onOpenMarginStressModal,
   interestIncomeSummary,
+  attributionSummary,
 }) => {
   const isTW = currentMarket === 'TW';
   const isUS = currentMarket === 'US';
@@ -505,6 +508,43 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                 <TrendingDown size={11} /> 壓力模擬
               </button>
             )}
+          </div>
+        )}
+
+        {/* 法人 HHI 集中度指數與 Capital-at-Risk 指標 */}
+        {attributionSummary && attributionSummary.totalMarketValueTWD > 0 && (
+          <div
+            style={{
+              marginTop: '6px',
+              paddingTop: '6px',
+              borderTop: '1px dashed rgba(51, 65, 85, 0.3)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontSize: '0.72rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>HHI 集中度:</span>
+              <span className="mono" style={{ fontWeight: 700, color: attributionSummary.hhiLevel === 'CONCENTRATED' ? '#f59e0b' : '#34d399' }}>
+                {attributionSummary.hhi.toLocaleString()}
+              </span>
+              <span
+                style={{
+                  fontSize: '0.625rem',
+                  padding: '1px 5px',
+                  borderRadius: '4px',
+                  background: attributionSummary.hhiLevel === 'CONCENTRATED' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                  color: attributionSummary.hhiLevel === 'CONCENTRATED' ? '#f59e0b' : '#34d399',
+                  fontWeight: 600,
+                }}
+              >
+                {attributionSummary.hhiLevel === 'CONCENTRATED' ? '高度集中' : attributionSummary.hhiLevel === 'MODERATE' ? '適度集中' : '分散良好'}
+              </span>
+            </div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem' }} title="在庫持股之有效在險總資本">
+              在險資本 NT$ {Math.round(attributionSummary.totalCapitalAtRiskTWD).toLocaleString()}
+            </div>
           </div>
         )}
       </div>
