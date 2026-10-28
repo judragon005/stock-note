@@ -13,6 +13,7 @@ import {
   HistoricalDailyPriceMap,
   HistoricalFxRateMap,
 } from '../types/stock';
+import { ReceivableDividend } from '../types/dividend';
 
 describe('歷史行情補值與日期序列引擎 (Forward-Fill & Date Sequence)', () => {
   it('應能正確生成連續日曆天日期序列 (YYYY-MM-DD)', () => {
@@ -635,6 +636,114 @@ describe('週期篩選與績效統計指標 (Metrics & Time Range Filter)', () =
       expect(series[3].totalNAV).toBe(2060000);
       expect(series[3].unitNAV).toBe(106.00);
       expect(series[3].dailyReturnPercent).toBe(0.00);
+    });
+  });
+
+  describe('應收股利 (Receivable Dividends) 除息空窗平滑補償 (Ticket 03)', () => {
+    it('在除息日 (Ex-Date) 至發放日 (Pay-Date) 之間，NAV 曲線應平滑過渡無假性跳水', () => {
+      // 07-01: 持有 2330 1,000 股 @ 1000 元，市值 100 萬，現金 0，NAV = 100 萬
+      // 07-02: 除息日 Ex-Date，配息 30 元/股 (30,000 元)，股價因除息扣減變為 970 元
+      //        若未補償：NAV 會假摔至 97 萬 (-3%)！
+      //        有平滑補償：認列應收股利 30,000 元，NAV 依然為 1,000,000 元，unitNAV 保持 100.00！
+      // 07-30: 發放日 Pay-Date，配息現金 30,000 元正式入帳，沖銷應收股利
+      //        持股市值 97 萬 + 現金 3 萬 = 100 萬，NAV 依然平滑為 1,000,000 元，unitNAV 保持 100.00！
+      const trades: TradeRecord[] = [
+        {
+          id: 't-buy',
+          date: '2026-07-01',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          shares: 1000,
+          price: 1000,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 't-div-pay',
+          date: '2026-07-30',
+          symbol: '2330',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'DIVIDEND',
+          shares: 1000,
+          price: 30,
+          cashAmount: 30000,
+          fee: 0,
+          tax: 0,
+          createdAt: 30,
+        },
+      ];
+
+      const receivableDividends: ReceivableDividend[] = [
+        {
+          id: '2330-2026-07-02',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-07-02',
+          payDate: '2026-07-30',
+          sharesHeldOnExDate: 1000,
+          cashDividendPerShare: 30,
+          estimatedGrossDividend: 30000,
+          estimatedTaxOrFee: 0,
+          estimatedNetDividend: 30000,
+          estimatedNetDividendInTWD: 30000,
+          status: 'PENDING_PAYMENT',
+        },
+      ];
+
+      const priceMap: HistoricalDailyPriceMap = {
+        '2330': {
+          '2026-07-01': 1000,
+          '2026-07-02': 970, // 除息日自然下調
+          '2026-07-15': 970, // 空窗期維持 970
+          '2026-07-30': 970, // 發放日維持 970
+        },
+      };
+
+      const series = calculateHistoricalNavSeries({
+        trades,
+        receivableDividends,
+        priceMap,
+        startDate: '2026-07-01',
+        endDate: '2026-07-30',
+        baseCurrency: 'TWD',
+      });
+
+      // 07-01 (除息前一日)
+      const day01 = series.find((s) => s.date === '2026-07-01');
+      expect(day01).toBeDefined();
+      expect(day01!.totalNAV).toBe(1000000);
+      expect(day01!.unitNAV).toBe(100.00);
+
+      // 07-02 (除息日): 市值變 97 萬，但應收股利為 3 萬，總 NAV 依然為 100 萬，unitNAV 維持 100.00
+      const day02 = series.find((s) => s.date === '2026-07-02');
+      expect(day02).toBeDefined();
+      expect(day02!.stockMarketValue).toBe(970000);
+      expect(day02!.receivableDividends).toBe(30000);
+      expect(day02!.totalNAV).toBe(1000000);
+      expect(day02!.unitNAV).toBe(100.00);
+      expect(day02!.dailyReturnPercent).toBe(0.00);
+
+      // 07-15 (空窗期間): 應收股利持續平滑補償
+      const day15 = series.find((s) => s.date === '2026-07-15');
+      expect(day15).toBeDefined();
+      expect(day15!.receivableDividends).toBe(30000);
+      expect(day15!.totalNAV).toBe(1000000);
+      expect(day15!.unitNAV).toBe(100.00);
+
+      // 07-30 (發放日): 應收股利自動沖銷為 0，現金入帳 3 萬，總 NAV 依然為 100 萬
+      const day30 = series.find((s) => s.date === '2026-07-30');
+      expect(day30).toBeDefined();
+      expect(day30!.receivableDividends).toBe(0);
+      expect(day30!.cashBalance).toBe(30000);
+      expect(day30!.stockMarketValue).toBe(970000);
+      expect(day30!.totalNAV).toBe(1000000);
+      expect(day30!.unitNAV).toBe(100.00);
     });
   });
 });

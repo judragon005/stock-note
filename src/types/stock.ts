@@ -410,6 +410,7 @@ export interface PortfolioDailySnapshot {
   units?: number; // 當前累積總份額
   stockMarketValue: number; // 股票持股市值
   cashBalance: number; // 現金帳戶總餘額
+  receivableDividends?: number; // 當日尚未入帳之應收股利資產 (折合基幣)
   loanBalance: number; // 借貸負債總餘額
   netCostBasis: number; // 累計外部投入本金 (入金 - 出金)
   cumulativeReturnPnL: number; // 累計總損益 (NAV - netCostBasis)

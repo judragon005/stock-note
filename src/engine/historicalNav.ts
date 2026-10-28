@@ -9,6 +9,7 @@ import {
   PortfolioPerformanceMetrics,
   Currency,
 } from '../types/stock';
+import { ReceivableDividend } from '../types/dividend';
 
 /**
  * 產生兩個 YYYY-MM-DD 日期之間所有連續日期的字串陣列
@@ -67,6 +68,7 @@ export interface CalculateHistoricalNavOptions {
   trades: TradeRecord[];
   cashTransactions?: CashTransaction[];
   loanRecords?: LoanRecord[];
+  receivableDividends?: ReceivableDividend[];
   priceMap: HistoricalDailyPriceMap;
   fxMap?: HistoricalFxRateMap;
   currentPrices?: Record<string, number>;
@@ -83,6 +85,7 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
     trades,
     cashTransactions = [],
     loanRecords = [],
+    receivableDividends = [],
     priceMap,
     fxMap = {},
     currentPrices = {},
@@ -391,8 +394,26 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
       }
     }
 
-    // (E) 計算總資產淨值 (NAV = 持股市值 + 現金餘額 - 借貸負債)
-    const totalNAV = Math.round((totalStockMarketValue + currentCashBalance - currentLoanBalance) * 100) / 100;
+    // (D.2) 計算當日應收未入帳股利 (除息日至發放日之間平滑補償)
+    let dailyReceivableDividends = 0;
+    if (receivableDividends && receivableDividends.length > 0) {
+      for (const div of receivableDividends) {
+        if (date >= div.exDate && date < div.payDate) {
+          const divAmountInBase = div.estimatedNetDividendInTWD && baseCurrency === 'TWD'
+            ? div.estimatedNetDividendInTWD
+            : div.currency === 'USD' && baseCurrency === 'TWD'
+            ? div.estimatedNetDividend * fxRate
+            : div.currency === 'TWD' && baseCurrency === 'USD'
+            ? div.estimatedNetDividend / fxRate
+            : div.estimatedNetDividend;
+          dailyReceivableDividends += divAmountInBase;
+        }
+      }
+    }
+    dailyReceivableDividends = Math.round(dailyReceivableDividends * 100) / 100;
+
+    // (E) 計算總資產淨值 (NAV = 持股市值 + 現金餘額 + 應收股利 - 借貸負債)
+    const totalNAV = Math.round((totalStockMarketValue + currentCashBalance + dailyReceivableDividends - currentLoanBalance) * 100) / 100;
     const effectiveCostBasis = Math.max(0, Math.round(netInvestedCapital * 100) / 100);
     const cumulativeReturnPnL = Math.round((totalNAV - effectiveCostBasis) * 100) / 100;
     const cumulativeReturnPercent = effectiveCostBasis > 0
@@ -438,6 +459,7 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
       units: Math.round(currentUnits * 1000) / 1000,
       stockMarketValue: Math.round(totalStockMarketValue * 100) / 100,
       cashBalance: Math.round(currentCashBalance * 100) / 100,
+      receivableDividends: dailyReceivableDividends,
       loanBalance: Math.round(currentLoanBalance * 100) / 100,
       netCostBasis: effectiveCostBasis,
       cumulativeReturnPnL,

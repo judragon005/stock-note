@@ -5,10 +5,10 @@
 
 **Blocked by:** Ticket 02
 
-**Status:** ready-for-agent
+**Status:** DONE
 
-- [ ] 擴充 `src/types/stock.ts` 中 `PortfolioDailySnapshot` 新增 `receivableDividends?: number` 欄位
-- [ ] 擴充 `calculateHistoricalNavSeries` 支援傳入 `receivableDividends?: { symbol: string; exDate: string; payDate: string; amount: number; currency: Currency }[]`
-- [ ] 逐日計算在 `exDate <= date < payDate` 期間將應收金額折算基幣加計至 `totalNAV`
-- [ ] 在 `payDate` 當日隨股息現金入帳沖銷應收資產
-- [ ] 於 `src/engine/__tests__/historicalNav.test.ts` 驗證除息日至發放日之間 NAV 走勢平滑無凹洞
+- [x] 擴充 `src/types/stock.ts` 中 `PortfolioDailySnapshot` 新增 `receivableDividends?: number` 欄位
+- [x] 擴充 `calculateHistoricalNavSeries` 支援傳入 `receivableDividends?: ReceivableDividend[]`
+- [x] 逐日計算在 `exDate <= date < payDate` 期間將應收金額折算基幣加計至 `totalNAV`
+- [x] 在 `payDate` 當日隨股息現金入帳沖銷應收資產
+- [x] 於 `src/engine/historicalNav.test.ts` 驗證除息日至發放日之間 NAV 走勢平滑無凹洞
