@@ -5,10 +5,10 @@
 
 **Blocked by:** Ticket 01, Ticket 02, Ticket 06
 
-**Status:** ready-for-agent
+**Status:** DONE
 
-- [ ] 在 `PortfolioGrowthChart.tsx` 頂部新增模式切換狀態 `chartMode: 'AUM' | 'UNIT_NAV'`
-- [ ] 在 `UNIT_NAV` 模式下，將 `series` 與大盤數列的第一筆價格歸一化為 100%（或相對基期百分比）
-- [ ] 座標軸 Y 軸刻度適配：AUM 模式顯示貨幣金額（如 NT$ 12.5M），UNIT_NAV 模式顯示百分比累積報酬率（如 +45.2%）
-- [ ] 交互 Tooltip 同步適配雙模數值顯示
-- [ ] 單元測試驗證模式切換與歸一化數列正確無誤
+- [x] 在 `PortfolioGrowthChart.tsx` 頂部新增模式切換狀態 `chartMode: 'AUM' | 'UNIT_NAV'`
+- [x] 在 `UNIT_NAV` 模式下，將 `series` 與大盤數列的第一筆價格歸一化為 100%（或相對基期百分比）
+- [x] 座標軸 Y 軸刻度適配：AUM 模式顯示貨幣金額（如 NT$ 12.5M），UNIT_NAV 模式顯示百分比累積報酬率（如 +45.2%）
+- [x] 交互 Tooltip 同步適配雙模數值顯示
+- [x] 單元測試驗證模式切換與歸一化數列正確無誤

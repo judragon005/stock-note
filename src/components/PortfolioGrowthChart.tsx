@@ -36,6 +36,7 @@ interface PortfolioGrowthChartProps {
   baseCurrency?: Currency;
   isSyncing?: boolean;
   syncProgressText?: string;
+  initialChartMode?: 'AUM' | 'UNIT_NAV';
   onRefreshHistory?: () => void;
   onInspectXirr?: () => void;
 }
@@ -46,9 +47,11 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
   baseCurrency = 'TWD',
   isSyncing = false,
   syncProgressText = '',
+  initialChartMode = 'AUM',
   onRefreshHistory,
   onInspectXirr,
 }) => {
+  const [chartMode, setChartMode] = useState<'AUM' | 'UNIT_NAV'>(initialChartMode);
   const [timeRange, setTimeRange] = useState<TimeRangeFilter>('ALL');
   const [benchmarkType, setBenchmarkType] = useState<BenchmarkType>('NONE');
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -164,28 +167,46 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
       let min = Infinity;
       let max = -Infinity;
 
-      filteredSeries.forEach((pt) => {
-        if (visibleLines.nav) {
-          min = Math.min(min, pt.totalNAV);
-          max = Math.max(max, pt.totalNAV);
+      const initialUnitNAV = filteredSeries[0]?.unitNAV || 100;
+      const normalizedUnitNavSeries = filteredSeries.map((pt) =>
+        initialUnitNAV > 0 ? (pt.unitNAV / initialUnitNAV) * 100 : 100
+      );
+
+      if (chartMode === 'UNIT_NAV') {
+        normalizedUnitNavSeries.forEach((v) => {
+          min = Math.min(min, v);
+          max = Math.max(max, v);
+        });
+        if (benchmarkType !== 'NONE' && benchmarkGrowth.length > 0) {
+          benchmarkGrowth.forEach((v) => {
+            min = Math.min(min, v);
+            max = Math.max(max, v);
+          });
         }
-        if (visibleLines.costBasis) {
-          min = Math.min(min, pt.netCostBasis);
-          max = Math.max(max, pt.netCostBasis);
-        }
-        if (visibleLines.stockValue) {
-          min = Math.min(min, pt.stockMarketValue);
-          max = Math.max(max, pt.stockMarketValue);
-        }
-        if (visibleLines.cash) {
-          min = Math.min(min, pt.cashBalance);
-          max = Math.max(max, pt.cashBalance);
-        }
-        if (visibleLines.loan) {
-          min = Math.min(min, pt.loanBalance);
-          max = Math.max(max, pt.loanBalance);
-        }
-      });
+      } else {
+        filteredSeries.forEach((pt) => {
+          if (visibleLines.nav) {
+            min = Math.min(min, pt.totalNAV);
+            max = Math.max(max, pt.totalNAV);
+          }
+          if (visibleLines.costBasis) {
+            min = Math.min(min, pt.netCostBasis);
+            max = Math.max(max, pt.netCostBasis);
+          }
+          if (visibleLines.stockValue) {
+            min = Math.min(min, pt.stockMarketValue);
+            max = Math.max(max, pt.stockMarketValue);
+          }
+          if (visibleLines.cash) {
+            min = Math.min(min, pt.cashBalance);
+            max = Math.max(max, pt.cashBalance);
+          }
+          if (visibleLines.loan) {
+            min = Math.min(min, pt.loanBalance);
+            max = Math.max(max, pt.loanBalance);
+          }
+        });
+      }
 
       if (min === Infinity || max === -Infinity || min === max) {
         min = Math.min(0, min);
@@ -215,24 +236,32 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
           .join(' ');
       };
 
-      // 產生基準折線 (若是基準模式，將基準等比對齊自身 NAV 起始高度繪製)
       let pBenchmark = '';
       if (benchmarkType !== 'NONE' && benchmarkGrowth.length > 0) {
-        const initialNav = filteredSeries[0]?.totalNAV || 1;
-        const bScaled = benchmarkGrowth.map((g) => (g / 100) * initialNav);
-        pBenchmark = buildPath(bScaled);
+        if (chartMode === 'UNIT_NAV') {
+          pBenchmark = buildPath(benchmarkGrowth);
+        } else {
+          const initialNav = filteredSeries[0]?.totalNAV || 1;
+          const bScaled = benchmarkGrowth.map((g) => (g / 100) * initialNav);
+          pBenchmark = buildPath(bScaled);
+        }
       }
 
+      const primaryNavValues =
+        chartMode === 'UNIT_NAV'
+          ? normalizedUnitNavSeries
+          : filteredSeries.map((d) => d.totalNAV);
+
       return {
-        pathNav: buildPath(filteredSeries.map((d) => d.totalNAV)),
-        pathCost: buildPath(filteredSeries.map((d) => d.netCostBasis)),
-        pathStock: buildPath(filteredSeries.map((d) => d.stockMarketValue)),
-        pathCash: buildPath(filteredSeries.map((d) => d.cashBalance)),
-        pathLoan: buildPath(filteredSeries.map((d) => d.loanBalance)),
+        pathNav: buildPath(primaryNavValues),
+        pathCost: chartMode === 'AUM' ? buildPath(filteredSeries.map((d) => d.netCostBasis)) : '',
+        pathStock: chartMode === 'AUM' ? buildPath(filteredSeries.map((d) => d.stockMarketValue)) : '',
+        pathCash: chartMode === 'AUM' ? buildPath(filteredSeries.map((d) => d.cashBalance)) : '',
+        pathLoan: chartMode === 'AUM' ? buildPath(filteredSeries.map((d) => d.loanBalance)) : '',
         pathBenchmark: pBenchmark,
         areaNav:
           filteredSeries.length > 0
-            ? `${buildPath(filteredSeries.map((d) => d.totalNAV))} L ${getX(filteredSeries.length - 1).toFixed(1)} ${(pad.top + plotH).toFixed(1)} L ${getX(0).toFixed(1)} ${(pad.top + plotH).toFixed(1)} Z`
+            ? `${buildPath(primaryNavValues)} L ${getX(filteredSeries.length - 1).toFixed(1)} ${(pad.top + plotH).toFixed(1)} L ${getX(0).toFixed(1)} ${(pad.top + plotH).toFixed(1)} Z`
             : '',
         minVal: min,
         maxVal: max,
@@ -240,7 +269,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
         height: h,
         padding: pad,
       };
-    }, [filteredSeries, visibleLines, benchmarkType, benchmarkGrowth]);
+    }, [filteredSeries, visibleLines, benchmarkType, benchmarkGrowth, chartMode]);
 
   if (series.length === 0) {
     return (
@@ -302,8 +331,53 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
           </div>
         </div>
 
-        {/* 週期篩選器與同步按鈕 */}
+        {/* 雙模切換、週期篩選器與同步按鈕 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {/* 走勢圖模式切換膠囊 */}
+          <div
+            style={{
+              display: 'flex',
+              background: 'rgba(19, 29, 49, 0.8)',
+              padding: '3px',
+              borderRadius: '9px',
+              border: '1px solid var(--border-color)',
+            }}
+          >
+            <button
+              onClick={() => setChartMode('AUM')}
+              style={{
+                padding: '4px 10px',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                borderRadius: '6px',
+                border: 'none',
+                cursor: 'pointer',
+                background: chartMode === 'AUM' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'transparent',
+                color: chartMode === 'AUM' ? '#fff' : 'var(--text-muted)',
+                transition: 'all 0.2s',
+                boxShadow: chartMode === 'AUM' ? '0 2px 8px rgba(16, 185, 129, 0.3)' : 'none',
+              }}
+            >
+              💰 資產金額 (AUM)
+            </button>
+            <button
+              onClick={() => setChartMode('UNIT_NAV')}
+              style={{
+                padding: '4px 10px',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                borderRadius: '6px',
+                border: 'none',
+                cursor: 'pointer',
+                background: chartMode === 'UNIT_NAV' ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : 'transparent',
+                color: chartMode === 'UNIT_NAV' ? '#fff' : 'var(--text-muted)',
+                transition: 'all 0.2s',
+                boxShadow: chartMode === 'UNIT_NAV' ? '0 2px 8px rgba(59, 130, 246, 0.3)' : 'none',
+              }}
+            >
+              📊 淨值走勢 (Unit NAV %)
+            </button>
+          </div>
           {/* 基準對照選單 */}
           <div
             style={{
@@ -680,7 +754,9 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
                   textAnchor="end"
                   fontFamily="monospace"
                 >
-                  {Math.round(val).toLocaleString()}
+                  {chartMode === 'UNIT_NAV'
+                    ? `${val - 100 >= 0 ? '+' : ''}${(val - 100).toFixed(1)}%`
+                    : Math.round(val).toLocaleString()}
                 </text>
               </g>
             );
