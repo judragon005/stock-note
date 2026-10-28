@@ -463,8 +463,9 @@ export const App: React.FC = () => {
       cashBalances: scopedCashBalances,
       loans: scopedLoans,
       usdToTwdRate,
+      trades: displayedTrades,
     });
-  }, [holdings, cashLedgerSummary, scopedLoans, usdToTwdRate, currentMarket]);
+  }, [holdings, cashLedgerSummary, scopedLoans, usdToTwdRate, currentMarket, displayedTrades]);
 
   // 各項利息收入明細與總額聚合 (依當前市場過濾)
   const interestIncomeSummary = useMemo(() => {

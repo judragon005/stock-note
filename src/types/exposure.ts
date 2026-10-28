@@ -51,4 +51,5 @@ export interface CalculateExposureParams {
   loans: LoanRecord[];
   usdToTwdRate: number;
   asOfDate?: string;
+  trades?: import('./stock').TradeRecord[];
 }

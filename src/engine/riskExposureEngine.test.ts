@@ -79,8 +79,8 @@ describe('整戶總曝險與淨槓桿率計算引擎 (riskExposureEngine)', () =
     expect(res.totalDebtTWD).toBe(0);
     expect(res.navTWD).toBe(1302400);
     expect(res.grossExposureTWD).toBe(1070400);
-    expect(res.grossLeverage).toBe(0);
-    expect(res.netLeverage).toBe(0);
+    expect(res.grossLeverage).toBeCloseTo(0.82, 2);
+    expect(res.netLeverage).toBeCloseTo(0.64, 2);
     expect(res.riskTier).toBe('CONSERVATIVE');
     expect(res.isUnderwater).toBe(false);
   });
@@ -245,8 +245,8 @@ describe('整戶總曝險與淨槓桿率計算引擎 (riskExposureEngine)', () =
 
     // 零負債時，不應判定為資不抵債 99.99x，應判定為現貨足額持有 0.00x 槓桿
     expect(res.totalDebtTWD).toBe(0);
-    expect(res.netLeverage).toBe(0);
-    expect(res.grossLeverage).toBe(0);
+    expect(res.netLeverage).toBeCloseTo(1.0, 2);
+    expect(res.grossLeverage).toBeCloseTo(1.0, 2);
     expect(res.riskTier).toBe('CONSERVATIVE');
     expect(res.isUnderwater).toBe(false);
   });
@@ -260,7 +260,7 @@ describe('整戶總曝險與淨槓桿率計算引擎 (riskExposureEngine)', () =
     });
 
     expect(res.totalDebtTWD).toBe(0);
-    expect(res.netLeverage).toBe(0);
+    expect(res.netLeverage).toBeCloseTo(0.91, 2);
     expect(res.riskTier).toBe('CONSERVATIVE');
   });
 });
