@@ -207,6 +207,50 @@ describe('PortfolioGrowthChart - 資產走勢與雙模切換 (Ticket 07)', () =>
       expect(html).toContain('title="點擊透視 ALL 週期之在席現金流"');
     });
   });
+
+  describe('Spec 0207 / Ticket 02: 累積總損益卡片 CAGR 渲染與動態無風險利率', () => {
+    it('歷時滿 30 天時，累計總損益卡片應清晰呈現 CAGR 複合年化成長率標籤', () => {
+      const yearSeries: PortfolioDailySnapshot[] = [
+        {
+          date: '2025-01-01',
+          totalNAV: 1000000,
+          unitNAV: 100,
+          units: 10000,
+          stockMarketValue: 1000000,
+          cashBalance: 0,
+          loanBalance: 0,
+          netCostBasis: 1000000,
+          cumulativeReturnPnL: 0,
+          cumulativeReturnPercent: 0,
+          dailyPnL: 0,
+          dailyReturnPercent: 0,
+          events: [],
+        },
+        {
+          date: '2026-01-01',
+          totalNAV: 1250000,
+          unitNAV: 125,
+          units: 10000,
+          stockMarketValue: 1250000,
+          cashBalance: 0,
+          loanBalance: 0,
+          netCostBasis: 1000000,
+          cumulativeReturnPnL: 250000,
+          cumulativeReturnPercent: 25,
+          dailyPnL: 0,
+          dailyReturnPercent: 0,
+          events: [],
+        },
+      ];
+
+      const html = renderToStaticMarkup(
+        <PortfolioGrowthChart series={yearSeries} baseCurrency="TWD" />
+      );
+
+      expect(html).toContain('CAGR:');
+      expect(html).toContain('+25.00%');
+    });
+  });
 });
 
 

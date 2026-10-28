@@ -804,8 +804,19 @@ export const App: React.FC = () => {
       fxMap: historicalFx,
       currentPrices,
       baseCurrency: currentMarket === 'US' ? 'USD' : 'TWD',
+      receivableDividends,
+      selectedAccountId,
     });
-  }, [trades, cashTransactions, loanRecords, historicalPrices, historicalFx, currentPrices, currentMarket]);
+  }, [trades, cashTransactions, loanRecords, historicalPrices, historicalFx, currentPrices, currentMarket, receivableDividends, selectedAccountId]);
+
+  // 資產成長視圖依券商與市場過濾的現金流 (供 XIRR 與圖表出入金標記使用)
+  const growthScopedCash = useMemo(() => {
+    return cashTransactions.filter((c) => {
+      const matchAccount = !selectedAccountId || c.accountId === selectedAccountId;
+      const matchMarket = currentMarket === 'ALL' || (currentMarket === 'US' ? c.currency === 'USD' : c.currency === 'TWD');
+      return matchAccount && matchMarket;
+    });
+  }, [cashTransactions, selectedAccountId, currentMarket]);
 
   // 當使用者切換至「資產成長 (NAV)」分頁且缺少歷史日 K 時，自動觸發背景平滑補抓
   useEffect(() => {
@@ -970,7 +981,7 @@ export const App: React.FC = () => {
       {activeTab === 'growth' && (
         <PortfolioGrowthChart
           series={historicalNavSeries}
-          cashTransactions={cashTransactions}
+          cashTransactions={growthScopedCash}
           baseCurrency={currentMarket === 'US' ? 'USD' : 'TWD'}
           isSyncing={isHistoricalSyncing}
           syncProgressText={historicalSyncProgress}
