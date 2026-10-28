@@ -5,10 +5,10 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** DONE
 
-- [ ] 在 `src/engine/benchmarkData.ts` 擴充 `loadBenchmarkDailyPricesAsync(symbol: string): Promise<Record<string, number>>`
-- [ ] 串接 `/api/market/history/:symbol?limit=all` 提取真實日 K 收盤價
-- [ ] 實作記憶體 Map 快取避免重複請求
-- [ ] 具備超時與空資料時的安全 fallback，確保離線或中斷時系統不崩潰
-- [ ] 單元測試驗證湖倉 API 回傳資料正確轉換為每日價格字典
+- [x] 在 `src/engine/benchmarkData.ts` 擴充 `loadBenchmarkDailyPricesAsync(symbol: string): Promise<Record<string, number>>`
+- [x] 串接 `/api/market/history/:symbol?limit=all` 提取真實日 K 收盤價
+- [x] 實作記憶體 Map 快取避免重複請求
+- [x] 具備超時與空資料時的安全 fallback，確保離線或中斷時系統不崩潰
+- [x] 單元測試驗證湖倉 API 回傳資料正確轉換為每日價格字典

@@ -1,9 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   getBenchmarkDailyPrices,
   alignBenchmarkTimeSeries,
   calculateNormalizedGrowth,
   calculate5050BalancedGrowth,
+  loadBenchmarkDailyPricesAsync,
+  resetBenchmarkCacheForTesting,
 } from './benchmarkData';
 
 describe('Benchmark Data Engine (benchmarkData.ts)', () => {
@@ -81,4 +83,53 @@ describe('Benchmark Data Engine (benchmarkData.ts)', () => {
       expect(balanced).toEqual([100, 100, 115]);
     });
   });
+
+  describe('loadBenchmarkDailyPricesAsync (Ticket 05: 湖倉 SQLite API 與記憶體快取)', () => {
+    beforeEach(() => {
+      resetBenchmarkCacheForTesting();
+    });
+
+    it('應能正確呼叫 /api/market/history/:symbol?limit=all 並轉換為每日價格字典', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          symbol: 'SPY',
+          candles: [
+            { date: '2026-01-02', close: 580.5 },
+            { date: '2026-01-03', close: 585.2 },
+          ],
+        }),
+      });
+
+      const prices = await loadBenchmarkDailyPricesAsync('SPY', mockFetch);
+      expect(mockFetch).toHaveBeenCalledWith('/api/market/history/SPY?limit=all', expect.anything());
+      expect(prices).toEqual({
+        '2026-01-02': 580.5,
+        '2026-01-03': 585.2,
+      });
+
+      // 第二次呼叫時應直接命中快取，不應再次呼叫 mockFetch
+      const cached = await loadBenchmarkDailyPricesAsync('SPY', mockFetch);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(cached).toEqual(prices);
+    });
+
+    it('當 API 網路異常或回傳非 200 時，應安全 fallback 降級為靜態常數不崩潰', async () => {
+      const failingFetch = vi.fn().mockRejectedValue(new Error('Network offline'));
+      const fallback = await loadBenchmarkDailyPricesAsync('0050', failingFetch);
+      expect(fallback).toBeDefined();
+      expect(fallback['2024-01-02']).toBeDefined();
+    });
+
+    it('當 API 回傳空 candles 或非陣列時，應降級為靜態常數', async () => {
+      const emptyFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ symbol: 'TAIEX', candles: [] }),
+      });
+      const fallback = await loadBenchmarkDailyPricesAsync('TAIEX', emptyFetch);
+      expect(fallback).toBeDefined();
+      expect(fallback['2026-09-07']).toBeCloseTo(47326.27, 1);
+    });
+  });
 });
+
