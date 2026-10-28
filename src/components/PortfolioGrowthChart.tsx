@@ -213,7 +213,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
         max = max === -Infinity ? 100000 : max * 1.1;
       } else {
         const span = max - min;
-        min = Math.max(0, min - span * 0.05);
+        min = min - span * 0.05;
         max = max + span * 0.08;
       }
 
@@ -761,6 +761,41 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
               </g>
             );
           })}
+
+          {/* 破產警示紅線 (Y = 0 基準線，防禦穿倉崩潰) */}
+          {minVal < 0 && maxVal > 0 && (
+            <g>
+              {(() => {
+                const zeroRatio = (0 - minVal) / (maxVal - minVal);
+                const plotH = height - padding.top - padding.bottom;
+                const zeroY = padding.top + plotH - zeroRatio * plotH;
+                return (
+                  <>
+                    <line
+                      x1={padding.left}
+                      y1={zeroY}
+                      x2={width - padding.right}
+                      y2={zeroY}
+                      stroke="#ef4444"
+                      strokeWidth="2"
+                      strokeDasharray="6 4"
+                    />
+                    <text
+                      x={width - padding.right}
+                      y={zeroY - 5}
+                      fill="#ef4444"
+                      fontSize="11"
+                      fontWeight="bold"
+                      textAnchor="end"
+                      fontFamily="monospace"
+                    >
+                      破產警戒線 (0)
+                    </text>
+                  </>
+                );
+              })()}
+            </g>
+          )}
 
           {/* X 軸日期刻度 */}
           {filteredSeries.length > 0 &&

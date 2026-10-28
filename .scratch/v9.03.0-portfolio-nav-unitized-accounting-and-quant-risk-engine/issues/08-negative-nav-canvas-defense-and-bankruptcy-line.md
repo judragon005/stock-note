@@ -5,9 +5,9 @@
 
 **Blocked by:** Ticket 07
 
-**Status:** ready-for-agent
+**Status:** DONE
 
-- [ ] 檢視並移除 `PortfolioGrowthChart.tsx` 及其 SVG 投影計算中所有不當的 `Math.max(0, minVal)` 硬性截斷
-- [ ] 支援當 `minVal < 0` 時，自動調整 Y 軸刻度範圍 `[minVal, maxVal]`，包含適當 buffer
-- [ ] 當序列包含負數時，在 Y 座標對應 0 元 / 0% 的位置繪製 `<line>` 破產警示紅虛線，並附帶標籤 `0 (破產線)`
-- [ ] 撰寫測試驗證當出現負淨值數列時，SVG 坐標點無 NaN 或坐標翻轉錯誤
+- [x] 檢視並移除 `PortfolioGrowthChart.tsx` 及其 SVG 投影計算中所有不當的 `Math.max(0, minVal)` 硬性截斷
+- [x] 支援當 `minVal < 0` 時，自動調整 Y 軸刻度範圍 `[minVal, maxVal]`，包含適當 buffer
+- [x] 當序列包含負數時，在 Y 座標對應 0 元 / 0% 的位置繪製 `<line>` 破產警示紅虛線，並附帶標籤 `0 (破產線)`
+- [x] 撰寫測試驗證當出現負淨值數列時，SVG 坐標點無 NaN 或坐標翻轉錯誤
