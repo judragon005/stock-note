@@ -6,6 +6,28 @@ import {
 } from '../types/lookThrough';
 import { getETFProfile } from '../data/etfHoldingsData';
 import { resolveOfficialSecurityName } from './stockNameResolver';
+import { STATIC_STOCK_DICTIONARY } from '../data/stockDictionary';
+
+// 建立靜態股票產業快取對照表 (提高產業穿透效率)
+const STATIC_SECTOR_MAP: Record<string, string> = STATIC_STOCK_DICTIONARY.reduce((acc, item) => {
+  if (item.category && item.category.trim().length > 0) {
+    acc[item.symbol.toUpperCase()] = item.category.trim();
+  }
+  return acc;
+}, {} as Record<string, string>);
+
+/**
+ * 依據標的代碼解析真實產業分類
+ * 優先自靜態字典查驗產業 (如 2330 -> 半導體業)，若無則退回台股/美股標的
+ */
+export function resolveSecuritySector(symbol: string, isUS: boolean = false): string {
+  if (!symbol) return isUS ? '美股投資標的' : '台股投資標的';
+  const clean = symbol.trim().toUpperCase();
+  if (STATIC_SECTOR_MAP[clean]) {
+    return STATIC_SECTOR_MAP[clean];
+  }
+  return isUS ? '美股投資標的' : '台股投資標的';
+}
 
 /**
  * 核心穿透透視與產業集中度聚合引擎 (Look-Through Aggregator)
@@ -129,7 +151,7 @@ export function calculateLookThroughExposure(
     } else {
       // 一般個股或未收錄 ETF：直接計為 Direct
       const isUS = holding.market === 'US' || holding.currency === 'USD';
-      const defaultSector = isUS ? '美股投資標的' : '台股投資標的';
+      const defaultSector = resolveSecuritySector(holding.symbol, isUS);
       const exp = getOrCreateExposure(
         holding.symbol,
         holding.name || holding.symbol,

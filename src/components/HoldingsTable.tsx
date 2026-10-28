@@ -34,6 +34,7 @@ interface HoldingsTableProps {
   onOpenDeepDive?: (symbol: string, market: MarketType, name?: string) => void;
   receivableDividends?: ReceivableDividend[];
   usdToTwdRate?: number;
+  onEditTrade?: (trade: TradeRecord) => void;
 }
 
 interface PriceDisplayViewProps {
@@ -192,6 +193,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   onOpenDeepDive,
   receivableDividends = [],
   usdToTwdRate = 32.0,
+  onEditTrade,
 }) => {
   const [localFilter, setLocalFilter] = useState<PositionFilter>('ACTIVE');
   const currentFilter = positionFilter ?? localFilter;
@@ -208,6 +210,15 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   const [isPrivacyMasked, setIsPrivacyMasked] = useState<boolean>(false);
   const [sortField, setSortField] = useState<AttributionSortField>('DEFAULT');
   const [sortDirection, setSortDirection] = useState<SortDirection>('DESC');
+
+  const handleHeaderSort = (field: AttributionSortField) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'ASC' ? 'DESC' : 'ASC'));
+    } else {
+      setSortField(field);
+      setSortDirection('DESC');
+    }
+  };
 
   // 計算法人歸因指標
   const attribution = useMemo(
@@ -575,7 +586,13 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
                 <th style={{ padding: '12px 14px', fontWeight: 700, width: '32px' }}></th>
-                <th style={{ padding: '12px 14px', fontWeight: 700 }}>標的代碼 / 名稱</th>
+                <th
+                  onClick={() => handleHeaderSort('DEFAULT')}
+                  style={{ padding: '12px 14px', fontWeight: 700, cursor: 'pointer', userSelect: 'none' }}
+                  title="點擊依標的代碼排序"
+                >
+                  標的代碼 / 名稱 {sortField === 'DEFAULT' ? (sortDirection === 'DESC' ? '▼' : '▲') : ''}
+                </th>
                 <th style={{ padding: '12px 14px', fontWeight: 700 }}>市場 / 幣別</th>
                 <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right' }}>持有股數</th>
                 <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right' }}>平均成本</th>
@@ -585,14 +602,26 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                 <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right' }}>
                   {currentFilter === 'CLOSED' ? '歷史總投入' : isBroker ? '總付出成本' : '持倉成本基準'}
                 </th>
-                <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right' }}>
-                  {currentFilter === 'CLOSED' ? '在倉市值' : isBroker ? '當前市值 (含稅淨值)' : '當前毛市值'}
+                <th
+                  onClick={() => handleHeaderSort('MARKET_VALUE')}
+                  style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                  title="點擊依市值大小排序"
+                >
+                  {currentFilter === 'CLOSED' ? '在倉市值' : isBroker ? '當前市值 (含稅淨值)' : '當前毛市值'} {sortField === 'MARKET_VALUE' ? (sortDirection === 'DESC' ? '▼' : '▲') : ''}
                 </th>
-                <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right' }}>
-                  {currentFilter === 'CLOSED' ? '已實現損益 / 報酬率' : isBroker ? '未實現損益 (含稅)' : '未實現損益 / 報酬率'}
+                <th
+                  onClick={() => handleHeaderSort('RETURN_PERCENT')}
+                  style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                  title="點擊依報酬率高低排序"
+                >
+                  {currentFilter === 'CLOSED' ? '已實現損益 / 報酬率' : isBroker ? '未實現損益 (含稅)' : '未實現損益 / 報酬率'} {sortField === 'RETURN_PERCENT' ? (sortDirection === 'DESC' ? '▼' : '▲') : ''}
                 </th>
-                <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right' }}>
-                  {isBroker ? '累計股息 / YoC' : '含息總損益 / 回報%'}
+                <th
+                  onClick={() => handleHeaderSort('RETURN_PERCENT')}
+                  style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                  title="點擊依回報率排序"
+                >
+                  {isBroker ? '累計股息 / YoC' : '含息總損益 / 回報%'} {sortField === 'RETURN_PERCENT' ? (sortDirection === 'DESC' ? '▼' : '▲') : ''}
                 </th>
                 <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'center' }}>操作</th>
               </tr>
@@ -1507,8 +1536,18 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                                   >
                                     {st.type === 'BUY'
                                       ? '買進'
+                                      : st.type === 'MARGIN_BUY'
+                                      ? '融資買進'
                                       : st.type === 'SELL'
                                       ? '賣出'
+                                      : st.type === 'MARGIN_SELL'
+                                      ? '融資賣出'
+                                      : st.type === 'ADJUSTMENT'
+                                      ? '庫存調整'
+                                      : st.type === 'STOCK_MERGER'
+                                      ? '股份合併'
+                                      : st.type === 'SPIN_OFF'
+                                      ? '企業分割'
                                       : st.type === 'DIVIDEND'
                                       ? '現金股利'
                                       : st.type === 'STOCK_DIVIDEND'
@@ -1524,11 +1563,36 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                                     {st.type === 'STOCK_SPLIT' && `1 拆 ${st.ratio} 比例分割`}
                                     {st.type === 'CAPITAL_REDUCTION' && formatTimelineReduction(st)}
                                     {st.type === 'DIVIDEND' && formatTimelineDividend(st)}
-                                    {(st.type === 'BUY' || st.type === 'SELL' || st.type === 'CAPITAL_INCREASE') &&
+                                    {(st.type === 'BUY' || st.type === 'MARGIN_BUY' || st.type === 'SELL' || st.type === 'MARGIN_SELL' || st.type === 'CAPITAL_INCREASE' || st.type === 'ADJUSTMENT') &&
                                       `${st.shares} 股 @ ${st.currency} ${st.price}`}
                                   </span>
                                 </div>
-                                <div style={{ color: 'var(--text-muted)' }}>{st.note || '-'}</div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span style={{ color: 'var(--text-muted)' }}>{st.note || '-'}</span>
+                                  {onEditTrade && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onEditTrade(st);
+                                      }}
+                                      style={{
+                                        background: 'rgba(59, 130, 246, 0.15)',
+                                        border: '1px solid rgba(59, 130, 246, 0.35)',
+                                        color: '#60a5fa',
+                                        borderRadius: '4px',
+                                        padding: '2px 6px',
+                                        fontSize: '0.68rem',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '2px',
+                                      }}
+                                      title="編輯此筆交易"
+                                    >
+                                      ✏️ 編輯
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             ))}
                           </div>

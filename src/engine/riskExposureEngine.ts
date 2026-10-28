@@ -1,8 +1,10 @@
+import { TradeRecord } from '../types/stock';
+
 /**
  * 計算在席融資買進之未償還券商負債 (TWD)
  */
 export function calculateActiveMarginDebt(
-  trades: import('../types/stock').TradeRecord[] = [],
+  trades: TradeRecord[] = [],
   usdToTwdRate: number = 32.0
 ): number {
   const marginLotsBySymbol: Record<string, { shares: number; debtPerShare: number; currency: string }[]> = {};
@@ -66,6 +68,7 @@ import {
 } from '../types/exposure';
 import { calculateLoanInterestAndPayoff } from './cashLedgerEngine';
 
+
 /**
  * 取得槓桿風險等級的中文標籤、主題顏色與說明
  */
@@ -101,6 +104,7 @@ export function getLeverageRiskInfo(tier: LeverageRiskTier): LeverageRiskTierInf
       };
   }
 }
+
 
 /**
  * 計算整戶總曝險與淨槓桿率 (Portfolio Gross/Net Exposure & Leverage Engine)

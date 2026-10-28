@@ -1,4 +1,4 @@
-import { HoldingPosition, LoanRecord } from './stock';
+import { HoldingPosition, LoanRecord, TradeRecord } from './stock';
 
 /**
  * 槓桿風險等級代碼
@@ -54,5 +54,5 @@ export interface CalculateExposureParams {
   loans: LoanRecord[];
   usdToTwdRate: number;
   asOfDate?: string;
-  trades?: import('./stock').TradeRecord[];
+  trades?: TradeRecord[];
 }

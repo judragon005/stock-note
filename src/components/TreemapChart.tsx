@@ -111,6 +111,18 @@ export const TreemapChart: React.FC<TreemapChartProps> = ({
           pnlPercent: 0,
         });
       }
+      const aggregatedLoanPrincipal = loans.reduce((sum, l) => sum + (l.principal || 0), 0);
+      const effectiveDebt = Math.max(0, totalDebtTwd > 0 ? totalDebtTwd : aggregatedLoanPrincipal);
+      if (effectiveDebt > 0) {
+        items.push({
+          id: 'DEBT_TWD',
+          symbol: '🏦 借貸負債',
+          name: '質押/借貸負債總額',
+          market: 'DEBT',
+          value: effectiveDebt,
+          pnlPercent: 0,
+        });
+      }
       return items;
     }
 
