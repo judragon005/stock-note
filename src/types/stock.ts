@@ -435,6 +435,7 @@ export interface PortfolioPerformanceMetrics {
   allTimeHighNAV: number; // 歷史最高淨值 ATH
   allTimeHighDate?: string;
   annualizedReturnPercent?: number; // 年化複合成長率 CAGR %
+  cagrPercent?: number; // 年化複合成長率 CAGR % (Spec 0207)
   xirrPercent?: number; // 資金加權年化報酬率 XIRR %
   isXirrAnnualized?: boolean; // XIRR 是否已年化
   xirrDurationDays?: number; // 總歷時天數

@@ -28,8 +28,9 @@ import {
   alignBenchmarkTimeSeries,
   calculateNormalizedGrowth,
   calculate5050BalancedGrowth,
+  loadBenchmarkDailyPricesAsync,
 } from '../engine/benchmarkData';
-import { calculateQuantMetrics, getQuantMetricDiagnosis } from '../engine/quantMetrics';
+import { calculateQuantMetrics, getQuantMetricDiagnosis, resolveDynamicRiskFreeRate } from '../engine/quantMetrics';
 import { QuantMetricId } from '../types/stock';
 
 interface PortfolioGrowthChartProps {
@@ -40,6 +41,7 @@ interface PortfolioGrowthChartProps {
   syncProgressText?: string;
   initialChartMode?: 'AUM' | 'UNIT_NAV';
   initialIsIncognito?: boolean;
+  initialBenchmark?: BenchmarkType;
   onRefreshHistory?: () => void;
   onInspectXirr?: (timeRange?: TimeRangeFilter) => void;
 }
@@ -52,15 +54,51 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
   syncProgressText = '',
   initialChartMode = 'AUM',
   initialIsIncognito = false,
+  initialBenchmark = 'NONE',
   onRefreshHistory,
   onInspectXirr,
 }) => {
   const [chartMode, setChartMode] = useState<'AUM' | 'UNIT_NAV'>(initialChartMode);
   const [timeRange, setTimeRange] = useState<TimeRangeFilter>('ALL');
   const [isIncognito, setIsIncognito] = useState<boolean>(initialIsIncognito);
-  const [benchmarkType, setBenchmarkType] = useState<BenchmarkType>('NONE');
+  const [benchmarkType, setBenchmarkType] = useState<BenchmarkType>(initialBenchmark);
+  const [benchmarkLoadedMap, setBenchmarkLoadedMap] = useState<Record<string, Record<string, number>>>({});
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [activeTooltipMetric, setActiveTooltipMetric] = useState<QuantMetricId | null>(null);
+
+  // 非同步自本機 SQLite 湖倉載入大盤日 K (Spec 0207 / Ticket 03)
+  React.useEffect(() => {
+    let isCancelled = false;
+    if (benchmarkType === 'NONE') return;
+
+    if (benchmarkType === 'BALANCED_50_50') {
+      Promise.all([
+        loadBenchmarkDailyPricesAsync('0050'),
+        loadBenchmarkDailyPricesAsync('SPY'),
+      ]).then(([p0050, pSpy]) => {
+        if (!isCancelled) {
+          setBenchmarkLoadedMap((prev) => ({
+            ...prev,
+            '0050': p0050,
+            'SPY': pSpy,
+          }));
+        }
+      }).catch(() => {});
+    } else {
+      loadBenchmarkDailyPricesAsync(benchmarkType).then((prices) => {
+        if (!isCancelled) {
+          setBenchmarkLoadedMap((prev) => ({
+            ...prev,
+            [benchmarkType]: prices,
+          }));
+        }
+      }).catch(() => {});
+    }
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [benchmarkType]);
 
   const currencySymbol = baseCurrency === 'USD' ? 'US$' : 'NT$';
 
@@ -103,10 +141,12 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
     const navPrices = filteredSeries.map((s) => s.totalNAV);
     const pGrowth = calculateNormalizedGrowth(navPrices);
 
+    const rfRate = resolveDynamicRiskFreeRate(null, baseCurrency);
+
     if (filteredSeries.length === 0 || benchmarkType === 'NONE') {
       return {
         benchmarkGrowth: [],
-        quantMetrics: calculateQuantMetrics(pGrowth, [], 1.5),
+        quantMetrics: calculateQuantMetrics(pGrowth, [], rfRate),
         benchmarkLabel: '',
       };
     }
@@ -116,36 +156,36 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
 
     if (benchmarkType === 'TAIEX') {
       label = '🇹🇼 加權指數 (^TWII)';
-      const raw = getBenchmarkDailyPrices('TAIEX');
+      const raw = benchmarkLoadedMap['TAIEX'] || getBenchmarkDailyPrices('TAIEX');
       const aligned = alignBenchmarkTimeSeries(dates, raw);
       bGrowth = calculateNormalizedGrowth(aligned);
     } else if (benchmarkType === '0050') {
       label = '🇹🇼 0050 元大台灣50';
-      const raw = getBenchmarkDailyPrices('0050');
+      const raw = benchmarkLoadedMap['0050'] || getBenchmarkDailyPrices('0050');
       const aligned = alignBenchmarkTimeSeries(dates, raw);
       bGrowth = calculateNormalizedGrowth(aligned);
     } else if (benchmarkType === 'SPY') {
       label = '🇺🇸 SPY 標普500 ETF';
-      const raw = getBenchmarkDailyPrices('SPY');
+      const raw = benchmarkLoadedMap['SPY'] || getBenchmarkDailyPrices('SPY');
       const aligned = alignBenchmarkTimeSeries(dates, raw);
       bGrowth = calculateNormalizedGrowth(aligned);
     } else if (benchmarkType === 'BALANCED_50_50') {
       label = '⚖️ 50/50 台美股債平衡';
-      const raw0050 = getBenchmarkDailyPrices('0050');
-      const rawSPY = getBenchmarkDailyPrices('SPY');
+      const raw0050 = benchmarkLoadedMap['0050'] || getBenchmarkDailyPrices('0050');
+      const rawSPY = benchmarkLoadedMap['SPY'] || getBenchmarkDailyPrices('SPY');
       const g0050 = calculateNormalizedGrowth(alignBenchmarkTimeSeries(dates, raw0050));
       const gSPY = calculateNormalizedGrowth(alignBenchmarkTimeSeries(dates, rawSPY));
       bGrowth = calculate5050BalancedGrowth(g0050, gSPY);
     }
 
-    const qMetrics = calculateQuantMetrics(pGrowth, bGrowth, 1.5);
+    const qMetrics = calculateQuantMetrics(pGrowth, bGrowth, rfRate);
 
     return {
       benchmarkGrowth: bGrowth,
       quantMetrics: qMetrics,
       benchmarkLabel: label,
     };
-  }, [filteredSeries, benchmarkType]);
+  }, [filteredSeries, benchmarkType, baseCurrency, benchmarkLoadedMap]);
 
   // 5 大量化指標之深度原理與即時診斷
   const quantDiagnosis = useMemo(() => {
@@ -171,6 +211,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
     underwaterPadding,
     currentDrawdownVal,
     drawdownDaysCount,
+    longestDrawdownDays,
   } = useMemo(() => {
     const uwW = 1000;
     const uwH = 160;
@@ -186,6 +227,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
         underwaterPadding: uwPad,
         currentDrawdownVal: 0,
         drawdownDaysCount: 0,
+        longestDrawdownDays: 0,
       };
     }
 
@@ -227,6 +269,20 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
       drawdownDaysCount++;
     }
 
+    // 歷史最長水下天數 (Longest Drawdown Duration) (Spec 0207)
+    let longestDrawdownDays = 0;
+    let currentStreak = 0;
+    for (let i = 0; i < ddValues.length; i++) {
+      if (ddValues[i] < -0.001) {
+        currentStreak++;
+        if (currentStreak > longestDrawdownDays) {
+          longestDrawdownDays = currentStreak;
+        }
+      } else {
+        currentStreak = 0;
+      }
+    }
+
     return {
       underwaterPath: linePoints,
       underwaterArea: areaPoints,
@@ -236,6 +292,7 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
       underwaterPadding: uwPad,
       currentDrawdownVal,
       drawdownDaysCount,
+      longestDrawdownDays,
     };
   }, [filteredSeries, hoverIndex]);
 
@@ -684,6 +741,34 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
               ? `${((activeSnapshot.totalNAV / activeSnapshot.netCostBasis) * 100).toFixed(1)}%`
               : '-'}
           </div>
+          {activeSnapshot && (
+            (() => {
+              const dayCashFlows = cashTransactions.filter(
+                (c) => c.date === activeSnapshot.date && (c.type === 'DEPOSIT' || c.type === 'WITHDRAWAL')
+              );
+              if (dayCashFlows.length === 0) return null;
+              return (
+                <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                  {dayCashFlows.map((cf) => (
+                    <span
+                      key={cf.id}
+                      style={{
+                        fontSize: '0.68rem',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        background: cf.type === 'DEPOSIT' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                        border: `1px solid ${cf.type === 'DEPOSIT' ? '#10b981' : '#ef4444'}`,
+                        color: cf.type === 'DEPOSIT' ? '#34d399' : '#f87171',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {cf.type === 'DEPOSIT' ? '💵 入金' : '💸 出金'}: {cf.type === 'DEPOSIT' ? '+' : '-'}{formatMoney(cf.amount)}
+                    </span>
+                  ))}
+                </div>
+              );
+            })()
+          )}
         </div>
 
         {/* 累計總報酬與報酬率 */}
@@ -708,17 +793,24 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
           >
             {formatMoney(activeSnapshot ? activeSnapshot.cumulativeReturnPnL : metrics.totalProfitPnL, true)}
           </div>
-          <div style={{ fontSize: '0.74rem', fontWeight: 700, color: (activeSnapshot?.cumulativeReturnPercent || 0) >= 0 ? 'var(--gain-color)' : 'var(--loss-color)', marginTop: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: '0.74rem', fontWeight: 700, color: (activeSnapshot?.cumulativeReturnPercent || 0) >= 0 ? 'var(--gain-color)' : 'var(--loss-color)', marginTop: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
             <span>
               {(activeSnapshot?.cumulativeReturnPercent || 0) >= 0 ? '+' : ''}
               {activeSnapshot ? activeSnapshot.cumulativeReturnPercent.toFixed(2) : metrics.totalReturnPercent.toFixed(2)}%
             </span>
-            {metrics.xirrPercent !== undefined && (
-              <span style={{ fontSize: '0.72rem', color: metrics.xirrPercent >= 0 ? 'var(--gain-color)' : 'var(--loss-color)' }}>
-                XIRR: {metrics.xirrPercent >= 0 ? '+' : ''}{metrics.xirrPercent.toFixed(2)}%
-                {!metrics.isXirrAnnualized && <span style={{ color: '#f59e0b', marginLeft: '2px' }} title="未滿 30 天非年化">*</span>}
-              </span>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {(metrics.cagrPercent !== undefined || metrics.annualizedReturnPercent !== undefined) && (
+                <span style={{ fontSize: '0.72rem', color: (metrics.cagrPercent ?? metrics.annualizedReturnPercent ?? 0) >= 0 ? 'var(--gain-color)' : 'var(--loss-color)' }} title="年化複合成長率 (CAGR)">
+                  CAGR: {(metrics.cagrPercent ?? metrics.annualizedReturnPercent ?? 0) >= 0 ? '+' : ''}{(metrics.cagrPercent ?? metrics.annualizedReturnPercent)!.toFixed(2)}%
+                </span>
+              )}
+              {metrics.xirrPercent !== undefined && (
+                <span style={{ fontSize: '0.72rem', color: metrics.xirrPercent >= 0 ? 'var(--gain-color)' : 'var(--loss-color)' }}>
+                  XIRR: {metrics.xirrPercent >= 0 ? '+' : ''}{metrics.xirrPercent.toFixed(2)}%
+                  {!metrics.isXirrAnnualized && <span style={{ color: '#f59e0b', marginLeft: '2px' }} title="未滿 30 天非年化">*</span>}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -997,6 +1089,40 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
                     {visibleLines.nav && (
                       <circle cx={x} cy={navY} r="5" fill="#10b981" stroke="#fff" strokeWidth="2" />
                     )}
+                    {(() => {
+                      const dayCashFlows = cashTransactions.filter(
+                        (c) => c.date === pt.date && (c.type === 'DEPOSIT' || c.type === 'WITHDRAWAL')
+                      );
+                      return dayCashFlows.map((cf, idx) => {
+                        const isDeposit = cf.type === 'DEPOSIT';
+                        const badgeText = `${isDeposit ? '💵 入金' : '💸 出金'}: ${isDeposit ? '+' : '-'}${formatMoney(cf.amount)}`;
+                        const badgeY = Math.max(padding.top + 20, navY - 20 - idx * 24);
+                        const isRight = x > width - 180;
+                        return (
+                          <g key={cf.id || idx}>
+                            <rect
+                              x={isRight ? x - 150 : x + 10}
+                              y={badgeY - 14}
+                              width="140"
+                              height="20"
+                              rx="5"
+                              fill={isDeposit ? 'rgba(16, 185, 129, 0.9)' : 'rgba(239, 68, 68, 0.9)'}
+                            />
+                            <text
+                              x={isRight ? x - 80 : x + 80}
+                              y={badgeY}
+                              fill="#ffffff"
+                              fontSize="10"
+                              fontWeight="bold"
+                              textAnchor="middle"
+                              fontFamily="monospace"
+                            >
+                              {badgeText}
+                            </text>
+                          </g>
+                        );
+                      });
+                    })()}
                   </>
                 );
               })()}
@@ -1043,6 +1169,12 @@ export const PortfolioGrowthChart: React.FC<PortfolioGrowthChartProps> = ({
               {drawdownDaysCount > 0 && (
                 <span style={{ color: '#fbbf24', marginLeft: '6px', fontSize: '0.74rem' }}>
                   (落水 {drawdownDaysCount} 天)
+                </span>
+              )}
+              {longestDrawdownDays > 0 && (
+                <span style={{ color: '#f87171', marginLeft: '10px', fontSize: '0.82rem', fontFamily: 'monospace' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>最長水下: </span>
+                  <span style={{ fontWeight: 800 }}>{longestDrawdownDays} 天</span>
                 </span>
               )}
             </div>

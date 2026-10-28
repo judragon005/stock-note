@@ -468,14 +468,15 @@ export function calculateHistoricalNavSeries(options: CalculateHistoricalNavOpti
     if (receivableDividends && receivableDividends.length > 0) {
       for (const div of receivableDividends) {
         if (date >= div.exDate && date < div.payDate) {
+          const rawNet = div.estimatedNetDividend ?? (div as any).netAmountTWD ?? (div as any).netAmount ?? ((div.sharesHeldOnExDate || 0) * (div.cashDividendPerShare || 0));
           const divAmountInBase = div.estimatedNetDividendInTWD && baseCurrency === 'TWD'
             ? div.estimatedNetDividendInTWD
             : div.currency === 'USD' && baseCurrency === 'TWD'
-            ? div.estimatedNetDividend * fxRate
+            ? rawNet * fxRate
             : div.currency === 'TWD' && baseCurrency === 'USD'
-            ? div.estimatedNetDividend / fxRate
-            : div.estimatedNetDividend;
-          dailyReceivableDividends += divAmountInBase;
+            ? rawNet / fxRate
+            : rawNet;
+          dailyReceivableDividends += (divAmountInBase || 0);
         }
       }
     }
@@ -639,7 +640,8 @@ export function calculatePerformanceMetrics(
   const daysDiff = (new Date(latest.date).getTime() - new Date(series[0].date).getTime()) / (1000 * 3600 * 24);
   let annualizedReturnPercent: number | undefined = undefined;
 
-  if (daysDiff >= 365 && latest.netCostBasis > 0 && latest.totalNAV > 0) {
+  // CAGR: 天數 >= 30 且本金與淨值為正時計算年化複合成長率 (Spec 0207)
+  if (daysDiff >= 30 && latest.netCostBasis > 0 && latest.totalNAV > 0) {
     const years = daysDiff / 365.25;
     const totalMultiplier = latest.totalNAV / latest.netCostBasis;
     annualizedReturnPercent = Math.round((Math.pow(totalMultiplier, 1 / years) - 1) * 10000) / 100;
@@ -657,6 +659,7 @@ export function calculatePerformanceMetrics(
     allTimeHighNAV: Math.max(0, allTimeHighNAV),
     allTimeHighDate,
     annualizedReturnPercent,
+    cagrPercent: annualizedReturnPercent,
     xirrPercent: xirrResult.ratePercent,
     isXirrAnnualized: xirrResult.isAnnualized,
     xirrDurationDays: xirrResult.durationDays,
