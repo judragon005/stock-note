@@ -1,4 +1,11 @@
 import { TradeRecord } from '../types/stock';
+import {
+  CalculateExposureParams,
+  PortfolioExposureMetrics,
+  LeverageRiskTier,
+  LeverageRiskTierInfo,
+} from '../types/exposure';
+import { calculateLoanInterestAndPayoff } from './cashLedgerEngine';
 
 /**
  * 計算在席融資買進之未償還券商負債 (TWD)
@@ -60,13 +67,7 @@ export function calculateActiveMarginDebt(
   return Math.round(totalMarginDebtTWD);
 }
 
-import {
-  CalculateExposureParams,
-  PortfolioExposureMetrics,
-  LeverageRiskTier,
-  LeverageRiskTierInfo,
-} from '../types/exposure';
-import { calculateLoanInterestAndPayoff } from './cashLedgerEngine';
+
 
 
 /**

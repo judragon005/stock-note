@@ -928,6 +928,7 @@ export const App: React.FC = () => {
             totalDebtTwd={exposureMetrics.totalDebtTWD}
             loans={scopedLoans}
             colorTheme={colorTheme}
+            attributionSummary={attributionSummary}
           />
           <SummaryCards
             summary={summary}
@@ -1214,6 +1215,7 @@ export const App: React.FC = () => {
         holdings={holdings}
         onAddTrade={handleSaveTrade}
         selectedAccountId={selectedAccountId}
+        accounts={accounts}
       />
 
       {/* 全市場個股全技術指標透視分析彈窗 */}

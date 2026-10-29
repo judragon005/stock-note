@@ -3,6 +3,7 @@ import { HoldingPosition, ColorThemeMode, LoanRecord } from '../types/stock';
 import { PieChart, LayoutGrid, BarChart2, Scale } from 'lucide-react';
 import { TreemapChart } from './TreemapChart';
 import { RebalancingView } from './RebalancingView';
+import { PortfolioAttributionSummary } from '../engine/attributionEngine';
 
 export interface AllocationChartProps {
   holdings: HoldingPosition[];
@@ -11,6 +12,7 @@ export interface AllocationChartProps {
   totalDebtTwd?: number;
   loans?: LoanRecord[];
   colorTheme?: ColorThemeMode;
+  attributionSummary?: PortfolioAttributionSummary;
 }
 
 const COLOR_PALETTE = [
@@ -36,6 +38,7 @@ export const AllocationChart: React.FC<AllocationChartProps> = ({
   totalDebtTwd = 0,
   loans = [],
   colorTheme = 'taiwan',
+  attributionSummary,
 }) => {
   const [viewMode, setViewMode] = useState<'treemap' | 'bars' | 'rebalance'>('treemap');
   const activeHoldings = holdings.filter(h => h.shares > 0);
@@ -131,9 +134,30 @@ export const AllocationChart: React.FC<AllocationChartProps> = ({
             <PieChart size={18} color="#c084fc" />
           </div>
           <div>
-            <h2 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-              資產配置與持倉分佈
-            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h2 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                資產配置與持倉分佈
+              </h2>
+              {attributionSummary && attributionSummary.totalMarketValueTWD > 0 && (
+                <span
+                  style={{
+                    fontSize: '0.68rem',
+                    padding: '2px 8px',
+                    borderRadius: '6px',
+                    background: attributionSummary.hhiLevel === 'CONCENTRATED' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                    color: attributionSummary.hhiLevel === 'CONCENTRATED' ? '#f59e0b' : '#34d399',
+                    border: `1px solid ${attributionSummary.hhiLevel === 'CONCENTRATED' ? 'rgba(245, 158, 11, 0.35)' : 'rgba(16, 185, 129, 0.35)'}`,
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                  title={`赫芬達爾-赫希曼集中度指數 (HHI): ${attributionSummary.hhi} (大於 2,500 為高度集中)`}
+                >
+                  📊 HHI {attributionSummary.hhi.toLocaleString()} · {attributionSummary.hhiLevel === 'CONCENTRATED' ? '高度集中' : attributionSummary.hhiLevel === 'MODERATE' ? '適度集中' : '分散良好'}
+                </span>
+              )}
+            </div>
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '2px 0 0 0' }}>
               即時權重佔比 · 多市場暴露 · 再平衡模擬
             </p>

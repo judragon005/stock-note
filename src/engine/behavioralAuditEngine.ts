@@ -74,11 +74,22 @@ export function calculateBehavioralAuditReport(
         realizedLossTradesCount++;
       }
 
-      // 動態追高平倉 vs 冷靜平倉勝率統計
+      // 動態追高平倉 vs 冷靜平倉勝率統計 (口徑與進場乖離判定 100% 對齊)
       if (buyTrade) {
-        const isChasing =
+        let isChasing =
           buyTrade.riskMetrics?.isChasingHigh === true ||
           Boolean(buyTrade.riskMetrics?.notes && buyTrade.riskMetrics.notes.includes('追高'));
+
+        if (!isChasing) {
+          const holding = holdings.find((h) => h.symbol === sym);
+          if (holding && holding.avgCost > 0) {
+            const biasPercent = ((buyTrade.price - holding.avgCost) / holding.avgCost) * 100;
+            if (biasPercent > 15) {
+              isChasing = true;
+            }
+          }
+        }
+
         if (isChasing) {
           chasingClosedCount++;
           if (profit >= 0) chasingGainCount++;

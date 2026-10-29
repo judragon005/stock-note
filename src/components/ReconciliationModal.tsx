@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { HoldingPosition, TradeRecord } from '../types/stock';
+import { HoldingPosition, TradeRecord, BrokerAccount } from '../types/stock';
 import {
   parseBrokerSnapshotText,
   reconcileWithBrokerSnapshot,
@@ -8,6 +8,8 @@ import {
 import { ReconciliationReport, ReconciliationDiscrepancy } from '../types/reconciliation';
 import { inferMarketFromSymbol, inferCurrencyFromMarket } from '../utils/formatters';
 
+
+
 export interface ReconciliationModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -15,6 +17,7 @@ export interface ReconciliationModalProps {
   onAddTrade: (trade: TradeRecord) => void;
   colorTheme?: 'taiwan' | 'international';
   selectedAccountId?: string;
+  accounts?: BrokerAccount[];
 }
 
 export const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
@@ -23,7 +26,9 @@ export const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
   holdings,
   onAddTrade,
   selectedAccountId,
+  accounts,
 }) => {
+  const [activeAccountId, setActiveAccountId] = useState<string>(selectedAccountId || 'ALL');
   const [brokerName, setBrokerName] = useState('國泰證券');
   const [rawText, setRawText] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -48,7 +53,7 @@ export const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
     if (item.diffShares === 0) return;
     const market = inferMarketFromSymbol(item.symbol);
     const currency = inferCurrencyFromMarket(market);
-    const targetAccountId = selectedAccountId !== 'ALL' ? selectedAccountId : undefined;
+    const targetAccountId = activeAccountId !== 'ALL' ? activeAccountId : (selectedAccountId !== 'ALL' ? selectedAccountId : undefined);
     const adjTrade = generateAuditAdjustmentTrade(
       item.symbol,
       item.diffShares,
@@ -158,6 +163,38 @@ export const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
                 flex: 1,
               }}
             />
+            {accounts && accounts.length > 0 && (
+              <select
+                value={activeAccountId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setActiveAccountId(val);
+                  const matched = accounts.find((a) => a.id === val);
+                  if (matched) {
+                    setBrokerName(matched.name);
+                  }
+                }}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  background: '#0f172a',
+                  color: '#38bdf8',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  maxWidth: '220px',
+                }}
+                title="選取校準對齊之券商帳戶"
+              >
+                <option value="ALL">全帳戶綜合對賬</option>
+                {accounts.map((acc) => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.name} ({acc.market})
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <label style={{ fontSize: '13px', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>

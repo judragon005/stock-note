@@ -253,7 +253,8 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
     rawFiltered,
     attribution.items,
     sortField,
-    sortDirection
+    sortDirection,
+    usdToTwdRate
   );
 
   const startEditPrice = (symbol: string, currentPrice: number) => {

@@ -93,7 +93,8 @@ export function sortHoldingsByInstitutionalField(
   holdings: HoldingPosition[],
   attributionItems: Record<string, HoldingAttributionItem>,
   sortField: AttributionSortField,
-  direction: SortDirection = 'DESC'
+  direction: SortDirection = 'DESC',
+  usdToTwdRate: number = 32.0
 ): HoldingPosition[] {
   return [...holdings].sort((a, b) => {
     // 平倉部位永遠往後排
@@ -111,11 +112,17 @@ export function sortHoldingsByInstitutionalField(
       case 'CONTRIBUTION_BPS':
         comp = attrA.todaysContributionBps - attrB.todaysContributionBps;
         break;
-      case 'MARKET_VALUE':
-        comp = a.marketValue - b.marketValue;
+      case 'MARKET_VALUE': {
+        // 跨幣別折算為 TWD 基準比較，消除美股未折算之排序偏差
+        const rateA = (a.currency === 'USD' || a.market === 'US') ? (usdToTwdRate > 0 ? usdToTwdRate : 32.0) : 1.0;
+        const rateB = (b.currency === 'USD' || b.market === 'US') ? (usdToTwdRate > 0 ? usdToTwdRate : 32.0) : 1.0;
+        const valA = (a.marketValue || 0) * rateA;
+        const valB = (b.marketValue || 0) * rateB;
+        comp = valA - valB;
         break;
+      }
       case 'RETURN_PERCENT':
-        comp = a.totalReturnPercent - b.totalReturnPercent;
+        comp = (a.totalReturnPercent ?? a.unrealizedPnLPercent ?? 0) - (b.totalReturnPercent ?? b.unrealizedPnLPercent ?? 0);
         break;
       case 'DEFAULT':
       default:
