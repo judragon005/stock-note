@@ -134,5 +134,47 @@ describe('Spec 0208 Gap Fixes: 產業穿透、行為審計真實天數與勝率'
     // 追高買進後以 1000 賣出（獲利），勝率應動態計算為 100%，而非寫死 35.0%
     expect(audit.fomoEntryAudit.chasingHighWinRate).toBe(100);
   });
-});
+  it('4. behavioralAuditEngine: 未手動打標但乖離 > 15% 之平倉交易，應自動納入追高平倉勝率統計', () => {
+    // 買進價 120，持倉均價 100 (乖離 +20% > 15%)，賣出價 130 (獲利)
+    const holding = createMockHolding({
+      symbol: '2330',
+      avgCost: 100,
+      shares: 1000,
+    });
 
+    const trades: TradeRecord[] = [
+      {
+        id: 'buy-bias',
+        symbol: '2330',
+        name: '台積電',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'BUY',
+        shares: 1000,
+        price: 120, // 成本 100，買在 120 (+20%)
+        fee: 50,
+        tax: 0,
+        date: '2026-03-01',
+        createdAt: 3000,
+      },
+      {
+        id: 'sell-bias',
+        symbol: '2330',
+        name: '台積電',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'SELL',
+        shares: 1000,
+        price: 130, // 獲利平倉
+        fee: 50,
+        tax: 390,
+        date: '2026-03-15',
+        createdAt: 4000,
+      },
+    ];
+
+    const audit = calculateBehavioralAudit([holding], trades, '2026-06-01');
+    expect(audit.fomoEntryAudit.chasingHighTradesCount).toBe(1);
+    expect(audit.fomoEntryAudit.chasingHighWinRate).toBe(100);
+  });
+});

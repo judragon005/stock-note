@@ -125,4 +125,31 @@ describe('Spec 0208 Ticket 08: Institutional UI Attribution & Controls Engine', 
     expect(formatPrivacyMasked('NT$ 1,000,000', true)).toBe('••••••');
     expect(formatPrivacyMasked(100000, true)).toBe('••••••');
   });
+  it('5. 跨市場跨幣別市值排序：美股依 USD 匯率折算為 TWD 比較', () => {
+    const twHolding = createMockHolding({
+      symbol: '2330',
+      market: 'TW',
+      currency: 'TWD',
+      marketValue: 10000, // 10,000 TWD
+      shares: 10,
+    });
+    const usHolding = createMockHolding({
+      symbol: 'AAPL',
+      market: 'US',
+      currency: 'USD',
+      marketValue: 500, // 500 USD * 32 = 16,000 TWD (> 10,000 TWD)
+      shares: 5,
+    });
+
+    const sortedDesc = sortHoldingsByInstitutionalField(
+      [twHolding, usHolding],
+      {},
+      'MARKET_VALUE',
+      'DESC',
+      32.0
+    );
+    // 折算後 AAPL (16,000 TWD) 應排在 2330 (10,000 TWD) 前面
+    expect(sortedDesc[0].symbol).toBe('AAPL');
+    expect(sortedDesc[1].symbol).toBe('2330');
+  });
 });
