@@ -70,6 +70,27 @@ export function calculateHoldingsAttribution(
     };
   }
 
+  // 計算全戶真實有效在險資本 (Capital at Risk)
+  // 規則：若有設定停損價 stopLossPrice，風險 = (currentPrice - stopLossPrice) * shares * fxRate
+  // 若未設停損，採保守風險基準：市價之 10%
+  let totalCapitalAtRiskTWD = 0;
+  for (const h of activeHoldings) {
+    const rate = (h.currency === 'USD' || h.market === 'US') ? (usdToTwdRate > 0 ? usdToTwdRate : 32.0) : 1.0;
+    const curPrice = h.currentPrice > 0 ? h.currentPrice : (h.marketValue > 0 && h.shares > 0 ? h.marketValue / h.shares : h.avgCost);
+    const stopLoss = h.riskMetrics?.stopLossPrice;
+
+    let riskPerShare = 0;
+    if (typeof stopLoss === 'number' && stopLoss > 0 && stopLoss < curPrice) {
+      riskPerShare = curPrice - stopLoss;
+    } else {
+      // 預設 10% 風險暴險
+      riskPerShare = curPrice * 0.1;
+    }
+
+    const posRiskTWD = riskPerShare * h.shares * rate;
+    totalCapitalAtRiskTWD += Math.max(0, posRiskTWD);
+  }
+
   let hhiLevel: 'DIVERSIFIED' | 'MODERATE' | 'CONCENTRATED' = 'DIVERSIFIED';
   if (totalHhi > 2500) {
     hhiLevel = 'CONCENTRATED';
@@ -79,7 +100,7 @@ export function calculateHoldingsAttribution(
 
   return {
     totalMarketValueTWD,
-    totalCapitalAtRiskTWD: totalMarketValueTWD,
+    totalCapitalAtRiskTWD: Math.round(totalCapitalAtRiskTWD),
     hhi: totalHhi,
     hhiLevel,
     items,
@@ -137,12 +158,5 @@ export function sortHoldingsByInstitutionalField(
   });
 }
 
-/**
- * 隱私遮罩轉換器：當啟用隱私模式時將敏感財務數字隱藏
- */
-export function formatPrivacyMasked(val: string | number, isMasked: boolean): string {
-  if (isMasked) {
-    return '••••••';
-  }
-  return String(val);
-}
+import { formatPrivacyMasked } from '../utils/formatters';
+export { formatPrivacyMasked };

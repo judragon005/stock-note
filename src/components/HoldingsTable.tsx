@@ -257,6 +257,9 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
     usdToTwdRate
   );
 
+  const cellPadding = densityMode === 'institutional' ? '8px 10px' : '14px';
+  const headerPadding = densityMode === 'institutional' ? '8px 10px' : '12px 14px';
+
   const startEditPrice = (symbol: string, currentPrice: number) => {
     setEditingSymbol(symbol);
     setPriceInput(currentPrice.toString());
@@ -586,45 +589,45 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.86rem' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
-                <th style={{ padding: '12px 14px', fontWeight: 700, width: '32px' }}></th>
+                <th style={{ padding: headerPadding, fontWeight: 700, width: '32px' }}></th>
                 <th
                   onClick={() => handleHeaderSort('DEFAULT')}
-                  style={{ padding: '12px 14px', fontWeight: 700, cursor: 'pointer', userSelect: 'none' }}
+                  style={{ padding: headerPadding, fontWeight: 700, cursor: 'pointer', userSelect: 'none' }}
                   title="點擊依標的代碼排序"
                 >
                   標的代碼 / 名稱 {sortField === 'DEFAULT' ? (sortDirection === 'DESC' ? '▼' : '▲') : ''}
                 </th>
-                <th style={{ padding: '12px 14px', fontWeight: 700 }}>市場 / 幣別</th>
-                <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right' }}>持有股數</th>
-                <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right' }}>平均成本</th>
-                <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right' }}>
+                <th style={{ padding: headerPadding, fontWeight: 700 }}>市場 / 幣別</th>
+                <th style={{ padding: headerPadding, fontWeight: 700, textAlign: 'right' }}>持有股數</th>
+                <th style={{ padding: headerPadding, fontWeight: 700, textAlign: 'right' }}>平均成本</th>
+                <th style={{ padding: headerPadding, fontWeight: 700, textAlign: 'right' }}>
                   {currentFilter === 'CLOSED' ? '出場均價 / 清倉日' : '最新參考市價'}
                 </th>
-                <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right' }}>
+                <th style={{ padding: headerPadding, fontWeight: 700, textAlign: 'right' }}>
                   {currentFilter === 'CLOSED' ? '歷史總投入' : isBroker ? '總付出成本' : '持倉成本基準'}
                 </th>
                 <th
                   onClick={() => handleHeaderSort('MARKET_VALUE')}
-                  style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                  style={{ padding: headerPadding, fontWeight: 700, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
                   title="點擊依市值大小排序"
                 >
                   {currentFilter === 'CLOSED' ? '在倉市值' : isBroker ? '當前市值 (含稅淨值)' : '當前毛市值'} {sortField === 'MARKET_VALUE' ? (sortDirection === 'DESC' ? '▼' : '▲') : ''}
                 </th>
                 <th
                   onClick={() => handleHeaderSort('RETURN_PERCENT')}
-                  style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                  style={{ padding: headerPadding, fontWeight: 700, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
                   title="點擊依報酬率高低排序"
                 >
                   {currentFilter === 'CLOSED' ? '已實現損益 / 報酬率' : isBroker ? '未實現損益 (含稅)' : '未實現損益 / 報酬率'} {sortField === 'RETURN_PERCENT' ? (sortDirection === 'DESC' ? '▼' : '▲') : ''}
                 </th>
                 <th
                   onClick={() => handleHeaderSort('RETURN_PERCENT')}
-                  style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                  style={{ padding: headerPadding, fontWeight: 700, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
                   title="點擊依回報率排序"
                 >
                   {isBroker ? '累計股息 / YoC' : '含息總損益 / 回報%'} {sortField === 'RETURN_PERCENT' ? (sortDirection === 'DESC' ? '▼' : '▲') : ''}
                 </th>
-                <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'center' }}>操作</th>
+                <th style={{ padding: headerPadding, fontWeight: 700, textAlign: 'center' }}>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -668,7 +671,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       onClick={() => toggleExpand(item.symbol)}
                     >
                       {/* Expand Toggle Chevron */}
-                      <td style={{ padding: '14px 6px 14px 14px', textAlign: 'center' }}>
+                      <td style={{ padding: densityMode === 'institutional' ? '8px 4px 8px 10px' : '14px 6px 14px 14px', textAlign: 'center' }}>
                         {isExpanded ? (
                           <ChevronDown size={16} color="#60a5fa" />
                         ) : (
@@ -677,7 +680,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       </td>
 
                       {/* 標的 */}
-                      <td style={{ padding: '14px 14px 14px 6px' }}>
+                      <td style={{ padding: densityMode === 'institutional' ? '8px 10px 8px 4px' : '14px 14px 14px 6px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span className="mono" style={{ fontWeight: 800, color: '#ffffff', fontSize: '0.96rem' }}>
                             {item.symbol}
@@ -850,14 +853,14 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       </td>
 
                       {/* 市場/幣別 */}
-                      <td style={{ padding: '14px' }}>
+                      <td style={{ padding: cellPadding }}>
                         <span className={`badge ${item.market === 'TW' ? 'badge-tw' : 'badge-us'}`}>
                           {item.market === 'TW' ? '🇹🇼 台股' : '🇺🇸 美股'} ({item.currency})
                         </span>
                       </td>
 
                       {/* 股數 */}
-                      <td className="mono" style={{ padding: '14px', textAlign: 'right', fontWeight: 600 }}>
+                      <td className="mono" style={{ padding: cellPadding, textAlign: 'right', fontWeight: 600 }}>
                         {isClosed ? (
                           <>
                             <div style={{ color: 'var(--text-muted)' }}>0 股</div>
@@ -885,7 +888,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       </td>
 
                       {/* 平均成本 */}
-                      <td className="mono" style={{ padding: '14px', textAlign: 'right', color: 'var(--text-secondary)' }}>
+                      <td className="mono" style={{ padding: cellPadding, textAlign: 'right', color: 'var(--text-secondary)' }}>
                         <div>{item.avgCost > 0 ? item.avgCost.toFixed(decimals) : '-'}</div>
                         {!isClosed && item.breakevenPrice !== undefined && item.breakevenPrice > 0 && (
                           <div
@@ -915,7 +918,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       {/* 最新參考市價 / 出場均價 */}
                       <td
                         className="mono"
-                        style={{ padding: '14px', textAlign: 'right' }}
+                        style={{ padding: cellPadding, textAlign: 'right' }}
                         onClick={(e) => e.stopPropagation()}
                       >
                         {isClosed ? (
@@ -971,7 +974,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       </td>
 
                       {/* 總成本 */}
-                      <td className="mono" style={{ padding: '14px', textAlign: 'right', color: 'var(--text-secondary)' }}>
+                      <td className="mono" style={{ padding: cellPadding, textAlign: 'right', color: 'var(--text-secondary)' }}>
                         <div>{mask(Math.round(item.totalCostBasis).toLocaleString('en-US'))}</div>
                         {item.totalCapitalReturned && item.totalCapitalReturned > 0 ? (
                           <div style={{ fontSize: '0.7rem', color: '#fb923c' }}>
@@ -981,7 +984,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       </td>
 
                       {/* 當前市值 */}
-                      <td className="mono" style={{ padding: '14px', textAlign: 'right', fontWeight: 600, color: '#ffffff' }}>
+                      <td className="mono" style={{ padding: cellPadding, textAlign: 'right', fontWeight: 600, color: '#ffffff' }}>
                         <div>{isClosed ? '-' : mask(Math.round(item.marketValue).toLocaleString('en-US'))}</div>
                         {!isClosed && (
                           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400, marginTop: '2px' }}>
@@ -993,7 +996,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       </td>
 
                       {/* 損益欄位 (持倉顯示未實現，已平倉顯示已實現) */}
-                      <td style={{ padding: '14px', textAlign: 'right' }}>
+                      <td style={{ padding: cellPadding, textAlign: 'right' }}>
                         {isClosed ? (
                           <>
                             <div
@@ -1103,7 +1106,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       </td>
 
                       {/* 累計股息與總報酬 / YoC / XIRR */}
-                      <td style={{ padding: '14px', textAlign: 'right' }}>
+                      <td style={{ padding: cellPadding, textAlign: 'right' }}>
                         {isBroker ? (
                           <>
                             <div
@@ -1191,7 +1194,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       </td>
 
                       {/* 快速加碼 / 平倉 / 再次買入操作 */}
-                      <td style={{ padding: '14px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                      <td style={{ padding: cellPadding, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                         {isClosed ? (
                           <button
                             className="btn btn-sm"
