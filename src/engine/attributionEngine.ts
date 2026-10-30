@@ -5,7 +5,10 @@ export type AttributionSortField =
   | 'WEIGHT'
   | 'CONTRIBUTION_BPS'
   | 'MARKET_VALUE'
-  | 'RETURN_PERCENT';
+  | 'RETURN_PERCENT'
+  | 'SHARES'
+  | 'TODAYS_PNL'
+  | 'UNREALIZED_PNL';
 
 export type SortDirection = 'ASC' | 'DESC';
 
@@ -19,6 +22,8 @@ export interface HoldingAttributionItem {
 export interface PortfolioAttributionSummary {
   totalMarketValueTWD: number;
   totalCapitalAtRiskTWD: number;
+  unhedgedPositionsCount?: number;
+  unhedgedPositionsPercent?: number;
   hhi: number;
   hhiLevel: 'DIVERSIFIED' | 'MODERATE' | 'CONCENTRATED';
   items: Record<string, HoldingAttributionItem>;
@@ -71,25 +76,28 @@ export function calculateHoldingsAttribution(
   }
 
   // 計算全戶真實有效在險資本 (Capital at Risk)
-  // 規則：若有設定停損價 stopLossPrice，風險 = (currentPrice - stopLossPrice) * shares * fxRate
-  // 若未設停損，採保守風險基準：市價之 10%
+  // 規則：僅對有設定停損價 (stopLossPrice < curPrice) 者計算真實暴險差額
+  // 未設停損者不強加假定 10% 市價，而是統計未設停損之標的檔數與持股佔比
   let totalCapitalAtRiskTWD = 0;
+  let unhedgedPositionsCount = 0;
+
   for (const h of activeHoldings) {
     const rate = (h.currency === 'USD' || h.market === 'US') ? (usdToTwdRate > 0 ? usdToTwdRate : 32.0) : 1.0;
     const curPrice = h.currentPrice > 0 ? h.currentPrice : (h.marketValue > 0 && h.shares > 0 ? h.marketValue / h.shares : h.avgCost);
     const stopLoss = h.riskMetrics?.stopLossPrice;
 
-    let riskPerShare = 0;
     if (typeof stopLoss === 'number' && stopLoss > 0 && stopLoss < curPrice) {
-      riskPerShare = curPrice - stopLoss;
+      const riskPerShare = curPrice - stopLoss;
+      const posRiskTWD = riskPerShare * h.shares * rate;
+      totalCapitalAtRiskTWD += Math.max(0, posRiskTWD);
     } else {
-      // 預設 10% 風險暴險
-      riskPerShare = curPrice * 0.1;
+      unhedgedPositionsCount += 1;
     }
-
-    const posRiskTWD = riskPerShare * h.shares * rate;
-    totalCapitalAtRiskTWD += Math.max(0, posRiskTWD);
   }
+
+  const unhedgedPositionsPercent = activeHoldings.length > 0
+    ? Math.round((unhedgedPositionsCount / activeHoldings.length) * 100)
+    : 0;
 
   let hhiLevel: 'DIVERSIFIED' | 'MODERATE' | 'CONCENTRATED' = 'DIVERSIFIED';
   if (totalHhi > 2500) {
@@ -101,6 +109,8 @@ export function calculateHoldingsAttribution(
   return {
     totalMarketValueTWD,
     totalCapitalAtRiskTWD: Math.round(totalCapitalAtRiskTWD),
+    unhedgedPositionsCount,
+    unhedgedPositionsPercent,
     hhi: totalHhi,
     hhiLevel,
     items,
@@ -144,6 +154,15 @@ export function sortHoldingsByInstitutionalField(
       }
       case 'RETURN_PERCENT':
         comp = (a.totalReturnPercent ?? a.unrealizedPnLPercent ?? 0) - (b.totalReturnPercent ?? b.unrealizedPnLPercent ?? 0);
+        break;
+      case 'SHARES':
+        comp = (a.shares || 0) - (b.shares || 0);
+        break;
+      case 'TODAYS_PNL':
+        comp = (a.todaysPnL || 0) - (b.todaysPnL || 0);
+        break;
+      case 'UNREALIZED_PNL':
+        comp = (a.unrealizedPnL || 0) - (b.unrealizedPnL || 0);
         break;
       case 'DEFAULT':
       default:

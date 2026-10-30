@@ -111,7 +111,7 @@ export function getLeverageRiskInfo(tier: LeverageRiskTier): LeverageRiskTierInf
  * 計算整戶總曝險與淨槓桿率 (Portfolio Gross/Net Exposure & Leverage Engine)
  */
 export function calculatePortfolioExposure(params: CalculateExposureParams): PortfolioExposureMetrics {
-  const { holdings, cashBalances, inTransitSummary, loans, usdToTwdRate, asOfDate } = params;
+  const { holdings, cashBalances, inTransitSummary, loans, usdToTwdRate, asOfDate, receivableDividendsTWD = 0 } = params;
 
   // 1. 計算所有股票現值 (折合 TWD)
   let totalStockValueTWD = 0;
@@ -144,8 +144,8 @@ export function calculatePortfolioExposure(params: CalculateExposureParams): Por
 
   // 4. 計算帳戶淨資產 NAV
   const isZeroDebt = totalDebtTWD <= 0;
-  let effectiveNavTWD = totalStockValueTWD + totalAvailableCashTWD - totalDebtTWD;
-  if (isZeroDebt && totalAvailableCashTWD <= 0) {
+  let effectiveNavTWD = totalStockValueTWD + totalAvailableCashTWD + receivableDividendsTWD - totalDebtTWD;
+  if (isZeroDebt && totalAvailableCashTWD <= 0 && receivableDividendsTWD <= 0) {
     effectiveNavTWD = totalStockValueTWD;
   }
   let isUnderwater = !isZeroDebt && effectiveNavTWD <= 0;
@@ -159,8 +159,8 @@ export function calculatePortfolioExposure(params: CalculateExposureParams): Por
 
   if (effectiveNavTWD > 0) {
     grossLeverage = totalStockValueTWD / effectiveNavTWD;
-    const netExposure = totalStockValueTWD - Math.max(0, totalAvailableCashTWD);
-    netLeverage = Math.max(0, netExposure / effectiveNavTWD);
+
+    netLeverage = totalStockValueTWD / effectiveNavTWD;
   } else if (!isZeroDebt) {
     grossLeverage = totalStockValueTWD > 0 ? 99.99 : 0;
     netLeverage = 99.99;
@@ -168,11 +168,11 @@ export function calculatePortfolioExposure(params: CalculateExposureParams): Por
   }
 
   const netExposureRatioPercent = effectiveNavTWD > 0
-    ? ((totalStockValueTWD - Math.max(0, totalAvailableCashTWD)) / effectiveNavTWD) * 100
+    ? (totalStockValueTWD / effectiveNavTWD) * 100
     : 100;
 
   // 7. 現金佔淨資產比率
-  const navTWD = isZeroDebt && totalAvailableCashTWD <= 0 ? totalStockValueTWD : (totalStockValueTWD + totalAvailableCashTWD - totalDebtTWD);
+  const navTWD = isZeroDebt && (totalAvailableCashTWD + receivableDividendsTWD) <= 0 ? totalStockValueTWD : (totalStockValueTWD + totalAvailableCashTWD + receivableDividendsTWD - totalDebtTWD);
   const cashToNavRatio = navTWD > 0 ? (totalAvailableCashTWD / navTWD) : 0;
 
   // 8. 判定風險等級

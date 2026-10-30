@@ -75,7 +75,8 @@ import { AiForceDashboardView } from './components/aiForceDashboard/AiForceDashb
 import { ReconciliationModal } from './components/ReconciliationModal';
 import { syncTradesWithCashTransactions, calculateAccountBalances, aggregateInterestIncomeDetails, reconcilePendingDividendTrades } from './engine/cashLedgerEngine';
 import { calculatePortfolioXirr, calculateSecurityXirr, XirrResult, CashFlowEvent } from './engine/xirrCalculator';
-import { calculatePortfolioExposure } from './engine/riskExposureEngine';
+import { calculatePortfolioExposure, calculateActiveMarginDebt } from './engine/riskExposureEngine';
+import { inferMarketFromSymbol } from './utils/formatters';
 import { calculateReceivableDividends } from './engine/receivableDividendEngine';
 import { buildTaxComplianceStatus } from './engine/taxComplianceEngine';
 import { CorporateActionSessionCache, scanCorporateActions } from './engine/corporateActionScanner';
@@ -120,6 +121,11 @@ export const App: React.FC = () => {
     localStorage.setItem('stock_tracker_accounting_method', accountingMethod);
   }, [accountingMethod]);
 
+  // 公司行動除息事件快取版本與同步狀態及全域隱私遮罩
+  const [caVersion, setCaVersion] = useState(0);
+  const [isCaSyncing, setIsCaSyncing] = useState(false);
+  const [isPrivacyMasked, setIsPrivacyMasked] = useState<boolean>(false);
+
   // 非同步初始化 IndexedDB 與狀態同步
   const loadAllFromDB = useCallback(async () => {
     try {
@@ -157,7 +163,7 @@ export const App: React.FC = () => {
             const prevClose = (item.quote.adjClose && item.quote.adjClose > 0 && item.quote.adjClose !== item.quote.close)
               ? item.quote.adjClose
               : item.quote.close;
-            const isUS = /^[A-Za-z]{1,5}$/.test(sym);
+            const isUS = inferMarketFromSymbol(sym) === 'US';
             quotesToHydrate[sym] = {
               symbol: sym,
               market: isUS ? 'US' : 'TW',
@@ -433,6 +439,19 @@ export const App: React.FC = () => {
     return filtered;
   }, [currentMarket, loanRecords, selectedAccountId]);
 
+  // 待發放應收現金股利 (除息日至發放日之間平滑)
+  const receivableDividends = useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const cachedEvents = CorporateActionSessionCache.getAllEvents();
+    return calculateReceivableDividends(holdings, cachedEvents, trades, todayStr, usdToTwdRate);
+  }, [holdings, trades, usdToTwdRate, caVersion]);
+
+  const pendingReceivableDividendsTWD = useMemo(() => {
+    return receivableDividends
+      .filter((d) => d.status === 'PENDING_PAYMENT')
+      .reduce((sum, d) => sum + (d.estimatedNetDividendInTWD || 0), 0);
+  }, [receivableDividends]);
+
   // 整戶/分市場總曝險與淨槓桿率 (Net Leverage) 計算（依當前市場隔離持股、現金與負債）
   // 法人歸因指標與 HHI 集中度
   const attributionSummary = useMemo(
@@ -452,8 +471,9 @@ export const App: React.FC = () => {
       loans: scopedLoans,
       usdToTwdRate,
       trades: displayedTrades,
+      receivableDividendsTWD: pendingReceivableDividendsTWD,
     });
-  }, [holdings, cashLedgerSummary, scopedLoans, usdToTwdRate, currentMarket, displayedTrades]);
+  }, [holdings, cashLedgerSummary, scopedLoans, usdToTwdRate, currentMarket, displayedTrades, pendingReceivableDividendsTWD]);
 
   // 整戶總體 XIRR 計算 (考慮外部出入金與期末淨資產，嚴密過濾券商帳戶與市場)
   const portfolioXirr = useMemo(() => {
@@ -473,10 +493,19 @@ export const App: React.FC = () => {
       scopedCash = scopedCash.filter((c) => c.accountId === selectedAccountId);
     }
 
+    const scopedMarginDebtUSD = calculateActiveMarginDebt(scopedTrades.filter((t) => t.market === 'US' || t.currency === 'USD'), 1.0);
+    const scopedMarginDebtTWD = calculateActiveMarginDebt(scopedTrades.filter((t) => t.market === 'TW' || t.currency === 'TWD'), 1.0);
+    const scopedReceivableUSD = receivableDividends
+      .filter((d) => d.status === 'PENDING_PAYMENT' && (d.market === 'US' || d.currency === 'USD'))
+      .reduce((sum, d) => sum + (d.estimatedNetDividend || 0), 0);
+    const scopedReceivableTWD = receivableDividends
+      .filter((d) => d.status === 'PENDING_PAYMENT' && (d.market === 'TW' || d.currency === 'TWD'))
+      .reduce((sum, d) => sum + (d.estimatedNetDividendInTWD || 0), 0);
+
     const terminalNAV = currentMarket === 'US'
-      ? Math.max(0, summary.usd.marketValue + cashLedgerSummary.totalUSD - (scopedLoans.find((l) => l.currency === 'USD')?.principal || 0))
+      ? Math.max(0, summary.usd.marketValue + cashLedgerSummary.totalUSD + scopedReceivableUSD - (scopedLoans.find((l) => l.currency === 'USD')?.principal || 0) - scopedMarginDebtUSD)
       : currentMarket === 'TW'
-      ? Math.max(0, summary.twd.marketValue + cashLedgerSummary.totalTWD - (scopedLoans.find((l) => l.currency === 'TWD')?.principal || 0))
+      ? Math.max(0, summary.twd.marketValue + cashLedgerSummary.totalTWD + scopedReceivableTWD - (scopedLoans.find((l) => l.currency === 'TWD')?.principal || 0) - scopedMarginDebtTWD)
       : (exposureMetrics.effectiveNavTWD ?? exposureMetrics.navTWD) || (summary.combinedTWD.netAssetValue || (summary.twd.marketValue + summary.usd.marketValue * usdToTwdRate));
 
     return calculatePortfolioXirr({
@@ -486,16 +515,14 @@ export const App: React.FC = () => {
       baseCurrency: currentMarket === 'US' ? 'USD' : 'TWD',
       fxMap: historicalFx,
     });
-  }, [trades, cashTransactions, summary, currentMarket, usdToTwdRate, selectedAccountId, cashLedgerSummary, scopedLoans, exposureMetrics, historicalFx]);
+  }, [trades, cashTransactions, summary, currentMarket, usdToTwdRate, selectedAccountId, cashLedgerSummary, scopedLoans, exposureMetrics, historicalFx, receivableDividends]);
 
   // 各項利息收入明細與總額聚合 (依當前市場過濾)
   const interestIncomeSummary = useMemo(() => {
     return aggregateInterestIncomeDetails(cashTransactions, currentMarket, usdToTwdRate);
   }, [cashTransactions, currentMarket, usdToTwdRate]);
 
-  // 公司行動除息事件快取版本與同步狀態
-  const [caVersion, setCaVersion] = useState(0);
-  const [isCaSyncing, setIsCaSyncing] = useState(false);
+  // 公司行動同步回呼函式
 
   const handleSyncCorporateActions = useCallback(async (force: boolean = false) => {
     if (isCaSyncing || trades.length === 0) return;
@@ -517,12 +544,6 @@ export const App: React.FC = () => {
     }
   }, [isCaSyncing, trades, holdings]);
 
-  // 待發放應收現金股利 (除息日至發放日之間平滑)
-  const receivableDividends = useMemo(() => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const cachedEvents = CorporateActionSessionCache.getAllEvents();
-    return calculateReceivableDividends(holdings, cachedEvents, trades, todayStr, usdToTwdRate);
-  }, [holdings, trades, usdToTwdRate, caVersion]);
 
   // 應用程式初始載入就緒時，自動在背景靜默預載在庫持股除息日曆公告 (保留手動強制同步按鈕)
   const hasTriggeredAutoSyncRef = useRef(false);
@@ -944,8 +965,12 @@ export const App: React.FC = () => {
             interestIncomeSummary={interestIncomeSummary}
             attributionSummary={attributionSummary}
             onOpenFrictionCenter={() => setActiveTab('behavioral')}
+            pendingReceivableDividendsTWD={pendingReceivableDividendsTWD}
+            isPrivacyMasked={isPrivacyMasked}
           />
           <HoldingsTable
+            isPrivacyMasked={isPrivacyMasked}
+            onTogglePrivacyMask={() => setIsPrivacyMasked((prev) => !prev)}
             holdings={holdings}
             trades={trades}
             quotes={quotes}

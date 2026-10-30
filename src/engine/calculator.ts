@@ -689,11 +689,13 @@ export function calculateHoldingsAndSummary(
         if (targetSym && targetSym !== trade.symbol && alloc > 0 && alloc < 1) {
           const splitCost = item.totalCostBasis * alloc;
           item.totalCostBasis = Math.max(0, item.totalCostBasis - splitCost);
+          item.historicalTotalInvestedCost = Math.max(0, item.historicalTotalInvestedCost - splitCost);
 
           const targetItem = getOrCreateItem(targetSym, trade.targetName || targetSym, item.market, item.currency);
           const newShares = shares > 0 ? shares : (ratio > 0 ? item.shares * ratio : 0);
           targetItem.shares += newShares;
           targetItem.totalCostBasis += splitCost;
+          targetItem.historicalTotalInvestedCost += splitCost;
         }
         break;
       }
@@ -702,7 +704,14 @@ export function calculateHoldingsAndSummary(
         const convPrice = trade.conversionPrice || price;
         const convCost = shares * (convPrice > 0 ? convPrice : price) + fee;
         item.shares += shares;
+        item.originalBuyShares += shares;
         item.totalCostBasis += convCost;
+        item.historicalTotalInvestedCost += convCost;
+        const currentTradeFx = (trade.date && historicalFx && historicalFx[trade.date]) || usdToTwdRate || 32.0;
+        if (item.currency === 'USD' || item.market === 'US') {
+          item.totalBuyCostUSD += convCost;
+          item.totalBuyCostTWD += convCost * currentTradeFx;
+        }
         break;
       }
 
