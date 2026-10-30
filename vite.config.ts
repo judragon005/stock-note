@@ -65,7 +65,7 @@ export default defineConfig({
     dangerouslyIgnoreUnhandledErrors: true,
   },
   server: {
-    port: 5173,
+    port: 3000,
     open: false,
     headers: {
       'X-Frame-Options': 'DENY',
