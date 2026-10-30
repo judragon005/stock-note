@@ -351,12 +351,14 @@ export function applyTradeToShares(
   let result = currentShares;
   switch (trade.type) {
     case 'BUY':
+    case 'MARGIN_BUY':
     case 'CAPITAL_INCREASE':
     case 'CB_CONVERSION':
       result = currentShares + shares;
       break;
 
     case 'SELL':
+    case 'MARGIN_SELL':
     case 'TENDER_OFFER':
     case 'PREFERRED_REDEMPTION':
       result = Math.max(0, currentShares - Math.min(shares, currentShares));
@@ -542,16 +544,23 @@ export function calculateHoldingsAndSummary(
     const cashAmount = Number(trade.cashAmount) || 0;
 
     switch (trade.type) {
-      case 'BUY': {
+      case 'BUY':
+      case 'MARGIN_BUY': {
+        const isMargin = trade.type === 'MARGIN_BUY' || Boolean(trade.isMargin);
+        const marginRate = typeof trade.marginRate === 'number' ? trade.marginRate : 0.4;
+        // 融資自備款或現股總額
+        const investedCost = isMargin ? shares * price * marginRate + fee : shares * price + fee;
         const netCost = shares * price + fee;
+
         item.shares += shares;
         item.originalBuyShares += shares;
         item.totalCostBasis += netCost;
-        item.historicalTotalInvestedCost += netCost;
+        item.historicalTotalInvestedCost += investedCost;
+
         const currentTradeFx = (trade.date && historicalFx && historicalFx[trade.date]) || usdToTwdRate || 32.0;
         if (item.currency === 'USD' || item.market === 'US') {
-          item.totalBuyCostUSD += netCost;
-          item.totalBuyCostTWD += netCost * currentTradeFx;
+          item.totalBuyCostUSD += investedCost;
+          item.totalBuyCostTWD += investedCost * currentTradeFx;
         }
         if (trade.plan) {
           item.latestPlan = trade.plan;
@@ -562,7 +571,8 @@ export function calculateHoldingsAndSummary(
         break;
       }
 
-      case 'SELL': {
+      case 'SELL':
+      case 'MARGIN_SELL': {
         if (price > 0) {
           item.lastExitPrice = price;
         }

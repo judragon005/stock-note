@@ -1,3 +1,8 @@
+/**
+ * 追高進場判定正乖離門檻百分比 (例如 > 15% 判定為 FOMO 追高)
+ */
+export const CHASING_HIGH_BIAS_THRESHOLD = 15;
+
 import { TradeRecord, HoldingPosition } from '../types/stock';
 import {
   BehavioralAuditReport,
@@ -84,7 +89,7 @@ export function calculateBehavioralAuditReport(
           const holding = holdings.find((h) => h.symbol === sym);
           if (holding && holding.avgCost > 0) {
             const biasPercent = ((buyTrade.price - holding.avgCost) / holding.avgCost) * 100;
-            if (biasPercent > 15) {
+            if (biasPercent > CHASING_HIGH_BIAS_THRESHOLD) {
               isChasing = true;
             }
           }
@@ -184,7 +189,7 @@ export function calculateBehavioralAuditReport(
         const holding = holdings.find((h) => h.symbol === t.symbol);
         if (holding && holding.avgCost > 0) {
           const biasPercent = ((t.price - holding.avgCost) / holding.avgCost) * 100;
-          if (biasPercent > 15) {
+          if (biasPercent > CHASING_HIGH_BIAS_THRESHOLD) {
             chasingHighTradesCount++;
           }
         }

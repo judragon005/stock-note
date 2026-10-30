@@ -1,3 +1,4 @@
+import { inferMarketFromSymbol } from '../utils/formatters';
 import {
   TargetAllocationConfig,
   RebalanceItemRecommendation,
@@ -194,7 +195,7 @@ export function calculateAllocationDrift(
     const symbolKey = item.key.toUpperCase();
     const holding = activeHoldings.find((h) => h.symbol.toUpperCase() === symbolKey);
 
-    const market: MarketType = holding ? holding.market : symbolKey.match(/^\d{4,6}[A-Za-z]?$/) ? 'TW' : 'US';
+    const market: MarketType = holding ? holding.market : inferMarketFromSymbol(symbolKey);
     const currency: Currency = holding ? holding.currency : market === 'US' ? 'USD' : 'TWD';
     const currentPrice = holding ? holding.currentPrice : 0;
     const rate = currency === 'USD' ? usdToTwdRate : 1;

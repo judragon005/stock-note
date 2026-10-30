@@ -156,3 +156,13 @@ export function formatFinancialAmount(val: number): string {
   const wan = Math.round(abs / 10000);
   return `${sign}${wan} 萬`;
 }
+
+/**
+ * 隱私遮罩轉換器：當啟用隱私模式時將敏感財務數字隱藏
+ */
+export function formatPrivacyMasked(val: string | number, isMasked: boolean): string {
+  if (isMasked) {
+    return '••••••';
+  }
+  return String(val);
+}
