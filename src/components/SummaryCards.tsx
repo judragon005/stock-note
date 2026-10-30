@@ -24,6 +24,31 @@ interface SummaryCardsProps {
   isPrivacyMasked?: boolean;
 }
 
+interface PendingReceivableBadgeProps {
+  amount?: number;
+  formatNumber: (num: number, decimals?: number) => string;
+}
+
+export const PendingReceivableBadge: React.FC<PendingReceivableBadgeProps> = ({ amount, formatNumber }) => {
+  if (!amount || amount <= 0) return null;
+  return (
+    <span
+      style={{
+        fontSize: '0.66rem',
+        padding: '1px 6px',
+        borderRadius: '4px',
+        background: 'rgba(16, 185, 129, 0.15)',
+        color: '#34d399',
+        border: '1px solid rgba(16, 185, 129, 0.35)',
+        fontWeight: 600,
+      }}
+      title="已除息但尚未入帳之應收現金股利"
+    >
+      ⏳ 待入帳股利 +NT${formatNumber(amount, 0)}
+    </span>
+  );
+};
+
 export const SummaryCards: React.FC<SummaryCardsProps> = ({
   summary,
   currentMarket,
@@ -269,23 +294,8 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
             已平倉標的現金股利與各項已入帳利息
           </div>
           <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '6px' }}>
-          {/* 待入帳應收股利膠囊 (Spec L50) */}
-          {Boolean(pendingReceivableDividendsTWD && pendingReceivableDividendsTWD > 0) && (
-            <span
-              style={{
-                fontSize: '0.66rem',
-                padding: '1px 6px',
-                borderRadius: '4px',
-                background: 'rgba(16, 185, 129, 0.15)',
-                color: '#34d399',
-                border: '1px solid rgba(16, 185, 129, 0.35)',
-                fontWeight: 600,
-              }}
-              title="已除息但尚未入帳之應收現金股利"
-            >
-              ⏳ 待入帳股利 +NT${formatNumber(pendingReceivableDividendsTWD || 0, 0)}
-            </span>
-          )}
+          {/* 待入帳應收股利膠囊 */}
+          <PendingReceivableBadge amount={pendingReceivableDividendsTWD} formatNumber={formatNumber} />
             {interestIncomeSummary?.interestItems && interestIncomeSummary.interestItems.map((item) => (
               <span
                 key={item.id}
@@ -781,23 +791,8 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
           </span>
         </div>
         <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '6px' }}>
-          {/* 待入帳應收股利膠囊 (Spec L50) */}
-          {Boolean(pendingReceivableDividendsTWD && pendingReceivableDividendsTWD > 0) && (
-            <span
-              style={{
-                fontSize: '0.66rem',
-                padding: '1px 6px',
-                borderRadius: '4px',
-                background: 'rgba(16, 185, 129, 0.15)',
-                color: '#34d399',
-                border: '1px solid rgba(16, 185, 129, 0.35)',
-                fontWeight: 600,
-              }}
-              title="已除息但尚未入帳之應收現金股利"
-            >
-              ⏳ 待入帳股利 +NT${formatNumber(pendingReceivableDividendsTWD || 0, 0)}
-            </span>
-          )}
+          {/* 待入帳應收股利膠囊 */}
+          <PendingReceivableBadge amount={pendingReceivableDividendsTWD} formatNumber={formatNumber} />
           {/* 各項利息收入獨立膠囊 */}
           {interestIncomeSummary?.interestItems && interestIncomeSummary.interestItems.map((item) => (
             <span

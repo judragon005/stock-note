@@ -17,6 +17,16 @@ export function formatInterestBadgeText(name: string, amount: number, currency: 
   return `💵 ${name} +${symbol}${formattedAmount} ${currency}`;
 }
 
+export function formatPendingReceivableText(amount: number, isPrivacyMasked: boolean = false): string {
+  const formatted = isPrivacyMasked
+    ? '****'
+    : amount.toLocaleString('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      });
+  return `⏳ 待入帳股利 +NT$${formatted}`;
+}
+
 describe('SummaryCards 被動收益與膠囊格式化輔助邏輯測試', () => {
   const mockInterestSummary: InterestIncomeSummary = {
     totalInterestAmount: 23.7,
@@ -55,5 +65,15 @@ describe('SummaryCards 被動收益與膠囊格式化輔助邏輯測試', () => 
   it('台幣利息膠囊格式化應為整數與 NT$ 符號', () => {
     const badge = formatInterestBadgeText('證券戶活存息', 500, 'TWD');
     expect(badge).toBe('💵 證券戶活存息 +NT$500 TWD');
+  });
+
+  it('待入帳應收股利膠囊在正常模式下應格式化金額', () => {
+    const badge = formatPendingReceivableText(12345, false);
+    expect(badge).toBe('⏳ 待入帳股利 +NT$12,345');
+  });
+
+  it('待入帳應收股利膠囊在隱私遮罩模式下應遮罩金額', () => {
+    const badge = formatPendingReceivableText(12345, true);
+    expect(badge).toBe('⏳ 待入帳股利 +NT$****');
   });
 });
