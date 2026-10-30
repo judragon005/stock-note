@@ -129,7 +129,7 @@ describe('Spec 0208 Gap Fixes: 產業穿透、行為審計真實天數與勝率'
       },
     ];
 
-    const audit = calculateBehavioralAudit([], trades, '2026-06-01');
+    const audit = calculateBehavioralAudit(trades, [], 1000000);
     expect(audit.fomoEntryAudit.chasingHighTradesCount).toBe(1);
     // 追高買進後以 1000 賣出（獲利），勝率應動態計算為 100%，而非寫死 35.0%
     expect(audit.fomoEntryAudit.chasingHighWinRate).toBe(100);
@@ -173,7 +173,7 @@ describe('Spec 0208 Gap Fixes: 產業穿透、行為審計真實天數與勝率'
       },
     ];
 
-    const audit = calculateBehavioralAudit([holding], trades, '2026-06-01');
+    const audit = calculateBehavioralAudit(trades, [holding], 1000000);
     expect(audit.fomoEntryAudit.chasingHighTradesCount).toBe(1);
     expect(audit.fomoEntryAudit.chasingHighWinRate).toBe(100);
   });

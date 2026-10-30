@@ -20,6 +20,8 @@ interface SummaryCardsProps {
   interestIncomeSummary?: InterestIncomeSummary;
   attributionSummary?: PortfolioAttributionSummary;
   onOpenFrictionCenter?: () => void;
+  pendingReceivableDividendsTWD?: number;
+  isPrivacyMasked?: boolean;
 }
 
 export const SummaryCards: React.FC<SummaryCardsProps> = ({
@@ -36,6 +38,8 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
   interestIncomeSummary,
   attributionSummary,
   onOpenFrictionCenter,
+  pendingReceivableDividendsTWD,
+  isPrivacyMasked = false,
 }) => {
   const isTW = currentMarket === 'TW';
   const isUS = currentMarket === 'US';
@@ -69,6 +73,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
   const isRealizedGain = realizedPnL >= 0;
 
   const formatNumber = (num: number, decimals: number = isUS ? 2 : 0) => {
+    if (isPrivacyMasked) return '****';
     return num.toLocaleString('en-US', {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
@@ -264,6 +269,23 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
             已平倉標的現金股利與各項已入帳利息
           </div>
           <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '6px' }}>
+          {/* 待入帳應收股利膠囊 (Spec L50) */}
+          {Boolean(pendingReceivableDividendsTWD && pendingReceivableDividendsTWD > 0) && (
+            <span
+              style={{
+                fontSize: '0.66rem',
+                padding: '1px 6px',
+                borderRadius: '4px',
+                background: 'rgba(16, 185, 129, 0.15)',
+                color: '#34d399',
+                border: '1px solid rgba(16, 185, 129, 0.35)',
+                fontWeight: 600,
+              }}
+              title="已除息但尚未入帳之應收現金股利"
+            >
+              ⏳ 待入帳股利 +NT${formatNumber(pendingReceivableDividendsTWD || 0, 0)}
+            </span>
+          )}
             {interestIncomeSummary?.interestItems && interestIncomeSummary.interestItems.map((item) => (
               <span
                 key={item.id}
@@ -545,7 +567,12 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
               </span>
             </div>
             <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem' }} title="在庫持股之有效在險總資本">
-              在險資本 NT$ {Math.round(attributionSummary.totalCapitalAtRiskTWD).toLocaleString()}
+              在險資本 NT$ {formatNumber(Math.round(attributionSummary.totalCapitalAtRiskTWD), 0)}
+              {Boolean(attributionSummary.unhedgedPositionsCount && attributionSummary.unhedgedPositionsCount > 0) && (
+                <span style={{ marginLeft: '4px', color: '#f59e0b' }}>
+                  ({attributionSummary.unhedgedPositionsCount} 檔未設停損)
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -749,8 +776,28 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
         </div>
         <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>累積已領取現金配息與各項利息</span>
+          <span className="mono" style={{ color: '#fbbf24', fontWeight: 600 }}>
+            YoC {totalCost > 0 ? ((totalDividends / totalCost) * 100).toFixed(2) : '0.00'}%
+          </span>
         </div>
         <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '6px' }}>
+          {/* 待入帳應收股利膠囊 (Spec L50) */}
+          {Boolean(pendingReceivableDividendsTWD && pendingReceivableDividendsTWD > 0) && (
+            <span
+              style={{
+                fontSize: '0.66rem',
+                padding: '1px 6px',
+                borderRadius: '4px',
+                background: 'rgba(16, 185, 129, 0.15)',
+                color: '#34d399',
+                border: '1px solid rgba(16, 185, 129, 0.35)',
+                fontWeight: 600,
+              }}
+              title="已除息但尚未入帳之應收現金股利"
+            >
+              ⏳ 待入帳股利 +NT${formatNumber(pendingReceivableDividendsTWD || 0, 0)}
+            </span>
+          )}
           {/* 各項利息收入獨立膠囊 */}
           {interestIncomeSummary?.interestItems && interestIncomeSummary.interestItems.map((item) => (
             <span

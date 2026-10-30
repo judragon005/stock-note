@@ -53,7 +53,7 @@ describe('Spec 0208 Third Review Fixes: Capital at Risk & Margin Accounting', ()
       },
     });
 
-    // 標的 B: 聯發科 1000 股，現價 1000，未設停損 -> 依預設基準 10% 估算風險: 1000 * 1000 * 0.1 = 100,000 TWD
+    // 標的 B: 聯發科 1000 股，現價 1000，未設停損 -> 不強加假定 10% 市價，納入未設停損統計
     const holdingDefaultRisk = createMockHolding({
       symbol: '2454',
       name: '聯發科',
@@ -68,8 +68,9 @@ describe('Spec 0208 Third Review Fixes: Capital at Risk & Margin Accounting', ()
     // 總市值為 1,900,000 TWD
     expect(report.totalMarketValueTWD).toBe(1900000);
 
-    // 在險資本應為 100,000 + 100,000 = 200,000 TWD，絕不能等於總市值 1,900,000 TWD
-    expect(report.totalCapitalAtRiskTWD).toBe(200000);
+    // 真實在險資本為 100,000 TWD (僅計設有停損價者)，未設停損者統計為 1 檔
+    expect(report.totalCapitalAtRiskTWD).toBe(100000);
+    expect(report.unhedgedPositionsCount).toBe(1);
     expect(report.totalCapitalAtRiskTWD).toBeLessThan(report.totalMarketValueTWD);
   });
 
@@ -99,4 +100,3 @@ describe('Spec 0208 Third Review Fixes: Capital at Risk & Margin Accounting', ()
     expect(h?.historicalTotalInvestedCost).toBe(401425);
   });
 });
-

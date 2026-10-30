@@ -55,4 +55,5 @@ export interface CalculateExposureParams {
   usdToTwdRate: number;
   asOfDate?: string;
   trades?: TradeRecord[];
+  receivableDividendsTWD?: number;
 }

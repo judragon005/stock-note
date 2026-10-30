@@ -82,6 +82,7 @@ export function calculateBehavioralAuditReport(
       // 動態追高平倉 vs 冷靜平倉勝率統計 (口徑與進場乖離判定 100% 對齊)
       if (buyTrade) {
         let isChasing =
+          Boolean((buyTrade as any).isChasingHigh) ||
           buyTrade.riskMetrics?.isChasingHigh === true ||
           Boolean(buyTrade.riskMetrics?.notes && buyTrade.riskMetrics.notes.includes('追高'));
 
@@ -181,7 +182,7 @@ export function calculateBehavioralAuditReport(
     if (t.type === 'BUY' || t.type === 'MARGIN_BUY') {
       totalBuyTradesCount++;
       const isDirectChasing =
-        t.riskMetrics?.isChasingHigh === true ||
+        Boolean((t as any).isChasingHigh) || t.riskMetrics?.isChasingHigh === true ||
         Boolean(t.riskMetrics?.notes && t.riskMetrics.notes.includes('追高'));
       if (isDirectChasing) {
         chasingHighTradesCount++;
@@ -341,30 +342,22 @@ export const detectBagHoldings = detectBagHoldingPositions;
  * 彈性多型行為審計入口 (相容多元參數組合)
  */
 export function calculateBehavioralAudit(
-  p1: any,
-  p2: any = [],
-  p3: any = 1000000
+  tradesOrHoldings: TradeRecord[] | HoldingPosition[] = [],
+  holdingsOrTrades: HoldingPosition[] | TradeRecord[] = [],
+  averageNAV: number = 1000000
 ): BehavioralAuditReport & { fomoEntryAudit: FOMOEntryAuditMetrics } {
   let trades: TradeRecord[] = [];
   let holdings: HoldingPosition[] = [];
-  let nav = 1000000;
 
-  if (Array.isArray(p1) && p1.length > 0 && 'type' in p1[0]) {
-    trades = p1;
-    holdings = Array.isArray(p2) ? p2 : [];
-  } else if (Array.isArray(p2) && p2.length > 0 && 'type' in p2[0]) {
-    trades = p2;
-    holdings = Array.isArray(p1) ? p1 : [];
-  } else if (Array.isArray(p1)) {
-    trades = p1;
-    holdings = p2;
+  const firstIsHolding = tradesOrHoldings.length > 0 && 'totalCostBasis' in tradesOrHoldings[0];
+  if (firstIsHolding) {
+    holdings = tradesOrHoldings as HoldingPosition[];
+    trades = holdingsOrTrades as TradeRecord[];
+  } else {
+    trades = tradesOrHoldings as TradeRecord[];
+    holdings = holdingsOrTrades as HoldingPosition[];
   }
-
-  if (typeof p3 === 'number') {
-    nav = p3;
-  }
-
-  return calculateBehavioralAuditReport(trades, holdings, nav) as any;
+  return calculateBehavioralAuditReport(trades, holdings, averageNAV) as any;
 }
 
 /**

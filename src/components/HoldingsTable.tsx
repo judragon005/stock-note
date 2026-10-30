@@ -35,6 +35,8 @@ interface HoldingsTableProps {
   receivableDividends?: ReceivableDividend[];
   usdToTwdRate?: number;
   onEditTrade?: (trade: TradeRecord) => void;
+  isPrivacyMasked?: boolean;
+  onTogglePrivacyMask?: () => void;
 }
 
 interface PriceDisplayViewProps {
@@ -194,6 +196,8 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   receivableDividends = [],
   usdToTwdRate = 32.0,
   onEditTrade,
+  isPrivacyMasked: propIsPrivacyMasked,
+  onTogglePrivacyMask,
 }) => {
   const [localFilter, setLocalFilter] = useState<PositionFilter>('ACTIVE');
   const currentFilter = positionFilter ?? localFilter;
@@ -207,7 +211,15 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
 
   // 法人控制項狀態
   const [densityMode, setDensityMode] = useState<'standard' | 'institutional'>('standard');
-  const [isPrivacyMasked, setIsPrivacyMasked] = useState<boolean>(false);
+  const [internalPrivacyMasked, setInternalPrivacyMasked] = useState<boolean>(false);
+  const isPrivacyMasked = propIsPrivacyMasked !== undefined ? propIsPrivacyMasked : internalPrivacyMasked;
+  const handleTogglePrivacyMask = () => {
+    if (onTogglePrivacyMask) {
+      onTogglePrivacyMask();
+    } else {
+      setInternalPrivacyMasked((prev) => !prev);
+    }
+  };
   const [sortField, setSortField] = useState<AttributionSortField>('DEFAULT');
   const [sortDirection, setSortDirection] = useState<SortDirection>('DESC');
 
@@ -476,7 +488,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
 
           {/* 隱私遮罩 [ 👁️ 隱私遮罩 ] */}
           <button
-            onClick={() => setIsPrivacyMasked((m) => !m)}
+            onClick={handleTogglePrivacyMask}
             style={{
               padding: '4px 10px',
               borderRadius: '8px',
@@ -598,10 +610,16 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                   標的代碼 / 名稱 {sortField === 'DEFAULT' ? (sortDirection === 'DESC' ? '▼' : '▲') : ''}
                 </th>
                 <th style={{ padding: headerPadding, fontWeight: 700 }}>市場 / 幣別</th>
-                <th style={{ padding: headerPadding, fontWeight: 700, textAlign: 'right' }}>持有股數</th>
+                <th
+                  onClick={() => handleHeaderSort('SHARES')}
+                  style={{ padding: headerPadding, fontWeight: 700, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                  title="點擊依持有股數排序"
+                >
+                  持有股數 {sortField === 'SHARES' ? (sortDirection === 'DESC' ? '▼' : '▲') : ''}
+                </th>
                 <th style={{ padding: headerPadding, fontWeight: 700, textAlign: 'right' }}>平均成本</th>
                 <th style={{ padding: headerPadding, fontWeight: 700, textAlign: 'right' }}>
-                  {currentFilter === 'CLOSED' ? '出場均價 / 清倉日' : '最新參考市價'}
+                  {currentFilter === 'CLOSED' ? '出場均價 / 清倉日' : '最新參考市價'} {sortField === 'TODAYS_PNL' ? (sortDirection === 'DESC' ? '▼' : '▲') : ''}
                 </th>
                 <th style={{ padding: headerPadding, fontWeight: 700, textAlign: 'right' }}>
                   {currentFilter === 'CLOSED' ? '歷史總投入' : isBroker ? '總付出成本' : '持倉成本基準'}
@@ -614,11 +632,11 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                   {currentFilter === 'CLOSED' ? '在倉市值' : isBroker ? '當前市值 (含稅淨值)' : '當前毛市值'} {sortField === 'MARKET_VALUE' ? (sortDirection === 'DESC' ? '▼' : '▲') : ''}
                 </th>
                 <th
-                  onClick={() => handleHeaderSort('RETURN_PERCENT')}
+                  onClick={() => handleHeaderSort('UNREALIZED_PNL')}
                   style={{ padding: headerPadding, fontWeight: 700, textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
-                  title="點擊依報酬率高低排序"
+                  title="點擊依未實現損益排序"
                 >
-                  {currentFilter === 'CLOSED' ? '已實現損益 / 報酬率' : isBroker ? '未實現損益 (含稅)' : '未實現損益 / 報酬率'} {sortField === 'RETURN_PERCENT' ? (sortDirection === 'DESC' ? '▼' : '▲') : ''}
+                  {currentFilter === 'CLOSED' ? '已實現損益 / 報酬率' : isBroker ? '未實現損益 (含稅)' : '未實現損益 / 報酬率'} {sortField === 'UNREALIZED_PNL' ? (sortDirection === 'DESC' ? '▼' : '▲') : ''}
                 </th>
                 <th
                   onClick={() => handleHeaderSort('RETURN_PERCENT')}

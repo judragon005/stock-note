@@ -1,4 +1,34 @@
-import { TradeRecord } from '../types/stock';
+
+/**
+ * 建立公司行動衍生批次 (Merger / Spin-off)
+ */
+function buildCorporateActionLot(
+  trade: TradeRecord,
+  targetSym: string,
+  shares: number,
+  cost: number,
+  market: MarketType,
+  currency: Currency
+): TaxLot {
+  const unitCost = shares > 0 ? cost / shares : 0;
+  return {
+    id: `lot-${trade.id}-${targetSym}`,
+    buyTradeId: trade.id,
+    symbol: targetSym,
+    market,
+    currency,
+    accountId: trade.accountId,
+    buyDate: trade.date,
+    buyPrice: unitCost,
+    originalShares: shares,
+    remainingShares: shares,
+    fee: 0,
+    totalCostBasis: cost,
+    unitCost,
+    createdAt: trade.createdAt || Date.now(),
+  };
+}
+import { TradeRecord, MarketType, Currency } from '../types/stock';
 import {
   TaxLot,
   LotDisposal,
@@ -406,23 +436,7 @@ export function processLots(
           }
           const mergedShares = shares > 0 ? shares : (ratio > 0 ? trade.shares : 0);
           const targetLots = getOpenLots(targetSym);
-          const newLot: TaxLot = {
-            id: `lot-${trade.id}-${targetSym}`,
-            buyTradeId: trade.id,
-            symbol: targetSym,
-            market,
-            currency,
-            accountId: trade.accountId,
-            buyDate: trade.date,
-            buyPrice: mergedShares > 0 ? transferCost / mergedShares : 0,
-            originalShares: mergedShares,
-            remainingShares: mergedShares,
-            fee: 0,
-            totalCostBasis: transferCost,
-            unitCost: mergedShares > 0 ? transferCost / mergedShares : 0,
-            createdAt: trade.createdAt || Date.now(),
-          };
-          targetLots.push(newLot);
+          targetLots.push(buildCorporateActionLot(trade, targetSym, mergedShares, transferCost, market, currency));
         }
         break;
       }
@@ -440,23 +454,7 @@ export function processLots(
           }
           const newShares = shares > 0 ? shares : (ratio > 0 ? trade.shares : 0);
           const targetLots = getOpenLots(targetSym);
-          const newLot: TaxLot = {
-            id: `lot-${trade.id}-${targetSym}`,
-            buyTradeId: trade.id,
-            symbol: targetSym,
-            market,
-            currency,
-            accountId: trade.accountId,
-            buyDate: trade.date,
-            buyPrice: newShares > 0 ? totalSplitCost / newShares : 0,
-            originalShares: newShares,
-            remainingShares: newShares,
-            fee: 0,
-            totalCostBasis: totalSplitCost,
-            unitCost: newShares > 0 ? totalSplitCost / newShares : 0,
-            createdAt: trade.createdAt || Date.now(),
-          };
-          targetLots.push(newLot);
+          targetLots.push(buildCorporateActionLot(trade, targetSym, newShares, totalSplitCost, market, currency));
         }
         break;
       }
