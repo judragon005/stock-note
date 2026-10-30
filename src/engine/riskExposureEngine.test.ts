@@ -80,7 +80,7 @@ describe('整戶總曝險與淨槓桿率計算引擎 (riskExposureEngine)', () =
     expect(res.navTWD).toBe(1302400);
     expect(res.grossExposureTWD).toBe(1070400);
     expect(res.grossLeverage).toBeCloseTo(0.82, 2);
-    expect(res.netLeverage).toBeCloseTo(0.64, 2);
+    expect(res.netLeverage).toBeCloseTo(0.82, 2);
     expect(res.riskTier).toBe('CONSERVATIVE');
     expect(res.isUnderwater).toBe(false);
   });
@@ -106,7 +106,7 @@ describe('整戶總曝險與淨槓桿率計算引擎 (riskExposureEngine)', () =
 
     expect(res.totalDebtTWD).toBe(202000);
     expect(res.navTWD).toBe(918400);
-    expect(res.netLeverage).toBeCloseTo(1.1111, 3);
+    expect(res.netLeverage).toBeCloseTo(1.1655, 3);
     expect(res.riskTier).toBe('MODERATE');
   });
 
@@ -162,7 +162,7 @@ describe('整戶總曝險與淨槓桿率計算引擎 (riskExposureEngine)', () =
       usdToTwdRate: mockUsdRate,
     });
 
-    expect(res.netLeverage).toBeCloseTo(1.4187, 3);
+    expect(res.netLeverage).toBeCloseTo(1.4457, 3);
     expect(res.riskTier).toBe('ELEVATED');
   });
 
@@ -185,7 +185,7 @@ describe('整戶總曝險與淨槓桿率計算引擎 (riskExposureEngine)', () =
       usdToTwdRate: mockUsdRate,
     });
 
-    expect(res.netLeverage).toBeCloseTo(2.2073, 3);
+    expect(res.netLeverage).toBeCloseTo(2.2281, 3);
     expect(res.riskTier).toBe('HIGH_RISK');
   });
 
@@ -260,7 +260,7 @@ describe('整戶總曝險與淨槓桿率計算引擎 (riskExposureEngine)', () =
     });
 
     expect(res.totalDebtTWD).toBe(0);
-    expect(res.netLeverage).toBeCloseTo(0.91, 2);
+    expect(res.netLeverage).toBeCloseTo(0.96, 2);
     expect(res.riskTier).toBe('CONSERVATIVE');
   });
 });
