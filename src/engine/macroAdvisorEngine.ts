@@ -25,6 +25,15 @@ export function evaluateVixLevel(vix: number): VixLevel {
 /**
  * 評估恐懼與貪婪指數分級
  */
+
+/**
+ * 判定長線總經配置溫度計與短中期波段戰術溫度計是否雙雙落入偏冷/弱勢區間
+ * - 長線總經 < 45 且 短中期波段 < 30
+ */
+export function isDoubleColdRegime(strategicScore: number, tacticalScore: number): boolean {
+  return strategicScore < 45 && tacticalScore < 30;
+}
+
 export function evaluateFearAndGreedLevel(score: number): FearAndGreedLevel {
   if (score <= 25) return 'EXTREME_FEAR';
   if (score <= 44) return 'FEAR';

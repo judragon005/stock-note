@@ -252,7 +252,8 @@ export interface MacroHoldingSignalInput {
   weightPercent?: number;        // 佔帳戶總資產權重百分比 % (例如 8.5%)
   unrealizedPnlPercent?: number; // 未實現損益百分比 % (例如 -4.2%)
   boxTop?: number;               // 三日箱頂價格
-  boxBottom?: number;            // 三日箱底價格
+  boxBottom?: number;
+  bias20MA?: number;             // 20MA 月線乖離率百分比 % (如 +4.2%)            // 三日箱底價格
   // --- 0209 自訂停損停利觸價與處置股警示擴充 ---
   planRiskStatus?: 'NORMAL' | 'NEAR_STOP_LOSS' | 'STOP_LOSS_TRIGGERED' | 'NEAR_TAKE_PROFIT' | 'TAKE_PROFIT_TRIGGERED';
   dispositionStatus?: 'NORMAL' | 'ATTENTION' | 'DISPOSITION';

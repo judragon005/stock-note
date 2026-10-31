@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { HoldingTacticalSignalsCard } from './HoldingTacticalSignalsCard';
 import type { MacroHoldingSignalInput } from '../../types/macro';
 
-describe('HoldingTacticalSignalsCard (分頁膠囊切換與安全盾反饋)', () => {
+describe('HoldingTacticalSignalsCard (分頁膠囊切換、安全盾反饋與月線乖離率揭露)', () => {
   const normalHolding: MacroHoldingSignalInput = {
     symbol: '2330',
     name: '台積電',
@@ -21,6 +21,7 @@ describe('HoldingTacticalSignalsCard (分頁膠囊切換與安全盾反饋)', ()
     boxBottom: 960,
     planRiskStatus: 'NORMAL',
     dispositionStatus: 'NORMAL',
+    bias20MA: 7.8, // 乖離率 > 6% (過熱)
   };
 
   const actionableHolding: MacroHoldingSignalInput = {
@@ -40,6 +41,7 @@ describe('HoldingTacticalSignalsCard (分頁膠囊切換與安全盾反饋)', ()
     boxBottom: 1260,
     planRiskStatus: 'STOP_LOSS_TRIGGERED',
     dispositionStatus: 'NORMAL',
+    bias20MA: -3.2,
   };
 
   it('當在倉全為正常股 (0 檔需行動) 時，預設在「需行動」模式應渲染綠色安全盾反饋卡', () => {
@@ -56,7 +58,7 @@ describe('HoldingTacticalSignalsCard (分頁膠囊切換與安全盾反饋)', ()
     expect(html).not.toContain('warroom-table');
   });
 
-  it('切換至「全部在倉」時應正確渲染持股明細表格', () => {
+  it('切換至「全部在倉」時應正確渲染持股明細表格，並揭露月線乖離率與過熱標籤', () => {
     const html = renderToStaticMarkup(
       <HoldingTacticalSignalsCard signals={[normalHolding]} defaultFilter="ALL" />
     );
@@ -64,6 +66,9 @@ describe('HoldingTacticalSignalsCard (分頁膠囊切換與安全盾反饋)', ()
     expect(html).toContain('warroom-table');
     expect(html).toContain('2330');
     expect(html).toContain('台積電');
+    // 驗證月線乖離率 > 6% 之過熱標籤
+    expect(html).toContain('+7.8%');
+    expect(html).toContain('過熱');
     expect(html).not.toContain('當前在倉持股全數處於正常箱型結構或安全防守水位');
   });
 

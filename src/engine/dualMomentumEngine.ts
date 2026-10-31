@@ -90,7 +90,8 @@ export function calculateAssetMomentum(
   name?: string,
   dividendAdjustment3M: number = 0
 ): MomentumAssetMetric {
-  if (candles.length === 0) {
+  // Spec 0213: 當日 K 不足 5 根時優雅降級為未水合狀態 (-999)
+  if (candles.length < 5) {
     return {
       symbol,
       name,
@@ -165,6 +166,14 @@ export interface EvaluateDualMomentumParams {
 /**
  * 評定指定資產池之雙重動能信號與資產輪動排行榜
  */
+
+function getSymbolValue<T>(record: Record<string, T>, symbol: string, fallback: T): T {
+  if (record[symbol] !== undefined) return record[symbol];
+  const stripped = symbol.replace(/\.TW$/i, '');
+  if (record[stripped] !== undefined) return record[stripped];
+  return fallback;
+}
+
 export function evaluateDualMomentum(params: {
   universeConfig: MomentumUniverseConfig;
   quotesMap: Record<string, DailyCandle[]>;
@@ -178,8 +187,8 @@ export function evaluateDualMomentum(params: {
   const metrics: MomentumAssetMetric[] = [];
 
   for (const item of universeConfig.symbols) {
-    const candles = quotesMap[item.symbol] || quotesMap[item.symbol.replace('.TW', '')] || [];
-    const divAdj = dividendAdjustments3M[item.symbol] ?? dividendAdjustments3M[item.symbol.replace('.TW', '')] ?? 0;
+    const candles = getSymbolValue(quotesMap, item.symbol, []);
+    const divAdj = getSymbolValue(dividendAdjustments3M, item.symbol, 0);
     const metric = calculateAssetMomentum(
       item.symbol,
       item.market,
