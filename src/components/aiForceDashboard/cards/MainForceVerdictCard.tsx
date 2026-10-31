@@ -166,6 +166,8 @@ export interface MainForcePlaybook {
   targetPrice: string;
   riskRewardRatio: string;
   invalidationGate: string;
+  maxPosition: string;
+  winRate: string;
 }
 
 /**
@@ -196,6 +198,8 @@ export function getMainForcePlaybook(verb: string, metrics: MetricCapsule[] = []
       targetPrice: target,
       riskRewardRatio: basePrice !== null ? '2.4 : 1' : '--',
       invalidationGate: '若盤中放量摜破防守價或外資單日大幅賣超，吸籌邏輯宣告失效',
+      maxPosition: '30% ~ 40%',
+      winRate: '68%',
     };
   }
 
@@ -217,6 +221,8 @@ export function getMainForcePlaybook(verb: string, metrics: MetricCapsule[] = []
       targetPrice: target,
       riskRewardRatio: basePrice !== null ? '3.2 : 1' : '--',
       invalidationGate: '跌破 5 日線或主力成本線且爆大量未過高，推升攻勢暫告段落',
+      maxPosition: '50% ~ 70%',
+      winRate: '75%',
     };
   }
 
@@ -231,6 +237,8 @@ export function getMainForcePlaybook(verb: string, metrics: MetricCapsule[] = []
       targetPrice: target,
       riskRewardRatio: basePrice !== null ? '1.9 : 1' : '--',
       invalidationGate: '盤中創波段新低未見下影線，即刻撤退停損',
+      maxPosition: '15% ~ 25%',
+      winRate: '60%',
     };
   }
 
@@ -245,6 +253,8 @@ export function getMainForcePlaybook(verb: string, metrics: MetricCapsule[] = []
       targetPrice: target,
       riskRewardRatio: basePrice !== null ? '1.2 : 1' : '--',
       invalidationGate: '爆大量長黑摜破短均線，全數出清離場',
+      maxPosition: '10% ~ 20%',
+      winRate: '55%',
     };
   }
 
@@ -259,6 +269,8 @@ export function getMainForcePlaybook(verb: string, metrics: MetricCapsule[] = []
     targetPrice: target,
     riskRewardRatio: basePrice !== null ? '1.0 : 1' : '--',
     invalidationGate: '跌破區間下緣支撐帶，多方結構轉弱',
+      maxPosition: '0% ~ 15%',
+      winRate: '50%',
   };
 }
 
@@ -475,280 +487,361 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
         </div>
       </div>
 
-      {/* 2. 中部：核心主力語意發光看板 */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '8px 14px',
-          background: 'rgba(15, 23, 42, 0.4)',
-          borderRadius: '10px',
-          border: `1px solid ${statusInfo.border}`,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <TermTooltip termId="mlpSemanticVerdict">
-            <span style={{ fontSize: '14px', color: '#94a3b8', fontWeight: 700, cursor: 'help' }}>主力核心語意</span>
-          </TermTooltip>
-          <TermTooltip termId="mlpSemanticVerdict">
-            <span
-              style={{
-                fontSize: '22px',
-                fontWeight: 900,
-                color: statusInfo.color,
-                letterSpacing: '1px',
-                textShadow: `0 0 16px ${statusInfo.color}60`,
-                cursor: 'help',
-              }}
-            >
-              {verb}
-            </span>
-          </TermTooltip>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: statusInfo.color,
-              boxShadow: `0 0 8px ${statusInfo.color}`,
-            }}
-          />
-          <span style={{ fontSize: '11px', color: statusInfo.color, fontWeight: 700 }}>
-            {statusInfo.statusText}
-          </span>
-        </div>
-      </div>
-
-      {/* 5 態主力作戰微型光譜圖例條 (方案 A) */}
-      <div
-        data-testid="spectrum-bar"
-        style={{
-          display: 'flex',
-          gap: '4px',
-          padding: '4px 6px',
-          background: 'rgba(15, 23, 42, 0.5)',
-          borderRadius: '8px',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        {spectrumPhases.map((phase) => (
-          <div
-            key={phase.id}
-            data-testid={`spectrum-phase-${phase.id}`}
-            title={phase.tooltip}
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '2px 4px',
-              borderRadius: '6px',
-              background: phase.isActive ? `${phase.color}2e` : 'transparent',
-              border: phase.isActive ? `1px solid ${phase.color}` : '1px solid transparent',
-              boxShadow: phase.isActive ? `0 0 10px ${phase.color}40` : 'none',
-              opacity: phase.isActive ? 1 : 0.45,
-              transition: 'all 0.2s ease',
-              cursor: 'help',
-            }}
-          >
-            <span
-              style={{
-                fontSize: '11px',
-                fontWeight: phase.isActive ? 800 : 500,
-                color: phase.isActive ? phase.color : '#94a3b8',
-                letterSpacing: '0.2px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '2px',
-              }}
-            >
-              {phase.isActive && <span style={{ fontSize: '9px' }}>★</span>}
-              {phase.label}
-            </span>
-            <span
-              style={{
-                fontSize: '9px',
-                color: phase.isActive ? '#f8fafc' : '#64748b',
-                fontWeight: 600,
-              }}
-            >
-              {phase.action}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* 2.5 中央重構：語意微觀解析 (Market Context) 與實戰操盤指引 (Action Playbook) - 寬幅雙欄自適應展開 (Spec 0211) */}
+      {/* 2. 司令台旗艦佈局：三欄式金融交易桌面 (左：態勢與光譜 / 中：點位巨大化三聯看板 / 右：戰術與法人風控) */}
       <div
         data-testid="verdict-central-grid"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-          gap: '10px',
+          gridTemplateColumns: 'minmax(280px, 1.1fr) minmax(320px, 1.3fr) minmax(280px, 1.1fr)',
+          gap: '12px',
           alignItems: 'stretch',
+          flex: 1,
         }}
       >
-        {/* A. 語意深度解析 (Market Context Panel) */}
+        {/* === 左欄：主力態勢、核心語意與作戰進度軸 === */}
         <div
           data-testid="market-context-panel"
           style={{
-            background: 'rgba(30, 41, 59, 0.45)',
-            borderLeft: `3px solid ${statusInfo.color}`,
-            borderRadius: '6px',
-            padding: '9px 12px',
+            background: 'rgba(15, 23, 42, 0.55)',
+            border: `1px solid ${statusInfo.border}`,
+            borderRadius: '10px',
+            padding: '12px 14px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '4px',
-            height: '100%',
+            justifyContent: 'space-between',
+            gap: '10px',
             boxSizing: 'border-box',
           }}
         >
-          <div style={{ fontSize: '11px', fontWeight: 800, color: statusInfo.color, letterSpacing: '0.3px' }}>
-            ▌ 語意微觀解析 (Market Context)
+          {/* 語意核心大字標題與狀態燈號 */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 700 }}>主力核心語意</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: statusInfo.color,
+                    boxShadow: `0 0 8px ${statusInfo.color}`,
+                  }}
+                />
+                <span style={{ fontSize: '12px', color: statusInfo.color, fontWeight: 700 }}>
+                  {statusInfo.statusText}
+                </span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <span
+                style={{
+                  fontSize: '28px',
+                  fontWeight: 900,
+                  color: statusInfo.color,
+                  letterSpacing: '1px',
+                  textShadow: `0 0 18px ${statusInfo.color}60`,
+                  lineHeight: 1.1,
+                }}
+              >
+                {verb}
+              </span>
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  background: `${statusInfo.color}20`,
+                  color: statusInfo.color,
+                  border: `1px solid ${statusInfo.color}50`,
+                }}
+              >
+                {playbook.horizon}
+              </span>
+            </div>
           </div>
-          <div style={{ fontSize: '11.5px', lineHeight: 1.55, color: '#cbd5e1' }}>
+
+          {/* 5 態微型作戰光譜條 */}
+          <div
+            data-testid="spectrum-bar"
+            style={{
+              display: 'flex',
+              gap: '3px',
+              padding: '4px',
+              background: 'rgba(255, 255, 255, 0.03)',
+              borderRadius: '8px',
+              border: '1px solid rgba(255, 255, 255, 0.05)',
+            }}
+          >
+            {spectrumPhases.map((phase) => (
+              <div
+                key={phase.id}
+                data-testid={`spectrum-phase-${phase.id}`}
+                title={phase.tooltip}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  padding: '3px 2px',
+                  borderRadius: '5px',
+                  background: phase.isActive ? `${phase.color}30` : 'transparent',
+                  border: phase.isActive ? `1px solid ${phase.color}` : '1px solid transparent',
+                  opacity: phase.isActive ? 1 : 0.45,
+                  cursor: 'help',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: phase.isActive ? 800 : 500,
+                    color: phase.isActive ? phase.color : '#94a3b8',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {phase.isActive && '★'}
+                  {phase.label}
+                </span>
+                <span style={{ fontSize: '9.5px', color: phase.isActive ? '#f8fafc' : '#64748b', fontWeight: 600 }}>
+                  {phase.action}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* 語意深度因果微觀解析 */}
+          <div
+            style={{
+              fontSize: '12.5px',
+              lineHeight: 1.55,
+              color: '#cbd5e1',
+              background: 'rgba(255, 255, 255, 0.02)',
+              padding: '8px 10px',
+              borderRadius: '6px',
+              borderLeft: `3px solid ${statusInfo.color}`,
+            }}
+          >
             {playbook.marketContext}
           </div>
         </div>
 
-        {/* B. 實戰操盤指引 (Action Playbook Panel) */}
+        {/* === 中欄：實戰點位三聯巨大看板 (Stop-Loss / Target / R:R) === */}
         <div
           data-testid="action-playbook-panel"
           style={{
-            background: 'rgba(15, 23, 42, 0.6)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            borderRadius: '8px',
-            padding: '9px 12px',
+            background: 'rgba(15, 23, 42, 0.65)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '10px',
+            padding: '12px 14px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '6px',
-            height: '100%',
+            justifyContent: 'space-between',
+            gap: '10px',
             boxSizing: 'border-box',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#f8fafc', letterSpacing: '0.2px' }}>
-              🎯 實戰操盤指引 (Playbook)
+            <span style={{ fontSize: '13px', fontWeight: 800, color: '#f8fafc', letterSpacing: '0.3px' }}>
+              🎯 實戰操盤點位看板
             </span>
-            <span
-              style={{
-                fontSize: '10px',
-                fontWeight: 700,
-                padding: '2px 7px',
-                borderRadius: '4px',
-                background: `${statusInfo.color}25`,
-                color: statusInfo.color,
-                border: `1px solid ${statusInfo.color}50`,
-              }}
-            >
-              {playbook.horizon}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '11px', color: '#94a3b8' }}>預估勝率</span>
+              <span style={{ fontSize: '13px', fontWeight: 800, color: '#38bdf8', fontFamily: 'monospace' }}>
+                {playbook.winRate}
+              </span>
+            </div>
           </div>
 
-          <div style={{ fontSize: '11px', color: '#94a3b8', lineHeight: 1.4 }}>
-            <span style={{ color: '#e2e8f0', fontWeight: 600 }}>指令：</span>
-            {playbook.executionDirective}
-          </div>
-
-          {/* 關鍵錨點三欄小網格 */}
+          {/* 三聯大字點位展示卡 */}
           <div
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '6px',
-              padding: '5px 8px',
-              background: 'rgba(255, 255, 255, 0.03)',
-              borderRadius: '6px',
-              fontSize: '10px',
+              gap: '8px',
             }}
           >
-            <div>
-              <div style={{ color: '#64748b' }}>防守停損</div>
-              <div style={{ color: '#ef4444', fontWeight: 700, fontFamily: 'monospace' }}>
+            {/* 防守停損價 */}
+            <div
+              style={{
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                borderRadius: '8px',
+                padding: '8px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+              }}
+            >
+              <div style={{ fontSize: '11px', color: '#f87171', fontWeight: 700, marginBottom: '2px' }}>
+                防守停損
+              </div>
+              <div
+                style={{
+                  fontSize: '18px',
+                  fontWeight: 900,
+                  color: '#ef4444',
+                  fontFamily: 'monospace',
+                  letterSpacing: '-0.3px',
+                }}
+              >
                 {playbook.stopLossPrice}
               </div>
             </div>
-            <div>
-              <div style={{ color: '#64748b' }}>目標滿足</div>
-              <div style={{ color: '#38bdf8', fontWeight: 700, fontFamily: 'monospace' }}>
+
+            {/* 目標滿足價 */}
+            <div
+              style={{
+                background: 'rgba(56, 189, 248, 0.08)',
+                border: '1px solid rgba(56, 189, 248, 0.25)',
+                borderRadius: '8px',
+                padding: '8px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+              }}
+            >
+              <div style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 700, marginBottom: '2px' }}>
+                目標滿足
+              </div>
+              <div
+                style={{
+                  fontSize: '18px',
+                  fontWeight: 900,
+                  color: '#38bdf8',
+                  fontFamily: 'monospace',
+                  letterSpacing: '-0.3px',
+                }}
+              >
                 {playbook.targetPrice}
               </div>
             </div>
-            <div>
-              <div style={{ color: '#64748b' }}>預估風報比</div>
-              <div style={{ color: '#f59e0b', fontWeight: 700, fontFamily: 'monospace' }}>
+
+            {/* 預估風報比 */}
+            <div
+              style={{
+                background: 'rgba(245, 158, 11, 0.08)',
+                border: '1px solid rgba(245, 158, 11, 0.25)',
+                borderRadius: '8px',
+                padding: '8px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+              }}
+            >
+              <div style={{ fontSize: '11px', color: '#fbbf24', fontWeight: 700, marginBottom: '2px' }}>
+                預估風報比
+              </div>
+              <div
+                style={{
+                  fontSize: '18px',
+                  fontWeight: 900,
+                  color: '#f59e0b',
+                  fontFamily: 'monospace',
+                  letterSpacing: '-0.3px',
+                }}
+              >
                 {playbook.riskRewardRatio}
               </div>
             </div>
           </div>
 
-          {/* 風控失效條件 */}
-          <div
-            style={{
-              fontSize: '10px',
-              color: '#f87171',
-              background: 'rgba(239, 68, 68, 0.08)',
-              border: '1px solid rgba(239, 68, 68, 0.2)',
-              borderRadius: '4px',
-              padding: '3px 6px',
-              lineHeight: 1.4,
-            }}
-          >
-            ⚠️ 失效門檻：{playbook.invalidationGate}
-          </div>
+          {/* 即時收盤、VWAP 與乖離指標膠囊 */}
+          {metricCapsules.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              {metricCapsules.map((m) => (
+                <div
+                  key={m.label}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '3px 8px',
+                    borderRadius: '6px',
+                    background: 'rgba(255, 255, 255, 0.04)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    fontSize: '11.5px',
+                  }}
+                >
+                  <span style={{ color: '#94a3b8' }}>{m.label}:</span>
+                  <span style={{ color: m.color || '#38bdf8', fontWeight: 700, fontFamily: 'monospace' }}>
+                    {m.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      </div>
 
-      {/* 3. 底層：結構化關鍵指標膠囊 + 完整 AI 論述 */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {metricCapsules.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-            {metricCapsules.map((m) => (
-              <div
-                key={m.label}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  padding: '3px 8px',
-                  borderRadius: '6px',
-                  background: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  fontSize: '11px',
-                }}
-              >
-                <span style={{ color: '#94a3b8' }}>{m.label}:</span>
-                <span style={{ color: m.color || '#38bdf8', fontWeight: 700, fontFamily: 'monospace' }}>
-                  {m.value}
+        {/* === 右欄：戰術指令、法人部位管理與失效門檻 === */}
+        <div
+          style={{
+            background: 'rgba(15, 23, 42, 0.55)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '10px',
+            padding: '12px 14px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            gap: '10px',
+            boxSizing: 'border-box',
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 800, color: '#f8fafc', letterSpacing: '0.3px' }}>
+                ⚡ 戰術執行指令
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>部位上限</span>
+                <span
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    color: '#34d399',
+                    background: 'rgba(16, 185, 129, 0.15)',
+                    padding: '1px 6px',
+                    borderRadius: '4px',
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                  }}
+                >
+                  {playbook.maxPosition}
                 </span>
               </div>
-            ))}
+            </div>
+            <div
+              style={{
+                fontSize: '13.5px',
+                fontWeight: 700,
+                color: '#f8fafc',
+                lineHeight: 1.45,
+                background: 'rgba(255, 255, 255, 0.03)',
+                padding: '8px 10px',
+                borderRadius: '6px',
+                borderLeft: '3px solid #38bdf8',
+              }}
+            >
+              {playbook.executionDirective}
+            </div>
           </div>
-        )}
 
-        <TermTooltip termId="mlpSemanticVerdict">
+          {/* 風控失效門檻框 */}
           <div
             style={{
-              fontSize: '12px',
-              lineHeight: 1.6,
-              color: '#cbd5e1',
-              padding: '10px 12px',
-              backgroundColor: 'rgba(15, 23, 42, 0.5)',
-              borderRadius: '8px',
-              border: '1px solid rgba(255, 255, 255, 0.05)',
-              cursor: 'help',
+              fontSize: '11.5px',
+              color: '#f87171',
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              borderRadius: '6px',
+              padding: '7px 10px',
+              lineHeight: 1.45,
             }}
           >
-            {verdictText}
+            <div style={{ fontWeight: 800, marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span>⚠️</span> 模型風控失效門檻
+            </div>
+            {playbook.invalidationGate}
           </div>
-        </TermTooltip>
+        </div>
       </div>
 
       {/* 量化研判深度指南彈窗 (方案 B: Modal Deep-Dive) */}

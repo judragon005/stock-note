@@ -161,17 +161,24 @@ describe('Ticket 03: 語意深度解析 (Market Context) 與實戰操盤指引 (
     expect(playbook.targetPrice).toContain('元');
     expect(playbook.riskRewardRatio).toMatch(/\d+(?:\.\d+)?\s*:\s*1/);
     expect(playbook.invalidationGate).toContain('摜破');
+    // 新增法人部位上限與預估勝率驗證
+    expect(playbook.maxPosition).toBe('30% ~ 40%');
+    expect(playbook.winRate).toBe('68%');
   });
 
-  it('鎖碼推升與高檔調節時，應動態生成相應的順勢或防守指引', () => {
+  it('鎖碼推升與高檔調節時，應動態生成相應的順勢或防守指引與精確部位', () => {
     const breakoutPlaybook = getMainForcePlaybook('鎖碼推升');
     expect(breakoutPlaybook.horizon).toContain('波段');
     expect(breakoutPlaybook.executionDirective).toContain('順勢');
     expect(breakoutPlaybook.invalidationGate).toContain('跌破');
+    expect(breakoutPlaybook.maxPosition).toBe('50% ~ 70%');
+    expect(breakoutPlaybook.winRate).toBe('75%');
 
     const exitPlaybook = getMainForcePlaybook('高檔調節');
     expect(exitPlaybook.horizon).toContain('減碼');
     expect(exitPlaybook.executionDirective).toContain('分批');
+    expect(exitPlaybook.maxPosition).toBe('10% ~ 20%');
+    expect(exitPlaybook.winRate).toBe('55%');
   });
 });
 
