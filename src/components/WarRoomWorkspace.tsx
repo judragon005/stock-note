@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Compass,
   TrendingUp,
@@ -15,7 +15,6 @@ import {
   Plus,
   Trash2,
   X,
-  Thermometer,
   Layers,
   Globe2,
   AlertTriangle,
@@ -23,8 +22,13 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { MacroQuickCalibrationModal } from './warRoom/MacroQuickCalibrationModal';
+import { MacroDualThermometerBar } from './warRoom/MacroDualThermometerBar';
+import { PortfolioShieldAndAmmoCard } from './warRoom/PortfolioShieldAndAmmoCard';
+import { MacroStrategyPinBar } from './warRoom/MacroStrategyPinBar';
+import { HoldingTacticalSignalsCard } from './warRoom/HoldingTacticalSignalsCard';
 
-import { HoldingPosition, LoanRecord } from '../types/stock';
+import { HoldingPosition, LoanRecord, TradeRecord, MarketType } from '../types/stock';
+import { TargetAllocationConfig } from '../types/allocation';
 import {
   MacroIndicatorSnapshot,
   UpcomingCatalyst,
@@ -32,11 +36,16 @@ import {
   CatalystImpact,
   MarketViewTab,
   TimelineHorizon,
+  MacroHoldingSignalInput,
+  UpcomingDividendInput,
+  MacroPinnedStrategy,
 } from '../types/macro';
 import {
   calculatePortfolioMacroShield,
   generateAiMorningBrief,
   calculateMacroThermometer,
+  evaluateMacroDualThermometer,
+  estimateExDividendIndexImpactPoints,
   groupCatalystsByTimeline,
   generateMonthlyRevenueDeadlineCatalyst,
 } from '../engine/macroAdvisorEngine';
@@ -47,15 +56,17 @@ import {
 import { DailyCandle } from '../types/indicators';
 import { ReceivableDividend } from '../types/dividend';
 import { scanMuscleBookerItem } from '../engine/muscleBookerEngine';
-import { MacroHoldingSignalInput, UpcomingDividendInput } from '../types/macro';
 import {
   loadMacroPulseHistory,
   saveMacroPulseRecord,
   getLatestMacroPulseRecord,
   exportMacroPulseHistoryAsCsv,
-  generateSampleHistoricalMacroData,
-  isSameDayCacheValid,
   MacroPulseHistoryRecord,
+  loadMacroPinnedStrategies,
+  saveMacroPinnedStrategy,
+  removeMacroPinnedStrategy,
+  parseMacroLoopbackJson,
+  sanitizeMacroRecord,
 } from '../utils/macroPulseStorage';
 import { copyTextToClipboard } from '../utils/clipboard';
 
@@ -66,7 +77,19 @@ import {
   resetCatalystsToDefault,
 } from '../utils/catalystStorage';
 import { syncExternalCatalystsAsync } from '../engine/catalystSyncService';
-
+import { ensureKeyPoolHydrated, buildMacroSyncKeyHeaders } from '../engine/smartKeyRotator';
+import { calculateLookThroughExposure } from '../engine/lookThroughEngine';
+import { calculateAllocationDrift } from '../engine/rebalancingEngine';
+import {
+  loadTargetAllocations,
+  loadActiveTargetAllocationId,
+  DEFAULT_MARKET_ALLOCATION,
+} from '../utils/allocationStorage';
+import { calculateHoldingFxBreakdown } from '../engine/fxBreakdown';
+import { calculateMarginStress } from '../engine/marginStressEngine';
+import { calculateBehavioralAuditReport } from '../engine/behavioralAuditEngine';
+import { evaluateRiskStatus } from '../engine/riskAlertEngine';
+import { resolveDispositionAttentionStatus } from '../engine/dispositionWindowEngine';
 
 interface WarRoomWorkspaceProps {
   holdings: HoldingPosition[];
@@ -77,38 +100,62 @@ interface WarRoomWorkspaceProps {
   historicalDailyPrices?: Record<string, Record<string, number>>;
   receivableDividends?: ReceivableDividend[];
   onOpenMarginStressModal: () => void;
+  currentMarket?: 'ALL' | 'TW' | 'US';
+  onMarketChange?: (market: 'ALL' | 'TW' | 'US') => void;
+  pendingSettlementOutflowTwd?: number;
+  dcaCommitment7dTwd?: number;
+  trades?: TradeRecord[];
+  rebalancingConfig?: TargetAllocationConfig;
+  privacyMode?: boolean;
+  onInspectTechnical?: (symbol: string, market?: MarketType) => void;
+  onOpenAiForce?: (symbol: string, market?: MarketType) => void;
+  onOpenTradeModal?: (symbol?: string, market?: MarketType) => void;
 }
 
-// 預設/基底宏觀數據
+// 預設/基底宏觀數據 (Spec 0209: 國際黃金現貨/期貨 GC=F 正名與跨市指標)
 const DEFAULT_MACRO_SNAPSHOT: MacroIndicatorSnapshot = {
   date: new Date().toISOString().split('T')[0],
-  us10y: 3.85,
-  us2y: 3.98,
-  yieldSpread: -0.13,
-  isYieldInverted: true,
-  vix: 19.4,
+  us10y: 4.18,
+  us2y: 4.02,
+  yieldSpread: 0.16,
+  isYieldInverted: false,
+  vix: 18.6,
   vixLevel: 'NORMAL',
-  fearAndGreedIndex: 48,
+  fearAndGreedIndex: 52,
   fearAndGreedLevel: 'NEUTRAL',
-  goldPrice: 2515.2,
-  oilPrice: 73.8,
-  dxy: 101.4,
+  goldPrice: 3350.0,
+  oilPrice: 71.5,
+  dxy: 103.4,
   usdToTwd: 32.15,
-  usM2GrowthYoY: 2.3,
+  usM2GrowthYoY: 2.8,
   twM2GrowthYoY: 5.6,
-  creditSpreadOAS: 3.5,
-  cdsInsuranceIndex: 65,
+  creditSpreadOAS: 3.45,
+  cdsInsuranceIndex: 62,
   cdsRiskLevel: 'LOW',
   twFuturesNetOi: -15000,
   twMarginMaintenance: 165.2,
   twFuturesRiskLevel: 'NEUTRAL',
   twMarginRiskLevel: 'SAFE',
+  soxIndex: 5240.5,
+  soxChangePercent: 1.15,
+  soxBias20Ma: 2.1,
+  soxAbove20Ma: true,
+  tsmAdrPrice: 195.0,
+  tsmTwPrice: 1050,
+  tsmAdrConvertedTwd: 1253.85,
+  tsmAdrPremiumPercent: 19.41,
+  taiexIndex: 23150,
+  taiexChangePercent: 0.65,
+  taiexBias20Ma: 1.8,
+  taiexAbove20Ma: true,
+  sp500Index: 5850,
+  sp500ChangePercent: 0.42,
+  sp500Bias20Ma: 1.5,
+  nasdaqIndex: 18520,
+  nasdaqChangePercent: 0.55,
+  sourceStatus: 'CACHED',
   updatedAt: Date.now(),
 };
-
-
-
-
 
 export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
   holdings,
@@ -119,19 +166,70 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
   historicalDailyPrices = {},
   receivableDividends = [],
   onOpenMarginStressModal,
+  currentMarket,
+  onMarketChange,
+  pendingSettlementOutflowTwd = 0,
+  dcaCommitment7dTwd = 0,
+  trades = [],
+  rebalancingConfig,
+  privacyMode = false,
+  onInspectTechnical,
+  onOpenAiForce,
+  onOpenTradeModal,
 }) => {
   const [copiedLlm, setCopiedLlm] = useState(false);
   const [selectedUniverseId, setSelectedUniverseId] = useState<string>('global_macro');
 
-  // 市場四柱在地持久化狀態
+  // 市場四柱與跨市數據在地持久化狀態
   const [macroSnapshot, setMacroSnapshot] = useState<MacroIndicatorSnapshot>(() => {
-    generateSampleHistoricalMacroData();
     const latest = getLatestMacroPulseRecord();
-    return latest || DEFAULT_MACRO_SNAPSHOT;
+    if (latest) {
+      return {
+        ...DEFAULT_MACRO_SNAPSHOT,
+        ...latest,
+        goldPrice: latest.goldPrice && latest.goldPrice >= 2800 ? latest.goldPrice : 3350.0,
+        usdToTwd: usdToTwdRate > 0 ? usdToTwdRate : latest.usdToTwd || 32.15,
+      };
+    }
+    return {
+      ...DEFAULT_MACRO_SNAPSHOT,
+      usdToTwd: usdToTwdRate > 0 ? usdToTwdRate : DEFAULT_MACRO_SNAPSHOT.usdToTwd,
+    };
   });
   const [showHistoryTable, setShowHistoryTable] = useState(false);
   const [macroHistoryList, setMacroHistoryList] = useState<MacroPulseHistoryRecord[]>(() => loadMacroPulseHistory());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lakehouseCandlesMap, setLakehouseCandlesMap] = useState<Record<string, DailyCandle[]>>({});
+  const [pinnedStrategies, setPinnedStrategies] = useState<MacroPinnedStrategy[]>(() =>
+    loadMacroPinnedStrategies()
+  );
+
+  // 同步外部 Header currentMarket (ALL / TW / US) 與戰情室視角 (GLOBAL / TW / US)
+  const [marketView, setMarketView] = useState<MarketViewTab>(() => {
+    if (currentMarket === 'TW') return 'TW';
+    if (currentMarket === 'US') return 'US';
+    return 'GLOBAL';
+  });
+
+  useEffect(() => {
+    if (currentMarket === 'TW' && marketView !== 'TW') {
+      setMarketView('TW');
+    } else if (currentMarket === 'US' && marketView !== 'US') {
+      setMarketView('US');
+    } else if (currentMarket === 'ALL' && marketView !== 'GLOBAL') {
+      setMarketView('GLOBAL');
+    }
+  }, [currentMarket]);
+
+  const handleMarketTabChange = useCallback(
+    (tab: MarketViewTab) => {
+      setMarketView(tab);
+      if (onMarketChange) {
+        onMarketChange(tab === 'GLOBAL' ? 'ALL' : tab);
+      }
+    },
+    [onMarketChange]
+  );
 
   const handleExportCsv = () => {
     const csv = exportMacroPulseHistoryAsCsv();
@@ -144,39 +242,153 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const handleRefreshPulse = () => {
-    setIsRefreshing(true);
-    const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
-    const isCachedToday = isSameDayCacheValid(macroSnapshot.updatedAt, Date.now());
+  // 真實呼叫本地後端 `/api/market/macro` 並自動掛載加密金鑰池 Header (Spec 0209 Zero-Mock Policy)
+  const syncMacroPulseFromBackend = useCallback(
+    async (forceRefresh: boolean) => {
+      if (typeof fetch !== 'function') return;
+      setIsRefreshing(true);
+      try {
+        await ensureKeyPoolHydrated();
+        const keyHeaders = buildMacroSyncKeyHeaders();
+        const endpoint = forceRefresh ? '/api/market/macro?refresh=1' : '/api/market/macro';
+        const res = await fetch(endpoint, {
+          headers: {
+            Accept: 'application/json',
+            ...keyHeaders,
+          },
+        });
+        if (res.ok) {
+          const payload = await res.json();
+          const remote = payload?.data || payload?.snapshot;
+          if (remote && typeof remote === 'object') {
+            const sanitizedRemote = sanitizeMacroRecord(remote);
+            const merged: MacroIndicatorSnapshot = {
+              ...macroSnapshot,
+              ...sanitizedRemote,
+              date: sanitizedRemote.date || new Date().toISOString().split('T')[0],
+              usdToTwd: sanitizedRemote.usdToTwd || (usdToTwdRate > 0 ? usdToTwdRate : macroSnapshot.usdToTwd),
+              sourceStatus: remote.sourceStatus || 'LIVE',
+              asOfTimestamp: remote.asOfTimestamp || new Date().toISOString(),
+              updatedAt: Date.now(),
+            };
+            saveMacroPulseRecord(merged, true);
+            setMacroSnapshot(merged);
+            setMacroHistoryList(loadMacroPulseHistory());
+          }
+        }
+      } catch {
+        // 離線或測試環境無後端時維持本地湖倉快取，絕不以 Math.random() 偽造波動
+      } finally {
+        setIsRefreshing(false);
+      }
+    },
+    [macroSnapshot, usdToTwdRate]
+  );
 
-    const updated: MacroIndicatorSnapshot = {
-      ...macroSnapshot,
-      date: dateStr,
-      updatedAt: Date.now(),
-      goldPrice: Math.round((macroSnapshot.goldPrice + (isCachedToday ? 0.2 : (Math.random() - 0.5) * 4)) * 10) / 10,
-      oilPrice: Math.round((macroSnapshot.oilPrice + (isCachedToday ? 0.1 : (Math.random() - 0.5) * 0.8)) * 10) / 10,
-      vix: Math.round((macroSnapshot.vix + (isCachedToday ? 0 : (Math.random() - 0.5) * 0.4)) * 10) / 10,
-    };
-    saveMacroPulseRecord(updated, true);
-    setMacroSnapshot(updated);
-    setMacroHistoryList(loadMacroPulseHistory());
-    setTimeout(() => setIsRefreshing(false), 500);
+  const handleRefreshPulse = () => {
+    void syncMacroPulseFromBackend(true);
   };
 
+  // 掛載時自動喚醒加密金鑰池並嘗試拉取最新宏觀快照與湖倉日 K
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      await ensureKeyPoolHydrated();
+      if (!active || typeof fetch !== 'function') return;
+      try {
+        const keyHeaders = buildMacroSyncKeyHeaders();
+        const res = await fetch('/api/market/macro', {
+          headers: { Accept: 'application/json', ...keyHeaders },
+        });
+        if (active && res.ok) {
+          const payload = await res.json();
+          const remote = payload?.data || payload?.snapshot;
+          if (remote && typeof remote === 'object') {
+            const sanitizedRemote = sanitizeMacroRecord(remote);
+            setMacroSnapshot((prev) => {
+              const merged: MacroIndicatorSnapshot = {
+                ...prev,
+                ...sanitizedRemote,
+                sourceStatus: remote.sourceStatus || 'LIVE',
+                updatedAt: Date.now(),
+              };
+              saveMacroPulseRecord(merged, true);
+              return merged;
+            });
+            setMacroHistoryList(loadMacroPulseHistory());
+          }
+        }
+      } catch {
+        // ignore offline
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
-  // 0. 持股技術訊號萃取 (嚴格鎖定在倉標的 shares > 0，杜絕假量假影線，並注入部位權重與實戰損益)
+  // 自動補齊雙動能資產池與在倉持股之本地 SQLite 湖倉歷史日 K，消除 -999% 假缺漏與平頭假 K 棒
+  useEffect(() => {
+    let active = true;
+    if (typeof fetch !== 'function') return;
+    const u =
+      DEFAULT_MOMENTUM_UNIVERSES.find((item) => item.id === selectedUniverseId) ||
+      DEFAULT_MOMENTUM_UNIVERSES[0];
+    const targetSymbols = Array.from(
+      new Set([
+        ...u.symbols.map((s) => s.symbol),
+        ...holdings.filter((h) => h.shares > 0).map((h) => h.symbol),
+      ])
+    );
+
+    void (async () => {
+      const nextMap: Record<string, DailyCandle[]> = {};
+      for (const sym of targetSymbols) {
+        const existingDates = historicalDailyPrices[sym]
+          ? Object.keys(historicalDailyPrices[sym]).length
+          : 0;
+        if (existingDates >= 65 || lakehouseCandlesMap[sym]?.length) continue;
+        try {
+          const res = await fetch(`/api/market/history/${encodeURIComponent(sym)}?limit=260`);
+          if (res.ok) {
+            const data = await res.json();
+            const list = data?.candles || data?.data;
+            if (Array.isArray(list) && list.length >= 5) {
+              nextMap[sym] = list.map((c: Record<string, unknown>) => ({
+                date: String(c.date || ''),
+                open: Number(c.open || c.close || 0),
+                high: Number(c.high || c.close || 0),
+                low: Number(c.low || c.close || 0),
+                close: Number(c.close || 0),
+                volume: Number(c.volume || 0),
+              }));
+            }
+          }
+        } catch {
+          // ignore offline
+        }
+      }
+      if (active && Object.keys(nextMap).length > 0) {
+        setLakehouseCandlesMap((prev) => ({ ...prev, ...nextMap }));
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedUniverseId, holdings, historicalDailyPrices]);
+
+  // 0. 持股技術訊號萃取 (結合真實日 K、自訂停損停利風控狀態與處置股警示)
   const holdingSignals = useMemo<MacroHoldingSignalInput[]>(() => {
     return holdings
       .filter((h) => h.shares > 0)
       .map((h) => {
         const localDailyMap = historicalDailyPrices[h.symbol];
-        let candles: DailyCandle[] | undefined = undefined;
-        if (localDailyMap && Object.keys(localDailyMap).length >= 5) {
+        let candles: DailyCandle[] | undefined = lakehouseCandlesMap[h.symbol];
+        if (!candles && localDailyMap && Object.keys(localDailyMap).length >= 5) {
           const sortedDates = Object.keys(localDailyMap).sort();
-          candles = sortedDates.slice(-30).map((d) => {
+          candles = sortedDates.slice(-60).map((d) => {
             const c = localDailyMap[d];
-            // 忠於真實歷史收盤價，杜絕人為捏造 10000 成交量與 ±1% 假上下影線
             return { date: d, open: c, high: c, low: c, close: c, volume: 0 };
           });
         }
@@ -197,12 +409,26 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
             ? ((currentPrice - h.avgCost) / h.avgCost) * 100
             : 0;
 
+        const customPlan = h.plan || (h as unknown as { tradePlan?: { stopLossPrice?: number; takeProfitPrice?: number } }).tradePlan;
+        const plannedStop = customPlan?.stopLossPrice ?? h.riskMetrics?.stopLossPrice;
+        const plannedTarget = customPlan?.takeProfitPrice ?? h.riskMetrics?.takeProfitPrice;
+        const planRiskStatus = evaluateRiskStatus(
+          currentPrice,
+          plannedStop,
+          plannedTarget
+        );
+        const dispositionStatus = resolveDispositionAttentionStatus(
+          (h as unknown as { dispositionEvents?: Array<{ type: 'DISPOSITION' | 'ATTENTION'; startDate?: string; endDate?: string; eventDate?: string }> }).dispositionEvents || [],
+          macroSnapshot.date
+        );
+
         return {
           symbol: h.symbol,
           name: h.name,
+          market: h.market,
           action: scanned.actionDecision.action,
-          stopLossPrice: scanned.actionDecision.stopLossPrice,
-          targetPrice: scanned.actionDecision.targetPrice,
+          stopLossPrice: plannedStop ?? scanned.actionDecision.stopLossPrice,
+          targetPrice: plannedTarget ?? scanned.actionDecision.targetPrice,
           shares: h.shares,
           costBasis: h.avgCost || 0,
           currentPrice,
@@ -211,9 +437,11 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           unrealizedPnlPercent: Math.round(unrealizedPnlPercent * 10) / 10,
           boxTop: scanned.boxUpper,
           boxBottom: scanned.boxLower,
+          planRiskStatus,
+          dispositionStatus,
         };
       });
-  }, [holdings, historicalDailyPrices, totalNavTwd, usdToTwdRate]);
+  }, [holdings, historicalDailyPrices, lakehouseCandlesMap, totalNavTwd, usdToTwdRate, macroSnapshot.date]);
 
   // 0.1 待收股息進度轉換
   const upcomingDividends = useMemo<UpcomingDividendInput[]>(() => {
@@ -233,7 +461,11 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
       .filter((d) => d.daysLeft >= 0);
   }, [receivableDividends]);
 
-  // 1. 計算個人防護盾
+  // 1. 跨模組整合：ETF 穿透曝險 + 再平衡真實偏離度 + 美股匯差緩衝墊 + 質押耐受度 + 個人防護盾 3.0
+  const lookThroughReport = useMemo(() => {
+    return calculateLookThroughExposure(holdings, usdToTwdRate);
+  }, [holdings, usdToTwdRate]);
+
   const shield = useMemo(() => {
     let totalDebt = 0;
     let totalCollateral = 0;
@@ -252,35 +484,126 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
       }
     }
 
-    const usStockUSD = holdings
-      .filter((h) => h.market === 'US' || h.currency === 'USD')
-      .reduce((acc, h) => acc + (h.currentPrice || h.avgCost || 0) * (h.shares || 0), 0);
+    const usHoldings = holdings.filter((h) => (h.market === 'US' || h.currency === 'USD') && h.shares > 0);
+    const usStockUSD = usHoldings.reduce(
+      (acc, h) => acc + (h.currentPrice || h.avgCost || 0) * (h.shares || 0),
+      0
+    );
 
+    // 計算美股持倉加權買入成本匯率與累積匯差緩衝墊 (fxBreakdown)
+    let usTotalCostUsd = 0;
+    let usWeightedFxNumerator = 0;
+    let usFxCushionTWD = 0;
+    for (const h of usHoldings) {
+      const costUsd = h.totalCostBasis || (h.avgCost || 0) * (h.shares || 0);
+      const costFx = (h as unknown as { avgExchangeRate?: number }).avgExchangeRate || 31.8;
+      const fxResult = calculateHoldingFxBreakdown(h, costFx, usdToTwdRate);
+      usTotalCostUsd += costUsd;
+      usWeightedFxNumerator += costUsd * costFx;
+      usFxCushionTWD += fxResult.fxGainTWD;
+    }
+    const usWeightedCostFxRate =
+      usTotalCostUsd > 0 ? Number((usWeightedFxNumerator / usTotalCostUsd).toFixed(2)) : undefined;
+
+    // 計算真實目標配置最大偏離度 (rebalancingEngine)
+    let realMaxDriftPercent = 0;
+    try {
+      let activeConfig = rebalancingConfig;
+      if (!activeConfig) {
+        const configs = typeof localStorage !== 'undefined' ? loadTargetAllocations() : [DEFAULT_MARKET_ALLOCATION];
+        const activeId = typeof localStorage !== 'undefined' ? loadActiveTargetAllocationId() : DEFAULT_MARKET_ALLOCATION.id;
+        activeConfig = configs.find((c) => c.id === activeId) || configs[0] || DEFAULT_MARKET_ALLOCATION;
+      }
+      const driftItems = calculateAllocationDrift(activeConfig, holdings, cashBalanceTwd, usdToTwdRate);
+      realMaxDriftPercent = driftItems.reduce(
+        (maxVal, item) => Math.max(maxVal, Math.abs(item.driftPercent || 0)),
+        0
+      );
+    } catch {
+      realMaxDriftPercent = 0;
+    }
+
+    // 穿透台積電 (2330 + TSM) 與半導體產業總曝險權重 (lookThroughEngine)
+    const tsmcExp = lookThroughReport.exposures
+      .filter((e) => e.symbol === '2330' || e.symbol === 'TSM' || e.symbol === '2330.TW')
+      .reduce((acc, e) => acc + (e.portfolioWeightPercent || 0), 0);
+    const semiSectorExp = lookThroughReport.sectorBreakdown
+      .filter((s) => s.sector.includes('半導體') || s.sector.toLowerCase().includes('semi'))
+      .reduce((acc, s) => acc + (s.weightPercent || 0), 0);
+    const effectiveSemiWeight = Math.max(semiSectorExp, tsmcExp);
+
+    // 質押距 130% 斷頭線安全耐受跌幅 (marginStressEngine)
+    const marginStress = calculateMarginStress({
+      holdings,
+      loans: pledgedLoans,
+      usdToTwdRate,
+    });
+    const maxDropToleranceTo130Percent =
+      marginStress.hasLoans && typeof marginStress.maxDropTolerancePercent === 'number'
+        ? Number((marginStress.maxDropTolerancePercent / 100).toFixed(4))
+        : undefined;
 
     return calculatePortfolioMacroShield({
       navTWD: totalNavTwd,
       cashTWD: cashBalanceTwd,
       totalLoanDebtTWD: totalDebt,
       collateralValueTWD: totalCollateral,
-      maxDriftPercent: 2.8,
+      maxDriftPercent: Number(realMaxDriftPercent.toFixed(1)),
       usStockValueUSD: usStockUSD,
+      pendingSettlementOutflowTWD: pendingSettlementOutflowTwd,
+      upcoming7dDcaCommitmentTWD: dcaCommitment7dTwd,
+      tsmcLookThroughWeightPercent: Number(tsmcExp.toFixed(1)),
+      semiLookThroughWeightPercent: Number(effectiveSemiWeight.toFixed(1)),
+      vix: macroSnapshot.vix,
+      usWeightedCostFxRate,
+      usFxCushionTWD,
+      maxDropToleranceTo130Percent,
     });
-  }, [holdings, loans, cashBalanceTwd, totalNavTwd, usdToTwdRate]);
+  }, [
+    holdings,
+    loans,
+    cashBalanceTwd,
+    totalNavTwd,
+    usdToTwdRate,
+    pendingSettlementOutflowTwd,
+    dcaCommitment7dTwd,
+    lookThroughReport,
+    macroSnapshot.vix,
+  ]);
 
-  // --- 0193 旗艦戰情室 2.0 狀態 ---
-  const [marketView, setMarketView] = useState<MarketViewTab>('GLOBAL');
+  // --- 0193 / 0209 旗艦戰情室 3.0 狀態 ---
   const [activeStressDrop, setActiveStressDrop] = useState<-10 | -20 | -30>(-10);
   const [timelineHorizon, setTimelineHorizon] = useState<TimelineHorizon | 'ALL'>('ALL');
   const [copiedBrief, setCopiedBrief] = useState(false);
   const [copiedPrivacyBrief, setCopiedPrivacyBrief] = useState(false);
 
-  // --- 0204 快速校準 Modal 狀態 (Spec 0205 / 技術債 0054: 表單狀態下沉自治) ---
+  // --- 0204 快速校準 Modal 狀態 ---
   const [isCalibrateModalOpen, setIsCalibrateModalOpen] = useState(false);
 
-  // 宏觀水溫計試算 (0~100 分與三秒作戰姿態)
+  // 宏觀水溫計試算 (向下相容單軌 + Spec 0209 雙溫度計)
   const macroThermometer = useMemo(() => {
     return calculateMacroThermometer(macroSnapshot);
   }, [macroSnapshot]);
+
+  const dualThermometer = useMemo(() => {
+    return evaluateMacroDualThermometer(macroSnapshot);
+  }, [macroSnapshot]);
+
+  // 個人化行為心理覆盤：當大盤/費半 20MA 正乖離 > +5% 過熱時提醒歷史追高勝率
+  const fomoChasingWarning = useMemo(() => {
+    const isOverheated =
+      (macroSnapshot.soxBias20Ma ?? 0) > 5 ||
+      (macroSnapshot.taiexBias20Ma ?? 0) > 5 ||
+      dualThermometer.tacticalSwing.signal === 'OVERHEATED_TRIM';
+    if (!isOverheated || !trades || trades.length === 0) return null;
+    try {
+      const report = calculateBehavioralAuditReport(trades, holdings, totalNavTwd || 1000000);
+      const winRate = report.fomo.chasingHighWinRate;
+      return `🧘 行為金融煞車提醒：當前大盤/費半 20MA 正乖離過熱，您過往於高正乖離追高進場之歷史勝率為 ${winRate.toFixed(1)}%，建議嚴守箱頂不盲目追價。`;
+    } catch {
+      return null;
+    }
+  }, [macroSnapshot.soxBias20Ma, macroSnapshot.taiexBias20Ma, dualThermometer.tacticalSwing.signal, trades, holdings, totalNavTwd]);
 
   // 催化劑日曆狀態管理
   const [catalystFilter, setCatalystFilter] = useState<string>('ALL');
@@ -294,7 +617,6 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
   const [newCustomCategory, setNewCustomCategory] = useState<CatalystCategory>('CUSTOM');
   const [newCustomImpact, setNewCustomImpact] = useState<CatalystImpact>('MEDIUM');
   const [newCustomDesc, setNewCustomDesc] = useState('');
-
 
   // 背景自動嘗試同步外部免費端點
   useEffect(() => {
@@ -338,14 +660,13 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     }
   };
 
-  // 2. 財經事件倒數 (四階梯多源聚合 + 每月 10 號營收截止倒數)
+  // 2. 財經事件倒數 (四階梯多源聚合 + 每月 10 號營收截止倒數 + 台積電法說會/NVDA財報)
   const catalysts = useMemo(() => {
     const list = getAggregatedCatalysts({
       asOfDate: macroSnapshot.date,
       receivableDividends,
       remoteCatalysts,
     });
-    // 自動注入每月 10 號營收截止倒數催化劑
     const revenueDeadlineEvent = generateMonthlyRevenueDeadlineCatalyst(macroSnapshot.date);
     if (!list.some((c) => c.id === revenueDeadlineEvent.id)) {
       list.push(revenueDeadlineEvent);
@@ -353,6 +674,19 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     }
     return list;
   }, [macroSnapshot.date, receivableDividends, remoteCatalysts, catalystRefreshKey]);
+
+  // 估算台積電除息對加權指數之蒸發點數
+  const exDividendImpactPoints = useMemo(() => {
+    const tsmDiv = receivableDividends.find(
+      (d) => (d.symbol === '2330' || d.symbol === '2330.TW') && d.cashDividendPerShare && d.cashDividendPerShare > 0
+    );
+    if (!tsmDiv || !tsmDiv.cashDividendPerShare) return 0;
+    return estimateExDividendIndexImpactPoints({
+      cashDividendPerShare: tsmDiv.cashDividendPerShare,
+      sharesOutstanding: 25_930_380_000,
+      taiexCurrentIndex: macroSnapshot.taiexIndex || 23150,
+    });
+  }, [receivableDividends, macroSnapshot.taiexIndex]);
 
   // 三段時序分組 (用於徽章計數與統計)
   const groupedCatalysts = useMemo(() => {
@@ -362,21 +696,18 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
   // 分類、市場視角與時序雷達多維度篩選
   const filteredCatalysts = useMemo(() => {
     let result = catalysts;
-    // 依市場視角過濾
     if (marketView === 'TW') {
       result = result.filter((c) => c.targetMarket === 'TW' || c.targetMarket === 'ALL' || !c.targetMarket);
     } else if (marketView === 'US') {
       result = result.filter((c) => c.targetMarket === 'US' || c.targetMarket === 'ALL' || !c.targetMarket);
     }
 
-    // 依類別過濾
     if (catalystFilter === 'INFLATION_EMPLOYMENT') {
       result = result.filter((c) => c.category === 'INFLATION' || c.category === 'EMPLOYMENT');
     } else if (catalystFilter !== 'ALL') {
       result = result.filter((c) => c.category === catalystFilter);
     }
 
-    // 依時序雷達過濾 (今日/7日/30日)
     if (timelineHorizon === 'TODAY') {
       result = result.filter((c) => c.daysLeft === 0);
     } else if (timelineHorizon === 'WEEK') {
@@ -388,8 +719,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     return result;
   }, [catalysts, catalystFilter, marketView, timelineHorizon]);
 
-
-  // 3. 生成 AI 作戰方針 (依據本地持久化宏觀數據 + 個人防護盾 + 持股動態 + 股息入帳全量診斷)
+  // 3. 生成 AI 作戰方針
   const morningBrief = useMemo(() => {
     return generateAiMorningBrief({
       macro: macroSnapshot,
@@ -400,8 +730,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     });
   }, [macroSnapshot, shield, catalysts, holdingSignals, upcomingDividends]);
 
-
-  // 4. 雙重動能輪動信號
+  // 4. 雙重動能輪動信號 (結合本地湖倉真實日 K 與歷史價格映射)
   const selectedUniverse = useMemo(() => {
     return (
       DEFAULT_MOMENTUM_UNIVERSES.find((u) => u.id === selectedUniverseId) ||
@@ -410,10 +739,10 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
   }, [selectedUniverseId]);
 
   const momentumSignal = useMemo(() => {
-    const quotesMap: Record<string, DailyCandle[]> = {};
+    const quotesMap: Record<string, DailyCandle[]> = { ...lakehouseCandlesMap };
     if (historicalDailyPrices && Object.keys(historicalDailyPrices).length > 0) {
       for (const [sym, dateMap] of Object.entries(historicalDailyPrices)) {
-        if (!dateMap) continue;
+        if (!dateMap || quotesMap[sym]?.length) continue;
         const sortedDates = Object.keys(dateMap).sort();
         quotesMap[sym] = sortedDates.map((d) => ({
           date: d,
@@ -421,7 +750,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           high: dateMap[d],
           low: dateMap[d],
           close: dateMap[d],
-          volume: 10000,
+          volume: 0,
         }));
       }
     }
@@ -430,8 +759,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
       quotesMap,
       riskFreeRateAnnualized: 0.04,
     });
-  }, [selectedUniverse, historicalDailyPrices]);
-
+  }, [selectedUniverse, historicalDailyPrices, lakehouseCandlesMap]);
 
   // 5. 距當月底倒數天數 (雙動能月結調倉檢視日)
   const daysUntilMonthEnd = useMemo(() => {
@@ -450,7 +778,6 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     return holdings.find((h) => currentUniverseSymbols.has(h.symbol) || currentUniverseSymbols.has(`${h.symbol}.TW`));
   }, [holdings, currentUniverseSymbols]);
 
-
   const handleCopyLlmJson = async () => {
     const ok = await copyTextToClipboard(morningBrief.llmPayloadJson);
     if (ok) {
@@ -463,15 +790,36 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     setIsCalibrateModalOpen(true);
   };
 
+  const handlePasteAndPinStrategy = useCallback(
+    (rawText: string): boolean => {
+      const parsed = parseMacroLoopbackJson(rawText);
+      if (!parsed || typeof parsed.recommendedEquityCapPercent !== 'number') return false;
+      const updated = saveMacroPinnedStrategy({
+        aiModel: parsed.aiModel || 'External AI',
+        recommendedEquityCapPercent: parsed.recommendedEquityCapPercent,
+        soxSupportLevel: parsed.soxSupportLevel,
+        taiexSupportLevel: parsed.taiexSupportLevel,
+        tacticalSummary: parsed.tacticalSummary || '外部 AI 戰略建議',
+      });
+      setPinnedStrategies(updated);
+      return true;
+    },
+    []
+  );
+
+  const handleRemovePinnedStrategy = useCallback((id: string) => {
+    const updated = removeMacroPinnedStrategy(id);
+    setPinnedStrategies(updated);
+  }, []);
+
   const handleCopyMorningBriefReport = async (isMasked = false) => {
     const stanceLabel =
       macroThermometer.stance === 'AGGRESSIVE'
         ? '進攻・積極擴張'
         : macroThermometer.stance === 'DEFENSIVE'
-        ? '防禦・現金為王'
-        : '平衡・區間操作';
+          ? '防禦・現金為王'
+          : '平衡・區間操作';
 
-    // 依權重降序排序持股風險矩陣
     const sortedSignals = [...holdingSignals].sort((a, b) => (b.weightPercent || 0) - (a.weightPercent || 0));
     const matrixLines = sortedSignals.map((s) => {
       const pnlSign = (s.unrealizedPnlPercent || 0) >= 0 ? '+' : '';
@@ -482,33 +830,35 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
 
     const report = [
       `> 【系統指令 (System Directive)】：`,
-      `> 你現在是首席風險官 (CRO) 與高階避險基金投資經理。本報告為個人投資組合「戰情室本地模型推演簡報」，所有宏觀數據、籌碼指標與持股風控防守價均為本地歷史快照與特定推演情境。請嚴格基於報告內給定的客觀數據進行壓力測試、調倉驗算與極端風險審核，請勿質疑數據歷史時效性或重複要求核實，直接產出具體執行決策。`,
+      `> 你現在是首席風險官 (CRO) 與高階避險基金投資經理。本報告為個人投資組合「戰情室 3.0 本地模型推演簡報」，所有宏觀數據、費半/台積電 ADR 溢折價、籌碼廣度指標與持股風控防守價均為本地快照。請嚴格基於報告內給定的客觀數據進行壓力測試、調倉驗算與極端風險審核，並於回覆末尾附上 JSON 戰略釘選區塊（含 recommendedEquityCapPercent, soxSupportLevel, taiexSupportLevel, tacticalSummary）。`,
       '',
-      `# 🏦 宏觀戰情室每日晨會簡報 (${macroSnapshot.date})`,
+      `# 🏦 宏觀戰情室 3.0 每日晨會簡報 (${macroSnapshot.date})`,
       `> 作戰定調：${morningBrief.headline} (${morningBrief.tone})`,
       '',
-      `## 🌡️ 宏觀水溫計：${macroThermometer.score} 分【${stanceLabel}】`,
+      `## 🌡️ 雙軌水溫計：長線總經 ${dualThermometer.strategicRegime.score} 分【${stanceLabel}】｜波段戰術 ${dualThermometer.tacticalSwing.score} 分【${dualThermometer.tacticalSwing.label}】`,
       `- 建議股票總倉位上限：${macroThermometer.suggestedEquityAllocationPercent}%`,
+      `- 費城半導體 (^SOX)：${macroSnapshot.soxIndex ?? 'N/A'} (20MA 乖離 ${macroSnapshot.soxBias20Ma ?? 0}%)｜台積電 ADR 溢折價：${macroSnapshot.tsmAdrPremiumPercent ?? 0}%`,
       `- 決策推論：${macroThermometer.rationale.join('；')}`,
       '',
-      `## 🛡️ 個人在險與風控 (1-Day 95% VaR)`,
+      `## 🛡️ 個人在險、真·自由子彈與穿透風控 (1-Day 95% VaR)`,
       isMasked
-        ? `- 帳戶總淨值：NT$ [已隱私遮蔽] (約 ${sortedSignals.length} 檔持股組合)`
-        : `- 帳戶總淨值：NT$ ${Math.round(shield.totalNavTWD).toLocaleString()}`,
+        ? `- 帳戶實質總淨值 (Effective NAV)：NT$ [已隱私遮蔽] (約 ${sortedSignals.length} 檔持股組合)`
+        : `- 帳戶實質總淨值 (Effective NAV)：NT$ ${Math.round(shield.totalNavTWD).toLocaleString()}`,
+      isMasked
+        ? `- 真·自由可動用子彈：佔總淨值 ${shield.cashRatioPercent}% (金額已隱私遮蔽)`
+        : `- 真·自由可動用子彈：NT$ ${Math.round(shield.freeDeployableCashTWD ?? shield.cashBalanceTWD).toLocaleString()}`,
+      `- ETF 穿透半導體權重：${shield.semiLookThroughWeightPercent ?? 0}% (台積電 ${shield.tsmcLookThroughWeightPercent ?? 0}%)`,
       isMasked
         ? `- 單日 95% 最大在險價值 (VaR)：佔總淨值 ${shield.varRatioPercent || 0}% (金額已隱私遮蔽)`
         : `- 單日 95% 最大在險價值 (VaR)：NT$ ${(shield.valueAtRisk95TWD || 0).toLocaleString()} (佔總淨值 ${shield.varRatioPercent || 0}%)`,
-      isMasked
-        ? `- 美股匯率敏感度 (FX Delta)：每升值 1 元影響約 ${(((shield.fxDeltaTWD || 0) / (shield.totalNavTWD || 1)) * 100).toFixed(2)}% 總資產`
-        : `- 美股匯率敏感度 (FX Delta)：NT$ ${(shield.fxDeltaTWD || 0).toLocaleString()} / 每升值 1 元`,
-      `- 質押維持率：${shield.hasLoans ? `${shield.marginMaintenanceRatio}% (${shield.marginStatus})` : '零負債安全'}`,
+      `- 質押維持率：${shield.hasLoans && shield.marginMaintenanceRatio !== null ? `${shield.marginMaintenanceRatio}% (${shield.marginStatus})` : '無質押負債 (零槓桿)'}`,
       '',
       `## 🎯 今日執行要點`,
       ...morningBrief.actionPoints.map((p, idx) => `${idx + 1}. ${p}`),
       '',
-      `## 🌐 台美關鍵金絲雀`,
+      `## 🌐 台美關鍵金絲雀與實體商品`,
       `- 美債 10Y/2Y：${macroSnapshot.us10y}% / ${macroSnapshot.us2y}% (利差 ${macroSnapshot.yieldSpread}% ${macroSnapshot.isYieldInverted ? '倒掛' : '正常'})`,
-      `- VIX 恐慌指數：${macroSnapshot.vix} (${macroSnapshot.vixLevel})`,
+      `- VIX 恐慌指數：${macroSnapshot.vix} (${macroSnapshot.vixLevel})｜國際黃金現貨/期貨 (GC=F)：$${macroSnapshot.goldPrice} USD/oz`,
       `- 高收益債利差 (OAS)：${macroSnapshot.creditSpreadOAS ?? 3.5}% | CDS 指數：${macroSnapshot.cdsInsuranceIndex ?? 65} (${macroSnapshot.cdsRiskLevel ?? 'LOW'})`,
       `- 外資台指期未平倉：${(macroSnapshot.twFuturesNetOi ?? 0).toLocaleString()} 口 | 全市場融資維持率：${macroSnapshot.twMarginMaintenance ?? 165.2}%`,
       '',
@@ -530,7 +880,6 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     }
   };
 
-
   return (
     <div className="warroom-container animate-fade-in">
       {/* 頂部戰情室標題與狀態 */}
@@ -542,25 +891,24 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <h1 style={{ fontSize: '1.45rem', fontWeight: 800, margin: 0, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
-                法人旗艦級宏觀戰情室 2.0
+                法人旗艦級宏觀戰情室 3.0
               </h1>
               <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--gain-color)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
                 <span className="pulse-dot-green" style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'currentColor', display: 'inline-block' }} />
-                雙軌即時監控
+                跨市費半傳導 × 雙溫度計
               </span>
             </div>
             <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              台美專屬指針 × 0~100 宏觀水溫計 × 1-Day 95% 在險價值 × 3階急速壓力測試
+              費城半導體 (^SOX) × 台積電 ADR 溢折價 × 台股騰落廣度 × 真·自由子彈與 ETF 穿透風控
             </p>
           </div>
         </div>
 
         {/* 頂部切換與操作區 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {/* 台美雙軌切換按鈕組 */}
           <div style={{ display: 'inline-flex', background: 'rgba(30, 41, 59, 0.8)', padding: '3px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
             <button
-              onClick={() => setMarketView('GLOBAL')}
+              onClick={() => handleMarketTabChange('GLOBAL')}
               className={`btn btn-sm ${marketView === 'GLOBAL' ? 'btn-primary' : 'btn-ghost'}`}
               style={{ fontSize: '0.78rem', padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
             >
@@ -568,14 +916,14 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
               🌐 全球綜觀
             </button>
             <button
-              onClick={() => setMarketView('TW')}
+              onClick={() => handleMarketTabChange('TW')}
               className={`btn btn-sm ${marketView === 'TW' ? 'btn-primary' : 'btn-ghost'}`}
               style={{ fontSize: '0.78rem', padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
             >
               🇹🇼 台股視角
             </button>
             <button
-              onClick={() => setMarketView('US')}
+              onClick={() => handleMarketTabChange('US')}
               className={`btn btn-sm ${marketView === 'US' ? 'btn-primary' : 'btn-ghost'}`}
               style={{ fontSize: '0.78rem', padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
             >
@@ -583,12 +931,11 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
             </button>
           </div>
 
-          {/* 數據校準與複製按鈕組 */}
           <button
             onClick={handleOpenCalibrateModal}
             className="btn btn-secondary btn-sm"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.78rem' }}
-            title="快速手動校準美債、VIX、外資空單與融資維持率"
+            title="快速手動校準美債、VIX、費半、台積電 ADR、外資空單與融資維持率"
           >
             <Sliders size={14} />
             ✏️ 數據校準
@@ -634,106 +981,60 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
         </div>
       </div>
 
-      {/* 🌡️ 宏觀水溫計與作戰姿態卡片 (Macro Thermometer) */}
-      <div className="card" style={{ padding: '20px 24px', background: 'rgba(15, 23, 42, 0.75)', border: '1px solid rgba(51, 65, 85, 0.6)' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ padding: '8px', background: 'rgba(245, 158, 11, 0.15)', color: 'var(--accent-amber)', borderRadius: 'var(--radius-md)' }}>
-              <Thermometer size={22} />
-            </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                  宏觀綜合水溫計 (Macro Thermometer)
-                </span>
-                <span
-                  className="badge"
-                  style={{
-                    fontWeight: 800,
-                    padding: '3px 8px',
-                    fontSize: '0.78rem',
-                    background:
-                      macroThermometer.stance === 'AGGRESSIVE'
-                        ? 'rgba(34, 197, 94, 0.2)'
-                        : macroThermometer.stance === 'DEFENSIVE'
-                        ? 'rgba(239, 68, 68, 0.2)'
-                        : 'rgba(245, 158, 11, 0.2)',
-                    color:
-                      macroThermometer.stance === 'AGGRESSIVE'
-                        ? '#4ade80'
-                        : macroThermometer.stance === 'DEFENSIVE'
-                        ? '#f87171'
-                        : '#fbbf24',
-                    border: `1px solid ${
-                      macroThermometer.stance === 'AGGRESSIVE'
-                        ? 'rgba(34, 197, 94, 0.4)'
-                        : macroThermometer.stance === 'DEFENSIVE'
-                        ? 'rgba(239, 68, 68, 0.4)'
-                        : 'rgba(245, 158, 11, 0.4)'
-                    }`,
-                  }}
-                >
-                  {macroThermometer.stance === 'AGGRESSIVE'
-                    ? '【進攻・積極擴張】'
-                    : macroThermometer.stance === 'DEFENSIVE'
-                    ? '【防禦・現金為王】'
-                    : '【平衡・區間操作】'}
-                </span>
-              </div>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                基於長短債利差、恐慌情緒、高收益信用利差、外資期貨空單與融資維持率綜合量化合成
-              </span>
-            </div>
-          </div>
+      {/* 🌡️ 第一層：雙溫度計（長線總經配置 × 短線波段戰術）與台美費半跨市傳導四聯卡 (Ticket 04, 05, 06) */}
+      <MacroDualThermometerBar
+        macroSnapshot={macroSnapshot}
+        dualThermometer={dualThermometer}
+        activeMarketTab={marketView}
+        onMarketTabChange={handleMarketTabChange}
+        exDividendImpactPoints={exDividendImpactPoints}
+      />
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>水溫得分</div>
-              <div className="mono" style={{ fontSize: '1.75rem', fontWeight: 800, color: macroThermometer.score >= 70 ? '#4ade80' : macroThermometer.score <= 40 ? '#f87171' : '#fbbf24', lineHeight: 1 }}>
-                {macroThermometer.score} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>/ 100</span>
-              </div>
-            </div>
+      {/* 📌 外部 AI 智囊團宏觀戰略釘選列 (Macro Strategy Loopback Pin - Ticket 10) */}
+      <MacroStrategyPinBar
+        pins={pinnedStrategies}
+        onPasteAndPin={handlePasteAndPinStrategy}
+        onRemovePin={handleRemovePinnedStrategy}
+        currentSoxIndex={macroSnapshot.soxIndex}
+        currentTaiexIndex={macroSnapshot.taiexIndex}
+      />
 
-            <div style={{ textAlign: 'right', borderLeft: '1px solid var(--border-color)', paddingLeft: '18px' }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>建議股票總倉位上限</div>
-              <div className="mono" style={{ fontSize: '1.75rem', fontWeight: 800, color: '#38bdf8', lineHeight: 1 }}>
-                {macroThermometer.suggestedEquityAllocationPercent}%
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* 🛡️ 個人部位防禦護欄、真·自由子彈與 ETF 穿透曝險 (Ticket 07 & 08) */}
+      <PortfolioShieldAndAmmoCard
+        shield={shield}
+        privacyMode={privacyMode}
+        currentUsdToTwdRate={usdToTwdRate}
+      />
 
-        {/* 水溫條進度 */}
-        <div style={{ width: '100%', height: '8px', background: 'rgba(30, 41, 59, 0.8)', borderRadius: '999px', overflow: 'hidden', marginBottom: '12px' }}>
-          <div
-            style={{
-              width: `${macroThermometer.score}%`,
-              height: '100%',
-              background:
-                macroThermometer.score >= 70
-                  ? 'linear-gradient(90deg, #10b981 0%, #22c55e 100%)'
-                  : macroThermometer.score <= 40
-                  ? 'linear-gradient(90deg, #ef4444 0%, #f97316 100%)'
-                  : 'linear-gradient(90deg, #eab308 0%, #f59e0b 100%)',
-              transition: 'width 0.4s ease',
-            }}
-          />
-        </div>
-
-        {/* 推論清單 */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-          {macroThermometer.rationale.map((r, idx) => (
-            <span
-              key={idx}
-              className="badge"
-              style={{ fontSize: '0.75rem', padding: '3px 8px', background: 'rgba(30, 41, 59, 0.6)', color: 'var(--text-secondary)', border: '1px solid rgba(51, 65, 85, 0.5)' }}
-            >
-              • {r}
-            </span>
-          ))}
-        </div>
-      </div>
-
+      {/* 🎯 在倉持股波段戰術雷達與一鍵執行閉環 (Ticket 09) */}
+      <HoldingTacticalSignalsCard
+        signals={holdingSignals}
+        fomoChasingWarning={fomoChasingWarning}
+        onInspectTechnical={
+          onInspectTechnical
+            ? (sym) => {
+              const matched = holdings.find((h) => h.symbol === sym);
+              onInspectTechnical(sym, matched?.market || 'TW');
+            }
+            : undefined
+        }
+        onOpenAiForce={
+          onOpenAiForce
+            ? (sym) => {
+              const matched = holdings.find((h) => h.symbol === sym);
+              onOpenAiForce(sym, matched?.market || 'TW');
+            }
+            : undefined
+        }
+        onOpenTradeModal={
+          onOpenTradeModal
+            ? (sym, mkt) => {
+              onOpenTradeModal(sym, mkt || 'TW');
+            }
+            : undefined
+        }
+        privacyMode={privacyMode}
+      />
 
       {/* 🤖 AI 智慧每日作戰方針 (AI Morning Brief) */}
       <div className="warroom-hero-card">
@@ -761,7 +1062,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                 fontWeight: 600,
                 background: copiedBrief ? 'rgba(34, 197, 94, 0.2)' : 'rgba(30, 41, 59, 0.7)',
                 borderColor: copiedBrief ? 'var(--accent-green)' : 'rgba(51, 65, 85, 0.6)',
-                color: copiedBrief ? '#4ade80' : 'var(--text-primary)',
+                color: copiedBrief ? 'var(--gain-color)' : 'var(--text-primary)',
                 transition: 'all 0.2s ease',
               }}
               title="一鍵複製 Markdown 格式繁體中文晨會作戰簡報 (含 Data Seal 與持股矩陣)"
@@ -782,7 +1083,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                 fontWeight: 600,
                 background: copiedPrivacyBrief ? 'rgba(34, 197, 94, 0.2)' : 'rgba(30, 41, 59, 0.7)',
                 borderColor: copiedPrivacyBrief ? 'var(--accent-green)' : 'rgba(51, 65, 85, 0.6)',
-                color: copiedPrivacyBrief ? '#4ade80' : 'var(--text-primary)',
+                color: copiedPrivacyBrief ? 'var(--gain-color)' : 'var(--text-primary)',
                 transition: 'all 0.2s ease',
               }}
               title="隱私遮蔽總淨值與金額，僅保留權重%與損益%，安心複製給外部 AI"
@@ -803,7 +1104,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                 fontWeight: 600,
                 background: copiedLlm ? 'rgba(34, 197, 94, 0.2)' : 'rgba(30, 41, 59, 0.7)',
                 borderColor: copiedLlm ? 'var(--accent-green)' : 'rgba(51, 65, 85, 0.6)',
-                color: copiedLlm ? '#4ade80' : 'var(--text-primary)',
+                color: copiedLlm ? 'var(--gain-color)' : 'var(--text-primary)',
                 transition: 'all 0.2s ease',
               }}
               title="複製結構化 Prompt Payload 供外部 LLM 使用"
@@ -812,7 +1113,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
               {copiedLlm ? '已複製 Payload！' : '🤖 LLM 提示詞'}
             </button>
             <span className="mono" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              基準日：{DEFAULT_MACRO_SNAPSHOT.date}
+              基準日：{macroSnapshot.date}
             </span>
           </div>
         </div>
@@ -864,12 +1165,12 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                 borderColor = 'rgba(239, 68, 68, 0.45)';
                 bg = 'rgba(239, 68, 68, 0.08)';
                 badgeBg = 'rgba(239, 68, 68, 0.25)';
-                badgeColor = '#f87171';
+                badgeColor = 'var(--loss-color)';
               } else if (isBuy) {
                 borderColor = 'rgba(34, 197, 94, 0.45)';
                 bg = 'rgba(34, 197, 94, 0.08)';
                 badgeBg = 'rgba(34, 197, 94, 0.25)';
-                badgeColor = '#4ade80';
+                badgeColor = 'var(--gain-color)';
               } else if (isCatalyst) {
                 borderColor = 'rgba(6, 182, 212, 0.45)';
                 bg = 'rgba(6, 182, 212, 0.08)';
@@ -916,7 +1217,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                   >
                     {idx + 1}
                   </span>
-                  <span style={{ color: isSell ? '#fecaca' : isBuy ? '#dcfce7' : undefined }}>{point}</span>
+                  <span style={{ color: isSell ? 'var(--loss-color)' : isBuy ? 'var(--gain-color)' : undefined }}>{point}</span>
                 </div>
               );
             })}
@@ -924,7 +1225,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
         </div>
       </div>
 
-      {/* 🛡️ 個人在險價值與 3 階急速黑天鵝壓力測試 (VaR & Stress Testing - Ticket 10) */}
+      {/* 🛡️ 個人在險價值與 3 階急速黑天鵝壓力測試 (VaR & Stress Testing) */}
       <div className="card" style={{ padding: '20px 24px', background: 'rgba(15, 23, 42, 0.75)', border: '1px solid rgba(51, 65, 85, 0.6)' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '14px', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -936,12 +1237,11 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                 個人在險價值 (1-Day 95% VaR) 與急速壓力測試
               </h3>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                機構級風控模型：年化 18% 波動度在險損失推估與台幣升貶敏感度
+                機構級風控模型：動態 VIX 波動度在險損失推估與台幣升貶敏感度
               </span>
             </div>
           </div>
 
-          {/* 3 階壓力切換按鈕 */}
           <div style={{ display: 'inline-flex', background: 'rgba(30, 41, 59, 0.8)', padding: '3px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
             <button
               onClick={() => setActiveStressDrop(-10)}
@@ -967,14 +1267,12 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           </div>
         </div>
 
-        {/* 核心風控指標網格 */}
         <div className="warroom-grid-3" style={{ marginBottom: '16px' }}>
-          {/* 1-Day 95% VaR */}
           <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)' }}>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
               單日 95% 在險價值 (1-Day 95% VaR)
             </div>
-            <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: '#f87171' }}>
+            <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--loss-color)' }}>
               NT$ {(shield.valueAtRisk95TWD || 0).toLocaleString()}
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
@@ -982,7 +1280,6 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
             </div>
           </div>
 
-          {/* 美股匯率敏感度 (FX Delta) */}
           <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)' }}>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
               美股部位匯率敏感度 (FX Delta)
@@ -995,13 +1292,28 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
             </div>
           </div>
 
-          {/* 質押維持率現況 */}
           <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)' }}>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
               質押借款現況與維持率
             </div>
-            <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: shield.hasLoans ? (shield.marginMaintenanceRatio < 130 ? '#ef4444' : shield.marginMaintenanceRatio < 166 ? '#f59e0b' : '#22c55e') : '#22c55e' }}>
-              {shield.hasLoans ? `${shield.marginMaintenanceRatio}%` : '無負債借款'}
+            <div
+              className="mono"
+              style={{
+                fontSize: '1.35rem',
+                fontWeight: 800,
+                color:
+                  shield.hasLoans && shield.marginMaintenanceRatio !== null
+                    ? shield.marginMaintenanceRatio < 130
+                      ? 'var(--loss-color)'
+                      : shield.marginMaintenanceRatio < 166
+                        ? '#f59e0b'
+                        : 'var(--gain-color)'
+                    : 'var(--gain-color)',
+              }}
+            >
+              {shield.hasLoans && shield.marginMaintenanceRatio !== null
+                ? `${shield.marginMaintenanceRatio}%`
+                : '無質押負債 (零槓桿)'}
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
               狀態：
@@ -1010,52 +1322,53 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                   fontWeight: 700,
                   color:
                     shield.marginStatus === 'SAFE' || shield.marginStatus === 'NO_LOAN'
-                      ? '#4ade80'
+                      ? 'var(--gain-color)'
                       : shield.marginStatus === 'WARNING'
-                      ? '#fbbf24'
-                      : '#f87171',
+                        ? '#fbbf24'
+                        : 'var(--loss-color)',
                 }}
               >
                 {shield.marginStatus === 'SAFE'
                   ? '安全無虞 (>=166%)'
                   : shield.marginStatus === 'NO_LOAN'
-                  ? '整戶零負債・安全無虞'
-                  : shield.marginStatus === 'WARNING'
-                  ? '警戒水位 (130%~166%)'
-                  : '追繳斷頭紅線 (<130%)'}
+                    ? '整戶零負債・安全無虞'
+                    : shield.marginStatus === 'WARNING'
+                      ? '警戒水位 (130%~166%)'
+                      : '追繳斷頭紅線 (<130%)'}
               </span>
             </div>
           </div>
         </div>
 
-        {/* 壓力測試情境預估結果展示 */}
         {(() => {
           const activeScenario = shield.quickStressTest?.find((s) => s.dropPercent === activeStressDrop);
           if (!activeScenario) return null;
 
           return (
             <div style={{ background: 'rgba(30, 41, 59, 0.65)', border: `1px solid ${activeScenario.status === 'MARGIN_CALL' ? 'rgba(239, 68, 68, 0.4)' : activeScenario.status === 'WARNING' ? 'rgba(245, 158, 11, 0.4)' : 'rgba(34, 197, 94, 0.4)'}`, borderRadius: 'var(--radius-md)', padding: '14px 18px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span className="badge" style={{ background: activeScenario.status === 'MARGIN_CALL' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(245, 158, 11, 0.25)', color: activeScenario.status === 'MARGIN_CALL' ? '#f87171' : '#fbbf24', fontWeight: 800, padding: '4px 8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <span className="badge" style={{ background: activeScenario.status === 'MARGIN_CALL' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(245, 158, 11, 0.25)', color: activeScenario.status === 'MARGIN_CALL' ? 'var(--loss-color)' : '#fbbf24', fontWeight: 800, padding: '4px 8px' }}>
                   {activeScenario.label}
                 </span>
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
                   壓力後擔保品市值：<strong className="mono">NT$ {activeScenario.stressedCollateralTWD.toLocaleString()}</strong>
                 </span>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-                  試算維持率：<strong className="mono" style={{ color: activeScenario.status === 'MARGIN_CALL' ? '#f87171' : activeScenario.status === 'WARNING' ? '#fbbf24' : '#4ade80' }}>{activeScenario.stressedMarginRatioPercent}%</strong>
-                </span>
+                {shield.hasLoans && (
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                    試算維持率：<strong className="mono" style={{ color: activeScenario.status === 'MARGIN_CALL' ? 'var(--loss-color)' : activeScenario.status === 'WARNING' ? '#fbbf24' : 'var(--gain-color)' }}>{activeScenario.stressedMarginRatioPercent}%</strong>
+                  </span>
+                )}
               </div>
 
               <div>
                 {activeScenario.marginCallShortfallTWD > 0 ? (
-                  <span style={{ fontSize: '0.85rem', color: '#f87171', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--loss-color)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                     <AlertTriangle size={15} />
                     觸發追繳！需補繳保證金缺口：NT$ {activeScenario.marginCallShortfallTWD.toLocaleString()}
                   </span>
                 ) : (
-                  <span style={{ fontSize: '0.85rem', color: '#4ade80', fontWeight: 700 }}>
-                    ✔ 維持率仍高於 130% 斷頭線，無追繳補繳缺口
+                  <span style={{ fontSize: '0.85rem', color: 'var(--gain-color)', fontWeight: 700 }}>
+                    ✔ {shield.hasLoans ? '維持率仍高於 130% 斷頭線，無追繳補繳缺口' : '無質押負債 (零槓桿)，免疫斷頭追繳'}
                   </span>
                 )}
               </div>
@@ -1064,6 +1377,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
         })()}
       </div>
 
+      {/* 市場四柱即時脈搏 (Market Pulse) */}
       <div className="card">
         <div className="warroom-section-header">
           <div>
@@ -1072,7 +1386,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
               市場四柱即時脈搏 (Market Pulse)
             </h3>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              長短端利率倒掛 · 恐慌與貪婪中樞 · 實體商品定價 · 全球流動性水庫 (在地持久化資料庫)
+              長短端利率倒掛 · 恐慌與貪婪中樞 · 國際黃金現貨/期貨 (GC=F) · 全球流動性水庫
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -1081,7 +1395,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
               disabled={isRefreshing}
               className="btn btn-secondary btn-sm"
               style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '0.75rem' }}
-              title="更新並持久化最新市場數據至本地資料庫"
+              title="攜帶加密金鑰池向後端更新並持久化最新總經與跨市數據"
             >
               <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : undefined} />
               {isRefreshing ? '同步中...' : '即時同步'}
@@ -1127,7 +1441,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
             </div>
             <div style={{ marginTop: '8px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-secondary)' }}>2Y 美債：{macroSnapshot.us2y}%</span>
-              <span className="badge" style={{ background: macroSnapshot.yieldSpread < 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)', color: macroSnapshot.yieldSpread < 0 ? 'var(--profit-color)' : 'var(--gain-color)' }}>
+              <span className="badge" style={{ background: macroSnapshot.yieldSpread < 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)', color: macroSnapshot.yieldSpread < 0 ? 'var(--loss-color)' : 'var(--gain-color)' }}>
                 利差 {macroSnapshot.yieldSpread}% {macroSnapshot.yieldSpread < 0 ? '(倒掛)' : '(正常)'}
               </span>
             </div>
@@ -1137,7 +1451,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           <div className="warroom-stat-card">
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>CBOE VIX 恐慌指數</div>
             <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {macroSnapshot.vix}
+              {typeof macroSnapshot.vix === 'number' ? macroSnapshot.vix : 18.0}
               <span className="badge" style={{ marginLeft: '8px', background: 'rgba(16, 185, 129, 0.15)', color: 'var(--gain-color)' }}>
                 {macroSnapshot.vixLevel}
               </span>
@@ -1150,17 +1464,17 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
             </div>
           </div>
 
-          {/* 柱三：大宗商品與實質硬資產 */}
+          {/* 柱三：大宗商品與實質硬資產 (Spec 0209 正名為 GC=F 國際黃金現貨/期貨) */}
           <div className="warroom-stat-card">
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>黃金現貨 (GLD)</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>國際黃金現貨/期貨 (GC=F)</div>
             <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--accent-amber)' }}>
-              ${macroSnapshot.goldPrice}
+              ${typeof macroSnapshot.goldPrice === 'number' ? macroSnapshot.goldPrice : 3350}
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: '4px' }}>USD/oz</span>
             </div>
             <div style={{ marginTop: '8px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>WTI 原油</span>
+              <span style={{ color: 'var(--text-secondary)' }}>WTI 原油 (CL=F)</span>
               <span className="mono" style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                ${macroSnapshot.oilPrice} / 桶
+                ${typeof macroSnapshot.oilPrice === 'number' ? macroSnapshot.oilPrice : 75} / 桶
               </span>
             </div>
           </div>
@@ -1169,9 +1483,9 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           <div className="warroom-stat-card">
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>美元指數 (DXY)</div>
             <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {macroSnapshot.dxy}
+              {typeof macroSnapshot.dxy === 'number' ? macroSnapshot.dxy : 101.5}
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 400 }}>
-                USD/TWD {macroSnapshot.usdToTwd}
+                USD/TWD {typeof macroSnapshot.usdToTwd === 'number' ? macroSnapshot.usdToTwd : 32.15}
               </span>
             </div>
             <div style={{ marginTop: '8px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1183,17 +1497,17 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           </div>
         </div>
 
-        {/* 🦅 台美機構金絲雀雙軌專屬指針 (Institutional Canaries - Ticket 02 & 03) */}
+        {/* 🦅 台美機構金絲雀雙軌專屬指針 (Institutional Canaries) */}
         <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
           {(marketView === 'US' || marketView === 'GLOBAL') && (
             <div style={{ background: 'rgba(30, 41, 59, 0.45)', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🇺🇸 美高收益債信用利差 (HY OAS)</div>
-                <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: (macroSnapshot.creditSpreadOAS ?? 3.5) >= 5.0 ? '#f87171' : '#38bdf8' }}>
+                <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: (macroSnapshot.creditSpreadOAS ?? 3.5) >= 5.0 ? 'var(--loss-color)' : '#38bdf8' }}>
                   {macroSnapshot.creditSpreadOAS ?? 3.5}%
                 </div>
               </div>
-              <span className="badge" style={{ background: (macroSnapshot.creditSpreadOAS ?? 3.5) >= 5.0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(56, 189, 248, 0.15)', color: (macroSnapshot.creditSpreadOAS ?? 3.5) >= 5.0 ? '#f87171' : '#38bdf8' }}>
+              <span className="badge" style={{ background: (macroSnapshot.creditSpreadOAS ?? 3.5) >= 5.0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(56, 189, 248, 0.15)', color: (macroSnapshot.creditSpreadOAS ?? 3.5) >= 5.0 ? 'var(--loss-color)' : '#38bdf8' }}>
                 {(macroSnapshot.creditSpreadOAS ?? 3.5) >= 5.0 ? '⚠️ 利差走擴' : '平穩健康'}
               </span>
             </div>
@@ -1203,11 +1517,11 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
             <div style={{ background: 'rgba(30, 41, 59, 0.45)', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🇺🇸 CDS 債券違約保險指數 (CDX)</div>
-                <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: (macroSnapshot.cdsInsuranceIndex ?? 65) >= 100 ? '#f87171' : '#a78bfa' }}>
+                <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: (macroSnapshot.cdsInsuranceIndex ?? 65) >= 100 ? 'var(--loss-color)' : '#a78bfa' }}>
                   {macroSnapshot.cdsInsuranceIndex ?? 65} 點
                 </div>
               </div>
-              <span className="badge" style={{ background: (macroSnapshot.cdsInsuranceIndex ?? 65) >= 100 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(167, 139, 250, 0.15)', color: (macroSnapshot.cdsInsuranceIndex ?? 65) >= 100 ? '#f87171' : '#a78bfa' }}>
+              <span className="badge" style={{ background: (macroSnapshot.cdsInsuranceIndex ?? 65) >= 100 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(167, 139, 250, 0.15)', color: (macroSnapshot.cdsInsuranceIndex ?? 65) >= 100 ? 'var(--loss-color)' : '#a78bfa' }}>
                 風控位階：{macroSnapshot.cdsRiskLevel ?? 'LOW'}
               </span>
             </div>
@@ -1217,11 +1531,11 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
             <div style={{ background: 'rgba(30, 41, 59, 0.45)', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🇹🇼 外資台指期淨未平倉 (Net OI)</div>
-                <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: (macroSnapshot.twFuturesNetOi ?? 0) <= -30000 ? '#f87171' : '#4ade80' }}>
+                <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: (macroSnapshot.twFuturesNetOi ?? 0) <= -30000 ? 'var(--loss-color)' : 'var(--gain-color)' }}>
                   {(macroSnapshot.twFuturesNetOi ?? -15000).toLocaleString()} 口
                 </div>
               </div>
-              <span className="badge" style={{ background: (macroSnapshot.twFuturesNetOi ?? 0) <= -30000 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.15)', color: (macroSnapshot.twFuturesNetOi ?? 0) <= -30000 ? '#f87171' : '#4ade80' }}>
+              <span className="badge" style={{ background: (macroSnapshot.twFuturesNetOi ?? 0) <= -30000 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.15)', color: (macroSnapshot.twFuturesNetOi ?? 0) <= -30000 ? 'var(--loss-color)' : 'var(--gain-color)' }}>
                 {(macroSnapshot.twFuturesNetOi ?? 0) <= -45000 ? '🚨 重度放空' : (macroSnapshot.twFuturesNetOi ?? 0) <= -30000 ? '⚠️ 避險警戒' : '中性多空'}
               </span>
             </div>
@@ -1231,17 +1545,16 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
             <div style={{ background: 'rgba(30, 41, 59, 0.45)', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🇹🇼 全市場融資維持率 (130% 斷頭)</div>
-                <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: (macroSnapshot.twMarginMaintenance ?? 165.2) < 140 ? '#f87171' : '#22c55e' }}>
+                <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: (macroSnapshot.twMarginMaintenance ?? 165.2) < 140 ? 'var(--loss-color)' : 'var(--gain-color)' }}>
                   {macroSnapshot.twMarginMaintenance ?? 165.2}%
                 </div>
               </div>
-              <span className="badge" style={{ background: (macroSnapshot.twMarginMaintenance ?? 165.2) < 130 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.15)', color: (macroSnapshot.twMarginMaintenance ?? 165.2) < 130 ? '#f87171' : '#4ade80' }}>
+              <span className="badge" style={{ background: (macroSnapshot.twMarginMaintenance ?? 165.2) < 130 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.15)', color: (macroSnapshot.twMarginMaintenance ?? 165.2) < 130 ? 'var(--loss-color)' : 'var(--gain-color)' }}>
                 {(macroSnapshot.twMarginMaintenance ?? 165.2) < 130 ? '🚨 斷頭追繳潮' : (macroSnapshot.twMarginMaintenance ?? 165.2) < 140 ? '⚠️ 警戒水位' : '安全無虞'}
               </span>
             </div>
           )}
         </div>
-
 
         {/* 展開之歷史數據表格檢視器 */}
         {showHistoryTable && (
@@ -1264,7 +1577,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                     <th style={{ textAlign: 'right' }}>殖利率差</th>
                     <th style={{ textAlign: 'right' }}>VIX恐慌</th>
                     <th style={{ textAlign: 'right' }}>貪婪指數</th>
-                    <th style={{ textAlign: 'right' }}>黃金(USD)</th>
+                    <th style={{ textAlign: 'right' }}>黃金(GC=F)</th>
                     <th style={{ textAlign: 'right' }}>WTI原油</th>
                     <th style={{ textAlign: 'right' }}>美元指數</th>
                     <th style={{ textAlign: 'right' }}>USD/TWD</th>
@@ -1276,7 +1589,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                       <td className="mono" style={{ fontWeight: 600 }}>{h.date}</td>
                       <td className="mono" style={{ textAlign: 'right' }}>{h.us10y.toFixed(2)}%</td>
                       <td className="mono" style={{ textAlign: 'right' }}>{h.us2y.toFixed(2)}%</td>
-                      <td className="mono" style={{ textAlign: 'right', color: h.yieldSpread < 0 ? 'var(--profit-color)' : 'var(--gain-color)' }}>
+                      <td className="mono" style={{ textAlign: 'right', color: h.yieldSpread < 0 ? 'var(--loss-color)' : 'var(--gain-color)' }}>
                         {h.yieldSpread.toFixed(2)}%
                       </td>
                       <td className="mono" style={{ textAlign: 'right' }}>{h.vix.toFixed(1)}</td>
@@ -1293,7 +1606,6 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           </div>
         )}
       </div>
-
 
       {/* 🛡️ 第二層：個人投資組合宏觀防護盾 (Portfolio Macro Shield) */}
       <div className="card">
@@ -1317,11 +1629,10 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
         </div>
 
         <div className="warroom-grid-3">
-          {/* 現金水庫比率 */}
           <div className="warroom-stat-card">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>現金購買力比率</span>
-              <span className="badge" style={{ background: shield.cashRatioPercent < 10 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)', color: shield.cashRatioPercent < 10 ? 'var(--profit-color)' : 'var(--gain-color)' }}>
+              <span className="badge" style={{ background: shield.cashRatioPercent < 10 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)', color: shield.cashRatioPercent < 10 ? 'var(--loss-color)' : 'var(--gain-color)' }}>
                 {shield.cashRatioPercent < 10 ? '水位偏緊' : '防禦充裕'}
               </span>
             </div>
@@ -1333,7 +1644,6 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
             </div>
           </div>
 
-          {/* 質押維持率健康度 */}
           <div className="warroom-stat-card">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>質押維持率健康度</span>
@@ -1342,14 +1652,15 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
               </span>
             </div>
             <div className="mono" style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {shield.marginMaintenanceRatio > 999 ? '∞ (零負債)' : `${shield.marginMaintenanceRatio}%`}
+              {shield.marginMaintenanceRatio === null || shield.marginMaintenanceRatio > 999
+                ? '無質押負債 (零槓桿)'
+                : `${shield.marginMaintenanceRatio}%`}
             </div>
             <div style={{ marginTop: '8px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
               {shield.marginStatus === 'NO_LOAN' ? '戶況健康無追繳壓力' : '維持率安全閥監控中'}
             </div>
           </div>
 
-          {/* 配置偏離度 */}
           <div className="warroom-stat-card">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>目標資產配置偏離</span>
@@ -1400,13 +1711,12 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           </div>
         </div>
 
-        {/* 避風港與決策提示條 */}
         <div
           className="warroom-banner-tip"
           style={{
             background: momentumSignal.safeHavenTriggered ? 'rgba(239, 68, 68, 0.12)' : 'rgba(59, 130, 246, 0.12)',
             border: '1px solid ' + (momentumSignal.safeHavenTriggered ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.3)'),
-            color: momentumSignal.safeHavenTriggered ? 'var(--profit-color)' : 'var(--text-primary)',
+            color: momentumSignal.safeHavenTriggered ? 'var(--loss-color)' : 'var(--text-primary)',
             marginBottom: '16px',
             display: 'flex',
             flexDirection: 'column',
@@ -1435,7 +1745,6 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           </div>
         </div>
 
-        {/* 排行榜清單 */}
         <div className="warroom-table-container">
           <table className="warroom-table">
             <thead>
@@ -1514,7 +1823,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
               關鍵財經事件倒數日曆 (Upcoming Catalysts)
             </h3>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              央行決議 · 通膨 CPI · 就業報告 · 市場流動性關鍵轉折 · 在庫除息日程
+              央行決議 · 通膨 CPI · 台積電法說會 · NVIDIA 財報 · 在庫除息日程
             </span>
           </div>
 
@@ -1543,7 +1852,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           </div>
         </div>
 
-        {/* ⏱️ 彭博式三段時序雷達切換 (Timeline Horizon Radar - Ticket 07 & 11) */}
+        {/* ⏱️ 彭博式三段時序雷達切換 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', margin: '14px 0 6px 0', padding: '10px 14px', background: 'rgba(30, 41, 59, 0.5)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.4)' }}>
           <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
             <Layers size={13} />
@@ -1559,7 +1868,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
             return (
               <button
                 key={tab.id}
-                onClick={() => setTimelineHorizon(tab.id as any)}
+                onClick={() => setTimelineHorizon(tab.id as TimelineHorizon | 'ALL')}
                 style={{
                   fontSize: '0.75rem',
                   padding: '4px 10px',
@@ -1577,14 +1886,12 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           })}
         </div>
 
-        {/* 快速分類篩選籤 (Filter Tabs) */}
-
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '14px 0 16px 0' }}>
           {[
             { id: 'ALL', label: `全部 (${catalysts.length})` },
             { id: 'CENTRAL_BANK', label: `🏛️ 央行利率 (${catalysts.filter((c) => c.category === 'CENTRAL_BANK').length})` },
             { id: 'INFLATION_EMPLOYMENT', label: `📊 通膨就業 (${catalysts.filter((c) => c.category === 'INFLATION' || c.category === 'EMPLOYMENT').length})` },
-            { id: 'EARNINGS_DIVIDEND', label: `🎯 持股除息 (${catalysts.filter((c) => c.category === 'EARNINGS_DIVIDEND' || c.category === 'EARNINGS').length})` },
+            { id: 'EARNINGS_DIVIDEND', label: `🎯 持股除息與法說 (${catalysts.filter((c) => c.category === 'EARNINGS_DIVIDEND' || c.category === 'EARNINGS').length})` },
             { id: 'DERIVATIVE_SETTLEMENT', label: `⚡ 期貨結算 (${catalysts.filter((c) => c.category === 'DERIVATIVE_SETTLEMENT').length})` },
             { id: 'CUSTOM', label: `✏️ 自訂備忘 (${catalysts.filter((c) => c.isCustom).length})` },
           ].map((tab) => {
@@ -1611,7 +1918,6 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           })}
         </div>
 
-        {/* 空狀態防禦卡片 (Empty State Fallback) */}
         {filteredCatalysts.length === 0 ? (
           <div
             style={{
@@ -1665,8 +1971,8 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                     borderColor: isToday
                       ? 'rgba(239, 68, 68, 0.6)'
                       : isUrgent && isHighImpact
-                      ? 'rgba(245, 158, 11, 0.5)'
-                      : undefined,
+                        ? 'rgba(245, 158, 11, 0.5)'
+                        : undefined,
                     boxShadow: isToday ? '0 0 14px rgba(239, 68, 68, 0.2)' : undefined,
                   }}
                 >
@@ -1680,39 +1986,39 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                               event.category === 'CENTRAL_BANK'
                                 ? 'rgba(139, 92, 246, 0.15)'
                                 : event.category === 'INFLATION'
-                                ? 'rgba(245, 158, 11, 0.15)'
-                                : event.category === 'EMPLOYMENT'
-                                ? 'rgba(59, 130, 246, 0.15)'
-                                : event.category === 'EARNINGS_DIVIDEND'
-                                ? 'rgba(16, 185, 129, 0.15)'
-                                : event.category === 'DERIVATIVE_SETTLEMENT'
-                                ? 'rgba(236, 72, 153, 0.15)'
-                                : 'rgba(6, 182, 212, 0.15)',
+                                  ? 'rgba(245, 158, 11, 0.15)'
+                                  : event.category === 'EMPLOYMENT'
+                                    ? 'rgba(59, 130, 246, 0.15)'
+                                    : event.category === 'EARNINGS_DIVIDEND'
+                                      ? 'rgba(16, 185, 129, 0.15)'
+                                      : event.category === 'DERIVATIVE_SETTLEMENT'
+                                        ? 'rgba(236, 72, 153, 0.15)'
+                                        : 'rgba(6, 182, 212, 0.15)',
                             color:
                               event.category === 'CENTRAL_BANK'
                                 ? '#a78bfa'
                                 : event.category === 'INFLATION'
-                                ? '#fbbf24'
-                                : event.category === 'EMPLOYMENT'
-                                ? '#60a5fa'
-                                : event.category === 'EARNINGS_DIVIDEND'
-                                ? '#34d399'
-                                : event.category === 'DERIVATIVE_SETTLEMENT'
-                                ? '#f472b6'
-                                : '#22d3ee',
+                                  ? '#fbbf24'
+                                  : event.category === 'EMPLOYMENT'
+                                    ? '#60a5fa'
+                                    : event.category === 'EARNINGS_DIVIDEND'
+                                      ? 'var(--gain-color)'
+                                      : event.category === 'DERIVATIVE_SETTLEMENT'
+                                        ? '#f472b6'
+                                        : '#22d3ee',
                           }}
                         >
                           {event.category === 'CENTRAL_BANK'
                             ? '🏛️ 央行'
                             : event.category === 'INFLATION'
-                            ? '📊 通膨'
-                            : event.category === 'EMPLOYMENT'
-                            ? '💼 就業'
-                            : event.category === 'EARNINGS_DIVIDEND'
-                            ? '🎯 除息'
-                            : event.category === 'DERIVATIVE_SETTLEMENT'
-                            ? '⚡ 結算'
-                            : '✏️ 自訂'}
+                              ? '📊 通膨'
+                              : event.category === 'EMPLOYMENT'
+                                ? '💼 就業'
+                                : event.category === 'EARNINGS_DIVIDEND'
+                                  ? '🎯 除息/法說'
+                                  : event.category === 'DERIVATIVE_SETTLEMENT'
+                                    ? '⚡ 結算'
+                                    : '✏️ 自訂'}
                         </span>
 
                         {event.impact && (
@@ -1725,14 +2031,14 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                                 event.impact === 'HIGH'
                                   ? 'rgba(239, 68, 68, 0.15)'
                                   : event.impact === 'MEDIUM'
-                                  ? 'rgba(245, 158, 11, 0.12)'
-                                  : 'rgba(148, 163, 184, 0.12)',
+                                    ? 'rgba(245, 158, 11, 0.12)'
+                                    : 'rgba(148, 163, 184, 0.12)',
                               color:
                                 event.impact === 'HIGH'
-                                  ? 'var(--profit-color, #ef4444)'
+                                  ? 'var(--loss-color)'
                                   : event.impact === 'MEDIUM'
-                                  ? '#f59e0b'
-                                  : 'var(--text-muted)',
+                                    ? '#f59e0b'
+                                    : 'var(--text-muted)',
                               border: event.impact === 'HIGH' ? '1px solid rgba(239, 68, 68, 0.3)' : undefined,
                             }}
                           >
@@ -1754,10 +2060,10 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                             fontSize: '0.8rem',
                             fontWeight: 700,
                             color: isToday
-                              ? 'var(--profit-color)'
+                              ? 'var(--loss-color)'
                               : isUrgent
-                              ? 'var(--profit-color)'
-                              : 'var(--accent-primary)',
+                                ? 'var(--loss-color)'
+                                : 'var(--accent-primary)',
                           }}
                         >
                           {isToday ? '🔥 今日登場' : `倒數 ${event.daysLeft} 天`}
@@ -1802,7 +2108,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
         )}
       </div>
 
-      {/* ✏️ 快速新增自訂催化劑彈窗 (Quick Custom Catalyst Modal) */}
+      {/* ✏️ 快速新增自訂催化劑彈窗 */}
       {isCustomModalOpen && (
         <div
           style={{
@@ -1981,7 +2287,8 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           </div>
         </div>
       )}
-      {/* ✏️ 快速數據校準 Modal (Ticket 08) */}
+
+      {/* ✏️ 快速數據校準 Modal */}
       <MacroQuickCalibrationModal
         isOpen={isCalibrateModalOpen}
         onClose={() => setIsCalibrateModalOpen(false)}

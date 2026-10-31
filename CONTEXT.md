@@ -95,6 +95,10 @@ _Avoid_: Raw Volume Passthrough, Unit Mismatch
 
 ### 雙軌回補與統一金鑰網關 (Dual-Market Backfill & Unified Key Gateway) *(新增於 V8.81.0 / Spec 0168)*
 
+**Financial Data Gateway Self-Healing & Scalar Defense (金融數據海關自愈與標量守衛)** *(新增於 Spec 0210 / ADR 0210)*:
+在宏觀數據攝取管線與持久化快取邊界建立第一性自愈機制。針對外部行情 API 回傳之複合行情物件（如 { symbol, price, ... }）誤入標量欄位（如 dxy, ix）的情況，前端與後端雙向海關強制透過 	oFiniteScalarNumber 自動解包 .price 純數值，絕不讓複合字典直接流入 DOM 造成 React child 致命崩潰。同時在工作區層級封裝 WorkspaceErrorBoundary，實現局部異常隔離與一鍵快取修復，達成全應用零黑屏。
+_Avoid_: Object Passthrough, Raw Quote Contamination, Global Crashing
+
 **Taiwan Active ETF & Bond Symbol Recognition (台股後綴字母標的精準識別)**:
 針對主動式基金（如 `00411A` 統一前沿科技）與債券 ETF（如 `00679B` 元大美債20年）等代碼結尾帶字母之標的，在市場路由 `inferMarketType` 與正規化引擎中支援 `/^[0-9]{4,6}[A-Z]?$/` 匹配。100% 精準識別為台股 `TW`，強制鎖定計價幣別為 `TWD`、量能為「張」，終結被誤判為美股或幣別混淆之錯誤。
 _Avoid_: Fallback-To-US, Letter Suffix Mistreatment
@@ -463,6 +467,8 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0127: V8.45.0 股票健診系統純運算診斷引擎、穿透報告與專屬工作區架構](docs/adr/0127-stock-health-check-diagnosis-engine-and-workspace.md)
 - [ADR-0128: V8.45.1 股票健診系統原生毛玻璃擬態、ETF防呆與標的快捷膠囊全面重構](docs/adr/0128-stock-health-check-ux-redesign-and-glassmorphism.md)
 - [ADR-0196: V8.109.0 AI 主力戰情室外聯提示詞受控聯網獵犬協議、上櫃資券與官方 PE/PB 湖倉管線](docs/adr/0196-ai-war-room-prompt-web-hunt-and-tpex-valuation.md)
+- [ADR-0208: V9.05.0 投資組合與庫存法人級會計修復、跨帳戶隔離、斷頭管線貫通與風控歸因升級](docs/adr/0208-portfolio-inventory-institutional-audit-and-pipeline-alignment.md)
+- [ADR-0209: V9.06.0 宏觀戰情室 3.0 — 台美費半跨市傳導鏈、總經波段雙溫度計、已配置 API 金鑰池全自動接線與跨模組孤島貫通](docs/adr/0209-macro-war-room-3-cross-market-transmission-and-api-key-pipeline.md)
 
 ### 股票健診系統原生毛玻璃擬態、ETF智慧防呆與標的快捷膠囊 (Stock Health Check & Native Glassmorphism) *(新增於 V8.45.1)*
 - **原生 Glassmorphism 擬態與排版防禦**：
@@ -2749,3 +2755,12 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
 
 
 
+- **Macro War Room 3.0: Cross-Market SOX/ADR Transmission, Dual Thermometer & API Key Pool Pipeline (宏觀戰情室 3.0：台美費半跨市傳導鏈、總經波段雙溫度計、已配置 API 金鑰池全自動接線與跨模組孤島貫通)**:
+  - 核心模組：`scripts/market-sync/vite-market-middleware.cjs`、`scripts/market-sync/ingest-macro-sentiment.cjs`、`scripts/market-sync/sqlite-db-core.cjs`、`src/types/macro.ts`、`src/engine/macroAdvisorEngine.ts`、`src/utils/macroPulseStorage.ts`、`src/engine/smartKeyRotator.ts`、`src/components/WarRoomWorkspace.tsx`、`src/components/warRoom/`、`src/App.tsx`。
+  - 規範依據：Spec 0209 (v9.06.0) 與 ADR 0209，對齊 GitHub Issue #359。
+  - 核心術語與特性：
+    1. **Dual-Axis Macro & Swing Thermometer (長線總經配置 × 短線波段戰術雙溫度計)**：將長線資產配置慢變數（殖利率利差、Fed 基準利率、CPI、信用利差、估值）收斂為「🧭 長線總經配置溫度計（決定總股票倉位上限 %）」，並將短中期波段快變數（費半 `^SOX` 與台股 `^TWII` 20MA/60MA 位階與乖離率、台積電 ADR 溢折價率、VIX、外資期現貨籌碼、台股騰落廣度）收斂為「⚡ 短中期波段戰術溫度計（決定拉回買點或高乖離減碼）」，徹底解決總經與波段訊號打架問題。
+    2. **Cross-Market Semiconductor Transmission Chain (台美費半與台積電 ADR 跨市傳導鏈)**：即時追蹤費城半導體指數 (`^SOX`) 與台積電 ADR (`TSM`) 對台股 `2330.TW` 之折算價（$\frac{\text{TSM USD} \times \text{USD/TWD}}{5}$）與溢折價率 (%)，搭配 `lookThroughEngine` 真實台積電/半導體穿透總權重試算費半波動損益衝擊。
+    3. **Taiwan Market Breadth & Narrow TSMC Trap Detection (台股騰落廣度與拉積盤偵測)**：由本地 SQLite Lakehouse 即時聚合上市櫃上漲/下跌家數比、站上 20MA 比例 (%) 與三大法人現貨合計買賣超；當加權指數上漲但下跌家數顯著多於上漲家數時，自動標記「⚠️ 拉積盤警訊 (NARROW_TSMC_TRAP)」。
+    4. **Free Deployable Cash Ammo (真·自由可動用子彈)**：於戰情室將已交割現金扣除 T+2 在途待交割淨流出 (`pendingSettlements`) 與近 7 日定期定額預留扣款 (`dcaSchedulerEngine`)，精確反映無違約交割風險之可加碼資金。
+    5. **Encrypted API Key Pool Auto-Hydration Bridge (加密金鑰池全自動橋接管線)**：啟動時自動將 `loadEncryptedKeyPool()` 載入 `globalKeyRotator`，並透過本地安全 Header 串聯使用者已配置之 `FRED`、`FinMind`、`Finnhub`、`FMP`、`Tiingo`、`Alpha Vantage` 金鑰與免金鑰 Yahoo Finance v8（含 `GC=F` 國際黃金現貨期貨 USD/oz 正名），100% 根除 `Math.sin`/`Math.random` 與寫死常數。

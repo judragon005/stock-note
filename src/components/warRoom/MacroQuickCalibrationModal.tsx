@@ -10,6 +10,10 @@ export interface MacroCalibrationFormState {
   twMarginMaintenance: string;
   creditSpreadOAS: string;
   cdsInsuranceIndex: string;
+  goldPrice: string;
+  soxIndex: string;
+  tsmAdrPrice: string;
+  tsmTwPrice: string;
 }
 
 export interface MacroQuickCalibrationModalProps {
@@ -34,9 +38,12 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
     twMarginMaintenance: '',
     creditSpreadOAS: '',
     cdsInsuranceIndex: '',
+    goldPrice: '',
+    soxIndex: '',
+    tsmAdrPrice: '',
+    tsmTwPrice: '',
   });
 
-  // 當彈窗開啟或基準快照變化時，在內部自治初始化表單
   useEffect(() => {
     if (isOpen) {
       setFormData({
@@ -48,6 +55,10 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
         twMarginMaintenance: (macroSnapshot.twMarginMaintenance ?? 165.2).toString(),
         creditSpreadOAS: (macroSnapshot.creditSpreadOAS ?? 3.5).toString(),
         cdsInsuranceIndex: (macroSnapshot.cdsInsuranceIndex ?? 65).toString(),
+        goldPrice: (macroSnapshot.goldPrice ?? 3350).toString(),
+        soxIndex: (macroSnapshot.soxIndex ?? 5200).toString(),
+        tsmAdrPrice: (macroSnapshot.tsmAdrPrice ?? 195).toString(),
+        tsmTwPrice: (macroSnapshot.tsmTwPrice ?? 1050).toString(),
       });
     }
   }, [isOpen, macroSnapshot]);
@@ -68,6 +79,15 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
     const marginNum = parseFloat(formData.twMarginMaintenance) || 165.2;
     const oasNum = parseFloat(formData.creditSpreadOAS) || 3.5;
     const cdsNum = parseFloat(formData.cdsInsuranceIndex) || 65;
+    const goldNum = parseFloat(formData.goldPrice) || 3350;
+    const soxNum = parseFloat(formData.soxIndex) || macroSnapshot.soxIndex || 5200;
+    const tsmAdrNum = parseFloat(formData.tsmAdrPrice) || macroSnapshot.tsmAdrPrice || 195;
+    const tsmTwNum = parseFloat(formData.tsmTwPrice) || macroSnapshot.tsmTwPrice || 1050;
+
+    const fxRate = macroSnapshot.usdToTwd || 32.15;
+    const convertedTwd = Number(((tsmAdrNum * fxRate) / 5).toFixed(2));
+    const premiumPct =
+      tsmTwNum > 0 ? Number((((convertedTwd - tsmTwNum) / tsmTwNum) * 100).toFixed(2)) : 0;
 
     const yieldSpread = Math.round((us10yNum - us2yNum) * 100) / 100;
     const updated: MacroIndicatorSnapshot = {
@@ -80,17 +100,43 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
       vixLevel: vixNum >= 30 ? 'PANIC' : vixNum >= 20 ? 'ELEVATED' : 'NORMAL',
       fearAndGreedIndex: fgNum,
       fearAndGreedLevel:
-        fgNum <= 25 ? 'EXTREME_FEAR' : fgNum <= 45 ? 'FEAR' : fgNum <= 55 ? 'NEUTRAL' : fgNum <= 75 ? 'GREED' : 'EXTREME_GREED',
+        fgNum <= 25
+          ? 'EXTREME_FEAR'
+          : fgNum <= 45
+            ? 'FEAR'
+            : fgNum <= 55
+              ? 'NEUTRAL'
+              : fgNum <= 75
+                ? 'GREED'
+                : 'EXTREME_GREED',
       twFuturesNetOi: oiNum,
       twMarginMaintenance: marginNum,
       creditSpreadOAS: oasNum,
       cdsInsuranceIndex: cdsNum,
+      goldPrice: goldNum,
+      soxIndex: soxNum,
+      tsmAdrPrice: tsmAdrNum,
+      tsmTwPrice: tsmTwNum,
+      tsmAdrConvertedTwd: convertedTwd,
+      tsmAdrPremiumPercent: premiumPct,
+      asOfTimestamp: new Date().toISOString(),
+      sourceStatus: 'CALIBRATED',
       date: new Date().toISOString().split('T')[0],
       updatedAt: Date.now(),
     };
 
     onSave(updated);
     onClose();
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '8px 12px',
+    borderRadius: '8px',
+    border: '1px solid rgba(148, 163, 184, 0.25)',
+    background: 'var(--bg-primary, #0f172a)',
+    color: 'var(--text-primary)',
+    fontSize: '0.85rem',
   };
 
   return (
@@ -114,7 +160,7 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
           border: '1px solid rgba(148, 163, 184, 0.2)',
           boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
           width: '100%',
-          maxWidth: '560px',
+          maxWidth: '600px',
           overflow: 'hidden',
         }}
       >
@@ -130,7 +176,7 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '1.2rem' }}>✏️</span>
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-              10 秒極簡快速校準宏觀數據
+              10 秒極簡快速校準宏觀數據 (含跨市費半與台積電 ADR)
             </h3>
           </div>
           <button
@@ -157,12 +203,12 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
               lineHeight: 1.5,
             }}
           >
-            手動覆寫最新數據以消除歷史滯後。儲存後將即時重算水溫計、作戰姿態並注入晨會簡報。
+            手動覆寫最新數據以消除離線滯後。儲存後將即時重算雙溫度計、台積電 ADR 溢折價並注入晨會簡報。
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
                 美債 10 年期殖利率 (%)
               </label>
               <input
@@ -171,19 +217,11 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
                 required
                 value={formData.us10y}
                 onChange={(e) => handleChange('us10y', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(148, 163, 184, 0.25)',
-                  background: 'var(--bg-primary, #0f172a)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.85rem',
-                }}
+                style={inputStyle}
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
                 美債 2 年期殖利率 (%)
               </label>
               <input
@@ -192,22 +230,14 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
                 required
                 value={formData.us2y}
                 onChange={(e) => handleChange('us2y', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(148, 163, 184, 0.25)',
-                  background: 'var(--bg-primary, #0f172a)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.85rem',
-                }}
+                style={inputStyle}
               />
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
                 VIX 恐慌指數
               </label>
               <input
@@ -216,19 +246,121 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
                 required
                 value={formData.vix}
                 onChange={(e) => handleChange('vix', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(148, 163, 184, 0.25)',
-                  background: 'var(--bg-primary, #0f172a)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.85rem',
-                }}
+                style={inputStyle}
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                國際黃金現貨/期貨 GC=F (USD/oz)
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                required
+                value={formData.goldPrice}
+                onChange={(e) => handleChange('goldPrice', e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                費城半導體 (^SOX)
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                value={formData.soxIndex}
+                onChange={(e) => handleChange('soxIndex', e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                台積電 ADR (TSM USD)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.tsmAdrPrice}
+                onChange={(e) => handleChange('tsmAdrPrice', e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                台積電現貨 (2330 TWD)
+              </label>
+              <input
+                type="number"
+                step="1"
+                value={formData.tsmTwPrice}
+                onChange={(e) => handleChange('tsmTwPrice', e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                外資台指期未平倉淨口數 (負為空單)
+              </label>
+              <input
+                type="number"
+                step="100"
+                placeholder="如 -35000"
+                value={formData.twFuturesNetOi}
+                onChange={(e) => handleChange('twFuturesNetOi', e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                全市場融資維持率 (%)
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                placeholder="如 165.2"
+                value={formData.twMarginMaintenance}
+                onChange={(e) => handleChange('twMarginMaintenance', e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '18px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                高收益債信用利差 OAS (%)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                placeholder="如 3.5"
+                value={formData.creditSpreadOAS}
+                onChange={(e) => handleChange('creditSpreadOAS', e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                CDS 信用違約交換指數 (基點)
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                placeholder="如 65"
+                value={formData.cdsInsuranceIndex}
+                onChange={(e) => handleChange('cdsInsuranceIndex', e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
                 CNN 恐懼貪婪指數 (0~100)
               </label>
               <input
@@ -238,105 +370,7 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
                 required
                 value={formData.fearAndGreedIndex}
                 onChange={(e) => handleChange('fearAndGreedIndex', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(148, 163, 184, 0.25)',
-                  background: 'var(--bg-primary, #0f172a)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.85rem',
-                }}
-              />
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                外資台指期未平倉淨口數 (負為空單)
-              </label>
-              <input
-                type="number"
-                step="100"
-                placeholder="如 -45000"
-                value={formData.twFuturesNetOi}
-                onChange={(e) => handleChange('twFuturesNetOi', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(148, 163, 184, 0.25)',
-                  background: 'var(--bg-primary, #0f172a)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.85rem',
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                全市場融資維持率 (%)
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                placeholder="如 165.2"
-                value={formData.twMarginMaintenance}
-                onChange={(e) => handleChange('twMarginMaintenance', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(148, 163, 184, 0.25)',
-                  background: 'var(--bg-primary, #0f172a)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.85rem',
-                }}
-              />
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                高收益債信用利差 OAS (%)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="如 3.5"
-                value={formData.creditSpreadOAS}
-                onChange={(e) => handleChange('creditSpreadOAS', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(148, 163, 184, 0.25)',
-                  background: 'var(--bg-primary, #0f172a)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.85rem',
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                CDS 信用違約交換指數 (基點)
-              </label>
-              <input
-                type="number"
-                step="1"
-                placeholder="如 65"
-                value={formData.cdsInsuranceIndex}
-                onChange={(e) => handleChange('cdsInsuranceIndex', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(148, 163, 184, 0.25)',
-                  background: 'var(--bg-primary, #0f172a)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.85rem',
-                }}
+                style={inputStyle}
               />
             </div>
           </div>

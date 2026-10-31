@@ -1,6 +1,7 @@
-import { MacroIndicatorSnapshot } from '../types/macro';
+import { MacroIndicatorSnapshot, MacroPinnedStrategy } from '../types/macro';
 
 export const MACRO_PULSE_STORAGE_KEY = 'STOCK_TRACKER_MACRO_PULSE_HISTORY_V1';
+export const MACRO_STRATEGY_PINS_STORAGE_KEY = 'stock_tracker_macro_strategy_pins_v1';
 
 export interface MacroPulseHistoryRecord extends MacroIndicatorSnapshot {
   id: string; // YYYY-MM-DD
@@ -21,13 +22,30 @@ export function isSameDayCacheValid(
 }
 
 /**
+ * 輔助函式：安全提取純數值標量 (Primitive Number)，若遇行情物件則自動拆包取 .price
+ */
+export function toFiniteScalarNumber(val: unknown, fallback: number): number {
+  if (typeof val === 'number' && Number.isFinite(val)) return val;
+  if (
+    val &&
+    typeof val === 'object' &&
+    'price' in val &&
+    typeof (val as { price: unknown }).price === 'number' &&
+    Number.isFinite((val as { price: number }).price)
+  ) {
+    return (val as { price: number }).price;
+  }
+  return fallback;
+}
+
+/**
  * 升級相容清洗：將可能缺少新增欄位之歷史快照安全補齊，防止 undefined 導致白屏崩潰
  */
 export function sanitizeMacroRecord(
   raw: Partial<MacroIndicatorSnapshot>
 ): MacroIndicatorSnapshot {
-  const us10y = typeof raw.us10y === 'number' ? raw.us10y : 3.85;
-  const us2y = typeof raw.us2y === 'number' ? raw.us2y : 3.98;
+  const us10y = toFiniteScalarNumber(raw.us10y, 3.85);
+  const us2y = toFiniteScalarNumber(raw.us2y, 3.98);
   const rawSpread =
     typeof raw.yieldSpread === 'number'
       ? raw.yieldSpread
@@ -64,18 +82,21 @@ export function sanitizeMacroRecord(
     date: raw.date || new Date().toISOString().split('T')[0],
     us10y,
     us2y,
+    us3m: typeof raw.us3m === 'number' ? raw.us3m : undefined,
     yieldSpread: rawSpread,
     isYieldInverted,
-    vix: typeof raw.vix === 'number' ? raw.vix : 18.0,
+    vix: toFiniteScalarNumber(raw.vix, 18.0),
     vixLevel: raw.vixLevel || 'NORMAL',
     fearAndGreedIndex: typeof raw.fearAndGreedIndex === 'number' ? raw.fearAndGreedIndex : 50,
     fearAndGreedLevel: raw.fearAndGreedLevel || 'NEUTRAL',
-    goldPrice: typeof raw.goldPrice === 'number' ? raw.goldPrice : 2500,
-    oilPrice: typeof raw.oilPrice === 'number' ? raw.oilPrice : 75,
-    dxy: typeof raw.dxy === 'number' ? raw.dxy : 101.5,
-    usdToTwd: typeof raw.usdToTwd === 'number' ? raw.usdToTwd : 32.0,
+    goldPrice: toFiniteScalarNumber(raw.goldPrice, 3350.0),
+    oilPrice: toFiniteScalarNumber(raw.oilPrice, 75.0),
+    dxy: toFiniteScalarNumber(raw.dxy, 101.5),
+    usdToTwd: toFiniteScalarNumber(raw.usdToTwd, 32.0),
     usM2GrowthYoY: raw.usM2GrowthYoY ?? 2.1,
     twM2GrowthYoY: raw.twM2GrowthYoY ?? 5.5,
+    usFedRate: raw.usFedRate,
+    usCpiYoY: raw.usCpiYoY,
     creditSpreadOAS,
     cdsInsuranceIndex,
     cdsRiskLevel,
@@ -83,6 +104,42 @@ export function sanitizeMacroRecord(
     twMarginMaintenance,
     twFuturesRiskLevel,
     twMarginRiskLevel,
+    soxIndex: raw.soxIndex,
+    soxChangePercent: raw.soxChangePercent,
+    soxBias20Ma: raw.soxBias20Ma,
+    soxAbove20Ma: raw.soxAbove20Ma,
+    soxAbove60Ma: raw.soxAbove60Ma,
+    tsmAdrPrice: raw.tsmAdrPrice,
+    tsmAdrChangePercent: raw.tsmAdrChangePercent,
+    tsmTwPrice: raw.tsmTwPrice,
+    tsmAdrConvertedTwd: raw.tsmAdrConvertedTwd,
+    tsmAdrPremiumPercent: raw.tsmAdrPremiumPercent,
+    taiexIndex: raw.taiexIndex,
+    taiexChangePercent: raw.taiexChangePercent,
+    taiexBias20Ma: raw.taiexBias20Ma,
+    taiexAbove20Ma: raw.taiexAbove20Ma,
+    taiexAbove60Ma: raw.taiexAbove60Ma,
+    sp500Index: raw.sp500Index,
+    sp500ChangePercent: raw.sp500ChangePercent,
+    sp500Bias20Ma: raw.sp500Bias20Ma,
+    nasdaqIndex: raw.nasdaqIndex,
+    nasdaqChangePercent: raw.nasdaqChangePercent,
+    nasdaqBias20Ma: raw.nasdaqBias20Ma,
+    twMarketBreadth: raw.twMarketBreadth
+      ? {
+          ...raw.twMarketBreadth,
+          pctAbove20MA:
+            raw.twMarketBreadth.pctAbove20MA ??
+            (raw.twMarketBreadth as any).pctAbove20Ma ??
+            (raw.twMarketBreadth as any).above20MaPercent,
+          pctAbove20Ma:
+            (raw.twMarketBreadth as any).pctAbove20Ma ??
+            raw.twMarketBreadth.pctAbove20MA,
+        }
+      : undefined,
+    twInstitutionalSpot: raw.twInstitutionalSpot,
+    asOfTimestamp: raw.asOfTimestamp,
+    sourceStatus: raw.sourceStatus,
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : Date.now(),
   };
 }
@@ -91,6 +148,7 @@ export function sanitizeMacroRecord(
  * 從本地持久化儲存載入全量市場四柱歷史快照 (依日期由新至舊排序，並經過自動清洗升級)
  */
 export function loadMacroPulseHistory(): MacroPulseHistoryRecord[] {
+  if (typeof localStorage === 'undefined') return [];
   try {
     const raw = localStorage.getItem(MACRO_PULSE_STORAGE_KEY);
     if (!raw) return [];
@@ -109,16 +167,18 @@ export function loadMacroPulseHistory(): MacroPulseHistoryRecord[] {
   }
 }
 
+export const loadMacroHistory = loadMacroPulseHistory;
 
 /**
  * 儲存或更新單日市場四柱紀錄 (冪等去重，以 date 為唯一鍵值)
  */
 export function saveMacroPulseRecord(snapshot: MacroIndicatorSnapshot, isManual = false): void {
+  if (typeof localStorage === 'undefined') return;
   try {
     const history = loadMacroPulseHistory();
     const existingIdx = history.findIndex((h) => h.date === snapshot.date);
     const newRecord: MacroPulseHistoryRecord = {
-      ...snapshot,
+      ...sanitizeMacroRecord(snapshot),
       id: snapshot.date,
       isManual,
       updatedAt: Date.now(),
@@ -190,54 +250,159 @@ export function exportMacroPulseHistoryAsCsv(): string {
 }
 
 /**
- * 初始化近 30 天代表性真實歷史脈搏 (若使用者本地首次使用，建立基底數據庫)
+ * Zero-Mock 政策 (Spec 0209 Ticket 02)：
+ * 徹底移除舊版正弦波假歷史產生器，僅回傳本地已儲存之真實歷史快照（無歷史則回傳空陣列 []）。
  */
-export function generateSampleHistoricalMacroData(): void {
-  const history = loadMacroPulseHistory();
-  if (history.length >= 10) return;
+export function generateSampleHistoricalMacroData(): MacroPulseHistoryRecord[] {
+  return loadMacroPulseHistory();
+}
 
-  const sampleDays = 30;
-  const baseDate = new Date();
-  const records: MacroPulseHistoryRecord[] = [];
+/**
+ * 載入外部 AI 宏觀戰略釘選清單 (Spec 0209 Ticket 10)
+ */
+export function loadMacroPinnedStrategies(): MacroPinnedStrategy[] {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(MACRO_STRATEGY_PINS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (item): item is MacroPinnedStrategy =>
+        Boolean(item && typeof item.id === 'string' && typeof item.aiModel === 'string')
+    );
+  } catch (e) {
+    console.error('Failed to load macro pinned strategies:', e);
+    return [];
+  }
+}
 
-  for (let i = sampleDays - 1; i >= 0; i--) {
-    const d = new Date(baseDate);
-    d.setDate(baseDate.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
+/**
+ * 儲存或更新外部 AI 宏觀戰略釘選（按 aiModel 名稱不分大小寫去重覆蓋，預設 7 天效期）
+ */
+export function saveMacroPinnedStrategy(
+  pin: Omit<MacroPinnedStrategy, 'id' | 'pinnedAt' | 'expiresAt'> &
+    Partial<Pick<MacroPinnedStrategy, 'id' | 'pinnedAt' | 'expiresAt'>>
+): MacroPinnedStrategy[] {
+  try {
+    const current = loadMacroPinnedStrategies();
+    const normalizedModel = (pin.aiModel || 'External AI').trim() || 'External AI';
+    const nowMs = Date.now();
+    const pinnedAt = pin.pinnedAt || new Date(nowMs).toISOString();
+    const expiresAt =
+      pin.expiresAt || new Date(nowMs + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    // 模擬真實走勢波動（8 月至 9 月降息預期與市場情緒演進）
-    const t = (sampleDays - i) / sampleDays;
-    const us10y = Math.round((3.95 - t * 0.1 + Math.sin(i) * 0.03) * 100) / 100;
-    const us2y = Math.round((4.15 - t * 0.17 + Math.cos(i) * 0.04) * 100) / 100;
-    const yieldSpread = Math.round((us10y - us2y) * 100) / 100;
-    const vix = Math.round((21.5 - t * 2.1 + Math.sin(i * 1.5) * 1.2) * 10) / 10;
-    const fearGreed = Math.round(42 + t * 6 + Math.cos(i) * 3);
-    const goldPrice = Math.round((2470 + t * 45 + Math.sin(i) * 8) * 10) / 10;
-    const oilPrice = Math.round((77.5 - t * 3.7 + Math.cos(i) * 1.1) * 10) / 10;
-    const dxy = Math.round((102.8 - t * 1.4 + Math.sin(i) * 0.3) * 10) / 10;
-    const usdToTwd = Math.round((32.35 - t * 0.2 + Math.cos(i) * 0.05) * 100) / 100;
+    const clampedCap = Math.max(
+      0,
+      Math.min(100, Math.round(Number(pin.recommendedEquityCapPercent) || 50))
+    );
 
-    records.push({
-      id: dateStr,
-      date: dateStr,
-      us10y,
-      us2y,
-      yieldSpread,
-      isYieldInverted: yieldSpread < 0,
-      vix,
-      vixLevel: vix >= 30 ? 'PANIC' : vix >= 20 ? 'ELEVATED' : 'NORMAL',
-      fearAndGreedIndex: fearGreed,
-      fearAndGreedLevel: fearGreed >= 75 ? 'EXTREME_GREED' : fearGreed >= 55 ? 'GREED' : fearGreed <= 25 ? 'EXTREME_FEAR' : fearGreed <= 45 ? 'FEAR' : 'NEUTRAL',
-      goldPrice,
-      oilPrice,
-      dxy,
-      usdToTwd,
-      usM2GrowthYoY: 2.3,
-      twM2GrowthYoY: 5.6,
-      updatedAt: d.getTime(),
-    });
+    const existingIdx = current.findIndex(
+      (item) => item.aiModel.trim().toLowerCase() === normalizedModel.toLowerCase()
+    );
+
+    const record: MacroPinnedStrategy = {
+      id:
+        pin.id ||
+        (existingIdx >= 0
+          ? current[existingIdx].id
+          : `macro-pin-${nowMs}-${Math.random().toString(36).slice(2, 7)}`),
+      aiModel: existingIdx >= 0 ? current[existingIdx].aiModel : normalizedModel,
+      recommendedEquityCapPercent: clampedCap,
+      soxSupportLevel:
+        typeof pin.soxSupportLevel === 'number' && Number.isFinite(pin.soxSupportLevel)
+          ? pin.soxSupportLevel
+          : undefined,
+      taiexSupportLevel:
+        typeof pin.taiexSupportLevel === 'number' && Number.isFinite(pin.taiexSupportLevel)
+          ? pin.taiexSupportLevel
+          : undefined,
+      tacticalSummary: (pin.tacticalSummary || '').trim(),
+      pinnedAt,
+      expiresAt,
+    };
+
+    if (existingIdx >= 0) {
+      current.splice(existingIdx, 1);
+    }
+    current.unshift(record);
+
+    localStorage.setItem(MACRO_STRATEGY_PINS_STORAGE_KEY, JSON.stringify(current));
+    return current;
+  } catch (e) {
+    console.error('Failed to save macro pinned strategy:', e);
+    return [];
+  }
+}
+
+/**
+ * 移除指定 ID 之外部 AI 宏觀戰略釘選
+ */
+export function removeMacroPinnedStrategy(id: string): MacroPinnedStrategy[] {
+  try {
+    const filtered = loadMacroPinnedStrategies().filter((item) => item.id !== id);
+    localStorage.setItem(MACRO_STRATEGY_PINS_STORAGE_KEY, JSON.stringify(filtered));
+    return filtered;
+  } catch (e) {
+    console.error('Failed to remove macro pinned strategy:', e);
+    return [];
+  }
+}
+
+/**
+ * 解析外部 LLM 回覆文字中之 Loopback 戰略 JSON 區塊 (Spec 0209 Ticket 10)
+ */
+export function parseMacroLoopbackJson(
+  rawText: string
+): Partial<MacroPinnedStrategy> | null {
+  if (!rawText || typeof rawText !== 'string') return null;
+
+  const candidates: string[] = [];
+  const codeBlockMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (codeBlockMatch?.[1]) {
+    candidates.push(codeBlockMatch[1].trim());
   }
 
+  const braceStart = rawText.indexOf('{');
+  const braceEnd = rawText.lastIndexOf('}');
+  if (braceStart >= 0 && braceEnd > braceStart) {
+    candidates.push(rawText.slice(braceStart, braceEnd + 1));
+  }
 
-  localStorage.setItem(MACRO_PULSE_STORAGE_KEY, JSON.stringify(records));
+  for (const candidate of candidates) {
+    try {
+      const obj = JSON.parse(candidate);
+      if (
+        obj &&
+        typeof obj === 'object' &&
+        (obj.recommendedEquityCapPercent !== undefined ||
+          typeof obj.tacticalSummary === 'string')
+      ) {
+        const capNum = Number(obj.recommendedEquityCapPercent);
+        const soxNum = Number(obj.soxSupportLevel);
+        const taiexNum = Number(obj.taiexSupportLevel);
+        return {
+          aiModel:
+            typeof obj.aiModel === 'string' && obj.aiModel.trim()
+              ? obj.aiModel.trim()
+              : 'External AI',
+          recommendedEquityCapPercent: Number.isFinite(capNum)
+            ? Math.max(0, Math.min(100, Math.round(capNum)))
+            : undefined,
+          soxSupportLevel:
+            Number.isFinite(soxNum) && soxNum > 0 ? soxNum : undefined,
+          taiexSupportLevel:
+            Number.isFinite(taiexNum) && taiexNum > 0 ? taiexNum : undefined,
+          tacticalSummary:
+            typeof obj.tacticalSummary === 'string'
+              ? obj.tacticalSummary.trim()
+              : undefined,
+        };
+      }
+    } catch {
+      // 嘗試下一個候選區段
+    }
+  }
+
+  return null;
 }

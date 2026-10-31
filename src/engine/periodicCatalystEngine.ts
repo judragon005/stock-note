@@ -35,6 +35,16 @@ export function getThirdWednesday(year: number, month: number): string {
   return getNthDayOfWeek(year, month, 3, 3);
 }
 
+/** 每月第三個星期四 (台積電 1/4/7/10 月季度法說會常態時窗) */
+export function getThirdThursday(year: number, month: number): string {
+  return getNthDayOfWeek(year, month, 4, 3);
+}
+
+/** 每月第四個星期三 (輝達 NVDA 2/5/8/11 月季度財報開獎週常態時窗) */
+export function getFourthWednesday(year: number, month: number): string {
+  return getNthDayOfWeek(year, month, 3, 4);
+}
+
 /** 每月第三個星期五 (美股選擇權月結算 / 季末四巫日) */
 export function getThirdFriday(year: number, month: number): string {
   return getNthDayOfWeek(year, month, 5, 3);
@@ -60,8 +70,8 @@ export function generatePeriodicCatalysts(
   lookaheadMonths: number = 2
 ): Omit<UpcomingCatalyst, 'daysLeft'>[] {
   const parts = asOfDateStr.split('-');
-  let currentYear = parseInt(parts[0], 10);
-  let currentMonth = parseInt(parts[1], 10);
+  const currentYear = parseInt(parts[0], 10);
+  const currentMonth = parseInt(parts[1], 10);
 
   const results: Omit<UpcomingCatalyst, 'daysLeft'>[] = [];
 
@@ -125,6 +135,36 @@ export function generatePeriodicCatalysts(
       targetMarket: 'US',
       description: '核心通膨黏滯度與物價趨勢關鍵檢驗，直接牽動公債殖利率與科技股估值。',
     });
+
+    // 5. 台積電 (2330) 季度法說會 (1, 4, 7, 10 月中旬第三個週四) - Spec 0209 Ticket 10
+    if ([1, 4, 7, 10].includes(m)) {
+      const tsmcDate = getThirdThursday(y, m);
+      results.push({
+        id: `periodic-tsmc-conf-${monthStr}`,
+        name: `台積電 (2330) ${m} 月季度法說會`,
+        date: tsmcDate,
+        category: 'EARNINGS',
+        impact: 'HIGH',
+        targetMarket: 'TW',
+        symbol: '2330.TW',
+        description: '全球晶圓代工龍頭法說會，毛利率展望與資本支出指引定調費半與台股波段方向。',
+      });
+    }
+
+    // 6. 輝達 (NVDA) 季度財報開獎週 (2, 5, 8, 11 月下旬第四個週三) - Spec 0209 Ticket 10
+    if ([2, 5, 8, 11].includes(m)) {
+      const nvdaDate = getFourthWednesday(y, m);
+      results.push({
+        id: `periodic-nvda-earnings-${monthStr}`,
+        name: `輝達 (NVDA) ${m} 月季度財報開獎週`,
+        date: nvdaDate,
+        category: 'EARNINGS',
+        impact: 'HIGH',
+        targetMarket: 'US',
+        symbol: 'NVDA',
+        description: '全球 AI 算力核心龍頭財報與下季財測指引，直接牽動美股費半與台股 AI 供應鏈估值。',
+      });
+    }
   }
 
   return results;
