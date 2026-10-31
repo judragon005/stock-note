@@ -16,7 +16,7 @@ describe('Ticket 08: 主力戰情室 7 層 Bento-Grid 專業動線架構驗收 (
     vi.spyOn(priceFetcher, 'fetchStockQuote').mockResolvedValue(null);
   });
 
-  it('應呈現交易心理學 7 層 Bento-Grid 階層架構 (Layer 1 ~ Layer 7)', () => {
+  it('應呈現交易心理學 8 層 Bento-Grid 階層架構 (Layer 1 ~ Layer 8，含 Card 18 獨立滿版作戰列與 Layer 7 雙欄矩陣)', () => {
     const html = renderToStaticMarkup(
       React.createElement(AiForceDashboardView, {
         initialSymbol: '2330',
@@ -25,14 +25,15 @@ describe('Ticket 08: 主力戰情室 7 層 Bento-Grid 專業動線架構驗收 (
       })
     );
 
-    // 驗證 7 大層級標記皆存在且按順序呈現
+    // 驗證 8 大層級標記皆存在且按順序呈現 (Spec 0211)
     expect(html).toContain('data-layer="1-kline"');
     expect(html).toContain('data-layer="2-radars"');
     expect(html).toContain('data-layer="3-position-chips"');
     expect(html).toContain('data-layer="4-big-data"');
     expect(html).toContain('data-layer="5-path-cost"');
     expect(html).toContain('data-layer="6-energy-sentiment"');
-    expect(html).toContain('data-layer="7-verdict-command"');
+    expect(html).toContain('data-layer="7-chips-health-matrix"');
+    expect(html).toContain('data-layer="8-main-force-verdict-deck"');
 
     // 驗證 Layer 2 包含雙雷達（卡片 03 + 卡片 05）
     const layer2Index = html.indexOf('data-layer="2-radars"');
@@ -40,13 +41,18 @@ describe('Ticket 08: 主力戰情室 7 層 Bento-Grid 專業動線架構驗收 (
     const layer4Index = html.indexOf('data-layer="4-big-data"');
     const layer5Index = html.indexOf('data-layer="5-path-cost"');
     const layer6Index = html.indexOf('data-layer="6-energy-sentiment"');
-    const layer7Index = html.indexOf('data-layer="7-verdict-command"');
+    const layer7Index = html.indexOf('data-layer="7-chips-health-matrix"');
+    const layer8Index = html.indexOf('data-layer="8-main-force-verdict-deck"');
 
     expect(layer2Index).toBeLessThan(layer3Index);
     expect(layer3Index).toBeLessThan(layer4Index);
     expect(layer4Index).toBeLessThan(layer5Index);
     expect(layer5Index).toBeLessThan(layer6Index);
     expect(layer6Index).toBeLessThan(layer7Index);
+    expect(layer7Index).toBeLessThan(layer8Index);
+
+    // 驗證 Card 18 獨立置於 Layer 8 滿版
+    expect(html).toContain('18 主力追蹤總評判');
   });
 
   it('Layer 2 雙雷達應享有獨立雙欄大視野且具備響應式寬度保護', () => {

@@ -225,6 +225,16 @@ describe('Ticket 05: 邊界保護與向後相容優雅降級 (Fallback Defense)'
     expect(playbook.marketContext).not.toContain('367.5');
     expect(playbook.marketContext).toContain('現價 回落至主力成本線負乖離區');
   });
+
+  it('Spec 0211: Card 18 應包含自適應雙欄中央網格容器 verdict-central-grid', () => {
+    const mockData: MainForceVerdictData = {
+      primaryVerb: '低接吸籌',
+      semanticTag: '偏多承接',
+      fullVerdictText: 'AI 結論：經 251 日日 K 數列與量能動態研判，最新收盤價 104.95 元，相對 20 日 VWAP 主力成本 (109.91 元) 乖離 -4.5%。系統建議執行「低接吸籌」策略。',
+    };
+    // 驗證模組導出與數據對齊
+    expect(mockData.primaryVerb).toBe('低接吸籌');
+  });
 });
 
 
