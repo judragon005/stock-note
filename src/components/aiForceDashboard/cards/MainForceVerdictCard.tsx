@@ -14,47 +14,53 @@ export interface VerdictStatusInfo {
   statusText: string;
 }
 
+export type MainForcePhaseId = 'oversold' | 'accumulation' | 'markup' | 'distribution' | 'consolidation';
+
+/**
+ * 領域專用型別：部位規模區間與勝率（改善 Primitive Obsession）
+ */
+export interface PositionAllocationRange {
+  minPercent: number;
+  maxPercent: number;
+  displayText: string;
+}
+
+export interface ModelWinRate {
+  percentage: number;
+  displayText: string;
+}
+
+/**
+ * 統一核心：根據語意動詞唯一解析主力五態識別碼 (消除 Repeated Switches)
+ */
+export function resolveMainForcePhaseId(verb: string): MainForcePhaseId {
+  if (verb.includes('超跌') || verb.includes('反彈') || verb.includes('反抽')) {
+    return 'oversold';
+  }
+  if (verb.includes('吸籌') || verb.includes('逢低') || verb.includes('低接') || verb.includes('承接')) {
+    return 'accumulation';
+  }
+  if (
+    verb.includes('鎖碼') ||
+    verb.includes('推升') ||
+    verb.includes('進貨') ||
+    verb.includes('加碼') ||
+    verb.includes('強勢') ||
+    verb.includes('買')
+  ) {
+    return 'markup';
+  }
+  if (verb.includes('調節') || verb.includes('出貨') || verb.includes('減碼')) {
+    return 'distribution';
+  }
+  return 'consolidation';
+}
+
 /**
  * 依據三軌認知體系與語意動詞取得主題色、半透明背景、邊框與右側燈號文字
  */
 export function getVerdictStatusInfo(verb: string): VerdictStatusInfo {
-  // 軌道一：多頭攻擊
-  if (verb.includes('鎖碼') || verb.includes('推升') || verb.includes('進貨') || verb.includes('加碼') || verb.includes('強勢') || verb.includes('買')) {
-    return {
-      color: '#ef4444',
-      bg: 'rgba(239, 68, 68, 0.15)',
-      border: 'rgba(239, 68, 68, 0.4)',
-      statusText: '● 偏多集結',
-    };
-  }
-  // 軌道二：超跌轉折
-  if (verb.includes('超跌') || verb.includes('反彈') || verb.includes('反抽')) {
-    return {
-      color: '#c084fc',
-      bg: 'rgba(192, 132, 252, 0.15)',
-      border: 'rgba(192, 132, 252, 0.4)',
-      statusText: '● 跌深反抽',
-    };
-  }
-  // 軌道二：吸籌蓄勢
-  if (verb.includes('吸籌') || verb.includes('逢低') || verb.includes('低接') || verb.includes('承接')) {
-    return {
-      color: '#38bdf8',
-      bg: 'rgba(56, 189, 248, 0.15)',
-      border: 'rgba(56, 189, 248, 0.4)',
-      statusText: '● 偏多承接',
-    };
-  }
-  // 軌道三：風險警戒
-  if (verb.includes('調節') || verb.includes('出貨') || verb.includes('減碼')) {
-    return {
-      color: '#f59e0b',
-      bg: 'rgba(245, 158, 11, 0.15)',
-      border: 'rgba(245, 158, 11, 0.4)',
-      statusText: '● 區間警戒',
-    };
-  }
-  // 停損空方防禦
+  // 特殊空方防禦動詞
   if (verb.includes('賣壓') || verb.includes('撤退') || verb.includes('停損')) {
     return {
       color: '#10b981',
@@ -63,13 +69,46 @@ export function getVerdictStatusInfo(verb: string): VerdictStatusInfo {
       statusText: '● 偏空防禦',
     };
   }
-  // 軌道三：盤整中性 / 預設
-  return {
-    color: '#94a3b8',
-    bg: 'rgba(148, 163, 184, 0.15)',
-    border: 'rgba(148, 163, 184, 0.4)',
-    statusText: '● 空手觀望',
-  };
+
+  const phaseId = resolveMainForcePhaseId(verb);
+  switch (phaseId) {
+    case 'markup':
+      return {
+        color: '#ef4444',
+        bg: 'rgba(239, 68, 68, 0.15)',
+        border: 'rgba(239, 68, 68, 0.4)',
+        statusText: '● 偏多集結',
+      };
+    case 'oversold':
+      return {
+        color: '#c084fc',
+        bg: 'rgba(192, 132, 252, 0.15)',
+        border: 'rgba(192, 132, 252, 0.4)',
+        statusText: '● 跌深反抽',
+      };
+    case 'accumulation':
+      return {
+        color: '#38bdf8',
+        bg: 'rgba(56, 189, 248, 0.15)',
+        border: 'rgba(56, 189, 248, 0.4)',
+        statusText: '● 偏多承接',
+      };
+    case 'distribution':
+      return {
+        color: '#f59e0b',
+        bg: 'rgba(245, 158, 11, 0.15)',
+        border: 'rgba(245, 158, 11, 0.4)',
+        statusText: '● 區間警戒',
+      };
+    case 'consolidation':
+    default:
+      return {
+        color: '#94a3b8',
+        bg: 'rgba(148, 163, 184, 0.15)',
+        border: 'rgba(148, 163, 184, 0.4)',
+        statusText: '● 空手觀望',
+      };
+  }
 }
 
 /**
@@ -81,7 +120,7 @@ export function getVerbBadgeColor(verb: string): { color: string; bg: string; bo
 }
 
 export interface MainForcePhase {
-  id: 'oversold' | 'accumulation' | 'markup' | 'distribution' | 'consolidation';
+  id: MainForcePhaseId;
   label: string;
   action: string;
   color: string;
@@ -93,26 +132,7 @@ export interface MainForcePhase {
  * 取得 5 態主力作戰光譜週期階段與當前激活狀態
  */
 export function getMainForceSpectrumPhases(verb: string): MainForcePhase[] {
-  let activeId: MainForcePhase['id'] = 'consolidation';
-
-  if (verb.includes('超跌') || verb.includes('反彈') || verb.includes('反抽')) {
-    activeId = 'oversold';
-  } else if (verb.includes('吸籌') || verb.includes('逢低') || verb.includes('低接') || verb.includes('承接')) {
-    activeId = 'accumulation';
-  } else if (
-    verb.includes('鎖碼') ||
-    verb.includes('推升') ||
-    verb.includes('進貨') ||
-    verb.includes('加碼') ||
-    verb.includes('強勢') ||
-    verb.includes('買')
-  ) {
-    activeId = 'markup';
-  } else if (verb.includes('調節') || verb.includes('出貨') || verb.includes('減碼')) {
-    activeId = 'distribution';
-  } else {
-    activeId = 'consolidation';
-  }
+  const activeId = resolveMainForcePhaseId(verb);
 
   return [
     {
@@ -168,109 +188,135 @@ export interface MainForcePlaybook {
   invalidationGate: string;
   maxPosition: string;
   winRate: string;
+  /** 領域結構化數值物件 (改善 Primitive Obsession) */
+  allocation?: PositionAllocationRange;
+  modelWinRate?: ModelWinRate;
 }
 
 /**
- * 依據主力語意動詞與結構化指標生成四方實戰操盤指引矩陣
+ * 主力 5 態策略態勢對照表 (Strategy Map - 消除重複邏輯)
+ */
+interface PhaseStrategyProfile {
+  horizon: string;
+  executionDirective: string;
+  stopLossMultiplier: number;
+  stopLossLabel: string;
+  targetMultiplier: number;
+  targetLabel: string;
+  riskRewardRatio: string;
+  invalidationGate: string;
+  allocation: PositionAllocationRange;
+  winRate: ModelWinRate;
+  buildContext: (priceText: string) => string;
+}
+
+const STRATEGY_PROFILES: Record<MainForcePhaseId, PhaseStrategyProfile> = {
+  accumulation: {
+    horizon: '3~5 日短線波段',
+    executionDirective: '分批金字塔掛單，切忌市價追擊',
+    stopLossMultiplier: 0.966,
+    stopLossLabel: '-3.4%',
+    targetMultiplier: 1.045,
+    targetLabel: '+4.5%',
+    riskRewardRatio: '2.4 : 1',
+    invalidationGate: '若盤中放量摜破防守價或外資單日大幅賣超，吸籌邏輯宣告失效',
+    allocation: { minPercent: 30, maxPercent: 40, displayText: '30% ~ 40%' },
+    winRate: { percentage: 68, displayText: '68%' },
+    buildContext: (priceText) => `現價${priceText} 回落至主力成本線負乖離區，短線跌幅已深；大戶賣壓逐步衰竭，機構資金於關鍵支撐帶低掛買盤吸納浮額，籌碼進行沉澱。`,
+  },
+  markup: {
+    horizon: '波段順勢續抱',
+    executionDirective: '順勢加碼並沿 5 日線移動停利',
+    stopLossMultiplier: 0.975,
+    stopLossLabel: '-2.5%',
+    targetMultiplier: 1.08,
+    targetLabel: '+8.0%',
+    riskRewardRatio: '3.2 : 1',
+    invalidationGate: '跌破 5 日線或主力成本線且爆大量未過高，推升攻勢暫告段落',
+    allocation: { minPercent: 50, maxPercent: 70, displayText: '50% ~ 70%' },
+    winRate: { percentage: 75, displayText: '75%' },
+    buildContext: () => '股價突破主力成本區並持續站穩，量增價揚；法人買超籌碼高度集中，多頭結構維持強勢推升態勢。',
+  },
+  oversold: {
+    horizon: '極短線搶反彈 (1~2日)',
+    executionDirective: '嚴格小部位快進快出，見好即收',
+    stopLossMultiplier: 0.98,
+    stopLossLabel: '-2.0%',
+    targetMultiplier: 1.038,
+    targetLabel: '+3.8%',
+    riskRewardRatio: '1.9 : 1',
+    invalidationGate: '盤中創波段新低未見下影線，即刻撤退停損',
+    allocation: { minPercent: 15, maxPercent: 25, displayText: '15% ~ 25%' },
+    winRate: { percentage: 60, displayText: '60%' },
+    buildContext: () => '短線技術指標與成本乖離率呈現極度超跌，空方動能減弱；急跌後迎來技術性修復反抽，短線波動加劇。',
+  },
+  distribution: {
+    horizon: '逢高分批減碼',
+    executionDirective: '分批拔檔獲利，保留現金部位',
+    stopLossMultiplier: 0.98,
+    stopLossLabel: '-2.0%',
+    targetMultiplier: 1.015,
+    targetLabel: '+1.5%',
+    riskRewardRatio: '1.2 : 1',
+    invalidationGate: '爆大量長黑摜破短均線，全數出清離場',
+    allocation: { minPercent: 10, maxPercent: 20, displayText: '10% ~ 20%' },
+    winRate: { percentage: 55, displayText: '55%' },
+    buildContext: () => '股價處於高檔震盪，法人主力逢高分批調節獲利部位，追價意願謹慎，防範假突破拉回風險。',
+  },
+  consolidation: {
+    horizon: '區間觀望等待',
+    executionDirective: '靜待均線收斂突破，不躁進建倉',
+    stopLossMultiplier: 0.97,
+    stopLossLabel: '-3.0%',
+    targetMultiplier: 1.03,
+    targetLabel: '+3.0%',
+    riskRewardRatio: '1.0 : 1',
+    invalidationGate: '跌破區間下緣支撐帶，多方結構轉弱',
+    allocation: { minPercent: 0, maxPercent: 15, displayText: '0% ~ 15%' },
+    winRate: { percentage: 50, displayText: '50%' },
+    buildContext: () => '量能萎縮且籌碼無單向集中跡象，均線糾纏；主力維持區間來回洗盤，等待趨勢表態。',
+  },
+};
+
+/**
+ * 依據主力語意動詞與結構化指標生成四方實戰操盤指引矩陣 (Strategy Map 精簡驅動)
  */
 export function getMainForcePlaybook(verb: string, metrics: MetricCapsule[] = []): MainForcePlaybook {
-  // 嘗試從 metrics 提取收盤價與 VWAP 數值
   const closeMetric = metrics.find((m) => m.label.includes('收盤價'));
   const vwapMetric = metrics.find((m) => m.label.includes('VWAP'));
   const closeNum = closeMetric ? parseFloat(closeMetric.value.replace(/[^\d.]/g, '')) : null;
   const vwapNum = vwapMetric ? parseFloat(vwapMetric.value.replace(/[^\d.]/g, '')) : null;
 
   const basePrice = closeNum ?? (vwapNum ? vwapNum * 0.96 : null);
+  const phaseId = resolveMainForcePhaseId(verb);
+  const profile = STRATEGY_PROFILES[phaseId];
 
-  if (verb.includes('吸籌') || verb.includes('逢低') || verb.includes('低接') || verb.includes('承接')) {
-    const stopLoss = basePrice !== null ? `${(basePrice * 0.966).toFixed(1)} 元 (-3.4%)` : '-- (待價位確認)';
-    const target = vwapNum
-      ? `${vwapNum.toFixed(1)} 元`
-      : basePrice !== null
-      ? `${(basePrice * 1.045).toFixed(1)} 元 (+4.5%)`
-      : '-- (待價位確認)';
-    const priceText = basePrice !== null ? ` (${basePrice} 元)` : '';
-    return {
-      marketContext: `現價${priceText} 回落至主力成本線負乖離區，短線跌幅已深；大戶賣壓逐步衰竭，機構資金於關鍵支撐帶低掛買盤吸納浮額，籌碼進行沉澱。`,
-      horizon: '3~5 日短線波段',
-      executionDirective: '分批金字塔掛單，切忌市價追擊',
-      stopLossPrice: stopLoss,
-      targetPrice: target,
-      riskRewardRatio: basePrice !== null ? '2.4 : 1' : '--',
-      invalidationGate: '若盤中放量摜破防守價或外資單日大幅賣超，吸籌邏輯宣告失效',
-      maxPosition: '30% ~ 40%',
-      winRate: '68%',
-    };
+  const stopLoss = basePrice !== null
+    ? `${(basePrice * profile.stopLossMultiplier).toFixed(1)} 元 (${profile.stopLossLabel})`
+    : '-- (待價位確認)';
+
+  // 特殊處理吸籌目標若有 VWAP 則優先回測 VWAP
+  let target = '-- (待價位確認)';
+  if (phaseId === 'accumulation' && vwapNum) {
+    target = `${vwapNum.toFixed(1)} 元`;
+  } else if (basePrice !== null) {
+    target = `${(basePrice * profile.targetMultiplier).toFixed(1)} 元 (${profile.targetLabel})`;
   }
 
-  if (
-    verb.includes('鎖碼') ||
-    verb.includes('推升') ||
-    verb.includes('進貨') ||
-    verb.includes('加碼') ||
-    verb.includes('強勢') ||
-    verb.includes('買')
-  ) {
-    const stopLoss = basePrice !== null ? `${(basePrice * 0.975).toFixed(1)} 元 (-2.5%)` : '-- (待價位確認)';
-    const target = basePrice !== null ? `${(basePrice * 1.08).toFixed(1)} 元 (+8.0%)` : '-- (待價位確認)';
-    return {
-      marketContext: '股價突破主力成本區並持續站穩，量增價揚；法人買超籌碼高度集中，多頭結構維持強勢推升態勢。',
-      horizon: '波段順勢續抱',
-      executionDirective: '順勢加碼並沿 5 日線移動停利',
-      stopLossPrice: stopLoss,
-      targetPrice: target,
-      riskRewardRatio: basePrice !== null ? '3.2 : 1' : '--',
-      invalidationGate: '跌破 5 日線或主力成本線且爆大量未過高，推升攻勢暫告段落',
-      maxPosition: '50% ~ 70%',
-      winRate: '75%',
-    };
-  }
+  const priceText = basePrice !== null ? ` (${basePrice} 元)` : '';
 
-  if (verb.includes('超跌') || verb.includes('反彈') || verb.includes('反抽')) {
-    const stopLoss = basePrice !== null ? `${(basePrice * 0.98).toFixed(1)} 元 (-2.0%)` : '-- (待價位確認)';
-    const target = basePrice !== null ? `${(basePrice * 1.038).toFixed(1)} 元 (+3.8%)` : '-- (待價位確認)';
-    return {
-      marketContext: '短線技術指標與成本乖離率呈現極度超跌，空方動能減弱；急跌後迎來技術性修復反抽，短線波動加劇。',
-      horizon: '極短線搶反彈 (1~2日)',
-      executionDirective: '嚴格小部位快進快出，見好即收',
-      stopLossPrice: stopLoss,
-      targetPrice: target,
-      riskRewardRatio: basePrice !== null ? '1.9 : 1' : '--',
-      invalidationGate: '盤中創波段新低未見下影線，即刻撤退停損',
-      maxPosition: '15% ~ 25%',
-      winRate: '60%',
-    };
-  }
-
-  if (verb.includes('調節') || verb.includes('出貨') || verb.includes('減碼')) {
-    const stopLoss = basePrice !== null ? `${(basePrice * 0.98).toFixed(1)} 元 (-2.0%)` : '-- (待價位確認)';
-    const target = basePrice !== null ? `${(basePrice * 1.015).toFixed(1)} 元 (+1.5%)` : '-- (待價位確認)';
-    return {
-      marketContext: '股價處於高檔震盪，法人主力逢高分批調節獲利部位，追價意願謹慎，防範假突破拉回風險。',
-      horizon: '逢高分批減碼',
-      executionDirective: '分批拔檔獲利，保留現金部位',
-      stopLossPrice: stopLoss,
-      targetPrice: target,
-      riskRewardRatio: basePrice !== null ? '1.2 : 1' : '--',
-      invalidationGate: '爆大量長黑摜破短均線，全數出清離場',
-      maxPosition: '10% ~ 20%',
-      winRate: '55%',
-    };
-  }
-
-  // 區間震盪 / 預設
-  const stopLoss = basePrice !== null ? `${(basePrice * 0.97).toFixed(1)} 元 (-3.0%)` : '-- (待價位確認)';
-  const target = basePrice !== null ? `${(basePrice * 1.03).toFixed(1)} 元 (+3.0%)` : '-- (待價位確認)';
   return {
-    marketContext: '量能萎縮且籌碼無單向集中跡象，均線糾纏；主力維持區間來回洗盤，等待趨勢表態。',
-    horizon: '區間觀望等待',
-    executionDirective: '靜待均線收斂突破，不躁進建倉',
+    marketContext: profile.buildContext(priceText),
+    horizon: profile.horizon,
+    executionDirective: profile.executionDirective,
     stopLossPrice: stopLoss,
     targetPrice: target,
-    riskRewardRatio: basePrice !== null ? '1.0 : 1' : '--',
-    invalidationGate: '跌破區間下緣支撐帶，多方結構轉弱',
-      maxPosition: '0% ~ 15%',
-      winRate: '50%',
+    riskRewardRatio: basePrice !== null ? profile.riskRewardRatio : '--',
+    invalidationGate: profile.invalidationGate,
+    maxPosition: profile.allocation.displayText,
+    winRate: profile.winRate.displayText,
+    allocation: profile.allocation,
+    modelWinRate: profile.winRate,
   };
 }
 
