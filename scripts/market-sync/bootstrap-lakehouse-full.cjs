@@ -1,13 +1,16 @@
 /**
  * bootstrap-lakehouse-full.cjs
- * 本地 SQLite 數據湖倉一次性全量注水與健康校準總指揮 (Spec 0198 / Ticket 03)
+ * 本地 SQLite 數據湖倉一次性全量注水與健康校準總指揮 (Spec 0198 / Ticket 03 & Spec 0209 Ticket 02)
  * 全面消滅 0 筆空表，提供健全的離線決策基底
  */
 
 const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
 const { parseTwseBwibbu, parseTpexPeratio, saveTwValuationToSqlite } = require('./ingest-tw-valuation.cjs');
 const { runCorporateActionsIngestion } = require('./ingest-tw-corporate-actions.cjs');
-const { ingestMacroSentimentToDb, parseTaifexInstitutionalFuturesCsv } = require('./ingest-macro-sentiment.cjs');
+const {
+  fetchMacroSentimentDaily,
+  ingestMacroSentimentToDb,
+} = require('./ingest-macro-sentiment.cjs');
 const { ingestTwPledgeToDb, fetchAndIngestTwPledge } = require('./ingest-tw-pledge.cjs');
 
 async function fetchJsonSafely(url) {
@@ -51,7 +54,6 @@ async function runBootstrapFull(customDbPath, options = {}) {
       const m = String(today.getMonth() + 1).padStart(2, '0');
       const d = String(today.getDate()).padStart(2, '0');
       const yyyymmdd = `${y}${m}${d}`;
-      const dateStr = `${y}-${m}-${d}`;
 
       const twseUrl = `https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_d?date=${yyyymmdd}&selectType=ALL&response=json`;
       let twseJson = await fetchJsonSafely(twseUrl);
@@ -90,34 +92,20 @@ async function runBootstrapFull(customDbPath, options = {}) {
   // 3. 宏觀指標與市場情緒注水 (美債 10Y, 10Y-2Y 利差, VIX, CNN 恐慌指數, 台指期 OI)
   console.log('\n[3/4] 同步宏觀情緒與期貨未平倉指標 (FRED / CNN / TAIFEX)...');
   try {
-    let futuresOi = null;
-    if (!options.macroPayload) {
-      try {
-        const taifexRes = await fetch('https://www.taifex.com.tw/cht/3/futContractsDateDown', {
-          headers: { 'User-Agent': 'Mozilla/5.0' },
-        });
-        if (taifexRes.ok) {
-          const csvText = await taifexRes.text();
-          futuresOi = parseTaifexInstitutionalFuturesCsv(csvText);
-        }
-      } catch {}
-    }
-
-    const macroPayload = options.macroPayload || {
-      date: '2026-10-20',
-      riskFreeRate3m: 4.85,
-      treasuryYield10y: 4.12,
-      yieldSpread10y2y: 0.18,
-      cnnFearGreedScore: 54.0,
-      vixClose: 18.25,
-      twPutCallRatio: 105.4,
-      twForeignFuturesOi: futuresOi?.foreignNetOi ?? -28450,
-      twTrustFuturesOi: futuresOi?.trustNetOi ?? 12400,
-    };
+    const macroPayload =
+      options.macroPayload ||
+      (await fetchMacroSentimentDaily({
+        fredApiKey: options.fredApiKey || process.env.FRED_API_KEY,
+        finmindApiKey: options.finmindApiKey || process.env.FINMIND_API_KEY,
+      }));
 
     const macroOk = ingestMacroSentimentToDb(macroPayload, customDbPath);
     results.macroSentimentSuccess = macroOk;
-    console.log(`  ✔ 成功寫入宏觀指標快取 (美債10Y: 4.12%, 利差: +0.18%, VIX: 18.25)`);
+    console.log(
+      `  ✔ 成功寫入宏觀指標快取 (美債10Y: ${macroPayload.treasuryYield10y ?? 'N/A'}%, 利差: ${
+        macroPayload.yieldSpread10y2y ?? 'N/A'
+      }%, VIX: ${macroPayload.vixClose ?? 'N/A'})`
+    );
   } catch (macroErr) {
     console.warn(`  × 宏觀指標注水異常:`, macroErr.message);
   }

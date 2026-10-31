@@ -138,9 +138,9 @@ function initSqliteLakehouseDb(customPath) {
     CREATE TABLE IF NOT EXISTS tw_institutional_chips (
       symbol TEXT NOT NULL,
       date TEXT NOT NULL,         -- YYYY-MM-DD
-      foreign_net INTEGER DEFAULT 0,  -- 外資淨買賣 (張)
-      trust_net INTEGER DEFAULT 0,    -- 投信淨買賣 (張)
-      dealer_net INTEGER DEFAULT 0,   -- 自營商淨買賣 (張)
+      foreign_net INTEGER DEFAULT 0,  -- 外資淨買賣 (張/股)
+      trust_net INTEGER DEFAULT 0,    -- 投信淨買賣 (張/股)
+      dealer_net INTEGER DEFAULT 0,   -- 自營商淨買賣 (張/股)
       margin_balance INTEGER,         -- 融資餘額
       short_balance INTEGER,          -- 融券餘額
       sbl_balance INTEGER,            -- 借券賣出餘額
@@ -316,7 +316,161 @@ function initSqliteLakehouseDb(customPath) {
     // 忽略表尚未建立時的遷移檢查錯誤
   }
 
+  db.getTwMarketBreadthAndSpotSummary = (options) => getTwMarketBreadthAndSpotSummary(db, options);
+
   return db;
+}
+
+/**
+ * 計算台股全市場漲跌家數騰落廣度 (Market Breadth) 與三大法人現貨買賣超預估 (Spec 0209 Ticket 05)
+ * 透過近 25 個交易日單一視窗函數查詢，確保執行耗時 < 50ms
+ * @param {DatabaseSync|string} [dbOrPath]
+ * @param {{ taiexChangePercent?: number }} [options]
+ */
+function getTwMarketBreadthAndSpotSummary(dbOrPath, options = {}) {
+  const db =
+    dbOrPath && typeof dbOrPath === 'object' && typeof dbOrPath.prepare === 'function'
+      ? dbOrPath
+      : initSqliteLakehouseDb(typeof dbOrPath === 'string' ? dbOrPath : undefined);
+
+  const breadthRows = db
+    .prepare(`
+      WITH recent_dates AS (
+        SELECT DISTINCT date
+        FROM daily_candles
+        WHERE symbol NOT LIKE '^%'
+          AND (symbol GLOB '[0-9]*' OR symbol LIKE '%.TW' OR symbol LIKE '%.TWO')
+        ORDER BY date DESC
+        LIMIT 25
+      ),
+      bounds AS (
+        SELECT MIN(date) AS min_date, MAX(date) AS max_date FROM recent_dates
+      ),
+      ranked AS (
+        SELECT
+          c.symbol,
+          c.date,
+          c.open,
+          c.close,
+          ROW_NUMBER() OVER (PARTITION BY c.symbol ORDER BY c.date DESC) AS rn,
+          LEAD(c.close) OVER (PARTITION BY c.symbol ORDER BY c.date DESC) AS prev_close,
+          AVG(c.close) OVER (
+            PARTITION BY c.symbol
+            ORDER BY c.date DESC
+            ROWS BETWEEN CURRENT ROW AND 19 FOLLOWING
+          ) AS ma20
+        FROM daily_candles c
+        JOIN bounds b ON c.date >= b.min_date
+        WHERE c.symbol NOT LIKE '^%'
+          AND (c.symbol GLOB '[0-9]*' OR c.symbol LIKE '%.TW' OR c.symbol LIKE '%.TWO')
+      )
+      SELECT symbol, date, open, close, prev_close, ma20
+      FROM ranked
+      WHERE rn = 1 AND date = (SELECT max_date FROM bounds)
+    `)
+    .all();
+
+  let advancingCount = 0;
+  let decliningCount = 0;
+  let unchangedCount = 0;
+  let above20MaCount = 0;
+  let latestTradeDate = null;
+  let tsmcChangePositive = null;
+
+  for (const r of breadthRows) {
+    if (!latestTradeDate && r.date) latestTradeDate = r.date;
+    const refPrice = r.prev_close !== null && r.prev_close !== undefined ? r.prev_close : r.open;
+    const diff = r.close - refPrice;
+
+    if (diff > 0) advancingCount++;
+    else if (diff < 0) decliningCount++;
+    else unchangedCount++;
+
+    if (r.ma20 !== null && r.ma20 !== undefined && r.close >= r.ma20) {
+      above20MaCount++;
+    }
+
+    if (r.symbol === '2330' || r.symbol === '2330.TW') {
+      tsmcChangePositive = diff >= 0;
+    }
+  }
+
+  // 檢查加權指數 ^TWII 漲跌方向 (供拉積盤 NARROW_TSMC_TRAP 判斷)
+  let taiexNonNegative = false;
+  if (typeof options.taiexChangePercent === 'number' && !isNaN(options.taiexChangePercent)) {
+    taiexNonNegative = options.taiexChangePercent >= 0;
+  } else {
+    const twiiRows = db
+      .prepare('SELECT open, close FROM daily_candles WHERE symbol = ? ORDER BY date DESC LIMIT 2')
+      .all('^TWII');
+    if (twiiRows.length >= 2) {
+      taiexNonNegative = twiiRows[0].close >= twiiRows[1].close;
+    } else if (twiiRows.length === 1) {
+      taiexNonNegative = twiiRows[0].close >= twiiRows[0].open;
+    } else if (tsmcChangePositive !== null) {
+      taiexNonNegative = tsmcChangePositive;
+    }
+  }
+
+  const totalStocks = breadthRows.length;
+  const pctAbove20Ma = totalStocks > 0 ? Number(((above20MaCount / totalStocks) * 100).toFixed(1)) : 0;
+  const advanceDeclineRatio =
+    decliningCount > 0
+      ? Number((advancingCount / decliningCount).toFixed(2))
+      : advancingCount > 0
+        ? advancingCount
+        : 1;
+
+  let breadthRegime = 'NEUTRAL';
+  if (decliningCount > advancingCount * 1.3) {
+    breadthRegime = taiexNonNegative ? 'NARROW_TSMC_TRAP' : 'BROAD_DECLINE';
+  } else if (advancingCount > decliningCount * 1.3) {
+    breadthRegime = 'BROAD_RALLY';
+  }
+
+  // 查詢最新交易日三大法人現貨買賣超估計值 (單位：億台幣)
+  const chipSummaryRow = db
+    .prepare(`
+      SELECT
+        i.date AS trade_date,
+        SUM(COALESCE(i.foreign_net, 0) * COALESCE(c.close, 100)) / 1e8 AS foreign_net_twd_billions,
+        SUM(COALESCE(i.trust_net, 0) * COALESCE(c.close, 100)) / 1e8 AS trust_net_twd_billions,
+        SUM(COALESCE(i.dealer_net, 0) * COALESCE(c.close, 100)) / 1e8 AS dealer_net_twd_billions
+      FROM tw_institutional_chips i
+      LEFT JOIN daily_candles c
+        ON c.symbol = i.symbol AND c.date = i.date
+      WHERE i.date = (SELECT MAX(date) FROM tw_institutional_chips)
+      GROUP BY i.date
+    `)
+    .get();
+
+  const foreignNetTwdBillions = Number((chipSummaryRow?.foreign_net_twd_billions || 0).toFixed(2));
+  const trustNetTwdBillions = Number((chipSummaryRow?.trust_net_twd_billions || 0).toFixed(2));
+  const dealerNetTwdBillions = Number((chipSummaryRow?.dealer_net_twd_billions || 0).toFixed(2));
+  const totalNetTwdBillions = Number(
+    (foreignNetTwdBillions + trustNetTwdBillions + dealerNetTwdBillions).toFixed(2)
+  );
+
+  return {
+    twMarketBreadth: {
+      asOfDate: latestTradeDate,
+      tradeDate: latestTradeDate,
+      advancingCount,
+      decliningCount,
+      unchangedCount,
+      totalStocks,
+      advanceDeclineRatio,
+      pctAbove20MA: pctAbove20Ma,
+      breadthRegime,
+    },
+    twInstitutionalSpot: {
+      asOfDate: chipSummaryRow?.trade_date || latestTradeDate,
+      foreignNetTwdBillions,
+      trustNetTwdBillions,
+      dealerNetTwdBillions,
+      totalNetTwdBillions,
+    },
+  };
 }
 
 /**
@@ -341,5 +495,6 @@ module.exports = {
   isSqliteSupported,
   getSqliteDbConnection,
   initSqliteLakehouseDb,
+  getTwMarketBreadthAndSpotSummary,
   closeSqliteDb,
 };

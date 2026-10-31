@@ -5,14 +5,27 @@
  */
 
 const url = require('url');
-const { getSqliteDbConnection, initSqliteLakehouseDb, isSqliteSupported } = require('./sqlite-db-core.cjs');
+const {
+  getSqliteDbConnection,
+  initSqliteLakehouseDb,
+  getTwMarketBreadthAndSpotSummary,
+  isSqliteSupported,
+} = require('./sqlite-db-core.cjs');
 const { searchSymbolsMeta } = require('./seed-symbols-universe.cjs');
 const { getMarketAnchorDate, checkMarketFreshness } = require('./market-freshness-service.cjs');
+const {
+  fetchFullMacroWarRoomPulse,
+  ingestMacroSentimentToDb,
+} = require('./ingest-macro-sentiment.cjs');
 
 const DEFAULT_CATCHUP_COOLDOWN_MS = 10 * 60 * 1000; // 預設 10 分鐘冷卻保護防線 (Spec 0165)
 const CATCHUP_COOLDOWN_MS = Number(process.env.MARKET_CATCHUP_COOLDOWN_MS) || DEFAULT_CATCHUP_COOLDOWN_MS;
+const MACRO_PULSE_CACHE_TTL_MS = 15 * 60 * 1000; // 15 分鐘宏觀脈搏快取 (Spec 0209)
+
 let isCatchingUp = false;
 let lastCatchupTime = 0;
+let cachedMacroPulse = null;
+let cachedMacroPulseAt = 0;
 
 /**
  * 判定是否仍在回補冷卻時間內
@@ -79,6 +92,8 @@ function triggerCatchupTask(customDbPath, options = {}) {
 function resetCatchupStateForTest() {
   isCatchingUp = false;
   lastCatchupTime = 0;
+  cachedMacroPulse = null;
+  cachedMacroPulseAt = 0;
 }
 
 function setLastCatchupTimeForTest(time) {
@@ -171,6 +186,130 @@ function createMarketApiMiddleware(customDbPath) {
           timestamp: Date.now(),
         })
       );
+    }
+
+    // 0.05 GET /api/market/macro (Spec 0209 Tickets 02, 03, 05 宏觀戰情室 3.0 即時脈搏與市場廣度端點)
+    if (pathname === '/api/market/macro' && (req.method || 'GET').toUpperCase() === 'GET') {
+      const headers = req.headers || {};
+      const fredApiKey = headers['x-fred-key'] || process.env.FRED_API_KEY || '';
+      const finmindApiKey = headers['x-finmind-key'] || process.env.FINMIND_API_KEY || '';
+      const finnhubApiKey = headers['x-finnhub-key'] || process.env.FINNHUB_API_KEY || '';
+      const fmpApiKey = headers['x-fmp-key'] || process.env.FMP_API_KEY || '';
+      const tiingoApiKey = headers['x-tiingo-key'] || process.env.TIINGO_API_KEY || '';
+      const alphaVantageApiKey = headers['x-alphavantage-key'] || process.env.ALPHAVANTAGE_API_KEY || '';
+
+      const forceRefresh = query.refresh === '1' || query.refresh === 'true';
+      const now = Date.now();
+      let existingRow = null;
+      try {
+        existingRow = db.prepare('SELECT * FROM macro_sentiment_daily ORDER BY date DESC LIMIT 1').get() || null;
+      } catch {}
+
+      const hasFreshCache =
+        !forceRefresh &&
+        cachedMacroPulse &&
+        now - cachedMacroPulseAt < MACRO_PULSE_CACHE_TTL_MS &&
+        existingRow;
+
+      if (hasFreshCache) {
+        const { twMarketBreadth, twInstitutionalSpot } = getTwMarketBreadthAndSpotSummary(db, {
+          taiexChangePercent: cachedMacroPulse?.taiexChangePercent,
+        });
+        const asOfTimestamp = cachedMacroPulse.asOfTimestamp || new Date(cachedMacroPulseAt).toISOString();
+        const dataObj = {
+          ...(existingRow || {}),
+          ...(cachedMacroPulse || {}),
+          pulse: cachedMacroPulse,
+          twMarketBreadth,
+          twInstitutionalSpot,
+          asOfTimestamp,
+          sourceStatus: 'CACHED',
+        };
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ status: 'ok', data: dataObj, ...dataObj }));
+      }
+
+      fetchFullMacroWarRoomPulse({
+        fredApiKey,
+        finmindApiKey,
+        finnhubApiKey,
+        fmpApiKey,
+        tiingoApiKey,
+        alphaVantageApiKey,
+      })
+        .then((fullPulse) => {
+          const hasLiveSignal =
+            fullPulse &&
+            (fullPulse.vixClose !== null ||
+              fullPulse.treasuryYield10y !== null ||
+              fullPulse.soxClose !== null ||
+              fullPulse.taiexClose !== null ||
+              fullPulse.cnnFearGreedScore !== null);
+
+          if (hasLiveSignal) {
+            const todayStr = fullPulse.date || new Date().toISOString().slice(0, 10);
+            ingestMacroSentimentToDb(
+              {
+                date: todayStr,
+                riskFreeRate3m: fullPulse.riskFreeRate3m,
+                treasuryYield10y: fullPulse.treasuryYield10y,
+                yieldSpread10y2y: fullPulse.yieldSpread10y2y,
+                cnnFearGreedScore: fullPulse.cnnFearGreedScore,
+                vixClose: fullPulse.vixClose,
+                twPutCallRatio: fullPulse.twPutCallRatio ?? null,
+                twForeignFuturesOi: fullPulse.twForeignFuturesOi ?? fullPulse.twFuturesNetOi ?? null,
+                twTrustFuturesOi: fullPulse.twTrustFuturesOi ?? null,
+              },
+              customDbPath
+            );
+            cachedMacroPulse = fullPulse;
+            cachedMacroPulseAt = Date.now();
+          }
+
+          let macroRow = null;
+          try {
+            macroRow = db.prepare('SELECT * FROM macro_sentiment_daily ORDER BY date DESC LIMIT 1').get() || null;
+          } catch {}
+
+          const { twMarketBreadth, twInstitutionalSpot } = getTwMarketBreadthAndSpotSummary(db, {
+            taiexChangePercent: fullPulse?.taiexChangePercent,
+          });
+          const sourceStatus = hasLiveSignal ? 'LIVE' : 'CACHED';
+          const asOfTimestamp = new Date().toISOString();
+          const dataObj = {
+            ...(macroRow || {}),
+            ...(fullPulse || {}),
+            pulse: fullPulse,
+            twMarketBreadth,
+            twInstitutionalSpot,
+            asOfTimestamp,
+            sourceStatus,
+          };
+
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ status: 'ok', data: dataObj, ...dataObj }));
+        })
+        .catch(() => {
+          let macroRow = null;
+          try {
+            macroRow = db.prepare('SELECT * FROM macro_sentiment_daily ORDER BY date DESC LIMIT 1').get() || null;
+          } catch {}
+          const { twMarketBreadth, twInstitutionalSpot } = getTwMarketBreadthAndSpotSummary(db);
+          const asOfTimestamp = macroRow?.updated_at
+            ? new Date(macroRow.updated_at).toISOString()
+            : new Date().toISOString();
+          const dataObj = {
+            ...(macroRow || {}),
+            pulse: cachedMacroPulse || null,
+            twMarketBreadth,
+            twInstitutionalSpot,
+            asOfTimestamp,
+            sourceStatus: 'CACHED',
+          };
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ status: 'ok', data: dataObj, ...dataObj }));
+        });
+      return;
     }
 
     // 0.1 GET /api/market/backfill-status (Spec 0168 / Ticket 08)
@@ -304,8 +443,6 @@ function createMarketApiMiddleware(customDbPath) {
         });
       return;
     }
-
-
 
     // 1. GET /api/market/symbols?q=...
     if (pathname === '/api/market/symbols') {

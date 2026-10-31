@@ -402,18 +402,10 @@ async function runUsMarketSync(config = {}) {
     }ms。`
   );
 
-  // 6. 附掛宏觀情緒與債券殖利率指標同步 (Spec 0198)
+  // 6. 附掛宏觀情緒與債券殖利率指標同步 (Spec 0198 / Spec 0209 真實聯網採集)
   try {
-    const { ingestMacroSentimentToDb } = require('./ingest-macro-sentiment.cjs');
-    const macroPayload = {
-      date: dateStr,
-      riskFreeRate3m: 4.85,
-      treasuryYield10y: 4.12,
-      yieldSpread10y2y: 0.18,
-      cnnFearGreedScore: 54.0,
-      vixClose: 18.25,
-      twPutCallRatio: 105.4,
-    };
+    const { fetchMacroSentimentDaily, ingestMacroSentimentToDb } = require('./ingest-macro-sentiment.cjs');
+    const macroPayload = await fetchMacroSentimentDaily({ date: dateStr });
     ingestMacroSentimentToDb(macroPayload, customDbPath);
     console.log(`✔ [CadenceSync] 已順路更新宏觀情緒與美債殖利率至 macro_sentiment_daily`);
   } catch (macroErr) {

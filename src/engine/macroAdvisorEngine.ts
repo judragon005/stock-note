@@ -1,14 +1,314 @@
 import {
   AiMorningBriefDirective,
+  FearAndGreedLevel,
   MacroAdvisorInput,
+  MacroDualThermometerResult,
   MacroIndicatorSnapshot,
   MacroPortfolioShield,
   MacroThermometer,
   QuickStressScenario,
   UpcomingCatalyst,
   GroupedCatalysts,
+  VixLevel,
 } from '../types/macro';
 
+/**
+ * 評估 VIX 恐慌指數分級
+ */
+export function evaluateVixLevel(vix: number): VixLevel {
+  if (vix >= 30) return 'PANIC';
+  if (vix >= 22) return 'ELEVATED';
+  if (vix <= 13.5) return 'EUPHORIA';
+  return 'NORMAL';
+}
+
+/**
+ * 評估恐懼與貪婪指數分級
+ */
+export function evaluateFearAndGreedLevel(score: number): FearAndGreedLevel {
+  if (score <= 25) return 'EXTREME_FEAR';
+  if (score <= 44) return 'FEAR';
+  if (score >= 75) return 'EXTREME_GREED';
+  if (score >= 56) return 'GREED';
+  return 'NEUTRAL';
+}
+
+/**
+ * Spec 0209 Ticket 04：計算台積電美股 ADR (TSM) 對台股 (2330.TW) 5:1 折合價與溢折價率
+ * 支援物件解構傳參或 (tsmUsd, tw2330Twd, usdToTwd) 3 參數呼叫
+ */
+export function calculateTsmcAdrPremium(
+  paramsOrTsmUsd: { tsmAdrUsd: number; tw2330Twd: number; usdToTwd: number } | number,
+  tw2330TwdArg?: number,
+  usdToTwdArg?: number
+): {
+  convertedTwd: number;
+  premiumPercent: number;
+  signal: 'HIGH_PREMIUM_BULLISH' | 'MODERATE_PREMIUM' | 'PARITY' | 'DISCOUNT_BEARISH';
+} {
+  let tsmAdrUsd = 0;
+  let tw2330Twd = 0;
+  let usdToTwd = 32.0;
+
+  if (typeof paramsOrTsmUsd === 'object' && paramsOrTsmUsd !== null) {
+    tsmAdrUsd = paramsOrTsmUsd.tsmAdrUsd;
+    tw2330Twd = paramsOrTsmUsd.tw2330Twd;
+    usdToTwd = paramsOrTsmUsd.usdToTwd;
+  } else {
+    tsmAdrUsd = Number(paramsOrTsmUsd) || 0;
+    tw2330Twd = Number(tw2330TwdArg) || 0;
+    usdToTwd = Number(usdToTwdArg) || 32.0;
+  }
+
+  const convertedTwd = Number(((tsmAdrUsd * usdToTwd) / 5).toFixed(2));
+  const premiumPercent =
+    tw2330Twd > 0
+      ? Number((((convertedTwd - tw2330Twd) / tw2330Twd) * 100).toFixed(2))
+      : 0;
+
+  let signal: 'HIGH_PREMIUM_BULLISH' | 'MODERATE_PREMIUM' | 'PARITY' | 'DISCOUNT_BEARISH' =
+    'PARITY';
+  if (premiumPercent >= 8) {
+    signal = 'HIGH_PREMIUM_BULLISH';
+  } else if (premiumPercent >= 2) {
+    signal = 'MODERATE_PREMIUM';
+  } else if (premiumPercent < -2) {
+    signal = 'DISCOUNT_BEARISH';
+  }
+
+  return {
+    convertedTwd,
+    premiumPercent,
+    signal,
+  };
+}
+
+/**
+ * Spec 0209 Ticket 06：總經配置 × 波段戰術雙溫度計 (Dual Macro-Swing Thermometer)
+ */
+export function evaluateMacroDualThermometer(
+  macro: MacroIndicatorSnapshot
+): MacroDualThermometerResult {
+  // 1. 長線總經配置溫度計 (Strategic Macro Regime)
+  let strategicScore = 55;
+  const strategicDrivers: string[] = [];
+
+  const hasValidYield = typeof macro.us10y === 'number' && macro.us10y > 0 && typeof macro.us2y === 'number' && macro.us2y > 0;
+  if (hasValidYield && (macro.isYieldInverted || macro.yieldSpread < 0)) {
+    strategicScore -= 15;
+    strategicDrivers.push(`美債殖利率曲線倒掛 (${macro.yieldSpread}%)，長線需維持景氣防禦意識`);
+  } else if (hasValidYield && macro.yieldSpread >= 0.3) {
+    strategicScore += 12;
+    strategicDrivers.push(`殖利率曲線正常化 (+${macro.yieldSpread}%)，資金定價健康`);
+  }
+
+  if (macro.usCpiYoY !== undefined) {
+    if (macro.usCpiYoY >= 3.5) {
+      strategicScore -= 12;
+      strategicDrivers.push(`美國 CPI 通膨年增率偏高 (${macro.usCpiYoY}%)，壓抑降息空間`);
+    } else if (macro.usCpiYoY <= 2.8) {
+      strategicScore += 8;
+      strategicDrivers.push(`美國 CPI 通膨受控 (${macro.usCpiYoY}%)，有利中長線估值`);
+    }
+  }
+
+  if (macro.creditSpreadOAS !== undefined) {
+    if (macro.creditSpreadOAS >= 5.0) {
+      strategicScore -= 20;
+      strategicDrivers.push(`高收益債信用利差擴大 (${macro.creditSpreadOAS}%)，企業違約風險升溫`);
+    } else if (macro.creditSpreadOAS <= 3.8) {
+      strategicScore += 8;
+      strategicDrivers.push(`信用利差維持低位 (${macro.creditSpreadOAS}%)，企業信用環境穩健`);
+    }
+  }
+
+  if (macro.usM2GrowthYoY !== undefined) {
+    if (macro.usM2GrowthYoY < 0) {
+      strategicScore -= 10;
+      strategicDrivers.push(`美國 M2 貨幣年增率萎縮 (${macro.usM2GrowthYoY}%)，流動性偏緊`);
+    } else if (macro.usM2GrowthYoY >= 2.0) {
+      strategicScore += 7;
+      strategicDrivers.push(`M2 貨幣供給溫和擴張 (+${macro.usM2GrowthYoY}%)，長線資金活水充沛`);
+    }
+  }
+
+  strategicScore = Math.max(0, Math.min(100, Math.round(strategicScore)));
+
+  let strategicStance: 'DEFENSIVE' | 'NEUTRAL' | 'AGGRESSIVE' = 'NEUTRAL';
+  let strategicLabel = '⚖️ 長線平衡・核心配置';
+  let recommendedEquityCapPercent = 60;
+
+  if (strategicScore >= 68) {
+    strategicStance = 'AGGRESSIVE';
+    strategicLabel = '🚀 長線順風・積極擴張';
+    recommendedEquityCapPercent = Math.min(85, Math.round(70 + (strategicScore - 68) * 0.5));
+  } else if (strategicScore <= 42) {
+    strategicStance = 'DEFENSIVE';
+    strategicLabel = '🛡️ 長線防禦・保留現金';
+    recommendedEquityCapPercent = Math.max(30, Math.round(30 + (strategicScore / 42) * 15));
+  } else {
+    strategicStance = 'NEUTRAL';
+    strategicLabel = '⚖️ 長線平衡・核心配置';
+    recommendedEquityCapPercent = Math.round(50 + ((strategicScore - 42) / 26) * 18);
+  }
+
+  // 2. 短中期波段戰術溫度計 (Tactical Swing Radar)
+  let swingScore = 50;
+  const swingDrivers: string[] = [];
+
+  const isNarrowTsmcTrap = Boolean(
+    macro.twMarketBreadth?.breadthRegime === 'NARROW_TSMC_TRAP' ||
+      ((macro.taiexChangePercent ?? 0) > 0 &&
+        (macro.twMarketBreadth?.decliningCount ?? 0) >
+          (macro.twMarketBreadth?.advancingCount ?? 0) * 1.3)
+  );
+
+  if (macro.soxAbove20Ma) {
+    swingScore += 18;
+    swingDrivers.push(
+      `費半站穩 20MA 月線${macro.soxBias20Ma !== undefined ? ` (乖離 ${macro.soxBias20Ma > 0 ? '+' : ''}${macro.soxBias20Ma}%)` : ''}`
+    );
+  } else if (macro.soxAbove20Ma === false) {
+    swingScore -= 15;
+    swingDrivers.push('費半跌破 20MA 月線支撐，短線科技股動能轉弱');
+  }
+
+  if ((macro.tsmAdrPremiumPercent ?? 0) >= 5) {
+    swingScore += 10;
+    swingDrivers.push(`台積電 ADR 溢價達 +${macro.tsmAdrPremiumPercent}%，外資買盤先行領漲`);
+  } else if ((macro.tsmAdrPremiumPercent ?? 0) < -1) {
+    swingScore -= 8;
+    swingDrivers.push(`台積電 ADR 呈現折價 (${macro.tsmAdrPremiumPercent}%)，壓抑權值表現`);
+  }
+
+  if (macro.taiexAbove20Ma) {
+    swingScore += 12;
+  } else if (macro.taiexAbove20Ma === false) {
+    swingScore -= 12;
+  }
+
+  if (isNarrowTsmcTrap) {
+    swingScore -= 8;
+    swingDrivers.push('偵測到台股拉積盤結構（指數紅盤但下跌家數顯著多於上漲家數），中小型股慎防失血');
+  }
+
+  const soxBias = macro.soxBias20Ma ?? 0;
+  const taiexBias = macro.taiexBias20Ma ?? 0;
+
+  let signal: MacroDualThermometerResult['tacticalSwing']['signal'] = 'AGGRESSIVE_SWING';
+  let tacticalLabel = '🔥 波段強勢・順勢抱牢';
+
+  if (soxBias > 6 || taiexBias > 5) {
+    signal = 'OVERHEATED_TRIM';
+    tacticalLabel = '⚠️ 短線正乖離過熱・分批調節不追高';
+    swingDrivers.push('短線月線正乖離過大，隨時留意均值回歸震盪');
+  } else if (
+    macro.vix >= 25 ||
+    (soxBias < -4 && macro.soxAbove60Ma !== false)
+  ) {
+    signal = 'PULLBACK_BUY';
+    tacticalLabel = '⚡ 短線恐慌超跌・季線支撐分批低接';
+    swingDrivers.push('短線急跌乖離過大或恐慌升溫，浮現右側/左側分批低接窗口');
+  } else if (
+    macro.soxAbove20Ma === false &&
+    macro.taiexAbove20Ma === false &&
+    (macro.vix > 22 || (macro.twFuturesNetOi ?? 0) < -30000)
+  ) {
+    signal = 'DEFENSIVE_CASH';
+    tacticalLabel = '🛡️ 雙破月線且籌碼偏空・收回波段現金';
+    swingDrivers.push('美台雙雙跌破月線且期貨空單或 VIX 偏高，暫停波段追價');
+  } else if (macro.soxAbove20Ma || macro.taiexAbove20Ma) {
+    signal = 'AGGRESSIVE_SWING';
+    tacticalLabel = '🔥 費半與台股守穩月線・波段順勢操作';
+  } else {
+    signal = 'DEFENSIVE_CASH';
+    tacticalLabel = '⚖️ 區間震盪整理・嚴守箱底紀律';
+  }
+
+  swingScore = Math.max(0, Math.min(100, Math.round(swingScore)));
+
+  const twSwingSummary = `台股${macro.taiexAbove20Ma ? '站上 20MA 月線' : '位於 20MA 月線下'}${
+    macro.taiexBias20Ma !== undefined ? ` (乖離 ${macro.taiexBias20Ma}%)` : ''
+  }${isNarrowTsmcTrap ? '，⚠️ 呈現拉積盤結構' : '，廣度結構尚稱均衡'}。`;
+
+  const usSwingSummary = `費半 (^SOX) ${
+    macro.soxAbove20Ma ? '強勢守穩 20MA' : '回測 20MA 下方'
+  }${macro.soxBias20Ma !== undefined ? ` (乖離 ${macro.soxBias20Ma}%)` : ''}，TSM ADR 溢折價 ${
+    macro.tsmAdrPremiumPercent !== undefined ? `${macro.tsmAdrPremiumPercent}%` : '平價'
+  }。`;
+
+  return {
+    strategicRegime: {
+      score: strategicScore,
+      stance: strategicStance,
+      label: strategicLabel,
+      recommendedEquityCapPercent,
+      drivers:
+        strategicDrivers.length > 0
+          ? strategicDrivers
+          : ['總經核心指標位於常態區間，維持核心資產配置。'],
+    },
+    tacticalSwing: {
+      score: swingScore,
+      signal,
+      label: tacticalLabel,
+      twSwingSummary,
+      usSwingSummary,
+      isNarrowTsmcTrap,
+      drivers:
+        swingDrivers.length > 0
+          ? swingDrivers
+          : ['跨市場波段指標處於中性整理區間。'],
+    },
+  };
+}
+
+/**
+ * Spec 0209 Ticket 07：試算動態 VIX 耦合之 1-Day 95% VaR 與壓力測試
+ */
+export function calculateMacroVaRAndStress(params: {
+  navTWD: number;
+  collateralValueTWD: number;
+  totalLoanDebtTWD: number;
+  usStockValueUSD?: number;
+  vix?: number;
+  annualizedVolatility?: number;
+}): {
+  valueAtRisk95TWD: number;
+  varRatioPercent: number;
+  fxDeltaTWD: number;
+  quickStressTest: QuickStressScenario[];
+} {
+  const {
+    navTWD,
+    collateralValueTWD,
+    totalLoanDebtTWD,
+    usStockValueUSD = 0,
+    vix,
+    annualizedVolatility,
+  } = params;
+
+  const effectiveVol =
+    annualizedVolatility !== undefined
+      ? annualizedVolatility
+      : vix !== undefined && vix > 0
+      ? Math.max(0.12, vix / 100)
+      : 0.18;
+
+  const totalNavTWD = Math.max(0, navTWD);
+  const valueAtRisk95TWD = calculate1DayVaR95(totalNavTWD, effectiveVol);
+  const varRatioPercent =
+    totalNavTWD > 0 ? Math.round((valueAtRisk95TWD / totalNavTWD) * 1000) / 10 : 0;
+  const fxDeltaTWD = calculateFxDelta(usStockValueUSD);
+  const quickStressTest = calculateQuickStressMatrix(collateralValueTWD, totalLoanDebtTWD);
+
+  return {
+    valueAtRisk95TWD,
+    varRatioPercent,
+    fxDeltaTWD,
+    quickStressTest,
+  };
+}
 
 /**
  * 計算個人投資組合宏觀防護盾 (Calculate Portfolio Macro Shield)
@@ -22,6 +322,15 @@ export function calculatePortfolioMacroShield(params: {
   portfolioBeta?: number;
   usStockValueUSD?: number;
   annualizedVolatility?: number;
+  vix?: number;
+  pendingSettlementOutflowTWD?: number;
+  upcoming7dDcaCommitmentTWD?: number;
+  tsmcLookThroughWeightPercent?: number;
+  semiLookThroughWeightPercent?: number;
+  soxStressImpact3PctTWD?: number;
+  maxDropToleranceTo130Percent?: number;
+  usWeightedCostFxRate?: number;
+  usFxCushionTWD?: number;
 }): MacroPortfolioShield {
   const {
     navTWD,
@@ -31,9 +340,17 @@ export function calculatePortfolioMacroShield(params: {
     maxDriftPercent = 0,
     portfolioBeta,
     usStockValueUSD = 0,
-    annualizedVolatility = 0.18,
+    annualizedVolatility,
+    vix,
+    pendingSettlementOutflowTWD = 0,
+    upcoming7dDcaCommitmentTWD = 0,
+    tsmcLookThroughWeightPercent,
+    semiLookThroughWeightPercent,
+    soxStressImpact3PctTWD,
+    maxDropToleranceTo130Percent,
+    usWeightedCostFxRate,
+    usFxCushionTWD,
   } = params;
-
 
   const totalNavTWD = Math.max(0, navTWD);
   const cashBalanceTWD = Math.max(0, cashTWD);
@@ -51,7 +368,7 @@ export function calculatePortfolioMacroShield(params: {
   }
 
   const hasLoans = totalLoanDebtTWD > 0;
-  let marginMaintenanceRatio = 0;
+  let marginMaintenanceRatio: number | null = null;
   let marginStatus: MacroPortfolioShield['marginStatus'] = 'NO_LOAN';
 
   if (hasLoans) {
@@ -66,11 +383,30 @@ export function calculatePortfolioMacroShield(params: {
     }
   }
 
-  const valueAtRisk95TWD = calculate1DayVaR95(totalNavTWD, annualizedVolatility);
-  const varRatioPercent =
-    totalNavTWD > 0 ? Math.round((valueAtRisk95TWD / totalNavTWD) * 1000) / 10 : 0;
-  const fxDeltaTWD = calculateFxDelta(usStockValueUSD);
-  const quickStressTest = calculateQuickStressMatrix(collateralValueTWD, totalLoanDebtTWD);
+  const { valueAtRisk95TWD, varRatioPercent, fxDeltaTWD, quickStressTest } =
+    calculateMacroVaRAndStress({
+      navTWD: totalNavTWD,
+      collateralValueTWD,
+      totalLoanDebtTWD,
+      usStockValueUSD,
+      vix,
+      annualizedVolatility,
+    });
+
+  const freeDeployableCashTWD = Math.max(
+    0,
+    Math.round(cashBalanceTWD - pendingSettlementOutflowTWD - upcoming7dDcaCommitmentTWD)
+  );
+
+  const computedDropTolerance =
+    maxDropToleranceTo130Percent !== undefined
+      ? maxDropToleranceTo130Percent
+      : hasLoans && collateralValueTWD > 0
+      ? Math.max(
+          0,
+          Number(((1 - (totalLoanDebtTWD * 1.3) / collateralValueTWD) * 100).toFixed(1))
+        )
+      : undefined;
 
   return {
     totalNavTWD,
@@ -86,9 +422,19 @@ export function calculatePortfolioMacroShield(params: {
     varRatioPercent,
     fxDeltaTWD,
     quickStressTest,
+    freeDeployableCashTWD,
+    pendingSettlementOutflowTWD,
+    upcoming7dDcaCommitmentTWD,
+    tsmcLookThroughWeightPercent,
+    semiLookThroughWeightPercent,
+    soxStressImpact3PctTWD,
+    maxDropToleranceTo130Percent: computedDropTolerance,
+    usWeightedCostFxRate,
+    usFxCushionTWD,
   };
 }
 
+export const evaluatePortfolioMacroShield = calculatePortfolioMacroShield;
 
 /**
  * 試算關鍵財經事件倒數 (Calculate Upcoming Catalysts)
@@ -115,7 +461,7 @@ export function calculateUpcomingCatalysts(
 }
 
 /**
- * 構建供外部 LLM 使用之結構化提示詞 Payload
+ * 構建供外部 LLM 使用之結構化提示詞 Payload (含 Spec 0209 Loopback Protocol Directive)
  */
 export function buildLlmPromptPayload(
   macro: MacroIndicatorSnapshot,
@@ -125,13 +471,17 @@ export function buildLlmPromptPayload(
   const payload = {
     systemDirective: {
       role: 'Chief Risk Officer (CRO) & Hedge Fund Portfolio Manager',
-      mandate: '嚴格基於所提供之基準日客觀數據進行極端壓力測試與策略審查。資料為封閉本地模型推演快照，請勿質疑歷史數據時效性。',
+      mandate:
+        '嚴格基於所提供之基準日客觀數據進行極端壓力測試與策略審查。資料為封閉本地模型推演快照，請勿質疑歷史數據時效性。',
       mode: 'DEFENSIVE_AND_EXECUTION_AUDIT',
+      loopbackProtocolDirective:
+        '<loopback_protocol_directive> 請於回覆最末段附帶一個 ```json 區塊，格式為 {"aiModel": "模型名稱", "recommendedEquityCapPercent": 65, "soxSupportLevel": 5000, "taiexSupportLevel": 22500, "tacticalSummary": "一句話戰術建議"} 供戰情室自動解析釘選。</loopback_protocol_directive>',
     },
     macro: {
       date: macro.date,
       us10yYield: macro.us10y,
       us2yYield: macro.us2y,
+      us3mYield: macro.us3m,
       yieldSpread: macro.yieldSpread,
       isYieldInverted: macro.isYieldInverted,
       vix: macro.vix,
@@ -144,6 +494,8 @@ export function buildLlmPromptPayload(
       usdToTwd: macro.usdToTwd,
       usM2GrowthYoY: macro.usM2GrowthYoY,
       twM2GrowthYoY: macro.twM2GrowthYoY,
+      usFedRate: macro.usFedRate,
+      usCpiYoY: macro.usCpiYoY,
       creditSpreadOAS: macro.creditSpreadOAS,
       cdsInsuranceIndex: macro.cdsInsuranceIndex,
       cdsRiskLevel: macro.cdsRiskLevel,
@@ -151,20 +503,34 @@ export function buildLlmPromptPayload(
       twMarginMaintenance: macro.twMarginMaintenance,
       twFuturesRiskLevel: macro.twFuturesRiskLevel,
       twMarginRiskLevel: macro.twMarginRiskLevel,
+      soxIndex: macro.soxIndex,
+      soxBias20Ma: macro.soxBias20Ma,
+      soxAbove20Ma: macro.soxAbove20Ma,
+      tsmAdrPrice: macro.tsmAdrPrice,
+      tsmAdrPremiumPercent: macro.tsmAdrPremiumPercent,
+      taiexIndex: macro.taiexIndex,
+      taiexBias20Ma: macro.taiexBias20Ma,
+      taiexAbove20Ma: macro.taiexAbove20Ma,
+      twMarketBreadth: macro.twMarketBreadth,
+      twInstitutionalSpot: macro.twInstitutionalSpot,
     },
     portfolio: {
       totalNavTWD: shield.totalNavTWD,
       cashBalanceTWD: shield.cashBalanceTWD,
+      freeDeployableCashTWD: shield.freeDeployableCashTWD ?? shield.cashBalanceTWD,
       cashRatioPercent: shield.cashRatioPercent,
       cashStatus: shield.cashStatus,
       hasLoans: shield.hasLoans,
-      marginMaintenanceRatio: shield.marginMaintenanceRatio,
+      marginMaintenanceRatio: shield.hasLoans ? shield.marginMaintenanceRatio : null,
       marginStatus: shield.marginStatus,
       maxAllocationDriftPercent: shield.maxAllocationDriftPercent,
       portfolioBeta: shield.portfolioBeta,
       valueAtRisk95TWD: shield.valueAtRisk95TWD,
       varRatioPercent: shield.varRatioPercent,
       fxDeltaTWD: shield.fxDeltaTWD,
+      tsmcLookThroughWeightPercent: shield.tsmcLookThroughWeightPercent,
+      semiLookThroughWeightPercent: shield.semiLookThroughWeightPercent,
+      soxStressImpact3PctTWD: shield.soxStressImpact3PctTWD,
       quickStressTest: shield.quickStressTest,
     },
     upcomingEvents: catalysts.map((c) => ({
@@ -218,9 +584,10 @@ export function generateAiMorningBrief(
   const actionPoints: string[] = [];
 
   const urgentHighImpactCatalyst = urgentCatalysts.find((c) => c.impact === 'HIGH');
+  const marginRatioVal = shield.marginMaintenanceRatio ?? 0;
   const isHighRiskMargin =
     shield.hasLoans &&
-    (isMarginFragile || (shield.marginMaintenanceRatio > 0 && shield.marginMaintenanceRatio < 180));
+    (isMarginFragile || (marginRatioVal > 0 && marginRatioVal < 180));
 
   // 動態決定方針基調與標題
   if (sellSignals.length > 0) {
@@ -230,7 +597,7 @@ export function generateAiMorningBrief(
   } else if (urgentHighImpactCatalyst && isHighRiskMargin) {
     headline = '【重大事件逼近・嚴控質押槓桿】';
     tone = 'CAUTION';
-    summary = `距離重大高衝擊事件 ${urgentHighImpactCatalyst.name} 僅剩 ${urgentHighImpactCatalyst.daysLeft === 0 ? '今天' : `${urgentHighImpactCatalyst.daysLeft} 天`}，且個人質押槓桿維持率偏緊 (${shield.marginMaintenanceRatio}%)，務必嚴控部位曝險防範黑天鵝。`;
+    summary = `距離重大高衝擊事件 ${urgentHighImpactCatalyst.name} 僅剩 ${urgentHighImpactCatalyst.daysLeft === 0 ? '今天' : `${urgentHighImpactCatalyst.daysLeft} 天`}，且個人質押槓桿維持率偏緊 (${marginRatioVal}%)，務必嚴控部位曝險防範黑天鵝。`;
   } else if (buySignals.length > 0 && !isPanic) {
     headline = '【強者恆強・突破進攻】';
     tone = 'OPPORTUNISTIC';
@@ -272,7 +639,7 @@ export function generateAiMorningBrief(
   }
 
   // 2. 注入具體個人化實戰行動要點 (Action Points)
-  // A. 持股賣出破線獨立標註 (Ticket 03 & 04) - 徹底根除單一價格共用 Bug
+  // A. 持股賣出破線獨立標註
   if (sellSignals.length > 0) {
     const sortedSells = [...sellSignals].sort((a, b) => (b.weightPercent || 0) - (a.weightPercent || 0));
     const top4 = sortedSells.slice(0, 4);
@@ -285,7 +652,7 @@ export function generateAiMorningBrief(
     );
   }
 
-  // B. 晨報 45%/50%/54% 情境調倉減碼金額試算 (Ticket 05 Trade Blotter)
+  // B. 晨報情境調倉減碼金額試算 (Trade Blotter)
   const totalStockValueTWD = holdingSignals.reduce((acc, s) => acc + (s.marketValueTWD || 0), 0);
   const currentEquityRatio =
     shield.totalNavTWD > 0
@@ -306,31 +673,46 @@ export function generateAiMorningBrief(
     }
   }
 
-  // C. 質押法規死線與自救指引 (Ticket 06)
-  if (shield.hasLoans && shield.marginMaintenanceRatio > 0 && shield.marginMaintenanceRatio < 130) {
+  // C. 質押法規死線與自救指引
+  if (shield.hasLoans && marginRatioVal > 0 && marginRatioVal < 130) {
     actionPoints.push(
-      `🚨【質押追繳死線】維持率已跌破 130% (${shield.marginMaintenanceRatio}%)，依券商法規需於 T+2 日 12:00 前補足至 166%，否則面臨開盤強制斷頭處分。`
+      `🚨【質押追繳死線】維持率已跌破 130% (${marginRatioVal}%)，依券商法規需於 T+2 日 12:00 前補足至 166%，否則面臨開盤強制斷頭處分。`
     );
   } else if (urgentHighImpactCatalyst && isHighRiskMargin) {
     actionPoints.push(
-      `🚨【槓桿警戒】距離重大高衝擊事件 (${urgentHighImpactCatalyst.name}) 僅剩 ${urgentHighImpactCatalyst.daysLeft === 0 ? '今天' : `${urgentHighImpactCatalyst.daysLeft} 天`}，且質押維持率處於警戒水位 (${shield.marginMaintenanceRatio}%)，強烈建議暫停追價加碼，優先提高現金水位或提撥擔保品以防範流動性黑天鵝。`
+      `🚨【槓桿警戒】距離重大高衝擊事件 (${urgentHighImpactCatalyst.name}) 僅剩 ${urgentHighImpactCatalyst.daysLeft === 0 ? '今天' : `${urgentHighImpactCatalyst.daysLeft} 天`}，且質押維持率處於警戒水位 (${marginRatioVal}%)，強烈建議暫停追價加碼，優先提高現金水位或提撥擔保品以防範流動性黑天鵝。`
     );
   }
 
-  // D. ETF 穿透重複曝險警示 (Ticket 06)
-  const overlapSymbols = holdingSignals.filter((s) =>
-    ['0050', '00923', '009816', '2330'].includes(s.symbol)
-  );
-  if (overlapSymbols.length >= 2) {
-    const overlapWeight = overlapSymbols.reduce((acc, s) => acc + (s.weightPercent || 0), 0);
-    if (overlapWeight >= 20) {
-      actionPoints.push(
-        `💡【成份穿透警示】0050、00923 等 ETF 與 2330 存在高度半導體權重重疊，實質曝險高度集中，切勿誤判為充分分散；若遇極端下殺切忌掛市價單踩踏。`
-      );
+  // D. Spec 0209 Ticket 08 穿透式台積電與廣義半導體曝險警示 (含舊版回退相容)
+  if (
+    (shield.semiLookThroughWeightPercent ?? 0) >= 20 ||
+    (shield.tsmcLookThroughWeightPercent ?? 0) >= 20
+  ) {
+    const tsmcPct = shield.tsmcLookThroughWeightPercent ?? 0;
+    const semiPct = shield.semiLookThroughWeightPercent ?? tsmcPct;
+    const impactText =
+      shield.soxStressImpact3PctTWD !== undefined
+        ? `（費半每波動 ±3% 預估影響約 NT$ ${Math.round(shield.soxStressImpact3PctTWD).toLocaleString()}）`
+        : '';
+    actionPoints.push(
+      `💡【穿透曝險警示】含 ETF 穿透後之台積電真實權重達 ${tsmcPct}%、廣義半導體總曝險達 ${semiPct}%${impactText}，實質風險高度連動費城半導體指數，切忌於跳空下殺時掛市價單踩踏。`
+    );
+  } else {
+    const overlapSymbols = holdingSignals.filter((s) =>
+      ['0050', '00923', '009816', '2330'].includes(s.symbol)
+    );
+    if (overlapSymbols.length >= 2) {
+      const overlapWeight = overlapSymbols.reduce((acc, s) => acc + (s.weightPercent || 0), 0);
+      if (overlapWeight >= 20) {
+        actionPoints.push(
+          `💡【成份穿透警示】0050、00923 等 ETF 與 2330 存在高度半導體權重重疊，實質曝險高度集中，切勿誤判為充分分散；若遇極端下殺切忌掛市價單踩踏。`
+        );
+      }
     }
   }
 
-  // E. 持股買進突破獨立標註 (Ticket 03) - 徹底根除 00919 共用 56.56 元 Bug
+  // E. 持股買進突破獨立標註
   if (buySignals.length > 0) {
     const detailList = buySignals
       .map(
@@ -343,7 +725,7 @@ export function generateAiMorningBrief(
     );
   }
 
-  // F. 關鍵財經催化劑倒數提醒 (若尚未被槓桿警戒點名)
+  // F. 關鍵財經催化劑倒數提醒
   if (urgentCatalysts.length > 0 && !(urgentHighImpactCatalyst && isHighRiskMargin)) {
     const catalyst = urgentCatalysts[0];
     actionPoints.push(
@@ -359,11 +741,11 @@ export function generateAiMorningBrief(
     );
   }
 
-  // E. 宏觀與防護盾核心原則常態補位 (若點數少於 3 條，補入常態紀律方針)
+  // H. 宏觀與防護盾核心原則常態補位
   if (actionPoints.length < 3) {
     if (isPanic) {
       if (isMarginFragile) {
-        actionPoints.push(`質押維持率處於警戒水位 (${shield.marginMaintenanceRatio}%)，優先守護防守線，暫停擴大槓桿。`);
+        actionPoints.push(`質押維持率處於警戒水位 (${marginRatioVal}%)，優先守護防守線，暫停擴大槓桿。`);
         actionPoints.push('暫停所有非必要的短線交易，預留生活與利息應急準備金。');
       } else {
         actionPoints.push('啟動金字塔式逢低分批佈局核心 ETF (如 0050/006208/VT)，杜絕單筆孤注一擲。');
@@ -386,15 +768,18 @@ export function generateAiMorningBrief(
   }
 
   // 3. 宏觀診斷描述
-  const inversionText = macro.isYieldInverted
+  const hasValidYield = typeof macro.us10y === 'number' && macro.us10y > 0 && typeof macro.us2y === 'number' && macro.us2y > 0;
+  const inversionText = !hasValidYield
+    ? '美債殖利率曲線利差維持歷史基準區間'
+    : macro.isYieldInverted || macro.yieldSpread < 0
     ? `美債殖利率曲線持續倒掛 (利差 ${macro.yieldSpread}%)，暗示景氣衰退防禦意識仍需保持`
     : `美債殖利率曲線利差正常 (+${macro.yieldSpread}%)，資金定價維持健康常態`;
   const macroDiagnosis = `當前 VIX 恐慌指數為 ${macro.vix} (${macro.vixLevel})，市場情緒貪婪恐慌指數為 ${macro.fearAndGreedIndex} (${macro.fearAndGreedLevel})；${inversionText}；美元指數座落於 ${macro.dxy}，USD/TWD 匯率約 ${macro.usdToTwd}。`;
 
-  // 4. 個人防護盾診斷描述
+  // 4. 個人防護盾診斷描述 (無質押借款時嚴禁輸出 250%)
   const marginText = shield.hasLoans
     ? `質押維持率為 ${shield.marginMaintenanceRatio}% (${shield.marginStatus === 'SAFE' ? '安全無虞' : '注意警戒'})`
-    : '無質押借款負債，整戶零槓桿風險';
+    : '無質押負債 (零槓桿)';
   const shieldDiagnosis = `個人總淨值折算約 NT$ ${Math.round(shield.totalNavTWD).toLocaleString()}，現金購買力防禦水位為 ${shield.cashRatioPercent}% (${shield.cashStatus === 'STRONG' ? '彈藥充裕' : shield.cashStatus === 'ADEQUATE' ? '適度均衡' : '水位偏緊'})；${marginText}；資產配置最大偏離度為 ${shield.maxAllocationDriftPercent}%。`;
 
   // 5. 生成結構化 LLM Payload
@@ -541,10 +926,11 @@ export function calculateMacroThermometer(macro: MacroIndicatorSnapshot): MacroT
   const rationale: string[] = [];
 
   // 1. 殖利率利差
-  if (macro.isYieldInverted || macro.yieldSpread < 0) {
+  const hasValidYield = typeof macro.us10y === 'number' && macro.us10y > 0 && typeof macro.us2y === 'number' && macro.us2y > 0;
+  if (hasValidYield && (macro.isYieldInverted || macro.yieldSpread < 0)) {
     score -= 15;
     rationale.push(`美債殖利率利差倒掛 (${macro.yieldSpread}%) 壓抑成長估值`);
-  } else if (macro.yieldSpread >= 0.5) {
+  } else if (hasValidYield && macro.yieldSpread >= 0.5) {
     score += 10;
     rationale.push(`殖利率利差正向健康 (+${macro.yieldSpread}%) 提供總經支撐`);
   }
@@ -616,15 +1002,12 @@ export function calculateMacroThermometer(macro: MacroIndicatorSnapshot): MacroT
 
   if (score >= 70) {
     stance = 'AGGRESSIVE';
-    // 70~100 分對應 75%~90% 倉位
     suggestedEquityAllocationPercent = Math.min(90, Math.round(75 + (score - 70) * 0.5));
   } else if (score <= 40) {
     stance = 'DEFENSIVE';
-    // 0~40 分對應 20%~40% 倉位
     suggestedEquityAllocationPercent = Math.max(20, Math.round(20 + score * 0.5));
   } else {
     stance = 'NEUTRAL';
-    // 41~69 分對應 45%~70% 倉位
     suggestedEquityAllocationPercent = Math.round(45 + (score - 40) * 0.85);
   }
 
@@ -712,6 +1095,8 @@ export function groupCatalystsByTimeline(catalysts: UpcomingCatalyst[]): Grouped
   return { today, within7Days, within30Days };
 }
 
+export const groupCatalystsByHorizon = groupCatalystsByTimeline;
+
 /**
  * 自動生成每月 10 號在線持股營收公布截止倒數催化劑
  */
@@ -750,6 +1135,8 @@ export function generateMonthlyRevenueDeadlineCatalyst(asOfDateStr: string): Upc
   };
 }
 
+export const generateMonthlyRevenueCatalyst = generateMonthlyRevenueDeadlineCatalyst;
+
 /**
  * 試算持股除息預估蒸發點數 (防大盤假跌破)
  * 公式：大盤指數 * (現金除息總額 / 大盤總市值)
@@ -775,5 +1162,3 @@ export function estimateExDividendIndexImpactPoints(params: {
   const impactPoints = taiexCurrentIndex * (totalDividendCash / taiexTotalMarketCapTWD);
   return Math.round(impactPoints * 10) / 10;
 }
-
-

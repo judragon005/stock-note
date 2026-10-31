@@ -1,5 +1,5 @@
 /**
- * 智慧金鑰輪替與狀態調度管理器 (Spec 0167 / Tickets 02 & 03)
+ * 智慧金鑰輪替與狀態調度管理器 (Spec 0167 / Tickets 02 & 03 / Spec 0209 Ticket 03)
  * SmartKeyRotator Core Engine
  */
 
@@ -11,6 +11,8 @@ import {
   createDefaultApiKeyItem,
   isKeyUsable,
 } from './apiKeyPoolTypes';
+import { loadEncryptedKeyPool } from './apiKeyStorage';
+import { loadApiKeysConfigFromStorage } from '../utils/storage';
 import { logger } from '../utils/logger';
 
 export class SmartKeyRotator {
@@ -227,4 +229,71 @@ export let globalKeyRotator = new SmartKeyRotator();
  */
 export function resetGlobalKeyRotatorForTest(): void {
   globalKeyRotator = new SmartKeyRotator();
+}
+
+/**
+ * 確保金鑰池已由本地加密金鑰庫與舊版單一金鑰設定完成注水 (Spec 0209 Ticket 03)
+ */
+export async function ensureKeyPoolHydrated(
+  rotator: SmartKeyRotator = globalKeyRotator
+): Promise<SmartKeyRotator> {
+  try {
+    const encryptedPool = await loadEncryptedKeyPool();
+    if (Array.isArray(encryptedPool)) {
+      for (const item of encryptedPool) {
+        if (item && item.provider && typeof item.key === 'string' && item.key.trim().length > 0) {
+          rotator.registerKey(item.provider, item.key.trim(), item);
+        }
+      }
+    }
+  } catch (err: any) {
+    logger.warn(`[SmartKeyRotator] 載入加密金鑰池失敗: ${err?.message || err}`);
+  }
+
+  try {
+    const legacyConfig = await Promise.resolve(loadApiKeysConfigFromStorage());
+    if (legacyConfig && typeof legacyConfig === 'object') {
+      const legacyMappings: Array<[string | undefined, ProviderType]> = [
+        [legacyConfig.finmindToken, 'finmind'],
+        [legacyConfig.fmpApiKey, 'fmp'],
+        [legacyConfig.alphaVantageKey, 'alphavantage'],
+        [legacyConfig.tiingoToken, 'tiingo'],
+      ];
+      for (const [rawKey, provider] of legacyMappings) {
+        if (typeof rawKey === 'string' && rawKey.trim().length > 0) {
+          rotator.registerKey(provider, rawKey.trim());
+        }
+      }
+    }
+  } catch (err: any) {
+    logger.warn(`[SmartKeyRotator] 載入傳統 API 金鑰設定失敗: ${err?.message || err}`);
+  }
+
+  return rotator;
+}
+
+const MACRO_SYNC_PROVIDERS: Array<{ provider: ProviderType; headerName: string }> = [
+  { provider: 'fred', headerName: 'x-fred-key' },
+  { provider: 'finmind', headerName: 'x-finmind-key' },
+  { provider: 'finnhub', headerName: 'x-finnhub-key' },
+  { provider: 'fmp', headerName: 'x-fmp-key' },
+  { provider: 'tiingo', headerName: 'x-tiingo-key' },
+  { provider: 'alphavantage', headerName: 'x-alphavantage-key' },
+];
+
+/**
+ * 自金鑰輪替池取得宏觀戰情室同步所需之可用金鑰 HTTP 標頭 (Spec 0209 Ticket 03)
+ */
+export function buildMacroSyncKeyHeaders(
+  rotator: SmartKeyRotator = globalKeyRotator,
+  now: number = Date.now()
+): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const { provider, headerName } of MACRO_SYNC_PROVIDERS) {
+    const keyItem = rotator.acquireKey(provider, now);
+    if (keyItem && keyItem.key) {
+      headers[headerName] = keyItem.key;
+    }
+  }
+  return headers;
 }

@@ -63,5 +63,22 @@ describe('常態金融週期推算引擎 (periodicCatalystEngine)', () => {
       expect(decWitching?.date).toBe('2026-12-18');
       expect(decWitching?.impact).toBe('HIGH');
     });
+
+    it('Ticket 10: 應自動生成台積電 (2330) 1/4/7/10 月季度法說會與輝達 (NVDA) 2/5/8/11 月財報週催化劑', () => {
+      const list = generatePeriodicCatalysts('2026-10-01', 2);
+      // 10 月應包含台積電法說會 (10 月第三個週四)
+      const tsmcOct = list.find((c) => c.symbol === '2330.TW' && c.date.startsWith('2026-10'));
+      expect(tsmcOct).toBeDefined();
+      expect(tsmcOct?.category).toBe('EARNINGS');
+      expect(tsmcOct?.impact).toBe('HIGH');
+      expect(tsmcOct?.targetMarket).toBe('TW');
+
+      // 11 月應包含輝達 NVDA 季度財報開獎週 (11 月第四個週三)
+      const nvdaNov = list.find((c) => c.symbol === 'NVDA' && c.date.startsWith('2026-11'));
+      expect(nvdaNov).toBeDefined();
+      expect(nvdaNov?.category).toBe('EARNINGS');
+      expect(nvdaNov?.impact).toBe('HIGH');
+      expect(nvdaNov?.targetMarket).toBe('US');
+    });
   });
 });

@@ -65,6 +65,11 @@ import { EquityDeepDiveModal } from './components/equityDeepDive/EquityDeepDiveM
 import { MarginStressModal } from './components/MarginStressModal';
 import { WorkspaceTabs, WorkspaceTabKey } from './components/WorkspaceTabs';
 import { WarRoomWorkspace } from './components/WarRoomWorkspace';
+import {
+  loadTargetAllocations,
+  loadActiveTargetAllocationId,
+  DEFAULT_MARKET_ALLOCATION,
+} from './utils/allocationStorage';
 import { MuscleBookerWorkspace } from './components/MuscleBookerWorkspace';
 import { ChipsWorkspace } from './components/ChipsWorkspace';
 import { FirePlanningWorkspace } from './components/FirePlanningWorkspace';
@@ -76,6 +81,7 @@ import { ReconciliationModal } from './components/ReconciliationModal';
 import { syncTradesWithCashTransactions, calculateAccountBalances, aggregateInterestIncomeDetails, reconcilePendingDividendTrades } from './engine/cashLedgerEngine';
 import { calculatePortfolioXirr, calculateSecurityXirr, XirrResult, CashFlowEvent } from './engine/xirrCalculator';
 import { calculatePortfolioExposure, calculateActiveMarginDebt } from './engine/riskExposureEngine';
+import { generateDCASchedule } from './engine/dcaSchedulerEngine';
 import { inferMarketFromSymbol } from './utils/formatters';
 import { calculateReceivableDividends } from './engine/receivableDividendEngine';
 import { buildTaxComplianceStatus } from './engine/taxComplianceEngine';
@@ -83,6 +89,7 @@ import { CorporateActionSessionCache, scanCorporateActions } from './engine/corp
 import { initializeStorageAsync } from './utils/storage';
 import { createSystemSnapshot } from './utils/db';
 import { loadMarketCacheSummary, syncMarketCacheToIndexedDB } from './engine/marketCacheLoader';
+import { WorkspaceErrorBoundary } from './components/common/WorkspaceErrorBoundary';
 
 export const App: React.FC = () => {
   const [isStorageInitialized, setIsStorageInitialized] = useState(false);
@@ -247,6 +254,7 @@ export const App: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<TradeRecord | null>(null);
   const [modalInitialSymbol, setModalInitialSymbol] = useState('');
+  const [aiForceTarget, setAiForceTarget] = useState<{ symbol: string; market: MarketType }>({ symbol: '0050', market: 'TW' });
   const [modalInitialType, setModalInitialType] = useState<TradeType>('BUY');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isBrokerAccountsOpen, setIsBrokerAccountsOpen] = useState(false);
@@ -880,6 +888,23 @@ export const App: React.FC = () => {
     });
   }, [cashTransactions, selectedAccountId, currentMarket]);
 
+  // 7日定時定額承諾預估扣款（台幣計價），用於宏觀戰情室自由發射彈藥守護計算
+  const dcaCommitment7dTwd = useMemo(() => {
+    try {
+      const stored = localStorage.getItem('fire_dca_plans');
+      if (stored) {
+        const plans = JSON.parse(stored);
+        if (Array.isArray(plans)) {
+          const schedules = generateDCASchedule(plans, 7);
+          return schedules.reduce((sum, s) => sum + (s.amountTwd || 0), 0);
+        }
+      }
+    } catch {
+      // 容錯降級
+    }
+    return 0;
+  }, []);
+
   // 當使用者切換至「資產成長 (NAV)」分頁且缺少歷史日 K 時，自動觸發背景平滑補抓
   useEffect(() => {
     if (activeTab === 'growth' && !isHistoricalSyncing && trades.length > 0) {
@@ -1002,8 +1027,8 @@ export const App: React.FC = () => {
       {/* 活頁: ⚡ 主力戰情室 (AI Force Decision Dashboard) */}
       {activeTab === 'aiforce' && (
         <AiForceDashboardView
-          initialSymbol="0050"
-          initialMarket="TW"
+          initialSymbol={aiForceTarget.symbol}
+          initialMarket={aiForceTarget.market}
           holdings={holdings}
         />
       )}
@@ -1023,16 +1048,51 @@ export const App: React.FC = () => {
 
       {/* 活頁: 🏛️ 宏觀總體戰情室 (Market War Room & AI Strategy Advisor) */}
       {activeTab === 'warroom' && (
+        <WorkspaceErrorBoundary fallbackTitle="宏觀總體戰情室載入異常">
         <WarRoomWorkspace
+          rebalancingConfig={(() => {
+            try {
+              const configs = typeof localStorage !== 'undefined' ? loadTargetAllocations() : [DEFAULT_MARKET_ALLOCATION];
+              const activeId = typeof localStorage !== 'undefined' ? loadActiveTargetAllocationId() : DEFAULT_MARKET_ALLOCATION.id;
+              return configs.find((c) => c.id === activeId) || configs[0] || DEFAULT_MARKET_ALLOCATION;
+            } catch {
+              return DEFAULT_MARKET_ALLOCATION;
+            }
+          })()}
           holdings={holdings}
           loans={scopedLoans}
           cashBalanceTwd={cashLedgerSummary.totalCashInTWD}
-          totalNavTwd={summary.combinedTWD.marketValue}
+          totalNavTwd={
+            (exposureMetrics.effectiveNavTWD ?? exposureMetrics.navTWD) ||
+            summary.combinedTWD.netAssetValue ||
+            summary.combinedTWD.marketValue
+          }
+          currentMarket={currentMarket}
+          onMarketChange={setCurrentMarket}
+          pendingSettlementOutflowTwd={cashLedgerSummary.totalPendingPayablesInTWD}
+          dcaCommitment7dTwd={dcaCommitment7dTwd}
+          trades={displayedTrades}
+          privacyMode={isPrivacyMasked}
+          onInspectTechnical={(sym, mkt) => handleOpenOmniInspector(sym, mkt || inferMarketFromSymbol(sym))}
+          onOpenAiForce={(sym, mkt) => {
+            if (sym) {
+              setAiForceTarget({ symbol: sym, market: mkt || (inferMarketFromSymbol(sym) as MarketType) });
+            }
+            setActiveTab('aiforce');
+          }}
+          onOpenTradeModal={(sym) => {
+            if (sym) {
+              handleQuickTrade(sym, 'BUY');
+            } else {
+              handleOpenNewTrade();
+            }
+          }}
           usdToTwdRate={usdToTwdRate}
           historicalDailyPrices={historicalPrices}
           receivableDividends={receivableDividends}
           onOpenMarginStressModal={() => setIsMarginStressOpen(true)}
         />
+        </WorkspaceErrorBoundary>
       )}
 
       {/* 活頁: 💪 肌肉書僮·動能雷達 (Muscle Booker Momentum Radar) */}
