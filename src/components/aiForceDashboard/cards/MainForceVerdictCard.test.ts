@@ -179,6 +179,15 @@ describe('Ticket 03: 語意深度解析 (Market Context) 與實戰操盤指引 (
     expect(exitPlaybook.executionDirective).toContain('分批');
     expect(exitPlaybook.maxPosition).toBe('10% ~ 20%');
     expect(exitPlaybook.winRate).toBe('55%');
+
+    // 補齊震盪觀望與超跌反彈之部位與勝率完整覆蓋斷言
+    const consolidationPlaybook = getMainForcePlaybook('區間觀望');
+    expect(consolidationPlaybook.maxPosition).toBe('0% ~ 15%');
+    expect(consolidationPlaybook.winRate).toBe('50%');
+
+    const oversoldPlaybook = getMainForcePlaybook('超跌反彈');
+    expect(oversoldPlaybook.maxPosition).toBe('15% ~ 25%');
+    expect(oversoldPlaybook.winRate).toBe('60%');
   });
 });
 
