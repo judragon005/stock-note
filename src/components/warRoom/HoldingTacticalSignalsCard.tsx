@@ -8,6 +8,7 @@ export interface HoldingTacticalSignalsCardProps {
   onOpenAiForce?: (symbol: string) => void;
   onOpenTradeModal?: (symbol: string, market?: 'TW' | 'US') => void;
   privacyMode?: boolean;
+  defaultFilter?: 'ACTIONABLE' | 'ALL';
 }
 
 export const HoldingTacticalSignalsCard: React.FC<HoldingTacticalSignalsCardProps> = ({
@@ -17,8 +18,9 @@ export const HoldingTacticalSignalsCard: React.FC<HoldingTacticalSignalsCardProp
   onOpenAiForce,
   onOpenTradeModal,
   privacyMode = false,
+  defaultFilter,
 }) => {
-  const [showNormalHoldings, setShowNormalHoldings] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<'ACTIONABLE' | 'ALL'>(defaultFilter || 'ACTIONABLE');
 
   // 將「需立即關注（突破買進 BUY / 破線賣出 SELL / 避開 AVOID / 觸及自訂停損停利 / 處置注意股）」與「正常箱型續抱 HOLD」分流
   const actionableSignals = signals.filter(
@@ -34,11 +36,9 @@ export const HoldingTacticalSignalsCard: React.FC<HoldingTacticalSignalsCardProp
       (!s.dispositionStatus || s.dispositionStatus === 'NORMAL')
   );
 
-  const displayedSignals = showNormalHoldings
+  const displayedSignals = activeFilter === 'ALL'
     ? [...actionableSignals, ...normalSignals]
-    : actionableSignals.length > 0
-      ? actionableSignals
-      : normalSignals.slice(0, 5);
+    : actionableSignals;
 
   const getActionBadge = (action: MacroHoldingSignalInput['action']) => {
     if (action === 'BUY') {
@@ -107,18 +107,32 @@ export const HoldingTacticalSignalsCard: React.FC<HoldingTacticalSignalsCardProp
           </span>
         </div>
 
-        {normalSignals.length > 0 && (
+        <div style={{ display: 'flex', gap: '6px' }}>
           <button
             type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => setShowNormalHoldings((prev) => !prev)}
-            style={{ fontSize: '0.76rem', padding: '5px 12px' }}
+            className={`btn btn-sm ${activeFilter === 'ACTIONABLE' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setActiveFilter('ACTIONABLE')}
+            style={{
+              fontSize: '0.76rem',
+              padding: '4px 10px',
+              fontWeight: activeFilter === 'ACTIONABLE' ? 700 : 500,
+            }}
           >
-            {showNormalHoldings
-              ? `收合正常震盪股 (${normalSignals.length} 檔)`
-              : `展開全部在倉持股 (${signals.length} 檔)`}
+            🚨 需行動 ({actionableSignals.length})
           </button>
-        )}
+          <button
+            type="button"
+            className={`btn btn-sm ${activeFilter === 'ALL' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setActiveFilter('ALL')}
+            style={{
+              fontSize: '0.76rem',
+              padding: '4px 10px',
+              fontWeight: activeFilter === 'ALL' ? 700 : 500,
+            }}
+          >
+            📑 全部在倉 ({signals.length})
+          </button>
+        </div>
       </div>
 
       {/* 波段正乖離過熱時之個人化 FOMO 追高歷史勝率煞車提醒 */}
@@ -142,6 +156,22 @@ export const HoldingTacticalSignalsCard: React.FC<HoldingTacticalSignalsCardProp
       {signals.length === 0 ? (
         <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.84rem' }}>
           目前尚無在倉持股訊號。
+        </div>
+      ) : displayedSignals.length === 0 ? (
+        <div
+          data-testid="all-clear-shield"
+          style={{
+            padding: '20px',
+            textAlign: 'center',
+            borderRadius: '8px',
+            background: 'rgba(16, 185, 129, 0.08)',
+            border: '1px solid rgba(16, 185, 129, 0.25)',
+            color: 'var(--gain-color)',
+            fontSize: '0.86rem',
+            fontWeight: 700,
+          }}
+        >
+          🛡️ 當前在倉持股全數處於正常箱型結構或安全防守水位，無須緊急減碼或調倉。
         </div>
       ) : (
         <div className="warroom-table-container">

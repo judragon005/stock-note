@@ -5,12 +5,14 @@ export interface PortfolioShieldAndAmmoCardProps {
   shield: MacroPortfolioShield;
   privacyMode?: boolean;
   currentUsdToTwdRate?: number;
+  isDoubleCold?: boolean;
 }
 
 export const PortfolioShieldAndAmmoCard: React.FC<PortfolioShieldAndAmmoCardProps> = ({
   shield,
   privacyMode = false,
   currentUsdToTwdRate = 32.15,
+  isDoubleCold = false,
 }) => {
   const maskMoney = (amount: number) =>
     privacyMode ? 'NT$******' : `NT$ ${Math.round(amount).toLocaleString()}`;
@@ -61,6 +63,24 @@ export const PortfolioShieldAndAmmoCard: React.FC<PortfolioShieldAndAmmoCardProp
           </span>
         </div>
       </div>
+
+      {isDoubleCold && (
+        <div
+          data-testid="double-cold-alert"
+          style={{
+            padding: '10px 14px',
+            marginBottom: '14px',
+            borderRadius: '8px',
+            background: 'rgba(239, 68, 68, 0.16)',
+            border: '1px solid rgba(239, 68, 68, 0.35)',
+            color: '#f87171',
+            fontSize: '0.8rem',
+            fontWeight: 700,
+          }}
+        >
+          🚨 總經與波段雙指標共振偏弱（雙冷體制）：建議優先確保質押維持率 ≥ 166% 並回收波段部位，嚴禁左側抄底。
+        </div>
+      )}
 
       <div
         style={{
