@@ -589,18 +589,17 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 </div>
               </div>
 
-              {/* Layer 7: 籌碼收斂與終極作戰指令 (Spec 0174: 3 欄緊湊作戰區，中間欄 3 卡矩陣) */}
+              {/* Layer 7: 籌碼收斂與體質定調 (Spec 0211: 雙欄自適應對稱矩陣，左 15+09，右 11+16+17) */}
               <div
-                data-layer="7-verdict-command"
+                data-layer="7-chips-health-matrix"
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
                   gap: '12px',
                   alignItems: 'stretch',
-                  minHeight: '480px',
                 }}
               >
-                {/* 欄 1: 15 籌碼異動摘要 + 09 隔日沖風險 (2 卡均衡呼吸) */}
+                {/* 欄 1: 15 籌碼異動摘要 + 09 隔日沖風險 (微觀籌碼動向與短線防護) */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, height: '100%' }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <ChipsSummaryCard data={report.chipsSummary} />
@@ -610,23 +609,38 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   </div>
                 </div>
 
-                {/* 欄 2: 11 健康度綜合評估表 + 16 買賣力分布 + 17 多空強度 (Spec 0174: 3 卡矩陣，消除疊字) */}
+                {/* 欄 2: 11 健康度綜合評估表 + 16 買賣力分布 + 17 多空強度 (結構健康度與多空籌碼對抗，圓環徹底舒展) */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, height: '100%' }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <HealthSummaryCard data={report.healthSummary} />
                   </div>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <ForceDistributionCard data={report.forceDistribution} />
-                  </div>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <BullBearStrengthCard data={report.bullBearStrength} />
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                      gap: '8px',
+                      minWidth: 0,
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <ForceDistributionCard data={report.forceDistribution} />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <BullBearStrengthCard data={report.bullBearStrength} />
+                    </div>
                   </div>
                 </div>
+              </div>
 
-                {/* 欄 3: 18 主力追蹤總評判 (MLP-AI 作戰命令與操盤指南，滿高舒展) */}
-                <div style={{ minWidth: 0, height: '100%' }}>
-                  <MainForceVerdictCard data={report.mainForceVerdict} />
-                </div>
+              {/* Layer 8: 18 主力追蹤總評判 (Spec 0211: 100% 滿版旗艦作戰指令列，如同 Card 01 頂部獨立大視野) */}
+              <div
+                data-layer="8-main-force-verdict-deck"
+                style={{
+                  width: '100%',
+                  minWidth: 0,
+                }}
+              >
+                <MainForceVerdictCard data={report.mainForceVerdict} />
               </div>
             </>
           )}

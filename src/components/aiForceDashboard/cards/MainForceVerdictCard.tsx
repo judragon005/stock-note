@@ -585,8 +585,16 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
         ))}
       </div>
 
-      {/* 2.5 中央重構：語意微觀解析 (Market Context) 與實戰操盤指引 (Action Playbook) */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {/* 2.5 中央重構：語意微觀解析 (Market Context) 與實戰操盤指引 (Action Playbook) - 寬幅雙欄自適應展開 (Spec 0211) */}
+      <div
+        data-testid="verdict-central-grid"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: '10px',
+          alignItems: 'stretch',
+        }}
+      >
         {/* A. 語意深度解析 (Market Context Panel) */}
         <div
           data-testid="market-context-panel"
@@ -594,16 +602,18 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
             background: 'rgba(30, 41, 59, 0.45)',
             borderLeft: `3px solid ${statusInfo.color}`,
             borderRadius: '6px',
-            padding: '7px 11px',
+            padding: '9px 12px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '3px',
+            gap: '4px',
+            height: '100%',
+            boxSizing: 'border-box',
           }}
         >
           <div style={{ fontSize: '11px', fontWeight: 800, color: statusInfo.color, letterSpacing: '0.3px' }}>
             ▌ 語意微觀解析 (Market Context)
           </div>
-          <div style={{ fontSize: '11px', lineHeight: 1.5, color: '#cbd5e1' }}>
+          <div style={{ fontSize: '11.5px', lineHeight: 1.55, color: '#cbd5e1' }}>
             {playbook.marketContext}
           </div>
         </div>
@@ -615,10 +625,12 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
             background: 'rgba(15, 23, 42, 0.6)',
             border: '1px solid rgba(255, 255, 255, 0.08)',
             borderRadius: '8px',
-            padding: '8px 11px',
+            padding: '9px 12px',
             display: 'flex',
             flexDirection: 'column',
             gap: '6px',
+            height: '100%',
+            boxSizing: 'border-box',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
