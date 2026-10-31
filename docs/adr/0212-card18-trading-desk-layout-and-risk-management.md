@@ -2,7 +2,7 @@
 
 - **狀態 (Status)**: 已接受 (Accepted)
 - **日期 (Date)**: 2026-10-31
-- **關聯規格 (Spec)**: [docs/specs/0211-ai-force-dashboard-verdict-full-width-and-layer7-dual-matrix-spec.md](file:///d:/APP/股票紀錄/docs/specs/0211-ai-force-dashboard-verdict-full-width-and-layer7-dual-matrix-spec.md)
+- **關聯規格 (Spec)**: [docs/specs/0212-card18-trading-desk-layout-and-risk-management-spec.md](file:///d:/APP/股票紀錄/docs/specs/0212-card18-trading-desk-layout-and-risk-management-spec.md)
 - **關聯 Issue**: Issue #364
 
 ---
