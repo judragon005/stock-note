@@ -284,6 +284,22 @@ export const HoldingTacticalSignalsCard: React.FC<HoldingTacticalSignalsCardProp
                             {planBadge.label}
                           </span>
                         )}
+                        {s.bias20MA !== undefined && (
+                          <span
+                            className="badge"
+                            style={{
+                              background: s.bias20MA > 6 ? 'rgba(245, 158, 11, 0.22)' : 'rgba(51, 65, 85, 0.4)',
+                              color: s.bias20MA > 6 ? '#fbbf24' : 'var(--text-secondary)',
+                              fontSize: '0.7rem',
+                              fontWeight: s.bias20MA > 6 ? 700 : 500,
+                              border: s.bias20MA > 6 ? '1px solid rgba(245, 158, 11, 0.4)' : undefined,
+                            }}
+                          >
+                            {s.bias20MA > 6
+                              ? `🔥 乖離過熱 +${s.bias20MA.toFixed(1)}%`
+                              : `月線乖離 ${s.bias20MA >= 0 ? '+' : ''}${s.bias20MA.toFixed(1)}%`}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td style={{ textAlign: 'right' }}>

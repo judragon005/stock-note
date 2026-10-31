@@ -48,6 +48,7 @@ import {
   estimateExDividendIndexImpactPoints,
   groupCatalystsByTimeline,
   generateMonthlyRevenueDeadlineCatalyst,
+  isDoubleColdRegime,
 } from '../engine/macroAdvisorEngine';
 import {
   evaluateDualMomentum,
@@ -1004,7 +1005,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
         shield={shield}
         privacyMode={privacyMode}
         currentUsdToTwdRate={usdToTwdRate}
-        isDoubleCold={dualThermometer.strategicRegime.score < 45 && dualThermometer.tacticalSwing.score < 30}
+        isDoubleCold={isDoubleColdRegime(dualThermometer.strategicRegime.score, dualThermometer.tacticalSwing.score)}
       />
 
       {/* 🎯 在倉持股波段戰術雷達與一鍵執行閉環 (Ticket 09) */}

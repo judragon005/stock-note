@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { calculateAssetMomentum, evaluateDualMomentum, DEFAULT_MOMENTUM_UNIVERSES } from './dualMomentumEngine';
+import { isDoubleColdRegime } from './macroAdvisorEngine';
 import type { DailyCandle } from '../types/indicators';
 
-describe('Dual Momentum Total Return & Full-Spectrum Alignment (Ticket 04)', () => {
+describe('Dual Momentum Total Return & Full-Spectrum Alignment (Ticket 04 / Followup)', () => {
   it('除息總報酬校準：當提供近 3 個月除息金額時，應正確還原 returns3M 與動能分數', () => {
     // 構造 300 根 K 棒
     const baseCandles: DailyCandle[] = [];
@@ -52,5 +53,24 @@ describe('Dual Momentum Total Return & Full-Spectrum Alignment (Ticket 04)', () 
 
     const asset0056 = signal.leaderboard.find((item) => item.symbol === '0056.TW');
     expect(asset0056?.returns3M).toBe(4.5);
+  });
+
+  it('日 K 不足 5 根時（1~4 根），應自動降級為水合中狀態 (momentumScore = -999)', () => {
+    // 構造僅 3 根 K 棒
+    const fewCandles: DailyCandle[] = [
+      { date: '2026-01-01', open: 100, high: 102, low: 99, close: 101, volume: 100 },
+      { date: '2026-01-02', open: 101, high: 103, low: 100, close: 102, volume: 120 },
+      { date: '2026-01-03', open: 102, high: 104, low: 101, close: 103, volume: 150 },
+    ];
+
+    const result = calculateAssetMomentum('0050.TW', 'TW', fewCandles, 0.04, '元大台灣50');
+    expect(result.momentumScore).toBe(-999);
+  });
+
+  it('isDoubleColdRegime 應正確判定長線總經與短線波段雙冷體制', () => {
+    expect(isDoubleColdRegime(44, 29)).toBe(true);
+    expect(isDoubleColdRegime(45, 29)).toBe(false);
+    expect(isDoubleColdRegime(44, 30)).toBe(false);
+    expect(isDoubleColdRegime(50, 50)).toBe(false);
   });
 });
