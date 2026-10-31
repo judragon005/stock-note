@@ -1004,6 +1004,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
         shield={shield}
         privacyMode={privacyMode}
         currentUsdToTwdRate={usdToTwdRate}
+        isDoubleCold={dualThermometer.strategicRegime.score < 45 && dualThermometer.tacticalSwing.score < 30}
       />
 
       {/* 🎯 在倉持股波段戰術雷達與一鍵執行閉環 (Ticket 09) */}
@@ -1686,9 +1687,32 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
               <TrendingUp size={18} style={{ color: 'var(--accent-primary)' }} />
               雙重動能跨資產輪動排行榜 (Dual Momentum Rotation)
             </h3>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Gary Antonacci 經典模型 · 12-1M 滾動加權動能 · 絕對動能避風港安全閥
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                Gary Antonacci 經典模型 · 12-1M 滾動加權動能 · 絕對動能避風港安全閥
+              </span>
+              <span
+                className="badge"
+                style={{
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  color: 'var(--gain-color)',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                }}
+              >
+                🟢 SQLite 湖倉真實日 K 驅動
+              </span>
+              <span
+                className="badge"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  color: 'var(--text-secondary)',
+                  fontSize: '0.72rem',
+                }}
+              >
+                基準日: {macroSnapshot.date || new Date().toISOString().split('T')[0]}
+              </span>
+            </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1785,19 +1809,29 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.name}</div>
                   </td>
                   <td className="mono" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--accent-cyan)' }}>
-                    {item.momentumScore.toFixed(1)}%
+                    {item.momentumScore <= -990 ? (
+                      <span className="badge" style={{ background: 'rgba(148, 163, 184, 0.15)', color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                        ⏳ 水合中
+                      </span>
+                    ) : (
+                      `${item.momentumScore.toFixed(1)}%`
+                    )}
                   </td>
                   <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                    {item.returns12M.toFixed(1)}%
+                    {item.momentumScore <= -990 ? '--' : `${item.returns12M.toFixed(1)}%`}
                   </td>
                   <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                    {item.returns6M.toFixed(1)}%
+                    {item.momentumScore <= -990 ? '--' : `${item.returns6M.toFixed(1)}%`}
                   </td>
                   <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                    {item.returns3M.toFixed(1)}%
+                    {item.momentumScore <= -990 ? '--' : `${item.returns3M.toFixed(1)}%`}
                   </td>
                   <td style={{ textAlign: 'center' }}>
-                    {item.isAboveRiskFree ? (
+                    {item.momentumScore <= -990 ? (
+                      <span className="badge" style={{ background: 'rgba(51, 65, 85, 0.4)', color: 'var(--text-muted)' }}>
+                        待同步
+                      </span>
+                    ) : item.isAboveRiskFree ? (
                       <span className="badge" style={{ background: 'var(--gain-bg)', color: 'var(--gain-color)', border: '1px solid var(--gain-border)' }}>
                         勝出基準
                       </span>

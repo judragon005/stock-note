@@ -87,7 +87,8 @@ export function calculateAssetMomentum(
   market: 'TW' | 'US',
   candles: DailyCandle[],
   riskFreeRateAnnualized: number = 0.04,
-  name?: string
+  name?: string,
+  dividendAdjustment3M: number = 0
 ): MomentumAssetMetric {
   if (candles.length === 0) {
     return {
@@ -129,7 +130,7 @@ export function calculateAssetMomentum(
   const price6M = candles[idx6M].close;
   const price12M = candles[idx12M].close;
 
-  const returns3M = price3M > 0 ? ((currentPrice - price3M) / price3M) * 100 : 0;
+  const returns3M = price3M > 0 ? ((currentPrice + dividendAdjustment3M - price3M) / price3M) * 100 : 0;
   const returns6M = price6M > 0 ? ((currentPrice - price6M) / price6M) * 100 : 0;
   const returns12M = price12M > 0 ? ((currentPrice - price12M) / price12M) * 100 : 0;
 
@@ -169,20 +170,23 @@ export function evaluateDualMomentum(params: {
   quotesMap: Record<string, DailyCandle[]>;
   currentHeldSymbol?: string;
   riskFreeRateAnnualized?: number;
+  dividendAdjustments3M?: Record<string, number>;
 }): DualMomentumSignal {
-  const { universeConfig, quotesMap, currentHeldSymbol } = params;
+  const { universeConfig, quotesMap, currentHeldSymbol, dividendAdjustments3M = {} } = params;
   const riskFreeRate = params.riskFreeRateAnnualized ?? universeConfig.riskFreeRateAnnualized;
 
   const metrics: MomentumAssetMetric[] = [];
 
   for (const item of universeConfig.symbols) {
     const candles = quotesMap[item.symbol] || quotesMap[item.symbol.replace('.TW', '')] || [];
+    const divAdj = dividendAdjustments3M[item.symbol] ?? dividendAdjustments3M[item.symbol.replace('.TW', '')] ?? 0;
     const metric = calculateAssetMomentum(
       item.symbol,
       item.market,
       candles,
       riskFreeRate,
-      item.name
+      item.name,
+      divAdj
     );
     metrics.push(metric);
   }

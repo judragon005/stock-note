@@ -479,6 +479,8 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0196: V8.109.0 AI 主力戰情室外聯提示詞受控聯網獵犬協議、上櫃資券與官方 PE/PB 湖倉管線](docs/adr/0196-ai-war-room-prompt-web-hunt-and-tpex-valuation.md)
 - [ADR-0208: V9.05.0 投資組合與庫存法人級會計修復、跨帳戶隔離、斷頭管線貫通與風控歸因升級](docs/adr/0208-portfolio-inventory-institutional-audit-and-pipeline-alignment.md)
 - [ADR-0209: V9.06.0 宏觀戰情室 3.0 — 台美費半跨市傳導鏈、總經波段雙溫度計、已配置 API 金鑰池全自動接線與跨模組孤島貫通](docs/adr/0209-macro-war-room-3-cross-market-transmission-and-api-key-pipeline.md)
+- [ADR-0212: V9.07.0 Card 18 主力追蹤總評判三欄式司令台佈局、金融大字號點位與法人部位風控升級](docs/adr/0212-card18-trading-desk-layout-and-risk-management.md)
+- [ADR-0213: V9.08.0 宏觀戰情室雙水溫計排版對齊防折行、持股訊號分頁膠囊與雙重動能湖倉數據審計升級](docs/adr/0213-macro-war-room-thermometer-signals-and-dual-momentum.md)
 
 ### 股票健診系統原生毛玻璃擬態、ETF智慧防呆與標的快捷膠囊 (Stock Health Check & Native Glassmorphism) *(新增於 V8.45.1)*
 - **原生 Glassmorphism 擬態與排版防禦**：
@@ -2774,3 +2776,12 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     3. **Taiwan Market Breadth & Narrow TSMC Trap Detection (台股騰落廣度與拉積盤偵測)**：由本地 SQLite Lakehouse 即時聚合上市櫃上漲/下跌家數比、站上 20MA 比例 (%) 與三大法人現貨合計買賣超；當加權指數上漲但下跌家數顯著多於上漲家數時，自動標記「⚠️ 拉積盤警訊 (NARROW_TSMC_TRAP)」。
     4. **Free Deployable Cash Ammo (真·自由可動用子彈)**：於戰情室將已交割現金扣除 T+2 在途待交割淨流出 (`pendingSettlements`) 與近 7 日定期定額預留扣款 (`dcaSchedulerEngine`)，精確反映無違約交割風險之可加碼資金。
     5. **Encrypted API Key Pool Auto-Hydration Bridge (加密金鑰池全自動橋接管線)**：啟動時自動將 `loadEncryptedKeyPool()` 載入 `globalKeyRotator`，並透過本地安全 Header 串聯使用者已配置之 `FRED`、`FinMind`、`Finnhub`、`FMP`、`Tiingo`、`Alpha Vantage` 金鑰與免金鑰 Yahoo Finance v8（含 `GC=F` 國際黃金現貨期貨 USD/oz 正名），100% 根除 `Math.sin`/`Math.random` 與寫死常數。
+
+- **Macro War Room Thermometer Alignment, Tactical Signal State Machine & Dual Momentum Audit (宏觀戰情室雙水溫計排版對齊防折行、持股訊號分頁膠囊狀態機與雙重動能湖倉數據審計)**:
+  - 核心模組：`src/components/warRoom/MacroDualThermometerBar.tsx`、`src/components/warRoom/HoldingTacticalSignalsCard.tsx`、`src/components/WarRoomWorkspace.tsx`、`src/engine/dualMomentumEngine.ts`、`src/components/warRoom/PortfolioShieldAndAmmoCard.tsx`。
+  - 規範依據：Spec 0213 (v9.08.0) 與 ADR 0213，對齊 GitHub Issue #367。
+  - 核心術語與特性：
+    1. **Tabular Num Monospace & Anti-Wrap Thermometer (等寬數字防折行水溫計)**：雙溫度計分數標籤鎖定 `tabular-nums` 與 `white-space: nowrap`，警訊徽章下移對齊第二行右側，達成左右軌對稱美學，消滅碎裂折行破圖。
+    2. **Tactical Signal Capsule State Machine & Green Shield (持股訊號分頁膠囊狀態機與安全綠盾)**：將收合按鈕重構為顯式 `[ 🚨 需行動 (X) ]` 與 `[ 📑 全部在倉 (Y) ]` 分頁膠囊；在庫存無行動訊號時，自動顯示正向綠色安全盾通知卡片，提供確信操作反饋。
+    3. **Zero Mock Lakehouse Audit Badge & Hydration Graceful Degradation (湖倉數據審計標章與冷啟動優雅降級)**：卡片頂部標示真實日 K 基準日審計印章；冷啟動未完成水合時顯示「⏳ 水合中 / 待同步」，杜絕 `-999.0%` 假數據破圖。
+    4. **Dual-Momentum Dividend Total Return Adjustment (雙重動能除息總報酬加回校準)**：動能評分引擎整合 3 個月除息回補（Total Return），還原高股息 ETF 評價；雙溫度計偏冷自動聯動整戶質押防斷頭警報。

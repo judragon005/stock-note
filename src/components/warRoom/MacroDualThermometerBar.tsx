@@ -238,31 +238,19 @@ export const MacroDualThermometerBar: React.FC<MacroDualThermometerBarProps> = (
             <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
               ⚡ 短中期波段戰術溫度計 (Tactical Swing Pulse)
             </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {tacticalSwing.isNarrowTsmcTrap && (
-                <span
-                  className="badge"
-                  style={{
-                    background: 'rgba(245, 158, 11, 0.2)',
-                    color: '#fbbf24',
-                    fontSize: '0.72rem',
-                    fontWeight: 700,
-                  }}
-                >
-                  ⚠️ 拉積盤警訊（賺指數賠價差）
-                </span>
-              )}
-              <span
-                className="mono"
-                style={{
-                  fontSize: '1.15rem',
-                  fontWeight: 800,
-                  color: getSwingSignalColor(tacticalSwing.signal),
-                }}
-              >
-                {tacticalSwing.score} / 100
-              </span>
-            </div>
+            <span
+              className="mono"
+              style={{
+                fontSize: '1.15rem',
+                fontWeight: 800,
+                color: getSwingSignalColor(tacticalSwing.signal),
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {tacticalSwing.score} / 100
+            </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
             <span
@@ -274,6 +262,21 @@ export const MacroDualThermometerBar: React.FC<MacroDualThermometerBarProps> = (
             >
               {tacticalSwing.label}
             </span>
+            {tacticalSwing.isNarrowTsmcTrap && (
+              <span
+                className="badge"
+                style={{
+                  background: 'rgba(245, 158, 11, 0.2)',
+                  color: '#fbbf24',
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
+                ⚠️ 拉積盤警訊（賺指數賠價差）
+              </span>
+            )}
           </div>
           <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
             <div>🇺🇸 {tacticalSwing.usSwingSummary}</div>
