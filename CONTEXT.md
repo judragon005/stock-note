@@ -93,6 +93,16 @@ _Avoid_: Runaway Hook Loop, Inline Callback Invalidation
 明確區分台股（以「張」為展示單位，1 張 = 1000 股）與美股（以「股」為展示單位）。自本機歷史日 K 資料庫提取原始成交股數後，依標的市場屬性執行換算（`Math.round(rawVolume / 1000)`），杜絕將股數直接填入 UI 導致個股成交量放大 1000 倍的嚴重錯誤。
 _Avoid_: Raw Volume Passthrough, Unit Mismatch
 
+### 主力作戰司令台與法人部位管理 (Trading Desk Layout & Position Sizing) *(新增於 Spec 0212 / ADR 0212)*
+
+**Trading Desk Layout (三欄式司令台金融交易桌面)**:
+在主力戰情室 Layer 8 滿版總評判面板中，採用「左翼主力態勢與光譜進度、中核大字點位三聯看板（停損/目標/風報比）、右翼戰術指令與法人風控」的等高三欄結構，支援 0.5 秒決策一眼定錨。
+_Avoid_: Fragmented Grid, Compressed Column
+
+**Institutional Position Sizing & Win Rate (法人建議部位上限與模型勝率)**:
+針對主力運作的 5 大週期階段（超跌反彈、低接吸籌、鎖碼推升、高檔調節、區間震盪），動態給予嚴格的資金配置上限（如吸籌 30%~40%、推升 50%~70%）與回測勝率指標，防止散戶逆勢重倉。
+_Avoid_: Unbounded Trading, Flat Allocation
+
 ### 雙軌回補與統一金鑰網關 (Dual-Market Backfill & Unified Key Gateway) *(新增於 V8.81.0 / Spec 0168)*
 
 **Financial Data Gateway Self-Healing & Scalar Defense (金融數據海關自愈與標量守衛)** *(新增於 Spec 0210 / ADR 0210)*:
