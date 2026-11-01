@@ -1,3 +1,4 @@
+import type { DailyCandle } from '../types/indicators';
 import {
   AiMorningBriefDirective,
   FearAndGreedLevel,
@@ -30,6 +31,19 @@ export function evaluateVixLevel(vix: number): VixLevel {
  * 判定長線總經配置溫度計與短中期波段戰術溫度計是否雙雙落入偏冷/弱勢區間
  * - 長線總經 < 45 且 短中期波段 < 30
  */
+
+/**
+ * 計算 20MA 月線乖離率百分比 % (如 +4.2% 或 -3.1%)
+ * 若 K 線不足 20 根或最新價格無效，回傳 undefined
+ */
+export function calculate20MABias(candles?: DailyCandle[], currentPrice?: number): number | undefined {
+  if (!candles || candles.length < 20 || !currentPrice || currentPrice <= 0) return undefined;
+  const last20 = candles.slice(-20);
+  const ma20 = last20.reduce((acc, candle) => acc + (candle.close || 0), 0) / 20;
+  if (ma20 <= 0) return undefined;
+  return Math.round(((currentPrice - ma20) / ma20) * 1000) / 10;
+}
+
 export function isDoubleColdRegime(strategicScore: number, tacticalScore: number): boolean {
   return strategicScore < 45 && tacticalScore < 30;
 }
