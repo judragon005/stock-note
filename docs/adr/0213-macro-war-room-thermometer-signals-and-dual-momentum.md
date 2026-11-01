@@ -3,7 +3,7 @@
 - **狀態 (Status)**: 已接受 (Accepted)
 - **日期 (Date)**: 2026-10-31
 - **關聯規格 (Spec)**: [docs/specs/0213-macro-war-room-thermometer-signals-and-dual-momentum-spec.md](file:///d:/APP/股票紀錄/docs/specs/0213-macro-war-room-thermometer-signals-and-dual-momentum-spec.md)
-- **關聯 Issue**: Issue #367, Issue #369
+- **關聯 Issue**: Issue #367, Issue #369, Issue #371
 
 ---
 

@@ -423,6 +423,16 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           macroSnapshot.date
         );
 
+        // Spec 0213: 計算 20MA 月線乖離率 bias20MA
+        let bias20MA: number | undefined;
+        if (candles && candles.length >= 20) {
+          const last20 = candles.slice(-20);
+          const ma20 = last20.reduce((acc, c) => acc + (c.close || 0), 0) / 20;
+          if (ma20 > 0) {
+            bias20MA = Math.round(((currentPrice - ma20) / ma20) * 1000) / 10;
+          }
+        }
+
         return {
           symbol: h.symbol,
           name: h.name,
@@ -438,6 +448,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           unrealizedPnlPercent: Math.round(unrealizedPnlPercent * 10) / 10,
           boxTop: scanned.boxUpper,
           boxBottom: scanned.boxLower,
+          bias20MA,
           planRiskStatus,
           dispositionStatus,
         };
@@ -755,12 +766,30 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
         }));
       }
     }
+    // 聚合近 90 天內各標的之每股除息調節金額 (Spec 0213: 除息總報酬還原)
+    const nowTime = Date.now();
+    const ninetyDaysMs = 90 * 86400000;
+    const dividendAdjustments3M: Record<string, number> = {};
+    for (const rec of receivableDividends) {
+      if (!rec.exDate) continue;
+      const exTime = new Date(`${rec.exDate}T00:00:00`).getTime();
+      if (nowTime - exTime <= ninetyDaysMs && nowTime >= exTime) {
+        const amt = rec.cashDividendPerShare || 0;
+        if (amt > 0) {
+          dividendAdjustments3M[rec.symbol] = (dividendAdjustments3M[rec.symbol] || 0) + amt;
+          const cleanSym = rec.symbol.replace(/\.TW$/i, '');
+          dividendAdjustments3M[cleanSym] = (dividendAdjustments3M[cleanSym] || 0) + amt;
+        }
+      }
+    }
+
     return evaluateDualMomentum({
       universeConfig: selectedUniverse,
       quotesMap,
       riskFreeRateAnnualized: 0.04,
+      dividendAdjustments3M,
     });
-  }, [selectedUniverse, historicalDailyPrices, lakehouseCandlesMap]);
+  }, [selectedUniverse, historicalDailyPrices, lakehouseCandlesMap, receivableDividends]);
 
   // 5. 距當月底倒數天數 (雙動能月結調倉檢視日)
   const daysUntilMonthEnd = useMemo(() => {
@@ -1699,19 +1728,10 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                   color: 'var(--gain-color)',
                   fontSize: '0.72rem',
                   fontWeight: 700,
+                  whiteSpace: 'nowrap',
                 }}
               >
-                🟢 SQLite 湖倉真實日 K 驅動
-              </span>
-              <span
-                className="badge"
-                style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  color: 'var(--text-secondary)',
-                  fontSize: '0.72rem',
-                }}
-              >
-                基準日: {macroSnapshot.date || new Date().toISOString().split('T')[0]}
+                🟢 SQLite 湖倉真實日 K 驅動 · 基準日: {macroSnapshot.date || new Date().toISOString().split('T')[0]}
               </span>
             </div>
           </div>
@@ -1784,7 +1804,9 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
               </tr>
             </thead>
             <tbody>
-              {momentumSignal.leaderboard.map((item, idx) => (
+              {momentumSignal.leaderboard.map((item, idx) => {
+                const isHydrating = item.momentumScore <= -990;
+                return (
                 <tr key={item.symbol} style={{ background: idx === 0 ? 'rgba(59, 130, 246, 0.08)' : undefined }}>
                   <td>
                     <span
@@ -1810,7 +1832,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.name}</div>
                   </td>
                   <td className="mono" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--accent-cyan)' }}>
-                    {item.momentumScore <= -990 ? (
+                    {isHydrating ? (
                       <span className="badge" style={{ background: 'rgba(148, 163, 184, 0.15)', color: 'var(--text-muted)', fontSize: '0.72rem' }}>
                         ⏳ 水合中
                       </span>
@@ -1819,16 +1841,16 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                     )}
                   </td>
                   <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                    {item.momentumScore <= -990 ? '--' : `${item.returns12M.toFixed(1)}%`}
+                    {isHydrating ? '--' : `${item.returns12M.toFixed(1)}%`}
                   </td>
                   <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                    {item.momentumScore <= -990 ? '--' : `${item.returns6M.toFixed(1)}%`}
+                    {isHydrating ? '--' : `${item.returns6M.toFixed(1)}%`}
                   </td>
                   <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                    {item.momentumScore <= -990 ? '--' : `${item.returns3M.toFixed(1)}%`}
+                    {isHydrating ? '--' : `${item.returns3M.toFixed(1)}%`}
                   </td>
                   <td style={{ textAlign: 'center' }}>
-                    {item.momentumScore <= -990 ? (
+                    {isHydrating ? (
                       <span className="badge" style={{ background: 'rgba(51, 65, 85, 0.4)', color: 'var(--text-muted)' }}>
                         待同步
                       </span>
@@ -1843,7 +1865,8 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
