@@ -49,6 +49,7 @@ import {
   groupCatalystsByTimeline,
   generateMonthlyRevenueDeadlineCatalyst,
   isDoubleColdRegime,
+  calculate20MABias,
 } from '../engine/macroAdvisorEngine';
 import {
   evaluateDualMomentum,
@@ -423,15 +424,8 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           macroSnapshot.date
         );
 
-        // Spec 0213: 計算 20MA 月線乖離率 bias20MA
-        let bias20MA: number | undefined;
-        if (candles && candles.length >= 20) {
-          const last20 = candles.slice(-20);
-          const ma20 = last20.reduce((acc, c) => acc + (c.close || 0), 0) / 20;
-          if (ma20 > 0) {
-            bias20MA = Math.round(((currentPrice - ma20) / ma20) * 1000) / 10;
-          }
-        }
+        // Spec 0213: 調用領域函式計算 20MA 月線乖離率 (消除 Feature Envy)
+        const bias20MA = calculate20MABias(candles, currentPrice);
 
         return {
           symbol: h.symbol,
@@ -777,8 +771,6 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
         const amt = rec.cashDividendPerShare || 0;
         if (amt > 0) {
           dividendAdjustments3M[rec.symbol] = (dividendAdjustments3M[rec.symbol] || 0) + amt;
-          const cleanSym = rec.symbol.replace(/\.TW$/i, '');
-          dividendAdjustments3M[cleanSym] = (dividendAdjustments3M[cleanSym] || 0) + amt;
         }
       }
     }
@@ -1805,7 +1797,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
             </thead>
             <tbody>
               {momentumSignal.leaderboard.map((item, idx) => {
-                const isHydrating = item.momentumScore <= -990;
+                const isHydrating = !item.isHydrated || item.momentumScore <= -990;
                 return (
                 <tr key={item.symbol} style={{ background: idx === 0 ? 'rgba(59, 130, 246, 0.08)' : undefined }}>
                   <td>

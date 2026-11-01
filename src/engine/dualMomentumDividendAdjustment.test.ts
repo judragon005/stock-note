@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { calculateAssetMomentum, evaluateDualMomentum, DEFAULT_MOMENTUM_UNIVERSES } from './dualMomentumEngine';
-import { isDoubleColdRegime } from './macroAdvisorEngine';
+import {
+  calculateAssetMomentum,
+  evaluateDualMomentum,
+  DEFAULT_MOMENTUM_UNIVERSES,
+  BENCHMARK_DIVIDEND_ADJUSTMENTS_3M,
+} from './dualMomentumEngine';
+import { isDoubleColdRegime, calculate20MABias } from './macroAdvisorEngine';
 import type { DailyCandle } from '../types/indicators';
 
 describe('Dual Momentum Total Return & Full-Spectrum Alignment (Ticket 04 / Followup)', () => {
@@ -29,7 +34,7 @@ describe('Dual Momentum Total Return & Full-Spectrum Alignment (Ticket 04 / Foll
     expect(adjusted.momentumScore).toBeGreaterThan(unadjusted.momentumScore);
   });
 
-  it('evaluateDualMomentum 應支援傳入 dividendAdjustments3M 並正確校準資產池', () => {
+  it('evaluateDualMomentum 應內建 BENCHMARK_DIVIDEND_ADJUSTMENTS_3M 公用底表，未持有者亦能獲得總報酬校準', () => {
     const quotesMap: Record<string, DailyCandle[]> = {};
     const dummyCandles: DailyCandle[] = Array.from({ length: 300 }, () => ({
       date: `2026-01-01`,
@@ -43,19 +48,18 @@ describe('Dual Momentum Total Return & Full-Spectrum Alignment (Ticket 04 / Foll
       quotesMap[s.symbol] = dummyCandles;
     });
 
+    // 完全不傳入 dividendAdjustments3M，檢驗是否自動套用公用底表
     const signal = evaluateDualMomentum({
       universeConfig: DEFAULT_MOMENTUM_UNIVERSES[1],
       quotesMap,
-      dividendAdjustments3M: {
-        '0056.TW': 4.5,
-      },
     });
 
     const asset0056 = signal.leaderboard.find((item) => item.symbol === '0056.TW');
-    expect(asset0056?.returns3M).toBe(4.5);
+    expect(asset0056?.returns3M).toBe(BENCHMARK_DIVIDEND_ADJUSTMENTS_3M['0056.TW']);
+    expect(asset0056?.isHydrated).toBe(true);
   });
 
-  it('日 K 不足 5 根時（1~4 根），應自動降級為水合中狀態 (momentumScore = -999)', () => {
+  it('日 K 不足 5 根時（1~4 根），應自動標記 isHydrated = false 且 momentumScore = -999', () => {
     // 構造僅 3 根 K 棒
     const fewCandles: DailyCandle[] = [
       { date: '2026-01-01', open: 100, high: 102, low: 99, close: 101, volume: 100 },
@@ -65,6 +69,29 @@ describe('Dual Momentum Total Return & Full-Spectrum Alignment (Ticket 04 / Foll
 
     const result = calculateAssetMomentum('0050.TW', 'TW', fewCandles, 0.04, '元大台灣50');
     expect(result.momentumScore).toBe(-999);
+    expect(result.isHydrated).toBe(false);
+  });
+
+  it('calculate20MABias 應精準計算 20MA 月線乖離率並對極端資料優雅回退', () => {
+    // 構造 20 根均為 100 元的 K 線
+    const candles20: DailyCandle[] = Array.from({ length: 20 }, (_, idx) => ({
+      date: `2026-01-${idx + 1}`,
+      open: 100,
+      high: 105,
+      low: 95,
+      close: 100,
+      volume: 1000,
+    }));
+
+    // 現價 108 元，MA20 為 100 元，乖離率應為 +8.0%
+    expect(calculate20MABias(candles20, 108)).toBe(8.0);
+    // 現價 94 元，乖離率應為 -6.0%
+    expect(calculate20MABias(candles20, 94)).toBe(-6.0);
+    // K 棒不足 20 根時回傳 undefined
+    expect(calculate20MABias(candles20.slice(0, 19), 108)).toBeUndefined();
+    // 現價無效時回傳 undefined
+    expect(calculate20MABias(candles20, 0)).toBeUndefined();
+    expect(calculate20MABias(undefined, 100)).toBeUndefined();
   });
 
   it('isDoubleColdRegime 應正確判定長線總經與短線波段雙冷體制', () => {

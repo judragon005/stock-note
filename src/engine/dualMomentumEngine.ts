@@ -101,6 +101,7 @@ export function calculateAssetMomentum(
       returns6M: 0,
       returns12M: 0,
       momentumScore: -999,
+      isHydrated: false,
       isAboveRiskFree: false,
       rank: 99,
     };
@@ -152,6 +153,7 @@ export function calculateAssetMomentum(
     returns12M: Math.round(returns12M * 100) / 100,
     momentumScore,
     isAboveRiskFree,
+    isHydrated: true,
     rank: 1, // 後續排序指派
   };
 }
@@ -174,6 +176,23 @@ function getSymbolValue<T>(record: Record<string, T>, symbol: string, fallback: 
   return fallback;
 }
 
+
+/**
+ * 常見台股高股息 ETF 之近一季公用除息調節基準表 (Spec 0213: 未持有者之公用底表)
+ */
+export const BENCHMARK_DIVIDEND_ADJUSTMENTS_3M: Record<string, number> = {
+  '0056': 1.07,
+  '0056.TW': 1.07,
+  '00878': 0.55,
+  '00878.TW': 0.55,
+  '00713': 1.5,
+  '00713.TW': 1.5,
+  '00919': 0.72,
+  '00919.TW': 0.72,
+  '00929': 0.11,
+  '00929.TW': 0.11,
+};
+
 export function evaluateDualMomentum(params: {
   universeConfig: MomentumUniverseConfig;
   quotesMap: Record<string, DailyCandle[]>;
@@ -188,7 +207,8 @@ export function evaluateDualMomentum(params: {
 
   for (const item of universeConfig.symbols) {
     const candles = getSymbolValue(quotesMap, item.symbol, []);
-    const divAdj = getSymbolValue(dividendAdjustments3M, item.symbol, 0);
+    const mergedDividends = { ...BENCHMARK_DIVIDEND_ADJUSTMENTS_3M, ...dividendAdjustments3M };
+    const divAdj = getSymbolValue(mergedDividends, item.symbol, 0);
     const metric = calculateAssetMomentum(
       item.symbol,
       item.market,
