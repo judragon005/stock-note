@@ -125,6 +125,13 @@ describe('Dual Momentum Total Return & Full-Spectrum Alignment (Ticket 04 / Foll
     expect(resDateOnly['0056.TW']).toBe(1.07);
     expect(resDateOnly['00878.TW']).toBe(0.55);
 
+    // 同日除息時區邊界防禦：基準日為純日期 2026-10-31，除息日為 UTC 戳記 2026-10-31T14:00:00.000Z，應正確對齊納入
+    const sameDayDivs = [
+      { symbol: '0056.TW', exDate: '2026-10-31T14:00:00.000Z', cashDividendPerShare: 1.07 },
+    ];
+    const resSameDay = aggregateRecentDividends(sameDayDivs, '2026-10-31', 90);
+    expect(resSameDay['0056.TW']).toBe(1.07);
+
     // 空陣列防禦
     expect(aggregateRecentDividends(undefined)).toEqual({});
   });

@@ -181,8 +181,9 @@ function getSymbolValue<T>(record: Record<string, T>, symbol: string, fallback: 
  */
 function parseDateTimestamp(dateStr?: string): number {
   if (!dateStr) return NaN;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    return new Date(`${dateStr}T00:00:00`).getTime();
+  const match = dateStr.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) {
+    return new Date(`${match[1]}T00:00:00`).getTime();
   }
   const ms = new Date(dateStr).getTime();
   return isNaN(ms) ? NaN : ms;
@@ -220,7 +221,7 @@ export function aggregateRecentDividends(
  * 判定動能指標或標的是否處於冷啟動日 K 水合狀態 (日 K 根數不足 5 或哨兵值 <= -990)
  */
 export function isMomentumHydrating(
-  asset?: { isHydrated?: boolean; momentumScore?: number } | null
+  asset?: Partial<Pick<MomentumAssetMetric, 'isHydrated' | 'momentumScore'>> | null
 ): boolean {
   if (!asset) return true;
   return asset.isHydrated === false || (asset.momentumScore !== undefined && asset.momentumScore <= -990);
