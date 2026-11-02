@@ -794,6 +794,8 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     return holdings.find((h) => currentUniverseSymbols.has(h.symbol) || currentUniverseSymbols.has(`${h.symbol}.TW`));
   }, [holdings, currentUniverseSymbols]);
 
+  const isTopHydrating = isMomentumHydrating(momentumSignal.topAsset);
+
   const handleCopyLlmJson = async () => {
     const ok = await copyTextToClipboard(morningBrief.llmPayloadJson);
     if (ok) {
@@ -1745,19 +1747,19 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
         <div
           className="warroom-banner-tip"
           style={{
-            background: isMomentumHydrating(momentumSignal.topAsset)
+            background: isTopHydrating
               ? 'rgba(100, 116, 139, 0.12)'
               : momentumSignal.safeHavenTriggered
               ? 'rgba(239, 68, 68, 0.12)'
               : 'rgba(59, 130, 246, 0.12)',
             border:
               '1px solid ' +
-              (isMomentumHydrating(momentumSignal.topAsset)
+              (isTopHydrating
                 ? 'rgba(100, 116, 139, 0.3)'
                 : momentumSignal.safeHavenTriggered
                 ? 'rgba(239, 68, 68, 0.3)'
                 : 'rgba(59, 130, 246, 0.3)'),
-            color: isMomentumHydrating(momentumSignal.topAsset)
+            color: isTopHydrating
               ? 'var(--text-secondary)'
               : momentumSignal.safeHavenTriggered
               ? 'var(--loss-color)'
@@ -1773,7 +1775,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
               <Flame size={16} />
               <span>
                 <strong>當前建議行動：</strong>
-                {isMomentumHydrating(momentumSignal.topAsset) ? (
+                {isTopHydrating ? (
                   <span style={{ color: 'var(--text-muted)' }}>
                     ⏳【湖倉日 K 水合中】
                   </span>
@@ -1789,8 +1791,8 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
             </span>
           </div>
           <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-            💡 {isMomentumHydrating(momentumSignal.topAsset) ? '正在載入全歷史量價數據，暫緩執行月結輪動。' : momentumSignal.actionAdvice}
-            {!isMomentumHydrating(momentumSignal.topAsset) && holdingMatchingAsset && momentumSignal.topAsset && !holdingMatchingAsset.symbol.includes(momentumSignal.topAsset.symbol.replace('.TW', '')) && (
+            💡 {isTopHydrating ? '正在載入全歷史量價數據，暫緩執行月結輪動。' : momentumSignal.actionAdvice}
+            {!isTopHydrating && holdingMatchingAsset && momentumSignal.topAsset && !holdingMatchingAsset.symbol.includes(momentumSignal.topAsset.symbol.replace('.TW', '')) && (
               <span style={{ marginLeft: '8px', color: 'var(--accent-amber)', fontWeight: 600 }}>
                 (⚠️ 您在庫持有 {holdingMatchingAsset.symbol}，非動能榜首，建議於月結日評估是否換倉)
               </span>
