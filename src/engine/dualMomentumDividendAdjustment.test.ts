@@ -4,6 +4,8 @@ import {
   evaluateDualMomentum,
   DEFAULT_MOMENTUM_UNIVERSES,
   BENCHMARK_DIVIDEND_ADJUSTMENTS_3M,
+  aggregateRecentDividends,
+  isMomentumHydrating,
 } from './dualMomentumEngine';
 import { isDoubleColdRegime, calculate20MABias } from './macroAdvisorEngine';
 import type { DailyCandle } from '../types/indicators';
@@ -99,5 +101,41 @@ describe('Dual Momentum Total Return & Full-Spectrum Alignment (Ticket 04 / Foll
     expect(isDoubleColdRegime(45, 29)).toBe(false);
     expect(isDoubleColdRegime(44, 30)).toBe(false);
     expect(isDoubleColdRegime(50, 50)).toBe(false);
+  });
+
+  it('aggregateRecentDividends 應具備日期容錯解析能力，支援 ISO 與純日期格式並過濾無效日期', () => {
+    const receivableDividends = [
+      { symbol: '0056.TW', exDate: '2026-10-15', cashDividendPerShare: 1.07 },
+      { symbol: '00878.TW', exDate: '2026-09-01T08:30:00.000Z', cashDividendPerShare: 0.55 },
+      { symbol: '00713.TW', exDate: '2026-05-01', cashDividendPerShare: 1.5 }, // 超過 90 天
+      { symbol: '2330', exDate: 'invalid-date', cashDividendPerShare: 3.5 }, // 無效日期
+      { symbol: '2454', exDate: undefined, cashDividendPerShare: 5.0 }, // 無日期
+    ];
+
+    // 基準日為 ISO 字串格式
+    const resIso = aggregateRecentDividends(receivableDividends, '2026-10-31T23:59:59.999Z', 90);
+    expect(resIso['0056.TW']).toBe(1.07);
+    expect(resIso['00878.TW']).toBe(0.55);
+    expect(resIso['00713.TW']).toBeUndefined();
+    expect(resIso['2330']).toBeUndefined();
+    expect(resIso['2454']).toBeUndefined();
+
+    // 基準日為純 YYYY-MM-DD
+    const resDateOnly = aggregateRecentDividends(receivableDividends, '2026-10-31', 90);
+    expect(resDateOnly['0056.TW']).toBe(1.07);
+    expect(resDateOnly['00878.TW']).toBe(0.55);
+
+    // 空陣列防禦
+    expect(aggregateRecentDividends(undefined)).toEqual({});
+  });
+
+  it('isMomentumHydrating 應準確判定空值、未水合與哨兵值資產狀態', () => {
+    expect(isMomentumHydrating(null)).toBe(true);
+    expect(isMomentumHydrating(undefined)).toBe(true);
+    expect(isMomentumHydrating({ isHydrated: false, momentumScore: 10 })).toBe(true);
+    expect(isMomentumHydrating({ isHydrated: true, momentumScore: -999 })).toBe(true);
+    expect(isMomentumHydrating({ isHydrated: true, momentumScore: -990 })).toBe(true);
+    expect(isMomentumHydrating({ isHydrated: true, momentumScore: -989 })).toBe(false);
+    expect(isMomentumHydrating({ isHydrated: true, momentumScore: 15.2 })).toBe(false);
   });
 });

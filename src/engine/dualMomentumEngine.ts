@@ -176,10 +176,18 @@ function getSymbolValue<T>(record: Record<string, T>, symbol: string, fallback: 
   return fallback;
 }
 
-
 /**
- * 常見台股高股息 ETF 之近一季公用除息調節基準表 (Spec 0213: 未持有者之公用底表)
+ * 安全解析日期字串為毫秒時間戳，兼容純 YYYY-MM-DD 與 ISO 時間格式
  */
+function parseDateTimestamp(dateStr?: string): number {
+  if (!dateStr) return NaN;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return new Date(`${dateStr}T00:00:00`).getTime();
+  }
+  const ms = new Date(dateStr).getTime();
+  return isNaN(ms) ? NaN : ms;
+}
+
 /**
  * 依基準日聚合近 N 天內（預設 90 天）在倉標的之每股除息調節金額 (Spec 0213: 領域封裝)
  */
@@ -188,13 +196,15 @@ export function aggregateRecentDividends(
   baseDate?: string,
   days: number = 90
 ): Record<string, number> {
-  const baseTime = baseDate ? new Date(`${baseDate}T00:00:00`).getTime() : Date.now();
+  const parsedBase = parseDateTimestamp(baseDate);
+  const baseTime = !isNaN(parsedBase) ? parsedBase : Date.now();
   const windowMs = days * 86400000;
   const result: Record<string, number> = {};
 
   for (const rec of receivableDividends) {
     if (!rec.exDate) continue;
-    const exTime = new Date(`${rec.exDate}T00:00:00`).getTime();
+    const exTime = parseDateTimestamp(rec.exDate);
+    if (isNaN(exTime)) continue;
     if (baseTime >= exTime && baseTime - exTime <= windowMs) {
       const amt = rec.cashDividendPerShare || 0;
       if (amt > 0) {
@@ -204,6 +214,16 @@ export function aggregateRecentDividends(
   }
 
   return result;
+}
+
+/**
+ * 判定動能指標或標的是否處於冷啟動日 K 水合狀態 (日 K 根數不足 5 或哨兵值 <= -990)
+ */
+export function isMomentumHydrating(
+  asset?: { isHydrated?: boolean; momentumScore?: number } | null
+): boolean {
+  if (!asset) return true;
+  return asset.isHydrated === false || (asset.momentumScore !== undefined && asset.momentumScore <= -990);
 }
 
 /**
