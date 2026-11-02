@@ -9,7 +9,6 @@ export interface HoldingTacticalSignalsCardProps {
   onOpenAiForce?: (symbol: string) => void;
   onOpenTradeModal?: (symbol: string, market?: 'TW' | 'US') => void;
   privacyMode?: boolean;
-  defaultFilter?: 'ACTIONABLE' | 'ALL';
 }
 
 export const HoldingTacticalSignalsCard: React.FC<HoldingTacticalSignalsCardProps> = ({
@@ -19,9 +18,8 @@ export const HoldingTacticalSignalsCard: React.FC<HoldingTacticalSignalsCardProp
   onOpenAiForce,
   onOpenTradeModal,
   privacyMode = false,
-  defaultFilter,
 }) => {
-  const [activeFilter, setActiveFilter] = useState<'ACTIONABLE' | 'ALL'>(defaultFilter || 'ACTIONABLE');
+  const [activeFilter, setActiveFilter] = useState<'ACTIONABLE' | 'ALL'>('ACTIONABLE');
 
   // 將「需立即關注（突破買進 BUY / 破線賣出 SELL / 避開 AVOID / 觸及自訂停損停利 / 處置注意股）」與「正常箱型續抱 HOLD」分流
   const actionableSignals = signals.filter(

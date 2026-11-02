@@ -54,6 +54,7 @@ import {
 import {
   evaluateDualMomentum,
   aggregateRecentDividends,
+  isMomentumHydrating,
   DEFAULT_MOMENTUM_UNIVERSES,
 } from '../engine/dualMomentumEngine';
 import { DailyCandle } from '../types/indicators';
@@ -1741,68 +1742,61 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           </div>
         </div>
 
-        {(() => {
-          const isTopHydrating = !momentumSignal.topAsset || momentumSignal.topAsset.isHydrated === false || momentumSignal.topAsset.momentumScore <= -990;
-          const bannerBg = isTopHydrating
-            ? 'rgba(100, 116, 139, 0.12)'
-            : momentumSignal.safeHavenTriggered
-            ? 'rgba(239, 68, 68, 0.12)'
-            : 'rgba(59, 130, 246, 0.12)';
-          const bannerBorder = isTopHydrating
-            ? 'rgba(100, 116, 139, 0.3)'
-            : momentumSignal.safeHavenTriggered
-            ? 'rgba(239, 68, 68, 0.3)'
-            : 'rgba(59, 130, 246, 0.3)';
-          const bannerColor = isTopHydrating
-            ? 'var(--text-secondary)'
-            : momentumSignal.safeHavenTriggered
-            ? 'var(--loss-color)'
-            : 'var(--text-primary)';
-
-          return (
-            <div
-              className="warroom-banner-tip"
-              style={{
-                background: bannerBg,
-                border: '1px solid ' + bannerBorder,
-                color: bannerColor,
-                marginBottom: '16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Flame size={16} />
-                  <span>
-                    <strong>當前建議行動：</strong>
-                    {isTopHydrating ? (
-                      <span style={{ color: 'var(--text-muted)' }}>
-                        ⏳【湖倉日 K 水合中】
-                      </span>
-                    ) : (
-                      <>
-                        {momentumSignal.actionHeadline}：{momentumSignal.topAsset ? `【${momentumSignal.topAsset.symbol} ${momentumSignal.topAsset.name || ''}】` : '退守避風港'}
-                      </>
-                    )}
+        <div
+          className="warroom-banner-tip"
+          style={{
+            background: isMomentumHydrating(momentumSignal.topAsset)
+              ? 'rgba(100, 116, 139, 0.12)'
+              : momentumSignal.safeHavenTriggered
+              ? 'rgba(239, 68, 68, 0.12)'
+              : 'rgba(59, 130, 246, 0.12)',
+            border:
+              '1px solid ' +
+              (isMomentumHydrating(momentumSignal.topAsset)
+                ? 'rgba(100, 116, 139, 0.3)'
+                : momentumSignal.safeHavenTriggered
+                ? 'rgba(239, 68, 68, 0.3)'
+                : 'rgba(59, 130, 246, 0.3)'),
+            color: isMomentumHydrating(momentumSignal.topAsset)
+              ? 'var(--text-secondary)'
+              : momentumSignal.safeHavenTriggered
+              ? 'var(--loss-color)'
+              : 'var(--text-primary)',
+            marginBottom: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Flame size={16} />
+              <span>
+                <strong>當前建議行動：</strong>
+                {isMomentumHydrating(momentumSignal.topAsset) ? (
+                  <span style={{ color: 'var(--text-muted)' }}>
+                    ⏳【湖倉日 K 水合中】
                   </span>
-                </div>
-                <span className="badge" style={{ background: 'rgba(255, 255, 255, 0.1)', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-                  📆 距月結調倉尚有 {daysUntilMonthEnd} 天
-                </span>
-              </div>
-              <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                💡 {isTopHydrating ? '正在載入全歷史量價數據，暫緩執行月結輪動。' : momentumSignal.actionAdvice}
-                {!isTopHydrating && holdingMatchingAsset && momentumSignal.topAsset && !holdingMatchingAsset.symbol.includes(momentumSignal.topAsset.symbol.replace('.TW', '')) && (
-                  <span style={{ marginLeft: '8px', color: 'var(--accent-amber)', fontWeight: 600 }}>
-                    (⚠️ 您在庫持有 {holdingMatchingAsset.symbol}，非動能榜首，建議於月結日評估是否換倉)
-                  </span>
+                ) : (
+                  <>
+                    {momentumSignal.actionHeadline}：{momentumSignal.topAsset ? `【${momentumSignal.topAsset.symbol} ${momentumSignal.topAsset.name || ''}】` : '退守避風港'}
+                  </>
                 )}
-              </div>
+              </span>
             </div>
-          );
-        })()}
+            <span className="badge" style={{ background: 'rgba(255, 255, 255, 0.1)', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+              📆 距月結調倉尚有 {daysUntilMonthEnd} 天
+            </span>
+          </div>
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+            💡 {isMomentumHydrating(momentumSignal.topAsset) ? '正在載入全歷史量價數據，暫緩執行月結輪動。' : momentumSignal.actionAdvice}
+            {!isMomentumHydrating(momentumSignal.topAsset) && holdingMatchingAsset && momentumSignal.topAsset && !holdingMatchingAsset.symbol.includes(momentumSignal.topAsset.symbol.replace('.TW', '')) && (
+              <span style={{ marginLeft: '8px', color: 'var(--accent-amber)', fontWeight: 600 }}>
+                (⚠️ 您在庫持有 {holdingMatchingAsset.symbol}，非動能榜首，建議於月結日評估是否換倉)
+              </span>
+            )}
+          </div>
+        </div>
 
         <div className="warroom-table-container">
           <table className="warroom-table">
@@ -1819,7 +1813,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
             </thead>
             <tbody>
               {momentumSignal.leaderboard.map((item, idx) => {
-                const isHydrating = item.isHydrated === false || item.momentumScore <= -990;
+                const isHydrating = isMomentumHydrating(item);
                 return (
                 <tr key={item.symbol} style={{ background: idx === 0 ? 'rgba(59, 130, 246, 0.08)' : undefined }}>
                   <td>

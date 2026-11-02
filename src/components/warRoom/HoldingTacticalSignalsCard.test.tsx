@@ -44,12 +44,12 @@ describe('HoldingTacticalSignalsCard (分頁膠囊切換、安全盾反饋與月
     bias20MA: -3.2,
   };
 
-  it('當在倉全為正常股 (0 檔需行動) 時，預設在「需行動」模式應渲染綠色安全盾反饋卡', () => {
+  it('當在倉全為正常股 (0 檔需行動) 時，預設應渲染綠色安全盾反饋卡', () => {
     const html = renderToStaticMarkup(
-      <HoldingTacticalSignalsCard signals={[normalHolding]} defaultFilter="ACTIONABLE" />
+      <HoldingTacticalSignalsCard signals={[normalHolding]} />
     );
 
-    // 驗證存在分頁膠囊
+    // 驗證存在分頁膠囊與計數
     expect(html).toContain('需行動 (0)');
     expect(html).toContain('全部在倉 (1)');
 
@@ -58,32 +58,36 @@ describe('HoldingTacticalSignalsCard (分頁膠囊切換、安全盾反饋與月
     expect(html).not.toContain('warroom-table');
   });
 
-  it('切換至「全部在倉」時應正確渲染持股明細表格，並揭露月線乖離率與過熱標籤', () => {
+  it('當存在需行動標的時，應正確渲染持股明細表格，並揭露月線乖離率與過熱標籤', () => {
+    const breakoutHolding: MacroHoldingSignalInput = {
+      ...normalHolding,
+      symbol: '2330',
+      action: 'BUY',
+      bias20MA: 7.8,
+    };
+
     const html = renderToStaticMarkup(
-      <HoldingTacticalSignalsCard signals={[normalHolding]} defaultFilter="ALL" />
+      <HoldingTacticalSignalsCard signals={[breakoutHolding]} />
     );
 
     expect(html).toContain('warroom-table');
     expect(html).toContain('2330');
     expect(html).toContain('台積電');
+    expect(html).toContain('箱頂突破加碼');
     // 驗證月線乖離率 > 6% 之過熱標籤
     expect(html).toContain('+7.8%');
     expect(html).toContain('過熱');
     expect(html).not.toContain('當前在倉持股全數處於正常箱型結構或安全防守水位');
   });
 
-  it('當存在異常股時，「需行動」僅顯示異常股，「全部在倉」顯示所有持股', () => {
-    const htmlActionable = renderToStaticMarkup(
-      <HoldingTacticalSignalsCard signals={[normalHolding, actionableHolding]} defaultFilter="ACTIONABLE" />
+  it('當存在異常股時，預設僅展示異常標的，並於分頁膠囊揭露整體持股數量', () => {
+    const html = renderToStaticMarkup(
+      <HoldingTacticalSignalsCard signals={[normalHolding, actionableHolding]} />
     );
-    expect(htmlActionable).toContain('2454');
-    expect(htmlActionable).toContain('🚨 觸及自訂停損');
-    expect(htmlActionable).not.toContain('2330');
-
-    const htmlAll = renderToStaticMarkup(
-      <HoldingTacticalSignalsCard signals={[normalHolding, actionableHolding]} defaultFilter="ALL" />
-    );
-    expect(htmlAll).toContain('2454');
-    expect(htmlAll).toContain('2330');
+    expect(html).toContain('需行動 (1)');
+    expect(html).toContain('全部在倉 (2)');
+    expect(html).toContain('2454');
+    expect(html).toContain('🚨 觸及自訂停損');
+    expect(html).not.toContain('2330');
   });
 });
