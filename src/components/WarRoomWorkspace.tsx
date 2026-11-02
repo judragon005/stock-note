@@ -53,6 +53,7 @@ import {
 } from '../engine/macroAdvisorEngine';
 import {
   evaluateDualMomentum,
+  aggregateRecentDividends,
   DEFAULT_MOMENTUM_UNIVERSES,
 } from '../engine/dualMomentumEngine';
 import { DailyCandle } from '../types/indicators';
@@ -760,20 +761,12 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
         }));
       }
     }
-    // 聚合近 90 天內各標的之每股除息調節金額 (Spec 0213: 除息總報酬還原)
-    const nowTime = Date.now();
-    const ninetyDaysMs = 90 * 86400000;
-    const dividendAdjustments3M: Record<string, number> = {};
-    for (const rec of receivableDividends) {
-      if (!rec.exDate) continue;
-      const exTime = new Date(`${rec.exDate}T00:00:00`).getTime();
-      if (nowTime - exTime <= ninetyDaysMs && nowTime >= exTime) {
-        const amt = rec.cashDividendPerShare || 0;
-        if (amt > 0) {
-          dividendAdjustments3M[rec.symbol] = (dividendAdjustments3M[rec.symbol] || 0) + amt;
-        }
-      }
-    }
+    // 聚合近 90 天內各標的之每股除息調節金額 (Spec 0213: 領域封裝與基準日錨定)
+    const dividendAdjustments3M = aggregateRecentDividends(
+      receivableDividends,
+      macroSnapshot.date,
+      90
+    );
 
     return evaluateDualMomentum({
       universeConfig: selectedUniverse,
@@ -1748,39 +1741,68 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           </div>
         </div>
 
-        <div
-          className="warroom-banner-tip"
-          style={{
-            background: momentumSignal.safeHavenTriggered ? 'rgba(239, 68, 68, 0.12)' : 'rgba(59, 130, 246, 0.12)',
-            border: '1px solid ' + (momentumSignal.safeHavenTriggered ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.3)'),
-            color: momentumSignal.safeHavenTriggered ? 'var(--loss-color)' : 'var(--text-primary)',
-            marginBottom: '16px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Flame size={16} />
-              <span>
-                <strong>當前建議行動：</strong>
-                {momentumSignal.actionHeadline}：{momentumSignal.topAsset ? `【${momentumSignal.topAsset.symbol} ${momentumSignal.topAsset.name || ''}】` : '退守避風港'}
-              </span>
+        {(() => {
+          const isTopHydrating = !momentumSignal.topAsset || momentumSignal.topAsset.isHydrated === false || momentumSignal.topAsset.momentumScore <= -990;
+          const bannerBg = isTopHydrating
+            ? 'rgba(100, 116, 139, 0.12)'
+            : momentumSignal.safeHavenTriggered
+            ? 'rgba(239, 68, 68, 0.12)'
+            : 'rgba(59, 130, 246, 0.12)';
+          const bannerBorder = isTopHydrating
+            ? 'rgba(100, 116, 139, 0.3)'
+            : momentumSignal.safeHavenTriggered
+            ? 'rgba(239, 68, 68, 0.3)'
+            : 'rgba(59, 130, 246, 0.3)';
+          const bannerColor = isTopHydrating
+            ? 'var(--text-secondary)'
+            : momentumSignal.safeHavenTriggered
+            ? 'var(--loss-color)'
+            : 'var(--text-primary)';
+
+          return (
+            <div
+              className="warroom-banner-tip"
+              style={{
+                background: bannerBg,
+                border: '1px solid ' + bannerBorder,
+                color: bannerColor,
+                marginBottom: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Flame size={16} />
+                  <span>
+                    <strong>當前建議行動：</strong>
+                    {isTopHydrating ? (
+                      <span style={{ color: 'var(--text-muted)' }}>
+                        ⏳【湖倉日 K 水合中】
+                      </span>
+                    ) : (
+                      <>
+                        {momentumSignal.actionHeadline}：{momentumSignal.topAsset ? `【${momentumSignal.topAsset.symbol} ${momentumSignal.topAsset.name || ''}】` : '退守避風港'}
+                      </>
+                    )}
+                  </span>
+                </div>
+                <span className="badge" style={{ background: 'rgba(255, 255, 255, 0.1)', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                  📆 距月結調倉尚有 {daysUntilMonthEnd} 天
+                </span>
+              </div>
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                💡 {isTopHydrating ? '正在載入全歷史量價數據，暫緩執行月結輪動。' : momentumSignal.actionAdvice}
+                {!isTopHydrating && holdingMatchingAsset && momentumSignal.topAsset && !holdingMatchingAsset.symbol.includes(momentumSignal.topAsset.symbol.replace('.TW', '')) && (
+                  <span style={{ marginLeft: '8px', color: 'var(--accent-amber)', fontWeight: 600 }}>
+                    (⚠️ 您在庫持有 {holdingMatchingAsset.symbol}，非動能榜首，建議於月結日評估是否換倉)
+                  </span>
+                )}
+              </div>
             </div>
-            <span className="badge" style={{ background: 'rgba(255, 255, 255, 0.1)', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-              📆 距月結調倉尚有 {daysUntilMonthEnd} 天
-            </span>
-          </div>
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-            💡 {momentumSignal.actionAdvice}
-            {holdingMatchingAsset && momentumSignal.topAsset && !holdingMatchingAsset.symbol.includes(momentumSignal.topAsset.symbol.replace('.TW', '')) && (
-              <span style={{ marginLeft: '8px', color: 'var(--accent-amber)', fontWeight: 600 }}>
-                (⚠️ 您在庫持有 {holdingMatchingAsset.symbol}，非動能榜首，建議於月結日評估是否換倉)
-              </span>
-            )}
-          </div>
-        </div>
+          );
+        })()}
 
         <div className="warroom-table-container">
           <table className="warroom-table">
@@ -1797,7 +1819,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
             </thead>
             <tbody>
               {momentumSignal.leaderboard.map((item, idx) => {
-                const isHydrating = !item.isHydrated || item.momentumScore <= -990;
+                const isHydrating = item.isHydrated === false || item.momentumScore <= -990;
                 return (
                 <tr key={item.symbol} style={{ background: idx === 0 ? 'rgba(59, 130, 246, 0.08)' : undefined }}>
                   <td>

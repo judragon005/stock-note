@@ -22,6 +22,10 @@ describe('Dual Momentum Lakehouse Data Audit & Graceful Hydration (Ticket 03)', 
     expect(html).toContain('⏳ 水合中');
     expect(html).not.toContain('-999.0%');
     expect(html).not.toContain('-999%');
+
+    // 斷言頂部行動卡片優雅降級為水合中，嚴禁誤判為空頭避險「現金為王」
+    expect(html).toContain('⏳【湖倉日 K 水合中】');
+    expect(html).not.toContain('【觸發避險・現金為王】');
   });
 
   it('當提供近 90 天除息記錄與持股日 K 時，WarRoomWorkspace 應成功串聯除息調節與月線乖離率', () => {

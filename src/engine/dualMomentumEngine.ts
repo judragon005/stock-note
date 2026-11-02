@@ -180,16 +180,40 @@ function getSymbolValue<T>(record: Record<string, T>, symbol: string, fallback: 
 /**
  * 常見台股高股息 ETF 之近一季公用除息調節基準表 (Spec 0213: 未持有者之公用底表)
  */
+/**
+ * 依基準日聚合近 N 天內（預設 90 天）在倉標的之每股除息調節金額 (Spec 0213: 領域封裝)
+ */
+export function aggregateRecentDividends(
+  receivableDividends: Array<{ exDate?: string; symbol: string; cashDividendPerShare?: number }> = [],
+  baseDate?: string,
+  days: number = 90
+): Record<string, number> {
+  const baseTime = baseDate ? new Date(`${baseDate}T00:00:00`).getTime() : Date.now();
+  const windowMs = days * 86400000;
+  const result: Record<string, number> = {};
+
+  for (const rec of receivableDividends) {
+    if (!rec.exDate) continue;
+    const exTime = new Date(`${rec.exDate}T00:00:00`).getTime();
+    if (baseTime >= exTime && baseTime - exTime <= windowMs) {
+      const amt = rec.cashDividendPerShare || 0;
+      if (amt > 0) {
+        result[rec.symbol] = (result[rec.symbol] || 0) + amt;
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 常見台股高股息 ETF 之近一季公用除息調節基準表 (Spec 0213: 未持有者之公用底表)
+ */
 export const BENCHMARK_DIVIDEND_ADJUSTMENTS_3M: Record<string, number> = {
-  '0056': 1.07,
   '0056.TW': 1.07,
-  '00878': 0.55,
   '00878.TW': 0.55,
-  '00713': 1.5,
   '00713.TW': 1.5,
-  '00919': 0.72,
   '00919.TW': 0.72,
-  '00929': 0.11,
   '00929.TW': 0.11,
 };
 

@@ -7,8 +7,8 @@ export interface MomentumAssetMetric {
   returns6M: number;       // 6 個月報酬率 %
   returns12M: number;      // 12 個月報酬率 %
   momentumScore: number;   // 12-1M 加權動能評分
-  isAboveRiskFree: boolean;
-  isHydrated?: boolean; // 是否完成日 K 水合 (candles >= 5)// 12 個月報酬是否大於無風險利率
+  isAboveRiskFree: boolean; // 12 個月報酬是否大於無風險利率
+  isHydrated?: boolean;     // 是否完成日 K 水合 (candles >= 5)
   rank: number;            // 資產池內部相對強弱名次 (1 為最強)
 }
 

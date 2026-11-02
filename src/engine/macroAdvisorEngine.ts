@@ -24,13 +24,9 @@ export function evaluateVixLevel(vix: number): VixLevel {
 }
 
 /**
- * 評估恐懼與貪婪指數分級
+ * 20MA 月線乖離率過熱警示閾值 (百分比 %)
  */
-
-/**
- * 判定長線總經配置溫度計與短中期波段戰術溫度計是否雙雙落入偏冷/弱勢區間
- * - 長線總經 < 45 且 短中期波段 < 30
- */
+export const BIAS_OVERHEAT_THRESHOLD_PERCENT = 6;
 
 /**
  * 計算 20MA 月線乖離率百分比 % (如 +4.2% 或 -3.1%)
@@ -44,6 +40,10 @@ export function calculate20MABias(candles?: DailyCandle[], currentPrice?: number
   return Math.round(((currentPrice - ma20) / ma20) * 1000) / 10;
 }
 
+/**
+ * 判定長線總經配置溫度計與短中期波段戰術溫度計是否雙雙落入偏冷/弱勢區間
+ * - 長線總經 < 45 且 短中期波段 < 30
+ */
 export function isDoubleColdRegime(strategicScore: number, tacticalScore: number): boolean {
   return strategicScore < 45 && tacticalScore < 30;
 }
