@@ -19,7 +19,8 @@ import {
   calculateMaDeduction,
   calculateBollingerSqueeze,
 } from './darvasBoxEngine';
-import { calculateSMA } from './technicalIndicatorEngine';
+import { calculateSMA, calculateMACD } from './technicalIndicatorEngine';
+import { calculateOBV } from './omniIndicatorEngine';
 
 /**
  * 4. ATR 動態移動防守價 (Trailing Defense)
@@ -211,6 +212,7 @@ export function evaluateMuscleBookerAction(params: {
   lookback60High?: number;
   isHolding?: boolean;
   marketRegime?: 'BULL' | 'BEAR' | 'NEUTRAL';
+  rsRank?: RelativeStrengthRank;
   obvTrend?: 'RISING' | 'FALLING' | 'FLAT';
   macd?: {
     dif12_26?: number;
@@ -219,7 +221,7 @@ export function evaluateMuscleBookerAction(params: {
   isForensicDangerous?: boolean;
   isLowLiquidity?: boolean;
 }): MuscleBookerActionDecision {
-  const { currentPrice, box, deduction, bbands, atr, lookback60High, isHolding, marketRegime, obvTrend, macd, isForensicDangerous, isLowLiquidity } = params;
+  const { currentPrice, box, deduction, bbands, atr, lookback60High, isHolding, marketRegime, rsRank, obvTrend, macd, isForensicDangerous, isLowLiquidity } = params;
 
   // 0. 財報鑑識負向排除 (Hard Ban)
   if (isForensicDangerous) {
@@ -227,15 +229,6 @@ export function evaluateMuscleBookerAction(params: {
       action: 'AVOID',
       actionBadge: '⛔ 鑑識雷達示警 (財報造假風險)',
       actionReason: '財報鑑識雷達偵測到嚴重造假/掏空異常，屬於絕對禁買標的，保全本金第一',
-    };
-  }
-
-  // 0.1 流動性容量初篩
-  if (isLowLiquidity) {
-    return {
-      action: 'HOLD',
-      actionBadge: '🟡 流動性不足 (容量受限)',
-      actionReason: '成交量或成交金額低於安全容量門檻，避免衝擊成本與滑價風險，不予主動推薦',
     };
   }
 
@@ -250,7 +243,7 @@ export function evaluateMuscleBookerAction(params: {
   }
 
   // 在倉持股二級防守：突破後跌回箱頂以下 (假突破保本離場)
-  if (isHolding && box.boxUpper !== undefined && currentPrice < box.boxUpper * 0.995 && currentPrice >= (box.boxLower ?? 0)) {
+  if (isHolding && box.boxUpper !== undefined && currentPrice < box.boxUpper * 0.99 && currentPrice >= (box.boxLower ?? 0)) {
     return {
       action: 'SELL',
       actionBadge: '🔴 建議賣出 (假突破保本)',
@@ -272,6 +265,14 @@ export function evaluateMuscleBookerAction(params: {
   // 2. 判斷買進訊號 (BUY)
   // 情境 A: 突破箱頂 + 均線向上
   if (box.boxStatus === 'BREAKOUT_UP' && deduction.ma20Slope === 'UP') {
+    if (isLowLiquidity) {
+      return {
+        action: 'HOLD',
+        actionBadge: '🟡 流動性不足 (容量受限)',
+        actionReason: '帶量站上箱頂但成交量或成交金額低於安全容量門檻，避免衝擊成本與滑價風險，不予主動推薦',
+      };
+    }
+
     // MACD 0 軸多頭主控檢驗
     if (macd && macd.dif12_26 !== undefined && macd.macdHist !== undefined) {
       if (macd.dif12_26 < 0 && macd.macdHist < 0) {
@@ -322,6 +323,18 @@ export function evaluateMuscleBookerAction(params: {
       };
     }
 
+    if (marketRegime === 'BEAR' && rsRank !== 'EXTREME_STRONG') {
+      return {
+        action: 'HOLD',
+        actionBadge: '🟡 觀望 (大盤偏空防線)',
+        actionReason: '大盤偏空處於空頭或轉折弱勢，非 RS 極強 (EXTREME_STRONG) 領先股，切忌逆勢進場',
+        stopLossPrice: Math.round(stopLoss * 100) / 100,
+        targetPrice: Math.round(target * 100) / 100,
+        riskRewardRatio: `${rrRatio}R`,
+        riskRewardRatioValue: rrValue,
+      };
+    }
+
     const minRequiredRR = marketRegime === 'BEAR' ? 3.0 : 2.0;
 
     // 風益比硬門檻：不足門檻絕不追高進場 (大盤偏空時提高至 3.0R)
@@ -353,6 +366,34 @@ export function evaluateMuscleBookerAction(params: {
 
   // 情境 B: 破底翻反轉 (收復下影線且均線不下彎)
   if (deduction.isBottomPenetrationRebound && deduction.ma20Slope !== 'DOWN') {
+    if (isLowLiquidity) {
+      return {
+        action: 'HOLD',
+        actionBadge: '🟡 流動性不足 (容量受限)',
+        actionReason: '破底翻但成交量或成交金額低於安全容量門檻，避免衝擊成本與滑價風險，不予主動推薦',
+      };
+    }
+
+    // MACD 0 軸多頭主控檢驗
+    if (macd && macd.dif12_26 !== undefined && macd.macdHist !== undefined) {
+      if (macd.dif12_26 < 0 && macd.macdHist < 0) {
+        return {
+          action: 'AVOID',
+          actionBadge: '⛔ 嚴禁碰觸 (MACD弱勢)',
+          actionReason: 'MACD 處於 0 軸以下且柱狀體為負，空方控盤結構，嚴禁左側猜底',
+        };
+      }
+    }
+
+    // OBV 能量潮資金流檢驗
+    if (obvTrend === 'FALLING') {
+      return {
+        action: 'HOLD',
+        actionBadge: '🟡 觀望 (OBV背離)',
+        actionReason: '破底翻但 OBV 能量潮呈現背離流出，真金白銀動能不足，切忌急躁進場',
+      };
+    }
+
     const stopLoss = box.boxLower ? box.boxLower * 0.98 : currentPrice * 0.95;
     const rawTarget = box.boxUpper ?? currentPrice * 1.1;
     const target = (lookback60High !== undefined && lookback60High > currentPrice)
@@ -365,12 +406,29 @@ export function evaluateMuscleBookerAction(params: {
     const rrValue = Math.round((reward / effectiveRisk) * 10) / 10;
     const rrRatio = rrValue.toFixed(1);
 
-    // 風益比硬門檻：不足 2.0R 絕不急躁進場
-    if (rrValue < 2.0) {
+    if (marketRegime === 'BEAR' && rsRank !== 'EXTREME_STRONG') {
       return {
         action: 'HOLD',
-        actionBadge: '🟡 觀望 (空間不足)',
-        actionReason: `破底翻但距上方壓力過近 (風益比僅 ${rrRatio}R < 2.0R)，空間狹小，切忌急躁進場`,
+        actionBadge: '🟡 觀望 (大盤偏空防線)',
+        actionReason: '大盤偏空處於空頭或轉折弱勢，非 RS 極強 (EXTREME_STRONG) 領先股，切忌逆勢進場',
+        stopLossPrice: Math.round(stopLoss * 100) / 100,
+        targetPrice: Math.round(target * 100) / 100,
+        riskRewardRatio: `${rrRatio}R`,
+        riskRewardRatioValue: rrValue,
+      };
+    }
+
+    const minRequiredRR = marketRegime === 'BEAR' ? 3.0 : 2.0;
+
+    // 風益比硬門檻：不足門檻絕不急躁進場 (大盤偏空時提高至 3.0R)
+    if (rrValue < minRequiredRR) {
+      const reason = marketRegime === 'BEAR'
+        ? `破底翻但大盤偏空，動能門檻提高至 3.0R (目前僅 ${rrRatio}R < 3.0R)，防禦優先，切忌急躁進場`
+        : `破底翻但距上方壓力過近 (風益比僅 ${rrRatio}R < 2.0R)，空間狹小，切忌急躁進場`;
+      return {
+        action: 'HOLD',
+        actionBadge: marketRegime === 'BEAR' ? '🟡 觀望 (大盤偏空防線)' : '🟡 觀望 (空間不足)',
+        actionReason: reason,
         stopLossPrice: Math.round(stopLoss * 100) / 100,
         targetPrice: Math.round(target * 100) / 100,
         riskRewardRatio: `${rrRatio}R`,
@@ -431,10 +489,17 @@ export const BEGINNER_TOOLTIPS = {
   stopLossPrinciple: '💡【股市小白指南】嚴格停損紀律：只要跌破設定的防守價位，代表進場理由消失。小賠離場是為了保護本金，避免一次大跌讓資產腰斬！',
 };
 
+export interface ScanMuscleBookerOptions {
+  isHolding?: boolean;
+  marketRegime?: 'BULL' | 'BEAR' | 'NEUTRAL';
+  rsRank?: RelativeStrengthRank;
+  isForensicDangerous?: boolean;
+}
+
 export interface ScannedStockItem {
   symbol: string;
   name: string;
-  market: 'TW' | 'US';
+  market: MarketType;
   currentPrice: number;
   boxStatus: BoxStatus;
   boxUpper?: number;
@@ -445,9 +510,12 @@ export interface ScannedStockItem {
   ma20DeductionPrice?: number;
   isBollingerSqueeze: boolean;
   bollingerBandwidth?: number;
-  isDataPending?: boolean;
   actionDecision: MuscleBookerActionDecision;
+  isDataPending?: boolean;
   candles?: DailyCandle[];
+  atr?: { atr14: number; trailingDefensePrice: number };
+  obvTrend?: 'RISING' | 'FALLING' | 'FLAT';
+  macd?: { dif12_26?: number; macdHist?: number };
 }
 
 // 台股法人焦點 Top 30 (30 檔熱門短線動能與核心飆股)
@@ -700,7 +768,8 @@ export function scanMuscleBookerItem(
   name: string,
   market: 'TW' | 'US',
   basePrice: number,
-  localCandles?: DailyCandle[]
+  localCandles?: DailyCandle[],
+  options?: ScanMuscleBookerOptions
 ): ScannedStockItem {
   // 防禦性零幻覺原則：無足夠真實歷史日 K 線（< 5 根）時，絕不可偽造假 K 線誤導交易！
   if (!localCandles || localCandles.length < 5) {
@@ -729,12 +798,52 @@ export function scanMuscleBookerItem(
   const deduction = calculateMaDeduction(candles);
   const bbands = calculateBollingerSqueeze(candles);
   const lastCandle = candles[candles.length - 1];
+  const closes = candles.map((c) => c.close);
+  const volumes = candles.map((c) => c.volume);
+
+  // 1. ATR 動態防守與真實波幅
+  const atr = calculateAtrTrailingDefense(candles);
+
+  // 2. 近 60 日結構高點壓制 (排除當日 K 線，取前波高點)
+  const pastCandles = candles.slice(0, -1);
+  const lookback60High = pastCandles.length > 0
+    ? Math.max(...pastCandles.slice(-60).map((c) => c.high))
+    : undefined;
+
+  // 3. OBV 能量潮資金流計算
+  const obvResult = calculateOBV(closes, volumes);
+  const obvTrend = obvResult.trend;
+
+  // 4. MACD 零軸多空主控計算
+  const macdResult = calculateMACD(closes);
+  const macd = macdResult && (macdResult.dif12_26 !== undefined || macdResult.macdHist !== undefined)
+    ? { dif12_26: macdResult.dif12_26, macdHist: macdResult.macdHist }
+    : undefined;
+
+  // 5. 流動性初篩 (台股 5 日均量 < 500 張 / 500,000 股)
+  let isLowLiquidity = false;
+  if (candles.length >= 5) {
+    const avgVol5 = candles.slice(-5).reduce((acc, c) => acc + c.volume, 0) / 5;
+    // 若為真實大成交量 (大於 100,000) 但小於 500,000，或以張計算小於 500 張
+    if (market === 'TW' && ((avgVol5 > 100000 && avgVol5 < 500000) || (avgVol5 > 0 && avgVol5 < 500))) {
+      isLowLiquidity = true;
+    }
+  }
 
   const actionDecision = evaluateMuscleBookerAction({
     currentPrice: lastCandle.close,
     box,
     deduction,
     bbands,
+    atr,
+    lookback60High,
+    isHolding: options?.isHolding,
+    marketRegime: options?.marketRegime,
+    rsRank: options?.rsRank,
+    obvTrend,
+    macd,
+    isForensicDangerous: options?.isForensicDangerous,
+    isLowLiquidity,
   });
 
   return {
@@ -753,6 +862,9 @@ export function scanMuscleBookerItem(
     bollingerBandwidth: bbands.bandwidth,
     actionDecision,
     candles,
+    atr,
+    obvTrend,
+    macd,
   };
 
 }

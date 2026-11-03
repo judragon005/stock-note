@@ -63,7 +63,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
 
   // 清理無效非正規代碼 (Ticket 10: 消除寫死的魔術字串)
   useEffect(() => {
-    const cleaned = watchlistSymbols.filter((s) => s && /^[0-9A-Z]{2,8}$/.test(s.trim()));
+    const cleaned = watchlistSymbols.filter((s) => s && /^[0-9A-Z.-]{1,10}$/i.test(s.trim()));
     if (cleaned.length !== watchlistSymbols.length) {
       setWatchlistSymbols(cleaned);
       saveMuscleBookerWatchlist(cleaned);
@@ -295,6 +295,11 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     }
   };
 
+  // 在庫持股快速比對 Map
+  const activeHoldingsMap = useMemo(() => {
+    return new Map(activeHoldings.map((h) => [h.symbol.toUpperCase(), h]));
+  }, [activeHoldings]);
+
   // 2. 進行肌肉書僮指標全量掃描
   const scannedItems = useMemo<ScannedStockItem[]>(() => {
     return targetUniverse.map((item) => {
@@ -312,15 +317,13 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         item.name,
         item.market,
         effectivePrice,
-        candles
+        candles,
+        {
+          isHolding: activeHoldingsMap.has(item.symbol.toUpperCase()),
+        }
       );
     });
-  }, [targetUniverse, cachedCandlesMap, adHocItem]);
-
-  // 在庫持股快速比對 Map
-  const activeHoldingsMap = useMemo(() => {
-    return new Map(activeHoldings.map((h) => [h.symbol.toUpperCase(), h]));
-  }, [activeHoldings]);
+  }, [targetUniverse, cachedCandlesMap, adHocItem, activeHoldingsMap]);
 
   // 各類動作清單與核心作戰指令 (置頂風益比最優者)
   const buyItems = useMemo(() => {

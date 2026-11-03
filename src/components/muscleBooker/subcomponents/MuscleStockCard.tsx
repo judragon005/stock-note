@@ -78,12 +78,13 @@ export const MuscleStockCard: React.FC<MuscleStockCardProps> = ({
   let bufferPercent: number | undefined;
   if (defensePrice !== undefined && item.currentPrice > 0) {
     bufferPercent =
-      Math.round(Math.abs((item.currentPrice - defensePrice) / item.currentPrice) * 1000) / 10;
+      Math.round(((item.currentPrice - defensePrice) / item.currentPrice) * 1000) / 10;
   }
 
-  // 是否處於防守臨界警訊 (<= 1.5%)
+  // 是否處於防守臨界警訊 (已破防守線，或緩衝距離 <= 1.5%)
+  const isBroken = defensePrice !== undefined && item.currentPrice < defensePrice;
   const isBufferCritical =
-    bufferPercent !== undefined && bufferPercent <= 1.5 && item.currentPrice >= defensePrice!;
+    isBroken || (bufferPercent !== undefined && bufferPercent <= 1.5);
 
   // 決定徽章色彩與文字
   const tone = badgeTone ?? item.actionDecision.action;
@@ -171,6 +172,32 @@ export const MuscleStockCard: React.FC<MuscleStockCardProps> = ({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <a
+            href={
+              item.market === 'US'
+                ? `https://finance.yahoo.com/quote/${encodeURIComponent(item.symbol)}`
+                : `https://tw.stock.yahoo.com/quote/${encodeURIComponent(item.symbol)}.TW`
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'rgba(15, 23, 42, 0.7)',
+              border: '1px solid rgba(148, 163, 184, 0.3)',
+              borderRadius: '4px',
+              color: 'var(--text-secondary)',
+              padding: '2px 6px',
+              fontSize: '0.72rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '3px',
+              textDecoration: 'none',
+            }}
+            title="開啟外部即時 K 線圖表"
+          >
+            <ExternalLink size={11} />
+            圖表
+          </a>
           {onOpenOmniInspector && (
             <button
               type="button"
@@ -265,8 +292,8 @@ export const MuscleStockCard: React.FC<MuscleStockCardProps> = ({
               color: isBufferCritical ? '#ef4444' : 'var(--text-muted)',
             }}
           >
-            {isBufferCritical && '🚨 緊貼防守: '}
-            緩衝: {bufferPercent}%
+            {isBroken ? '🚨 已破防守: ' : isBufferCritical ? '🚨 緊貼防守: ' : ''}
+            緩衝: {bufferPercent > 0 ? `+${bufferPercent}` : bufferPercent}%
           </span>
         )}
       </div>
