@@ -12,7 +12,19 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 宏觀戰情室雙水溫計排版對齊、持股訊號分頁膠囊與雙重動能真實數據審計 (`Macro War Room Thermometer Alignment, Tactical Signal State Machine & Dual Momentum Audit`) *(V9.08.0 最新發布 / Spec #0213 / ADR #0213 / Issue #367)*
+### 0. 四大象限動能看板卡片蘋果美學重構、全量台股與美股四大指數選池 (`Quadrant Card Apple Design System & Full Market Multi-Index Evolution`) *(V9.10.0 最新發布 / Spec #0215 / ADR #0215 / Issue #395)*
+
+- **蘋果系統美學三層式卡片架構 (MuscleStockCard)**：
+  - 徹底根治多欄排版下的中文字元折字直排（如「中/華/電」），Header 左右分工，標的名稱限制單行省略保護 (`max-width: 92px; text-overflow: ellipsis; white-space: nowrap`)，外部圖表與指標透視儀收攏為右上角 13px 微圖標群組，徹底節省 60px 以上橫向空間。
+  - 現價等寬粗體搭配 Apple Stocks 原生雙態微透明漲跌微膠囊與量比晶片。
+  - 達瓦斯防守儀表條完整顯示防守金額（消滅省略號）與緩衝百分比，下方加入 **3px 高度微光動態防守安全條**（綠色安全 >5%、黃色臨界 1.5%~5%、紅色已跌破 <0%），風益比 R 倍數乾淨呈現。
+- **全量台股與美股四大市場指數選池**：
+  - 擴充模組化成分庫 `src/data/usIndicesComponents.ts`，納入台股全市場（~2,285+ 檔上市櫃與 ETF）、美股標普 500、那斯達克 100、道瓊工業 30、費城半導體 30 與台灣中型 100。
+  - 下拉選單以語意化 `<optgroup>` 清楚分組「🇹🇼 台灣市場」、「🇺🇸 美股四大市場」與「💼 我的投資組合」。
+- **超大池快取優先與模擬種子日 K 防 429 屏障**：
+  - 超大池標的未命中快取時由 `generateSyntheticCandles` 毫秒級瞬間排定四大象限，保障 0 延遲零白屏；背景啟動受控並發（3 並發、60ms 節流）增量水合，杜絕 Yahoo 429 限流與卡死。
+
+### 1. 宏觀戰情室雙水溫計排版對齊、持股訊號分頁膠囊與雙重動能真實數據審計 (`Macro War Room Thermometer Alignment, Tactical Signal State Machine & Dual Momentum Audit`) *(V9.08.0 / Spec #0213 / ADR #0213 / Issue #367)*
 
 - **雙水溫計數值防折行與左右軌對稱重構**：
   - 鎖定 `tabular-nums`、`white-space: nowrap` 與 `flex-shrink: 0`，將「⚠️ 拉積盤警訊」徽章下移對齊次行，徹底消除小螢幕與窄視窗文字換行碎裂。
