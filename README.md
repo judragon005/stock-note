@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1903%2F1903%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-1992%2F1992%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,20 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 資產成長全歷史管線修復、券商隔離與量化複利指標 (`Portfolio NAV Pipeline Repair & Compounding Metrics`) *(V9.04.0 最新發布 / Spec #0207 / ADR #0207 / Issue #340)*
+### 0. 宏觀戰情室雙水溫計排版對齊、持股訊號分頁膠囊與雙重動能真實數據審計 (`Macro War Room Thermometer Alignment, Tactical Signal State Machine & Dual Momentum Audit`) *(V9.08.0 最新發布 / Spec #0213 / ADR #0213 / Issue #367)*
+
+- **雙水溫計數值防折行與左右軌對稱重構**：
+  - 鎖定 `tabular-nums`、`white-space: nowrap` 與 `flex-shrink: 0`，將「⚠️ 拉積盤警訊」徽章下移對齊次行，徹底消除小螢幕與窄視窗文字換行碎裂。
+- **持股戰術訊號分頁膠囊與高信任度安全綠盾**：
+  - 廢除易引發假死感之折疊按鈕，改採 `[ 🚨 需行動 (X) ]` 與 `[ 📑 全部在倉 (Y) ]` 分頁膠囊；全數持股健康時渲染綠色正向安全卡片（`All-Clear Shield`），並顯式標註月線乖離率與 >6% 過熱警示。
+- **SQLite 湖倉真實日 K 審計標章與冷啟動水合優雅降級**：
+  - 頂部明確標示湖倉真實日 K 基準日；冷啟動未滿 5 根日 K 時標籤優雅顯示「⏳ 水合中」，告別 `-999.0%` 破圖。
+- **除息還原總報酬校準 (Total Return) 與公用高股息底表**：
+  - 聚合近 90 天除息總額加回分子計算，消除高息 ETF 遭到動能模型誤判淘汰，並內建台股高股息 ETF（0056, 00878, 00713, 00919, 00929）之公用除息底表。
+- **宏觀全景雙冷連動**：
+  - 長線總經 < 45 且短線波段 < 30 時連動個人防護盾警示，提示守護質押維持率。
+
+### 1. 資產成長全歷史管線修復、券商隔離與量化複利指標 (`Portfolio NAV Pipeline Repair & Compounding Metrics`) *(V9.04.0 / Spec #0207 / ADR #0207 / Issue #340)*
 
 - **App 頂層管線縫隙貫通與券商金流隔離**：
   - 補通 `receivableDividends` 平滑參數，消滅除息日至發放日之間的假性跌幅；傳入 `selectedAccountId` 篩選單一券商持股，並導出 `growthScopedCash` 隔離現金流，徹底解決多券商混雜金流與除息空窗期假凹洞。
