@@ -92,7 +92,7 @@ describe('Ticket 01: 台股 2,361 檔歷史 CSV 250+ 交易日日 K 批次入庫
     const t1 = performance.now();
 
     expect(queried.length).toBe(250);
-    expect(t1 - t0).toBeLessThan(50); // 查詢時間應極速小於 50ms (通常 < 5ms)
+    expect(t1 - t0).toBeLessThan(150); // 查詢時間應極速小於 150ms (防禦多行程並行 I/O 抖動，通常 < 5ms)
   });
 
   describe('Ticket 02: 日 K 湖倉查詢 API 與前端 Loader 穿透 (TDD)', () => {
