@@ -14,6 +14,13 @@ import { HoldingPosition, MarketType } from '../../../types/stock';
 import { Tooltip } from '../../common/Tooltip';
 import { formatCurrencyPrice } from '../../MuscleBookerWorkspace';
 
+// 達瓦斯防守安全條漸層色常數 (消除 Primitive Obsession smell)
+const BUFFER_BAR_GRADIENTS = {
+  BROKEN: 'linear-gradient(90deg, #ef4444, #f87171)',
+  CRITICAL: 'linear-gradient(90deg, #f59e0b, #fbbf24)',
+  HEALTHY: 'linear-gradient(90deg, #10b981, #34d399)',
+} as const;
+
 export interface MuscleStockCardProps {
   item: ScannedStockItem;
   holding?: HoldingPosition;
@@ -96,13 +103,13 @@ export const MuscleStockCard: React.FC<MuscleStockCardProps> = ({
   const toneStyles = {
     BUY: {
       bg: 'rgba(34, 197, 94, 0.16)',
-      color: '#4ade80',
+      color: 'var(--gain-color, #4ade80)',
       border: 'rgba(34, 197, 94, 0.35)',
     },
     SELL: {
-      bg: 'rgba(239, 68, 68, 0.16)',
-      color: '#f87171',
-      border: 'rgba(239, 68, 68, 0.35)',
+      bg: 'var(--loss-bg, rgba(239, 68, 68, 0.16))',
+      color: 'var(--loss-color, #f87171)',
+      border: 'var(--loss-border, rgba(239, 68, 68, 0.35))',
     },
     AVOID: {
       bg: 'rgba(148, 163, 184, 0.12)',
@@ -126,10 +133,10 @@ export const MuscleStockCard: React.FC<MuscleStockCardProps> = ({
     Math.min(100, bufferPercent !== undefined ? (Math.max(0, bufferPercent) / 8) * 100 : 50)
   );
   const bufferBarColor = isBroken
-    ? 'linear-gradient(90deg, #ef4444, #f87171)'
+    ? BUFFER_BAR_GRADIENTS.BROKEN
     : isBufferCritical
-    ? 'linear-gradient(90deg, #f59e0b, #fbbf24)'
-    : 'linear-gradient(90deg, #10b981, #34d399)';
+    ? BUFFER_BAR_GRADIENTS.CRITICAL
+    : BUFFER_BAR_GRADIENTS.HEALTHY;
 
   return (
     <div
