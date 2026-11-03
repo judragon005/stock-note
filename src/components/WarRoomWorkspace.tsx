@@ -775,7 +775,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
       riskFreeRateAnnualized: 0.04,
       dividendAdjustments3M,
     });
-  }, [selectedUniverse, historicalDailyPrices, lakehouseCandlesMap, receivableDividends]);
+  }, [selectedUniverse, historicalDailyPrices, lakehouseCandlesMap, receivableDividends, macroSnapshot.date]);
 
   // 5. 距當月底倒數天數 (雙動能月結調倉檢視日)
   const daysUntilMonthEnd = useMemo(() => {
