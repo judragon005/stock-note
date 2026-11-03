@@ -132,6 +132,19 @@ describe('Dual Momentum Total Return & Full-Spectrum Alignment (Ticket 04 / Foll
     const resSameDay = aggregateRecentDividends(sameDayDivs, '2026-10-31', 90);
     expect(resSameDay['0056.TW']).toBe(1.07);
 
+    // 實質非法日曆日期字串防禦（如 2026-99-99 格式吻合但數值非法）
+    const invalidDateDivs = [
+      { symbol: '2317', exDate: '2026-99-99', cashDividendPerShare: 5.4 },
+      { symbol: '2330', exDate: '2026-00-10', cashDividendPerShare: 4.0 },
+    ];
+    const resInvalidDate = aggregateRecentDividends(invalidDateDivs, '2026-10-31', 90);
+    expect(resInvalidDate['2317']).toBeUndefined();
+    expect(resInvalidDate['2330']).toBeUndefined();
+
+    // 基準日為實質非法日期時應安全回退至 Date.now() 不拋錯
+    const resInvalidBase = aggregateRecentDividends(receivableDividends, '2026-99-99', 90);
+    expect(resInvalidBase).toBeDefined();
+
     // 空陣列防禦
     expect(aggregateRecentDividends(undefined)).toEqual({});
   });

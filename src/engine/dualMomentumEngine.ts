@@ -177,13 +177,20 @@ function getSymbolValue<T>(record: Record<string, T>, symbol: string, fallback: 
 }
 
 /**
- * 安全解析日期字串為毫秒時間戳，兼容純 YYYY-MM-DD 與 ISO 時間格式
+ * 安全解析日期字串為本地零時毫秒時間戳
+ * - 強制以日曆日期為基準對齊當日零時，杜絕跨時區微小時差判定錯誤
+ * - 嚴格校驗年月日時序合法性，防禦 NaN 與異常日曆字串 (如 2026-99-99)
  */
 function parseDateTimestamp(dateStr?: string): number {
   if (!dateStr) return NaN;
-  const match = dateStr.match(/^(\d{4}-\d{2}-\d{2})/);
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (match) {
-    return new Date(`${match[1]}T00:00:00`).getTime();
+    const month = parseInt(match[2], 10);
+    const day = parseInt(match[3], 10);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return NaN;
+    const d = new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00`);
+    const ms = d.getTime();
+    return isNaN(ms) ? NaN : ms;
   }
   const ms = new Date(dateStr).getTime();
   return isNaN(ms) ? NaN : ms;
