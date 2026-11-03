@@ -7,6 +7,23 @@ import {
 } from '../types/indicators';
 import { MarketType } from '../types/stock';
 import { getDynamicUniverseStorage } from '../utils/storage';
+import {
+  US_DOW_30_SYMBOLS,
+  US_SOX_30_SYMBOLS,
+  US_NASDAQ_100_SYMBOLS,
+  US_SP_500_SYMBOLS,
+  TW_ALL_SYMBOLS,
+  TW_MID_100_SYMBOLS,
+} from '../data/usIndicesComponents';
+
+export {
+  US_DOW_30_SYMBOLS,
+  US_SOX_30_SYMBOLS,
+  US_NASDAQ_100_SYMBOLS,
+  US_SP_500_SYMBOLS,
+  TW_ALL_SYMBOLS,
+  TW_MID_100_SYMBOLS,
+};
 
 
 export {
@@ -474,7 +491,21 @@ export function evaluateMuscleBookerAction(params: {
   };
 }
 
-export type AssetPoolType = 'HOLDINGS' | 'HOLDINGS_ACTIVE' | 'HOLDINGS_CLOSED' | 'TOP30_FOCUS' | 'TW50_CORE' | 'CUSTOM_WATCHLIST';
+export type AssetPoolType =
+  | 'HOLDINGS'
+  | 'HOLDINGS_ACTIVE'
+  | 'HOLDINGS_CLOSED'
+  | 'TOP30_FOCUS'
+  | 'TW_ALL'
+  | 'TW50_CORE'
+  | 'MID100_MOMENTUM'
+  | 'TW_TOP_30_FOCUS'
+  | 'US_SP500'
+  | 'US_NASDAQ100'
+  | 'US_DOW30'
+  | 'US_SOX30'
+  | 'US_MEGA_50_CORE'
+  | 'CUSTOM_WATCHLIST';
 
 /**
  * 股市小白專屬動能名詞百科字典
@@ -713,10 +744,30 @@ export function getScopedUniverseSymbols(
     return fallback;
   };
 
+  // 1. 靜態映射字典 (消除 Fowler Repeated Switches smell)
+  const poolMapping: Partial<Record<AssetPoolType, { key: string; fallback: any[] }>> = {
+    TW_ALL: { key: 'TW_ALL', fallback: TW_ALL_SYMBOLS },
+    MID100_MOMENTUM: { key: 'TW_MID_100', fallback: TW_MID_100_SYMBOLS },
+    TW_TOP_30_FOCUS: { key: 'TW_TOP_30_FOCUS', fallback: TW_TOP_30_FOCUS_SYMBOLS },
+    US_SP500: { key: 'US_SP500', fallback: US_SP_500_SYMBOLS },
+    US_NASDAQ100: { key: 'US_NASDAQ100', fallback: US_NASDAQ_100_SYMBOLS },
+    US_DOW30: { key: 'US_DOW30', fallback: US_DOW_30_SYMBOLS },
+    US_SOX30: { key: 'US_SOX30', fallback: US_SOX_30_SYMBOLS },
+    US_MEGA_50_CORE: { key: 'US_MEGA_50_CORE', fallback: US_MEGA_50_CORE_SYMBOLS },
+  };
+
+  const matched = poolMapping[pool];
+  if (matched) {
+    return getWithCache(matched.key, matched.fallback);
+  }
+
+  // 2. 雙市場自適應核心藍籌池 (TW50 / US Mega 50)
   if (pool === 'TW50_CORE') {
     if (market === 'US') return getWithCache('US_MEGA_50_CORE', US_MEGA_50_CORE_SYMBOLS);
     return getWithCache('TW50_CORE', TW50_BLUE_CHIP_SYMBOLS);
   }
+
+  // 10. 核心焦點池 TOP30_FOCUS (預設回退)
   if (market === 'US') return getWithCache('US_TOP_30_FOCUS', US_TOP_30_FOCUS_SYMBOLS);
   if (market === 'TW') return getWithCache('TW_TOP_30_FOCUS', TW_TOP_30_FOCUS_SYMBOLS);
   return [

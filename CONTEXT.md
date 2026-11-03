@@ -2795,3 +2795,13 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     3. **MA Deduction Future Array (均線扣抵時空望遠鏡未來數列)**：提取未來 3 日扣抵高低價，均值高於現價提前警示下彎反壓。
     4. **Multi-Engine Defensive Gates (多引擎量化風控防禦)**：無重複造輪子，整合 `omniIndicatorEngine.ts` (OBV量能背離/MACD零軸)、`dualMomentumEngine.ts` (大盤Regime 3.0R防禦門檻)、`forensicRadarEngine.ts` (財報防雷與流動性容量防禦)。
     5. **Batched State Throttling & Workspace Modularization (批次節流與主工作區模組化解耦)**：建立 `useMuscleBookerSync.ts` (Promise.all 批次水合 + 5 檔/300ms 批次緩衝刷新)，主工作區自 2,464 行解耦至 420 行，抽取 `MuscleStockCard`、`ActionDirectivesHUD`、`MuscleBookerHeader`、`TrafficLightMatrix`、`DarvasQuadrantGrid`、`DeductionTelescopeTable`。
+
+- **Quadrant Card Apple Design System & Full Market Multi-Index Evolution (四大象限動能卡片蘋果系統美學重構、全量台股與美股四大市場選池進化)**:
+  - 核心模組：`src/components/muscleBooker/subcomponents/MuscleStockCard.tsx`、`src/components/muscleBooker/subcomponents/MuscleBookerHeader.tsx`、`src/data/usIndicesComponents.ts`、`src/engine/muscleBookerEngine.ts`、`src/components/muscleBooker/hooks/useMuscleBookerSync.ts`。
+  - 規格來源：Spec 0215 (v9.10.0) 與 ADR 0215，關聯 GitHub Issue #395。
+  - 核心行為與革新特性：
+    1. **Apple Design System Card Layout (蘋果美學三層式卡片架構)**：徹底根治多欄排版下的中文折字直排（如「中/華/電」），Header 左右分工結合標的名稱單行省略截斷（`max-width: 92px; text-overflow: ellipsis`），外部圖表與指標透視儀收攏為右上角微圖標群組，徹底節省 60px 以上橫向空間。
+    2. **Hero Price & Momentum Pills (量價焦點層與原生漲跌膠囊)**：等寬現價粗體搭配 Apple Stocks 風格半透明圓角微膠囊，灰階標註成交量比。
+    3. **Darvas Defense Metric & 3px Micro-Glow Buffer Bar (達瓦斯防守儀表條與 3px 動態防守安全條)**：顯示完整防守價（無省略號）與緩衝百分比，下方加入 3px 微光動態安全進度條（綠色安全 >5%、黃色臨界 1.5%~5%、紅色已跌破 <0%），風益比 R 倍數乾淨呈現。
+    4. **Full Taiwan Market & US Four Major Indices (台股全量與美股四大市場指數選池)**：新增 `TW_ALL` (台股上市櫃全量 2,285+ 檔，復用 `STATIC_TW_STOCKS`)、`US_SP500` (標普 500)、`US_NASDAQ100` (那斯達克 100)、`US_DOW30` (道瓊 30)、`US_SOX30` (費半 30)、`MID100_MOMENTUM` (中型 100)，選單以語意化 `<optgroup>` 清晰分組。
+    5. **Cache-First & Seed Synthetic K-Line Throttle Shield (快取優先與模擬種子日 K 防 429 屏障)**：超大池 (>150 檔) 未命中快取時以收盤價種子自動調用 `generateSyntheticCandles` 瞬間排定四大象限，0 延遲零白屏；背景以 3 並發受控節流增量水合，杜絕 Yahoo 429 限流與記憶體溢出。
