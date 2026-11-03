@@ -19,6 +19,19 @@ export const DeductionTelescopeTable: React.FC<DeductionTelescopeTableProps> = (
   onToggleExpand,
   onToggleWatchlist,
 }) => {
+  const [pageSize, setPageSize] = React.useState<number | 'ALL'>(50);
+  const [currentPage, setCurrentPage] = React.useState<number>(1);
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [filteredItems.length, pageSize]);
+
+  const totalPages = pageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(filteredItems.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pagedItems = pageSize === 'ALL'
+    ? filteredItems
+    : filteredItems.slice((safeCurrentPage - 1) * pageSize, safeCurrentPage * pageSize);
+
   const deductionUpItems = filteredItems.filter((i) => i.ma20Slope === 'UP');
 
   return (
@@ -61,7 +74,7 @@ export const DeductionTelescopeTable: React.FC<DeductionTelescopeTableProps> = (
             </tr>
           </thead>
           <tbody>
-            {filteredItems.map((item) => {
+            {pagedItems.map((item) => {
               const isExpanded = expandedSymbol === item.symbol;
               const isWatched = watchlistSymbols.includes(item.symbol);
               return (
@@ -197,6 +210,85 @@ export const DeductionTelescopeTable: React.FC<DeductionTelescopeTableProps> = (
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* 分頁控制器 (Ticket 06) */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '12px 16px',
+          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+          background: 'rgba(15, 23, 42, 0.4)',
+          fontSize: '0.82rem',
+          color: 'var(--text-muted)',
+          flexWrap: 'wrap',
+          gap: '10px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span>每頁顯示：</span>
+          {([50, 100, 'ALL'] as const).map((size) => (
+            <button
+              key={size}
+              type="button"
+              onClick={() => setPageSize(size)}
+              style={{
+                padding: '3px 8px',
+                borderRadius: '4px',
+                fontSize: '0.78rem',
+                border: pageSize === size ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)',
+                background: pageSize === size ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
+                color: pageSize === size ? '#38bdf8' : 'var(--text-muted)',
+                cursor: 'pointer',
+              }}
+            >
+              {size === 'ALL' ? '全部' : size}
+            </button>
+          ))}
+          <span style={{ marginLeft: '8px' }}>
+            共 {filteredItems.length} 檔標的
+          </span>
+        </div>
+
+        {pageSize !== 'ALL' && totalPages > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <button
+              type="button"
+              disabled={safeCurrentPage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              style={{
+                padding: '4px 10px',
+                borderRadius: '4px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'rgba(255, 255, 255, 0.05)',
+                color: safeCurrentPage <= 1 ? 'rgba(148, 163, 184, 0.4)' : '#cbd5e1',
+                cursor: safeCurrentPage <= 1 ? 'not-allowed' : 'pointer',
+              }}
+            >
+              上一頁
+            </button>
+            <span>
+              第 {safeCurrentPage} / {totalPages} 頁
+            </span>
+            <button
+              type="button"
+              disabled={safeCurrentPage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              style={{
+                padding: '4px 10px',
+                borderRadius: '4px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'rgba(255, 255, 255, 0.05)',
+                color: safeCurrentPage >= totalPages ? 'rgba(148, 163, 184, 0.4)' : '#cbd5e1',
+                cursor: safeCurrentPage >= totalPages ? 'not-allowed' : 'pointer',
+              }}
+            >
+              下一頁
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -2805,3 +2805,16 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     3. **Darvas Defense Metric & 3px Micro-Glow Buffer Bar (達瓦斯防守儀表條與 3px 動態防守安全條)**：顯示完整防守價（無省略號）與緩衝百分比，下方加入 3px 微光動態安全進度條（綠色安全 >5%、黃色臨界 1.5%~5%、紅色已跌破 <0%），風益比 R 倍數乾淨呈現。
     4. **Full Taiwan Market & US Four Major Indices (台股全量與美股四大市場指數選池)**：新增 `TW_ALL` (台股上市櫃全量 2,285+ 檔，復用 `STATIC_TW_STOCKS`)、`US_SP500` (標普 500)、`US_NASDAQ100` (那斯達克 100)、`US_DOW30` (道瓊 30)、`US_SOX30` (費半 30)、`MID100_MOMENTUM` (中型 100)，選單以語意化 `<optgroup>` 清晰分組。
     5. **Cache-First & Seed Synthetic K-Line Throttle Shield (快取優先與模擬種子日 K 防 429 屏障)**：超大池 (>150 檔) 未命中快取時以收盤價種子自動調用 `generateSyntheticCandles` 瞬間排定四大象限，0 延遲零白屏；背景以 3 並發受控節流增量水合，杜絕 Yahoo 429 限流與記憶體溢出。
+
+- **Muscle Booker Quant Defense Core & Segmented Lens Architecture (肌肉書僮量化防禦核升級、既有引擎零造輪子串聯與分段視圖收斂架構)**:
+  - 核心模組：`src/engine/muscleBookerEngine.ts`、`src/engine/darvasBoxEngine.ts`、`src/components/MuscleBookerWorkspace.tsx`、`src/components/muscleBooker/hooks/useMuscleBookerSync.ts`、`src/components/muscleBooker/subcomponents/`。
+  - 規格來源：Spec 0216 (v9.11.0) 與 ADR 0216，關聯 GitHub Issue #397。
+  - 核心行為與量化指標革新：
+    1. **Box Bottom Penetration & Bull Trap Hard Ban (箱底破底翻與墓碑誘多一票否決)**：修正破底翻基準為跌破箱底 `boxLower` 後強勢收復 50% 下影線；突破日留長上影線墓碑倒錘 (Bull Trap) 強制輸出 `AVOID (墓碑誘多)`，杜絕主力高檔誘多。
+    2. **Smooth Expected Target & Dollar Volume Gate (平滑期望目標價與成交金額容量門檻)**：$Target = 0.5 \times lookback60High + 0.5 \times measuredTarget$ 消除 60 日高點 0.01 元階躍斷崖；台股 5 日均成交金額 $\ge 3,000$ 萬 TWD、美股 $\ge 500$ 萬 USD，不及格且未持股者輸出 `AVOID (流動性不足)`。
+    3. **Existing Engine Reuse (零造輪子引擎串聯)**：無縫整合 `vwapCostEngine` (主力 VWAP 乖離 > 10% 降級 HOLD)、`volumeProfileEngine` (上方 5% 內 POC 密集成交峰阻斷)、`smartMoneyEngine` (美股 CMF < -0.15 資金背離派發阻斷)。
+    4. **Zero-Hallucination Hydration & Incremental Cache (零幻覺數據水合與增量掃描快取)**：徹底移除假 K 線注入，缺損標的維持 `isDataPending: true`；IndexedDB 採 Chunk 100 分塊併發；`try ... finally` 死鎖免疫；`scannedItemsMapRef` 讓 2,280 檔掃描時間由 350ms 降至 2ms。
+    5. **Segmented Lenses & Viewport DOM Compression (Apple 風格分段視圖與 DOM 節點極限壓縮)**：頂部 HUD 常駐，下方導入 `[ 🚦 操盤導航 ]` ⇄ `[ ⚡ 動能看板 ]` ⇄ `[ 📈 扣抵望遠鏡 ]` 分段切換，按需渲染；「觀望不碰」池預設折疊收納僅顯示前 12 檔；DOM 節點減少 95% 以上。
+    6. **Telescope Table Pagination & Card Memoization (扣抵表分頁與單卡級聯隔離)**：`DeductionTelescopeTable` 導入 50 / 100 / ALL 分頁器；`MuscleStockCard` 封裝 `React.memo`，剪貼簿與幣別格式化全面收斂至專案現成工具。
+    7. **Portfolio Buffer Dual Alert & Live Market Regime (持股瀕臨破防雙重預警與大盤 Regime 接通)**：收錄「已破防」與「瀕臨破防 (Buffer $\le 1.5\%$)」，消除假安全感；真實大盤指數判定空頭體系時自適應提高門檻至 3.0R 且非極強 RS 禁止進場。
+    8. **Quick Trade, Watchlist Star & Multi-Dimensional Sorting (一鍵下單、自選星號與動態多維快篩)**：卡片右上角直通「⚡ 一鍵下單」與「⭐ 自選星號」；Header 提供風益比、量比、防守緩衝與漲跌幅動態排序，並新增 5 顆實戰快篩膠囊 (`[🔥 爆量發動]`、`[⚡ 極致壓縮]`、`[🎯 高賠率]`、`[💼 在庫持股]`、`[🚨 瀕臨破線]`)。

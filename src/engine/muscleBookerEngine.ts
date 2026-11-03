@@ -37,7 +37,10 @@ import {
   calculateBollingerSqueeze,
 } from './darvasBoxEngine';
 import { calculateSMA, calculateMACD } from './technicalIndicatorEngine';
-import { calculateOBV } from './omniIndicatorEngine';
+import { calculateOBV, detectPriceActionTraps } from './omniIndicatorEngine';
+import { calculateVwapCostStructure } from './vwapCostEngine';
+import { calculateVolumeProfile } from './volumeProfileEngine';
+import { computeChaikinMoneyFlow } from './smartMoneyEngine';
 
 /**
  * 4. ATR 動態移動防守價 (Trailing Defense)
@@ -237,8 +240,33 @@ export function evaluateMuscleBookerAction(params: {
   };
   isForensicDangerous?: boolean;
   isLowLiquidity?: boolean;
+  hasBullTrap?: boolean;
+  vwap?: {
+    mainForceVwap?: number;
+    biasPercent?: number;
+  };
+  hasHeavyResistance?: boolean;
+  isUsMoneyFlowDivergent?: boolean;
 }): MuscleBookerActionDecision {
-  const { currentPrice, box, deduction, bbands, atr, lookback60High, isHolding, marketRegime, rsRank, obvTrend, macd, isForensicDangerous, isLowLiquidity } = params;
+  const {
+    currentPrice,
+    box,
+    deduction,
+    bbands,
+    atr,
+    lookback60High,
+    isHolding,
+    marketRegime,
+    rsRank,
+    obvTrend,
+    macd,
+    isForensicDangerous,
+    isLowLiquidity,
+    hasBullTrap,
+    vwap,
+    hasHeavyResistance,
+    isUsMoneyFlowDivergent,
+  } = params;
 
   // 0. 財報鑑識負向排除 (Hard Ban)
   if (isForensicDangerous) {
@@ -279,14 +307,40 @@ export function evaluateMuscleBookerAction(params: {
     };
   }
 
+  // 1.5. 流動性容量安全門檻一票否決 (Spec 0216 Ticket 02)
+  if (!isHolding && isLowLiquidity) {
+    return {
+      action: 'AVOID',
+      actionBadge: '⛔ 嚴禁碰觸 (流動性不足)',
+      actionReason: '日均成交金額低於安全容量門檻 (台股3,000萬/美股500萬)，避免滑價與衝擊成本，嚴禁建倉',
+    };
+  }
+
   // 2. 判斷買進訊號 (BUY)
   // 情境 A: 突破箱頂 + 均線向上
   if (box.boxStatus === 'BREAKOUT_UP' && deduction.ma20Slope === 'UP') {
+    // 假突破墓碑倒錘線 (Bull Trap) 一票否決 (Spec 0216 Ticket 01)
+    if (hasBullTrap) {
+      return {
+        action: 'AVOID',
+        actionBadge: '⛔ 嚴禁碰觸 (墓碑誘多)',
+        actionReason: '突破箱頂但出現長上影線墓碑倒錘 (Bull Trap)，主力拉高出貨誘多，切忌追高',
+      };
+    }
+
+    // 流動性容量安全檢驗 (Spec 0216 Ticket 02)
     if (isLowLiquidity) {
+      if (!isHolding) {
+        return {
+          action: 'AVOID',
+          actionBadge: '⛔ 嚴禁碰觸 (流動性不足)',
+          actionReason: '日均成交金額低於安全容量門檻 (台股3,000萬/美股500萬)，避免滑價與衝擊成本，嚴禁建倉',
+        };
+      }
       return {
         action: 'HOLD',
         actionBadge: '🟡 流動性不足 (容量受限)',
-        actionReason: '帶量站上箱頂但成交量或成交金額低於安全容量門檻，避免衝擊成本與滑價風險，不予主動推薦',
+        actionReason: '帶量站上箱頂但成交金額低於安全容量門檻，避免衝擊成本與滑價風險，不予主動推薦',
       };
     }
 
@@ -301,11 +355,12 @@ export function evaluateMuscleBookerAction(params: {
       }
     }
 
+    // 平滑化 R-Multiple 目標價 (Spec 0216 Ticket 02: 消除 60 日高點階躍斷崖)
     const stopLoss = box.boxUpper ?? currentPrice * 0.95;
     const boxWidth = box.boxUpper && box.boxLower ? box.boxUpper - box.boxLower : currentPrice - stopLoss;
-    const measuredTarget = currentPrice + Math.max(boxWidth, currentPrice * 0.08);
+    const measuredTarget = currentPrice + Math.max(boxWidth, 2.0 * (atr?.atr14 ?? currentPrice * 0.03));
     const target = (lookback60High !== undefined && lookback60High > currentPrice)
-      ? Math.min(lookback60High, measuredTarget)
+      ? 0.5 * lookback60High + 0.5 * measuredTarget
       : measuredTarget;
     const structuralRisk = Math.max(0.1, currentPrice - stopLoss);
     const minRiskBuffer = Math.max(currentPrice * 0.02, (atr?.atr14 ?? 0) * 1.0);
@@ -320,6 +375,45 @@ export function evaluateMuscleBookerAction(params: {
         action: 'HOLD',
         actionBadge: '🟡 觀望 (OBV背離)',
         actionReason: '帶量站上箱頂但 OBV 能量潮呈現背離流出，真金白銀動能不足，切忌追高',
+        stopLossPrice: Math.round(stopLoss * 100) / 100,
+        targetPrice: Math.round(target * 100) / 100,
+        riskRewardRatio: `${rrRatio}R`,
+        riskRewardRatioValue: rrValue,
+      };
+    }
+
+    // 美股 CMF 資金流背離檢驗 (Spec 0216 Ticket 03)
+    if (isUsMoneyFlowDivergent) {
+      return {
+        action: 'HOLD',
+        actionBadge: '🟡 觀望 (美股CMF背離)',
+        actionReason: '帶量站上箱頂但美股機構資金流 CMF < -0.15 呈現高檔派發，切忌追高',
+        stopLossPrice: Math.round(stopLoss * 100) / 100,
+        targetPrice: Math.round(target * 100) / 100,
+        riskRewardRatio: `${rrRatio}R`,
+        riskRewardRatioValue: rrValue,
+      };
+    }
+
+    // 20 日主力 VWAP 成本過熱檢驗 (Spec 0216 Ticket 03)
+    if (vwap?.biasPercent !== undefined && vwap.biasPercent > 10.0) {
+      return {
+        action: 'HOLD',
+        actionBadge: '🟡 觀望 (主力成本過熱)',
+        actionReason: `帶量站上箱頂但距 20 日主力成本線乖離過大 (${vwap.biasPercent.toFixed(1)}% > 10.0%)，非主力建倉成本區，防主力派發，切忌追高`,
+        stopLossPrice: Math.round(stopLoss * 100) / 100,
+        targetPrice: Math.round(target * 100) / 100,
+        riskRewardRatio: `${rrRatio}R`,
+        riskRewardRatioValue: rrValue,
+      };
+    }
+
+    // Volume Profile 上方 5% 套牢反壓檢驗 (Spec 0216 Ticket 03)
+    if (hasHeavyResistance) {
+      return {
+        action: 'HOLD',
+        actionBadge: '🟡 觀望 (上方套牢壓沉重)',
+        actionReason: '帶量站上箱頂但上方 5% 內密集成交套牢峰 (POC) 賣壓沉重，阻力重重，切忌追高',
         stopLossPrice: Math.round(stopLoss * 100) / 100,
         targetPrice: Math.round(target * 100) / 100,
         riskRewardRatio: `${rrRatio}R`,
@@ -384,6 +478,13 @@ export function evaluateMuscleBookerAction(params: {
   // 情境 B: 破底翻反轉 (收復下影線且均線不下彎)
   if (deduction.isBottomPenetrationRebound && deduction.ma20Slope !== 'DOWN') {
     if (isLowLiquidity) {
+      if (!isHolding) {
+        return {
+          action: 'AVOID',
+          actionBadge: '⛔ 嚴禁碰觸 (流動性不足)',
+          actionReason: '日均成交金額低於安全容量門檻 (台股3,000萬/美股500萬)，避免滑價與衝擊成本，嚴禁建倉',
+        };
+      }
       return {
         action: 'HOLD',
         actionBadge: '🟡 流動性不足 (容量受限)',
@@ -414,7 +515,7 @@ export function evaluateMuscleBookerAction(params: {
     const stopLoss = box.boxLower ? box.boxLower * 0.98 : currentPrice * 0.95;
     const rawTarget = box.boxUpper ?? currentPrice * 1.1;
     const target = (lookback60High !== undefined && lookback60High > currentPrice)
-      ? Math.min(lookback60High, rawTarget)
+      ? 0.5 * lookback60High + 0.5 * rawTarget
       : rawTarget;
     const structuralRisk = Math.max(0.1, currentPrice - stopLoss);
     const minRiskBuffer = Math.max(currentPrice * 0.02, (atr?.atr14 ?? 0) * 1.0);
@@ -846,7 +947,7 @@ export function scanMuscleBookerItem(
   const candles = localCandles;
 
   const box = detectDarvasBox(candles);
-  const deduction = calculateMaDeduction(candles);
+  const deduction = calculateMaDeduction(candles, box.boxLower);
   const bbands = calculateBollingerSqueeze(candles);
   const lastCandle = candles[candles.length - 1];
   const closes = candles.map((c) => c.close);
@@ -871,12 +972,76 @@ export function scanMuscleBookerItem(
     ? { dif12_26: macdResult.dif12_26, macdHist: macdResult.macdHist }
     : undefined;
 
-  // 5. 流動性初篩 (台股 5 日均量 < 500 張 / 500,000 股)
+  // 5. 誘多墓碑倒錘 (Bull Trap) 檢測 (Spec 0216 Ticket 01)
+  const body = Math.max(0.01, Math.abs(lastCandle.close - lastCandle.open));
+  const upperShadow = lastCandle.high - Math.max(lastCandle.open, lastCandle.close);
+  const lowerShadow = Math.min(lastCandle.open, lastCandle.close) - lastCandle.low;
+  const range = lastCandle.high - lastCandle.low;
+  const isCandleBullTrap =
+    range > 0 &&
+    upperShadow >= body * 1.5 &&
+    upperShadow > lowerShadow * 1.2 &&
+    (upperShadow / range >= 0.4 || lastCandle.close < lastCandle.open);
+  const traps = detectPriceActionTraps({
+    open: lastCandle.open,
+    high: lastCandle.high,
+    low: lastCandle.low,
+    close: lastCandle.close,
+    resistanceLevel: box.boxUpper,
+    supportLevel: box.boxLower,
+  });
+  const hasBullTrap = traps.hasBullTrap || (box.boxStatus === 'BREAKOUT_UP' && isCandleBullTrap);
+
+  // 6. 20 日主力 VWAP 成本結構與乖離率 (Spec 0216 Ticket 03)
+  let vwap: { biasPercent?: number } | undefined;
+  try {
+    const vwapStruct = calculateVwapCostStructure(candles, lastCandle.close);
+    if (vwapStruct) {
+      vwap = { biasPercent: vwapStruct.biasPercent };
+    }
+  } catch {
+    // 防禦性容錯
+  }
+
+  // 7. Volume Profile 上方 5% 密集成交峰 (POC) 反壓檢測 (Spec 0216 Ticket 03)
+  let hasHeavyResistance = false;
+  try {
+    const vp = calculateVolumeProfile(candles);
+    if (vp && vp.buckets && vp.buckets.length > 0) {
+      const pocBucket = [...vp.buckets].sort((a, b) => b.percentage - a.percentage)[0];
+      const pocCenter = (pocBucket.priceMin + pocBucket.priceMax) / 2;
+      // POC 必須實質處於現價上方且在 5% 反壓警戒區內，且成交量密集 (>= 25%)
+      if (pocCenter > lastCandle.close && pocCenter <= lastCandle.close * 1.05 && pocBucket.percentage >= 25) {
+        hasHeavyResistance = true;
+      }
+    }
+  } catch {
+    // 防禦性容錯
+  }
+
+  // 8. 美股機構資金流 CMF 背離檢測 (Spec 0216 Ticket 03)
+  let isUsMoneyFlowDivergent = false;
+  if (market === 'US') {
+    try {
+      const cmf = computeChaikinMoneyFlow(candles, 20);
+      if (cmf < -0.15) {
+        isUsMoneyFlowDivergent = true;
+      }
+    } catch {
+      // 防禦性容錯
+    }
+  }
+
+  // 9. 流動性初篩與安全金額容量檢驗 (Spec 0216 Ticket 02)
   let isLowLiquidity = false;
   if (candles.length >= 5) {
-    const avgVol5 = candles.slice(-5).reduce((acc, c) => acc + c.volume, 0) / 5;
-    // 若為真實大成交量 (大於 100,000) 但小於 500,000，或以張計算小於 500 張
-    if (market === 'TW' && ((avgVol5 > 100000 && avgVol5 < 500000) || (avgVol5 > 0 && avgVol5 < 500))) {
+    const last5 = candles.slice(-5);
+    const avgVol5 = last5.reduce((acc, c) => acc + c.volume, 0) / 5;
+    // 台股行情量若 <= 100,000 通常為張數 (券商/一般日K慣例)，自動換算為股數 (1張 = 1,000股)
+    const twShares = avgVol5 <= 100000 ? avgVol5 * 1000 : avgVol5;
+    const avgDollarVolume5 = market === 'TW' ? twShares * lastCandle.close : avgVol5 * lastCandle.close;
+    const dollarThreshold = market === 'TW' ? 30_000_000 : 5_000_000;
+    if (avgDollarVolume5 < dollarThreshold) {
       isLowLiquidity = true;
     }
   }
@@ -895,6 +1060,10 @@ export function scanMuscleBookerItem(
     macd,
     isForensicDangerous: options?.isForensicDangerous,
     isLowLiquidity,
+    hasBullTrap,
+    vwap,
+    hasHeavyResistance,
+    isUsMoneyFlowDivergent,
   });
 
   return {

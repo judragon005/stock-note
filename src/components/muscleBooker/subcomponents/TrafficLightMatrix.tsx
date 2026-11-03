@@ -12,6 +12,9 @@ export interface TrafficLightMatrixProps {
   expandedSymbol: string | null;
   onToggleExpand: (symbol: string) => void;
   onOpenOmniInspector?: (symbol: string, market: MarketType) => void;
+  watchlistSymbols?: string[];
+  onToggleWatchlist?: (symbol: string) => void;
+  onQuickTrade?: (symbol: string, action: 'BUY' | 'SELL', price?: number) => void;
 }
 
 export const TrafficLightMatrix: React.FC<TrafficLightMatrixProps> = ({
@@ -22,7 +25,12 @@ export const TrafficLightMatrix: React.FC<TrafficLightMatrixProps> = ({
   expandedSymbol,
   onToggleExpand,
   onOpenOmniInspector,
+  watchlistSymbols = [],
+  onToggleWatchlist,
+  onQuickTrade,
 }) => {
+  const [isAvoidExpanded, setIsAvoidExpanded] = React.useState(false);
+  const displayedAvoidItems = isAvoidExpanded ? avoidItems : avoidItems.slice(0, 12);
   return (
     <div style={{ marginBottom: '28px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
@@ -75,6 +83,9 @@ export const TrafficLightMatrix: React.FC<TrafficLightMatrixProps> = ({
                   onToggleExpand={() => onToggleExpand(item.symbol)}
                   onOpenOmniInspector={onOpenOmniInspector}
                   badgeTone="BUY"
+                  isWatched={watchlistSymbols.includes(item.symbol)}
+                  onToggleWatchlist={onToggleWatchlist}
+                  onQuickTrade={onQuickTrade}
                 />
               ))}
             </div>
@@ -94,7 +105,9 @@ export const TrafficLightMatrix: React.FC<TrafficLightMatrixProps> = ({
             <span style={{ fontWeight: 800, color: '#facc15', fontSize: '0.95rem' }}>
               🟡 觀望不碰 / 整理待變 ({avoidItems.length})
             </span>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>維持耐心不妄動</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              {avoidItems.length > 12 && !isAvoidExpanded ? '預設精選前 12 檔' : '維持耐心不妄動'}
+            </span>
           </div>
 
           {avoidItems.length === 0 ? (
@@ -103,7 +116,7 @@ export const TrafficLightMatrix: React.FC<TrafficLightMatrixProps> = ({
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {avoidItems.map((item) => (
+              {displayedAvoidItems.map((item) => (
                 <MuscleStockCard
                   key={item.symbol}
                   item={item}
@@ -112,8 +125,38 @@ export const TrafficLightMatrix: React.FC<TrafficLightMatrixProps> = ({
                   onToggleExpand={() => onToggleExpand(item.symbol)}
                   onOpenOmniInspector={onOpenOmniInspector}
                   badgeTone={item.actionDecision.action === 'HOLD' ? 'HOLD' : 'AVOID'}
+                  isWatched={watchlistSymbols.includes(item.symbol)}
+                  onToggleWatchlist={onToggleWatchlist}
+                  onQuickTrade={onQuickTrade}
                 />
               ))}
+
+              {avoidItems.length > 12 && (
+                <button
+                  type="button"
+                  onClick={() => setIsAvoidExpanded((prev) => !prev)}
+                  style={{
+                    marginTop: '8px',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    background: 'rgba(234, 179, 8, 0.1)',
+                    border: '1px solid rgba(234, 179, 8, 0.3)',
+                    color: '#facc15',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '100%',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {isAvoidExpanded
+                    ? '收合至前 12 檔精華 ▲'
+                    : `展開其餘 ${avoidItems.length - 12} 檔觀望標的 ▼`}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -149,6 +192,9 @@ export const TrafficLightMatrix: React.FC<TrafficLightMatrixProps> = ({
                   onToggleExpand={() => onToggleExpand(item.symbol)}
                   onOpenOmniInspector={onOpenOmniInspector}
                   badgeTone="SELL"
+                  isWatched={watchlistSymbols.includes(item.symbol)}
+                  onToggleWatchlist={onToggleWatchlist}
+                  onQuickTrade={onQuickTrade}
                 />
               ))}
             </div>

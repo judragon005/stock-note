@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DailyCandle } from '../../../types/indicators';
 import { MarketType } from '../../../types/stock';
-import { AssetPoolType, generateSyntheticCandles } from '../../../engine/muscleBookerEngine';
+import { AssetPoolType } from '../../../engine/muscleBookerEngine';
 import { backfillSymbolOhlcvAndIndicators } from '../../../engine/historicalOhlcvBackfill';
 import { getSymbolOhlcv } from '../../../utils/db';
 
@@ -67,12 +67,10 @@ async function processSyncBatch({
         if (isCancelled() || !isMounted()) return;
         if (res.candles && res.candles.length >= 5) {
           onUpdateCandles(m.symbol, res.candles);
-        } else {
-          onUpdateCandles(m.symbol, generateSyntheticCandles(m.symbol, 100));
         }
       } catch {
+        // 零幻覺原則：外部行情連線失敗或缺損標的維持 isDataPending，絕不偽造假 K 線
         if (isCancelled() || !isMounted()) return;
-        onUpdateCandles(m.symbol, generateSyntheticCandles(m.symbol, 100));
       }
 
       completed++;
@@ -144,86 +142,84 @@ export function useMuscleBookerSync({
     [flushBuffer]
   );
 
-  // 1.1 從 IndexedDB 批次水合並對缺損標的進行受控增量回補
+  // 1.1 從 IndexedDB 批次水合並對缺損標的進行受控增量回補 (分塊 100 檢索)
   useEffect(() => {
     let isCancelled = false;
 
     const syncCandles = async () => {
-      // 找出尚未快取的項目
-      const toFetch = targetUniverse.filter((item) => !cachedCandlesMap[item.symbol]);
-      if (toFetch.length === 0) return;
+      try {
+        // 找出尚未快取的項目
+        const toFetch = targetUniverse.filter((item) => !cachedCandlesMap[item.symbol]);
+        if (toFetch.length === 0) return;
 
-      const initialUpdates: Record<string, DailyCandle[]> = {};
-      const missing: { symbol: string; market: MarketType }[] = [];
+        const initialUpdates: Record<string, DailyCandle[]> = {};
+        const missing: { symbol: string; market: MarketType }[] = [];
 
-      // 第一步：Promise.all 瞬時批次檢索 IndexedDB 本地快取
-      const idbResults = await Promise.all(
-        toFetch.map(async (item) => {
-          try {
-            const cached = await getSymbolOhlcv(item.symbol);
-            return { item, cached };
-          } catch {
-            return { item, cached: null };
-          }
-        })
-      );
-
-      for (const { item, cached } of idbResults) {
-        if (cached && cached.candles && cached.candles.length >= 5) {
-          initialUpdates[item.symbol] = cached.candles;
-        } else {
-          // 若為大型資產池 (如台股全量或美股大盤 > 150 檔)，先以種子價格生成模擬日 K 確保毫秒級瞬時上榜與零白屏
-          if (toFetch.length > 150) {
-            initialUpdates[item.symbol] = generateSyntheticCandles(item.symbol, item.basePrice || 100);
-          }
-          missing.push({ symbol: item.symbol, market: item.market });
+        // 第一步：分塊檢索 IndexedDB 本地快取 (Chunk 100)，避免資料庫線程過載
+        const CHUNK_SIZE = 100;
+        const idbResults: Array<{ item: TargetUniverseItem; cached: any }> = [];
+        for (let i = 0; i < toFetch.length; i += CHUNK_SIZE) {
+          if (isCancelled || !isMountedRef.current) return;
+          const chunk = toFetch.slice(i, i + CHUNK_SIZE);
+          const chunkResults = await Promise.all(
+            chunk.map(async (item) => {
+              try {
+                const cached = await getSymbolOhlcv(item.symbol);
+                return { item, cached };
+              } catch {
+                return { item, cached: null };
+              }
+            })
+          );
+          idbResults.push(...chunkResults);
         }
-      }
 
-      if (isCancelled || !isMountedRef.current) return;
+        for (const { item, cached } of idbResults) {
+          if (cached && cached.candles && cached.candles.length >= 5) {
+            initialUpdates[item.symbol] = cached.candles;
+          } else {
+            missing.push({ symbol: item.symbol, market: item.market });
+          }
+        }
 
-      if (Object.keys(initialUpdates).length > 0) {
-        setCachedCandlesMap((prev) => ({ ...prev, ...initialUpdates }));
-      }
+        if (isCancelled || !isMountedRef.current) return;
 
-      // 第二步：對缺損標的啟動受控並發增量回補 (Concurrency = 3, 節流 60ms)
-      if (missing.length > 0) {
-        setSyncState({
-          isSyncing: true,
-          total: missing.length,
-          current: 0,
-          currentSymbol: missing[0].symbol,
-        });
+        if (Object.keys(initialUpdates).length > 0) {
+          setCachedCandlesMap((prev) => ({ ...prev, ...initialUpdates }));
+        }
 
-        await processSyncBatch({
-          items: missing,
-          forceRefresh: false,
-          concurrency: 3,
-          isCancelled: () => isCancelled,
-          isMounted: () => isMountedRef.current,
-          onProgress: (comp, sym) => {
-            setSyncState((prev) => ({ ...prev, current: comp, currentSymbol: sym }));
-          },
-          onUpdateCandles: queueCandleUpdate,
-        });
-
-        // 結束前強制清空緩衝區
-        flushBuffer();
-
-        if (!isCancelled && isMountedRef.current) {
+        // 第二步：對缺損標的啟動受控並發增量回補 (Concurrency = 3, 節流 60ms)
+        if (missing.length > 0) {
           setSyncState({
-            isSyncing: false,
+            isSyncing: true,
             total: missing.length,
-            current: missing.length,
-            currentSymbol: undefined,
+            current: 0,
+            currentSymbol: missing[0].symbol,
           });
+
+          await processSyncBatch({
+            items: missing,
+            forceRefresh: false,
+            concurrency: 3,
+            isCancelled: () => isCancelled,
+            isMounted: () => isMountedRef.current,
+            onProgress: (comp, sym) => {
+              setSyncState((prev) => ({ ...prev, current: comp, currentSymbol: sym }));
+            },
+            onUpdateCandles: queueCandleUpdate,
+          });
+
+          // 結束前強制清空緩衝區
+          flushBuffer();
         }
-      } else {
-        setSyncState({
-          isSyncing: false,
-          total: 0,
-          current: 0,
-        });
+      } finally {
+        if (!isCancelled && isMountedRef.current) {
+          setSyncState((prev) => ({
+            ...prev,
+            isSyncing: false,
+            currentSymbol: undefined,
+          }));
+        }
       }
     };
 
@@ -238,7 +234,7 @@ export function useMuscleBookerSync({
     };
   }, [targetUniverseKey, selectedPool, queueCandleUpdate, flushBuffer]);
 
-  // 手動觸發全池增量同步最新收盤
+  // 手動觸發全池增量同步最新收盤 (try ... finally 杜絕死鎖)
   const triggerManualSync = useCallback(
     async (forceRefresh = false) => {
       if (syncState.isSyncing) return;
@@ -252,26 +248,27 @@ export function useMuscleBookerSync({
         currentSymbol: items[0].symbol,
       });
 
-      await processSyncBatch({
-        items,
-        forceRefresh,
-        concurrency: 3,
-        isMounted: () => isMountedRef.current,
-        onProgress: (comp, sym) => {
-          setSyncState((prev) => ({ ...prev, current: comp, currentSymbol: sym }));
-        },
-        onUpdateCandles: queueCandleUpdate,
-      });
-
-      flushBuffer();
-
-      if (isMountedRef.current) {
-        setSyncState({
-          isSyncing: false,
-          total: items.length,
-          current: items.length,
-          currentSymbol: undefined,
+      try {
+        await processSyncBatch({
+          items,
+          forceRefresh,
+          concurrency: 3,
+          isMounted: () => isMountedRef.current,
+          onProgress: (comp, sym) => {
+            setSyncState((prev) => ({ ...prev, current: comp, currentSymbol: sym }));
+          },
+          onUpdateCandles: queueCandleUpdate,
         });
+
+        flushBuffer();
+      } finally {
+        if (isMountedRef.current) {
+          setSyncState((prev) => ({
+            ...prev,
+            isSyncing: false,
+            currentSymbol: undefined,
+          }));
+        }
       }
     },
     [syncState.isSyncing, targetUniverse, queueCandleUpdate, flushBuffer]

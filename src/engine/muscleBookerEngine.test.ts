@@ -442,7 +442,7 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
       expect(decision.actionBadge).toContain('鑑識雷達示警');
     });
 
-    it('標的流動性不足 (isLowLiquidity) 時，應給予安全警示 HOLD 不予主動推薦', () => {
+    it('標的流動性不足 (isLowLiquidity) 且非在倉時，應強制輸出 AVOID 杜絕滑價與衝擊成本', () => {
       const decision = evaluateMuscleBookerAction({
         currentPrice: 105,
         box: {
@@ -462,7 +462,7 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
         isLowLiquidity: true, // 流動性不足
       } as any);
 
-      expect(decision.action).toBe('HOLD');
+      expect(decision.action).toBe('AVOID');
       expect(decision.actionBadge).toContain('流動性不足');
     });
 
@@ -666,6 +666,91 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
 
       const mid100 = getScopedUniverseSymbols('TW', 'MID100_MOMENTUM');
       expect(mid100.length).toBe(100);
+    });
+
+    describe('Spec 0216: 量化防禦核升級 (Tickets 01 ~ 03)', () => {
+      it('Ticket 01: 當突破當日出現長上影線墓碑倒錘 (Bull Trap) 時，應強制輸出 AVOID (墓碑誘多)', () => {
+        const candles = generateMockCandles(25, 100);
+        // 最後一天衝高至 125 但收盤殺回 106 (箱頂 105，上影線 19 遠大於實體 5)
+        candles[24].open = 101;
+        candles[24].high = 125;
+        candles[24].low = 100;
+        candles[24].close = 106;
+
+        const res = scanMuscleBookerItem('2330', '台積電', 'TW', 106, candles);
+        expect(res.actionDecision.action).toBe('AVOID');
+        expect(res.actionDecision.actionBadge).toContain('墓碑誘多');
+      });
+
+      it('Ticket 01: 破底翻必須以跌破 boxLower 箱底並強勢收復為準，若未跌破 boxLower 僅回踩 MA20 不得判定為破底翻', () => {
+        const candles = generateMockCandles(25, 100);
+        // 設定箱頂 110，箱底 90
+        candles[5].high = 110;
+        candles[6].low = 90;
+        // 最後一天最低 95 (高於箱底 90，僅稍微低於 MA20)，收盤 98
+        candles[24].open = 96;
+        candles[24].low = 95;
+        candles[24].close = 98;
+        candles[24].high = 99;
+
+        const res = scanMuscleBookerItem('2330', '台積電', 'TW', 98, candles);
+        expect(res.isBottomPenetration).toBe(false);
+
+        // 若最後一天跌破箱底 90 (最低 88)，隨後收復至 93 留下長下影線
+        candles[24].open = 91;
+        candles[24].low = 88;
+        candles[24].close = 93;
+        candles[24].high = 94;
+        const resTruePen = scanMuscleBookerItem('2330', '台積電', 'TW', 93, candles);
+        expect(resTruePen.isBottomPenetration).toBe(true);
+      });
+
+      it('Ticket 02: 目標價應採平滑加權期望值，消除 60 日高點階躍斷崖', () => {
+        const decisionA = evaluateMuscleBookerAction({
+          currentPrice: 99.9,
+          box: { boxStatus: 'BREAKOUT_UP', boxUpper: 95, boxLower: 85 },
+          deduction: { ma20Slope: 'UP' },
+          bbands: { isSqueeze: false, bandwidth: 7.5 },
+          lookback60High: 100.0,
+        });
+
+        const decisionB = evaluateMuscleBookerAction({
+          currentPrice: 100.1,
+          box: { boxStatus: 'BREAKOUT_UP', boxUpper: 95, boxLower: 85 },
+          deduction: { ma20Slope: 'UP' },
+          bbands: { isSqueeze: false, bandwidth: 7.5 },
+          lookback60High: 100.0,
+        });
+
+        const diff = Math.abs((decisionB.riskRewardRatioValue ?? 0) - (decisionA.riskRewardRatioValue ?? 0));
+        expect(diff).toBeLessThan(2.0);
+      });
+
+      it('Ticket 02: 當雙市場日均成交金額不及格時，非在庫持股應輸出 AVOID (流動性不足)', () => {
+        const candles = generateMockCandles(25, 10);
+        // 成交量極小 (5 日均量 100 股，股價 10 元，成交金額僅 1,000 元 < 3000 萬)
+        candles.slice(-5).forEach((c) => {
+          c.volume = 100;
+        });
+
+        const res = scanMuscleBookerItem('9999', '冷門股', 'TW', 10, candles, { isHolding: false });
+        expect(res.actionDecision.action).toBe('AVOID');
+        expect(res.actionDecision.actionBadge).toContain('流動性不足');
+      });
+
+      it('Ticket 03: 當突破箱頂但 20 日主力 VWAP 乖離率 > 10% 時，應降級為 HOLD (主力成本過熱)', () => {
+        const candles = generateMockCandles(25, 100);
+        // 前 20 天價格在 100，最後幾天暴衝到 130 (VWAP 約 102，現價 130 乖離 > 25%)
+        candles[23].close = 120;
+        candles[24].open = 125;
+        candles[24].close = 130;
+        candles[24].high = 131;
+        candles[24].low = 124;
+
+        const res = scanMuscleBookerItem('2330', '台積電', 'TW', 130, candles);
+        expect(res.actionDecision.action).toBe('HOLD');
+        expect(res.actionDecision.actionBadge).toContain('主力成本過熱');
+      });
     });
   });
 });

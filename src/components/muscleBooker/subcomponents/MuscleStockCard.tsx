@@ -8,11 +8,14 @@ import {
   Sliders,
   Shield,
   Target,
+  Star,
+  Zap,
 } from 'lucide-react';
 import { ScannedStockItem, BEGINNER_TOOLTIPS } from '../../../engine/muscleBookerEngine';
 import { HoldingPosition, MarketType } from '../../../types/stock';
 import { Tooltip } from '../../common/Tooltip';
 import { formatCurrencyPrice } from '../../MuscleBookerWorkspace';
+import { copyTextToClipboard } from '../../../utils/clipboard';
 
 // 達瓦斯防守安全條漸層色常數 (消除 Primitive Obsession smell)
 const BUFFER_BAR_GRADIENTS = {
@@ -29,9 +32,12 @@ export interface MuscleStockCardProps {
   onOpenOmniInspector?: (symbol: string, market: MarketType) => void;
   badgeLabel?: string;
   badgeTone?: 'BUY' | 'SELL' | 'AVOID' | 'HOLD';
+  isWatched?: boolean;
+  onToggleWatchlist?: (symbol: string) => void;
+  onQuickTrade?: (symbol: string, action: 'BUY' | 'SELL', price?: number) => void;
 }
 
-export const MuscleStockCard: React.FC<MuscleStockCardProps> = ({
+const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
   item,
   holding,
   isExpanded = false,
@@ -39,13 +45,16 @@ export const MuscleStockCard: React.FC<MuscleStockCardProps> = ({
   onOpenOmniInspector,
   badgeLabel,
   badgeTone,
+  isWatched = false,
+  onToggleWatchlist,
+  onQuickTrade,
 }) => {
   const [copied, setCopied] = useState(false);
 
-  const handleCopySymbol = (e: React.MouseEvent) => {
+  const handleCopySymbol = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (navigator?.clipboard) {
-      navigator.clipboard.writeText(item.symbol);
+    const ok = await copyTextToClipboard(item.symbol);
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -308,6 +317,66 @@ export const MuscleStockCard: React.FC<MuscleStockCardProps> = ({
               <Sliders size={13} />
             </button>
           )}
+
+          {/* ⭐ 自選星號微按鈕 (Ticket 08) */}
+          {onToggleWatchlist && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleWatchlist(item.symbol);
+              }}
+              style={{
+                background: isWatched ? 'rgba(250, 204, 21, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                border: isWatched ? '1px solid rgba(250, 204, 21, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '5px',
+                color: isWatched ? '#fde047' : 'var(--text-muted)',
+                cursor: 'pointer',
+                padding: '3px 4px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s',
+              }}
+              title={isWatched ? '從自選觀察名單移除' : '加入自選觀察名單'}
+            >
+              <Star size={13} fill={isWatched ? '#fde047' : 'none'} />
+            </button>
+          )}
+
+          {/* ⚡ 一鍵下單微按鈕 (Ticket 08) */}
+          {onQuickTrade && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                const tradeAction = (item.actionDecision.action === 'SELL' || isBroken) ? 'SELL' : 'BUY';
+                onQuickTrade(item.symbol, tradeAction, item.currentPrice);
+              }}
+              style={{
+                background: (item.actionDecision.action === 'SELL' || isBroken)
+                  ? 'rgba(239, 68, 68, 0.15)'
+                  : 'rgba(34, 197, 94, 0.15)',
+                border: (item.actionDecision.action === 'SELL' || isBroken)
+                  ? '1px solid rgba(239, 68, 68, 0.4)'
+                  : '1px solid rgba(34, 197, 94, 0.4)',
+                borderRadius: '5px',
+                color: (item.actionDecision.action === 'SELL' || isBroken) ? '#f87171' : '#4ade80',
+                cursor: 'pointer',
+                padding: '3px 6px',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '2px',
+                transition: 'all 0.2s',
+              }}
+              title={(item.actionDecision.action === 'SELL' || isBroken) ? '快速停損平倉' : '快速買進建倉'}
+            >
+              <Zap size={11} />
+              {(item.actionDecision.action === 'SELL' || isBroken) ? '停損' : '買進'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -538,3 +607,5 @@ export const MuscleStockCard: React.FC<MuscleStockCardProps> = ({
     </div>
   );
 };
+
+export const MuscleStockCard = React.memo(MuscleStockCardComponent);

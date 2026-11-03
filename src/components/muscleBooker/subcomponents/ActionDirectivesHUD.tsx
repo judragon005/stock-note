@@ -11,6 +11,9 @@ export interface ActionDirectivesHUDProps {
   expandedSymbol: string | null;
   onToggleExpand: (symbol: string) => void;
   onOpenOmniInspector?: (symbol: string, market: MarketType) => void;
+  watchlistSymbols?: string[];
+  onToggleWatchlist?: (symbol: string) => void;
+  onQuickTrade?: (symbol: string, action: 'BUY' | 'SELL', price?: number) => void;
 }
 
 export const ActionDirectivesHUD: React.FC<ActionDirectivesHUDProps> = ({
@@ -20,6 +23,9 @@ export const ActionDirectivesHUD: React.FC<ActionDirectivesHUDProps> = ({
   expandedSymbol,
   onToggleExpand,
   onOpenOmniInspector,
+  watchlistSymbols = [],
+  onToggleWatchlist,
+  onQuickTrade,
 }) => {
   return (
     <div
@@ -87,13 +93,16 @@ export const ActionDirectivesHUD: React.FC<ActionDirectivesHUDProps> = ({
                 onOpenOmniInspector={onOpenOmniInspector}
                 badgeTone="BUY"
                 badgeLabel={`買進 · ${item.actionDecision.riskRewardRatioValue}R`}
+                isWatched={watchlistSymbols.includes(item.symbol)}
+                onToggleWatchlist={onToggleWatchlist}
+                onQuickTrade={onQuickTrade}
               />
             ))}
           </div>
         )}
       </div>
 
-      {/* 🚨 右側：在庫持股停損警戒 */}
+      {/* 🚨 右側：在庫持股停損與瀕臨破防警戒 */}
       <div
         className="card"
         style={{
@@ -106,7 +115,7 @@ export const ActionDirectivesHUD: React.FC<ActionDirectivesHUDProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <ShieldAlert size={20} color="#f87171" />
             <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#ffffff' }}>
-              在庫停損警戒 (Top 3)
+              在庫停損與瀕臨破防警戒 (Top 3)
             </h3>
           </div>
           <span
@@ -119,7 +128,7 @@ export const ActionDirectivesHUD: React.FC<ActionDirectivesHUDProps> = ({
               fontWeight: 700,
             }}
           >
-            僅限實際持股破線
+            已破防或緩衝 ≤ 1.5%
           </span>
         </div>
 
@@ -135,22 +144,36 @@ export const ActionDirectivesHUD: React.FC<ActionDirectivesHUDProps> = ({
             }}
           >
             <CheckCircle2 size={24} color="#4ade80" style={{ margin: '0 auto 8px', display: 'block' }} />
-            🟢 在庫持股全數守穩防守線，暫無破線停損警訊！
+            🟢 在庫持股全數守穩安全防線 (緩衝 &gt; 1.5%)，暫無破線警訊！
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {top3SellItems.map((item) => (
-              <MuscleStockCard
-                key={item.symbol}
-                item={item}
-                holding={activeHoldingsMap.get(item.symbol.toUpperCase())}
-                isExpanded={expandedSymbol === item.symbol}
-                onToggleExpand={() => onToggleExpand(item.symbol)}
-                onOpenOmniInspector={onOpenOmniInspector}
-                badgeTone="SELL"
-                badgeLabel="🚨 破線停損"
-              />
-            ))}
+            {top3SellItems.map((item) => {
+              const defPrice = item.actionDecision.stopLossPrice ?? (item.actionDecision.action === 'BUY' ? item.boxUpper : item.boxLower);
+              const isBroken = defPrice !== undefined && item.currentPrice < defPrice;
+              const bufferPercent = (defPrice !== undefined && item.currentPrice > 0)
+                ? Math.round(((item.currentPrice - defPrice) / item.currentPrice) * 1000) / 10
+                : undefined;
+              const badgeLabel = isBroken
+                ? '🚨 破線停損'
+                : `⚠️ 瀕臨破防 (${bufferPercent ?? 0}%)`;
+
+              return (
+                <MuscleStockCard
+                  key={item.symbol}
+                  item={item}
+                  holding={activeHoldingsMap.get(item.symbol.toUpperCase())}
+                  isExpanded={expandedSymbol === item.symbol}
+                  onToggleExpand={() => onToggleExpand(item.symbol)}
+                  onOpenOmniInspector={onOpenOmniInspector}
+                  badgeTone="SELL"
+                  badgeLabel={badgeLabel}
+                  isWatched={watchlistSymbols.includes(item.symbol)}
+                  onToggleWatchlist={onToggleWatchlist}
+                  onQuickTrade={onQuickTrade}
+                />
+              );
+            })}
           </div>
         )}
       </div>

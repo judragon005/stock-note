@@ -13,6 +13,9 @@ import { AssetPoolType } from '../../../engine/muscleBookerEngine';
 import { SyncState } from '../hooks/useMuscleBookerSync';
 import { resolveOfficialSecurityName } from '../../../engine/stockNameResolver';
 
+export type MuscleBookerSortOption = 'RR_DESC' | 'VOL_RATIO_DESC' | 'BUFFER_ASC' | 'CHANGE_DESC';
+export type MuscleBookerFilterChip = 'ALL' | 'EXPLOSIVE_VOL' | 'SQUEEZE' | 'HIGH_RR' | 'HOLDINGS' | 'CRITICAL_BUFFER';
+
 export interface MuscleBookerHeaderProps {
   universeSyncToast: { message: string; type: 'info' | 'success' | 'warn' } | null;
   universeStatusText: string;
@@ -39,6 +42,11 @@ export interface MuscleBookerHeaderProps {
   isAdHocLoading: boolean;
   adHocError: string | null;
   onRunAdHocScan: (symbol?: string) => void;
+  // Ticket 08 排序與快篩
+  sortBy?: MuscleBookerSortOption;
+  onSortByChange?: (sort: MuscleBookerSortOption) => void;
+  activeFilterChip?: MuscleBookerFilterChip;
+  onFilterChipChange?: (chip: MuscleBookerFilterChip) => void;
 }
 
 export const MuscleBookerHeader: React.FC<MuscleBookerHeaderProps> = ({
@@ -66,6 +74,10 @@ export const MuscleBookerHeader: React.FC<MuscleBookerHeaderProps> = ({
   isAdHocLoading,
   adHocError,
   onRunAdHocScan,
+  sortBy = 'RR_DESC',
+  onSortByChange,
+  activeFilterChip = 'ALL',
+  onFilterChipChange,
 }) => {
   return (
     <>
@@ -190,6 +202,29 @@ export const MuscleBookerHeader: React.FC<MuscleBookerHeaderProps> = ({
               <option value="HOLDINGS_CLOSED">📜 歷史已平倉標的</option>
             </optgroup>
           </select>
+
+          {onSortByChange && (
+            <select
+              value={sortBy}
+              onChange={(e) => onSortByChange(e.target.value as MuscleBookerSortOption)}
+              style={{
+                padding: '6px 12px',
+                background: 'rgba(15, 23, 42, 0.8)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.85rem',
+                color: '#38bdf8',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+              title="標的排序依據"
+            >
+              <option value="RR_DESC">🎯 風益比最高 (R降序)</option>
+              <option value="VOL_RATIO_DESC">🔥 量比最大 (量能湧現)</option>
+              <option value="BUFFER_ASC">🛡️ 貼近防守優先 (急需監控)</option>
+              <option value="CHANGE_DESC">📈 今日漲幅最高 (%)</option>
+            </select>
+          )}
         </div>
       </div>
 
@@ -302,6 +337,41 @@ export const MuscleBookerHeader: React.FC<MuscleBookerHeaderProps> = ({
         >
           🔴 建議賣出 ({counts.sell})
         </button>
+      </div>
+
+      {/* ⚡ 實戰快篩膠囊 (Ticket 08) */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '16px', alignItems: 'center' }}>
+        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginRight: '4px' }}>實戰快篩：</span>
+        {[
+          { key: 'ALL', label: '全部' },
+          { key: 'EXPLOSIVE_VOL', label: '🔥 爆量發動 (量比≥1.5)' },
+          { key: 'SQUEEZE', label: '⚡ 極致壓縮 (帶寬≤8%)' },
+          { key: 'HIGH_RR', label: '🎯 高賠率 (≥2.5R)' },
+          { key: 'HOLDINGS', label: '💼 在庫持股' },
+          { key: 'CRITICAL_BUFFER', label: '🚨 瀕臨破線 (緩衝≤1.5%)' },
+        ].map((chip) => {
+          const isActive = (activeFilterChip || 'ALL') === chip.key;
+          return (
+            <button
+              key={chip.key}
+              type="button"
+              onClick={() => onFilterChipChange?.(chip.key as MuscleBookerFilterChip)}
+              style={{
+                padding: '3px 10px',
+                borderRadius: '16px',
+                fontSize: '0.75rem',
+                fontWeight: isActive ? 700 : 500,
+                background: isActive ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                color: isActive ? '#38bdf8' : 'var(--text-muted)',
+                border: isActive ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {chip.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* 🌟 自訂觀察清單管理列 (僅在 CUSTOM_WATCHLIST 顯示) */}

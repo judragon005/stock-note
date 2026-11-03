@@ -92,7 +92,7 @@ export function detectDarvasBox(candles: DailyCandle[]): {
 /**
  * 2. 均線扣抵望遠鏡與「底穿上」假跌破型態
  */
-export function calculateMaDeduction(candles: DailyCandle[]): {
+export function calculateMaDeduction(candles: DailyCandle[], boxLower?: number): {
   ma5DeductionPrice?: number;
   ma20DeductionPrice?: number;
   ma20Slope: TrendSlope;
@@ -141,15 +141,19 @@ export function calculateMaDeduction(candles: DailyCandle[]): {
     }
   }
 
-  // 偵測「底穿上」假跌破型態：
-  // 盤中跌破支撐 (MA20 或近期支撐)，但收盤站回支撐之上，且下影線佔振幅 >= 50%
+  // 偵測「底穿上」假跌破型態 (Spec 0216 Ticket 01)：
+  // 優先以達瓦斯箱底 boxLower 為準，盤中跌破箱底但收盤站回箱底之上，且下影線佔振幅 >= 50%
   let isBottomPenetrationRebound = false;
-  if (ma20 !== undefined && current.low < ma20 && current.close >= ma20) {
-    const totalRange = current.high - current.low;
-    const lowerShadow = current.close - current.low;
-    if (totalRange > 0 && lowerShadow / totalRange >= 0.5) {
+  const totalRange = current.high - current.low;
+  const lowerShadow = current.close - current.low;
+  const hasStrongLowerShadow = totalRange > 0 && lowerShadow / totalRange >= 0.5;
+
+  if (boxLower !== undefined) {
+    if (current.low < boxLower && current.close >= boxLower && hasStrongLowerShadow) {
       isBottomPenetrationRebound = true;
     }
+  } else if (ma20 !== undefined && current.low < ma20 && current.close >= ma20 && hasStrongLowerShadow) {
+    isBottomPenetrationRebound = true;
   }
 
   return {

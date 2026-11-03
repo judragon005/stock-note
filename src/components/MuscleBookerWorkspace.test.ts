@@ -262,21 +262,21 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
   });
 
   it('風益比不足 2:1 時 (如 1599 宏佳騰)，即使突破箱頂亦應自動降級為 HOLD (觀望待變)，絕不判定為 BUY', () => {
-    // 模擬 1599 宏佳騰：箱頂 $23.2，現價 $23.15，防守價 $22.3 (風險 0.85，利潤 0.10 -> 風益比約 0.1R)
+    // 模擬 1599 宏佳騰：確立箱頂 $22.5，但上方有前波高點反壓 $22.75，最後一天收 $22.6 突破箱頂，空間狹小風益比不足 2.0R
     const candles: DailyCandle[] = Array.from({ length: 25 }, (_, i) => {
       const isLast = i === 24;
-      const c = isLast ? 23.15 : 22.0 + (i % 3) * 0.4;
+      const c = isLast ? 22.6 : 22.0 + (i % 3) * 0.15;
       return {
         date: `2026-08-${String(i + 1).padStart(2, '0')}`,
-        open: c,
-        high: isLast ? 23.2 : 23.2,
-        low: isLast ? 22.3 : 21.8,
+        open: isLast ? 22.55 : c,
+        high: i === 3 ? 22.75 : (isLast ? 22.62 : 22.5),
+        low: isLast ? 22.5 : 21.8,
         close: c,
         volume: 15000,
       };
     });
 
-    const result = scanMuscleBookerItem('1599', '宏佳騰', 'TW', 23.15, candles);
+    const result = scanMuscleBookerItem('1599', '宏佳騰', 'TW', 22.6, candles);
     // 由於利潤空間極小，風益比不足 2.0，絕不能是 BUY！
     expect(result.actionDecision.action).not.toBe('BUY');
     expect(result.actionDecision.action).toBe('HOLD');
@@ -419,6 +419,73 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
       const top3SellItems = holdingGatedSellItems.slice(0, 3);
 
       expect(top3SellItems).toHaveLength(0);
+    });
+
+    it('Spec 0216 Ticket 07: 在庫持股雙重警戒應同時收錄已破防與瀕臨破防 (Buffer <= 1.5%) 標的', () => {
+      const activeHoldings = [
+        { symbol: '2330', shares: 1000 }, // 安全 (緩衝 5%)
+        { symbol: '2454', shares: 500 },  // 瀕臨破防 (緩衝 0.8% <= 1.5%)
+        { symbol: '3008', shares: 200 },  // 已破防 (跌破防守價)
+      ];
+      const activeHoldingsMap = new Map(activeHoldings.map((h) => [h.symbol.toUpperCase(), h]));
+
+      const scannedList = [
+        {
+          symbol: '2330',
+          currentPrice: 1000,
+          actionDecision: { action: 'HOLD' as const, stopLossPrice: 950, actionReason: '守穩箱內' },
+        },
+        {
+          symbol: '2454',
+          currentPrice: 1008,
+          actionDecision: { action: 'HOLD' as const, stopLossPrice: 1000, actionReason: '回踩測試' }, // 緩衝 (1008-1000)/1008 = 0.79% <= 1.5%
+        },
+        {
+          symbol: '3008',
+          currentPrice: 890,
+          actionDecision: { action: 'SELL' as const, stopLossPrice: 900, actionReason: '跌破箱底' }, // 已破防
+        },
+        {
+          symbol: '2317', // 非在庫持股
+          currentPrice: 100,
+          actionDecision: { action: 'SELL' as const, stopLossPrice: 105, actionReason: '非持股破線' },
+        },
+      ];
+
+      const criticalAlerts = scannedList.filter((i) => {
+        if (!activeHoldingsMap.has(i.symbol.toUpperCase())) return false;
+        const def = i.actionDecision.stopLossPrice;
+        if (def === undefined || i.currentPrice <= 0) return i.actionDecision.action === 'SELL';
+        const isBroken = i.currentPrice < def;
+        const buf = ((i.currentPrice - def) / i.currentPrice) * 100;
+        return isBroken || buf <= 1.5 || i.actionDecision.action === 'SELL';
+      });
+
+      expect(criticalAlerts).toHaveLength(2);
+      expect(criticalAlerts.map((i) => i.symbol)).toContain('2454');
+      expect(criticalAlerts.map((i) => i.symbol)).toContain('3008');
+      expect(criticalAlerts.map((i) => i.symbol)).not.toContain('2330');
+      expect(criticalAlerts.map((i) => i.symbol)).not.toContain('2317');
+    });
+
+    it('Spec 0216 Ticket 08: 實戰快篩應精確過濾出極致壓縮 (SQUEEZE) 與瀕臨破線標的', () => {
+      const items = [
+        { symbol: 'A', isBollingerSqueeze: true, currentPrice: 100, actionDecision: { action: 'HOLD' as const, stopLossPrice: 90 } },
+        { symbol: 'B', isBollingerSqueeze: false, currentPrice: 100, actionDecision: { action: 'HOLD' as const, stopLossPrice: 99 } }, // 緩衝 1.0% <= 1.5%
+        { symbol: 'C', isBollingerSqueeze: false, currentPrice: 100, actionDecision: { action: 'HOLD' as const, stopLossPrice: 90 } },
+      ];
+
+      const squeezeItems = items.filter((i) => i.isBollingerSqueeze);
+      expect(squeezeItems).toHaveLength(1);
+      expect(squeezeItems[0].symbol).toBe('A');
+
+      const criticalBufferItems = items.filter((i) => {
+        const def = i.actionDecision.stopLossPrice;
+        const buf = ((i.currentPrice - def) / i.currentPrice) * 100;
+        return buf <= 1.5;
+      });
+      expect(criticalBufferItems).toHaveLength(1);
+      expect(criticalBufferItems[0].symbol).toBe('B');
     });
   });
 });
