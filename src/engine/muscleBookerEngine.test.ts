@@ -8,6 +8,7 @@ import {
   calculateRelativeStrength,
   calculateTrustToNetVolumeRatio,
   evaluateMuscleBookerAction,
+  scanMuscleBookerItem,
 } from './muscleBookerEngine';
 import { DailyCandle } from '../types/indicators';
 
@@ -335,7 +336,7 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
 
     it('在倉持股若假突破跌回箱頂以下，應發布 SELL 假突破保本離場訊號', () => {
       const decision = evaluateMuscleBookerAction({
-        currentPrice: 99.2, // 跌破原箱頂 100
+        currentPrice: 98.8, // 跌破原箱頂 100 達 1.0% 以上 (< 99.0)
         box: {
           boxStatus: 'INSIDE_BOX', // 已跌回箱內
           boxUpper: 100,
@@ -553,6 +554,95 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
       expect(latestPoint.box.boxStatus).toBeDefined();
       expect(latestPoint.bbands.bandwidth).toBeDefined();
       expect(latestPoint.atr.atr14).toBeDefined();
+    });
+  });
+
+  describe('9. 規格審查 (Spec 0214) 邊界修正與實盤全模組貫通 (Issue #389 TDD)', () => {
+    it('假突破門檻應精準遵循規格定義跌破原箱頂 1.0% (< boxUpper * 0.99)', () => {
+      // 箱頂 100，跌至 99.2 (跌 0.8%，尚未達 1.0%) -> 不應觸發假突破 SELL
+      const decision1 = evaluateMuscleBookerAction({
+        currentPrice: 99.2,
+        box: { boxStatus: 'INSIDE_BOX', boxUpper: 100, boxLower: 90 },
+        deduction: { ma20Slope: 'UP' },
+        bbands: { isSqueeze: false },
+        isHolding: true,
+      });
+      expect(decision1.action).not.toBe('SELL');
+
+      // 跌至 98.9 (跌 1.1% < 99.0) -> 確立為假突破，觸發 SELL
+      const decision2 = evaluateMuscleBookerAction({
+        currentPrice: 98.9,
+        box: { boxStatus: 'INSIDE_BOX', boxUpper: 100, boxLower: 90 },
+        deduction: { ma20Slope: 'UP' },
+        bbands: { isSqueeze: false },
+        isHolding: true,
+      });
+      expect(decision2.action).toBe('SELL');
+      expect(decision2.actionBadge).toContain('假突破保本');
+    });
+
+    it('大盤偏空 Regime 時，若非 RS 極強 (EXTREME_STRONG)，即使風益比達標亦應觸發防線觀望', () => {
+      const decision = evaluateMuscleBookerAction({
+        currentPrice: 105,
+        box: { boxStatus: 'BREAKOUT_UP', boxUpper: 100, boxLower: 90 },
+        deduction: { ma20Slope: 'UP' },
+        bbands: { isSqueeze: false, bandwidth: 5.0 },
+        atr: { atr14: 1.0 },
+        marketRegime: 'BEAR',
+        rsRank: 'STRONG', // 非 EXTREME_STRONG
+      } as any);
+
+      expect(decision.action).toBe('HOLD');
+      expect(decision.actionBadge).toContain('大盤偏空防線');
+      expect(decision.actionReason).toContain('RS 極強');
+    });
+
+    it('情境 B 破底翻反轉應具備完整量化閘門 (MACD 負向阻斷、OBV 下降背離降級與大盤防禦)', () => {
+      // 1. MACD 弱勢阻斷
+      const macdBlocked = evaluateMuscleBookerAction({
+        currentPrice: 95,
+        box: { boxStatus: 'INSIDE_BOX', boxUpper: 110, boxLower: 90 },
+        deduction: { isBottomPenetrationRebound: true, ma20Slope: 'UP' },
+        bbands: { isSqueeze: false },
+        macd: { dif12_26: -1.2, macdHist: -0.8 },
+      } as any);
+      expect(macdBlocked.action).toBe('AVOID');
+      expect(macdBlocked.actionBadge).toContain('MACD弱勢');
+
+      // 2. OBV 背離降級
+      const obvFalling = evaluateMuscleBookerAction({
+        currentPrice: 95,
+        box: { boxStatus: 'INSIDE_BOX', boxUpper: 110, boxLower: 90 },
+        deduction: { isBottomPenetrationRebound: true, ma20Slope: 'UP' },
+        bbands: { isSqueeze: false },
+        obvTrend: 'FALLING',
+      } as any);
+      expect(obvFalling.action).toBe('HOLD');
+      expect(obvFalling.actionBadge).toContain('OBV背離');
+
+      // 3. 大盤偏空提高門檻至 3.0R 且要求 RS 極強
+      const bearWeakRS = evaluateMuscleBookerAction({
+        currentPrice: 95,
+        box: { boxStatus: 'INSIDE_BOX', boxUpper: 110, boxLower: 90 },
+        deduction: { isBottomPenetrationRebound: true, ma20Slope: 'UP' },
+        bbands: { isSqueeze: false },
+        marketRegime: 'BEAR',
+        rsRank: 'NEUTRAL',
+      } as any);
+      expect(bearWeakRS.action).toBe('HOLD');
+      expect(bearWeakRS.actionBadge).toContain('大盤偏空防線');
+    });
+
+    it('scanMuscleBookerItem 應實質調用 calculateOBV、calculateMACD、ATR 與 60 日高點壓制', () => {
+      const candles = generateMockCandles(35, 100);
+      const scanned = scanMuscleBookerItem('2330', '台積電', 'TW', 100, candles, {
+        isHolding: true,
+        marketRegime: 'BULL',
+      } as any);
+
+      expect((scanned as any).atr).toBeDefined();
+      expect((scanned as any).obvTrend).toBeDefined();
+      expect((scanned as any).macd).toBeDefined();
     });
   });
 });

@@ -19,10 +19,27 @@ export const DarvasQuadrantGrid: React.FC<DarvasQuadrantGridProps> = ({
   onToggleExpand,
   onOpenOmniInspector,
 }) => {
-  const breakoutUpItems = scannedItems.filter((i) => i.boxStatus === 'BREAKOUT_UP');
-  const bottomPenetrationItems = scannedItems.filter((i) => i.isBottomPenetration);
-  const bollingerSqueezeItems = scannedItems.filter((i) => i.isBollingerSqueeze);
-  const breakoutDownItems = scannedItems.filter((i) => i.boxStatus === 'BREAKOUT_DOWN');
+  const { breakoutUpItems, bottomPenetrationItems, bollingerSqueezeItems, breakoutDownItems } =
+    React.useMemo(() => {
+      const bUp: ScannedStockItem[] = [];
+      const bPen: ScannedStockItem[] = [];
+      const bSq: ScannedStockItem[] = [];
+      const bDown: ScannedStockItem[] = [];
+
+      for (const item of scannedItems) {
+        if (item.boxStatus === 'BREAKOUT_UP') bUp.push(item);
+        if (item.isBottomPenetration) bPen.push(item);
+        if (item.isBollingerSqueeze) bSq.push(item);
+        if (item.boxStatus === 'BREAKOUT_DOWN') bDown.push(item);
+      }
+
+      return {
+        breakoutUpItems: bUp,
+        bottomPenetrationItems: bPen,
+        bollingerSqueezeItems: bSq,
+        breakoutDownItems: bDown,
+      };
+    }, [scannedItems]);
 
   return (
     <div style={{ marginBottom: '28px' }}>

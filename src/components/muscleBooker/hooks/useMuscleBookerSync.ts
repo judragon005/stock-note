@@ -25,6 +25,69 @@ export interface UseMuscleBookerSyncProps {
   selectedPool: AssetPoolType;
 }
 
+interface SyncWorkerParams {
+  items: Array<{ symbol: string; market: MarketType }>;
+  forceRefresh: boolean;
+  concurrency?: number;
+  isCancelled?: () => boolean;
+  isMounted: () => boolean;
+  onProgress: (completed: number, currentSymbol: string) => void;
+  onUpdateCandles: (symbol: string, candles: DailyCandle[]) => void;
+}
+
+/**
+ * 共用並發批次同步排程器 (消滅重複代碼與 Shotgun Surgery 隱患)
+ */
+async function processSyncBatch({
+  items,
+  forceRefresh,
+  concurrency = 3,
+  isCancelled = () => false,
+  isMounted,
+  onProgress,
+  onUpdateCandles,
+}: SyncWorkerParams) {
+  let completed = 0;
+  let index = 0;
+  const total = items.length;
+  const actualConcurrency = Math.min(concurrency, total);
+
+  const worker = async () => {
+    while (index < total) {
+      if (isCancelled() || !isMounted()) return;
+      const currentIndex = index++;
+      const m = items[currentIndex];
+
+      if (!isCancelled() && isMounted()) {
+        onProgress(completed, m.symbol);
+      }
+
+      try {
+        const res = await backfillSymbolOhlcvAndIndicators(m.symbol, m.market, forceRefresh);
+        if (isCancelled() || !isMounted()) return;
+        if (res.candles && res.candles.length >= 5) {
+          onUpdateCandles(m.symbol, res.candles);
+        } else {
+          onUpdateCandles(m.symbol, generateSyntheticCandles(m.symbol, 100));
+        }
+      } catch {
+        if (isCancelled() || !isMounted()) return;
+        onUpdateCandles(m.symbol, generateSyntheticCandles(m.symbol, 100));
+      }
+
+      completed++;
+      if (!isCancelled() && isMounted()) {
+        onProgress(completed, m.symbol);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    }
+  };
+
+  const workers = Array.from({ length: actualConcurrency }, () => worker());
+  await Promise.all(workers);
+}
+
 export function useMuscleBookerSync({
   targetUniverse,
   targetUniverseKey,
@@ -128,53 +191,17 @@ export function useMuscleBookerSync({
           currentSymbol: missing[0].symbol,
         });
 
-        let completed = 0;
-        let index = 0;
-        const total = missing.length;
-        const concurrency = Math.min(3, total);
-
-        const worker = async () => {
-          while (index < total) {
-            if (isCancelled || !isMountedRef.current) return;
-            const currentIndex = index++;
-            const m = missing[currentIndex];
-
-            if (!isCancelled && isMountedRef.current) {
-              setSyncState((prev) => ({
-                ...prev,
-                current: completed,
-                currentSymbol: m.symbol,
-              }));
-            }
-
-            try {
-              const res = await backfillSymbolOhlcvAndIndicators(m.symbol, m.market, false);
-              if (isCancelled || !isMountedRef.current) return;
-              if (res.candles && res.candles.length >= 5) {
-                queueCandleUpdate(m.symbol, res.candles);
-              } else {
-                queueCandleUpdate(m.symbol, generateSyntheticCandles(m.symbol, 100));
-              }
-            } catch {
-              if (isCancelled || !isMountedRef.current) return;
-              queueCandleUpdate(m.symbol, generateSyntheticCandles(m.symbol, 100));
-            }
-
-            completed++;
-            if (!isCancelled && isMountedRef.current) {
-              setSyncState((prev) => ({
-                ...prev,
-                current: completed,
-                currentSymbol: m.symbol,
-              }));
-            }
-
-            await new Promise((resolve) => setTimeout(resolve, 60));
-          }
-        };
-
-        const workers = Array.from({ length: concurrency }, () => worker());
-        await Promise.all(workers);
+        await processSyncBatch({
+          items: missing,
+          forceRefresh: false,
+          concurrency: 3,
+          isCancelled: () => isCancelled,
+          isMounted: () => isMountedRef.current,
+          onProgress: (comp, sym) => {
+            setSyncState((prev) => ({ ...prev, current: comp, currentSymbol: sym }));
+          },
+          onUpdateCandles: queueCandleUpdate,
+        });
 
         // 結束前強制清空緩衝區
         flushBuffer();
@@ -221,51 +248,16 @@ export function useMuscleBookerSync({
         currentSymbol: items[0].symbol,
       });
 
-      let completed = 0;
-      let index = 0;
-      const total = items.length;
-      const concurrency = Math.min(3, total);
-
-      const worker = async () => {
-        while (index < total) {
-          if (!isMountedRef.current) return;
-          const currentIndex = index++;
-          const m = items[currentIndex];
-
-          setSyncState((prev) => ({
-            ...prev,
-            current: completed,
-            currentSymbol: m.symbol,
-          }));
-
-          try {
-            const res = await backfillSymbolOhlcvAndIndicators(m.symbol, m.market, forceRefresh);
-            if (!isMountedRef.current) return;
-            if (res.candles && res.candles.length >= 5) {
-              queueCandleUpdate(m.symbol, res.candles);
-            } else {
-              queueCandleUpdate(m.symbol, generateSyntheticCandles(m.symbol, 100));
-            }
-          } catch {
-            if (!isMountedRef.current) return;
-            queueCandleUpdate(m.symbol, generateSyntheticCandles(m.symbol, 100));
-          }
-
-          completed++;
-          if (isMountedRef.current) {
-            setSyncState((prev) => ({
-              ...prev,
-              current: completed,
-              currentSymbol: m.symbol,
-            }));
-          }
-
-          await new Promise((resolve) => setTimeout(resolve, 60));
-        }
-      };
-
-      const workers = Array.from({ length: concurrency }, () => worker());
-      await Promise.all(workers);
+      await processSyncBatch({
+        items,
+        forceRefresh,
+        concurrency: 3,
+        isMounted: () => isMountedRef.current,
+        onProgress: (comp, sym) => {
+          setSyncState((prev) => ({ ...prev, current: comp, currentSymbol: sym }));
+        },
+        onUpdateCandles: queueCandleUpdate,
+      });
 
       flushBuffer();
 

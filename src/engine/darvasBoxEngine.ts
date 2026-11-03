@@ -4,6 +4,8 @@ import {
   TrendSlope,
 } from '../types/indicators';
 
+export const DEFAULT_LOOKBACK_BARS = 20;
+
 /**
  * 1. 箱子戰術與三日法則 (Darvas Box Theory)
  * - 箱頂：前波高點後連續 3 個交易日未創更高價確立
@@ -60,7 +62,7 @@ export function detectDarvasBox(candles: DailyCandle[]): {
   // 預設 fallback 為前波 (排除當日 K 線) 近 20 日高低
   if (confirmedUpper === undefined || confirmedLower === undefined) {
     const pastCandles = candles.slice(0, -1);
-    const lookback = pastCandles.length > 0 ? pastCandles.slice(-20) : candles;
+    const lookback = pastCandles.length > 0 ? pastCandles.slice(-DEFAULT_LOOKBACK_BARS) : candles;
     confirmedUpper = Math.max(...lookback.map((c) => c.high));
     confirmedLower = Math.min(...lookback.map((c) => c.low));
   }
