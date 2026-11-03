@@ -9,6 +9,7 @@ import {
   calculateTrustToNetVolumeRatio,
   evaluateMuscleBookerAction,
   scanMuscleBookerItem,
+  getScopedUniverseSymbols,
 } from './muscleBookerEngine';
 import { DailyCandle } from '../types/indicators';
 
@@ -643,6 +644,28 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
       expect((scanned as any).atr).toBeDefined();
       expect((scanned as any).obvTrend).toBeDefined();
       expect((scanned as any).macd).toBeDefined();
+    });
+
+    it('getScopedUniverseSymbols 應正確支援全量台股與美股四大市場池過濾', () => {
+      const twAll = getScopedUniverseSymbols('TW', 'TW_ALL');
+      expect(twAll.length).toBeGreaterThanOrEqual(2000);
+      expect(twAll.some((s) => s.symbol === '2330')).toBe(true);
+
+      const sp500 = getScopedUniverseSymbols('US', 'US_SP500');
+      expect(sp500.length).toBeGreaterThanOrEqual(500);
+      expect(sp500.some((s) => s.symbol === 'AAPL')).toBe(true);
+
+      const dow30 = getScopedUniverseSymbols('US', 'US_DOW30');
+      expect(dow30.length).toBe(30);
+
+      const sox30 = getScopedUniverseSymbols('US', 'US_SOX30');
+      expect(sox30.length).toBe(30);
+
+      const nasdaq100 = getScopedUniverseSymbols('US', 'US_NASDAQ100');
+      expect(nasdaq100.length).toBeGreaterThanOrEqual(100);
+
+      const mid100 = getScopedUniverseSymbols('TW', 'MID100_MOMENTUM');
+      expect(mid100.length).toBe(100);
     });
   });
 });

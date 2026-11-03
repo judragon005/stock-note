@@ -101,4 +101,30 @@ describe('MuscleStockCard 組件測試 (Apple 美學卡片)', () => {
     const html = renderToStaticMarkup(<MuscleStockCard item={brokenItem} />);
     expect(html).toContain('已跌破');
   });
+
+  it('美股標的應正確指向美股 Yahoo Finance 外部圖表與美金貨幣格式', () => {
+    const usItem: ScannedStockItem = {
+      symbol: 'NVDA',
+      name: '輝達 NVIDIA',
+      market: 'US',
+      currentPrice: 125.5,
+      boxStatus: 'BREAKOUT_UP',
+      isBottomPenetration: false,
+      ma20Slope: 'UP',
+      isBollingerSqueeze: true,
+      bollingerBandwidth: 4.5,
+      actionDecision: {
+        action: 'BUY',
+        actionBadge: '🔥 箱頂突破',
+        actionReason: '突破箱頂',
+        stopLossPrice: 120,
+      },
+    };
+
+    const html = renderToStaticMarkup(<MuscleStockCard item={usItem} isExpanded={true} />);
+    expect(html).toContain('NVDA');
+    expect(html).toContain('https://finance.yahoo.com/quote/NVDA');
+    expect(html).toContain('US$');
+    expect(html).toContain('極致壓縮');
+  });
 });
