@@ -172,6 +172,10 @@ export function useMuscleBookerSync({
         if (cached && cached.candles && cached.candles.length >= 5) {
           initialUpdates[item.symbol] = cached.candles;
         } else {
+          // 若為大型資產池 (如台股全量或美股大盤 > 150 檔)，先以種子價格生成模擬日 K 確保毫秒級瞬時上榜與零白屏
+          if (toFetch.length > 150) {
+            initialUpdates[item.symbol] = generateSyntheticCandles(item.symbol, item.basePrice || 100);
+          }
           missing.push({ symbol: item.symbol, market: item.market });
         }
       }

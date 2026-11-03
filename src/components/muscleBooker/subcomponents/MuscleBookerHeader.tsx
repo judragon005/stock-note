@@ -165,15 +165,30 @@ export const MuscleBookerHeader: React.FC<MuscleBookerHeaderProps> = ({
               fontSize: '0.85rem',
               color: 'var(--text-primary)',
               fontWeight: 600,
+              cursor: 'pointer',
             }}
           >
-            <option value="TOP30_FOCUS">🔥 核心動能觀察池 (Top 30)</option>
-            <option value="TW50_CORE">🇹🇼 台灣五十藍籌 (TW50)</option>
-            <option value="MID100_MOMENTUM">🚀 中型潛力動能 (Mid100)</option>
-            <option value="CUSTOM_WATCHLIST">🌟 自訂精選觀察名單</option>
-            <option value="HOLDINGS">💼 在庫全部標的</option>
-            <option value="HOLDINGS_ACTIVE">📦 在庫有效持股</option>
-            <option value="HOLDINGS_CLOSED">📜 歷史已平倉標的</option>
+            <optgroup label="🇹🇼 台灣市場 (Taiwan Markets)">
+              <option value="TW_ALL">🇹🇼 台灣上市櫃全量 (~2,280+ 檔)</option>
+              <option value="TW50_CORE">🇹🇼 台灣五十藍籌 (TW50)</option>
+              <option value="MID100_MOMENTUM">🚀 中型潛力動能 (Mid100)</option>
+              <option value="TW_TOP_30_FOCUS">🔥 台股核心動能焦點 (Top 30)</option>
+            </optgroup>
+
+            <optgroup label="🇺🇸 美股四大市場 (US Markets & Indices)">
+              <option value="US_SP500">🇺🇸 標普 500 (S&P 500 大型權值)</option>
+              <option value="US_NASDAQ100">🇺🇸 那斯達克 100 (NASDAQ 100 科技旗艦)</option>
+              <option value="US_DOW30">🇺🇸 道瓊工業 30 (Dow Jones 30 藍籌龍頭)</option>
+              <option value="US_SOX30">🇺🇸 費城半導體 30 (PHLX SOX 晶片霸主)</option>
+              <option value="US_MEGA_50_CORE">🇺🇸 美股大型核心 (Mega 50)</option>
+            </optgroup>
+
+            <optgroup label="💼 我的投資組合 (Portfolio)">
+              <option value="HOLDINGS_ACTIVE">📦 在庫有效持股</option>
+              <option value="CUSTOM_WATCHLIST">🌟 自訂精選觀察名單</option>
+              <option value="HOLDINGS">💼 在庫全部標的</option>
+              <option value="HOLDINGS_CLOSED">📜 歷史已平倉標的</option>
+            </optgroup>
           </select>
         </div>
       </div>

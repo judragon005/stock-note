@@ -7,6 +7,23 @@ import {
 } from '../types/indicators';
 import { MarketType } from '../types/stock';
 import { getDynamicUniverseStorage } from '../utils/storage';
+import {
+  US_DOW_30_SYMBOLS,
+  US_SOX_30_SYMBOLS,
+  US_NASDAQ_100_SYMBOLS,
+  US_SP_500_SYMBOLS,
+  TW_ALL_SYMBOLS,
+  TW_MID_100_SYMBOLS,
+} from '../data/usIndicesComponents';
+
+export {
+  US_DOW_30_SYMBOLS,
+  US_SOX_30_SYMBOLS,
+  US_NASDAQ_100_SYMBOLS,
+  US_SP_500_SYMBOLS,
+  TW_ALL_SYMBOLS,
+  TW_MID_100_SYMBOLS,
+};
 
 
 export {
@@ -474,7 +491,21 @@ export function evaluateMuscleBookerAction(params: {
   };
 }
 
-export type AssetPoolType = 'HOLDINGS' | 'HOLDINGS_ACTIVE' | 'HOLDINGS_CLOSED' | 'TOP30_FOCUS' | 'TW50_CORE' | 'CUSTOM_WATCHLIST';
+export type AssetPoolType =
+  | 'HOLDINGS'
+  | 'HOLDINGS_ACTIVE'
+  | 'HOLDINGS_CLOSED'
+  | 'TOP30_FOCUS'
+  | 'TW_ALL'
+  | 'TW50_CORE'
+  | 'MID100_MOMENTUM'
+  | 'TW_TOP_30_FOCUS'
+  | 'US_SP500'
+  | 'US_NASDAQ100'
+  | 'US_DOW30'
+  | 'US_SOX30'
+  | 'US_MEGA_50_CORE'
+  | 'CUSTOM_WATCHLIST';
 
 /**
  * 股市小白專屬動能名詞百科字典
@@ -713,10 +744,53 @@ export function getScopedUniverseSymbols(
     return fallback;
   };
 
+  // 1. 🇹🇼 台股全量 (TWSE + TPEx 全市場上市櫃與 ETF ~2,280+ 檔)
+  if (pool === 'TW_ALL') {
+    return getWithCache('TW_ALL', TW_ALL_SYMBOLS);
+  }
+
+  // 2. 🇹🇼 台灣 50 藍籌
   if (pool === 'TW50_CORE') {
     if (market === 'US') return getWithCache('US_MEGA_50_CORE', US_MEGA_50_CORE_SYMBOLS);
     return getWithCache('TW50_CORE', TW50_BLUE_CHIP_SYMBOLS);
   }
+
+  // 3. 🇹🇼 台灣中型 100 動能
+  if (pool === 'MID100_MOMENTUM') {
+    return getWithCache('TW_MID_100', TW_MID_100_SYMBOLS);
+  }
+
+  // 4. 🇹🇼 台股法人核心焦點 Top 30
+  if (pool === 'TW_TOP_30_FOCUS') {
+    return getWithCache('TW_TOP_30_FOCUS', TW_TOP_30_FOCUS_SYMBOLS);
+  }
+
+  // 5. 🇺🇸 美股標普 500 (S&P 500)
+  if (pool === 'US_SP500') {
+    return getWithCache('US_SP500', US_SP_500_SYMBOLS);
+  }
+
+  // 6. 🇺🇸 美股那斯達克 100 (NASDAQ 100)
+  if (pool === 'US_NASDAQ100') {
+    return getWithCache('US_NASDAQ100', US_NASDAQ_100_SYMBOLS);
+  }
+
+  // 7. 🇺🇸 美股道瓊工業 30 (Dow Jones 30)
+  if (pool === 'US_DOW30') {
+    return getWithCache('US_DOW30', US_DOW_30_SYMBOLS);
+  }
+
+  // 8. 🇺🇸 美股費城半導體 30 (PHLX SOX 30)
+  if (pool === 'US_SOX30') {
+    return getWithCache('US_SOX30', US_SOX_30_SYMBOLS);
+  }
+
+  // 9. 🇺🇸 美股精選大型核心 Mega 50
+  if (pool === 'US_MEGA_50_CORE') {
+    return getWithCache('US_MEGA_50_CORE', US_MEGA_50_CORE_SYMBOLS);
+  }
+
+  // 10. 核心焦點池 TOP30_FOCUS (預設回退)
   if (market === 'US') return getWithCache('US_TOP_30_FOCUS', US_TOP_30_FOCUS_SYMBOLS);
   if (market === 'TW') return getWithCache('TW_TOP_30_FOCUS', TW_TOP_30_FOCUS_SYMBOLS);
   return [
