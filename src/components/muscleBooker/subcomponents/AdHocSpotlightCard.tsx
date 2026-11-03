@@ -166,7 +166,7 @@ export const AdHocSpotlightCard: React.FC<AdHocSpotlightCardProps> = ({
             {adHocItem.isBollingerSqueeze ? (
               <span style={{ color: '#fbbf24' }}>⚡ 極致壓縮 ({adHocItem.bollingerBandwidth?.toFixed(1)}%)</span>
             ) : (
-              <span style={{ color: 'var(--text-secondary)' }}>帶寬 {adHocItem.bollingerBandwidth?.toFixed(1) || '-'}%</span>
+              <span style={{ color: 'var(--text-secondary)' }}>帶寬 {adHocItem.bollingerBandwidth?.toFixed(1) ?? '-'}%</span>
             )}
             <span style={{ marginLeft: '6px', color: adHocItem.ma20Slope === 'UP' ? 'var(--gain-color)' : adHocItem.ma20Slope === 'DOWN' ? 'var(--loss-color)' : 'var(--text-muted)' }}>
               {adHocItem.ma20Slope === 'UP' ? '📈 扣抵翻揚' : adHocItem.ma20Slope === 'DOWN' ? '📉 扣抵下彎' : '➖ 均線走平'}

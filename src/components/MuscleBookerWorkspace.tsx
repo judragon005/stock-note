@@ -267,6 +267,10 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     e.preventDefault();
     const clean = customInputSymbol.trim().toUpperCase();
     if (!clean) return;
+    if (!/^[0-9A-Z.-]{1,10}$/i.test(clean)) {
+      setCustomInputError(`股票代碼「${clean}」格式不符合規範。`);
+      return;
+    }
     if (watchlistSymbols.includes(clean)) {
       setCustomInputError(`股票代碼「${clean}」已存在於觀察清單中。`);
       return;
