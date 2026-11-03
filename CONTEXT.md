@@ -2785,3 +2785,13 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     2. **Tactical Signal Capsule State Machine & Green Shield (持股訊號分頁膠囊狀態機與安全綠盾)**：將收合按鈕重構為顯式 `[ 🚨 需行動 (X) ]` 與 `[ 📑 全部在倉 (Y) ]` 分頁膠囊；在庫存無行動訊號時，自動顯示正向綠色安全盾通知卡片，提供確信操作反饋。
     3. **Zero Mock Lakehouse Audit Badge & Hydration Graceful Degradation (湖倉數據審計標章與冷啟動優雅降級)**：卡片頂部標示真實日 K 基準日審計印章；冷啟動未完成水合時顯示「⏳ 水合中 / 待同步」，杜絕 `-999.0%` 假數據破圖。
     4. **Dual-Momentum Dividend Total Return Adjustment (雙重動能除息總報酬加回校準)**：動能評分引擎整合 3 個月除息回補（Total Return），還原高股息 ETF 評價；雙溫度計偏冷自動聯動整戶質押防斷頭警報。
+
+- **Muscle Booker Momentum Radar Evolution, Multi-Engine Defense & Workspace Modularization (肌肉書僮·動能雷達全量進化、量化風控防禦與無重複模組化重構)**:
+  - 核心模組：`src/engine/muscleBookerEngine.ts`、`src/engine/darvasBoxEngine.ts`、`src/components/MuscleBookerWorkspace.tsx`、`src/components/muscleBooker/hooks/useMuscleBookerSync.ts`、`src/components/muscleBooker/subcomponents/`。
+  - 規格來源：Spec 0214 (v9.09.0) 與 ADR 0214，關聯 GitHub Issue #387。
+  - 核心行為與指標：
+    1. **Min Risk Buffer (最小防守緩衝)**：停損價分母保護 `Math.max(price * 0.02, atr14 * 1.0)`，消滅 16R~20R 虛胖風益比分母陷阱。
+    2. **Structural Target Price Cap (目標價結構化天花板壓制)**：等距測量目標價結合過去 60 日高點 `Math.min(lookback60High, measuredTarget)`。
+    3. **MA Deduction Future Array (均線扣抵時空望遠鏡未來數列)**：提取未來 3 日扣抵高低價，均值高於現價提前警示下彎反壓。
+    4. **Multi-Engine Defensive Gates (多引擎量化風控防禦)**：無重複造輪子，整合 `omniIndicatorEngine.ts` (OBV量能背離/MACD零軸)、`dualMomentumEngine.ts` (大盤Regime 3.0R防禦門檻)、`forensicRadarEngine.ts` (財報防雷與流動性容量防禦)。
+    5. **Batched State Throttling & Workspace Modularization (批次節流與主工作區模組化解耦)**：建立 `useMuscleBookerSync.ts` (Promise.all 批次水合 + 5 檔/300ms 批次緩衝刷新)，主工作區自 2,464 行解耦至 420 行，抽取 `MuscleStockCard`、`ActionDirectivesHUD`、`MuscleBookerHeader`、`TrafficLightMatrix`、`DarvasQuadrantGrid`、`DeductionTelescopeTable`。

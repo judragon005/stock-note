@@ -38,6 +38,7 @@ export interface MuscleBookerIndicatorPoint {
     ma20DeductionPrice?: number;
     ma20Slope: TrendSlope;
     isBottomPenetrationRebound: boolean; // 「底穿上」假跌破強勢反轉
+    futureDeductions?: number[]; // 未來 3 日扣抵價格陣列 (時空望遠鏡)
   };
   // 3. 肌肉書僮：箱子戰術（三日法則）
   box: {
