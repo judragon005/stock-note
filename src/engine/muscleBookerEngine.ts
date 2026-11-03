@@ -9,189 +9,17 @@ import { MarketType } from '../types/stock';
 import { getDynamicUniverseStorage } from '../utils/storage';
 
 
-/**
- * 1. 箱子戰術與三日法則 (Darvas Box Theory)
- * - 箱頂：前波高點後連續 3 個交易日未創更高價確立
- * - 箱底：前波低點後連續 3 個交易日未創更低價確立
- */
-export function detectDarvasBox(candles: DailyCandle[]): {
-  boxUpper?: number;
-  boxLower?: number;
-  boxStatus: BoxStatus;
-  boxWidthPercent?: number;
-} {
-  if (candles.length < 4) {
-    return { boxStatus: 'INSIDE_BOX' };
-  }
-
-  // 尋找最近確認的箱頂與箱底
-  let confirmedUpper: number | undefined;
-  let confirmedLower: number | undefined;
-
-  // 從近到遠回溯尋找滿足三日法則的高低點
-  for (let i = candles.length - 4; i >= 0; i--) {
-    const candidate = candles[i];
-    const after1 = candles[i + 1];
-    const after2 = candles[i + 2];
-    const after3 = candles[i + 3];
-
-    // 三日不破高確認箱頂
-    if (!confirmedUpper) {
-      if (
-        candidate.high > after1.high &&
-        candidate.high > after2.high &&
-        candidate.high > after3.high
-      ) {
-        confirmedUpper = candidate.high;
-      }
-    }
-
-    // 三日不破低確認箱底
-    if (!confirmedLower) {
-      if (
-        candidate.low < after1.low &&
-        candidate.low < after2.low &&
-        candidate.low < after3.low
-      ) {
-        confirmedLower = candidate.low;
-      }
-    }
-
-    if (confirmedUpper !== undefined && confirmedLower !== undefined) {
-      break;
-    }
-  }
-
-  // 預設 fallback 為前波 (排除當日 K 線) 近 20 日高低
-  if (confirmedUpper === undefined || confirmedLower === undefined) {
-    const pastCandles = candles.slice(0, -1);
-    const lookback = pastCandles.length > 0 ? pastCandles.slice(-20) : candles;
-    confirmedUpper = Math.max(...lookback.map((c) => c.high));
-    confirmedLower = Math.min(...lookback.map((c) => c.low));
-  }
-
-  const currentClose = candles[candles.length - 1].close;
-  let boxStatus: BoxStatus = 'INSIDE_BOX';
-
-  if (currentClose > confirmedUpper) {
-    boxStatus = 'BREAKOUT_UP';
-  } else if (currentClose < confirmedLower) {
-    boxStatus = 'BREAKOUT_DOWN';
-  }
-
-  const boxWidthPercent =
-    confirmedLower > 0
-      ? Math.round(((confirmedUpper - confirmedLower) / confirmedLower) * 1000) / 10
-      : undefined;
-
-  return {
-    boxUpper: confirmedUpper,
-    boxLower: confirmedLower,
-    boxStatus,
-    boxWidthPercent,
-  };
-}
-
-/**
- * 2. 均線扣抵望遠鏡與「底穿上」假跌破型態
- */
-export function calculateMaDeduction(candles: DailyCandle[]): {
-  ma5DeductionPrice?: number;
-  ma20DeductionPrice?: number;
-  ma20Slope: TrendSlope;
-  isBottomPenetrationRebound: boolean;
-} {
-  const len = candles.length;
-  if (len === 0) {
-    return { ma20Slope: 'FLAT', isBottomPenetrationRebound: false };
-  }
-
-  const current = candles[len - 1];
-  const ma5DeductionPrice = len >= 6 ? candles[len - 6].close : undefined;
-  const ma20DeductionPrice = len >= 21 ? candles[len - 21].close : undefined;
-
-  // 計算當前 MA20 數值
-  let ma20: number | undefined;
-  if (len >= 20) {
-    const slice20 = candles.slice(-20);
-    ma20 = slice20.reduce((acc, c) => acc + c.close, 0) / 20;
-  }
-
-  let ma20Slope: TrendSlope = 'FLAT';
-  if (ma20DeductionPrice !== undefined) {
-    if (current.close > ma20DeductionPrice * 1.002) {
-      ma20Slope = 'UP';
-    } else if (current.close < ma20DeductionPrice * 0.998) {
-      ma20Slope = 'DOWN';
-    }
-  }
-
-  // 偵測「底穿上」假跌破型態：
-  // 盤中跌破支撐 (MA20 或近期支撐)，但收盤站回支撐之上，且下影線佔振幅 >= 50%
-  let isBottomPenetrationRebound = false;
-  if (ma20 !== undefined && current.low < ma20 && current.close >= ma20) {
-    const totalRange = current.high - current.low;
-    const lowerShadow = current.close - current.low;
-    if (totalRange > 0 && lowerShadow / totalRange >= 0.5) {
-      isBottomPenetrationRebound = true;
-    }
-  }
-
-  return {
-    ma5DeductionPrice,
-    ma20DeductionPrice,
-    ma20Slope,
-    isBottomPenetrationRebound,
-  };
-}
-
-/**
- * 3. 布林通道極致壓縮 (Bollinger Bands & Squeeze)
- */
-export function calculateBollingerSqueeze(
-  candles: DailyCandle[],
-  period: number = 20,
-  multiplier: number = 2
-): {
-  upper: number;
-  mid: number;
-  lower: number;
-  bandwidth: number;
-  isSqueeze: boolean;
-} {
-  if (candles.length < period) {
-    const fallbackPrice = candles.length > 0 ? candles[candles.length - 1].close : 0;
-    return {
-      upper: fallbackPrice,
-      mid: fallbackPrice,
-      lower: fallbackPrice,
-      bandwidth: 0,
-      isSqueeze: false,
-    };
-  }
-
-  const slice = candles.slice(-period);
-  const closes = slice.map((c) => c.close);
-  const mid = closes.reduce((acc, v) => acc + v, 0) / period;
-
-  const variance = closes.reduce((acc, v) => acc + Math.pow(v - mid, 2), 0) / period;
-  const stdDev = Math.sqrt(variance);
-
-  const upper = mid + multiplier * stdDev;
-  const lower = mid - multiplier * stdDev;
-  const bandwidth = mid > 0 ? Math.round(((upper - lower) / mid) * 10000) / 100 : 0; // %
-
-  // 帶寬 <= 8% 判定為極致壓縮 (Squeeze)
-  const isSqueeze = bandwidth <= 8.0;
-
-  return {
-    upper: Math.round(upper * 100) / 100,
-    mid: Math.round(mid * 100) / 100,
-    lower: Math.round(lower * 100) / 100,
-    bandwidth,
-    isSqueeze,
-  };
-}
+export {
+  detectDarvasBox,
+  calculateMaDeduction,
+  calculateBollingerSqueeze,
+} from './darvasBoxEngine';
+import {
+  detectDarvasBox,
+  calculateMaDeduction,
+  calculateBollingerSqueeze,
+} from './darvasBoxEngine';
+import { calculateSMA } from './technicalIndicatorEngine';
 
 /**
  * 4. ATR 動態移動防守價 (Trailing Defense)
@@ -300,22 +128,11 @@ export function calculateMuscleBookerIndicators(
     const curr = candles[i];
 
     // 均線
-    const ma5 =
-      subCandles.length >= 5
-        ? subCandles.slice(-5).reduce((acc, c) => acc + c.close, 0) / 5
-        : undefined;
-    const ma10 =
-      subCandles.length >= 10
-        ? subCandles.slice(-10).reduce((acc, c) => acc + c.close, 0) / 10
-        : undefined;
-    const ma20 =
-      subCandles.length >= 20
-        ? subCandles.slice(-20).reduce((acc, c) => acc + c.close, 0) / 20
-        : undefined;
-    const ma60 =
-      subCandles.length >= 60
-        ? subCandles.slice(-60).reduce((acc, c) => acc + c.close, 0) / 60
-        : undefined;
+    const closePrices = subCandles.map((c) => c.close);
+      const ma5 = calculateSMA(closePrices, 5);
+      const ma10 = calculateSMA(closePrices, 10);
+      const ma20 = calculateSMA(closePrices, 20);
+      const ma60 = calculateSMA(closePrices, 60);
 
     // 核心肌肉書僮各維度
     const box = detectDarvasBox(subCandles);
@@ -381,15 +198,48 @@ export function evaluateMuscleBookerAction(params: {
     ma20Slope: TrendSlope;
     isBottomPenetrationRebound?: boolean;
     ma20DeductionPrice?: number;
+    futureDeductions?: number[];
   };
   bbands: {
     isSqueeze: boolean;
     bandwidth?: number;
   };
+  atr?: {
+    atr14?: number;
+    trailingDefensePrice?: number;
+  };
+  lookback60High?: number;
+  isHolding?: boolean;
+  marketRegime?: 'BULL' | 'BEAR' | 'NEUTRAL';
+  obvTrend?: 'RISING' | 'FALLING' | 'FLAT';
+  macd?: {
+    dif12_26?: number;
+    macdHist?: number;
+  };
+  isForensicDangerous?: boolean;
+  isLowLiquidity?: boolean;
 }): MuscleBookerActionDecision {
-  const { currentPrice, box, deduction, bbands } = params;
+  const { currentPrice, box, deduction, bbands, atr, lookback60High, isHolding, marketRegime, obvTrend, macd, isForensicDangerous, isLowLiquidity } = params;
 
-  // 1. 優先判斷賣出/停損訊號 (SELL)
+  // 0. 財報鑑識負向排除 (Hard Ban)
+  if (isForensicDangerous) {
+    return {
+      action: 'AVOID',
+      actionBadge: '⛔ 鑑識雷達示警 (財報造假風險)',
+      actionReason: '財報鑑識雷達偵測到嚴重造假/掏空異常，屬於絕對禁買標的，保全本金第一',
+    };
+  }
+
+  // 0.1 流動性容量初篩
+  if (isLowLiquidity) {
+    return {
+      action: 'HOLD',
+      actionBadge: '🟡 流動性不足 (容量受限)',
+      actionReason: '成交量或成交金額低於安全容量門檻，避免衝擊成本與滑價風險，不予主動推薦',
+    };
+  }
+
+  // 1. 優先判斷賣出/停損訊號 (SELL) - 三級防守矩陣
   if (box.boxStatus === 'BREAKOUT_DOWN') {
     return {
       action: 'SELL',
@@ -399,16 +249,65 @@ export function evaluateMuscleBookerAction(params: {
     };
   }
 
+  // 在倉持股二級防守：突破後跌回箱頂以下 (假突破保本離場)
+  if (isHolding && box.boxUpper !== undefined && currentPrice < box.boxUpper * 0.995 && currentPrice >= (box.boxLower ?? 0)) {
+    return {
+      action: 'SELL',
+      actionBadge: '🔴 建議賣出 (假突破保本)',
+      actionReason: '突破箱頂後無力續攻跌回箱內，假突破確立，應保本離場',
+      stopLossPrice: box.boxUpper,
+    };
+  }
+
+  // 在倉持股三級防守：跌破 ATR 移動防守線 (波段移動停利)
+  if (isHolding && atr?.trailingDefensePrice !== undefined && atr.trailingDefensePrice > 0 && currentPrice < atr.trailingDefensePrice) {
+    return {
+      action: 'SELL',
+      actionBadge: '🔴 建議賣出 (ATR移動停利)',
+      actionReason: '股價自波段高點拉回跌破 2.5 倍 ATR 移動防守線，獲利了結保全戰果',
+      stopLossPrice: atr.trailingDefensePrice,
+    };
+  }
+
   // 2. 判斷買進訊號 (BUY)
   // 情境 A: 突破箱頂 + 均線向上
   if (box.boxStatus === 'BREAKOUT_UP' && deduction.ma20Slope === 'UP') {
+    // MACD 0 軸多頭主控檢驗
+    if (macd && macd.dif12_26 !== undefined && macd.macdHist !== undefined) {
+      if (macd.dif12_26 < 0 && macd.macdHist < 0) {
+        return {
+          action: 'AVOID',
+          actionBadge: '⛔ 嚴禁碰觸 (MACD弱勢)',
+          actionReason: 'MACD 處於 0 軸以下且柱狀體為負，空方控盤結構，嚴禁追高',
+        };
+      }
+    }
+
     const stopLoss = box.boxUpper ?? currentPrice * 0.95;
     const boxWidth = box.boxUpper && box.boxLower ? box.boxUpper - box.boxLower : currentPrice - stopLoss;
-    const target = currentPrice + Math.max(boxWidth, currentPrice * 0.08);
-    const risk = Math.max(0.1, currentPrice - stopLoss);
+    const measuredTarget = currentPrice + Math.max(boxWidth, currentPrice * 0.08);
+    const target = (lookback60High !== undefined && lookback60High > currentPrice)
+      ? Math.min(lookback60High, measuredTarget)
+      : measuredTarget;
+    const structuralRisk = Math.max(0.1, currentPrice - stopLoss);
+    const minRiskBuffer = Math.max(currentPrice * 0.02, (atr?.atr14 ?? 0) * 1.0);
+    const effectiveRisk = Math.max(structuralRisk, minRiskBuffer);
     const reward = Math.max(0.1, target - currentPrice);
-    const rrValue = Math.round((reward / risk) * 10) / 10;
+    const rrValue = Math.round((reward / effectiveRisk) * 10) / 10;
     const rrRatio = rrValue.toFixed(1);
+
+    // OBV 能量潮資金流檢驗
+    if (obvTrend === 'FALLING') {
+      return {
+        action: 'HOLD',
+        actionBadge: '🟡 觀望 (OBV背離)',
+        actionReason: '帶量站上箱頂但 OBV 能量潮呈現背離流出，真金白銀動能不足，切忌追高',
+        stopLossPrice: Math.round(stopLoss * 100) / 100,
+        targetPrice: Math.round(target * 100) / 100,
+        riskRewardRatio: `${rrRatio}R`,
+        riskRewardRatioValue: rrValue,
+      };
+    }
 
     // 帶寬審查硬門檻：帶寬必須極致收斂 (<= 8.0%)，方為壓縮後方向確立之第一買點
     if (bbands.bandwidth !== undefined && bbands.bandwidth > 8.0) {
@@ -423,12 +322,17 @@ export function evaluateMuscleBookerAction(params: {
       };
     }
 
-    // 風益比硬門檻：不足 2.0R 絕不追高進場
-    if (rrValue < 2.0) {
+    const minRequiredRR = marketRegime === 'BEAR' ? 3.0 : 2.0;
+
+    // 風益比硬門檻：不足門檻絕不追高進場 (大盤偏空時提高至 3.0R)
+    if (rrValue < minRequiredRR) {
+      const reason = marketRegime === 'BEAR'
+        ? `帶量站上箱頂但大盤偏空，動能門檻提高至 3.0R (目前僅 ${rrRatio}R < 3.0R)，防禦優先，切忌追高`
+        : `帶量站上箱頂但向上空間狹窄 (風益比僅 ${rrRatio}R < 2.0R)，期望值過低，切忌追高`;
       return {
         action: 'HOLD',
-        actionBadge: '🟡 觀望 (風益比不足)',
-        actionReason: `帶量站上箱頂但向上空間狹窄 (風益比僅 ${rrRatio}R < 2.0R)，期望值過低，切忌追高`,
+        actionBadge: marketRegime === 'BEAR' ? '🟡 觀望 (大盤偏空防線)' : '🟡 觀望 (風益比不足)',
+        actionReason: reason,
         stopLossPrice: Math.round(stopLoss * 100) / 100,
         targetPrice: Math.round(target * 100) / 100,
         riskRewardRatio: `${rrRatio}R`,
@@ -450,10 +354,15 @@ export function evaluateMuscleBookerAction(params: {
   // 情境 B: 破底翻反轉 (收復下影線且均線不下彎)
   if (deduction.isBottomPenetrationRebound && deduction.ma20Slope !== 'DOWN') {
     const stopLoss = box.boxLower ? box.boxLower * 0.98 : currentPrice * 0.95;
-    const target = box.boxUpper ?? currentPrice * 1.1;
-    const risk = Math.max(0.1, currentPrice - stopLoss);
+    const rawTarget = box.boxUpper ?? currentPrice * 1.1;
+    const target = (lookback60High !== undefined && lookback60High > currentPrice)
+      ? Math.min(lookback60High, rawTarget)
+      : rawTarget;
+    const structuralRisk = Math.max(0.1, currentPrice - stopLoss);
+    const minRiskBuffer = Math.max(currentPrice * 0.02, (atr?.atr14 ?? 0) * 1.0);
+    const effectiveRisk = Math.max(structuralRisk, minRiskBuffer);
     const reward = Math.max(0.1, target - currentPrice);
-    const rrValue = Math.round((reward / risk) * 10) / 10;
+    const rrValue = Math.round((reward / effectiveRisk) * 10) / 10;
     const rrRatio = rrValue.toFixed(1);
 
     // 風益比硬門檻：不足 2.0R 絕不急躁進場
@@ -538,6 +447,7 @@ export interface ScannedStockItem {
   bollingerBandwidth?: number;
   isDataPending?: boolean;
   actionDecision: MuscleBookerActionDecision;
+  candles?: DailyCandle[];
 }
 
 // 台股法人焦點 Top 30 (30 檔熱門短線動能與核心飆股)
@@ -842,6 +752,7 @@ export function scanMuscleBookerItem(
     isBollingerSqueeze: bbands.isSqueeze,
     bollingerBandwidth: bbands.bandwidth,
     actionDecision,
+    candles,
   };
 
 }

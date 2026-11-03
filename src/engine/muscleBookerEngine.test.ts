@@ -71,6 +71,24 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
       expect(deduction.ma20Slope).toBe('UP'); // 120 > 100，MA20 走揚
     });
 
+    it('未來 3 日即將扣抵歷史高價天花板時，即使現價大於單日扣抵，亦應識別反壓下彎 (時空望遠鏡)', () => {
+      const candles = generateMockCandles(25, 100);
+      // 現價 105
+      candles[24].close = 105;
+      // 20 日前單日 100 (看似翻揚)
+      candles[4].close = 100;
+      // 但未來 3 天 (第 5, 6, 7 日) 即將扣抵高價 120, 125, 122
+      candles[5].close = 120;
+      candles[6].close = 125;
+      candles[7].close = 122;
+
+      const deduction = calculateMaDeduction(candles);
+      // 現價 105 小於未來 3 天即將扣抵的高價均值 (122.3) 與高點 (125)，應判定為 DOWN 下彎反壓
+      expect(deduction.ma20Slope).toBe('DOWN');
+      expect((deduction as any).futureDeductions).toBeDefined();
+      expect((deduction as any).futureDeductions?.length).toBe(3);
+    });
+
     it('盤中破 MA20 支撐但收盤強勢站回且留下影線，應觸發底穿上假跌破偵測', () => {
       const candles = generateMockCandles(25, 100);
       // MA20 約在 100，今日開盤 102，盤中下殺破線至 95，收盤強勢收在 103 (高點 104)
@@ -193,6 +211,257 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
       expect(decision.riskRewardRatio).toBe('2.0R');
       expect(decision.riskRewardRatio).not.toContain('1 :');
       expect(decision.riskRewardRatioValue).toBeGreaterThanOrEqual(2.0);
+    });
+
+    it('微小突破 (如僅過箱頂 0.1 元) 應納入 minRiskBuffer 保護，杜絕 20R 以上虛胖分母', () => {
+      // 現價 100.1，突破箱頂 100，若停損在 100，結構風險僅 0.1 元
+      // 目標價以箱寬 10 元測幅為 110.1 (獲利 10 元)
+      // 若無緩衝，10 / 0.1 = 100.0R (誇張虛胖)
+      // 引入 minRiskBuffer = Math.max(100.1 * 0.02, atr = 2.5) = 2.5 元
+      // 風益比應平穩收斂在 10 / 2.5 = 4.0R
+      const decision = evaluateMuscleBookerAction({
+        currentPrice: 100.1,
+        box: {
+          boxStatus: 'BREAKOUT_UP',
+          boxUpper: 100,
+          boxLower: 90,
+          boxWidthPercent: 10,
+        },
+        deduction: {
+          ma20Slope: 'UP',
+          isBottomPenetrationRebound: false,
+        },
+        bbands: {
+          isSqueeze: true,
+          bandwidth: 6.5,
+        },
+        atr: {
+          atr14: 2.5,
+          trailingDefensePrice: 97.5,
+        },
+      } as any);
+
+      expect(decision.action).toBe('BUY');
+      expect(decision.riskRewardRatioValue).toBeLessThanOrEqual(5.0);
+      expect(decision.riskRewardRatioValue).toBeGreaterThanOrEqual(2.0);
+    });
+
+    it('破底翻但受制於近 60 日歷史高點結構反壓時，目標價應受結構壓制', () => {
+      // 現價 95，破底翻，箱底 90，箱頂 110
+      // 結構風險 = 95 - 88.2 = 6.8
+      // 若純測幅目標為箱頂 110 (獲利 15 元)，但近 60 日高點僅 101 (獲利 6 元)
+      // 6 / 6.8 = 0.88R < 2.0R ➔ 應安全降級為 HOLD (空間不足)
+      const decision = evaluateMuscleBookerAction({
+        currentPrice: 95,
+        box: {
+          boxStatus: 'INSIDE_BOX',
+          boxUpper: 110,
+          boxLower: 90,
+          boxWidthPercent: 20,
+        },
+        deduction: {
+          ma20Slope: 'FLAT',
+          isBottomPenetrationRebound: true,
+        },
+        bbands: {
+          isSqueeze: false,
+          bandwidth: 12.0,
+        },
+        atr: {
+          atr14: 3.0,
+          trailingDefensePrice: 92.0,
+        },
+        lookback60High: 101, // 歷史天花板壓制
+      } as any);
+
+      expect(decision.action).toBe('HOLD');
+      expect(decision.actionBadge).toContain('空間不足');
+    });
+
+    it('突破箱頂但 OBV 能量潮資金背離流出 (obvTrend === FALLING) 時，應降級為 HOLD (OBV 背離)', () => {
+      const decision = evaluateMuscleBookerAction({
+        currentPrice: 105,
+        box: {
+          boxStatus: 'BREAKOUT_UP',
+          boxUpper: 100,
+          boxLower: 90,
+          boxWidthPercent: 10,
+        },
+        deduction: {
+          ma20Slope: 'UP',
+          isBottomPenetrationRebound: false,
+        },
+        bbands: {
+          isSqueeze: true,
+          bandwidth: 6.5,
+        },
+        atr: {
+          atr14: 2.5,
+          trailingDefensePrice: 97.5,
+        },
+        obvTrend: 'FALLING', // 能量潮背離
+      } as any);
+
+      expect(decision.action).toBe('HOLD');
+      expect(decision.actionReason).toContain('OBV');
+    });
+
+    it('突破箱頂但 MACD 處於 0 軸以下弱勢空方主控時，應標記為 AVOID 嚴禁碰觸', () => {
+      const decision = evaluateMuscleBookerAction({
+        currentPrice: 105,
+        box: {
+          boxStatus: 'BREAKOUT_UP',
+          boxUpper: 100,
+          boxLower: 90,
+          boxWidthPercent: 10,
+        },
+        deduction: {
+          ma20Slope: 'UP',
+          isBottomPenetrationRebound: false,
+        },
+        bbands: {
+          isSqueeze: true,
+          bandwidth: 6.5,
+        },
+        macd: {
+          dif12_26: -1.5,
+          macdHist: -0.8, // 0 軸以下弱勢
+        },
+      } as any);
+
+      expect(decision.action).toBe('AVOID');
+      expect(decision.actionReason).toContain('MACD');
+    });
+
+    it('在倉持股若假突破跌回箱頂以下，應發布 SELL 假突破保本離場訊號', () => {
+      const decision = evaluateMuscleBookerAction({
+        currentPrice: 99.2, // 跌破原箱頂 100
+        box: {
+          boxStatus: 'INSIDE_BOX', // 已跌回箱內
+          boxUpper: 100,
+          boxLower: 90,
+          boxWidthPercent: 10,
+        },
+        deduction: {
+          ma20Slope: 'UP',
+          isBottomPenetrationRebound: false,
+        },
+        bbands: {
+          isSqueeze: false,
+          bandwidth: 12.0,
+        },
+        isHolding: true, // 在倉持股
+      } as any);
+
+      expect(decision.action).toBe('SELL');
+      expect(decision.actionBadge).toContain('假突破');
+      expect(decision.stopLossPrice).toBe(100);
+    });
+
+    it('在倉持股若跌破 ATR 移動防守線，應發布 SELL 移動停利獲利了結訊號', () => {
+      const decision = evaluateMuscleBookerAction({
+        currentPrice: 108, // 高於箱頂 100 但自高點 120 拉回
+        box: {
+          boxStatus: 'BREAKOUT_UP',
+          boxUpper: 100,
+          boxLower: 90,
+          boxWidthPercent: 10,
+        },
+        deduction: {
+          ma20Slope: 'UP',
+          isBottomPenetrationRebound: false,
+        },
+        bbands: {
+          isSqueeze: false,
+          bandwidth: 14.0,
+        },
+        atr: {
+          atr14: 3.0,
+          trailingDefensePrice: 110.0, // 現價 108 已跌破移動防守線 110
+        },
+        isHolding: true,
+      } as any);
+
+      expect(decision.action).toBe('SELL');
+      expect(decision.actionBadge).toContain('移動停利');
+      expect(decision.stopLossPrice).toBe(110);
+    });
+
+    it('大盤處於空頭體系 (marketRegime === BEAR) 時，風益比門檻應自適應提高至 3.0R', () => {
+      // 2.5R 在多頭市場可買進，但在空頭市場未達 3.0R 應安全降級為 HOLD
+      const decision = evaluateMuscleBookerAction({
+        currentPrice: 104,
+        box: {
+          boxStatus: 'BREAKOUT_UP',
+          boxUpper: 100,
+          boxLower: 90,
+          boxWidthPercent: 10,
+        },
+        deduction: {
+          ma20Slope: 'UP',
+          isBottomPenetrationRebound: false,
+        },
+        bbands: {
+          isSqueeze: true,
+          bandwidth: 6.5,
+        },
+        atr: {
+          atr14: 2.5,
+          trailingDefensePrice: 97.5,
+        },
+        marketRegime: 'BEAR', // 大盤空頭
+      } as any);
+
+      expect(decision.action).toBe('HOLD');
+      expect(decision.actionReason).toContain('大盤偏空');
+    });
+
+    it('標的被財報鑑識雷達標記為嚴重異常 (isForensicDangerous) 時，應絕對禁買 AVOID', () => {
+      const decision = evaluateMuscleBookerAction({
+        currentPrice: 105,
+        box: {
+          boxStatus: 'BREAKOUT_UP',
+          boxUpper: 100,
+          boxLower: 90,
+          boxWidthPercent: 10,
+        },
+        deduction: {
+          ma20Slope: 'UP',
+          isBottomPenetrationRebound: false,
+        },
+        bbands: {
+          isSqueeze: true,
+          bandwidth: 6.5,
+        },
+        isForensicDangerous: true, // 地雷股示警
+      } as any);
+
+      expect(decision.action).toBe('AVOID');
+      expect(decision.actionBadge).toContain('鑑識雷達示警');
+    });
+
+    it('標的流動性不足 (isLowLiquidity) 時，應給予安全警示 HOLD 不予主動推薦', () => {
+      const decision = evaluateMuscleBookerAction({
+        currentPrice: 105,
+        box: {
+          boxStatus: 'BREAKOUT_UP',
+          boxUpper: 100,
+          boxLower: 90,
+          boxWidthPercent: 10,
+        },
+        deduction: {
+          ma20Slope: 'UP',
+          isBottomPenetrationRebound: false,
+        },
+        bbands: {
+          isSqueeze: true,
+          bandwidth: 6.5,
+        },
+        isLowLiquidity: true, // 流動性不足
+      } as any);
+
+      expect(decision.action).toBe('HOLD');
+      expect(decision.actionBadge).toContain('流動性不足');
     });
 
     it('當帶寬未極致收斂 (bandwidth > 8.0%) 時，即使突破箱頂，亦必須安全降級為 HOLD (觀望待變)，絕不可判定為 BUY', () => {

@@ -4,7 +4,7 @@ import {
   detectDarvasBox,
   calculateMaDeduction,
   calculateBollingerSqueeze,
-} from './muscleBookerEngine';
+} from './darvasBoxEngine';
 
 /**
  * 計算指定週期的簡單移動平均線 (SMA)
