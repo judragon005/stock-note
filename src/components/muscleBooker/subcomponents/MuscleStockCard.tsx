@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ScannedStockItem, BEGINNER_TOOLTIPS, calculateDefenseBufferMetrics, calculateMomentumQuickMetrics } from '../../../engine/muscleBookerEngine';
 import { HoldingPosition, MarketType } from '../../../types/stock';
+import { StockInteractionHandlers } from '../types';
 import { Tooltip } from '../../common/Tooltip';
 import { formatStockPrice } from '../../../utils/formatters';
 import { copyTextToClipboard } from '../../../utils/clipboard';
@@ -36,6 +37,7 @@ export interface MuscleStockCardProps {
   watchlistSymbols?: string[];
   onToggleWatchlist?: (symbol: string) => void;
   onQuickTrade?: (symbol: string, action: 'BUY' | 'SELL', price?: number) => void;
+  handlers?: StockInteractionHandlers;
 }
 
 const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
@@ -50,8 +52,20 @@ const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
   watchlistSymbols,
   onToggleWatchlist,
   onQuickTrade,
+  handlers,
 }) => {
-  const effectiveWatched = isWatched ?? (watchlistSymbols ? watchlistSymbols.includes(item.symbol.toUpperCase()) : false);
+  const actualExpanded = handlers?.expandedSymbol !== undefined
+    ? handlers.expandedSymbol === item.symbol
+    : isExpanded;
+  const actualToggleExpand = handlers
+    ? () => handlers.onToggleExpand?.(item.symbol)
+    : onToggleExpand;
+  const actualOpenOmniInspector = handlers?.onOpenOmniInspector ?? onOpenOmniInspector;
+  const effectiveWatched = handlers?.watchlistSymbols
+    ? handlers.watchlistSymbols.has(item.symbol.toUpperCase())
+    : (isWatched ?? (watchlistSymbols ? watchlistSymbols.includes(item.symbol.toUpperCase()) : false));
+  const actualToggleWatchlist = handlers?.onToggleWatchlist ?? onToggleWatchlist;
+  const actualQuickTrade = handlers?.onQuickTrade ?? onQuickTrade;
   const [copied, setCopied] = useState(false);
 
   const handleCopySymbol = async (e: React.MouseEvent) => {
@@ -65,8 +79,8 @@ const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
 
   const handleOpenInspector = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onOpenOmniInspector) {
-      onOpenOmniInspector(item.symbol, item.market);
+    if (actualOpenOmniInspector) {
+      actualOpenOmniInspector(item.symbol, item.market);
     }
   };
 
@@ -145,7 +159,7 @@ const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
           : '0 4px 12px rgba(0, 0, 0, 0.2)',
         overflow: 'hidden',
       }}
-      onClick={onToggleExpand}
+      onClick={actualToggleExpand}
     >
       {/* 1. 頂部標的列 (Ticker & Meta Row) */}
       <div
@@ -274,7 +288,7 @@ const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
             <BarChart2 size={13} />
           </a>
 
-          {onOpenOmniInspector && (
+          {actualOpenOmniInspector && (
             <button
               type="button"
               onClick={handleOpenInspector}
@@ -297,12 +311,12 @@ const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
           )}
 
           {/* ⭐ 自選星號微按鈕 (Ticket 08) */}
-          {onToggleWatchlist && (
+          {actualToggleWatchlist && (
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                onToggleWatchlist(item.symbol);
+                actualToggleWatchlist(item.symbol);
               }}
               style={{
                 background: effectiveWatched ? 'rgba(250, 204, 21, 0.15)' : 'rgba(255, 255, 255, 0.05)',
@@ -323,13 +337,13 @@ const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
           )}
 
           {/* ⚡ 一鍵下單微按鈕 (Ticket 08) */}
-          {onQuickTrade && (
+          {actualQuickTrade && (
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 const tradeAction = (item.actionDecision.action === 'SELL' || isBroken) ? 'SELL' : 'BUY';
-                onQuickTrade(item.symbol, tradeAction, item.currentPrice);
+                actualQuickTrade(item.symbol, tradeAction, item.currentPrice);
               }}
               style={{
                 background: (item.actionDecision.action === 'SELL' || isBroken)
@@ -521,7 +535,7 @@ const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
       </div>
 
       {/* 4. 抽屜式詳細技術指標 (Collapsible Details Drawer) */}
-      {isExpanded && (
+      {actualExpanded && (
         <div
           style={{
             marginTop: '10px',
@@ -580,7 +594,7 @@ const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
           color: 'rgba(148, 163, 184, 0.4)',
         }}
       >
-        {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        {actualExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
       </div>
     </div>
   );

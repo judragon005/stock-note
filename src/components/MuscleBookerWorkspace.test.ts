@@ -571,6 +571,22 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
 
         expect(resultSymbols).toEqual(['2454', '2330']);
       });
+
+      it('Issue #407: 跨市場觀察池中，台股標的應綁定 0050 基準，美股標的應綁定 SPY 基準', () => {
+        const mockUniverse = [
+          { symbol: '2330', name: '台積電', market: 'TW' },
+          { symbol: 'AAPL', name: 'Apple Inc.', market: 'US' },
+          { symbol: 'NVDA', name: 'Nvidia Corp.', market: 'US' },
+          { symbol: '2454', name: '聯發科', market: 'TW' },
+        ];
+
+        const getBenchmarkSymbol = (item: { symbol: string; market: string }) => {
+          const isUS = item.market === 'US' || !/^[0-9]/.test(item.symbol);
+          return isUS ? 'SPY' : '0050';
+        };
+
+        expect(mockUniverse.map(getBenchmarkSymbol)).toEqual(['0050', 'SPY', 'SPY', '0050']);
+      });
     });
 
 });

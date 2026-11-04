@@ -197,17 +197,16 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
       selectedPool,
     });
 
-  // Ticket 07 & Issue #399: 大盤市場體系判定 (Market Regime Gate - 複用既有 omniIndicatorEngine 狀態機)
-  const marketRegime = useMemo<'BULL' | 'BEAR' | 'NEUTRAL'>(() => {
-    const benchmarkSymbol = currentMarket === 'US' ? 'SPY' : '0050';
-    const candles = cachedCandlesMap[benchmarkSymbol] || (currentMarket === 'TW' ? cachedCandlesMap['2330'] : undefined);
+  // Ticket 07 & Issue #399 & Issue #407: 雙市場大盤體系判定 (台股 0050 vs 美股 SPY 獨立判定，消除自選混合池 Regime 錯配)
+  const computeRegime = (benchmarkSymbol: string, mkt: 'TW' | 'US'): 'BULL' | 'BEAR' | 'NEUTRAL' => {
+    const candles = cachedCandlesMap[benchmarkSymbol] || (mkt === 'TW' ? cachedCandlesMap['2330'] : undefined);
     if (!candles || candles.length < 20) return 'NEUTRAL';
 
     try {
       const omni = computeOmniIndicators({
         symbol: benchmarkSymbol,
         name: benchmarkSymbol,
-        market: currentMarket === 'US' ? 'US' : 'TW',
+        market: mkt,
         candles,
         currentPrice: candles[candles.length - 1].close,
       });
@@ -231,7 +230,10 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
       }
     }
     return 'NEUTRAL';
-  }, [cachedCandlesMap, currentMarket]);
+  };
+
+  const marketRegimeTW = useMemo(() => computeRegime('0050', 'TW'), [cachedCandlesMap]);
+  const marketRegimeUS = useMemo(() => computeRegime('SPY', 'US'), [cachedCandlesMap]);
 
   // 手動觸發成分股校準與存活探針檢驗
   const handleManualCheckUniverse = async () => {
@@ -282,6 +284,10 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
       const latestCandle = res.candles[res.candles.length - 1];
       const basePrice = latestCandle?.close || 100;
 
+      const isUS = inferredMarket === 'US' || !/^[0-9]/.test(raw);
+      const targetRegime = isUS ? marketRegimeUS : marketRegimeTW;
+      const targetBenchmarkCandles = isUS ? cachedCandlesMap['SPY'] : cachedCandlesMap['0050'];
+
       const scanned = scanMuscleBookerItem(
         raw,
         officialName,
@@ -289,7 +295,8 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         basePrice,
         res.candles,
         {
-          marketRegime,
+          marketRegime: targetRegime,
+          benchmarkCandles: targetBenchmarkCandles,
         }
       );
 
@@ -363,6 +370,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         candlesRef: DailyCandle[] | undefined;
         isHolding: boolean;
         marketRegime?: 'BULL' | 'BEAR' | 'NEUTRAL';
+        benchmarkCandlesRef?: DailyCandle[];
         isForensicDangerous?: boolean;
         scanned: ScannedStockItem;
       }
@@ -379,6 +387,10 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         return adHocItem;
       }
 
+      const isUS = item.market === 'US' || !/^[0-9]/.test(item.symbol);
+      const targetRegime = isUS ? marketRegimeUS : marketRegimeTW;
+      const targetBenchmarkCandles = isUS ? cachedCandlesMap['SPY'] : cachedCandlesMap['0050'];
+
       const holding = activeHoldingsMap.get(item.symbol.toUpperCase());
       const isHolding = !!holding;
       const isForensicDangerous = !!(
@@ -392,7 +404,8 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         cachedEntry &&
         cachedEntry.candlesRef === candles &&
         cachedEntry.isHolding === isHolding &&
-        cachedEntry.marketRegime === marketRegime &&
+        cachedEntry.marketRegime === targetRegime &&
+        cachedEntry.benchmarkCandlesRef === targetBenchmarkCandles &&
         cachedEntry.isForensicDangerous === isForensicDangerous
       ) {
         return cachedEntry.scanned;
@@ -409,7 +422,8 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         candles,
         {
           isHolding,
-          marketRegime,
+          marketRegime: targetRegime,
+          benchmarkCandles: targetBenchmarkCandles,
           isForensicDangerous,
         }
       );
@@ -417,14 +431,15 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
       cache.set(item.symbol, {
         candlesRef: candles,
         isHolding,
-        marketRegime,
+        marketRegime: targetRegime,
+        benchmarkCandlesRef: targetBenchmarkCandles,
         isForensicDangerous,
         scanned,
       });
 
       return scanned;
     });
-  }, [targetUniverse, cachedCandlesMap, adHocItem, activeHoldingsMap, marketRegime]);
+  }, [targetUniverse, cachedCandlesMap, adHocItem, activeHoldingsMap, marketRegimeTW, marketRegimeUS]);
 
   // 頂部常駐作戰指令：全域風益比 >= 2.0 最佳買進標的 (不受局部快篩影響)
   const top3BuyItems = useMemo(() => {
