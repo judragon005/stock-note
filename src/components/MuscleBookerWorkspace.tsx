@@ -7,9 +7,10 @@ import {
   getScopedUniverseSymbols,
   scanMuscleBookerItem,
   calculateDefenseBufferMetrics,
+  calculateMomentumQuickMetrics,
 } from '../engine/muscleBookerEngine';
+import { StockInteractionHandlers } from './muscleBooker/types';
 import { computeOmniIndicators } from '../engine/omniIndicatorEngine';
-import { formatStockPrice } from '../utils/formatters';
 import { calculateSMA } from '../engine/technicalIndicatorEngine';
 import { backfillSymbolOhlcvAndIndicators } from '../engine/historicalOhlcvBackfill';
 import {
@@ -35,8 +36,7 @@ import { TrafficLightMatrix } from './muscleBooker/subcomponents/TrafficLightMat
 import { DarvasQuadrantGrid } from './muscleBooker/subcomponents/DarvasQuadrantGrid';
 import { DeductionTelescopeTable } from './muscleBooker/subcomponents/DeductionTelescopeTable';
 
-// 直接匯出統一之 formatStockPrice 工具函式 (消除無效中介轉發 Middle Man)
-export { formatStockPrice };
+// formatStockPrice 集中自 utils/formatters 引用，Workspace 不再作為中介導出 (Spec 0216 / Issue #405)
 
 export type MuscleBookerViewLens = 'ACTIONS' | 'QUADRANTS' | 'TELESCOPE';
 
@@ -122,6 +122,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
       }
     };
     runDailyUniverseCheck();
+
     return () => {
       isCancelled = true;
     };
@@ -450,31 +451,14 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
       .map((entry) => entry.item);
   }, [scannedItems, activeHoldingsMap]);
 
-  // 輔助計算量比與漲跌幅 (統一複用 calculateDefenseBufferMetrics 防守指標)
+  // 輔助計算量比與漲跌幅 (統一複用 calculateMomentumQuickMetrics 與 calculateDefenseBufferMetrics - Issue #405 DRY)
   const getItemMetrics = useCallback((item: ScannedStockItem) => {
-    let volRatio = 1.0;
-    let changePct = 0;
-
-    if (item.candles && item.candles.length >= 2) {
-      const len = item.candles.length;
-      const prevClose = item.candles[len - 2].close;
-      if (prevClose > 0) {
-        changePct = ((item.currentPrice - prevClose) / prevClose) * 100;
-      }
-      if (len >= 5) {
-        const vSlice = item.candles.slice(-5);
-        const vAvg = vSlice.reduce((acc, c) => acc + c.volume, 0) / 5;
-        if (vAvg > 0) {
-          volRatio = item.candles[len - 1].volume / vAvg;
-        }
-      }
-    }
-
+    const quick = calculateMomentumQuickMetrics(item.candles, item.currentPrice);
     const defMetrics = calculateDefenseBufferMetrics(item);
 
     return {
-      volRatio,
-      changePct,
+      volRatio: quick.volRatio ?? 1.0,
+      changePct: quick.priceChangePercent ?? 0,
       bufferPercent: defMetrics.bufferPercent,
       isBroken: defMetrics.isBroken,
       isCritical: defMetrics.isCritical,
@@ -580,6 +564,15 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     [externalQuickTrade]
   );
 
+  // 打包互動回調 (消滅 Data Clumps 資料泥塊 - Issue #405)
+  const interactionHandlers = useMemo<StockInteractionHandlers>(() => ({
+    expandedSymbol,
+    onToggleExpand: handleToggleExpand,
+    onOpenOmniInspector,
+    onToggleWatchlist: handleToggleWatchlist,
+    onQuickTrade: handleQuickTrade,
+  }), [expandedSymbol, handleToggleExpand, onOpenOmniInspector, handleToggleWatchlist, handleQuickTrade]);
+
   return (
     <div className="warroom-container animate-fade-in" style={{ padding: '20px' }}>
       {/* 頂部 Header、資產池、搜尋框與狀態列 */}
@@ -630,12 +623,8 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         top3BuyItems={top3BuyItems}
         top3SellItems={criticalHoldingAlerts}
         activeHoldingsMap={activeHoldingsMap}
-        expandedSymbol={expandedSymbol}
-        onToggleExpand={handleToggleExpand}
-        onOpenOmniInspector={onOpenOmniInspector}
         watchlistSymbols={watchlistSymbols}
-        onToggleWatchlist={handleToggleWatchlist}
-        onQuickTrade={handleQuickTrade}
+        handlers={interactionHandlers}
       />
 
       {/* 🌟 Apple 風格分段視圖控制器 (Segmented Tabs - Ticket 05) */}
@@ -712,12 +701,8 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
           avoidItems={avoidItems}
           sellItems={sellItems}
           activeHoldingsMap={activeHoldingsMap}
-          expandedSymbol={expandedSymbol}
-          onToggleExpand={handleToggleExpand}
-          onOpenOmniInspector={onOpenOmniInspector}
           watchlistSymbols={watchlistSymbols}
-          onToggleWatchlist={handleToggleWatchlist}
-          onQuickTrade={handleQuickTrade}
+          handlers={interactionHandlers}
         />
       )}
 
@@ -725,12 +710,8 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         <DarvasQuadrantGrid
           scannedItems={filteredItems}
           activeHoldingsMap={activeHoldingsMap}
-          expandedSymbol={expandedSymbol}
-          onToggleExpand={handleToggleExpand}
-          onOpenOmniInspector={onOpenOmniInspector}
           watchlistSymbols={watchlistSymbols}
-          onToggleWatchlist={handleToggleWatchlist}
-          onQuickTrade={handleQuickTrade}
+          handlers={interactionHandlers}
         />
       )}
 

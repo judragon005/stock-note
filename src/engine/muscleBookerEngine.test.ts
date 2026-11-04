@@ -12,6 +12,9 @@ import {
   getScopedUniverseSymbols,
   calculateDefenseBufferMetrics,
   detectBottomPenetration,
+  isHeavyResistanceAhead,
+  calculateMomentumQuickMetrics,
+  computeMuscleBookerTimeline,
 } from './muscleBookerEngine';
 import { DailyCandle } from '../types/indicators';
 
@@ -865,6 +868,271 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
         const res = detectBottomPenetration(candles, 100);
         expect(res).toBe(true);
         expect(typeof res).toBe('boolean');
+      });
+
+      it('Issue #405: isHeavyResistanceAhead 當 POC 在現價上方 5% 內且佔比 >= 25% 應回傳 true，其餘情況回傳 false', () => {
+        // 現價 100，POC 在 102 (上方 2%)，佔比 30%
+        const heavyVp = {
+          buckets: [
+            { priceMin: 101, priceMax: 103, percentage: 30 },
+            { priceMin: 95, priceMax: 97, percentage: 10 },
+          ],
+        };
+        expect(isHeavyResistanceAhead(heavyVp, 100)).toBe(true);
+
+        // POC 在現價下方 (98)
+        const lowerVp = {
+          buckets: [
+            { priceMin: 97, priceMax: 99, percentage: 35 },
+          ],
+        };
+        expect(isHeavyResistanceAhead(lowerVp, 100)).toBe(false);
+
+        // POC 在現價上方超過 5% (例如 107)
+        const farVp = {
+          buckets: [
+            { priceMin: 106, priceMax: 108, percentage: 40 },
+          ],
+        };
+        expect(isHeavyResistanceAhead(farVp, 100)).toBe(false);
+
+        // POC 佔比不足 25% (例如 20%)
+        const weakVp = {
+          buckets: [
+            { priceMin: 101, priceMax: 103, percentage: 20 },
+          ],
+        };
+        expect(isHeavyResistanceAhead(weakVp, 100)).toBe(false);
+
+        // 空值防禦
+        expect(isHeavyResistanceAhead(null, 100)).toBe(false);
+        expect(isHeavyResistanceAhead({ buckets: [] }, 100)).toBe(false);
+      });
+
+      it('Issue #405: calculateMomentumQuickMetrics 應精確計算 5 日均量量比與當日漲跌幅', () => {
+        const candles: DailyCandle[] = [
+          { date: '2026-08-01', open: 100, high: 105, low: 95, close: 100, volume: 1000 },
+          { date: '2026-08-02', open: 100, high: 105, low: 95, close: 102, volume: 1000 },
+          { date: '2026-08-03', open: 100, high: 105, low: 95, close: 104, volume: 1000 },
+          { date: '2026-08-04', open: 100, high: 105, low: 95, close: 106, volume: 1000 },
+          { date: '2026-08-05', open: 100, high: 110, low: 105, close: 110, volume: 2000 }, // 前收 106，收 110，漲幅 +3.77%
+        ];
+
+        const metrics = calculateMomentumQuickMetrics(candles, 110);
+        expect(metrics.priceChange).toBe(4);
+        expect(metrics.priceChangePercent).toBe(3.77);
+        // 5 日均量 = (1000 + 1000 + 1000 + 1000 + 2000) / 5 = 1200, 當日量 2000 / 1200 = 1.67
+        expect(metrics.volRatio).toBe(1.67);
+
+        // 少於 2 根 K 線防禦
+        expect(calculateMomentumQuickMetrics([])).toEqual({});
+        expect(calculateMomentumQuickMetrics([candles[0]])).toEqual({});
+      });
+
+      it('Issue #405: POC 上方套牢反壓時，風益比 riskRewardRatio 應實質折半降級', () => {
+        const decision = evaluateMuscleBookerAction({
+          currentPrice: 100,
+          box: { boxStatus: 'BREAKOUT_UP', boxUpper: 98, boxLower: 90 },
+          deduction: { ma20Slope: 'UP' },
+          hasHeavyResistance: true, // 套牢反壓
+          bbands: { bandwidth: 6.0, isSqueeze: true, wasRecentSqueeze: true },
+          vwap: { biasPercent: 2.0 },
+          volumeRatio: 1.5,
+          volRatio: 1.5,
+          marketRegime: 'BULL',
+          rsRank: 'STRONG',
+          atr: { trailingDefensePrice: 95 },
+        });
+
+        expect(decision.action).toBe('HOLD');
+        expect(decision.actionBadge).toContain('上方套牢壓沉重');
+        // 原本 100-95=5 停損，目標價 = 100+max(8, 2*3)=108，原 R = 8/5 = 1.6R，折半後應為 0.8R
+        expect(decision.riskRewardRatioValue).toBe(2);
+        expect(decision.riskRewardRatio).toBe('2.0R');
+      });
+
+      it('Issue #405: 帶寬開口擴張 (bandwidth > 8.0 且 wasRecentSqueeze) 時，若未放量 (volRatio < 1.0) 應強制觀望', () => {
+        const noVolDecision = evaluateMuscleBookerAction({
+          currentPrice: 100,
+          box: { boxStatus: 'BREAKOUT_UP', boxUpper: 98, boxLower: 90 },
+          deduction: { ma20Slope: 'UP' },
+          hasHeavyResistance: false,
+          bbands: { bandwidth: 10.0, isSqueeze: false, wasRecentSqueeze: true }, // 開口放寬中
+          vwap: { biasPercent: 2.0 },
+          volumeRatio: 0.8, // 未放量 (< 1.0)
+          volRatio: 0.8,
+          marketRegime: 'BULL',
+          rsRank: 'STRONG',
+          atr: { trailingDefensePrice: 95 },
+        });
+
+        expect(noVolDecision.action).toBe('HOLD');
+        expect(noVolDecision.actionBadge).toContain('帶寬開口但量能不足');
+
+        const volDecision = evaluateMuscleBookerAction({
+          currentPrice: 100,
+          box: { boxStatus: 'BREAKOUT_UP', boxUpper: 98, boxLower: 90 },
+          deduction: { ma20Slope: 'UP' },
+          hasHeavyResistance: false,
+          bbands: { bandwidth: 10.0, isSqueeze: false, wasRecentSqueeze: true }, // 開口放寬中
+          vwap: { biasPercent: 2.0 },
+          volumeRatio: 1.5, // 顯著放量 (>= 1.0)
+          volRatio: 1.5,
+          marketRegime: 'BULL',
+          rsRank: 'STRONG',
+          atr: { trailingDefensePrice: 95 },
+        });
+
+        expect(volDecision.action).toBe('BUY');
+      });
+
+      it('Issue #405: computeMuscleBookerTimeline 應將 boxLower 傳入扣抵計算，歷史破底翻點位應正確識別', () => {
+        const candles: DailyCandle[] = Array.from({ length: 30 }, (_, i) => {
+          const isHammer = i === 24;
+          return {
+            date: `2026-08-${String(i + 1).padStart(2, '0')}`,
+            open: isHammer ? 100.5 : 101,
+            high: isHammer ? 101.5 : 103,
+            low: isHammer ? 94 : 100,
+            close: isHammer ? 101 : 101,
+            volume: 15000,
+          };
+        });
+
+        const timeline = computeMuscleBookerTimeline('TEST', candles);
+        expect(timeline.length).toBe(30);
+        // 第 25 根 (index 24) 的扣抵指標中 isBottomPenetrationRebound 應為 true
+        expect(timeline[24].maDeduction.isBottomPenetrationRebound).toBe(true);
+      });
+      it('Issue #405: isHeavyResistanceAhead 當 POC 在現價上方 5% 內且佔比 >= 25% 應回傳 true，其餘情況回傳 false', () => {
+        // 現價 100，POC 在 102 (上方 2%)，佔比 30%
+        const heavyVp = {
+          buckets: [
+            { priceMin: 101, priceMax: 103, percentage: 30 },
+            { priceMin: 95, priceMax: 97, percentage: 10 },
+          ],
+        };
+        expect(isHeavyResistanceAhead(heavyVp, 100)).toBe(true);
+
+        // POC 在現價下方 (98)
+        const lowerVp = {
+          buckets: [
+            { priceMin: 97, priceMax: 99, percentage: 35 },
+          ],
+        };
+        expect(isHeavyResistanceAhead(lowerVp, 100)).toBe(false);
+
+        // POC 在現價上方超過 5% (例如 107)
+        const farVp = {
+          buckets: [
+            { priceMin: 106, priceMax: 108, percentage: 40 },
+          ],
+        };
+        expect(isHeavyResistanceAhead(farVp, 100)).toBe(false);
+
+        // POC 佔比不足 25% (例如 20%)
+        const weakVp = {
+          buckets: [
+            { priceMin: 101, priceMax: 103, percentage: 20 },
+          ],
+        };
+        expect(isHeavyResistanceAhead(weakVp, 100)).toBe(false);
+
+        // 空值防禦
+        expect(isHeavyResistanceAhead(null, 100)).toBe(false);
+        expect(isHeavyResistanceAhead({ buckets: [] }, 100)).toBe(false);
+      });
+
+      it('Issue #405: calculateMomentumQuickMetrics 應精確計算 5 日均量量比與當日漲跌幅', () => {
+        const candles: DailyCandle[] = [
+          { date: '2026-08-01', open: 100, high: 105, low: 95, close: 100, volume: 1000 },
+          { date: '2026-08-02', open: 100, high: 105, low: 95, close: 102, volume: 1000 },
+          { date: '2026-08-03', open: 100, high: 105, low: 95, close: 104, volume: 1000 },
+          { date: '2026-08-04', open: 100, high: 105, low: 95, close: 106, volume: 1000 },
+          { date: '2026-08-05', open: 100, high: 110, low: 105, close: 110, volume: 2000 }, // 前收 106，收 110，漲幅 +3.77%
+        ];
+
+        const metrics = calculateMomentumQuickMetrics(candles, 110);
+        expect(metrics.priceChange).toBe(4);
+        expect(metrics.priceChangePercent).toBe(3.77);
+        // 5 日均量 = (1000 + 1000 + 1000 + 1000 + 2000) / 5 = 1200, 當日量 2000 / 1200 = 1.67
+        expect(metrics.volRatio).toBe(1.67);
+
+        // 少於 2 根 K 線防禦
+        expect(calculateMomentumQuickMetrics([])).toEqual({});
+        expect(calculateMomentumQuickMetrics([candles[0]])).toEqual({});
+      });
+
+      it('Issue #405: POC 上方套牢反壓時，風益比 riskRewardRatio 應實質折半降級', () => {
+        const decision = evaluateMuscleBookerAction({
+          currentPrice: 100,
+          box: { boxStatus: 'BREAKOUT_UP', boxUpper: 98, boxLower: 90 },
+          deduction: { ma20Slope: 'UP' },
+          hasHeavyResistance: true, // 套牢反壓
+          bbands: { bandwidth: 6.0, isSqueeze: true, wasRecentSqueeze: true },
+          vwap: { biasPercent: 2.0 },
+          volRatio: 1.5,
+          marketRegime: 'BULL',
+          rsRank: 'STRONG',
+          atr: { trailingDefensePrice: 95 },
+        });
+
+        expect(decision.action).toBe('HOLD');
+        expect(decision.actionBadge).toContain('上方套牢壓沉重');
+        expect(decision.riskRewardRatioValue).toBe(2);
+        expect(decision.riskRewardRatio).toBe('2.0R');
+      });
+
+      it('Issue #405: 帶寬開口擴張 (bandwidth > 8.0 且 wasRecentSqueeze) 時，若未放量 (volRatio < 1.0) 應強制觀望', () => {
+        const noVolDecision = evaluateMuscleBookerAction({
+          currentPrice: 100,
+          box: { boxStatus: 'BREAKOUT_UP', boxUpper: 98, boxLower: 90 },
+          deduction: { ma20Slope: 'UP' },
+          hasHeavyResistance: false,
+          bbands: { bandwidth: 10.0, isSqueeze: false, wasRecentSqueeze: true }, // 開口放寬中
+          vwap: { biasPercent: 2.0 },
+          volRatio: 0.8, // 未放量 (< 1.0)
+          marketRegime: 'BULL',
+          rsRank: 'STRONG',
+          atr: { trailingDefensePrice: 95 },
+        });
+
+        expect(noVolDecision.action).toBe('HOLD');
+        expect(noVolDecision.actionBadge).toContain('帶寬開口但量能不足');
+
+        const volDecision = evaluateMuscleBookerAction({
+          currentPrice: 100,
+          box: { boxStatus: 'BREAKOUT_UP', boxUpper: 98, boxLower: 90 },
+          deduction: { ma20Slope: 'UP' },
+          hasHeavyResistance: false,
+          bbands: { bandwidth: 10.0, isSqueeze: false, wasRecentSqueeze: true }, // 開口放寬中
+          vwap: { biasPercent: 2.0 },
+          volRatio: 1.5, // 顯著放量 (>= 1.0)
+          marketRegime: 'BULL',
+          rsRank: 'STRONG',
+          atr: { trailingDefensePrice: 95 },
+        });
+
+        expect(volDecision.action).toBe('BUY');
+      });
+
+      it('Issue #405: computeMuscleBookerTimeline 應將 boxLower 傳入扣抵計算，歷史破底翻點位應正確識別', () => {
+        const candles: DailyCandle[] = Array.from({ length: 30 }, (_, i) => {
+          const isHammer = i === 24;
+          return {
+            date: `2026-08-${String(i + 1).padStart(2, '0')}`,
+            open: isHammer ? 100.5 : 101,
+            high: isHammer ? 101.5 : 103,
+            low: isHammer ? 94 : 100,
+            close: isHammer ? 101 : 101,
+            volume: 15000,
+          };
+        });
+
+        const timeline = computeMuscleBookerTimeline('TEST', candles);
+        expect(timeline.length).toBe(30);
+        // 第 25 根 (index 24) 的扣抵指標中 isBottomPenetrationRebound 應為 true
+        expect(timeline[24].maDeduction.isBottomPenetrationRebound).toBe(true);
       });
 
     });

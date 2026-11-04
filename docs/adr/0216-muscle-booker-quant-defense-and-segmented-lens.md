@@ -80,8 +80,21 @@
 
 ---
 
+
+### 8. 第四輪 Code Review 全量修復與品質閉環 (Issue #405)
+
+- **獨立 `isHeavyResistanceAhead` 純函式導出**：將現價上方 5% POC 密集成交套牢反壓判斷自 `scanMuscleBookerItem` 內聯抽取為獨立模組純函式，嚴格落實 Spec 0216 Line 109 設計。
+- **POC 上方套牢反壓風益比折半降級**：當偵測到現價上方 5% 存在密集成交套牢峰 (POC) 時，將 `riskRewardRatio` 實質折半降級，如實反映上方套牢壓制之真實風險。
+- **當日放量開口擴張檢驗**：帶寬開口擴張 (`bandwidth > 8.0%` 且 `wasRecentSqueeze`) 時，嚴格檢驗當日量比 `volRatio >= 1.0`，未放量時維持觀望，嚴格對齊 Spec Line 35。
+- **時序點位破底翻基準修復**：`computeMuscleBookerTimeline` 傳入 `box.boxLower`，徹底解決歷史時序破底翻指標恆為 `false` 缺陷。
+- **量比與漲跌幅共用計算抽取 (DRY)**：抽取 `calculateMomentumQuickMetrics` 純函式，由 `MuscleStockCard` 與 `Workspace` 統一呼叫，消滅重複程式碼。
+- **互動回調成團泥塊封裝 (Data Clumps 消除)**：定義 `StockInteractionHandlers` 介面，統一傳遞互動回調狀態。
+- **Middle Man 清理與 API 收斂**：Workspace 移除冗餘 `export { formatStockPrice }`；`darvasBoxEngine` 收斂 `computeBandwidthSlice` 為內部函式；修正錯字「下彎壓頂」。
+
+---
+
 ## 驗證結果 (Consequences & Verification)
 
 - **單元測試驗證**：全量 272 個測試套件、2,039 隻測試 100% PASS 綠燈通過。
 - **TypeScript 編譯**：`npm run build` 0 錯誤通過，生產打包 bundle 順利產出。
-- **規範對齊**：Spec 0216 的 8 張 Tickets 全數標記為 `done`，三輪 Code Review 審查建議 100% 閉環。
+- **規範對齊**：Spec 0216 的 8 張 Tickets 全數標記為 `done`，四輪 Code Review 審查建議 100% 閉環。

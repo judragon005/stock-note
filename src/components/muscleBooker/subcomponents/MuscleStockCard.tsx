@@ -11,7 +11,7 @@ import {
   Star,
   Zap,
 } from 'lucide-react';
-import { ScannedStockItem, BEGINNER_TOOLTIPS, calculateDefenseBufferMetrics } from '../../../engine/muscleBookerEngine';
+import { ScannedStockItem, BEGINNER_TOOLTIPS, calculateDefenseBufferMetrics, calculateMomentumQuickMetrics } from '../../../engine/muscleBookerEngine';
 import { HoldingPosition, MarketType } from '../../../types/stock';
 import { Tooltip } from '../../common/Tooltip';
 import { formatStockPrice } from '../../../utils/formatters';
@@ -70,27 +70,11 @@ const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
     }
   };
 
-  // 計算漲跌價與漲跌幅
-  let priceChange: number | undefined;
-  let priceChangePercent: number | undefined;
-  let volRatio: number | undefined;
-
-  if (item.candles && item.candles.length >= 2) {
-    const len = item.candles.length;
-    const prevClose = item.candles[len - 2].close;
-    if (prevClose > 0) {
-      priceChange = Math.round((item.currentPrice - prevClose) * 100) / 100;
-      priceChangePercent = Math.round(((item.currentPrice - prevClose) / prevClose) * 10000) / 100;
-    }
-    // 量比計算：當日成交量 / 5日均量
-    if (len >= 5) {
-      const vSlice = item.candles.slice(-5);
-      const vAvg = vSlice.reduce((acc, c) => acc + c.volume, 0) / 5;
-      if (vAvg > 0) {
-        volRatio = Math.round((item.candles[len - 1].volume / vAvg) * 100) / 100;
-      }
-    }
-  }
+  // 集中計算漲跌價、漲跌幅與 5 日量比 (DRY 複用 calculateMomentumQuickMetrics - Issue #405)
+  const quickMetrics = calculateMomentumQuickMetrics(item.candles, item.currentPrice);
+  const priceChange = quickMetrics.priceChange;
+  const priceChangePercent = quickMetrics.priceChangePercent;
+  const volRatio = quickMetrics.volRatio;
 
   // 防守價與防守緩衝距離 Buffer % (複用統一計算 helper)
   const defMetrics = calculateDefenseBufferMetrics(item);
