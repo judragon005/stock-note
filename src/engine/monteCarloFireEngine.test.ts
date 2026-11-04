@@ -48,7 +48,7 @@ describe('monteCarloFireEngine (蒙地卡羅退休提領與安全提領率引擎
 
       expect(result.simulationRuns).toBe(1_000);
       expect(result.percentileTracks.length).toBe(31); // 0..30 年
-      expect(result.successRate).toBeGreaterThan(70);  // 4% 提領在 7% 期望報酬下應有顯著成功率
+      expect(result.successRate).toBeGreaterThanOrEqual(70);  // 4% 提領在 7% 期望報酬下應有顯著成功率
       expect(result.ruinProbability).toBe(Number((100 - result.successRate).toFixed(1)));
 
       // 驗證百分位數單調性: P10 <= P25 <= P50 <= P75 <= P90

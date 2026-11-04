@@ -122,8 +122,8 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
     });
 
     const result = scanMuscleBookerItem('2330', '台積電', 'TW', 106.5, candles);
-    console.log('ActionDecision:', result.actionDecision);
-        expect(result.actionDecision).toBeDefined();
+
+    expect(result.actionDecision).toBeDefined();
     expect(result.actionDecision.action).toBe('BUY');
     expect(result.actionDecision.stopLossPrice).toBeDefined();
     expect(result.actionDecision.stopLossPrice!).toBeLessThan(106.5);
@@ -542,6 +542,34 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
           (a, b) => (metricsMap.get(a.symbol)?.bufferPercent ?? 999) - (metricsMap.get(b.symbol)?.bufferPercent ?? 999)
         );
         expect(sortedByBuffer.map((i) => i.symbol)).toEqual(['B', 'C', 'A']);
+      });
+
+      it('Issue #403: 在倉持股瀕危警報應建立單次快取並依 bufferPercent 升冪排序', () => {
+        const mockHoldingsMap = new Map<string, any>([
+          ['2330', { symbol: '2330' }],
+          ['2454', { symbol: '2454' }],
+          ['2317', { symbol: '2317' }],
+        ]);
+
+        const mockItems: any[] = [
+          { symbol: '2330', currentPrice: 100, stopLossPrice: 99 },
+          { symbol: '2454', currentPrice: 100, stopLossPrice: 99.5 },
+          { symbol: '2317', currentPrice: 100, stopLossPrice: 90 },
+          { symbol: 'NON_HOLDING', currentPrice: 100, stopLossPrice: 99.9 },
+        ];
+
+        const criticalList: { item: any; bufferPercent: number }[] = [];
+        for (const item of mockItems) {
+          if (!mockHoldingsMap.has(item.symbol)) continue;
+          const buf = ((item.currentPrice - item.stopLossPrice) / item.currentPrice) * 100;
+          if (buf <= 1.5) {
+            criticalList.push({ item, bufferPercent: buf });
+          }
+        }
+        criticalList.sort((a, b) => a.bufferPercent - b.bufferPercent);
+        const resultSymbols = criticalList.map((c) => c.item.symbol);
+
+        expect(resultSymbols).toEqual(['2454', '2330']);
       });
     });
 

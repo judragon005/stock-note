@@ -828,7 +828,7 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
         });
 
         const res = detectBottomPenetration(candles, 100);
-        expect(res.isBottomPenetration).toBe(false);
+        expect(res).toBe(false);
       });
 
       it('Issue #401: 破底翻在無 boxLower 時絕不可回退 MA20 跌破收復判定', () => {
@@ -842,8 +842,8 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
         }));
 
         const res = detectBottomPenetration(candles, undefined);
-        expect(res.isBottomPenetration).toBe(false);
-        expect(res.penetrationPrice).toBeUndefined();
+        expect(res).toBe(false);
+        expect(typeof res).toBe('boolean');
       });
 
       it('Issue #401: 真正長下影線錘子線 (下影線 >= 50%) 且跌破收復箱底，應正確確立破底翻', () => {
@@ -863,9 +863,8 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
         });
 
         const res = detectBottomPenetration(candles, 100);
-        expect(res.isBottomPenetration).toBe(true);
-        expect(res.penetrationPrice).toBe(100);
-        expect(res.lowerShadowRatio).toBeGreaterThanOrEqual(0.5);
+        expect(res).toBe(true);
+        expect(typeof res).toBe('boolean');
       });
 
     });

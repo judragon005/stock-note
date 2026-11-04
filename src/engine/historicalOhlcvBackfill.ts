@@ -199,7 +199,7 @@ export async function backfillSymbolOhlcvAndIndicators(
       };
     }
 
-    // 保底合成防禦：遠端查無資料 (如標的下市、代碼變更或 API 暫無數據)
+    // 保底合成防禦 (Spec 0113)：遠端查無資料且本地無舊快取時 (如標的下市、代碼變更或 API 暫無數據)
     const fallbackCandles = generateSyntheticCandles(cleanSymbol, 100);
     const fallbackIndicators = calculateMuscleBookerIndicators(fallbackCandles);
     try {
