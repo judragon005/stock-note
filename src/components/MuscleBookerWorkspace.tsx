@@ -434,20 +434,20 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
       .slice(0, 3);
   }, [scannedItems]);
 
-  // Ticket 07 & Issue #399: 在倉持股停損與瀕臨破防雙重過濾 (已破防或緩衝 <= 1.5%，統一收斂至 calculateDefenseBufferMetrics)
+  // Ticket 07 & Issue #399 & Issue #403: 在倉持股停損與瀕臨破防雙重過濾 (已破防或緩衝 <= 1.5%，統一收斂至 calculateDefenseBufferMetrics，建立單次預算快取)
   const criticalHoldingAlerts = useMemo(() => {
-    return scannedItems
-      .filter((i) => {
-        if (!activeHoldingsMap.has(i.symbol.toUpperCase())) return false;
-        const metrics = calculateDefenseBufferMetrics(i);
-        return metrics.isCritical;
-      })
-      .sort((a, b) => {
-        const bufA = calculateDefenseBufferMetrics(a).bufferPercent;
-        const bufB = calculateDefenseBufferMetrics(b).bufferPercent;
-        return bufA - bufB;
-      })
-      .slice(0, 3);
+    const criticalList: { item: ScannedStockItem; bufferPercent: number }[] = [];
+    for (const item of scannedItems) {
+      if (!activeHoldingsMap.has(item.symbol.toUpperCase())) continue;
+      const metrics = calculateDefenseBufferMetrics(item);
+      if (metrics.isCritical) {
+        criticalList.push({ item, bufferPercent: metrics.bufferPercent });
+      }
+    }
+    return criticalList
+      .sort((a, b) => a.bufferPercent - b.bufferPercent)
+      .slice(0, 3)
+      .map((entry) => entry.item);
   }, [scannedItems, activeHoldingsMap]);
 
   // 輔助計算量比與漲跌幅 (統一複用 calculateDefenseBufferMetrics 防守指標)

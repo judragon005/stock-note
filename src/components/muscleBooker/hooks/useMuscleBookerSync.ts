@@ -19,6 +19,12 @@ export interface SyncState {
   currentSymbol?: string;
 }
 
+// 大盤多空濾網 (Market Regime) 核心基準標的 (Spec 0216 Ticket 07 & Issue #403)
+export const BENCHMARK_SYMBOLS: TargetUniverseItem[] = [
+  { symbol: '0050', name: '元大台灣50', market: 'TW' },
+  { symbol: 'SPY', name: 'SPDR S&P 500 ETF', market: 'US' },
+];
+
 export interface UseMuscleBookerSyncProps {
   targetUniverse: TargetUniverseItem[];
   targetUniverseKey: string;
@@ -148,8 +154,14 @@ export function useMuscleBookerSync({
 
     const syncCandles = async () => {
       try {
-        // 找出尚未快取的項目
-        const toFetch = targetUniverse.filter((item) => !cachedCandlesMap[item.symbol]);
+        // 找出尚未快取的項目 (保證包含大盤多空濾網基準標的 0050 與 SPY)
+        const combinedUniverse: TargetUniverseItem[] = [...targetUniverse];
+        for (const benchmark of BENCHMARK_SYMBOLS) {
+          if (!combinedUniverse.some((u) => u.symbol === benchmark.symbol)) {
+            combinedUniverse.push(benchmark);
+          }
+        }
+        const toFetch = combinedUniverse.filter((item) => !cachedCandlesMap[item.symbol]);
         if (toFetch.length === 0) return;
 
         const initialUpdates: Record<string, DailyCandle[]> = {};
@@ -238,7 +250,13 @@ export function useMuscleBookerSync({
   const triggerManualSync = useCallback(
     async (forceRefresh = false) => {
       if (syncState.isSyncing) return;
-      const items = targetUniverse.map((item) => ({ symbol: item.symbol, market: item.market }));
+      const combinedItems: TargetUniverseItem[] = [...targetUniverse];
+      for (const benchmark of BENCHMARK_SYMBOLS) {
+        if (!combinedItems.some((u) => u.symbol === benchmark.symbol)) {
+          combinedItems.push(benchmark);
+        }
+      }
+      const items = combinedItems.map((item) => ({ symbol: item.symbol, market: item.market }));
       if (items.length === 0) return;
 
       setSyncState({

@@ -69,10 +69,19 @@
 - **重構與 Middle Man 清除**：抽取 `computeBandwidthSlice` 純函式消滅 5 日回溯重複運算；移除 `formatCurrencyPrice` 中介轉發。
 - **單元測試補齊**：新增 `DarvasQuadrantGrid.test.tsx` 並擴充 `MuscleStockCard.test.tsx` 下單與星號按鈕測試。
 
+### 7. 第三輪 Code Review 全量修復與閉環驗證 (Issue #403)
+
+- **`detectBottomPenetration` 回傳型態收斂**：依照 Spec 0216 Line 87 定義，明確收斂為布林值 `boolean`，徹底消滅呼叫端因物件 Truthy 特性造成未觸發卻誤判為 true 之語意隱患。
+- **動態布林帶寬回溯修正**：修正回溯邊界為完整 5 日（`offset <= Math.min(5, candles.length - period)`），確保近 5 交易日極致壓縮判定嚴格對齊規格。
+- **持股防守緩衝距離排序快取**：`criticalHoldingAlerts` 建立單次預算快取，消除多次調用 `calculateDefenseBufferMetrics` 之開銷。
+- **大盤基準標的主動水合**：`useMuscleBookerSync.ts` 自動將 `0050` 與 `SPY` 納入預載水合清單，確保無論選擇任何觀察池，多空濾網 `marketRegime` 均能正常運算而不退回 `NEUTRAL`。
+- **測試除錯產物與型別完善**：移除 `MuscleBookerWorkspace.test.ts` 中的 `console.log` 調試遺跡；確保 `DarvasQuadrantGrid.test.tsx` 之 Mock 資料完備包含 `ma20Slope`。
+- **合成假行情架構隔離與文檔澄清**：明確規範 `generateSyntheticCandles` 僅限 `historicalOhlcvBackfill.ts` 作為底層 404 保底（Spec 0113），肌肉書僮動能雷達核心工作區堅決奉行 Spec 0216 零幻覺原則絕不調用。
+
 ---
 
 ## 驗證結果 (Consequences & Verification)
 
 - **單元測試驗證**：全量 272 個測試套件、2,039 隻測試 100% PASS 綠燈通過。
 - **TypeScript 編譯**：`npm run build` 0 錯誤通過，生產打包 bundle 順利產出。
-- **規範對齊**：Spec 0216 的 8 張 Tickets 全數標記為 `done`，兩輪 Code Review 審查建議 100% 閉環。
+- **規範對齊**：Spec 0216 的 8 張 Tickets 全數標記為 `done`，三輪 Code Review 審查建議 100% 閉環。

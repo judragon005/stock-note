@@ -927,8 +927,12 @@ export function getScopedUniverseSymbols(
   ];
 }
 
+
 /**
- * 依據基礎價格生成具備真實特徵的 30 天模擬日 K 線 (用於無實時日 K 之公開標的)
+ * 依據基礎價格生成具備真實特徵的 30 天模擬日 K 線 (Spec 0113 保底回退)
+ * 注意：此函式僅提供 historicalOhlcvBackfill.ts 極端 404/查無資料時之保底持久化；
+ * 肌肉書僮動能雷達核心工作區 (useMuscleBookerSync 及 scanMuscleBookerItem) 嚴格遵循 Spec 0216 零幻覺原則，
+ * 缺少真實日 K 時維持 isDataPending: true 與 AVOID 觀望，絕不調用此函式偽造行情。
  */
 export function generateSyntheticCandles(symbol: string, basePrice: number): DailyCandle[] {
   const candles: DailyCandle[] = [];

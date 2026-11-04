@@ -97,13 +97,9 @@ export function detectDarvasBox(candles: DailyCandle[]): {
 export function detectBottomPenetration(
   candles: DailyCandle[],
   boxLower?: number
-): {
-  isBottomPenetration: boolean;
-  penetrationPrice?: number;
-  lowerShadowRatio?: number;
-} {
+): boolean {
   if (candles.length === 0 || boxLower === undefined || boxLower <= 0) {
-    return { isBottomPenetration: false };
+    return false;
   }
 
   const current = candles[candles.length - 1];
@@ -113,14 +109,7 @@ export function detectBottomPenetration(
   const lowerShadowRatio = totalRange > 0 ? lowerShadow / totalRange : 0;
   const hasStrongLowerShadow = lowerShadowRatio >= 0.5;
 
-  const isBottomPenetration =
-    current.low < boxLower && current.close >= boxLower && hasStrongLowerShadow;
-
-  return {
-    isBottomPenetration,
-    penetrationPrice: isBottomPenetration ? boxLower : undefined,
-    lowerShadowRatio: Math.round(lowerShadowRatio * 1000) / 1000,
-  };
+  return current.low < boxLower && current.close >= boxLower && hasStrongLowerShadow;
 }
 
 /**
@@ -160,7 +149,7 @@ export function calculateMaDeduction(candles: DailyCandle[], boxLower?: number):
       ma20Slope = 'DOWN';
     }
 
-    // 均線扣抵時空望遠鏡進階校準：若未來 3 日扣抵高檔天花板，均線即將下彎壓頂
+    // 均線扣抵時空望遠鏡進階校準 (Spec 0214)：若未來 3 日扣抵高檔天花板，均線即將下埄僅頂
     if (futureDeductions.length > 0) {
       const futureMax = Math.max(...futureDeductions);
       const futureAvg = futureDeductions.reduce((a, b) => a + b, 0) / futureDeductions.length;
@@ -170,9 +159,8 @@ export function calculateMaDeduction(candles: DailyCandle[], boxLower?: number):
     }
   }
 
-  // 偵測「底穿上」假跌破型態 (Spec 0216 Ticket 01 & Issue #401): 呼叫獨立導出之 detectBottomPenetration
-  const bottomPenRes = detectBottomPenetration(candles, boxLower);
-  const isBottomPenetrationRebound = bottomPenRes.isBottomPenetration;
+  // 偵測「底穿上」假跌破型態 (Spec 0216 Ticket 01 & Issue #401 & Issue #403): 呼叫獨立導出之 boolean detectBottomPenetration
+  const isBottomPenetrationRebound = detectBottomPenetration(candles, boxLower);
 
   return {
     ma5DeductionPrice,
@@ -245,11 +233,11 @@ export function calculateBollingerSqueeze(
   const bandwidth = currentMetrics.bandwidth;
   const isSqueeze = bandwidth <= 8.0;
 
-  // 均線與帶寬動態開口放寬 (Spec 0216 / Issue #399): 近 5 交易日曾極致收斂 (<= 8.0%)
+  // 均線與帶寬動態開口放寬 (Spec 0216 / Issue #399 & Issue #403): 近 5 交易日曾極致收斂 (<= 8.0%)
   let wasRecentSqueeze = isSqueeze;
   if (!wasRecentSqueeze && candles.length >= period + 1) {
-    const lookbackLimit = Math.min(5, candles.length - period + 1);
-    for (let offset = 1; offset < lookbackLimit; offset++) {
+    const lookbackLimit = Math.min(5, candles.length - period);
+    for (let offset = 1; offset <= lookbackLimit; offset++) {
       const pastSlice = candles.slice(0, candles.length - offset);
       const pastMetrics = computeBandwidthSlice(pastSlice, period, multiplier);
       if (pastMetrics.bandwidth <= 8.0) {
