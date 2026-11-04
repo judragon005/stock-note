@@ -11,7 +11,6 @@ import {
   calculateMomentumQuickMetrics,
 } from '../engine/muscleBookerEngine';
 import { StockInteractionHandlers } from './muscleBooker/types';
-export { resolveMarketBenchmarkAndRegime };
 import { computeOmniIndicators } from '../engine/omniIndicatorEngine';
 import { calculateSMA } from '../engine/technicalIndicatorEngine';
 import { backfillSymbolOhlcvAndIndicators } from '../engine/historicalOhlcvBackfill';

@@ -32,12 +32,14 @@ export const TrafficLightMatrix: React.FC<TrafficLightMatrixProps> = ({
   onQuickTrade,
   handlers,
 }) => {
-  const actualExpandedSymbol = handlers?.expandedSymbol !== undefined ? handlers.expandedSymbol : expandedSymbol;
-  const actualOnToggleExpand = handlers?.onToggleExpand ?? onToggleExpand;
-  const actualOnOpenOmniInspector = handlers?.onOpenOmniInspector ?? onOpenOmniInspector;
-  const actualWatchlistSymbols = handlers?.watchlistSymbols ? Array.from(handlers.watchlistSymbols) : watchlistSymbols;
-  const actualOnToggleWatchlist = handlers?.onToggleWatchlist ?? onToggleWatchlist;
-  const actualOnQuickTrade = handlers?.onQuickTrade ?? onQuickTrade;
+  const effectiveHandlers: StockInteractionHandlers = React.useMemo(() => ({
+    expandedSymbol: handlers?.expandedSymbol !== undefined ? handlers.expandedSymbol : expandedSymbol,
+    onToggleExpand: handlers?.onToggleExpand ?? onToggleExpand,
+    onOpenOmniInspector: handlers?.onOpenOmniInspector ?? onOpenOmniInspector,
+    watchlistSymbols: handlers?.watchlistSymbols ?? new Set((watchlistSymbols || []).map(s => s.toUpperCase())),
+    onToggleWatchlist: handlers?.onToggleWatchlist ?? onToggleWatchlist,
+    onQuickTrade: handlers?.onQuickTrade ?? onQuickTrade,
+  }), [handlers, expandedSymbol, onToggleExpand, onOpenOmniInspector, watchlistSymbols, onToggleWatchlist, onQuickTrade]);
   const [isAvoidExpanded, setIsAvoidExpanded] = React.useState(false);
   const displayedAvoidItems = isAvoidExpanded ? avoidItems : avoidItems.slice(0, 12);
   return (
@@ -88,13 +90,8 @@ export const TrafficLightMatrix: React.FC<TrafficLightMatrixProps> = ({
                   key={item.symbol}
                   item={item}
                   holding={activeHoldingsMap.get(item.symbol.toUpperCase())}
-                  isExpanded={actualExpandedSymbol === item.symbol}
-                  onToggleExpand={() => actualOnToggleExpand?.(item.symbol)}
-                  onOpenOmniInspector={actualOnOpenOmniInspector}
                   badgeTone="BUY"
-                  isWatched={actualWatchlistSymbols.includes(item.symbol)}
-                  onToggleWatchlist={actualOnToggleWatchlist}
-                  onQuickTrade={actualOnQuickTrade}
+                  handlers={effectiveHandlers}
                 />
               ))}
             </div>
@@ -130,13 +127,8 @@ export const TrafficLightMatrix: React.FC<TrafficLightMatrixProps> = ({
                   key={item.symbol}
                   item={item}
                   holding={activeHoldingsMap.get(item.symbol.toUpperCase())}
-                  isExpanded={actualExpandedSymbol === item.symbol}
-                  onToggleExpand={() => actualOnToggleExpand?.(item.symbol)}
-                  onOpenOmniInspector={actualOnOpenOmniInspector}
                   badgeTone={item.actionDecision.action === 'HOLD' ? 'HOLD' : 'AVOID'}
-                  isWatched={actualWatchlistSymbols.includes(item.symbol)}
-                  onToggleWatchlist={actualOnToggleWatchlist}
-                  onQuickTrade={actualOnQuickTrade}
+                  handlers={effectiveHandlers}
                 />
               ))}
 
@@ -197,13 +189,8 @@ export const TrafficLightMatrix: React.FC<TrafficLightMatrixProps> = ({
                   key={item.symbol}
                   item={item}
                   holding={activeHoldingsMap.get(item.symbol.toUpperCase())}
-                  isExpanded={actualExpandedSymbol === item.symbol}
-                  onToggleExpand={() => actualOnToggleExpand?.(item.symbol)}
-                  onOpenOmniInspector={actualOnOpenOmniInspector}
                   badgeTone="SELL"
-                  isWatched={actualWatchlistSymbols.includes(item.symbol)}
-                  onToggleWatchlist={actualOnToggleWatchlist}
-                  onQuickTrade={actualOnQuickTrade}
+                  handlers={effectiveHandlers}
                 />
               ))}
             </div>

@@ -25,7 +25,12 @@ export const DeductionTelescopeTable: React.FC<DeductionTelescopeTableProps> = (
   onToggleWatchlist: rawOnToggleWatchlist,
   onQuickTrade: rawOnQuickTrade,
 }) => {
-  const watchlistSymbols = handlers?.watchlistSymbols ?? rawWatchlistSymbols ?? [];
+  const rawList = handlers?.watchlistSymbols ?? rawWatchlistSymbols ?? [];
+  const watchlistSet = React.useMemo(() => {
+    if (rawList instanceof Set) return new Set(Array.from(rawList).map(s => s.toUpperCase()));
+    return new Set((Array.isArray(rawList) ? rawList : []).map(s => s.toUpperCase()));
+  }, [rawList]);
+
   const onToggleExpand = handlers?.onToggleExpand ?? rawOnToggleExpand ?? (() => {});
   const onToggleWatchlist = handlers?.onToggleWatchlist ?? rawOnToggleWatchlist ?? (() => {});
   const onQuickTrade = handlers?.onQuickTrade ?? rawOnQuickTrade;
@@ -86,7 +91,7 @@ export const DeductionTelescopeTable: React.FC<DeductionTelescopeTableProps> = (
           <tbody>
             {pagedItems.map((item) => {
               const isExpanded = expandedSymbol === item.symbol;
-              const isWatched = Array.isArray(watchlistSymbols) ? watchlistSymbols.includes(item.symbol) : ((watchlistSymbols as any)?.has?.(item.symbol) ?? false);
+              const isWatched = watchlistSet.has(item.symbol.toUpperCase());
               return (
                 <React.Fragment key={item.symbol}>
                   <tr

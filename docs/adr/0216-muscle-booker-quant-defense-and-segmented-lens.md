@@ -132,8 +132,17 @@
 
 ---
 
+### 13. 第九輪 Code Review 全量修復與透傳收斂 (Issue #415)
+
+- **死代碼清理與消除 Middle Man (AGENTS.md 原則)**：徹底刪除 `MuscleBookerWorkspace.tsx` 內 `export { resolveMarketBenchmarkAndRegime };` 冗餘中介轉發導出，純函式統一由 `src/engine/muscleBookerEngine.ts` 匯出。
+- **容器層 Handlers 整包透傳 (Data Clumps 消除)**：在 `DarvasQuadrantGrid.tsx` 與 `TrafficLightMatrix.tsx` 中，將 `MuscleStockCard` 散裝 props 重複解構全面收斂為直接傳遞 `handlers={effectiveHandlers}`，提升元件內聚力並大幅精簡模板代碼。
+- **扣抵表 Set 型別正規化 (Primitive Obsession 消除)**：於 `DeductionTelescopeTable.tsx` 頂部將 `watchlistSymbols` 統一正規化為 `Set<string>`，徹底消除 `as any` 繞道與邊界潛在異常。
+- **HUD 賣出卡片補齊 Handlers 與大小寫防禦 (Spec Line 59)**：於 `ActionDirectivesHUD.tsx` 之 `top3SellItems` 補齊 `handlers={handlers}` 傳遞，並將自選星號比對加上 `.toUpperCase()`，確保跨市場標的狀態 100% 同步。
+
+---
+
 ## 驗證結果 (Consequences & Verification)
 
 - **單元測試驗證**：全量 273 個測試套件、2,058 隻測試 100% PASS 綠燈通過。
 - **TypeScript 編譯**：`npm run build` 0 錯誤通過，生產打包 bundle 順利產出。
-- **規範對齊**：Spec 0216 的 8 張 Tickets 全數標記為 `done`，八輪 Code Review 審查建議 100% 閉環。
+- **規範對齊**：Spec 0216 的 8 張 Tickets 全數標記為 `done`，九輪 Code Review 審查建議 100% 閉環。
