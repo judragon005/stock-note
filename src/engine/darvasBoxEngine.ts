@@ -90,6 +90,40 @@ export function detectDarvasBox(candles: DailyCandle[]): {
 }
 
 /**
+ * 2.1 獨立導出：破底翻反轉偵測純函式 (Spec 0216 Ticket 01 & Line 87)
+ * 基準：以箱底 boxLower 為準，盤中跌破箱底但收盤強勢站回箱底之上，且下影線佔振幅 >= 50%
+ * 下影線精確幾何公式：Math.min(open, close) - low (杜絕光頭長紅陽線將實體誤算為下影線)
+ */
+export function detectBottomPenetration(
+  candles: DailyCandle[],
+  boxLower?: number
+): {
+  isBottomPenetration: boolean;
+  penetrationPrice?: number;
+  lowerShadowRatio?: number;
+} {
+  if (candles.length === 0 || boxLower === undefined || boxLower <= 0) {
+    return { isBottomPenetration: false };
+  }
+
+  const current = candles[candles.length - 1];
+  const totalRange = current.high - current.low;
+  // 真實下影線：K棒實體下沿至最低點距離
+  const lowerShadow = Math.min(current.open, current.close) - current.low;
+  const lowerShadowRatio = totalRange > 0 ? lowerShadow / totalRange : 0;
+  const hasStrongLowerShadow = lowerShadowRatio >= 0.5;
+
+  const isBottomPenetration =
+    current.low < boxLower && current.close >= boxLower && hasStrongLowerShadow;
+
+  return {
+    isBottomPenetration,
+    penetrationPrice: isBottomPenetration ? boxLower : undefined,
+    lowerShadowRatio: Math.round(lowerShadowRatio * 1000) / 1000,
+  };
+}
+
+/**
  * 2. 均線扣抵望遠鏡與「底穿上」假跌破型態
  */
 export function calculateMaDeduction(candles: DailyCandle[], boxLower?: number): {
@@ -108,12 +142,7 @@ export function calculateMaDeduction(candles: DailyCandle[], boxLower?: number):
   const ma5DeductionPrice = len >= 6 ? candles[len - 6].close : undefined;
   const ma20DeductionPrice = len >= 21 ? candles[len - 21].close : undefined;
 
-  // 計算當前 MA20 數值
-  let ma20: number | undefined;
-  if (len >= 20) {
-    const slice20 = candles.slice(-20);
-    ma20 = slice20.reduce((acc, c) => acc + c.close, 0) / 20;
-  }
+
 
   // 均線扣抵時空望遠鏡：提取未來 3 日即將扣抵之歷史數列
   const futureDeductions: number[] = [];
@@ -141,20 +170,9 @@ export function calculateMaDeduction(candles: DailyCandle[], boxLower?: number):
     }
   }
 
-  // 偵測「底穿上」假跌破型態 (Spec 0216 Ticket 01)：
-  // 優先以達瓦斯箱底 boxLower 為準，盤中跌破箱底但收盤站回箱底之上，且下影線佔振幅 >= 50%
-  let isBottomPenetrationRebound = false;
-  const totalRange = current.high - current.low;
-  const lowerShadow = current.close - current.low;
-  const hasStrongLowerShadow = totalRange > 0 && lowerShadow / totalRange >= 0.5;
-
-  if (boxLower !== undefined) {
-    if (current.low < boxLower && current.close >= boxLower && hasStrongLowerShadow) {
-      isBottomPenetrationRebound = true;
-    }
-  } else if (ma20 !== undefined && current.low < ma20 && current.close >= ma20 && hasStrongLowerShadow) {
-    isBottomPenetrationRebound = true;
-  }
+  // 偵測「底穿上」假跌破型態 (Spec 0216 Ticket 01 & Issue #401): 呼叫獨立導出之 detectBottomPenetration
+  const bottomPenRes = detectBottomPenetration(candles, boxLower);
+  const isBottomPenetrationRebound = bottomPenRes.isBottomPenetration;
 
   return {
     ma5DeductionPrice,
@@ -168,6 +186,37 @@ export function calculateMaDeduction(candles: DailyCandle[], boxLower?: number):
 /**
  * 3. 布林通道極致壓縮 (Bollinger Bands & Squeeze)
  */
+/**
+ * 計算指定切片日 K 之布林帶寬純函式 (DRY 重構抽取)
+ */
+export function computeBandwidthSlice(
+  candles: DailyCandle[],
+  period: number = 20,
+  multiplier: number = 2
+): { upper: number; mid: number; lower: number; bandwidth: number } {
+  if (candles.length < period) {
+    const p = candles.length > 0 ? candles[candles.length - 1].close : 0;
+    return { upper: p, mid: p, lower: p, bandwidth: 0 };
+  }
+  const slice = candles.slice(-period);
+  const closes = slice.map((c) => c.close);
+  const mid = closes.reduce((acc, v) => acc + v, 0) / period;
+  if (mid <= 0) return { upper: 0, mid: 0, lower: 0, bandwidth: 0 };
+
+  const variance = closes.reduce((acc, v) => acc + Math.pow(v - mid, 2), 0) / period;
+  const stdDev = Math.sqrt(variance);
+  const upper = mid + multiplier * stdDev;
+  const lower = mid - multiplier * stdDev;
+  const bandwidth = Math.round(((upper - lower) / mid) * 10000) / 100;
+
+  return {
+    upper: Math.round(upper * 100) / 100,
+    mid: Math.round(mid * 100) / 100,
+    lower: Math.round(lower * 100) / 100,
+    bandwidth,
+  };
+}
+
 export function calculateBollingerSqueeze(
   candles: DailyCandle[],
   period: number = 20,
@@ -192,18 +241,8 @@ export function calculateBollingerSqueeze(
     };
   }
 
-  const slice = candles.slice(-period);
-  const closes = slice.map((c) => c.close);
-  const mid = closes.reduce((acc, v) => acc + v, 0) / period;
-
-  const variance = closes.reduce((acc, v) => acc + Math.pow(v - mid, 2), 0) / period;
-  const stdDev = Math.sqrt(variance);
-
-  const upper = mid + multiplier * stdDev;
-  const lower = mid - multiplier * stdDev;
-  const bandwidth = mid > 0 ? Math.round(((upper - lower) / mid) * 10000) / 100 : 0; // %
-
-  // 帶寬 <= 8% 判定為極致壓縮 (Squeeze)
+  const currentMetrics = computeBandwidthSlice(candles, period, multiplier);
+  const bandwidth = currentMetrics.bandwidth;
   const isSqueeze = bandwidth <= 8.0;
 
   // 均線與帶寬動態開口放寬 (Spec 0216 / Issue #399): 近 5 交易日曾極致收斂 (<= 8.0%)
@@ -211,30 +250,17 @@ export function calculateBollingerSqueeze(
   if (!wasRecentSqueeze && candles.length >= period + 1) {
     const lookbackLimit = Math.min(5, candles.length - period + 1);
     for (let offset = 1; offset < lookbackLimit; offset++) {
-      const pastSlice = candles.slice(-period - offset, candles.length - offset);
-      if (pastSlice.length === period) {
-        const pastCloses = pastSlice.map((c) => c.close);
-        const pastMid = pastCloses.reduce((acc, v) => acc + v, 0) / period;
-        if (pastMid > 0) {
-          const pastVar = pastCloses.reduce((acc, v) => acc + Math.pow(v - pastMid, 2), 0) / period;
-          const pastStd = Math.sqrt(pastVar);
-          const pastUpper = pastMid + multiplier * pastStd;
-          const pastLower = pastMid - multiplier * pastStd;
-          const pastBw = Math.round(((pastUpper - pastLower) / pastMid) * 10000) / 100;
-          if (pastBw <= 8.0) {
-            wasRecentSqueeze = true;
-            break;
-          }
-        }
+      const pastSlice = candles.slice(0, candles.length - offset);
+      const pastMetrics = computeBandwidthSlice(pastSlice, period, multiplier);
+      if (pastMetrics.bandwidth <= 8.0) {
+        wasRecentSqueeze = true;
+        break;
       }
     }
   }
 
   return {
-    upper: Math.round(upper * 100) / 100,
-    mid: Math.round(mid * 100) / 100,
-    lower: Math.round(lower * 100) / 100,
-    bandwidth,
+    ...currentMetrics,
     isSqueeze,
     wasRecentSqueeze,
   };

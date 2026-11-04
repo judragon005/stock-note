@@ -127,4 +127,55 @@ describe('MuscleStockCard 組件測試 (Apple 美學卡片)', () => {
     expect(html).toContain('US$');
     expect(html).toContain('極致壓縮');
   });
+
+  it('Spec 0216 Line 153-154: 當傳入 onToggleWatchlist 時應渲染自選星號按鈕，並依 watchlist 狀態顯示正確提示', () => {
+    // 未自選情境
+    const unwatchedHtml = renderToStaticMarkup(
+      <MuscleStockCard
+        item={mockItem}
+        watchlistSymbols={['2454']}
+        onToggleWatchlist={() => {}}
+      />
+    );
+    expect(unwatchedHtml).toContain('加入自選觀察名單');
+
+    // 已自選情境
+    const watchedHtml = renderToStaticMarkup(
+      <MuscleStockCard
+        item={mockItem}
+        watchlistSymbols={['2330']}
+        onToggleWatchlist={() => {}}
+      />
+    );
+    expect(watchedHtml).toContain('從自選觀察名單移除');
+  });
+
+  it('Spec 0216 Line 153-154: 當傳入 onQuickTrade 時應正確渲染一鍵快速買進或賣出下單按鈕', () => {
+    // 買進訊號標的
+    const buyHtml = renderToStaticMarkup(
+      <MuscleStockCard
+        item={mockItem}
+        onQuickTrade={() => {}}
+      />
+    );
+    expect(buyHtml).toContain('一鍵快速買進下單');
+
+    // 破線/賣出訊號標的
+    const brokenItem: ScannedStockItem = {
+      ...mockItem,
+      currentPrice: 950,
+      actionDecision: {
+        ...mockItem.actionDecision,
+        action: 'SELL',
+        stopLossPrice: 980,
+      },
+    };
+    const sellHtml = renderToStaticMarkup(
+      <MuscleStockCard
+        item={brokenItem}
+        onQuickTrade={() => {}}
+      />
+    );
+    expect(sellHtml).toContain('一鍵快速賣出下單');
+  });
 });

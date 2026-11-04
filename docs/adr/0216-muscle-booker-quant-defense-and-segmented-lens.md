@@ -59,10 +59,20 @@
 - **排序 O(N) 預算快取**：多維排序比較器預先建立單次快取 Map，消滅 2,280 檔下 $O(N \log N)$ 指標重複運算開銷。
 - **工具函式 DRY 收斂**：幣別價格格式化統一呼叫 `formatStockPrice`。
 
+### 6. 第二輪 Code Review 全量修復與規格對齊 (Issue #401)
+
+- **下影線幾何計算修正 (金融邏輯核心修復)**：改為 `Math.min(open, close) - low`，徹底杜絕光頭長紅陽線將實體誤算為下影線之金融偏誤。
+- **破底翻獨立導出與 MA20 漏洞消滅**：獨立導出 `detectBottomPenetration` API，在 `boxLower === undefined` 時徹底封印回退 MA20。
+- **誘多型態 Single SSOT 收斂**：強化 `detectPriceActionTraps` 射擊之星與墓碑倒錘識別，消除 `muscleBookerEngine` 內部重複手算。
+- **象限動能看板全量連動**：`DarvasQuadrantGrid` 完整向下傳遞 `watchlistSymbols`、`onToggleWatchlist` 與 `onQuickTrade`。
+- **財報鑑識風控接通**：`MuscleBookerWorkspace` 串接持股鑑識警報與高風險標記，徹底消滅參數懸空。
+- **重構與 Middle Man 清除**：抽取 `computeBandwidthSlice` 純函式消滅 5 日回溯重複運算；移除 `formatCurrencyPrice` 中介轉發。
+- **單元測試補齊**：新增 `DarvasQuadrantGrid.test.tsx` 並擴充 `MuscleStockCard.test.tsx` 下單與星號按鈕測試。
+
 ---
 
 ## 驗證結果 (Consequences & Verification)
 
-- **單元測試驗證**：全量 271 個測試套件、2,032 隻測試 100% PASS 綠燈通過。
+- **單元測試驗證**：全量 272 個測試套件、2,039 隻測試 100% PASS 綠燈通過。
 - **TypeScript 編譯**：`npm run build` 0 錯誤通過，生產打包 bundle 順利產出。
-- **規範對齊**：Spec 0216 的 8 張 Tickets 全數標記為 `done`，Code Review 審查建議全數落實閉環。
+- **規範對齊**：Spec 0216 的 8 張 Tickets 全數標記為 `done`，兩輪 Code Review 審查建議 100% 閉環。
