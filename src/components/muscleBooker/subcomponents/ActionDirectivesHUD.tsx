@@ -102,7 +102,7 @@ export const ActionDirectivesHUD: React.FC<ActionDirectivesHUDProps> = ({
                 onOpenOmniInspector={actualOnOpenOmniInspector}
                 badgeTone="BUY"
                 badgeLabel={`買進 · ${item.actionDecision.riskRewardRatioValue}R`}
-                isWatched={actualWatchlistSymbols.includes(item.symbol)}
+                isWatched={actualWatchlistSymbols.map(s => s.toUpperCase()).includes(item.symbol.toUpperCase())}
                 onToggleWatchlist={actualOnToggleWatchlist}
                 onQuickTrade={actualOnQuickTrade}
                 handlers={handlers}
@@ -174,9 +174,10 @@ export const ActionDirectivesHUD: React.FC<ActionDirectivesHUDProps> = ({
                   onOpenOmniInspector={actualOnOpenOmniInspector}
                   badgeTone="SELL"
                   badgeLabel={badgeLabel}
-                  isWatched={actualWatchlistSymbols.includes(item.symbol)}
+                  isWatched={actualWatchlistSymbols.map(s => s.toUpperCase()).includes(item.symbol.toUpperCase())}
                   onToggleWatchlist={actualOnToggleWatchlist}
                   onQuickTrade={actualOnQuickTrade}
+                  handlers={handlers}
                 />
               );
             })}

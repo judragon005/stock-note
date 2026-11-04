@@ -28,12 +28,14 @@ export const DarvasQuadrantGrid: React.FC<DarvasQuadrantGridProps> = ({
   onQuickTrade,
   handlers,
 }) => {
-  const actualExpandedSymbol = handlers?.expandedSymbol !== undefined ? handlers.expandedSymbol : expandedSymbol;
-  const actualOnToggleExpand = handlers?.onToggleExpand ?? onToggleExpand;
-  const actualOnOpenOmniInspector = handlers?.onOpenOmniInspector ?? onOpenOmniInspector;
-  const actualWatchlistSymbols = handlers?.watchlistSymbols ? Array.from(handlers.watchlistSymbols) : watchlistSymbols;
-  const actualOnToggleWatchlist = handlers?.onToggleWatchlist ?? onToggleWatchlist;
-  const actualOnQuickTrade = handlers?.onQuickTrade ?? onQuickTrade;
+  const effectiveHandlers: StockInteractionHandlers = React.useMemo(() => ({
+    expandedSymbol: handlers?.expandedSymbol !== undefined ? handlers.expandedSymbol : expandedSymbol,
+    onToggleExpand: handlers?.onToggleExpand ?? onToggleExpand,
+    onOpenOmniInspector: handlers?.onOpenOmniInspector ?? onOpenOmniInspector,
+    watchlistSymbols: handlers?.watchlistSymbols ?? new Set((watchlistSymbols || []).map(s => s.toUpperCase())),
+    onToggleWatchlist: handlers?.onToggleWatchlist ?? onToggleWatchlist,
+    onQuickTrade: handlers?.onQuickTrade ?? onQuickTrade,
+  }), [handlers, expandedSymbol, onToggleExpand, onOpenOmniInspector, watchlistSymbols, onToggleWatchlist, onQuickTrade]);
   const { breakoutUpItems, bottomPenetrationItems, bollingerSqueezeItems, breakoutDownItems } =
     React.useMemo(() => {
       const bUp: ScannedStockItem[] = [];
@@ -107,12 +109,7 @@ export const DarvasQuadrantGrid: React.FC<DarvasQuadrantGridProps> = ({
                   key={item.symbol}
                   item={item}
                   holding={activeHoldingsMap.get(item.symbol.toUpperCase())}
-                  isExpanded={actualExpandedSymbol === item.symbol}
-                  onToggleExpand={() => actualOnToggleExpand?.(item.symbol)}
-                  onOpenOmniInspector={actualOnOpenOmniInspector}
-                  watchlistSymbols={actualWatchlistSymbols}
-                  onToggleWatchlist={actualOnToggleWatchlist}
-                  onQuickTrade={actualOnQuickTrade}
+                  handlers={effectiveHandlers}
                   badgeTone="BUY"
                   badgeLabel="🔥 箱頂突破"
                 />
@@ -151,12 +148,7 @@ export const DarvasQuadrantGrid: React.FC<DarvasQuadrantGridProps> = ({
                   key={item.symbol}
                   item={item}
                   holding={activeHoldingsMap.get(item.symbol.toUpperCase())}
-                  isExpanded={actualExpandedSymbol === item.symbol}
-                  onToggleExpand={() => actualOnToggleExpand?.(item.symbol)}
-                  onOpenOmniInspector={actualOnOpenOmniInspector}
-                  watchlistSymbols={actualWatchlistSymbols}
-                  onToggleWatchlist={actualOnToggleWatchlist}
-                  onQuickTrade={actualOnQuickTrade}
+                  handlers={effectiveHandlers}
                   badgeTone="BUY"
                   badgeLabel="🚀 底穿上"
                 />
@@ -195,12 +187,7 @@ export const DarvasQuadrantGrid: React.FC<DarvasQuadrantGridProps> = ({
                   key={item.symbol}
                   item={item}
                   holding={activeHoldingsMap.get(item.symbol.toUpperCase())}
-                  isExpanded={actualExpandedSymbol === item.symbol}
-                  onToggleExpand={() => actualOnToggleExpand?.(item.symbol)}
-                  onOpenOmniInspector={actualOnOpenOmniInspector}
-                  watchlistSymbols={actualWatchlistSymbols}
-                  onToggleWatchlist={actualOnToggleWatchlist}
-                  onQuickTrade={actualOnQuickTrade}
+                  handlers={effectiveHandlers}
                   badgeTone="HOLD"
                   badgeLabel="⚡ 極致壓縮"
                 />
@@ -239,12 +226,7 @@ export const DarvasQuadrantGrid: React.FC<DarvasQuadrantGridProps> = ({
                   key={item.symbol}
                   item={item}
                   holding={activeHoldingsMap.get(item.symbol.toUpperCase())}
-                  isExpanded={actualExpandedSymbol === item.symbol}
-                  onToggleExpand={() => actualOnToggleExpand?.(item.symbol)}
-                  onOpenOmniInspector={actualOnOpenOmniInspector}
-                  watchlistSymbols={actualWatchlistSymbols}
-                  onToggleWatchlist={actualOnToggleWatchlist}
-                  onQuickTrade={actualOnQuickTrade}
+                  handlers={effectiveHandlers}
                   badgeTone="SELL"
                   badgeLabel="⚠️ 破箱底"
                 />
