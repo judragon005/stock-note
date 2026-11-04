@@ -103,8 +103,17 @@
 
 ---
 
+### 10. 第六輪 Code Review 全量修復與純函式收斂 (Issue #409)
+
+- **風益比純函式全面切換 (Duplicated Code 徹底消除)**：在 `evaluateMuscleBookerAction` 中「突破買進 (BREAKOUT_UP)」與「破底翻 (BOTTOM_PENETRATION_REBOUND)」全面改為調用 `computeRiskReward` 純函式，徹底消除內聯重複手寫之風險、目標價與折算邏輯。
+- **市場基準日 K 與多空體制解析收斂 (DRY 原則)**：抽取純函式 `resolveMarketBenchmarkAndRegime`，集中即時診斷與清單掃描重複之市場判斷與基準日 K 分發。
+- **台股基準日 K 雙層備援機制 (Fault-tolerant Benchmark)**：當台股市場 0050 日 K 暫時缺損時，自動無縫備援至 2330 基準日 K (`cachedCandlesMap['0050'] || cachedCandlesMap['2330']`)，保障領先股 RS Rank 與逆勢放行機制不中斷。
+- **時序數據防禦註解對齊 (Spec Line 44)**：明確標註少於 5 根日 K 線時維持 `isDataPending: true` 與 `AVOID` 觀望，絕不調用偽造行情。
+
+---
+
 ## 驗證結果 (Consequences & Verification)
 
-- **單元測試驗證**：全量 272 個測試套件、2,050 隻測試 100% PASS 綠燈通過。
+- **單元測試驗證**：全量 272 個測試套件、2,051 隻測試 100% PASS 綠燈通過。
 - **TypeScript 編譯**：`npm run build` 0 錯誤通過，生產打包 bundle 順利產出。
-- **規範對齊**：Spec 0216 的 8 張 Tickets 全數標記為 `done`，五輪 Code Review 審查建議 100% 閉環。
+- **規範對齊**：Spec 0216 的 8 張 Tickets 全數標記為 `done`，六輪 Code Review 審查建議 100% 閉環。
