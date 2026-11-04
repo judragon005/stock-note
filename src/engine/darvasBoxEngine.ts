@@ -274,5 +274,15 @@ export function isHeavyResistanceAhead(
   if (!pocBucket) return false;
   const pocCenter = (pocBucket.priceMin + pocBucket.priceMax) / 2;
   const upperBound = currentPrice * (1 + resistanceRangePercent / 100);
-  return pocCenter > currentPrice && pocCenter <= upperBound && pocBucket.percentage >= minPercentage;
+
+  // 1. POC 重心在現價上方 5% 內
+  const isPocCenterAbove = pocCenter > currentPrice && pocCenter <= upperBound;
+  // 2. 或現價已穿入 POC 密集區，但尚未脫離 POC 上限且上方剩餘套牢厚度顯著 (Issue #413: 消除穿入死角)
+  const isPocSpanResistance =
+    currentPrice >= pocBucket.priceMin &&
+    currentPrice < pocBucket.priceMax &&
+    pocBucket.priceMax <= upperBound &&
+    pocBucket.priceMax - currentPrice >= (pocBucket.priceMax - pocBucket.priceMin) * 0.35;
+
+  return (isPocCenterAbove || isPocSpanResistance) && pocBucket.percentage >= minPercentage;
 }

@@ -1,26 +1,34 @@
 import React from 'react';
 import { TrendingUp, ChevronDown, ChevronUp, Star, Zap } from 'lucide-react';
 import { ScannedStockItem, BEGINNER_TOOLTIPS } from '../../../engine/muscleBookerEngine';
+import { StockInteractionHandlers } from '../types';
 import { Tooltip } from '../../common/Tooltip';
 import { formatStockPrice } from '../../../utils/formatters';
 
 export interface DeductionTelescopeTableProps {
   filteredItems: ScannedStockItem[];
-  watchlistSymbols: string[];
-  expandedSymbol: string | null;
-  onToggleExpand: (symbol: string) => void;
-  onToggleWatchlist: (symbol: string) => void;
-  onQuickTrade?: (symbol: string, action: 'BUY' | 'SELL', price?: number) => void; // 閉環快速交易 - Issue #411
+  expandedSymbol?: string | null;
+  handlers?: StockInteractionHandlers;
+  // 向下相容支援散裝回調
+  watchlistSymbols?: string[];
+  onToggleExpand?: (symbol: string) => void;
+  onToggleWatchlist?: (symbol: string) => void;
+  onQuickTrade?: (symbol: string, action: 'BUY' | 'SELL', price?: number) => void;
 }
 
 export const DeductionTelescopeTable: React.FC<DeductionTelescopeTableProps> = ({
   filteredItems,
-  watchlistSymbols,
   expandedSymbol,
-  onToggleExpand,
-  onToggleWatchlist,
-  onQuickTrade,
+  handlers,
+  watchlistSymbols: rawWatchlistSymbols,
+  onToggleExpand: rawOnToggleExpand,
+  onToggleWatchlist: rawOnToggleWatchlist,
+  onQuickTrade: rawOnQuickTrade,
 }) => {
+  const watchlistSymbols = handlers?.watchlistSymbols ?? rawWatchlistSymbols ?? [];
+  const onToggleExpand = handlers?.onToggleExpand ?? rawOnToggleExpand ?? (() => {});
+  const onToggleWatchlist = handlers?.onToggleWatchlist ?? rawOnToggleWatchlist ?? (() => {});
+  const onQuickTrade = handlers?.onQuickTrade ?? rawOnQuickTrade;
   const [pageSize, setPageSize] = React.useState<number | 'ALL'>(50);
   const [currentPage, setCurrentPage] = React.useState<number>(1);
 
@@ -78,7 +86,7 @@ export const DeductionTelescopeTable: React.FC<DeductionTelescopeTableProps> = (
           <tbody>
             {pagedItems.map((item) => {
               const isExpanded = expandedSymbol === item.symbol;
-              const isWatched = watchlistSymbols.includes(item.symbol);
+              const isWatched = Array.isArray(watchlistSymbols) ? watchlistSymbols.includes(item.symbol) : ((watchlistSymbols as any)?.has?.(item.symbol) ?? false);
               return (
                 <React.Fragment key={item.symbol}>
                   <tr

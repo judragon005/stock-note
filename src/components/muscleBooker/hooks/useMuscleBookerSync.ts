@@ -22,6 +22,7 @@ export interface SyncState {
 // 大盤多空濾網 (Market Regime) 核心基準標的 (Spec 0216 Ticket 07 & Issue #403)
 export const BENCHMARK_SYMBOLS: TargetUniverseItem[] = [
   { symbol: '0050', name: '元大台灣50', market: 'TW' },
+  { symbol: '2330', name: '台積電', market: 'TW' }, // 0050 缺損時之備援基準 (Issue #409 & #413)
   { symbol: 'SPY', name: 'SPDR S&P 500 ETF', market: 'US' },
 ];
 

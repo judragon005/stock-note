@@ -1,3 +1,25 @@
+/**
+ * 集中解析標的所屬市場、適用大盤多空 Regime 與基準日 K (含 2330 備援 - Issue #409 & #413)
+ */
+export function resolveMarketBenchmarkAndRegime(
+  symbol: string,
+  market: MarketType,
+  cachedCandlesMap: Record<string, DailyCandle[] | undefined>,
+  marketRegimeTW: 'BULL' | 'BEAR' | 'NEUTRAL',
+  marketRegimeUS: 'BULL' | 'BEAR' | 'NEUTRAL'
+): {
+  isUS: boolean;
+  targetRegime: 'BULL' | 'BEAR' | 'NEUTRAL';
+  targetBenchmarkCandles?: DailyCandle[];
+} {
+  const isUS = market === 'US' || (market as string) === '美股' || !/^[0-9]/.test(symbol);
+  const targetRegime = isUS ? marketRegimeUS : marketRegimeTW;
+  const targetBenchmarkCandles = isUS
+    ? cachedCandlesMap['SPY']
+    : (cachedCandlesMap['0050'] || cachedCandlesMap['2330']);
+  return { isUS, targetRegime, targetBenchmarkCandles };
+}
+
 import {
   DailyCandle,
   BoxStatus,
@@ -196,14 +218,7 @@ export function calculateMuscleBookerIndicators(
 }
 
 
-/**
- * 依據標的與日 K 數列計算時序點位 (calculateMuscleBookerIndicators 之語意別名)
- */
-export const computeMuscleBookerTimeline = (
-  _symbol: string,
-  candles: DailyCandle[],
-  benchmarkCandles?: DailyCandle[]
-): MuscleBookerIndicatorPoint[] => calculateMuscleBookerIndicators(candles, benchmarkCandles);
+
 
 export type MuscleBookerActionType = 'BUY' | 'AVOID' | 'SELL' | 'HOLD';
 
@@ -389,7 +404,6 @@ export function evaluateMuscleBookerAction(params: {
   };
   hasHeavyResistance?: boolean;
   isUsMoneyFlowDivergent?: boolean;
-  volumeRatio?: number;
   volRatio?: number;
 }): MuscleBookerActionDecision {
   const {
@@ -410,7 +424,6 @@ export function evaluateMuscleBookerAction(params: {
     vwap,
     hasHeavyResistance,
     isUsMoneyFlowDivergent,
-    volumeRatio,
     volRatio,
   } = params;
 
@@ -568,7 +581,7 @@ export function evaluateMuscleBookerAction(params: {
       (bbands.bandwidth <= 8.0 || (bbands.wasRecentSqueeze && bbands.bandwidth <= 12.0));
 
     // 當日放量開口擴張檢驗 (Spec 0216 Line 35 & Issue #405)
-    const effectiveVolRatio = volRatio ?? volumeRatio;
+    const effectiveVolRatio = volRatio;
     if (
       bbands.bandwidth !== undefined &&
       bbands.bandwidth > 8.0 &&
@@ -1202,10 +1215,12 @@ export function scanMuscleBookerItem(
   let isLowLiquidity = false;
   if (candles.length > 0) {
     const sample = candles.slice(-5);
-    const avgVol5 = sample.reduce((acc, c) => acc + c.volume, 0) / sample.length;
-    // 若顯式指定 LOTS (張數) 則 1 張 = 1,000 股；預設全市場日 K 線 volume 均為標準股數 (Shares)
-    const effectiveShares = options?.volumeUnit === 'LOTS' ? avgVol5 * 1000 : avgVol5;
-    const avgDollarVolume5 = effectiveShares * lastCandle.close;
+    // 第一性原理：逐日 (成交股數 * 收盤價) 加總平均，消除跳空暴漲將過去低量乘上單日高價的虛增失真 (Issue #413)
+    const avgDollarVolume5 =
+      sample.reduce((acc, c) => {
+        const shares = options?.volumeUnit === 'LOTS' ? c.volume * 1000 : c.volume;
+        return acc + shares * c.close;
+      }, 0) / sample.length;
     const dollarThreshold = market === 'TW' ? 30_000_000 : 5_000_000;
     if (avgDollarVolume5 < dollarThreshold) {
       isLowLiquidity = true;
