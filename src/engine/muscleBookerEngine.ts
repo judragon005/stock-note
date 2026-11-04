@@ -313,6 +313,41 @@ export interface MuscleBookerActionDecision {
  * 8. 肌肉書僮實戰操盤三色決策引擎 (Traffic-Light Action Matrix)
  * 輸出投資人最直觀的操作動詞：哪一支買、哪一支不能碰、哪一支賣
  */
+export interface RiskRewardResult {
+  stopLossPrice: number;
+  targetPrice: number;
+  effectiveRisk: number;
+  reward: number;
+  rrValue: number;
+  rrRatio: string;
+}
+
+/**
+ * 統一計算波段結構風險、有效風險與風益比 (DRY 消除重複運算 - Spec 0216 / Issue #407)
+ */
+export function computeRiskReward(
+  currentPrice: number,
+  stopLoss: number,
+  target: number,
+  atrValue?: number
+): RiskRewardResult {
+  const structuralRisk = Math.max(0.1, currentPrice - stopLoss);
+  const minRiskBuffer = Math.max(currentPrice * 0.02, (atrValue ?? 0) * 1.0);
+  const effectiveRisk = Math.max(structuralRisk, minRiskBuffer);
+  const reward = Math.max(0.1, target - currentPrice);
+  const rrValue = Math.round((reward / effectiveRisk) * 10) / 10;
+  const rrRatio = rrValue.toFixed(1);
+
+  return {
+    stopLossPrice: Math.round(stopLoss * 100) / 100,
+    targetPrice: Math.round(target * 100) / 100,
+    effectiveRisk,
+    reward,
+    rrValue,
+    rrRatio,
+  };
+}
+
 export function evaluateMuscleBookerAction(params: {
   currentPrice: number;
   box: {
@@ -752,6 +787,7 @@ export interface ScanMuscleBookerOptions {
   isHolding?: boolean;
   marketRegime?: 'BULL' | 'BEAR' | 'NEUTRAL';
   rsRank?: RelativeStrengthRank;
+  benchmarkCandles?: DailyCandle[];
   isForensicDangerous?: boolean;
 }
 
@@ -1150,11 +1186,22 @@ export function scanMuscleBookerItem(
     }
   }
 
-  // 9. 流動性初篩與安全金額容量檢驗 (Spec 0216 Ticket 02)
+  // 5. RS 相對強度推導 (若傳入 benchmarkCandles 且未明確指定 rsRank，自動進行運算 - Spec 0216 Line 40 / Issue #407)
+  let effectiveRsRank = options?.rsRank;
+  if (!effectiveRsRank && options?.benchmarkCandles && options.benchmarkCandles.length > 10 && candles.length > 10) {
+    try {
+      const rs = calculateRelativeStrength(candles, options.benchmarkCandles);
+      effectiveRsRank = rs.rsRank;
+    } catch {
+      // 防禦性容錯
+    }
+  }
+
+  // 9. 流動性初篩與安全金額容量檢驗 (Spec 0216 Ticket 02 & Issue #407: 防短 K 線穿透)
   let isLowLiquidity = false;
-  if (candles.length >= 5) {
-    const last5 = candles.slice(-5);
-    const avgVol5 = last5.reduce((acc, c) => acc + c.volume, 0) / 5;
+  if (candles.length > 0) {
+    const sample = candles.slice(-5);
+    const avgVol5 = sample.reduce((acc, c) => acc + c.volume, 0) / sample.length;
     // 台股行情量若 <= 100,000 通常為張數 (券商/一般日K慣例)，自動換算為股數 (1張 = 1,000股)
     const twShares = avgVol5 <= 100000 ? avgVol5 * 1000 : avgVol5;
     const avgDollarVolume5 = market === 'TW' ? twShares * lastCandle.close : avgVol5 * lastCandle.close;
@@ -1174,7 +1221,7 @@ export function scanMuscleBookerItem(
     lookback60High,
     isHolding: options?.isHolding,
     marketRegime: options?.marketRegime,
-    rsRank: options?.rsRank,
+    rsRank: effectiveRsRank,
     obvTrend,
     macd,
     isForensicDangerous: options?.isForensicDangerous,

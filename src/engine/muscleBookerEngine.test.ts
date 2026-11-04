@@ -15,6 +15,7 @@ import {
   isHeavyResistanceAhead,
   calculateMomentumQuickMetrics,
   computeMuscleBookerTimeline,
+  computeRiskReward,
 } from './muscleBookerEngine';
 import { DailyCandle } from '../types/indicators';
 
@@ -1004,6 +1005,81 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
         // 第 25 根 (index 24) 的扣抵指標中 isBottomPenetrationRebound 應為 true
         expect(timeline[24].maDeduction.isBottomPenetrationRebound).toBe(true);
       });
+
+      describe('Issue #407: 第五輪 Code Review 審查發現修正 (TDD Red-Green)', () => {
+        it('computeRiskReward 應準確計算結構風險、有效風險與風益比，並消除重複計算', () => {
+          const rrStandard = computeRiskReward(100, 95, 110, 2);
+          expect(rrStandard.stopLossPrice).toBe(95);
+          expect(rrStandard.targetPrice).toBe(110);
+          expect(rrStandard.effectiveRisk).toBe(5);
+          expect(rrStandard.reward).toBe(10);
+          expect(rrStandard.rrValue).toBe(2);
+          expect(rrStandard.rrRatio).toBe('2.0');
+
+          // 當 ATR 較大時，應由 minRiskBuffer 主導有效風險
+          const rrAtrDominated = computeRiskReward(100, 98, 110, 5);
+          expect(rrAtrDominated.effectiveRisk).toBe(5);
+          expect(rrAtrDominated.rrValue).toBe(2);
+        });
+
+                it('scanMuscleBookerItem 傳入 benchmarkCandles 應自動計算 rsRank，且空頭下 EXTREME_STRONG 領先股應放行 BUY', () => {
+          const benchCandles = Array.from({ length: 25 }, (_, i) => ({
+            date: '2026-08-' + String(i + 1).padStart(2, '0'),
+            open: 100,
+            high: 101,
+            low: 99,
+            close: 100,
+            volume: 100000,
+          }));
+
+          // 25 天日 K：前 24 天在 90~95 箱體內整理 (箱頂 95，箱底 90)，第 1 天留有高點 175 提供波段目標空間
+          // 第 25 天帶量 50000 突破 95 收 105
+          const stockCandles = Array.from({ length: 25 }, (_, i) => {
+            const isLast = i === 24;
+            const isFirst = i === 0;
+            return {
+              date: '2026-08-' + String(i + 1).padStart(2, '0'),
+              open: isLast ? 96 : 92,
+              high: isFirst ? 175 : (isLast ? 101 : 95),
+              low: isLast ? 95.5 : 90,
+              close: isLast ? 100 : 92,
+              volume: isLast ? 50000 : 10000,
+            };
+          });
+
+          // 1. 在大盤偏空 (BEAR) 時，若未傳入 benchmarkCandles 且未給 rsRank，應被防線阻斷 HOLD
+          const blockedResult = scanMuscleBookerItem('2330', '台積電', 'TW', 100, stockCandles, {
+            marketRegime: 'BEAR',
+          });
+          expect(blockedResult.actionDecision.action).toBe('HOLD');
+          expect(blockedResult.actionDecision.actionBadge).toContain('大盤偏空防線');
+
+          // 2. 傳入 benchmarkCandles 後，自動推導為 EXTREME_STRONG 領先股，放行 BUY
+          const leaderResult = scanMuscleBookerItem('2330', '台積電', 'TW', 100, stockCandles, {
+            marketRegime: 'BEAR',
+            benchmarkCandles: benchCandles,
+          });
+          expect(leaderResult.actionDecision.action).toBe('BUY');
+          expect(leaderResult.actionDecision.actionBadge).toContain('突破買點');
+        });
+
+        it('5 根日 K 線成交金額不足 3,000 萬時，應嚴格標註 isLowLiquidity 且輸出 AVOID 杜絕穿透', () => {
+          // 5 根日 K 線，每日僅 5 張，收盤 10 元，5 日日均成交額僅 5 萬 < 3,000 萬
+          const shortCandles = Array.from({ length: 5 }, (_, i) => ({
+            date: '2026-08-0' + (i + 1),
+            open: 10,
+            high: 10.2,
+            low: 9.8,
+            close: 10,
+            volume: 5,
+          }));
+
+          const result = scanMuscleBookerItem('9999', '冷門新股', 'TW', 10, shortCandles);
+          expect(result.actionDecision.action).toBe('AVOID');
+          expect(result.actionDecision.actionBadge).toContain('流動性不足');
+        });
+      });
+
       it('Issue #405: isHeavyResistanceAhead 當 POC 在現價上方 5% 內且佔比 >= 25% 應回傳 true，其餘情況回傳 false', () => {
         // 現價 100，POC 在 102 (上方 2%)，佔比 30%
         const heavyVp = {

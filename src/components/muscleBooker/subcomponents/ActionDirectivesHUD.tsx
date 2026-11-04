@@ -105,6 +105,7 @@ export const ActionDirectivesHUD: React.FC<ActionDirectivesHUDProps> = ({
                 isWatched={actualWatchlistSymbols.includes(item.symbol)}
                 onToggleWatchlist={actualOnToggleWatchlist}
                 onQuickTrade={actualOnQuickTrade}
+                handlers={handlers}
               />
             ))}
           </div>

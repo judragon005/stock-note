@@ -93,8 +93,18 @@
 
 ---
 
+### 9. 第五輪 Code Review 全量修復與架構收斂 (Issue #407)
+
+- **極強領先股逆勢放行 (RS Rank 貫通, Spec Line 40)**：`scanMuscleBookerItem` 支援傳入 `benchmarkCandles` 自動推導 `rsRank`；`MuscleBookerWorkspace.tsx` 於即時診斷與批次掃描時動態注入基準日 K，確保大盤偏空 (`BEAR`) 下 `EXTREME_STRONG` 領先股能正確放行逆勢買點。
+- **跨市場池大盤 Regime 動態校正 (Spec Line 40-41)**：依標的代碼特徵（美股無數字代碼 vs 台股數字代碼）動態映射至所屬基準大盤 (SPY vs 0050)，徹底消滅自選池或跨市場混合清單 Regime 錯配缺陷。
+- **極短 K 線穿透成交金額門檻防護 (Spec Line 41)**：以實際可用 K 棒計算平均成交金額；若不足 3,000 萬 (TW) 或 500 萬 (US) 則正確標註 `isLowLiquidity = true`，防止剛掛牌新股繞過流動性防守。
+- **風益比計算抽取 (Duplicated Code 消除)**：抽取 `computeRiskReward` 純函式，收斂 `muscleBookerEngine.ts` 內突破買進與破底翻重複計算之 `effectiveRisk`、`reward`、`rrValue` 與大盤偏空折算法。
+- **參數命名與組件 Props 收斂**：`evaluateMuscleBookerAction` 統一收斂為 `volRatio`；`ActionDirectivesHUD` 與 `MuscleStockCard` 全面支援 `StockInteractionHandlers`，徹底消除資料泥塊 (Data Clumps)。
+
+---
+
 ## 驗證結果 (Consequences & Verification)
 
-- **單元測試驗證**：全量 272 個測試套件、2,039 隻測試 100% PASS 綠燈通過。
+- **單元測試驗證**：全量 272 個測試套件、2,050 隻測試 100% PASS 綠燈通過。
 - **TypeScript 編譯**：`npm run build` 0 錯誤通過，生產打包 bundle 順利產出。
-- **規範對齊**：Spec 0216 的 8 張 Tickets 全數標記為 `done`，四輪 Code Review 審查建議 100% 閉環。
+- **規範對齊**：Spec 0216 的 8 張 Tickets 全數標記為 `done`，五輪 Code Review 審查建議 100% 閉環。
