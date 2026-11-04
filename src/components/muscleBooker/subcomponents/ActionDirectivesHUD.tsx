@@ -1,6 +1,6 @@
 import React from 'react';
 import { Flame, ShieldAlert, CheckCircle2 } from 'lucide-react';
-import { ScannedStockItem } from '../../../engine/muscleBookerEngine';
+import { ScannedStockItem, calculateDefenseBufferMetrics } from '../../../engine/muscleBookerEngine';
 import { HoldingPosition, MarketType } from '../../../types/stock';
 import { MuscleStockCard } from './MuscleStockCard';
 
@@ -149,14 +149,10 @@ export const ActionDirectivesHUD: React.FC<ActionDirectivesHUDProps> = ({
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {top3SellItems.map((item) => {
-              const defPrice = item.actionDecision.stopLossPrice ?? (item.actionDecision.action === 'BUY' ? item.boxUpper : item.boxLower);
-              const isBroken = defPrice !== undefined && item.currentPrice < defPrice;
-              const bufferPercent = (defPrice !== undefined && item.currentPrice > 0)
-                ? Math.round(((item.currentPrice - defPrice) / item.currentPrice) * 1000) / 10
-                : undefined;
-              const badgeLabel = isBroken
+              const { isDefenseBroken, bufferPercent } = calculateDefenseBufferMetrics(item);
+              const badgeLabel = isDefenseBroken
                 ? '🚨 破線停損'
-                : `⚠️ 瀕臨破防 (${bufferPercent ?? 0}%)`;
+                : `⚠️ 瀕臨破防 (${bufferPercent}%)`;
 
               return (
                 <MuscleStockCard

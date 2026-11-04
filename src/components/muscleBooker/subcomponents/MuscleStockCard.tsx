@@ -11,10 +11,10 @@ import {
   Star,
   Zap,
 } from 'lucide-react';
-import { ScannedStockItem, BEGINNER_TOOLTIPS } from '../../../engine/muscleBookerEngine';
+import { ScannedStockItem, BEGINNER_TOOLTIPS, calculateDefenseBufferMetrics } from '../../../engine/muscleBookerEngine';
 import { HoldingPosition, MarketType } from '../../../types/stock';
 import { Tooltip } from '../../common/Tooltip';
-import { formatCurrencyPrice } from '../../MuscleBookerWorkspace';
+import { formatStockPrice } from '../../../utils/formatters';
 import { copyTextToClipboard } from '../../../utils/clipboard';
 
 // 達瓦斯防守安全條漸層色常數 (消除 Primitive Obsession smell)
@@ -89,21 +89,12 @@ const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
     }
   }
 
-  // 防守價與防守緩衝距離 Buffer %
-  const defensePrice =
-    item.actionDecision.stopLossPrice ??
-    (item.actionDecision.action === 'BUY' ? item.boxUpper : item.boxLower);
-
-  let bufferPercent: number | undefined;
-  if (defensePrice !== undefined && item.currentPrice > 0) {
-    bufferPercent =
-      Math.round(((item.currentPrice - defensePrice) / item.currentPrice) * 1000) / 10;
-  }
-
-  // 是否處於防守臨界警訊 (已破防守線，或緩衝距離 <= 1.5%)
-  const isBroken = defensePrice !== undefined && item.currentPrice < defensePrice;
-  const isBufferCritical =
-    isBroken || (bufferPercent !== undefined && bufferPercent <= 1.5);
+  // 防守價與防守緩衝距離 Buffer % (複用統一計算 helper)
+  const defMetrics = calculateDefenseBufferMetrics(item);
+  const defensePrice = defMetrics.defensePrice;
+  const bufferPercent = defMetrics.bufferPercent;
+  const isBroken = defMetrics.isDefenseBroken;
+  const isBufferCritical = isBroken || defMetrics.isDefenseEndangered;
 
   // 決定徽章色彩與文字
   const tone = badgeTone ?? item.actionDecision.action;
@@ -399,7 +390,7 @@ const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
               letterSpacing: '-0.02em',
             }}
           >
-            {formatCurrencyPrice(item.currentPrice, item.market)}
+            {formatStockPrice(item.currentPrice, item.market)}
           </span>
 
           {priceChangePercent !== undefined && (
@@ -474,7 +465,7 @@ const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
               }}
             >
               <Shield size={11} color="var(--text-muted)" />
-              防守 {formatCurrencyPrice(defensePrice, item.market)}
+              防守 {formatStockPrice(defensePrice, item.market)}
             </span>
           </Tooltip>
 
@@ -531,7 +522,7 @@ const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
             <Tooltip content={BEGINNER_TOOLTIPS.riskReward} position="top">
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', cursor: 'help' }}>
                 <Target size={11} />
-                目標 {formatCurrencyPrice(item.actionDecision.targetPrice, item.market)}
+                目標 {formatStockPrice(item.actionDecision.targetPrice, item.market)}
               </span>
             </Tooltip>
 

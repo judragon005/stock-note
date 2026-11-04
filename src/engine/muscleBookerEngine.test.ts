@@ -10,6 +10,7 @@ import {
   evaluateMuscleBookerAction,
   scanMuscleBookerItem,
   getScopedUniverseSymbols,
+  calculateDefenseBufferMetrics,
 } from './muscleBookerEngine';
 import { DailyCandle } from '../types/indicators';
 
@@ -750,6 +751,62 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
         const res = scanMuscleBookerItem('2330', '台積電', 'TW', 130, candles);
         expect(res.actionDecision.action).toBe('HOLD');
         expect(res.actionDecision.actionBadge).toContain('主力成本過熱');
+      });
+
+      it('Issue #399: 動態布林帶寬放寬 - 當日突破開口達 9.5% 但近 5 日曾極致壓縮 (<= 8.0%) 時，允許 BUY 買點確立', () => {
+        const decision = evaluateMuscleBookerAction({
+          currentPrice: 105,
+          box: { boxStatus: 'BREAKOUT_UP', boxUpper: 100, boxLower: 90 },
+          deduction: { ma20Slope: 'UP' },
+          bbands: { isSqueeze: false, bandwidth: 9.5, wasRecentSqueeze: true },
+          atr: { atr14: 2.0 },
+        });
+
+        expect(decision.action).toBe('BUY');
+        expect(decision.actionBadge).toContain('建議買進');
+      });
+
+      it('Issue #399: 破底翻反轉站回 VWAP 成本線時，應追加站回成本線強化支撐註記', () => {
+        const decision = evaluateMuscleBookerAction({
+          currentPrice: 95,
+          box: { boxStatus: 'INSIDE_BOX', boxUpper: 110, boxLower: 90 },
+          deduction: { isBottomPenetrationRebound: true, ma20Slope: 'UP' },
+          bbands: { isSqueeze: true, bandwidth: 5.0 },
+          vwap: { mainForceVwap: 93, biasPercent: 2.1 },
+        });
+
+        expect(decision.action).toBe('BUY');
+        expect(decision.actionBadge).toContain('站回成本線');
+        expect(decision.actionReason).toContain('收復20日主力VWAP成本線');
+      });
+
+      it('Issue #399: calculateDefenseBufferMetrics 應精確推導防守價、緩衝比例與瀕危狀態', () => {
+        // 破線情境
+        const broken = calculateDefenseBufferMetrics({
+          currentPrice: 98,
+          actionDecision: { stopLossPrice: 100 },
+        });
+        expect(broken.defensePrice).toBe(100);
+        expect(broken.isDefenseBroken).toBe(true);
+        expect(broken.isDefenseEndangered).toBe(false);
+
+        // 瀕臨破防情境 (緩衝 <= 1.5%)
+        const endangered = calculateDefenseBufferMetrics({
+          currentPrice: 101,
+          actionDecision: { stopLossPrice: 100 },
+        });
+        expect(endangered.isDefenseBroken).toBe(false);
+        expect(endangered.isDefenseEndangered).toBe(true);
+        expect(endangered.bufferPercent).toBeCloseTo(1.0, 1);
+
+        // 安全守穩情境 (緩衝 > 1.5%)
+        const safe = calculateDefenseBufferMetrics({
+          currentPrice: 110,
+          actionDecision: { stopLossPrice: 100 },
+        });
+        expect(safe.isDefenseBroken).toBe(false);
+        expect(safe.isDefenseEndangered).toBe(false);
+        expect(safe.bufferPercent).toBeCloseTo(9.1, 1);
       });
     });
   });

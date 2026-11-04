@@ -6,7 +6,10 @@ import {
   ScannedStockItem,
   getScopedUniverseSymbols,
   scanMuscleBookerItem,
+  calculateDefenseBufferMetrics,
 } from '../engine/muscleBookerEngine';
+import { computeOmniIndicators } from '../engine/omniIndicatorEngine';
+import { formatStockPrice } from '../utils/formatters';
 import { calculateSMA } from '../engine/technicalIndicatorEngine';
 import { backfillSymbolOhlcvAndIndicators } from '../engine/historicalOhlcvBackfill';
 import {
@@ -33,14 +36,10 @@ import { DarvasQuadrantGrid } from './muscleBooker/subcomponents/DarvasQuadrantG
 import { DeductionTelescopeTable } from './muscleBooker/subcomponents/DeductionTelescopeTable';
 
 /**
- * 格式化標的幣別價格字串：美股市場統一標示 US$，台股市場標示 $
+ * 格式化標的幣別價格字串 (轉接自 src/utils/formatters.ts 之統一工具)
  */
 export function formatCurrencyPrice(price?: number, market?: 'TW' | 'US'): string {
-  if (price === undefined || price === null || isNaN(price)) return '-';
-  if (market === 'US') {
-    return `US$ ${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  }
-  return `$${price.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  return formatStockPrice(price, market);
 }
 
 export type MuscleBookerViewLens = 'ACTIONS' | 'QUADRANTS' | 'TELESCOPE';
@@ -201,11 +200,25 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
       selectedPool,
     });
 
-  // Ticket 07: 大盤市場體系判定 (Market Regime Gate)
+  // Ticket 07 & Issue #399: 大盤市場體系判定 (Market Regime Gate - 複用既有 omniIndicatorEngine 狀態機)
   const marketRegime = useMemo<'BULL' | 'BEAR' | 'NEUTRAL'>(() => {
     const benchmarkSymbol = currentMarket === 'US' ? 'SPY' : '0050';
     const candles = cachedCandlesMap[benchmarkSymbol] || (currentMarket === 'TW' ? cachedCandlesMap['2330'] : undefined);
     if (!candles || candles.length < 20) return 'NEUTRAL';
+
+    try {
+      const omni = computeOmniIndicators({
+        symbol: benchmarkSymbol,
+        name: benchmarkSymbol,
+        market: currentMarket === 'US' ? 'US' : 'TW',
+        candles,
+        currentPrice: candles[candles.length - 1].close,
+      });
+      if (omni.confluence.marketRegime === 'TRENDING_BEAR') return 'BEAR';
+      if (omni.confluence.marketRegime === 'TRENDING_BULL') return 'BULL';
+    } catch {
+      // 容錯防禦
+    }
 
     const closes = candles.map((c) => c.close);
     const ma20 = calculateSMA(closes, 20);
@@ -405,59 +418,35 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
     });
   }, [targetUniverse, cachedCandlesMap, adHocItem, activeHoldingsMap, marketRegime]);
 
-  // 各類動作清單與核心作戰指令 (置頂風益比最優者)
-  const buyItems = useMemo(() => {
+  // 頂部常駐作戰指令：全域風益比 >= 2.0 最佳買進標的 (不受局部快篩影響)
+  const top3BuyItems = useMemo(() => {
     return scannedItems
       .filter((i) => i.actionDecision.action === 'BUY')
-      .sort((a, b) => (b.actionDecision.riskRewardRatioValue ?? 0) - (a.actionDecision.riskRewardRatioValue ?? 0));
-  }, [scannedItems]);
-
-  const top3BuyItems = useMemo(() => {
-    return buyItems
+      .sort((a, b) => (b.actionDecision.riskRewardRatioValue ?? 0) - (a.actionDecision.riskRewardRatioValue ?? 0))
       .filter((i) => (i.actionDecision.riskRewardRatioValue ?? 0) >= 2.0)
       .slice(0, 3);
-  }, [buyItems]);
+  }, [scannedItems]);
 
-  const avoidItems = useMemo(
-    () => scannedItems.filter((i) => i.actionDecision.action === 'AVOID' || i.actionDecision.action === 'HOLD'),
-    [scannedItems]
-  );
-
-  const sellItems = useMemo(() => scannedItems.filter((i) => i.actionDecision.action === 'SELL'), [scannedItems]);
-
-  // Ticket 07: 在倉持股停損與瀕臨破防雙重過濾 (已破防或緩衝 <= 1.5%)
+  // Ticket 07 & Issue #399: 在倉持股停損與瀕臨破防雙重過濾 (已破防或緩衝 <= 1.5%，統一收斂至 calculateDefenseBufferMetrics)
   const criticalHoldingAlerts = useMemo(() => {
     return scannedItems
       .filter((i) => {
         if (!activeHoldingsMap.has(i.symbol.toUpperCase())) return false;
-        const defPrice =
-          i.actionDecision.stopLossPrice ??
-          (i.actionDecision.action === 'BUY' ? i.boxUpper : i.boxLower);
-        if (defPrice === undefined || i.currentPrice <= 0) {
-          return i.actionDecision.action === 'SELL';
-        }
-        const isBroken = i.currentPrice < defPrice;
-        const bufferPercent = ((i.currentPrice - defPrice) / i.currentPrice) * 100;
-        return isBroken || bufferPercent <= 1.5 || i.actionDecision.action === 'SELL';
+        const metrics = calculateDefenseBufferMetrics(i);
+        return metrics.isCritical;
       })
       .sort((a, b) => {
-        const getBuf = (item: ScannedStockItem) => {
-          const def =
-            item.actionDecision.stopLossPrice ??
-            (item.actionDecision.action === 'BUY' ? item.boxUpper : item.boxLower);
-          return def && item.currentPrice > 0 ? (item.currentPrice - def) / item.currentPrice : 999;
-        };
-        return getBuf(a) - getBuf(b);
+        const bufA = calculateDefenseBufferMetrics(a).bufferPercent;
+        const bufB = calculateDefenseBufferMetrics(b).bufferPercent;
+        return bufA - bufB;
       })
       .slice(0, 3);
   }, [scannedItems, activeHoldingsMap]);
 
-  // 輔助計算量比與漲跌幅
+  // 輔助計算量比與漲跌幅 (統一複用 calculateDefenseBufferMetrics 防守指標)
   const getItemMetrics = useCallback((item: ScannedStockItem) => {
     let volRatio = 1.0;
     let changePct = 0;
-    let bufferPercent = 999;
-    let isBroken = false;
 
     if (item.candles && item.candles.length >= 2) {
       const len = item.candles.length;
@@ -474,15 +463,15 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
       }
     }
 
-    const defPrice =
-      item.actionDecision.stopLossPrice ??
-      (item.actionDecision.action === 'BUY' ? item.boxUpper : item.boxLower);
-    if (defPrice !== undefined && item.currentPrice > 0) {
-      bufferPercent = ((item.currentPrice - defPrice) / item.currentPrice) * 100;
-      isBroken = item.currentPrice < defPrice;
-    }
+    const defMetrics = calculateDefenseBufferMetrics(item);
 
-    return { volRatio, changePct, bufferPercent, isBroken };
+    return {
+      volRatio,
+      changePct,
+      bufferPercent: defMetrics.bufferPercent,
+      isBroken: defMetrics.isBroken,
+      isCritical: defMetrics.isCritical,
+    };
   }, []);
 
   // 3. 搜尋、實戰快篩與動態多維排序
@@ -506,20 +495,25 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
       );
     }
 
-    // C. 實戰快篩膠囊 (Ticket 08)
+    // C. 實戰快篩膠囊 (Ticket 08 & Issue #399)
     if (activeFilterChip !== 'ALL') {
       list = list.filter((item) => {
-        const { volRatio, bufferPercent, isBroken } = getItemMetrics(item);
+        const { volRatio, isCritical } = getItemMetrics(item);
         if (activeFilterChip === 'EXPLOSIVE_VOL') return volRatio >= 1.5;
         if (activeFilterChip === 'SQUEEZE') return item.isBollingerSqueeze;
         if (activeFilterChip === 'HIGH_RR') return (item.actionDecision.riskRewardRatioValue ?? 0) >= 2.5;
         if (activeFilterChip === 'HOLDINGS') return activeHoldingsMap.has(item.symbol.toUpperCase());
-        if (activeFilterChip === 'CRITICAL_BUFFER') return isBroken || bufferPercent <= 1.5;
+        if (activeFilterChip === 'CRITICAL_BUFFER') return isCritical;
         return true;
       });
     }
 
-    // D. 多維動態排序 (Ticket 08)
+    // D. 多維動態排序 (Ticket 08 & Issue #399) - O(N) 預算快取比較器
+    const metricsMap = new Map<string, ReturnType<typeof getItemMetrics>>();
+    for (const item of list) {
+      metricsMap.set(item.symbol, getItemMetrics(item));
+    }
+
     const sorted = [...list];
     if (sortBy === 'RR_DESC') {
       sorted.sort(
@@ -527,24 +521,40 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
           (b.actionDecision.riskRewardRatioValue ?? 0) - (a.actionDecision.riskRewardRatioValue ?? 0)
       );
     } else if (sortBy === 'VOL_RATIO_DESC') {
-      sorted.sort((a, b) => getItemMetrics(b).volRatio - getItemMetrics(a).volRatio);
+      sorted.sort((a, b) => (metricsMap.get(b.symbol)?.volRatio ?? 1) - (metricsMap.get(a.symbol)?.volRatio ?? 1));
     } else if (sortBy === 'BUFFER_ASC') {
-      sorted.sort((a, b) => getItemMetrics(a).bufferPercent - getItemMetrics(b).bufferPercent);
+      sorted.sort((a, b) => (metricsMap.get(a.symbol)?.bufferPercent ?? 999) - (metricsMap.get(b.symbol)?.bufferPercent ?? 999));
     } else if (sortBy === 'CHANGE_DESC') {
-      sorted.sort((a, b) => getItemMetrics(b).changePct - getItemMetrics(a).changePct);
+      sorted.sort((a, b) => (metricsMap.get(b.symbol)?.changePct ?? 0) - (metricsMap.get(a.symbol)?.changePct ?? 0));
     }
 
     return sorted;
   }, [scannedItems, actionFilter, searchQuery, activeFilterChip, sortBy, getItemMetrics, activeHoldingsMap]);
 
+  // Issue #399: 操盤導航 (TrafficLightMatrix) 同步連動 filteredItems
+  const buyItems = useMemo(
+    () => filteredItems.filter((i) => i.actionDecision.action === 'BUY'),
+    [filteredItems]
+  );
+
+  const avoidItems = useMemo(
+    () => filteredItems.filter((i) => i.actionDecision.action === 'AVOID' || i.actionDecision.action === 'HOLD'),
+    [filteredItems]
+  );
+
+  const sellItems = useMemo(
+    () => filteredItems.filter((i) => i.actionDecision.action === 'SELL'),
+    [filteredItems]
+  );
+
   const counts = useMemo(
     () => ({
       all: scannedItems.length,
-      buy: buyItems.length,
-      avoid: avoidItems.length,
-      sell: sellItems.length,
+      buy: scannedItems.filter((i) => i.actionDecision.action === 'BUY').length,
+      avoid: scannedItems.filter((i) => i.actionDecision.action === 'AVOID' || i.actionDecision.action === 'HOLD').length,
+      sell: scannedItems.filter((i) => i.actionDecision.action === 'SELL').length,
     }),
-    [scannedItems.length, buyItems.length, avoidItems.length, sellItems.length]
+    [scannedItems]
   );
 
   const handleToggleExpand = useCallback((sym: string) => {
@@ -642,8 +652,8 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
           }}
         >
           {[
-            { key: 'ACTIONS', label: '🚦 操盤導航', count: scannedItems.length },
-            { key: 'QUADRANTS', label: '⚡ 動能看板', count: scannedItems.length },
+            { key: 'ACTIONS', label: '🚦 操盤導航', count: filteredItems.length },
+            { key: 'QUADRANTS', label: '⚡ 動能看板', count: filteredItems.length },
             { key: 'TELESCOPE', label: '📈 扣抵望遠鏡', count: filteredItems.length },
           ].map((tab) => {
             const isActive = viewLens === tab.key;
@@ -706,7 +716,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
 
       {viewLens === 'QUADRANTS' && (
         <DarvasQuadrantGrid
-          scannedItems={scannedItems}
+          scannedItems={filteredItems}
           activeHoldingsMap={activeHoldingsMap}
           expandedSymbol={expandedSymbol}
           onToggleExpand={handleToggleExpand}
