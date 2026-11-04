@@ -37,7 +37,7 @@
 2. **專案既有模組零造輪子串聯 (`volumeProfile` / `vwapCost` / `Regime`)**：
    - 串聯 `volumeProfileEngine.ts`：突破時檢驗現價上方 5% 內是否存在 POC 大量套牢峰，若有則降級風益比並提示套牢壓制。
    - 串聯 `vwapCostEngine.ts`：計算 20 日主力成本乖離率，> 10% 降級為過熱觀望；破底翻站回 VWAP 加分標註。
-   - 接通 `omniIndicatorEngine.evaluateMarketRegime`：大盤空頭時強制提高 R 門檻至 3.0R 且非極強領先股禁止逆勢進場。
+   - 接通 `omniIndicatorEngine.evaluateMarketRegime`：大盤空頭時強制提高 R 門檻至 3.0R 且非極強領先股禁止逆勢進場；台股基準預設為 0050，若缺損則具備 2330 備援機制，美股基準為 SPY (Issue #409 & #411)。
    - 建立雙市場成交金額門檻：台股 5 日均成交金額 ≥ 3,000 萬 TWD；美股 ≥ 500 萬 USD。美股串聯 CMF 蔡金資金流。
 
 3. **數據水合機制升級與零幻覺防護 (`useMuscleBookerSync.ts`)**：

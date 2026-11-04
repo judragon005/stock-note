@@ -636,16 +636,20 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         onActionFilterChange={setActionFilter}
         counts={counts}
         watchlistSymbols={watchlistSymbols}
-        customInputSymbol={customInputSymbol}
-        customInputError={customInputError}
-        isAddingCustom={isAddingCustom}
-        onCustomInputChange={setCustomInputSymbol}
-        onAddCustomSymbol={handleAddCustomSymbol}
         onToggleWatchlist={handleToggleWatchlist}
         filteredCount={filteredItems.length}
-        isAdHocLoading={isAdHocLoading}
-        adHocError={adHocError}
-        onRunAdHocScan={handleRunAdHocScan}
+        watchlistControl={{
+          customInputSymbol,
+          customInputError,
+          isAddingCustom,
+          onCustomInputChange: setCustomInputSymbol,
+          onAddCustomSymbol: handleAddCustomSymbol,
+        }}
+        adHocControl={{
+          isAdHocLoading,
+          adHocError,
+          onRunAdHocScan: handleRunAdHocScan,
+        }}
         sortBy={sortBy}
         onSortByChange={setSortBy}
         activeFilterChip={activeFilterChip}
@@ -767,6 +771,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
           expandedSymbol={expandedSymbol}
           onToggleExpand={handleToggleExpand}
           onToggleWatchlist={handleToggleWatchlist}
+          onQuickTrade={handleQuickTrade}
         />
       )}
     </div>

@@ -16,6 +16,26 @@ import { resolveOfficialSecurityName } from '../../../engine/stockNameResolver';
 export type MuscleBookerSortOption = 'RR_DESC' | 'VOL_RATIO_DESC' | 'BUFFER_ASC' | 'CHANGE_DESC';
 export type MuscleBookerFilterChip = 'ALL' | 'EXPLOSIVE_VOL' | 'SQUEEZE' | 'HIGH_RR' | 'HOLDINGS' | 'CRITICAL_BUFFER';
 
+/**
+ * 自選清單輸入控制聚合介面 (Data Clumps 消除 - Issue #411)
+ */
+export interface WatchlistInputControl {
+  customInputSymbol: string;
+  customInputError: string | null;
+  isAddingCustom: boolean;
+  onCustomInputChange: (val: string) => void;
+  onAddCustomSymbol: (e: React.FormEvent) => void;
+}
+
+/**
+ * 即時外部診斷控制聚合介面 (Data Clumps 消除 - Issue #411)
+ */
+export interface AdHocScanControl {
+  isAdHocLoading: boolean;
+  adHocError: string | null;
+  onRunAdHocScan: (symbol?: string) => void;
+}
+
 export interface MuscleBookerHeaderProps {
   universeSyncToast: { message: string; type: 'info' | 'success' | 'warn' } | null;
   universeStatusText: string;
@@ -31,17 +51,23 @@ export interface MuscleBookerHeaderProps {
   onActionFilterChange: (f: 'ALL' | 'BUY' | 'AVOID' | 'SELL') => void;
   counts: { all: number; buy: number; avoid: number; sell: number };
   watchlistSymbols: string[];
-  customInputSymbol: string;
-  customInputError: string | null;
-  isAddingCustom: boolean;
-  onCustomInputChange: (val: string) => void;
-  onAddCustomSymbol: (e: React.FormEvent) => void;
   onToggleWatchlist: (sym: string) => void;
-  // 即時診斷相關
   filteredCount: number;
-  isAdHocLoading: boolean;
-  adHocError: string | null;
-  onRunAdHocScan: (symbol?: string) => void;
+
+  // 聚合控制項 (Issue #411)
+  watchlistControl?: WatchlistInputControl;
+  adHocControl?: AdHocScanControl;
+
+  // 向下相容扁平 props (可選)
+  customInputSymbol?: string;
+  customInputError?: string | null;
+  isAddingCustom?: boolean;
+  onCustomInputChange?: (val: string) => void;
+  onAddCustomSymbol?: (e: React.FormEvent) => void;
+  isAdHocLoading?: boolean;
+  adHocError?: string | null;
+  onRunAdHocScan?: (symbol?: string) => void;
+
   // Ticket 08 排序與快篩
   sortBy?: MuscleBookerSortOption;
   onSortByChange?: (sort: MuscleBookerSortOption) => void;
@@ -64,21 +90,33 @@ export const MuscleBookerHeader: React.FC<MuscleBookerHeaderProps> = ({
   onActionFilterChange,
   counts,
   watchlistSymbols,
-  customInputSymbol,
-  customInputError,
-  isAddingCustom,
-  onCustomInputChange,
-  onAddCustomSymbol,
+  watchlistControl,
+  adHocControl,
+  customInputSymbol: rawCustomInputSymbol,
+  customInputError: rawCustomInputError,
+  isAddingCustom: rawIsAddingCustom,
+  onCustomInputChange: rawOnCustomInputChange,
+  onAddCustomSymbol: rawOnAddCustomSymbol,
   onToggleWatchlist,
   filteredCount,
-  isAdHocLoading,
-  adHocError,
-  onRunAdHocScan,
+  isAdHocLoading: rawIsAdHocLoading,
+  adHocError: rawAdHocError,
+  onRunAdHocScan: rawOnRunAdHocScan,
   sortBy = 'RR_DESC',
   onSortByChange,
   activeFilterChip = 'ALL',
   onFilterChipChange,
 }) => {
+  const customInputSymbol = watchlistControl?.customInputSymbol ?? rawCustomInputSymbol ?? '';
+  const customInputError = watchlistControl?.customInputError ?? rawCustomInputError ?? null;
+  const isAddingCustom = watchlistControl?.isAddingCustom ?? rawIsAddingCustom ?? false;
+  const onCustomInputChange = watchlistControl?.onCustomInputChange ?? rawOnCustomInputChange ?? (() => {});
+  const onAddCustomSymbol = watchlistControl?.onAddCustomSymbol ?? rawOnAddCustomSymbol ?? (() => {});
+
+  const isAdHocLoading = adHocControl?.isAdHocLoading ?? rawIsAdHocLoading ?? false;
+  const adHocError = adHocControl?.adHocError ?? rawAdHocError ?? null;
+  const onRunAdHocScan = adHocControl?.onRunAdHocScan ?? rawOnRunAdHocScan ?? (() => {});
+
   return (
     <>
       {/* 輕量 Toast 通知 */}

@@ -789,6 +789,7 @@ export interface ScanMuscleBookerOptions {
   rsRank?: RelativeStrengthRank;
   benchmarkCandles?: DailyCandle[];
   isForensicDangerous?: boolean;
+  volumeUnit?: 'SHARES' | 'LOTS'; // 支援顯式指定成交量單位，未指定預設為 SHARES (標準股數) - Issue #411
 }
 
 export interface ScannedStockItem {
@@ -1197,14 +1198,14 @@ export function scanMuscleBookerItem(
     }
   }
 
-  // 9. 流動性初篩與安全金額容量檢驗 (Spec 0216 Ticket 02 & Issue #407: 防短 K 線穿透)
+  // 9. 流動性初篩與安全金額容量檢驗 (Spec 0216 Ticket 02 & Issue #411: 消除張數盲猜斷崖)
   let isLowLiquidity = false;
   if (candles.length > 0) {
     const sample = candles.slice(-5);
     const avgVol5 = sample.reduce((acc, c) => acc + c.volume, 0) / sample.length;
-    // 台股行情量若 <= 100,000 通常為張數 (券商/一般日K慣例)，自動換算為股數 (1張 = 1,000股)
-    const twShares = avgVol5 <= 100000 ? avgVol5 * 1000 : avgVol5;
-    const avgDollarVolume5 = market === 'TW' ? twShares * lastCandle.close : avgVol5 * lastCandle.close;
+    // 若顯式指定 LOTS (張數) 則 1 張 = 1,000 股；預設全市場日 K 線 volume 均為標準股數 (Shares)
+    const effectiveShares = options?.volumeUnit === 'LOTS' ? avgVol5 * 1000 : avgVol5;
+    const avgDollarVolume5 = effectiveShares * lastCandle.close;
     const dollarThreshold = market === 'TW' ? 30_000_000 : 5_000_000;
     if (avgDollarVolume5 < dollarThreshold) {
       isLowLiquidity = true;

@@ -30,7 +30,7 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
       const high = price + 2;
       const low = price - 2;
       const close = price + (i % 2 === 0 ? 1 : -1);
-      const volume = 1000 + i * 10;
+      const volume = (1000 + i * 10) * 1000;
       candles.push({ date, open, high, low, close, volume });
       price = close;
     }
@@ -1043,7 +1043,7 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
               high: isFirst ? 175 : (isLast ? 101 : 95),
               low: isLast ? 95.5 : 90,
               close: isLast ? 100 : 92,
-              volume: isLast ? 50000 : 10000,
+              volume: isLast ? 500000 : 350000, // 正常活躍成交量 (350~500 張)
             };
           });
 
@@ -1077,6 +1077,58 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
           const result = scanMuscleBookerItem('9999', '冷門新股', 'TW', 10, shortCandles);
           expect(result.actionDecision.action).toBe('AVOID');
           expect(result.actionDecision.actionBadge).toContain('流動性不足');
+        });
+
+        it('Issue #411: 消除張數盲猜斷崖，8 萬股與 12 萬股真實股數低於 3,000 萬應正確判為流動性不足', () => {
+          // 8 萬股 (80 張) * 100 元 = 800 萬 < 3,000 萬，過去因 <= 100000 誤乘以千變成 80 億繞過防守，現已修復
+          const candles80k: DailyCandle[] = Array.from({ length: 5 }, (_, i) => ({
+            date: '2026-08-0' + (i + 1),
+            open: 100,
+            high: 102,
+            low: 98,
+            close: 100,
+            volume: 80_000,
+          }));
+          const res80k = scanMuscleBookerItem('1111', '量小股A', 'TW', 100, candles80k);
+          expect(res80k.actionDecision.action).toBe('AVOID');
+          expect(res80k.actionDecision.actionBadge).toContain('流動性不足');
+
+          // 12 萬股 (120 張) * 100 元 = 1,200 萬 < 3,000 萬，正確判為流動性不足
+          const candles120k: DailyCandle[] = Array.from({ length: 5 }, (_, i) => ({
+            date: '2026-08-0' + (i + 1),
+            open: 100,
+            high: 102,
+            low: 98,
+            close: 100,
+            volume: 120_000,
+          }));
+          const res120k = scanMuscleBookerItem('2222', '量小股B', 'TW', 100, candles120k);
+          expect(res120k.actionDecision.action).toBe('AVOID');
+          expect(res120k.actionDecision.actionBadge).toContain('流動性不足');
+
+          // 50 萬股 (500 張) * 100 元 = 5,000 萬 >= 3,000 萬，流動性充足
+          const candles500k: DailyCandle[] = Array.from({ length: 5 }, (_, i) => ({
+            date: '2026-08-0' + (i + 1),
+            open: 100,
+            high: 102,
+            low: 98,
+            close: 100,
+            volume: 500_000,
+          }));
+          const res500k = scanMuscleBookerItem('2330', '台積電', 'TW', 100, candles500k);
+          expect(res500k.actionDecision.actionBadge).not.toContain('流動性不足');
+
+          // 顯式指定 volumeUnit: 'LOTS' (400 張 * 1000 股/張 * 100 元 = 4,000 萬 >= 3,000 萬)
+          const candlesLots: DailyCandle[] = Array.from({ length: 5 }, (_, i) => ({
+            date: '2026-08-0' + (i + 1),
+            open: 100,
+            high: 102,
+            low: 98,
+            close: 100,
+            volume: 400,
+          }));
+          const resLots = scanMuscleBookerItem('2330', '台積電', 'TW', 100, candlesLots, { volumeUnit: 'LOTS' });
+          expect(resLots.actionDecision.actionBadge).not.toContain('流動性不足');
         });
       });
 

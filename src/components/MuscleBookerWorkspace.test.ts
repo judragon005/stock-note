@@ -15,7 +15,7 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
         high: isLast ? 116 : c + 1,
         low: isLast ? 114 : c - 1,
         close: c,
-        volume: isLast ? 50000 : 10000,
+        volume: isLast ? 500000 : 350000, // 正常活躍成交量 (350~500 張)
       };
     });
 
@@ -118,7 +118,7 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
         high: isLast ? 107 : c + 1,
         low: isLast ? 105.8 : c - 1,
         close: c,
-        volume: isLast ? 50000 : 10000,
+        volume: isLast ? 500000 : 350000,
       };
     });
 
@@ -274,7 +274,7 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
         high: i === 3 ? 22.75 : (isLast ? 22.62 : 22.5),
         low: isLast ? 22.5 : 21.8,
         close: c,
-        volume: 15000,
+        volume: 1500000, // 正常成交量 (1,500 張 * 22.6 元 = 3,390 萬 > 3,000 萬門檻)
       };
     });
 
