@@ -48,6 +48,28 @@ export interface MuscleBookerWorkspaceProps {
   onQuickTrade?: (symbol: string, action: 'BUY' | 'SELL', price?: number) => void;
 }
 
+/**
+ * 集中解析標的所屬市場、適用大盤多空 Regime 與基準日 K (含 2330 備援 - Issue #409)
+ */
+export function resolveMarketBenchmarkAndRegime(
+  symbol: string,
+  market: MarketType,
+  cachedCandlesMap: Record<string, DailyCandle[] | undefined>,
+  marketRegimeTW: 'BULL' | 'BEAR' | 'NEUTRAL',
+  marketRegimeUS: 'BULL' | 'BEAR' | 'NEUTRAL'
+): {
+  isUS: boolean;
+  targetRegime: 'BULL' | 'BEAR' | 'NEUTRAL';
+  targetBenchmarkCandles?: DailyCandle[];
+} {
+  const isUS = market === 'US' || (market as string) === '美股' || !/^[0-9]/.test(symbol);
+  const targetRegime = isUS ? marketRegimeUS : marketRegimeTW;
+  const targetBenchmarkCandles = isUS
+    ? cachedCandlesMap['SPY']
+    : (cachedCandlesMap['0050'] || cachedCandlesMap['2330']);
+  return { isUS, targetRegime, targetBenchmarkCandles };
+}
+
 export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
   holdings,
   historicalDailyPrices: _historicalDailyPrices = {},
@@ -284,9 +306,13 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
       const latestCandle = res.candles[res.candles.length - 1];
       const basePrice = latestCandle?.close || 100;
 
-      const isUS = inferredMarket === 'US' || !/^[0-9]/.test(raw);
-      const targetRegime = isUS ? marketRegimeUS : marketRegimeTW;
-      const targetBenchmarkCandles = isUS ? cachedCandlesMap['SPY'] : cachedCandlesMap['0050'];
+      const { targetRegime, targetBenchmarkCandles } = resolveMarketBenchmarkAndRegime(
+        raw,
+        inferredMarket,
+        cachedCandlesMap,
+        marketRegimeTW,
+        marketRegimeUS
+      );
 
       const scanned = scanMuscleBookerItem(
         raw,
@@ -387,9 +413,13 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         return adHocItem;
       }
 
-      const isUS = item.market === 'US' || !/^[0-9]/.test(item.symbol);
-      const targetRegime = isUS ? marketRegimeUS : marketRegimeTW;
-      const targetBenchmarkCandles = isUS ? cachedCandlesMap['SPY'] : cachedCandlesMap['0050'];
+      const { targetRegime, targetBenchmarkCandles } = resolveMarketBenchmarkAndRegime(
+        item.symbol,
+        item.market,
+        cachedCandlesMap,
+        marketRegimeTW,
+        marketRegimeUS
+      );
 
       const holding = activeHoldingsMap.get(item.symbol.toUpperCase());
       const isHolding = !!holding;

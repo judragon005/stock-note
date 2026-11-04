@@ -501,12 +501,12 @@ export function evaluateMuscleBookerAction(params: {
     const target = (lookback60High !== undefined && lookback60High > currentPrice)
       ? 0.5 * lookback60High + 0.5 * measuredTarget
       : measuredTarget;
-    const structuralRisk = Math.max(0.1, currentPrice - stopLoss);
-    const minRiskBuffer = Math.max(currentPrice * 0.02, (atr?.atr14 ?? 0) * 1.0);
-    const effectiveRisk = Math.max(structuralRisk, minRiskBuffer);
-    const reward = Math.max(0.1, target - currentPrice);
-    const rrValue = Math.round((reward / effectiveRisk) * 10) / 10;
-    const rrRatio = rrValue.toFixed(1);
+    const { rrValue, rrRatio } = computeRiskReward(
+      currentPrice,
+      stopLoss,
+      target,
+      atr?.atr14
+    );
 
     // OBV 能量潮資金流檢驗
     if (obvTrend === 'FALLING') {
@@ -675,12 +675,12 @@ export function evaluateMuscleBookerAction(params: {
     const target = (lookback60High !== undefined && lookback60High > currentPrice)
       ? 0.5 * lookback60High + 0.5 * rawTarget
       : rawTarget;
-    const structuralRisk = Math.max(0.1, currentPrice - stopLoss);
-    const minRiskBuffer = Math.max(currentPrice * 0.02, (atr?.atr14 ?? 0) * 1.0);
-    const effectiveRisk = Math.max(structuralRisk, minRiskBuffer);
-    const reward = Math.max(0.1, target - currentPrice);
-    const rrValue = Math.round((reward / effectiveRisk) * 10) / 10;
-    const rrRatio = rrValue.toFixed(1);
+    const { rrValue, rrRatio } = computeRiskReward(
+      currentPrice,
+      stopLoss,
+      target,
+      atr?.atr14
+    );
 
     if (marketRegime === 'BEAR' && rsRank !== 'EXTREME_STRONG') {
       return {
@@ -1090,7 +1090,7 @@ export function scanMuscleBookerItem(
   localCandles?: DailyCandle[],
   options?: ScanMuscleBookerOptions
 ): ScannedStockItem {
-  // 防禦性零幻覺原則：無足夠真實歷史日 K 線（< 5 根）時，絕不可偽造假 K 線誤導交易！
+  // 防禦性零幻覺原則 (Spec 0216 Line 44)：無足夠真實歷史日 K 線 (< 5 根) 屬時序數據回補中，維持 isDataPending: true 與 AVOID 觀望，絕不調用偽造行情！
   if (!localCandles || localCandles.length < 5) {
     return {
       symbol,

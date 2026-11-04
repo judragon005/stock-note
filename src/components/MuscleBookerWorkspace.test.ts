@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { resolveMarketBenchmarkAndRegime } from './MuscleBookerWorkspace';
 import { scanMuscleBookerItem } from '../engine/muscleBookerEngine';
 import { DailyCandle } from '../types/indicators';
 
@@ -586,6 +587,28 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
         };
 
         expect(mockUniverse.map(getBenchmarkSymbol)).toEqual(['0050', 'SPY', 'SPY', '0050']);
+      });
+
+      it('Issue #409: resolveMarketBenchmarkAndRegime 應支援 0050 缺損時自動備援至 2330 基準日 K', () => {
+        const dummyCandles2330: any[] = [{ date: '2026-08-01', close: 100 }];
+        const cachedMap = {
+          '2330': dummyCandles2330,
+        };
+
+        const res = resolveMarketBenchmarkAndRegime('2454', 'TW', cachedMap, 'BEAR', 'BULL');
+        expect(res.isUS).toBe(false);
+        expect(res.targetRegime).toBe('BEAR');
+        expect(res.targetBenchmarkCandles).toBe(dummyCandles2330);
+
+        // 美股標的應綁定 SPY
+        const dummyCandlesSpy: any[] = [{ date: '2026-08-01', close: 500 }];
+        const cachedMapUS = {
+          'SPY': dummyCandlesSpy,
+        };
+        const resUS = resolveMarketBenchmarkAndRegime('AAPL', 'US', cachedMapUS, 'BEAR', 'BULL');
+        expect(resUS.isUS).toBe(true);
+        expect(resUS.targetRegime).toBe('BULL');
+        expect(resUS.targetBenchmarkCandles).toBe(dummyCandlesSpy);
       });
     });
 
