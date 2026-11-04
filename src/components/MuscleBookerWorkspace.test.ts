@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveMarketBenchmarkAndRegime } from './MuscleBookerWorkspace';
+import { resolveMarketBenchmarkAndRegime } from '../engine/muscleBookerEngine';
 import { scanMuscleBookerItem } from '../engine/muscleBookerEngine';
 import { DailyCandle } from '../types/indicators';
 

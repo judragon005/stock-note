@@ -121,8 +121,19 @@
 
 ---
 
+### 12. 第八輪 Code Review 全量修復與架構下沉 (Issue #413)
+
+- **水合基準補齊 2330 備援鏈路 (Spec Line 40-41)**：於 `useMuscleBookerSync.ts` 之 `BENCHMARK_SYMBOLS` 補齊 `2330`，確保大盤 Regime 0050 日 K 缺損且觀察池不含 2330 時，備援日 K 能順利被預載水合入本地快取，杜絕備援機制懸空。
+- **偽造行情函式物理移除 (Spec Line 44)**：徹底自 `muscleBookerEngine.ts` 拔除隨機假行情生成函式 `generateSyntheticCandles`；`historicalOhlcvBackfill.ts` 亦全面遵守防幻覺原則，無行情時返回空數列，絕不偽造假 K 線誤導交易。
+- **5 日日均成交金額第一性原理計算 (Spec Line 41)**：`muscleBookerEngine.ts` 改為 5 日逐日 `(shares * c.close)` 加總平均，消除跳空暴漲將過去低量乘上單日高價的虛增失真。
+- **POC 上方套牢反壓邊界穿入死角修復 (Spec Line 109)**：優化 `isHeavyResistanceAhead` 判定邏輯，當現價穿入 POC 密集區且距桶頂仍有顯著套牢厚度時正確識別上方反壓。
+- **消除 Middle Man 與同義參數收斂**：拔除 `computeMuscleBookerTimeline` 冗餘轉發函式；`evaluateMuscleBookerAction` 徹底移除同義參數 `volumeRatio`，統一收斂為 `volRatio`。
+- **領域純函式下沉與扣抵表資料泥塊收斂**：`resolveMarketBenchmarkAndRegime` 正式下沉至 `src/engine/muscleBookerEngine.ts` 導出；`DeductionTelescopeTable.tsx` 全面接入 `StockInteractionHandlers`，消滅雙軌散裝 props。
+
+---
+
 ## 驗證結果 (Consequences & Verification)
 
-- **單元測試驗證**：全量 273 個測試套件、2,057 隻測試 100% PASS 綠燈通過。
+- **單元測試驗證**：全量 273 個測試套件、2,058 隻測試 100% PASS 綠燈通過。
 - **TypeScript 編譯**：`npm run build` 0 錯誤通過，生產打包 bundle 順利產出。
-- **規範對齊**：Spec 0216 的 8 張 Tickets 全數標記為 `done`，七輪 Code Review 審查建議 100% 閉環。
+- **規範對齊**：Spec 0216 的 8 張 Tickets 全數標記為 `done`，八輪 Code Review 審查建議 100% 閉環。

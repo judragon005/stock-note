@@ -3,6 +3,7 @@ import { HoldingPosition, MarketType } from '../types/stock';
 import { DailyCandle } from '../types/indicators';
 import {
   AssetPoolType,
+  resolveMarketBenchmarkAndRegime,
   ScannedStockItem,
   getScopedUniverseSymbols,
   scanMuscleBookerItem,
@@ -10,6 +11,7 @@ import {
   calculateMomentumQuickMetrics,
 } from '../engine/muscleBookerEngine';
 import { StockInteractionHandlers } from './muscleBooker/types';
+export { resolveMarketBenchmarkAndRegime };
 import { computeOmniIndicators } from '../engine/omniIndicatorEngine';
 import { calculateSMA } from '../engine/technicalIndicatorEngine';
 import { backfillSymbolOhlcvAndIndicators } from '../engine/historicalOhlcvBackfill';
@@ -48,27 +50,7 @@ export interface MuscleBookerWorkspaceProps {
   onQuickTrade?: (symbol: string, action: 'BUY' | 'SELL', price?: number) => void;
 }
 
-/**
- * 集中解析標的所屬市場、適用大盤多空 Regime 與基準日 K (含 2330 備援 - Issue #409)
- */
-export function resolveMarketBenchmarkAndRegime(
-  symbol: string,
-  market: MarketType,
-  cachedCandlesMap: Record<string, DailyCandle[] | undefined>,
-  marketRegimeTW: 'BULL' | 'BEAR' | 'NEUTRAL',
-  marketRegimeUS: 'BULL' | 'BEAR' | 'NEUTRAL'
-): {
-  isUS: boolean;
-  targetRegime: 'BULL' | 'BEAR' | 'NEUTRAL';
-  targetBenchmarkCandles?: DailyCandle[];
-} {
-  const isUS = market === 'US' || (market as string) === '美股' || !/^[0-9]/.test(symbol);
-  const targetRegime = isUS ? marketRegimeUS : marketRegimeTW;
-  const targetBenchmarkCandles = isUS
-    ? cachedCandlesMap['SPY']
-    : (cachedCandlesMap['0050'] || cachedCandlesMap['2330']);
-  return { isUS, targetRegime, targetBenchmarkCandles };
-}
+
 
 export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
   holdings,
@@ -767,11 +749,8 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
       {viewLens === 'TELESCOPE' && (
         <DeductionTelescopeTable
           filteredItems={filteredItems}
-          watchlistSymbols={watchlistSymbols}
           expandedSymbol={expandedSymbol}
-          onToggleExpand={handleToggleExpand}
-          onToggleWatchlist={handleToggleWatchlist}
-          onQuickTrade={handleQuickTrade}
+          handlers={interactionHandlers}
         />
       )}
     </div>

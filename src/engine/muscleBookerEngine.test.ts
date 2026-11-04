@@ -14,7 +14,6 @@ import {
   detectBottomPenetration,
   isHeavyResistanceAhead,
   calculateMomentumQuickMetrics,
-  computeMuscleBookerTimeline,
   computeRiskReward,
 } from './muscleBookerEngine';
 import { DailyCandle } from '../types/indicators';
@@ -938,7 +937,6 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
           hasHeavyResistance: true, // 套牢反壓
           bbands: { bandwidth: 6.0, isSqueeze: true, wasRecentSqueeze: true },
           vwap: { biasPercent: 2.0 },
-          volumeRatio: 1.5,
           volRatio: 1.5,
           marketRegime: 'BULL',
           rsRank: 'STRONG',
@@ -960,8 +958,7 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
           hasHeavyResistance: false,
           bbands: { bandwidth: 10.0, isSqueeze: false, wasRecentSqueeze: true }, // 開口放寬中
           vwap: { biasPercent: 2.0 },
-          volumeRatio: 0.8, // 未放量 (< 1.0)
-          volRatio: 0.8,
+          volRatio: 0.8, // 未放量 (< 1.0)
           marketRegime: 'BULL',
           rsRank: 'STRONG',
           atr: { trailingDefensePrice: 95 },
@@ -977,8 +974,7 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
           hasHeavyResistance: false,
           bbands: { bandwidth: 10.0, isSqueeze: false, wasRecentSqueeze: true }, // 開口放寬中
           vwap: { biasPercent: 2.0 },
-          volumeRatio: 1.5, // 顯著放量 (>= 1.0)
-          volRatio: 1.5,
+          volRatio: 1.5, // 顯著放量 (>= 1.0)
           marketRegime: 'BULL',
           rsRank: 'STRONG',
           atr: { trailingDefensePrice: 95 },
@@ -1000,7 +996,7 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
           };
         });
 
-        const timeline = computeMuscleBookerTimeline('TEST', candles);
+        const timeline = calculateMuscleBookerIndicators(candles);
         expect(timeline.length).toBe(30);
         // 第 25 根 (index 24) 的扣抵指標中 isBottomPenetrationRebound 應為 true
         expect(timeline[24].maDeduction.isBottomPenetrationRebound).toBe(true);
@@ -1257,7 +1253,7 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
           };
         });
 
-        const timeline = computeMuscleBookerTimeline('TEST', candles);
+        const timeline = calculateMuscleBookerIndicators(candles);
         expect(timeline.length).toBe(30);
         // 第 25 根 (index 24) 的扣抵指標中 isBottomPenetrationRebound 應為 true
         expect(timeline[24].maDeduction.isBottomPenetrationRebound).toBe(true);
