@@ -26,18 +26,20 @@ export {
 };
 
 
-export {
-  detectDarvasBox,
-  calculateMaDeduction,
-  calculateBollingerSqueeze,
-} from './darvasBoxEngine';
 import {
   detectDarvasBox,
   calculateMaDeduction,
   calculateBollingerSqueeze,
   detectBottomPenetration,
+  isHeavyResistanceAhead,
 } from './darvasBoxEngine';
-export { detectBottomPenetration };
+export {
+  detectDarvasBox,
+  calculateMaDeduction,
+  calculateBollingerSqueeze,
+  detectBottomPenetration,
+  isHeavyResistanceAhead,
+};
 import { calculateSMA, calculateMACD } from './technicalIndicatorEngine';
 import { calculateOBV, detectPriceActionTraps } from './omniIndicatorEngine';
 import { calculateVwapCostStructure } from './vwapCostEngine';
@@ -159,7 +161,7 @@ export function calculateMuscleBookerIndicators(
 
     // 核心肌肉書僮各維度
     const box = detectDarvasBox(subCandles);
-    const deduction = calculateMaDeduction(subCandles);
+    const deduction = calculateMaDeduction(subCandles, box.boxLower);
     const bbands = calculateBollingerSqueeze(subCandles);
     const atr = calculateAtrTrailingDefense(subCandles);
 
@@ -193,7 +195,56 @@ export function calculateMuscleBookerIndicators(
   return points;
 }
 
+
+/**
+ * 依據標的與日 K 數列計算時序點位 (calculateMuscleBookerIndicators 之語意別名)
+ */
+export const computeMuscleBookerTimeline = (
+  _symbol: string,
+  candles: DailyCandle[],
+  benchmarkCandles?: DailyCandle[]
+): MuscleBookerIndicatorPoint[] => calculateMuscleBookerIndicators(candles, benchmarkCandles);
+
 export type MuscleBookerActionType = 'BUY' | 'AVOID' | 'SELL' | 'HOLD';
+
+
+export interface MomentumQuickMetrics {
+  priceChange?: number;
+  priceChangePercent?: number;
+  volRatio?: number;
+}
+
+/**
+ * 集中計算當日漲跌價、漲跌幅與 5 日均量之量比 (DRY 消除重複運算 - Spec 0216 / Issue #405)
+ */
+export function calculateMomentumQuickMetrics(
+  candles?: DailyCandle[],
+  currentPrice?: number
+): MomentumQuickMetrics {
+  if (!candles || candles.length < 2) {
+    return {};
+  }
+  const len = candles.length;
+  const p = currentPrice ?? candles[len - 1].close;
+  const prevClose = candles[len - 2].close;
+  let priceChange: number | undefined;
+  let priceChangePercent: number | undefined;
+  let volRatio: number | undefined;
+
+  if (prevClose > 0) {
+    priceChange = Math.round((p - prevClose) * 100) / 100;
+    priceChangePercent = Math.round(((p - prevClose) / prevClose) * 10000) / 100;
+  }
+  if (len >= 5) {
+    const vSlice = candles.slice(-5);
+    const vAvg = vSlice.reduce((acc, c) => acc + c.volume, 0) / 5;
+    if (vAvg > 0) {
+      volRatio = Math.round((candles[len - 1].volume / vAvg) * 100) / 100;
+    }
+  }
+
+  return { priceChange, priceChangePercent, volRatio };
+}
 
 export interface DefenseBufferMetrics {
   defensePrice: number;
@@ -303,6 +354,8 @@ export function evaluateMuscleBookerAction(params: {
   };
   hasHeavyResistance?: boolean;
   isUsMoneyFlowDivergent?: boolean;
+  volumeRatio?: number;
+  volRatio?: number;
 }): MuscleBookerActionDecision {
   const {
     currentPrice,
@@ -322,6 +375,8 @@ export function evaluateMuscleBookerAction(params: {
     vwap,
     hasHeavyResistance,
     isUsMoneyFlowDivergent,
+    volumeRatio,
+    volRatio,
   } = params;
 
   // 0. 財報鑑識負向排除 (Hard Ban)
@@ -457,23 +512,45 @@ export function evaluateMuscleBookerAction(params: {
       };
     }
 
-    // Volume Profile 上方 5% 套牢反壓檢驗 (Spec 0216 Ticket 03)
+    // Volume Profile 上方 5% 套牢反壓檢驗 (Spec 0216 Ticket 03 & Issue #405)
     if (hasHeavyResistance) {
+      const discountedRr = Math.round(rrValue * 0.5 * 10) / 10;
+      const discountedRrStr = discountedRr.toFixed(1);
       return {
         action: 'HOLD',
         actionBadge: '🟡 觀望 (上方套牢壓沉重)',
-        actionReason: '帶量站上箱頂但上方 5% 內密集成交套牢峰 (POC) 賣壓沉重，阻力重重，切忌追高',
+        actionReason: `帶量站上箱頂但上方 5% 內密集成交套牢峰 (POC) 賣壓沉重，風益比折半降級為 ${discountedRrStr}R，阻力重重，切忌追高`,
+        stopLossPrice: Math.round(stopLoss * 100) / 100,
+        targetPrice: Math.round(target * 100) / 100,
+        riskRewardRatio: `${discountedRrStr}R`,
+        riskRewardRatioValue: discountedRr,
+      };
+    }
+
+    // 帶寬審查門檻：帶寬必須極致收斂 (<= 8.0%)，或近 5 日曾極致收斂且當日開口 <= 12.0% (Spec 0216 / Issue #399 & Issue #405)
+    const isBandwidthValid =
+      bbands.bandwidth !== undefined &&
+      (bbands.bandwidth <= 8.0 || (bbands.wasRecentSqueeze && bbands.bandwidth <= 12.0));
+
+    // 當日放量開口擴張檢驗 (Spec 0216 Line 35 & Issue #405)
+    const effectiveVolRatio = volRatio ?? volumeRatio;
+    if (
+      bbands.bandwidth !== undefined &&
+      bbands.bandwidth > 8.0 &&
+      bbands.wasRecentSqueeze &&
+      effectiveVolRatio !== undefined &&
+      effectiveVolRatio < 1.0
+    ) {
+      return {
+        action: 'HOLD',
+        actionBadge: '🟡 觀望 (帶寬開口但量能不足)',
+        actionReason: `帶量站上箱頂且帶寬開口擴張 (${bbands.bandwidth.toFixed(1)}%)，但當日未顯著放量 (量比 ${effectiveVolRatio.toFixed(2)} < 1.0)，切忌盲目追高`,
         stopLossPrice: Math.round(stopLoss * 100) / 100,
         targetPrice: Math.round(target * 100) / 100,
         riskRewardRatio: `${rrRatio}R`,
         riskRewardRatioValue: rrValue,
       };
     }
-
-    // 帶寬審查門檻：帶寬必須極致收斂 (<= 8.0%)，或近 5 日曾極致收斂且當日開口 <= 12.0% (Spec 0216 / Issue #399)
-    const isBandwidthValid =
-      bbands.bandwidth !== undefined &&
-      (bbands.bandwidth <= 8.0 || (bbands.wasRecentSqueeze && bbands.bandwidth <= 12.0));
 
     if (bbands.bandwidth !== undefined && !isBandwidthValid) {
       return {
@@ -1051,18 +1128,11 @@ export function scanMuscleBookerItem(
     // 防禦性容錯
   }
 
-  // 7. Volume Profile 上方 5% 密集成交峰 (POC) 反壓檢測 (Spec 0216 Ticket 03)
+  // 7. Volume Profile 上方 5% 密集成交峰 (POC) 反壓檢測 (Spec 0216 Line 109 & Issue #405)
   let hasHeavyResistance = false;
   try {
     const vp = calculateVolumeProfile(candles);
-    if (vp && vp.buckets && vp.buckets.length > 0) {
-      const pocBucket = [...vp.buckets].sort((a, b) => b.percentage - a.percentage)[0];
-      const pocCenter = (pocBucket.priceMin + pocBucket.priceMax) / 2;
-      // POC 必須實質處於現價上方且在 5% 反壓警戒區內，且成交量密集 (>= 25%)
-      if (pocCenter > lastCandle.close && pocCenter <= lastCandle.close * 1.05 && pocBucket.percentage >= 25) {
-        hasHeavyResistance = true;
-      }
-    }
+    hasHeavyResistance = isHeavyResistanceAhead(vp, lastCandle.close);
   } catch {
     // 防禦性容錯
   }
@@ -1094,6 +1164,7 @@ export function scanMuscleBookerItem(
     }
   }
 
+  const quickMetrics = calculateMomentumQuickMetrics(candles, lastCandle.close);
   const actionDecision = evaluateMuscleBookerAction({
     currentPrice: lastCandle.close,
     box,
@@ -1112,6 +1183,7 @@ export function scanMuscleBookerItem(
     vwap,
     hasHeavyResistance,
     isUsMoneyFlowDivergent,
+    volRatio: quickMetrics.volRatio,
   });
 
   return {

@@ -149,7 +149,7 @@ export function calculateMaDeduction(candles: DailyCandle[], boxLower?: number):
       ma20Slope = 'DOWN';
     }
 
-    // 均線扣抵時空望遠鏡進階校準 (Spec 0214)：若未來 3 日扣抵高檔天花板，均線即將下埄僅頂
+    // 均線扣抵時空望遠鏡進階校準 (Spec 0214)：若未來 3 日扣抵高檔天花板，均線即將下彎壓頂
     if (futureDeductions.length > 0) {
       const futureMax = Math.max(...futureDeductions);
       const futureAvg = futureDeductions.reduce((a, b) => a + b, 0) / futureDeductions.length;
@@ -177,7 +177,7 @@ export function calculateMaDeduction(candles: DailyCandle[], boxLower?: number):
 /**
  * 計算指定切片日 K 之布林帶寬純函式 (DRY 重構抽取)
  */
-export function computeBandwidthSlice(
+function computeBandwidthSlice(
   candles: DailyCandle[],
   period: number = 20,
   multiplier: number = 2
@@ -252,4 +252,27 @@ export function calculateBollingerSqueeze(
     isSqueeze,
     wasRecentSqueeze,
   };
+}
+
+/**
+ * 檢驗現價上方特定範圍內是否存在密集成交套牢峰 (POC) (Spec 0216 Line 109 & Issue #405)
+ * @param vpData 分價量表結果
+ * @param currentPrice 當前現價
+ * @param resistanceRangePercent 反壓偵測區間百分比 (預設 5.0%)
+ * @param minPercentage POC 最小成交量佔比門檻 (預設 25.0%)
+ */
+export function isHeavyResistanceAhead(
+  vpData?: { buckets?: Array<{ priceMin: number; priceMax: number; percentage: number }> } | null,
+  currentPrice?: number,
+  resistanceRangePercent = 5.0,
+  minPercentage = 25.0
+): boolean {
+  if (!vpData?.buckets || vpData.buckets.length === 0 || !currentPrice || currentPrice <= 0) {
+    return false;
+  }
+  const pocBucket = [...vpData.buckets].sort((a, b) => b.percentage - a.percentage)[0];
+  if (!pocBucket) return false;
+  const pocCenter = (pocBucket.priceMin + pocBucket.priceMax) / 2;
+  const upperBound = currentPrice * (1 + resistanceRangePercent / 100);
+  return pocCenter > currentPrice && pocCenter <= upperBound && pocBucket.percentage >= minPercentage;
 }

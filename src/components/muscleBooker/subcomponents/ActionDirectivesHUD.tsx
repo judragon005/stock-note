@@ -2,18 +2,20 @@ import React from 'react';
 import { Flame, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { ScannedStockItem, calculateDefenseBufferMetrics } from '../../../engine/muscleBookerEngine';
 import { HoldingPosition, MarketType } from '../../../types/stock';
+import { StockInteractionHandlers } from '../types';
 import { MuscleStockCard } from './MuscleStockCard';
 
 export interface ActionDirectivesHUDProps {
   top3BuyItems: ScannedStockItem[];
   top3SellItems: ScannedStockItem[];
   activeHoldingsMap: Map<string, HoldingPosition>;
-  expandedSymbol: string | null;
-  onToggleExpand: (symbol: string) => void;
+  expandedSymbol?: string | null;
+  onToggleExpand?: (symbol: string) => void;
   onOpenOmniInspector?: (symbol: string, market: MarketType) => void;
   watchlistSymbols?: string[];
   onToggleWatchlist?: (symbol: string) => void;
   onQuickTrade?: (symbol: string, action: 'BUY' | 'SELL', price?: number) => void;
+  handlers?: StockInteractionHandlers;
 }
 
 export const ActionDirectivesHUD: React.FC<ActionDirectivesHUDProps> = ({
@@ -26,7 +28,14 @@ export const ActionDirectivesHUD: React.FC<ActionDirectivesHUDProps> = ({
   watchlistSymbols = [],
   onToggleWatchlist,
   onQuickTrade,
+  handlers,
 }) => {
+  const actualExpandedSymbol = handlers?.expandedSymbol !== undefined ? handlers.expandedSymbol : expandedSymbol;
+  const actualOnToggleExpand = handlers?.onToggleExpand ?? onToggleExpand;
+  const actualOnOpenOmniInspector = handlers?.onOpenOmniInspector ?? onOpenOmniInspector;
+  const actualWatchlistSymbols = handlers?.watchlistSymbols ? Array.from(handlers.watchlistSymbols) : watchlistSymbols;
+  const actualOnToggleWatchlist = handlers?.onToggleWatchlist ?? onToggleWatchlist;
+  const actualOnQuickTrade = handlers?.onQuickTrade ?? onQuickTrade;
   return (
     <div
       style={{
@@ -88,14 +97,14 @@ export const ActionDirectivesHUD: React.FC<ActionDirectivesHUDProps> = ({
                 key={item.symbol}
                 item={item}
                 holding={activeHoldingsMap.get(item.symbol.toUpperCase())}
-                isExpanded={expandedSymbol === item.symbol}
-                onToggleExpand={() => onToggleExpand(item.symbol)}
-                onOpenOmniInspector={onOpenOmniInspector}
+                isExpanded={actualExpandedSymbol === item.symbol}
+                onToggleExpand={() => actualOnToggleExpand?.(item.symbol)}
+                onOpenOmniInspector={actualOnOpenOmniInspector}
                 badgeTone="BUY"
                 badgeLabel={`買進 · ${item.actionDecision.riskRewardRatioValue}R`}
-                isWatched={watchlistSymbols.includes(item.symbol)}
-                onToggleWatchlist={onToggleWatchlist}
-                onQuickTrade={onQuickTrade}
+                isWatched={actualWatchlistSymbols.includes(item.symbol)}
+                onToggleWatchlist={actualOnToggleWatchlist}
+                onQuickTrade={actualOnQuickTrade}
               />
             ))}
           </div>
@@ -159,14 +168,14 @@ export const ActionDirectivesHUD: React.FC<ActionDirectivesHUDProps> = ({
                   key={item.symbol}
                   item={item}
                   holding={activeHoldingsMap.get(item.symbol.toUpperCase())}
-                  isExpanded={expandedSymbol === item.symbol}
-                  onToggleExpand={() => onToggleExpand(item.symbol)}
-                  onOpenOmniInspector={onOpenOmniInspector}
+                  isExpanded={actualExpandedSymbol === item.symbol}
+                  onToggleExpand={() => actualOnToggleExpand?.(item.symbol)}
+                  onOpenOmniInspector={actualOnOpenOmniInspector}
                   badgeTone="SELL"
                   badgeLabel={badgeLabel}
-                  isWatched={watchlistSymbols.includes(item.symbol)}
-                  onToggleWatchlist={onToggleWatchlist}
-                  onQuickTrade={onQuickTrade}
+                  isWatched={actualWatchlistSymbols.includes(item.symbol)}
+                  onToggleWatchlist={actualOnToggleWatchlist}
+                  onQuickTrade={actualOnQuickTrade}
                 />
               );
             })}
