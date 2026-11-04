@@ -178,6 +178,7 @@ export function calculateBollingerSqueeze(
   lower: number;
   bandwidth: number;
   isSqueeze: boolean;
+  wasRecentSqueeze?: boolean;
 } {
   if (candles.length < period) {
     const fallbackPrice = candles.length > 0 ? candles[candles.length - 1].close : 0;
@@ -187,6 +188,7 @@ export function calculateBollingerSqueeze(
       lower: fallbackPrice,
       bandwidth: 0,
       isSqueeze: false,
+      wasRecentSqueeze: false,
     };
   }
 
@@ -204,11 +206,36 @@ export function calculateBollingerSqueeze(
   // 帶寬 <= 8% 判定為極致壓縮 (Squeeze)
   const isSqueeze = bandwidth <= 8.0;
 
+  // 均線與帶寬動態開口放寬 (Spec 0216 / Issue #399): 近 5 交易日曾極致收斂 (<= 8.0%)
+  let wasRecentSqueeze = isSqueeze;
+  if (!wasRecentSqueeze && candles.length >= period + 1) {
+    const lookbackLimit = Math.min(5, candles.length - period + 1);
+    for (let offset = 1; offset < lookbackLimit; offset++) {
+      const pastSlice = candles.slice(-period - offset, candles.length - offset);
+      if (pastSlice.length === period) {
+        const pastCloses = pastSlice.map((c) => c.close);
+        const pastMid = pastCloses.reduce((acc, v) => acc + v, 0) / period;
+        if (pastMid > 0) {
+          const pastVar = pastCloses.reduce((acc, v) => acc + Math.pow(v - pastMid, 2), 0) / period;
+          const pastStd = Math.sqrt(pastVar);
+          const pastUpper = pastMid + multiplier * pastStd;
+          const pastLower = pastMid - multiplier * pastStd;
+          const pastBw = Math.round(((pastUpper - pastLower) / pastMid) * 10000) / 100;
+          if (pastBw <= 8.0) {
+            wasRecentSqueeze = true;
+            break;
+          }
+        }
+      }
+    }
+  }
+
   return {
     upper: Math.round(upper * 100) / 100,
     mid: Math.round(mid * 100) / 100,
     lower: Math.round(lower * 100) / 100,
     bandwidth,
     isSqueeze,
+    wasRecentSqueeze,
   };
 }

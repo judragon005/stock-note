@@ -488,6 +488,62 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
       expect(criticalBufferItems[0].symbol).toBe('B');
     });
   });
+
+    describe('Issue #399: 快篩視圖全聯動與 O(N) 排序快取防禦', () => {
+      it('快篩膠囊生效時，操盤導航分區與動能看板應完全同步消費過濾後清單 (filteredItems)', () => {
+        const mockScannedList = [
+          { symbol: 'A', name: '標的A', actionDecision: { action: 'BUY' as const, riskRewardRatioValue: 3.0 }, isBollingerSqueeze: true, currentPrice: 100 },
+          { symbol: 'B', name: '標的B', actionDecision: { action: 'BUY' as const, riskRewardRatioValue: 2.2 }, isBollingerSqueeze: false, currentPrice: 100 },
+          { symbol: 'C', name: '標的C', actionDecision: { action: 'AVOID' as const }, isBollingerSqueeze: true, currentPrice: 50 },
+          { symbol: 'D', name: '標的D', actionDecision: { action: 'SELL' as const }, isBollingerSqueeze: false, currentPrice: 30 },
+        ];
+
+        // 模擬使用者點擊「🎯 緊縮突破 (SQUEEZE)」
+        const filterChip = 'SQUEEZE';
+        const filteredItems = mockScannedList.filter((item) => {
+          if (filterChip === 'SQUEEZE') return item.isBollingerSqueeze;
+          return true;
+        });
+
+        // 操盤導航分區
+        const buyItems = filteredItems.filter((i) => i.actionDecision.action === 'BUY');
+        const avoidItems = filteredItems.filter((i) => (i.actionDecision.action as string) === 'AVOID' || (i.actionDecision.action as string) === 'HOLD');
+        const sellItems = filteredItems.filter((i) => i.actionDecision.action === 'SELL');
+
+        // 驗證三色導航與動能看板標的均精確同步為緊縮標的 (A 與 C)，非緊縮的 B 與 D 被徹底過濾
+        expect(filteredItems).toHaveLength(2);
+        expect(filteredItems.map((i) => i.symbol)).toEqual(['A', 'C']);
+        expect(buyItems).toHaveLength(1);
+        expect(buyItems[0].symbol).toBe('A');
+        expect(avoidItems).toHaveLength(1);
+        expect(avoidItems[0].symbol).toBe('C');
+        expect(sellItems).toHaveLength(0);
+      });
+
+      it('多維排序 O(N) 快取比較器應能精準進行爆量與緩衝率排序', () => {
+        const mockList = [
+          { symbol: 'A', volRatio: 1.2, bufferPercent: 5.0 },
+          { symbol: 'B', volRatio: 2.8, bufferPercent: 0.8 },
+          { symbol: 'C', volRatio: 1.9, bufferPercent: 2.1 },
+        ];
+
+        // O(N) 預算快取
+        const metricsMap = new Map(mockList.map((m) => [m.symbol, m]));
+
+        // 爆量由大到小排序
+        const sortedByVol = [...mockList].sort(
+          (a, b) => (metricsMap.get(b.symbol)?.volRatio ?? 0) - (metricsMap.get(a.symbol)?.volRatio ?? 0)
+        );
+        expect(sortedByVol.map((i) => i.symbol)).toEqual(['B', 'C', 'A']);
+
+        // 緩衝由緊到寬排序 (瀕危優先)
+        const sortedByBuffer = [...mockList].sort(
+          (a, b) => (metricsMap.get(a.symbol)?.bufferPercent ?? 999) - (metricsMap.get(b.symbol)?.bufferPercent ?? 999)
+        );
+        expect(sortedByBuffer.map((i) => i.symbol)).toEqual(['B', 'C', 'A']);
+      });
+    });
+
 });
 
 

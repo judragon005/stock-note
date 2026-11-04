@@ -166,3 +166,14 @@ export function formatPrivacyMasked(val: string | number, isMasked: boolean): st
   }
   return String(val);
 }
+
+/**
+ * 格式化標的幣別股價字串：美股市場統一標示 US$，台股市場標示 $ (符合金融看板慣例)
+ */
+export function formatStockPrice(price?: number, market?: 'TW' | 'US'): string {
+  if (price === undefined || price === null || isNaN(price)) return '-';
+  if (market === 'US') {
+    return `US$ ${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  return `$${price.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+}

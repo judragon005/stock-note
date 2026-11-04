@@ -193,6 +193,59 @@ export function calculateMuscleBookerIndicators(
 
 export type MuscleBookerActionType = 'BUY' | 'AVOID' | 'SELL' | 'HOLD';
 
+export interface DefenseBufferMetrics {
+  defensePrice: number;
+  bufferPercent: number;
+  isDefenseBroken: boolean;
+  isDefenseEndangered: boolean;
+  isBroken: boolean;
+  isCritical: boolean;
+}
+
+/**
+ * 統一計算達瓦斯與移動防守價之緩衝距離與瀕危警報狀態 (DRY 消除重複代碼)
+ */
+export function calculateDefenseBufferMetrics(item: {
+  currentPrice: number;
+  atr?: { trailingDefensePrice?: number };
+  actionDecision: { action?: string; stopLossPrice?: number };
+  boxUpper?: number;
+  boxLower?: number;
+}): DefenseBufferMetrics {
+  const defPrice =
+    item.actionDecision.stopLossPrice ??
+    item.atr?.trailingDefensePrice ??
+    (item.actionDecision.action === 'BUY' ? item.boxUpper : item.boxLower) ??
+    item.currentPrice * 0.95;
+
+  const isSell = item.actionDecision.action === 'SELL';
+  if (defPrice === undefined || item.currentPrice <= 0) {
+    return {
+      defensePrice: 0,
+      bufferPercent: 999,
+      isDefenseBroken: isSell,
+      isDefenseEndangered: isSell,
+      isBroken: isSell,
+      isCritical: isSell,
+    };
+  }
+
+  const bufferPercent = ((item.currentPrice - defPrice) / item.currentPrice) * 100;
+  const isDefenseBroken = item.currentPrice < defPrice;
+  const isDefenseEndangered = !isDefenseBroken && bufferPercent <= 1.5;
+  const isBroken = isDefenseBroken || isSell;
+  const isCritical = isBroken || bufferPercent <= 1.5 || isSell;
+
+  return {
+    defensePrice: Math.round(defPrice * 100) / 100,
+    bufferPercent: Math.round(bufferPercent * 10) / 10,
+    isDefenseBroken,
+    isDefenseEndangered,
+    isBroken,
+    isCritical,
+  };
+}
+
 export interface MuscleBookerActionDecision {
   action: MuscleBookerActionType;
   actionBadge: string;
@@ -224,6 +277,7 @@ export function evaluateMuscleBookerAction(params: {
   bbands: {
     isSqueeze: boolean;
     bandwidth?: number;
+    wasRecentSqueeze?: boolean;
   };
   atr?: {
     atr14?: number;
@@ -328,15 +382,8 @@ export function evaluateMuscleBookerAction(params: {
       };
     }
 
-    // 流動性容量安全檢驗 (Spec 0216 Ticket 02)
-    if (isLowLiquidity) {
-      if (!isHolding) {
-        return {
-          action: 'AVOID',
-          actionBadge: '⛔ 嚴禁碰觸 (流動性不足)',
-          actionReason: '日均成交金額低於安全容量門檻 (台股3,000萬/美股500萬)，避免滑價與衝擊成本，嚴禁建倉',
-        };
-      }
+    // 流動性容量安全檢驗 (Spec 0216 Ticket 02 - 消除死代碼)
+    if (isHolding && isLowLiquidity) {
       return {
         action: 'HOLD',
         actionBadge: '🟡 流動性不足 (容量受限)',
@@ -421,8 +468,12 @@ export function evaluateMuscleBookerAction(params: {
       };
     }
 
-    // 帶寬審查硬門檻：帶寬必須極致收斂 (<= 8.0%)，方為壓縮後方向確立之第一買點
-    if (bbands.bandwidth !== undefined && bbands.bandwidth > 8.0) {
+    // 帶寬審查門檻：帶寬必須極致收斂 (<= 8.0%)，或近 5 日曾極致收斂且當日開口 <= 12.0% (Spec 0216 / Issue #399)
+    const isBandwidthValid =
+      bbands.bandwidth !== undefined &&
+      (bbands.bandwidth <= 8.0 || (bbands.wasRecentSqueeze && bbands.bandwidth <= 12.0));
+
+    if (bbands.bandwidth !== undefined && !isBandwidthValid) {
       return {
         action: 'HOLD',
         actionBadge: '🟡 觀望 (帶寬未收斂)',
@@ -477,18 +528,11 @@ export function evaluateMuscleBookerAction(params: {
 
   // 情境 B: 破底翻反轉 (收復下影線且均線不下彎)
   if (deduction.isBottomPenetrationRebound && deduction.ma20Slope !== 'DOWN') {
-    if (isLowLiquidity) {
-      if (!isHolding) {
-        return {
-          action: 'AVOID',
-          actionBadge: '⛔ 嚴禁碰觸 (流動性不足)',
-          actionReason: '日均成交金額低於安全容量門檻 (台股3,000萬/美股500萬)，避免滑價與衝擊成本，嚴禁建倉',
-        };
-      }
+    if (isHolding && isLowLiquidity) {
       return {
         action: 'HOLD',
         actionBadge: '🟡 流動性不足 (容量受限)',
-        actionReason: '破底翻但成交量或成交金額低於安全容量門檻，避免衝擊成本與滑價風險，不予主動推薦',
+        actionReason: '破底翻但成交金額低於安全容量門檻，避免衝擊成本與滑價風險，不予主動推薦',
       };
     }
 
@@ -554,10 +598,14 @@ export function evaluateMuscleBookerAction(params: {
       };
     }
 
+    const isVwapReclaimed = vwap?.mainForceVwap !== undefined && currentPrice >= vwap.mainForceVwap;
+    const actionBadge = isVwapReclaimed ? '🟢 建議買進 (破底翻站回成本線)' : '🟢 建議買進 (破底翻)';
+    const vwapBonusReason = isVwapReclaimed ? '，且強勢收復20日主力VWAP成本線' : '';
+
     return {
       action: 'BUY',
-      actionBadge: '🟢 建議買進 (破底翻)',
-      actionReason: '盤中跌破箱底但強勢收回50%以上，洗盤結束，右側進場',
+      actionBadge,
+      actionReason: `盤中跌破箱底但強勢收回50%以上${vwapBonusReason}，洗盤結束，右側進場`,
       stopLossPrice: Math.round(stopLoss * 100) / 100,
       targetPrice: Math.round(target * 100) / 100,
       riskRewardRatio: `${rrRatio}R`,
@@ -993,11 +1041,14 @@ export function scanMuscleBookerItem(
   const hasBullTrap = traps.hasBullTrap || (box.boxStatus === 'BREAKOUT_UP' && isCandleBullTrap);
 
   // 6. 20 日主力 VWAP 成本結構與乖離率 (Spec 0216 Ticket 03)
-  let vwap: { biasPercent?: number } | undefined;
+  let vwap: { mainForceVwap?: number; biasPercent?: number } | undefined;
   try {
     const vwapStruct = calculateVwapCostStructure(candles, lastCandle.close);
     if (vwapStruct) {
-      vwap = { biasPercent: vwapStruct.biasPercent };
+      vwap = {
+        mainForceVwap: vwapStruct.mainForceVwap,
+        biasPercent: vwapStruct.biasPercent,
+      };
     }
   } catch {
     // 防禦性容錯
