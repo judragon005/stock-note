@@ -10,6 +10,7 @@ export interface DeductionTelescopeTableProps {
   expandedSymbol: string | null;
   onToggleExpand: (symbol: string) => void;
   onToggleWatchlist: (symbol: string) => void;
+  onQuickTrade?: (symbol: string, action: 'BUY' | 'SELL', price?: number) => void; // 閉環快速交易 - Issue #411
 }
 
 export const DeductionTelescopeTable: React.FC<DeductionTelescopeTableProps> = ({
@@ -18,6 +19,7 @@ export const DeductionTelescopeTable: React.FC<DeductionTelescopeTableProps> = (
   expandedSymbol,
   onToggleExpand,
   onToggleWatchlist,
+  onQuickTrade,
 }) => {
   const [pageSize, setPageSize] = React.useState<number | 'ALL'>(50);
   const [currentPage, setCurrentPage] = React.useState<number>(1);
@@ -168,25 +170,53 @@ export const DeductionTelescopeTable: React.FC<DeductionTelescopeTableProps> = (
                       )}
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleWatchlist(item.symbol);
-                        }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: isWatched ? '#fde047' : 'var(--text-muted)',
-                          padding: '4px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                        title={isWatched ? '從自訂觀察移除' : '加入自訂觀察'}
-                      >
-                        <Star size={15} fill={isWatched ? '#fde047' : 'none'} />
-                      </button>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        {onQuickTrade && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const tradeAction = item.actionDecision.action === 'SELL' ? 'SELL' : 'BUY';
+                              onQuickTrade(item.symbol, tradeAction, item.currentPrice);
+                            }}
+                            style={{
+                              background: item.actionDecision.action === 'SELL' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)',
+                              border: item.actionDecision.action === 'SELL' ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid rgba(34, 197, 94, 0.4)',
+                              borderRadius: '4px',
+                              color: item.actionDecision.action === 'SELL' ? '#f87171' : '#4ade80',
+                              cursor: 'pointer',
+                              padding: '2px 6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                              fontSize: '0.72rem',
+                              fontWeight: 600,
+                            }}
+                            title={`快速交易 (${item.actionDecision.action === 'SELL' ? '賣出' : '買進'})`}
+                          >
+                            <Zap size={11} />
+                            {item.actionDecision.action === 'SELL' ? '賣出' : '下單'}
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleWatchlist(item.symbol);
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: isWatched ? '#fde047' : 'var(--text-muted)',
+                            padding: '4px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                          title={isWatched ? '從自訂觀察移除' : '加入自訂觀察'}
+                        >
+                          <Star size={15} fill={isWatched ? '#fde047' : 'none'} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   {isExpanded && (

@@ -112,8 +112,17 @@
 
 ---
 
+### 11. 第七輪 Code Review 全量修復與資料泥塊收斂 (Issue #411)
+
+- **台股成交量單位盲猜斷崖徹底消除 (Spec Line 41)**：移除 `muscleBookerEngine.ts` 內 `avgVol5 <= 100000` 盲猜張數乘千邏輯。全市場統一回歸 `DailyCandle.volume` 為標準股數 (Shares) 計算成交金額 (`effectiveShares * lastCandle.close`)；同時在 `ScanMuscleBookerOptions` 支援顯式 `volumeUnit: 'LOTS'`，徹底消除冷門股虛膨千倍繞過門檻與活躍股遭誤殺之斷崖漏洞。
+- **扣抵望遠鏡排表一鍵下單閉環 (Spec Line 59)**：於 `DeductionTelescopeTable.tsx` 與 `MuscleBookerWorkspace.tsx` 串接 `onQuickTrade` 快捷交易按鈕，支援在扣抵表一鍵觸發買進/賣出，補齊實戰交易閉環。
+- **Header 資料泥塊封裝 (Data Clumps 消除)**：抽象出 `WatchlistInputControl` 與 `AdHocScanControl` 物件，收斂 `MuscleBookerHeaderProps` 原有 28 個散裝 props。
+- **大盤基準 2330 備援機制規格對齊**：於 Spec 0216 規格文檔第 40-41 行明確記錄台股基準預設 0050 且具備 2330 備援之容錯機制，使規格、ADR 與實作代碼 100% 吻合。
+
+---
+
 ## 驗證結果 (Consequences & Verification)
 
-- **單元測試驗證**：全量 272 個測試套件、2,051 隻測試 100% PASS 綠燈通過。
+- **單元測試驗證**：全量 273 個測試套件、2,057 隻測試 100% PASS 綠燈通過。
 - **TypeScript 編譯**：`npm run build` 0 錯誤通過，生產打包 bundle 順利產出。
-- **規範對齊**：Spec 0216 的 8 張 Tickets 全數標記為 `done`，六輪 Code Review 審查建議 100% 閉環。
+- **規範對齊**：Spec 0216 的 8 張 Tickets 全數標記為 `done`，七輪 Code Review 審查建議 100% 閉環。
