@@ -11,6 +11,7 @@ import {
   scanMuscleBookerItem,
   getScopedUniverseSymbols,
   calculateDefenseBufferMetrics,
+  detectBottomPenetration,
 } from './muscleBookerEngine';
 import { DailyCandle } from '../types/indicators';
 
@@ -92,10 +93,10 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
       expect((deduction as any).futureDeductions?.length).toBe(3);
     });
 
-    it('盤中破 MA20 支撐但收盤強勢站回且留下影線，應觸發底穿上假跌破偵測', () => {
+    it('盤中跌破箱底支撐但收盤強勢站回且留下影線，應觸發底穿上破底翻偵測', () => {
       const candles = generateMockCandles(25, 100);
-      // MA20 約在 100，今日開盤 102，盤中下殺破線至 95，收盤強勢收在 103 (高點 104)
-      // 下影線長度: 103 - 95 = 8，總振幅: 104 - 95 = 9 (占比 88% >= 50%)
+      // 箱底 100，今日開盤 102，盤中下殺破線至 95，收盤強勢收在 103 (高點 104)
+      // 下影線長度: min(102, 103) - 95 = 7，總振幅: 104 - 95 = 9 (占比 77.8% >= 50%)
       candles[24] = {
         date: '2026-01-25',
         open: 102,
@@ -105,7 +106,7 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
         volume: 2500,
       };
 
-      const deduction = calculateMaDeduction(candles);
+      const deduction = calculateMaDeduction(candles, 100);
       expect(deduction.isBottomPenetrationRebound).toBe(true);
     });
   });
@@ -808,6 +809,65 @@ describe('MuscleBooker Quant Engine (肌肉書僮量化運算核心)', () => {
         expect(safe.isDefenseEndangered).toBe(false);
         expect(safe.bufferPercent).toBeCloseTo(9.1, 1);
       });
+
+      it('Issue #401: 破底翻下影線幾何計算必須以 min(open, close) - low 為準，長紅陽線即使破底收復亦不可被誤判為下影線破底翻', () => {
+        // 箱底 100。最後一天開 100.5，盤中低點 99.5，隨後大漲收 109 (光頭長紅陽線)
+        // 振幅 = 109 - 99.5 = 9.5
+        // 真實下影線 = min(100.5, 109) - 99.5 = 1.0 (佔比 1.0 / 9.5 = 10.5% < 50%)
+        // 舊錯誤公式：close - low = 109 - 99.5 = 8.5 (佔比 8.5 / 9.5 = 89.5% >= 50% 造成誤判)
+        const candles: DailyCandle[] = Array.from({ length: 25 }, (_, i) => {
+          const isLast = i === 24;
+          return {
+            date: `2026-08-${String(i + 1).padStart(2, '0')}`,
+            open: isLast ? 100.5 : 101,
+            high: isLast ? 109 : 102,
+            low: isLast ? 99.5 : 100,
+            close: isLast ? 109 : 101,
+            volume: 10000,
+          };
+        });
+
+        const res = detectBottomPenetration(candles, 100);
+        expect(res.isBottomPenetration).toBe(false);
+      });
+
+      it('Issue #401: 破底翻在無 boxLower 時絕不可回退 MA20 跌破收復判定', () => {
+        const candles: DailyCandle[] = Array.from({ length: 25 }, (_, i) => ({
+          date: `2026-08-${String(i + 1).padStart(2, '0')}`,
+          open: 100,
+          high: 101,
+          low: 99,
+          close: 100,
+          volume: 10000,
+        }));
+
+        const res = detectBottomPenetration(candles, undefined);
+        expect(res.isBottomPenetration).toBe(false);
+        expect(res.penetrationPrice).toBeUndefined();
+      });
+
+      it('Issue #401: 真正長下影線錘子線 (下影線 >= 50%) 且跌破收復箱底，應正確確立破底翻', () => {
+        // 箱底 100。最後一天開 100.5，盤中下殺至 94 探底，終盤強烈拉升收 101
+        // 振幅 = 101.5 - 94 = 7.5
+        // 下影線 = min(100.5, 101) - 94 = 6.5 (佔比 6.5 / 7.5 = 86.7% >= 50%)
+        const candles: DailyCandle[] = Array.from({ length: 25 }, (_, i) => {
+          const isLast = i === 24;
+          return {
+            date: `2026-08-${String(i + 1).padStart(2, '0')}`,
+            open: isLast ? 100.5 : 101,
+            high: isLast ? 101.5 : 102,
+            low: isLast ? 94 : 100,
+            close: isLast ? 101 : 101,
+            volume: 15000,
+          };
+        });
+
+        const res = detectBottomPenetration(candles, 100);
+        expect(res.isBottomPenetration).toBe(true);
+        expect(res.penetrationPrice).toBe(100);
+        expect(res.lowerShadowRatio).toBeGreaterThanOrEqual(0.5);
+      });
+
     });
   });
 });

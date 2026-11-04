@@ -33,6 +33,7 @@ export interface MuscleStockCardProps {
   badgeLabel?: string;
   badgeTone?: 'BUY' | 'SELL' | 'AVOID' | 'HOLD';
   isWatched?: boolean;
+  watchlistSymbols?: string[];
   onToggleWatchlist?: (symbol: string) => void;
   onQuickTrade?: (symbol: string, action: 'BUY' | 'SELL', price?: number) => void;
 }
@@ -45,10 +46,12 @@ const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
   onOpenOmniInspector,
   badgeLabel,
   badgeTone,
-  isWatched = false,
+  isWatched,
+  watchlistSymbols,
   onToggleWatchlist,
   onQuickTrade,
 }) => {
+  const effectiveWatched = isWatched ?? (watchlistSymbols ? watchlistSymbols.includes(item.symbol.toUpperCase()) : false);
   const [copied, setCopied] = useState(false);
 
   const handleCopySymbol = async (e: React.MouseEvent) => {
@@ -318,10 +321,10 @@ const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
                 onToggleWatchlist(item.symbol);
               }}
               style={{
-                background: isWatched ? 'rgba(250, 204, 21, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                border: isWatched ? '1px solid rgba(250, 204, 21, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
+                background: effectiveWatched ? 'rgba(250, 204, 21, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                border: effectiveWatched ? '1px solid rgba(250, 204, 21, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
                 borderRadius: '5px',
-                color: isWatched ? '#fde047' : 'var(--text-muted)',
+                color: effectiveWatched ? '#fde047' : 'var(--text-muted)',
                 cursor: 'pointer',
                 padding: '3px 4px',
                 display: 'inline-flex',
@@ -329,9 +332,9 @@ const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
                 justifyContent: 'center',
                 transition: 'all 0.2s',
               }}
-              title={isWatched ? '從自選觀察名單移除' : '加入自選觀察名單'}
+              title={effectiveWatched ? '從自選觀察名單移除' : '加入自選觀察名單'}
             >
-              <Star size={13} fill={isWatched ? '#fde047' : 'none'} />
+              <Star size={13} fill={effectiveWatched ? '#fde047' : 'none'} />
             </button>
           )}
 
@@ -362,7 +365,7 @@ const MuscleStockCardComponent: React.FC<MuscleStockCardProps> = ({
                 gap: '2px',
                 transition: 'all 0.2s',
               }}
-              title={(item.actionDecision.action === 'SELL' || isBroken) ? '快速停損平倉' : '快速買進建倉'}
+              title={(item.actionDecision.action === 'SELL' || isBroken) ? '一鍵快速賣出下單' : '一鍵快速買進下單'}
             >
               <Zap size={11} />
               {(item.actionDecision.action === 'SELL' || isBroken) ? '停損' : '買進'}

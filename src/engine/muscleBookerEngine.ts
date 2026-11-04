@@ -35,7 +35,9 @@ import {
   detectDarvasBox,
   calculateMaDeduction,
   calculateBollingerSqueeze,
+  detectBottomPenetration,
 } from './darvasBoxEngine';
+export { detectBottomPenetration };
 import { calculateSMA, calculateMACD } from './technicalIndicatorEngine';
 import { calculateOBV, detectPriceActionTraps } from './omniIndicatorEngine';
 import { calculateVwapCostStructure } from './vwapCostEngine';
@@ -150,10 +152,10 @@ export function calculateMuscleBookerIndicators(
 
     // 均線
     const closePrices = subCandles.map((c) => c.close);
-      const ma5 = calculateSMA(closePrices, 5);
-      const ma10 = calculateSMA(closePrices, 10);
-      const ma20 = calculateSMA(closePrices, 20);
-      const ma60 = calculateSMA(closePrices, 60);
+    const ma5 = calculateSMA(closePrices, 5);
+    const ma10 = calculateSMA(closePrices, 10);
+    const ma20 = calculateSMA(closePrices, 20);
+    const ma60 = calculateSMA(closePrices, 60);
 
     // 核心肌肉書僮各維度
     const box = detectDarvasBox(subCandles);
@@ -1020,16 +1022,7 @@ export function scanMuscleBookerItem(
     ? { dif12_26: macdResult.dif12_26, macdHist: macdResult.macdHist }
     : undefined;
 
-  // 5. 誘多墓碑倒錘 (Bull Trap) 檢測 (Spec 0216 Ticket 01)
-  const body = Math.max(0.01, Math.abs(lastCandle.close - lastCandle.open));
-  const upperShadow = lastCandle.high - Math.max(lastCandle.open, lastCandle.close);
-  const lowerShadow = Math.min(lastCandle.open, lastCandle.close) - lastCandle.low;
-  const range = lastCandle.high - lastCandle.low;
-  const isCandleBullTrap =
-    range > 0 &&
-    upperShadow >= body * 1.5 &&
-    upperShadow > lowerShadow * 1.2 &&
-    (upperShadow / range >= 0.4 || lastCandle.close < lastCandle.open);
+  // 5. 誘多墓碑倒錘 (Bull Trap) 檢測 (Spec 0216 Ticket 01 & Standards SSOT 收斂)
   const traps = detectPriceActionTraps({
     open: lastCandle.open,
     high: lastCandle.high,
@@ -1038,7 +1031,7 @@ export function scanMuscleBookerItem(
     resistanceLevel: box.boxUpper,
     supportLevel: box.boxLower,
   });
-  const hasBullTrap = traps.hasBullTrap || (box.boxStatus === 'BREAKOUT_UP' && isCandleBullTrap);
+  const hasBullTrap = traps.hasBullTrap;
 
   // 6. 20 日主力 VWAP 成本結構與乖離率 (Spec 0216 Ticket 03)
   let vwap: { mainForceVwap?: number; biasPercent?: number } | undefined;

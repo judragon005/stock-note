@@ -35,12 +35,8 @@ import { TrafficLightMatrix } from './muscleBooker/subcomponents/TrafficLightMat
 import { DarvasQuadrantGrid } from './muscleBooker/subcomponents/DarvasQuadrantGrid';
 import { DeductionTelescopeTable } from './muscleBooker/subcomponents/DeductionTelescopeTable';
 
-/**
- * 格式化標的幣別價格字串 (轉接自 src/utils/formatters.ts 之統一工具)
- */
-export function formatCurrencyPrice(price?: number, market?: 'TW' | 'US'): string {
-  return formatStockPrice(price, market);
-}
+// 直接匯出統一之 formatStockPrice 工具函式 (消除無效中介轉發 Middle Man)
+export { formatStockPrice };
 
 export type MuscleBookerViewLens = 'ACTIONS' | 'QUADRANTS' | 'TELESCOPE';
 
@@ -366,6 +362,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         candlesRef: DailyCandle[] | undefined;
         isHolding: boolean;
         marketRegime?: 'BULL' | 'BEAR' | 'NEUTRAL';
+        isForensicDangerous?: boolean;
         scanned: ScannedStockItem;
       }
     >
@@ -381,13 +378,21 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         return adHocItem;
       }
 
-      const isHolding = activeHoldingsMap.has(item.symbol.toUpperCase());
+      const holding = activeHoldingsMap.get(item.symbol.toUpperCase());
+      const isHolding = !!holding;
+      const isForensicDangerous = !!(
+        holding?.signals?.some(
+          (s) => (s.tone === 'BEARISH' || s.tone === 'WARNING') && (s.label.includes('鑑識') || s.label.includes('異常') || s.label.includes('警報'))
+        )
+      );
+
       const cachedEntry = cache.get(item.symbol);
       if (
         cachedEntry &&
         cachedEntry.candlesRef === candles &&
         cachedEntry.isHolding === isHolding &&
-        cachedEntry.marketRegime === marketRegime
+        cachedEntry.marketRegime === marketRegime &&
+        cachedEntry.isForensicDangerous === isForensicDangerous
       ) {
         return cachedEntry.scanned;
       }
@@ -404,6 +409,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         {
           isHolding,
           marketRegime,
+          isForensicDangerous,
         }
       );
 
@@ -411,6 +417,7 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
         candlesRef: candles,
         isHolding,
         marketRegime,
+        isForensicDangerous,
         scanned,
       });
 
@@ -721,6 +728,9 @@ export const MuscleBookerWorkspace: React.FC<MuscleBookerWorkspaceProps> = ({
           expandedSymbol={expandedSymbol}
           onToggleExpand={handleToggleExpand}
           onOpenOmniInspector={onOpenOmniInspector}
+          watchlistSymbols={watchlistSymbols}
+          onToggleWatchlist={handleToggleWatchlist}
+          onQuickTrade={handleQuickTrade}
         />
       )}
 

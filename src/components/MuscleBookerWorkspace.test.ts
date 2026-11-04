@@ -122,7 +122,8 @@ describe('MuscleBookerWorkspace (肌肉書僮動能雷達工作區測試)', () =
     });
 
     const result = scanMuscleBookerItem('2330', '台積電', 'TW', 106.5, candles);
-    expect(result.actionDecision).toBeDefined();
+    console.log('ActionDecision:', result.actionDecision);
+        expect(result.actionDecision).toBeDefined();
     expect(result.actionDecision.action).toBe('BUY');
     expect(result.actionDecision.stopLossPrice).toBeDefined();
     expect(result.actionDecision.stopLossPrice!).toBeLessThan(106.5);

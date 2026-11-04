@@ -2,7 +2,7 @@ import React from 'react';
 import { TrendingUp, ChevronDown, ChevronUp, Star, Zap } from 'lucide-react';
 import { ScannedStockItem, BEGINNER_TOOLTIPS } from '../../../engine/muscleBookerEngine';
 import { Tooltip } from '../../common/Tooltip';
-import { formatCurrencyPrice } from '../../MuscleBookerWorkspace';
+import { formatStockPrice } from '../../../utils/formatters';
 
 export interface DeductionTelescopeTableProps {
   filteredItems: ScannedStockItem[];
@@ -91,10 +91,10 @@ export const DeductionTelescopeTable: React.FC<DeductionTelescopeTableProps> = (
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.name}</div>
                     </td>
                     <td className="mono" style={{ textAlign: 'right', fontWeight: 700 }}>
-                      {formatCurrencyPrice(item.currentPrice, item.market)}
+                      {formatStockPrice(item.currentPrice, item.market)}
                     </td>
                     <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                      {formatCurrencyPrice(item.ma20DeductionPrice, item.market)}
+                      {formatStockPrice(item.ma20DeductionPrice, item.market)}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       {item.isDataPending ? (
@@ -160,7 +160,7 @@ export const DeductionTelescopeTable: React.FC<DeductionTelescopeTableProps> = (
                     <td className="mono" style={{ textAlign: 'center', fontSize: '0.8rem' }}>
                       {item.actionDecision.stopLossPrice ? (
                         <span>
-                          防守: {formatCurrencyPrice(item.actionDecision.stopLossPrice, item.market)}
+                          防守: {formatStockPrice(item.actionDecision.stopLossPrice, item.market)}
                           {item.actionDecision.riskRewardRatio && ` (${item.actionDecision.riskRewardRatio})`}
                         </span>
                       ) : (
@@ -198,7 +198,7 @@ export const DeductionTelescopeTable: React.FC<DeductionTelescopeTableProps> = (
                           <span>{item.actionDecision.actionReason}</span>
                           {item.actionDecision.targetPrice && (
                             <span style={{ color: '#38bdf8', marginLeft: 'auto' }}>
-                              目標價: {formatCurrencyPrice(item.actionDecision.targetPrice, item.market)}
+                              目標價: {formatStockPrice(item.actionDecision.targetPrice, item.market)}
                             </span>
                           )}
                         </div>

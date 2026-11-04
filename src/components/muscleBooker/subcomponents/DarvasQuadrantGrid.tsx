@@ -10,6 +10,9 @@ export interface DarvasQuadrantGridProps {
   expandedSymbol: string | null;
   onToggleExpand: (symbol: string) => void;
   onOpenOmniInspector?: (symbol: string, market: MarketType) => void;
+  watchlistSymbols?: string[];
+  onToggleWatchlist?: (symbol: string) => void;
+  onQuickTrade?: (symbol: string, action: 'BUY' | 'SELL', price?: number) => void;
 }
 
 export const DarvasQuadrantGrid: React.FC<DarvasQuadrantGridProps> = ({
@@ -18,6 +21,9 @@ export const DarvasQuadrantGrid: React.FC<DarvasQuadrantGridProps> = ({
   expandedSymbol,
   onToggleExpand,
   onOpenOmniInspector,
+  watchlistSymbols = [],
+  onToggleWatchlist,
+  onQuickTrade,
 }) => {
   const { breakoutUpItems, bottomPenetrationItems, bollingerSqueezeItems, breakoutDownItems } =
     React.useMemo(() => {
@@ -95,6 +101,9 @@ export const DarvasQuadrantGrid: React.FC<DarvasQuadrantGridProps> = ({
                   isExpanded={expandedSymbol === item.symbol}
                   onToggleExpand={() => onToggleExpand(item.symbol)}
                   onOpenOmniInspector={onOpenOmniInspector}
+                  watchlistSymbols={watchlistSymbols}
+                  onToggleWatchlist={onToggleWatchlist}
+                  onQuickTrade={onQuickTrade}
                   badgeTone="BUY"
                   badgeLabel="🔥 箱頂突破"
                 />
@@ -136,6 +145,9 @@ export const DarvasQuadrantGrid: React.FC<DarvasQuadrantGridProps> = ({
                   isExpanded={expandedSymbol === item.symbol}
                   onToggleExpand={() => onToggleExpand(item.symbol)}
                   onOpenOmniInspector={onOpenOmniInspector}
+                  watchlistSymbols={watchlistSymbols}
+                  onToggleWatchlist={onToggleWatchlist}
+                  onQuickTrade={onQuickTrade}
                   badgeTone="BUY"
                   badgeLabel="🚀 底穿上"
                 />
@@ -177,6 +189,9 @@ export const DarvasQuadrantGrid: React.FC<DarvasQuadrantGridProps> = ({
                   isExpanded={expandedSymbol === item.symbol}
                   onToggleExpand={() => onToggleExpand(item.symbol)}
                   onOpenOmniInspector={onOpenOmniInspector}
+                  watchlistSymbols={watchlistSymbols}
+                  onToggleWatchlist={onToggleWatchlist}
+                  onQuickTrade={onQuickTrade}
                   badgeTone="HOLD"
                   badgeLabel="⚡ 極致壓縮"
                 />
@@ -218,6 +233,9 @@ export const DarvasQuadrantGrid: React.FC<DarvasQuadrantGridProps> = ({
                   isExpanded={expandedSymbol === item.symbol}
                   onToggleExpand={() => onToggleExpand(item.symbol)}
                   onOpenOmniInspector={onOpenOmniInspector}
+                  watchlistSymbols={watchlistSymbols}
+                  onToggleWatchlist={onToggleWatchlist}
+                  onQuickTrade={onQuickTrade}
                   badgeTone="SELL"
                   badgeLabel="⚠️ 破箱底"
                 />

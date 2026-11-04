@@ -582,11 +582,14 @@ export function detectPriceActionTraps(params: {
   let hasBearTrap = false;
   let description: string | undefined = undefined;
 
-  // 假突破：衝過阻力但收盤壓回，且上影線顯著長於實體 (墓碑線/射擊之星)
-  if (resistanceLevel && high >= resistanceLevel && close <= resistanceLevel * 1.005) {
-    if (upperShadow >= body * 1.5 || close < open) {
+  const range = high - low;
+  // 假突破 / 墓碑誘多：衝過阻力但收盤壓回，或衝高留下長上影線墓碑倒錘 (上影線 >= 實體 1.5 倍且佔振幅 >= 40%)
+  if (resistanceLevel && high >= resistanceLevel) {
+    const isPressurePullback = close <= resistanceLevel * 1.005 && (upperShadow >= body * 1.5 || close < open);
+    const isShootingStarTrap = range > 0 && upperShadow >= body * 1.5 && upperShadow > lowerShadow && (upperShadow / range >= 0.4 || close < open);
+    if (isPressurePullback || isShootingStarTrap) {
       hasBullTrap = true;
-      description = `壓力位 (${resistanceLevel}) 出現長上影線墓碑倒錘，盤中突破無效收盤壓回，為典型誘多假突破 (Bull Trap)。`;
+      description = `壓力位 (${resistanceLevel}) 出現長上影線墓碑倒錘，盤中突破受阻巨幅折返，為典型誘多假突破 (Bull Trap)。`;
     }
   }
 
