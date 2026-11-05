@@ -176,7 +176,9 @@ export function filterMarketFocusList(
   availableDates: string[] = ['T'],
   historyReportsMap?: Record<string, Record<string, TwseInstitutionalRow>>,
   usRealDataMap?: Record<string, UsRealStockData>,
-  includeEtf = false
+  includeEtf = false,
+  chipsHorizon: 1 | 3 | 5 = 1,
+  usdToTwdRate = 32
 ): SmartMoneyInputItem[] {
   const usSourceList = includeEtf
     ? US_MARKET_FOCUS_LIST
@@ -189,8 +191,14 @@ export function filterMarketFocusList(
       const matchingHolding = holdings.find(
         (h) => !h.isClosed && h.shares > 0 && h.symbol.trim().toUpperCase() === usItem.symbol
       );
-      const pnl = realUs ? realUs.changePercent : usItem.pnl;
       const curPrice = realUs ? realUs.currentPrice : matchingHolding?.currentPrice || 0;
+      let pnl = realUs ? realUs.changePercent : usItem.pnl;
+      if (chipsHorizon > 1 && realUs?.candles && realUs.candles.length >= chipsHorizon + 1) {
+        const baseCandle = realUs.candles[realUs.candles.length - 1 - chipsHorizon];
+        if (baseCandle?.close && curPrice) {
+          pnl = Math.round(((curPrice - baseCandle.close) / baseCandle.close) * 10000) / 100;
+        }
+      }
       const prevClose = realUs ? realUs.previousClose : curPrice - pnl;
       const volume = realUs ? realUs.volume : 2000000 + idx * 100000;
       const candles =
@@ -218,7 +226,7 @@ export function filterMarketFocusList(
         currentPrice: curPrice || 1,
         previousClose: prevClose || 1,
         changePercent: pnl,
-        holdingValueTwd: matchingHolding ? matchingHolding.grossMarketValue * 32 : undefined,
+        holdingValueTwd: matchingHolding ? matchingHolding.grossMarketValue * usdToTwdRate : undefined,
         isHolding: Boolean(matchingHolding),
         avgCost: matchingHolding?.avgCost,
         unrealizedPnLPercent: matchingHolding?.unrealizedPnLPercent,
@@ -247,10 +255,19 @@ export function filterMarketFocusList(
     const matchingHolding = holdings.find(
       (h) => !h.isClosed && h.shares > 0 && h.symbol.replace(/\.(TW|TWO)$/i, '').trim() === item.symbol
     );
+    const realPrice = item.close || matchingHolding?.currentPrice || 1;
     let changeP = matchingHolding?.todaysPnLPercent;
 
-    const realPrice = item.close || matchingHolding?.currentPrice || 1;
-    if (changeP === undefined) {
+    if (chipsHorizon > 1) {
+      const targetIdx = Math.max(0, availableDates.length - 1 - chipsHorizon);
+      const baseDate = availableDates.length > 1 ? availableDates[targetIdx] : null;
+      const baseDayItem = baseDate && historyReportsMap ? historyReportsMap[baseDate]?.[item.symbol] : null;
+      if (baseDayItem?.close && realPrice) {
+        changeP = Math.round(((realPrice - baseDayItem.close) / baseDayItem.close) * 1000) / 10;
+      } else if (changeP === undefined) {
+        changeP = 0;
+      }
+    } else if (changeP === undefined) {
       const prevDate = availableDates.length >= 2 ? availableDates[availableDates.length - 2] : null;
       const prevDayItem = prevDate && historyReportsMap ? historyReportsMap[prevDate]?.[item.symbol] : null;
       if (prevDayItem?.close && item.close) {
@@ -312,7 +329,13 @@ export function filterMarketFocusList(
         (h) => !h.isClosed && h.shares > 0 && h.symbol.trim().toUpperCase() === usItem.symbol
       );
       const curPrice = realUs ? realUs.currentPrice : matchingHolding?.currentPrice || 1;
-      const pnl = realUs ? realUs.changePercent : usItem.pnl;
+      let pnl = realUs ? realUs.changePercent : usItem.pnl;
+      if (chipsHorizon > 1 && realUs?.candles && realUs.candles.length >= chipsHorizon + 1) {
+        const baseCandle = realUs.candles[realUs.candles.length - 1 - chipsHorizon];
+        if (baseCandle?.close && curPrice) {
+          pnl = Math.round(((curPrice - baseCandle.close) / baseCandle.close) * 10000) / 100;
+        }
+      }
       return {
         symbol: usItem.symbol,
         name: usItem.name,
@@ -320,7 +343,7 @@ export function filterMarketFocusList(
         currentPrice: curPrice,
         previousClose: realUs ? realUs.previousClose : curPrice - pnl,
         changePercent: pnl,
-        holdingValueTwd: matchingHolding ? matchingHolding.grossMarketValue * 32 : undefined,
+        holdingValueTwd: matchingHolding ? matchingHolding.grossMarketValue * usdToTwdRate : undefined,
         isHolding: Boolean(matchingHolding),
         avgCost: matchingHolding?.avgCost,
         unrealizedPnLPercent: matchingHolding?.unrealizedPnLPercent,
@@ -366,6 +389,7 @@ export interface ChipsWorkspaceProps {
   onMarketChange?: (market: 'ALL' | MarketType) => void;
   onOpenOmniInspector?: (symbol: string, market: MarketType) => void;
   onOpenAiForce?: (symbol: string, market: MarketType) => void;
+  onOpenDeepDive?: (symbol: string, market: MarketType, name?: string) => void;
   onQuickTrade?: (symbol: string, market: MarketType) => void;
 }
 
@@ -377,6 +401,7 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
   onMarketChange,
   onOpenOmniInspector,
   onOpenAiForce,
+  onOpenDeepDive,
   onQuickTrade,
 }) => {
   const activeHoldingsCount = holdings.filter((h) => !h.isClosed && h.shares > 0).length;
@@ -600,13 +625,33 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
           twseData?.trustToVolumeRatio ??
           (volLots > 0 && twseData ? Math.round((twseData.trustNetShares / volLots) * 1000) / 10 : undefined);
 
+        let changePercent = h.todaysPnLPercent || 0;
+        if (chipsHorizon > 1) {
+          if (h.market === 'US' && usCandles && usCandles.length >= chipsHorizon + 1) {
+            const baseCandle = usCandles[usCandles.length - 1 - chipsHorizon];
+            if (baseCandle?.close && h.currentPrice) {
+              changePercent = Math.round(((h.currentPrice - baseCandle.close) / baseCandle.close) * 10000) / 100;
+            }
+          } else if (h.market === 'TW') {
+            const targetIdx = Math.max(0, availableDates.length - 1 - chipsHorizon);
+            const baseDate = availableDates.length > 1 ? availableDates[targetIdx] : null;
+            const baseDayItem =
+              baseDate && historyReportsMap
+                ? historyReportsMap[baseDate]?.[cleanSymbol] || historyReportsMap[baseDate]?.[h.symbol]
+                : null;
+            if (baseDayItem?.close && h.currentPrice) {
+              changePercent = Math.round(((h.currentPrice - baseDayItem.close) / baseDayItem.close) * 1000) / 10;
+            }
+          }
+        }
+
         return {
           symbol: h.symbol,
           name: h.name || h.symbol,
           market: h.market,
           currentPrice: h.currentPrice,
           previousClose: h.currentPrice - (h.todaysChange || 0),
-          changePercent: h.todaysPnLPercent || 0,
+          changePercent,
           holdingValueTwd: valTwd,
           isHolding: true,
           avgCost: h.avgCost,
@@ -637,10 +682,12 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
         availableDates,
         historyReportsMap,
         usRealDataMap,
-        includeEtf
+        includeEtf,
+        chipsHorizon,
+        usdToTwdRate
       );
     }
-  }, [holdings, activeChipsMap, viewMode, marketFilter, usdToTwdRate, availableDates, historyReportsMap, usRealDataMap, includeEtf]);
+  }, [holdings, activeChipsMap, viewMode, marketFilter, usdToTwdRate, availableDates, historyReportsMap, usRealDataMap, includeEtf, chipsHorizon]);
 
   // Spec 0119 Ticket 04: 動態計算當前週期的決策排行榜 (可以買 vs 一定要閃)
   const cardStyles = getChipsQuadrantCardStyles(colorTheme);
@@ -1218,6 +1265,7 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
         chipsHorizon={chipsHorizon}
         onOpenOmniInspector={onOpenOmniInspector}
         onOpenAiForce={onOpenAiForce}
+        onOpenDeepDive={onOpenDeepDive}
         onQuickTrade={onQuickTrade}
         colorTheme={colorTheme}
         availableDates={availableDates}
@@ -1403,6 +1451,14 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
                               style={{ padding: '3px 6px', fontSize: '0.68rem', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.2)', border: '1px solid rgba(59, 130, 246, 0.4)', color: '#93c5fd', cursor: 'pointer' }}
                             >
                               K線
+                            </button>
+                          )}
+                          {onOpenDeepDive && (
+                            <button
+                              onClick={() => onOpenDeepDive(b.symbol, b.market, b.name)}
+                              style={{ padding: '3px 6px', fontSize: '0.68rem', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.2)', border: '1px solid rgba(245, 158, 11, 0.4)', color: '#fde68a', cursor: 'pointer' }}
+                            >
+                              深研
                             </button>
                           )}
                           {onOpenAiForce && (

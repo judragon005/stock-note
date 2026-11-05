@@ -1151,6 +1151,7 @@ export const App: React.FC = () => {
             }
             setActiveTab('aiforce');
           }}
+          onOpenDeepDive={handleOpenDeepDive}
           onQuickTrade={(sym) => {
             if (sym) {
               handleQuickTrade(sym, 'BUY');
