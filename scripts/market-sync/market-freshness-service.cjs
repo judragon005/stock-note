@@ -134,6 +134,7 @@ function getLatestSettledRevenueMonth(now = new Date()) {
  */
 function checkMarketFreshness(db, now = new Date()) {
   let twLatest = null;
+  let twChipsCount = null;
   let usLatest = null;
   let tdccLatest = null;
   let revenueLatest = null;
@@ -143,6 +144,14 @@ function checkMarketFreshness(db, now = new Date()) {
       .prepare("SELECT MAX(date) as maxDate FROM daily_candles WHERE symbol = '0050' OR symbol = '2330'")
       .get();
     twLatest = twMaxRow?.maxDate || null;
+    if (twLatest) {
+      try {
+        const countRow = db.prepare("SELECT COUNT(*) as count FROM tw_institutional_chips WHERE date = ?").get(twLatest);
+        twChipsCount = countRow?.count != null ? Number(countRow.count) : null;
+      } catch {
+        twChipsCount = null;
+      }
+    }
   } catch {
     twLatest = null;
   }
@@ -179,13 +188,17 @@ function checkMarketFreshness(db, now = new Date()) {
   const tdccAnchor = getLatestSettledTdccFriday(now);
   const revenueAnchor = getLatestSettledRevenueMonth(now);
 
-  const isTwStale = Boolean(twLatest && twLatest < twAnchor);
+  // Spec 0218 Ticket 02 (#435): 若日 K 最新但三大法人有效記錄數未達門檻 (< 1800)，標記 isStale = true 以觸發自動追趕
+  const isTwStale = Boolean(
+    (twLatest && twLatest < twAnchor) ||
+    (twLatest && twChipsCount !== null && twChipsCount < 1800)
+  );
   const isUsStale = Boolean(usLatest && usLatest < usAnchor);
   const isTdccStale = Boolean(tdccLatest && tdccLatest < tdccAnchor);
   const isRevenueStale = Boolean(revenueLatest && revenueLatest < revenueAnchor);
 
   return {
-    tw: { latestDate: twLatest, anchorDate: twAnchor, isStale: isTwStale },
+    tw: { latestDate: twLatest, anchorDate: twAnchor, isStale: isTwStale, chipsCount: twChipsCount },
     us: { latestDate: usLatest, anchorDate: usAnchor, isStale: isUsStale },
     tdcc: { latestDate: tdccLatest, anchorDate: tdccAnchor, isStale: isTdccStale },
     revenue: { latestMonth: revenueLatest, anchorMonth: revenueAnchor, isStale: isRevenueStale },

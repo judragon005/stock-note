@@ -10,6 +10,8 @@ import { SmartMoneyBubbleChart } from './SmartMoneyBubbleChart';
 import {
   calculateSmartMoneyFlowDynamics,
   getTemporalBubbleFrameData,
+  calculateSectorRotation,
+  detectActionableSignals,
 } from '../engine/smartMoneyEngine';
 import {
   fetchTwseInstitutionalReportDetailed,
@@ -86,34 +88,31 @@ export function buildHoldingHistoricalFlows(
   historyReportsMap?: Record<string, Record<string, TwseInstitutionalRow>>
 ) {
   const cleanSymbol = holding.symbol.replace(/\.(TW|TWO)$/i, '').trim();
-  const baseFlow = twseData ? twseData.totalNetShares / 2500 : 0;
 
   return availableDates.map((d, idx) => {
-    const factor = (idx + 1) / availableDates.length;
-    const changeP = (holding.todaysPnLPercent || 0) * factor;
+    const isLatest = idx === availableDates.length - 1;
 
     if (holding.market === 'US') {
-      const stepCmf = Math.round(baseUsCmf * factor * 100) / 100;
-      const usNetFlow = stepCmf * 1000000 * (holding.currentPrice || 100);
+      const cmfVal = isLatest ? baseUsCmf : 0;
+      const changeP = isLatest ? (holding.todaysPnLPercent || 0) : 0;
       return {
         date: d,
-        changePercent: Math.round(changeP * 100) / 100,
-        flowScore: stepCmf,
-        netFlowAmount: usNetFlow,
-        cmf: stepCmf,
+        changePercent: changeP,
+        flowScore: cmfVal,
+        netFlowAmount: cmfVal * 1000000 * (holding.currentPrice || 100),
+        cmf: cmfVal,
       };
     }
 
-    // 檢查是否有真實歷史日報 (本地化存儲時間換空間)
+    // 檢查是否有真實歷史日報 (Zero-Mock 湖倉直連，Ticket 05)
     const dayReport = historyReportsMap?.[d];
     const dayItem = dayReport ? (dayReport[cleanSymbol] || dayReport[holding.symbol]) : undefined;
 
     if (dayItem) {
-      const dayScore = dayItem.totalNetShares / 2500;
       return {
         date: d,
-        changePercent: Math.round(changeP * 100) / 100,
-        flowScore: Math.round(dayScore * 100) / 100,
+        changePercent: isLatest ? (holding.todaysPnLPercent || 0) : 0,
+        flowScore: dayItem.totalNetShares / 2500,
         netFlowAmount: dayItem.totalNetShares * 1000 * (holding.currentPrice || 100),
         foreignNetShares: dayItem.foreignNetShares,
         trustNetShares: dayItem.trustNetShares,
@@ -121,48 +120,58 @@ export function buildHoldingHistoricalFlows(
       };
     }
 
-    // 優雅降級模擬
-    const fNet = twseData ? Math.round(twseData.foreignNetShares * factor) : undefined;
-    const tNet = twseData ? Math.round(twseData.trustNetShares * factor) : undefined;
-    const dNet = twseData ? Math.round(twseData.dealerNetShares * factor) : undefined;
+    // 若為當前最新日且 twseData 存在，直連真實最新日報
+    if (isLatest && twseData) {
+      return {
+        date: d,
+        changePercent: holding.todaysPnLPercent || 0,
+        flowScore: twseData.totalNetShares / 2500,
+        netFlowAmount: (twseData.totalNetShares || 0) * 1000 * (holding.currentPrice || 100),
+        foreignNetShares: twseData.foreignNetShares,
+        trustNetShares: twseData.trustNetShares,
+        dealerNetShares: twseData.dealerNetShares,
+      };
+    }
+
+    // 歷史無日報時誠實返回 0，絕不使用線性插值偽造軌跡
     return {
       date: d,
-      changePercent: Math.round(changeP * 100) / 100,
-      flowScore: Math.round(baseFlow * factor * 100) / 100,
-      netFlowAmount: (twseData?.totalNetShares || 0) * 1000 * (holding.currentPrice || 100) * factor,
-      foreignNetShares: fNet,
-      trustNetShares: tNet,
-      dealerNetShares: dNet,
+      changePercent: 0,
+      flowScore: 0,
+      netFlowAmount: 0,
+      foreignNetShares: undefined,
+      trustNetShares: undefined,
+      dealerNetShares: undefined,
     };
   });
 }
 
 export const US_MARKET_FOCUS_LIST = [
-  { symbol: 'NVDA', name: '輝達', pnl: 3.2, cmf: 0.65 },
-  { symbol: 'AAPL', name: '蘋果', pnl: 1.1, cmf: 0.35 },
-  { symbol: 'MSFT', name: '微軟', pnl: 0.8, cmf: 0.28 },
-  { symbol: 'AMZN', name: '亞馬遜', pnl: -0.6, cmf: 0.42 },
-  { symbol: 'GOOGL', name: 'Alphabet', pnl: 1.5, cmf: 0.30 },
-  { symbol: 'META', name: 'Meta', pnl: 2.4, cmf: 0.55 },
-  { symbol: 'TSLA', name: '特斯拉', pnl: -2.8, cmf: -0.45 },
-  { symbol: 'AVGO', name: '博通', pnl: 2.1, cmf: 0.48 },
-  { symbol: 'AMD', name: '超微', pnl: 1.8, cmf: -0.32 },
-  { symbol: 'PLTR', name: 'Palantir', pnl: 4.2, cmf: 0.72 },
-  { symbol: 'ARM', name: '安謀', pnl: -1.2, cmf: 0.25 },
-  { symbol: 'QCOM', name: '高通', pnl: 0.5, cmf: -0.22 },
-  { symbol: 'ASML', name: '艾斯摩爾', pnl: -1.8, cmf: 0.38 },
-  { symbol: 'TSM', name: '台積電ADR', pnl: 3.5, cmf: 0.68 },
-  { symbol: 'MU', name: '美光', pnl: -2.1, cmf: -0.40 },
-  { symbol: 'SMCI', name: '美超微', pnl: 5.1, cmf: 0.52 },
-  { symbol: 'NFLX', name: '網飛', pnl: 1.2, cmf: 0.18 },
-  { symbol: 'COST', name: '好市多', pnl: 0.4, cmf: 0.22 },
-  { symbol: 'BRK.B', name: '波克夏B', pnl: 0.2, cmf: 0.15 },
-  { symbol: 'JPM', name: '摩根大通', pnl: -0.8, cmf: 0.30 },
-  { symbol: 'LLY', name: '禮來', pnl: 1.9, cmf: 0.45 },
-  { symbol: 'NVO', name: '諾和諾德', pnl: -1.5, cmf: -0.35 },
-  { symbol: 'SPY', name: '標普500 ETF', pnl: 0.6, cmf: 0.25 },
-  { symbol: 'QQQ', name: '那斯達克 ETF', pnl: 1.1, cmf: 0.40 },
-  { symbol: 'SOXX', name: '費半 ETF', pnl: 2.2, cmf: 0.58 },
+  { symbol: 'NVDA', name: '輝達', pnl: 0, cmf: 0 },
+  { symbol: 'AAPL', name: '蘋果', pnl: 0, cmf: 0 },
+  { symbol: 'MSFT', name: '微軟', pnl: 0, cmf: 0 },
+  { symbol: 'AMZN', name: '亞馬遜', pnl: 0, cmf: 0 },
+  { symbol: 'GOOGL', name: 'Alphabet', pnl: 0, cmf: 0 },
+  { symbol: 'META', name: 'Meta', pnl: 0, cmf: 0 },
+  { symbol: 'TSLA', name: '特斯拉', pnl: 0, cmf: 0 },
+  { symbol: 'AVGO', name: '博通', pnl: 0, cmf: 0 },
+  { symbol: 'AMD', name: '超微', pnl: 0, cmf: 0 },
+  { symbol: 'PLTR', name: 'Palantir', pnl: 0, cmf: 0 },
+  { symbol: 'ARM', name: '安謀', pnl: 0, cmf: 0 },
+  { symbol: 'QCOM', name: '高通', pnl: 0, cmf: 0 },
+  { symbol: 'ASML', name: '艾斯摩爾', pnl: 0, cmf: 0 },
+  { symbol: 'TSM', name: '台積電ADR', pnl: 0, cmf: 0 },
+  { symbol: 'MU', name: '美光', pnl: 0, cmf: 0 },
+  { symbol: 'SMCI', name: '美超微', pnl: 0, cmf: 0 },
+  { symbol: 'NFLX', name: '網飛', pnl: 0, cmf: 0 },
+  { symbol: 'COST', name: '好市多', pnl: 0, cmf: 0 },
+  { symbol: 'BRK.B', name: '波克夏B', pnl: 0, cmf: 0 },
+  { symbol: 'JPM', name: '摩根大通', pnl: 0, cmf: 0 },
+  { symbol: 'LLY', name: '禮來', pnl: 0, cmf: 0 },
+  { symbol: 'NVO', name: '諾和諾德', pnl: 0, cmf: 0 },
+  { symbol: 'SPY', name: '標普500 ETF', pnl: 0, cmf: 0 },
+  { symbol: 'QQQ', name: '那斯達克 ETF', pnl: 0, cmf: 0 },
+  { symbol: 'SOXX', name: '費半 ETF', pnl: 0, cmf: 0 },
 ];
 
 /**
@@ -186,38 +195,34 @@ export function filterMarketFocusList(
 
   if (marketFilter === 'US') {
     // 100% 純美股全市場焦點 (優先對齊 Yahoo Finance 真實日 K 與 20D CMF)
-    return usSourceList.map((usItem, idx) => {
+    return usSourceList.map((usItem) => {
       const realUs = usRealDataMap?.[usItem.symbol];
       const matchingHolding = holdings.find(
         (h) => !h.isClosed && h.shares > 0 && h.symbol.trim().toUpperCase() === usItem.symbol
       );
       const curPrice = realUs ? realUs.currentPrice : matchingHolding?.currentPrice || 0;
-      let pnl = realUs ? realUs.changePercent : usItem.pnl;
+      let pnl = realUs ? realUs.changePercent : 0;
       if (chipsHorizon > 1 && realUs?.candles && realUs.candles.length >= chipsHorizon + 1) {
         const baseCandle = realUs.candles[realUs.candles.length - 1 - chipsHorizon];
         if (baseCandle?.close && curPrice) {
           pnl = Math.round(((curPrice - baseCandle.close) / baseCandle.close) * 10000) / 100;
         }
       }
-      const prevClose = realUs ? realUs.previousClose : curPrice - pnl;
-      const volume = realUs ? realUs.volume : 2000000 + idx * 100000;
+      const prevClose = realUs ? realUs.previousClose : (curPrice && pnl ? Math.round((curPrice / (1 + pnl / 100)) * 100) / 100 : curPrice);
+      const volume = realUs ? realUs.volume : 0;
       const candles =
         realUs?.candles && realUs.candles.length >= 20 ? realUs.candles : undefined;
 
       const histFlows =
         realUs?.historicalDailyFlows && realUs.historicalDailyFlows.length > 0
           ? realUs.historicalDailyFlows
-          : availableDates.map((d, dIdx) => {
-              const factor = (dIdx + 1) / availableDates.length;
-              const curCmf = Math.round(usItem.cmf * factor * 100) / 100;
-              return {
-                date: d,
-                changePercent: Math.round(usItem.pnl * factor * 100) / 100,
-                flowScore: curCmf,
-                cmf: curCmf,
-                netFlowAmount: usItem.cmf * 50000000 * factor,
-              };
-            });
+          : availableDates.map((d) => ({
+              date: d,
+              changePercent: 0,
+              flowScore: 0,
+              cmf: 0,
+              netFlowAmount: 0,
+            }));
 
       return {
         symbol: usItem.symbol,
@@ -450,6 +455,8 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
   const [tableSortField, setTableSortField] = useState<string>('totalNetShares');
   const [tableSortAsc, setTableSortAsc] = useState<boolean>(false);
   const [isDecisionBoardExpanded, setIsDecisionBoardExpanded] = useState<boolean>(true);
+  const [flowDimension, setFlowDimension] = useState<'AMOUNT' | 'RATIO' | 'SHARES'>('AMOUNT');
+  const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
 
   // 支援 5 個連續真實交易日供時序回放 (優先採用湖倉真實交易日序列，防範國定假日時序錯位)
   const availableDates = useMemo(() => {
@@ -575,10 +582,10 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
   // 依視圖模式與市場篩選產生 Input Items (採用累計週期 activeChipsMap 與真實美股日 K)
   const smartMoneyItems = useMemo<SmartMoneyInputItem[]>(() => {
     if (viewMode === 'PORTFOLIO') {
+      // 在庫持倉模式預設呈現 100% 全部持倉（含 10 檔台股 ETF 與美股 VT，Ticket 07）
       const scopedHoldings = holdings
         .filter((h) => !h.isClosed && h.shares > 0)
-        .filter((h) => marketFilter === 'ALL' || h.market === marketFilter)
-        .filter((h) => includeEtf || !isEtfSymbol(h.symbol));
+        .filter((h) => marketFilter === 'ALL' || h.market === marketFilter);
 
       const totalPortfolioTwd = Math.max(
         scopedHoldings.reduce(
@@ -698,15 +705,29 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
     return getTopMomentumSymbols(activeChipsMap, 4, { excludeEtf: !includeEtf, market: marketFilter === 'US' ? 'US' : 'TW' });
   }, [activeChipsMap, includeEtf, marketFilter]);
 
-  // 透過量化引擎計算四象限模型
+  // 透過量化引擎計算四象限模型 (支援維度切換與持倉特化 Ticket 08)
   const analysisResult = useMemo(() => {
-    return calculateSmartMoneyFlowDynamics(smartMoneyItems);
+    return calculateSmartMoneyFlowDynamics(smartMoneyItems, {
+      isPortfolioMode: viewMode === 'PORTFOLIO',
+      flowDimension,
+    });
+  }, [smartMoneyItems, viewMode, flowDimension]);
+
+  // 產業資金輪動聚合 (Ticket 09 / Spec 0218)
+  const sectorRotation = useMemo(() => {
+    return calculateSectorRotation(smartMoneyItems);
   }, [smartMoneyItems]);
-  // 依象限過濾器過濾泡泡 (Ticket 07 / Spec 0217)
+  // 依象限與產業輪動過濾泡泡 (Ticket 07 & 09 / Spec 0218)
   const displayBubbles = useMemo(() => {
-    if (quadrantFilter === 'ALL') return analysisResult.bubbles;
-    return analysisResult.bubbles.filter((b) => b.quadrant === quadrantFilter);
-  }, [analysisResult.bubbles, quadrantFilter]);
+    let list = analysisResult.bubbles;
+    if (quadrantFilter !== 'ALL') {
+      list = list.filter((b) => b.quadrant === quadrantFilter);
+    }
+    if (selectedIndustry) {
+      list = list.filter((b) => (b as any).industry === selectedIndustry);
+    }
+    return list;
+  }, [analysisResult.bubbles, quadrantFilter, selectedIndustry]);
 
 
   // 依據當前選取的時序日期 (currentDateIndex) 動態重新統計當前影格之四象限檔數，杜絕 T-4 切換時數字凍結
@@ -890,6 +911,43 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
                 }}
               >
                 {days === 1 ? '1日 (當日)' : days === 3 ? '3日 (短波段)' : '5日 (週籌碼)'}
+              </button>
+            ))}
+          </div>
+
+          {/* Y 軸維度選擇器 (金額 / 投量比 / 張數) (Ticket 08 / Spec 0218) */}
+          <div
+            style={{
+              display: 'flex',
+              background: 'rgba(30, 41, 59, 0.7)',
+              padding: '3px',
+              borderRadius: '10px',
+              border: '1px solid rgba(51, 65, 85, 0.6)',
+              gap: '2px',
+            }}
+            title="切換星圖 Y 軸衡量維度：以真金白銀【買賣超金額】、【投量比】或【張數】展開縱軸"
+          >
+            {[
+              { id: 'AMOUNT', label: '💰 金額榜' },
+              { id: 'RATIO', label: '🎯 投量比' },
+              { id: 'SHARES', label: '📊 張數榜' },
+            ].map((dim) => (
+              <button
+                key={dim.id}
+                onClick={() => setFlowDimension(dim.id as any)}
+                style={{
+                  padding: '4px 9px',
+                  borderRadius: '7px',
+                  border: 'none',
+                  background: flowDimension === dim.id ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'transparent',
+                  color: flowDimension === dim.id ? '#ffffff' : '#94a3b8',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {dim.label}
               </button>
             ))}
           </div>
@@ -1258,6 +1316,90 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
         )}
       </div>
 
+      {/* 聰明錢淨流入 Top 5 vs 淨流出 Top 3 產業資金輪動橫條 (Ticket 09 / Spec 0218) */}
+      {(sectorRotation.topInflows.length > 0 || sectorRotation.topOutflows.length > 0) && (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 14px',
+            borderRadius: '10px',
+            background: 'rgba(15, 23, 42, 0.65)',
+            border: '1px solid rgba(51, 65, 85, 0.45)',
+          }}
+        >
+          <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#94a3b8' }}>
+            🌊 產業資金輪動：
+          </span>
+          {sectorRotation.topInflows.map((sec) => (
+            <button
+              key={sec.industry}
+              onClick={() => setSelectedIndustry(selectedIndustry === sec.industry ? null : sec.industry)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 8px',
+                borderRadius: '6px',
+                border: selectedIndustry === sec.industry ? '1px solid #ef4444' : '1px solid rgba(239, 68, 68, 0.25)',
+                background: selectedIndustry === sec.industry ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.12)',
+                color: '#fca5a5',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+              title={`${sec.industry}三大法人淨買入 ${(sec.netAmount / 100000000).toFixed(1)} 億元，點擊過濾`}
+            >
+              <span>🔥 {sec.industry}</span>
+              <span className="mono">+{(sec.netAmount / 100000000).toFixed(1)}億</span>
+            </button>
+          ))}
+          {sectorRotation.topOutflows.map((sec) => (
+            <button
+              key={sec.industry}
+              onClick={() => setSelectedIndustry(selectedIndustry === sec.industry ? null : sec.industry)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 8px',
+                borderRadius: '6px',
+                border: selectedIndustry === sec.industry ? '1px solid #3b82f6' : '1px solid rgba(59, 130, 246, 0.25)',
+                background: selectedIndustry === sec.industry ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.12)',
+                color: '#93c5fd',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+              title={`${sec.industry}三大法人淨賣出 ${Math.abs(sec.netAmount / 100000000).toFixed(1)} 億元，點擊過濾`}
+            >
+              <span>💧 {sec.industry}</span>
+              <span className="mono">{(sec.netAmount / 100000000).toFixed(1)}億</span>
+            </button>
+          ))}
+          {selectedIndustry && (
+            <button
+              onClick={() => setSelectedIndustry(null)}
+              style={{
+                padding: '3px 8px',
+                borderRadius: '6px',
+                border: '1px solid rgba(148, 163, 184, 0.3)',
+                background: 'rgba(51, 65, 85, 0.4)',
+                color: '#cbd5e1',
+                fontSize: '0.7rem',
+                cursor: 'pointer',
+              }}
+            >
+              ✕ 重置過濾
+            </button>
+          )}
+        </div>
+      )}
+
       {/* 核心泡泡圖元件 */}
       <SmartMoneyBubbleChart
         bubbles={displayBubbles}
@@ -1407,33 +1549,73 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
                         </span>
                       </td>
                       <td style={{ padding: '9px 10px' }}>
-                        {b.crossoverLabel && b.crossoverLabel !== '穩態延續' ? (
-                          <span style={{ fontSize: '0.72rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(234, 179, 8, 0.15)', color: '#fde047', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
-                            {b.crossoverLabel}
-                          </span>
-                        ) : (
-                          <span style={{ color: '#64748b', fontSize: '0.72rem' }}>—</span>
-                        )}
+                        {(() => {
+                          const sigs = detectActionableSignals(
+                            {
+                              changePercent: b.changePercent,
+                              totalNetShares: (b.foreignNetShares || 0) + (b.trustNetShares || 0) + (b.dealerNetShares || 0),
+                              netFlowAmount: b.netFlowAmount,
+                              foreignBuyShares: b.foreignNetShares && b.foreignNetShares > 0 ? b.foreignNetShares : 0,
+                              foreignSellShares: b.foreignNetShares && b.foreignNetShares < 0 ? Math.abs(b.foreignNetShares) : 0,
+                              trustBuyShares: b.trustNetShares && b.trustNetShares > 0 ? b.trustNetShares : 0,
+                              trustSellShares: b.trustNetShares && b.trustNetShares < 0 ? Math.abs(b.trustNetShares) : 0,
+                            },
+                            { trustStreak: b.trustStreak, foreignStreak: b.foreignStreak }
+                          );
+                          const primarySig = sigs.length > 0 ? sigs[0] : null;
+
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                              {b.crossoverLabel && b.crossoverLabel !== '穩態延續' && (
+                                <span style={{ fontSize: '0.7rem', padding: '1px 5px', borderRadius: '4px', background: 'rgba(234, 179, 8, 0.15)', color: '#fde047', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
+                                  {b.crossoverLabel}
+                                </span>
+                              )}
+                              {primarySig ? (
+                                <span style={{ fontSize: '0.7rem', padding: '1px 5px', borderRadius: '4px', background: primarySig.severity === 'HIGH' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)', color: primarySig.severity === 'HIGH' ? '#fca5a5' : '#6ee7b7' }} title={primarySig.detail}>
+                                  {primarySig.label}
+                                </span>
+                              ) : (!b.crossoverLabel || b.crossoverLabel === '穩態延續') ? (
+                                <span style={{ color: '#64748b', fontSize: '0.72rem' }}>—</span>
+                              ) : null}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td style={{ padding: '9px 10px', fontWeight: 700, color: b.changePercent >= 0 ? upColor : downColor }}>
                         {b.changePercent >= 0 ? '+' : ''}{b.changePercent.toFixed(1)}%
                       </td>
-                      <td style={{ padding: '9px 10px', color: (b.foreignNetShares || 0) >= 0 ? upColor : downColor }}>
-                        {b.foreignNetShares !== undefined
-                          ? `${b.foreignNetShares >= 0 ? '+' : ''}${b.foreignNetShares.toLocaleString()}張${b.foreignStreak ? ` (${b.foreignStreak > 0 ? `連買${b.foreignStreak}` : `連賣${Math.abs(b.foreignStreak)}`})` : ''}`
-                          : '—'}
-                      </td>
-                      <td style={{ padding: '9px 10px', color: (b.trustNetShares || 0) >= 0 ? upColor : downColor }}>
-                        {b.trustNetShares !== undefined
-                          ? `${b.trustNetShares >= 0 ? '+' : ''}${b.trustNetShares.toLocaleString()}張${b.trustStreak ? ` (${b.trustStreak > 0 ? `連買${b.trustStreak}` : `連賣${Math.abs(b.trustStreak)}`})` : ''}`
-                          : '—'}
-                      </td>
-                      <td style={{ padding: '9px 10px', fontWeight: 700, color: (b.trustToVolumeRatio || 0) >= 5 ? '#f59e0b' : '#cbd5e1' }}>
-                        {b.trustToVolumeRatio !== undefined ? `${b.trustToVolumeRatio.toFixed(1)}%` : '—'}
-                      </td>
-                      <td style={{ padding: '9px 10px', fontWeight: 800, color: totalShares >= 0 ? upColor : downColor }}>
-                        {totalShares >= 0 ? '+' : ''}{totalShares.toLocaleString()}張
-                      </td>
+                      {b.market === 'US' ? (
+                        <>
+                          <td style={{ padding: '9px 10px', color: (b.cmf || 0) >= 0 ? upColor : downColor, fontWeight: 700 }}>
+                            {b.cmf !== undefined ? `CMF ${b.cmf >= 0 ? '+' : ''}${b.cmf.toFixed(2)}` : '—'}
+                          </td>
+                          <td style={{ padding: '9px 10px', color: '#64748b' }}>—</td>
+                          <td style={{ padding: '9px 10px', color: '#64748b' }}>—</td>
+                          <td style={{ padding: '9px 10px', color: '#cbd5e1', fontWeight: 600 }}>
+                            {b.volume ? `${(b.volume).toLocaleString()}股` : '—'}
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td style={{ padding: '9px 10px', color: (b.foreignNetShares || 0) >= 0 ? upColor : downColor }}>
+                            {b.foreignNetShares !== undefined
+                              ? `${b.foreignNetShares >= 0 ? '+' : ''}${b.foreignNetShares.toLocaleString()}張${b.foreignStreak ? ` (${b.foreignStreak > 0 ? `連買${b.foreignStreak}` : `連賣${Math.abs(b.foreignStreak)}`})` : ''}`
+                              : '—'}
+                          </td>
+                          <td style={{ padding: '9px 10px', color: (b.trustNetShares || 0) >= 0 ? upColor : downColor }}>
+                            {b.trustNetShares !== undefined
+                              ? `${b.trustNetShares >= 0 ? '+' : ''}${b.trustNetShares.toLocaleString()}張${b.trustStreak ? ` (${b.trustStreak > 0 ? `連買${b.trustStreak}` : `連賣${Math.abs(b.trustStreak)}`})` : ''}`
+                              : '—'}
+                          </td>
+                          <td style={{ padding: '9px 10px', fontWeight: 700, color: (b.trustToVolumeRatio || 0) >= 5 ? '#f59e0b' : '#cbd5e1' }}>
+                            {b.trustToVolumeRatio !== undefined ? `${b.trustToVolumeRatio.toFixed(1)}%` : '—'}
+                          </td>
+                          <td style={{ padding: '9px 10px', fontWeight: 800, color: totalShares >= 0 ? upColor : downColor }}>
+                            {totalShares >= 0 ? '+' : ''}{totalShares.toLocaleString()}張
+                          </td>
+                        </>
+                      )}
                       <td style={{ padding: '9px 10px', fontWeight: 700 }}>
                         {b.unrealizedPnLPercent !== undefined ? (
                           <span style={{ color: b.unrealizedPnLPercent >= 0 ? upColor : downColor }}>

@@ -369,5 +369,47 @@ describe('Ticket 10 - Vite 原生 Connect 中介層 API (TDD Seam)', () => {
       expect(res.data.items['AAPL'].history[1].date).toBe('2026-10-30');
     });
 
+    it('Ticket 03 (Spec 0218) - 湖倉快照端點應往前撈取 T-1 基準收盤價以精算首日與區間累計漲跌幅', async () => {
+      const db = initSqliteLakehouseDb(testDbPath);
+      db.exec('DELETE FROM tw_institutional_chips; DELETE FROM daily_candles; DELETE FROM symbols_meta;');
+      db.prepare(
+        'INSERT OR REPLACE INTO symbols_meta (symbol, name, market, type, industry, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+      ).run('2330', '台積電', 'TW', 'STOCK', '半導體業', Date.now());
+
+      // 插入基準日前收價 (2026-10-28)
+      const insertCandle = db.prepare(
+        'INSERT OR REPLACE INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume, turnover, transactions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      );
+      insertCandle.run('2330', '2026-10-28', 990, 1005, 990, 1000, 1000, 20000000, 0, 12000);
+      insertCandle.run('2330', '2026-10-29', 1000, 1010, 995, 1005, 1005, 25000000, 0, 15000);
+      insertCandle.run('2330', '2026-10-30', 1005, 1020, 1000, 1020, 1020, 30000000, 0, 18000);
+
+      const insertChip = db.prepare(
+        'INSERT OR REPLACE INTO tw_institutional_chips (symbol, date, foreign_net, trust_net, dealer_net, margin_balance, short_balance) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      );
+      insertChip.run('2330', '2026-10-29', 500, 200, -50, 3000, 10);
+      insertChip.run('2330', '2026-10-30', 800, 300, 100, 3100, 12);
+
+      const middleware = createMarketApiMiddleware(testDbPath);
+      const res = await simulateRequest(middleware, '/api/market/chips-snapshot?market=TW&days=2&minSymbols=1');
+
+      expect(res.status).toBe(200);
+      expect(res.data.success).toBe(true);
+      expect(res.data.baseDate).toBe('2026-10-28');
+
+      const ts2330 = res.data.items['2330'];
+      expect(ts2330).toBeDefined();
+      expect(ts2330.basePrice).toBe(1000);
+      expect(ts2330.previousClose).toBe(1000);
+      // 首日 2026-10-29: close 1005, basePrice 1000 -> 漲幅 +0.5% (不為 0)
+      expect(ts2330.history[0].previousClose).toBe(1000);
+      expect(ts2330.history[0].changePercent).toBe(0.5);
+      // 第二日 2026-10-30: close 1020, 前日 1005 -> 漲幅 +1.49%
+      expect(ts2330.history[1].previousClose).toBe(1005);
+      expect(ts2330.history[1].changePercent).toBe(1.49);
+      // 總累計漲跌幅: (1020 - 1000) / 1000 * 100 = +2.0%
+      expect(ts2330.cumulativeChangePercent).toBe(2.0);
+    });
+
   });
 });

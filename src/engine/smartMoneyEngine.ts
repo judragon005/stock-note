@@ -1,3 +1,4 @@
+import { isEtfSymbol } from './chipsAggregator';
 import {
   MarketType,
   SmartMoneyQuadrant,
@@ -307,7 +308,8 @@ export function getTemporalBubbleFrameData(
  * 核心計算引擎：將標的日行情與法人/機構數據換算為四象限動態泡泡圖模型
  */
 export function calculateSmartMoneyFlowDynamics(
-  items: SmartMoneyInputItem[]
+  items: SmartMoneyInputItem[],
+  options?: SmartMoneyDynamicsOptions
 ): SmartMoneyFlowAnalysisResult {
   if (!items || items.length === 0) {
     return {
@@ -321,36 +323,55 @@ export function calculateSmartMoneyFlowDynamics(
     };
   }
 
-  // 1. 泡泡半徑自適應縮放 (持倉模式嚴格依據 holdingValueTwd，杜絕高價零股變巨球)
-  const isPortfolioMode = items.some((i) => (i.holdingValueTwd || 0) > 0);
+  // 1. 判斷是否為純持倉模式 (Ticket 08 / Spec 0218)
+  const isPortfolioMode = options?.isPortfolioMode !== undefined
+    ? options.isPortfolioMode
+    : (items.length > 0 && items.filter((i) => (i.holdingValueTwd || 0) > 0).length >= items.length * 0.8);
+
   const maxVal = Math.max(
     ...items.map((i) =>
       isPortfolioMode
         ? (i.holdingValueTwd || 1)
-        : Math.max(i.holdingValueTwd || 0, (i.volume || 0) * (i.currentPrice || 1))
+        : ((i.volume && i.volume > 0) ? i.volume * (i.currentPrice || 1) : (i.holdingValueTwd || (i.currentPrice || 100) * 1000))
     ),
     1
   );
 
-  // 1.1 計算全清單之最大買賣超張數與最大漲跌幅，作為自適應縮放之基準 (排除 ETF 造市壓扁一般股)
+  // 1.1 計算普通股、ETF、金額與投量比之獨立分母基準 (Ticket 08)
   let maxAbsShares = 0;
+  let maxAbsEtfShares = 0;
+  let maxAbsAmount = 0;
+  let maxAbsRatio = 0;
   let maxAbsChange = 0;
+
   for (const item of items) {
+    const isEtf = isEtfSymbol(item.symbol) || (item as any).type === 'ETF';
     if (item.market === 'TW') {
-      const isEtf = (item as any).type === 'ETF' || /^(00|01)/.test(item.symbol);
       const fn = (item.foreignBuyShares || 0) - (item.foreignSellShares || 0);
       const tn = (item.trustBuyShares || 0) - (item.trustSellShares || 0);
       const dn = (item.dealerBuyShares || 0) - (item.dealerSellShares || 0);
       const net = Math.abs(fn + tn + dn);
-      if (!isEtf && net > maxAbsShares) {
-        maxAbsShares = net;
+      if (isEtf) {
+        if (net > maxAbsEtfShares) maxAbsEtfShares = net;
+      } else {
+        if (net > maxAbsShares) maxAbsShares = net;
       }
+
+      const amt = Math.abs(((item as any).netFlowAmount !== undefined ? (item as any).netFlowAmount : (item.netFlowAmountTwd !== undefined ? item.netFlowAmountTwd : net * 1000 * item.currentPrice)));
+      if (amt > maxAbsAmount) maxAbsAmount = amt;
+
+      const r = Math.abs(item.trustToVolumeRatio || 0);
+      if (r > maxAbsRatio) maxAbsRatio = r;
     }
     const absChg = Math.abs(item.changePercent || 0);
     if (absChg > maxAbsChange) maxAbsChange = absChg;
   }
-  // 設定基準值上下限：最低 2500，最高 15,000 (Ticket 03 / Spec 0217 防禦)
+
+  // 保底動態下限，消除極端值全部貼頂/貼底 (Ticket 06 & 08 / Spec 0218)
   maxAbsShares = Math.max(maxAbsShares, 2500);
+  maxAbsEtfShares = Math.max(maxAbsEtfShares, 10000);
+  maxAbsAmount = Math.max(maxAbsAmount, 50000000);
+  maxAbsRatio = Math.max(maxAbsRatio, 20);
   maxAbsChange = Math.max(maxAbsChange, 3.0);
 
   let breakoutCount = 0;
@@ -378,11 +399,24 @@ export function calculateSmartMoneyFlowDynamics(
       synergy = detectInstitutionalSynergy(foreignNet, trustNet);
 
       // 台股以 1000 股為 1 張，計算概略淨流向金額
-      netFlowAmount = totalNetShares * 1000 * item.currentPrice;
+      netFlowAmount = (item as any).netFlowAmount !== undefined ? (item as any).netFlowAmount : (item.netFlowAmountTwd !== undefined ? item.netFlowAmountTwd : totalNetShares * 1000 * item.currentPrice);
 
-      // 自適應冪次縮放評分 (以 0.65 次方平滑壓縮，防止極端量能打滿截斷)
-      const flowRatio = Math.min(1.0, Math.abs(totalNetShares) / maxAbsShares);
-      flowScore = Math.sign(totalNetShares) * Math.pow(flowRatio, 0.65);
+      const isEtf = isEtfSymbol(item.symbol) || (item as any).type === 'ETF';
+      const dimension = options?.flowDimension || 'SHARES';
+
+      if (dimension === 'AMOUNT') {
+        const amtRatio = Math.min(1.0, Math.abs(netFlowAmount) / maxAbsAmount);
+        flowScore = Math.sign(netFlowAmount) * Math.pow(amtRatio, 0.65);
+      } else if (dimension === 'RATIO') {
+        const ratioVal = item.trustToVolumeRatio || 0;
+        const rRatio = Math.min(1.0, Math.abs(ratioVal) / maxAbsRatio);
+        flowScore = Math.sign(ratioVal) * Math.pow(rRatio, 0.65);
+      } else {
+        // SHARES (普通股與 ETF 具備獨立分母，Ticket 08)
+        const denom = isEtf ? maxAbsEtfShares : maxAbsShares;
+        const flowRatio = Math.min(1.0, Math.abs(totalNetShares) / denom);
+        flowScore = Math.sign(totalNetShares) * Math.pow(flowRatio, 0.65);
+      }
 
       // 生成台股白話流向說明 (優先呈現土洋共振態)
       if (synergy.type === 'TUG_OF_WAR') {
@@ -450,10 +484,10 @@ export function calculateSmartMoneyFlowDynamics(
       item.unrealizedPnLPercent
     );
 
-    // 5. 泡泡半徑自適應縮放 (收斂在 16px ~ 36px，消滅大球吞小球；持倉模式 100% 依 holdingValueTwd)
+    // 5. 泡泡半徑自適應縮放 (Ticket 08: 全市場模式焦點股依據自身成交量放縮，不再被縮至 16px)
     const weightVal = isPortfolioMode
       ? (item.holdingValueTwd || 1)
-      : Math.max(item.holdingValueTwd || 0, (item.volume || 0) * (item.currentPrice || 1));
+      : ((item.volume && item.volume > 0) ? item.volume * (item.currentPrice || 1) : (item.holdingValueTwd || (item.currentPrice || 100) * 1000));
     const radiusRatio = Math.sqrt(Math.max(0, weightVal) / maxVal);
     const radius = Math.round(16 + radiusRatio * 20);
 
@@ -719,5 +753,170 @@ export function resolveBubbleCollisions<T extends { x: number; y: number; radius
     cx: Math.round(rest.cx * 10) / 10,
     cy: Math.round(rest.cy * 10) / 10,
   }));
+}
+
+
+
+export interface SmartMoneyDynamicsOptions {
+  isPortfolioMode?: boolean;
+  flowDimension?: 'SHARES' | 'AMOUNT' | 'RATIO';
+}
+
+export interface SectorRotationItem {
+  industry: string;
+  netAmount: number;
+  symbolCount: number;
+  topSymbols: string[];
+}
+
+export interface SectorRotationResult {
+  topInflows: SectorRotationItem[];
+  topOutflows: SectorRotationItem[];
+}
+
+export type ActionableSignalType =
+  | 'CONCEALED_ACCUMULATION'     // 隱蔽吃貨（大買壓盤）
+  | 'FALSE_FIRE'                 // 虛火出貨警戒
+  | 'GOLDEN_PIT'                  // 黃金坑承接
+  | 'STREAK_BREAK_DUMP'          // 連買中斷結帳警報
+  | 'DOMESTIC_SHORT_SQUEEZE'     // 內資軋外資勝出
+  | 'MARGIN_DECREASE_INST_BUY';   // 資減法人買（籌碼沉澱）
+
+export interface ActionableSignal {
+  type: ActionableSignalType;
+  label: string;
+  detail: string;
+  severity: 'HIGH' | 'MEDIUM' | 'INFO';
+}
+
+
+/**
+ * 產業資金輪動聚合引擎 (Sector Rotation Engine) - Ticket 09 / Spec 0218
+ * 依據標的之產業分類彙總三大法人買賣超淨金額，產出淨流入 Top 5 與淨流出 Top 3 產業
+ */
+export function calculateSectorRotation(
+  items: { symbol: string; name?: string; industry?: string; netFlowAmount?: number }[]
+): SectorRotationResult {
+  const map: Record<string, { netAmount: number; symbolCount: number; symbols: string[] }> = {};
+
+  for (const item of items) {
+    const ind = (item.industry && item.industry.trim()) ? item.industry.trim() : '其他';
+    const amt = item.netFlowAmount || 0;
+    if (!map[ind]) {
+      map[ind] = { netAmount: 0, symbolCount: 0, symbols: [] };
+    }
+    map[ind].netAmount += amt;
+    map[ind].symbolCount += 1;
+    if (map[ind].symbols.length < 3) {
+      map[ind].symbols.push(item.symbol);
+    }
+  }
+
+  const entries: SectorRotationItem[] = Object.entries(map).map(([industry, data]) => ({
+    industry,
+    netAmount: data.netAmount,
+    symbolCount: data.symbolCount,
+    topSymbols: data.symbols,
+  }));
+
+  const topInflows = entries
+    .filter((e) => e.netAmount > 0)
+    .sort((a, b) => b.netAmount - a.netAmount)
+    .slice(0, 5);
+
+  const topOutflows = entries
+    .filter((e) => e.netAmount < 0)
+    .sort((a, b) => a.netAmount - b.netAmount)
+    .slice(0, 3);
+
+  return { topInflows, topOutflows };
+}
+
+/**
+ * 5 大高勝率實戰訊號識別引擎 (Actionable Signals Engine) - Ticket 09 / Spec 0218
+ */
+export function detectActionableSignals(
+  item: {
+    changePercent?: number;
+    totalNetShares?: number;
+    netFlowAmount?: number;
+    foreignBuyShares?: number;
+    foreignSellShares?: number;
+    trustBuyShares?: number;
+    trustSellShares?: number;
+    currentPrice?: number;
+    volume?: number;
+  },
+  streakInfo?: { trustStreak?: number; prevTrustStreak?: number; foreignStreak?: number },
+  marginChange?: number
+): ActionableSignal[] {
+  const signals: ActionableSignal[] = [];
+  const chg = item.changePercent || 0;
+  const netShares = item.totalNetShares !== undefined
+    ? item.totalNetShares
+    : ((item.foreignBuyShares || 0) - (item.foreignSellShares || 0) + (item.trustBuyShares || 0) - (item.trustSellShares || 0));
+  const netAmount = item.netFlowAmount !== undefined ? item.netFlowAmount : netShares * 1000 * (item.currentPrice || 100);
+
+  const fNet = (item.foreignBuyShares || 0) - (item.foreignSellShares || 0);
+  const tNet = (item.trustBuyShares || 0) - (item.trustSellShares || 0);
+
+  // 1. 隱蔽吃貨（大買壓盤）：法人大買 (買超 > 1000 張或金額 > 5000萬) 且價格小跌/平盤 (-2.0% <= chg <= 0.0%)
+  if ((netShares >= 1000 || netAmount >= 50000000) && chg <= 0.0 && chg >= -2.0) {
+    signals.push({
+      type: 'CONCEALED_ACCUMULATION',
+      label: '🤫 隱蔽吃貨壓盤',
+      detail: '三大法人重金逆勢大買，但股價受壓盤未見大漲，主力暗中吸籌訊號強烈！',
+      severity: 'HIGH',
+    });
+  }
+
+  // 2. 虛火出貨 vs 黃金坑
+  if (chg >= 2.0 && (netShares <= -1000 || netAmount <= -50000000)) {
+    signals.push({
+      type: 'FALSE_FIRE',
+      label: '⚠️ 虛火高檔派發',
+      detail: '股價表面大漲，但法人籌碼同步大舉倒貨撤退，散戶切勿高檔盲目追高！',
+      severity: 'HIGH',
+    });
+  } else if (chg <= -2.0 && (netShares >= 1000 || netAmount >= 50000000)) {
+    signals.push({
+      type: 'GOLDEN_PIT',
+      label: '💎 黃金坑逆勢承接',
+      detail: '盤勢恐慌急殺，但法人反向大舉抄底承接，為左側極具爆發力之黃金坑！',
+      severity: 'HIGH',
+    });
+  }
+
+  // 3. 連買中斷結帳首日警報：投信先前連買 >= 3 天，今日首日翻賣
+  if (streakInfo && streakInfo.trustStreak === -1 && (streakInfo.prevTrustStreak ?? 0) >= 3) {
+    signals.push({
+      type: 'STREAK_BREAK_DUMP',
+      label: '🚨 投信連買中斷結帳',
+      detail: '投信連續認養多日後今日首度翻賣，提防作帳轉結帳之短線獲利了結賣壓！',
+      severity: 'HIGH',
+    });
+  }
+
+  // 4. 土洋對作內資軋外資勝出：投信買超且外資賣超，且股價逆勢上漲
+  if (tNet > 0 && fNet < 0 && chg > 0) {
+    signals.push({
+      type: 'DOMESTIC_SHORT_SQUEEZE',
+      label: '💪 內資軋外資勝出',
+      detail: '土洋激烈對作中，投信本土資金實力強勁，成功逆風軋贏外資並推升股價！',
+      severity: 'MEDIUM',
+    });
+  }
+
+  // 5. 資減法人買（籌碼沉澱）：融資減少且法人淨買超
+  if (marginChange !== undefined && marginChange < 0 && netShares > 0) {
+    signals.push({
+      type: 'MARGIN_DECREASE_INST_BUY',
+      label: '🧹 資減法人買沉澱',
+      detail: '散戶融資浮額認賠退場，大機構逢低穩穩接走籌碼，籌碼結構高度乾淨穩定！',
+      severity: 'INFO',
+    });
+  }
+
+  return signals;
 }
 

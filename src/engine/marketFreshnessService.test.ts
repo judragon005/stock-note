@@ -197,4 +197,50 @@ describe('Ticket 01 (Seam 1): 市場新鮮度領域服務 marketFreshnessService
     expect(result.revenue.anchorMonth).toBe('2026-09');
     expect(result.revenue.isStale).toBe(true);
   });
+
+  it('8. Spec 0218 Ticket 02: checkMarketFreshness 納入籌碼筆數檢驗 (筆數 < 1800 標記 isStale = true)', async () => {
+    // @ts-expect-error cjs import
+    const { checkMarketFreshness } = await import('../../scripts/market-sync/market-freshness-service.cjs');
+
+    // 模擬 1：日 K 為最新 2026-10-02 盤後，但籌碼筆數只有 980 (單邊上櫃殘缺)
+    const mockDbPartialChips = {
+      prepare: (sql: string) => ({
+        get: () => {
+          if (sql.includes('0050')) {
+            return { maxDate: '2026-10-02' };
+          }
+          if (sql.includes('tw_institutional_chips')) {
+            return { count: 980 };
+          }
+          return null;
+        },
+      }),
+    };
+
+    const now = new Date('2026-10-02T16:00:00+08:00');
+    const res1 = checkMarketFreshness(mockDbPartialChips, now);
+    expect(res1.tw.latestDate).toBe('2026-10-02');
+    expect(res1.tw.chipsCount).toBe(980);
+    expect(res1.tw.isStale).toBe(true); // 籌碼未達 1800，應觸發 isStale 補漏
+
+    // 模擬 2：日 K 為最新 2026-10-02 盤後，且籌碼筆數達 2300 (完整結算)
+    const mockDbFullChips = {
+      prepare: (sql: string) => ({
+        get: () => {
+          if (sql.includes('0050')) {
+            return { maxDate: '2026-10-02' };
+          }
+          if (sql.includes('tw_institutional_chips')) {
+            return { count: 2300 };
+          }
+          return null;
+        },
+      }),
+    };
+
+    const res2 = checkMarketFreshness(mockDbFullChips, now);
+    expect(res2.tw.latestDate).toBe('2026-10-02');
+    expect(res2.tw.chipsCount).toBe(2300);
+    expect(res2.tw.isStale).toBe(false); // 完整結算，不為 stale
+  });
 });

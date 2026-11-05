@@ -479,6 +479,33 @@ function createMarketApiMiddleware(customDbPath) {
             );
           }
 
+          // Spec 0218 Ticket 03 (#436): 往前多撈取 1 個交易日的收盤價作為基準前收價 (basePrice / previousClose)
+          let baseDate = null;
+          const basePrices = {};
+          try {
+            const earliestDate = dates[dates.length - 1];
+            const prevDateRow = db
+              .prepare("SELECT MAX(date) as prevDate FROM daily_candles WHERE date < ? AND (symbol = '0050' OR symbol = '2330')")
+              .get(earliestDate);
+            baseDate = prevDateRow?.prevDate || null;
+            if (!baseDate) {
+              const fallbackDateRow = db
+                .prepare("SELECT MAX(date) as prevDate FROM daily_candles WHERE date < ?")
+                .get(earliestDate);
+              baseDate = fallbackDateRow?.prevDate || null;
+            }
+            if (baseDate) {
+              const baseRows = db
+                .prepare("SELECT symbol, close FROM daily_candles WHERE date = ?")
+                .all(baseDate);
+              for (const r of baseRows) {
+                if (r.symbol && r.close != null) {
+                  basePrices[r.symbol] = r.close;
+                }
+              }
+            }
+          } catch (e) {}
+
           const placeholders = dates.map(() => '?').join(',');
           const querySql = `
             SELECT 
@@ -503,6 +530,8 @@ function createMarketApiMiddleware(customDbPath) {
                 industry: row.industry || '',
                 type: row.type || 'STOCK',
                 close: 0,
+                basePrice: basePrices[row.symbol] ?? null,
+                previousClose: basePrices[row.symbol] ?? null,
                 volumeLots: 0,
                 foreignNet: 0,
                 trustNet: 0,
@@ -531,9 +560,19 @@ function createMarketApiMiddleware(customDbPath) {
             item.marginBalance = row.margin_balance || 0;
             item.shortBalance = row.short_balance || 0;
 
+            const prevCloseForDay = item.history.length === 0
+              ? (item.basePrice ?? null)
+              : (item.history[item.history.length - 1].close ?? null);
+            const curClose = row.close ?? 0;
+            const changePercent = prevCloseForDay && prevCloseForDay > 0
+              ? Number((((curClose - prevCloseForDay) / prevCloseForDay) * 100).toFixed(2))
+              : 0;
+
             item.history.push({
               date: row.date,
-              close: row.close ?? 0,
+              close: curClose,
+              previousClose: prevCloseForDay,
+              changePercent,
               volumeLots: volLots,
               foreignNet: foreign,
               trustNet: trust,
@@ -542,11 +581,24 @@ function createMarketApiMiddleware(customDbPath) {
             });
           }
 
+          // 重新校準個股總累計漲跌幅 (5D 完整覆蓋基準日)
+          for (const item of Object.values(items)) {
+            if (item.basePrice && item.basePrice > 0 && item.close > 0) {
+              item.cumulativeChangePercent = Number((((item.close - item.basePrice) / item.basePrice) * 100).toFixed(2));
+            } else if (item.history.length > 0) {
+              const first = item.history[0];
+              if (first.previousClose && first.previousClose > 0 && item.close > 0) {
+                item.cumulativeChangePercent = Number((((item.close - first.previousClose) / first.previousClose) * 100).toFixed(2));
+              }
+            }
+          }
+
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           return res.end(
             JSON.stringify({
               success: true,
               market: 'TW',
+              baseDate,
               availableDates: dates,
               items,
             })

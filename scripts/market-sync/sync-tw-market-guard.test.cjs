@@ -18,4 +18,13 @@ const date3 = '2026-10-07';
 assert.strictEqual(isTradingDay(date3, 'TW'), true);
 assert.strictEqual(getHolidayReason(date3, 'TW'), null);
 
-console.log('✔ Ticket 09 守衛邏輯驗證 100% 通過！');
+// 4. Spec 0218 Ticket 01: 三大法人雙邊完整性檢查 (TWSE 與 TPEx 籌碼筆數均須 > 500 筆)
+const checkChipsCompleteness = (twseCount, tpexCount) => {
+  return twseCount > 500 && tpexCount > 500;
+};
+assert.strictEqual(checkChipsCompleteness(0, 980), false);
+assert.strictEqual(checkChipsCompleteness(500, 980), false);
+assert.strictEqual(checkChipsCompleteness(1350, 0), false);
+assert.strictEqual(checkChipsCompleteness(1350, 980), true);
+
+console.log('✔ Ticket 09 & Ticket 01 守衛邏輯驗證 100% 通過！');

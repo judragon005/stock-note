@@ -265,6 +265,39 @@ describe('MarketCacheLoader (前端快取秒讀與 IndexedDB 沉澱引擎)', () 
       );
     });
 
+    it('應完整映射 chips 中的 trust_net、foreign_net 與 dealer_net 至 DailyCandle (Spec 0218 Ticket 02)', async () => {
+      const mockApiResponse = {
+        symbol: '2330',
+        candles: [
+          { date: '2026-11-04', open: 1000, high: 1020, low: 995, close: 1015, volume: 30000000, transactions: 18000 },
+        ],
+        chips: {
+          '2026-11-04': {
+            symbol: '2330',
+            date: '2026-11-04',
+            foreign_net: -21604,
+            trust_net: 3715,
+            dealer_net: 5967,
+          },
+        },
+      };
+
+      // @ts-ignore
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => mockApiResponse,
+      });
+
+      const { loadSymbolHistoryFromLakehouse } = await import('./marketCacheLoader');
+      const result = await loadSymbolHistoryFromLakehouse('2330', 'TW');
+
+      expect(result).toHaveLength(1);
+      expect(result?.[0].trustNetBuy).toBe(3715);
+      expect(result?.[0].foreignNetBuy).toBe(-21604);
+      expect(result?.[0].dealerNetBuy).toBe(5967);
+      expect(result?.[0].transactions).toBe(18000);
+    });
+
     it('當本地 API 離線 (404/Network Error) 時，應平滑降級為 compact 快取', async () => {
       // @ts-ignore
       global.fetch = vi.fn().mockImplementation((url: string) => {

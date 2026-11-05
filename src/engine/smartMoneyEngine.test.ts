@@ -8,6 +8,8 @@ import {
   getTemporalBubbleFrameData,
   mapToAxisCoordinate,
   detectQuadrantCrossover,
+  calculateSectorRotation,
+  detectActionableSignals,
 } from './smartMoneyEngine';
 import { SmartMoneyInputItem } from '../types/stock';
 
@@ -724,6 +726,127 @@ describe('smartMoneyEngine (籌碼與聰明錢量化引擎)', () => {
       expect(diag.quadrantLabel).toContain('波段套牢');
       expect(diag.diagnosisTitle).toContain('凹單');
       expect(diag.diagnosisDetail).toContain('停損防守');
+    });
+  });
+
+
+  describe('Ticket 08 (Spec 0218) - 金融股/ETF 坐標防壓扁與多維度 Y 軸切換', () => {
+    it('全市場焦點模式下，存在單一持股時，其餘焦點股之半徑不得全部縮至 16px 最小值', () => {
+      // 模擬 1 檔有 holdingValueTwd，其餘 4 檔為全市場焦點股 (volume * price 各異)
+      const items = [
+        { symbol: '2330', name: '台積電', market: 'TW' as const, currentPrice: 1000, volume: 50000, changePercent: 1.5, foreignBuyShares: 3000, foreignSellShares: 1000, holdingValueTwd: 10000000, isHolding: true },
+        { symbol: '2317', name: '鴻海', market: 'TW' as const, currentPrice: 200, volume: 80000, changePercent: 0.5, foreignBuyShares: 5000, foreignSellShares: 2000 },
+        { symbol: '2454', name: '聯發科', market: 'TW' as const, currentPrice: 1200, volume: 10000, changePercent: -1.0, foreignBuyShares: 1000, foreignSellShares: 500 },
+        { symbol: '3008', name: '大立光', market: 'TW' as const, currentPrice: 2500, volume: 2000, changePercent: 2.0, foreignBuyShares: 300, foreignSellShares: 100 },
+        { symbol: '2603', name: '長榮', market: 'TW' as const, currentPrice: 180, volume: 60000, changePercent: -0.5, foreignBuyShares: 2000, foreignSellShares: 4000 },
+      ];
+
+      const res = calculateSmartMoneyFlowDynamics(items as any, { isPortfolioMode: false });
+      const nonHoldingBubbles = res.bubbles.filter((b) => b.symbol !== '2330');
+      // 其餘焦點股之半徑不得全部為 16px，大成交量者 (如鴻海) 應具有顯著半徑
+      const hasLargerRadius = nonHoldingBubbles.some((b) => b.radius > 16);
+      expect(hasLargerRadius).toBe(true);
+    });
+
+    it('普通股與 ETF 具備獨立正規化分母，高張數 ETF 不得將普通個股 Y 軸壓扁在水平中軸線', () => {
+      const items = [
+        // ETF 買賣超 100,000 張
+        { symbol: '0050', name: '元大台灣50', market: 'TW' as const, currentPrice: 180, volume: 200000, changePercent: 0.5, foreignBuyShares: 100000, foreignSellShares: 0 },
+        // 普通個股買超 3,000 張
+        { symbol: '2330', name: '台積電', market: 'TW' as const, currentPrice: 1000, volume: 20000, changePercent: 1.0, foreignBuyShares: 3000, foreignSellShares: 0 },
+      ];
+
+      const res = calculateSmartMoneyFlowDynamics(items as any);
+      const tsmc = res.bubbles.find((b) => b.symbol === '2330');
+      // 2330 買超 3,000 張在獨立分母下 Y 軸應具備顯著高度 (y >= 20)，不應被壓扁至接近 0
+      expect(tsmc?.y).toBeGreaterThanOrEqual(20);
+    });
+
+    it('支援 Y 軸多維度切換 (金額 AMOUNT / 投量比 RATIO / 張數 SHARES)', () => {
+      const items = [
+        { symbol: '3008', name: '大立光', market: 'TW' as const, currentPrice: 2500, volume: 1000, changePercent: 1.0, trustBuyShares: 200, trustSellShares: 0, foreignBuyShares: 100, foreignSellShares: 0 }, // 買超金額 7.5 億
+        { symbol: '2888', name: '新光金', market: 'TW' as const, currentPrice: 12, volume: 100000, changePercent: 1.0, trustBuyShares: 0, trustSellShares: 0, foreignBuyShares: 10000, foreignSellShares: 0 }, // 買超金額 1.2 億
+      ];
+
+      // 金額維度下：高價股 3008 金額遠高於低價股 2888，其 Y 坐標應顯著高於 2888
+      const resAmount = calculateSmartMoneyFlowDynamics(items as any, { flowDimension: 'AMOUNT' });
+      const larganAmount = resAmount.bubbles.find((b) => b.symbol === '3008');
+      const skfhAmount = resAmount.bubbles.find((b) => b.symbol === '2888');
+      expect(larganAmount!.y).toBeGreaterThan(skfhAmount!.y);
+    });
+  });
+
+  describe('Ticket 09 (Spec 0218) - 產業資金輪動橫條與實戰異動訊號引擎', () => {
+    it('calculateSectorRotation 應準確彙總淨流入 Top 5 與淨流出 Top 3 產業', () => {
+      const items = [
+        { symbol: '2330', name: '台積電', industry: '半導體', netFlowAmount: 5000000000 },
+        { symbol: '2454', name: '聯發科', industry: '半導體', netFlowAmount: 2000000000 },
+        { symbol: '2603', name: '長榮', industry: '航運業', netFlowAmount: -1500000000 },
+        { symbol: '2609', name: '陽明', industry: '航運業', netFlowAmount: -500000000 },
+        { symbol: '2881', name: '富邦金', industry: '金融保險', netFlowAmount: 800000000 },
+        { symbol: '2317', name: '鴻海', industry: '其他電子', netFlowAmount: 1200000000 },
+      ];
+
+      const rotation = calculateSectorRotation(items as any);
+      expect(rotation.topInflows.length).toBeGreaterThanOrEqual(2);
+      expect(rotation.topInflows[0].industry).toBe('半導體');
+      expect(rotation.topInflows[0].netAmount).toBe(7000000000);
+
+      expect(rotation.topOutflows.length).toBeGreaterThanOrEqual(1);
+      expect(rotation.topOutflows[0].industry).toBe('航運業');
+      expect(rotation.topOutflows[0].netAmount).toBe(-2000000000);
+    });
+
+    it('detectActionableSignals 應正確捕捉 5 大高勝率實戰訊號', () => {
+      // 1. 隱蔽吃貨 (大買壓盤)：法人大買且跌幅在 -2% ~ 0%
+      const sig1 = detectActionableSignals({
+        changePercent: -0.5,
+        totalNetShares: 3000,
+        netFlowAmount: 150000000,
+        currentPrice: 100,
+        volume: 5000,
+      } as any);
+      expect(sig1.some((s) => s.type === 'CONCEALED_ACCUMULATION')).toBe(true);
+
+      // 2. 虛火出貨 vs 黃金坑
+      const sigFire = detectActionableSignals({
+        changePercent: 3.5,
+        totalNetShares: -4000,
+        netFlowAmount: -200000000,
+      } as any);
+      expect(sigFire.some((s) => s.type === 'FALSE_FIRE')).toBe(true);
+
+      const sigPit = detectActionableSignals({
+        changePercent: -3.5,
+        totalNetShares: 4000,
+        netFlowAmount: 200000000,
+      } as any);
+      expect(sigPit.some((s) => s.type === 'GOLDEN_PIT')).toBe(true);
+
+      // 3. 連買中斷結帳警報
+      const sigBreak = detectActionableSignals(
+        { changePercent: -1.0, totalNetShares: -500 } as any,
+        { trustStreak: -1, prevTrustStreak: 4 }
+      );
+      expect(sigBreak.some((s) => s.type === 'STREAK_BREAK_DUMP')).toBe(true);
+
+      // 4. 土洋對作內資軋外資勝出
+      const sigSqueeze = detectActionableSignals({
+        changePercent: 1.8,
+        foreignBuyShares: 1000,
+        foreignSellShares: 4000, // 外資賣超 -3000
+        trustBuyShares: 2500,
+        trustSellShares: 500,    // 投信買超 +2000
+      } as any);
+      expect(sigSqueeze.some((s) => s.type === 'DOMESTIC_SHORT_SQUEEZE')).toBe(true);
+
+      // 5. 資減法人買 (籌碼沉澱)
+      const sigMargin = detectActionableSignals(
+        { changePercent: 0.2, totalNetShares: 1500 } as any,
+        undefined,
+        -500 // 融資減 500 張
+      );
+      expect(sigMargin.some((s) => s.type === 'MARGIN_DECREASE_INST_BUY')).toBe(true);
     });
   });
 

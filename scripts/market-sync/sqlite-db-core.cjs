@@ -439,7 +439,10 @@ function getTwMarketBreadthAndSpotSummary(dbOrPath, options = {}) {
       FROM tw_institutional_chips i
       LEFT JOIN daily_candles c
         ON c.symbol = i.symbol AND c.date = i.date
-      WHERE i.date = (SELECT MAX(date) FROM tw_institutional_chips)
+      WHERE i.date = COALESCE(
+        (SELECT date FROM tw_institutional_chips GROUP BY date HAVING COUNT(*) >= 1800 ORDER BY date DESC LIMIT 1),
+        (SELECT MAX(date) FROM tw_institutional_chips)
+      )
       GROUP BY i.date
     `)
     .get();
