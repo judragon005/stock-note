@@ -33,6 +33,7 @@ export interface SmartMoneyBubbleChartProps {
   chipsHorizon?: 1 | 3 | 5;
   onOpenOmniInspector?: (symbol: string, market: MarketType) => void;
   onOpenAiForce?: (symbol: string, market: MarketType) => void;
+  onOpenDeepDive?: (symbol: string, market: MarketType, name?: string) => void;
   onQuickTrade?: (symbol: string, market: MarketType) => void;
 }
 
@@ -217,6 +218,7 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
   chipsHorizon = 1,
   onOpenOmniInspector,
   onOpenAiForce,
+  onOpenDeepDive,
   onQuickTrade,
 }) => {
   const [showGuide, setShowGuide] = useState(true);
@@ -1043,6 +1045,29 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
                     }}
                   >
                     🔍 技術透視
+                  </button>
+                )}
+                {onOpenDeepDive && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenDeepDive(activeBubble.symbol, activeBubble.market, activeBubble.name);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 8px',
+                      borderRadius: '6px',
+                      background: 'rgba(245, 158, 11, 0.2)',
+                      border: '1px solid rgba(245, 158, 11, 0.4)',
+                      color: '#fde68a',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    📊 個股深研
                   </button>
                 )}
                 {onOpenAiForce && (

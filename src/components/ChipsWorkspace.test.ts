@@ -253,6 +253,85 @@ describe('ChipsWorkspace 象限卡片動態習慣燈號連動 (ColorThemeMode)',
       expect(withEtf.map((x) => x.symbol)).toContain('0050');
       expect(withEtf.map((x) => x.symbol)).toContain('2330');
     });
+
+    it('3D/5D 時間窗多日累計漲跌幅對齊與動態匯率折算 (Issue #430)', () => {
+      const mockDates = ['2026-10-25', '2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30'];
+      const mockHistoryReports: Record<string, Record<string, any>> = {
+        '2026-10-27': {
+          '2330': { symbol: '2330', close: 1000 },
+        },
+      };
+
+      const mockChipsMap = {
+        '2330': {
+          symbol: '2330',
+          name: '台積電',
+          close: 1050,
+          totalNetShares: 5000,
+        },
+      };
+
+      const mockUsHoldings: any[] = [
+        {
+          symbol: 'NVDA',
+          name: 'NVIDIA',
+          market: 'US',
+          shares: 10,
+          isClosed: false,
+          grossMarketValue: 1000,
+        },
+      ];
+
+      const mockUsRealData: Record<string, any> = {
+        NVDA: {
+          symbol: 'NVDA',
+          currentPrice: 120,
+          changePercent: 1.5,
+          candles: [
+            { date: '2026-10-25', close: 100 },
+            { date: '2026-10-26', close: 105 },
+            { date: '2026-10-27', close: 110 },
+            { date: '2026-10-28', close: 112 },
+            { date: '2026-10-29', close: 115 },
+            { date: '2026-10-30', close: 120 },
+          ],
+        },
+      };
+
+      // 測試台股 3 日累計漲跌幅：基準日為 mockDates[mockDates.length - 1 - 3] = mockDates[2] = '2026-10-27'
+      // 基準日 close 為 1000，今日 close 為 1050，累計漲幅 = (1050 - 1000) / 1000 = +5.0%
+      const twResults = filterMarketFocusList(
+        'TW',
+        mockChipsMap as any,
+        [],
+        mockDates,
+        mockHistoryReports as any,
+        undefined,
+        false,
+        3,
+        32.5
+      );
+      expect(twResults[0].changePercent).toBe(5);
+
+      // 測試美股動態匯率折算 (usdToTwdRate = 32.5) 與 3 日累計漲跌幅 (120 vs candles[5-1-3=1] 105 => (120-112)/112 等)
+      const usResults = filterMarketFocusList(
+        'US',
+        {} as any,
+        mockUsHoldings,
+        mockDates,
+        undefined,
+        mockUsRealData as any,
+        false,
+        3,
+        32.5
+      );
+      const nvda = usResults.find((x) => x.symbol === 'NVDA');
+      expect(nvda).toBeDefined();
+      // grossMarketValue * usdToTwdRate = 1000 * 32.5 = 32500
+      expect(nvda?.holdingValueTwd).toBe(32500);
+      // 3 日前 candle (candles[6-1-3] = candles[2] close 110 => (120 - 110) / 110 * 100 = 9.09%)
+      expect(nvda?.changePercent).toBe(9.09);
+    });
   });
 
 });
