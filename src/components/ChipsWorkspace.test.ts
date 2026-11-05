@@ -188,6 +188,71 @@ describe('ChipsWorkspace 象限卡片動態習慣燈號連動 (ColorThemeMode)',
       const all = filterByQuadrant(mockBubbles, 'ALL');
       expect(all).toHaveLength(4);
     });
+
+    it('filterMarketFocusList 應預設排除 ETF，開啟 includeEtf 時納入 ETF，並完整注入持倉防線與投量比屬性', () => {
+      const mockChipsMap = {
+        '2330': {
+          symbol: '2330',
+          name: '台積電',
+          close: 1020,
+          volumeLots: 20000,
+          foreignBuyShares: 6000,
+          foreignSellShares: 1000,
+          foreignNetShares: 5000,
+          trustBuyShares: 2500,
+          trustSellShares: 500,
+          trustNetShares: 2000,
+          dealerNetShares: 500,
+          totalNetShares: 7500,
+          trustStreak: 3,
+          foreignStreak: 2,
+        },
+        '0050': {
+          symbol: '0050',
+          name: '元大台灣50',
+          close: 195,
+          volumeLots: 50000,
+          foreignBuyShares: 30000,
+          foreignSellShares: 5000,
+          foreignNetShares: 25000,
+          trustBuyShares: 0,
+          trustSellShares: 0,
+          trustNetShares: 0,
+          dealerNetShares: 0,
+          totalNetShares: 25000,
+        },
+      };
+
+      const mockHoldings: any[] = [
+        {
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          shares: 1000,
+          isClosed: false,
+          avgCost: 900,
+          currentPrice: 1020,
+          grossMarketValue: 1020000,
+          unrealizedPnLPercent: 13.3,
+          intent: 'DIVIDEND',
+        },
+      ];
+
+      // 預設不含 ETF
+      const withoutEtf = filterMarketFocusList('TW', mockChipsMap as any, mockHoldings, ['2026-10-30'], undefined, undefined, false);
+      expect(withoutEtf.map((x) => x.symbol)).toEqual(['2330']);
+      expect(withoutEtf[0].isHolding).toBe(true);
+      expect(withoutEtf[0].avgCost).toBe(900);
+      expect(withoutEtf[0].unrealizedPnLPercent).toBe(13.3);
+      expect(withoutEtf[0].intent).toBe('DIVIDEND');
+      expect(withoutEtf[0].trustToVolumeRatio).toBe(10); // 2000 / 20000 * 100 = 10%
+      expect(withoutEtf[0].trustStreak).toBe(3);
+
+      // 開啟含 ETF
+      const withEtf = filterMarketFocusList('TW', mockChipsMap as any, mockHoldings, ['2026-10-30'], undefined, undefined, true);
+      expect(withEtf.map((x) => x.symbol)).toContain('0050');
+      expect(withEtf.map((x) => x.symbol)).toContain('2330');
+    });
   });
 
 });

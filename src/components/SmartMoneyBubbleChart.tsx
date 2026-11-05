@@ -5,7 +5,11 @@ import {
   ColorThemeMode,
   MarketType,
 } from '../types/stock';
-import { resolveBubbleCollisions, getTemporalBubbleFrameData } from '../engine/smartMoneyEngine';
+import {
+  resolveBubbleCollisions,
+  getTemporalBubbleFrameData,
+  resolveQuadrant,
+} from '../engine/smartMoneyEngine';
 import {
   Play,
   Pause,
@@ -26,6 +30,7 @@ export interface SmartMoneyBubbleChartProps {
   summaryText?: string;
   overallSentiment?: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
   focusedSymbol?: string | null;
+  chipsHorizon?: 1 | 3 | 5;
   onOpenOmniInspector?: (symbol: string, market: MarketType) => void;
   onOpenAiForce?: (symbol: string, market: MarketType) => void;
   onQuickTrade?: (symbol: string, market: MarketType) => void;
@@ -209,6 +214,7 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
   summaryText,
   overallSentiment = 'NEUTRAL',
   focusedSymbol,
+  chipsHorizon = 1,
   onOpenOmniInspector,
   onOpenAiForce,
   onQuickTrade,
@@ -260,29 +266,27 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
     };
   }, [isPlaying, playSpeed, availableDates.length, currentDateIndex, onDateChange]);
 
-  // 1. 2D 圓形防碰撞排斥佈局 (依據當前時間軸進度 currentDateIndex 動態映射泡泡時序坐標)
+  // 1. 2D 圓形防碰撞排斥佈局 (依據當前時間軸進度 currentDateIndex 動態映射泡泡時序坐標；3D/5D 非回放時保留累計主座標)
   const placedBubbles = useMemo(() => {
-    const temporalBubbles = bubbles.map((b) => {
-      const trailPt = b.trail && b.trail.length > currentDateIndex
-        ? b.trail[currentDateIndex]
-        : null;
-      if (trailPt) {
-        let dynQuadrant: SmartMoneyQuadrant = b.quadrant;
-        if (trailPt.x >= 0 && trailPt.y >= 0) {
-          dynQuadrant = 'BREAKOUT';
-        } else if (trailPt.x < 0 && trailPt.y > 0) {
-          dynQuadrant = 'ACCUMULATION';
-        } else if (trailPt.x >= 0 && trailPt.y < 0) {
-          dynQuadrant = 'DISTRIBUTION';
-        } else {
-          dynQuadrant = 'LIQUIDATION';
-        }
+    const isLatestFrame =
+      !isPlaying &&
+      (availableDates.length === 0 || currentDateIndex >= availableDates.length - 1);
+    const shouldPreserveMultiDay = chipsHorizon > 1 && isLatestFrame;
 
+    const temporalBubbles = bubbles.map((b) => {
+      if (shouldPreserveMultiDay) {
+        return b;
+      }
+      const trailPt =
+        b.trail && b.trail.length > currentDateIndex ? b.trail[currentDateIndex] : null;
+      if (trailPt) {
+        const dynQuadrant = resolveQuadrant(trailPt.x, trailPt.y);
         return {
           ...b,
           x: trailPt.x,
           y: trailPt.y,
-          changePercent: trailPt.changePercent !== undefined ? trailPt.changePercent : b.changePercent,
+          changePercent:
+            trailPt.changePercent !== undefined ? trailPt.changePercent : b.changePercent,
           flowScore: trailPt.flowScore !== undefined ? trailPt.flowScore : b.flowScore,
           quadrant: dynQuadrant,
         };
@@ -290,7 +294,7 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
       return b;
     });
     return resolveBubbleCollisions(temporalBubbles, width, height, padding);
-  }, [bubbles, currentDateIndex, width, height, padding]);
+  }, [bubbles, currentDateIndex, width, height, padding, chipsHorizon, isPlaying, availableDates.length]);
 
   // 動態綁定選中與懸浮泡泡，杜絕時序回放產生 Stale Reference
   const selectedBubble = useMemo(() => {
@@ -483,7 +487,7 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
             y={padding}
             width={width / 2 - padding}
             height={height / 2 - padding}
-            fill="rgba(239, 68, 68, 0.04)"
+            fill={colorTheme === 'taiwan' ? 'rgba(239, 68, 68, 0.04)' : 'rgba(16, 185, 129, 0.04)'}
           />
           {/* 左上：逢低撿便宜區 */}
           <rect
@@ -499,7 +503,7 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
             y={height / 2}
             width={width / 2 - padding}
             height={height / 2 - padding}
-            fill="rgba(16, 185, 129, 0.04)"
+            fill={colorTheme === 'taiwan' ? 'rgba(16, 185, 129, 0.04)' : 'rgba(239, 68, 68, 0.04)'}
           />
           {/* 左下：冷凍提款區 */}
           <rect
@@ -832,7 +836,14 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
                   {activeBubble.unrealizedPnLPercent !== undefined && (
                     <span
                       style={{
-                        color: activeBubble.unrealizedPnLPercent >= 0 ? '#f87171' : '#34d399',
+                        color:
+                          activeBubble.unrealizedPnLPercent >= 0
+                            ? colorTheme === 'taiwan'
+                              ? '#f87171'
+                              : '#34d399'
+                            : colorTheme === 'taiwan'
+                            ? '#34d399'
+                            : '#f87171',
                       }}
                     >
                       {activeBubble.unrealizedPnLPercent >= 0 ? '+' : ''}
@@ -931,8 +942,21 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
                   <span>{activeFrameData.date}</span>
                 </span>
                 <span>•</span>
-                <span style={{ fontWeight: 700, color: activeFrameData.changePercent >= 0 ? '#f87171' : '#34d399' }}>
-                  當日表現: {activeFrameData.changePercent >= 0 ? '+' : ''}{activeFrameData.changePercent.toFixed(2)}%
+                <span
+                  style={{
+                    fontWeight: 700,
+                    color:
+                      activeFrameData.changePercent >= 0
+                        ? colorTheme === 'taiwan'
+                          ? '#f87171'
+                          : '#34d399'
+                        : colorTheme === 'taiwan'
+                        ? '#34d399'
+                        : '#f87171',
+                  }}
+                >
+                  當日表現: {activeFrameData.changePercent >= 0 ? '+' : ''}
+                  {activeFrameData.changePercent.toFixed(2)}%
                 </span>
               </div>
 

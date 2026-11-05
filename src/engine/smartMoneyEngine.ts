@@ -66,7 +66,7 @@ export function getBeginnerDiagnosis(
   netFlowAmount: number,
   market?: MarketType,
   cmf?: number,
-  intent?: 'DIVIDEND' | 'SWING',
+  intent?: 'DIVIDEND' | 'SWING' | 'DAY_TRADE',
   unrealizedPnLPercent?: number
 ): {
   quadrantLabel: string;
@@ -272,16 +272,7 @@ export function getTemporalBubbleFrameData(
   const currentNetFlow = trailPoint?.netFlowAmount !== undefined ? trailPoint.netFlowAmount : bubble.netFlowAmount;
 
   // 依據當日動能與流向動態判斷當日象限
-  let quadrant: SmartMoneyQuadrant;
-  if (currentChange >= 0 && currentFlow >= 0) {
-    quadrant = 'BREAKOUT';
-  } else if (currentChange < 0 && currentFlow > 0) {
-    quadrant = 'ACCUMULATION';
-  } else if (currentChange >= 0 && currentFlow < 0) {
-    quadrant = 'DISTRIBUTION';
-  } else {
-    quadrant = 'LIQUIDATION';
-  }
+  const quadrant = resolveQuadrant(currentChange, currentFlow);
 
   const diag = getBeginnerDiagnosis(
     quadrant,
@@ -290,7 +281,9 @@ export function getTemporalBubbleFrameData(
     currentChange,
     currentNetFlow,
     bubble.market,
-    currentCmf
+    currentCmf,
+    bubble.intent,
+    bubble.unrealizedPnLPercent
   );
 
   return {
@@ -434,28 +427,15 @@ export function calculateSmartMoneyFlowDynamics(
     }
 
     // 2. 自適應坐標映射 (安全限制在 [-75, +75] 之間，為四個邊界保留至少 25% 安全緩衝區，杜絕貼壁)
-    // X 軸：漲跌幅自適應動態壓縮
-    const changeRatio = Math.min(1.0, Math.abs(item.changePercent) / maxAbsChange);
-    const x = Math.round(clamp(Math.sign(item.changePercent) * Math.pow(changeRatio, 0.7) * 75, -75, 75) * 10) / 10;
-
-    // Y 軸：聰明錢強度評分自適應壓縮
-    const y = Math.round(clamp(Math.sign(flowScore) * Math.pow(Math.abs(flowScore), 0.7) * 75, -75, 75) * 10) / 10;
+    const x = mapToAxisCoordinate(item.changePercent, maxAbsChange, 0.7, 75);
+    const y = mapToAxisCoordinate(flowScore, 1.0, 0.7, 75);
 
     // 3. 判定象限 (以 0 為中軸)
-    let quadrant: SmartMoneyQuadrant;
-    if (x >= 0 && y >= 0) {
-      quadrant = 'BREAKOUT';
-      breakoutCount++;
-    } else if (x < 0 && y > 0) {
-      quadrant = 'ACCUMULATION';
-      accumulationCount++;
-    } else if (x >= 0 && y < 0) {
-      quadrant = 'DISTRIBUTION';
-      distributionCount++;
-    } else {
-      quadrant = 'LIQUIDATION';
-      liquidationCount++;
-    }
+    const quadrant = resolveQuadrant(x, y);
+    if (quadrant === 'BREAKOUT') breakoutCount++;
+    else if (quadrant === 'ACCUMULATION') accumulationCount++;
+    else if (quadrant === 'DISTRIBUTION') distributionCount++;
+    else liquidationCount++;
 
     // 4. 生成小白友善診斷
     const diag = getBeginnerDiagnosis(
@@ -466,12 +446,14 @@ export function calculateSmartMoneyFlowDynamics(
       netFlowAmount,
       item.market,
       cmfValue,
-      (item as any).intent,
-      (item as any).unrealizedPnLPercent
+      item.intent,
+      item.unrealizedPnLPercent
     );
 
-    // 5. 泡泡半徑自適應縮放 (收斂在 16px ~ 36px，消滅大球吞小球)
-    const weightVal = Math.max(item.holdingValueTwd || 0, (item.volume || 0) * (item.currentPrice || 1));
+    // 5. 泡泡半徑自適應縮放 (收斂在 16px ~ 36px，消滅大球吞小球；持倉模式 100% 依 holdingValueTwd)
+    const weightVal = isPortfolioMode
+      ? (item.holdingValueTwd || 1)
+      : Math.max(item.holdingValueTwd || 0, (item.volume || 0) * (item.currentPrice || 1));
     const radiusRatio = Math.sqrt(Math.max(0, weightVal) / maxVal);
     const radius = Math.round(16 + radiusRatio * 20);
 
@@ -493,10 +475,7 @@ export function calculateSmartMoneyFlowDynamics(
     let prevQuadrant: SmartMoneyQuadrant | undefined;
     if (trail.length >= 2) {
       const prevPt = trail[trail.length - 2];
-      if (prevPt.changePercent >= 0 && prevPt.flowScore >= 0) prevQuadrant = 'BREAKOUT';
-      else if (prevPt.changePercent < 0 && prevPt.flowScore > 0) prevQuadrant = 'ACCUMULATION';
-      else if (prevPt.changePercent >= 0 && prevPt.flowScore < 0) prevQuadrant = 'DISTRIBUTION';
-      else prevQuadrant = 'LIQUIDATION';
+      prevQuadrant = resolveQuadrant(prevPt.changePercent, prevPt.flowScore);
     }
     const crossover = detectQuadrantCrossover(prevQuadrant, quadrant);
 
@@ -524,10 +503,14 @@ export function calculateSmartMoneyFlowDynamics(
       crossoverType: crossover.type,
       crossoverLabel: crossover.label,
       crossoverDetail: crossover.detail,
-      isHolding: (item as any).isHolding || Boolean((item as any).holdingValueTwd),
-      holdingAvgCost: (item as any).avgCost,
-      unrealizedPnLPercent: (item as any).unrealizedPnLPercent,
-      intent: (item as any).intent,
+      isHolding: item.isHolding || Boolean(item.holdingValueTwd),
+      holdingAvgCost: item.avgCost,
+      unrealizedPnLPercent: item.unrealizedPnLPercent,
+      portfolioWeightPercent: item.portfolioWeightPercent,
+      intent: item.intent,
+      trustToVolumeRatio: item.trustToVolumeRatio,
+      trustStreak: item.trustStreak,
+      foreignStreak: item.foreignStreak,
       trail,
     };
   });
@@ -566,6 +549,13 @@ export function calculateSmartMoneyFlowDynamics(
  * 將原始數值 (如漲跌幅 % 或買賣超張數/評分) 映射至 [-maxRange, +maxRange]
  * 採用冪次 power = 0.7 展延中小數值，消除極端值擠壓
  */
+export function resolveQuadrant(x: number, y: number): SmartMoneyQuadrant {
+  if (x >= 0 && y >= 0) return 'BREAKOUT';
+  if (x < 0 && y > 0) return 'ACCUMULATION';
+  if (x >= 0 && y < 0) return 'DISTRIBUTION';
+  return 'LIQUIDATION';
+}
+
 export function mapToAxisCoordinate(
   val: number,
   maxAbs: number,
