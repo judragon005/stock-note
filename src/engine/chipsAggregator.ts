@@ -8,8 +8,41 @@ export interface InstitutionalSignal {
 }
 
 /**
- * 依據選擇之動能週期 (1D / 3D / 5D) 累加歷史日報數據 (Spec 0119 Ticket 04)
- * 能有效濾除隔日沖雜訊，還原法人中短期真實波段進出
+ * 判斷是否為 ETF 標的 (代號以 00 或 01 開頭)
+ */
+export function isEtfSymbol(symbol: string): boolean {
+  if (!symbol) return false;
+  return /^(00|01)/.test(symbol.trim());
+}
+
+/**
+ * 計算最新交易日之連續買進或賣出天數 (Streak)
+ * 數列為依日期升序排列 (由遠到近)
+ * 正數代表連買天數，負數代表連賣天數，0 為持平
+ */
+export function calculateStreaks(series: number[]): number {
+  if (!series || series.length === 0) return 0;
+  const lastVal = series[series.length - 1];
+  if (!lastVal || lastVal === 0) return 0;
+
+  const isBuy = lastVal > 0;
+  let streak = 0;
+  for (let i = series.length - 1; i >= 0; i--) {
+    const val = series[i];
+    if (isBuy && val > 0) {
+      streak++;
+    } else if (!isBuy && val < 0) {
+      streak--;
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+/**
+ * 依據選擇之動能週期 (1D / 3D / 5D) 累加歷史日報數據 (Spec 0119 & Spec 0217 Ticket 04)
+ * 能有效濾除隔日沖雜訊，還原法人中短期真實波段進出與連續買賣超 Streak
  */
 export function aggregateMultiDayChips(
   historyReportsMap: Record<string, Record<string, TwseInstitutionalRow>>,
@@ -18,19 +51,34 @@ export function aggregateMultiDayChips(
 ): Record<string, TwseInstitutionalRow> {
   if (!availableDates || availableDates.length === 0) return {};
 
-  // 取最近 N 個交易日
   const targetDates = availableDates.slice(-horizonDays);
   if (targetDates.length === 1) {
-    return historyReportsMap[targetDates[0]] || {};
+    const dayData = historyReportsMap[targetDates[0]] || {};
+    const res: Record<string, TwseInstitutionalRow> = {};
+    for (const [sym, r] of Object.entries(dayData)) {
+      res[sym] = {
+        ...r,
+        foreignStreak: calculateStreaks([r.foreignNetShares]),
+        trustStreak: calculateStreaks([r.trustNetShares]),
+      };
+    }
+    return res;
   }
 
   const aggregated: Record<string, TwseInstitutionalRow> = {};
+  const foreignSeriesMap: Record<string, number[]> = {};
+  const trustSeriesMap: Record<string, number[]> = {};
 
   for (const date of targetDates) {
     const dayData = historyReportsMap[date];
     if (!dayData) continue;
 
     for (const [symbol, row] of Object.entries(dayData)) {
+      if (!foreignSeriesMap[symbol]) foreignSeriesMap[symbol] = [];
+      if (!trustSeriesMap[symbol]) trustSeriesMap[symbol] = [];
+      foreignSeriesMap[symbol].push(row.foreignNetShares || 0);
+      trustSeriesMap[symbol].push(row.trustNetShares || 0);
+
       if (!aggregated[symbol]) {
         aggregated[symbol] = {
           symbol: row.symbol,
@@ -58,6 +106,14 @@ export function aggregateMultiDayChips(
     }
   }
 
+  // 注入 Streak
+  for (const symbol of Object.keys(aggregated)) {
+    const fSeries = foreignSeriesMap[symbol] || [];
+    const tSeries = trustSeriesMap[symbol] || [];
+    aggregated[symbol].foreignStreak = calculateStreaks(fSeries);
+    aggregated[symbol].trustStreak = calculateStreaks(tSeries);
+  }
+
   return aggregated;
 }
 
@@ -76,7 +132,6 @@ export function classifyInstitutionalSignal(row?: TwseInstitutionalRow | null): 
 
   const { foreignNetShares, trustNetShares } = row;
 
-  // 1. 雙法人同買認養 (可以買)
   if (foreignNetShares > 0 && trustNetShares > 0) {
     return {
       signalType: 'BUY_SYNERGY',
@@ -86,7 +141,6 @@ export function classifyInstitutionalSignal(row?: TwseInstitutionalRow | null): 
     };
   }
 
-  // 2. 雙法人同賣出逃 (一定要閃)
   if (foreignNetShares < 0 && trustNetShares < 0) {
     return {
       signalType: 'SELL_DUMP',
@@ -96,7 +150,6 @@ export function classifyInstitutionalSignal(row?: TwseInstitutionalRow | null): 
     };
   }
 
-  // 3. 投信逆勢加碼
   if (trustNetShares > 0 && foreignNetShares <= 0) {
     return {
       signalType: 'TRUST_BUY',
@@ -106,7 +159,6 @@ export function classifyInstitutionalSignal(row?: TwseInstitutionalRow | null): 
     };
   }
 
-  // 4. 外資單邊搶進
   if (foreignNetShares > 0 && trustNetShares <= 0) {
     return {
       signalType: 'FOREIGN_BUY',
@@ -116,7 +168,6 @@ export function classifyInstitutionalSignal(row?: TwseInstitutionalRow | null): 
     };
   }
 
-  // 5. 中性觀望
   return {
     signalType: 'NEUTRAL',
     label: '❄️ 法人觀望',
@@ -126,24 +177,29 @@ export function classifyInstitutionalSignal(row?: TwseInstitutionalRow | null): 
 }
 
 /**
- * 取得當前週期之【法人聯手搶買榜 (可以買)】與【主力大舉提款榜 (一定要閃)】(Spec 0119 Ticket 04)
+ * 取得當前週期之【法人聯手搶買榜 (可以買)】與【主力大舉提款榜 (一定要閃)】(Spec 0119 & Spec 0217 Ticket 04)
+ * 預設排除 ETF 造市標的
  */
 export function getTopMomentumSymbols(
   aggregatedData: Record<string, TwseInstitutionalRow>,
-  limit = 5
+  limit = 5,
+  options?: { excludeEtf?: boolean; market?: 'TW' | 'US' }
 ): {
   buyList: TwseInstitutionalRow[];
   dumpList: TwseInstitutionalRow[];
 } {
-  const rows = Object.values(aggregatedData);
+  const shouldExcludeEtf = options?.excludeEtf !== false;
+  let rows = Object.values(aggregatedData);
 
-  // 買超榜：外資 > 0 或 投信 > 0，依總買賣超由大到小排序
+  if (shouldExcludeEtf) {
+    rows = rows.filter((r) => !isEtfSymbol(r.symbol));
+  }
+
   const buyList = rows
     .filter((r) => r.totalNetShares > 0 && (r.foreignNetShares > 0 || r.trustNetShares > 0))
     .sort((a, b) => b.totalNetShares - a.totalNetShares)
     .slice(0, limit);
 
-  // 出逃榜：總賣超最劇烈者，由負最多開始排序
   const dumpList = rows
     .filter((r) => r.totalNetShares < 0)
     .sort((a, b) => a.totalNetShares - b.totalNetShares)

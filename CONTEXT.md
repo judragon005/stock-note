@@ -2818,3 +2818,14 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     6. **Telescope Table Pagination & Card Memoization (扣抵表分頁與單卡級聯隔離)**：`DeductionTelescopeTable` 導入 50 / 100 / ALL 分頁器；`MuscleStockCard` 封裝 `React.memo`，剪貼簿與幣別格式化全面收斂至專案現成工具。
     7. **Portfolio Buffer Dual Alert & Live Market Regime (持股瀕臨破防雙重預警與大盤 Regime 接通)**：收錄「已破防」與「瀕臨破防 (Buffer $\le 1.5\%$)」，消除假安全感；真實大盤指數判定空頭體系時自適應提高門檻至 3.0R 且非極強 RS 禁止進場。
     8. **Quick Trade, Watchlist Star & Multi-Dimensional Sorting (一鍵下單、自選星號與動態多維快篩)**：卡片右上角直通「⚡ 一鍵下單」與「⭐ 自選星號」；Header 提供風益比、量比、防守緩衝與漲跌幅動態排序，並新增 5 顆實戰快篩膠囊 (`[🔥 爆量發動]`、`[⚡ 極致壓縮]`、`[🎯 高賠率]`、`[💼 在庫持股]`、`[🚨 瀕臨破線]`)。
+
+- **Smart Money Star Map Lakehouse Integration, Physics Calibration & Actionable Chip Matrix (籌碼與動態星圖湖倉直連、物理引擎校準、ETF 造市隔離與實戰閉環升級)**:
+  - 核心模組：`scripts/market-sync/vite-market-middleware.cjs`、`src/engine/smartMoneyEngine.ts`、`src/engine/smartMoneyFetcher.ts`、`src/engine/chipsAggregator.ts`、`src/components/ChipsWorkspace.tsx`、`src/components/SmartMoneyBubbleChart.tsx`、`src/App.tsx`。
+  - 規格來源：Spec 0217 (v9.12.0) 與 ADR 0217。
+  - 核心領域術語與特性：
+    1. **Lakehouse-First Dual-Market Complete Snapshot (湖倉優先雙市場完整籌碼快照)**：後端提供 `/api/market/chips-snapshot` 批次端點，以 `GROUP BY date HAVING COUNT(*) >= 1500` 自動過濾單邊殘缺髒資料（如僅有上櫃缺上市之日期），關聯 `daily_candles` 毫秒級輸出最近 5 個完整交易日之真實收盤價、真實漲跌幅、真實成交張數（`ROUND(volume / 1000)`）與三大法人買賣超；徹底剷除前端 `idx % 4 === 1` 假漲跌、`estPrice = 100` 與 `factor` 線性插值假歷史軌跡。
+    2. **ETF Creation-Redemption Arbitrage Isolation (ETF 造市申贖套利籌碼隔離)**：台股 ETF（`00*`）之自營商與外資巨額買賣超多屬初級市場申贖造市套利，全市場焦點與決策快報預設隔離 ETF（提供 `[含 ETF]` 切換開關）；持倉模式下對 Y 軸正規化分母 `maxAbsShares` 施加非 ETF 保護上限（`15,000` 張），杜絕單一 ETF 巨量將個股 Y 軸壓扁為水平死魚線。
+    3. **Trust-to-Volume Ratio & Consecutive Streak (投量比與法人連買連賣天數)**：利用 5 日歷史日報計算外資/投信連續買賣超天數 (`foreignStreak` / `trustStreak`) 與真實投信佔成交量比 (`trustNetShares / volumeLots * 100`)，精準識別中小型鎖碼股與波段認養動能。
+    4. **Quadrant Crossover Trajectory Detection (象限躍遷轉折捕捉)**：於時序軌跡中自動比對 $T-1 \to T$ 象限變化，標註「🚀 潛伏點火首日 (`ACCUMULATION ➔ BREAKOUT`)」與「🚨 轉入派發/棄守首日 (`上半部 ➔ 下半部`)」，將時間軸播放升維為實戰轉折捕捉器。
+    5. **Radius-Aware Quadrant Guard & Unified Axis Mapping (半徑感知中軸防穿透與統一冪次映射)**：修正 `resolveBubbleCollisions` 正交微擾動保留原始 `rawDist` 排斥力，並將象限中軸鎖定升級為 `midX ± (p.radius + 2)` 與 `midY ± (p.radius + 2)`，根除大球跨象限視覺穿透；統一主泡泡與歷史 `trail` 之冪次座標映射純函式，消除時序切換座標跳躍。
+    6. **Intent-Aware Portfolio Chip Health & Cross-Workspace Action Loop (意圖感知持倉體檢與跨模組行動閉環)**：注入持倉 `avgCost`、`unrealizedPnLPercent`、`portfolioWeightPercent` 與交易初衷 `intent` (`DIVIDEND` 存股 vs `SWING` 波段)，區分存股回檔逢低佈局與波段套牢凹單警示；打通頂部象限卡點擊過濾、下方可排序/搜尋之「實戰籌碼作戰明細表」，以及一鍵直通 `OmniTechnicalInspectorModal`（技術透視）、`AiForceDashboardView`（主力戰情室）與 `TradeModal`（快速記帳）。

@@ -6,6 +6,8 @@ import {
   resolveBubbleCollisions,
   detectInstitutionalSynergy,
   getTemporalBubbleFrameData,
+  mapToAxisCoordinate,
+  detectQuadrantCrossover,
 } from './smartMoneyEngine';
 import { SmartMoneyInputItem } from '../types/stock';
 
@@ -401,6 +403,45 @@ describe('smartMoneyEngine (籌碼與聰明錢量化引擎)', () => {
       }
     });
 
+
+    it('Ticket 02 (Spec 0217) - 物理碰撞排斥演算法校準：重疊泡泡在 8 輪迭代內應完全排斥開來 (dist >= r1 + r2)', () => {
+      const width = 880;
+      const height = 560;
+      const padding = 50;
+
+      const overlapBubbles = [
+        { symbol: 'A', name: 'A', market: 'TW', x: 20, y: 30, radius: 24 },
+        { symbol: 'B', name: 'B', market: 'TW', x: 20.2, y: 30.1, radius: 24 },
+      ];
+
+      const placed = resolveBubbleCollisions(overlapBubbles, width, height, padding);
+      const dist = Math.hypot(placed[0].cx - placed[1].cx, placed[0].cy - placed[1].cy);
+      expect(dist).toBeGreaterThanOrEqual(placed[0].radius + placed[1].radius);
+    });
+
+    it('Ticket 02 (Spec 0217) - 半徑感知中軸邊界保護：大球即使在象限邊緣，球體也不得跨越十字中軸線', () => {
+      const width = 880;
+      const height = 560;
+      const padding = 50;
+      const midX = width / 2;
+      const midY = height / 2;
+
+      // 放置在接近 X=0, Y=0 的右上象限，半徑為 36px 的大球
+      const closeBubbles = [
+        { symbol: 'BIG1', name: 'BIG1', market: 'TW', x: 1, y: 1, radius: 36 },
+        { symbol: 'BIG2', name: 'BIG2', market: 'TW', x: 2, y: 2, radius: 36 },
+      ];
+
+      const placed = resolveBubbleCollisions(closeBubbles, width, height, padding);
+
+      for (const p of placed) {
+        // 右上象限：球體左邊緣 (cx - radius) 必須在 midX 右邊
+        expect(p.cx - p.radius).toBeGreaterThanOrEqual(midX);
+        // 球體底邊緣 (cy + radius) 必須在 midY 上邊 (SVG cy 越小越在上)
+        expect(p.cy + p.radius).toBeLessThanOrEqual(midY);
+      }
+    });
+
     it('2D 正交空間排斥：當多顆泡泡初始水平串在同一高度線時，排斥演算法應產生垂直錯落位移', () => {
       const width = 880;
       const height = 560;
@@ -580,7 +621,110 @@ describe('smartMoneyEngine (籌碼與聰明錢量化引擎)', () => {
       expect(diag.quadrantLabel).toContain('量縮');
     });
   });
+
+  describe('Ticket 03 (Spec 0217) - 坐標映射統一、Y 軸分母保護與象限躍遷轉折捕捉', () => {
+    it('mapToAxisCoordinate 應將數值以非線性冪次平滑映射至 [-maxRange, +maxRange]', () => {
+      expect(mapToAxisCoordinate(0, 1000)).toBe(0);
+      expect(mapToAxisCoordinate(1000, 1000, 0.7, 75)).toBe(75);
+      expect(mapToAxisCoordinate(-1000, 1000, 0.7, 75)).toBe(-75);
+      // 50% 處經過 0.7 冪次映射應約為 46.2
+      const midVal = mapToAxisCoordinate(500, 1000, 0.7, 75);
+      expect(midVal).toBeGreaterThan(40);
+      expect(midVal).toBeLessThan(50);
+    });
+
+    it('detectQuadrantCrossover 應準確捕捉時序躍遷轉折', () => {
+      const b1 = detectQuadrantCrossover('ACCUMULATION', 'BREAKOUT');
+      expect(b1.type).toBe('BREAKOUT_FIRST_DAY');
+      expect(b1.label).toContain('潛伏點火首日');
+
+      const b2 = detectQuadrantCrossover('BREAKOUT', 'ACCUMULATION');
+      expect(b2.type).toBe('PULLBACK_ACCUMULATION');
+      expect(b2.label).toContain('逢低強勢承接');
+
+      const b3 = detectQuadrantCrossover('BREAKOUT', 'DISTRIBUTION');
+      expect(b3.type).toBe('DISTRIBUTION_ALERT');
+      expect(b3.label).toContain('轉入派發警戒');
+
+      const b4 = detectQuadrantCrossover('DISTRIBUTION', 'LIQUIDATION');
+      expect(b4.type).toBe('LIQUIDATION_COLLAPSE');
+      expect(b4.label).toContain('轉入棄守破位');
+
+      const b5 = detectQuadrantCrossover('BREAKOUT', 'BREAKOUT');
+      expect(b5.type).toBe('CONTINUOUS');
+    });
+
+    it('ETF 巨量造市隔離：即使 0050 買超 150,000 張，一般個股 500 張買超仍不被壓扁 (Y 軸 > 10)', () => {
+      const items = [
+        {
+          symbol: '0050',
+          name: '元大台灣50',
+          market: 'TW',
+          type: 'ETF',
+          currentPrice: 190,
+          previousClose: 188,
+          changePercent: 1.0,
+          foreignBuyShares: 150000,
+          foreignSellShares: 0,
+        },
+        {
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          type: 'STOCK',
+          currentPrice: 1000,
+          previousClose: 990,
+          changePercent: 1.0,
+          foreignBuyShares: 1200,
+          foreignSellShares: 0,
+        },
+      ];
+
+      const res = calculateSmartMoneyFlowDynamics(items as any);
+      const ts2330 = res.bubbles.find((b) => b.symbol === '2330');
+      expect(ts2330).toBeDefined();
+      // 在 15,000 張保護上限與 0.7 冪次映射下，1200 張的 Y 坐標應 > 10
+      expect(ts2330!.y).toBeGreaterThanOrEqual(10);
+    });
+  });
+
+
+  describe('Ticket 06 (Spec 0217) - 持倉成本防線與意圖感知診斷 (Intent-Aware Diagnosis)', () => {
+    it('存股部位 (DIVIDEND) 落入冷凍提款區，應輸出殖利率提升之左側布局指引，杜絕恐慌文案', () => {
+      const diag = getBeginnerDiagnosis(
+        'LIQUIDATION',
+        '2886',
+        '兆豐金',
+        -1.5,
+        -50000000,
+        'TW',
+        undefined,
+        'DIVIDEND',
+        -2.5
+      );
+
+      expect(diag.quadrantLabel).toContain('存股');
+      expect(diag.diagnosisTitle).toContain('殖利率提升');
+      expect(diag.diagnosisDetail).toContain('左側逢低分批');
+    });
+
+    it('波段部位 (SWING) 水下套牢且主力棄守時，應強烈拉響停損警報嚴防凹單', () => {
+      const diag = getBeginnerDiagnosis(
+        'LIQUIDATION',
+        '2330',
+        '台積電',
+        -3.2,
+        -150000000,
+        'TW',
+        undefined,
+        'SWING',
+        -8.5
+      );
+
+      expect(diag.quadrantLabel).toContain('波段套牢');
+      expect(diag.diagnosisTitle).toContain('凹單');
+      expect(diag.diagnosisDetail).toContain('停損防守');
+    });
+  });
+
 });
-
-
-

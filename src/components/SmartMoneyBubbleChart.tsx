@@ -25,6 +25,10 @@ export interface SmartMoneyBubbleChartProps {
   onDateChange?: (dateIndex: number) => void;
   summaryText?: string;
   overallSentiment?: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+  focusedSymbol?: string | null;
+  onOpenOmniInspector?: (symbol: string, market: MarketType) => void;
+  onOpenAiForce?: (symbol: string, market: MarketType) => void;
+  onQuickTrade?: (symbol: string, market: MarketType) => void;
 }
 
 /**
@@ -204,10 +208,27 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
   onDateChange,
   summaryText,
   overallSentiment = 'NEUTRAL',
+  focusedSymbol,
+  onOpenOmniInspector,
+  onOpenAiForce,
+  onQuickTrade,
 }) => {
   const [showGuide, setShowGuide] = useState(true);
   const [hoveredBubble, setHoveredBubble] = useState<SmartMoneyBubbleData | null>(null);
-  const [selectedBubble, setSelectedBubble] = useState<SmartMoneyBubbleData | null>(null);
+  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const [isNarrowScreen, setIsNarrowScreen] = useState(false);
+  useEffect(() => {
+    const checkNarrow = () => setIsNarrowScreen(typeof window !== 'undefined' && window.innerWidth < 640);
+    checkNarrow();
+    window.addEventListener('resize', checkNarrow);
+    return () => window.removeEventListener('resize', checkNarrow);
+  }, []);
+
+  useEffect(() => {
+    if (focusedSymbol !== undefined) {
+      setSelectedSymbol(focusedSymbol);
+    }
+  }, [focusedSymbol]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playSpeed, setPlaySpeed] = useState<1 | 2>(1);
 
@@ -238,8 +259,6 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [isPlaying, playSpeed, availableDates.length, currentDateIndex, onDateChange]);
-
-  const activeBubble = hoveredBubble || selectedBubble;
 
   // 1. 2D 圓形防碰撞排斥佈局 (依據當前時間軸進度 currentDateIndex 動態映射泡泡時序坐標)
   const placedBubbles = useMemo(() => {
@@ -272,6 +291,16 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
     });
     return resolveBubbleCollisions(temporalBubbles, width, height, padding);
   }, [bubbles, currentDateIndex, width, height, padding]);
+
+  // 動態綁定選中與懸浮泡泡，杜絕時序回放產生 Stale Reference
+  const selectedBubble = useMemo(() => {
+    if (!selectedSymbol) return null;
+    return placedBubbles.find((b) => b.symbol === selectedSymbol) || null;
+  }, [selectedSymbol, placedBubbles]);
+
+  const activeBubble = hoveredBubble
+    ? (placedBubbles.find((b) => b.symbol === hoveredBubble.symbol) || hoveredBubble)
+    : selectedBubble;
 
   // 2. DOM 頂層繪製排序 (消滅大球吞小球：半徑較大者先畫在底層，小球後畫在頂層；active 泡泡排在絕對最末尾)
   const displayBubbles = useMemo(() => {
@@ -424,7 +453,7 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
 
       {/* 主 SVG 畫布區域 */}
       <div
-        onClick={() => setSelectedBubble(null)}
+        onClick={() => setSelectedSymbol(null)}
         style={{
           position: 'relative',
           width: '100%',
@@ -437,7 +466,7 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
         <svg
           viewBox={`0 0 ${width} ${height}`}
           style={{ width: '100%', height: 'auto', display: 'block' }}
-          onClick={() => setSelectedBubble(null)}
+          onClick={() => setSelectedSymbol(null)}
         >
           <defs>
             {/* 濾鏡光暈 */}
@@ -629,7 +658,7 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
             const fillColor = getBubbleFillColor(b, colorTheme, b.quadrant);
             const strokeColor = getBubbleStrokeColor(b, colorTheme, b.quadrant);
             const isHovered = hoveredBubble?.symbol === b.symbol;
-            const isSelected = selectedBubble?.symbol === b.symbol;
+            const isSelected = selectedSymbol === b.symbol;
             const isActive = isHovered || isSelected;
             const currentRadius = isActive ? b.radius * 1.15 : b.radius;
             // 聚光燈模式：當有選中或懸浮泡泡時，其他泡泡降至 0.25 透明度
@@ -647,7 +676,7 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
                 onMouseLeave={() => setHoveredBubble(null)}
                 onClick={(e) => {
                   e.stopPropagation();
-                  setSelectedBubble(selectedBubble?.symbol === b.symbol ? null : b);
+                  setSelectedSymbol(selectedSymbol === b.symbol ? null : b.symbol);
                 }}
               >
                 {/* 脈衝外光暈 */}
@@ -662,6 +691,35 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
                     strokeOpacity="0.5"
                     strokeDasharray="4 4"
                   />
+                )}
+
+                {/* 自有持股專屬金色光環與 ★ 角標 (Ticket 06 / Spec 0217) */}
+                {b.isHolding && (
+                  <>
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={currentRadius + 4}
+                      fill="none"
+                      stroke="#eab308"
+                      strokeWidth="1.5"
+                      strokeDasharray="3 3"
+                      opacity="0.85"
+                    />
+                    <text
+                      x={cx + currentRadius - 2}
+                      y={cy - currentRadius + 3}
+                      fill="#eab308"
+                      fontSize="10"
+                      fontWeight="900"
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      pointerEvents="none"
+                      style={{ textShadow: '0 0 4px rgba(234, 179, 8, 0.8)' }}
+                    >
+                      ★
+                    </text>
+                  </>
                 )}
 
                 {/* 主實體泡泡 */}
@@ -721,14 +779,25 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
         {activeBubble && activeFrameData && (() => {
           const activeCx = activeBubble.cx !== undefined ? activeBubble.cx : calculateCanvasCoordinates(activeBubble.x, activeBubble.y, width, height, padding).cx;
           const activeCy = activeBubble.cy !== undefined ? activeBubble.cy : calculateCanvasCoordinates(activeBubble.x, activeBubble.y, width, height, padding).cy;
-          const isPinned = !!selectedBubble;
+          const isPinned = !!selectedSymbol;
           const placement = calculateTooltipPlacement(activeCx, activeCy, width, height, isPinned);
+
+          const tooltipStyle: React.CSSProperties = isNarrowScreen
+            ? {
+                position: 'relative',
+                width: '100%',
+                marginTop: '12px',
+                zIndex: 20,
+              }
+            : {
+                ...placement,
+              };
 
           return (
             <div
               onClick={(e) => e.stopPropagation()}
               style={{
-                ...placement,
+                ...tooltipStyle,
                 background: 'rgba(15, 23, 42, 0.95)',
                 border: `1px solid ${getBubbleStrokeColor(activeBubble, colorTheme)}`,
                 borderRadius: '12px',
@@ -738,6 +807,44 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
                 transition: 'top 0.25s ease, bottom 0.25s ease, left 0.25s ease, right 0.25s ease',
               }}
             >
+              {/* 持股防線與意圖膠囊 (Ticket 06 / Spec 0217) */}
+              {activeBubble.isHolding && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '4px 8px',
+                    background: 'rgba(234, 179, 8, 0.12)',
+                    border: '1px solid rgba(234, 179, 8, 0.35)',
+                    borderRadius: '6px',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    color: '#facc15',
+                    marginBottom: '8px',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <span>★ 自有持股</span>
+                  {activeBubble.holdingAvgCost !== undefined && (
+                    <span>均價 ${activeBubble.holdingAvgCost.toFixed(1)}</span>
+                  )}
+                  {activeBubble.unrealizedPnLPercent !== undefined && (
+                    <span
+                      style={{
+                        color: activeBubble.unrealizedPnLPercent >= 0 ? '#f87171' : '#34d399',
+                      }}
+                    >
+                      {activeBubble.unrealizedPnLPercent >= 0 ? '+' : ''}
+                      {activeBubble.unrealizedPnLPercent.toFixed(1)}%
+                    </span>
+                  )}
+                  {activeBubble.intent && (
+                    <span>({activeBubble.intent === 'DIVIDEND' ? '🌱 存股領息' : '⚡ 波段操作'})</span>
+                  )}
+                </div>
+              )}
+
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#f8fafc' }}>
@@ -785,9 +892,9 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
                   >
                     {activeFrameData.quadrantLabel}
                   </span>
-                  {selectedBubble && (
+                  {selectedSymbol && (
                     <button
-                      onClick={() => setSelectedBubble(null)}
+                      onClick={() => setSelectedSymbol(null)}
                       style={{
                         background: 'rgba(255, 255, 255, 0.1)',
                         border: '1px solid rgba(255, 255, 255, 0.2)',
@@ -877,6 +984,89 @@ export const SmartMoneyBubbleChart: React.FC<SmartMoneyBubbleChartProps> = ({
                     cmf: activeFrameData.cmf,
                   })}
                 </span>
+              </div>
+
+              {/* 實戰行動閉環按鈕 (Ticket 08 / Spec 0217) */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginTop: '10px',
+                  paddingTop: '8px',
+                  borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                  flexWrap: 'wrap',
+                }}
+              >
+                {onOpenOmniInspector && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenOmniInspector(activeBubble.symbol, activeBubble.market);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 8px',
+                      borderRadius: '6px',
+                      background: 'rgba(59, 130, 246, 0.2)',
+                      border: '1px solid rgba(59, 130, 246, 0.4)',
+                      color: '#93c5fd',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    🔍 技術透視
+                  </button>
+                )}
+                {onOpenAiForce && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenAiForce(activeBubble.symbol, activeBubble.market);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 8px',
+                      borderRadius: '6px',
+                      background: 'rgba(168, 85, 247, 0.2)',
+                      border: '1px solid rgba(168, 85, 247, 0.4)',
+                      color: '#d8b4fe',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    ⚡ 主力戰情
+                  </button>
+                )}
+                {onQuickTrade && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onQuickTrade(activeBubble.symbol, activeBubble.market);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 8px',
+                      borderRadius: '6px',
+                      background: 'rgba(16, 185, 129, 0.2)',
+                      border: '1px solid rgba(16, 185, 129, 0.4)',
+                      color: '#6ee7b7',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    📝 記一筆
+                  </button>
+                )}
               </div>
             </div>
           );

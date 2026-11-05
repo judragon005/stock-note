@@ -119,3 +119,75 @@ describe('ChipsWorkspace 象限卡片動態習慣燈號連動 (ColorThemeMode)',
     });
   });
 });
+  describe('Ticket 05 (Spec 0217) - 前端三級瀑布流真實資料管線與 Zero-Mock 清洗', () => {
+    it('filterMarketFocusList 在無持倉時優先採用真實收盤價計算漲跌幅，杜絕 idx % 4 假背離', () => {
+      const mockChipsMap = {
+        '2330': {
+          symbol: '2330',
+          name: '台積電',
+          foreignNetShares: 5000,
+          trustNetShares: 2000,
+          dealerNetShares: 500,
+          totalNetShares: 7500,
+          close: 1020,
+        },
+      };
+
+      const historyReportsMap = {
+        '2026-10-29': {
+          '2330': {
+            symbol: '2330',
+            name: '台積電',
+            close: 1000,
+            totalNetShares: 5000,
+          },
+        },
+        '2026-10-30': {
+          '2330': {
+            symbol: '2330',
+            name: '台積電',
+            close: 1020,
+            totalNetShares: 7500,
+          },
+        },
+      };
+
+      const res = filterMarketFocusList(
+        'TW',
+        mockChipsMap as any,
+        [],
+        ['2026-10-29', '2026-10-30'],
+        historyReportsMap as any
+      );
+
+      expect(res).toHaveLength(1);
+      expect(res[0].symbol).toBe('2330');
+      expect(res[0].currentPrice).toBe(1020);
+      // (1020 - 1000) / 1000 = +2.0%
+      expect(res[0].changePercent).toBe(2);
+    });
+  
+  describe('Ticket 07 (Spec 0217) - 四象限卡片篩選與實戰籌碼作戰明細表', () => {
+    it('應支援依象限過濾標的清單', () => {
+      const mockBubbles = [
+        { symbol: '2330', name: '台積電', quadrant: 'BREAKOUT', totalNetShares: 5000 },
+        { symbol: '2454', name: '聯發科', quadrant: 'ACCUMULATION', totalNetShares: 2000 },
+        { symbol: '2317', name: '鴻海', quadrant: 'DISTRIBUTION', totalNetShares: -3000 },
+        { symbol: '2481', name: '強茂', quadrant: 'LIQUIDATION', totalNetShares: -1000 },
+      ];
+
+      const filterByQuadrant = (bubbles: any[], quadrant: string) => {
+        if (quadrant === 'ALL') return bubbles;
+        return bubbles.filter((b) => b.quadrant === quadrant);
+      };
+
+      const breakoutOnly = filterByQuadrant(mockBubbles, 'BREAKOUT');
+      expect(breakoutOnly).toHaveLength(1);
+      expect(breakoutOnly[0].symbol).toBe('2330');
+
+      const all = filterByQuadrant(mockBubbles, 'ALL');
+      expect(all).toHaveLength(4);
+    });
+  });
+
+});

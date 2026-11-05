@@ -4,6 +4,7 @@ import {
   ColorThemeMode,
   MarketType,
   SmartMoneyInputItem,
+  SmartMoneyQuadrant,
 } from '../types/stock';
 import { SmartMoneyBubbleChart } from './SmartMoneyBubbleChart';
 import {
@@ -18,6 +19,7 @@ import {
   TwseInstitutionalRow,
   getLatestTradingDateString,
   getRecentTradingDateSequence,
+  fetchSmartMoneyLakehouseSnapshot,
 } from '../engine/smartMoneyFetcher';
 import {
   aggregateMultiDayChips,
@@ -87,7 +89,7 @@ export function buildHoldingHistoricalFlows(
 
   return availableDates.map((d, idx) => {
     const factor = (idx + 1) / availableDates.length;
-    const changeP = (holding.todaysPnLPercent || 0) * factor + (idx % 2 === 0 ? 0.3 : -0.2);
+    const changeP = (holding.todaysPnLPercent || 0) * factor;
 
     if (holding.market === 'US') {
       const stepCmf = Math.round(baseUsCmf * factor * 100) / 100;
@@ -224,24 +226,23 @@ export function filterMarketFocusList(
 
   // 台股全市場焦點 Top 30
   const topSymbols = Object.values(twseChipsMap)
-    .sort((a, b) => Math.abs(b.totalNetShares) - Math.abs(a.totalNetShares))
+    .sort((a, b) => Math.abs(((b.foreignNetShares || 0) + (b.trustNetShares || 0) + (b.dealerNetShares || 0))) - Math.abs(a.totalNetShares))
     .slice(0, marketFilter === 'ALL' ? 20 : 30);
 
-  const twItems: SmartMoneyInputItem[] = topSymbols.map((item, idx) => {
+  const twItems: SmartMoneyInputItem[] = topSymbols.map((item) => {
     const matchingHolding = holdings.find((h) => h.symbol.replace(/\.(TW|TWO)$/i, '').trim() === item.symbol);
     let changeP = matchingHolding?.todaysPnLPercent;
 
+    const estPrice = item.close || matchingHolding?.currentPrice || 100;
     if (changeP === undefined) {
-      const isDivergent = idx % 4 === 1;
-      const baseMagnitude = 0.8 + ((Math.abs(item.totalNetShares) % 35) / 10);
-      if (item.totalNetShares > 0) {
-        changeP = isDivergent ? -baseMagnitude : baseMagnitude;
+      const prevDate = availableDates.length >= 2 ? availableDates[availableDates.length - 2] : null;
+      const prevDayItem = prevDate && historyReportsMap ? historyReportsMap[prevDate]?.[item.symbol] : null;
+      if (prevDayItem?.close && item.close) {
+        changeP = Math.round(((item.close - prevDayItem.close) / prevDayItem.close) * 1000) / 10;
       } else {
-        changeP = isDivergent ? baseMagnitude : -baseMagnitude;
+        changeP = 0;
       }
     }
-
-    const estPrice = matchingHolding?.currentPrice || 100;
     const histFlows = buildHoldingHistoricalFlows(
       {
         symbol: item.symbol,
@@ -312,6 +313,9 @@ export interface ChipsWorkspaceProps {
   usdToTwdRate: number;
   market?: 'ALL' | MarketType;
   onMarketChange?: (market: 'ALL' | MarketType) => void;
+  onOpenOmniInspector?: (symbol: string, market: MarketType) => void;
+  onOpenAiForce?: (symbol: string, market: MarketType) => void;
+  onQuickTrade?: (symbol: string, market: MarketType) => void;
 }
 
 export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
@@ -320,6 +324,9 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
   usdToTwdRate,
   market,
   onMarketChange,
+  onOpenOmniInspector,
+  onOpenAiForce,
+  onQuickTrade,
 }) => {
   const [viewMode, setViewMode] = useState<'PORTFOLIO' | 'MARKET'>('PORTFOLIO');
   const [internalMarketFilter, setInternalMarketFilter] = useState<'ALL' | MarketType>(market || 'ALL');
@@ -350,6 +357,11 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
   const [isUsSyncing, setIsUsSyncing] = useState<boolean>(false);
   // Spec 0119: 動能時間窗選擇器狀態 (1D / 3D / 5D)
   const [chipsHorizon, setChipsHorizon] = useState<1 | 3 | 5>(1);
+  const [quadrantFilter, setQuadrantFilter] = useState<SmartMoneyQuadrant | 'ALL'>('ALL');
+  const [spotlightSymbol, setSpotlightSymbol] = useState<string | null>(null);
+  const [tableSearch, setTableSearch] = useState<string>('');
+  const [tableSortField, setTableSortField] = useState<string>('totalNetShares');
+  const [tableSortAsc, setTableSortAsc] = useState<boolean>(false);
   const [isDecisionBoardExpanded, setIsDecisionBoardExpanded] = useState<boolean>(true);
 
   // 支援 5 個連續真實交易日供時序回放 (Spec 0117 Ticket 02)
@@ -367,13 +379,74 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
   const loadChipsData = async (forceRefresh = false) => {
     setIsLoading(true);
     try {
+      // 三級瀑布流第一級：優先嘗試本機 SQLite 湖倉快照端點 (Spec 0217 / Ticket 01 & 05)
+      if (!forceRefresh) {
+        try {
+          const snapshot = await fetchSmartMoneyLakehouseSnapshot('TW', 5);
+          if (snapshot && snapshot.success && snapshot.items && Object.keys(snapshot.items).length > 0) {
+            const chipsMap: Record<string, TwseInstitutionalRow> = {};
+            const histMap: Record<string, Record<string, TwseInstitutionalRow>> = {};
+
+            for (const [sym, itm] of Object.entries(snapshot.items) as [string, any][]) {
+              chipsMap[sym] = {
+                symbol: sym,
+                name: itm.name,
+                foreignBuyShares: itm.foreignNet > 0 ? itm.foreignNet : 0,
+                foreignSellShares: itm.foreignNet < 0 ? Math.abs(itm.foreignNet) : 0,
+                foreignNetShares: itm.foreignNet,
+                trustBuyShares: itm.trustNet > 0 ? itm.trustNet : 0,
+                trustSellShares: itm.trustNet < 0 ? Math.abs(itm.trustNet) : 0,
+                trustNetShares: itm.trustNet,
+                dealerNetShares: itm.dealerNet,
+                totalNetShares: itm.totalNetShares,
+                volumeLots: itm.volumeLots,
+                close: itm.close,
+              };
+
+              if (itm.history && itm.history.length > 0) {
+                for (const h of itm.history) {
+                  if (!histMap[h.date]) histMap[h.date] = {};
+                  histMap[h.date][sym] = {
+                    symbol: sym,
+                    name: itm.name,
+                    foreignBuyShares: h.foreignNet > 0 ? h.foreignNet : 0,
+                    foreignSellShares: h.foreignNet < 0 ? Math.abs(h.foreignNet) : 0,
+                    foreignNetShares: h.foreignNet,
+                    trustBuyShares: h.trustNet > 0 ? h.trustNet : 0,
+                    trustSellShares: h.trustNet < 0 ? Math.abs(h.trustNet) : 0,
+                    trustNetShares: h.trustNet,
+                    dealerNetShares: h.dealerNet,
+                    totalNetShares: h.totalNetShares,
+                    volumeLots: h.volumeLots,
+                    close: h.close,
+                  };
+                }
+              }
+            }
+
+            setTwseChipsMap(chipsMap);
+            setHistoryReportsMap(histMap);
+            if (snapshot.availableDates && snapshot.availableDates.length > 0) {
+              setReportDate(snapshot.availableDates[0]);
+              setCurrentDateIndex(snapshot.availableDates.length - 1);
+            }
+            setIsLiveToday(true);
+            setTotalSymbols(Object.keys(chipsMap).length);
+            return;
+          }
+        } catch {
+          // 湖倉不可用時平滑降級進入第二/三級
+        }
+      }
+
+      // 降級第二/三級：線上 TWSE/TPEx 日報或 IndexedDB 歷史快取
       const detailed = await fetchTwseInstitutionalReportDetailed(undefined, undefined, 5, forceRefresh);
       setTwseChipsMap(detailed.data);
       setReportDate(detailed.reportDate);
       setIsLiveToday(detailed.isLiveToday);
       setFallbackReason(detailed.fallbackReason);
       setTotalSymbols(detailed.totalSymbols);
-      setCurrentDateIndex(4); // 預設指向最新 (5 個交易日的最後一日)
+      setCurrentDateIndex(4);
     } catch {
       // 容錯靜默處理
     } finally {
@@ -502,6 +575,8 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
   }, [holdings, activeChipsMap, viewMode, marketFilter, usdToTwdRate, availableDates, historyReportsMap, usRealDataMap]);
 
   // Spec 0119 Ticket 04: 動態計算當前週期的決策排行榜 (可以買 vs 一定要閃)
+  const cardStyles = getChipsQuadrantCardStyles(colorTheme);
+
   const momentumSignals = useMemo(() => {
     return getTopMomentumSymbols(activeChipsMap, 4);
   }, [activeChipsMap]);
@@ -510,6 +585,12 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
   const analysisResult = useMemo(() => {
     return calculateSmartMoneyFlowDynamics(smartMoneyItems);
   }, [smartMoneyItems]);
+  // 依象限過濾器過濾泡泡 (Ticket 07 / Spec 0217)
+  const displayBubbles = useMemo(() => {
+    if (quadrantFilter === 'ALL') return analysisResult.bubbles;
+    return analysisResult.bubbles.filter((b) => b.quadrant === quadrantFilter);
+  }, [analysisResult.bubbles, quadrantFilter]);
+
 
   // 依據當前選取的時序日期 (currentDateIndex) 動態重新統計當前影格之四象限檔數，杜絕 T-4 切換時數字凍結
   const currentFrameCounts = useMemo(() => {
@@ -777,15 +858,21 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
           return (
             <>
               <div
+                onClick={() => setQuadrantFilter(quadrantFilter === 'BREAKOUT' ? 'ALL' : 'BREAKOUT')}
                 style={{
                   background: cardStyles.breakout.bg,
-                  border: cardStyles.breakout.border,
+                  border: quadrantFilter === 'BREAKOUT' ? '2px solid #ef4444' : cardStyles.breakout.border,
                   borderRadius: '12px',
                   padding: '12px 14px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  transform: quadrantFilter === 'BREAKOUT' ? 'scale(1.02)' : 'none',
+                  transition: 'all 0.2s ease',
+                  boxShadow: quadrantFilter === 'BREAKOUT' ? '0 0 15px rgba(239, 68, 68, 0.4)' : 'none',
                 }}
+                title="點擊篩選：僅展示主力抬轎區標的"
               >
                 <div>
                   <div style={{ fontSize: '0.75rem', color: cardStyles.breakout.titleColor, fontWeight: 600 }}>🔥 主力抬轎區</div>
@@ -797,15 +884,21 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
               </div>
 
               <div
+                onClick={() => setQuadrantFilter(quadrantFilter === 'ACCUMULATION' ? 'ALL' : 'ACCUMULATION')}
                 style={{
                   background: cardStyles.accumulation.bg,
-                  border: cardStyles.accumulation.border,
+                  border: quadrantFilter === 'ACCUMULATION' ? '2px solid #f59e0b' : cardStyles.accumulation.border,
                   borderRadius: '12px',
                   padding: '12px 14px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  transform: quadrantFilter === 'ACCUMULATION' ? 'scale(1.02)' : 'none',
+                  transition: 'all 0.2s ease',
+                  boxShadow: quadrantFilter === 'ACCUMULATION' ? '0 0 15px rgba(245, 158, 11, 0.4)' : 'none',
                 }}
+                title="點擊篩選：僅展示逢低撿便宜區標的"
               >
                 <div>
                   <div style={{ fontSize: '0.75rem', color: cardStyles.accumulation.titleColor, fontWeight: 600 }}>🛡️ 逢低撿便宜區</div>
@@ -817,15 +910,21 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
               </div>
 
               <div
+                onClick={() => setQuadrantFilter(quadrantFilter === 'DISTRIBUTION' ? 'ALL' : 'DISTRIBUTION')}
                 style={{
                   background: cardStyles.distribution.bg,
-                  border: cardStyles.distribution.border,
+                  border: quadrantFilter === 'DISTRIBUTION' ? '2px solid #10b981' : cardStyles.distribution.border,
                   borderRadius: '12px',
                   padding: '12px 14px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  transform: quadrantFilter === 'DISTRIBUTION' ? 'scale(1.02)' : 'none',
+                  transition: 'all 0.2s ease',
+                  boxShadow: quadrantFilter === 'DISTRIBUTION' ? '0 0 15px rgba(16, 185, 129, 0.4)' : 'none',
                 }}
+                title="點擊篩選：僅展示割韭菜警戒區標的"
               >
                 <div>
                   <div style={{ fontSize: '0.75rem', color: cardStyles.distribution.titleColor, fontWeight: 600 }}>⚠️ 割韭菜警戒區</div>
@@ -837,15 +936,21 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
               </div>
 
               <div
+                onClick={() => setQuadrantFilter(quadrantFilter === 'LIQUIDATION' ? 'ALL' : 'LIQUIDATION')}
                 style={{
                   background: cardStyles.liquidation.bg,
-                  border: cardStyles.liquidation.border,
+                  border: quadrantFilter === 'LIQUIDATION' ? '2px solid #94a3b8' : cardStyles.liquidation.border,
                   borderRadius: '12px',
                   padding: '12px 14px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  transform: quadrantFilter === 'LIQUIDATION' ? 'scale(1.02)' : 'none',
+                  transition: 'all 0.2s ease',
+                  boxShadow: quadrantFilter === 'LIQUIDATION' ? '0 0 15px rgba(148, 163, 184, 0.4)' : 'none',
                 }}
+                title="點擊篩選：僅展示冷凍提款區標的"
               >
                 <div>
                   <div style={{ fontSize: '0.75rem', color: cardStyles.liquidation.titleColor, fontWeight: 600 }}>❄️ 冷凍提款區</div>
@@ -907,8 +1012,8 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
             {/* 1. 法人聯手搶買榜 (可以買) */}
             <div
               style={{
-                background: 'rgba(16, 185, 129, 0.08)',
-                border: '1px solid rgba(16, 185, 129, 0.25)',
+                background: cardStyles.breakout.bg,
+                border: cardStyles.breakout.border,
                 borderRadius: '10px',
                 padding: '10px 12px',
               }}
@@ -925,15 +1030,20 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
                     return (
                       <div
                         key={item.symbol}
+                        onClick={() => setSpotlightSymbol(item.symbol)}
                         style={{
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
                           fontSize: '0.78rem',
                           padding: '5px 8px',
-                          background: 'rgba(15, 23, 42, 0.5)',
+                          background: spotlightSymbol === item.symbol ? 'rgba(59, 130, 246, 0.3)' : 'rgba(15, 23, 42, 0.5)',
+                          border: spotlightSymbol === item.symbol ? '1px solid #3b82f6' : '1px solid transparent',
                           borderRadius: '6px',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
                         }}
+                        title="點擊於星圖中高亮定位此泡泡"
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span className="mono" style={{ fontWeight: 700, color: '#f8fafc' }}>{item.symbol}</span>
@@ -957,8 +1067,8 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
             {/* 2. 主力大舉提款榜 (一定要閃) */}
             <div
               style={{
-                background: 'rgba(239, 68, 68, 0.08)',
-                border: '1px solid rgba(239, 68, 68, 0.25)',
+                background: cardStyles.distribution.bg,
+                border: cardStyles.distribution.border,
                 borderRadius: '10px',
                 padding: '10px 12px',
               }}
@@ -975,15 +1085,20 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
                     return (
                       <div
                         key={item.symbol}
+                        onClick={() => setSpotlightSymbol(item.symbol)}
                         style={{
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
                           fontSize: '0.78rem',
                           padding: '5px 8px',
-                          background: 'rgba(15, 23, 42, 0.5)',
+                          background: spotlightSymbol === item.symbol ? 'rgba(239, 68, 68, 0.3)' : 'rgba(15, 23, 42, 0.5)',
+                          border: spotlightSymbol === item.symbol ? '1px solid #ef4444' : '1px solid transparent',
                           borderRadius: '6px',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
                         }}
+                        title="點擊於星圖中高亮定位此泡泡"
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span className="mono" style={{ fontWeight: 700, color: '#f8fafc' }}>{item.symbol}</span>
@@ -1009,7 +1124,11 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
 
       {/* 核心泡泡圖元件 */}
       <SmartMoneyBubbleChart
-        bubbles={analysisResult.bubbles}
+        bubbles={displayBubbles}
+        focusedSymbol={spotlightSymbol}
+        onOpenOmniInspector={onOpenOmniInspector}
+        onOpenAiForce={onOpenAiForce}
+        onQuickTrade={onQuickTrade}
         colorTheme={colorTheme}
         availableDates={availableDates}
         currentDateIndex={currentDateIndex}
@@ -1017,6 +1136,171 @@ export const ChipsWorkspace: React.FC<ChipsWorkspaceProps> = ({
         summaryText={analysisResult.summaryText}
         overallSentiment={analysisResult.overallSentiment}
       />
+
+      {/* 實戰籌碼與部位作戰明細表 (Ticket 07 / Spec 0217) */}
+      <div
+        style={{
+          background: 'rgba(15, 23, 42, 0.8)',
+          border: '1px solid rgba(51, 65, 85, 0.5)',
+          borderRadius: '16px',
+          padding: '18px',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.35)',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '12px',
+            marginBottom: '14px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#f8fafc' }}>
+              📊 實戰籌碼與部位作戰明細表
+            </span>
+            <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '6px', background: 'rgba(51, 65, 85, 0.6)', color: '#cbd5e1' }}>
+              共 {displayBubbles.length} 檔標的
+            </span>
+            {quadrantFilter !== 'ALL' && (
+              <button
+                onClick={() => setQuadrantFilter('ALL')}
+                style={{
+                  fontSize: '0.72rem',
+                  padding: '2px 8px',
+                  borderRadius: '6px',
+                  background: 'rgba(239, 68, 68, 0.2)',
+                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                  color: '#f87171',
+                  cursor: 'pointer',
+                }}
+              >
+                ✕ 清除象限過濾
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input
+              type="text"
+              placeholder="搜尋代號或名稱..."
+              value={tableSearch}
+              onChange={(e) => setTableSearch(e.target.value)}
+              style={{
+                background: 'rgba(30, 41, 59, 0.8)',
+                border: '1px solid rgba(71, 85, 105, 0.6)',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                color: '#f8fafc',
+                fontSize: '0.8rem',
+                outline: 'none',
+                width: '180px',
+              }}
+            />
+          </div>
+        </div>
+
+        {/* 明細數據表格 */}
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid rgba(51, 65, 85, 0.8)', color: '#94a3b8', textAlign: 'left' }}>
+                <th style={{ padding: '8px 10px', fontWeight: 700 }}>標的</th>
+                <th style={{ padding: '8px 10px', fontWeight: 700 }}>象限狀態</th>
+                <th style={{ padding: '8px 10px', fontWeight: 700 }}>躍遷轉折</th>
+                <th onClick={() => { setTableSortField('changePercent'); setTableSortAsc(!tableSortAsc); }} style={{ padding: '8px 10px', fontWeight: 700, cursor: 'pointer' }}>漲跌幅 ↕</th>
+                <th onClick={() => { setTableSortField('foreignNetShares'); setTableSortAsc(!tableSortAsc); }} style={{ padding: '8px 10px', fontWeight: 700, cursor: 'pointer' }}>外資買賣 ↕</th>
+                <th onClick={() => { setTableSortField('trustNetShares'); setTableSortAsc(!tableSortAsc); }} style={{ padding: '8px 10px', fontWeight: 700, cursor: 'pointer' }}>投信買賣 ↕</th>
+                <th onClick={() => { setTableSortField('totalNetShares'); setTableSortAsc(!tableSortAsc); }} style={{ padding: '8px 10px', fontWeight: 700, cursor: 'pointer' }}>三大法人合計 ↕</th>
+                <th onClick={() => { setTableSortField('unrealizedPnLPercent'); setTableSortAsc(!tableSortAsc); }} style={{ padding: '8px 10px', fontWeight: 700, cursor: 'pointer' }}>未實現損益 ↕</th>
+              </tr>
+            </thead>
+            <tbody>
+              {displayBubbles
+                .filter((b) => {
+                  if (!tableSearch) return true;
+                  const q = tableSearch.toLowerCase();
+                  return b.symbol.toLowerCase().includes(q) || b.name.toLowerCase().includes(q);
+                })
+                .sort((a, b) => {
+                  let valA = 0;
+                  let valB = 0;
+                  if (tableSortField === 'changePercent') { valA = a.changePercent; valB = b.changePercent; }
+                  else if (tableSortField === 'foreignNetShares') { valA = a.foreignNetShares || 0; valB = b.foreignNetShares || 0; }
+                  else if (tableSortField === 'trustNetShares') { valA = a.trustNetShares || 0; valB = b.trustNetShares || 0; }
+                  else if (tableSortField === 'unrealizedPnLPercent') { valA = a.unrealizedPnLPercent ?? -999; valB = b.unrealizedPnLPercent ?? -999; }
+                  else {
+                    valA = (a.foreignNetShares || 0) + (a.trustNetShares || 0) + (a.dealerNetShares || 0);
+                    valB = (b.foreignNetShares || 0) + (b.trustNetShares || 0) + (b.dealerNetShares || 0);
+                  }
+                  return tableSortAsc ? valA - valB : valB - valA;
+                })
+                .map((b) => {
+                  const isSpotlight = spotlightSymbol === b.symbol;
+                  return (
+                    <tr
+                      key={b.symbol}
+                      onClick={() => setSpotlightSymbol(spotlightSymbol === b.symbol ? null : b.symbol)}
+                      style={{
+                        borderBottom: '1px solid rgba(51, 65, 85, 0.3)',
+                        cursor: 'pointer',
+                        background: isSpotlight ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
+                        transition: 'background 0.15s ease',
+                      }}
+                    >
+                      <td style={{ padding: '9px 10px', fontWeight: 700 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ color: '#f8fafc' }}>{b.name}</span>
+                          <span className="mono" style={{ color: '#94a3b8', fontSize: '0.72rem' }}>({b.symbol})</span>
+                          {b.isHolding && (
+                            <span style={{ color: '#facc15', fontSize: '0.75rem', fontWeight: 900 }}>★</span>
+                          )}
+                        </div>
+                      </td>
+                      <td style={{ padding: '9px 10px' }}>
+                        <span style={{ fontSize: '0.74rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(51, 65, 85, 0.5)', color: '#cbd5e1' }}>
+                          {b.quadrantLabel}
+                        </span>
+                      </td>
+                      <td style={{ padding: '9px 10px' }}>
+                        {b.crossoverLabel && b.crossoverLabel !== '穩態延續' ? (
+                          <span style={{ fontSize: '0.72rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(234, 179, 8, 0.15)', color: '#fde047', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
+                            {b.crossoverLabel}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#64748b', fontSize: '0.72rem' }}>—</span>
+                        )}
+                      </td>
+                      <td style={{ padding: '9px 10px', fontWeight: 700, color: b.changePercent >= 0 ? '#f87171' : '#34d399' }}>
+                        {b.changePercent >= 0 ? '+' : ''}{b.changePercent.toFixed(1)}%
+                      </td>
+                      <td style={{ padding: '9px 10px', color: (b.foreignNetShares || 0) >= 0 ? '#f87171' : '#34d399' }}>
+                        {b.foreignNetShares !== undefined ? `${(b.foreignNetShares >= 0 ? '+' : '')}${b.foreignNetShares.toLocaleString()}張` : '—'}
+                      </td>
+                      <td style={{ padding: '9px 10px', color: (b.trustNetShares || 0) >= 0 ? '#f87171' : '#34d399' }}>
+                        {b.trustNetShares !== undefined ? `${(b.trustNetShares >= 0 ? '+' : '')}${b.trustNetShares.toLocaleString()}張` : '—'}
+                      </td>
+                      <td style={{ padding: '9px 10px', fontWeight: 800, color: ((b.foreignNetShares || 0) + (b.trustNetShares || 0) + (b.dealerNetShares || 0)) >= 0 ? '#f87171' : '#34d399' }}>
+                        {((b.foreignNetShares || 0) + (b.trustNetShares || 0) + (b.dealerNetShares || 0)) >= 0 ? '+' : ''}{((b.foreignNetShares || 0) + (b.trustNetShares || 0) + (b.dealerNetShares || 0)).toLocaleString()}張
+                      </td>
+                      <td style={{ padding: '9px 10px', fontWeight: 700 }}>
+                        {b.unrealizedPnLPercent !== undefined ? (
+                          <span style={{ color: b.unrealizedPnLPercent >= 0 ? '#f87171' : '#34d399' }}>
+                            {b.unrealizedPnLPercent >= 0 ? '+' : ''}{b.unrealizedPnLPercent.toFixed(1)}%
+                          </span>
+                        ) : (
+                          <span style={{ color: '#64748b' }}>未持有</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 };
