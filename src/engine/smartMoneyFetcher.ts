@@ -7,14 +7,20 @@ import { DailyCandle } from '../types/signal';
 export interface TwseInstitutionalRow {
   symbol: string;
   name: string;
-  foreignBuyShares: number;  // 張數
-  foreignSellShares: number; // 張數
-  foreignNetShares: number;  // 張數
-  trustBuyShares: number;    // 張數
-  trustSellShares: number;   // 張數
-  trustNetShares: number;    // 張數
-  dealerNetShares: number;   // 張數
-  totalNetShares: number;    // 張數
+  foreignBuyShares: number;
+  foreignSellShares: number;
+  foreignNetShares: number;
+  trustBuyShares: number;
+  trustSellShares: number;
+  trustNetShares: number;
+  dealerNetShares: number;
+  totalNetShares: number;
+  foreignStreak?: number;
+  trustStreak?: number;
+  trustToVolumeRatio?: number;
+  volumeLots?: number;
+  close?: number;
+  netFlowAmountTwd?: number;
 }
 
 const parseNumber = (val: any): number => {
@@ -653,3 +659,58 @@ export async function fetchUsMarketRealData(
 }
 
 
+
+
+export interface LakehouseChipsSnapshotResponse {
+  success: boolean;
+  market: 'TW' | 'US';
+  availableDates: string[];
+  items: Record<
+    string,
+    {
+      symbol: string;
+      name: string;
+      industry: string;
+      type: string;
+      close: number;
+      volumeLots: number;
+      foreignNet: number;
+      trustNet: number;
+      dealerNet: number;
+      totalNetShares: number;
+      marginBalance: number;
+      shortBalance: number;
+      history: {
+        date: string;
+        close: number;
+        volumeLots: number;
+        foreignNet: number;
+        trustNet: number;
+        dealerNet: number;
+        totalNetShares: number;
+      }[];
+    }
+  >;
+}
+
+/**
+ * 本機 SQLite 湖倉快照端點高速載入純函數 (Spec 0217 / Ticket 01 & 05)
+ * 在本機 Vite 開發中介層可用時，以 <30ms 取得 5 日完整日 K 與法人籌碼
+ */
+export async function fetchSmartMoneyLakehouseSnapshot(
+  market: 'TW' | 'US' = 'TW',
+  days = 5,
+  fetchFn: typeof fetch = fetch
+): Promise<LakehouseChipsSnapshotResponse | null> {
+  try {
+    const res = await fetchFn(`/api/market/chips-snapshot?market=${market}&days=${days}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data && data.success) {
+      return data as LakehouseChipsSnapshotResponse;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}

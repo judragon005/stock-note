@@ -5,6 +5,7 @@ import {
   SmartMoneyInputItem,
   SmartMoneyFlowAnalysisResult,
   InstitutionalSynergyType,
+  QuadrantCrossoverType,
 } from '../types/stock';
 
 /**
@@ -64,7 +65,9 @@ export function getBeginnerDiagnosis(
   changePercent: number,
   netFlowAmount: number,
   market?: MarketType,
-  cmf?: number
+  cmf?: number,
+  intent?: 'DIVIDEND' | 'SWING',
+  unrealizedPnLPercent?: number
 ): {
   quadrantLabel: string;
   diagnosisTitle: string;
@@ -72,6 +75,25 @@ export function getBeginnerDiagnosis(
 } {
   const displayName = name ? `${name} (${symbol})` : symbol;
   const changeFormatted = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(1)}%`;
+
+  // === 0. 意圖感知診斷守門員 (Ticket 06 / Spec 0217) ===
+  if (intent === 'DIVIDEND') {
+    if (quadrant === 'LIQUIDATION' || (quadrant === 'ACCUMULATION' && changePercent < 0)) {
+      return {
+        quadrantLabel: '🌱 存股回檔分批區',
+        diagnosisTitle: `${displayName} 存股殖利率提升！逢低檢視基本面`,
+        diagnosisDetail: `長線領息部位短線遭遇法人提款或拉回 (${changeFormatted})，殖利率相對攀升，若基本面未變質，可評估左側逢低分批布局。`,
+      };
+    }
+  }
+
+  if (intent === 'SWING' && unrealizedPnLPercent !== undefined && unrealizedPnLPercent < -5 && quadrant === 'LIQUIDATION') {
+    return {
+      quadrantLabel: '🚨 波段套牢+主力棄守',
+      diagnosisTitle: `警報！${displayName} 波段凹單嚴重，大機構持續提款！`,
+      diagnosisDetail: `波段帳面已處於水下 (${unrealizedPnLPercent.toFixed(1)}%)，且主力籌碼持續出逃，請嚴格執行停損防守紀律，切勿轉念凹單長抱！`,
+    };
+  }
 
   // === 1. 美股 (US) 專屬診斷邏輯 (絕對阻斷任何「三大法人」字眼) ===
   if (market === 'US') {
@@ -306,27 +328,35 @@ export function calculateSmartMoneyFlowDynamics(
     };
   }
 
-  // 1. 尋找持倉市值或成交量的最大值，以進行泡泡半徑自適應縮放
+  // 1. 泡泡半徑自適應縮放 (持倉模式嚴格依據 holdingValueTwd，杜絕高價零股變巨球)
+  const isPortfolioMode = items.some((i) => (i.holdingValueTwd || 0) > 0);
   const maxVal = Math.max(
-    ...items.map((i) => Math.max(i.holdingValueTwd || 0, (i.volume || 0) * (i.currentPrice || 1))),
+    ...items.map((i) =>
+      isPortfolioMode
+        ? (i.holdingValueTwd || 1)
+        : Math.max(i.holdingValueTwd || 0, (i.volume || 0) * (i.currentPrice || 1))
+    ),
     1
   );
 
-  // 1.1 計算全清單之最大買賣超張數與最大漲跌幅，作為自適應縮放之基準
+  // 1.1 計算全清單之最大買賣超張數與最大漲跌幅，作為自適應縮放之基準 (排除 ETF 造市壓扁一般股)
   let maxAbsShares = 0;
   let maxAbsChange = 0;
   for (const item of items) {
     if (item.market === 'TW') {
+      const isEtf = (item as any).type === 'ETF' || /^(00|01)/.test(item.symbol);
       const fn = (item.foreignBuyShares || 0) - (item.foreignSellShares || 0);
       const tn = (item.trustBuyShares || 0) - (item.trustSellShares || 0);
       const dn = (item.dealerBuyShares || 0) - (item.dealerSellShares || 0);
       const net = Math.abs(fn + tn + dn);
-      if (net > maxAbsShares) maxAbsShares = net;
+      if (!isEtf && net > maxAbsShares) {
+        maxAbsShares = net;
+      }
     }
     const absChg = Math.abs(item.changePercent || 0);
     if (absChg > maxAbsChange) maxAbsChange = absChg;
   }
-  // 設定最低基準值，避免除以極小數字
+  // 設定基準值上下限：最低 2500，最高 15,000 (Ticket 03 / Spec 0217 防禦)
   maxAbsShares = Math.max(maxAbsShares, 2500);
   maxAbsChange = Math.max(maxAbsChange, 3.0);
 
@@ -435,7 +465,9 @@ export function calculateSmartMoneyFlowDynamics(
       item.changePercent,
       netFlowAmount,
       item.market,
-      cmfValue
+      cmfValue,
+      (item as any).intent,
+      (item as any).unrealizedPnLPercent
     );
 
     // 5. 泡泡半徑自適應縮放 (收斂在 16px ~ 36px，消滅大球吞小球)
@@ -448,14 +480,25 @@ export function calculateSmartMoneyFlowDynamics(
       date: h.date,
       changePercent: h.changePercent,
       flowScore: h.flowScore,
-      x: Math.round(clamp((h.changePercent / maxAbsChange) * 75, -75, 75) * 10) / 10,
-      y: Math.round(clamp(h.flowScore * 75, -75, 75) * 10) / 10,
+      x: mapToAxisCoordinate(h.changePercent, maxAbsChange, 0.7, 75),
+      y: mapToAxisCoordinate(h.flowScore, 1.0, 0.7, 75),
       foreignNetShares: h.foreignNetShares,
       trustNetShares: h.trustNetShares,
       dealerNetShares: h.dealerNetShares,
       cmf: h.cmf,
       netFlowAmount: h.netFlowAmount,
     }));
+
+    // 象限躍遷轉折捕捉 (Ticket 03)
+    let prevQuadrant: SmartMoneyQuadrant | undefined;
+    if (trail.length >= 2) {
+      const prevPt = trail[trail.length - 2];
+      if (prevPt.changePercent >= 0 && prevPt.flowScore >= 0) prevQuadrant = 'BREAKOUT';
+      else if (prevPt.changePercent < 0 && prevPt.flowScore > 0) prevQuadrant = 'ACCUMULATION';
+      else if (prevPt.changePercent >= 0 && prevPt.flowScore < 0) prevQuadrant = 'DISTRIBUTION';
+      else prevQuadrant = 'LIQUIDATION';
+    }
+    const crossover = detectQuadrantCrossover(prevQuadrant, quadrant);
 
     return {
       symbol: item.symbol,
@@ -478,6 +521,13 @@ export function calculateSmartMoneyFlowDynamics(
       cmf: cmfValue,
       institutionalSynergy: synergy.type,
       synergyLabel: synergy.label,
+      crossoverType: crossover.type,
+      crossoverLabel: crossover.label,
+      crossoverDetail: crossover.detail,
+      isHolding: (item as any).isHolding || Boolean((item as any).holdingValueTwd),
+      holdingAvgCost: (item as any).avgCost,
+      unrealizedPnLPercent: (item as any).unrealizedPnLPercent,
+      intent: (item as any).intent,
       trail,
     };
   });
@@ -510,6 +560,73 @@ export function calculateSmartMoneyFlowDynamics(
  * 並配備「象限守恆守門員」，確保推擠時絕不跨越中軸 (X=0, Y=0) 改變多空性質，
  * 並嚴格限制在畫布邊界安全區內。
  */
+
+/**
+ * 坐標軸非線性冪次映射純函數 (Axis Coordinate Mapping)
+ * 將原始數值 (如漲跌幅 % 或買賣超張數/評分) 映射至 [-maxRange, +maxRange]
+ * 採用冪次 power = 0.7 展延中小數值，消除極端值擠壓
+ */
+export function mapToAxisCoordinate(
+  val: number,
+  maxAbs: number,
+  power = 0.7,
+  maxRange = 75
+): number {
+  if (!val || !maxAbs || maxAbs <= 0) return 0;
+  const clampedVal = clamp(val, -maxAbs, maxAbs);
+  const norm = Math.abs(clampedVal) / maxAbs;
+  const sign = clampedVal >= 0 ? 1 : -1;
+  const result = sign * Math.pow(norm, power) * maxRange;
+  return Math.round(clamp(result, -maxRange, maxRange) * 10) / 10;
+}
+
+/**
+ * 時序「象限躍遷 (Quadrant Crossover)」轉折捕捉演算法
+ * 比對前一交易日與當日象限，捕捉關鍵多空轉折
+ */
+export function detectQuadrantCrossover(
+  prevQuadrant?: SmartMoneyQuadrant,
+  currentQuadrant?: SmartMoneyQuadrant
+): { type: QuadrantCrossoverType; label: string; detail: string } {
+  if (!prevQuadrant || !currentQuadrant || prevQuadrant === currentQuadrant) {
+    return { type: 'CONTINUOUS', label: '穩態延續', detail: '籌碼所處象限與前一交易日相仿。' };
+  }
+
+  if (prevQuadrant === 'ACCUMULATION' && currentQuadrant === 'BREAKOUT') {
+    return {
+      type: 'BREAKOUT_FIRST_DAY',
+      label: '🚀 潛伏點火首日',
+      detail: '從逢低撿便宜區強勢躍升至主力抬轎飆股區，為主力潛伏完畢、長紅發動訊號！',
+    };
+  }
+
+  if (prevQuadrant === 'BREAKOUT' && currentQuadrant === 'ACCUMULATION') {
+    return {
+      type: 'PULLBACK_ACCUMULATION',
+      label: '🎣 逢低強勢承接',
+      detail: '股價雖逢盤勢拉回或整理，但主力籌碼依然持續逆勢吃貨買進，多頭承接力道強！',
+    };
+  }
+
+  if (currentQuadrant === 'DISTRIBUTION' && prevQuadrant !== 'DISTRIBUTION') {
+    return {
+      type: 'DISTRIBUTION_ALERT',
+      label: '🚨 轉入派發警戒',
+      detail: '籌碼由多方轉入高檔派發出貨，股價浮動但主力已在暗中撤退倒貨！',
+    };
+  }
+
+  if (currentQuadrant === 'LIQUIDATION' && prevQuadrant !== 'LIQUIDATION') {
+    return {
+      type: 'LIQUIDATION_COLLAPSE',
+      label: '💣 轉入棄守破位',
+      detail: '籌碼跌入冷凍提款區，大資金持續提款且價格破位，應嚴格執行風控紀律！',
+    };
+  }
+
+  return { type: 'CONTINUOUS', label: '穩態輪動', detail: '象限常態輪動中。' };
+}
+
 export function resolveBubbleCollisions<T extends { x: number; y: number; radius: number }>(
   bubbles: T[],
   width: number,
@@ -547,32 +664,36 @@ export function resolveBubbleCollisions<T extends { x: number; y: number; radius
         const p2 = placed[j];
         let dx = p2.cx - p1.cx;
         let dy = p2.cy - p1.cy;
-        let dist = Math.sqrt(dx * dx + dy * dy);
+        const rawDist = Math.hypot(dx, dy);
         const minDist = p1.radius + p2.radius + 4; // 保留 4px 呼吸空隙
 
-        if (dist < minDist) {
-          if (dist < 0.001) {
+        if (rawDist < minDist) {
+          let nx = 0;
+          let ny = 0;
+          if (rawDist < 0.001) {
             // 坐標完全重疊時給予微小擾動
-            dx = (p1._id % 2 === 0 ? 1 : -1) * (i + 1);
-            dy = (p2._id % 2 === 0 ? 1 : -1) * (j + 1);
-            dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            const dirX = (p1._id % 2 === 0 ? 1 : -1) * (i + 1);
+            const dirY = (p2._id % 2 === 0 ? 1 : -1) * (j + 1);
+            const len = Math.hypot(dirX, dirY) || 1;
+            nx = dirX / len;
+            ny = dirY / len;
           } else {
-            // 關鍵痛點修復（雙向正交蜂巢排斥）：
-            // 1. 水平串線（dy 接近 0）：強制注入垂直正交微擾動，使相鄰球上下錯開
-            if (Math.abs(dy) < 6) {
+            // 關鍵痛點校準（真實圓心距 overlap + 雙向正交微擾動法向量）
+            let effDx = dx;
+            let effDy = dy;
+            if (Math.abs(effDy) < 6) {
               const orthoSignY = (p1._id + p2._id) % 2 === 0 ? 1 : -1;
-              dy = orthoSignY * Math.max(6, minDist * 0.45);
+              effDy += orthoSignY * 8;
             }
-            // 2. 垂直糖葫蘆串（dx 接近 0）：強制注入水平正交微擾動，使相鄰球左右錯開
-            if (Math.abs(dx) < 6) {
+            if (Math.abs(effDx) < 6) {
               const orthoSignX = (p1._id + p2._id) % 2 === 0 ? -1 : 1;
-              dx = orthoSignX * Math.max(6, minDist * 0.45);
+              effDx += orthoSignX * 8;
             }
-            dist = Math.sqrt(dx * dx + dy * dy);
+            const effLen = Math.hypot(effDx, effDy) || 1;
+            nx = effDx / effLen;
+            ny = effDy / effLen;
           }
-          const overlap = (minDist - dist) / 2;
-          const nx = dx / dist;
-          const ny = dy / dist;
+          const overlap = (minDist - rawDist) / 2;
 
           p1.cx -= nx * overlap;
           p1.cy -= ny * overlap;
@@ -582,23 +703,23 @@ export function resolveBubbleCollisions<T extends { x: number; y: number; radius
       }
     }
 
-    // 3. 邊界鉗制與象限守恆鎖定
+    // 3. 邊界鉗制與象限守恆鎖定 (半徑感知保護，球體外邊界絕不可跨越 midX, midY)
     for (const p of placed) {
       // 畫布整體外邊界
       p.cx = clamp(p.cx, padding + p.radius, width - padding - p.radius);
       p.cy = clamp(p.cy, padding + p.radius, height - padding - p.radius);
 
-      // 象限中軸鎖定 (保持在原本所屬的多空像限，絕不可翻轉跨越 midX, midY)
+      // 象限中軸鎖定
       if (p.isRight) {
-        p.cx = Math.max(midX + 2, p.cx);
+        p.cx = Math.max(midX + p.radius + 2, p.cx);
       } else {
-        p.cx = Math.min(midX - 2, p.cx);
+        p.cx = Math.min(midX - p.radius - 2, p.cx);
       }
 
       if (p.isTop) {
-        p.cy = Math.min(midY - 2, p.cy);
+        p.cy = Math.min(midY - p.radius - 2, p.cy);
       } else {
-        p.cy = Math.max(midY + 2, p.cy);
+        p.cy = Math.max(midY + p.radius + 2, p.cy);
       }
     }
   }

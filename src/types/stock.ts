@@ -533,6 +533,13 @@ export type SmartMoneyQuadrant = 'BREAKOUT' | 'ACCUMULATION' | 'DISTRIBUTION' | 
 
 export type InstitutionalSynergyType = 'DUAL_BUY' | 'TUG_OF_WAR' | 'DUAL_SELL' | 'NEUTRAL';
 
+export type QuadrantCrossoverType =
+  | 'BREAKOUT_FIRST_DAY'      // 🚀 潛伏點火首日
+  | 'PULLBACK_ACCUMULATION'   // 🎣 逢低強勢承接
+  | 'DISTRIBUTION_ALERT'      // 🚨 轉入派發警戒
+  | 'LIQUIDATION_COLLAPSE'    // 💣 轉入棄守破位
+  | 'CONTINUOUS';             // 穩態延續
+
 export interface SmartMoneyBubbleData {
   symbol: string;
   name: string;
@@ -568,6 +575,16 @@ export interface SmartMoneyBubbleData {
   }[]; // 過去 N 天時序位移點
   cx?: number; // 經防碰撞佈局計算後之畫布像素 X 坐標
   cy?: number; // 經防碰撞佈局計算後之畫布像素 Y 坐標
+  crossoverType?: QuadrantCrossoverType;
+  crossoverLabel?: string;
+  crossoverDetail?: string;
+  isHolding?: boolean; // 持股金色光環
+  holdingAvgCost?: number;
+  unrealizedPnLPercent?: number;
+  intent?: 'DIVIDEND' | 'SWING';
+  trustToVolumeRatio?: number; // 投量比
+  trustStreak?: number; // 投信連買天數
+  foreignStreak?: number; // 外資連買天數
 }
 
 export interface SmartMoneyInputItem {

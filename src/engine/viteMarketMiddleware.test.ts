@@ -296,5 +296,78 @@ describe('Ticket 10 - Vite 原生 Connect 中介層 API (TDD Seam)', () => {
       }
     });
   });
-});
 
+  describe('Ticket 01 (Spec 0217) - 雙市場完整籌碼快照端點 (/api/market/chips-snapshot)', () => {
+    it('應支援以 HAVING COUNT >= 門檻過濾殘缺日，並回傳真實價量與張數單位', async () => {
+      const db = initSqliteLakehouseDb(testDbPath);
+      db.prepare(
+        'INSERT OR REPLACE INTO symbols_meta (symbol, name, market, type, industry, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+      ).run('2330', '台積電', 'TW', 'STOCK', '半導體業', Date.now());
+      db.prepare(
+        'INSERT OR REPLACE INTO symbols_meta (symbol, name, market, type, industry, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+      ).run('8299', '群聯', 'TW', 'STOCK', '半導體業', Date.now());
+
+      const insertChip = db.prepare(
+        'INSERT OR REPLACE INTO tw_institutional_chips (symbol, date, foreign_net, trust_net, dealer_net, margin_balance, short_balance) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      );
+      insertChip.run('2330', '2026-10-29', 500, 200, -50, 3000, 10);
+      insertChip.run('8299', '2026-10-29', 100, 50, 10, 500, 2);
+
+      insertChip.run('2330', '2026-10-30', 800, 300, 100, 3100, 12);
+      insertChip.run('8299', '2026-10-30', -50, 80, -20, 480, 1);
+
+      // 殘缺日：僅有 8299 一檔
+      insertChip.run('8299', '2026-11-04', 20, 10, 5, 470, 0);
+
+      const insertCandle = db.prepare(
+        'INSERT OR REPLACE INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume, turnover, transactions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      );
+      insertCandle.run('2330', '2026-10-29', 1000, 1010, 995, 1005, 1005, 25000000, 0, 15000);
+      insertCandle.run('2330', '2026-10-30', 1005, 1020, 1000, 1015, 1015, 30000000, 0, 18000);
+
+      insertCandle.run('8299', '2026-10-29', 500, 510, 495, 505, 505, 2000000, 0, 2500);
+      insertCandle.run('8299', '2026-10-30', 505, 515, 500, 500, 500, 1800000, 0, 2100);
+
+      const middleware = createMarketApiMiddleware(testDbPath);
+      const res = await simulateRequest(middleware, '/api/market/chips-snapshot?market=TW&days=2&minSymbols=2');
+
+      expect(res.status).toBe(200);
+      expect(res.data.success).toBe(true);
+      expect(res.data.availableDates).toEqual(['2026-10-30', '2026-10-29']);
+
+      const ts2330 = res.data.items['2330'];
+      expect(ts2330).toBeDefined();
+      expect(ts2330.name).toBe('台積電');
+      expect(ts2330.close).toBe(1015);
+      expect(ts2330.volumeLots).toBe(30000);
+      expect(ts2330.totalNetShares).toBe(1200);
+      expect(ts2330.history).toHaveLength(2);
+      expect(ts2330.history[0].date).toBe('2026-10-29');
+      expect(ts2330.history[1].date).toBe('2026-10-30');
+    });
+    it('應支援美股快照並返回指定代號之日 K 序列', async () => {
+      const db = initSqliteLakehouseDb(testDbPath);
+      db.prepare(
+        'INSERT OR REPLACE INTO symbols_meta (symbol, name, market, type, industry, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+      ).run('AAPL', '蘋果', 'US', 'STOCK', '科技', Date.now());
+
+      const insertCandle = db.prepare(
+        'INSERT OR REPLACE INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume, turnover, transactions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      );
+      insertCandle.run('AAPL', '2026-10-29', 220, 225, 219, 224, 224, 45000000, 0, 50000);
+      insertCandle.run('AAPL', '2026-10-30', 224, 228, 223, 227, 227, 50000000, 0, 55000);
+
+      const middleware = createMarketApiMiddleware(testDbPath);
+      const res = await simulateRequest(middleware, '/api/market/chips-snapshot?market=US&symbols=AAPL');
+
+      expect(res.status).toBe(200);
+      expect(res.data.success).toBe(true);
+      expect(res.data.items['AAPL']).toBeDefined();
+      expect(res.data.items['AAPL'].close).toBe(227);
+      expect(res.data.items['AAPL'].history).toHaveLength(2);
+      expect(res.data.items['AAPL'].history[0].date).toBe('2026-10-29');
+      expect(res.data.items['AAPL'].history[1].date).toBe('2026-10-30');
+    });
+
+  });
+});

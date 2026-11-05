@@ -444,6 +444,165 @@ function createMarketApiMiddleware(customDbPath) {
       return;
     }
 
+    // 0. GET /api/market/chips-snapshot (Spec 0217 / Ticket 01)
+    if (pathname === '/api/market/chips-snapshot') {
+      const market = String(query.market || 'TW').toUpperCase();
+      const days = parseInt(query.days, 10) || 5;
+      const minSymbols = parseInt(query.minSymbols, 10) || 1500;
+
+      if (market === 'TW') {
+        try {
+          // 1. 取得完整交易日 (防禦單邊殘缺日)
+          const dateRows = db
+            .prepare(
+              'SELECT date FROM tw_institutional_chips GROUP BY date HAVING COUNT(*) >= ? ORDER BY date DESC LIMIT ?'
+            )
+            .all(minSymbols, days);
+
+          let dates = dateRows.map((r) => r.date);
+          if (dates.length === 0) {
+            const fallbackRows = db
+              .prepare('SELECT DISTINCT date FROM tw_institutional_chips ORDER BY date DESC LIMIT ?')
+              .all(days);
+            dates = fallbackRows.map((r) => r.date);
+          }
+
+          if (dates.length === 0) {
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(
+              JSON.stringify({
+                success: true,
+                market: 'TW',
+                availableDates: [],
+                items: {},
+              })
+            );
+          }
+
+          const placeholders = dates.map(() => '?').join(',');
+          const querySql = `
+            SELECT 
+              c.symbol, c.date, c.foreign_net, c.trust_net, c.dealer_net, c.margin_balance, c.short_balance,
+              d.close, d.volume,
+              m.name, m.industry, m.type
+            FROM tw_institutional_chips c
+            LEFT JOIN daily_candles d ON c.symbol = d.symbol AND c.date = d.date
+            LEFT JOIN symbols_meta m ON c.symbol = m.symbol
+            WHERE c.date IN (${placeholders})
+            ORDER BY c.symbol, c.date ASC
+          `;
+
+          const rows = db.prepare(querySql).all(...dates);
+          const items = {};
+
+          for (const row of rows) {
+            if (!items[row.symbol]) {
+              items[row.symbol] = {
+                symbol: row.symbol,
+                name: row.name || row.symbol,
+                industry: row.industry || '',
+                type: row.type || 'STOCK',
+                close: 0,
+                volumeLots: 0,
+                foreignNet: 0,
+                trustNet: 0,
+                dealerNet: 0,
+                totalNetShares: 0,
+                marginBalance: 0,
+                shortBalance: 0,
+                history: [],
+              };
+            }
+            const item = items[row.symbol];
+            const volLots = Math.round((row.volume || 0) / 1000);
+            const foreign = row.foreign_net || 0;
+            const trust = row.trust_net || 0;
+            const dealer = row.dealer_net || 0;
+            const totalNet = foreign + trust + dealer;
+
+            if (row.close != null) {
+              item.close = row.close;
+            }
+            item.volumeLots = volLots;
+            item.foreignNet = foreign;
+            item.trustNet = trust;
+            item.dealerNet = dealer;
+            item.totalNetShares = totalNet;
+            item.marginBalance = row.margin_balance || 0;
+            item.shortBalance = row.short_balance || 0;
+
+            item.history.push({
+              date: row.date,
+              close: row.close ?? 0,
+              volumeLots: volLots,
+              foreignNet: foreign,
+              trustNet: trust,
+              dealerNet: dealer,
+              totalNetShares: totalNet,
+            });
+          }
+
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(
+            JSON.stringify({
+              success: true,
+              market: 'TW',
+              availableDates: dates,
+              items,
+            })
+          );
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ success: false, error: err.message }));
+        }
+      } else {
+        // 美股快照
+        try {
+          const usDays = days * 5;
+          const symbolsParam = query.symbols ? String(query.symbols).split(',').map((s) => s.trim().toUpperCase()) : [];
+
+          let metas = [];
+          if (symbolsParam.length > 0) {
+            const placeholders = symbolsParam.map(() => '?').join(',');
+            metas = db.prepare(`SELECT symbol, name, industry, type FROM symbols_meta WHERE symbol IN (${placeholders})`).all(...symbolsParam);
+          } else {
+            metas = db.prepare('SELECT symbol, name, industry, type FROM symbols_meta WHERE market = "US" LIMIT 100').all();
+          }
+
+          const items = {};
+          for (const m of metas) {
+            const candles = db
+              .prepare('SELECT date, open, high, low, close, volume FROM daily_candles WHERE symbol = ? ORDER BY date DESC LIMIT ?')
+              .all(m.symbol, usDays);
+
+            const ascCandles = candles.reverse();
+            const latest = ascCandles[ascCandles.length - 1] || {};
+            items[m.symbol] = {
+              symbol: m.symbol,
+              name: m.name || m.symbol,
+              industry: m.industry || '',
+              type: m.type || 'STOCK',
+              close: latest.close || 0,
+              volume: latest.volume || 0,
+              history: ascCandles,
+            };
+          }
+
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(
+            JSON.stringify({
+              success: true,
+              market: 'US',
+              items,
+            })
+          );
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ success: false, error: err.message }));
+        }
+      }
+    }
+
     // 1. GET /api/market/symbols?q=...
     if (pathname === '/api/market/symbols') {
       const q = String(query.q || '').trim();
