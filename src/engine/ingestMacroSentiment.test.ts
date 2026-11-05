@@ -237,4 +237,33 @@ describe('Ticket 15 & Spec 0209: Macro War Room 3.0 Ingestion, Breadth & Pulse P
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it('8. Spec 0218 Ticket 02: getTwMarketBreadthAndSpotSummary 應優先使用雙邊完整結算日 (COUNT >= 1800)，防禦單邊殘缺日', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'macro-spot-settled-'));
+    const dbPath = path.join(tmpDir, 'test_spot.db');
+    try {
+      const db = dbCoreModule.initSqliteLakehouseDb(dbPath);
+      const insertChips = db.prepare(`
+        INSERT INTO tw_institutional_chips (symbol, date, foreign_net, trust_net, dealer_net)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      db.exec('BEGIN TRANSACTION;');
+      // 2026-10-30: 1850 筆完整結算
+      for (let i = 1; i <= 1850; i++) {
+        insertChips.run('S' + i, '2026-10-30', 100, 50, 10);
+      }
+      // 2026-11-04: 只有 50 筆殘缺籌碼 (如僅上櫃)
+      for (let i = 1; i <= 50; i++) {
+        insertChips.run('S' + i, '2026-11-04', 5, 2, 1);
+      }
+      db.exec('COMMIT;');
+
+      const summary = dbCoreModule.getTwMarketBreadthAndSpotSummary(db);
+      // 應鎖定 2026-10-30 完整結算日，而非 2026-11-04 殘缺日
+      expect(summary.twInstitutionalSpot.asOfDate).toBe('2026-10-30');
+    } finally {
+      dbCoreModule.closeSqliteDb();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

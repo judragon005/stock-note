@@ -179,6 +179,55 @@ d('scripts/market-sync/backfill-tw-history-web.test.cjs', () => {
     exp(valRow.pb).toBe(6.2);
     exp(valRow.dividend_yield).toBe(2.1);
   });
+
+  t('9. fetchAndIngestTwDailyData 應具備三大法人雙邊完整性檢查，上市或上櫃 <= 500 時判定為異常並防禦拒絕入庫 (Spec 0218 Ticket 01)', async () => {
+    const { fetchAndIngestTwDailyData } = require('./backfill-tw-history-web.cjs');
+    
+    // 模擬：TWSE quotes 存在 (600 筆), TPEx quotes 存在 (600 筆), 但 TWSE chips 只有 10 筆 (未發布), TPEx chips 600 筆
+    const mockFetcher = async (url) => {
+      if (url.includes('MI_INDEX')) {
+        const rows = [];
+        for (let i = 1000; i < 1600; i++) {
+          rows.push([String(i), '股' + i, '10,000', '100', '100,000', '10', '10', '10', '10']);
+        }
+        return { tables: [{ data: rows }] };
+      }
+      if (url.includes('otc_quotes_no1430')) {
+        const rows = [];
+        for (let i = 3000; i < 3600; i++) {
+          rows.push([String(i), '櫃' + i, '10', '+0', '10', '10', '10', '100', '10,000', '100,000']);
+        }
+        return { tables: [{ data: rows }] };
+      }
+      if (url.includes('fund/T86')) {
+        // TWSE 籌碼只有 10 筆
+        const rows = [];
+        for (let i = 1000; i < 1010; i++) {
+          rows.push([String(i), '股' + i, '0', '0', '1000', '0', '0', '0', '0', '0', '1000', '0']);
+        }
+        return { stat: 'OK', data: rows };
+      }
+      if (url.includes('3itrade_hedge_result')) {
+        // TPEx 籌碼 600 筆
+        const rows = [];
+        for (let i = 3000; i < 3600; i++) {
+          rows.push([String(i), '櫃' + i, '0', '0', '1000', '0', '0', '0', '0', '0', '1000', '0']);
+        }
+        return { tables: [{ data: rows }] };
+      }
+      return { stat: 'OK', data: [] };
+    };
+
+    const res = await fetchAndIngestTwDailyData('2026-11-04', {
+      fetcher: mockFetcher,
+      inMemoryOnly: true,
+      throttleMs: 0,
+      includeValuationAndMargin: false,
+    });
+
+    exp(res.hasError).toBe(true);
+    exp(res.errorReason.includes('三大法人籌碼雙邊未完全結算或單邊缺失')).toBe(true);
+  });
 });
 
 

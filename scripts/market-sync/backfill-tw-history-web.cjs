@@ -580,6 +580,25 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
     const cleanK = normalizeTwSymbol(k);
     tpexChips[cleanK] = { ...v, symbol: cleanK };
   }
+  const twseChipsCount = Object.keys(twseChips).length;
+  const tpexChipsCount = Object.keys(tpexChips).length;
+
+  // Spec 0218 Ticket 01 (#434): 三大法人雙邊完整性檢查 (TWSE 與 TPEx 均須 > 500 筆)
+  if (twseQuotesCount > 0 && (twseChipsCount <= 500 || tpexChipsCount <= 500)) {
+    return {
+      date: dateStr,
+      isTradingDay: true,
+      hasError: true,
+      errorReason: `三大法人籌碼雙邊未完全結算或單邊缺失 (上市: ${twseChipsCount} 筆, 上櫃: ${tpexChipsCount} 筆，均須 > 500)`,
+      quotesCount: twseQuotesCount + tpexQuotesCount,
+      chipsCount: 0,
+      twseQuotesCount,
+      tpexQuotesCount,
+      twseChipsCount,
+      tpexChipsCount,
+    };
+  }
+
   const allChips = { ...twseChips, ...tpexChips };
 
   const quotesCount = Object.keys(allQuotes).length;

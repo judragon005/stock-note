@@ -133,13 +133,45 @@ describe('chipsAggregator (多日法人籌碼累加與動能決策引擎 Spec 01
       expect(calculateStreaks([])).toBe(0);
     });
 
-    it('isEtfSymbol 應正確識別 00/01 開頭之 ETF 標的', () => {
+    it('isEtfSymbol 應正確識別各類主動式、新制與美股 ETF 標的 (Ticket 07 / Spec 0218)', () => {
       expect(isEtfSymbol('0050')).toBe(true);
       expect(isEtfSymbol('0056')).toBe(true);
       expect(isEtfSymbol('00679B')).toBe(true);
       expect(isEtfSymbol('01001T')).toBe(true);
+      expect(isEtfSymbol('00403A')).toBe(true);
+      expect(isEtfSymbol('00981A')).toBe(true);
+      expect(isEtfSymbol('009816')).toBe(true);
+      expect(isEtfSymbol('009826')).toBe(true);
+      expect(isEtfSymbol('VT')).toBe(true);
+      expect(isEtfSymbol('SPY')).toBe(true);
+      expect(isEtfSymbol('QQQ')).toBe(true);
+      expect(isEtfSymbol('SOXX')).toBe(true);
+      expect(isEtfSymbol('VOO')).toBe(true);
+      expect(isEtfSymbol('IVV')).toBe(true);
+      expect(isEtfSymbol('DIA')).toBe(true);
+      expect(isEtfSymbol('IWM')).toBe(true);
       expect(isEtfSymbol('2330')).toBe(false);
+      expect(isEtfSymbol('2454')).toBe(false);
       expect(isEtfSymbol('AAPL')).toBe(false);
+      expect(isEtfSymbol('NVDA')).toBe(false);
+      expect(isEtfSymbol('TSLA')).toBe(false);
+    });
+
+    it('1D 模式下 aggregateMultiDayChips 應依據全量 availableDates 歷史數列計算真實 Streak (Ticket 06 / Spec 0218)', () => {
+      const dates = ['20260907', '20260908', '20260909', '20260910', '20260911'];
+      const historyMap = {
+        '20260907': { '2330': createMockRow('2330', '台積電', 1000, 500) },
+        '20260908': { '2330': createMockRow('2330', '台積電', 2000, 300) },
+        '20260909': { '2330': createMockRow('2330', '台積電', 1500, 200) },
+        '20260910': { '2330': createMockRow('2330', '台積電', 3000, 1000) },
+        '20260911': { '2330': createMockRow('2330', '台積電', 2500, 800) },
+      };
+
+      const res = aggregateMultiDayChips(historyMap, dates, 1);
+      expect(res['2330'].foreignNetShares).toBe(2500);
+      expect(res['2330'].trustNetShares).toBe(800);
+      expect(res['2330'].foreignStreak).toBe(5);
+      expect(res['2330'].trustStreak).toBe(5);
     });
 
     it('aggregateMultiDayChips 應在彙總結果中附帶 foreignStreak 與 trustStreak', () => {

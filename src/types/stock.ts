@@ -586,6 +586,8 @@ export interface SmartMoneyBubbleData {
   trustToVolumeRatio?: number; // 投量比
   trustStreak?: number; // 投信連買天數
   foreignStreak?: number; // 外資連買天數
+  volume?: number;
+  industry?: string;
 }
 
 export interface SmartMoneyInputItem {
@@ -606,6 +608,8 @@ export interface SmartMoneyInputItem {
   trustStreak?: number;
   foreignStreak?: number;
   netFlowAmountTwd?: number;
+  netFlowAmount?: number;
+  industry?: string;
   // 台股三大法人數據 (張數)
   foreignBuyShares?: number;
   foreignSellShares?: number;

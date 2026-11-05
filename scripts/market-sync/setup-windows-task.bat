@@ -7,15 +7,15 @@ echo    股票紀錄系統 (Stock Tracker) - 每日盤後定時自動同步設�
 echo ======================================================================
 echo.
 echo 此工具將在 Windows 工作排程器 (Task Scheduler) 中註冊兩項定時任務：
-echo  1. [StockTracker_TW_Sync] : 每日 16:00 自動同步台股全市場籌碼與日K (TWSE / TPEx)
+echo  1. [StockTracker_TW_Sync] : 每日 16:45 自動同步台股全市場籌碼與日K (TWSE / TPEx)
 echo  2. [StockTracker_US_Sync] : 每日 08:00 自動同步美股全市場指標與日K (NYSE / NASDAQ)
 echo 執行方式: 背景靜默執行 (不彈出黑視窗)
 echo 資料儲存: 本地快取秒讀 (Zero Latency Cache)
 echo.
 echo 請選擇操作：
-echo  [1] 安裝 / 更新排程任務 (每日台股16:00、美股08:00)
+echo  [1] 安裝 / 更新排程任務 (每日台股16:45、美股08:00)
 echo  [2] 移除排程任務
-echo  [3] 立即手動測試台股同步 (16:00 腳本：日K/三大法人/資券/當沖)
+echo  [3] 立即手動測試台股同步 (16:45 腳本：日K/三大法人/資券/當沖)
 echo  [4] 立即手動測試美股同步 (08:00 腳本：標普與主流日K)
 echo  [5] 立即執行台股歷史 CSV 全量日K回補 (250+日)
 echo  [6] 立即執行三大法人與信用交易斷層全量回補 (2026-08-15 至 2026-10-02)
@@ -58,10 +58,10 @@ set "VBS_SCRIPT=%PROJECT_DIR%\scripts\market-sync\run-sync-silent.vbs"
 set "TW_SCRIPT=%PROJECT_DIR%\scripts\market-sync\sync-tw-market.cjs"
 set "US_SCRIPT=%PROJECT_DIR%\scripts\market-sync\sync-us-market.cjs"
 
-:: 建立台股排程 (每日 16:00)
-schtasks /create /tn "StockTracker_TW_Sync" /tr "wscript.exe \"%VBS_SCRIPT%\" \"%NODE_PATH%\" \"%TW_SCRIPT%\"" /sc daily /st 16:00 /f >nul
+:: 建立台股排程 (每日 16:45)
+schtasks /create /tn "StockTracker_TW_Sync" /tr "wscript.exe \"%VBS_SCRIPT%\" \"%NODE_PATH%\" \"%TW_SCRIPT%\"" /sc daily /st 16:45 /f >nul
 if %errorlevel% equ 0 (
-    echo  ✔ 台股排程已成功註冊：每日 16:00 自動執行
+    echo  ✔ 台股排程已成功註冊：每日 16:45 自動執行
 ) else (
     echo  ✖ 台股排程註冊失敗，請嘗試以「系統管理員身分執行」此批次檔！
 )

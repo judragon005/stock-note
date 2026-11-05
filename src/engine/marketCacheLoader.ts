@@ -198,6 +198,7 @@ export async function loadSymbolHistoryFromLakehouse(
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.candles) && data.candles.length > 0) {
+          const chipsMap = data.chips && typeof data.chips === 'object' ? data.chips : {};
           const candles: DailyCandle[] = data.candles.map((c: any) => ({
             date: c.date,
             open: Number(c.open),
@@ -206,6 +207,9 @@ export async function loadSymbolHistoryFromLakehouse(
             close: Number(c.close),
             volume: Number(c.volume),
             transactions: c.transactions != null ? Number(c.transactions) : undefined,
+            foreignNetBuy: chipsMap[c.date]?.foreign_net != null ? Number(chipsMap[c.date].foreign_net) : undefined,
+            trustNetBuy: chipsMap[c.date]?.trust_net != null ? Number(chipsMap[c.date].trust_net) : undefined,
+            dealerNetBuy: chipsMap[c.date]?.dealer_net != null ? Number(chipsMap[c.date].dealer_net) : undefined,
           }));
 
           // 非同步沉澱至 IndexedDB (統一以請求標準代碼沉澱)
@@ -301,6 +305,7 @@ export async function loadSymbolFullLakehouseData(
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.candles) && data.candles.length > 0) {
+          const chipsMap = data.chips && typeof data.chips === 'object' ? data.chips : {};
           const candles: DailyCandle[] = data.candles.map((c: any) => ({
             date: c.date,
             open: Number(c.open),
@@ -309,6 +314,9 @@ export async function loadSymbolFullLakehouseData(
             close: Number(c.close),
             volume: Number(c.volume),
             transactions: c.transactions != null ? Number(c.transactions) : undefined,
+            foreignNetBuy: chipsMap[c.date]?.foreign_net != null ? Number(chipsMap[c.date].foreign_net) : undefined,
+            trustNetBuy: chipsMap[c.date]?.trust_net != null ? Number(chipsMap[c.date].trust_net) : undefined,
+            dealerNetBuy: chipsMap[c.date]?.dealer_net != null ? Number(chipsMap[c.date].dealer_net) : undefined,
           }));
 
           saveSymbolOhlcv({

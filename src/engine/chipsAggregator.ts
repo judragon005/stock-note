@@ -8,11 +8,23 @@ export interface InstitutionalSignal {
 }
 
 /**
- * 判斷是否為 ETF 標的 (代號以 00 或 01 開頭)
+ * 美股常見核心 ETF 字典清單
+ */
+export const US_COMMON_ETFS = new Set([
+  'VT', 'SPY', 'QQQ', 'SOXX', 'VOO', 'IVV', 'DIA', 'IWM', 'VTI', 'BND',
+  'TLT', 'XLK', 'XLF', 'XLE', 'XLV', 'XLY', 'XLP', 'XLU', 'XLI', 'XLB',
+  'VNQ', 'GLD', 'SLV', 'ARKK', 'SMH', 'SCHD', 'VIG', 'VYM', 'JEPI', 'JEPQ'
+]);
+
+/**
+ * 判斷是否為 ETF 標的 (包含台股傳統 00/01、新制 6 碼/主動式，以及美股核心 ETF)
+ * Ticket 07 / Spec 0218
  */
 export function isEtfSymbol(symbol: string): boolean {
   if (!symbol) return false;
-  return /^(00|01)/.test(symbol.trim());
+  const clean = symbol.trim().toUpperCase().replace(/\.(TW|TWO)$/i, '');
+  if (/^(00|01)/.test(clean)) return true;
+  return US_COMMON_ETFS.has(clean);
 }
 
 /**
@@ -51,6 +63,20 @@ export function aggregateMultiDayChips(
 ): Record<string, TwseInstitutionalRow> {
   if (!availableDates || availableDates.length === 0) return {};
 
+  // 全量回溯歷史數列以正確計算連買/連賣天數 (Ticket 06 / Spec 0218)
+  const fullForeignSeriesMap: Record<string, number[]> = {};
+  const fullTrustSeriesMap: Record<string, number[]> = {};
+  for (const date of availableDates) {
+    const dayData = historyReportsMap[date];
+    if (!dayData) continue;
+    for (const [sym, row] of Object.entries(dayData)) {
+      if (!fullForeignSeriesMap[sym]) fullForeignSeriesMap[sym] = [];
+      if (!fullTrustSeriesMap[sym]) fullTrustSeriesMap[sym] = [];
+      fullForeignSeriesMap[sym].push(row.foreignNetShares || 0);
+      fullTrustSeriesMap[sym].push(row.trustNetShares || 0);
+    }
+  }
+
   const targetDates = availableDates.slice(-horizonDays);
   if (targetDates.length === 1) {
     const dayData = historyReportsMap[targetDates[0]] || {};
@@ -60,8 +86,8 @@ export function aggregateMultiDayChips(
       const trustRatio = volLots > 0 ? Math.round((r.trustNetShares / volLots) * 1000) / 10 : 0;
       res[sym] = {
         ...r,
-        foreignStreak: calculateStreaks([r.foreignNetShares]),
-        trustStreak: calculateStreaks([r.trustNetShares]),
+        foreignStreak: calculateStreaks(fullForeignSeriesMap[sym] || [r.foreignNetShares]),
+        trustStreak: calculateStreaks(fullTrustSeriesMap[sym] || [r.trustNetShares]),
         trustToVolumeRatio: r.trustToVolumeRatio ?? trustRatio,
         netFlowAmountTwd: r.netFlowAmountTwd ?? r.totalNetShares * 1000 * (r.close || 0),
       };

@@ -664,6 +664,7 @@ export async function fetchUsMarketRealData(
 export interface LakehouseChipsSnapshotResponse {
   success: boolean;
   market: 'TW' | 'US';
+  baseDate?: string | null;
   availableDates: string[];
   items: Record<
     string,
@@ -673,6 +674,9 @@ export interface LakehouseChipsSnapshotResponse {
       industry: string;
       type: string;
       close: number;
+      basePrice?: number | null;
+      previousClose?: number | null;
+      changePercent?: number | null;
       volumeLots: number;
       foreignNet: number;
       trustNet: number;
@@ -683,6 +687,9 @@ export interface LakehouseChipsSnapshotResponse {
       history: {
         date: string;
         close: number;
+      basePrice?: number | null;
+      previousClose?: number | null;
+      changePercent?: number | null;
         volumeLots: number;
         foreignNet: number;
         trustNet: number;

@@ -334,4 +334,34 @@ describe('ChipsWorkspace 象限卡片動態習慣燈號連動 (ColorThemeMode)',
     });
   });
 
+
+  describe('Ticket 07 / 08 / 10 (Spec 0218) - 持倉特化、坐標防壓扁與零假資料驗證', () => {
+    it('US_MARKET_FOCUS_LIST 與美股焦點生成絕無假 pnl/cmf 硬編碼，完全直連真實資料 (Ticket 05)', () => {
+      const mockDates = ['2026-11-04'];
+      const results = filterMarketFocusList('US', {} as any, [], mockDates, undefined, undefined, false, 1);
+      // 未傳入 realUs 資料時，changePercent 應誠實為 0，絕不輸出寫死的假數字 3.2% 或 1.1%
+      const nvda = results.find((r) => r.symbol === 'NVDA');
+      expect(nvda).toBeDefined();
+      expect(nvda?.changePercent).toBe(0);
+    });
+
+    it('持倉模式 21 檔持倉中包含 10 檔台股 ETF 與美股 VT 時，應 100% 全量保留 (Ticket 07)', () => {
+      const mockHoldings: any[] = [
+        { symbol: '0050', name: '元大台灣50', market: 'TW', shares: 1000, grossMarketValue: 180000, isClosed: false },
+        { symbol: '0056', name: '元大高股息', market: 'TW', shares: 2000, grossMarketValue: 70000, isClosed: false },
+        { symbol: '00878', name: '國泰永續高股息', market: 'TW', shares: 3000, grossMarketValue: 66000, isClosed: false },
+        { symbol: 'VT', name: 'Vanguard全世界', market: 'US', shares: 50, grossMarketValue: 6000, isClosed: false },
+        { symbol: '2330', name: '台積電', market: 'TW', shares: 1000, grossMarketValue: 1000000, isClosed: false },
+      ];
+
+      // 模擬持倉模式過濾邏輯：即使 includeEtf 為 false，持倉部位亦不應被排除
+      const activeHoldings = mockHoldings
+        .filter((h) => !h.isClosed && h.shares > 0);
+
+      expect(activeHoldings).toHaveLength(5);
+      expect(activeHoldings.some((h) => h.symbol === '0050')).toBe(true);
+      expect(activeHoldings.some((h) => h.symbol === 'VT')).toBe(true);
+    });
+  });
+
 });

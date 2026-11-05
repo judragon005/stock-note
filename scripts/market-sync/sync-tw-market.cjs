@@ -1,5 +1,5 @@
 /**
- * 台股全市場每日盤後批次同步腳本 (每日 16:00 定時排程執行)
+ * 台股全市場每日盤後批次同步腳本 (每日 16:45 定時排程執行)
  * 單次整包抓取 TWSE/TPEx 官方籌碼日報與收盤行情，本地計算技術指標並落地快取
  */
 
@@ -150,14 +150,24 @@ async function runTwMarketSync(targetDateInput) {
 
   const twseChips = parseTwseT86BulkData(twseT86Raw);
   const tpexChips = parseTpexT86BulkData(tpexT86Raw);
-  const allChips = { ...twseChips, ...tpexChips };
+  const twseChipsCount = Object.keys(twseChips).length;
+  const tpexChipsCount = Object.keys(tpexChips).length;
 
-  const allSymbols = new Set([...Object.keys(allQuotes), ...Object.keys(allChips)]);
+  const allSymbols = new Set([...Object.keys(allQuotes), ...Object.keys(twseChips), ...Object.keys(tpexChips)]);
   if (allSymbols.size === 0) {
     console.log(`[提示] 目標日期 (${dateStr}) 官方尚未發布盤後數據（TWSE/TPEx 通常於 15:30~16:00 結算產出）或該日為非交易休市日。`);
     console.log(`[防禦保護] 本次未獲取到有效標的，安全退出且不覆蓋既有本地快取。`);
     return;
   }
+
+  // Spec 0218 Ticket 01 (#434): 三大法人雙邊完整性檢查 (TWSE 與 TPEx 籌碼筆數均須 > 500 筆)
+  if (twseChipsCount <= 500 || tpexChipsCount <= 500) {
+    console.warn(`[三大法人雙邊完整性守衛] 目標日期 (${dateStr}) 籌碼尚未完全結算或單邊缺失 (上市 TWSE: ${twseChipsCount} 筆, 上櫃 TPEx: ${tpexChipsCount} 筆，門檻需雙邊 > 500)。`);
+    console.warn(`[防禦保護] 判定為未結算，安全退出且絕不寫入單邊殘缺籌碼或覆蓋全市場快照。`);
+    return;
+  }
+
+  const allChips = { ...twseChips, ...tpexChips };
 
   const stocksMap = {};
 
