@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-1992%2F1992%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2058%2F2058%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,22 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 四大象限動能看板卡片蘋果美學重構、全量台股與美股四大指數選池 (`Quadrant Card Apple Design System & Full Market Multi-Index Evolution`) *(V9.10.0 最新發布 / Spec #0215 / ADR #0215 / Issue #395)*
+### 0. 肌肉書僮量化防禦核心、既有引擎零造輪子串聯與分段視圖架構 (`Muscle Booker Quant Defense Core & Segmented Lens Architecture`) *(V9.11.0 最新發布 / Spec #0216 / ADR #0216 / Issue #397)*
+
+- **箱體底穿上型態與誘多陷阱硬性防禦**：
+  - 修復破底翻基準錯誤，跌破箱底 `boxLower` 後反彈收盤 < 50% 下影線、頂部受阻之誘多型態（Bull Trap）強制輸出 `AVOID (誘多陷阱)`，杜絕盲目追多。
+- **平滑目標價與成交金額流動性硬性門檻**：
+  - 期望目標價以 $Target = 0.5 \times lookback60High + 0.5 \times measuredTarget$ 消除 60 日高點 0.01 元之偏態干擾；台股 5 日均成交金額 $\ge 3,000$ 萬 TWD、美股 $\ge 500$ 萬 USD，未達標者強制標記 `AVOID (流動性不足)`。
+- **既有核心引擎零重複造輪子全面貫通**：
+  - 無縫串聯 `vwapCostEngine`（成交量加權均價乖離 > 10% 觸發 HOLD）、`volumeProfileEngine`（上方 5% 遭遇 POC 密集籌碼反壓警示）、`smartMoneyEngine`（美股 CMF < -0.15 資金背離警訊）。
+- **零幻覺真實水合架構與增量快取優化**：
+  - 徹底移除假行情生成引擎 `generateSyntheticCandles`，以真實日 K 歷史、IndexedDB 沉澱與動態漸進載入為單一真實來源（SSOT），全市場 2,280+ 檔切換流暢無延遲。
+- **分段視圖鏡頭 (Segmented Lenses) 與 DOM 節點巨幅瘦身**：
+  - 導入頂部 HUD 決策儀表板，並以 `[ 📊 決策總覽 ]`、`[ 📈 動能看板 ]`、`[ 🔭 扣抵星空 ]` 分段鏡頭收斂，視圖切換僅保留關鍵節點，DOM 節點減少 90% 以上。
+- **扣抵星空虛擬分頁與卡片微光安全條透傳**：
+  - `DeductionTelescopeTable` 支援 50 / 100 / ALL 分頁切換；`MuscleStockCard` 全面 React.memo 化並支援一鍵下單與自選星號。
+
+### 1. 四大象限動能看板卡片蘋果美學重構、全量台股與美股四大指數選池 (`Quadrant Card Apple Design System & Full Market Multi-Index Evolution`) *(V9.10.0 / Spec #0215 / ADR #0215 / Issue #395)*
 
 - **蘋果系統美學三層式卡片架構 (MuscleStockCard)**：
   - 徹底根治多欄排版下的中文字元折字直排（如「中/華/電」），Header 左右分工，標的名稱限制單行省略保護 (`max-width: 92px; text-overflow: ellipsis; white-space: nowrap`)，外部圖表與指標透視儀收攏為右上角 13px 微圖標群組，徹底節省 60px 以上橫向空間。
