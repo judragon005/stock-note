@@ -581,7 +581,8 @@ export interface SmartMoneyBubbleData {
   isHolding?: boolean; // 持股金色光環
   holdingAvgCost?: number;
   unrealizedPnLPercent?: number;
-  intent?: 'DIVIDEND' | 'SWING';
+  portfolioWeightPercent?: number;
+  intent?: TradeIntent;
   trustToVolumeRatio?: number; // 投量比
   trustStreak?: number; // 投信連買天數
   foreignStreak?: number; // 外資連買天數
@@ -596,6 +597,15 @@ export interface SmartMoneyInputItem {
   changePercent: number;
   holdingValueTwd?: number;
   volume?: number;
+  isHolding?: boolean;
+  avgCost?: number;
+  unrealizedPnLPercent?: number;
+  portfolioWeightPercent?: number;
+  intent?: TradeIntent;
+  trustToVolumeRatio?: number;
+  trustStreak?: number;
+  foreignStreak?: number;
+  netFlowAmountTwd?: number;
   // 台股三大法人數據 (張數)
   foreignBuyShares?: number;
   foreignSellShares?: number;

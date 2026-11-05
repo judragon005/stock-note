@@ -1139,6 +1139,25 @@ export const App: React.FC = () => {
           usdToTwdRate={usdToTwdRate}
           market={currentMarket}
           onMarketChange={setCurrentMarket}
+          onOpenOmniInspector={(sym, mkt) =>
+            handleOpenOmniInspector(sym, mkt || (inferMarketFromSymbol(sym) as MarketType))
+          }
+          onOpenAiForce={(sym, mkt) => {
+            if (sym) {
+              setAiForceTarget({
+                symbol: sym,
+                market: mkt || (inferMarketFromSymbol(sym) as MarketType),
+              });
+            }
+            setActiveTab('aiforce');
+          }}
+          onQuickTrade={(sym) => {
+            if (sym) {
+              handleQuickTrade(sym, 'BUY');
+            } else {
+              handleOpenNewTrade();
+            }
+          }}
         />
       )}
 

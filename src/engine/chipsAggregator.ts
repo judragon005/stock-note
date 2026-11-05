@@ -56,10 +56,14 @@ export function aggregateMultiDayChips(
     const dayData = historyReportsMap[targetDates[0]] || {};
     const res: Record<string, TwseInstitutionalRow> = {};
     for (const [sym, r] of Object.entries(dayData)) {
+      const volLots = r.volumeLots || 0;
+      const trustRatio = volLots > 0 ? Math.round((r.trustNetShares / volLots) * 1000) / 10 : 0;
       res[sym] = {
         ...r,
         foreignStreak: calculateStreaks([r.foreignNetShares]),
         trustStreak: calculateStreaks([r.trustNetShares]),
+        trustToVolumeRatio: r.trustToVolumeRatio ?? trustRatio,
+        netFlowAmountTwd: r.netFlowAmountTwd ?? r.totalNetShares * 1000 * (r.close || 0),
       };
     }
     return res;
@@ -68,6 +72,8 @@ export function aggregateMultiDayChips(
   const aggregated: Record<string, TwseInstitutionalRow> = {};
   const foreignSeriesMap: Record<string, number[]> = {};
   const trustSeriesMap: Record<string, number[]> = {};
+  const volumeLotsSumMap: Record<string, number> = {};
+  const latestCloseMap: Record<string, number> = {};
 
   for (const date of targetDates) {
     const dayData = historyReportsMap[date];
@@ -78,6 +84,8 @@ export function aggregateMultiDayChips(
       if (!trustSeriesMap[symbol]) trustSeriesMap[symbol] = [];
       foreignSeriesMap[symbol].push(row.foreignNetShares || 0);
       trustSeriesMap[symbol].push(row.trustNetShares || 0);
+      volumeLotsSumMap[symbol] = (volumeLotsSumMap[symbol] || 0) + (row.volumeLots || 0);
+      if (row.close) latestCloseMap[symbol] = row.close;
 
       if (!aggregated[symbol]) {
         aggregated[symbol] = {
@@ -91,6 +99,8 @@ export function aggregateMultiDayChips(
           trustNetShares: row.trustNetShares,
           dealerNetShares: row.dealerNetShares,
           totalNetShares: row.totalNetShares,
+          volumeLots: row.volumeLots,
+          close: row.close,
         };
       } else {
         const acc = aggregated[symbol];
@@ -102,16 +112,23 @@ export function aggregateMultiDayChips(
         acc.trustNetShares += row.trustNetShares;
         acc.dealerNetShares += row.dealerNetShares;
         acc.totalNetShares += row.totalNetShares;
+        acc.volumeLots = (acc.volumeLots || 0) + (row.volumeLots || 0);
+        if (row.close) acc.close = row.close;
       }
     }
   }
 
-  // 注入 Streak
+  // 注入 Streak、投量比與淨流向金額
   for (const symbol of Object.keys(aggregated)) {
     const fSeries = foreignSeriesMap[symbol] || [];
     const tSeries = trustSeriesMap[symbol] || [];
+    const totalVol = volumeLotsSumMap[symbol] || 0;
+    const latestClose = latestCloseMap[symbol] || aggregated[symbol].close || 0;
     aggregated[symbol].foreignStreak = calculateStreaks(fSeries);
     aggregated[symbol].trustStreak = calculateStreaks(tSeries);
+    aggregated[symbol].trustToVolumeRatio =
+      totalVol > 0 ? Math.round((aggregated[symbol].trustNetShares / totalVol) * 1000) / 10 : 0;
+    aggregated[symbol].netFlowAmountTwd = aggregated[symbol].totalNetShares * 1000 * latestClose;
   }
 
   return aggregated;
