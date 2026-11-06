@@ -1,7 +1,12 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-10-28 14:30 (UTC+8)  
+> **交接產生時間**：2026-11-06 13:30 (UTC+8)  
 > **當前最新里程碑**：
+> - **V9.15.0 戰情室風控指標抽取與估值河流二元搜尋優化**（ADR 0220, Spec 0220, Issue #466, PR #467）：
+>   - **估值河流圖二元搜尋優化 (技術債 0056)**：在 `src/utils/binarySearch.ts` 實作純函式二元搜尋 `findLatestCloseBeforeDate`，將歷史季度收盤價匹配時間複雜度降為 $O(M \log N)$，消滅 GC 記憶體分配浪費。
+>   - **主力戰情室龐大單體風控計算解耦 (技術債 0055)**：建立 `src/hooks/useWarRoomPortfolioMetrics.ts`，自 `WarRoomWorkspace.tsx` 移出 110+ 行非視圖之維持率、可用防禦資金、槓桿曝險與集中度穿透指標，補齊無 DOM 單元測試。
+>   - **技術債看板全面閉環**：`docs/debts/README.md` 將 0055 與 0056 狀態更新為 `RESOLVED`。
+> - **V9.14.0 台美股機構級深度財報研究與實戰投資決策系統**（ADR 0219, Spec 0219, Issue #449, PR #461, #463）：
 > - **V9.04.0 資產成長全歷史管線修復、券商隔離與量化複利指標**（ADR 0207, Spec 0207, Issue #340）：
 >   - **App 頂層管線縫隙貫通**：在 `App.tsx` 注入 `receivableDividends` 平滑除息假摔，注入 `selectedAccountId` 篩選單一券商持股，並導出 `growthScopedCash` 隔離現金流，徹底解決多券商混雜金流與除息空窗期假凹洞。
 >   - **動態無風險利率接軌**：將硬編碼 `1.5%` 替換為 `resolveDynamicRiskFreeRate(null, baseCurrency)`，USD 計價使用 4.5%、TWD 計價使用 1.8%，消滅美股夏普率與索提諾率系統性虛高。
@@ -24,7 +29,7 @@
 >   - **戰情室快速校準 Modal 抽取與狀態自治 (技術債 0054)**：將分散之 8 個 State 泥團封裝至獨立元件 `MacroQuickCalibrationModal.tsx`，表單自治管理，父層零無效重繪，`WarRoomWorkspace.tsx` 精簡約 250 行。
 >   - **財務三表樣式常數與純展示儲存格抽取 (技術債 0053)**：於 `EightQuarterStatementTable.tsx` 抽取 `STATEMENT_TABLE_STYLES` 與 `<StatementDataCell />`，消滅重複內聯宣告。
 >   - **技術債看板閉環**：`docs/debts/README.md` 將 0047, 0052, 0053, 0054 標記為 `RESOLVED`。
-> - **品質狀態**：全量單元測試 **1,903/1,903 通過 (100% Passed / 251 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，生產打包 `npm run build` 100% 綠燈。
+> - **品質狀態**：全量單元測試 **2,111/2,111 通過 (100% Passed / 277 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，生產打包 `npm run build` 100% 綠燈。
 
 ---
 
@@ -33,10 +38,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main` (待合併)
-- **單元測試套件**：**1,903/1,903 通過 (251 test suites / 100% 綠燈)**
+- **單元測試套件**：**2,111/2,111 通過 (277 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V9.04.0**
+- **當前釋出版本**：**V9.15.0**
 - **工作區與分支整潔度**：工作區乾淨受控，本地 feature/fix 分支已完全合併並清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
