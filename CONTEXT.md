@@ -2829,3 +2829,14 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     4. **Quadrant Crossover Trajectory Detection (象限躍遷轉折捕捉)**：於時序軌跡中自動比對 $T-1 \to T$ 象限變化，標註「🚀 潛伏點火首日 (`ACCUMULATION ➔ BREAKOUT`)」與「🚨 轉入派發/棄守首日 (`上半部 ➔ 下半部`)」，將時間軸播放升維為實戰轉折捕捉器。
     5. **Radius-Aware Quadrant Guard & Unified Axis Mapping (半徑感知中軸防穿透與統一冪次映射)**：修正 `resolveBubbleCollisions` 正交微擾動保留原始 `rawDist` 排斥力，並將象限中軸鎖定升級為 `midX ± (p.radius + 2)` 與 `midY ± (p.radius + 2)`，根除大球跨象限視覺穿透；統一主泡泡與歷史 `trail` 之冪次座標映射純函式，消除時序切換座標跳躍。
     6. **Intent-Aware Portfolio Chip Health & Cross-Workspace Action Loop (意圖感知持倉體檢與跨模組行動閉環)**：注入持倉 `avgCost`、`unrealizedPnLPercent`、`portfolioWeightPercent` 與交易初衷 `intent` (`DIVIDEND` 存股 vs `SWING` 波段)，區分存股回檔逢低佈局與波段套牢凹單警示；打通頂部象限卡點擊過濾、下方可排序/搜尋之「實戰籌碼作戰明細表」，以及一鍵直通 `OmniTechnicalInspectorModal`（技術透視）、`AiForceDashboardView`（主力戰情室）與 `TradeModal`（快速記帳）。
+
+- **Smart Money Star Map Full-Chain Temporal Anchoring, Sector Rotation & Actionable Signals (籌碼與動態星圖全鏈路時空定錨、產業輪動、實戰訊號與零假資料精實重構)**:
+  - 核心模組：`scripts/market-sync/sync-tw-market.cjs`、`scripts/market-sync/backfill-tw-history-web.cjs`、`scripts/market-sync/market-freshness-service.cjs`、`scripts/market-sync/vite-market-middleware.cjs`、`src/engine/smartMoneyEngine.ts`、`src/engine/chipsAggregator.ts`、`src/components/ChipsWorkspace.tsx`。
+  - 規格來源：Spec 0218 (v9.13.0) 與 ADR 0218，關聯 GitHub Issue #433, #434~#443, #445。
+  - 核心領域概念與架構革新：
+    1. **Bilateral Chip Completeness Guard (三大法人雙邊完整性守衛)**：在 `sync-tw-market.cjs` 與 `backfill-tw-history-web.cjs` 建立雙邊筆數門檻（TWSE 與 TPEx 均需 > 500 筆），嚴禁上市缺失之半殘籌碼污染本機 SQLite 湖倉，並將定時排程調整至 16:45 確保日報發布完畢。
+    2. **T-Aligned Anchor (嚴格同日定錨與時態鮮度標章)**：前端星圖 X 軸漲跌幅與 Y 軸籌碼 100% 鎖定在同一個最新已結算交易日，盤中與盤後未結算時段嚴禁將今日即時行情與昨日籌碼硬拼接，徹底消滅誘使散戶接刀的「時空錯位假背離」。
+    3. **T-5 Base Price Lookback (T-5 基準日收盤價補齊)**：後端快照端點 `/api/market/chips-snapshot` 往前多撈取 1 個交易日收盤價作為基準前收價，確保 5D 模式累計漲跌幅精算涵蓋完整 5 天，消除首日為 0 與少算 1 天漏洞。
+    4. **All-Inclusive Portfolio Positions (持倉模式 21 檔全量特化與廣義 ETF 識別)**：在庫持倉模式 100% 呈現使用者所有 21 檔部位（含 10 檔台股 ETF 與美股 VT），杜絕持倉模式無聲隱藏 ETF 的矛盾；美股明細表自適應呈現 CMF 資金流與成交規模，消除「+0張」破圖。
+    5. **Multi-Dimension Y-Axis & Adaptive Normalization (多維度 Y 軸與個股/ETF 獨立分母)**：支援 Y 軸切換「買賣超金額 (AMOUNT)」、「投量比 (RATIO)」與「張數 (SHARES)」，並為普通股與 ETF 建立獨立正規化分母（`maxAbsShares` vs `maxAbsEtfShares`），防止高張數 ETF 壓扁中小型股 Y 軸。
+    6. **Sector Rotation & Actionable Signals (產業資金輪動條與 5 大高勝率實戰訊號引擎)**：於星圖頂部渲染「聰明錢淨流入 Top 5 vs 淨流出 Top 3 產業橫條」並支援點擊過濾；實作 5 大實戰異動訊號引擎（隱蔽吃貨、虛火出貨、連買中斷首日結帳、土洋對作內資軋外資、資減法人買籌碼沉澱），全面對齊作戰明細表。
