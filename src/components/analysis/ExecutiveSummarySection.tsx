@@ -60,10 +60,26 @@ export const ExecutiveSummarySection: React.FC<ExecutiveSummarySectionProps> = (
       holdingCost,
     });
 
-    if (navigator.clipboard) {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
       navigator.clipboard.writeText(promptText);
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2500);
+    } else {
+      // 降級方案相容非 HTTPS 與 iframe
+      const textArea = document.createElement('textarea');
+      textArea.value = promptText;
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2500);
+      } finally {
+        document.body.removeChild(textArea);
+      }
     }
   };
 

@@ -72,7 +72,7 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
   historicalCandles,
   revenueRecords,
   pledge,
-  valuation: _valuation,
+  valuation,
 }) => {
   // 市場與產業屬性判定 (對齊 industryGate 權威產業字典閘門)
   const isUsMarket = !/^\d+[A-Za-z]?$/.test(symbol) && !symbol.startsWith('00');
@@ -1522,6 +1522,27 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
             >
               <strong>🚨 景氣循環股警示：</strong>
               此標的具高度景氣循環特性，獲利高點時 P/E 常處於歷史低位（低 P/E 陷阱），獲利低谷或虧損時 P/E 往往飆高或失效。強烈建議優先切換至【股價淨值比 P/B 河流圖】評估歷史景氣位階。
+            </div>
+          )}
+          {valuation && (valuation.pe || valuation.pb || valuation.dividendYield) && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '12px',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-color)',
+                fontSize: '11px',
+                color: 'var(--text-secondary)',
+              }}
+            >
+              <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>🏛️ 證交所/櫃買官方最新估值基準：</span>
+              {valuation.pe ? <span>官方 P/E: <strong style={{ color: 'var(--text-primary)' }}>{valuation.pe.toFixed(1)}x</strong></span> : null}
+              {valuation.pb ? <span>官方 P/B: <strong style={{ color: 'var(--text-primary)' }}>{valuation.pb.toFixed(2)}x</strong></span> : null}
+              {valuation.dividendYield ? <span>官方殖利率: <strong style={{ color: '#10b981' }}>{valuation.dividendYield.toFixed(2)}%</strong></span> : null}
             </div>
           )}
           <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 12px 0' }}>本益比河流圖 (P/E River Bands)</h3>
