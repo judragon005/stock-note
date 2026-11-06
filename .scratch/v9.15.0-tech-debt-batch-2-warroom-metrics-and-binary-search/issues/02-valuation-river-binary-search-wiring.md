@@ -1,12 +1,9 @@
-# Ticket 02 — AnalysisMetricView 估值河流圖歷史收盤價改以二元搜尋並搭配 useMemo
+# Ticket 02 ??AnalysisMetricView 估值河流�?歷史?�盤?�改以�??��?尋並?��? useMemo
 
-**State:** OPEN
+**State:** CLOSED
 **Parent:** #466 (Spec 0220)
 
 ## What to build
-重構 `src/components/analysis/AnalysisMetricView.tsx` 中 P/E 河流圖與 P/B 河流圖之歷史收盤價匹配邏輯，移除 `[...historicalCandles].reverse().find(...)`，改為使用 `findLatestCloseBeforeDate` 配合 `useMemo`。
-
+?��? `src/components/analysis/AnalysisMetricView.tsx` �?P/E 河�??��? P/B 河�??��?歷史?�盤?�匹?��?輯�?移除 `[...historicalCandles].reverse().find(...)`，改?�使??`findLatestCloseBeforeDate` ?��? `useMemo`??
 ## Acceptance criteria
-- [ ] 消除渲染時重複的陣列複製與反轉操作。
-- [ ] 歷史收盤價軌跡紅線顯示結果與重構前 100% 一致。
-- [ ] 現有 `AnalysisMetricView.test.tsx` 100% 通過。
+- [x] 消除渲�??��?複�????複製?��?轉�?作�?- [x] 歷史?�盤?��?跡�?線顯示�??��??��???100% 一?��?- [x] ?��? `AnalysisMetricView.test.tsx` 100% ?��???

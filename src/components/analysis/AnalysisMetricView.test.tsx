@@ -251,4 +251,34 @@ describe('AnalysisMetricView Zero-Mock & Accounting Engine (Tickets 08 ~ 18)', (
 
     expect(html).toContain('獲利純度不足');
   });
+
+  it('Spec 0220 / 技術債 0056: pe_river 與 pb_river 能透過二元搜尋正確疊加歷史收盤軌跡紅線', () => {
+    const candles = [
+      { date: '2025-03-31', open: 90, high: 95, low: 88, close: 92, volume: 1000 },
+      { date: '2025-06-30', open: 95, high: 102, low: 94, close: 100, volume: 1200 },
+      { date: '2025-09-30', open: 101, high: 108, low: 100, close: 105, volume: 1500 },
+      { date: '2025-12-31', open: 106, high: 115, low: 105, close: 112, volume: 2000 },
+    ];
+    const recordsWithPeriod = normalRecords.map((r, i) => ({
+      ...r,
+      periodDate: ['2025-03-31', '2025-06-30', '2025-09-30', '2025-12-31'][i],
+    }));
+
+    const html = renderToStaticMarkup(
+      <AnalysisMetricView
+        primaryTab="valuation"
+        subTab="pe_river"
+        records={recordsWithPeriod}
+        currentPrice={110}
+        annualDividends={[]}
+        stockName="測試標的"
+        symbol="2330"
+        historicalCandles={candles}
+      />
+    );
+
+    // 驗證 SVG 歷史軌跡紅線與圓點是否有渲染
+    expect(html).toContain('stroke="#f43f5e"');
+    expect(html).toContain('fill="#f43f5e"');
+  });
 });

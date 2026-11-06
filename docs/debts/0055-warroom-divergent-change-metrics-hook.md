@@ -1,7 +1,7 @@
 # 技術債 0055: WarRoomWorkspace 龐大單體元件與發散式變化 (Divergent Change) 狀態抽取 (useWarRoomPortfolioMetrics)
 
 ## 📌 基本資訊
-- **狀態**: `OPEN`
+- **狀態**: `RESOLVED` (已於 v9.15.0 Spec 0220 / ADR 0220 完整解決)
 - **建立日期**: 2026-10-30
 - **發現來源**: Code Review (Spec 0209 / Issue #359)
 - **優先級別**: `P3` (非阻擋性代碼整潔與維護性改進)

@@ -41,7 +41,6 @@ import {
   MacroPinnedStrategy,
 } from '../types/macro';
 import {
-  calculatePortfolioMacroShield,
   generateAiMorningBrief,
   calculateMacroThermometer,
   evaluateMacroDualThermometer,
@@ -82,15 +81,7 @@ import {
 } from '../utils/catalystStorage';
 import { syncExternalCatalystsAsync } from '../engine/catalystSyncService';
 import { ensureKeyPoolHydrated, buildMacroSyncKeyHeaders } from '../engine/smartKeyRotator';
-import { calculateLookThroughExposure } from '../engine/lookThroughEngine';
-import { calculateAllocationDrift } from '../engine/rebalancingEngine';
-import {
-  loadTargetAllocations,
-  loadActiveTargetAllocationId,
-  DEFAULT_MARKET_ALLOCATION,
-} from '../utils/allocationStorage';
-import { calculateHoldingFxBreakdown } from '../engine/fxBreakdown';
-import { calculateMarginStress } from '../engine/marginStressEngine';
+import { useWarRoomPortfolioMetrics } from '../hooks/useWarRoomPortfolioMetrics';
 import { calculateBehavioralAuditReport } from '../engine/behavioralAuditEngine';
 import { evaluateRiskStatus } from '../engine/riskAlertEngine';
 import { resolveDispositionAttentionStatus } from '../engine/dispositionWindowEngine';
@@ -469,105 +460,8 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
       .filter((d) => d.daysLeft >= 0);
   }, [receivableDividends]);
 
-  // 1. 跨模組整合：ETF 穿透曝險 + 再平衡真實偏離度 + 美股匯差緩衝墊 + 質押耐受度 + 個人防護盾 3.0
-  const lookThroughReport = useMemo(() => {
-    return calculateLookThroughExposure(holdings, usdToTwdRate);
-  }, [holdings, usdToTwdRate]);
-
-  const shield = useMemo(() => {
-    let totalDebt = 0;
-    let totalCollateral = 0;
-    const pledgedLoans = loans.filter((l) => l.principal > 0 && l.loanType === 'PLEDGE');
-    for (const l of pledgedLoans) {
-      const debtTwd = l.currency === 'USD' ? l.principal * usdToTwdRate : l.principal;
-      totalDebt += debtTwd;
-      if (l.pledgedCollateral) {
-        for (const col of l.pledgedCollateral) {
-          const h = holdings.find((item) => item.symbol === col.symbol);
-          if (h) {
-            const fx = h.currency === 'USD' ? usdToTwdRate : 1;
-            totalCollateral += col.shares * (h.currentPrice || 0) * fx;
-          }
-        }
-      }
-    }
-
-    const usHoldings = holdings.filter((h) => (h.market === 'US' || h.currency === 'USD') && h.shares > 0);
-    const usStockUSD = usHoldings.reduce(
-      (acc, h) => acc + (h.currentPrice || h.avgCost || 0) * (h.shares || 0),
-      0
-    );
-
-    // 計算美股持倉加權買入成本匯率與累積匯差緩衝墊 (fxBreakdown)
-    let usTotalCostUsd = 0;
-    let usWeightedFxNumerator = 0;
-    let usFxCushionTWD = 0;
-    for (const h of usHoldings) {
-      const costUsd = h.totalCostBasis || (h.avgCost || 0) * (h.shares || 0);
-      const costFx = (h as unknown as { avgExchangeRate?: number }).avgExchangeRate || 31.8;
-      const fxResult = calculateHoldingFxBreakdown(h, costFx, usdToTwdRate);
-      usTotalCostUsd += costUsd;
-      usWeightedFxNumerator += costUsd * costFx;
-      usFxCushionTWD += fxResult.fxGainTWD;
-    }
-    const usWeightedCostFxRate =
-      usTotalCostUsd > 0 ? Number((usWeightedFxNumerator / usTotalCostUsd).toFixed(2)) : undefined;
-
-    // 計算真實目標配置最大偏離度 (rebalancingEngine)
-    let realMaxDriftPercent = 0;
-    try {
-      let activeConfig = rebalancingConfig;
-      if (!activeConfig) {
-        const configs = typeof localStorage !== 'undefined' ? loadTargetAllocations() : [DEFAULT_MARKET_ALLOCATION];
-        const activeId = typeof localStorage !== 'undefined' ? loadActiveTargetAllocationId() : DEFAULT_MARKET_ALLOCATION.id;
-        activeConfig = configs.find((c) => c.id === activeId) || configs[0] || DEFAULT_MARKET_ALLOCATION;
-      }
-      const driftItems = calculateAllocationDrift(activeConfig, holdings, cashBalanceTwd, usdToTwdRate);
-      realMaxDriftPercent = driftItems.reduce(
-        (maxVal, item) => Math.max(maxVal, Math.abs(item.driftPercent || 0)),
-        0
-      );
-    } catch {
-      realMaxDriftPercent = 0;
-    }
-
-    // 穿透台積電 (2330 + TSM) 與半導體產業總曝險權重 (lookThroughEngine)
-    const tsmcExp = lookThroughReport.exposures
-      .filter((e) => e.symbol === '2330' || e.symbol === 'TSM' || e.symbol === '2330.TW')
-      .reduce((acc, e) => acc + (e.portfolioWeightPercent || 0), 0);
-    const semiSectorExp = lookThroughReport.sectorBreakdown
-      .filter((s) => s.sector.includes('半導體') || s.sector.toLowerCase().includes('semi'))
-      .reduce((acc, s) => acc + (s.weightPercent || 0), 0);
-    const effectiveSemiWeight = Math.max(semiSectorExp, tsmcExp);
-
-    // 質押距 130% 斷頭線安全耐受跌幅 (marginStressEngine)
-    const marginStress = calculateMarginStress({
-      holdings,
-      loans: pledgedLoans,
-      usdToTwdRate,
-    });
-    const maxDropToleranceTo130Percent =
-      marginStress.hasLoans && typeof marginStress.maxDropTolerancePercent === 'number'
-        ? Number((marginStress.maxDropTolerancePercent / 100).toFixed(4))
-        : undefined;
-
-    return calculatePortfolioMacroShield({
-      navTWD: totalNavTwd,
-      cashTWD: cashBalanceTwd,
-      totalLoanDebtTWD: totalDebt,
-      collateralValueTWD: totalCollateral,
-      maxDriftPercent: Number(realMaxDriftPercent.toFixed(1)),
-      usStockValueUSD: usStockUSD,
-      pendingSettlementOutflowTWD: pendingSettlementOutflowTwd,
-      upcoming7dDcaCommitmentTWD: dcaCommitment7dTwd,
-      tsmcLookThroughWeightPercent: Number(tsmcExp.toFixed(1)),
-      semiLookThroughWeightPercent: Number(effectiveSemiWeight.toFixed(1)),
-      vix: macroSnapshot.vix,
-      usWeightedCostFxRate,
-      usFxCushionTWD,
-      maxDropToleranceTo130Percent,
-    });
-  }, [
+  // 1. 跨模組整合：ETF 穿透曝險 + 個人防護盾 3.0 與自由彈藥 (Spec 0220 / 技術債 0055: 狀態抽取 Hook)
+  const { shield } = useWarRoomPortfolioMetrics({
     holdings,
     loans,
     cashBalanceTwd,
@@ -575,9 +469,9 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     usdToTwdRate,
     pendingSettlementOutflowTwd,
     dcaCommitment7dTwd,
-    lookThroughReport,
-    macroSnapshot.vix,
-  ]);
+    rebalancingConfig,
+    vix: macroSnapshot.vix,
+  });
 
   // --- 0193 / 0209 旗艦戰情室 3.0 狀態 ---
   const [activeStressDrop, setActiveStressDrop] = useState<-10 | -20 | -30>(-10);

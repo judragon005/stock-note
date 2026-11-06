@@ -1,12 +1,9 @@
-# Ticket 04 — WarRoomWorkspace 串接 Hook 並精簡 110+ 行計算程式碼
+# Ticket 04 ??WarRoomWorkspace 串接 Hook 並精�?110+ 行�?算�?式碼
 
-**State:** OPEN
+**State:** CLOSED
 **Parent:** #466 (Spec 0220)
 
 ## What to build
-在 `src/components/WarRoomWorkspace.tsx` 引入 `useWarRoomPortfolioMetrics`，移除 L472～L580 的重複內聯風控運算，專注於各分區卡片的排版與佈局。
-
+??`src/components/WarRoomWorkspace.tsx` 引入 `useWarRoomPortfolioMetrics`，移??L472～L580 ?��?複內?�風?��?算�?專注?��??��??��??��??��?佈�???
 ## Acceptance criteria
-- [ ] `WarRoomWorkspace.tsx` 程式碼精簡 110+ 行。
-- [ ] 戰情室各分區卡片接收之 `shield` 與 `lookThroughReport` 資料完全不變。
-- [ ] 現有戰情室相關測試全部綠燈通過。
+- [x] `WarRoomWorkspace.tsx` 程�?碼精�?110+ 行�?- [x] ?��?室�??��??��??�收�?`shield` ??`lookThroughReport` 資�?完全不�???- [x] ?��??��?室相?�測試全?��??�通�???

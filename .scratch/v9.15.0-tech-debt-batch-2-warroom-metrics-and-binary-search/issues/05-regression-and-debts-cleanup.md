@@ -1,13 +1,9 @@
-# Ticket 05 — 全量測試與建置回歸驗證，並更新 docs/debts/ 看板
+# Ticket 05 ???��?測試?�建置�?歸�?證�?並更??docs/debts/ ?�板
 
-**State:** OPEN
+**State:** CLOSED
 **Parent:** #466 (Spec 0220)
 
 ## What to build
-執行全專案 `npm test` 與 `npm run build` 回歸驗收，確認 0 錯誤後將 `docs/debts/README.md` 看板中的技術債 0055 與 0056 狀態更新為 `RESOLVED`。
-
+?��??��?�?`npm test` ??`npm run build` ?�歸驗收，確�?0 ?�誤後�? `docs/debts/README.md` ?�板中�??�術債 0055 ??0056 ?�?�更?�為 `RESOLVED`??
 ## Acceptance criteria
-- [ ] `npm test` 275+ 測試檔 100% 通過。
-- [ ] `npm run build` TypeScript 0 錯誤。
-- [ ] `docs/debts/README.md` 看板狀態與預計觸發時機同步更新為已於 v9.15.0 解決。
-- [ ] 更新 `0055-warroom-divergent-change-metrics-hook.md` 與 `0056-valuation-river-candle-lookup-binary-search.md` 的狀態為 `RESOLVED`。
+- [x] `npm test` 275+ 測試�?100% ?��???- [x] `npm run build` TypeScript 0 ?�誤??- [x] `docs/debts/README.md` ?�板?�?��??��?觸發?��??�步?�新?�已??v9.15.0 �?��??- [x] ?�新 `0055-warroom-divergent-change-metrics-hook.md` ??`0056-valuation-river-candle-lookup-binary-search.md` ?��??�為 `RESOLVED`??

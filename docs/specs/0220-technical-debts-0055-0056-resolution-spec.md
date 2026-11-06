@@ -169,3 +169,4 @@ export function useWarRoomPortfolioMetrics(
    - 全專案編譯維持 0 錯誤（`npm run build` 成功）。
 4. **看板維護**：
    - `docs/debts/README.md` 看板將技術債 0055、0056 狀態更新為 `RESOLVED`。
+
