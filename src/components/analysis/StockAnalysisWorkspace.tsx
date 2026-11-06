@@ -20,11 +20,14 @@ import type { HealthCheckCategoryResult, StockHealthDiagnosis } from '../../type
 import type { QuarterlyFinancialRecord } from '../../types/financialForensic';
 import { computeStockHealthDiagnosis } from '../../utils/stockHealthDiagnosis';
 import { loadOrFetchFinancialReport } from '../../engine/financialReportService';
+import { loadSymbolFullLakehouseData, type LakehouseFullPayload } from '../../engine/marketCacheLoader';
 import { HealthCard } from '../health/HealthCard';
 import { HealthReportModal } from '../health/HealthReportModal';
 import { isEtfSymbol } from '../health/StockHealthWorkspace';
 import { AnalysisMetricView } from './AnalysisMetricView';
 import { EightQuarterStatementTable } from './EightQuarterStatementTable';
+import { ExecutiveSummarySection } from './ExecutiveSummarySection';
+import { calculateInstitutionalScoring } from '../../engine/institutionalScoringEngine';
 import {
   generateStockForensicMarkdownReport,
   downloadMarkdownFile,
@@ -311,6 +314,7 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [diagnosis, setDiagnosis] = useState<StockHealthDiagnosis | null>(null);
   const [financialRecords, setFinancialRecords] = useState<QuarterlyFinancialRecord[]>([]);
+  const [lakehouseData, setLakehouseData] = useState<LakehouseFullPayload | null>(null);
   const [companyDividends, setCompanyDividends] = useState<CompanyDividendPolicyRecord[]>([]);
   const [activeModalResult, setActiveModalResult] = useState<HealthCheckCategoryResult | null>(null);
 
@@ -343,7 +347,8 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
     popularMatch?.market ||
     (/^\d+$/.test(selectedSymbol) || selectedSymbol.startsWith('00') ? 'TW' : 'US');
   const stockName = selectedHolding?.name || popularMatch?.name || selectedSymbol;
-  const currentPrice = currentPrices[selectedSymbol] || selectedHolding?.currentPrice || 100;
+  const lakehouseLatestClose = lakehouseData?.candles && lakehouseData.candles.length > 0 ? lakehouseData.candles[lakehouseData.candles.length - 1].close : undefined;
+  const currentPrice = currentPrices[selectedSymbol] || selectedHolding?.currentPrice || lakehouseLatestClose || 100;
   const isCurrentEtf = isEtfSymbol(selectedSymbol);
 
   // 個人交易歷史配息整理 (作為備援)
@@ -364,6 +369,11 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
   const loadData = useCallback(async (forceRefresh: boolean = false) => {
     setIsLoading(true);
     try {
+      // 0. 並行載入本地 SQLite 數據湖倉 (日 K 歷史、董監質押、官方估值、月營收)
+      loadSymbolFullLakehouseData(selectedSymbol, market)
+        .then((lh) => setLakehouseData(lh))
+        .catch(() => setLakehouseData(null));
+
       // 1. 同步取得上市公司真實歷年公開股利政策
       const divHistory = await fetchCompanyDividendHistory(
         selectedSymbol,
@@ -424,6 +434,23 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // 計算 8 維度機構級投研總覽與決策看板 (Ticket 10 & 11)
+  const institutionalSummary = useMemo(() => {
+    if (financialRecords.length === 0) return null;
+    return calculateInstitutionalScoring({
+      records: financialRecords,
+      currentPrice,
+      symbol: selectedSymbol,
+      stockName,
+      market,
+      revenueRecords: lakehouseData?.revenueRecords,
+      directorPledgeRatio: lakehouseData?.pledge?.pledge_ratio,
+      insiderTransferShares: lakehouseData?.pledge?.insider_transfer_shares,
+      valuation: lakehouseData?.valuation,
+      holdingCost: selectedHolding?.avgCost,
+    });
+  }, [financialRecords, currentPrice, selectedSymbol, stockName, market, lakehouseData, selectedHolding]);
 
   // 匯出 Markdown 深度研報 (Ticket 15)
   const handleExportMarkdown = () => {
@@ -993,7 +1020,22 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
         </div>
 
         {/* 主視圖區域 (Main Viewport) */}
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* 01｜機構研究總覽 (Executive Summary) 看板 (Ticket 10 & 11) */}
+          {institutionalSummary && (
+            <ExecutiveSummarySection
+              summary={institutionalSummary}
+              symbol={selectedSymbol}
+              stockName={stockName}
+              market={market}
+              currentPrice={currentPrice}
+              records={financialRecords}
+              revenueRecords={lakehouseData?.revenueRecords}
+              directorPledgeRatio={lakehouseData?.pledge?.pledge_ratio}
+              holdingCost={selectedHolding?.avgCost}
+            />
+          )}
+
           {/* A. 股票健診子分頁 (無縫複用 4 大幫手與 21 項指標) */}
           {primaryTab === 'health' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -1247,6 +1289,10 @@ export const StockAnalysisWorkspace: React.FC<StockAnalysisWorkspaceProps> = ({
                 companyDividends={companyDividends}
                 stockName={stockName}
                 symbol={selectedSymbol}
+                historicalCandles={lakehouseData?.candles}
+                revenueRecords={lakehouseData?.revenueRecords}
+                pledge={lakehouseData?.pledge}
+                valuation={lakehouseData?.valuation}
               />
             </div>
           )}
