@@ -276,6 +276,13 @@ export interface LakehouseFullPayload {
   }>;
   marginAsOfDate?: string;
   macro?: any;
+  pledge?: {
+    report_date?: string;
+    pledged_shares?: number;
+    total_director_shares?: number;
+    pledge_ratio?: number;
+    insider_transfer_shares?: number;
+  };
   valuation?: {
     pe?: number | null;
     pb?: number | null;
@@ -403,6 +410,7 @@ export async function loadSymbolFullLakehouseData(
             tdccRecords,
             revenueRecords,
             valuation,
+            pledge: data.pledge || undefined,
             macro: data.macro,
           };
         }
