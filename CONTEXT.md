@@ -2852,3 +2852,10 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     4. **Reverse DCF & Scenario Matrix (現價隱含成長率與三情境估值矩陣)**：逆推當前股價隱含之未來 5 年 FCF 複合成長率，提供 Bull (+20%) / Base (歷史中位) / Bear (-20%) 三情境合理價值區間與安全邊際 (Margin of Safety %)。
     5. **Executive Summary & 100-Point Scoring (機構研究總覽與 100 分制評分)**：頂部新增「01｜機構研究總覽」看板，整合 8 維度透明量化評分（營收 15%、獲利 15%、現金流 15%、安全 10%、優勢 10%、產業 10%、估值 15%、催化劑 10%）、財報說了什麼 vs 沒說什麼對照卡、實戰買進觀察區與失效停損條件。
     6. **12-Analyst Prompt Drawer & Loopback Pinning (12 位分析師外聯抽屜與裁決釘選回流)**：本地零 Token 生成結構化投研 Prompt，支援複製至外部頂尖模型推演非結構化質化報告，並復用專案既有 `strategyPinEngine` 一鍵貼回釘選。
+
+- **WarRoom Metrics Decoupling & Valuation River Binary Search Optimization (戰情室風控指標抽取與估值河流二元搜尋優化)**:
+  - 核心模組：`src/hooks/useWarRoomPortfolioMetrics.ts`、`src/components/WarRoomWorkspace.tsx`、`src/utils/binarySearch.ts`、`src/components/analysis/AnalysisMetricView.tsx`。
+  - 規格來源：Spec 0220 (v9.15.0) 與 ADR 0220，關聯 GitHub Issue #466，解決架構技術債 0055 與 0056。
+  - 核心領域概念與架構革新：
+    1. **WarRoom Portfolio Metrics Decoupling (戰情室投資組合風控計算解耦 - TD 0055)**：自龐大戰情室單體元件中抽取獨立純計算函式 `calculateWarRoomPortfolioMetrics` 與自訂 React Hook `useWarRoomPortfolioMetrics`，集中封裝維持率、可用防禦資金、槓桿曝險、大盤對沖部位與集中度穿透指標。實現純邏輯與 UI 視圖完全分離，支援零 DOM 極速單元測試（<20ms）。
+    2. **Valuation River Binary Search Optimization (估值河流圖歷史收盤價二元搜尋 - TD 0056)**：以純函式 `findLatestCloseBeforeDate` 替換原先在數百根歷史河流點陣列中重複執行的 `[...candles].reverse().find()` 陣列反轉與線性拷貝搜尋。時間複雜度由 $O(N \cdot M)$ 徹底降至 $O(M \log N)$，並杜絕中介反向拷貝陣列之 GC 記憶體分配浪費。

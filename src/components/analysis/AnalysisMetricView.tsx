@@ -21,6 +21,7 @@ import { calculateTurnoverMetrics } from '../../engine/financialTurnoverEngine';
 import { isFinancialIndustry, isCyclicalIndustry } from '../../engine/industryGate';
 import { ForensicWarningSection } from './ForensicWarningSection';
 import { formatFinancialAmount } from '../../utils/formatters';
+import { findLatestCloseBeforeDate } from '../../utils/binarySearch';
 
 interface AnalysisMetricViewProps {
   primaryTab: string;
@@ -127,6 +128,14 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
   const turnoverMetrics = useMemo(() => {
     return latestRecord ? calculateTurnoverMetrics(latestRecord) : null;
   }, [latestRecord]);
+
+  // 估值河流圖歷史季度收盤價紅線軌跡預先計算 (Spec 0220 / 技術債 0056: 二元搜尋 O(log N) 零拷貝)
+  const valuationRiverQuarterlyClosePrices = useMemo<(number | null)[]>(() => {
+    if (!historicalCandles || historicalCandles.length === 0 || !chronological || chronological.length === 0) {
+      return [];
+    }
+    return chronological.map((r) => findLatestCloseBeforeDate(historicalCandles, r.periodDate));
+  }, [historicalCandles, chronological]);
 
   // ========================== 繪圖輔助元件 (全原生純 CSS Tokens) ==========================
 
@@ -1559,12 +1568,7 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
             'TTM EPS',
             'x',
             // 注入真實歷史收盤價軌跡紅線 (Ticket 02)
-            chronological.map((r) => {
-              if (!historicalCandles || historicalCandles.length === 0) return null;
-              // 匹配該季度結算日前後最接近的收盤價
-              const match = [...historicalCandles].reverse().find((c) => c.date <= r.periodDate);
-              return match ? match.close : null;
-            })
+            valuationRiverQuarterlyClosePrices
           )}
         </div>
       )}
@@ -1654,11 +1658,7 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
             '每股淨值 BVPS',
             'x',
             // 注入真實歷史收盤價軌跡紅線 (Ticket 02)
-            chronological.map((r) => {
-              if (!historicalCandles || historicalCandles.length === 0) return null;
-              const match = [...historicalCandles].reverse().find((c) => c.date <= r.periodDate);
-              return match ? match.close : null;
-            })
+            valuationRiverQuarterlyClosePrices
           )}
         </div>
       )}

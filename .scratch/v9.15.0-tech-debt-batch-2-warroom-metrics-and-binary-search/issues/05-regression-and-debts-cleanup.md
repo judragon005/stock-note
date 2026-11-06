@@ -1,0 +1,9 @@
+# Ticket 05 ???¨é?æ¸¬è©¦?‡å»ºç½®å?æ­¸é?è­‰ï?ä¸¦æ›´??docs/debts/ ?‹æ¿
+
+**State:** CLOSED
+**Parent:** #466 (Spec 0220)
+
+## What to build
+?·è??¨å?æ¡?`npm test` ??`npm run build` ?æ­¸é©—æ”¶ï¼Œç¢ºèª?0 ?¯èª¤å¾Œå? `docs/debts/README.md` ?‹æ¿ä¸­ç??€è¡“å‚µ 0055 ??0056 ?€?‹æ›´?°ç‚º `RESOLVED`??
+## Acceptance criteria
+- [x] `npm test` 275+ æ¸¬è©¦æª?100% ?šé???- [x] `npm run build` TypeScript 0 ?¯èª¤??- [x] `docs/debts/README.md` ?‹æ¿?€?‹è??è?è§¸ç™¼?‚æ??Œæ­¥?´æ–°?ºå·²??v9.15.0 è§?±º??- [x] ?´æ–° `0055-warroom-divergent-change-metrics-hook.md` ??`0056-valuation-river-candle-lookup-binary-search.md` ?„ç??‹ç‚º `RESOLVED`??

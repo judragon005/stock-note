@@ -62,8 +62,8 @@
 | [**0052**](0052-default-fetch-json-compound-abort-signal.md) | defaultFetchJson 雙重信號複合支援 (Compound AbortSignal) | `P3` | `RESOLVED` | Code Review (Spec 0187 / Issue #268) | `Refactor` · `Architecture` · `Resilience` · `Network` | **已於 v9.02.0 (Spec 0205 / Issue #336) 完整解決** |
 | [**0053**](0053-eight-quarter-statement-table-style-constants-extraction.md) | EightQuarterStatementTable 樣式常數與子儲存格抽取 | `P3` | `RESOLVED` | Code Review (Spec 0202 / Issue #322) | `Refactor` · `UI` · `CleanCode` · `StockAnalysis` · `EightQuarterStatementTable` | **已於 v9.02.0 (Spec 0205 / Issue #336) 完整解決** |
 | [**0054**](0054-war-room-quick-calibration-modal-decomposition.md) | WarRoomWorkspace 快速校準表單聚合與子元件解耦 (MacroQuickCalibrationModal) | `P3` | `RESOLVED` | Code Review (Spec 0204 / Issue #332) | `Refactor` · `UI` · `CleanCode` · `WarRoom` · `ComponentDecomposition` | **已於 v9.02.0 (Spec 0205 / Issue #336) 完整解決** |
-| [**0055**](0055-warroom-divergent-change-metrics-hook.md) | WarRoomWorkspace 龐大單體元件與發散式變化 (Divergent Change) 狀態抽取 (useWarRoomPortfolioMetrics) | `P3` | `OPEN` | Code Review (Spec 0209 / Issue #359) | `Refactor` · `CleanCode` · `WarRoom` · `CustomHooks` · `DivergentChange` | 待下期戰情室重構或多幣別彈藥分配時實作 |
-| [**0056**](0056-valuation-river-candle-lookup-binary-search.md) | 估值河流圖歷史收盤價匹配二元搜尋優化 | `P3` | `OPEN` | Code Review (Spec 0219 / Issue #462) | `Performance` · `Algorithm` · `StockAnalysis` · `ValuationRiver` · `BinarySearch` | 待日 K 線快取範圍擴充超過 500 天或進行前端圖表虛擬化渲染時實作 |
+| [**0055**](0055-warroom-divergent-change-metrics-hook.md) | WarRoomWorkspace 龐大單體元件與發散式變化 (Divergent Change) 狀態抽取 (useWarRoomPortfolioMetrics) | `P3` | `RESOLVED` | Code Review (Spec 0209 / Issue #359) | `Refactor` · `CleanCode` · `WarRoom` · `CustomHooks` · `DivergentChange` | **已於 v9.15.0 (Spec 0220 / ADR #0220) 完整解決** |
+| [**0056**](0056-valuation-river-candle-lookup-binary-search.md) | 估值河流圖歷史收盤價匹配二元搜尋優化 | `P3` | `RESOLVED` | Code Review (Spec 0219 / Issue #462) | `Performance` · `Algorithm` · `StockAnalysis` · `ValuationRiver` · `BinarySearch` | **已於 v9.15.0 (Spec 0220 / ADR #0220) 完整解決** |
 
 ---
 

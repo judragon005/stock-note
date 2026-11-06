@@ -23,7 +23,7 @@
 
 ## 3. 優先級與觸發時機
 - **優先級**: `P3 (Low)`
-- **狀態**: `OPEN`
+- **狀態**: `RESOLVED` (已於 v9.15.0 Spec 0220 / ADR 0220 完整解決)
 - **收錄來源**: Code Review (Spec 0219 / PR #461 / Issue #462)
 - **標籤**: `Performance` · `Algorithm` · `StockAnalysis` · `ValuationRiver` · `BinarySearch`
 - **觸發時機**: 待日 K 線快取範圍擴充超過 500 天或進行前端圖表虛擬化渲染時實作。
