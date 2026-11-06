@@ -7,6 +7,8 @@ import {
   calculateDcfValuation,
   calculateDdmValuation,
   deriveSharesOutstanding,
+  calculateReverseDcf,
+  calculateScenarioValuation,
 } from './keyMetricsEngine';
 
 type DeepPartial<T> = {
@@ -279,6 +281,43 @@ describe('keyMetricsEngine (量化估值與關鍵指標計算引擎 TDD)', () =>
       });
       const res = deriveSharesOutstanding(usLossRecord);
       expect(res).toBe(100000000); // 5000 萬 / 0.5 = 1 億股
+    });
+  });
+
+  describe('8. Ticket 08 & 09: Reverse DCF 現價隱含成長率與三情境估值矩陣', () => {
+    it('應能依據現價精確逆推市場隱含之未來 5 年 FCF 複合成長率', () => {
+      // 假設最新年度 FCF = 10 元/股，WACC = 9%，永續成長率 = 2.5%
+      // 若當前股價為 180 元，應能逆推求出隱含成長率
+      const res = calculateReverseDcf({
+        currentPrice: 180,
+        fcfPerShare: 10,
+        wacc: 0.09,
+        perpetualGrowth: 0.025,
+      });
+
+      expect(res.isValid).toBe(true);
+      expect(res.impliedGrowthRate).toBeGreaterThan(-50);
+      expect(res.impliedGrowthRate).toBeLessThan(100);
+      expect(res.marketOptimism).toBeDefined();
+    });
+
+    it('應能正確產出 Bull/Base/Bear 三情境合理價值矩陣與安全邊際', () => {
+      const scenarios = calculateScenarioValuation({
+        baseFairValue: 100,
+        currentPrice: 80,
+      });
+
+      // 基準合理價 100，現價 80 -> 安全邊際 = (100 - 80) / 100 = 20%
+      expect(scenarios.base.fairValue).toBe(100);
+      expect(scenarios.base.marginOfSafety).toBe(20);
+
+      // Bull 樂觀情境 (+20%) -> 120
+      expect(scenarios.bull.fairValue).toBe(120);
+      expect(scenarios.bull.marginOfSafety).toBeCloseTo(33.33, 1);
+
+      // Bear 悲觀情境 (-20%) -> 80
+      expect(scenarios.bear.fairValue).toBe(80);
+      expect(scenarios.bear.marginOfSafety).toBe(0);
     });
   });
 });

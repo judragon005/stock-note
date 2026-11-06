@@ -469,3 +469,148 @@ export function calculateDdmValuation(
     assessment,
   };
 }
+
+export interface ReverseDcfInput {
+  currentPrice: number;
+  fcfPerShare: number;
+  wacc?: number; // 預設 0.09 (9%)
+  perpetualGrowth?: number; // 預設 0.025 (2.5%)
+  forecastYears?: number; // 預設 5 年
+}
+
+export interface ReverseDcfResult {
+  impliedGrowthRate: number; // 市場隱含年化複合成長率 %
+  marketOptimism: 'HIGHLY_OPTIMISTIC' | 'REASONABLE' | 'PESSIMISTIC' | 'EXTREME_EXPANSION';
+  summary: string;
+  isValid: boolean;
+}
+
+/**
+ * 8. Reverse DCF 反向折現現金流求解器 (Ticket 08)
+ * 求解方程：當前市價 = ∑ [FCF_t / (1+WACC)^t] + 終值折現
+ */
+export function calculateReverseDcf(input: ReverseDcfInput): ReverseDcfResult {
+  const {
+    currentPrice,
+    fcfPerShare,
+    wacc = 0.09,
+    perpetualGrowth = 0.025,
+    forecastYears = 5,
+  } = input;
+
+  if (currentPrice <= 0 || fcfPerShare <= 0) {
+    return {
+      impliedGrowthRate: 0,
+      marketOptimism: 'REASONABLE',
+      summary: '自由現金流為負或股價無效，無法執行 Reverse DCF 逆推',
+      isValid: false,
+    };
+  }
+
+  // 內部 DCF 計算輔助函式
+  const dcfFairValue = (g: number): number => {
+    let pv = 0;
+    let cf = fcfPerShare;
+    for (let t = 1; t <= forecastYears; t++) {
+      cf *= 1 + g;
+      pv += cf / Math.pow(1 + wacc, t);
+    }
+    const terminalValue = (cf * (1 + perpetualGrowth)) / Math.max(0.01, wacc - perpetualGrowth);
+    pv += terminalValue / Math.pow(1 + wacc, forecastYears);
+    return pv;
+  };
+
+  // 二分法逼近求解隱含成長率 g (範圍 -50% ~ +200%)
+  let low = -0.5;
+  let high = 2.0;
+  let impliedG = 0;
+
+  for (let iter = 0; iter < 40; iter++) {
+    const mid = (low + high) / 2;
+    const estimatedPv = dcfFairValue(mid);
+
+    if (Math.abs(estimatedPv - currentPrice) < 0.05) {
+      impliedG = mid;
+      break;
+    }
+
+    if (estimatedPv < currentPrice) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+    impliedG = mid;
+  }
+
+  const impliedGrowthPct = Number((impliedG * 100).toFixed(2));
+  let marketOptimism: ReverseDcfResult['marketOptimism'] = 'REASONABLE';
+  let summary = `現價隱含未來 5 年 FCF 需維持 ${impliedGrowthPct}% 複合增長`;
+
+  if (impliedGrowthPct > 25) {
+    marketOptimism = 'HIGHLY_OPTIMISTIC';
+    summary += '。市場預期極度樂觀，已透支多數利多，安全邊際脆弱。';
+  } else if (impliedGrowthPct >= 8) {
+    marketOptimism = 'REASONABLE';
+    summary += '。符合常態成長股水準，預期合理。';
+  } else {
+    marketOptimism = 'PESSIMISTIC';
+    summary += '。市場預期悲觀低落，若本業優於預期具大幅重估空間。';
+  }
+
+  return {
+    impliedGrowthRate: impliedGrowthPct,
+    marketOptimism,
+    summary,
+    isValid: true,
+  };
+}
+
+export interface ScenarioItem {
+  name: string;
+  fairValue: number;
+  marginOfSafety: number; // (合理價 - 現價) / 合理價 %
+}
+
+export interface ScenarioValuationResult {
+  bull: ScenarioItem;
+  base: ScenarioItem;
+  bear: ScenarioItem;
+}
+
+/**
+ * 9. Bull/Base/Bear 三情境合理價值矩陣與安全邊際 (Ticket 09)
+ */
+export function calculateScenarioValuation({
+  baseFairValue,
+  currentPrice,
+}: {
+  baseFairValue: number;
+  currentPrice: number;
+}): ScenarioValuationResult {
+  const safeBase = Math.max(0, baseFairValue);
+  const bullFairValue = Number((safeBase * 1.2).toFixed(2));
+  const bearFairValue = Number((safeBase * 0.8).toFixed(2));
+
+  const calcMos = (fair: number): number => {
+    if (fair <= 0) return 0;
+    return Number((((fair - currentPrice) / fair) * 100).toFixed(2));
+  };
+
+  return {
+    bull: {
+      name: '樂觀情境 (Bull Case)',
+      fairValue: bullFairValue,
+      marginOfSafety: calcMos(bullFairValue),
+    },
+    base: {
+      name: '基準情境 (Base Case)',
+      fairValue: safeBase,
+      marginOfSafety: calcMos(safeBase),
+    },
+    bear: {
+      name: '悲觀情境 (Bear Case)',
+      fairValue: bearFairValue,
+      marginOfSafety: calcMos(bearFairValue),
+    },
+  };
+}
