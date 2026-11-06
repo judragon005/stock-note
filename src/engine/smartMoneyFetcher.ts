@@ -687,9 +687,9 @@ export interface LakehouseChipsSnapshotResponse {
       history: {
         date: string;
         close: number;
-      basePrice?: number | null;
-      previousClose?: number | null;
-      changePercent?: number | null;
+        basePrice?: number | null;
+        previousClose?: number | null;
+        changePercent?: number | null;
         volumeLots: number;
         foreignNet: number;
         trustNet: number;
