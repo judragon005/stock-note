@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-2058%2F2058%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2099%2F2099%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,23 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 肌肉書僮量化防禦核心、既有引擎零造輪子串聯與分段視圖架構 (`Muscle Booker Quant Defense Core & Segmented Lens Architecture`) *(V9.11.0 最新發布 / Spec #0216 / ADR #0216 / Issue #397)*
+### 0. 台美股機構級深度財報研究與實戰投資決策系統 (`Institutional Equity Research & Decision System`) *(V9.14.0 最新發布 / Spec #0219 / ADR #0219 / Issue #449)*
+
+- **全量接通五大數據寶藏與 20 季可調觀測窗**：
+  - 歷史季度財務指標數據集全面解鎖，支援 `[ 8 季 | 12 季 | 20 季 ]` 多維度歷史縱深切換。
+  - 接通全維度現金流量與盈餘品質指標（CFO/淨利、FCF/淨利、CCC 現金轉換週期、DSO 應收天數、DIO 存貨天數、DPO 應付天數）。
+  - 估值河流圖矩陣（歷史本益比河流圖、歷史本淨比河流圖、證交所/櫃買官方最新估值基準對照橫條）。
+  - 杜邦分析五因子拆解（稅負負擔率、利息負擔率、營業利益率、資產週轉率、財務槓桿權益乘數）。
+  - 月營收動能與台美多源整合（YoY/MoM/CAGR、法人營收預期差 Beat/Miss）。
+- **買方機構 100 分制決策雷達與三情境估值模型**：
+  - 涵蓋成長動能 (25%)、獲利能力 (20%)、現金品質 (25%)、資產安全 (15%) 與估值優勢 (15%) 五大維度。
+  - 實作三情境財務預估（Bull / Base / Bear Case）、反方挑戰論點與安全邊際估值 (Margin of Safety)。
+- **實戰投資決策面板與全域策略釘選**：
+  - 深度結合個人持倉脈絡（投入成本、在倉浮動盈虧、加減碼與停損保護建議）。
+  - 實作「📌 一鍵釘選策略至投資作戰室」，無縫聯動全局持倉監控。
+  - 支援機構級研究報告 Markdown 一鍵導出、安全剪貼簿複製（支援降級防禦）與多版本歷史差異比對 (Diff Tracking)。
+
+### 1. 肌肉書僮量化防禦核心、既有引擎零造輪子串聯與分段視圖架構 (`Muscle Booker Quant Defense Core & Segmented Lens Architecture`) *(V9.11.0 最新發布 / Spec #0216 / ADR #0216 / Issue #397)*
 
 - **箱體底穿上型態與誘多陷阱硬性防禦**：
   - 修復破底翻基準錯誤，跌破箱底 `boxLower` 後反彈收盤 < 50% 下影線、頂部受阻之誘多型態（Bull Trap）強制輸出 `AVOID (誘多陷阱)`，杜絕盲目追多。
