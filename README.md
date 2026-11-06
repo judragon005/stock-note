@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-2099%2F2099%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2111%2F2111%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,20 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 台美股機構級深度財報研究與實戰投資決策系統 (`Institutional Equity Research & Decision System`) *(V9.14.0 最新發布 / Spec #0219 / ADR #0219 / Issue #449)*
+### 0. 戰情室風控指標抽取與估值河流二元搜尋優化 (`WarRoom Metrics Decoupling & Valuation River Binary Search`) *(V9.15.0 最新發布 / Spec #0220 / ADR #0220 / Issue #466)*
+
+- **技術債 0056：估值河流圖歷史收盤價二元搜尋優化 (`findLatestCloseBeforeDate`)**：
+  - 以高效純函式二元搜尋替換每次渲染在多季歷史中反覆執行的 `[...candles].reverse().find()` 反向線性拷貝搜尋。
+  - 時間複雜度由 $O(M \times N)$ 降至 $O(M \log N)$，並杜絕中介淺拷貝陣列之 GC 記憶體分配浪費。
+  - 於 `AnalysisMetricView.tsx` 整合 `useMemo`，一次性預計算季度收盤價紅線軌跡數列。
+- **技術債 0055：主力戰情室龐大單體風控計算解耦 (`useWarRoomPortfolioMetrics`)**：
+  - 徹底解決 `WarRoomWorkspace.tsx`（2,372 行單體）之發散式變化 (`Divergent Change`) 壞味道。
+  - 抽取純計算函式 `calculateWarRoomPortfolioMetrics` 與自訂 React Hook `useWarRoomPortfolioMetrics`，移出 110+ 行非視圖之維持率、可用防禦資金、槓桿曝險、大盤對沖與個股集中度穿透指標。
+  - 補齊零 DOM 依賴之獨立極速單元測試（執行耗時 <25ms）。
+- **架構治理看板閉環**：
+  - `docs/debts/README.md`、`docs/debts/0055-*.md`、`docs/debts/0056-*.md` 全面標記為 `RESOLVED`。
+
+### 0. 台美股機構級深度財報研究與實戰投資決策系統 (`Institutional Equity Research & Decision System`) *(V9.14.0 / Spec #0219 / ADR #0219 / Issue #449)*
 
 - **全量接通五大數據寶藏與 20 季可調觀測窗**：
   - 歷史季度財務指標數據集全面解鎖，支援 `[ 8 季 | 12 季 | 20 季 ]` 多維度歷史縱深切換。
