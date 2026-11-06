@@ -37,7 +37,7 @@
 
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
-- **當前工作分支**：`main` (待合併)
+- **當前工作分支**：`main` (已完全同步主幹，Working Tree Clean)
 - **單元測試套件**：**2,111/2,111 通過 (277 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
@@ -70,7 +70,21 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| [`Spec 0206`](file:///d:/APP/股票紀錄/docs/specs/0206-portfolio-nav-unitized-accounting-and-quant-risk-engine-spec.md) | [`ADR 0206`](file:///d:/APP/股票紀錄/docs/adr/0206-portfolio-nav-unitized-accounting-and-quant-risk-engine.md) | [`.scratch/v9.03.0-portfolio-nav-unitized-accounting-and-quant-risk-engine/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.03.0-portfolio-nav-unitized-accounting-and-quant-risk-engine/issues/) | Issue #338 / 待發 PR | V9.03.0 | 資產成長與單位淨值會計及量化風控引擎重構 (11 大 Micro-Tickets 閉環) |
+| [`Spec 0220`](file:///d:/APP/股票紀錄/docs/specs/0220-technical-debts-0055-0056-resolution-spec.md) | [`ADR 0220`](file:///d:/APP/股票紀錄/docs/adr/0220-technical-debts-0055-0056-resolution.md) | [`.scratch/v9.15.0-tech-debt-batch-2-warroom-metrics-and-binary-search/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.15.0-tech-debt-batch-2-warroom-metrics-and-binary-search/issues/) | Issue #466 / PR #467, #469 | V9.15.0 | 第二梯隊架構技術債清理 (0055 戰情室風控狀態抽取 Hook 與 0056 估值河流二元搜尋) |
+| [`Spec 0219`](file:///d:/APP/股票紀錄/docs/specs/0219-institutional-equity-research-and-decision-system-spec.md) | [`ADR 0219`](file:///d:/APP/股票紀錄/docs/adr/0219-institutional-equity-research-and-decision-system.md) | [`.scratch/v9.14.0-institutional-equity-research/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.14.0-institutional-equity-research/issues/) | Issue #449 / PR #461, #463, #465 | V9.14.0 | 台美股機構級深度財報研究與實戰投資決策系統 (5 大數據孤島貫通、20 季財報縱深、反向 DCF) |
+| [`Spec 0218`](file:///d:/APP/股票紀錄/docs/specs/0218-smart-money-star-map-full-chain-temporal-anchoring-spec.md) | [`ADR 0218`](file:///d:/APP/股票紀錄/docs/adr/0218-smart-money-star-map-full-chain-temporal-anchoring.md) | [`.scratch/v9.13.0-smart-money-temporal-anchoring/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.13.0-smart-money-temporal-anchoring/issues/) | Issue #433 / PR #444, #448 | V9.13.0 | 籌碼與動態星圖全鏈路時空定錨、產業輪動、實戰訊號與零假資料精實重構 |
+| [`Spec 0217`](file:///d:/APP/股票紀錄/docs/specs/0217-smart-money-star-map-lakehouse-and-physics-calibration-spec.md) | [`ADR 0217`](file:///d:/APP/股票紀錄/docs/adr/0217-smart-money-star-map-lakehouse-and-physics-calibration.md) | [`.scratch/v9.12.0-chips-star-map-lakehouse/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.12.0-chips-star-map-lakehouse/issues/) | Issue #418 / PR #427, #429 | V9.12.0 | 籌碼與動態星圖湖倉直連、物理引擎校準、ETF 造市隔離與實戰閉環升級 |
+| [`Spec 0216`](file:///d:/APP/股票紀錄/docs/specs/0216-muscle-booker-quant-defense-and-segmented-lens-architecture-spec.md) | [`ADR 0216`](file:///d:/APP/股票紀錄/docs/adr/0216-muscle-booker-quant-defense-and-segmented-lens.md) | [`.scratch/v9.11.0-muscle-booker-quant-defense-and-segmented-lens/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.11.0-muscle-booker-quant-defense-and-segmented-lens/issues/) | Issue #397 / PR #398 | V9.11.0 | 肌肉書僮動能雷達量化防禦核升級、既有引擎零造輪子串聯與分段視圖收斂 |
+| [`Spec 0215`](file:///d:/APP/股票紀錄/docs/specs/0215-quadrant-card-apple-design-and-market-pools-evolution-spec.md) | [`ADR 0215`](file:///d:/APP/股票紀錄/docs/adr/0215-quadrant-card-apple-design-and-market-pools-evolution.md) | [`.scratch/v9.10.0-quadrant-card-apple-design-and-market-pools/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.10.0-quadrant-card-apple-design-and-market-pools/issues/) | Issue #395 / PR #396 | V9.10.0 | 四大象限動能卡片蘋果系統美學重構、全量台股與美股四大市場選池進化 |
+| [`Spec 0214`](file:///d:/APP/股票紀錄/docs/specs/0214-muscle-booker-momentum-radar-full-spectrum-evolution-spec.md) | [`ADR 0214`](file:///d:/APP/股票紀錄/docs/adr/0214-muscle-booker-momentum-radar-evolution.md) | [`.scratch/v9.09.0-muscle-booker-momentum-radar-evolution/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.09.0-muscle-booker-momentum-radar-evolution/issues/) | Issue #387 / PR #388 | V9.09.0 | 肌肉書僮·動能雷達全量進化、量化風控防禦與無重複模組化重構 |
+| [`Spec 0213`](file:///d:/APP/股票紀錄/docs/specs/0213-macro-war-room-thermometer-signals-and-dual-momentum-spec.md) | [`ADR 0213`](file:///d:/APP/股票紀錄/docs/adr/0213-macro-war-room-thermometer-signals-and-dual-momentum.md) | [`.scratch/v9.08.0-war-room-thermometer-signals-and-momentum/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.08.0-war-room-thermometer-signals-and-momentum/issues/) | Issue #367 / PR #368 | V9.08.0 | 宏觀戰情室雙水溫計排版對齊防折行、持股訊號分頁膠囊狀態機與雙重動能湖倉數據審計 |
+| [`Spec 0212`](file:///d:/APP/股票紀錄/docs/specs/0212-card18-trading-desk-layout-and-risk-management-spec.md) | [`ADR 0212`](file:///d:/APP/股票紀錄/docs/adr/0212-card18-trading-desk-layout-and-risk-management.md) | [`.scratch/v9.07.0-ai-force-card18-full-deck-and-layer7-matrix/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.07.0-ai-force-card18-full-deck-and-layer7-matrix/issues/) | Issue #366 / PR #368 | V9.07.0 | Card 18 主力追蹤總評判三欄式司令台佈局、金融大字號點位與法人部位風控升級 |
+| [`Spec 0211`](file:///d:/APP/股票紀錄/docs/specs/0211-ai-force-dashboard-verdict-full-width-and-layer7-dual-matrix-spec.md) | [`ADR 0211`](file:///d:/APP/股票紀錄/docs/adr/0211-ai-force-dashboard-verdict-full-width-and-layer7-dual-matrix.md) | [`.scratch/v9.07.0-ai-force-card18-full-deck-and-layer7-matrix/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.07.0-ai-force-card18-full-deck-and-layer7-matrix/issues/) | Issue #365 / PR #363 | V9.07.0 | 主力戰情室 Layer 7 作戰決策雙欄對稱重組與 Card 18 終極作戰指引全寬佈局 |
+| [`Spec 0210`](file:///d:/APP/股票紀錄/docs/specs/0210-financial-data-gateway-self-healing-and-workspace-guard-spec.md) | [`ADR 0210`](file:///d:/APP/股票紀錄/docs/adr/0210-financial-data-gateway-self-healing-and-workspace-guard.md) | [`.scratch/v9.06.1-financial-gateway-guard/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.06.1-financial-gateway-guard/issues/) | Issue #362 / PR #363 | V9.06.1 | 金融數據網關入境淨化、快取自愈與工作區安全氣囊防禦 |
+| [`Spec 0209`](file:///d:/APP/股票紀錄/docs/specs/0209-macro-war-room-3-cross-market-transmission-and-api-key-pipeline-spec.md) | [`ADR 0209`](file:///d:/APP/股票紀錄/docs/adr/0209-macro-war-room-3-cross-market-transmission-and-api-key-pipeline.md) | [`.scratch/v9.06.0-macro-war-room-3/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.06.0-macro-war-room-3/issues/) | Issue #359 / PR #361 | V9.06.0 | 宏觀戰情室 3.0 — 台美費半跨市傳導鏈、總經波段雙溫度計、已配置 API 金鑰池全自動接線 |
+| [`Spec 0208`](file:///d:/APP/股票紀錄/docs/specs/0208-portfolio-inventory-institutional-audit-and-pipeline-alignment-spec.md) | [`ADR 0208`](file:///d:/APP/股票紀錄/docs/adr/0208-portfolio-inventory-institutional-audit-and-pipeline-alignment.md) | [`.scratch/v9.05.0-portfolio-inventory-institutional-upgrade/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.05.0-portfolio-inventory-institutional-upgrade/issues/) | Issue #342 / PR #343 | V9.05.0 | 投資組合與庫存法人級會計修復、跨帳戶隔離、斷頭管線貫通與風控歸因升級 |
+| [`Spec 0207`](file:///d:/APP/股票紀錄/docs/specs/0207-portfolio-nav-pipeline-repair-and-cagr-alignment-spec.md) | [`ADR 0207`](file:///d:/APP/股票紀錄/docs/adr/0207-portfolio-nav-pipeline-repair-and-cagr-alignment.md) | [`.scratch/v9.04.0-portfolio-nav-pipeline-repair-and-cagr-alignment/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.04.0-portfolio-nav-pipeline-repair-and-cagr-alignment/issues/) | Issue #340 / PR #341 | V9.04.0 | 資產成長全歷史管線修復、券商隔離與量化複利指標規格 (CAGR、動態 Rf、真實出入金打點) |
+| [`Spec 0206`](file:///d:/APP/股票紀錄/docs/specs/0206-portfolio-nav-unitized-accounting-and-quant-risk-engine-spec.md) | [`ADR 0206`](file:///d:/APP/股票紀錄/docs/adr/0206-portfolio-nav-unitized-accounting-and-quant-risk-engine.md) | [`.scratch/v9.03.0-portfolio-nav-unitized-accounting-and-quant-risk-engine/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.03.0-portfolio-nav-unitized-accounting-and-quant-risk-engine/issues/) | Issue #338 / PR #339 | V9.03.0 | 資產成長與單位淨值會計及量化風控引擎重構 (11 大 Micro-Tickets 閉環) |
 | [`Spec 0205`](file:///d:/APP/股票紀錄/docs/specs/0205-tech-debts-guardrails-and-lean-refactor-spec.md) | [`ADR 0205`](file:///d:/APP/股票紀錄/docs/adr/0205-tech-debts-guardrails-and-lean-refactor.md) | [`.scratch/v9.02.0-tech-debts-guardrails-and-lean-refactor/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.02.0-tech-debts-guardrails-and-lean-refactor/issues/) | Issue #336 / PR #337 | V9.02.0 | 第一梯隊高性價比架構技術債清理與精實重構 (4 大 Micro-Tickets 閉環) |
 | [`Spec 0204`](file:///d:/APP/股票紀錄/docs/specs/0204-war-room-morning-brief-data-seal-and-lean-alignment.md) | [`ADR 0204`](file:///d:/APP/股票紀錄/docs/adr/0204-war-room-morning-brief-data-seal-and-lean-alignment.md) | [`.scratch/v9.01.0-war-room-morning-brief-data-seal-and-lean-alignment/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.01.0-war-room-morning-brief-data-seal-and-lean-alignment/issues/) | Issue #332 / PR #333, #334 | V9.01.0 | 戰情室宏觀晨會數據認證戳記、獨立防守價修復、隱私脫敏與實戰極簡對齊 (8 大 Micro-Tickets 閉環) |
 | [`Spec 0203`](file:///d:/APP/股票紀錄/docs/specs/0203-lakehouse-bootstrap-api-probe-proxy-and-tiingo-backup-spec.md) | [`ADR 0203`](file:///d:/APP/股票紀錄/docs/adr/0203-lakehouse-bootstrap-api-probe-proxy-and-tiingo-backup.md) | [`.scratch/v8.116.0-lakehouse-bootstrap-api-probe-proxy-and-tiingo-backup/`](file:///d:/APP/股票紀錄/.scratch/v8.116.0-lakehouse-bootstrap-api-probe-proxy-and-tiingo-backup/) | Issue #329 / PR #330 | V8.116.0 | 數據湖倉全量補足、API 金鑰測活代理中繼與 Tiingo 備援整合 (切片 01~13 閉環) |
@@ -163,13 +177,20 @@
 
 依據專案規範與 [`docs/debts/README.md`](file:///d:/APP/股票紀錄/docs/debts/README.md)，當前重點如下：
 
-- **待進行評估之架構改善 (Backlog / Open)**：
-  - `DEBT-0050`：[個股分析指標視圖 (AnalysisMetricView) 子元件模組化解耦重構](file:///d:/APP/股票紀錄/docs/debts/0050-analysis-metric-view-subcomponent-decomposition.md) (`P3`，已完成排雷燈子模組解耦，持續追蹤四大構面拆解)。
-  - `DEBT-0049`：[AI 動態信號判斷卡片 (Card 12) 專業層與決策層子元件模組化解耦重構](file:///d:/APP/股票紀錄/docs/debts/0049-dynamic-signals-card-subcomponent-decomposition.md) (`P3`)。
+- **待進行評估之架構改善 (Backlog / Open: 5 項)**：
+  - `DEBT-0046`：[中央金鑰庫與私有雲全端代理架構 (跨裝置同步與安全邊界防禦)](file:///d:/APP/股票紀錄/docs/debts/0046-centralized-key-vault-and-nas-proxy-mesh.md) (`P2`)。
   - `DEBT-0048`：[個股分析工作區已載入之量化財務報表與本益比深度注入智策提示詞事實清單](file:///d:/APP/股票紀錄/docs/debts/0048-strategic-prompt-workspace-financial-records-injection.md) (`P3`，待下期個股財務深探或即時估值欄位對齊時實作)。
-  - `DEBT-0047`：[Pre-push Guard 整合文檔完整性與死鏈自動化守門 (verify-docs)](file:///d:/APP/股票紀錄/docs/debts/0047-pre-push-guard-docs-integrity-linter-integration.md) (`P3`)。
-  - `DEBT-0046`：[中央金鑰庫與私有雲全端代理架構](file:///d:/APP/股票紀錄/docs/debts/0046-centralized-key-vault-and-nas-proxy-mesh.md) (`P2`)。
-  - `DEBT-0038`：[提取流通股數推導共用輔助函式 (deriveSharesOutstanding) 消除 DRY 異味](file:///d:/APP/股票紀錄/docs/debts/0038-derive-shares-outstanding-helper-refactor.md) (`P3`)。
+  - `DEBT-0049`：[AI 動態信號判斷卡片 (Card 12) 專業層與決策層子元件模組化解耦重構](file:///d:/APP/股票紀錄/docs/debts/0049-dynamic-signals-card-subcomponent-decomposition.md) (`P3`，待未來自訂多因子權重偏好演進時實作)。
+  - `DEBT-0050`：[個股分析指標視圖 (AnalysisMetricView) 子元件模組化解耦重構](file:///d:/APP/股票紀錄/docs/debts/0050-analysis-metric-view-subcomponent-decomposition.md) (`P3`，已完成排雷燈子模組解耦，持續追蹤四大構面拆解)。
+  - `DEBT-0051`：[未來現金流投影慣性配息庫動態學習與跨市場擴展](file:///d:/APP/股票紀錄/docs/debts/0051-projected-cashflow-dynamic-calendar-profile-learning.md) (`P3`，待下期跨市場現金流或自動化公司行動整合時實作)。
+
+- **近期已完整解決之架構技術債 (Recently Resolved: 6 項)**：
+  - `DEBT-0056`：[估值河流圖歷史收盤價匹配二元搜尋優化](file:///d:/APP/股票紀錄/docs/debts/0056-valuation-river-candle-lookup-binary-search.md) (`RESOLVED`，已於 v9.15.0 Spec 0220 / ADR 0220 解決)。
+  - `DEBT-0055`：[主力戰情室龐大單體風控計算解耦 (useWarRoomPortfolioMetrics)](file:///d:/APP/股票紀錄/docs/debts/0055-warroom-divergent-change-metrics-hook.md) (`RESOLVED`，已於 v9.15.0 Spec 0220 / ADR 0220 解決)。
+  - `DEBT-0054`：[WarRoomWorkspace 快速校準表單聚合與子元件解耦](file:///d:/APP/股票紀錄/docs/debts/0054-war-room-quick-calibration-modal-decomposition.md) (`RESOLVED`，已於 v9.02.0 Spec 0205 解決)。
+  - `DEBT-0053`：[EightQuarterStatementTable 樣式常數與子儲存格抽取](file:///d:/APP/股票紀錄/docs/debts/0053-eight-quarter-statement-table-style-constants-extraction.md) (`RESOLVED`，已於 v9.02.0 Spec 0205 解決)。
+  - `DEBT-0052`：[defaultFetchJson 雙重信號複合支援 (Compound AbortSignal)](file:///d:/APP/股票紀錄/docs/debts/0052-default-fetch-json-compound-abort-signal.md) (`RESOLVED`，已於 v9.02.0 Spec 0205 解決)。
+  - `DEBT-0047`：[Pre-push Guard 整合文檔完整性與死鏈自動化守門 (verify-docs)](file:///d:/APP/股票紀錄/docs/debts/0047-pre-push-guard-docs-integrity-linter-integration.md) (`RESOLVED`，已於 v9.02.0 Spec 0205 解決)。
 
 ---
 
@@ -179,9 +200,9 @@
 
 1. **確認當前工作分支與儲存庫狀態**：
    - 當前位於分支 `main`，與 `origin/main` 保持一致，Working Tree Clean。
-   - 所有變更均已透過 GitHub Actions CI 綠燈驗證並 Squash and Merge 回主幹（近期已合併 PR #313, #314, #316）。
+   - 所有變更均已透過 GitHub Actions CI 綠燈驗證並 Squash and Merge 回主幹（近期已合併 PR #461, #463, #465, #467, #469）。
 2. **日常驗證防線**：
-   - 接手前務必執行 `npm test`（確認 243 個測試檔案、1,810 個測試 100% 綠燈）與 `npm run build`（確認 0 型別錯誤）。
+   - 接手前務必執行 `npm test`（確認 277 個測試套件、2,111 個測試 100% 綠燈）與 `npm run build`（確認 0 型別錯誤）。
 3. **工作流閉環準則**：
    - 嚴格遵循工作流藍圖：`/grill-with-docs` ➔ `/to-spec` ➔ `/to-tickets` ➔ `/triage` ➔ `/tdd & /implement` ➔ `/code-review` ➔ `/handoff`。
 

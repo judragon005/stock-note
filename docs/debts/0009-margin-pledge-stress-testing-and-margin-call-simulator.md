@@ -1,6 +1,6 @@
 # 技術債 #0009: 質押維持率極端壓力測試與斷頭追繳預警模擬器 (Margin Pledge Stress Testing & Simulator)
 
-- **狀態**：`OPEN`
+- **狀態**：`RESOLVED` (已於 v5.4 ADR #0037 完整解決)
 - **優先級**：`P2`
 - **發現來源**：專業金融軟體架構審查 (Financial Software Engineering Audit)
 - **建立日期**：2026-08-26

@@ -1,6 +1,6 @@
 # 技術債 #0017: 整戶總曝險與淨槓桿率 (Leverage Ratio) 及部位持有天數統計 (Leverage Ratio & Holding Period Quant)
 
-- **狀態**：`OPEN`
+- **狀態**：`RESOLVED` (已於 v5.4 ADR #0037 完整解決)
 - **優先級**：`P2`
 - **發現來源**：證券核心系統與交易員深度審查 (Trader & Quant Audit)
 - **建立日期**：2026-08-26
