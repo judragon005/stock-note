@@ -59,13 +59,14 @@ describe('lakehouseFinancialClient (TDD Seam)', () => {
     expect(restored.cashFlow.operatingCashFlow).toBe(400000);
   });
 
-  it('2. fetchLakehouseFinancials 呼叫 /api/market/financials/:symbol 成功時回傳記錄', async () => {
+  it('2. fetchLakehouseFinancials 呼叫 /api/market/financials/:symbol 成功時回傳記錄 (支援 { data } 或 { financials } 雙結構)', async () => {
+    // 測試 A: 後端中介層標準產出 { symbol, count, financials }
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         symbol: '2330',
         count: 1,
-        data: [mapQuarterlyRecordToLakehouseRow(sampleRecord, 'TWSE')],
+        financials: [mapQuarterlyRecordToLakehouseRow(sampleRecord, 'TWSE')],
       }),
     } as any);
 
@@ -74,6 +75,20 @@ describe('lakehouseFinancialClient (TDD Seam)', () => {
     expect(result).toHaveLength(1);
     expect(result![0].symbol).toBe('2330');
     expect(result![0].income.revenue).toBe(759692);
+
+    // 測試 B: 相容舊格式 { symbol, count, data }
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        symbol: '2330',
+        count: 1,
+        data: [mapQuarterlyRecordToLakehouseRow(sampleRecord, 'TWSE')],
+      }),
+    } as any);
+
+    const resultB = await fetchLakehouseFinancials('2330', 'TW');
+    expect(resultB).toHaveLength(1);
+    expect(resultB![0].income.netIncome).toBe(325258);
   });
 
   it('3. fetchLakehouseFinancials 若中介層回傳空或 404 應回傳 null', async () => {

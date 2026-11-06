@@ -85,6 +85,7 @@ export const EightQuarterStatementTable: React.FC<EightQuarterStatementTableProp
   symbol = '',
 }) => {
   const [activeView, setActiveView] = useState<StatementViewType>('ALL');
+  const [historyDepth, setHistoryDepth] = useState<8 | 12 | 20>(12); // 預設 12 季 (Spec 0219 Ticket 05)
 
   if (!records || records.length === 0) {
     return (
@@ -94,13 +95,13 @@ export const EightQuarterStatementTable: React.FC<EightQuarterStatementTableProp
     );
   }
 
-  // 排序：最近 8 季，由舊到新橫向排列便於觀察歷史趨勢
+  // 排序：依使用者選取之歷史深度 (8 / 12 / 20 季)，由舊到新橫向排列便於觀察歷史趨勢
   const sorted = [...records]
     .sort((a, b) => {
       if (a.year !== b.year) return a.year - b.year;
       return a.quarter - b.quarter;
     })
-    .slice(-8);
+    .slice(-historyDepth);
 
   const quarters = sorted.map((r) => `${r.year % 100}Q${r.quarter}`);
 
@@ -161,14 +162,39 @@ export const EightQuarterStatementTable: React.FC<EightQuarterStatementTableProp
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
         <div>
           <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>
-            三大財務報表 8 季橫向對比全貌 {stockName ? `(${stockName} ${symbol})` : ''}
+            三大財務報表 {historyDepth} 季橫向對比全貌 {stockName ? `(${stockName} ${symbol})` : ''}
           </h3>
           <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
             損益表、資產負債表與現金流量表全貌檢視，百萬/億單位友善顯示，支援左右滑動對照
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '6px', background: 'var(--bg-secondary)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* 歷史深度分段切換器 (Ticket 05) */}
+          <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-secondary)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+            {([8, 12, 20] as const).map((depth) => (
+              <button
+                key={depth}
+                type="button"
+                onClick={() => setHistoryDepth(depth)}
+                style={{
+                  fontSize: '11px',
+                  fontWeight: historyDepth === depth ? 800 : 500,
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: historyDepth === depth ? 'var(--accent-primary, #3b82f6)' : 'transparent',
+                  color: historyDepth === depth ? '#ffffff' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {depth === 20 ? '20季 (5年)' : `${depth}季`}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: '6px', background: 'var(--bg-secondary)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
           {(
             [
               { id: 'ALL', label: '全部三表' },
@@ -196,6 +222,7 @@ export const EightQuarterStatementTable: React.FC<EightQuarterStatementTableProp
               {tab.label}
             </button>
           ))}
+          </div>
         </div>
       </div>
 

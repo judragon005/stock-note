@@ -31,6 +31,33 @@ interface AnalysisMetricViewProps {
   companyDividends?: CompanyDividendPolicyRecord[];
   stockName: string;
   symbol: string;
+  historicalCandles?: Array<{ date: string; close: number }>;
+  revenueRecords?: Array<{
+    yearMonth: string;
+    revenue: number;
+    lastYearRevenue?: number;
+    yoyRate?: number;
+    momRate?: number;
+    isAllTimeHigh?: number;
+  }>;
+  pledge?: {
+    report_date?: string;
+    pledged_shares?: number;
+    total_director_shares?: number;
+    pledge_ratio?: number;
+    insider_transfer_shares?: number;
+  };
+  valuation?: {
+    pe?: number | null;
+    pb?: number | null;
+    dividendYield?: number | null;
+    history?: Array<{
+      pe?: number | null;
+      pb?: number | null;
+      dividendYield?: number | null;
+      date?: string;
+    }>;
+  };
 }
 
 export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
@@ -42,6 +69,10 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
   companyDividends = [],
   stockName,
   symbol,
+  historicalCandles,
+  revenueRecords,
+  pledge,
+  valuation: _valuation,
 }) => {
   // 市場與產業屬性判定 (對齊 industryGate 權威產業字典閘門)
   const isUsMarket = !/^\d+[A-Za-z]?$/.test(symbol) && !symbol.startsWith('00');
@@ -1279,7 +1310,57 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
         subTab === 'operating_profit_growth' ||
         subTab === 'net_income_growth' ||
         subTab === 'eps_growth') && (
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Ticket 04: 近 12 個月營收領先走勢圖與 🔥 ATH 徽章 */}
+          {subTab === 'revenue_growth' && revenueRecords && revenueRecords.length > 0 && (
+            <div
+              style={{
+                padding: '16px',
+                borderRadius: '12px',
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-color)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                    📊 領先指標：最新 12 個月營收走勢
+                  </span>
+                  {revenueRecords[revenueRecords.length - 1]?.isAllTimeHigh === 1 && (
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        color: '#ef4444',
+                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                      }}
+                    >
+                      🔥 ATH 創歷史新高
+                    </span>
+                  )}
+                </div>
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                  資料來源：台灣證券交易所 / 櫃買中心月營收公告（比季報領先 1~2 個月）
+                </span>
+              </div>
+              {renderSimpleBars(
+                revenueRecords.slice(-12).map((rec) => ({
+                  label: rec.yearMonth.slice(2),
+                  value: rec.revenue / 100000,
+                  displayValue: `${(rec.revenue / 100000).toFixed(1)} 億`,
+                  note: rec.yoyRate !== undefined ? `YoY: ${rec.yoyRate > 0 ? `+${rec.yoyRate}` : rec.yoyRate}%` : undefined,
+                })),
+                '#3b82f6',
+                '月營收 (億元新台幣)'
+              )}
+            </div>
+          )}
           <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 12px 0' }}>
             {subTab === 'revenue_growth'
               ? '營業收入年增率 (Revenue YoY)'
@@ -1455,7 +1536,14 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
             }),
             [10, 14, 18, 22, 26],
             'TTM EPS',
-            'x'
+            'x',
+            // 注入真實歷史收盤價軌跡紅線 (Ticket 02)
+            chronological.map((r) => {
+              if (!historicalCandles || historicalCandles.length === 0) return null;
+              // 匹配該季度結算日前後最接近的收盤價
+              const match = [...historicalCandles].reverse().find((c) => c.date <= r.periodDate);
+              return match ? match.close : null;
+            })
           )}
         </div>
       )}
@@ -1543,7 +1631,13 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
             }),
             [0.8, 1.0, 1.2, 1.4, 1.6],
             '每股淨值 BVPS',
-            'x'
+            'x',
+            // 注入真實歷史收盤價軌跡紅線 (Ticket 02)
+            chronological.map((r) => {
+              if (!historicalCandles || historicalCandles.length === 0) return null;
+              const match = [...historicalCandles].reverse().find((c) => c.date <= r.periodDate);
+              return match ? match.close : null;
+            })
           )}
         </div>
       )}
@@ -1976,6 +2070,8 @@ export const AnalysisMetricView: React.FC<AnalysisMetricViewProps> = ({
           chronological={chronological}
           isFinancialStock={isFinancialStock}
           sharesOutstanding={latestRecord ? deriveSharesOutstanding(latestRecord) : undefined}
+          directorPledgeRatio={pledge?.pledge_ratio}
+          insiderTransferShares={pledge?.insider_transfer_shares}
         />
       )}
 

@@ -746,7 +746,7 @@ function createMarketApiMiddleware(customDbPath) {
       const symbol = finMatch[1].toUpperCase();
       const aliasSym = symbol.endsWith('O') ? symbol.slice(0, -1) : `${symbol}O`;
       const isAll = String(query.limit || '').trim().toLowerCase() === 'all';
-      const limit = isAll ? -1 : (parseInt(query.limit, 10) || 8);
+      const limit = isAll ? -1 : (parseInt(query.limit, 10) || 20);
 
       try {
         const sql = `SELECT * FROM financial_statements_quarterly
@@ -964,6 +964,14 @@ function createMarketApiMiddleware(customDbPath) {
         macroRow = db.prepare('SELECT * FROM macro_sentiment_daily ORDER BY date DESC LIMIT 1').get() || null;
       } catch {}
 
+      // 新增查詢最新 1 筆董監質押與內部人申報轉讓 (Spec 0219 Ticket 03)
+      let pledgeRow = null;
+      try {
+        pledgeRow = db
+          .prepare('SELECT * FROM tw_insider_pledge_records WHERE symbol IN (?, ?) ORDER BY report_date DESC LIMIT 1')
+          .get(symbol, aliasSym) || null;
+      } catch {}
+
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(
         JSON.stringify({
@@ -974,6 +982,7 @@ function createMarketApiMiddleware(customDbPath) {
           tdcc: tdccRows,
           revenue: revenueRows,
           valuation: valRow ? { ...valRow, history: valHistory } : null,
+          pledge: pledgeRow,
           macro: macroRow,
         })
       );
