@@ -138,8 +138,14 @@ export async function fetchLakehouseFinancials(
     const res = await fetch(`/api/market/financials/${encodeURIComponent(cleanSymbol)}`);
     if (!res.ok) return null;
     const json = await res.json();
-    if (json && Array.isArray(json.data) && json.data.length > 0) {
-      const records = json.data.map((row: LakehouseFinancialRow) =>
+    const rawList = Array.isArray(json?.financials)
+      ? json.financials
+      : Array.isArray(json?.data)
+      ? json.data
+      : null;
+
+    if (rawList && rawList.length > 0) {
+      const records = rawList.map((row: LakehouseFinancialRow) =>
         mapLakehouseRowToQuarterlyRecord(row, defaultMarket)
       );
       return records.sort((a: QuarterlyFinancialRecord, b: QuarterlyFinancialRecord) => {

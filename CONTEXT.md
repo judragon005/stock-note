@@ -481,6 +481,7 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0209: V9.06.0 宏觀戰情室 3.0 — 台美費半跨市傳導鏈、總經波段雙溫度計、已配置 API 金鑰池全自動接線與跨模組孤島貫通](docs/adr/0209-macro-war-room-3-cross-market-transmission-and-api-key-pipeline.md)
 - [ADR-0212: V9.07.0 Card 18 主力追蹤總評判三欄式司令台佈局、金融大字號點位與法人部位風控升級](docs/adr/0212-card18-trading-desk-layout-and-risk-management.md)
 - [ADR-0213: V9.08.0 宏觀戰情室雙水溫計排版對齊防折行、持股訊號分頁膠囊與雙重動能湖倉數據審計升級](docs/adr/0213-macro-war-room-thermometer-signals-and-dual-momentum.md)
+- [ADR-0219: V9.14.0 台美股機構級深度財報研究與實戰投資決策系統架構](docs/adr/0219-institutional-equity-research-and-decision-system.md)
 
 ### 股票健診系統原生毛玻璃擬態、ETF智慧防呆與標的快捷膠囊 (Stock Health Check & Native Glassmorphism) *(新增於 V8.45.1)*
 - **原生 Glassmorphism 擬態與排版防禦**：
@@ -2840,3 +2841,14 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     4. **All-Inclusive Portfolio Positions (持倉模式 21 檔全量特化與廣義 ETF 識別)**：在庫持倉模式 100% 呈現使用者所有 21 檔部位（含 10 檔台股 ETF 與美股 VT），杜絕持倉模式無聲隱藏 ETF 的矛盾；美股明細表自適應呈現 CMF 資金流與成交規模，消除「+0張」破圖。
     5. **Multi-Dimension Y-Axis & Adaptive Normalization (多維度 Y 軸與個股/ETF 獨立分母)**：支援 Y 軸切換「買賣超金額 (AMOUNT)」、「投量比 (RATIO)」與「張數 (SHARES)」，並為普通股與 ETF 建立獨立正規化分母（`maxAbsShares` vs `maxAbsEtfShares`），防止高張數 ETF 壓扁中小型股 Y 軸。
     6. **Sector Rotation & Actionable Signals (產業資金輪動條與 5 大高勝率實戰訊號引擎)**：於星圖頂部渲染「聰明錢淨流入 Top 5 vs 淨流出 Top 3 產業橫條」並支援點擊過濾；實作 5 大實戰異動訊號引擎（隱蔽吃貨、虛火出貨、連買中斷首日結帳、土洋對作內資軋外資、資減法人買籌碼沉澱），全面對齊作戰明細表。
+
+- **Institutional Equity Research & Decision System (台美股機構級深度財報研究與實戰投資決策系統)**:
+  - 核心模組：`src/components/analysis/StockAnalysisWorkspace.tsx`、`src/components/analysis/AnalysisMetricView.tsx`、`src/components/analysis/EightQuarterStatementTable.tsx`、`src/components/analysis/ForensicWarningSection.tsx`、`src/engine/keyMetricsEngine.ts`、`src/engine/financialProfitabilityEngine.ts`、`src/engine/forensicAuditor.ts`、`src/engine/lakehouseFinancialClient.ts`、`src/engine/strategyPinEngine.ts`。
+  - 規格來源：Spec 0219 (v9.14.0) 與 ADR 0219，關聯 GitHub Issue #449。
+  - 核心領域概念與架構革新：
+    1. **Lakehouse Contract Repair & Five-Silo Bridge (湖倉契約修復與五大孤島貫通)**：修復 `lakehouseFinancialClient` 陣列解析 Bug，使 SQLite 本地財報秒開恢復；無縫貫通月營收 (`tw_monthly_revenue`)、官方估值 (`tw_valuation_daily`)、董監質押 (`tw_insider_pledge_records`)、產業分類 (`symbols_meta`) 與歷史日 K 收盤價 (`daily_candles`)。
+    2. **12Q / 20Q Adaptive History Depth (12 季與 20 季自適應歷史深度)**：三表對照組件新增 `[ 8 季 | 12 季 | 20 季 ]` 分段切換器，後端解除 `limit=8` 預設截斷，支援跨越完整 3~5 年景氣循環的深度分析。
+    3. **Core Business Purity & Operating Leverage DOL (本業純度與營運槓桿轉折)**：實作 `calculateCoreBusinessPurity` (營業利益 / 稅前淨利) 識破業外處分資產假象；實作 `calculateOperatingLeverage` (營業利益 YoY / 營收 YoY) 捕捉跨越損益兩平點之獲利爆發轉折；提煉營收成長加速度 ($\Delta \text{YoY}$)。
+    4. **Reverse DCF & Scenario Matrix (現價隱含成長率與三情境估值矩陣)**：逆推當前股價隱含之未來 5 年 FCF 複合成長率，提供 Bull (+20%) / Base (歷史中位) / Bear (-20%) 三情境合理價值區間與安全邊際 (Margin of Safety %)。
+    5. **Executive Summary & 100-Point Scoring (機構研究總覽與 100 分制評分)**：頂部新增「01｜機構研究總覽」看板，整合 8 維度透明量化評分（營收 15%、獲利 15%、現金流 15%、安全 10%、優勢 10%、產業 10%、估值 15%、催化劑 10%）、財報說了什麼 vs 沒說什麼對照卡、實戰買進觀察區與失效停損條件。
+    6. **12-Analyst Prompt Drawer & Loopback Pinning (12 位分析師外聯抽屜與裁決釘選回流)**：本地零 Token 生成結構化投研 Prompt，支援複製至外部頂尖模型推演非結構化質化報告，並復用專案既有 `strategyPinEngine` 一鍵貼回釘選。
