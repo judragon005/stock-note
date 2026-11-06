@@ -12,7 +12,7 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 0. 戰情室風控指標抽取與估值河流二元搜尋優化 (`WarRoom Metrics Decoupling & Valuation River Binary Search`) *(V9.15.0 最新發布 / Spec #0220 / ADR #0220 / Issue #466)*
+### 1. 戰情室風控指標抽取與估值河流二元搜尋優化 (`WarRoom Metrics Decoupling & Valuation River Binary Search`) *(V9.15.0 最新發布 / Spec #0220 / ADR #0220 / Issue #466)*
 
 - **技術債 0056：估值河流圖歷史收盤價二元搜尋優化 (`findLatestCloseBeforeDate`)**：
   - 以高效純函式二元搜尋替換每次渲染在多季歷史中反覆執行的 `[...candles].reverse().find()` 反向線性拷貝搜尋。
@@ -25,7 +25,7 @@
 - **架構治理看板閉環**：
   - `docs/debts/README.md`、`docs/debts/0055-*.md`、`docs/debts/0056-*.md` 全面標記為 `RESOLVED`。
 
-### 0. 台美股機構級深度財報研究與實戰投資決策系統 (`Institutional Equity Research & Decision System`) *(V9.14.0 / Spec #0219 / ADR #0219 / Issue #449)*
+### 2. 台美股機構級深度財報研究與實戰投資決策系統 (`Institutional Equity Research & Decision System`) *(V9.14.0 / Spec #0219 / ADR #0219 / Issue #449)*
 
 - **全量接通五大數據寶藏與 20 季可調觀測窗**：
   - 歷史季度財務指標數據集全面解鎖，支援 `[ 8 季 | 12 季 | 20 季 ]` 多維度歷史縱深切換。
@@ -41,34 +41,56 @@
   - 實作「📌 一鍵釘選策略至投資作戰室」，無縫聯動全局持倉監控。
   - 支援機構級研究報告 Markdown 一鍵導出、安全剪貼簿複製（支援降級防禦）與多版本歷史差異比對 (Diff Tracking)。
 
-### 1. 肌肉書僮量化防禦核心、既有引擎零造輪子串聯與分段視圖架構 (`Muscle Booker Quant Defense Core & Segmented Lens Architecture`) *(V9.11.0 最新發布 / Spec #0216 / ADR #0216 / Issue #397)*
+### 3. 籌碼與動態星圖全鏈路時空定錨、產業輪動與實戰訊號重構 (`Smart Money Star Map Full-Chain Temporal Anchoring & Actionable Signals`) *(V9.13.0 / Spec #0218 / ADR #0218 / Issue #433)*
+
+- **三大法人雙邊完整性守衛 (Bilateral Chip Completeness Guard)**：
+  - 建立雙邊筆數門檻（TWSE 與 TPEx 均需 > 500 筆），嚴禁上市缺失之半殘籌碼污染本機 SQLite 湖倉，並將定時排程調整至 16:45 確保日報發布完畢。
+- **嚴格同日定錨與時態鮮度標章 (T-Aligned Anchor)**：
+  - 前端星圖 X 軸漲跌幅與 Y 軸籌碼 100% 鎖定在同一個最新已結算交易日，未結算時段嚴禁將即時行情與昨日籌碼硬拼接，徹底消滅時空錯位假背離。
+- **持倉模式 21 檔全量特化與產業輪動條**：
+  - 在庫持倉模式 100% 呈現使用者所有 21 檔部位（含 10 檔台股 ETF 與美股 VT）；星圖頂部渲染「聰明錢淨流入 Top 5 vs 淨流出 Top 3 產業橫條」並支援點擊過濾。
+  - 實作 5 大實戰異動訊號引擎（隱蔽吃貨、虛火出貨、連買中斷首日結帳、土洋對作內資軋外資、資減法人買籌碼沉澱）。
+
+### 4. 籌碼與動態星圖湖倉直連、物理引擎校準與 ETF 造市隔離 (`Smart Money Star Map Lakehouse & Physics Calibration`) *(V9.12.0 / Spec #0217 / ADR #0217 / Issue #418)*
+
+- **湖倉優先雙市場完整籌碼快照**：
+  - 提供 `/api/market/chips-snapshot` 批次端點，毫秒級輸出最近 5 個完整交易日之真實收盤價、真實漲跌幅、真實成交張數與三大法人買賣超，剷除假資料插值。
+- **ETF 初級市場造市申贖套利隔離**：
+  - 預設隔離台股 ETF 自營商申贖造市干擾，持倉模式對 Y 軸正規化分母施加非 ETF 上限保護，防止巨量 ETF 將個股 Y 軸壓扁。
+- **半徑感知中軸防穿透與意圖感知閉環**：
+  - 修正排斥力並將象限中軸鎖定升級為半徑感知防護，杜絕大球跨象限視覺穿透；打通意圖感知體檢（存股逢低佈局 vs 波段套牢凹單警示）與跨模組一鍵下單。
+
+### 5. 肌肉書僮量化防禦核心、既有引擎零造輪子串聯與分段視圖架構 (`Muscle Booker Quant Defense Core & Segmented Lens Architecture`) *(V9.11.0 / Spec #0216 / ADR #0216 / Issue #397)*
 
 - **箱體底穿上型態與誘多陷阱硬性防禦**：
   - 修復破底翻基準錯誤，跌破箱底 `boxLower` 後反彈收盤 < 50% 下影線、頂部受阻之誘多型態（Bull Trap）強制輸出 `AVOID (誘多陷阱)`，杜絕盲目追多。
 - **平滑目標價與成交金額流動性硬性門檻**：
-  - 期望目標價以 $Target = 0.5 \times lookback60High + 0.5 \times measuredTarget$ 消除 60 日高點 0.01 元之偏態干擾；台股 5 日均成交金額 $\ge 3,000$ 萬 TWD、美股 $\ge 500$ 萬 USD，未達標者強制標記 `AVOID (流動性不足)`。
+  - 期望目標價以平滑公式消除 60 日高點偏態干擾；台股 5 日均成交金額 $\ge 3,000$ 萬 TWD、美股 $\ge 500$ 萬 USD，未達標者強制標記 `AVOID (流動性不足)`。
 - **既有核心引擎零重複造輪子全面貫通**：
-  - 無縫串聯 `vwapCostEngine`（成交量加權均價乖離 > 10% 觸發 HOLD）、`volumeProfileEngine`（上方 5% 遭遇 POC 密集籌碼反壓警示）、`smartMoneyEngine`（美股 CMF < -0.15 資金背離警訊）。
-- **零幻覺真實水合架構與增量快取優化**：
-  - 徹底移除假行情生成引擎 `generateSyntheticCandles`，以真實日 K 歷史、IndexedDB 沉澱與動態漸進載入為單一真實來源（SSOT），全市場 2,280+ 檔切換流暢無延遲。
+  - 無縫串聯 `vwapCostEngine`（VWAP 乖離 > 10% 觸發 HOLD）、`volumeProfileEngine`（上方 5% 遭遇 POC 密集籌碼反壓警示）、`smartMoneyEngine`（美股 CMF < -0.15 資金背離警訊）。
 - **分段視圖鏡頭 (Segmented Lenses) 與 DOM 節點巨幅瘦身**：
   - 導入頂部 HUD 決策儀表板，並以 `[ 📊 決策總覽 ]`、`[ 📈 動能看板 ]`、`[ 🔭 扣抵星空 ]` 分段鏡頭收斂，視圖切換僅保留關鍵節點，DOM 節點減少 90% 以上。
-- **扣抵星空虛擬分頁與卡片微光安全條透傳**：
-  - `DeductionTelescopeTable` 支援 50 / 100 / ALL 分頁切換；`MuscleStockCard` 全面 React.memo 化並支援一鍵下單與自選星號。
 
-### 1. 四大象限動能看板卡片蘋果美學重構、全量台股與美股四大指數選池 (`Quadrant Card Apple Design System & Full Market Multi-Index Evolution`) *(V9.10.0 / Spec #0215 / ADR #0215 / Issue #395)*
+### 6. 四大象限動能看板卡片蘋果美學重構、全量台股與美股四大指數選池 (`Quadrant Card Apple Design System & Full Market Multi-Index Evolution`) *(V9.10.0 / Spec #0215 / ADR #0215 / Issue #395)*
 
 - **蘋果系統美學三層式卡片架構 (MuscleStockCard)**：
-  - 徹底根治多欄排版下的中文字元折字直排（如「中/華/電」），Header 左右分工，標的名稱限制單行省略保護 (`max-width: 92px; text-overflow: ellipsis; white-space: nowrap`)，外部圖表與指標透視儀收攏為右上角 13px 微圖標群組，徹底節省 60px 以上橫向空間。
+  - 徹底根治多欄排版下的中文字元折字直排，Header 左右分工結合標的名稱單行省略截斷，節省 60px 以上橫向空間。
   - 現價等寬粗體搭配 Apple Stocks 原生雙態微透明漲跌微膠囊與量比晶片。
-  - 達瓦斯防守儀表條完整顯示防守金額（消滅省略號）與緩衝百分比，下方加入 **3px 高度微光動態防守安全條**（綠色安全 >5%、黃色臨界 1.5%~5%、紅色已跌破 <0%），風益比 R 倍數乾淨呈現。
+  - 達瓦斯防守儀表條完整顯示防守金額（消滅省略號）與緩衝百分比，下方加入 **3px 高度微光動態防守安全條**。
 - **全量台股與美股四大市場指數選池**：
-  - 擴充模組化成分庫 `src/data/usIndicesComponents.ts`，納入台股全市場（~2,285+ 檔上市櫃與 ETF）、美股標普 500、那斯達克 100、道瓊工業 30、費城半導體 30 與台灣中型 100。
-  - 下拉選單以語意化 `<optgroup>` 清楚分組「🇹🇼 台灣市場」、「🇺🇸 美股四大市場」與「💼 我的投資組合」。
-- **超大池快取優先與模擬種子日 K 防 429 屏障**：
-  - 超大池標的未命中快取時由 `generateSyntheticCandles` 毫秒級瞬間排定四大象限，保障 0 延遲零白屏；背景啟動受控並發（3 並發、60ms 節流）增量水合，杜絕 Yahoo 429 限流與卡死。
+  - 擴充模組化成分庫，納入台股全市場（~2,285+ 檔上市櫃與 ETF）、美股標普 500、那斯達克 100、道瓊 30、費半 30 與中型 100。
+  - 下拉選單以語意化 `<optgroup>` 清楚分組，超大池快取優先與模擬種子日 K 防 429 屏障。
 
-### 1. 宏觀戰情室雙水溫計排版對齊、持股訊號分頁膠囊與雙重動能真實數據審計 (`Macro War Room Thermometer Alignment, Tactical Signal State Machine & Dual Momentum Audit`) *(V9.08.0 / Spec #0213 / ADR #0213 / Issue #367)*
+### 7. 肌肉書僮·動能雷達全量進化、量化風控防禦與無重複模組化重構 (`Muscle Booker Momentum Radar Evolution`) *(V9.09.0 / Spec #0214 / ADR #0214 / Issue #387)*
+
+- **最小防守緩衝與結構化目標價壓制**：
+  - 停損價分母保護 `Math.max(price * 0.02, atr14 * 1.0)`，消滅 16R~20R 虛胖風益比分母陷阱；等距測量目標價結合過去 60 日高點壓制。
+- **均線扣抵未來數列與多引擎量化風控**：
+  - 提取未來 3 日扣抵高低價，均值高於現價提前警示下彎反壓；無重複造輪子整合 `omniIndicatorEngine`、`dualMomentumEngine` 與 `forensicRadarEngine`。
+- **主工作區模組化解耦**：
+  - 建立 `useMuscleBookerSync.ts` 批次節流管線，主工作區自 2,464 行解耦至 420 行。
+
+### 8. 宏觀戰情室雙水溫計排版對齊、持股訊號分頁膠囊與雙重動能真實數據審計 (`Macro War Room Thermometer Alignment, Tactical Signal State Machine & Dual Momentum Audit`) *(V9.08.0 / Spec #0213 / ADR #0213 / Issue #367)*
 
 - **雙水溫計數值防折行與左右軌對稱重構**：
   - 鎖定 `tabular-nums`、`white-space: nowrap` 與 `flex-shrink: 0`，將「⚠️ 拉積盤警訊」徽章下移對齊次行，徹底消除小螢幕與窄視窗文字換行碎裂。
@@ -77,24 +99,41 @@
 - **SQLite 湖倉真實日 K 審計標章與冷啟動水合優雅降級**：
   - 頂部明確標示湖倉真實日 K 基準日；冷啟動未滿 5 根日 K 時標籤優雅顯示「⏳ 水合中」，告別 `-999.0%` 破圖。
 - **除息還原總報酬校準 (Total Return) 與公用高股息底表**：
-  - 聚合近 90 天除息總額加回分子計算，消除高息 ETF 遭到動能模型誤判淘汰，並內建台股高股息 ETF（0056, 00878, 00713, 00919, 00929）之公用除息底表。
-- **宏觀全景雙冷連動**：
-  - 長線總經 < 45 且短線波段 < 30 時連動個人防護盾警示，提示守護質押維持率。
+  - 聚合近 90 天除息總額加回分子計算，消除高息 ETF 遭到動能模型誤判淘汰，並內建台股高股息 ETF 之公用除息底表。
 
-### 1. 資產成長全歷史管線修復、券商隔離與量化複利指標 (`Portfolio NAV Pipeline Repair & Compounding Metrics`) *(V9.04.0 / Spec #0207 / ADR #0207 / Issue #340)*
+### 9. 主力戰情室 Layer 7 作戰決策雙欄對稱重組與 Card 18 司令台佈局 (`Trading Desk Layout & Layer 7 Matrix`) *(V9.07.0 / Spec #0211, #0212 / ADR #0211, #0212 / Issue #365, #366)*
+
+- **三欄式司令台金融交易桌面 (Trading Desk Layout)**：
+  - 採用「左翼主力態勢與光譜進度、中核大字點位三聯看板（停損/目標/風報比）、右翼戰術指令與法人部位風控」的等高三欄結構，支援 0.5 秒決策一眼定錨。
+- **Layer 7 雙矩陣對稱滿版重構**：
+  - 徹底重組 Card 18 終極作戰指引為 100% 滿版橫幅，整合多空能量矩陣與籌碼集中度動態診斷。
+
+### 10. 宏觀戰情室 3.0 與金融數據網關自癒護欄 (`Macro War Room 3.0 & Data Gateway Guard`) *(V9.06.0, V9.06.1 / Spec #0209, #0210 / ADR #0209, #0210 / Issue #359, #362)*
+
+- **長線總經配置 × 短線波段戰術雙水溫計**：
+  - 慢變數（殖利率利差、Fed、CPI、信用利差）收斂為「長線總經配置溫度計」；快變數（費半、台股 MA 位階、ADR 溢價率、VIX）收斂為「短中期波段戰術溫度計」。
+- **台美費半與台積電 ADR 跨市傳導鏈與拉積盤偵測**：
+  - 即時追蹤費半與台積電 ADR 溢折價，穿透試算半導體權重損益衝擊；上市櫃上漲/下跌家數比偵測「⚠️ 拉積盤警訊」。
+- **金融數據網關入境淨化與快取自癒**：
+  - 實作防護守門員與自動降級熔斷機制，保障工作區零白屏。
+
+### 11. 投資組合與庫存法人級會計修復、跨帳戶隔離與風控歸因升級 (`Portfolio Inventory Accounting & Risk Attribution`) *(V9.05.0 / Spec #0208 / ADR #0208 / Issue #342)*
+
+- **歷史累計總買入成本與加權成本匯率**：
+  - 作為已平倉與含已實現損益之累計總報酬率的唯一分母，根除已清倉顯示 `+0.00%` 與部分減碼留零股導致的分母失真；美股持倉依據歷史換匯成本加權，精確解耦美股本體 Alpha 與匯差損益。
+- **股票淨曝險率、基點貢獻度 (bps) 與集中度 HHI 指數**：
+  - 定義股票淨曝險率為 `總股票市值 / 實質總淨值 (NAV)`；個股今日損益以基點（bps）量化對整體投組波動之實質貢獻；以 HHI 指數評估投組分散風險。
+
+### 12. 資產成長全歷史管線修復、券商隔離與量化複利指標 (`Portfolio NAV Pipeline Repair & Compounding Metrics`) *(V9.04.0 / Spec #0207 / ADR #0207 / Issue #340)*
 
 - **App 頂層管線縫隙貫通與券商金流隔離**：
-  - 補通 `receivableDividends` 平滑參數，消滅除息日至發放日之間的假性跌幅；傳入 `selectedAccountId` 篩選單一券商持股，並導出 `growthScopedCash` 隔離現金流，徹底解決多券商混雜金流與除息空窗期假凹洞。
-- **動態無風險利率接軌 ($R_f$)**：
-  - 替換硬編碼 1.5%，動態適配美元 (4.5%) 與台幣 (1.8%) 殖利率標準，消滅美股夏普率與索提諾率系統性虛高。
-- **長期複利 CAGR 指標增設**：
-  - 實作年化複合成長率（CAGR %）公式 `((endingNAV / beginningCost) ** (365.25 / totalDays) - 1) * 100`，並於累計總損益卡片清晰呈現標籤。
-- **大盤日 K 本機湖倉非同步水合**：
-  - 切換大盤基準時自本機 SQLite 湖倉 `/api/market/history/` 載入真實日 K 數據並自動重繪，告別靜態備份常數。
-- **實戰出入金跳空打點與歷史最長水下天數**：
-  - Hover Crosshair 與累計本金卡片中動態呈現「💵 入金: +金額」與「💸 出金: -金額」標籤；水下回撤面板計算並呈現「最長水下: N 天」歷史極端套牢週期防禦指標。
+  - 補通 `receivableDividends` 平滑參數，消滅除息日至發放日之間的假性跌幅；傳入 `selectedAccountId` 篩選單一券商持股，並導出 `growthScopedCash` 隔離現金流。
+- **動態無風險利率接軌 ($R_f$) 與長期複利 CAGR 指標**：
+  - 替換硬編碼 1.5%，動態適配美元 (4.5%) 與台幣 (1.8%) 殖利率標準；實作年化複合成長率（CAGR %）公式。
+- **大盤日 K 本機湖倉非同步水合與實戰水下天數**：
+  - 切換大盤基準時自本機 SQLite 湖倉載入真實日 K 數據；水下回撤面板計算並呈現「最長水下: N 天」歷史極端套牢週期防禦指標。
 
-### 1. 資產成長與單位淨值會計及量化風控引擎重構 (`Portfolio NAV Unitized Accounting & Quant Risk Engine`) *(V9.03.0 / Spec #0206 / ADR #0206 / Issue #338)*
+### 13. 資產成長與單位淨值會計及量化風控引擎重構 (`Portfolio NAV Unitized Accounting & Quant Risk Engine`) *(V9.03.0 / Spec #0206 / ADR #0206 / Issue #338)*
 
 - **單位淨值會計法 (GIPS Unit NAV / TWR) 狀態機**：
   - 起點歸一化為 100.00，外部大額出入金等比增減總份額，單位淨值維持連續，徹底根除出入金扭曲真實操盤績效之金融失真。
@@ -103,96 +142,31 @@
 - **融資利息扣除與實戰逐日水下深度計算 (`Margin Interest & Drawdown Series`)**：
   - 平倉時依天數與利率扣除利息支出；逐日追蹤歷史最高淨值 (Peak ATH)，推演 `underwaterDrawdownPercent` 數列。
 - **大盤真數據直連本機 SQLite 湖倉 API 與動態無風險利率 ($R_f$)**：
-  - 徹底清除 2025/2026 年捏造的 SPY 線性偽常數，直連 `/api/market/history/:symbol?limit=all` 並具備記憶體快取；依計價幣別 (USD 4.5%, TWD 1.8%) 與外部 FRED 動態注入無風險利率。
-- **時間除數校準 (`days/365.25`) 與索提諾比率 (Sortino Ratio)**：
-  - 時間除數統一校準為 365.25 日曆天；量化看板新增第 6 張卡片「🛡️ 索提諾比率 (Sortino)」，專注懲罰下行虧損風險並具備多階層智能診斷。
-- **前台資產走勢雙模切換視圖與原生向量 SVG 水下回撤圖**：
-  - 走勢圖支援「資產金額 (AUM)」與「淨值走勢 (Unit NAV %)」膠囊切換；提供原生向量 SVG 實戰水下回撤圖面板與落水天數統計。
-- **SVG 畫布穿倉負淨值防禦與破產警戒紅線 (Y = 0)**：
-  - 移除負淨值截斷，當遭遇融資穿倉淨值跌破 0 時繪製紅色虛線基準線，座標計算防禦 NaN 崩潰。
-- **操作管線閉環（透視金流移位、帳戶篩選器、一鍵隱私遮罩）**：
-  - 將「透視金流」移至「累計投入本金」卡片並連動週期；打通券商篩選器 (`selectedAccountId`)；頂部新增 `[ 👁️ 隱私遮罩 ]`，一鍵遮蔽全頁敏感金額（`NT$******`）且保留報酬率百分比。
+  - 徹底清除偽常數，直連 `/api/market/history/:symbol?limit=all` 並具備記憶體快取；量化看板新增「🛡️ 索提諾比率 (Sortino)」卡片。
 
-### 1. 第一梯隊高性價比架構技術債清理與精實重構 (`Technical Debt Batch 1: Guardrails, Compound Timeout, Component Decomposition & Style Cleanup`) *(V9.02.0 / Spec #0205 / ADR #0205 / Issue #336)*
+### 14. 第一梯隊高性價比架構技術債清理與精實重構 (`Technical Debt Batch 1: Guardrails, Compound Timeout, Component Decomposition & Style Cleanup`) *(V9.02.0 / Spec #0205 / ADR #0205 / Issue #336)*
 
 - **Pre-push Guard 整合文檔完整性與死鏈守門 (`Documentation Integrity Guard Integration`)**：
-  - 將全專案文檔稽核腳本 `verify-docs.cjs` 整合至 `pre-push-guard.cjs` 本地阻斷關卡，以 1 秒超低延遲在推播前強制驗證 630+ 份文檔超連結實體與 Spec/ADR 1:1 成對性，徹底阻斷壞鏈外洩 (技術債 0047)。
+  - 將全專案文檔稽核腳本 `verify-docs.cjs` 整合至 `pre-push-guard.cjs` 本地阻斷關卡，以 1 秒超低延遲在推播前強制驗證 630+ 份文檔超連結實體與 Spec/ADR 1:1 成對性 (技術債 0047)。
 - **網路請求取消與連線超時雙重信號複合 (`Compound AbortSignal Integration`)**：
-  - 重構 `defaultFetchJson`，引入 `AbortSignal.any` 複合外部取消信號與 20 秒連線超時，並附帶三元優雅降級防護，消滅遠端官方伺服器連線掛起風險 (技術債 0052)。
+  - 重構 `defaultFetchJson`，引入 `AbortSignal.any` 複合外部取消信號與 20 秒連線超時，消滅連線掛起風險 (技術債 0052)。
 - **戰情室巨石元件資料泥團收斂與 Modal 狀態自治 (`War Room Quick Calibration Modal Decomposition`)**：
-  - 抽取獨立子元件 `MacroQuickCalibrationModal.tsx`，表單 8 個欄位編輯狀態完全在 Modal 內部自治 (State Colocation)，點擊儲存才通知父層，精簡 `WarRoomWorkspace.tsx` 約 250 行程式碼並消滅父元件全域無效重繪 (技術債 0054)。
+  - 抽取獨立子元件 `MacroQuickCalibrationModal.tsx`，表單 8 個欄位編輯狀態在 Modal 內部自治，精簡 `WarRoomWorkspace.tsx` 約 250 行 (技術債 0054)。
 - **財務三表樣式常數與純展示儲存格抽取 (`Eight-Quarter Statement Table Style Constants`)**：
-  - 於 `EightQuarterStatementTable.tsx` 提取 `STATEMENT_TABLE_STYLES` 與展示元件 `<StatementDataCell />`，消滅重複內聯樣式宣告，保持 8 季財務三表對比全貌無損相容 (技術債 0053)。
+  - 於 `EightQuarterStatementTable.tsx` 提取 `STATEMENT_TABLE_STYLES` 與展示元件 `<StatementDataCell />` (技術債 0053)。
 
-### 1. 戰情室宏觀晨會數據認證戳記、獨立防守價修復、隱私脫敏與實戰極簡對齊 (`War Room Morning Brief Data Seal, Isolated Stop-Loss Repair, Privacy Masking & Lean Alignment`) *(V9.01.0 / Spec #0204 / ADR #0204 / Issue #332)*
+### 15. 戰情室宏觀晨會數據認證戳記、獨立防守價修復、隱私脫敏與實戰極簡對齊 (`War Room Morning Brief Data Seal, Isolated Stop-Loss Repair, Privacy Masking & Lean Alignment`) *(V9.01.0 / Spec #0204 / ADR #0204 / Issue #332)*
 
 - **系統認證戳記與 CRO 提示詞前綴 (`Data Seal & CRO Prompt Directive`)**：
-  - 晨會簡報開頭前綴 `System Directive`，明確賦予外部 LLM 首席風險官 (CRO) 角色，並標明此為封閉本地模型推演快照，嚴格杜絕外部 AI 質疑歷史時效性與重複要求核實之循環。
+  - 晨會簡報開頭前綴 `System Directive`，明確賦予外部 LLM 首席風險官 (CRO) 角色，並標明此為封閉本地模型推演快照。
 - **根除跨標的幽靈共用防守價 Bug (`Isolated Stop-Loss Calculation`)**：
-  - 重構 `macroAdvisorEngine.ts`，將陣列取首項之 Bug 全面修復為逐檔嚴格提取各自之 `stopLossPrice` 或箱底價格，徹底根除 18 檔標的共用 $10.9593 及 00919 共用 0056 之 $56.56 防守價。
+  - 重構 `macroAdvisorEngine.ts`，逐檔嚴格提取各自之 `stopLossPrice` 或箱底價格，徹底根除 18 檔標的共用 $10.9593 及 00919 共用 0056 之 $56.56 防守價。
 - **實戰風控資料注入與真實權重計算 (`Real Weights, PnL & Volume Cleanse`)**：
-  - 全面清除 `volume: 10000` 與 `±1%` 偽造 K 線，為 `MacroHoldingSignalInput` 注入股數、成本基準、部位市值、帳戶權重百分比與未實現損益百分比。
+  - 為 `MacroHoldingSignalInput` 注入真實股數、成本基準、部位市值、帳戶權重百分比與未實現損益百分比。
 - **權重差異化賣出訊號與情境調倉執行單 (`Differentiate Sell Signals & Scenario Trade Blotter`)**：
-  - 依據部位權重自動區分處置層級（超大型權重股階梯減碼防滑價，小型股破線果斷市價停損），並精確試算股票倉位高於上限時需削減之金額（$\Delta \text{TWD}$）與建議賣出張數。
-- **質押維持率法規死線與台股 ETF 穿透警戒 (`Margin Statutory Deadlines & ETF Lookthrough`)**：
-  - 個人維持率跌破 130% 斷頭線時自動標註「T+2 日 12:00 補回 166%」之法規死線與追繳金額；標註台積電高穿透集中風險。
+  - 依據部位權重自動區分處置層級，並精確試算股票倉位高於上限時需削減之金額（$\Delta \text{TWD}$）與建議賣出張數。
 - **全市場籌碼結構化外聯與 10 秒快速校準 (`LLM Payload CRO Expansion & Quick Calibration Modal`)**：
-  - 將 OAS 信用利差、CDS 指數、外資期貨空單、全市場維持率、1-Day 95% VaR、外匯敏感度 (FX Delta) 及 3 階急速壓力測試無損序列化。
-  - 支援一鍵複製脫敏晨報（隱藏千萬資產真實金額，僅輸出權重% 與損益%），並提供 10 秒快速校準彈窗，動態覆寫美債、VIX、台指期空單與維持率。
-
-### 1. 湖倉全量注水補全、定時排程節奏化與戰情室卡片視覺優化 (`Lakehouse Full Bootstrap, Cadence-Aware Scheduled Sync & War Room Visual Optimization`) *(V9.12.0 / Spec #0198 / ADR #0198 / Issue #304)*
-
-- **湖倉一次性全量注水補全 (`Lakehouse Full Bootstrap Pipeline`)**：
-  - 獨立腳本 `bootstrap-lakehouse-full.cjs` 一次性補齊上市 (TWSE) 1,084 檔每日估值（包含愛之味 1217 等上市股 PE/PB/殖利率）、美股三大宏觀情緒指標（10Y、VIX、CNN 恐懼貪婪指數）及全市場董監事質押比例（`tw_insider_pledge_records`），徹底消除資料孤島。
-- **TWSE 官方除權息預告端點修復 (`TWSE Corporate Actions Endpoint Repair`)**：
-  - 遷移舊版 404 失效接口至 TWSE 官方 RWD 接口 (`/rwd/zh/exRight/TWT48U`)，解析標準化民國年月日為 ISO 日期，官方宣告除權息行事曆零延遲入庫 `corporate_action_calendar`。
-- **定時排程節奏化與自適應無人值守 (`Cadence-Aware Scheduled Sync`)**：
-  - 嚴格遵守 KISS 原則，拒絕過度工程化之常駐微服務，將動態資料依更新週期順路附掛於現行排程：
-    - 每日盤後（15:00 後）：順路附掛除權息預告最新宣告。
-    - 每週五（18:30 後）：順路附掛 TDCC 集保股權分散表。
-    - 每月 1~11 號：順路附掛上市櫃最新月營收。
-    - 美股盤後（05:00 後）：順路附掛美債 10Y、VIX 與 CNN 恐懼指數。
-- **戰情室 Layer 6 視覺高度放大至 295px (`Layer 6 Visual Height Enlargement`)**：
-  - 放寬容器高度至 `295px`，卡片高度改為 `height: 100%`，字體不縮小，徹底消除卡片內容壅擠壓迫感。
-- **卡片標籤純數字化 (`Card Numbering Simplification`)**：
-  - 移除冗餘英文字 `CARD`，統一轉化為現代簡約純數字徽章（如 `[10 · 13]`、`[12]`、`[21]`、`[19]`、`[20]`）。
-
-### 1. AI 主力戰情室 Layer 6 雙子堆疊重構、Card 21 估值卡導入與 Card 15 寬幅 Sparkline 對稱對齊 (`AI Force Dashboard Layout Reorganization, Card 21 Valuation & Chips Sparkline Alignment`) *(V9.11.0 / Spec #0195 / ADR #0195 / Issue #290)*
-
-- **Card 19 TDCC 集保趨勢標的確認與美股 13F / 放空籌碼卡 (`TDCC Symbol Lock & US 13F Squeeze Alert`)**：
-  - 台股標題明確綁定標的代碼（`CARD 19 · {symbol} TDCC 集保趨勢`），概覽區自動計算「散戶持股比 (10張以下)」與「大戶增持·散戶退場 (籌碼集中)」剪刀差。
-  - 美股模式自適應切換為機構持股比、空單佔流通比 (Short Float) 與內部人持股結構三宮格及 SVG 堆疊條；當 Short Float > 10% 時精準觸發「軋空警戒 (Squeeze Alert)」，徹底根除美股空白佔位符。
-- **Card 15 籌碼摘要 50%:50% 寬幅對稱與美股微觀量價 (`Chips Summary 1fr 1fr & US Microstructure`)**：
-  - 重構為 `1fr 1fr` 等寬對稱，左側數值區採用 monospace 與 `whiteSpace: 'nowrap'`，徹底杜絕窄螢幕文字溢出折行。
-  - 右側 Sparkline 走勢圖加入 0 軸水平分水嶺基準虛線與連續性動能標籤；美股模式呈現 RVOL、VWAP 偏離、MFI 機構量能與 ATR 日振幅，達成雙市場 100% 視覺對稱。
-- **Card 13 美股宏觀情緒激活 (`US Macro Sentiment Activation`)**：
-  - 100% 複用本地 Lakehouse SQLite `macro_sentiment_daily`，自適應切換為 CNN Fear & Greed 半圓指針儀表、VIX 恐慌指數與 10Y 美債殖利率，零新外部依賴。
-- **Card 21 全新估值與殖利率量化矩陣四態自適應 (`ValuationMetricsCard`)**：
-  - 填補原 Card 13 騰出的第 3 欄空間，支援四態切換：
-    1. 台股個股：盤中即時動態 PE、PB、年化現金殖利率與歷史三段位階條（低估便宜 / 合理 / 高估偏貴）。
-    2. 美股個股：Forward PE / TTM PE、PB 與為台灣投資人標註之「扣除 30% IRS 預扣稅後之實質殖利率」。
-    3. 虧損轉機股：遇負本益比自動切換為「市銷率 (PS)」並標記虧損轉機期。
-    4. ETF 標的：自動切換為「即時折溢價率 (Premium %，>0.5% 追價警戒)」、總費用率與年化配息率。
-- **Layer 6 雙子容器 (`EnergySentimentTwinCard`) 封裝與 250px 鎖定 (`Layer 6 250px Anti-Break Layout`)**：
-  - 將 Card 10 (AI 多空能量棒) 與 Card 13 (市場情緒儀表板) 垂直緊湊封裝於同一欄位雙子容器中。
-  - 兩卡中段實作「Alpha 共振仲裁標籤」（如：`逆勢抗跌 (Alpha 領頭羊)`、`拉指數出個股 (主力背離)`、`順風主升 (共振多頭)`）。
-  - Layer 6 網格四欄高度鎖定在 **250px**，徹底解決縱向拉長破版問題。
-- **全域外聯提示詞中樞連動與金融術語庫補全 (`Prompt Digest & Glossary Sync`)**：
-  - 戰情室外聯提示詞中樞成功注入 `<valuation_status>` 節點與美股 CNN / VIX 宏觀情緒；金融字典齊備 6 項新術語解釋。
-
-### 1. 戰情室外聯提示詞時態一致性、景氣循環判定與法人風控對齊 (`War Room Strategic Prompt Temporal & Cyclical Alignment`) *(V9.10.0 / Spec #0194 / ADR #0194 / Issue #288)*
-
-- **盤中成交量回退與量價一致性護欄 (`Intraday Volume-Price Consistency`)**：
-  - 在主力戰情室尚未達到正式收盤結算時，若即時報價有跳動與成交，自動自 `realtimeQuote.volume` 回退並依台股規則換算為張數，徹底消滅「現價上漲但成交量為 0」之風控海關矛盾。
-- **記憶體模組龍頭景氣循環股歸屬 (`Cyclical Symbols Expansion`)**：
-  - 於 `industryGate.ts` 補入威剛（3260）與群聯（8299），保證外部 AI 風控長能準確識別記憶體週期特性，觸發黑帽紅隊對「週期高峰殺估值（Cycle Peak Valuation Trap）」之深度質詢。
-- **時態因果隔離與待同步免責宣告 (`Temporal & Pending Declarations`)**：
-  - 宣告現價為即時盤中，而三大法人與融資券為前一日盤後結算，強制外部 AI 不得將昨日籌碼因果直接套用於盤中走勢。
-  - 明確宣告指標 N/A 係因系統管線尚待同步，杜絕將工程待同步過度推論為假帳或財務危機。
-- **在庫持倉停損防線實質觸發狀態前置預算 (`Deterministic Stop-Loss Status`)**：
-  - 由引擎前端預算並輸出 `<stop_loss_conservative_status is_triggered="true|false">`，在跌破 3% 保守停損線時給出確定性防守標籤，杜絕外部 AI 模棱兩可的空話。
-- **外資借券賣出（SBL）維度擴充 (`SBL Borrowing Dimension`)**：
-  - 於台股籌碼補齊借券賣出維度與註解，提醒外資空單主要採用借券賣出，補全空方壓力維度。
+  - 將 OAS 信用利差、CDS 指數、外資期貨空單、全市場維持率、1-Day 95% VaR 及 3 階急速壓力測試無損序列化；支援一鍵複製脫敏晨報。
 
 ### 0. 法人旗艦級宏觀戰情室 2.0 (`Institutional Macro War Room 2.0`) *(V9.00.0 / Spec #0193 / ADR #0193 / Issue #283)*
 
