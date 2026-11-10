@@ -62,7 +62,7 @@ export const ZavyMacroCompassCard: React.FC<ZavyMacroCompassCardProps> = ({
             🌊 潮汐大週期 (30Y 景氣與利率中樞)
           </div>
           <div style={{ fontSize: '15px', fontWeight: 600, color: '#f1f5f9', marginBottom: '8px' }}>
-            生產力擴張期 · 10Y美債 {snapshot.treasuryYield10y?.toFixed(2) ?? '4.45'}%
+            生產力擴張期 · 10Y美債 {snapshot.treasuryYield10y != null ? `${snapshot.treasuryYield10y.toFixed(2)}%` : '--'}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
             <span
@@ -96,7 +96,7 @@ export const ZavyMacroCompassCard: React.FC<ZavyMacroCompassCardProps> = ({
             【{wave.phase}】{wave.cycleSummary}
           </div>
           <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-            美 ISM: {snapshot.usIsmPmi ?? '51.5'} | 台 PMI: {snapshot.twPmi ?? '53.8'}
+            美 ISM: {snapshot.usIsmPmi != null ? snapshot.usIsmPmi : '--'} | 台 PMI: {snapshot.twPmi != null ? snapshot.twPmi : '--'}
           </div>
         </div>
 
@@ -155,7 +155,7 @@ export const ZavyMacroCompassCard: React.FC<ZavyMacroCompassCardProps> = ({
             信用裂痕雷達：
           </span>
           <span style={{ color: '#cbd5e1' }}>
-            高收益債 OAS {snapshot.highYieldSpreadOas?.toFixed(2) ?? '3.20'}% | CCC 垃圾債利差 {snapshot.cccHighYieldSpread?.toFixed(2) ?? '7.50'}%
+            高收益債 OAS {snapshot.highYieldSpreadOas != null ? `${snapshot.highYieldSpreadOas.toFixed(2)}%` : '--'} | CCC 垃圾債利差 {snapshot.cccHighYieldSpread != null ? `${snapshot.cccHighYieldSpread.toFixed(2)}%` : '--'}
           </span>
         </div>
         <div
