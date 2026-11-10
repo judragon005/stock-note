@@ -1,6 +1,6 @@
-import { PieChart, TrendingUp, History, Settings, Wallet, Coins, Activity, Compass, Flame, Brain, BarChart3, Sparkles } from 'lucide-react';
+import { PieChart, TrendingUp, History, Settings, Wallet, Coins, Activity, Compass, Flame, Brain, BarChart3, Sparkles, ShieldCheck } from 'lucide-react';
 
-export type WorkspaceTabKey = 'portfolio' | 'aiforce' | 'analysis' | 'health' | 'warroom' | 'musclebooker' | 'behavioral' | 'fire' | 'growth' | 'chips' | 'dividend' | 'cash' | 'ledger' | 'settings' | 'friction';
+export type WorkspaceTabKey = 'portfolio' | 'aiforce' | 'analysis' | 'health' | 'warroom' | 'zavy' | 'musclebooker' | 'behavioral' | 'fire' | 'growth' | 'chips' | 'dividend' | 'cash' | 'ledger' | 'settings' | 'friction';
 
 interface WorkspaceTabsProps {
   activeTab: WorkspaceTabKey;
@@ -68,6 +68,14 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
       badge: 'AI 作戰方針',
       badgeColor: '#f59e0b',
       badgeBg: 'rgba(245, 158, 11, 0.15)',
+    },
+    {
+      key: 'zavy',
+      label: '🐢 慢富週期與配置',
+      icon: <ShieldCheck size={16} />,
+      badge: 'Zavy 雙軌',
+      badgeColor: '#10b981',
+      badgeBg: 'rgba(16, 185, 129, 0.15)',
     },
     {
       key: 'musclebooker',
