@@ -2,6 +2,8 @@ import {
   MonteCarloSimulationConfig,
   MonteCarloSimulationResult,
   MonteCarloPercentileTrack,
+  SlowWealthFireMetricsConfig,
+  SlowWealthFireMetricsResult,
 } from '../types/firePlanning';
 
 /**
@@ -246,5 +248,106 @@ export function runMonteCarloFIRESimulation(
     safeWithdrawalRateMax: Number((optimalSWR * 100).toFixed(1)),
     percentileTracks,
     runsExhaustedBeforeYear10: exhaustedBeforeYear10Count,
+  };
+}
+
+/**
+ * 計算 Zavy 慢富 30 倍年支出本金目標、Coast-FIRE 今日門檻與順序風險 (SRR) 雙軌對比
+ */
+export function calculateSlowWealthFireMetrics(
+  config: SlowWealthFireMetricsConfig
+): SlowWealthFireMetricsResult {
+  const {
+    currentNetWorthTwd,
+    annualExpenditureTargetTwd,
+    currentAge = 35,
+    targetRetirementAge = 60,
+    expectedRealReturnRate = 0.05,
+    simulationRuns = 1_000,
+  } = config;
+
+  const validNetWorth = Math.max(0, currentNetWorthTwd);
+  const validExpenditure = Math.max(0, annualExpenditureTargetTwd);
+
+  // 1. 30x 年支出本金目標
+  const targetCapital30xTwd = Math.round(validExpenditure * 30);
+  const currentProgressPercent =
+    targetCapital30xTwd > 0
+      ? Number(((validNetWorth / targetCapital30xTwd) * 100).toFixed(1))
+      : 100;
+  const capitalShortfallTwd = Math.max(0, targetCapital30xTwd - validNetWorth);
+  const isTargetAchieved = validNetWorth >= targetCapital30xTwd;
+
+  // 2. Coast-FIRE 今日門檻 (實質年化報酬率複利折現)
+  const yearsToRetirement = Math.max(0, targetRetirementAge - currentAge);
+  const discountFactor = Math.pow(1 + Math.max(0.001, expectedRealReturnRate), yearsToRetirement);
+  const coastFireRequirementTodayTwd = Math.round(targetCapital30xTwd / discountFactor);
+  const isCoastFireAchieved = validNetWorth >= coastFireRequirementTodayTwd;
+  const coastFireSurplusOrDeficitTwd = validNetWorth - coastFireRequirementTodayTwd;
+
+  // 3. 順序風險 (SRR) 雙軌對比模擬
+  // 情境 A: 純股票組合 (高波動度 18%, 期望報酬 8.5%)
+  const equityRuns = Math.max(100, simulationRuns);
+  const equitySimConfig: MonteCarloSimulationConfig = {
+    initialPortfolioValue: validNetWorth,
+    annualExpenditureTargetTwd: validExpenditure,
+    yearsToSimulate: 30,
+    expectedAnnualReturn: 0.085,
+    annualVolatility: 0.18,
+    annualInflationRate: 0.025,
+    dividendYield: 0.035,
+    strategy: 'FIXED_PERCENT_INFLATION_ADJUSTED',
+    simulationRuns: equityRuns,
+  };
+  const equitySimResult = runMonteCarloFIRESimulation(equitySimConfig);
+  const equityExhaustionRate = Number(
+    ((equitySimResult.runsExhaustedBeforeYear10 / equityRuns) * 100).toFixed(1)
+  );
+
+  // 情境 B: 股債金防彈衣組合 (防禦波動度 11%, 期望報酬 6.8%)
+  const shieldedSimConfig: MonteCarloSimulationConfig = {
+    initialPortfolioValue: validNetWorth,
+    annualExpenditureTargetTwd: validExpenditure,
+    yearsToSimulate: 30,
+    expectedAnnualReturn: 0.068,
+    annualVolatility: 0.11,
+    annualInflationRate: 0.025,
+    dividendYield: 0.04,
+    strategy: 'FIXED_PERCENT_INFLATION_ADJUSTED',
+    simulationRuns: equityRuns,
+  };
+  const shieldedSimResult = runMonteCarloFIRESimulation(shieldedSimConfig);
+  const shieldedExhaustionRate = Number(
+    ((shieldedSimResult.runsExhaustedBeforeYear10 / equityRuns) * 100).toFixed(1)
+  );
+
+  const srrRiskReductionPercent = Number(
+    Math.max(0, equityExhaustionRate - shieldedExhaustionRate).toFixed(1)
+  );
+
+  return {
+    targetCapital30xTwd,
+    currentProgressPercent,
+    capitalShortfallTwd,
+    isTargetAchieved,
+    yearsToRetirement,
+    coastFireRequirementTodayTwd,
+    isCoastFireAchieved,
+    coastFireSurplusOrDeficitTwd,
+    equityOnlyScenario: {
+      expectedReturn: 0.085,
+      volatility: 0.18,
+      successRate: equitySimResult.successRate,
+      runsExhaustedBeforeYear10: equitySimResult.runsExhaustedBeforeYear10,
+      exhaustionRateBeforeYear10: equityExhaustionRate,
+    },
+    shieldedAssetScenario: {
+      expectedReturn: 0.068,
+      volatility: 0.11,
+      successRate: shieldedSimResult.successRate,
+      runsExhaustedBeforeYear10: shieldedSimResult.runsExhaustedBeforeYear10,
+      exhaustionRateBeforeYear10: shieldedExhaustionRate,
+    },
+    srrRiskReductionPercent,
   };
 }

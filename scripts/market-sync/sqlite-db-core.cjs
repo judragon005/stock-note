@@ -226,7 +226,7 @@ function initSqliteLakehouseDb(customPath) {
     );
     CREATE INDEX IF NOT EXISTS idx_pledge_symbol ON tw_insider_pledge_records(symbol, report_date DESC);
 
-    -- 9. 宏觀指標與市場情緒日序表 (Spec 0167 / Spec 0183)
+    -- 9. 宏觀指標與市場情緒日序表 (Spec 0167 / Spec 0183 / Spec 0221)
     CREATE TABLE IF NOT EXISTS macro_sentiment_daily (
       date TEXT PRIMARY KEY,             -- YYYY-MM-DD
       risk_free_rate_3m REAL,            -- 3 個月美債殖利率 (FRED DGS3MO)
@@ -237,6 +237,15 @@ function initSqliteLakehouseDb(customPath) {
       tw_put_call_ratio REAL,            -- 台指期 P/C Ratio
       tw_foreign_futures_oi INTEGER,     -- 外資台指期淨未平倉口數 (Spec 0183)
       tw_trust_futures_oi INTEGER,       -- 投信台指期淨未平倉口數 (Spec 0183)
+      treasury_yield_2y REAL,            -- 2 年美債殖利率 (FRED DGS2)
+      fed_funds_rate REAL,               -- 聯準會基準利率 (FRED FEDFUNDS)
+      us_cpi_yoy REAL,                   -- 美國 CPI 年增率 YoY (%)
+      credit_spread_oas REAL,            -- 高收益債利差 (FRED BAMLH0A0HYM2)
+      tw_margin_maintenance_ratio REAL,  -- 台股整體融資維持率 (%)
+      ig_spread_oas REAL,                -- 投資級債利差 (FRED BAMLC0A0CM)
+      ccc_spread_oas REAL,               -- CCC 級高收益債利差 (FRED BAMLH0A3HYC)
+      breakeven_10y REAL,                -- 10 年平衡通膨率 (FRED T10YIE)
+      initial_claims REAL,               -- 初請失業金人數 (FRED ICSA)
       updated_at INTEGER NOT NULL
     );
 
@@ -306,17 +315,35 @@ function initSqliteLakehouseDb(customPath) {
     }
 
     const macroColumns = db.prepare('PRAGMA table_info(macro_sentiment_daily)').all();
-    if (!macroColumns.some((c) => c.name === 'tw_foreign_futures_oi')) {
-      db.exec('ALTER TABLE macro_sentiment_daily ADD COLUMN tw_foreign_futures_oi INTEGER;');
-    }
-    if (!macroColumns.some((c) => c.name === 'tw_trust_futures_oi')) {
-      db.exec('ALTER TABLE macro_sentiment_daily ADD COLUMN tw_trust_futures_oi INTEGER;');
+    const existingMacroCols = new Set(macroColumns.map((c) => c.name));
+    const newMacroCols = [
+      { name: 'tw_foreign_futures_oi', type: 'INTEGER' },
+      { name: 'tw_trust_futures_oi', type: 'INTEGER' },
+      { name: 'treasury_yield_2y', type: 'REAL' },
+      { name: 'fed_funds_rate', type: 'REAL' },
+      { name: 'us_cpi_yoy', type: 'REAL' },
+      { name: 'credit_spread_oas', type: 'REAL' },
+      { name: 'tw_margin_maintenance_ratio', type: 'REAL' },
+      { name: 'ig_spread_oas', type: 'REAL' },
+      { name: 'ccc_spread_oas', type: 'REAL' },
+      { name: 'breakeven_10y', type: 'REAL' },
+      { name: 'initial_claims', type: 'REAL' },
+    ];
+    for (const col of newMacroCols) {
+      if (!existingMacroCols.has(col.name)) {
+        try {
+          db.exec(`ALTER TABLE macro_sentiment_daily ADD COLUMN ${col.name} ${col.type};`);
+        } catch {
+          // 容錯防重複
+        }
+      }
     }
   } catch (e) {
     // 忽略表尚未建立時的遷移檢查錯誤
   }
 
   db.getTwMarketBreadthAndSpotSummary = (options) => getTwMarketBreadthAndSpotSummary(db, options);
+  db.getMarketMultiHorizonBreadth = (targetDate) => getMarketMultiHorizonBreadth(targetDate, db);
 
   return db;
 }
@@ -476,10 +503,343 @@ function getTwMarketBreadthAndSpotSummary(dbOrPath, options = {}) {
   };
 }
 
+// 全局交易日定錨記憶體快取 (Spec 0221: 單次呼叫執行時間 < 25ms)
+const breadthAnchorCache = new Map();
+
+function clearBreadthAnchorCache() {
+  breadthAnchorCache.clear();
+}
+
+/**
+ * 計算台美多週期市場寬度 (20MA / 60MA / 200MA 還原除權息) 與台股近 60 日融資去槓桿比率 (Spec 0221 Ticket 01)
+ * 使用 PRIMARY KEY (symbol, date) 順序掃描與 adj_close 還原除權息，過濾零成交殭屍股
+ * 支援交易日定錨記憶體快取，單次呼叫執行時間需控制在 25ms 內
+ * @param {string} [targetDate] 目標交易日 (YYYY-MM-DD)
+ * @param {DatabaseSync|string} [dbOrPath] 資料庫連線實例或路徑
+ */
+function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
+  let db = dbOrPath;
+  if (!db && typeof targetDate === 'object' && targetDate !== null && typeof targetDate.prepare === 'function') {
+    db = targetDate;
+    targetDate = undefined;
+  }
+  db =
+    db && typeof db === 'object' && typeof db.prepare === 'function'
+      ? db
+      : getSqliteDbConnection(typeof db === 'string' ? db : undefined);
+
+  // 1. 定錨目標交易日 (定錨至 <= targetDate 的最新交易日)
+  let anchorDate = null;
+  if (targetDate && typeof targetDate === 'string') {
+    const row = db
+      .prepare('SELECT MAX(date) AS mDate FROM daily_candles WHERE date <= ?')
+      .get(targetDate);
+    anchorDate = row?.mDate || targetDate;
+  } else {
+    const row = db
+      .prepare("SELECT MAX(date) AS mDate FROM daily_candles WHERE symbol NOT LIKE '^%'")
+      .get();
+    anchorDate = row?.mDate || new Date().toISOString().slice(0, 10);
+  }
+
+  const cacheKey = `${currentDbPath || 'default'}:${anchorDate}`;
+  if (breadthAnchorCache.has(cacheKey)) {
+    return breadthAnchorCache.get(cacheKey);
+  }
+
+  // 2. 撈取近 200 個交易日視窗邊界
+  const dateRows = db
+    .prepare('SELECT DISTINCT date FROM daily_candles WHERE date <= ? ORDER BY date DESC LIMIT 200')
+    .all(anchorDate);
+  const availableDates = dateRows.map((r) => r.date);
+
+  if (availableDates.length === 0) {
+    const emptyResult = {
+      asOfDate: anchorDate,
+      tradeDate: anchorDate,
+      breadth20: 0,
+      breadth60: 0,
+      breadth200: 0,
+      pctAbove20MA: 0,
+      pctAbove60MA: 0,
+      pctAbove200MA: 0,
+      totalStocks: 0,
+      tw: {
+        breadth20: 0,
+        breadth60: 0,
+        breadth200: 0,
+        totalStocks: 0,
+        above20MaCount: 0,
+        above60MaCount: 0,
+        above200MaCount: 0,
+      },
+      us: {
+        breadth20: 0,
+        breadth60: 0,
+        breadth200: 0,
+        totalStocks: 0,
+        above20MaCount: 0,
+        above60MaCount: 0,
+        above200MaCount: 0,
+      },
+      marginDeleveragingRatio: 1,
+      twMarginDeleveraging: {
+        taiexMaxDrawdown: 0,
+        marginReductionPercent: 0,
+        marginDeleveragingRatio: 1,
+        isCleaned: true,
+      },
+    };
+    breadthAnchorCache.set(cacheKey, emptyResult);
+    return emptyResult;
+  }
+
+  const minDate = availableDates[availableDates.length - 1];
+  const minRequired20 = Math.min(20, availableDates.length);
+  const minRequired60 = Math.min(60, availableDates.length);
+  const minRequired200 = Math.min(200, availableDates.length);
+
+  // 3. 透過視窗函數計算各標的最新日之 20/60/200MA (取 COALESCE(NULLIF(adj_close, 0), close) 還原除權息)
+  // 同時計算近 20 日成交量總和 sum_vol20，過濾近 20 日零成交之殭屍股
+  const breadthRows = db
+    .prepare(`
+      WITH bounds AS (
+        SELECT ? AS min_date, ? AS max_date
+      ),
+      ranked AS (
+        SELECT
+          c.symbol,
+          c.date,
+          COALESCE(NULLIF(c.adj_close, 0), c.close) AS price,
+          c.volume,
+          ROW_NUMBER() OVER (PARTITION BY c.symbol ORDER BY c.date DESC) AS rn,
+          AVG(COALESCE(NULLIF(c.adj_close, 0), c.close)) OVER (
+            PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 19 FOLLOWING
+          ) AS ma20,
+          AVG(COALESCE(NULLIF(c.adj_close, 0), c.close)) OVER (
+            PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 59 FOLLOWING
+          ) AS ma60,
+          AVG(COALESCE(NULLIF(c.adj_close, 0), c.close)) OVER (
+            PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 199 FOLLOWING
+          ) AS ma200,
+          COUNT(c.close) OVER (
+            PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 19 FOLLOWING
+          ) AS cnt20,
+          COUNT(c.close) OVER (
+            PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 59 FOLLOWING
+          ) AS cnt60,
+          COUNT(c.close) OVER (
+            PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 199 FOLLOWING
+          ) AS cnt200,
+          SUM(COALESCE(c.volume, 0)) OVER (
+            PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 19 FOLLOWING
+          ) AS sum_vol20
+        FROM daily_candles c
+        JOIN bounds b ON c.date >= b.min_date AND c.date <= b.max_date
+        WHERE c.symbol NOT LIKE '^%'
+      )
+      SELECT
+        symbol, date, price,
+        ma20, ma60, ma200,
+        cnt20, cnt60, cnt200,
+        sum_vol20
+      FROM ranked
+      WHERE rn = 1 AND date = (SELECT max_date FROM bounds)
+    `)
+    .all(minDate, anchorDate);
+
+  let twTotal = 0;
+  let twEligible20 = 0;
+  let twEligible60 = 0;
+  let twEligible200 = 0;
+  let twAbove20 = 0;
+  let twAbove60 = 0;
+  let twAbove200 = 0;
+
+  let usTotal = 0;
+  let usEligible20 = 0;
+  let usEligible60 = 0;
+  let usEligible200 = 0;
+  let usAbove20 = 0;
+  let usAbove60 = 0;
+  let usAbove200 = 0;
+
+  for (const r of breadthRows) {
+    // 殭屍股過濾：近 20 日成交量皆為 0 且當日 volume <= 0 者剔除
+    if (r.sum_vol20 <= 0 && (r.volume === null || r.volume === undefined || r.volume <= 0)) {
+      continue;
+    }
+
+    const isTw = /^\d/.test(r.symbol) || r.symbol.endsWith('.TW') || r.symbol.endsWith('.TWO');
+    const price = r.price;
+
+    if (isTw) {
+      twTotal++;
+      if (r.ma20 !== null && r.cnt20 >= minRequired20) {
+        twEligible20++;
+        if (price >= r.ma20) twAbove20++;
+      }
+      if (r.ma60 !== null && r.cnt60 >= minRequired60) {
+        twEligible60++;
+        if (price >= r.ma60) twAbove60++;
+      }
+      if (r.ma200 !== null && r.cnt200 >= minRequired200) {
+        twEligible200++;
+        if (price >= r.ma200) twAbove200++;
+      }
+    } else {
+      usTotal++;
+      if (r.ma20 !== null && r.cnt20 >= minRequired20) {
+        usEligible20++;
+        if (price >= r.ma20) usAbove20++;
+      }
+      if (r.ma60 !== null && r.cnt60 >= minRequired60) {
+        usEligible60++;
+        if (price >= r.ma60) usAbove60++;
+      }
+      if (r.ma200 !== null && r.cnt200 >= minRequired200) {
+        usEligible200++;
+        if (price >= r.ma200) usAbove200++;
+      }
+    }
+  }
+
+  const twBreadth20 = twEligible20 > 0 ? Number(((twAbove20 / twEligible20) * 100).toFixed(1)) : 0;
+  const twBreadth60 = twEligible60 > 0 ? Number(((twAbove60 / twEligible60) * 100).toFixed(1)) : 0;
+  const twBreadth200 = twEligible200 > 0 ? Number(((twAbove200 / twEligible200) * 100).toFixed(1)) : 0;
+
+  const usBreadth20 = usEligible20 > 0 ? Number(((usAbove20 / usEligible20) * 100).toFixed(1)) : 0;
+  const usBreadth60 = usEligible60 > 0 ? Number(((usAbove60 / usEligible60) * 100).toFixed(1)) : 0;
+  const usBreadth200 = usEligible200 > 0 ? Number(((usAbove200 / usEligible200) * 100).toFixed(1)) : 0;
+
+  // 4. 台股近 60 日融資去槓桿比率 (marginDeleveragingRatio)
+  // 加權指數最大回撤 % vs 全市場融資餘額減幅 %
+  let taiexMaxDrawdown = 0;
+  let marginReductionPercent = 0;
+  let marginDeleveragingRatio = 1;
+  let isCleaned = true;
+
+  try {
+    const dates60 = availableDates.slice(0, 60);
+    if (dates60.length > 0) {
+      const minDate60 = dates60[dates60.length - 1];
+
+      // 4.1 加權指數 ^TWII 近 60 日最高點與最新收盤
+      const twiiRows = db
+        .prepare(`
+          SELECT date, close, high
+          FROM daily_candles
+          WHERE symbol = '^TWII' AND date >= ? AND date <= ?
+          ORDER BY date ASC
+        `)
+        .all(minDate60, anchorDate);
+
+      if (twiiRows.length > 0) {
+        let peakTaiex = 0;
+        for (const row of twiiRows) {
+          const val = row.high || row.close || 0;
+          if (val > peakTaiex) peakTaiex = val;
+        }
+        const curTaiex = twiiRows[twiiRows.length - 1].close;
+        if (peakTaiex > 0 && curTaiex > 0) {
+          taiexMaxDrawdown = Number((((curTaiex - peakTaiex) / peakTaiex) * 100).toFixed(2));
+        }
+      }
+
+      // 4.2 全市場融資餘額近 60 日最高總額與最新總額
+      const marginRows = db
+        .prepare(`
+          SELECT date, SUM(margin_balance) AS total_margin
+          FROM tw_institutional_chips
+          WHERE date >= ? AND date <= ?
+          GROUP BY date
+          ORDER BY date ASC
+        `)
+        .all(minDate60, anchorDate);
+
+      if (marginRows.length > 0) {
+        let peakMargin = 0;
+        for (const m of marginRows) {
+          const mVal = Number(m.total_margin || 0);
+          if (mVal > peakMargin) peakMargin = mVal;
+        }
+        const curMargin = Number(marginRows[marginRows.length - 1].total_margin || 0);
+        if (peakMargin > 0 && curMargin > 0) {
+          marginReductionPercent = Number((((curMargin - peakMargin) / peakMargin) * 100).toFixed(2));
+        }
+      }
+
+      // 融資減幅 % vs 指數回撤 % (若大盤回撤 < -0.05%，計算比率)
+      if (taiexMaxDrawdown < -0.05) {
+        marginDeleveragingRatio = Number((marginReductionPercent / taiexMaxDrawdown).toFixed(2));
+        isCleaned = marginReductionPercent <= taiexMaxDrawdown;
+      } else {
+        marginDeleveragingRatio = 1;
+        isCleaned = true;
+      }
+    }
+  } catch {
+    // 容錯防禦
+  }
+
+  // 頂層寬度預設以台股優先（若台股為 0 且美股有值則採美股）
+  const topBreadth20 = twTotal > 0 ? twBreadth20 : usBreadth20;
+  const topBreadth60 = twTotal > 0 ? twBreadth60 : usBreadth60;
+  const topBreadth200 = twTotal > 0 ? twBreadth200 : usBreadth200;
+  const topTotalStocks = twTotal > 0 ? twTotal : usTotal;
+
+  const result = {
+    asOfDate: anchorDate,
+    tradeDate: anchorDate,
+    breadth20: topBreadth20,
+    breadth60: topBreadth60,
+    breadth200: topBreadth200,
+    pctAbove20MA: topBreadth20,
+    pctAbove60MA: topBreadth60,
+    pctAbove200MA: topBreadth200,
+    totalStocks: topTotalStocks,
+    tw: {
+      breadth20: twBreadth20,
+      breadth60: twBreadth60,
+      breadth200: twBreadth200,
+      totalStocks: twTotal,
+      eligible20Count: twEligible20,
+      eligible60Count: twEligible60,
+      eligible200Count: twEligible200,
+      above20MaCount: twAbove20,
+      above60MaCount: twAbove60,
+      above200MaCount: twAbove200,
+    },
+    us: {
+      breadth20: usBreadth20,
+      breadth60: usBreadth60,
+      breadth200: usBreadth200,
+      totalStocks: usTotal,
+      eligible20Count: usEligible20,
+      eligible60Count: usEligible60,
+      eligible200Count: usEligible200,
+      above20MaCount: usAbove20,
+      above60MaCount: usAbove60,
+      above200MaCount: usAbove200,
+    },
+    marginDeleveragingRatio,
+    twMarginDeleveraging: {
+      taiexMaxDrawdown,
+      marginReductionPercent,
+      marginDeleveragingRatio,
+      isCleaned,
+    },
+  };
+
+  breadthAnchorCache.set(cacheKey, result);
+  return result;
+}
+
 /**
  * 優雅關閉 SQLite 連線
  */
 function closeSqliteDb() {
+  clearBreadthAnchorCache();
   if (globalDbInstance) {
     try {
       globalDbInstance.close();
@@ -499,5 +859,7 @@ module.exports = {
   getSqliteDbConnection,
   initSqliteLakehouseDb,
   getTwMarketBreadthAndSpotSummary,
+  getMarketMultiHorizonBreadth,
+  clearBreadthAnchorCache,
   closeSqliteDb,
 };

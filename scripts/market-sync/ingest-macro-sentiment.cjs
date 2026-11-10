@@ -381,7 +381,19 @@ async function fetchFullMacroWarRoomPulse(options = {}) {
     fetchYahooQuoteAndMa(sym, fetchJson, timeoutMs).catch(() => null)
   );
 
-  const fredSeriesIds = ['DGS10', 'DGS2', 'DGS3MO', 'T10Y2Y', 'FEDFUNDS', 'CPIAUCSL', 'BAMLH0A0HYM2'];
+  const fredSeriesIds = [
+    'DGS10',
+    'DGS2',
+    'DGS3MO',
+    'T10Y2Y',
+    'FEDFUNDS',
+    'CPIAUCSL',
+    'BAMLH0A0HYM2',
+    'BAMLC0A0CM',
+    'BAMLH0A3HYC',
+    'T10YIE',
+    'ICSA',
+  ];
   const fredPromises = fredSeriesIds.map((sid) =>
     fredApiKey
       ? fetchFredSeriesLatest(sid, fredApiKey, fetchJson, timeoutMs).catch(() => null)
@@ -407,7 +419,19 @@ async function fetchFullMacroWarRoomPulse(options = {}) {
     quotes[sym] = yahooResults[idx] || null;
   });
 
-  const [dgs10, dgs2, dgs3mo, t10y2y, fedFunds, cpiYoY, creditSpreadOas] = fredResults;
+  const [
+    dgs10,
+    dgs2,
+    dgs3mo,
+    t10y2y,
+    fedFunds,
+    cpiYoY,
+    creditSpreadOas,
+    igSpreadOas,
+    cccSpreadOas,
+    breakeven10y,
+    initialClaims,
+  ] = fredResults;
 
   const sox = quotes['^SOX'];
   const tsmAdr = quotes['TSM'];
@@ -509,7 +533,7 @@ async function fetchFullMacroWarRoomPulse(options = {}) {
     oilWtiPrice: oilWti?.price ?? null,
     wtiCrudePrice: oilWti?.price ?? null,
     oilWtiChangePercent: oilWti?.changePercent ?? null,
-    // 總經利率、通膨與信用利差
+    // 總經利率、通膨與信用利差 (Spec 0221 擴充投等債、CCC級、平衡通膨率與初請失業金)
     treasuryYield10y,
     treasuryYield2y,
     riskFreeRate3m,
@@ -519,6 +543,12 @@ async function fetchFullMacroWarRoomPulse(options = {}) {
     usCpiYoY: cpiYoY ?? null,
     creditSpreadOas: creditSpreadOas ?? null,
     highYieldSpread: creditSpreadOas ?? null,
+    twMarginMaintenanceRatio: twMarginMaintenance ?? null,
+    twMarginMaintenance: twMarginMaintenance ?? null,
+    igSpreadOas: igSpreadOas ?? null,
+    cccSpreadOas: cccSpreadOas ?? null,
+    breakeven10y: breakeven10y ?? null,
+    initialClaims: initialClaims ?? null,
     // 市場情緒與台股籌碼
     vixClose: vix?.price ?? null,
     vixChangePercent: vix?.changePercent ?? null,
@@ -526,7 +556,6 @@ async function fetchFullMacroWarRoomPulse(options = {}) {
     twFuturesNetOi: futuresOi?.foreignNetOi ?? null,
     twForeignFuturesOi: futuresOi?.foreignNetOi ?? null,
     twTrustFuturesOi: futuresOi?.trustNetOi ?? null,
-    twMarginMaintenance: twMarginMaintenance ?? null,
   };
 }
 
@@ -546,12 +575,21 @@ async function fetchMacroSentimentDaily(options = {}) {
     twForeignFuturesOi: pulse.twForeignFuturesOi,
     twTrustFuturesOi: pulse.twTrustFuturesOi,
     twMarginMaintenance: pulse.twMarginMaintenance,
+    twMarginMaintenanceRatio: pulse.twMarginMaintenanceRatio,
+    treasuryYield2y: pulse.treasuryYield2y,
+    fedFundsRate: pulse.fedFundsRate,
+    usCpiYoY: pulse.usCpiYoY,
+    creditSpreadOas: pulse.creditSpreadOas,
+    igSpreadOas: pulse.igSpreadOas,
+    cccSpreadOas: pulse.cccSpreadOas,
+    breakeven10y: pulse.breakeven10y,
+    initialClaims: pulse.initialClaims,
     pulse,
   };
 }
 
 /**
- * 批次寫入 Lakehouse SQLite macro_sentiment_daily 表 (Spec 0183 擴充期貨 OI)
+ * 批次寫入 Lakehouse SQLite macro_sentiment_daily 表 (Spec 0183 & Spec 0221 全維度總經與情緒持久化)
  */
 function ingestMacroSentimentToDb(data, customDbPath) {
   if (!data || !data.date) return false;
@@ -560,8 +598,10 @@ function ingestMacroSentimentToDb(data, customDbPath) {
   const stmt = db.prepare(`
     INSERT INTO macro_sentiment_daily (
       date, risk_free_rate_3m, treasury_yield_10y, yield_spread_10y_2y,
-      cnn_fear_greed_score, vix_close, tw_put_call_ratio, tw_foreign_futures_oi, tw_trust_futures_oi, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      cnn_fear_greed_score, vix_close, tw_put_call_ratio, tw_foreign_futures_oi, tw_trust_futures_oi,
+      treasury_yield_2y, fed_funds_rate, us_cpi_yoy, credit_spread_oas, tw_margin_maintenance_ratio,
+      ig_spread_oas, ccc_spread_oas, breakeven_10y, initial_claims, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(date) DO UPDATE SET
       risk_free_rate_3m = COALESCE(excluded.risk_free_rate_3m, macro_sentiment_daily.risk_free_rate_3m),
       treasury_yield_10y = COALESCE(excluded.treasury_yield_10y, macro_sentiment_daily.treasury_yield_10y),
@@ -571,19 +611,37 @@ function ingestMacroSentimentToDb(data, customDbPath) {
       tw_put_call_ratio = COALESCE(excluded.tw_put_call_ratio, macro_sentiment_daily.tw_put_call_ratio),
       tw_foreign_futures_oi = COALESCE(excluded.tw_foreign_futures_oi, macro_sentiment_daily.tw_foreign_futures_oi),
       tw_trust_futures_oi = COALESCE(excluded.tw_trust_futures_oi, macro_sentiment_daily.tw_trust_futures_oi),
+      treasury_yield_2y = COALESCE(excluded.treasury_yield_2y, macro_sentiment_daily.treasury_yield_2y),
+      fed_funds_rate = COALESCE(excluded.fed_funds_rate, macro_sentiment_daily.fed_funds_rate),
+      us_cpi_yoy = COALESCE(excluded.us_cpi_yoy, macro_sentiment_daily.us_cpi_yoy),
+      credit_spread_oas = COALESCE(excluded.credit_spread_oas, macro_sentiment_daily.credit_spread_oas),
+      tw_margin_maintenance_ratio = COALESCE(excluded.tw_margin_maintenance_ratio, macro_sentiment_daily.tw_margin_maintenance_ratio),
+      ig_spread_oas = COALESCE(excluded.ig_spread_oas, macro_sentiment_daily.ig_spread_oas),
+      ccc_spread_oas = COALESCE(excluded.ccc_spread_oas, macro_sentiment_daily.ccc_spread_oas),
+      breakeven_10y = COALESCE(excluded.breakeven_10y, macro_sentiment_daily.breakeven_10y),
+      initial_claims = COALESCE(excluded.initial_claims, macro_sentiment_daily.initial_claims),
       updated_at = excluded.updated_at
   `);
 
   stmt.run(
     data.date,
-    data.riskFreeRate3m ?? null,
-    data.treasuryYield10y ?? null,
-    data.yieldSpread10y2y ?? null,
-    data.cnnFearGreedScore ?? null,
-    data.vixClose ?? null,
-    data.twPutCallRatio ?? null,
-    data.twForeignFuturesOi ?? null,
-    data.twTrustFuturesOi ?? null,
+    data.riskFreeRate3m ?? data.risk_free_rate_3m ?? null,
+    data.treasuryYield10y ?? data.treasury_yield_10y ?? null,
+    data.yieldSpread10y2y ?? data.yield_spread_10y_2y ?? null,
+    data.cnnFearGreedScore ?? data.cnn_fear_greed_score ?? null,
+    data.vixClose ?? data.vix_close ?? null,
+    data.twPutCallRatio ?? data.tw_put_call_ratio ?? null,
+    data.twForeignFuturesOi ?? data.tw_foreign_futures_oi ?? null,
+    data.twTrustFuturesOi ?? data.tw_trust_futures_oi ?? null,
+    data.treasuryYield2y ?? data.treasury_yield_2y ?? null,
+    data.fedFundsRate ?? data.fed_funds_rate ?? null,
+    data.usCpiYoY ?? data.cpiYoY ?? data.us_cpi_yoy ?? null,
+    data.creditSpreadOas ?? data.credit_spread_oas ?? null,
+    data.twMarginMaintenanceRatio ?? data.twMarginMaintenance ?? data.tw_margin_maintenance_ratio ?? null,
+    data.igSpreadOas ?? data.ig_spread_oas ?? null,
+    data.cccSpreadOas ?? data.ccc_spread_oas ?? null,
+    data.breakeven10y ?? data.breakeven_10y ?? null,
+    data.initialClaims ?? data.initial_claims ?? null,
     Date.now()
   );
 

@@ -148,3 +148,47 @@ export interface MonteCarloSimulationResult {
   percentileTracks: MonteCarloPercentileTrack[];
   runsExhaustedBeforeYear10: number;     // 前 10 年破產之路徑數 (順序報酬嚴重受創)
 }
+
+// ==========================================
+// 4. Zavy 慢富 30x 本金、Coast-FIRE 與順序風險雙軌對比型別
+// ==========================================
+
+export interface SlowWealthFireMetricsConfig {
+  currentNetWorthTwd: number;              // 當前淨資產總值 (TWD)
+  annualExpenditureTargetTwd: number;      // 預期退休年支出 (TWD)
+  currentAge?: number;                     // 當前年齡 (預設 35)
+  targetRetirementAge?: number;            // 預期退休年齡 (預設 60)
+  expectedRealReturnRate?: number;         // 預期長期實質年化報酬率 (預設 0.05 代表扣除通膨後 5%)
+  simulationRuns?: number;                 // 蒙地卡羅模擬次數 (預設 1,000)
+}
+
+export interface SlowWealthFireMetricsResult {
+  // 1. 30x 年支出本金目標 (3.33% 安全提領率)
+  targetCapital30xTwd: number;             // 目標本金 (年支出 * 30)
+  currentProgressPercent: number;          // 當前達成進度 % (淨資產 / 30x 目標 * 100)
+  capitalShortfallTwd: number;             // 資金缺口 (Math.max(0, 30x目標 - 淨資產))
+  isTargetAchieved: boolean;               // 是否已達標 30x
+
+  // 2. Coast-FIRE (提早抵達被動滾存門檻)
+  yearsToRetirement: number;               // 距離預計退休年數
+  coastFireRequirementTodayTwd: number;    // 今日 Coast-FIRE 門檻本金 (30x目標 / (1 + r)^n)
+  isCoastFireAchieved: boolean;            // 今日是否已達 Coast-FIRE 門檻
+  coastFireSurplusOrDeficitTwd: number;    // Coast-FIRE 盈餘或缺口 (當前淨資產 - 今日門檻)
+
+  // 3. 順序風險 (Sequence of Returns Risk, SRR) 雙軌對比 (純股票現況 vs 股債金防彈衣)
+  equityOnlyScenario: {
+    expectedReturn: number;                // 例如 0.085
+    volatility: number;                    // 例如 0.18
+    successRate: number;                   // 30年存活率 %
+    runsExhaustedBeforeYear10: number;     // 前10年破產路徑數
+    exhaustionRateBeforeYear10: number;    // 前10年破產率 %
+  };
+  shieldedAssetScenario: {                 // 股債金防彈衣配置
+    expectedReturn: number;                // 例如 0.068
+    volatility: number;                    // 例如 0.11
+    successRate: number;                   // 30年存活率 %
+    runsExhaustedBeforeYear10: number;     // 前10年破產路徑數
+    exhaustionRateBeforeYear10: number;    // 前10年破產率 %
+  };
+  srrRiskReductionPercent: number;         // 順序風險降低幅度 (equity10年破產率 - shielded10年破產率)
+}

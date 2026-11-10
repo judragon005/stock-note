@@ -36,6 +36,7 @@ interface FirePlanningWorkspaceProps {
   totalNavTwd: number;
   portfolioAnnualVolatility?: number;
   portfolioWeightedYield?: number;
+  accountCashBalances?: Record<string, number>;
 }
 
 export const FirePlanningWorkspace: React.FC<FirePlanningWorkspaceProps> = ({
@@ -44,6 +45,7 @@ export const FirePlanningWorkspace: React.FC<FirePlanningWorkspaceProps> = ({
   totalNavTwd,
   portfolioAnnualVolatility = 0.16,
   portfolioWeightedYield = 0.045,
+  accountCashBalances,
 }) => {
   // 子分頁切換
   const [activeSubTab, setActiveSubTab] = useState<'DRIP' | 'MONTE_CARLO' | 'DCA'>('DRIP');
@@ -166,10 +168,10 @@ export const FirePlanningWorkspace: React.FC<FirePlanningWorkspaceProps> = ({
   const cashMap = useMemo(() => {
     const map: Record<string, number> = {};
     for (const acc of accounts) {
-      map[acc.id] = 50_000;
+      map[acc.id] = accountCashBalances?.[acc.id] ?? 0;
     }
     return map;
-  }, [accounts]);
+  }, [accounts, accountCashBalances]);
 
   const overdraftForecasts = useMemo(
     () => forecastDCAOverdraftRisk(dcaSchedules, accounts, cashMap),

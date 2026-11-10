@@ -71,6 +71,7 @@ import {
   DEFAULT_MARKET_ALLOCATION,
 } from './utils/allocationStorage';
 import { MuscleBookerWorkspace } from './components/MuscleBookerWorkspace';
+import { ZavySlowWealthWorkspace } from './components/zavy/ZavySlowWealthWorkspace';
 import { ChipsWorkspace } from './components/ChipsWorkspace';
 import { FirePlanningWorkspace } from './components/FirePlanningWorkspace';
 import { SettingsWorkspace } from './components/SettingsWorkspace';
@@ -435,6 +436,16 @@ export const App: React.FC = () => {
       : cashTransactions.filter((c) => c.accountId === selectedAccountId);
     return calculateAccountBalances(scopedAccounts, scopedCash, usdToTwdRate);
   }, [accounts, cashTransactions, usdToTwdRate, selectedAccountId]);
+
+  // 各券商帳戶之實質可用現金映射
+  const accountCashBalances = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const acc of accounts) {
+      const accSummary = cashLedgerSummary.byAccount[acc.id];
+      map[acc.id] = accSummary ? accSummary.settledCash : 0;
+    }
+    return map;
+  }, [accounts, cashLedgerSummary]);
 
   // 依當前市場與選定券商過濾借貸紀錄
   const scopedLoans = useMemo(() => {
@@ -1095,6 +1106,20 @@ export const App: React.FC = () => {
         </WorkspaceErrorBoundary>
       )}
 
+      {/* 活頁: 🐢 Zavy 慢富週期與配置 (Slow Wealth Cycle & Dual Track) */}
+      {activeTab === 'zavy' && (
+        <ZavySlowWealthWorkspace
+          holdings={holdings}
+          accounts={accounts}
+          totalNavTwd={
+            exposureMetrics?.navTWD && exposureMetrics.navTWD > 0
+              ? exposureMetrics.navTWD
+              : summary.combinedTWD.netAssetValue || 3_000_000
+          }
+          cashBalanceTwd={cashLedgerSummary.totalCashInTWD}
+        />
+      )}
+
       {/* 活頁: 💪 肌肉書僮·動能雷達 (Muscle Booker Momentum Radar) */}
       {activeTab === 'musclebooker' && (
         <MuscleBookerWorkspace
@@ -1110,6 +1135,7 @@ export const App: React.FC = () => {
         <FirePlanningWorkspace
           holdings={holdings}
           accounts={accounts}
+          accountCashBalances={accountCashBalances}
           totalNavTwd={
             exposureMetrics?.navTWD && exposureMetrics.navTWD > 0
               ? exposureMetrics.navTWD

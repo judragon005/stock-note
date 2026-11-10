@@ -5,6 +5,9 @@ import {
   generateFullRebalancePlan,
   convertAmountToOrderUnits,
   estimateTransactionFriction,
+  classifyZavyAssetClass,
+  validateEtfNavPremium,
+  calculateAssetClassRebalancePlan,
 } from './rebalancingEngine';
 import { TargetAllocationConfig } from '../types/allocation';
 import { HoldingPosition } from '../types/stock';
@@ -266,6 +269,431 @@ describe('Rebalancing Engine (再平衡運算引擎)', () => {
 
       const frictionSell = estimateTransactionFriction('TW', 'SELL', 100000);
       expect(frictionSell).toBe(Math.round(100000 * (0.001425 + 0.003)));
+    });
+  });
+
+  describe('5. Zavy 慢富大類資產分類器 (classifyZavyAssetClass)', () => {
+    it('應精準識別長天期政府公債 (BOND_GOV_LONG) 為真避險防彈衣', () => {
+      const twLongBonds = ['00679B', '00687B', '00795B', '00764B'];
+      twLongBonds.forEach((sym) => {
+        const res = classifyZavyAssetClass(sym);
+        expect(res.category).toBe('BOND_GOV');
+        expect(res.subCategory).toBe('BOND_GOV_LONG');
+        expect(res.isTrueDefensive).toBe(true);
+        expect(res.isExcluded).toBe(false);
+      });
+
+      const usLongBond = classifyZavyAssetClass({ symbol: 'TLT', name: 'iShares 20+ Year Treasury' });
+      expect(usLongBond.category).toBe('BOND_GOV');
+      expect(usLongBond.subCategory).toBe('BOND_GOV_LONG');
+      expect(usLongBond.isTrueDefensive).toBe(true);
+    });
+
+    it('應精準識別中天期與短天期/國庫券公債 (BOND_GOV_MID / BOND_GOV_SHORT)', () => {
+      const midBond = classifyZavyAssetClass('00697B');
+      expect(midBond.category).toBe('BOND_GOV');
+      expect(midBond.subCategory).toBe('BOND_GOV_MID');
+      expect(midBond.isTrueDefensive).toBe(true);
+
+      const usMidBond = classifyZavyAssetClass('IEF');
+      expect(usMidBond.category).toBe('BOND_GOV');
+      expect(usMidBond.subCategory).toBe('BOND_GOV_MID');
+
+      const shortBondTW = classifyZavyAssetClass('00719B');
+      expect(shortBondTW.category).toBe('BOND_GOV');
+      expect(shortBondTW.subCategory).toBe('BOND_GOV_SHORT');
+
+      const usShortBonds = ['SHY', 'SGOV', 'BIL'];
+      usShortBonds.forEach((sym) => {
+        const res = classifyZavyAssetClass(sym);
+        expect(res.category).toBe('BOND_GOV');
+        expect(res.subCategory).toBe('BOND_GOV_SHORT');
+        expect(res.isTrueDefensive).toBe(true);
+      });
+
+      const broadGovBond = classifyZavyAssetClass('BNDW');
+      expect(broadGovBond.category).toBe('BOND_GOV');
+      expect(broadGovBond.isTrueDefensive).toBe(true);
+    });
+
+    it('應識別投資級公司債 (BOND_CORP_IG) 為防禦性風險資產 (非純防彈衣)', () => {
+      const igBonds = ['00720B', '00725B', '00751B', '00772B', '00937B', 'LQD', 'VCIT'];
+      igBonds.forEach((sym) => {
+        const res = classifyZavyAssetClass(sym);
+        expect(res.category).toBe('BOND_CORP_IG');
+        expect(res.subCategory).toBe('BOND_CORP_IG');
+        expect(res.isTrueDefensive).toBe(false); // 包含信用利差風險，非真避險防彈衣
+        expect(res.isExcluded).toBe(false);
+      });
+    });
+
+    it('應精準識別黃金 (GOLD) 為真避險防彈衣', () => {
+      const golds = ['00635U', 'GLD', 'IAU'];
+      golds.forEach((sym) => {
+        const res = classifyZavyAssetClass(sym);
+        expect(res.category).toBe('GOLD');
+        expect(res.subCategory).toBe('GOLD');
+        expect(res.isTrueDefensive).toBe(true);
+      });
+    });
+
+    it('應分流權益型 REITs 與剔除抵押權型 mREITs (00712 / NLY)', () => {
+      const equityReits = classifyZavyAssetClass('VNQ');
+      expect(equityReits.category).toBe('REITS');
+      expect(equityReits.subCategory).toBe('REITS_EQUITY');
+      expect(equityReits.isExcluded).toBe(false);
+
+      const mortgageReitTW = classifyZavyAssetClass({ symbol: '00712', name: '復華富時不動產' });
+      expect(mortgageReitTW.category).toBe('REITS');
+      expect(mortgageReitTW.subCategory).toBe('EXCLUDED');
+      expect(mortgageReitTW.isExcluded).toBe(true);
+      expect(mortgageReitTW.exclusionReason).toBe('MORTGAGE_REIT');
+      expect(mortgageReitTW.warningMessage).toBeDefined();
+
+      const mortgageReitUS = classifyZavyAssetClass('NLY');
+      expect(mortgageReitUS.isExcluded).toBe(true);
+      expect(mortgageReitUS.exclusionReason).toBe('MORTGAGE_REIT');
+    });
+
+    it('應將槓桿與反向型 ETF (00631L, 00632R, 00680L, TQQQ 等) 標記為 EXCLUDED 剔除池', () => {
+      const leveraged = ['00631L', '00632R', '00680L', 'TQQQ', 'SQQQ', 'SOXL', 'TMF'];
+      leveraged.forEach((sym) => {
+        const res = classifyZavyAssetClass(sym);
+        expect(res.isExcluded).toBe(true);
+        expect(res.subCategory).toBe('EXCLUDED');
+        expect(res.exclusionReason).toBe('LEVERAGED_INVERSE');
+        expect(res.warningMessage).toContain('時間價值耗損');
+      });
+    });
+
+    it('應正確識別股票型 (EQUITY)：市值型核心、高股息與波段衛星', () => {
+      // 市值核心
+      const coreStocks = ['0050', '006208', 'VTI', 'VOO', 'QQQ', 'VT'];
+      coreStocks.forEach((sym) => {
+        const res = classifyZavyAssetClass(sym);
+        expect(res.category).toBe('EQUITY');
+        expect(res.subCategory).toBe('EQUITY_CORE');
+        expect(res.isExcluded).toBe(false);
+      });
+
+      // 高股息
+      const dividendStocks = ['00878', '00919', '00929', '0056', 'VYM', 'SCHD'];
+      dividendStocks.forEach((sym) => {
+        const res = classifyZavyAssetClass(sym);
+        expect(res.category).toBe('EQUITY');
+        expect(res.subCategory).toBe('EQUITY_DIVIDEND');
+      });
+
+      // 個股 / 衛星
+      const satellite = classifyZavyAssetClass({ symbol: '2330', name: '台積電' });
+      expect(satellite.category).toBe('EQUITY');
+      expect(satellite.subCategory).toBe('EQUITY_SATELLITE');
+    });
+
+    it('應支援現金 (CASH) 識別', () => {
+      const cashRes = classifyZavyAssetClass('CASH');
+      expect(cashRes.category).toBe('CASH');
+      expect(cashRes.isTrueDefensive).toBe(true);
+    });
+
+    it('邊界條件測試：大小寫容錯、空格容錯與未知代碼安全回退', () => {
+      const lowerTlt = classifyZavyAssetClass('  tlt  ');
+      expect(lowerTlt.category).toBe('BOND_GOV');
+      expect(lowerTlt.subCategory).toBe('BOND_GOV_LONG');
+
+      const lowerBondTW = classifyZavyAssetClass(' 00679b ');
+      expect(lowerBondTW.category).toBe('BOND_GOV');
+
+      // 未知個股代碼預設為 EQUITY / EQUITY_SATELLITE
+      const unknownStock = classifyZavyAssetClass('UNKNOWN999');
+      expect(unknownStock.category).toBe('EQUITY');
+      expect(unknownStock.subCategory).toBe('EQUITY_SATELLITE');
+      expect(unknownStock.isExcluded).toBe(false);
+    });
+  });
+
+  describe('6. ETF 折溢價守門員 (validateEtfNavPremium)', () => {
+    it('折溢價正常 (<= 0.5% 或折價) 時回傳 NORMAL 且不攔截', () => {
+      const resNormal = validateEtfNavPremium('00679B', 0.2);
+      expect(resNormal.status).toBe('NORMAL');
+      expect(resNormal.isBlocked).toBe(false);
+
+      const resDiscount = validateEtfNavPremium('0050', -0.5);
+      expect(resDiscount.status).toBe('NORMAL');
+      expect(resDiscount.isBlocked).toBe(false);
+    });
+
+    it('輕度溢價 (0.5% ~ 1.0%) 時回傳 ELEVATED_PREMIUM_WARNING 且不攔截', () => {
+      const resMild = validateEtfNavPremium('00679B', 0.8);
+      expect(resMild.status).toBe('ELEVATED_PREMIUM_WARNING');
+      expect(resMild.isBlocked).toBe(false);
+      expect(resMild.warningMessage).toBeDefined();
+    });
+
+    it('高溢價 (> 1.0%) 時回傳 HIGH_PREMIUM_RISK 並攔截買進，且提供同類型平價替代標的', () => {
+      // 00679B 溢價高時建議 00687B 或 00795B
+      const resBond = validateEtfNavPremium('00679B', 1.5);
+      expect(resBond.status).toBe('HIGH_PREMIUM_RISK');
+      expect(resBond.isBlocked).toBe(true);
+      expect(resBond.suggestedAlternatives).toBeDefined();
+      expect(resBond.suggestedAlternatives).toEqual(
+        expect.arrayContaining(['00687B', '00795B'])
+      );
+
+      // 0050 溢價時建議 006208
+      const res0050 = validateEtfNavPremium('0050', 1.2);
+      expect(res0050.status).toBe('HIGH_PREMIUM_RISK');
+      expect(res0050.isBlocked).toBe(true);
+      expect(res0050.suggestedAlternatives).toContain('006208');
+
+      // 00878 溢價時建議 0056 / 00713 / 00919
+      const res00878 = validateEtfNavPremium('00878', 1.8);
+      expect(res00878.status).toBe('HIGH_PREMIUM_RISK');
+      expect(res00878.suggestedAlternatives).toBeDefined();
+      expect(res00878.suggestedAlternatives!.length).toBeGreaterThan(0);
+    });
+
+    it('支援自訂閾值 (如 0.6% 臨界值)', () => {
+      const resCustom = validateEtfNavPremium('00679B', 0.8, 0.6);
+      expect(resCustom.status).toBe('HIGH_PREMIUM_RISK');
+      expect(resCustom.isBlocked).toBe(true);
+    });
+  });
+
+  describe('7. Zavy 慢富大類資產再平衡與股息活水轉向 (calculateAssetClassRebalancePlan)', () => {
+    const portfolioHoldings: HoldingPosition[] = [
+      {
+        symbol: '0050',
+        name: '元大台灣50',
+        market: 'TW',
+        currency: 'TWD',
+        shares: 10000,
+        avgCost: 150,
+        totalCostBasis: 1500000,
+        adjustedCostBasis: 1500000,
+        currentPrice: 200,
+        marketValue: 2000000,
+        grossMarketValue: 2000000,
+        estimatedSellTax: 2000,
+        estimatedSellFee: 2850,
+        netMarketValue: 1995150,
+        unrealizedPnL: 500000,
+        unrealizedPnLPercent: 33.3,
+        unrealizedPnLBroker: 495150,
+        unrealizedPnLBrokerPercent: 33.0,
+        realizedPnL: 0,
+        totalDividends: 0,
+        totalCapitalReturned: 0,
+        totalStockDividendsShares: 0,
+        totalReturnPnL: 500000,
+        totalReturnPercent: 33.3,
+        yieldOnCostPercent: 0,
+      },
+      {
+        symbol: '00878',
+        name: '國泰永續高股息',
+        market: 'TW',
+        currency: 'TWD',
+        shares: 50000,
+        avgCost: 20,
+        totalCostBasis: 1000000,
+        adjustedCostBasis: 1000000,
+        currentPrice: 22,
+        marketValue: 1100000,
+        grossMarketValue: 1100000,
+        estimatedSellTax: 1100,
+        estimatedSellFee: 1568,
+        netMarketValue: 1097332,
+        unrealizedPnL: 100000,
+        unrealizedPnLPercent: 10.0,
+        unrealizedPnLBroker: 97332,
+        unrealizedPnLBrokerPercent: 9.73,
+        realizedPnL: 0,
+        totalDividends: 0,
+        totalCapitalReturned: 0,
+        totalStockDividendsShares: 0,
+        totalReturnPnL: 100000,
+        totalReturnPercent: 10.0,
+        yieldOnCostPercent: 0,
+      },
+      {
+        symbol: '2330',
+        name: '台積電 (波段衛星)',
+        market: 'TW',
+        currency: 'TWD',
+        shares: 1000,
+        avgCost: 800,
+        totalCostBasis: 800000,
+        adjustedCostBasis: 800000,
+        currentPrice: 1000,
+        marketValue: 1000000,
+        grossMarketValue: 1000000,
+        estimatedSellTax: 3000,
+        estimatedSellFee: 1425,
+        netMarketValue: 995575,
+        unrealizedPnL: 200000,
+        unrealizedPnLPercent: 25.0,
+        unrealizedPnLBroker: 195575,
+        unrealizedPnLBrokerPercent: 24.45,
+        realizedPnL: 0,
+        totalDividends: 0,
+        totalCapitalReturned: 0,
+        totalStockDividendsShares: 0,
+        totalReturnPnL: 200000,
+        totalReturnPercent: 25.0,
+        yieldOnCostPercent: 0,
+      },
+      {
+        symbol: '00687B',
+        name: '國泰20年美債',
+        market: 'TW',
+        currency: 'TWD',
+        shares: 15000,
+        avgCost: 32,
+        totalCostBasis: 480000,
+        adjustedCostBasis: 480000,
+        currentPrice: 30,
+        marketValue: 450000,
+        grossMarketValue: 450000,
+        estimatedSellTax: 0,
+        estimatedSellFee: 641,
+        netMarketValue: 449359,
+        unrealizedPnL: -30000,
+        unrealizedPnLPercent: -6.25,
+        unrealizedPnLBroker: -30641,
+        unrealizedPnLBrokerPercent: -6.38,
+        realizedPnL: 0,
+        totalDividends: 0,
+        totalCapitalReturned: 0,
+        totalStockDividendsShares: 0,
+        totalReturnPnL: -30000,
+        totalReturnPercent: -6.25,
+        yieldOnCostPercent: 0,
+      },
+      {
+        symbol: '00635U',
+        name: '期元大S&P黃金',
+        market: 'TW',
+        currency: 'TWD',
+        shares: 10000,
+        avgCost: 24,
+        totalCostBasis: 240000,
+        adjustedCostBasis: 240000,
+        currentPrice: 25,
+        marketValue: 250000,
+        grossMarketValue: 250000,
+        estimatedSellTax: 250,
+        estimatedSellFee: 356,
+        netMarketValue: 249394,
+        unrealizedPnL: 10000,
+        unrealizedPnLPercent: 4.17,
+        unrealizedPnLBroker: 9394,
+        unrealizedPnLBrokerPercent: 3.91,
+        realizedPnL: 0,
+        totalDividends: 0,
+        totalCapitalReturned: 0,
+        totalStockDividendsShares: 0,
+        totalReturnPnL: 10000,
+        totalReturnPercent: 4.17,
+        yieldOnCostPercent: 0,
+      },
+    ];
+
+    // 總股票: 410萬 (0050 200萬 + 00878 110萬 + 2330 100萬)
+    // 總公債: 45萬 (00687B)
+    // 總黃金: 25萬 (00635U)
+    // 現金: 20萬
+    // 總淨值: 500萬
+    // 當前比重: 股 82% / 債 9% / 金 5% / 現金 4%
+    // 目標配置: 股 60% / 債 20% / 金 10% / 現金 10%
+    const targetConfig: TargetAllocationConfig = {
+      id: 'zavy-slow-wealth-6211',
+      type: 'ASSET_CLASS',
+      name: '慢富資產配置 (6:2:1:1)',
+      items: [
+        { key: 'EQUITY', name: '股票資產', targetPercent: 60 },
+        { key: 'BOND_GOV', name: '純政府公債防彈衣', targetPercent: 20 },
+        { key: 'GOLD', name: '黃金儲備', targetPercent: 10 },
+        { key: 'CASH', name: '現金防護網', targetPercent: 10 },
+      ],
+      toleranceBandPercent: 5.0,
+      updatedAt: Date.now(),
+    };
+
+    it('應正確精算大類資產偏離度與健康度', () => {
+      const plan = calculateAssetClassRebalancePlan({
+        config: targetConfig,
+        holdings: portfolioHoldings,
+        cashBalanceTwd: 200000,
+        strategyMode: 'NORMAL',
+      });
+
+      expect(plan.mode).toBe('FULL_REBALANCE');
+      expect(plan.totalPortfolioValueTwd).toBe(5000000);
+
+      const equityRec = plan.assetClassRecommendations.find((r) => r.key === 'EQUITY')!;
+      expect(equityRec.currentPercent).toBe(82);
+      expect(equityRec.targetPercent).toBe(60);
+      expect(equityRec.driftPercent).toBe(22);
+      expect(equityRec.status).toBe('SEVERE_DRIFT');
+      expect(equityRec.action).toBe('SELL');
+
+      const bondRec = plan.assetClassRecommendations.find((r) => r.key === 'BOND_GOV')!;
+      expect(bondRec.currentPercent).toBe(9);
+      expect(bondRec.driftPercent).toBe(-11);
+      expect(bondRec.action).toBe('BUY');
+    });
+
+    it('股息活水轉向 (DIVIDEND_REDIRECT)：不賣股票存量，將年股息導流加碼低配防彈衣', () => {
+      const plan = calculateAssetClassRebalancePlan({
+        config: targetConfig,
+        holdings: portfolioHoldings,
+        cashBalanceTwd: 200000,
+        strategyMode: 'DIVIDEND_REDIRECT',
+        annualEstimatedDividendsTwd: 300000, // 30 萬股息活水
+      });
+
+      expect(plan.strategyMode).toBe('DIVIDEND_REDIRECT');
+      expect(plan.dividendRedirectPlan).toBeDefined();
+      expect(plan.dividendRedirectPlan!.annualEstimatedDividendsTwd).toBe(300000);
+      expect(plan.dividendRedirectPlan!.targets.length).toBeGreaterThan(0);
+
+      // 低配嚴重的公債與黃金應獲得活水配額
+      const bondTarget = plan.dividendRedirectPlan!.targets.find((t) => t.category === 'BOND_GOV');
+      expect(bondTarget).toBeDefined();
+      expect(bondTarget!.allocatedAmountTwd).toBeGreaterThan(0);
+      expect(bondTarget!.suggestedSymbol).toBe('00687B');
+    });
+
+    it('股票質押負債情境：優先建議償還質押本金降槓桿，且已設質股數不賣', () => {
+      const pledgedStockMap = {
+        '0050': 5000, // 0050 設質 5,000 股
+      };
+
+      const plan = calculateAssetClassRebalancePlan({
+        config: targetConfig,
+        holdings: portfolioHoldings,
+        cashBalanceTwd: 200000,
+        strategyMode: 'NORMAL',
+        activeLoanPrincipalTwd: 500000, // 質押借款 50 萬
+        pledgedSharesMap: pledgedStockMap,
+      });
+
+      expect(plan.debtRepayment).toBeDefined();
+      expect(plan.debtRepayment!.hasActiveLoans).toBe(true);
+      expect(plan.debtRepayment!.totalLoanPrincipalTwd).toBe(500000);
+      expect(plan.debtRepayment!.recommendedRepaymentAmountTwd).toBeGreaterThan(0);
+
+      // 四階減碼瀑布流：波段個股 (2330) 應排在 Tier 1 優先減碼
+      expect(plan.waterfallSellSuggestions).toBeDefined();
+      const tier1 = plan.waterfallSellSuggestions!.find((w) => w.tier === 1);
+      expect(tier1?.symbol).toBe('2330');
+
+      // 0050 設質 5000 股應標記為 isPledged = true 且可賣股數排除設質
+      const t0050Waterfall = plan.waterfallSellSuggestions!.find((w) => w.symbol === '0050')!;
+      expect(t0050Waterfall.isPledged).toBe(true);
+      expect(t0050Waterfall.pledgedShares).toBe(5000);
+      expect(t0050Waterfall.unpledgedShares).toBe(5000);
     });
   });
 });
