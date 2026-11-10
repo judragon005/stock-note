@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-2141%2F2141%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2145%2F2145%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,15 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. Zavy「散戶慢富之路」三級週期定位、台美市場結構寬度與 A/B 雙軌配置系統 (`🐢 慢富週期與配置`) *(V9.16.0 最新發布 / Spec #0221 / ADR #0221 / Issue #472)*
+### 1. Zavy「散戶慢富之路」全鏈路真實數據驅動、市場寬度修復與引擎統一 (`🐢 慢富週期與配置`) *(V9.16.1 最新發布 / Spec #0222 / ADR #0222 / Issue #478)*
+
+- **全鏈路真實數據驅動與去偽存真 (Zero Mock UI & Real-Data Driven)**：
+  - 徹底移除所有前端寫死假數據與虛構常數，無數據時誠實顯示 `--`；數據庫與 API 完全隔離外部機密目錄，全面取自專案內部 SQLite 湖倉或免 Key FRED 官方公開 CSV 端點。
+  - **修復 200MA 年線寬度 (25.2%)**：台美市場獨立定錨各自交易日清單（杜絕美股交易日稀釋台股天數）、嚴格排除 4,660 筆 6 碼非 00 權證，並放寬有效天數門檻，徹底根治「200MA 為 0.0%」之系統性 Bug。
+  - **融資去槓桿殘缺日安全過濾**：引入近 60 日有效檔數動態門檻，杜絕盤後收錄未齊造成的 `-81.2%` 虛假去槓桿暴跌信號。
+  - **全市場營收擴散指數**：直接自 SQLite 1,957 檔上市櫃歷史營收動態精算月增率擴散度（`mom_rate > 0` 佔比）與全市場單月總營收 YoY。
+  - **既有成熟引擎全面統一**：移除粗糙的 `(usPmi + twPmi) / 2` 偽平均，改採美股大卡車主軸與台灣小車領先判定；全面調用 `rebalancingEngine.ts`（大類資產動態平衡、質押設質保護瀑布流）與 `monteCarloFireEngine.ts`（30x 本金與 Coast-FIRE 測算），實現高內聚與零重複造輪子。
+
 
 - **頂層專屬工作區與三層分段鏡頭 (`Segmented Lenses`)**：
   - 於頂部導航列新增 `🐢 慢富週期與配置` (`key: 'zavy'`) 頁籤。
