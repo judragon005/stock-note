@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-2111%2F2111%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2141%2F2141%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,23 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 戰情室風控指標抽取與估值河流二元搜尋優化 (`WarRoom Metrics Decoupling & Valuation River Binary Search`) *(V9.15.0 最新發布 / Spec #0220 / ADR #0220 / Issue #466)*
+### 1. Zavy「散戶慢富之路」三級週期定位、台美市場結構寬度與 A/B 雙軌配置系統 (`🐢 慢富週期與配置`) *(V9.16.0 最新發布 / Spec #0221 / ADR #0221 / Issue #472)*
+
+- **頂層專屬工作區與三層分段鏡頭 (`Segmented Lenses`)**：
+  - 於頂部導航列新增 `🐢 慢富週期與配置` (`key: 'zavy'`) 頁籤。
+  - 頂部常駐「Zavy 大局觀定錨 HUD 橫幅」（顯示當前三級週期階段、心態指引、淨股票曝險 vs 風險預算上限、Coast-FIRE 達成率，支援 Markdown/CSV 一鍵匯出）。
+  - 分段鏡頭 `[ 🌊 一、總經週期與大局觀 ]`：三級週期定位（潮汐/波浪/漣漪）、台灣小車 vs 美國大卡車對照、2026/10 月度基準庫與 10 秒快填校準抽屜。
+  - 分段鏡頭 `[ 🌡️ 二、市場位階與風險傳導 ]`：10Y 美債殖利率新區間 (`4.0%–5.5%`)、高收益/投等/CCC 級垃圾債利差、台美雙市場 20/60/200MA 還原寬度、週期耦合季線布林位階、大型空頭鈍化失效閘門、台股近 60 日融資去槓桿完成度。
+  - 分段鏡頭 `[ 🛡️ 三、見自己：雙軌配置與慢富退休 ]`：A 軌風險預算反推（回撤金額 ÷ 壓力跌幅）與質押本金優先償還、四階減碼瀑布流；B 軌大類資產純度體檢、增量股息活水轉向再平衡、30 倍年支出（3.33% SWR）與 Coast-FIRE 滑行退休進度條。
+- **SQLite 湖倉 `<25ms` 叢集索引多週期還原寬度與宏觀持久化修復**：
+  - `sqlite-db-core.cjs` 實作 `getMarketMultiHorizonBreadth`，以 `PRIMARY KEY (symbol, date)` 叢集索引掃描與條件平均，一次算完台美 `20/60/200MA` 還原寬度與近 60 日融資去槓桿比率，快取命中執行時間 `<0.1ms`。
+  - 冪等擴充 `macro_sentiment_daily` 9 個欄位（FRED OAS、`T10YIE`、失業金），確保宏觀指標離線持久化不遺失。
+- **大類資產分類器與 `etf_daily_nav` 折溢價守門員**：
+  - 擴充 `'ASSET_CLASS'` 配置型別，實作 `classifyZavyAssetClass` 純函式（純公債長/中/短 vs 投資級公司債 vs 黃金 vs REITs vs 剔除池）；折溢價 `>1.0%` 自動攔截防買貴並推薦平價替代品。
+- **慢富 30 倍年支出、Coast-FIRE 與蒙地卡羅順序風險**：
+  - 於 `monteCarloFireEngine.ts` 實作 `calculateSlowWealthFireMetrics`，並將真實現金餘額注入退休工作區，消除 `50_000` 元硬編碼。
+
+### 2. 戰情室風控指標抽取與估值河流二元搜尋優化 (`WarRoom Metrics Decoupling & Valuation River Binary Search`) *(V9.15.0 / Spec #0220 / ADR #0220 / Issue #466)*
 
 - **技術債 0056：估值河流圖歷史收盤價二元搜尋優化 (`findLatestCloseBeforeDate`)**：
   - 以高效純函式二元搜尋替換每次渲染在多季歷史中反覆執行的 `[...candles].reverse().find()` 反向線性拷貝搜尋。
@@ -25,7 +41,7 @@
 - **架構治理看板閉環**：
   - `docs/debts/README.md`、`docs/debts/0055-*.md`、`docs/debts/0056-*.md` 全面標記為 `RESOLVED`。
 
-### 2. 台美股機構級深度財報研究與實戰投資決策系統 (`Institutional Equity Research & Decision System`) *(V9.14.0 / Spec #0219 / ADR #0219 / Issue #449)*
+### 3. 台美股機構級深度財報研究與實戰投資決策系統 (`Institutional Equity Research & Decision System`) *(V9.14.0 / Spec #0219 / ADR #0219 / Issue #449)*
 
 - **全量接通五大數據寶藏與 20 季可調觀測窗**：
   - 歷史季度財務指標數據集全面解鎖，支援 `[ 8 季 | 12 季 | 20 季 ]` 多維度歷史縱深切換。
@@ -41,7 +57,7 @@
   - 實作「📌 一鍵釘選策略至投資作戰室」，無縫聯動全局持倉監控。
   - 支援機構級研究報告 Markdown 一鍵導出、安全剪貼簿複製（支援降級防禦）與多版本歷史差異比對 (Diff Tracking)。
 
-### 3. 籌碼與動態星圖全鏈路時空定錨、產業輪動與實戰訊號重構 (`Smart Money Star Map Full-Chain Temporal Anchoring & Actionable Signals`) *(V9.13.0 / Spec #0218 / ADR #0218 / Issue #433)*
+### 4. 籌碼與動態星圖全鏈路時空定錨、產業輪動與實戰訊號重構 (`Smart Money Star Map Full-Chain Temporal Anchoring & Actionable Signals`) *(V9.13.0 / Spec #0218 / ADR #0218 / Issue #433)*
 
 - **三大法人雙邊完整性守衛 (Bilateral Chip Completeness Guard)**：
   - 建立雙邊筆數門檻（TWSE 與 TPEx 均需 > 500 筆），嚴禁上市缺失之半殘籌碼污染本機 SQLite 湖倉，並將定時排程調整至 16:45 確保日報發布完畢。
@@ -51,7 +67,7 @@
   - 在庫持倉模式 100% 呈現使用者所有 21 檔部位（含 10 檔台股 ETF 與美股 VT）；星圖頂部渲染「聰明錢淨流入 Top 5 vs 淨流出 Top 3 產業橫條」並支援點擊過濾。
   - 實作 5 大實戰異動訊號引擎（隱蔽吃貨、虛火出貨、連買中斷首日結帳、土洋對作內資軋外資、資減法人買籌碼沉澱）。
 
-### 4. 籌碼與動態星圖湖倉直連、物理引擎校準與 ETF 造市隔離 (`Smart Money Star Map Lakehouse & Physics Calibration`) *(V9.12.0 / Spec #0217 / ADR #0217 / Issue #418)*
+### 5. 籌碼與動態星圖湖倉直連、物理引擎校準與 ETF 造市隔離 (`Smart Money Star Map Lakehouse & Physics Calibration`) *(V9.12.0 / Spec #0217 / ADR #0217 / Issue #418)*
 
 - **湖倉優先雙市場完整籌碼快照**：
   - 提供 `/api/market/chips-snapshot` 批次端點，毫秒級輸出最近 5 個完整交易日之真實收盤價、真實漲跌幅、真實成交張數與三大法人買賣超，剷除假資料插值。
@@ -60,7 +76,7 @@
 - **半徑感知中軸防穿透與意圖感知閉環**：
   - 修正排斥力並將象限中軸鎖定升級為半徑感知防護，杜絕大球跨象限視覺穿透；打通意圖感知體檢（存股逢低佈局 vs 波段套牢凹單警示）與跨模組一鍵下單。
 
-### 5. 肌肉書僮量化防禦核心、既有引擎零造輪子串聯與分段視圖架構 (`Muscle Booker Quant Defense Core & Segmented Lens Architecture`) *(V9.11.0 / Spec #0216 / ADR #0216 / Issue #397)*
+### 6. 肌肉書僮量化防禦核心、既有引擎零造輪子串聯與分段視圖架構 (`Muscle Booker Quant Defense Core & Segmented Lens Architecture`) *(V9.11.0 / Spec #0216 / ADR #0216 / Issue #397)*
 
 - **箱體底穿上型態與誘多陷阱硬性防禦**：
   - 修復破底翻基準錯誤，跌破箱底 `boxLower` 後反彈收盤 < 50% 下影線、頂部受阻之誘多型態（Bull Trap）強制輸出 `AVOID (誘多陷阱)`，杜絕盲目追多。
@@ -71,7 +87,7 @@
 - **分段視圖鏡頭 (Segmented Lenses) 與 DOM 節點巨幅瘦身**：
   - 導入頂部 HUD 決策儀表板，並以 `[ 📊 決策總覽 ]`、`[ 📈 動能看板 ]`、`[ 🔭 扣抵星空 ]` 分段鏡頭收斂，視圖切換僅保留關鍵節點，DOM 節點減少 90% 以上。
 
-### 6. 四大象限動能看板卡片蘋果美學重構、全量台股與美股四大指數選池 (`Quadrant Card Apple Design System & Full Market Multi-Index Evolution`) *(V9.10.0 / Spec #0215 / ADR #0215 / Issue #395)*
+### 7. 四大象限動能看板卡片蘋果美學重構、全量台股與美股四大指數選池 (`Quadrant Card Apple Design System & Full Market Multi-Index Evolution`) *(V9.10.0 / Spec #0215 / ADR #0215 / Issue #395)*
 
 - **蘋果系統美學三層式卡片架構 (MuscleStockCard)**：
   - 徹底根治多欄排版下的中文字元折字直排，Header 左右分工結合標的名稱單行省略截斷，節省 60px 以上橫向空間。
@@ -81,7 +97,7 @@
   - 擴充模組化成分庫，納入台股全市場（~2,285+ 檔上市櫃與 ETF）、美股標普 500、那斯達克 100、道瓊 30、費半 30 與中型 100。
   - 下拉選單以語意化 `<optgroup>` 清楚分組，超大池快取優先與模擬種子日 K 防 429 屏障。
 
-### 7. 肌肉書僮·動能雷達全量進化、量化風控防禦與無重複模組化重構 (`Muscle Booker Momentum Radar Evolution`) *(V9.09.0 / Spec #0214 / ADR #0214 / Issue #387)*
+### 8. 肌肉書僮·動能雷達全量進化、量化風控防禦與無重複模組化重構 (`Muscle Booker Momentum Radar Evolution`) *(V9.09.0 / Spec #0214 / ADR #0214 / Issue #387)*
 
 - **最小防守緩衝與結構化目標價壓制**：
   - 停損價分母保護 `Math.max(price * 0.02, atr14 * 1.0)`，消滅 16R~20R 虛胖風益比分母陷阱；等距測量目標價結合過去 60 日高點壓制。
@@ -90,7 +106,7 @@
 - **主工作區模組化解耦**：
   - 建立 `useMuscleBookerSync.ts` 批次節流管線，主工作區自 2,464 行解耦至 420 行。
 
-### 8. 宏觀戰情室雙水溫計排版對齊、持股訊號分頁膠囊與雙重動能真實數據審計 (`Macro War Room Thermometer Alignment, Tactical Signal State Machine & Dual Momentum Audit`) *(V9.08.0 / Spec #0213 / ADR #0213 / Issue #367)*
+### 9. 宏觀戰情室雙水溫計排版對齊、持股訊號分頁膠囊與雙重動能真實數據審計 (`Macro War Room Thermometer Alignment, Tactical Signal State Machine & Dual Momentum Audit`) *(V9.08.0 / Spec #0213 / ADR #0213 / Issue #367)*
 
 - **雙水溫計數值防折行與左右軌對稱重構**：
   - 鎖定 `tabular-nums`、`white-space: nowrap` 與 `flex-shrink: 0`，將「⚠️ 拉積盤警訊」徽章下移對齊次行，徹底消除小螢幕與窄視窗文字換行碎裂。
