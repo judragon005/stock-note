@@ -8,6 +8,7 @@ import {
   generateZavyAnalysisReport,
   exportZavyReportMarkdown,
   exportZavyRawDataCsv,
+  aggregateLoanCollateral,
 } from './zavySlowWealthEngine';
 import {
   MacroIndicatorSnapshot,
@@ -323,6 +324,52 @@ describe('Zavy Slow Wealth Engine (慢富三級週期、市場寬度與 A/B 雙�
       expect(report.trackB.fire30xStatus.targetCapital30xTwd).toBe(18000000);
       expect(report.trackB.dividendRedirectPlanSummary).toContain('存量不動');
       expect(typeof report.trackB.srrRiskReductionPercent).toBe('number');
+    });
+
+    it('Spec 0222 Ticket 05: 信心度應依輸入指標豐富度動態評估 (消除硬編碼假信心度)', () => {
+      // 完整指標輸入 (6 項齊全) -> 信心度 100%
+      const fullSnap: MacroIndicatorSnapshot = {
+        usIsmPmi: 52.0,
+        twPmi: 53.0,
+        usNewOrdersMinusInventory: 3.0,
+        usCpiYoY: 2.8,
+        highYieldSpreadOas: 3.4,
+        treasuryYield10y: 4.3,
+      };
+      const fullRes = evaluateMacroCompass(fullSnap);
+      expect(fullRes.wave.confidenceScore).toBe(100);
+
+      // 稀疏指標輸入 (僅 1 項) -> 信心度約 17%
+      const sparseSnap: MacroIndicatorSnapshot = {
+        usIsmPmi: 49.0,
+      };
+      const sparseRes = evaluateMacroCompass(sparseSnap);
+      expect(sparseRes.wave.confidenceScore).toBeLessThan(30);
+    });
+
+    it('Code Smell Refactoring: aggregateLoanCollateral 應正確彙總本金與設質股數 (消除 Feature Envy)', () => {
+      const mockLoans: any[] = [
+        {
+          id: 'loan-1',
+          principal: 300000,
+          pledgedCollateral: [
+            { symbol: '2330', shares: 1000 },
+            { symbol: '2454', shares: 500 },
+          ],
+        },
+        {
+          id: 'loan-2',
+          principal: 200000,
+          pledgedCollateral: [
+            { symbol: '2330', shares: 500 },
+          ],
+        },
+      ];
+
+      const res = aggregateLoanCollateral(mockLoans);
+      expect(res.activePrincipalTwd).toBe(500000);
+      expect(res.pledgedSharesMap['2330']).toBe(1500);
+      expect(res.pledgedSharesMap['2454']).toBe(500);
     });
   });
 });

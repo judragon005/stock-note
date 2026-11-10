@@ -559,12 +559,14 @@ function getTwRevenueDiffusionAndYoY(dbOrPath) {
     }
 
     // 聚合統計：排除營收 <= 0 之無效資料
+    // Spec 0222 Ticket 02: 擴散指數依 (YoY正成長家數 + 0.5 × 持平家數) / 總家數 × 100 計算
     const statsRow = db
       .prepare(`
         SELECT
           COUNT(*) AS total_count,
-          SUM(CASE WHEN mom_rate > 0 THEN 1 ELSE 0 END) AS mom_positive_count,
           SUM(CASE WHEN yoy_rate > 0 THEN 1 ELSE 0 END) AS yoy_positive_count,
+          SUM(CASE WHEN yoy_rate = 0 THEN 1 ELSE 0 END) AS yoy_flat_count,
+          SUM(CASE WHEN mom_rate > 0 THEN 1 ELSE 0 END) AS mom_positive_count,
           SUM(revenue) AS total_revenue,
           SUM(last_year_revenue) AS total_last_year_revenue
         FROM tw_monthly_revenue
@@ -579,8 +581,11 @@ function getTwRevenueDiffusionAndYoY(dbOrPath) {
     }
 
     const totalCount = Number(statsRow.total_count);
+    const yoyPositive = Number(statsRow.yoy_positive_count || 0);
+    const yoyFlat = Number(statsRow.yoy_flat_count || 0);
     const momPositive = Number(statsRow.mom_positive_count || 0);
-    const diffusionIndex = Number(((momPositive / totalCount) * 100).toFixed(1));
+    const diffusionIndex = Number((((yoyPositive + 0.5 * yoyFlat) / totalCount) * 100).toFixed(1));
+    const momPositiveRatio = Number(((momPositive / totalCount) * 100).toFixed(1));
 
     let totalRevenueYoY = 0;
     const curRev = Number(statsRow.total_revenue || 0);
@@ -594,6 +599,7 @@ function getTwRevenueDiffusionAndYoY(dbOrPath) {
       totalCount,
       diffusionIndex,
       isExpansion: diffusionIndex >= 50,
+      momPositiveRatio,
       totalRevenueYoY,
       totalRevenueTwdBillions: Number((curRev / 1e5).toFixed(2)), // 營收單位千元 -> 億元
     };
@@ -895,12 +901,15 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
   let isCleaned = true;
   let isAtBollingerLowerBand = false;
   let isBadNewsDivergenceObserved = false;
+  let bollinger = null;
 
   try {
+    const dates200 = twDates.slice(0, 200);
+    const minDate200 = dates200.length > 0 ? dates200[dates200.length - 1] : twAnchorDate;
     const dates60 = twDates.slice(0, 60);
-    if (dates60.length > 0) {
-      const minDate60 = dates60[dates60.length - 1];
+    const minDate60 = dates60.length > 0 ? dates60[dates60.length - 1] : twAnchorDate;
 
+    if (dates200.length > 0) {
       // 5.1 查詢大盤指數日 K (優先 ^TWII，查無則 Fallback 至 0050)
       let indexSymbol = '^TWII';
       let indexRows = db
@@ -910,7 +919,7 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
           WHERE symbol = ? AND date >= ? AND date <= ?
           ORDER BY date ASC
         `)
-        .all(indexSymbol, minDate60, twAnchorDate);
+        .all(indexSymbol, minDate200, twAnchorDate);
 
       if (indexRows.length === 0) {
         indexSymbol = '0050';
@@ -921,12 +930,14 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
             WHERE symbol = ? AND date >= ? AND date <= ?
             ORDER BY date ASC
           `)
-          .all(indexSymbol, minDate60, twAnchorDate);
+          .all(indexSymbol, minDate200, twAnchorDate);
       }
 
       if (indexRows.length > 0) {
+        // 近 60 日大盤高點回撤
+        const last60Rows = indexRows.slice(-60);
         let peakIndex = 0;
-        for (const row of indexRows) {
+        for (const row of last60Rows) {
           const val = row.high || row.close || 0;
           if (val > peakIndex) peakIndex = val;
         }
@@ -935,20 +946,40 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
           taiexMaxDrawdown = Number((((curIndex - peakIndex) / peakIndex) * 100).toFixed(2));
         }
 
-        // 計算大盤布林通道 (20MA - 2*StdDev)
+        // 輔助函式：計算指定天期之布林下軌 (MA - 2*StdDev)
+        const calcBollingerLower = (rows, period) => {
+          if (rows.length < Math.min(period, 20)) return null;
+          const actualPeriod = Math.min(rows.length, period);
+          const sliceCloses = rows.slice(-actualPeriod).map((r) => r.close);
+          const ma = sliceCloses.reduce((acc, c) => acc + c, 0) / actualPeriod;
+          const variance = sliceCloses.reduce((acc, c) => acc + Math.pow(c - ma, 2), 0) / actualPeriod;
+          const stdDev = Math.sqrt(variance);
+          return Number((ma - 2 * stdDev).toFixed(2));
+        };
+
+        const lowerBand20 = calcBollingerLower(indexRows, 20);
+        const lowerBand60 = calcBollingerLower(indexRows, 60);
+        const lowerBand200 = calcBollingerLower(indexRows, 200);
+
+        // Spec 0222 Ticket 04: 判斷是否達到 60MA 季線或 200MA 年線布林下軌 (或 20MA 短線下軌)
+        if (lowerBand60 && curIndex <= lowerBand60 * 1.01) {
+          isAtBollingerLowerBand = true;
+        } else if (lowerBand200 && curIndex <= lowerBand200 * 1.01) {
+          isAtBollingerLowerBand = true;
+        } else if (lowerBand20 && curIndex <= lowerBand20 * 1.01) {
+          isAtBollingerLowerBand = true;
+        }
+
+        bollinger = {
+          ma20Lower: lowerBand20,
+          ma60Lower: lowerBand60,
+          ma200Lower: lowerBand200,
+          isAtLowerBand: isAtBollingerLowerBand,
+        };
+
+        // 計算利空鈍化：若近 5 日內之最低點高於近 20 日最低點 (未破底、底底高) 且近 60 日有明顯修正 (< -3%)
         if (indexRows.length >= 20) {
           const last20Closes = indexRows.slice(-20).map((r) => r.close);
-          const ma20 = last20Closes.reduce((acc, c) => acc + c, 0) / 20;
-          const variance = last20Closes.reduce((acc, c) => acc + Math.pow(c - ma20, 2), 0) / 20;
-          const stdDev = Math.sqrt(variance);
-          const lowerBand = ma20 - 2 * stdDev;
-
-          // 若收盤價小於或接近布林下軌 (<= lowerBand * 1.01)，視為達到布林下軌位階
-          if (curIndex <= lowerBand * 1.01) {
-            isAtBollingerLowerBand = true;
-          }
-
-          // 計算利空鈍化：若近 5 日內之最低點高於近 20 日最低點 (未破底、底底高) 且近 60 日有明顯修正 (< -3%)
           const minClose20 = Math.min(...last20Closes);
           const last5Lows = indexRows.slice(-5).map((r) => r.low || r.close);
           const minLow5 = Math.min(...last5Lows);
@@ -1052,6 +1083,7 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
     marginDeleveragingRatio,
     isAtBollingerLowerBand,
     isBadNewsDivergenceObserved,
+    bollinger,
     twMarginDeleveraging: {
       taiexMaxDrawdown,
       marginReductionPercent,
@@ -1059,6 +1091,7 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
       isCleaned,
       isAtBollingerLowerBand,
       isBadNewsDivergenceObserved,
+      bollinger,
     },
   };
 
