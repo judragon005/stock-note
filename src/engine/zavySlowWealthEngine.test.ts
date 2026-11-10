@@ -371,5 +371,78 @@ describe('Zavy Slow Wealth Engine (慢富三級週期、市場寬度與 A/B 雙�
       expect(res.pledgedSharesMap['2330']).toBe(1500);
       expect(res.pledgedSharesMap['2454']).toBe(500);
     });
+
+    it('8. [Spec 0223 / Ticket 01] Zavy 慢富白話決策字典 18 項詞條完整性與週期/利率枚舉中文化驗證', async () => {
+      const {
+        ZAVY_SLOW_WEALTH_GLOSSARY,
+        formatWavePhaseLabel,
+        formatTreasuryStatusLabel,
+      } = await import('../constants/zavyGlossary');
+
+      const expectedKeys = [
+        'M01_threeTierCycle',
+        'M02_treasury10yNewNormal',
+        'M03_waveBusinessCyclePmi',
+        'M04_ordersMinusInventory',
+        'M05_smallTruckVsBigTruck',
+        'M06_creditCrackRadar',
+        'B01_multiHorizonBreadth',
+        'B02_decadeMaInvalidationGate',
+        'B03_marginDeleveragingRatio',
+        'B04_bottomingChecklist',
+        'T01_dualTrackKnowYourself',
+        'T02_personalRiskBudget',
+        'T03_debtAsNegativeBond',
+        'T04_fourTierSellWaterfall',
+        'T05_trueDefensiveArmor',
+        'T06_dividendRedirectRebalance',
+        'T07_fire30xAndCoastFire',
+        'T08_sequenceOfReturnsRisk',
+      ];
+
+      for (const key of expectedKeys) {
+        const entry = ZAVY_SLOW_WEALTH_GLOSSARY[key];
+        expect(entry, `Missing glossary key: ${key}`).toBeDefined();
+        expect(entry.term.length).toBeGreaterThan(2);
+        expect(entry.metaphor.length).toBeGreaterThan(10);
+        expect(entry.meaning.length).toBeGreaterThan(10);
+        expect(entry.buySignal.length).toBeGreaterThan(10);
+        expect(entry.sellSignal.length).toBeGreaterThan(10);
+      }
+
+      expect(formatWavePhaseLabel('EXPANSION')).toBe('擴張成長期');
+      expect(formatWavePhaseLabel('RECOVERY')).toBe('復甦期');
+      expect(formatWavePhaseLabel('BOOM_MID')).toBe('榮景主升段');
+      expect(formatTreasuryStatusLabel('IN_RANGE_4_TO_5_5')).toBe('4.0%~5.5% 新常態平衡區');
+
+      const report = generateZavyAnalysisReport({
+        snapshot: { treasuryYield10y: 4.4, usIsmPmi: 52.0, twPmi: 53.0 },
+        breadth: {
+          asOfDate: '2026-11-10',
+          market: 'TW',
+          breadth20: 35,
+          breadth60: 50,
+          breadth200: 60,
+          totalFilteredStocks: 1950,
+        },
+        marginStatus: {
+          asOfDate: '2026-11-10',
+          indexDrawdownPercent: -3,
+          marginDrawdownPercent: -4,
+          marginDeleveragingRatio: 1.33,
+          isDeleveragingSufficient: true,
+          statusText: '清洗充分',
+        },
+        holdings: [],
+        cashBalanceTwd: 100000,
+      });
+
+      expect(report.tenSecondsExecutiveSummary[0]).not.toContain('IN_RANGE_4_TO_5_5');
+      expect(report.tenSecondsExecutiveSummary[0]).toContain('4.0%~5.5% 新常態平衡區');
+
+      const md = exportZavyReportMarkdown(report);
+      expect(md).not.toContain('IN_RANGE_4_TO_5_5');
+      expect(md).toContain('擴張成長期');
+    });
   });
 });

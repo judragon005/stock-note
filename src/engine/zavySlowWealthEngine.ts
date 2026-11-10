@@ -26,6 +26,11 @@ import {
   calculateSlowWealthFireMetrics,
 } from './monteCarloFireEngine';
 import { TargetAllocationConfig } from '../types/allocation';
+import {
+  formatWavePhaseLabel,
+  formatTreasuryStatusLabel,
+  formatTidalRegimeLabel,
+} from '../constants/zavyGlossary';
 
 /**
  * 1. 總經三級週期羅盤引擎 (Tidal, Wave, Credit Radar)
@@ -700,8 +705,11 @@ export function generateZavyAnalysisReport(params: ZavyAnalysisReportParams): Za
     loans,
   });
 
+  const treasuryStatusLabel = formatTreasuryStatusLabel(macroCompass.tidal.treasury10yNewNormalStatus);
+  const wavePhaseLabel = formatWavePhaseLabel(macroCompass.wave.phase);
+
   const tenSecondsExecutiveSummary: string[] = [
-    `【總經羅盤】製造業處於「${macroCompass.wave.cycleSummary}」，10Y 美債處於「${macroCompass.tidal.treasury10yNewNormalStatus}」新常態區間。`,
+    `【總經羅盤】製造業處於「${wavePhaseLabel}（${macroCompass.wave.cycleSummary}）」，10Y 美債處於「${treasuryStatusLabel}」。`,
     `【結構寬度】台股 20MA 寬度為 ${breadth.breadth20.toFixed(1)}%，${interpretation.interpretationHeadline}。`,
     `【A 軌建議】建議股票曝險上限為 ${trackA.finalSuggestedEquityExposurePercent}% (當前持股佔比 ${trackA.currentEquityWeightPercent}%)。`,
     `【B 軌配置】當前股債金比重為 ${trackB.currentAssetAllocation.equityPercent}% / ${trackB.currentAssetAllocation.govBondPercent}% / ${trackB.currentAssetAllocation.goldPercent}%，${trackB.isRebalanceRecommended ? '已觸發再平衡警戒' : '資產結構均衡'}。`,
@@ -740,10 +748,10 @@ ${tenSecondsExecutiveSummary.map((s) => `- ${s}`).join('\n')}
 ---
 
 ## 🧭 第一層：總體經濟與三級週期定位
-- **潮汐大週期 (Tidal)**：${macroCompass.tidal.regime}
-  - 10 年美債殖利率位階：${macroCompass.tidal.treasury10yNewNormalStatus}
+- **潮汐大週期 (Tidal)**：${formatTidalRegimeLabel(macroCompass.tidal.regime)}
+  - 10 年美債殖利率位階：${formatTreasuryStatusLabel(macroCompass.tidal.treasury10yNewNormalStatus)}
   - 敘事與大局觀：${macroCompass.tidal.narrative}
-- **波浪商業週期 (Wave)**：${macroCompass.wave.phase} (信心度 ${macroCompass.wave.confidenceScore}%)
+- **波浪商業週期 (Wave)**：${formatWavePhaseLabel(macroCompass.wave.phase)} (信心度 ${macroCompass.wave.confidenceScore}%)
   - 週期現況：${macroCompass.wave.cycleSummary}
   - 美台大卡車 vs 小車：${macroCompass.wave.smallTruckVsBigTruckStatus.commentary}
 - **信用裂痕雷達**：風險等級【${macroCompass.creditRadar.creditRiskLevel}】

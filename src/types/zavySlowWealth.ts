@@ -24,7 +24,8 @@ export interface MacroIndicatorSnapshot {
   usIsmPmi?: number;                // 美國 ISM 製造業 PMI (如 52.4)
   usNewOrdersMinusInventory?: number;// 美國新訂單減客戶庫存
   twPmi?: number;                   // 台灣製造業 PMI (中經院)
-  twExportOrdersYoY?: number;       // 台灣外銷訂單年增率 %
+  twRevenueDiffusionIndex?: number; // 台灣上市櫃月營收擴散指數 % (50 為榮枯線)
+  twExportOrdersYoY?: number;       // 台灣外銷訂單 / 全市場營收年增率 %
   twLeadingIndicatorYoY?: number;   // 國發會景氣領先指標變動率 %
   treasuryYield10y?: number;        // 美國 10 年期公債殖利率 (新常態 4.0%~5.5%)
   treasuryYield2y?: number;         // 美國 2 年期公債殖利率
