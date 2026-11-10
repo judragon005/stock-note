@@ -227,5 +227,102 @@ describe('Zavy Slow Wealth Engine (慢富三級週期、市場寬度與 A/B 雙�
       expect(csv).toContain('MetricKey,MetricName,Value,Unit,AsOfDate');
       expect(csv).toContain('us_ism_pmi,美國 ISM 製造業 PMI,52,指數,2026-11-10');
     });
+
+    it('7. [Spec 0222 / Ticket 05] 既有引擎統一：質押還款、設質鎖定防呆、真實股息導流與 30x FIRE 連動', () => {
+      const snap: MacroIndicatorSnapshot = {
+        usIsmPmi: 53.0,
+        twPmi: 54.0,
+      };
+      const breadth: MultiHorizonMarketBreadth = {
+        asOfDate: '2026-11-10',
+        market: 'TW',
+        breadth20: 18.0,
+        breadth60: 40.0,
+        breadth200: 55.0,
+        totalFilteredStocks: 2000,
+      };
+      const marginStatus: MarginDeleveragingStatus = {
+        asOfDate: '2026-11-10',
+        indexDrawdownPercent: -7.0,
+        marginDrawdownPercent: -10.0,
+        marginDeleveragingRatio: 1.43,
+        isDeleveragingSufficient: true,
+        statusText: '融資清洗充分',
+      };
+
+      // 模擬持股：2330 (個股衛星，被質押 1000 股)、0050 (市值核心，無質押)
+      const holdings = [
+        {
+          id: 'pos-1',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW' as const,
+          shares: 2000,
+          currentPrice: 1000,
+          marketValue: 2000000,
+          averageCost: 900,
+          totalCost: 1800000,
+          unrealizedProfit: 200000,
+          unrealizedProfitPercent: 11.1,
+          currency: 'TWD' as const,
+        },
+        {
+          id: 'pos-2',
+          symbol: '0050',
+          name: '元大台灣50',
+          market: 'TW' as const,
+          shares: 5000,
+          currentPrice: 200,
+          marketValue: 1000000,
+          averageCost: 180,
+          totalCost: 900000,
+          unrealizedProfit: 100000,
+          unrealizedProfitPercent: 11.1,
+          currency: 'TWD' as const,
+        },
+      ];
+
+      const loans: import('../types/stock').LoanRecord[] = [
+        {
+          id: 'loan-1',
+          name: '元大台積電股票質押',
+          principal: 500000,
+          currency: 'TWD',
+          createdAt: Date.now(),
+          loanType: 'PLEDGE',
+          pledgedCollateral: [
+            { symbol: '2330', shares: 1000 },
+          ],
+        },
+      ];
+
+      const report = generateZavyAnalysisReport({
+        snapshot: snap,
+        breadth,
+        marginStatus,
+        holdings: holdings as unknown as import('../types/stock').HoldingPosition[],
+        cashBalanceTwd: 200000,
+        loans,
+        annualEstimatedDividendsTwd: 100000,
+        isAtBollingerLowerBand: true,
+        isBadNewsDivergenceObserved: true,
+        targetAnnualExpenseTwd: 600000,
+      });
+
+      // 1. 落底核對表應接收到真實布林與利空鈍化標記
+      expect(report.marketBreadth.bottomingChecklist.satisfiedCount).toBe(4);
+      expect(report.marketBreadth.bottomingChecklist.bottomingReadinessScore).toBe(100);
+
+      // 2. Track A 應包含質押還款建議與設質標籤
+      expect(report.trackA.activeLoanPrincipalTwd).toBe(500000);
+      expect(report.trackA.debtRepaymentSummary).toContain('500,000');
+      // 2330 在 tier1SellCandidates 應帶有 🔒[設質鎖定]
+      expect(report.trackA.sellWaterfallPreview.tier1SellCandidates.some((c) => c.includes('2330') && c.includes('🔒'))).toBe(true);
+
+      // 3. Track B 應產出 30x FIRE (目標 1800 萬) 與股息活水導流計畫
+      expect(report.trackB.fire30xStatus.targetCapital30xTwd).toBe(18000000);
+      expect(report.trackB.dividendRedirectPlanSummary).toContain('存量不動');
+      expect(typeof report.trackB.srrRiskReductionPercent).toBe('number');
+    });
   });
 });

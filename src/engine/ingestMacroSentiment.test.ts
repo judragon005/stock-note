@@ -266,4 +266,123 @@ describe('Ticket 15 & Spec 0209: Macro War Room 3.0 Ingestion, Breadth & Pulse P
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it('9. Spec 0222 Ticket 01: fetchFredCsvObservations 應正確解析 FRED 官方公開 CSV（支援純數值與製造業/CPI YoY %，無效點過濾）', async () => {
+    const mockCsvDgs10 = `DATE,DGS10
+2026-10-18,4.15
+2026-10-19,.
+2026-10-20,4.28
+2026-10-21,.
+`;
+    const mockFetcherDgs10 = async (url: string) => {
+      expect(url).toContain('fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10');
+      return mockCsvDgs10;
+    };
+
+    const valDgs10 = await macroModule.fetchFredCsvObservations('DGS10', mockFetcherDgs10);
+    expect(valDgs10).toBe(4.28);
+
+    // 測試 CPIAUCSL 12 期 YoY %
+    let csvCpi = 'DATE,CPIAUCSL\n';
+    for (let i = 0; i < 12; i++) {
+      csvCpi += `2025-${String(i + 1).padStart(2, '0')}-01,${(300 + i * 0.5).toFixed(1)}\n`;
+    }
+    csvCpi += '2026-01-01,309.0\n'; // 309 vs 300 -> +3.00%
+    const mockFetcherCpi = async () => csvCpi;
+    const valCpi = await macroModule.fetchFredCsvObservations('CPIAUCSL', mockFetcherCpi);
+    expect(valCpi).toBeCloseTo(3.0, 2);
+
+    // 測試製造業新訂單 AMTMNO 12 期 YoY %
+    let csvMfg = 'DATE,AMTMNO\n';
+    for (let i = 0; i < 12; i++) {
+      csvMfg += `2025-${String(i + 1).padStart(2, '0')}-01,500\n`;
+    }
+    csvMfg += '2026-01-01,550\n'; // 550 vs 500 -> +10.00%
+    const valMfg = await macroModule.fetchFredCsvObservations('AMTMNO', async () => csvMfg);
+    expect(valMfg).toBeCloseTo(10.0, 2);
+
+    // 測試全為 '.' 或空資料時回傳 null
+    const mockAllDots = 'DATE,DGS2\n2026-10-19,.\n2026-10-20,.\n';
+    const valNull = await macroModule.fetchFredCsvObservations('DGS2', async () => mockAllDots);
+    expect(valNull).toBeNull();
+  });
+
+  it('10. Spec 0222 Ticket 01: fetchFredSeriesLatest 在無 apiKey 時應自動無縫 Fallback 至 fetchFredCsvObservations', async () => {
+    const mockFetcher = async (url: string) => {
+      if (url.includes('fred.stlouisfed.org/graph/fredgraph.csv?id=BAMLH0A3HYC')) {
+        return 'DATE,BAMLH0A3HYC\n2026-10-19,13.10\n2026-10-20,13.17\n';
+      }
+      return null;
+    };
+
+    // apiKey 為空字串、null 或 undefined
+    const valFallback1 = await macroModule.fetchFredSeriesLatest('BAMLH0A3HYC', '', mockFetcher);
+    expect(valFallback1).toBe(13.17);
+
+    const valFallback2 = await macroModule.fetchFredSeriesLatest('BAMLH0A3HYC', null, mockFetcher);
+    expect(valFallback2).toBe(13.17);
+  });
+
+  it('11. Spec 0222 Ticket 01: fetchFullMacroWarRoomPulse 在無 fredApiKey 時仍能完整抓取真實殖利率、利差與製造業數據', async () => {
+    const mockFetchJson = async (url: string) => {
+      if (url.includes('finance.yahoo.com')) {
+        const makeYahoo = (price: number) => ({
+          chart: {
+            result: [
+              {
+                meta: { regularMarketPrice: price, chartPreviousClose: price },
+                indicators: { quote: [{ close: [price] }] },
+              },
+            ],
+          },
+        });
+        return makeYahoo(100);
+      }
+      if (url.includes('fredgraph.csv')) {
+        if (url.includes('id=DGS10')) return 'DATE,DGS10\n2026-10-20,4.25\n';
+        if (url.includes('id=DGS2')) return 'DATE,DGS2\n2026-10-20,3.95\n';
+        if (url.includes('id=DGS3MO')) return 'DATE,DGS3MO\n2026-10-20,4.50\n';
+        if (url.includes('id=T10Y2Y')) return 'DATE,T10Y2Y\n2026-10-20,0.30\n';
+        if (url.includes('id=BAMLH0A0HYM2')) return 'DATE,BAMLH0A0HYM2\n2026-10-20,3.42\n';
+        if (url.includes('id=BAMLH0A3HYC')) return 'DATE,BAMLH0A3HYC\n2026-10-20,13.17\n';
+        if (url.includes('id=T10YIE')) return 'DATE,T10YIE\n2026-10-20,2.35\n';
+        if (url.includes('id=AMTMNO')) {
+          let csv = 'DATE,AMTMNO\n';
+          for (let i = 0; i < 12; i++) csv += `2025-${String(i + 1).padStart(2, '0')}-01,100\n`;
+          csv += '2026-01-01,108\n'; // YoY = +8%
+          return csv;
+        }
+        if (url.includes('id=AMTMTI')) {
+          let csv = 'DATE,AMTMTI\n';
+          for (let i = 0; i < 12; i++) csv += `2025-${String(i + 1).padStart(2, '0')}-01,100\n`;
+          csv += '2026-01-01,103\n'; // YoY = +3%
+          return csv;
+        }
+        if (url.includes('id=INDPRO')) {
+          let csv = 'DATE,INDPRO\n';
+          for (let i = 0; i < 12; i++) csv += `2025-${String(i + 1).padStart(2, '0')}-01,100\n`;
+          csv += '2026-01-01,102\n'; // YoY = +2%
+          return csv;
+        }
+        return 'DATE,VAL\n2026-10-20,1.0\n';
+      }
+      return null;
+    };
+
+    const pulse = await macroModule.fetchFullMacroWarRoomPulse({
+      fredApiKey: undefined, // 免 Key 情境！
+      fetchJson: mockFetchJson,
+    });
+
+    expect(pulse.treasuryYield10y).toBe(4.25);
+    expect(pulse.treasuryYield2y).toBe(3.95);
+    expect(pulse.yieldSpread10y2y).toBe(0.30);
+    expect(pulse.creditSpreadOas).toBe(3.42);
+    expect(pulse.cccSpreadOas).toBe(13.17);
+    expect(pulse.breakeven10y).toBe(2.35);
+    expect(pulse.usMfgNewOrdersYoY).toBeCloseTo(8.0, 2);
+    expect(pulse.usMfgInventoriesYoY).toBeCloseTo(3.0, 2);
+    expect(pulse.usOrdersMinusInvSpread).toBeCloseTo(5.0, 2); // 8 - 3 = 5
+    expect(pulse.usIndustrialProdYoY).toBeCloseTo(2.0, 2);
+  });
 });

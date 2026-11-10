@@ -246,6 +246,10 @@ function initSqliteLakehouseDb(customPath) {
       ccc_spread_oas REAL,               -- CCC 級高收益債利差 (FRED BAMLH0A3HYC)
       breakeven_10y REAL,                -- 10 年平衡通膨率 (FRED T10YIE)
       initial_claims REAL,               -- 初請失業金人數 (FRED ICSA)
+      us_mfg_new_orders_yoy REAL,        -- 美國製造業新訂單年增率 (FRED AMTMNO, Spec 0222)
+      us_mfg_inventories_yoy REAL,       -- 美國製造業存貨年增率 (FRED AMTMTI, Spec 0222)
+      us_orders_minus_inv_spread REAL,   -- 新訂單減存貨動能差 (Spec 0222)
+      us_industrial_prod_yoy REAL,       -- 美國工業生產指數年增率 (FRED INDPRO, Spec 0222)
       updated_at INTEGER NOT NULL
     );
 
@@ -328,6 +332,10 @@ function initSqliteLakehouseDb(customPath) {
       { name: 'ccc_spread_oas', type: 'REAL' },
       { name: 'breakeven_10y', type: 'REAL' },
       { name: 'initial_claims', type: 'REAL' },
+      { name: 'us_mfg_new_orders_yoy', type: 'REAL' },
+      { name: 'us_mfg_inventories_yoy', type: 'REAL' },
+      { name: 'us_orders_minus_inv_spread', type: 'REAL' },
+      { name: 'us_industrial_prod_yoy', type: 'REAL' },
     ];
     for (const col of newMacroCols) {
       if (!existingMacroCols.has(col.name)) {
@@ -511,9 +519,96 @@ function clearBreadthAnchorCache() {
 }
 
 /**
- * 計算台美多週期市場寬度 (20MA / 60MA / 200MA 還原除權息) 與台股近 60 日融資去槓桿比率 (Spec 0221 Ticket 01)
- * 使用 PRIMARY KEY (symbol, date) 順序掃描與 adj_close 還原除權息，過濾零成交殭屍股
- * 支援交易日定錨記憶體快取，單次呼叫執行時間需控制在 25ms 內
+ * 查詢公開資訊觀測站 (MOPS) 本地 SQLite 最新月營收擴散指數與全市場總營收 YoY (%) (Spec 0222 Ticket 02)
+ * 營收月增率擴散指數 = (當月營收 MoM > 0 之上市櫃公司家數 / 總有效家數) * 100
+ * 全市場營收年增率 = (全市場當月營收總額 / 去年同月營收總額 - 1) * 100
+ * @param {DatabaseSync|string} [dbOrPath] 資料庫連線實例或路徑
+ */
+function getTwRevenueDiffusionAndYoY(dbOrPath) {
+  let db = dbOrPath;
+  db =
+    db && typeof db === 'object' && typeof db.prepare === 'function'
+      ? db
+      : getSqliteDbConnection(typeof db === 'string' ? db : undefined);
+
+  try {
+    // 取得最新營收年月 (YYYY-MM)，且家數需 >= 500 以確保非殘缺期
+    let targetMonth = null;
+    const latestMonthRow = db
+      .prepare(`
+        SELECT year_month, COUNT(*) AS count
+        FROM tw_monthly_revenue
+        GROUP BY year_month
+        HAVING count >= 500
+        ORDER BY year_month DESC
+        LIMIT 1
+      `)
+      .get();
+
+    if (latestMonthRow && latestMonthRow.year_month) {
+      targetMonth = latestMonthRow.year_month;
+    } else {
+      // 容錯降級：若無 >= 500 的月份，取最新月份
+      const fallbackMonth = db
+        .prepare('SELECT year_month FROM tw_monthly_revenue ORDER BY year_month DESC LIMIT 1')
+        .get();
+      if (!fallbackMonth || !fallbackMonth.year_month) {
+        return null;
+      }
+      targetMonth = fallbackMonth.year_month;
+    }
+
+    // 聚合統計：排除營收 <= 0 之無效資料
+    const statsRow = db
+      .prepare(`
+        SELECT
+          COUNT(*) AS total_count,
+          SUM(CASE WHEN mom_rate > 0 THEN 1 ELSE 0 END) AS mom_positive_count,
+          SUM(CASE WHEN yoy_rate > 0 THEN 1 ELSE 0 END) AS yoy_positive_count,
+          SUM(revenue) AS total_revenue,
+          SUM(last_year_revenue) AS total_last_year_revenue
+        FROM tw_monthly_revenue
+        WHERE year_month = ?
+          AND revenue > 0
+          AND (LENGTH(symbol) = 4 AND symbol GLOB '[0-9][0-9][0-9][0-9]')
+      `)
+      .get(targetMonth);
+
+    if (!statsRow || !statsRow.total_count || statsRow.total_count === 0) {
+      return null;
+    }
+
+    const totalCount = Number(statsRow.total_count);
+    const momPositive = Number(statsRow.mom_positive_count || 0);
+    const diffusionIndex = Number(((momPositive / totalCount) * 100).toFixed(1));
+
+    let totalRevenueYoY = 0;
+    const curRev = Number(statsRow.total_revenue || 0);
+    const lastRev = Number(statsRow.total_last_year_revenue || 0);
+    if (lastRev > 0 && curRev > 0) {
+      totalRevenueYoY = Number((((curRev - lastRev) / lastRev) * 100).toFixed(2));
+    }
+
+    return {
+      yearMonth: targetMonth,
+      totalCount,
+      diffusionIndex,
+      isExpansion: diffusionIndex >= 50,
+      totalRevenueYoY,
+      totalRevenueTwdBillions: Number((curRev / 1e5).toFixed(2)), // 營收單位千元 -> 億元
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 計算台美多週期市場寬度 (20MA / 60MA / 200MA 還原除權息) 與台股近 60 日融資去槓桿比率 (Spec 0221 & Spec 0222 Tickets 03, 04)
+ * 1. 權證過濾：台股僅包含 4 碼純數字個股與 00 開頭 ETF，嚴格剔除 6 碼認購/認售權證
+ * 2. 交易日獨立定錨：台股與美股各自定錨最新交易日與 200 日獨立視窗，避免休市與聯集稀釋
+ * 3. 200MA 合格門檻彈性化：採 Math.min(180, availableDates.length)，確保近一年 180~200 天皆能正常統計
+ * 4. 融資殘缺日過濾：過濾 COUNT(margin_balance) 異常殘缺日，計算真實融資減幅
+ * 5. 大盤 Fallback 與動態指標：^TWII 缺失時自動 fallback 至 0050，計算動態布林通道下軌與利空鈍化
  * @param {string} [targetDate] 目標交易日 (YYYY-MM-DD)
  * @param {DatabaseSync|string} [dbOrPath] 資料庫連線實例或路徑
  */
@@ -528,35 +623,48 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
       ? db
       : getSqliteDbConnection(typeof db === 'string' ? db : undefined);
 
-  // 1. 定錨目標交易日 (定錨至 <= targetDate 的最新交易日)
-  let anchorDate = null;
-  if (targetDate && typeof targetDate === 'string') {
-    const row = db
-      .prepare('SELECT MAX(date) AS mDate FROM daily_candles WHERE date <= ?')
-      .get(targetDate);
-    anchorDate = row?.mDate || targetDate;
-  } else {
-    const row = db
-      .prepare("SELECT MAX(date) AS mDate FROM daily_candles WHERE symbol NOT LIKE '^%'")
-      .get();
-    anchorDate = row?.mDate || new Date().toISOString().slice(0, 10);
-  }
-
-  const cacheKey = `${currentDbPath || 'default'}:${anchorDate}`;
+  // 定錨全域基準日
+  const baseTargetDate = (typeof targetDate === 'string' && targetDate.trim()) ? targetDate.trim() : null;
+  const cacheKey = `${currentDbPath || 'default'}:${baseTargetDate || 'latest'}`;
   if (breadthAnchorCache.has(cacheKey)) {
     return breadthAnchorCache.get(cacheKey);
   }
 
-  // 2. 撈取近 200 個交易日視窗邊界
-  const dateRows = db
-    .prepare('SELECT DISTINCT date FROM daily_candles WHERE date <= ? ORDER BY date DESC LIMIT 200')
-    .all(anchorDate);
-  const availableDates = dateRows.map((r) => r.date);
+  // 1. 台股獨立定錨與 200 日交易日清單 (僅 4 碼股票與 00 開頭 ETF，排除 6 碼權證)
+  const twDateQuery = baseTargetDate
+    ? `SELECT DISTINCT date FROM daily_candles
+       WHERE date <= ? AND (symbol GLOB '[0-9][0-9][0-9][0-9]' OR symbol LIKE '00%')
+       ORDER BY date DESC LIMIT 200`
+    : `SELECT DISTINCT date FROM daily_candles
+       WHERE (symbol GLOB '[0-9][0-9][0-9][0-9]' OR symbol LIKE '00%')
+       ORDER BY date DESC LIMIT 200`;
+  const twDateRows = baseTargetDate
+    ? db.prepare(twDateQuery).all(baseTargetDate)
+    : db.prepare(twDateQuery).all();
+  const twDates = twDateRows.map((r) => r.date);
+  const twAnchorDate = twDates.length > 0 ? twDates[0] : null;
 
-  if (availableDates.length === 0) {
+  // 2. 美股獨立定錨與 200 日交易日清單 (純字母代碼，排除指數 ^)
+  const usDateQuery = baseTargetDate
+    ? `SELECT DISTINCT date FROM daily_candles
+       WHERE date <= ? AND symbol GLOB '[A-Za-z]*' AND symbol NOT LIKE '^%'
+       ORDER BY date DESC LIMIT 200`
+    : `SELECT DISTINCT date FROM daily_candles
+       WHERE symbol GLOB '[A-Za-z]*' AND symbol NOT LIKE '^%'
+       ORDER BY date DESC LIMIT 200`;
+  const usDateRows = baseTargetDate
+    ? db.prepare(usDateQuery).all(baseTargetDate)
+    : db.prepare(usDateQuery).all();
+  const usDates = usDateRows.map((r) => r.date);
+  const usAnchorDate = usDates.length > 0 ? usDates[0] : null;
+
+  // 全域展示日期：以台股最新為優先，若無則美股
+  const displayAnchorDate = twAnchorDate || usAnchorDate || new Date().toISOString().slice(0, 10);
+
+  if (twDates.length === 0 && usDates.length === 0) {
     const emptyResult = {
-      asOfDate: anchorDate,
-      tradeDate: anchorDate,
+      asOfDate: displayAnchorDate,
+      tradeDate: displayAnchorDate,
       breadth20: 0,
       breadth60: 0,
       breadth200: 0,
@@ -564,20 +672,29 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
       pctAbove60MA: 0,
       pctAbove200MA: 0,
       totalStocks: 0,
+      totalFilteredStocks: 0,
       tw: {
+        asOfDate: twAnchorDate,
         breadth20: 0,
         breadth60: 0,
         breadth200: 0,
         totalStocks: 0,
+        eligible20Count: 0,
+        eligible60Count: 0,
+        eligible200Count: 0,
         above20MaCount: 0,
         above60MaCount: 0,
         above200MaCount: 0,
       },
       us: {
+        asOfDate: usAnchorDate,
         breadth20: 0,
         breadth60: 0,
         breadth200: 0,
         totalStocks: 0,
+        eligible20Count: 0,
+        eligible60Count: 0,
+        eligible200Count: 0,
         above20MaCount: 0,
         above60MaCount: 0,
         above200MaCount: 0,
@@ -588,66 +705,15 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
         marginReductionPercent: 0,
         marginDeleveragingRatio: 1,
         isCleaned: true,
+        isAtBollingerLowerBand: false,
+        isBadNewsDivergenceObserved: false,
       },
     };
     breadthAnchorCache.set(cacheKey, emptyResult);
     return emptyResult;
   }
 
-  const minDate = availableDates[availableDates.length - 1];
-  const minRequired20 = Math.min(20, availableDates.length);
-  const minRequired60 = Math.min(60, availableDates.length);
-  const minRequired200 = Math.min(200, availableDates.length);
-
-  // 3. 透過視窗函數計算各標的最新日之 20/60/200MA (取 COALESCE(NULLIF(adj_close, 0), close) 還原除權息)
-  // 同時計算近 20 日成交量總和 sum_vol20，過濾近 20 日零成交之殭屍股
-  const breadthRows = db
-    .prepare(`
-      WITH bounds AS (
-        SELECT ? AS min_date, ? AS max_date
-      ),
-      ranked AS (
-        SELECT
-          c.symbol,
-          c.date,
-          COALESCE(NULLIF(c.adj_close, 0), c.close) AS price,
-          c.volume,
-          ROW_NUMBER() OVER (PARTITION BY c.symbol ORDER BY c.date DESC) AS rn,
-          AVG(COALESCE(NULLIF(c.adj_close, 0), c.close)) OVER (
-            PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 19 FOLLOWING
-          ) AS ma20,
-          AVG(COALESCE(NULLIF(c.adj_close, 0), c.close)) OVER (
-            PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 59 FOLLOWING
-          ) AS ma60,
-          AVG(COALESCE(NULLIF(c.adj_close, 0), c.close)) OVER (
-            PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 199 FOLLOWING
-          ) AS ma200,
-          COUNT(c.close) OVER (
-            PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 19 FOLLOWING
-          ) AS cnt20,
-          COUNT(c.close) OVER (
-            PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 59 FOLLOWING
-          ) AS cnt60,
-          COUNT(c.close) OVER (
-            PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 199 FOLLOWING
-          ) AS cnt200,
-          SUM(COALESCE(c.volume, 0)) OVER (
-            PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 19 FOLLOWING
-          ) AS sum_vol20
-        FROM daily_candles c
-        JOIN bounds b ON c.date >= b.min_date AND c.date <= b.max_date
-        WHERE c.symbol NOT LIKE '^%'
-      )
-      SELECT
-        symbol, date, price,
-        ma20, ma60, ma200,
-        cnt20, cnt60, cnt200,
-        sum_vol20
-      FROM ranked
-      WHERE rn = 1 AND date = (SELECT max_date FROM bounds)
-    `)
-    .all(minDate, anchorDate);
-
+  // 3. 計算台股寬度 (Spec 0222: 門檻調整為 18/55/180 天)
   let twTotal = 0;
   let twEligible20 = 0;
   let twEligible60 = 0;
@@ -656,6 +722,82 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
   let twAbove60 = 0;
   let twAbove200 = 0;
 
+  if (twDates.length > 0) {
+    const twMinDate = twDates[twDates.length - 1];
+    const minTw20 = Math.min(18, twDates.length);
+    const minTw60 = Math.min(55, twDates.length);
+    const minTw200 = Math.min(180, twDates.length);
+
+    const twRows = db
+      .prepare(`
+        WITH bounds AS (
+          SELECT ? AS min_date, ? AS max_date
+        ),
+        ranked AS (
+          SELECT
+            c.symbol,
+            c.date,
+            COALESCE(NULLIF(c.adj_close, 0), c.close) AS price,
+            c.volume,
+            ROW_NUMBER() OVER (PARTITION BY c.symbol ORDER BY c.date DESC) AS rn,
+            AVG(COALESCE(NULLIF(c.adj_close, 0), c.close)) OVER (
+              PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 19 FOLLOWING
+            ) AS ma20,
+            AVG(COALESCE(NULLIF(c.adj_close, 0), c.close)) OVER (
+              PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 59 FOLLOWING
+            ) AS ma60,
+            AVG(COALESCE(NULLIF(c.adj_close, 0), c.close)) OVER (
+              PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 199 FOLLOWING
+            ) AS ma200,
+            COUNT(c.close) OVER (
+              PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 19 FOLLOWING
+            ) AS cnt20,
+            COUNT(c.close) OVER (
+              PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 59 FOLLOWING
+            ) AS cnt60,
+            COUNT(c.close) OVER (
+              PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 199 FOLLOWING
+            ) AS cnt200,
+            SUM(COALESCE(c.volume, 0)) OVER (
+              PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 19 FOLLOWING
+            ) AS sum_vol20
+          FROM daily_candles c
+          JOIN bounds b ON c.date >= b.min_date AND c.date <= b.max_date
+          WHERE (c.symbol GLOB '[0-9][0-9][0-9][0-9]' OR (c.symbol LIKE '00%' AND LENGTH(c.symbol) <= 6))
+        )
+        SELECT
+          symbol, date, price, volume,
+          ma20, ma60, ma200,
+          cnt20, cnt60, cnt200,
+          sum_vol20
+        FROM ranked
+        WHERE rn = 1 AND date = (SELECT max_date FROM bounds)
+      `)
+      .all(twMinDate, twAnchorDate);
+
+    for (const r of twRows) {
+      // 殭屍股過濾
+      if (r.sum_vol20 <= 0 && (r.volume === null || r.volume === undefined || r.volume <= 0)) {
+        continue;
+      }
+      twTotal++;
+      const price = r.price;
+      if (r.ma20 !== null && r.cnt20 >= minTw20) {
+        twEligible20++;
+        if (price >= r.ma20) twAbove20++;
+      }
+      if (r.ma60 !== null && r.cnt60 >= minTw60) {
+        twEligible60++;
+        if (price >= r.ma60) twAbove60++;
+      }
+      if (r.ma200 !== null && r.cnt200 >= minTw200) {
+        twEligible200++;
+        if (price >= r.ma200) twAbove200++;
+      }
+    }
+  }
+
+  // 4. 計算美股寬度
   let usTotal = 0;
   let usEligible20 = 0;
   let usEligible60 = 0;
@@ -664,40 +806,74 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
   let usAbove60 = 0;
   let usAbove200 = 0;
 
-  for (const r of breadthRows) {
-    // 殭屍股過濾：近 20 日成交量皆為 0 且當日 volume <= 0 者剔除
-    if (r.sum_vol20 <= 0 && (r.volume === null || r.volume === undefined || r.volume <= 0)) {
-      continue;
-    }
+  if (usDates.length > 0) {
+    const usMinDate = usDates[usDates.length - 1];
+    const minUs20 = Math.min(18, usDates.length);
+    const minUs60 = Math.min(55, usDates.length);
+    const minUs200 = Math.min(180, usDates.length);
 
-    const isTw = /^\d/.test(r.symbol) || r.symbol.endsWith('.TW') || r.symbol.endsWith('.TWO');
-    const price = r.price;
+    const usRows = db
+      .prepare(`
+        WITH bounds AS (
+          SELECT ? AS min_date, ? AS max_date
+        ),
+        ranked AS (
+          SELECT
+            c.symbol,
+            c.date,
+            COALESCE(NULLIF(c.adj_close, 0), c.close) AS price,
+            c.volume,
+            ROW_NUMBER() OVER (PARTITION BY c.symbol ORDER BY c.date DESC) AS rn,
+            AVG(COALESCE(NULLIF(c.adj_close, 0), c.close)) OVER (
+              PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 19 FOLLOWING
+            ) AS ma20,
+            AVG(COALESCE(NULLIF(c.adj_close, 0), c.close)) OVER (
+              PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 59 FOLLOWING
+            ) AS ma60,
+            AVG(COALESCE(NULLIF(c.adj_close, 0), c.close)) OVER (
+              PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 199 FOLLOWING
+            ) AS ma200,
+            COUNT(c.close) OVER (
+              PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 19 FOLLOWING
+            ) AS cnt20,
+            COUNT(c.close) OVER (
+              PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 59 FOLLOWING
+            ) AS cnt60,
+            COUNT(c.close) OVER (
+              PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 199 FOLLOWING
+            ) AS cnt200,
+            SUM(COALESCE(c.volume, 0)) OVER (
+              PARTITION BY c.symbol ORDER BY c.date DESC ROWS BETWEEN CURRENT ROW AND 19 FOLLOWING
+            ) AS sum_vol20
+          FROM daily_candles c
+          JOIN bounds b ON c.date >= b.min_date AND c.date <= b.max_date
+          WHERE c.symbol GLOB '[A-Za-z]*' AND c.symbol NOT LIKE '^%'
+        )
+        SELECT
+          symbol, date, price, volume,
+          ma20, ma60, ma200,
+          cnt20, cnt60, cnt200,
+          sum_vol20
+        FROM ranked
+        WHERE rn = 1 AND date = (SELECT max_date FROM bounds)
+      `)
+      .all(usMinDate, usAnchorDate);
 
-    if (isTw) {
-      twTotal++;
-      if (r.ma20 !== null && r.cnt20 >= minRequired20) {
-        twEligible20++;
-        if (price >= r.ma20) twAbove20++;
+    for (const r of usRows) {
+      if (r.sum_vol20 <= 0 && (r.volume === null || r.volume === undefined || r.volume <= 0)) {
+        continue;
       }
-      if (r.ma60 !== null && r.cnt60 >= minRequired60) {
-        twEligible60++;
-        if (price >= r.ma60) twAbove60++;
-      }
-      if (r.ma200 !== null && r.cnt200 >= minRequired200) {
-        twEligible200++;
-        if (price >= r.ma200) twAbove200++;
-      }
-    } else {
       usTotal++;
-      if (r.ma20 !== null && r.cnt20 >= minRequired20) {
+      const price = r.price;
+      if (r.ma20 !== null && r.cnt20 >= minUs20) {
         usEligible20++;
         if (price >= r.ma20) usAbove20++;
       }
-      if (r.ma60 !== null && r.cnt60 >= minRequired60) {
+      if (r.ma60 !== null && r.cnt60 >= minUs60) {
         usEligible60++;
         if (price >= r.ma60) usAbove60++;
       }
-      if (r.ma200 !== null && r.cnt200 >= minRequired200) {
+      if (r.ma200 !== null && r.cnt200 >= minUs200) {
         usEligible200++;
         if (price >= r.ma200) usAbove200++;
       }
@@ -712,50 +888,98 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
   const usBreadth60 = usEligible60 > 0 ? Number(((usAbove60 / usEligible60) * 100).toFixed(1)) : 0;
   const usBreadth200 = usEligible200 > 0 ? Number(((usAbove200 / usEligible200) * 100).toFixed(1)) : 0;
 
-  // 4. 台股近 60 日融資去槓桿比率 (marginDeleveragingRatio)
-  // 加權指數最大回撤 % vs 全市場融資餘額減幅 %
+  // 5. 台股近 60 日融資去槓桿比率與動態落底指標 (Spec 0222 Ticket 04)
   let taiexMaxDrawdown = 0;
   let marginReductionPercent = 0;
   let marginDeleveragingRatio = 1;
   let isCleaned = true;
+  let isAtBollingerLowerBand = false;
+  let isBadNewsDivergenceObserved = false;
 
   try {
-    const dates60 = availableDates.slice(0, 60);
+    const dates60 = twDates.slice(0, 60);
     if (dates60.length > 0) {
       const minDate60 = dates60[dates60.length - 1];
 
-      // 4.1 加權指數 ^TWII 近 60 日最高點與最新收盤
-      const twiiRows = db
+      // 5.1 查詢大盤指數日 K (優先 ^TWII，查無則 Fallback 至 0050)
+      let indexSymbol = '^TWII';
+      let indexRows = db
         .prepare(`
-          SELECT date, close, high
+          SELECT date, close, high, low
           FROM daily_candles
-          WHERE symbol = '^TWII' AND date >= ? AND date <= ?
+          WHERE symbol = ? AND date >= ? AND date <= ?
           ORDER BY date ASC
         `)
-        .all(minDate60, anchorDate);
+        .all(indexSymbol, minDate60, twAnchorDate);
 
-      if (twiiRows.length > 0) {
-        let peakTaiex = 0;
-        for (const row of twiiRows) {
+      if (indexRows.length === 0) {
+        indexSymbol = '0050';
+        indexRows = db
+          .prepare(`
+            SELECT date, close, high, low
+            FROM daily_candles
+            WHERE symbol = ? AND date >= ? AND date <= ?
+            ORDER BY date ASC
+          `)
+          .all(indexSymbol, minDate60, twAnchorDate);
+      }
+
+      if (indexRows.length > 0) {
+        let peakIndex = 0;
+        for (const row of indexRows) {
           const val = row.high || row.close || 0;
-          if (val > peakTaiex) peakTaiex = val;
+          if (val > peakIndex) peakIndex = val;
         }
-        const curTaiex = twiiRows[twiiRows.length - 1].close;
-        if (peakTaiex > 0 && curTaiex > 0) {
-          taiexMaxDrawdown = Number((((curTaiex - peakTaiex) / peakTaiex) * 100).toFixed(2));
+        const curIndex = indexRows[indexRows.length - 1].close;
+        if (peakIndex > 0 && curIndex > 0) {
+          taiexMaxDrawdown = Number((((curIndex - peakIndex) / peakIndex) * 100).toFixed(2));
+        }
+
+        // 計算大盤布林通道 (20MA - 2*StdDev)
+        if (indexRows.length >= 20) {
+          const last20Closes = indexRows.slice(-20).map((r) => r.close);
+          const ma20 = last20Closes.reduce((acc, c) => acc + c, 0) / 20;
+          const variance = last20Closes.reduce((acc, c) => acc + Math.pow(c - ma20, 2), 0) / 20;
+          const stdDev = Math.sqrt(variance);
+          const lowerBand = ma20 - 2 * stdDev;
+
+          // 若收盤價小於或接近布林下軌 (<= lowerBand * 1.01)，視為達到布林下軌位階
+          if (curIndex <= lowerBand * 1.01) {
+            isAtBollingerLowerBand = true;
+          }
+
+          // 計算利空鈍化：若近 5 日內之最低點高於近 20 日最低點 (未破底、底底高) 且近 60 日有明顯修正 (< -3%)
+          const minClose20 = Math.min(...last20Closes);
+          const last5Lows = indexRows.slice(-5).map((r) => r.low || r.close);
+          const minLow5 = Math.min(...last5Lows);
+          if (minLow5 > minClose20 && taiexMaxDrawdown < -3.0) {
+            isBadNewsDivergenceObserved = true;
+          }
         }
       }
 
-      // 4.2 全市場融資餘額近 60 日最高總額與最新總額
-      const marginRows = db
+      // 5.2 全市場融資餘額 (過濾殘缺日：自動依歷史最大檔數之 60% 作為門檻)
+      const rawMarginRows = db
         .prepare(`
-          SELECT date, SUM(margin_balance) AS total_margin
+          SELECT date, SUM(margin_balance) AS total_margin, COUNT(margin_balance) AS cnt
           FROM tw_institutional_chips
           WHERE date >= ? AND date <= ?
           GROUP BY date
           ORDER BY date ASC
         `)
-        .all(minDate60, anchorDate);
+        .all(minDate60, twAnchorDate);
+
+      let marginRows = [];
+      if (rawMarginRows.length > 0) {
+        let maxCnt = 0;
+        for (const r of rawMarginRows) {
+          if (r.cnt > maxCnt) maxCnt = r.cnt;
+        }
+        // 殘缺日過濾門檻：若最大檔數 >= 1000 則門檻為 1000 檔；否則為最大檔數之 60%
+        const validThreshold = maxCnt >= 1000 ? 1000 : Math.max(1, Math.ceil(maxCnt * 0.6));
+        const filtered = rawMarginRows.filter((r) => r.cnt >= validThreshold);
+        marginRows = filtered.length > 0 ? filtered : rawMarginRows;
+      }
 
       if (marginRows.length > 0) {
         let peakMargin = 0;
@@ -782,15 +1006,15 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
     // 容錯防禦
   }
 
-  // 頂層寬度預設以台股優先（若台股為 0 且美股有值則採美股）
+  // 頂層寬度以台股優先（若台股為 0 且美股有值則採美股）
   const topBreadth20 = twTotal > 0 ? twBreadth20 : usBreadth20;
   const topBreadth60 = twTotal > 0 ? twBreadth60 : usBreadth60;
   const topBreadth200 = twTotal > 0 ? twBreadth200 : usBreadth200;
   const topTotalStocks = twTotal > 0 ? twTotal : usTotal;
 
   const result = {
-    asOfDate: anchorDate,
-    tradeDate: anchorDate,
+    asOfDate: displayAnchorDate,
+    tradeDate: displayAnchorDate,
     breadth20: topBreadth20,
     breadth60: topBreadth60,
     breadth200: topBreadth200,
@@ -798,7 +1022,9 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
     pctAbove60MA: topBreadth60,
     pctAbove200MA: topBreadth200,
     totalStocks: topTotalStocks,
+    totalFilteredStocks: topTotalStocks,
     tw: {
+      asOfDate: twAnchorDate,
       breadth20: twBreadth20,
       breadth60: twBreadth60,
       breadth200: twBreadth200,
@@ -811,6 +1037,7 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
       above200MaCount: twAbove200,
     },
     us: {
+      asOfDate: usAnchorDate,
       breadth20: usBreadth20,
       breadth60: usBreadth60,
       breadth200: usBreadth200,
@@ -823,11 +1050,15 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
       above200MaCount: usAbove200,
     },
     marginDeleveragingRatio,
+    isAtBollingerLowerBand,
+    isBadNewsDivergenceObserved,
     twMarginDeleveraging: {
       taiexMaxDrawdown,
       marginReductionPercent,
       marginDeleveragingRatio,
       isCleaned,
+      isAtBollingerLowerBand,
+      isBadNewsDivergenceObserved,
     },
   };
 
@@ -860,6 +1091,7 @@ module.exports = {
   initSqliteLakehouseDb,
   getTwMarketBreadthAndSpotSummary,
   getMarketMultiHorizonBreadth,
+  getTwRevenueDiffusionAndYoY,
   clearBreadthAnchorCache,
   closeSqliteDb,
 };

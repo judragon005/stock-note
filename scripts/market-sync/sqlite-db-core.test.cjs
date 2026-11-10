@@ -229,6 +229,119 @@ d('Spec 0221 Ticket 01: SQLite 多週期寬度 & 宏觀持久化修復', () => {
     assert.ok(elapsed < 25, `定錨快取呼叫時間 (${elapsed.toFixed(3)}ms) 應小於 25ms`);
   });
 
+  t('5. [Spec 0222 / Ticket 03] 權證過濾、台美交易日隔離與 200MA 寬度修復', () => {
+    cleanupTestDb();
+    const db = initSqliteLakehouseDb(TEST_DB_PATH);
+
+    // 建立 190 個交易日（測試 200MA 在 >=180 天時不被 200 硬性門檻歸零）
+    const dates = [];
+    const baseDate = new Date('2026-01-01');
+    for (let i = 0; i < 190; i++) {
+      const d = new Date(baseDate.getTime() + i * 86400000);
+      dates.push(d.toISOString().slice(0, 10));
+    }
+    const latestDate = dates[dates.length - 1];
+
+    const insertCandle = db.prepare(`
+      INSERT INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    db.exec('BEGIN TRANSACTION;');
+    // 標的 A: 2330 (4碼普通股，始終站上 20/60/200MA)
+    for (let i = 0; i < dates.length; i++) {
+      const p = 500 + i * 2;
+      insertCandle.run('2330', dates[i], p, p + 2, p - 2, p, p, 1000000);
+    }
+
+    // 標的 B: 0050 (00開頭 ETF，始終站上 20/60/200MA)
+    for (let i = 0; i < dates.length; i++) {
+      const p = 120 + i * 0.5;
+      insertCandle.run('0050', dates[i], p, p + 1, p - 1, p, p, 2000000);
+    }
+
+    // 標的 C: 710001 (6碼權證，應被過濾剔除，不計入分母)
+    for (let i = 0; i < dates.length; i++) {
+      insertCandle.run('710001', dates[i], 2, 2, 1.5, 1.5, 1.5, 500000);
+    }
+
+    // 美股: AAPL (美股最新日跨至隔天 latestDate + 1)
+    const nextDay = '2026-11-15';
+    for (let i = 0; i < dates.length; i++) {
+      insertCandle.run('AAPL', dates[i], 200, 202, 198, 200, 200, 3000000);
+    }
+    // AAPL 單獨跨日一筆
+    insertCandle.run('AAPL', nextDay, 205, 207, 204, 206, 206, 3000000);
+    db.exec('COMMIT;');
+
+    clearBreadthAnchorCache();
+
+    // 查詢台股寬度
+    const breadthTw = getMarketMultiHorizonBreadth(latestDate, db);
+
+    // 權證 710001 應被排除，台股有效總檔數應為 2 (2330 與 0050)
+    assert.strictEqual(breadthTw.tw.totalStocks, 2, '台股應排除 6 碼權證，僅保留 4 碼股與 00 ETF');
+    assert.strictEqual(breadthTw.totalFilteredStocks, 2, '應相容提供 totalFilteredStocks 屬性');
+
+    // 200MA 寬度：因為有 190 天 (>= 180)，eligible200Count 不應為 0
+    assert.ok(breadthTw.tw.eligible200Count > 0, '200MA 合格標的數不應為 0');
+    assert.strictEqual(breadthTw.tw.breadth200, 100, '2330 與 0050 均在年線上，寬度應為 100%');
+  });
+
+  t('6. [Spec 0222 / Ticket 04] 融資去槓桿殘缺日過濾、0050 大盤回撤 Fallback 與動態布林/利空鈍化', () => {
+    cleanupTestDb();
+    const db = initSqliteLakehouseDb(TEST_DB_PATH);
+
+    const dates = [];
+    const baseDate = new Date('2026-09-01');
+    for (let i = 0; i < 60; i++) {
+      const d = new Date(baseDate.getTime() + i * 86400000);
+      dates.push(d.toISOString().slice(0, 10));
+    }
+    const latestDate = dates[dates.length - 1];
+
+    const insertCandle = db.prepare(`
+      INSERT INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    db.exec('BEGIN TRANSACTION;');
+    // 無 ^TWII，改以 0050 代表大盤：最高 100，回撤至 94 (-6%)
+    for (let i = 0; i < dates.length; i++) {
+      const p = i < 40 ? 80 + i * 0.5 : 100 - (i - 40) * 0.3; // 峰值 100 -> 最新 94
+      insertCandle.run('0050', dates[i], p, p + 1, p - 1, p, p, 5000000);
+      insertCandle.run('2330', dates[i], 900, 910, 890, 900, 900, 3000000);
+    }
+
+    // 融資資料：tw_institutional_chips
+    const insertChips = db.prepare(`
+      INSERT INTO tw_institutional_chips (symbol, date, foreign_net, trust_net, dealer_net, margin_balance)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    // 正常日融資 1000 萬 -> 最新正常日 950 萬 (-5%)
+    for (let i = 0; i < dates.length - 1; i++) {
+      insertChips.run('0050', dates[i], 0, 0, 0, 5000000);
+      insertChips.run('2330', dates[i], 0, 0, 0, 5000000 - i * 10000);
+    }
+    // 最新一日 dates[dates.length - 1] 故意只有 1 檔股票有融資 (殘缺日)，若未過濾會導致融資腰斬
+    insertChips.run('0050', latestDate, 0, 0, 0, 1000);
+    db.exec('COMMIT;');
+
+    clearBreadthAnchorCache();
+
+    const breadth = getMarketMultiHorizonBreadth(latestDate, db);
+
+    assert.ok(breadth.twMarginDeleveraging, '應回傳台股融資去槓桿');
+    // 大盤回撤應來自 0050: 約 -6%
+    assert.ok(breadth.twMarginDeleveraging.taiexMaxDrawdown < -5, '應由 0050 正確計算大盤回撤');
+    // 殘缺日應被平滑或過濾，融資減幅不應是 -99% 的異常假象
+    assert.ok(breadth.twMarginDeleveraging.marginReductionPercent > -50, '融資減幅應過濾殘缺日');
+
+    // 應具備動態布林下軌與利空鈍化屬性
+    assert.strictEqual(typeof breadth.isAtBollingerLowerBand, 'boolean', '應有 isAtBollingerLowerBand 布林狀態');
+    assert.strictEqual(typeof breadth.isBadNewsDivergenceObserved, 'boolean', '應有 isBadNewsDivergenceObserved 利空鈍化狀態');
+  });
+
   t('4. Vite Connect 中介層端點 GET /api/market/breadth 整合驗證', async () => {
     cleanupTestDb();
     const db = initSqliteLakehouseDb(TEST_DB_PATH);

@@ -45,6 +45,98 @@ async function executeJsonRequest(url, customFetchJson, timeoutMs = 8000) {
 }
 
 /**
+ * 內部安全文字/CSV 請求輔助器：相容自訂 fetchJson (回傳字串或 Response) 與原生 fetch
+ */
+async function executeTextRequest(url, customFetch, timeoutMs = 8000) {
+  try {
+    if (typeof customFetch === 'function') {
+      const result = await customFetch(url, timeoutMs);
+      if (!result) return null;
+      if (typeof result === 'string') return result;
+      if (typeof result.text === 'function') {
+        if (result.ok === false) return null;
+        return await result.text();
+      }
+      return String(result);
+    }
+
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = setTimeout(() => {
+      if (controller) controller.abort();
+    }, timeoutMs);
+
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          Accept: 'text/csv, text/plain, */*',
+        },
+        signal: controller ? controller.signal : undefined,
+      });
+      if (!res.ok) return null;
+      return await res.text();
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 抓取 FRED 官方免 Key 公開 CSV 序列並解析最新有效數值 (Spec 0222 Ticket 01)
+ * 支援 CPIAUCSL 與製造業/工業序列 (AMTMNO, AMTMTI, INDPRO) 12 個月 YoY 年增率 (%) 計算
+ */
+async function fetchFredCsvObservations(seriesId, fetchJson, timeoutMs = 8000, options = {}) {
+  if (!seriesId || typeof seriesId !== 'string') return null;
+  const trimmedId = seriesId.trim();
+  if (!trimmedId) return null;
+
+  const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(trimmedId)}`;
+  const csvText = await executeTextRequest(url, fetchJson, timeoutMs);
+  if (!csvText || typeof csvText !== 'string') return null;
+
+  const lines = csvText.trim().split(/\r?\n/);
+  if (lines.length < 2) return null;
+
+  // 跳過標頭行 (DATE,VALUE 等)
+  const validObs = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const commaIdx = line.indexOf(',');
+    if (commaIdx === -1) continue;
+    const dateStr = line.slice(0, commaIdx).trim();
+    const valStr = line.slice(commaIdx + 1).replace(/["']/g, '').trim();
+    if (valStr !== '.' && valStr !== '') {
+      const num = parseFloat(valStr);
+      if (Number.isFinite(num)) {
+        validObs.push({ date: dateStr, num });
+      }
+    }
+  }
+
+  if (validObs.length === 0) return null;
+
+  // 依日期升序排列 (最舊 -> 最新)
+  validObs.sort((a, b) => a.date.localeCompare(b.date));
+
+  const yoySeries = ['CPIAUCSL', 'AMTMNO', 'AMTMTI', 'INDPRO'];
+  const isYoy = options.calcYoY !== undefined ? !!options.calcYoY : yoySeries.includes(trimmedId);
+
+  if (isYoy) {
+    if (validObs.length === 1) return validObs[0].num;
+    const latest = validObs[validObs.length - 1].num;
+    const idx12Ago = Math.max(0, validObs.length - 13);
+    const obs12Ago = validObs[idx12Ago].num;
+    if (!obs12Ago || obs12Ago === 0) return null;
+    return Number((((latest - obs12Ago) / obs12Ago) * 100).toFixed(2));
+  }
+
+  return validObs[validObs.length - 1].num;
+}
+
+/**
  * 解析 FRED 序列數據，取得最後一個非空有效數值
  */
 function parseFredObservations(rawData) {
@@ -161,24 +253,35 @@ async function fetchYahooQuoteAndMa(symbol, fetchJson, timeoutMs = 8000) {
 }
 
 /**
- * 查詢 FRED 指定總經序列最新有效值；針對 CPIAUCSL 自動取近 13 期計算 12 個月 YoY 年增率 (%) (Spec 0209 Ticket 04)
+ * 查詢 FRED 指定總經序列最新有效值；針對 CPIAUCSL 與製造業/工業序列 (AMTMNO, AMTMTI, INDPRO)
+ * 自動取近 13 期計算 12 個月 YoY 年增率 (%) (Spec 0209 Ticket 04 & Spec 0222 Ticket 01)
+ * 當無 API Key 或 API 請求失敗時，自動無縫 Fallback 至 FRED 官方公開 CSV 端點！
  */
 async function fetchFredSeriesLatest(seriesId, apiKey, fetchJson, timeoutMs = 8000) {
-  if (!seriesId || !apiKey || typeof apiKey !== 'string' || !apiKey.trim()) {
+  if (!seriesId || typeof seriesId !== 'string') {
     return null;
   }
+  const trimmedId = seriesId.trim();
+  if (!trimmedId) return null;
 
-  const limit = seriesId === 'CPIAUCSL' ? 15 : 10;
+  if (!apiKey || typeof apiKey !== 'string' || !apiKey.trim()) {
+    return fetchFredCsvObservations(trimmedId, fetchJson, timeoutMs);
+  }
+
+  const yoySeries = ['CPIAUCSL', 'AMTMNO', 'AMTMTI', 'INDPRO'];
+  const isYoy = yoySeries.includes(trimmedId);
+  const limit = isYoy ? 20 : 10;
   const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${encodeURIComponent(
-    seriesId
+    trimmedId
   )}&api_key=${encodeURIComponent(apiKey.trim())}&file_type=json&sort_order=desc&limit=${limit}`;
 
   const rawData = await executeJsonRequest(url, fetchJson, timeoutMs);
   if (!rawData || !Array.isArray(rawData.observations) || rawData.observations.length === 0) {
-    return null;
+    // API 失敗或限流時，無縫 fallback 至免 Key 官方 CSV
+    return fetchFredCsvObservations(trimmedId, fetchJson, timeoutMs);
   }
 
-  if (seriesId === 'CPIAUCSL') {
+  if (isYoy) {
     const validObs = [];
     for (const item of rawData.observations) {
       const valStr = String(item?.value ?? '').trim();
@@ -214,14 +317,12 @@ function normalizeYahooYield(val) {
 }
 
 /**
- * 抓取美債 10 年期殖利率 (FRED DGS10 優先，失敗降級至 Yahoo ^TNX)
+ * 抓取美債 10 年期殖利率 (FRED DGS10 優先，包含免 Key CSV fallback，失敗降級至 Yahoo ^TNX)
  */
 async function fetchTreasuryYield10y(options = {}) {
   const { fredApiKey = process.env.FRED_API_KEY, fetchJson, timeoutMs = 8000 } = options;
-  if (fredApiKey) {
-    const dgs10 = await fetchFredSeriesLatest('DGS10', fredApiKey, fetchJson, timeoutMs);
-    if (dgs10 !== null) return dgs10;
-  }
+  const dgs10 = await fetchFredSeriesLatest('DGS10', fredApiKey, fetchJson, timeoutMs);
+  if (dgs10 !== null) return dgs10;
   const tnx = await fetchYahooQuoteAndMa('^TNX', fetchJson, timeoutMs);
   return normalizeYahooYield(tnx?.price);
 }
@@ -393,11 +494,12 @@ async function fetchFullMacroWarRoomPulse(options = {}) {
     'BAMLH0A3HYC',
     'T10YIE',
     'ICSA',
+    'AMTMNO',
+    'AMTMTI',
+    'INDPRO',
   ];
   const fredPromises = fredSeriesIds.map((sid) =>
-    fredApiKey
-      ? fetchFredSeriesLatest(sid, fredApiKey, fetchJson, timeoutMs).catch(() => null)
-      : Promise.resolve(null)
+    fetchFredSeriesLatest(sid, fredApiKey, fetchJson, timeoutMs).catch(() => null)
   );
 
   const [
@@ -431,7 +533,20 @@ async function fetchFullMacroWarRoomPulse(options = {}) {
     cccSpreadOas,
     breakeven10y,
     initialClaims,
+    mfgNewOrdersYoY,
+    mfgInventoriesYoY,
+    industrialProdYoY,
   ] = fredResults;
+
+  let ordersMinusInvSpread = null;
+  if (
+    typeof mfgNewOrdersYoY === 'number' &&
+    Number.isFinite(mfgNewOrdersYoY) &&
+    typeof mfgInventoriesYoY === 'number' &&
+    Number.isFinite(mfgInventoriesYoY)
+  ) {
+    ordersMinusInvSpread = Number((mfgNewOrdersYoY - mfgInventoriesYoY).toFixed(2));
+  }
 
   const sox = quotes['^SOX'];
   const tsmAdr = quotes['TSM'];
@@ -549,6 +664,11 @@ async function fetchFullMacroWarRoomPulse(options = {}) {
     cccSpreadOas: cccSpreadOas ?? null,
     breakeven10y: breakeven10y ?? null,
     initialClaims: initialClaims ?? null,
+    // 美國製造業與景氣動能 (Spec 0222 Ticket 01)
+    usMfgNewOrdersYoY: mfgNewOrdersYoY ?? null,
+    usMfgInventoriesYoY: mfgInventoriesYoY ?? null,
+    usOrdersMinusInvSpread: ordersMinusInvSpread ?? null,
+    usIndustrialProdYoY: industrialProdYoY ?? null,
     // 市場情緒與台股籌碼
     vixClose: vix?.price ?? null,
     vixChangePercent: vix?.changePercent ?? null,
@@ -584,16 +704,91 @@ async function fetchMacroSentimentDaily(options = {}) {
     cccSpreadOas: pulse.cccSpreadOas,
     breakeven10y: pulse.breakeven10y,
     initialClaims: pulse.initialClaims,
+    usMfgNewOrdersYoY: pulse.usMfgNewOrdersYoY,
+    usMfgInventoriesYoY: pulse.usMfgInventoriesYoY,
+    usOrdersMinusInvSpread: pulse.usOrdersMinusInvSpread,
+    usIndustrialProdYoY: pulse.usIndustrialProdYoY,
     pulse,
   };
 }
 
 /**
- * 批次寫入 Lakehouse SQLite macro_sentiment_daily 表 (Spec 0183 & Spec 0221 全維度總經與情緒持久化)
+ * 批次寫入 Lakehouse SQLite macro_sentiment_daily 表 (Spec 0183 & Spec 0221 & Spec 0222 全維度總經與情緒持久化)
  */
 function ingestMacroSentimentToDb(data, customDbPath) {
   if (!data || !data.date) return false;
   const db = initSqliteLakehouseDb(customDbPath);
+
+  let hasMfgCols = false;
+  try {
+    const cols = db.prepare('PRAGMA table_info(macro_sentiment_daily)').all();
+    hasMfgCols = cols.some((c) => c.name === 'us_mfg_new_orders_yoy');
+  } catch {
+    hasMfgCols = false;
+  }
+
+  if (hasMfgCols) {
+    const stmt = db.prepare(`
+      INSERT INTO macro_sentiment_daily (
+        date, risk_free_rate_3m, treasury_yield_10y, yield_spread_10y_2y,
+        cnn_fear_greed_score, vix_close, tw_put_call_ratio, tw_foreign_futures_oi, tw_trust_futures_oi,
+        treasury_yield_2y, fed_funds_rate, us_cpi_yoy, credit_spread_oas, tw_margin_maintenance_ratio,
+        ig_spread_oas, ccc_spread_oas, breakeven_10y, initial_claims,
+        us_mfg_new_orders_yoy, us_mfg_inventories_yoy, us_orders_minus_inv_spread, us_industrial_prod_yoy,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(date) DO UPDATE SET
+        risk_free_rate_3m = COALESCE(excluded.risk_free_rate_3m, macro_sentiment_daily.risk_free_rate_3m),
+        treasury_yield_10y = COALESCE(excluded.treasury_yield_10y, macro_sentiment_daily.treasury_yield_10y),
+        yield_spread_10y_2y = COALESCE(excluded.yield_spread_10y_2y, macro_sentiment_daily.yield_spread_10y_2y),
+        cnn_fear_greed_score = COALESCE(excluded.cnn_fear_greed_score, macro_sentiment_daily.cnn_fear_greed_score),
+        vix_close = COALESCE(excluded.vix_close, macro_sentiment_daily.vix_close),
+        tw_put_call_ratio = COALESCE(excluded.tw_put_call_ratio, macro_sentiment_daily.tw_put_call_ratio),
+        tw_foreign_futures_oi = COALESCE(excluded.tw_foreign_futures_oi, macro_sentiment_daily.tw_foreign_futures_oi),
+        tw_trust_futures_oi = COALESCE(excluded.tw_trust_futures_oi, macro_sentiment_daily.tw_trust_futures_oi),
+        treasury_yield_2y = COALESCE(excluded.treasury_yield_2y, macro_sentiment_daily.treasury_yield_2y),
+        fed_funds_rate = COALESCE(excluded.fed_funds_rate, macro_sentiment_daily.fed_funds_rate),
+        us_cpi_yoy = COALESCE(excluded.us_cpi_yoy, macro_sentiment_daily.us_cpi_yoy),
+        credit_spread_oas = COALESCE(excluded.credit_spread_oas, macro_sentiment_daily.credit_spread_oas),
+        tw_margin_maintenance_ratio = COALESCE(excluded.tw_margin_maintenance_ratio, macro_sentiment_daily.tw_margin_maintenance_ratio),
+        ig_spread_oas = COALESCE(excluded.ig_spread_oas, macro_sentiment_daily.ig_spread_oas),
+        ccc_spread_oas = COALESCE(excluded.ccc_spread_oas, macro_sentiment_daily.ccc_spread_oas),
+        breakeven_10y = COALESCE(excluded.breakeven_10y, macro_sentiment_daily.breakeven_10y),
+        initial_claims = COALESCE(excluded.initial_claims, macro_sentiment_daily.initial_claims),
+        us_mfg_new_orders_yoy = COALESCE(excluded.us_mfg_new_orders_yoy, macro_sentiment_daily.us_mfg_new_orders_yoy),
+        us_mfg_inventories_yoy = COALESCE(excluded.us_mfg_inventories_yoy, macro_sentiment_daily.us_mfg_inventories_yoy),
+        us_orders_minus_inv_spread = COALESCE(excluded.us_orders_minus_inv_spread, macro_sentiment_daily.us_orders_minus_inv_spread),
+        us_industrial_prod_yoy = COALESCE(excluded.us_industrial_prod_yoy, macro_sentiment_daily.us_industrial_prod_yoy),
+        updated_at = excluded.updated_at
+    `);
+
+    stmt.run(
+      data.date,
+      data.riskFreeRate3m ?? data.risk_free_rate_3m ?? null,
+      data.treasuryYield10y ?? data.treasury_yield_10y ?? null,
+      data.yieldSpread10y2y ?? data.yield_spread_10y_2y ?? null,
+      data.cnnFearGreedScore ?? data.cnn_fear_greed_score ?? null,
+      data.vixClose ?? data.vix_close ?? null,
+      data.twPutCallRatio ?? data.tw_put_call_ratio ?? null,
+      data.twForeignFuturesOi ?? data.tw_foreign_futures_oi ?? null,
+      data.twTrustFuturesOi ?? data.tw_trust_futures_oi ?? null,
+      data.treasuryYield2y ?? data.treasury_yield_2y ?? null,
+      data.fedFundsRate ?? data.fed_funds_rate ?? null,
+      data.usCpiYoY ?? data.cpiYoY ?? data.us_cpi_yoy ?? null,
+      data.creditSpreadOas ?? data.credit_spread_oas ?? null,
+      data.twMarginMaintenanceRatio ?? data.twMarginMaintenance ?? data.tw_margin_maintenance_ratio ?? null,
+      data.igSpreadOas ?? data.ig_spread_oas ?? null,
+      data.cccSpreadOas ?? data.ccc_spread_oas ?? null,
+      data.breakeven10y ?? data.breakeven_10y ?? null,
+      data.initialClaims ?? data.initial_claims ?? null,
+      data.usMfgNewOrdersYoY ?? data.us_mfg_new_orders_yoy ?? null,
+      data.usMfgInventoriesYoY ?? data.us_mfg_inventories_yoy ?? null,
+      data.usOrdersMinusInvSpread ?? data.us_orders_minus_inv_spread ?? null,
+      data.usIndustrialProdYoY ?? data.us_industrial_prod_yoy ?? null,
+      Date.now()
+    );
+    return true;
+  }
 
   const stmt = db.prepare(`
     INSERT INTO macro_sentiment_daily (
@@ -794,6 +989,7 @@ async function fetchAndIngestEtfDailyNav(customDbPath, targetDateStr = new Date(
 }
 
 module.exports = {
+  fetchFredCsvObservations,
   parseFredObservations,
   computeYieldSpread,
   parseCnnFearGreedResponse,
