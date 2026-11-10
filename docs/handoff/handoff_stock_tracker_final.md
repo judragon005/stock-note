@@ -1,7 +1,13 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-11-06 13:30 (UTC+8)  
+> **交接產生時間**：2026-11-10 12:35 (UTC+8)  
 > **當前最新里程碑**：
+> - **V9.16.0 Zavy「散戶慢富之路」三級週期定位、台美市場結構寬度與 A/B 雙軌配置系統**（ADR 0221, Spec 0221, Issue #472, PR #473, #475）：
+>   - **頂層專屬工作區（`🐢 慢富週期與配置`）**：在導航列新增 `key: 'zavy'`，提供 HUD 大局觀定錨橫幅與三層分段鏡頭（總經週期大局觀、市場位階與風險傳導、見自己 A/B 雙軌配置與慢富退休）。
+>   - **SQLite 湖倉 `<25ms` 叢集索引多週期還原寬度與宏觀持久化修復**：實作 `getMarketMultiHorizonBreadth`，一次算完台美 `20/60/200MA` 還原寬度與近 60 日融資去槓桿比率；冪等補齊 `macro_sentiment_daily` 9 個宏觀欄位（FRED 利差、`T10YIE`、失業金）。
+>   - **大類資產分類器與 `etf_daily_nav` 折溢價守門員**：擴充 `'ASSET_CLASS'` 配置型別，實作 `classifyZavyAssetClass`（長/中/短純公債 vs 投資級公司債 vs 黃金 vs REITs vs 剔除池）；折溢價 `>1.0%` 攔截防買貴。
+>   - **大類資產再平衡、股息活水轉向與質押降槓桿**：支援「高股息存量不動、增量股息活水轉向（Dividend-Redirect）」；榮景期優先償還股票質押借款（`LoanRecord`），防範維持率斷頭中斷風險。
+>   - **慢富 30 倍年支出、Coast-FIRE 與雙軌順序風險**：實作 30x 本金（3.33% SWR）、Coast-FIRE 今日門檻，修復 FIRE 頁面 50,000 元硬編碼。
 > - **V9.15.0 戰情室風控指標抽取與估值河流二元搜尋優化**（ADR 0220, Spec 0220, Issue #466, PR #467）：
 >   - **估值河流圖二元搜尋優化 (技術債 0056)**：在 `src/utils/binarySearch.ts` 實作純函式二元搜尋 `findLatestCloseBeforeDate`，將歷史季度收盤價匹配時間複雜度降為 $O(M \log N)$，消滅 GC 記憶體分配浪費。
 >   - **主力戰情室龐大單體風控計算解耦 (技術債 0055)**：建立 `src/hooks/useWarRoomPortfolioMetrics.ts`，自 `WarRoomWorkspace.tsx` 移出 110+ 行非視圖之維持率、可用防禦資金、槓桿曝險與集中度穿透指標，補齊無 DOM 單元測試。
@@ -29,7 +35,7 @@
 >   - **戰情室快速校準 Modal 抽取與狀態自治 (技術債 0054)**：將分散之 8 個 State 泥團封裝至獨立元件 `MacroQuickCalibrationModal.tsx`，表單自治管理，父層零無效重繪，`WarRoomWorkspace.tsx` 精簡約 250 行。
 >   - **財務三表樣式常數與純展示儲存格抽取 (技術債 0053)**：於 `EightQuarterStatementTable.tsx` 抽取 `STATEMENT_TABLE_STYLES` 與 `<StatementDataCell />`，消滅重複內聯宣告。
 >   - **技術債看板閉環**：`docs/debts/README.md` 將 0047, 0052, 0053, 0054 標記為 `RESOLVED`。
-> - **品質狀態**：全量單元測試 **2,111/2,111 通過 (100% Passed / 277 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，生產打包 `npm run build` 100% 綠燈。
+> - **品質狀態**：全量單元測試 **2,141/2,141 通過 (100% Passed / 278 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，生產打包 `npm run build` 100% 綠燈。
 
 ---
 
@@ -38,10 +44,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main` (已完全同步主幹，Working Tree Clean)
-- **單元測試套件**：**2,111/2,111 通過 (277 test suites / 100% 綠燈)**
+- **單元測試套件**：**2,141/2,141 通過 (278 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V9.15.0**
+- **當前釋出版本**：**V9.16.0**
 - **工作區與分支整潔度**：工作區乾淨受控，本地 feature/fix 分支已完全合併並清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
