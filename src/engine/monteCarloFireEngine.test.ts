@@ -2,8 +2,12 @@ import { describe, it, expect } from 'vitest';
 import {
   generateStandardNormal,
   runMonteCarloFIRESimulation,
+  calculateSlowWealthFireMetrics,
 } from './monteCarloFireEngine';
-import { MonteCarloSimulationConfig } from '../types/firePlanning';
+import {
+  MonteCarloSimulationConfig,
+  SlowWealthFireMetricsConfig,
+} from '../types/firePlanning';
 
 describe('monteCarloFireEngine (蒙地卡羅退休提領與安全提領率引擎)', () => {
   describe('generateStandardNormal (Box-Muller 常態亂數生成器)', () => {
@@ -100,6 +104,60 @@ describe('monteCarloFireEngine (蒙地卡羅退休提領與安全提領率引擎
       expect(result.successRate).toBe(0);
       expect(result.ruinProbability).toBe(100);
       expect(result.runsExhaustedBeforeYear10).toBe(1_000);
+    });
+  });
+
+  describe('calculateSlowWealthFireMetrics (Zavy 慢富 30x 本金與 Coast-FIRE 雙軌對比)', () => {
+    it('應正確精算 30 倍年支出目標本金、進度與資金缺口', () => {
+      const config: SlowWealthFireMetricsConfig = {
+        currentNetWorthTwd: 9_000_000,
+        annualExpenditureTargetTwd: 600_000, // 30x = 1,800 萬
+        currentAge: 35,
+        targetRetirementAge: 60,
+        expectedRealReturnRate: 0.05,
+      };
+
+      const metrics = calculateSlowWealthFireMetrics(config);
+
+      expect(metrics.targetCapital30xTwd).toBe(18_000_000);
+      expect(metrics.currentProgressPercent).toBe(50); // 900萬 / 1800萬 = 50%
+      expect(metrics.capitalShortfallTwd).toBe(9_000_000);
+      expect(metrics.isTargetAchieved).toBe(false);
+    });
+
+    it('應正確精算 Coast-FIRE 今日門檻 (距離退休 25 年、實質報酬率 5%)', () => {
+      const config: SlowWealthFireMetricsConfig = {
+        currentNetWorthTwd: 6_000_000,
+        annualExpenditureTargetTwd: 600_000, // 30x = 1,800 萬
+        currentAge: 35,
+        targetRetirementAge: 60, // 25 年
+        expectedRealReturnRate: 0.05,
+      };
+
+      const metrics = calculateSlowWealthFireMetrics(config);
+
+      // 18,000,000 / (1.05^25) ≈ 18,000,000 / 3.386355 ≈ 5,315,450
+      expect(metrics.yearsToRetirement).toBe(25);
+      expect(metrics.coastFireRequirementTodayTwd).toBeGreaterThan(5_300_000);
+      expect(metrics.coastFireRequirementTodayTwd).toBeLessThan(5_330_000);
+      expect(metrics.isCoastFireAchieved).toBe(true); // 600萬 > 531.5萬
+      expect(metrics.coastFireSurplusOrDeficitTwd).toBeGreaterThan(0);
+    });
+
+    it('順序風險 (SRR) 對比：股債金防彈衣組合應有效降低前 10 年破產率', () => {
+      const config: SlowWealthFireMetricsConfig = {
+        currentNetWorthTwd: 12_000_000,
+        annualExpenditureTargetTwd: 600_000,
+        simulationRuns: 300,
+      };
+
+      const metrics = calculateSlowWealthFireMetrics(config);
+
+      // 防彈衣組合波動度較小，前 10 年破產率應小於等於純股票組合
+      expect(metrics.shieldedAssetScenario.exhaustionRateBeforeYear10).toBeLessThanOrEqual(
+        metrics.equityOnlyScenario.exhaustionRateBeforeYear10
+      );
+      expect(metrics.srrRiskReductionPercent).toBeGreaterThanOrEqual(0);
     });
   });
 });

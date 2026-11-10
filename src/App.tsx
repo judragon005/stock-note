@@ -436,6 +436,16 @@ export const App: React.FC = () => {
     return calculateAccountBalances(scopedAccounts, scopedCash, usdToTwdRate);
   }, [accounts, cashTransactions, usdToTwdRate, selectedAccountId]);
 
+  // 各券商帳戶之實質可用現金映射
+  const accountCashBalances = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const acc of accounts) {
+      const accSummary = cashLedgerSummary.byAccount[acc.id];
+      map[acc.id] = accSummary ? accSummary.settledCash : 0;
+    }
+    return map;
+  }, [accounts, cashLedgerSummary]);
+
   // 依當前市場與選定券商過濾借貸紀錄
   const scopedLoans = useMemo(() => {
     let filtered = currentMarket === 'ALL'
@@ -1110,6 +1120,7 @@ export const App: React.FC = () => {
         <FirePlanningWorkspace
           holdings={holdings}
           accounts={accounts}
+          accountCashBalances={accountCashBalances}
           totalNavTwd={
             exposureMetrics?.navTWD && exposureMetrics.navTWD > 0
               ? exposureMetrics.navTWD

@@ -9,6 +9,7 @@ const {
   getSqliteDbConnection,
   initSqliteLakehouseDb,
   getTwMarketBreadthAndSpotSummary,
+  getMarketMultiHorizonBreadth,
   isSqliteSupported,
 } = require('./sqlite-db-core.cjs');
 const { searchSymbolsMeta } = require('./seed-symbols-universe.cjs');
@@ -259,6 +260,15 @@ function createMarketApiMiddleware(customDbPath) {
                 twPutCallRatio: fullPulse.twPutCallRatio ?? null,
                 twForeignFuturesOi: fullPulse.twForeignFuturesOi ?? fullPulse.twFuturesNetOi ?? null,
                 twTrustFuturesOi: fullPulse.twTrustFuturesOi ?? null,
+                treasuryYield2y: fullPulse.treasuryYield2y,
+                fedFundsRate: fullPulse.fedFundsRate,
+                usCpiYoY: fullPulse.usCpiYoY,
+                creditSpreadOas: fullPulse.creditSpreadOas,
+                twMarginMaintenanceRatio: fullPulse.twMarginMaintenanceRatio ?? fullPulse.twMarginMaintenance,
+                igSpreadOas: fullPulse.igSpreadOas,
+                cccSpreadOas: fullPulse.cccSpreadOas,
+                breakeven10y: fullPulse.breakeven10y,
+                initialClaims: fullPulse.initialClaims,
               },
               customDbPath
             );
@@ -310,6 +320,26 @@ function createMarketApiMiddleware(customDbPath) {
           return res.end(JSON.stringify({ status: 'ok', data: dataObj, ...dataObj }));
         });
       return;
+    }
+
+    // 0.08 GET /api/market/breadth (Spec 0221 / Ticket 01 多週期市場寬度與融資去槓桿端點)
+    if (pathname === '/api/market/breadth' && (req.method || 'GET').toUpperCase() === 'GET') {
+      try {
+        const targetDate = query.date || query.targetDate || undefined;
+        const breadthData = getMarketMultiHorizonBreadth(targetDate, db);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(
+          JSON.stringify({
+            status: 'ok',
+            success: true,
+            data: breadthData,
+            ...breadthData,
+          })
+        );
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ status: 'error', success: false, error: err.message }));
+      }
     }
 
     // 0.1 GET /api/market/backfill-status (Spec 0168 / Ticket 08)

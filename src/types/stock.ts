@@ -226,6 +226,9 @@ export interface HoldingPosition {
   isBagHolding?: boolean; // Spec 0183: 是否觸發波段凹單警報
 }
 
+export type StockPosition = HoldingPosition;
+export type StockHolding = HoldingPosition;
+
 export type PositionFilter = 'ACTIVE' | 'CLOSED' | 'ALL';
 
 export interface DisciplineSummary {
