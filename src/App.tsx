@@ -1117,6 +1117,8 @@ export const App: React.FC = () => {
               : summary.combinedTWD.netAssetValue || 3_000_000
           }
           cashBalanceTwd={cashLedgerSummary.totalCashInTWD}
+          usdToTwdRate={usdToTwdRate}
+          loans={scopedLoans}
         />
       )}
 

@@ -10,6 +10,7 @@ const {
   initSqliteLakehouseDb,
   getTwMarketBreadthAndSpotSummary,
   getMarketMultiHorizonBreadth,
+  getTwRevenueDiffusionAndYoY,
   isSqliteSupported,
 } = require('./sqlite-db-core.cjs');
 const { searchSymbolsMeta } = require('./seed-symbols-universe.cjs');
@@ -284,6 +285,7 @@ function createMarketApiMiddleware(customDbPath) {
           const { twMarketBreadth, twInstitutionalSpot } = getTwMarketBreadthAndSpotSummary(db, {
             taiexChangePercent: fullPulse?.taiexChangePercent,
           });
+          const twRevenue = getTwRevenueDiffusionAndYoY(db);
           const sourceStatus = hasLiveSignal ? 'LIVE' : 'CACHED';
           const asOfTimestamp = new Date().toISOString();
           const dataObj = {
@@ -292,6 +294,7 @@ function createMarketApiMiddleware(customDbPath) {
             pulse: fullPulse,
             twMarketBreadth,
             twInstitutionalSpot,
+            twRevenue,
             asOfTimestamp,
             sourceStatus,
           };
@@ -305,6 +308,7 @@ function createMarketApiMiddleware(customDbPath) {
             macroRow = db.prepare('SELECT * FROM macro_sentiment_daily ORDER BY date DESC LIMIT 1').get() || null;
           } catch {}
           const { twMarketBreadth, twInstitutionalSpot } = getTwMarketBreadthAndSpotSummary(db);
+          const twRevenue = getTwRevenueDiffusionAndYoY(db);
           const asOfTimestamp = macroRow?.updated_at
             ? new Date(macroRow.updated_at).toISOString()
             : new Date().toISOString();
@@ -313,6 +317,7 @@ function createMarketApiMiddleware(customDbPath) {
             pulse: cachedMacroPulse || null,
             twMarketBreadth,
             twInstitutionalSpot,
+            twRevenue,
             asOfTimestamp,
             sourceStatus: 'CACHED',
           };
@@ -327,12 +332,14 @@ function createMarketApiMiddleware(customDbPath) {
       try {
         const targetDate = query.date || query.targetDate || undefined;
         const breadthData = getMarketMultiHorizonBreadth(targetDate, db);
+        const twRevenue = getTwRevenueDiffusionAndYoY(db);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         return res.end(
           JSON.stringify({
             status: 'ok',
             success: true,
-            data: breadthData,
+            data: { ...breadthData, twRevenue },
+            twRevenue,
             ...breadthData,
           })
         );

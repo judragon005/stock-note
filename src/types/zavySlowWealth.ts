@@ -125,6 +125,9 @@ export interface TrackADecision {
   riskBudgetMaxEquityExposurePercent: number;   // 個人風險預算反推上限 (回撤 / 壓力跌幅)
   finalSuggestedEquityExposurePercent: number;  // 取週期水位與風險預算之交集極小值
   recommendedActionSummary: string;
+  currentEquityWeightPercent?: number;
+  debtRepaymentSummary?: string;
+  activeLoanPrincipalTwd?: number;
   sellWaterfallPreview: {
     tier1SellCandidates: string[];
     tier2SellCandidates: string[];
@@ -151,11 +154,15 @@ export interface TrackBDecision {
   isRebalanceRecommended: boolean;
   rebalanceTriggerReason?: string;
   dividendRedirectPlanSummary?: string;
+  dividendRedirectDetails?: Array<{ targetCategory: string; allocationPercent: number; amountTwd: number }>;
   fire30xStatus: {
     targetCapital30xTwd: number;
     currentProgressPercent: number;
     isCoastFireAchieved: boolean;
   };
+  srrRiskReductionPercent?: number;
+  equityOnlyExhaustionRate?: number;
+  shieldedExhaustionRate?: number;
 }
 
 export interface ZavyComprehensiveAnalysisReport {

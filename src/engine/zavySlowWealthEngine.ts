@@ -17,8 +17,15 @@ import {
   TrackBDecision,
   ZavyComprehensiveAnalysisReport,
 } from '../types/zavySlowWealth';
-import { HoldingPosition } from '../types/stock';
-import { classifyZavyAssetClass } from './rebalancingEngine';
+import { HoldingPosition, LoanRecord } from '../types/stock';
+import {
+  calculateAssetClassRebalancePlan,
+  classifyZavyAssetClass,
+} from './rebalancingEngine';
+import {
+  calculateSlowWealthFireMetrics,
+} from './monteCarloFireEngine';
+import { TargetAllocationConfig } from '../types/allocation';
 
 /**
  * 1. 總經三級週期羅盤引擎 (Tidal, Wave, Credit Radar)
@@ -58,20 +65,22 @@ export function evaluateMacroCompass(
   let confidenceScore = 80;
   let cycleSummary = '全球製造業穩健擴張。';
 
-  const effUsPmi = usIsmPmi ?? 50.0;
-  const effTwPmi = twPmi ?? 50.0;
-  const avgPmi = (effUsPmi + effTwPmi) / 2;
+  // 依據美國大卡車 (ISM PMI 與新訂單減庫存) 為主軸，台灣小車 (出口訂單) 為領先輔助
+  const hasUsPmi = typeof usIsmPmi === 'number';
+  const hasTwPmi = typeof twPmi === 'number';
+  const effUsPmi = usIsmPmi ?? (hasTwPmi ? twPmi! : 50.0);
+  const effTwPmi = twPmi ?? (hasUsPmi ? usIsmPmi! : 50.0);
   const newOrdersMinusInv = usNewOrdersMinusInventory ?? 0;
 
-  if (avgPmi < 48.0 && newOrdersMinusInv < -3.0) {
+  if (effUsPmi < 48.0 && newOrdersMinusInv < -2.0) {
     phase = 'RECESSION';
     cycleSummary = '製造業深陷收縮，實質衰退風險攀升。';
     confidenceScore = 85;
-  } else if (avgPmi <= 52.0 && newOrdersMinusInv > 0) {
+  } else if ((effUsPmi <= 52.0 || effTwPmi <= 52.0) && newOrdersMinusInv > 0) {
     phase = 'RECOVERY';
     cycleSummary = '庫存去化接近尾聲，新訂單減庫存翻正，製造業步入復甦期。';
     confidenceScore = 85;
-  } else if (avgPmi >= 55.0) {
+  } else if (effUsPmi >= 55.0 || effTwPmi >= 56.0) {
     if ((snapshot.usCpiYoY ?? 0) > 3.8 || (highYieldSpreadOas ?? 4) < 3.3) {
       phase = 'BOOM_LATE';
       cycleSummary = '製造業榮景末升段，景氣處於過熱頂峰，需防範估值透支。';
@@ -301,7 +310,7 @@ export function evaluateBottomingChecklist(params: {
 }
 
 /**
- * 5. A 軌波段調節與個人風險預算決策
+ * 5. A 軌波段調節與個人風險預算決策 (整合既有 rebalancingEngine 質押還款與四階減碼瀑布流)
  */
 export function generateTrackADecision(params: {
   cyclePhase: WaveBusinessCyclePhase;
@@ -309,13 +318,23 @@ export function generateTrackADecision(params: {
   stressScenarioDrawdownPercent?: number; // 壓力情境跌幅 (如 30%)
   currentEquityWeightPercent?: number;
   holdings: HoldingPosition[];
-}): TrackADecision {
+  cashBalanceTwd?: number;
+  usdToTwdRate?: number;
+  loans?: LoanRecord[];
+}): TrackADecision & {
+  currentEquityWeightPercent: number;
+  debtRepaymentSummary?: string;
+  activeLoanPrincipalTwd?: number;
+} {
   const {
     cyclePhase,
     maxDrawdownTolerancePercent,
     stressScenarioDrawdownPercent = 30,
-    currentEquityWeightPercent: _currentEquityWeightPercent,
+    currentEquityWeightPercent: explicitEquityWeight,
     holdings,
+    cashBalanceTwd = 0,
+    usdToTwdRate = 32,
+    loans = [],
   } = params;
 
   // 1. 週期建議持股水位範圍
@@ -355,26 +374,90 @@ export function generateTrackADecision(params: {
   // 3. 最終持股建議取週期水位與個人風險預算之極小值
   const finalSuggested = Number(Math.min(recommendedMid, riskBudgetMaxEquity).toFixed(1));
 
-  // 4. 四階減碼候選名單整理
+  // 4. 呼叫既有 rebalancingEngine 取得真實質押與資產大類計畫
+  let activeLoanPrincipalTwd = 0;
+  const pledgedSharesMap: Record<string, number> = {};
+  if (Array.isArray(loans)) {
+    for (const l of loans) {
+      if (l.principal && l.principal > 0) {
+        activeLoanPrincipalTwd += l.principal;
+      }
+      if (l.pledgedCollateral && Array.isArray(l.pledgedCollateral)) {
+        for (const col of l.pledgedCollateral) {
+          if (col.symbol && col.shares) {
+            const sym = col.symbol.toUpperCase();
+            pledgedSharesMap[sym] = (pledgedSharesMap[sym] || 0) + col.shares;
+          }
+        }
+      }
+    }
+  }
+
+  const standardConfig: TargetAllocationConfig = {
+    id: 'zavy_track_a_standard',
+    name: '慢富標準雙軌配置',
+    type: 'ASSET_CLASS',
+    updatedAt: Date.now(),
+    toleranceBandPercent: 5.0,
+    items: [
+      { key: 'EQUITY', name: '股票資產', targetPercent: finalSuggested },
+      { key: 'BOND_GOV', name: '純公債防彈衣', targetPercent: Math.max(0, 100 - finalSuggested) },
+    ],
+  };
+
+  const rebalancePlan = calculateAssetClassRebalancePlan({
+    config: standardConfig,
+    holdings,
+    cashBalanceTwd,
+    usdToTwdRate,
+    activeLoanPrincipalTwd,
+    pledgedSharesMap,
+  });
+
+  const equityRec = rebalancePlan.assetClassRecommendations.find((r) => r.key === 'EQUITY');
+  const actualEquityPercent =
+    typeof explicitEquityWeight === 'number'
+      ? explicitEquityWeight
+      : (equityRec?.currentPercent ?? 0);
+
+  // 5. 四階減碼候選名單 (優先對齊 rebalancingEngine 的 waterfallSellSuggestions)
   const tier1SellCandidates: string[] = [];
   const tier2SellCandidates: string[] = [];
   const tier3PreservedCandidates: string[] = [];
   const tier4CoreHoldings: string[] = [];
 
-  for (const h of holdings) {
-    const cls = classifyZavyAssetClass(h);
-    if (cls.category !== 'EQUITY') continue;
+  if (rebalancePlan.waterfallSellSuggestions && rebalancePlan.waterfallSellSuggestions.length > 0) {
+    for (const item of rebalancePlan.waterfallSellSuggestions) {
+      const pledgedTag = item.isPledged ? ' 🔒[設質鎖定]' : '';
+      const label = `${item.symbol} ${item.name}${pledgedTag}`;
+      if (item.tier === 1) tier1SellCandidates.push(label);
+      else if (item.tier === 2) tier2SellCandidates.push(label);
+      else if (item.tier === 3) tier3PreservedCandidates.push(label);
+      else tier4CoreHoldings.push(label);
+    }
+  } else {
+    for (const h of holdings) {
+      const cls = classifyZavyAssetClass(h);
+      if (cls.category !== 'EQUITY') continue;
+      const isPledged = (pledgedSharesMap[h.symbol.toUpperCase()] || 0) > 0;
+      const label = `${h.symbol} ${h.name}${isPledged ? ' 🔒[設質鎖定]' : ''}`;
 
-    if (cls.subCategory === 'EQUITY_SATELLITE' || cls.isExcluded) {
-      tier1SellCandidates.push(`${h.symbol} ${h.name}`);
-    } else if (cls.subCategory === 'EQUITY_DIVIDEND') {
-      tier3PreservedCandidates.push(`${h.symbol} ${h.name}`);
-    } else if (cls.subCategory === 'EQUITY_CORE') {
-      tier4CoreHoldings.push(`${h.symbol} ${h.name}`);
-    } else {
-      tier2SellCandidates.push(`${h.symbol} ${h.name}`);
+      if (cls.subCategory === 'EQUITY_SATELLITE' || cls.isExcluded) {
+        tier1SellCandidates.push(label);
+      } else if (cls.subCategory === 'EQUITY_DIVIDEND') {
+        tier3PreservedCandidates.push(label);
+      } else if (cls.subCategory === 'EQUITY_CORE') {
+        tier4CoreHoldings.push(label);
+      } else {
+        tier2SellCandidates.push(label);
+      }
     }
   }
+
+  const debtSummary =
+    rebalancePlan.debtRepayment && rebalancePlan.debtRepayment.hasActiveLoans
+      ? `目前質押借款總額為 $${rebalancePlan.debtRepayment.totalLoanPrincipalTwd.toLocaleString()}，${rebalancePlan.debtRepayment.rationale}`
+      : undefined;
 
   return {
     cyclePhase,
@@ -385,6 +468,9 @@ export function generateTrackADecision(params: {
     riskBudgetMaxEquityExposurePercent: riskBudgetMaxEquity,
     finalSuggestedEquityExposurePercent: finalSuggested,
     recommendedActionSummary: actionSummary,
+    currentEquityWeightPercent: actualEquityPercent,
+    debtRepaymentSummary: debtSummary,
+    activeLoanPrincipalTwd,
     sellWaterfallPreview: {
       tier1SellCandidates,
       tier2SellCandidates,
@@ -395,68 +481,35 @@ export function generateTrackADecision(params: {
 }
 
 /**
- * 6. B 軌多資產配置與再平衡決策
+ * 6. B 軌多資產配置與再平衡決策 (整合既有 rebalancingEngine 股息活水與 monteCarloFireEngine 30x FIRE)
  */
 export function generateTrackBDecision(params: {
   holdings: HoldingPosition[];
   cashBalanceTwd: number;
   usdToTwdRate?: number;
   annualExpenditureTargetTwd?: number;
-}): TrackBDecision {
+  annualEstimatedDividendsTwd?: number;
+  userAge?: number;
+  targetRetirementAge?: number;
+  loans?: LoanRecord[];
+}): TrackBDecision & {
+  srrRiskReductionPercent?: number;
+  equityOnlyExhaustionRate?: number;
+  shieldedExhaustionRate?: number;
+  dividendRedirectDetails?: Array<{ targetCategory: string; allocationPercent: number; amountTwd: number }>;
+} {
   const {
     holdings,
     cashBalanceTwd,
     usdToTwdRate = 32,
     annualExpenditureTargetTwd = 600000,
+    annualEstimatedDividendsTwd = 0,
+    userAge,
+    targetRetirementAge,
+    loans = [],
   } = params;
 
-  let totalEquityTwd = 0;
-  let totalGovBondTwd = 0;
-  let totalCorpBondTwd = 0;
-  let totalGoldTwd = 0;
-  let totalReitsTwd = 0;
-
-  for (const h of holdings) {
-    const fx = h.currency === 'USD' ? usdToTwdRate : 1;
-    const val = h.marketValue * fx;
-    const cls = classifyZavyAssetClass(h);
-
-    switch (cls.category) {
-      case 'EQUITY':
-        totalEquityTwd += val;
-        break;
-      case 'BOND_GOV':
-        totalGovBondTwd += val;
-        break;
-      case 'BOND_CORP_IG':
-        totalCorpBondTwd += val;
-        break;
-      case 'GOLD':
-        totalGoldTwd += val;
-        break;
-      case 'REITS':
-        totalReitsTwd += val;
-        break;
-      default:
-        totalEquityTwd += val;
-        break;
-    }
-  }
-
-  const cleanCash = Math.max(0, cashBalanceTwd);
-  const totalNav =
-    totalEquityTwd + totalGovBondTwd + totalCorpBondTwd + totalGoldTwd + totalReitsTwd + cleanCash;
-
-  const currentAllocation = {
-    equityPercent: totalNav > 0 ? Number(((totalEquityTwd / totalNav) * 100).toFixed(1)) : 0,
-    govBondPercent: totalNav > 0 ? Number(((totalGovBondTwd / totalNav) * 100).toFixed(1)) : 0,
-    corpBondPercent: totalNav > 0 ? Number(((totalCorpBondTwd / totalNav) * 100).toFixed(1)) : 0,
-    goldPercent: totalNav > 0 ? Number(((totalGoldTwd / totalNav) * 100).toFixed(1)) : 0,
-    reitsPercent: totalNav > 0 ? Number(((totalReitsTwd / totalNav) * 100).toFixed(1)) : 0,
-    cashPercent: totalNav > 0 ? Number(((cleanCash / totalNav) * 100).toFixed(1)) : 0,
-  };
-
-  // 慢富基準配置: 60/20/10/10
+  // 1. 慢富基準配置: 60/20/10/10 (股票 60%, 純公債 20%, 黃金 10%, 現金 10%)
   const targetAllocation = {
     equityPercent: 60,
     govBondPercent: 20,
@@ -464,32 +517,99 @@ export function generateTrackBDecision(params: {
     cashPercent: 10,
   };
 
-  const equityDrift = Math.abs(currentAllocation.equityPercent - targetAllocation.equityPercent);
-  const isRebalanceRecommended = equityDrift >= 5.0;
+  const standardConfig: TargetAllocationConfig = {
+    id: 'zavy_track_b_standard',
+    name: '慢富標準雙軌配置',
+    type: 'ASSET_CLASS',
+    updatedAt: Date.now(),
+    toleranceBandPercent: 5.0,
+    items: [
+      { key: 'EQUITY', name: '股票資產', targetPercent: targetAllocation.equityPercent },
+      { key: 'BOND_GOV', name: '純公債防彈衣', targetPercent: targetAllocation.govBondPercent },
+      { key: 'GOLD', name: '黃金儲備', targetPercent: targetAllocation.goldPercent },
+      { key: 'CASH', name: '現金防護網', targetPercent: targetAllocation.cashPercent },
+    ],
+  };
 
-  // 30x FIRE 狀態
-  const target30x = annualExpenditureTargetTwd * 30;
-  const progress30x = target30x > 0 ? Number(((totalNav / target30x) * 100).toFixed(1)) : 0;
-  const isCoastFireAchieved = totalNav >= target30x / Math.pow(1.05, 25);
+  let activeLoanPrincipalTwd = 0;
+  if (Array.isArray(loans)) {
+    for (const l of loans) {
+      if (l.principal && l.principal > 0) {
+        activeLoanPrincipalTwd += l.principal;
+      }
+    }
+  }
+
+  // 2. 呼叫既有 rebalancingEngine
+  const rebalancePlan = calculateAssetClassRebalancePlan({
+    config: standardConfig,
+    holdings,
+    cashBalanceTwd,
+    usdToTwdRate,
+    annualEstimatedDividendsTwd,
+    activeLoanPrincipalTwd,
+  });
+
+  const totalNav = rebalancePlan.totalPortfolioValueTwd;
+
+  const equityRec = rebalancePlan.assetClassRecommendations.find((r) => r.key === 'EQUITY');
+  const govBondRec = rebalancePlan.assetClassRecommendations.find((r) => r.key === 'BOND_GOV');
+  const corpBondRec = rebalancePlan.assetClassRecommendations.find((r) => r.key === 'BOND_CORP_IG');
+  const goldRec = rebalancePlan.assetClassRecommendations.find((r) => r.key === 'GOLD');
+  const reitsRec = rebalancePlan.assetClassRecommendations.find((r) => r.key === 'REITS');
+  const cashRec = rebalancePlan.assetClassRecommendations.find((r) => r.key === 'CASH');
+
+  const currentAllocation = {
+    equityPercent: equityRec?.currentPercent ?? 0,
+    govBondPercent: govBondRec?.currentPercent ?? 0,
+    corpBondPercent: corpBondRec?.currentPercent ?? 0,
+    goldPercent: goldRec?.currentPercent ?? 0,
+    reitsPercent: reitsRec?.currentPercent ?? 0,
+    cashPercent: cashRec?.currentPercent ?? 0,
+  };
+
+  const isRebalanceRecommended = rebalancePlan.assetClassRecommendations.some((r) => r.status !== 'BALANCED');
+  const rebalanceTriggerReason = isRebalanceRecommended
+    ? `股票資產實際佔比 (${currentAllocation.equityPercent}%) 偏離目標 (60%) 超過 ±5% 閾值。`
+    : undefined;
+
+  // 3. 呼叫既有 monteCarloFireEngine 精算 30x 本金與順序風險 (SRR)
+  const fireMetrics = calculateSlowWealthFireMetrics({
+    currentNetWorthTwd: totalNav,
+    annualExpenditureTargetTwd,
+    currentAge: userAge,
+    targetRetirementAge,
+  });
+
+  const dividendRedirectDetails = rebalancePlan.dividendRedirectPlan?.targets?.map((item) => ({
+    targetCategory: item.category,
+    allocationPercent: item.allocationPercent,
+    amountTwd: item.allocatedAmountTwd,
+  }));
+
+  const dividendPlanSummary = rebalancePlan.dividendRedirectPlan?.guidanceMessage ||
+    '建議將每年股息現金活水優先注入純公債 (00687B) 與黃金 (00635U)。';
 
   return {
     currentAssetAllocation: currentAllocation,
     targetAllocation,
     isRebalanceRecommended,
-    rebalanceTriggerReason: isRebalanceRecommended
-      ? `股票資產實際佔比 (${currentAllocation.equityPercent}%) 偏離目標 (60%) 超過 ±5% 閾值。`
-      : undefined,
-    dividendRedirectPlanSummary: '建議將每年股息現金活水優先注入純公債 (00687B) 與黃金 (00635U)。',
+    rebalanceTriggerReason,
+    dividendRedirectPlanSummary: dividendPlanSummary,
+    dividendRedirectDetails,
     fire30xStatus: {
-      targetCapital30xTwd: target30x,
-      currentProgressPercent: progress30x,
-      isCoastFireAchieved,
+      targetCapital30xTwd: fireMetrics.targetCapital30xTwd,
+      currentProgressPercent: fireMetrics.currentProgressPercent,
+      isCoastFireAchieved: fireMetrics.isCoastFireAchieved,
     },
+    srrRiskReductionPercent: fireMetrics.srrRiskReductionPercent,
+    equityOnlyExhaustionRate: fireMetrics.equityOnlyScenario.exhaustionRateBeforeYear10,
+    shieldedExhaustionRate: fireMetrics.shieldedAssetScenario.exhaustionRateBeforeYear10,
   };
 }
 
 /**
- * 7. 彙整產出 Zavy 全景交付報告 (含 10 秒即食摘要)
+ * 7. 彙整產出 Zavy 全景交付報告 (含 10 秒即食摘要，100% 真實數據連通)
  */
 export function generateZavyAnalysisReport(params: {
   snapshot: MacroIndicatorSnapshot;
@@ -497,7 +617,17 @@ export function generateZavyAnalysisReport(params: {
   marginStatus: MarginDeleveragingStatus;
   holdings: HoldingPosition[];
   cashBalanceTwd: number;
+  usdToTwdRate?: number;
+  loans?: LoanRecord[];
+  annualEstimatedDividendsTwd?: number;
+  isAtBollingerLowerBand?: boolean;
+  isBadNewsDivergenceObserved?: boolean;
+  stressScenarioDrawdownPercent?: number;
   maxDrawdownTolerancePercent?: number;
+  targetAnnualExpenseTwd?: number;
+  userAge?: number;
+  targetRetirementAge?: number;
+  isDecadeMovingAverageBroken?: boolean;
 }): ZavyComprehensiveAnalysisReport {
   const {
     snapshot,
@@ -505,35 +635,54 @@ export function generateZavyAnalysisReport(params: {
     marginStatus,
     holdings,
     cashBalanceTwd,
+    usdToTwdRate = 32,
+    loans = [],
+    annualEstimatedDividendsTwd = 0,
+    isAtBollingerLowerBand = false,
+    isBadNewsDivergenceObserved = false,
+    stressScenarioDrawdownPercent = 30,
     maxDrawdownTolerancePercent = 20,
+    targetAnnualExpenseTwd = 600000,
+    userAge,
+    targetRetirementAge,
+    isDecadeMovingAverageBroken = false,
   } = params;
 
   const macroCompass = evaluateMacroCompass(snapshot);
-  const interpretation = evaluateCycleCoupledBreadth(breadth, macroCompass.wave.phase);
+  const interpretation = evaluateCycleCoupledBreadth(breadth, macroCompass.wave.phase, isDecadeMovingAverageBroken);
   const bottomingChecklist = evaluateBottomingChecklist({
     marginStatus,
     breadth20: breadth.breadth20,
-    isAtBollingerLowerBand: false,
-    isBadNewsDivergenceObserved: false,
+    isAtBollingerLowerBand,
+    isBadNewsDivergenceObserved,
   });
 
   const trackA = generateTrackADecision({
     cyclePhase: macroCompass.wave.phase,
     maxDrawdownTolerancePercent,
-    currentEquityWeightPercent: 80,
+    stressScenarioDrawdownPercent,
     holdings,
+    cashBalanceTwd,
+    usdToTwdRate,
+    loans,
   });
 
   const trackB = generateTrackBDecision({
     holdings,
     cashBalanceTwd,
+    usdToTwdRate,
+    annualExpenditureTargetTwd: targetAnnualExpenseTwd,
+    annualEstimatedDividendsTwd,
+    userAge,
+    targetRetirementAge,
+    loans,
   });
 
   const tenSecondsExecutiveSummary: string[] = [
     `【總經羅盤】製造業處於「${macroCompass.wave.cycleSummary}」，10Y 美債處於「${macroCompass.tidal.treasury10yNewNormalStatus}」新常態區間。`,
     `【結構寬度】台股 20MA 寬度為 ${breadth.breadth20.toFixed(1)}%，${interpretation.interpretationHeadline}。`,
-    `【A 軌建議】建議股票曝險上限為 ${trackA.finalSuggestedEquityExposurePercent}% (${trackA.recommendedActionSummary})。`,
-    `【B 軌配置】當前股債比重為 ${trackB.currentAssetAllocation.equityPercent}% / ${trackB.currentAssetAllocation.govBondPercent}%，${trackB.isRebalanceRecommended ? '已觸發再平衡警戒' : '資產結構均衡'}。`,
+    `【A 軌建議】建議股票曝險上限為 ${trackA.finalSuggestedEquityExposurePercent}% (當前持股佔比 ${trackA.currentEquityWeightPercent}%)。`,
+    `【B 軌配置】當前股債金比重為 ${trackB.currentAssetAllocation.equityPercent}% / ${trackB.currentAssetAllocation.govBondPercent}% / ${trackB.currentAssetAllocation.goldPercent}%，${trackB.isRebalanceRecommended ? '已觸發再平衡警戒' : '資產結構均衡'}。`,
   ];
 
   return {
