@@ -482,6 +482,8 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0212: V9.07.0 Card 18 主力追蹤總評判三欄式司令台佈局、金融大字號點位與法人部位風控升級](docs/adr/0212-card18-trading-desk-layout-and-risk-management.md)
 - [ADR-0213: V9.08.0 宏觀戰情室雙水溫計排版對齊防折行、持股訊號分頁膠囊與雙重動能湖倉數據審計升級](docs/adr/0213-macro-war-room-thermometer-signals-and-dual-momentum.md)
 - [ADR-0219: V9.14.0 台美股機構級深度財報研究與實戰投資決策系統架構](docs/adr/0219-institutional-equity-research-and-decision-system.md)
+- [ADR-0220: V9.15.0 第二梯隊架構技術債清理與算法優化 (WarRoom 狀態抽取與估值河流二元搜尋)](docs/adr/0220-technical-debts-0055-0056-resolution.md)
+- [ADR-0221: V9.16.0 Zavy「散戶慢富之路」三級週期定位、台美市場結構寬度與 A/B 雙軌配置系統架構](docs/adr/0221-zavy-slow-wealth-cycle-and-dual-track-allocation.md)
 
 ### 股票健診系統原生毛玻璃擬態、ETF智慧防呆與標的快捷膠囊 (Stock Health Check & Native Glassmorphism) *(新增於 V8.45.1)*
 - **原生 Glassmorphism 擬態與排版防禦**：
@@ -2859,3 +2861,13 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
   - 核心領域概念與架構革新：
     1. **WarRoom Portfolio Metrics Decoupling (戰情室投資組合風控計算解耦 - TD 0055)**：自龐大戰情室單體元件中抽取獨立純計算函式 `calculateWarRoomPortfolioMetrics` 與自訂 React Hook `useWarRoomPortfolioMetrics`，集中封裝維持率、可用防禦資金、槓桿曝險、大盤對沖部位與集中度穿透指標。實現純邏輯與 UI 視圖完全分離，支援零 DOM 極速單元測試（<20ms）。
     2. **Valuation River Binary Search Optimization (估值河流圖歷史收盤價二元搜尋 - TD 0056)**：以純函式 `findLatestCloseBeforeDate` 替換原先在數百根歷史河流點陣列中重複執行的 `[...candles].reverse().find()` 陣列反轉與線性拷貝搜尋。時間複雜度由 $O(N \cdot M)$ 徹底降至 $O(M \log N)$，並杜絕中介反向拷貝陣列之 GC 記憶體分配浪費。
+
+- **Zavy Slow Wealth Three-Tier Cycle Compass, Dual-Market Breadth & A/B Dual-Track Asset Allocation (Zavy「散戶慢富之路」三級週期定位、台美市場結構寬度與 A/B 雙軌配置系統)**:
+  - 核心模組：`scripts/market-sync/sqlite-db-core.cjs`、`scripts/market-sync/ingest-macro-sentiment.cjs`、`scripts/market-sync/vite-market-middleware.cjs`、`src/types/allocation.ts`、`src/types/macro.ts`、`src/engine/rebalancingEngine.ts`、`src/engine/monteCarloFireEngine.ts`、`src/engine/zavySlowWealthEngine.ts`、`src/hooks/useZavySlowWealthMetrics.ts`、`src/components/ZavySlowWealthWorkspace.tsx`。
+  - 規格來源：Spec 0221 (v9.16.0) 與 ADR 0221，關聯 GitHub Issue #472。
+  - 核心領域術語與特性：
+    1. **Three-Tier Macroeconomic Cycle (三級總經週期：潮汐／波浪／漣漪)**：以 30 年生產力與通膨大循環為「潮汐」、7–10 年商業週期為「波浪」、2–4 年製造業庫存循環為「漣漪」。區分「台灣小車（出口與 AI 半導體主導，領先 1–3 季）」與「美國大卡車（內需消費主導，追蹤實質可支配所得 vs 消費支出之寅吃卯糧現象）」。_Avoid_: Flat Macro Score, Single Indicator Timing
+    2. **Cycle-Conditioned Market Breadth & Secular Bear Invalidation Gate (週期情境耦合之市場寬度與大型空頭鈍化失效閘門)**：由本機 SQLite 湖倉以叢集索引順序掃描還原權息收盤價 (`adj_close`)，毫秒級計算台美 `20MA / 60MA / 200MA` 市場寬度與季線 (`60D`)/年線 (`200D`) 布林通道位階 (`%B`)。製造業上行期觸及季線布林下緣或 20MA 寬度 `<20%` 判定為「波浪回檔買點（不對漣漪起反應）」；中期修正以半數落底核對表判定；跌破十年線之大型空頭則自動亮起「200MA 寬度長期鈍化失效閘門」，改以 10 年期平衡通膨率 (`T10YIE`) 插針急跌見底作為底部依據。_Avoid_: Mechanical Breadth Sell-Off, Unconditional 200MA Bottom Fishing
+    3. **Post-2026 Secondary Hike Treasury Regime & CCC Credit Crack (二次升息後長債殖利率新區間與 CCC 垃圾債早期裂痕)**：反映 2026/09–10 聯準會調整式二次升息環境，將擴張期 10 年期美債殖利率區間上修 `0.5%` 至 `4.0%–5.5%`（30Y 上修至 `4.5%–6.0%`）；信用面除觀測高收益債利差 (`BAMLH0A0HYM2`，`3.0%–3.5%` 低檔區) 與投等債利差 (`BAMLC0A0CM`) 外，同步監測信用評級最低之 CCC 級垃圾債利差 (`BAMLH0A3HYC`) 是否率先擴大。_Avoid_: Stale 3.5-5.0% Bond Range, Aggregate Spread Only
+    4. **Pure Safe-Haven vs. Defensive Risk Asset Separation (純避險防彈衣與防禦性風險資產純度分流)**：嚴格將「純美國政府公債（長天期 `TLT`/`00679B`/`00687B`、中天期 `IEF`/`00695B`、短天期 `SGOV`/`00865B`/`00719B` 長短存續期間搭配）」與「實體黃金 (`GLD`/`00635U`)」定性為唯一危機逆勢保護之純避險資產；將「投資級公司債 (`LQD`/`00720B`/`00937B`)」定性為含信用利差風險之防禦性風險資產；將高股息 ETF (`00878`/`00919`) 定性為 100% 股票風險；並嚴格剔除抵押權型 mREITs (`00712`) 與槓桿債 (`00680L`)，結合 SQLite `etf_daily_nav` 攔截台股 ETF 溢價買貴風險。_Avoid_: Treating Corporate Bonds as Safe Haven, Buying Overpriced Local Bond ETFs
+    5. **Know-Thyself A/B Dual-Track & Dividend-Redirect Rebalancing (「見自己」A/B 雙軌決策與股息活水轉向再平衡)**：A 軌（市場紀要波段水位）以「個人可承受帳面回撤金額 ÷ 週期常態修正跌幅」反推股票上限，榮景期中後段第一優先提示「順勢償還股票質押本金降槓桿（負債即負向債券，防範中斷風險）」，並依四階瀑布流優先調節波段衛星股、鎖定保護已設質股數 (`🔒`)；B 軌（慢富資產配置与退休）對高股息部位採「存量不動、增量股息活水轉向再平衡」，結合 **30 倍年支出本金（3.33% 提領率）** 與 **Coast-FIRE 滑行退休門檻**，以蒙地卡羅雙軌對照驗證防彈衣對前 10 年報酬順序風險之保護力。_Avoid_: Preachy Forced Selling of High-Dividend Core, Mixing Swing Timing with Passive Rebalancing
