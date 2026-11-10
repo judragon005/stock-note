@@ -76,10 +76,10 @@ export const ZavySlowWealthWorkspace: React.FC<ZavySlowWealthWorkspaceProps> = (
               highYieldSpreadOas: data.creditSpreadOas ?? data.credit_spread_oas,
               cccHighYieldSpread: data.cccSpreadOas ?? data.ccc_spread_oas,
               usCpiYoY: data.usCpiYoY ?? data.us_cpi_yoy,
-              usIsmPmi: data.us_orders_minus_inv_spread ? 50 + data.us_orders_minus_inv_spread : undefined,
+              usIsmPmi: data.usIsmPmi ?? data.us_ism_pmi ?? undefined,
               usNewOrdersMinusInventory: data.us_orders_minus_inv_spread ?? data.usOrdersMinusInvSpread,
-              twPmi: data.twRevenue?.isExpansion ? 52.0 : (data.twRevenue ? 48.0 : undefined),
-              twExportOrdersYoY: data.twRevenue?.totalRevenueYoY,
+              twPmi: data.twPmi ?? data.tw_pmi ?? undefined,
+              twExportOrdersYoY: data.twRevenue?.totalRevenueYoY ?? data.tw_export_orders_yoy,
             });
           }
         }

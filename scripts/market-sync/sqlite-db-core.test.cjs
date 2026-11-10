@@ -16,6 +16,7 @@ const {
   getSqliteDbConnection,
   closeSqliteDb,
   getMarketMultiHorizonBreadth,
+  getTwRevenueDiffusionAndYoY,
   clearBreadthAnchorCache,
   isSqliteSupported,
 } = require('./sqlite-db-core.cjs');
@@ -385,6 +386,73 @@ d('Spec 0221 Ticket 01: SQLite 多週期寬度 & 宏觀持久化修復', () => {
     assert.strictEqual(json.asOfDate, '2026-11-05');
     assert.ok('breadth20' in json);
     assert.ok('marginDeleveragingRatio' in json);
+
+    cleanupTestDb();
+  });
+
+  t('7. [Spec 0222 / Ticket 02] 本地 SQLite tw_monthly_revenue 月營收擴散指數以 (YoY正成長+0.5*持平)/總數 計算', () => {
+    cleanupTestDb();
+    const db = initSqliteLakehouseDb(TEST_DB_PATH);
+
+    // 插入營收測試資料：2026-09
+    // 4 檔 4 碼公司：
+    // 2330: yoy_rate = 20.0 (+), mom_rate = 5.0
+    // 2454: yoy_rate = 0.0 (持平), mom_rate = -2.0
+    // 2317: yoy_rate = -10.0 (-), mom_rate = 3.0
+    // 2308: yoy_rate = 15.0 (+), mom_rate = 1.0
+    // 正成長 2 家，持平 1 家，衰退 1 家，總計 4 家
+    // 擴散指數公式 = (2 + 0.5 * 1) / 4 * 100 = 2.5 / 4 * 100 = 62.5%
+    const insertRev = db.prepare(`
+      INSERT INTO tw_monthly_revenue (symbol, year_month, revenue, last_year_revenue, yoy_rate, mom_rate, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const now = Date.now();
+    insertRev.run('2330', '2026-09', 120, 100, 20.0, 5.0, now);
+    insertRev.run('2454', '2026-09', 100, 100, 0.0, -2.0, now);
+    insertRev.run('2317', '2026-09', 90, 100, -10.0, 3.0, now);
+    insertRev.run('2308', '2026-09', 115, 100, 15.0, 1.0, now);
+    insertRev.run('03001P', '2026-09', 50, 50, 20.0, 10.0, now); // 6 碼權證應排除
+
+    const revStats = getTwRevenueDiffusionAndYoY(db);
+    assert.ok(revStats, '應回傳營收統計物件');
+    assert.strictEqual(revStats.yearMonth, '2026-09');
+    assert.strictEqual(revStats.totalCount, 4, '應排除 6 碼權證，僅保留 4 家 4 碼個股');
+    assert.strictEqual(revStats.diffusionIndex, 62.5, '擴散指數應為 (2 + 0.5 * 1) / 4 * 100 = 62.5%');
+    assert.strictEqual(revStats.isExpansion, true);
+
+    cleanupTestDb();
+  });
+
+  t('8. [Spec 0222 / Ticket 04] 基於近 200 日大盤日 K 計算 60MA/200MA 布林通道下軌與利空鈍化', () => {
+    cleanupTestDb();
+    const db = initSqliteLakehouseDb(TEST_DB_PATH);
+
+    // 建立 200 天大盤日 K 模擬資料 (^TWII)
+    const insertCandle = db.prepare(`
+      INSERT INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    // 產生 200 天日期序列
+    const baseDate = new Date(2026, 10, 5); // 2026-11-05
+    for (let i = 199; i >= 0; i--) {
+      const d = new Date(baseDate);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().slice(0, 10);
+
+      // 前 180 天平均約 20,000 點，最後 20 天下跌至 18,000 點觸及季線/年線布林下軌
+      const closePrice = i <= 5 ? 17500 : (i <= 60 ? 18500 : 20000);
+      insertCandle.run('^TWII', dateStr, closePrice, closePrice + 50, closePrice - 50, closePrice, closePrice, 10000000);
+      insertCandle.run('2330', dateStr, 1000, 1010, 990, 1000, 1000, 1000000);
+    }
+
+    clearBreadthAnchorCache();
+    const breadth = getMarketMultiHorizonBreadth('2026-11-05', db);
+    assert.ok(breadth, '應成功計算台股寬度與布林位階');
+    assert.strictEqual(breadth.isAtBollingerLowerBand, true, '跌至 17500 應判定達到季線/年線布林通道下軌');
+    assert.ok(breadth.bollinger, '應回傳 bollinger 詳細指標物件');
+    assert.ok(typeof breadth.bollinger.ma60Lower === 'number', '應包含 ma60Lower');
 
     cleanupTestDb();
   });

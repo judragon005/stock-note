@@ -62,8 +62,19 @@ export function evaluateMacroCompass(
 
   // 2. 商業庫存波浪週期 (Wave / 2~4 年製造業週期)
   let phase: WaveBusinessCyclePhase = 'EXPANSION';
-  let confidenceScore = 80;
   let cycleSummary = '全球製造業穩健擴張。';
+
+  // Spec 0222 Ticket 05: 移除硬編碼假信心度，改依據輸入指標豐富度動態評定 (10% ~ 100%)
+  const keyIndicators = [
+    usIsmPmi,
+    twPmi,
+    usNewOrdersMinusInventory,
+    snapshot.usCpiYoY,
+    highYieldSpreadOas,
+    snapshot.treasuryYield10y,
+  ];
+  const validCount = keyIndicators.filter((v) => typeof v === 'number' && !Number.isNaN(v)).length;
+  const confidenceScore = Math.max(10, Math.round((validCount / keyIndicators.length) * 100));
 
   // 依據美國大卡車 (ISM PMI 與新訂單減庫存) 為主軸，台灣小車 (出口訂單) 為領先輔助
   const hasUsPmi = typeof usIsmPmi === 'number';
@@ -75,11 +86,9 @@ export function evaluateMacroCompass(
   if (effUsPmi < 48.0 && newOrdersMinusInv < -2.0) {
     phase = 'RECESSION';
     cycleSummary = '製造業深陷收縮，實質衰退風險攀升。';
-    confidenceScore = 85;
   } else if ((effUsPmi <= 52.0 || effTwPmi <= 52.0) && newOrdersMinusInv > 0) {
     phase = 'RECOVERY';
     cycleSummary = '庫存去化接近尾聲，新訂單減庫存翻正，製造業步入復甦期。';
-    confidenceScore = 85;
   } else if (effUsPmi >= 55.0 || effTwPmi >= 56.0) {
     if ((snapshot.usCpiYoY ?? 0) > 3.8 || (highYieldSpreadOas ?? 4) < 3.3) {
       phase = 'BOOM_LATE';
@@ -88,15 +97,12 @@ export function evaluateMacroCompass(
       phase = 'BOOM_MID';
       cycleSummary = '製造業榮景主升段，需求旺盛，獲利全面開展。';
     }
-    confidenceScore = 90;
   } else if (effUsPmi >= 50.0 && effTwPmi >= 50.0) {
     phase = 'EXPANSION';
     cycleSummary = '美台製造業同步處於 50 以上健康擴張期。';
-    confidenceScore = 85;
   } else {
     phase = 'MID_CYCLE_SLOWDOWN';
     cycleSummary = '製造業處於中期庫存調整與趨緩階段。';
-    confidenceScore = 75;
   }
 
   // 台灣小車 vs 美國大卡車領先判定
@@ -310,6 +316,33 @@ export function evaluateBottomingChecklist(params: {
 }
 
 /**
+ * 統計貸款質押總本金與各標的已設質股數 (消除 Feature Envy)
+ */
+export function aggregateLoanCollateral(loans: LoanRecord[] = []): {
+  activePrincipalTwd: number;
+  pledgedSharesMap: Record<string, number>;
+} {
+  let activePrincipalTwd = 0;
+  const pledgedSharesMap: Record<string, number> = {};
+  if (Array.isArray(loans)) {
+    for (const l of loans) {
+      if (l.principal && l.principal > 0) {
+        activePrincipalTwd += l.principal;
+      }
+      if (Array.isArray(l.pledgedCollateral)) {
+        for (const col of l.pledgedCollateral) {
+          if (col.symbol && col.shares) {
+            const sym = col.symbol.toUpperCase();
+            pledgedSharesMap[sym] = (pledgedSharesMap[sym] || 0) + col.shares;
+          }
+        }
+      }
+    }
+  }
+  return { activePrincipalTwd, pledgedSharesMap };
+}
+
+/**
  * 5. A 軌波段調節與個人風險預算決策 (整合既有 rebalancingEngine 質押還款與四階減碼瀑布流)
  */
 export function generateTrackADecision(params: {
@@ -375,23 +408,7 @@ export function generateTrackADecision(params: {
   const finalSuggested = Number(Math.min(recommendedMid, riskBudgetMaxEquity).toFixed(1));
 
   // 4. 呼叫既有 rebalancingEngine 取得真實質押與資產大類計畫
-  let activeLoanPrincipalTwd = 0;
-  const pledgedSharesMap: Record<string, number> = {};
-  if (Array.isArray(loans)) {
-    for (const l of loans) {
-      if (l.principal && l.principal > 0) {
-        activeLoanPrincipalTwd += l.principal;
-      }
-      if (l.pledgedCollateral && Array.isArray(l.pledgedCollateral)) {
-        for (const col of l.pledgedCollateral) {
-          if (col.symbol && col.shares) {
-            const sym = col.symbol.toUpperCase();
-            pledgedSharesMap[sym] = (pledgedSharesMap[sym] || 0) + col.shares;
-          }
-        }
-      }
-    }
-  }
+  const { activePrincipalTwd: activeLoanPrincipalTwd, pledgedSharesMap } = aggregateLoanCollateral(loans);
 
   const standardConfig: TargetAllocationConfig = {
     id: 'zavy_track_a_standard',
@@ -609,9 +626,9 @@ export function generateTrackBDecision(params: {
 }
 
 /**
- * 7. 彙整產出 Zavy 全景交付報告 (含 10 秒即食摘要，100% 真實數據連通)
+ * 7. Zavy 全景交付報告輸入參數 (收斂 Data Clumps)
  */
-export function generateZavyAnalysisReport(params: {
+export interface ZavyAnalysisReportParams {
   snapshot: MacroIndicatorSnapshot;
   breadth: MultiHorizonMarketBreadth;
   marginStatus: MarginDeleveragingStatus;
@@ -628,7 +645,12 @@ export function generateZavyAnalysisReport(params: {
   userAge?: number;
   targetRetirementAge?: number;
   isDecadeMovingAverageBroken?: boolean;
-}): ZavyComprehensiveAnalysisReport {
+}
+
+/**
+ * 7. 彙整產出 Zavy 全景交付報告 (含 10 秒即食摘要，100% 真實數據連通)
+ */
+export function generateZavyAnalysisReport(params: ZavyAnalysisReportParams): ZavyComprehensiveAnalysisReport {
   const {
     snapshot,
     breadth,
