@@ -124,6 +124,7 @@ export const ZavySlowWealthWorkspace: React.FC<ZavySlowWealthWorkspaceProps> = (
     a.href = url;
     a.download = `${new Date().toISOString().slice(0, 10)}_Zavy_台美股市場紀要與雙軌配置報告.md`;
     a.click();
+    a.remove();
     URL.revokeObjectURL(url);
   };
 
@@ -135,6 +136,7 @@ export const ZavySlowWealthWorkspace: React.FC<ZavySlowWealthWorkspaceProps> = (
     a.href = url;
     a.download = `${new Date().toISOString().slice(0, 10)}_Zavy_台美股與總經原始數據.csv`;
     a.click();
+    a.remove();
     URL.revokeObjectURL(url);
   };
 
