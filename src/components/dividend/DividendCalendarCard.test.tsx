@@ -57,4 +57,23 @@ describe('DividendCalendarCard (未來 12 個月現金流月曆與活水轉向�
     expect(html).toContain('Zavy 股息活水轉向');
     expect(html).toContain('00687B');
   });
+
+  it('應渲染生活費微調按鈕群 (30k, 35k, 40k, 50k, 自訂)', () => {
+    const html = renderToStaticMarkup(
+      <DividendCalendarCard
+        projectedCashflow={mockProjectedCashflow as any}
+        complementaryRecommendations={[]}
+        taxStats={mockTaxStats}
+        targetMonthlyExpenseTwd={35000}
+        onTargetExpenseChange={vi.fn()}
+        isCashflowExpanded={true}
+        onToggleExpand={vi.fn()}
+      />
+    );
+    expect(html).toContain('30k');
+    expect(html).toContain('35k');
+    expect(html).toContain('40k');
+    expect(html).toContain('50k');
+    expect(html).toContain('自訂');
+  });
 });
