@@ -152,8 +152,33 @@ export const OFFICIAL_TW_PAY_DATE_MAP: Record<string, string> = {
 };
 
 /**
+ * 判斷指定標的與除息日是否為官方公告之精準發放日
+ */
+export function isPaymentDateOfficial(exDateStr: string, symbol?: string): boolean {
+  if (symbol) {
+    const symbolKey = `${symbol.toUpperCase()}:${exDateStr}`;
+    if (OFFICIAL_TW_PAY_DATE_MAP[symbolKey]) {
+      return true;
+    }
+  }
+  return !!OFFICIAL_TW_PAY_DATE_MAP[exDateStr];
+}
+
+/**
+ * 判斷標的是否為台股 ETF (代碼以 00 開頭，或 5~6 碼帶後綴英文之 ETF 標的)
+ */
+export function isTwEtfSymbol(symbol?: string): boolean {
+  if (!symbol) return false;
+  const s = symbol.trim().toUpperCase();
+  return s.startsWith('00') || /^\d{5,6}[A-Z]?$/.test(s);
+}
+
+/**
  * 推估現金股利發放日 (Pay-Date)
- * 優先依據標的代碼與除息日比對官方真實發放日庫，無比對結果時依市場慣例推估
+ * 優先依據標的代碼與除息日比對官方真實發放日庫，無比對結果時依市場慣例推估：
+ * - 台股 ETF 慣例約 20~24 天 (預設採 23 天)
+ * - 台股一般個股約 28 天
+ * - 美股約 21 天
  */
 export function estimatePaymentDate(exDateStr: string, market: MarketType, symbol?: string): string {
   if (symbol) {
@@ -169,9 +194,29 @@ export function estimatePaymentDate(exDateStr: string, market: MarketType, symbo
 
   const date = new Date(exDateStr);
   if (isNaN(date.getTime())) return exDateStr;
-  const daysToAdd = market === 'TW' ? 28 : 21;
+
+  let daysToAdd = 21;
+  if (market === 'TW') {
+    daysToAdd = isTwEtfSymbol(symbol) ? 23 : 28;
+  }
   date.setDate(date.getDate() + daysToAdd);
   return date.toISOString().split('T')[0];
+}
+
+/**
+ * 一鍵已入帳 (Instant Settle)
+ * 將待發放款定錨為指定入帳日 (預設今日) 並轉為已結算狀態
+ */
+export function instantSettleReceivableDividend(
+  receivable: ReceivableDividend,
+  settleDate: string = new Date().toISOString().split('T')[0]
+): ReceivableDividend {
+  return {
+    ...receivable,
+    payDate: settleDate,
+    status: 'RECEIVED',
+    dateSource: 'OFFICIAL',
+  };
 }
 
 /**
@@ -288,6 +333,7 @@ export function calculateReceivableDividends(
     const netDividendInTWD = market === 'TW' ? Math.round(netDividend) : Math.round(netDividend * exchangeRate);
 
     const status: ReceivableDividend['status'] = currentDateStr < exDate ? 'UPCOMING_EX' : 'PENDING_PAYMENT';
+    const isOfficial = isPaymentDateOfficial(exDate, symbol);
 
     receivables.push({
       id: `rec-official-${symbol}-${exDate}`,
@@ -306,6 +352,7 @@ export function calculateReceivableDividends(
       estimatedNetDividend: netDividend,
       estimatedNetDividendInTWD: netDividendInTWD,
       status,
+      dateSource: isOfficial ? 'OFFICIAL' : 'ESTIMATED',
     });
   }
 
@@ -351,6 +398,7 @@ export function calculateReceivableDividends(
     const netDividendInTWD = trade.market === 'TW' ? Math.round(netDividend) : Math.round(netDividend * exchangeRate);
 
     const status: ReceivableDividend['status'] = 'PENDING_PAYMENT';
+    const isOfficial = trade.payDate ? true : isPaymentDateOfficial(exDate, trade.symbol);
 
     receivables.push({
       id: `rec-trade-${trade.id}`,
@@ -367,6 +415,7 @@ export function calculateReceivableDividends(
       estimatedNetDividend: netDividend,
       estimatedNetDividendInTWD: netDividendInTWD,
       status,
+      dateSource: isOfficial ? 'OFFICIAL' : 'ESTIMATED',
     });
   }
 
