@@ -192,7 +192,7 @@ export const DividendCalendarCard: React.FC<DividendCalendarCardProps> = ({
 
       {isCashflowExpanded && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '8px', marginBottom: '12px' }}>
+          <div className="dividend-calendar-grid">
             {projectedCashflow.months.map((m) => {
               const isCovered = targetMonthlyExpenseTwd > 0 && m.estimatedTotalTwd >= targetMonthlyExpenseTwd;
               return (

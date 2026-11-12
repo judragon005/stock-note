@@ -157,6 +157,7 @@ export interface TradeRecord {
   cashAmount?: number; // 退還或入帳總現金金額（如減資退款總額、現金補貼）
   exDate?: string; // 基準日 / 除權息日 (YYYY-MM-DD)
   exPrice?: number; // 除息參考價 (TWD/USD)
+  referencePrice?: number; // 前一日參考基準價 (TWD/USD)
   payDate?: string; // 股利入帳發放日 (YYYY-MM-DD)
   targetSymbol?: string; // 換股目標標的代碼 (STOCK_MERGER) 或分拆新公司代碼 (SPIN_OFF)
   targetName?: string; // 目標標的名稱

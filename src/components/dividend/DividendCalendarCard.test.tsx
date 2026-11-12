@@ -42,7 +42,7 @@ describe('DividendCalendarCard (未來 12 個月現金流月曆與活水轉向�
     expect(html).toContain('85.7%');
     expect(html).toContain('枯水期');
     // 驗證三列四欄網格排版與完整金額展示 (非截斷 k)
-    expect(html).toContain('repeat(4, minmax(0, 1fr))');
+    expect(html).toContain('dividend-calendar-grid');
     expect(html).toContain('NT$ 40,000');
     expect(html).toContain('NT$ 10,000');
     expect(html).toContain('達標');

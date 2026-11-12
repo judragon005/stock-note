@@ -48,6 +48,8 @@ describe('DividendMonthlyChart (月度配息長條圖)', () => {
       expect(html).toContain('z-index:0');
       // 確保長條柱 z-index 為 1
       expect(html).toContain('z-index:1');
+      // 確保幾何座標精準錨定 (24px 底座 + Math.round((60k / 110k) * 120) = 89px)
+      expect(html).toContain('bottom:89px');
     });
   });
 });

@@ -38,9 +38,6 @@ export interface DividendHistoryTableProps {
   onSearchChange: (q: string) => void;
   tableYearFilter: 'SELECTED_YEAR' | 'ALL';
   onTableYearFilterChange: (filter: 'SELECTED_YEAR' | 'ALL') => void;
-  rankMode: 'YEAR' | 'ALL_TIME';
-  onRankModeChange: (mode: 'YEAR' | 'ALL_TIME') => void;
-  activeContributors: DividendContributor[];
   reconciliationList: AnnualReconciliationItem[];
   showReconciliationPanel: boolean;
   onToggleReconciliationPanel: () => void;
@@ -58,9 +55,6 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
   onSearchChange,
   tableYearFilter,
   onTableYearFilterChange,
-  rankMode: _rankMode = 'YEAR',
-  onRankModeChange: _onRankModeChange = () => {},
-  activeContributors: _activeContributors = [],
   reconciliationList,
   showReconciliationPanel,
   onToggleReconciliationPanel,
@@ -299,10 +293,10 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
                     ? calculateYieldOnCost(t.price, holding.avgCost)
                     : 0;
 
-                  const rawExPrice = (t as any).exPrice !== undefined
-                    ? (t as any).exPrice
-                    : (t as any).referencePrice !== undefined
-                    ? (t as any).referencePrice - t.price
+                  const rawExPrice = t.exPrice !== undefined
+                    ? t.exPrice
+                    : t.referencePrice !== undefined
+                    ? t.referencePrice - t.price
                     : undefined;
 
                   const fillStatus = holding && holding.currentPrice > 0 && rawExPrice !== undefined

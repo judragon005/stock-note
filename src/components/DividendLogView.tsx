@@ -401,14 +401,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
       />
 
       {/* 3. 各月份現金流分佈 (2/3) + 股息貢獻排行榜 (1/3) 齊高並列網格 */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)',
-          gap: '16px',
-          alignItems: 'stretch',
-        }}
-      >
+      <div className="dividend-dual-panel-grid">
         <div style={{ minWidth: 0, height: '100%' }}>
           <DividendMonthlyChart
             monthlyDistribution={report.monthlyDistribution}
@@ -582,9 +575,6 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         onSearchChange={setSearchQuery}
         tableYearFilter={tableYearFilter}
         onTableYearFilterChange={setTableYearFilter}
-        rankMode={rankMode}
-        onRankModeChange={setRankMode}
-        activeContributors={activeContributors}
         reconciliationList={annualReconciliationList}
         showReconciliationPanel={showReconciliationPanel}
         onToggleReconciliationPanel={() => setShowReconciliationPanel((v) => !v)}
