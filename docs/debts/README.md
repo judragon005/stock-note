@@ -64,6 +64,7 @@
 | [**0054**](0054-war-room-quick-calibration-modal-decomposition.md) | WarRoomWorkspace 快速校準表單聚合與子元件解耦 (MacroQuickCalibrationModal) | `P3` | `RESOLVED` | Code Review (Spec 0204 / Issue #332) | `Refactor` · `UI` · `CleanCode` · `WarRoom` · `ComponentDecomposition` | **已於 v9.02.0 (Spec 0205 / Issue #336) 完整解決** |
 | [**0055**](0055-warroom-divergent-change-metrics-hook.md) | WarRoomWorkspace 龐大單體元件與發散式變化 (Divergent Change) 狀態抽取 (useWarRoomPortfolioMetrics) | `P3` | `RESOLVED` | Code Review (Spec 0209 / Issue #359) | `Refactor` · `CleanCode` · `WarRoom` · `CustomHooks` · `DivergentChange` | **已於 v9.15.0 (Spec 0220 / ADR #0220) 完整解決** |
 | [**0056**](0056-valuation-river-candle-lookup-binary-search.md) | 估值河流圖歷史收盤價匹配二元搜尋優化 | `P3` | `RESOLVED` | Code Review (Spec 0219 / Issue #462) | `Performance` · `Algorithm` · `StockAnalysis` · `ValuationRiver` · `BinarySearch` | **已於 v9.15.0 (Spec 0220 / ADR #0220) 完整解決** |
+| [**0057**](0057-zavy-workspace-test-decomposition-and-engine-helper-refactor.md) | Zavy 慢富工作區測試職責解耦、預估年股息輔助函式下沉與信用雷達枚舉中文化 | `P3` | `OPEN` | Code Review (Spec 0223 / Issue #494) | `Refactor` · `CleanCode` · `TestSmell` · `ZavyWorkspace` | 待下期 Zavy 進階功能演進或通用測試重構時實作 |
 
 ---
 
