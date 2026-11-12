@@ -1,7 +1,12 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-11-12 11:58 (UTC+8)  
+> **交接產生時間**：2026-11-12 13:17 (UTC+8)  
 > **當前最新里程碑**：
+> - **V9.17.1 第三梯隊架構技術債清理與精實收斂**（ADR 0224, Spec 0224, Issue #500）：
+>   - **Zavy 慢富工作區龐大單體測試解耦 (技術債 0057)**：將 630+ 行包含 4 個鏡頭的 `ZavyMacroCompassCard.test.tsx` 拆解為 4 個聚焦單一職責之元件測試檔（羅盤卡片、工作區導覽、市場寬度卡片、雙軌決策卡片），消除發散變更與脆弱性。
+>   - **股息估算邏輯下沉至純函式模組 (技術債 0057)**：自工作區抽離 inline reduce，實作 `estimateHoldingsAnnualDividendsTwd`，支援 USD/TWD 匯率換算、平倉排除與 4.5% 兜底；新增 `formatCreditRiskLevelLabel` 消除信用風險英文枚舉。
+>   - **智策外聯提示詞董監質押率精確注入 (技術債 0048)**：在主力戰情室個股提示詞與 `ValuationMetricsData` 中打通 `directorPledgeRatioPct`，提供多重安全提取與 100% 邊界測試。
+>   - **技術債看板閉環**：`docs/debts/README.md` 將 0057 與 0048 狀態更新為 `RESOLVED`。
 > - **V9.17.0 Zavy 慢富新手白話導覽、零造輪子 TermTooltip 整合與 12 項漏接欄位全貫通**（ADR 0223, Spec 0223, Issue #494, PR #494 系列）：
 >   - **Zavy 慢富白話決策字典 (`zavyGlossary.ts`)**：收錄 18 項核心慢富詞條與信心度詞條，提供 `formatWavePhaseLabel`、`formatTreasuryStatusLabel` 與 `formatTidalRegimeLabel`，徹底消除裸露英文枚舉。
 >   - **頂部新手 30 秒慢富導覽**：提供展開/收合三步驟（「看天氣 ➔ 量體溫 ➔ 穿防彈衣」）白話心法橫幅。
@@ -50,10 +55,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main` (已完全同步主幹，Working Tree Clean)
-- **單元測試套件**：**2,141/2,141 通過 (278 test suites / 100% 綠燈)**
+- **單元測試套件**：**2,157/2,157 通過 (282 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V9.16.0**
+- **當前釋出版本**：**V9.17.1**
 - **工作區與分支整潔度**：工作區乾淨受控，本地 feature/fix 分支已完全合併並清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -82,6 +87,9 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0224`](file:///d:/APP/股票紀錄/docs/specs/0224-technical-debts-0057-0048-resolution-spec.md) | [`ADR 0224`](file:///d:/APP/股票紀錄/docs/adr/0224-technical-debts-0057-0048-resolution.md) | [`.scratch/v9.17.1-tech-debt-0057-0048-resolution/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.17.1-tech-debt-0057-0048-resolution/issues/) | Issue #500 | V9.17.1 | Zavy 慢富工作區測試解耦、股息估算下沉純函式與智策提示詞董監質押技術債閉環 (技術債 0057 & 0048) |
+| [`Spec 0223`](file:///d:/APP/股票紀錄/docs/specs/0223-zavy-slow-wealth-onboarding-termtooltip-and-full-pipeline-alignment-spec.md) | [`ADR 0223`](file:///d:/APP/股票紀錄/docs/adr/0223-zavy-slow-wealth-onboarding-termtooltip-and-full-pipeline-alignment.md) | [`.scratch/v9.17.0-zavy-onboarding-termtooltip/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.17.0-zavy-onboarding-termtooltip/issues/) | Issue #494 / PR #495, #497 | V9.17.0 | Zavy 慢富新手白話導覽、零造輪子 TermTooltip 整合與 12 項漏接欄位全貫通 |
+| [`Spec 0221`](file:///d:/APP/股票紀錄/docs/specs/0221-zavy-slow-wealth-cycle-market-breadth-and-dual-track-allocation-system-spec.md) | [`ADR 0221`](file:///d:/APP/股票紀錄/docs/adr/0221-zavy-slow-wealth-cycle-market-breadth-and-dual-track-allocation-system.md) | [`.scratch/v9.16.0-zavy-slow-wealth-cycle-breadth-and-dual-track/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.16.0-zavy-slow-wealth-cycle-breadth-and-dual-track/issues/) | Issue #472 / PR #473, #475 | V9.16.0 | Zavy「散戶慢富之路」三級週期定位、台美市場結構寬度與 A/B 雙軌配置系統 |
 | [`Spec 0220`](file:///d:/APP/股票紀錄/docs/specs/0220-technical-debts-0055-0056-resolution-spec.md) | [`ADR 0220`](file:///d:/APP/股票紀錄/docs/adr/0220-technical-debts-0055-0056-resolution.md) | [`.scratch/v9.15.0-tech-debt-batch-2-warroom-metrics-and-binary-search/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.15.0-tech-debt-batch-2-warroom-metrics-and-binary-search/issues/) | Issue #466 / PR #467, #469 | V9.15.0 | 第二梯隊架構技術債清理 (0055 戰情室風控狀態抽取 Hook 與 0056 估值河流二元搜尋) |
 | [`Spec 0219`](file:///d:/APP/股票紀錄/docs/specs/0219-institutional-equity-research-and-decision-system-spec.md) | [`ADR 0219`](file:///d:/APP/股票紀錄/docs/adr/0219-institutional-equity-research-and-decision-system.md) | [`.scratch/v9.14.0-institutional-equity-research/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.14.0-institutional-equity-research/issues/) | Issue #449 / PR #461, #463, #465 | V9.14.0 | 台美股機構級深度財報研究與實戰投資決策系統 (5 大數據孤島貫通、20 季財報縱深、反向 DCF) |
 | [`Spec 0218`](file:///d:/APP/股票紀錄/docs/specs/0218-smart-money-star-map-full-chain-temporal-anchoring-spec.md) | [`ADR 0218`](file:///d:/APP/股票紀錄/docs/adr/0218-smart-money-star-map-full-chain-temporal-anchoring.md) | [`.scratch/v9.13.0-smart-money-temporal-anchoring/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.13.0-smart-money-temporal-anchoring/issues/) | Issue #433 / PR #444, #448 | V9.13.0 | 籌碼與動態星圖全鏈路時空定錨、產業輪動、實戰訊號與零假資料精實重構 |
