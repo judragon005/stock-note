@@ -9,7 +9,10 @@ import {
   exportZavyReportMarkdown,
   exportZavyRawDataCsv,
   aggregateLoanCollateral,
+  estimateHoldingsAnnualDividendsTwd,
+  formatCreditRiskLevelLabel,
 } from './zavySlowWealthEngine';
+import { HoldingPosition } from '../types/stock';
 import {
   MacroIndicatorSnapshot,
   MultiHorizonMarketBreadth,
@@ -443,6 +446,126 @@ describe('Zavy Slow Wealth Engine (慢富三級週期、市場寬度與 A/B 雙�
       const md = exportZavyReportMarkdown(report);
       expect(md).not.toContain('IN_RANGE_4_TO_5_5');
       expect(md).toContain('擴張成長期');
+    });
+
+    it('8. [Spec 0224 / Ticket 01] estimateHoldingsAnnualDividendsTwd 應正確估算年度股息現金活水 (TDD Seam)', () => {
+      // 1. 空持股或無效輸入
+      expect(estimateHoldingsAnnualDividendsTwd([])).toBe(0);
+      expect(estimateHoldingsAnnualDividendsTwd(undefined as any)).toBe(0);
+
+      // 2. 正常台股持股 (自訂殖利率 5.0%)
+      const twHolding: HoldingPosition = {
+        symbol: '2330',
+        name: '台積電',
+        shares: 1000,
+        avgCost: 1000,
+        totalCostBasis: 1000000,
+        currency: 'TWD',
+        market: 'TW',
+        yieldOnCostPercent: 5.0,
+      } as HoldingPosition;
+      // 1,000,000 * 5% = 50,000
+      expect(estimateHoldingsAnnualDividendsTwd([twHolding])).toBe(50000);
+
+      // 3. 正常台股持股 (未提供殖利率 ➔ 預設 4.5% 防禦性底標)
+      const twDefaultYield: HoldingPosition = {
+        symbol: '0050',
+        name: '元大台灣50',
+        shares: 1000,
+        avgCost: 100,
+        totalCostBasis: 100000,
+        currency: 'TWD',
+        market: 'TW',
+      } as HoldingPosition;
+      // 100,000 * 4.5% = 4,500
+      expect(estimateHoldingsAnnualDividendsTwd([twDefaultYield])).toBe(4500);
+
+      // 4. 美股持股匯率折算 (USD 乘上匯率 32，未提供殖利率 ➔ 4.5%)
+      const usHolding: HoldingPosition = {
+        symbol: 'AAPL',
+        name: 'Apple',
+        shares: 10,
+        avgCost: 200,
+        totalCostBasis: 2000, // 2000 USD * 32 = 64,000 TWD
+        currency: 'USD',
+        market: 'US',
+      } as HoldingPosition;
+      // 64,000 * 4.5% = 2,880
+      expect(estimateHoldingsAnnualDividendsTwd([usHolding], 32)).toBe(2880);
+
+      // 5. 平倉或零股數過濾 (isClosed: true 或 shares <= 0 應被剔除)
+      const closedHolding: HoldingPosition = {
+        symbol: '2603',
+        name: '長榮',
+        shares: 1000,
+        avgCost: 150,
+        totalCostBasis: 150000,
+        currency: 'TWD',
+        market: 'TW',
+        isClosed: true,
+      } as HoldingPosition;
+      const zeroShareHolding: HoldingPosition = {
+        symbol: '2454',
+        name: '聯發科',
+        shares: 0,
+        avgCost: 1000,
+        totalCostBasis: 0,
+        currency: 'TWD',
+        market: 'TW',
+      } as HoldingPosition;
+
+      // 組合驗算：twHolding(50000) + twDefaultYield(4500) + usHolding(2880) + closedHolding(0) + zeroShareHolding(0) = 57380
+      const total = estimateHoldingsAnnualDividendsTwd(
+        [twHolding, twDefaultYield, usHolding, closedHolding, zeroShareHolding],
+        32
+      );
+      expect(total).toBe(57380);
+    });
+
+    it('9. [Spec 0224 / Ticket 02] formatCreditRiskLevelLabel 應正確將信用風險等級中文化且 Markdown 導出採用 (TDD Seam)', () => {
+      // 1. 各等級中文化
+      expect(formatCreditRiskLevelLabel('LOW')).toBe('低風險穩健');
+      expect(formatCreditRiskLevelLabel('ELEVATED')).toBe('偏高警戒');
+      expect(formatCreditRiskLevelLabel('HIGH')).toBe('高風險承壓');
+      expect(formatCreditRiskLevelLabel('CRITICAL')).toBe('極端危急');
+      expect(formatCreditRiskLevelLabel(undefined)).toBe('未知');
+      expect(formatCreditRiskLevelLabel('UNKNOWN_FOO')).toBe('UNKNOWN_FOO');
+
+      // 2. Markdown 導出中應呈現繁中標籤而非英文枚舉
+      const snap: MacroIndicatorSnapshot = {
+        treasuryYield10y: 4.4,
+        usIsmPmi: 52.0,
+        highYieldSpreadOas: 3.2,
+      };
+      const breadth: MultiHorizonMarketBreadth = {
+        asOfDate: '2026-11-10',
+        market: 'TW',
+        breadth20: 30,
+        breadth60: 45,
+        breadth200: 55,
+        totalFilteredStocks: 2000,
+      };
+      const marginStatus: MarginDeleveragingStatus = {
+        asOfDate: '2026-11-10',
+        indexDrawdownPercent: -5,
+        marginDrawdownPercent: -6,
+        marginDeleveragingRatio: 1.2,
+        isDeleveragingSufficient: true,
+        statusText: '清洗充分',
+      };
+      const report = generateZavyAnalysisReport({
+        snapshot: snap,
+        breadth,
+        marginStatus,
+        holdings: [],
+        cashBalanceTwd: 100000,
+      });
+
+      const md = exportZavyReportMarkdown(report);
+      // 驗證 OAS <= 3.5 時觸發 ELEVATED，正確輸出繁體中文「偏高警戒」且無原始英文枚舉
+      expect(md).toContain('風險等級【偏高警戒】');
+      expect(md).not.toContain('風險等級【ELEVATED】');
+      expect(md).not.toContain('風險等級【LOW】');
     });
   });
 });

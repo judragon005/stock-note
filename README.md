@@ -12,7 +12,18 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. Zavy「散戶慢富之路」全鏈路真實數據驅動、市場寬度修復與引擎統一 (`🐢 慢富週期與配置`) *(V9.16.1 最新發布 / Spec #0222 / ADR #0222 / Issue #478)*
+### 1. Zavy 慢富代碼氣味清理、測試職責解耦與智策提示詞技術債閉環 (`Technical Debts 0057 & 0048 Resolution`) *(V9.17.0 最新發布 / Spec #0224 / ADR #0224 / Issue #500)*
+
+- **技術債 0057：Zavy 慢富工作區代碼氣味清理與測試巨石拆解**：
+  - **股息活水純函式下沉 (`estimateHoldingsAnnualDividendsTwd`)**：在 `zavySlowWealthEngine.ts` 實作純函式，提供台美股匯率換算、平倉標的過濾與 4.5% 防禦性底標；`ZavySlowWealthWorkspace.tsx` 拔除渲染層 inline `reduce`，徹底消除 Feature Envy 業務邏輯外溢。
+  - **信用雷達標籤中文化 (`formatCreditRiskLevelLabel`)**：實作中文化映射函式，Markdown 導出報告全面採用繁中標籤（`低風險穩健`、`偏高警戒`、`高風險承壓`、`極端危急`），消弭領域語言不一致缺口。
+  - **測試巨石物理拆分**：將原巨石測試 `ZavyMacroCompassCard.test.tsx` 物理拆分為四個高凝聚度獨立測試檔（羅盤、工作區、市場寬度、雙軌決策），徹底消除 Divergent Change 測試氣味。
+- **技術債 0048：智策提示詞事實清單董監質押安全讀取與看板收斂**：
+  - 於主力戰情室適配器 `aiForcePromptAdapter.ts` 補齊 `directorPledgeRatioPct` 安全提取邏輯與單元測試防禦，正式收斂結清技術債 0048。
+- **架構治理看板閉環**：
+  - `docs/debts/README.md`、`docs/debts/0057-*.md`、`docs/debts/0048-*.md` 全面標記為 `RESOLVED`。
+
+### 2. Zavy「散戶慢富之路」新手白話導覽、TermTooltip 整合與 12 項漏接欄位全貫通 (`🐢 慢富新手友善與深度對齊`) *(Spec #0223 / ADR #0223 / Issue #494)*
 
 - **全鏈路真實數據驅動與去偽存真 (Zero Mock UI & Real-Data Driven)**：
   - 徹底移除所有前端寫死假數據與虛構常數，無數據時誠實顯示 `--`；數據庫與 API 完全隔離外部機密目錄，全面取自專案內部 SQLite 湖倉或免 Key FRED 官方公開 CSV 端點。

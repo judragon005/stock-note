@@ -7,7 +7,7 @@
 | **債務編號** | `0057` |
 | **關聯模組** | `src/components/zavy/` · `src/engine/zavySlowWealthEngine.ts` |
 | **優先級別** | `P3` (Low - 代碼整潔與架構健壯性備忘) |
-| **狀態** | `OPEN` |
+| **狀態** | `RESOLVED` (已於 v9.17.0 / Spec 0224 / Issue #500 完整解決) |
 | **發現來源** | Spec 0223 雙軸代碼審查 (`/code-review`, Issue #494) |
 | **標籤** | `Refactor` · `CleanCode` · `TestSmell` · `ZavyWorkspace` |
 
@@ -31,6 +31,10 @@
 
 ---
 
-## 3. 重構計畫與預計觸發時機
+## 3. 重構計畫與解決成果 (Resolution)
 
-- **觸發時機**：下期 Zavy 慢富進階功能擴充（例如：加入定期定額智慧試算、自訂目標資產配置比重）或專案通用測試目錄結構整理時。
+- **解決狀態**：`RESOLVED` (v9.17.0 / Spec 0224 / ADR #0224 / Issue #500)
+- **實作成效**：
+  1. 測試職責解耦：將 `ZavyMacroCompassCard.test.tsx` 拆分為羅盤、工作區、市場寬度與雙軌決策 4 個獨立測試檔，徹底消除 Divergent Change。
+  2. 業務邏輯下沉：實作純函式 `estimateHoldingsAnnualDividendsTwd(holdings, usdToTwdRate)` 置於 `zavySlowWealthEngine.ts`，由工作區渲染層委託調用，消除 Feature Envy。
+  3. 信用雷達繁中化：實作 `formatCreditRiskLevelLabel` 函式，Markdown 導出報告全面採用繁中標籤（`低風險穩健`、`偏高警戒`、`高風險承壓`、`極端危急`）。

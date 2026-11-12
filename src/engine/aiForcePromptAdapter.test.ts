@@ -472,6 +472,35 @@ describe('Spec 0181 Ticket 06: aiForcePromptAdapter - 主力戰情室特徵轉�
       // (-601 / 1500) * 100 = -40.1% (不再是 0.0%)
       expect(digest.chips.trustRatio20D).toBe(-40.1);
     });
+
+    it('Spec 0224 Ticket 09: 智策提示詞事實清單應正確注入董監質押比率 (有資料時精確注入，無資料安全 undefined)', () => {
+      // 1. 提供董監質押比率的情境
+      const reportWithPledge: AiForceDashboardReport = {
+        ...mockReportTw,
+        symbol: '2330',
+        name: '台積電',
+        valuationMetrics: {
+          isEtf: false,
+          directorPledgeRatio: 12.34,
+        },
+      } as any;
+
+      const digestWithPledge = createWarRoomPromptDigest(reportWithPledge);
+      expect(digestWithPledge.fundamental?.directorPledgeRatioPct).toBe(12.34);
+
+      // 2. 未提供董監質押比率的情境 (安全為 undefined，遵循 Zero-Mock 原則)
+      const reportWithoutPledge: AiForceDashboardReport = {
+        ...mockReportTw,
+        symbol: '2330',
+        name: '台積電',
+        valuationMetrics: {
+          isEtf: false,
+        },
+      } as any;
+
+      const digestWithoutPledge = createWarRoomPromptDigest(reportWithoutPledge);
+      expect(digestWithoutPledge.fundamental?.directorPledgeRatioPct).toBeUndefined();
+    });
   });
 });
 
