@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-2145%2F2145%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2199%2F2199%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,25 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. Zavy 慢富代碼氣味清理、測試職責解耦與智策提示詞技術債閉環 (`Technical Debts 0057 & 0048 Resolution`) *(V9.17.0 最新發布 / Spec #0224 / ADR #0224 / Issue #500)*
+### 1. 股利日誌與現金流全景：證交所發放日時差對齊、法人級實戰指標打通與極簡模組化重構 (`Spec 0225`) *(V9.18.0 最新發布 / Spec #0225 / ADR #0225 / Issues #502, #504)*
+
+- **證交所發放日時差對齊與一鍵已入帳**：
+  - **ETF / 個股發放日時差分流**：針對未公告發放日之標的，台股 ETF 採除息後 **+23 天**（對齊投信 ACH 慣例），個股採 **+28 天**；自動跳過週末順延，徹底消除「銀行已入帳但系統仍顯示待入帳」之時差痛點。
+  - **「一鍵已入帳」快速結算**：在歷史明細與待入帳面板提供快捷結算按鈕，點擊立即轉入真實入帳歷史交易紀錄。
+- **法人級實戰指標全面打通**：
+  - **YOC (成本殖利率) 與實質填息標籤**：新增 `dividendMetricsEngine.ts`，精算 `(每股年化配息 / 持股平均成本) * 100%`，並動態判定 `[實質填息]` 或 `[貼息中]` 狀態。
+  - **質押借貸淨利差分析**：新增 `dividendCarrySpreadEngine.ts`，展示 `實領股息 - 借貸利息 = 淨利差現金流`，防範負利差侵蝕。
+  - **跨行匯費耗損警報**：累計非保管銀行跨行匯費（10 元/筆），對微額配息（<$500）摩擦損耗提出保管銀行變更警示。
+  - **生活費目標對齊與動態微調選單 (Issue #504)**：支援 `30k`、`35k`、`40k`、`50k` 快捷切換與「自訂」數值輸入，即時雙向連動各月份覆蓋百分比與長條圖基準線。
+  - **Zavy 股息活水轉向指引**：月曆行事曆自動提示股息活水注入純公債 (00687B) 與黃金儲備 (00635U)，存量不動、增量抗震。
+- **神級單體組件解耦 (技術債 0058 RESOLVED)**：
+  - 將 1,604 行之 `DividendLogView.tsx` 瘦身至 396 行（減少 75% 代碼量），Props 100% 向後相容，拆分為 4 個高凝聚子組件（位於 `src/components/dividend/`）：
+    - `DividendCalendarCard.tsx`：未來 12 個月現金流預估、生活費微調選單與 Zavy 活水指引。
+    - `DividendKpiSummary.tsx`：4 大發光 KPI 卡片、質押借貸淨利差與匯費警報。
+    - `DividendMonthlyChart.tsx`：月度現金流長條圖、智慧避讓 Tooltip 與生活費對標線。
+    - `DividendHistoryTable.tsx`：歷史明細搜尋過濾、YOC 成本殖利率、填息標籤、一鍵已入帳與毛淨額對帳抽屜。
+
+### 2. Zavy 慢富代碼氣味清理、測試職責解耦與智策提示詞技術債閉環 (`Technical Debts 0057 & 0048 Resolution`) *(Spec #0224 / ADR #0224 / Issue #500)*
 
 - **技術債 0057：Zavy 慢富工作區代碼氣味清理與測試巨石拆解**：
   - **股息活水純函式下沉 (`estimateHoldingsAnnualDividendsTwd`)**：在 `zavySlowWealthEngine.ts` 實作純函式，提供台美股匯率換算、平倉標的過濾與 4.5% 防禦性底標；`ZavySlowWealthWorkspace.tsx` 拔除渲染層 inline `reduce`，徹底消除 Feature Envy 業務邏輯外溢。
