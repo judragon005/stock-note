@@ -14,18 +14,32 @@ export interface DividendCalendarCardProps {
   onToggleExpand: () => void;
 }
 
+const PRESET_EXPENSE_TARGETS = [30000, 35000, 40000, 50000];
+
 export const DividendCalendarCard: React.FC<DividendCalendarCardProps> = ({
   projectedCashflow,
   complementaryRecommendations,
   taxStats,
   targetMonthlyExpenseTwd = 35000,
+  onTargetExpenseChange,
   zavyDividendPlanSummary,
   isCashflowExpanded,
   onToggleExpand,
 }) => {
+  const [isEditingCustom, setIsEditingCustom] = React.useState<boolean>(false);
+  const [customValue, setCustomValue] = React.useState<string>(String(targetMonthlyExpenseTwd));
+
   const fiCoverageRatioPct = targetMonthlyExpenseTwd > 0
     ? ((projectedCashflow.monthlyAverageTwd / targetMonthlyExpenseTwd) * 100)
     : 0;
+
+  const handleCustomSubmit = () => {
+    const val = parseInt(customValue, 10);
+    if (!isNaN(val) && val > 0) {
+      onTargetExpenseChange?.(val);
+    }
+    setIsEditingCustom(false);
+  };
 
   return (
     <div
@@ -48,7 +62,107 @@ export const DividendCalendarCard: React.FC<DividendCalendarCardProps> = ({
             <span style={{ fontSize: '12px', color: '#94a3b8' }}>
               全年預估: <strong style={{ color: '#34d399', fontVariantNumeric: 'tabular-nums' }}>NT$ {projectedCashflow.annualTotalTwd.toLocaleString()}</strong> · 月均: <strong style={{ color: '#38bdf8', fontVariantNumeric: 'tabular-nums' }}>NT$ {Math.round(projectedCashflow.monthlyAverageTwd).toLocaleString()}</strong>
               {targetMonthlyExpenseTwd > 0 && (
-                <span> · 生活費覆蓋: <strong style={{ color: fiCoverageRatioPct >= 100 ? '#34d399' : '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>{fiCoverageRatioPct.toFixed(1)}%</strong></span>
+                <span>
+                  {' '}· 生活費覆蓋: <strong style={{ color: fiCoverageRatioPct >= 100 ? '#34d399' : '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>{fiCoverageRatioPct.toFixed(1)}%</strong>
+                  {onTargetExpenseChange && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginLeft: '6px' }}>
+                      <span style={{ fontSize: '11px', color: '#64748b' }}>(目標:</span>
+                      {PRESET_EXPENSE_TARGETS.map((amt) => {
+                        const isSelected = targetMonthlyExpenseTwd === amt && !isEditingCustom;
+                        return (
+                          <button
+                            key={amt}
+                            type="button"
+                            onClick={() => {
+                              setIsEditingCustom(false);
+                              onTargetExpenseChange(amt);
+                            }}
+                            style={{
+                              background: isSelected ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.06)',
+                              border: `1px solid ${isSelected ? 'rgba(56, 189, 248, 0.5)' : 'rgba(255, 255, 255, 0.12)'}`,
+                              color: isSelected ? '#38bdf8' : '#94a3b8',
+                              borderRadius: '4px',
+                              padding: '1px 5px',
+                              fontSize: '10px',
+                              cursor: 'pointer',
+                              fontWeight: isSelected ? 700 : 500,
+                              fontVariantNumeric: 'tabular-nums',
+                            }}
+                            title={`切換每月生活費基準為 NT$ ${amt.toLocaleString()}`}
+                          >
+                            {amt / 1000}k
+                          </button>
+                        );
+                      })}
+                      {isEditingCustom ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                          <input
+                            type="number"
+                            className="mono"
+                            value={customValue}
+                            onChange={(e) => setCustomValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleCustomSubmit();
+                              if (e.key === 'Escape') setIsEditingCustom(false);
+                            }}
+                            style={{
+                              width: '65px',
+                              padding: '1px 4px',
+                              fontSize: '10px',
+                              borderRadius: '3px',
+                              border: '1px solid #38bdf8',
+                              background: 'rgba(15, 23, 42, 0.9)',
+                              color: '#ffffff',
+                              outline: 'none',
+                            }}
+                            autoFocus
+                            placeholder="如 45000"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleCustomSubmit}
+                            style={{
+                              background: '#38bdf8',
+                              color: '#0f172a',
+                              border: 'none',
+                              borderRadius: '3px',
+                              padding: '1px 4px',
+                              fontSize: '10px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            確定
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomValue(String(targetMonthlyExpenseTwd));
+                            setIsEditingCustom(true);
+                          }}
+                          style={{
+                            background: !PRESET_EXPENSE_TARGETS.includes(targetMonthlyExpenseTwd) ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.06)',
+                            border: `1px solid ${!PRESET_EXPENSE_TARGETS.includes(targetMonthlyExpenseTwd) ? 'rgba(56, 189, 248, 0.5)' : 'rgba(255, 255, 255, 0.12)'}`,
+                            color: !PRESET_EXPENSE_TARGETS.includes(targetMonthlyExpenseTwd) ? '#38bdf8' : '#94a3b8',
+                            borderRadius: '4px',
+                            padding: '1px 5px',
+                            fontSize: '10px',
+                            cursor: 'pointer',
+                            fontWeight: !PRESET_EXPENSE_TARGETS.includes(targetMonthlyExpenseTwd) ? 700 : 500,
+                          }}
+                          title="自訂義生活費目標金額"
+                        >
+                          {!PRESET_EXPENSE_TARGETS.includes(targetMonthlyExpenseTwd)
+                            ? `自訂 (${Math.round(targetMonthlyExpenseTwd / 1000)}k)`
+                            : '自訂'}
+                        </button>
+                      )}
+                      <span style={{ fontSize: '11px', color: '#64748b' }}>)</span>
+                    </span>
+                  )}
+                </span>
               )}
             </span>
           </div>
