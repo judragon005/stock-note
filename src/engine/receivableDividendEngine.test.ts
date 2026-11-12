@@ -88,6 +88,9 @@ describe('Receivable Dividend & Ex-Dividend Smoothing Engine (應收股利平滑
       expect(estimatePaymentDate('2024-08-16', 'TW', '00878')).toBe('2024-09-11');
       expect(isPaymentDateOfficial('2024-08-16', '00878')).toBe(true);
       expect(isPaymentDateOfficial('2026-06-15', '00878')).toBe(false);
+      // 0056 2026-10-22 除息，官方公告發放日為 2026-11-11
+      expect(estimatePaymentDate('2026-10-22', 'TW', '0056')).toBe('2026-11-11');
+      expect(isPaymentDateOfficial('2026-10-22', '0056')).toBe(true);
     });
 
     it('isTwEtfSymbol 能準確判定各類型台股 ETF 標的', () => {

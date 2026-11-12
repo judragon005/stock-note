@@ -15,6 +15,7 @@ describe('DividendHistoryTable (歷史明細表、YOC 成本殖利率與填息�
       date: '2026-06-15',
       shares: 10000,
       price: 0.55,
+      exPrice: 21.0,
       fee: 0,
       tax: 0,
       createdAt: 1,

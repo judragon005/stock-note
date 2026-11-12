@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { calculateMonthTooltipAlign } from './DividendMonthlyChart';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { calculateMonthTooltipAlign, DividendMonthlyChart } from './DividendMonthlyChart';
+import { MonthlyDividendDistribution } from '../../types/dividend';
 
 describe('DividendMonthlyChart (月度配息長條圖)', () => {
   describe('calculateMonthTooltipAlign (智慧避讓演算法)', () => {
@@ -18,6 +20,34 @@ describe('DividendMonthlyChart (月度配息長條圖)', () => {
       expect(calculateMonthTooltipAlign(9)).toBe('right');
       expect(calculateMonthTooltipAlign(10)).toBe('right');
       expect(calculateMonthTooltipAlign(11)).toBe('right');
+    });
+  });
+
+  describe('生活費基準線與幾何長條渲染', () => {
+    const mockDistribution: MonthlyDividendDistribution[] = [
+      { monthKey: '2026-01', monthLabel: '1月', grossTWD: 30000, netTWD: 28000, taxTWD: 2000, count: 2 },
+      { monthKey: '2026-04', monthLabel: '4月', grossTWD: 84863, netTWD: 82959, taxTWD: 1904, count: 3 },
+      { monthKey: '2026-10', monthLabel: '10月', grossTWD: 120000, netTWD: 110000, taxTWD: 10000, count: 4 },
+    ];
+
+    it('應正確呈現生活費門檻與生活費基準標籤', () => {
+      const html = renderToStaticMarkup(
+        <DividendMonthlyChart
+          monthlyDistribution={mockDistribution}
+          maxMonthlyNet={110000}
+          targetMonthlyExpenseTwd={60000}
+          dividendDisplayMode="NET"
+          selectedYear={2026}
+        />
+      );
+
+      expect(html).toContain('生活費基準: NT$ 60,000');
+      expect(html).toContain('🎯 生活費線');
+      expect(html).toContain('2026 各月份現金流分佈');
+      // 確保生活費線 z-index 為 0
+      expect(html).toContain('z-index:0');
+      // 確保長條柱 z-index 為 1
+      expect(html).toContain('z-index:1');
     });
   });
 });

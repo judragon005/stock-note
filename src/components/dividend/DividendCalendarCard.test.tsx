@@ -41,6 +41,11 @@ describe('DividendCalendarCard (未來 12 個月現金流月曆與活水轉向�
     // 30000 / 35000 = 85.7%
     expect(html).toContain('85.7%');
     expect(html).toContain('枯水期');
+    // 驗證三列四欄網格排版與完整金額展示 (非截斷 k)
+    expect(html).toContain('repeat(4, minmax(0, 1fr))');
+    expect(html).toContain('NT$ 40,000');
+    expect(html).toContain('NT$ 10,000');
+    expect(html).toContain('達標');
   });
 
   it('若傳入 Zavy 活水轉向指引，應展示活水轉向公債/黃金指引區塊', () => {
