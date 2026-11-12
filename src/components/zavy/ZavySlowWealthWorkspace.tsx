@@ -10,6 +10,7 @@ import {
   generateZavyAnalysisReport,
   exportZavyReportMarkdown,
   exportZavyRawDataCsv,
+  estimateHoldingsAnnualDividendsTwd,
 } from '../../engine/zavySlowWealthEngine';
 import { ZavyMacroCompassCard } from './ZavyMacroCompassCard';
 import { ZavyMarketBreadthCard } from './ZavyMarketBreadthCard';
@@ -135,20 +136,8 @@ export const ZavySlowWealthWorkspace: React.FC<ZavySlowWealthWorkspaceProps> = (
 
   // 3. 核心報告運算 (連通真實匯率、質押借貸帳本、真實年度股息與動態指標)
   const analysisReport = useMemo(() => {
-    // 依據在席持股市值與成本殖利率 (yieldOnCostPercent) 或累計配息防禦性估算單年股息活水
-    const annualEstimatedDividendsTwd = holdings.reduce((sum, h) => {
-      if (h.isClosed || !h.shares || h.shares <= 0) return sum;
-      // 優先使用成本殖利率估算單年股息 (totalCostBasis * yieldOnCostPercent)
-      let estAnnualDiv = 0;
-      if (typeof h.yieldOnCostPercent === 'number' && h.yieldOnCostPercent > 0 && h.totalCostBasis > 0) {
-        estAnnualDiv = Math.min(h.totalCostBasis * (h.yieldOnCostPercent / 100), h.totalDividends || Infinity);
-      } else if (h.totalDividends && h.totalDividends > 0) {
-        // 若無成本殖利率，以累計配息作保底估算
-        estAnnualDiv = h.totalDividends;
-      }
-      if (estAnnualDiv <= 0) return sum;
-      return sum + (h.currency === 'USD' ? estAnnualDiv * usdToTwdRate : estAnnualDiv);
-    }, 0);
+    // 依據在席持股市值與成本殖利率 (yieldOnCostPercent) 或累計配息防禦性估算單年股息活水 (Spec 0224 Ticket 03 純函式下沉)
+    const annualEstimatedDividendsTwd = estimateHoldingsAnnualDividendsTwd(holdings, usdToTwdRate);
 
     return generateZavyAnalysisReport({
       snapshot: macroSnapshot,

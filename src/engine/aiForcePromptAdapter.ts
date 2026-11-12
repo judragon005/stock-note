@@ -222,6 +222,14 @@ export function createWarRoomPromptDigest(
   // 取陣列最新月份 (Spec 0197 Ticket 02: 避免由舊到新排序誤取最舊月份)
   const latestRevItem = rev?.history && rev.history.length > 0 ? rev.history[rev.history.length - 1] : undefined;
   const val = report.valuationMetrics;
+  // 董監質押比率安全提取 (Spec 0224 Ticket 08)
+  const rawPledge =
+    val?.directorPledgeRatio ??
+    (report as any).directorPledgeRatioPct ??
+    (report as any).healthSummary?.directorPledgeRatio;
+  const directorPledgeRatioPct = typeof rawPledge === 'number' && !isNaN(rawPledge)
+    ? Number(rawPledge.toFixed(2))
+    : undefined;
 
   const fundamental: StrategicFactDigest['fundamental'] = !isEtf
     ? {
@@ -236,7 +244,7 @@ export function createWarRoomPromptDigest(
         monthlyRevenueYoY: rev?.latestYoyRate ?? latestRevItem?.yoyRate,
         monthlyRevenueMoM: latestRevItem?.momRate,
         isMonthlyRevenueAllTimeHigh: latestRevItem?.isAllTimeHigh,
-        directorPledgeRatioPct: undefined,
+        directorPledgeRatioPct,
       }
     : undefined;
 

@@ -754,7 +754,7 @@ ${tenSecondsExecutiveSummary.map((s) => `- ${s}`).join('\n')}
 - **波浪商業週期 (Wave)**：${formatWavePhaseLabel(macroCompass.wave.phase)} (信心度 ${macroCompass.wave.confidenceScore}%)
   - 週期現況：${macroCompass.wave.cycleSummary}
   - 美台大卡車 vs 小車：${macroCompass.wave.smallTruckVsBigTruckStatus.commentary}
-- **信用裂痕雷達**：風險等級【${macroCompass.creditRadar.creditRiskLevel}】
+- **信用裂痕雷達**：風險等級【${formatCreditRiskLevelLabel(macroCompass.creditRadar.creditRiskLevel)}】
   - OAS 利差過熱警戒：${macroCompass.creditRadar.isOasOverheatedLow ? '⚠️ 是 (<=3.5%)' : '否'}
   - CCC 垃圾債利差走闊：${macroCompass.creditRadar.hasEarlyCccStress ? '⚠️ 是' : '否'}
   ${macroCompass.creditRadar.warningMessage ? `> ${macroCompass.creditRadar.warningMessage}` : ''}
@@ -827,4 +827,60 @@ export function exportZavyRawDataCsv(snapshot: MacroIndicatorSnapshot, breadth: 
 
   return rows.map((r) => r.join(',')).join('\n');
 }
+
+/**
+ * 10. [Spec 0224 / Ticket 01] 依據在席持股市值與成本殖利率計算年度預估股息現金活水 (TWD)
+ * 具備平倉過濾、幣別匯率換算與防禦性底標 4.5% 兜底機制。
+ */
+export function estimateHoldingsAnnualDividendsTwd(
+  holdings: HoldingPosition[] = [],
+  usdToTwdRate: number = 32
+): number {
+  if (!Array.isArray(holdings) || holdings.length === 0) return 0;
+
+  return holdings.reduce((sum, h) => {
+    if (!h || h.isClosed || !h.shares || h.shares <= 0) return sum;
+    const rate = h.currency === 'USD' ? usdToTwdRate : 1;
+    const cost = (h.totalCostBasis && h.totalCostBasis > 0)
+      ? h.totalCostBasis
+      : ((h as any).totalCost !== undefined && (h as any).totalCost !== null && !isNaN((h as any).totalCost))
+      ? (h as any).totalCost
+      : (h.shares * (h.avgCost || 0));
+
+    let estAnnualDiv = 0;
+    if (typeof h.yieldOnCostPercent === 'number' && h.yieldOnCostPercent > 0 && cost > 0) {
+      estAnnualDiv = cost * (h.yieldOnCostPercent / 100);
+    } else if (h.totalDividends && h.totalDividends > 0) {
+      estAnnualDiv = h.totalDividends;
+    } else if (cost > 0) {
+      estAnnualDiv = cost * 0.045; // 保守 4.5% 防禦性底標
+    }
+
+    if (estAnnualDiv <= 0) return sum;
+    return sum + (estAnnualDiv * rate);
+  }, 0);
+}
+
+/**
+ * 11. [Spec 0224 / Ticket 02] 將信用裂痕雷達風險等級英文枚舉轉為繁體中文標籤
+ */
+export function formatCreditRiskLevelLabel(
+  level: 'LOW' | 'ELEVATED' | 'HIGH' | 'CRITICAL' | string | undefined | null
+): string {
+  if (!level) return '未知';
+  switch (level) {
+    case 'LOW':
+      return '低風險穩健';
+    case 'ELEVATED':
+      return '偏高警戒';
+    case 'HIGH':
+      return '高風險承壓';
+    case 'CRITICAL':
+      return '極端危急';
+    default:
+      return String(level);
+  }
+}
+
+
 

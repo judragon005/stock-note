@@ -1,6 +1,6 @@
 # 技術債 0048: 個股分析工作區已載入之量化財務報表與本益比深度注入智策提示詞事實清單
 
-- **狀態**：`OPEN`
+- **狀態**：`RESOLVED` (已於 Spec 0181/0195/0196/0197/0224 隨提示詞物理遷移戰情室與董監質押補充完整解決)
 - **優先級**：`P3`
 - **發現來源**：Code Review (Spec 0153 / Issue #135 / PR #225)
 - **標籤**：`Feature` · `AI-Advisor` · `PromptEngine` · `FinancialRecords` · `Workspace`
@@ -69,6 +69,10 @@ const strategicDigest = useMemo(() => {
 
 ---
 
-## 📅 預計觸發時機
+## 📅 解決成果與閉環紀錄 (Resolution)
 
-本項屬於漸進式增強 (Progressive Enhancement) 優化，待下期進行個股工作區財務報表深探升級，或進行外部 API 即時本益比/股價淨值比欄位對齊時一併實施。
+- **解決狀態**：`RESOLVED` (v9.17.0 / Spec 0224 / Issue #500)
+- **實作成效**：
+  1. 提示詞架構遷移：在 Spec 0181 中，個股提示詞物理遷移至主力戰情室，統一由 `aiForcePromptAdapter.ts` 產出 `StrategicFactDigest`。
+  2. 量化財報與估值全量注入：在 Spec 0195、0196、0197 中，本益比 (PE)、股價淨值比 (PB)、現金殖利率、最新季 EPS、毛利率、營業利益率與月營收歷史已全部注入 XML 事實清單。
+  3. 董監質押安全補全：在 Spec 0224 (Ticket 08 & 09) 中，補全了 `directorPledgeRatioPct` 的安全讀取與單元測試防禦，本技術債圓滿解決。

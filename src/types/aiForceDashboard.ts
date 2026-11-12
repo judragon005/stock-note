@@ -562,6 +562,7 @@ export interface ValuationMetricsData {
   latestQuarterName?: string;
   grossMargin?: number;
   operatingMargin?: number;
+  directorPledgeRatio?: number; // 董監質押比例 (%) (Spec 0224 Ticket 08)
   // ETF 自適應欄位
   etfPremiumDiscountRate?: number; // 折溢價率 (%)
   etfExpenseRatio?: number; // 總費用率 (%)

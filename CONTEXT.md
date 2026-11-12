@@ -486,6 +486,7 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0221: V9.16.0 Zavy「散戶慢富之路」三級週期定位、台美市場結構寬度與 A/B 雙軌配置系統架構](docs/adr/0221-zavy-slow-wealth-cycle-and-dual-track-allocation.md)
 - [ADR-0222: V9.16.1 Zavy 慢富週期與配置工作區全鏈路真實數據驅動與既有引擎統一架構決策](docs/adr/0222-zavy-workspace-real-data-and-engine-unification.md)
 - [ADR-0223: V9.17.0 Zavy 慢富週期與配置新手白話導覽、零造輪子 TermTooltip 整合與既有引擎 12 項漏接欄位全貫通架構決策](docs/adr/0223-zavy-slow-wealth-beginner-guide-and-ui-completion.md)
+- [ADR-0224: V9.17.0 Zavy 慢富模組代碼氣味清理、測試職責解耦與智策提示詞技術債閉環](docs/adr/0224-technical-debts-0057-0048-resolution.md)
 
 ### 股票健診系統原生毛玻璃擬態、ETF智慧防呆與標的快捷膠囊 (Stock Health Check & Native Glassmorphism) *(新增於 V8.45.1)*
 - **原生 Glassmorphism 擬態與排版防禦**：
@@ -2892,3 +2893,13 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     1. **Three-Tier Progressive Disclosure & Anti-Panic UX (三層漸進式揭露與反恐慌行為金融 UX)**：第一層維持機構級高密度 KPI 供老手 3 秒巡檢；第二層 100% 複用既有 `TermTooltip.tsx` 與 `ZAVY_SLOW_WEALTH_GLOSSARY`（M01~T08 共 18 項 Zavy 語氣 DNA 詞條）提供「💡 白話比喻 / 📊 指標含義 / 🎯 買賣操作指引 / ⚡ 當前即時診斷」四段式按需浮動解讀；第三層於頂部提供可一鍵收合之「📖 新手 30 秒慢富導覽（看天氣 ➔ 量體溫 ➔ 穿防彈衣）」。製造業上行期遇上 `20MA 寬度 < 20%` 時以祖母綠機會色（`#10b981`）定錨「波浪回檔黃金買點」，杜絕散戶恐慌砍在阿呆谷。_Avoid_: Wall-of-Text Card Bloat, Reinventing Custom Popovers, Panic-Inducing Red Alerts on Up-Cycle Pullbacks
     2. **Honest Empty-State & Free Real-Data Proxy Pairing (誠實空狀態與免費真實替代硬數據並列引導)**：當商業封閉授權之官方 ISM / 台灣 PMI 未提供而顯示 `--` 時，同格自動並列展示本機 SQLite 與 FRED 免 Key 管線計算之「美國製造業新訂單減存貨年增率利差 (`usNewOrdersMinusInventory`)」與「台股全市場上市櫃月營收擴散指數 (`twRevenueDiffusionIndex`) 及全市場總營收 YoY (`twExportOrdersYoY`)」，誠實向新手說明免費官方硬數據替代基準。_Avoid_: Confusing Naked Dashes Without Proxy Context
     3. **Full Surfacing of 12 Pre-Computed Engine Fields & Tolerance Pills (既有引擎 12 項漏接欄位全貫通與 5 檔風險耐受度互動 Pills)**：零修改底層財務模型公式，將引擎已算出之 `tidal.narrative`、台灣小車 `LEADING_DOWN` 三態文字、`bottomingChecklist.guidanceText`、十年線鈍化防禦錨點 `fallbackIndicator`、A 軌 `currentEquityWeightPercent`（當前實際持股 % vs 建議上限 % 差距）與 `debtRepaymentSummary`（負債即負向債券之質押優先還款建議）、B 軌 `srrRiskReductionPercent`（前 10 年報酬順序風險：100% 純股破產率 vs 60/20/10/10 穿防彈衣破產率對比）與 `targetCapital30xTwd` 全數接通至 UI，並啟用 `[10% 保守 | 15% 穩健 | 20% 平衡 | 25% 積極 | 30% 進取]` 五檔風險耐受度即時切換 Pills。_Avoid_: Unused Engine Outputs, Dead `_onUpdateTolerance` Props, Leaking Raw English Enum Strings
+
+- **Technical Debts 0057 & 0048 Resolution (Zavy 慢富模組代碼氣味清理、測試職責解耦與智策提示詞技術債閉環)**:
+  - 核心模組：`src/engine/zavySlowWealthEngine.ts`、`src/components/zavy/ZavySlowWealthWorkspace.tsx`、`src/components/zavy/ZavyMacroCompassCard.test.tsx`、`src/components/zavy/ZavySlowWealthWorkspace.test.tsx`、`src/components/zavy/ZavyMarketBreadthCard.test.tsx`、`src/components/zavy/ZavyDualTrackDecisionCard.test.tsx`、`src/engine/aiForcePromptAdapter.ts`。
+  - 規格來源：Spec 0224 (v9.17.0) 與 ADR 0224，關聯 GitHub Issue #500。
+  - 核心領域術語與架構革新：
+    1. **Engine Helper Sinking (股息現金活水估算純函式下沉 - TD 0057)**：在 `zavySlowWealthEngine.ts` 實作純函式 `estimateHoldingsAnnualDividendsTwd`，提供台美股匯率換算、平倉標的過濾與 4.5% 防禦性底標；`ZavySlowWealthWorkspace.tsx` 拔除渲染層 inline `reduce`，徹底消除 Feature Envy 代碼氣味。
+    2. **Credit Risk Level Localization (信用雷達風險標籤繁中化 - TD 0057)**：實作 `formatCreditRiskLevelLabel` 函式，映射繁中標籤（`低風險穩健`、`偏高警戒`、`高風險承壓`、`極端危急`），Markdown 導出報告達到 100% 領域語言一致性。
+    3. **Test Decomposition (測試巨石拆解 - TD 0057)**：將原巨石測試 `ZavyMacroCompassCard.test.tsx` 物理拆分為四個獨立測試檔案（羅盤、工作區、市場寬度、雙軌決策），徹底消除 Divergent Change 測試氣味。
+    4. **Strategic Prompt Fact Digest Director Pledge Hardening (智策事實清單董監質押安全讀取 - TD 0048)**：於 `aiForcePromptAdapter.ts` 補齊 `directorPledgeRatioPct` 安全提取邏輯與單元測試防禦，正式收斂結清技術債 0048。
+
