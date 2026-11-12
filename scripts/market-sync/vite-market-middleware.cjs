@@ -217,6 +217,7 @@ function createMarketApiMiddleware(customDbPath) {
         const { twMarketBreadth, twInstitutionalSpot } = getTwMarketBreadthAndSpotSummary(db, {
           taiexChangePercent: cachedMacroPulse?.taiexChangePercent,
         });
+        const twRevenue = getTwRevenueDiffusionAndYoY(db);
         const asOfTimestamp = cachedMacroPulse.asOfTimestamp || new Date(cachedMacroPulseAt).toISOString();
         const dataObj = {
           ...(existingRow || {}),
@@ -224,6 +225,7 @@ function createMarketApiMiddleware(customDbPath) {
           pulse: cachedMacroPulse,
           twMarketBreadth,
           twInstitutionalSpot,
+          twRevenue,
           asOfTimestamp,
           sourceStatus: 'CACHED',
         };
@@ -270,6 +272,10 @@ function createMarketApiMiddleware(customDbPath) {
                 cccSpreadOas: fullPulse.cccSpreadOas,
                 breakeven10y: fullPulse.breakeven10y,
                 initialClaims: fullPulse.initialClaims,
+                usMfgNewOrdersYoY: fullPulse.usMfgNewOrdersYoY,
+                usMfgInventoriesYoY: fullPulse.usMfgInventoriesYoY,
+                usOrdersMinusInvSpread: fullPulse.usOrdersMinusInvSpread,
+                usIndustrialProdYoY: fullPulse.usIndustrialProdYoY,
               },
               customDbPath
             );

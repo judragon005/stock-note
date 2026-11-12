@@ -484,6 +484,8 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0219: V9.14.0 台美股機構級深度財報研究與實戰投資決策系統架構](docs/adr/0219-institutional-equity-research-and-decision-system.md)
 - [ADR-0220: V9.15.0 第二梯隊架構技術債清理與算法優化 (WarRoom 狀態抽取與估值河流二元搜尋)](docs/adr/0220-technical-debts-0055-0056-resolution.md)
 - [ADR-0221: V9.16.0 Zavy「散戶慢富之路」三級週期定位、台美市場結構寬度與 A/B 雙軌配置系統架構](docs/adr/0221-zavy-slow-wealth-cycle-and-dual-track-allocation.md)
+- [ADR-0222: V9.16.1 Zavy 慢富週期與配置工作區全鏈路真實數據驅動與既有引擎統一架構決策](docs/adr/0222-zavy-workspace-real-data-and-engine-unification.md)
+- [ADR-0223: V9.17.0 Zavy 慢富週期與配置新手白話導覽、零造輪子 TermTooltip 整合與既有引擎 12 項漏接欄位全貫通架構決策](docs/adr/0223-zavy-slow-wealth-beginner-guide-and-ui-completion.md)
 
 ### 股票健診系統原生毛玻璃擬態、ETF智慧防呆與標的快捷膠囊 (Stock Health Check & Native Glassmorphism) *(新增於 V8.45.1)*
 - **原生 Glassmorphism 擬態與排版防禦**：
@@ -2882,3 +2884,11 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     4. **Margin Deleveraging Truncated-Day Filter & Dynamic Bollinger/Panic Checklist (融資去槓桿殘缺日過濾、0050 大盤回撤 Fallback 與動態布林/鈍化檢核)**：在籌碼表中建立標的檔數動態門檻（取近 60 日歷史最高檔數之 60% 或 1,000 檔），若最新交易日未收齊自動回溯至上一完整日，消除 `-81.2%` 殘缺日假訊號；大盤指數優先查 `^TWII`，查無則 Fallback 至 `0050`；動態精算 20MA 布林通道下軌與近 5 日未破 20 日低點之利空鈍化標記。
     5. **Engine Unification & Elimination of Reinvented Wheels (既有引擎統一與重複造輪子拔除)**：移除 `(usPmi + twPmi) / 2` 偽平均，改採美股大卡車主軸與台灣小車領先判定；全面委託調用 `rebalancingEngine.ts`（大類資產動態平衡、質押設質保護瀑布流）與 `monteCarloFireEngine.ts`（30x 本金與 Coast-FIRE 測算），對接真實布林下軌與利空鈍化檢核表。
     6. **Zero Mock UI & Honest Empty State (前端假數據全量拔除與誠實空狀態)**：`ZavySlowWealthWorkspace` 全量拔除寫死常數（`51.5 / 53.8 / 1.31` 等），無資料時誠實呈現 `--`；注入真實質押借貸紀錄 `loans` 與即時匯率 `usdToTwdRate`。
+
+- **Zavy Slow Wealth Beginner Plain-Language Guide, TermTooltip Integration & 12 Engine Fields Completion (Zavy 慢富週期與配置新手白話導覽、零造輪子 TermTooltip 整合與既有引擎 12 項漏接欄位全貫通)**:
+  - 核心模組：`src/constants/zavyGlossary.ts`、`src/engine/zavySlowWealthEngine.ts`、`scripts/market-sync/vite-market-middleware.cjs`、`src/components/zavy/ZavySlowWealthWorkspace.tsx`、`src/components/zavy/ZavyMacroCompassCard.tsx`、`src/components/zavy/ZavyMarketBreadthCard.tsx`、`src/components/zavy/ZavyDualTrackDecisionCard.tsx`、`src/components/zavy/ZavyTenSecondsModal.tsx`。
+  - 規格來源：Spec 0223 (v9.17.0) 與 ADR 0223，關聯 GitHub Issue #494。
+  - 核心領域術語與架構革新：
+    1. **Three-Tier Progressive Disclosure & Anti-Panic UX (三層漸進式揭露與反恐慌行為金融 UX)**：第一層維持機構級高密度 KPI 供老手 3 秒巡檢；第二層 100% 複用既有 `TermTooltip.tsx` 與 `ZAVY_SLOW_WEALTH_GLOSSARY`（M01~T08 共 18 項 Zavy 語氣 DNA 詞條）提供「💡 白話比喻 / 📊 指標含義 / 🎯 買賣操作指引 / ⚡ 當前即時診斷」四段式按需浮動解讀；第三層於頂部提供可一鍵收合之「📖 新手 30 秒慢富導覽（看天氣 ➔ 量體溫 ➔ 穿防彈衣）」。製造業上行期遇上 `20MA 寬度 < 20%` 時以祖母綠機會色（`#10b981`）定錨「波浪回檔黃金買點」，杜絕散戶恐慌砍在阿呆谷。_Avoid_: Wall-of-Text Card Bloat, Reinventing Custom Popovers, Panic-Inducing Red Alerts on Up-Cycle Pullbacks
+    2. **Honest Empty-State & Free Real-Data Proxy Pairing (誠實空狀態與免費真實替代硬數據並列引導)**：當商業封閉授權之官方 ISM / 台灣 PMI 未提供而顯示 `--` 時，同格自動並列展示本機 SQLite 與 FRED 免 Key 管線計算之「美國製造業新訂單減存貨年增率利差 (`usNewOrdersMinusInventory`)」與「台股全市場上市櫃月營收擴散指數 (`twRevenueDiffusionIndex`) 及全市場總營收 YoY (`twExportOrdersYoY`)」，誠實向新手說明免費官方硬數據替代基準。_Avoid_: Confusing Naked Dashes Without Proxy Context
+    3. **Full Surfacing of 12 Pre-Computed Engine Fields & Tolerance Pills (既有引擎 12 項漏接欄位全貫通與 5 檔風險耐受度互動 Pills)**：零修改底層財務模型公式，將引擎已算出之 `tidal.narrative`、台灣小車 `LEADING_DOWN` 三態文字、`bottomingChecklist.guidanceText`、十年線鈍化防禦錨點 `fallbackIndicator`、A 軌 `currentEquityWeightPercent`（當前實際持股 % vs 建議上限 % 差距）與 `debtRepaymentSummary`（負債即負向債券之質押優先還款建議）、B 軌 `srrRiskReductionPercent`（前 10 年報酬順序風險：100% 純股破產率 vs 60/20/10/10 穿防彈衣破產率對比）與 `targetCapital30xTwd` 全數接通至 UI，並啟用 `[10% 保守 | 15% 穩健 | 20% 平衡 | 25% 積極 | 30% 進取]` 五檔風險耐受度即時切換 Pills。_Avoid_: Unused Engine Outputs, Dead `_onUpdateTolerance` Props, Leaking Raw English Enum Strings

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { FileDown, Download, Zap } from 'lucide-react';
+import { FileDown, Download, Zap, BookOpen } from 'lucide-react';
 import { HoldingPosition, BrokerAccount, LoanRecord } from '../../types/stock';
 import {
   MacroIndicatorSnapshot,
@@ -23,6 +23,7 @@ interface ZavySlowWealthWorkspaceProps {
   cashBalanceTwd?: number;
   usdToTwdRate?: number;
   loans?: LoanRecord[];
+  initialShowBeginnerGuide?: boolean;
 }
 
 export const ZavySlowWealthWorkspace: React.FC<ZavySlowWealthWorkspaceProps> = ({
@@ -32,8 +33,10 @@ export const ZavySlowWealthWorkspace: React.FC<ZavySlowWealthWorkspaceProps> = (
   cashBalanceTwd = 0,
   usdToTwdRate = 32,
   loans = [],
+  initialShowBeginnerGuide = false,
 }) => {
   const [isTenSecModalOpen, setIsTenSecModalOpen] = useState(false);
+  const [showBeginnerGuide, setShowBeginnerGuide] = useState(initialShowBeginnerGuide);
   const [maxTolerancePercent, setMaxTolerancePercent] = useState(20);
 
   // 1. 100% 真實數據狀態：初始為空物件或真實預設
@@ -79,6 +82,7 @@ export const ZavySlowWealthWorkspace: React.FC<ZavySlowWealthWorkspaceProps> = (
               usIsmPmi: data.usIsmPmi ?? data.us_ism_pmi ?? undefined,
               usNewOrdersMinusInventory: data.us_orders_minus_inv_spread ?? data.usOrdersMinusInvSpread,
               twPmi: data.twPmi ?? data.tw_pmi ?? undefined,
+              twRevenueDiffusionIndex: data.twRevenue?.diffusionIndex ?? data.tw_revenue_diffusion_index,
               twExportOrdersYoY: data.twRevenue?.totalRevenueYoY ?? data.tw_export_orders_yoy,
             });
           }
@@ -129,8 +133,23 @@ export const ZavySlowWealthWorkspace: React.FC<ZavySlowWealthWorkspaceProps> = (
     };
   }, []);
 
-  // 3. 核心報告運算 (連通真實匯率、質押借貸帳本與動態指標)
+  // 3. 核心報告運算 (連通真實匯率、質押借貸帳本、真實年度股息與動態指標)
   const analysisReport = useMemo(() => {
+    // 依據在席持股市值與成本殖利率 (yieldOnCostPercent) 或累計配息防禦性估算單年股息活水
+    const annualEstimatedDividendsTwd = holdings.reduce((sum, h) => {
+      if (h.isClosed || !h.shares || h.shares <= 0) return sum;
+      // 優先使用成本殖利率估算單年股息 (totalCostBasis * yieldOnCostPercent)
+      let estAnnualDiv = 0;
+      if (typeof h.yieldOnCostPercent === 'number' && h.yieldOnCostPercent > 0 && h.totalCostBasis > 0) {
+        estAnnualDiv = Math.min(h.totalCostBasis * (h.yieldOnCostPercent / 100), h.totalDividends || Infinity);
+      } else if (h.totalDividends && h.totalDividends > 0) {
+        // 若無成本殖利率，以累計配息作保底估算
+        estAnnualDiv = h.totalDividends;
+      }
+      if (estAnnualDiv <= 0) return sum;
+      return sum + (h.currency === 'USD' ? estAnnualDiv * usdToTwdRate : estAnnualDiv);
+    }, 0);
+
     return generateZavyAnalysisReport({
       snapshot: macroSnapshot,
       breadth: marketBreadth,
@@ -139,6 +158,7 @@ export const ZavySlowWealthWorkspace: React.FC<ZavySlowWealthWorkspaceProps> = (
       cashBalanceTwd,
       usdToTwdRate,
       loans,
+      annualEstimatedDividendsTwd,
       isAtBollingerLowerBand,
       isBadNewsDivergenceObserved,
       maxDrawdownTolerancePercent: maxTolerancePercent,
@@ -204,6 +224,29 @@ export const ZavySlowWealthWorkspace: React.FC<ZavySlowWealthWorkspaceProps> = (
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <button
+            onClick={() => setShowBeginnerGuide((prev) => !prev)}
+            aria-expanded={showBeginnerGuide}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 14px',
+              borderRadius: '8px',
+              backgroundColor: showBeginnerGuide
+                ? 'rgba(56, 189, 248, 0.2)'
+                : 'rgba(56, 189, 248, 0.1)',
+              border: '1px solid rgba(56, 189, 248, 0.45)',
+              color: '#38bdf8',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontSize: '13px',
+            }}
+          >
+            <BookOpen size={16} />
+            新手 30 秒慢富導覽 {showBeginnerGuide ? '▲' : '▼'}
+          </button>
+
+          <button
             onClick={() => setIsTenSecModalOpen(true)}
             style={{
               display: 'flex',
@@ -262,6 +305,95 @@ export const ZavySlowWealthWorkspace: React.FC<ZavySlowWealthWorkspaceProps> = (
           </button>
         </div>
       </div>
+
+      {/* 可收合的新手 30 秒慢富導覽橫幅 (Step 1~3) */}
+      {showBeginnerGuide && (
+        <div
+          style={{
+            background:
+              'linear-gradient(90deg, rgba(56, 189, 248, 0.08) 0%, rgba(16, 185, 129, 0.06) 100%)',
+            border: '1px solid rgba(56, 189, 248, 0.3)',
+            borderRadius: '14px',
+            padding: '16px 20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: '#38bdf8' }}>
+              📖 新手小白 30 秒看懂慢富三步驟（點擊畫面中帶有「i」的專有名詞，皆可展開四段式白話比喻與買賣指引）
+            </div>
+            <button
+              onClick={() => setShowBeginnerGuide(false)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#94a3b8',
+                cursor: 'pointer',
+                fontSize: '12px',
+              }}
+            >
+              收合 ✕
+            </button>
+          </div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: '12px',
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                borderRadius: '10px',
+                padding: '12px 14px',
+                borderLeft: '3px solid #38bdf8',
+              }}
+            >
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#f8fafc', marginBottom: '4px' }}>
+                🔭 第一步：看天氣（鏡頭一）
+              </div>
+              <div style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: '1.5' }}>
+                分辨現在是「2~4 年製造業擴張期」還是「系統性衰退」。只要大方向順風且信用雷達無紅燈，每天的新聞大跌都只是水面「漣漪」，切記<strong>勿對漣漪起反應</strong>。
+              </div>
+            </div>
+
+            <div
+              style={{
+                backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                borderRadius: '10px',
+                padding: '12px 14px',
+                borderLeft: '3px solid #10b981',
+              }}
+            >
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#f8fafc', marginBottom: '4px' }}>
+                🌡️ 第二步：量體溫（鏡頭二）
+              </div>
+              <div style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: '1.5' }}>
+                在景氣擴張期中，若短線 20MA 市場寬度跌破 20% 且散戶融資清洗充分（去槓桿比率 &ge; 1.0），代表浮現<strong>波浪回檔黃金買點</strong>，千萬別砍在阿呆谷！
+              </div>
+            </div>
+
+            <div
+              style={{
+                backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                borderRadius: '10px',
+                padding: '12px 14px',
+                borderLeft: '3px solid #f59e0b',
+              }}
+            >
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#f8fafc', marginBottom: '4px' }}>
+                🛡️ 第三步：穿防彈衣（鏡頭三）
+              </div>
+              <div style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: '1.5' }}>
+                「見自己」選擇適合你的軌道：用耐受回撤鎖定安全持股上限與優先還質押借貸（A 軌），或<strong>存量不動、用股息活水轉買純公債與黃金防彈衣</strong>（B 軌），安心把路走完。
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 鏡頭一：總體經濟三級週期羅盤 */}
       <ZavyMacroCompassCard evaluation={analysisReport.macroCompass} snapshot={macroSnapshot} />
