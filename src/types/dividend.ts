@@ -25,6 +25,7 @@ export interface ReceivableDividend {
   estimatedNetDividend: number;   // 預估實領股息 (原生幣別)
   estimatedNetDividendInTWD: number; // 折合台幣實領金額
   status: 'PENDING_PAYMENT' | 'RECEIVED' | 'OVERDUE' | 'UPCOMING_EX';
+  dateSource?: 'OFFICIAL' | 'ESTIMATED'; // 發放日來源標註（官方公告 vs 演算法推估）
 }
 
 /**
@@ -136,3 +137,5 @@ export interface DividendSummaryReport {
   }[];
   upcomingDividends: ReceivableDividend[]; // 即將除息與待發放清單
 }
+
+export type MonthlyDividendDistribution = DividendSummaryReport['monthlyDistribution'][number];

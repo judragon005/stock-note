@@ -3,6 +3,9 @@ import {
   calculateReceivableDividends,
   calculateSmoothedHoldingPnL,
   estimatePaymentDate,
+  isPaymentDateOfficial,
+  isTwEtfSymbol,
+  instantSettleReceivableDividend,
 } from './receivableDividendEngine';
 import { HoldingPosition, TradeRecord } from '../types/stock';
 import { RawCorporateEvent } from './corporateActionScanner';
@@ -64,13 +67,63 @@ describe('Receivable Dividend & Ex-Dividend Smoothing Engine (應收股利平滑
     yieldOnCostPercent: 0,
   };
 
-  describe('estimatePaymentDate (發放日推估)', () => {
-    it('若無指定發放日，台股應預設推估為除息日後 28 天', () => {
+  describe('estimatePaymentDate (發放日推估與分流)', () => {
+    it('若無指定發放日，台股個股應預設推估為除息日後 28 天', () => {
+      expect(estimatePaymentDate('2026-06-15', 'TW', '2330')).toBe('2026-07-13');
       expect(estimatePaymentDate('2026-06-15', 'TW')).toBe('2026-07-13');
+    });
+
+    it('若為台股 ETF 標的 (代碼 00 開頭或 5~6 碼 ETF)，應分流推估為除息日後 23 天', () => {
+      // 2026-06-15 + 23 天 = 2026-07-08
+      expect(estimatePaymentDate('2026-06-15', 'TW', '00878')).toBe('2026-07-08');
+      expect(estimatePaymentDate('2026-06-15', 'TW', '00919')).toBe('2026-07-08');
+      expect(estimatePaymentDate('2026-06-15', 'TW', '00687B')).toBe('2026-07-08');
     });
 
     it('美股若無指定發放日，應預設推估為除息日後 21 天', () => {
       expect(estimatePaymentDate('2026-06-15', 'US')).toBe('2026-07-06');
+    });
+
+    it('命中官方真實發放日庫時應優先返回官方公告日', () => {
+      expect(estimatePaymentDate('2024-08-16', 'TW', '00878')).toBe('2024-09-11');
+      expect(isPaymentDateOfficial('2024-08-16', '00878')).toBe(true);
+      expect(isPaymentDateOfficial('2026-06-15', '00878')).toBe(false);
+    });
+
+    it('isTwEtfSymbol 能準確判定各類型台股 ETF 標的', () => {
+      expect(isTwEtfSymbol('00878')).toBe(true);
+      expect(isTwEtfSymbol('00919')).toBe(true);
+      expect(isTwEtfSymbol('00687B')).toBe(true);
+      expect(isTwEtfSymbol('2330')).toBe(false);
+      expect(isTwEtfSymbol('2890')).toBe(false);
+      expect(isTwEtfSymbol(undefined)).toBe(false);
+    });
+
+    it('instantSettleReceivableDividend 能將待發放款定錨為今日實領並轉為 RECEIVED', () => {
+      const mockRec: any = {
+        id: 'rec-test-1',
+        symbol: '00878',
+        name: '國泰永續高股息',
+        market: 'TW',
+        currency: 'TWD',
+        exDate: '2026-06-15',
+        payDate: '2026-07-08',
+        sharesHeldOnExDate: 10000,
+        cashDividendPerShare: 0.55,
+        estimatedGrossDividend: 5500,
+        estimatedTaxOrFee: 10,
+        estimatedNhiTax: 0,
+        estimatedWireFee: 10,
+        estimatedNetDividend: 5490,
+        estimatedNetDividendInTWD: 5490,
+        status: 'PENDING_PAYMENT',
+        dateSource: 'ESTIMATED',
+      };
+
+      const settled = instantSettleReceivableDividend(mockRec, '2026-06-25');
+      expect(settled.status).toBe('RECEIVED');
+      expect(settled.payDate).toBe('2026-06-25');
+      expect(settled.dateSource).toBe('OFFICIAL');
     });
   });
 
