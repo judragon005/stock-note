@@ -1,7 +1,15 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-11-12 13:17 (UTC+8)  
+> **交接產生時間**：2026-11-13 10:10 (UTC+8)  
 > **當前最新里程碑**：
+> - **V9.19.0 台美跨市場股利發放日精準時序、ETF 配息組成穿透與被動現金流全景重構**（ADR 0226, Spec 0226, Issues #507 ~ #513, PR #514）：
+>   - **現金流預估月曆 3 列 4 欄佈局與視覺層級升級 (Issue #508)**：將 `DividendCalendarCard.tsx` 中間 12 個月份卡片自 1 列擠壓徹底重構為 3 行 × 4 欄 (`repeat(4, minmax(0, 1fr))`) 網格，月份字體 13px、金額 16px 粗體、完整呈現 `NT$ XX,XXX`，枯水期與達標 11px 雙色膠囊標籤，窄螢幕自動回退為 2 欄自適應。
+>   - **股息貢獻排行 (1/3) 與月度長條圖 (2/3) 齊高並列解耦 (Issue #509)**：自明細表中物理抽離獨立組件 `DividendTopContributorsCard.tsx`，主控制台建立 `2fr 1fr` 網格佈局達成左右等高對齊，保留 10~12 月 Tooltip 向左智慧避讓演算法，且窄螢幕 (<1024px) 自動折行堆疊。
+>   - **長條圖幾何坐標 0 誤差對齊、scaleMax 口徑修復與生活費持久化 (Issue #510)**：統一柱高與生活費線係數為 120px，消除魔術數字並錨定底座 24px 達成 0 像素誤差對齊；GROSS 模式分母動態納入實際毛額最大值杜絕溢出；生活費虛線置於 `zIndex: 0` 背景層，長條柱置於 `zIndex: 1` 前景層；生活費門檻自動儲存至 `localStorage` (`STOCK_TRACKER_DIVIDEND_TARGET_EXPENSE`)。
+>   - **0056 官方發放日精準時序對齊與 FinMind 原生欄位映射 (Issue #511)**：官方常態庫補入 `'0056:2026-10-22': '2026-11-11'`，精準顯示 11/11 入帳並亮起綠色 `[官方公告]`；`corporateActionScanner.ts` 正式映射 FinMind 原生 `CashDividendPaymentDate` 欄位，台股除息自動獲得官方入帳日。
+>   - **填息判定基準價 Bug 根絕、質押利差連通與 Zavy 活水轉向 (Issue #512)**：徹底修復 `determineDividendFillStatus` 誤用持股成本 `avgCost` 作為除息參考價之深水區 Bug，杜絕假填息；連通 `cashLedgerEngine` 動態計算質押借貸利息支出，激活真實淨利差 (Net Carry Spread) 指標。
+>   - **品質狀態**：全量單元測試 **2,202/2,202 通過 (100% Passed / 289 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，生產打包 `npm run build` 100% 綠燈。
+> - **V9.18.0 股利日誌與現金流全景：證交所發放日時差對齊、法人級實戰指標打通與極簡模組化重構**（ADR 0225, Spec 0225, Issues #502, #504, PR #505）：
 > - **V9.17.1 第三梯隊架構技術債清理與精實收斂**（ADR 0224, Spec 0224, Issue #500）：
 >   - **Zavy 慢富工作區龐大單體測試解耦 (技術債 0057)**：將 630+ 行包含 4 個鏡頭的 `ZavyMacroCompassCard.test.tsx` 拆解為 4 個聚焦單一職責之元件測試檔（羅盤卡片、工作區導覽、市場寬度卡片、雙軌決策卡片），消除發散變更與脆弱性。
 >   - **股息估算邏輯下沉至純函式模組 (技術債 0057)**：自工作區抽離 inline reduce，實作 `estimateHoldingsAnnualDividendsTwd`，支援 USD/TWD 匯率換算、平倉排除與 4.5% 兜底；新增 `formatCreditRiskLevelLabel` 消除信用風險英文枚舉。
