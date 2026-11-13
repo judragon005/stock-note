@@ -1,7 +1,31 @@
 import { TradeRecord, MarketType } from '../types/stock';
-import { ReceivableDividend, DividendSummaryReport } from '../types/dividend';
+import { ReceivableDividend, DividendSummaryReport, PendingDividendItem } from '../types/dividend';
 import { resolveEffectiveDividendTaxAndNet } from './taxComplianceEngine';
 import { estimatePaymentDate } from './receivableDividendEngine';
+
+/**
+ * 自交易紀錄中萃取各標的歷史實際發放月份慣性 (消除 Feature Envy，下沉至領域純函式)
+ */
+export function extractHistoricalPayoutMonths(trades: TradeRecord[]): Record<string, number[]> {
+  const map: Record<string, number[]> = {};
+  for (const t of trades) {
+    if (t.type === 'DIVIDEND') {
+      const payDate = getEffectiveDividendPayDate(t);
+      if (payDate && payDate.length >= 7) {
+        const monthNum = parseInt(payDate.substring(5, 7), 10);
+        if (monthNum >= 1 && monthNum <= 12) {
+          const sym = t.symbol.toUpperCase();
+          if (!map[sym]) map[sym] = [];
+          if (!map[sym].includes(monthNum)) {
+            map[sym].push(monthNum);
+            map[sym].sort((a, b) => a - b);
+          }
+        }
+      }
+    }
+  }
+  return map;
+}
 
 /**
  * 全域單一時序事實來源 (SSOT)：解析現金股利交易之實質入帳發放日 (Effective Payment Date)
@@ -46,6 +70,7 @@ export function aggregateDividendReport(
     pendingNetTWD: number;
     pendingGrossTWD: number;
     pendingCount: number;
+    pendingItems?: PendingDividendItem[];
   }[] = Array.from({ length: 12 }, (_, i) => {
     const monthNum = i + 1;
     const monthFormatted = monthNum < 10 ? `0${monthNum}` : `${monthNum}`;
@@ -59,6 +84,7 @@ export function aggregateDividendReport(
       pendingNetTWD: 0,
       pendingGrossTWD: 0,
       pendingCount: 0,
+      pendingItems: [],
     };
   });
 
@@ -146,6 +172,13 @@ export function aggregateDividendReport(
       targetMonth.pendingNetTWD += pendingNet;
       targetMonth.pendingGrossTWD += pendingGross;
       targetMonth.pendingCount += 1;
+      targetMonth.pendingItems = targetMonth.pendingItems || [];
+      targetMonth.pendingItems.push({
+        symbol: rec.symbol,
+        name: rec.name,
+        payDate: rec.payDate,
+        netTWD: pendingNet,
+      });
     }
   }
 

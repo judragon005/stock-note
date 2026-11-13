@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { aggregateDividendReport } from './dividendAggregator';
+import { aggregateDividendReport, extractHistoricalPayoutMonths } from './dividendAggregator';
 import { TradeRecord } from '../types/stock';
 import { ReceivableDividend } from '../types/dividend';
 
@@ -404,12 +404,92 @@ describe('Dividend Aggregator Engine (股利數據聚合引擎)', () => {
       expect(novData.netTWD).toBe(0); // 實領為 0
       expect(novData.pendingNetTWD).toBe(10690); // 待入帳 10,690
       expect(novData.pendingCount).toBe(1);
+      expect(novData.pendingItems).toBeDefined();
+      expect(novData.pendingItems).toHaveLength(1);
+      expect(novData.pendingItems![0]).toEqual({
+        symbol: '0056',
+        name: '元大高股息',
+        payDate: '2026-11-11',
+        netTWD: 10690,
+      });
 
       // 12 月 (Index 11) 應聚合待入帳款項
       const decData = report.monthlyDistribution[11];
       expect(decData.netTWD).toBe(0);
       expect(decData.pendingNetTWD).toBe(10990);
       expect(decData.pendingCount).toBe(1);
+      expect(decData.pendingItems).toBeDefined();
+      expect(decData.pendingItems).toHaveLength(1);
+      expect(decData.pendingItems![0].symbol).toBe('00878');
+    });
+
+    it('Spec 0227 / Review Fix: extractHistoricalPayoutMonths 純函式應正確從歷史交易中提取各標的除息/發放月份', () => {
+      const mixedTrades: TradeRecord[] = [
+        {
+          id: 't-1',
+          symbol: '0056',
+          name: '元大高股息',
+          market: 'TW',
+          type: 'DIVIDEND',
+          date: '2026-10-22',
+          payDate: '2026-11-15',
+          shares: 1000,
+          price: 1.0,
+          currency: 'TWD',
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 't-2',
+          symbol: '0056',
+          name: '元大高股息',
+          market: 'TW',
+          type: 'DIVIDEND',
+          date: '2026-07-20',
+          payDate: '2026-08-10',
+          shares: 1000,
+          price: 1.0,
+          currency: 'TWD',
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+        {
+          id: 't-3',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          type: 'BUY', // 非配息交易，應忽略
+          date: '2026-04-10',
+          shares: 100,
+          price: 900,
+          currency: 'TWD',
+          fee: 0,
+          tax: 0,
+          createdAt: 3,
+        },
+        {
+          id: 't-4',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          type: 'DIVIDEND',
+          date: '2026-03-15',
+          payDate: '2026-03-25', // 顯式 payDate，月份為 3
+          shares: 100,
+          price: 3.5,
+          currency: 'TWD',
+          fee: 0,
+          tax: 0,
+          createdAt: 4,
+        },
+      ];
+
+      const payoutMap = extractHistoricalPayoutMonths(mixedTrades);
+
+      expect(payoutMap['0056']).toEqual([8, 11]);
+      expect(payoutMap['2330']).toEqual([3]);
     });
   });
 });

@@ -102,6 +102,13 @@ export interface TaxComplianceStatus {
   usOverseasIncome: OverseasTaxProgress;
 }
 
+export interface PendingDividendItem {
+  symbol: string;
+  name: string;
+  payDate: string;
+  netTWD: number;
+}
+
 /**
  * 股利日誌彙整報告
  */
@@ -123,6 +130,7 @@ export interface DividendSummaryReport {
     pendingNetTWD?: number;            // 當月待入帳應收股利折合台幣 (TWD)
     pendingGrossTWD?: number;          // 當月待入帳應收毛額折合台幣 (TWD)
     pendingCount?: number;             // 當月待入帳筆數
+    pendingItems?: PendingDividendItem[]; // 當月待入帳各筆明細清單 (Spec 0227)
   }[];
   topDividendContributors: {
     symbol: string;

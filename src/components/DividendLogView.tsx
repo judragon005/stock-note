@@ -9,7 +9,11 @@ import {
 } from 'lucide-react';
 import { TradeRecord, MarketType, HoldingPosition } from '../types/stock';
 import { ReceivableDividend } from '../types/dividend';
-import { aggregateDividendReport, getEffectiveDividendPayDate } from '../engine/dividendAggregator';
+import {
+  aggregateDividendReport,
+  getEffectiveDividendPayDate,
+  extractHistoricalPayoutMonths,
+} from '../engine/dividendAggregator';
 import { resolveEffectiveDividendTaxAndNet } from '../engine/taxComplianceEngine';
 import { generate12MonthProjectedCashflow, recommendComplementaryDividendMonths } from '../engine/projectedCashflowEngine';
 import { calculateDividendTaxDeductionStats } from '../engine/taxOptimizationGuard';
@@ -124,23 +128,9 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
     return aggregateDividendReport(scopedTrades, scopedReceivables, selectedYear, usdToTwdRate, todayStr);
   }, [scopedTrades, scopedReceivables, selectedYear, usdToTwdRate, todayStr]);
 
-  // 萃取各標的歷史已入帳交易之實際發放月份慣性 (SSOT Learning)
+  // 萃取各標的歷史已入帳交易之實際發放月份慣性 (SSOT Learning 純函式下沉)
   const historicalPayoutMonthsMap = useMemo(() => {
-    const map: Record<string, number[]> = {};
-    for (const trade of scopedTrades) {
-      if (trade.type !== 'DIVIDEND') continue;
-      const payDate = getEffectiveDividendPayDate(trade);
-      const month = parseInt(payDate.substring(5, 7), 10);
-      if (month >= 1 && month <= 12) {
-        const key = trade.symbol.toUpperCase();
-        if (!map[key]) map[key] = [];
-        if (!map[key].includes(month)) {
-          map[key].push(month);
-          map[key].sort((a, b) => a - b);
-        }
-      }
-    }
-    return map;
+    return extractHistoricalPayoutMonths(scopedTrades);
   }, [scopedTrades]);
 
   const projectedCashflow = useMemo(() => {
@@ -444,6 +434,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
 
       {/* 4. 除息待入帳行事曆面板 (支援一鍵已入帳微操作) */}
       <div
+        id="receivable-calendar"
         className="glass-card"
         style={{
           padding: '20px 22px',

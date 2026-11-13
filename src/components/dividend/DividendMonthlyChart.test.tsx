@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { calculateMonthTooltipAlign, DividendMonthlyChart } from './DividendMonthlyChart';
+import {
+  calculateMonthTooltipAlign,
+  DividendMonthlyChart,
+  MonthDividendTooltipContent,
+} from './DividendMonthlyChart';
 import { MonthlyDividendDistribution } from '../../types/dividend';
 
 describe('DividendMonthlyChart (月度配息長條圖)', () => {
@@ -76,6 +80,42 @@ describe('DividendMonthlyChart (月度配息長條圖)', () => {
       expect(html).toContain('color:#f59e0b');
       // 圖表提示文字應包含金黃色代表待入帳
       expect(html).toContain('金黃色代表待入帳應收股利');
+    });
+
+    it('Spec 0227 / Review Fix: MonthDividendTooltipContent 應展開待入帳個別標的清單與預計入帳日', () => {
+      const mockDistributionWithPendingItems: MonthlyDividendDistribution = {
+        monthKey: '2026-11',
+        monthLabel: '11月',
+        grossTWD: 0,
+        netTWD: 0,
+        taxTWD: 0,
+        count: 0,
+        pendingNetTWD: 16088,
+        pendingGrossTWD: 16098,
+        pendingCount: 1,
+        pendingItems: [
+          {
+            symbol: '0056',
+            name: '元大高股息',
+            payDate: '2026-11-11',
+            netTWD: 16088,
+          },
+        ],
+      };
+
+      const html = renderToStaticMarkup(
+        <MonthDividendTooltipContent
+          distribution={mockDistributionWithPendingItems}
+          selectedYear={2026}
+          dividendDisplayMode="NET"
+          targetMonthlyExpenseTwd={60000}
+        />
+      );
+
+      expect(html).toContain('待入帳標的清單');
+      expect(html).toContain('0056');
+      expect(html).toContain('(11-11)');
+      expect(html).toContain('16,088');
     });
   });
 });
