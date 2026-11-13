@@ -156,10 +156,10 @@ export function aggregateDividendReport(
   // 3. 聚合未到期之待入帳應收股利至當年度月度分佈 (Tri-State Accrual)
   for (const rec of receivableDividends) {
     if (rec.status !== 'PENDING_PAYMENT' && rec.status !== 'OVERDUE') continue;
-    const payDate = rec.payDate;
-    if (!payDate || !payDate.startsWith(currentYearStr)) continue;
+    const effectivePayDate = rec.payDate || estimatePaymentDate(rec.exDate, rec.market || 'TW');
+    if (!effectivePayDate || !effectivePayDate.startsWith(currentYearStr)) continue;
 
-    const monthPart = parseInt(payDate.substring(5, 7), 10);
+    const monthPart = parseInt(effectivePayDate.substring(5, 7), 10);
     if (monthPart >= 1 && monthPart <= 12) {
       const targetMonth = monthlyData[monthPart - 1];
       const pendingNet = rec.currency === 'USD'
@@ -176,7 +176,7 @@ export function aggregateDividendReport(
       targetMonth.pendingItems.push({
         symbol: rec.symbol,
         name: rec.name,
-        payDate: rec.payDate,
+        payDate: effectivePayDate,
         netTWD: pendingNet,
       });
     }

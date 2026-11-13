@@ -491,6 +491,38 @@ describe('Dividend Aggregator Engine (股利數據聚合引擎)', () => {
       expect(payoutMap['0056']).toEqual([8, 11]);
       expect(payoutMap['2330']).toEqual([3]);
     });
+
+    it('Spec 0227 / Review Refinements: 當 ReceivableDividend 缺失 payDate 時，能自動調用 estimatePaymentDate 推估有效發放日並聚合', () => {
+      const mockReceivableWithoutPayDate: ReceivableDividend[] = [
+        {
+          id: 'rec-no-paydate',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-03-16', // 3 月除息，台股推估次月 4 月中入帳
+          payDate: '', // 官方尚未公佈發放日
+          sharesHeldOnExDate: 1000,
+          cashDividendPerShare: 4.0,
+          estimatedGrossDividend: 4000,
+          estimatedTaxOrFee: 0,
+          estimatedNetDividend: 4000,
+          estimatedNetDividendInTWD: 4000,
+          status: 'PENDING_PAYMENT',
+        },
+      ];
+
+      const report = aggregateDividendReport([], mockReceivableWithoutPayDate, 2026, 32.0, '2026-03-01');
+
+      // 4 月 (Index 3) 應成功聚合此筆待入帳款項
+      const aprData = report.monthlyDistribution[3];
+      expect(aprData.pendingNetTWD).toBe(4000);
+      expect(aprData.pendingCount).toBe(1);
+      expect(aprData.pendingItems).toBeDefined();
+      expect(aprData.pendingItems![0].symbol).toBe('2330');
+      expect(aprData.pendingItems![0].payDate).toBeDefined();
+      expect(aprData.pendingItems![0].payDate.startsWith('2026-04')).toBe(true);
+    });
   });
 });
 

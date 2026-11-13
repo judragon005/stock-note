@@ -24,6 +24,42 @@ export function calculateMonthTooltipAlign(monthIndex: number): 'left' | 'center
   return 'center';
 }
 
+export interface MonthBarMetrics {
+  receivedVal: number;
+  pendingVal: number;
+  totalVal: number;
+  pendingCount: number;
+  hasReceived: boolean;
+  hasPending: boolean;
+  hasAnyData: boolean;
+  meetsExpense: boolean;
+}
+
+/**
+ * 計算單月度現金流柱狀與 Tooltip 統計指標 (消除重複計算異味)
+ */
+export function computeMonthBarMetrics(
+  m: MonthlyDividendDistribution,
+  dividendDisplayMode: DividendDisplayMode,
+  targetMonthlyExpenseTwd = 0
+): MonthBarMetrics {
+  const receivedVal = dividendDisplayMode === 'GROSS' ? m.grossTWD : m.netTWD;
+  const pendingVal = dividendDisplayMode === 'GROSS' ? (m.pendingGrossTWD || 0) : (m.pendingNetTWD || 0);
+  const totalVal = receivedVal + pendingVal;
+  const pendingCount = m.pendingCount || 0;
+
+  return {
+    receivedVal,
+    pendingVal,
+    totalVal,
+    pendingCount,
+    hasReceived: receivedVal > 0,
+    hasPending: pendingVal > 0,
+    hasAnyData: totalVal > 0,
+    meetsExpense: targetMonthlyExpenseTwd > 0 && totalVal >= targetMonthlyExpenseTwd,
+  };
+}
+
 export interface MonthDividendTooltipContentProps {
   distribution: MonthlyDividendDistribution;
   selectedYear: number;
@@ -37,15 +73,16 @@ export const MonthDividendTooltipContent: React.FC<MonthDividendTooltipContentPr
   dividendDisplayMode,
   targetMonthlyExpenseTwd = 0,
 }) => {
-  const receivedVal = dividendDisplayMode === 'GROSS' ? m.grossTWD : m.netTWD;
-  const pendingVal = dividendDisplayMode === 'GROSS' ? (m.pendingGrossTWD || 0) : (m.pendingNetTWD || 0);
-  const totalVal = receivedVal + pendingVal;
-  const pendingCount = m.pendingCount || 0;
-
-  const hasReceived = receivedVal > 0;
-  const hasPending = pendingVal > 0;
-  const hasAnyData = totalVal > 0;
-  const meetsExpense = targetMonthlyExpenseTwd > 0 && totalVal >= targetMonthlyExpenseTwd;
+  const {
+    receivedVal,
+    pendingVal,
+    totalVal,
+    pendingCount,
+    hasReceived,
+    hasPending,
+    hasAnyData,
+    meetsExpense,
+  } = computeMonthBarMetrics(m, dividendDisplayMode, targetMonthlyExpenseTwd);
 
   return (
     <div style={{ padding: '4px', display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '190px' }}>
@@ -57,7 +94,7 @@ export const MonthDividendTooltipContent: React.FC<MonthDividendTooltipContentPr
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ color: '#94a3b8' }}>實領入帳：</span>
             <b className="mono" style={{ color: hasReceived ? '#34d399' : '#64748b', fontVariantNumeric: 'tabular-nums' }}>
-              NT$ {m.netTWD.toLocaleString()}
+              NT$ {receivedVal.toLocaleString()}
             </b>
           </div>
           {hasPending && (
@@ -275,16 +312,17 @@ export const DividendMonthlyChart: React.FC<DividendMonthlyChartProps> = ({
           }}
         >
           {monthlyDistribution.map((m, idx) => {
-            const receivedVal = dividendDisplayMode === 'GROSS' ? m.grossTWD : m.netTWD;
-            const pendingVal = dividendDisplayMode === 'GROSS' ? (m.pendingGrossTWD || 0) : (m.pendingNetTWD || 0);
-            const totalVal = receivedVal + pendingVal;
-
-            const hasReceived = receivedVal > 0;
-            const hasPending = pendingVal > 0;
-            const hasAnyData = totalVal > 0;
+            const {
+              receivedVal,
+              pendingVal,
+              totalVal,
+              hasReceived,
+              hasPending,
+              hasAnyData,
+              meetsExpense,
+            } = computeMonthBarMetrics(m, dividendDisplayMode, targetMonthlyExpenseTwd);
 
             const totalBarHeightPx = chartMaxVal > 0 ? Math.round((totalVal / chartMaxVal) * BAR_SCALE_HEIGHT_PX) : 0;
-            const meetsExpense = targetMonthlyExpenseTwd > 0 && totalVal >= targetMonthlyExpenseTwd;
 
             // 計算堆疊比例
             const receivedRatio = totalVal > 0 ? receivedVal / totalVal : 0;

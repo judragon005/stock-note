@@ -110,6 +110,22 @@ export interface PendingDividendItem {
 }
 
 /**
+ * 月度股利與現金流分佈統計實體 (Spec 0227)
+ */
+export interface MonthlyDividendDistribution {
+  monthKey: string;                  // YYYY-MM
+  monthLabel: string;                // "2026/08" 或 "8月"
+  grossTWD: number;
+  netTWD: number;
+  taxTWD: number;
+  count: number;
+  pendingNetTWD?: number;            // 當月待入帳應收股利折合台幣 (TWD)
+  pendingGrossTWD?: number;          // 當月待入帳應收毛額折合台幣 (TWD)
+  pendingCount?: number;             // 當月待入帳筆數
+  pendingItems?: PendingDividendItem[]; // 當月待入帳各筆明細清單 (Spec 0227)
+}
+
+/**
  * 股利日誌彙整報告
  */
 export interface DividendSummaryReport {
@@ -120,18 +136,7 @@ export interface DividendSummaryReport {
   previousYearDividendsTWD: number;    // 去年同期累計 (TWD)
   yoyGrowthPercent: number;            // 年度成長率 %
   trailing12mDividendsTWD: number;     // 近 12 個月現金流合計
-  monthlyDistribution: {
-    monthKey: string;                  // YYYY-MM
-    monthLabel: string;                // "2026/08" 或 "8月"
-    grossTWD: number;
-    netTWD: number;
-    taxTWD: number;
-    count: number;
-    pendingNetTWD?: number;            // 當月待入帳應收股利折合台幣 (TWD)
-    pendingGrossTWD?: number;          // 當月待入帳應收毛額折合台幣 (TWD)
-    pendingCount?: number;             // 當月待入帳筆數
-    pendingItems?: PendingDividendItem[]; // 當月待入帳各筆明細清單 (Spec 0227)
-  }[];
+  monthlyDistribution: MonthlyDividendDistribution[];
   topDividendContributors: {
     symbol: string;
     name: string;
@@ -148,5 +153,3 @@ export interface DividendSummaryReport {
   }[];
   upcomingDividends: ReceivableDividend[]; // 即將除息與待發放清單
 }
-
-export type MonthlyDividendDistribution = DividendSummaryReport['monthlyDistribution'][number];
