@@ -185,6 +185,30 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
           </div>
         </div>
 
+        {/* 統計口徑與待入帳提示橫幅 (Spec 0227 / Ticket 04) */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '8px',
+            padding: '8px 12px',
+            borderRadius: '8px',
+            background: 'rgba(30, 41, 59, 0.5)',
+            border: '1px solid rgba(51, 65, 85, 0.6)',
+            fontSize: '0.74rem',
+            color: '#cbd5e1',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            <span style={{ color: '#38bdf8', fontWeight: 700 }}>📌 統計口徑說明：本表為銀行已入帳實領流水</span>
+            <span style={{ color: '#94a3b8' }}>
+              （已到期並完成交割之正式入帳紀錄）。若有除息基準日已過、款項尚未撥入銀行之股票，請參閱上方「除息待入帳行事曆」；收到網銀通知時可一鍵轉化入帳。
+            </span>
+          </div>
+        </div>
+
         {/* 券商對帳核對面板 */}
         {showReconciliationPanel && (
           <div
