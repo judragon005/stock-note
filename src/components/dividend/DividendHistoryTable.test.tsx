@@ -109,4 +109,10 @@ describe('DividendHistoryTable (歷史明細表、YOC 成本殖利率與填息�
     expect(html).toContain('一鍵已入帳');
     expect(html).toContain('預約待入');
   });
+
+  it('Spec 0227 / Ticket 04: 表頭應顯示口徑提示橫幅，明確區隔銀行實領流水與待發放應收行事曆', () => {
+    const html = renderToStaticMarkup(<DividendHistoryTable {...defaultProps} />);
+    expect(html).toContain('統計口徑說明：本表為銀行已入帳實領流水');
+    expect(html).toContain('除息待入帳行事曆');
+  });
 });
