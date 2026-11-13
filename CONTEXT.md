@@ -487,6 +487,15 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0222: V9.16.1 Zavy 慢富週期與配置工作區全鏈路真實數據驅動與既有引擎統一架構決策](docs/adr/0222-zavy-workspace-real-data-and-engine-unification.md)
 - [ADR-0223: V9.17.0 Zavy 慢富週期與配置新手白話導覽、零造輪子 TermTooltip 整合與既有引擎 12 項漏接欄位全貫通架構決策](docs/adr/0223-zavy-slow-wealth-beginner-guide-and-ui-completion.md)
 - [ADR-0224: V9.17.0 Zavy 慢富模組代碼氣味清理、測試職責解耦與智策提示詞技術債閉環](docs/adr/0224-technical-debts-0057-0048-resolution.md)
+- [ADR-0225: V9.18.0 股利日誌與現金流全景多維透視與會計重構](docs/adr/0225-dividend-and-cashflow-holistic-refactor.md)
+- [ADR-0226: V9.19.0 跨市場股利現金流、資產組合組成與領息日誌整合](docs/adr/0226-cross-market-dividend-cashflow-and-composition.md)
+- [ADR-0227: V9.20.0 現金流三態時序統一、股利發放月精準對齊與月度日曆勾稽架構決策](docs/adr/0227-dividend-cashflow-tri-state-reconciliation.md)
+
+### 現金流三態時序統一、股利發放月精準對齊與月度日曆勾稽 (Dividend Cashflow Tri-State Reconciliation) *(新增於 V9.20.0)*
+- **發放月常態庫精準校準**：修正 `0056` 為真實入帳月份 `[2, 5, 8, 11]`，校準 `00878` (3/6/9/12)、`00919` (1/4/7/10)、`00713` (1/4/7/10)。
+- **解除 8 月單點假性暴衝**：動態學習交易紀錄歷史發放月份；新標的以代碼確定性雜湊平滑分散至除權息旺季 (7~10月)，杜絕非清單股票全數擠在 8 月。
+- **三態堆疊月度長條圖 (Tri-State Stacked Bars)**：月度分佈擴充 `pendingNetTWD` 與 `pendingCount`，長條圖堆疊已實領翡翠綠與待入帳金黃色，Tooltip 完整揭露兩者拆解與預期總額。
+- **歷史明細表口徑提示橫幅**：表頭新增統計口徑提示橫幅，明確區隔銀行已到期實領流水與待發放應收行事曆，消除數值口徑割裂。
 
 ### 股票健診系統原生毛玻璃擬態、ETF智慧防呆與標的快捷膠囊 (Stock Health Check & Native Glassmorphism) *(新增於 V8.45.1)*
 - **原生 Glassmorphism 擬態與排版防禦**：
