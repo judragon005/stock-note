@@ -2921,4 +2921,13 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     4. **FinMind Official Payment Date Mapping & 4-Tier Fallback Mesh (FinMind 原生發放日映射與跨市場四層降級網)**：補齊 `corporateActionScanner.ts` 對 FinMind `CashDividendPaymentDate` 欄位映射，並於 `OFFICIAL_TW_PAY_DATE_MAP` 常態庫補入 `0056:2026-10-22: 2026-11-11`，實現台美股官方發放日零成本自動化對齊。
     5. **Ex-Dividend Recovery Baseline Repair & Institutional Metric Sinking (填息判定基準價修正與機構級指標貫通)**：修復 `DividendHistoryTable` 將買進成本當除息價的傳參 Bug；連通質押借貸利息支出計算實質淨利差 (Net Carry Spread)；連通 `zavySlowWealthEngine` 輸出動態公債/黃金活水轉向。
 
+- **Dividend Cashflow Tri-State Reconciliation, Payout Month Alignment & Calendar Precision (現金流三態時序統一、股利發放月精準對齊與月度日曆勾稽重構)**:
+  - 核心模組：`src/engine/projectedCashflowEngine.ts`、`src/engine/dividendAggregator.ts`、`src/components/DividendLogView.tsx`、`src/components/dividend/DividendCalendarCard.tsx`、`src/components/dividend/DividendMonthlyChart.tsx`、`src/components/dividend/DividendHistoryTable.tsx`。
+  - 規格來源：Spec 0227 (v9.20.0) 與 ADR 0227，關聯 GitHub Issue #516、#517。
+  - 核心領域術語與架構革新：
+    1. **Payout Month Precision vs Ex-Date Decoupling (發放月與除息月嚴格解耦)**：更正 `DEFAULT_DIVIDEND_PROFILES` 中將除息月誤植為發放月之致命缺陷，將 0056 精準對齊至實際發放月 `[2, 5, 8, 11]`，00878 更正為 `[3, 6, 9, 12]`，00919/00713 更正為 `[1, 4, 7, 10]`，消滅「11 月明明有 0056 匯入，預估卻排在 10 月」的時序認知錯置。
+    2. **Anti-Clustering Summer Payout Mesh (夏秋旺季除權息發放平滑網)**：廢除未收錄標的單點硬塞 8 月（4% 粗估）之硬編碼，改由確定性代碼雜湊平滑分散於 7~10 月除權息旺季，徹底消滅 8 月暴增 29 筆配息與其餘月份被誤判為枯水期之假性高峰。
+    3. **SSOT Historical Dividend Month Learning (歷史交易發放月份自主學習機制)**：主控制台自 `scopedTrades` 提取各標的歷史已結算之實質入帳月份，注入預估引擎優先採用，達到零硬編碼、自適應使用者專屬持倉配息節奏。
+
+
 
