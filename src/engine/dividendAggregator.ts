@@ -43,6 +43,9 @@ export function aggregateDividendReport(
     netTWD: number;
     taxTWD: number;
     count: number;
+    pendingNetTWD: number;
+    pendingGrossTWD: number;
+    pendingCount: number;
   }[] = Array.from({ length: 12 }, (_, i) => {
     const monthNum = i + 1;
     const monthFormatted = monthNum < 10 ? `0${monthNum}` : `${monthNum}`;
@@ -53,6 +56,9 @@ export function aggregateDividendReport(
       netTWD: 0,
       taxTWD: 0,
       count: 0,
+      pendingNetTWD: 0,
+      pendingGrossTWD: 0,
+      pendingCount: 0,
     };
   });
 
@@ -118,6 +124,28 @@ export function aggregateDividendReport(
       }
     } else if (effectivePayDate.startsWith(previousYearStr) && isSettled) {
       previousYearDividendsTWD += netTWD;
+    }
+  }
+
+  // 3. 聚合未到期之待入帳應收股利至當年度月度分佈 (Tri-State Accrual)
+  for (const rec of receivableDividends) {
+    if (rec.status !== 'PENDING_PAYMENT' && rec.status !== 'OVERDUE') continue;
+    const payDate = rec.payDate;
+    if (!payDate || !payDate.startsWith(currentYearStr)) continue;
+
+    const monthPart = parseInt(payDate.substring(5, 7), 10);
+    if (monthPart >= 1 && monthPart <= 12) {
+      const targetMonth = monthlyData[monthPart - 1];
+      const pendingNet = rec.currency === 'USD'
+        ? Math.round(rec.estimatedNetDividend * exchangeRate)
+        : Math.round(rec.estimatedNetDividendInTWD || rec.estimatedNetDividend);
+      const pendingGross = rec.currency === 'USD'
+        ? Math.round(rec.estimatedGrossDividend * exchangeRate)
+        : Math.round(rec.estimatedGrossDividend);
+
+      targetMonth.pendingNetTWD += pendingNet;
+      targetMonth.pendingGrossTWD += pendingGross;
+      targetMonth.pendingCount += 1;
     }
   }
 

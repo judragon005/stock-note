@@ -356,6 +356,61 @@ describe('Dividend Aggregator Engine (股利數據聚合引擎)', () => {
       expect(report.monthlyDistribution[8].netTWD).toBe(22260); // 9 月
       expect(report.monthlyDistribution[11].netTWD).toBe(27680); // 12 月
     });
+
+    it('Spec 0227 / Ticket 02: aggregateDividendReport 應將未到期之應收股利按預估入帳月聚合至 pendingNetTWD 與 pendingCount', () => {
+      const mockReceivables: ReceivableDividend[] = [
+        {
+          id: 'rec-0056-nov',
+          symbol: '0056',
+          name: '元大高股息',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-10-22',
+          payDate: '2026-11-11',
+          sharesHeldOnExDate: 10000,
+          cashDividendPerShare: 1.07,
+          estimatedGrossDividend: 10700,
+          estimatedTaxOrFee: 10,
+          estimatedNetDividend: 10690,
+          estimatedNetDividendInTWD: 10690,
+          status: 'PENDING_PAYMENT',
+        },
+        {
+          id: 'rec-00878-dec',
+          symbol: '00878',
+          name: '國泰永續高股息',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-11-18',
+          payDate: '2026-12-12',
+          sharesHeldOnExDate: 20000,
+          cashDividendPerShare: 0.55,
+          estimatedGrossDividend: 11000,
+          estimatedTaxOrFee: 10,
+          estimatedNetDividend: 10990,
+          estimatedNetDividendInTWD: 10990,
+          status: 'PENDING_PAYMENT',
+        },
+      ];
+
+      // 假設基準日為 2026-10-31 (11月與12月款項均未到期)
+      const report = aggregateDividendReport([], mockReceivables, 2026, 32.0, '2026-10-31');
+
+      // 已實領金額維持 0 (未到期不計入已落袋，維持真實會計原則)
+      expect(report.currentYearDividendsTWD).toBe(0);
+
+      // 11 月 (Index 10) 應聚合待入帳款項
+      const novData = report.monthlyDistribution[10];
+      expect(novData.netTWD).toBe(0); // 實領為 0
+      expect(novData.pendingNetTWD).toBe(10690); // 待入帳 10,690
+      expect(novData.pendingCount).toBe(1);
+
+      // 12 月 (Index 11) 應聚合待入帳款項
+      const decData = report.monthlyDistribution[11];
+      expect(decData.netTWD).toBe(0);
+      expect(decData.pendingNetTWD).toBe(10990);
+      expect(decData.pendingCount).toBe(1);
+    });
   });
 });
 
