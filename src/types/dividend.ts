@@ -120,6 +120,9 @@ export interface DividendSummaryReport {
     netTWD: number;
     taxTWD: number;
     count: number;
+    pendingNetTWD?: number;            // 當月待入帳應收股利折合台幣 (TWD)
+    pendingGrossTWD?: number;          // 當月待入帳應收毛額折合台幣 (TWD)
+    pendingCount?: number;             // 當月待入帳筆數
   }[];
   topDividendContributors: {
     symbol: string;

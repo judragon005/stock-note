@@ -9,8 +9,8 @@
 
 **Status:** ready-for-agent
 
-- [ ] `monthlyDistribution` 型別新增 `pendingNetTWD` 與 `pendingCount`
-- [ ] 遍歷未到期之 `scopedReceivables`，依 `payDate` 歸屬加總至月度分佈
-- [ ] 確保 `currentYearDividendsTWD` 等已實現統計口徑不受影響，維持會計真實性
-- [ ] 單元測試驗證 11 月、12 月包含待入帳金額與筆數
+- [x] `monthlyDistribution` 型別新增 `pendingNetTWD` 與 `pendingCount`
+- [x] 遍歷未到期之 `scopedReceivables`，依 `payDate` 歸屬加總至月度分佈
+- [x] 確保 `currentYearDividendsTWD` 等已實現統計口徑不受影響，維持會計真實性
+- [x] 單元測試驗證 11 月、12 月包含待入帳金額與筆數
 
