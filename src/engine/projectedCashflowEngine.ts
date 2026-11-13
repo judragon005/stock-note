@@ -18,6 +18,7 @@ export interface ProjectedCashflowInput {
   baseYearMonth: string; // 'YYYY-MM'
   holdings: HoldingPosition[];
   customPayoutRates?: Record<string, PayoutRateConfig>;
+  historicalPayoutMonths?: Record<string, number[]>; // 歷史實際除息發放月份 SSOT 映射
 }
 
 export interface ProjectedMonthBreakdown {
@@ -56,31 +57,45 @@ export interface ComplementaryRecommendation {
 
 /**
  * 台灣常見熱門 ETF 與權值股預設除息/發放月份慣性庫
+ * 嚴格以實質現金「入帳發放日 (Payment Date)」為基準，消滅除息月與入帳月混淆
  */
 const DEFAULT_DIVIDEND_PROFILES: Record<string, { frequency: DividendFrequency; payoutMonths: number[]; defaultYield: number }> = {
-  // 月配型
+  // 月配型 (1~12月每月入帳)
   '00929': { frequency: 'MONTHLY', payoutMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], defaultYield: 0.08 },
   '00934': { frequency: 'MONTHLY', payoutMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], defaultYield: 0.07 },
   '00936': { frequency: 'MONTHLY', payoutMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], defaultYield: 0.07 },
   '00940': { frequency: 'MONTHLY', payoutMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], defaultYield: 0.06 },
 
-  // 1/4/7/10 季配組
-  '0056': { frequency: 'QUARTERLY', payoutMonths: [1, 4, 7, 10], defaultYield: 0.07 },
-  '00888': { frequency: 'QUARTERLY', payoutMonths: [1, 4, 7, 10], defaultYield: 0.05 },
+  // 0056 元大高股息: 1/4/7/10 月除息，實質現金發放於 2/5/8/11 月
+  '0056': { frequency: 'QUARTERLY', payoutMonths: [2, 5, 8, 11], defaultYield: 0.07 },
+  '00888': { frequency: 'QUARTERLY', payoutMonths: [2, 5, 8, 11], defaultYield: 0.05 },
+
+  // 00878 國泰永續高股息: 2/5/8/11 月除息，實質現金發放於 3/6/9/12 月
+  '00878': { frequency: 'QUARTERLY', payoutMonths: [3, 6, 9, 12], defaultYield: 0.065 },
+  '00900': { frequency: 'QUARTERLY', payoutMonths: [3, 6, 9, 12], defaultYield: 0.06 },
+
+  // 00919 群益精選高息 / 00713 元大高息低波 / 2330 台積電: 3/6/9/12 月除息，實質現金發放於 1/4/7/10 月 (跨年次月中旬)
+  '00919': { frequency: 'QUARTERLY', payoutMonths: [1, 4, 7, 10], defaultYield: 0.09 },
+  '00713': { frequency: 'QUARTERLY', payoutMonths: [1, 4, 7, 10], defaultYield: 0.065 },
   '2330': { frequency: 'QUARTERLY', payoutMonths: [1, 4, 7, 10], defaultYield: 0.02 },
 
-  // 2/5/8/11 季配組
-  '00878': { frequency: 'QUARTERLY', payoutMonths: [2, 5, 8, 11], defaultYield: 0.065 },
-  '00900': { frequency: 'QUARTERLY', payoutMonths: [2, 5, 8, 11], defaultYield: 0.06 },
-
-  // 3/6/9/12 季配組
-  '00919': { frequency: 'QUARTERLY', payoutMonths: [3, 6, 9, 12], defaultYield: 0.09 },
-  '00713': { frequency: 'QUARTERLY', payoutMonths: [3, 6, 9, 12], defaultYield: 0.065 },
-
-  // 半年配 (1/7 或 6/12)
+  // 半年配 (1/7 或 6/12 除息)
   '0050': { frequency: 'SEMI_ANNUAL', payoutMonths: [2, 8], defaultYield: 0.035 },
   '006208': { frequency: 'SEMI_ANNUAL', payoutMonths: [7, 11], defaultYield: 0.035 },
 };
+
+/**
+ * 依據標的代碼字串生成確定性的夏秋除權息旺季發放月 (7, 8, 9, 10 月平滑分散)
+ * 避免所有非清單股票盲目集中於單一 8 月造成 29 筆暴衝
+ */
+function getFallbackSummerPayoutMonth(symbol: string): number {
+  let hash = 0;
+  for (let i = 0; i < symbol.length; i++) {
+    hash = (hash * 31 + symbol.charCodeAt(i)) >>> 0;
+  }
+  const summerMonths = [7, 8, 9, 10];
+  return summerMonths[hash % summerMonths.length];
+}
 
 /**
  * 計算指定標的在某月份是否入帳，及預估每股配息金額
@@ -89,7 +104,8 @@ function resolvePayoutForMonth(
   symbol: string,
   monthNumber: number,
   currentPrice: number,
-  customConfig?: PayoutRateConfig
+  customConfig?: PayoutRateConfig,
+  historicalMonths?: number[]
 ): number {
   if (customConfig) {
     if (customConfig.frequency === 'MONTHLY') {
@@ -98,6 +114,15 @@ function resolvePayoutForMonth(
     const months = customConfig.payoutMonths || [7];
     if (months.includes(monthNumber)) {
       return customConfig.estimatedPerShare;
+    }
+    return 0;
+  }
+
+  // 若有歷史實際發放月份紀錄，優先對齊真實歷史發放節奏
+  if (historicalMonths && historicalMonths.length > 0) {
+    if (historicalMonths.includes(monthNumber)) {
+      const timesPerYear = historicalMonths.length;
+      return (currentPrice * 0.045) / timesPerYear;
     }
     return 0;
   }
@@ -112,8 +137,9 @@ function resolvePayoutForMonth(
     return 0;
   }
 
-  // 一般年配股預設於 7 月或 8 月發放，以 4% 殖利率粗估
-  if (monthNumber === 8) {
+  // 一般年配股分散於 7~10 月除權息旺季平滑發放，以 4% 殖利率粗估
+  const assignedMonth = getFallbackSummerPayoutMonth(symbol);
+  if (monthNumber === assignedMonth) {
     return currentPrice * 0.04;
   }
 
@@ -161,7 +187,8 @@ export function generate12MonthProjectedCashflow(input: ProjectedCashflowInput):
     for (const h of input.holdings) {
       if (h.shares <= 0) continue;
       const customConfig = input.customPayoutRates?.[h.symbol];
-      const perShare = resolvePayoutForMonth(h.symbol, monthNumber, h.currentPrice, customConfig);
+      const historicalMonths = input.historicalPayoutMonths?.[h.symbol];
+      const perShare = resolvePayoutForMonth(h.symbol, monthNumber, h.currentPrice, customConfig, historicalMonths);
 
       if (perShare > 0) {
         const amount = Math.round(perShare * h.shares);

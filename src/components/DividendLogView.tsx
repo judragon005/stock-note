@@ -124,12 +124,32 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
     return aggregateDividendReport(scopedTrades, scopedReceivables, selectedYear, usdToTwdRate, todayStr);
   }, [scopedTrades, scopedReceivables, selectedYear, usdToTwdRate, todayStr]);
 
+  // 萃取各標的歷史已入帳交易之實際發放月份慣性 (SSOT Learning)
+  const historicalPayoutMonthsMap = useMemo(() => {
+    const map: Record<string, number[]> = {};
+    for (const trade of scopedTrades) {
+      if (trade.type !== 'DIVIDEND') continue;
+      const payDate = getEffectiveDividendPayDate(trade);
+      const month = parseInt(payDate.substring(5, 7), 10);
+      if (month >= 1 && month <= 12) {
+        const key = trade.symbol.toUpperCase();
+        if (!map[key]) map[key] = [];
+        if (!map[key].includes(month)) {
+          map[key].push(month);
+          map[key].sort((a, b) => a - b);
+        }
+      }
+    }
+    return map;
+  }, [scopedTrades]);
+
   const projectedCashflow = useMemo(() => {
     return generate12MonthProjectedCashflow({
       baseYearMonth: currentYearMonth,
       holdings,
+      historicalPayoutMonths: historicalPayoutMonthsMap,
     });
-  }, [holdings, currentYearMonth]);
+  }, [holdings, currentYearMonth, historicalPayoutMonthsMap]);
 
   const complementaryRecommendations = useMemo(() => {
     return recommendComplementaryDividendMonths(projectedCashflow.drySeasonMonths);

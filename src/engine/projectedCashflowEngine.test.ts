@@ -102,12 +102,79 @@ describe('Spec 0183 Ticket 02: projectedCashflowEngine (未來 12 個月現金�
   });
 
   it('3. detectDrySeasonMonths 與 recommendComplementaryDividendMonths 應能產出互補標的配息建議', () => {
-    const drySeasonMonths = [3, 6, 9, 12]; // 缺少 3, 6, 9, 12 月現金流
-    const recommendations = recommendComplementaryDividendMonths(drySeasonMonths);
+    // 缺少 3, 6, 9, 12 月現金流時，應推薦在 3, 6, 9, 12 月發放的 00878
+    const drySeasonMonths36912 = [3, 6, 9, 12];
+    const recs36912 = recommendComplementaryDividendMonths(drySeasonMonths36912);
+    expect(recs36912.some((r) => r.symbol === '00878')).toBe(true);
 
-    expect(recommendations).toBeInstanceOf(Array);
-    expect(recommendations.length).toBeGreaterThan(0);
-    // 應推薦配息月份包含 3, 6, 9, 12 的熱門 ETF (如 00919、00713 等)
-    expect(recommendations.some((r) => r.symbol === '00919' || r.symbol === '00713')).toBe(true);
+    // 缺少 1, 4, 7, 10 月現金流時，應推薦在 1, 4, 7, 10 月發放的 00919 或 00713
+    const drySeasonMonths14710 = [1, 4, 7, 10];
+    const recs14710 = recommendComplementaryDividendMonths(drySeasonMonths14710);
+    expect(recs14710.some((r) => r.symbol === '00919' || r.symbol === '00713')).toBe(true);
+  });
+
+  it('4. [Spec 0227 / Ticket 01] 0056 預設發放月應精準對齊實際入帳發放月 [2, 5, 8, 11]，而非除息月', () => {
+    const holdingsWith0056: HoldingPosition[] = [
+      {
+        symbol: '0056',
+        name: '元大高股息',
+        shares: 10000,
+        avgCost: 35,
+        currentPrice: 38,
+        marketValue: 380000,
+        unrealizedPnL: 30000,
+        unrealizedPnLPercent: 8.57,
+        market: 'TW',
+      } as unknown as HoldingPosition,
+    ];
+
+    const input: ProjectedCashflowInput = {
+      baseYearMonth: '2026-10',
+      holdings: holdingsWith0056,
+      // 不傳入 customPayoutRates，使用預設 DEFAULT_DIVIDEND_PROFILES
+    };
+
+    const projection = generate12MonthProjectedCashflow(input);
+
+    // 0056 現金發放日為 2, 5, 8, 11 月，10 月不應有配息入帳！
+    const oct2026 = projection.months.find((m) => m.yearMonth === '2026-10');
+    expect(oct2026?.estimatedTotalTwd).toBe(0);
+    expect(oct2026?.breakdown).toHaveLength(0);
+
+    // 11 月應有 0056 配息入帳！
+    const nov2026 = projection.months.find((m) => m.yearMonth === '2026-11');
+    expect(nov2026?.estimatedTotalTwd).toBeGreaterThan(0);
+    expect(nov2026?.breakdown.some((b) => b.symbol === '0056')).toBe(true);
+
+    // 2 月應有 0056 配息入帳！
+    const feb2027 = projection.months.find((m) => m.yearMonth === '2027-02');
+    expect(feb2027?.estimatedTotalTwd).toBeGreaterThan(0);
+    expect(feb2027?.breakdown.some((b) => b.symbol === '0056')).toBe(true);
+  });
+
+  it('5. [Spec 0227 / Ticket 01] 非清單普通股持倉不應全部粗暴擠在 8 月單點發放造成假性暴衝', () => {
+    // 模擬用戶持有 20 檔非清單內普通股
+    const genericHoldings: HoldingPosition[] = Array.from({ length: 20 }, (_, i) => ({
+      symbol: `STOCK${i + 1}`,
+      name: `普通股${i + 1}`,
+      shares: 1000,
+      avgCost: 50,
+      currentPrice: 50,
+      marketValue: 50000,
+      unrealizedPnL: 0,
+      unrealizedPnLPercent: 0,
+      market: 'TW',
+    })) as unknown as HoldingPosition[];
+
+    const input: ProjectedCashflowInput = {
+      baseYearMonth: '2026-01',
+      holdings: genericHoldings,
+    };
+
+    const projection = generate12MonthProjectedCashflow(input);
+
+    // 8 月份不應單點包攬全部 20 筆股票之發放 (解除單月 100% 暴衝 Bug)
+    const augMonth = projection.months.find((m) => m.yearMonth === '2026-08');
+    expect(augMonth?.breakdown.length).toBeLessThan(20);
   });
 });
