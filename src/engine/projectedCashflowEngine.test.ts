@@ -215,4 +215,39 @@ describe('Spec 0183 Ticket 02: projectedCashflowEngine (未來 12 個月現金�
     expect(may2027?.breakdown.some((b) => b.symbol === '0056')).toBe(true);
     expect(aug2027?.breakdown.some((b) => b.symbol === '0056')).toBe(true);
   });
+
+  it('7. [Spec 0227 / Review Refinements] Profile 標的即使歷史月份包含非典型特例月，單期金額仍以 Profile 原生常態頻率次數計算防止稀釋', () => {
+    const holdingsWith0056: HoldingPosition[] = [
+      {
+        symbol: '0056',
+        name: '元大高股息',
+        shares: 10000,
+        avgCost: 35,
+        currentPrice: 38,
+        marketValue: 380000,
+        unrealizedPnL: 30000,
+        unrealizedPnLPercent: 8.57,
+        market: 'TW',
+      } as unknown as HoldingPosition,
+    ];
+
+    // 0056 常態 defaultYield 為 0.07，全年期望 = 38 * 0.07 * 10,000 = 26,600
+    // 常態 4 次季配，每期應為 26,600 / 4 = 6,650
+    // 假設帳本歷史因特例額外多記了 6 月（共 5 個月：2, 5, 6, 8, 11）
+    const input: ProjectedCashflowInput = {
+      baseYearMonth: '2026-10',
+      holdings: holdingsWith0056,
+      historicalPayoutMonths: {
+        '0056': [2, 5, 6, 8, 11],
+      },
+    };
+
+    const projection = generate12MonthProjectedCashflow(input);
+    const nov2026 = projection.months.find((m) => m.yearMonth === '2026-11');
+    const b0056 = nov2026?.breakdown.find((b) => b.symbol === '0056');
+
+    expect(b0056).toBeDefined();
+    // 應維持每期 6,650，而不是被除以 5 稀釋為 5,320
+    expect(b0056?.estimatedAmountTwd).toBe(6650);
+  });
 });

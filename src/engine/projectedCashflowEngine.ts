@@ -55,6 +55,12 @@ export interface ComplementaryRecommendation {
   description: string;
 }
 
+/** 歷史標的預設年化粗估殖利率 (4.5%) */
+export const DEFAULT_HISTORICAL_ESTIMATED_YIELD = 0.045;
+
+/** 夏秋除權息旺季年配預估殖利率 (4.0%) */
+export const DEFAULT_SUMMER_FALL_YIELD = 0.04;
+
 /**
  * 台灣常見熱門 ETF 與權值股預設除息/發放月份慣性庫
  * 嚴格以實質現金「入帳發放日 (Payment Date)」為基準，消滅除息月與入帳月混淆
@@ -126,9 +132,10 @@ function resolvePayoutForMonth(
       : profile.payoutMonths;
 
     if (effectiveMonths.includes(monthNumber)) {
-      const timesPerYear = effectiveMonths.length;
+      // 單期金額以 Profile 原生常態頻率次數為基準，防止特例月份稀釋正常季度金額
+      const normalTimesPerYear = Math.max(profile.payoutMonths.length, 1);
       const annualDividend = currentPrice * profile.defaultYield;
-      return annualDividend / timesPerYear;
+      return annualDividend / normalTimesPerYear;
     }
     return 0;
   }
@@ -137,15 +144,15 @@ function resolvePayoutForMonth(
   if (historicalMonths && historicalMonths.length > 0) {
     if (historicalMonths.includes(monthNumber)) {
       const timesPerYear = historicalMonths.length;
-      return (currentPrice * 0.045) / timesPerYear;
+      return (currentPrice * DEFAULT_HISTORICAL_ESTIMATED_YIELD) / timesPerYear;
     }
     return 0;
   }
 
-  // 3. 一般年配股分散於 7~10 月除權息旺季平滑發放，以 4% 殖利率粗估
+  // 3. 一般年配股分散於 7~10 月除權息旺季平滑發放，以具名常數預估殖利率粗估
   const assignedMonth = getFallbackSummerPayoutMonth(symbol);
   if (monthNumber === assignedMonth) {
-    return currentPrice * 0.04;
+    return currentPrice * DEFAULT_SUMMER_FALL_YIELD;
   }
 
   return 0;

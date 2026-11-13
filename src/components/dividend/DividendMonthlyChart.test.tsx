@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   calculateMonthTooltipAlign,
+  computeMonthBarMetrics,
   DividendMonthlyChart,
   MonthDividendTooltipContent,
 } from './DividendMonthlyChart';
@@ -116,6 +117,36 @@ describe('DividendMonthlyChart (月度配息長條圖)', () => {
       expect(html).toContain('0056');
       expect(html).toContain('(11-11)');
       expect(html).toContain('16,088');
+    });
+
+    it('Spec 0227 / Review Refinements: computeMonthBarMetrics 純函式應正確計算 NET 與 GROSS 模式之三態統計', () => {
+      const mockItem: MonthlyDividendDistribution = {
+        monthKey: '2026-10',
+        monthLabel: '10月',
+        grossTWD: 50000,
+        netTWD: 48000,
+        taxTWD: 2000,
+        count: 2,
+        pendingNetTWD: 12000,
+        pendingGrossTWD: 12500,
+        pendingCount: 1,
+      };
+
+      // 測試 NET 模式
+      const netMetrics = computeMonthBarMetrics(mockItem, 'NET', 55000);
+      expect(netMetrics.receivedVal).toBe(48000);
+      expect(netMetrics.pendingVal).toBe(12000);
+      expect(netMetrics.totalVal).toBe(60000);
+      expect(netMetrics.hasReceived).toBe(true);
+      expect(netMetrics.hasPending).toBe(true);
+      expect(netMetrics.meetsExpense).toBe(true); // 60,000 >= 55,000
+
+      // 測試 GROSS 模式
+      const grossMetrics = computeMonthBarMetrics(mockItem, 'GROSS', 65000);
+      expect(grossMetrics.receivedVal).toBe(50000);
+      expect(grossMetrics.pendingVal).toBe(12500);
+      expect(grossMetrics.totalVal).toBe(62500);
+      expect(grossMetrics.meetsExpense).toBe(false); // 62,500 < 65,000
     });
   });
 });
