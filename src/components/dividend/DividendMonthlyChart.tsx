@@ -31,9 +31,13 @@ export const DividendMonthlyChart: React.FC<DividendMonthlyChartProps> = ({
   dividendDisplayMode,
   selectedYear,
 }) => {
-  // 自動依據當前顯示模式 (毛額 GROSS / 淨額 NET) 計算動態最大值，防止分母失真
+  // 自動依據當前顯示模式 (毛額 GROSS / 淨額 NET) 計算動態最大值（含已實領與待入帳總額），防止分母失真
   const currentMaxVal = Math.max(
-    ...monthlyDistribution.map((m) => (dividendDisplayMode === 'GROSS' ? m.grossTWD : m.netTWD)),
+    ...monthlyDistribution.map((m) => {
+      const received = dividendDisplayMode === 'GROSS' ? m.grossTWD : m.netTWD;
+      const pending = dividendDisplayMode === 'GROSS' ? (m.pendingGrossTWD || 0) : (m.pendingNetTWD || 0);
+      return received + pending;
+    }),
     maxMonthlyNet,
     1000
   );
@@ -136,10 +140,26 @@ export const DividendMonthlyChart: React.FC<DividendMonthlyChartProps> = ({
           }}
         >
           {monthlyDistribution.map((m, idx) => {
-            const displayVal = dividendDisplayMode === 'GROSS' ? m.grossTWD : m.netTWD;
-            const barHeightPx = chartMaxVal > 0 ? Math.round((displayVal / chartMaxVal) * BAR_SCALE_HEIGHT_PX) : 0;
-            const hasData = displayVal > 0;
-            const meetsExpense = targetMonthlyExpenseTwd > 0 && displayVal >= targetMonthlyExpenseTwd;
+            const receivedVal = dividendDisplayMode === 'GROSS' ? m.grossTWD : m.netTWD;
+            const pendingVal = dividendDisplayMode === 'GROSS' ? (m.pendingGrossTWD || 0) : (m.pendingNetTWD || 0);
+            const totalVal = receivedVal + pendingVal;
+            const pendingCount = m.pendingCount || 0;
+
+            const hasReceived = receivedVal > 0;
+            const hasPending = pendingVal > 0;
+            const hasAnyData = totalVal > 0;
+
+            const totalBarHeightPx = chartMaxVal > 0 ? Math.round((totalVal / chartMaxVal) * BAR_SCALE_HEIGHT_PX) : 0;
+            const meetsExpense = targetMonthlyExpenseTwd > 0 && totalVal >= targetMonthlyExpenseTwd;
+
+            // 計算堆疊比例
+            const receivedRatio = totalVal > 0 ? receivedVal / totalVal : 0;
+            const receivedHeightPx = hasReceived
+              ? Math.max(hasPending ? 4 : 14, Math.round(totalBarHeightPx * receivedRatio))
+              : 0;
+            const pendingHeightPx = hasPending
+              ? Math.max(hasReceived ? 4 : 14, totalBarHeightPx - receivedHeightPx)
+              : 0;
 
             return (
               <div
@@ -156,22 +176,46 @@ export const DividendMonthlyChart: React.FC<DividendMonthlyChartProps> = ({
                 <Tooltip
                   align={calculateMonthTooltipAlign(idx)}
                   content={
-                    <div style={{ padding: '4px', display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '180px' }}>
-                      <div style={{ fontWeight: 700, color: '#34d399', borderBottom: '1px solid rgba(51,65,85,0.6)', paddingBottom: '4px' }}>
+                    <div style={{ padding: '4px', display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '190px' }}>
+                      <div style={{ fontWeight: 700, color: hasReceived ? '#34d399' : (hasPending ? '#f59e0b' : '#94a3b8'), borderBottom: '1px solid rgba(51,65,85,0.6)', paddingBottom: '4px' }}>
                         📅 {selectedYear} 年 {m.monthLabel} 股息明細
                       </div>
-                      {hasData ? (
+                      {hasAnyData ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '0.75rem' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                             <span style={{ color: '#94a3b8' }}>實領入帳：</span>
-                            <b className="mono" style={{ color: '#34d399', fontVariantNumeric: 'tabular-nums' }}>
+                            <b className="mono" style={{ color: hasReceived ? '#34d399' : '#64748b', fontVariantNumeric: 'tabular-nums' }}>
                               NT$ {m.netTWD.toLocaleString()}
                             </b>
                           </div>
+                          {hasPending && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ color: '#f59e0b' }}>待入帳應收：</span>
+                              <b className="mono" style={{ color: '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>
+                                +NT$ {pendingVal.toLocaleString()}{pendingCount > 0 ? ` (${pendingCount} 筆)` : ''}
+                              </b>
+                            </div>
+                          )}
+                          {hasPending && hasReceived && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed rgba(51,65,85,0.6)', paddingTop: '2px' }}>
+                              <span style={{ color: '#38bdf8' }}>預期入帳總額：</span>
+                              <b className="mono" style={{ color: '#38bdf8', fontVariantNumeric: 'tabular-nums' }}>
+                                NT$ {totalVal.toLocaleString()}
+                              </b>
+                            </div>
+                          )}
+                          {!hasReceived && hasPending && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed rgba(51,65,85,0.6)', paddingTop: '2px' }}>
+                              <span style={{ color: '#38bdf8' }}>預期入帳總額：</span>
+                              <b className="mono" style={{ color: '#38bdf8', fontVariantNumeric: 'tabular-nums' }}>
+                                NT$ {totalVal.toLocaleString()}
+                              </b>
+                            </div>
+                          )}
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                             <span style={{ color: '#94a3b8' }}>應發毛額：</span>
                             <span className="mono" style={{ color: '#ffffff', fontVariantNumeric: 'tabular-nums' }}>
-                              NT$ {m.grossTWD.toLocaleString()}
+                              NT$ {(m.grossTWD + (m.pendingGrossTWD || 0)).toLocaleString()}
                             </span>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -182,48 +226,98 @@ export const DividendMonthlyChart: React.FC<DividendMonthlyChartProps> = ({
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                             <span style={{ color: '#94a3b8' }}>配息筆數：</span>
-                            <span className="mono" style={{ color: '#ffffff' }}>{m.count} 筆</span>
+                            <span className="mono" style={{ color: '#ffffff' }}>
+                              {m.count + pendingCount} 筆 {pendingCount > 0 ? `(含 ${pendingCount} 筆待入帳)` : ''}
+                            </span>
                           </div>
                           {targetMonthlyExpenseTwd > 0 && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(51,65,85,0.5)', paddingTop: '3px', marginTop: '2px' }}>
                               <span style={{ color: '#38bdf8' }}>生活費覆蓋率：</span>
                               <b className="mono" style={{ color: meetsExpense ? '#34d399' : '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>
-                                {((displayVal / targetMonthlyExpenseTwd) * 100).toFixed(1)}%
+                                {((totalVal / targetMonthlyExpenseTwd) * 100).toFixed(1)}%
                               </b>
                             </div>
                           )}
                         </div>
                       ) : (
-                        <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>該月份尚無配息入帳紀錄</div>
+                        <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>該月份尚無配息入帳或待入帳紀錄</div>
                       )}
                     </div>
                   }
                 >
-                  <div
-                    style={{
-                      width: '100%',
-                      minWidth: '16px',
-                      maxWidth: '36px',
-                      height: `${hasData ? Math.max(14, barHeightPx) : 6}px`,
-                      borderRadius: '6px 6px 2px 2px',
-                      background: hasData
-                        ? meetsExpense
-                          ? 'linear-gradient(180deg, #10b981 0%, #047857 100%)'
-                          : 'linear-gradient(180deg, #34d399 0%, #059669 100%)'
-                        : 'rgba(51, 65, 85, 0.3)',
-                      boxShadow: hasData ? (meetsExpense ? '0 0 14px rgba(16, 185, 129, 0.5)' : '0 0 10px rgba(16, 185, 129, 0.3)') : 'none',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease',
-                      border: meetsExpense ? '1px solid rgba(52, 211, 153, 0.8)' : 'none',
-                    }}
-                  />
+                  {hasAnyData ? (
+                    <div
+                      aria-label={`${selectedYear}年${m.monthLabel}: 實領 NT$ ${m.netTWD.toLocaleString()}${hasPending ? `, 待入帳應收 NT$ ${pendingVal.toLocaleString()}` : ''}`}
+                      style={{
+                        width: '100%',
+                        minWidth: '16px',
+                        maxWidth: '36px',
+                        height: `${Math.max(14, totalBarHeightPx)}px`,
+                        display: 'flex',
+                        flexDirection: 'column-reverse',
+                        borderRadius: '6px 6px 2px 2px',
+                        overflow: 'hidden',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        boxShadow: meetsExpense
+                          ? '0 0 14px rgba(16, 185, 129, 0.45)'
+                          : hasPending && !hasReceived
+                            ? '0 0 10px rgba(245, 158, 11, 0.35)'
+                            : '0 0 10px rgba(16, 185, 129, 0.25)',
+                        border: meetsExpense
+                          ? '1px solid rgba(52, 211, 153, 0.8)'
+                          : hasPending && !hasReceived
+                            ? '1px dashed rgba(245, 158, 11, 0.8)'
+                            : 'none',
+                      }}
+                    >
+                      {/* 下層：已實領綠柱 */}
+                      {hasReceived && (
+                        <div
+                          style={{
+                            width: '100%',
+                            height: hasPending ? `${receivedHeightPx}px` : '100%',
+                            background: meetsExpense && !hasPending
+                              ? 'linear-gradient(180deg, #10b981 0%, #047857 100%)'
+                              : 'linear-gradient(180deg, #34d399 0%, #059669 100%)',
+                            borderRadius: hasPending ? '0 0 2px 2px' : '6px 6px 2px 2px',
+                          }}
+                        />
+                      )}
+                      {/* 上層：待入帳金黃柱 */}
+                      {hasPending && (
+                        <div
+                          style={{
+                            width: '100%',
+                            height: hasReceived ? `${pendingHeightPx}px` : '100%',
+                            background: 'linear-gradient(180deg, #f59e0b 0%, #d97706 100%)',
+                            borderRadius: hasReceived ? '6px 6px 0 0' : '6px 6px 2px 2px',
+                            opacity: 0.92,
+                          }}
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        width: '100%',
+                        minWidth: '16px',
+                        maxWidth: '36px',
+                        height: '6px',
+                        borderRadius: '6px 6px 2px 2px',
+                        background: 'rgba(51, 65, 85, 0.3)',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                      }}
+                    />
+                  )}
                 </Tooltip>
                 <span
                   style={{
                     fontSize: '0.72rem',
                     marginTop: '6px',
-                    color: hasData ? '#34d399' : '#64748b',
-                    fontWeight: hasData ? 700 : 500,
+                    color: hasReceived ? '#34d399' : (hasPending ? '#f59e0b' : '#64748b'),
+                    fontWeight: hasAnyData ? 700 : 500,
                   }}
                 >
                   {idx + 1}月
@@ -235,7 +329,7 @@ export const DividendMonthlyChart: React.FC<DividendMonthlyChartProps> = ({
       </div>
 
       <div style={{ fontSize: '0.74rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
-        <span>💡 提示：綠色長條代表該月有配息入帳，滑鼠懸浮柱狀條可檢視該月份實領與扣稅細節。</span>
+        <span>💡 提示：綠色代表已實領入帳，金黃色代表待入帳應收股利。滑鼠懸浮柱狀條可檢視三態細節與扣稅拆解。</span>
         {targetMonthlyExpenseTwd > 0 && (
           <span style={{ color: '#38bdf8' }}>🎯 藍色虛線為每月 NT$ {targetMonthlyExpenseTwd.toLocaleString()} 生活開銷門檻</span>
         )}

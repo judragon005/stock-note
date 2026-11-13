@@ -51,5 +51,31 @@ describe('DividendMonthlyChart (月度配息長條圖)', () => {
       // 確保幾何座標精準錨定 (24px 底座 + Math.round((60k / 110k) * 120) = 89px)
       expect(html).toContain('bottom:89px');
     });
+
+    it('Spec 0227 / Ticket 03: 當月份僅有待入帳款項時，應渲染金黃色柱狀與待入帳 Tooltip 資訊', () => {
+      const mockDistributionWithPending: MonthlyDividendDistribution[] = [
+        { monthKey: '2026-10', monthLabel: '10月', grossTWD: 100000, netTWD: 90000, taxTWD: 10000, count: 2, pendingNetTWD: 0, pendingGrossTWD: 0, pendingCount: 0 },
+        { monthKey: '2026-11', monthLabel: '11月', grossTWD: 0, netTWD: 0, taxTWD: 0, count: 0, pendingNetTWD: 16088, pendingGrossTWD: 16098, pendingCount: 1 },
+      ];
+
+      const html = renderToStaticMarkup(
+        <DividendMonthlyChart
+          monthlyDistribution={mockDistributionWithPending}
+          maxMonthlyNet={90000}
+          targetMonthlyExpenseTwd={60000}
+          dividendDisplayMode="NET"
+          selectedYear={2026}
+        />
+      );
+
+      // 11 月長條柱應具備無障礙標籤，揭露實領與待入帳應收
+      expect(html).toContain('2026年11月: 實領 NT$ 0, 待入帳應收 NT$ 16,088');
+      // 11 月長條柱應渲染金黃色背景漸層
+      expect(html).toContain('linear-gradient(180deg, #f59e0b 0%, #d97706 100%)');
+      // 11 月文字顏色應為金黃色 (#f59e0b)
+      expect(html).toContain('color:#f59e0b');
+      // 圖表提示文字應包含金黃色代表待入帳
+      expect(html).toContain('金黃色代表待入帳應收股利');
+    });
   });
 });
