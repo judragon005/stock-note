@@ -17,7 +17,10 @@ import { calculateDividendTaxDeductionStats } from '../engine/taxOptimizationGua
 import { DividendMonthlyChart, calculateMonthTooltipAlign, DividendDisplayMode } from './dividend/DividendMonthlyChart';
 import { DividendKpiSummary } from './dividend/DividendKpiSummary';
 import { DividendCalendarCard } from './dividend/DividendCalendarCard';
+import { DividendTopContributorsCard } from './dividend/DividendTopContributorsCard';
 import { DividendHistoryTable, AnnualReconciliationItem } from './dividend/DividendHistoryTable';
+import { loadLoanRecordsFromStorage } from '../utils/storage';
+import { calculateLoanInterestAndPayoff } from '../engine/cashLedgerEngine';
 
 // 保持 100% 向後相容之對外匯出
 export { calculateMonthTooltipAlign };
@@ -47,6 +50,9 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
   onInstantSettleDividend,
 }) => {
   const currentYear = new Date().getFullYear();
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const currentYearMonth = `${currentYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [rankMode, setRankMode] = useState<'YEAR' | 'ALL_TIME'>('YEAR');
@@ -54,7 +60,43 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
   const [dividendDisplayMode, setDividendDisplayMode] = useState<DividendDisplayMode>('GROSS');
   const [isCashflowExpanded, setIsCashflowExpanded] = useState<boolean>(true);
   const [showReconciliationPanel, setShowReconciliationPanel] = useState(false);
-  const [targetMonthlyExpenseTwd, setTargetMonthlyExpenseTwd] = useState<number>(35000);
+  const [targetMonthlyExpenseTwd, setTargetMonthlyExpenseTwd] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('STOCK_TRACKER_DIVIDEND_TARGET_EXPENSE');
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed > 0) return parsed;
+      }
+    } catch {
+      // fallback
+    }
+    return 35000;
+  });
+
+  const handleTargetExpenseChange = (val: number) => {
+    setTargetMonthlyExpenseTwd(val);
+    try {
+      localStorage.setItem('STOCK_TRACKER_DIVIDEND_TARGET_EXPENSE', String(val));
+    } catch {
+      // ignore
+    }
+  };
+
+  // 質押借貸利息支出計算 (連通 cashLedgerEngine)
+  const estimatedLoanInterestTWD = useMemo(() => {
+    try {
+      const loans = loadLoanRecordsFromStorage();
+      if (!loans || loans.length === 0) return 0;
+      return loans.reduce((sum, loan) => {
+        if (!loan.principal || loan.principal <= 0) return sum;
+        const fx = loan.currency === 'USD' ? usdToTwdRate : 1;
+        const payoff = calculateLoanInterestAndPayoff(loan, todayStr);
+        return sum + Math.round((payoff.monthlyEstimatedInterest * 12) * fx);
+      }, 0);
+    } catch {
+      return 0;
+    }
+  }, [todayStr, usdToTwdRate]);
 
   // 1. 依全域市場與帳戶過濾交易與應收股利
   const scopedTrades = useMemo(() => {
@@ -78,9 +120,6 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
   }, [receivableDividends, market, selectedAccountId]);
 
   // 2. 彙總年度股利報表與現金流投影
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const currentYearMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-
   const report = useMemo(() => {
     return aggregateDividendReport(scopedTrades, scopedReceivables, selectedYear, usdToTwdRate, todayStr);
   }, [scopedTrades, scopedReceivables, selectedYear, usdToTwdRate, todayStr]);
@@ -337,7 +376,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         complementaryRecommendations={complementaryRecommendations}
         taxStats={taxStats}
         targetMonthlyExpenseTwd={targetMonthlyExpenseTwd}
-        onTargetExpenseChange={setTargetMonthlyExpenseTwd}
+        onTargetExpenseChange={handleTargetExpenseChange}
         zavyDividendPlanSummary="依目前景氣波浪建議活水轉向注入：純公債 (00687B) 與黃金儲備 (00635U)，存量不動、增量抗震。"
         isCashflowExpanded={isCashflowExpanded}
         onToggleExpand={() => setIsCashflowExpanded((v) => !v)}
@@ -358,16 +397,30 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         totalHistoricalNetTWD={report.totalHistoricalDividendsTWD}
         nhiAlertCount={scopedReceivables.filter((r) => r.market === 'TW' && r.estimatedGrossDividend >= 20000).length}
         pendingStockSharesTotal={pendingStockSharesTotal}
+        estimatedLoanInterestTWD={estimatedLoanInterestTWD}
       />
 
-      {/* 3. 月度配息分佈長條圖 (含生活費對標線) */}
-      <DividendMonthlyChart
-        monthlyDistribution={report.monthlyDistribution}
-        maxMonthlyNet={maxMonthlyNet}
-        targetMonthlyExpenseTwd={targetMonthlyExpenseTwd}
-        dividendDisplayMode={dividendDisplayMode}
-        selectedYear={selectedYear}
-      />
+      {/* 3. 各月份現金流分佈 (2/3) + 股息貢獻排行榜 (1/3) 齊高並列網格 */}
+      <div className="dividend-dual-panel-grid">
+        <div style={{ minWidth: 0, height: '100%' }}>
+          <DividendMonthlyChart
+            monthlyDistribution={report.monthlyDistribution}
+            maxMonthlyNet={maxMonthlyNet}
+            targetMonthlyExpenseTwd={targetMonthlyExpenseTwd}
+            dividendDisplayMode={dividendDisplayMode}
+            selectedYear={selectedYear}
+          />
+        </div>
+        <div style={{ minWidth: 0, height: '100%' }}>
+          <DividendTopContributorsCard
+            activeContributors={activeContributors}
+            rankMode={rankMode}
+            onRankModeChange={setRankMode}
+            selectedYear={selectedYear}
+            holdings={holdings}
+          />
+        </div>
+      </div>
 
       {/* 4. 除息待入帳行事曆面板 (支援一鍵已入帳微操作) */}
       <div
@@ -522,9 +575,6 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         onSearchChange={setSearchQuery}
         tableYearFilter={tableYearFilter}
         onTableYearFilterChange={setTableYearFilter}
-        rankMode={rankMode}
-        onRankModeChange={setRankMode}
-        activeContributors={activeContributors}
         reconciliationList={annualReconciliationList}
         showReconciliationPanel={showReconciliationPanel}
         onToggleReconciliationPanel={() => setShowReconciliationPanel((v) => !v)}

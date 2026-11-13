@@ -2903,3 +2903,22 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     3. **Test Decomposition (測試巨石拆解 - TD 0057)**：將原巨石測試 `ZavyMacroCompassCard.test.tsx` 物理拆分為四個獨立測試檔案（羅盤、工作區、市場寬度、雙軌決策），徹底消除 Divergent Change 測試氣味。
     4. **Strategic Prompt Fact Digest Director Pledge Hardening (智策事實清單董監質押安全讀取 - TD 0048)**：於 `aiForcePromptAdapter.ts` 補齊 `directorPledgeRatioPct` 安全提取邏輯與單元測試防禦，正式收斂結清技術債 0048。
 
+- **Dividend Log & Cashflow Holistic Refactor, Timing Alignment & Institutional Metric Unification (股利日誌與現金流全景：證交所發放日時差對齊、法人級實戰指標打通與極簡模組化重構)**:
+  - 核心模組：`src/components/DividendLogView.tsx`、`src/components/dividend/DividendCalendarCard.tsx`、`src/components/dividend/DividendKpiSummary.tsx`、`src/components/dividend/DividendMonthlyChart.tsx`、`src/components/dividend/DividendHistoryTable.tsx`、`src/engine/dividendCarrySpreadEngine.ts`、`src/engine/dividendMetricsEngine.ts`、`src/engine/receivableDividendEngine.ts`。
+  - 規格來源：Spec 0225 (v9.18.0) 與 ADR 0225，關聯 GitHub Issue #502。
+  - 核心領域術語與架構革新：
+    1. **SSOT Official Pay-Date Cache & Heuristic Fallback (官方真實發放日庫與分流推估演算法)**：建立 `OFFICIAL_TW_PAY_DATE_MAP`，消滅 28 天推估產生的跨年邊界錯置；針對台股 ETF 標的優化為 23 天經驗推估，個股維持 28 天，美股 21 天，並標註 `[官方公告日]` 或 `[演算法推估]`。
+    2. **Instant Settle Micro-Action (一鍵已入帳微操作)**：在應收股利與明細表待入帳項目中，提供快捷按鈕：點擊後立即將 `payDate` 定錨為今日並轉為已結算狀態，直接納入實領統計與現金帳本。
+    3. **God Component Modular Decoupling (1,604 行單體胖組件無損重構)**：保持主入口 `DividendLogViewProps` 100% 向後相容，內部拆分為 `DividendCalendarCard`、`DividendKpiSummary`、`DividendMonthlyChart` 與 `DividendHistoryTable` 四大高內聚子模組。
+
+- **Cross-Market Dividend Payment Date Precision, ETF Composition Look-Through & Modular Dashboard Architecture (台美跨市場股利發放日精準時序、ETF 配息組成穿透與被動現金流全景重構)**:
+  - 核心模組：`src/components/DividendLogView.tsx`、`src/components/dividend/DividendCalendarCard.tsx`、`src/components/dividend/DividendMonthlyChart.tsx`、`src/components/dividend/DividendTopContributorsCard.tsx`、`src/components/dividend/DividendHistoryTable.tsx`、`src/engine/receivableDividendEngine.ts`、`src/engine/corporateActionScanner.ts`、`src/engine/taxComplianceEngine.ts`。
+  - 規格來源：Spec 0226 (v9.19.0) 與 ADR 0226，關聯 GitHub Issue #507。
+  - 核心領域術語與架構革新：
+    1. **Three-Row Calendar Grid & Typography Scaling (月曆 3 列 × 4 欄佈局與字體放大)**：將 12 個月份由硬擠一列改為 3 列 × 4 欄，卡片寬度由 70px 暴增至 ~250px，月份升至 13px，預估金額升至 16px 並完整顯示 `NT$ XX,XXX`，枯水期標籤改為 11px 膠囊 Badge，大幅優化視認性。
+    2. **Two-Thirds Dashboard Grid & Top Contributors Decoupling (2/3 現金流 + 1/3 貢獻排行並列網格)**：將股息貢獻排行從表格解耦為獨立 `DividendTopContributorsCard`，與長條圖在主視圖並列一列（2/3 vs 1/3），高度自然等高錨定在 ~290px，並保留 10~12 月 Tooltip 向左智慧避讓。
+    3. **Sub-pixel Geometry Calibration & Expense Baseline Persistence (長條圖幾何坐標統一與生活費持久化)**：消除 `+26px` 魔術數字，將柱高與虛線統一為 120px 比例尺與 30px 實體文字底座，確保覆蓋率 100% 時 0 像素誤差重合；Gross 模式 scaleMax 分母同步；生活費目標持久化至 `localStorage`。
+    4. **FinMind Official Payment Date Mapping & 4-Tier Fallback Mesh (FinMind 原生發放日映射與跨市場四層降級網)**：補齊 `corporateActionScanner.ts` 對 FinMind `CashDividendPaymentDate` 欄位映射，並於 `OFFICIAL_TW_PAY_DATE_MAP` 常態庫補入 `0056:2026-10-22: 2026-11-11`，實現台美股官方發放日零成本自動化對齊。
+    5. **Ex-Dividend Recovery Baseline Repair & Institutional Metric Sinking (填息判定基準價修正與機構級指標貫通)**：修復 `DividendHistoryTable` 將買進成本當除息價的傳參 Bug；連通質押借貸利息支出計算實質淨利差 (Net Carry Spread)；連通 `zavySlowWealthEngine` 輸出動態公債/黃金活水轉向。
+
+

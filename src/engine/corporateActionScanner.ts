@@ -196,6 +196,8 @@ export async function fetchFinMindCorporateActions(symbol: string, token?: strin
         const date = item.date;
         const cashDiv = Number(item.CashEarningsDistribution || item.CashStatutorySurplus || 0);
         const stockDiv = Number(item.StockEarningsDistribution || item.StockStatutorySurplus || 0);
+        const cashPayDate = item.CashDividendPaymentDate ? String(item.CashDividendPaymentDate).trim() : undefined;
+        const stockPayDate = item.StockDividendPaymentDate ? String(item.StockDividendPaymentDate).trim() : undefined;
 
         if (date) {
           if (cashDiv > 0) {
@@ -204,8 +206,9 @@ export async function fetchFinMindCorporateActions(symbol: string, token?: strin
               market: 'TW',
               type: 'DIVIDEND',
               date,
+              payDate: cashPayDate,
               price: cashDiv,
-              description: `FinMind 歷史除息：現金股利每股 ${cashDiv} TWD`,
+              description: `FinMind 歷史除息：現金股利每股 ${cashDiv} TWD${cashPayDate ? ` (預計 ${cashPayDate} 發放)` : ''}`,
               sourceType: 'LIVE_API',
             });
           }
@@ -216,8 +219,9 @@ export async function fetchFinMindCorporateActions(symbol: string, token?: strin
               market: 'TW',
               type: 'STOCK_DIVIDEND',
               date,
+              payDate: stockPayDate,
               ratio,
-              description: `FinMind 歷史除權：股票股利每股 ${stockDiv} 元`,
+              description: `FinMind 歷史除權：股票股利每股 ${stockDiv} 元${stockPayDate ? ` (預計 ${stockPayDate} 發放)` : ''}`,
               sourceType: 'LIVE_API',
             });
           }

@@ -192,7 +192,7 @@ export const DividendCalendarCard: React.FC<DividendCalendarCardProps> = ({
 
       {isCashflowExpanded && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '6px', marginBottom: '12px' }}>
+          <div className="dividend-calendar-grid">
             {projectedCashflow.months.map((m) => {
               const isCovered = targetMonthlyExpenseTwd > 0 && m.estimatedTotalTwd >= targetMonthlyExpenseTwd;
               return (
@@ -212,18 +212,51 @@ export const DividendCalendarCard: React.FC<DividendCalendarCardProps> = ({
                         : 'rgba(255, 255, 255, 0.08)'
                     }`,
                     borderRadius: '8px',
-                    padding: '8px 4px',
-                    textAlign: 'center',
+                    padding: '10px 12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
                   }}
                   title={m.breakdown.map((b) => `${b.name}: NT$ ${b.estimatedAmountTwd.toLocaleString()}`).join('\n') || '無預估入帳'}
                 >
-                  <div style={{ fontSize: '11px', color: m.isDrySeason ? '#fca5a5' : '#94a3b8', marginBottom: '4px' }}>
-                    {m.monthNumber}月
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: m.isDrySeason ? '#fca5a5' : '#cbd5e1' }}>
+                      {m.monthNumber}月
+                    </span>
+                    {m.isDrySeason ? (
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          color: '#f87171',
+                          backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          border: '1px solid rgba(239, 68, 68, 0.35)',
+                        }}
+                      >
+                        枯水期
+                      </span>
+                    ) : isCovered ? (
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          color: '#34d399',
+                          backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          border: '1px solid rgba(16, 185, 129, 0.35)',
+                        }}
+                      >
+                        達標
+                      </span>
+                    ) : null}
                   </div>
                   <div
                     className="mono"
                     style={{
-                      fontSize: '11px',
+                      fontSize: '16px',
                       fontWeight: 800,
                       color: m.estimatedTotalTwd > 0
                         ? m.isDrySeason
@@ -231,15 +264,20 @@ export const DividendCalendarCard: React.FC<DividendCalendarCardProps> = ({
                           : '#34d399'
                         : '#64748b',
                       fontVariantNumeric: 'tabular-nums',
+                      letterSpacing: '-0.2px',
+                      marginBottom: '4px',
                     }}
                   >
-                    {m.estimatedTotalTwd > 0 ? `${Math.round(m.estimatedTotalTwd / 1000)}k` : '-'}
+                    {m.estimatedTotalTwd > 0 ? `NT$ ${Math.round(m.estimatedTotalTwd).toLocaleString()}` : '-'}
                   </div>
-                  {m.isDrySeason && (
-                    <div style={{ fontSize: '9px', color: '#f87171', marginTop: '2px', fontWeight: 700 }}>
-                      枯水期
-                    </div>
-                  )}
+                  <div style={{ fontSize: '11px', color: '#94a3b8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{m.breakdown.length > 0 ? `${m.breakdown.length} 筆配息` : '無預估入帳'}</span>
+                    {targetMonthlyExpenseTwd > 0 && m.estimatedTotalTwd > 0 && (
+                      <span style={{ color: isCovered ? '#34d399' : '#94a3b8', fontWeight: 600 }}>
+                        {Math.round((m.estimatedTotalTwd / targetMonthlyExpenseTwd) * 100)}%
+                      </span>
+                    )}
+                  </div>
                 </div>
               );
             })}

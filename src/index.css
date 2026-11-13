@@ -118,6 +118,33 @@ body {
   border-color: var(--border-hover);
 }
 
+/* Spec 0226 - 現金流月曆與貢獻排行自適應響應式佈局 */
+.dividend-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 768px) {
+  .dividend-calendar-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.dividend-dual-panel-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+@media (max-width: 1024px) {
+  .dividend-dual-panel-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;

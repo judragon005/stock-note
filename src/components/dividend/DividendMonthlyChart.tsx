@@ -31,15 +31,26 @@ export const DividendMonthlyChart: React.FC<DividendMonthlyChartProps> = ({
   dividendDisplayMode,
   selectedYear,
 }) => {
+  // 自動依據當前顯示模式 (毛額 GROSS / 淨額 NET) 計算動態最大值，防止分母失真
+  const currentMaxVal = Math.max(
+    ...monthlyDistribution.map((m) => (dividendDisplayMode === 'GROSS' ? m.grossTWD : m.netTWD)),
+    maxMonthlyNet,
+    1000
+  );
+
   // 若生活開銷基準高於當前最高月配息，計算刻度上限
-  const chartMaxVal = Math.max(maxMonthlyNet, targetMonthlyExpenseTwd, 1000);
+  const chartMaxVal = Math.max(currentMaxVal, targetMonthlyExpenseTwd, 1000);
   const expenseLinePercent = chartMaxVal > 0 ? (targetMonthlyExpenseTwd / chartMaxVal) * 100 : 0;
+
+  // 統一基準幾何參數 (消除魔術數字，達成 0 誤差對齊)
+  const BASELINE_LABEL_HEIGHT_PX = 24; // 月份標籤高度與間隔
+  const BAR_SCALE_HEIGHT_PX = 120;     // 長條柱刻度滿格高度
+  const expenseLineBottomPx = BASELINE_LABEL_HEIGHT_PX + Math.round((targetMonthlyExpenseTwd / chartMaxVal) * BAR_SCALE_HEIGHT_PX);
 
   return (
     <div
       className="glass-card"
       style={{
-        gridColumn: 'span 2',
         padding: '20px',
         borderRadius: '16px',
         background: 'rgba(15, 23, 42, 0.85)',
@@ -48,6 +59,8 @@ export const DividendMonthlyChart: React.FC<DividendMonthlyChartProps> = ({
         flexDirection: 'column',
         justifyContent: 'space-between',
         gap: '16px',
+        height: '100%',
+        boxSizing: 'border-box',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
@@ -78,12 +91,12 @@ export const DividendMonthlyChart: React.FC<DividendMonthlyChartProps> = ({
           paddingTop: '20px',
         }}
       >
-        {/* 生活費目標參考水平線 */}
+        {/* 生活費目標參考水平線 (置於 zIndex: 0 背景層，避免貫穿切斷前景長條柱) */}
         {targetMonthlyExpenseTwd > 0 && expenseLinePercent <= 100 && (
           <div
             style={{
               position: 'absolute',
-              bottom: `${Math.min(170, Math.round((targetMonthlyExpenseTwd / chartMaxVal) * 135) + 26)}px`,
+              bottom: `${Math.min(170, expenseLineBottomPx)}px`,
               left: 0,
               right: 0,
               borderTop: '1px dashed #38bdf8',
@@ -92,7 +105,7 @@ export const DividendMonthlyChart: React.FC<DividendMonthlyChartProps> = ({
               display: 'flex',
               justifyContent: 'flex-end',
               paddingRight: '6px',
-              zIndex: 1,
+              zIndex: 0,
             }}
           >
             <span
@@ -110,7 +123,7 @@ export const DividendMonthlyChart: React.FC<DividendMonthlyChartProps> = ({
           </div>
         )}
 
-        {/* 柱狀網格 */}
+        {/* 柱狀網格 (置於 zIndex: 1 前景層) */}
         <div
           style={{
             display: 'grid',
@@ -118,11 +131,13 @@ export const DividendMonthlyChart: React.FC<DividendMonthlyChartProps> = ({
             gap: '6px',
             height: '100%',
             alignItems: 'flex-end',
+            position: 'relative',
+            zIndex: 1,
           }}
         >
           {monthlyDistribution.map((m, idx) => {
             const displayVal = dividendDisplayMode === 'GROSS' ? m.grossTWD : m.netTWD;
-            const barHeightPx = chartMaxVal > 0 ? Math.round((displayVal / chartMaxVal) * 130) : 0;
+            const barHeightPx = chartMaxVal > 0 ? Math.round((displayVal / chartMaxVal) * BAR_SCALE_HEIGHT_PX) : 0;
             const hasData = displayVal > 0;
             const meetsExpense = targetMonthlyExpenseTwd > 0 && displayVal >= targetMonthlyExpenseTwd;
 

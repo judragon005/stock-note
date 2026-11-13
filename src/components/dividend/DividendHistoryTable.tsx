@@ -38,9 +38,6 @@ export interface DividendHistoryTableProps {
   onSearchChange: (q: string) => void;
   tableYearFilter: 'SELECTED_YEAR' | 'ALL';
   onTableYearFilterChange: (filter: 'SELECTED_YEAR' | 'ALL') => void;
-  rankMode: 'YEAR' | 'ALL_TIME';
-  onRankModeChange: (mode: 'YEAR' | 'ALL_TIME') => void;
-  activeContributors: DividendContributor[];
   reconciliationList: AnnualReconciliationItem[];
   showReconciliationPanel: boolean;
   onToggleReconciliationPanel: () => void;
@@ -58,9 +55,6 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
   onSearchChange,
   tableYearFilter,
   onTableYearFilterChange,
-  rankMode,
-  onRankModeChange,
-  activeContributors,
   reconciliationList,
   showReconciliationPanel,
   onToggleReconciliationPanel,
@@ -75,143 +69,6 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {/* 標的股息貢獻排行 Top 榜 */}
-      <div
-        className="glass-card"
-        style={{
-          padding: '20px',
-          borderRadius: '16px',
-          background: 'rgba(15, 23, 42, 0.85)',
-          border: '1px solid var(--border-color)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          gap: '14px',
-        }}
-      >
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Award size={18} color="#c084fc" />
-              <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#ffffff' }}>
-                股息貢獻排行 (Top)
-              </h3>
-            </div>
-
-            {/* 當年度 vs 全歷史 切換開關 */}
-            <div
-              style={{
-                display: 'flex',
-                background: 'rgba(19, 29, 49, 0.8)',
-                padding: '2px',
-                borderRadius: '8px',
-                border: '1px solid var(--border-color)',
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => onRankModeChange('YEAR')}
-                style={{
-                  padding: '3px 8px',
-                  borderRadius: '6px',
-                  border: 'none',
-                  background: rankMode === 'YEAR' ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' : 'transparent',
-                  color: rankMode === 'YEAR' ? '#ffffff' : '#94a3b8',
-                  fontSize: '0.7rem',
-                  fontWeight: rankMode === 'YEAR' ? 700 : 500,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-              >
-                {selectedYear}年
-              </button>
-              <button
-                type="button"
-                onClick={() => onRankModeChange('ALL_TIME')}
-                style={{
-                  padding: '3px 8px',
-                  borderRadius: '6px',
-                  border: 'none',
-                  background: rankMode === 'ALL_TIME' ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' : 'transparent',
-                  color: rankMode === 'ALL_TIME' ? '#ffffff' : '#94a3b8',
-                  fontSize: '0.7rem',
-                  fontWeight: rankMode === 'ALL_TIME' ? 700 : 500,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-              >
-                全歷史
-              </button>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '190px', overflowY: 'auto' }}>
-            {activeContributors.length === 0 ? (
-              <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '30px 0' }}>
-                {rankMode === 'YEAR' ? `${selectedYear} 年度尚無股息記錄` : '尚無股息發放紀錄'}
-              </div>
-            ) : (
-              activeContributors.slice(0, 5).map((item, idx) => {
-                const holding = holdingsMap.get(item.symbol.toUpperCase());
-                const holdingCost = holding?.avgCost || 0;
-                return (
-                  <div key={item.symbol} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span
-                          style={{
-                            width: '18px',
-                            height: '18px',
-                            borderRadius: '50%',
-                            background: idx === 0 ? '#f59e0b' : idx === 1 ? '#94a3b8' : '#334155',
-                            color: '#ffffff',
-                            fontSize: '0.65rem',
-                            fontWeight: 700,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          {idx + 1}
-                        </span>
-                        <span style={{ fontWeight: 700, color: '#ffffff' }}>{item.symbol}</span>
-                        <span style={{ color: '#94a3b8', maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {item.name}
-                        </span>
-                        {holdingCost > 0 && holding?.yieldOnCostPercent ? (
-                          <span style={{ fontSize: '0.65rem', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.15)', padding: '1px 4px', borderRadius: '4px' }}>
-                            YOC: {holding.yieldOnCostPercent.toFixed(1)}%
-                          </span>
-                        ) : null}
-                      </div>
-                      <span className="mono" style={{ fontWeight: 700, color: '#34d399', fontVariantNumeric: 'tabular-nums' }}>
-                        NT$ {item.totalDividendsTWD.toLocaleString()} ({item.percentageOfTotal}%)
-                      </span>
-                    </div>
-
-                    {/* 進度條 */}
-                    <div style={{ width: '100%', height: '5px', background: 'rgba(51, 65, 85, 0.5)', borderRadius: '4px', overflow: 'hidden' }}>
-                      <div
-                        style={{
-                          height: '100%',
-                          width: `${Math.min(100, item.percentageOfTotal)}%`,
-                          background: 'linear-gradient(90deg, #a855f7 0%, #10b981 100%)',
-                          borderRadius: '4px',
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        <div style={{ fontSize: '0.72rem', color: '#64748b', paddingTop: '8px', borderTop: '1px solid rgba(51, 65, 85, 0.4)' }}>
-          {rankMode === 'YEAR' ? `${selectedYear} 年度共 ${activeContributors.length} 檔標的貢獻` : `全歷史共 ${activeContributors.length} 檔標的貢獻`}
-        </div>
-      </div>
-
       {/* 歷史現金股利入帳流水明細表 */}
       <div
         className="glass-card"
@@ -436,10 +293,16 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
                     ? calculateYieldOnCost(t.price, holding.avgCost)
                     : 0;
 
-                  const fillStatus = holding && holding.currentPrice > 0
+                  const rawExPrice = t.exPrice !== undefined
+                    ? t.exPrice
+                    : t.referencePrice !== undefined
+                    ? t.referencePrice - t.price
+                    : undefined;
+
+                  const fillStatus = holding && holding.currentPrice > 0 && rawExPrice !== undefined
                     ? determineDividendFillStatus({
                         currentPrice: holding.currentPrice,
-                        exPrice: holding.avgCost,
+                        exPrice: rawExPrice,
                         dividendPerShare: t.price,
                       })
                     : undefined;
