@@ -118,7 +118,22 @@ function resolvePayoutForMonth(
     return 0;
   }
 
-  // 若有歷史實際發放月份紀錄，優先對齊真實歷史發放節奏
+  // 1. 若內建常態庫已有 Profile，與歷史實際發放月份取聯集（確保季配/月配完整週期，避免單月歷史覆蓋全季預估）
+  const profile = DEFAULT_DIVIDEND_PROFILES[symbol];
+  if (profile) {
+    const effectiveMonths = (historicalMonths && historicalMonths.length > 0)
+      ? Array.from(new Set([...profile.payoutMonths, ...historicalMonths])).sort((a, b) => a - b)
+      : profile.payoutMonths;
+
+    if (effectiveMonths.includes(monthNumber)) {
+      const timesPerYear = effectiveMonths.length;
+      const annualDividend = currentPrice * profile.defaultYield;
+      return annualDividend / timesPerYear;
+    }
+    return 0;
+  }
+
+  // 2. 若非內建清單標的，優先對齊真實歷史發放節奏
   if (historicalMonths && historicalMonths.length > 0) {
     if (historicalMonths.includes(monthNumber)) {
       const timesPerYear = historicalMonths.length;
@@ -127,17 +142,7 @@ function resolvePayoutForMonth(
     return 0;
   }
 
-  const profile = DEFAULT_DIVIDEND_PROFILES[symbol];
-  if (profile) {
-    if (profile.payoutMonths.includes(monthNumber)) {
-      const timesPerYear = profile.payoutMonths.length;
-      const annualDividend = currentPrice * profile.defaultYield;
-      return annualDividend / timesPerYear;
-    }
-    return 0;
-  }
-
-  // 一般年配股分散於 7~10 月除權息旺季平滑發放，以 4% 殖利率粗估
+  // 3. 一般年配股分散於 7~10 月除權息旺季平滑發放，以 4% 殖利率粗估
   const assignedMonth = getFallbackSummerPayoutMonth(symbol);
   if (monthNumber === assignedMonth) {
     return currentPrice * 0.04;

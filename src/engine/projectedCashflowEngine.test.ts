@@ -177,4 +177,42 @@ describe('Spec 0183 Ticket 02: projectedCashflowEngine (未來 12 個月現金�
     const augMonth = projection.months.find((m) => m.yearMonth === '2026-08');
     expect(augMonth?.breakdown.length).toBeLessThan(20);
   });
+
+  it('6. [Spec 0227 / Review Fix] 歷史發放月與 Profile 預設發放月應取聯集補齊，杜絕因僅有 1 筆入帳而覆蓋季配節奏', () => {
+    const holdingsWith0056: HoldingPosition[] = [
+      {
+        symbol: '0056',
+        name: '元大高股息',
+        shares: 10000,
+        avgCost: 35,
+        currentPrice: 38,
+        marketValue: 380000,
+        unrealizedPnL: 30000,
+        unrealizedPnLPercent: 8.57,
+        market: 'TW',
+      } as unknown as HoldingPosition,
+    ];
+
+    const input: ProjectedCashflowInput = {
+      baseYearMonth: '2026-10',
+      holdings: holdingsWith0056,
+      // 模擬帳本歷史上只記錄了一筆 11 月的 0056 配息
+      historicalPayoutMonths: {
+        '0056': [11],
+      },
+    };
+
+    const projection = generate12MonthProjectedCashflow(input);
+
+    // 0056 本身為季配 [2, 5, 8, 11]，聯集後應保留 2, 5, 8, 11 四個發放月
+    const nov2026 = projection.months.find((m) => m.yearMonth === '2026-11');
+    const feb2027 = projection.months.find((m) => m.yearMonth === '2027-02');
+    const may2027 = projection.months.find((m) => m.yearMonth === '2027-05');
+    const aug2027 = projection.months.find((m) => m.yearMonth === '2027-08');
+
+    expect(nov2026?.breakdown.some((b) => b.symbol === '0056')).toBe(true);
+    expect(feb2027?.breakdown.some((b) => b.symbol === '0056')).toBe(true);
+    expect(may2027?.breakdown.some((b) => b.symbol === '0056')).toBe(true);
+    expect(aug2027?.breakdown.some((b) => b.symbol === '0056')).toBe(true);
+  });
 });
