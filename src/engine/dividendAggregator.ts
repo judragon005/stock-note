@@ -1,5 +1,5 @@
 import { TradeRecord, MarketType } from '../types/stock';
-import { ReceivableDividend, DividendSummaryReport, PendingDividendItem } from '../types/dividend';
+import { ReceivableDividend, DividendSummaryReport, MonthlyDividendDistribution } from '../types/dividend';
 import { resolveEffectiveDividendTaxAndNet } from './taxComplianceEngine';
 import { estimatePaymentDate } from './receivableDividendEngine';
 
@@ -59,19 +59,8 @@ export function aggregateDividendReport(
   const currentYearStr = String(selectedYear);
   const previousYearStr = String(selectedYear - 1);
 
-  // 初始化 12 個月分佈
-  const monthlyData: {
-    monthKey: string;
-    monthLabel: string;
-    grossTWD: number;
-    netTWD: number;
-    taxTWD: number;
-    count: number;
-    pendingNetTWD: number;
-    pendingGrossTWD: number;
-    pendingCount: number;
-    pendingItems?: PendingDividendItem[];
-  }[] = Array.from({ length: 12 }, (_, i) => {
+  // 初始化 12 個月分佈 (直接引用 MonthlyDividendDistribution 具名領域型別)
+  const monthlyData: MonthlyDividendDistribution[] = Array.from({ length: 12 }, (_, i) => {
     const monthNum = i + 1;
     const monthFormatted = monthNum < 10 ? `0${monthNum}` : `${monthNum}`;
     return {
@@ -156,7 +145,7 @@ export function aggregateDividendReport(
   // 3. 聚合未到期之待入帳應收股利至當年度月度分佈 (Tri-State Accrual)
   for (const rec of receivableDividends) {
     if (rec.status !== 'PENDING_PAYMENT' && rec.status !== 'OVERDUE') continue;
-    const effectivePayDate = rec.payDate || estimatePaymentDate(rec.exDate, rec.market || 'TW');
+    const effectivePayDate = rec.payDate || estimatePaymentDate(rec.exDate, rec.market || 'TW', rec.symbol);
     if (!effectivePayDate || !effectivePayDate.startsWith(currentYearStr)) continue;
 
     const monthPart = parseInt(effectivePayDate.substring(5, 7), 10);
@@ -169,9 +158,9 @@ export function aggregateDividendReport(
         ? Math.round(rec.estimatedGrossDividend * exchangeRate)
         : Math.round(rec.estimatedGrossDividend);
 
-      targetMonth.pendingNetTWD += pendingNet;
-      targetMonth.pendingGrossTWD += pendingGross;
-      targetMonth.pendingCount += 1;
+      targetMonth.pendingNetTWD = (targetMonth.pendingNetTWD || 0) + pendingNet;
+      targetMonth.pendingGrossTWD = (targetMonth.pendingGrossTWD || 0) + pendingGross;
+      targetMonth.pendingCount = (targetMonth.pendingCount || 0) + 1;
       targetMonth.pendingItems = targetMonth.pendingItems || [];
       targetMonth.pendingItems.push({
         symbol: rec.symbol,

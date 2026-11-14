@@ -3,6 +3,7 @@ import {
   generate12MonthProjectedCashflow,
   ProjectedCashflowInput,
   recommendComplementaryDividendMonths,
+  FALLBACK_SUMMER_MONTHS,
 } from './projectedCashflowEngine';
 import { HoldingPosition } from '../types/stock';
 
@@ -249,5 +250,9 @@ describe('Spec 0183 Ticket 02: projectedCashflowEngine (未來 12 個月現金�
     expect(b0056).toBeDefined();
     // 應維持每期 6,650，而不是被除以 5 稀釋為 5,320
     expect(b0056?.estimatedAmountTwd).toBe(6650);
+  });
+
+  it('8. [Spec 0227 / Code Review Fix] FALLBACK_SUMMER_MONTHS 應嚴格對齊台股除權息週期 7~9 月', () => {
+    expect(FALLBACK_SUMMER_MONTHS).toEqual([7, 8, 9]);
   });
 });
