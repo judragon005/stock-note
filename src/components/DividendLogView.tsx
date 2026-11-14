@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { getTaipeiDateStr } from '../utils/formatters';
+import React, { useState, useMemo } from 'react';
+import { useTaipeiDateStr } from '../hooks/useTaipeiDateStr';
 import {
   Coins,
   ChevronLeft,
@@ -55,22 +55,9 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
   isSyncingCorporateActions = false,
   onInstantSettleDividend,
 }) => {
-  const [todayStr, setTodayStr] = useState<string>(() => getTaipeiDateStr());
+  const todayStr = useTaipeiDateStr();
   const currentYear = Number(todayStr.slice(0, 4));
   const currentYearMonth = todayStr.slice(0, 7);
-
-  useEffect(() => {
-    const syncToday = () => {
-      const next = getTaipeiDateStr();
-      setTodayStr((prev) => (prev === next ? prev : next));
-    };
-    const timer = window.setInterval(syncToday, 60_000);
-    window.addEventListener('focus', syncToday);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener('focus', syncToday);
-    };
-  }, []);
 
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [searchQuery, setSearchQuery] = useState<string>('');

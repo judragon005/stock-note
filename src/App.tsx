@@ -16,6 +16,7 @@ import {
 import { AccountingMethod } from './types/lot';
 import { calculateHoldingsAndSummary, repairLedgerTaxAndFee } from './engine/calculator';
 import { getTaipeiDateStr } from './utils/formatters';
+import { useTaipeiDateStr } from './hooks/useTaipeiDateStr';
 import { calculateHistoricalNavSeries } from './engine/historicalNav';
 import { fetchSymbolHistoricalPrices, fetchHistoricalFxRates } from './engine/historicalPriceFetcher';
 import {
@@ -460,19 +461,7 @@ export const App: React.FC = () => {
   }, [currentMarket, loanRecords, selectedAccountId]);
 
   // 台北當地日期 (YYYY-MM-DD)，跨午夜自動刷新以避免應收狀態機滯後
-  const [taipeiTodayStr, setTaipeiTodayStr] = useState<string>(() => getTaipeiDateStr());
-  useEffect(() => {
-    const syncToday = () => {
-      const next = getTaipeiDateStr();
-      setTaipeiTodayStr((prev) => (prev === next ? prev : next));
-    };
-    const timer = window.setInterval(syncToday, 60_000);
-    window.addEventListener('focus', syncToday);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener('focus', syncToday);
-    };
-  }, []);
+  const taipeiTodayStr = useTaipeiDateStr();
 
   // 待發放應收現金股利 (除息日至發放日之間平滑)
   const receivableDividends = useMemo(() => {
