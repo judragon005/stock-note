@@ -3,6 +3,7 @@ import { ReceivableDividend, SmoothedHoldingPnL } from '../types/dividend';
 import { RawCorporateEvent } from './corporateActionScanner';
 import { getHoldingsAsOfDate } from './calculator';
 import { calculateConsolidatedTwNhiTax } from './taxComplianceEngine';
+import { getTaipeiDateStr, addDaysToDateStr } from '../utils/formatters';
 
 /**
  * 官方除權息行事曆常態基準庫 (包含台積電 2330、兆豐金 2886、00878、00923、9927 等)
@@ -202,15 +203,11 @@ export function estimatePaymentDate(exDateStr: string, market: MarketType, symbo
     return OFFICIAL_TW_PAY_DATE_MAP[exDateStr];
   }
 
-  const date = new Date(exDateStr);
-  if (isNaN(date.getTime())) return exDateStr;
-
   let daysToAdd = 21;
   if (market === 'TW') {
     daysToAdd = isTwEtfSymbol(symbol) ? 23 : 28;
   }
-  date.setDate(date.getDate() + daysToAdd);
-  return date.toISOString().split('T')[0];
+  return addDaysToDateStr(exDateStr, daysToAdd);
 }
 
 /**
@@ -219,7 +216,7 @@ export function estimatePaymentDate(exDateStr: string, market: MarketType, symbo
  */
 export function instantSettleReceivableDividend(
   receivable: ReceivableDividend,
-  settleDate: string = new Date().toISOString().split('T')[0]
+  settleDate: string = getTaipeiDateStr()
 ): ReceivableDividend {
   return {
     ...receivable,
@@ -288,9 +285,7 @@ export function calculateReceivableDividends(
     processedKeys.add(key);
 
     // 依證券法規：以除息日前一日收盤在籍股數為準 (完整計入配股、增減資等公司行動)
-    const exDateObj = new Date(exDate);
-    exDateObj.setUTCDate(exDateObj.getUTCDate() - 1);
-    const prevDay = exDateObj.toISOString().split('T')[0];
+    const prevDay = addDaysToDateStr(exDate, -1);
 
     let sharesHeld = getHoldingsAsOfDate(trades, prevDay, symbol);
     // 防禦性在籍判定：

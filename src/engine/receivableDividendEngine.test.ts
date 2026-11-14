@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   calculateReceivableDividends,
   calculateSmoothedHoldingPnL,
@@ -650,6 +650,39 @@ describe('Receivable Dividend & Ex-Dividend Smoothing Engine (應收股利平滑
       );
       const rec0056 = receivables.find((r) => r.symbol === '0056');
       expect(rec0056).toBeUndefined();
+    });
+  });
+
+  describe('Ticket #545: 台北當地時區日期基準', () => {
+    it('instantSettleReceivableDividend 在 UTC+8 凌晨 00:30 預設入帳日應為台北當地日期', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-03-10T16:30:00.000Z')); // 台北 2026-03-11 00:30
+      try {
+        const settled = instantSettleReceivableDividend({
+          id: 'rec-test',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-03-01',
+          payDate: '2026-03-29',
+          sharesHeld: 1000,
+          sharesHeldOnExDate: 1000,
+          cashDividendPerShare: 4,
+          estimatedGrossDividend: 4000,
+          estimatedTaxOrFee: 10,
+          estimatedNetDividend: 3990,
+          estimatedNetDividendInTWD: 3990,
+          status: 'PENDING_PAYMENT',
+        });
+        expect(settled.payDate).toBe('2026-03-11');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('estimatePaymentDate 應正確處理閏年二月跨月 (+23 天)', () => {
+      expect(estimatePaymentDate('2024-02-28', 'TW', '0056')).toBe('2024-03-22');
     });
   });
 });
