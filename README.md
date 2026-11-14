@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-2199%2F2199%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2215%2F2215%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,20 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 台美跨市場股利發放日精準時序、ETF 配息組成穿透與被動現金流全景重構 (`Spec 0226`) *(V9.19.0 最新發布 / Spec #0226 / ADR #0226 / Issues #507 ~ #513 / PR #514)*
+### 1. 現金流三態時序統一、股利發放月精準對齊與月度日曆勾稽重構 (`Spec 0227`) *(V9.20.0 最新發布 / Spec #0227 / ADR #0227 / Issues #516 ~ #521, #533 / PR #522 ~ #526, #534)*
+
+- **0056 與核心權值股發放月精準校準 (Issue #517)**：
+  - 修正 `projectedCashflowEngine.ts` 將 0056 自除息月校準為實質發放月 `[2, 5, 8, 11]`，並校準 `00878` (`[3, 6, 9, 12]`)、`00919`、`00713`、`2330` 與 `00888`，徹底終結「11 月明明有 0056 入帳，圖表與明細卻空白」之混亂。
+- **解除 8 月單點集中 29 筆之硬編碼暴衝 (Issue #517)**：
+  - 引入歷史發放月查表優先機制 (`historicalPayoutMonths`) 並具備大小寫不敏感防禦（`.toUpperCase()`）；無歷史記錄之新標的改由 Symbol Hash 確定性平滑分攤至除權息旺季（7~9 月），徹底杜絕 520% 超標的假性高峰。
+- **現金流三態時序聚合與待入帳應收分佈擴展 (Issue #518)**：
+  - 月度分佈資料結構擴充 `pendingNetTWD` 與 `pendingCount`，精準收錄未到期之 `receivableDividends`，並保持實領淨額會計原則不失真。
+- **月度長條圖三態堆疊渲染與 Tooltip 待入帳清單穿透 (Issue #519)**：
+  - 在已結算月份顯示祖母綠實心柱，當前或未來月份若存在應收款則以金黃色條紋柱 (`#f59e0b` / `stripes-amber`) 分層堆疊；Tooltip 清晰穿透各標的待入帳清單與入帳日。
+- **歷史明細表明確時序口徑提示與待入帳錨點跳轉 (Issue #520)**：
+  - 表頭增設清晰口徑橫幅，標示實領流水性質，並提供便捷跳轉至上方待入帳行事曆，避免重複造輪子。
+
+### 2. 台美跨市場股利發放日精準時序、ETF 配息組成穿透與被動現金流全景重構 (`Spec 0226`) *(V9.19.0 / Spec #0226 / ADR #0226 / Issues #507 ~ #513 / PR #514)*
 
 - **現金流預估月曆 3 列 4 欄佈局與字體/金額放大優化 (Issue #508)**：
   - 將中間 12 個月份卡片自 1 列擠壓徹底重構為 3 行 × 4 欄 (`repeat(4, minmax(0, 1fr))`) 網格；
