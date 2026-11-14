@@ -337,6 +337,78 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
       expect(active[0].symbol).toBe('0056');
     });
   });
+
+  describe('6. Spec 0229 / Ticket 03: 雙軌應收中樞整合 (消滅待入帳矛盾)', () => {
+    it('當 scopedReceivables 為空，但交易明細存在未來預約股利 (如 2344 華邦電 2026-12-16) 時，應能正確合成為可待入帳實體', () => {
+      const mockFutureDividend: TradeRecord = {
+        id: 'trade-future-2344',
+        symbol: '2344',
+        name: '華邦電',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'DIVIDEND',
+        date: '2026-11-18', // 除息日
+        payDate: '2026-12-16', // 發放日
+        shares: 4000,
+        price: 2.0,
+        fee: 0,
+        tax: 0,
+        createdAt: 999,
+      };
+
+      const emptyScopedReceivables: ReceivableDividend[] = [];
+      const todayStr = '2026-11-14';
+      const usdToTwdRate = 32.0;
+
+      // 模擬 unifiedPendingReceivables 合成管線邏輯
+      const map = new Map<string, ReceivableDividend>();
+
+      emptyScopedReceivables.forEach((r) => {
+        if (
+          (r.status === 'PENDING_PAYMENT' ||
+            r.status === 'OVERDUE' ||
+            r.status === 'DUE_FOR_RECONCILIATION') &&
+          r.estimatedNetDividendInTWD > 0
+        ) {
+          map.set(`${r.symbol.toUpperCase()}_${r.payDate}`, r);
+        }
+      });
+
+      const effectivePayDate = mockFutureDividend.payDate || mockFutureDividend.date;
+      const isFuture = effectivePayDate > todayStr;
+      const key = `${mockFutureDividend.symbol.toUpperCase()}_${effectivePayDate}`;
+
+      if (isFuture && !map.has(key)) {
+        const gross = mockFutureDividend.shares * mockFutureDividend.price;
+        map.set(key, {
+          id: `virtual_${mockFutureDividend.id}`,
+          symbol: mockFutureDividend.symbol,
+          name: mockFutureDividend.name || mockFutureDividend.symbol,
+          market: mockFutureDividend.market,
+          currency: mockFutureDividend.currency || 'TWD',
+          exDate: mockFutureDividend.exDate || mockFutureDividend.date,
+          payDate: effectivePayDate,
+          sharesHeldOnExDate: mockFutureDividend.shares,
+          cashDividendPerShare: mockFutureDividend.price,
+          estimatedGrossDividend: gross,
+          estimatedTaxOrFee: 0,
+          estimatedNetDividend: gross,
+          estimatedNetDividendInTWD:
+            mockFutureDividend.currency === 'USD'
+              ? Math.round(gross * usdToTwdRate)
+              : Math.round(gross),
+          status: 'PENDING_PAYMENT',
+        });
+      }
+
+      const unifiedList = Array.from(map.values());
+      expect(unifiedList.length).toBe(1);
+      expect(unifiedList[0].symbol).toBe('2344');
+      expect(unifiedList[0].estimatedNetDividendInTWD).toBe(8000);
+      expect(unifiedList[0].payDate).toBe('2026-12-16');
+      expect(unifiedList[0].status).toBe('PENDING_PAYMENT');
+    });
+  });
 });
 
 

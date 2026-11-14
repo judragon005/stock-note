@@ -148,4 +148,38 @@ describe('DividendHistoryTable (歷史明細表、YOC 成本殖利率與填息�
     expect(html).toContain('NT$ 7,480');
     expect(html).toContain('確認網銀已入帳');
   });
+
+  describe('Spec 0229 / Ticket 02: 填息標籤防隱形自癒測試', () => {
+    it('當持股已被賣出清倉 (holdingsMap 無該標的) 時，應渲染 "已結清" 膠囊而非隱形空白', () => {
+      // 00919 不在 mockHoldings 內
+      const html = renderToStaticMarkup(<DividendHistoryTable {...defaultProps} />);
+      expect(html).toContain('00919');
+      expect(html).toContain('已結清');
+    });
+
+    it('當缺乏除息參考價時，應渲染 "待補除息價" 膠囊', () => {
+      const tradeWithoutExPrice: TradeRecord = {
+        id: 'trade-no-exprice',
+        symbol: '00878',
+        name: '國泰永續高股息',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'DIVIDEND',
+        date: '2026-08-15',
+        shares: 1000,
+        price: 0.55,
+        fee: 0,
+        tax: 0,
+        createdAt: 3,
+      };
+
+      const html = renderToStaticMarkup(
+        <DividendHistoryTable
+          {...defaultProps}
+          dividendTrades={[tradeWithoutExPrice]}
+        />
+      );
+      expect(html).toContain('待補除息價');
+    });
+  });
 });

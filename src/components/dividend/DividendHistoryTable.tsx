@@ -453,13 +453,13 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
                     ? t.referencePrice - t.price
                     : undefined;
 
-                  const fillStatus = holding && holding.currentPrice > 0 && rawExPrice !== undefined
-                    ? determineDividendFillStatus({
-                        currentPrice: holding.currentPrice,
-                        exPrice: rawExPrice,
-                        dividendPerShare: t.price,
-                      })
-                    : undefined;
+                  const isClosedPosition = !holding || holding.shares <= 0;
+                  const fillStatus = determineDividendFillStatus({
+                    currentPrice: holding ? holding.currentPrice : 0,
+                    exPrice: rawExPrice,
+                    dividendPerShare: t.price,
+                    isClosedPosition: isClosedPosition,
+                  });
 
                   const formattedShares = isUS ? t.shares.toLocaleString() : Math.round(t.shares).toLocaleString();
                   const formattedPrice = isUS ? `${t.price.toFixed(4)} USD` : `${t.price} TWD`;
@@ -535,9 +535,31 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
                                 fontSize: '0.65rem',
                                 padding: '1px 5px',
                                 borderRadius: '4px',
-                                background: fillStatus === 'FILLED' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.15)',
-                                color: fillStatus === 'FILLED' ? '#34d399' : '#f87171',
-                                border: `1px solid ${fillStatus === 'FILLED' ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.3)'}`,
+                                background:
+                                  fillStatus === 'FILLED'
+                                    ? 'rgba(16, 185, 129, 0.2)'
+                                    : fillStatus === 'UNFILLED'
+                                    ? 'rgba(239, 68, 68, 0.15)'
+                                    : fillStatus === 'CLOSED_POSITION'
+                                    ? 'rgba(100, 116, 139, 0.2)'
+                                    : 'rgba(245, 158, 11, 0.15)',
+                                color:
+                                  fillStatus === 'FILLED'
+                                    ? '#34d399'
+                                    : fillStatus === 'UNFILLED'
+                                    ? '#f87171'
+                                    : fillStatus === 'CLOSED_POSITION'
+                                    ? '#94a3b8'
+                                    : '#fbbf24',
+                                border: `1px solid ${
+                                  fillStatus === 'FILLED'
+                                    ? 'rgba(16, 185, 129, 0.4)'
+                                    : fillStatus === 'UNFILLED'
+                                    ? 'rgba(239, 68, 68, 0.3)'
+                                    : fillStatus === 'CLOSED_POSITION'
+                                    ? 'rgba(100, 116, 139, 0.4)'
+                                    : 'rgba(245, 158, 11, 0.35)'
+                                }`,
                               }}
                             >
                               {formatDividendFillStatusLabel(fillStatus)}

@@ -4,19 +4,22 @@
  */
 
 /**
- * 實質填息 / 貼息狀態代碼
+ * 實質填息 / 貼息 / 自癒狀態代碼
  * FILLED: 實質填息 (現價已回補除息缺口)
  * UNFILLED: 貼息中 (現價低於除息前基準，處於領息但本金虧損狀態)
+ * CLOSED_POSITION: 已結清部位 (該標的已全數平倉賣出，無需持續追蹤即時貼息)
+ * PENDING_DATA: 待補除息價 (缺乏除息前收盤價或參考價數據，防禦性提示)
  */
-export type DividendFillStatus = 'FILLED' | 'UNFILLED';
+export type DividendFillStatus = 'FILLED' | 'UNFILLED' | 'CLOSED_POSITION' | 'PENDING_DATA';
 
 /**
  * 填息狀態判斷參數介面
  */
 export interface DividendFillStatusParams {
   currentPrice: number;
-  exPrice: number;
+  exPrice?: number;
   dividendPerShare: number;
+  isClosedPosition?: boolean;
 }
 
 /**
@@ -73,10 +76,21 @@ export function calculatePositionYieldOnCost(
  * @returns 'FILLED' | 'UNFILLED'
  */
 export function determineDividendFillStatus(params: DividendFillStatusParams): DividendFillStatus {
-  const { currentPrice, exPrice, dividendPerShare } = params;
+  const { currentPrice, exPrice, dividendPerShare, isClosedPosition } = params;
+
+  // 1. 若該持股已被全數平倉賣出，標記為已結清部位
+  if (isClosedPosition) {
+    return 'CLOSED_POSITION';
+  }
+
+  // 2. 若缺乏除息參考價或數據無效，標記為待補除息價
+  if (exPrice === undefined || exPrice === null || isNaN(exPrice) || exPrice <= 0) {
+    return 'PENDING_DATA';
+  }
+
   const preExDividendBenchmark = exPrice + dividendPerShare;
 
-  // 納入 1e-9 浮點運算防禦誤差容限
+  // 3. 納入 1e-9 浮點運算防禦誤差容限
   if (currentPrice >= preExDividendBenchmark - 1e-9) {
     return 'FILLED';
   }
@@ -87,8 +101,8 @@ export function determineDividendFillStatus(params: DividendFillStatusParams): D
 /**
  * 格式化填息狀態為繁體中文友善標籤
  *
- * @param status 'FILLED' | 'UNFILLED'
- * @returns '實質填息' | '貼息中'
+ * @param status 'FILLED' | 'UNFILLED' | 'CLOSED_POSITION' | 'PENDING_DATA'
+ * @returns '實質填息' | '貼息中' | '已結清' | '待補除息價'
  */
 export function formatDividendFillStatusLabel(status: DividendFillStatus): string {
   switch (status) {
@@ -96,6 +110,10 @@ export function formatDividendFillStatusLabel(status: DividendFillStatus): strin
       return '實質填息';
     case 'UNFILLED':
       return '貼息中';
+    case 'CLOSED_POSITION':
+      return '已結清';
+    case 'PENDING_DATA':
+      return '待補除息價';
     default: {
       const _exhaustiveCheck: never = status;
       return _exhaustiveCheck;
