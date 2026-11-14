@@ -264,21 +264,39 @@ export function calculateReceivableDividends(
     allEventsMap.set(k, ev);
   }
 
-  // 2. 處理官方公司行動除息事件 (SSOT 線性判定，按帳戶隔離)
+  // 2. 處理官方公司行動除息事件 (SSOT 線性判定，按帳戶隔離，包含除息日後已清倉部位)
   for (const event of allEventsMap.values()) {
     if (event.type !== 'DIVIDEND' || !event.price || event.price <= 0) {
       continue;
     }
 
     const symbol = event.symbol.toUpperCase();
-    const matchedHoldings = holdingsBySymbol.get(symbol);
-    if (!matchedHoldings || matchedHoldings.length === 0) continue;
+    // 合併現有持倉與曾有交易紀錄之已清倉帳戶 (Spec 0231 #548)
+    const candidateMap = new Map<string, { accountId?: string; name: string; shares: number }>();
+    for (const h of holdingsBySymbol.get(symbol) || []) {
+      candidateMap.set(h.accountId || '', {
+        accountId: h.accountId,
+        name: h.name || symbol,
+        shares: h.shares,
+      });
+    }
+    for (const t of trades) {
+      if (t.symbol.toUpperCase() !== symbol || t.type === 'DIVIDEND') continue;
+      const accKey = t.accountId || '';
+      if (!candidateMap.has(accKey)) {
+        candidateMap.set(accKey, {
+          accountId: t.accountId,
+          name: t.name || symbol,
+          shares: 0,
+        });
+      }
+    }
+    if (candidateMap.size === 0) continue;
 
     const exDate = event.date;
     const payDate = estimatePaymentDate(exDate, event.market, symbol);
 
-    for (const holding of matchedHoldings) {
-      const accountKey = holding.accountId || '';
+    for (const [accountKey, holding] of candidateMap.entries()) {
       const key = `${symbol}-${exDate}-${accountKey}`;
       if (processedKeys.has(key)) continue;
 
@@ -286,10 +304,14 @@ export function calculateReceivableDividends(
         ? trades.filter((t) => t.accountId === holding.accountId)
         : trades;
 
-      // 檢查該帳戶 trades 中是否已手動或自動登記該次除息之股利收入，杜絕雙重計算
+      // 檢查該帳戶 trades 中是否已手動或自動登記該次除息之股利收入 (精確期次優先，防月配重疊誤殺與延遲重複)
+      const windowEnd = addDaysToDateStr(payDate, 21);
       const isAlreadyLogged = scopedAccountTrades.some((t) => {
         if (t.type !== 'DIVIDEND' || t.symbol.toUpperCase() !== symbol) return false;
-        return t.exDate === exDate || (t.date >= exDate && t.date <= payDate);
+        if (t.exDate) {
+          return t.exDate === exDate;
+        }
+        return t.date >= exDate && t.date <= windowEnd;
       });
       if (isAlreadyLogged) {
         processedKeys.add(key);
@@ -405,7 +427,11 @@ export function calculateReceivableDividends(
       holdingsBySymbol.get(symbol)?.[0];
 
     const exDate = trade.exDate || trade.date;
-    const payDate = trade.payDate || (trade.date > currentDateStr ? trade.date : estimatePaymentDate(exDate, trade.market));
+    const payDate =
+      trade.payDate ||
+      (trade.date > currentDateStr && !trade.exDate
+        ? trade.date
+        : estimatePaymentDate(exDate, trade.market, trade.symbol));
 
     const key = `${symbol}-${exDate}-${trade.accountId || ''}`;
     if (processedKeys.has(key)) {
@@ -413,7 +439,17 @@ export function calculateReceivableDividends(
     }
     processedKeys.add(key);
 
-    const sharesHeld = holding && holding.shares > 0 ? holding.shares : trade.shares;
+    const scopedAccountTrades = trade.accountId
+      ? trades.filter((t) => t.accountId === trade.accountId)
+      : trades;
+    const prevDay = addDaysToDateStr(exDate, -1);
+    const snapshotShares = getHoldingsAsOfDate(scopedAccountTrades, prevDay, symbol);
+    const sharesHeld =
+      snapshotShares > 0
+        ? snapshotShares
+        : holding && holding.shares > 0 && currentDateStr < exDate
+        ? holding.shares
+        : trade.shares;
     const cashPerShare = trade.price;
     const grossDividend = Number((sharesHeld * cashPerShare).toFixed(marketPrecision(trade.market)));
 
@@ -431,7 +467,14 @@ export function calculateReceivableDividends(
     const netDividend = Math.max(0, Number((grossDividend - taxOrFee).toFixed(marketPrecision(trade.market))));
     const netDividendInTWD = trade.market === 'TW' ? Math.round(netDividend) : Math.round(netDividend * exchangeRate);
 
-    const status: ReceivableDividend['status'] = 'PENDING_PAYMENT';
+    let status: ReceivableDividend['status'];
+    if (trade.exDate && currentDateStr < trade.exDate) {
+      status = 'UPCOMING_EX';
+    } else if (currentDateStr < payDate) {
+      status = 'PENDING_PAYMENT';
+    } else {
+      status = 'DUE_FOR_RECONCILIATION';
+    }
     const isOfficial = trade.payDate ? true : isPaymentDateOfficial(exDate, trade.symbol);
 
     receivables.push({
@@ -587,4 +630,102 @@ export function computeExDividendReferencePrice(
   const denominator = 1 + (stockDividendRatio > 0 ? stockDividendRatio : 0);
   const adjusted = (lastClose - cashDividend) / denominator;
   return Math.max(0, adjusted);
+}
+
+/**
+ * 一鍵入帳狀態機收斂處理器 (Spec 0231 #550)：
+ * - 若源自現有預約交易 (virtual_ / rec-trade-)，更新原交易而非重複新增，並保留 accountId 與正確稅費。
+ * - 若源自官方行事曆應收，先檢查是否有同 (accountId, symbol, exDate) 預約交易，無則新建並帶入完整 accountId 與稅費。
+ */
+export function settleDividendAction(params: {
+  dividendId: string;
+  actualPayDate: string;
+  receivableDividends: ReceivableDividend[];
+  trades: TradeRecord[];
+}): TradeRecord[] {
+  const { dividendId, actualPayDate, receivableDividends, trades } = params;
+  const isFromExistingTrade = dividendId.startsWith('virtual_') || dividendId.startsWith('rec-trade-');
+
+  if (isFromExistingTrade) {
+    const sourceTradeId = dividendId.replace(/^(virtual_|rec-trade-)/, '');
+    let matched = false;
+    const updated = trades.map((t) => {
+      if (t.id !== sourceTradeId) return t;
+      matched = true;
+      const targetRec = receivableDividends.find((r) => r.id === dividendId);
+      const effectiveDate = actualPayDate || targetRec?.payDate || t.payDate || t.date;
+      const fee = t.fee || targetRec?.estimatedWireFee || 0;
+      const tax =
+        t.tax && t.tax > 0
+          ? t.tax
+          : targetRec?.estimatedNhiTax || (targetRec?.currency === 'USD' ? targetRec.estimatedTaxOrFee : 0) || 0;
+      const cashAmount =
+        t.cashAmount ??
+        targetRec?.estimatedNetDividend ??
+        Math.max(0, t.shares * t.price - tax - fee);
+      return {
+        ...t,
+        date: effectiveDate,
+        payDate: effectiveDate,
+        accountId: t.accountId || targetRec?.accountId,
+        fee,
+        tax,
+        cashAmount,
+      };
+    });
+    if (matched) return updated;
+  }
+
+  const targetRec = receivableDividends.find((r) => r.id === dividendId);
+  if (!targetRec) return trades;
+
+  // 若帳本中已有相同 (accountId, symbol, exDate) 之預約股利，更新原紀錄避免雙重入帳
+  const existingIdx = trades.findIndex(
+    (t) =>
+      t.type === 'DIVIDEND' &&
+      t.symbol.toUpperCase() === targetRec.symbol.toUpperCase() &&
+      (t.exDate || t.date) === targetRec.exDate &&
+      (t.accountId || '') === (targetRec.accountId || '')
+  );
+
+  const settledDate = actualPayDate || targetRec.payDate;
+  const fee = targetRec.estimatedWireFee || 0;
+  const tax = targetRec.estimatedNhiTax || (targetRec.currency === 'USD' ? targetRec.estimatedTaxOrFee : 0);
+
+  if (existingIdx >= 0) {
+    return trades.map((t, i) =>
+      i === existingIdx
+        ? {
+            ...t,
+            date: settledDate,
+            payDate: settledDate,
+            accountId: t.accountId || targetRec.accountId,
+            fee: t.fee || fee,
+            tax: t.tax && t.tax > 0 ? t.tax : tax,
+            cashAmount: targetRec.estimatedNetDividend,
+          }
+        : t
+    );
+  }
+
+  const newTrade: TradeRecord = {
+    id: `trade-div-${Date.now()}-${targetRec.symbol}`,
+    accountId: targetRec.accountId,
+    symbol: targetRec.symbol,
+    name: targetRec.name,
+    market: targetRec.market,
+    currency: targetRec.currency,
+    type: 'DIVIDEND',
+    date: settledDate,
+    exDate: targetRec.exDate,
+    payDate: settledDate,
+    shares: targetRec.sharesHeldOnExDate || targetRec.sharesHeld || 0,
+    price: targetRec.cashDividendPerShare,
+    fee,
+    tax,
+    cashAmount: targetRec.estimatedNetDividend,
+    createdAt: Date.now(),
+  };
+
+  return [newTrade, ...trades];
 }

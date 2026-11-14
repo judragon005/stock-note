@@ -203,11 +203,12 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
       .reduce((sum, r) => sum + (r.stockDividendShares || 0), 0);
   }, [activeReceivables]);
 
-  // 歷史入帳明細列表過濾 (解除 payDate > todayStr 硬截斷，支援穿透式時序預覽)
+  // 歷史入帳明細列表過濾 (Spec 0231 #550: 嚴格僅顯示已完成交割之實領流水 payDate <= todayStr，在途項目歸口應收專區)
   const dividendTrades = useMemo(() => {
     const selectedYearStr = String(selectedYear);
     return scopedTrades
       .filter((t) => t.type === 'DIVIDEND')
+      .filter((t) => getEffectiveDividendPayDate(t) <= todayStr)
       .filter((t) => {
         const payDate = getEffectiveDividendPayDate(t);
         if (tableYearFilter === 'SELECTED_YEAR') {
