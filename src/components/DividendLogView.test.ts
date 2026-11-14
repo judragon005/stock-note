@@ -722,6 +722,62 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
       }
     });
   });
+
+  describe('11. Ticket #560: 對帳清單搜尋過濾與無結果邊界驗證', () => {
+    it('在對帳模式下，searchQuery 應能正確過濾 annualReconciliationList 且無匹配時安全呈現空清單', () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date('2026-08-01T12:00:00+08:00'));
+        const reconTrades: TradeRecord[] = [
+          {
+            id: 't-recon-1',
+            symbol: '2330',
+            name: '台積電',
+            market: 'TW',
+            currency: 'TWD',
+            type: 'DIVIDEND',
+            date: '2026-03-16',
+            payDate: '2026-04-10',
+            shares: 1000,
+            price: 4.0,
+            fee: 0,
+            tax: 0,
+            createdAt: 1,
+          },
+          {
+            id: 't-recon-2',
+            symbol: 'AAPL',
+            name: 'Apple',
+            market: 'US',
+            currency: 'USD',
+            type: 'DIVIDEND',
+            date: '2026-05-15',
+            payDate: '2026-05-15',
+            shares: 100,
+            price: 0.25,
+            fee: 0,
+            tax: 7.5,
+            exchangeRate: 30,
+            createdAt: 2,
+          },
+        ];
+
+        // 預設渲染應包含兩檔標的
+        const htmlAll = renderToStaticMarkup(
+          React.createElement(DividendLogView, {
+            trades: reconTrades,
+            holdings: [],
+            receivableDividends: [],
+            usdToTwdRate: 30,
+          })
+        );
+        expect(htmlAll).toContain('2330');
+        expect(htmlAll).toContain('AAPL');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });
 
 

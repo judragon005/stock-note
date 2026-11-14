@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { DividendHistoryTable } from './DividendHistoryTable';
+import { DividendHistoryTable, AnnualReconciliationItem } from './DividendHistoryTable';
 import { TradeRecord, HoldingPosition } from '../../types/stock';
 
 describe('DividendHistoryTable (歷史明細表、YOC 成本殖利率與填息標籤)', () => {
@@ -334,7 +334,7 @@ describe('DividendHistoryTable (歷史明細表、YOC 成本殖利率與填息�
     });
   });
 
-  describe('6. Ticket #552: 匯率基準統一、年化 YOC 標示、空對帳提示與大額美金千分位', () => {
+  describe('6. Ticket #552 / #560: 匯率基準統一、年化 YOC 標示、對帳搜尋過濾與大額美金千分位', () => {
     it('對帳面板無資料時應顯示空狀態提示', () => {
       const html = renderToStaticMarkup(
         <DividendHistoryTable
@@ -344,6 +344,31 @@ describe('DividendHistoryTable (歷史明細表、YOC 成本殖利率與填息�
         />
       );
       expect(html).toContain('本年度尚無符合條件之已入帳對帳紀錄');
+    });
+
+    it('對帳面板應精確渲染已過濾之標的清單與毛/淨額對帳數據', () => {
+      const filteredList: AnnualReconciliationItem[] = [
+        {
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          count: 2,
+          grossTWD: 20000,
+          netTWD: 20000,
+          taxTWD: 0,
+        },
+      ];
+      const html = renderToStaticMarkup(
+        <DividendHistoryTable
+          {...defaultProps}
+          showReconciliationPanel={true}
+          reconciliationList={filteredList}
+        />
+      );
+      expect(html).toContain('2330');
+      expect(html).toContain('台積電');
+      expect(html).toContain('2 筆');
+      expect(html).toContain('NT$ 20,000');
     });
 
     it('大額美股股利應具千分位格式，優先採用交易快照匯率（無快照則回退 usdToTwdRate）換算台幣並標示「年化 YOC」', () => {
