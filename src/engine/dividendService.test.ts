@@ -103,6 +103,89 @@ describe('fetchCompanyDividendHistory', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
+  it('Ticket #553: 同年度多次配息合併時，應保留各期除息日與發放日於 payoutEvents 且不遺失日期', async () => {
+    const mockData = {
+      data: [
+        {
+          date: '2026-03-19',
+          CashEarningsDistribution: 4.0,
+          CashExDividendTradingDate: '2026-03-19',
+          CashDividendPaymentDate: '2026-04-09',
+        },
+        {
+          date: '2026-06-18',
+          CashEarningsDistribution: 4.5,
+          CashExDividendTradingDate: '2026-06-18',
+          CashDividendPaymentDate: '2026-07-09',
+        },
+      ],
+    };
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any) => {
+      if (String(input).includes('/api/market/corporate-actions/')) {
+        return { ok: false, status: 404 } as Response;
+      }
+      return { ok: true, json: async () => mockData } as Response;
+    });
+
+    const res = await fetchCompanyDividendHistory('2330_MULTI', 'TW');
+    expect(res).toHaveLength(1);
+    expect(res[0].cashDividend).toBe(8.5);
+    expect(res[0].payoutEvents).toHaveLength(2);
+    expect(res[0].payoutEvents?.[0]).toMatchObject({
+      exDividendDate: '2026-03-19',
+      payDate: '2026-04-09',
+      cashDividend: 4.0,
+    });
+    expect(res[0].payoutEvents?.[1]).toMatchObject({
+      exDividendDate: '2026-06-18',
+      payDate: '2026-07-09',
+      cashDividend: 4.5,
+    });
+  });
+
+  it('Ticket #553: Lakehouse 本地 API 成功路徑、HTTP 429/500 異常與 MAX_CACHE_ENTRIES 驅逐驗證', async () => {
+    // 1. Lakehouse 成功路徑
+    const lakehouseActions = [{ year: 2025, cashDividend: 10, stockDividend: 0, totalDividend: 10 }];
+    const spyOk = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ actions: lakehouseActions }),
+    } as Response);
+    const resLk = await fetchCompanyDividendHistory('LK_SUCCESS', 'TW');
+    expect(resLk).toEqual(lakehouseActions);
+    expect(spyOk).toHaveBeenCalledTimes(1);
+
+    // 2. HTTP 429 / 500 異常安全回退
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 429 } as Response);
+    const res429 = await fetchCompanyDividendHistory('ERR_429', 'TW');
+    expect(res429).toEqual([]);
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 500 } as Response);
+    const res500 = await fetchCompanyDividendHistory('ERR_500', 'TW');
+    expect(res500).toEqual([]);
+
+    // 3. MAX_CACHE_ENTRIES (100) 驅逐驗證：寫入 101 個不重複代碼後，第一個應被驅逐重發 fetch
+    const fetchCalls: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any) => {
+      const url = String(input);
+      fetchCalls.push(url);
+      if (url.includes('/api/market/corporate-actions/')) {
+        return {
+          ok: true,
+          json: async () => ({ actions: [{ year: 2025, cashDividend: 1, stockDividend: 0, totalDividend: 1 }] }),
+        } as Response;
+      }
+      return { ok: false, status: 404 } as Response;
+    });
+
+    for (let i = 0; i <= 100; i++) {
+      await fetchCompanyDividendHistory(`CACHE_SYM_${i}`, 'TW');
+    }
+    const callsBeforeRefetch = fetchCalls.length;
+    await fetchCompanyDividendHistory('CACHE_SYM_0', 'TW');
+    expect(fetchCalls.length).toBeGreaterThan(callsBeforeRefetch);
+  });
+
   describe('deriveUsDividendsFromFinancials (Spec 0202 - Ticket 06)', () => {
     it('應能從美股現金流量表 dividendPaid 與推導股數精準反推歷年每股股利', async () => {
       const { deriveUsDividendsFromFinancials } = await import('./dividendService');

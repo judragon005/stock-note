@@ -411,6 +411,7 @@ describe('Dividend Aggregator Engine (股利數據聚合引擎)', () => {
         name: '元大高股息',
         payDate: '2026-11-11',
         netTWD: 10690,
+        grossTWD: 10700,
       });
 
       // 12 月 (Index 11) 應聚合待入帳款項

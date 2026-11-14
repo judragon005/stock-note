@@ -29,11 +29,27 @@ describe('DividendKpiSummary (四大發光 KPI 摘要面板)', () => {
     expect(html).toContain('券商對帳');
   });
 
-  it('若有借貸利息支出，應呈現扣除利息後的實質淨現金流', () => {
-    const html = renderToStaticMarkup(<DividendKpiSummary {...defaultProps} />);
-    // 95000 - 20000 = 75000
-    expect(html).toContain('NT$ 75,000');
+  it('若有借貸利息支出，應以近 12 個月滾動股利 (TTM) 扣除利息計算實質淨利差，不受選定年份影響', () => {
+    const html = renderToStaticMarkup(
+      <DividendKpiSummary {...defaultProps} currentYearNetTWD={0} />
+    );
+    // TTM 120000 - 20000 = 100000 (不受 currentYearNetTWD=0 影響)
+    expect(html).toContain('NT$ 100,000');
     expect(html).toContain('扣除質押利息淨現金流');
+  });
+
+  it('應正確呈現負利差與無跨行匯費分支', () => {
+    const html = renderToStaticMarkup(
+      <DividendKpiSummary
+        {...defaultProps}
+        trailing12mDividendsTWD={10000}
+        estimatedLoanInterestTWD={25000}
+        totalWireFeesTWD={0}
+        nhiAlertCount={0}
+      />
+    );
+    expect(html).toContain('-15,000');
+    expect(html).not.toContain('累計跨行匯費');
   });
 
   it('應正確呈現待入庫股票股利股數與累計匯費', () => {

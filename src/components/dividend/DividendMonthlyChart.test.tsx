@@ -148,5 +148,42 @@ describe('DividendMonthlyChart (月度配息長條圖)', () => {
       expect(grossMetrics.totalVal).toBe(62500);
       expect(grossMetrics.meetsExpense).toBe(false); // 62,500 < 65,000
     });
+
+    it('Ticket #551: GROSS 模式下 aria-label 與明細文字應一致呈現毛額而非實領淨額', () => {
+      const mockDist = {
+        monthKey: '2026-08',
+        monthLabel: '8月',
+        grossTWD: 50000,
+        netTWD: 48935,
+        taxTWD: 1065,
+        count: 1,
+        pendingNetTWD: 9779,
+        pendingGrossTWD: 10000,
+        pendingCount: 1,
+        pendingItems: [{ symbol: '2330', name: '台積電', payDate: '2026-08-20', netTWD: 9779, grossTWD: 10000 } as any],
+      };
+
+      const chartHtml = renderToStaticMarkup(
+        <DividendMonthlyChart
+          monthlyDistribution={[mockDist]}
+          maxMonthlyNet={60000}
+          selectedYear={2026}
+          dividendDisplayMode="GROSS"
+        />
+      );
+      expect(chartHtml).toContain('50,000');
+      expect(chartHtml).not.toContain('實領 NT$ 48,935');
+
+      const tooltipHtml = renderToStaticMarkup(
+        <MonthDividendTooltipContent
+          distribution={mockDist}
+          selectedYear={2026}
+          dividendDisplayMode="GROSS"
+        />
+      );
+      expect(tooltipHtml).toContain('應發毛額：');
+      expect(tooltipHtml).not.toContain('實領入帳：');
+      expect(tooltipHtml).toContain('NT$ 10,000');
+    });
   });
 });

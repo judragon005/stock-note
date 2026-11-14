@@ -158,7 +158,7 @@ export const DividendTopContributorsCard: React.FC<DividendTopContributorsCardPr
                             flexShrink: 0,
                           }}
                         >
-                          YOC: {holding.yieldOnCostPercent.toFixed(1)}%
+                          累計 YOC: {holding.yieldOnCostPercent.toFixed(1)}%
                         </span>
                       ) : null}
                     </div>

@@ -92,7 +92,9 @@ export const MonthDividendTooltipContent: React.FC<MonthDividendTooltipContentPr
       {hasAnyData ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '0.75rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#94a3b8' }}>實領入帳：</span>
+            <span style={{ color: '#94a3b8' }}>
+              {dividendDisplayMode === 'GROSS' ? '應發毛額：' : '實領入帳：'}
+            </span>
             <b className="mono" style={{ color: hasReceived ? '#34d399' : '#64748b', fontVariantNumeric: 'tabular-nums' }}>
               NT$ {receivedVal.toLocaleString()}
             </b>
@@ -139,7 +141,7 @@ export const MonthDividendTooltipContent: React.FC<MonthDividendTooltipContentPr
                       • <b style={{ color: '#ffffff' }}>{item.symbol}</b> ({payDateStr})
                     </span>
                     <span className="mono" style={{ color: '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>
-                      NT$ {item.netTWD.toLocaleString()}
+                      NT$ {(dividendDisplayMode === 'GROSS' ? (item.grossTWD ?? item.netTWD) : item.netTWD).toLocaleString()}
                     </span>
                   </div>
                 );
@@ -323,14 +325,19 @@ export const DividendMonthlyChart: React.FC<DividendMonthlyChartProps> = ({
             } = computeMonthBarMetrics(m, dividendDisplayMode, targetMonthlyExpenseTwd);
 
             const totalBarHeightPx = chartMaxVal > 0 ? Math.round((totalVal / chartMaxVal) * BAR_SCALE_HEIGHT_PX) : 0;
+            const effectiveBarHeightPx = Math.max(14, totalBarHeightPx);
 
-            // 計算堆疊比例
+            // 計算堆疊比例 (確保兩柱高度嚴格貼合不產生間隙)
             const receivedRatio = totalVal > 0 ? receivedVal / totalVal : 0;
             const receivedHeightPx = hasReceived
-              ? Math.max(hasPending ? 4 : 14, Math.round(totalBarHeightPx * receivedRatio))
+              ? hasPending
+                ? Math.max(4, Math.min(effectiveBarHeightPx - 4, Math.round(effectiveBarHeightPx * receivedRatio)))
+                : effectiveBarHeightPx
               : 0;
             const pendingHeightPx = hasPending
-              ? Math.max(hasReceived ? 4 : 14, totalBarHeightPx - receivedHeightPx)
+              ? hasReceived
+                ? Math.max(4, effectiveBarHeightPx - receivedHeightPx)
+                : effectiveBarHeightPx
               : 0;
 
             return (
@@ -358,12 +365,12 @@ export const DividendMonthlyChart: React.FC<DividendMonthlyChartProps> = ({
                 >
                   {hasAnyData ? (
                     <div
-                      aria-label={`${selectedYear}年${m.monthLabel}: 實領 NT$ ${m.netTWD.toLocaleString()}${hasPending ? `, 待入帳應收 NT$ ${pendingVal.toLocaleString()}` : ''}`}
+                      aria-label={`${selectedYear}年${m.monthLabel}: ${dividendDisplayMode === 'GROSS' ? '應發毛額' : '實領'} NT$ ${receivedVal.toLocaleString()}${hasPending ? `, 待入帳應收 NT$ ${pendingVal.toLocaleString()}` : ''}`}
                       style={{
                         width: '100%',
                         minWidth: '16px',
                         maxWidth: '36px',
-                        height: `${Math.max(14, totalBarHeightPx)}px`,
+                        height: `${effectiveBarHeightPx}px`,
                         display: 'flex',
                         flexDirection: 'column-reverse',
                         borderRadius: '6px 6px 2px 2px',

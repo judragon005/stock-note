@@ -425,6 +425,11 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
               </div>
             </div>
 
+            {reconciliationList.length === 0 ? (
+              <div style={{ padding: '16px', textAlign: 'center', fontSize: '0.78rem', color: '#64748b' }}>
+                本年度尚無符合條件之已入帳對帳紀錄
+              </div>
+            ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '10px', maxHeight: '200px', overflowY: 'auto' }}>
               {reconciliationList.map((item) => (
                 <div
@@ -461,6 +466,7 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
                 </div>
               ))}
             </div>
+            )}
           </div>
         )}
 
@@ -532,16 +538,17 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
                     isClosedPosition: isClosedPosition,
                   });
 
+                  const formatUsd = (val: number) => val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                   const formattedShares = isUS ? t.shares.toLocaleString() : Math.round(t.shares).toLocaleString();
                   const formattedPrice = isUS ? `${t.price.toFixed(4)} USD` : `${t.price} TWD`;
-                  const formattedGross = isUS ? `${gross.toFixed(2)} USD` : `${Math.round(gross).toLocaleString()} TWD`;
+                  const formattedGross = isUS ? `${formatUsd(gross)} USD` : `${Math.round(gross).toLocaleString()} TWD`;
 
                   let formattedTax = isUS ? '$0.00 USD' : 'NT$ 0';
                   if (effectiveTax > 0) {
-                    formattedTax = isUS ? `-${effectiveTax.toFixed(2)} USD` : `-NT$ ${Math.round(effectiveTax).toLocaleString()}`;
+                    formattedTax = isUS ? `-${formatUsd(effectiveTax)} USD` : `-NT$ ${Math.round(effectiveTax).toLocaleString()}`;
                   }
 
-                  const formattedNet = isUS ? `${net.toFixed(2)} USD` : `${Math.round(net).toLocaleString()} TWD`;
+                  const formattedNet = isUS ? `${formatUsd(net)} USD` : `${Math.round(net).toLocaleString()} TWD`;
 
                   return (
                     <tr
@@ -597,7 +604,7 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
                           {yoc > 0 && (
                             <span className="mono" style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                              YOC {yoc.toFixed(1)}%
+                              年化 YOC {yoc.toFixed(1)}%
                             </span>
                           )}
                           {fillStatus && <DividendFillStatusBadge status={fillStatus} />}

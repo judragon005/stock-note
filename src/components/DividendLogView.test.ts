@@ -9,72 +9,57 @@ import { calculateMonthTooltipAlign, DividendLogView } from './DividendLogView';
 import { buildUnifiedPendingReceivables } from '../engine/dividendAggregator';
 
 describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () => {
-  describe('1. 歷史現金股利入帳明細：配股配息合併健保計算', () => {
-    it('真實場景：2890 永豐金持股 31,000 股、配息 1.10 元、同期配股 620 股，應自動合併面額計算二代健保 NT$ 850，實領 NT$ 33,250', () => {
-      const mockTrades: TradeRecord[] = [
-        {
-          id: 't-div-2890',
-          symbol: '2890',
-          name: '永豐金',
-          market: 'TW',
-          currency: 'TWD',
-          type: 'DIVIDEND',
-          date: '2026-07-23',
-          shares: 31000,
-          price: 1.10,
-          fee: 0,
-          tax: 0, // 未手動指定，由系統智能計算
-          createdAt: 1,
-        },
-        {
-          id: 't-stock-div-2890',
-          symbol: '2890',
-          name: '永豐金',
-          market: 'TW',
-          currency: 'TWD',
-          type: 'STOCK_DIVIDEND',
-          date: '2026-07-23',
-          shares: 620,
-          price: 0,
-          fee: 0,
-          tax: 0,
-          createdAt: 2,
-        },
-      ];
+  describe('1. 歷史現金股利入帳明細：配股配息合併健保計算 (真實主視圖掛載)', () => {
+    it('真實場景：2890 永豐金持股 31,000 股、配息 1.10 元、同期配股 620 股，主視圖應合併面額計算二代健保 NT$ 850，實領 NT$ 33,250', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-01T12:00:00+08:00'));
+      try {
+        const mockTrades: TradeRecord[] = [
+          {
+            id: 't-div-2890',
+            symbol: '2890',
+            name: '永豐金',
+            market: 'TW',
+            currency: 'TWD',
+            type: 'DIVIDEND',
+            date: '2026-07-23',
+            shares: 31000,
+            price: 1.1,
+            fee: 0,
+            tax: 0,
+            createdAt: 1,
+          },
+          {
+            id: 't-stock-div-2890',
+            symbol: '2890',
+            name: '永豐金',
+            market: 'TW',
+            currency: 'TWD',
+            type: 'STOCK_DIVIDEND',
+            date: '2026-07-23',
+            shares: 620,
+            price: 0,
+            fee: 0,
+            tax: 0,
+            createdAt: 2,
+          },
+        ];
 
-      const dividendTrade = mockTrades[0];
-      const gross = dividendTrade.shares * dividendTrade.price; // 34,100
+        const html = renderToStaticMarkup(
+          React.createElement(DividendLogView, {
+            trades: mockTrades,
+            holdings: [],
+            receivableDividends: [],
+            usdToTwdRate: 32,
+          })
+        );
 
-      // 模擬 DividendLogView 中的計算縫隙
-      let peerStockShares = 0;
-      const tTime = new Date(dividendTrade.date).getTime();
-      const matchedStockTrade = mockTrades.find((st) => {
-        if (st.symbol.toUpperCase() !== dividendTrade.symbol.toUpperCase()) return false;
-        if (st.type !== 'STOCK_DIVIDEND' && st.type !== 'STOCK_SPLIT') return false;
-        const stTime = new Date(st.date).getTime();
-        return Math.abs(tTime - stTime) / (1000 * 3600 * 24) <= 7;
-      });
-
-      if (matchedStockTrade) {
-        peerStockShares = matchedStockTrade.shares;
+        expect(html).toContain('34,100');
+        expect(html).toContain('850');
+        expect(html).toContain('33,250');
+      } finally {
+        vi.useRealTimers();
       }
-
-      expect(peerStockShares).toBe(620);
-
-      const taxRes = calculateConsolidatedTwNhiTax({
-        cashDividendGross: gross,
-        stockDividendShares: Math.round(peerStockShares),
-      });
-
-      expect(gross).toBe(34100);
-      expect(taxRes.stockDividendParValue).toBe(6200);
-      expect(taxRes.totalTaxableIncome).toBe(40300);
-      expect(taxRes.triggersNhi).toBe(true);
-      expect(taxRes.nhiFeeTWD).toBe(850);
-      expect(taxRes.netCashDividend).toBe(33250);
-
-      const net = Math.max(0, gross - taxRes.nhiFeeTWD);
-      expect(net).toBe(33250);
     });
 
     it('若交易紀錄中尚未補登配股，應自動自 CorporateActionSessionCache 比對官方配股事件並計算健保', () => {
@@ -653,6 +638,71 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
         );
 
         expect(html).toContain('2026 年度尚無符合條件之現金股利入帳明細');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe('10. Ticket #553: 台美混合三方加總守恆驗證 (KPI / 月柱圖 / 歷史明細)', () => {
+    it('KPI、月度分佈與歷史明細表加總誤差 <= ±1 TWD', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-01T12:00:00+08:00'));
+      try {
+        const { aggregateDividendReport } = await import('../engine/dividendAggregator');
+        const mixedTrades: TradeRecord[] = [
+          {
+            id: 'tw-1',
+            symbol: '2330',
+            name: '台積電',
+            market: 'TW',
+            currency: 'TWD',
+            type: 'DIVIDEND',
+            date: '2026-04-10',
+            shares: 2000,
+            price: 4.5,
+            fee: 10,
+            tax: 0,
+            createdAt: 1,
+          },
+          {
+            id: 'us-1',
+            symbol: 'AAPL',
+            name: 'Apple',
+            market: 'US',
+            currency: 'USD',
+            type: 'DIVIDEND',
+            date: '2026-05-15',
+            shares: 100,
+            price: 0.25,
+            fee: 0,
+            tax: 7.5,
+            exchangeRate: 31.5,
+            createdAt: 2,
+          },
+        ];
+
+        const report = aggregateDividendReport(mixedTrades, [], 2026, 32.0, '2026-08-01');
+        const monthlySumNet = report.monthlyDistribution.reduce((s, m) => s + m.netTWD, 0);
+        const monthlySumGross = report.monthlyDistribution.reduce((s, m) => s + m.grossTWD, 0);
+
+        expect(Math.abs(report.currentYearDividendsTWD - monthlySumNet)).toBeLessThanOrEqual(1);
+        expect(Math.abs(report.currentYearGrossTWD - monthlySumGross)).toBeLessThanOrEqual(1);
+
+        // TW: 9000 - 10 = 8990; US: (25 - 7.5) * 31.5 = 551.25 -> 551; Total = 9541
+        expect(report.currentYearDividendsTWD).toBe(9541);
+
+        const html = renderToStaticMarkup(
+          React.createElement(DividendLogView, {
+            trades: mixedTrades,
+            holdings: [],
+            receivableDividends: [],
+            usdToTwdRate: 32.0,
+          })
+        );
+        expect(html).toContain('NT$ 9,541');
+        expect(html).toContain('NT$ 8,990');
+        expect(html).toContain('NT$ 551');
       } finally {
         vi.useRealTimers();
       }

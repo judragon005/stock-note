@@ -42,7 +42,7 @@ describe('DividendTopContributorsCard (股息貢獻排行卡片)', () => {
     expect(html).toContain('00919');
     expect(html).toContain('群益台灣精選高息');
     expect(html).toContain('NT$ 294,748 (48.4%)');
-    expect(html).toContain('YOC: 45.9%');
+    expect(html).toContain('累計 YOC: 45.9%');
     expect(html).toContain('2026年');
     expect(html).toContain('全歷史');
   });

@@ -115,6 +115,7 @@ export interface PendingDividendItem {
   name: string;
   payDate: string;
   netTWD: number;
+  grossTWD?: number;
 }
 
 /**
