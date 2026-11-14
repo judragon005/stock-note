@@ -133,7 +133,8 @@ function resolvePayoutForMonth(ctx: PayoutResolutionContext): number {
   }
 
   // 1. 若內建常態庫已有 Profile，優先以 Profile 官方常態發放月為唯一準則（保持年化累計 100% 且防止單月歷史覆蓋全季預估）
-  const profile = DEFAULT_DIVIDEND_PROFILES[symbol];
+  const sym = symbol.toUpperCase();
+  const profile = DEFAULT_DIVIDEND_PROFILES[sym];
   if (profile) {
     if (profile.payoutMonths.includes(monthNumber)) {
       const normalTimesPerYear = Math.max(profile.payoutMonths.length, 1);
@@ -153,7 +154,7 @@ function resolvePayoutForMonth(ctx: PayoutResolutionContext): number {
   }
 
   // 3. 一般年配股分散於 7~9 月除權息旺季平滑發放，以具名常數預估殖利率粗估
-  const assignedMonth = getFallbackSummerPayoutMonth(symbol);
+  const assignedMonth = getFallbackSummerPayoutMonth(sym);
   if (monthNumber === assignedMonth) {
     return currentPrice * DEFAULT_SUMMER_FALL_YIELD;
   }
@@ -201,10 +202,11 @@ export function generate12MonthProjectedCashflow(input: ProjectedCashflowInput):
 
     for (const h of input.holdings) {
       if (h.shares <= 0) continue;
-      const customConfig = input.customPayoutRates?.[h.symbol];
-      const historicalMonths = input.historicalPayoutMonths?.[h.symbol];
+      const sym = h.symbol.toUpperCase();
+      const customConfig = input.customPayoutRates?.[sym] || input.customPayoutRates?.[h.symbol];
+      const historicalMonths = input.historicalPayoutMonths?.[sym] || input.historicalPayoutMonths?.[h.symbol];
       const perShare = resolvePayoutForMonth({
-        symbol: h.symbol,
+        symbol: sym,
         monthNumber,
         currentPrice: h.currentPrice,
         customConfig,
