@@ -619,6 +619,45 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
       expect(html).not.toContain('已扣除二代健保與 30% IRS 預扣稅');
     });
   });
+
+  describe('9. Ticket #550: 歷史明細表僅顯示已完成交割之實領流水（避免與在途應收雙重渲染）', () => {
+    it('同年度尚未到期之未來預約股利不得出現在歷史實領明細表格中', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-06-01T12:00:00+08:00'));
+      try {
+        const futureTrade = {
+          id: 't-future-9927',
+          symbol: '9927',
+          name: '泰銘',
+          market: 'TW' as const,
+          accountId: 'acc-a',
+          type: 'DIVIDEND' as const,
+          date: '2026-12-31',
+          exDate: '2026-12-01',
+          payDate: '2026-12-31',
+          shares: 1000,
+          price: 5.0,
+          currency: 'TWD' as const,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        };
+
+        const html = renderToStaticMarkup(
+          React.createElement(DividendLogView, {
+            trades: [futureTrade],
+            holdings: [],
+            receivableDividends: [],
+            usdToTwdRate: 32,
+          })
+        );
+
+        expect(html).toContain('2026 年度尚無符合條件之現金股利入帳明細');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });
 
 

@@ -86,7 +86,7 @@ import { calculatePortfolioXirr, calculateSecurityXirr, XirrResult, CashFlowEven
 import { calculatePortfolioExposure, calculateActiveMarginDebt } from './engine/riskExposureEngine';
 import { generateDCASchedule } from './engine/dcaSchedulerEngine';
 import { inferMarketFromSymbol } from './utils/formatters';
-import { calculateReceivableDividends } from './engine/receivableDividendEngine';
+import { calculateReceivableDividends, settleDividendAction } from './engine/receivableDividendEngine';
 import { buildTaxComplianceStatus } from './engine/taxComplianceEngine';
 import { CorporateActionSessionCache, scanCorporateActions } from './engine/corporateActionScanner';
 import { initializeStorageAsync } from './utils/storage';
@@ -720,30 +720,16 @@ export const App: React.FC = () => {
     setCashTransactions((prev) => syncTradesWithCashTransactions(reconciledTrades, prev));
   };
 
-  // 一鍵確認應收股利入帳 (Spec 0228 / Ticket 04: 自癒閉環)
+  // 一鍵確認應收股利入帳 (Spec 0228 / Spec 0231 #550: 狀態機收斂，不重複建立且保留 accountId 與稅費)
   const handleInstantSettleDividend = (dividendId: string, actualPayDate: string) => {
-    const targetRec = receivableDividends.find((r) => r.id === dividendId);
-    if (!targetRec) return;
+    const updatedTrades = settleDividendAction({
+      dividendId,
+      actualPayDate,
+      receivableDividends,
+      trades,
+    });
+    if (updatedTrades === trades) return;
 
-    const shares = targetRec.sharesHeldOnExDate || targetRec.sharesHeld || 0;
-    const newTrade: TradeRecord = {
-      id: `trade-div-${Date.now()}-${targetRec.symbol}`,
-      symbol: targetRec.symbol,
-      name: targetRec.name,
-      market: targetRec.market,
-      currency: targetRec.currency,
-      type: 'DIVIDEND',
-      date: actualPayDate || targetRec.payDate,
-      exDate: targetRec.exDate,
-      shares,
-      price: targetRec.cashDividendPerShare,
-      fee: targetRec.estimatedWireFee || 0,
-      tax: targetRec.estimatedNhiTax || (targetRec.currency === 'USD' ? targetRec.estimatedTaxOrFee : 0),
-      cashAmount: targetRec.estimatedNetDividend,
-      createdAt: Date.now(),
-    };
-
-    const updatedTrades = [newTrade, ...trades];
     const { updatedTrades: reconciledTrades } = reconcilePendingDividendTrades(updatedTrades);
     setTrades(reconciledTrades);
     setCashTransactions((prev) => syncTradesWithCashTransactions(reconciledTrades, prev));

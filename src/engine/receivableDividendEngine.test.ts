@@ -766,6 +766,189 @@ describe('Receivable Dividend & Ex-Dividend Smoothing Engine (應收股利平滑
       }
     });
   });
+
+  describe('9. Ticket #548: 除息前一日快照（含清倉）與月配息去重視窗', () => {
+    it('除息前一日持股 > 0 且於除息日後全數清倉（holdings 為空），仍應保留該筆應收股息', () => {
+      const trades: TradeRecord[] = [
+        {
+          id: 'b-1',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          accountId: 'acc-1',
+          type: 'BUY',
+          date: '2026-09-01',
+          shares: 2000,
+          price: 900,
+          currency: 'TWD',
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 's-1',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          accountId: 'acc-1',
+          type: 'SELL',
+          date: '2026-09-18', // 除息日 09-16 之後全數賣出清倉
+          shares: 2000,
+          price: 920,
+          currency: 'TWD',
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+      ];
+      const ev = {
+        symbol: '2330',
+        market: 'TW' as const,
+        type: 'DIVIDEND' as const,
+        date: '2026-09-16',
+        price: 4.5,
+        sourceType: 'OFFICIAL_DATA' as const,
+      };
+
+      const res = calculateReceivableDividends([], [ev], trades, '2026-09-20', 32.0, []);
+      expect(res).toHaveLength(1);
+      expect(res[0].sharesHeld).toBe(2000);
+      expect(res[0].accountId).toBe('acc-1');
+      expect(res[0].estimatedGrossDividend).toBe(9000);
+    });
+
+    it('月配息 ETF 上期發放日若與下期除息區間重疊，不得誤殺下期應收股息', () => {
+      const holding = {
+        symbol: '00929',
+        name: '復華台灣科技優息',
+        market: 'TW' as const,
+        currency: 'TWD' as const,
+        accountId: 'acc-1',
+        shares: 10000,
+        avgCost: 20,
+        totalCostBasis: 200000,
+        currentPrice: 20,
+        marketValue: 200000,
+        unrealizedPnL: 0,
+        unrealizedPnLPercent: 0,
+        realizedPnL: 0,
+        totalDividends: 0,
+        yieldOnCostPercent: 0,
+      } as any;
+
+      const trades: TradeRecord[] = [
+        {
+          id: 'b-00929',
+          symbol: '00929',
+          name: '復華台灣科技優息',
+          market: 'TW',
+          accountId: 'acc-1',
+          type: 'BUY',
+          date: '2026-07-01',
+          shares: 10000,
+          price: 20,
+          currency: 'TWD',
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 'd-00929-prev',
+          symbol: '00929',
+          name: '復華台灣科技優息',
+          market: 'TW',
+          accountId: 'acc-1',
+          type: 'DIVIDEND',
+          date: '2026-09-22', // 上期入帳日落在下期 [09-19, 10-12] 區間內
+          exDate: '2026-08-20', // 但明確標註為上期 08-20 除息
+          shares: 10000,
+          price: 0.15,
+          currency: 'TWD',
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+      ];
+
+      const evNext = {
+        symbol: '00929',
+        market: 'TW' as const,
+        type: 'DIVIDEND' as const,
+        date: '2026-09-19',
+        price: 0.15,
+        sourceType: 'OFFICIAL_DATA' as const,
+      };
+
+      const res = calculateReceivableDividends([holding], [evNext], trades, '2026-09-25', 32.0, []);
+      expect(res).toHaveLength(1);
+      expect(res[0].exDate).toBe('2026-09-19');
+    });
+
+    it('自訂未來股利交易應套用台股 ETF 23 天規則與正確狀態機 (UPCOMING_EX)', () => {
+      const trades: TradeRecord[] = [
+        {
+          id: 't-custom-00878',
+          symbol: '00878',
+          name: '國泰永續高股息',
+          market: 'TW',
+          accountId: 'acc-1',
+          type: 'DIVIDEND',
+          date: '2026-05-18', // 除息日未指定 payDate
+          exDate: '2026-05-18',
+          shares: 1000,
+          price: 0.55,
+          currency: 'TWD',
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+      ];
+
+      // 基準日 2026-05-10 早於除息日 2026-05-18，應為 UPCOMING_EX 且 payDate 為 +23 天 (2026-06-10)
+      const res = calculateReceivableDividends([], [], trades, '2026-05-10', 32.0, []);
+      expect(res).toHaveLength(1);
+      expect(res[0].payDate).toBe('2026-06-10');
+      expect(res[0].status).toBe('UPCOMING_EX');
+    });
+  });
+
+  describe('10. Ticket #550: 一鍵入帳狀態機去重與帳戶保留', () => {
+    it('對現有預約交易 (virtual_ 或 rec-trade-) 一鍵入帳時，應更新原交易而非重複新增，並保留 accountId', async () => {
+      const mod = await import('./receivableDividendEngine');
+      const settleFn = (mod as any).settleDividendAction;
+      expect(typeof settleFn).toBe('function');
+
+      const pendingTrade: TradeRecord = {
+        id: 't-future-1',
+        symbol: '2330',
+        name: '台積電',
+        market: 'TW',
+        accountId: 'acc-a',
+        type: 'DIVIDEND',
+        date: '2026-10-08',
+        exDate: '2026-09-16',
+        shares: 5000,
+        price: 4.5,
+        currency: 'TWD',
+        fee: 0,
+        tax: 0,
+        createdAt: 1,
+      };
+
+      const nextTrades = settleFn({
+        dividendId: 'virtual_t-future-1',
+        actualPayDate: '2026-10-01',
+        receivableDividends: [],
+        trades: [pendingTrade],
+      });
+
+      expect(nextTrades).toHaveLength(1);
+      expect(nextTrades[0].id).toBe('t-future-1');
+      expect(nextTrades[0].accountId).toBe('acc-a');
+      expect(nextTrades[0].date).toBe('2026-10-01');
+      expect(nextTrades[0].payDate).toBe('2026-10-01');
+    });
+  });
 });
 
 
