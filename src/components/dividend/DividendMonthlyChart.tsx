@@ -68,7 +68,7 @@ export interface MonthDividendTooltipContentProps {
 }
 
 export const MonthDividendTooltipContent: React.FC<MonthDividendTooltipContentProps> = ({
-  distribution: m,
+  distribution,
   selectedYear,
   dividendDisplayMode,
   targetMonthlyExpenseTwd = 0,
@@ -82,12 +82,12 @@ export const MonthDividendTooltipContent: React.FC<MonthDividendTooltipContentPr
     hasPending,
     hasAnyData,
     meetsExpense,
-  } = computeMonthBarMetrics(m, dividendDisplayMode, targetMonthlyExpenseTwd);
+  } = computeMonthBarMetrics(distribution, dividendDisplayMode, targetMonthlyExpenseTwd);
 
   return (
     <div style={{ padding: '4px', display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '190px' }}>
       <div style={{ fontWeight: 700, color: hasReceived ? '#34d399' : (hasPending ? '#f59e0b' : '#94a3b8'), borderBottom: '1px solid rgba(51,65,85,0.6)', paddingBottom: '4px' }}>
-        📅 {selectedYear} 年 {m.monthLabel} 股息明細
+        📅 {selectedYear} 年 {distribution.monthLabel} 股息明細
       </div>
       {hasAnyData ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '0.75rem' }}>
@@ -105,9 +105,9 @@ export const MonthDividendTooltipContent: React.FC<MonthDividendTooltipContentPr
               </b>
             </div>
           )}
-          {hasPending && m.pendingItems && m.pendingItems.length > 0 && (
+          {hasPending && distribution.pendingItems && distribution.pendingItems.length > 0 && (
             <div
-              data-testid={`pending-items-list-${m.monthKey}`}
+              data-testid={`pending-items-list-${distribution.monthKey}`}
               style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -123,7 +123,7 @@ export const MonthDividendTooltipContent: React.FC<MonthDividendTooltipContentPr
               <div style={{ color: '#f59e0b', fontSize: '0.68rem', fontWeight: 600 }}>
                 ⏳ 待入帳標的清單：
               </div>
-              {m.pendingItems.map((item, pIdx) => {
+              {distribution.pendingItems.map((item, pIdx) => {
                 const payDateStr = item.payDate ? item.payDate.slice(5) : '待定';
                 return (
                   <div
@@ -165,19 +165,19 @@ export const MonthDividendTooltipContent: React.FC<MonthDividendTooltipContentPr
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ color: '#94a3b8' }}>應發毛額：</span>
             <span className="mono" style={{ color: '#ffffff', fontVariantNumeric: 'tabular-nums' }}>
-              NT$ {(m.grossTWD + (m.pendingGrossTWD || 0)).toLocaleString()}
+              NT$ {(distribution.grossTWD + (distribution.pendingGrossTWD || 0)).toLocaleString()}
             </span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ color: '#94a3b8' }}>扣繳稅款/健保：</span>
-            <span className="mono" style={{ color: m.taxTWD > 0 ? 'var(--loss-color)' : '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>
-              {m.taxTWD > 0 ? `-NT$ ${m.taxTWD.toLocaleString()}` : 'NT$ 0'}
+            <span className="mono" style={{ color: distribution.taxTWD > 0 ? 'var(--loss-color)' : '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>
+              {distribution.taxTWD > 0 ? `-NT$ ${distribution.taxTWD.toLocaleString()}` : 'NT$ 0'}
             </span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ color: '#94a3b8' }}>配息筆數：</span>
             <span className="mono" style={{ color: '#ffffff' }}>
-              {m.count + pendingCount} 筆 {pendingCount > 0 ? `(含 ${pendingCount} 筆待入帳)` : ''}
+              {distribution.count + pendingCount} 筆 {pendingCount > 0 ? `(含 ${pendingCount} 筆待入帳)` : ''}
             </span>
           </div>
           {targetMonthlyExpenseTwd > 0 && (
