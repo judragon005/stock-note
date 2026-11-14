@@ -177,3 +177,33 @@ export function formatStockPrice(price?: number, market?: 'TW' | 'US'): string {
   }
   return `$${price.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
+
+const taipeiDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Taipei',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/**
+ * 取得台北當地時間 (Asia/Taipei, UTC+8) 之 YYYY-MM-DD 日期字串
+ * 避免宿主環境或 UTC 00:00~07:59 造成跨日偏差
+ */
+export function getTaipeiDateStr(date: Date = new Date()): string {
+  if (isNaN(date.getTime())) return '';
+  return taipeiDateFormatter.format(date);
+}
+
+/**
+ * 純日曆 YYYY-MM-DD 加減天數，全程於 UTC 整數日曆計算以避免本地時區與 DST 偏移
+ */
+export function addDaysToDateStr(dateStr: string, days: number): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec((dateStr || '').trim());
+  if (!match) return dateStr;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const utc = new Date(Date.UTC(year, month - 1, day + days));
+  if (isNaN(utc.getTime())) return dateStr;
+  return `${utc.getUTCFullYear()}-${String(utc.getUTCMonth() + 1).padStart(2, '0')}-${String(utc.getUTCDate()).padStart(2, '0')}`;
+}

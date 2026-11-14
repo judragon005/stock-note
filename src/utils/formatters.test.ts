@@ -9,6 +9,8 @@ import {
   inferMarketFromSymbol,
   inferCurrencyFromMarket,
   formatFinancialAmount,
+  getTaipeiDateStr,
+  addDaysToDateStr,
 } from './formatters';
 import { TradeRecord } from '../types/stock';
 
@@ -202,6 +204,24 @@ describe('多幣別與券商慣用精度格式化模組 (Formatters)', () => {
       expect(formatFinancialAmount(500000)).toBe('50 萬');
       expect(formatFinancialAmount(0)).toBe('0.0 億');
       expect(formatFinancialAmount(NaN)).toBe('0.0 億');
+    });
+  });
+
+  describe('台北當地時區日期基準與純日期加減 (Ticket #545)', () => {
+    it('getTaipeiDateStr 在 UTC+8 凌晨 00:00~07:59 應回傳台北當地日期而非 UTC 前一日', () => {
+      // UTC 2026-03-10 16:30 = 台北 2026-03-11 00:30
+      expect(getTaipeiDateStr(new Date('2026-03-10T16:30:00.000Z'))).toBe('2026-03-11');
+      // UTC 2026-03-10 23:59:59 = 台北 2026-03-11 07:59:59
+      expect(getTaipeiDateStr(new Date('2026-03-10T23:59:59.000Z'))).toBe('2026-03-11');
+      // UTC 2026-03-10 15:59:59 = 台北 2026-03-10 23:59:59
+      expect(getTaipeiDateStr(new Date('2026-03-10T15:59:59.000Z'))).toBe('2026-03-10');
+    });
+
+    it('addDaysToDateStr 應以純日曆計算跨月、閏年與減日，不受宿主時區偏移影響', () => {
+      expect(addDaysToDateStr('2024-02-28', 2)).toBe('2024-03-01');
+      expect(addDaysToDateStr('2026-03-01', -1)).toBe('2026-02-28');
+      expect(addDaysToDateStr('2026-12-31', 1)).toBe('2027-01-01');
+      expect(addDaysToDateStr('invalid-date', 5)).toBe('invalid-date');
     });
   });
 });

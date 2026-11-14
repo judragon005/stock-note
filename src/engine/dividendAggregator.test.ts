@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { aggregateDividendReport, extractHistoricalPayoutMonths } from './dividendAggregator';
 import { TradeRecord } from '../types/stock';
 import { ReceivableDividend } from '../types/dividend';
@@ -604,6 +604,55 @@ describe('Dividend Aggregator Engine (股利數據聚合引擎)', () => {
       expect(report.currentYearDividendsTWD).toBe(4560);
       // currentYearTwDividendsTWD 必須純粹為台股 4,000 TWD，嚴格杜絕海外所得污染！
       expect(report.currentYearTwDividendsTWD).toBe(4000);
+    });
+  });
+
+  describe('Ticket #545: TTM 近 12 個月滾動視窗台北時區對齊', () => {
+    it('在 UTC+8 凌晨 00:30 呼叫 aggregateDividendReport（未傳 currentDateStr）時，TTM 應以台北 2026-03-11 為準', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-03-10T16:30:00.000Z')); // 台北 2026-03-11 00:30
+      try {
+        const ttmBoundaryTrades: TradeRecord[] = [
+          {
+            id: 't-old-2025-03-10',
+            symbol: '2330',
+            name: '台積電',
+            market: 'TW',
+            currency: 'TWD',
+            type: 'DIVIDEND',
+            date: '2025-03-10',
+            payDate: '2025-03-10',
+            shares: 1000,
+            price: 4.0,
+            fee: 0,
+            tax: 0,
+            cashAmount: 4000,
+            createdAt: 1,
+          },
+          {
+            id: 't-today-2026-03-11',
+            symbol: '2330',
+            name: '台積電',
+            market: 'TW',
+            currency: 'TWD',
+            type: 'DIVIDEND',
+            date: '2026-03-11',
+            payDate: '2026-03-11',
+            shares: 1000,
+            price: 4.5,
+            fee: 0,
+            tax: 0,
+            cashAmount: 4500,
+            createdAt: 2,
+          },
+        ];
+
+        const report = aggregateDividendReport(ttmBoundaryTrades, [], 2026, 32.0);
+        // 台北 2026-03-11 的 TTM 區間為 [2025-03-11, 2026-03-11]：應包含 4,500、排除 2025-03-10 的 4,000
+        expect(report.trailing12mDividendsTWD).toBe(4500);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

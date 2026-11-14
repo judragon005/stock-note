@@ -15,6 +15,8 @@ import {
 } from './types/stock';
 import { AccountingMethod } from './types/lot';
 import { calculateHoldingsAndSummary, repairLedgerTaxAndFee } from './engine/calculator';
+import { getTaipeiDateStr } from './utils/formatters';
+import { useTaipeiDateStr } from './hooks/useTaipeiDateStr';
 import { calculateHistoricalNavSeries } from './engine/historicalNav';
 import { fetchSymbolHistoricalPrices, fetchHistoricalFxRates } from './engine/historicalPriceFetcher';
 import {
@@ -458,12 +460,14 @@ export const App: React.FC = () => {
     return filtered;
   }, [currentMarket, loanRecords, selectedAccountId]);
 
+  // 台北當地日期 (YYYY-MM-DD)，跨午夜自動刷新以避免應收狀態機滯後
+  const taipeiTodayStr = useTaipeiDateStr();
+
   // 待發放應收現金股利 (除息日至發放日之間平滑)
   const receivableDividends = useMemo(() => {
-    const todayStr = new Date().toISOString().split('T')[0];
     const cachedEvents = CorporateActionSessionCache.getAllEvents();
-    return calculateReceivableDividends(holdings, cachedEvents, trades, todayStr, usdToTwdRate);
-  }, [holdings, trades, usdToTwdRate, caVersion]);
+    return calculateReceivableDividends(holdings, cachedEvents, trades, taipeiTodayStr, usdToTwdRate);
+  }, [holdings, trades, usdToTwdRate, caVersion, taipeiTodayStr]);
 
   const pendingReceivableDividendsTWD = useMemo(() => {
     return receivableDividends
@@ -850,7 +854,7 @@ export const App: React.FC = () => {
     try {
       const allDates = trades.map((t) => t.date).sort();
       const earliestTradeDate = allDates[0] || '2020-01-01';
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = getTaipeiDateStr();
 
       // 1. 同步 USD/TWD 歷史匯率
       setHistoricalSyncProgress('同步歷史匯率 (USD/TWD)...');

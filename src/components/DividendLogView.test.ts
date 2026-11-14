@@ -1,9 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { TradeRecord } from '../types/stock';
 import { ReceivableDividend } from '../types/dividend';
 import { calculateConsolidatedTwNhiTax } from '../engine/taxComplianceEngine';
 import { CorporateActionSessionCache, RawCorporateEvent } from '../engine/corporateActionScanner';
-import { calculateMonthTooltipAlign } from './DividendLogView';
+import { calculateMonthTooltipAlign, DividendLogView } from './DividendLogView';
 import { buildUnifiedPendingReceivables } from '../engine/dividendAggregator';
 
 describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () => {
@@ -475,6 +477,47 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
       expect(map.has('2330')).toBe(true);
       expect(map.has('2344')).toBe(false);
       expect(map.size).toBe(1);
+    });
+  });
+
+  describe('6. Ticket #545: DividendLogView 台北當地時區基準', () => {
+    it('在 UTC+8 凌晨 00:30 渲染 DividendLogView 時，當日 (2026-03-11) 發放之股利應視為已到期而不列為預約待入帳', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-03-10T16:30:00.000Z')); // 台北 2026-03-11 00:30
+      try {
+        const tradeSettledToday: TradeRecord = {
+          id: 't-taipei-midnight',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'DIVIDEND',
+          date: '2026-03-11',
+          payDate: '2026-03-11',
+          exDate: '2026-02-11',
+          shares: 1000,
+          price: 4.5,
+          fee: 10,
+          tax: 0,
+          cashAmount: 4490,
+          createdAt: 1,
+        };
+
+        const html = renderToStaticMarkup(
+          React.createElement(DividendLogView, {
+            trades: [tradeSettledToday],
+            holdings: [],
+            receivableDividends: [],
+            usdToTwdRate: 32,
+          })
+        );
+
+        // 若 todayStr 正確為 '2026-03-11'，該筆應已到期，不應出現在「預約待入」或「待發放應收現金股利」區塊
+        expect(html).not.toContain('預約待入');
+        expect(html).not.toContain('待發放應收現金股利');
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

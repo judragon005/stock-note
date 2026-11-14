@@ -2,6 +2,7 @@ import { TradeRecord, MarketType } from '../types/stock';
 import { ReceivableDividend, DividendSummaryReport, MonthlyDividendDistribution } from '../types/dividend';
 import { resolveEffectiveDividendTaxAndNet } from './taxComplianceEngine';
 import { estimatePaymentDate } from './receivableDividendEngine';
+import { getTaipeiDateStr } from '../utils/formatters';
 
 /**
  * 自交易紀錄中萃取各標的歷史實際發放月份慣性 (消除 Feature Envy，下沉至領域純函式)
@@ -51,9 +52,9 @@ export function getEffectiveDividendPayDate(trade: TradeRecord): string {
 export function aggregateDividendReport(
   trades: TradeRecord[],
   receivableDividends: ReceivableDividend[] = [],
-  selectedYear: number = new Date().getFullYear(),
+  selectedYear: number = Number(getTaipeiDateStr().slice(0, 4)),
   exchangeRate: number = 32.0,
-  currentDateStr: string = new Date().toISOString().split('T')[0]
+  currentDateStr: string = getTaipeiDateStr()
 ): DividendSummaryReport {
   const dividendTrades = trades.filter((t) => t.type === 'DIVIDEND');
 
@@ -187,11 +188,21 @@ export function aggregateDividendReport(
     ? ((currentYearDividendsTWD - previousYearDividendsTWD) / previousYearDividendsTWD) * 100
     : currentYearDividendsTWD > 0 ? 100 : 0;
 
-  // 近 12 個月滾動統計 (TTM)
-  const now = new Date();
-  const twelveMonthsAgo = new Date();
-  twelveMonthsAgo.setFullYear(now.getFullYear() - 1);
-  const twelveMonthsAgoStr = twelveMonthsAgo.toISOString().split('T')[0];
+  // 近 12 個月滾動統計 (TTM)：嚴格依 currentDateStr 純日曆回推一年，避免 UTC 跨日偏移
+  const baseDateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(currentDateStr);
+  let twelveMonthsAgoStr = currentDateStr;
+  if (baseDateMatch) {
+    const prevYear = Number(baseDateMatch[1]) - 1;
+    const month = Number(baseDateMatch[2]);
+    const day = Number(baseDateMatch[3]);
+    const prevYearUtc = new Date(Date.UTC(prevYear, month - 1, day));
+    if (prevYearUtc.getUTCMonth() !== month - 1) {
+      // 閏年 2/29 回推至平年 2/28
+      twelveMonthsAgoStr = `${prevYear}-02-28`;
+    } else {
+      twelveMonthsAgoStr = `${prevYear}-${baseDateMatch[2]}-${baseDateMatch[3]}`;
+    }
+  }
 
   let trailing12mDividendsTWD = 0;
   for (const trade of dividendTrades) {
