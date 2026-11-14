@@ -1,7 +1,14 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-11-13 10:10 (UTC+8)  
+> **交接產生時間**：2026-11-14 10:30 (UTC+8)  
 > **當前最新里程碑**：
+> - **V9.20.0 現金流三態時序統一、股利發放月精準對齊與月度日曆勾稽重構**（ADR 0227, Spec 0227, Issues #516 ~ #521, #527 ~ #534, PRs #522 ~ #526, #528, #530, #532, #534）：
+>   - **0056 與核心權值股發放月精準校準 (Issue #517)**：修正 `projectedCashflowEngine.ts` 將 0056 自除息月校準為實質發放月 `[2, 5, 8, 11]`，並校準 `00878` (`[3, 6, 9, 12]`)、`00919`、`00713`、`2330` 與 `00888`，徹底終結「11 月明明有 0056 入帳，圖表與明細卻空白」之混亂。
+>   - **解除 8 月單點集中 29 筆之硬編碼暴衝 (Issue #517)**：引入歷史發放月查表優先機制 (`historicalPayoutMonths`) 並具備大小寫不敏感防禦（`.toUpperCase()`）；無歷史記錄之新標的改由 Symbol Hash 確定性平滑分攤至除權息旺季（7~9 月），徹底杜絕 520% 超標的假性高峰。
+>   - **現金流三態時序聚合與待入帳應收分佈擴展 (Issue #518)**：月度分佈資料結構擴充 `pendingNetTWD` 與 `pendingCount`，精準收錄未到期之 `receivableDividends`，並保持實領淨額會計原則不失真。
+>   - **月度長條圖三態堆疊渲染與 Tooltip 待入帳清單穿透 (Issue #519)**：在已結算月份顯示祖母綠實心柱，當前或未來月份若存在應收款則以金黃色條紋柱 (`#f59e0b` / `stripes-amber`) 分層堆疊；Tooltip 清晰穿透各標的待入帳清單與入帳日。
+>   - **歷史明細表明確時序口徑提示與待入帳錨點跳轉 (Issue #520)**：表頭增設清晰口徑橫幅，標示實領流水性質，並提供便捷跳轉至上方待入帳行事曆，避免重複造輪子。
+>   - **品質狀態**：全量單元測試 **2,215/2,215 通過 (100% Passed / 289 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，生產打包 `npm run build` 100% 綠燈。
 > - **V9.19.0 台美跨市場股利發放日精準時序、ETF 配息組成穿透與被動現金流全景重構**（ADR 0226, Spec 0226, Issues #507 ~ #513, PR #514）：
 >   - **現金流預估月曆 3 列 4 欄佈局與視覺層級升級 (Issue #508)**：將 `DividendCalendarCard.tsx` 中間 12 個月份卡片自 1 列擠壓徹底重構為 3 行 × 4 欄 (`repeat(4, minmax(0, 1fr))`) 網格，月份字體 13px、金額 16px 粗體、完整呈現 `NT$ XX,XXX`，枯水期與達標 11px 雙色膠囊標籤，窄螢幕自動回退為 2 欄自適應。
 >   - **股息貢獻排行 (1/3) 與月度長條圖 (2/3) 齊高並列解耦 (Issue #509)**：自明細表中物理抽離獨立組件 `DividendTopContributorsCard.tsx`，主控制台建立 `2fr 1fr` 網格佈局達成左右等高對齊，保留 10~12 月 Tooltip 向左智慧避讓演算法，且窄螢幕 (<1024px) 自動折行堆疊。
@@ -63,10 +70,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main` (已完全同步主幹，Working Tree Clean)
-- **單元測試套件**：**2,157/2,157 通過 (282 test suites / 100% 綠燈)**
+- **單元測試套件**：**2,215/2,215 通過 (289 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V9.17.1**
+- **當前釋出版本**：**V9.20.0**
 - **工作區與分支整潔度**：工作區乾淨受控，本地 feature/fix 分支已完全合併並清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -95,6 +102,9 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0227`](file:///d:/APP/股票紀錄/docs/specs/0227-dividend-cashflow-tri-state-reconciliation-and-calendar-precision-spec.md) | [`ADR 0227`](file:///d:/APP/股票紀錄/docs/adr/0227-dividend-cashflow-tri-state-reconciliation.md) | [`.scratch/v9.20.0-dividend-cashflow-tri-state-reconciliation/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.20.0-dividend-cashflow-tri-state-reconciliation/issues/) | Issue #516 ~ #521, #533 / PR #522 ~ #526, #534 | V9.20.0 | 現金流三態時序統一、0056發放月修正、8月硬編碼暴衝解除、長條圖待入帳堆疊與Tooltip清單穿透 |
+| [`Spec 0226`](file:///d:/APP/股票紀錄/docs/specs/0226-cross-market-dividend-cashflow-and-composition-spec.md) | [`ADR 0226`](file:///d:/APP/股票紀錄/docs/adr/0226-cross-market-dividend-cashflow-and-composition.md) | [`.scratch/v9.19.0-cross-market-dividend-cashflow-and-composition/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.19.0-cross-market-dividend-cashflow-and-composition/issues/) | Issue #507 ~ #513 / PR #514 | V9.19.0 | 台美跨市場股利發放日精準時序、ETF 配息組成穿透與被動現金流全景重構 |
+| [`Spec 0225`](file:///d:/APP/股票紀錄/docs/specs/0225-dividend-and-cashflow-holistic-refactor-and-timing-alignment-spec.md) | [`ADR 0225`](file:///d:/APP/股票紀錄/docs/adr/0225-dividend-and-cashflow-holistic-refactor.md) | [`.scratch/v9.18.0-dividend-cashflow-timing-and-modular-refactor/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.18.0-dividend-cashflow-timing-and-modular-refactor/issues/) | Issue #502, #504 / PR #503, #505 | V9.18.0 | 股利日誌與現金流全景：證交所發放日時差對齊、法人級實戰指標打通與極簡模組化重構 |
 | [`Spec 0224`](file:///d:/APP/股票紀錄/docs/specs/0224-technical-debts-0057-0048-resolution-spec.md) | [`ADR 0224`](file:///d:/APP/股票紀錄/docs/adr/0224-technical-debts-0057-0048-resolution.md) | [`.scratch/v9.17.1-tech-debt-0057-0048-resolution/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.17.1-tech-debt-0057-0048-resolution/issues/) | Issue #500 | V9.17.1 | Zavy 慢富工作區測試解耦、股息估算下沉純函式與智策提示詞董監質押技術債閉環 (技術債 0057 & 0048) |
 | [`Spec 0223`](file:///d:/APP/股票紀錄/docs/specs/0223-zavy-slow-wealth-onboarding-termtooltip-and-full-pipeline-alignment-spec.md) | [`ADR 0223`](file:///d:/APP/股票紀錄/docs/adr/0223-zavy-slow-wealth-onboarding-termtooltip-and-full-pipeline-alignment.md) | [`.scratch/v9.17.0-zavy-onboarding-termtooltip/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.17.0-zavy-onboarding-termtooltip/issues/) | Issue #494 / PR #495, #497 | V9.17.0 | Zavy 慢富新手白話導覽、零造輪子 TermTooltip 整合與 12 項漏接欄位全貫通 |
 | [`Spec 0221`](file:///d:/APP/股票紀錄/docs/specs/0221-zavy-slow-wealth-cycle-market-breadth-and-dual-track-allocation-system-spec.md) | [`ADR 0221`](file:///d:/APP/股票紀錄/docs/adr/0221-zavy-slow-wealth-cycle-market-breadth-and-dual-track-allocation-system.md) | [`.scratch/v9.16.0-zavy-slow-wealth-cycle-breadth-and-dual-track/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.16.0-zavy-slow-wealth-cycle-breadth-and-dual-track/issues/) | Issue #472 / PR #473, #475 | V9.16.0 | Zavy「散戶慢富之路」三級週期定位、台美市場結構寬度與 A/B 雙軌配置系統 |
