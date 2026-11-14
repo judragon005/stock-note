@@ -149,27 +149,38 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
     return calculateDividendTaxDeductionStats(report.currentYearDividendsTWD);
   }, [report.currentYearDividendsTWD]);
 
-  // 計算待發放款項總金額與待入庫配股
-  const totalReceivableTWD = useMemo(() => {
-    return scopedReceivables
-      .filter((r) => r.status === 'PENDING_PAYMENT' || r.status === 'OVERDUE')
-      .reduce((sum, r) => sum + r.estimatedNetDividendInTWD, 0);
+  // 篩選有效之待入帳與待對帳應收款項 (Spec 0228 / Ticket 03)
+  const activeReceivables = useMemo(() => {
+    return scopedReceivables.filter(
+      (r) =>
+        (r.status === 'PENDING_PAYMENT' || r.status === 'OVERDUE' || r.status === 'DUE_FOR_RECONCILIATION') &&
+        r.estimatedNetDividendInTWD > 0
+    );
   }, [scopedReceivables]);
+
+  // 發放日已屆待核實入帳款項 (Spec 0228 / Ticket 04: 消滅時序黑洞)
+  const dueReceivables = useMemo(() => {
+    return scopedReceivables.filter((r) => r.status === 'DUE_FOR_RECONCILIATION' && r.estimatedNetDividendInTWD > 0);
+  }, [scopedReceivables]);
+
+  // 計算待發放款項總金額與待入庫配股 (嚴格閉環)
+  const totalReceivableTWD = useMemo(() => {
+    return activeReceivables.reduce((sum, r) => sum + r.estimatedNetDividendInTWD, 0);
+  }, [activeReceivables]);
 
   const pendingStockSharesTotal = useMemo(() => {
-    return scopedReceivables
-      .filter((r) => (r.status === 'PENDING_PAYMENT' || r.status === 'OVERDUE') && (r.stockDividendShares || 0) > 0)
+    return activeReceivables
+      .filter((r) => (r.stockDividendShares || 0) > 0)
       .reduce((sum, r) => sum + (r.stockDividendShares || 0), 0);
-  }, [scopedReceivables]);
+  }, [activeReceivables]);
 
-  // 歷史入帳明細列表過濾
+  // 歷史入帳明細列表過濾 (解除 payDate > todayStr 硬截斷，支援穿透式時序預覽)
   const dividendTrades = useMemo(() => {
     const selectedYearStr = String(selectedYear);
     return scopedTrades
       .filter((t) => t.type === 'DIVIDEND')
       .filter((t) => {
         const payDate = getEffectiveDividendPayDate(t);
-        if (payDate > todayStr) return false;
         if (tableYearFilter === 'SELECTED_YEAR') {
           return payDate.startsWith(selectedYearStr);
         }
@@ -187,7 +198,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         if (comp !== 0) return comp;
         return (b.exDate || b.date).localeCompare(a.exDate || a.date);
       });
-  }, [scopedTrades, searchQuery, todayStr, tableYearFilter, selectedYear]);
+  }, [scopedTrades, searchQuery, tableYearFilter, selectedYear]);
 
   // 計算月度最大值以設定長條圖比例
   const maxMonthlyNet = useMemo(() => {
@@ -403,7 +414,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         yoyGrowthPercent={report.yoyGrowthPercent}
         trailing12mDividendsTWD={report.trailing12mDividendsTWD}
         totalReceivableTWD={totalReceivableTWD}
-        receivablePendingCount={scopedReceivables.filter((r) => r.status === 'PENDING_PAYMENT' || r.status === 'OVERDUE').length}
+        receivablePendingCount={activeReceivables.length}
         totalHistoricalNetTWD={report.totalHistoricalDividendsTWD}
         nhiAlertCount={scopedReceivables.filter((r) => r.market === 'TW' && r.estimatedGrossDividend >= 20000).length}
         pendingStockSharesTotal={pendingStockSharesTotal}
@@ -453,7 +464,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
               ⚡ 除息待入帳行事曆 (Receivable Dividends Pending Payment)
             </h3>
             <span style={{ fontSize: '0.75rem', color: '#fbbf24', fontWeight: 600 }}>
-              ({scopedReceivables.filter((r) => r.status !== 'UPCOMING_EX').length} 筆待入帳)
+              ({activeReceivables.length} 筆待入帳)
             </span>
           </div>
           <span
@@ -471,7 +482,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
           </span>
         </div>
 
-        {scopedReceivables.filter((r) => r.status !== 'UPCOMING_EX').length === 0 ? (
+        {activeReceivables.length === 0 ? (
           <div
             style={{
               padding: '28px 20px',
@@ -499,9 +510,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
               gap: '14px',
             }}
           >
-            {scopedReceivables
-              .filter((r) => r.status !== 'UPCOMING_EX')
-              .map((rec) => (
+            {activeReceivables.map((rec) => (
                 <div
                   key={rec.id}
                   style={{
@@ -590,6 +599,8 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         showReconciliationPanel={showReconciliationPanel}
         onToggleReconciliationPanel={() => setShowReconciliationPanel((v) => !v)}
         onInstantSettle={onInstantSettleDividend ? (id) => onInstantSettleDividend(id, todayStr) : undefined}
+        dueReceivables={dueReceivables}
+        onSettleReceivable={onInstantSettleDividend ? (rec) => onInstantSettleDividend(rec.id, todayStr) : undefined}
       />
     </div>
   );

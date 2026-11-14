@@ -1,7 +1,14 @@
 import { MarketType, Currency } from './stock';
 
+export type ReceivableDividendStatus =
+  | 'PENDING_PAYMENT'
+  | 'RECEIVED'
+  | 'OVERDUE'
+  | 'UPCOMING_EX'
+  | 'DUE_FOR_RECONCILIATION';
+
 /**
- * 應收股利明細 (除息日至發放日之間)
+ * 應收股利明細 (除息日至發放日之間，或發放日已屆待核實入帳)
  */
 export interface ReceivableDividend {
   id: string;
@@ -13,6 +20,7 @@ export interface ReceivableDividend {
   exDate: string;                 // 除息日 / 除權日 (YYYY-MM-DD)
   payDate: string;                // 預計現金發放日 (YYYY-MM-DD)
   sharesHeldOnExDate: number;     // 除息基準日持有股數
+  sharesHeld?: number;            // 除息在席持股 (語意便利別名)
   cashDividendPerShare: number;   // 每股現金股利
   estimatedGrossDividend: number; // 預估應發總額 (原生幣別)
   stockDividendShares?: number;   // 預估獲配股票股利股數
@@ -24,7 +32,7 @@ export interface ReceivableDividend {
   estimatedWireFee?: number;      // 預估跨行匯費 (台股 10 元)
   estimatedNetDividend: number;   // 預估實領股息 (原生幣別)
   estimatedNetDividendInTWD: number; // 折合台幣實領金額
-  status: 'PENDING_PAYMENT' | 'RECEIVED' | 'OVERDUE' | 'UPCOMING_EX';
+  status: ReceivableDividendStatus;
   dateSource?: 'OFFICIAL' | 'ESTIMATED'; // 發放日來源標註（官方公告 vs 演算法推估）
 }
 
