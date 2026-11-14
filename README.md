@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-2235%2F2235%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2271%2F2271%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,26 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 股利現金流全域同態收縮、時序因果阻斷、跨境稅制隔離與自然鍵防撞 (`Spec 0230`) *(V9.20.3 最新發布 / Spec #0230 / ADR #0230 / Issue #542)*
+### 1. 股利日誌與被動現金流全路徑帳務不變量修復與真實整合測試 (`Spec 0231`) *(V9.20.4 最新發布 / Spec #0231 / ADR #0231 / Issues #544 ~ #553, #558, #560, #562 / PR #554 ~ #557, #559, #561, #563)*
+
+- **台北當地時區基準與跨午夜自動結轉 (Issue #545)**：
+  - 導入 `useTaipeiDateStr` 與 `getTaipeiDateStr` 消除跨時區計算脫節，午夜 00:00:00 自動無感刷新，當日到期股利精準結轉。
+- **多帳戶水密隔離與未歸屬防穿透 (Issue #546)**：
+  - 在聚合前全面注入 `scopedTrades` 與 `scopedReceivables` 帳戶隔離，單一券商視角下未標註帳戶之紀錄 100% 阻絕穿透。
+- **假值清零與美股市場語意純化 (Issue #547 & #549)**：
+  - 美股視角全面剔除台股 ETF 活水推薦與二代健保文案；無配息成長股嚴禁產生假息；美股匯率換算全面採用單一事實來源。
+- **除息清倉快照時點校準與月配息防撞 (Issue #548)**：
+  - 校準除息日持股快照判定為 `date <= exDate`，確保歷史除息後清倉標的權益；月配息依金融自然鍵防撞去重。
+- **一鍵入帳互斥狀態機與雙重渲染消除 (Issue #550)**：
+  - 歷史實領表格過濾 `payDate <= todayStr`，在途應收入帳後即刻從應收看板剔除，杜絕同一筆股利同時雙重渲染。
+- **KPI 近 12 個月滾動利差與月柱圖毛額口徑對齊 (Issue #551)**：
+  - KPI 質押利差扣抵改採近 12 個月滾動股利 (`trailing12mDividendsTWD`) 並計入實際匯費；月柱圖 GROSS 模式全面對齊應發毛額並納入 `DUE_FOR_RECONCILIATION`。
+- **三方匯率基準統一與 YOC 標籤精確分離 (Issue #552)**：
+  - 統一匯率換算為 `convertDividendAmountToTWD`，台美混合加總守恆誤差 $\le \pm 1\text{ TWD}$；明確分離「累計 YOC」與「年化 YOC」。
+- **股利服務季配除息日保全與真實 DOM 掛載測試 (Issue #553 & #558 & #560 & #562)**：
+  - 保留同年度多次除息事件個別日期；重構測試全面改以真實公開介面渲染掛載驗證，補齊對帳搜尋過濾與柱高邊界保護測試。
+
+### 2. 股利現金流全域同態收縮、時序因果阻斷、跨境稅制隔離與自然鍵防撞 (`Spec 0230`) *(V9.20.3 / Spec #0230 / ADR #0230 / Issue #542)*
 
 - **時序因果屏障門禁 (Causal Horizon Wall)**：
   - 歷史月份學習器與年度券商對帳單注入 `currentDateStr` 門禁 (`payDate <= todayStr`)，阻斷未來未到期預約股利倒灌歷史慣性庫，徹底消滅華邦電 12 月 NT$ 22,500 幽靈現金流，自癒恢復實質枯水期（31% 覆蓋率）並恢復 00929/00934 填補建議。
