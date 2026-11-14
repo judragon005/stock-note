@@ -19,6 +19,7 @@ export interface ProjectedCashflowInput {
   holdings: HoldingPosition[];
   customPayoutRates?: Record<string, PayoutRateConfig>;
   historicalPayoutMonths?: Record<string, number[]>; // 歷史實際除息發放月份 SSOT 映射
+  usdToTwdRate?: number; // 美元兌台幣匯率，預設 32.0
 }
 
 export interface ProjectedMonthBreakdown {
@@ -158,12 +159,7 @@ function resolvePayoutForMonth(ctx: PayoutResolutionContext): number {
     return 0;
   }
 
-  // 3. 一般年配股分散於 7~9 月除權息旺季平滑發放，以具名常數預估殖利率粗估
-  const assignedMonth = getFallbackSummerPayoutMonth(sym);
-  if (monthNumber === assignedMonth) {
-    return currentPrice * DEFAULT_SUMMER_FALL_YIELD;
-  }
-
+  // 3. 無自訂設定、非內建常態配息標的且無歷史配息紀錄（如不配息成長股），誠實回傳 0 預期配息 (Spec 0231 #549)
   return 0;
 }
 
@@ -198,6 +194,7 @@ function generate12MonthKeys(baseYearMonth: string): Array<{ yearMonth: string; 
 export function generate12MonthProjectedCashflow(input: ProjectedCashflowInput): ProjectedCashflowResult {
   const monthKeys = generate12MonthKeys(input.baseYearMonth);
   const monthlyItems: ProjectedMonthItem[] = [];
+  const fxRate = input.usdToTwdRate && input.usdToTwdRate > 0 ? input.usdToTwdRate : 32.0;
 
   let annualTotalTwd = 0;
 
@@ -219,7 +216,10 @@ export function generate12MonthProjectedCashflow(input: ProjectedCashflowInput):
       });
 
       if (perShare > 0) {
-        const amount = Math.round(perShare * h.shares);
+        const isUs = h.market === 'US' || h.currency === 'USD';
+        // 美股配息須扣除 30% IRS 預扣稅並乘上即時匯率折合台幣 (Spec 0231 #549)
+        const netPerShareInTwd = isUs ? perShare * 0.7 * fxRate : perShare;
+        const amount = Math.round(netPerShareInTwd * h.shares);
         monthTotal += amount;
         breakdown.push({
           symbol: h.symbol,

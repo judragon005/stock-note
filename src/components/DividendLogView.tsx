@@ -174,8 +174,9 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
       baseYearMonth: currentYearMonth,
       holdings: scopedHoldings,
       historicalPayoutMonths: historicalPayoutMonthsMap,
+      usdToTwdRate,
     });
-  }, [scopedHoldings, currentYearMonth, historicalPayoutMonthsMap]);
+  }, [scopedHoldings, currentYearMonth, historicalPayoutMonthsMap, usdToTwdRate]);
 
   const complementaryRecommendations = useMemo(() => {
     return recommendComplementaryDividendMonths(projectedCashflow.drySeasonMonths);

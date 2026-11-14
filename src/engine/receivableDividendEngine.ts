@@ -506,7 +506,8 @@ export function projectFutureDividends(
     paymentDate?: string;
     cashDividendPerShare?: number;
     stockDividendRatio?: number;
-  }>
+  }>,
+  usdToTwdRate: number = 32.0
 ): ReceivableDividend[] {
   const results: ReceivableDividend[] = [];
   const holdingMap = new Map<string, HoldingPosition>();
@@ -520,16 +521,37 @@ export function projectFutureDividends(
     if (!holding || holding.shares <= 0) continue;
 
     const cashPerShare = cal.cashDividendPerShare || 0;
-    const grossDividend = Math.round(holding.shares * cashPerShare);
+    const isTw = holding.market === 'TW';
+    const grossDividend = isTw
+      ? Math.round(holding.shares * cashPerShare)
+      : Number((holding.shares * cashPerShare).toFixed(2));
     if (grossDividend <= 0) continue;
 
-    // 台股二代健保預估
-    const isTw = holding.market === 'TW';
-    const estimatedNhi = isTw && grossDividend >= 20000 ? Math.round(grossDividend * 0.0211) : 0;
-    const netDividend = grossDividend - estimatedNhi;
+    const stockShares = cal.stockDividendRatio ? Math.round(holding.shares * cal.stockDividendRatio) : 0;
+    let estimatedNhi = 0;
+    let wireFee = 0;
+    let taxOrFee = 0;
+
+    if (isTw) {
+      wireFee = 10;
+      const taxRes = calculateConsolidatedTwNhiTax({
+        cashDividendGross: grossDividend,
+        stockDividendShares: stockShares,
+        wireFee,
+      });
+      estimatedNhi = taxRes.nhiFeeTWD;
+      taxOrFee = estimatedNhi + wireFee;
+    } else {
+      // 美股 30% IRS 預扣稅 (Spec 0231 #549)
+      taxOrFee = Number((grossDividend * 0.3).toFixed(2));
+    }
+
+    const netDividend = Math.max(0, Number((grossDividend - taxOrFee).toFixed(isTw ? 0 : 2)));
+    const netDividendInTWD = isTw ? Math.round(netDividend) : Math.round(netDividend * usdToTwdRate);
 
     results.push({
       id: `proj_${symbolUpper}_${cal.exDate}`,
+      accountId: holding.accountId,
       symbol: symbolUpper,
       name: holding.name || symbolUpper,
       market: holding.market,
@@ -539,11 +561,12 @@ export function projectFutureDividends(
       sharesHeldOnExDate: holding.shares,
       cashDividendPerShare: cashPerShare,
       estimatedGrossDividend: grossDividend,
-      stockDividendShares: cal.stockDividendRatio ? Math.round(holding.shares * cal.stockDividendRatio) : undefined,
-      estimatedTaxOrFee: estimatedNhi,
+      stockDividendShares: stockShares > 0 ? stockShares : undefined,
+      estimatedTaxOrFee: taxOrFee,
       estimatedNhiTax: estimatedNhi > 0 ? estimatedNhi : undefined,
+      estimatedWireFee: wireFee > 0 ? wireFee : undefined,
       estimatedNetDividend: netDividend,
-      estimatedNetDividendInTWD: netDividend,
+      estimatedNetDividendInTWD: netDividendInTWD,
       status: 'UPCOMING_EX',
     });
   }
