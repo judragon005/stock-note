@@ -326,7 +326,7 @@ describe('DividendHistoryTable (歷史明細表、YOC 成本殖利率與填息�
         <DividendHistoryTable
           {...defaultProps}
           dividendTrades={[tradeAccA]}
-          holdings={holdingsMulti}
+          holdings={holdingsMulti as any}
         />
       );
 

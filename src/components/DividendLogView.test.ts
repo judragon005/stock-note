@@ -570,12 +570,12 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
               marketValue: 20000,
               unrealizedPnL: 5000,
               unrealizedPnLPercent: 33.3,
-              totalCost: 15000,
+              totalCostBasis: 15000,
               currency: 'USD',
               totalDividends: 100,
               yieldOnCostPercent: 0.67,
             },
-          ],
+          ] as any,
           trades: [
             {
               id: 'div-aapl',

@@ -102,14 +102,6 @@ export const DEFAULT_DIVIDEND_PROFILES: Record<string, { frequency: DividendFreq
  */
 export const FALLBACK_SUMMER_MONTHS = [7, 8, 9];
 
-function getFallbackSummerPayoutMonth(symbol: string): number {
-  let hash = 0;
-  for (let i = 0; i < symbol.length; i++) {
-    hash = (hash * 31 + symbol.charCodeAt(i)) >>> 0;
-  }
-  return FALLBACK_SUMMER_MONTHS[hash % FALLBACK_SUMMER_MONTHS.length];
-}
-
 /**
  * 月度配息解析上下文 (消除 Data Clumps 異味)
  */

@@ -745,7 +745,7 @@ describe('Receivable Dividend & Ex-Dividend Smoothing Engine (應收股利平滑
         type: 'DIVIDEND',
         date: '2026-09-16',
         price: 4.5,
-        sourceType: 'FINMIND',
+        sourceType: 'OFFICIAL_DATA',
       };
 
       const res = calculateReceivableDividends([hA, hB], [ev], trades, '2026-09-20', 32.0, []);
