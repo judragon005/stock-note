@@ -520,6 +520,39 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
       }
     });
   });
+
+  describe('7. Ticket #546: 跨帳戶隔離防穿透', () => {
+    it('指定單一券商帳戶 (acc-a) 時，缺少 accountId 的未歸屬股利紀錄不得穿透顯示', () => {
+      const orphanTrade: TradeRecord = {
+        id: 't-orphan',
+        symbol: '0050',
+        name: '元大台灣50',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'DIVIDEND',
+        date: '2026-02-10',
+        payDate: '2026-02-10',
+        shares: 1000,
+        price: 2.0,
+        fee: 10,
+        tax: 0,
+        cashAmount: 1990,
+        createdAt: 1,
+      };
+
+      const html = renderToStaticMarkup(
+        React.createElement(DividendLogView, {
+          trades: [orphanTrade],
+          holdings: [],
+          receivableDividends: [],
+          usdToTwdRate: 32,
+          selectedAccountId: 'acc-a',
+        })
+      );
+
+      expect(html).not.toContain('0050');
+    });
+  });
 });
 
 

@@ -685,6 +685,76 @@ describe('Receivable Dividend & Ex-Dividend Smoothing Engine (應收股利平滑
       expect(estimatePaymentDate('2024-02-28', 'TW', '0056')).toBe('2024-03-22');
     });
   });
+
+  describe('Ticket #546: 跨帳戶與跨市場嚴格隔離', () => {
+    it('雙帳戶同代號 (2330) 分別持有 1000 與 2000 股，A 帳戶已入帳不應誤殺 B 帳戶應收，且 B 帳戶僅算 2000 股並標記 accountId', () => {
+      const hA: HoldingPosition = { ...mockHoldingTW, accountId: 'acc-a', shares: 1000, totalCostBasis: 600000 };
+      const hB: HoldingPosition = { ...mockHoldingTW, accountId: 'acc-b', shares: 2000, totalCostBasis: 1200000 };
+      const trades: TradeRecord[] = [
+        {
+          id: 'buy-a',
+          accountId: 'acc-a',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          date: '2026-01-10',
+          shares: 1000,
+          price: 600,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 'buy-b',
+          accountId: 'acc-b',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'BUY',
+          date: '2026-01-10',
+          shares: 2000,
+          price: 600,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+        {
+          id: 'div-a',
+          accountId: 'acc-a',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'DIVIDEND',
+          date: '2026-09-16',
+          exDate: '2026-09-16',
+          shares: 1000,
+          price: 4.5,
+          fee: 10,
+          tax: 0,
+          cashAmount: 4490,
+          createdAt: 3,
+        },
+      ];
+      const ev: RawCorporateEvent = {
+        symbol: '2330',
+        market: 'TW',
+        type: 'DIVIDEND',
+        date: '2026-09-16',
+        price: 4.5,
+        sourceType: 'FINMIND',
+      };
+
+      const res = calculateReceivableDividends([hA, hB], [ev], trades, '2026-09-20', 32.0, []);
+      expect(res).toHaveLength(1);
+      expect(res[0].accountId).toBe('acc-b');
+      expect(res[0].sharesHeld).toBe(2000);
+      expect(res[0].estimatedGrossDividend).toBe(9000);
+    });
+  });
 });
 
 

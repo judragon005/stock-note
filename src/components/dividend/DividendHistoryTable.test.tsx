@@ -267,5 +267,70 @@ describe('DividendHistoryTable (歷史明細表、YOC 成本殖利率與填息�
       expect(html).toContain('NT$ 1,960');
       expect(html).not.toContain('NT$ 2,275');
     });
+
+    it('Ticket #546: 全部帳戶模式下，同一標的於 B 帳戶已結清但 A 帳戶仍持有時，A 帳戶股利不得誤標為已結清部位', () => {
+      const tradeAccA: TradeRecord = {
+        id: 't-acc-a',
+        accountId: 'acc-a',
+        symbol: '2330',
+        name: '台積電',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'DIVIDEND',
+        date: '2026-09-16',
+        payDate: '2026-10-15',
+        shares: 1000,
+        price: 4.5,
+        tax: 0,
+        fee: 10,
+        createdAt: 1,
+      };
+      const holdingsMulti = [
+        {
+          symbol: '2330',
+          accountId: 'acc-a',
+          name: '台積電',
+          market: 'TW' as const,
+          currency: 'TWD' as const,
+          shares: 1000,
+          avgCost: 600,
+          totalCostBasis: 600000,
+          currentPrice: 900,
+          marketValue: 900000,
+          unrealizedPnL: 300000,
+          unrealizedPnLPercent: 50,
+          realizedPnL: 0,
+          totalDividends: 4490,
+          yieldOnCostPercent: 0.75,
+        },
+        {
+          symbol: '2330',
+          accountId: 'acc-b',
+          name: '台積電',
+          market: 'TW' as const,
+          currency: 'TWD' as const,
+          shares: 0,
+          avgCost: 0,
+          totalCostBasis: 0,
+          currentPrice: 900,
+          marketValue: 0,
+          unrealizedPnL: 0,
+          unrealizedPnLPercent: 0,
+          realizedPnL: 10000,
+          totalDividends: 0,
+          yieldOnCostPercent: 0,
+        },
+      ];
+
+      const html = renderToStaticMarkup(
+        <DividendHistoryTable
+          {...defaultProps}
+          dividendTrades={[tradeAccA]}
+          holdings={holdingsMulti}
+        />
+      );
+
+      expect(html).not.toContain('已結清部位');
+    });
   });
 });

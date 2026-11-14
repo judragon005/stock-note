@@ -92,7 +92,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
   const scopedHoldings = useMemo(() => {
     return holdings.filter((h) => {
       if (market !== 'ALL' && h.market !== market) return false;
-      if (selectedAccountId && selectedAccountId !== 'ALL' && h.accountId && h.accountId !== selectedAccountId) {
+      if (selectedAccountId && selectedAccountId !== 'ALL' && h.accountId !== selectedAccountId) {
         return false;
       }
       return true;
@@ -108,7 +108,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
           const loanMarket = loan.currency === 'USD' ? 'US' : 'TW';
           if (loanMarket !== market) return false;
         }
-        if (selectedAccountId && selectedAccountId !== 'ALL' && loan.accountId && loan.accountId !== selectedAccountId) {
+        if (selectedAccountId && selectedAccountId !== 'ALL' && loan.accountId !== selectedAccountId) {
           return false;
         }
         return true;
@@ -136,7 +136,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
   const scopedTrades = useMemo(() => {
     return trades.filter((t) => {
       if (market !== 'ALL' && t.market !== market) return false;
-      if (selectedAccountId && selectedAccountId !== 'ALL' && t.accountId && t.accountId !== selectedAccountId) {
+      if (selectedAccountId && selectedAccountId !== 'ALL' && t.accountId !== selectedAccountId) {
         return false;
       }
       return true;
@@ -146,7 +146,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
   const scopedReceivables = useMemo(() => {
     return receivableDividends.filter((r) => {
       if (market !== 'ALL' && r.market !== market) return false;
-      if (selectedAccountId && selectedAccountId !== 'ALL' && r.accountId && r.accountId !== selectedAccountId) {
+      if (selectedAccountId && selectedAccountId !== 'ALL' && r.accountId !== selectedAccountId) {
         return false;
       }
       return true;

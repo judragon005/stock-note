@@ -117,10 +117,19 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
   dueReceivables = [],
   onSettleReceivable,
 }) => {
-  // 建立標的持倉快速比對 Map
+  // 建立標的持倉快速比對 Map (支援 accountId+symbol 複合鍵，且不讓已結清帳戶覆蓋活躍持倉)
   const holdingsMap = React.useMemo(() => {
     const map = new Map<string, HoldingPosition>();
-    holdings.forEach((h) => map.set(h.symbol.toUpperCase(), h));
+    holdings.forEach((h) => {
+      const sym = h.symbol.toUpperCase();
+      if (h.accountId) {
+        map.set(`${sym}::${h.accountId}`, h);
+      }
+      const existing = map.get(sym);
+      if (!existing || (existing.shares <= 0 && h.shares > 0)) {
+        map.set(sym, h);
+      }
+    });
     return map;
   }, [holdings]);
 
@@ -495,7 +504,10 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
                   const isFuture = effectivePayDate > todayStr;
 
                   // 計算 YOC 與填息狀態 (Spec 0230: 透過領域函式下沉年化頻率，消滅 Feature Envy)
-                  const holding = holdingsMap.get(t.symbol.toUpperCase());
+                  const symUpper = t.symbol.toUpperCase();
+                  const holding =
+                    (t.accountId ? holdingsMap.get(`${symUpper}::${t.accountId}`) : undefined) ||
+                    holdingsMap.get(symUpper);
                   const freqMultiplier = resolveDividendFrequencyMultiplier(
                     t.symbol,
                     t.market || (isUS ? 'US' : 'TW')
