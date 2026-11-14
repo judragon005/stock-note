@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { aggregateDividendReport, extractHistoricalPayoutMonths } from './dividendAggregator';
+import { aggregateDividendReport, extractHistoricalPayoutMonths, convertDividendAmountToTWD } from './dividendAggregator';
 import { TradeRecord } from '../types/stock';
 import { ReceivableDividend } from '../types/dividend';
 
@@ -654,6 +654,40 @@ describe('Dividend Aggregator Engine (股利數據聚合引擎)', () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+
+    it('Ticket #551 / #558: DUE_FOR_RECONCILIATION 應納入月度待入帳統計並保留 grossTWD，且 convertDividendAmountToTWD 優先採用交易快照匯率', () => {
+      const reconReceivable: ReceivableDividend[] = [
+        {
+          id: 'rec-due-1',
+          symbol: '0056',
+          name: '元大高股息',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-07-16',
+          payDate: '2026-08-12',
+          sharesHeldOnExDate: 1000,
+          cashDividendPerShare: 1.07,
+          estimatedGrossDividend: 1070,
+          estimatedTaxOrFee: 10,
+          estimatedNetDividend: 1060,
+          estimatedNetDividendInTWD: 1060,
+          status: 'DUE_FOR_RECONCILIATION',
+        },
+      ];
+      const report = aggregateDividendReport([], reconReceivable, 2026, 32.0, '2026-08-15');
+      const aug = report.monthlyDistribution[7];
+      expect(aug.pendingCount).toBe(1);
+      expect(aug.pendingNetTWD).toBe(1060);
+      expect(aug.pendingItems?.[0]).toMatchObject({
+        symbol: '0056',
+        netTWD: 1060,
+        grossTWD: 1070,
+      });
+
+      expect(convertDividendAmountToTWD(10, { currency: 'USD', exchangeRate: 30 }, 32)).toBe(300);
+      expect(convertDividendAmountToTWD(10, { currency: 'USD' }, 32)).toBe(320);
+      expect(convertDividendAmountToTWD(100, { currency: 'TWD', exchangeRate: 30 }, 32)).toBe(100);
     });
   });
 });

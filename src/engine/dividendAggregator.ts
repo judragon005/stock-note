@@ -46,6 +46,18 @@ export function getEffectiveDividendPayDate(trade: TradeRecord): string {
 }
 
 /**
+ * 統一解析股利相關金額（股息／匯費）之台幣折算：優先採用交易快照匯率，否則回退即時匯率
+ */
+export function convertDividendAmountToTWD(
+  amount: number,
+  trade: Pick<TradeRecord, 'currency' | 'exchangeRate'>,
+  fallbackUsdToTwdRate: number
+): number {
+  const effectiveFx = trade.exchangeRate && trade.exchangeRate > 0 ? trade.exchangeRate : fallbackUsdToTwdRate;
+  return trade.currency === 'USD' ? Math.round(amount * effectiveFx) : Math.round(amount);
+}
+
+/**
  * 彙整全歷史與指定年度之股利成長報告、月度現金流與標的貢獻榜 (支援全歷史 vs 當年度切換)
  * 嚴格以「實質入帳發放日 (Payment Date)」為現金流唯一時序核心
  */
@@ -97,9 +109,8 @@ export function aggregateDividendReport(
     const rawGross = res.gross;
     const net = res.netCash;
 
-    const effectiveFx = trade.exchangeRate && trade.exchangeRate > 0 ? trade.exchangeRate : exchangeRate;
-    const grossTWD = trade.currency === 'USD' ? Math.round(rawGross * effectiveFx) : Math.round(rawGross);
-    const netTWD = trade.currency === 'USD' ? Math.round(net * effectiveFx) : Math.round(net);
+    const grossTWD = convertDividendAmountToTWD(rawGross, trade, exchangeRate);
+    const netTWD = convertDividendAmountToTWD(net, trade, exchangeRate);
     const taxTWD = grossTWD - netTWD;
 
     const symbolKey = trade.symbol.toUpperCase();
@@ -217,9 +228,7 @@ export function aggregateDividendReport(
     const effectivePayDate = getEffectiveDividendPayDate(trade);
     if (effectivePayDate >= twelveMonthsAgoStr && effectivePayDate <= currentDateStr) {
       const res = resolveEffectiveDividendTaxAndNet(trade, trades);
-      const effectiveFx = trade.exchangeRate && trade.exchangeRate > 0 ? trade.exchangeRate : exchangeRate;
-      const netTWD = trade.currency === 'USD' ? Math.round(res.netCash * effectiveFx) : Math.round(res.netCash);
-      trailing12mDividendsTWD += netTWD;
+      trailing12mDividendsTWD += convertDividendAmountToTWD(res.netCash, trade, exchangeRate);
     }
   }
 

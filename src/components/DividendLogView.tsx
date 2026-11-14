@@ -15,6 +15,7 @@ import {
   getEffectiveDividendPayDate,
   extractHistoricalPayoutMonths,
   buildUnifiedPendingReceivables,
+  convertDividendAmountToTWD,
 } from '../engine/dividendAggregator';
 import { resolveEffectiveDividendTaxAndNet } from '../engine/taxComplianceEngine';
 import { generate12MonthProjectedCashflow, recommendComplementaryDividendMonths } from '../engine/projectedCashflowEngine';
@@ -220,8 +221,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
     return scopedTrades
       .filter((t) => t.type === 'DIVIDEND' && getEffectiveDividendPayDate(t) <= todayStr)
       .reduce((sum, t) => {
-        const fee = t.fee || 0;
-        return sum + (t.currency === 'USD' ? Math.round(fee * usdToTwdRate) : Math.round(fee));
+        return sum + convertDividendAmountToTWD(t.fee || 0, t, usdToTwdRate);
       }, 0);
   }, [scopedTrades, todayStr, usdToTwdRate]);
 
