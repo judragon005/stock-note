@@ -42,9 +42,9 @@ export const DividendKpiSummary: React.FC<DividendKpiSummaryProps> = ({
   estimatedLoanInterestTWD = 0,
   totalWireFeesTWD = 0,
 }) => {
-  // 質押借貸實質淨利差計算
+  // 質押借貸實質淨利差計算 (Spec 0231 #551: 嚴格以近 12 個月滾動股利 TTM 扣除利息)
   const carrySpread = calculateNetCarrySpread({
-    dividendIncomeTwd: currentYearNetTWD,
+    dividendIncomeTwd: trailing12mDividendsTWD,
     loanInterestExpenseTwd: estimatedLoanInterestTWD,
   });
 

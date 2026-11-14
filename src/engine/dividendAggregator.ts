@@ -97,8 +97,9 @@ export function aggregateDividendReport(
     const rawGross = res.gross;
     const net = res.netCash;
 
-    const grossTWD = trade.currency === 'USD' ? Math.round(rawGross * exchangeRate) : Math.round(rawGross);
-    const netTWD = trade.currency === 'USD' ? Math.round(net * exchangeRate) : Math.round(net);
+    const effectiveFx = trade.exchangeRate && trade.exchangeRate > 0 ? trade.exchangeRate : exchangeRate;
+    const grossTWD = trade.currency === 'USD' ? Math.round(rawGross * effectiveFx) : Math.round(rawGross);
+    const netTWD = trade.currency === 'USD' ? Math.round(net * effectiveFx) : Math.round(net);
     const taxTWD = grossTWD - netTWD;
 
     const symbolKey = trade.symbol.toUpperCase();
@@ -154,9 +155,15 @@ export function aggregateDividendReport(
     }
   }
 
-  // 3. 聚合未到期之待入帳應收股利至當年度月度分佈 (Tri-State Accrual)
+  // 3. 聚合未到期與待對帳之應收股利至當年度月度分佈 (Tri-State Accrual)
   for (const rec of receivableDividends) {
-    if (rec.status !== 'PENDING_PAYMENT' && rec.status !== 'OVERDUE') continue;
+    if (
+      rec.status !== 'PENDING_PAYMENT' &&
+      rec.status !== 'OVERDUE' &&
+      rec.status !== 'DUE_FOR_RECONCILIATION'
+    ) {
+      continue;
+    }
     const effectivePayDate = rec.payDate || estimatePaymentDate(rec.exDate, rec.market || 'TW', rec.symbol);
     if (!effectivePayDate || !effectivePayDate.startsWith(currentYearStr)) continue;
 
@@ -179,6 +186,7 @@ export function aggregateDividendReport(
         name: rec.name,
         payDate: effectivePayDate,
         netTWD: pendingNet,
+        grossTWD: pendingGross,
       });
     }
   }
@@ -209,7 +217,8 @@ export function aggregateDividendReport(
     const effectivePayDate = getEffectiveDividendPayDate(trade);
     if (effectivePayDate >= twelveMonthsAgoStr && effectivePayDate <= currentDateStr) {
       const res = resolveEffectiveDividendTaxAndNet(trade, trades);
-      const netTWD = trade.currency === 'USD' ? Math.round(res.netCash * exchangeRate) : Math.round(res.netCash);
+      const effectiveFx = trade.exchangeRate && trade.exchangeRate > 0 ? trade.exchangeRate : exchangeRate;
+      const netTWD = trade.currency === 'USD' ? Math.round(res.netCash * effectiveFx) : Math.round(res.netCash);
       trailing12mDividendsTWD += netTWD;
     }
   }

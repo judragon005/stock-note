@@ -333,4 +333,66 @@ describe('DividendHistoryTable (歷史明細表、YOC 成本殖利率與填息�
       expect(html).not.toContain('已結清部位');
     });
   });
+
+  describe('6. Ticket #552: 匯率基準統一、年化 YOC 標示、空對帳提示與大額美金千分位', () => {
+    it('對帳面板無資料時應顯示空狀態提示', () => {
+      const html = renderToStaticMarkup(
+        <DividendHistoryTable
+          {...defaultProps}
+          showReconciliationPanel={true}
+          reconciliationList={[]}
+        />
+      );
+      expect(html).toContain('本年度尚無符合條件之已入帳對帳紀錄');
+    });
+
+    it('大額美股股利應具千分位格式，統一使用 usdToTwdRate 換算台幣並標示「年化 YOC」', () => {
+      const usTrade = {
+        id: 'div-us-large',
+        symbol: 'AAPL',
+        name: 'Apple',
+        market: 'US' as const,
+        type: 'DIVIDEND' as const,
+        date: '2026-06-15',
+        shares: 10000,
+        price: 0.25, // 2,500.00 USD gross; 30% tax = 750.00; net = 1,750.00 USD
+        currency: 'USD' as const,
+        fee: 0,
+        tax: 750,
+        exchangeRate: 30, // 歷史異質匯率不應覆蓋統一的 usdToTwdRate (32)
+        createdAt: 1,
+      };
+      const usHolding = {
+        symbol: 'AAPL',
+        name: 'Apple',
+        market: 'US' as const,
+        currency: 'USD' as const,
+        shares: 10000,
+        avgCost: 100,
+        totalCostBasis: 1000000,
+        currentPrice: 200,
+        marketValue: 2000000,
+        unrealizedPnL: 1000000,
+        unrealizedPnLPercent: 100,
+        realizedPnL: 0,
+        totalDividends: 1750,
+        yieldOnCostPercent: 0.175,
+      } as any;
+
+      const html = renderToStaticMarkup(
+        <DividendHistoryTable
+          {...defaultProps}
+          dividendTrades={[usTrade]}
+          allScopedTrades={[usTrade]}
+          holdings={[usHolding]}
+          usdToTwdRate={32}
+        />
+      );
+
+      expect(html).toContain('2,500.00 USD');
+      expect(html).toContain('1,750.00 USD');
+      expect(html).toContain('NT$ 52,500'); // 優先採用交易快照匯率 30: 1750 * 30 = 52,500，與 KPI/圖表/對帳小計口徑一致
+      expect(html).toContain('年化 YOC');
+    });
+  });
 });

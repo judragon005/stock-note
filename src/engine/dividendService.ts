@@ -14,6 +14,12 @@ export interface CompanyDividendPolicyRecord {
   totalDividend: number;
   exDividendDate?: string;
   payDate?: string;
+  payoutEvents?: Array<{
+    cashDividend: number;
+    stockDividend: number;
+    exDividendDate?: string;
+    payDate?: string;
+  }>;
 }
 
 // 本地記憶體快取避免重複頻繁請求
@@ -135,21 +141,45 @@ export async function fetchCompanyDividendHistory(
               ((item.StockEarningsDistribution || 0) + (item.StockStatutorySurplus || 0)).toFixed(2)
             );
 
+            const exDate = item.CashExDividendTradingDate || undefined;
+            const payDate = item.CashDividendPaymentDate || undefined;
+
             if (mapByYear.has(year)) {
               const existing = mapByYear.get(year)!;
-              existing.cashDividend += cash;
-              existing.stockDividend += stock;
+              existing.cashDividend = Number((existing.cashDividend + cash).toFixed(2));
+              existing.stockDividend = Number((existing.stockDividend + stock).toFixed(2));
               existing.totalDividend = Number(
                 (existing.cashDividend + existing.stockDividend).toFixed(2)
               );
+              if (exDate && (!existing.exDividendDate || exDate > existing.exDividendDate)) {
+                existing.exDividendDate = exDate;
+              }
+              if (payDate && (!existing.payDate || payDate > existing.payDate)) {
+                existing.payDate = payDate;
+              }
+              existing.payoutEvents = existing.payoutEvents || [];
+              existing.payoutEvents.push({
+                cashDividend: cash,
+                stockDividend: stock,
+                exDividendDate: exDate,
+                payDate,
+              });
             } else {
               mapByYear.set(year, {
                 year,
                 cashDividend: cash,
                 stockDividend: stock,
                 totalDividend: Number((cash + stock).toFixed(2)),
-                exDividendDate: item.CashExDividendTradingDate || undefined,
-                payDate: item.CashDividendPaymentDate || undefined,
+                exDividendDate: exDate,
+                payDate,
+                payoutEvents: [
+                  {
+                    cashDividend: cash,
+                    stockDividend: stock,
+                    exDividendDate: exDate,
+                    payDate,
+                  },
+                ],
               });
             }
           }

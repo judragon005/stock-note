@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useTaipeiDateStr } from '../hooks/useTaipeiDateStr';
 import {
   Coins,
@@ -66,6 +66,18 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
   const [dividendDisplayMode, setDividendDisplayMode] = useState<DividendDisplayMode>('GROSS');
   const [isCashflowExpanded, setIsCashflowExpanded] = useState<boolean>(true);
   const [showReconciliationPanel, setShowReconciliationPanel] = useState(false);
+  const [loanRefreshTick, setLoanRefreshTick] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleLoanUpdate = () => setLoanRefreshTick((v) => v + 1);
+    window.addEventListener('storage', handleLoanUpdate);
+    window.addEventListener('loan-records-updated', handleLoanUpdate);
+    return () => {
+      window.removeEventListener('storage', handleLoanUpdate);
+      window.removeEventListener('loan-records-updated', handleLoanUpdate);
+    };
+  }, []);
   const [targetMonthlyExpenseTwd, setTargetMonthlyExpenseTwd] = useState<number>(() => {
     try {
       const saved = localStorage.getItem('STOCK_TRACKER_DIVIDEND_TARGET_EXPENSE');
@@ -116,7 +128,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
     } catch {
       return [];
     }
-  }, [market, selectedAccountId]);
+  }, [market, selectedAccountId, loanRefreshTick, trades.length]);
 
   // 質押借貸利息支出計算 (連通 cashLedgerEngine，消費 scopedLoans 杜絕跨市場/跨帳戶洩漏)
   const estimatedLoanInterestTWD = useMemo(() => {
@@ -203,6 +215,16 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
       .reduce((sum, r) => sum + (r.stockDividendShares || 0), 0);
   }, [activeReceivables]);
 
+  // 累計已實付跨行匯費/手續費 (Spec 0231 #551)
+  const totalWireFeesTWD = useMemo(() => {
+    return scopedTrades
+      .filter((t) => t.type === 'DIVIDEND' && getEffectiveDividendPayDate(t) <= todayStr)
+      .reduce((sum, t) => {
+        const fee = t.fee || 0;
+        return sum + (t.currency === 'USD' ? Math.round(fee * usdToTwdRate) : Math.round(fee));
+      }, 0);
+  }, [scopedTrades, todayStr, usdToTwdRate]);
+
   // 歷史入帳明細列表過濾 (Spec 0231 #550: 嚴格僅顯示已完成交割之實領流水 payDate <= todayStr，在途項目歸口應收專區)
   const dividendTrades = useMemo(() => {
     const selectedYearStr = String(selectedYear);
@@ -268,8 +290,11 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
       existing.taxTWD += taxTWD;
       map.set(key, existing);
     }
-    return Array.from(map.values()).sort((a, b) => b.grossTWD - a.grossTWD);
-  }, [scopedTrades, selectedYear, usdToTwdRate, todayStr]);
+    const q = searchQuery.trim().toLowerCase();
+    return Array.from(map.values())
+      .filter((item) => !q || item.symbol.toLowerCase().includes(q) || item.name.toLowerCase().includes(q))
+      .sort((a, b) => b.grossTWD - a.grossTWD);
+  }, [scopedTrades, selectedYear, usdToTwdRate, todayStr, searchQuery]);
 
   const activeContributors = rankMode === 'YEAR'
     ? report.currentYearTopContributors
@@ -457,9 +482,10 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         totalReceivableTWD={totalReceivableTWD}
         receivablePendingCount={activeReceivables.length}
         totalHistoricalNetTWD={report.totalHistoricalDividendsTWD}
-        nhiAlertCount={scopedReceivables.filter((r) => r.market === 'TW' && r.estimatedGrossDividend >= 20000).length}
+        nhiAlertCount={activeReceivables.filter((r) => r.market === 'TW' && r.estimatedGrossDividend >= 20000).length}
         pendingStockSharesTotal={pendingStockSharesTotal}
         estimatedLoanInterestTWD={estimatedLoanInterestTWD}
+        totalWireFeesTWD={totalWireFeesTWD}
       />
 
       {/* 3. 各月份現金流分佈 (2/3) + 股息貢獻排行榜 (1/3) 齊高並列網格 */}
