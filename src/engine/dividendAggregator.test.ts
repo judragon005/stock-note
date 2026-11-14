@@ -492,6 +492,46 @@ describe('Dividend Aggregator Engine (股利數據聚合引擎)', () => {
       expect(payoutMap['2330']).toEqual([3]);
     });
 
+    it('Spec 0230 / Issue 01: extractHistoricalPayoutMonths 應支援 currentDateStr 時序門禁，嚴禁未來預約款項倒灌歷史月份', () => {
+      const tradesWithFuture: TradeRecord[] = [
+        {
+          id: 't-past',
+          symbol: '2344',
+          name: '華邦電',
+          market: 'TW',
+          type: 'DIVIDEND',
+          date: '2026-07-15',
+          payDate: '2026-08-15', // 過去歷史已入帳 (8月)
+          shares: 1000,
+          price: 1.0,
+          currency: 'TWD',
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 't-future',
+          symbol: '2344',
+          name: '華邦電',
+          market: 'TW',
+          type: 'DIVIDEND',
+          date: '2026-11-20',
+          payDate: '2026-12-16', // 未來預約款項 (12月)
+          shares: 1000,
+          price: 1.0,
+          currency: 'TWD',
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+      ];
+
+      // 當前日期定錨於 2026-11-14，未來 2026-12-16 不得計入歷史習慣
+      const payoutMap = extractHistoricalPayoutMonths(tradesWithFuture, '2026-11-14');
+      expect(payoutMap['2344']).toEqual([8]);
+      expect(payoutMap['2344']).not.toContain(12);
+    });
+
     it('Spec 0227 / Review Refinements: 當 ReceivableDividend 缺失 payDate 時，能自動調用 estimatePaymentDate 推估有效發放日並聚合', () => {
       const mockReceivableWithoutPayDate: ReceivableDividend[] = [
         {
@@ -522,6 +562,48 @@ describe('Dividend Aggregator Engine (股利數據聚合引擎)', () => {
       expect(aprData.pendingItems![0].symbol).toBe('2330');
       expect(aprData.pendingItems![0].payDate).toBeDefined();
       expect(aprData.pendingItems![0].payDate.startsWith('2026-04')).toBe(true);
+    });
+
+    it('Spec 0230 / Issue 07: aggregateDividendReport 應獨立統計 currentYearTwDividendsTWD 嚴格隔離美股海外所得', () => {
+      const mixedMarketTrades: TradeRecord[] = [
+        {
+          id: 't-tw',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'DIVIDEND',
+          date: '2026-04-10',
+          payDate: '2026-04-10',
+          shares: 1000,
+          price: 4.0,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 't-us',
+          symbol: 'AAPL',
+          name: 'Apple',
+          market: 'US',
+          currency: 'USD',
+          type: 'DIVIDEND',
+          date: '2026-05-15',
+          payDate: '2026-05-15',
+          shares: 100,
+          price: 0.25, // 25 USD
+          fee: 0,
+          tax: 7.5, // 30% 預扣
+          createdAt: 2,
+        },
+      ];
+
+      const report = aggregateDividendReport(mixedMarketTrades, [], 2026, 32.0, '2026-11-14');
+      // 台積電: 4,000 TWD
+      // 美股 AAPL: 17.5 USD * 32 = 560 TWD
+      expect(report.currentYearDividendsTWD).toBe(4560);
+      // currentYearTwDividendsTWD 必須純粹為台股 4,000 TWD，嚴格杜絕海外所得污染！
+      expect(report.currentYearTwDividendsTWD).toBe(4000);
     });
   });
 });

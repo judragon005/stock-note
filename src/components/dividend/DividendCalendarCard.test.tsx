@@ -83,4 +83,34 @@ describe('DividendCalendarCard (未來 12 個月現金流月曆與活水轉向�
     expect(html).toContain('50k');
     expect(html).toContain('自訂');
   });
+
+  describe('Spec 0230 / Issue 11: 生活費邊界防禦與 NaN% 免疫', () => {
+    it('當 targetMonthlyExpenseTwd 為非法值或 0 時，生活費覆蓋率應安全降級為 0% 而不崩潰為 NaN%', () => {
+      const htmlZero = renderToStaticMarkup(
+        <DividendCalendarCard
+          projectedCashflow={mockProjectedCashflow as any}
+          complementaryRecommendations={[]}
+          taxStats={mockTaxStats}
+          targetMonthlyExpenseTwd={0}
+          onTargetExpenseChange={vi.fn()}
+          isCashflowExpanded={true}
+          onToggleExpand={vi.fn()}
+        />
+      );
+      expect(htmlZero).not.toContain('NaN%');
+
+      const htmlNegative = renderToStaticMarkup(
+        <DividendCalendarCard
+          projectedCashflow={mockProjectedCashflow as any}
+          complementaryRecommendations={[]}
+          taxStats={mockTaxStats}
+          targetMonthlyExpenseTwd={-5000}
+          onTargetExpenseChange={vi.fn()}
+          isCashflowExpanded={true}
+          onToggleExpand={vi.fn()}
+        />
+      );
+      expect(htmlNegative).not.toContain('NaN%');
+    });
+  });
 });

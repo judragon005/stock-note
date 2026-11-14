@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-2215%2F2215%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2235%2F2235%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,24 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 現金流三態時序統一、股利發放月精準對齊與月度日曆勾稽重構 (`Spec 0227`) *(V9.20.0 最新發布 / Spec #0227 / ADR #0227 / Issues #516 ~ #521, #533 / PR #522 ~ #526, #534)*
+### 1. 股利現金流全域同態收縮、時序因果阻斷、跨境稅制隔離與自然鍵防撞 (`Spec 0230`) *(V9.20.3 最新發布 / Spec #0230 / ADR #0230 / Issue #542)*
+
+- **時序因果屏障門禁 (Causal Horizon Wall)**：
+  - 歷史月份學習器與年度券商對帳單注入 `currentDateStr` 門禁 (`payDate <= todayStr`)，阻斷未來未到期預約股利倒灌歷史慣性庫，徹底消滅華邦電 12 月 NT$ 22,500 幽靈現金流，自癒恢復實質枯水期（31% 覆蓋率）並恢復 00929/00934 填補建議。
+- **全域過濾同態幾何收縮 (Homomorphic Context Closure)**：
+  - 在頂層建立 `scopedHoldings` 與 `scopedLoans`，使持股現況、質押借貸、交易明細與應收股利同態收縮，美股模式水密排除台股與質押利息。
+- **SSOT 應收同源融合與月度長條圖對齊**：
+  - 報表聚合引擎直接消費融合去重後的單一事實來源 `activeReceivables`，修復待入帳卡片有款項但長條圖顯示為 0 的畫面脫節 Bug。
+- **法定跨境稅制水密艙隔離 (Watertight Tax Jurisdiction Bulwark)**：
+  - 聚合引擎獨立輸出 `currentYearTwDividendsTWD`，專供台灣所得稅法 8.5% 股利抵扣額（扣繳代碼 54C，上限 8 萬）計算，美股 30% 海外所得水密隔離。
+- **金融事件自然鍵防撞去重協定 (Natural Key Deduplication Protocol)**：
+  - 升級 `buildUnifiedPendingReceivables`，以 `${market}_${symbol}_${exDate || payDate}` 防撞去重，徹底消除待入帳款項虛增 200% 的雙重認列問題。
+- **配息頻率動態年化 YOC 與歷史匯率快照**：
+  - 抽象領域純函式 `resolveDividendFrequencyMultiplier`，動態年化季配/月配 YOC（台積電正確顯示 1.6%，美股月配 ETF 如 O, JEPI 正確 12 次年化），並全面穿透 `trade.exchangeRate` 歷史匯率快照。
+- **自訂生活費數值邊界守衛**：
+  - 生活費輸入設置 NT$ 1,000 ~ 1,000,000 範圍邊界與非負保護，杜絕 `NaN%`。
+
+### 2. 現金流三態時序統一、股利發放月精準對齊與月度日曆勾稽重構 (`Spec 0227`) *(V9.20.0 / Spec #0227 / ADR #0227 / Issues #516 ~ #521, #533 / PR #522 ~ #526, #534)*
 
 - **0056 與核心權值股發放月精準校準 (Issue #517)**：
   - 修正 `projectedCashflowEngine.ts` 將 0056 自除息月校準為實質發放月 `[2, 5, 8, 11]`，並校準 `00878` (`[3, 6, 9, 12]`)、`00919`、`00713`、`2330` 與 `00888`，徹底終結「11 月明明有 0056 入帳，圖表與明細卻空白」之混亂。

@@ -29,14 +29,16 @@ export const DividendCalendarCard: React.FC<DividendCalendarCardProps> = ({
   const [isEditingCustom, setIsEditingCustom] = React.useState<boolean>(false);
   const [customValue, setCustomValue] = React.useState<string>(String(targetMonthlyExpenseTwd));
 
-  const fiCoverageRatioPct = targetMonthlyExpenseTwd > 0
+  const fiCoverageRatioPct = (targetMonthlyExpenseTwd > 0 && !isNaN(targetMonthlyExpenseTwd))
     ? ((projectedCashflow.monthlyAverageTwd / targetMonthlyExpenseTwd) * 100)
     : 0;
 
   const handleCustomSubmit = () => {
     const val = parseInt(customValue, 10);
     if (!isNaN(val) && val > 0) {
-      onTargetExpenseChange?.(val);
+      // 數值範圍邊界守衛：NT$ 1,000 ~ NT$ 1,000,000
+      const clamped = Math.min(1000000, Math.max(1000, val));
+      onTargetExpenseChange?.(clamped);
     }
     setIsEditingCustom(false);
   };

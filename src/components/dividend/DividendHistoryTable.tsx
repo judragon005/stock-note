@@ -8,6 +8,7 @@ import {
   calculateYieldOnCost,
   determineDividendFillStatus,
   formatDividendFillStatusLabel,
+  resolveDividendFrequencyMultiplier,
 } from '../../engine/dividendMetricsEngine';
 
 export interface DividendContributor {
@@ -487,15 +488,22 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
                   const gross = res.gross;
                   const effectiveTax = res.effectiveTax;
                   const net = res.netCash;
-                  const netTWD = isUS ? Math.round(net * usdToTwdRate) : Math.round(net);
+                  const effectiveFx = t.exchangeRate && t.exchangeRate > 0 ? t.exchangeRate : usdToTwdRate;
+                  const netTWD = isUS ? Math.round(net * effectiveFx) : Math.round(net);
                   const effectivePayDate = getEffectiveDividendPayDate(t);
                   const exDate = t.exDate || t.date;
                   const isFuture = effectivePayDate > todayStr;
 
-                  // 計算 YOC 與填息狀態
+                  // 計算 YOC 與填息狀態 (Spec 0230: 透過領域函式下沉年化頻率，消滅 Feature Envy)
                   const holding = holdingsMap.get(t.symbol.toUpperCase());
+                  const freqMultiplier = resolveDividendFrequencyMultiplier(
+                    t.symbol,
+                    t.market || (isUS ? 'US' : 'TW')
+                  );
+                  const annualizedDividendPerShare = t.price * freqMultiplier;
+
                   const yoc = holding && holding.avgCost > 0
-                    ? calculateYieldOnCost(t.price, holding.avgCost)
+                    ? calculateYieldOnCost(annualizedDividendPerShare, holding.avgCost)
                     : 0;
 
                   const rawExPrice = t.exPrice !== undefined

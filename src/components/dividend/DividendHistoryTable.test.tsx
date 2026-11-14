@@ -99,8 +99,8 @@ describe('DividendHistoryTable (歷史明細表、YOC 成本殖利率與填息�
     const html = renderToStaticMarkup(<DividendHistoryTable {...defaultProps} />);
     expect(html).toContain('00878');
     expect(html).toContain('國泰永續高股息');
-    // YOC: (0.55 / 18.0) * 100 = 3.1%
-    expect(html).toContain('YOC 3.1%');
+    // 00878 為季配 (頻率年化 4 次)：(0.55 * 4 / 18.0) * 100 = 12.2%
+    expect(html).toContain('YOC 12.2%');
     expect(html).toContain('實質填息');
   });
 
@@ -180,6 +180,92 @@ describe('DividendHistoryTable (歷史明細表、YOC 成本殖利率與填息�
         />
       );
       expect(html).toContain('待補除息價');
+    });
+  });
+
+  describe('Spec 0230 / Issue 09 & 10: YOC 頻率年化與歷史外幣匯率快照穿透', () => {
+    it('Issue 09: 季配與月配標的在計算 YOC 時應依配息頻率進行年化 (台積電單季 4.0 元在成本 1000 元時年化顯示 1.6%)', () => {
+      const tsmcTrade: TradeRecord = {
+        id: 'trade-tsmc',
+        symbol: '2330',
+        name: '台積電',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'DIVIDEND',
+        date: '2026-04-10',
+        payDate: '2026-04-10',
+        shares: 1000,
+        price: 4.0, // 單季 4.0 元
+        fee: 0,
+        tax: 0,
+        createdAt: 10,
+      };
+
+      const tsmcHolding: HoldingPosition = {
+        symbol: '2330',
+        name: '台積電',
+        market: 'TW',
+        currency: 'TWD',
+        shares: 1000,
+        avgCost: 1000.0, // 成本 1000 元
+        totalCostBasis: 1000000,
+        adjustedCostBasis: 1000000,
+        currentPrice: 1050.0,
+        marketValue: 1050000,
+        grossMarketValue: 1050000,
+        estimatedSellTax: 3150,
+        estimatedSellFee: 1496,
+        netMarketValue: 1045354,
+        unrealizedPnL: 50000,
+        unrealizedPnLPercent: 5.0,
+        unrealizedPnLBroker: 45354,
+        unrealizedPnLBrokerPercent: 4.54,
+        realizedPnL: 0,
+      } as unknown as HoldingPosition;
+
+      const html = renderToStaticMarkup(
+        <DividendHistoryTable
+          {...defaultProps}
+          dividendTrades={[tsmcTrade]}
+          holdings={[tsmcHolding]}
+        />
+      );
+
+      // 單季 4.0 元年化 4 次 = 16 元，成本 1000 元，年化 YOC = 1.6% (非 0.4%)
+      expect(html).toContain('YOC 1.6%');
+    });
+
+    it('Issue 10: 歷史外幣交易折合台幣應優先採用 trade.exchangeRate 成交匯率快照', () => {
+      const historicalUsTrade: TradeRecord = {
+        id: 'trade-historical-us',
+        symbol: 'AAPL',
+        name: 'Apple',
+        market: 'US',
+        currency: 'USD',
+        type: 'DIVIDEND',
+        date: '2021-05-15',
+        payDate: '2021-05-15',
+        shares: 100,
+        price: 1.0, // 100 USD
+        tax: 30.0, // 30 USD
+        fee: 0,
+        exchangeRate: 28.0, // 歷史成交當日匯率快照 28.0
+        createdAt: 11,
+      };
+
+      // 傳入的即時匯率為 32.5
+      const html = renderToStaticMarkup(
+        <DividendHistoryTable
+          {...defaultProps}
+          usdToTwdRate={32.5}
+          dividendTrades={[historicalUsTrade]}
+          holdings={[]}
+        />
+      );
+
+      // 實領 70 USD * 歷史匯率 28.0 = NT$ 1,960 (若誤用即時匯率 32.5 則會是 2,275)
+      expect(html).toContain('NT$ 1,960');
+      expect(html).not.toContain('NT$ 2,275');
     });
   });
 });

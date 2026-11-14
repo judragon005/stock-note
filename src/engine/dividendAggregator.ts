@@ -5,12 +5,19 @@ import { estimatePaymentDate } from './receivableDividendEngine';
 
 /**
  * 自交易紀錄中萃取各標的歷史實際發放月份慣性 (消除 Feature Envy，下沉至領域純函式)
+ * Spec 0230: 支援 currentDateStr 時序因果屏障，嚴禁未來未到期預約款項倒灌歷史月份
  */
-export function extractHistoricalPayoutMonths(trades: TradeRecord[]): Record<string, number[]> {
+export function extractHistoricalPayoutMonths(
+  trades: TradeRecord[],
+  currentDateStr?: string
+): Record<string, number[]> {
   const map: Record<string, number[]> = {};
   for (const t of trades) {
     if (t.type === 'DIVIDEND') {
       const payDate = getEffectiveDividendPayDate(t);
+      if (currentDateStr && payDate > currentDateStr) {
+        continue;
+      }
       if (payDate && payDate.length >= 7) {
         const monthNum = parseInt(payDate.substring(5, 7), 10);
         if (monthNum >= 1 && monthNum <= 12) {
@@ -52,6 +59,7 @@ export function aggregateDividendReport(
 
   let totalHistoricalDividendsTWD = 0;
   let currentYearDividendsTWD = 0;
+  let currentYearTwDividendsTWD = 0;
   let currentYearGrossTWD = 0;
   let currentYearTaxTWD = 0;
   let previousYearDividendsTWD = 0;
@@ -114,6 +122,9 @@ export function aggregateDividendReport(
       // 只有在已入帳時才算入實領股息與當年度貢獻榜
       if (isSettled) {
         currentYearDividendsTWD += netTWD;
+        if (trade.market === 'TW' || (!trade.market && trade.currency !== 'USD')) {
+          currentYearTwDividendsTWD += netTWD;
+        }
         currentYearGrossTWD += grossTWD;
         currentYearTaxTWD += taxTWD;
 
@@ -219,6 +230,7 @@ export function aggregateDividendReport(
   return {
     totalHistoricalDividendsTWD,
     currentYearDividendsTWD,
+    currentYearTwDividendsTWD,
     currentYearGrossTWD,
     currentYearTaxTWD,
     previousYearDividendsTWD,
@@ -232,8 +244,9 @@ export function aggregateDividendReport(
 }
 
 /**
- * 建立統一應收股利與預約交易聯集中樞 (Spec 0229 SSOT)
+ * 建立統一應收股利與預約交易聯集中樞 (Spec 0229 SSOT & Spec 0230 自然鍵防撞協定)
  * 解決外部公告與本地預約交易雙軌分裂，確保全看板消費單一事實來源
+ * 以不可變的除息金融自然鍵 `${market}_${symbol}_${exDate}` 防撞去重
  */
 export function buildUnifiedPendingReceivables(
   scopedReceivables: ReceivableDividend[],
@@ -249,7 +262,9 @@ export function buildUnifiedPendingReceivables(
       (r.status === 'PENDING_PAYMENT' || r.status === 'OVERDUE' || r.status === 'DUE_FOR_RECONCILIATION') &&
       r.estimatedNetDividendInTWD > 0
     ) {
-      map.set(`${r.symbol.toUpperCase()}_${r.payDate}`, r);
+      const dateKey = r.exDate || r.payDate || '';
+      const key = `${r.market || 'TW'}_${r.symbol.toUpperCase()}_${dateKey}`;
+      map.set(key, r);
     }
   });
 
@@ -258,7 +273,8 @@ export function buildUnifiedPendingReceivables(
     if (t.type !== 'DIVIDEND') return;
     const effectivePayDate = getEffectiveDividendPayDate(t);
     const isFuture = effectivePayDate > todayStr;
-    const key = `${t.symbol.toUpperCase()}_${effectivePayDate}`;
+    const exDate = t.exDate || t.date || effectivePayDate;
+    const key = `${t.market || 'TW'}_${t.symbol.toUpperCase()}_${exDate}`;
 
     if (isFuture && !map.has(key)) {
       const gross = t.shares * t.price;
@@ -273,7 +289,7 @@ export function buildUnifiedPendingReceivables(
         name: t.name || t.symbol,
         market: t.market,
         currency: (t.currency as any) || 'TWD',
-        exDate: t.exDate || t.date,
+        exDate: exDate,
         payDate: effectivePayDate,
         sharesHeldOnExDate: t.shares,
         cashDividendPerShare: t.price,
@@ -286,5 +302,9 @@ export function buildUnifiedPendingReceivables(
     }
   });
 
-  return Array.from(map.values()).sort((a, b) => a.payDate.localeCompare(b.payDate));
+  return Array.from(map.values()).sort((a, b) => {
+    const pA = a.payDate || a.exDate;
+    const pB = b.payDate || b.exDate;
+    return pA.localeCompare(pB);
+  });
 }

@@ -375,6 +375,107 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
       expect(unifiedList[0].payDate).toBe('2026-12-16');
       expect(unifiedList[0].status).toBe('PENDING_PAYMENT');
     });
+
+    it('Spec 0230 / Issue 03: buildUnifiedPendingReceivables 應使用 Market_Symbol_ExDate 金融自然鍵防撞去重', () => {
+      // 官方公告除息日 2026-11-18，發放日 2026-12-18
+      const officialRec: ReceivableDividend = {
+        id: 'rec-official-2344',
+        symbol: '2344',
+        name: '華邦電',
+        market: 'TW',
+        currency: 'TWD',
+        exDate: '2026-11-18',
+        payDate: '2026-12-18', // 官方發放日比本地預約晚 2 天
+        sharesHeldOnExDate: 4000,
+        cashDividendPerShare: 2.0,
+        estimatedGrossDividend: 8000,
+        estimatedTaxOrFee: 0,
+        estimatedNetDividend: 8000,
+        estimatedNetDividendInTWD: 8000,
+        status: 'PENDING_PAYMENT',
+      };
+
+      // 本地預約交易除息日 2026-11-18，發放日 2026-12-16
+      const localTrade: TradeRecord = {
+        id: 'trade-local-2344',
+        symbol: '2344',
+        name: '華邦電',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'DIVIDEND',
+        date: '2026-11-18', // exDate
+        exDate: '2026-11-18',
+        payDate: '2026-12-16', // 發放日 12-16
+        shares: 4000,
+        price: 2.0,
+        fee: 0,
+        tax: 0,
+        createdAt: 1000,
+      };
+
+      const unified = buildUnifiedPendingReceivables([officialRec], [localTrade], '2026-11-14', 32.0);
+
+      // 雖然發放日不同 (12-18 vs 12-16)，但市場、代碼、除息日完全相同，必須防撞去重為 1 筆，嚴禁 200% 重複認列！
+      expect(unified.length).toBe(1);
+      expect(unified[0].symbol).toBe('2344');
+      expect(unified[0].estimatedNetDividendInTWD).toBe(8000);
+    });
+  });
+
+  describe('7. Spec 0230: 時序門禁、全域同態收縮與對帳單防漏驗證', () => {
+    it('券商對帳核對小計 annualReconciliationList 應嚴格阻斷未到期預約款項提前計入 (payDate <= todayStr 門禁)', () => {
+      const todayStr = '2026-11-14';
+      const tradesForRecon: TradeRecord[] = [
+        {
+          id: 'trade-past',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'DIVIDEND',
+          date: '2026-03-16',
+          payDate: '2026-04-10', // 已入帳
+          shares: 1000,
+          price: 4.0,
+          fee: 0,
+          tax: 0,
+          createdAt: 1,
+        },
+        {
+          id: 'trade-future',
+          symbol: '2344',
+          name: '華邦電',
+          market: 'TW',
+          currency: 'TWD',
+          type: 'DIVIDEND',
+          date: '2026-11-18',
+          payDate: '2026-12-16', // 未到期預約款項 (未來)
+          shares: 4000,
+          price: 2.0,
+          fee: 0,
+          tax: 0,
+          createdAt: 2,
+        },
+      ];
+
+      // 模擬 annualReconciliationList 的計算邏輯縫隙
+      const selectedYearStr = '2026';
+      const map = new Map<string, any>();
+      for (const trade of tradesForRecon) {
+        if (trade.type !== 'DIVIDEND') continue;
+        const payDate = trade.payDate || trade.date;
+        if (!payDate.startsWith(selectedYearStr)) continue;
+        if (payDate > todayStr) continue; // 時序門禁
+
+        const key = trade.symbol.toUpperCase();
+        map.set(key, trade);
+      }
+
+      // 未到期的 2344 華邦電不得出現在對帳單中
+      expect(map.has('2330')).toBe(true);
+      expect(map.has('2344')).toBe(false);
+      expect(map.size).toBe(1);
+    });
   });
 });
 

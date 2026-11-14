@@ -120,3 +120,49 @@ export function formatDividendFillStatusLabel(status: DividendFillStatus): strin
     }
   }
 }
+
+/**
+ * 解析標的現金股利之年化頻率倍數 (Spec 0230 領域層下沉，消滅 Feature Envy)
+ *
+ * @param symbol 標的代碼
+ * @param market 市場類別 ('TW' | 'US')
+ * @param customFrequency 自訂配息頻率 (可選)
+ * @returns 年化乘數 (月配: 12, 季配: 4, 半年配: 2, 年配: 1)
+ */
+export function resolveDividendFrequencyMultiplier(
+  symbol: string,
+  market: 'TW' | 'US' = 'TW',
+  frequency?: string
+): number {
+  if (frequency) {
+    if (frequency === 'MONTHLY') return 12;
+    if (frequency === 'QUARTERLY') return 4;
+    if (frequency === 'SEMI_ANNUAL') return 2;
+    if (frequency === 'ANNUAL') return 1;
+  }
+
+  const upper = symbol.toUpperCase();
+
+  // 常見美股月配 ETF / REITs
+  const US_MONTHLY_SYMBOLS = new Set(['O', 'MAIN', 'STAG', 'JEPI', 'JEPQ', 'TLTW', 'HYGW']);
+  if (market === 'US') {
+    if (US_MONTHLY_SYMBOLS.has(upper)) return 12;
+    // 美股普通股與主流 ETF 預設均為季配
+    return 4;
+  }
+
+  // 台股常見月配
+  const TW_MONTHLY_SYMBOLS = new Set(['00929', '00934', '00936', '00940']);
+  if (TW_MONTHLY_SYMBOLS.has(upper)) return 12;
+
+  // 台股常見半年配
+  const TW_SEMI_ANNUAL_SYMBOLS = new Set(['0050', '006208', '2454']);
+  if (TW_SEMI_ANNUAL_SYMBOLS.has(upper)) return 2;
+
+  // 台股常見季配
+  const TW_QUARTERLY_SYMBOLS = new Set(['0056', '00878', '00919', '00713', '2330', '00888', '00900']);
+  if (TW_QUARTERLY_SYMBOLS.has(upper)) return 4;
+
+  // 台股其餘個股常態為夏秋年配
+  return 1;
+}

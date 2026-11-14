@@ -81,6 +81,22 @@ _Avoid_: Disappearing Badge, Null Return Status
 將外部除權息公告所生成的應收股利池 (`scopedReceivables`) 與交易紀錄中未到期之預約股利 (`TradeRecord`) 在領域層純函式中進行聯集與去重合成，確保全看板（行事曆、月曆卡片、明細表）消費同一組單一事實來源 (SSOT)，杜絕「上方顯示暫無記錄、下方卻有待入帳」之矛盾。
 _Avoid_: Split-Brain Receivables, Ghost Accruals
 
+**Causal Horizon Wall (時序因果屏障)** _(新增於 Spec 0230)_:
+在歷史月份學習器 (`extractHistoricalPayoutMonths`) 與年度券商對帳小計 (`annualReconciliationList`) 入口處設置時間閘門 (`payDate <= currentDateStr`)。嚴格禁止未來未到期預約股利反向倒灌歷史慣性庫或提前計入券商對帳單，徹底杜絕幽靈現金流（如華邦電 12 月 22,500 元）與枯水期誤判。
+_Avoid_: Chrono Taint, Future Leakage, Look-Ahead Learning
+
+**Homomorphic Context Closure (全域過濾同態幾何收縮)** _(新增於 Spec 0230)_:
+當全域切換「市場（TW/US）」或「券商/質押子帳戶」時，持股現況 (`scopedHoldings`)、質押借貸 (`scopedLoans`)、交易明細與應收股利在頂層父元件瞬間完成同態收縮，保證月曆、KPI、長條圖、明細表五大視圖的資產母體 100% 嚴格一致，杜絕跨市場/跨帳戶幽靈股票與利息洩漏。
+_Avoid_: Scoping Fracture, Raw Holdings Passthrough, Account Drift
+
+**Watertight Tax Jurisdiction Bulwark (法定跨境稅制水密隔離)** _(新增於 Spec 0230)_:
+將台灣所得稅法 8.5% 境內股利抵扣額（扣繳代碼 54C，上限 8 萬）與美股 30% 外國人預扣稅（扣繳代碼 73，適用最低稅負制）在領域層實施物理水密艙隔離。聚合引擎獨立統計 `currentYearTwDividendsTWD`，嚴禁境外股利所得侵蝕台灣抵扣額。
+_Avoid_: Cross-Border Tax Contamination, Foreign Deduction Leak
+
+**Natural Key De-duplication Protocol (金融事件自然鍵防撞去重協定)** _(新增於 Spec 0230)_:
+以 `Market_Symbol_ExDate`（除息基準日唯一不變性）取代易變的 `payDate` 作為雙軌應收股利之去重中樞。即便官方公告與手動預約發放日存在數日偏差，依然能精確去重，徹底消除待入帳 200% 雙重認列。
+_Avoid_: PayDate Key Collision, Double Counting Accruals
+
 ### 市場時間與結算定錨 (Market Settlement & Anchoring) _(新增於 Spec 0150)_
 
 **Market Settlement Status (市場結算狀態)**:
