@@ -136,7 +136,7 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
     });
   });
 
-  describe('2. 雙看板獨立拆分與資料過濾', () => {
+  describe('2. 雙看板獨立拆分與資料過濾 (真實主視圖掛載)', () => {
     const mockReceivables: ReceivableDividend[] = [
       {
         id: 'rec-1',
@@ -172,29 +172,36 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
       },
     ];
 
-    it('應能精準將應收項目拆分為「待入帳行事曆」與「即將除息公告」', () => {
-      const pending = mockReceivables.filter((r) => r.status !== 'UPCOMING_EX');
-      const upcoming = mockReceivables.filter((r) => r.status === 'UPCOMING_EX');
-
-      expect(pending.length).toBe(1);
-      expect(pending[0].symbol).toBe('2886');
-
-      expect(upcoming.length).toBe(1);
-      expect(upcoming[0].symbol).toBe('2330');
+    it('主視圖應僅將待入帳 (PENDING_PAYMENT) 列入行事曆，排除尚未除息 (UPCOMING_EX)', () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date('2026-08-20T12:00:00+08:00'));
+        const html = renderToStaticMarkup(
+          React.createElement(DividendLogView, {
+            trades: [],
+            holdings: [],
+            receivableDividends: mockReceivables,
+            usdToTwdRate: 32,
+          })
+        );
+        expect(html).toContain('2886');
+        expect(html).toContain('兆豐金');
+        expect(html).not.toContain('2330');
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
-    it('當無待入帳項目時，pending 陣列長度為 0，可正確提供空狀態占位判定', () => {
-      const onlyUpcoming = mockReceivables.filter((r) => r.status === 'UPCOMING_EX');
-      const pending = onlyUpcoming.filter((r) => r.status !== 'UPCOMING_EX');
-
-      expect(pending.length).toBe(0);
-    });
-
-    it('當無即將除息項目時，upcoming 陣列長度為 0，可正確提供空狀態占位判定', () => {
-      const onlyPending = mockReceivables.filter((r) => r.status === 'PENDING_PAYMENT');
-      const upcoming = onlyPending.filter((r) => r.status === 'UPCOMING_EX');
-
-      expect(upcoming.length).toBe(0);
+    it('無待入帳與無即將除息時，主視圖應呈現對應空狀態提示', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(DividendLogView, {
+          trades: [],
+          holdings: [],
+          receivableDividends: [],
+          usdToTwdRate: 32,
+        })
+      );
+      expect(html).toContain('2026 年度尚無符合條件之現金股利入帳明細');
     });
   });
 
@@ -205,53 +212,57 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
       expect(estimatePaymentDate('2026-07-23', 'TW')).toBe('2026-08-24');
     });
 
-    it('歷史入帳明細應以有效入帳日 (effectivePayDate) 為主鍵進行倒序排列，而非除息日', async () => {
-      const { estimatePaymentDate } = await import('../engine/receivableDividendEngine');
-      const testTrades: TradeRecord[] = [
-        {
-          id: 't-2890',
-          symbol: '2890',
-          name: '永豐金',
-          market: 'TW',
-          type: 'DIVIDEND',
-          date: '2026-07-23', // 除息日較早
-          payDate: '2026-08-24', // 入帳日較晚
-          shares: 31000,
-          price: 1.1,
-          currency: 'TWD',
-          fee: 0,
-          tax: 850,
-          createdAt: 1,
-        },
-        {
-          id: 't-0050',
-          symbol: '0050',
-          name: '元大台灣50',
-          market: 'TW',
-          type: 'DIVIDEND',
-          date: '2026-07-25', // 除息日較晚
-          payDate: '2026-08-15', // 入帳日較早
-          shares: 1000,
-          price: 1.0,
-          currency: 'TWD',
-          fee: 0,
-          tax: 0,
-          createdAt: 2,
-        },
-      ];
+    it('主視圖歷史入帳明細應以有效入帳日 (payDate) 倒序排列，2890 排在 0050 之前', () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date('2026-09-01T12:00:00+08:00'));
+        const testTrades: TradeRecord[] = [
+          {
+            id: 't-2890',
+            symbol: '2890',
+            name: '永豐金',
+            market: 'TW',
+            type: 'DIVIDEND',
+            date: '2026-07-23',
+            payDate: '2026-08-24',
+            shares: 31000,
+            price: 1.1,
+            currency: 'TWD',
+            fee: 0,
+            tax: 850,
+            createdAt: 1,
+          },
+          {
+            id: 't-0050',
+            symbol: '0050',
+            name: '元大台灣50',
+            market: 'TW',
+            type: 'DIVIDEND',
+            date: '2026-07-25',
+            payDate: '2026-08-15',
+            shares: 1000,
+            price: 1.0,
+            currency: 'TWD',
+            fee: 0,
+            tax: 0,
+            createdAt: 2,
+          },
+        ];
 
-      // 依 effectivePayDate 倒序排序
-      const sorted = [...testTrades].sort((a, b) => {
-        const payA = a.payDate || estimatePaymentDate(a.exDate || a.date, a.market);
-        const payB = b.payDate || estimatePaymentDate(b.exDate || b.date, b.market);
-        const comp = payB.localeCompare(payA);
-        if (comp !== 0) return comp;
-        return (b.exDate || b.date).localeCompare(a.exDate || a.date);
-      });
-
-      // 2890 入帳日 2026-08-24 應排在 0050 (2026-08-15) 前面
-      expect(sorted[0].symbol).toBe('2890');
-      expect(sorted[1].symbol).toBe('0050');
+        const html = renderToStaticMarkup(
+          React.createElement(DividendLogView, {
+            trades: testTrades,
+            holdings: [],
+            receivableDividends: [],
+            usdToTwdRate: 32,
+          })
+        );
+        expect(html.indexOf('2890')).toBeGreaterThan(-1);
+        expect(html.indexOf('0050')).toBeGreaterThan(-1);
+        expect(html.indexOf('2890')).toBeLessThan(html.indexOf('0050'));
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
@@ -409,59 +420,62 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
     });
   });
 
-  describe('7. Spec 0230: 時序門禁、全域同態收縮與對帳單防漏驗證', () => {
-    it('券商對帳核對小計 annualReconciliationList 應嚴格阻斷未到期預約款項提前計入 (payDate <= todayStr 門禁)', () => {
-      const todayStr = '2026-11-14';
-      const tradesForRecon: TradeRecord[] = [
-        {
-          id: 'trade-past',
-          symbol: '2330',
-          name: '台積電',
-          market: 'TW',
-          currency: 'TWD',
-          type: 'DIVIDEND',
-          date: '2026-03-16',
-          payDate: '2026-04-10', // 已入帳
-          shares: 1000,
-          price: 4.0,
-          fee: 0,
-          tax: 0,
-          createdAt: 1,
-        },
-        {
-          id: 'trade-future',
-          symbol: '2344',
-          name: '華邦電',
-          market: 'TW',
-          currency: 'TWD',
-          type: 'DIVIDEND',
-          date: '2026-11-18',
-          payDate: '2026-12-16', // 未到期預約款項 (未來)
-          shares: 4000,
-          price: 2.0,
-          fee: 0,
-          tax: 0,
-          createdAt: 2,
-        },
-      ];
+  describe('7. Spec 0230 / #558: 時序門禁與美股匯費交易快照匯率一致性 (真實主視圖掛載)', () => {
+    it('未到期預約款項不得進入主視圖實領計算，且美股匯費應優先採交易快照匯率', () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date('2026-11-14T12:00:00+08:00'));
+        const tradesForRecon: TradeRecord[] = [
+          {
+            id: 'trade-past-us',
+            symbol: 'AAPL',
+            name: 'Apple',
+            market: 'US',
+            currency: 'USD',
+            type: 'DIVIDEND',
+            date: '2026-04-10',
+            payDate: '2026-04-10',
+            shares: 100,
+            price: 1.0,
+            fee: 10, // 10 USD * 30 = NT$ 300
+            tax: 30,
+            exchangeRate: 30,
+            createdAt: 1,
+          },
+          {
+            id: 'trade-future',
+            symbol: '2344',
+            name: '華邦電',
+            market: 'TW',
+            currency: 'TWD',
+            type: 'DIVIDEND',
+            date: '2026-11-18',
+            payDate: '2026-12-16', // 未到期預約款項 (未來)
+            shares: 4000,
+            price: 2.0,
+            fee: 0,
+            tax: 0,
+            createdAt: 2,
+          },
+        ];
 
-      // 模擬 annualReconciliationList 的計算邏輯縫隙
-      const selectedYearStr = '2026';
-      const map = new Map<string, any>();
-      for (const trade of tradesForRecon) {
-        if (trade.type !== 'DIVIDEND') continue;
-        const payDate = trade.payDate || trade.date;
-        if (!payDate.startsWith(selectedYearStr)) continue;
-        if (payDate > todayStr) continue; // 時序門禁
+        const html = renderToStaticMarkup(
+          React.createElement(DividendLogView, {
+            trades: tradesForRecon,
+            holdings: [],
+            receivableDividends: [],
+            usdToTwdRate: 32,
+          })
+        );
 
-        const key = trade.symbol.toUpperCase();
-        map.set(key, trade);
+        const tableSection = html.slice(html.indexOf('<table'));
+        expect(tableSection).toContain('AAPL');
+        expect(tableSection).not.toContain('2344');
+        // 匯費採交易快照匯率 30: 10 * 30 = NT$ 300 (而非 320)
+        expect(html).toContain('NT$ 300');
+      } finally {
+        vi.useRealTimers();
       }
-
-      // 未到期的 2344 華邦電不得出現在對帳單中
-      expect(map.has('2330')).toBe(true);
-      expect(map.has('2344')).toBe(false);
-      expect(map.size).toBe(1);
     });
   });
 

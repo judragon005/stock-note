@@ -346,7 +346,7 @@ describe('DividendHistoryTable (歷史明細表、YOC 成本殖利率與填息�
       expect(html).toContain('本年度尚無符合條件之已入帳對帳紀錄');
     });
 
-    it('大額美股股利應具千分位格式，統一使用 usdToTwdRate 換算台幣並標示「年化 YOC」', () => {
+    it('大額美股股利應具千分位格式，優先採用交易快照匯率（無快照則回退 usdToTwdRate）換算台幣並標示「年化 YOC」', () => {
       const usTrade = {
         id: 'div-us-large',
         symbol: 'AAPL',
@@ -359,7 +359,7 @@ describe('DividendHistoryTable (歷史明細表、YOC 成本殖利率與填息�
         currency: 'USD' as const,
         fee: 0,
         tax: 750,
-        exchangeRate: 30, // 歷史異質匯率不應覆蓋統一的 usdToTwdRate (32)
+        exchangeRate: 30, // 優先採用交易快照匯率 (30)，與聚合器及對帳小計基準一致
         createdAt: 1,
       };
       const usHolding = {
