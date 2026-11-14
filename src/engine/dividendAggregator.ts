@@ -262,7 +262,8 @@ export function buildUnifiedPendingReceivables(
       (r.status === 'PENDING_PAYMENT' || r.status === 'OVERDUE' || r.status === 'DUE_FOR_RECONCILIATION') &&
       r.estimatedNetDividendInTWD > 0
     ) {
-      const key = `${r.market || 'TW'}_${r.symbol.toUpperCase()}_${r.exDate || ''}`;
+      const dateKey = r.exDate || r.payDate || '';
+      const key = `${r.market || 'TW'}_${r.symbol.toUpperCase()}_${dateKey}`;
       map.set(key, r);
     }
   });
@@ -272,7 +273,7 @@ export function buildUnifiedPendingReceivables(
     if (t.type !== 'DIVIDEND') return;
     const effectivePayDate = getEffectiveDividendPayDate(t);
     const isFuture = effectivePayDate > todayStr;
-    const exDate = t.exDate || t.date;
+    const exDate = t.exDate || t.date || effectivePayDate;
     const key = `${t.market || 'TW'}_${t.symbol.toUpperCase()}_${exDate}`;
 
     if (isFuture && !map.has(key)) {

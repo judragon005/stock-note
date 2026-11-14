@@ -4,6 +4,7 @@ import {
   calculatePositionYieldOnCost,
   determineDividendFillStatus,
   formatDividendFillStatusLabel,
+  resolveDividendFrequencyMultiplier,
   type DividendFillStatus,
 } from './dividendMetricsEngine';
 
@@ -35,6 +36,26 @@ describe('dividendMetricsEngine - YOC (成本殖利率) 與實質填息標籤計
       expect(calculateYieldOnCost(1.005, 100)).toBe(1.01);
       // 1.004 / 100 * 100 = 1.004 -> 1%
       expect(calculateYieldOnCost(1.004, 100)).toBe(1);
+    });
+  });
+
+  describe('resolveDividendFrequencyMultiplier - 標的配息年化頻率解析 (下沉純函式)', () => {
+    it('美股月配息標的 (O, JEPI) 應解析為 12 次年化', () => {
+      expect(resolveDividendFrequencyMultiplier('O', 'US')).toBe(12);
+      expect(resolveDividendFrequencyMultiplier('JEPI', 'US')).toBe(12);
+    });
+
+    it('美股普通股與主流 ETF (AAPL, SPY) 應解析為 4 次年化', () => {
+      expect(resolveDividendFrequencyMultiplier('AAPL', 'US')).toBe(4);
+      expect(resolveDividendFrequencyMultiplier('SPY', 'US')).toBe(4);
+    });
+
+    it('台股月配 (00929) 應解析為 12 次，季配 (2330, 00878) 為 4 次，半年配 (0050) 為 2 次，普通股 (2344) 為 1 次', () => {
+      expect(resolveDividendFrequencyMultiplier('00929', 'TW')).toBe(12);
+      expect(resolveDividendFrequencyMultiplier('2330', 'TW')).toBe(4);
+      expect(resolveDividendFrequencyMultiplier('00878', 'TW')).toBe(4);
+      expect(resolveDividendFrequencyMultiplier('0050', 'TW')).toBe(2);
+      expect(resolveDividendFrequencyMultiplier('2344', 'TW')).toBe(1);
     });
   });
 

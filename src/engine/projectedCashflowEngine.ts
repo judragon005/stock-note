@@ -92,7 +92,7 @@ export const DEFAULT_DIVIDEND_PROFILES: Record<string, { frequency: DividendFreq
 
   // 常見權值與週期股 (夏秋年配 / 旺季入帳)
   '2303': { frequency: 'ANNUAL', payoutMonths: [7], defaultYield: 0.05 }, // 聯電: 常態 7 月發放
-  '2344': { frequency: 'ANNUAL', payoutMonths: [8], defaultYield: 0.04 }, // 華邦電: 常態 8 月發放
+  '2344': { frequency: 'ANNUAL', payoutMonths: [8], defaultYield: 0.025 }, // 華邦電: 常態 8 月發放 (Spec 0230 週期股合理預估)
 };
 
 /**

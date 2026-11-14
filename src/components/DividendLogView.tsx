@@ -243,8 +243,9 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
       if (payDate > todayStr) continue;
 
       const res = resolveEffectiveDividendTaxAndNet(trade, scopedTrades);
-      const grossTWD = trade.currency === 'USD' ? Math.round(res.gross * usdToTwdRate) : Math.round(res.gross);
-      const netTWD = trade.currency === 'USD' ? Math.round(res.netCash * usdToTwdRate) : Math.round(res.netCash);
+      const effectiveFx = trade.exchangeRate && trade.exchangeRate > 0 ? trade.exchangeRate : usdToTwdRate;
+      const grossTWD = trade.currency === 'USD' ? Math.round(res.gross * effectiveFx) : Math.round(res.gross);
+      const netTWD = trade.currency === 'USD' ? Math.round(res.netCash * effectiveFx) : Math.round(res.netCash);
       const taxTWD = grossTWD - netTWD;
 
       const key = trade.symbol.toUpperCase();
