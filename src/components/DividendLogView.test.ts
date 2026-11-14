@@ -553,6 +553,72 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
       expect(html).not.toContain('0050');
     });
   });
+
+  describe('8. Ticket #547: 假值與硬編碼市場文案清零', () => {
+    it('美股視角 (market="US") 不得出現台股 ETF (00687B/00635U) 與無關的二代健保文案', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(DividendLogView, {
+          holdings: [
+            {
+              symbol: 'AAPL',
+              name: 'Apple',
+              market: 'US',
+              accountId: 'acc-us',
+              shares: 100,
+              avgCost: 150,
+              currentPrice: 200,
+              marketValue: 20000,
+              unrealizedPnL: 5000,
+              unrealizedPnLPercent: 33.3,
+              totalCost: 15000,
+              currency: 'USD',
+              totalDividends: 100,
+              yieldOnCostPercent: 0.67,
+            },
+          ],
+          trades: [
+            {
+              id: 'div-aapl',
+              symbol: 'AAPL',
+              name: 'Apple',
+              market: 'US',
+              accountId: 'acc-us',
+              type: 'DIVIDEND',
+              date: '2026-02-15',
+              shares: 100,
+              price: 0.25,
+              currency: 'USD',
+              fee: 0,
+              tax: 7.5,
+              exchangeRate: 32,
+              createdAt: 1,
+            },
+          ],
+          receivableDividends: [],
+          market: 'US',
+          usdToTwdRate: 32,
+        })
+      );
+      expect(html).not.toContain('00687B');
+      expect(html).not.toContain('00635U');
+      expect(html).not.toContain('二代健保');
+    });
+
+    it('空資料狀態下不得顯示硬編碼台股 ETF 活水推薦與扣稅文案', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(DividendLogView, {
+          holdings: [],
+          trades: [],
+          receivableDividends: [],
+          market: 'ALL',
+          usdToTwdRate: 32,
+        })
+      );
+      expect(html).not.toContain('00687B');
+      expect(html).not.toContain('00635U');
+      expect(html).not.toContain('已扣除二代健保與 30% IRS 預扣稅');
+    });
+  });
 });
 
 

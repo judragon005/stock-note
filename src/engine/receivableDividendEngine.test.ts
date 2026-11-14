@@ -755,6 +755,17 @@ describe('Receivable Dividend & Ex-Dividend Smoothing Engine (應收股利平滑
       expect(res[0].estimatedGrossDividend).toBe(9000);
     });
   });
+
+  describe('8. Ticket #547: 靜態內建行事曆來源標記淨化', () => {
+    it('OFFICIAL_DIVIDEND_CALENDAR 不得偽裝為 LIVE_API', async () => {
+      const { OFFICIAL_DIVIDEND_CALENDAR } = await import('./receivableDividendEngine');
+      expect(OFFICIAL_DIVIDEND_CALENDAR.length).toBeGreaterThan(0);
+      for (const ev of OFFICIAL_DIVIDEND_CALENDAR) {
+        expect(ev.sourceType).not.toBe('LIVE_API');
+        expect(ev.sourceType).toBe('OFFICIAL_DATA');
+      }
+    });
+  });
 });
 
 

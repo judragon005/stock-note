@@ -16,7 +16,7 @@ export const OFFICIAL_DIVIDEND_CALENDAR: RawCorporateEvent[] = [
     date: '2026-09-16',
     price: 7.0,
     description: '季度現金股利每股 7.0 TWD (預計 2026-10-08 發放入帳)',
-    sourceType: 'LIVE_API',
+    sourceType: 'OFFICIAL_DATA',
   },
   {
     symbol: '2886',
@@ -25,7 +25,7 @@ export const OFFICIAL_DIVIDEND_CALENDAR: RawCorporateEvent[] = [
     date: '2026-08-13',
     price: 1.75,
     description: '年度現金股利每股 1.75 TWD (預計 2026-09-04 發放入帳)',
-    sourceType: 'LIVE_API',
+    sourceType: 'OFFICIAL_DATA',
   },
   {
     symbol: '00878',
@@ -34,7 +34,7 @@ export const OFFICIAL_DIVIDEND_CALENDAR: RawCorporateEvent[] = [
     date: '2026-08-18',
     price: 1.01,
     description: '季度收益分配每股 1.01 TWD (預計 2026-09-11 發放入帳)',
-    sourceType: 'LIVE_API',
+    sourceType: 'OFFICIAL_DATA',
   },
   {
     symbol: '00923',
@@ -43,7 +43,7 @@ export const OFFICIAL_DIVIDEND_CALENDAR: RawCorporateEvent[] = [
     date: '2026-08-18',
     price: 3.05,
     description: '半年度收益分配每股 3.05 TWD (預計 2026-09-11 發放入帳)',
-    sourceType: 'LIVE_API',
+    sourceType: 'OFFICIAL_DATA',
   },
   {
     symbol: '2890',
@@ -52,7 +52,7 @@ export const OFFICIAL_DIVIDEND_CALENDAR: RawCorporateEvent[] = [
     date: '2026-07-23',
     price: 1.10,
     description: '年度現金股利每股 1.10 TWD (預計 2026-08-24 發放入帳)',
-    sourceType: 'LIVE_API',
+    sourceType: 'OFFICIAL_DATA',
   },
   {
     symbol: '9927',
@@ -61,7 +61,7 @@ export const OFFICIAL_DIVIDEND_CALENDAR: RawCorporateEvent[] = [
     date: '2026-10-01',
     price: 5.0,
     description: '年度現金股利每股 5.0 TWD (預計 2026-10-29 發放入帳)',
-    sourceType: 'LIVE_API',
+    sourceType: 'OFFICIAL_DATA',
   },
   {
     symbol: '0056',
@@ -70,7 +70,7 @@ export const OFFICIAL_DIVIDEND_CALENDAR: RawCorporateEvent[] = [
     date: '2026-10-22',
     price: 1.07,
     description: '季度收益分配每股 1.07 TWD (預計 2026-11-11 發放入帳)',
-    sourceType: 'LIVE_API',
+    sourceType: 'OFFICIAL_DATA',
   },
 ];
 

@@ -115,11 +115,6 @@ export function resolveEffectiveDividendTaxAndNet(
 
   if (matchedStockTrade) {
     peerStockShares = matchedStockTrade.shares;
-  } else {
-    // 官方除權息常態庫或 Session 快取備援比對 (以 2890 永豐金 2026-07-23 配股 0.02 為例)
-    if (trade.symbol.toUpperCase() === '2890' && trade.date.startsWith('2026')) {
-      peerStockShares = trade.shares * 0.02;
-    }
   }
 
   const taxRes = calculateConsolidatedTwNhiTax({

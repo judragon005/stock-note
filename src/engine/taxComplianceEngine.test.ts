@@ -3,6 +3,7 @@ import {
   checkTwNhiTaxAlert,
   calculateConsolidatedTwNhiTax,
   calculateOverseasIncomeProgress,
+  resolveEffectiveDividendTaxAndNet,
   TW_NHI_THRESHOLD,
   US_OVERSEAS_FILING_THRESHOLD,
   US_AMT_EXEMPTION,
@@ -182,6 +183,29 @@ describe('Tax Compliance & Pre-Trade Tax Bracket Engine (稅務合規與稅階�
       expect(progress.isFilingRequired).toBe(false); // 48萬 < 100萬
       expect(progress.filingProgressPercent).toBeCloseTo(48.0, 1); // 48%
       expect(progress.amtProgressPercent).toBeCloseTo((480000 / 7500000) * 100, 2);
+    });
+  });
+
+  describe('4. Ticket #547: 移除特定個股硬編碼配股假設', () => {
+    it('2890 於 2026 年若無實際配股交易紀錄，不得憑空注入 2% 配股面額觸發二代健保', () => {
+      const cashTrade = {
+        id: 'div-2890-2026',
+        symbol: '2890',
+        name: '永豐金',
+        market: 'TW' as const,
+        type: 'DIVIDEND' as const,
+        date: '2026-08-24',
+        shares: 17000, // 現金 17000 * 1.1 = 18,700 (< 20,000); 若誤加 2% 配股 3400 元會變 22,100 誤扣健保
+        price: 1.1,
+        currency: 'TWD' as const,
+        fee: 0,
+        tax: 0,
+        createdAt: 1787529600000,
+      };
+      const res = resolveEffectiveDividendTaxAndNet(cashTrade, [cashTrade]);
+      expect(res.gross).toBe(18700);
+      expect(res.effectiveTax).toBe(0);
+      expect(res.netCash).toBe(18700);
     });
   });
 });
