@@ -87,12 +87,41 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
     }
   };
 
-  // 質押借貸利息支出計算 (連通 cashLedgerEngine)
-  const estimatedLoanInterestTWD = useMemo(() => {
+  // 1. 依全域市場與帳戶過濾交易、持股、借貸與應收股利 (Spec 0230 Homomorphic Context Closure)
+  const scopedHoldings = useMemo(() => {
+    return holdings.filter((h) => {
+      if (market !== 'ALL' && h.market !== market) return false;
+      if (selectedAccountId && selectedAccountId !== 'ALL' && h.accountId && h.accountId !== selectedAccountId) {
+        return false;
+      }
+      return true;
+    });
+  }, [holdings, market, selectedAccountId]);
+
+  const scopedLoans = useMemo(() => {
     try {
       const loans = loadLoanRecordsFromStorage();
-      if (!loans || loans.length === 0) return 0;
-      return loans.reduce((sum, loan) => {
+      if (!loans || loans.length === 0) return [];
+      return loans.filter((loan) => {
+        if (market !== 'ALL') {
+          const loanMarket = loan.currency === 'USD' ? 'US' : 'TW';
+          if (loanMarket !== market) return false;
+        }
+        if (selectedAccountId && selectedAccountId !== 'ALL' && loan.accountId && loan.accountId !== selectedAccountId) {
+          return false;
+        }
+        return true;
+      });
+    } catch {
+      return [];
+    }
+  }, [market, selectedAccountId]);
+
+  // 質押借貸利息支出計算 (連通 cashLedgerEngine，消費 scopedLoans 杜絕跨市場/跨帳戶洩漏)
+  const estimatedLoanInterestTWD = useMemo(() => {
+    try {
+      if (!scopedLoans || scopedLoans.length === 0) return 0;
+      return scopedLoans.reduce((sum, loan) => {
         if (!loan.principal || loan.principal <= 0) return sum;
         const fx = loan.currency === 'USD' ? usdToTwdRate : 1;
         const payoff = calculateLoanInterestAndPayoff(loan, todayStr);
@@ -101,9 +130,8 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
     } catch {
       return 0;
     }
-  }, [todayStr, usdToTwdRate]);
+  }, [scopedLoans, todayStr, usdToTwdRate]);
 
-  // 1. 依全域市場與帳戶過濾交易與應收股利
   const scopedTrades = useMemo(() => {
     return trades.filter((t) => {
       if (market !== 'ALL' && t.market !== market) return false;
@@ -124,37 +152,38 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
     });
   }, [receivableDividends, market, selectedAccountId]);
 
-  // 2. 彙總年度股利報表與現金流投影
-  const report = useMemo(() => {
-    return aggregateDividendReport(scopedTrades, scopedReceivables, selectedYear, usdToTwdRate, todayStr);
-  }, [scopedTrades, scopedReceivables, selectedYear, usdToTwdRate, todayStr]);
+  // 2. 篩選有效之待入帳與待對帳應收款項 (Spec 0228 / Ticket 03)
+  // 升級：融合 scopedReceivables 與本地未入帳預約交易 (如華邦電 2026-12-16)，消除雙軌分裂
+  const activeReceivables = useMemo(() => {
+    return buildUnifiedPendingReceivables(scopedReceivables, scopedTrades, todayStr, usdToTwdRate);
+  }, [scopedReceivables, scopedTrades, todayStr, usdToTwdRate]);
 
-  // 萃取各標的歷史已入帳交易之實際發放月份慣性 (SSOT Learning 純函式下沉)
+  // 3. 彙總年度股利報表與現金流投影 (Spec 0230: 消費 activeReceivables 實現長條圖與卡片 100% SSOT 對齊)
+  const report = useMemo(() => {
+    return aggregateDividendReport(scopedTrades, activeReceivables, selectedYear, usdToTwdRate, todayStr);
+  }, [scopedTrades, activeReceivables, selectedYear, usdToTwdRate, todayStr]);
+
+  // 萃取各標的歷史已入帳交易之實際發放月份慣性 (SSOT Learning 純函式下沉，注入 todayStr 時序因果屏障)
   const historicalPayoutMonthsMap = useMemo(() => {
-    return extractHistoricalPayoutMonths(scopedTrades);
-  }, [scopedTrades]);
+    return extractHistoricalPayoutMonths(scopedTrades, todayStr);
+  }, [scopedTrades, todayStr]);
 
   const projectedCashflow = useMemo(() => {
     return generate12MonthProjectedCashflow({
       baseYearMonth: currentYearMonth,
-      holdings,
+      holdings: scopedHoldings,
       historicalPayoutMonths: historicalPayoutMonthsMap,
     });
-  }, [holdings, currentYearMonth, historicalPayoutMonthsMap]);
+  }, [scopedHoldings, currentYearMonth, historicalPayoutMonthsMap]);
 
   const complementaryRecommendations = useMemo(() => {
     return recommendComplementaryDividendMonths(projectedCashflow.drySeasonMonths);
   }, [projectedCashflow.drySeasonMonths]);
 
+  // Spec 0230: 境內 54C 稅制水密隔離，僅以 report.currentYearTwDividendsTWD 計算抵減額
   const taxStats = useMemo(() => {
-    return calculateDividendTaxDeductionStats(report.currentYearDividendsTWD);
-  }, [report.currentYearDividendsTWD]);
-
-  // 篩選有效之待入帳與待對帳應收款項 (Spec 0228 / Ticket 03)
-  // 升級：融合 scopedReceivables 與本地未入帳預約交易 (如華邦電 2026-12-16)，消除雙軌分裂
-  const activeReceivables = useMemo(() => {
-    return buildUnifiedPendingReceivables(scopedReceivables, scopedTrades, todayStr, usdToTwdRate);
-  }, [scopedReceivables, scopedTrades, todayStr, usdToTwdRate]);
+    return calculateDividendTaxDeductionStats(report.currentYearTwDividendsTWD ?? report.currentYearDividendsTWD);
+  }, [report.currentYearTwDividendsTWD, report.currentYearDividendsTWD]);
 
   // 發放日已屆待核實入帳款項 (Spec 0228 / Ticket 04: 消滅時序黑洞)
   const dueReceivables = useMemo(() => {
@@ -203,7 +232,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
     return Math.max(...report.monthlyDistribution.map((m) => m.netTWD), 1000);
   }, [report.monthlyDistribution]);
 
-  // 各標的對帳小計
+  // 各標的對帳小計 (Spec 0230: 設置 payDate <= todayStr 門禁，阻斷未結算預約款項偷跑計入)
   const annualReconciliationList = useMemo(() => {
     const map = new Map<string, AnnualReconciliationItem>();
     const selectedYearStr = String(selectedYear);
@@ -211,6 +240,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
       if (trade.type !== 'DIVIDEND') continue;
       const payDate = getEffectiveDividendPayDate(trade);
       if (!payDate.startsWith(selectedYearStr)) continue;
+      if (payDate > todayStr) continue;
 
       const res = resolveEffectiveDividendTaxAndNet(trade, scopedTrades);
       const grossTWD = trade.currency === 'USD' ? Math.round(res.gross * usdToTwdRate) : Math.round(res.gross);
@@ -235,7 +265,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
       map.set(key, existing);
     }
     return Array.from(map.values()).sort((a, b) => b.grossTWD - a.grossTWD);
-  }, [scopedTrades, selectedYear, usdToTwdRate]);
+  }, [scopedTrades, selectedYear, usdToTwdRate, todayStr]);
 
   const activeContributors = rankMode === 'YEAR'
     ? report.currentYearTopContributors
@@ -436,7 +466,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
             rankMode={rankMode}
             onRankModeChange={setRankMode}
             selectedYear={selectedYear}
-            holdings={holdings}
+            holdings={scopedHoldings}
           />
         </div>
       </div>
@@ -585,7 +615,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
       <DividendHistoryTable
         dividendTrades={dividendTrades}
         allScopedTrades={scopedTrades}
-        holdings={holdings}
+        holdings={scopedHoldings}
         selectedYear={selectedYear}
         usdToTwdRate={usdToTwdRate}
         todayStr={todayStr}

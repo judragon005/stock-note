@@ -286,4 +286,30 @@ describe('Spec 0183 Ticket 02: projectedCashflowEngine (未來 12 個月現金�
     expect(bAapl).toBeDefined();
     expect(bAapl?.estimatedAmountTwd).toBeGreaterThan(0);
   });
+
+  it('10. [Spec 0230 / Issue 02] 擴充 DEFAULT_DIVIDEND_PROFILES: 華邦電 (2344, 8月)、聯電 (2303, 7月)、聯發科 (2454, 1/7月)', () => {
+    // 驗證預設 profiles 中明確定義了 2344, 2303, 2454 的常態月份
+    const input: ProjectedCashflowInput = {
+      baseYearMonth: '2026-01',
+      holdings: [
+        { symbol: '2344', name: '華邦電', shares: 1000, avgCost: 25, currentPrice: 28, marketValue: 28000, market: 'TW' },
+        { symbol: '2303', name: '聯電', shares: 1000, avgCost: 50, currentPrice: 52, marketValue: 52000, market: 'TW' },
+        { symbol: '2454', name: '聯發科', shares: 1000, avgCost: 1200, currentPrice: 1300, marketValue: 1300000, market: 'TW' },
+      ] as unknown as HoldingPosition[],
+      historicalPayoutMonths: {},
+    };
+
+    const projection = generate12MonthProjectedCashflow(input);
+    const jul = projection.months.find((m) => m.yearMonth === '2026-07');
+    const aug = projection.months.find((m) => m.yearMonth === '2026-08');
+    const jan = projection.months.find((m) => m.yearMonth === '2026-01');
+
+    // 2303 應在 7 月
+    expect(jul?.breakdown.find((b) => b.symbol === '2303')).toBeDefined();
+    // 2344 應在 8 月
+    expect(aug?.breakdown.find((b) => b.symbol === '2344')).toBeDefined();
+    // 2454 應在 1 月與 7 月
+    expect(jan?.breakdown.find((b) => b.symbol === '2454')).toBeDefined();
+    expect(jul?.breakdown.find((b) => b.symbol === '2454')).toBeDefined();
+  });
 });

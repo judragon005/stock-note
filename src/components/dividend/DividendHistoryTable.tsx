@@ -9,6 +9,7 @@ import {
   determineDividendFillStatus,
   formatDividendFillStatusLabel,
 } from '../../engine/dividendMetricsEngine';
+import { DEFAULT_DIVIDEND_PROFILES } from '../../engine/projectedCashflowEngine';
 
 export interface DividendContributor {
   symbol: string;
@@ -487,15 +488,30 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
                   const gross = res.gross;
                   const effectiveTax = res.effectiveTax;
                   const net = res.netCash;
-                  const netTWD = isUS ? Math.round(net * usdToTwdRate) : Math.round(net);
+                  const effectiveFx = t.exchangeRate && t.exchangeRate > 0 ? t.exchangeRate : usdToTwdRate;
+                  const netTWD = isUS ? Math.round(net * effectiveFx) : Math.round(net);
                   const effectivePayDate = getEffectiveDividendPayDate(t);
                   const exDate = t.exDate || t.date;
                   const isFuture = effectivePayDate > todayStr;
 
-                  // 計算 YOC 與填息狀態
+                  // 計算 YOC 與填息狀態 (Spec 0230: 依據標的配息頻率進行年化)
                   const holding = holdingsMap.get(t.symbol.toUpperCase());
+                  const profile = DEFAULT_DIVIDEND_PROFILES[t.symbol.toUpperCase()];
+                  let freqMultiplier = 1;
+                  if (profile?.frequency === 'MONTHLY') {
+                    freqMultiplier = 12;
+                  } else if (profile?.frequency === 'QUARTERLY') {
+                    freqMultiplier = 4;
+                  } else if (profile?.frequency === 'SEMI_ANNUAL') {
+                    freqMultiplier = 2;
+                  } else if (isUS) {
+                    // 美股主流普通股與 ETF 預設為季配 (年化 4 次)
+                    freqMultiplier = 4;
+                  }
+                  const annualizedDividendPerShare = t.price * freqMultiplier;
+
                   const yoc = holding && holding.avgCost > 0
-                    ? calculateYieldOnCost(t.price, holding.avgCost)
+                    ? calculateYieldOnCost(annualizedDividendPerShare, holding.avgCost)
                     : 0;
 
                   const rawExPrice = t.exPrice !== undefined

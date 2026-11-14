@@ -159,6 +159,7 @@ export interface TradeRecord {
   exPrice?: number; // 除息參考價 (TWD/USD)
   referencePrice?: number; // 前一日參考基準價 (TWD/USD)
   payDate?: string; // 股利入帳發放日 (YYYY-MM-DD)
+  exchangeRate?: number; // 成交日匯率快照 (如美股交易時的 USD/TWD 匯率)
   targetSymbol?: string; // 換股目標標的代碼 (STOCK_MERGER) 或分拆新公司代碼 (SPIN_OFF)
   targetName?: string; // 目標標的名稱
   allocationRatio?: number; // 分拆成本分攤比例 (如 0.2 代表拆出 20% 成本給新標的)

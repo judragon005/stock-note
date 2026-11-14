@@ -65,7 +65,7 @@ export const DEFAULT_SUMMER_FALL_YIELD = 0.04;
  * 台灣常見熱門 ETF 與權值股預設除息/發放月份慣性庫
  * 嚴格以實質現金「入帳發放日 (Payment Date)」為基準，消滅除息月與入帳月混淆
  */
-const DEFAULT_DIVIDEND_PROFILES: Record<string, { frequency: DividendFrequency; payoutMonths: number[]; defaultYield: number }> = {
+export const DEFAULT_DIVIDEND_PROFILES: Record<string, { frequency: DividendFrequency; payoutMonths: number[]; defaultYield: number }> = {
   // 月配型 (1~12月每月入帳)
   '00929': { frequency: 'MONTHLY', payoutMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], defaultYield: 0.08 },
   '00934': { frequency: 'MONTHLY', payoutMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], defaultYield: 0.07 },
@@ -88,6 +88,11 @@ const DEFAULT_DIVIDEND_PROFILES: Record<string, { frequency: DividendFrequency; 
   // 半年配 (1/7 或 6/12 除息)
   '0050': { frequency: 'SEMI_ANNUAL', payoutMonths: [2, 8], defaultYield: 0.035 },
   '006208': { frequency: 'SEMI_ANNUAL', payoutMonths: [7, 11], defaultYield: 0.035 },
+  '2454': { frequency: 'SEMI_ANNUAL', payoutMonths: [1, 7], defaultYield: 0.045 }, // 聯發科: 常態 1 月與 7 月除息/入帳
+
+  // 常見權值與週期股 (夏秋年配 / 旺季入帳)
+  '2303': { frequency: 'ANNUAL', payoutMonths: [7], defaultYield: 0.05 }, // 聯電: 常態 7 月發放
+  '2344': { frequency: 'ANNUAL', payoutMonths: [8], defaultYield: 0.04 }, // 華邦電: 常態 8 月發放
 };
 
 /**
