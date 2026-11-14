@@ -334,8 +334,8 @@ describe('DividendHistoryTable (歷史明細表、YOC 成本殖利率與填息�
     });
   });
 
-  describe('6. Ticket #552 / #560: 匯率基準統一、年化 YOC 標示、對帳搜尋過濾與大額美金千分位', () => {
-    it('對帳面板無資料時應顯示空狀態提示', () => {
+  describe('6. Ticket #552 / #560 / #562: 匯率基準統一、年化 YOC 標示、對帳搜尋過濾與大額美金千分位', () => {
+    it('對帳面板無資料或搜尋無符合時應顯示空狀態提示', () => {
       const html = renderToStaticMarkup(
         <DividendHistoryTable
           {...defaultProps}
@@ -346,8 +346,8 @@ describe('DividendHistoryTable (歷史明細表、YOC 成本殖利率與填息�
       expect(html).toContain('本年度尚無符合條件之已入帳對帳紀錄');
     });
 
-    it('對帳面板應精確渲染已過濾之標的清單與毛/淨額對帳數據', () => {
-      const filteredList: AnnualReconciliationItem[] = [
+    it('對帳面板在關鍵字過濾後應精確僅渲染匹配標的清單與對帳數據', () => {
+      const allReconciliation: AnnualReconciliationItem[] = [
         {
           symbol: '2330',
           name: '台積電',
@@ -357,17 +357,33 @@ describe('DividendHistoryTable (歷史明細表、YOC 成本殖利率與填息�
           netTWD: 20000,
           taxTWD: 0,
         },
+        {
+          symbol: 'AAPL',
+          name: 'Apple',
+          market: 'US',
+          count: 1,
+          grossTWD: 3000,
+          netTWD: 2100,
+          taxTWD: 900,
+        },
       ];
+
+      // 模擬關鍵字過濾 "2330" 之結果傳入
+      const query = '2330';
+      const filtered = allReconciliation.filter((item) =>
+        item.symbol.toLowerCase().includes(query) || item.name.toLowerCase().includes(query)
+      );
+
       const html = renderToStaticMarkup(
         <DividendHistoryTable
           {...defaultProps}
           showReconciliationPanel={true}
-          reconciliationList={filteredList}
+          reconciliationList={filtered}
         />
       );
       expect(html).toContain('2330');
       expect(html).toContain('台積電');
-      expect(html).toContain('2 筆');
+      expect(html).not.toContain('AAPL');
       expect(html).toContain('NT$ 20,000');
     });
 

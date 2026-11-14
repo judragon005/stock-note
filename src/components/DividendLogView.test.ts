@@ -723,8 +723,8 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
     });
   });
 
-  describe('11. Ticket #560: 對帳清單搜尋過濾與無結果邊界驗證', () => {
-    it('在對帳模式下，searchQuery 應能正確過濾 annualReconciliationList 且無匹配時安全呈現空清單', () => {
+  describe('11. Ticket #560 / #562: 對帳與流水多標的渲染與基準一致性驗證', () => {
+    it('在多市場股利場景下，主視圖應能完整渲染各標的入帳流水與對帳基準', () => {
       vi.useFakeTimers();
       try {
         vi.setSystemTime(new Date('2026-08-01T12:00:00+08:00'));

@@ -186,7 +186,39 @@ describe('DividendMonthlyChart (月度配息長條圖)', () => {
       expect(tooltipHtml).toContain('NT$ 10,000');
     });
 
-    it('Ticket #560: DUE_FOR_RECONCILIATION 待對帳應收股利整合流入月度長條圖，應正確呈現在待入帳清單與提示中', () => {
+    it('極小實領與大額待入帳共存時，長條高度應具最小視覺下限且待對帳項目正確呈現', () => {
+      const distributions = Array.from({ length: 12 }, (_, idx) => ({
+        month: `${idx + 1}月`,
+        monthKey: `2026-${String(idx + 1).padStart(2, '0')}`,
+        monthLabel: `${idx + 1}月`,
+        monthIndex: idx,
+        netTWD: idx === 0 ? 100000 : idx === 6 ? 1 : 0,
+        grossTWD: idx === 0 ? 100000 : idx === 6 ? 1 : 0,
+        taxTWD: 0,
+        count: idx === 0 || idx === 6 ? 1 : 0,
+        pendingNetTWD: idx === 6 ? 1 : 0,
+        pendingCount: idx === 6 ? 1 : 0,
+        pendingItems:
+          idx === 6
+            ? [{ symbol: '2330', name: '台積電', payDate: '2026-07-10', netTWD: 1, grossTWD: 1 }]
+            : [],
+      }));
+
+      const chartHtml = renderToStaticMarkup(
+        <DividendMonthlyChart
+          monthlyDistribution={distributions}
+          maxMonthlyNet={100000}
+          selectedYear={2026}
+          dividendDisplayMode="NET"
+        />
+      );
+      expect(chartHtml).toContain('2026年7月: 實領 NT$ 1, 待入帳應收 NT$ 1');
+      // 確保極小非零柱具備最小 7px 子段高度與無縫總高度 14px，不致消失或產生間隙
+      expect(chartHtml).toContain('height:14px');
+      expect(chartHtml).toContain('height:7px');
+    });
+
+    it('Ticket #560 / #562: DUE_FOR_RECONCILIATION 待對帳應收股利整合流入月度長條圖，應正確呈現在待入帳清單與提示中', () => {
       const distributions = Array.from({ length: 12 }, (_, idx) => ({
         month: `${idx + 1}月`,
         monthKey: `2026-${String(idx + 1).padStart(2, '0')}`,
