@@ -111,7 +111,7 @@ export function formatDividendFillStatusLabel(status: DividendFillStatus): strin
     case 'UNFILLED':
       return '貼息中';
     case 'CLOSED_POSITION':
-      return '已結清';
+      return '已結清部位';
     case 'PENDING_DATA':
       return '待補除息價';
     default: {

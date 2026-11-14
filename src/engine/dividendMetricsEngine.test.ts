@@ -117,8 +117,8 @@ describe('dividendMetricsEngine - YOC (成本殖利率) 與實質填息標籤計
       expect(formatDividendFillStatusLabel('UNFILLED')).toBe('貼息中');
     });
 
-    it('應將 CLOSED_POSITION 正確格式化為 "已結清"', () => {
-      expect(formatDividendFillStatusLabel('CLOSED_POSITION')).toBe('已結清');
+    it('應將 CLOSED_POSITION 正確格式化為 "已結清部位"', () => {
+      expect(formatDividendFillStatusLabel('CLOSED_POSITION')).toBe('已結清部位');
     });
 
     it('應將 PENDING_DATA 正確格式化為 "待補除息價"', () => {

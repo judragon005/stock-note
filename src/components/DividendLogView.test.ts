@@ -4,6 +4,7 @@ import { ReceivableDividend } from '../types/dividend';
 import { calculateConsolidatedTwNhiTax } from '../engine/taxComplianceEngine';
 import { CorporateActionSessionCache, RawCorporateEvent } from '../engine/corporateActionScanner';
 import { calculateMonthTooltipAlign } from './DividendLogView';
+import { buildUnifiedPendingReceivables } from '../engine/dividendAggregator';
 
 describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () => {
   describe('1. 歷史現金股利入帳明細：配股配息合併健保計算', () => {
@@ -360,48 +361,14 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
       const todayStr = '2026-11-14';
       const usdToTwdRate = 32.0;
 
-      // 模擬 unifiedPendingReceivables 合成管線邏輯
-      const map = new Map<string, ReceivableDividend>();
+      // 透過公開介面縫隙 buildUnifiedPendingReceivables 驗證合成管線
+      const unifiedList = buildUnifiedPendingReceivables(
+        emptyScopedReceivables,
+        [mockFutureDividend],
+        todayStr,
+        usdToTwdRate
+      );
 
-      emptyScopedReceivables.forEach((r) => {
-        if (
-          (r.status === 'PENDING_PAYMENT' ||
-            r.status === 'OVERDUE' ||
-            r.status === 'DUE_FOR_RECONCILIATION') &&
-          r.estimatedNetDividendInTWD > 0
-        ) {
-          map.set(`${r.symbol.toUpperCase()}_${r.payDate}`, r);
-        }
-      });
-
-      const effectivePayDate = mockFutureDividend.payDate || mockFutureDividend.date;
-      const isFuture = effectivePayDate > todayStr;
-      const key = `${mockFutureDividend.symbol.toUpperCase()}_${effectivePayDate}`;
-
-      if (isFuture && !map.has(key)) {
-        const gross = mockFutureDividend.shares * mockFutureDividend.price;
-        map.set(key, {
-          id: `virtual_${mockFutureDividend.id}`,
-          symbol: mockFutureDividend.symbol,
-          name: mockFutureDividend.name || mockFutureDividend.symbol,
-          market: mockFutureDividend.market,
-          currency: mockFutureDividend.currency || 'TWD',
-          exDate: mockFutureDividend.exDate || mockFutureDividend.date,
-          payDate: effectivePayDate,
-          sharesHeldOnExDate: mockFutureDividend.shares,
-          cashDividendPerShare: mockFutureDividend.price,
-          estimatedGrossDividend: gross,
-          estimatedTaxOrFee: 0,
-          estimatedNetDividend: gross,
-          estimatedNetDividendInTWD:
-            mockFutureDividend.currency === 'USD'
-              ? Math.round(gross * usdToTwdRate)
-              : Math.round(gross),
-          status: 'PENDING_PAYMENT',
-        });
-      }
-
-      const unifiedList = Array.from(map.values());
       expect(unifiedList.length).toBe(1);
       expect(unifiedList[0].symbol).toBe('2344');
       expect(unifiedList[0].estimatedNetDividendInTWD).toBe(8000);

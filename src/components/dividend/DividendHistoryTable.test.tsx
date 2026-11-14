@@ -154,7 +154,7 @@ describe('DividendHistoryTable (歷史明細表、YOC 成本殖利率與填息�
       // 00919 不在 mockHoldings 內
       const html = renderToStaticMarkup(<DividendHistoryTable {...defaultProps} />);
       expect(html).toContain('00919');
-      expect(html).toContain('已結清');
+      expect(html).toContain('已結清部位');
     });
 
     it('當缺乏除息參考價時，應渲染 "待補除息價" 膠囊', () => {

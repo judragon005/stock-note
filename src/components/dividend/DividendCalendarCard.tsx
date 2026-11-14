@@ -41,6 +41,10 @@ export const DividendCalendarCard: React.FC<DividendCalendarCardProps> = ({
     setIsEditingCustom(false);
   };
 
+  const startMonthStr = projectedCashflow.months.length > 0 ? projectedCashflow.months[0].yearMonth.replace('-', '/') : '';
+  const endMonthStr = projectedCashflow.months.length > 0 ? projectedCashflow.months[projectedCashflow.months.length - 1].yearMonth.replace('-', '/') : '';
+  const rollingDateRangeLabel = startMonthStr && endMonthStr ? `${startMonthStr} ~ ${endMonthStr}` : '';
+
   return (
     <div
       className="glass-card animate-fade-in"
@@ -72,7 +76,7 @@ export const DividendCalendarCard: React.FC<DividendCalendarCardProps> = ({
                 }}
                 title="基於現有持股與歷史除息節奏，推估未來 12 個月滾動現金流"
               >
-                滾動 12 個月預估
+                滾動 12 個月{rollingDateRangeLabel ? `: ${rollingDateRangeLabel}` : '預估'}
               </span>
             </div>
             <span style={{ fontSize: '12px', color: '#94a3b8' }}>

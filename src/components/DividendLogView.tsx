@@ -13,6 +13,7 @@ import {
   aggregateDividendReport,
   getEffectiveDividendPayDate,
   extractHistoricalPayoutMonths,
+  buildUnifiedPendingReceivables,
 } from '../engine/dividendAggregator';
 import { resolveEffectiveDividendTaxAndNet } from '../engine/taxComplianceEngine';
 import { generate12MonthProjectedCashflow, recommendComplementaryDividendMonths } from '../engine/projectedCashflowEngine';
@@ -152,52 +153,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
   // 篩選有效之待入帳與待對帳應收款項 (Spec 0228 / Ticket 03)
   // 升級：融合 scopedReceivables 與本地未入帳預約交易 (如華邦電 2026-12-16)，消除雙軌分裂
   const activeReceivables = useMemo(() => {
-    const map = new Map<string, ReceivableDividend>();
-
-    // 1. 注入官方公告或引擎識別之應收
-    scopedReceivables.forEach((r) => {
-      if (
-        (r.status === 'PENDING_PAYMENT' || r.status === 'OVERDUE' || r.status === 'DUE_FOR_RECONCILIATION') &&
-        r.estimatedNetDividendInTWD > 0
-      ) {
-        map.set(`${r.symbol.toUpperCase()}_${r.payDate}`, r);
-      }
-    });
-
-    // 2. 注入 scopedTrades 中未到期或預約待入之 DIVIDEND 記錄
-    scopedTrades.forEach((t) => {
-      if (t.type !== 'DIVIDEND') return;
-      const effectivePayDate = getEffectiveDividendPayDate(t);
-      const isFuture = effectivePayDate > todayStr;
-      const key = `${t.symbol.toUpperCase()}_${effectivePayDate}`;
-
-      if (isFuture && !map.has(key)) {
-        const gross = t.shares * t.price;
-        const res = resolveEffectiveDividendTaxAndNet(t, scopedTrades);
-        const netTWD = t.currency === 'USD' ? Math.round(res.netCash * usdToTwdRate) : Math.round(res.netCash);
-        const grossTWD = t.currency === 'USD' ? Math.round(gross * usdToTwdRate) : Math.round(gross);
-        const taxTWD = grossTWD - netTWD;
-
-        map.set(key, {
-          id: `virtual_${t.id}`,
-          symbol: t.symbol,
-          name: t.name || t.symbol,
-          market: t.market,
-          currency: (t.currency as any) || 'TWD',
-          exDate: t.exDate || t.date,
-          payDate: effectivePayDate,
-          sharesHeldOnExDate: t.shares,
-          cashDividendPerShare: t.price,
-          estimatedGrossDividend: gross,
-          estimatedTaxOrFee: taxTWD,
-          estimatedNetDividend: res.netCash,
-          estimatedNetDividendInTWD: netTWD,
-          status: 'PENDING_PAYMENT',
-        });
-      }
-    });
-
-    return Array.from(map.values()).sort((a, b) => a.payDate.localeCompare(b.payDate));
+    return buildUnifiedPendingReceivables(scopedReceivables, scopedTrades, todayStr, usdToTwdRate);
   }, [scopedReceivables, scopedTrades, todayStr, usdToTwdRate]);
 
   // 發放日已屆待核實入帳款項 (Spec 0228 / Ticket 04: 消滅時序黑洞)
