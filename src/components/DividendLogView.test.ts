@@ -4,6 +4,7 @@ import { ReceivableDividend } from '../types/dividend';
 import { calculateConsolidatedTwNhiTax } from '../engine/taxComplianceEngine';
 import { CorporateActionSessionCache, RawCorporateEvent } from '../engine/corporateActionScanner';
 import { calculateMonthTooltipAlign } from './DividendLogView';
+import { buildUnifiedPendingReceivables } from '../engine/dividendAggregator';
 
 describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () => {
   describe('1. 歷史現金股利入帳明細：配股配息合併健保計算', () => {
@@ -335,6 +336,44 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
       expect(count).toBe(1);
       expect(totalTwd).toBe(7480);
       expect(active[0].symbol).toBe('0056');
+    });
+  });
+
+  describe('6. Spec 0229 / Ticket 03: 雙軌應收中樞整合 (消滅待入帳矛盾)', () => {
+    it('當 scopedReceivables 為空，但交易明細存在未來預約股利 (如 2344 華邦電 2026-12-16) 時，應能正確合成為可待入帳實體', () => {
+      const mockFutureDividend: TradeRecord = {
+        id: 'trade-future-2344',
+        symbol: '2344',
+        name: '華邦電',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'DIVIDEND',
+        date: '2026-11-18', // 除息日
+        payDate: '2026-12-16', // 發放日
+        shares: 4000,
+        price: 2.0,
+        fee: 0,
+        tax: 0,
+        createdAt: 999,
+      };
+
+      const emptyScopedReceivables: ReceivableDividend[] = [];
+      const todayStr = '2026-11-14';
+      const usdToTwdRate = 32.0;
+
+      // 透過公開介面縫隙 buildUnifiedPendingReceivables 驗證合成管線
+      const unifiedList = buildUnifiedPendingReceivables(
+        emptyScopedReceivables,
+        [mockFutureDividend],
+        todayStr,
+        usdToTwdRate
+      );
+
+      expect(unifiedList.length).toBe(1);
+      expect(unifiedList[0].symbol).toBe('2344');
+      expect(unifiedList[0].estimatedNetDividendInTWD).toBe(8000);
+      expect(unifiedList[0].payDate).toBe('2026-12-16');
+      expect(unifiedList[0].status).toBe('PENDING_PAYMENT');
     });
   });
 });

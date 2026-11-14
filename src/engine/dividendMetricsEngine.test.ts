@@ -116,5 +116,41 @@ describe('dividendMetricsEngine - YOC (成本殖利率) 與實質填息標籤計
     it('應將 UNFILLED 正確格式化為 "貼息中"', () => {
       expect(formatDividendFillStatusLabel('UNFILLED')).toBe('貼息中');
     });
+
+    it('應將 CLOSED_POSITION 正確格式化為 "已結清部位"', () => {
+      expect(formatDividendFillStatusLabel('CLOSED_POSITION')).toBe('已結清部位');
+    });
+
+    it('應將 PENDING_DATA 正確格式化為 "待補除息價"', () => {
+      expect(formatDividendFillStatusLabel('PENDING_DATA')).toBe('待補除息價');
+    });
+  });
+
+  describe('determineDividendFillStatus - 四態自癒擴充模式 (Ticket 01)', () => {
+    it('當持倉已被平倉清空時 (isClosedPosition: true)，應判定為 CLOSED_POSITION', () => {
+      const status = determineDividendFillStatus({
+        currentPrice: 0,
+        exPrice: 95,
+        dividendPerShare: 5,
+        isClosedPosition: true,
+      });
+      expect(status).toBe('CLOSED_POSITION');
+    });
+
+    it('當缺乏除息價格或價格小於等於 0 時，應判定為 PENDING_DATA', () => {
+      const statusNoExPrice = determineDividendFillStatus({
+        currentPrice: 100,
+        exPrice: 0,
+        dividendPerShare: 5,
+      });
+      expect(statusNoExPrice).toBe('PENDING_DATA');
+
+      const statusNaN = determineDividendFillStatus({
+        currentPrice: 100,
+        exPrice: undefined as unknown as number,
+        dividendPerShare: 5,
+      });
+      expect(statusNaN).toBe('PENDING_DATA');
+    });
   });
 });

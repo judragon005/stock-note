@@ -73,6 +73,14 @@ _Avoid_: Expired Dividend, Dropped Accrual
 將美股以台幣計價之總損益嚴格解耦為「股票本體價差 (Asset Gain)」與「美元匯率波動 (FX Gain/Loss)」，精確反映選股 Alpha 與外匯貢獻。
 _Avoid_: Currency Mix, Mixed Gain
 
+**Dividend Fill Status Four-State Pipeline (股利實質填息四態自癒狀態機)** _(新增於 Spec 0229)_:
+將歷史股息入帳明細之填息狀態形式化為四態：`FILLED` (實質填息，現價已回補除息缺口)、`UNFILLED` (貼息中)、`CLOSED_POSITION` (已結清部位，該標的已全數平倉賣出，無需追蹤即時貼息)、`PENDING_DATA` (待補除息價，缺乏除息參考價)。徹底解決因持倉清空或缺價導致膠囊靜默隱形的缺陷。
+_Avoid_: Disappearing Badge, Null Return Status
+
+**Unified Dividend Receivable Hub (雙軌應收股利與預約交易聯集中樞)** _(新增於 Spec 0229)_:
+將外部除權息公告所生成的應收股利池 (`scopedReceivables`) 與交易紀錄中未到期之預約股利 (`TradeRecord`) 在領域層純函式中進行聯集與去重合成，確保全看板（行事曆、月曆卡片、明細表）消費同一組單一事實來源 (SSOT)，杜絕「上方顯示暫無記錄、下方卻有待入帳」之矛盾。
+_Avoid_: Split-Brain Receivables, Ghost Accruals
+
 ### 市場時間與結算定錨 (Market Settlement & Anchoring) _(新增於 Spec 0150)_
 
 **Market Settlement Status (市場結算狀態)**:

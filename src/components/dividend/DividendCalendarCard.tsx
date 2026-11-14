@@ -41,6 +41,10 @@ export const DividendCalendarCard: React.FC<DividendCalendarCardProps> = ({
     setIsEditingCustom(false);
   };
 
+  const startMonthStr = projectedCashflow.months.length > 0 ? projectedCashflow.months[0].yearMonth.replace('-', '/') : '';
+  const endMonthStr = projectedCashflow.months.length > 0 ? projectedCashflow.months[projectedCashflow.months.length - 1].yearMonth.replace('-', '/') : '';
+  const rollingDateRangeLabel = startMonthStr && endMonthStr ? `${startMonthStr} ~ ${endMonthStr}` : '';
+
   return (
     <div
       className="glass-card animate-fade-in"
@@ -56,11 +60,27 @@ export const DividendCalendarCard: React.FC<DividendCalendarCardProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ fontSize: '20px' }}>📅</span>
           <div>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#f8fafc' }}>
-              未來 12 個月現金流預估行事曆
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#f8fafc' }}>
+                未來 12 個月現金流預估行事曆
+              </h3>
+              <span
+                style={{
+                  fontSize: '11px',
+                  padding: '1px 6px',
+                  borderRadius: '6px',
+                  background: 'rgba(56, 189, 248, 0.15)',
+                  border: '1px solid rgba(56, 189, 248, 0.35)',
+                  color: '#38bdf8',
+                  fontWeight: 600,
+                }}
+                title="基於現有持股與歷史除息節奏，推估未來 12 個月滾動現金流"
+              >
+                滾動 12 個月{rollingDateRangeLabel ? `: ${rollingDateRangeLabel}` : '預估'}
+              </span>
+            </div>
             <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-              全年預估: <strong style={{ color: '#34d399', fontVariantNumeric: 'tabular-nums' }}>NT$ {projectedCashflow.annualTotalTwd.toLocaleString()}</strong> · 月均: <strong style={{ color: '#38bdf8', fontVariantNumeric: 'tabular-nums' }}>NT$ {Math.round(projectedCashflow.monthlyAverageTwd).toLocaleString()}</strong>
+              滾動預估總計: <strong style={{ color: '#34d399', fontVariantNumeric: 'tabular-nums' }}>NT$ {projectedCashflow.annualTotalTwd.toLocaleString()}</strong> · 月均: <strong style={{ color: '#38bdf8', fontVariantNumeric: 'tabular-nums' }}>NT$ {Math.round(projectedCashflow.monthlyAverageTwd).toLocaleString()}</strong>
               {targetMonthlyExpenseTwd > 0 && (
                 <span>
                   {' '}· 生活費覆蓋: <strong style={{ color: fiCoverageRatioPct >= 100 ? '#34d399' : '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>{fiCoverageRatioPct.toFixed(1)}%</strong>

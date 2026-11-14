@@ -47,6 +47,57 @@ export interface DividendHistoryTableProps {
   onSettleReceivable?: (rec: ReceivableDividend) => void;
 }
 
+interface FillStatusStyle {
+  bg: string;
+  color: string;
+  border: string;
+}
+
+const FILL_STATUS_STYLE_MAP: Record<string, FillStatusStyle> = {
+  FILLED: {
+    bg: 'rgba(16, 185, 129, 0.2)',
+    color: '#34d399',
+    border: '1px solid rgba(16, 185, 129, 0.4)',
+  },
+  UNFILLED: {
+    bg: 'rgba(239, 68, 68, 0.15)',
+    color: '#f87171',
+    border: '1px solid rgba(239, 68, 68, 0.3)',
+  },
+  CLOSED_POSITION: {
+    bg: 'rgba(100, 116, 139, 0.2)',
+    color: '#94a3b8',
+    border: '1px solid rgba(100, 116, 139, 0.4)',
+  },
+  PENDING_DATA: {
+    bg: 'rgba(245, 158, 11, 0.15)',
+    color: '#fbbf24',
+    border: '1px solid rgba(245, 158, 11, 0.35)',
+  },
+};
+
+/**
+ * 實質填息狀態自癒膠囊元件 (Spec 0229)
+ * 消除行內三元巢狀運算，統一樣式呈現
+ */
+export const DividendFillStatusBadge: React.FC<{ status: import('../../engine/dividendMetricsEngine').DividendFillStatus }> = ({ status }) => {
+  const style = FILL_STATUS_STYLE_MAP[status] || FILL_STATUS_STYLE_MAP.PENDING_DATA;
+  return (
+    <span
+      style={{
+        fontSize: '0.65rem',
+        padding: '1px 5px',
+        borderRadius: '4px',
+        background: style.bg,
+        color: style.color,
+        border: style.border,
+      }}
+    >
+      {formatDividendFillStatusLabel(status)}
+    </span>
+  );
+};
+
 export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
   dividendTrades,
   allScopedTrades,
@@ -453,13 +504,13 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
                     ? t.referencePrice - t.price
                     : undefined;
 
-                  const fillStatus = holding && holding.currentPrice > 0 && rawExPrice !== undefined
-                    ? determineDividendFillStatus({
-                        currentPrice: holding.currentPrice,
-                        exPrice: rawExPrice,
-                        dividendPerShare: t.price,
-                      })
-                    : undefined;
+                  const isClosedPosition = !holding || holding.shares <= 0;
+                  const fillStatus = determineDividendFillStatus({
+                    currentPrice: holding ? holding.currentPrice : 0,
+                    exPrice: rawExPrice,
+                    dividendPerShare: t.price,
+                    isClosedPosition: isClosedPosition,
+                  });
 
                   const formattedShares = isUS ? t.shares.toLocaleString() : Math.round(t.shares).toLocaleString();
                   const formattedPrice = isUS ? `${t.price.toFixed(4)} USD` : `${t.price} TWD`;
@@ -529,20 +580,7 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
                               YOC {yoc.toFixed(1)}%
                             </span>
                           )}
-                          {fillStatus && (
-                            <span
-                              style={{
-                                fontSize: '0.65rem',
-                                padding: '1px 5px',
-                                borderRadius: '4px',
-                                background: fillStatus === 'FILLED' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.15)',
-                                color: fillStatus === 'FILLED' ? '#34d399' : '#f87171',
-                                border: `1px solid ${fillStatus === 'FILLED' ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.3)'}`,
-                              }}
-                            >
-                              {formatDividendFillStatusLabel(fillStatus)}
-                            </span>
-                          )}
+                          {fillStatus && <DividendFillStatusBadge status={fillStatus} />}
                         </div>
                       </td>
                       <td className="mono" style={{ padding: '10px 12px', textAlign: 'right', color: '#cbd5e1', fontVariantNumeric: 'tabular-nums' }}>

@@ -13,6 +13,7 @@ import {
   aggregateDividendReport,
   getEffectiveDividendPayDate,
   extractHistoricalPayoutMonths,
+  buildUnifiedPendingReceivables,
 } from '../engine/dividendAggregator';
 import { resolveEffectiveDividendTaxAndNet } from '../engine/taxComplianceEngine';
 import { generate12MonthProjectedCashflow, recommendComplementaryDividendMonths } from '../engine/projectedCashflowEngine';
@@ -150,13 +151,10 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
   }, [report.currentYearDividendsTWD]);
 
   // 篩選有效之待入帳與待對帳應收款項 (Spec 0228 / Ticket 03)
+  // 升級：融合 scopedReceivables 與本地未入帳預約交易 (如華邦電 2026-12-16)，消除雙軌分裂
   const activeReceivables = useMemo(() => {
-    return scopedReceivables.filter(
-      (r) =>
-        (r.status === 'PENDING_PAYMENT' || r.status === 'OVERDUE' || r.status === 'DUE_FOR_RECONCILIATION') &&
-        r.estimatedNetDividendInTWD > 0
-    );
-  }, [scopedReceivables]);
+    return buildUnifiedPendingReceivables(scopedReceivables, scopedTrades, todayStr, usdToTwdRate);
+  }, [scopedReceivables, scopedTrades, todayStr, usdToTwdRate]);
 
   // 發放日已屆待核實入帳款項 (Spec 0228 / Ticket 04: 消滅時序黑洞)
   const dueReceivables = useMemo(() => {

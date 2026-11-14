@@ -230,3 +230,61 @@ export function aggregateDividendReport(
     upcomingDividends: receivableDividends,
   };
 }
+
+/**
+ * 建立統一應收股利與預約交易聯集中樞 (Spec 0229 SSOT)
+ * 解決外部公告與本地預約交易雙軌分裂，確保全看板消費單一事實來源
+ */
+export function buildUnifiedPendingReceivables(
+  scopedReceivables: ReceivableDividend[],
+  scopedTrades: TradeRecord[],
+  todayStr: string,
+  usdToTwdRate: number
+): ReceivableDividend[] {
+  const map = new Map<string, ReceivableDividend>();
+
+  // 1. 注入官方公告或引擎識別之應收
+  scopedReceivables.forEach((r) => {
+    if (
+      (r.status === 'PENDING_PAYMENT' || r.status === 'OVERDUE' || r.status === 'DUE_FOR_RECONCILIATION') &&
+      r.estimatedNetDividendInTWD > 0
+    ) {
+      map.set(`${r.symbol.toUpperCase()}_${r.payDate}`, r);
+    }
+  });
+
+  // 2. 注入 scopedTrades 中未到期或預約待入之 DIVIDEND 記錄 (如華邦電 2026-12-16)
+  scopedTrades.forEach((t) => {
+    if (t.type !== 'DIVIDEND') return;
+    const effectivePayDate = getEffectiveDividendPayDate(t);
+    const isFuture = effectivePayDate > todayStr;
+    const key = `${t.symbol.toUpperCase()}_${effectivePayDate}`;
+
+    if (isFuture && !map.has(key)) {
+      const gross = t.shares * t.price;
+      const res = resolveEffectiveDividendTaxAndNet(t, scopedTrades);
+      const netTWD = t.currency === 'USD' ? Math.round(res.netCash * usdToTwdRate) : Math.round(res.netCash);
+      const grossTWD = t.currency === 'USD' ? Math.round(gross * usdToTwdRate) : Math.round(gross);
+      const taxTWD = grossTWD - netTWD;
+
+      map.set(key, {
+        id: `virtual_${t.id}`,
+        symbol: t.symbol,
+        name: t.name || t.symbol,
+        market: t.market,
+        currency: (t.currency as any) || 'TWD',
+        exDate: t.exDate || t.date,
+        payDate: effectivePayDate,
+        sharesHeldOnExDate: t.shares,
+        cashDividendPerShare: t.price,
+        estimatedGrossDividend: gross,
+        estimatedTaxOrFee: taxTWD,
+        estimatedNetDividend: res.netCash,
+        estimatedNetDividendInTWD: netTWD,
+        status: 'PENDING_PAYMENT',
+      });
+    }
+  });
+
+  return Array.from(map.values()).sort((a, b) => a.payDate.localeCompare(b.payDate));
+}
