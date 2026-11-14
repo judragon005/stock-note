@@ -92,7 +92,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
   const scopedHoldings = useMemo(() => {
     return holdings.filter((h) => {
       if (market !== 'ALL' && h.market !== market) return false;
-      if (selectedAccountId && selectedAccountId !== 'ALL' && h.accountId && h.accountId !== selectedAccountId) {
+      if (selectedAccountId && selectedAccountId !== 'ALL' && h.accountId !== selectedAccountId) {
         return false;
       }
       return true;
@@ -108,7 +108,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
           const loanMarket = loan.currency === 'USD' ? 'US' : 'TW';
           if (loanMarket !== market) return false;
         }
-        if (selectedAccountId && selectedAccountId !== 'ALL' && loan.accountId && loan.accountId !== selectedAccountId) {
+        if (selectedAccountId && selectedAccountId !== 'ALL' && loan.accountId !== selectedAccountId) {
           return false;
         }
         return true;
@@ -136,7 +136,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
   const scopedTrades = useMemo(() => {
     return trades.filter((t) => {
       if (market !== 'ALL' && t.market !== market) return false;
-      if (selectedAccountId && selectedAccountId !== 'ALL' && t.accountId && t.accountId !== selectedAccountId) {
+      if (selectedAccountId && selectedAccountId !== 'ALL' && t.accountId !== selectedAccountId) {
         return false;
       }
       return true;
@@ -146,7 +146,7 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
   const scopedReceivables = useMemo(() => {
     return receivableDividends.filter((r) => {
       if (market !== 'ALL' && r.market !== market) return false;
-      if (selectedAccountId && selectedAccountId !== 'ALL' && r.accountId && r.accountId !== selectedAccountId) {
+      if (selectedAccountId && selectedAccountId !== 'ALL' && r.accountId !== selectedAccountId) {
         return false;
       }
       return true;
@@ -174,8 +174,9 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
       baseYearMonth: currentYearMonth,
       holdings: scopedHoldings,
       historicalPayoutMonths: historicalPayoutMonthsMap,
+      usdToTwdRate,
     });
-  }, [scopedHoldings, currentYearMonth, historicalPayoutMonthsMap]);
+  }, [scopedHoldings, currentYearMonth, historicalPayoutMonthsMap, usdToTwdRate]);
 
   const complementaryRecommendations = useMemo(() => {
     return recommendComplementaryDividendMonths(projectedCashflow.drySeasonMonths);
@@ -428,13 +429,22 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         taxStats={taxStats}
         targetMonthlyExpenseTwd={targetMonthlyExpenseTwd}
         onTargetExpenseChange={handleTargetExpenseChange}
-        zavyDividendPlanSummary="依目前景氣波浪建議活水轉向注入：純公債 (00687B) 與黃金儲備 (00635U)，存量不動、增量抗震。"
+        zavyDividendPlanSummary={
+          scopedHoldings.length === 0
+            ? undefined
+            : market === 'US'
+            ? '依目前景氣波浪建議活水轉向注入：美國長天期公債 (TLT / VGLT) 與黃金儲備 (GLD / IAU)，存量不動、增量抗震。'
+            : market === 'TW'
+            ? '依目前景氣波浪建議活水轉向注入：純公債 (00687B) 與黃金儲備 (00635U)，存量不動、增量抗震。'
+            : '依目前景氣波浪建議活水轉向注入：台股純公債/黃金 (00687B / 00635U) 或美股公債/黃金 (TLT / GLD)，存量不動、增量抗震。'
+        }
         isCashflowExpanded={isCashflowExpanded}
         onToggleExpand={() => setIsCashflowExpanded((v) => !v)}
       />
 
       {/* 2. 四大發光 KPI 摘要面板 */}
       <DividendKpiSummary
+        market={market}
         selectedYear={selectedYear}
         dividendDisplayMode={dividendDisplayMode}
         onToggleDisplayMode={setDividendDisplayMode}

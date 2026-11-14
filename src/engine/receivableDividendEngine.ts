@@ -16,7 +16,7 @@ export const OFFICIAL_DIVIDEND_CALENDAR: RawCorporateEvent[] = [
     date: '2026-09-16',
     price: 7.0,
     description: '季度現金股利每股 7.0 TWD (預計 2026-10-08 發放入帳)',
-    sourceType: 'LIVE_API',
+    sourceType: 'OFFICIAL_DATA',
   },
   {
     symbol: '2886',
@@ -25,7 +25,7 @@ export const OFFICIAL_DIVIDEND_CALENDAR: RawCorporateEvent[] = [
     date: '2026-08-13',
     price: 1.75,
     description: '年度現金股利每股 1.75 TWD (預計 2026-09-04 發放入帳)',
-    sourceType: 'LIVE_API',
+    sourceType: 'OFFICIAL_DATA',
   },
   {
     symbol: '00878',
@@ -34,7 +34,7 @@ export const OFFICIAL_DIVIDEND_CALENDAR: RawCorporateEvent[] = [
     date: '2026-08-18',
     price: 1.01,
     description: '季度收益分配每股 1.01 TWD (預計 2026-09-11 發放入帳)',
-    sourceType: 'LIVE_API',
+    sourceType: 'OFFICIAL_DATA',
   },
   {
     symbol: '00923',
@@ -43,7 +43,7 @@ export const OFFICIAL_DIVIDEND_CALENDAR: RawCorporateEvent[] = [
     date: '2026-08-18',
     price: 3.05,
     description: '半年度收益分配每股 3.05 TWD (預計 2026-09-11 發放入帳)',
-    sourceType: 'LIVE_API',
+    sourceType: 'OFFICIAL_DATA',
   },
   {
     symbol: '2890',
@@ -52,7 +52,7 @@ export const OFFICIAL_DIVIDEND_CALENDAR: RawCorporateEvent[] = [
     date: '2026-07-23',
     price: 1.10,
     description: '年度現金股利每股 1.10 TWD (預計 2026-08-24 發放入帳)',
-    sourceType: 'LIVE_API',
+    sourceType: 'OFFICIAL_DATA',
   },
   {
     symbol: '9927',
@@ -61,7 +61,7 @@ export const OFFICIAL_DIVIDEND_CALENDAR: RawCorporateEvent[] = [
     date: '2026-10-01',
     price: 5.0,
     description: '年度現金股利每股 5.0 TWD (預計 2026-10-29 發放入帳)',
-    sourceType: 'LIVE_API',
+    sourceType: 'OFFICIAL_DATA',
   },
   {
     symbol: '0056',
@@ -70,7 +70,7 @@ export const OFFICIAL_DIVIDEND_CALENDAR: RawCorporateEvent[] = [
     date: '2026-10-22',
     price: 1.07,
     description: '季度收益分配每股 1.07 TWD (預計 2026-11-11 發放入帳)',
-    sourceType: 'LIVE_API',
+    sourceType: 'OFFICIAL_DATA',
   },
 ];
 
@@ -240,9 +240,15 @@ export function calculateReceivableDividends(
   officialCalendar: RawCorporateEvent[] = OFFICIAL_DIVIDEND_CALENDAR
 ): ReceivableDividend[] {
   const receivables: ReceivableDividend[] = [];
-  const activeHoldingsMap = new Map<string, HoldingPosition>();
+  // 依 (symbol, accountId) 建立複合鍵索引，防止多帳戶同標的互相覆蓋 (Spec 0231 #546)
+  const holdingsBySymbol = new Map<string, HoldingPosition[]>();
+  const holdingsByAccountSymbol = new Map<string, HoldingPosition>();
   holdings.forEach((h) => {
-    activeHoldingsMap.set(h.symbol.toUpperCase(), h);
+    const sym = h.symbol.toUpperCase();
+    const list = holdingsBySymbol.get(sym) || [];
+    list.push(h);
+    holdingsBySymbol.set(sym, list);
+    holdingsByAccountSymbol.set(`${sym}::${h.accountId || ''}`, h);
   });
 
   const processedKeys = new Set<string>();
@@ -258,125 +264,135 @@ export function calculateReceivableDividends(
     allEventsMap.set(k, ev);
   }
 
-  // 2. 處理官方公司行動除息事件 (SSOT 線性判定)
+  // 2. 處理官方公司行動除息事件 (SSOT 線性判定，按帳戶隔離)
   for (const event of allEventsMap.values()) {
     if (event.type !== 'DIVIDEND' || !event.price || event.price <= 0) {
       continue;
     }
 
     const symbol = event.symbol.toUpperCase();
-    const holding = activeHoldingsMap.get(symbol);
-    if (!holding) continue;
+    const matchedHoldings = holdingsBySymbol.get(symbol);
+    if (!matchedHoldings || matchedHoldings.length === 0) continue;
 
     const exDate = event.date;
     const payDate = estimatePaymentDate(exDate, event.market, symbol);
-    const key = `${symbol}-${exDate}`;
 
-    // 檢查 trades 中是否已手動或自動登記該次除息之股利收入，杜絕雙重計算
-    const isAlreadyLogged = trades.some((t) => {
-      if (t.type !== 'DIVIDEND' || t.symbol.toUpperCase() !== symbol) return false;
-      return t.exDate === exDate || (t.date >= exDate && t.date <= payDate);
-    });
-    if (isAlreadyLogged) {
-      processedKeys.add(key);
-      continue;
-    }
+    for (const holding of matchedHoldings) {
+      const accountKey = holding.accountId || '';
+      const key = `${symbol}-${exDate}-${accountKey}`;
+      if (processedKeys.has(key)) continue;
 
-    processedKeys.add(key);
+      const scopedAccountTrades = holding.accountId
+        ? trades.filter((t) => t.accountId === holding.accountId)
+        : trades;
 
-    // 依證券法規：以除息日前一日收盤在籍股數為準 (完整計入配股、增減資等公司行動)
-    const prevDay = addDaysToDateStr(exDate, -1);
-
-    let sharesHeld = getHoldingsAsOfDate(trades, prevDay, symbol);
-    // 防禦性在籍判定：
-    // 1. 若除息前一日持股 > 0，採納歷史在籍持股；
-    // 2. 若尚未除息 (currentDateStr < exDate)，得以當前庫存預估即將除息股數；
-    // 3. 若帳本中完全無該標的歷史買賣紀錄 (如純外部持倉匯入)，且在庫持股 > 0，安全回退採納在庫持股；
-    // 4. 若帳本有該標的歷史紀錄且為除息日後買進，維持 sharesHeld = 0，排除除息權利 (Ticket #005)。
-    const hasAnyTradesForSymbol = trades.some((t) => t.symbol.toUpperCase() === symbol);
-    if (sharesHeld <= 0 && (!hasAnyTradesForSymbol || currentDateStr < exDate) && holding.shares > 0) {
-      sharesHeld = holding.shares;
-    }
-    if (sharesHeld <= 0) continue;
-
-    const market = event.market;
-    const currency: Currency = market === 'TW' ? 'TWD' : 'USD';
-    const cashPerShare = event.price;
-    const grossDividend = Number((sharesHeld * cashPerShare).toFixed(marketPrecision(market)));
-
-    // 智能稅費 (台股 >= 2萬 扣 2.11% 二代健保，內扣 10 元跨行匯費；美股 30% 預扣稅)
-    let nhiTax = 0;
-    let wireFee = 0;
-    let taxOrFee = 0;
-
-    if (market === 'TW') {
-      // 檢查同標的是否有同除權息日之股票股利 (STOCK_DIVIDEND)
-      let peerStockShares = 0;
-      for (const ev of allEventsMap.values()) {
-        if (ev.symbol.toUpperCase() === symbol && ev.type === 'STOCK_DIVIDEND' && ev.date === exDate) {
-          const rawPeer = ev.shares && ev.shares > 0 ? ev.shares : (ev.ratio ? sharesHeld * ev.ratio : 0);
-          peerStockShares = Math.round(rawPeer);
-          break;
-        }
+      // 檢查該帳戶 trades 中是否已手動或自動登記該次除息之股利收入，杜絕雙重計算
+      const isAlreadyLogged = scopedAccountTrades.some((t) => {
+        if (t.type !== 'DIVIDEND' || t.symbol.toUpperCase() !== symbol) return false;
+        return t.exDate === exDate || (t.date >= exDate && t.date <= payDate);
+      });
+      if (isAlreadyLogged) {
+        processedKeys.add(key);
+        continue;
       }
 
-      wireFee = grossDividend > 0 ? 10 : 0;
-      const taxRes = calculateConsolidatedTwNhiTax({
-        cashDividendGross: grossDividend,
-        stockDividendShares: peerStockShares,
-        wireFee,
+      processedKeys.add(key);
+
+      // 依證券法規：以除息日前一日收盤在籍股數為準 (完整計入配股、增減資等公司行動)
+      const prevDay = addDaysToDateStr(exDate, -1);
+
+      let sharesHeld = getHoldingsAsOfDate(scopedAccountTrades, prevDay, symbol);
+      // 防禦性在籍判定：
+      // 1. 若除息前一日持股 > 0，採納歷史在籍持股；
+      // 2. 若尚未除息 (currentDateStr < exDate)，得以當前庫存預估即將除息股數；
+      // 3. 若帳本中完全無該標的歷史買賣紀錄 (如純外部持倉匯入)，且在庫持股 > 0，安全回退採納在庫持股；
+      // 4. 若帳本有該標的歷史紀錄且為除息日後買進，維持 sharesHeld = 0，排除除息權利 (Ticket #005)。
+      const hasAnyTradesForSymbol = scopedAccountTrades.some((t) => t.symbol.toUpperCase() === symbol);
+      if (sharesHeld <= 0 && (!hasAnyTradesForSymbol || currentDateStr < exDate) && holding.shares > 0) {
+        sharesHeld = holding.shares;
+      }
+      if (sharesHeld <= 0) continue;
+
+      const market = event.market;
+      const currency: Currency = market === 'TW' ? 'TWD' : 'USD';
+      const cashPerShare = event.price;
+      const grossDividend = Number((sharesHeld * cashPerShare).toFixed(marketPrecision(market)));
+
+      // 智能稅費 (台股 >= 2萬 扣 2.11% 二代健保，內扣 10 元跨行匯費；美股 30% 預扣稅)
+      let nhiTax = 0;
+      let wireFee = 0;
+      let taxOrFee = 0;
+
+      if (market === 'TW') {
+        // 檢查同標的是否有同除權息日之股票股利 (STOCK_DIVIDEND)
+        let peerStockShares = 0;
+        for (const ev of allEventsMap.values()) {
+          if (ev.symbol.toUpperCase() === symbol && ev.type === 'STOCK_DIVIDEND' && ev.date === exDate) {
+            const rawPeer = ev.shares && ev.shares > 0 ? ev.shares : (ev.ratio ? sharesHeld * ev.ratio : 0);
+            peerStockShares = Math.round(rawPeer);
+            break;
+          }
+        }
+
+        wireFee = grossDividend > 0 ? 10 : 0;
+        const taxRes = calculateConsolidatedTwNhiTax({
+          cashDividendGross: grossDividend,
+          stockDividendShares: peerStockShares,
+          wireFee,
+        });
+
+        nhiTax = taxRes.nhiFeeTWD;
+        taxOrFee = nhiTax + wireFee;
+      } else {
+        taxOrFee = Number((grossDividend * 0.3).toFixed(2));
+      }
+
+      const netDividend = Math.max(0, Number((grossDividend - taxOrFee).toFixed(marketPrecision(market))));
+      const netDividendInTWD = market === 'TW' ? Math.round(netDividend) : Math.round(netDividend * exchangeRate);
+
+      // 股利生命週期狀態判定 (Spec 0228 / Ticket 02)：
+      // 1. 若今日尚未除息 -> UPCOMING_EX
+      // 2. 若今日已除息且未屆發放日 -> PENDING_PAYMENT
+      // 3. 若今日已達或超過官方發放日且尚未完成入帳對帳 -> DUE_FOR_RECONCILIATION
+      let status: ReceivableDividend['status'];
+      if (currentDateStr < exDate) {
+        status = 'UPCOMING_EX';
+      } else if (currentDateStr < payDate) {
+        status = 'PENDING_PAYMENT';
+      } else {
+        status = 'DUE_FOR_RECONCILIATION';
+      }
+      const isOfficial = isPaymentDateOfficial(exDate, symbol);
+
+      receivables.push({
+        id: holding.accountId ? `rec-official-${symbol}-${exDate}-${holding.accountId}` : `rec-official-${symbol}-${exDate}`,
+        accountId: holding.accountId,
+        symbol,
+        name: holding.name || symbol,
+        market,
+        currency,
+        exDate,
+        payDate,
+        sharesHeldOnExDate: sharesHeld,
+        sharesHeld,
+        cashDividendPerShare: cashPerShare,
+        estimatedGrossDividend: grossDividend,
+        estimatedTaxOrFee: taxOrFee,
+        estimatedNhiTax: nhiTax,
+        estimatedWireFee: wireFee,
+        estimatedNetDividend: netDividend,
+        estimatedNetDividendInTWD: netDividendInTWD,
+        status,
+        dateSource: isOfficial ? 'OFFICIAL' : 'ESTIMATED',
       });
-
-      nhiTax = taxRes.nhiFeeTWD;
-      taxOrFee = nhiTax + wireFee;
-    } else {
-      taxOrFee = Number((grossDividend * 0.3).toFixed(2));
     }
-
-    const netDividend = Math.max(0, Number((grossDividend - taxOrFee).toFixed(marketPrecision(market))));
-    const netDividendInTWD = market === 'TW' ? Math.round(netDividend) : Math.round(netDividend * exchangeRate);
-
-    // 股利生命週期狀態判定 (Spec 0228 / Ticket 02)：
-    // 1. 若今日尚未除息 -> UPCOMING_EX
-    // 2. 若今日已除息且未屆發放日 -> PENDING_PAYMENT
-    // 3. 若今日已達或超過官方發放日且尚未完成入帳對帳 -> DUE_FOR_RECONCILIATION
-    let status: ReceivableDividend['status'];
-    if (currentDateStr < exDate) {
-      status = 'UPCOMING_EX';
-    } else if (currentDateStr < payDate) {
-      status = 'PENDING_PAYMENT';
-    } else {
-      status = 'DUE_FOR_RECONCILIATION';
-    }
-    const isOfficial = isPaymentDateOfficial(exDate, symbol);
-
-    receivables.push({
-      id: `rec-official-${symbol}-${exDate}`,
-      symbol,
-      name: holding.name || symbol,
-      market,
-      currency,
-      exDate,
-      payDate,
-      sharesHeldOnExDate: sharesHeld,
-      sharesHeld,
-      cashDividendPerShare: cashPerShare,
-      estimatedGrossDividend: grossDividend,
-      estimatedTaxOrFee: taxOrFee,
-      estimatedNhiTax: nhiTax,
-      estimatedWireFee: wireFee,
-      estimatedNetDividend: netDividend,
-      estimatedNetDividendInTWD: netDividendInTWD,
-      status,
-      dateSource: isOfficial ? 'OFFICIAL' : 'ESTIMATED',
-    });
   }
 
   // 3. 補充帳本中非官方涵蓋之自訂未來預約 DIVIDEND 記錄
   const customFutureTrades = trades.filter((t) => {
     if (t.type !== 'DIVIDEND') return false;
     const exDate = t.exDate || t.date;
-    const key = `${t.symbol.toUpperCase()}-${exDate}`;
+    const key = `${t.symbol.toUpperCase()}-${exDate}-${t.accountId || ''}`;
     if (processedKeys.has(key)) return false;
     const effectivePayDate = t.payDate || (t.date > currentDateStr ? t.date : estimatePaymentDate(exDate, t.market, t.symbol));
     return effectivePayDate > currentDateStr;
@@ -384,12 +400,14 @@ export function calculateReceivableDividends(
 
   for (const trade of customFutureTrades) {
     const symbol = trade.symbol.toUpperCase();
-    const holding = activeHoldingsMap.get(symbol);
+    const holding =
+      holdingsByAccountSymbol.get(`${symbol}::${trade.accountId || ''}`) ||
+      holdingsBySymbol.get(symbol)?.[0];
 
     const exDate = trade.exDate || trade.date;
     const payDate = trade.payDate || (trade.date > currentDateStr ? trade.date : estimatePaymentDate(exDate, trade.market));
 
-    const key = `${symbol}-${exDate}`;
+    const key = `${symbol}-${exDate}-${trade.accountId || ''}`;
     if (processedKeys.has(key)) {
       continue;
     }
@@ -418,6 +436,7 @@ export function calculateReceivableDividends(
 
     receivables.push({
       id: `rec-trade-${trade.id}`,
+      accountId: trade.accountId || holding?.accountId,
       symbol: trade.symbol,
       name: trade.name || (holding?.name || trade.symbol),
       market: trade.market,
@@ -487,7 +506,8 @@ export function projectFutureDividends(
     paymentDate?: string;
     cashDividendPerShare?: number;
     stockDividendRatio?: number;
-  }>
+  }>,
+  usdToTwdRate: number = 32.0
 ): ReceivableDividend[] {
   const results: ReceivableDividend[] = [];
   const holdingMap = new Map<string, HoldingPosition>();
@@ -501,16 +521,37 @@ export function projectFutureDividends(
     if (!holding || holding.shares <= 0) continue;
 
     const cashPerShare = cal.cashDividendPerShare || 0;
-    const grossDividend = Math.round(holding.shares * cashPerShare);
+    const isTw = holding.market === 'TW';
+    const grossDividend = isTw
+      ? Math.round(holding.shares * cashPerShare)
+      : Number((holding.shares * cashPerShare).toFixed(2));
     if (grossDividend <= 0) continue;
 
-    // 台股二代健保預估
-    const isTw = holding.market === 'TW';
-    const estimatedNhi = isTw && grossDividend >= 20000 ? Math.round(grossDividend * 0.0211) : 0;
-    const netDividend = grossDividend - estimatedNhi;
+    const stockShares = cal.stockDividendRatio ? Math.round(holding.shares * cal.stockDividendRatio) : 0;
+    let estimatedNhi = 0;
+    let wireFee = 0;
+    let taxOrFee = 0;
+
+    if (isTw) {
+      wireFee = 10;
+      const taxRes = calculateConsolidatedTwNhiTax({
+        cashDividendGross: grossDividend,
+        stockDividendShares: stockShares,
+        wireFee,
+      });
+      estimatedNhi = taxRes.nhiFeeTWD;
+      taxOrFee = estimatedNhi + wireFee;
+    } else {
+      // 美股 30% IRS 預扣稅 (Spec 0231 #549)
+      taxOrFee = Number((grossDividend * 0.3).toFixed(2));
+    }
+
+    const netDividend = Math.max(0, Number((grossDividend - taxOrFee).toFixed(isTw ? 0 : 2)));
+    const netDividendInTWD = isTw ? Math.round(netDividend) : Math.round(netDividend * usdToTwdRate);
 
     results.push({
       id: `proj_${symbolUpper}_${cal.exDate}`,
+      accountId: holding.accountId,
       symbol: symbolUpper,
       name: holding.name || symbolUpper,
       market: holding.market,
@@ -520,11 +561,12 @@ export function projectFutureDividends(
       sharesHeldOnExDate: holding.shares,
       cashDividendPerShare: cashPerShare,
       estimatedGrossDividend: grossDividend,
-      stockDividendShares: cal.stockDividendRatio ? Math.round(holding.shares * cal.stockDividendRatio) : undefined,
-      estimatedTaxOrFee: estimatedNhi,
+      stockDividendShares: stockShares > 0 ? stockShares : undefined,
+      estimatedTaxOrFee: taxOrFee,
       estimatedNhiTax: estimatedNhi > 0 ? estimatedNhi : undefined,
+      estimatedWireFee: wireFee > 0 ? wireFee : undefined,
       estimatedNetDividend: netDividend,
-      estimatedNetDividendInTWD: netDividend,
+      estimatedNetDividendInTWD: netDividendInTWD,
       status: 'UPCOMING_EX',
     });
   }

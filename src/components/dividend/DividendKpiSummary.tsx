@@ -3,8 +3,10 @@ import { Coins, TrendingUp, Clock, Sparkles, AlertTriangle, Layers } from 'lucid
 import { Tooltip } from '../common/Tooltip';
 import { DividendDisplayMode } from './DividendMonthlyChart';
 import { calculateNetCarrySpread } from '../../engine/dividendCarrySpreadEngine';
+import { MarketType } from '../../types/stock';
 
 export interface DividendKpiSummaryProps {
+  market?: MarketType | 'ALL';
   selectedYear: number;
   dividendDisplayMode: DividendDisplayMode; // 'GROSS' | 'NET'
   onToggleDisplayMode: (mode: DividendDisplayMode) => void;
@@ -23,6 +25,7 @@ export interface DividendKpiSummaryProps {
 }
 
 export const DividendKpiSummary: React.FC<DividendKpiSummaryProps> = ({
+  market = 'ALL',
   selectedYear,
   dividendDisplayMode,
   onToggleDisplayMode,
@@ -131,7 +134,7 @@ export const DividendKpiSummary: React.FC<DividendKpiSummaryProps> = ({
               <div style={{ padding: '4px', fontSize: '0.74rem', maxWidth: '280px', lineHeight: 1.45 }}>
                 💡 <b>券商對帳口徑 (Gross) vs 存摺實領 (Net)</b>：<br />
                 • <b>券商對帳 (應發毛額)</b>：吻合券商 APP 總額（未扣除健保補充保費與匯費）。<br />
-                • <b>存摺實領 (實領淨額)</b>：銀行實際入帳金額（已扣除 2.11% 二代健保與匯費）。
+                • <b>存摺實領 (實領淨額)</b>：銀行實際入帳金額（{market === 'US' ? '已扣除 30% IRS 預扣稅' : market === 'TW' ? '已扣除 2.11% 二代健保與匯費' : '已扣除二代健保、匯費與 30% IRS 預扣稅'}）。
               </div>
             }
           >
@@ -256,7 +259,13 @@ export const DividendKpiSummary: React.FC<DividendKpiSummaryProps> = ({
           NT$ {totalHistoricalNetTWD.toLocaleString()}
         </div>
         <div style={{ marginTop: '6px', fontSize: '0.74rem', color: '#94a3b8' }}>
-          已扣除二代健保與 30% IRS 預扣稅
+          {totalHistoricalNetTWD <= 0
+            ? '尚無已入帳股利稅費紀錄'
+            : market === 'US'
+            ? '已扣除 30% IRS 預扣稅'
+            : market === 'TW'
+            ? '已扣除二代健保與跨行匯費'
+            : '已扣除二代健保、匯費與 30% IRS 預扣稅'}
         </div>
 
         {/* 跨行匯費與二代健保警報提示 */}

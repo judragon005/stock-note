@@ -18,10 +18,16 @@ export const DividendTopContributorsCard: React.FC<DividendTopContributorsCardPr
   selectedYear,
   holdings,
 }) => {
-  // 建立標的持倉快速比對 Map
+  // 建立標的持倉快速比對 Map (不讓已結清帳戶覆蓋活躍持倉)
   const holdingsMap = useMemo(() => {
     const map = new Map<string, HoldingPosition>();
-    holdings.forEach((h) => map.set(h.symbol.toUpperCase(), h));
+    holdings.forEach((h) => {
+      const sym = h.symbol.toUpperCase();
+      const existing = map.get(sym);
+      if (!existing || (existing.shares <= 0 && h.shares > 0)) {
+        map.set(sym, h);
+      }
+    });
     return map;
   }, [holdings]);
 

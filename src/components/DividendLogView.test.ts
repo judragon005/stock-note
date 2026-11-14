@@ -520,6 +520,105 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
       }
     });
   });
+
+  describe('7. Ticket #546: 跨帳戶隔離防穿透', () => {
+    it('指定單一券商帳戶 (acc-a) 時，缺少 accountId 的未歸屬股利紀錄不得穿透顯示', () => {
+      const orphanTrade: TradeRecord = {
+        id: 't-orphan',
+        symbol: '0050',
+        name: '元大台灣50',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'DIVIDEND',
+        date: '2026-02-10',
+        payDate: '2026-02-10',
+        shares: 1000,
+        price: 2.0,
+        fee: 10,
+        tax: 0,
+        cashAmount: 1990,
+        createdAt: 1,
+      };
+
+      const html = renderToStaticMarkup(
+        React.createElement(DividendLogView, {
+          trades: [orphanTrade],
+          holdings: [],
+          receivableDividends: [],
+          usdToTwdRate: 32,
+          selectedAccountId: 'acc-a',
+        })
+      );
+
+      expect(html).not.toContain('0050');
+    });
+  });
+
+  describe('8. Ticket #547: 假值與硬編碼市場文案清零', () => {
+    it('美股視角 (market="US") 不得出現台股 ETF (00687B/00635U) 與無關的二代健保文案', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(DividendLogView, {
+          holdings: [
+            {
+              symbol: 'AAPL',
+              name: 'Apple',
+              market: 'US',
+              accountId: 'acc-us',
+              shares: 100,
+              avgCost: 150,
+              currentPrice: 200,
+              marketValue: 20000,
+              unrealizedPnL: 5000,
+              unrealizedPnLPercent: 33.3,
+              totalCostBasis: 15000,
+              currency: 'USD',
+              totalDividends: 100,
+              yieldOnCostPercent: 0.67,
+            },
+          ] as any,
+          trades: [
+            {
+              id: 'div-aapl',
+              symbol: 'AAPL',
+              name: 'Apple',
+              market: 'US',
+              accountId: 'acc-us',
+              type: 'DIVIDEND',
+              date: '2026-02-15',
+              shares: 100,
+              price: 0.25,
+              currency: 'USD',
+              fee: 0,
+              tax: 7.5,
+              exchangeRate: 32,
+              createdAt: 1,
+            },
+          ],
+          receivableDividends: [],
+          market: 'US',
+          usdToTwdRate: 32,
+        })
+      );
+      expect(html).not.toContain('00687B');
+      expect(html).not.toContain('00635U');
+      expect(html).not.toContain('二代健保');
+    });
+
+    it('空資料狀態下不得顯示硬編碼台股 ETF 活水推薦與扣稅文案', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(DividendLogView, {
+          holdings: [],
+          trades: [],
+          receivableDividends: [],
+          market: 'ALL',
+          usdToTwdRate: 32,
+        })
+      );
+      expect(html).not.toContain('00687B');
+      expect(html).not.toContain('00635U');
+      expect(html).not.toContain('已扣除二代健保與 30% IRS 預扣稅');
+    });
+  });
 });
 
 

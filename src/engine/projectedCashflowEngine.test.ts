@@ -312,4 +312,71 @@ describe('Spec 0183 Ticket 02: projectedCashflowEngine (未來 12 個月現金�
     expect(jan?.breakdown.find((b) => b.symbol === '2454')).toBeDefined();
     expect(jul?.breakdown.find((b) => b.symbol === '2454')).toBeDefined();
   });
+
+  it('11. [Spec 0231 / Ticket #549] 美股預期配息應乘上 usdToTwdRate 並扣除 30% IRS 預扣稅', () => {
+    const input: ProjectedCashflowInput = {
+      baseYearMonth: '2026-10',
+      usdToTwdRate: 32.0,
+      holdings: [
+        {
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
+          shares: 100,
+          avgCost: 150,
+          currentPrice: 200,
+          marketValue: 20000,
+          market: 'US',
+          currency: 'USD',
+        } as unknown as HoldingPosition,
+      ],
+      customPayoutRates: {
+        AAPL: { frequency: 'QUARTERLY', estimatedPerShare: 0.25, payoutMonths: [11] },
+      },
+    };
+
+    const projection = generate12MonthProjectedCashflow(input);
+    const nov2026 = projection.months.find((m) => m.yearMonth === '2026-11');
+    const bAapl = nov2026?.breakdown.find((b) => b.symbol === 'AAPL');
+
+    // 100 股 * 0.25 USD = 25 USD; 扣 30% 稅 = 17.5 USD; * 32 TWD = 560 TWD
+    expect(bAapl?.estimatedAmountTwd).toBe(560);
+    expect(nov2026?.estimatedTotalTwd).toBe(560);
+  });
+
+  it('12. [Spec 0231 / Ticket #549] 不配息成長股 (NVDA/TSLA) 無歷史配息時，預期配息應誠實回傳 0', () => {
+    const input: ProjectedCashflowInput = {
+      baseYearMonth: '2026-01',
+      usdToTwdRate: 32.0,
+      holdings: [
+        {
+          symbol: 'NVDA',
+          name: 'NVIDIA',
+          shares: 50,
+          avgCost: 100,
+          currentPrice: 140,
+          marketValue: 7000,
+          market: 'US',
+          currency: 'USD',
+        } as unknown as HoldingPosition,
+        {
+          symbol: 'TSLA',
+          name: 'Tesla',
+          shares: 20,
+          avgCost: 200,
+          currentPrice: 250,
+          marketValue: 5000,
+          market: 'US',
+          currency: 'USD',
+        } as unknown as HoldingPosition,
+      ],
+      historicalPayoutMonths: {},
+    };
+
+    const projection = generate12MonthProjectedCashflow(input);
+    expect(projection.annualTotalTwd).toBe(0);
+    for (const m of projection.months) {
+      expect(m.estimatedTotalTwd).toBe(0);
+      expect(m.breakdown).toHaveLength(0);
+    }
+  });
 });

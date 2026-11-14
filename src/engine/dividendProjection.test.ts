@@ -61,4 +61,38 @@ describe('Ticket 12: Receivable Dividend Future Projection Engine', () => {
     const ref2 = computeExDividendReferencePrice(100, 2, 0.1);
     expect(ref2).toBeCloseTo(89.09, 2);
   });
+
+  it('3. [Spec 0231 / Ticket #549] projectFutureDividends 應為美股扣除 30% IRS 預扣稅並乘上 usdToTwdRate 折合台幣', () => {
+    const usHoldings: HoldingPosition[] = [
+      {
+        symbol: 'AAPL',
+        name: 'Apple',
+        shares: 100,
+        costPrice: 150,
+        currentPrice: 200,
+        market: 'US',
+        currency: 'USD',
+        totalCost: 15000,
+        totalDividends: 0,
+      } as any,
+    ];
+    const usCalendar: CorporateActionCalendarRecord[] = [
+      {
+        symbol: 'AAPL',
+        market: 'US',
+        actionType: 'DIVIDEND',
+        exDate: '2026-11-10',
+        paymentDate: '2026-11-20',
+        cashDividendPerShare: 0.25,
+        updatedAt: Date.now(),
+      },
+    ];
+
+    const projected = projectFutureDividends(usHoldings, usCalendar, 32.0);
+    expect(projected).toHaveLength(1);
+    expect(projected[0].estimatedGrossDividend).toBe(25);
+    expect(projected[0].estimatedTaxOrFee).toBe(7.5);
+    expect(projected[0].estimatedNetDividend).toBe(17.5);
+    expect(projected[0].estimatedNetDividendInTWD).toBe(560);
+  });
 });
