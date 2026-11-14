@@ -255,4 +255,35 @@ describe('Spec 0183 Ticket 02: projectedCashflowEngine (未來 12 個月現金�
   it('8. [Spec 0227 / Code Review Fix] FALLBACK_SUMMER_MONTHS 應嚴格對齊台股除權息週期 7~9 月', () => {
     expect(FALLBACK_SUMMER_MONTHS).toEqual([7, 8, 9]);
   });
+
+  it('9. [Spec 0227 / Code Review Final Patch] 持倉代碼大小寫不敏感查表防禦 (美股小寫 aapl 也能命中 AAPL 歷史月份)', () => {
+    const holdingsLowercase: HoldingPosition[] = [
+      {
+        symbol: 'aapl', // 小寫美股代碼
+        name: 'Apple Inc.',
+        shares: 100,
+        avgCost: 200,
+        currentPrice: 220,
+        marketValue: 22000,
+        unrealizedPnL: 2000,
+        unrealizedPnLPercent: 10,
+        market: 'US',
+      } as unknown as HoldingPosition,
+    ];
+
+    const input: ProjectedCashflowInput = {
+      baseYearMonth: '2026-10',
+      holdings: holdingsLowercase,
+      historicalPayoutMonths: {
+        'AAPL': [2, 5, 8, 11], // 大寫 Key
+      },
+    };
+
+    const projection = generate12MonthProjectedCashflow(input);
+    const nov2026 = projection.months.find((m) => m.yearMonth === '2026-11');
+    const bAapl = nov2026?.breakdown.find((b) => b.symbol.toUpperCase() === 'AAPL');
+
+    expect(bAapl).toBeDefined();
+    expect(bAapl?.estimatedAmountTwd).toBeGreaterThan(0);
+  });
 });
