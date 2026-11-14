@@ -285,5 +285,58 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
       expect(calculateMonthTooltipAlign(11)).toBe('right');
     });
   });
+
+  describe('5. Spec 0228 / Ticket 03 & 04: 卡片 3 閉環與待對帳款項一鍵入帳', () => {
+    it('Ticket 03: activeReceivables 應嚴格過濾淨額大於 0 之項目，確保 Count > 0 當且僅當 Amount > 0', () => {
+      const mockItems: ReceivableDividend[] = [
+        {
+          id: 'rec-1',
+          symbol: '0056',
+          name: '元大高股息',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-10-22',
+          payDate: '2026-11-11',
+          sharesHeldOnExDate: 7000,
+          cashDividendPerShare: 1.07,
+          estimatedGrossDividend: 7490,
+          estimatedTaxOrFee: 10,
+          estimatedNetDividend: 7480,
+          estimatedNetDividendInTWD: 7480,
+          status: 'DUE_FOR_RECONCILIATION',
+        },
+        {
+          id: 'rec-invalid-ghost',
+          symbol: '0050',
+          name: '元大台灣50',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-10-20',
+          payDate: '2026-11-15',
+          sharesHeldOnExDate: 0,
+          cashDividendPerShare: 1.0,
+          estimatedGrossDividend: 0,
+          estimatedTaxOrFee: 0,
+          estimatedNetDividend: 0,
+          estimatedNetDividendInTWD: 0, // 無效 0 元記錄
+          status: 'PENDING_PAYMENT',
+        },
+      ];
+
+      const active = mockItems.filter(
+        (r) =>
+          (r.status === 'PENDING_PAYMENT' || r.status === 'OVERDUE' || r.status === 'DUE_FOR_RECONCILIATION') &&
+          r.estimatedNetDividendInTWD > 0
+      );
+
+      const totalTwd = active.reduce((sum, r) => sum + r.estimatedNetDividendInTWD, 0);
+      const count = active.length;
+
+      expect(count).toBe(1);
+      expect(totalTwd).toBe(7480);
+      expect(active[0].symbol).toBe('0056');
+    });
+  });
 });
+
 

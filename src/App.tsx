@@ -716,6 +716,35 @@ export const App: React.FC = () => {
     setCashTransactions((prev) => syncTradesWithCashTransactions(reconciledTrades, prev));
   };
 
+  // 一鍵確認應收股利入帳 (Spec 0228 / Ticket 04: 自癒閉環)
+  const handleInstantSettleDividend = (dividendId: string, actualPayDate: string) => {
+    const targetRec = receivableDividends.find((r) => r.id === dividendId);
+    if (!targetRec) return;
+
+    const shares = targetRec.sharesHeldOnExDate || targetRec.sharesHeld || 0;
+    const newTrade: TradeRecord = {
+      id: `trade-div-${Date.now()}-${targetRec.symbol}`,
+      symbol: targetRec.symbol,
+      name: targetRec.name,
+      market: targetRec.market,
+      currency: targetRec.currency,
+      type: 'DIVIDEND',
+      date: actualPayDate || targetRec.payDate,
+      exDate: targetRec.exDate,
+      shares,
+      price: targetRec.cashDividendPerShare,
+      fee: targetRec.estimatedWireFee || 0,
+      tax: targetRec.estimatedNhiTax || (targetRec.currency === 'USD' ? targetRec.estimatedTaxOrFee : 0),
+      cashAmount: targetRec.estimatedNetDividend,
+      createdAt: Date.now(),
+    };
+
+    const updatedTrades = [newTrade, ...trades];
+    const { updatedTrades: reconciledTrades } = reconcilePendingDividendTrades(updatedTrades);
+    setTrades(reconciledTrades);
+    setCashTransactions((prev) => syncTradesWithCashTransactions(reconciledTrades, prev));
+  };
+
   // 手動更新市價（自動套用鎖定保護）
   const handleUpdatePrice = (symbol: string, price: number) => {
     setCurrentPrices((prev) => ({
@@ -1201,6 +1230,7 @@ export const App: React.FC = () => {
           selectedAccountId={selectedAccountId}
           onSyncCorporateActions={() => handleSyncCorporateActions(true)}
           isSyncingCorporateActions={isCaSyncing}
+          onInstantSettleDividend={handleInstantSettleDividend}
         />
       )}
 

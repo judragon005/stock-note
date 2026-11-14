@@ -62,6 +62,15 @@ export const OFFICIAL_DIVIDEND_CALENDAR: RawCorporateEvent[] = [
     description: '年度現金股利每股 5.0 TWD (預計 2026-10-29 發放入帳)',
     sourceType: 'LIVE_API',
   },
+  {
+    symbol: '0056',
+    market: 'TW',
+    type: 'DIVIDEND',
+    date: '2026-10-22',
+    price: 1.07,
+    description: '季度收益分配每股 1.07 TWD (預計 2026-11-11 發放入帳)',
+    sourceType: 'LIVE_API',
+  },
 ];
 
 /**
@@ -276,12 +285,6 @@ export function calculateReceivableDividends(
       continue;
     }
 
-    // 線性時序判定：若發放日已過，代表已實質落袋
-    if (currentDateStr >= payDate) {
-      processedKeys.add(key);
-      continue;
-    }
-
     processedKeys.add(key);
 
     // 依證券法規：以除息日前一日收盤在籍股數為準 (完整計入配股、增減資等公司行動)
@@ -290,8 +293,13 @@ export function calculateReceivableDividends(
     const prevDay = exDateObj.toISOString().split('T')[0];
 
     let sharesHeld = getHoldingsAsOfDate(trades, prevDay, symbol);
-    // 防禦性在籍判定：僅在尚未除息 (currentDateStr < exDate) 時方得以當前庫存預估即將除息股數；若已除息則嚴格以除息日前一日在籍持股為準
-    if (sharesHeld <= 0 && currentDateStr < exDate && holding.shares > 0) {
+    // 防禦性在籍判定：
+    // 1. 若除息前一日持股 > 0，採納歷史在籍持股；
+    // 2. 若尚未除息 (currentDateStr < exDate)，得以當前庫存預估即將除息股數；
+    // 3. 若帳本中完全無該標的歷史買賣紀錄 (如純外部持倉匯入)，且在庫持股 > 0，安全回退採納在庫持股；
+    // 4. 若帳本有該標的歷史紀錄且為除息日後買進，維持 sharesHeld = 0，排除除息權利 (Ticket #005)。
+    const hasAnyTradesForSymbol = trades.some((t) => t.symbol.toUpperCase() === symbol);
+    if (sharesHeld <= 0 && (!hasAnyTradesForSymbol || currentDateStr < exDate) && holding.shares > 0) {
       sharesHeld = holding.shares;
     }
     if (sharesHeld <= 0) continue;
@@ -333,7 +341,18 @@ export function calculateReceivableDividends(
     const netDividend = Math.max(0, Number((grossDividend - taxOrFee).toFixed(marketPrecision(market))));
     const netDividendInTWD = market === 'TW' ? Math.round(netDividend) : Math.round(netDividend * exchangeRate);
 
-    const status: ReceivableDividend['status'] = currentDateStr < exDate ? 'UPCOMING_EX' : 'PENDING_PAYMENT';
+    // 股利生命週期狀態判定 (Spec 0228 / Ticket 02)：
+    // 1. 若今日尚未除息 -> UPCOMING_EX
+    // 2. 若今日已除息且未屆發放日 -> PENDING_PAYMENT
+    // 3. 若今日已達或超過官方發放日且尚未完成入帳對帳 -> DUE_FOR_RECONCILIATION
+    let status: ReceivableDividend['status'];
+    if (currentDateStr < exDate) {
+      status = 'UPCOMING_EX';
+    } else if (currentDateStr < payDate) {
+      status = 'PENDING_PAYMENT';
+    } else {
+      status = 'DUE_FOR_RECONCILIATION';
+    }
     const isOfficial = isPaymentDateOfficial(exDate, symbol);
 
     receivables.push({
@@ -345,6 +364,7 @@ export function calculateReceivableDividends(
       exDate,
       payDate,
       sharesHeldOnExDate: sharesHeld,
+      sharesHeld,
       cashDividendPerShare: cashPerShare,
       estimatedGrossDividend: grossDividend,
       estimatedTaxOrFee: taxOrFee,
@@ -410,6 +430,7 @@ export function calculateReceivableDividends(
       exDate,
       payDate,
       sharesHeldOnExDate: sharesHeld,
+      sharesHeld,
       cashDividendPerShare: cashPerShare,
       estimatedGrossDividend: grossDividend,
       estimatedTaxOrFee: taxOrFee,

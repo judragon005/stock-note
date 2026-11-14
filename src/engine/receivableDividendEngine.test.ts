@@ -564,7 +564,96 @@ describe('Receivable Dividend & Ex-Dividend Smoothing Engine (應收股利平滑
       expect(payDate).toBe('2025-09-18');
     });
   });
+
+  describe('Spec 0228 / Ticket 01 & 02: 股利時序黑洞根除與 DUE_FOR_RECONCILIATION 狀態機', () => {
+    const mockHolding0056: HoldingPosition = {
+      symbol: '0056',
+      name: '元大高股息',
+      market: 'TW',
+      currency: 'TWD',
+      shares: 7000,
+      avgCost: 36.5,
+      totalCostBasis: 255500,
+      adjustedCostBasis: 255500,
+      currentPrice: 38.0,
+      marketValue: 266000,
+      grossMarketValue: 266000,
+      estimatedSellTax: 266,
+      estimatedSellFee: 379,
+      netMarketValue: 265355,
+      unrealizedPnL: 10500,
+      unrealizedPnLPercent: 4.11,
+      unrealizedPnLBroker: 9855,
+      unrealizedPnLBrokerPercent: 3.86,
+      realizedPnL: 0,
+      totalDividends: 0,
+      totalCapitalReturned: 0,
+      totalStockDividendsShares: 0,
+      totalReturnPnL: 10500,
+      totalReturnPercent: 4.11,
+      yieldOnCostPercent: 0,
+    };
+
+    it('Ticket 01: OFFICIAL_DIVIDEND_CALENDAR 必須收錄 0056 官方 2026-10-22 除息事件', () => {
+      const receivables = calculateReceivableDividends(
+        [mockHolding0056],
+        [],
+        [],
+        '2026-10-20' // 除息前
+      );
+      const rec0056 = receivables.find((r) => r.symbol === '0056');
+      expect(rec0056).toBeDefined();
+      expect(rec0056?.exDate).toBe('2026-10-22');
+      expect(rec0056?.payDate).toBe('2026-11-11');
+      expect(rec0056?.cashDividendPerShare).toBe(1.07);
+      expect(rec0056?.status).toBe('UPCOMING_EX');
+    });
+
+    it('Ticket 02: 發放日已過 (2026-11-14 >= 2026-11-11) 且帳本尚未記錄時，絕不丟棄，必須標記為 DUE_FOR_RECONCILIATION', () => {
+      const receivables = calculateReceivableDividends(
+        [mockHolding0056],
+        [],
+        [], // 無任何已確認交易
+        '2026-11-14' // 當前時間晚於發放日 2026-11-11
+      );
+      const rec0056 = receivables.find((r) => r.symbol === '0056');
+      expect(rec0056).toBeDefined();
+      expect(rec0056?.status).toBe('DUE_FOR_RECONCILIATION');
+      expect(rec0056?.sharesHeld).toBe(7000);
+      expect(rec0056?.estimatedGrossDividend).toBe(7490);
+      expect(rec0056?.estimatedNetDividendInTWD).toBe(7480); // 7490 - 10元匯費
+    });
+
+    it('Ticket 02: 若 trades 帳本已手動登記該次除息交易，則維持去重不重複生成', () => {
+      const settledTrade: TradeRecord = {
+        id: 'trade-0056-settled',
+        symbol: '0056',
+        name: '元大高股息',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'DIVIDEND',
+        date: '2026-11-11',
+        exDate: '2026-10-22',
+        shares: 7000,
+        price: 1.07,
+        tax: 0,
+        fee: 10,
+        cashAmount: 7480,
+        createdAt: 1,
+      };
+
+      const receivables = calculateReceivableDividends(
+        [mockHolding0056],
+        [],
+        [settledTrade],
+        '2026-11-14'
+      );
+      const rec0056 = receivables.find((r) => r.symbol === '0056');
+      expect(rec0056).toBeUndefined();
+    });
+  });
 });
+
 
 
 

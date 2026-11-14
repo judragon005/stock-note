@@ -65,6 +65,10 @@ _Avoid_: Current Yield, Dividend Rate
 除息日 (Ex-Date) 股價開盤即下調除息金額，但現金需歷經 2~4 週發放日 (Pay-Date) 才入帳。系統在除息空窗期自動計算 `ReceivableDividend`，並於持倉未實現損益提供平滑補償視圖，徹底杜絕帳面假性跳水。
 _Avoid_: Unpaid Dividend, Accrued Profit
 
+**Due for Reconciliation Dividend (官方已發放·待核對入帳股利)** _(新增於 V9.20.1 / Spec 0228)_:
+官方發放日 (Pay-Date) 已屆或已過，但尚未在交易帳本中完成核銷之除息款項（狀態為 `DUE_FOR_RECONCILIATION`）。系統杜絕時序黑洞丟棄，以醒目專區列示在席股數與實領金額，並提供一鍵確認入帳寫入標準交易紀錄。
+_Avoid_: Expired Dividend, Dropped Accrual
+
 **FX Gain/Loss Breakdown (美股外匯匯差與本體價差拆解)** _(新增於 V6.1.0)_:
 將美股以台幣計價之總損益嚴格解耦為「股票本體價差 (Asset Gain)」與「美元匯率波動 (FX Gain/Loss)」，精確反映選股 Alpha 與外匯貢獻。
 _Avoid_: Currency Mix, Mixed Gain

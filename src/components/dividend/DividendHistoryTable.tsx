@@ -1,6 +1,7 @@
 import React from 'react';
-import { Award, Coins, Search, CheckCircle2 } from 'lucide-react';
+import { Award, Coins, Search, CheckCircle2, Clock } from 'lucide-react';
 import { TradeRecord, MarketType, HoldingPosition } from '../../types/stock';
+import { ReceivableDividend } from '../../types/dividend';
 import { resolveEffectiveDividendTaxAndNet } from '../../engine/taxComplianceEngine';
 import { getEffectiveDividendPayDate } from '../../engine/dividendAggregator';
 import {
@@ -42,6 +43,8 @@ export interface DividendHistoryTableProps {
   showReconciliationPanel: boolean;
   onToggleReconciliationPanel: () => void;
   onInstantSettle?: (tradeId: string) => void;
+  dueReceivables?: ReceivableDividend[];
+  onSettleReceivable?: (rec: ReceivableDividend) => void;
 }
 
 export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
@@ -59,6 +62,8 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
   showReconciliationPanel,
   onToggleReconciliationPanel,
   onInstantSettle,
+  dueReceivables = [],
+  onSettleReceivable,
 }) => {
   // 建立標的持倉快速比對 Map
   const holdingsMap = React.useMemo(() => {
@@ -230,6 +235,109 @@ export const DividendHistoryTable: React.FC<DividendHistoryTableProps> = ({
             查閱除息待入帳行事曆 ➔
           </a>
         </div>
+
+        {/* 官方已發放·待核對入帳專區 (Spec 0228 / Ticket 04: 消滅時序黑洞) */}
+        {dueReceivables.length > 0 && (
+          <div
+            data-testid="due-reconciliation-banner"
+            style={{
+              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(15, 23, 42, 0.95) 100%)',
+              border: '1px solid rgba(245, 158, 11, 0.45)',
+              borderRadius: '12px',
+              padding: '14px 16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+              boxShadow: '0 4px 16px rgba(245, 158, 11, 0.15)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Clock size={16} color="#fbbf24" />
+                <span style={{ fontSize: '0.86rem', fontWeight: 800, color: '#fef3c7' }}>
+                  ⚡ 官方已發放·待核對入帳款項 (共 {dueReceivables.length} 筆已到期)
+                </span>
+                <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                  （官方發放日已過，網銀確認入帳後請點擊「確認入帳」直接轉為正式交易）
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px' }}>
+              {dueReceivables.map((rec) => {
+                const isUS = rec.market === 'US' || rec.currency === 'USD';
+                const shares = rec.sharesHeldOnExDate || rec.sharesHeld || 0;
+                const formattedShares = isUS ? shares.toLocaleString() : Math.round(shares).toLocaleString();
+                const netTWD = rec.estimatedNetDividendInTWD;
+
+                return (
+                  <div
+                    key={rec.id}
+                    data-testid={`due-item-${rec.symbol}`}
+                    style={{
+                      background: 'rgba(30, 41, 59, 0.8)',
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      borderRadius: '10px',
+                      padding: '10px 12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <b style={{ color: '#ffffff', fontSize: '0.88rem' }}>{rec.symbol}</b>
+                        <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>{rec.name}</span>
+                        <span style={{ fontSize: '0.65rem', background: 'rgba(245, 158, 11, 0.25)', color: '#fbbf24', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
+                          發放日: {rec.payDate} (已屆期)
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', fontSize: '0.72rem', color: '#cbd5e1' }}>
+                      <div>除息日: <b className="mono" style={{ color: '#ffffff' }}>{rec.exDate}</b></div>
+                      <div>在庫股數: <b className="mono" style={{ color: '#38bdf8' }}>{formattedShares} 股</b></div>
+                      <div>每股配息: <b className="mono" style={{ color: '#34d399' }}>{rec.cashDividendPerShare} {rec.currency}</b></div>
+                      <div>實領金額: <b className="mono" style={{ color: '#34d399', fontWeight: 800 }}>NT$ {netTWD.toLocaleString()}</b></div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '4px' }}>
+                      <button
+                        type="button"
+                        data-testid={`btn-settle-${rec.symbol}`}
+                        onClick={() => {
+                          if (onSettleReceivable) {
+                            onSettleReceivable(rec);
+                          } else if (onInstantSettle) {
+                            onInstantSettle(rec.id);
+                          }
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          padding: '5px 12px',
+                          borderRadius: '6px',
+                          border: '1px solid rgba(16, 185, 129, 0.6)',
+                          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.3) 0%, rgba(5, 150, 105, 0.4) 100%)',
+                          color: '#34d399',
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                        }}
+                        title="將此筆官方已到期股利寫入正式交易紀錄"
+                      >
+                        <CheckCircle2 size={13} />
+                        確認網銀已入帳
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* 券商對帳核對面板 */}
         {showReconciliationPanel && (

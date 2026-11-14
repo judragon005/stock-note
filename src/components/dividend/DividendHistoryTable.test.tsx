@@ -117,4 +117,35 @@ describe('DividendHistoryTable (歷史明細表、YOC 成本殖利率與填息�
     expect(html).toContain('href="#receivable-calendar"');
     expect(html).toContain('查閱除息待入帳行事曆 ➔');
   });
+
+  it('Spec 0228 / Ticket 04: 當傳入 dueReceivables 時應渲染官方已發放·待核對入帳專區', () => {
+    const mockDue0056 = [
+      {
+        id: 'rec-due-0056',
+        symbol: '0056',
+        name: '元大高股息',
+        market: 'TW' as const,
+        currency: 'TWD' as const,
+        exDate: '2026-10-22',
+        payDate: '2026-11-11',
+        sharesHeldOnExDate: 7000,
+        cashDividendPerShare: 1.07,
+        estimatedGrossDividend: 7490,
+        estimatedTaxOrFee: 10,
+        estimatedNetDividend: 7480,
+        estimatedNetDividendInTWD: 7480,
+        status: 'DUE_FOR_RECONCILIATION' as const,
+      },
+    ];
+
+    const html = renderToStaticMarkup(
+      <DividendHistoryTable {...defaultProps} dueReceivables={mockDue0056} />
+    );
+
+    expect(html).toContain('官方已發放·待核對入帳款項');
+    expect(html).toContain('0056');
+    expect(html).toContain('7,000 股');
+    expect(html).toContain('NT$ 7,480');
+    expect(html).toContain('確認網銀已入帳');
+  });
 });
