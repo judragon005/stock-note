@@ -746,10 +746,16 @@ export function differenceInCalendarDays(dateStrA: string, dateStrB: string): nu
 /**
  * 評定標的填息信心分數與評級 (Spec 0232 / Ticket 03)
  */
-export function calculateDividendRecoveryScore(symbol: string): {
+export function calculateDividendRecoveryScore(
+  symbol: string,
+  options?: { isLaggingOrUnfilled?: boolean }
+): {
   rviScore: number;
   recoveryRating: 'HIGH_MOMENTUM' | 'MODERATE' | 'UNFILLED_RISK';
 } {
+  if (options?.isLaggingOrUnfilled) {
+    return { rviScore: 0.35, recoveryRating: 'UNFILLED_RISK' };
+  }
   const sym = symbol.toUpperCase();
   const HIGH_RECOVERY_SYMBOLS = new Set(['2330', '0056', '00878', '00919', '00713', 'AAPL', 'MSFT']);
   if (HIGH_RECOVERY_SYMBOLS.has(sym)) {
@@ -781,8 +787,9 @@ export function generateUpcomingExDividendRadarEvents({
   market = 'ALL',
 }: GenerateRadarEventsParams): UpcomingExDividendRadarItem[] {
   // 1. 建立當前持倉快速索引（僅取 shares > 0 之有效持倉）
-  const validHoldingsBySymbol = new Map<string, HoldingPosition>();
   const validHoldingsByAccountSymbol = new Map<string, HoldingPosition>();
+  const totalSharesBySymbol = new Map<string, number>();
+  const symbolNameMap = new Map<string, string>();
 
   holdings.forEach((h) => {
     if (h.shares <= 0) return;
@@ -790,8 +797,9 @@ export function generateUpcomingExDividendRadarEvents({
     if (h.accountId) {
       validHoldingsByAccountSymbol.set(`${sym}::${h.accountId}`, h);
     }
-    if (!validHoldingsBySymbol.has(sym) || (validHoldingsBySymbol.get(sym)?.shares || 0) < h.shares) {
-      validHoldingsBySymbol.set(sym, h);
+    totalSharesBySymbol.set(sym, (totalSharesBySymbol.get(sym) || 0) + h.shares);
+    if (h.name && !symbolNameMap.has(sym)) {
+      symbolNameMap.set(sym, h.name);
     }
   });
 
@@ -811,13 +819,29 @@ export function generateUpcomingExDividendRadarEvents({
     }
 
     const sym = rec.symbol.toUpperCase();
-    // 匹配有效持倉
-    const holding = rec.accountId
-      ? validHoldingsByAccountSymbol.get(`${sym}::${rec.accountId}`) || validHoldingsBySymbol.get(sym)
-      : validHoldingsBySymbol.get(sym);
 
-    if (!holding || holding.shares <= 0) {
-      continue;
+    // 匹配有效持倉（支援特定帳戶隔離或全域多帳戶合併求和）
+    let sharesHeld = 0;
+    let holdingName = rec.name || sym;
+    let effectiveAccountId = rec.accountId;
+
+    if (rec.accountId) {
+      const accountHolding = validHoldingsByAccountSymbol.get(`${sym}::${rec.accountId}`);
+      if (!accountHolding || accountHolding.shares <= 0) {
+        continue;
+      }
+      sharesHeld = accountHolding.shares;
+      holdingName = accountHolding.name || holdingName;
+      effectiveAccountId = accountHolding.accountId;
+    } else {
+      // 全域公告，無指定 accountId：取該標的在所有有效帳戶中的持股總和
+      const totalShares = totalSharesBySymbol.get(sym) || 0;
+      if (totalShares <= 0) {
+        continue;
+      }
+      sharesHeld = totalShares;
+      holdingName = symbolNameMap.get(sym) || holdingName;
+      effectiveAccountId = undefined;
     }
 
     // 計算倒數天數 (T-X)
@@ -829,7 +853,7 @@ export function generateUpcomingExDividendRadarEvents({
     }
 
     // 唯一鍵防止重複
-    const itemKey = `${sym}_${rec.exDate}_${rec.accountId || ''}`;
+    const itemKey = `${sym}_${rec.exDate}_${effectiveAccountId || ''}`;
     if (processedKeys.has(itemKey)) {
       continue;
     }
@@ -840,7 +864,6 @@ export function generateUpcomingExDividendRadarEvents({
     const daysFromExToPay = Math.max(0, differenceInCalendarDays(payDate, rec.exDate));
 
     // 金額與稅務推導
-    const sharesHeld = holding.shares;
     const cashPerShare = rec.cashDividendPerShare;
     let estimatedGrossTWD = 0;
     let estimatedNetTWD = 0;
@@ -872,10 +895,10 @@ export function generateUpcomingExDividendRadarEvents({
     radarItems.push({
       id: rec.id || `radar-${sym}-${rec.exDate}`,
       symbol: sym,
-      name: holding.name || rec.name || sym,
+      name: holdingName,
       market: rec.market,
       currency: rec.currency,
-      accountId: rec.accountId || holding.accountId,
+      accountId: effectiveAccountId,
       exDate: rec.exDate,
       payDate,
       daysUntilEx,

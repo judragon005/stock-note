@@ -28,6 +28,10 @@ export const ExDividendRadarCard: React.FC<ExDividendRadarCardProps> = ({
   // KPI 統計彙整
   const totalEventsCount = radarEvents.length;
   const totalEstimatedNetTWD = radarEvents.reduce((sum, item) => sum + item.estimatedNetTWD, 0);
+  const totalWithholdingTaxTWD = radarEvents.reduce(
+    (sum, item) => sum + Math.max(0, item.estimatedGrossTWD - item.estimatedNetTWD),
+    0
+  );
   const nhiAlertsCount = radarEvents.filter((item) => item.isNhiTriggered).length;
   const totalNhiFeeTWD = radarEvents.reduce((sum, item) => sum + (item.nhiFeeTWD || 0), 0);
   const isUsMarket = market === 'US';
@@ -197,7 +201,7 @@ export const ExDividendRadarCard: React.FC<ExDividendRadarCardProps> = ({
 
         <div>
           <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-            {isUsMarket ? '美股稅負狀態' : '二代健保預警'}
+            {isUsMarket ? '美股 IRS 30% 預扣稅' : '二代健保預警'}
           </span>
           <div
             style={{
@@ -211,7 +215,7 @@ export const ExDividendRadarCard: React.FC<ExDividendRadarCardProps> = ({
             }}
           >
             {isUsMarket ? (
-              <span>已扣除 30% IRS 預扣稅</span>
+              <span>已預扣 NT$ {totalWithholdingTaxTWD.toLocaleString()}</span>
             ) : nhiAlertsCount > 0 ? (
               <>
                 <AlertTriangle size={14} />

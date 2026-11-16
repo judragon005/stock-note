@@ -141,4 +141,63 @@ describe('ExDividendRadarCard (近日持倉除息行事曆雷達卡片元件)', 
 
     expect(html90).toContain('未來 90 天視野');
   });
+
+  it('Code Review Refinement: 美股市場視圖下應以 estimatedGrossTWD - estimatedNetTWD 作為 SSOT 匯總稅額', () => {
+    const mockUsEvents: UpcomingExDividendRadarItem[] = [
+      {
+        id: 'radar-msft-us',
+        symbol: 'MSFT',
+        name: '微軟',
+        market: 'US',
+        currency: 'USD',
+        exDate: '2026-06-15',
+        payDate: '2026-07-06',
+        daysUntilEx: 10,
+        daysFromExToPay: 21,
+        scheduleType: 'CONFIRMED',
+        sharesHeld: 100,
+        cashPerShare: 1.0,
+        estimatedGrossTWD: 3200,
+        estimatedNetTWD: 2240, // 30% 稅負 = 960 元
+        isNhiTriggered: false,
+        nhiFeeTWD: 0,
+        rviScore: 0.88,
+        recoveryRating: 'HIGH_MOMENTUM',
+      },
+      {
+        id: 'radar-custom-tax-us',
+        symbol: 'TEST_ADR',
+        name: '特例標的',
+        market: 'US',
+        currency: 'USD',
+        exDate: '2026-06-20',
+        payDate: '2026-07-10',
+        daysUntilEx: 15,
+        daysFromExToPay: 20,
+        scheduleType: 'PROJECTED',
+        sharesHeld: 50,
+        cashPerShare: 2.0,
+        estimatedGrossTWD: 3200,
+        estimatedNetTWD: 2880, // 特殊稅率 10% = 320 元
+        isNhiTriggered: false,
+        nhiFeeTWD: 0,
+        rviScore: 0.65,
+        recoveryRating: 'MODERATE',
+      },
+    ];
+
+    const html = renderToStaticMarkup(
+      React.createElement(ExDividendRadarCard, {
+        radarEvents: mockUsEvents,
+        horizonDays: 60,
+        market: 'US',
+      })
+    );
+
+    // 總預扣稅應為 960 + 320 = 1280 元 (毛額 6400 - 淨額 5120 = 1280)
+    // 若使用脆弱的 * 0.3 / 0.7 逆推將得到 5120 * 0.3 / 0.7 = 2194 (嚴重錯誤)
+    expect(html).toContain('美股 IRS 30% 預扣稅');
+    expect(html).toContain('1,280');
+    expect(html).not.toContain('2,194');
+  });
 });
