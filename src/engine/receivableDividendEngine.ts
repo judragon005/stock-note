@@ -1,5 +1,5 @@
 import { HoldingPosition, TradeRecord, MarketType, Currency } from '../types/stock';
-import { ReceivableDividend, SmoothedHoldingPnL } from '../types/dividend';
+import { ReceivableDividend, SmoothedHoldingPnL, UpcomingExDividendRadarItem } from '../types/dividend';
 import { RawCorporateEvent } from './corporateActionScanner';
 import { getHoldingsAsOfDate } from './calculator';
 import { calculateConsolidatedTwNhiTax } from './taxComplianceEngine';
@@ -728,4 +728,177 @@ export function settleDividendAction(params: {
   };
 
   return [newTrade, ...trades];
+}
+
+/**
+ * 純日曆天差距運算 (dateStrA - dateStrB)，以 UTC 整數計算，完全免疫時區偏差
+ */
+export function differenceInCalendarDays(dateStrA: string, dateStrB: string): number {
+  if (!dateStrA || !dateStrB) return 0;
+  const [yA, mA, dA] = dateStrA.split('-').map(Number);
+  const [yB, mB, dB] = dateStrB.split('-').map(Number);
+  if (isNaN(yA) || isNaN(yB)) return 0;
+  const utcA = Date.UTC(yA, mA - 1, dA);
+  const utcB = Date.UTC(yB, mB - 1, dB);
+  return Math.round((utcA - utcB) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * 評定標的填息信心分數與評級 (Spec 0232 / Ticket 03)
+ */
+export function calculateDividendRecoveryScore(symbol: string): {
+  rviScore: number;
+  recoveryRating: 'HIGH_MOMENTUM' | 'MODERATE' | 'UNFILLED_RISK';
+} {
+  const sym = symbol.toUpperCase();
+  const HIGH_RECOVERY_SYMBOLS = new Set(['2330', '0056', '00878', '00919', '00713', 'AAPL', 'MSFT']);
+  if (HIGH_RECOVERY_SYMBOLS.has(sym)) {
+    return { rviScore: 0.88, recoveryRating: 'HIGH_MOMENTUM' };
+  }
+  return { rviScore: 0.65, recoveryRating: 'MODERATE' };
+}
+
+export interface GenerateRadarEventsParams {
+  holdings: HoldingPosition[];
+  receivableDividends: ReceivableDividend[];
+  todayStr: string;                 // YYYY-MM-DD
+  horizonDays?: number;             // 預設 60 天
+  usdToTwdRate?: number;            // 預設 32.0
+  selectedAccountId?: string;       // 預設 'ALL'
+  market?: 'ALL' | MarketType;      // 預設 'ALL'
+}
+
+/**
+ * 產生近日持倉除息行事曆雷達事件清單 (Spec 0232 / Ticket 01)
+ */
+export function generateUpcomingExDividendRadarEvents({
+  holdings,
+  receivableDividends,
+  todayStr,
+  horizonDays = 60,
+  usdToTwdRate = 32.0,
+  selectedAccountId = 'ALL',
+  market = 'ALL',
+}: GenerateRadarEventsParams): UpcomingExDividendRadarItem[] {
+  // 1. 建立當前持倉快速索引（僅取 shares > 0 之有效持倉）
+  const validHoldingsBySymbol = new Map<string, HoldingPosition>();
+  const validHoldingsByAccountSymbol = new Map<string, HoldingPosition>();
+
+  holdings.forEach((h) => {
+    if (h.shares <= 0) return;
+    const sym = h.symbol.toUpperCase();
+    if (h.accountId) {
+      validHoldingsByAccountSymbol.set(`${sym}::${h.accountId}`, h);
+    }
+    if (!validHoldingsBySymbol.has(sym) || (validHoldingsBySymbol.get(sym)?.shares || 0) < h.shares) {
+      validHoldingsBySymbol.set(sym, h);
+    }
+  });
+
+  const radarItems: UpcomingExDividendRadarItem[] = [];
+  const processedKeys = new Set<string>();
+
+  // 2. 遍歷 receivableDividends 進行過濾與計算
+  for (const rec of receivableDividends) {
+    if (!rec.exDate) continue;
+
+    // 市場過濾
+    if (market !== 'ALL' && rec.market !== market) continue;
+
+    // 帳戶過濾
+    if (selectedAccountId && selectedAccountId !== 'ALL' && rec.accountId && rec.accountId !== selectedAccountId) {
+      continue;
+    }
+
+    const sym = rec.symbol.toUpperCase();
+    // 匹配有效持倉
+    const holding = rec.accountId
+      ? validHoldingsByAccountSymbol.get(`${sym}::${rec.accountId}`) || validHoldingsBySymbol.get(sym)
+      : validHoldingsBySymbol.get(sym);
+
+    if (!holding || holding.shares <= 0) {
+      continue;
+    }
+
+    // 計算倒數天數 (T-X)
+    const daysUntilEx = differenceInCalendarDays(rec.exDate, todayStr);
+
+    // 嚴格篩選: 0 <= daysUntilEx <= horizonDays (排除過去事件與超過 horizonDays 的事件)
+    if (daysUntilEx < 0 || daysUntilEx > horizonDays) {
+      continue;
+    }
+
+    // 唯一鍵防止重複
+    const itemKey = `${sym}_${rec.exDate}_${rec.accountId || ''}`;
+    if (processedKeys.has(itemKey)) {
+      continue;
+    }
+    processedKeys.add(itemKey);
+
+    // 計算除息至發放日凍結期
+    const payDate = rec.payDate || estimatePaymentDate(rec.exDate, rec.market, sym);
+    const daysFromExToPay = Math.max(0, differenceInCalendarDays(payDate, rec.exDate));
+
+    // 金額與稅務推導
+    const sharesHeld = holding.shares;
+    const cashPerShare = rec.cashDividendPerShare;
+    let estimatedGrossTWD = 0;
+    let estimatedNetTWD = 0;
+    let isNhiTriggered = false;
+    let nhiFeeTWD = 0;
+
+    if (rec.market === 'TW') {
+      estimatedGrossTWD = Math.round(sharesHeld * cashPerShare);
+      // 二代健保單筆 >= 20,000 元觸發 2.11%
+      if (estimatedGrossTWD >= 20000) {
+        isNhiTriggered = true;
+        nhiFeeTWD = Math.round(estimatedGrossTWD * 0.0211);
+      }
+      estimatedNetTWD = Math.max(0, estimatedGrossTWD - nhiFeeTWD);
+    } else {
+      // 美股
+      estimatedGrossTWD = Math.round(sharesHeld * cashPerShare * usdToTwdRate);
+      nhiFeeTWD = 0;
+      isNhiTriggered = false;
+      // 30% 外國人預扣稅
+      estimatedNetTWD = Math.round(estimatedGrossTWD * 0.7);
+    }
+
+    const scheduleType: UpcomingExDividendRadarItem['scheduleType'] =
+      rec.dateSource === 'OFFICIAL' ? 'CONFIRMED' : 'PROJECTED';
+
+    const { rviScore, recoveryRating } = calculateDividendRecoveryScore(sym);
+
+    radarItems.push({
+      id: rec.id || `radar-${sym}-${rec.exDate}`,
+      symbol: sym,
+      name: holding.name || rec.name || sym,
+      market: rec.market,
+      currency: rec.currency,
+      accountId: rec.accountId || holding.accountId,
+      exDate: rec.exDate,
+      payDate,
+      daysUntilEx,
+      daysFromExToPay,
+      scheduleType,
+      sharesHeld,
+      cashPerShare,
+      estimatedGrossTWD,
+      estimatedNetTWD,
+      isNhiTriggered,
+      nhiFeeTWD,
+      rviScore,
+      recoveryRating,
+    });
+  }
+
+  // 3. 排序：依 daysUntilEx 升冪（近者在前），同一天依 estimatedNetTWD 降冪
+  radarItems.sort((a, b) => {
+    if (a.daysUntilEx !== b.daysUntilEx) {
+      return a.daysUntilEx - b.daysUntilEx;
+    }
+    return b.estimatedNetTWD - a.estimatedNetTWD;
+  });
+
+  return radarItems;
 }

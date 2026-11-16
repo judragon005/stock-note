@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { TradeRecord } from '../types/stock';
+import { TradeRecord, HoldingPosition } from '../types/stock';
 import { ReceivableDividend } from '../types/dividend';
 import { calculateConsolidatedTwNhiTax } from '../engine/taxComplianceEngine';
 import { CorporateActionSessionCache, RawCorporateEvent } from '../engine/corporateActionScanner';
@@ -773,6 +773,136 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
         );
         expect(htmlAll).toContain('2330');
         expect(htmlAll).toContain('AAPL');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe('12. Spec 0232 / Ticket 07: 近日持倉除息行事曆雷達頂層 E2E 整合門禁 (DividendLogView)', () => {
+    it('應在頂層頁面正確渲染近日除息行事曆雷達卡片，並連動市場與券商帳戶過濾', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-05-15T12:00:00+08:00'));
+      try {
+        const mockHoldings = [
+          { accountId: 'acc-1', symbol: '0056', name: '元大高股息', market: 'TW' as const, currency: 'TWD' as const, shares: 10000, avgCost: 35, currentPrice: 38, totalCostBasis: 350000, adjustedCostBasis: 350000, marketValue: 380000, grossMarketValue: 380000, estimatedSellTax: 0, estimatedSellFee: 0, unrealizedPnL: 30000, unrealizedPnLPercent: 8.57 },
+          { accountId: 'acc-2', symbol: '2454', name: '聯發科', market: 'TW' as const, currency: 'TWD' as const, shares: 1000, avgCost: 1000, currentPrice: 1200, totalCostBasis: 1000000, adjustedCostBasis: 1000000, marketValue: 1200000, grossMarketValue: 1200000, estimatedSellTax: 0, estimatedSellFee: 0, unrealizedPnL: 200000, unrealizedPnLPercent: 20 },
+          { accountId: 'acc-1', symbol: 'AAPL', name: '蘋果', market: 'US' as const, currency: 'USD' as const, shares: 100, avgCost: 180, currentPrice: 210, totalCostBasis: 18000, adjustedCostBasis: 18000, marketValue: 21000, grossMarketValue: 21000, estimatedSellTax: 0, estimatedSellFee: 0, unrealizedPnL: 3000, unrealizedPnLPercent: 16.6 },
+        ] as HoldingPosition[];
+
+        const mockReceivables: ReceivableDividend[] = [
+          {
+            id: 'rec-0056-today',
+            accountId: 'acc-1',
+            symbol: '0056',
+            name: '元大高股息',
+            market: 'TW',
+            currency: 'TWD',
+            exDate: '2026-05-15', // 今日除息 (T=0)
+            payDate: '2026-06-08',
+            sharesHeldOnExDate: 10000,
+            sharesHeld: 10000,
+            cashDividendPerShare: 1.07,
+            estimatedGrossDividend: 10700,
+            estimatedTaxOrFee: 0,
+            estimatedNetDividend: 10700,
+            estimatedNetDividendInTWD: 10700,
+            status: 'UPCOMING_EX',
+            dateSource: 'OFFICIAL',
+          },
+          {
+            id: 'rec-2454-nhi',
+            accountId: 'acc-2',
+            symbol: '2454',
+            name: '聯發科',
+            market: 'TW',
+            currency: 'TWD',
+            exDate: '2026-06-01',
+            payDate: '2026-06-30',
+            sharesHeldOnExDate: 1000,
+            sharesHeld: 1000,
+            cashDividendPerShare: 25.0,
+            estimatedGrossDividend: 25000,
+            estimatedTaxOrFee: 528,
+            estimatedNetDividend: 24472,
+            estimatedNetDividendInTWD: 24472,
+            status: 'UPCOMING_EX',
+            dateSource: 'OFFICIAL',
+          },
+          {
+            id: 'rec-aapl-us',
+            accountId: 'acc-1',
+            symbol: 'AAPL',
+            name: '蘋果',
+            market: 'US',
+            currency: 'USD',
+            exDate: '2026-06-15',
+            payDate: '2026-07-06',
+            sharesHeldOnExDate: 100,
+            sharesHeld: 100,
+            cashDividendPerShare: 1.5,
+            estimatedGrossDividend: 150,
+            estimatedTaxOrFee: 45,
+            estimatedNetDividend: 105,
+            estimatedNetDividendInTWD: 3360,
+            status: 'UPCOMING_EX',
+            dateSource: 'OFFICIAL',
+          },
+        ];
+
+        // 1. 全市場、全帳戶渲染
+        const htmlAll = renderToStaticMarkup(
+          React.createElement(DividendLogView, {
+            trades: [],
+            holdings: mockHoldings,
+            receivableDividends: mockReceivables,
+            usdToTwdRate: 32,
+            market: 'ALL',
+            selectedAccountId: 'ALL',
+          })
+        );
+
+        // 應包含雷達標題與各項目
+        expect(htmlAll).toContain('近日持倉除息行事曆雷達');
+        expect(htmlAll).toContain('今日除息');
+        expect(htmlAll).toContain('0056');
+        expect(htmlAll).toContain('2454');
+        expect(htmlAll).toContain('健保 2.11%');
+        expect(htmlAll).toContain('AAPL');
+
+        // 2. 切換單一帳戶 acc-1
+        const htmlAcc1 = renderToStaticMarkup(
+          React.createElement(DividendLogView, {
+            trades: [],
+            holdings: mockHoldings,
+            receivableDividends: mockReceivables,
+            usdToTwdRate: 32,
+            market: 'ALL',
+            selectedAccountId: 'acc-1',
+          })
+        );
+
+        expect(htmlAcc1).toContain('0056');
+        expect(htmlAcc1).toContain('AAPL');
+        // acc-2 的聯發科應被精確排除
+        expect(htmlAcc1).not.toContain('2454');
+
+        // 3. 切換台股市場 TW
+        const htmlTW = renderToStaticMarkup(
+          React.createElement(DividendLogView, {
+            trades: [],
+            holdings: mockHoldings,
+            receivableDividends: mockReceivables,
+            usdToTwdRate: 32,
+            market: 'TW',
+            selectedAccountId: 'ALL',
+          })
+        );
+
+        expect(htmlTW).toContain('0056');
+        expect(htmlTW).toContain('2454');
+        // 美股 AAPL 應被排除
+        expect(htmlTW).not.toContain('AAPL');
       } finally {
         vi.useRealTimers();
       }

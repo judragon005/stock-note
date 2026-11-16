@@ -163,3 +163,28 @@ export interface DividendSummaryReport {
   }[];
   upcomingDividends: ReceivableDividend[]; // 即將除息與待發放清單
 }
+
+/**
+ * 近日持倉除息行事曆雷達項目 (Spec 0232 / Ticket 01)
+ */
+export interface UpcomingExDividendRadarItem {
+  id: string;
+  symbol: string;
+  name: string;
+  market: MarketType;
+  currency: Currency;
+  accountId?: string;
+  exDate: string;                  // YYYY-MM-DD (除息日)
+  payDate: string;                 // YYYY-MM-DD (預計入帳發放日)
+  daysUntilEx: number;             // 距離除息日倒數天數 (0 代表今日除息)
+  daysFromExToPay: number;         // 除息日到發放日凍結天數 (payDate - exDate)
+  scheduleType: 'CONFIRMED' | 'PROJECTED'; // 官方公告確定 vs 週期歷史推估
+  sharesHeld: number;              // 當前有效持股數 (> 0)
+  cashPerShare: number;            // 預計每股現金股利
+  estimatedGrossTWD: number;       // 預計總配息 (TWD)
+  estimatedNetTWD: number;         // 預計實質淨配息 (TWD)
+  isNhiTriggered: boolean;         // 是否觸發二代健保 (>= 20,000 元)
+  nhiFeeTWD: number;               // 預估二代健保費 (2.11%)
+  rviScore?: number;               // 填息信心分數 (0.0 ~ 1.0, Ticket 03)
+  recoveryRating?: 'HIGH_MOMENTUM' | 'MODERATE' | 'UNFILLED_RISK'; // 填息信心評級
+}
