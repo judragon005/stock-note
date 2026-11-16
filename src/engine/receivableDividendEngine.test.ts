@@ -7,6 +7,7 @@ import {
   isTwEtfSymbol,
   instantSettleReceivableDividend,
   generateUpcomingExDividendRadarEvents,
+  calculateDividendRecoveryScore,
 } from './receivableDividendEngine';
 import { HoldingPosition, TradeRecord } from '../types/stock';
 import { ReceivableDividend } from '../types/dividend';
@@ -1385,6 +1386,65 @@ describe('Receivable Dividend & Ex-Dividend Smoothing Engine (應收股利平滑
       expect(resUS).toHaveLength(1);
       expect(resUS[0].symbol).toBe('NVDA');
       expect(resUS[0].market).toBe('US');
+    });
+
+    it('Code Review Refinement: 全市場視角下未綁定帳戶之全域除息事件應精確聚合所有帳戶持股總和', () => {
+      const mockHoldings: HoldingPosition[] = [
+        createMockHolding({ accountId: 'acc-cathay', symbol: '00878', name: '國泰永續高股息', shares: 1200 }),
+        createMockHolding({ accountId: 'acc-fubon', symbol: '00878', name: '國泰永續高股息', shares: 1800 }),
+      ];
+
+      // 全域公告，無指定 accountId
+      const globalReceivable: ReceivableDividend[] = [
+        {
+          id: 'rec-00878-global',
+          symbol: '00878',
+          name: '國泰永續高股息',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-06-20',
+          payDate: '2026-07-15',
+          sharesHeldOnExDate: 3000,
+          sharesHeld: 3000,
+          cashDividendPerShare: 0.55,
+          estimatedGrossDividend: 1650,
+          estimatedTaxOrFee: 0,
+          estimatedNetDividend: 1650,
+          estimatedNetDividendInTWD: 1650,
+          status: 'UPCOMING_EX',
+          dateSource: 'OFFICIAL',
+        },
+      ];
+
+      const resAll = generateUpcomingExDividendRadarEvents({
+        holdings: mockHoldings,
+        receivableDividends: globalReceivable,
+        todayStr,
+        selectedAccountId: 'ALL',
+      });
+
+      expect(resAll).toHaveLength(1);
+      // 應加總 1200 + 1800 = 3000 股，而非僅取 1800 股
+      expect(resAll[0].sharesHeld).toBe(3000);
+      expect(resAll[0].estimatedGrossTWD).toBe(Math.round(3000 * 0.55)); // 1650
+      expect(resAll[0].accountId).toBeUndefined(); // 全域聚合無單一 accountId
+    });
+
+    it('Code Review Refinement: calculateDividendRecoveryScore 應支援 UNFILLED_RISK 評級', () => {
+      // 高填息動能標的
+      const highRes = calculateDividendRecoveryScore('2330');
+      expect(highRes.recoveryRating).toBe('HIGH_MOMENTUM');
+      expect(highRes.rviScore).toBeGreaterThanOrEqual(0.8);
+
+      // 普通填息標的
+      const modRes = calculateDividendRecoveryScore('2884');
+      expect(modRes.recoveryRating).toBe('MODERATE');
+      expect(modRes.rviScore).toBe(0.65);
+
+      // 貼息風險 / 弱勢動能標的
+      const riskRes = calculateDividendRecoveryScore('TEST_UNFILLED', { isLaggingOrUnfilled: true });
+      expect(riskRes.recoveryRating).toBe('UNFILLED_RISK');
+      expect(riskRes.rviScore).toBeLessThan(0.5);
     });
   });
 });
