@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-2271%2F2271%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2282%2F2282%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,24 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 股利日誌與被動現金流全路徑帳務不變量修復與真實整合測試 (`Spec 0231`) *(V9.20.4 最新發布 / Spec #0231 / ADR #0231 / Issues #544 ~ #553, #558, #560, #562 / PR #554 ~ #557, #559, #561, #563)*
+### 1. 近日持倉除息行事曆雷達與跨期現金流前瞻排程 (`Spec 0232`) *(V9.20.5 最新發布 / Spec #0232 / ADR #0232 / Issues #565 ~ #572, #574 / PR #573, #575)*
+
+- **雙時序解耦與純運算雷達引擎 (Issue #566)**：
+  - 解耦除息日 (`exDate`)、預計入帳發放日 (`payDate`)、倒數天數 (`daysUntilEx`) 與在途凍結天數 (`daysFromExToPay`)，支援 60 天（確定公告）與 90 天（含週期推估）雙重視野。
+- **純 UTC 零時差日曆天計算 (Issue #566)**：
+  - 導入 `differenceInCalendarDays`，純整數 UTC 計算比較日曆天，徹底免疫本機與伺服器時區漂移導致之 $\pm 1$ 天倒數偏差。
+- **二代健保臨界警報與美股實質稅負折算 (Issue #567 & #574)**：
+  - 台股單筆預估總額 $\ge 20,000$ TWD 觸發 2.11% 二代健保預扣預警；美股視圖下嚴格屏蔽二代健保字樣，並以 `estimatedGrossTWD - estimatedNetTWD` 單一事實來源 (SSOT) 匯總 30% IRS 預扣稅。
+- **填息動能信心指標與多帳戶持股聚合 (Issue #568 & #574)**：
+  - 提供填息信心指標評級（`HIGH_MOMENTUM`, `MODERATE`, `UNFILLED_RISK`）；全市場視角下自動聚合標的在各券商持股總和，杜絕多帳戶低估。
+- **多券商水密隔離與全域連動 (Issue #569)**：
+  - 無縫串聯 `selectedAccountId` 與 `market` (ALL/TW/US)，券商帳戶切換時嚴格隔離，杜絕資料穿透。
+- **獨立 Glassmorphic 雷達卡片元件 (Issue #570 & #571)**：
+  - 獨立封裝 `ExDividendRadarCard`，支援緊湊視覺色階倒數（$\le 7$ 天紅標、$\le 14$ 天黃標、$> 14$ 天藍標）與 60d/90d 視窗切換。
+- **頂層整合與真實 DOM 門禁 (Issue #572)**：
+  - 掛載於 `DividendLogView` 頂部，全儲存庫單元與整合測試 100% 通過。
+
+### 2. 股利日誌與被動現金流全路徑帳務不變量修復與真實整合測試 (`Spec 0231`) *(V9.20.4 / Spec #0231 / ADR #0231 / Issues #544 ~ #553, #558, #560, #562 / PR #554 ~ #557, #559, #561, #563)*
 
 - **台北當地時區基準與跨午夜自動結轉 (Issue #545)**：
   - 導入 `useTaipeiDateStr` 與 `getTaipeiDateStr` 消除跨時區計算脫節，午夜 00:00:00 自動無感刷新，當日到期股利精準結轉。

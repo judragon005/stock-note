@@ -518,7 +518,15 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0226: V9.19.0 跨市場股利現金流、資產組合組成與領息日誌整合](docs/adr/0226-cross-market-dividend-cashflow-and-composition.md)
 - [ADR-0227: V9.20.0 現金流三態時序統一、股利發放月精準對齊與月度日曆勾稽架構決策](docs/adr/0227-dividend-cashflow-tri-state-reconciliation.md)
 - [ADR-0231: V9.20.3 股利日誌與被動現金流全路徑帳務不變量與時區/隔離架構決策](docs/adr/0231-dividend-cashflow-full-path-audit-and-accounting-invariants.md)
-- [ADR-0232: V9.20.4 近日持倉除息行事曆雷達與跨期現金流前瞻排程架構決策](docs/adr/0232-ex-dividend-radar-and-calendar-horizon.md)
+- [ADR-0232: V9.20.5 近日持倉除息行事曆雷達與跨期現金流前瞻排程架構決策](docs/adr/0232-ex-dividend-radar-and-calendar-horizon.md)
+
+### 近日持倉除息行事曆雷達與跨期現金流前瞻排程 (Ex-Dividend Radar & Horizon Calendar) _(新增於 V9.20.5)_
+
+- **雙時序解耦 (Dual-Timeline Decoupling)**：除息行事曆解耦除息日 (`exDate`)、預計入帳發放日 (`payDate`)、倒數天數 (`daysUntilEx`) 與資金在途凍結天數 (`daysFromExToPay`)。
+- **純 UTC 日曆天安全比較**：全面使用 `differenceInCalendarDays`，純整數 UTC 計算比較日曆天，杜絕瀏覽器與伺服器當地時區導致之 $\pm 1$ 天倒數漂移。
+- **二代健保臨界警報與美股水密隔離**：單筆預估股利 $\ge 20,000$ TWD 觸發二代健保 2.11% 警報；美股市場依 ADR 0230 水密隔離，強制屏蔽健保字樣，並以 `estimatedGrossTWD - estimatedNetTWD` 單一事實來源 (SSOT) 匯總預扣稅折合台幣。
+- **多帳戶跨券商聚合求和**：無指定 `accountId` 之全域除息事件以 `totalSharesBySymbol` 累加映射求和跨券商持股，確保全市場視角下預估現金流不失真。
+- **填息動能指標三態模型**：支援 `HIGH_MOMENTUM` (0.88)、`MODERATE` (0.65) 與 `UNFILLED_RISK` (0.35) 信心評級。
 
 ### 現金流三態時序統一、股利發放月精準對齊與月度日曆勾稽 (Dividend Cashflow Tri-State Reconciliation) _(新增於 V9.20.0)_
 
