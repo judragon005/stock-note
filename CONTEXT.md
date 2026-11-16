@@ -517,6 +517,8 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0225: V9.18.0 股利日誌與現金流全景多維透視與會計重構](docs/adr/0225-dividend-and-cashflow-holistic-refactor.md)
 - [ADR-0226: V9.19.0 跨市場股利現金流、資產組合組成與領息日誌整合](docs/adr/0226-cross-market-dividend-cashflow-and-composition.md)
 - [ADR-0227: V9.20.0 現金流三態時序統一、股利發放月精準對齊與月度日曆勾稽架構決策](docs/adr/0227-dividend-cashflow-tri-state-reconciliation.md)
+- [ADR-0231: V9.20.3 股利日誌與被動現金流全路徑帳務不變量與時區/隔離架構決策](docs/adr/0231-dividend-cashflow-full-path-audit-and-accounting-invariants.md)
+- [ADR-0232: V9.20.4 近日持倉除息行事曆雷達與跨期現金流前瞻排程架構決策](docs/adr/0232-ex-dividend-radar-and-calendar-horizon.md)
 
 ### 現金流三態時序統一、股利發放月精準對齊與月度日曆勾稽 (Dividend Cashflow Tri-State Reconciliation) _(新增於 V9.20.0)_
 

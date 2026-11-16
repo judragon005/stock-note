@@ -6,8 +6,10 @@ import {
   isPaymentDateOfficial,
   isTwEtfSymbol,
   instantSettleReceivableDividend,
+  generateUpcomingExDividendRadarEvents,
 } from './receivableDividendEngine';
 import { HoldingPosition, TradeRecord } from '../types/stock';
+import { ReceivableDividend } from '../types/dividend';
 import { RawCorporateEvent } from './corporateActionScanner';
 
 describe('Receivable Dividend & Ex-Dividend Smoothing Engine (應收股利平滑引擎)', () => {
@@ -947,6 +949,442 @@ describe('Receivable Dividend & Ex-Dividend Smoothing Engine (應收股利平滑
       expect(nextTrades[0].accountId).toBe('acc-a');
       expect(nextTrades[0].date).toBe('2026-10-01');
       expect(nextTrades[0].payDate).toBe('2026-10-01');
+    });
+  });
+
+  describe('Spec 0232 / Ticket 01: 近日持倉除息行事曆雷達純運算引擎 (generateUpcomingExDividendRadarEvents)', () => {
+    const todayStr = '2026-05-15';
+
+    const createMockHolding = (data: Partial<HoldingPosition> & { symbol: string; shares: number }): HoldingPosition => ({
+      name: data.symbol,
+      market: 'TW',
+      currency: 'TWD',
+      avgCost: 100,
+      totalCostBasis: 100000,
+      adjustedCostBasis: 100000,
+      currentPrice: 110,
+      marketValue: 110000,
+      grossMarketValue: 110000,
+      netMarketValue: 110000,
+      estimatedSellTax: 300,
+      estimatedSellFee: 150,
+      unrealizedPnL: 10000,
+      unrealizedPnLPercent: 10,
+      ...data,
+    } as HoldingPosition);
+
+    it('應精確篩選未來 60 天內即將除息事件，包含今日除息 (T=0) 與第 60 天，並排除第 61 天與過去事件', () => {
+      const mockHoldings: HoldingPosition[] = [
+        createMockHolding({ symbol: '0056', name: '元大高股息', shares: 10000 }),
+        createMockHolding({ symbol: '00878', name: '國泰永續高股息', shares: 2000 }),
+        createMockHolding({ symbol: '2330', name: '台積電', shares: 1000 }),
+        createMockHolding({ symbol: '2454', name: '聯發科', shares: 1000 }),
+        createMockHolding({ symbol: '2881', name: '富邦金', shares: 1000 }),
+        createMockHolding({ symbol: '2882', name: '國泰金', shares: 0 }),
+      ];
+
+      const mockReceivables: ReceivableDividend[] = [
+        {
+          id: 'rec-0056-today',
+          symbol: '0056',
+          name: '元大高股息',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-05-15', // 今日除息 (T=0)
+          payDate: '2026-06-08',
+          sharesHeldOnExDate: 10000,
+          sharesHeld: 10000,
+          cashDividendPerShare: 1.07,
+          estimatedGrossDividend: 10700,
+          estimatedTaxOrFee: 0,
+          estimatedNetDividend: 10700,
+          estimatedNetDividendInTWD: 10700,
+          status: 'UPCOMING_EX',
+          dateSource: 'OFFICIAL',
+        },
+        {
+          id: 'rec-00878-31d',
+          symbol: '00878',
+          name: '國泰永續高股息',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-06-15', // 31 天後
+          payDate: '2026-07-10',
+          sharesHeldOnExDate: 2000,
+          sharesHeld: 2000,
+          cashDividendPerShare: 0.55,
+          estimatedGrossDividend: 1100,
+          estimatedTaxOrFee: 0,
+          estimatedNetDividend: 1100,
+          estimatedNetDividendInTWD: 1100,
+          status: 'UPCOMING_EX',
+          dateSource: 'OFFICIAL',
+        },
+        {
+          id: 'rec-2330-60d',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-07-14', // 恰好第 60 天 (2026-05-15 + 60 天)
+          payDate: '2026-08-13',
+          sharesHeldOnExDate: 1000,
+          sharesHeld: 1000,
+          cashDividendPerShare: 4.0,
+          estimatedGrossDividend: 4000,
+          estimatedTaxOrFee: 0,
+          estimatedNetDividend: 4000,
+          estimatedNetDividendInTWD: 4000,
+          status: 'UPCOMING_EX',
+          dateSource: 'OFFICIAL',
+        },
+        {
+          id: 'rec-2454-61d',
+          symbol: '2454',
+          name: '聯發科',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-07-15', // 第 61 天 (超過 60 天視窗，應被排除)
+          payDate: '2026-08-14',
+          sharesHeldOnExDate: 1000,
+          sharesHeld: 1000,
+          cashDividendPerShare: 20.0,
+          estimatedGrossDividend: 20000,
+          estimatedTaxOrFee: 422,
+          estimatedNetDividend: 19578,
+          estimatedNetDividendInTWD: 19578,
+          status: 'UPCOMING_EX',
+          dateSource: 'OFFICIAL',
+        },
+        {
+          id: 'rec-2881-past',
+          symbol: '2881',
+          name: '富邦金',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-05-10', // 過去 5 天前，已除息，非即將除息
+          payDate: '2026-06-05',
+          sharesHeldOnExDate: 1000,
+          sharesHeld: 1000,
+          cashDividendPerShare: 3.0,
+          estimatedGrossDividend: 3000,
+          estimatedTaxOrFee: 0,
+          estimatedNetDividend: 3000,
+          estimatedNetDividendInTWD: 3000,
+          status: 'PENDING_PAYMENT',
+          dateSource: 'OFFICIAL',
+        },
+        {
+          id: 'rec-2882-zero-share',
+          symbol: '2882',
+          name: '國泰金',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-05-20', // 雖然在未來 5 天，但持股為 0，應排除
+          payDate: '2026-06-18',
+          sharesHeldOnExDate: 0,
+          sharesHeld: 0,
+          cashDividendPerShare: 2.0,
+          estimatedGrossDividend: 0,
+          estimatedTaxOrFee: 0,
+          estimatedNetDividend: 0,
+          estimatedNetDividendInTWD: 0,
+          status: 'UPCOMING_EX',
+          dateSource: 'OFFICIAL',
+        },
+      ];
+
+      const results = generateUpcomingExDividendRadarEvents({
+        holdings: mockHoldings,
+        receivableDividends: mockReceivables,
+        todayStr,
+        horizonDays: 60,
+      });
+
+      // 預期僅包含 0056 (T=0), 00878 (T=31), 2330 (T=60)
+      expect(results).toHaveLength(3);
+      expect(results.map(r => r.symbol)).toEqual(['0056', '00878', '2330']);
+
+      // 檢查 0056 今日除息
+      expect(results[0].symbol).toBe('0056');
+      expect(results[0].daysUntilEx).toBe(0);
+      expect(results[0].daysFromExToPay).toBe(24); // 2026-06-08 - 2026-05-15 = 24 日曆天
+      expect(results[0].scheduleType).toBe('CONFIRMED');
+      expect(results[0].sharesHeld).toBe(10000);
+      expect(results[0].cashPerShare).toBe(1.07);
+
+      // 檢查 00878 31 天後除息
+      expect(results[1].symbol).toBe('00878');
+      expect(results[1].daysUntilEx).toBe(31);
+      expect(results[1].daysFromExToPay).toBe(25); // 2026-07-10 - 2026-06-15 = 25 日曆天
+
+      // 檢查 2330 恰好第 60 天
+      expect(results[2].symbol).toBe('2330');
+      expect(results[2].daysUntilEx).toBe(60);
+      expect(results[2].daysFromExToPay).toBe(30); // 2026-08-13 - 2026-07-14 = 30 日曆天
+    });
+
+    it('Spec 0232 / Ticket 02: 應精確檢驗二代健保 19,999 vs 20,000 門檻與美股 30% 稅負折算', () => {
+      const mockHoldings: HoldingPosition[] = [
+        createMockHolding({ symbol: '2890', name: '永豐金A', shares: 19999 }),
+        createMockHolding({ symbol: '2891', name: '中信金B', shares: 20000 }),
+        createMockHolding({ symbol: 'AAPL', name: '蘋果', market: 'US', currency: 'USD', shares: 100 }),
+      ];
+
+      const mockReceivables: ReceivableDividend[] = [
+        {
+          id: 'rec-2890-sub20k',
+          symbol: '2890',
+          name: '永豐金A',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-05-20',
+          payDate: '2026-06-15',
+          sharesHeldOnExDate: 19999,
+          sharesHeld: 19999,
+          cashDividendPerShare: 1.0,
+          estimatedGrossDividend: 19999,
+          estimatedTaxOrFee: 0,
+          estimatedNetDividend: 19999,
+          estimatedNetDividendInTWD: 19999,
+          status: 'UPCOMING_EX',
+          dateSource: 'OFFICIAL',
+        },
+        {
+          id: 'rec-2891-hit20k',
+          symbol: '2891',
+          name: '中信金B',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-05-22',
+          payDate: '2026-06-18',
+          sharesHeldOnExDate: 20000,
+          sharesHeld: 20000,
+          cashDividendPerShare: 1.0,
+          estimatedGrossDividend: 20000,
+          estimatedTaxOrFee: 422,
+          estimatedNetDividend: 19578,
+          estimatedNetDividendInTWD: 19578,
+          status: 'UPCOMING_EX',
+          dateSource: 'OFFICIAL',
+        },
+        {
+          id: 'rec-aapl-us',
+          symbol: 'AAPL',
+          name: '蘋果',
+          market: 'US',
+          currency: 'USD',
+          exDate: '2026-05-25',
+          payDate: '2026-06-15',
+          sharesHeldOnExDate: 100,
+          sharesHeld: 100,
+          cashDividendPerShare: 1.5,
+          estimatedGrossDividend: 150,
+          estimatedTaxOrFee: 45,
+          estimatedNetDividend: 105,
+          estimatedNetDividendInTWD: 3413,
+          status: 'UPCOMING_EX',
+          dateSource: 'OFFICIAL',
+        },
+      ];
+
+      const results = generateUpcomingExDividendRadarEvents({
+        holdings: mockHoldings,
+        receivableDividends: mockReceivables,
+        todayStr,
+        usdToTwdRate: 32.5,
+      });
+
+      expect(results).toHaveLength(3);
+
+      // 1. 永豐金: 19,999 元 -> 未達 20,000 元門檻
+      const item2890 = results.find(r => r.symbol === '2890')!;
+      expect(item2890.estimatedGrossTWD).toBe(19999);
+      expect(item2890.isNhiTriggered).toBe(false);
+      expect(item2890.nhiFeeTWD).toBe(0);
+      expect(item2890.estimatedNetTWD).toBe(19999);
+
+      // 2. 中信金: 20,000 元 -> 恰達門檻，觸發 2.11% 二代健保 NT$ 422
+      const item2891 = results.find(r => r.symbol === '2891')!;
+      expect(item2891.estimatedGrossTWD).toBe(20000);
+      expect(item2891.isNhiTriggered).toBe(true);
+      expect(item2891.nhiFeeTWD).toBe(422); // round(20000 * 0.0211) = 422
+      expect(item2891.estimatedNetTWD).toBe(19578);
+
+      // 3. 美股 AAPL: 100 股 * $1.5 * 32.5 = 4875 TWD，扣除 30% IRS 預扣稅後為 3413 TWD
+      const itemAapl = results.find(r => r.symbol === 'AAPL')!;
+      expect(itemAapl.market).toBe('US');
+      expect(itemAapl.estimatedGrossTWD).toBe(4875);
+      expect(itemAapl.isNhiTriggered).toBe(false);
+      expect(itemAapl.nhiFeeTWD).toBe(0);
+      expect(itemAapl.estimatedNetTWD).toBe(3413); // round(4875 * 0.7) = 3413
+    });
+
+    it('Spec 0232 / Ticket 03: 應正確區分 CONFIRMED 與 PROJECTED 標籤並評定填息信心指標', () => {
+      const mockHoldings: HoldingPosition[] = [
+        createMockHolding({ symbol: '0056', name: '元大高股息', shares: 5000 }),
+        createMockHolding({ symbol: '9999', name: '測試個股', shares: 1000 }),
+      ];
+
+      const mockReceivables: ReceivableDividend[] = [
+        {
+          id: 'rec-0056-official',
+          symbol: '0056',
+          name: '元大高股息',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-06-01',
+          payDate: '2026-06-25',
+          sharesHeldOnExDate: 5000,
+          sharesHeld: 5000,
+          cashDividendPerShare: 1.0,
+          estimatedGrossDividend: 5000,
+          estimatedTaxOrFee: 0,
+          estimatedNetDividend: 5000,
+          estimatedNetDividendInTWD: 5000,
+          status: 'UPCOMING_EX',
+          dateSource: 'OFFICIAL',
+        },
+        {
+          id: 'rec-9999-estimated',
+          symbol: '9999',
+          name: '測試個股',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-06-10',
+          payDate: '2026-07-08',
+          sharesHeldOnExDate: 1000,
+          sharesHeld: 1000,
+          cashDividendPerShare: 2.0,
+          estimatedGrossDividend: 2000,
+          estimatedTaxOrFee: 0,
+          estimatedNetDividend: 2000,
+          estimatedNetDividendInTWD: 2000,
+          status: 'UPCOMING_EX',
+          dateSource: 'ESTIMATED',
+        },
+      ];
+
+      const results = generateUpcomingExDividendRadarEvents({
+        holdings: mockHoldings,
+        receivableDividends: mockReceivables,
+        todayStr,
+      });
+
+      const item0056 = results.find(r => r.symbol === '0056')!;
+      expect(item0056.scheduleType).toBe('CONFIRMED');
+      expect(item0056.recoveryRating).toBe('HIGH_MOMENTUM');
+      expect(item0056.rviScore).toBeGreaterThanOrEqual(0.7);
+
+      const item9999 = results.find(r => r.symbol === '9999')!;
+      expect(item9999.scheduleType).toBe('PROJECTED');
+      expect(item9999.recoveryRating).toBe('MODERATE');
+    });
+
+    it('Spec 0232 / Ticket 04: 應實現多券商子帳戶隔離與跨市場 (TW/US) 動態連動閉環', () => {
+      const mockHoldings: HoldingPosition[] = [
+        createMockHolding({ accountId: 'acc-1', symbol: '2330', name: '台積電', shares: 1500 }),
+        createMockHolding({ accountId: 'acc-2', symbol: '2330', name: '台積電', shares: 5500 }),
+        createMockHolding({ accountId: 'acc-1', symbol: 'NVDA', name: '輝達', market: 'US', currency: 'USD', shares: 50 }),
+      ];
+
+      const mockReceivables: ReceivableDividend[] = [
+        {
+          id: 'rec-2330-acc1',
+          accountId: 'acc-1',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-06-15',
+          payDate: '2026-07-10',
+          sharesHeldOnExDate: 1500,
+          sharesHeld: 1500,
+          cashDividendPerShare: 4.0,
+          estimatedGrossDividend: 6000,
+          estimatedTaxOrFee: 0,
+          estimatedNetDividend: 6000,
+          estimatedNetDividendInTWD: 6000,
+          status: 'UPCOMING_EX',
+          dateSource: 'OFFICIAL',
+        },
+        {
+          id: 'rec-2330-acc2',
+          accountId: 'acc-2',
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          exDate: '2026-06-15',
+          payDate: '2026-07-10',
+          sharesHeldOnExDate: 5500,
+          sharesHeld: 5500,
+          cashDividendPerShare: 4.0,
+          estimatedGrossDividend: 22000,
+          estimatedTaxOrFee: 464,
+          estimatedNetDividend: 21536,
+          estimatedNetDividendInTWD: 21536,
+          status: 'UPCOMING_EX',
+          dateSource: 'OFFICIAL',
+        },
+        {
+          id: 'rec-nvda-acc1',
+          accountId: 'acc-1',
+          symbol: 'NVDA',
+          name: '輝達',
+          market: 'US',
+          currency: 'USD',
+          exDate: '2026-06-18',
+          payDate: '2026-07-05',
+          sharesHeldOnExDate: 50,
+          sharesHeld: 50,
+          cashDividendPerShare: 0.1,
+          estimatedGrossDividend: 5,
+          estimatedTaxOrFee: 1.5,
+          estimatedNetDividend: 3.5,
+          estimatedNetDividendInTWD: 112,
+          status: 'UPCOMING_EX',
+          dateSource: 'OFFICIAL',
+        },
+      ];
+
+      // 1. 篩選單一帳戶 acc-1
+      const resAcc1 = generateUpcomingExDividendRadarEvents({
+        holdings: mockHoldings,
+        receivableDividends: mockReceivables,
+        todayStr,
+        selectedAccountId: 'acc-1',
+        market: 'ALL',
+      });
+      expect(resAcc1).toHaveLength(2);
+      expect(resAcc1.every(r => r.accountId === 'acc-1')).toBe(true);
+      const acc1_2330 = resAcc1.find(r => r.symbol === '2330')!;
+      expect(acc1_2330.sharesHeld).toBe(1500);
+      expect(acc1_2330.estimatedGrossTWD).toBe(6000);
+      expect(acc1_2330.isNhiTriggered).toBe(false); // 未達 20,000 元門檻
+
+      // 2. 篩選台股市場 TW
+      const resTW = generateUpcomingExDividendRadarEvents({
+        holdings: mockHoldings,
+        receivableDividends: mockReceivables,
+        todayStr,
+        selectedAccountId: 'ALL',
+        market: 'TW',
+      });
+      expect(resTW).toHaveLength(2);
+      expect(resTW.every(r => r.market === 'TW')).toBe(true);
+
+      // 3. 篩選美股市場 US
+      const resUS = generateUpcomingExDividendRadarEvents({
+        holdings: mockHoldings,
+        receivableDividends: mockReceivables,
+        todayStr,
+        selectedAccountId: 'ALL',
+        market: 'US',
+      });
+      expect(resUS).toHaveLength(1);
+      expect(resUS[0].symbol).toBe('NVDA');
+      expect(resUS[0].market).toBe('US');
     });
   });
 });

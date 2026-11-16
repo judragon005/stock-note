@@ -20,10 +20,12 @@ import {
 import { resolveEffectiveDividendTaxAndNet } from '../engine/taxComplianceEngine';
 import { generate12MonthProjectedCashflow, recommendComplementaryDividendMonths } from '../engine/projectedCashflowEngine';
 import { calculateDividendTaxDeductionStats } from '../engine/taxOptimizationGuard';
+import { generateUpcomingExDividendRadarEvents } from '../engine/receivableDividendEngine';
 
 import { DividendMonthlyChart, calculateMonthTooltipAlign, DividendDisplayMode } from './dividend/DividendMonthlyChart';
 import { DividendKpiSummary } from './dividend/DividendKpiSummary';
 import { DividendCalendarCard } from './dividend/DividendCalendarCard';
+import { ExDividendRadarCard } from './dividend/ExDividendRadarCard';
 import { DividendTopContributorsCard } from './dividend/DividendTopContributorsCard';
 import { DividendHistoryTable, AnnualReconciliationItem } from './dividend/DividendHistoryTable';
 import { loadLoanRecordsFromStorage } from '../utils/storage';
@@ -66,6 +68,8 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
   const [tableYearFilter, setTableYearFilter] = useState<'SELECTED_YEAR' | 'ALL'>('SELECTED_YEAR');
   const [dividendDisplayMode, setDividendDisplayMode] = useState<DividendDisplayMode>('GROSS');
   const [isCashflowExpanded, setIsCashflowExpanded] = useState<boolean>(true);
+  const [radarHorizonDays, setRadarHorizonDays] = useState<number>(60);
+  const [isRadarExpanded, setIsRadarExpanded] = useState<boolean>(true);
   const [showReconciliationPanel, setShowReconciliationPanel] = useState(false);
   const [loanRefreshTick, setLoanRefreshTick] = useState(0);
 
@@ -199,6 +203,19 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
   const taxStats = useMemo(() => {
     return calculateDividendTaxDeductionStats(report.currentYearTwDividendsTWD ?? report.currentYearDividendsTWD);
   }, [report.currentYearTwDividendsTWD, report.currentYearDividendsTWD]);
+
+  // Spec 0232: 產生近日持倉除息行事曆雷達事件清單 (60/90 天視野)
+  const upcomingRadarEvents = useMemo(() => {
+    return generateUpcomingExDividendRadarEvents({
+      holdings,
+      receivableDividends,
+      todayStr,
+      horizonDays: radarHorizonDays,
+      usdToTwdRate,
+      selectedAccountId,
+      market,
+    });
+  }, [holdings, receivableDividends, todayStr, radarHorizonDays, usdToTwdRate, selectedAccountId, market]);
 
   // 發放日已屆待核實入帳款項 (Spec 0228 / Ticket 04: 消滅時序黑洞)
   const dueReceivables = useMemo(() => {
@@ -446,6 +463,16 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 0. 近日持倉除息行事曆雷達 (Spec 0232: 60/90 天除息前瞻視野) */}
+      <ExDividendRadarCard
+        radarEvents={upcomingRadarEvents}
+        horizonDays={radarHorizonDays}
+        onHorizonChange={setRadarHorizonDays}
+        isExpanded={isRadarExpanded}
+        onToggleExpand={() => setIsRadarExpanded((v) => !v)}
+        market={market}
+      />
 
       {/* 2×2 金融控制台網格佈局 */}
       {/* 1. 未來 12 個月現金流預估行事曆 (整合生活費對標與 Zavy 活水轉向指引) */}
