@@ -71,11 +71,62 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 
 If the spec is missing, skip the Spec sub-agent and note this in the final report.
 
-### 5. Aggregate
+### 5. Aggregate & Presentation Template
 
-Present the two reports under `## Standards` and `## Spec` headings, verbatim or lightly cleaned. Do **not** merge or rerank findings — the two axes are deliberately separate (see _Why two axes_).
+依據金字塔原理（Pyramid Principle）與第一性原則（First-Principles Grounding），雙軸審查報告必須嚴格遵循以下結構分區輸出，嚴禁將結論後置或以寒暄開頭：
 
-End with a one-line summary: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes — that's the reranking the separation exists to prevent.
+```markdown
+## 審查結論 (Executive Verdict)
+
+> **第一性原則仲裁結果：【無需修繕 (PASS)】 或 【建議修繕 (REVISION NEEDED)】**
+> 
+> [依第一性原則，從底層抽象、狀態機水密性、代碼行數預算與不變量守恆，以 <= 3 句話直接說明「為什麼」]
+> [若需修繕，指明具體修繕步驟與最小 Diff 目標；若無需修繕，說明零負擔驗收狀態]
+
+---
+
+## 審查基準 (Review Baseline)
+- **基準錨點 (Fixed Point)**：`<fixed-point-commit-or-ref>`
+- **審查目標 (Head)**：`HEAD` (`<head-commit-hash>`)
+- **比對命令**：`git diff <fixed-point>...HEAD`
+
+---
+
+## 一、 規格軸審查 (Spec Axis)
+
+審查程式碼是否忠實履約 originating issue / spec 之需求合約：
+1. **核心需求與行為履約 (Core Requirements Fulfillment)**：逐條檢驗 spec 要求之功能與邊界。
+2. **資訊架構與時序流向 (Architecture & Flow Alignment)**：檢驗 DOM、狀態或時序是否符合規格層次。
+3. **介面契約與狀態水密性 (Interface & State Invariants)**：檢驗 Props、型別與回調是否零漏接、零篡改。
+4. **範圍蔓延 (Scope Creep) 審查**：確認是否有未被要求的過度實作。
+
+- **規格軸判定**：**PASS** 或 **REVISION NEEDED**。
+
+---
+
+## 二、 標準與程式碼氣味軸審查 (Standards & Code Smells Axis)
+
+審查是否符合 DARS v2.0、`AGENTS.md` 協作準則與 Fowler 代碼氣味基準：
+1. **極致奧坎剪刀 (Radical Occam / KISS)**：新增代碼行數比是否在理論極限內？有無過度設計與臆測性抽象？
+2. **測試驅動開發 (TDD) 與測試縫隙 (Test Seams)**：測試是否依附於單一最高縫隙？是否耐受內部重構？
+3. **Fowler Code Smells 掃描**：逐一過濾 Shotgun Surgery, Divergent Change, Speculative Generality, Primitive Obsession, Feature Envy 等。
+4. **型別安全與測試覆蓋驗收**：`npm run build` TypeScript 0 錯誤、全量測試 100% 綠燈。
+
+- **標準軸判定**：**PASS** 或 **REVISION NEEDED**。
+
+---
+
+## 三、 雙軸總結 (Executive Summary)
+
+| 審查維度 | 發現事項數量 | 最嚴重議題等級 | 仲裁結論 |
+| :--- | :---: | :---: | :---: |
+| **規格軸 (Spec Axis)** | [數字] | [無 / 低 / 中 / 高 / 阻斷] | **[PASS / REVISE]** |
+| **標準軸 (Standards Axis)** | [數字] | [無 / 低 / 中 / 高 / 阻斷] | **[PASS / REVISE]** |
+
+**最終裁定**：[一句話裁定當前狀態，例如：維持主幹合併發布狀態 / 阻斷並發起最小 Patch 修正]。
+```
+
+Do **not** merge or rerank findings — the two axes are deliberately separate (see _Why two axes_).
 
 ## Why two axes
 
