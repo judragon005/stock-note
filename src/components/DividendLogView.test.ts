@@ -908,6 +908,74 @@ describe('DividendLogView (股利日誌與雙看板核心資料流測試)', () =
       }
     });
   });
+
+  describe('13. Spec 0233 / Ticket 01: 近日持倉除息行事曆雷達佈局順序測試 (置於雙欄圖表後、待入帳面板前)', () => {
+    it('在頂層頁面中，雷達卡片應位於各月份現金流雙欄網格之後、除息待入帳行事曆之前', () => {
+      const mockHoldings = [
+        {
+          symbol: '00878',
+          name: '國泰永續高股息',
+          market: 'TW' as const,
+          accountId: 'acc-1',
+          shares: 30000,
+          avgCost: 20,
+          currentPrice: 22,
+          marketValue: 660000,
+          unrealizedPnL: 60000,
+          unrealizedPnLPercent: 10,
+          totalCostBasis: 600000,
+          currency: 'TWD' as const,
+          totalDividends: 0,
+          yieldOnCostPercent: 6.25,
+        },
+      ];
+
+      const mockReceivables = [
+        {
+          id: 'rec-1',
+          symbol: '00878',
+          name: '國泰永續高股息',
+          market: 'TW' as const,
+          currency: 'TWD' as const,
+          accountId: 'acc-1',
+          exDate: '2026-11-17',
+          payDate: '2026-12-10',
+          sharesHeldOnExDate: 30000,
+          sharesHeld: 30000,
+          cashDividendPerShare: 1.25,
+          estimatedGrossDividend: 37500,
+          estimatedTaxOrFee: 791,
+          estimatedNetDividend: 36709,
+          estimatedNetDividendInTWD: 36709,
+          status: 'PENDING_PAYMENT' as const,
+          dateSource: 'OFFICIAL' as const,
+        },
+      ];
+
+      const html = renderToStaticMarkup(
+        React.createElement(DividendLogView, {
+          trades: [],
+          holdings: mockHoldings as any,
+          receivableDividends: mockReceivables,
+          usdToTwdRate: 32,
+          market: 'ALL',
+          selectedAccountId: 'ALL',
+        })
+      );
+
+      const dualPanelIdx = html.indexOf('dividend-dual-panel-grid');
+      const radarIdx = html.indexOf('近日持倉除息行事曆雷達');
+      const receivableIdx = html.indexOf('receivable-calendar');
+
+      expect(dualPanelIdx).toBeGreaterThan(-1);
+      expect(radarIdx).toBeGreaterThan(-1);
+      expect(receivableIdx).toBeGreaterThan(-1);
+
+      // 驗證核心時序：雙欄圖表 -> 雷達 -> 待入帳行事曆
+      expect(dualPanelIdx).toBeLessThan(radarIdx);
+      expect(radarIdx).toBeLessThan(receivableIdx);
+    });
+  });
 });
 
 
