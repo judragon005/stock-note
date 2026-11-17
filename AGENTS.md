@@ -57,6 +57,7 @@
 10. **詳細操作指引與合規手冊**：
     - 分支與 PR 工作流：[docs/guides/branch_protection_and_pr_workflow.md](docs/guides/branch_protection_and_pr_workflow.md)
     - GitHub ToS、防封號與新帳號隔離指南：[docs/guides/github_tos_and_anti_ban_guidelines.md](docs/guides/github_tos_and_anti_ban_guidelines.md)
+    - 雙軸程式碼審查實務指南：[docs/guides/two_axis_code_review_guide.md](docs/guides/two_axis_code_review_guide.md)
 
 
 
