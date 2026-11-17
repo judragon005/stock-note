@@ -3012,3 +3012,14 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     1. **Payout Month Precision vs Ex-Date Decoupling (發放月與除息月嚴格解耦)**：更正 `DEFAULT_DIVIDEND_PROFILES` 中將除息月誤植為發放月之致命缺陷，將 0056 精準對齊至實際發放月 `[2, 5, 8, 11]`，00878 更正為 `[3, 6, 9, 12]`，00919/00713 更正為 `[1, 4, 7, 10]`，消滅「11 月明明有 0056 匯入，預估卻排在 10 月」的時序認知錯置。
     2. **Anti-Clustering Summer Payout Mesh (夏秋旺季除權息發放平滑網)**：廢除未收錄標的單點硬塞 8 月（4% 粗估）之硬編碼，改由確定性代碼雜湊平滑分散於 7~9 月除權息旺季，徹底消滅 8 月暴增 29 筆配息與其餘月份被誤判為枯水期之假性高峰。
     3. **SSOT Historical Dividend Month Learning (歷史交易發放月份自主學習機制)**：主控制台自 `scopedTrades` 提取各標的歷史已結算之實質入帳月份，注入預估引擎優先採用，達到零硬編碼、自適應使用者專屬持倉配息節奏。
+
+- **Unified Full Database Cross-Device Sync & Dual-Track Security Architecture (全態資料庫封包 V2 跨端同態同步與 API 金鑰雙軌安全規範)**:
+  - 核心模組：`src/types/stock.ts`、`src/engine/archiveParser.ts`、`src/utils/db.ts`、`src/engine/securitySanitizer.ts`、`src/components/ExportDatabaseModal.tsx`、`src/components/EnhancedImportModal.tsx`、`src/components/Header.tsx`、`src/App.tsx`。
+  - 規格來源：Spec 0234 (v9.20.7) 與 ADR 0234，關聯 GitHub Issue #582。
+  - 核心領域術語與架構革新：
+    1. **StockTrackerUnifiedArchiveV2 (全態封包標準 V2)**：確立全態封包標準，封裝 `schemaVersion: '2.0.0'`、`exportedAt`、`appVersion`、`isRedacted`、`metrics` 與 `payload`，完整覆蓋六大實體（696 筆交易、729 筆現金流水、券商交割帳戶、不限用途借貸/股票質押合約、除權息事件快取、系統與 API Key 設定）。
+    2. **Dual-Track Security Export (雙軌安全匯出模式)**：預設啟用「安全脫敏備份 (抹除 API Key)」，消除檔案外洩敏感憑證風險；提供私有雲/NAS「完整遷移 (保留 API Key)」專用模式並附帶高對比琥珀色醒目警示。
+    3. **Cash Ledger Fidelity & Destruction Prevention (現金流水完整保全與防破壞機制)**：徹底廢除全態匯入時以 `syncTradesWithCashTransactions` 逆向推導交割款的行為，將 729 筆現金帳本（含 41 筆非交易手動出入金、借貸與利息）100% 同態落盤至目標端資料庫。
+    4. **Polymorphic Archive Ingestion & Orphan Account Alignment (多型解包引擎與孤兒帳戶對齊)**：支援自動識別 `UNIFIED_V2`、`LEGACY_DB_V1` 與 `TRADES_ONLY` 多型封包，自動將外鍵懸空之交易對齊至既有或預設合法交割帳戶，避免孤兒外鍵引發計算異常。
+    5. **Corporate Action Cache Hydration (除權息快取冷啟動還原)**：跨端遷移時同步載入除權息事件快取，確保 NAS 或新裝置冷啟動後待發放股利數量（2 筆）與本機 100% 精確一致。
+

@@ -123,11 +123,11 @@ export function validateFullDatabaseBackup(parsed: unknown): DatabaseBackupExpor
   }
 
   const cleanPayload = safeSanitizeObject(parsed) as any;
-  if (!cleanPayload.data || typeof cleanPayload.data !== 'object') {
+  const cleanData = cleanPayload.payload || cleanPayload.data;
+  if (!cleanData || typeof cleanData !== 'object') {
     return null;
   }
 
-  const cleanData = cleanPayload.data;
   const sanitizedTrades: TradeRecord[] = [];
 
   if (Array.isArray(cleanData.trades)) {

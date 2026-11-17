@@ -28,7 +28,6 @@ import {
   saveCustomPricesToStorage,
   loadAccountingViewFromStorage,
   saveAccountingViewToStorage,
-  exportTradesToJSON,
   exportTradesToCSV,
   loadBrokerAccountsFromStorage,
   saveBrokerAccountsToStorage,
@@ -90,7 +89,9 @@ import { calculateReceivableDividends, settleDividendAction } from './engine/rec
 import { buildTaxComplianceStatus } from './engine/taxComplianceEngine';
 import { CorporateActionSessionCache, scanCorporateActions } from './engine/corporateActionScanner';
 import { initializeStorageAsync } from './utils/storage';
-import { createSystemSnapshot } from './utils/db';
+import { createSystemSnapshot, exportFullDatabaseJSON, importFullDatabaseJSON } from './utils/db';
+import { ExportDatabaseModal } from './components/ExportDatabaseModal';
+import { StockTrackerUnifiedArchiveV2 } from './types/stock';
 import { loadMarketCacheSummary, syncMarketCacheToIndexedDB } from './engine/marketCacheLoader';
 import { WorkspaceErrorBoundary } from './components/common/WorkspaceErrorBoundary';
 
@@ -264,6 +265,7 @@ export const App: React.FC = () => {
   const [isFrictionCenterOpen, setIsFrictionCenterOpen] = useState(false);
   const [isMarginStressOpen, setIsMarginStressOpen] = useState(false);
   const [isEnhancedImportModalOpen, setIsEnhancedImportModalOpen] = useState(false);
+  const [isExportDatabaseModalOpen, setIsExportDatabaseModalOpen] = useState(false);
   const [isReconciliationOpen, setIsReconciliationOpen] = useState(false);
 
   // 全指標透視彈窗狀態
@@ -763,9 +765,28 @@ export const App: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  // JSON 匯出
+  // 系統全態封包匯出 (跨裝置 / NAS 同態遷移)
   const handleExportJSON = () => {
-    exportTradesToJSON(trades);
+    setIsExportDatabaseModalOpen(true);
+  };
+
+  // 執行全庫資料庫匯出下載
+  const handleConfirmExportDatabase = async (redactSensitive: boolean) => {
+    const jsonStr = await exportFullDatabaseJSON(redactSensitive);
+    const dateStr = getTaipeiDateStr();
+    const fileName = redactSensitive
+      ? `stock_tracker_backup_sanitized_${dateStr}.json`
+      : `stock_tracker_backup_full_${dateStr}.json`;
+
+    const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', url);
+    downloadAnchor.setAttribute('download', fileName);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    URL.revokeObjectURL(url);
   };
 
   // CSV 匯出
@@ -777,7 +798,8 @@ export const App: React.FC = () => {
   const handleConfirmEnhancedImport = async (
     finalTrades: TradeRecord[],
     mode: ImportDeduplicationMode,
-    rawIncomingCount: number
+    rawIncomingCount: number,
+    unifiedArchive?: StockTrackerUnifiedArchiveV2
   ) => {
     try {
       await createSystemSnapshot(
@@ -797,6 +819,76 @@ export const App: React.FC = () => {
       );
     } catch (e) {
       console.warn('Failed to take auto snapshot before import:', e);
+    }
+
+    if (unifiedArchive && unifiedArchive.payload) {
+      // 1. 寫入 IndexedDB 全態
+      try {
+        await importFullDatabaseJSON(JSON.stringify(unifiedArchive));
+      } catch (err) {
+        console.error('Failed to import full database from unified archive:', err);
+      }
+
+      // 2. 狀態機與持久層全面同態更新
+      const p = unifiedArchive.payload;
+      setTrades(finalTrades);
+      saveTradesToStorage(finalTrades);
+
+      if (p.brokerAccounts && p.brokerAccounts.length > 0) {
+        setAccounts(p.brokerAccounts);
+        saveBrokerAccountsToStorage(p.brokerAccounts);
+      }
+
+      if (p.cashTransactions && p.cashTransactions.length > 0) {
+        setCashTransactions(p.cashTransactions);
+        saveCashTransactionsToStorage(p.cashTransactions);
+      }
+
+      if (p.loanRecords && p.loanRecords.length > 0) {
+        setLoanRecords(p.loanRecords);
+        saveLoanRecordsToStorage(p.loanRecords);
+      }
+
+      if (p.corporateActions && p.corporateActions.length > 0) {
+        p.corporateActions.forEach((ca) => {
+          CorporateActionSessionCache.set(ca.symbol, [
+            {
+              symbol: ca.symbol,
+              market: ca.market,
+              type: ca.type,
+              date: ca.date,
+              payDate: ca.payDate,
+              price: ca.price,
+              ratio: ca.ratio,
+              description: ca.description,
+              sourceType: (ca.sourceType as any) || 'CACHE',
+            },
+          ]);
+        });
+        setCaVersion((v) => v + 1);
+      }
+
+      setIsEnhancedImportModalOpen(false);
+
+      if (unifiedArchive.isRedacted) {
+        alert(
+          `🎉 全態同態遷移完成！\n\n` +
+          `• 歷史交易帳本：${finalTrades.length} 筆\n` +
+          `• 現金與借貸流水：${p.cashTransactions.length} 筆 (完整保全手動出入金與借貸)\n` +
+          `• 不限用途借貸/質押：${p.loanRecords.length} 筆\n` +
+          `• 券商與交割帳戶：${p.brokerAccounts.length} 組\n\n` +
+          `🛡️ 提示：此檔案為安全脫敏檔，若需即時行情與除權息雷達，請至【設定】頁補填 API 金鑰。`
+        );
+      } else {
+        alert(
+          `🎉 全態同態遷移完成！\n\n` +
+          `• 歷史交易帳本：${finalTrades.length} 筆\n` +
+          `• 現金與借貸流水：${p.cashTransactions.length} 筆\n` +
+          `• 不限用途借貸/質押：${p.loanRecords.length} 筆\n` +
+          `• API 金鑰與除權息快取已 100% 同態還原！`
+        );
+      }
+      return;
     }
 
     setTrades(finalTrades);
@@ -1339,6 +1431,17 @@ export const App: React.FC = () => {
         accounts={accounts}
         existingTrades={trades}
         onConfirmImport={handleConfirmEnhancedImport}
+      />
+
+      {/* 系統全態封包匯出確認彈窗 (Spec 0234) */}
+      <ExportDatabaseModal
+        isOpen={isExportDatabaseModalOpen}
+        onClose={() => setIsExportDatabaseModalOpen(false)}
+        tradesCount={trades.length}
+        cashTransactionsCount={cashTransactions.length}
+        accountsCount={accounts.length}
+        loansCount={loanRecords.length}
+        onConfirmExport={handleConfirmExportDatabase}
       />
 
       {/* XIRR 現金流明細與收斂診斷透視彈窗 */}

@@ -10,7 +10,7 @@ import {
   Save,
   Layers,
 } from 'lucide-react';
-import { BrokerAccount, TradeRecord } from '../types/stock';
+import { BrokerAccount, TradeRecord, StockTrackerUnifiedArchiveV2 } from '../types/stock';
 import {
   BrokerTemplateId,
   BUILTIN_BROKER_TEMPLATES,
@@ -29,6 +29,7 @@ import {
   ImportDeduplicationMode,
 } from '../engine/tradeDeduplicator';
 import { validateTradesSchema } from '../utils/storage';
+import { detectArchiveFormat, parseUnifiedArchiveV2 } from '../engine/archiveParser';
 
 interface EnhancedImportModalProps {
   isOpen: boolean;
@@ -38,8 +39,9 @@ interface EnhancedImportModalProps {
   onConfirmImport: (
     trades: TradeRecord[],
     mode: ImportDeduplicationMode,
-    rawIncomingCount: number
-  ) => void;
+    rawIncomingCount: number,
+    unifiedArchive?: StockTrackerUnifiedArchiveV2
+  ) => void | Promise<void>;
 }
 
 function parseCSVRawLines(csvText: string): string[][] {
@@ -81,6 +83,7 @@ export const EnhancedImportModal: React.FC<EnhancedImportModalProps> = ({
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [rawFile, setRawFile] = useState<File | null>(null);
   const [isJSONFile, setIsJSONFile] = useState<boolean>(false);
+  const [unifiedArchive, setUnifiedArchive] = useState<StockTrackerUnifiedArchiveV2 | null>(null);
   const [parsedJSONTrades, setParsedJSONTrades] = useState<TradeRecord[]>([]);
 
   // CSV 解析狀態
@@ -98,6 +101,7 @@ export const EnhancedImportModal: React.FC<EnhancedImportModalProps> = ({
       setCurrentStep(1);
       setRawFile(null);
       setIsJSONFile(false);
+      setUnifiedArchive(null);
       setParsedJSONTrades([]);
       setCsvHeaders([]);
       setCsvRows([]);
@@ -121,12 +125,28 @@ export const EnhancedImportModal: React.FC<EnhancedImportModalProps> = ({
         try {
           const content = e.target?.result as string;
           const parsed = JSON.parse(content);
-          const validated = validateTradesSchema(parsed);
-          if (validated && validated.length > 0) {
-            setParsedJSONTrades(validated);
-            setCurrentStep(3); // JSON 直通預覽與確認
+          const format = detectArchiveFormat(parsed);
+
+          if (format === 'V2_UNIFIED') {
+            const unified = parseUnifiedArchiveV2(parsed);
+            if (unified && unified.payload.trades.length > 0) {
+              setUnifiedArchive(unified);
+              setParsedJSONTrades(unified.payload.trades);
+              setCurrentStep(3); // JSON 直通預覽與確認
+            } else {
+              alert('❌ V2 全態封包內容格式不符或交易紀錄為空！');
+            }
+          } else if (format === 'V1_TRADES_ARRAY') {
+            setUnifiedArchive(null);
+            const validated = validateTradesSchema(parsed);
+            if (validated && validated.length > 0) {
+              setParsedJSONTrades(validated);
+              setCurrentStep(3); // JSON 直通預覽與確認
+            } else {
+              alert('❌ JSON 備份檔格式不符或缺少必要交易欄位！');
+            }
           } else {
-            alert('❌ JSON 備份檔格式不符或缺少必要交易欄位！');
+            alert('❌ 未知的 JSON 檔案格式，請確認是否為系統匯出之備份檔！');
           }
         } catch {
           alert('❌ JSON 解析失敗，請確認檔案格式！');
@@ -601,6 +621,53 @@ export const EnhancedImportModal: React.FC<EnhancedImportModalProps> = ({
           {/* STEP 3: Preview & Deduplication Summary */}
           {currentStep === 3 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* V2 Unified Archive Banner */}
+              {unifiedArchive && (
+                <div
+                  style={{
+                    background: unifiedArchive.isRedacted ? 'rgba(16, 185, 129, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+                    border: `1.5px solid ${unifiedArchive.isRedacted ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)'}`,
+                    borderRadius: '8px',
+                    padding: '12px 14px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '1rem' }}>📦</span>
+                      <strong style={{ color: unifiedArchive.isRedacted ? '#10b981' : '#f59e0b', fontSize: '0.9rem' }}>
+                        系統全態封包 V2.0 ({unifiedArchive.isRedacted ? '🛡️ 安全脫敏版' : '⚠️ 完整遷移版'})
+                      </strong>
+                    </div>
+                    <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                      導出於: {new Date(unifiedArchive.exportedAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '6px', fontSize: '0.78rem', color: '#cbd5e1' }}>
+                    <div>📊 交易：<strong>{unifiedArchive.metrics.totalTrades}</strong> 筆</div>
+                    <div>💰 現金流水：<strong style={{ color: '#10b981' }}>{unifiedArchive.metrics.totalCashTransactions}</strong> 筆</div>
+                    <div>🏦 券商帳戶：<strong>{unifiedArchive.metrics.totalAccounts}</strong> 組</div>
+                    <div>📑 借貸質押：<strong>{unifiedArchive.metrics.totalLoans}</strong> 筆</div>
+                    <div>📅 除權息事件：<strong>{unifiedArchive.metrics.totalCorporateActions}</strong> 筆</div>
+                  </div>
+                </div>
+              )}
+
+              {/* V1 Legacy Alert */}
+              {isJSONFile && !unifiedArchive && (
+                <div
+                  style={{
+                    background: 'rgba(59, 130, 246, 0.08)',
+                    border: '1px solid rgba(59, 130, 246, 0.25)',
+                    borderRadius: '8px',
+                    padding: '8px 12px',
+                    fontSize: '0.78rem',
+                    color: '#93c5fd',
+                  }}
+                >
+                  ℹ️ <strong>舊式純交易檔 (V1.0 Legacy)</strong>：此檔案僅包含交易紀錄。匯入時將自動從交易反推生成交割金流，但不包含獨立手動現金帳與借貸合約。
+                </div>
+              )}
+
               {/* Summary Stats Badges */}
               <div
                 style={{
@@ -790,7 +857,7 @@ export const EnhancedImportModal: React.FC<EnhancedImportModalProps> = ({
                 <button
                   onClick={() => {
                     const finalTrades = applyImportDeduplication('OVERWRITE', parsedIncomingTrades, existingTrades);
-                    onConfirmImport(finalTrades, 'OVERWRITE', deduplicationResult.summary.total);
+                    onConfirmImport(finalTrades, 'OVERWRITE', deduplicationResult.summary.total, unifiedArchive || undefined);
                   }}
                   className="btn btn-secondary"
                   style={{
@@ -807,7 +874,7 @@ export const EnhancedImportModal: React.FC<EnhancedImportModalProps> = ({
                 <button
                   onClick={() => {
                     const finalTrades = applyImportDeduplication('SMART_MERGE', parsedIncomingTrades, existingTrades);
-                    onConfirmImport(finalTrades, 'SMART_MERGE', deduplicationResult.summary.total);
+                    onConfirmImport(finalTrades, 'SMART_MERGE', deduplicationResult.summary.total, unifiedArchive || undefined);
                   }}
                   className="btn btn-primary"
                   style={{

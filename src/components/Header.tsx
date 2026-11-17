@@ -488,7 +488,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               className="btn btn-secondary btn-sm"
               onClick={onExportJSON}
-              title="匯出完整 JSON 備份檔"
+              title="匯出系統全態封包 (含交易、帳戶、729筆現金帳與不限用途借貸)"
               style={{ padding: '5px 8px' }}
             >
               <FileJson size={13} />

@@ -460,6 +460,85 @@ describe('IndexedDB Core Engine & Snapshots (db.ts)', () => {
       expect(imported.length).toBe(1);
       expect(imported[0].symbol).toBe('2454');
     });
+
+    it('Spec 0234: exportFullDatabaseJSON 應完整導出 V2 全態封包（包含 loanRecords 與 corporateActions），且支援雙軌脫敏', async () => {
+      await dbPut('trades', { id: 't-1', symbol: '2330', market: 'TW', type: 'BUY', price: 900, shares: 1000, fee: 10, tax: 0, date: '2026-08-01' });
+      await dbPut('brokerAccounts', { id: 'acc-tw', name: '元大證券', market: 'TW', currency: 'TWD', feeDiscount: 0.28 });
+      await dbPut('cashTransactions', { id: 'cash-1', accountId: 'acc-tw', currency: 'TWD', type: 'DEPOSIT', amount: 1000000, date: '2026-08-01', createdAt: 1 });
+      await dbPut('loanRecords', {
+        id: 'loan-1',
+        name: '元大不限用途款項借貸',
+        loanType: 'PLEDGE',
+        principal: 500000,
+        annualInterestRate: 2.45,
+        currency: 'TWD',
+        warningRatio: 130,
+        safeRatio: 166,
+        pledgedCollateral: [{ symbol: '2330', shares: 1000 }],
+        createdAt: 1,
+      });
+      await dbPut('corporateActions', {
+        id: 'ca-1',
+        symbol: '2330',
+        name: '台積電',
+        market: 'TW',
+        currency: 'TWD',
+        type: 'DIVIDEND',
+        date: '2026-09-16',
+        payDate: '2026-10-08',
+        price: 4.0,
+      });
+      await dbPut('settings', {
+        key: 'apiKeys',
+        value: { finmindToken: 'secret_fm_123', fmpKey: 'secret_fmp_456' },
+      });
+
+      // 1. 測試預設脫敏匯出 (isRedacted: true)
+      const sanitizedJson = await exportFullDatabaseJSON(true);
+      const sanitizedParsed = JSON.parse(sanitizedJson);
+
+      expect(sanitizedParsed.schemaVersion).toBe('2.0.0');
+      expect(sanitizedParsed.isRedacted).toBe(true);
+      expect(sanitizedParsed.payload.trades.length).toBe(1);
+      expect(sanitizedParsed.payload.brokerAccounts.length).toBe(1);
+      expect(sanitizedParsed.payload.cashTransactions.length).toBe(1);
+      expect(sanitizedParsed.payload.loanRecords.length).toBe(1);
+      expect(sanitizedParsed.payload.loanRecords[0].name).toBe('元大不限用途款項借貸');
+      expect(sanitizedParsed.payload.loanRecords[0].warningRatio).toBe(130);
+      expect(sanitizedParsed.payload.corporateActions.length).toBe(1);
+      expect(sanitizedParsed.payload.corporateActions[0].symbol).toBe('2330');
+
+      // 驗證金鑰被抹除
+      const sanitizedSettings = sanitizedParsed.payload.settings;
+      expect(sanitizedSettings.apiKeys.finmindToken).toBe('');
+      expect(sanitizedSettings.apiKeys.fmpKey).toBe('');
+
+      // 2. 測試完整遷移匯出 (isRedacted: false)
+      const fullJson = await exportFullDatabaseJSON(false);
+      const fullParsed = JSON.parse(fullJson);
+
+      expect(fullParsed.isRedacted).toBe(false);
+      expect(fullParsed.payload.settings.apiKeys.finmindToken).toBe('secret_fm_123');
+      expect(fullParsed.payload.settings.apiKeys.fmpKey).toBe('secret_fmp_456');
+
+      // 3. 測試透過 importFullDatabaseJSON 完整還原至空白 DB
+      await dbClear('trades');
+      await dbClear('brokerAccounts');
+      await dbClear('cashTransactions');
+      await dbClear('loanRecords');
+      await dbClear('corporateActions');
+
+      await importFullDatabaseJSON(fullJson);
+
+      const restoredTrades = await dbGetAll<TradeRecord>('trades');
+      const restoredLoans = await dbGetAll<LoanRecord>('loanRecords');
+      const restoredCA = await dbGetAll<StoredCorporateAction>('corporateActions');
+      expect(restoredTrades.length).toBe(1);
+      expect(restoredLoans.length).toBe(1);
+      expect(restoredLoans[0].loanType).toBe('PLEDGE');
+      expect(restoredCA.length).toBe(1);
+      expect(restoredCA[0].id).toBe('ca-1');
+    });
   });
 
   describe('5. 公司行動持久化與增量更新 (Corporate Actions DB Persistence & Incremental Upsert)', () => {
