@@ -519,6 +519,13 @@ _Avoid_: Generic Rounding, Default String Conversion
 - [ADR-0227: V9.20.0 現金流三態時序統一、股利發放月精準對齊與月度日曆勾稽架構決策](docs/adr/0227-dividend-cashflow-tri-state-reconciliation.md)
 - [ADR-0231: V9.20.3 股利日誌與被動現金流全路徑帳務不變量與時區/隔離架構決策](docs/adr/0231-dividend-cashflow-full-path-audit-and-accounting-invariants.md)
 - [ADR-0232: V9.20.5 近日持倉除息行事曆雷達與跨期現金流前瞻排程架構決策](docs/adr/0232-ex-dividend-radar-and-calendar-horizon.md)
+- [ADR-0233: V9.20.6 近日持倉除息行事曆雷達佈局重構與短線現金流流水線整合](docs/adr/0233-ex-dividend-radar-layout-reorganization.md)
+
+### 近日持倉除息行事曆雷達佈局重構與短線現金流流水線整合 (Ex-Dividend Radar Layout Reorganization) _(新增於 V9.20.6)_
+
+- **短線戰術走廊聚合 (Tactical Settlement Corridor)**：將近日持倉除息雷達 (`ExDividendRadarCard`) 由最頂部移至月度長條圖與貢獻排行雙欄網格 (`dividend-dual-panel-grid`) 之後、除息待入帳行事曆 (`#receivable-calendar`) 之前，消除上下折返視線。
+- **單向認知階梯分層 (Macro-to-Micro Hierarchy)**：確立四階資訊架構：`Level 1 (宏觀總覽)` -> `Level 2 (結構分析)` -> `Level 3 (短線流水線)` -> `Level 4 (歷史稽核)`。
+- **測試縫隙防禦**：以頂層靜態渲染字串索引 `Index("dividend-dual-panel-grid") < Index("近日持倉除息行事曆雷達") < Index("receivable-calendar")` 作為時序防禦契約。
 
 ### 近日持倉除息行事曆雷達與跨期現金流前瞻排程 (Ex-Dividend Radar & Horizon Calendar) _(新增於 V9.20.5)_
 

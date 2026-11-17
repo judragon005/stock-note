@@ -464,16 +464,6 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         </div>
       </div>
 
-      {/* 0. 近日持倉除息行事曆雷達 (Spec 0232: 60/90 天除息前瞻視野) */}
-      <ExDividendRadarCard
-        radarEvents={upcomingRadarEvents}
-        horizonDays={radarHorizonDays}
-        onHorizonChange={setRadarHorizonDays}
-        isExpanded={isRadarExpanded}
-        onToggleExpand={() => setIsRadarExpanded((v) => !v)}
-        market={market}
-      />
-
       {/* 2×2 金融控制台網格佈局 */}
       {/* 1. 未來 12 個月現金流預估行事曆 (整合生活費對標與 Zavy 活水轉向指引) */}
       <DividendCalendarCard
@@ -537,7 +527,17 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
         </div>
       </div>
 
-      {/* 4. 除息待入帳行事曆面板 (支援一鍵已入帳微操作) */}
+      {/* 4. 近日持倉除息行事曆雷達 (Spec 0233: 聚合短線現金流流水線，位於雙欄分佈後、待入帳面板前) */}
+      <ExDividendRadarCard
+        radarEvents={upcomingRadarEvents}
+        horizonDays={radarHorizonDays}
+        onHorizonChange={setRadarHorizonDays}
+        isExpanded={isRadarExpanded}
+        onToggleExpand={() => setIsRadarExpanded((v) => !v)}
+        market={market}
+      />
+
+      {/* 5. 除息待入帳行事曆面板 (支援一鍵已入帳微操作) */}
       <div
         id="receivable-calendar"
         className="glass-card"
