@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-2282%2F2282%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2311%2F2311%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,30 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 近日持倉除息行事曆雷達與跨期現金流前瞻排程 (`Spec 0232`) *(V9.20.5 最新發布 / Spec #0232 / ADR #0232 / Issues #565 ~ #572, #574 / PR #573, #575)*
+### 1. 宏觀戰情室 3.5 全量修枝補缺、統一數據總線與一鍵決策閉環重構 (`Spec 0235`) *(V9.21.0 最新發布 / Spec #0235 / ADR #0235 / Issue #584 / PR #585)*
+
+- **統一數據總線與雙向別名正規化 (Issue #584 / Ticket 01)**：
+  - 實作 `normalizeMacroAliases` 與 `mergeMacroSnapshot`，徹底解決 camelCase 與 snake_case 欄位脫節；補齊 FRED 信用利差 (`cccSpreadOAS`, `igSpreadOAS`)、平衡通膨率 (`breakeven10y`)、新訂單-存貨利差與營收擴散指數；遇遠端空值保留本地快照，動態重算 VIX 與恐慌貪婪位階。
+- **風控防護盾計量精度修正 (Issue #584 / Ticket 02)**：
+  - 移除維持率多餘的除以 100，200% 維持率精確輸出 0.35 (`-35.0%`)；費半衝擊損益以總淨值乘持股權重精準折算台幣；1-Day 95% VaR 以扣除現金後之實質在險資產計算；統一採用 `recommendedEquityCapPercent` 作為建議上限 SSOT。
+- **戰情室風控卡片物理合併與資訊瘦身 (Issue #584 / Ticket 03)**：
+  - 物理刪除重複之舊版三欄 VaR 卡與舊版防護盾，全頁收斂至 `PortfolioShieldAndAmmoCard`，整合 ETF 穿透前 5 大抽屜、急速壓力測試與質押黑天鵝彈窗，全區受 `privacyMode` 金額遮罩保護。
+- **市場脈搏全面淘汰假數據 (Issue #584 / Ticket 04)**：
+  - 淘汰寫死常數 `CDS 65` 與 `M2 2.8%`，換上真實 FRED 利差與 `/api/market/breadth` 台美 20/60/200MA 多週期寬度及融資去槓桿比率。
+- **市場視角切換器去重合一與美股聯動 (Issue #584 / Ticket 05)**：
+  - 頂部視角切換器去重，統一收斂至 `MacroDualThermometerBar`；美股視角動態呈現費半、S&P 500、Nasdaq、TSM ADR；全球/台股視角呈現三大法人現貨合計；個股戰術訊號依視角聯動過濾。
+- **戰情晨報收合與一鍵決策跳轉 (Issue #584 / Ticket 06)**：
+  - 清除重複複製按鈕，長文診斷預設折疊；今日紀律執行清單針對點名持股掛載一鍵 `📈 技術面` 與 `⚡ 下單` 快捷鍵；釘選上限即時警示超配應減碼金額。
+- **雙動能自動推薦池與動態無風險利率 (Issue #584 / Ticket 07)**：
+  - 依市場視角自動切換推薦動能資產池，無風險利率動態取用 `macroSnapshot.us3m`，動能排行榜標記在庫權重並提供一鍵下單換倉跳轉。
+- **催化劑行事曆與除息點數精確估算 (Issue #584 / Ticket 08)**：
+  - 催化劑元件獨立封裝，除息/法說事件提供技術面跳轉；`estimateTsmcExDividendImpactPoints` 解耦，未直接持股台積電時仍可精確估算大盤蒸發點數。
+- **宏觀快速校準彈窗擴充與 Zavy 總線打通 (Issue #584 / Ticket 09)**：
+  - 校準彈窗擴充 8 項欄位；Zavy 漫步成長工作區啟動時自動融合本地宏觀快照消除 `--` 孤島，呈現美股寬度並提供真實校準彈窗。
+- **主檔結構巨石拆解與狀態總線解耦 (Issue #584 / Ticket 10)**：
+  - `WarRoomWorkspace.tsx` 行數由 2,266 行物理壓降至 **594 行**（完全符合 $\le 600$ 行門禁），抽離 `useWarRoomMacroSync.ts` 與 `warRoomBriefBuilder.ts`。
+
+### 2. 近日持倉除息行事曆雷達與跨期現金流前瞻排程 (`Spec 0232`) *(V9.20.5 / Spec #0232 / ADR #0232 / Issues #565 ~ #572, #574 / PR #573, #575)*
 
 - **雙時序解耦與純運算雷達引擎 (Issue #566)**：
   - 解耦除息日 (`exDate`)、預計入帳發放日 (`payDate`)、倒數天數 (`daysUntilEx`) 與在途凍結天數 (`daysFromExToPay`)，支援 60 天（確定公告）與 90 天（含週期推估）雙重視野。
