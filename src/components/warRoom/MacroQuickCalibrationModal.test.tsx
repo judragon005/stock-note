@@ -57,4 +57,23 @@ describe('MacroQuickCalibrationModal (Spec 0205 / Ticket 03)', () => {
     expect(html).toContain('CDS 信用違約交換指數 (基點)');
     expect(html).toContain('💾 儲存並即時重算');
   });
+
+  it('Spec 0235 Ticket 09: 應包含 taiexIndex、20MA 乖離、DXY、原油、CCC 利差、美/台 PMI 等 8 項新增校準欄位', () => {
+    const html = renderToStaticMarkup(
+      <MacroQuickCalibrationModal
+        isOpen={true}
+        onClose={vi.fn()}
+        macroSnapshot={MOCK_MACRO_SNAPSHOT}
+        onSave={vi.fn()}
+      />
+    );
+    expect(html).toContain('台股加權指數 (^TWII)');
+    expect(html).toContain('費半 20MA 乖離率 (%)');
+    expect(html).toContain('台股 20MA 乖離率 (%)');
+    expect(html).toContain('美元指數 (DXY)');
+    expect(html).toContain('WTI 原油 (USD/桶)');
+    expect(html).toContain('CCC 級垃圾債利差 OAS (%)');
+    expect(html).toContain('美國 ISM 製造業 PMI');
+    expect(html).toContain('台灣製造業 PMI');
+  });
 });

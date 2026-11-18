@@ -17,6 +17,7 @@ import {
   evaluateMacroDualThermometer,
   calculateMacroVaRAndStress,
   evaluatePortfolioMacroShield,
+  estimateTsmcExDividendImpactPoints,
 } from './macroAdvisorEngine';
 
 import {
@@ -848,6 +849,109 @@ describe('MacroAdvisorEngine (TDD Seam)', () => {
       expect(brief.actionPoints.some((p) => p.includes('34.5%') || p.includes('48.2%'))).toBe(true);
       expect(brief.llmPayloadJson).toContain('<loopback_protocol_directive>');
       expect(brief.llmPayloadJson).toContain('recommendedEquityCapPercent');
+    });
+  });
+
+  describe('14. Spec 0235 風控計量精度修復與單一權益上限基準 (Ticket 02)', () => {
+    it('未傳入耐受跌幅時，備援計算應回傳 0~1 小數比例 (維持率 200% → 0.35)', () => {
+      const shield = calculatePortfolioMacroShield({
+        navTWD: 1500000,
+        cashTWD: 100000,
+        totalLoanDebtTWD: 400000,
+        collateralValueTWD: 800000,
+      });
+      expect(shield.maxDropToleranceTo130Percent).toBe(0.35);
+    });
+
+    it('1-Day 95% VaR 應以扣除現金後之實質風險資產為母體', () => {
+      const base = { totalLoanDebtTWD: 0, collateralValueTWD: 0 };
+      const highCash = calculatePortfolioMacroShield({ ...base, navTWD: 1000000, cashTWD: 900000 });
+      const fullyInvested = calculatePortfolioMacroShield({ ...base, navTWD: 1000000, cashTWD: 0 });
+      const invested100k = calculatePortfolioMacroShield({ ...base, navTWD: 100000, cashTWD: 0 });
+      expect(highCash.valueAtRisk95TWD).toBeLessThan(fullyInvested.valueAtRisk95TWD ?? 0);
+      // 90% 現金之 100 萬帳戶，風險等同 10 萬滿倉帳戶
+      expect(highCash.valueAtRisk95TWD).toBe(invested100k.valueAtRisk95TWD);
+    });
+
+    it('晨報調倉減碼目標應與雙溫度計 recommendedEquityCapPercent 單一基準一致', () => {
+      const macro = createBaseMacro({ vix: 26, vixLevel: 'ELEVATED' });
+      const dualCap = evaluateMacroDualThermometer(macro).strategicRegime.recommendedEquityCapPercent;
+      const legacyCap = calculateMacroThermometer(macro).suggestedEquityAllocationPercent;
+      expect(dualCap).not.toBe(legacyCap); // 前提：兩套基準確實不同，測試才具鑑別力
+
+      const brief = generateAiMorningBrief({
+        macro,
+        shield: createBaseShield({ totalNavTWD: 10000000 }),
+        holdingSignals: [
+          { symbol: '2330', name: '台積電', action: 'HOLD', marketValueTWD: 9500000, weightPercent: 95 },
+        ],
+        asOfDate: '2026-09-08',
+      });
+      const rebalance = brief.actionPoints.find((p) => p.includes('情境調倉目標'));
+      expect(rebalance).toContain(`若降至 ${dualCap}% 防禦上限`);
+    });
+  });
+
+  describe('15. Spec 0235 無條件台積電除息點數估算 (Ticket 08)', () => {
+    it('未持有 2330 但催化劑日曆存在台積電除息事件時，仍應估算大盤蒸發點數 (> 0)', () => {
+      const points = estimateTsmcExDividendImpactPoints({
+        receivableDividends: [],
+        catalysts: [
+          {
+            id: 'tsm-div-1',
+            name: '台積電 (2330) 季度除息',
+            date: '2026-12-11',
+            daysLeft: 23,
+            category: 'EARNINGS_DIVIDEND',
+            impact: 'HIGH',
+            targetMarket: 'TW',
+            symbol: '2330.TW',
+            description: '台積電季度現金除息',
+          },
+        ],
+        taiexCurrentIndex: 23000,
+      });
+      expect(points).toBeGreaterThan(30);
+    });
+
+    it('既未持有 2330 且催化劑日曆無台積電除息事件時，應回傳 0', () => {
+      const points = estimateTsmcExDividendImpactPoints({
+        receivableDividends: [],
+        catalysts: [
+          {
+            id: 'fomc-1',
+            name: 'FOMC 利率決策',
+            date: '2026-12-18',
+            daysLeft: 30,
+            category: 'CENTRAL_BANK',
+            impact: 'HIGH',
+            targetMarket: 'US',
+            description: 'FOMC 利率決策會議',
+          },
+        ],
+        taiexCurrentIndex: 23000,
+      });
+      expect(points).toBe(0);
+    });
+
+    it('僅 description 順帶提及台積電與除息，但 symbol/name 非台積電事件時，應回傳 0 不誤觸發', () => {
+      const points = estimateTsmcExDividendImpactPoints({
+        receivableDividends: [],
+        catalysts: [
+          {
+            id: 'fomc-note',
+            name: 'FOMC 利率會議',
+            date: '2026-12-18',
+            daysLeft: 30,
+            category: 'CENTRAL_BANK',
+            impact: 'HIGH',
+            targetMarket: 'US',
+            description: '市場關注匯率波動與台積電除息週期對資金流向影響',
+          },
+        ],
+        taiexCurrentIndex: 23000,
+      });
+      expect(points).toBe(0);
     });
   });
 });

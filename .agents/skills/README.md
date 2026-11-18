@@ -86,3 +86,54 @@ flowchart TD
 3. **規格化階段 (Specification)**：執行 `/to-spec` 產出具備驗收條件 (Acceptance Criteria) 的 PRD，隨後執行 `/to-tickets` 拆解為單一權責 Ticket。
 4. **實作階段 (Implementation)**：經由 `/triage` 領取任務，並全程嚴格遵循 `/tdd`（先紅後綠、單一切片）實作程式碼。
 5. **門禁與交付階段 (Gate & Handoff)**：提交前執行 `/code-review` 進行「標準 (Standards)」與「規格 (Spec)」雙軸平行自動化驗收，最終透過 `/handoff` 自動檢核並補全 ADR 架構決策、同步領域文檔與歸檔完整交接紀錄。
+
+---
+
+## 🧭 模型戰力矩陣與閉環算力路由規範 (Model Routing Matrix)
+
+本專案支援多款主力 AI 模型與思考深度（Effort）。為避免單一模型自寫自審造成的同質性盲區，並兼顧配額週期（7 天長週期 vs 當日快速重置），各閉環階段強制遵守以下模型適配與對抗式審查規範：
+
+### 1. 核心模型家族定位清單
+
+| 模型家族與檔位 | 核心能力特質 | 配額週期特性 | 開發定位與適用場景 |
+| :--- | :--- | :--- | :--- |
+| **`Gemini 4 Argon (Medium / High)`**<br>`Orchestrator (Argon)` | **全域長上下文與架構統籌之王**：超大上下文窗口、跨檔案 ADR/Spec 衝突偵測、複雜系統重構設計。 | 7 天長週期<br>*(稀缺戰略資源)* | **總架構師 / 協調者**<br>專用於 `/grill-with-docs` 大架構設計，嚴禁用於跑腿讀檔或樣板測試。 |
+| **`Claude Opus 5.5 (Medium / High)`** | **極致邏輯嚴謹與邊界防禦之王**：嚴格 TypeScript 型別推導、狀態機不變量守護、複雜 Diff 手術。 | 當日快速重置<br>*(高配額重武器)* | **核心引擎實作 / 終極審查官**<br>核心計算、演算法、併發/資安與重大 Bug 排查首選。 |
+| **`Claude Sonnet 5.5 (Medium / High)`** | **日常寫碼性價比與速度平衡點**：指令遵從度高、最小 Diff 精準、React/TSX 元件拆解流暢。 | 當日快速重置<br>*(高頻主力工作馬)* | **UI 與一般切片實作主力**<br>日常 80% Ticket 實作、Ticket 拆解與分支管理首選。 |
+| **`Gemini 4 Hydrogen (Low ~ XHigh)`** | **高速推理與大容量脈絡推演**：支援 `XHigh` 超深思考檔位，結構化歸納極強。 | 當日快速重置<br>*(高頻主力對照)* | **規格起草 / 異質審查官**<br>`/to-spec` 規格化、Claude 寫碼後的異質 Code Review。 |
+| **`Gemini 3.8 Flash (Low ~ High)`** | **極速低延遲 I/O 引擎**：超快吞吐與低延遲，適合海量檢索與模板填充。 | 當日快速重置<br>*(卸載首選)* | **子代理探勘 / 收尾歸檔**<br>`invoke_subagent` 讀檔卸載、`/handoff` 歸檔清理。 |
+| **`GPT-OSS 120B (Medium)`** | **開源獨立第三視角**：跳脫 Gemini / Claude 雙體系的獨立推導。 | 當日重置 | **第三方算法驗算 / 備援** |
+
+---
+
+### 2. 開發閉環 8 階段最適模型配對表
+
+```mermaid
+flowchart LR
+    G[1. Grill / 對齊<br>Argon High / Hydrogen High] --> S[2. Spec / 規格<br>Hydrogen High / Opus 5.5]
+    S --> T[3. Tickets / 拆票<br>Sonnet 5.5 / Hydrogen Med]
+    T --> I[4. TDD / 實作<br>Sonnet 5.5 / Opus 5.5]
+    I -->|跨家族互審| CR[5. Code Review / 門禁<br>Gemini 審 Claude / Claude 審 Gemini]
+    CR --> H[6. Handoff / 交付<br>Sonnet 5.5 Low / 3.8 Flash]
+```
+
+| 閉環階段 | 觸發指令 | 推薦主視窗模型 | 子代理 (`Model`) 配置 | 核心選用理由與策略 |
+| :--- | :--- | :--- | :--- | :--- |
+| **1. 初始化配置** | `/setup-matt-pocock-skills` | **`Gemini 3.8 Flash (Med)`** 或 **`Claude Sonnet 5.5 (Low)`** | — | 純結構檢查與樣板寫入，零消耗高階配額。 |
+| **2. 需求壓力測試** | `/grill-with-docs`<br>`/grill-me` | **`Gemini 4 Argon (High)`** 或 **`Gemini 4 Hydrogen (High)`** | 平行調研強制配 **`flash`** | 需要一次吞入全域文檔與業務理論。以 `flash` 子代理讀碼回傳結構化摘要，主視窗專注攻克決策樹。 |
+| **3. 產出需求規格** | `/to-spec` | **`Gemini 4 Hydrogen (High)`** 或 **`Claude Opus 5.5 (Med)`** | — | 將決策收斂為嚴謹 PRD 與 Test Seams，`Hydrogen (High)` 歸納力強且當日快速回復。 |
+| **4. 票券任務拆解** | `/to-tickets`<br>`/triage` | **`Claude Sonnet 5.5 (Med)`** 或 **`Gemini 4 Hydrogen (Med)`** | — | 垂直切片拆解與 DAG 拓撲計算，Medium 檔位最精確且不拖泥帶水。 |
+| **5a. 核心實作**<br>*(計算/算法/安全/狀態機)* | `/tdd` + `/implement` | **`Claude Opus 5.5 (Med / High)`** 或 **`Gemini 4 Hydrogen (XHigh)`** | 局部查閱用 **`flash_lite`** | 金融級計算精度與核心引擎零容錯，先紅後綠一次命中。 |
+| **5b. UI 與一般實作**<br>*(元件拆分/樣式/CRUD)* | `/tdd` + `/implement` | **`Claude Sonnet 5.5 (Med)`** 或 **`Gemini 4 Hydrogen (Med)`** | — | 本專案日常 80% 的 Ticket 類型，速度快、代碼簡潔、嚴格控制 Diff。 |
+| **6. 雙軸程式碼審查** | `/code-review` | **【強制跨家族對抗式切換】**<br>• 若實作採用 **Claude** ➔ 切 **`Gemini 4 Argon / Hydrogen (High)`** 審<br>• 若實作採用 **Gemini** ➔ 切 **`Claude Opus 5.5 (Med)`** 審 | 雙軸平行審查 (`Standards` + `Spec`) | **打破同源盲區核心機制**：跨家族對邊界條件與隱性假設的敏感度互補，抓出隱蔽 Bug。 |
+| **7. 上下文交接與歸檔** | `/handoff` | **`Claude Sonnet 5.5 (Low / Med)`** 或 **`Gemini 3.8 Flash (High)`** | 工作區清理與暫存檢查 | 標準化分支合併、ADR 自動補全與工作區清理，低耗能快速完成。 |
+
+---
+
+### 3. 日常開發 3 條黃金調度守則
+
+1. **日常主視窗常駐檔位**：預設使用 **`Claude Sonnet 5.5 (Medium)`** 或 **`Gemini 4 Hydrogen (Medium)`**（當日快速重置池），足以平穩執行 80% 的日常切片實作與交付。
+2. **高槓桿節點手動升檔**：
+   - 跨系統大架構規劃 (`/grill-with-docs`) ➔ 切 **`Gemini 4 Argon (High)`**（將 7 天稀缺配額用在刀口上）。
+   - 核心計量引擎與複雜演算法 (`/tdd`) ➔ 切 **`Claude Opus 5.5 (Medium/High)`** 或 **`Gemini 4 Hydrogen (XHigh)`**。
+3. **門禁審查強制跨家族**：執行 `/code-review` 前，務必手動切換至「與撰寫者不同家族」的模型，實現真正的對抗式交叉審查。

@@ -1,23 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Compass,
-  TrendingUp,
-  ShieldCheck,
-  Calendar,
   Copy,
   Check,
-  Activity,
-  Flame,
-  Zap,
-  Download,
-  RefreshCw,
-  History,
-  Plus,
-  Trash2,
-  X,
-  Layers,
-  Globe2,
-  AlertTriangle,
   Sliders,
   EyeOff,
 } from 'lucide-react';
@@ -26,50 +11,36 @@ import { MacroDualThermometerBar } from './warRoom/MacroDualThermometerBar';
 import { PortfolioShieldAndAmmoCard } from './warRoom/PortfolioShieldAndAmmoCard';
 import { MacroStrategyPinBar } from './warRoom/MacroStrategyPinBar';
 import { HoldingTacticalSignalsCard } from './warRoom/HoldingTacticalSignalsCard';
+import { MarketPulseAndCanariesCard } from './warRoom/MarketPulseAndCanariesCard';
+import { WarRoomMorningBriefCard } from './warRoom/WarRoomMorningBriefCard';
+import { DualMomentumRotationCard } from './warRoom/DualMomentumRotationCard';
+import { CatalystCalendarCard } from './warRoom/CatalystCalendarCard';
 
 import { HoldingPosition, LoanRecord, TradeRecord, MarketType } from '../types/stock';
 import { TargetAllocationConfig } from '../types/allocation';
 import {
-  MacroIndicatorSnapshot,
   UpcomingCatalyst,
-  CatalystCategory,
-  CatalystImpact,
   MarketViewTab,
-  TimelineHorizon,
   MacroHoldingSignalInput,
-  UpcomingDividendInput,
   MacroPinnedStrategy,
 } from '../types/macro';
 import {
   generateAiMorningBrief,
-  calculateMacroThermometer,
   evaluateMacroDualThermometer,
-  estimateExDividendIndexImpactPoints,
-  groupCatalystsByTimeline,
+  estimateTsmcExDividendImpactPoints,
   generateMonthlyRevenueDeadlineCatalyst,
   isDoubleColdRegime,
-  calculate20MABias,
 } from '../engine/macroAdvisorEngine';
 import {
-  evaluateDualMomentum,
-  aggregateRecentDividends,
-  isMomentumHydrating,
   DEFAULT_MOMENTUM_UNIVERSES,
 } from '../engine/dualMomentumEngine';
-import { DailyCandle } from '../types/indicators';
 import { ReceivableDividend } from '../types/dividend';
-import { scanMuscleBookerItem } from '../engine/muscleBookerEngine';
 import {
-  loadMacroPulseHistory,
-  saveMacroPulseRecord,
-  getLatestMacroPulseRecord,
-  exportMacroPulseHistoryAsCsv,
-  MacroPulseHistoryRecord,
   loadMacroPinnedStrategies,
   saveMacroPinnedStrategy,
   removeMacroPinnedStrategy,
   parseMacroLoopbackJson,
-  sanitizeMacroRecord,
+  exportMacroPulseHistoryAsCsv,
 } from '../utils/macroPulseStorage';
 import { copyTextToClipboard } from '../utils/clipboard';
 
@@ -80,11 +51,15 @@ import {
   resetCatalystsToDefault,
 } from '../utils/catalystStorage';
 import { syncExternalCatalystsAsync } from '../engine/catalystSyncService';
-import { ensureKeyPoolHydrated, buildMacroSyncKeyHeaders } from '../engine/smartKeyRotator';
 import { useWarRoomPortfolioMetrics } from '../hooks/useWarRoomPortfolioMetrics';
+import { useWarRoomMacroSync } from '../hooks/useWarRoomMacroSync';
 import { calculateBehavioralAuditReport } from '../engine/behavioralAuditEngine';
-import { evaluateRiskStatus } from '../engine/riskAlertEngine';
-import { resolveDispositionAttentionStatus } from '../engine/dispositionWindowEngine';
+import {
+  assembleWarRoomHoldingSignals,
+  buildMorningBriefMarkdownReport,
+  buildDualMomentumViewModel,
+  toUpcomingDividends,
+} from '../utils/warRoomBriefBuilder';
 
 interface WarRoomWorkspaceProps {
   holdings: HoldingPosition[];
@@ -106,51 +81,6 @@ interface WarRoomWorkspaceProps {
   onOpenAiForce?: (symbol: string, market?: MarketType) => void;
   onOpenTradeModal?: (symbol?: string, market?: MarketType) => void;
 }
-
-// 預設/基底宏觀數據 (Spec 0209: 國際黃金現貨/期貨 GC=F 正名與跨市指標)
-const DEFAULT_MACRO_SNAPSHOT: MacroIndicatorSnapshot = {
-  date: new Date().toISOString().split('T')[0],
-  us10y: 4.18,
-  us2y: 4.02,
-  yieldSpread: 0.16,
-  isYieldInverted: false,
-  vix: 18.6,
-  vixLevel: 'NORMAL',
-  fearAndGreedIndex: 52,
-  fearAndGreedLevel: 'NEUTRAL',
-  goldPrice: 3350.0,
-  oilPrice: 71.5,
-  dxy: 103.4,
-  usdToTwd: 32.15,
-  usM2GrowthYoY: 2.8,
-  twM2GrowthYoY: 5.6,
-  creditSpreadOAS: 3.45,
-  cdsInsuranceIndex: 62,
-  cdsRiskLevel: 'LOW',
-  twFuturesNetOi: -15000,
-  twMarginMaintenance: 165.2,
-  twFuturesRiskLevel: 'NEUTRAL',
-  twMarginRiskLevel: 'SAFE',
-  soxIndex: 5240.5,
-  soxChangePercent: 1.15,
-  soxBias20Ma: 2.1,
-  soxAbove20Ma: true,
-  tsmAdrPrice: 195.0,
-  tsmTwPrice: 1050,
-  tsmAdrConvertedTwd: 1253.85,
-  tsmAdrPremiumPercent: 19.41,
-  taiexIndex: 23150,
-  taiexChangePercent: 0.65,
-  taiexBias20Ma: 1.8,
-  taiexAbove20Ma: true,
-  sp500Index: 5850,
-  sp500ChangePercent: 0.42,
-  sp500Bias20Ma: 1.5,
-  nasdaqIndex: 18520,
-  nasdaqChangePercent: 0.55,
-  sourceStatus: 'CACHED',
-  updatedAt: Date.now(),
-};
 
 export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
   holdings,
@@ -175,26 +105,20 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
   const [copiedLlm, setCopiedLlm] = useState(false);
   const [selectedUniverseId, setSelectedUniverseId] = useState<string>('global_macro');
 
-  // 市場四柱與跨市數據在地持久化狀態
-  const [macroSnapshot, setMacroSnapshot] = useState<MacroIndicatorSnapshot>(() => {
-    const latest = getLatestMacroPulseRecord();
-    if (latest) {
-      return {
-        ...DEFAULT_MACRO_SNAPSHOT,
-        ...latest,
-        goldPrice: latest.goldPrice && latest.goldPrice >= 2800 ? latest.goldPrice : 3350.0,
-        usdToTwd: usdToTwdRate > 0 ? usdToTwdRate : latest.usdToTwd || 32.15,
-      };
-    }
-    return {
-      ...DEFAULT_MACRO_SNAPSHOT,
-      usdToTwd: usdToTwdRate > 0 ? usdToTwdRate : DEFAULT_MACRO_SNAPSHOT.usdToTwd,
-    };
+  const {
+    macroSnapshot,
+    macroHistoryList,
+    isRefreshing,
+    lakehouseCandlesMap,
+    syncMacroPulseFromBackend,
+    applyCalibratedSnapshot,
+  } = useWarRoomMacroSync({
+    usdToTwdRate,
+    selectedUniverseId,
+    holdings,
+    historicalDailyPrices,
   });
-  const [showHistoryTable, setShowHistoryTable] = useState(false);
-  const [macroHistoryList, setMacroHistoryList] = useState<MacroPulseHistoryRecord[]>(() => loadMacroPulseHistory());
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lakehouseCandlesMap, setLakehouseCandlesMap] = useState<Record<string, DailyCandle[]>>({});
+
   const [pinnedStrategies, setPinnedStrategies] = useState<MacroPinnedStrategy[]>(() =>
     loadMacroPinnedStrategies()
   );
@@ -237,231 +161,30 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  // 真實呼叫本地後端 `/api/market/macro` 並自動掛載加密金鑰池 Header (Spec 0209 Zero-Mock Policy)
-  const syncMacroPulseFromBackend = useCallback(
-    async (forceRefresh: boolean) => {
-      if (typeof fetch !== 'function') return;
-      setIsRefreshing(true);
-      try {
-        await ensureKeyPoolHydrated();
-        const keyHeaders = buildMacroSyncKeyHeaders();
-        const endpoint = forceRefresh ? '/api/market/macro?refresh=1' : '/api/market/macro';
-        const res = await fetch(endpoint, {
-          headers: {
-            Accept: 'application/json',
-            ...keyHeaders,
-          },
-        });
-        if (res.ok) {
-          const payload = await res.json();
-          const remote = payload?.data || payload?.snapshot;
-          if (remote && typeof remote === 'object') {
-            const sanitizedRemote = sanitizeMacroRecord(remote);
-            const merged: MacroIndicatorSnapshot = {
-              ...macroSnapshot,
-              ...sanitizedRemote,
-              date: sanitizedRemote.date || new Date().toISOString().split('T')[0],
-              usdToTwd: sanitizedRemote.usdToTwd || (usdToTwdRate > 0 ? usdToTwdRate : macroSnapshot.usdToTwd),
-              sourceStatus: remote.sourceStatus || 'LIVE',
-              asOfTimestamp: remote.asOfTimestamp || new Date().toISOString(),
-              updatedAt: Date.now(),
-            };
-            saveMacroPulseRecord(merged, true);
-            setMacroSnapshot(merged);
-            setMacroHistoryList(loadMacroPulseHistory());
-          }
-        }
-      } catch {
-        // 離線或測試環境無後端時維持本地湖倉快取，絕不以 Math.random() 偽造波動
-      } finally {
-        setIsRefreshing(false);
-      }
-    },
-    [macroSnapshot, usdToTwdRate]
-  );
-
   const handleRefreshPulse = () => {
     void syncMacroPulseFromBackend(true);
   };
 
-  // 掛載時自動喚醒加密金鑰池並嘗試拉取最新宏觀快照與湖倉日 K
-  useEffect(() => {
-    let active = true;
-    void (async () => {
-      await ensureKeyPoolHydrated();
-      if (!active || typeof fetch !== 'function') return;
-      try {
-        const keyHeaders = buildMacroSyncKeyHeaders();
-        const res = await fetch('/api/market/macro', {
-          headers: { Accept: 'application/json', ...keyHeaders },
-        });
-        if (active && res.ok) {
-          const payload = await res.json();
-          const remote = payload?.data || payload?.snapshot;
-          if (remote && typeof remote === 'object') {
-            const sanitizedRemote = sanitizeMacroRecord(remote);
-            setMacroSnapshot((prev) => {
-              const merged: MacroIndicatorSnapshot = {
-                ...prev,
-                ...sanitizedRemote,
-                sourceStatus: remote.sourceStatus || 'LIVE',
-                updatedAt: Date.now(),
-              };
-              saveMacroPulseRecord(merged, true);
-              return merged;
-            });
-            setMacroHistoryList(loadMacroPulseHistory());
-          }
-        }
-      } catch {
-        // ignore offline
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  // 自動補齊雙動能資產池與在倉持股之本地 SQLite 湖倉歷史日 K，消除 -999% 假缺漏與平頭假 K 棒
-  useEffect(() => {
-    let active = true;
-    if (typeof fetch !== 'function') return;
-    const u =
-      DEFAULT_MOMENTUM_UNIVERSES.find((item) => item.id === selectedUniverseId) ||
-      DEFAULT_MOMENTUM_UNIVERSES[0];
-    const targetSymbols = Array.from(
-      new Set([
-        ...u.symbols.map((s) => s.symbol),
-        ...holdings.filter((h) => h.shares > 0).map((h) => h.symbol),
-      ])
-    );
-
-    void (async () => {
-      const nextMap: Record<string, DailyCandle[]> = {};
-      for (const sym of targetSymbols) {
-        const existingDates = historicalDailyPrices[sym]
-          ? Object.keys(historicalDailyPrices[sym]).length
-          : 0;
-        if (existingDates >= 65 || lakehouseCandlesMap[sym]?.length) continue;
-        try {
-          const res = await fetch(`/api/market/history/${encodeURIComponent(sym)}?limit=260`);
-          if (res.ok) {
-            const data = await res.json();
-            const list = data?.candles || data?.data;
-            if (Array.isArray(list) && list.length >= 5) {
-              nextMap[sym] = list.map((c: Record<string, unknown>) => ({
-                date: String(c.date || ''),
-                open: Number(c.open || c.close || 0),
-                high: Number(c.high || c.close || 0),
-                low: Number(c.low || c.close || 0),
-                close: Number(c.close || 0),
-                volume: Number(c.volume || 0),
-              }));
-            }
-          }
-        } catch {
-          // ignore offline
-        }
-      }
-      if (active && Object.keys(nextMap).length > 0) {
-        setLakehouseCandlesMap((prev) => ({ ...prev, ...nextMap }));
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, [selectedUniverseId, holdings, historicalDailyPrices]);
-
-  // 0. 持股技術訊號萃取 (結合真實日 K、自訂停損停利風控狀態與處置股警示)
+  // 0. 持股技術訊號萃取 (委派至純函式 assembleWarRoomHoldingSignals)
   const holdingSignals = useMemo<MacroHoldingSignalInput[]>(() => {
-    return holdings
-      .filter((h) => h.shares > 0)
-      .map((h) => {
-        const localDailyMap = historicalDailyPrices[h.symbol];
-        let candles: DailyCandle[] | undefined = lakehouseCandlesMap[h.symbol];
-        if (!candles && localDailyMap && Object.keys(localDailyMap).length >= 5) {
-          const sortedDates = Object.keys(localDailyMap).sort();
-          candles = sortedDates.slice(-60).map((d) => {
-            const c = localDailyMap[d];
-            return { date: d, open: c, high: c, low: c, close: c, volume: 0 };
-          });
-        }
-        const currentPrice = h.currentPrice || h.avgCost || 100;
-        const scanned = scanMuscleBookerItem(
-          h.symbol,
-          h.name,
-          h.market,
-          currentPrice,
-          candles
-        );
-
-        const fx = h.currency === 'USD' ? usdToTwdRate : 1;
-        const marketValueTWD = (h.shares || 0) * currentPrice * fx;
-        const weightPercent = totalNavTwd > 0 ? (marketValueTWD / totalNavTwd) * 100 : 0;
-        const unrealizedPnlPercent =
-          h.avgCost && h.avgCost > 0
-            ? ((currentPrice - h.avgCost) / h.avgCost) * 100
-            : 0;
-
-        const customPlan = h.plan || (h as unknown as { tradePlan?: { stopLossPrice?: number; takeProfitPrice?: number } }).tradePlan;
-        const plannedStop = customPlan?.stopLossPrice ?? h.riskMetrics?.stopLossPrice;
-        const plannedTarget = customPlan?.takeProfitPrice ?? h.riskMetrics?.takeProfitPrice;
-        const planRiskStatus = evaluateRiskStatus(
-          currentPrice,
-          plannedStop,
-          plannedTarget
-        );
-        const dispositionStatus = resolveDispositionAttentionStatus(
-          (h as unknown as { dispositionEvents?: Array<{ type: 'DISPOSITION' | 'ATTENTION'; startDate?: string; endDate?: string; eventDate?: string }> }).dispositionEvents || [],
-          macroSnapshot.date
-        );
-
-        // Spec 0213: 調用領域函式計算 20MA 月線乖離率 (消除 Feature Envy)
-        const bias20MA = calculate20MABias(candles, currentPrice);
-
-        return {
-          symbol: h.symbol,
-          name: h.name,
-          market: h.market,
-          action: scanned.actionDecision.action,
-          stopLossPrice: plannedStop ?? scanned.actionDecision.stopLossPrice,
-          targetPrice: plannedTarget ?? scanned.actionDecision.targetPrice,
-          shares: h.shares,
-          costBasis: h.avgCost || 0,
-          currentPrice,
-          marketValueTWD,
-          weightPercent: Math.round(weightPercent * 10) / 10,
-          unrealizedPnlPercent: Math.round(unrealizedPnlPercent * 10) / 10,
-          boxTop: scanned.boxUpper,
-          boxBottom: scanned.boxLower,
-          bias20MA,
-          planRiskStatus,
-          dispositionStatus,
-        };
-      });
+    return assembleWarRoomHoldingSignals({
+      holdings,
+      historicalDailyPrices,
+      lakehouseCandlesMap,
+      totalNavTwd,
+      usdToTwdRate,
+      asOfDate: macroSnapshot.date,
+    });
   }, [holdings, historicalDailyPrices, lakehouseCandlesMap, totalNavTwd, usdToTwdRate, macroSnapshot.date]);
 
   // 0.1 待收股息進度轉換
-  const upcomingDividends = useMemo<UpcomingDividendInput[]>(() => {
-    const today = new Date().toISOString().split('T')[0];
-    const todayTime = new Date(`${today}T00:00:00`).getTime();
-    return receivableDividends
-      .map((r) => {
-        const payTime = new Date(`${r.payDate}T00:00:00`).getTime();
-        const diffDays = Math.round((payTime - todayTime) / (1000 * 60 * 60 * 24));
-        return {
-          symbol: r.symbol,
-          amount: r.estimatedNetDividendInTWD || r.estimatedGrossDividend || 0,
-          payDate: r.payDate,
-          daysLeft: diffDays,
-        };
-      })
-      .filter((d) => d.daysLeft >= 0);
-  }, [receivableDividends]);
+  const upcomingDividends = useMemo(
+    () => toUpcomingDividends(receivableDividends),
+    [receivableDividends]
+  );
 
   // 1. 跨模組整合：ETF 穿透曝險 + 個人防護盾 3.0 與自由彈藥 (Spec 0220 / 技術債 0055: 狀態抽取 Hook)
-  const { shield } = useWarRoomPortfolioMetrics({
+  const { lookThroughReport, shield } = useWarRoomPortfolioMetrics({
     holdings,
     loans,
     cashBalanceTwd,
@@ -474,19 +197,13 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
   });
 
   // --- 0193 / 0209 旗艦戰情室 3.0 狀態 ---
-  const [activeStressDrop, setActiveStressDrop] = useState<-10 | -20 | -30>(-10);
-  const [timelineHorizon, setTimelineHorizon] = useState<TimelineHorizon | 'ALL'>('ALL');
   const [copiedBrief, setCopiedBrief] = useState(false);
   const [copiedPrivacyBrief, setCopiedPrivacyBrief] = useState(false);
 
   // --- 0204 快速校準 Modal 狀態 ---
   const [isCalibrateModalOpen, setIsCalibrateModalOpen] = useState(false);
 
-  // 宏觀水溫計試算 (向下相容單軌 + Spec 0209 雙溫度計)
-  const macroThermometer = useMemo(() => {
-    return calculateMacroThermometer(macroSnapshot);
-  }, [macroSnapshot]);
-
+  // Spec 0209 雙溫度計 SSOT (移除舊版單軌 macroThermometer)
   const dualThermometer = useMemo(() => {
     return evaluateMacroDualThermometer(macroSnapshot);
   }, [macroSnapshot]);
@@ -508,17 +225,8 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
   }, [macroSnapshot.soxBias20Ma, macroSnapshot.taiexBias20Ma, dualThermometer.tacticalSwing.signal, trades, holdings, totalNavTwd]);
 
   // 催化劑日曆狀態管理
-  const [catalystFilter, setCatalystFilter] = useState<string>('ALL');
-  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const [remoteCatalysts, setRemoteCatalysts] = useState<Omit<UpcomingCatalyst, 'daysLeft'>[]>([]);
   const [catalystRefreshKey, setCatalystRefreshKey] = useState(0);
-
-  // 新增自訂事件表單狀態
-  const [newCustomName, setNewCustomName] = useState('');
-  const [newCustomDate, setNewCustomDate] = useState(macroSnapshot.date);
-  const [newCustomCategory, setNewCustomCategory] = useState<CatalystCategory>('CUSTOM');
-  const [newCustomImpact, setNewCustomImpact] = useState<CatalystImpact>('MEDIUM');
-  const [newCustomDesc, setNewCustomDesc] = useState('');
 
   // 背景自動嘗試同步外部免費端點
   useEffect(() => {
@@ -533,19 +241,8 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     };
   }, []);
 
-  const handleSaveCustomCatalyst = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCustomName.trim() || !newCustomDate) return;
-    saveCustomCatalyst({
-      name: newCustomName.trim(),
-      date: newCustomDate,
-      category: newCustomCategory,
-      impact: newCustomImpact,
-      description: newCustomDesc.trim() || '使用者自訂重要財經日程。',
-    });
-    setNewCustomName('');
-    setNewCustomDesc('');
-    setIsCustomModalOpen(false);
+  const handleAddCustomCatalyst = (input: Parameters<typeof saveCustomCatalyst>[0]) => {
+    saveCustomCatalyst(input);
     setCatalystRefreshKey((k) => k + 1);
   };
 
@@ -577,49 +274,14 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     return list;
   }, [macroSnapshot.date, receivableDividends, remoteCatalysts, catalystRefreshKey]);
 
-  // 估算台積電除息對加權指數之蒸發點數
+  // 估算台積電除息對加權指數之蒸發點數 (即使未持有 2330，催化劑有台積電除息亦主動預警)
   const exDividendImpactPoints = useMemo(() => {
-    const tsmDiv = receivableDividends.find(
-      (d) => (d.symbol === '2330' || d.symbol === '2330.TW') && d.cashDividendPerShare && d.cashDividendPerShare > 0
-    );
-    if (!tsmDiv || !tsmDiv.cashDividendPerShare) return 0;
-    return estimateExDividendIndexImpactPoints({
-      cashDividendPerShare: tsmDiv.cashDividendPerShare,
-      sharesOutstanding: 25_930_380_000,
-      taiexCurrentIndex: macroSnapshot.taiexIndex || 23150,
+    return estimateTsmcExDividendImpactPoints({
+      receivableDividends,
+      catalysts,
+      taiexCurrentIndex: macroSnapshot.taiexIndex,
     });
-  }, [receivableDividends, macroSnapshot.taiexIndex]);
-
-  // 三段時序分組 (用於徽章計數與統計)
-  const groupedCatalysts = useMemo(() => {
-    return groupCatalystsByTimeline(catalysts);
-  }, [catalysts]);
-
-  // 分類、市場視角與時序雷達多維度篩選
-  const filteredCatalysts = useMemo(() => {
-    let result = catalysts;
-    if (marketView === 'TW') {
-      result = result.filter((c) => c.targetMarket === 'TW' || c.targetMarket === 'ALL' || !c.targetMarket);
-    } else if (marketView === 'US') {
-      result = result.filter((c) => c.targetMarket === 'US' || c.targetMarket === 'ALL' || !c.targetMarket);
-    }
-
-    if (catalystFilter === 'INFLATION_EMPLOYMENT') {
-      result = result.filter((c) => c.category === 'INFLATION' || c.category === 'EMPLOYMENT');
-    } else if (catalystFilter !== 'ALL') {
-      result = result.filter((c) => c.category === catalystFilter);
-    }
-
-    if (timelineHorizon === 'TODAY') {
-      result = result.filter((c) => c.daysLeft === 0);
-    } else if (timelineHorizon === 'WEEK') {
-      result = result.filter((c) => c.daysLeft >= 1 && c.daysLeft <= 7);
-    } else if (timelineHorizon === 'MONTH') {
-      result = result.filter((c) => c.daysLeft >= 8 && c.daysLeft <= 30);
-    }
-
-    return result;
-  }, [catalysts, catalystFilter, marketView, timelineHorizon]);
+  }, [receivableDividends, catalysts, macroSnapshot.taiexIndex]);
 
   // 3. 生成 AI 作戰方針
   const morningBrief = useMemo(() => {
@@ -632,63 +294,43 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     });
   }, [macroSnapshot, shield, catalysts, holdingSignals, upcomingDividends]);
 
-  // 4. 雙重動能輪動信號 (結合本地湖倉真實日 K 與歷史價格映射)
-  const selectedUniverse = useMemo(() => {
-    return (
-      DEFAULT_MOMENTUM_UNIVERSES.find((u) => u.id === selectedUniverseId) ||
-      DEFAULT_MOMENTUM_UNIVERSES[0]
-    );
-  }, [selectedUniverseId]);
+  // 依 marketView 自動推薦切換對應雙動能資產池（支援手動切換覆寫）
+  useEffect(() => {
+    if (marketView === 'TW') setSelectedUniverseId('tw_dividend_etf');
+    else if (marketView === 'US') setSelectedUniverseId('us_sector_rotation');
+    else setSelectedUniverseId('global_macro');
+  }, [marketView]);
 
-  const momentumSignal = useMemo(() => {
-    const quotesMap: Record<string, DailyCandle[]> = { ...lakehouseCandlesMap };
-    if (historicalDailyPrices && Object.keys(historicalDailyPrices).length > 0) {
-      for (const [sym, dateMap] of Object.entries(historicalDailyPrices)) {
-        if (!dateMap || quotesMap[sym]?.length) continue;
-        const sortedDates = Object.keys(dateMap).sort();
-        quotesMap[sym] = sortedDates.map((d) => ({
-          date: d,
-          open: dateMap[d],
-          high: dateMap[d],
-          low: dateMap[d],
-          close: dateMap[d],
-          volume: 0,
-        }));
-      }
-    }
-    // 聚合近 90 天內各標的之每股除息調節金額 (Spec 0213: 領域封裝與基準日錨定)
-    const dividendAdjustments3M = aggregateRecentDividends(
-      receivableDividends,
+  // 4. 雙重動能輪動信號 (委派至純函式 buildDualMomentumViewModel)
+  const { effectiveRiskFreeRate, momentumSignal, holdingMatchingSymbol, holdingWeightMap } = useMemo(
+    () =>
+      buildDualMomentumViewModel({
+        selectedUniverseId,
+        us3m: macroSnapshot.us3m,
+        lakehouseCandlesMap,
+        historicalDailyPrices,
+        receivableDividends,
+        asOfDate: macroSnapshot.date,
+        holdings,
+        holdingSignals,
+      }),
+    [
+      selectedUniverseId,
+      macroSnapshot.us3m,
       macroSnapshot.date,
-      90
-    );
+      lakehouseCandlesMap,
+      historicalDailyPrices,
+      receivableDividends,
+      holdings,
+      holdingSignals,
+    ]
+  );
 
-    return evaluateDualMomentum({
-      universeConfig: selectedUniverse,
-      quotesMap,
-      riskFreeRateAnnualized: 0.04,
-      dividendAdjustments3M,
-    });
-  }, [selectedUniverse, historicalDailyPrices, lakehouseCandlesMap, receivableDividends, macroSnapshot.date]);
-
-  // 5. 距當月底倒數天數 (雙動能月結調倉檢視日)
   const daysUntilMonthEnd = useMemo(() => {
     const now = new Date();
     const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     return Math.max(0, lastDayOfMonth - now.getDate());
   }, []);
-
-  // 6. 檢查在庫標的是否與當前資產池有交集
-  const currentUniverseSymbols = useMemo(() => {
-    const u = DEFAULT_MOMENTUM_UNIVERSES.find((item) => item.id === selectedUniverseId);
-    return new Set(u?.symbols.map((s) => s.symbol) || []);
-  }, [selectedUniverseId]);
-
-  const holdingMatchingAsset = useMemo(() => {
-    return holdings.find((h) => currentUniverseSymbols.has(h.symbol) || currentUniverseSymbols.has(`${h.symbol}.TW`));
-  }, [holdings, currentUniverseSymbols]);
-
-  const isTopHydrating = isMomentumHydrating(momentumSignal.topAsset);
 
   const handleCopyLlmJson = async () => {
     const ok = await copyTextToClipboard(morningBrief.llmPayloadJson);
@@ -725,61 +367,14 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
   }, []);
 
   const handleCopyMorningBriefReport = async (isMasked = false) => {
-    const stanceLabel =
-      macroThermometer.stance === 'AGGRESSIVE'
-        ? '進攻・積極擴張'
-        : macroThermometer.stance === 'DEFENSIVE'
-          ? '防禦・現金為王'
-          : '平衡・區間操作';
-
-    const sortedSignals = [...holdingSignals].sort((a, b) => (b.weightPercent || 0) - (a.weightPercent || 0));
-    const matrixLines = sortedSignals.map((s) => {
-      const pnlSign = (s.unrealizedPnlPercent || 0) >= 0 ? '+' : '';
-      const stopPriceStr = s.stopLossPrice ? `$${s.stopLossPrice.toFixed(2)}` : (s.boxBottom ? `$${s.boxBottom.toFixed(2)} (箱底)` : '動態移動');
-      const actionBadge = s.action === 'SELL' ? '⚠️ 減碼/停損' : s.action === 'BUY' ? '⚡ 突破加碼' : s.action === 'AVOID' ? '🛑 弱勢觀望' : '🟢 續抱';
-      return `| ${s.symbol} | ${s.name || ''} | ${s.weightPercent || 0}% | ${pnlSign}${s.unrealizedPnlPercent || 0}% | $${(s.currentPrice || 0).toFixed(2)} | ${stopPriceStr} | ${actionBadge} |`;
+    const report = buildMorningBriefMarkdownReport({
+      macroSnapshot,
+      dualThermometer,
+      morningBrief,
+      shield,
+      holdingSignals,
+      isMasked,
     });
-
-    const report = [
-      `> 【系統指令 (System Directive)】：`,
-      `> 你現在是首席風險官 (CRO) 與高階避險基金投資經理。本報告為個人投資組合「戰情室 3.0 本地模型推演簡報」，所有宏觀數據、費半/台積電 ADR 溢折價、籌碼廣度指標與持股風控防守價均為本地快照。請嚴格基於報告內給定的客觀數據進行壓力測試、調倉驗算與極端風險審核，並於回覆末尾附上 JSON 戰略釘選區塊（含 recommendedEquityCapPercent, soxSupportLevel, taiexSupportLevel, tacticalSummary）。`,
-      '',
-      `# 🏦 宏觀戰情室 3.0 每日晨會簡報 (${macroSnapshot.date})`,
-      `> 作戰定調：${morningBrief.headline} (${morningBrief.tone})`,
-      '',
-      `## 🌡️ 雙軌水溫計：長線總經 ${dualThermometer.strategicRegime.score} 分【${stanceLabel}】｜波段戰術 ${dualThermometer.tacticalSwing.score} 分【${dualThermometer.tacticalSwing.label}】`,
-      `- 建議股票總倉位上限：${macroThermometer.suggestedEquityAllocationPercent}%`,
-      `- 費城半導體 (^SOX)：${macroSnapshot.soxIndex ?? 'N/A'} (20MA 乖離 ${macroSnapshot.soxBias20Ma ?? 0}%)｜台積電 ADR 溢折價：${macroSnapshot.tsmAdrPremiumPercent ?? 0}%`,
-      `- 決策推論：${macroThermometer.rationale.join('；')}`,
-      '',
-      `## 🛡️ 個人在險、真·自由子彈與穿透風控 (1-Day 95% VaR)`,
-      isMasked
-        ? `- 帳戶實質總淨值 (Effective NAV)：NT$ [已隱私遮蔽] (約 ${sortedSignals.length} 檔持股組合)`
-        : `- 帳戶實質總淨值 (Effective NAV)：NT$ ${Math.round(shield.totalNavTWD).toLocaleString()}`,
-      isMasked
-        ? `- 真·自由可動用子彈：佔總淨值 ${shield.cashRatioPercent}% (金額已隱私遮蔽)`
-        : `- 真·自由可動用子彈：NT$ ${Math.round(shield.freeDeployableCashTWD ?? shield.cashBalanceTWD).toLocaleString()}`,
-      `- ETF 穿透半導體權重：${shield.semiLookThroughWeightPercent ?? 0}% (台積電 ${shield.tsmcLookThroughWeightPercent ?? 0}%)`,
-      isMasked
-        ? `- 單日 95% 最大在險價值 (VaR)：佔總淨值 ${shield.varRatioPercent || 0}% (金額已隱私遮蔽)`
-        : `- 單日 95% 最大在險價值 (VaR)：NT$ ${(shield.valueAtRisk95TWD || 0).toLocaleString()} (佔總淨值 ${shield.varRatioPercent || 0}%)`,
-      `- 質押維持率：${shield.hasLoans && shield.marginMaintenanceRatio !== null ? `${shield.marginMaintenanceRatio}% (${shield.marginStatus})` : '無質押負債 (零槓桿)'}`,
-      '',
-      `## 🎯 今日執行要點`,
-      ...morningBrief.actionPoints.map((p, idx) => `${idx + 1}. ${p}`),
-      '',
-      `## 🌐 台美關鍵金絲雀與實體商品`,
-      `- 美債 10Y/2Y：${macroSnapshot.us10y}% / ${macroSnapshot.us2y}% (利差 ${macroSnapshot.yieldSpread}% ${macroSnapshot.isYieldInverted ? '倒掛' : '正常'})`,
-      `- VIX 恐慌指數：${macroSnapshot.vix} (${macroSnapshot.vixLevel})｜國際黃金現貨/期貨 (GC=F)：$${macroSnapshot.goldPrice} USD/oz`,
-      `- 高收益債利差 (OAS)：${macroSnapshot.creditSpreadOAS ?? 3.5}% | CDS 指數：${macroSnapshot.cdsInsuranceIndex ?? 65} (${macroSnapshot.cdsRiskLevel ?? 'LOW'})`,
-      `- 外資台指期未平倉：${(macroSnapshot.twFuturesNetOi ?? 0).toLocaleString()} 口 | 全市場融資維持率：${macroSnapshot.twMarginMaintenance ?? 165.2}%`,
-      '',
-      `## 📋 持股技術防守與權重矩陣 (按權重排序)`,
-      `| 代號 | 名稱 | 權重 | 損益% | 市價 | 防守價/箱底 | 建議動作 |`,
-      `|---|---|---|---|---|---|---|`,
-      ...matrixLines,
-    ].join('\n');
-
     const ok = await copyTextToClipboard(report);
     if (ok) {
       if (isMasked) {
@@ -803,7 +398,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <h1 style={{ fontSize: '1.45rem', fontWeight: 800, margin: 0, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
-                法人旗艦級宏觀戰情室 3.0
+                法人旗艦級宏觀戰情室 3.5
               </h1>
               <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--gain-color)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
                 <span className="pulse-dot-green" style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'currentColor', display: 'inline-block' }} />
@@ -816,33 +411,8 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           </div>
         </div>
 
-        {/* 頂部切換與操作區 */}
+        {/* 頂部操作區（視角切換統一收斂至下方 MacroDualThermometerBar，避免雙重渲染） */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'inline-flex', background: 'rgba(30, 41, 59, 0.8)', padding: '3px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-            <button
-              onClick={() => handleMarketTabChange('GLOBAL')}
-              className={`btn btn-sm ${marketView === 'GLOBAL' ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ fontSize: '0.78rem', padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-            >
-              <Globe2 size={13} />
-              🌐 全球綜觀
-            </button>
-            <button
-              onClick={() => handleMarketTabChange('TW')}
-              className={`btn btn-sm ${marketView === 'TW' ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ fontSize: '0.78rem', padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-            >
-              🇹🇼 台股視角
-            </button>
-            <button
-              onClick={() => handleMarketTabChange('US')}
-              className={`btn btn-sm ${marketView === 'US' ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ fontSize: '0.78rem', padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-            >
-              🇺🇸 美股視角
-            </button>
-          </div>
-
           <button
             onClick={handleOpenCalibrateModal}
             className="btn btn-secondary btn-sm"
@@ -902,27 +472,45 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
         exDividendImpactPoints={exDividendImpactPoints}
       />
 
-      {/* 📌 外部 AI 智囊團宏觀戰略釘選列 (Macro Strategy Loopback Pin - Ticket 10) */}
+      {/* 📌 外部 AI 智囊團宏觀戰略釘選列 (Macro Strategy Loopback Pin - Ticket 10, Spec 0235 Ticket 06) */}
       <MacroStrategyPinBar
         pins={pinnedStrategies}
         onPasteAndPin={handlePasteAndPinStrategy}
         onRemovePin={handleRemovePinnedStrategy}
         currentSoxIndex={macroSnapshot.soxIndex}
         currentTaiexIndex={macroSnapshot.taiexIndex}
+        currentEquityPercent={
+          shield.totalNavTWD > 0
+            ? Math.round((lookThroughReport.totalPortfolioNAV / shield.totalNavTWD) * 1000) / 10
+            : 0
+        }
+        totalNavTwd={shield.totalNavTWD}
+        privacyMode={privacyMode}
       />
 
-      {/* 🛡️ 個人部位防禦護欄、真·自由子彈與 ETF 穿透曝險 (Ticket 07 & 08) */}
+      {/* 🛡️ 個人部位防禦護欄、真·自由子彈與 ETF 穿透曝險 (Ticket 07 & 08, Spec 0235 Ticket 03 整併版) */}
       <PortfolioShieldAndAmmoCard
         shield={shield}
         privacyMode={privacyMode}
         currentUsdToTwdRate={usdToTwdRate}
         isDoubleCold={isDoubleColdRegime(dualThermometer.strategicRegime.score, dualThermometer.tacticalSwing.score)}
+        lookThroughReport={lookThroughReport}
+        onOpenMarginStressModal={onOpenMarginStressModal}
+        recommendedEquityCapPercent={dualThermometer.strategicRegime.recommendedEquityCapPercent}
+        pinnedEquityCapPercent={pinnedStrategies[0]?.recommendedEquityCapPercent}
+        currentEquityPercent={
+          shield.totalNavTWD > 0
+            ? Math.round((lookThroughReport.totalPortfolioNAV / shield.totalNavTWD) * 1000) / 10
+            : 0
+        }
       />
 
       {/* 🎯 在倉持股波段戰術雷達與一鍵執行閉環 (Ticket 09) */}
       <HoldingTacticalSignalsCard
         signals={holdingSignals}
         fomoChasingWarning={fomoChasingWarning}
+        activeMarketTab={marketView}
+        onResetMarketTab={() => handleMarketTabChange('GLOBAL')}
         onInspectTechnical={
           onInspectTechnical
             ? (sym) => {
@@ -949,1317 +537,57 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
         privacyMode={privacyMode}
       />
 
-      {/* 🤖 AI 智慧每日作戰方針 (AI Morning Brief) */}
-      <div className="warroom-hero-card">
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span className="badge" style={{ background: 'var(--accent-amber)', color: '#0f172a', fontWeight: 800, padding: '4px 10px' }}>
-              <Zap size={14} />
-              AI 晨報作戰方針
-            </span>
-            <span style={{ fontSize: '1.35rem', fontWeight: 800, color: '#fef08a' }}>
-              {morningBrief.headline}
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={() => handleCopyMorningBriefReport(false)}
-              className="btn btn-secondary"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                background: copiedBrief ? 'rgba(34, 197, 94, 0.2)' : 'rgba(30, 41, 59, 0.7)',
-                borderColor: copiedBrief ? 'var(--accent-green)' : 'rgba(51, 65, 85, 0.6)',
-                color: copiedBrief ? 'var(--gain-color)' : 'var(--text-primary)',
-                transition: 'all 0.2s ease',
-              }}
-              title="一鍵複製 Markdown 格式繁體中文晨會作戰簡報 (含 Data Seal 與持股矩陣)"
-            >
-              {copiedBrief ? <Check size={14} /> : <Copy size={14} />}
-              {copiedBrief ? '已複製簡報！' : '📋 複製晨會簡報'}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleCopyMorningBriefReport(true)}
-              className="btn btn-secondary"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                background: copiedPrivacyBrief ? 'rgba(34, 197, 94, 0.2)' : 'rgba(30, 41, 59, 0.7)',
-                borderColor: copiedPrivacyBrief ? 'var(--accent-green)' : 'rgba(51, 65, 85, 0.6)',
-                color: copiedPrivacyBrief ? 'var(--gain-color)' : 'var(--text-primary)',
-                transition: 'all 0.2s ease',
-              }}
-              title="隱私遮蔽總淨值與金額，僅保留權重%與損益%，安心複製給外部 AI"
-            >
-              {copiedPrivacyBrief ? <Check size={14} /> : <EyeOff size={14} />}
-              {copiedPrivacyBrief ? '已複製脫敏版！' : '🔒 脫敏複製'}
-            </button>
-            <button
-              type="button"
-              onClick={handleCopyLlmJson}
-              className="btn btn-secondary"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                background: copiedLlm ? 'rgba(34, 197, 94, 0.2)' : 'rgba(30, 41, 59, 0.7)',
-                borderColor: copiedLlm ? 'var(--accent-green)' : 'rgba(51, 65, 85, 0.6)',
-                color: copiedLlm ? 'var(--gain-color)' : 'var(--text-primary)',
-                transition: 'all 0.2s ease',
-              }}
-              title="複製結構化 Prompt Payload 供外部 LLM 使用"
-            >
-              {copiedLlm ? <Check size={14} /> : <Zap size={14} />}
-              {copiedLlm ? '已複製 Payload！' : '🤖 LLM 提示詞'}
-            </button>
-            <span className="mono" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              基準日：{macroSnapshot.date}
-            </span>
-          </div>
-        </div>
+      {/* 🤖 AI 智慧每日作戰方針 (Spec 0235 Ticket 06 緊湊型互動晨報) */}
+      <WarRoomMorningBriefCard
+        morningBrief={morningBrief}
+        asOfDate={macroSnapshot.date}
+        holdingSymbols={holdings.filter((h) => h.shares > 0).map((h) => ({ symbol: h.symbol, market: h.market || 'TW' }))}
+        onInspectTechnical={onInspectTechnical}
+        onOpenTradeModal={onOpenTradeModal}
+        privacyMode={privacyMode}
+      />
 
-        <div style={{ background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(51, 65, 85, 0.6)', borderRadius: 'var(--radius-md)', padding: '14px 18px', marginBottom: '18px', lineHeight: 1.6, fontSize: '0.92rem' }}>
-          💡 <strong style={{ color: '#ffffff' }}>核心方針：</strong>
-          {morningBrief.summary}
-        </div>
+      {/* 市場四柱即時脈搏與機構金絲雀 (Spec 0235 Ticket 04) */}
+      <MarketPulseAndCanariesCard
+        macroSnapshot={macroSnapshot}
+        marketView={marketView}
+        historyList={macroHistoryList}
+        isRefreshing={isRefreshing}
+        onRefreshPulse={handleRefreshPulse}
+        onExportCsv={handleExportCsv}
+      />
 
-        <div className="warroom-grid-2" style={{ marginBottom: '18px' }}>
-          <div style={{ background: 'rgba(30, 41, 59, 0.4)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '16px' }}>
-            <h4 style={{ margin: '0 0 8px 0', fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-amber)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Activity size={14} />
-              宏觀環境診斷
-            </h4>
-            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              {morningBrief.macroDiagnosis}
-            </p>
-          </div>
+      {/* 🚀 第三層：雙重動能跨資產輪動排行榜 (Spec 0235 Ticket 07) */}
+      <DualMomentumRotationCard
+        universes={DEFAULT_MOMENTUM_UNIVERSES}
+        selectedUniverseId={selectedUniverseId}
+        onSelectUniverse={setSelectedUniverseId}
+        momentumSignal={momentumSignal}
+        asOfDate={macroSnapshot.date || new Date().toISOString().split('T')[0]}
+        daysUntilMonthEnd={daysUntilMonthEnd}
+        effectiveRiskFreeRate={effectiveRiskFreeRate}
+        holdingMatchingSymbol={holdingMatchingSymbol}
+        holdingWeightMap={holdingWeightMap}
+        onInspectTechnical={onInspectTechnical}
+        onOpenTradeModal={onOpenTradeModal}
+      />
 
-          <div style={{ background: 'rgba(30, 41, 59, 0.4)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '16px' }}>
-            <h4 style={{ margin: '0 0 8px 0', fontSize: '0.8rem', fontWeight: 700, color: '#818cf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <ShieldCheck size={14} />
-              個人防護盾體質診斷
-            </h4>
-            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              {morningBrief.shieldDiagnosis}
-            </p>
-          </div>
-        </div>
-
-        <div>
-          <h4 style={{ margin: '0 0 10px 0', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-            📋 今日客觀紀律執行清單 (個人化多因子事件驅動)：
-          </h4>
-          <div className="warroom-grid-3">
-            {morningBrief.actionPoints.map((point, idx) => {
-              const isSell = point.includes('破線停損') || point.includes('停損');
-              const isBuy = point.includes('動能突破') || point.includes('突破');
-              const isCatalyst = point.includes('催化劑倒數');
-              const isDividend = point.includes('股息活水');
-
-              let borderColor = 'rgba(51, 65, 85, 0.4)';
-              let bg = 'rgba(15, 23, 42, 0.6)';
-              let badgeBg = 'rgba(245, 158, 11, 0.2)';
-              let badgeColor = 'var(--accent-amber)';
-
-              if (isSell) {
-                borderColor = 'rgba(239, 68, 68, 0.45)';
-                bg = 'rgba(239, 68, 68, 0.08)';
-                badgeBg = 'rgba(239, 68, 68, 0.25)';
-                badgeColor = 'var(--loss-color)';
-              } else if (isBuy) {
-                borderColor = 'rgba(34, 197, 94, 0.45)';
-                bg = 'rgba(34, 197, 94, 0.08)';
-                badgeBg = 'rgba(34, 197, 94, 0.25)';
-                badgeColor = 'var(--gain-color)';
-              } else if (isCatalyst) {
-                borderColor = 'rgba(6, 182, 212, 0.45)';
-                bg = 'rgba(6, 182, 212, 0.08)';
-                badgeBg = 'rgba(6, 182, 212, 0.25)';
-                badgeColor = '#38bdf8';
-              } else if (isDividend) {
-                borderColor = 'rgba(245, 158, 11, 0.45)';
-                bg = 'rgba(245, 158, 11, 0.08)';
-                badgeBg = 'rgba(245, 158, 11, 0.25)';
-                badgeColor = '#fbbf24';
-              }
-
-              return (
-                <div
-                  key={idx}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '10px',
-                    padding: '12px',
-                    borderRadius: 'var(--radius-sm)',
-                    background: bg,
-                    border: `1px solid ${borderColor}`,
-                    fontSize: '0.82rem',
-                    color: 'var(--text-secondary)',
-                    lineHeight: 1.5,
-                  }}
-                >
-                  <span
-                    className="mono"
-                    style={{
-                      width: '20px',
-                      height: '20px',
-                      flexShrink: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: '50%',
-                      background: badgeBg,
-                      color: badgeColor,
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                    }}
-                  >
-                    {idx + 1}
-                  </span>
-                  <span style={{ color: isSell ? 'var(--loss-color)' : isBuy ? 'var(--gain-color)' : undefined }}>{point}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* 🛡️ 個人在險價值與 3 階急速黑天鵝壓力測試 (VaR & Stress Testing) */}
-      <div className="card" style={{ padding: '20px 24px', background: 'rgba(15, 23, 42, 0.75)', border: '1px solid rgba(51, 65, 85, 0.6)' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '14px', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ padding: '8px', background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', borderRadius: 'var(--radius-md)' }}>
-              <ShieldCheck size={20} />
-            </div>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                個人在險價值 (1-Day 95% VaR) 與急速壓力測試
-              </h3>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                機構級風控模型：動態 VIX 波動度在險損失推估與台幣升貶敏感度
-              </span>
-            </div>
-          </div>
-
-          <div style={{ display: 'inline-flex', background: 'rgba(30, 41, 59, 0.8)', padding: '3px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-            <button
-              onClick={() => setActiveStressDrop(-10)}
-              className={`btn btn-sm ${activeStressDrop === -10 ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ fontSize: '0.75rem', padding: '4px 8px' }}
-            >
-              -10% 震盪
-            </button>
-            <button
-              onClick={() => setActiveStressDrop(-20)}
-              className={`btn btn-sm ${activeStressDrop === -20 ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ fontSize: '0.75rem', padding: '4px 8px' }}
-            >
-              -20% 回檔
-            </button>
-            <button
-              onClick={() => setActiveStressDrop(-30)}
-              className={`btn btn-sm ${activeStressDrop === -30 ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ fontSize: '0.75rem', padding: '4px 8px' }}
-            >
-              -30% 崩盤
-            </button>
-          </div>
-        </div>
-
-        <div className="warroom-grid-3" style={{ marginBottom: '16px' }}>
-          <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-              單日 95% 在險價值 (1-Day 95% VaR)
-            </div>
-            <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--loss-color)' }}>
-              NT$ {(shield.valueAtRisk95TWD || 0).toLocaleString()}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              佔整戶總淨值約 <span className="mono" style={{ color: 'var(--text-primary)' }}>{shield.varRatioPercent || 0}%</span> (95% 信心水準下單日最大損失)
-            </div>
-          </div>
-
-          <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-              美股部位匯率敏感度 (FX Delta)
-            </div>
-            <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: '#38bdf8' }}>
-              ± NT$ {(shield.fxDeltaTWD || 0).toLocaleString()}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              台幣每升值 1 元，美股持倉實質匯損金額
-            </div>
-          </div>
-
-          <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-              質押借款現況與維持率
-            </div>
-            <div
-              className="mono"
-              style={{
-                fontSize: '1.35rem',
-                fontWeight: 800,
-                color:
-                  shield.hasLoans && shield.marginMaintenanceRatio !== null
-                    ? shield.marginMaintenanceRatio < 130
-                      ? 'var(--loss-color)'
-                      : shield.marginMaintenanceRatio < 166
-                        ? '#f59e0b'
-                        : 'var(--gain-color)'
-                    : 'var(--gain-color)',
-              }}
-            >
-              {shield.hasLoans && shield.marginMaintenanceRatio !== null
-                ? `${shield.marginMaintenanceRatio}%`
-                : '無質押負債 (零槓桿)'}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              狀態：
-              <span
-                style={{
-                  fontWeight: 700,
-                  color:
-                    shield.marginStatus === 'SAFE' || shield.marginStatus === 'NO_LOAN'
-                      ? 'var(--gain-color)'
-                      : shield.marginStatus === 'WARNING'
-                        ? '#fbbf24'
-                        : 'var(--loss-color)',
-                }}
-              >
-                {shield.marginStatus === 'SAFE'
-                  ? '安全無虞 (>=166%)'
-                  : shield.marginStatus === 'NO_LOAN'
-                    ? '整戶零負債・安全無虞'
-                    : shield.marginStatus === 'WARNING'
-                      ? '警戒水位 (130%~166%)'
-                      : '追繳斷頭紅線 (<130%)'}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {(() => {
-          const activeScenario = shield.quickStressTest?.find((s) => s.dropPercent === activeStressDrop);
-          if (!activeScenario) return null;
-
-          return (
-            <div style={{ background: 'rgba(30, 41, 59, 0.65)', border: `1px solid ${activeScenario.status === 'MARGIN_CALL' ? 'rgba(239, 68, 68, 0.4)' : activeScenario.status === 'WARNING' ? 'rgba(245, 158, 11, 0.4)' : 'rgba(34, 197, 94, 0.4)'}`, borderRadius: 'var(--radius-md)', padding: '14px 18px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                <span className="badge" style={{ background: activeScenario.status === 'MARGIN_CALL' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(245, 158, 11, 0.25)', color: activeScenario.status === 'MARGIN_CALL' ? 'var(--loss-color)' : '#fbbf24', fontWeight: 800, padding: '4px 8px' }}>
-                  {activeScenario.label}
-                </span>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-                  壓力後擔保品市值：<strong className="mono">NT$ {activeScenario.stressedCollateralTWD.toLocaleString()}</strong>
-                </span>
-                {shield.hasLoans && (
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-                    試算維持率：<strong className="mono" style={{ color: activeScenario.status === 'MARGIN_CALL' ? 'var(--loss-color)' : activeScenario.status === 'WARNING' ? '#fbbf24' : 'var(--gain-color)' }}>{activeScenario.stressedMarginRatioPercent}%</strong>
-                  </span>
-                )}
-              </div>
-
-              <div>
-                {activeScenario.marginCallShortfallTWD > 0 ? (
-                  <span style={{ fontSize: '0.85rem', color: 'var(--loss-color)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                    <AlertTriangle size={15} />
-                    觸發追繳！需補繳保證金缺口：NT$ {activeScenario.marginCallShortfallTWD.toLocaleString()}
-                  </span>
-                ) : (
-                  <span style={{ fontSize: '0.85rem', color: 'var(--gain-color)', fontWeight: 700 }}>
-                    ✔ {shield.hasLoans ? '維持率仍高於 130% 斷頭線，無追繳補繳缺口' : '無質押負債 (零槓桿)，免疫斷頭追繳'}
-                  </span>
-                )}
-              </div>
-            </div>
-          );
-        })()}
-      </div>
-
-      {/* 市場四柱即時脈搏 (Market Pulse) */}
-      <div className="card">
-        <div className="warroom-section-header">
-          <div>
-            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Activity size={18} style={{ color: 'var(--accent-cyan)' }} />
-              市場四柱即時脈搏 (Market Pulse)
-            </h3>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              長短端利率倒掛 · 恐慌與貪婪中樞 · 國際黃金現貨/期貨 (GC=F) · 全球流動性水庫
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <button
-              onClick={handleRefreshPulse}
-              disabled={isRefreshing}
-              className="btn btn-secondary btn-sm"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '0.75rem' }}
-              title="攜帶加密金鑰池向後端更新並持久化最新總經與跨市數據"
-            >
-              <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : undefined} />
-              {isRefreshing ? '同步中...' : '即時同步'}
-            </button>
-            <button
-              onClick={handleExportCsv}
-              className="btn btn-secondary btn-sm"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '0.75rem' }}
-              title="匯出歷史四柱數據為 CSV 格式供 Excel/量化分析"
-            >
-              <Download size={12} />
-              匯出歷史 CSV
-            </button>
-            <button
-              onClick={() => setShowHistoryTable(!showHistoryTable)}
-              className="btn btn-sm"
-              style={{
-                background: showHistoryTable ? 'var(--accent-primary)' : 'rgba(30, 41, 59, 0.65)',
-                color: showHistoryTable ? '#ffffff' : 'var(--text-secondary)',
-                border: '1px solid ' + (showHistoryTable ? 'var(--accent-primary)' : 'var(--border-color)'),
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                cursor: 'pointer',
-                fontSize: '0.75rem',
-              }}
-            >
-              <History size={12} />
-              {showHistoryTable ? '收合歷史' : `過往數據庫 (${macroHistoryList.length}筆)`}
-            </button>
-          </div>
-        </div>
-
-        <div className="warroom-grid-4">
-          {/* 柱一：利率與倒掛 */}
-          <div className="warroom-stat-card">
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>利率與倒掛利差</div>
-            <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {macroSnapshot.us10y}%
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 400 }}>
-                10Y 美債
-              </span>
-            </div>
-            <div style={{ marginTop: '8px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>2Y 美債：{macroSnapshot.us2y}%</span>
-              <span className="badge" style={{ background: macroSnapshot.yieldSpread < 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)', color: macroSnapshot.yieldSpread < 0 ? 'var(--loss-color)' : 'var(--gain-color)' }}>
-                利差 {macroSnapshot.yieldSpread}% {macroSnapshot.yieldSpread < 0 ? '(倒掛)' : '(正常)'}
-              </span>
-            </div>
-          </div>
-
-          {/* 柱二：恐慌與情緒 */}
-          <div className="warroom-stat-card">
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>CBOE VIX 恐慌指數</div>
-            <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {typeof macroSnapshot.vix === 'number' ? macroSnapshot.vix : 18.0}
-              <span className="badge" style={{ marginLeft: '8px', background: 'rgba(16, 185, 129, 0.15)', color: 'var(--gain-color)' }}>
-                {macroSnapshot.vixLevel}
-              </span>
-            </div>
-            <div style={{ marginTop: '8px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Fear & Greed</span>
-              <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.15)', color: 'var(--accent-primary)' }}>
-                {macroSnapshot.fearAndGreedIndex} ({macroSnapshot.fearAndGreedLevel})
-              </span>
-            </div>
-          </div>
-
-          {/* 柱三：大宗商品與實質硬資產 (Spec 0209 正名為 GC=F 國際黃金現貨/期貨) */}
-          <div className="warroom-stat-card">
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>國際黃金現貨/期貨 (GC=F)</div>
-            <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--accent-amber)' }}>
-              ${typeof macroSnapshot.goldPrice === 'number' ? macroSnapshot.goldPrice : 3350}
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: '4px' }}>USD/oz</span>
-            </div>
-            <div style={{ marginTop: '8px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>WTI 原油 (CL=F)</span>
-              <span className="mono" style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                ${typeof macroSnapshot.oilPrice === 'number' ? macroSnapshot.oilPrice : 75} / 桶
-              </span>
-            </div>
-          </div>
-
-          {/* 柱四：全球流動性水閘 */}
-          <div className="warroom-stat-card">
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>美元指數 (DXY)</div>
-            <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {typeof macroSnapshot.dxy === 'number' ? macroSnapshot.dxy : 101.5}
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: '6px', fontWeight: 400 }}>
-                USD/TWD {typeof macroSnapshot.usdToTwd === 'number' ? macroSnapshot.usdToTwd : 32.15}
-              </span>
-            </div>
-            <div style={{ marginTop: '8px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>美 M2 年增</span>
-              <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.15)', color: 'var(--accent-primary)' }}>
-                +{macroSnapshot.usM2GrowthYoY}%
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* 🦅 台美機構金絲雀雙軌專屬指針 (Institutional Canaries) */}
-        <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
-          {(marketView === 'US' || marketView === 'GLOBAL') && (
-            <div style={{ background: 'rgba(30, 41, 59, 0.45)', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🇺🇸 美高收益債信用利差 (HY OAS)</div>
-                <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: (macroSnapshot.creditSpreadOAS ?? 3.5) >= 5.0 ? 'var(--loss-color)' : '#38bdf8' }}>
-                  {macroSnapshot.creditSpreadOAS ?? 3.5}%
-                </div>
-              </div>
-              <span className="badge" style={{ background: (macroSnapshot.creditSpreadOAS ?? 3.5) >= 5.0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(56, 189, 248, 0.15)', color: (macroSnapshot.creditSpreadOAS ?? 3.5) >= 5.0 ? 'var(--loss-color)' : '#38bdf8' }}>
-                {(macroSnapshot.creditSpreadOAS ?? 3.5) >= 5.0 ? '⚠️ 利差走擴' : '平穩健康'}
-              </span>
-            </div>
-          )}
-
-          {(marketView === 'US' || marketView === 'GLOBAL') && (
-            <div style={{ background: 'rgba(30, 41, 59, 0.45)', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🇺🇸 CDS 債券違約保險指數 (CDX)</div>
-                <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: (macroSnapshot.cdsInsuranceIndex ?? 65) >= 100 ? 'var(--loss-color)' : '#a78bfa' }}>
-                  {macroSnapshot.cdsInsuranceIndex ?? 65} 點
-                </div>
-              </div>
-              <span className="badge" style={{ background: (macroSnapshot.cdsInsuranceIndex ?? 65) >= 100 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(167, 139, 250, 0.15)', color: (macroSnapshot.cdsInsuranceIndex ?? 65) >= 100 ? 'var(--loss-color)' : '#a78bfa' }}>
-                風控位階：{macroSnapshot.cdsRiskLevel ?? 'LOW'}
-              </span>
-            </div>
-          )}
-
-          {(marketView === 'TW' || marketView === 'GLOBAL') && (
-            <div style={{ background: 'rgba(30, 41, 59, 0.45)', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🇹🇼 外資台指期淨未平倉 (Net OI)</div>
-                <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: (macroSnapshot.twFuturesNetOi ?? 0) <= -30000 ? 'var(--loss-color)' : 'var(--gain-color)' }}>
-                  {(macroSnapshot.twFuturesNetOi ?? -15000).toLocaleString()} 口
-                </div>
-              </div>
-              <span className="badge" style={{ background: (macroSnapshot.twFuturesNetOi ?? 0) <= -30000 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.15)', color: (macroSnapshot.twFuturesNetOi ?? 0) <= -30000 ? 'var(--loss-color)' : 'var(--gain-color)' }}>
-                {(macroSnapshot.twFuturesNetOi ?? 0) <= -45000 ? '🚨 重度放空' : (macroSnapshot.twFuturesNetOi ?? 0) <= -30000 ? '⚠️ 避險警戒' : '中性多空'}
-              </span>
-            </div>
-          )}
-
-          {(marketView === 'TW' || marketView === 'GLOBAL') && (
-            <div style={{ background: 'rgba(30, 41, 59, 0.45)', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🇹🇼 全市場融資維持率 (130% 斷頭)</div>
-                <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: (macroSnapshot.twMarginMaintenance ?? 165.2) < 140 ? 'var(--loss-color)' : 'var(--gain-color)' }}>
-                  {macroSnapshot.twMarginMaintenance ?? 165.2}%
-                </div>
-              </div>
-              <span className="badge" style={{ background: (macroSnapshot.twMarginMaintenance ?? 165.2) < 130 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.15)', color: (macroSnapshot.twMarginMaintenance ?? 165.2) < 130 ? 'var(--loss-color)' : 'var(--gain-color)' }}>
-                {(macroSnapshot.twMarginMaintenance ?? 165.2) < 130 ? '🚨 斷頭追繳潮' : (macroSnapshot.twMarginMaintenance ?? 165.2) < 140 ? '⚠️ 警戒水位' : '安全無虞'}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* 展開之歷史數據表格檢視器 */}
-        {showHistoryTable && (
-          <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <strong style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-                📜 在地資料庫過往歷史脈搏 (最近 10 筆快照)
-              </strong>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                永久沉澱於本機，離線隨時可查，無須重新從網路下載
-              </span>
-            </div>
-            <div className="warroom-table-container">
-              <table className="warroom-table" style={{ fontSize: '0.8rem' }}>
-                <thead>
-                  <tr>
-                    <th>日期</th>
-                    <th style={{ textAlign: 'right' }}>10Y美債</th>
-                    <th style={{ textAlign: 'right' }}>2Y美債</th>
-                    <th style={{ textAlign: 'right' }}>殖利率差</th>
-                    <th style={{ textAlign: 'right' }}>VIX恐慌</th>
-                    <th style={{ textAlign: 'right' }}>貪婪指數</th>
-                    <th style={{ textAlign: 'right' }}>黃金(GC=F)</th>
-                    <th style={{ textAlign: 'right' }}>WTI原油</th>
-                    <th style={{ textAlign: 'right' }}>美元指數</th>
-                    <th style={{ textAlign: 'right' }}>USD/TWD</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {macroHistoryList.slice(0, 10).map((h) => (
-                    <tr key={h.date} style={{ background: h.date === macroSnapshot.date ? 'rgba(59, 130, 246, 0.08)' : undefined }}>
-                      <td className="mono" style={{ fontWeight: 600 }}>{h.date}</td>
-                      <td className="mono" style={{ textAlign: 'right' }}>{h.us10y.toFixed(2)}%</td>
-                      <td className="mono" style={{ textAlign: 'right' }}>{h.us2y.toFixed(2)}%</td>
-                      <td className="mono" style={{ textAlign: 'right', color: h.yieldSpread < 0 ? 'var(--loss-color)' : 'var(--gain-color)' }}>
-                        {h.yieldSpread.toFixed(2)}%
-                      </td>
-                      <td className="mono" style={{ textAlign: 'right' }}>{h.vix.toFixed(1)}</td>
-                      <td className="mono" style={{ textAlign: 'right' }}>{h.fearAndGreedIndex}</td>
-                      <td className="mono" style={{ textAlign: 'right', color: 'var(--accent-amber)' }}>${h.goldPrice.toFixed(1)}</td>
-                      <td className="mono" style={{ textAlign: 'right' }}>${h.oilPrice.toFixed(1)}</td>
-                      <td className="mono" style={{ textAlign: 'right' }}>{h.dxy.toFixed(1)}</td>
-                      <td className="mono" style={{ textAlign: 'right' }}>{h.usdToTwd.toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 🛡️ 第二層：個人投資組合宏觀防護盾 (Portfolio Macro Shield) */}
-      <div className="card">
-        <div className="warroom-section-header">
-          <div>
-            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <ShieldCheck size={18} style={{ color: 'var(--accent-emerald)' }} />
-              個人投資組合宏觀防護盾 (Macro Shield)
-            </h3>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              現金購買力深度 · 質押維持率安全緩衝 · 目標資產配置偏離度
-            </span>
-          </div>
-          <button
-            onClick={onOpenMarginStressModal}
-            className="btn btn-secondary btn-sm"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
-          >
-            質押黑天鵝壓力測試 ➔
-          </button>
-        </div>
-
-        <div className="warroom-grid-3">
-          <div className="warroom-stat-card">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>現金購買力比率</span>
-              <span className="badge" style={{ background: shield.cashRatioPercent < 10 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)', color: shield.cashRatioPercent < 10 ? 'var(--loss-color)' : 'var(--gain-color)' }}>
-                {shield.cashRatioPercent < 10 ? '水位偏緊' : '防禦充裕'}
-              </span>
-            </div>
-            <div className="mono" style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {shield.cashRatioPercent}%
-            </div>
-            <div style={{ marginTop: '8px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              可用現金 NT$ {Math.round(cashBalanceTwd).toLocaleString()}
-            </div>
-          </div>
-
-          <div className="warroom-stat-card">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>質押維持率健康度</span>
-              <span className="badge" style={{ background: shield.marginStatus === 'NO_LOAN' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)', color: shield.marginStatus === 'NO_LOAN' ? 'var(--gain-color)' : 'var(--accent-amber)' }}>
-                {shield.marginStatus === 'NO_LOAN' ? '無借款 (零槓桿)' : '進行中風控'}
-              </span>
-            </div>
-            <div className="mono" style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {shield.marginMaintenanceRatio === null || shield.marginMaintenanceRatio > 999
-                ? '無質押負債 (零槓桿)'
-                : `${shield.marginMaintenanceRatio}%`}
-            </div>
-            <div style={{ marginTop: '8px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              {shield.marginStatus === 'NO_LOAN' ? '戶況健康無追繳壓力' : '維持率安全閥監控中'}
-            </div>
-          </div>
-
-          <div className="warroom-stat-card">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>目標資產配置偏離</span>
-              <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.15)', color: 'var(--accent-primary)' }}>
-                {shield.maxAllocationDriftPercent <= 5 ? '平衡正常' : '顯著失衡'}
-              </span>
-            </div>
-            <div className="mono" style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {shield.maxAllocationDriftPercent}%
-            </div>
-            <div style={{ marginTop: '8px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              容許偏離閾值 ±5.0%
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 🚀 第三層：雙重動能跨資產輪動排行榜 (Dual Momentum Rotation) */}
-      <div className="card">
-        <div className="warroom-section-header">
-          <div>
-            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <TrendingUp size={18} style={{ color: 'var(--accent-primary)' }} />
-              雙重動能跨資產輪動排行榜 (Dual Momentum Rotation)
-            </h3>
-            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}>
-              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                Gary Antonacci 經典模型 · 12-1M 滾動加權動能 · 絕對動能避風港安全閥
-              </span>
-              <span
-                className="badge"
-                style={{
-                  background: 'rgba(16, 185, 129, 0.15)',
-                  color: 'var(--gain-color)',
-                  fontSize: '0.72rem',
-                  fontWeight: 700,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                🟢 SQLite 湖倉真實日 K 驅動 · 基準日: {macroSnapshot.date || new Date().toISOString().split('T')[0]}
-              </span>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {DEFAULT_MOMENTUM_UNIVERSES.map((u) => (
-              <button
-                key={u.id}
-                onClick={() => setSelectedUniverseId(u.id)}
-                className="btn btn-sm"
-                style={{
-                  background: selectedUniverseId === u.id ? 'var(--accent-primary)' : 'rgba(30, 41, 59, 0.65)',
-                  color: selectedUniverseId === u.id ? '#ffffff' : 'var(--text-secondary)',
-                  border: '1px solid ' + (selectedUniverseId === u.id ? 'var(--accent-primary)' : 'var(--border-color)'),
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                }}
-              >
-                {u.name.split(' (')[0]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div
-          className="warroom-banner-tip"
-          style={{
-            background: isTopHydrating
-              ? 'rgba(100, 116, 139, 0.12)'
-              : momentumSignal.safeHavenTriggered
-              ? 'rgba(239, 68, 68, 0.12)'
-              : 'rgba(59, 130, 246, 0.12)',
-            border:
-              '1px solid ' +
-              (isTopHydrating
-                ? 'rgba(100, 116, 139, 0.3)'
-                : momentumSignal.safeHavenTriggered
-                ? 'rgba(239, 68, 68, 0.3)'
-                : 'rgba(59, 130, 246, 0.3)'),
-            color: isTopHydrating
-              ? 'var(--text-secondary)'
-              : momentumSignal.safeHavenTriggered
-              ? 'var(--loss-color)'
-              : 'var(--text-primary)',
-            marginBottom: '16px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Flame size={16} />
-              <span>
-                <strong>當前建議行動：</strong>
-                {isTopHydrating ? (
-                  <span style={{ color: 'var(--text-muted)' }}>
-                    ⏳【湖倉日 K 水合中】
-                  </span>
-                ) : (
-                  <>
-                    {momentumSignal.actionHeadline}：{momentumSignal.topAsset ? `【${momentumSignal.topAsset.symbol} ${momentumSignal.topAsset.name || ''}】` : '退守避風港'}
-                  </>
-                )}
-              </span>
-            </div>
-            <span className="badge" style={{ background: 'rgba(255, 255, 255, 0.1)', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-              📆 距月結調倉尚有 {daysUntilMonthEnd} 天
-            </span>
-          </div>
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-            💡 {isTopHydrating ? '正在載入全歷史量價數據，暫緩執行月結輪動。' : momentumSignal.actionAdvice}
-            {!isTopHydrating && holdingMatchingAsset && momentumSignal.topAsset && !holdingMatchingAsset.symbol.includes(momentumSignal.topAsset.symbol.replace('.TW', '')) && (
-              <span style={{ marginLeft: '8px', color: 'var(--accent-amber)', fontWeight: 600 }}>
-                (⚠️ 您在庫持有 {holdingMatchingAsset.symbol}，非動能榜首，建議於月結日評估是否換倉)
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="warroom-table-container">
-          <table className="warroom-table">
-            <thead>
-              <tr>
-                <th style={{ width: '60px' }}>排名</th>
-                <th>代號 / 標的名稱</th>
-                <th style={{ textAlign: 'right' }}>12-1M 加權分數</th>
-                <th style={{ textAlign: 'right' }}>12M 報酬</th>
-                <th style={{ textAlign: 'right' }}>6M 報酬</th>
-                <th style={{ textAlign: 'right' }}>3M 報酬</th>
-                <th style={{ textAlign: 'center' }}>絕對動能 (vs 4%)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {momentumSignal.leaderboard.map((item, idx) => {
-                const isHydrating = isMomentumHydrating(item);
-                return (
-                <tr key={item.symbol} style={{ background: idx === 0 ? 'rgba(59, 130, 246, 0.08)' : undefined }}>
-                  <td>
-                    <span
-                      className="mono"
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '22px',
-                        height: '22px',
-                        borderRadius: '50%',
-                        fontSize: '0.75rem',
-                        fontWeight: 700,
-                        background: idx === 0 ? 'var(--accent-amber)' : 'rgba(51, 65, 85, 0.5)',
-                        color: idx === 0 ? '#0f172a' : 'var(--text-primary)',
-                      }}
-                    >
-                      {item.rank}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="mono" style={{ fontWeight: 700, fontSize: '0.9rem' }}>{item.symbol}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.name}</div>
-                  </td>
-                  <td className="mono" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--accent-cyan)' }}>
-                    {isHydrating ? (
-                      <span className="badge" style={{ background: 'rgba(148, 163, 184, 0.15)', color: 'var(--text-muted)', fontSize: '0.72rem' }}>
-                        ⏳ 水合中
-                      </span>
-                    ) : (
-                      `${item.momentumScore.toFixed(1)}%`
-                    )}
-                  </td>
-                  <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                    {isHydrating ? '--' : `${item.returns12M.toFixed(1)}%`}
-                  </td>
-                  <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                    {isHydrating ? '--' : `${item.returns6M.toFixed(1)}%`}
-                  </td>
-                  <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                    {isHydrating ? '--' : `${item.returns3M.toFixed(1)}%`}
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    {isHydrating ? (
-                      <span className="badge" style={{ background: 'rgba(51, 65, 85, 0.4)', color: 'var(--text-muted)' }}>
-                        待同步
-                      </span>
-                    ) : item.isAboveRiskFree ? (
-                      <span className="badge" style={{ background: 'var(--gain-bg)', color: 'var(--gain-color)', border: '1px solid var(--gain-border)' }}>
-                        勝出基準
-                      </span>
-                    ) : (
-                      <span className="badge" style={{ background: 'rgba(51, 65, 85, 0.4)', color: 'var(--text-muted)' }}>
-                        弱於現金
-                      </span>
-                    )}
-                  </td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* 📅 第四層：關鍵財經催化劑倒數日曆 (Catalyst Calendar) */}
-      <div className="card">
-        <div className="warroom-section-header" style={{ flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Calendar size={18} style={{ color: 'var(--accent-purple)' }} />
-              關鍵財經事件倒數日曆 (Upcoming Catalysts)
-            </h3>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              央行決議 · 通膨 CPI · 台積電法說會 · NVIDIA 財報 · 在庫除息日程
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              className="btn btn-secondary"
-              onClick={() => setIsCustomModalOpen(true)}
-              style={{ fontSize: '0.78rem', padding: '5px 12px', display: 'flex', alignItems: 'center', gap: '5px' }}
-              title="新增自訂關注事件"
-            >
-              <Plus size={14} />
-              新增事件
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={handleResetCatalysts}
-              style={{ fontSize: '0.78rem', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: '4px' }}
-              title="一鍵清除自訂並重置為官方預設日曆"
-            >
-              <RefreshCw size={13} />
-              重置
-            </button>
-            <span className="badge" style={{ background: 'rgba(139, 92, 246, 0.15)', color: 'var(--accent-purple)', border: '1px solid rgba(139, 92, 246, 0.3)' }}>
-              倒數雷達 ({filteredCatalysts.length})
-            </span>
-          </div>
-        </div>
-
-        {/* ⏱️ 彭博式三段時序雷達切換 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', margin: '14px 0 6px 0', padding: '10px 14px', background: 'rgba(30, 41, 59, 0.5)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(51, 65, 85, 0.4)' }}>
-          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-            <Layers size={13} />
-            時序雷達：
-          </span>
-          {[
-            { id: 'ALL', label: `全時序 (${catalysts.length})` },
-            { id: 'TODAY', label: `🔥 今日登場 (${groupedCatalysts.today.length})` },
-            { id: 'WEEK', label: `⚡ 7 日焦點 (${groupedCatalysts.within7Days.length})` },
-            { id: 'MONTH', label: `📅 30 日遠端 (${groupedCatalysts.within30Days.length})` },
-          ].map((tab) => {
-            const active = timelineHorizon === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setTimelineHorizon(tab.id as TimelineHorizon | 'ALL')}
-                style={{
-                  fontSize: '0.75rem',
-                  padding: '4px 10px',
-                  borderRadius: 'var(--radius-sm)',
-                  border: active ? '1px solid var(--accent-purple)' : '1px solid transparent',
-                  background: active ? 'rgba(139, 92, 246, 0.25)' : 'rgba(15, 23, 42, 0.5)',
-                  color: active ? '#c084fc' : 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  fontWeight: active ? 700 : 500,
-                }}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '14px 0 16px 0' }}>
-          {[
-            { id: 'ALL', label: `全部 (${catalysts.length})` },
-            { id: 'CENTRAL_BANK', label: `🏛️ 央行利率 (${catalysts.filter((c) => c.category === 'CENTRAL_BANK').length})` },
-            { id: 'INFLATION_EMPLOYMENT', label: `📊 通膨就業 (${catalysts.filter((c) => c.category === 'INFLATION' || c.category === 'EMPLOYMENT').length})` },
-            { id: 'EARNINGS_DIVIDEND', label: `🎯 持股除息與法說 (${catalysts.filter((c) => c.category === 'EARNINGS_DIVIDEND' || c.category === 'EARNINGS').length})` },
-            { id: 'DERIVATIVE_SETTLEMENT', label: `⚡ 期貨結算 (${catalysts.filter((c) => c.category === 'DERIVATIVE_SETTLEMENT').length})` },
-            { id: 'CUSTOM', label: `✏️ 自訂備忘 (${catalysts.filter((c) => c.isCustom).length})` },
-          ].map((tab) => {
-            const active = catalystFilter === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setCatalystFilter(tab.id)}
-                style={{
-                  fontSize: '0.76rem',
-                  padding: '5px 12px',
-                  borderRadius: '20px',
-                  border: active ? '1px solid var(--accent-primary, #3b82f6)' : '1px solid rgba(148, 163, 184, 0.2)',
-                  background: active ? 'rgba(59, 130, 246, 0.2)' : 'rgba(30, 41, 59, 0.4)',
-                  color: active ? 'var(--accent-primary, #3b82f6)' : 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  fontWeight: active ? 700 : 500,
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {filteredCatalysts.length === 0 ? (
-          <div
-            style={{
-              textAlign: 'center',
-              padding: '40px 16px',
-              background: 'rgba(15, 23, 42, 0.4)',
-              borderRadius: '12px',
-              border: '1px dashed rgba(148, 163, 184, 0.25)',
-            }}
-          >
-            <Calendar size={36} style={{ color: 'var(--text-muted)', margin: '0 auto 10px auto' }} />
-            <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)', marginBottom: '6px' }}>
-              近期無特定分類之重大財經事件
-            </div>
-            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0 auto 16px auto', maxWidth: '380px', lineHeight: 1.6 }}>
-              當前分類下暫無待登場事件。您可以切換回「全部」視圖，或點擊下方按鈕手動新增法說會、除息日或理財規劃日。
-            </p>
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-              <button
-                className="btn btn-secondary"
-                onClick={() => setCatalystFilter('ALL')}
-                style={{ fontSize: '0.78rem', padding: '6px 14px' }}
-              >
-                查看全部事件
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={() => setIsCustomModalOpen(true)}
-                style={{ fontSize: '0.78rem', padding: '6px 14px' }}
-              >
-                ＋ 新增自訂事件
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="warroom-grid-4">
-            {filteredCatalysts.map((event) => {
-              const isUrgent = event.daysLeft <= 3;
-              const isToday = event.daysLeft === 0;
-              const isHighImpact = event.impact === 'HIGH';
-
-              return (
-                <div
-                  key={event.id}
-                  className="warroom-stat-card"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    position: 'relative',
-                    borderColor: isToday
-                      ? 'rgba(239, 68, 68, 0.6)'
-                      : isUrgent && isHighImpact
-                        ? 'rgba(245, 158, 11, 0.5)'
-                        : undefined,
-                    boxShadow: isToday ? '0 0 14px rgba(239, 68, 68, 0.2)' : undefined,
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span
-                          className="badge"
-                          style={{
-                            background:
-                              event.category === 'CENTRAL_BANK'
-                                ? 'rgba(139, 92, 246, 0.15)'
-                                : event.category === 'INFLATION'
-                                  ? 'rgba(245, 158, 11, 0.15)'
-                                  : event.category === 'EMPLOYMENT'
-                                    ? 'rgba(59, 130, 246, 0.15)'
-                                    : event.category === 'EARNINGS_DIVIDEND'
-                                      ? 'rgba(16, 185, 129, 0.15)'
-                                      : event.category === 'DERIVATIVE_SETTLEMENT'
-                                        ? 'rgba(236, 72, 153, 0.15)'
-                                        : 'rgba(6, 182, 212, 0.15)',
-                            color:
-                              event.category === 'CENTRAL_BANK'
-                                ? '#a78bfa'
-                                : event.category === 'INFLATION'
-                                  ? '#fbbf24'
-                                  : event.category === 'EMPLOYMENT'
-                                    ? '#60a5fa'
-                                    : event.category === 'EARNINGS_DIVIDEND'
-                                      ? 'var(--gain-color)'
-                                      : event.category === 'DERIVATIVE_SETTLEMENT'
-                                        ? '#f472b6'
-                                        : '#22d3ee',
-                          }}
-                        >
-                          {event.category === 'CENTRAL_BANK'
-                            ? '🏛️ 央行'
-                            : event.category === 'INFLATION'
-                              ? '📊 通膨'
-                              : event.category === 'EMPLOYMENT'
-                                ? '💼 就業'
-                                : event.category === 'EARNINGS_DIVIDEND'
-                                  ? '🎯 除息/法說'
-                                  : event.category === 'DERIVATIVE_SETTLEMENT'
-                                    ? '⚡ 結算'
-                                    : '✏️ 自訂'}
-                        </span>
-
-                        {event.impact && (
-                          <span
-                            className="badge"
-                            style={{
-                              fontSize: '0.68rem',
-                              padding: '2px 6px',
-                              background:
-                                event.impact === 'HIGH'
-                                  ? 'rgba(239, 68, 68, 0.15)'
-                                  : event.impact === 'MEDIUM'
-                                    ? 'rgba(245, 158, 11, 0.12)'
-                                    : 'rgba(148, 163, 184, 0.12)',
-                              color:
-                                event.impact === 'HIGH'
-                                  ? 'var(--loss-color)'
-                                  : event.impact === 'MEDIUM'
-                                    ? '#f59e0b'
-                                    : 'var(--text-muted)',
-                              border: event.impact === 'HIGH' ? '1px solid rgba(239, 68, 68, 0.3)' : undefined,
-                            }}
-                          >
-                            {event.impact === 'HIGH' ? '🔴 高衝擊' : event.impact === 'MEDIUM' ? '🟡 中度' : '🟢 溫和'}
-                          </span>
-                        )}
-
-                        {event.targetMarket && event.targetMarket !== 'ALL' && (
-                          <span className="badge" style={{ fontSize: '0.68rem', padding: '2px 5px', background: 'rgba(51, 65, 85, 0.4)', color: 'var(--text-muted)' }}>
-                            {event.targetMarket === 'TW' ? '台股' : '美股'}
-                          </span>
-                        )}
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span
-                          className="mono"
-                          style={{
-                            fontSize: '0.8rem',
-                            fontWeight: 700,
-                            color: isToday
-                              ? 'var(--loss-color)'
-                              : isUrgent
-                                ? 'var(--loss-color)'
-                                : 'var(--accent-primary)',
-                          }}
-                        >
-                          {isToday ? '🔥 今日登場' : `倒數 ${event.daysLeft} 天`}
-                        </span>
-
-                        {event.isCustom && (
-                          <button
-                            onClick={() => handleDeleteCustomCatalyst(event.id)}
-                            style={{
-                              background: 'transparent',
-                              border: 'none',
-                              color: 'var(--text-muted)',
-                              cursor: 'pointer',
-                              padding: '2px',
-                              display: 'flex',
-                              alignItems: 'center',
-                            }}
-                            title="刪除此自訂事件"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '4px' }}>
-                      {event.name}
-                    </div>
-
-                    <div className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                      日期：{event.date}
-                    </div>
-                  </div>
-
-                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    {event.description}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ✏️ 快速新增自訂催化劑彈窗 */}
-      {isCustomModalOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.65)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: '16px',
-            backdropFilter: 'blur(4px)',
-          }}
-          onClick={() => setIsCustomModalOpen(false)}
-        >
-          <div
-            style={{
-              background: 'var(--bg-secondary, #1e293b)',
-              border: '1px solid rgba(148, 163, 184, 0.25)',
-              borderRadius: '14px',
-              padding: '24px',
-              width: '100%',
-              maxWidth: '440px',
-              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
-              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Calendar size={18} style={{ color: 'var(--accent-primary)' }} />
-                新增自訂關鍵財經事件
-              </h3>
-              <button
-                onClick={() => setIsCustomModalOpen(false)}
-                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveCustomCatalyst}>
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                  事件名稱 *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="例如：台積電北美技術論壇、個人信貸撥款"
-                  value={newCustomName}
-                  onChange={(e) => setNewCustomName(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(148, 163, 184, 0.25)',
-                    background: 'var(--bg-primary, #0f172a)',
-                    color: 'var(--text-primary)',
-                    fontSize: '0.85rem',
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                    發生日期 *
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={newCustomDate}
-                    onChange={(e) => setNewCustomDate(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 10px',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(148, 163, 184, 0.25)',
-                      background: 'var(--bg-primary, #0f172a)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.85rem',
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                    衝擊等級
-                  </label>
-                  <select
-                    value={newCustomImpact}
-                    onChange={(e) => setNewCustomImpact(e.target.value as CatalystImpact)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 10px',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(148, 163, 184, 0.25)',
-                      background: 'var(--bg-primary, #0f172a)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.85rem',
-                    }}
-                  >
-                    <option value="HIGH">🔴 高衝擊 (HIGH)</option>
-                    <option value="MEDIUM">🟡 中度 (MEDIUM)</option>
-                    <option value="LOW">🟢 溫和 (LOW)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                  事件類別
-                </label>
-                <select
-                  value={newCustomCategory}
-                  onChange={(e) => setNewCustomCategory(e.target.value as CatalystCategory)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(148, 163, 184, 0.25)',
-                    background: 'var(--bg-primary, #0f172a)',
-                    color: 'var(--text-primary)',
-                    fontSize: '0.85rem',
-                  }}
-                >
-                  <option value="CUSTOM">✏️ 自訂備忘事件</option>
-                  <option value="CENTRAL_BANK">🏛️ 央行與利率決議</option>
-                  <option value="INFLATION">📊 通膨與物價指數</option>
-                  <option value="EMPLOYMENT">💼 勞動與就業報告</option>
-                  <option value="EARNINGS_DIVIDEND">🎯 持股除息與法說會</option>
-                  <option value="DERIVATIVE_SETTLEMENT">⚡ 期貨與衍生品結算</option>
-                </select>
-              </div>
-
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                  說明備忘
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="備註具體細節、觀察重點或操作規劃..."
-                  value={newCustomDesc}
-                  onChange={(e) => setNewCustomDesc(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(148, 163, 184, 0.25)',
-                    background: 'var(--bg-primary, #0f172a)',
-                    color: 'var(--text-primary)',
-                    fontSize: '0.82rem',
-                    resize: 'none',
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setIsCustomModalOpen(false)}
-                  style={{ fontSize: '0.82rem', padding: '7px 16px' }}
-                >
-                  取消
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  style={{ fontSize: '0.82rem', padding: '7px 18px' }}
-                >
-                  確認儲存
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* 📅 第四層：關鍵財經催化劑倒數日曆 (Spec 0235 Ticket 08) */}
+      <CatalystCalendarCard
+        catalysts={catalysts}
+        marketView={marketView}
+        onAddCustom={handleAddCustomCatalyst}
+        onDeleteCustom={handleDeleteCustomCatalyst}
+        onResetDefaults={handleResetCatalysts}
+        onInspectTechnical={onInspectTechnical}
+      />
 
       {/* ✏️ 快速數據校準 Modal */}
       <MacroQuickCalibrationModal
         isOpen={isCalibrateModalOpen}
         onClose={() => setIsCalibrateModalOpen(false)}
         macroSnapshot={macroSnapshot}
-        onSave={(updated) => {
-          saveMacroPulseRecord(updated, true);
-          setMacroSnapshot(updated);
-          setMacroHistoryList(loadMacroPulseHistory());
-        }}
+        onSave={applyCalibratedSnapshot}
       />
     </div>
   );

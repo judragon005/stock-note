@@ -94,6 +94,8 @@ describe('useWarRoomPortfolioMetrics - 戰情室投組風控指標與防禦護�
     // 距 130% 斷頭耐受度應有數值
     expect(result.shield.maxDropToleranceTo130Percent).toBeDefined();
     expect(result.shield.maxDropToleranceTo130Percent).toBeGreaterThan(0);
+    // Spec 0235：維持率 200% 時耐受跌幅 = 1 - 130/200 = 0.35 (UI 顯示 -35.0%)
+    expect(result.shield.maxDropToleranceTo130Percent).toBe(0.35);
   });
 
   it('3. 美股部位加權成本匯率與匯差緩衝墊應正確納入計算', () => {
@@ -121,6 +123,18 @@ describe('useWarRoomPortfolioMetrics - 戰情室投組風控指標與防禦護�
     });
 
     expect(result.shield.freeDeployableCashTWD).toBe(0);
+  });
+
+  it('6. Spec 0235：費半 ±3% 敏感度應等於半導體穿透市值 × 3%，不因現金部位虛增', () => {
+    const result = calculateWarRoomPortfolioMetrics({
+      holdings: [baseHoldings[0]], // 2330 市值 1,000,000 (100% 半導體)
+      loans: [],
+      cashBalanceTwd: 1000000,
+      totalNavTwd: 2000000,
+      usdToTwdRate: 32.0,
+    });
+    // 依 Spec 0235 L150：NAV 200 萬 * 穿透半導體 100% * 3% = 60,000
+    expect(result.shield.soxStressImpact3PctTWD).toBe(60000);
   });
 
   it('5. Hook 函式簽名應可被正常引用', () => {

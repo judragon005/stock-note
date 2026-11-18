@@ -1,7 +1,19 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-11-14 11:15 (UTC+8)  
+> **交接產生時間**：2026-11-18 13:10 (UTC+8)  
 > **當前最新里程碑**：
+> - **V9.21.0 宏觀戰情室 3.5 全量修枝補缺、統一數據總線與一鍵決策閉環重構**（ADR 0235, Spec 0235, Issue #584, PR #585）：
+>   - **宏觀數據雙向別名正規化與 FRED 信貸/製造業/寬度欄位補齊 (Issue #584 / Ticket 01)**：`normalizeMacroAliases` 與 `mergeMacroSnapshot` 雙向相容 camelCase、snake_case 與行情包裝物件；補齊 FRED 信用利差、平衡通膨率、新訂單-存貨利差與營收擴散指數；遇遠端空值保留本地快照，動態重算 VIX 與恐慌貪婪位階。
+>   - **風控防護盾計量精度修正 (Issue #584 / Ticket 02)**：修正維持率比例尺（200% 維持率精確輸出 0.35 即 -35.0%）；費半衝擊損益以總淨值乘持股權重折算；1-Day 95% VaR 以扣除現金後之實質在險資產計算；全頁統一採用 `recommendedEquityCapPercent` 作為建議上限 SSOT。
+>   - **戰情室風控卡片物理合併與資訊瘦身 (Issue #584 / Ticket 03)**：物理刪除舊版三欄 VaR 卡與舊版防護盾，全頁收斂至 `PortfolioShieldAndAmmoCard`，整合 ETF 穿透前 5 大抽屜、急速壓力測試與質押黑天鵝彈窗，全區受 `privacyMode` 金額遮罩保護。
+>   - **市場脈搏全面淘汰假數據 (Issue #584 / Ticket 04)**：淘汰寫死常數 `CDS 65` 與 `M2 2.8%`，全面串接真實 FRED 利差與 `/api/market/breadth` 台美 20/60/200MA 多週期寬度及融資去槓桿比率。
+>   - **市場視角切換器去重合一與美股聯動 (Issue #584 / Ticket 05)**：頂部切換器去重合一，收斂至 `MacroDualThermometerBar`；美股視角呈現費半、S&P 500、Nasdaq、TSM ADR；全球/台股視角呈現三大法人現貨合計；個股戰術訊號依視角聯動過濾。
+>   - **戰情晨報長文預設收合、複製按鈕合一與決策跳轉 (Issue #584 / Ticket 06)**：清除重複複製按鈕，長文診斷預設折疊；今日紀律執行清單針對點名持股掛載一鍵 `📈 技術面` 與 `⚡ 下單` 快捷鍵；釘選上限即時警示超配應減碼金額。
+>   - **雙動能自動推薦池與動態無風險利率 (Issue #584 / Ticket 07)**：依市場視角自動切換推薦動能資產池，無風險利率動態取用 `macroSnapshot.us3m`，動能排行榜標記在庫權重並提供一鍵下單換倉跳轉。
+>   - **催化劑行事曆與除息點數精確估算 (Issue #584 / Ticket 08)**：催化劑元件獨立封裝，除息/法說事件提供技術面跳轉；`estimateTsmcExDividendImpactPoints` 解耦，未直接持股台積電時仍可精確估算大盤蒸發點數。
+>   - **宏觀快速校準彈窗擴充與 Zavy 總線打通 (Issue #584 / Ticket 09)**：校準彈窗擴充 8 項欄位；Zavy 漫步成長工作區啟動時自動融合本地宏觀快照消除 `--` 孤島，呈現美股寬度並提供真實校準彈窗。
+>   - **主檔結構巨石拆解與狀態總線解耦 (Issue #584 / Ticket 10)**：`WarRoomWorkspace.tsx` 行數由 2,266 行物理壓降至 **594 行**（完全符合 $\le 600$ 行門禁），抽離 `useWarRoomMacroSync.ts` 與 `warRoomBriefBuilder.ts`。
+>   - **品質狀態**：全量單元測試 **2,311/2,311 通過 (100% Passed / 296 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，生產打包 `npm run build` 100% 綠燈。
 > - **V9.20.1 股利時序黑洞根除、生命週期狀態機與已到期待核對閉環重構**（ADR 0228, Spec 0228, Issue #537, PR #538）：
 >   - **0056 官方除息行事曆補齊與在席持股容錯回退 (Issue #537 / Ticket 01)**：`OFFICIAL_DIVIDEND_CALENDAR` 增補 0056 官方除息日（2026-10-22，1.07 元，2026-11-11 發放）；除息日在席持股推估加入在庫持股容錯回退，杜絕純持倉使用者產生 0 元幽靈記錄，兼顧 Ticket #005 排除除息日後買進者之約束。
 >   - **根除發放日時序黑洞與 DUE_FOR_RECONCILIATION 狀態機 (Issue #537 / Ticket 02)**：廢除 `currentDateStr >= payDate` 無條件丟棄邏輯；發放日已過但未在帳本核銷之款項自動提升為 `DUE_FOR_RECONCILIATION`（已到期·待對帳），永不脫離系統雷達視野。

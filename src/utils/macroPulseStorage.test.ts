@@ -7,6 +7,7 @@ import {
   generateSampleHistoricalMacroData,
   isSameDayCacheValid,
   sanitizeMacroRecord,
+  mergeMacroSnapshot,
   loadMacroPinnedStrategies,
   saveMacroPinnedStrategy,
   removeMacroPinnedStrategy,
@@ -187,6 +188,137 @@ describe('macroPulseStorage (市場四柱在地持久化與歷史資料庫)', ()
       expect(typeof clean.oilPrice).toBe('number');
       expect(clean.usdToTwd).toBe(32.12);
       expect(typeof clean.usdToTwd).toBe('number');
+    });
+  });
+
+  describe('Spec 0235 Ticket 01: 統一宏觀數據海關正規化器 (Dual-Schema Normalizer)', () => {
+    it('應將後端 /api/market/macro 真實鍵名無損映射為前端欄位，不退回寫死常數', () => {
+      const clean = sanitizeMacroRecord({
+        date: '2026-11-18',
+        treasuryYield10y: 4.42,
+        treasuryYield2y: 4.11,
+        riskFreeRate3m: 4.05,
+        yieldSpread10y2y: 0.31,
+        cnnFearGreedScore: 22,
+        creditSpreadOas: 4.8,
+        cccSpreadOas: 9.6,
+        igSpreadOas: 1.1,
+        breakeven10y: 2.35,
+        initialClaims: 231000,
+        usOrdersMinusInvSpread: -1.8,
+        twRevenue: 64.2,
+        soxClose: 5123.4,
+        taiexClose: 22876.5,
+        sp500Close: 5980.1,
+        nasdaqClose: 19234.7,
+      } as any);
+
+      expect(clean.us10y).toBe(4.42);
+      expect(clean.us2y).toBe(4.11);
+      expect(clean.us3m).toBe(4.05);
+      expect(clean.yieldSpread).toBe(0.31);
+      expect(clean.fearAndGreedIndex).toBe(22);
+      expect(clean.creditSpreadOAS).toBe(4.8);
+      expect(clean.cccSpreadOAS).toBe(9.6);
+      expect(clean.igSpreadOAS).toBe(1.1);
+      expect(clean.breakeven10y).toBe(2.35);
+      expect(clean.initialClaims).toBe(231000);
+      expect(clean.usOrdersMinusInvSpread).toBe(-1.8);
+      expect(clean.twRevenueDiffusionIndex).toBe(64.2);
+      expect(clean.soxIndex).toBe(5123.4);
+      expect(clean.taiexIndex).toBe(22876.5);
+      expect(clean.sp500Index).toBe(5980.1);
+      expect(clean.nasdaqIndex).toBe(19234.7);
+    });
+
+    it('應依最新數值動態重算 vixLevel 與 fearAndGreedLevel，不沿用過期等級', () => {
+      const clean = sanitizeMacroRecord({
+        vix: 34.2,
+        vixLevel: 'NORMAL',
+        cnnFearGreedScore: 18,
+        fearAndGreedLevel: 'GREED',
+      } as any);
+      expect(clean.vixLevel).toBe('PANIC');
+      expect(clean.fearAndGreedLevel).toBe('EXTREME_FEAR');
+    });
+
+    it('黃金價格 2,600 USD/oz 合理區間應保留，僅 <= 500 之異常值退回預設', () => {
+      expect(sanitizeMacroRecord({ goldPrice: 2600 }).goldPrice).toBe(2600);
+      expect(sanitizeMacroRecord({ goldPrice: 120 }).goldPrice).toBe(3350);
+    });
+
+    it('mergeMacroSnapshot：遠端欄位 null/undefined 時保留既有指數報價，有值者覆寫並重算利差', () => {
+      const prev = sanitizeMacroRecord({
+        us10y: 4.3,
+        us2y: 4.0,
+        soxIndex: 5000,
+        taiexIndex: 22000,
+        sp500Index: 5900,
+        nasdaqIndex: 19000,
+      });
+      const merged = mergeMacroSnapshot(prev, {
+        treasuryYield10y: 4.5,
+        soxClose: null,
+        taiexClose: undefined,
+        sp500Close: null,
+      });
+      expect(merged.us10y).toBe(4.5);
+      expect(merged.us2y).toBe(4.0);
+      expect(merged.yieldSpread).toBe(0.5);
+      expect(merged.soxIndex).toBe(5000);
+      expect(merged.taiexIndex).toBe(22000);
+      expect(merged.sp500Index).toBe(5900);
+      expect(merged.nasdaqIndex).toBe(19000);
+    });
+
+    it('應完整透傳 Spec L108-126 製造業週期、PMI 與多週期寬度欄位而不剝除', () => {
+      const clean = sanitizeMacroRecord({
+        usMfgNewOrdersYoY: 3.1,
+        usMfgInventoriesYoY: 1.4,
+        usIndustrialProdYoY: 2.2,
+        usIsmPmi: 51.4,
+        twPmi: 53.1,
+        twExportOrdersYoY: 12.6,
+        multiHorizonBreadth: {
+          tw: { breadth20: 54, breadth60: 48, breadth200: 61, totalStocks: 1800 },
+          us: { breadth20: 62, breadth60: 58, breadth200: 67, totalStocks: 500 },
+          twMarginDeleveraging: {
+            taiexMaxDrawdown: -8.5,
+            marginReductionPercent: -10.2,
+            marginDeleveragingRatio: 1.2,
+            isCleaned: true,
+          },
+        },
+      } as any);
+
+      expect(clean.usMfgNewOrdersYoY).toBe(3.1);
+      expect(clean.usMfgInventoriesYoY).toBe(1.4);
+      expect(clean.usIndustrialProdYoY).toBe(2.2);
+      expect(clean.usIsmPmi).toBe(51.4);
+      expect(clean.twPmi).toBe(53.1);
+      expect(clean.twExportOrdersYoY).toBe(12.6);
+      expect(clean.multiHorizonBreadth?.tw?.breadth60).toBe(48);
+      expect(clean.multiHorizonBreadth?.us?.breadth200).toBe(67);
+      expect(clean.multiHorizonBreadth?.twMarginDeleveraging?.marginDeleveragingRatio).toBe(1.2);
+    });
+
+    it('應支援 SQLite snake_case 鍵名映射', () => {
+      const clean = sanitizeMacroRecord({
+        treasury_yield_10y: 4.2,
+        treasury_yield_2y: 4.0,
+        cnn_fear_greed_score: 80,
+        credit_spread_oas: 3.1,
+        ccc_spread_oas: 8.2,
+        tw_foreign_futures_oi: -32000,
+        tw_margin_maintenance_ratio: 158.5,
+      } as any);
+      expect(clean.us10y).toBe(4.2);
+      expect(clean.us2y).toBe(4.0);
+      expect(clean.fearAndGreedIndex).toBe(80);
+      expect(clean.creditSpreadOAS).toBe(3.1);
+      expect(clean.cccSpreadOAS).toBe(8.2);
+      expect(clean.twFuturesNetOi).toBe(-32000);
+      expect(clean.twMarginMaintenance).toBe(158.5);
     });
   });
 

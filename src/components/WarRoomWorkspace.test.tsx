@@ -309,4 +309,50 @@ describe('WarRoomWorkspace (Spec 0209 Macro War Room 3.0)', () => {
       expect(html).toContain('法人旗艦級宏觀戰情室');
     }).not.toThrow();
   });
+
+  it('Spec 0235 Ticket 03: 個人防護盾 3.5 整併去重、內嵌壓力測試與 privacyMode 全區防漏', () => {
+    const html = renderToStaticMarkup(
+      <WarRoomWorkspace
+        holdings={sampleHoldings}
+        loans={emptyLoans}
+        cashBalanceTwd={500000}
+        totalNavTwd={2700000}
+        usdToTwdRate={32.5}
+        privacyMode={true}
+        onOpenMarginStressModal={vi.fn()}
+      />
+    );
+
+    // 1. 移除 L6 與 L8 重複卡片
+    expect(html).not.toContain('個人在險價值 (1-Day 95% VaR) 與急速壓力測試');
+    expect(html).not.toContain('個人投資組合宏觀防護盾 (Macro Shield)');
+    // 2. 單一 PortfolioShieldAndAmmoCard 保留壓力測試切換與彈窗按鈕
+    expect(html).toContain('個人部位防禦護欄、真·自由子彈與穿透曝險');
+    expect(html).toContain('-10% 震盪');
+    expect(html).toContain('-20% 回檔');
+    expect(html).toContain('-30% 崩盤');
+    expect(html).toContain('質押黑天鵝壓力測試');
+    // 3. 穿透曝險展開按鈕存在
+    expect(html).toContain('展開穿透前五大明細');
+    // 4. privacyMode={true} 時絕不出現未遮罩明文現金或淨值金額
+    expect(html).not.toContain('500,000');
+    expect(html).not.toContain('2,700,000');
+    expect(html).toContain('NT$******');
+  });
+
+  it('Spec 0235 Ticket 05: 頂部僅存在單一組視角切換器，不重複渲染', () => {
+    const html = renderToStaticMarkup(
+      <WarRoomWorkspace
+        holdings={sampleHoldings}
+        loans={emptyLoans}
+        cashBalanceTwd={500000}
+        totalNavTwd={2700000}
+        usdToTwdRate={32.5}
+        onOpenMarginStressModal={vi.fn()}
+      />
+    );
+    expect(html).not.toContain('🇺🇸 美股視角');
+    const tablists = html.match(/aria-label="宏觀戰情室市場視角切換"/g) || [];
+    expect(tablists.length).toBe(1);
+  });
 });

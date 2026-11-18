@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { MacroHoldingSignalInput } from '../../types/macro';
+import type { MacroHoldingSignalInput, MarketViewTab } from '../../types/macro';
 import { BIAS_OVERHEAT_THRESHOLD_PERCENT } from '../../engine/macroAdvisorEngine';
 
 export interface HoldingTacticalSignalsCardProps {
@@ -9,6 +9,8 @@ export interface HoldingTacticalSignalsCardProps {
   onOpenAiForce?: (symbol: string) => void;
   onOpenTradeModal?: (symbol: string, market?: 'TW' | 'US') => void;
   privacyMode?: boolean;
+  activeMarketTab?: MarketViewTab;
+  onResetMarketTab?: () => void;
 }
 
 export const HoldingTacticalSignalsCard: React.FC<HoldingTacticalSignalsCardProps> = ({
@@ -18,17 +20,24 @@ export const HoldingTacticalSignalsCard: React.FC<HoldingTacticalSignalsCardProp
   onOpenAiForce,
   onOpenTradeModal,
   privacyMode = false,
+  activeMarketTab = 'GLOBAL',
+  onResetMarketTab,
 }) => {
   const [activeFilter, setActiveFilter] = useState<'ACTIONABLE' | 'ALL'>('ACTIONABLE');
 
+  const marketFilteredSignals =
+    activeMarketTab === 'TW' || activeMarketTab === 'US'
+      ? signals.filter((s) => !s.market || s.market === activeMarketTab)
+      : signals;
+
   // 將「需立即關注（突破買進 BUY / 破線賣出 SELL / 避開 AVOID / 觸及自訂停損停利 / 處置注意股）」與「正常箱型續抱 HOLD」分流
-  const actionableSignals = signals.filter(
+  const actionableSignals = marketFilteredSignals.filter(
     (s) =>
       s.action !== 'HOLD' ||
       (s.planRiskStatus && s.planRiskStatus !== 'NORMAL') ||
       (s.dispositionStatus && s.dispositionStatus !== 'NORMAL')
   );
-  const normalSignals = signals.filter(
+  const normalSignals = marketFilteredSignals.filter(
     (s) =>
       s.action === 'HOLD' &&
       (!s.planRiskStatus || s.planRiskStatus === 'NORMAL') &&
@@ -106,7 +115,17 @@ export const HoldingTacticalSignalsCard: React.FC<HoldingTacticalSignalsCardProp
           </span>
         </div>
 
-        <div style={{ display: 'flex', gap: '6px' }}>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+          {activeMarketTab !== 'GLOBAL' && onResetMarketTab && (
+            <button
+              type="button"
+              onClick={onResetMarketTab}
+              className="btn btn-sm btn-ghost"
+              style={{ fontSize: '0.72rem', padding: '3px 8px', border: '1px solid rgba(56, 189, 248, 0.35)', color: '#38bdf8' }}
+            >
+              僅顯示 {activeMarketTab} · 切回全市場 ✕
+            </button>
+          )}
           <button
             type="button"
             className={`btn btn-sm ${activeFilter === 'ACTIONABLE' ? 'btn-primary' : 'btn-secondary'}`}
