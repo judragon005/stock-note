@@ -67,6 +67,7 @@
 | [**0057**](0057-zavy-workspace-test-decomposition-and-engine-helper-refactor.md) | Zavy 慢富工作區測試職責解耦、預估年股息輔助函式下沉與信用雷達枚舉中文化 | `P3` | `RESOLVED` | Code Review (Spec 0223 / Issue #494) | `Refactor` · `CleanCode` · `TestSmell` · `ZavyWorkspace` | **已於 v9.17.0 (Spec 0224 / ADR #0224 / Issue #500) 完整解決** |
 | [**0058**](0058-dividend-log-view-subcomponent-decomposition.md) | DividendLogView 龐大單體神級組件模組化解耦重構 | `P2` | `RESOLVED` | /grill-with-docs 深度架構大閱兵審查 (Spec 0225 / Issue #501) | `Refactor` · `UI` · `CleanCode` · `Dividend` · `SRP` · `ComponentDecomposition` | **已於 v9.18.0 (Spec 0225 / ADR #0225 / Issue #502) 完整解決** |
 | [**0059**](0059-holding-position-extended-fields-type-convergence.md) | HoldingPosition 擴展欄位型別收斂與雙重轉型氣味清理 | `P3` | `RESOLVED` | /code-review 雙軸審查回饋 (Spec 0235 / Issue #584) | `Refactor` · `TypeScript` · `CleanCode` · `TypeSafety` · `WarRoom` | **已於 Spec 0236 (Issue #586) 完整解決** |
+| [**0060**](0060-equity-deep-dive-sbl-wiring-and-card-theme-token-convergence.md) | 深度投研彈窗借券餘額消費與卡片曜石主題 Token 集中化 | `P3` | `OPEN` | /code-review 雙軸審查回饋 (Spec 0237 / Issue #588) | `Refactor` · `AiForceDashboard` · `Theme` · `DesignSystem` · `Lakehouse` | 待下期深度投研籌碼視圖或主題切換演進時實作 |
 
 ---
 
