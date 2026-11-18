@@ -80,4 +80,26 @@ describe('MultiDimensionRadarCard - 六角蛛網雷達圖數學與座標規範 (
       expect(getGradeBadgeStyle('D').color).toBe('#ef4444');
     });
   });
+
+  describe('Ticket 07 (Spec 0239): 雷達圖視口收緊、容器最小高度與字級/對比度底線驗收', () => {
+    it('MultiDimensionRadarCard 應具備 >= 260px 容器高度、收緊之 viewBox 與 >= 13 scoreDetailFontSize，且不含 #64748b 與 <0.75rem', async () => {
+      // @ts-expect-error 測試環境無 @types/node 型別定義
+      const fs = await import('node:fs');
+      // @ts-expect-error 測試環境無 @types/node 型別定義
+      const path = await import('node:path');
+      // @ts-expect-error 測試環境使用 Node __dirname
+      const src = fs.readFileSync(path.resolve(__dirname, 'MultiDimensionRadarCard.tsx'), 'utf-8');
+
+      expect(RADAR_CHART_CONFIG.labelFontSize).toBeGreaterThanOrEqual(15);
+      expect(RADAR_CHART_CONFIG.scoreFontSize).toBeGreaterThanOrEqual(14);
+      expect(RADAR_CHART_CONFIG.scoreDetailFontSize).toBeGreaterThanOrEqual(13);
+      expect(src).toMatch(/minHeight:\s*['"]2[6-9]\dpx['"]/);
+      expect(src).not.toMatch(/#64748b/i);
+
+      const remMatches = [...src.matchAll(/fontSize:\s*['"](\d+(?:\.\d+)?)rem['"]/g)];
+      for (const m of remMatches) {
+        expect(Number(m[1]), `發現過小 rem 字級: ${m[0]}`).toBeGreaterThanOrEqual(0.75);
+      }
+    });
+  });
 });

@@ -284,7 +284,7 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
                 borderRadius: '5px',
                 background: 'rgba(59, 130, 246, 0.25)',
                 color: '#60a5fa',
-                fontSize: '0.72rem',
+                fontSize: '0.75rem',
                 fontWeight: 800,
               }}
             >
@@ -293,7 +293,7 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
             <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
               美股微觀量價動能 (Microstructure)
             </span>
-            <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
               | 機構量價評分
             </span>
           </div>
@@ -330,7 +330,7 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
               border: '1px solid rgba(59, 130, 246, 0.2)',
             }}
           >
-            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>機構量價評分</div>
+            <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>機構量價評分</div>
             <div style={{ fontSize: '1.1rem', fontWeight: 800, color: scoreColor }}>
               {micro.score} 分
             </div>
@@ -344,7 +344,7 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
               border: '1px solid rgba(56, 189, 248, 0.2)',
             }}
           >
-            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>資金流量 MFI</div>
+            <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>資金流量 MFI</div>
             <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#38bdf8' }}>
               {micro.mfi}
             </div>
@@ -358,7 +358,7 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
               border: '1px solid rgba(148, 163, 184, 0.2)',
             }}
           >
-            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>5D/20D 量能比</div>
+            <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>5D/20D 量能比</div>
             <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f8fafc' }}>
               {micro.volumeRatio}x
             </div>
@@ -385,7 +385,7 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
               {micro.obvTrend === 'UP' ? '資金主動進駐 (累積偏多)' : micro.obvTrend === 'DOWN' ? '資金逢高調節 (承壓)' : '多空動能平衡'}
             </span>
           </div>
-          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
             {micro.note}
           </div>
         </div>
@@ -397,8 +397,8 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
             alignItems: 'center',
             justifyContent: 'space-between',
             marginTop: '8px',
-            fontSize: '0.72rem',
-            color: '#64748b',
+            fontSize: '0.75rem',
+            color: '#94a3b8',
           }}
         >
           <span>量能單位: 股 | 計價: USD</span>
@@ -442,7 +442,7 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
               color: '#94a3b8',
               border: '1px solid rgba(255,255,255,0.08)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -453,13 +453,13 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
               法人行為計量
             </span>
           </TermTooltip>
-          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
             | 三大法人買賣超 (張)
           </span>
         </div>
 
         {/* 圖例 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem' }}>
           <TermTooltip termId="foreignFlow">
             <span style={{ color: '#38bdf8' }}>■ 外資</span>
           </TermTooltip>
@@ -645,7 +645,7 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <TermTooltip termId="totalInstFlow">
-            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>累積買賣超：</span>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>累積買賣超：</span>
           </TermTooltip>
           <span
             style={{
@@ -653,7 +653,7 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
               borderRadius: '5px',
               background: summaries.summary20Days.includes('多') ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)',
               color: summaries.summary20Days.includes('多') ? '#ef4444' : '#10b981',
-              fontSize: '0.74rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -663,7 +663,7 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <TermTooltip termId="totalInstFlow">
-            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>近5日買賣超：</span>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>近5日買賣超：</span>
           </TermTooltip>
           <span
             style={{
@@ -671,7 +671,7 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
               borderRadius: '5px',
               background: summaries.summary5Days.includes('多') ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)',
               color: summaries.summary5Days.includes('多') ? '#ef4444' : '#10b981',
-              fontSize: '0.74rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -682,7 +682,7 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
         {data.history && data.history.length > 0 && (
           <span
             data-testid="inst-flow-as-of-date"
-            style={{ fontSize: '0.72rem', color: '#64748b', marginLeft: 'auto' }}
+            style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: 'auto' }}
           >
             基準日: {data.history[data.history.length - 1].date}
           </span>

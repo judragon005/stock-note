@@ -111,7 +111,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
   );
 
   const ratioLinePoints = useMemo(() => {
-    if (history.length === 0) return '';
+    if (history.length <= 1) return '';
     const usableWidth = chartWidth - 40;
     const step = usableWidth / Math.max(1, history.length - 1);
     return history
@@ -168,7 +168,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
               color: '#94a3b8',
               border: '1px solid rgba(255,255,255,0.08)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
               letterSpacing: '0.5px',
             }}
@@ -243,7 +243,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
           <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#cbd5e1' }}>
             {data?.emptyMessage || '尚無集保分散資料'}
           </div>
-          <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
             {data?.asOfDateText || '集保每週五收盤後更新'}
           </div>
         </div>
@@ -266,7 +266,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                 border: '1px solid rgba(139, 92, 246, 0.2)',
               }}
             >
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>機構持股比 (13F)</div>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>機構持股比 (13F)</div>
               <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#c084fc' }}>
                 {data.us13fData.institutionalRatio !== undefined
                   ? `${data.us13fData.institutionalRatio.toFixed(2)}%`
@@ -286,7 +286,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                 }`,
               }}
             >
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
                 空單佔流通比 (Short Float)
               </div>
               <div
@@ -311,7 +311,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                 border: '1px solid rgba(148, 163, 184, 0.2)',
               }}
             >
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>內部人持股比</div>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>內部人持股比</div>
               <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#f8fafc' }}>
                 {data.us13fData.insiderRatio !== undefined
                   ? `${data.us13fData.insiderRatio.toFixed(2)}%`
@@ -322,7 +322,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
 
           {/* 持股結構分佈水平長條圖 */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: '6px' }}>
+            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '6px' }}>
               持股結構分佈 (機構 / 內部人 / 公眾流通)
             </div>
             <div
@@ -342,7 +342,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '0.68rem',
+                  fontSize: '0.75rem',
                   color: '#fff',
                   fontWeight: 700,
                 }}
@@ -358,7 +358,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '0.68rem',
+                  fontSize: '0.75rem',
                   color: '#fff',
                   fontWeight: 700,
                 }}
@@ -374,7 +374,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '0.68rem',
+                  fontSize: '0.75rem',
                   color: '#fff',
                   fontWeight: 700,
                 }}
@@ -392,8 +392,8 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 marginTop: '10px',
-                fontSize: '0.72rem',
-                color: '#64748b',
+                fontSize: '0.75rem',
+                color: '#94a3b8',
               }}
             >
               <div style={{ display: 'flex', gap: '12px' }}>
@@ -436,7 +436,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                 border: '1px solid rgba(139, 92, 246, 0.15)',
               }}
             >
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>千張大戶持股比</div>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>千張大戶持股比</div>
               <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#c084fc' }}>
                 {data.latestOver1000Ratio !== undefined ? `${data.latestOver1000Ratio.toFixed(2)}%` : '--'}
               </div>
@@ -450,7 +450,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                 border: '1px solid rgba(59, 130, 246, 0.15)',
               }}
             >
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>近 4 週大戶變動</div>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>近 4 週大戶變動</div>
               <div
                 style={{
                   fontSize: '1.05rem',
@@ -472,7 +472,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                 border: '1px solid rgba(148, 163, 184, 0.15)',
               }}
             >
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>總股東人數</div>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>總股東人數</div>
               <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#f8fafc' }}>
                 {data.latestShareholders !== undefined
                   ? data.latestShareholders.toLocaleString()
@@ -489,7 +489,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                   border: '1px solid rgba(245, 158, 11, 0.15)',
                 }}
               >
-                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>散戶持股比 (10張以下)</div>
+                <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>散戶持股比 (10張以下)</div>
                 <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fbbf24' }}>
                   {data.latestUnder10Ratio.toFixed(2)}%
                 </div>
@@ -509,7 +509,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                 borderRadius: '6px',
                 background: 'rgba(139, 92, 246, 0.12)',
                 border: '1px solid rgba(139, 92, 246, 0.3)',
-                fontSize: '0.72rem',
+                fontSize: '0.75rem',
                 color: '#e2e8f0',
                 fontWeight: 600,
               }}
@@ -552,9 +552,10 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
               {/* 右軸：總股東人數柱狀圖 */}
               {history.map((h, i) => {
                 const usableWidth = chartWidth - 40;
+                const isSingle = history.length === 1;
                 const step = usableWidth / Math.max(1, history.length - 1);
-                const xCenter = 20 + i * step;
-                const barWidth = Math.min(18, Math.max(8, step * 0.45));
+                const xCenter = isSingle ? chartWidth / 2 : 20 + i * step;
+                const barWidth = isSingle ? 28 : Math.min(18, Math.max(8, step * 0.45));
                 const yTop = projectTdccShareholdersToY(h.totalShareholders, scales, chartHeight, padding);
                 const yBase = chartHeight - padding.bottom;
                 const barHeight = Math.max(2, yBase - yTop);
@@ -572,9 +573,9 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                     {/* 日期標籤 */}
                     <text
                       x={xCenter}
-                      y={chartHeight - 8}
-                      fontSize="9"
-                      fill="#64748b"
+                      y={chartHeight - 6}
+                      fontSize="12"
+                      fill="#94a3b8"
                       textAnchor="middle"
                     >
                       {h.date.substring(5)}
@@ -582,6 +583,21 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                   </g>
                 );
               })}
+
+              {/* 單週基準水平虛線 */}
+              {history.length === 1 && (
+                <line
+                  data-testid="tdcc-single-point-baseline"
+                  x1="20"
+                  y1={projectTdccRatioToY(history[0].over1000Ratio, scales, chartHeight, padding)}
+                  x2={chartWidth - 20}
+                  y2={projectTdccRatioToY(history[0].over1000Ratio, scales, chartHeight, padding)}
+                  stroke="#c084fc"
+                  strokeWidth="1.5"
+                  strokeDasharray="4 4"
+                  opacity="0.7"
+                />
+              )}
 
               {/* 左軸：千張大戶持股比折線 */}
               {ratioLinePoints && (
@@ -598,8 +614,9 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
               {/* 折線資料節點圓點 */}
               {history.map((h, i) => {
                 const usableWidth = chartWidth - 40;
+                const isSingle = history.length === 1;
                 const step = usableWidth / Math.max(1, history.length - 1);
-                const x = 20 + i * step;
+                const x = isSingle ? chartWidth / 2 : 20 + i * step;
                 const y = projectTdccRatioToY(h.over1000Ratio, scales, chartHeight, padding);
 
                 return (
@@ -607,7 +624,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                     key={`node-${h.date}`}
                     cx={x}
                     cy={y}
-                    r="3.5"
+                    r={isSingle ? '5' : '3.5'}
                     fill="#a855f7"
                     stroke="#0f172a"
                     strokeWidth="1.5"
@@ -624,8 +641,8 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
               alignItems: 'center',
               justifyContent: 'space-between',
               marginTop: '6px',
-              fontSize: '0.72rem',
-              color: '#64748b',
+              fontSize: '0.75rem',
+              color: '#94a3b8',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

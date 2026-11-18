@@ -1,9 +1,14 @@
 import React from 'react';
+// @ts-expect-error 測試環境為 Node，無全域 @types/node 型別定義
+import fs from 'node:fs';
+// @ts-expect-error 測試環境為 Node，無全域 @types/node 型別定義
+import path from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AiForceDashboardView, createSymbolRequestGuard } from './AiForceDashboardView';
 import { TaskViewsSwitcher } from './TaskViewsSwitcher';
 import { HeaderExportBar } from './HeaderExportBar';
+import { WAR_ROOM_TYPOGRAPHY_FLOOR } from './typographyFloor';
 import { createDefaultAiForceReport } from '../../engine/aiForceDashboardEngine';
 import type { HoldingPosition } from '../../types/stock';
 import * as marketCacheLoader from '../../engine/marketCacheLoader';
@@ -268,6 +273,64 @@ describe('Ticket 08: 主力戰情室 7 層 Bento-Grid 專業動線架構驗收 (
       expect(html).toContain('data-testid="executive-verdict-strip"');
       expect(html).toContain(reportWithXai.mainForceVerdict.primaryVerb);
       expect(html).toContain('外資連買且站上 20 日均線，短線動能偏多。');
+    });
+  });
+
+  describe('Ticket 06: 戰情室字級底線、對比度與 Layer 6 / DayTradeRate 補齊驗收', () => {
+    it('應匯出 WAR_ROOM_TYPOGRAPHY_FLOOR 規範常數', () => {
+      expect(WAR_ROOM_TYPOGRAPHY_FLOOR).toEqual({
+        captionMinRem: '0.75rem',
+        labelMinRem: '0.8125rem',
+        bodyMinRem: '0.875rem',
+        kpiMinRem: '1.125rem',
+        minContrastSecondary: '#94a3b8',
+      });
+    });
+
+    it('Layer 6 (6-energy-sentiment) 應採用 minmax(440px, 1fr) 響應式網格且不再使用 260px', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(AiForceDashboardView, {
+          initialSymbol: '2330',
+          initialMarket: 'TW',
+          initialReport: readyReport,
+        })
+      );
+
+      expect(html).toContain('data-layer="6-energy-sentiment"');
+      expect(html).toContain('minmax(440px, 1fr)');
+      expect(html).not.toContain('minmax(260px, 1fr)');
+    });
+
+    it('View 與頂部模組 (AiForceDashboardView / HeaderMarketBar / HeaderExportBar / TaskViewsSwitcher / WarRoomPromptCard) 不得含 #64748b 與 < 12px / < 0.75rem 微字級', () => {
+      const files = [
+        'AiForceDashboardView.tsx',
+        'HeaderMarketBar.tsx',
+        'HeaderExportBar.tsx',
+        'TaskViewsSwitcher.tsx',
+        'WarRoomPromptCard.tsx',
+      ];
+      // @ts-expect-error 測試環境使用 Node __dirname
+      const baseDir = path.resolve(__dirname);
+      for (const file of files) {
+        const src = fs.readFileSync(path.join(baseDir, file), 'utf-8');
+        expect(src, `${file} 不應含 #64748b`).not.toMatch(/#64748b/i);
+
+        const pxMatches = [...src.matchAll(/fontSize:\s*['"](\d+(?:\.\d+)?)px['"]/g)];
+        for (const m of pxMatches) {
+          expect(Number(m[1]), `${file} 發現過小 px 字級: ${m[0]}`).toBeGreaterThanOrEqual(12);
+        }
+
+        const remMatches = [...src.matchAll(/fontSize:\s*['"](\d+(?:\.\d+)?)rem['"]/g)];
+        for (const m of remMatches) {
+          expect(Number(m[1]), `${file} 發現過小 rem 字級: ${m[0]}`).toBeGreaterThanOrEqual(0.75);
+        }
+      }
+    });
+
+    it('AiForceDashboardView 應包含 lakehouseData.dayTradeRate !== undefined 判斷條件', () => {
+      // @ts-expect-error 測試環境使用 Node __dirname
+      const src = fs.readFileSync(path.resolve(__dirname, 'AiForceDashboardView.tsx'), 'utf-8');
+      expect(src).toContain('lakehouseData.dayTradeRate !== undefined');
     });
   });
 });

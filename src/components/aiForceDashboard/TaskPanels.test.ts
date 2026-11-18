@@ -364,5 +364,28 @@ describe('TaskPanels 底部任務視圖真實資料動態連動 (Spec 0143 Ticke
       expect(html).toContain('<svg');
     });
   });
+
+  describe('Ticket 11 (Spec 0239): TaskPanels 字級底線與對比度驗收', () => {
+    it('TaskPanels.tsx 不得含 #64748b 與 < 12px / SVG < 12 微字級', async () => {
+      // @ts-expect-error 測試環境無 @types/node 型別定義
+      const fs = await import('node:fs');
+      // @ts-expect-error 測試環境無 @types/node 型別定義
+      const path = await import('node:path');
+      // @ts-expect-error 測試環境使用 Node __dirname
+      const src = fs.readFileSync(path.resolve(__dirname, 'TaskPanels.tsx'), 'utf-8');
+
+      expect(src).not.toMatch(/#64748b/i);
+
+      const pxMatches = [...src.matchAll(/fontSize:\s*['"](\d+(?:\.\d+)?)px['"]/g)];
+      for (const m of pxMatches) {
+        expect(Number(m[1]), `發現過小 px 字級: ${m[0]}`).toBeGreaterThanOrEqual(12);
+      }
+
+      const svgFontMatches = [...src.matchAll(/fontSize=["'](\d+(?:\.\d+)?)["']/g)];
+      for (const m of svgFontMatches) {
+        expect(Number(m[1]), `發現過小 SVG 字級: ${m[0]}`).toBeGreaterThanOrEqual(12);
+      }
+    });
+  });
 });
 

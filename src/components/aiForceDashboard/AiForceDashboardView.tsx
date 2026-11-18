@@ -172,6 +172,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           if (
             lakehouseData.marginBalance !== undefined ||
             lakehouseData.shortBalance !== undefined ||
+            lakehouseData.dayTradeRate !== undefined ||
             lakehouseData.sblBalance !== undefined ||
             lakehouseData.marginBalanceChange !== undefined ||
             lakehouseData.shortBalanceChange !== undefined
@@ -456,10 +457,10 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
               justifyContent: 'space-between',
               padding: '4px 2px',
               borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
-              fontSize: '11px',
+              fontSize: '12px',
               fontWeight: 700,
               letterSpacing: '0.12em',
-              color: '#64748b',
+              color: '#94a3b8',
             }}
           >
             <span>ZONE 01 // 價格結構與主力總判</span>
@@ -640,10 +641,10 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   justifyContent: 'space-between',
                   padding: '4px 2px',
                   borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
-                  fontSize: '11px',
+                  fontSize: '12px',
                   fontWeight: 700,
                   letterSpacing: '0.12em',
-                  color: '#64748b',
+                  color: '#94a3b8',
                 }}
               >
                 <span>ZONE 02 // AI 多維量化雷達與價格位階</span>
@@ -699,10 +700,10 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   justifyContent: 'space-between',
                   padding: '4px 2px',
                   borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
-                  fontSize: '11px',
+                  fontSize: '12px',
                   fontWeight: 700,
                   letterSpacing: '0.12em',
-                  color: '#64748b',
+                  color: '#94a3b8',
                 }}
               >
                 <span>ZONE 03 // 籌碼大數據與估值動能</span>
@@ -770,7 +771,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 data-layer="6-energy-sentiment"
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))',
                   gap: '12px',
                   alignItems: 'stretch',
                   minHeight: '315px',
@@ -809,10 +810,10 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   justifyContent: 'space-between',
                   padding: '4px 2px',
                   borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
-                  fontSize: '11px',
+                  fontSize: '12px',
                   fontWeight: 700,
                   letterSpacing: '0.12em',
-                  color: '#64748b',
+                  color: '#94a3b8',
                 }}
               >
                 <span>ZONE 04 // 風險控管與主力終極定調</span>

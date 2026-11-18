@@ -113,6 +113,23 @@ describe('VolumeProfileCard - 籌碼熱區圖元件樣式與計算規範 (Ticket
       expect(normalized[3].label).toBe('近5日');
     });
   });
+
+  describe('Ticket 07 (Spec 0239): 字級底線與對比度驗收', () => {
+    it('VolumeProfileCard 不得含 #64748b 與 < 0.75rem / < 12px 微字級', async () => {
+      // @ts-expect-error 測試環境無 @types/node 型別定義
+      const fs = await import('node:fs');
+      // @ts-expect-error 測試環境無 @types/node 型別定義
+      const path = await import('node:path');
+      // @ts-expect-error 測試環境使用 Node __dirname
+      const src = fs.readFileSync(path.resolve(__dirname, 'VolumeProfileCard.tsx'), 'utf-8');
+
+      expect(src).not.toMatch(/#64748b/i);
+      const remMatches = [...src.matchAll(/fontSize:\s*['"](\d+(?:\.\d+)?)rem['"]/g)];
+      for (const m of remMatches) {
+        expect(Number(m[1]), `發現過小 rem 字級: ${m[0]}`).toBeGreaterThanOrEqual(0.75);
+      }
+    });
+  });
 });
 
 

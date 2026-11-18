@@ -144,7 +144,7 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
               color: '#94a3b8',
               border: '1px solid rgba(255,255,255,0.08)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.68rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -169,7 +169,7 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
         {/* 右上角多空結論小徽章 */}
         <span
           style={{
-            fontSize: '0.68rem',
+            fontSize: '0.75rem',
             fontWeight: 700,
             color: ratio >= 1.05 ? '#f87171' : ratio <= 0.95 ? '#34d399' : '#fbbf24',
           }}
@@ -193,7 +193,7 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            fontSize: '0.68rem',
+            fontSize: '0.75rem',
             marginBottom: '6px',
           }}
         >
@@ -249,7 +249,7 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
           background: resonance.bg,
           border: `1px solid ${resonance.border}`,
           color: resonance.color,
-          fontSize: '0.72rem',
+          fontSize: '0.75rem',
           fontWeight: 800,
           boxShadow: `0 0 10px ${resonance.bg}`,
           marginBottom: '8px',
@@ -278,16 +278,16 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
           /* 美股宏觀情緒指標 */
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>美股宏觀情緒</div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>美股宏觀情緒</div>
               <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#38bdf8' }}>
                 CNN {usMacro?.cnnRatingText || 'Neutral'} ({marketScore})
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
                 VIX: <span style={{ color: '#fbbf24', fontWeight: 700 }}>{usMacro?.vix ?? '--'}</span>
               </div>
-              <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
                 10Y: <span style={{ color: '#34d399', fontWeight: 700 }}>{usMacro?.tenYearTreasury ? `${usMacro.tenYearTreasury}%` : '--'}</span>
               </div>
             </div>
@@ -297,7 +297,7 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>台股市場合情緒</div>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>台股市場合情緒</div>
                 <div
                   style={{
                     fontSize: '0.78rem',
@@ -313,7 +313,7 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
                   ({marketScore})
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: '6px', fontSize: '0.62rem' }}>
+              <div style={{ display: 'flex', gap: '6px', fontSize: '0.75rem' }}>
                 <span style={{ color: '#f59e0b' }}>散 {sentimentData?.retailSentimentPercent ?? 50}%</span>
                 <span style={{ color: '#38bdf8' }}>法 {sentimentData?.institutionalSentimentPercent ?? 50}%</span>
                 <span style={{ color: '#ec4899' }}>主 {sentimentData?.mainForceSentimentPercent ?? 50}%</span>
@@ -327,7 +327,7 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  fontSize: '0.62rem',
+                  fontSize: '0.75rem',
                   color: '#94a3b8',
                   borderTop: '1px solid rgba(255, 255, 255, 0.05)',
                   paddingTop: '3px',

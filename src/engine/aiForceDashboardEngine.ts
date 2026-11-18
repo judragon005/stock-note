@@ -388,6 +388,24 @@ export function buildTdccDistribution(
   }));
 
   const latest = history[history.length - 1];
+  if (history.length === 1) {
+    const latestUnder10Ratio = latest.under10Ratio !== undefined ? Number(latest.under10Ratio.toFixed(2)) : undefined;
+    return {
+      symbol,
+      history,
+      latestOver1000Ratio: latest.over1000Ratio,
+      latestUnder10Ratio,
+      latestShareholders: latest.totalShareholders,
+      change4WeeksRatio: undefined,
+      change4WeeksUnder10Ratio: undefined,
+      change4WeeksShareholders: undefined,
+      retailScissorsText: undefined,
+      concentrationBadge: '首週基準建立',
+      asOfDateText: `集保基準日: ${latest.date}`,
+      isEmpty: false,
+    };
+  }
+
   const compareIndex = Math.max(0, history.length - 4);
   const baseline = history[compareIndex];
 
@@ -440,6 +458,53 @@ export function buildTdccDistribution(
 }
 
 /**
+ * 台灣與美股主流 ETF 規模 (億元/億美元) 與總費用率基準對照 (Spec 0238 Ticket 04)
+ */
+const ETF_BASELINE_META: Record<string, { aumBillion: number; expenseRatio: number }> = {
+  '0050': { aumBillion: 4380, expenseRatio: 0.43 },
+  '0056': { aumBillion: 3650, expenseRatio: 0.44 },
+  '00878': { aumBillion: 3520, expenseRatio: 0.42 },
+  '00919': { aumBillion: 2890, expenseRatio: 0.42 },
+  '006208': { aumBillion: 1750, expenseRatio: 0.24 },
+  '00713': { aumBillion: 1120, expenseRatio: 0.45 },
+  '00929': { aumBillion: 2350, expenseRatio: 0.43 },
+  '00940': { aumBillion: 1620, expenseRatio: 0.45 },
+  '00679B': { aumBillion: 2980, expenseRatio: 0.16 },
+  '00687B': { aumBillion: 2560, expenseRatio: 0.17 },
+  VOO: { aumBillion: 5600, expenseRatio: 0.03 },
+  SPY: { aumBillion: 6100, expenseRatio: 0.09 },
+  QQQ: { aumBillion: 3100, expenseRatio: 0.2 },
+  VTI: { aumBillion: 4500, expenseRatio: 0.03 },
+  SOXX: { aumBillion: 145, expenseRatio: 0.35 },
+};
+
+/**
+ * 依據近一年歷史除權息反推 ETF/個股真實年化配息率 (%)
+ */
+export function deriveTrailingDividendYield(
+  corporateActions?: Array<{ exDate: string; cashDividendPerShare?: number }>,
+  currentPrice?: number,
+  referenceDateStr?: string
+): number | undefined {
+  if (!corporateActions || corporateActions.length === 0 || !currentPrice || currentPrice <= 0) {
+    return undefined;
+  }
+  const refMs = referenceDateStr ? new Date(referenceDateStr).getTime() : Date.now();
+  const oneYearMs = 370 * 24 * 60 * 60 * 1000;
+  const recentDividends = corporateActions.filter((ca) => {
+    if (typeof ca.cashDividendPerShare !== 'number' || ca.cashDividendPerShare <= 0) return false;
+    const exMs = new Date(ca.exDate).getTime();
+    if (Number.isNaN(exMs)) return true;
+    return exMs <= refMs + 30 * 24 * 60 * 60 * 1000 && refMs - exMs <= oneYearMs;
+  });
+  const source = recentDividends.length > 0 ? recentDividends : corporateActions.filter((ca) => (ca.cashDividendPerShare ?? 0) > 0).slice(0, 4);
+  if (source.length === 0) return undefined;
+  const sumCash = source.reduce((sum, ca) => sum + (ca.cashDividendPerShare ?? 0), 0);
+  if (sumCash <= 0) return undefined;
+  return Number(((sumCash / currentPrice) * 100).toFixed(2));
+}
+
+/**
  * 依據本地 SQLite tw_monthly_revenue 建立 Card 20「月營收成長走勢」(含 ETF 自適應) 資料 (Spec 0169)
  */
 export function buildMonthlyRevenue(
@@ -470,20 +535,35 @@ export function buildMonthlyRevenue(
     }>;
     dividendYield?: number | null;
     aumBillion?: number | null;
+    currentPrice?: number;
+    referenceDateStr?: string;
   }
 ): MonthlyRevenueData {
   const isEtf = isEtfSymbol(symbol, name);
 
   if (isEtf) {
+    const cleanSym = symbol.trim().toUpperCase().replace(/\.(TW|TWO)$/i, '');
     const latestTdcc = tdccRecords && tdccRecords.length > 0 ? tdccRecords[tdccRecords.length - 1] : undefined;
     const beneficiaries = latestTdcc?.totalShareholders;
+    const derivedYield = deriveTrailingDividendYield(
+      etfOptions?.corporateActions,
+      etfOptions?.currentPrice,
+      etfOptions?.referenceDateStr
+    );
     const dividendYield =
       typeof etfOptions?.dividendYield === 'number' && Number.isFinite(etfOptions.dividendYield)
         ? etfOptions.dividendYield
-        : undefined;
+        : derivedYield;
+    const hasAnyDynamicEtfSignal =
+      beneficiaries !== undefined ||
+      dividendYield !== undefined ||
+      (etfOptions?.corporateActions && etfOptions.corporateActions.length > 0) ||
+      typeof etfOptions?.aumBillion === 'number';
     const aumBillion =
       typeof etfOptions?.aumBillion === 'number' && Number.isFinite(etfOptions.aumBillion)
         ? etfOptions.aumBillion
+        : hasAnyDynamicEtfSignal
+        ? ETF_BASELINE_META[cleanSym]?.aumBillion
         : undefined;
 
     const quarterlyDividends = (etfOptions?.corporateActions ?? [])
@@ -1611,7 +1691,7 @@ export function generateAiForceReportFromCandles(
   const sblBalance =
     options?.marginData?.sblBalance ??
     (effectiveInstRecords && effectiveInstRecords.length > 0
-      ? effectiveInstRecords[effectiveInstRecords.length - 1].sblBalance
+      ? [...effectiveInstRecords].reverse().find((r) => r.sblBalance != null)?.sblBalance
       : undefined);
 
   // 6. 調用各量化子引擎 (含 1000x 單位正規化)
@@ -1998,14 +2078,30 @@ export function generateAiForceReportFromCandles(
     monthlyRevenue: buildMonthlyRevenue(symbol, name, market, options?.revenueRecords, options?.tdccRecords, {
       corporateActions: options?.corporateActions,
       dividendYield: options?.valuationData?.dividendYield,
+      currentPrice,
+      referenceDateStr: last.date,
     }),
     valuationMetrics: (() => {
+      const cleanSym = symbol.trim().toUpperCase().replace(/\.(TW|TWO)$/i, '');
       const pe = options?.valuationData?.pe ?? undefined;
       const pb = options?.valuationData?.pb ?? undefined;
-      const dividendYield = options?.valuationData?.dividendYield ?? undefined;
-      const isEtf = isEtfSymbol(symbol);
+      const isEtf = isEtfSymbol(symbol, name);
+      const derivedYield = isEtf
+        ? deriveTrailingDividendYield(options?.corporateActions, currentPrice, last.date)
+        : undefined;
+      const dividendYield = options?.valuationData?.dividendYield ?? derivedYield;
+      const etfExpenseRatio =
+        isEtf && (options?.valuationData || options?.etfNav || derivedYield !== undefined)
+          ? ETF_BASELINE_META[cleanSym]?.expenseRatio
+          : undefined;
       const isUsMarket = market === 'US';
-      const isEmpty = !options?.valuationData && !options?.etfNav && !options?.pledge;
+      const isEmpty = isEtf
+        ? !options?.valuationData &&
+          !options?.etfNav &&
+          !options?.pledge &&
+          etfExpenseRatio === undefined &&
+          dividendYield === undefined
+        : !options?.valuationData && !options?.etfNav && !options?.pledge;
 
       const percentileStats = calculateValuationPercentile(
         pe,
@@ -2019,6 +2115,7 @@ export function generateAiForceReportFromCandles(
         pe,
         pb,
         dividendYield,
+        etfExpenseRatio,
         latestQuarterEps: options?.valuationData?.eps ?? undefined,
         latestQuarterName: options?.valuationData?.quarterName ?? undefined,
         grossMargin: options?.valuationData?.grossMargin ?? undefined,

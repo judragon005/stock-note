@@ -76,11 +76,11 @@ export const TaskViewsSwitcher: React.FC<TaskViewsSwitcherProps> = ({
             {task.badge && (
               <span
                 style={{
-                  fontSize: '10px',
+                  fontSize: '12px',
                   padding: '1px 6px',
                   borderRadius: '9999px',
                   backgroundColor: isActive ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.06)',
-                  color: isActive ? '#f8fafc' : '#64748b',
+                  color: isActive ? '#f8fafc' : '#94a3b8',
                   fontVariantNumeric: 'tabular-nums',
                 }}
               >

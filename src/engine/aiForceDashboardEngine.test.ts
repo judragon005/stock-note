@@ -1220,6 +1220,53 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
       expect(unsettledReport.marketBar.volumeShares).toBe(4000);
     });
   });
+
+  describe('Spec 0238 Ticket 04 & 05 - ETF 資產多型合流、單筆集保與 SBL 向前回退', () => {
+    it('1. 0050 ETF 在 Card 20 應具備 aumBillion、依近一年配息反推之 dividendYield，且 Card 21 不應誤判為空', () => {
+      const candles = Array.from({ length: 10 }, (_, i) => ({
+        date: `2026-11-${String(i + 1).padStart(2, '0')}`,
+        open: 93,
+        high: 95,
+        low: 92,
+        close: 94,
+        volume: 10_000_000,
+      }));
+      const report = generateAiForceReportFromCandles(
+        '0050',
+        '元大台灣50',
+        'TW',
+        candles,
+        undefined,
+        [{ date: '2026-11-10', foreignShares: 1000, trustShares: 200, dealerShares: 50, sblBalance: 1200 }, { date: '2026-11-11', foreignShares: 500, trustShares: 100, dealerShares: 10 }],
+        new Date('2026-11-11T16:00:00+08:00'),
+        {
+          tdccRecords: [{ date: '2026-11-06', totalShareholders: 3956621, over1000Ratio: 22.35 }],
+          etfNav: { date: '2026-11-11', closePrice: 94.1, nav: 93.93, premiumDiscountRatio: 0.18 },
+          corporateActions: [
+            { exDate: '2026-07-18', cashDividendPerShare: 1.0 },
+            { exDate: '2026-01-17', cashDividendPerShare: 2.7 },
+          ],
+        }
+      );
+
+      // Card 20: AUM 與動態反推殖利率 (3.7 / 94 = 3.94%)
+      expect(report.monthlyRevenue.isEtf).toBe(true);
+      expect(report.monthlyRevenue.isEmpty).toBe(false);
+      expect(report.monthlyRevenue.etfData?.aumBillion).toBeGreaterThan(0);
+      expect(report.monthlyRevenue.etfData?.dividendYield).toBeCloseTo(3.94, 1);
+      expect(report.monthlyRevenue.etfData?.quarterlyDividends.length).toBe(2);
+
+      // Card 21: 非空且有折溢價、費用率與反推殖利率
+      expect(report.valuationMetrics?.isEtf).toBe(true);
+      expect(report.valuationMetrics?.isEmpty).toBe(false);
+      expect(report.valuationMetrics?.etfPremiumDiscountRate).toBe(0.18);
+      expect(report.valuationMetrics?.etfExpenseRatio).toBeGreaterThan(0);
+      expect(report.valuationMetrics?.dividendYield).toBeCloseTo(3.94, 1);
+
+      // Card 15: sblBalance 向前回退取得 2026-11-10 的 1200 張
+      expect(report.chipsSummary.sblBalance).toBe(1200);
+    });
+  });
 });
 
 

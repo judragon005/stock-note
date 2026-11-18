@@ -220,7 +220,7 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
               color: '#94a3b8',
               border: '1px solid rgba(255,255,255,0.08)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -252,8 +252,8 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
             flexDirection: 'column',
             justifyContent: 'space-between',
             height: '100%',
-            fontSize: '0.68rem',
-            color: '#64748b',
+            fontSize: '0.75rem',
+            color: '#94a3b8',
             fontFamily: 'monospace',
             textAlign: 'right',
             paddingRight: '4px',
@@ -303,7 +303,7 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
                 style={{
                   background: 'rgba(245, 158, 11, 0.95)',
                   color: '#0f172a',
-                  fontSize: '0.62rem',
+                  fontSize: '0.75rem',
                   fontWeight: 800,
                   padding: '1px 5px',
                   borderRadius: '3px',
@@ -360,7 +360,7 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
             flexDirection: 'column',
             justifyContent: 'space-between',
             height: '100%',
-            fontSize: '0.72rem',
+            fontSize: '0.75rem',
             gap: '2px',
             minWidth: '85px',
             whiteSpace: 'nowrap',
@@ -391,12 +391,12 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
                     }}
                   />
                   <TermTooltip termId={termMap[b.type]}>
-                    <span style={{ color: '#cbd5e1', fontSize: '0.7rem' }}>{b.label}</span>
+                    <span style={{ color: '#cbd5e1', fontSize: '0.75rem' }}>{b.label}</span>
                   </TermTooltip>
                   {idx === pocBucketIndex && (
                     <span
                       style={{
-                        fontSize: '0.58rem',
+                        fontSize: '0.75rem',
                         padding: '1px 3px',
                         borderRadius: '3px',
                         background: 'rgba(245, 158, 11, 0.25)',
@@ -414,7 +414,7 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
                   {idx === vacuumBucketIndex && (
                     <span
                       style={{
-                        fontSize: '0.58rem',
+                        fontSize: '0.75rem',
                         padding: '1px 3px',
                         borderRadius: '3px',
                         background: 'rgba(56, 189, 248, 0.2)',
@@ -454,8 +454,8 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
           gridTemplateColumns: 'auto 1fr auto',
           gap: '10px',
           marginTop: '6px',
-          fontSize: '0.68rem',
-          color: '#64748b',
+          fontSize: '0.75rem',
+          color: '#94a3b8',
           fontFamily: 'monospace',
         }}
       >

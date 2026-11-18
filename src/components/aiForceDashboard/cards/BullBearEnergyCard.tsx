@@ -98,7 +98,7 @@ export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({ data }) 
               borderRadius: '5px',
               background: 'rgba(59, 130, 246, 0.25)',
               color: '#60a5fa',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -130,7 +130,7 @@ export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({ data }) 
         {/* 多方能量 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <TermTooltip termId="bullEnergy">
-            <span style={{ fontSize: '0.74rem', color: '#cbd5e1', width: '56px', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: '0.75rem', color: '#cbd5e1', width: '56px', whiteSpace: 'nowrap' }}>
               多方能量
             </span>
           </TermTooltip>
@@ -173,7 +173,7 @@ export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({ data }) 
         {/* 空方能量 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <TermTooltip termId="bearEnergy">
-            <span style={{ fontSize: '0.74rem', color: '#cbd5e1', width: '56px', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: '0.75rem', color: '#cbd5e1', width: '56px', whiteSpace: 'nowrap' }}>
               空方能量
             </span>
           </TermTooltip>
@@ -226,13 +226,13 @@ export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({ data }) 
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <TermTooltip termId="bullBearRatio" dynamicDiagnosis={diagnoseBullBearEnergy(bull, bear, ratio)}>
-            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>多空比：</span>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>多空比：</span>
           </TermTooltip>
           <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', fontFamily: 'monospace' }}>
             {ratio} 倍多
           </span>
         </div>
-        <div style={{ fontSize: '0.66rem', color: '#64748b', textAlign: 'right' }}>
+        <div style={{ fontSize: '0.75rem', color: '#94a3b8', textAlign: 'right' }}>
           {note}
         </div>
       </div>

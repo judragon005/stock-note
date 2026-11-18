@@ -893,8 +893,12 @@ function parseTwseEtfNavResponse(rawData, dateStr) {
   let items = [];
   if (Array.isArray(rawData)) {
     items = rawData;
-  } else if (rawData.a1 && Array.isArray(rawData.a1) && rawData.a1[0] && Array.isArray(rawData.a1[0].msgArray)) {
-    items = rawData.a1[0].msgArray;
+  } else if (rawData.a1 && Array.isArray(rawData.a1)) {
+    for (const group of rawData.a1) {
+      if (group && Array.isArray(group.msgArray)) {
+        items.push(...group.msgArray);
+      }
+    }
   } else if (Array.isArray(rawData.msgArray)) {
     items = rawData.msgArray;
   }

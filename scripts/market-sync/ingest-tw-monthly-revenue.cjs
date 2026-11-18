@@ -306,6 +306,110 @@ async function runMonthlyRevenueIngestion(customDbPath, targetYearMonthOrOptions
   return { savedCount, yearMonth: effectiveYearMonth, monthsCount: savedCount > 0 ? 1 : 0 };
 }
 
+/**
+ * 單一非 ETF 台股個股月營收歷史序列按需補齊 (Spec 0241 Ticket 03)
+ * 當 tw_monthly_revenue 筆數 < 6 時，從 FinMind TaiwanStockMonthRevenue 拉取近 N 個月資料並計算 YoY/MoM 寫入
+ * @param {string} symbol
+ * @param {number} [months=12]
+ * @param {string} [customDbPath]
+ * @param {Function} [fetcher]
+ * @returns {Promise<{ savedCount: number, skipped?: boolean }>}
+ */
+async function backfillSymbolMonthlyRevenue(symbol, months = 12, customDbPath, fetcher = globalThis.fetch) {
+  if (!symbol || typeof fetcher !== 'function') {
+    return { savedCount: 0 };
+  }
+
+  const cleanSymbol = String(symbol).trim().toUpperCase();
+  const aliasSym = cleanSymbol.endsWith('O') ? cleanSymbol.slice(0, -1) : `${cleanSymbol}O`;
+
+  if (/^00/.test(cleanSymbol)) {
+    return { savedCount: 0, skipped: true };
+  }
+
+  try {
+    const db = initSqliteLakehouseDb(customDbPath);
+    const metaRow = db
+      .prepare('SELECT type FROM symbols_meta WHERE symbol IN (?, ?)')
+      .get(cleanSymbol, aliasSym);
+    if (metaRow?.type === 'ETF') {
+      return { savedCount: 0, skipped: true };
+    }
+
+    const existingRow = db
+      .prepare('SELECT COUNT(*) AS count FROM tw_monthly_revenue WHERE symbol IN (?, ?)')
+      .get(cleanSymbol, aliasSym);
+    if (Number(existingRow?.count || 0) >= 6) {
+      return { savedCount: 0, skipped: true };
+    }
+
+    const startDateObj = new Date(Date.now() - (months + 14) * 31 * 86400000);
+    const startDate = startDateObj.toISOString().slice(0, 10);
+    const querySym = cleanSymbol.endsWith('O') ? cleanSymbol.slice(0, -1) : cleanSymbol;
+    const apiUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockMonthRevenue&data_id=${encodeURIComponent(querySym)}&start_date=${startDate}`;
+
+    const res = await fetcher(apiUrl, {
+      headers: { Accept: 'application/json', 'User-Agent': 'StockTracker/1.0 (local-sync)' },
+    });
+    if (!res || !res.ok) return { savedCount: 0 };
+
+    const json = await res.json();
+    const rawRows = Array.isArray(json?.data) ? json.data : [];
+    if (rawRows.length === 0) return { savedCount: 0 };
+
+    const byYm = {};
+    for (const r of rawRows) {
+      if (!r) continue;
+      let ym = null;
+      if (r.revenue_year && r.revenue_month) {
+        ym = `${r.revenue_year}-${String(r.revenue_month).padStart(2, '0')}`;
+      } else if (r.date) {
+        ym = String(r.date).slice(0, 7);
+      }
+      if (!ym || !/^\d{4}-\d{2}$/.test(ym)) continue;
+
+      const rev = Number(r.revenue);
+      if (!Number.isFinite(rev) || rev < 0) continue;
+      byYm[ym] = rev;
+    }
+
+    const sortedYms = Object.keys(byYm).sort();
+    if (sortedYms.length === 0) return { savedCount: 0 };
+
+    const targetYms = sortedYms.slice(-months);
+    const revenueMap = {};
+
+    for (const ym of targetYms) {
+      const [yStr, mStr] = ym.split('-');
+      const yNum = Number(yStr);
+      const mNum = Number(mStr);
+      const lyYm = `${yNum - 1}-${mStr}`;
+      const lmYm = mNum === 1 ? `${yNum - 1}-12` : `${yNum}-${String(mNum - 1).padStart(2, '0')}`;
+
+      const curRev = byYm[ym];
+      const lyRev = byYm[lyYm] !== undefined ? byYm[lyYm] : null;
+      const lmRev = byYm[lmYm] !== undefined ? byYm[lmYm] : null;
+      const pastRevs = sortedYms.filter((d) => d < ym).map((d) => byYm[d]);
+
+      const { yoyRate, momRate, isAllTimeHigh } = computeRevenueGrowth(curRev, lyRev, lmRev, pastRevs);
+      revenueMap[`${cleanSymbol}_${ym}`] = {
+        symbol: cleanSymbol,
+        yearMonth: ym,
+        revenue: curRev,
+        lastYearRevenue: lyRev,
+        yoyRate,
+        momRate,
+        isAllTimeHigh,
+      };
+    }
+
+    const { savedCount } = saveMonthlyRevenueToSqlite(revenueMap, customDbPath);
+    return { savedCount };
+  } catch {
+    return { savedCount: 0 };
+  }
+}
+
 module.exports = {
   TWSE_REVENUE_URL,
   TPEX_REVENUE_URL,
@@ -315,6 +419,7 @@ module.exports = {
   saveMonthlyRevenueToSqlite,
   purgeSyntheticRecords,
   runMonthlyRevenueIngestion,
+  backfillSymbolMonthlyRevenue,
 };
 
 if (require.main === module) {

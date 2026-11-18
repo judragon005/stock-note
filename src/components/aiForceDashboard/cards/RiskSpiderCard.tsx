@@ -204,7 +204,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
               color: '#94a3b8',
               border: '1px solid rgba(255,255,255,0.08)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
               flexShrink: 0,
             }}
@@ -224,9 +224,9 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
       </div>
 
       {/* SVG 五角蛛網圖繪製區 */}
-      <div style={{ width: '100%', flex: 1, minHeight: '230px', position: 'relative' }}>
+      <div style={{ width: '100%', flex: 1, minHeight: '270px', position: 'relative' }}>
         <svg
-          viewBox="0 0 350 310"
+          viewBox="15 0 320 316"
           style={{ width: '100%', height: '100%', overflow: 'visible' }}
           preserveAspectRatio="xMidYMid meet"
         >
@@ -333,7 +333,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', flexShrink: 0 }}>
           <TermTooltip termId="dayTradeRisk" dynamicDiagnosis={diagnoseDayTradeRisk(data.mainForceRiskIndex ?? 60, 50)}>
-            <span style={{ fontSize: '0.74rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>主力風險等級：</span>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>主力風險等級：</span>
           </TermTooltip>
           <span
             style={{
@@ -342,7 +342,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
               background: riskBadge.bg,
               color: riskBadge.color,
               border: `1px solid ${riskBadge.border}`,
-              fontSize: '0.74rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
               whiteSpace: 'nowrap',
             }}
@@ -353,7 +353,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap', flexShrink: 0 }}>
           <TermTooltip termId="dayTradeRisk" dynamicDiagnosis={diagnoseDayTradeRisk(data.mainForceRiskIndex ?? 60, 50)}>
-            <span style={{ fontSize: '0.74rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>主力風險指數：</span>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>主力風險指數：</span>
           </TermTooltip>
           <span
             style={{

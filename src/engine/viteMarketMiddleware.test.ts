@@ -412,4 +412,127 @@ describe('Ticket 10 - Vite 原生 Connect 中介層 API (TDD Seam)', () => {
     });
 
   });
+
+  describe('Spec 0241 Ticket 02 & 03 - triggerCatchupTask 半殘日自癒與 history 按需補齊', () => {
+    it('Ticket 02: triggerCatchupTask 應針對 incompleteDates 補抓、etf_nav 呼叫 fetchAndIngestEtfDailyNav、us.isStale 呼叫 runUsMarketSync', async () => {
+      const {
+        triggerCatchupTask,
+        resetCatchupStateForTest,
+      } = require('../../scripts/market-sync/vite-market-middleware.cjs');
+
+      resetCatchupStateForTest();
+
+      const backfilledDates: string[] = [];
+      let etfNavCalledDate = '';
+      let usSyncCalled = false;
+      let twSyncCalled = false;
+
+      const mockFreshness = {
+        tw: {
+          latestDate: '2026-10-02',
+          anchorDate: '2026-10-02',
+          isStale: true,
+          incompleteDates: ['2026-10-02', '2026-10-01', '2026-09-30', '2026-09-29', '2026-09-25', '2026-09-24'],
+          missingPlanes: ['sbl', 'etf_nav'],
+        },
+        us: { latestDate: '2026-10-01', anchorDate: '2026-10-02', isStale: true },
+        tdcc: { isStale: false },
+        revenue: { isStale: false },
+      };
+
+      const started = triggerCatchupTask(testDbPath, {
+        bypassTestEnv: true,
+        force: true,
+        freshnessOverride: mockFreshness,
+        handlers: {
+          runTwMarketSync: async () => { twSyncCalled = true; },
+          fetchAndIngestTwDailyData: async (d: string) => { backfilledDates.push(d); },
+          fetchAndIngestEtfDailyNav: async (_db: any, d: string) => { etfNavCalledDate = d; },
+          runUsMarketSync: async () => { usSyncCalled = true; },
+          runTdccIngestion: async () => {},
+          runMonthlyRevenueIngestion: async () => {},
+        },
+      });
+
+      expect(started).toBe(true);
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(twSyncCalled).toBe(true);
+      expect(backfilledDates).toHaveLength(5); // 最多近 5 個交易日
+      expect(backfilledDates).toEqual(['2026-10-02', '2026-10-01', '2026-09-30', '2026-09-29', '2026-09-25']);
+      expect(etfNavCalledDate).toBe('2026-10-02');
+      expect(usSyncCalled).toBe(true);
+
+      resetCatchupStateForTest();
+    });
+
+    it('Ticket 03: GET /api/market/history/:symbol 應觸發按需補齊並合併歷史除權息 corporateActions', async () => {
+      const { resetCatchupStateForTest } = require('../../scripts/market-sync/vite-market-middleware.cjs');
+      resetCatchupStateForTest();
+
+      const db = initSqliteLakehouseDb(testDbPath);
+      db.exec('DELETE FROM tw_tdcc_distribution; DELETE FROM tw_monthly_revenue; DELETE FROM corporate_action_calendar;');
+      db.prepare(
+        'INSERT OR REPLACE INTO symbols_meta (symbol, name, market, type, industry, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+      ).run('2330', '台積電', 'TW', 'STOCK', '半導體業', Date.now());
+
+      const originalFetch = (globalThis as any).fetch;
+      try {
+        (globalThis as any).fetch = async (targetUrl: string) => {
+          if (targetUrl.includes('TaiwanStockHoldingSharesPer')) {
+            return {
+              ok: true,
+              json: async () => ({
+                data: [
+                  { date: '2026-10-02', stock_id: '2330', HoldingSharesLevel: '1-999', people: 500000, percent: 2.0 },
+                  { date: '2026-10-02', stock_id: '2330', HoldingSharesLevel: 'more than 1,000,001', people: 1500, percent: 82.0 },
+                  { date: '2026-10-02', stock_id: '2330', HoldingSharesLevel: 'total', people: 1200000, percent: 100.0 },
+                ],
+              }),
+            };
+          }
+          if (targetUrl.includes('TaiwanStockMonthRevenue')) {
+            return {
+              ok: true,
+              json: async () => ({
+                data: [
+                  { date: '2025-09-01', stock_id: '2330', revenue: 200000, revenue_year: 2025, revenue_month: 9 },
+                  { date: '2026-09-01', stock_id: '2330', revenue: 250000, revenue_year: 2026, revenue_month: 9 },
+                ],
+              }),
+            };
+          }
+          if (targetUrl.includes('TaiwanStockDividend')) {
+            return {
+              ok: true,
+              json: async () => ({
+                data: [
+                  {
+                    stock_id: '2330',
+                    CashExDividendTradingDate: '2026-09-17',
+                    CashDividendPaymentDate: '2026-10-09',
+                    CashEarningsDistribution: 4.0,
+                    StockEarningsDistribution: 0,
+                  },
+                ],
+              }),
+            };
+          }
+          return { ok: false, status: 404 };
+        };
+
+        const middleware = createMarketApiMiddleware(testDbPath);
+        const res = await simulateRequest(middleware, '/api/market/history/2330?limit=10');
+
+        expect(res.status).toBe(200);
+        expect(res.data.tdcc.length).toBeGreaterThanOrEqual(1);
+        expect(res.data.revenue.length).toBeGreaterThanOrEqual(1);
+        expect(res.data.corporateActions.length).toBeGreaterThanOrEqual(1);
+        expect(res.data.corporateActions[0].ex_date).toBe('2026-09-17');
+        expect(res.data.corporateActions[0].cash_dividend_per_share).toBe(4.0);
+      } finally {
+        (globalThis as any).fetch = originalFetch;
+      }
+    });
+  });
 });

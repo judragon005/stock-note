@@ -239,6 +239,25 @@ describe('TdccDistributionCard - TDD Unit Tests', () => {
     expect(result.us13fData?.institutionalRatio).toBe(68.5);
     expect(result.concentrationBadge).toBe('機構高度控盤');
   });
+
+  it('13. Spec 0238 Ticket 05: 僅有 1 週集保資料時，change4WeeksRatio 應為 undefined (顯示 -- 與首週基準建立)，且 SVG 單柱置中渲染', async () => {
+    const { buildTdccDistribution } = await import('../../../engine/aiForceDashboardEngine');
+    const React = await import('react');
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const { TdccDistributionCard } = await import('./TdccDistributionCard');
+
+    const singleRecord = [{ date: '2026-11-13', totalShareholders: 3956621, over1000Ratio: 22.35 }];
+    const result = buildTdccDistribution(singleRecord, 'TW', '0050');
+
+    expect(result.change4WeeksRatio).toBeUndefined();
+    expect(result.concentrationBadge).toBe('首週基準建立');
+
+    const html = renderToStaticMarkup(
+      React.createElement(TdccDistributionCard, { data: result, colorTheme: 'taiwan' })
+    );
+    expect(html).toContain('首週基準建立');
+    expect(html).toContain('data-testid="tdcc-single-point-baseline"');
+  });
 });
 
 

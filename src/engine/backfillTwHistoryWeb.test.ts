@@ -223,15 +223,21 @@ describe('Spec 0168 / Ticket 07: 台股日期驅動歷史回補模組 (backfill-
       const tempDbPath = path.join(os.tmpdir(), `test_cache_skip_${Date.now()}.db`);
       const db = initSqliteLakehouseDb(tempDbPath);
 
-      // 預先插入 1850 檔 4 碼股票與 2050 檔籌碼
+      // 預先插入 1850 檔 4 碼股票、2050 檔籌碼（含 margin >= 1500 與 sbl >= 500）及 1550 檔估值
       db.exec('BEGIN TRANSACTION;');
       const candleStmt = db.prepare('INSERT INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
       for (let i = 1000; i < 2850; i++) {
         candleStmt.run(String(i), '2026-10-15', 100, 105, 95, 100, 100, 1000);
       }
-      const chipStmt = db.prepare('INSERT INTO tw_institutional_chips (symbol, date, foreign_net) VALUES (?, ?, ?)');
+      const chipStmt = db.prepare('INSERT INTO tw_institutional_chips (symbol, date, foreign_net, margin_balance, sbl_balance) VALUES (?, ?, ?, ?, ?)');
       for (let i = 1000; i < 3050; i++) {
-        chipStmt.run(String(i), '2026-10-15', 10);
+        const margin = i < 2550 ? 1000 : null;
+        const sbl = i < 1550 ? 200 : null;
+        chipStmt.run(String(i), '2026-10-15', 10, margin, sbl);
+      }
+      const valStmt = db.prepare('INSERT INTO tw_valuation_daily (symbol, date, pe, pb, dividend_yield, updated_at) VALUES (?, ?, 15, 2, 3, 12345)');
+      for (let i = 1000; i < 2550; i++) {
+        valStmt.run(String(i), '2026-10-15');
       }
       db.exec('COMMIT;');
 
@@ -511,6 +517,82 @@ describe('Spec 0168 / Ticket 07: 台股日期驅動歷史回補模組 (backfill-
 
       expect(res.failedDates.length).toBe(0);
       expect(res.totalTradingDays).toBe(0);
+    });
+  });
+
+  describe('13. [Spec 0241 / Ticket 02] 7 維欄位級快取門檻與 TWT93U / TWTB4U 抓取寫入', () => {
+    it('當日僅有 stock >= 1800 與 chip >= 2000 但缺少 margin/sbl/valuation 時，不應跳過快取', async () => {
+      const fs = require('fs');
+      const path = require('path');
+      const os = require('os');
+      const { initSqliteLakehouseDb, closeSqliteDb } = require('../../scripts/market-sync/sqlite-db-core.cjs');
+
+      const tempDbPath = path.join(os.tmpdir(), `test_half_day_${Date.now()}.db`);
+      const db = initSqliteLakehouseDb(tempDbPath);
+
+      db.exec('BEGIN TRANSACTION;');
+      const candleStmt = db.prepare('INSERT INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+      for (let i = 1000; i < 2850; i++) {
+        candleStmt.run(String(i), '2026-10-15', 100, 105, 95, 100, 100, 1000);
+      }
+      const chipStmt = db.prepare('INSERT INTO tw_institutional_chips (symbol, date, foreign_net) VALUES (?, ?, ?)');
+      for (let i = 1000; i < 3050; i++) {
+        chipStmt.run(String(i), '2026-10-15', 10);
+      }
+      db.exec('COMMIT;');
+
+      const calledUrls: string[] = [];
+      const mockFetcher = vi.fn().mockImplementation(async (url: string) => {
+        calledUrls.push(url);
+        if (url.includes('MI_INDEX')) {
+          return {
+            tables: [{ data: [['2330', '台積電', '10000', '500', '10000000', '980', '990', '975', '985']] }],
+          };
+        }
+        if (url.includes('otc_quotes_no1430')) {
+          return {
+            tables: [{ data: [['3293', '鈊象', '1050', '+10', '1040', '1060', '1035', '4000', '1000000', '1000000000']] }],
+          };
+        }
+        if (url.includes('T86')) {
+          const rows = Array.from({ length: 550 }, (_, idx) => [String(1000 + idx), '股', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '100']);
+          return { stat: 'OK', data: rows };
+        }
+        if (url.includes('3itrade_hedge_result')) {
+          const rows = Array.from({ length: 550 }, (_, idx) => [String(5000 + idx), '櫃股', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '50']);
+          return { tables: [{ data: rows }] };
+        }
+        if (url.includes('TWT93U')) {
+          return { data: [['2330', '台積電', '0', '0', '0', '3500']] };
+        }
+        if (url.includes('TWTB4U')) {
+          return { data: [['2330', '台積電', '0', '0', '32.5']] };
+        }
+        return {};
+      });
+
+      try {
+        const res = await fetchAndIngestTwDailyData('2026-10-15', {
+          fetcher: mockFetcher,
+          dbPath: tempDbPath,
+          throttleMs: 0,
+          retries: 1,
+        });
+
+        expect(res.cached).toBeUndefined();
+        expect(mockFetcher).toHaveBeenCalled();
+        expect(calledUrls.some((u) => u.includes('TWT93U'))).toBe(true);
+        expect(calledUrls.some((u) => u.includes('TWTB4U'))).toBe(true);
+
+        const row2330 = db.prepare('SELECT sbl_balance, day_trade_rate FROM tw_institutional_chips WHERE symbol = ? AND date = ?').get('2330', '2026-10-15');
+        expect(row2330.sbl_balance).toBe(3500);
+        expect(row2330.day_trade_rate).toBe(32.5);
+      } finally {
+        closeSqliteDb();
+        if (fs.existsSync(tempDbPath)) {
+          try { fs.unlinkSync(tempDbPath); } catch {}
+        }
+      }
     });
   });
 });

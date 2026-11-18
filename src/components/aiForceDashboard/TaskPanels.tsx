@@ -295,7 +295,7 @@ export const TechnicalAlertsView: React.FC<TaskPanelProps> = ({
             </span>
             <span
               style={{
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: 700,
                 padding: '2px 8px',
                 borderRadius: '4px',
@@ -324,19 +324,19 @@ export const TechnicalAlertsView: React.FC<TaskPanelProps> = ({
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', fontSize: '12px' }}>
             <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
-              <span style={{ color: '#94a3b8', fontSize: '11px' }}>撮合機制</span>
+              <span style={{ color: '#94a3b8', fontSize: '12px' }}>撮合機制</span>
               <div style={{ fontWeight: 600, color: isDisposition ? '#ef4444' : '#f1f5f9' }}>
                 {isDisposition ? '分盤撮合 (5分/20分)' : '逐筆連續撮合'}
               </div>
             </div>
             <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
-              <span style={{ color: '#94a3b8', fontSize: '11px' }}>預收款券</span>
+              <span style={{ color: '#94a3b8', fontSize: '12px' }}>預收款券</span>
               <div style={{ fontWeight: 600, color: isDisposition ? '#ef4444' : '#10b981' }}>
                 {isDisposition ? '預收款券 (單筆10/累計30)' : '免預收款券'}
               </div>
             </div>
             <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
-              <span style={{ color: '#94a3b8', fontSize: '11px' }}>出關日預估</span>
+              <span style={{ color: '#94a3b8', fontSize: '12px' }}>出關日預估</span>
               <div style={{ fontWeight: 600, color: '#38bdf8' }}>
                 {isDisposition ? '約 10 交易日解禁' : '常態營運無限制'}
               </div>
@@ -361,31 +361,31 @@ export const TechnicalAlertsView: React.FC<TaskPanelProps> = ({
             <span style={{ fontSize: '14px', fontWeight: 700, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Zap size={15} color="#f59e0b" /> 券商信用維持率壓力測試矩陣
             </span>
-            <span style={{ fontSize: '11px', color: '#38bdf8', padding: '2px 8px', borderRadius: '4px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
+            <span style={{ fontSize: '12px', color: '#38bdf8', padding: '2px 8px', borderRadius: '4px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
               整戶維持率模型
             </span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', fontSize: '12px' }}>
             <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
-              <span style={{ color: '#94a3b8', fontSize: '11px' }}>預估維持率</span>
-              <div style={{ fontWeight: 700, color: maintenanceStatus ? maintenanceStatus.color : '#64748b', fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ color: '#94a3b8', fontSize: '12px' }}>預估維持率</span>
+              <div style={{ fontWeight: 700, color: maintenanceStatus ? maintenanceStatus.color : '#94a3b8', fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}>
                 {maintenanceRatio !== null && maintenanceStatus
                   ? `${maintenanceRatio.toFixed(1)}% (${maintenanceStatus.label})`
                   : '--'}
               </div>
             </div>
             <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
-              <span style={{ color: '#94a3b8', fontSize: '11px' }}>-10% 跌停壓力</span>
+              <span style={{ color: '#94a3b8', fontSize: '12px' }}>-10% 跌停壓力</span>
               <div style={{ fontWeight: 700, color: stressMaintenanceRatio !== null && stressMaintenanceRatio < 130 ? '#ef4444' : '#38bdf8', fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}>
                 {stressMaintenanceRatio !== null ? `${stressMaintenanceRatio.toFixed(1)}%` : '--'}
               </div>
             </div>
             <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
-              <span style={{ color: '#94a3b8', fontSize: '11px' }}>追繳警戒線</span>
+              <span style={{ color: '#94a3b8', fontSize: '12px' }}>追繳警戒線</span>
               <div style={{ fontWeight: 700, color: '#ef4444', fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}>130% (補繳令)</div>
             </div>
             <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
-              <span style={{ color: '#94a3b8', fontSize: '11px' }}>斷頭防守線</span>
+              <span style={{ color: '#94a3b8', fontSize: '12px' }}>斷頭防守線</span>
               <div style={{ fontWeight: 700, color: '#f59e0b', fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}>140% (斷頭線)</div>
             </div>
           </div>
@@ -438,7 +438,7 @@ export const TechnicalAlertsView: React.FC<TaskPanelProps> = ({
                 <span style={{ fontSize: '13px', fontWeight: 600, color: '#f1f5f9' }}>{a.title}</span>
                 <span
                   style={{
-                    fontSize: '11px',
+                    fontSize: '12px',
                     color: a.color,
                     padding: '2px 8px',
                     borderRadius: '4px',
@@ -449,7 +449,7 @@ export const TechnicalAlertsView: React.FC<TaskPanelProps> = ({
                 </span>
               </div>
               <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8', lineHeight: 1.6 }}>{a.message}</p>
-              <span style={{ fontSize: '10px', color: '#64748b' }}>觸發時戳：{a.time}</span>
+              <span style={{ fontSize: '12px', color: '#94a3b8' }}>觸發時戳：{a.time}</span>
             </div>
           ))}
         </div>
@@ -608,7 +608,7 @@ export const KdMaView: React.FC<TaskPanelProps> = ({ report }) => {
               backgroundColor: 'rgba(16, 185, 129, 0.15)',
               color: '#10b981',
               border: '1px solid rgba(16, 185, 129, 0.3)',
-              fontSize: '11px',
+              fontSize: '12px',
               fontWeight: 700,
             }}
           >
@@ -620,44 +620,44 @@ export const KdMaView: React.FC<TaskPanelProps> = ({ report }) => {
       {/* 4 核心指標 + 多週期共振與勝率統計看板 (Ticket 07) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
         <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.5)', padding: '10px', borderRadius: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#94a3b8' }}>日 KD (9日)</span>
+          <span style={{ fontSize: '12px', color: '#94a3b8' }}>日 KD (9日)</span>
           <div style={{ fontSize: '16px', fontWeight: 700, color: '#f43f5e' }}>
             K:{k} / D:{d}
           </div>
-          <span style={{ fontSize: '10px', color: '#10b981' }}>{multiTimeframeResonance.dailyKd.status}</span>
+          <span style={{ fontSize: '12px', color: '#10b981' }}>{multiTimeframeResonance.dailyKd.status}</span>
         </div>
         <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.5)', padding: '10px', borderRadius: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#94a3b8' }}>週 KD 趨勢</span>
+          <span style={{ fontSize: '12px', color: '#94a3b8' }}>週 KD 趨勢</span>
           <div style={{ fontSize: '16px', fontWeight: 700, color: '#f59e0b' }}>
             K:{multiTimeframeResonance.weeklyKd.k} / D:{multiTimeframeResonance.weeklyKd.d}
           </div>
-          <span style={{ fontSize: '10px', color: '#f59e0b' }}>{multiTimeframeResonance.weeklyKd.status}</span>
+          <span style={{ fontSize: '12px', color: '#f59e0b' }}>{multiTimeframeResonance.weeklyKd.status}</span>
         </div>
         <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.5)', padding: '10px', borderRadius: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#94a3b8' }}>月 KD 長線</span>
+          <span style={{ fontSize: '12px', color: '#94a3b8' }}>月 KD 長線</span>
           <div style={{ fontSize: '16px', fontWeight: 700, color: '#38bdf8' }}>
             K:{multiTimeframeResonance.monthlyKd.k} / D:{multiTimeframeResonance.monthlyKd.d}
           </div>
-          <span style={{ fontSize: '10px', color: '#38bdf8' }}>{multiTimeframeResonance.monthlyKd.status}</span>
+          <span style={{ fontSize: '12px', color: '#38bdf8' }}>{multiTimeframeResonance.monthlyKd.status}</span>
         </div>
         <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.5)', padding: '10px', borderRadius: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#94a3b8' }}>MA20 月線基準</span>
+          <span style={{ fontSize: '12px', color: '#94a3b8' }}>MA20 月線基準</span>
           <div style={{ fontSize: '16px', fontWeight: 700, color: '#38bdf8' }}>
             ${ma20.toLocaleString()}
           </div>
-          <span style={{ fontSize: '10px', color: '#94a3b8' }}>關鍵防守線</span>
+          <span style={{ fontSize: '12px', color: '#94a3b8' }}>關鍵防守線</span>
         </div>
         <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.5)', padding: '10px', borderRadius: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#94a3b8' }}>多週期共振判定</span>
+          <span style={{ fontSize: '12px', color: '#94a3b8' }}>多週期共振判定</span>
           <div style={{ fontSize: '15px', fontWeight: 700, color: '#a855f7' }}>多週期共振</div>
-          <span style={{ fontSize: '10px', color: '#c084fc' }}>{kdCrossingState}</span>
+          <span style={{ fontSize: '12px', color: '#c084fc' }}>{kdCrossingState}</span>
         </div>
         <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.5)', padding: '10px', borderRadius: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#94a3b8' }}>低檔金叉歷史勝率</span>
+          <span style={{ fontSize: '12px', color: '#94a3b8' }}>低檔金叉歷史勝率</span>
           <div style={{ fontSize: '16px', fontWeight: 700, color: '#10b981' }}>
             勝率 {historicalOversoldStats.winRate}%
           </div>
-          <span style={{ fontSize: '10px', color: '#94a3b8' }}>
+          <span style={{ fontSize: '12px', color: '#94a3b8' }}>
             共 {historicalOversoldStats.sampleCount} 次 (均漲 {historicalOversoldStats.avgReturnPercent}%)
           </span>
         </div>
@@ -689,7 +689,7 @@ export const KdMaView: React.FC<TaskPanelProps> = ({ report }) => {
             x={padding.left - 5}
             y={padding.top + plotHeight * 0.2 + 4}
             fill="#f43f5e"
-            fontSize="10"
+            fontSize="12"
             textAnchor="end"
           >
             80 超買
@@ -707,7 +707,7 @@ export const KdMaView: React.FC<TaskPanelProps> = ({ report }) => {
             x={padding.left - 5}
             y={padding.top + plotHeight * 0.8 + 4}
             fill="#38bdf8"
-            fontSize="10"
+            fontSize="12"
             textAnchor="end"
           >
             20 超賣
@@ -881,7 +881,7 @@ export const MacdView: React.FC<TaskPanelProps> = ({ report }) => {
             backgroundColor: zeroAxisState.isBull ? 'rgba(56, 189, 248, 0.15)' : 'rgba(239, 68, 68, 0.15)',
             color: zeroAxisState.isBull ? '#38bdf8' : '#ef4444',
             border: `1px solid ${zeroAxisState.isBull ? 'rgba(56, 189, 248, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
-            fontSize: '11px',
+            fontSize: '12px',
             fontWeight: 700,
           }}
         >
@@ -918,7 +918,7 @@ export const MacdView: React.FC<TaskPanelProps> = ({ report }) => {
             <span style={{ fontSize: '12px', color: '#94a3b8' }}>頂底背離量化偵測</span>
             <span
               style={{
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: 700,
                 color:
                   divergenceInfo.type === 'BEARISH_DIVERGENCE'
@@ -931,7 +931,7 @@ export const MacdView: React.FC<TaskPanelProps> = ({ report }) => {
               {divergenceInfo.label}
             </span>
           </div>
-          <p style={{ margin: 0, fontSize: '11px', color: '#cbd5e1', lineHeight: 1.5 }}>
+          <p style={{ margin: 0, fontSize: '12px', color: '#cbd5e1', lineHeight: 1.5 }}>
             {divergenceInfo.description}
           </p>
         </div>
@@ -949,7 +949,7 @@ export const MacdView: React.FC<TaskPanelProps> = ({ report }) => {
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '12px', color: '#94a3b8' }}>零軸動能衰竭預警</span>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: momentumAlert.isExhausted ? '#f59e0b' : '#10b981', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 700, color: momentumAlert.isExhausted ? '#f59e0b' : '#10b981', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
               {momentumAlert.isExhausted ? (
                 <>
                   <AlertTriangle size={12} /> 留意衰竭
@@ -961,7 +961,7 @@ export const MacdView: React.FC<TaskPanelProps> = ({ report }) => {
               )}
             </span>
           </div>
-          <p style={{ margin: 0, fontSize: '11px', color: '#cbd5e1', lineHeight: 1.5 }}>
+          <p style={{ margin: 0, fontSize: '12px', color: '#cbd5e1', lineHeight: 1.5 }}>
             {momentumAlert.text}
           </p>
         </div>
@@ -969,19 +969,19 @@ export const MacdView: React.FC<TaskPanelProps> = ({ report }) => {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
         <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.5)', padding: '10px', borderRadius: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#94a3b8' }}>DIF 快線 (12, 26)</span>
+          <span style={{ fontSize: '12px', color: '#94a3b8' }}>DIF 快線 (12, 26)</span>
           <div style={{ fontSize: '18px', fontWeight: 700, color: '#38bdf8' }}>
             {dif >= 0 ? `+${dif}` : dif}
           </div>
         </div>
         <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.5)', padding: '10px', borderRadius: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#94a3b8' }}>MACD 慢線 (9)</span>
+          <span style={{ fontSize: '12px', color: '#94a3b8' }}>MACD 慢線 (9)</span>
           <div style={{ fontSize: '18px', fontWeight: 700, color: '#a855f7' }}>
             {macd >= 0 ? `+${macd}` : macd}
           </div>
         </div>
         <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.5)', padding: '10px', borderRadius: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#94a3b8' }}>OSC 柱狀體</span>
+          <span style={{ fontSize: '12px', color: '#94a3b8' }}>OSC 柱狀體</span>
           <div style={{ fontSize: '18px', fontWeight: 700, color: macdHist >= 0 ? '#ef4444' : '#10b981' }}>
             {macdHist >= 0 ? `+${macdHist}` : macdHist} ({statusText})
           </div>
@@ -1135,7 +1135,7 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
                       style={{
                         marginLeft: '6px',
                         padding: '1px 5px',
-                        fontSize: '10px',
+                        fontSize: '12px',
                         borderRadius: '4px',
                         backgroundColor: 'rgba(56, 189, 248, 0.2)',
                         color: '#38bdf8',
@@ -1211,7 +1211,7 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
                 border: '1px solid rgba(56, 189, 248, 0.3)',
                 borderRadius: '4px',
                 padding: '2px 6px',
-                fontSize: '11px',
+                fontSize: '12px',
                 cursor: 'pointer',
               }}
             >
@@ -1233,7 +1233,7 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
               padding: '3px 8px',
               borderRadius: '6px',
               backgroundColor: currentPage <= 1 ? 'rgba(255, 255, 255, 0.04)' : 'rgba(56, 189, 248, 0.15)',
-              color: currentPage <= 1 ? '#64748b' : '#38bdf8',
+              color: currentPage <= 1 ? '#94a3b8' : '#38bdf8',
               border: '1px solid rgba(255, 255, 255, 0.08)',
               cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
             }}
@@ -1248,7 +1248,7 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
               padding: '3px 10px',
               borderRadius: '6px',
               backgroundColor: currentPage <= 1 ? 'rgba(255, 255, 255, 0.04)' : 'rgba(56, 189, 248, 0.15)',
-              color: currentPage <= 1 ? '#64748b' : '#38bdf8',
+              color: currentPage <= 1 ? '#94a3b8' : '#38bdf8',
               border: '1px solid rgba(255, 255, 255, 0.08)',
               cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
             }}
@@ -1264,7 +1264,7 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
               borderRadius: '6px',
               backgroundColor:
                 currentPage >= totalPages ? 'rgba(255, 255, 255, 0.04)' : 'rgba(56, 189, 248, 0.15)',
-              color: currentPage >= totalPages ? '#64748b' : '#38bdf8',
+              color: currentPage >= totalPages ? '#94a3b8' : '#38bdf8',
               border: '1px solid rgba(255, 255, 255, 0.08)',
               cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
             }}
@@ -1280,7 +1280,7 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
               borderRadius: '6px',
               backgroundColor:
                 currentPage >= totalPages ? 'rgba(255, 255, 255, 0.04)' : 'rgba(56, 189, 248, 0.15)',
-              color: currentPage >= totalPages ? '#64748b' : '#38bdf8',
+              color: currentPage >= totalPages ? '#94a3b8' : '#38bdf8',
               border: '1px solid rgba(255, 255, 255, 0.08)',
               cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
             }}

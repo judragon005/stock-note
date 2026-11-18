@@ -124,7 +124,7 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
                 borderRadius: '5px',
                 background: 'rgba(59, 130, 246, 0.25)',
                 color: '#60a5fa',
-                fontSize: '0.72rem',
+                fontSize: '0.75rem',
                 fontWeight: 800,
               }}
             >
@@ -168,7 +168,7 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    fontSize: '0.74rem',
+                    fontSize: '0.75rem',
                     minWidth: 0,
                   }}
                 >
@@ -194,7 +194,7 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
               <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
                 <span
                   style={{
-                    fontSize: '0.68rem',
+                    fontSize: '0.75rem',
                     fontWeight: 700,
                     color: isUp ? '#38bdf8' : '#f87171',
                     background: isUp ? 'rgba(56, 189, 248, 0.12)' : 'rgba(239, 68, 68, 0.12)',
@@ -250,7 +250,7 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
             }}
           >
             <div>{data?.usMicroNote || '美股無三大法人日報，已切換為機構量價評分'}</div>
-            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
               量能單位: 股 | 計價幣別: USD
             </div>
           </div>
@@ -263,8 +263,8 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
             justifyContent: 'space-between',
             paddingTop: '6px',
             borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-            fontSize: '0.68rem',
-            color: '#64748b',
+            fontSize: '0.75rem',
+            color: '#94a3b8',
           }}
         >
           <span>{note}</span>
@@ -307,7 +307,7 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
               color: '#94a3b8',
               border: '1px solid rgba(255,255,255,0.08)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -341,7 +341,7 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                fontSize: '0.74rem',
+                fontSize: '0.75rem',
                 minWidth: 0,
               }}
             >
@@ -370,7 +370,7 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
           <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
             <span
               style={{
-                fontSize: '0.68rem',
+                fontSize: '0.75rem',
                 fontWeight: 700,
                 color: isUp ? '#38bdf8' : '#f87171',
                 background: isUp ? 'rgba(56, 189, 248, 0.12)' : 'rgba(239, 68, 68, 0.12)',
@@ -415,18 +415,22 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
         </div>
       </div>
 
-      {/* 外資連續買賣與借券餘額 (Real Data) */}
-      {(data?.foreignConsecutiveDays != null || data?.sblBalance != null) && (
+      {/* 外資連續買賣、借券與融資融券餘額 (Real Data) */}
+      {(data?.foreignConsecutiveDays != null ||
+        data?.sblBalance != null ||
+        data?.marginBalance != null ||
+        data?.shortBalance != null) && (
         <div
           data-testid="chips-extra-metrics"
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexWrap: 'wrap',
             paddingTop: '6px',
             marginTop: '4px',
             borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-            fontSize: '0.68rem',
+            fontSize: '0.75rem',
             gap: '8px',
           }}
         >
@@ -440,6 +444,22 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
                 }}
               >
                 {Math.abs(data.foreignConsecutiveDays)} 日
+              </strong>
+            </span>
+          )}
+          {data?.marginBalance != null && (
+            <span style={{ color: '#94a3b8' }}>
+              融資：{' '}
+              <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>
+                {data.marginBalance.toLocaleString()} 張
+              </strong>
+            </span>
+          )}
+          {data?.shortBalance != null && (
+            <span style={{ color: '#94a3b8' }}>
+              融券：{' '}
+              <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>
+                {data.shortBalance.toLocaleString()} 張
               </strong>
             </span>
           )}
@@ -462,7 +482,7 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
           justifyContent: 'space-between',
           paddingTop: '6px',
           borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-          fontSize: '0.68rem',
+          fontSize: '0.75rem',
         }}
       >
         <span style={{ color: '#94a3b8' }}>{note}</span>

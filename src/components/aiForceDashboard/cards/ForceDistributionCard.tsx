@@ -140,7 +140,7 @@ export const ForceDistributionCard: React.FC<ForceDistributionCardProps> = ({ da
               color: '#94a3b8',
               border: '1px solid rgba(255,255,255,0.08)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -151,7 +151,7 @@ export const ForceDistributionCard: React.FC<ForceDistributionCardProps> = ({ da
               買賣力分布圖
             </span>
           </TermTooltip>
-          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
             | 法人 vs 散戶
           </span>
         </div>
@@ -175,8 +175,8 @@ export const ForceDistributionCard: React.FC<ForceDistributionCardProps> = ({ da
       {/* 底部時間與資料說明 */}
       <div
         style={{
-          fontSize: '0.68rem',
-          color: '#64748b',
+          fontSize: '0.75rem',
+          color: '#94a3b8',
           textAlign: 'center',
           paddingTop: '6px',
           borderTop: '1px solid rgba(255, 255, 255, 0.05)',

@@ -120,7 +120,7 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
               color: '#94a3b8',
               border: '1px solid rgba(255,255,255,0.08)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -143,7 +143,7 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
             borderRadius: '999px',
             background: verdictConfig.bg,
             border: `1px solid ${verdictConfig.border}`,
-            fontSize: '0.72rem',
+            fontSize: '0.75rem',
             fontWeight: 700,
             color: verdictConfig.color,
           }}
@@ -227,7 +227,7 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
               padding: '4px 8px',
               background: 'rgba(15, 23, 42, 0.4)',
               borderRadius: '6px',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               border: '1px solid rgba(255, 255, 255, 0.03)',
             }}
           >
@@ -259,7 +259,7 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
                 background: 'rgba(245, 158, 11, 0.15)',
                 border: '1px solid rgba(245, 158, 11, 0.3)',
                 color: '#fbbf24',
-                fontSize: '0.68rem',
+                fontSize: '0.75rem',
                 fontWeight: 700,
               }}
             >
@@ -278,7 +278,7 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
                 background: 'rgba(239, 68, 68, 0.15)',
                 border: '1px solid rgba(239, 68, 68, 0.3)',
                 color: '#f87171',
-                fontSize: '0.68rem',
+                fontSize: '0.75rem',
                 fontWeight: 700,
               }}
             >
@@ -299,7 +299,7 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
             padding: '5px 8px',
             background: 'rgba(30, 41, 59, 0.45)',
             borderRadius: '6px',
-            fontSize: '0.69rem',
+            fontSize: '0.75rem',
             color: '#cbd5e1',
           }}
         >
@@ -334,7 +334,7 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
             borderRadius: '6px',
             background: 'rgba(15, 23, 42, 0.6)',
             borderLeft: `3px solid ${verdictConfig.color}`,
-            fontSize: '0.72rem',
+            fontSize: '0.75rem',
             lineHeight: 1.55,
             color: '#e2e8f0',
             marginTop: '2px',
@@ -356,7 +356,7 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
           justifyContent: 'space-between',
           paddingTop: '6px',
           borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-          fontSize: '0.72rem',
+          fontSize: '0.75rem',
           marginTop: 'auto',
         }}
       >

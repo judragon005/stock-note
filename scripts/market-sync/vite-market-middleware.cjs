@@ -23,11 +23,16 @@ const {
 const DEFAULT_CATCHUP_COOLDOWN_MS = 10 * 60 * 1000; // 預設 10 分鐘冷卻保護防線 (Spec 0165)
 const CATCHUP_COOLDOWN_MS = Number(process.env.MARKET_CATCHUP_COOLDOWN_MS) || DEFAULT_CATCHUP_COOLDOWN_MS;
 const MACRO_PULSE_CACHE_TTL_MS = 15 * 60 * 1000; // 15 分鐘宏觀脈搏快取 (Spec 0209)
+const NATIVE_FETCH = globalThis.fetch;
 
 let isCatchingUp = false;
 let lastCatchupTime = 0;
 let cachedMacroPulse = null;
 let cachedMacroPulseAt = 0;
+const onDemandBackfillInFlight = new Set();
+const onDemandBackfillCooldown = new Map();
+const ON_DEMAND_COOLDOWN_MS = 5 * 60 * 1000;
+const ON_DEMAND_TIMEOUT_MS = 2500;
 
 /**
  * 判定是否仍在回補冷卻時間內
@@ -64,24 +69,75 @@ function triggerCatchupTask(customDbPath, options = {}) {
   setImmediate(async () => {
     try {
       console.log(`[MarketCatchup] 偵測到本機資料庫過期，啟動背景聯網追趕同步 (Spec 0170 & Spec 0177)...`);
-      const { runTwMarketSync } = require('./sync-tw-market.cjs');
+      const handlers = options.handlers || {};
+      const runTwMarketSync = handlers.runTwMarketSync || require('./sync-tw-market.cjs').runTwMarketSync;
+      const fetchAndIngestTwDailyData =
+        handlers.fetchAndIngestTwDailyData || require('./backfill-tw-history-web.cjs').fetchAndIngestTwDailyData;
+      const fetchAndIngestEtfDailyNav =
+        handlers.fetchAndIngestEtfDailyNav || require('./ingest-macro-sentiment.cjs').fetchAndIngestEtfDailyNav;
+      const runUsMarketSync = handlers.runUsMarketSync || require('./sync-us-market.cjs').runUsMarketSync;
+      const runTdccIngestion = handlers.runTdccIngestion || require('./ingest-tw-tdcc.cjs').runTdccIngestion;
+      const runMonthlyRevenueIngestion =
+        handlers.runMonthlyRevenueIngestion || require('./ingest-tw-monthly-revenue.cjs').runMonthlyRevenueIngestion;
+
+      let freshness = options.freshnessOverride || null;
+      if (!freshness) {
+        try {
+          const db = initSqliteLakehouseDb(customDbPath);
+          freshness = checkMarketFreshness(db);
+        } catch {}
+      }
+
       await runTwMarketSync();
 
+      // Spec 0241 Ticket 02: 針對 incompleteDates（最多近 5 個交易日）呼叫 backfill-tw-history-web 補抓缺漏欄位
+      const incompleteDates = Array.isArray(freshness?.tw?.incompleteDates)
+        ? freshness.tw.incompleteDates.slice(0, 5)
+        : [];
+      for (const targetDate of incompleteDates) {
+        try {
+          await fetchAndIngestTwDailyData(targetDate, {
+            dbPath: customDbPath,
+            force: true,
+            throttleMs: 1000,
+          });
+        } catch (backfillErr) {
+          console.warn(`[MarketCatchup] 半殘日 ${targetDate} 補抓警示:`, backfillErr.message);
+        }
+      }
+
+      // 若缺少 etf_nav，補抓最新結算日 ETF 淨值
+      if (freshness?.tw?.missingPlanes?.includes('etf_nav')) {
+        try {
+          const navDate = freshness.tw.latestDate || freshness.tw.anchorDate;
+          await fetchAndIngestEtfDailyNav(customDbPath, navDate);
+        } catch (etfErr) {
+          console.warn(`[MarketCatchup] ETF 淨值補抓警示:`, etfErr.message);
+        }
+      }
+
+      // 若美股陳舊，觸發美股盤後同步
+      if (freshness?.us?.isStale) {
+        try {
+          await runUsMarketSync({ dbPath: customDbPath });
+        } catch (usErr) {
+          console.warn(`[MarketCatchup] 美股同步警示:`, usErr.message);
+        }
+      }
+
       try {
-        const { runTdccIngestion } = require('./ingest-tw-tdcc.cjs');
         await runTdccIngestion(customDbPath);
       } catch (tdccErr) {
         console.warn(`[MarketCatchup] TDCC 入庫警示:`, tdccErr.message);
       }
 
       try {
-        const { runMonthlyRevenueIngestion } = require('./ingest-tw-monthly-revenue.cjs');
         await runMonthlyRevenueIngestion(customDbPath);
       } catch (revErr) {
         console.warn(`[MarketCatchup] 月營收入庫警示:`, revErr.message);
       }
 
-      console.log(`[MarketCatchup] ✔ 背景聯網追趕同步完成 (含 TDCC 與月營收)！`);
+      console.log(`[MarketCatchup] ✔ 背景聯網追趕同步完成 (含半殘日自癒、美股、TDCC 與月營收)！`);
     } catch (err) {
       console.warn(`[MarketCatchup] 背景追趕回補警告:`, err.message);
     } finally {
@@ -96,6 +152,8 @@ function resetCatchupStateForTest() {
   lastCatchupTime = 0;
   cachedMacroPulse = null;
   cachedMacroPulseAt = 0;
+  onDemandBackfillInFlight.clear();
+  onDemandBackfillCooldown.clear();
 }
 
 function setLastCatchupTimeForTest(time) {
@@ -127,6 +185,135 @@ function readJsonBody(req) {
     });
     req.on('error', (err) => reject(err));
   });
+}
+
+/**
+ * 按需拉取台股歷史除權息紀錄 (FinMind TaiwanStockDividend -> fallback Yahoo Chart events)
+ */
+async function backfillSymbolDividendsFromRemote(symbol, customDbPath, fetcher = globalThis.fetch) {
+  if (!symbol || typeof fetcher !== 'function') return 0;
+  const cleanSymbol = String(symbol).trim().toUpperCase();
+  const querySym = cleanSymbol.endsWith('O') ? cleanSymbol.slice(0, -1) : cleanSymbol;
+  const startDate = new Date(Date.now() - 5 * 365 * 86400000).toISOString().slice(0, 10);
+
+  const actions = [];
+  try {
+    const fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockDividend&data_id=${encodeURIComponent(querySym)}&start_date=${startDate}`;
+    const res = await fetcher(fmUrl, {
+      headers: { Accept: 'application/json', 'User-Agent': 'StockTracker/1.0 (local-sync)' },
+    });
+    if (res && res.ok) {
+      const json = await res.json();
+      const rows = Array.isArray(json?.data) ? json.data : [];
+      for (const r of rows) {
+        const exDate = r.CashExDividendTradingDate || r.StockExDividendTradingDate;
+        if (!exDate || !/^\d{4}-\d{2}-\d{2}$/.test(String(exDate).slice(0, 10))) continue;
+        const cashDiv = Number(r.CashEarningsDistribution || 0) + Number(r.CashStatutorySurplus || 0);
+        const stockDiv = Number(r.StockEarningsDistribution || 0) + Number(r.StockStatutorySurplus || 0);
+        actions.push({
+          symbol: cleanSymbol,
+          market: 'TW',
+          action_type: 'DIVIDEND',
+          ex_date: String(exDate).slice(0, 10),
+          payment_date: r.CashDividendPaymentDate ? String(r.CashDividendPaymentDate).slice(0, 10) : null,
+          cash_dividend_per_share: Number.isFinite(cashDiv) ? Number(cashDiv.toFixed(4)) : 0,
+          stock_dividend_ratio: Number.isFinite(stockDiv) ? Number(stockDiv.toFixed(4)) : 0,
+        });
+      }
+    }
+  } catch {}
+
+  if (actions.length === 0) {
+    try {
+      const yhUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(querySym)}.TW?range=5y&interval=1d&events=div%2Csplit`;
+      const res = await fetcher(yhUrl, {
+        headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
+      });
+      if (res && res.ok) {
+        const json = await res.json();
+        const divs = json?.chart?.result?.[0]?.events?.dividends || {};
+        for (const item of Object.values(divs)) {
+          if (!item || !item.date) continue;
+          const exDate = new Date(item.date * 1000).toISOString().slice(0, 10);
+          const cashDiv = Number(item.amount) || 0;
+          if (cashDiv > 0) {
+            actions.push({
+              symbol: cleanSymbol,
+              market: 'TW',
+              action_type: 'DIVIDEND',
+              ex_date: exDate,
+              payment_date: null,
+              cash_dividend_per_share: Number(cashDiv.toFixed(4)),
+              stock_dividend_ratio: 0,
+            });
+          }
+        }
+      }
+    } catch {}
+  }
+
+  if (actions.length === 0) return 0;
+
+  try {
+    const db = initSqliteLakehouseDb(customDbPath);
+    const stmt = db.prepare(`
+      INSERT INTO corporate_action_calendar (
+        symbol, market, action_type, ex_date, payment_date, cash_dividend_per_share, stock_dividend_ratio, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(symbol, action_type, ex_date) DO UPDATE SET
+        payment_date = COALESCE(excluded.payment_date, corporate_action_calendar.payment_date),
+        cash_dividend_per_share = COALESCE(excluded.cash_dividend_per_share, corporate_action_calendar.cash_dividend_per_share),
+        stock_dividend_ratio = COALESCE(excluded.stock_dividend_ratio, corporate_action_calendar.stock_dividend_ratio),
+        updated_at = excluded.updated_at
+    `);
+    const now = Date.now();
+    db.exec('BEGIN TRANSACTION;');
+    try {
+      for (const a of actions) {
+        stmt.run(a.symbol, a.market, a.action_type, a.ex_date, a.payment_date, a.cash_dividend_per_share, a.stock_dividend_ratio, now);
+      }
+      db.exec('COMMIT;');
+    } catch (e) {
+      db.exec('ROLLBACK;');
+      throw e;
+    }
+    return actions.length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * 觸發單一標的 TDCC / 月營收 / 歷史除權息按需補齊 (帶 Circuit Breaker 防重入)
+ */
+async function runOnDemandSymbolBackfill(symbol, { needTdcc, needRevenue, needDividend, customDbPath }) {
+  const now = Date.now();
+  const lastAt = onDemandBackfillCooldown.get(symbol) || 0;
+  if (onDemandBackfillInFlight.has(symbol) || now - lastAt < ON_DEMAND_COOLDOWN_MS) {
+    return;
+  }
+
+  onDemandBackfillInFlight.add(symbol);
+  onDemandBackfillCooldown.set(symbol, now);
+
+  try {
+    const tasks = [];
+    if (needTdcc) {
+      const { backfillSymbolTdccHistory } = require('./ingest-tw-tdcc.cjs');
+      tasks.push(backfillSymbolTdccHistory(symbol, 10, customDbPath));
+    }
+    if (needRevenue) {
+      const { backfillSymbolMonthlyRevenue } = require('./ingest-tw-monthly-revenue.cjs');
+      tasks.push(backfillSymbolMonthlyRevenue(symbol, 12, customDbPath));
+    }
+    if (needDividend) {
+      tasks.push(backfillSymbolDividendsFromRemote(symbol, customDbPath));
+    }
+    await Promise.allSettled(tasks);
+  } finally {
+    onDemandBackfillInFlight.delete(symbol);
+  }
 }
 
 /**
@@ -1031,22 +1218,73 @@ function createMarketApiMiddleware(customDbPath) {
           .all(symbol, aliasSym) || [];
       } catch {}
 
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      return res.end(
-        JSON.stringify({
-          symbol,
-          meta: meta || null,
-          candles,
-          chips: chipsMap,
-          tdcc: tdccRows,
-          revenue: revenueRows,
-          valuation: valRow ? { ...valRow, history: valHistory } : null,
-          pledge: pledgeRow,
-          etfNav: etfNavRow,
-          corporateActions,
-          macro: macroRow,
-        })
-      );
+      // Spec 0241 Ticket 03: 台股按需補齊 (TDCC < 4、非 ETF 月營收 < 6、無過去已除息紀錄)，帶 <= 2500ms 逾時保護與 Circuit Breaker
+      const isTwStock = meta?.market === 'TW' || /^\d{4,6}[A-Z]?$/.test(symbol);
+      const isEtf = /^00/.test(symbol) || meta?.type === 'ETF';
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const hasPastDividend = corporateActions.some((a) => a.ex_date && a.ex_date <= todayStr);
+
+      const needTdcc = isTwStock && tdccRows.length < 4;
+      const needRevenue = isTwStock && !isEtf && revenueRows.length < 6;
+      const needDividend = isTwStock && !hasPastDividend;
+
+      const sendHistoryResponse = () => {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(
+          JSON.stringify({
+            symbol,
+            meta: meta || null,
+            candles,
+            chips: chipsMap,
+            tdcc: tdccRows,
+            revenue: revenueRows,
+            valuation: valRow ? { ...valRow, history: valHistory } : null,
+            pledge: pledgeRow,
+            etfNav: etfNavRow,
+            corporateActions,
+            macro: macroRow,
+          })
+        );
+      };
+
+      const isUnmockedTestEnv =
+        (process.env.NODE_ENV === 'test' || process.env.VITEST) &&
+        globalThis.fetch === NATIVE_FETCH;
+
+      if ((needTdcc || needRevenue || needDividend) && typeof globalThis.fetch === 'function' && !isUnmockedTestEnv) {
+        let timer = null;
+        return Promise.race([
+          runOnDemandSymbolBackfill(symbol, { needTdcc, needRevenue, needDividend, customDbPath }),
+          new Promise((resolve) => {
+            timer = setTimeout(resolve, ON_DEMAND_TIMEOUT_MS);
+          }),
+        ])
+          .finally(() => {
+            if (timer) clearTimeout(timer);
+            try {
+              if (needTdcc) {
+                tdccRows = db
+                  .prepare('SELECT * FROM tw_tdcc_distribution WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 10')
+                  .all(symbol, aliasSym);
+                tdccRows.reverse();
+              }
+              if (needRevenue) {
+                revenueRows = db
+                  .prepare('SELECT * FROM tw_monthly_revenue WHERE symbol IN (?, ?) ORDER BY year_month DESC LIMIT 12')
+                  .all(symbol, aliasSym);
+                revenueRows.reverse();
+              }
+              if (needDividend) {
+                corporateActions = db
+                  .prepare('SELECT * FROM corporate_action_calendar WHERE symbol IN (?, ?) ORDER BY ex_date DESC LIMIT 16')
+                  .all(symbol, aliasSym) || [];
+              }
+            } catch {}
+            return sendHistoryResponse();
+          });
+      }
+
+      return sendHistoryResponse();
     }
 
     // 若未匹配任何端點

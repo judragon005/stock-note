@@ -151,7 +151,7 @@ export const RADAR_CHART_CONFIG = {
   scoreFontSize: 14,
   centerBadgeRadius: 30,
   gradeFontSize: 19,
-  scoreDetailFontSize: 10.5,
+  scoreDetailFontSize: 13,
 };
 
 export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = ({ data }) => {
@@ -231,7 +231,7 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
               color: '#94a3b8',
               border: '1px solid rgba(255,255,255,0.08)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
               flexShrink: 0,
             }}
@@ -251,7 +251,7 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
           <TermTooltip termId="chipsHealth" dynamicDiagnosis={diagnoseHealthScore(data.overallScore ?? 56)}>
-            <span style={{ fontSize: '0.74rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
               綜合評分：<span style={{ color: '#38bdf8', fontWeight: 700, fontFamily: 'monospace' }}>{data.overallScore ?? 56} / 100</span>
             </span>
           </TermTooltip>
@@ -259,9 +259,9 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
       </div>
 
       {/* SVG 六角蛛網繪圖區 */}
-      <div style={{ width: '100%', flex: 1, minHeight: '220px', position: 'relative' }}>
+      <div style={{ width: '100%', flex: 1, minHeight: '270px', position: 'relative' }}>
         <svg
-          viewBox="0 0 360 330"
+          viewBox="16 0 328 336"
           style={{ width: '100%', height: '100%', overflow: 'visible' }}
           preserveAspectRatio="xMidYMid meet"
         >
@@ -388,7 +388,7 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
           borderRadius: '8px',
           background: 'rgba(30, 41, 59, 0.45)',
           border: '1px solid rgba(59, 130, 246, 0.15)',
-          fontSize: '0.74rem',
+          fontSize: '0.75rem',
           whiteSpace: 'nowrap',
         }}
       >

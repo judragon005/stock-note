@@ -78,7 +78,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
               color: '#94a3b8',
               border: '1px solid rgba(255,255,255,0.08)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -112,7 +112,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
               background: tierMeta.bg,
               border: `1px solid ${tierMeta.border}`,
               color: tierMeta.color,
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 700,
             }}
           >
@@ -146,7 +146,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
         >
           <Calculator size={28} opacity={0.3} />
           <div style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>尚無估值數據</div>
-          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
             {data?.asOfDateText || '等待財務報表或即時價格合流'}
           </div>
         </div>
@@ -185,9 +185,9 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>折溢價率</span>
+                        <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>折溢價率</span>
                         {current.etfPremiumDiscountRate !== undefined && current.etfPremiumDiscountRate > 0.5 && (
-                          <span style={{ fontSize: '0.6rem', color: '#f87171', fontWeight: 800 }}>溢價警戒</span>
+                          <span style={{ fontSize: '0.75rem', color: '#f87171', fontWeight: 800 }}>溢價警戒</span>
                         )}
                       </div>
                       <div
@@ -216,7 +216,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                         border: '1px solid rgba(59, 130, 246, 0.15)',
                       }}
                     >
-                      <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>總費用率</div>
+                      <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>總費用率</div>
                       <div style={{ fontSize: '1.02rem', fontWeight: 800, color: '#38bdf8', fontFamily: 'monospace' }}>
                         {current.etfExpenseRatio !== undefined ? `${current.etfExpenseRatio.toFixed(2)}%` : '--'}
                       </div>
@@ -231,7 +231,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                         border: '1px solid rgba(16, 185, 129, 0.15)',
                       }}
                     >
-                      <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>年化配息率</div>
+                      <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>年化配息率</div>
                       <div style={{ fontSize: '1.02rem', fontWeight: 800, color: '#34d399', fontFamily: 'monospace' }}>
                         {current.dividendYield !== undefined ? `${current.dividendYield.toFixed(2)}%` : '--'}
                       </div>
@@ -250,8 +250,8 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>市銷率 (PS)</span>
-                        <span style={{ fontSize: '0.6rem', color: '#fbbf24', fontWeight: 700 }}>虧損轉機</span>
+                        <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>市銷率 (PS)</span>
+                        <span style={{ fontSize: '0.75rem', color: '#fbbf24', fontWeight: 700 }}>虧損轉機</span>
                       </div>
                       <div style={{ fontSize: '1.02rem', fontWeight: 800, color: '#fbbf24', fontFamily: 'monospace' }}>
                         {current.psRatio !== undefined ? current.psRatio.toFixed(2) : '--'}
@@ -267,7 +267,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                         border: '1px solid rgba(59, 130, 246, 0.15)',
                       }}
                     >
-                      <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>股價淨值比 (PB)</div>
+                      <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>股價淨值比 (PB)</div>
                       <div style={{ fontSize: '1.02rem', fontWeight: 800, color: '#38bdf8', fontFamily: 'monospace' }}>
                         {current.pb !== undefined ? current.pb.toFixed(2) : '--'}
                       </div>
@@ -282,7 +282,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                         border: '1px solid rgba(16, 185, 129, 0.15)',
                       }}
                     >
-                      <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>年化現金殖利率</div>
+                      <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>年化現金殖利率</div>
                       <div style={{ fontSize: '1.02rem', fontWeight: 800, color: '#34d399', fontFamily: 'monospace' }}>
                         {current.dividendYield !== undefined && current.dividendYield > 0
                           ? `${current.dividendYield.toFixed(2)}%`
@@ -302,7 +302,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                         border: '1px solid rgba(139, 92, 246, 0.15)',
                       }}
                     >
-                      <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>
+                      <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
                         {current.forwardPe !== undefined ? 'Forward PE' : '本益比 (PE)'}
                       </div>
                       <div style={{ fontSize: '1.02rem', fontWeight: 800, color: '#c084fc', fontFamily: 'monospace' }}>
@@ -321,7 +321,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                         border: '1px solid rgba(59, 130, 246, 0.15)',
                       }}
                     >
-                      <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>股價淨值比 (PB)</div>
+                      <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>股價淨值比 (PB)</div>
                       <div style={{ fontSize: '1.02rem', fontWeight: 800, color: '#38bdf8', fontFamily: 'monospace' }}>
                         {current.pb !== undefined ? current.pb.toFixed(2) : '--'}
                       </div>
@@ -337,8 +337,8 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>年化殖利率</span>
-                        <span style={{ fontSize: '0.6rem', color: '#a78bfa', fontWeight: 700 }}>30% 稅後</span>
+                        <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>年化殖利率</span>
+                        <span style={{ fontSize: '0.75rem', color: '#a78bfa', fontWeight: 700 }}>30% 稅後</span>
                       </div>
                       <div style={{ fontSize: '1.02rem', fontWeight: 800, color: '#34d399', fontFamily: 'monospace' }}>
                         {current.netDividendYieldUs !== undefined
@@ -361,7 +361,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                         border: '1px solid rgba(139, 92, 246, 0.15)',
                       }}
                     >
-                      <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>本益比 (PE)</div>
+                      <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>本益比 (PE)</div>
                       <div style={{ fontSize: '1.02rem', fontWeight: 800, color: '#c084fc', fontFamily: 'monospace' }}>
                         {current.pe !== undefined ? current.pe.toFixed(2) : '--'}
                       </div>
@@ -376,7 +376,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                         border: '1px solid rgba(59, 130, 246, 0.15)',
                       }}
                     >
-                      <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>股價淨值比 (PB)</div>
+                      <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>股價淨值比 (PB)</div>
                       <div style={{ fontSize: '1.02rem', fontWeight: 800, color: '#38bdf8', fontFamily: 'monospace' }}>
                         {current.pb !== undefined ? current.pb.toFixed(2) : '--'}
                       </div>
@@ -391,7 +391,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                         border: '1px solid rgba(16, 185, 129, 0.15)',
                       }}
                     >
-                      <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>年化現金殖利率</div>
+                      <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>年化現金殖利率</div>
                       <div style={{ fontSize: '1.02rem', fontWeight: 800, color: '#34d399', fontFamily: 'monospace' }}>
                         {current.dividendYield !== undefined ? `${current.dividendYield.toFixed(2)}%` : '--'}
                       </div>
@@ -412,7 +412,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                     borderRadius: '6px',
                     background: 'rgba(30, 41, 59, 0.45)',
                     border: '1px solid rgba(255, 255, 255, 0.05)',
-                    fontSize: '0.68rem',
+                    fontSize: '0.78rem',
                     marginBottom: '8px',
                   }}
                 >
@@ -422,17 +422,17 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                   <div style={{ display: 'flex', gap: '6px', fontFamily: 'monospace' }}>
                     <span style={{ color: '#34d399' }}>
                       {current.peMin !== undefined ? `${current.peMin}x` : `${current.pbMin}x`}{' '}
-                      <span style={{ fontSize: '0.62rem', color: '#64748b' }}>低</span>
+                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>低</span>
                     </span>
-                    <span style={{ color: '#64748b' }}>—</span>
+                    <span style={{ color: '#94a3b8' }}>—</span>
                     <span style={{ color: '#fbbf24' }}>
                       {current.peMedian !== undefined ? `${current.peMedian}x` : `${current.pbMedian}x`}{' '}
-                      <span style={{ fontSize: '0.62rem', color: '#64748b' }}>中</span>
+                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>中</span>
                     </span>
-                    <span style={{ color: '#64748b' }}>—</span>
+                    <span style={{ color: '#94a3b8' }}>—</span>
                     <span style={{ color: '#f87171' }}>
                       {current.peMax !== undefined ? `${current.peMax}x` : `${current.pbMax}x`}{' '}
-                      <span style={{ fontSize: '0.62rem', color: '#64748b' }}>高</span>
+                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>高</span>
                     </span>
                   </div>
                 </div>
@@ -449,7 +449,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                   marginBottom: '10px',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', color: '#94a3b8' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#94a3b8' }}>
                   <span>歷史位階</span>
                   <span style={{ color: tierMeta.color, fontWeight: 700 }}>{tierMeta.label}</span>
                 </div>
@@ -508,7 +508,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                     borderRadius: '6px',
                     background: 'rgba(15, 23, 42, 0.55)',
                     border: '1px solid rgba(255, 255, 255, 0.08)',
-                    fontSize: '0.68rem',
+                    fontSize: '0.78rem',
                     marginBottom: '8px',
                   }}
                 >
@@ -555,8 +555,8 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                   justifyContent: 'space-between',
                   paddingTop: '6px',
                   borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-                  fontSize: '0.68rem',
-                  color: '#64748b',
+                  fontSize: '0.78rem',
+                  color: '#94a3b8',
                   marginTop: 'auto',
                 }}
               >

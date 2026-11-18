@@ -309,7 +309,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
               color: '#94a3b8',
               border: '1px solid rgba(255,255,255,0.08)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -320,7 +320,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
               AI 決策核心
             </span>
           </TermTooltip>
-          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
             | AI DECISION CORE
           </span>
         </div>
@@ -369,7 +369,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
             background: 'rgba(15, 23, 42, 0.55)',
             border: '1px solid rgba(255, 255, 255, 0.06)',
             color: '#cbd5e1',
-            fontSize: '0.72rem',
+            fontSize: '0.75rem',
             lineHeight: 1.45,
             marginBottom: data.settlementNotice ? '6px' : '10px',
           }}
@@ -391,7 +391,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
             background: 'rgba(245, 158, 11, 0.12)',
             border: '1px solid rgba(245, 158, 11, 0.35)',
             color: '#fbbf24',
-            fontSize: '0.68rem',
+            fontSize: '0.75rem',
             lineHeight: 1.35,
             fontWeight: 600,
             marginBottom: '10px',

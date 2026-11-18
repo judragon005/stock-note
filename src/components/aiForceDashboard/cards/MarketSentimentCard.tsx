@@ -98,7 +98,7 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
               borderRadius: '5px',
               background: 'rgba(59, 130, 246, 0.25)',
               color: '#60a5fa',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -162,7 +162,7 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
             </svg>
           </div>
           <TermTooltip termId="marketSentiment">
-            <span style={{ fontSize: '0.72rem', color: '#cbd5e1', marginTop: '2px', fontWeight: 600, cursor: 'help' }}>
+            <span style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: '2px', fontWeight: 600, cursor: 'help' }}>
               市場情緒：<span style={{ color: badgeMeta.color, fontWeight: 800 }}>{isUs && usMacro?.cnnStateText ? usMacro.cnnStateText : badgeMeta.label}</span>
             </span>
           </TermTooltip>
@@ -178,7 +178,7 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  fontSize: '0.72rem',
+                  fontSize: '0.75rem',
                   padding: '4px 8px',
                   borderRadius: '6px',
                   background: 'rgba(15, 23, 42, 0.55)',
@@ -196,7 +196,7 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {participantBars.map((bar) => (
               <div key={bar.label} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
                   <TermTooltip termId={bar.termId}>
                     <span style={{ color: '#94a3b8', cursor: 'help' }}>{bar.label}：</span>
                   </TermTooltip>
