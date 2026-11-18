@@ -2,7 +2,7 @@
  * 個股 7 步深度投研引擎資料契約與型別定義 (Spec 0156 / Ticket 05)
  */
 
-import { MarketType } from './stock';
+import { MarketType, ApiKeysConfig } from './stock';
 
 export interface EquityDeepDiveStep1Data {
   symbol: string;
@@ -109,6 +109,8 @@ export interface EquityDeepDiveInput {
   boxFloorPrice?: number;
   boxCeilingPrice?: number;
   statusTag?: 'NORMAL' | 'ATTENTION' | 'DISPOSITION';
+  sblBalance?: number;
+  apiKeys?: ApiKeysConfig;
 }
 
 export interface EquityDeepDiveReport {

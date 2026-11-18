@@ -441,41 +441,35 @@ export async function loadSymbolFullLakehouseData(
         }
 
         // 資券與借券餘額有效值向前回退與日增減演算法 (Spec 0200 Ticket 01 / Spec 0237 Ticket 05)
+        const extractLatestAndDelta = <T>(
+          rows: T[],
+          selector: (r: T) => number | undefined
+        ): { latest?: number; delta?: number; latestRow?: T } => {
+          const valid = rows.filter((r) => selector(r) != null);
+          if (valid.length === 0) return {};
+          const latestRow = valid[valid.length - 1];
+          const latest = selector(latestRow)!;
+          const delta = valid.length >= 2 ? latest - selector(valid[valid.length - 2])! : undefined;
+          return { latest, delta, latestRow };
+        };
+
         const sortedInst = institutionalRecords
           ? [...institutionalRecords].sort((a, b) => a.date.localeCompare(b.date))
           : [];
-        const validMarginRows = sortedInst.filter((r) => r.marginBalance != null);
-        const validMarginRow =
-          validMarginRows.length > 0 ? validMarginRows[validMarginRows.length - 1] : undefined;
-        const marginBalanceChange =
-          validMarginRows.length >= 2
-            ? validMarginRows[validMarginRows.length - 1].marginBalance! -
-              validMarginRows[validMarginRows.length - 2].marginBalance!
-            : undefined;
-
-        const validShortRows = sortedInst.filter((r) => r.shortBalance != null);
-        const validShortRow =
-          validShortRows.length > 0 ? validShortRows[validShortRows.length - 1] : undefined;
-        const shortBalanceChange =
-          validShortRows.length >= 2
-            ? validShortRows[validShortRows.length - 1].shortBalance! -
-              validShortRows[validShortRows.length - 2].shortBalance!
-            : undefined;
-
-        const validSblRows = sortedInst.filter((r) => r.sblBalance != null);
-        const validSblRow =
-          validSblRows.length > 0 ? validSblRows[validSblRows.length - 1] : undefined;
+        const marginStats = extractLatestAndDelta(sortedInst, (r) => r.marginBalance);
+        const shortStats = extractLatestAndDelta(sortedInst, (r) => r.shortBalance);
+        const sblStats = extractLatestAndDelta(sortedInst, (r) => r.sblBalance);
 
           return {
             candles,
             institutionalRecords,
-            marginBalance: validMarginRow?.marginBalance,
-            marginBalanceChange,
-            shortBalance: validShortRow?.shortBalance ?? validMarginRow?.shortBalance,
-            shortBalanceChange,
-            sblBalance: validSblRow?.sblBalance,
-            dayTradeRate: validMarginRow?.dayTradeRate,
-            marginAsOfDate: validMarginRow?.date,
+            marginBalance: marginStats.latest,
+            marginBalanceChange: marginStats.delta,
+            shortBalance: shortStats.latest ?? marginStats.latestRow?.shortBalance,
+            shortBalanceChange: shortStats.delta,
+            sblBalance: sblStats.latest,
+            dayTradeRate: marginStats.latestRow?.dayTradeRate,
+            marginAsOfDate: marginStats.latestRow?.date,
             tdccRecords,
             revenueRecords,
             valuation,

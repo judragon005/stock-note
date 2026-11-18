@@ -492,26 +492,30 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                 </div>
               </div>
 
-              {/* 最新單季獲利基石 (EPS / 毛利率 / 營利率，Spec 0199 Ticket 04) */}
-              {(current.latestQuarterEps !== undefined || current.grossMargin !== undefined) && (
+              {/* 最新單季獲利基石與董監質押治理 (EPS / 毛利率 / 營利率 / 董監質押，Spec 0199 & Spec 0237) */}
+              {(current.latestQuarterEps !== undefined ||
+                current.grossMargin !== undefined ||
+                current.directorPledgeRatio !== undefined) && (
                 <div
                   data-testid="valuation-quarterly-financials"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '6px',
                     padding: '5px 8px',
                     borderRadius: '6px',
                     background: 'rgba(15, 23, 42, 0.55)',
-                    border: '1px solid rgba(139, 92, 246, 0.18)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
                     fontSize: '0.68rem',
                     marginBottom: '8px',
                   }}
                 >
                   <span style={{ color: '#a78bfa', fontWeight: 700 }}>
-                    {current.latestQuarterName ? `${current.latestQuarterName} 季報` : '最新單季獲利'}
+                    {current.latestQuarterName ? `${current.latestQuarterName} 季報` : '最新單季與治理'}
                   </span>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                     {current.latestQuarterEps !== undefined && (
                       <span style={{ color: '#f8fafc' }}>
                         EPS: <strong style={{ color: current.latestQuarterEps >= 0 ? '#38bdf8' : '#f87171' }}>{current.latestQuarterEps}</strong>元
@@ -525,6 +529,18 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                     {current.operatingMargin !== undefined && (
                       <span style={{ color: '#94a3b8' }}>
                         營利: <strong>{current.operatingMargin}%</strong>
+                      </span>
+                    )}
+                    {current.directorPledgeRatio !== undefined && (
+                      <span
+                        data-testid="valuation-director-pledge"
+                        style={{
+                          color: current.directorPledgeRatio >= 30 ? '#f87171' : '#94a3b8',
+                          fontWeight: current.directorPledgeRatio >= 30 ? 700 : 500,
+                        }}
+                      >
+                        質押: <strong>{current.directorPledgeRatio.toFixed(1)}%</strong>
+                        {current.directorPledgeRatio >= 30 ? ' (高質押警戒)' : ''}
                       </span>
                     )}
                   </div>

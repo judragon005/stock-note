@@ -100,7 +100,8 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<AiForceTaskTabKey>('TASK_1_COMPREHENSIVE');
   const [isDeepDiveOpen, setIsDeepDiveOpen] = useState(false);
-  const activeRequestIdRef = useRef(0);
+  const [macroMaintenanceRatio, setMacroMaintenanceRatio] = useState<number | undefined>(undefined);
+  const requestGuardRef = useRef(createSymbolRequestGuard());
   const [report, setReport] = useState<AiForceDashboardReport>(
     () =>
       initialReport ||
@@ -129,10 +130,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
   }, [report, _holdings]);
 
   const loadDataForSymbol = async (targetSymbol: string, targetMarket: MarketType) => {
-    const requestId = ++activeRequestIdRef.current;
+    const requestId = requestGuardRef.current.next();
     setIsLoading(true);
     setSymbol(targetSymbol);
     setMarket(targetMarket);
+    setMacroMaintenanceRatio(undefined);
     const resolvedName = resolveOfficialSecurityName(targetSymbol, targetMarket) || targetSymbol;
     setReport(createDefaultAiForceReport(targetSymbol, resolvedName, targetMarket));
     let quote:
@@ -155,7 +157,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       // 1. Layer 1: 優先嘗試從本地 SQLite 數據湖倉直讀歷史日 K、籌碼、集保與月營收 (Spec 0169 & Spec 0197)
       try {
         const lakehouseData = await loadSymbolFullLakehouseData(targetSymbol, targetMarket);
-        if (requestId !== activeRequestIdRef.current) return;
+        if (!requestGuardRef.current.isCurrent(requestId)) return;
         if (lakehouseData && lakehouseData.candles.length >= 1) {
           candles = lakehouseData.candles;
           if (lakehouseData.institutionalRecords && lakehouseData.institutionalRecords.length > 0) {
@@ -193,6 +195,10 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           }
           if (lakehouseData.macro) {
             macroData = lakehouseData.macro;
+            const rawMaint = lakehouseData.macro.tw_margin_maintenance_ratio;
+            if (typeof rawMaint === 'number' && !isNaN(rawMaint) && rawMaint > 0) {
+              setMacroMaintenanceRatio(rawMaint);
+            }
           }
           if (lakehouseData.pledge) {
             pledgeData = lakehouseData.pledge;
@@ -208,12 +214,12 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         logger.warn(`Lakehouse load failed for ${targetSymbol}, falling back to hybrid pipeline:`, err);
       }
 
-      if (requestId !== activeRequestIdRef.current) return;
+      if (!requestGuardRef.current.isCurrent(requestId)) return;
 
       // 若湖倉無數據，降級走常規拉取管線 (Layer 2~3)
       if (candles.length === 0) {
         const res = await backfillSymbolOhlcvAndIndicators(targetSymbol, targetMarket, false);
-        if (requestId !== activeRequestIdRef.current) return;
+        if (!requestGuardRef.current.isCurrent(requestId)) return;
         candles = res?.candles || [];
       }
 
@@ -242,7 +248,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           }
         );
         firstPaintReport.marketBar.dataSourceText = `本地盤後歷史資料庫 (共 ${candles.length} 日 K)`;
-        if (requestId !== activeRequestIdRef.current) return;
+        if (!requestGuardRef.current.isCurrent(requestId)) return;
         setReport(firstPaintReport);
         setIsLoading(false);
       }
@@ -302,7 +308,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           fmpApiKey: apiKeys?.fmpApiKey,
           finmindToken: apiKeys?.finmindToken,
         });
-        if (requestId !== activeRequestIdRef.current) return;
+        if (!requestGuardRef.current.isCurrent(requestId)) return;
         if (forensic && Array.isArray(forensic.historicalRecords) && forensic.historicalRecords.length > 0) {
           const sorted = [...forensic.historicalRecords].sort((a, b) => (b.year * 10 + b.quarter) - (a.year * 10 + a.quarter));
           const latestQ = sorted[0];
@@ -331,7 +337,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         logger.warn(`[AiForceDashboard] 載入 ${targetSymbol} 歷史單季財報時發生非致命異常，優雅降級:`, err);
       }
 
-      if (requestId !== activeRequestIdRef.current) return;
+      if (!requestGuardRef.current.isCurrent(requestId)) return;
 
       // 5. 背景增量補強後二次渲染
       if (candles.length >= 1) {
@@ -379,11 +385,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       }
     } catch (err) {
       logger.warn(`Failed to backfill data for ${targetSymbol}, falling back to default:`, err);
-      if (requestId === activeRequestIdRef.current) {
+      if (requestGuardRef.current.isCurrent(requestId)) {
         setReport(createDefaultAiForceReport(targetSymbol, resolvedName, targetMarket, quote?.price));
       }
     } finally {
-      if (requestId === activeRequestIdRef.current) {
+      if (requestGuardRef.current.isCurrent(requestId)) {
         setIsLoading(false);
       }
     }
@@ -867,14 +873,16 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
               </div>
             </>
           )}
-    </div>
-  )}
+        </div>
+      )}
 
       {/* 任務二：技術警示報告 */}
       {activeTab === 'TASK_2_TECHNICAL_ALERTS' && (
         <TechnicalAlertsView
           report={report}
-          {...({ holdings: _holdings, loanRecords } as Record<string, unknown>)}
+          holdings={_holdings}
+          loanRecords={loanRecords}
+          macroMaintenanceRatio={macroMaintenanceRatio}
         />
       )}
 
@@ -922,7 +930,8 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             dividendYield: report.valuationMetrics?.dividendYield ?? undefined,
           },
           statusTag: report.marketBar?.marketStatusTag || 'NORMAL',
-          ...(apiKeys ? ({ apiKeys } as Record<string, unknown>) : {}),
+          sblBalance: report.dayTradeRisk?.sblBalance,
+          apiKeys,
         }}
       />
     </div>
