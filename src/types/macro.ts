@@ -60,6 +60,11 @@ export interface MacroIndicatorSnapshot {
   usCpiYoY?: number;          // 美國 CPI 通膨年增率 % (FRED CPIAUCSL)
   // --- 0193 法人金絲雀與籌碼擴充 ---
   creditSpreadOAS?: number;   // 美國高收益債期權調整利差 % (如 3.5%)
+  igSpreadOAS?: number;       // 美國投等債期權調整利差 % (FRED BAMLC0A0CM)
+  cccSpreadOAS?: number;      // 美國 CCC 級垃圾債利差 % (FRED BAMLH0A3HYC)
+  breakeven10y?: number;      // 10Y 平衡通膨率 % (FRED T10YIE)
+  initialClaims?: number;     // 美國初領失業救濟金人數
+  usOrdersMinusInvSpread?: number; // 美國製造業新訂單減存貨年增差額 %
   cdsInsuranceIndex?: number; // CDS/CDX 債券履約違約互換保險指數 (點數，如 65)
   cdsRiskLevel?: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
   twFuturesNetOi?: number;    // 外資台指期淨未平倉口數 (負數為淨空單，如 -35000)

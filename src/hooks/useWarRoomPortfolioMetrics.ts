@@ -130,7 +130,7 @@ export function calculateWarRoomPortfolioMetrics(
   });
   const maxDropToleranceTo130Percent =
     marginStress.hasLoans && typeof marginStress.maxDropTolerancePercent === 'number'
-      ? Number((marginStress.maxDropTolerancePercent / 100).toFixed(4))
+      ? Number(marginStress.maxDropTolerancePercent.toFixed(4))
       : undefined;
 
   // 7. 產出全資產防禦護盾與自由發射彈藥 (Free Ammo)
@@ -145,6 +145,10 @@ export function calculateWarRoomPortfolioMetrics(
     upcoming7dDcaCommitmentTWD: dcaCommitment7dTwd,
     tsmcLookThroughWeightPercent: Number(tsmcExp.toFixed(1)),
     semiLookThroughWeightPercent: Number(effectiveSemiWeight.toFixed(1)),
+    // 穿透權重分母為持股總市值 (不含現金)，故以持股市值 × 半導體權重 × 3% 計算
+    soxStressImpact3PctTWD: Math.round(
+      lookThroughReport.totalPortfolioNAV * (effectiveSemiWeight / 100) * 0.03
+    ),
     vix,
     usWeightedCostFxRate,
     usFxCushionTWD,

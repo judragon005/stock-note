@@ -1,4 +1,5 @@
 import { MacroIndicatorSnapshot, MacroPinnedStrategy } from '../types/macro';
+import { evaluateVixLevel, evaluateFearAndGreedLevel } from '../engine/macroAdvisorEngine';
 
 export const MACRO_PULSE_STORAGE_KEY = 'STOCK_TRACKER_MACRO_PULSE_HISTORY_V1';
 export const MACRO_STRATEGY_PINS_STORAGE_KEY = 'stock_tracker_macro_strategy_pins_v1';
@@ -39,11 +40,71 @@ export function toFiniteScalarNumber(val: unknown, fallback: number): number {
 }
 
 /**
+ * 依優先序從多組別名中取第一個有效純數值 (相容後端 camelCase / SQLite snake_case / 前端舊鍵名)
+ */
+function pickNumber(raw: Record<string, unknown>, keys: string[]): number | undefined {
+  for (const k of keys) {
+    const v = toFiniteScalarNumber(raw[k], NaN);
+    if (Number.isFinite(v)) return v;
+  }
+  return undefined;
+}
+
+/**
+ * 將多組別名正規化為前端欄位名 (未提供之欄位為 undefined)
+ */
+function normalizeMacroAliases(input: Record<string, unknown>): Partial<MacroIndicatorSnapshot> {
+  const r = input;
+  return {
+    ...(input as Partial<MacroIndicatorSnapshot>),
+    us10y: pickNumber(r, ['us10y', 'treasuryYield10y', 'treasury_yield_10y']),
+    us2y: pickNumber(r, ['us2y', 'treasuryYield2y', 'treasury_yield_2y']),
+    us3m: pickNumber(r, ['us3m', 'riskFreeRate3m', 'risk_free_rate_3m']),
+    yieldSpread: pickNumber(r, ['yieldSpread', 'yieldSpread10y2y', 'yield_spread_10y_2y']),
+    vix: pickNumber(r, ['vix', 'vixClose', 'vix_close']),
+    fearAndGreedIndex: pickNumber(r, ['fearAndGreedIndex', 'cnnFearGreedScore', 'cnn_fear_greed_score']),
+    creditSpreadOAS: pickNumber(r, ['creditSpreadOAS', 'creditSpreadOas', 'credit_spread_oas', 'highYieldSpreadOas']),
+    cccSpreadOAS: pickNumber(r, ['cccSpreadOAS', 'cccSpreadOas', 'ccc_spread_oas', 'cccHighYieldSpread']),
+    igSpreadOAS: pickNumber(r, ['igSpreadOAS', 'igSpreadOas', 'ig_spread_oas']),
+    breakeven10y: pickNumber(r, ['breakeven10y', 'breakeven_10y']),
+    initialClaims: pickNumber(r, ['initialClaims', 'initial_claims']),
+    usOrdersMinusInvSpread: pickNumber(r, ['usOrdersMinusInvSpread', 'us_orders_minus_inv_spread']),
+    soxIndex: pickNumber(r, ['soxIndex', 'soxClose', 'soxQuote']),
+    taiexIndex: pickNumber(r, ['taiexIndex', 'taiexClose', 'taiexQuote']),
+    sp500Index: pickNumber(r, ['sp500Index', 'sp500Close', 'sp500Quote']),
+    nasdaqIndex: pickNumber(r, ['nasdaqIndex', 'nasdaqClose', 'nasdaqQuote']),
+    twFuturesNetOi: pickNumber(r, ['twFuturesNetOi', 'twForeignFuturesOi', 'tw_foreign_futures_oi']),
+    twMarginMaintenance: pickNumber(r, ['twMarginMaintenance', 'twMarginMaintenanceRatio', 'tw_margin_maintenance_ratio']),
+  };
+}
+
+const DERIVED_MACRO_KEYS = ['isYieldInverted', 'cdsRiskLevel', 'twFuturesRiskLevel', 'twMarginRiskLevel'] as const;
+
+/**
+ * 合併遠端快照至本地既有快照：遠端 null/undefined 欄位保留本地有效值，衍生等級依合併後數值重算
+ */
+export function mergeMacroSnapshot(
+  prev: MacroIndicatorSnapshot,
+  remote: Record<string, unknown>
+): MacroIndicatorSnapshot {
+  const patch = Object.fromEntries(
+    Object.entries(normalizeMacroAliases(remote)).filter(([, v]) => v !== undefined && v !== null)
+  ) as Partial<MacroIndicatorSnapshot>;
+  const base: Partial<MacroIndicatorSnapshot> = { ...prev };
+  for (const k of DERIVED_MACRO_KEYS) delete base[k];
+  if ((patch.us10y !== undefined || patch.us2y !== undefined) && patch.yieldSpread === undefined) {
+    delete base.yieldSpread;
+  }
+  return sanitizeMacroRecord({ ...base, ...patch });
+}
+
+/**
  * 升級相容清洗：將可能缺少新增欄位之歷史快照安全補齊，防止 undefined 導致白屏崩潰
  */
 export function sanitizeMacroRecord(
-  raw: Partial<MacroIndicatorSnapshot>
+  input: Partial<MacroIndicatorSnapshot>
 ): MacroIndicatorSnapshot {
+  const raw = normalizeMacroAliases(input as Record<string, unknown>);
   const us10y = toFiniteScalarNumber(raw.us10y, 3.85);
   const us2y = toFiniteScalarNumber(raw.us2y, 3.98);
   const rawSpread =
@@ -86,10 +147,15 @@ export function sanitizeMacroRecord(
     yieldSpread: rawSpread,
     isYieldInverted,
     vix: toFiniteScalarNumber(raw.vix, 18.0),
-    vixLevel: raw.vixLevel || 'NORMAL',
+    vixLevel: evaluateVixLevel(toFiniteScalarNumber(raw.vix, 18.0)),
     fearAndGreedIndex: typeof raw.fearAndGreedIndex === 'number' ? raw.fearAndGreedIndex : 50,
-    fearAndGreedLevel: raw.fearAndGreedLevel || 'NEUTRAL',
-    goldPrice: toFiniteScalarNumber(raw.goldPrice, 3350.0),
+    fearAndGreedLevel: evaluateFearAndGreedLevel(
+      typeof raw.fearAndGreedIndex === 'number' ? raw.fearAndGreedIndex : 50
+    ),
+    goldPrice: (() => {
+      const g = toFiniteScalarNumber(raw.goldPrice, 3350.0);
+      return g > 500 ? g : 3350.0;
+    })(),
     oilPrice: toFiniteScalarNumber(raw.oilPrice, 75.0),
     dxy: toFiniteScalarNumber(raw.dxy, 101.5),
     usdToTwd: toFiniteScalarNumber(raw.usdToTwd, 32.0),
@@ -98,6 +164,11 @@ export function sanitizeMacroRecord(
     usFedRate: raw.usFedRate,
     usCpiYoY: raw.usCpiYoY,
     creditSpreadOAS,
+    igSpreadOAS: raw.igSpreadOAS,
+    cccSpreadOAS: raw.cccSpreadOAS,
+    breakeven10y: raw.breakeven10y,
+    initialClaims: raw.initialClaims,
+    usOrdersMinusInvSpread: raw.usOrdersMinusInvSpread,
     cdsInsuranceIndex,
     cdsRiskLevel,
     twFuturesNetOi,

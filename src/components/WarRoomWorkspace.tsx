@@ -44,7 +44,7 @@ import {
   generateAiMorningBrief,
   calculateMacroThermometer,
   evaluateMacroDualThermometer,
-  estimateExDividendIndexImpactPoints,
+  estimateTsmcExDividendImpactPoints,
   groupCatalystsByTimeline,
   generateMonthlyRevenueDeadlineCatalyst,
   isDoubleColdRegime,
@@ -69,7 +69,7 @@ import {
   saveMacroPinnedStrategy,
   removeMacroPinnedStrategy,
   parseMacroLoopbackJson,
-  sanitizeMacroRecord,
+  mergeMacroSnapshot,
 } from '../utils/macroPulseStorage';
 import { copyTextToClipboard } from '../utils/clipboard';
 
@@ -182,7 +182,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
       return {
         ...DEFAULT_MACRO_SNAPSHOT,
         ...latest,
-        goldPrice: latest.goldPrice && latest.goldPrice >= 2800 ? latest.goldPrice : 3350.0,
+        goldPrice: latest.goldPrice && latest.goldPrice > 500 ? latest.goldPrice : 3350.0,
         usdToTwd: usdToTwdRate > 0 ? usdToTwdRate : latest.usdToTwd || 32.15,
       };
     }
@@ -256,9 +256,8 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           const payload = await res.json();
           const remote = payload?.data || payload?.snapshot;
           if (remote && typeof remote === 'object') {
-            const sanitizedRemote = sanitizeMacroRecord(remote);
+            const sanitizedRemote = mergeMacroSnapshot(macroSnapshot, remote);
             const merged: MacroIndicatorSnapshot = {
-              ...macroSnapshot,
               ...sanitizedRemote,
               date: sanitizedRemote.date || new Date().toISOString().split('T')[0],
               usdToTwd: sanitizedRemote.usdToTwd || (usdToTwdRate > 0 ? usdToTwdRate : macroSnapshot.usdToTwd),
@@ -299,11 +298,9 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
           const payload = await res.json();
           const remote = payload?.data || payload?.snapshot;
           if (remote && typeof remote === 'object') {
-            const sanitizedRemote = sanitizeMacroRecord(remote);
             setMacroSnapshot((prev) => {
               const merged: MacroIndicatorSnapshot = {
-                ...prev,
-                ...sanitizedRemote,
+                ...mergeMacroSnapshot(prev, remote),
                 sourceStatus: remote.sourceStatus || 'LIVE',
                 updatedAt: Date.now(),
               };
@@ -577,18 +574,14 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
     return list;
   }, [macroSnapshot.date, receivableDividends, remoteCatalysts, catalystRefreshKey]);
 
-  // 估算台積電除息對加權指數之蒸發點數
+  // 估算台積電除息對加權指數之蒸發點數 (即使未持有 2330，催化劑有台積電除息亦主動預警)
   const exDividendImpactPoints = useMemo(() => {
-    const tsmDiv = receivableDividends.find(
-      (d) => (d.symbol === '2330' || d.symbol === '2330.TW') && d.cashDividendPerShare && d.cashDividendPerShare > 0
-    );
-    if (!tsmDiv || !tsmDiv.cashDividendPerShare) return 0;
-    return estimateExDividendIndexImpactPoints({
-      cashDividendPerShare: tsmDiv.cashDividendPerShare,
-      sharesOutstanding: 25_930_380_000,
-      taiexCurrentIndex: macroSnapshot.taiexIndex || 23150,
+    return estimateTsmcExDividendImpactPoints({
+      receivableDividends,
+      catalysts,
+      taiexCurrentIndex: macroSnapshot.taiexIndex,
     });
-  }, [receivableDividends, macroSnapshot.taiexIndex]);
+  }, [receivableDividends, catalysts, macroSnapshot.taiexIndex]);
 
   // 三段時序分組 (用於徽章計數與統計)
   const groupedCatalysts = useMemo(() => {
@@ -748,7 +741,7 @@ export const WarRoomWorkspace: React.FC<WarRoomWorkspaceProps> = ({
       `> 作戰定調：${morningBrief.headline} (${morningBrief.tone})`,
       '',
       `## 🌡️ 雙軌水溫計：長線總經 ${dualThermometer.strategicRegime.score} 分【${stanceLabel}】｜波段戰術 ${dualThermometer.tacticalSwing.score} 分【${dualThermometer.tacticalSwing.label}】`,
-      `- 建議股票總倉位上限：${macroThermometer.suggestedEquityAllocationPercent}%`,
+      `- 建議股票總倉位上限：${dualThermometer.strategicRegime.recommendedEquityCapPercent}%`,
       `- 費城半導體 (^SOX)：${macroSnapshot.soxIndex ?? 'N/A'} (20MA 乖離 ${macroSnapshot.soxBias20Ma ?? 0}%)｜台積電 ADR 溢折價：${macroSnapshot.tsmAdrPremiumPercent ?? 0}%`,
       `- 決策推論：${macroThermometer.rationale.join('；')}`,
       '',

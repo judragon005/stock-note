@@ -291,6 +291,7 @@ export function evaluateMacroDualThermometer(
  */
 export function calculateMacroVaRAndStress(params: {
   navTWD: number;
+  cashTWD?: number;
   collateralValueTWD: number;
   totalLoanDebtTWD: number;
   usStockValueUSD?: number;
@@ -304,6 +305,7 @@ export function calculateMacroVaRAndStress(params: {
 } {
   const {
     navTWD,
+    cashTWD,
     collateralValueTWD,
     totalLoanDebtTWD,
     usStockValueUSD = 0,
@@ -319,7 +321,9 @@ export function calculateMacroVaRAndStress(params: {
       : 0.18;
 
   const totalNavTWD = Math.max(0, navTWD);
-  const valueAtRisk95TWD = calculate1DayVaR95(totalNavTWD, effectiveVol);
+  // 現金零波動：VaR 母體為實質風險資產 (未傳入 cashTWD 時向下相容使用整戶淨值)
+  const investedAtRiskTWD = Math.max(0, totalNavTWD - Math.max(0, cashTWD ?? 0));
+  const valueAtRisk95TWD = calculate1DayVaR95(investedAtRiskTWD, effectiveVol);
   const varRatioPercent =
     totalNavTWD > 0 ? Math.round((valueAtRisk95TWD / totalNavTWD) * 1000) / 10 : 0;
   const fxDeltaTWD = calculateFxDelta(usStockValueUSD);
@@ -409,6 +413,7 @@ export function calculatePortfolioMacroShield(params: {
   const { valueAtRisk95TWD, varRatioPercent, fxDeltaTWD, quickStressTest } =
     calculateMacroVaRAndStress({
       navTWD: totalNavTWD,
+      cashTWD: cashBalanceTWD,
       collateralValueTWD,
       totalLoanDebtTWD,
       usStockValueUSD,
@@ -427,7 +432,7 @@ export function calculatePortfolioMacroShield(params: {
       : hasLoans && collateralValueTWD > 0
       ? Math.max(
           0,
-          Number(((1 - (totalLoanDebtTWD * 1.3) / collateralValueTWD) * 100).toFixed(1))
+          Number((1 - (totalLoanDebtTWD * 1.3) / collateralValueTWD).toFixed(4))
         )
       : undefined;
 
@@ -675,23 +680,20 @@ export function generateAiMorningBrief(
     );
   }
 
-  // B. 晨報情境調倉減碼金額試算 (Trade Blotter)
+  // B. 晨報情境調倉減碼金額試算 (Trade Blotter) — 統一採用雙溫度計建議總倉位上限 (SSOT)
   const totalStockValueTWD = holdingSignals.reduce((acc, s) => acc + (s.marketValueTWD || 0), 0);
   const currentEquityRatio =
     shield.totalNavTWD > 0
       ? Math.round((totalStockValueTWD / shield.totalNavTWD) * 1000) / 10
       : 0;
-  const currentThermometer = calculateMacroThermometer(macro);
-  if (
-    totalStockValueTWD > 0 &&
-    currentEquityRatio > currentThermometer.suggestedEquityAllocationPercent
-  ) {
-    const targetEquityTWD =
-      (shield.totalNavTWD * currentThermometer.suggestedEquityAllocationPercent) / 100;
+  const recommendedEquityCapPercent =
+    evaluateMacroDualThermometer(macro).strategicRegime.recommendedEquityCapPercent;
+  if (totalStockValueTWD > 0 && currentEquityRatio > recommendedEquityCapPercent) {
+    const targetEquityTWD = (shield.totalNavTWD * recommendedEquityCapPercent) / 100;
     const deltaTWD = totalStockValueTWD - targetEquityTWD;
     if (deltaTWD > 10000) {
       actionPoints.push(
-        `📌【情境調倉目標】當前股票水位約 ${currentEquityRatio}% (約 NT$ ${Math.round(totalStockValueTWD / 10000)} 萬)，若降至 ${currentThermometer.suggestedEquityAllocationPercent}% 防禦上限，需降低股票額度約 NT$ ${Math.round(deltaTWD).toLocaleString()}；優先自 P1 週期敏感標的檢核減碼。`
+        `📌【情境調倉目標】當前股票水位約 ${currentEquityRatio}% (約 NT$ ${Math.round(totalStockValueTWD / 10000)} 萬)，若降至 ${recommendedEquityCapPercent}% 防禦上限，需降低股票額度約 NT$ ${Math.round(deltaTWD).toLocaleString()}；優先自 P1 週期敏感標的檢核減碼。`
       );
     }
   }
@@ -1184,4 +1186,47 @@ export function estimateExDividendIndexImpactPoints(params: {
   const totalDividendCash = cashDividendPerShare * sharesOutstanding;
   const impactPoints = taiexCurrentIndex * (totalDividendCash / taiexTotalMarketCapTWD);
   return Math.round(impactPoints * 10) / 10;
+}
+
+/**
+ * 無條件估算台積電 (2330) 除息對加權指數之蒸發點數：
+ * 即使未直接持有 2330 個股，只要催化劑日曆存在台積電除息事件，仍以已知或預設季配息估算預警點數。
+ */
+export function estimateTsmcExDividendImpactPoints(params: {
+  receivableDividends?: Array<{ symbol: string; cashDividendPerShare?: number }>;
+  catalysts?: UpcomingCatalyst[];
+  taiexCurrentIndex?: number;
+  defaultTsmcDividendPerShare?: number;
+}): number {
+  const {
+    receivableDividends = [],
+    catalysts = [],
+    taiexCurrentIndex = 23150,
+    defaultTsmcDividendPerShare = 4.5,
+  } = params;
+
+  const heldTsmc = receivableDividends.find(
+    (d) => (d.symbol === '2330' || d.symbol === '2330.TW') && d.cashDividendPerShare && d.cashDividendPerShare > 0
+  );
+  let dividendPerShare = heldTsmc?.cashDividendPerShare ?? 0;
+
+  if (dividendPerShare <= 0) {
+    const hasTsmcDividendCatalyst = catalysts.some((c) => {
+      const label = `${c.symbol || ''} ${c.name || ''} ${c.description || ''}`;
+      const isTsmc = label.includes('2330') || label.includes('台積電');
+      const isDividend = c.category === 'EARNINGS_DIVIDEND' || label.includes('除息');
+      return isTsmc && isDividend;
+    });
+    if (hasTsmcDividendCatalyst) {
+      dividendPerShare = defaultTsmcDividendPerShare;
+    }
+  }
+
+  if (dividendPerShare <= 0) return 0;
+
+  return estimateExDividendIndexImpactPoints({
+    cashDividendPerShare: dividendPerShare,
+    sharesOutstanding: 25_930_380_000,
+    taiexCurrentIndex: taiexCurrentIndex > 0 ? taiexCurrentIndex : 23150,
+  });
 }
