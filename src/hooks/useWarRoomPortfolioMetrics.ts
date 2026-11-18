@@ -86,7 +86,7 @@ export function calculateWarRoomPortfolioMetrics(
   let usFxCushionTWD = 0;
   for (const h of usHoldings) {
     const costUsd = h.totalCostBasis || (h.avgCost || 0) * (h.shares || 0);
-    const costFx = (h as unknown as { avgExchangeRate?: number }).avgExchangeRate || 31.8;
+    const costFx = h.avgCostFxRate || 31.8;
     const fxResult = calculateHoldingFxBreakdown(h, costFx, usdToTwdRate);
     usTotalCostUsd += costUsd;
     usWeightedFxNumerator += costUsd * costFx;

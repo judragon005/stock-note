@@ -73,6 +73,10 @@ _Avoid_: Expired Dividend, Dropped Accrual
 將美股以台幣計價之總損益嚴格解耦為「股票本體價差 (Asset Gain)」與「美元匯率波動 (FX Gain/Loss)」，精確反映選股 Alpha 與外匯貢獻。
 _Avoid_: Currency Mix, Mixed Gain
 
+**HoldingPosition Canonical Fields (持倉正統領域欄位單一事實來源)** _(新增於 Spec 0236)_:
+在 `HoldingPosition` 實體中，買進加權平均成本匯率之唯一正統屬性為 `avgCostFxRate`，交易計畫之唯一正統屬性為 `plan`，處置與注意事件列表為 `dispositionEvents` (`DispositionEventInput[]`)。嚴禁於領域契約或消費端以雙重轉型另立別名，避免靜默斷路。
+_Avoid_: avgExchangeRate, tradePlan
+
 **Dividend Fill Status Four-State Pipeline (股利實質填息四態自癒狀態機)** _(新增於 Spec 0229)_:
 將歷史股息入帳明細之填息狀態形式化為四態：`FILLED` (實質填息，現價已回補除息缺口)、`UNFILLED` (貼息中)、`CLOSED_POSITION` (已結清部位，該標的已全數平倉賣出，無需追蹤即時貼息)、`PENDING_DATA` (待補除息價，缺乏除息參考價)。徹底解決因持倉清空或缺價導致膠囊靜默隱形的缺陷。
 _Avoid_: Disappearing Badge, Null Return Status

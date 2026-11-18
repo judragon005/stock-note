@@ -66,7 +66,7 @@
 | [**0056**](0056-valuation-river-candle-lookup-binary-search.md) | 估值河流圖歷史收盤價匹配二元搜尋優化 | `P3` | `RESOLVED` | Code Review (Spec 0219 / Issue #462) | `Performance` · `Algorithm` · `StockAnalysis` · `ValuationRiver` · `BinarySearch` | **已於 v9.15.0 (Spec 0220 / ADR #0220) 完整解決** |
 | [**0057**](0057-zavy-workspace-test-decomposition-and-engine-helper-refactor.md) | Zavy 慢富工作區測試職責解耦、預估年股息輔助函式下沉與信用雷達枚舉中文化 | `P3` | `RESOLVED` | Code Review (Spec 0223 / Issue #494) | `Refactor` · `CleanCode` · `TestSmell` · `ZavyWorkspace` | **已於 v9.17.0 (Spec 0224 / ADR #0224 / Issue #500) 完整解決** |
 | [**0058**](0058-dividend-log-view-subcomponent-decomposition.md) | DividendLogView 龐大單體神級組件模組化解耦重構 | `P2` | `RESOLVED` | /grill-with-docs 深度架構大閱兵審查 (Spec 0225 / Issue #501) | `Refactor` · `UI` · `CleanCode` · `Dividend` · `SRP` · `ComponentDecomposition` | **已於 v9.18.0 (Spec 0225 / ADR #0225 / Issue #502) 完整解決** |
-| [**0059**](0059-holding-position-extended-fields-type-convergence.md) | HoldingPosition 擴展欄位型別收斂與雙重轉型氣味清理 | `P3` | `OPEN` | /code-review 雙軸審查回饋 (Spec 0235 / Issue #584) | `Refactor` · `TypeScript` · `CleanCode` · `TypeSafety` · `WarRoom` | 待下期個股持倉介面擴充或類型整理時實作 |
+| [**0059**](0059-holding-position-extended-fields-type-convergence.md) | HoldingPosition 擴展欄位型別收斂與雙重轉型氣味清理 | `P3` | `RESOLVED` | /code-review 雙軸審查回饋 (Spec 0235 / Issue #584) | `Refactor` · `TypeScript` · `CleanCode` · `TypeSafety` · `WarRoom` | **已於 Spec 0236 (Issue #586) 完整解決** |
 
 ---
 

@@ -137,6 +137,25 @@ describe('useWarRoomPortfolioMetrics - 戰情室投組風控指標與防禦護�
     expect(result.shield.soxStressImpact3PctTWD).toBe(60000);
   });
 
+  it('7. Spec 0236：應優先讀取 HoldingPosition 正統 avgCostFxRate，不再靜默回退 31.8 常數', () => {
+    const usHoldingWithFx = {
+      ...baseHoldings[1],
+      avgCostFxRate: 29.5,
+    } as unknown as HoldingPosition;
+
+    const result = calculateWarRoomPortfolioMetrics({
+      holdings: [usHoldingWithFx],
+      loans: [],
+      cashBalanceTwd: 0,
+      totalNavTwd: 71500,
+      usdToTwdRate: 32.5,
+    });
+
+    // 總美元成本 2000 * (現時匯率 32.5 - 買進成本匯率 29.5) = +6000 TWD
+    expect(result.shield.usWeightedCostFxRate).toBe(29.5);
+    expect(result.shield.usFxCushionTWD).toBe(6000);
+  });
+
   it('5. Hook 函式簽名應可被正常引用', () => {
     expect(typeof useWarRoomPortfolioMetrics).toBe('function');
   });

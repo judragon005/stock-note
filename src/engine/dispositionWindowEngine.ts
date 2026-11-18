@@ -2,12 +2,9 @@
  * 處置股票與注意股票有效視窗判定引擎 (Spec 0156 / Ticket 01 & Ticket 02)
  */
 
-export interface DispositionEventInput {
-  type: 'DISPOSITION' | 'ATTENTION';
-  startDate?: string;
-  endDate?: string;
-  eventDate?: string;
-}
+import type { DispositionEventInput } from '../types/stock';
+
+export type { DispositionEventInput };
 
 /**
  * 將各類日期格式 (YYYY-MM-DD, YYYY/MM/DD, Date) 正規化為 YYYY-MM-DD
