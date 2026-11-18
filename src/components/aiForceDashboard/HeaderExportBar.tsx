@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Download, Printer, Search } from 'lucide-react';
 import type { AiForceDashboardReport } from '../../types/aiForceDashboard';
 import {
   triggerCsvDownload,
@@ -12,15 +13,15 @@ import { getInvestmentMemo } from '../../utils/investmentMemoStorage';
 export interface ExportActionItem {
   id: 'DASHBOARD_PNG' | 'ALL_CHARTS_PNG' | 'CSV' | 'HTML' | 'PDF';
   label: string;
-  icon: string;
+  icon: 'download' | 'printer';
 }
 
 export const EXPORT_ACTIONS_CONFIG: ExportActionItem[] = [
-  { id: 'DASHBOARD_PNG', label: '下載儀表板 PNG', icon: '⬇' },
-  { id: 'ALL_CHARTS_PNG', label: '下載全部圖表 PNG', icon: '⬇' },
-  { id: 'CSV', label: '下載資料 CSV', icon: '⬇' },
-  { id: 'HTML', label: '下載總結報告 HTML', icon: '⬇' },
-  { id: 'PDF', label: '列印 / PDF', icon: '🖨️' },
+  { id: 'DASHBOARD_PNG', label: '下載儀表板 PNG', icon: 'download' },
+  { id: 'ALL_CHARTS_PNG', label: '下載全部圖表 PNG', icon: 'download' },
+  { id: 'CSV', label: '下載資料 CSV', icon: 'download' },
+  { id: 'HTML', label: '下載總結報告 HTML', icon: 'download' },
+  { id: 'PDF', label: '列印 / PDF', icon: 'printer' },
 ];
 
 export interface HeaderExportBarProps {
@@ -128,9 +129,10 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
         flexWrap: 'wrap',
         gap: '10px',
         padding: '6px 14px',
-        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+        backgroundColor: '#0B101B',
         borderRadius: '10px',
-        border: '1px solid rgba(255, 255, 255, 0.06)',
+        border: '1px solid rgba(255, 255, 255, 0.07)',
+        fontVariantNumeric: 'tabular-nums',
       }}
     >
       {/* 左側：資料來源與區間說明 */}
@@ -153,7 +155,7 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
               padding: '4px 10px',
               borderRadius: '6px',
               border: '1px solid rgba(56, 189, 248, 0.4)',
-              backgroundColor: 'rgba(56, 189, 248, 0.15)',
+              backgroundColor: 'rgba(56, 189, 248, 0.14)',
               color: '#38bdf8',
               fontSize: '11px',
               fontWeight: 600,
@@ -165,12 +167,12 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
               e.currentTarget.style.borderColor = '#38bdf8';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(56, 189, 248, 0.15)';
+              e.currentTarget.style.backgroundColor = 'rgba(56, 189, 248, 0.14)';
               e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.4)';
             }}
             title="開啟全市場個股 7 步深度投研與決策閉環視窗"
           >
-            <span>🔍</span>
+            <Search size={12} />
             <span>7步深度投研</span>
           </button>
         )}
@@ -186,8 +188,8 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
               gap: '4px',
               padding: '4px 8px',
               borderRadius: '6px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              backgroundColor: 'rgba(30, 41, 59, 0.85)',
+              border: '1px solid rgba(255, 255, 255, 0.07)',
+              backgroundColor: 'rgba(255, 255, 255, 0.03)',
               color: '#cbd5e1',
               fontSize: '11px',
               fontWeight: 500,
@@ -200,12 +202,12 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
               e.currentTarget.style.color = '#38bdf8';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(30, 41, 59, 0.85)';
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.03)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.07)';
               e.currentTarget.style.color = '#cbd5e1';
             }}
           >
-            <span style={{ fontSize: '11px' }}>{act.icon}</span>
+            {act.icon === 'printer' ? <Printer size={12} /> : <Download size={12} />}
             <span>{act.label}</span>
           </button>
         ))}

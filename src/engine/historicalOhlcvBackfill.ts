@@ -2,7 +2,7 @@ import { MarketType } from '../types/stock';
 import { DailyCandle, MuscleBookerIndicatorPoint } from '../types/indicators';
 import { fetchWithCORSProxy, getYahooCandidateSymbols } from './priceFetcher';
 import { parseYahooHistoricalCandlesResponse } from './historicalPriceFetcher';
-import { calculateMuscleBookerIndicators, generateSyntheticCandles } from './muscleBookerEngine';
+import { calculateMuscleBookerIndicators } from './muscleBookerEngine';
 import {
   getSymbolOhlcv,
   saveSymbolOhlcv,
@@ -199,27 +199,8 @@ export async function backfillSymbolOhlcvAndIndicators(
       };
     }
 
-    // 保底合成防禦 (Spec 0113)：遠端查無資料且本地無舊快取時 (如標的下市、代碼變更或 API 暫無數據)
-    const fallbackCandles = generateSyntheticCandles(cleanSymbol, 100);
-    const fallbackIndicators = calculateMuscleBookerIndicators(fallbackCandles);
-    try {
-      await saveSymbolOhlcv({
-        symbol: cleanSymbol,
-        market,
-        candles: fallbackCandles,
-        updatedAt: Date.now(),
-      });
-      await saveSymbolIndicators({
-        symbol: cleanSymbol,
-        market,
-        points: fallbackIndicators,
-        updatedAt: Date.now(),
-      });
-    } catch (saveErr) {
-      logger.warn(`Failed to persist fallback synthetic candles for ${cleanSymbol}:`, saveErr);
-    }
-
-    return { candles: fallbackCandles, indicators: fallbackIndicators };
+    // Zero-Mock Policy：湖倉與遠端皆查無資料且本地無舊快取時，嚴禁偽造合成日 K，直接返回空陣列
+    return { candles: [], indicators: [] };
   }
 
 

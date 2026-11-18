@@ -1,5 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { MarketType, HoldingPosition, PriceQuote } from '../../types/stock';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Radio, SatelliteDish, ShieldAlert, Target, Zap } from 'lucide-react';
+import {
+  MarketType,
+  HoldingPosition,
+  PriceQuote,
+  ApiKeysConfig,
+  ColorThemeMode,
+  LoanRecord,
+} from '../../types/stock';
 import { AiForceDashboardReport } from '../../types/aiForceDashboard';
 import {
   createDefaultAiForceReport,
@@ -49,11 +57,33 @@ import { WarRoomPromptCard } from './WarRoomPromptCard';
 import { createWarRoomPromptDigest } from '../../engine/aiForcePromptAdapter';
 import { loadOrFetchFinancialReport } from '../../engine/financialReportService';
 
+export interface SymbolRequestGuard {
+  next: () => number;
+  isCurrent: (requestId: number) => boolean;
+}
+
+/**
+ * 建立非同步標的載入競態防護器 (Spec 0237)
+ */
+export function createSymbolRequestGuard(): SymbolRequestGuard {
+  let latestId = 0;
+  return {
+    next: () => {
+      latestId += 1;
+      return latestId;
+    },
+    isCurrent: (requestId: number) => requestId === latestId,
+  };
+}
+
 export interface AiForceDashboardViewProps {
   initialSymbol?: string;
   initialMarket?: MarketType;
   holdings?: HoldingPosition[];
   initialReport?: AiForceDashboardReport;
+  apiKeys?: ApiKeysConfig;
+  colorTheme?: ColorThemeMode;
+  loanRecords?: LoanRecord[];
 }
 
 export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
@@ -61,12 +91,16 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
   initialMarket = 'TW',
   holdings: _holdings = [],
   initialReport,
+  apiKeys,
+  colorTheme,
+  loanRecords = [],
 }) => {
   const [symbol, setSymbol] = useState(initialSymbol);
   const [market, setMarket] = useState<MarketType>(initialMarket);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<AiForceTaskTabKey>('TASK_1_COMPREHENSIVE');
   const [isDeepDiveOpen, setIsDeepDiveOpen] = useState(false);
+  const activeRequestIdRef = useRef(0);
   const [report, setReport] = useState<AiForceDashboardReport>(
     () =>
       initialReport ||
@@ -77,12 +111,25 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       )
   );
 
+  const resolvedColorTheme: ColorThemeMode =
+    colorTheme ?? (market === 'US' ? 'international' : 'taiwan');
+
+  const userAvgCost = useMemo(() => {
+    const matched = _holdings.filter(
+      (h) => h.symbol.toUpperCase() === symbol.toUpperCase() && h.shares > 0
+    );
+    const totalShares = matched.reduce((sum, h) => sum + h.shares, 0);
+    if (totalShares <= 0) return undefined;
+    return matched.reduce((sum, h) => sum + h.avgCost * h.shares, 0) / totalShares;
+  }, [_holdings, symbol]);
+
   // ⚡ 戰情室專屬高濃度提示詞特徵模型 (Spec 0181 / Ticket 16)
   const warRoomDigest = useMemo(() => {
     return createWarRoomPromptDigest(report, _holdings);
   }, [report, _holdings]);
 
   const loadDataForSymbol = async (targetSymbol: string, targetMarket: MarketType) => {
+    const requestId = ++activeRequestIdRef.current;
     setIsLoading(true);
     setSymbol(targetSymbol);
     setMarket(targetMarket);
@@ -96,17 +143,19 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
     try {
       let candles: any[] = [];
       let institutionalRecords: RawInstitutionalRecord[] | undefined = undefined;
-      let marginData:
-        | { marginBalance?: number; shortBalance?: number; dayTradeRate?: number }
-        | undefined = undefined;
+      let marginData: GenerateReportOptions['marginData'] = undefined;
       let tdccRecords: any[] | undefined = undefined;
       let revenueRecords: any[] | undefined = undefined;
       let quarterlyValuationData: DashboardValuationCombinedData | undefined = undefined;
       let macroData: any = undefined;
+      let pledgeData: GenerateReportOptions['pledge'] = undefined;
+      let etfNavData: GenerateReportOptions['etfNav'] = undefined;
+      let corporateActionsData: GenerateReportOptions['corporateActions'] = undefined;
 
       // 1. Layer 1: 優先嘗試從本地 SQLite 數據湖倉直讀歷史日 K、籌碼、集保與月營收 (Spec 0169 & Spec 0197)
       try {
         const lakehouseData = await loadSymbolFullLakehouseData(targetSymbol, targetMarket);
+        if (requestId !== activeRequestIdRef.current) return;
         if (lakehouseData && lakehouseData.candles.length >= 1) {
           candles = lakehouseData.candles;
           if (lakehouseData.institutionalRecords && lakehouseData.institutionalRecords.length > 0) {
@@ -120,12 +169,18 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           }
           if (
             lakehouseData.marginBalance !== undefined ||
-            lakehouseData.shortBalance !== undefined
+            lakehouseData.shortBalance !== undefined ||
+            lakehouseData.sblBalance !== undefined ||
+            lakehouseData.marginBalanceChange !== undefined ||
+            lakehouseData.shortBalanceChange !== undefined
           ) {
             marginData = {
               marginBalance: lakehouseData.marginBalance,
               shortBalance: lakehouseData.shortBalance,
               dayTradeRate: lakehouseData.dayTradeRate,
+              sblBalance: lakehouseData.sblBalance,
+              marginBalanceChange: lakehouseData.marginBalanceChange,
+              shortBalanceChange: lakehouseData.shortBalanceChange,
             };
           }
           if (lakehouseData.valuation) {
@@ -139,14 +194,26 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           if (lakehouseData.macro) {
             macroData = lakehouseData.macro;
           }
+          if (lakehouseData.pledge) {
+            pledgeData = lakehouseData.pledge;
+          }
+          if (lakehouseData.etfNav) {
+            etfNavData = lakehouseData.etfNav;
+          }
+          if (lakehouseData.corporateActions && lakehouseData.corporateActions.length > 0) {
+            corporateActionsData = lakehouseData.corporateActions;
+          }
         }
       } catch (err) {
         logger.warn(`Lakehouse load failed for ${targetSymbol}, falling back to hybrid pipeline:`, err);
       }
 
+      if (requestId !== activeRequestIdRef.current) return;
+
       // 若湖倉無數據，降級走常規拉取管線 (Layer 2~3)
       if (candles.length === 0) {
         const res = await backfillSymbolOhlcvAndIndicators(targetSymbol, targetMarket, false);
+        if (requestId !== activeRequestIdRef.current) return;
         candles = res?.candles || [];
       }
 
@@ -169,9 +236,13 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             revenueRecords,
             valuationData: quarterlyValuationData,
             macroData,
+            pledge: pledgeData,
+            etfNav: etfNavData,
+            corporateActions: corporateActionsData,
           }
         );
         firstPaintReport.marketBar.dataSourceText = `本地盤後歷史資料庫 (共 ${candles.length} 日 K)`;
+        if (requestId !== activeRequestIdRef.current) return;
         setReport(firstPaintReport);
         setIsLoading(false);
       }
@@ -227,7 +298,11 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
 
       // 4.5 嘗試載入單季財報 EPS/毛利 (Spec 0196 & Spec 0197)
       try {
-        const forensic = await loadOrFetchFinancialReport(targetSymbol, targetMarket, resolvedName);
+        const forensic = await loadOrFetchFinancialReport(targetSymbol, targetMarket, resolvedName, {
+          fmpApiKey: apiKeys?.fmpApiKey,
+          finmindToken: apiKeys?.finmindToken,
+        });
+        if (requestId !== activeRequestIdRef.current) return;
         if (forensic && Array.isArray(forensic.historicalRecords) && forensic.historicalRecords.length > 0) {
           const sorted = [...forensic.historicalRecords].sort((a, b) => (b.year * 10 + b.quarter) - (a.year * 10 + a.quarter));
           const latestQ = sorted[0];
@@ -256,6 +331,8 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         logger.warn(`[AiForceDashboard] 載入 ${targetSymbol} 歷史單季財報時發生非致命異常，優雅降級:`, err);
       }
 
+      if (requestId !== activeRequestIdRef.current) return;
+
       // 5. 背景增量補強後二次渲染
       if (candles.length >= 1) {
         const fullReport = generateAiForceReportFromCandles(
@@ -275,6 +352,9 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             revenueRecords,
             valuationData: quarterlyValuationData,
             macroData,
+            pledge: pledgeData,
+            etfNav: etfNavData,
+            corporateActions: corporateActionsData,
           }
         );
         if (!quote && targetMarket === 'TW') {
@@ -293,15 +373,19 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           if (quote.low !== undefined) fallback.marketBar.lowPrice = quote.low;
           if (quote.volume !== undefined) fallback.marketBar.volumeShares = quote.volume;
         } else if (resolvedName === targetSymbol) {
-          fallback.marketBar.dataSourceText = `⚠️ 查無此台股標的代碼 (${targetSymbol})，請確認代碼是否輸入正確（如 00403A、2330）`;
+          fallback.marketBar.dataSourceText = `查無此台股標的代碼 (${targetSymbol})，請確認代碼是否輸入正確（如 00403A、2330）`;
         }
         setReport(fallback);
       }
     } catch (err) {
       logger.warn(`Failed to backfill data for ${targetSymbol}, falling back to default:`, err);
-      setReport(createDefaultAiForceReport(targetSymbol, resolvedName, targetMarket, quote?.price));
+      if (requestId === activeRequestIdRef.current) {
+        setReport(createDefaultAiForceReport(targetSymbol, resolvedName, targetMarket, quote?.price));
+      }
     } finally {
-      setIsLoading(false);
+      if (requestId === activeRequestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -339,7 +423,9 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         currentName={report.name}
         isLoading={isLoading}
         onAnalyze={handleAnalyze}
-        colorTheme={market === 'US' ? 'international' : 'taiwan'}
+        colorTheme={resolvedColorTheme}
+        holdings={_holdings}
+        vwapCost={report.vwapCostStructure?.mainForceVwap}
       />
 
       {/* 資料來源說明與 5 大量化匯出工具列 (照片第 2 列) */}
@@ -350,15 +436,97 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         onOpenDeepDive={() => setIsDeepDiveOpen(true)}
       />
 
+      {/* 頂部 5 大任務視圖切換器 (Obsidian De-Slop: 置頂於匯出列下方) */}
+      <TaskViewsSwitcher activeTab={activeTab} onChangeTab={setActiveTab} />
+
       {/* 依據任務頁籤條件渲染視圖 */}
       {activeTab === 'TASK_1_COMPREHENSIVE' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
+          {/* ZONE 01: 價格結構與主力總判 */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '4px 2px',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+              fontSize: '11px',
+              fontWeight: 700,
+              letterSpacing: '0.12em',
+              color: '#64748b',
+            }}
+          >
+            <span>ZONE 01 // 價格結構與主力總判</span>
+          </div>
+
           {/* Layer 1: 全盤態勢與趨勢主圖 (100% 滿版獨立大視野，看盤完全不壓迫) */}
           <div data-layer="1-kline" style={{ width: '100%', minWidth: 0 }}>
             <KLineChartCard
               data={report.klineSystem}
-              colorTheme={market === 'US' ? 'international' : 'taiwan'}
+              colorTheme={resolvedColorTheme}
+              {...(userAvgCost !== undefined ? { userAvgCost } : {})}
             />
+          </div>
+
+          {/* 首屏決策摘要帶 (Executive Tactical Verdict Strip) */}
+          <div
+            data-testid="executive-verdict-strip"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '12px',
+              padding: '12px 16px',
+              backgroundColor: '#0B101B',
+              borderRadius: '10px',
+              border: '1px solid rgba(255, 255, 255, 0.07)',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1 1 360px', minWidth: 0 }}>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  backgroundColor: 'rgba(56, 189, 248, 0.14)',
+                  border: '1px solid rgba(56, 189, 248, 0.35)',
+                  color: '#38bdf8',
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <Zap size={13} />
+                <span>{report.mainForceVerdict.primaryVerb}</span>
+              </span>
+              <span style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: 1.5 }}>
+                {report.decisionCore.xaiExplanation || report.mainForceVerdict.fullVerdictText}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '12px', flexShrink: 0 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#f87171' }}>
+                <ShieldAlert size={13} />
+                <span>停損防線</span>
+                <strong style={{ color: '#f8fafc' }}>
+                  {report.mainForceVerdict.stopLossPrice !== undefined
+                    ? report.mainForceVerdict.stopLossPrice.toFixed(2)
+                    : '-'}
+                </strong>
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#34d399' }}>
+                <Target size={13} />
+                <span>停利目標</span>
+                <strong style={{ color: '#f8fafc' }}>
+                  {report.mainForceVerdict.takeProfitPrice !== undefined
+                    ? report.mainForceVerdict.takeProfitPrice.toFixed(2)
+                    : '-'}
+                </strong>
+              </span>
+            </div>
           </div>
 
           {/* 若處於無真實資料待命狀態 (report.isDataPending)，展示高質感毛玻璃空狀態引導面板 (Ticket 07 / Spec 0162) */}
@@ -371,17 +539,17 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 alignItems: 'center',
                 justifyContent: 'center',
                 padding: '48px 24px',
-                background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(30, 41, 59, 0.75) 100%)',
-                borderRadius: '16px',
-                border: '1px solid rgba(59, 130, 246, 0.25)',
-                backdropFilter: 'blur(12px)',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+                background: '#0B101B',
+                borderRadius: '12px',
+                border: '1px solid rgba(255, 255, 255, 0.07)',
                 textAlign: 'center',
                 gap: '16px',
                 margin: '12px 0',
               }}
             >
-              <div style={{ fontSize: '3rem' }}>🛰️</div>
+              <div style={{ color: '#38bdf8' }}>
+                <SatelliteDish size={42} />
+              </div>
               <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f8fafc' }}>
                 查無此標的真實數據（{symbol}）
               </div>
@@ -414,9 +582,13 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                     cursor: 'pointer',
                     fontSize: '0.85rem',
                     transition: 'all 0.15s ease',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
                   }}
                 >
-                  {isLoading ? '📡 數據回補中...' : '📡 嘗試在線即時回補 250 日數據'}
+                  <Radio size={14} />
+                  <span>{isLoading ? '數據回補中...' : '嘗試在線即時回補 250 日數據'}</span>
                 </button>
                 <button
                   type="button"
@@ -454,6 +626,23 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             </div>
           ) : (
             <>
+              {/* ZONE 02: AI 多維量化雷達與價格位階 */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '4px 2px',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.12em',
+                  color: '#64748b',
+                }}
+              >
+                <span>ZONE 02 // AI 多維量化雷達與價格位階</span>
+              </div>
+
               {/* Layer 2: AI 核心定調與雙雷達全景 (Half Width: 1 欄 2 卡，大視野展開，寬度均 >= 480px / minmax(440px, 1fr)) */}
               <div
                 data-layer="2-radars"
@@ -496,6 +685,23 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 </div>
               </div>
 
+              {/* ZONE 03: 籌碼大數據與估值動能 */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '4px 2px',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.12em',
+                  color: '#64748b',
+                }}
+              >
+                <span>ZONE 03 // 籌碼大數據與估值動能</span>
+              </div>
+
               {/* Layer 4: 主力籌碼與基本面大數據 (3 卡寬幅戰區，5 欄表格無擠壓) */}
               <div
                 data-layer="4-big-data"
@@ -510,7 +716,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 <div style={{ minWidth: 0, height: '100%' }}>
                   <InstitutionalFlowCard
                     data={report.institutionalFlow}
-                    colorTheme={market === 'US' ? 'international' : 'taiwan'}
+                    colorTheme={resolvedColorTheme}
                   />
                 </div>
 
@@ -519,7 +725,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   <TdccDistributionCard
                     key={symbol}
                     data={report.tdccDistribution}
-                    colorTheme={market === 'US' ? 'international' : 'taiwan'}
+                    colorTheme={resolvedColorTheme}
                   />
                 </div>
 
@@ -527,7 +733,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 <div style={{ minWidth: 0, height: '100%' }}>
                   <MonthlyRevenueCard
                     data={report.monthlyRevenue}
-                    colorTheme={market === 'US' ? 'international' : 'taiwan'}
+                    colorTheme={resolvedColorTheme}
                   />
                 </div>
               </div>
@@ -589,6 +795,23 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 </div>
               </div>
 
+              {/* ZONE 04: 風險控管與主力終極定調 */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '4px 2px',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.12em',
+                  color: '#64748b',
+                }}
+              >
+                <span>ZONE 04 // 風險控管與主力終極定調</span>
+              </div>
+
               {/* Layer 7: 籌碼收斂與體質定調 (Spec 0211: 雙欄自適應對稱矩陣，左 15+09，右 11+16+17) */}
               <div
                 data-layer="7-chips-health-matrix"
@@ -648,7 +871,12 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
   )}
 
       {/* 任務二：技術警示報告 */}
-      {activeTab === 'TASK_2_TECHNICAL_ALERTS' && <TechnicalAlertsView report={report} />}
+      {activeTab === 'TASK_2_TECHNICAL_ALERTS' && (
+        <TechnicalAlertsView
+          report={report}
+          {...({ holdings: _holdings, loanRecords } as Record<string, unknown>)}
+        />
+      )}
 
       {/* 任務三：KD + MA 圖表 */}
       {activeTab === 'TASK_3_KD_MA' && <KdMaView report={report} />}
@@ -668,11 +896,6 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         />
       </div>
 
-      {/* 底部 5 大任務視圖切換器 (Ticket 31) */}
-      <div style={{ marginTop: '8px', position: 'sticky', bottom: '12px', zIndex: 20 }}>
-        <TaskViewsSwitcher activeTab={activeTab} onChangeTab={setActiveTab} />
-      </div>
-
       {/* 7 步深度投研與決策閉環 Modal (Debt #0037 / Spec 0173) */}
       <EquityDeepDiveModal
         isOpen={isDeepDiveOpen}
@@ -686,12 +909,20 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           symbol,
           name: report.name || symbol,
           market,
+          candles: report.klineSystem.candles,
+          institutionalRecords: report.institutionalFlow.history,
+          boxFloorPrice: report.klineSystem.keyLevels.supportLevel,
+          boxCeilingPrice: report.klineSystem.keyLevels.highResistance,
           quote: {
             price: report.marketBar?.currentPrice || 0,
             change: report.marketBar?.change || 0,
             changePercent: report.marketBar?.changePercent || 0,
+            pe: report.valuationMetrics?.pe ?? undefined,
+            pb: report.valuationMetrics?.pb ?? undefined,
+            dividendYield: report.valuationMetrics?.dividendYield ?? undefined,
           },
           statusTag: report.marketBar?.marketStatusTag || 'NORMAL',
+          ...(apiKeys ? ({ apiKeys } as Record<string, unknown>) : {}),
         }}
       />
     </div>

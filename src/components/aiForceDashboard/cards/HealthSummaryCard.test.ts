@@ -41,7 +41,7 @@ describe('HealthSummaryCard & calculateCircleProgress', () => {
     expect(progressOver.strokeDashoffset).toBe(0);
   });
 
-  it('應該正確計算 5 項指標平均綜合評分', () => {
+  it('應該正確計算 5 項指標平均綜合評分（流動性風險反轉為正向安全度 100 - liquidityRisk）', () => {
     const score = calculateOverallHealthScore({
       chipHealth: 55,
       technicalStructure: 80,
@@ -49,9 +49,9 @@ describe('HealthSummaryCard & calculateCircleProgress', () => {
       liquidityRisk: 5,
       institutionalSupport: 50,
     });
-    // 平均值 (55 + 80 + 58 + 5 + 50) / 5 = 49.6 ≈ 50 分
-    expect(score.averageScore).toBe(50);
-    expect(score.ratingLabel).toContain('普通');
+    // 平均值 (55 + 80 + 58 + (100 - 5) + 50) / 5 = 338 / 5 = 67.6 ≈ 68 分
+    expect(score.averageScore).toBe(68);
+    expect(score.ratingLabel).toContain('良好');
   });
 
   it('應該正確解析 HealthSummaryData 契約', () => {

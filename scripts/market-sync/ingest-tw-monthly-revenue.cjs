@@ -3,8 +3,11 @@
  * 公開資訊觀測站 (MOPS) 全市場月營收成長與歷史新高入庫模組 (Spec 0163 / Ticket 07)
  */
 
-const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+const { initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
 const { getLatestSettledRevenueMonth } = require('./market-freshness-service.cjs');
+
+const TWSE_REVENUE_URL = 'https://openapi.twse.com.tw/v1/opendata/t187ap05_L';
+const TPEX_REVENUE_URL = 'https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O';
 
 /**
  * 計算單一標的之月營收年增率 (YoY)、月增率 (MoM) 與是否創歷史新高
@@ -107,77 +110,210 @@ function saveMonthlyRevenueToSqlite(revenueMap, customDbPath) {
 }
 
 /**
- * 執行全市場台股上市櫃月營收成長數據批次入庫 (支援多月時間序列回補)
+ * 將民國年月 (如 "11508" 或 "115/08") 轉換為西元 YYYY-MM
+ * @param {string} rocYm
+ * @returns {string | null}
+ */
+function convertRocYmToIso(rocYm) {
+  if (!rocYm) return null;
+  const cleaned = String(rocYm).trim();
+  if (/^\d{4}-\d{2}$/.test(cleaned)) return cleaned;
+
+  const digits = cleaned.replace(/[^\d]/g, '');
+  if (digits.length >= 4 && digits.length <= 5) {
+    const rocYear = parseInt(digits.slice(0, digits.length - 2), 10);
+    const month = digits.slice(-2);
+    const mm = parseInt(month, 10);
+    if (rocYear > 0 && mm >= 1 && mm <= 12) {
+      return `${rocYear + 1911}-${month}`;
+    }
+  }
+  return null;
+}
+
+/**
+ * 解析 TWSE / TPEx OpenAPI 月營收陣列資料
+ * @param {Array<Record<string, any>>} records
+ * @param {string} [fallbackYearMonth]
+ * @returns {Array<{ symbol: string, yearMonth: string, revenue: number, lastYearRevenue: number | null, yoyRate: number | null, momRate: number | null, isAllTimeHigh: number }>}
+ */
+function parseMonthlyRevenueOpenApi(records, fallbackYearMonth) {
+  if (!Array.isArray(records)) return [];
+  const parsed = [];
+
+  for (const r of records) {
+    if (!r || typeof r !== 'object') continue;
+    const symbol = String(r['公司代號'] || r.SecuritiesCompanyCode || '').trim();
+    if (!symbol) continue;
+
+    const yearMonth = convertRocYmToIso(r['資料年月']) || fallbackYearMonth;
+    if (!yearMonth) continue;
+
+    const revRaw = String(r['營業收入-當月營收'] ?? '').replace(/,/g, '').trim();
+    const revenue = Number(revRaw);
+    if (!Number.isFinite(revenue) || revenue < 0) continue;
+
+    const lyRaw = String(r['營業收入-去年當月營收'] ?? '').replace(/,/g, '').trim();
+    const lastYearRevenue = lyRaw !== '' && Number.isFinite(Number(lyRaw)) ? Number(lyRaw) : null;
+
+    const lmRaw = String(r['營業收入-上月營收'] ?? '').replace(/,/g, '').trim();
+    const lastMonthRevenue = lmRaw !== '' && Number.isFinite(Number(lmRaw)) ? Number(lmRaw) : null;
+
+    const yoyRaw = String(r['營業收入-去年同月增減(%)'] ?? '').replace(/,/g, '').trim();
+    const momRaw = String(r['營業收入-上月比較增減(%)'] ?? '').replace(/,/g, '').trim();
+
+    const computed = computeRevenueGrowth(revenue, lastYearRevenue, lastMonthRevenue);
+    const yoyRate = yoyRaw !== '' && Number.isFinite(Number(yoyRaw)) ? Number(Number(yoyRaw).toFixed(2)) : computed.yoyRate;
+    const momRate = momRaw !== '' && Number.isFinite(Number(momRaw)) ? Number(Number(momRaw).toFixed(2)) : computed.momRate;
+
+    parsed.push({
+      symbol,
+      yearMonth,
+      revenue,
+      lastYearRevenue,
+      yoyRate,
+      momRate,
+      isAllTimeHigh: 0,
+    });
+  }
+
+  return parsed;
+}
+
+/**
+ * 清除舊版由 Math.sin/Math.cos 產生的合成月營收假資料
  * @param {string} [customDbPath]
- * @param {string} [targetYearMonth]
- * @param {number} [backfillMonths=12]
+ * @returns {{ deletedCount: number }}
+ */
+function purgeSyntheticRecords(customDbPath) {
+  const db = initSqliteLakehouseDb(customDbPath);
+  const rows = db
+    .prepare('SELECT rowid, symbol, yoy_rate, mom_rate FROM tw_monthly_revenue')
+    .all();
+
+  const syntheticRowIds = [];
+  for (const r of rows) {
+    if (r.yoy_rate === null || r.mom_rate === null) continue;
+    const seed = parseInt(String(r.symbol).replace(/\D/g, '') || '1000', 10);
+    let matched = false;
+    for (let m = 0; m < 12; m++) {
+      const expectedYoy = Number((((seed % 40) - 10) + Math.cos(m + (seed % 7)) * 12).toFixed(2));
+      const expectedMom = Number((((seed % 20) - 8) + Math.sin(m + (seed % 3)) * 6).toFixed(2));
+      if (Math.abs(r.yoy_rate - expectedYoy) <= 0.01 && Math.abs(r.mom_rate - expectedMom) <= 0.01) {
+        matched = true;
+        break;
+      }
+    }
+    if (matched) {
+      syntheticRowIds.push(r.rowid);
+    }
+  }
+
+  if (syntheticRowIds.length === 0) return { deletedCount: 0 };
+
+  const delStmt = db.prepare('DELETE FROM tw_monthly_revenue WHERE rowid = ?');
+  db.exec('BEGIN TRANSACTION;');
+  try {
+    for (const id of syntheticRowIds) {
+      delStmt.run(id);
+    }
+    db.exec('COMMIT;');
+  } catch (err) {
+    db.exec('ROLLBACK;');
+    throw err;
+  }
+
+  return { deletedCount: syntheticRowIds.length };
+}
+
+/**
+ * 執行全市場台股上市櫃月營收真實資料抓取與入庫 (Spec 0237 Ticket 01)
+ * 離線或抓取失敗時回傳 { savedCount: 0 }，嚴禁寫入任何合成假資料
+ * @param {string} [customDbPath]
+ * @param {string | { targetYearMonth?: string, fetcher?: Function, purgeSynthetic?: boolean }} [targetYearMonthOrOptions]
+ * @param {number} [backfillMonths]
+ * @param {{ targetYearMonth?: string, fetcher?: Function, purgeSynthetic?: boolean }} [options]
  * @returns {Promise<{ savedCount: number, yearMonth: string, monthsCount: number }>}
  */
-async function runMonthlyRevenueIngestion(customDbPath, targetYearMonth, backfillMonths) {
-  const db = initSqliteLakehouseDb(customDbPath);
-  const baseYearMonth = targetYearMonth || getLatestSettledRevenueMonth(); // 動態最新申報月份 (Spec 0177)
-  const [baseYearStr, baseMonthStr] = baseYearMonth.split('-');
-  let curYear = parseInt(baseYearStr, 10);
-  let curMonth = parseInt(baseMonthStr, 10);
-  const monthsToRun = backfillMonths !== undefined ? backfillMonths : (targetYearMonth ? 1 : 12);
+async function runMonthlyRevenueIngestion(customDbPath, targetYearMonthOrOptions, backfillMonths, options) {
+  const opts =
+    typeof targetYearMonthOrOptions === 'object' && targetYearMonthOrOptions !== null
+      ? targetYearMonthOrOptions
+      : options || {};
+  const explicitYm = typeof targetYearMonthOrOptions === 'string' ? targetYearMonthOrOptions : opts.targetYearMonth;
+  const baseYearMonth = explicitYm || getLatestSettledRevenueMonth();
+  const fetcher = opts.fetcher || globalThis.fetch;
 
-  // 取得所有台股標的
-  const symbols = db.prepare("SELECT symbol, name FROM symbols_meta WHERE market = 'TW'").all();
-  if (symbols.length === 0) {
+  const db = initSqliteLakehouseDb(customDbPath);
+  const symbols = db.prepare("SELECT symbol FROM symbols_meta WHERE market = 'TW'").all();
+  if (symbols.length === 0 || typeof fetcher !== 'function') {
     return { savedCount: 0, yearMonth: baseYearMonth, monthsCount: 0 };
   }
 
-  const targetMonths = [];
-  for (let m = 0; m < monthsToRun; m++) {
-    const ym = `${curYear}-${String(curMonth).padStart(2, '0')}`;
-    targetMonths.push(ym);
-    curMonth--;
-    if (curMonth === 0) {
-      curMonth = 12;
-      curYear--;
+  const fetchJsonSafe = async (url) => {
+    try {
+      const res = await fetcher(url, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'StockTracker/1.0 (local-sync)',
+        },
+      });
+      if (!res || !res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
     }
+  };
+
+  const [twseData, tpexData] = await Promise.all([
+    fetchJsonSafe(TWSE_REVENUE_URL),
+    fetchJsonSafe(TPEX_REVENUE_URL),
+  ]);
+
+  const parsedAll = [
+    ...parseMonthlyRevenueOpenApi(twseData, explicitYm),
+    ...parseMonthlyRevenueOpenApi(tpexData, explicitYm),
+  ];
+
+  if (parsedAll.length === 0) {
+    return { savedCount: 0, yearMonth: baseYearMonth, monthsCount: 0 };
   }
 
-  let totalSaved = 0;
-  for (let m = 0; m < targetMonths.length; m++) {
-    const ym = targetMonths[m];
-    const revenueMap = {};
+  const registeredSet = new Set(symbols.map((s) => String(s.symbol).trim()));
+  const revenueMap = {};
+  let effectiveYearMonth = explicitYm || baseYearMonth;
 
-    for (const s of symbols) {
-      const sym = s.symbol.trim();
-      const seed = parseInt(sym.replace(/\D/g, '') || '1000', 10);
-      
-      // 動態波動模擬：隨月份 m 產生真實趨勢與季節性
-      const seasonalFactor = 1 + Math.sin((12 - m) * (Math.PI / 6) + (seed % 5)) * 0.15;
-      const growthTrend = 1 + (12 - m) * 0.015;
-      const baseRev = Math.round(((seed * 12345) % 8000000 + 500000) * seasonalFactor * growthTrend);
-      
-      const yoy = Number((((seed % 40) - 10) + Math.cos(m + (seed % 7)) * 12).toFixed(2));
-      const mom = Number((((seed % 20) - 8) + Math.sin(m + (seed % 3)) * 6).toFixed(2));
-      const lastYearRev = Math.round(baseRev / (1 + (yoy || 0) / 100));
-      const isAth = yoy > 35 && m === 0 ? 1 : 0;
-
-      revenueMap[sym] = {
-        symbol: sym,
-        yearMonth: ym,
-        revenue: baseRev,
-        lastYearRevenue: lastYearRev,
-        yoyRate: yoy,
-        momRate: mom,
-        isAllTimeHigh: isAth,
-      };
-    }
-
-    const { savedCount } = saveMonthlyRevenueToSqlite(revenueMap, customDbPath);
-    totalSaved += savedCount;
+  for (const item of parsedAll) {
+    if (!registeredSet.has(item.symbol)) continue;
+    const ym = explicitYm || item.yearMonth;
+    effectiveYearMonth = ym;
+    revenueMap[item.symbol] = {
+      ...item,
+      yearMonth: ym,
+    };
   }
 
-  return { savedCount: totalSaved, yearMonth: targetMonths[0], monthsCount: targetMonths.length };
+  if (Object.keys(revenueMap).length === 0) {
+    return { savedCount: 0, yearMonth: effectiveYearMonth, monthsCount: 0 };
+  }
+
+  if (opts.purgeSynthetic !== false) {
+    purgeSyntheticRecords(customDbPath);
+  }
+
+  const { savedCount } = saveMonthlyRevenueToSqlite(revenueMap, customDbPath);
+  return { savedCount, yearMonth: effectiveYearMonth, monthsCount: savedCount > 0 ? 1 : 0 };
 }
 
 module.exports = {
+  TWSE_REVENUE_URL,
+  TPEX_REVENUE_URL,
+  convertRocYmToIso,
+  parseMonthlyRevenueOpenApi,
   computeRevenueGrowth,
   saveMonthlyRevenueToSqlite,
+  purgeSyntheticRecords,
   runMonthlyRevenueIngestion,
 };
 

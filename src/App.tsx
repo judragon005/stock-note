@@ -1152,6 +1152,9 @@ export const App: React.FC = () => {
           initialSymbol={aiForceTarget.symbol}
           initialMarket={aiForceTarget.market}
           holdings={holdings}
+          apiKeys={apiKeys}
+          colorTheme={colorTheme}
+          loanRecords={loanRecords}
         />
       )}
 

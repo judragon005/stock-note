@@ -3,9 +3,10 @@
  * 台灣集中保管結算所 (TDCC) 股權分散表與千張大戶持股比入庫模組 (Spec 0163 / Ticket 06)
  */
 
-const https = require('https');
-const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+const { initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
 const { getLatestTdccPublishDate } = require('./trading-calendar-engine.cjs');
+
+const TDCC_OPENDATA_URL = 'https://smart.tdcc.com.tw/opendata/getOD.ashx?id=1-5';
 
 
 /**
@@ -134,76 +135,154 @@ function saveTdccDistributionToSqlite(distributionMap, dateStr, customDbPath) {
 }
 
 /**
- * 執行全市場台股 TDCC 集保股權分散表批次入庫 (支援多週時間序列回補)
+ * 解析 TDCC OpenData CSV 文本 (id=1-5)
+ * 欄位格式：資料日期,證券代號,持股分級,人數,股數,占集保庫存數比例%
+ * @param {string} csvText
+ * @returns {{ dateStr: string | null, rows: Array<{ symbol: string, level: number, shareholders: number, shares: number }> }}
+ */
+function parseTdccCsv(csvText) {
+  if (!csvText || typeof csvText !== 'string') {
+    return { dateStr: null, rows: [] };
+  }
+
+  const lines = csvText.replace(/^\uFEFF/, '').split(/\r?\n/);
+  const rows = [];
+  let dateStr = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const cols = line.split(',').map((c) => c.replace(/^"|"$/g, '').trim());
+    if (cols.length < 5) continue;
+
+    const level = Number(cols[2]);
+    if (!Number.isFinite(level) || level <= 0) continue; // 略過標題列
+
+    const rawDate = cols[0];
+    if (!dateStr && /^\d{8}$/.test(rawDate)) {
+      dateStr = `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`;
+    } else if (!dateStr && /^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+      dateStr = rawDate;
+    }
+
+    const symbol = cols[1];
+    if (!symbol) continue;
+
+    const shareholders = Number(cols[3].replace(/,/g, '')) || 0;
+    const shares = Number(cols[4].replace(/,/g, '')) || 0;
+    rows.push({ symbol, level, shareholders, shares });
+  }
+
+  return { dateStr, rows };
+}
+
+/**
+ * 清除舊版由 Math.sin/Math.cos 產生的合成 TDCC 假資料
+ * 舊版合成公式固定滿足：under_10_ratio = round(max(2, (100 - over_400_ratio) * 0.6), 2)
  * @param {string} [customDbPath]
- * @param {string} [targetDate]
- * @param {number} [backfillWeeks=10]
+ * @returns {{ deletedCount: number }}
+ */
+function purgeSyntheticRecords(customDbPath) {
+  const db = initSqliteLakehouseDb(customDbPath);
+  const rows = db
+    .prepare('SELECT rowid, over_400_ratio, under_10_ratio FROM tw_tdcc_distribution')
+    .all();
+
+  const syntheticRowIds = [];
+  for (const r of rows) {
+    if (r.over_400_ratio === null || r.under_10_ratio === null) continue;
+    const expectedUnder10 = Number(Math.max(2, (100 - r.over_400_ratio) * 0.6).toFixed(2));
+    if (Math.abs(r.under_10_ratio - expectedUnder10) <= 0.01) {
+      syntheticRowIds.push(r.rowid);
+    }
+  }
+
+  if (syntheticRowIds.length === 0) return { deletedCount: 0 };
+
+  const delStmt = db.prepare('DELETE FROM tw_tdcc_distribution WHERE rowid = ?');
+  db.exec('BEGIN TRANSACTION;');
+  try {
+    for (const id of syntheticRowIds) {
+      delStmt.run(id);
+    }
+    db.exec('COMMIT;');
+  } catch (err) {
+    db.exec('ROLLBACK;');
+    throw err;
+  }
+
+  return { deletedCount: syntheticRowIds.length };
+}
+
+/**
+ * 執行全市場台股 TDCC 集保股權分散表真實資料抓取與入庫 (Spec 0237 Ticket 01)
+ * 離線或抓取失敗時回傳 { savedCount: 0 }，嚴禁寫入任何合成假資料
+ * @param {string} [customDbPath]
+ * @param {string | { targetDate?: string, fetcher?: Function, purgeSynthetic?: boolean }} [targetDateOrOptions]
+ * @param {number} [backfillWeeks]
+ * @param {{ targetDate?: string, fetcher?: Function, purgeSynthetic?: boolean }} [options]
  * @returns {Promise<{ savedCount: number, targetDate: string, weeksCount: number }>}
  */
-async function runTdccIngestion(customDbPath, targetDate, backfillWeeks) {
+async function runTdccIngestion(customDbPath, targetDateOrOptions, backfillWeeks, options) {
+  const opts =
+    typeof targetDateOrOptions === 'object' && targetDateOrOptions !== null
+      ? targetDateOrOptions
+      : options || {};
+  const explicitDate = typeof targetDateOrOptions === 'string' ? targetDateOrOptions : opts.targetDate;
+  const anchorDateStr = explicitDate || getLatestTdccPublishDate();
+  const fetcher = opts.fetcher || globalThis.fetch;
+
   const db = initSqliteLakehouseDb(customDbPath);
-  const anchorDateStr = targetDate || getLatestTdccPublishDate(); // 動態最新結算日 (遇連假自動提前至週四，Spec 0190)
-  const anchorDate = new Date(anchorDateStr);
-
-  const weeksToRun = backfillWeeks !== undefined ? backfillWeeks : (targetDate ? 1 : 10);
-
-  // 取得所有台股標的
-  const symbols = db.prepare("SELECT symbol, name FROM symbols_meta WHERE market = 'TW'").all();
-  if (symbols.length === 0) {
+  const symbols = db.prepare("SELECT symbol FROM symbols_meta WHERE market = 'TW'").all();
+  if (symbols.length === 0 || typeof fetcher !== 'function') {
     return { savedCount: 0, targetDate: anchorDateStr, weeksCount: 0 };
   }
 
-  // 生成最近 weeksToRun 個週五日期清單
-  const targetFridays = [];
-  for (let w = 0; w < weeksToRun; w++) {
-    const d = new Date(anchorDate.getTime() - w * 7 * 86400000);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    targetFridays.push(`${yyyy}-${mm}-${dd}`);
-  }
-
-  let totalSaved = 0;
-  for (let w = 0; w < targetFridays.length; w++) {
-    const dateStr = targetFridays[w];
-    const distributionMap = {};
-
-    for (const s of symbols) {
-      const sym = s.symbol.trim();
-      const seed = parseInt(sym.replace(/\D/g, '') || '1000', 10);
-      
-      // 動態波動模擬：隨週次 w 產生自然小幅波動 (±1.5%)，使近 4 週大戶變動率真實反映
-      const delta1000 = Math.sin((seed % 17) + w * 0.8) * 1.25;
-      const base1000 = 50 + (seed % 35) + ((seed * 7) % 10) * 0.1;
-      const over1000 = Number(Math.max(10, Math.min(88, base1000 + delta1000)).toFixed(2));
-
-      const delta400 = Math.cos((seed % 13) + w * 0.6) * 1.1;
-      const over400 = Number(Math.min(95, Math.max(over1000 + 3, over1000 + (seed % 15) + 5 + delta400)).toFixed(2));
-      const under10 = Number(Math.max(2, (100 - over400) * 0.6).toFixed(2));
-      
-      const deltaHolders = Math.round(Math.sin(w + (seed % 7)) * 120);
-      const totalShareholders = Math.max(1000, 5000 + (seed * 37) % 250000 + deltaHolders);
-
-      distributionMap[sym] = {
-        symbol: sym,
-        date: dateStr,
-        totalShareholders,
-        over400Ratio: over400,
-        over1000Ratio: over1000,
-        under10Ratio: under10,
-      };
+  let csvText = '';
+  try {
+    const res = await fetcher(TDCC_OPENDATA_URL, {
+      headers: {
+        Accept: 'text/csv,text/plain,*/*',
+        'User-Agent': 'StockTracker/1.0 (local-sync)',
+      },
+    });
+    if (!res || !res.ok) {
+      return { savedCount: 0, targetDate: anchorDateStr, weeksCount: 0 };
     }
-
-    const { savedCount } = saveTdccDistributionToSqlite(distributionMap, dateStr, customDbPath);
-    totalSaved += savedCount;
+    csvText = await res.text();
+  } catch {
+    return { savedCount: 0, targetDate: anchorDateStr, weeksCount: 0 };
   }
 
-  return { savedCount: totalSaved, targetDate: targetFridays[0], weeksCount: targetFridays.length };
+  const { dateStr: csvDateStr, rows } = parseTdccCsv(csvText);
+  if (rows.length === 0) {
+    return { savedCount: 0, targetDate: anchorDateStr, weeksCount: 0 };
+  }
+
+  const registeredSet = new Set(symbols.map((s) => String(s.symbol).trim()));
+  const filteredRows = rows.filter((r) => registeredSet.has(r.symbol));
+  if (filteredRows.length === 0) {
+    return { savedCount: 0, targetDate: explicitDate || csvDateStr || anchorDateStr, weeksCount: 0 };
+  }
+
+  if (opts.purgeSynthetic !== false) {
+    purgeSyntheticRecords(customDbPath);
+  }
+
+  const effectiveDate = explicitDate || csvDateStr || anchorDateStr;
+  const distributionMap = parseTdccRecords(filteredRows, effectiveDate);
+  const { savedCount } = saveTdccDistributionToSqlite(distributionMap, effectiveDate, customDbPath);
+
+  return { savedCount, targetDate: effectiveDate, weeksCount: savedCount > 0 ? 1 : 0 };
 }
 
 module.exports = {
+  TDCC_OPENDATA_URL,
+  parseTdccCsv,
   parseTdccRecords,
   saveTdccDistributionToSqlite,
+  purgeSyntheticRecords,
   runTdccIngestion,
 };
 

@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   createDefaultAiForceReport,
   generateAiForceReportFromCandles,
+  calculateHealthSummaryFromCandles,
+  buildMonthlyRevenue,
 } from './aiForceDashboardEngine';
+import { calculateOverallHealthScore } from '../components/aiForceDashboard/cards/HealthSummaryCard';
 import type { AiForceDashboardReport } from '../types/aiForceDashboard';
 
 describe('aiForceDashboardEngine - Foundation & Contract', () => {
@@ -224,8 +227,8 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
         expect(report.institutionalFlow.history[0].date).toBe('2026-09-01');
         expect(report.institutionalFlow.history[0].cumulativeTotalShares).toBe(100 + 50 + 20); // 170
 
-        // 2. 近 3 日明細表格
-        expect(report.institutionalFlow.recentDaysTable.length).toBe(3);
+        // 2. 近 5 日明細表格
+        expect(report.institutionalFlow.recentDaysTable.length).toBe(5);
         // 第一筆應為最新日 2026-09-25
         expect(report.institutionalFlow.recentDaysTable[0].date).toContain('09/25');
         expect(report.institutionalFlow.recentDaysTable[0].totalShares).toBeDefined();
@@ -347,7 +350,7 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
           high: 1020 + i * 15,
           low: 995 + i * 15,
           close: 1018 + i * 15,
-          volume: 6000,
+          volume: 6_000_000,
         }));
         const bullInst = Array.from({ length: 20 }, (_, i) => ({
           date: `2026-09-${String((i % 28) + 1).padStart(2, '0')}`,
@@ -801,8 +804,8 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
       expect(report.monthlyRevenue.asOfDateText).toBe('營收基準: 2026-09');
     });
 
-    it('3. 當標的為 ETF (0050) 時，monthlyRevenue 應自動切換為 ETF 資產規模與收益分配，杜絕空白與錯誤', () => {
-      const report = generateAiForceReportFromCandles(
+    it('3. 當標的為 ETF (0050) 且無外部配息與估值資料時，嚴禁硬編碼 420 / 4.2 / $1.00 假配息；有真實資料時應正確映射', () => {
+      const emptyEtfReport = generateAiForceReportFromCandles(
         '0050',
         '元大台灣50',
         'TW',
@@ -812,12 +815,33 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
         new Date('2026-09-25T16:00:00+08:00')
       );
 
-      expect(report.monthlyRevenue.isEtf).toBe(true);
-      expect(report.monthlyRevenue.isEmpty).toBe(false);
-      expect(report.monthlyRevenue.growthBadge).toBe('ETF 規模穩健');
-      expect(report.monthlyRevenue.etfData).toBeDefined();
-      expect(report.monthlyRevenue.etfData?.aumBillion).toBeGreaterThan(0);
-      expect(report.monthlyRevenue.etfData?.quarterlyDividends.length).toBeGreaterThan(0);
+      expect(emptyEtfReport.monthlyRevenue.isEtf).toBe(true);
+      expect(emptyEtfReport.monthlyRevenue.etfData?.aumBillion).toBeUndefined();
+      expect(emptyEtfReport.monthlyRevenue.etfData?.dividendYield).toBeUndefined();
+      expect(emptyEtfReport.monthlyRevenue.etfData?.quarterlyDividends ?? []).toEqual([]);
+
+      const realEtfReport = generateAiForceReportFromCandles(
+        '0050',
+        '元大台灣50',
+        'TW',
+        mockCandles,
+        undefined,
+        undefined,
+        new Date('2026-09-25T16:00:00+08:00'),
+        {
+          valuationData: { dividendYield: 3.45 },
+          corporateActions: [
+            { exDate: '2026-07-16', cashDividendPerShare: 1.85 },
+            { exDate: '2026-01-17', cashDividendPerShare: 2.7 },
+          ],
+        }
+      );
+
+      expect(realEtfReport.monthlyRevenue.isEtf).toBe(true);
+      expect(realEtfReport.monthlyRevenue.isEmpty).toBe(false);
+      expect(realEtfReport.monthlyRevenue.etfData?.dividendYield).toBe(3.45);
+      expect(realEtfReport.monthlyRevenue.etfData?.quarterlyDividends.length).toBe(2);
+      expect(realEtfReport.monthlyRevenue.etfData?.quarterlyDividends[0].amount).toBe(1.85);
     });
 
     it('4. 美股 NVDA 應徹底剔除假外資投信張數，啟動美股微觀動能評分且集保標記為美股不適用 (Zero-Mock)', () => {
@@ -923,6 +947,277 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
       expect(report.marketBar.intradayQuote?.price).toBe(780); // 盤中即時價妥善記錄於 intradayQuote
       expect(report.marketBar.anchorTradingDate).toBe('2026-10-07');
       expect(report.marketBar.isSettled).toBe(false);
+    });
+  });
+
+  describe('Spec 0237 Wave 2B: De-Mock, 1000x 正規化, 實質數據串接與量化連動', () => {
+    it('Ticket 02 (De-Mock): createDefaultAiForceReport 不得包含假 recentDaysTable、假 sparklineHistory 與假 ETF 420/4.2/$1.00', () => {
+      const def = createDefaultAiForceReport('0050', '元大台灣50', 'TW');
+      expect(def.institutionalFlow.recentDaysTable).toEqual([]);
+      expect(def.chipsSummary.sparklineHistory).toEqual([]);
+      expect(def.monthlyRevenue.etfData?.aumBillion).toBeUndefined();
+      expect(def.monthlyRevenue.etfData?.dividendYield).toBeUndefined();
+      expect(def.monthlyRevenue.etfData?.quarterlyDividends ?? []).toEqual([]);
+      expect(def.monthlyRevenue.isEmpty).toBe(true);
+    });
+
+    it('Ticket 03 (1000x Lot Normalization): 台股 volume=3000 股 (3張) 應正確判讀為極低流動性', () => {
+      const lowVolCandles = Array.from({ length: 25 }, (_, i) => ({
+        date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+        open: 50,
+        high: 51,
+        low: 49,
+        close: 50,
+        volume: 3000, // 3,000 股 = 3 張
+      }));
+      const report = generateAiForceReportFromCandles('9998', '低量股', 'TW', lowVolCandles);
+
+      expect(report.healthSummary.liquidityRisk).toBeGreaterThanOrEqual(50);
+      expect(report.riskSpider.liquidityRisk).toBeGreaterThanOrEqual(60);
+      expect(report.aiConfidence.strategyApplicability).toBeLessThanOrEqual(55);
+      expect(report.multiDimensionRadar.dimensions.liquidity).toBeLessThanOrEqual(35);
+    });
+
+    it('Ticket 03 (1000x Institutional Ratio): 台股 5 日法人買超 +5000 張、5 日成交量 25,000,000 股 (25,000 張) 時，法人情緒應大於 55', () => {
+      const candles = Array.from({ length: 20 }, (_, i) => ({
+        date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+        open: 100,
+        high: 102,
+        low: 99,
+        close: 101,
+        volume: 5_000_000, // 每日 5,000 張 (5日合計 25,000,000 股 = 25,000 張)
+      }));
+      const inst = Array.from({ length: 20 }, (_, i) => ({
+        date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+        foreignShares: 800,
+        trustShares: 200,
+        dealerShares: 0, // 每日 +1000 張, 5 日 +5000 張 (佔 20%)
+      }));
+      const report = generateAiForceReportFromCandles('2330', '台積電', 'TW', candles, undefined, inst);
+      expect(report.marketSentiment.institutionalSentimentPercent).toBeGreaterThan(55);
+    });
+
+    it('Ticket 03 (Polarity Inversion): calculateHealthSummaryFromCandles 與 calculateOverallHealthScore 應將 liquidityRisk 反轉為 100 - liquidityRisk', () => {
+      const scoreResult = calculateOverallHealthScore({
+        chipHealth: 80,
+        technicalStructure: 80,
+        capitalMomentum: 80,
+        liquidityRisk: 5, // 低風險 -> 應貢獻 95 分而非 5 分
+        institutionalSupport: 80,
+      });
+      // (80 + 80 + 80 + 95 + 80) / 5 = 83
+      expect(scoreResult.averageScore).toBe(83);
+      expect(scoreResult.ratingLabel).toContain('優良');
+
+      const candles = Array.from({ length: 20 }, (_, i) => ({
+        date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+        open: 100 + i,
+        high: 102 + i,
+        low: 99 + i,
+        close: 101 + i,
+        volume: 5_000_000, // 5000 張 -> liquidityRisk = 5
+        ma5: 118,
+        ma10: 115,
+        ma20: 110,
+        ma60: 100,
+      }));
+      const flow = {
+        history: Array.from({ length: 20 }, (_, i) => ({
+          date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+          foreignShares: 500,
+          trustShares: 100,
+          dealerShares: 50,
+          cumulativeTotalShares: (i + 1) * 650,
+        })),
+        recentDaysTable: [],
+        cumulative20DaysSummary: '',
+        recent5DaysSummary: '',
+      };
+      const health = calculateHealthSummaryFromCandles(candles as any, flow, 'TW');
+      // 全部指標皆高，且 liquidityRisk=5 反轉為 95 -> 總評應為優良 (>= 75)
+      expect(health.liquidityRisk).toBe(5);
+      expect(health.overallRatingLabel).toMatch(/優良/);
+    });
+
+    it('Ticket 06 (ETF Real Dividends + Pledge + NAV): buildMonthlyRevenue 與 valuationMetrics 應正確串接 corporateActions、etfNav 與 pledge', () => {
+      const etfRev = buildMonthlyRevenue(
+        '0056',
+        '元大高股息',
+        'TW',
+        undefined,
+        [{ date: '2026-09-25', totalShareholders: 1100000 }],
+        {
+          corporateActions: [
+            { exDate: '2026-07-16', cashDividendPerShare: 1.07 },
+            { exDate: '2026-04-16', cashDividendPerShare: 0.79 },
+          ],
+          dividendYield: 8.5,
+        }
+      );
+      expect(etfRev.isEtf).toBe(true);
+      expect(etfRev.isEmpty).toBe(false);
+      expect(etfRev.etfData?.dividendYield).toBe(8.5);
+      expect(etfRev.etfData?.beneficiaries).toBe(1100000);
+      expect(etfRev.etfData?.quarterlyDividends[0].amount).toBe(1.07);
+
+      const emptyEtfRev = buildMonthlyRevenue('0056', '元大高股息', 'TW');
+      expect(emptyEtfRev.isEmpty).toBe(true);
+      expect(emptyEtfRev.etfData?.quarterlyDividends ?? []).toEqual([]);
+
+      const candles = Array.from({ length: 20 }, (_, i) => ({
+        date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+        open: 38,
+        high: 39,
+        low: 37.5,
+        close: 38.5,
+        volume: 10_000_000,
+      }));
+      const report = generateAiForceReportFromCandles('0056', '元大高股息', 'TW', candles, undefined, undefined, new Date('2026-09-25T16:00:00+08:00'), {
+        valuationData: { dividendYield: 8.5 },
+        etfNav: { date: '2026-09-25', closePrice: 38.5, nav: 38.1, premiumDiscountRatio: 1.05 },
+        pledge: { pledge_ratio: 12.4 },
+        corporateActions: [{ exDate: '2026-07-16', cashDividendPerShare: 1.07 }],
+      });
+      expect(report.valuationMetrics?.etfPremiumDiscountRate).toBe(1.05);
+      expect(report.valuationMetrics?.directorPledgeRatio).toBe(12.4);
+      expect(report.monthlyRevenue.etfData?.dividendYield).toBe(8.5);
+    });
+
+    it('Ticket 07 (TW SBL, Margin Change, Consecutive Days): 應計算連買賣天數、SBL 餘額並觸發融資警戒', () => {
+      const candles = Array.from({ length: 20 }, (_, i) => ({
+        date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+        open: 120 - i * 1.5,
+        high: 121 - i * 1.5,
+        low: 118 - i * 1.5,
+        close: 119 - i * 1.5, // 持續走跌，低於 20 日均線/VWAP
+        volume: 4_000_000,
+      }));
+      const inst = Array.from({ length: 20 }, (_, i) => ({
+        date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+        foreignShares: i >= 17 ? 300 : -200, // 連 3 日買超
+        trustShares: i >= 18 ? -150 : 100,  // 連 2 日賣超 -> -2
+        dealerShares: 10,
+        sblBalance: 8500,
+      }));
+      const report = generateAiForceReportFromCandles('2330', '台積電', 'TW', candles, undefined, inst, new Date('2026-09-25T16:00:00+08:00'), {
+        marginData: {
+          marginBalance: 32000,
+          shortBalance: 1200,
+          dayTradeRate: 25,
+          marginBalanceChange: 1500,
+          sblBalance: 9200,
+        },
+      });
+      expect(report.chipsSummary.foreignConsecutiveDays).toBe(3);
+      expect(report.chipsSummary.trustConsecutiveDays).toBe(-2);
+      expect(report.chipsSummary.sblBalance).toBe(9200);
+      expect(report.dayTradeRisk.sblBalance).toBe(9200);
+      expect(report.dayTradeRisk.marginBalanceChange).toBe(1500);
+      expect(report.dynamicSignals.brokerMarginAlert).toContain('融資浮額沉重');
+    });
+
+    it('Ticket 08 (US Microstructure): 美股 NVDA 應填入 usMicroMetrics 與 10 日 OBV sparklineHistory', () => {
+      const usCandles = Array.from({ length: 25 }, (_, i) => ({
+        date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+        open: 120 + i * 0.5,
+        high: 122 + i * 0.5,
+        low: 119 + i * 0.5,
+        close: 121 + i * 0.5,
+        volume: 50_000_000 + i * 1_000_000,
+      }));
+      const report = generateAiForceReportFromCandles('NVDA', 'NVIDIA', 'US', usCandles);
+
+      expect(report.chipsSummary.isUsMarket).toBe(true);
+      expect(report.chipsSummary.usMicroMetrics).toBeDefined();
+      expect(report.chipsSummary.usMicroMetrics?.rvol).toBeGreaterThan(0);
+      expect(typeof report.chipsSummary.usMicroMetrics?.vwapBiasPct).toBe('number');
+      expect(report.chipsSummary.usMicroMetrics?.mfiScore).toBeGreaterThanOrEqual(0);
+      expect(report.chipsSummary.usMicroMetrics?.atrValue).toBeGreaterThan(0);
+      expect(report.chipsSummary.usMicroMetrics?.conclusionLabel).toBeTruthy();
+      expect(report.chipsSummary.sparklineHistory.length).toBe(10);
+    });
+
+    it('Ticket 09 (Card 08 5-day table): recentDaysTable 應回傳最近 5 日並由新到舊排序', () => {
+      const candles = Array.from({ length: 15 }, (_, i) => ({
+        date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+        open: 100,
+        high: 102,
+        low: 99,
+        close: 101,
+        volume: 2_000_000,
+      }));
+      const inst = Array.from({ length: 15 }, (_, i) => ({
+        date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+        foreignShares: 100 + i,
+        trustShares: 50,
+        dealerShares: 10,
+      }));
+      const report = generateAiForceReportFromCandles('2330', '台積電', 'TW', candles, undefined, inst);
+      expect(report.institutionalFlow.recentDaysTable.length).toBe(5);
+      expect(report.institutionalFlow.recentDaysTable[0].date).toBe('09/15');
+      expect(report.institutionalFlow.recentDaysTable[4].date).toBe('09/11');
+    });
+
+    it('Ticket 10 (MainForceVerdict + RiskSpider + ForceDistribution + DecisionCore + Unsettled MarketBar): 全量動態化與對齊', () => {
+      const candles = Array.from({ length: 25 }, (_, i) => ({
+        date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+        open: 100 + i * 2,
+        high: 104 + i * 2,
+        low: 99 + i * 2,
+        close: 103 + i * 2,
+        volume: 5_000_000, // 5,000 張
+      }));
+      const inst = Array.from({ length: 25 }, (_, i) => ({
+        date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+        foreignShares: 1000,
+        trustShares: 500,
+        dealerShares: 100,
+      }));
+      const settledReport = generateAiForceReportFromCandles(
+        '2330',
+        '台積電',
+        'TW',
+        candles,
+        undefined,
+        inst,
+        new Date('2026-09-25T16:00:00+08:00')
+      );
+
+      // MainForceVerdict 透過 synthesizeMainForceVerdict 並附帶停損/停利/風報比/5日均量(張)
+      expect(settledReport.mainForceVerdict.stopLossPrice).toBeGreaterThan(0);
+      expect(settledReport.mainForceVerdict.takeProfitPrice).toBeGreaterThan(settledReport.mainForceVerdict.stopLossPrice!);
+      expect(settledReport.mainForceVerdict.riskRewardRatio).toBeTruthy();
+      expect(settledReport.mainForceVerdict.avgVolume5Lots).toBe(5000);
+      expect(settledReport.mainForceVerdict.semanticTag).toBe('法人動作');
+
+      // DecisionCore 動態衍生 shortTermState 與 chipStructure (不再寫死)
+      expect(settledReport.decisionCore.shortTermState).not.toBe('區間震盪');
+      expect(settledReport.decisionCore.chipStructure).not.toBe('中性');
+
+      // ForceDistribution 納入真實法人買賣力比例
+      expect(settledReport.forceDistribution.largePlayerBuyPercent).toBeGreaterThanOrEqual(50);
+
+      // 未收盤定錨時，marketBar.openPrice/highPrice/lowPrice/volumeShares 應與 anchorCandle 對齊
+      const intradayCandles = [
+        ...candles.slice(0, 10),
+        { date: '2026-09-29', open: 200, high: 210, low: 198, close: 205, volume: 4_000_000 }, // anchor
+        { date: '2026-09-30', open: 212, high: 225, low: 211, close: 224, volume: 9_000_000 }, // intraday
+      ];
+      const unsettledReport = generateAiForceReportFromCandles(
+        '2330',
+        '台積電',
+        'TW',
+        intradayCandles,
+        { price: 224, change: 19, changePercent: 9.27, open: 212, high: 225, low: 211, volume: 9_000_000 },
+        undefined,
+        new Date('2026-09-30T11:30:00+08:00')
+      );
+      expect(unsettledReport.marketBar.isSettled).toBe(false);
+      expect(unsettledReport.marketBar.currentPrice).toBe(205);
+      expect(unsettledReport.marketBar.openPrice).toBe(200);
+      expect(unsettledReport.marketBar.highPrice).toBe(210);
+      expect(unsettledReport.marketBar.lowPrice).toBe(198);
+      expect(unsettledReport.marketBar.volumeShares).toBe(4000);
     });
   });
 });

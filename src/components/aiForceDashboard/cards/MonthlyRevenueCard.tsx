@@ -17,6 +17,25 @@ export function calculateRevenueBarHeight(
   return Number(Math.max(2, ratio * maxHeight).toFixed(1));
 }
 
+export interface FormattedEtfMetrics {
+  aumText: string;
+  yieldText: string;
+  beneficiariesText: string;
+}
+
+/**
+ * 格式化 ETF 資產規模、殖利率與受益人數，安全防禦可選欄位
+ */
+export function formatEtfMetrics(
+  etfData?: MonthlyRevenueData['etfData'] | null
+): FormattedEtfMetrics {
+  return {
+    aumText: etfData?.aumBillion != null ? `${etfData.aumBillion} 億元` : '--',
+    yieldText: etfData?.dividendYield != null ? `${etfData.dividendYield}%` : '--',
+    beneficiariesText: etfData?.beneficiaries != null ? `${etfData.beneficiaries.toLocaleString()} 人` : '--',
+  };
+}
+
 interface MonthlyRevenueCardProps {
   data: MonthlyRevenueData;
   colorTheme?: ColorThemeMode;
@@ -51,11 +70,11 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
         flexDirection: 'column',
         height: '100%',
         padding: '16px',
-        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(20, 32, 54, 0.8) 100%)',
+        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(10, 15, 28, 0.92) 100%)',
         borderRadius: '14px',
-        border: '1px solid rgba(16, 185, 129, 0.25)',
+        border: '1px solid rgba(255, 255, 255, 0.07)',
         backdropFilter: 'blur(10px)',
-        boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+        boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.35)',
       }}
     >
       {/* 標題列 */}
@@ -74,8 +93,10 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
             style={{
               padding: '2px 6px',
               borderRadius: '5px',
-              background: 'rgba(16, 185, 129, 0.25)',
-              color: '#34d399',
+              background: 'rgba(30, 41, 59, 0.9)',
+              color: '#94a3b8',
+              border: '1px solid rgba(255,255,255,0.08)',
+              fontFamily: 'var(--font-mono)',
               fontSize: '0.72rem',
               fontWeight: 800,
               letterSpacing: '0.5px',
@@ -169,7 +190,7 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
             >
               <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>ETF 資產規模</div>
               <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#34d399' }}>
-                {data.etfData.aumBillion} 億元
+                {data.etfData.aumBillion != null ? `${data.etfData.aumBillion} 億元` : '--'}
               </div>
             </div>
 
@@ -183,7 +204,7 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
             >
               <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>平均年化殖利率</div>
               <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#38bdf8' }}>
-                {data.etfData.dividendYield}%
+                {data.etfData.dividendYield != null ? `${data.etfData.dividendYield}%` : '--'}
               </div>
             </div>
 
@@ -197,7 +218,7 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
             >
               <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>總受益人人數</div>
               <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#f8fafc' }}>
-                {data.etfData.beneficiaries.toLocaleString()} 人
+                {data.etfData.beneficiaries != null ? `${data.etfData.beneficiaries.toLocaleString()} 人` : '--'}
               </div>
             </div>
           </div>

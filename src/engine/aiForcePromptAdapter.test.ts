@@ -501,6 +501,56 @@ describe('Spec 0181 Ticket 06: aiForcePromptAdapter - 主力戰情室特徵轉�
       const digestWithoutPledge = createWarRoomPromptDigest(reportWithoutPledge);
       expect(digestWithoutPledge.fundamental?.directorPledgeRatioPct).toBeUndefined();
     });
+
+    it('Spec 0237: 應正確映射 TDCC 4週大戶/散戶變化、台指期 P/C Ratio (twMacroData.putCallRatio) 與 sblBalance', () => {
+      const reportWithExtendedFields: AiForceDashboardReport = {
+        ...mockReportTw,
+        symbol: '2330',
+        name: '台積電',
+        chipsSummary: {
+          foreignNetShares: 1200,
+          trustNetShares: 300,
+          dealerNetShares: 100,
+          threeInstitutionsTotal: 1600,
+          verdictNote: '偏多',
+          conclusionBadge: '偏多',
+          sparklineHistory: [],
+          sblBalance: 5432,
+        },
+        tdccDistribution: {
+          concentrationBadge: '籌碼集中',
+          asOfDateText: '2026-10-16',
+          isEmpty: false,
+          latestOver1000Ratio: 88.5,
+          change4WeeksRatio: 1.75,
+          change4WeeksShareholders: -2150,
+          history: [
+            { date: '2026-09-18', totalShareholders: 120000, over1000Ratio: 86.75, over400Ratio: 90.1, under10Ratio: 5.2 },
+            { date: '2026-10-16', totalShareholders: 117850, over1000Ratio: 88.5, over400Ratio: 91.4, under10Ratio: 4.8 },
+          ],
+        },
+        marketSentiment: {
+          overallSentimentIndex: 65,
+          sentimentState: 'GREED',
+          retailSentimentPercent: 55,
+          institutionalSentimentPercent: 68,
+          mainForceSentimentPercent: 70,
+          twMacroData: {
+            putCallRatio: 112.5,
+            foreignFuturesOi: -15200,
+            trustFuturesOi: 8400,
+          },
+        },
+      } as any;
+
+      const digest = createWarRoomPromptDigest(reportWithExtendedFields);
+
+      expect(digest.chips.bigHolderRatioChange1000).toBe(1.75);
+      expect(digest.chips.bigHolderRatioChange400).toBe(91.4);
+      expect(digest.chips.retailHolderCountChange).toBe(-2150);
+      expect(digest.macro.twPutCallRatio).toBe(112.5);
+      expect((digest.chips as any).sblBalance).toBe(5432);
+    });
   });
 });
 

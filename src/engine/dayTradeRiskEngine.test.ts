@@ -84,6 +84,21 @@ describe('DayTradeRiskEngine - 隔日沖 5 大風險量化指標演算法規範 
 
       expect(result.shortMarginRatio).toBeUndefined();
     });
+
+    it('Spec 0237: 傳入 sblBalance 與 marginBalanceChange 時，應正確透傳至 DayTradeRiskData', () => {
+      const candles = [
+        { open: 100, high: 102, low: 99, close: 101, volume: 1000 },
+      ];
+      const result = calculateDayTradeRisk(candles, {
+        marginBalance: 10000,
+        shortBalance: 2500,
+        sblBalance: 4200,
+        marginBalanceChange: -350,
+      });
+
+      expect(result.sblBalance).toBe(4200);
+      expect(result.marginBalanceChange).toBe(-350);
+    });
   });
 });
 

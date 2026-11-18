@@ -1015,6 +1015,22 @@ function createMarketApiMiddleware(customDbPath) {
           .get(symbol, aliasSym) || null;
       } catch {}
 
+      // 新增查詢最新 1 筆 ETF 官方淨值與折溢價 (Spec 0237 Ticket 05)
+      let etfNavRow = null;
+      try {
+        etfNavRow = db
+          .prepare('SELECT * FROM etf_daily_nav WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 1')
+          .get(symbol, aliasSym) || null;
+      } catch {}
+
+      // 新增查詢最近 16 筆除權息與重大行動行事曆 (Spec 0237 Ticket 05)
+      let corporateActions = [];
+      try {
+        corporateActions = db
+          .prepare('SELECT * FROM corporate_action_calendar WHERE symbol IN (?, ?) ORDER BY ex_date DESC LIMIT 16')
+          .all(symbol, aliasSym) || [];
+      } catch {}
+
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(
         JSON.stringify({
@@ -1026,6 +1042,8 @@ function createMarketApiMiddleware(customDbPath) {
           revenue: revenueRows,
           valuation: valRow ? { ...valRow, history: valHistory } : null,
           pledge: pledgeRow,
+          etfNav: etfNavRow,
+          corporateActions,
           macro: macroRow,
         })
       );

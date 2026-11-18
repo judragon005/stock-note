@@ -71,7 +71,18 @@ export function getHealthScoreStyle(score: number): HealthScoreResult {
   return { status: '偏弱', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.2)' };
 }
 
-import { MoreVertical } from 'lucide-react';
+import {
+  Rocket,
+  AlertTriangle,
+  Zap,
+  Compass,
+  Landmark,
+  BarChart3,
+  Stethoscope,
+  Shield,
+  Swords,
+  Clock,
+} from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseDayTradeRisk, diagnoseHealthScore } from '../../../constants/aiForceGlossary';
 
@@ -178,7 +189,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
     {
       label: '趨勢判斷',
       termId: 'decisionTrend',
-      icon: '🧭',
+      icon: <Compass size={14} strokeWidth={1.5} color="#94a3b8" />,
       badge: {
         text: data.trendJudgement || '中性偏多',
         color: trendStyle.color,
@@ -189,7 +200,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
     {
       label: '短線狀態',
       termId: 'shortTermState',
-      icon: '⚡',
+      icon: <Zap size={14} strokeWidth={1.5} color="#38bdf8" />,
       badge: {
         text: data.shortTermState || '區間震盪',
         color: '#38bdf8',
@@ -200,7 +211,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
     {
       label: '主力行為',
       termId: 'mainForceAction',
-      icon: '🏛️',
+      icon: <Landmark size={14} strokeWidth={1.5} color="#94a3b8" />,
       badge: {
         text: data.mainForceAction || '調節減碼',
         color: data.mainForceAction?.includes('進貨') || data.mainForceAction?.includes('吸籌') ? '#10b981' : '#f97316',
@@ -211,7 +222,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
     {
       label: '籌碼結構',
       termId: 'chipStructure',
-      icon: '📊',
+      icon: <BarChart3 size={14} strokeWidth={1.5} color="#94a3b8" />,
       badge: {
         text: data.chipStructure || '中性',
         color: '#94a3b8',
@@ -223,7 +234,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
       label: '隔日沖風險',
       termId: 'dayTradeRisk',
       dynamicDiagnosis: diagnoseDayTradeRisk(data.dayTradeRiskPercent ?? 53, 50),
-      icon: '⚠️',
+      icon: <AlertTriangle size={14} strokeWidth={1.5} color={riskBadge.color} />,
       badge: {
         text: `${data.dayTradeRiskPercent ?? 53}%`,
         color: riskBadge.color,
@@ -235,7 +246,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
       label: '籌碼健康度',
       termId: 'chipsHealth',
       dynamicDiagnosis: diagnoseHealthScore(data.chipHealthScore ?? 55),
-      icon: '🩺',
+      icon: <Stethoscope size={14} strokeWidth={1.5} color={healthBadge.color} />,
       badge: {
         text: `${data.chipHealthScore ?? 55}分 (${data.chipHealthLabel || healthBadge.status})`,
         color: healthBadge.color,
@@ -246,21 +257,21 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
     {
       label: '支撐區間',
       termId: 'supportLevel',
-      icon: '🛡️',
+      icon: <Shield size={14} strokeWidth={1.5} color="#38bdf8" />,
       value: formatPriceRange(data.supportRange, ' / '),
       valueColor: '#38bdf8',
     },
     {
       label: '壓力區間',
       termId: 'highResistance',
-      icon: '⚔️',
+      icon: <Swords size={14} strokeWidth={1.5} color="#ef4444" />,
       value: formatPriceRange(data.resistanceRange, ' / '),
       valueColor: '#ef4444',
     },
     {
       label: '風險等級',
       termId: 'volatilityRisk',
-      icon: '⏱️',
+      icon: <Clock size={14} strokeWidth={1.5} color="#94a3b8" />,
       value: data.riskHorizonDays ? `${data.riskHorizonDays.replace('個', '級')}日` : '1 ~ 4 級交易日',
       valueColor: '#f8fafc',
     },
@@ -273,14 +284,14 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
         flexDirection: 'column',
         height: '100%',
         padding: '14px',
-        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
+        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(10, 15, 28, 0.92) 100%)',
         borderRadius: '14px',
-        border: '1px solid rgba(59, 130, 246, 0.25)',
+        border: '1px solid rgba(255, 255, 255, 0.07)',
         backdropFilter: 'blur(10px)',
-        boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+        boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.35)',
       }}
     >
-      {/* 頂部標題與右上選單 */}
+      {/* 頂部標題 */}
       <div
         style={{
           display: 'flex',
@@ -294,8 +305,10 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
             style={{
               padding: '2px 6px',
               borderRadius: '5px',
-              background: 'rgba(59, 130, 246, 0.25)',
-              color: '#60a5fa',
+              background: 'rgba(30, 41, 59, 0.9)',
+              color: '#94a3b8',
+              border: '1px solid rgba(255,255,255,0.08)',
+              fontFamily: 'var(--font-mono)',
               fontSize: '0.72rem',
               fontWeight: 800,
             }}
@@ -311,22 +324,6 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
             | AI DECISION CORE
           </span>
         </div>
-
-        <button
-          type="button"
-          aria-label="選項"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: '#64748b',
-            cursor: 'pointer',
-            padding: '2px',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <MoreVertical size={14} />
-        </button>
       </div>
 
       {/* AI 決策核心自適應橫幅 (Spec 0148 Ticket 02: 支援多頭綠標/中性藍標/警戒紅標) */}
@@ -345,14 +342,41 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
           fontSize: '0.78rem',
           fontWeight: 800,
           letterSpacing: '0.04em',
-          marginBottom: data.settlementNotice ? '6px' : '10px',
+          marginBottom: data.settlementNotice || data.xaiExplanation ? '6px' : '10px',
           boxShadow: bannerStyle.glow,
           transition: 'all 0.25s ease',
         }}
       >
-        <span>{bannerStyle.icon}</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+          {bannerStyle.icon === '🚀' ? (
+            <Rocket size={14} strokeWidth={1.5} />
+          ) : bannerStyle.icon === '⚠️' ? (
+            <AlertTriangle size={14} strokeWidth={1.5} />
+          ) : (
+            <Zap size={14} strokeWidth={1.5} />
+          )}
+        </span>
         <span>{bannerStyle.text}</span>
       </div>
+
+      {/* XAI 白話文因果判讀文案 */}
+      {data.xaiExplanation && (
+        <div
+          data-testid="decision-core-xai"
+          style={{
+            padding: '6px 10px',
+            borderRadius: '6px',
+            background: 'rgba(15, 23, 42, 0.55)',
+            border: '1px solid rgba(255, 255, 255, 0.06)',
+            color: '#cbd5e1',
+            fontSize: '0.72rem',
+            lineHeight: 1.45,
+            marginBottom: data.settlementNotice ? '6px' : '10px',
+          }}
+        >
+          {data.xaiExplanation}
+        </div>
+      )}
 
       {/* 盤中未結算安全定錨警示條 (Spec 0150) */}
       {data.settlementNotice && (
@@ -403,7 +427,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
           >
             {/* 左側名稱與圖示 */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-              <span style={{ fontSize: '0.85rem' }}>{item.icon}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center' }}>{item.icon}</span>
               <TermTooltip termId={item.termId} dynamicDiagnosis={item.dynamicDiagnosis}>
                 <span style={{ fontSize: '0.82rem', color: '#94a3b8', fontWeight: 500 }}>
                   {item.label}

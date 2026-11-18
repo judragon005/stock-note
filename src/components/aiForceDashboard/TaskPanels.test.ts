@@ -105,6 +105,74 @@ describe('TaskPanels 底部任務視圖真實資料動態連動 (Spec 0143 Ticke
       expect(html).toContain('130%');
       expect(html).toContain('140%');
     });
+
+    it('Ticket 11: 無信用/大盤維持率資料時應回退顯示 --，絕不寫死 168.5% (安全)', () => {
+      const html = renderToStaticMarkup(React.createElement(TechnicalAlertsView, { report: mockReport }));
+      expect(html).not.toContain('168.5%');
+      expect(html).toContain('--');
+    });
+
+    it('Ticket 11: 提供 holdings/loanRecords 或 macroMaintenanceRatio 時應動態計算維持率與 -10% 跌停壓力測試', () => {
+      const htmlMacro = renderToStaticMarkup(
+        React.createElement(TechnicalAlertsView, {
+          report: mockReport,
+          macroMaintenanceRatio: 175.0,
+        })
+      );
+      expect(htmlMacro).toContain('175.0%');
+      expect(htmlMacro).toContain('157.5%'); // 175 * 0.9 = 157.5% (-10% 壓力測試)
+      expect(htmlMacro).not.toContain('168.5%');
+
+      const mockHoldings = [
+        {
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW' as const,
+          currency: 'TWD' as const,
+          shares: 1000,
+          avgCost: 1000,
+          totalCostBasis: 1000000,
+          adjustedCostBasis: 1000000,
+          currentPrice: 1000,
+          marketValue: 1000000,
+          grossMarketValue: 1000000,
+          estimatedSellTax: 0,
+          estimatedSellFee: 0,
+          netMarketValue: 1000000,
+          unrealizedPnL: 0,
+          unrealizedPnLPercent: 0,
+          unrealizedPnLBroker: 0,
+          unrealizedPnLBrokerPercent: 0,
+          realizedPnL: 0,
+          totalDividends: 0,
+          totalCapitalReturned: 0,
+          totalStockDividendsShares: 0,
+          totalReturnPnL: 0,
+          totalReturnPercent: 0,
+          yieldOnCostPercent: 0,
+        },
+      ];
+      const mockLoans = [
+        {
+          id: 'loan-1',
+          name: '台積電質押',
+          principal: 500000,
+          currency: 'TWD' as const,
+          pledgedCollateral: [{ symbol: '2330', shares: 1000 }],
+          createdAt: Date.now(),
+        },
+      ];
+      const htmlDynamic = renderToStaticMarkup(
+        React.createElement(TechnicalAlertsView, {
+          report: mockReport,
+          holdings: mockHoldings,
+          loanRecords: mockLoans,
+        })
+      );
+      // 1,000,000 / 500,000 = 200.0%, -10% 壓力測試 = 180.0%
+      expect(htmlDynamic).toContain('200.0%');
+      expect(htmlDynamic).toContain('180.0%');
+    });
   });
 
   describe('任務三：KD + MA 視圖 (KdMaView & deriveKdMaMetrics)', () => {
@@ -133,6 +201,23 @@ describe('TaskPanels 底部任務視圖真實資料動態連動 (Spec 0143 Ticke
       expect(typeof metrics.historicalOversoldStats.winRate).toBe('number');
       expect(typeof metrics.historicalOversoldStats.sampleCount).toBe('number');
       expect(typeof metrics.historicalOversoldStats.avgReturnPercent).toBe('number');
+    });
+
+    it('Ticket 11: deriveKdMaMetrics 應使用真實聚合週/月 K 計算週 KD 與月 KD，且無低檔金叉時回傳 0', () => {
+      // mockCandles 內 k 永遠大於 d (70+i%15 > 65+i%15)，goldenCrossCount === 0
+      const metrics = deriveKdMaMetrics(mockReport);
+      expect(metrics.historicalOversoldStats).toEqual({
+        sampleCount: 0,
+        winRate: 0,
+        avgReturnPercent: 0,
+      });
+
+      // 確認週 KD / 月 KD 不是舊版偽造公式 (k * 0.55 + 65 * 0.45)
+      const last = mockCandles[mockCandles.length - 1];
+      const fakeWeeklyK = Math.round(((last.k ?? 50) * 0.55 + (last.close >= (last.ma20 ?? last.close) ? 65 : 35) * 0.45) * 10) / 10;
+      const fakeWeeklyD = Math.round(((last.d ?? 50) * 0.55 + 50 * 0.45) * 10) / 10;
+      expect(metrics.multiTimeframeResonance.weeklyKd.k).not.toBe(fakeWeeklyK);
+      expect(metrics.multiTimeframeResonance.weeklyKd.d).not.toBe(fakeWeeklyD);
     });
 
     it('KdMaView 渲染時應包含真實指標數值並繪製原生 SVG 走勢圖與多週期共振看板', () => {
@@ -275,7 +360,8 @@ describe('TaskPanels 底部任務視圖真實資料動態連動 (Spec 0143 Ticke
 
       const html = renderToStaticMarkup(React.createElement(RawDataView, { report: reportWithIntraday }));
       expect(html).toContain('2026-10-08');
-      expect(html).toContain('⚡ 即時');
+      expect(html).toContain('即時');
+      expect(html).toContain('<svg');
     });
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateRevenueBarHeight } from './MonthlyRevenueCard';
+import { calculateRevenueBarHeight, formatEtfMetrics } from './MonthlyRevenueCard';
 import type { MonthlyRevenueData } from '../../../types/aiForceDashboard';
 import { buildMonthlyRevenue } from '../../../engine/aiForceDashboardEngine';
 
@@ -90,5 +90,22 @@ describe('MonthlyRevenueCard - TDD Unit Tests', () => {
     expect(result.isEtf).toBe(true);
     expect(result.etfData?.beneficiaries).toBe(825000);
     expect(result.asOfDateText).toBe('ETF 規模與受益人 (2026-10-02)');
+  });
+
+  it('6. formatEtfMetrics 應安全處理可選的 beneficiaries / aumBillion / dividendYield 欄位', () => {
+    const emptyEtf = formatEtfMetrics({ quarterlyDividends: [] });
+    expect(emptyEtf.aumText).toBe('--');
+    expect(emptyEtf.yieldText).toBe('--');
+    expect(emptyEtf.beneficiariesText).toBe('--');
+
+    const fullEtf = formatEtfMetrics({
+      aumBillion: 420,
+      dividendYield: 4.2,
+      beneficiaries: 750000,
+      quarterlyDividends: [],
+    });
+    expect(fullEtf.aumText).toBe('420 億元');
+    expect(fullEtf.yieldText).toBe('4.2%');
+    expect(fullEtf.beneficiariesText).toBe('750,000 人');
   });
 });

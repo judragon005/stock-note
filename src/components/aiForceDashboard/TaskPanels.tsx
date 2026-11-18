@@ -1,8 +1,24 @@
 import React, { useState, useMemo } from 'react';
+import {
+  Shield,
+  Zap,
+  AlertTriangle,
+  Bell,
+  CircleDot,
+  TrendingUp,
+  TrendingDown,
+  FileSpreadsheet,
+} from 'lucide-react';
 import type { AiForceDashboardReport, KlineCandleItem } from '../../types/aiForceDashboard';
+import type { HoldingPosition, LoanRecord } from '../../types/stock';
+import { aggregateCandlesToTimeframe } from '../../engine/klineAggregationEngine';
+import { calculateStochasticKD } from '../../engine/technicalIndicatorEngine';
 
 export interface TaskPanelProps {
   report: AiForceDashboardReport;
+  holdings?: HoldingPosition[];
+  loanRecords?: LoanRecord[];
+  macroMaintenanceRatio?: number;
 }
 
 export interface TechnicalAlertItem {
@@ -183,16 +199,76 @@ export function generateTechnicalAlerts(report: AiForceDashboardReport): Technic
 /**
  * 任務二：技術警示報告面板 (含處置/注意警示與信用維持率壓力測試)
  */
-export const TechnicalAlertsView: React.FC<TaskPanelProps> = ({ report }) => {
+export const TechnicalAlertsView: React.FC<TaskPanelProps> = ({
+  report,
+  holdings,
+  loanRecords,
+  macroMaintenanceRatio,
+}) => {
   const alerts = useMemo(() => generateTechnicalAlerts(report), [report]);
   const statusTag = report.marketBar?.statusTag ?? report.marketBar?.marketStatusTag ?? 'NORMAL';
 
   const isDisposition = statusTag === 'DISPOSITION';
   const isAttention = statusTag === 'ATTENTION';
 
+  const { maintenanceRatio, stressMaintenanceRatio } = useMemo(() => {
+    const activeLoans = (loanRecords ?? []).filter((l) => !l.closedDate && l.principal > 0);
+    let ratio: number | null = null;
+
+    if (activeLoans.length > 0 && holdings && holdings.length > 0) {
+      const holdingMap = new Map(holdings.map((h) => [h.symbol, h]));
+      const totalDebt = activeLoans.reduce((sum, l) => sum + l.principal, 0);
+      let collateralValue = 0;
+      let hasExplicitCollateral = false;
+
+      for (const loan of activeLoans) {
+        if (loan.pledgedCollateral && loan.pledgedCollateral.length > 0) {
+          hasExplicitCollateral = true;
+          for (const item of loan.pledgedCollateral) {
+            const h = holdingMap.get(item.symbol);
+            collateralValue += item.shares * (h?.currentPrice ?? 0);
+          }
+        }
+      }
+
+      if (!hasExplicitCollateral) {
+        collateralValue = holdings.reduce(
+          (sum, h) => sum + (h.grossMarketValue || h.shares * h.currentPrice),
+          0
+        );
+      }
+
+      if (totalDebt > 0 && collateralValue > 0) {
+        ratio = (collateralValue / totalDebt) * 100;
+      }
+    } else if (
+      macroMaintenanceRatio !== undefined &&
+      Number.isFinite(macroMaintenanceRatio) &&
+      macroMaintenanceRatio > 0
+    ) {
+      ratio = macroMaintenanceRatio;
+    }
+
+    return {
+      maintenanceRatio: ratio,
+      stressMaintenanceRatio: ratio !== null ? ratio * 0.9 : null,
+    };
+  }, [holdings, loanRecords, macroMaintenanceRatio]);
+
+  const maintenanceStatus =
+    maintenanceRatio === null
+      ? null
+      : maintenanceRatio >= 160
+      ? { label: '安全', color: '#10b981' }
+      : maintenanceRatio >= 140
+      ? { label: '警戒', color: '#f59e0b' }
+      : maintenanceRatio >= 130
+      ? { label: '注意', color: '#fb923c' }
+      : { label: '追繳危險', color: '#ef4444' };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-      {/* 處置股票預警與信用維持率壓力測試看板 (Ticket 07) */}
+      {/* 處置股票預警與信用維持率壓力測試看板 (Ticket 07 / Ticket 11) */}
       <div
         style={{
           display: 'grid',
@@ -203,9 +279,9 @@ export const TechnicalAlertsView: React.FC<TaskPanelProps> = ({ report }) => {
         {/* 交易所管制維度卡 */}
         <div
           style={{
-            background: 'rgba(30, 41, 59, 0.7)',
+            background: 'rgba(15, 23, 42, 0.78)',
             backdropFilter: 'blur(12px)',
-            border: `1px solid ${isDisposition ? 'rgba(239, 68, 68, 0.4)' : isAttention ? 'rgba(245, 158, 11, 0.4)' : 'rgba(255, 255, 255, 0.08)'}`,
+            border: `1px solid ${isDisposition ? 'rgba(239, 68, 68, 0.4)' : isAttention ? 'rgba(245, 158, 11, 0.4)' : 'rgba(255, 255, 255, 0.07)'}`,
             borderRadius: '12px',
             padding: '16px',
             display: 'flex',
@@ -215,7 +291,7 @@ export const TechnicalAlertsView: React.FC<TaskPanelProps> = ({ report }) => {
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '14px', fontWeight: 700, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span>🛡️</span> 交易所處置與注意股票管制風控
+              <Shield size={15} color="#38bdf8" /> 交易所處置與注意股票管制風控
             </span>
             <span
               style={{
@@ -226,25 +302,40 @@ export const TechnicalAlertsView: React.FC<TaskPanelProps> = ({ report }) => {
                 backgroundColor: isDisposition ? 'rgba(239, 68, 68, 0.2)' : isAttention ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.15)',
                 color: isDisposition ? '#ef4444' : isAttention ? '#f59e0b' : '#10b981',
                 border: `1px solid ${isDisposition ? '#ef4444' : isAttention ? '#f59e0b' : '#10b981'}`,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
               }}
             >
-              {isDisposition ? '⚠️ 處置股票列管中' : isAttention ? '🔔 注意股票監控' : '🟢 正常撮合交易'}
+              {isDisposition ? (
+                <>
+                  <AlertTriangle size={12} /> 處置股票列管中
+                </>
+              ) : isAttention ? (
+                <>
+                  <Bell size={12} /> 注意股票監控
+                </>
+              ) : (
+                <>
+                  <CircleDot size={12} /> 正常撮合交易
+                </>
+              )}
             </span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', fontSize: '12px' }}>
-            <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px' }}>
+            <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
               <span style={{ color: '#94a3b8', fontSize: '11px' }}>撮合機制</span>
               <div style={{ fontWeight: 600, color: isDisposition ? '#ef4444' : '#f1f5f9' }}>
                 {isDisposition ? '分盤撮合 (5分/20分)' : '逐筆連續撮合'}
               </div>
             </div>
-            <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px' }}>
+            <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
               <span style={{ color: '#94a3b8', fontSize: '11px' }}>預收款券</span>
               <div style={{ fontWeight: 600, color: isDisposition ? '#ef4444' : '#10b981' }}>
                 {isDisposition ? '預收款券 (單筆10/累計30)' : '免預收款券'}
               </div>
             </div>
-            <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px' }}>
+            <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
               <span style={{ color: '#94a3b8', fontSize: '11px' }}>出關日預估</span>
               <div style={{ fontWeight: 600, color: '#38bdf8' }}>
                 {isDisposition ? '約 10 交易日解禁' : '常態營運無限制'}
@@ -256,9 +347,9 @@ export const TechnicalAlertsView: React.FC<TaskPanelProps> = ({ report }) => {
         {/* 券商信用交易維持率壓力測試卡 */}
         <div
           style={{
-            background: 'rgba(30, 41, 59, 0.7)',
+            background: 'rgba(15, 23, 42, 0.78)',
             backdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
+            border: '1px solid rgba(255, 255, 255, 0.07)',
             borderRadius: '12px',
             padding: '16px',
             display: 'flex',
@@ -268,24 +359,34 @@ export const TechnicalAlertsView: React.FC<TaskPanelProps> = ({ report }) => {
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '14px', fontWeight: 700, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span>⚡</span> 券商信用維持率壓力測試矩陣
+              <Zap size={15} color="#f59e0b" /> 券商信用維持率壓力測試矩陣
             </span>
-            <span style={{ fontSize: '11px', color: '#38bdf8', padding: '2px 8px', borderRadius: '4px', background: 'rgba(56, 189, 248, 0.1)' }}>
+            <span style={{ fontSize: '11px', color: '#38bdf8', padding: '2px 8px', borderRadius: '4px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
               整戶維持率模型
             </span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', fontSize: '12px' }}>
-            <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', fontSize: '12px' }}>
+            <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
               <span style={{ color: '#94a3b8', fontSize: '11px' }}>預估維持率</span>
-              <div style={{ fontWeight: 700, color: '#10b981', fontSize: '14px' }}>168.5% (安全)</div>
+              <div style={{ fontWeight: 700, color: maintenanceStatus ? maintenanceStatus.color : '#64748b', fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}>
+                {maintenanceRatio !== null && maintenanceStatus
+                  ? `${maintenanceRatio.toFixed(1)}% (${maintenanceStatus.label})`
+                  : '--'}
+              </div>
             </div>
-            <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px' }}>
+            <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
+              <span style={{ color: '#94a3b8', fontSize: '11px' }}>-10% 跌停壓力</span>
+              <div style={{ fontWeight: 700, color: stressMaintenanceRatio !== null && stressMaintenanceRatio < 130 ? '#ef4444' : '#38bdf8', fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}>
+                {stressMaintenanceRatio !== null ? `${stressMaintenanceRatio.toFixed(1)}%` : '--'}
+              </div>
+            </div>
+            <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
               <span style={{ color: '#94a3b8', fontSize: '11px' }}>追繳警戒線</span>
-              <div style={{ fontWeight: 700, color: '#ef4444', fontSize: '14px' }}>130% (補繳令)</div>
+              <div style={{ fontWeight: 700, color: '#ef4444', fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}>130% (補繳令)</div>
             </div>
-            <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px' }}>
+            <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.07)' }}>
               <span style={{ color: '#94a3b8', fontSize: '11px' }}>斷頭防守線</span>
-              <div style={{ fontWeight: 700, color: '#f59e0b', fontSize: '14px' }}>140% (斷頭線)</div>
+              <div style={{ fontWeight: 700, color: '#f59e0b', fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}>140% (斷頭線)</div>
             </div>
           </div>
         </div>
@@ -293,9 +394,9 @@ export const TechnicalAlertsView: React.FC<TaskPanelProps> = ({ report }) => {
 
       <div
         style={{
-          background: 'rgba(30, 41, 59, 0.7)',
+          background: 'rgba(15, 23, 42, 0.78)',
           backdropFilter: 'blur(12px)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          border: '1px solid rgba(255, 255, 255, 0.07)',
           borderRadius: '12px',
           padding: '20px',
         }}
@@ -310,7 +411,7 @@ export const TechnicalAlertsView: React.FC<TaskPanelProps> = ({ report }) => {
             gap: '8px',
           }}
         >
-          <span>⚠️</span> 任務二：即時技術警示矩陣 ({report.symbol} {report.name})
+          <AlertTriangle size={16} color="#f59e0b" /> 任務二：即時技術警示矩陣 ({report.symbol} {report.name})
         </h3>
         <div
           style={{
@@ -379,11 +480,24 @@ export function deriveKdMaMetrics(report: AiForceDashboardReport) {
   else if (prev && prevK >= prevD && k < d) kdCrossingState = '死亡交叉';
   else if (k < d) kdCrossingState = '空頭收斂';
 
-  // 1. 多週期 (日 KD / 週 KD / 月 KD) 共振判定 (Ticket 07 / Story 6)
-  const weeklyK = Math.round((k * 0.55 + (last.close >= ma20 ? 65 : 35) * 0.45) * 10) / 10;
-  const weeklyD = Math.round((d * 0.55 + 50 * 0.45) * 10) / 10;
-  const monthlyK = Math.round((k * 0.35 + (last.close >= (last.ma60 ?? ma20) ? 70 : 30) * 0.65) * 10) / 10;
-  const monthlyD = Math.round((d * 0.35 + 50 * 0.65) * 10) / 10;
+  // 1. 多週期 (日 KD / 週 KD / 月 KD) 真實聚合計算與共振判定 (Ticket 11)
+  const computeAggregatedKd = (aggCandles: KlineCandleItem[]) => {
+    if (aggCandles.length === 0) return { k: 50, d: 50 };
+    const highs = aggCandles.map((c) => c.high);
+    const lows = aggCandles.map((c) => c.low);
+    const closes = aggCandles.map((c) => c.close);
+    const period = Math.min(9, aggCandles.length);
+    const res = calculateStochasticKD(highs, lows, closes, period);
+    return {
+      k: res.k9 !== undefined ? Number(res.k9.toFixed(1)) : 50,
+      d: res.d9 !== undefined ? Number(res.d9.toFixed(1)) : 50,
+    };
+  };
+
+  const weeklyCandles = aggregateCandlesToTimeframe(candles, 'WEEK');
+  const monthlyCandles = aggregateCandlesToTimeframe(candles, 'MONTH');
+  const { k: weeklyK, d: weeklyD } = computeAggregatedKd(weeklyCandles);
+  const { k: monthlyK, d: monthlyD } = computeAggregatedKd(monthlyCandles);
 
   let resonanceLabel = '日週多頭共振：主升段發散';
   if (k >= d && weeklyK >= weeklyD) {
@@ -420,9 +534,9 @@ export function deriveKdMaMetrics(report: AiForceDashboardReport) {
     }
   }
 
-  const sampleCount = goldenCrossCount > 0 ? goldenCrossCount : 5;
-  const winRate = goldenCrossCount > 0 ? Number(((winCount / goldenCrossCount) * 100).toFixed(1)) : 80.0;
-  const avgReturnPercent = goldenCrossCount > 0 ? Number((totalReturn / goldenCrossCount).toFixed(1)) : 6.8;
+  const sampleCount = goldenCrossCount;
+  const winRate = goldenCrossCount > 0 ? Number(((winCount / goldenCrossCount) * 100).toFixed(1)) : 0;
+  const avgReturnPercent = goldenCrossCount > 0 ? Number((totalReturn / goldenCrossCount).toFixed(1)) : 0;
 
   const historicalOversoldStats = {
     sampleCount,
@@ -484,7 +598,7 @@ export const KdMaView: React.FC<TaskPanelProps> = ({ report }) => {
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
         <h3 style={{ margin: 0, fontSize: '15px', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>📈</span> 任務三：KD 隨機指標與多天期均線系統 ({report.symbol} {report.name})
+          <TrendingUp size={16} color="#10b981" /> 任務三：KD 隨機指標與多天期均線系統 ({report.symbol} {report.name})
         </h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span
@@ -758,7 +872,7 @@ export const MacdView: React.FC<TaskPanelProps> = ({ report }) => {
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
         <h3 style={{ margin: 0, fontSize: '15px', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>📉</span> 任務四：MACD 指數平滑異同移動平均線 ({report.symbol} {report.name})
+          <TrendingDown size={16} color="#38bdf8" /> 任務四：MACD 指數平滑異同移動平均線 ({report.symbol} {report.name})
         </h3>
         <span
           style={{
@@ -835,8 +949,16 @@ export const MacdView: React.FC<TaskPanelProps> = ({ report }) => {
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '12px', color: '#94a3b8' }}>零軸動能衰竭預警</span>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: momentumAlert.isExhausted ? '#f59e0b' : '#10b981' }}>
-              {momentumAlert.isExhausted ? '⚠️ 留意衰竭' : '🟢 動能充沛'}
+            <span style={{ fontSize: '11px', fontWeight: 700, color: momentumAlert.isExhausted ? '#f59e0b' : '#10b981', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              {momentumAlert.isExhausted ? (
+                <>
+                  <AlertTriangle size={12} /> 留意衰竭
+                </>
+              ) : (
+                <>
+                  <CircleDot size={12} /> 動能充沛
+                </>
+              )}
             </span>
           </div>
           <p style={{ margin: 0, fontSize: '11px', color: '#cbd5e1', lineHeight: 1.5 }}>
@@ -977,7 +1099,7 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ margin: 0, fontSize: '15px', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>📑</span> 原始量化數據總表 ({report.symbol} {report.name})
+          <FileSpreadsheet size={16} color="#94a3b8" /> 原始量化數據總表 ({report.symbol} {report.name})
         </h3>
         <span style={{ fontSize: '12px', color: '#94a3b8' }}>共 {totalCount} 筆交易日資料</span>
       </div>
@@ -1019,9 +1141,12 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
                         color: '#38bdf8',
                         border: '1px solid rgba(56, 189, 248, 0.4)',
                         fontWeight: 600,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
                       }}
                     >
-                      ⚡ 即時
+                      <Zap size={10} /> 即時
                     </span>
                   )}
                 </td>

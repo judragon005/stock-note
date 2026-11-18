@@ -254,10 +254,14 @@ export interface LakehouseFullPayload {
     dealerShares: number;
     marginBalance?: number;
     shortBalance?: number;
+    sblBalance?: number;
     dayTradeRate?: number;
   }>;
   marginBalance?: number;
+  marginBalanceChange?: number;
   shortBalance?: number;
+  shortBalanceChange?: number;
+  sblBalance?: number;
   dayTradeRate?: number;
   tdccRecords?: Array<{
     date: string;
@@ -294,6 +298,19 @@ export interface LakehouseFullPayload {
       date?: string;
     }>;
   };
+  etfNav?: {
+    date: string;
+    closePrice?: number;
+    nav?: number;
+    premiumDiscountRatio?: number;
+  };
+  corporateActions?: Array<{
+    exDate: string;
+    paymentDate?: string;
+    cashDividendPerShare?: number;
+    stockDividendRatio?: number;
+    mandatoryBuybackDate?: string;
+  }>;
 }
 
 /**
@@ -346,6 +363,7 @@ export async function loadSymbolFullLakehouseData(
               dealerShares: Number(r.dealer_net) || 0,
               marginBalance: r.margin_balance != null ? Number(r.margin_balance) : undefined,
               shortBalance: r.short_balance != null ? Number(r.short_balance) : undefined,
+              sblBalance: r.sbl_balance != null ? Number(r.sbl_balance) : undefined,
               dayTradeRate: r.day_trade_rate != null ? Number(r.day_trade_rate) : undefined,
             }));
           }
@@ -394,17 +412,68 @@ export async function loadSymbolFullLakehouseData(
           };
         }
 
-        // 資券有效值向前回退演算法 (Spec 0200 Ticket 01)
+        let etfNav: LakehouseFullPayload['etfNav'] = undefined;
+        if (data.etfNav && typeof data.etfNav === 'object') {
+          const rawClose = data.etfNav.closePrice ?? data.etfNav.close_price;
+          const rawNav = data.etfNav.nav;
+          const rawRatio = data.etfNav.premiumDiscountRatio ?? data.etfNav.premium_discount_ratio;
+          etfNav = {
+            date: data.etfNav.date,
+            closePrice: rawClose != null ? Number(rawClose) : undefined,
+            nav: rawNav != null ? Number(rawNav) : undefined,
+            premiumDiscountRatio: rawRatio != null ? Number(rawRatio) : undefined,
+          };
+        }
+
+        let corporateActions: LakehouseFullPayload['corporateActions'] = undefined;
+        if (Array.isArray(data.corporateActions)) {
+          corporateActions = data.corporateActions.map((ca: any) => {
+            const rawCash = ca.cashDividendPerShare ?? ca.cash_dividend_per_share;
+            const rawStock = ca.stockDividendRatio ?? ca.stock_dividend_ratio;
+            return {
+              exDate: ca.exDate ?? ca.ex_date,
+              paymentDate: ca.paymentDate ?? ca.payment_date ?? undefined,
+              cashDividendPerShare: rawCash != null ? Number(rawCash) : undefined,
+              stockDividendRatio: rawStock != null ? Number(rawStock) : undefined,
+              mandatoryBuybackDate: ca.mandatoryBuybackDate ?? ca.mandatory_buyback_date ?? undefined,
+            };
+          });
+        }
+
+        // 資券與借券餘額有效值向前回退與日增減演算法 (Spec 0200 Ticket 01 / Spec 0237 Ticket 05)
+        const sortedInst = institutionalRecords
+          ? [...institutionalRecords].sort((a, b) => a.date.localeCompare(b.date))
+          : [];
+        const validMarginRows = sortedInst.filter((r) => r.marginBalance != null);
         const validMarginRow =
-          institutionalRecords && institutionalRecords.length > 0
-            ? [...institutionalRecords].reverse().find((r) => r.marginBalance != null)
+          validMarginRows.length > 0 ? validMarginRows[validMarginRows.length - 1] : undefined;
+        const marginBalanceChange =
+          validMarginRows.length >= 2
+            ? validMarginRows[validMarginRows.length - 1].marginBalance! -
+              validMarginRows[validMarginRows.length - 2].marginBalance!
             : undefined;
+
+        const validShortRows = sortedInst.filter((r) => r.shortBalance != null);
+        const validShortRow =
+          validShortRows.length > 0 ? validShortRows[validShortRows.length - 1] : undefined;
+        const shortBalanceChange =
+          validShortRows.length >= 2
+            ? validShortRows[validShortRows.length - 1].shortBalance! -
+              validShortRows[validShortRows.length - 2].shortBalance!
+            : undefined;
+
+        const validSblRows = sortedInst.filter((r) => r.sblBalance != null);
+        const validSblRow =
+          validSblRows.length > 0 ? validSblRows[validSblRows.length - 1] : undefined;
 
           return {
             candles,
             institutionalRecords,
             marginBalance: validMarginRow?.marginBalance,
-            shortBalance: validMarginRow?.shortBalance,
+            marginBalanceChange,
+            shortBalance: validShortRow?.shortBalance ?? validMarginRow?.shortBalance,
+            shortBalanceChange,
+            sblBalance: validSblRow?.sblBalance,
             dayTradeRate: validMarginRow?.dayTradeRate,
             marginAsOfDate: validMarginRow?.date,
             tdccRecords,
@@ -412,6 +481,8 @@ export async function loadSymbolFullLakehouseData(
             valuation,
             pledge: data.pledge || undefined,
             macro: data.macro,
+            etfNav,
+            corporateActions,
           };
         }
       }

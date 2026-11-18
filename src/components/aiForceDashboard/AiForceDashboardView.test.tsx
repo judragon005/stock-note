@@ -1,8 +1,11 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { AiForceDashboardView } from './AiForceDashboardView';
+import { AiForceDashboardView, createSymbolRequestGuard } from './AiForceDashboardView';
+import { TaskViewsSwitcher } from './TaskViewsSwitcher';
+import { HeaderExportBar } from './HeaderExportBar';
 import { createDefaultAiForceReport } from '../../engine/aiForceDashboardEngine';
+import type { HoldingPosition } from '../../types/stock';
 import * as marketCacheLoader from '../../engine/marketCacheLoader';
 import * as priceFetcher from '../../engine/priceFetcher';
 
@@ -132,6 +135,139 @@ describe('Ticket 08: 主力戰情室 7 層 Bento-Grid 專業動線架構驗收 (
       expect(html).toContain('data-testid="valuation-metrics-card"');
       expect(html).toContain('data-testid="ai-confidence-card"');
       expect(html).toContain('height:250px');
+    });
+  });
+
+  describe('Spec 0237 Wave 3A: 競態防護、持倉 HUD、Obsidian De-Slop 與 4 大戰術區驗收', () => {
+    it('非同步競態防護 (activeRequestIdRef)：較慢的舊標的請求回傳時不得覆蓋較新的標的選擇', async () => {
+      const guard = createSymbolRequestGuard();
+      const committed: string[] = [];
+
+      const req1 = guard.next();
+      const req2 = guard.next();
+
+      // 模擬 req2 先完成，req1 較慢後完成
+      await Promise.resolve().then(() => {
+        if (guard.isCurrent(req2)) {
+          committed.push('2330');
+        }
+      });
+      await new Promise((r) => setTimeout(r, 10)).then(() => {
+        if (guard.isCurrent(req1)) {
+          committed.push('0050');
+        }
+      });
+
+      expect(committed).toEqual(['2330']);
+    });
+
+    it('Portfolio Position HUD：當 holdings 持有當前標的 (shares > 0) 時，HeaderMarketBar 應顯示持股數與均價 vs VWAP 對比', () => {
+      const reportWithVwap = {
+        ...readyReport,
+        vwapCostStructure: {
+          ...readyReport.vwapCostStructure,
+          mainForceVwap: 980,
+        },
+      };
+      const mockHoldings: HoldingPosition[] = [
+        {
+          symbol: '2330',
+          name: '台積電',
+          market: 'TW',
+          currency: 'TWD',
+          shares: 1000,
+          avgCost: 950,
+          totalCostBasis: 950000,
+          adjustedCostBasis: 950000,
+          currentPrice: 1000,
+          marketValue: 1000000,
+          grossMarketValue: 1000000,
+          estimatedSellTax: 3000,
+          estimatedSellFee: 1425,
+          netMarketValue: 995575,
+          unrealizedPnL: 50000,
+          unrealizedPnLPercent: 5.26,
+          unrealizedPnLBroker: 45575,
+          unrealizedPnLBrokerPercent: 4.8,
+          realizedPnL: 0,
+          totalDividends: 0,
+          totalCapitalReturned: 0,
+          totalStockDividendsShares: 0,
+          totalReturnPnL: 50000,
+          totalReturnPercent: 5.26,
+          yieldOnCostPercent: 0,
+        },
+      ];
+
+      const html = renderToStaticMarkup(
+        React.createElement(AiForceDashboardView, {
+          initialSymbol: '2330',
+          initialMarket: 'TW',
+          initialReport: reportWithVwap,
+          holdings: mockHoldings,
+        })
+      );
+
+      expect(html).toContain('data-testid="portfolio-position-hud"');
+      expect(html).toContain('1,000');
+      expect(html).toContain('950.00');
+      expect(html).toContain('980.00');
+    });
+
+    it('TaskViewsSwitcher 應顯示「21 模組」徽章且全面改用 lucide-react SVG 圖示 (零 Emoji)', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(TaskViewsSwitcher, {
+          activeTab: 'TASK_1_COMPREHENSIVE',
+          onChangeTab: () => {},
+        })
+      );
+
+      expect(html).toContain('21 模組');
+      expect(html).not.toContain('18 卡片');
+      expect(html).toContain('<svg');
+      expect(html).not.toContain('📊');
+      expect(html).not.toContain('⚠️');
+      expect(html).not.toContain('📈');
+      expect(html).not.toContain('📉');
+      expect(html).not.toContain('📑');
+    });
+
+    it('HeaderExportBar 與 AiForceDashboardView 應渲染零 Emoji SVG 圖示、4 大戰術區標題 (ZONE 01 ~ ZONE 04) 與首屏決策摘要帶', () => {
+      const exportHtml = renderToStaticMarkup(
+        React.createElement(HeaderExportBar, {
+          report: readyReport,
+          onOpenDeepDive: () => {},
+        })
+      );
+
+      expect(exportHtml).toContain('<svg');
+      expect(exportHtml).not.toContain('⬇');
+      expect(exportHtml).not.toContain('🖨️');
+      expect(exportHtml).not.toContain('🔍');
+
+      const reportWithXai = {
+        ...readyReport,
+        decisionCore: {
+          ...readyReport.decisionCore,
+          xaiExplanation: '外資連買且站上 20 日均線，短線動能偏多。',
+        },
+      };
+
+      const html = renderToStaticMarkup(
+        React.createElement(AiForceDashboardView, {
+          initialSymbol: '2330',
+          initialMarket: 'TW',
+          initialReport: reportWithXai,
+        })
+      );
+
+      expect(html).toContain('ZONE 01');
+      expect(html).toContain('ZONE 02');
+      expect(html).toContain('ZONE 03');
+      expect(html).toContain('ZONE 04');
+      expect(html).toContain('data-testid="executive-verdict-strip"');
+      expect(html).toContain(reportWithXai.mainForceVerdict.primaryVerb);
+      expect(html).toContain('外資連買且站上 20 日均線，短線動能偏多。');
     });
   });
 });

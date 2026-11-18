@@ -4,6 +4,7 @@ import {
   formatBiasMetric,
   buildStackedMountainPaths,
   formatLegendItems,
+  resolveVwapCurrentPrice,
 } from './VwapCostStructureCard';
 
 describe('VwapCostStructureCard - 主力成本結構分佈元件規範 (Ticket 15 & Spec 0144)', () => {
@@ -85,6 +86,13 @@ describe('VwapCostStructureCard - 主力成本結構分佈元件規範 (Ticket 1
     expect(items[2].color).toBe('#eab308');
     expect(items[3].label).toContain('大量成交區');
     expect(items[3].color).toBe('#ea580c');
+  });
+
+  it('resolveVwapCurrentPrice 應優先使用 currentPrice，其次 mainForceAvgCost / mainForceVwap，絕不回退寫死 1240', () => {
+    expect(resolveVwapCurrentPrice({ currentPrice: 850, mainForceAvgCost: 820 })).toBe(850);
+    expect(resolveVwapCurrentPrice({ mainForceAvgCost: 820, mainForceVwap: 810 })).toBe(820);
+    expect(resolveVwapCurrentPrice({ mainForceVwap: 810 })).toBe(810);
+    expect(resolveVwapCurrentPrice({})).toBe(0);
   });
 });
 

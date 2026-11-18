@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { DayTradeRiskData } from '../../../types/aiForceDashboard';
-import { MoreVertical } from 'lucide-react';
+import { AlertOctagon, RefreshCw, Zap, TrendingDown, Activity } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseDayTradeRisk } from '../../../constants/aiForceGlossary';
 
@@ -85,12 +85,45 @@ export interface DayTradeRiskMetricItem {
 
 export function getDayTradeRiskItems(data?: Partial<DayTradeRiskData> | null): DayTradeRiskMetricItem[] {
   return [
-    { label: '主力賣出異常', value: data?.abnormalSelling ?? 49, icon: '🚨', termId: 'dayTradeRisk' },
-    { label: '籌碼換手率', value: data?.turnoverRate ?? 57, icon: '🔄', termId: 'turnoverRate' },
-    { label: '沖銷比例', value: data?.dayTradeRatio ?? 53, icon: '⚡', termId: 'dayTradeRatio' },
-    { label: '隔日回檔風險', value: data?.pullbackRisk ?? 45, icon: '📉', termId: 'pullbackRisk' },
-    { label: '日內波動率', value: data?.intradayVolatility ?? 62, icon: '🌊', termId: 'intradayVolatility' },
+    { label: '主力賣出異常', value: data?.abnormalSelling ?? 49, icon: 'alert', termId: 'dayTradeRisk' },
+    { label: '籌碼換手率', value: data?.turnoverRate ?? 57, icon: 'refresh', termId: 'turnoverRate' },
+    { label: '沖銷比例', value: data?.dayTradeRatio ?? 53, icon: 'zap', termId: 'dayTradeRatio' },
+    { label: '隔日回檔風險', value: data?.pullbackRisk ?? 45, icon: 'trending-down', termId: 'pullbackRisk' },
+    { label: '日內波動率', value: data?.intradayVolatility ?? 62, icon: 'activity', termId: 'intradayVolatility' },
   ];
+}
+
+export interface DayTradeExtraMetrics {
+  sblText: string | null;
+  marginChangeText: string | null;
+}
+
+/**
+ * 格式化借券賣出餘額與融資餘額增減顯示文案
+ */
+export function formatDayTradeExtraMetrics(data?: Partial<DayTradeRiskData> | null): DayTradeExtraMetrics {
+  const sblText = data?.sblBalance != null ? `${data.sblBalance.toLocaleString()} 張` : null;
+  const marginChangeText =
+    data?.marginBalanceChange != null
+      ? `${data.marginBalanceChange > 0 ? '+' : ''}${data.marginBalanceChange.toLocaleString()} 張`
+      : null;
+  return { sblText, marginChangeText };
+}
+
+function renderDayTradeIcon(iconKey: string): React.ReactNode {
+  switch (iconKey) {
+    case 'alert':
+      return <AlertOctagon size={13} strokeWidth={1.5} color="#94a3b8" />;
+    case 'refresh':
+      return <RefreshCw size={13} strokeWidth={1.5} color="#94a3b8" />;
+    case 'zap':
+      return <Zap size={13} strokeWidth={1.5} color="#94a3b8" />;
+    case 'trending-down':
+      return <TrendingDown size={13} strokeWidth={1.5} color="#94a3b8" />;
+    case 'activity':
+    default:
+      return <Activity size={13} strokeWidth={1.5} color="#94a3b8" />;
+  }
 }
 
 export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
@@ -103,6 +136,8 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
     return Math.round(sum / items.length);
   }, [items]);
 
+  const extraMetrics = useMemo(() => formatDayTradeExtraMetrics(data), [data]);
+
   return (
     <div
       style={{
@@ -110,11 +145,11 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
         flexDirection: 'column',
         height: '100%',
         padding: '14px',
-        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
+        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(10, 15, 28, 0.92) 100%)',
         borderRadius: '14px',
-        border: '1px solid rgba(59, 130, 246, 0.25)',
+        border: '1px solid rgba(255, 255, 255, 0.07)',
         backdropFilter: 'blur(10px)',
-        boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+        boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.35)',
       }}
     >
       {/* 標題列 */}
@@ -131,8 +166,10 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
             style={{
               padding: '2px 6px',
               borderRadius: '5px',
-              background: 'rgba(59, 130, 246, 0.25)',
-              color: '#60a5fa',
+              background: 'rgba(30, 41, 59, 0.9)',
+              color: '#94a3b8',
+              border: '1px solid rgba(255,255,255,0.08)',
+              fontFamily: 'var(--font-mono)',
               fontSize: '0.72rem',
               fontWeight: 800,
             }}
@@ -149,22 +186,6 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
             </span>
           </TermTooltip>
         </div>
-
-        <button
-          type="button"
-          aria-label="選項"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: '#64748b',
-            cursor: 'pointer',
-            padding: '2px',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <MoreVertical size={14} />
-        </button>
       </div>
 
       {/* 5 條水平彩色進度條 */}
@@ -191,7 +212,7 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '0.8rem' }}>{item.icon}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center' }}>{renderDayTradeIcon(item.icon)}</span>
                   <TermTooltip termId={item.termId}>
                     <span style={{ color: '#cbd5e1', fontWeight: 600 }}>{item.label}</span>
                   </TermTooltip>
@@ -314,6 +335,48 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
           </div>
         )}
       </div>
+
+      {/* 借券賣出餘額與融資增減 (Real Data) */}
+      {(extraMetrics.sblText !== null || extraMetrics.marginChangeText !== null) && (
+        <div
+          data-testid="daytrade-extra-metrics"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginTop: '6px',
+            padding: '5px 10px',
+            borderRadius: '6px',
+            background: 'rgba(15, 23, 42, 0.5)',
+            border: '1px solid rgba(255, 255, 255, 0.06)',
+            fontSize: '0.72rem',
+            gap: '8px',
+          }}
+        >
+          {extraMetrics.sblText !== null && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ color: '#94a3b8' }}>借券賣出餘額：</span>
+              <span style={{ color: '#f8fafc', fontWeight: 700, fontFamily: 'monospace' }}>
+                {extraMetrics.sblText}
+              </span>
+            </div>
+          )}
+          {extraMetrics.marginChangeText !== null && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ color: '#94a3b8' }}>融資增減：</span>
+              <span
+                style={{
+                  color: (data.marginBalanceChange ?? 0) > 0 ? '#ef4444' : '#10b981',
+                  fontWeight: 700,
+                  fontFamily: 'monospace',
+                }}
+              >
+                {extraMetrics.marginChangeText}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

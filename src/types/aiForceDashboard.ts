@@ -195,6 +195,7 @@ export interface CostBandTimeNode {
 export interface VwapCostStructureData {
   mainForceVwap: number; // 2131 (20日 VWAP)
   biasPercent: number; // +7.5%
+  currentPrice?: number; // 最新收盤價或現價
   bands: {
     name: string;
     biasLabel: string;
@@ -254,6 +255,8 @@ export interface DayTradeRiskData {
   shortBalance?: number; // 融券餘額 (張)
   shortMarginRatio?: number; // 券資比 (%)
   dayTradeRate?: number; // 當沖率 (%)
+  sblBalance?: number; // 借券賣出餘額 (張/股)
+  marginBalanceChange?: number; // 融資餘額增減 (張)
 }
 
 /**
@@ -328,6 +331,11 @@ export interface MarketSentimentData {
   mainForceSentimentPercent: number; // 58%
   isUsMarket?: boolean;
   usMacroData?: UsMacroSentimentData;
+  twMacroData?: {
+    putCallRatio?: number;
+    foreignFuturesOi?: number;
+    trustFuturesOi?: number;
+  };
 }
 
 /**
@@ -374,6 +382,8 @@ export interface ChipsSummaryData {
   marginBalance?: number;
   shortBalance?: number;
   foreignConsecutiveDays?: number;
+  trustConsecutiveDays?: number;
+  sblBalance?: number;
 }
 
 /**
@@ -404,6 +414,10 @@ export interface MainForceVerdictData {
   primaryVerb: string; // "調節減碼"
   semanticTag: string; // "法人動作"
   fullVerdictText: string; // "AI 結論：經 5 日主力行為綜合研判（法人近 5 日合計 -64 張、收盤相對 20 日 VWAP +7.5%、RSI 60），法人小幅調節，短線宜區間操作。"
+  stopLossPrice?: number;
+  takeProfitPrice?: number;
+  riskRewardRatio?: string;
+  avgVolume5Lots?: number;
 }
 
 /**
@@ -475,9 +489,9 @@ export interface MonthlyRevenueData {
   growthBadge: string; // '連續 3 個月年月雙增' | '創歷史新高 (ATH)' | '營收強勁雙位數成長' | '營收穩健成長' | '營收年減衰退' | 'ETF 規模穩健'
   asOfDateText: string; // e.g. "營收基準: 2026-09"
   etfData?: {
-    aumBillion: number; // 資產規模 (十億 TWD 或 USD)
-    dividendYield: number; // 平均殖利率 (%)
-    beneficiaries: number; // 受益人人數 (人)
+    aumBillion?: number; // 資產規模 (十億 TWD 或 USD)
+    dividendYield?: number; // 平均殖利率 (%)
+    beneficiaries?: number; // 受益人人數 (人)
     quarterlyDividends: EtfYieldItem[];
   };
   isEmpty: boolean;

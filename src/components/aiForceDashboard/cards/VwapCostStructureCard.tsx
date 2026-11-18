@@ -1,9 +1,15 @@
 import React, { useMemo } from 'react';
 import { VwapCostStructureData, CostBandTimeNode } from '../../../types/aiForceDashboard';
 import { DEFAULT_TIME_NODES } from '../../../engine/vwapCostEngine';
-import { MoreVertical } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseMainForceCost } from '../../../constants/aiForceGlossary';
+
+/**
+ * 解析當前基準股價，優先取 currentPrice，其次 mainForceAvgCost / mainForceVwap
+ */
+export function resolveVwapCurrentPrice(data: Partial<VwapCostStructureData>): number {
+  return data.currentPrice ?? data.mainForceAvgCost ?? data.mainForceVwap ?? 0;
+}
 
 export interface StackedBandSegment {
   name: string;
@@ -197,14 +203,14 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
         flexDirection: 'column',
         height: '100%',
         padding: '14px',
-        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
+        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(10, 15, 28, 0.92) 100%)',
         borderRadius: '14px',
-        border: '1px solid rgba(59, 130, 246, 0.25)',
+        border: '1px solid rgba(255, 255, 255, 0.07)',
         backdropFilter: 'blur(10px)',
-        boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+        boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.35)',
       }}
     >
-      {/* 頂部標題與右上選單 (校正繁體字「分佈圖」) */}
+      {/* 頂部標題 (校正繁體字「分佈圖」) */}
       <div
         style={{
           display: 'flex',
@@ -218,8 +224,10 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
             style={{
               padding: '2px 6px',
               borderRadius: '5px',
-              background: 'rgba(59, 130, 246, 0.25)',
-              color: '#60a5fa',
+              background: 'rgba(30, 41, 59, 0.9)',
+              color: '#94a3b8',
+              border: '1px solid rgba(255,255,255,0.08)',
+              fontFamily: 'var(--font-mono)',
               fontSize: '0.72rem',
               fontWeight: 800,
             }}
@@ -235,22 +243,6 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
             </span>
           </TermTooltip>
         </div>
-
-        <button
-          type="button"
-          aria-label="選項"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: '#64748b',
-            cursor: 'pointer',
-            padding: '2px',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <MoreVertical size={14} />
-        </button>
       </div>
 
       {/* SVG 多層次波形面積堆疊圖繪製區 (Area Chart) */}
@@ -347,7 +339,7 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <TermTooltip
             termId="vwap20"
-            dynamicDiagnosis={diagnoseMainForceCost(1240, data.mainForceAvgCost ?? data.mainForceVwap ?? 2131)}
+            dynamicDiagnosis={diagnoseMainForceCost(resolveVwapCurrentPrice(data), data.mainForceAvgCost ?? data.mainForceVwap ?? 2131)}
           >
             <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>主力平均成本：</span>
           </TermTooltip>
