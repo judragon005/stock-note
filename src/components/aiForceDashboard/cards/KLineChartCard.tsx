@@ -10,6 +10,8 @@ import { MoreVertical } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseMainForceCost } from '../../../constants/aiForceGlossary';
 import { aggregateCandlesToTimeframe, KlineTimeframe } from '../../../engine/klineAggregationEngine';
+import { calculateStochasticKD, calculateMACD } from '../../../engine/technicalIndicatorEngine';
+import { calculateRSI } from '../../../engine/omniIndicatorEngine';
 
 /**
  * 券商法人級標準均線色彩光譜 (Spec 0177)
@@ -211,11 +213,13 @@ export function normalizeAndSortCandles(candles?: KlineCandleItem[]): KlineCandl
 export interface KLineChartCardProps {
   data: KlineSystemData;
   colorTheme?: ColorThemeMode;
+  userAvgCost?: number;
 }
 
 export const KLineChartCard: React.FC<KLineChartCardProps> = ({
   data,
   colorTheme = 'taiwan',
+  userAvgCost,
 }) => {
   const [timeframe, setTimeframe] = useState<KlineTimeframe>('DAY');
   const [period, setPeriod] = useState<KlinePeriodMode>('60D');
@@ -229,9 +233,28 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
     return normalizeAndSortCandles(data.candles);
   }, [data.candles]);
 
-  // 2. 依據 timeframe (日 K / 週 K / 月 K) 毫秒級聚合蠟燭
+  // 2. 依據 timeframe (日 K / 週 K / 月 K) 毫秒級聚合蠟燭，週/月線重算 KD/MACD/RSI
   const aggregatedCandles = useMemo(() => {
-    return aggregateCandlesToTimeframe(rawCandles, timeframe);
+    const agg = aggregateCandlesToTimeframe(rawCandles, timeframe);
+    if (timeframe === 'DAY' || agg.length === 0) return agg;
+    const highs = agg.map((c) => c.high);
+    const lows = agg.map((c) => c.low);
+    const closes = agg.map((c) => c.close);
+    return agg.map((c, idx) => {
+      const end = idx + 1;
+      const kd = calculateStochasticKD(highs.slice(0, end), lows.slice(0, end), closes.slice(0, end), 9);
+      const macdRes = calculateMACD(closes.slice(0, end));
+      const rsiVal = calculateRSI(closes.slice(0, end), 14);
+      return {
+        ...c,
+        k: kd.k9,
+        d: kd.d9,
+        dif: macdRes.dif12_26,
+        macd: macdRes.macd9,
+        macdHist: macdRes.macdHist,
+        rsi: rsiVal,
+      };
+    });
   }, [rawCandles, timeframe]);
 
   // 3. 依據週期切片提取當前檢視蠟燭
@@ -398,9 +421,9 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
         flexDirection: 'column',
         height: '100%',
         padding: '16px',
-        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(20, 30, 50, 0.75) 100%)',
+        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(20, 30, 50, 0.8) 100%)',
         borderRadius: '14px',
-        border: '1px solid rgba(59, 130, 246, 0.25)',
+        border: '1px solid rgba(255, 255, 255, 0.07)',
         backdropFilter: 'blur(10px)',
         boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
         position: 'relative',
@@ -926,6 +949,32 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
               </text>
             </g>
           ))}
+
+          {/* 用戶持有均價虛線參考線 (Ticket 11) */}
+          {userAvgCost !== undefined && userAvgCost > 0 && (
+            <g data-testid="kline-user-avg-cost-line">
+              <line
+                x1={leftPad}
+                y1={projectPriceToY(userAvgCost, priceRange, klineHeight, 15, 15)}
+                x2={width - rightPad}
+                y2={projectPriceToY(userAvgCost, priceRange, klineHeight, 15, 15)}
+                stroke="#fbbf24"
+                strokeWidth="1.1"
+                strokeDasharray="3 3"
+                opacity="0.75"
+              />
+              <text
+                x={leftPad + 4}
+                y={projectPriceToY(userAvgCost, priceRange, klineHeight, 15, 15) - 4}
+                fill="#fbbf24"
+                fontSize="8.5"
+                fontWeight="600"
+                fontFamily="monospace"
+              >
+                持有均價 {userAvgCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </text>
+            </g>
+          )}
 
           {/* 副圖分界線 */}
           <line

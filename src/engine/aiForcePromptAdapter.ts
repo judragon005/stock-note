@@ -313,10 +313,20 @@ export function createWarRoomPromptDigest(
       totalNetShares20D,
       marginBalance: dayTrade?.marginBalance ?? chipsSummary?.marginBalance,
       shortBalance: dayTrade?.shortBalance ?? chipsSummary?.shortBalance,
+      ...((!isUS && (chipsSummary?.sblBalance ?? dayTrade?.sblBalance) !== undefined)
+        ? { sblBalance: chipsSummary?.sblBalance ?? dayTrade?.sblBalance }
+        : {}),
       dayTradeRatioPct: dayTrade?.dayTradeRatio,
-      bigHolderRatioChange1000: tdcc?.latestOver1000Ratio,
-      bigHolderRatioChange400: tdcc?.history?.[0]?.over400Ratio,
-      retailHolderCountChange: tdcc?.history?.[0]?.under10Ratio,
+      bigHolderRatioChange1000: tdcc?.change4WeeksRatio,
+      bigHolderRatioChange400:
+        tdcc?.history && tdcc.history.length > 0
+          ? tdcc.history[tdcc.history.length - 1]?.over400Ratio
+          : undefined,
+      retailHolderCountChange:
+        tdcc?.change4WeeksShareholders ??
+        (tdcc?.history && tdcc.history.length > 0
+          ? tdcc.history[tdcc.history.length - 1]?.under10Ratio
+          : undefined),
       mainForceVwap20D,
       currentVwapBiasPct,
       boxResistancePrice,
@@ -335,7 +345,7 @@ export function createWarRoomPromptDigest(
       treasuryYield10Y: report.marketSentiment?.usMacroData?.tenYearTreasury,
       cnnFearGreedScore: report.marketSentiment?.usMacroData?.cnnScore ?? report.marketSentiment?.overallSentimentIndex,
       vixClose: report.marketSentiment?.usMacroData?.vix,
-      twPutCallRatio: undefined,
+      twPutCallRatio: report.marketSentiment?.twMacroData?.putCallRatio,
       macroRegimeText: isUS
         ? (report.marketSentiment?.usMacroData?.cnnRatingText
             ? `美股情緒: CNN ${report.marketSentiment.usMacroData.cnnRatingText} (${report.marketSentiment.usMacroData.cnnScore ?? ''}), VIX: ${report.marketSentiment.usMacroData.vix ?? ''}`

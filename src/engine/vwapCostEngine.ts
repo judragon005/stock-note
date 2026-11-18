@@ -9,7 +9,7 @@ export interface CandleVwapInput {
 }
 
 const BAND_TEMPLATES = [
-  { name: '衰竭區', biasLabel: '<-5%', color: '#2563eb' },
+  { name: '突破區', biasLabel: '>+5%', color: '#2563eb' },
   { name: '套牢區', biasLabel: '-2~-5%', color: '#10b981' },
   { name: '主力成本區', biasLabel: '±2%', color: '#eab308' },
   { name: '大量成交區', biasLabel: '+2~5%', color: '#ea580c' },
@@ -136,7 +136,7 @@ export function calculateVwapCostStructure(
       n - 1,
     ];
 
-    timeNodes = anchorIndices.map((anchorIdx, i) => {
+    const rawNodes = anchorIndices.map((anchorIdx, i) => {
       const windowCandles = candles.slice(Math.max(0, anchorIdx - 19), anchorIdx + 1);
       let winWeightedPrice = 0;
       let winVolume = 0;
@@ -162,15 +162,7 @@ export function calculateVwapCostStructure(
         else hVol += vol;
       });
 
-      const totalWinVol = bVol + tVol + cVol + hVol || 1;
-      // 依比例映射至 0~60k 高度波形，並維持起伏山峰感
-      const peakScale = i % 2 === 0 ? 55 : 40;
-      const inventory = Math.round((bVol / totalWinVol) * peakScale * 0.35) + 6;
-      const trapped = Math.round((tVol / totalWinVol) * peakScale * 0.3) + 7;
-      const cost = Math.round((cVol / totalWinVol) * peakScale * 0.25) + 6;
-      const heavy = Math.round((hVol / totalWinVol) * peakScale * 0.2) + 5;
-      const total = inventory + trapped + cost + heavy;
-
+      const totalWinVol = bVol + tVol + cVol + hVol;
       const candleDate = candles[anchorIdx]?.date;
       let dateLabel = DEFAULT_TIME_NODES[i].dateLabel;
       if (candleDate && candleDate.includes('-')) {
@@ -180,8 +172,21 @@ export function calculateVwapCostStructure(
         }
       }
 
+      return { dateLabel, bVol, tVol, cVol, hVol, totalWinVol };
+    });
+
+    const maxTotalWinVol = Math.max(...rawNodes.map((node) => node.totalWinVol), 1);
+    const scaleFactor = 1000 / maxTotalWinVol;
+
+    timeNodes = rawNodes.map((node) => {
+      const inventory = Math.round(node.bVol * scaleFactor);
+      const trapped = Math.round(node.tVol * scaleFactor);
+      const cost = Math.round(node.cVol * scaleFactor);
+      const heavy = Math.round(node.hVol * scaleFactor);
+      const total = Math.max(node.totalWinVol > 0 ? 1 : 0, inventory + trapped + cost + heavy);
+
       return {
-        dateLabel,
+        dateLabel: node.dateLabel,
         inventoryVol: inventory,
         trappedVol: trapped,
         costVol: cost,
@@ -194,6 +199,7 @@ export function calculateVwapCostStructure(
   return {
     mainForceVwap,
     biasPercent,
+    currentPrice: lastPrice,
     bands,
     timeNodes,
   };

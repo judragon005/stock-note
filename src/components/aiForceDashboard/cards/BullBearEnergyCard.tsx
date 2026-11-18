@@ -1,6 +1,5 @@
 import React from 'react';
 import type { BullBearEnergyData } from '../../../types/aiForceDashboard';
-import { MoreVertical } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseBullBearEnergy } from '../../../constants/aiForceGlossary';
 
@@ -115,21 +114,6 @@ export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({ data }) 
             </span>
           </TermTooltip>
         </div>
-        <button
-          type="button"
-          aria-label="選項"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: '#64748b',
-            cursor: 'pointer',
-            padding: '2px',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <MoreVertical size={14} />
-        </button>
       </div>
 
       {/* 主體：多空能量水平對比條 */}

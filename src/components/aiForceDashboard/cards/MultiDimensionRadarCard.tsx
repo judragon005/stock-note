@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import { MultiDimensionRadarData } from '../../../types/aiForceDashboard';
-import { MoreVertical } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseHealthScore } from '../../../constants/aiForceGlossary';
 
@@ -136,12 +135,12 @@ export interface MultiDimensionRadarCardProps {
 }
 
 const AXIS_CONFIG = [
-  { key: 'institutional', label: '法人', icon: '🏛️' },
-  { key: 'trend', label: '趨勢', icon: '📈' },
-  { key: 'chips', label: '籌碼', icon: '📊' },
-  { key: 'liquidity', label: '流動', icon: '💧' },
-  { key: 'volatility', label: '波動', icon: '⚡' },
-  { key: 'momentum', label: '動能', icon: '🚀' },
+  { key: 'institutional', label: '法人' },
+  { key: 'trend', label: '趨勢' },
+  { key: 'chips', label: '籌碼' },
+  { key: 'liquidity', label: '流動' },
+  { key: 'volatility', label: '波動' },
+  { key: 'momentum', label: '動能' },
 ] as const;
 
 export const RADAR_CHART_CONFIG = {
@@ -206,11 +205,11 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
         flexDirection: 'column',
         height: '100%',
         padding: '16px',
-        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
+        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(10, 15, 28, 0.92) 100%)',
         borderRadius: '14px',
-        border: '1px solid rgba(59, 130, 246, 0.25)',
+        border: '1px solid rgba(255, 255, 255, 0.07)',
         backdropFilter: 'blur(10px)',
-        boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+        boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.35)',
       }}
     >
       {/* 標題列 */}
@@ -228,8 +227,10 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
             style={{
               padding: '2px 6px',
               borderRadius: '5px',
-              background: 'rgba(59, 130, 246, 0.25)',
-              color: '#60a5fa',
+              background: 'rgba(30, 41, 59, 0.9)',
+              color: '#94a3b8',
+              border: '1px solid rgba(255,255,255,0.08)',
+              fontFamily: 'var(--font-mono)',
               fontSize: '0.72rem',
               fontWeight: 800,
               flexShrink: 0,
@@ -254,22 +255,6 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
               綜合評分：<span style={{ color: '#38bdf8', fontWeight: 700, fontFamily: 'monospace' }}>{data.overallScore ?? 56} / 100</span>
             </span>
           </TermTooltip>
-          <button
-            type="button"
-            aria-label="選項"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#64748b',
-              cursor: 'pointer',
-              padding: '2px',
-              display: 'flex',
-              alignItems: 'center',
-              flexShrink: 0,
-            }}
-          >
-            <MoreVertical size={14} />
-          </button>
         </div>
       </div>
 

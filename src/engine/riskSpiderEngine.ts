@@ -12,6 +12,9 @@ export interface RiskSpiderOptions {
   institutionalNetVolume?: number; // 法人買賣超 (張)
   turnoverRate?: number; // 當日週轉率 (%)
   avgVolume20?: number; // 20 日均量 (張)
+  volumeUnit?: 'LOTS' | 'SHARES';
+  volumeInShares?: boolean;
+  market?: 'TW' | 'US';
 }
 
 /**
@@ -57,7 +60,9 @@ export function calculateRiskSpider(
   candles.forEach((c) => {
     totalVolume += c.volume;
   });
-  const avgVol = totalVolume / count;
+  const isSharesUnit =
+    options?.volumeUnit === 'SHARES' || options?.volumeInShares === true;
+  const avgVol = isSharesUnit ? totalVolume / count / 1000 : totalVolume / count;
 
   // 成交量 > 5000 張 -> 低風險 (~15-25)
   // 成交量 < 300 張 -> 高風險 (> 70)

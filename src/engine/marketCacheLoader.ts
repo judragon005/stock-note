@@ -254,10 +254,14 @@ export interface LakehouseFullPayload {
     dealerShares: number;
     marginBalance?: number;
     shortBalance?: number;
+    sblBalance?: number;
     dayTradeRate?: number;
   }>;
   marginBalance?: number;
+  marginBalanceChange?: number;
   shortBalance?: number;
+  shortBalanceChange?: number;
+  sblBalance?: number;
   dayTradeRate?: number;
   tdccRecords?: Array<{
     date: string;
@@ -294,6 +298,19 @@ export interface LakehouseFullPayload {
       date?: string;
     }>;
   };
+  etfNav?: {
+    date: string;
+    closePrice?: number;
+    nav?: number;
+    premiumDiscountRatio?: number;
+  };
+  corporateActions?: Array<{
+    exDate: string;
+    paymentDate?: string;
+    cashDividendPerShare?: number;
+    stockDividendRatio?: number;
+    mandatoryBuybackDate?: string;
+  }>;
 }
 
 /**
@@ -346,6 +363,7 @@ export async function loadSymbolFullLakehouseData(
               dealerShares: Number(r.dealer_net) || 0,
               marginBalance: r.margin_balance != null ? Number(r.margin_balance) : undefined,
               shortBalance: r.short_balance != null ? Number(r.short_balance) : undefined,
+              sblBalance: r.sbl_balance != null ? Number(r.sbl_balance) : undefined,
               dayTradeRate: r.day_trade_rate != null ? Number(r.day_trade_rate) : undefined,
             }));
           }
@@ -394,24 +412,71 @@ export async function loadSymbolFullLakehouseData(
           };
         }
 
-        // 資券有效值向前回退演算法 (Spec 0200 Ticket 01)
-        const validMarginRow =
-          institutionalRecords && institutionalRecords.length > 0
-            ? [...institutionalRecords].reverse().find((r) => r.marginBalance != null)
-            : undefined;
+        let etfNav: LakehouseFullPayload['etfNav'] = undefined;
+        if (data.etfNav && typeof data.etfNav === 'object') {
+          const rawClose = data.etfNav.closePrice ?? data.etfNav.close_price;
+          const rawNav = data.etfNav.nav;
+          const rawRatio = data.etfNav.premiumDiscountRatio ?? data.etfNav.premium_discount_ratio;
+          etfNav = {
+            date: data.etfNav.date,
+            closePrice: rawClose != null ? Number(rawClose) : undefined,
+            nav: rawNav != null ? Number(rawNav) : undefined,
+            premiumDiscountRatio: rawRatio != null ? Number(rawRatio) : undefined,
+          };
+        }
+
+        let corporateActions: LakehouseFullPayload['corporateActions'] = undefined;
+        if (Array.isArray(data.corporateActions)) {
+          corporateActions = data.corporateActions.map((ca: any) => {
+            const rawCash = ca.cashDividendPerShare ?? ca.cash_dividend_per_share;
+            const rawStock = ca.stockDividendRatio ?? ca.stock_dividend_ratio;
+            return {
+              exDate: ca.exDate ?? ca.ex_date,
+              paymentDate: ca.paymentDate ?? ca.payment_date ?? undefined,
+              cashDividendPerShare: rawCash != null ? Number(rawCash) : undefined,
+              stockDividendRatio: rawStock != null ? Number(rawStock) : undefined,
+              mandatoryBuybackDate: ca.mandatoryBuybackDate ?? ca.mandatory_buyback_date ?? undefined,
+            };
+          });
+        }
+
+        // 資券與借券餘額有效值向前回退與日增減演算法 (Spec 0200 Ticket 01 / Spec 0237 Ticket 05)
+        const extractLatestAndDelta = <T>(
+          rows: T[],
+          selector: (r: T) => number | undefined
+        ): { latest?: number; delta?: number; latestRow?: T } => {
+          const valid = rows.filter((r) => selector(r) != null);
+          if (valid.length === 0) return {};
+          const latestRow = valid[valid.length - 1];
+          const latest = selector(latestRow)!;
+          const delta = valid.length >= 2 ? latest - selector(valid[valid.length - 2])! : undefined;
+          return { latest, delta, latestRow };
+        };
+
+        const sortedInst = institutionalRecords
+          ? [...institutionalRecords].sort((a, b) => a.date.localeCompare(b.date))
+          : [];
+        const marginStats = extractLatestAndDelta(sortedInst, (r) => r.marginBalance);
+        const shortStats = extractLatestAndDelta(sortedInst, (r) => r.shortBalance);
+        const sblStats = extractLatestAndDelta(sortedInst, (r) => r.sblBalance);
 
           return {
             candles,
             institutionalRecords,
-            marginBalance: validMarginRow?.marginBalance,
-            shortBalance: validMarginRow?.shortBalance,
-            dayTradeRate: validMarginRow?.dayTradeRate,
-            marginAsOfDate: validMarginRow?.date,
+            marginBalance: marginStats.latest,
+            marginBalanceChange: marginStats.delta,
+            shortBalance: shortStats.latest ?? marginStats.latestRow?.shortBalance,
+            shortBalanceChange: shortStats.delta,
+            sblBalance: sblStats.latest,
+            dayTradeRate: marginStats.latestRow?.dayTradeRate,
+            marginAsOfDate: marginStats.latestRow?.date,
             tdccRecords,
             revenueRecords,
             valuation,
             pledge: data.pledge || undefined,
             macro: data.macro,
+            etfNav,
+            corporateActions,
           };
         }
       }

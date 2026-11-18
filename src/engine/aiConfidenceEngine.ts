@@ -4,6 +4,7 @@ export interface AiConfidenceInput {
   candles?: Array<{ open: number; high: number; low: number; close: number; volume: number }>;
   klineCandles?: KlineCandleItem[];
   hasInstitutionalData?: boolean;
+  volumeInShares?: boolean;
 }
 
 /**
@@ -17,7 +18,7 @@ function clamp(val: number, min: number = 0, max: number = 100): number {
  * Ticket 05: Card 14 AI 信心維度量化引擎
  */
 export function calculateAiConfidence(input: AiConfidenceInput): AiConfidenceData {
-  const { candles = [], klineCandles = [], hasInstitutionalData = false } = input;
+  const { candles = [], klineCandles = [], hasInstitutionalData = false, volumeInShares = false } = input;
   const count = candles.length;
 
   if (count === 0 || klineCandles.length === 0) {
@@ -79,8 +80,10 @@ export function calculateAiConfidence(input: AiConfidenceInput): AiConfidenceDat
   let strategyApplicability = 70;
   const last = candles[count - 1];
   const recent20 = candles.slice(-20);
-  const avgVol = recent20.reduce((acc, c) => acc + c.volume, 0) / Math.max(1, recent20.length);
-  if (avgVol > 2000 && last.volume > 1000) {
+  const rawAvgVol = recent20.reduce((acc, c) => acc + c.volume, 0) / Math.max(1, recent20.length);
+  const avgVol = volumeInShares ? rawAvgVol / 1000 : rawAvgVol;
+  const lastVol = volumeInShares ? last.volume / 1000 : last.volume;
+  if (avgVol > 2000 && lastVol > 1000) {
     strategyApplicability = 82;
   } else if (avgVol < 300) {
     strategyApplicability = 45; // 流動性枯竭不易實施量化策略

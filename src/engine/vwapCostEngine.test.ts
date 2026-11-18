@@ -79,5 +79,27 @@ describe('VwapCostEngine - 20日 VWAP 與成本結構分佈演算法規範 (Tick
     expect(node.dateLabel).toBeDefined();
     expect(node.totalVolume).toBeGreaterThan(0);
   });
+
+  it('Spec 0237: 正向乖離 >+5% 成本帶標籤應為 >+5% (非 <-5%)，回傳 currentPrice，且 timeNodes 反映實際相對成交量比例', () => {
+    // 建立成交量明顯遞增的 40 根 K 線：早期低量 (100 張)、後期爆量 (10,000 張)
+    const candles = Array.from({ length: 40 }, (_, i) => ({
+      high: 110,
+      low: 100,
+      close: 105,
+      volume: i < 20 ? 100 : 10000,
+      date: `2026-08-${String((i % 28) + 1).padStart(2, '0')}`,
+    }));
+
+    const result = calculateVwapCostStructure(candles, 112);
+
+    // 1. 第一階代表 bias > 0.05，標籤應為 >+5% 而非 <-5%
+    expect(result.bands[0].biasLabel).toBe('>+5%');
+    // 2. 應回傳 currentPrice
+    expect(result.currentPrice).toBe(112);
+    // 3. timeNodes 應反映真實相對成交量比例：後期節點 (index 3) 應顯著大於早期節點 (index 0)
+    expect(result.timeNodes).toBeDefined();
+    expect(result.timeNodes!.length).toBe(4);
+    expect(result.timeNodes![3].totalVolume).toBeGreaterThan(result.timeNodes![0].totalVolume * 2);
+  });
 });
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MarketBarData } from '../../types/aiForceDashboard';
-import { ColorThemeMode, MarketType } from '../../types/stock';
-import { Activity, ShieldAlert, Cpu, Radio, RefreshCw } from 'lucide-react';
+import { ColorThemeMode, HoldingPosition, MarketType } from '../../types/stock';
+import { Activity, AlertOctagon, AlertTriangle, Briefcase, Cpu, Radio, RefreshCw, ShieldAlert } from 'lucide-react';
 import { cleanSymbolInput, inferMarketType } from './HeaderQueryBar';
 import { TermTooltip } from '../common/TermTooltip';
 
@@ -152,6 +152,8 @@ export interface HeaderMarketBarProps {
   currentSymbol?: string;
   currentName?: string;
   isLoading?: boolean;
+  holdings?: HoldingPosition[];
+  vwapCost?: number;
   onAnalyze?: (symbol: string, market: MarketType) => void;
 }
 
@@ -161,6 +163,8 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
   currentSymbol = '0050',
   currentName = '元大台灣50',
   isLoading = false,
+  holdings = [],
+  vwapCost,
   onAnalyze,
 }) => {
   const [inputVal, setInputVal] = useState(currentSymbol);
@@ -250,6 +254,31 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
     onAnalyze(clean, inferred);
   };
 
+  // 計算當前標的持倉彙總與前四大持股快速切換膠囊
+  const matchingHoldings = holdings.filter(
+    (h) => h.symbol.toUpperCase() === currentSymbol.toUpperCase() && h.shares > 0
+  );
+  const heldShares = matchingHoldings.reduce((sum, h) => sum + h.shares, 0);
+  const heldAvgCost =
+    heldShares > 0
+      ? matchingHoldings.reduce((sum, h) => sum + h.avgCost * h.shares, 0) / heldShares
+      : 0;
+  const hasVwapComparison = heldShares > 0 && vwapCost !== undefined && vwapCost > 0;
+  const vwapDiffPct = hasVwapComparison ? ((heldAvgCost - vwapCost) / vwapCost) * 100 : 0;
+
+  const quickChipSymbols = new Set(QUICK_CHIPS.map((c) => c.symbol.toUpperCase()));
+  const topHoldingPills: Array<{ symbol: string; name: string; market: MarketType }> = [];
+  const seenHoldingSymbols = new Set<string>();
+  for (const h of [...holdings]
+    .filter((item) => item.shares > 0)
+    .sort((a, b) => (b.marketValue || 0) - (a.marketValue || 0))) {
+    const sym = h.symbol.toUpperCase();
+    if (quickChipSymbols.has(sym) || seenHoldingSymbols.has(sym)) continue;
+    seenHoldingSymbols.add(sym);
+    topHoldingPills.push({ symbol: h.symbol, name: h.name, market: h.market });
+    if (topHoldingPills.length >= 4) break;
+  }
+
   return (
     <div
       style={{
@@ -257,13 +286,12 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
         flexDirection: 'column',
         gap: '10px',
         padding: '10px 16px',
-        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(20, 30, 55, 0.9) 100%)',
-        borderRadius: '14px',
-        border: '1px solid rgba(59, 130, 246, 0.25)',
-        backdropFilter: 'blur(12px)',
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+        background: '#0B101B',
+        borderRadius: '12px',
+        border: '1px solid rgba(255, 255, 255, 0.07)',
         width: '100%',
         boxSizing: 'border-box',
+        fontVariantNumeric: 'tabular-nums',
       }}
     >
       {/* 1. 第一層：股票搜尋操作、處置/注意警示與 4 大狀態指示燈 (Ticket 03: 單行清爽化) */}
@@ -417,21 +445,21 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
             style={{
               padding: '4px 10px',
               borderRadius: '6px',
-              background: 'rgba(239, 68, 68, 0.22)',
+              background: 'rgba(239, 68, 68, 0.16)',
               color: '#f87171',
-              border: '1px solid #ef4444',
+              border: '1px solid rgba(239, 68, 68, 0.5)',
               fontSize: '0.75rem',
               fontWeight: 800,
               letterSpacing: '0.5px',
               whiteSpace: 'nowrap',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '4px',
-              boxShadow: '0 0 10px rgba(239, 68, 68, 0.2)',
+              gap: '5px',
               flexShrink: 0,
             }}
           >
-            🚨 處置股票 (分盤撮合)
+            <AlertOctagon size={13} />
+            <span>處置股票 (分盤撮合)</span>
           </span>
         )}
         {data.marketStatusTag === 'ATTENTION' && (
@@ -440,21 +468,21 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
             style={{
               padding: '4px 10px',
               borderRadius: '6px',
-              background: 'rgba(245, 158, 11, 0.22)',
+              background: 'rgba(245, 158, 11, 0.16)',
               color: '#fbbf24',
-              border: '1px solid #f59e0b',
+              border: '1px solid rgba(245, 158, 11, 0.5)',
               fontSize: '0.75rem',
               fontWeight: 800,
               letterSpacing: '0.5px',
               whiteSpace: 'nowrap',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '4px',
-              boxShadow: '0 0 10px rgba(245, 158, 11, 0.2)',
+              gap: '5px',
               flexShrink: 0,
             }}
           >
-            ⚠️ 注意股票
+            <AlertTriangle size={13} />
+            <span>注意股票</span>
           </span>
         )}
 
@@ -584,16 +612,20 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
                   fontSize: '0.62rem',
                   padding: '1px 6px',
                   borderRadius: '4px',
-                  background: 'rgba(245, 158, 11, 0.18)',
+                  background: 'rgba(245, 158, 11, 0.16)',
                   color: '#fbbf24',
-                  border: '1px solid rgba(245, 158, 11, 0.45)',
+                  border: '1px solid rgba(245, 158, 11, 0.4)',
                   fontWeight: 700,
                   letterSpacing: '0.02em',
                   whiteSpace: 'nowrap',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '3px',
                 }}
                 title={data.settlementReason || '市場尚未收盤結算，以確定之前日收盤數據為準'}
               >
-                ⚠️ 盤中未結算
+                <AlertTriangle size={10} />
+                <span>盤中未結算</span>
               </span>
             )}
           </div>
@@ -762,6 +794,112 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
             {data.dataPointsCount} 日
           </span>
         </div>
+      </div>
+
+      {/* 3. 第三層：快速切換膠囊 (QUICK_CHIPS + 庫存前大持股) 與 Portfolio Position HUD */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '8px',
+          paddingTop: '8px',
+          borderTop: '1px solid rgba(255, 255, 255, 0.07)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          {QUICK_CHIPS.map((chip) => {
+            const isActive = chip.symbol.toUpperCase() === currentSymbol.toUpperCase();
+            return (
+              <button
+                key={`quick-${chip.symbol}`}
+                type="button"
+                onClick={() => handleSelectSymbol(chip.symbol, chip.market)}
+                style={{
+                  padding: '3px 9px',
+                  borderRadius: '6px',
+                  border: isActive
+                    ? '1px solid rgba(56, 189, 248, 0.5)'
+                    : '1px solid rgba(255, 255, 255, 0.07)',
+                  background: isActive ? 'rgba(56, 189, 248, 0.14)' : 'rgba(255, 255, 255, 0.03)',
+                  color: isActive ? '#38bdf8' : '#94a3b8',
+                  fontSize: '0.72rem',
+                  fontWeight: isActive ? 700 : 500,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <span>{chip.symbol}</span>
+                <span style={{ opacity: 0.75 }}>{chip.name}</span>
+              </button>
+            );
+          })}
+          {topHoldingPills.map((pill) => {
+            const isActive = pill.symbol.toUpperCase() === currentSymbol.toUpperCase();
+            return (
+              <button
+                key={`holding-${pill.symbol}`}
+                type="button"
+                onClick={() => handleSelectSymbol(pill.symbol, pill.market)}
+                style={{
+                  padding: '3px 9px',
+                  borderRadius: '6px',
+                  border: isActive
+                    ? '1px solid rgba(16, 185, 129, 0.5)'
+                    : '1px solid rgba(16, 185, 129, 0.2)',
+                  background: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.06)',
+                  color: isActive ? '#34d399' : '#6ee7b7',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <Briefcase size={11} />
+                <span>{pill.symbol}</span>
+                <span style={{ opacity: 0.8 }}>{pill.name}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Portfolio Position HUD 膠囊：當持有當前標的時顯示股數與均價 vs VWAP 對比 */}
+        {heldShares > 0 && (
+          <div
+            data-testid="portfolio-position-hud"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '4px 10px',
+              borderRadius: '7px',
+              background: 'rgba(16, 185, 129, 0.08)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
+              fontSize: '0.74rem',
+              color: '#e2e8f0',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#34d399', fontWeight: 700 }}>
+              <Briefcase size={12} />
+              <span>持倉 {heldShares.toLocaleString()} 股</span>
+            </span>
+            <span style={{ color: '#94a3b8' }}>
+              均價 <strong style={{ color: '#f8fafc' }}>{heldAvgCost.toFixed(2)}</strong>
+            </span>
+            {hasVwapComparison && (
+              <span style={{ color: vwapDiffPct <= 0 ? '#34d399' : '#fbbf24', fontWeight: 600 }}>
+                vs VWAP {vwapCost.toFixed(2)} ({vwapDiffPct >= 0 ? '+' : ''}
+                {vwapDiffPct.toFixed(1)}%)
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

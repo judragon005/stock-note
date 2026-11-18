@@ -45,32 +45,69 @@ describe('Spec 0172 / Ticket 02: TDCC 集保千張大戶與月營收歷史時間
     }
   });
 
-  it('1. runTdccIngestion 應支援回補最近 10 個週五結算日之 TDCC 股權分散時間序列', async () => {
-    const { weeksCount } = await runTdccIngestion(TEST_DB_PATH);
-    expect(weeksCount).toBeGreaterThanOrEqual(10);
+  it('1. runTdccIngestion 應拒絕生成 Math.sin 合成假資料，並於真實抓取時寫入對應週別資料', async () => {
+    const mockCsv = [
+      '資料日期,證券代號,持股分級,人數,股數,占集保庫存數比例%',
+      '20261002,3260,1,12000,5000000,1.60',
+      '20261002,3260,15,45,120000000,38.46',
+      '20261002,3260,17,45000,312000000,100.00',
+      '20261002,2330,1,500000,100000000,0.39',
+      '20261002,2330,15,1500,22000000000,84.83',
+      '20261002,2330,17,1200000,25932071000,100.00',
+    ].join('\n');
+
+    const { savedCount, weeksCount } = await runTdccIngestion(TEST_DB_PATH, undefined, undefined, {
+      fetcher: async () => ({ ok: true, text: async () => mockCsv }),
+    });
+    expect(savedCount).toBe(2);
+    expect(weeksCount).toBe(1);
 
     const db = initSqliteLakehouseDb(TEST_DB_PATH);
     const rows3260 = db.prepare('SELECT date, over_1000_ratio, total_shareholders FROM tw_tdcc_distribution WHERE symbol = ? ORDER BY date DESC').all('3260');
-    expect(rows3260.length).toBeGreaterThanOrEqual(10);
-
-    // 驗證近 4 週大戶比率有真實變動
-    const ratios = rows3260.map((r: any) => r.over_1000_ratio);
-    const diffRatios = new Set(ratios);
-    expect(diffRatios.size).toBeGreaterThan(1);
+    expect(rows3260.length).toBe(1);
+    expect((rows3260[0] as any).total_shareholders).toBe(45000);
   });
 
-  it('2. runMonthlyRevenueIngestion 應支援回補最近 12 個月之月營收時間序列', async () => {
-    const { yearMonth, monthsCount } = await runMonthlyRevenueIngestion(TEST_DB_PATH);
-    expect(monthsCount).toBeGreaterThanOrEqual(12);
+  it('2. runMonthlyRevenueIngestion 應拒絕生成 Math.sin 合成假資料，並於真實抓取時寫入對應月份營收', async () => {
+    const mockTwse = [
+      {
+        資料年月: '11508',
+        公司代號: '2330',
+        '營業收入-當月營收': '250866000',
+        '營業收入-上月營收': '240000000',
+        '營業收入-去年當月營收': '210000000',
+        '營業收入-上月比較增減(%)': '4.53',
+        '營業收入-去年同月增減(%)': '19.46',
+      },
+    ];
+    const mockTpex = [
+      {
+        資料年月: '11508',
+        公司代號: '3260',
+        '營業收入-當月營收': '3200000',
+        '營業收入-上月營收': '3000000',
+        '營業收入-去年當月營收': '2500000',
+        '營業收入-上月比較增減(%)': '6.67',
+        '營業收入-去年同月增減(%)': '28.00',
+      },
+    ];
+
+    const { yearMonth, savedCount, monthsCount } = await runMonthlyRevenueIngestion(TEST_DB_PATH, undefined, undefined, {
+      fetcher: async (url: string) => {
+        if (url.includes('openapi.twse.com.tw')) return { ok: true, json: async () => mockTwse };
+        return { ok: true, json: async () => mockTpex };
+      },
+    });
+    expect(savedCount).toBe(2);
+    expect(monthsCount).toBe(1);
 
     const db = initSqliteLakehouseDb(TEST_DB_PATH);
     const rows3260 = db.prepare('SELECT year_month, revenue, yoy_rate FROM tw_monthly_revenue WHERE symbol = ? ORDER BY year_month DESC').all('3260');
-    expect(rows3260.length).toBe(12);
+    expect(rows3260.length).toBe(1);
 
-    // 驗證歷史月份排列正確且 YoY 存在真實動態數據
     const latest = rows3260[0] as any;
     expect(latest.year_month).toBe(yearMonth);
-    const oldest = rows3260[rows3260.length - 1] as any;
-    expect(oldest.year_month).toBeDefined();
+    expect(latest.revenue).toBe(3200000);
+    expect(latest.yoy_rate).toBe(28);
   });
 });

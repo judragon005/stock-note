@@ -3,6 +3,7 @@ import {
   getProgressBarStyle,
   getDayTradeRiskBadge,
   getDayTradeRiskItems,
+  formatDayTradeExtraMetrics,
 } from './DayTradeRiskCard';
 
 describe('DayTradeRiskCard - 隔日沖風險進度條元件規範 (Ticket 19)', () => {
@@ -51,6 +52,28 @@ describe('DayTradeRiskCard - 隔日沖風險進度條元件規範 (Ticket 19)', 
       expect(items[1].label).toBe('籌碼換手率');
       expect(items[1].value).toBe(58);
       expect(items.some(i => i.label === '籌碼過手率')).toBe(false);
+    });
+
+    it('指標 icon 不應包含系統 Emoji', () => {
+      const items = getDayTradeRiskItems({});
+      const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+      items.forEach((item) => {
+        expect(emojiRegex.test(item.icon)).toBe(false);
+      });
+    });
+  });
+
+  describe('formatDayTradeExtraMetrics - 借券賣出餘額與融資增減格式化', () => {
+    it('當存在 sblBalance 與 marginBalanceChange 時應正確格式化輸出', () => {
+      const res = formatDayTradeExtraMetrics({ sblBalance: 1250, marginBalanceChange: -320 });
+      expect(res.sblText).toBe('1,250 張');
+      expect(res.marginChangeText).toBe('-320 張');
+    });
+
+    it('缺少 sblBalance 或 marginBalanceChange 時應回傳 null', () => {
+      const res = formatDayTradeExtraMetrics({});
+      expect(res.sblText).toBeNull();
+      expect(res.marginChangeText).toBeNull();
     });
   });
 });

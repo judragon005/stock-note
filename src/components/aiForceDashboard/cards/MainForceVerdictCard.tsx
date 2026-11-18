@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { MainForceVerdictData } from '../../../types/aiForceDashboard';
-import { MoreVertical } from 'lucide-react';
+import { Sparkles, Target, Zap, AlertTriangle, BarChart3, CheckCircle2, Scale, X } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 
 export interface MainForceVerdictCardProps {
@@ -373,13 +373,13 @@ export function checkLiquidityGate(avgVolume?: number): LiquidityGateResult {
   if (avgVolume !== undefined && avgVolume < 300) {
     return {
       isLowLiquidity: true,
-      badge: '⚠️ 流動性偏低 (<300張防作線警示)',
+      badge: '流動性偏低 (<300張防作線警示)',
       desc: '近 5 日日均成交量低於 300 張，易受少數特定主力對作作線，量化統計訊號權重自動調降。',
     };
   }
   return {
     isLowLiquidity: false,
-    badge: '✅ 流動性充足 (>300張)',
+    badge: '流動性充足 (>300張)',
     desc: '日均成交量能健康，大單進出微觀結構正常，量化模型具備高顯著性。',
   };
 }
@@ -479,15 +479,20 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
   const spectrumPhases = getMainForceSpectrumPhases(verb);
   const metricCapsules = parseVerdictMetrics(verdictText);
   const playbook = getMainForcePlaybook(verb, metricCapsules);
-  const liquidity = checkLiquidityGate();
+  const liquidity = checkLiquidityGate(data?.avgVolume5Lots);
+  const displayStopLoss =
+    data?.stopLossPrice != null ? `${data.stopLossPrice.toLocaleString()} 元` : playbook.stopLossPrice;
+  const displayTakeProfit =
+    data?.takeProfitPrice != null ? `${data.takeProfitPrice.toLocaleString()} 元` : playbook.targetPrice;
+  const displayRiskReward = data?.riskRewardRatio ?? playbook.riskRewardRatio;
 
   return (
     <div
       data-testid="main-force-verdict-card"
       style={{
-        background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.9) 100%)',
+        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(10, 15, 28, 0.92) 100%)',
         backdropFilter: 'blur(16px)',
-        border: '1px solid rgba(255, 255, 255, 0.12)',
+        border: '1px solid rgba(255, 255, 255, 0.07)',
         borderRadius: '14px',
         padding: '16px 20px',
         display: 'flex',
@@ -496,7 +501,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
         height: '100%',
         boxSizing: 'border-box',
         gap: '10px',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.35)',
+        boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.35)',
         position: 'relative',
         overflowY: 'auto',
       }}
@@ -504,7 +509,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
       {/* 1. 頂部：標題與法人動作狀態徽章 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '18px' }}>🔮</span>
+          <Sparkles size={16} strokeWidth={1.5} color="#a78bfa" />
           <TermTooltip termId="mlpSemanticVerdict">
             <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#f8fafc', letterSpacing: '0.2px', cursor: 'help' }}>
               18 主力追蹤總評判 <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 500 }}>(MLP-AI)</span>
@@ -529,7 +534,6 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
           >
             {tag}
           </button>
-          <MoreVertical size={14} style={{ color: '#64748b', cursor: 'pointer' }} />
         </div>
       </div>
 
@@ -687,8 +691,9 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '13px', fontWeight: 800, color: '#f8fafc', letterSpacing: '0.3px' }}>
-              🎯 實戰操盤點位看板
+            <span style={{ fontSize: '13px', fontWeight: 800, color: '#f8fafc', letterSpacing: '0.3px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <Target size={14} strokeWidth={1.5} color="#38bdf8" />
+              實戰操盤點位看板
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ fontSize: '11px', color: '#94a3b8' }}>預估勝率</span>
@@ -722,6 +727,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
                 防守停損
               </div>
               <div
+                data-testid="verdict-stop-loss-price"
                 style={{
                   fontSize: '18px',
                   fontWeight: 900,
@@ -730,7 +736,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
                   letterSpacing: '-0.3px',
                 }}
               >
-                {playbook.stopLossPrice}
+                {displayStopLoss}
               </div>
             </div>
 
@@ -750,6 +756,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
                 目標滿足
               </div>
               <div
+                data-testid="verdict-take-profit-price"
                 style={{
                   fontSize: '18px',
                   fontWeight: 900,
@@ -758,7 +765,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
                   letterSpacing: '-0.3px',
                 }}
               >
-                {playbook.targetPrice}
+                {displayTakeProfit}
               </div>
             </div>
 
@@ -778,6 +785,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
                 預估風報比
               </div>
               <div
+                data-testid="verdict-risk-reward-ratio"
                 style={{
                   fontSize: '18px',
                   fontWeight: 900,
@@ -786,7 +794,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
                   letterSpacing: '-0.3px',
                 }}
               >
-                {playbook.riskRewardRatio}
+                {displayRiskReward}
               </div>
             </div>
           </div>
@@ -834,8 +842,9 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
         >
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 800, color: '#f8fafc', letterSpacing: '0.3px' }}>
-                ⚡ 戰術執行指令
+              <span style={{ fontSize: '13px', fontWeight: 800, color: '#f8fafc', letterSpacing: '0.3px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <Zap size={14} strokeWidth={1.5} color="#fbbf24" />
+                戰術執行指令
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <span style={{ fontSize: '11px', color: '#94a3b8' }}>部位上限</span>
@@ -883,7 +892,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
             }}
           >
             <div style={{ fontWeight: 800, marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span>⚠️</span> 模型風控失效門檻
+              <AlertTriangle size={13} strokeWidth={1.5} /> 模型風控失效門檻
             </div>
             {playbook.invalidationGate}
           </div>
@@ -915,7 +924,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
           {/* 標題列 */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '14px' }}>📊</span>
+              <BarChart3 size={14} strokeWidth={1.5} color="#38bdf8" />
               <strong style={{ fontSize: '13px', color: '#f8fafc', letterSpacing: '0.2px' }}>
                 量化研判深度指南 (Quant Deep-Dive)
               </strong>
@@ -931,9 +940,11 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
                 cursor: 'pointer',
                 padding: '2px 6px',
                 borderRadius: '4px',
+                display: 'inline-flex',
+                alignItems: 'center',
               }}
             >
-              ✕
+              <X size={14} strokeWidth={1.5} />
             </button>
           </div>
 
@@ -993,8 +1004,9 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
               gap: '3px',
             }}
           >
-            <div style={{ fontSize: '10.5px', fontWeight: 700, color: liquidity.isLowLiquidity ? '#f59e0b' : '#34d399' }}>
-              {liquidity.badge}
+            <div style={{ fontSize: '10.5px', fontWeight: 700, color: liquidity.isLowLiquidity ? '#f59e0b' : '#34d399', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              {liquidity.isLowLiquidity ? <AlertTriangle size={12} strokeWidth={1.5} /> : <CheckCircle2 size={12} strokeWidth={1.5} />}
+              <span>{liquidity.badge}</span>
             </div>
             <div style={{ fontSize: '9.5px', color: '#cbd5e1', lineHeight: 1.4 }}>
               {liquidity.desc}
@@ -1009,9 +1021,13 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
               lineHeight: 1.4,
               borderTop: '1px solid rgba(255, 255, 255, 0.06)',
               paddingTop: '6px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '4px',
             }}
           >
-            ⚖️ 合規免責：本研判由類神經量化模型生成，僅供輔助分析，非投資買賣保證。投資人應獨立判斷並自負盈虧。
+            <Scale size={11} strokeWidth={1.5} style={{ flexShrink: 0, marginTop: '2px' }} />
+            <span>合規免責：本研判由類神經量化模型生成，僅供輔助分析，非投資買賣保證。投資人應獨立判斷並自負盈虧。</span>
           </div>
         </div>
       )}

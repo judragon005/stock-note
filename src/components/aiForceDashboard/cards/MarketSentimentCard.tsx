@@ -1,7 +1,6 @@
 import React from 'react';
 import type { MarketSentimentData } from '../../../types/aiForceDashboard';
 import { calculateGaugeNeedleAngle } from '../../../engine/marketSentimentEngine';
-import { MoreVertical } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 
 export interface MarketSentimentCardProps {
@@ -111,21 +110,6 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
             </span>
           </TermTooltip>
         </div>
-        <button
-          type="button"
-          aria-label="選項"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: '#64748b',
-            cursor: 'pointer',
-            padding: '2px',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <MoreVertical size={14} />
-        </button>
       </div>
 
       {/* 主體：左側半圓彩虹儀表 + 右側參與者情緒水平條或美股宏觀數據 */}

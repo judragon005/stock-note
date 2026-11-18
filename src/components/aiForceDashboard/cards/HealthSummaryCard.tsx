@@ -1,6 +1,5 @@
 import React from 'react';
 import type { HealthSummaryData } from '../../../types/aiForceDashboard';
-import { MoreVertical } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseHealthScore } from '../../../constants/aiForceGlossary';
 
@@ -36,7 +35,7 @@ export function calculateOverallHealthScore(data: {
     data.chipHealth,
     data.technicalStructure,
     data.capitalMomentum,
-    data.liquidityRisk,
+    Math.max(0, Math.min(100, 100 - data.liquidityRisk)),
     data.institutionalSupport,
   ];
   const sum = values.reduce((acc, curr) => acc + curr, 0);
@@ -200,21 +199,6 @@ export const HealthSummaryCard: React.FC<HealthSummaryCardProps> = ({ data }) =>
             </span>
           </TermTooltip>
         </div>
-        <button
-          type="button"
-          aria-label="選項"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: '#64748b',
-            cursor: 'pointer',
-            padding: '2px',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <MoreVertical size={14} />
-        </button>
       </div>
 
       {/* 5 環橫向排列容器 */}

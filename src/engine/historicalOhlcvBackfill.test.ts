@@ -222,21 +222,22 @@ describe('Historical OHLCV & Indicators Backfill Engine (回補引擎)', () => {
       expect(result.candles[0].close).toBe(452);
     });
 
-    it('當遠端 API 抓取失敗 (如查無資料/404) 且本地無舊快取時，應自動回退生成合成日 K (Synthetic Fallback) 並持久化', async () => {
+    it('Zero-Mock Policy: 當湖倉與遠端 API 皆查無資料或失敗且本地無舊快取時，應返回空陣列且絕不生成合成日 K 或寫入 IndexedDB', async () => {
       vi.spyOn(db, 'getSymbolOhlcv').mockResolvedValue(null);
+      const marketCacheLoader = await import('./marketCacheLoader');
+      vi.spyOn(marketCacheLoader, 'loadSymbolHistoryFromLakehouse').mockResolvedValue(null);
       vi.spyOn(priceFetcher, 'fetchWithCORSProxy').mockRejectedValue(new Error('HTTP 404 Not Found'));
+      const muscleBookerEngine = await import('./muscleBookerEngine');
+      const syntheticSpy = vi.spyOn(muscleBookerEngine, 'generateSyntheticCandles');
       const saveOhlcvSpy = vi.spyOn(db, 'saveSymbolOhlcv').mockResolvedValue();
+      const saveIndicatorsSpy = vi.spyOn(db, 'saveSymbolIndicators').mockResolvedValue();
 
       const result = await backfillSymbolOhlcvAndIndicators('UNKNOWN_SYM', 'US');
 
-      expect(result.candles.length).toBeGreaterThanOrEqual(25);
-      expect(result.indicators.length).toBeGreaterThanOrEqual(25);
-      expect(saveOhlcvSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          symbol: 'UNKNOWN_SYM',
-          candles: expect.any(Array),
-        })
-      );
+      expect(result).toEqual({ candles: [], indicators: [] });
+      expect(syntheticSpy).not.toHaveBeenCalled();
+      expect(saveOhlcvSpy).not.toHaveBeenCalled();
+      expect(saveIndicatorsSpy).not.toHaveBeenCalled();
     });
 
     it('Ticket 02: 當台股遭遇 Yahoo 429 限流且 IndexedDB 無資料時，應自動從本地 compact 快取與最新 summary 成功合流並沉澱', async () => {
@@ -325,6 +326,95 @@ describe('Historical OHLCV & Indicators Backfill Engine (回補引擎)', () => {
       const lastSec = Math.floor(new Date('2026-06-15').getTime() / 1000);
       const period1 = calculateIncrementalPeriod1(existing, 1780000000);
       expect(period1).toBe(lastSec - 7 * 86400);
+    });
+  });
+
+  describe('5. loadSymbolFullLakehouseData (湖倉完整籌碼與衍生欄位映射)', () => {
+    it('Ticket 05: 應正確映射 sblBalance、依日期排序計算 marginBalanceChange / shortBalanceChange，並映射 etfNav 與 corporateActions', async () => {
+      const { loadSymbolFullLakehouseData } = await import('./marketCacheLoader');
+
+      const mockResponsePayload = {
+        candles: [
+          { date: '2026-10-01', open: 50, high: 51, low: 49.5, close: 50.2, volume: 10000 },
+          { date: '2026-10-02', open: 50.2, high: 51.2, low: 50, close: 50.5, volume: 12000 },
+          { date: '2026-10-03', open: 50.5, high: 51.5, low: 50.2, close: 51.0, volume: 15000 },
+        ],
+        chips: {
+          // 刻意不依日期順序排列，驗證依日期升冪排序後取最新兩筆計算差值
+          '2026-10-03': {
+            date: '2026-10-03',
+            foreign_net: 500,
+            trust_net: 100,
+            dealer_net: -50,
+            margin_balance: 12500,
+            short_balance: 820,
+            sbl_balance: 3400,
+          },
+          '2026-10-01': {
+            date: '2026-10-01',
+            foreign_net: 200,
+            trust_net: 50,
+            dealer_net: 10,
+            margin_balance: 11000,
+            short_balance: 900,
+            sbl_balance: 3000,
+          },
+          '2026-10-02': {
+            date: '2026-10-02',
+            foreign_net: 300,
+            trust_net: 80,
+            dealer_net: 20,
+            margin_balance: 12000,
+            short_balance: 850,
+            sbl_balance: 3200,
+          },
+        },
+        etfNav: {
+          date: '2026-10-03',
+          closePrice: 51.0,
+          nav: 50.5,
+          premiumDiscountRatio: 0.99,
+        },
+        corporateActions: [
+          {
+            exDate: '2026-10-15',
+            paymentDate: '2026-11-10',
+            cashDividendPerShare: 2.5,
+            stockDividendRatio: 0,
+            mandatoryBuybackDate: '2026-10-10',
+          },
+        ],
+      };
+
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponsePayload,
+      } as Response);
+
+      const result = await loadSymbolFullLakehouseData('0050', 'TW');
+
+      expect(result).not.toBeNull();
+      expect(result?.sblBalance).toBe(3400);
+      expect(result?.institutionalRecords?.find((r) => r.date === '2026-10-02')?.sblBalance).toBe(3200);
+      expect(result?.marginBalance).toBe(12500);
+      expect(result?.marginBalanceChange).toBe(500);
+      expect(result?.shortBalance).toBe(820);
+      expect(result?.shortBalanceChange).toBe(-30);
+      expect(result?.etfNav).toEqual({
+        date: '2026-10-03',
+        closePrice: 51.0,
+        nav: 50.5,
+        premiumDiscountRatio: 0.99,
+      });
+      expect(result?.corporateActions).toEqual([
+        {
+          exDate: '2026-10-15',
+          paymentDate: '2026-11-10',
+          cashDividendPerShare: 2.5,
+          stockDividendRatio: 0,
+          mandatoryBuybackDate: '2026-10-10',
+        },
+      ]);
     });
   });
 });

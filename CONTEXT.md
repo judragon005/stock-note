@@ -3035,3 +3035,20 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     2. **Risk Math Precision & Single Equity Cap SSOT (風控精度修復與單一權益上限基準)**：修正 `maxDropToleranceTo130Percent` `0~1` 比例尺、1-Day 95% VaR 扣除現金部位、補算 `soxStressImpact3PctTWD`，全區與晨報簡報統一採用雙溫度計 `recommendedEquityCapPercent`；新增 `estimateTsmcExDividendImpactPoints` 無條件預警台積電除息蒸發點數。
     3. **Modular War Room & Cross-Tab Calibration Bus (組合式戰情室與跨頁校準總線)**：拆出 `MarketPulseAndCanariesCard`、`WarRoomMorningBriefCard`、`DualMomentumRotationCard`、`CatalystCalendarCard`、`useWarRoomMacroSync`，消滅 L6/L8 重複防護盾與 `privacyMode` 明文外洩；`MacroQuickCalibrationModal` 擴充 8 項欄位並與 `ZavySlowWealthWorkspace` 共享校準快照與美股多週期寬度。
 
+- **HoldingPosition Canonical Type Convergence & Silent Circuit Breaker Elimination (HoldingPosition 正統領域型別收斂與戰情室靜默斷路根除)**:
+  - 核心模組：`src/types/stock.ts`、`src/hooks/useWarRoomPortfolioMetrics.ts`、`src/utils/warRoomBriefBuilder.ts`、`src/engine/dispositionWindowEngine.ts`。
+  - 規格來源：Spec 0236 (v9.21.1) 與 ADR 0236，關聯 GitHub Issue #586 / Debt 0059。
+  - 核心領域術語與架構革新：
+    1. **Canonical SSOT Field Convergence (正統 SSOT 欄位收斂)**：嚴禁於 `HoldingPosition` 引入 `avgExchangeRate` 與 `tradePlan` 冗餘別名；強制統一讀取會計引擎正統欄位 `avgCostFxRate` 與 `plan`，消除戰情室美股匯率靜默回退至 31.8 的實時失真。
+    2. **Disposition Events Type Elevation (處置事件型別提升與單向依賴)**：將 `DispositionEventInput` 自計算引擎提升至 `src/types/stock.ts` 並正式掛載於 `HoldingPosition.dispositionEvents`，徹底清除雙重轉型氣味。
+
+- **Main Force War Room 4.0 Holistic De-Mocking, Dimensional Homomorphism & Obsidian Precision UI Architecture (主力戰情室 4.0 全鏈路去假、量綱同態校驗、湖倉深度接線與曜石精密 UI 重構)**:
+  - 核心模組：`scripts/market-sync/ingest-tw-tdcc.cjs`、`scripts/market-sync/ingest-tw-monthly-revenue.cjs`、`scripts/market-sync/vite-market-middleware.cjs`、`src/engine/aiForceDashboardEngine.ts`、`src/engine/historicalOhlcvBackfill.ts`、`src/engine/mainForceVerdictEngine.ts`、`src/engine/aiForcePromptAdapter.ts`、`src/components/AiForceDashboardView.tsx`、`src/components/aiforce/TaskPanels.tsx`、`src/components/aiforce/cards/*`。
+  - 規格來源：Spec 0237 (v9.22.0) 與 ADR 0237，關聯 GitHub Issue #588。
+  - 核心領域術語與架構革新：
+    1. **Zero-Synthetic Circuit Breaker (零合成數據物理斷路器)**：後端徹底移除以 `Math.sin/cos` 捏造 12.5 萬筆假集保與 10.9 萬筆假營收之造假邏輯，全面接通 TDCC OpenData CSV (`1-5`) 與 TWSE/TPEx 月營收 OpenAPI (`t187ap05_L`) 並提供 `purgeSyntheticRecords` 物理清洗；前端回補層拔除 `generateSyntheticCandles`，查無日 K 時誠實回傳空陣列進入 `isDataPending` 空狀態；Card 20 拔除寫死 420 億與 4.2% 之假 ETF 模板，改接真實淨值與除權息日曆。
+    2. **Dimensional Homomorphism Gate (量綱同態校驗閘門)**：徹底解決台股日 K 成交量為「股」而法人買賣超為「張」之 1,000 倍量綱失真，健康度、風險蛛網、AI 信心度、六維雷達與市場情緒 `institutionalNetRatio` 統一在除法分母正規化為張數；Card 11 健康度總分正負向極性校正，負向 `liquidityRisk` 反轉為 `100 - liquidityRisk` 正向安全度；Card 07 VWAP 成本帶正負乖離標籤顛倒修正；`requestGuardRef` 阻斷快速切換標的時之過期非同步競態覆蓋。
+    3. **Lakehouse Full-Depth Pipeline & Personal HUD (湖倉深層流水線與持倉感知抬頭顯示器)**：打通 `/api/market/history/:symbol` 回傳借券賣出 (`sblBalance`)、融資日增減 (`marginBalanceChange`)、董監質押 (`pledge`)、ETF 折溢價 (`etfNav`)、除權息日曆 (`corporateActions`)；接通 `synthesizeMainForceVerdict` (MLP 主力語意)、外資/投信連買連賣天數、美股微觀量價 4 指標 (`usMicroMetrics`: RVOL, VWAP Bias, MFI, ATR) 與 10 日 OBV Sparkline；頂部整合個人持倉 HUD（均價 vs VWAP 乖離對比、庫存張數）與 7 步深度投研彈窗全量參數。
+    4. **Obsidian Precision UI Architecture (曜石精密反 AI Slop 視覺體系)**：物理拔除 15 張卡片無作用 `<MoreVertical />` 裝飾按鈕；100% 根除系統 Emoji，全數替換為 `lucide-react` 向量圖示；統一曜石深邃底色 (`#0B0F19`) + `1px solid rgba(255,255,255,0.07)` 極細石墨邊框 + 等寬微標籤 (`01`~`21`)；首屏重構「戰術摘要帶」與 Zone 01~04 戰術章節，消滅底部遮擋，實現「0 滾動直達結論」。
+
+

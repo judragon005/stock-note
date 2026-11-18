@@ -351,15 +351,17 @@ describe('Ticket 03: AI 主力戰情室端到端資料庫注入與全視圖驗�
       {
         tdccRecords: [],
         revenueRecords: [],
+        valuationData: { dividendYield: 3.1 },
+        corporateActions: [{ exDate: '2026-07-16', cashDividendPerShare: 1.8, stockDividendRatio: 0 }],
         currency: 'TWD',
         volumeUnit: '張',
       }
     );
 
-    // 驗證 0050 正確自適應為 ETF 視圖
+    // 驗證 0050 正確自適應為 ETF 視圖（以真實估值殖利率與除權息紀錄驅動，不再使用假 420 億模板）
     expect(report0050.monthlyRevenue?.isEtf).toBe(true);
-    expect(report0050.monthlyRevenue?.etfData?.aumBillion).toBeDefined();
-    expect(report0050.monthlyRevenue?.etfData?.dividendYield).toBeDefined();
+    expect(report0050.monthlyRevenue?.etfData?.dividendYield).toBe(3.1);
+    expect(report0050.monthlyRevenue?.etfData?.quarterlyDividends.length).toBeGreaterThan(0);
 
     // 3. NVDA 美股：微觀動能與零假數據驗收
     const mockNvdaCandles = Array.from({ length: 60 }, (_, i) => ({

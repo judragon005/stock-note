@@ -304,14 +304,16 @@ export function calculateMomentumScore(
  */
 export function calculateLiquidityScore(
   candles: Array<{ volume: number }> = [],
-  market: MarketType = 'TW'
+  market: MarketType = 'TW',
+  options?: { volumeInShares?: boolean }
 ): number {
   if (!candles || candles.length === 0) return 50;
 
   const recent5 = candles.slice(-5);
-  const avgVol5 = recent5.reduce((acc, c) => acc + c.volume, 0) / recent5.length;
+  const rawAvgVol5 = recent5.reduce((acc, c) => acc + c.volume, 0) / recent5.length;
 
   if (market === 'TW') {
+    const avgVol5 = options?.volumeInShares ? rawAvgVol5 / 1000 : rawAvgVol5;
     // 台股：張數基準
     if (avgVol5 > 5000) return 95;
     if (avgVol5 > 3000) return 88;
@@ -320,9 +322,9 @@ export function calculateLiquidityScore(
     return 25;
   } else {
     // 美股：股數基準
-    if (avgVol5 > 1_000_000) return 92;
-    if (avgVol5 > 200_000) return 78;
-    if (avgVol5 > 50_000) return 60;
+    if (rawAvgVol5 > 1_000_000) return 92;
+    if (rawAvgVol5 > 200_000) return 78;
+    if (rawAvgVol5 > 50_000) return 60;
     return 35;
   }
 }
@@ -365,6 +367,7 @@ export interface MultiDimensionRadarInput {
   mainForceCost?: number;
   institutionalFlow?: InstitutionalFlowData;
   market?: MarketType;
+  volumeInShares?: boolean;
 }
 
 /**
@@ -379,6 +382,7 @@ export function calculateMultiDimensionRadar(
     mainForceCost = 0,
     institutionalFlow = { history: [], recentDaysTable: [], cumulative20DaysSummary: '', recent5DaysSummary: '' },
     market = 'TW',
+    volumeInShares = false,
   } = input;
 
   // 安全邊界：不足 5 根日 K 時提供防護回退
@@ -406,7 +410,7 @@ export function calculateMultiDimensionRadar(
     // 美股無官方集中三大法人，籌碼軸由量價微觀機構力道與趨勢結構共同映射
     chips = clamp(Math.round(institutional * 0.85 + trend * 0.15), 0, 100);
   }
-  const liquidity = calculateLiquidityScore(candles, market);
+  const liquidity = calculateLiquidityScore(candles, market, { volumeInShares });
   const volatility = calculateVolatilityScore(candles);
   const momentum = calculateMomentumScore(lastKline, candles);
 

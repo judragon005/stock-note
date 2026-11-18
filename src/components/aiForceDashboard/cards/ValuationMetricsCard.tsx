@@ -51,11 +51,11 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
         flexDirection: 'column',
         height: '100%',
         padding: '14px',
-        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(20, 30, 52, 0.8) 100%)',
+        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(10, 15, 28, 0.92) 100%)',
         borderRadius: '14px',
-        border: '1px solid rgba(139, 92, 246, 0.25)',
+        border: '1px solid rgba(255, 255, 255, 0.07)',
         backdropFilter: 'blur(10px)',
-        boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+        boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.35)',
       }}
     >
       {/* 標題列 */}
@@ -74,8 +74,10 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
             style={{
               padding: '2px 6px',
               borderRadius: '5px',
-              background: 'rgba(139, 92, 246, 0.25)',
-              color: '#a78bfa',
+              background: 'rgba(30, 41, 59, 0.9)',
+              color: '#94a3b8',
+              border: '1px solid rgba(255,255,255,0.08)',
+              fontFamily: 'var(--font-mono)',
               fontSize: '0.72rem',
               fontWeight: 800,
             }}
@@ -490,26 +492,30 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                 </div>
               </div>
 
-              {/* 最新單季獲利基石 (EPS / 毛利率 / 營利率，Spec 0199 Ticket 04) */}
-              {(current.latestQuarterEps !== undefined || current.grossMargin !== undefined) && (
+              {/* 最新單季獲利基石與董監質押治理 (EPS / 毛利率 / 營利率 / 董監質押，Spec 0199 & Spec 0237) */}
+              {(current.latestQuarterEps !== undefined ||
+                current.grossMargin !== undefined ||
+                current.directorPledgeRatio !== undefined) && (
                 <div
                   data-testid="valuation-quarterly-financials"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '6px',
                     padding: '5px 8px',
                     borderRadius: '6px',
                     background: 'rgba(15, 23, 42, 0.55)',
-                    border: '1px solid rgba(139, 92, 246, 0.18)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
                     fontSize: '0.68rem',
                     marginBottom: '8px',
                   }}
                 >
                   <span style={{ color: '#a78bfa', fontWeight: 700 }}>
-                    {current.latestQuarterName ? `${current.latestQuarterName} 季報` : '最新單季獲利'}
+                    {current.latestQuarterName ? `${current.latestQuarterName} 季報` : '最新單季與治理'}
                   </span>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                     {current.latestQuarterEps !== undefined && (
                       <span style={{ color: '#f8fafc' }}>
                         EPS: <strong style={{ color: current.latestQuarterEps >= 0 ? '#38bdf8' : '#f87171' }}>{current.latestQuarterEps}</strong>元
@@ -523,6 +529,18 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                     {current.operatingMargin !== undefined && (
                       <span style={{ color: '#94a3b8' }}>
                         營利: <strong>{current.operatingMargin}%</strong>
+                      </span>
+                    )}
+                    {current.directorPledgeRatio !== undefined && (
+                      <span
+                        data-testid="valuation-director-pledge"
+                        style={{
+                          color: current.directorPledgeRatio >= 30 ? '#f87171' : '#94a3b8',
+                          fontWeight: current.directorPledgeRatio >= 30 ? 700 : 500,
+                        }}
+                      >
+                        質押: <strong>{current.directorPledgeRatio.toFixed(1)}%</strong>
+                        {current.directorPledgeRatio >= 30 ? ' (高質押警戒)' : ''}
                       </span>
                     )}
                   </div>

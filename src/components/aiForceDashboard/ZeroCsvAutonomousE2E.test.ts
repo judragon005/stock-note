@@ -172,7 +172,7 @@ describe('Spec 0170 E2E: 零本地 CSV 依賴、全自主聯網回補與櫃買�
     // 驗證 RawDataView UI 渲染
     const html = renderToStaticMarkup(React.createElement(RawDataView, { report }));
     expect(html).toContain('2026-10-08');
-    expect(html).toContain('⚡ 即時');
+    expect(html).toContain('即時');
     expect(html).toContain('$785');
   });
 });

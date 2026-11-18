@@ -82,4 +82,29 @@ describe('RiskSpiderEngine - 五維量化風險評估演算法規範 (Ticket 10)
     expect(result.mainForceRiskLevel).toBeDefined();
     expect(result.volatilityRisk).toBeDefined();
   });
+
+  it('Spec 0237: 當 volumeUnit="SHARES" 或 volumeInShares=true 時，應先將股數換算為張數再評估流動性風險', () => {
+    const lowLotCandles = Array.from({ length: 10 }, () => ({
+      high: 105,
+      low: 95,
+      close: 100,
+      volume: 3000, // 3,000 股 = 3 張 (極低流動性)
+    }));
+    const highLotCandles = Array.from({ length: 10 }, () => ({
+      high: 105,
+      low: 95,
+      close: 100,
+      volume: 5_000_000, // 5,000,000 股 = 5,000 張 (高流動性)
+    }));
+
+    const lowResByUnit = calculateRiskSpider(lowLotCandles, { volumeUnit: 'SHARES' } as any);
+    const highResByUnit = calculateRiskSpider(highLotCandles, { volumeUnit: 'SHARES' } as any);
+    expect(lowResByUnit.liquidityRisk).toBeGreaterThanOrEqual(60);
+    expect(highResByUnit.liquidityRisk).toBeLessThanOrEqual(25);
+
+    const lowResByFlag = calculateRiskSpider(lowLotCandles, { volumeInShares: true } as any);
+    const highResByFlag = calculateRiskSpider(highLotCandles, { volumeInShares: true } as any);
+    expect(lowResByFlag.liquidityRisk).toBeGreaterThanOrEqual(60);
+    expect(highResByFlag.liquidityRisk).toBeLessThanOrEqual(25);
+  });
 });

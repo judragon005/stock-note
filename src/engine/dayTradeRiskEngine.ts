@@ -14,6 +14,8 @@ export interface DayTradeQuoteInput {
   marginBalance?: number;
   shortBalance?: number;
   dayTradeRate?: number;
+  sblBalance?: number;
+  marginBalanceChange?: number;
 }
 
 /**
@@ -39,6 +41,8 @@ export function calculateDayTradeRisk(
           ? Number(((quote.shortBalance / quote.marginBalance) * 100).toFixed(2))
           : undefined,
       dayTradeRate: quote?.dayTradeRate,
+      sblBalance: quote?.sblBalance,
+      marginBalanceChange: quote?.marginBalanceChange,
     };
   }
 
@@ -146,5 +150,7 @@ export function calculateDayTradeRisk(
     shortBalance: quote?.shortBalance,
     shortMarginRatio,
     dayTradeRate: quote?.dayTradeRate ?? dayTradeRatio,
+    sblBalance: quote?.sblBalance,
+    marginBalanceChange: quote?.marginBalanceChange,
   };
 }

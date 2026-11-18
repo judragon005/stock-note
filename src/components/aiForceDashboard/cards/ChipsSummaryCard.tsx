@@ -1,6 +1,5 @@
 import React from 'react';
 import type { ChipsSummaryData } from '../../../types/aiForceDashboard';
-import { MoreVertical } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 
 export interface ChipsSummaryCardProps {
@@ -283,14 +282,14 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
         flexDirection: 'column',
         height: '100%',
         padding: '14px',
-        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
+        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(10, 15, 28, 0.92) 100%)',
         borderRadius: '14px',
-        border: '1px solid rgba(59, 130, 246, 0.25)',
+        border: '1px solid rgba(255, 255, 255, 0.07)',
         backdropFilter: 'blur(10px)',
-        boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+        boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.35)',
       }}
     >
-      {/* 頂部標題與選單 */}
+      {/* 頂部標題 */}
       <div
         style={{
           display: 'flex',
@@ -304,8 +303,10 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
             style={{
               padding: '2px 6px',
               borderRadius: '5px',
-              background: 'rgba(59, 130, 246, 0.25)',
-              color: '#60a5fa',
+              background: 'rgba(30, 41, 59, 0.9)',
+              color: '#94a3b8',
+              border: '1px solid rgba(255,255,255,0.08)',
+              fontFamily: 'var(--font-mono)',
               fontSize: '0.72rem',
               fontWeight: 800,
             }}
@@ -318,21 +319,6 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
             </span>
           </TermTooltip>
         </div>
-        <button
-          type="button"
-          aria-label="選項"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: '#64748b',
-            cursor: 'pointer',
-            padding: '2px',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <MoreVertical size={14} />
-        </button>
       </div>
 
       {/* 主體：等寬 50%:50% (左側法人買賣張數明細 + 右側寬幅 Sparkline 走勢圖) */}
@@ -428,6 +414,45 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
           </div>
         </div>
       </div>
+
+      {/* 外資連續買賣與借券餘額 (Real Data) */}
+      {(data?.foreignConsecutiveDays != null || data?.sblBalance != null) && (
+        <div
+          data-testid="chips-extra-metrics"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingTop: '6px',
+            marginTop: '4px',
+            borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+            fontSize: '0.68rem',
+            gap: '8px',
+          }}
+        >
+          {data?.foreignConsecutiveDays != null && (
+            <span style={{ color: '#94a3b8' }}>
+              外資連{data.foreignConsecutiveDays >= 0 ? '買' : '賣'}{' '}
+              <strong
+                style={{
+                  color: data.foreignConsecutiveDays >= 0 ? '#ef4444' : '#10b981',
+                  fontFamily: 'monospace',
+                }}
+              >
+                {Math.abs(data.foreignConsecutiveDays)} 日
+              </strong>
+            </span>
+          )}
+          {data?.sblBalance != null && (
+            <span style={{ color: '#94a3b8' }}>
+              借券餘額：{' '}
+              <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>
+                {data.sblBalance.toLocaleString()} 張
+              </strong>
+            </span>
+          )}
+        </div>
+      )}
 
       {/* 底部摘要結論 */}
       <div

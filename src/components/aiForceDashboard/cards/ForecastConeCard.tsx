@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import { ForecastConeData } from '../../../types/aiForceDashboard';
-import { MoreVertical } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseForecastCone } from '../../../constants/aiForceGlossary';
 
@@ -283,14 +282,14 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
         flexDirection: 'column',
         height: '100%',
         padding: '14px',
-        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 30, 52, 0.78) 100%)',
+        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(10, 15, 28, 0.92) 100%)',
         borderRadius: '14px',
-        border: '1px solid rgba(59, 130, 246, 0.25)',
+        border: '1px solid rgba(255, 255, 255, 0.07)',
         backdropFilter: 'blur(10px)',
-        boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+        boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.35)',
       }}
     >
-      {/* 標題與選單列 */}
+      {/* 標題列 */}
       <div
         style={{
           display: 'flex',
@@ -304,8 +303,10 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
             style={{
               padding: '2px 6px',
               borderRadius: '5px',
-              background: 'rgba(59, 130, 246, 0.25)',
-              color: '#60a5fa',
+              background: 'rgba(30, 41, 59, 0.9)',
+              color: '#94a3b8',
+              border: '1px solid rgba(255,255,255,0.08)',
+              fontFamily: 'var(--font-mono)',
               fontSize: '0.72rem',
               fontWeight: 800,
             }}
@@ -325,22 +326,6 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
             | 依 60 日報酬統計推估
           </span>
         </div>
-
-        <button
-          type="button"
-          aria-label="選項"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: '#64748b',
-            cursor: 'pointer',
-            padding: '2px',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <MoreVertical size={14} />
-        </button>
       </div>
 
       {/* SVG 預測錐繪製區 */}

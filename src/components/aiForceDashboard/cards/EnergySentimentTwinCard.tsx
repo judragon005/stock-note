@@ -119,11 +119,11 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
         boxSizing: 'border-box',
         overflow: 'hidden',
         padding: '12px 14px',
-        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.88) 0%, rgba(20, 30, 52, 0.82) 100%)',
+        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(10, 15, 28, 0.92) 100%)',
         borderRadius: '14px',
-        border: '1px solid rgba(139, 92, 246, 0.25)',
+        border: '1px solid rgba(255, 255, 255, 0.07)',
         backdropFilter: 'blur(10px)',
-        boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+        boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.35)',
       }}
     >
       {/* 頂部標題 */}
@@ -140,8 +140,10 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
             style={{
               padding: '2px 5px',
               borderRadius: '4px',
-              background: 'rgba(139, 92, 246, 0.25)',
-              color: '#a78bfa',
+              background: 'rgba(30, 41, 59, 0.9)',
+              color: '#94a3b8',
+              border: '1px solid rgba(255,255,255,0.08)',
+              fontFamily: 'var(--font-mono)',
               fontSize: '0.68rem',
               fontWeight: 800,
             }}
@@ -292,29 +294,69 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
           </div>
         ) : (
           /* 台股市場合情緒指標 */
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>台股市場合情緒</div>
-              <div
-                style={{
-                  fontSize: '0.78rem',
-                  fontWeight: 800,
-                  color: marketScore >= 60 ? '#ef4444' : marketScore <= 40 ? '#38bdf8' : '#fbbf24',
-                }}
-              >
-                {sentimentData?.sentimentState === 'FEAR'
-                  ? '恐慌'
-                  : sentimentData?.sentimentState === 'GREED'
-                    ? '貪婪'
-                    : '中性'}{' '}
-                ({marketScore})
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>台股市場合情緒</div>
+                <div
+                  style={{
+                    fontSize: '0.78rem',
+                    fontWeight: 800,
+                    color: marketScore >= 60 ? '#ef4444' : marketScore <= 40 ? '#38bdf8' : '#fbbf24',
+                  }}
+                >
+                  {sentimentData?.sentimentState === 'FEAR'
+                    ? '恐慌'
+                    : sentimentData?.sentimentState === 'GREED'
+                      ? '貪婪'
+                      : '中性'}{' '}
+                  ({marketScore})
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '6px', fontSize: '0.62rem' }}>
+                <span style={{ color: '#f59e0b' }}>散 {sentimentData?.retailSentimentPercent ?? 50}%</span>
+                <span style={{ color: '#38bdf8' }}>法 {sentimentData?.institutionalSentimentPercent ?? 50}%</span>
+                <span style={{ color: '#ec4899' }}>主 {sentimentData?.mainForceSentimentPercent ?? 50}%</span>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '6px', fontSize: '0.62rem' }}>
-              <span style={{ color: '#f59e0b' }}>散 {sentimentData?.retailSentimentPercent ?? 50}%</span>
-              <span style={{ color: '#38bdf8' }}>法 {sentimentData?.institutionalSentimentPercent ?? 50}%</span>
-              <span style={{ color: '#ec4899' }}>主 {sentimentData?.mainForceSentimentPercent ?? 50}%</span>
-            </div>
+            {(sentimentData?.twMacroData?.putCallRatio != null ||
+              sentimentData?.twMacroData?.foreignFuturesOi != null) && (
+              <div
+                data-testid="tw-macro-derivatives"
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontSize: '0.62rem',
+                  color: '#94a3b8',
+                  borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+                  paddingTop: '3px',
+                }}
+              >
+                {sentimentData?.twMacroData?.putCallRatio != null && (
+                  <span>
+                    P/C 比:{' '}
+                    <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>
+                      {sentimentData.twMacroData.putCallRatio.toFixed(1)}%
+                    </strong>
+                  </span>
+                )}
+                {sentimentData?.twMacroData?.foreignFuturesOi != null && (
+                  <span>
+                    外資期貨未平倉:{' '}
+                    <strong
+                      style={{
+                        color: sentimentData.twMacroData.foreignFuturesOi >= 0 ? '#ef4444' : '#10b981',
+                        fontFamily: 'monospace',
+                      }}
+                    >
+                      {sentimentData.twMacroData.foreignFuturesOi > 0 ? '+' : ''}
+                      {sentimentData.twMacroData.foreignFuturesOi.toLocaleString()} 口
+                    </strong>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
