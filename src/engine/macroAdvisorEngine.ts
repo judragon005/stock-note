@@ -1188,6 +1188,12 @@ export function estimateExDividendIndexImpactPoints(params: {
   return Math.round(impactPoints * 10) / 10;
 }
 
+/** 台積電目前發行在外總股數 (約 259.3 億股) */
+export const TSMC_SHARES_OUTSTANDING = 25_930_380_000;
+
+/** 台積電預設季度除息配息金額 (TWD/股) */
+export const TSMC_DEFAULT_QUARTERLY_DIVIDEND_TWD = 4.5;
+
 /**
  * 無條件估算台積電 (2330) 除息對加權指數之蒸發點數：
  * 即使未直接持有 2330 個股，只要催化劑日曆存在台積電除息事件，仍以已知或預設季配息估算預警點數。
@@ -1202,7 +1208,7 @@ export function estimateTsmcExDividendImpactPoints(params: {
     receivableDividends = [],
     catalysts = [],
     taiexCurrentIndex = 23150,
-    defaultTsmcDividendPerShare = 4.5,
+    defaultTsmcDividendPerShare = TSMC_DEFAULT_QUARTERLY_DIVIDEND_TWD,
   } = params;
 
   const heldTsmc = receivableDividends.find(
@@ -1226,7 +1232,7 @@ export function estimateTsmcExDividendImpactPoints(params: {
 
   return estimateExDividendIndexImpactPoints({
     cashDividendPerShare: dividendPerShare,
-    sharesOutstanding: 25_930_380_000,
+    sharesOutstanding: TSMC_SHARES_OUTSTANDING,
     taiexCurrentIndex: taiexCurrentIndex > 0 ? taiexCurrentIndex : 23150,
   });
 }

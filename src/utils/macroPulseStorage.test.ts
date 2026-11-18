@@ -206,6 +206,7 @@ describe('macroPulseStorage (市場四柱在地持久化與歷史資料庫)', ()
         breakeven10y: 2.35,
         initialClaims: 231000,
         usOrdersMinusInvSpread: -1.8,
+        twRevenue: 64.2,
         soxClose: 5123.4,
         taiexClose: 22876.5,
         sp500Close: 5980.1,
@@ -223,6 +224,7 @@ describe('macroPulseStorage (市場四柱在地持久化與歷史資料庫)', ()
       expect(clean.breakeven10y).toBe(2.35);
       expect(clean.initialClaims).toBe(231000);
       expect(clean.usOrdersMinusInvSpread).toBe(-1.8);
+      expect(clean.twRevenueDiffusionIndex).toBe(64.2);
       expect(clean.soxIndex).toBe(5123.4);
       expect(clean.taiexIndex).toBe(22876.5);
       expect(clean.sp500Index).toBe(5980.1);

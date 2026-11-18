@@ -97,20 +97,16 @@ export function calculateWarRoomPortfolioMetrics(
 
   // 4. 計算真實目標配置最大偏離度
   let realMaxDriftPercent = 0;
-  try {
-    let activeConfig = rebalancingConfig;
-    if (!activeConfig) {
-      const configs = typeof localStorage !== 'undefined' ? loadTargetAllocations() : [DEFAULT_MARKET_ALLOCATION];
-      const activeId = typeof localStorage !== 'undefined' ? loadActiveTargetAllocationId() : DEFAULT_MARKET_ALLOCATION.id;
-      activeConfig = configs.find((c: TargetAllocationConfig) => c.id === activeId) || configs[0] || DEFAULT_MARKET_ALLOCATION;
+  if (rebalancingConfig) {
+    try {
+      const driftItems = calculateAllocationDrift(rebalancingConfig, holdings, cashBalanceTwd, usdToTwdRate);
+      realMaxDriftPercent = driftItems.reduce(
+        (maxVal, item) => Math.max(maxVal, Math.abs(item.driftPercent || 0)),
+        0
+      );
+    } catch {
+      realMaxDriftPercent = 0;
     }
-    const driftItems = calculateAllocationDrift(activeConfig, holdings, cashBalanceTwd, usdToTwdRate);
-    realMaxDriftPercent = driftItems.reduce(
-      (maxVal, item) => Math.max(maxVal, Math.abs(item.driftPercent || 0)),
-      0
-    );
-  } catch {
-    realMaxDriftPercent = 0;
   }
 
   // 5. 穿透台積電與半導體產業總曝險權重
@@ -145,9 +141,9 @@ export function calculateWarRoomPortfolioMetrics(
     upcoming7dDcaCommitmentTWD: dcaCommitment7dTwd,
     tsmcLookThroughWeightPercent: Number(tsmcExp.toFixed(1)),
     semiLookThroughWeightPercent: Number(effectiveSemiWeight.toFixed(1)),
-    // 穿透權重分母為持股總市值 (不含現金)，故以持股市值 × 半導體權重 × 3% 計算
+    // Spec 0235 L150: soxStressImpact3PctTWD = Math.round(navTWD * (effectiveSemiWeight / 100) * 0.03)
     soxStressImpact3PctTWD: Math.round(
-      lookThroughReport.totalPortfolioNAV * (effectiveSemiWeight / 100) * 0.03
+      totalNavTwd * (effectiveSemiWeight / 100) * 0.03
     ),
     vix,
     usWeightedCostFxRate,
@@ -181,6 +177,17 @@ export function useWarRoomPortfolioMetrics(
   } = params;
 
   return useMemo(() => {
+    let resolvedConfig = rebalancingConfig;
+    if (!resolvedConfig && typeof localStorage !== 'undefined') {
+      try {
+        const configs = loadTargetAllocations();
+        const activeId = loadActiveTargetAllocationId();
+        resolvedConfig = configs.find((c: TargetAllocationConfig) => c.id === activeId) || configs[0] || DEFAULT_MARKET_ALLOCATION;
+      } catch {
+        resolvedConfig = DEFAULT_MARKET_ALLOCATION;
+      }
+    }
+
     return calculateWarRoomPortfolioMetrics({
       holdings,
       loans,
@@ -189,7 +196,7 @@ export function useWarRoomPortfolioMetrics(
       usdToTwdRate,
       pendingSettlementOutflowTwd,
       dcaCommitment7dTwd,
-      rebalancingConfig,
+      rebalancingConfig: resolvedConfig,
       vix,
     });
   }, [

@@ -133,7 +133,8 @@ describe('useWarRoomPortfolioMetrics - 戰情室投組風控指標與防禦護�
       totalNavTwd: 2000000,
       usdToTwdRate: 32.0,
     });
-    expect(result.shield.soxStressImpact3PctTWD).toBe(30000);
+    // 依 Spec 0235 L150：NAV 200 萬 * 穿透半導體 100% * 3% = 60,000
+    expect(result.shield.soxStressImpact3PctTWD).toBe(60000);
   });
 
   it('5. Hook 函式簽名應可被正常引用', () => {
