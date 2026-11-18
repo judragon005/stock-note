@@ -77,4 +77,45 @@ describe('MacroDualThermometerBar (雙溫度計排版與防折行測試)', () =>
     );
     expect(secondLineContent).toContain('⚠️ 拉積盤警訊（賺指數賠價差）');
   });
+
+  it('Spec 0235 Ticket 05: GLOBAL/TW 卡4顯示外資現貨，US 視角顯示 S&P 500 與 Nasdaq', () => {
+    const globalHtml = renderToStaticMarkup(
+      <MacroDualThermometerBar
+        macroSnapshot={{
+          ...mockMacroSnapshot,
+          sp500Index: 5985.2,
+          sp500ChangePercent: 0.65,
+          sp500Bias20Ma: 1.4,
+          nasdaqIndex: 19240.8,
+          nasdaqChangePercent: 1.12,
+          nasdaqBias20Ma: 2.1,
+        }}
+        dualThermometer={mockDualThermometer}
+        activeMarketTab="GLOBAL"
+        onMarketTabChange={vi.fn()}
+      />
+    );
+    expect(globalHtml).toContain('外資 +100.0 億');
+
+    const usHtml = renderToStaticMarkup(
+      <MacroDualThermometerBar
+        macroSnapshot={{
+          ...mockMacroSnapshot,
+          sp500Index: 5985.2,
+          sp500ChangePercent: 0.65,
+          sp500Bias20Ma: 1.4,
+          nasdaqIndex: 19240.8,
+          nasdaqChangePercent: 1.12,
+          nasdaqBias20Ma: 2.1,
+        }}
+        dualThermometer={mockDualThermometer}
+        activeMarketTab="US"
+        onMarketTabChange={vi.fn()}
+      />
+    );
+    expect(usHtml).toContain('S&amp;P 500 (^GSPC)');
+    expect(usHtml).toContain('5,985.2');
+    expect(usHtml).toContain('Nasdaq (^IXIC)');
+    expect(usHtml).toContain('19,240.8');
+  });
 });

@@ -933,5 +933,25 @@ describe('MacroAdvisorEngine (TDD Seam)', () => {
       });
       expect(points).toBe(0);
     });
+
+    it('僅 description 順帶提及台積電與除息，但 symbol/name 非台積電事件時，應回傳 0 不誤觸發', () => {
+      const points = estimateTsmcExDividendImpactPoints({
+        receivableDividends: [],
+        catalysts: [
+          {
+            id: 'fomc-note',
+            name: 'FOMC 利率會議',
+            date: '2026-12-18',
+            daysLeft: 30,
+            category: 'CENTRAL_BANK',
+            impact: 'HIGH',
+            targetMarket: 'US',
+            description: '市場關注匯率波動與台積電除息週期對資金流向影響',
+          },
+        ],
+        taiexCurrentIndex: 23000,
+      });
+      expect(points).toBe(0);
+    });
   });
 });

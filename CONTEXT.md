@@ -3023,3 +3023,11 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     4. **Polymorphic Archive Ingestion & Orphan Account Alignment (多型解包引擎與孤兒帳戶對齊)**：支援自動識別 `UNIFIED_V2`、`LEGACY_DB_V1` 與 `TRADES_ONLY` 多型封包，自動將外鍵懸空之交易對齊至既有或預設合法交割帳戶，避免孤兒外鍵引發計算異常。
     5. **Corporate Action Cache Hydration (除權息快取冷啟動還原)**：跨端遷移時同步載入除權息事件快取，確保 NAS 或新裝置冷啟動後待發放股利數量（2 筆）與本機 100% 精確一致。
 
+- **Macro War Room 3.5 Unified Data Bus, Dark-Cockpit Pruning & Action Loop (宏觀戰情室 3.5 統一數據總線、風控精度修復與一鍵決策閉環)**:
+  - 核心模組：`src/components/WarRoomWorkspace.tsx`、`src/components/warRoom/*`、`src/components/zavy/ZavySlowWealthWorkspace.tsx`、`src/utils/macroPulseStorage.ts`、`src/utils/warRoomBriefBuilder.ts`、`src/hooks/useWarRoomMacroSync.ts`、`src/hooks/useWarRoomPortfolioMetrics.ts`、`src/engine/macroAdvisorEngine.ts`。
+  - 規格來源：Spec 0235 (v9.21.0) 與 ADR 0235，關聯 GitHub Issue #584。
+  - 核心領域術語與架構革新：
+    1. **Dual-Schema Normalizer & Value-Preserving Merge (雙向 Schema 正規化器與保值合併)**：`normalizeMacroAliases` 與 `mergeMacroSnapshot` 無損映射 `/api/market/macro` 與 SQLite 鍵名，遠端缺漏不抹除本地指數，並以 FRED 真實 `cccSpreadOAS` / `igSpreadOAS` / `usOrdersMinusInvSpread` / `breakeven10y` 與 `/api/market/breadth` 取代靜態常數。
+    2. **Risk Math Precision & Single Equity Cap SSOT (風控精度修復與單一權益上限基準)**：修正 `maxDropToleranceTo130Percent` `0~1` 比例尺、1-Day 95% VaR 扣除現金部位、補算 `soxStressImpact3PctTWD`，全區與晨報簡報統一採用雙溫度計 `recommendedEquityCapPercent`；新增 `estimateTsmcExDividendImpactPoints` 無條件預警台積電除息蒸發點數。
+    3. **Modular War Room & Cross-Tab Calibration Bus (組合式戰情室與跨頁校準總線)**：拆出 `MarketPulseAndCanariesCard`、`WarRoomMorningBriefCard`、`DualMomentumRotationCard`、`CatalystCalendarCard`、`useWarRoomMacroSync`，消滅 L6/L8 重複防護盾與 `privacyMode` 明文外洩；`MacroQuickCalibrationModal` 擴充 8 項欄位並與 `ZavySlowWealthWorkspace` 共享校準快照與美股多週期寬度。
+

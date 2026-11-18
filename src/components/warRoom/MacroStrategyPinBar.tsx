@@ -7,6 +7,9 @@ export interface MacroStrategyPinBarProps {
   onRemovePin: (id: string) => void;
   currentSoxIndex?: number;
   currentTaiexIndex?: number;
+  currentEquityPercent?: number;
+  totalNavTwd?: number;
+  privacyMode?: boolean;
 }
 
 export const MacroStrategyPinBar: React.FC<MacroStrategyPinBarProps> = ({
@@ -15,6 +18,9 @@ export const MacroStrategyPinBar: React.FC<MacroStrategyPinBarProps> = ({
   onRemovePin,
   currentSoxIndex,
   currentTaiexIndex,
+  currentEquityPercent,
+  totalNavTwd,
+  privacyMode = false,
 }) => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [pasteInput, setPasteInput] = useState('');
@@ -176,6 +182,22 @@ export const MacroStrategyPinBar: React.FC<MacroStrategyPinBarProps> = ({
                   >
                     建議持股上限 ≤ {pin.recommendedEquityCapPercent}%
                   </span>
+                  {currentEquityPercent !== undefined && currentEquityPercent > pin.recommendedEquityCapPercent && (
+                    <span
+                      className="badge"
+                      style={{
+                        background: 'rgba(245, 158, 11, 0.2)',
+                        color: '#fbbf24',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                      }}
+                    >
+                      ⚠️ 當前 {currentEquityPercent.toFixed(1)}% 超配{' '}
+                      {totalNavTwd && totalNavTwd > 0
+                        ? `需減碼 ${privacyMode ? 'NT$******' : `NT$ ${Math.round(((currentEquityPercent - pin.recommendedEquityCapPercent) / 100) * totalNavTwd).toLocaleString()}`}`
+                        : `+${(currentEquityPercent - pin.recommendedEquityCapPercent).toFixed(1)}%`}
+                    </span>
+                  )}
                   {pin.soxSupportLevel && (
                     <span
                       className="mono"

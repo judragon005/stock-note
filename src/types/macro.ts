@@ -65,7 +65,23 @@ export interface MacroIndicatorSnapshot {
   breakeven10y?: number;      // 10Y 平衡通膨率 % (FRED T10YIE)
   initialClaims?: number;     // 美國初領失業救濟金人數
   usOrdersMinusInvSpread?: number; // 美國製造業新訂單減存貨年增差額 %
+  usMfgNewOrdersYoY?: number;      // 美國製造業新訂單年增率 %
+  usMfgInventoriesYoY?: number;    // 美國製造業存貨年增率 %
+  usIndustrialProdYoY?: number;    // 美國工業生產年增率 %
+  usIsmPmi?: number;               // 美國 ISM 製造業 PMI
+  twPmi?: number;                  // 台灣製造業 PMI
+  twExportOrdersYoY?: number;      // 台灣外銷訂單年增率 %
   twRevenueDiffusionIndex?: number;// 台灣上市櫃營收擴散指數 %
+  multiHorizonBreadth?: {
+    tw?: { breadth20: number; breadth60: number; breadth200: number; totalStocks?: number };
+    us?: { breadth20: number; breadth60: number; breadth200: number; totalStocks?: number };
+    twMarginDeleveraging?: {
+      taiexMaxDrawdown: number;
+      marginReductionPercent: number;
+      marginDeleveragingRatio: number;
+      isCleaned: boolean;
+    };
+  };
   cdsInsuranceIndex?: number; // CDS/CDX 債券履約違約互換保險指數 (點數，如 65)
   cdsRiskLevel?: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
   twFuturesNetOi?: number;    // 外資台指期淨未平倉口數 (負數為淨空單，如 -35000)

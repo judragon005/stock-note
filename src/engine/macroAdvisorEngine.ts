@@ -1218,7 +1218,7 @@ export function estimateTsmcExDividendImpactPoints(params: {
 
   if (dividendPerShare <= 0) {
     const hasTsmcDividendCatalyst = catalysts.some((c) => {
-      const label = `${c.symbol || ''} ${c.name || ''} ${c.description || ''}`;
+      const label = `${c.symbol || ''} ${c.name || ''}`;
       const isTsmc = label.includes('2330') || label.includes('台積電');
       const isDividend = c.category === 'EARNINGS_DIVIDEND' || label.includes('除息');
       return isTsmc && isDividend;

@@ -14,7 +14,31 @@ export interface MacroCalibrationFormState {
   soxIndex: string;
   tsmAdrPrice: string;
   tsmTwPrice: string;
+  taiexIndex: string;
+  soxBias20Ma: string;
+  taiexBias20Ma: string;
+  dxy: string;
+  oilPrice: string;
+  cccSpreadOAS: string;
+  usIsmPmi: string;
+  twPmi: string;
 }
+
+const EXTRA_CALIBRATION_FIELDS: Array<{
+  key: keyof MacroCalibrationFormState;
+  label: string;
+  step: string;
+  placeholder?: string;
+}> = [
+  { key: 'taiexIndex', label: '台股加權指數 (^TWII)', step: '1', placeholder: '如 23150' },
+  { key: 'soxBias20Ma', label: '費半 20MA 乖離率 (%)', step: '0.1', placeholder: '如 2.4' },
+  { key: 'taiexBias20Ma', label: '台股 20MA 乖離率 (%)', step: '0.1', placeholder: '如 1.2' },
+  { key: 'dxy', label: '美元指數 (DXY)', step: '0.1', placeholder: '如 104.2' },
+  { key: 'oilPrice', label: 'WTI 原油 (USD/桶)', step: '0.1', placeholder: '如 72.5' },
+  { key: 'cccSpreadOAS', label: 'CCC 級垃圾債利差 OAS (%)', step: '0.01', placeholder: '如 8.5' },
+  { key: 'usIsmPmi', label: '美國 ISM 製造業 PMI', step: '0.1', placeholder: '如 50.5' },
+  { key: 'twPmi', label: '台灣製造業 PMI', step: '0.1', placeholder: '如 52.0' },
+];
 
 export interface MacroQuickCalibrationModalProps {
   isOpen: boolean;
@@ -42,6 +66,14 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
     soxIndex: '',
     tsmAdrPrice: '',
     tsmTwPrice: '',
+    taiexIndex: '',
+    soxBias20Ma: '',
+    taiexBias20Ma: '',
+    dxy: '',
+    oilPrice: '',
+    cccSpreadOAS: '',
+    usIsmPmi: '',
+    twPmi: '',
   });
 
   useEffect(() => {
@@ -59,6 +91,14 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
         soxIndex: (macroSnapshot.soxIndex ?? 5200).toString(),
         tsmAdrPrice: (macroSnapshot.tsmAdrPrice ?? 195).toString(),
         tsmTwPrice: (macroSnapshot.tsmTwPrice ?? 1050).toString(),
+        taiexIndex: macroSnapshot.taiexIndex !== undefined ? macroSnapshot.taiexIndex.toString() : '',
+        soxBias20Ma: macroSnapshot.soxBias20Ma !== undefined ? macroSnapshot.soxBias20Ma.toString() : '',
+        taiexBias20Ma: macroSnapshot.taiexBias20Ma !== undefined ? macroSnapshot.taiexBias20Ma.toString() : '',
+        dxy: (macroSnapshot.dxy ?? 101.5).toString(),
+        oilPrice: (macroSnapshot.oilPrice ?? 75).toString(),
+        cccSpreadOAS: macroSnapshot.cccSpreadOAS !== undefined ? macroSnapshot.cccSpreadOAS.toString() : '',
+        usIsmPmi: macroSnapshot.usIsmPmi !== undefined ? macroSnapshot.usIsmPmi.toString() : '',
+        twPmi: macroSnapshot.twPmi !== undefined ? macroSnapshot.twPmi.toString() : '',
       });
     }
   }, [isOpen, macroSnapshot]);
@@ -88,6 +128,12 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
     const convertedTwd = Number(((tsmAdrNum * fxRate) / 5).toFixed(2));
     const premiumPct =
       tsmTwNum > 0 ? Number((((convertedTwd - tsmTwNum) / tsmTwNum) * 100).toFixed(2)) : 0;
+
+    const parseOptNum = (raw: string, prev?: number): number | undefined => {
+      if (!raw.trim()) return prev;
+      const n = parseFloat(raw);
+      return Number.isFinite(n) ? n : prev;
+    };
 
     const yieldSpread = Math.round((us10yNum - us2yNum) * 100) / 100;
     const updated: MacroIndicatorSnapshot = {
@@ -119,6 +165,14 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
       tsmTwPrice: tsmTwNum,
       tsmAdrConvertedTwd: convertedTwd,
       tsmAdrPremiumPercent: premiumPct,
+      taiexIndex: parseOptNum(formData.taiexIndex, macroSnapshot.taiexIndex),
+      soxBias20Ma: parseOptNum(formData.soxBias20Ma, macroSnapshot.soxBias20Ma),
+      taiexBias20Ma: parseOptNum(formData.taiexBias20Ma, macroSnapshot.taiexBias20Ma),
+      dxy: parseOptNum(formData.dxy, macroSnapshot.dxy) ?? macroSnapshot.dxy,
+      oilPrice: parseOptNum(formData.oilPrice, macroSnapshot.oilPrice) ?? macroSnapshot.oilPrice,
+      cccSpreadOAS: parseOptNum(formData.cccSpreadOAS, macroSnapshot.cccSpreadOAS),
+      usIsmPmi: parseOptNum(formData.usIsmPmi, macroSnapshot.usIsmPmi),
+      twPmi: parseOptNum(formData.twPmi, macroSnapshot.twPmi),
       asOfTimestamp: new Date().toISOString(),
       sourceStatus: 'CALIBRATED',
       date: new Date().toISOString().split('T')[0],
@@ -373,6 +427,24 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
                 style={inputStyle}
               />
             </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))', gap: '10px', marginBottom: '18px' }}>
+            {EXTRA_CALIBRATION_FIELDS.map((f) => (
+              <div key={f.key}>
+                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                  {f.label}
+                </label>
+                <input
+                  type="number"
+                  step={f.step}
+                  placeholder={f.placeholder}
+                  value={formData[f.key]}
+                  onChange={(e) => handleChange(f.key, e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+            ))}
           </div>
 
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>

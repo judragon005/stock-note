@@ -330,114 +330,191 @@ export const MacroDualThermometerBar: React.FC<MacroDualThermometerBarProps> = (
           </div>
         </div>
 
-        {/* 卡 2: 台積電 ADR (TSM) vs 2330 溢折價率 */}
-        <div className="card" style={{ padding: '12px 14px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-            <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-              🌉 台積電 ADR (TSM) 跨市溢折價
-            </span>
-            <span
-              className="badge"
-              style={{
-                fontSize: '0.68rem',
-                background: 'rgba(59, 130, 246, 0.15)',
-                color: getDeltaColor(macroSnapshot.tsmAdrPremiumPercent),
-              }}
-            >
-              {(macroSnapshot.tsmAdrPremiumPercent ?? 0) >= 0 ? '溢價領漲' : '折價壓抑'}
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-            <span
-              className="mono"
-              style={{
-                fontSize: '1.2rem',
-                fontWeight: 800,
-                color: getDeltaColor(macroSnapshot.tsmAdrPremiumPercent),
-              }}
-            >
-              {formatSignedPct(macroSnapshot.tsmAdrPremiumPercent ?? 0)}
-            </span>
-            <span className="mono" style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-              折合 NT${macroSnapshot.tsmAdrConvertedTwd ?? Math.round(((macroSnapshot.tsmAdrPrice ?? 195) * macroSnapshot.usdToTwd) / 5)}
-            </span>
-          </div>
-          <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            TSM: <strong className="mono">${macroSnapshot.tsmAdrPrice ?? 195}</strong> vs 2330: <strong className="mono">NT${macroSnapshot.tsmTwPrice ?? 1050}</strong>
-          </div>
-        </div>
-
-        {/* 卡 3: 台股加權 (^TWII) 與大盤騰落廣度 */}
-        <div className="card" style={{ padding: '12px 14px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-            <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-              🇹🇼 台股加權 (^TWII) 與騰落廣度
-            </span>
-            <span
-              className="badge"
-              style={{
-                fontSize: '0.68rem',
-                background: 'rgba(148, 163, 184, 0.15)',
-                color: 'var(--text-primary)',
-              }}
-            >
-              站上月線 {typeof pctAbove20Ma === 'number' ? `${pctAbove20Ma.toFixed(0)}%` : '55%'}
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-            <span className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {macroSnapshot.taiexIndex ? macroSnapshot.taiexIndex.toLocaleString() : '23,150'}
-            </span>
-            <span
-              className="mono"
-              style={{
-                fontSize: '0.84rem',
-                fontWeight: 700,
-                color: getDeltaColor(macroSnapshot.taiexChangePercent),
-              }}
-            >
-              {formatSignedPct(macroSnapshot.taiexChangePercent ?? 0)}
-            </span>
-          </div>
-          <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            {breadth
-              ? `漲 ${breadth.advancingCount} / 跌 ${breadth.decliningCount} 家`
-              : `20MA 乖離 ${formatSignedPct(macroSnapshot.taiexBias20Ma ?? 0)}`}
-            {exDividendImpactPoints > 0 && (
-              <span style={{ marginLeft: '6px', color: '#38bdf8' }}>
-                · 除息蒸發約 {exDividendImpactPoints} 點
+        {/* 卡 2: 美股視角顯示 S&P 500 (^GSPC)，否則顯示 TSM ADR 跨市溢折價 */}
+        {activeMarketTab === 'US' ? (
+          <div className="card" style={{ padding: '12px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                🇺🇸 S&amp;P 500 (^GSPC)
               </span>
-            )}
+              <span className="badge" style={{ fontSize: '0.68rem', background: 'rgba(59, 130, 246, 0.15)', color: '#38bdf8' }}>
+                美股大盤基準
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <span className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                {macroSnapshot.sp500Index ? macroSnapshot.sp500Index.toLocaleString() : '--'}
+              </span>
+              <span className="mono" style={{ fontSize: '0.84rem', fontWeight: 700, color: getDeltaColor(macroSnapshot.sp500ChangePercent) }}>
+                {formatSignedPct(macroSnapshot.sp500ChangePercent)}
+              </span>
+            </div>
+            <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              20MA 乖離率：<strong className="mono">{formatSignedPct(macroSnapshot.sp500Bias20Ma)}</strong>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="card" style={{ padding: '12px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                🌉 台積電 ADR (TSM) 跨市溢折價
+              </span>
+              <span
+                className="badge"
+                style={{
+                  fontSize: '0.68rem',
+                  background: 'rgba(59, 130, 246, 0.15)',
+                  color: getDeltaColor(macroSnapshot.tsmAdrPremiumPercent),
+                }}
+              >
+                {(macroSnapshot.tsmAdrPremiumPercent ?? 0) >= 0 ? '溢價領漲' : '折價壓抑'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <span
+                className="mono"
+                style={{
+                  fontSize: '1.2rem',
+                  fontWeight: 800,
+                  color: getDeltaColor(macroSnapshot.tsmAdrPremiumPercent),
+                }}
+              >
+                {formatSignedPct(macroSnapshot.tsmAdrPremiumPercent ?? 0)}
+              </span>
+              <span className="mono" style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                折合 NT${macroSnapshot.tsmAdrConvertedTwd ?? Math.round(((macroSnapshot.tsmAdrPrice ?? 195) * macroSnapshot.usdToTwd) / 5)}
+              </span>
+            </div>
+            <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              TSM: <strong className="mono">${macroSnapshot.tsmAdrPrice ?? 195}</strong> vs 2330: <strong className="mono">NT${macroSnapshot.tsmTwPrice ?? 1050}</strong>
+            </div>
+          </div>
+        )}
 
-        {/* 卡 4: 三大法人期現貨雙向對照 */}
-        <div className="card" style={{ padding: '12px 14px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-            <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-              🏦 法人期現貨對照 & 匯率
-            </span>
-            <span className="mono" style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-              USD/TWD {(macroSnapshot.usdToTwd ?? 32.15).toFixed(2)}
-            </span>
+        {/* 卡 3: 美股視角顯示 Nasdaq (^IXIC)，否則顯示台股加權 (^TWII) 與騰落廣度 */}
+        {activeMarketTab === 'US' ? (
+          <div className="card" style={{ padding: '12px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                💻 Nasdaq (^IXIC)
+              </span>
+              <span className="badge" style={{ fontSize: '0.68rem', background: 'rgba(139, 92, 246, 0.15)', color: '#a78bfa' }}>
+                科技成長風向
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <span className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                {macroSnapshot.nasdaqIndex ? macroSnapshot.nasdaqIndex.toLocaleString() : '--'}
+              </span>
+              <span className="mono" style={{ fontSize: '0.84rem', fontWeight: 700, color: getDeltaColor(macroSnapshot.nasdaqChangePercent) }}>
+                {formatSignedPct(macroSnapshot.nasdaqChangePercent)}
+              </span>
+            </div>
+            <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              20MA 乖離率：<strong className="mono">{formatSignedPct(macroSnapshot.nasdaqBias20Ma)}</strong>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-            <span
-              className="mono"
-              style={{
-                fontSize: '1.05rem',
-                fontWeight: 800,
-                color: getDeltaColor(spot?.totalNetTwdBillions ?? 0),
-              }}
-            >
-              現貨 {typeof spot?.totalNetTwdBillions === 'number' ? `${spot.totalNetTwdBillions >= 0 ? '+' : ''}${spot.totalNetTwdBillions.toFixed(1)} 億` : '同步中'}
-            </span>
+        ) : (
+          <div className="card" style={{ padding: '12px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                🇹🇼 台股加權 (^TWII) 與騰落廣度
+              </span>
+              <span
+                className="badge"
+                style={{
+                  fontSize: '0.68rem',
+                  background: 'rgba(148, 163, 184, 0.15)',
+                  color: 'var(--text-primary)',
+                }}
+              >
+                站上月線 {typeof pctAbove20Ma === 'number' ? `${pctAbove20Ma.toFixed(0)}%` : '55%'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <span className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                {macroSnapshot.taiexIndex ? macroSnapshot.taiexIndex.toLocaleString() : '23,150'}
+              </span>
+              <span
+                className="mono"
+                style={{
+                  fontSize: '0.84rem',
+                  fontWeight: 700,
+                  color: getDeltaColor(macroSnapshot.taiexChangePercent),
+                }}
+              >
+                {formatSignedPct(macroSnapshot.taiexChangePercent ?? 0)}
+              </span>
+            </div>
+            <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              {breadth
+                ? `漲 ${breadth.advancingCount} / 跌 ${breadth.decliningCount} 家`
+                : `20MA 乖離 ${formatSignedPct(macroSnapshot.taiexBias20Ma ?? 0)}`}
+              {exDividendImpactPoints > 0 && (
+                <span style={{ marginLeft: '6px', color: '#38bdf8' }}>
+                  · 除息蒸發約 {exDividendImpactPoints} 點
+                </span>
+              )}
+            </div>
           </div>
-          <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            外資期貨淨部位：<strong className="mono" style={{ color: getDeltaColor(macroSnapshot.twFuturesNetOi) }}>{(macroSnapshot.twFuturesNetOi ?? 0).toLocaleString()} 口</strong>
-            {typeof spot?.trustNetTwdBillions === 'number' && ` · 投信 ${spot.trustNetTwdBillions >= 0 ? '+' : ''}${spot.trustNetTwdBillions.toFixed(1)} 億`}
+        )}
+
+        {/* 卡 4: 美股視角顯示 TSM ADR 溢折價，否則顯示三大法人期現貨雙向對照（含外資現貨） */}
+        {activeMarketTab === 'US' ? (
+          <div className="card" style={{ padding: '12px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                🌉 台積電 ADR (TSM) 跨市溢折價
+              </span>
+              <span className="mono" style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                USD/TWD {(macroSnapshot.usdToTwd ?? 32.15).toFixed(2)}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <span className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: getDeltaColor(macroSnapshot.tsmAdrPremiumPercent) }}>
+                {formatSignedPct(macroSnapshot.tsmAdrPremiumPercent ?? 0)}
+              </span>
+              <span className="mono" style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                TSM ${macroSnapshot.tsmAdrPrice ?? 195}
+              </span>
+            </div>
+            <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              折合台股 NT${macroSnapshot.tsmAdrConvertedTwd ?? Math.round(((macroSnapshot.tsmAdrPrice ?? 195) * macroSnapshot.usdToTwd) / 5)}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="card" style={{ padding: '12px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                🏦 法人期現貨對照 & 匯率
+              </span>
+              <span className="mono" style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                USD/TWD {(macroSnapshot.usdToTwd ?? 32.15).toFixed(2)}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
+              <span
+                className="mono"
+                style={{
+                  fontSize: '1.05rem',
+                  fontWeight: 800,
+                  color: getDeltaColor(spot?.totalNetTwdBillions ?? 0),
+                }}
+              >
+                現貨 {typeof spot?.totalNetTwdBillions === 'number' ? `${spot.totalNetTwdBillions >= 0 ? '+' : ''}${spot.totalNetTwdBillions.toFixed(1)} 億` : '同步中'}
+              </span>
+              {typeof spot?.foreignNetTwdBillions === 'number' && (
+                <span className="mono" style={{ fontSize: '0.76rem', fontWeight: 700, color: getDeltaColor(spot.foreignNetTwdBillions) }}>
+                  外資 {spot.foreignNetTwdBillions >= 0 ? '+' : ''}{spot.foreignNetTwdBillions.toFixed(1)} 億
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              外資期貨淨部位：<strong className="mono" style={{ color: getDeltaColor(macroSnapshot.twFuturesNetOi) }}>{(macroSnapshot.twFuturesNetOi ?? 0).toLocaleString()} 口</strong>
+              {typeof spot?.trustNetTwdBillions === 'number' && ` · 投信 ${spot.trustNetTwdBillions >= 0 ? '+' : ''}${spot.trustNetTwdBillions.toFixed(1)} 億`}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

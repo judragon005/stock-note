@@ -16,6 +16,13 @@ import { ZavyMacroCompassCard } from './ZavyMacroCompassCard';
 import { ZavyMarketBreadthCard } from './ZavyMarketBreadthCard';
 import { ZavyDualTrackDecisionCard } from './ZavyDualTrackDecisionCard';
 import { ZavyTenSecondsModal } from './ZavyTenSecondsModal';
+import { MacroQuickCalibrationModal } from '../warRoom/MacroQuickCalibrationModal';
+import {
+  getLatestMacroPulseRecord,
+  saveMacroPulseRecord,
+  sanitizeMacroRecord,
+} from '../../utils/macroPulseStorage';
+import type { MacroIndicatorSnapshot as WarRoomMacroSnapshot } from '../../types/macro';
 
 interface ZavySlowWealthWorkspaceProps {
   holdings: HoldingPosition[];
@@ -37,19 +44,49 @@ export const ZavySlowWealthWorkspace: React.FC<ZavySlowWealthWorkspaceProps> = (
   initialShowBeginnerGuide = false,
 }) => {
   const [isTenSecModalOpen, setIsTenSecModalOpen] = useState(false);
+  const [isCalibrateModalOpen, setIsCalibrateModalOpen] = useState(false);
   const [showBeginnerGuide, setShowBeginnerGuide] = useState(initialShowBeginnerGuide);
   const [maxTolerancePercent, setMaxTolerancePercent] = useState(20);
 
-  // 1. 100% 真實數據狀態：初始為空物件或真實預設
-  const [macroSnapshot, setMacroSnapshot] = useState<MacroIndicatorSnapshot>({});
-  const [marketBreadth, setMarketBreadth] = useState<MultiHorizonMarketBreadth>({
-    asOfDate: new Date().toISOString().slice(0, 10),
-    market: 'TW',
-    breadth20: 0,
-    breadth60: 0,
-    breadth200: 0,
-    totalFilteredStocks: 0,
+  const localPulse = useMemo(() => getLatestMacroPulseRecord(), []);
+
+  // 1. 100% 真實數據狀態：啟動時融合本地校準快照 (消除跨頁切換 -- 孤島)
+  const [macroSnapshot, setMacroSnapshot] = useState<MacroIndicatorSnapshot>(() => {
+    if (!localPulse) return {};
+    return {
+      treasuryYield10y: localPulse.us10y,
+      treasuryYield2y: localPulse.us2y,
+      yieldSpread10y2y: localPulse.yieldSpread,
+      highYieldSpreadOas: localPulse.creditSpreadOAS,
+      cccHighYieldSpread: localPulse.cccSpreadOAS,
+      usCpiYoY: localPulse.usCpiYoY,
+      usIsmPmi: localPulse.usIsmPmi,
+      usNewOrdersMinusInventory: localPulse.usOrdersMinusInvSpread,
+      twPmi: localPulse.twPmi,
+      twRevenueDiffusionIndex: localPulse.twRevenueDiffusionIndex,
+      twExportOrdersYoY: localPulse.twExportOrdersYoY,
+    };
   });
+  const [marketBreadth, setMarketBreadth] = useState<MultiHorizonMarketBreadth>(() => ({
+    asOfDate: localPulse?.date || new Date().toISOString().slice(0, 10),
+    market: 'TW',
+    breadth20: localPulse?.multiHorizonBreadth?.tw?.breadth20 ?? 0,
+    breadth60: localPulse?.multiHorizonBreadth?.tw?.breadth60 ?? 0,
+    breadth200: localPulse?.multiHorizonBreadth?.tw?.breadth200 ?? 0,
+    totalFilteredStocks: localPulse?.multiHorizonBreadth?.tw?.totalStocks ?? 0,
+  }));
+  const [usMarketBreadth, setUsMarketBreadth] = useState<MultiHorizonMarketBreadth | undefined>(() =>
+    localPulse?.multiHorizonBreadth?.us
+      ? {
+          asOfDate: localPulse.date,
+          market: 'US',
+          breadth20: localPulse.multiHorizonBreadth.us.breadth20,
+          breadth60: localPulse.multiHorizonBreadth.us.breadth60,
+          breadth200: localPulse.multiHorizonBreadth.us.breadth200,
+          totalFilteredStocks: localPulse.multiHorizonBreadth.us.totalStocks ?? 0,
+        }
+      : undefined
+  );
 
   const [marginStatus, setMarginStatus] = useState<MarginDeleveragingStatus>({
     asOfDate: new Date().toISOString().slice(0, 10),
@@ -93,7 +130,7 @@ export const ZavySlowWealthWorkspace: React.FC<ZavySlowWealthWorkspaceProps> = (
       }
 
       try {
-        const breadthRes = await fetch('/api/market/breadth?market=TW');
+        const breadthRes = await fetch('/api/market/breadth');
         if (breadthRes.ok && isMounted) {
           const bData = await breadthRes.json();
           const data = bData.data || bData;
@@ -106,6 +143,16 @@ export const ZavySlowWealthWorkspace: React.FC<ZavySlowWealthWorkspaceProps> = (
               breadth200: data.tw?.breadth200 ?? data.breadth200 ?? 0,
               totalFilteredStocks: data.tw?.totalStocks ?? data.totalFilteredStocks ?? data.totalStocks ?? 0,
             });
+            if (data.us) {
+              setUsMarketBreadth({
+                asOfDate: data.asOfDate || new Date().toISOString().slice(0, 10),
+                market: 'US',
+                breadth20: data.us.breadth20 ?? 0,
+                breadth60: data.us.breadth60 ?? 0,
+                breadth200: data.us.breadth200 ?? 0,
+                totalFilteredStocks: data.us.totalStocks ?? 0,
+              });
+            }
 
             if (data.twMarginDeleveraging) {
               const md = data.twMarginDeleveraging;
@@ -233,6 +280,26 @@ export const ZavySlowWealthWorkspace: React.FC<ZavySlowWealthWorkspaceProps> = (
           >
             <BookOpen size={16} />
             新手 30 秒慢富導覽 {showBeginnerGuide ? '▲' : '▼'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsCalibrateModalOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 14px',
+              borderRadius: '8px',
+              backgroundColor: 'rgba(59, 130, 246, 0.15)',
+              border: '1px solid #3b82f6',
+              color: '#60a5fa',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontSize: '13px',
+            }}
+          >
+            ✏️ 數據校準
           </button>
 
           <button
@@ -390,6 +457,7 @@ export const ZavySlowWealthWorkspace: React.FC<ZavySlowWealthWorkspaceProps> = (
       {/* 鏡頭二：台美市場結構、多週期寬度與融資去槓桿 */}
       <ZavyMarketBreadthCard
         breadth={analysisReport.marketBreadth.tw}
+        usBreadth={usMarketBreadth}
         marginStatus={analysisReport.marketBreadth.marginDeleveraging}
         interpretation={analysisReport.marketBreadth.interpretation}
         bottomingChecklist={analysisReport.marketBreadth.bottomingChecklist}
@@ -402,11 +470,39 @@ export const ZavySlowWealthWorkspace: React.FC<ZavySlowWealthWorkspaceProps> = (
         onUpdateTolerance={(tol) => setMaxTolerancePercent(tol)}
       />
 
-      {/* 10 秒快速校準彈窗 */}
+      {/* 10 秒快速校準摘要彈窗 */}
       <ZavyTenSecondsModal
         isOpen={isTenSecModalOpen}
         onClose={() => setIsTenSecModalOpen(false)}
         report={analysisReport}
+      />
+
+      {/* 真實可編輯數據校準彈窗 (打通 WarRoom 與 Zavy 共享快照) */}
+      <MacroQuickCalibrationModal
+        isOpen={isCalibrateModalOpen}
+        onClose={() => setIsCalibrateModalOpen(false)}
+        macroSnapshot={sanitizeMacroRecord({
+          ...(localPulse ?? {}),
+          us10y: macroSnapshot.treasuryYield10y ?? localPulse?.us10y,
+          us2y: macroSnapshot.treasuryYield2y ?? localPulse?.us2y,
+          creditSpreadOAS: macroSnapshot.highYieldSpreadOas ?? localPulse?.creditSpreadOAS,
+          cccSpreadOAS: macroSnapshot.cccHighYieldSpread ?? localPulse?.cccSpreadOAS,
+          usIsmPmi: macroSnapshot.usIsmPmi ?? localPulse?.usIsmPmi,
+          twPmi: macroSnapshot.twPmi ?? localPulse?.twPmi,
+        })}
+        onSave={(updated: WarRoomMacroSnapshot) => {
+          saveMacroPulseRecord(updated, true);
+          setMacroSnapshot((prev) => ({
+            ...prev,
+            treasuryYield10y: updated.us10y,
+            treasuryYield2y: updated.us2y,
+            yieldSpread10y2y: updated.yieldSpread,
+            highYieldSpreadOas: updated.creditSpreadOAS,
+            cccHighYieldSpread: updated.cccSpreadOAS,
+            usIsmPmi: updated.usIsmPmi,
+            twPmi: updated.twPmi,
+          }));
+        }}
       />
     </div>
   );

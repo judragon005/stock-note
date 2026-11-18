@@ -271,6 +271,37 @@ describe('macroPulseStorage (市場四柱在地持久化與歷史資料庫)', ()
       expect(merged.nasdaqIndex).toBe(19000);
     });
 
+    it('應完整透傳 Spec L108-126 製造業週期、PMI 與多週期寬度欄位而不剝除', () => {
+      const clean = sanitizeMacroRecord({
+        usMfgNewOrdersYoY: 3.1,
+        usMfgInventoriesYoY: 1.4,
+        usIndustrialProdYoY: 2.2,
+        usIsmPmi: 51.4,
+        twPmi: 53.1,
+        twExportOrdersYoY: 12.6,
+        multiHorizonBreadth: {
+          tw: { breadth20: 54, breadth60: 48, breadth200: 61, totalStocks: 1800 },
+          us: { breadth20: 62, breadth60: 58, breadth200: 67, totalStocks: 500 },
+          twMarginDeleveraging: {
+            taiexMaxDrawdown: -8.5,
+            marginReductionPercent: -10.2,
+            marginDeleveragingRatio: 1.2,
+            isCleaned: true,
+          },
+        },
+      } as any);
+
+      expect(clean.usMfgNewOrdersYoY).toBe(3.1);
+      expect(clean.usMfgInventoriesYoY).toBe(1.4);
+      expect(clean.usIndustrialProdYoY).toBe(2.2);
+      expect(clean.usIsmPmi).toBe(51.4);
+      expect(clean.twPmi).toBe(53.1);
+      expect(clean.twExportOrdersYoY).toBe(12.6);
+      expect(clean.multiHorizonBreadth?.tw?.breadth60).toBe(48);
+      expect(clean.multiHorizonBreadth?.us?.breadth200).toBe(67);
+      expect(clean.multiHorizonBreadth?.twMarginDeleveraging?.marginDeleveragingRatio).toBe(1.2);
+    });
+
     it('應支援 SQLite snake_case 鍵名映射', () => {
       const clean = sanitizeMacroRecord({
         treasury_yield_10y: 4.2,

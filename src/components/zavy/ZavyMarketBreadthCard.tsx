@@ -11,6 +11,7 @@ import { ZAVY_SLOW_WEALTH_GLOSSARY } from '../../constants/zavyGlossary';
 
 interface ZavyMarketBreadthCardProps {
   breadth: MultiHorizonMarketBreadth;
+  usBreadth?: MultiHorizonMarketBreadth;
   marginStatus: MarginDeleveragingStatus;
   interpretation: CycleCoupledBreadthInterpretation;
   bottomingChecklist: BottomingChecklistResult;
@@ -18,6 +19,7 @@ interface ZavyMarketBreadthCardProps {
 
 export const ZavyMarketBreadthCard: React.FC<ZavyMarketBreadthCardProps> = ({
   breadth,
+  usBreadth,
   marginStatus,
   interpretation,
   bottomingChecklist,
@@ -34,6 +36,29 @@ export const ZavyMarketBreadthCard: React.FC<ZavyMarketBreadthCardProps> = ({
         gap: '16px',
       }}
     >
+      {/* 美股 20/60/200MA 寬度對照橫條 (Spec 0235 Ticket 09) */}
+      <div
+        style={{
+          backgroundColor: '#0f172a',
+          borderRadius: '10px',
+          padding: '10px 14px',
+          border: '1px solid #1e293b',
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '13px',
+        }}
+      >
+        <span style={{ color: '#e2e8f0', fontWeight: 600 }}>🇺🇸 美股多週期市場寬度 (20 / 60 / 200MA)：</span>
+        <span className="mono" style={{ color: '#38bdf8', fontWeight: 700 }}>
+          {usBreadth
+            ? `20MA ${usBreadth.breadth20}% · 60MA ${usBreadth.breadth60}% · 200MA ${usBreadth.breadth200}%`
+            : '20MA -- · 60MA -- · 200MA --'}
+        </span>
+      </div>
+
       {/* 標題列 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
