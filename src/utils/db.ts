@@ -11,6 +11,7 @@ import {
   StoredCorporateAction,
   LocalStorageInspectionStats,
   StorageObjectStoreStat,
+  StockTrackerUnifiedArchiveV2,
 } from '../types/stock';
 import { logger } from './logger';
 import { getStockDictionaryStats } from '../engine/stockNameResolver';
@@ -580,17 +581,60 @@ export async function migrateFromLocalStorageIfNeeded(): Promise<boolean> {
 }
 
 /**
- * 導出全量資料庫 JSON (支援脫敏匯出)
+ * 導出全量資料庫 JSON (支援 V2 全態封包與雙軌脫敏)
  */
 export async function exportFullDatabaseJSON(redactSensitive = false): Promise<string> {
   const trades = await dbGetAll<TradeRecord>('trades');
   const brokerAccounts = await dbGetAll<BrokerAccount>('brokerAccounts');
   const cashTransactions = await dbGetAll<CashTransaction>('cashTransactions');
   const loanRecords = await dbGetAll<LoanRecord>('loanRecords');
+  const corporateActions = await dbGetAll<StoredCorporateAction>('corporateActions');
   const snapshots = await dbGetAll<SystemSnapshot>('snapshots');
   let settings = await dbGetAll<{ key: string; value: any }>('settings');
 
+  // 若 IndexedDB 尚未寫入但 LocalStorage 有資料，執行平滑備援讀取
+  if (trades.length === 0 && typeof localStorage !== 'undefined') {
+    const raw = localStorage.getItem(STORAGE_KEYS.TRADES);
+    if (raw) try { trades.push(...JSON.parse(raw)); } catch {}
+  }
+  if (brokerAccounts.length === 0 && typeof localStorage !== 'undefined') {
+    const raw = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
+    if (raw) try { brokerAccounts.push(...JSON.parse(raw)); } catch {}
+  }
+  if (cashTransactions.length === 0 && typeof localStorage !== 'undefined') {
+    const raw = localStorage.getItem(STORAGE_KEYS.CASH);
+    if (raw) try { cashTransactions.push(...JSON.parse(raw)); } catch {}
+  }
+  if (loanRecords.length === 0 && typeof localStorage !== 'undefined') {
+    const raw = localStorage.getItem(STORAGE_KEYS.LOANS);
+    if (raw) try { loanRecords.push(...JSON.parse(raw)); } catch {}
+  }
+
+  // 構造 settings 物件字典
+  const settingsMap: Record<string, any> = {};
+  settings.forEach((s) => {
+    if (s && s.key) {
+      settingsMap[s.key] = s.value;
+    }
+  });
+
+  // 如果 settings 中沒有 apiKeys 但 LocalStorage 有，補齊至 settingsMap
+  if (!settingsMap.apiKeys && typeof localStorage !== 'undefined') {
+    const raw = localStorage.getItem(STORAGE_KEYS.API_KEYS);
+    if (raw) try { settingsMap.apiKeys = JSON.parse(raw); } catch {}
+  }
+
   if (redactSensitive) {
+    if (settingsMap.apiKeys && typeof settingsMap.apiKeys === 'object') {
+      const cleaned: Record<string, any> = { ...settingsMap.apiKeys };
+      for (const k of Object.keys(cleaned)) {
+        if (typeof cleaned[k] === 'string') {
+          cleaned[k] = '';
+        }
+      }
+      settingsMap.apiKeys = cleaned;
+    }
+
     settings = settings.map((s) => {
       if (s.key === 'apiKeys' && s.value && typeof s.value === 'object') {
         const cleanedKeys: Record<string, any> = { ...s.value };
@@ -605,15 +649,34 @@ export async function exportFullDatabaseJSON(redactSensitive = false): Promise<s
     });
   }
 
-  const exportObj = {
+  const exportObj: StockTrackerUnifiedArchiveV2 = {
+    schemaVersion: '2.0.0',
+    generator: 'StockTracker-Core',
     version: DB_VERSION,
     exportedAt: new Date().toISOString(),
     isRedacted: redactSensitive,
+    payload: {
+      trades,
+      brokerAccounts,
+      cashTransactions,
+      loanRecords,
+      corporateActions,
+      settings: settingsMap,
+      snapshots,
+    },
+    metrics: {
+      totalTrades: trades.length,
+      totalAccounts: brokerAccounts.length,
+      totalCashTransactions: cashTransactions.length,
+      totalLoans: loanRecords.length,
+      totalCorporateActions: corporateActions.length,
+    },
     data: {
       trades,
       brokerAccounts,
       cashTransactions,
       loanRecords,
+      corporateActions,
       snapshots,
       settings,
     },
@@ -656,7 +719,12 @@ export async function importFullDatabaseJSON(jsonStr: string): Promise<void> {
   }
   if (settings) {
     await dbClear('settings');
-    await dbBatchPut('settings', safeSanitizeObject(settings));
+    if (Array.isArray(settings)) {
+      await dbBatchPut('settings', safeSanitizeObject(settings));
+    } else if (typeof settings === 'object') {
+      const items = Object.entries(settings).map(([key, value]) => ({ key, value }));
+      await dbBatchPut('settings', safeSanitizeObject(items));
+    }
   }
   if (corporateActions) {
     await dbClear('corporateActions');

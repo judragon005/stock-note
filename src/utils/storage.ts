@@ -169,6 +169,7 @@ export function getDefaultBrokerAccounts(): BrokerAccount[] {
 }
 
 export function loadBrokerAccountsFromStorage(): BrokerAccount[] {
+  if (typeof localStorage === 'undefined') return getDefaultBrokerAccounts();
   try {
     const raw = localStorage.getItem(BROKER_ACCOUNTS_STORAGE_KEY);
     if (raw) {

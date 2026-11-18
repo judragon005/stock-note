@@ -647,4 +647,44 @@ export interface SmartMoneyFlowAnalysisResult {
   summaryText: string;
 }
 
+export interface StockTrackerUnifiedArchiveV2 {
+  schemaVersion: '2.0.0';
+  generator: 'StockTracker-Core';
+  version: number;
+  exportedAt: string;
+  isRedacted: boolean;
+  payload: {
+    trades: TradeRecord[];
+    brokerAccounts: BrokerAccount[];
+    cashTransactions: CashTransaction[];
+    loanRecords: LoanRecord[];
+    corporateActions: StoredCorporateAction[];
+    settings: Record<string, any>;
+    snapshots?: any[];
+    marketSnapshot?: {
+      usdToTwdRate?: number;
+      customPrices?: Record<string, number>;
+      historicalFx?: Record<string, any>;
+    };
+  };
+  metrics: {
+    totalTrades: number;
+    totalAccounts: number;
+    totalCashTransactions: number;
+    totalLoans: number;
+    totalCorporateActions: number;
+  };
+  // 向下相容 V1 之 data 欄位
+  data: {
+    trades: TradeRecord[];
+    brokerAccounts: BrokerAccount[];
+    cashTransactions: CashTransaction[];
+    loanRecords: LoanRecord[];
+    corporateActions: StoredCorporateAction[];
+    snapshots?: any[];
+    settings: any[];
+  };
+}
+
+
 
