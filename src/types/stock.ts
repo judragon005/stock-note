@@ -139,6 +139,13 @@ export type QuantDiagnosisMap = Record<QuantMetricId, MetricDiagnosis>;
 
 export type TradeIntent = 'DIVIDEND' | 'SWING' | 'DAY_TRADE'; // Spec 0183: 交易初衷 (存股/波段/當沖)
 
+export interface DispositionEventInput {
+  type: 'DISPOSITION' | 'ATTENTION';
+  startDate?: string;
+  endDate?: string;
+  eventDate?: string;
+}
+
 export interface TradeRecord {
   id: string;
   date: string; // YYYY-MM-DD
@@ -227,6 +234,7 @@ export interface HoldingPosition {
   actionDirective?: import('./signal').HoldingActionDirective; // 智慧操作建議四字定調與紀律指引
   intent?: TradeIntent; // Spec 0183: 交易初衷 (存股/波段/當沖)
   isBagHolding?: boolean; // Spec 0183: 是否觸發波段凹單警報
+  dispositionEvents?: DispositionEventInput[]; // Spec 0236: 處置與注意股票事件歷史與生效視窗
 }
 
 export type StockPosition = HoldingPosition;

@@ -1,7 +1,7 @@
 # 技術債 0059: HoldingPosition 擴展欄位型別收斂與雙重轉型氣味清理 (HoldingPosition Extended Fields Type Convergence)
 
 * **建立日期**：2026-11-18
-* **狀態**：`OPEN`
+* **狀態**：`RESOLVED` (已於 Spec 0236 / Issue #586 完整解決)
 * **優先級**：`P3 (Low)`
 * **來源**：/code-review 雙軸審查回饋 (Spec 0235 / Issue #584)
 * **標籤**：`Refactor` · `TypeScript` · `CleanCode` · `TypeSafety` · `WarRoom`
@@ -28,20 +28,14 @@
 
 ---
 
-## 2. 建議解法與架構演進 (Proposed Solution)
+## 2. 建議解法與架構演進 (Proposed Solution & Final Resolution)
 
-於 `src/types/stock.ts` 中，為 `HoldingPosition` 正式宣告可選屬性：
+經 Spec 0236 架構審計確認：`src/types/stock.ts` 早已定義正統欄位 `avgCostFxRate?: number` 與 `plan?: TradePlan`，且核心會計引擎 (`calculator.ts`) 唯一寫入此二欄位；原本讀取 `avgExchangeRate` 導致戰情室美股匯差計算永遠靜默回退至 `31.8`。
 
-```ts
-export interface HoldingPosition {
-  // ... 現有屬性 ...
-  avgExchangeRate?: number;
-  tradePlan?: TradePlan;
-  dispositionEvents?: DispositionEvent[];
-}
-```
-
-隨後於 `useWarRoomPortfolioMetrics.ts` 與 `warRoomBriefBuilder.ts` 中移除雙重轉型，直接存取 `h.avgExchangeRate`、`h.tradePlan`、`h.dispositionEvents`。
+因此，最終採行 **正統 SSOT 收斂策略**（而非新增冗餘別名）：
+1. 將 `DispositionEventInput` 提升至 `src/types/stock.ts` 並由 `dispositionWindowEngine.ts` re-export，正式於 `HoldingPosition` 擴充 `dispositionEvents?: DispositionEventInput[]`。
+2. `useWarRoomPortfolioMetrics.ts` 改為直接讀取 `h.avgCostFxRate`，打通真實美股成本匯率。
+3. `warRoomBriefBuilder.ts` 改為直接讀取 `h.plan` 與 `h.dispositionEvents ?? []`，徹底清除雙重型別斷言。
 
 ---
 

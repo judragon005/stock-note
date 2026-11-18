@@ -95,13 +95,12 @@ export function assembleWarRoomHoldingSignals(params: {
       const unrealizedPnlPercent =
         h.avgCost && h.avgCost > 0 ? ((currentPrice - h.avgCost) / h.avgCost) * 100 : 0;
 
-      const customPlan =
-        h.plan || (h as unknown as { tradePlan?: { stopLossPrice?: number; takeProfitPrice?: number } }).tradePlan;
+      const customPlan = h.plan;
       const plannedStop = customPlan?.stopLossPrice ?? h.riskMetrics?.stopLossPrice;
       const plannedTarget = customPlan?.takeProfitPrice ?? h.riskMetrics?.takeProfitPrice;
       const planRiskStatus = evaluateRiskStatus(currentPrice, plannedStop, plannedTarget);
       const dispositionStatus = resolveDispositionAttentionStatus(
-        (h as unknown as { dispositionEvents?: Array<{ type: 'DISPOSITION' | 'ATTENTION'; startDate?: string; endDate?: string; eventDate?: string }> }).dispositionEvents || [],
+        h.dispositionEvents ?? [],
         asOfDate
       );
       const bias20MA = calculate20MABias(candles, currentPrice);
