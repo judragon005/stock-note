@@ -1986,9 +1986,11 @@ export function generateAiForceReportFromCandles(
         if (rawVol === undefined) return undefined;
         return market === 'TW' ? Math.round(rawVol / 1000) : rawVol;
       })(),
-      transactionCount: !settlement.isSettled
+      transactionCount: realtimeQuote?.transactions !== undefined
+        ? realtimeQuote.transactions
+        : !settlement.isSettled
         ? (anchorCandle as any)?.transactions
-        : (realtimeQuote?.transactions ?? (last as any)?.transactions),
+        : (last as any)?.transactions,
       openPrice: !settlement.isSettled
         ? anchorCandle.open
         : (realtimeQuote?.open ?? (realtimeQuote?.price && last.date !== settlement.anchorTradingDate ? undefined : last.open)),
