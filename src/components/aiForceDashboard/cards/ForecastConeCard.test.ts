@@ -108,4 +108,94 @@ describe('ForecastConeCard - 預測路徑圖座標與 SVG 路徑計算規範 (Ti
     expect(bearStyle.color).toBe('#10b981');
     expect(bearStyle.label).toBe('空頭');
   });
+
+  describe('Spec 0239 T13: 低價股動態刻度、colorTheme、獨立圖例、useId 與空狀態契約', () => {
+    it('低價股 (< $25) 與窄幅小數價位不可因 /50 取整算出 0 飛出畫布，且無浮點長尾誤差', () => {
+      const lowPriceTicks = generateYAxisTicks(14.1, 15.9, 180, { top: 20, bottom: 25, left: 44, right: 35 });
+      expect(lowPriceTicks.length).toBeGreaterThanOrEqual(2);
+      lowPriceTicks.forEach((tick) => {
+        expect(tick.price).toBeGreaterThan(14.0);
+        expect(tick.price).toBeLessThan(16.0);
+        expect(tick.y).toBeGreaterThanOrEqual(20);
+        expect(tick.y).toBeLessThanOrEqual(155);
+        expect(tick.label).not.toMatch(/000000/);
+      });
+
+      const pennyTicks = generateYAxisTicks(0.82, 0.98, 180, { top: 20, bottom: 25, left: 44, right: 35 });
+      expect(pennyTicks.length).toBeGreaterThanOrEqual(2);
+      pennyTicks.forEach((tick) => {
+        expect(tick.price).toBeGreaterThan(0.8);
+        expect(tick.price).toBeLessThan(1.0);
+        expect(tick.y).toBeGreaterThanOrEqual(20);
+        expect(tick.y).toBeLessThanOrEqual(155);
+        expect(tick.label).not.toBe('0');
+      });
+    });
+
+    it('getMainForceDirectionStyle 應響應 colorTheme (international 綠漲紅跌)', () => {
+      const usBull = getMainForceDirectionStyle(60, 60, 30, 'international');
+      expect(usBull.color).toBe('#10b981');
+      expect(usBull.label).toBe('多頭');
+
+      const usBear = getMainForceDirectionStyle(35, 30, 60, 'international');
+      expect(usBear.color).toBe('#ef4444');
+      expect(usBear.label).toBe('空頭');
+    });
+
+    it('timeNodes 為空時應渲染 Honest Empty State，絕不畫 2000~2500 空框', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { ForecastConeCard } = await import('./ForecastConeCard');
+
+      const html = renderToStaticMarkup(
+        React.createElement(ForecastConeCard, {
+          data: {
+            bullishProb: 0,
+            rangeProb: 0,
+            bearishProb: 0,
+            mainForceDirectionProb: 0,
+            annualizedDriftPercent: 0,
+            timeNodes: [],
+          },
+          colorTheme: 'international',
+          market: 'US',
+        })
+      );
+
+      expect(html).toContain('data-testid="forecast-cone-empty-state"');
+      expect(html).not.toContain('2,000');
+      expect(html).not.toContain('2,500');
+    });
+
+    it('正常渲染時圖例應置於獨立非絕對定位列，漸層 ID 不得寫死 bullConeGrad，且支援美股綠漲紅跌', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { ForecastConeCard } = await import('./ForecastConeCard');
+
+      const html = renderToStaticMarkup(
+        React.createElement(ForecastConeCard, {
+          data: {
+            bullishProb: 55,
+            rangeProb: 15,
+            bearishProb: 30,
+            mainForceDirectionProb: 55,
+            annualizedDriftPercent: 18.5,
+            timeNodes: [
+              { dayOffset: 0, label: '今日', upperPrice: 15.0, medianPrice: 15.0, lowerPrice: 15.0 },
+              { dayOffset: 5, label: '5日後', upperPrice: 16.2, medianPrice: 15.4, lowerPrice: 14.3 },
+              { dayOffset: 10, label: '10日後', upperPrice: 17.0, medianPrice: 15.8, lowerPrice: 13.9 },
+            ],
+          },
+          colorTheme: 'international',
+          market: 'US',
+        })
+      );
+
+      expect(html).toContain('data-testid="forecast-cone-legend"');
+      expect(html).not.toContain('id="bullConeGrad"');
+      expect(html).not.toContain('紅色：上漲機率');
+      expect(html).toContain('上漲機率 55%');
+      expect(html).toContain('#10b981');
+    });
+  });
 });

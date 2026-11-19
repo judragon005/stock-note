@@ -44,7 +44,7 @@ function createMockResponse(options: {
     async json() {
       return options.json;
     },
-    async text() {
+    async text(): Promise<string> {
       return options.text ?? (options.json !== undefined ? JSON.stringify(options.json) : '');
     },
   };
@@ -441,7 +441,7 @@ describe('Spec 0239 T06: 美股基本面/13F/ETF 抓取與持久化模組 (us-fu
                   : null;
               },
             },
-            async text() {
+            async text(): Promise<string> {
               return '';
             },
           };

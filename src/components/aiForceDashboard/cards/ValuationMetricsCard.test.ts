@@ -154,6 +154,42 @@ describe('ValuationMetricsCard - TDD Unit Tests', () => {
     expect(html).toContain('2.15');
     expect(html).toContain('48.5%');
     expect(html).toContain('自身歷史偏高 (PR 88%)');
+    expect(html).toContain('data-testid="valuation-pr-needle"');
+  });
+
+  it('7. Spec 0239 T14: 美股虧損股仍應顯示 30% 稅後殖利率與 $ EPS，且 ETF 不洩漏 etf_daily_nav 表名', () => {
+    const usLossData: ValuationMetricsData = {
+      isEtf: false,
+      isUsMarket: true,
+      isLossMaking: true,
+      psRatio: 6.4,
+      pb: 3.1,
+      dividendYield: 2.0,
+      netDividendYieldUs: 1.4,
+      latestQuarterName: '2026Q2',
+      latestQuarterEps: -0.45,
+      operatingMargin: -12.5,
+      isEmpty: false,
+    };
+
+    const usHtml = renderToStaticMarkup(
+      React.createElement(ValuationMetricsCard, { data: usLossData, market: 'US' })
+    );
+    expect(usHtml).toContain('市銷率 (PS)');
+    expect(usHtml).toContain('30% 稅後');
+    expect(usHtml).toContain('1.40%');
+    expect(usHtml).toContain('$-0.45');
+    expect(usHtml).not.toContain('-0.45</strong>元');
+    expect(usHtml).toContain('-12.5%');
+
+    const etfHtml = renderToStaticMarkup(
+      React.createElement(ValuationMetricsCard, {
+        data: { isEtf: true, etfPremiumDiscountRate: 0.1, dividendYield: 3.5, isEmpty: false },
+        market: 'TW',
+      })
+    );
+    expect(etfHtml).toContain('官方 ETF 淨值定錨');
+    expect(etfHtml).not.toContain('etf_daily_nav');
   });
 });
 

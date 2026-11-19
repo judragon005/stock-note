@@ -1,23 +1,36 @@
 import React from 'react';
 import type { DynamicSignalsData } from '../../../types/aiForceDashboard';
+import type { ColorThemeMode, MarketType } from '../../../types/stock';
 import { ShieldAlert, AlertTriangle } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 
 export interface DynamicSignalsCardProps {
   data?: DynamicSignalsData;
+  colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
 /**
- * 依據信號關鍵字映射信號顏色
+ * 依據信號關鍵字映射信號顏色 (優先攔截分歧/中性/震盪為黃色，可控/低風險為綠色)
  */
 export function getSignalLightColor(signalText: string): { color: string; bg: string; dot: string } {
+  if (
+    signalText.includes('分歧') ||
+    signalText.includes('中性') ||
+    signalText.includes('震盪') ||
+    signalText.includes('觀望')
+  ) {
+    return { color: '#fbbf24', bg: 'rgba(245, 158, 11, 0.15)', dot: '#f59e0b' };
+  }
   if (
     signalText.includes('強') ||
     signalText.includes('多') ||
     signalText.includes('偏強') ||
     signalText.includes('合買') ||
     signalText.includes('集中') ||
-    signalText.includes('低風險')
+    signalText.includes('低風險') ||
+    signalText.includes('可控') ||
+    signalText.includes('安全')
   ) {
     return { color: '#34d399', bg: 'rgba(16, 185, 129, 0.15)', dot: '#10b981' };
   }
@@ -29,7 +42,8 @@ export function getSignalLightColor(signalText: string): { color: string; bg: st
     signalText.includes('破線') ||
     signalText.includes('破位') ||
     signalText.includes('超跌') ||
-    signalText.includes('偏高')
+    signalText.includes('偏高') ||
+    signalText.includes('警戒')
   ) {
     return { color: '#f87171', bg: 'rgba(239, 68, 68, 0.15)', dot: '#ef4444' };
   }
@@ -179,7 +193,7 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
             style={{
               display: 'flex',
               justifyContent: 'space-between',
-              fontSize: '0.7rem',
+              fontSize: '0.75rem',
               color: '#94a3b8',
             }}
           >
@@ -310,13 +324,13 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
             </div>
           )}
           <div style={{ display: 'flex', gap: '8px' }}>
-            {data?.keySupportPrice !== undefined && (
+            {data?.keySupportPrice != null && (
               <div>
                 <span style={{ color: '#94a3b8' }}>防守: </span>
                 <span style={{ fontWeight: 700, color: '#34d399' }}>{data.keySupportPrice}</span>
               </div>
             )}
-            {data?.keyPressurePrice !== undefined && (
+            {data?.keyPressurePrice != null && (
               <div>
                 <span style={{ color: '#94a3b8' }}>壓力: </span>
                 <span style={{ fontWeight: 700, color: '#f87171' }}>{data.keyPressurePrice}</span>
@@ -341,7 +355,7 @@ export const DynamicSignalsCard: React.FC<DynamicSignalsCardProps> = ({ data }) 
             marginBottom: '4px',
           }}
         >
-          <div style={{ color: verdictConfig.color, fontWeight: 800, marginBottom: '4px', fontSize: '0.7rem' }}>
+          <div style={{ color: verdictConfig.color, fontWeight: 800, marginBottom: '4px', fontSize: '0.75rem' }}>
             【AI 決策情境解析】
           </div>
           <div>{data.actionableAdvice}</div>

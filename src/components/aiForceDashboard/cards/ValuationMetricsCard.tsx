@@ -1,12 +1,13 @@
 import React from 'react';
 import type { ValuationMetricsData } from '../../../types/aiForceDashboard';
-import type { MarketType } from '../../../types/stock';
+import type { ColorThemeMode, MarketType } from '../../../types/stock';
 import { Calculator, AlertTriangle, ShieldCheck, TrendingDown } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 
 export interface ValuationMetricsCardProps {
   data?: ValuationMetricsData;
   market?: MarketType;
+  colorTheme?: ColorThemeMode;
 }
 
 export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
@@ -185,7 +186,9 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>折溢價率</span>
+                        <TermTooltip termId="etfDiscountPremium">
+                          <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>折溢價率</span>
+                        </TermTooltip>
                         {current.etfPremiumDiscountRate !== undefined && current.etfPremiumDiscountRate > 0.5 && (
                           <span style={{ fontSize: '0.75rem', color: '#f87171', fontWeight: 800 }}>溢價警戒</span>
                         )}
@@ -250,7 +253,9 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>市銷率 (PS)</span>
+                        <TermTooltip termId="psRatio">
+                          <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>市銷率 (PS)</span>
+                        </TermTooltip>
                         <span style={{ fontSize: '0.75rem', color: '#fbbf24', fontWeight: 700 }}>虧損轉機</span>
                       </div>
                       <div style={{ fontSize: '1.02rem', fontWeight: 800, color: '#fbbf24', fontFamily: 'monospace' }}>
@@ -273,7 +278,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                       </div>
                     </div>
 
-                    {/* 格 3: 年化現金殖利率 */}
+                    {/* 格 3: 年化現金殖利率 (美股虧損股仍須保留 30% 稅後殖利率) */}
                     <div
                       style={{
                         background: 'rgba(15, 23, 42, 0.55)',
@@ -282,11 +287,24 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                         border: '1px solid rgba(16, 185, 129, 0.15)',
                       }}
                     >
-                      <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>年化現金殖利率</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                          {isUs ? '年化殖利率' : '年化現金殖利率'}
+                        </span>
+                        {isUs && (
+                          <span style={{ fontSize: '0.75rem', color: '#a78bfa', fontWeight: 700 }}>30% 稅後</span>
+                        )}
+                      </div>
                       <div style={{ fontSize: '1.02rem', fontWeight: 800, color: '#34d399', fontFamily: 'monospace' }}>
-                        {current.dividendYield !== undefined && current.dividendYield > 0
-                          ? `${current.dividendYield.toFixed(2)}%`
-                          : '--'}
+                        {isUs
+                          ? current.netDividendYieldUs !== undefined && current.netDividendYieldUs > 0
+                            ? `${current.netDividendYieldUs.toFixed(2)}%`
+                            : current.dividendYield !== undefined && current.dividendYield > 0
+                              ? `${(current.dividendYield * 0.7).toFixed(2)}%`
+                              : '--'
+                          : current.dividendYield !== undefined && current.dividendYield > 0
+                            ? `${current.dividendYield.toFixed(2)}%`
+                            : '--'}
                       </div>
                     </div>
                   </>
@@ -456,45 +474,75 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
 
                 <div
                   style={{
+                    position: 'relative',
                     display: 'flex',
                     height: '8px',
                     width: '100%',
                     borderRadius: '999px',
-                    overflow: 'hidden',
                     background: 'rgba(30, 41, 59, 0.8)',
                     gap: '2px',
                   }}
                 >
-                  <div
-                    style={{
-                      width: '33%',
-                      background: 'linear-gradient(90deg, #10b981 0%, #34d399 100%)',
-                      opacity: current.valuationTier === 'UNDERVALUED' ? 1 : 0.4,
-                    }}
-                    title="低估便宜"
-                  />
-                  <div
-                    style={{
-                      width: '34%',
-                      background: 'linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%)',
-                      opacity: current.valuationTier === 'FAIR' ? 1 : 0.4,
-                    }}
-                    title="合理估值"
-                  />
-                  <div
-                    style={{
-                      width: '33%',
-                      background: 'linear-gradient(90deg, #ef4444 0%, #f87171 100%)',
-                      opacity: current.valuationTier === 'OVERVALUED' ? 1 : 0.4,
-                    }}
-                    title="高估偏貴"
-                  />
+                  {(() => {
+                    const hasEnoughSamples =
+                      !isEtf &&
+                      (current.historySampleSize === undefined || current.historySampleSize >= 5);
+                    const prValue = current.pePercentile ?? current.pbPercentile;
+                    return (
+                      <>
+                        <div
+                          style={{
+                            width: '33%',
+                            borderRadius: '999px 0 0 999px',
+                            background: 'linear-gradient(90deg, #10b981 0%, #34d399 100%)',
+                            opacity: hasEnoughSamples && current.valuationTier === 'UNDERVALUED' ? 1 : 0.35,
+                          }}
+                          title="低估便宜"
+                        />
+                        <div
+                          style={{
+                            width: '34%',
+                            background: 'linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%)',
+                            opacity: hasEnoughSamples && current.valuationTier === 'FAIR' ? 1 : 0.35,
+                          }}
+                          title="合理估值"
+                        />
+                        <div
+                          style={{
+                            width: '33%',
+                            borderRadius: '0 999px 999px 0',
+                            background: 'linear-gradient(90deg, #ef4444 0%, #f87171 100%)',
+                            opacity: hasEnoughSamples && current.valuationTier === 'OVERVALUED' ? 1 : 0.35,
+                          }}
+                          title="高估偏貴"
+                        />
+                        {hasEnoughSamples && prValue !== undefined && Number.isFinite(prValue) && (
+                          <div
+                            data-testid="valuation-pr-needle"
+                            style={{
+                              position: 'absolute',
+                              left: `${Math.min(98, Math.max(2, prValue))}%`,
+                              top: '-2px',
+                              width: '4px',
+                              height: '12px',
+                              borderRadius: '2px',
+                              backgroundColor: '#f8fafc',
+                              boxShadow: '0 0 6px rgba(255, 255, 255, 0.9)',
+                              transform: 'translateX(-50%)',
+                            }}
+                            title={`PR ${prValue}%`}
+                          />
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 
-              {/* 最新單季獲利基石與董監質押治理 (EPS / 毛利率 / 營利率 / 董監質押，Spec 0199 & Spec 0237) */}
+              {/* 最新單季獲利基石與董監質押治理 */}
               {(current.latestQuarterEps !== undefined ||
                 current.grossMargin !== undefined ||
+                current.operatingMargin !== undefined ||
                 current.directorPledgeRatio !== undefined) && (
                 <div
                   data-testid="valuation-quarterly-financials"
@@ -518,7 +566,11 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                     {current.latestQuarterEps !== undefined && (
                       <span style={{ color: '#f8fafc' }}>
-                        EPS: <strong style={{ color: current.latestQuarterEps >= 0 ? '#38bdf8' : '#f87171' }}>{current.latestQuarterEps}</strong>元
+                        EPS:{' '}
+                        <strong style={{ color: current.latestQuarterEps >= 0 ? '#38bdf8' : '#f87171' }}>
+                          {isUs ? `$${current.latestQuarterEps}` : current.latestQuarterEps}
+                        </strong>
+                        {!isUs && '元'}
                       </span>
                     )}
                     {current.grossMargin !== undefined && (
@@ -561,7 +613,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                 }}
               >
                 <span>
-                  {isEtf ? 'ETF 淨值定錨 (etf_daily_nav)' : isUs ? '美股即時估值' : '台股即時動態價差定錨'}
+                  {isEtf ? '官方 ETF 淨值定錨' : isUs ? '美股即時估值' : '台股即時動態價差定錨'}
                 </span>
                 <span>{current.asOfDateText ? `基準日: ${current.asOfDateText}` : ''}</span>
               </div>

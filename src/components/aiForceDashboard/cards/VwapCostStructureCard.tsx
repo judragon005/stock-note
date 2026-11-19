@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useId } from 'react';
 import { VwapCostStructureData, CostBandTimeNode } from '../../../types/aiForceDashboard';
-import { DEFAULT_TIME_NODES } from '../../../engine/vwapCostEngine';
+import { ColorThemeMode, MarketType } from '../../../types/stock';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseMainForceCost } from '../../../constants/aiForceGlossary';
 
@@ -48,10 +48,17 @@ export interface BiasMetricResult {
 }
 
 /**
- * 格式化強弱指標偏離度字串與色彩 (Spec 0144 對齊照片天藍色冷調)
+ * 格式化強弱指標偏離度字串與色彩 (支援 colorTheme 台股紅漲綠跌 / 國際綠漲紅跌)
  */
-export function formatBiasMetric(biasPercent: number): BiasMetricResult {
+export function formatBiasMetric(
+  biasPercent: number,
+  colorTheme: ColorThemeMode = 'taiwan'
+): BiasMetricResult {
   const isPositive = biasPercent > 0;
+  const isNegative = biasPercent < 0;
+  const isTaiwan = colorTheme === 'taiwan';
+  const posColor = isTaiwan ? '#ef4444' : '#10b981';
+  const negColor = isTaiwan ? '#10b981' : '#ef4444';
   let text = `${biasPercent.toFixed(1)}%`;
   if (isPositive) {
     text = `+${biasPercent.toFixed(1)}%`;
@@ -59,30 +66,37 @@ export function formatBiasMetric(biasPercent: number): BiasMetricResult {
   return {
     text,
     isPositive,
-    color: isPositive ? '#38bdf8' : biasPercent < 0 ? '#10b981' : '#fbbf24',
+    color: isPositive ? posColor : isNegative ? negColor : '#fbbf24',
   };
 }
 
 export interface LegendItem {
   label: string;
   color: string;
+  percentage?: number;
 }
 
-export const DEFAULT_LEGEND_BANDS = [
-  { name: '衰竭區', biasLabel: '<-5%', color: '#2563eb' },
-  { name: '套牢區', biasLabel: '-2~-5%', color: '#10b981' },
-  { name: '主力成本區', biasLabel: '±2%', color: '#eab308' },
-  { name: '大量成交區', biasLabel: '+2~5%', color: '#ea580c' },
+export const DEFAULT_LEGEND_BANDS: Array<{
+  name: string;
+  biasLabel: string;
+  color: string;
+  percentage?: number;
+}> = [
+  { name: '突破區', biasLabel: '>+5%', color: '#2563eb' },
+  { name: '大量成交區', biasLabel: '+2~+5%', color: '#f97316' },
+  { name: '主力成本區', biasLabel: '±2%', color: '#10b981' },
+  { name: '套牢區', biasLabel: '<-2%', color: '#38bdf8' },
 ];
 
 /**
- * 格式化右上圖例項目 (Spec 0144 對齊照片)
+ * 格式化圖例項目 (Spec 0239 T13: 100% 對齊 vwapCostEngine 四層名稱、色碼與百分比)
  */
 export function formatLegendItems(bands?: VwapCostStructureData['bands']): LegendItem[] {
   const source = bands && bands.length === 4 ? bands : DEFAULT_LEGEND_BANDS;
   return source.map((b) => ({
     label: `${b.name}(${b.biasLabel.replace(/\s+/g, '')})`,
     color: b.color,
+    percentage: 'percentage' in b ? b.percentage : undefined,
   }));
 }
 
@@ -179,22 +193,44 @@ export function buildStackedMountainPaths(
 
 export interface VwapCostStructureCardProps {
   data: VwapCostStructureData;
+  colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
-export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ data }) => {
-  const biasMetric = useMemo(() => formatBiasMetric(data.biasPercent ?? 7.5), [data.biasPercent]);
-  const legendItems = useMemo(() => formatLegendItems(data.bands), [data.bands]);
+export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({
+  data,
+  colorTheme = 'taiwan',
+  market,
+}) => {
+  const uid = useId().replace(/:/g, '');
+  const grad1Id = `areaGrad1-${uid}`;
+  const grad2Id = `areaGrad2-${uid}`;
+  const grad3Id = `areaGrad3-${uid}`;
+  const grad4Id = `areaGrad4-${uid}`;
 
-  const timeNodes = data.timeNodes && data.timeNodes.length >= 4 ? data.timeNodes : DEFAULT_TIME_NODES;
+  const vwapCost = data.mainForceAvgCost ?? data.mainForceVwap ?? 0;
+  const timeNodes = data.timeNodes && data.timeNodes.length > 0 ? data.timeNodes : [];
+  const isEmpty = timeNodes.length === 0 || vwapCost <= 0;
+
+  const biasMetric = useMemo(
+    () => formatBiasMetric(data.biasPercent ?? 0, colorTheme),
+    [data.biasPercent, colorTheme]
+  );
+  const legendItems = useMemo(() => formatLegendItems(data.bands), [data.bands]);
 
   const width = 340;
   const height = 130;
-  const padding: ChartPadding = { left: 30, right: 10, top: 10, bottom: 25 };
+  const padding: ChartPadding = { left: 34, right: 10, top: 10, bottom: 25 };
 
   const mountainPaths = useMemo(
     () => buildStackedMountainPaths(timeNodes, width, height, padding),
     [timeNodes]
   );
+
+  const formattedVwapPrice =
+    market === 'US'
+      ? `$${vwapCost.toFixed(2)}`
+      : vwapCost.toLocaleString();
 
   return (
     <div
@@ -210,7 +246,7 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
         boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.35)',
       }}
     >
-      {/* 頂部標題 (校正繁體字「分佈圖」) */}
+      {/* 頂部標題 */}
       <div
         style={{
           display: 'flex',
@@ -245,95 +281,135 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
         </div>
       </div>
 
-      {/* SVG 多層次波形面積堆疊圖繪製區 (Area Chart) */}
-      <div style={{ width: '100%', flex: 1, minHeight: '185px', position: 'relative' }}>
-        {/* 右上方浮動 HTML 圖例 (零拉伸變形) */}
+      {isEmpty ? (
         <div
+          data-testid="vwap-empty-state"
           style={{
-            position: 'absolute',
-            top: '6px',
-            right: '8px',
-            zIndex: 10,
+            flex: 1,
+            minHeight: '185px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '3px',
-            padding: '5px 8px',
-            borderRadius: '6px',
-            backgroundColor: 'rgba(15, 23, 42, 0.85)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            fontSize: '0.75rem',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            background: 'rgba(15, 23, 42, 0.45)',
+            borderRadius: '10px',
+            border: '1px dashed rgba(148, 163, 184, 0.25)',
+            color: '#94a3b8',
+            fontSize: '0.8rem',
+            padding: '16px',
+            textAlign: 'center',
           }}
         >
-          {legendItems.map((item, idx) => (
-            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#cbd5e1' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: item.color, flexShrink: 0 }} />
-              <span>{item.label}</span>
-            </div>
-          ))}
+          <span style={{ fontWeight: 700, color: '#cbd5e1' }}>主力成本結構數據待計算</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>需累積至少 5 個交易日量價資料方可建構 20D VWAP 成本分佈</span>
         </div>
-
-        <svg
-          viewBox={`0 0 ${width} ${height}`}
-          style={{ width: '100%', height: '100%', overflow: 'visible' }}
-        >
-          <defs>
-            <linearGradient id="areaGrad1" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#2563eb" stopOpacity="0.88" />
-              <stop offset="100%" stopColor="#1e40af" stopOpacity="0.45" />
-            </linearGradient>
-            <linearGradient id="areaGrad2" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#10b981" stopOpacity="0.88" />
-              <stop offset="100%" stopColor="#059669" stopOpacity="0.45" />
-            </linearGradient>
-            <linearGradient id="areaGrad3" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#eab308" stopOpacity="0.88" />
-              <stop offset="100%" stopColor="#ca8a04" stopOpacity="0.45" />
-            </linearGradient>
-            <linearGradient id="areaGrad4" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ea580c" stopOpacity="0.88" />
-              <stop offset="100%" stopColor="#9a3412" stopOpacity="0.45" />
-            </linearGradient>
-          </defs>
-
-          {/* 左側 Y 軸刻度 */}
-          <text x="5" y="20" fill="#94a3b8" fontSize="12" fontFamily="monospace">60k</text>
-          <text x="5" y="50" fill="#94a3b8" fontSize="12" fontFamily="monospace">40k</text>
-          <text x="5" y="80" fill="#94a3b8" fontSize="12" fontFamily="monospace">20k</text>
-          <text x="10" y="108" fill="#94a3b8" fontSize="12" fontFamily="monospace">0k</text>
-
-          {/* 動態多峰平滑山峰面積圖 (Spec 0144) */}
-          {mountainPaths.layer4Path && (
-            <path d={mountainPaths.layer4Path} fill="url(#areaGrad4)" />
-          )}
-          {mountainPaths.layer3Path && (
-            <path d={mountainPaths.layer3Path} fill="url(#areaGrad3)" />
-          )}
-          {mountainPaths.layer2Path && (
-            <path d={mountainPaths.layer2Path} fill="url(#areaGrad2)" />
-          )}
-          {mountainPaths.layer1Path && (
-            <path d={mountainPaths.layer1Path} fill="url(#areaGrad1)" />
-          )}
-
-          {/* 底部 X 軸時間刻度 (動態對齊 4 時點) */}
-          {timeNodes.map((n, idx) => {
-            const x = padding.left + (timeNodes.length > 1 ? ((width - padding.left - padding.right) / (timeNodes.length - 1)) * idx : 50);
-            return (
-              <text
-                key={'xdate-' + idx}
-                x={x}
-                y={height - 6}
-                textAnchor="middle"
-                fill="#94a3b8"
-                fontSize="12"
-                fontFamily="monospace"
+      ) : (
+        <>
+          {/* 獨立非遮擋圖例橫列 (含各層百分比) */}
+          <div
+            data-testid="vwap-legend-bar"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '4px 8px',
+              padding: '4px 8px',
+              marginBottom: '4px',
+              borderRadius: '6px',
+              backgroundColor: 'rgba(15, 23, 42, 0.65)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              fontSize: '0.75rem',
+            }}
+          >
+            {legendItems.map((item, idx) => (
+              <div
+                key={idx}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '4px',
+                  color: '#cbd5e1',
+                }}
               >
-                {n.dateLabel}
-              </text>
-            );
-          })}
-        </svg>
-      </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: item.color, flexShrink: 0 }} />
+                  <span>{item.label}</span>
+                </div>
+                {item.percentage !== undefined && (
+                  <span style={{ color: item.color, fontWeight: 700, fontFamily: 'monospace' }}>
+                    {item.percentage}%
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* SVG 多層次波形面積堆疊圖繪製區 (Area Chart) */}
+          <div style={{ width: '100%', flex: 1, minHeight: '150px', position: 'relative' }}>
+            <svg
+              viewBox={`0 0 ${width} ${height}`}
+              style={{ width: '100%', height: '100%', overflow: 'visible' }}
+            >
+              <defs>
+                <linearGradient id={grad1Id} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#2563eb" stopOpacity="0.88" />
+                  <stop offset="100%" stopColor="#1e40af" stopOpacity="0.45" />
+                </linearGradient>
+                <linearGradient id={grad2Id} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.88" />
+                  <stop offset="100%" stopColor="#0284c7" stopOpacity="0.45" />
+                </linearGradient>
+                <linearGradient id={grad3Id} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity="0.88" />
+                  <stop offset="100%" stopColor="#059669" stopOpacity="0.45" />
+                </linearGradient>
+                <linearGradient id={grad4Id} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#f97316" stopOpacity="0.88" />
+                  <stop offset="100%" stopColor="#c2410c" stopOpacity="0.45" />
+                </linearGradient>
+              </defs>
+
+              {/* 左側 Y 軸真實累計比例刻度 (100% / 50% / 0%) */}
+              <text x="2" y="20" fill="#94a3b8" fontSize="12" fontFamily="monospace">100%</text>
+              <text x="6" y="64" fill="#94a3b8" fontSize="12" fontFamily="monospace">50%</text>
+              <text x="10" y="108" fill="#94a3b8" fontSize="12" fontFamily="monospace">0%</text>
+
+              {/* 動態多峰平滑山峰面積圖 */}
+              {mountainPaths.layer4Path && (
+                <path d={mountainPaths.layer4Path} fill={`url(#${grad4Id})`} />
+              )}
+              {mountainPaths.layer3Path && (
+                <path d={mountainPaths.layer3Path} fill={`url(#${grad3Id})`} />
+              )}
+              {mountainPaths.layer2Path && (
+                <path d={mountainPaths.layer2Path} fill={`url(#${grad2Id})`} />
+              )}
+              {mountainPaths.layer1Path && (
+                <path d={mountainPaths.layer1Path} fill={`url(#${grad1Id})`} />
+              )}
+
+              {/* 底部 X 軸時間刻度 */}
+              {timeNodes.map((n, idx) => {
+                const x = padding.left + (timeNodes.length > 1 ? ((width - padding.left - padding.right) / (timeNodes.length - 1)) * idx : 50);
+                return (
+                  <text
+                    key={'xdate-' + idx}
+                    x={x}
+                    y={height - 6}
+                    textAnchor="middle"
+                    fill="#94a3b8"
+                    fontSize="12"
+                    fontFamily="monospace"
+                  >
+                    {n.dateLabel}
+                  </text>
+                );
+              })}
+            </svg>
+          </div>
+        </>
+      )}
 
       {/* 底部主力平均成本與強弱指標 */}
       <div
@@ -351,7 +427,15 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <TermTooltip
             termId="vwap20"
-            dynamicDiagnosis={diagnoseMainForceCost(resolveVwapCurrentPrice(data), data.mainForceAvgCost ?? data.mainForceVwap ?? 2131)}
+            dynamicDiagnosis={
+              !isEmpty
+                ? diagnoseMainForceCost(
+                    resolveVwapCurrentPrice(data),
+                    vwapCost,
+                    market === 'US' ? 'USD' : 'TWD'
+                  )
+                : undefined
+            }
           >
             <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>主力平均成本：</span>
           </TermTooltip>
@@ -360,10 +444,10 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
               fontSize: '0.82rem',
               fontWeight: 800,
               fontFamily: 'monospace',
-              color: '#38bdf8',
+              color: isEmpty ? '#94a3b8' : '#38bdf8',
             }}
           >
-            {(data.mainForceAvgCost ?? data.mainForceVwap ?? 2131).toLocaleString()}
+            {isEmpty ? '--' : formattedVwapPrice}
           </span>
           <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
             ({data.referenceVwapLabel || '20日VWAP'})
@@ -379,10 +463,10 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
               fontSize: '0.82rem',
               fontWeight: 800,
               fontFamily: 'monospace',
-              color: biasMetric.color,
+              color: isEmpty ? '#94a3b8' : biasMetric.color,
             }}
           >
-            {biasMetric.text}
+            {isEmpty ? '--' : biasMetric.text}
           </span>
         </div>
       </div>

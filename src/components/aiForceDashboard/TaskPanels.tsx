@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Shield,
   Zap,
@@ -10,7 +10,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import type { AiForceDashboardReport, KlineCandleItem } from '../../types/aiForceDashboard';
-import type { HoldingPosition, LoanRecord } from '../../types/stock';
+import type { ColorThemeMode, HoldingPosition, LoanRecord, MarketType } from '../../types/stock';
 import { aggregateCandlesToTimeframe } from '../../engine/klineAggregationEngine';
 import { calculateStochasticKD } from '../../engine/technicalIndicatorEngine';
 
@@ -19,6 +19,8 @@ export interface TaskPanelProps {
   holdings?: HoldingPosition[];
   loanRecords?: LoanRecord[];
   macroMaintenanceRatio?: number;
+  colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
 export interface TechnicalAlertItem {
@@ -149,49 +151,64 @@ export function generateTechnicalAlerts(report: AiForceDashboardReport): Technic
     });
   }
 
-  // 4. 隔日沖與日內籌碼換手警示
+  // 4. 隔日沖與日內籌碼換手警示 (台美股雙市場分流)
+  const isUs = report.market === 'US';
   const dayTrade = report.dayTradeRisk;
   if (dayTrade) {
     const levelLabel: '高' | '中' | '低' =
       dayTrade.riskLevel === 'HIGH' ? '高' : dayTrade.riskLevel === 'LOW' ? '低' : '中';
     const color = levelLabel === '高' ? '#ef4444' : levelLabel === '低' ? '#10b981' : '#f59e0b';
     alerts.push({
-      title: '隔日沖沖銷異常偵測',
+      title: isUs ? '美股日內波動與換手偵測' : '隔日沖沖銷異常偵測',
       level: levelLabel,
-      message: `日內沖銷風險指數 ${dayTrade.riskIndex} 分 (等級：${dayTrade.riskLevel})，換手率 ${dayTrade.turnoverRate}%，日內波動度 ${dayTrade.intradayVolatility}%`,
+      message: isUs
+        ? `日內波動風險指數 ${dayTrade.riskIndex} 分 (等級：${dayTrade.riskLevel})，換手活躍度 ${dayTrade.turnoverRate}%，ATR 日內波動度 ${dayTrade.intradayVolatility}%`
+        : `日內沖銷風險指數 ${dayTrade.riskIndex} 分 (等級：${dayTrade.riskLevel})，換手率 ${dayTrade.turnoverRate}%，日內波動度 ${dayTrade.intradayVolatility}%`,
       time,
       color,
     });
   }
 
-  // 5. 交易所處置股票與注意股票標記 (Ticket 07 / Story 6)
-  const statusTag = report.marketBar?.statusTag ?? report.marketBar?.marketStatusTag ?? 'NORMAL';
-  if (statusTag === 'DISPOSITION') {
-    alerts.unshift({
-      title: '交易所處置股票預警',
-      level: '高',
-      message: `本標的已被主管機關列入「處置股票」，採行分盤撮合機制（每 5 分鐘或 20 分鐘分盤撮合一次），單筆委託達 10 張或多筆累積達 30 張需預收款券，流動性大幅受限`,
-      time,
-      color: '#ef4444',
-    });
-  } else if (statusTag === 'ATTENTION') {
-    alerts.unshift({
-      title: '證交所注意股票列管',
-      level: '中',
-      message: `本標的近期因漲跌幅異常、成交量放大或週轉率過高已被證交所列為注意股票，若連續達標恐觸發處置機制，請提高警覺`,
-      time,
-      color: '#f59e0b',
-    });
+  // 5. 交易所處置股票與注意股票標記 (僅台股適用)
+  if (!isUs) {
+    const statusTag = report.marketBar?.statusTag ?? report.marketBar?.marketStatusTag ?? 'NORMAL';
+    if (statusTag === 'DISPOSITION') {
+      alerts.unshift({
+        title: '交易所處置股票預警',
+        level: '高',
+        message: `本標的已被主管機關列入「處置股票」，採行分盤撮合機制（每 5 分鐘或 20 分鐘分盤撮合一次），單筆委託達 10 張或多筆累積達 30 張需預收款券，流動性大幅受限`,
+        time,
+        color: '#ef4444',
+      });
+    } else if (statusTag === 'ATTENTION') {
+      alerts.unshift({
+        title: '證交所注意股票列管',
+        level: '中',
+        message: `本標的近期因漲跌幅異常、成交量放大或週轉率過高已被證交所列為注意股票，若連續達標恐觸發處置機制，請提高警覺`,
+        time,
+        color: '#f59e0b',
+      });
+    }
   }
 
-  // 6. 信用交易維持率風控警示 (Ticket 07 / Story 6)
-  alerts.push({
-    title: '信用交易維持率風控',
-    level: '中',
-    message: `券商融資維持率追繳警戒線為 130%（T+2 日未補繳將面臨斷頭處分）、實務波段防守警戒線為 140%，需注意標的回檔對信用帳戶擔保率之壓力測試`,
-    time,
-    color: '#38bdf8',
-  });
+  // 6. 信用交易維持率 / 美股無漲跌幅跳空風控警示
+  if (isUs) {
+    alerts.push({
+      title: '美股無漲跌幅與跳空風控',
+      level: '中',
+      message: `美股市場無單日 10% 漲跌幅限制（採 LULD 價格帶熔斷機制），需留意財報發布與盤後延長交易時段之跳空滑價風險`,
+      time,
+      color: '#38bdf8',
+    });
+  } else {
+    alerts.push({
+      title: '信用交易維持率風控',
+      level: '中',
+      message: `券商融資維持率追繳警戒線為 130%（T+2 日未補繳將面臨斷頭處分）、實務波段防守警戒線為 140%，需注意標的回檔對信用帳戶擔保率之壓力測試`,
+      time,
+      color: '#38bdf8',
+    });
+  }
 
   return alerts;
 }
@@ -525,7 +542,12 @@ export function deriveKdMaMetrics(report: AiForceDashboardReport) {
   for (let i = 1; i < candles.length - 3; i++) {
     const cPrev = candles[i - 1];
     const cCurr = candles[i];
-    if ((cPrev.k ?? 50) < (cPrev.d ?? 50) && (cCurr.k ?? 50) >= (cCurr.d ?? 50) && (cCurr.k ?? 50) <= 35) {
+    if (
+      cCurr.close > 0 &&
+      (cPrev.k ?? 50) < (cPrev.d ?? 50) &&
+      (cCurr.k ?? 50) >= (cCurr.d ?? 50) &&
+      (cCurr.k ?? 50) <= 35
+    ) {
       goldenCrossCount++;
       const forwardCandle = candles[Math.min(i + 10, candles.length - 1)];
       const ret = ((forwardCandle.close - cCurr.close) / cCurr.close) * 100;
@@ -562,10 +584,10 @@ export const KdMaView: React.FC<TaskPanelProps> = ({ report }) => {
   const { k, d, ma20, kdCrossingState, multiTimeframeResonance, historicalOversoldStats, recentCandles } =
     useMemo(() => deriveKdMaMetrics(report), [report]);
 
-  // SVG 座標繪製計算 (寬 100%, 高 220px, 邊界 20px)
+  // SVG 座標繪製計算 (寬 100%, 高 220px, 左邊界擴大至 58px 防止 '80 超買' 裁切)
   const svgWidth = 600;
   const svgHeight = 220;
-  const padding = { top: 20, right: 30, bottom: 30, left: 30 };
+  const padding = { top: 20, right: 30, bottom: 30, left: 58 };
   const plotWidth = svgWidth - padding.left - padding.right;
   const plotHeight = svgHeight - padding.top - padding.bottom;
 
@@ -774,11 +796,12 @@ export function deriveMacdMetrics(report: AiForceDashboardReport) {
     const lowestDif = Math.min(...window.map((c) => c.dif ?? 0));
 
     // 頂背離：收盤價處於近20日最高檔區 (>= 98%)，但 DIF 顯著落後未過高
+    const bullishDifThreshold = lowestDif < 0 ? lowestDif * 0.85 : lowestDif * 1.15;
     if (last.close >= highestClose * 0.98 && dif < highestDif * 0.85 && macdHist < prevHist) {
       divergenceType = 'BEARISH_DIVERGENCE';
       divergenceLabel = '頂背離警戒 (動能未過高)';
       divergenceDescription = '股價創波段新高或處於高檔，但 DIF 快線與紅柱動能未能同步創高，量化動能呈現頂背離，需防範主力高檔調節回檔';
-    } else if (last.close <= lowestClose * 1.02 && dif > lowestDif * 1.15 && macdHist > prevHist) {
+    } else if (last.close <= lowestClose * 1.02 && dif > bullishDifThreshold && macdHist > prevHist) {
       divergenceType = 'BULLISH_DIVERGENCE';
       divergenceLabel = '底背離醞釀 (賣壓竭盡反彈)';
       divergenceDescription = '股價創波段新低或處於低檔，但 DIF 快線低點墊高未破前低，量化空方殺盤動能竭盡，醞釀技術性波段築底反彈';
@@ -1081,8 +1104,12 @@ export function paginateCandles(
  */
 export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
   const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [report.symbol]);
   const candles = report.klineSystem?.candles ?? [];
   const { items, totalPages, currentPage, totalCount } = paginateCandles(candles, page, 10);
+  const volUnit = report.market === 'US' ? '股' : '張';
 
   return (
     <div
@@ -1113,7 +1140,7 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
               <th style={{ textAlign: 'right', padding: '8px' }}>最高</th>
               <th style={{ textAlign: 'right', padding: '8px' }}>最低</th>
               <th style={{ textAlign: 'right', padding: '8px' }}>收盤</th>
-              <th style={{ textAlign: 'right', padding: '8px' }}>成交量</th>
+              <th style={{ textAlign: 'right', padding: '8px' }}>成交量 ({volUnit})</th>
               <th style={{ textAlign: 'right', padding: '8px' }}>MA20</th>
               <th style={{ textAlign: 'right', padding: '8px' }}>MA60</th>
               <th style={{ textAlign: 'right', padding: '8px' }}>MA250</th>

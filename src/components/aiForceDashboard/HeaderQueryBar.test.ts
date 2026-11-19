@@ -2,20 +2,34 @@ import { describe, it, expect } from 'vitest';
 import {
   cleanSymbolInput,
   inferMarketType,
+  resolveSymbolAndMarket,
   buildDataProvenanceText,
 } from './HeaderQueryBar';
 
 describe('HeaderQueryBar - 標的檢索與資料來源格式化 (Ticket 03)', () => {
   describe('cleanSymbolInput - 代號清理與正規化', () => {
-    it('應自動去除首尾空格並轉為大寫', () => {
+    it('應自動去除首尾空格並轉為大寫，並移除 .TW / .TWO / .US 後綴', () => {
       expect(cleanSymbolInput('  2360  ')).toBe('2360');
       expect(cleanSymbolInput(' aapl ')).toBe('AAPL');
       expect(cleanSymbolInput('2330.tw')).toBe('2330');
+      expect(cleanSymbolInput('aapl.us')).toBe('AAPL');
+      expect(cleanSymbolInput('NVDA.US')).toBe('NVDA');
     });
 
     it('空字串應安全回傳空字串', () => {
       expect(cleanSymbolInput('')).toBe('');
       expect(cleanSymbolInput('   ')).toBe('');
+    });
+  });
+
+  describe('resolveSymbolAndMarket - 中文名稱與代號雙向解析 (T11)', () => {
+    it('輸入中文名稱時應反查字典解析出正確代號與市場，避免直接掉入 US', () => {
+      expect(resolveSymbolAndMarket('台積電')).toEqual({ symbol: '2330', market: 'TW' });
+      expect(resolveSymbolAndMarket('輝達')).toEqual({ symbol: 'NVDA', market: 'US' });
+    });
+
+    it('輸入未知中文時應預設回退為 TW 而非 US', () => {
+      expect(inferMarketType('未知測試標的')).toBe('TW');
     });
   });
 

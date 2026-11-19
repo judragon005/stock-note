@@ -144,6 +144,7 @@ export interface VolumeProfileData {
   heatmapColumns?: HeatmapColumn[]; // 4 欄週期熱力數據 (5日/10日/20日/60日)
   currentPrice?: number; // 最新收盤價
   currentPriceYRatio?: number; // 最新現價落於熱區圖之相對高度比例 (0~1)
+  isEmpty?: boolean;
 }
 
 /**

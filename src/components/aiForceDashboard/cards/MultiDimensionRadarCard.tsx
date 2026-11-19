@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useId } from 'react';
 import { MultiDimensionRadarData } from '../../../types/aiForceDashboard';
+import { ColorThemeMode, MarketType } from '../../../types/stock';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseHealthScore } from '../../../constants/aiForceGlossary';
 
@@ -72,8 +73,9 @@ export function buildRadarDataPolygon(
   const pts: string[] = [];
 
   for (let i = 0; i < totalAxes; i++) {
-    const rawVal = values[i] ?? 50;
-    const clamped = Math.max(0, Math.min(100, rawVal));
+    const rawVal = values[i];
+    const safeVal = Number.isFinite(rawVal) ? rawVal : 50;
+    const clamped = Math.max(0, Math.min(100, safeVal));
     const r = (maxRadius * clamped) / 100;
     const p = calculateRadarVertex(center, r, i, totalAxes);
     vertices.push(p);
@@ -132,6 +134,8 @@ export function getGradeBadgeStyle(grade: 'A' | 'B' | 'C' | 'D' | string): Grade
 
 export interface MultiDimensionRadarCardProps {
   data: MultiDimensionRadarData;
+  colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
 const AXIS_CONFIG = [
@@ -154,17 +158,24 @@ export const RADAR_CHART_CONFIG = {
   scoreDetailFontSize: 14,
 };
 
-export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = ({ data }) => {
+export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = ({
+  data,
+  market,
+}) => {
   const { center, maxRadius, labelOffset } = RADAR_CHART_CONFIG;
+  const uid = useId().replace(/:/g, '');
+  const gradId = `radarFillGrad-${uid}`;
+  const safeOverallScore = Number.isFinite(data.overallScore) ? data.overallScore : 56;
 
   const scoreValues = useMemo(() => {
+    const safeNum = (v?: number) => (Number.isFinite(v) ? (v as number) : 50);
     return [
-      data.dimensions.institutional ?? 50,
-      data.dimensions.trend ?? 50,
-      data.dimensions.chips ?? 50,
-      data.dimensions.liquidity ?? 50,
-      data.dimensions.volatility ?? 50,
-      data.dimensions.momentum ?? 50,
+      safeNum(data.dimensions?.institutional),
+      safeNum(data.dimensions?.trend),
+      safeNum(data.dimensions?.chips),
+      safeNum(data.dimensions?.liquidity),
+      safeNum(data.dimensions?.volatility),
+      safeNum(data.dimensions?.momentum),
     ];
   }, [data.dimensions]);
 
@@ -189,14 +200,16 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
   const labelPositions = useMemo(() => {
     return AXIS_CONFIG.map((cfg, idx) => {
       const pos = calculateRadarVertex(center, maxRadius + labelOffset, idx, 6);
+      const label = idx === 0 && market === 'US' ? '機構' : cfg.label;
       return {
         ...cfg,
+        label,
         x: pos.x,
         y: pos.y,
         score: scoreValues[idx],
       };
     });
-  }, [center, maxRadius, labelOffset, scoreValues]);
+  }, [center, maxRadius, labelOffset, scoreValues, market]);
 
   return (
     <div
@@ -240,7 +253,7 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
           </span>
           <TermTooltip
             termId="radarInstitutional"
-            dynamicDiagnosis={diagnoseHealthScore(data.overallScore ?? 56)}
+            dynamicDiagnosis={diagnoseHealthScore(safeOverallScore)}
             showIcon={true}
           >
             <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc', whiteSpace: 'nowrap' }}>
@@ -250,9 +263,9 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
-          <TermTooltip termId="chipsHealth" dynamicDiagnosis={diagnoseHealthScore(data.overallScore ?? 56)}>
+          <TermTooltip termId="healthScore" dynamicDiagnosis={diagnoseHealthScore(safeOverallScore)}>
             <span style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
-              綜合評分：<span style={{ color: '#38bdf8', fontWeight: 700, fontFamily: 'monospace' }}>{data.overallScore ?? 56} / 100</span>
+              綜合評分：<span style={{ color: '#38bdf8', fontWeight: 700, fontFamily: 'monospace' }}>{safeOverallScore} / 100</span>
             </span>
           </TermTooltip>
         </div>
@@ -261,12 +274,12 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
       {/* SVG 六角蛛網繪圖區 */}
       <div style={{ width: '100%', flex: 1, minHeight: '300px', position: 'relative' }}>
         <svg
-          viewBox="16 0 328 336"
+          viewBox="0 -14 360 364"
           style={{ width: '100%', height: '100%', overflow: 'visible' }}
           preserveAspectRatio="xMidYMid meet"
         >
           <defs>
-            <radialGradient id="radarFillGrad" cx="50%" cy="50%" r="50%">
+            <radialGradient id={gradId} cx="50%" cy="50%" r="50%">
               <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
               <stop offset="100%" stopColor="#2563eb" stopOpacity="0.15" />
             </radialGradient>
@@ -300,7 +313,7 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
           {/* 雷達資料填充多邊形 */}
           <polygon
             points={dataPolygon.points}
-            fill="url(#radarFillGrad)"
+            fill={`url(#${gradId})`}
             stroke="#38bdf8"
             strokeWidth="2"
             style={{
@@ -344,7 +357,7 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
             fontWeight="700"
             fontFamily="monospace"
           >
-            {data.overallScore ?? 56}/100
+            {safeOverallScore}/100
           </text>
 
           {/* 外圍 6 個維度標籤與分數 */}
@@ -396,7 +409,7 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
           評級等級：<span style={{ color: gradeStyle.color, fontWeight: 800 }}>{data.overallGrade || 'C'} 級</span>
         </span>
         <span style={{ color: '#cbd5e1', whiteSpace: 'nowrap' }}>
-          評級分數：<span style={{ color: '#38bdf8', fontWeight: 800, fontFamily: 'monospace' }}>{data.overallScore ?? 56} / 100</span>
+          評級分數：<span style={{ color: '#38bdf8', fontWeight: 800, fontFamily: 'monospace' }}>{safeOverallScore} / 100</span>
         </span>
       </div>
     </div>

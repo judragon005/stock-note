@@ -50,6 +50,31 @@ describe('HeaderExportBar - 快照下載連動測試 (Ticket 19)', () => {
     const fallback = resolveExportBarTexts(mockReport as AiForceDashboardReport);
     expect(fallback.sourcesText).toBe('來源: TWSE');
     expect(fallback.rangeText).toBe('區間: 近一年');
+
+    const usFallback = resolveExportBarTexts({ symbol: 'NVDA', market: 'US' } as AiForceDashboardReport);
+    expect(usFallback.sourcesText).toContain('Yahoo Finance');
+    expect(usFallback.sourcesText).toContain('SEC EDGAR');
+  });
+
+  it('generateSummaryHtml 應根據市場與漲跌方向動態切換 .price-tag 顏色', async () => {
+    const { generateSummaryHtml } = await import('../../engine/exportReportPipeline');
+    const twDownHtml = generateSummaryHtml({
+      symbol: '2330',
+      name: '台積電',
+      market: 'TW',
+      updatedAt: '2026-10-01',
+      marketBar: { currentPrice: 950, change: -15 } as any,
+    } as AiForceDashboardReport);
+    expect(twDownHtml).toContain('color: #10b981');
+
+    const usUpHtml = generateSummaryHtml({
+      symbol: 'NVDA',
+      name: '輝達',
+      market: 'US',
+      updatedAt: '2026-10-01',
+      marketBar: { currentPrice: 135, change: 4.5 } as any,
+    } as AiForceDashboardReport);
+    expect(usUpHtml).toContain('color: #10b981');
   });
 });
 

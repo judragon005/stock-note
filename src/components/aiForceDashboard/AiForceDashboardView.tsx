@@ -537,6 +537,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         data={report.marketBar}
         currentSymbol={symbol}
         currentName={report.name}
+        currentMarket={market}
         isLoading={isLoading}
         onAnalyze={handleAnalyze}
         colorTheme={resolvedColorTheme}
@@ -580,6 +581,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             <KLineChartCard
               data={report.klineSystem}
               colorTheme={resolvedColorTheme}
+              market={market}
               {...(userAvgCost !== undefined ? { userAvgCost } : {})}
             />
           </div>
@@ -800,12 +802,20 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
               >
                 {/* 03 多維度判讀 (6 維體質大雷達) */}
                 <div style={{ minWidth: 0 }}>
-                  <MultiDimensionRadarCard data={report.multiDimensionRadar} />
+                  <MultiDimensionRadarCard
+                    data={report.multiDimensionRadar}
+                    colorTheme={resolvedColorTheme}
+                    market={market}
+                  />
                 </div>
 
                 {/* 05 風險雷達圖 (5 維風控大蛛網) */}
                 <div style={{ minWidth: 0 }}>
-                  <RiskSpiderCard data={report.riskSpider} />
+                  <RiskSpiderCard
+                    data={report.riskSpider}
+                    colorTheme={resolvedColorTheme}
+                    market={market}
+                  />
                 </div>
               </div>
 
@@ -821,12 +831,20 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
               >
                 {/* 02 AI 決策核心 (訊號儀表盤) */}
                 <div style={{ minWidth: 0 }}>
-                  <AiDecisionCoreCard data={report.decisionCore} />
+                  <AiDecisionCoreCard
+                    data={report.decisionCore}
+                    colorTheme={resolvedColorTheme}
+                    market={market}
+                  />
                 </div>
 
                 {/* 04 AI 籌碼熱區圖 (動態量價與現價指針) */}
                 <div style={{ minWidth: 0 }}>
-                  <VolumeProfileCard data={report.volumeProfile} />
+                  <VolumeProfileCard
+                    data={report.volumeProfile}
+                    colorTheme={resolvedColorTheme}
+                    market={market}
+                  />
                 </div>
               </div>
 
@@ -862,6 +880,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   <InstitutionalFlowCard
                     data={report.institutionalFlow}
                     colorTheme={resolvedColorTheme}
+                    market={market}
                   />
                 </div>
 
@@ -871,6 +890,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                     key={symbol}
                     data={report.tdccDistribution}
                     colorTheme={resolvedColorTheme}
+                    market={market}
                   />
                 </div>
 
@@ -879,6 +899,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   <MonthlyRevenueCard
                     data={report.monthlyRevenue}
                     colorTheme={resolvedColorTheme}
+                    market={market}
                   />
                 </div>
               </div>
@@ -895,12 +916,20 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
               >
                 {/* 06 累積型 AI 預測路徑圖 (Cone) */}
                 <div style={{ minWidth: 0 }}>
-                  <ForecastConeCard data={report.forecastCone} />
+                  <ForecastConeCard
+                    data={report.forecastCone}
+                    colorTheme={resolvedColorTheme}
+                    market={market}
+                  />
                 </div>
 
                 {/* 07 主力成本結構分布圖 (VWAP) */}
                 <div style={{ minWidth: 0 }}>
-                  <VwapCostStructureCard data={report.vwapCostStructure} />
+                  <VwapCostStructureCard
+                    data={report.vwapCostStructure}
+                    colorTheme={resolvedColorTheme}
+                    market={market}
+                  />
                 </div>
               </div>
 
@@ -921,22 +950,35 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                     bullBearData={report.bullBearEnergy}
                     sentimentData={report.marketSentiment}
                     market={market}
+                    colorTheme={resolvedColorTheme}
                   />
                 </div>
 
                 {/* 欄 2: 12 AI 主力動態信號判斷 */}
                 <div style={{ minWidth: 0, height: '100%', minHeight: '315px', display: 'flex', flexDirection: 'column' }}>
-                  <DynamicSignalsCard data={report.dynamicSignals} />
+                  <DynamicSignalsCard
+                    data={report.dynamicSignals}
+                    colorTheme={resolvedColorTheme}
+                    market={market}
+                  />
                 </div>
 
                 {/* 欄 3: 21 估值與殖利率量化矩陣 */}
                 <div style={{ minWidth: 0, height: '100%', minHeight: '315px', display: 'flex', flexDirection: 'column' }}>
-                  <ValuationMetricsCard data={report.valuationMetrics} market={market} />
+                  <ValuationMetricsCard
+                    data={report.valuationMetrics}
+                    market={market}
+                    colorTheme={resolvedColorTheme}
+                  />
                 </div>
 
                 {/* 欄 4: 14 AI 信心維度 */}
                 <div style={{ minWidth: 0, height: '100%', minHeight: '315px', display: 'flex', flexDirection: 'column' }}>
-                  <AiConfidenceCard data={report.aiConfidence} />
+                  <AiConfidenceCard
+                    data={report.aiConfidence}
+                    colorTheme={resolvedColorTheme}
+                    market={market}
+                  />
                 </div>
               </div>
 
@@ -970,17 +1012,29 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 {/* 欄 1: 15 籌碼異動摘要 + 09 隔日沖風險 (微觀籌碼動向與短線防護) */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, height: '100%' }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <ChipsSummaryCard data={report.chipsSummary} />
+                    <ChipsSummaryCard
+                      data={report.chipsSummary}
+                      colorTheme={resolvedColorTheme}
+                      market={market}
+                    />
                   </div>
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <DayTradeRiskCard data={report.dayTradeRisk} />
+                    <DayTradeRiskCard
+                      data={report.dayTradeRisk}
+                      colorTheme={resolvedColorTheme}
+                      market={market}
+                    />
                   </div>
                 </div>
 
                 {/* 欄 2: 11 健康度綜合評估表 + 16 買賣力分布 + 17 多空強度 (結構健康度與多空籌碼對抗，圓環徹底舒展) */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, height: '100%' }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <HealthSummaryCard data={report.healthSummary} />
+                    <HealthSummaryCard
+                      data={report.healthSummary}
+                      colorTheme={resolvedColorTheme}
+                      market={market}
+                    />
                   </div>
                   <div
                     style={{
@@ -991,10 +1045,18 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                     }}
                   >
                     <div style={{ minWidth: 0 }}>
-                      <ForceDistributionCard data={report.forceDistribution} />
+                      <ForceDistributionCard
+                        data={report.forceDistribution}
+                        colorTheme={resolvedColorTheme}
+                        market={market}
+                      />
                     </div>
                     <div style={{ minWidth: 0 }}>
-                      <BullBearStrengthCard data={report.bullBearStrength} />
+                      <BullBearStrengthCard
+                        data={report.bullBearStrength}
+                        colorTheme={resolvedColorTheme}
+                        market={market}
+                      />
                     </div>
                   </div>
                 </div>
@@ -1008,7 +1070,12 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   minWidth: 0,
                 }}
               >
-                <MainForceVerdictCard key={symbol} data={report.mainForceVerdict} />
+                <MainForceVerdictCard
+                  key={symbol}
+                  data={report.mainForceVerdict}
+                  colorTheme={resolvedColorTheme}
+                  market={market}
+                />
               </div>
             </>
           )}
@@ -1022,17 +1089,25 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           holdings={_holdings}
           loanRecords={loanRecords}
           macroMaintenanceRatio={macroMaintenanceRatio}
+          colorTheme={resolvedColorTheme}
+          market={market}
         />
       )}
 
       {/* 任務三：KD + MA 圖表 */}
-      {activeTab === 'TASK_3_KD_MA' && <KdMaView report={report} />}
+      {activeTab === 'TASK_3_KD_MA' && (
+        <KdMaView report={report} colorTheme={resolvedColorTheme} market={market} />
+      )}
 
       {/* 任務四：MACD 圖表 */}
-      {activeTab === 'TASK_4_MACD' && <MacdView report={report} />}
+      {activeTab === 'TASK_4_MACD' && (
+        <MacdView report={report} colorTheme={resolvedColorTheme} market={market} />
+      )}
 
       {/* 任務五：原始資料表 */}
-      {activeTab === 'TASK_5_RAW_DATA' && <RawDataView report={report} />}
+      {activeTab === 'TASK_5_RAW_DATA' && (
+        <RawDataView report={report} colorTheme={resolvedColorTheme} market={market} />
+      )}
 
       {/* ⚡ 全域外聯 AI 戰情提示詞中樞 (Spec 0181 / Issue #243 / Spec 0182) */}
       <div style={{ marginTop: '16px', marginBottom: '16px' }}>

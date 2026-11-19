@@ -81,6 +81,12 @@ describe('VolumeProfileCard - 籌碼熱區圖元件樣式與計算規範 (Ticket
       const { pocBucketIndex, vacuumBucketIndex } = identifyPocAndVacuum(buckets);
       expect(pocBucketIndex).toBe(1); // 55% 是大量成交峰
       expect(vacuumBucketIndex).toBe(4); // 3% 是籌碼真空帶
+
+      // 當所有區間百分比相等時，不得同時將同一區間標記為大量峰與真空帶 (T12)
+      const tied = buckets.map((b) => ({ ...b, percentage: 20 }));
+      const tiedRes = identifyPocAndVacuum(tied);
+      expect(tiedRes.pocBucketIndex).toBe(0);
+      expect(tiedRes.vacuumBucketIndex).toBe(-1);
     });
 
     it('應計算最新收盤價之指針線 Y 軸比例', async () => {

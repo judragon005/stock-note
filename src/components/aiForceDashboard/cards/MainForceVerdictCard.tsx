@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { MainForceVerdictData } from '../../../types/aiForceDashboard';
+import type { ColorThemeMode, MarketType } from '../../../types/stock';
 import { Sparkles, Target, Zap, AlertTriangle, BarChart3, CheckCircle2, Scale, X } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 
 export interface MainForceVerdictCardProps {
   data?: MainForceVerdictData;
+  colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
 export interface VerdictStatusInfo {
@@ -50,7 +53,14 @@ export function resolveMainForcePhaseId(verb: string): MainForcePhaseId {
   ) {
     return 'markup';
   }
-  if (verb.includes('調節') || verb.includes('出貨') || verb.includes('減碼')) {
+  if (
+    verb.includes('調節') ||
+    verb.includes('出貨') ||
+    verb.includes('減碼') ||
+    verb.includes('賣壓') ||
+    verb.includes('撤退') ||
+    verb.includes('停損')
+  ) {
     return 'distribution';
   }
   return 'consolidation';
@@ -281,7 +291,12 @@ const STRATEGY_PROFILES: Record<MainForcePhaseId, PhaseStrategyProfile> = {
 /**
  * 依據主力語意動詞與結構化指標生成四方實戰操盤指引矩陣 (Strategy Map 精簡驅動)
  */
-export function getMainForcePlaybook(verb: string, metrics: MetricCapsule[] = []): MainForcePlaybook {
+export function getMainForcePlaybook(
+  verb: string,
+  metrics: MetricCapsule[] = [],
+  market: MarketType = 'TW'
+): MainForcePlaybook {
+  const isUs = market === 'US';
   const closeMetric = metrics.find((m) => m.label.includes('收盤價'));
   const vwapMetric = metrics.find((m) => m.label.includes('VWAP'));
   const closeNum = closeMetric ? parseFloat(closeMetric.value.replace(/[^\d.]/g, '')) : null;
@@ -291,28 +306,35 @@ export function getMainForcePlaybook(verb: string, metrics: MetricCapsule[] = []
   const phaseId = resolveMainForcePhaseId(verb);
   const profile = STRATEGY_PROFILES[phaseId];
 
+  const formatP = (val: number) => (isUs ? `$${val.toFixed(2)}` : `${val.toFixed(1)} 元`);
+
   const stopLoss = basePrice !== null
-    ? `${(basePrice * profile.stopLossMultiplier).toFixed(1)} 元 (${profile.stopLossLabel})`
+    ? `${formatP(basePrice * profile.stopLossMultiplier)} (${profile.stopLossLabel})`
     : '-- (待價位確認)';
 
   // 特殊處理吸籌目標若有 VWAP 則優先回測 VWAP
   let target = '-- (待價位確認)';
   if (phaseId === 'accumulation' && vwapNum) {
-    target = `${vwapNum.toFixed(1)} 元`;
+    target = formatP(vwapNum);
   } else if (basePrice !== null) {
-    target = `${(basePrice * profile.targetMultiplier).toFixed(1)} 元 (${profile.targetLabel})`;
+    target = `${formatP(basePrice * profile.targetMultiplier)} (${profile.targetLabel})`;
   }
 
-  const priceText = basePrice !== null ? ` (${basePrice} 元)` : '';
+  const priceText = basePrice !== null ? (isUs ? ` ($${basePrice})` : ` (${basePrice} 元)`) : '';
+  const rawContext = profile.buildContext(priceText);
+  const marketContext = isUs ? rawContext.replace(/外資/g, '機構').replace(/法人/g, '機構資金') : rawContext;
+  const invalidationGate = isUs
+    ? profile.invalidationGate.replace(/外資/g, '機構').replace(/法人/g, '機構資金')
+    : profile.invalidationGate;
 
   return {
-    marketContext: profile.buildContext(priceText),
+    marketContext,
     horizon: profile.horizon,
     executionDirective: profile.executionDirective,
     stopLossPrice: stopLoss,
     targetPrice: target,
     riskRewardRatio: basePrice !== null ? profile.riskRewardRatio : '--',
-    invalidationGate: profile.invalidationGate,
+    invalidationGate,
     maxPosition: profile.allocation.displayText,
     winRate: profile.winRate.displayText,
     allocation: profile.allocation,
@@ -367,9 +389,23 @@ export interface LiquidityGateResult {
 }
 
 /**
- * 檢驗 5 日成交均量是否滿足最低防作線門檻 (>= 300 張)
+ * 檢驗 5 日成交均量是否滿足最低防作線門檻 (台股 >= 300 張 / 美股 >= 50,000 股)
  */
-export function checkLiquidityGate(avgVolume?: number): LiquidityGateResult {
+export function checkLiquidityGate(avgVolume?: number, market: MarketType = 'TW'): LiquidityGateResult {
+  if (market === 'US') {
+    if (avgVolume !== undefined && avgVolume < 50000) {
+      return {
+        isLowLiquidity: true,
+        badge: '流動性偏低 (<50,000股防作線警示)',
+        desc: '近 5 日日均成交量低於 50,000 股，點差較寬易受少數大單滑價影響，量化統計訊號權重自動調降。',
+      };
+    }
+    return {
+      isLowLiquidity: false,
+      badge: '流動性充足 (>50,000股)',
+      desc: '美股日均成交量能健康，機構大單進出微觀結構正常，量化模型具備高顯著性。',
+    };
+  }
   if (avgVolume !== undefined && avgVolume < 300) {
     return {
       isLowLiquidity: true,
@@ -391,28 +427,33 @@ export interface MetricCapsule {
 }
 
 /**
- * 從 AI 結論文字中提取結構化量化數據指標（支援新舊雙格式）
+ * 從 AI 結論文字中提取結構化量化數據指標（支援新舊雙格式與千分位逗號、台美股幣別）
  */
 export function parseVerdictMetrics(text: string): MetricCapsule[] {
   const metrics: MetricCapsule[] = [];
 
-  // 1. 最新收盤價匹配 (例如: 最新收盤價 367.5 元)
-  const closeMatch = text.match(/最新收盤價\s*([\d,]+(?:\.\d+)?)\s*元/);
+  // 1. 最新收盤價匹配 (例如: 最新收盤價 367.5 元 或 最新收盤價 $135.50 USD)
+  const closeMatch = text.match(/最新收盤價\s*(?:(\$)([\d,]+(?:\.\d+)?)(?:\s*USD)?|([\d,]+(?:\.\d+)?)\s*元)/);
   if (closeMatch) {
+    const isUsd = Boolean(closeMatch[1]);
+    const val = closeMatch[2] || closeMatch[3];
     metrics.push({
       label: '最新收盤價',
-      value: `${closeMatch[1]} 元`,
+      value: isUsd ? `$${val}` : `${val} 元`,
       color: '#f8fafc',
     });
   }
 
-  // 2. 20日 VWAP 主力成本匹配 (例如: 20 日 VWAP 主力成本 (384.2 元) 或 20日VWAP 384.2 元)
-  const vwapCostMatch = text.match(/20\s*日\s*VWAP(?:\s*主力成本)?\s*(?:\(([\d,]+(?:\.\d+)?)\s*元\)|\s*([\d,]+(?:\.\d+)?)\s*元)/);
+  // 2. 20日 VWAP 主力成本匹配 (例如: 20 日 VWAP 主力成本 (384.2 元) 或 ($130.25))
+  const vwapCostMatch = text.match(
+    /20\s*日\s*VWAP(?:\s*主力成本)?\s*(?:\(\s*(\$)?([\d,]+(?:\.\d+)?)\s*(?:元|USD)?\s*\)|\s+(\$)?([\d,]+(?:\.\d+)?)\s*(?:元|USD))/
+  );
   if (vwapCostMatch) {
-    const val = vwapCostMatch[1] || vwapCostMatch[2];
+    const isUsd = Boolean(vwapCostMatch[1] || vwapCostMatch[3]);
+    const val = vwapCostMatch[2] || vwapCostMatch[4];
     metrics.push({
       label: '20日VWAP',
-      value: `${val} 元`,
+      value: isUsd ? `$${val}` : `${val} 元`,
       color: '#94a3b8',
     });
   }
@@ -428,15 +469,17 @@ export function parseVerdictMetrics(text: string): MetricCapsule[] {
     });
   }
 
-  // 4. 舊版法人累計匹配 (法人近 5 日合計 -64 張)
-  const instMatch = text.match(/法人近\s*5\s*日合計\s*([+-]?\d+)\s*張/);
+  // 4. 法人累計匹配 (支援千分位逗號: 法人近 5 日合計 +1,250 張 或 -64 張)
+  const instMatch = text.match(/法人近\s*5\s*日合計\s*([+-]?[\d,]+)\s*張/);
   if (instMatch) {
-    const val = Number(instMatch[1]);
-    metrics.push({
-      label: '5日法人合計',
-      value: `${val > 0 ? '+' : ''}${val.toLocaleString()} 張`,
-      color: val > 0 ? '#ef4444' : val < 0 ? '#10b981' : '#94a3b8',
-    });
+    const val = Number(instMatch[1].replace(/,/g, ''));
+    if (Number.isFinite(val)) {
+      metrics.push({
+        label: '5日法人合計',
+        value: `${val > 0 ? '+' : ''}${val.toLocaleString()} 張`,
+        color: val > 0 ? '#ef4444' : val < 0 ? '#10b981' : '#94a3b8',
+      });
+    }
   }
 
   // 5. 舊版 VWAP 乖離匹配（若尚未由上述第3點匹配到）
@@ -466,24 +509,41 @@ export function parseVerdictMetrics(text: string): MetricCapsule[] {
   return metrics;
 }
 
-export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data }) => {
+export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({
+  data,
+  market = 'TW',
+}) => {
   const [showModal, setShowModal] = useState(false);
+  const isUs = market === 'US';
 
-  const verb = data?.primaryVerb ?? '調節減碼';
-  const tag = data?.semanticTag ?? '法人動作';
+  useEffect(() => {
+    if (!showModal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowModal(false);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showModal]);
+
+  const verb = data?.primaryVerb ?? '區間觀望';
+  const tag = data?.semanticTag ?? (isUs ? '機構動作' : '法人動作');
   const verdictText =
     data?.fullVerdictText ??
-    'AI 結論：經 5 日主力行為綜合研判（法人近 5 日合計 -64 張、收盤相對 20 日 VWAP +7.5%、RSI 60），法人小幅調節，短線宜區間操作。';
+    'AI 結論：目前歷史樣本累積中，暫維持區間觀望。';
 
   const statusInfo = getVerdictStatusInfo(verb);
   const spectrumPhases = getMainForceSpectrumPhases(verb);
   const metricCapsules = parseVerdictMetrics(verdictText);
-  const playbook = getMainForcePlaybook(verb, metricCapsules);
-  const liquidity = checkLiquidityGate(data?.avgVolume5Lots);
+  const playbook = getMainForcePlaybook(verb, metricCapsules, market);
+  const liquidity = checkLiquidityGate(data?.avgVolume5Lots, market);
+  const formatPriceUnit = (val: number) =>
+    isUs ? `$${val.toFixed(2)}` : `${val.toLocaleString()} 元`;
   const displayStopLoss =
-    data?.stopLossPrice != null ? `${data.stopLossPrice.toLocaleString()} 元` : playbook.stopLossPrice;
+    data?.stopLossPrice != null ? formatPriceUnit(data.stopLossPrice) : playbook.stopLossPrice;
   const displayTakeProfit =
-    data?.takeProfitPrice != null ? `${data.takeProfitPrice.toLocaleString()} 元` : playbook.targetPrice;
+    data?.takeProfitPrice != null ? formatPriceUnit(data.takeProfitPrice) : playbook.targetPrice;
   const displayRiskReward = data?.riskRewardRatio ?? playbook.riskRewardRatio;
 
   return (
@@ -542,7 +602,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
         data-testid="verdict-central-grid"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(280px, 1.1fr) minmax(320px, 1.3fr) minmax(280px, 1.1fr)',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
           gap: '12px',
           alignItems: 'stretch',
           flex: 1,

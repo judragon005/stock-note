@@ -1,13 +1,16 @@
-import React from 'react';
+import React, { useId } from 'react';
 import type { ChipsSummaryData } from '../../../types/aiForceDashboard';
+import type { ColorThemeMode, MarketType } from '../../../types/stock';
 import { TermTooltip } from '../../common/TermTooltip';
 
 export interface ChipsSummaryCardProps {
   data?: ChipsSummaryData;
+  colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
 /**
- * 將數列歸一化轉換為 SVG 折線路徑 (Sparkline)
+ * 將數列歸一化轉換為 SVG 折線路徑 (Sparkline)，當跨越 0 軸時 areaD 以 zeroY 封閉
  */
 export function normalizeSparklinePoints(
   points: number[],
@@ -37,23 +40,40 @@ export function normalizeSparklinePoints(
     return `${x},${y}`;
   });
 
-  const pathD = `M ${coords.join(' L ')}`;
-  const areaD = `${pathD} L ${width},${height} L 0,${height} Z`;
-  const isUp = points[points.length - 1] >= points[0];
-
   let zeroY: number | undefined = undefined;
   if (min <= 0 && max >= 0) {
     zeroY = Math.round((height - ((0 - min) / range) * (height - 6) - 3) * 10) / 10;
   }
 
+  const baseLineY = zeroY !== undefined ? zeroY : height;
+  const pathD = `M ${coords.join(' L ')}`;
+  const areaD = `${pathD} L ${width},${baseLineY} L 0,${baseLineY} Z`;
+  const isUp = points[points.length - 1] >= points[0];
+
   return { pathD, areaD, isUp, zeroY };
 }
 
-export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
-  const foreign = data?.foreignNetShares ?? 0;
-  const trust = data?.trustNetShares ?? 0;
-  const dealer = data?.dealerNetShares ?? 0;
-  const total = data?.threeInstitutionsTotal ?? (foreign + trust + dealer);
+export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({
+  data,
+  colorTheme,
+  market,
+}) => {
+  const uid = useId().replace(/:/g, '');
+  const sparkGradId = `chipsSparkGrad-${uid}`;
+  const isUs = Boolean(market === 'US' || data?.isUsMarket);
+  const effectiveTheme: ColorThemeMode = colorTheme ?? (isUs ? 'international' : 'taiwan');
+  const isTaiwan = effectiveTheme === 'taiwan';
+  const posColor = isTaiwan ? '#ef4444' : '#10b981';
+  const negColor = isTaiwan ? '#10b981' : '#ef4444';
+
+  const anyData = data as Record<string, any> | undefined;
+  const foreign = data?.foreignNetShares ?? anyData?.foreignInvestorsNetBuyShares ?? 0;
+  const trust = data?.trustNetShares ?? anyData?.investmentTrustNetBuyShares ?? 0;
+  const dealer = data?.dealerNetShares ?? anyData?.dealerNetBuyShares ?? 0;
+  const total =
+    data?.threeInstitutionsTotal ??
+    anyData?.totalInstitutionalNetBuyShares ??
+    foreign + trust + dealer;
   const conclusionBadge = data?.conclusionBadge ?? '待命觀望';
   const note = data?.verdictNote ?? '尚無籌碼數據';
   const sparklineHistory = data?.sparklineHistory ?? [];
@@ -61,7 +81,7 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
   const width = 160;
   const height = 50;
   const { pathD, areaD, isUp, zeroY } = normalizeSparklinePoints(sparklineHistory, width, height);
-  const sparkColor = isUp ? '#38bdf8' : '#ef4444';
+  const sparkColor = isUp ? '#38bdf8' : negColor;
 
   const formatShares = (val: number) => {
     const sign = val > 0 ? '+' : '';
@@ -69,10 +89,17 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
   };
 
   const getShareColor = (val: number) => {
-    if (val > 0) return '#ef4444';
-    if (val < 0) return '#10b981';
+    if (val > 0) return posColor;
+    if (val < 0) return negColor;
     return '#94a3b8';
   };
+
+  const conclusionColor =
+    total > 0 || conclusionBadge.includes('買') || conclusionBadge.includes('多')
+      ? posColor
+      : total < 0 || conclusionBadge.includes('賣') || conclusionBadge.includes('空')
+        ? negColor
+        : '#38bdf8';
 
   const chipItems = [
     { label: '外資', value: foreign, termId: 'foreignFlow' },
@@ -81,16 +108,39 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
     { label: '三大法人', value: total, isMajor: true, termId: 'totalInstFlow' },
   ];
 
-  if (data?.isUsMarket) {
-    const micro = data.usMicroMetrics;
+  if (isUs) {
+    const micro = data?.usMicroMetrics;
     const hasMicroMetrics = Boolean(micro);
 
     const usItems = micro
       ? [
-          { label: 'RVOL 相對均量', value: micro.rvol !== undefined ? `${micro.rvol.toFixed(2)}x` : '--', color: (micro.rvol ?? 0) >= 1.2 ? '#ef4444' : '#94a3b8' },
-          { label: 'VWAP 偏離', value: micro.vwapBiasPct !== undefined ? `${micro.vwapBiasPct >= 0 ? '+' : ''}${micro.vwapBiasPct.toFixed(2)}%` : '--', color: (micro.vwapBiasPct ?? 0) >= 0 ? '#ef4444' : '#10b981' },
-          { label: 'MFI 機構量能', value: micro.mfiScore !== undefined ? `${micro.mfiScore.toFixed(0)}分` : '--', color: (micro.mfiScore ?? 0) >= 60 ? '#c084fc' : '#94a3b8' },
-          { label: 'ATR 日振幅', value: micro.atrValue !== undefined ? `$${micro.atrValue.toFixed(2)}` : '--', color: '#38bdf8' },
+          {
+            label: 'RVOL 相對均量',
+            termId: 'rvol',
+            value: micro.rvol !== undefined ? `${micro.rvol.toFixed(2)}x` : '--',
+            color: (micro.rvol ?? 0) >= 1.2 ? posColor : '#94a3b8',
+          },
+          {
+            label: 'VWAP 偏離',
+            termId: 'vwap20',
+            value:
+              micro.vwapBiasPct !== undefined
+                ? `${micro.vwapBiasPct >= 0 ? '+' : ''}${micro.vwapBiasPct.toFixed(2)}%`
+                : '--',
+            color: (micro.vwapBiasPct ?? 0) >= 0 ? posColor : negColor,
+          },
+          {
+            label: 'MFI 機構量能',
+            termId: 'radarMomentum',
+            value: micro.mfiScore !== undefined ? `${micro.mfiScore.toFixed(0)}分` : '--',
+            color: (micro.mfiScore ?? 0) >= 60 ? '#c084fc' : '#94a3b8',
+          },
+          {
+            label: 'ATR 日振幅',
+            termId: 'intradayVolatility',
+            value: micro.atrValue !== undefined ? `$${micro.atrValue.toFixed(2)}` : '--',
+            color: '#38bdf8',
+          },
         ]
       : [];
 
@@ -172,9 +222,14 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
                     minWidth: 0,
                   }}
                 >
-                  <span style={{ color: '#94a3b8', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                    {item.label}
-                  </span>
+                  <TermTooltip termId={item.termId}>
+                    <span
+                      data-term-id={item.termId}
+                      style={{ color: '#94a3b8', fontWeight: 500, whiteSpace: 'nowrap', cursor: 'help' }}
+                    >
+                      {item.label}
+                    </span>
+                  </TermTooltip>
                   <span
                     style={{
                       color: item.color,
@@ -189,51 +244,51 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
               ))}
             </div>
 
-            {/* 右側 Sparkline 寬幅走勢圖 (50%) */}
+            {/* 右側 Sparkline 寬幅走勢圖 (50%，不重複渲染頂部已顯示之 conclusionLabel) */}
             <div style={{ display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0, gap: '2px' }}>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-                <span
-                  style={{
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    color: isUp ? '#38bdf8' : '#f87171',
-                    background: isUp ? 'rgba(56, 189, 248, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                    padding: '1px 6px',
-                    borderRadius: '4px',
-                  }}
-                >
-                  {micro?.conclusionLabel || conclusionBadge}
-                </span>
-              </div>
-
               <div style={{ width: '100%', height: `${height}px`, position: 'relative' }}>
-                <svg
-                  width="100%"
-                  height={height}
-                  viewBox={`0 0 ${width} ${height}`}
-                  preserveAspectRatio="none"
-                  style={{ overflow: 'visible' }}
-                >
-                  <defs>
-                    <linearGradient id="usChipsSparkGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stopColor={sparkColor} stopOpacity="0.4" />
-                      <stop offset="100%" stopColor={sparkColor} stopOpacity="0.0" />
-                    </linearGradient>
-                  </defs>
-                  {zeroY !== undefined && (
-                    <line
-                      data-testid="chips-zero-axis"
-                      x1="0"
-                      y1={zeroY}
-                      x2={width}
-                      y2={zeroY}
-                      stroke="rgba(148, 163, 184, 0.35)"
-                      strokeDasharray="3 3"
-                    />
-                  )}
-                  {areaD && <path d={areaD} fill="url(#usChipsSparkGrad)" />}
-                  {pathD && <path d={pathD} fill="none" stroke={sparkColor} strokeWidth="1.8" />}
-                </svg>
+                {sparklineHistory.length === 0 ? (
+                  <div
+                    style={{
+                      height: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.75rem',
+                      color: '#94a3b8',
+                    }}
+                  >
+                    暫無量能序列
+                  </div>
+                ) : (
+                  <svg
+                    width="100%"
+                    height={height}
+                    viewBox={`0 0 ${width} ${height}`}
+                    preserveAspectRatio="none"
+                    style={{ overflow: 'visible' }}
+                  >
+                    <defs>
+                      <linearGradient id={sparkGradId} x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor={sparkColor} stopOpacity="0.4" />
+                        <stop offset="100%" stopColor={sparkColor} stopOpacity="0.0" />
+                      </linearGradient>
+                    </defs>
+                    {zeroY !== undefined && (
+                      <line
+                        data-testid="chips-zero-axis"
+                        x1="0"
+                        y1={zeroY}
+                        x2={width}
+                        y2={zeroY}
+                        stroke="rgba(148, 163, 184, 0.35)"
+                        strokeDasharray="3 3"
+                      />
+                    )}
+                    {areaD && <path d={areaD} fill={`url(#${sparkGradId})`} />}
+                    {pathD && <path d={pathD} fill="none" stroke={sparkColor} strokeWidth="1.8" />}
+                  </svg>
+                )}
               </div>
             </div>
           </div>
@@ -383,40 +438,58 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
           </div>
 
           <div style={{ width: '100%', height: `${height}px`, position: 'relative' }}>
-            <svg
-              width="100%"
-              height={height}
-              viewBox={`0 0 ${width} ${height}`}
-              preserveAspectRatio="none"
-              style={{ overflow: 'visible' }}
-            >
-              <defs>
-                <linearGradient id="chipsSparkGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor={sparkColor} stopOpacity="0.4" />
-                  <stop offset="100%" stopColor={sparkColor} stopOpacity="0.0" />
-                </linearGradient>
-              </defs>
-              {/* 0 軸水平分水嶺基準線 */}
-              {zeroY !== undefined && (
-                <line
-                  data-testid="chips-zero-axis"
-                  x1="0"
-                  y1={zeroY}
-                  x2={width}
-                  y2={zeroY}
-                  stroke="rgba(148, 163, 184, 0.35)"
-                  strokeDasharray="3 3"
-                />
-              )}
-              {areaD && <path d={areaD} fill="url(#chipsSparkGrad)" />}
-              {pathD && <path d={pathD} fill="none" stroke={sparkColor} strokeWidth="1.8" />}
-            </svg>
+            {sparklineHistory.length === 0 ? (
+              <div
+                style={{
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.75rem',
+                  color: '#94a3b8',
+                  border: '1px dashed rgba(148, 163, 184, 0.2)',
+                  borderRadius: '6px',
+                }}
+              >
+                暫無法人延續序列
+              </div>
+            ) : (
+              <svg
+                width="100%"
+                height={height}
+                viewBox={`0 0 ${width} ${height}`}
+                preserveAspectRatio="none"
+                style={{ overflow: 'visible' }}
+              >
+                <defs>
+                  <linearGradient id={sparkGradId} x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor={sparkColor} stopOpacity="0.4" />
+                    <stop offset="100%" stopColor={sparkColor} stopOpacity="0.0" />
+                  </linearGradient>
+                </defs>
+                {/* 0 軸水平分水嶺基準線 */}
+                {zeroY !== undefined && (
+                  <line
+                    data-testid="chips-zero-axis"
+                    x1="0"
+                    y1={zeroY}
+                    x2={width}
+                    y2={zeroY}
+                    stroke="rgba(148, 163, 184, 0.35)"
+                    strokeDasharray="3 3"
+                  />
+                )}
+                {areaD && <path d={areaD} fill={`url(#${sparkGradId})`} />}
+                {pathD && <path d={pathD} fill="none" stroke={sparkColor} strokeWidth="1.8" />}
+              </svg>
+            )}
           </div>
         </div>
       </div>
 
-      {/* 外資連續買賣、借券與融資融券餘額 (Real Data) */}
+      {/* 外資/投信連續買賣、借券與融資融券餘額 (Real Data) */}
       {(data?.foreignConsecutiveDays != null ||
+        data?.trustConsecutiveDays != null ||
         data?.sblBalance != null ||
         data?.marginBalance != null ||
         data?.shortBalance != null) && (
@@ -439,11 +512,24 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
               外資連{data.foreignConsecutiveDays >= 0 ? '買' : '賣'}{' '}
               <strong
                 style={{
-                  color: data.foreignConsecutiveDays >= 0 ? '#ef4444' : '#10b981',
+                  color: data.foreignConsecutiveDays >= 0 ? posColor : negColor,
                   fontFamily: 'monospace',
                 }}
               >
                 {Math.abs(data.foreignConsecutiveDays)} 日
+              </strong>
+            </span>
+          )}
+          {data?.trustConsecutiveDays != null && (
+            <span style={{ color: '#94a3b8' }}>
+              投信連{data.trustConsecutiveDays >= 0 ? '買' : '賣'}{' '}
+              <strong
+                style={{
+                  color: data.trustConsecutiveDays >= 0 ? posColor : negColor,
+                  fontFamily: 'monospace',
+                }}
+              >
+                {Math.abs(data.trustConsecutiveDays)} 日
               </strong>
             </span>
           )}
@@ -480,14 +566,19 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({ data }) => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '6px',
           paddingTop: '6px',
           borderTop: '1px solid rgba(255, 255, 255, 0.05)',
           fontSize: '0.75rem',
         }}
       >
-        <span style={{ color: '#94a3b8' }}>{note}</span>
+        <span style={{ color: '#94a3b8' }}>
+          {note}
+          {data?.asOfDateText ? ` (${data.asOfDateText})` : ''}
+        </span>
         <TermTooltip termId="totalInstFlow">
-          <span style={{ color: '#f87171', fontWeight: 800, cursor: 'help' }}>
+          <span style={{ color: conclusionColor, fontWeight: 800, cursor: 'help' }}>
             結論：{conclusionBadge}
           </span>
         </TermTooltip>

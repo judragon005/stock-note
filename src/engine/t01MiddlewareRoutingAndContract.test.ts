@@ -20,7 +20,6 @@ const {
   createMarketApiMiddleware,
 } = require('../../scripts/market-sync/vite-market-middleware.cjs');
 const {
-  getSqliteDbConnection,
   initSqliteLakehouseDb,
   getMarketMultiHorizonBreadth,
   closeSqliteDb,

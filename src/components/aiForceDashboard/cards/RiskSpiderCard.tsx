@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useId } from 'react';
 import { RiskSpiderData } from '../../../types/aiForceDashboard';
+import { ColorThemeMode, MarketType } from '../../../types/stock';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseDayTradeRisk } from '../../../constants/aiForceGlossary';
 
@@ -100,6 +101,8 @@ export function getRiskLevelBadge(level: RiskSpiderData['mainForceRiskLevel']): 
 
 export interface RiskSpiderCardProps {
   data: RiskSpiderData;
+  colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
 const FIVE_AXIS_CONFIG = [
@@ -117,16 +120,20 @@ export const RISK_SPIDER_CONFIG = {
   scoreFontSize: 15,
 };
 
-export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
+export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data, market }) => {
   const { center, maxRadius, labelFontSize, scoreFontSize } = RISK_SPIDER_CONFIG;
+  const uid = useId().replace(/:/g, '');
+  const gradId = `riskFillGrad-${uid}`;
+  const safeRiskIndex = Number.isFinite(data.mainForceRiskIndex) ? data.mainForceRiskIndex : 50;
 
   const scoreValues = useMemo(() => {
+    const safeNum = (v?: number, fallback: number = 50) => (Number.isFinite(v) ? (v as number) : fallback);
     return [
-      data.volatilityRisk ?? 50,
-      data.liquidityRisk ?? 30,
-      data.chipRisk ?? 48,
-      data.institutionalRisk ?? 55,
-      data.trendRisk ?? 45,
+      safeNum(data.volatilityRisk, 50),
+      safeNum(data.liquidityRisk, 30),
+      safeNum(data.chipRisk, 48),
+      safeNum(data.institutionalRisk, 55),
+      safeNum(data.trendRisk, 45),
     ];
   }, [data]);
 
@@ -160,14 +167,16 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
     return FIVE_AXIS_CONFIG.map((cfg, idx) => {
       const extraOffset = idx === 0 ? 22 : 28;
       const pos = calculateFiveAxisVertex(center, maxRadius + extraOffset, idx, 5);
+      const label = cfg.key === 'institutionalRisk' && market === 'US' ? '機構' : cfg.label;
       return {
         ...cfg,
+        label,
         x: pos.x,
         y: pos.y,
         score: scoreValues[idx],
       };
     });
-  }, [center, maxRadius, scoreValues]);
+  }, [center, maxRadius, scoreValues, market]);
 
   const riskBadge = getRiskLevelBadge(data.mainForceRiskLevel || 'MEDIUM');
 
@@ -213,7 +222,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
           </span>
           <TermTooltip
             termId="volatilityRisk"
-            dynamicDiagnosis={diagnoseDayTradeRisk(data.mainForceRiskIndex ?? 60, 50)}
+            dynamicDiagnosis={diagnoseDayTradeRisk(safeRiskIndex)}
             showIcon={true}
           >
             <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc', whiteSpace: 'nowrap' }}>
@@ -226,12 +235,12 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
       {/* SVG 五角蛛網圖繪製區 */}
       <div style={{ width: '100%', flex: 1, minHeight: '290px', position: 'relative' }}>
         <svg
-          viewBox="15 0 320 316"
+          viewBox="0 -14 350 344"
           style={{ width: '100%', height: '100%', overflow: 'visible' }}
           preserveAspectRatio="xMidYMid meet"
         >
           <defs>
-            <radialGradient id="riskFillGrad" cx="50%" cy="50%" r="50%">
+            <radialGradient id={gradId} cx="50%" cy="50%" r="50%">
               <stop offset="0%" stopColor="#ef4444" stopOpacity="0.45" />
               <stop offset="100%" stopColor="#f97316" stopOpacity="0.15" />
             </radialGradient>
@@ -265,7 +274,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
           {/* 風險資料多邊形 */}
           <polygon
             points={dataPolygon.points}
-            fill="url(#riskFillGrad)"
+            fill={`url(#${gradId})`}
             stroke="#ef4444"
             strokeWidth="2"
             style={{
@@ -332,7 +341,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', flexShrink: 0 }}>
-          <TermTooltip termId="dayTradeRisk" dynamicDiagnosis={diagnoseDayTradeRisk(data.mainForceRiskIndex ?? 60, 50)}>
+          <TermTooltip termId="dayTradeRisk" dynamicDiagnosis={diagnoseDayTradeRisk(safeRiskIndex)}>
             <span style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>主力風險等級：</span>
           </TermTooltip>
           <span
@@ -352,7 +361,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap', flexShrink: 0 }}>
-          <TermTooltip termId="dayTradeRisk" dynamicDiagnosis={diagnoseDayTradeRisk(data.mainForceRiskIndex ?? 60, 50)}>
+          <TermTooltip termId="dayTradeRisk" dynamicDiagnosis={diagnoseDayTradeRisk(safeRiskIndex)}>
             <span style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>主力風險指數：</span>
           </TermTooltip>
           <span
@@ -364,7 +373,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
               whiteSpace: 'nowrap',
             }}
           >
-            {data.mainForceRiskIndex ?? 60}%
+            {safeRiskIndex}%
           </span>
         </div>
       </div>

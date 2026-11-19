@@ -1,6 +1,6 @@
 import React from 'react';
 import type { BullBearEnergyData, MarketSentimentData } from '../../../types/aiForceDashboard';
-import type { MarketType } from '../../../types/stock';
+import type { ColorThemeMode, MarketType } from '../../../types/stock';
 import { Zap, ShieldAlert, Award, Compass, TrendingUp, TrendingDown } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 
@@ -8,6 +8,7 @@ export interface EnergySentimentTwinCardProps {
   bullBearData?: BullBearEnergyData;
   sentimentData?: MarketSentimentData;
   market?: MarketType;
+  colorTheme?: ColorThemeMode;
 }
 
 export type AlphaResonanceType =
@@ -92,21 +93,53 @@ export function calculateAlphaResonance(
 export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = ({
   bullBearData,
   sentimentData,
-  market = 'TW',
+  market,
+  colorTheme,
 }) => {
-  const isUs = Boolean(market === 'US' || sentimentData?.isUsMarket || sentimentData?.usMacroData);
+  const isUs = market
+    ? market === 'US'
+    : Boolean(
+        sentimentData?.isUsMarket ||
+          (sentimentData?.usMacroData && !sentimentData?.twMacroData)
+      );
+  const effectiveTheme: ColorThemeMode = colorTheme ?? (isUs ? 'international' : 'taiwan');
+  const isTaiwan = effectiveTheme === 'taiwan';
+  const bullText = isTaiwan ? '#f87171' : '#34d399';
+  const bearText = isTaiwan ? '#34d399' : '#f87171';
+  const bullGrad = isTaiwan
+    ? 'linear-gradient(90deg, #ef4444 0%, #f87171 100%)'
+    : 'linear-gradient(90deg, #10b981 0%, #34d399 100%)';
+  const bearGrad = isTaiwan
+    ? 'linear-gradient(90deg, #34d399 0%, #10b981 100%)'
+    : 'linear-gradient(90deg, #f87171 0%, #ef4444 100%)';
+
   const usMacro = sentimentData?.usMacroData;
 
-  const marketScore = isUs
+  const rawMarketScore = isUs
     ? (usMacro?.cnnScore ?? sentimentData?.overallSentimentIndex ?? 50)
     : (sentimentData?.overallSentimentIndex ?? 50);
+  const marketScore = Number.isFinite(rawMarketScore) ? rawMarketScore : 50;
 
-  const ratio = bullBearData?.bullBearRatio ?? 1.0;
+  const rawRatio = bullBearData?.bullBearRatio;
+  const ratio = Number.isFinite(rawRatio) ? (rawRatio as number) : 1.0;
   const resonance = calculateAlphaResonance(ratio, marketScore);
 
-  const bullPercent = bullBearData?.bullEnergyPercent ?? bullBearData?.bullPercent ?? 50;
-  const bearPercent = bullBearData?.bearEnergyPercent ?? bullBearData?.bearPercent ?? 50;
+  const rawBull = bullBearData?.bullEnergyPercent ?? bullBearData?.bullPercent;
+  const rawBear = bullBearData?.bearEnergyPercent ?? bullBearData?.bearPercent;
+  const safeBull = Number.isFinite(rawBull) ? Math.max(0, rawBull as number) : 50;
+  const safeBear = Number.isFinite(rawBear) ? Math.max(0, rawBear as number) : 50;
+  const totalPct = safeBull + safeBear;
+  const bullPercent = totalPct > 0 ? Math.round((safeBull / totalPct) * 100) : 50;
+  const bearPercent = 100 - bullPercent;
+
   const conclusionText = bullBearData?.bullBearConclusion || bullBearData?.conclusion || '均衡';
+
+  const cnnLabel = usMacro?.cnnRatingText || usMacro?.cnnStateText || 'Neutral';
+  const cnnColor = marketScore <= 35 ? '#f87171' : marketScore >= 65 ? '#34d399' : '#38bdf8';
+  const vixVal = usMacro?.vix ?? usMacro?.vixValue;
+  const vixText = vixVal !== undefined && Number.isFinite(vixVal) ? vixVal.toFixed(1) : '--';
+  const yieldVal = usMacro?.tenYearTreasury ?? usMacro?.us10yYield;
+  const yieldText = yieldVal !== undefined && Number.isFinite(yieldVal) ? `${yieldVal.toFixed(2)}%` : '--';
 
   return (
     <div
@@ -117,7 +150,6 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
         justifyContent: 'space-between',
         height: '100%',
         boxSizing: 'border-box',
-        overflow: 'hidden',
         padding: '12px 14px',
         background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(10, 15, 28, 0.92) 100%)',
         borderRadius: '14px',
@@ -171,14 +203,14 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
           style={{
             fontSize: '0.75rem',
             fontWeight: 700,
-            color: ratio >= 1.05 ? '#f87171' : ratio <= 0.95 ? '#34d399' : '#fbbf24',
+            color: ratio >= 1.05 ? bullText : ratio <= 0.95 ? bearText : '#fbbf24',
           }}
         >
           {conclusionText}
         </span>
       </div>
 
-      {/* 上半段：Card 10 AI 多空能量條 (約 72px) */}
+      {/* 上半段：Card 10 AI 多空能量條 */}
       <div
         style={{
           background: 'rgba(15, 23, 42, 0.5)',
@@ -197,13 +229,13 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
             marginBottom: '6px',
           }}
         >
-          <span style={{ color: '#f87171', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
+          <span style={{ color: bullText, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
             <TrendingUp size={11} /> 多頭 {bullPercent}%
           </span>
           <span style={{ color: '#94a3b8', fontFamily: 'monospace', fontWeight: 600 }}>
             多空比 {ratio.toFixed(2)}
           </span>
-          <span style={{ color: '#34d399', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
+          <span style={{ color: bearText, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
             空頭 {bearPercent}% <TrendingDown size={11} />
           </span>
         </div>
@@ -222,21 +254,21 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
           <div
             style={{
               width: `${bullPercent}%`,
-              background: 'linear-gradient(90deg, #ef4444 0%, #f87171 100%)',
+              background: bullGrad,
               transition: 'width 0.3s ease',
             }}
           />
           <div
             style={{
               width: `${bearPercent}%`,
-              background: 'linear-gradient(90deg, #34d399 0%, #10b981 100%)',
+              background: bearGrad,
               transition: 'width 0.3s ease',
             }}
           />
         </div>
       </div>
 
-      {/* 中段：Alpha 共振仲裁標籤 (約 26px) */}
+      {/* 中段：Alpha 共振仲裁標籤 */}
       <div
         data-testid="alpha-resonance-badge"
         style={{
@@ -265,7 +297,7 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
         <span>{resonance.label}</span>
       </div>
 
-      {/* 下半段：Card 13 市場情緒概況 (約 72px) */}
+      {/* 下半段：Card 13 市場情緒概況 */}
       <div
         style={{
           background: 'rgba(15, 23, 42, 0.5)',
@@ -276,28 +308,35 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
       >
         {isUs ? (
           /* 美股宏觀情緒指標 */
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>美股宏觀情緒</div>
-              <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#38bdf8' }}>
-                CNN {usMacro?.cnnRatingText || 'Neutral'} ({marketScore})
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>美股宏觀情緒</div>
+                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: cnnColor }}>
+                  CNN {cnnLabel} ({marketScore})
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                  VIX: <span style={{ color: '#fbbf24', fontWeight: 700 }}>{vixText}</span>
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                  10Y: <span style={{ color: '#34d399', fontWeight: 700 }}>{yieldText}</span>
+                </div>
               </div>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                VIX: <span style={{ color: '#fbbf24', fontWeight: 700 }}>{usMacro?.vix ?? '--'}</span>
+            {usMacro?.asOfDateText && (
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8', textAlign: 'right' }}>
+                基準日: {usMacro.asOfDateText}
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                10Y: <span style={{ color: '#34d399', fontWeight: 700 }}>{usMacro?.tenYearTreasury ? `${usMacro.tenYearTreasury}%` : '--'}</span>
-              </div>
-            </div>
+            )}
           </div>
         ) : (
-          /* 台股市場合情緒指標 */
+          /* 台股市場情緒指標 */
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>台股市場合情緒</div>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>台股市場情緒</div>
                 <div
                   style={{
                     fontSize: '0.78rem',
@@ -320,13 +359,16 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
               </div>
             </div>
             {(sentimentData?.twMacroData?.putCallRatio != null ||
-              sentimentData?.twMacroData?.foreignFuturesOi != null) && (
+              sentimentData?.twMacroData?.foreignFuturesOi != null ||
+              sentimentData?.twMacroData?.trustFuturesOi != null) && (
               <div
                 data-testid="tw-macro-derivatives"
                 style={{
                   display: 'flex',
+                  flexWrap: 'wrap',
                   justifyContent: 'space-between',
                   alignItems: 'center',
+                  gap: '6px',
                   fontSize: '0.75rem',
                   color: '#94a3b8',
                   borderTop: '1px solid rgba(255, 255, 255, 0.05)',
@@ -346,13 +388,32 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
                     外資期貨未平倉:{' '}
                     <strong
                       style={{
-                        color: sentimentData.twMacroData.foreignFuturesOi >= 0 ? '#ef4444' : '#10b981',
+                        color: sentimentData.twMacroData.foreignFuturesOi >= 0 ? bullText : bearText,
                         fontFamily: 'monospace',
                       }}
                     >
                       {sentimentData.twMacroData.foreignFuturesOi > 0 ? '+' : ''}
                       {sentimentData.twMacroData.foreignFuturesOi.toLocaleString()} 口
                     </strong>
+                  </span>
+                )}
+                {sentimentData?.twMacroData?.trustFuturesOi != null && (
+                  <span>
+                    投信期貨未平倉:{' '}
+                    <strong
+                      style={{
+                        color: sentimentData.twMacroData.trustFuturesOi >= 0 ? bullText : bearText,
+                        fontFamily: 'monospace',
+                      }}
+                    >
+                      {sentimentData.twMacroData.trustFuturesOi > 0 ? '+' : ''}
+                      {sentimentData.twMacroData.trustFuturesOi.toLocaleString()} 口
+                    </strong>
+                  </span>
+                )}
+                {sentimentData?.twMacroData?.asOfDateText && (
+                  <span style={{ marginLeft: 'auto' }}>
+                    {sentimentData.twMacroData.asOfDateText}
                   </span>
                 )}
               </div>

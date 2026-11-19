@@ -925,9 +925,11 @@ export function diagnoseMainForceCost(
 /**
  * 診斷隔日沖風險 (動態數值即時評估)
  */
-export function diagnoseDayTradeRisk(dayTradeRiskPercent: number, dayTradeRatio: number): string {
-  if (dayTradeRiskPercent >= 50 || dayTradeRatio >= 40) {
-    return `目前隔日沖比例偏高 (風險指數 ${dayTradeRiskPercent}%, 沖銷比 ${dayTradeRatio}%)。明天開盤極易出現「開高走低倒貨賣壓」，新手早盤切忌追高買進，甚至應逢高賣出！`;
+export function diagnoseDayTradeRisk(dayTradeRiskPercent: number, dayTradeRatio?: number): string {
+  const hasRatio = typeof dayTradeRatio === 'number' && Number.isFinite(dayTradeRatio);
+  if (dayTradeRiskPercent >= 50 || (hasRatio && dayTradeRatio >= 40)) {
+    const ratioNote = hasRatio ? `, 沖銷比 ${dayTradeRatio}%` : '';
+    return `目前隔日沖比例偏高 (風險指數 ${dayTradeRiskPercent}%${ratioNote})。明天開盤極易出現「開高走低倒貨賣壓」，新手早盤切忌追高買進，甚至應逢高賣出！`;
   }
   return `隔日沖風險較低 (風險指數 ${dayTradeRiskPercent}%)。籌碼以波段持有為主，短線倒貨賣壓相對溫和，走勢較為健康！`;
 }

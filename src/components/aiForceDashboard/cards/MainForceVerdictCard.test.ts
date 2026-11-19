@@ -251,6 +251,25 @@ describe('Ticket 05: 邊界保護與向後相容優雅降級 (Fallback Defense)'
     // 驗證模組導出與數據對齊
     expect(mockData.primaryVerb).toBe('低接吸籌');
   });
+
+  it('Spec 0239 T15: parseVerdictMetrics 支援千分位張數/股數、賣壓沉重對齊 distribution 光譜、美股流動性門檻與 $ 幣別格式化', () => {
+    const textWithComma =
+      'AI 結論：經 5 日主力行為綜合研判（法人近 5 日合計 +12,450 張、最新收盤價 $138.45、20 日 VWAP 主力成本 ($132.10)、收盤相對 20 日 VWAP +4.8%、RSI 66），法人積極加碼。';
+    const metrics = parseVerdictMetrics(textWithComma);
+    const instMetric = metrics.find((m) => m.label === '5日法人合計');
+    expect(instMetric?.value).toBe('+12,450 張');
+
+    const heavySellPhases = getMainForceSpectrumPhases('賣壓沉重');
+    expect(heavySellPhases.find((p) => p.isActive)?.id).toBe('distribution');
+
+    const usLowLiq = checkLiquidityGate(12000, 'US');
+    expect(usLowLiq.isLowLiquidity).toBe(true);
+    expect(usLowLiq.desc).toContain('50,000 股');
+
+    const usPlaybook = getMainForcePlaybook('鎖碼推升', metrics, 'US');
+    expect(usPlaybook.stopLossPrice).toMatch(/^\$\d+\.\d+/);
+    expect(usPlaybook.targetPrice).toMatch(/^\$\d+\.\d+/);
+  });
 });
 
 

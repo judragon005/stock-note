@@ -1,17 +1,28 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
   KlineSystemData,
   KlinePeriodMode,
   SubchartIndicatorMode,
   KlineCandleItem,
 } from '../../../types/aiForceDashboard';
-import { ColorThemeMode } from '../../../types/stock';
+import { ColorThemeMode, MarketType } from '../../../types/stock';
 import { MoreVertical } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseMainForceCost } from '../../../constants/aiForceGlossary';
 import { aggregateCandlesToTimeframe, KlineTimeframe } from '../../../engine/klineAggregationEngine';
 import { calculateStochasticKD, calculateMACD } from '../../../engine/technicalIndicatorEngine';
 import { calculateRSI } from '../../../engine/omniIndicatorEngine';
+
+/**
+ * 自適應價格刻度格式化（支援低價美股/ETF 小數精度，避免 <$10 標的四捨五入為相同整數）
+ */
+export function formatKlinePriceTick(val: number): string {
+  if (!Number.isFinite(val)) return '-';
+  const abs = Math.abs(val);
+  if (abs < 100) return val.toFixed(2);
+  if (abs < 1000) return val.toFixed(1);
+  return val.toFixed(0);
+}
 
 /**
  * 券商法人級標準均線色彩光譜 (Spec 0177)
@@ -213,12 +224,14 @@ export function normalizeAndSortCandles(candles?: KlineCandleItem[]): KlineCandl
 export interface KLineChartCardProps {
   data: KlineSystemData;
   colorTheme?: ColorThemeMode;
+  market?: MarketType;
   userAvgCost?: number;
 }
 
 export const KLineChartCard: React.FC<KLineChartCardProps> = ({
   data,
   colorTheme = 'taiwan',
+  market,
   userAvgCost,
 }) => {
   const [timeframe, setTimeframe] = useState<KlineTimeframe>('DAY');
@@ -227,6 +240,27 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [showKeyLevels, setShowKeyLevels] = useState(true);
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+  const optionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOptionsOpen) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      if (optionsRef.current && !optionsRef.current.contains(e.target as Node)) {
+        setIsOptionsOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOptionsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOptionsOpen]);
 
   // 1. 若無真實歷史資料，強制按日期升冪排序
   const rawCandles = useMemo(() => {
@@ -453,7 +487,19 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           >
             01
           </span>
-          <TermTooltip termId="mainForceCost" dynamicDiagnosis={activeCandle ? diagnoseMainForceCost(activeCandle.close, data.keyLevels.mainForceCost) : undefined} showIcon={true}>
+          <TermTooltip
+            termId="mainForceCost"
+            dynamicDiagnosis={
+              activeCandle
+                ? diagnoseMainForceCost(
+                    activeCandle.close,
+                    data.keyLevels.mainForceCost,
+                    market === 'US' ? 'USD' : 'TWD'
+                  )
+                : undefined
+            }
+            showIcon={true}
+          >
             <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f8fafc' }}>
               主K線圖
             </span>
@@ -618,7 +664,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
             })}
           </div>
 
-          <div style={{ position: 'relative' }}>
+          <div ref={optionsRef} style={{ position: 'relative' }}>
             <button
               type="button"
               aria-label="選項"
@@ -691,8 +737,10 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
                   type="button"
                   data-testid="kline-reset-period"
                   onClick={() => {
+                    setTimeframe('DAY');
                     setPeriod('60D');
                     setSubchartMode('VOL');
+                    setShowKeyLevels(true);
                     setIsOptionsOpen(false);
                   }}
                   style={{
@@ -706,7 +754,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
                     cursor: 'pointer',
                   }}
                 >
-                  ↺ 重設預設視圖 (60D+量)
+                  ↺ 重設預設視圖 (日K+60D+量)
                 </button>
               </div>
             )}
@@ -748,8 +796,8 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           </span>
           <span style={{ color: '#38bdf8', fontWeight: 700 }}>📅 {activeCandle.date}</span>
           <span>開: <b style={{ color: '#f8fafc' }}>{activeCandle.open}</b></span>
-          <span>高: <b style={{ color: '#ef4444' }}>{activeCandle.high}</b></span>
-          <span>低: <b style={{ color: '#10b981' }}>{activeCandle.low}</b></span>
+          <span>高: <b style={{ color: bullColor }}>{activeCandle.high}</b></span>
+          <span>低: <b style={{ color: bearColor }}>{activeCandle.low}</b></span>
           <span>收: <b style={{ color: activeCandle.close >= activeCandle.open ? bullColor : bearColor }}>{activeCandle.close}</b></span>
           <span>量: <b style={{ color: '#fbbf24' }}>{activeCandle.volume.toLocaleString()}</b></span>
           {activeCandle.ma5 && <span style={{ color: KLINE_MA_COLORS.ma5 }}>MA5:{activeCandle.ma5}</span>}
@@ -771,11 +819,17 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           )}
           {subchartMode === 'MACD' && (
             <span style={{ color: '#34d399' }}>
-              DIF:{activeCandle.dif ?? '-'} MACD:{activeCandle.macd ?? '-'} 柱:{activeCandle.macdHist ?? '-'}
+              {timeframe === 'MONTH' && count < 26
+                ? 'MACD: 月K樣本未滿26期，指標累積中'
+                : `DIF:${activeCandle.dif ?? '-'} MACD:${activeCandle.macd ?? '-'} 柱:${activeCandle.macdHist ?? '-'}`}
             </span>
           )}
           {subchartMode === 'RSI' && (
-            <span style={{ color: '#c084fc' }}>RSI:{activeCandle.rsi ?? '-'}</span>
+            <span style={{ color: '#c084fc' }}>
+              {timeframe === 'MONTH' && count < 14
+                ? 'RSI: 月K樣本未滿14期，指標累積中'
+                : `RSI:${activeCandle.rsi ?? '-'}`}
+            </span>
           )}
         </div>
       ) : (
@@ -851,7 +905,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
             fontSize="12"
             fontFamily="monospace"
           >
-            {priceRange.max.toFixed(0)}
+            {formatKlinePriceTick(priceRange.max)}
           </text>
           <text
             x={width - rightPad + 6}
@@ -860,7 +914,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
             fontSize="12"
             fontFamily="monospace"
           >
-            {((priceRange.max + priceRange.min) / 2).toFixed(0)}
+            {formatKlinePriceTick((priceRange.max + priceRange.min) / 2)}
           </text>
           <text
             x={width - rightPad + 6}
@@ -869,7 +923,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
             fontSize="12"
             fontFamily="monospace"
           >
-            {priceRange.min.toFixed(0)}
+            {formatKlinePriceTick(priceRange.min)}
           </text>
 
           {/* K 線蠟燭繪製 */}
@@ -1117,7 +1171,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
               <rect
                 x={width - rightPad + 2}
                 y={projectPriceToY(hoveredCandle.close, priceRange, klineHeight, 15, 15) - 8}
-                width="48"
+                width="64"
                 height="16"
                 rx="3"
                 fill="#3b82f6"
@@ -1130,15 +1184,16 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
                 fontWeight="700"
                 fontFamily="monospace"
               >
-                {hoveredCandle.close.toFixed(0)}
+                {formatKlinePriceTick(hoveredCandle.close)}
               </text>
             </g>
           )}
 
-          {/* 底部時間軸標籤 (抽樣顯示) */}
+          {/* 底部時間軸標籤 (抽樣顯示，防止倒數第二筆與最後一筆重疊) */}
           {displayCandles.map((c, idx) => {
             const step = Math.max(4, Math.floor(count / 7));
             if (idx % step !== 0 && idx !== count - 1) return null;
+            if (idx !== count - 1 && count - 1 - idx <= 3) return null;
             const cx = getX(idx);
             return (
               <text

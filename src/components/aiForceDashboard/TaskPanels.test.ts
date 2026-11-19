@@ -386,6 +386,46 @@ describe('TaskPanels 底部任務視圖真實資料動態連動 (Spec 0143 Ticke
         expect(Number(m[1]), `發現過小 SVG 字級: ${m[0]}`).toBeGreaterThanOrEqual(12);
       }
     });
+
+    it('Spec 0239 T15: 美股 generateTechnicalAlerts 切換 Reg T / Trading Halt 語意、MACD 負值底背離判定與 RawDataView (股)/(張) 表頭', () => {
+      const usReport = {
+        ...createDefaultAiForceReport('NVDA', 'NVIDIA', 'US'),
+        klineSystem: mockReport.klineSystem,
+      };
+      const usAlerts = generateTechnicalAlerts(usReport);
+      expect(usAlerts.some((a) => a.title.includes('美股無漲跌幅與跳空風控'))).toBe(true);
+      expect(usAlerts.some((a) => a.message.includes('處置分盤撮合'))).toBe(false);
+
+      const usAlertHtml = renderToStaticMarkup(React.createElement(TechnicalAlertsView, { report: usReport }));
+      expect(usAlertHtml).toContain('LULD 價格帶熔斷機制');
+
+      // 驗證負值 DIF 底背離：價格創低 (90 < 95) 但 DIF 回升 (-3 > -6)
+      const divergenceCandles: KlineCandleItem[] = Array.from({ length: 20 }, (_, i) => ({
+        date: `2026-10-${String(i + 1).padStart(2, '0')}`,
+        open: i === 19 ? 90 : 100,
+        high: i === 19 ? 91 : 102,
+        low: i === 5 ? 95 : i === 19 ? 88 : 98,
+        close: i === 5 ? 95 : i === 19 ? 90 : 100,
+        volume: 5000,
+        dif: i === 5 ? -6 : i === 19 ? -3 : -4,
+        macd: -4,
+        macdHist: i === 19 ? 1 : -1,
+      }));
+      const divReport = {
+        ...mockReport,
+        klineSystem: {
+          ...mockReport.klineSystem,
+          candles: divergenceCandles,
+        },
+      };
+      const macdMetrics = deriveMacdMetrics(divReport);
+      expect(macdMetrics.divergenceInfo.type).toBe('BULLISH_DIVERGENCE');
+
+      const rawTwHtml = renderToStaticMarkup(React.createElement(RawDataView, { report: mockReport }));
+      expect(rawTwHtml).toContain('成交量 (張)');
+      const rawUsHtml = renderToStaticMarkup(React.createElement(RawDataView, { report: usReport }));
+      expect(rawUsHtml).toContain('成交量 (股)');
+    });
   });
 });
 

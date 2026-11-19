@@ -155,22 +155,24 @@ describe('HeaderMarketBar - 行情 Bar 格式化與狀態燈規範 (Ticket 02)',
     });
   });
 
-  describe('Ticket 03 (Spec 0172): 頂部快捷股票按鈕徹底移除與查詢行單行清爽化', () => {
-    it('QUICK_CHIPS 仍保留作為模糊候選資料池，但主橫列不再渲染快捷晶片', async () => {
-      const { QUICK_CHIPS } = await import('./HeaderMarketBar');
+  describe('Ticket 03 (Spec 0172) & T11: 模糊搜尋串接全量字典與查詢行防擠壓換行', () => {
+    it('QUICK_CHIPS 仍保留作為模糊候選資料池，且 searchCandidateSymbols 串接全量字典', async () => {
+      const { QUICK_CHIPS, searchCandidateSymbols } = await import('./HeaderMarketBar');
       expect(QUICK_CHIPS.length).toBe(5);
+      // 驗證可檢索不在硬編碼 13 檔內但位於全量字典之標的 (如 AMD / 2881 富邦金)
+      const amdMatches = searchCandidateSymbols('AMD');
+      expect(amdMatches.some((item) => item.symbol === 'AMD')).toBe(true);
     });
 
-    it('主橫列排版規範：輸入列與 4 大狀態膠囊在 >= 1200px 保持單行舒展 (nowrap)', () => {
-      // 驗證排版防禦參數
+    it('主橫列排版規範：輸入列與 4 大狀態膠囊支援窄視窗彈性換行 (wrap)', () => {
       const rowLayout = {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        flexWrap: 'nowrap',
+        flexWrap: 'wrap',
         gap: '16px',
       };
-      expect(rowLayout.flexWrap).toBe('nowrap');
+      expect(rowLayout.flexWrap).toBe('wrap');
       expect(rowLayout.gap).toBe('16px');
     });
   });

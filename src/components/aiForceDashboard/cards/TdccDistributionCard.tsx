@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useId } from 'react';
 import { TdccDistributionData } from '../../../types/aiForceDashboard';
-import { ColorThemeMode } from '../../../types/stock';
+import { ColorThemeMode, MarketType } from '../../../types/stock';
 import { Users, TrendingUp, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 
@@ -49,7 +49,7 @@ export function calculateTdccScales(
   const holdersSpan = maxHolders - minHolders || 100;
 
   return {
-    leftMin: Number((minRatio - ratioSpan * 0.15).toFixed(2)),
+    leftMin: Math.max(0, Number((minRatio - ratioSpan * 0.15).toFixed(2))),
     leftMax: Number((maxRatio + ratioSpan * 0.15).toFixed(2)),
     rightMin: Math.max(0, Math.floor(minHolders - holdersSpan * 0.15)),
     rightMax: Math.ceil(maxHolders + holdersSpan * 0.15),
@@ -86,19 +86,78 @@ export function projectTdccShareholdersToY(
   return Number((padding.top + usable * (1 - norm)).toFixed(1));
 }
 
+export interface NormalizedUs13fOwnership {
+  hasStructureData: boolean;
+  instWidth: number;
+  insiderWidth: number;
+  publicWidth: number;
+}
+
+/**
+ * 歸一化美股 13F 持股結構寬度，防止 institutional + insider > 100% 擠壓文字，並在無結構資料時拒絕偽造 50%/10%
+ */
+export function normalizeUs13fOwnership(
+  us13f?: TdccDistributionData['us13fData']
+): NormalizedUs13fOwnership {
+  if (
+    !us13f ||
+    (us13f.institutionalRatio === undefined &&
+      us13f.insiderRatio === undefined &&
+      us13f.publicFloatRatio === undefined)
+  ) {
+    return { hasStructureData: false, instWidth: 0, insiderWidth: 0, publicWidth: 0 };
+  }
+  const inst = Math.max(0, us13f.institutionalRatio ?? 0);
+  const insider = Math.max(0, us13f.insiderRatio ?? 0);
+  const sumKnown = inst + insider;
+  if (sumKnown <= 0 && (us13f.publicFloatRatio ?? 0) <= 0) {
+    return { hasStructureData: false, instWidth: 0, insiderWidth: 0, publicWidth: 0 };
+  }
+  if (sumKnown >= 100) {
+    return {
+      hasStructureData: true,
+      instWidth: Number(((inst / sumKnown) * 100).toFixed(2)),
+      insiderWidth: Number(((insider / sumKnown) * 100).toFixed(2)),
+      publicWidth: 0,
+    };
+  }
+  const pub =
+    us13f.publicFloatRatio !== undefined
+      ? Math.max(0, us13f.publicFloatRatio)
+      : Math.max(0, 100 - sumKnown);
+  const total = sumKnown + pub || 100;
+  return {
+    hasStructureData: true,
+    instWidth: Number(((inst / total) * 100).toFixed(2)),
+    insiderWidth: Number(((insider / total) * 100).toFixed(2)),
+    publicWidth: Number(((pub / total) * 100).toFixed(2)),
+  };
+}
+
 interface TdccDistributionCardProps {
   data: TdccDistributionData;
   colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
 export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
   data,
-  colorTheme: _colorTheme = 'taiwan',
+  colorTheme = 'taiwan',
 }) => {
+  const uid = useId().replace(/:/g, '');
+  const holderBarGradId = `holderBarGrad-${uid}`;
   const history = data?.history || [];
   const chartWidth = 340;
   const chartHeight = 170;
   const padding = { top: 20, bottom: 25 };
+
+  const isTaiwan = colorTheme === 'taiwan';
+  const bullText = isTaiwan ? '#f87171' : '#34d399';
+  const bullBg = isTaiwan ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)';
+  const bullBorder = isTaiwan ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)';
+  const bearText = isTaiwan ? '#34d399' : '#f87171';
+  const bearBg = isTaiwan ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)';
+  const bearBorder = isTaiwan ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)';
 
   const isUsMode = Boolean(data?.isUsMarket || data?.us13fData);
   const isDataEmpty = isUsMode
@@ -126,13 +185,24 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
   const badgeColor = useMemo(() => {
     const badge = data?.concentrationBadge || '';
     if (badge.includes('高度集中') || badge.includes('增持') || badge.includes('控盤')) {
-      return { bg: 'rgba(16, 185, 129, 0.2)', text: '#34d399', border: 'rgba(16, 185, 129, 0.4)' };
+      return { bg: bullBg, text: bullText, border: bullBorder };
     }
-    if (badge.includes('警戒') || badge.includes('調節') || badge.includes('軋空')) {
+    if (badge.includes('軋空')) {
       return { bg: 'rgba(239, 68, 68, 0.2)', text: '#f87171', border: 'rgba(239, 68, 68, 0.4)' };
     }
+    if (badge.includes('警戒') || badge.includes('調節') || badge.includes('發散')) {
+      return { bg: bearBg, text: bearText, border: bearBorder };
+    }
     return { bg: 'rgba(148, 163, 184, 0.15)', text: '#94a3b8', border: 'rgba(148, 163, 184, 0.3)' };
-  }, [data?.concentrationBadge]);
+  }, [data?.concentrationBadge, bullBg, bullText, bullBorder, bearBg, bearText, bearBorder]);
+
+  const usOwnership = useMemo(
+    () => normalizeUs13fOwnership(data?.us13fData),
+    [data?.us13fData]
+  );
+  const isSqueeze = Boolean(
+    data?.us13fData?.isSqueezeRisk || (data?.us13fData?.shortFloatRatio ?? 0) > 10
+  );
 
   return (
     <div
@@ -280,21 +350,20 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                 padding: '8px 10px',
                 borderRadius: '8px',
                 border: `1px solid ${
-                  (data.us13fData.shortFloatRatio ?? 0) > 10
+                  isSqueeze
                     ? 'rgba(239, 68, 68, 0.35)'
                     : 'rgba(59, 130, 246, 0.2)'
                 }`,
               }}
             >
               <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-                空單佔流通比 (Short Float)
+                <TermTooltip termId="shortFloat">空單佔流通比 (Short Float)</TermTooltip>
               </div>
               <div
                 style={{
                   fontSize: '1.05rem',
                   fontWeight: 800,
-                  color:
-                    (data.us13fData.shortFloatRatio ?? 0) > 10 ? '#f87171' : '#38bdf8',
+                  color: isSqueeze ? '#f87171' : '#38bdf8',
                 }}
               >
                 {data.us13fData.shortFloatRatio !== undefined
@@ -325,65 +394,91 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
             <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '6px' }}>
               持股結構分佈 (機構 / 內部人 / 公眾流通)
             </div>
-            <div
-              style={{
-                display: 'flex',
-                height: '24px',
-                width: '100%',
-                borderRadius: '6px',
-                overflow: 'hidden',
-                background: 'rgba(30, 41, 59, 0.6)',
-              }}
-            >
+            {!usOwnership.hasStructureData ? (
+              <div
+                data-testid="us13f-structure-empty"
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: '6px',
+                  background: 'rgba(30, 41, 59, 0.45)',
+                  border: '1px dashed rgba(148, 163, 184, 0.25)',
+                  fontSize: '0.75rem',
+                  color: '#94a3b8',
+                  textAlign: 'center',
+                }}
+              >
+                機構與內部人持股結構資料待更新
+              </div>
+            ) : (
               <div
                 style={{
-                  width: `${data.us13fData.institutionalRatio ?? 50}%`,
-                  background: 'linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%)',
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '0.75rem',
-                  color: '#fff',
-                  fontWeight: 700,
+                  height: '24px',
+                  width: '100%',
+                  borderRadius: '6px',
+                  overflow: 'hidden',
+                  background: 'rgba(30, 41, 59, 0.6)',
                 }}
-                title={`機構: ${data.us13fData.institutionalRatio ?? 0}%`}
               >
-                {(data.us13fData.institutionalRatio ?? 0) > 15 &&
-                  `${(data.us13fData.institutionalRatio ?? 0).toFixed(0)}%`}
+                {usOwnership.instWidth > 0 && (
+                  <div
+                    style={{
+                      width: `${usOwnership.instWidth}%`,
+                      background: 'linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.75rem',
+                      color: '#fff',
+                      fontWeight: 700,
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={`機構: ${data.us13fData.institutionalRatio ?? 0}%`}
+                  >
+                    {usOwnership.instWidth >= 14 && `${Math.round(usOwnership.instWidth)}%`}
+                  </div>
+                )}
+                {usOwnership.insiderWidth > 0 && (
+                  <div
+                    style={{
+                      width: `${usOwnership.insiderWidth}%`,
+                      background: 'linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.75rem',
+                      color: '#fff',
+                      fontWeight: 700,
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={`內部人: ${data.us13fData.insiderRatio ?? 0}%`}
+                  >
+                    {usOwnership.insiderWidth >= 12 && `${Math.round(usOwnership.insiderWidth)}%`}
+                  </div>
+                )}
+                {usOwnership.publicWidth > 0 && (
+                  <div
+                    style={{
+                      width: `${usOwnership.publicWidth}%`,
+                      background: 'linear-gradient(90deg, #0ea5e9 0%, #38bdf8 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.75rem',
+                      color: '#fff',
+                      fontWeight: 700,
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={`公眾流通: ${usOwnership.publicWidth.toFixed(1)}%`}
+                  >
+                    {usOwnership.publicWidth >= 14 && `${Math.round(usOwnership.publicWidth)}%`}
+                  </div>
+                )}
               </div>
-              <div
-                style={{
-                  width: `${data.us13fData.insiderRatio ?? 10}%`,
-                  background: 'linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '0.75rem',
-                  color: '#fff',
-                  fontWeight: 700,
-                }}
-                title={`內部人: ${data.us13fData.insiderRatio ?? 0}%`}
-              >
-                {(data.us13fData.insiderRatio ?? 0) > 10 &&
-                  `${(data.us13fData.insiderRatio ?? 0).toFixed(0)}%`}
-              </div>
-              <div
-                style={{
-                  flex: 1,
-                  background: 'linear-gradient(90deg, #0ea5e9 0%, #38bdf8 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '0.75rem',
-                  color: '#fff',
-                  fontWeight: 700,
-                }}
-                title={`公眾流通: ${data.us13fData.publicFloatRatio ?? 40}%`}
-              >
-                {(data.us13fData.publicFloatRatio ?? 40) > 15 &&
-                  `${(data.us13fData.publicFloatRatio ?? 40).toFixed(0)}%`}
-              </div>
-            </div>
+            )}
 
             {/* 圖例說明 */}
             <div
@@ -455,7 +550,14 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                 style={{
                   fontSize: '1.05rem',
                   fontWeight: 800,
-                  color: (data.change4WeeksRatio ?? 0) >= 0 ? '#34d399' : '#f87171',
+                  color:
+                    data.change4WeeksRatio === undefined
+                      ? '#94a3b8'
+                      : data.change4WeeksRatio > 0
+                      ? bullText
+                      : data.change4WeeksRatio < 0
+                      ? bearText
+                      : '#94a3b8',
                 }}
               >
                 {data.change4WeeksRatio !== undefined
@@ -526,7 +628,7 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
               style={{ width: '100%', height: '100%', overflow: 'visible' }}
             >
               <defs>
-                <linearGradient id="holderBarGrad" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id={holderBarGradId} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.4" />
                   <stop offset="100%" stopColor="#0284c7" stopOpacity="0.08" />
                 </linearGradient>
@@ -559,6 +661,11 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                 const yTop = projectTdccShareholdersToY(h.totalShareholders, scales, chartHeight, padding);
                 const yBase = chartHeight - padding.bottom;
                 const barHeight = Math.max(2, yBase - yTop);
+                const shouldShowDate =
+                  history.length <= 6 ||
+                  i === 0 ||
+                  i === history.length - 1 ||
+                  (i % 2 === 0 && history.length - 1 - i >= 2);
 
                 return (
                   <g key={`bar-${h.date}`}>
@@ -567,19 +674,21 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                       y={yTop}
                       width={barWidth}
                       height={barHeight}
-                      fill="url(#holderBarGrad)"
+                      fill={`url(#${holderBarGradId})`}
                       rx="2"
                     />
-                    {/* 日期標籤 */}
-                    <text
-                      x={xCenter}
-                      y={chartHeight - 6}
-                      fontSize="12"
-                      fill="#94a3b8"
-                      textAnchor="middle"
-                    >
-                      {h.date.substring(5)}
-                    </text>
+                    {/* 日期標籤 (超過 6 週時隔週疏化，防止文字重疊) */}
+                    {shouldShowDate && (
+                      <text
+                        x={xCenter}
+                        y={chartHeight - 6}
+                        fontSize="12"
+                        fill="#94a3b8"
+                        textAnchor="middle"
+                      >
+                        {h.date.substring(5)}
+                      </text>
+                    )}
                   </g>
                 );
               })}
