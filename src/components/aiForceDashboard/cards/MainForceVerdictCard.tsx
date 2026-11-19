@@ -512,7 +512,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
           <Sparkles size={16} strokeWidth={1.5} color="#a78bfa" />
           <TermTooltip termId="mlpSemanticVerdict">
             <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#f8fafc', letterSpacing: '0.2px', cursor: 'help' }}>
-              18 主力追蹤總評判 <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 500 }}>(MLP-AI)</span>
+              18 主力追蹤總評判 <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 500 }}>(MLP-AI)</span>
             </h3>
           </TermTooltip>
         </div>
@@ -521,7 +521,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
             type="button"
             onClick={() => setShowModal(!showModal)}
             style={{
-              fontSize: '11px',
+              fontSize: '12px',
               fontWeight: 700,
               padding: '3px 10px',
               borderRadius: '6px',
@@ -597,7 +597,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
               </span>
               <span
                 style={{
-                  fontSize: '11px',
+                  fontSize: '12px',
                   fontWeight: 700,
                   padding: '2px 8px',
                   borderRadius: '4px',
@@ -637,13 +637,13 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
                   borderRadius: '5px',
                   background: phase.isActive ? `${phase.color}30` : 'transparent',
                   border: phase.isActive ? `1px solid ${phase.color}` : '1px solid transparent',
-                  opacity: phase.isActive ? 1 : 0.45,
+                  opacity: phase.isActive ? 1 : 0.78,
                   cursor: 'help',
                 }}
               >
                 <span
                   style={{
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: phase.isActive ? 800 : 500,
                     color: phase.isActive ? phase.color : '#94a3b8',
                     whiteSpace: 'nowrap',
@@ -652,7 +652,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
                   {phase.isActive && '★'}
                   {phase.label}
                 </span>
-                <span style={{ fontSize: '9.5px', color: phase.isActive ? '#f8fafc' : '#64748b', fontWeight: 600 }}>
+                <span style={{ fontSize: '12px', color: phase.isActive ? '#f8fafc' : '#94a3b8', fontWeight: 600 }}>
                   {phase.action}
                 </span>
               </div>
@@ -696,7 +696,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
               實戰操盤點位看板
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '11px', color: '#94a3b8' }}>預估勝率</span>
+              <span style={{ fontSize: '12px', color: '#94a3b8' }}>預估勝率</span>
               <span style={{ fontSize: '13px', fontWeight: 800, color: '#38bdf8', fontFamily: 'monospace' }}>
                 {playbook.winRate}
               </span>
@@ -723,7 +723,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
                 justifyContent: 'center',
               }}
             >
-              <div style={{ fontSize: '11px', color: '#f87171', fontWeight: 700, marginBottom: '2px' }}>
+              <div style={{ fontSize: '12px', color: '#f87171', fontWeight: 700, marginBottom: '2px' }}>
                 防守停損
               </div>
               <div
@@ -752,7 +752,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
                 justifyContent: 'center',
               }}
             >
-              <div style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 700, marginBottom: '2px' }}>
+              <div style={{ fontSize: '12px', color: '#38bdf8', fontWeight: 700, marginBottom: '2px' }}>
                 目標滿足
               </div>
               <div
@@ -781,7 +781,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
                 justifyContent: 'center',
               }}
             >
-              <div style={{ fontSize: '11px', color: '#fbbf24', fontWeight: 700, marginBottom: '2px' }}>
+              <div style={{ fontSize: '12px', color: '#fbbf24', fontWeight: 700, marginBottom: '2px' }}>
                 預估風報比
               </div>
               <div
@@ -813,7 +813,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
                     borderRadius: '6px',
                     background: 'rgba(255, 255, 255, 0.04)',
                     border: '1px solid rgba(255, 255, 255, 0.08)',
-                    fontSize: '11.5px',
+                    fontSize: '12px',
                   }}
                 >
                   <span style={{ color: '#94a3b8' }}>{m.label}:</span>
@@ -847,7 +847,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
                 戰術執行指令
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <span style={{ fontSize: '11px', color: '#94a3b8' }}>部位上限</span>
+                <span style={{ fontSize: '12px', color: '#94a3b8' }}>部位上限</span>
                 <span
                   style={{
                     fontSize: '12px',
@@ -882,7 +882,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
           {/* 風控失效門檻框 */}
           <div
             style={{
-              fontSize: '11.5px',
+              fontSize: '12px',
               color: '#f87171',
               background: 'rgba(239, 68, 68, 0.08)',
               border: '1px solid rgba(239, 68, 68, 0.25)',
@@ -950,7 +950,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
 
           {/* 1. 5 態主力作戰門檻對照表 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: '#38bdf8' }}>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: '#38bdf8' }}>
               ▌ 5 態主力作戰門檻對照表
             </div>
             <div
@@ -971,7 +971,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
                     display: 'grid',
                     gridTemplateColumns: '70px 1fr',
                     gap: '6px',
-                    fontSize: '10px',
+                    fontSize: '12px',
                     padding: '3px 0',
                     borderBottom: idx < QUANT_VERDICT_THRESHOLDS.length - 1 ? '1px dashed rgba(255, 255, 255, 0.06)' : 'none',
                   }}
@@ -980,10 +980,10 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
                     {item.phase}
                   </span>
                   <div style={{ color: '#cbd5e1', lineHeight: 1.3 }}>
-                    <div style={{ fontFamily: 'monospace', color: '#e2e8f0', fontSize: '9.5px' }}>
+                    <div style={{ fontFamily: 'monospace', color: '#e2e8f0', fontSize: '12px' }}>
                       {item.quantRule}
                     </div>
-                    <div style={{ color: '#94a3b8', fontSize: '9px' }}>
+                    <div style={{ color: '#94a3b8', fontSize: '12px' }}>
                       {item.roleAction}
                     </div>
                   </div>
@@ -1004,11 +1004,11 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
               gap: '3px',
             }}
           >
-            <div style={{ fontSize: '10.5px', fontWeight: 700, color: liquidity.isLowLiquidity ? '#f59e0b' : '#34d399', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: liquidity.isLowLiquidity ? '#f59e0b' : '#34d399', display: 'flex', alignItems: 'center', gap: '4px' }}>
               {liquidity.isLowLiquidity ? <AlertTriangle size={12} strokeWidth={1.5} /> : <CheckCircle2 size={12} strokeWidth={1.5} />}
               <span>{liquidity.badge}</span>
             </div>
-            <div style={{ fontSize: '9.5px', color: '#cbd5e1', lineHeight: 1.4 }}>
+            <div style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: 1.4 }}>
               {liquidity.desc}
             </div>
           </div>
@@ -1016,8 +1016,8 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({ data
           {/* 3. 合規宣告 */}
           <div
             style={{
-              fontSize: '9.5px',
-              color: '#64748b',
+              fontSize: '12px',
+              color: '#94a3b8',
               lineHeight: 1.4,
               borderTop: '1px solid rgba(255, 255, 255, 0.06)',
               paddingTop: '6px',

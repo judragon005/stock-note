@@ -221,4 +221,96 @@ describe('Ticket 02 & 03 - 台股 TDCC 集保與月營收批次入庫管線 (Spe
 
     closeSqliteDb();
   });
+
+  it('6. [Spec 0241 / Ticket 03] backfillSymbolTdccHistory 應在筆數 < 4 時從 FinMind 拉取近 10 週並寫入，失敗靜默返回 savedCount: 0', async () => {
+    const { initSqliteLakehouseDb, closeSqliteDb } = require('../../scripts/market-sync/sqlite-db-core.cjs');
+    const { backfillSymbolTdccHistory } = require('../../scripts/market-sync/ingest-tw-tdcc.cjs');
+
+    const db = initSqliteLakehouseDb(testDbPath);
+    db.prepare("INSERT OR REPLACE INTO symbols_meta (symbol, name, market, updated_at) VALUES ('2330', '台積電', 'TW', 12345)").run();
+
+    const mockFinMindTdcc = {
+      msg: 'success',
+      status: 200,
+      data: [
+        { date: '2026-09-25', stock_id: '2330', HoldingSharesLevel: '1-999', people: 500000, percent: 1.5, unit: 30000 },
+        { date: '2026-09-25', stock_id: '2330', HoldingSharesLevel: '5,001-10,000', people: 100000, percent: 2.0, unit: 40000 },
+        { date: '2026-09-25', stock_id: '2330', HoldingSharesLevel: '400,001-600,000', people: 200, percent: 5.5, unit: 100000 },
+        { date: '2026-09-25', stock_id: '2330', HoldingSharesLevel: 'more than 1,000,001', people: 1500, percent: 80.2, unit: 2000000 },
+        { date: '2026-09-25', stock_id: '2330', HoldingSharesLevel: 'total', people: 1200000, percent: 100.0, unit: 25932071 },
+        { date: '2026-10-02', stock_id: '2330', HoldingSharesLevel: '1-999', people: 510000, percent: 1.6, unit: 31000 },
+        { date: '2026-10-02', stock_id: '2330', HoldingSharesLevel: 'more than 1,000,001', people: 1490, percent: 81.0, unit: 2050000 },
+        { date: '2026-10-02', stock_id: '2330', HoldingSharesLevel: 'total', people: 1210000, percent: 100.0, unit: 25932071 },
+      ],
+    };
+
+    let fetchedUrl = '';
+    const mockFetcher = async (url: string) => {
+      fetchedUrl = url;
+      return { ok: true, json: async () => mockFinMindTdcc };
+    };
+
+    const res = await backfillSymbolTdccHistory('2330', 10, testDbPath, mockFetcher);
+    expect(fetchedUrl).toContain('TaiwanStockHoldingSharesPer');
+    expect(fetchedUrl).toContain('data_id=2330');
+    expect(res.savedCount).toBe(2);
+
+    const rows = db.prepare("SELECT * FROM tw_tdcc_distribution WHERE symbol = '2330' ORDER BY date ASC").all();
+    expect(rows.length).toBe(2);
+    expect(rows[0].date).toBe('2026-09-25');
+    expect(rows[0].total_shareholders).toBe(1200000);
+    expect(rows[0].over_400_ratio).toBeCloseTo(85.7, 1);
+    expect(rows[0].over_1000_ratio).toBeCloseTo(80.2, 1);
+    expect(rows[0].under_10_ratio).toBeCloseTo(3.5, 1);
+
+    // 失敗時應靜默返回 savedCount: 0
+    const failRes = await backfillSymbolTdccHistory('2454', 10, testDbPath, async () => {
+      throw new Error('Network error');
+    });
+    expect(failRes.savedCount).toBe(0);
+
+    closeSqliteDb();
+  });
+
+  it('7. [Spec 0241 / Ticket 03] backfillSymbolMonthlyRevenue 應在筆數 < 6 時從 FinMind 拉取近 12 個月營收並計算 YoY/MoM 寫入', async () => {
+    const { initSqliteLakehouseDb, closeSqliteDb } = require('../../scripts/market-sync/sqlite-db-core.cjs');
+    const { backfillSymbolMonthlyRevenue } = require('../../scripts/market-sync/ingest-tw-monthly-revenue.cjs');
+
+    const db = initSqliteLakehouseDb(testDbPath);
+    db.prepare("INSERT OR REPLACE INTO symbols_meta (symbol, name, market, type, updated_at) VALUES ('2330', '台積電', 'TW', 'STOCK', 12345)").run();
+    db.prepare("INSERT OR REPLACE INTO symbols_meta (symbol, name, market, type, updated_at) VALUES ('0050', '元大台灣50', 'TW', 'ETF', 12345)").run();
+
+    const mockFinMindRev = {
+      msg: 'success',
+      status: 200,
+      data: [
+        { date: '2025-08-01', stock_id: '2330', revenue: 200000, revenue_year: 2025, revenue_month: 8 },
+        { date: '2026-07-01', stock_id: '2330', revenue: 240000, revenue_year: 2026, revenue_month: 7 },
+        { date: '2026-08-01', stock_id: '2330', revenue: 250000, revenue_year: 2026, revenue_month: 8 },
+      ],
+    };
+
+    let fetchedUrl = '';
+    const mockFetcher = async (url: string) => {
+      fetchedUrl = url;
+      return { ok: true, json: async () => mockFinMindRev };
+    };
+
+    const res = await backfillSymbolMonthlyRevenue('2330', 12, testDbPath, mockFetcher);
+    expect(fetchedUrl).toContain('TaiwanStockMonthRevenue');
+    expect(fetchedUrl).toContain('data_id=2330');
+    expect(res.savedCount).toBe(3);
+
+    const augRow = db.prepare("SELECT * FROM tw_monthly_revenue WHERE symbol = '2330' AND year_month = '2026-08'").get();
+    expect(augRow).toBeDefined();
+    expect(augRow.revenue).toBe(250000);
+    expect(augRow.yoy_rate).toBeCloseTo(25.0, 1); // (250000 - 200000) / 200000 * 100
+    expect(augRow.mom_rate).toBeCloseTo(4.17, 1); // (250000 - 240000) / 240000 * 100
+
+    // ETF 應略過
+    const etfRes = await backfillSymbolMonthlyRevenue('0050', 12, testDbPath, mockFetcher);
+    expect(etfRes.savedCount).toBe(0);
+
+    closeSqliteDb();
+  });
 });

@@ -72,7 +72,7 @@ export const AiConfidenceCard: React.FC<AiConfidenceCardProps> = ({ data }) => {
               color: '#94a3b8',
               border: '1px solid rgba(255,255,255,0.08)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -90,7 +90,7 @@ export const AiConfidenceCard: React.FC<AiConfidenceCardProps> = ({ data }) => {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '11px', padding: '4px 0', flex: 1, justifyContent: 'center' }}>
         {bars.map((item) => (
           <div key={item.label} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
               {item.termId ? (
                 <TermTooltip termId={item.termId}>
                   <span style={{ color: '#94a3b8', cursor: 'help' }}>{item.label}</span>
@@ -129,7 +129,7 @@ export const AiConfidenceCard: React.FC<AiConfidenceCardProps> = ({ data }) => {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          fontSize: '11px',
+          fontSize: '12px',
           color: '#94a3b8',
           paddingTop: '6px',
           borderTop: '1px solid rgba(255, 255, 255, 0.05)',

@@ -55,7 +55,7 @@ export function getSystemBadgeConfig(type: SystemBadgeType, active: boolean = tr
     case 'AI_SCAN':
       return {
         label: 'AI 智慧掃描',
-        color: active ? '#10b981' : '#64748b',
+        color: active ? '#10b981' : '#94a3b8',
         bgColor: active ? 'rgba(16, 185, 129, 0.15)' : 'rgba(100, 116, 139, 0.1)',
         borderColor: active ? 'rgba(16, 185, 129, 0.35)' : 'rgba(100, 116, 139, 0.2)',
         dotAnimate: active,
@@ -63,21 +63,21 @@ export function getSystemBadgeConfig(type: SystemBadgeType, active: boolean = tr
     case 'MAIN_FORCE':
       return {
         label: '主力行為追蹤',
-        color: active ? '#38bdf8' : '#64748b',
+        color: active ? '#38bdf8' : '#94a3b8',
         bgColor: active ? 'rgba(56, 189, 248, 0.15)' : 'rgba(100, 116, 139, 0.1)',
         borderColor: active ? 'rgba(56, 189, 248, 0.35)' : 'rgba(100, 116, 139, 0.2)',
       };
     case 'MARKET_STATUS':
       return {
         label: '市場即時狀態',
-        color: active ? '#818cf8' : '#64748b',
+        color: active ? '#818cf8' : '#94a3b8',
         bgColor: active ? 'rgba(129, 140, 248, 0.15)' : 'rgba(100, 116, 139, 0.1)',
         borderColor: active ? 'rgba(129, 140, 248, 0.35)' : 'rgba(100, 116, 139, 0.2)',
       };
     case 'VOLATILITY':
       return {
         label: '波動異常預警',
-        color: active ? '#ef4444' : '#64748b',
+        color: active ? '#ef4444' : '#94a3b8',
         bgColor: active ? 'rgba(239, 68, 68, 0.15)' : 'rgba(100, 116, 139, 0.1)',
         borderColor: active ? 'rgba(239, 68, 68, 0.35)' : 'rgba(100, 116, 139, 0.2)',
         dotAnimate: active,
@@ -422,7 +422,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
                     </div>
                     <span
                       style={{
-                        fontSize: '0.68rem',
+                        fontSize: '0.75rem',
                         padding: '1px 5px',
                         borderRadius: '4px',
                         background: item.market === 'US' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(59, 130, 246, 0.2)',
@@ -601,7 +601,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <TermTooltip termId="closePrice">
-              <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+              <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
                 {data.isSettled === false ? '前日收盤價' : '今日收盤價'}
               </span>
             </TermTooltip>
@@ -609,7 +609,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
               <span
                 data-testid="market-unsettled-badge"
                 style={{
-                  fontSize: '0.62rem',
+                  fontSize: '0.75rem',
                   padding: '1px 6px',
                   borderRadius: '4px',
                   background: 'rgba(245, 158, 11, 0.16)',
@@ -637,7 +637,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
               <span
                 data-testid="market-currency-badge"
                 style={{
-                  fontSize: '0.68rem',
+                  fontSize: '0.75rem',
                   fontWeight: 700,
                   color: '#94a3b8',
                   background: 'rgba(255, 255, 255, 0.08)',
@@ -652,7 +652,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
               <span
                 data-testid="market-intraday-reference"
                 style={{
-                  fontSize: '0.72rem',
+                  fontSize: '0.75rem',
                   color: '#94a3b8',
                   background: 'rgba(255, 255, 255, 0.05)',
                   padding: '1px 6px',
@@ -685,7 +685,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
         {/* 今日漲跌 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
           <TermTooltip termId="closePrice">
-            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
               {data.isSettled === false ? '前日漲跌' : '今日漲跌'}
             </span>
           </TermTooltip>
@@ -697,7 +697,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
         {/* 今日漲幅 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
           <TermTooltip termId="closePrice">
-            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
               {data.isSettled === false ? '前日漲幅' : '今日漲幅'}
             </span>
           </TermTooltip>
@@ -711,7 +711,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
         {/* 成交量 (張/股) */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
           <TermTooltip termId="volumeShares">
-            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
               {data.isSettled === false
                 ? `前日成交量(${data.volumeUnit ?? (data.currency === 'USD' ? '股' : '張')})`
                 : `成交量(${data.volumeUnit ?? (data.currency === 'USD' ? '股' : '張')})`}
@@ -725,7 +725,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
         {/* 成交筆數 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
           <TermTooltip termId="transactionCount">
-            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
               {data.isSettled === false ? '前日筆數' : '成交筆數'}
             </span>
           </TermTooltip>
@@ -737,7 +737,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
         {/* 開盤 / 最高 / 最低 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
           <TermTooltip termId="openPrice">
-            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>開盤</span>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>開盤</span>
           </TermTooltip>
           <span style={{ fontSize: '0.98rem', fontWeight: 700, color: '#e2e8f0' }}>
             {formatMarketMetric(data.openPrice, 2)}
@@ -746,7 +746,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
 
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
           <TermTooltip termId="highPrice">
-            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>最高</span>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>最高</span>
           </TermTooltip>
           <span style={{ fontSize: '0.98rem', fontWeight: 700, color: '#f87171' }}>
             {formatMarketMetric(data.highPrice, 2)}
@@ -755,7 +755,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
 
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
           <TermTooltip termId="lowPrice">
-            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>最低</span>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>最低</span>
           </TermTooltip>
           <span style={{ fontSize: '0.98rem', fontWeight: 700, color: '#34d399' }}>
             {formatMarketMetric(data.lowPrice, 2)}
@@ -766,7 +766,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
 
         {/* 最新交易日 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
             {data.isSettled === false ? '定錨基準日' : '最新交易日'}
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -780,7 +780,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
               {data.latestTradingDate}
             </span>
             {data.isSettled === false && (
-              <span style={{ fontSize: '0.62rem', color: '#f59e0b', fontWeight: 700 }}>
+              <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 700 }}>
                 [前日收盤]
               </span>
             )}
@@ -789,7 +789,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
 
         {/* 資料筆數 */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>資料筆數</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>資料筆數</span>
           <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#fbbf24' }}>
             {data.dataPointsCount} 日
           </span>
@@ -824,7 +824,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
                     : '1px solid rgba(255, 255, 255, 0.07)',
                   background: isActive ? 'rgba(56, 189, 248, 0.14)' : 'rgba(255, 255, 255, 0.03)',
                   color: isActive ? '#38bdf8' : '#94a3b8',
-                  fontSize: '0.72rem',
+                  fontSize: '0.75rem',
                   fontWeight: isActive ? 700 : 500,
                   cursor: 'pointer',
                   display: 'inline-flex',
@@ -852,7 +852,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
                     : '1px solid rgba(16, 185, 129, 0.2)',
                   background: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(16, 185, 129, 0.06)',
                   color: isActive ? '#34d399' : '#6ee7b7',
-                  fontSize: '0.72rem',
+                  fontSize: '0.75rem',
                   fontWeight: 600,
                   cursor: 'pointer',
                   display: 'inline-flex',
@@ -880,7 +880,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
               borderRadius: '7px',
               background: 'rgba(16, 185, 129, 0.08)',
               border: '1px solid rgba(16, 185, 129, 0.25)',
-              fontSize: '0.74rem',
+              fontSize: '0.75rem',
               color: '#e2e8f0',
               fontVariantNumeric: 'tabular-nums',
             }}

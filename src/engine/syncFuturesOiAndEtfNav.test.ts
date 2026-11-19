@@ -121,6 +121,19 @@ describe('Spec 0183 Ticket 06: syncFuturesOiAndEtfNav (期貨未平倉與 ETF �
     expect(records[1].premiumDiscountRatio).toBe(-0.39);
   });
 
+  it('4b. parseTwseEtfNavResponse 應遍歷 rawData.a1 所有分組 (a1[0..N]) 而非僅取 a1[0] (Spec 0238 Ticket 01)', () => {
+    const multiGroupPayload = {
+      a1: [
+        { msgArray: [{ a: '00693U', b: '期元大S&P石油', e: '20.10', f: '20.00', g: '0.50%' }] },
+        { msgArray: [{ a: '0050', b: '元大台灣50', e: '195.50', f: '195.42', g: '0.04%' }] },
+        { msgArray: [{ a: '00878', b: '國泰永續高股息', e: '22.80', f: '22.75', g: '0.22%' }] },
+      ],
+    };
+
+    const records = ingestMacroSentiment.parseTwseEtfNavResponse(multiGroupPayload, '2026-11-17');
+    expect(records.map((r: any) => r.symbol)).toEqual(['00693U', '0050', '00878']);
+  });
+
   it('5. fetchAndIngestEtfDailyNav 應成功抓取並寫入 SQLite 湖倉 etf_daily_nav (Spec 0203 Ticket 05)', async () => {
     if (!sqliteDbCore.isSqliteSupported()) return;
 

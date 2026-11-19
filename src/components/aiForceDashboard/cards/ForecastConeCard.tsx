@@ -307,7 +307,7 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
               color: '#94a3b8',
               border: '1px solid rgba(255,255,255,0.08)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -322,14 +322,14 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
               累積型 AI 預測路徑圖
             </span>
           </TermTooltip>
-          <span style={{ fontSize: '0.7rem', color: '#64748b' }}>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
             | 依 60 日報酬統計推估
           </span>
         </div>
       </div>
 
       {/* SVG 預測錐繪製區 */}
-      <div style={{ width: '100%', flex: 1, minHeight: '180px', position: 'relative' }}>
+      <div style={{ width: '100%', flex: 1, minHeight: '200px', position: 'relative' }}>
         {/* 左上角精緻半透明深底方塊圖例 (對齊照片四) */}
         <div
           style={{
@@ -344,7 +344,7 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
             backgroundColor: 'rgba(15, 23, 42, 0.88)',
             border: '1px solid rgba(255, 255, 255, 0.12)',
             borderRadius: '6px',
-            fontSize: '0.64rem',
+            fontSize: '0.75rem',
             backdropFilter: 'blur(6px)',
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
           }}
@@ -363,7 +363,6 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
         <svg
           viewBox={`0 0 ${CONE_WIDTH} ${CONE_HEIGHT}`}
           style={{ width: '100%', height: '100%', overflow: 'visible' }}
-          preserveAspectRatio="none"
         >
           <defs>
             {/* 上漲扇形紅色漸層 (對齊照片四) */}
@@ -388,10 +387,10 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
             <g key={'ytick-' + idx}>
               <text
                 x={CONE_PADDING.left - 5}
-                y={tick.y + 3}
+                y={tick.y + 4}
                 textAnchor="end"
-                fill="#64748b"
-                fontSize="8"
+                fill="#94a3b8"
+                fontSize="12"
                 fontFamily="monospace"
               >
                 {tick.label}
@@ -455,10 +454,10 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
               <text
                 key={'t' + idx}
                 x={x}
-                y={CONE_HEIGHT - 5}
+                y={CONE_HEIGHT - 3}
                 textAnchor="middle"
                 fill="#94a3b8"
-                fontSize="9"
+                fontSize="12"
                 fontFamily="sans-serif"
               >
                 {n.label}
@@ -483,7 +482,7 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <TermTooltip termId="forecastUp" dynamicDiagnosis={diagnoseForecastCone(data.bullishProb ?? 48, data.bearishProb ?? 44)}>
-            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>主力方向機率：</span>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>主力方向機率：</span>
           </TermTooltip>
           <span
             style={{
@@ -498,7 +497,7 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <TermTooltip termId="annualDrift">
-            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>強弱指標：</span>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>強弱指標：</span>
           </TermTooltip>
           <span
             style={{

@@ -136,7 +136,7 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
       }}
     >
       {/* 左側：資料來源與區間說明 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', flexWrap: 'wrap' }}>
         <span style={{ color: '#38bdf8', fontWeight: 600 }}>{sourcesText}</span>
         <span style={{ color: '#94a3b8' }}>{rangeText}</span>
       </div>
@@ -157,7 +157,7 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
               border: '1px solid rgba(56, 189, 248, 0.4)',
               backgroundColor: 'rgba(56, 189, 248, 0.14)',
               color: '#38bdf8',
-              fontSize: '11px',
+              fontSize: '12px',
               fontWeight: 600,
               cursor: 'pointer',
               transition: 'all 0.15s ease',
@@ -191,7 +191,7 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
               border: '1px solid rgba(255, 255, 255, 0.07)',
               backgroundColor: 'rgba(255, 255, 255, 0.03)',
               color: '#cbd5e1',
-              fontSize: '11px',
+              fontSize: '12px',
               fontWeight: 500,
               cursor: 'pointer',
               transition: 'all 0.15s ease',
@@ -216,7 +216,7 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
       {toastMessage && (
         <span
           style={{
-            fontSize: '11px',
+            fontSize: '12px',
             color: '#38bdf8',
             backgroundColor: 'rgba(56, 189, 248, 0.12)',
             padding: '2px 8px',

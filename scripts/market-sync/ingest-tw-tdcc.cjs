@@ -277,6 +277,108 @@ async function runTdccIngestion(customDbPath, targetDateOrOptions, backfillWeeks
   return { savedCount, targetDate: effectiveDate, weeksCount: savedCount > 0 ? 1 : 0 };
 }
 
+/**
+ * 單一標的 TDCC 集保股權分散歷史序列按需補齊 (Spec 0241 Ticket 03)
+ * 當 tw_tdcc_distribution 筆數 < 4 時，從 FinMind TaiwanStockHoldingSharesPer 拉取近 N 週資料寫入
+ * @param {string} symbol
+ * @param {number} [weeks=10]
+ * @param {string} [customDbPath]
+ * @param {Function} [fetcher]
+ * @returns {Promise<{ savedCount: number, skipped?: boolean }>}
+ */
+async function backfillSymbolTdccHistory(symbol, weeks = 10, customDbPath, fetcher = globalThis.fetch) {
+  if (!symbol || typeof fetcher !== 'function') {
+    return { savedCount: 0 };
+  }
+
+  const cleanSymbol = String(symbol).trim().toUpperCase();
+  const aliasSym = cleanSymbol.endsWith('O') ? cleanSymbol.slice(0, -1) : `${cleanSymbol}O`;
+
+  try {
+    const db = initSqliteLakehouseDb(customDbPath);
+    const existingRow = db
+      .prepare('SELECT COUNT(*) AS count FROM tw_tdcc_distribution WHERE symbol IN (?, ?)')
+      .get(cleanSymbol, aliasSym);
+    if (Number(existingRow?.count || 0) >= 4) {
+      return { savedCount: 0, skipped: true };
+    }
+
+    const startDateObj = new Date(Date.now() - (weeks * 7 + 21) * 86400000);
+    const startDate = startDateObj.toISOString().slice(0, 10);
+    const querySym = cleanSymbol.endsWith('O') ? cleanSymbol.slice(0, -1) : cleanSymbol;
+    const apiUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockHoldingSharesPer&data_id=${encodeURIComponent(querySym)}&start_date=${startDate}`;
+
+    const res = await fetcher(apiUrl, {
+      headers: { Accept: 'application/json', 'User-Agent': 'StockTracker/1.0 (local-sync)' },
+    });
+    if (!res || !res.ok) return { savedCount: 0 };
+
+    const json = await res.json();
+    const rows = Array.isArray(json?.data) ? json.data : [];
+    if (rows.length === 0) return { savedCount: 0 };
+
+    const byDate = {};
+    for (const r of rows) {
+      if (!r || !r.date) continue;
+      const d = String(r.date).slice(0, 10);
+      if (!byDate[d]) {
+        byDate[d] = {
+          date: d,
+          totalShareholders: 0,
+          fallbackShareholders: 0,
+          over400Ratio: 0,
+          over1000Ratio: 0,
+          under10Ratio: 0,
+        };
+      }
+      const g = byDate[d];
+      const lvl = String(r.HoldingSharesLevel || '').trim().toLowerCase();
+      const people = Number(r.people) || 0;
+      const pct = Number(r.percent) || 0;
+
+      if (lvl === 'total') {
+        g.totalShareholders = people;
+      } else {
+        g.fallbackShareholders += people;
+        if (
+          lvl === '400,001-600,000' ||
+          lvl === '600,001-800,000' ||
+          lvl === '800,001-1,000,000' ||
+          lvl === 'more than 1,000,001'
+        ) {
+          g.over400Ratio += pct;
+        }
+        if (lvl === 'more than 1,000,001') {
+          g.over1000Ratio += pct;
+        }
+        if (lvl === '1-999' || lvl === '1,000-5,000' || lvl === '5,001-10,000') {
+          g.under10Ratio += pct;
+        }
+      }
+    }
+
+    const sortedDates = Object.keys(byDate).sort().slice(-weeks);
+    let totalSaved = 0;
+    for (const d of sortedDates) {
+      const g = byDate[d];
+      const item = {
+        symbol: cleanSymbol,
+        date: d,
+        totalShareholders: g.totalShareholders > 0 ? g.totalShareholders : g.fallbackShareholders,
+        over400Ratio: Number(g.over400Ratio.toFixed(2)),
+        over1000Ratio: Number(g.over1000Ratio.toFixed(2)),
+        under10Ratio: Number(g.under10Ratio.toFixed(2)),
+      };
+      const { savedCount } = saveTdccDistributionToSqlite({ [cleanSymbol]: item }, d, customDbPath);
+      totalSaved += savedCount;
+    }
+
+    return { savedCount: totalSaved };
+  } catch {
+    return { savedCount: 0 };
+  }
+}
+
 module.exports = {
   TDCC_OPENDATA_URL,
   parseTdccCsv,
@@ -284,6 +386,7 @@ module.exports = {
   saveTdccDistributionToSqlite,
   purgeSyntheticRecords,
   runTdccIngestion,
+  backfillSymbolTdccHistory,
 };
 
 if (require.main === module) {

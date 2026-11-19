@@ -3051,4 +3051,12 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     3. **Lakehouse Full-Depth Pipeline & Personal HUD (湖倉深層流水線與持倉感知抬頭顯示器)**：打通 `/api/market/history/:symbol` 回傳借券賣出 (`sblBalance`)、融資日增減 (`marginBalanceChange`)、董監質押 (`pledge`)、ETF 折溢價 (`etfNav`)、除權息日曆 (`corporateActions`)；接通 `synthesizeMainForceVerdict` (MLP 主力語意)、外資/投信連買連賣天數、美股微觀量價 4 指標 (`usMicroMetrics`: RVOL, VWAP Bias, MFI, ATR) 與 10 日 OBV Sparkline；頂部整合個人持倉 HUD（均價 vs VWAP 乖離對比、庫存張數）與 7 步深度投研彈窗全量參數。
     4. **Obsidian Precision UI Architecture (曜石精密反 AI Slop 視覺體系)**：物理拔除 15 張卡片無作用 `<MoreVertical />` 裝飾按鈕；100% 根除系統 Emoji，全數替換為 `lucide-react` 向量圖示；統一曜石深邃底色 (`#0B0F19`) + `1px solid rgba(255,255,255,0.07)` 極細石墨邊框 + 等寬微標籤 (`01`~`21`)；首屏重構「戰術摘要帶」與 Zone 01~04 戰術章節，消滅底部遮擋，實現「0 滾動直達結論」。
 
+- **Main Force War Room 4.1 Lakehouse Self-Healing, ETF Asset Polymorphism & Ergonomic Typography (主力戰情室 4.1 — 湖倉欄位級自癒、ETF 資產多型與零微字人體工學重構)**:
+  - 核心模組：`scripts/market-sync/market-freshness-service.cjs`、`scripts/market-sync/ingest-macro-sentiment.cjs`、`scripts/market-sync/backfill-tw-history-web.cjs`、`scripts/market-sync/ingest-tw-tdcc.cjs`、`scripts/market-sync/ingest-tw-monthly-revenue.cjs`、`scripts/market-sync/vite-market-middleware.cjs`、`src/engine/aiForceDashboardEngine.ts`、`src/engine/marketCacheLoader.ts`、`src/components/aiForceDashboard/typographyFloor.ts`、`src/components/aiForceDashboard/*`。
+  - 規格來源：Spec 0238 (v9.23.0) 與 ADR 0238，關聯 GitHub Issue #590。
+  - 核心領域術語與架構革新：
+    1. **Column-Level Lakehouse Completeness (湖倉欄位級完好度)**：單一交易日同步狀態不得僅以日 K 筆數判定，必須驗證日 K、法人、上市櫃資券 (`margin_balance`)、借券賣出 (`sbl_balance`)、當沖 (`day_trade_rate`)、每日估值 (`tw_valuation_daily`) 與 ETF 淨值 (`etf_daily_nav`) 7 大子平面覆蓋率，自動偵測並補齊半殘日。_Avoid_: Row-Count Only Freshness, Blind Day Skip
+    2. **Asset-Aware Card Polymorphism (資產型態感知卡片多型)**：遍歷證交所 `all_etf.txt` 全投信分組 (`a1[0..N]`) 寫入 `etf_daily_nav`；針對 ETF 自動路由至淨值折溢價、規模 AUM、總費用率與近一年歷史配息反推殖利率管線，不依賴個股 `BWIBBU_d` 本益比表，並提供按需 10 週集保 / 12 月營收 / 歷史配息補齊。_Avoid_: Stock-Only Valuation Assumption
+    3. **Ergonomic Typography Floor (戰情室人體工學字級底線)**：全戰情室 29 個元件強制執行最小字級 `12px (0.75rem)` 與 WCAG AA 次要對比色 `#94a3b8` (`>= 4.5:1`)，消除含 `<text>` SVG 之 `preserveAspectRatio="none"` 橫向拉伸變形，並將 Layer 6 擴展為 `minmax(440px, 1fr)` 雙欄矩陣。_Avoid_: Micro-Typography (<12px), Non-Uniform Text Stretching, Muddy Gray-on-Dark (#64748b)
+
 

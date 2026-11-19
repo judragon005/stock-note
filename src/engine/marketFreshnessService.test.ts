@@ -243,4 +243,75 @@ describe('Ticket 01 (Seam 1): 市場新鮮度領域服務 marketFreshnessService
     expect(res2.tw.chipsCount).toBe(2300);
     expect(res2.tw.isStale).toBe(false); // 完整結算，不為 stale
   });
+
+  it('9. Spec 0241 Ticket 02: 最近 5 個交易日 7 維欄位覆蓋率與 etf_daily_nav 探針 (半殘日偵測)', async () => {
+    // @ts-ignore
+    const fs = require('fs');
+    // @ts-ignore
+    const path = require('path');
+    // @ts-ignore
+    const os = require('os');
+    // @ts-ignore
+    const { initSqliteLakehouseDb, closeSqliteDb } = require('../../scripts/market-sync/sqlite-db-core.cjs');
+    // @ts-expect-error cjs import
+    const { checkMarketFreshness } = await import('../../scripts/market-sync/market-freshness-service.cjs');
+
+    const tempDbPath = path.join(os.tmpdir(), `test_freshness_7d_${Date.now()}.db`);
+    const db = initSqliteLakehouseDb(tempDbPath);
+
+    try {
+      const dates = ['2026-10-01', '2026-10-02'];
+      db.exec('BEGIN TRANSACTION;');
+      const candleStmt = db.prepare(
+        'INSERT INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume) VALUES (?, ?, 100, 105, 95, 100, 100, 1000)'
+      );
+      const chipStmt = db.prepare(
+        'INSERT INTO tw_institutional_chips (symbol, date, foreign_net, margin_balance, sbl_balance, day_trade_rate) VALUES (?, ?, 10, ?, ?, ?)'
+      );
+      const valStmt = db.prepare(
+        'INSERT INTO tw_valuation_daily (symbol, date, pe, pb, dividend_yield, updated_at) VALUES (?, ?, 15, 2, 3, 12345)'
+      );
+      const etfStmt = db.prepare(
+        'INSERT INTO etf_daily_nav (symbol, date, close_price, nav, premium_discount_ratio, updated_at) VALUES (?, ?, 180, 180, 0, 12345)'
+      );
+
+      for (const d of dates) {
+        candleStmt.run('2330', d);
+        candleStmt.run('0050', d);
+        for (let i = 1000; i < 2900; i++) {
+          const sym = String(i);
+          // 2026-10-01 為完整日；2026-10-02 缺少 sbl_balance 與 day_trade_rate (半殘日)
+          const margin = i < 2600 ? 100 : null; // 1600 筆 >= 1500
+          const sbl = d === '2026-10-01' && i < 1600 ? 50 : null; // 10-01 有 600 筆, 10-02 只有 0 筆
+          const dayTrade = d === '2026-10-01' && i < 1600 ? 25.5 : null; // 10-01 有 600 筆, 10-02 只有 0 筆
+          chipStmt.run(sym, d, margin, sbl, dayTrade);
+          if (i < 2600) {
+            valStmt.run(sym, d); // 1600 筆 >= 1500
+          }
+        }
+      }
+      // 最新結算日 2026-10-02 僅塞入 10 筆 etf_daily_nav (< 100)
+      for (let i = 0; i < 10; i++) {
+        etfStmt.run(`00${50 + i}`, '2026-10-02');
+      }
+      db.exec('COMMIT;');
+
+      const now = new Date('2026-10-02T16:00:00+08:00');
+      const res = checkMarketFreshness(db, now);
+
+      expect(res.tw.isStale).toBe(true);
+      expect(res.tw.incompleteDates).toContain('2026-10-02');
+      expect(res.tw.incompleteDates).not.toContain('2026-10-01');
+      expect(res.tw.missingPlanes).toContain('sbl');
+      expect(res.tw.missingPlanes).toContain('day_trade');
+      expect(res.tw.missingPlanes).toContain('etf_nav');
+      expect(res.tw.missingPlanes).not.toContain('margin');
+      expect(res.tw.missingPlanes).not.toContain('valuation');
+    } finally {
+      closeSqliteDb();
+      if (fs.existsSync(tempDbPath)) {
+        try { fs.unlinkSync(tempDbPath); } catch { }
+      }
+    }
+  });
 });

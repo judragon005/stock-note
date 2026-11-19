@@ -97,7 +97,7 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
               color: '#94a3b8',
               border: '1px solid rgba(255,255,255,0.08)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
               letterSpacing: '0.5px',
             }}
@@ -165,7 +165,7 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
           <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#cbd5e1' }}>
             {data.emptyMessage || '營收數據累積中'}
           </div>
-          <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+          <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
             {data.asOfDateText || '每月 10 日前公布前月營收'}
           </div>
         </div>
@@ -188,8 +188,8 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
                 border: '1px solid rgba(16, 185, 129, 0.2)',
               }}
             >
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>ETF 資產規模</div>
-              <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#34d399' }}>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>ETF 資產規模</div>
+              <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#34d399' }}>
                 {data.etfData.aumBillion != null ? `${data.etfData.aumBillion} 億元` : '--'}
               </div>
             </div>
@@ -202,8 +202,8 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
                 border: '1px solid rgba(56, 189, 248, 0.2)',
               }}
             >
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>平均年化殖利率</div>
-              <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#38bdf8' }}>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>平均年化殖利率</div>
+              <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#38bdf8' }}>
                 {data.etfData.dividendYield != null ? `${data.etfData.dividendYield}%` : '--'}
               </div>
             </div>
@@ -216,7 +216,7 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
                 border: '1px solid rgba(148, 163, 184, 0.2)',
               }}
             >
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>總受益人人數</div>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>總受益人人數</div>
               <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#f8fafc' }}>
                 {data.etfData.beneficiaries != null ? `${data.etfData.beneficiaries.toLocaleString()} 人` : '--'}
               </div>
@@ -228,28 +228,45 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
             <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', marginBottom: '8px' }}>
               近四季配息紀錄與年化殖利率
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
-              {data.etfData.quarterlyDividends.map((q) => (
-                <div
-                  key={q.quarter}
-                  style={{
-                    background: 'rgba(30, 41, 59, 0.6)',
-                    padding: '8px 6px',
-                    borderRadius: '6px',
-                    border: '1px solid rgba(56, 189, 248, 0.15)',
-                    textAlign: 'center',
-                  }}
-                >
-                  <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>{q.quarter}</div>
-                  <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#f8fafc', margin: '2px 0' }}>
-                    ${q.amount.toFixed(2)}
+            {data.etfData.quarterlyDividends.length === 0 ? (
+              <div
+                data-testid="etf-dividend-empty-hint"
+                style={{
+                  padding: '14px 12px',
+                  borderRadius: '8px',
+                  background: 'rgba(30, 41, 59, 0.45)',
+                  border: '1px dashed rgba(148, 163, 184, 0.25)',
+                  textAlign: 'center',
+                  fontSize: '0.78rem',
+                  color: '#94a3b8',
+                }}
+              >
+                近四季尚無現金配息紀錄（或屬不配息累積型 ETF）
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                {data.etfData.quarterlyDividends.map((q) => (
+                  <div
+                    key={q.quarter}
+                    style={{
+                      background: 'rgba(30, 41, 59, 0.6)',
+                      padding: '8px 6px',
+                      borderRadius: '6px',
+                      border: '1px solid rgba(56, 189, 248, 0.15)',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{q.quarter}</div>
+                    <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#f8fafc', margin: '2px 0' }}>
+                      ${q.amount.toFixed(2)}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#38bdf8', fontWeight: 600 }}>
+                      {q.yieldRate}%
+                    </div>
                   </div>
-                  <div style={{ fontSize: '0.7rem', color: '#38bdf8', fontWeight: 600 }}>
-                    {q.yieldRate}%
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div
@@ -258,8 +275,8 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
               alignItems: 'center',
               justifyContent: 'space-between',
               marginTop: '8px',
-              fontSize: '0.72rem',
-              color: '#64748b',
+              fontSize: '0.75rem',
+              color: '#94a3b8',
             }}
           >
             <span>智慧自適應：ETF 指數型基金視圖</span>
@@ -285,8 +302,8 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
                 border: '1px solid rgba(16, 185, 129, 0.2)',
               }}
             >
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>單月最新營收</div>
-              <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#34d399' }}>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>單月最新營收</div>
+              <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#34d399' }}>
                 {data.latestRevenueText || '--'}
               </div>
             </div>
@@ -299,10 +316,10 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
                 border: '1px solid rgba(59, 130, 246, 0.2)',
               }}
             >
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>營收年增率 YoY</div>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>營收年增率 YoY</div>
               <div
                 style={{
-                  fontSize: '1.05rem',
+                  fontSize: '1.1rem',
                   fontWeight: 800,
                   color: (data.latestYoyRate ?? 0) >= 0 ? '#34d399' : '#f87171',
                 }}
@@ -321,7 +338,7 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
                 border: '1px solid rgba(245, 158, 11, 0.2)',
               }}
             >
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>連續雙增月數</div>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>連續雙增月數</div>
               <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fbbf24' }}>
                 {data.growthStreakMonths ? `${data.growthStreakMonths} 個月` : '0 個月'}
               </div>
@@ -377,7 +394,7 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
                   />
 
                   {/* 月份標籤 (如 "09") */}
-                  <div style={{ fontSize: '0.65rem', color: '#64748b', transform: 'scale(0.9)' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
                     {h.yearMonth.substring(5)}
                   </div>
                 </div>
@@ -392,8 +409,8 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
               alignItems: 'center',
               justifyContent: 'space-between',
               marginTop: '6px',
-              fontSize: '0.72rem',
-              color: '#64748b',
+              fontSize: '0.75rem',
+              color: '#94a3b8',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

@@ -447,7 +447,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
               borderRadius: '6px',
               background: 'rgba(59, 130, 246, 0.25)',
               color: '#60a5fa',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -458,7 +458,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
               主K線圖
             </span>
           </TermTooltip>
-          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
             | AI 主力行為判讀系統
           </span>
 
@@ -494,7 +494,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
                     border: 'none',
                     background: timeframe === tf ? 'rgba(16, 185, 129, 0.8)' : 'transparent',
                     color: timeframe === tf ? '#ffffff' : '#94a3b8',
-                    fontSize: '0.68rem',
+                    fontSize: '0.75rem',
                     fontWeight: timeframe === tf ? 700 : 500,
                     cursor: 'pointer',
                     transition: 'all 0.15s ease',
@@ -530,7 +530,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
                   border: 'none',
                   background: period === p ? 'rgba(59, 130, 246, 0.8)' : 'transparent',
                   color: period === p ? '#ffffff' : '#94a3b8',
-                  fontSize: '0.68rem',
+                  fontSize: '0.75rem',
                   fontWeight: period === p ? 700 : 500,
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
@@ -546,8 +546,8 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
             <span
               data-testid="kline-as-of-date"
               style={{
-                fontSize: '0.68rem',
-                color: '#64748b',
+                fontSize: '0.75rem',
+                color: '#94a3b8',
                 marginLeft: '6px',
                 whiteSpace: 'nowrap',
               }}
@@ -558,7 +558,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
         </div>
 
         {/* 均線圖例、副圖指標切換與選單 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem' }}>
           <TermTooltip termId="ma5">
             <span style={{ color: KLINE_MA_COLORS.ma5, fontWeight: 600 }}>— MA5</span>
           </TermTooltip>
@@ -605,7 +605,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
                       border: 'none',
                       background: subchartMode === m ? 'rgba(16, 185, 129, 0.8)' : 'transparent',
                       color: subchartMode === m ? '#ffffff' : '#94a3b8',
-                      fontSize: '0.68rem',
+                      fontSize: '0.75rem',
                       fontWeight: subchartMode === m ? 700 : 500,
                       cursor: 'pointer',
                       transition: 'all 0.15s ease',
@@ -628,7 +628,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
                 background: isOptionsOpen ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
                 border: 'none',
                 borderRadius: '4px',
-                color: isOptionsOpen ? '#60a5fa' : '#64748b',
+                color: isOptionsOpen ? '#60a5fa' : '#94a3b8',
                 cursor: 'pointer',
                 padding: '3px',
                 display: 'flex',
@@ -673,7 +673,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
                     border: 'none',
                     borderRadius: '4px',
                     color: '#e2e8f0',
-                    fontSize: '0.72rem',
+                    fontSize: '0.75rem',
                     padding: '6px 8px',
                     textAlign: 'left',
                     cursor: 'pointer',
@@ -683,7 +683,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
                   }}
                 >
                   <span>關鍵價位引線</span>
-                  <span style={{ color: showKeyLevels ? '#10b981' : '#64748b', fontWeight: 700 }}>
+                  <span style={{ color: showKeyLevels ? '#10b981' : '#94a3b8', fontWeight: 700 }}>
                     {showKeyLevels ? '已開啟' : '已關閉'}
                   </span>
                 </button>
@@ -700,7 +700,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
                     border: 'none',
                     borderRadius: '4px',
                     color: '#94a3b8',
-                    fontSize: '0.72rem',
+                    fontSize: '0.75rem',
                     padding: '6px 8px',
                     textAlign: 'left',
                     cursor: 'pointer',
@@ -721,7 +721,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
-            fontSize: '0.72rem',
+            fontSize: '0.75rem',
             padding: '4px 8px',
             background: isHovering ? 'rgba(30, 41, 59, 0.9)' : 'rgba(30, 41, 59, 0.5)',
             borderRadius: '6px',
@@ -741,7 +741,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
               background: isHovering ? 'rgba(59, 130, 246, 0.3)' : 'rgba(100, 116, 139, 0.2)',
               color: isHovering ? '#60a5fa' : '#94a3b8',
               fontWeight: 700,
-              fontSize: '0.65rem',
+              fontSize: '0.75rem',
             }}
           >
             {isHovering ? '🔍 查價' : '📌 最新'}
@@ -757,12 +757,12 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           {activeCandle.ma60 !== undefined ? (
             <span style={{ color: KLINE_MA_COLORS.ma60 }}>MA60:{activeCandle.ma60}</span>
           ) : (
-            <span style={{ color: '#64748b' }} title="上市未滿60日，數據累積中">MA60:數據累積中</span>
+            <span style={{ color: '#94a3b8' }} title="上市未滿60日，數據累積中">MA60:數據累積中</span>
           )}
           {activeCandle.ma250 !== undefined ? (
             <span style={{ color: KLINE_MA_COLORS.ma250, fontWeight: 700 }}>MA250:{activeCandle.ma250}</span>
           ) : (
-            <span style={{ color: '#64748b' }} title="上市未滿250日，數據累積中">MA250:數據累積中</span>
+            <span style={{ color: '#94a3b8' }} title="上市未滿250日，數據累積中">MA250:數據累積中</span>
           )}
           {subchartMode === 'KD' && (
             <span style={{ color: '#60a5fa' }}>
@@ -809,7 +809,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           <div
             style={{
               fontSize: '0.78rem',
-              color: '#64748b',
+              color: '#94a3b8',
               maxWidth: '380px',
               textAlign: 'center',
               lineHeight: 1.5,
@@ -823,7 +823,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           <svg
             viewBox={`0 0 ${width} ${totalHeight}`}
             style={{ width: '100%', height: '100%', overflow: 'visible', cursor: 'crosshair' }}
-            preserveAspectRatio="none"
+            preserveAspectRatio="xMidYMid meet"
             onMouseMove={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
               const svgX = ((e.clientX - rect.left) / rect.width) * width;
@@ -848,7 +848,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
             x={width - rightPad + 6}
             y={20}
             fill="#94a3b8"
-            fontSize="10"
+            fontSize="12"
             fontFamily="monospace"
           >
             {priceRange.max.toFixed(0)}
@@ -856,8 +856,8 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           <text
             x={width - rightPad + 6}
             y={klineHeight / 2 + 4}
-            fill="#64748b"
-            fontSize="10"
+            fill="#94a3b8"
+            fontSize="12"
             fontFamily="monospace"
           >
             {((priceRange.max + priceRange.min) / 2).toFixed(0)}
@@ -866,7 +866,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
             x={width - rightPad + 6}
             y={klineHeight - 6}
             fill="#94a3b8"
-            fontSize="10"
+            fontSize="12"
             fontFamily="monospace"
           >
             {priceRange.min.toFixed(0)}
@@ -941,7 +941,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
                 x={width - rightPad + 8}
                 y={overlay.y + 3.5}
                 fill={overlay.color}
-                fontSize="8.5"
+                fontSize="12"
                 fontWeight="700"
                 fontFamily="system-ui, -apple-system, sans-serif"
               >
@@ -967,7 +967,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
                 x={leftPad + 4}
                 y={projectPriceToY(userAvgCost, priceRange, klineHeight, 15, 15) - 4}
                 fill="#fbbf24"
-                fontSize="8.5"
+                fontSize="12"
                 fontWeight="600"
                 fontFamily="monospace"
               >
@@ -1126,7 +1126,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
                 x={width - rightPad + 6}
                 y={projectPriceToY(hoveredCandle.close, priceRange, klineHeight, 15, 15) + 4}
                 fill="#ffffff"
-                fontSize="9"
+                fontSize="12"
                 fontWeight="700"
                 fontFamily="monospace"
               >
@@ -1146,8 +1146,8 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
                 x={cx}
                 y={totalHeight - 2}
                 textAnchor="middle"
-                fill="#64748b"
-                fontSize="9"
+                fill="#94a3b8"
+                fontSize="12"
               >
                 {c.date}
               </text>

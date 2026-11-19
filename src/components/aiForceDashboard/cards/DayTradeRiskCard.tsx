@@ -170,7 +170,7 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
               color: '#94a3b8',
               border: '1px solid rgba(255,255,255,0.08)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -274,7 +274,7 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
             termId="dayTradeRisk"
             dynamicDiagnosis={diagnoseDayTradeRisk(data.riskIndex ?? avgIndex, data.dayTradeRatio ?? 53)}
           >
-            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>隔日沖風險等級：</span>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>隔日沖風險等級：</span>
           </TermTooltip>
           <span
             style={{
@@ -283,7 +283,7 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
               background: riskBadge.bg,
               color: riskBadge.color,
               border: `1px solid ${riskBadge.border}`,
-              fontSize: '0.74rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -296,7 +296,7 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
             termId="dayTradeRisk"
             dynamicDiagnosis={diagnoseDayTradeRisk(data.riskIndex ?? avgIndex, data.dayTradeRatio ?? 53)}
           >
-            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>風險指數：</span>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>風險指數：</span>
           </TermTooltip>
           <span
             style={{
@@ -321,7 +321,7 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
               paddingLeft: '8px',
             }}
           >
-            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>券資比：</span>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>券資比：</span>
             <span
               style={{
                 fontSize: '0.82rem',
@@ -349,7 +349,7 @@ export const DayTradeRiskCard: React.FC<DayTradeRiskCardProps> = ({ data }) => {
             borderRadius: '6px',
             background: 'rgba(15, 23, 42, 0.5)',
             border: '1px solid rgba(255, 255, 255, 0.06)',
-            fontSize: '0.72rem',
+            fontSize: '0.75rem',
             gap: '8px',
           }}
         >

@@ -24,6 +24,8 @@ const { saveTwT86ToSqlite } = require('./ingest-tw-t86.cjs');
 const {
   parseTwseMargin,
   parseTpexMargin,
+  parseTwseSbl,
+  parseTwseDayTrade,
   saveTwExtendedChipsToSqlite,
 } = require('./ingest-tw-extended-chips.cjs');
 const {
@@ -352,6 +354,10 @@ function getVerificationStmts(db) {
         WHERE date = ? AND (symbol GLOB '[1-9][0-9][0-9][0-9]' OR symbol GLOB '00*')
       `),
       chipStmt: db.prepare("SELECT count(*) AS n FROM tw_institutional_chips WHERE date = ?"),
+      marginStmt: db.prepare("SELECT count(*) AS n FROM tw_institutional_chips WHERE date = ? AND margin_balance IS NOT NULL"),
+      sblStmt: db.prepare("SELECT count(*) AS n FROM tw_institutional_chips WHERE date = ? AND sbl_balance IS NOT NULL"),
+      dayTradeStmt: db.prepare("SELECT count(*) AS n FROM tw_institutional_chips WHERE date = ? AND day_trade_rate IS NOT NULL"),
+      valuationStmt: db.prepare("SELECT count(*) AS n FROM tw_valuation_daily WHERE date = ?"),
     };
     verificationStmtsCache.set(db, stmts);
   }
@@ -369,16 +375,24 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
   if (!options.force && !options.inMemoryOnly) {
     try {
       const db = initSqliteLakehouseDb(options.dbPath);
-      const { stockStmt, chipStmt } = getVerificationStmts(db);
+      const { stockStmt, chipStmt, marginStmt, sblStmt, dayTradeStmt, valuationStmt } = getVerificationStmts(db);
       const stockRow = stockStmt.get(dateStr);
       const chipRow = chipStmt.get(dateStr);
+      const marginRow = marginStmt.get(dateStr);
+      const sblRow = sblStmt.get(dateStr);
+      const dayTradeRow = dayTradeStmt.get(dateStr);
+      const valuationRow = valuationStmt.get(dateStr);
       const totalCount = stockRow ? Number(stockRow.totalCount) : 0;
       const stockCount = stockRow ? Number(stockRow.stockCount) : 0;
       const etfCount = stockRow ? Number(stockRow.etfCount) : 0;
       const chipCount = chipRow ? Number(chipRow.n) : 0;
+      const marginCount = marginRow ? Number(marginRow.n) : 0;
+      const sblCount = sblRow ? Number(sblRow.n) : 0;
+      const dayTradeCount = dayTradeRow ? Number(dayTradeRow.n) : 0;
+      const valuationCount = valuationRow ? Number(valuationRow.n) : 0;
 
-      // 雙指標安全快取判定：普通股 >= 1800 且 籌碼 >= 2000 (Spec 0185)
-      if (stockCount >= 1800 && chipCount >= 2000) {
+      // 7 維欄位級安全快取判定：股票 >= 1800、籌碼 >= 2000、融資 >= 1500、借券 >= 500、當沖 >= 500、估值 >= 1500 (Spec 0238 Ticket 02)
+      if (stockCount >= 1800 && chipCount >= 2000 && marginCount >= 1500 && sblCount >= 500 && dayTradeCount >= 500 && valuationCount >= 1500) {
         return {
           date: dateStr,
           isTradingDay: true,
@@ -387,6 +401,10 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
           stockCount,
           etfCount,
           chipsCount: chipCount,
+          marginCount,
+          sblCount,
+          dayTradeCount,
+          valuationCount,
         };
       }
     } catch (e) {
@@ -473,11 +491,13 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
     console.warn(`[TPEx T86] 下載跳過:`, e.message);
   }
 
-  // 5. TWSE MI_MARGN & BWIBBU / TPEx Margin & PE (資券與估值日報)
+  // 5. TWSE MI_MARGN, BWIBBU, TWT93U (借券賣出), TWTB4U (現股當沖) / TPEx Margin & PE
   let twseMarginRaw = null;
   let twseBwibbuRaw = null;
   let tpexMarginRaw = null;
   let tpexPeratioRaw = null;
+  let twseSblRaw = null;
+  let twseDayTradeRaw = null;
 
   if (options.includeValuationAndMargin !== false) {
     if (throttleMs > 0) await sleep(throttleMs);
@@ -525,6 +545,32 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
         () =>
           fetcher(
             `https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis?l=zh-tw&d=${rocDateStr}`,
+            { signal: options.signal }
+          ),
+        retries,
+        retryDelayMs
+      );
+    } catch (e) {}
+
+    if (throttleMs > 0) await sleep(throttleMs);
+    try {
+      twseSblRaw = await retryFetch(
+        () =>
+          fetcher(
+            `https://www.twse.com.tw/rwd/zh/marginTrading/TWT93U?date=${yyyymmdd}&response=json`,
+            { signal: options.signal }
+          ),
+        retries,
+        retryDelayMs
+      );
+    } catch (e) {}
+
+    if (throttleMs > 0) await sleep(throttleMs);
+    try {
+      twseDayTradeRaw = await retryFetch(
+        () =>
+          fetcher(
+            `https://www.twse.com.tw/rwd/zh/dayTrading/TWTB4U?date=${yyyymmdd}&response=json`,
             { signal: options.signal }
           ),
         retries,
@@ -604,11 +650,33 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
   const quotesCount = Object.keys(allQuotes).length;
   const chipsCount = Object.keys(allChips).length;
 
-  // 解析資券與估值
+  // 解析資券、借券賣出、當沖比率與估值
   const twseMargin = parseTwseMargin(twseMarginRaw);
   const tpexMargin = parseTpexMargin(tpexMarginRaw);
   const allMargin = { ...twseMargin, ...tpexMargin };
   const marginCount = Object.keys(allMargin).length;
+
+  const sblMap = parseTwseSbl(twseSblRaw);
+  const dayTradeMap = parseTwseDayTrade(twseDayTradeRaw);
+  const sblCount = Object.keys(sblMap).length;
+  const dayTradeCount = Object.keys(dayTradeMap).length;
+
+  const extendedSymbols = new Set([
+    ...Object.keys(allMargin),
+    ...Object.keys(sblMap),
+    ...Object.keys(dayTradeMap),
+  ]);
+  const allExtendedChips = {};
+  for (const sym of extendedSymbols) {
+    allExtendedChips[sym] = {
+      symbol: sym,
+      marginBalance: allMargin[sym]?.marginBalance,
+      shortBalance: allMargin[sym]?.shortBalance,
+      sblBalance: sblMap[sym]?.sblBalance,
+      dayTradeRate: dayTradeMap[sym]?.dayTradeRate,
+    };
+  }
+  const extendedChipsCount = Object.keys(allExtendedChips).length;
 
   const twseValuation = parseTwseBwibbu(twseBwibbuRaw);
   const tpexValuation = parseTpexPeratio(tpexPeratioRaw);
@@ -622,8 +690,8 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
     if (chipsCount > 0) {
       saveTwT86ToSqlite(allChips, dateStr, options.dbPath);
     }
-    if (marginCount > 0) {
-      saveTwExtendedChipsToSqlite(allMargin, dateStr, options.dbPath);
+    if (extendedChipsCount > 0) {
+      saveTwExtendedChipsToSqlite(allExtendedChips, dateStr, options.dbPath);
     }
     if (valuationCount > 0) {
       saveTwValuationToSqlite(allValuation, dateStr, options.dbPath);
@@ -636,6 +704,8 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
     quotesCount,
     chipsCount,
     marginCount,
+    sblCount,
+    dayTradeCount,
     valuationCount,
     twseQuotesCount,
     tpexQuotesCount,

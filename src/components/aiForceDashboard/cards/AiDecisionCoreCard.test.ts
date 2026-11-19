@@ -117,6 +117,23 @@ describe('AiDecisionCoreCard - 決策核心邏輯與樣式判定規範 (Ticket 0
       expect(notice).toContain('2026-09-29');
     });
   });
+
+  describe('Ticket 07 (Spec 0239): 字級底線與對比度驗收', () => {
+    it('AiDecisionCoreCard 不得含 #64748b 與 < 0.75rem / < 12px 微字級', async () => {
+      // @ts-expect-error 測試環境無 @types/node 型別定義
+      const fs = await import('node:fs');
+      // @ts-expect-error 測試環境無 @types/node 型別定義
+      const path = await import('node:path');
+      // @ts-expect-error 測試環境使用 Node __dirname
+      const src = fs.readFileSync(path.resolve(__dirname, 'AiDecisionCoreCard.tsx'), 'utf-8');
+
+      expect(src).not.toMatch(/#64748b/i);
+      const remMatches = [...src.matchAll(/fontSize:\s*['"](\d+(?:\.\d+)?)rem['"]/g)];
+      for (const m of remMatches) {
+        expect(Number(m[1]), `發現過小 rem 字級: ${m[0]}`).toBeGreaterThanOrEqual(0.75);
+      }
+    });
+  });
 });
 
 

@@ -59,7 +59,7 @@ const OUTCOME_BTN_WIN_STYLE: React.CSSProperties = {
   borderRadius: '3px',
   padding: '1px 5px',
   cursor: 'pointer',
-  fontSize: '10px',
+  fontSize: '12px',
 };
 
 const OUTCOME_BTN_LOSS_STYLE: React.CSSProperties = {
@@ -69,11 +69,11 @@ const OUTCOME_BTN_LOSS_STYLE: React.CSSProperties = {
   borderRadius: '3px',
   padding: '1px 5px',
   cursor: 'pointer',
-  fontSize: '10px',
+  fontSize: '12px',
 };
 
 const MODEL_BADGE_STYLE: React.CSSProperties = {
-  fontSize: '11px',
+  fontSize: '12px',
   fontWeight: 700,
   padding: '1px 6px',
   borderRadius: '4px',
@@ -362,7 +362,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
               </span>
               <span
                 style={{
-                  fontSize: '11px',
+                  fontSize: '12px',
                   padding: '2px 6px',
                   borderRadius: '4px',
                   background: 'rgba(16, 185, 129, 0.15)',
@@ -592,7 +592,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
             style={{
               padding: '3px 8px',
               borderRadius: '4px',
-              fontSize: '11px',
+              fontSize: '12px',
               cursor: 'pointer',
               background: 'rgba(0, 0, 0, 0.4)',
               color: '#ffffff',
@@ -633,7 +633,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span
                 style={{
-                  fontSize: '11px',
+                  fontSize: '12px',
                   fontWeight: 600,
                   padding: '2px 8px',
                   borderRadius: '4px',
@@ -667,7 +667,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '11px', color: '#9ca3af' }}>全隊結案：</span>
+              <span style={{ fontSize: '12px', color: '#9ca3af' }}>全隊結案：</span>
               <button
                 type="button"
                 onClick={() => handleCloseAllOutcomes('WIN')}
@@ -678,7 +678,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
                   borderRadius: '4px',
                   padding: '2px 6px',
                   cursor: 'pointer',
-                  fontSize: '11px',
+                  fontSize: '12px',
                 }}
                 title="全隊獲利了結"
               >
@@ -694,7 +694,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
                   borderRadius: '4px',
                   padding: '2px 6px',
                   cursor: 'pointer',
-                  fontSize: '11px',
+                  fontSize: '12px',
                 }}
                 title="全隊停損出場"
               >
@@ -758,7 +758,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span
                       style={{
-                        fontSize: '11px',
+                        fontSize: '12px',
                         color: pin.isExpired ? '#f87171' : '#9ca3af',
                       }}
                     >

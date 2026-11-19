@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-2311%2F2311%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2365%2F2365%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,20 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 宏觀戰情室 3.5 全量修枝補缺、統一數據總線與一鍵決策閉環重構 (`Spec 0235`) *(V9.21.0 最新發布 / Spec #0235 / ADR #0235 / Issue #584 / PR #585)*
+### 1. 主力戰情室 4.1 湖倉自癒、ETF 多型合流與零微字人體工學重構 (`Spec 0238`) *(V9.23.0 最新發布 / Spec #0238 / ADR #0238 / Issue #590)*
+
+- **ETF 全分組入庫與覆蓋率躍升 (Issue #590 / Ticket 01)**：
+  - 修復證交所 `all_etf.txt` 投信分組遍歷缺陷，將 `a1[0]` 單組讀取拓展至 `a1[0..N]` 全量掃描，本機 SQLite 湖倉 `etf_daily_nav` 覆蓋率由 4 檔躍升至 **365 檔**（涵蓋 `0050`、`0056`、`00878` 等全部國內與跨國 ETF 最新淨值與折溢價）。
+- **7 維欄位完好度探針與半殘日自癒 (Issue #590 / Ticket 02)**：
+  - 徹底終結 15:00 僅抓日 K 即標記最新導致的「假性新鮮度鎖死」；探針嚴格檢驗日 K、三大法人、融資 (`>= 1500`)、借券 (`>= 500`)、當沖 (`>= 500`)、估值 (`>= 1500`) 與 ETF 淨值 (`>= 100`)。近 5 個交易日任一維度未達標即自動觸發補抓與半殘自癒，盤中亦支援美股日 K 延遲自動追趕。
+- **按需歷史序列補齊與熔斷防禦 (Issue #590 / Ticket 03)**：
+  - 針對首次查詢之冷門標的，中介層提供 10 週 TDCC 集保與 12 個月營收即時動態追趕，並掛載 2500ms 逾時熔斷，確保 UI 零等待且湖倉自動補齊。
+- **ETF 多型數據合流與假空狀態解除 (Issue #590 / Ticket 04 & 05)**：
+  - Card 20/21 針對 ETF 資產多型，引導近一年配息計算年化殖利率；解除 `0050` Card 21 假空狀態，呈現基金規模、費用率與受益人數；單筆集保改採置中平移柱狀渲染並消除誤導性 `+0.00%`，融資餘額與當沖率向前安全回退。
+- **全戰情室零微字人體工學與大視野矩陣 (Issue #590 / Ticket 06~12)**：
+  - 建立 `typographyFloor.ts`，全戰情室 29 個元件 **272 處 `< 12px` 微字徹底清零**、**63 處暗灰字 (`#64748b`) 清零**；移除含文字 SVG 之 `preserveAspectRatio="none"` 扭曲變形；Layer 6 擴展為 2×2 雙欄大視野矩陣，並由 `ergonomicTypographyGuardrail.test.ts` 物理守門。
+
+### 2. 宏觀戰情室 3.5 全量修枝補缺、統一數據總線與一鍵決策閉環重構 (`Spec 0235`) *(V9.21.0 / Spec #0235 / ADR #0235 / Issue #584 / PR #585)*
 
 - **統一數據總線與雙向別名正規化 (Issue #584 / Ticket 01)**：
   - 實作 `normalizeMacroAliases` 與 `mergeMacroSnapshot`，徹底解決 camelCase 與 snake_case 欄位脫節；補齊 FRED 信用利差 (`cccSpreadOAS`, `igSpreadOAS`)、平衡通膨率 (`breakeven10y`)、新訂單-存貨利差與營收擴散指數；遇遠端空值保留本地快照，動態重算 VIX 與恐慌貪婪位階。

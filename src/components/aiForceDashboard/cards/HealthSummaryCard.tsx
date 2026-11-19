@@ -60,7 +60,7 @@ export const DONUT_GAUGE_CONFIG = {
   radius: 30,
   strokeWidth: 6,
   percentFontSize: '15px',
-  labelFontSize: '0.74rem',
+  labelFontSize: '0.75rem',
 };
 
 interface GaugeItemProps {
@@ -187,7 +187,7 @@ export const HealthSummaryCard: React.FC<HealthSummaryCardProps> = ({ data }) =>
               borderRadius: '5px',
               background: 'rgba(59, 130, 246, 0.25)',
               color: '#60a5fa',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -222,7 +222,7 @@ export const HealthSummaryCard: React.FC<HealthSummaryCardProps> = ({ data }) =>
         style={{
           paddingTop: '6px',
           borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-          fontSize: '0.7rem',
+          fontSize: '0.75rem',
           textAlign: 'center',
           color: '#cbd5e1',
         }}

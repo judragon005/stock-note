@@ -188,17 +188,94 @@ function checkMarketFreshness(db, now = new Date()) {
   const tdccAnchor = getLatestSettledTdccFriday(now);
   const revenueAnchor = getLatestSettledRevenueMonth(now);
 
-  // Spec 0218 Ticket 02 (#435): 若日 K 最新但三大法人有效記錄數未達門檻 (< 1800)，標記 isStale = true 以觸發自動追趕
+  // Spec 0241 Ticket 02: 最近 5 個台股已結算交易日 7 維欄位覆蓋率與 etf_daily_nav 探針
+  const incompleteDatesSet = new Set();
+  const missingPlanesSet = new Set();
+
+  if (twLatest) {
+    try {
+      const recentRows = db
+        .prepare("SELECT DISTINCT date FROM daily_candles WHERE symbol IN ('0050','2330') ORDER BY date DESC LIMIT 5")
+        .all();
+      const recentDates = Array.isArray(recentRows) ? recentRows.map((r) => r?.date).filter(Boolean) : [];
+
+      for (const d of recentDates) {
+        const chipCov = db
+          .prepare(`
+            SELECT
+              COUNT(CASE WHEN margin_balance IS NOT NULL THEN 1 END) AS marginCount,
+              COUNT(CASE WHEN sbl_balance IS NOT NULL THEN 1 END) AS sblCount,
+              COUNT(CASE WHEN day_trade_rate IS NOT NULL THEN 1 END) AS dayTradeCount
+            FROM tw_institutional_chips
+            WHERE date = ?
+          `)
+          .get(d);
+        const valCov = db
+          .prepare('SELECT COUNT(*) AS count FROM tw_valuation_daily WHERE date = ?')
+          .get(d);
+
+        const marginCount = Number(chipCov?.marginCount ?? 0);
+        const sblCount = Number(chipCov?.sblCount ?? 0);
+        const dayTradeCount = Number(chipCov?.dayTradeCount ?? 0);
+        const valCount = Number(valCov?.count ?? 0);
+
+        let dayIncomplete = false;
+        if (marginCount < 1500) {
+          missingPlanesSet.add('margin');
+          dayIncomplete = true;
+        }
+        if (sblCount < 500) {
+          missingPlanesSet.add('sbl');
+          dayIncomplete = true;
+        }
+        if (dayTradeCount < 500) {
+          missingPlanesSet.add('day_trade');
+          dayIncomplete = true;
+        }
+        if (valCount < 1500) {
+          missingPlanesSet.add('valuation');
+          dayIncomplete = true;
+        }
+        if (dayIncomplete) {
+          incompleteDatesSet.add(d);
+        }
+      }
+
+      // 最新結算日檢查 etf_daily_nav >= 100
+      const etfNavCov = db
+        .prepare('SELECT COUNT(*) AS count FROM etf_daily_nav WHERE date = ?')
+        .get(twLatest);
+      if (etfNavCov && Number(etfNavCov.count) < 100) {
+        missingPlanesSet.add('etf_nav');
+        incompleteDatesSet.add(twLatest);
+      }
+    } catch {
+      // 容錯降級：舊版 Mock DB 若未實作 .all() 或缺表時不中斷既有邏輯
+    }
+  }
+
+  const incompleteDates = Array.from(incompleteDatesSet);
+  const missingPlanes = Array.from(missingPlanesSet);
+
+  // Spec 0218 Ticket 02 (#435): 若日 K 最新但三大法人有效記錄數未達門檻 (< 1800)，或近 5 日存在半殘日，標記 isStale = true
   const isTwStale = Boolean(
     (twLatest && twLatest < twAnchor) ||
-    (twLatest && twChipsCount !== null && twChipsCount < 1800)
+    (twLatest && twChipsCount !== null && twChipsCount < 1800) ||
+    incompleteDates.length > 0
   );
   const isUsStale = Boolean(usLatest && usLatest < usAnchor);
   const isTdccStale = Boolean(tdccLatest && tdccLatest < tdccAnchor);
   const isRevenueStale = Boolean(revenueLatest && revenueLatest < revenueAnchor);
 
   return {
-    tw: { latestDate: twLatest, anchorDate: twAnchor, isStale: isTwStale, chipsCount: twChipsCount },
+    tw: {
+      latestDate: twLatest,
+      anchorDate: twAnchor,
+      isStale: isTwStale,
+      chipsCount: twChipsCount,
+      incompleteDates,
+      missingPlanes,
+    },
     us: { latestDate: usLatest, anchorDate: usAnchor, isStale: isUsStale },
     tdcc: { latestDate: tdccLatest, anchorDate: tdccAnchor, isStale: isTdccStale },
     revenue: { latestMonth: revenueLatest, anchorMonth: revenueAnchor, isStale: isRevenueStale },

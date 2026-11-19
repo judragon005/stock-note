@@ -87,7 +87,7 @@ const StrengthRing: React.FC<StrengthRingProps> = ({ label, percent, color, term
         </div>
       </div>
       <TermTooltip termId={termId}>
-        <span style={{ fontSize: '0.72rem', color: '#cbd5e1', cursor: 'help' }}>{label}</span>
+        <span style={{ fontSize: '0.75rem', color: '#cbd5e1', cursor: 'help' }}>{label}</span>
       </TermTooltip>
     </div>
   );
@@ -140,7 +140,7 @@ export const BullBearStrengthCard: React.FC<BullBearStrengthCardProps> = ({ data
               color: '#94a3b8',
               border: '1px solid rgba(255,255,255,0.08)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -174,7 +174,7 @@ export const BullBearStrengthCard: React.FC<BullBearStrengthCardProps> = ({ data
         style={{
           paddingTop: '6px',
           borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-          fontSize: '0.68rem',
+          fontSize: '0.75rem',
           textAlign: 'center',
           color: '#94a3b8',
         }}
@@ -184,7 +184,7 @@ export const BullBearStrengthCard: React.FC<BullBearStrengthCardProps> = ({ data
             信號等級：<strong style={{ color: tierMeta.color }}>{tierMeta.tier} 級區</strong>
           </span>
         </TermTooltip>
-        <span style={{ color: '#64748b', marginLeft: '4px' }}>(1級最強 ~ 5級最弱，依綜合評分 {score})</span>
+        <span style={{ color: '#94a3b8', marginLeft: '4px' }}>(1級最強 ~ 5級最弱，依綜合評分 {score})</span>
       </div>
     </div>
   );

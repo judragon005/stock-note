@@ -228,7 +228,7 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
               color: '#94a3b8',
               border: '1px solid rgba(255,255,255,0.08)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
@@ -246,11 +246,35 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
       </div>
 
       {/* SVG 多層次波形面積堆疊圖繪製區 (Area Chart) */}
-      <div style={{ width: '100%', flex: 1, minHeight: '145px', position: 'relative' }}>
+      <div style={{ width: '100%', flex: 1, minHeight: '185px', position: 'relative' }}>
+        {/* 右上方浮動 HTML 圖例 (零拉伸變形) */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '6px',
+            right: '8px',
+            zIndex: 10,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '3px',
+            padding: '5px 8px',
+            borderRadius: '6px',
+            backgroundColor: 'rgba(15, 23, 42, 0.85)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            fontSize: '0.75rem',
+          }}
+        >
+          {legendItems.map((item, idx) => (
+            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#cbd5e1' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: item.color, flexShrink: 0 }} />
+              <span>{item.label}</span>
+            </div>
+          ))}
+        </div>
+
         <svg
           viewBox={`0 0 ${width} ${height}`}
           style={{ width: '100%', height: '100%', overflow: 'visible' }}
-          preserveAspectRatio="none"
         >
           <defs>
             <linearGradient id="areaGrad1" x1="0" y1="0" x2="0" y2="1">
@@ -272,10 +296,10 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
           </defs>
 
           {/* 左側 Y 軸刻度 */}
-          <text x="5" y="20" fill="#64748b" fontSize="8" fontFamily="monospace">60k</text>
-          <text x="5" y="50" fill="#64748b" fontSize="8" fontFamily="monospace">40k</text>
-          <text x="5" y="80" fill="#64748b" fontSize="8" fontFamily="monospace">20k</text>
-          <text x="10" y="108" fill="#64748b" fontSize="8" fontFamily="monospace">0k</text>
+          <text x="5" y="20" fill="#94a3b8" fontSize="12" fontFamily="monospace">60k</text>
+          <text x="5" y="50" fill="#94a3b8" fontSize="12" fontFamily="monospace">40k</text>
+          <text x="5" y="80" fill="#94a3b8" fontSize="12" fontFamily="monospace">20k</text>
+          <text x="10" y="108" fill="#94a3b8" fontSize="12" fontFamily="monospace">0k</text>
 
           {/* 動態多峰平滑山峰面積圖 (Spec 0144) */}
           {mountainPaths.layer4Path && (
@@ -291,18 +315,6 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
             <path d={mountainPaths.layer1Path} fill="url(#areaGrad1)" />
           )}
 
-          {/* 右上方浮動圖例 (對齊照片) */}
-          <g transform="translate(230, 8)">
-            {legendItems.map((item, idx) => (
-              <g key={idx} transform={`translate(0, ${idx * 11})`}>
-                <rect x="0" y="0" width="6" height="6" fill={item.color} rx="1" />
-                <text x="9" y="5.5" fill="#cbd5e1" fontSize="6.5">
-                  {item.label}
-                </text>
-              </g>
-            ))}
-          </g>
-
           {/* 底部 X 軸時間刻度 (動態對齊 4 時點) */}
           {timeNodes.map((n, idx) => {
             const x = padding.left + (timeNodes.length > 1 ? ((width - padding.left - padding.right) / (timeNodes.length - 1)) * idx : 50);
@@ -310,10 +322,10 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
               <text
                 key={'xdate-' + idx}
                 x={x}
-                y={height - 8}
+                y={height - 6}
                 textAnchor="middle"
-                fill="#64748b"
-                fontSize="7.5"
+                fill="#94a3b8"
+                fontSize="12"
                 fontFamily="monospace"
               >
                 {n.dateLabel}
@@ -341,7 +353,7 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
             termId="vwap20"
             dynamicDiagnosis={diagnoseMainForceCost(resolveVwapCurrentPrice(data), data.mainForceAvgCost ?? data.mainForceVwap ?? 2131)}
           >
-            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>主力平均成本：</span>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>主力平均成本：</span>
           </TermTooltip>
           <span
             style={{
@@ -353,14 +365,14 @@ export const VwapCostStructureCard: React.FC<VwapCostStructureCardProps> = ({ da
           >
             {(data.mainForceAvgCost ?? data.mainForceVwap ?? 2131).toLocaleString()}
           </span>
-          <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
             ({data.referenceVwapLabel || '20日VWAP'})
           </span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <TermTooltip termId="annualDrift">
-            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>強弱指標：</span>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>強弱指標：</span>
           </TermTooltip>
           <span
             style={{

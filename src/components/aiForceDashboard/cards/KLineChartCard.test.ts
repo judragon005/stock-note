@@ -314,5 +314,29 @@ describe('KLineChartCard - 專業互動與多功能副圖 (Ticket 35 / Stage 1)'
       expect(uniqueColors.size).toBe(5);
     });
   });
+
+  describe('Ticket 07 (Spec 0239): SVG 等比視口校正與字級/對比度底線驗收', () => {
+    it('KLineChartCard 不得使用 preserveAspectRatio="none" 且不得含 #64748b 與微字級 (<0.75rem / <12px / SVG<12)', async () => {
+      // @ts-expect-error 測試環境無 @types/node 型別定義
+      const fs = await import('node:fs');
+      // @ts-expect-error 測試環境無 @types/node 型別定義
+      const path = await import('node:path');
+      // @ts-expect-error 測試環境使用 Node __dirname
+      const src = fs.readFileSync(path.resolve(__dirname, 'KLineChartCard.tsx'), 'utf-8');
+
+      expect(src).not.toContain('preserveAspectRatio="none"');
+      expect(src).not.toMatch(/#64748b/i);
+
+      const remMatches = [...src.matchAll(/fontSize:\s*['"](\d+(?:\.\d+)?)rem['"]/g)];
+      for (const m of remMatches) {
+        expect(Number(m[1]), `發現過小 rem 字級: ${m[0]}`).toBeGreaterThanOrEqual(0.75);
+      }
+
+      const svgFontMatches = [...src.matchAll(/fontSize=["'](\d+(?:\.\d+)?)["']/g)];
+      for (const m of svgFontMatches) {
+        expect(Number(m[1]), `發現過小 SVG 字級: ${m[0]}`).toBeGreaterThanOrEqual(12);
+      }
+    });
+  });
 });
 

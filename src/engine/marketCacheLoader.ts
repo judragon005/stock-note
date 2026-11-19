@@ -459,6 +459,7 @@ export async function loadSymbolFullLakehouseData(
         const marginStats = extractLatestAndDelta(sortedInst, (r) => r.marginBalance);
         const shortStats = extractLatestAndDelta(sortedInst, (r) => r.shortBalance);
         const sblStats = extractLatestAndDelta(sortedInst, (r) => r.sblBalance);
+        const dayTradeStats = extractLatestAndDelta(sortedInst, (r) => r.dayTradeRate);
 
           return {
             candles,
@@ -468,7 +469,7 @@ export async function loadSymbolFullLakehouseData(
             shortBalance: shortStats.latest ?? marginStats.latestRow?.shortBalance,
             shortBalanceChange: shortStats.delta,
             sblBalance: sblStats.latest,
-            dayTradeRate: marginStats.latestRow?.dayTradeRate,
+            dayTradeRate: dayTradeStats.latest ?? marginStats.latestRow?.dayTradeRate,
             marginAsOfDate: marginStats.latestRow?.date,
             tdccRecords,
             revenueRecords,
