@@ -381,6 +381,14 @@ function initSqliteLakehouseDb(customPath) {
     // 忽略表尚未建立時的遷移檢查錯誤
   }
 
+  // 13. 美股基本面、13F 與美股 ETF 每日快取表 (Spec 0239 T06)
+  try {
+    const { ensureUsFundamentalsTable } = require('./us-fundamentals-ingestion.cjs');
+    ensureUsFundamentalsTable(db);
+  } catch (e) {
+    console.warn('[SQLite] 初始化 us_fundamentals_daily 失敗:', e?.message || e);
+  }
+
   db.getTwMarketBreadthAndSpotSummary = (options) => getTwMarketBreadthAndSpotSummary(db, options);
   db.getMarketMultiHorizonBreadth = (targetDate) => getMarketMultiHorizonBreadth(targetDate, db);
   initializedDbPaths.add(resolvedPath);

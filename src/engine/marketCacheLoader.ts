@@ -308,8 +308,11 @@ export interface LakehouseFullPayload {
   };
   valuation?: {
     pe?: number | null;
+    forwardPe?: number | null;
     pb?: number | null;
+    psRatio?: number | null;
     dividendYield?: number | null;
+    asOfDate?: string;
     history?: Array<{
       pe?: number | null;
       pb?: number | null;
@@ -317,6 +320,31 @@ export interface LakehouseFullPayload {
       date?: string;
     }>;
   };
+  us13fData?: {
+    institutionalRatio?: number;
+    insiderRatio?: number;
+    shortFloatRatio?: number;
+    publicFloatRatio?: number;
+    isSqueezeRisk?: boolean;
+    asOfQuarterText?: string;
+  };
+  etfMeta?: {
+    aumBillion?: number;
+    expenseRatio?: number;
+  };
+  quarterlyFinancials?: Array<{
+    symbol: string;
+    market: string;
+    year: number;
+    quarter: number;
+    periodDate?: string;
+    revenue?: number | null;
+    grossProfit?: number | null;
+    operatingIncome?: number | null;
+    netIncome?: number | null;
+    eps?: number | null;
+  }>;
+  enrichmentPending?: boolean;
   etfNav?: {
     date: string;
     closePrice?: number;
@@ -420,6 +448,7 @@ export async function loadSymbolFullLakehouseData(
               data.valuation.dividend_yield != null
                 ? Number(data.valuation.dividend_yield)
                 : (data.valuation.dividendYield != null ? Number(data.valuation.dividendYield) : null),
+            asOfDate: data.valuation.date ?? data.valuation.asOfDate ?? undefined,
             history: Array.isArray(data.valuation.history)
               ? data.valuation.history.map((h: any) => ({
                   pe: h.pe != null ? Number(h.pe) : null,
@@ -429,6 +458,51 @@ export async function loadSymbolFullLakehouseData(
                 }))
               : [],
           };
+        }
+
+        // Spec 0239 T06: 融合 us_fundamentals_daily (美股估值 / 13F 籌碼 / 美股 ETF 淨值與費用率)
+        let us13fData: LakehouseFullPayload['us13fData'] = undefined;
+        let etfMeta: LakehouseFullPayload['etfMeta'] = undefined;
+        const usFund = data.usFundamentals;
+        if (usFund && typeof usFund === 'object') {
+          const ufPe = usFund.pe != null ? Number(usFund.pe) : null;
+          const ufFwdPe = usFund.forward_pe != null ? Number(usFund.forward_pe) : (usFund.forwardPe != null ? Number(usFund.forwardPe) : null);
+          const ufPb = usFund.pb != null ? Number(usFund.pb) : null;
+          const ufPs = usFund.ps_ratio != null ? Number(usFund.ps_ratio) : (usFund.psRatio != null ? Number(usFund.psRatio) : null);
+          const ufDy = usFund.dividend_yield != null ? Number(usFund.dividend_yield) : (usFund.dividendYield != null ? Number(usFund.dividendYield) : null);
+          if (ufPe != null || ufFwdPe != null || ufPb != null || ufPs != null || ufDy != null) {
+            valuation = {
+              ...(valuation || {}),
+              pe: valuation?.pe ?? ufPe,
+              forwardPe: ufFwdPe,
+              pb: valuation?.pb ?? ufPb,
+              psRatio: ufPs,
+              dividendYield: valuation?.dividendYield ?? ufDy,
+              asOfDate: valuation?.asOfDate ?? usFund.date ?? undefined,
+              history: valuation?.history || [],
+            };
+          }
+
+          const instRatio = usFund.institutional_ratio != null ? Number(usFund.institutional_ratio) : undefined;
+          const insiderRatio = usFund.insider_ratio != null ? Number(usFund.insider_ratio) : undefined;
+          const shortFloatRatio = usFund.short_float_ratio != null ? Number(usFund.short_float_ratio) : undefined;
+          const publicFloatRatio = usFund.public_float_ratio != null ? Number(usFund.public_float_ratio) : undefined;
+          if (instRatio !== undefined || insiderRatio !== undefined || shortFloatRatio !== undefined) {
+            us13fData = {
+              institutionalRatio: instRatio,
+              insiderRatio,
+              shortFloatRatio,
+              publicFloatRatio,
+              isSqueezeRisk: shortFloatRatio !== undefined && shortFloatRatio > 10,
+              asOfQuarterText: usFund.date ? `SEC 13F / FINRA (${usFund.date})` : 'SEC 13F / FINRA 放空結算',
+            };
+          }
+
+          const aumB = usFund.etf_aum_billion != null ? Number(usFund.etf_aum_billion) : undefined;
+          const expR = usFund.etf_expense_ratio != null ? Number(usFund.etf_expense_ratio) : undefined;
+          if (aumB !== undefined || expR !== undefined) {
+            etfMeta = { aumBillion: aumB, expenseRatio: expR };
+          }
         }
 
         let etfNav: LakehouseFullPayload['etfNav'] = undefined;
@@ -442,6 +516,31 @@ export async function loadSymbolFullLakehouseData(
             nav: rawNav != null ? Number(rawNav) : undefined,
             premiumDiscountRatio: rawRatio != null ? Number(rawRatio) : undefined,
           };
+        } else if (usFund && (usFund.etf_nav_price != null || usFund.etf_premium_discount_ratio != null)) {
+          etfNav = {
+            date: usFund.date || new Date().toISOString().slice(0, 10),
+            nav: usFund.etf_nav_price != null ? Number(usFund.etf_nav_price) : undefined,
+            premiumDiscountRatio:
+              usFund.etf_premium_discount_ratio != null
+                ? Number(usFund.etf_premium_discount_ratio)
+                : undefined,
+          };
+        }
+
+        let quarterlyFinancials: LakehouseFullPayload['quarterlyFinancials'] = undefined;
+        if (Array.isArray(data.quarterlyFinancials) && data.quarterlyFinancials.length > 0) {
+          quarterlyFinancials = data.quarterlyFinancials.map((q: any) => ({
+            symbol: q.symbol,
+            market: q.market,
+            year: Number(q.year),
+            quarter: Number(q.quarter),
+            periodDate: q.period_date ?? q.periodDate ?? undefined,
+            revenue: q.revenue != null ? Number(q.revenue) : null,
+            grossProfit: q.gross_profit != null ? Number(q.gross_profit) : (q.grossProfit != null ? Number(q.grossProfit) : null),
+            operatingIncome: q.operating_income != null ? Number(q.operating_income) : (q.operatingIncome != null ? Number(q.operatingIncome) : null),
+            netIncome: q.net_income != null ? Number(q.net_income) : (q.netIncome != null ? Number(q.netIncome) : null),
+            eps: q.eps != null ? Number(q.eps) : null,
+          }));
         }
 
         let corporateActions: LakehouseFullPayload['corporateActions'] = undefined;
@@ -507,6 +606,10 @@ export async function loadSymbolFullLakehouseData(
             tdccRecords,
             revenueRecords,
             valuation,
+            us13fData,
+            etfMeta,
+            quarterlyFinancials,
+            enrichmentPending: Boolean(data.enrichmentPending),
             pledge: data.pledge || undefined,
             macro: data.macro,
             etfNav,

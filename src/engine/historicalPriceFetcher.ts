@@ -4,9 +4,57 @@ import { logger } from '../utils/logger';
 import { DailyCandle } from '../types/signal';
 
 /**
+ * 使用指定 IANA 時區將 Date 轉為 YYYY-MM-DD（杜絕本機 UTC+8 造成美股日期偏移隔日）
+ */
+function formatDateInTimeZone(date: Date, timeZone: string): string {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const parts = formatter.formatToParts(date);
+  let yyyy = '1970';
+  let mm = '01';
+  let dd = '01';
+  for (const p of parts) {
+    if (p.type === 'year') yyyy = p.value;
+    if (p.type === 'month') mm = p.value;
+    if (p.type === 'day') dd = p.value;
+  }
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
+ * 依據顯式市場參數或 Yahoo meta 決定交易日曆所屬時區：
+ * - 美股嚴格使用 America/New_York
+ * - 台股嚴格使用 Asia/Taipei
+ */
+function resolveYahooTimeZone(meta: any, market?: MarketType): string {
+  if (market === 'TW') return 'Asia/Taipei';
+  if (market === 'US') return 'America/New_York';
+
+  const exchangeTz = typeof meta?.exchangeTimezoneName === 'string' ? meta.exchangeTimezoneName : '';
+  if (exchangeTz === 'Asia/Taipei' || exchangeTz === 'America/New_York') {
+    return exchangeTz;
+  }
+
+  const metaSym = typeof meta?.symbol === 'string' ? meta.symbol.trim().toUpperCase() : '';
+  if (
+    metaSym.endsWith('.TW') ||
+    metaSym.endsWith('.TWO') ||
+    metaSym.includes('=X') ||
+    /^\d{4,6}[A-Z]?$/.test(metaSym)
+  ) {
+    return 'Asia/Taipei';
+  }
+  return 'America/New_York';
+}
+
+/**
  * 解析 Yahoo Finance Chart API 完整日 K 棒響應 (Open, High, Low, Close, Volume)
  */
-export function parseYahooHistoricalCandlesResponse(data: any): DailyCandle[] {
+export function parseYahooHistoricalCandlesResponse(data: any, market?: MarketType): DailyCandle[] {
   const candles: DailyCandle[] = [];
   try {
     if (!data || !data.chart || !Array.isArray(data.chart.result) || data.chart.result.length === 0) {
@@ -14,6 +62,7 @@ export function parseYahooHistoricalCandlesResponse(data: any): DailyCandle[] {
     }
 
     const item = data.chart.result[0];
+    const timeZone = resolveYahooTimeZone(item?.meta, market);
     const timestamps: number[] = item?.timestamp || [];
     const quote = item?.indicators?.quote?.[0];
     const opens: (number | null)[] = quote?.open || [];
@@ -27,10 +76,7 @@ export function parseYahooHistoricalCandlesResponse(data: any): DailyCandle[] {
       const close = closes[i];
       if (typeof ts === 'number' && typeof close === 'number' && !isNaN(close) && close > 0) {
         const dateObj = new Date(ts * 1000);
-        const yyyy = dateObj.getFullYear();
-        const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const dd = String(dateObj.getDate()).padStart(2, '0');
-        const dateStr = `${yyyy}-${mm}-${dd}`;
+        const dateStr = formatDateInTimeZone(dateObj, timeZone);
 
         const open = typeof opens[i] === 'number' && !isNaN(opens[i]!) ? opens[i]! : close;
         const high = typeof highs[i] === 'number' && !isNaN(highs[i]!) ? highs[i]! : close;
@@ -56,9 +102,9 @@ export function parseYahooHistoricalCandlesResponse(data: any): DailyCandle[] {
 /**
  * 解析 Yahoo Finance Chart API 歷史日 K 響應 (僅收盤價字典)
  */
-export function parseYahooHistoricalChartResponse(data: any): Record<string, number> {
+export function parseYahooHistoricalChartResponse(data: any, market?: MarketType): Record<string, number> {
   const result: Record<string, number> = {};
-  const candles = parseYahooHistoricalCandlesResponse(data);
+  const candles = parseYahooHistoricalCandlesResponse(data, market);
   for (const c of candles) {
     result[c.date] = c.close;
   }
@@ -161,7 +207,7 @@ export async function fetchSymbolHistoricalPrices(
 
   try {
     const data = await customFetch(url, 6000);
-    const newPrices = parseYahooHistoricalChartResponse(data);
+    const newPrices = parseYahooHistoricalChartResponse(data, market);
     return mergeHistoricalPrices(currentCache, newPrices);
   } catch (err) {
     logger.warn(`Failed to fetch historical prices for ${symbol}:`, err);

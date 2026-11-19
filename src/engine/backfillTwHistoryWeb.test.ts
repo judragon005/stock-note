@@ -596,6 +596,86 @@ describe('Spec 0168 / Ticket 07: 台股日期驅動歷史回補模組 (backfill-
       }
     });
   });
+
+  describe('14. [Spec 0239 / T03] TPEx OpenAPI 歷史快照日期防污染與 O 尾綴清理', () => {
+    it('TPEx OpenAPI 回傳日期與目標日不符時不得污染歷史資料，吻合時才正規化並入庫', async () => {
+      const fs = require('fs');
+      const path = require('path');
+      const os = require('os');
+      const { initSqliteLakehouseDb, closeSqliteDb } = require('../../scripts/market-sync/sqlite-db-core.cjs');
+
+      const tempDbPath = path.join(os.tmpdir(), `test_tpex_guard_${Date.now()}.db`);
+      const logs: string[] = [];
+
+      const createMockFetcher = (tpexRocDate: string) => vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('MI_INDEX')) {
+          return { stat: 'OK', tables: [{ data: [['2330', '台積電', '10000', '500', '10000000', '980', '990', '975', '985']] }] };
+        }
+        if (url.includes('otc_quotes_no1430')) {
+          return { tables: [{ data: [['8299O', '群聯', '600', '+10', '595', '605', '590', '400', '100000', '60000000']] }] };
+        }
+        if (url.includes('T86')) {
+          const rows = Array.from({ length: 510 }, (_, idx) => [String(1100 + idx), '股', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '100']);
+          return { stat: 'OK', data: rows };
+        }
+        if (url.includes('3itrade_hedge_result')) {
+          const rows = Array.from({ length: 510 }, (_, idx) => {
+            const r = new Array(24).fill('0');
+            r[0] = `${5100 + idx}O`;
+            r[1] = '櫃股';
+            r[23] = '1000';
+            return r;
+          });
+          return { tables: [{ data: rows }] };
+        }
+        if (url.includes('tpex_mainboard_margin_balance')) {
+          return [{ Date: tpexRocDate, SecuritiesCompanyCode: '8299O', MarginPurchaseBalance: '8,800', ShortSaleBalance: '120' }];
+        }
+        if (url.includes('tpex_mainboard_peratio_analysis')) {
+          return [{ Date: tpexRocDate, SecuritiesCompanyCode: '8299O', PriceEarningRatio: '18.5', PriceBookRatio: '2.8', YieldRatio: '3.5' }];
+        }
+        return {};
+      });
+
+      try {
+        // 1. 歷史日期 2026-10-12 遇到 1151019 (2026-10-19) 快照 -> 必須阻擋
+        await fetchAndIngestTwDailyData('2026-10-12', {
+          fetcher: createMockFetcher('1151019'),
+          dbPath: tempDbPath,
+          throttleMs: 0,
+          retries: 1,
+          logger: (m: string) => logs.push(m),
+        });
+
+        const db = initSqliteLakehouseDb(tempDbPath);
+        const histMargin = db.prepare('SELECT margin_balance FROM tw_institutional_chips WHERE symbol = ? AND date = ?').get('8299', '2026-10-12');
+        const histVal = db.prepare('SELECT pe FROM tw_valuation_daily WHERE symbol = ? AND date = ?').get('8299', '2026-10-12');
+        expect(histMargin?.margin_balance ?? null).toBeNull();
+        expect(histVal).toBeUndefined();
+
+        // 2. 吻合日期 2026-10-19 遇到 1151019 快照 -> 正常去 O 寫入
+        await fetchAndIngestTwDailyData('2026-10-19', {
+          fetcher: createMockFetcher('1151019'),
+          dbPath: tempDbPath,
+          throttleMs: 0,
+          retries: 1,
+          logger: (m: string) => logs.push(m),
+        });
+
+        const todayMargin = db.prepare('SELECT margin_balance, short_balance FROM tw_institutional_chips WHERE symbol = ? AND date = ?').get('8299', '2026-10-19');
+        const todayVal = db.prepare('SELECT pe, pb, dividend_yield FROM tw_valuation_daily WHERE symbol = ? AND date = ?').get('8299', '2026-10-19');
+        expect(todayMargin?.margin_balance).toBe(8800);
+        expect(todayMargin?.short_balance).toBe(120);
+        expect(todayVal?.pe).toBe(18.5);
+        expect(logs.length).toBeGreaterThan(0);
+      } finally {
+        closeSqliteDb();
+        if (fs.existsSync(tempDbPath)) {
+          try { fs.unlinkSync(tempDbPath); } catch {}
+        }
+      }
+    });
+  });
 });
 
 

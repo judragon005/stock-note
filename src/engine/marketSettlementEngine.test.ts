@@ -76,13 +76,14 @@ describe('marketSettlementEngine (市場結算與前日收盤數據定錨引擎)
       expect(status.anchorTradingDate).toBe('2026-09-30');
     });
 
-    it('台北時間週一早上 07:30（週末結束），應正確退回至前週四收盤', () => {
-      // 2026-09-28 (週一) 07:30:00 (台北時間)
+    it('台北時間週一早上 07:30（美東週日休市），應判定已結算並定錨於上週五收盤', () => {
+      // 2026-09-28 (週一) 07:30:00 (台北時間) = 美東 2026-09-27 (週日) 19:30 EDT
       const now = new Date('2026-09-28T07:30:00+08:00');
       const status = getMarketSettlementStatus('US', now);
 
-      expect(status.isSettled).toBe(false);
-      expect(status.anchorTradingDate).toBe('2026-09-25'); // 週五收盤
+      expect(status.isSettled).toBe(true);
+      expect(status.anchorTradingDate).toBe('2026-09-25'); // 上週五收盤
+      expect(status.currentTradingDate).toBe('2026-09-27'); // 美東週日
     });
   });
 });
