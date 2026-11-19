@@ -229,11 +229,12 @@ describe('Spec 0168 / Ticket 07: 台股日期驅動歷史回補模組 (backfill-
       for (let i = 1000; i < 2850; i++) {
         candleStmt.run(String(i), '2026-10-15', 100, 105, 95, 100, 100, 1000);
       }
-      const chipStmt = db.prepare('INSERT INTO tw_institutional_chips (symbol, date, foreign_net, margin_balance, sbl_balance) VALUES (?, ?, ?, ?, ?)');
+      const chipStmt = db.prepare('INSERT INTO tw_institutional_chips (symbol, date, foreign_net, margin_balance, sbl_balance, day_trade_rate) VALUES (?, ?, ?, ?, ?, ?)');
       for (let i = 1000; i < 3050; i++) {
         const margin = i < 2550 ? 1000 : null;
         const sbl = i < 1550 ? 200 : null;
-        chipStmt.run(String(i), '2026-10-15', 10, margin, sbl);
+        const dayTrade = i < 1550 ? 25.5 : null;
+        chipStmt.run(String(i), '2026-10-15', 10, margin, sbl, dayTrade);
       }
       const valStmt = db.prepare('INSERT INTO tw_valuation_daily (symbol, date, pe, pb, dividend_yield, updated_at) VALUES (?, ?, 15, 2, 3, 12345)');
       for (let i = 1000; i < 2550; i++) {

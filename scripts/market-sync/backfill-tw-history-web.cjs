@@ -356,6 +356,7 @@ function getVerificationStmts(db) {
       chipStmt: db.prepare("SELECT count(*) AS n FROM tw_institutional_chips WHERE date = ?"),
       marginStmt: db.prepare("SELECT count(*) AS n FROM tw_institutional_chips WHERE date = ? AND margin_balance IS NOT NULL"),
       sblStmt: db.prepare("SELECT count(*) AS n FROM tw_institutional_chips WHERE date = ? AND sbl_balance IS NOT NULL"),
+      dayTradeStmt: db.prepare("SELECT count(*) AS n FROM tw_institutional_chips WHERE date = ? AND day_trade_rate IS NOT NULL"),
       valuationStmt: db.prepare("SELECT count(*) AS n FROM tw_valuation_daily WHERE date = ?"),
     };
     verificationStmtsCache.set(db, stmts);
@@ -374,11 +375,12 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
   if (!options.force && !options.inMemoryOnly) {
     try {
       const db = initSqliteLakehouseDb(options.dbPath);
-      const { stockStmt, chipStmt, marginStmt, sblStmt, valuationStmt } = getVerificationStmts(db);
+      const { stockStmt, chipStmt, marginStmt, sblStmt, dayTradeStmt, valuationStmt } = getVerificationStmts(db);
       const stockRow = stockStmt.get(dateStr);
       const chipRow = chipStmt.get(dateStr);
       const marginRow = marginStmt.get(dateStr);
       const sblRow = sblStmt.get(dateStr);
+      const dayTradeRow = dayTradeStmt.get(dateStr);
       const valuationRow = valuationStmt.get(dateStr);
       const totalCount = stockRow ? Number(stockRow.totalCount) : 0;
       const stockCount = stockRow ? Number(stockRow.stockCount) : 0;
@@ -386,10 +388,11 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
       const chipCount = chipRow ? Number(chipRow.n) : 0;
       const marginCount = marginRow ? Number(marginRow.n) : 0;
       const sblCount = sblRow ? Number(sblRow.n) : 0;
+      const dayTradeCount = dayTradeRow ? Number(dayTradeRow.n) : 0;
       const valuationCount = valuationRow ? Number(valuationRow.n) : 0;
 
-      // 7 維欄位級安全快取判定：股票 >= 1800、籌碼 >= 2000、融資 >= 1500、借券 >= 500、估值 >= 1500 (Spec 0241 Ticket 02)
-      if (stockCount >= 1800 && chipCount >= 2000 && marginCount >= 1500 && sblCount >= 500 && valuationCount >= 1500) {
+      // 7 維欄位級安全快取判定：股票 >= 1800、籌碼 >= 2000、融資 >= 1500、借券 >= 500、當沖 >= 500、估值 >= 1500 (Spec 0238 Ticket 02)
+      if (stockCount >= 1800 && chipCount >= 2000 && marginCount >= 1500 && sblCount >= 500 && dayTradeCount >= 500 && valuationCount >= 1500) {
         return {
           date: dateStr,
           isTradingDay: true,
@@ -400,6 +403,7 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
           chipsCount: chipCount,
           marginCount,
           sblCount,
+          dayTradeCount,
           valuationCount,
         };
       }

@@ -93,7 +93,7 @@ describe('MultiDimensionRadarCard - 六角蛛網雷達圖數學與座標規範 (
       expect(RADAR_CHART_CONFIG.labelFontSize).toBeGreaterThanOrEqual(15);
       expect(RADAR_CHART_CONFIG.scoreFontSize).toBeGreaterThanOrEqual(14);
       expect(RADAR_CHART_CONFIG.scoreDetailFontSize).toBeGreaterThanOrEqual(13);
-      expect(src).toMatch(/minHeight:\s*['"]2[6-9]\dpx['"]/);
+      expect(src).toMatch(/minHeight:\s*['"](?:2[6-9]\d|3\d\d)px['"]/);
       expect(src).not.toMatch(/#64748b/i);
 
       const remMatches = [...src.matchAll(/fontSize:\s*['"](\d+(?:\.\d+)?)rem['"]/g)];

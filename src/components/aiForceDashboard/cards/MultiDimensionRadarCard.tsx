@@ -147,11 +147,11 @@ export const RADAR_CHART_CONFIG = {
   center: { x: 180, y: 165 },
   maxRadius: 125,
   labelOffset: 28,
-  labelFontSize: 15,
-  scoreFontSize: 14,
+  labelFontSize: 16,
+  scoreFontSize: 15,
   centerBadgeRadius: 30,
   gradeFontSize: 19,
-  scoreDetailFontSize: 13,
+  scoreDetailFontSize: 14,
 };
 
 export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = ({ data }) => {
@@ -259,7 +259,7 @@ export const MultiDimensionRadarCard: React.FC<MultiDimensionRadarCardProps> = (
       </div>
 
       {/* SVG 六角蛛網繪圖區 */}
-      <div style={{ width: '100%', flex: 1, minHeight: '270px', position: 'relative' }}>
+      <div style={{ width: '100%', flex: 1, minHeight: '300px', position: 'relative' }}>
         <svg
           viewBox="16 0 328 336"
           style={{ width: '100%', height: '100%', overflow: 'visible' }}

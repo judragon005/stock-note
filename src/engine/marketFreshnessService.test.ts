@@ -310,7 +310,7 @@ describe('Ticket 01 (Seam 1): 市場新鮮度領域服務 marketFreshnessService
     } finally {
       closeSqliteDb();
       if (fs.existsSync(tempDbPath)) {
-        try { fs.unlinkSync(tempDbPath); } catch {}
+        try { fs.unlinkSync(tempDbPath); } catch { }
       }
     }
   });

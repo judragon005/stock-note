@@ -113,8 +113,8 @@ const FIVE_AXIS_CONFIG = [
 export const RISK_SPIDER_CONFIG = {
   center: { x: 175, y: 155 },
   maxRadius: 120,
-  labelFontSize: 15,
-  scoreFontSize: 14,
+  labelFontSize: 16,
+  scoreFontSize: 15,
 };
 
 export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
@@ -224,7 +224,7 @@ export const RiskSpiderCard: React.FC<RiskSpiderCardProps> = ({ data }) => {
       </div>
 
       {/* SVG 五角蛛網圖繪製區 */}
-      <div style={{ width: '100%', flex: 1, minHeight: '270px', position: 'relative' }}>
+      <div style={{ width: '100%', flex: 1, minHeight: '290px', position: 'relative' }}>
         <svg
           viewBox="15 0 320 316"
           style={{ width: '100%', height: '100%', overflow: 'visible' }}

@@ -79,6 +79,8 @@ function triggerCatchupTask(customDbPath, options = {}) {
       const runTdccIngestion = handlers.runTdccIngestion || require('./ingest-tw-tdcc.cjs').runTdccIngestion;
       const runMonthlyRevenueIngestion =
         handlers.runMonthlyRevenueIngestion || require('./ingest-tw-monthly-revenue.cjs').runMonthlyRevenueIngestion;
+      const fetchAndIngestTwPledge =
+        handlers.fetchAndIngestTwPledge || require('./ingest-tw-pledge.cjs').fetchAndIngestTwPledge;
 
       let freshness = options.freshnessOverride || null;
       if (!freshness) {
@@ -135,6 +137,23 @@ function triggerCatchupTask(customDbPath, options = {}) {
         await runMonthlyRevenueIngestion(customDbPath);
       } catch (revErr) {
         console.warn(`[MarketCatchup] 月營收入庫警示:`, revErr.message);
+      }
+
+      // Spec 0238: 每月 16 日後或質押表低於 10 筆時自動補齊董監事質押紀錄
+      try {
+        let needPledge = Boolean(handlers.fetchAndIngestTwPledge) || new Date().getDate() >= 16;
+        if (!needPledge) {
+          const db = initSqliteLakehouseDb(customDbPath);
+          const pledgeRow = db.prepare('SELECT COUNT(*) AS n FROM tw_insider_pledge_records').get();
+          if (!pledgeRow || Number(pledgeRow.n) < 10) {
+            needPledge = true;
+          }
+        }
+        if (needPledge && typeof fetchAndIngestTwPledge === 'function') {
+          await fetchAndIngestTwPledge(customDbPath);
+        }
+      } catch (pledgeErr) {
+        console.warn(`[MarketCatchup] 董監質押同步警示:`, pledgeErr.message);
       }
 
       console.log(`[MarketCatchup] ✔ 背景聯網追趕同步完成 (含半殘日自癒、美股、TDCC 與月營收)！`);
