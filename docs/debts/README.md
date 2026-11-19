@@ -68,6 +68,7 @@
 | [**0058**](0058-dividend-log-view-subcomponent-decomposition.md) | DividendLogView 龐大單體神級組件模組化解耦重構 | `P2` | `RESOLVED` | /grill-with-docs 深度架構大閱兵審查 (Spec 0225 / Issue #501) | `Refactor` · `UI` · `CleanCode` · `Dividend` · `SRP` · `ComponentDecomposition` | **已於 v9.18.0 (Spec 0225 / ADR #0225 / Issue #502) 完整解決** |
 | [**0059**](0059-holding-position-extended-fields-type-convergence.md) | HoldingPosition 擴展欄位型別收斂與雙重轉型氣味清理 | `P3` | `RESOLVED` | /code-review 雙軸審查回饋 (Spec 0235 / Issue #584) | `Refactor` · `TypeScript` · `CleanCode` · `TypeSafety` · `WarRoom` | **已於 Spec 0236 (Issue #586) 完整解決** |
 | [**0060**](0060-equity-deep-dive-sbl-wiring-and-card-theme-token-convergence.md) | 深度投研彈窗借券餘額消費與卡片曜石主題 Token 集中化 | `P3` | `OPEN` | /code-review 雙軸審查回饋 (Spec 0237 / Issue #588) | `Refactor` · `AiForceDashboard` · `Theme` · `DesignSystem` · `Lakehouse` | 待下期深度投研籌碼視圖或主題切換演進時實作 |
+| [**0061**](0061-sync-threshold-magic-numbers-and-abort-controller.md) | 同步門檻常數跨檔收斂、按需補齊中斷控制與長照爬蟲擴展 | `P3` | `OPEN` | /code-review 雙軸審查回饋 (Spec 0238 / Issue #590) | `Refactor` · `CleanCode` · `MarketSync` · `Lakehouse` · `Resilience` · `TestSmell` | 待下期市場資料管道重構或中介層全面演進時實作 |
 
 ---
 
