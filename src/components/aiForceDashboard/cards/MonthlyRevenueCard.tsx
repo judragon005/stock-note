@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { MonthlyRevenueData } from '../../../types/aiForceDashboard';
-import { ColorThemeMode } from '../../../types/stock';
+import { ColorThemeMode, MarketType } from '../../../types/stock';
 import { BarChart3, TrendingUp, Sparkles, Coins, Award } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 
@@ -17,6 +17,27 @@ export function calculateRevenueBarHeight(
   return Number(Math.max(2, ratio * maxHeight).toFixed(1));
 }
 
+/**
+ * 自適應營收 Tooltip 數值格式化（支援美股 $B/$M 與台股小型股萬元/億元）
+ */
+export function formatRevenueTooltipValue(
+  revenue: number,
+  opts?: { isQuarterly?: boolean; currency?: 'TWD' | 'USD' }
+): string {
+  if (!Number.isFinite(revenue) || revenue <= 0) return '--';
+  if (opts?.currency === 'USD' || opts?.isQuarterly) {
+    if (revenue >= 1_000_000_000) return `$${(revenue / 1_000_000_000).toFixed(2)}B`;
+    if (revenue >= 1_000_000) return `$${(revenue / 1_000_000).toFixed(1)}M`;
+    return `$${revenue.toLocaleString()}`;
+  }
+  const yi = revenue / 100_000;
+  if (yi >= 0.1) {
+    return `${yi.toFixed(1)} 億元`;
+  }
+  const wan = Math.round(revenue / 10);
+  return `${wan.toLocaleString()} 萬元`;
+}
+
 export interface FormattedEtfMetrics {
   aumText: string;
   yieldText: string;
@@ -24,13 +45,20 @@ export interface FormattedEtfMetrics {
 }
 
 /**
- * 格式化 ETF 資產規模、殖利率與受益人數，安全防禦可選欄位
+ * 格式化 ETF 資產規模、殖利率與受益人數，支援美股 USD 億美元 ($B) 與台股億元
  */
 export function formatEtfMetrics(
-  etfData?: MonthlyRevenueData['etfData'] | null
+  etfData?: MonthlyRevenueData['etfData'] | null,
+  opts?: { currency?: 'TWD' | 'USD'; market?: MarketType }
 ): FormattedEtfMetrics {
+  const isUs = opts?.currency === 'USD' || opts?.market === 'US';
   return {
-    aumText: etfData?.aumBillion != null ? `${etfData.aumBillion} 億元` : '--',
+    aumText:
+      etfData?.aumBillion != null
+        ? isUs
+          ? `${etfData.aumBillion} 億美元 ($${etfData.aumBillion}B)`
+          : `${etfData.aumBillion} 億元`
+        : '--',
     yieldText: etfData?.dividendYield != null ? `${etfData.dividendYield}%` : '--',
     beneficiariesText: etfData?.beneficiaries != null ? `${etfData.beneficiaries.toLocaleString()} 人` : '--',
   };
@@ -39,14 +67,28 @@ export function formatEtfMetrics(
 interface MonthlyRevenueCardProps {
   data: MonthlyRevenueData;
   colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
 export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
   data,
-  colorTheme: _colorTheme = 'taiwan',
+  colorTheme = 'taiwan',
+  market,
 }) => {
   const isEtf = data.isEtf;
+  const isQuarterly = Boolean(data.isQuarterly);
+  const isUs = Boolean(data.isUsMarket || data.currency === 'USD' || market === 'US');
   const history = data.history || [];
+
+  const isTaiwan = colorTheme === 'taiwan';
+  const posColor = isTaiwan ? '#ef4444' : '#10b981';
+  const posText = isTaiwan ? '#f87171' : '#34d399';
+  const posBg = isTaiwan ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)';
+  const posBorder = isTaiwan ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)';
+  const negColor = isTaiwan ? '#10b981' : '#ef4444';
+  const negText = isTaiwan ? '#34d399' : '#f87171';
+  const negBg = isTaiwan ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)';
+  const negBorder = isTaiwan ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)';
 
   const maxRevenue = useMemo(() => {
     if (history.length === 0) return 1;
@@ -54,14 +96,20 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
   }, [history]);
 
   const badgeColor = useMemo(() => {
-    if (data.growthBadge.includes('雙增') || data.growthBadge.includes('新高') || data.growthBadge.includes('強勁')) {
-      return { bg: 'rgba(16, 185, 129, 0.2)', text: '#34d399', border: 'rgba(16, 185, 129, 0.4)' };
+    const b = data.growthBadge || '';
+    if (b.includes('雙增') || b.includes('新高') || b.includes('強勁') || b.includes('成長') || b.includes('穩健')) {
+      return { bg: posBg, text: posText, border: posBorder };
     }
-    if (data.growthBadge.includes('衰退') || data.growthBadge.includes('年減')) {
-      return { bg: 'rgba(239, 68, 68, 0.2)', text: '#f87171', border: 'rgba(239, 68, 68, 0.4)' };
+    if (b.includes('衰退') || b.includes('年減')) {
+      return { bg: negBg, text: negText, border: negBorder };
     }
     return { bg: 'rgba(56, 189, 248, 0.15)', text: '#38bdf8', border: 'rgba(56, 189, 248, 0.3)' };
-  }, [data.growthBadge]);
+  }, [data.growthBadge, posBg, posText, posBorder, negBg, negText, negBorder]);
+
+  const etfMetrics = useMemo(
+    () => formatEtfMetrics(data.etfData, { currency: data.currency, market: isUs ? 'US' : 'TW' }),
+    [data.etfData, data.currency, isUs]
+  );
 
   return (
     <div
@@ -117,7 +165,11 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
           >
             {isEtf ? <Coins size={16} color="#34d399" /> : <BarChart3 size={16} color="#34d399" />}
             <TermTooltip termId={isEtf ? 'etf' : 'revenue'}>
-              {isEtf ? 'ETF 資產規模與收益分配' : '月營收與成長趨勢'}
+              {isEtf
+                ? 'ETF 資產規模與收益分配'
+                : isQuarterly
+                ? '美股季度營收與成長走勢 (10-Q/10-K)'
+                : '月營收與成長趨勢'}
             </TermTooltip>
           </h3>
         </div>
@@ -146,9 +198,10 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
         </div>
       </div>
 
-      {/* 空狀態防禦 */}
-      {data.isEmpty && !isEtf ? (
+      {/* 分支 1：ETF 空狀態防禦 (絕不落入個股月營收分支) */}
+      {isEtf && (data.isEmpty || !data.etfData) ? (
         <div
+          data-testid="etf-empty-state"
           style={{
             flex: 1,
             display: 'flex',
@@ -161,16 +214,16 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
             gap: '8px',
           }}
         >
-          <BarChart3 size={32} opacity={0.3} />
+          <Coins size={32} opacity={0.3} />
           <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#cbd5e1' }}>
-            {data.emptyMessage || '營收數據累積中'}
+            ETF 規模與配息資料待補
           </div>
           <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-            {data.asOfDateText || '每月 10 日前公布前月營收'}
+            {data.emptyMessage || data.asOfDateText || 'ETF 配息與受益人資料累積中'}
           </div>
         </div>
       ) : isEtf && data.etfData ? (
-        /* ETF 自適應視圖：規模、殖利率與配息河流 */
+        /* 分支 2：ETF 自適應視圖：規模、殖利率與配息河流 */
         <>
           <div
             style={{
@@ -190,7 +243,7 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
             >
               <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>ETF 資產規模</div>
               <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#34d399' }}>
-                {data.etfData.aumBillion != null ? `${data.etfData.aumBillion} 億元` : '--'}
+                {etfMetrics.aumText}
               </div>
             </div>
 
@@ -204,7 +257,7 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
             >
               <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>平均年化殖利率</div>
               <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#38bdf8' }}>
-                {data.etfData.dividendYield != null ? `${data.etfData.dividendYield}%` : '--'}
+                {etfMetrics.yieldText}
               </div>
             </div>
 
@@ -216,9 +269,11 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
                 border: '1px solid rgba(148, 163, 184, 0.2)',
               }}
             >
-              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>總受益人人數</div>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                {isUs ? '計價幣別' : '總受益人人數'}
+              </div>
               <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#f8fafc' }}>
-                {data.etfData.beneficiaries != null ? `${data.etfData.beneficiaries.toLocaleString()} 人` : '--'}
+                {isUs && data.etfData.beneficiaries == null ? 'USD 美元' : etfMetrics.beneficiariesText}
               </div>
             </div>
           </div>
@@ -226,7 +281,7 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
           {/* 近四季配息金額與殖利率河流 */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', marginBottom: '8px' }}>
-              近四季配息紀錄與年化殖利率
+              近四季配息紀錄與年化殖利率 {isUs ? '(USD)' : '(TWD)'}
             </div>
             {data.etfData.quarterlyDividends.length === 0 ? (
               <div
@@ -283,8 +338,31 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
             <span>{data.asOfDateText}</span>
           </div>
         </>
+      ) : data.isEmpty || history.length === 0 ? (
+        /* 分支 3：個股營收空狀態防禦 */
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px 12px',
+            color: '#94a3b8',
+            textAlign: 'center',
+            gap: '8px',
+          }}
+        >
+          <BarChart3 size={32} opacity={0.3} />
+          <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#cbd5e1' }}>
+            {data.emptyMessage || '營收數據累積中'}
+          </div>
+          <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+            {data.asOfDateText || '每月 10 日前公布前月營收'}
+          </div>
+        </div>
       ) : (
-        /* 個股月營收長條圖視圖 */
+        /* 分支 4：個股月營收 / 美股季營收長條圖視圖 */
         <>
           <div
             style={{
@@ -302,8 +380,10 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
                 border: '1px solid rgba(16, 185, 129, 0.2)',
               }}
             >
-              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>單月最新營收</div>
-              <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#34d399' }}>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                {isQuarterly ? '最新季度營收' : '單月最新營收'}
+              </div>
+              <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#38bdf8' }}>
                 {data.latestRevenueText || '--'}
               </div>
             </div>
@@ -321,7 +401,7 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
                 style={{
                   fontSize: '1.1rem',
                   fontWeight: 800,
-                  color: (data.latestYoyRate ?? 0) >= 0 ? '#34d399' : '#f87171',
+                  color: (data.latestYoyRate ?? 0) >= 0 ? posText : negText,
                 }}
               >
                 {data.latestYoyRate !== undefined
@@ -338,14 +418,18 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
                 border: '1px solid rgba(245, 158, 11, 0.2)',
               }}
             >
-              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>連續雙增月數</div>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                {isQuarterly ? '連續雙增季數' : '連續雙增月數'}
+              </div>
               <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fbbf24' }}>
-                {data.growthStreakMonths ? `${data.growthStreakMonths} 個月` : '0 個月'}
+                {data.growthStreakMonths
+                  ? `${data.growthStreakMonths} ${isQuarterly ? '季' : '個月'}`
+                  : `0 ${isQuarterly ? '季' : '個月'}`}
               </div>
             </div>
           </div>
 
-          {/* 12 個月單月營收長條圖 */}
+          {/* 營收長條圖 */}
           <div
             style={{
               flex: 1,
@@ -353,13 +437,22 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
               alignItems: 'flex-end',
               gap: '4px',
               padding: '6px 0',
-              minHeight: '110px',
+              minHeight: '115px',
+              height: '125px',
             }}
           >
             {history.map((h) => {
               const barHeight = calculateRevenueBarHeight(h.revenue, maxRevenue, 95);
               const isPositive = (h.yoyRate ?? 0) >= 0;
-              const barColor = isPositive ? '#10b981' : '#ef4444';
+              const barColor = isPositive ? posColor : negColor;
+              const tooltipRev = formatRevenueTooltipValue(h.revenue, {
+                isQuarterly,
+                currency: isUs ? 'USD' : 'TWD',
+              });
+              const xLabel =
+                isQuarterly && h.yearMonth.includes('Q')
+                  ? h.yearMonth.replace(/^20/, '')
+                  : h.yearMonth.substring(5);
 
               return (
                 <div
@@ -370,10 +463,10 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
                     flexDirection: 'column',
                     alignItems: 'center',
                     gap: '4px',
-                    height: '100%',
+                    height: '115px',
                     justifyContent: 'flex-end',
                   }}
-                  title={`${h.yearMonth}: 營收 ${(h.revenue / 100000).toFixed(1)} 億 | YoY: ${h.yoyRate ?? '--'}%`}
+                  title={`${h.yearMonth}: 營收 ${tooltipRev} | YoY: ${h.yoyRate ?? '--'}%`}
                 >
                   {/* ATH 創高標註星星 */}
                   {h.isAllTimeHigh && (
@@ -393,9 +486,9 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
                     }}
                   />
 
-                  {/* 月份標籤 (如 "09") */}
+                  {/* 月份或季度標籤 */}
                   <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                    {h.yearMonth.substring(5)}
+                    {xLabel}
                   </div>
                 </div>
               );
@@ -415,11 +508,11 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#10b981' }} />
+                <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: posColor }} />
                 YoY 正成長
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#ef4444' }} />
+                <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: negColor }} />
                 YoY 衰退
               </span>
             </div>

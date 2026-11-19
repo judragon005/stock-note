@@ -34,28 +34,16 @@ function normalCdf(x: number): number {
  */
 export function calculateForecastCone(
   candles: CandleReturnInput[],
-  defaultPrice: number = 2290
+  _defaultPrice?: number
 ): ForecastConeData {
   if (!candles || candles.length < 2) {
-    const s0 = defaultPrice > 0 ? defaultPrice : 2290;
-    const defaultNodes = FORECAST_HORIZONS.map((h) => {
-      const spread = h.dayOffset === 0 ? 0 : s0 * (0.015 * Math.sqrt(h.dayOffset));
-      return {
-        dayOffset: h.dayOffset,
-        label: h.label,
-        upperPrice: Number((s0 + spread).toFixed(1)),
-        medianPrice: s0,
-        lowerPrice: Number((s0 - spread).toFixed(1)),
-      };
-    });
-
     return {
-      bullishProb: 47,
-      rangeProb: 11,
-      bearishProb: 42,
-      mainForceDirectionProb: 52,
-      annualizedDriftPercent: 19.7,
-      timeNodes: defaultNodes,
+      bullishProb: 0,
+      rangeProb: 0,
+      bearishProb: 0,
+      mainForceDirectionProb: 0,
+      annualizedDriftPercent: 0,
+      timeNodes: [],
     };
   }
 
@@ -89,15 +77,17 @@ export function calculateForecastCone(
 
   const annualizedDriftPercent = Number((meanReturn * 252 * 100).toFixed(1));
 
-  // 3. 預測節點 (3, 5, 10 日標準差上下限)
+  // 3. 預測節點 (3, 5, 10 日標準差上下限；低價股 < 20 保留 2 位小數防失真)
+  const priceDecimals = s0 < 20 ? 2 : 1;
   const timeNodes = FORECAST_HORIZONS.map((h) => {
     if (h.dayOffset === 0) {
+      const baseRounded = Number(s0.toFixed(priceDecimals));
       return {
         dayOffset: 0,
         label: h.label,
-        upperPrice: s0,
-        medianPrice: s0,
-        lowerPrice: s0,
+        upperPrice: baseRounded,
+        medianPrice: baseRounded,
+        lowerPrice: baseRounded,
       };
     }
 
@@ -111,9 +101,9 @@ export function calculateForecastCone(
     return {
       dayOffset: h.dayOffset,
       label: h.label,
-      upperPrice: Number(upper.toFixed(1)),
-      medianPrice: Number(median.toFixed(1)),
-      lowerPrice: Number(lower.toFixed(1)),
+      upperPrice: Number(upper.toFixed(priceDecimals)),
+      medianPrice: Number(median.toFixed(priceDecimals)),
+      lowerPrice: Number(lower.toFixed(priceDecimals)),
     };
   });
 

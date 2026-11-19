@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { MarketBarData } from '../../types/aiForceDashboard';
 import { ColorThemeMode, HoldingPosition, MarketType } from '../../types/stock';
 import { Activity, AlertOctagon, AlertTriangle, Briefcase, Cpu, Radio, RefreshCw, ShieldAlert } from 'lucide-react';
-import { cleanSymbolInput, inferMarketType } from './HeaderQueryBar';
+import { inferMarketType, resolveSymbolAndMarket } from './HeaderQueryBar';
+import { searchStockSuggestions } from '../../engine/stockNameResolver';
 import { TermTooltip } from '../common/TermTooltip';
 
 export type SystemBadgeType = 'AI_SCAN' | 'MAIN_FORCE' | 'MARKET_STATUS' | 'VOLATILITY';
@@ -118,7 +119,13 @@ export function searchCandidateSymbols(
 ): Array<{ symbol: string; name: string; market: MarketType }> {
   if (!query || query.trim().length === 0) return [];
   const q = query.trim().toLowerCase();
+  const dictMatches = searchStockSuggestions(query.trim(), 'ALL', 8).map((item) => ({
+    symbol: item.symbol,
+    name: item.name,
+    market: item.market,
+  }));
   const pool = [
+    ...dictMatches,
     ...QUICK_CHIPS,
     { symbol: '2317', name: '鴻海', market: 'TW' as const },
     { symbol: '0056', name: '元大高股息', market: 'TW' as const },
@@ -134,12 +141,13 @@ export function searchCandidateSymbols(
   const seen = new Set<string>();
   const results: Array<{ symbol: string; name: string; market: MarketType }> = [];
   for (const item of pool) {
-    if (seen.has(item.symbol)) continue;
+    const key = `${item.market}:${item.symbol.toUpperCase()}`;
+    if (seen.has(key)) continue;
     if (
       item.symbol.toLowerCase().includes(q) ||
       item.name.toLowerCase().includes(q)
     ) {
-      seen.add(item.symbol);
+      seen.add(key);
       results.push(item);
     }
   }
@@ -151,6 +159,7 @@ export interface HeaderMarketBarProps {
   colorTheme?: ColorThemeMode;
   currentSymbol?: string;
   currentName?: string;
+  currentMarket?: MarketType;
   isLoading?: boolean;
   holdings?: HoldingPosition[];
   vwapCost?: number;
@@ -162,6 +171,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
   colorTheme = 'taiwan',
   currentSymbol = '0050',
   currentName = '元大台灣50',
+  currentMarket,
   isLoading = false,
   holdings = [],
   vwapCost,
@@ -248,15 +258,20 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsDropdownOpen(false);
-    const clean = cleanSymbolInput(inputVal);
-    if (!clean || !onAnalyze) return;
-    const inferred = inferMarketType(clean);
-    onAnalyze(clean, inferred);
+    if (!onAnalyze) return;
+    const resolved = resolveSymbolAndMarket(inputVal);
+    if (!resolved.symbol) return;
+    setInputVal(resolved.symbol);
+    onAnalyze(resolved.symbol, resolved.market);
   };
 
   // 計算當前標的持倉彙總與前四大持股快速切換膠囊
+  const effectiveCurrentMarket = currentMarket ?? (data.currency === 'USD' ? 'US' : inferMarketType(currentSymbol));
   const matchingHoldings = holdings.filter(
-    (h) => h.symbol.toUpperCase() === currentSymbol.toUpperCase() && h.shares > 0
+    (h) =>
+      h.symbol.toUpperCase() === currentSymbol.toUpperCase() &&
+      (!h.market || h.market === effectiveCurrentMarket) &&
+      h.shares > 0
   );
   const heldShares = matchingHoldings.reduce((sum, h) => sum + h.shares, 0);
   const heldAvgCost =
@@ -301,7 +316,7 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          flexWrap: 'nowrap',
+          flexWrap: 'wrap',
           gap: '16px',
           width: '100%',
           paddingBottom: '8px',
@@ -674,8 +689,10 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
                   }}
                 >
                   {formatMarketMetric(data.intradayQuote.price, 2)} (
-                  {data.intradayQuote.changePercent >= 0 ? '+' : ''}
-                  {data.intradayQuote.changePercent.toFixed(2)}%)
+                  {Number.isFinite(data.intradayQuote.changePercent)
+                    ? `${data.intradayQuote.changePercent >= 0 ? '+' : ''}${data.intradayQuote.changePercent.toFixed(2)}%`
+                    : '-'}
+                  )
                 </span>
               </span>
             )}

@@ -1,7 +1,15 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-11-18 13:10 (UTC+8)  
+> **交接產生時間**：2026-11-19 15:55 (UTC+8)  
 > **當前最新里程碑**：
+> - **V9.24.0 主力戰情室 5.0 — 台美雙市場一等公民對等架構、全鏈路資料管線修復與 21 卡零缺陷閉環**（ADR 0239, Spec 0239, Issue #592）：
+>   - **台美雙市場一等公民對等架構與全域主題貫通 (Issue #592 / Ticket 08 & 16)**：嚴格隔離 `twMacroData` 與 `usMacroData`（依 `market` 專屬寫入），根治台股遭美股總經視圖劫持缺陷；全域貫通 `colorTheme` 與 `market` 至全數 21 張卡片、4 大任務子頁籤與 HTML 匯出，達成台股（紅漲綠跌）與美股（綠漲紅跌）視覺一致。
+>   - **統一市場能力適配層與美股評分解鎖 (Issue #592 / Ticket 08 & 09)**：將美股機構微觀量價結構 (`usMicrostructure`: MFI, OBV, RVOL, VWAP 乖離) 與美股股數流動性階梯全面接入評分核心，解除美股健康度鎖死 50%、動態信號封頂 55 分與主力總評判退化為 `+0 張` 之缺陷。
+>   - **單一權威資產分類來源 (SSOT) 與點號代碼路由 (Issue #592 / Ticket 01 & 02)**：收斂衝突之 ETF 邏輯至 `resolveAssetClass`，移除 `/(富邦|國泰)/` 誤殺規則，精準區分金融個股 `2881` 與主動/債券/美股 ETF；擴展中介層點號代碼匹配（如 `BRK.B` ↔ `BRK-B`）與單例快取。
+>   - **美股基本面/13F/季營收管線與 SEC EDGAR 本地代理 (Issue #592 / Ticket 06 & 07)**：新增 `us_fundamentals_daily` 湖倉表整合 Yahoo `quoteSummary`，中介層建立 SEC EDGAR 代理路由 (`/api/market/sec-edgar/companyfacts/:symbol` 搭配 `company_tickers.json` 動態 CIK 解析），零付費供應 Card 19 (`us13fData`)、Card 20（美股個股近 8 季營收 YoY / 美股 ETF 規模費用殖利率）與 Card 21（Forward PE、PS、30% 稅後實質殖利率）。
+>   - **ARINC 661 Zero-Mock 零造假待命硬閘門 (Issue #592 / Ticket 09 & 15)**：全面清除預設報表與子引擎殘留之硬編碼假數值（`-64張`、`2131`、`2400~1600`、`60k~0k`、`168.5%` 與美股靜態 ETF 回退）；歷史日 K `< 5` 根嚴格維持 `isDataPending = true`，全區遮蔽 Executive Strip、`TASK_2~5` 子頁籤與 `WarRoomPromptCard` 提示詞複製按鈕，阻斷假數據外洩與 `currentPrice=0` 誤觸停損警報。
+>   - **21 卡與 5 大分頁全鏈路零缺損精修 (Issue #592 / Ticket 10~15)**：解除 `TaskViewsSwitcher` 點擊攔截死鎖；修復低價美股自適應小數刻度；雷達圖邊距防裁切；Card 07 動態正規化比例軸；Card 08 雙軸座標防重疊；Card 18 正則千分位逗號相容與彈窗 ESC 關閉；首屏按需補齊縮至 $\le 300\text{ms}$ 搭配受控輪詢刷新。
+>   - **品質狀態**：全量單元與整合測試 **2,518/2,518 通過 (100% Passed / 309 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，生產打包 `npm run build` 100% 綠燈。
 > - **V9.21.0 宏觀戰情室 3.5 全量修枝補缺、統一數據總線與一鍵決策閉環重構**（ADR 0235, Spec 0235, Issue #584, PR #585）：
 >   - **宏觀數據雙向別名正規化與 FRED 信貸/製造業/寬度欄位補齊 (Issue #584 / Ticket 01)**：`normalizeMacroAliases` 與 `mergeMacroSnapshot` 雙向相容 camelCase、snake_case 與行情包裝物件；補齊 FRED 信用利差、平衡通膨率、新訂單-存貨利差與營收擴散指數；遇遠端空值保留本地快照，動態重算 VIX 與恐慌貪婪位階。
 >   - **風控防護盾計量精度修正 (Issue #584 / Ticket 02)**：修正維持率比例尺（200% 維持率精確輸出 0.35 即 -35.0%）；費半衝擊損益以總淨值乘持股權重折算；1-Day 95% VaR 以扣除現金後之實質在險資產計算；全頁統一採用 `recommendedEquityCapPercent` 作為建議上限 SSOT。

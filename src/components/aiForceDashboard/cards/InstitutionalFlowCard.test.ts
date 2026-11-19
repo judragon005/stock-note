@@ -167,6 +167,83 @@ describe('InstitutionalFlowCard - 三大法人雙軸圖表與明細表規範 (Ti
       expect(empty).toEqual([]);
     });
   });
+
+  describe('Spec 0239 T13: X 軸中心對齊、柱寬動態防重疊、單筆圓點、Zero-Mock 空狀態與 colorTheme', () => {
+    it('computeInstitutionalSummaries 空陣列絕不回傳硬編碼假字串 (-64張 / +1,621張) 且不染紅多頭色', () => {
+      const emptySum = computeInstitutionalSummaries([]);
+      expect(emptySum.summary5Days).not.toContain('-64');
+      expect(emptySum.summary20Days).not.toContain('1,621');
+      expect(emptySum.summary20Days).not.toContain('多');
+      expect(emptySum.summary5Days).not.toContain('多');
+    });
+
+    it('computeInstitutionalBarLayout 應統一柱群與折線中心點，且 39~60 筆時相鄰三柱群組絕不水平重疊', async () => {
+      const { computeInstitutionalBarLayout } = await import('./InstitutionalFlowCard');
+      for (const count of [1, 5, 20, 39, 60]) {
+        const layout = computeInstitutionalBarLayout(count, 340, 15);
+        expect(layout.centers.length).toBe(count);
+        if (count > 1) {
+          const rightEdge0 = layout.centers[0] + layout.groupWidth / 2;
+          const leftEdge1 = layout.centers[1] - layout.groupWidth / 2;
+          expect(rightEdge0).toBeLessThanOrEqual(leftEdge1);
+        }
+      }
+    });
+
+    it('無歷史資料時應渲染 Honest Empty State，且不出現空 SVG 零軸或假張數', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { InstitutionalFlowCard } = await import('./InstitutionalFlowCard');
+
+      const html = renderToStaticMarkup(
+        React.createElement(InstitutionalFlowCard, {
+          data: {
+            history: [],
+            recentDaysTable: [],
+            cumulative20DaysSummary: '尚無法人日報數據',
+            recent5DaysSummary: '待三大法人公布',
+            isUsMarket: false,
+            asOfDateText: '法人資料待公布',
+          },
+          colorTheme: 'taiwan',
+        })
+      );
+
+      expect(html).toContain('data-testid="inst-flow-empty-state"');
+      expect(html).not.toContain('-64張');
+      expect(html).not.toContain('+1,621張');
+      expect(html).not.toContain('#ef4444');
+    });
+
+    it('單筆歷史資料應繪製累計圓點、移除 preserveAspectRatio="none"、表格含 tabular-nums 且底部標籤響應 colorTheme', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { InstitutionalFlowCard } = await import('./InstitutionalFlowCard');
+
+      const html = renderToStaticMarkup(
+        React.createElement(InstitutionalFlowCard, {
+          data: {
+            history: [
+              { date: '2026-10-01', foreignShares: 500, trustShares: 100, dealerShares: 50, cumulativeTotalShares: 650 },
+            ],
+            recentDaysTable: [
+              { date: '2026-10-01', foreignShares: 500, trustShares: 100, dealerShares: 50, totalShares: 650 },
+            ],
+            cumulative20DaysSummary: '多頭 (20日 +650張)',
+            recent5DaysSummary: '偏多 (+650張)',
+            isUsMarket: false,
+          },
+          colorTheme: 'international',
+        })
+      );
+
+      expect(html).toContain('data-testid="inst-cumulative-single-dot"');
+      expect(html).not.toContain('preserveAspectRatio="none"');
+      expect(html).toContain('tabular-nums');
+      expect(html).toContain('overflow-x:auto');
+      expect(html).toContain('#10b981');
+    });
+  });
 });
 
 

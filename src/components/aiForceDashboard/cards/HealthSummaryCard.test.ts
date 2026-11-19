@@ -65,4 +65,66 @@ describe('HealthSummaryCard & calculateCircleProgress', () => {
     };
     expect(mockData.overallRatingLabel).toBe('普通 (平均 50 分)');
   });
+
+  describe('Spec 0239 T15: 流動性風險語意對齊、NaN 防護、flexWrap 與美股術語', () => {
+    it('calculateCircleProgress 傳入 NaN / Infinity 應安全回退至 0 不產出 NaN', () => {
+      const resNaN = calculateCircleProgress(Number.NaN, 30);
+      expect(Number.isFinite(resNaN.clamped)).toBe(true);
+      expect(resNaN.clamped).toBe(0);
+      expect(Number.isFinite(resNaN.strokeDashoffset)).toBe(true);
+
+      const resInf = calculateCircleProgress(Number.POSITIVE_INFINITY, 30);
+      expect(resInf.clamped).toBe(0);
+      expect(Number.isFinite(resInf.strokeDashoffset)).toBe(true);
+    });
+
+    it('第 4 環應標註「流動性風險」與「越低越佳」反向提示，不再誤標「波動風險度」，且外層支援 flexWrap', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { HealthSummaryCard } = await import('./HealthSummaryCard');
+
+      const html = renderToStaticMarkup(
+        React.createElement(HealthSummaryCard, {
+          data: {
+            chipHealth: 65,
+            technicalStructure: 78,
+            capitalMomentum: 62,
+            liquidityRisk: 18,
+            institutionalSupport: 70,
+            overallRatingLabel: '良好 (平均 71 分)',
+          },
+        })
+      );
+
+      expect(html).toContain('流動性風險');
+      expect(html).toContain('越低越佳');
+      expect(html).not.toContain('波動風險度');
+      expect(html).toContain('flex-wrap:wrap');
+    });
+
+    it('美股模式 (market="US") 第 1/5 環應改稱「籌碼結構」與「機構支撐」', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { HealthSummaryCard } = await import('./HealthSummaryCard');
+
+      const html = renderToStaticMarkup(
+        React.createElement(HealthSummaryCard, {
+          market: 'US',
+          colorTheme: 'international',
+          data: {
+            chipHealth: 72,
+            technicalStructure: 80,
+            capitalMomentum: 68,
+            liquidityRisk: 12,
+            institutionalSupport: 75,
+            overallRatingLabel: '優良 (平均 77 分)',
+          },
+        })
+      );
+
+      expect(html).toContain('籌碼結構');
+      expect(html).toContain('機構支撐');
+      expect(html).not.toContain('法人支撐度');
+    });
+  });
 });

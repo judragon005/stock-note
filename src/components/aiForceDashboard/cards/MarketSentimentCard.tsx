@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useId } from 'react';
 import type { MarketSentimentData } from '../../../types/aiForceDashboard';
+import type { ColorThemeMode, MarketType } from '../../../types/stock';
 import { calculateGaugeNeedleAngle } from '../../../engine/marketSentimentEngine';
 import { TermTooltip } from '../../common/TermTooltip';
 
 export interface MarketSentimentCardProps {
   data?: MarketSentimentData;
+  colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
 /**
@@ -38,17 +41,33 @@ export function getSentimentBadgeMeta(
   };
 }
 
-export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }) => {
-  const isUs = Boolean(data?.isUsMarket || data?.usMacroData);
+export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({
+  data,
+  market,
+  colorTheme = 'taiwan',
+}) => {
+  const uid = useId().replace(/:/g, '');
+  const gaugeGradId = `gaugeGrad-${uid}`;
+  const isUs = market
+    ? market === 'US'
+    : Boolean(data?.isUsMarket || (data?.usMacroData && !data?.twMacroData));
   const usMacro = data?.usMacroData;
 
-  const index = isUs
+  const isTaiwan = colorTheme === 'taiwan';
+  const bullText = isTaiwan ? '#ef4444' : '#10b981';
+  const bearText = isTaiwan ? '#10b981' : '#ef4444';
+
+  const rawIndex = isUs
     ? (usMacro?.cnnScore ?? data?.overallSentimentIndex ?? 50)
     : (data?.overallSentimentIndex ?? 50);
+  const index = Number.isFinite(rawIndex) ? rawIndex : 50;
 
-  const retail = data?.retailSentimentPercent ?? 59;
-  const institutional = data?.institutionalSentimentPercent ?? 55;
-  const mainForce = data?.mainForceSentimentPercent ?? 58;
+  const clampPct = (v?: number, fallback: number = 50) =>
+    Math.max(0, Math.min(100, Number.isFinite(v) ? (v as number) : fallback));
+
+  const retail = clampPct(data?.retailSentimentPercent, 50);
+  const institutional = clampPct(data?.institutionalSentimentPercent, 50);
+  const mainForce = clampPct(data?.mainForceSentimentPercent, 50);
 
   const needleAngle = calculateGaugeNeedleAngle(index);
   const badgeMeta = getSentimentBadgeMeta(data?.sentimentState || 'NEUTRAL', index);
@@ -59,11 +78,23 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
     { label: '主力情緒', percent: mainForce, color: '#ec4899', termId: 'mainSentiment' },
   ];
 
+  const cnnLabel = usMacro?.cnnStateText || usMacro?.cnnRatingText;
+  const vixVal = usMacro?.vixValue ?? usMacro?.vix;
+  const yieldVal = usMacro?.us10yYield ?? usMacro?.tenYearTreasury;
+
   const usMacroRows = usMacro
     ? [
         { label: 'CNN 恐懼貪婪', value: `${usMacro.cnnScore ?? 50} 分`, color: badgeMeta.color },
-        { label: 'VIX 恐慌指數', value: `${usMacro.vixValue !== undefined ? usMacro.vixValue.toFixed(1) : '--'}`, color: (usMacro.vixValue ?? 0) > 20 ? '#ef4444' : '#38bdf8' },
-        { label: '10Y 美債殖利率', value: `${usMacro.us10yYield !== undefined ? usMacro.us10yYield.toFixed(2) + '%' : '--'}`, color: '#f59e0b' },
+        {
+          label: 'VIX 恐慌指數',
+          value: vixVal !== undefined && Number.isFinite(vixVal) ? vixVal.toFixed(1) : '--',
+          color: (vixVal ?? 0) > 20 ? '#ef4444' : '#38bdf8',
+        },
+        {
+          label: '10Y 美債殖利率',
+          value: yieldVal !== undefined && Number.isFinite(yieldVal) ? `${yieldVal.toFixed(2)}%` : '--',
+          color: '#f59e0b',
+        },
       ]
     : [];
 
@@ -106,7 +137,7 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
           </span>
           <TermTooltip termId="marketSentiment">
             <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc', cursor: 'help' }}>
-              {isUs ? '美股宏觀情緒 (CNN Fear & Greed / VIX)' : '台股市場合情緒儀表板'}
+              {isUs ? '美股宏觀情緒 (CNN Fear & Greed / VIX)' : '台股市場情緒儀表板'}
             </span>
           </TermTooltip>
         </div>
@@ -127,7 +158,7 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
           <div style={{ width: '100px', height: '58px', position: 'relative' }}>
             <svg width="100" height="58" viewBox="0 0 100 58">
               <defs>
-                <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <linearGradient id={gaugeGradId} x1="0%" y1="0%" x2="100%" y2="0%">
                   <stop offset="0%" stopColor="#38bdf8" />
                   <stop offset="35%" stopColor="#10b981" />
                   <stop offset="50%" stopColor="#fbbf24" />
@@ -139,7 +170,7 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
               <path
                 d="M 12 50 A 38 38 0 0 1 88 50"
                 fill="none"
-                stroke="url(#gaugeGrad)"
+                stroke={`url(#${gaugeGradId})`}
                 strokeWidth="7"
                 strokeLinecap="round"
               />
@@ -163,35 +194,52 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
           </div>
           <TermTooltip termId="marketSentiment">
             <span style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: '2px', fontWeight: 600, cursor: 'help' }}>
-              市場情緒：<span style={{ color: badgeMeta.color, fontWeight: 800 }}>{isUs && usMacro?.cnnStateText ? usMacro.cnnStateText : badgeMeta.label}</span>
+              市場情緒：<span style={{ color: badgeMeta.color, fontWeight: 800 }}>{isUs && cnnLabel ? cnnLabel : badgeMeta.label}</span>
             </span>
           </TermTooltip>
         </div>
 
         {/* 右側：美股宏觀數據行 或 台股 3 條水平情緒條 */}
-        {isUs && usMacro ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {usMacroRows.map((row) => (
-              <div
-                key={row.label}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  fontSize: '0.75rem',
-                  padding: '4px 8px',
-                  borderRadius: '6px',
-                  background: 'rgba(15, 23, 42, 0.55)',
-                  border: '1px solid rgba(255, 255, 255, 0.05)',
-                }}
-              >
-                <span style={{ color: '#94a3b8' }}>{row.label}</span>
-                <span style={{ color: row.color, fontWeight: 800, fontFamily: 'monospace' }}>
-                  {row.value}
-                </span>
-              </div>
-            ))}
-          </div>
+        {isUs ? (
+          usMacro ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {usMacroRows.map((row) => (
+                <div
+                  key={row.label}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: '0.75rem',
+                    padding: '4px 8px',
+                    borderRadius: '6px',
+                    background: 'rgba(15, 23, 42, 0.55)',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                  }}
+                >
+                  <span style={{ color: '#94a3b8' }}>{row.label}</span>
+                  <span style={{ color: row.color, fontWeight: 800, fontFamily: 'monospace' }}>
+                    {row.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div
+              data-testid="us-macro-empty-state"
+              style={{
+                padding: '10px',
+                borderRadius: '8px',
+                background: 'rgba(15, 23, 42, 0.5)',
+                border: '1px dashed rgba(148, 163, 184, 0.25)',
+                fontSize: '0.75rem',
+                color: '#94a3b8',
+                textAlign: 'center',
+              }}
+            >
+              美股宏觀情緒指標 (CNN / VIX / 10Y) 同步中
+            </div>
+          )
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {participantBars.map((bar) => (
@@ -230,6 +278,68 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({ data }
           </div>
         )}
       </div>
+
+      {/* 台股期權衍生品指標列 */}
+      {!isUs &&
+        (data?.twMacroData?.putCallRatio != null ||
+          data?.twMacroData?.foreignFuturesOi != null ||
+          data?.twMacroData?.trustFuturesOi != null) && (
+          <div
+            data-testid="tw-macro-derivatives"
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '6px',
+              marginTop: '8px',
+              paddingTop: '6px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+              fontSize: '0.75rem',
+              color: '#94a3b8',
+            }}
+          >
+            {data?.twMacroData?.putCallRatio != null && (
+              <span>
+                P/C 比:{' '}
+                <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>
+                  {data.twMacroData.putCallRatio.toFixed(1)}%
+                </strong>
+              </span>
+            )}
+            {data?.twMacroData?.foreignFuturesOi != null && (
+              <span>
+                外資期貨未平倉:{' '}
+                <strong
+                  style={{
+                    color: data.twMacroData.foreignFuturesOi >= 0 ? bullText : bearText,
+                    fontFamily: 'monospace',
+                  }}
+                >
+                  {data.twMacroData.foreignFuturesOi > 0 ? '+' : ''}
+                  {data.twMacroData.foreignFuturesOi.toLocaleString()} 口
+                </strong>
+              </span>
+            )}
+            {data?.twMacroData?.trustFuturesOi != null && (
+              <span>
+                投信期貨未平倉:{' '}
+                <strong
+                  style={{
+                    color: data.twMacroData.trustFuturesOi >= 0 ? bullText : bearText,
+                    fontFamily: 'monospace',
+                  }}
+                >
+                  {data.twMacroData.trustFuturesOi > 0 ? '+' : ''}
+                  {data.twMacroData.trustFuturesOi.toLocaleString()} 口
+                </strong>
+              </span>
+            )}
+            {data?.twMacroData?.asOfDateText && (
+              <span>{data.twMacroData.asOfDateText}</span>
+            )}
+          </div>
+        )}
     </div>
   );
 };

@@ -11,10 +11,11 @@ export interface CandleRiskInput {
 export interface RiskSpiderOptions {
   institutionalNetVolume?: number; // 法人買賣超 (張)
   turnoverRate?: number; // 當日週轉率 (%)
-  avgVolume20?: number; // 20 日均量 (張)
+  avgVolume20?: number; // 20 日均量 (張/股)
   volumeUnit?: 'LOTS' | 'SHARES';
   volumeInShares?: boolean;
   market?: 'TW' | 'US';
+  usMicroScore?: number; // 美股微結構機構評分 (0~100)
 }
 
 /**
@@ -24,16 +25,16 @@ export function calculateRiskSpider(
   candles: CandleRiskInput[],
   options?: RiskSpiderOptions
 ): RiskSpiderData {
-  // 邊界防禦：空資料或不足
-  if (!candles || candles.length === 0) {
+  // 邊界防禦：空資料或不足 2 根 K 線回傳零造假中性基準 (Spec 0239 Zero-Mock)
+  if (!candles || candles.length < 2) {
     return {
-      liquidityRisk: 30,
-      volatilityRisk: 50,
-      trendRisk: 45,
-      institutionalRisk: 55,
-      chipRisk: 48,
-      mainForceRiskLevel: 'MEDIUM_HIGH',
-      mainForceRiskIndex: 60,
+      liquidityRisk: 0,
+      volatilityRisk: 0,
+      trendRisk: 0,
+      institutionalRisk: 0,
+      chipRisk: 0,
+      mainForceRiskLevel: 'LOW',
+      mainForceRiskIndex: 0,
     };
   }
 
@@ -55,26 +56,48 @@ export function calculateRiskSpider(
   volatilityRisk = Math.max(10, Math.min(100, volatilityRisk));
 
   // 2. 流動性風險 (Liquidity Risk)
-  // 以平均成交量為依歸
+  // 以平均成交量為依歸：雙市場量綱校準 (Spec 0239)
   let totalVolume = 0;
   candles.forEach((c) => {
     totalVolume += c.volume;
   });
-  const isSharesUnit =
-    options?.volumeUnit === 'SHARES' || options?.volumeInShares === true;
-  const avgVol = isSharesUnit ? totalVolume / count / 1000 : totalVolume / count;
-
-  // 成交量 > 5000 張 -> 低風險 (~15-25)
-  // 成交量 < 300 張 -> 高風險 (> 70)
+  const rawAvgVol = totalVolume / count;
   let liquidityRisk = 50;
-  if (avgVol >= 5000) {
-    liquidityRisk = 20;
-  } else if (avgVol <= 200) {
-    liquidityRisk = Math.round(85 - (avgVol / 200) * 15);
+
+  if (options?.market === 'US') {
+    // 美股成交量以「股」為單位 (<5萬股極高風險、5萬~50萬中高、50萬~200萬中低、>=200萬低風險20)
+    const avgShares = options.volumeUnit === 'LOTS' ? rawAvgVol * 1000 : rawAvgVol;
+    if (avgShares >= 2_000_000) {
+      liquidityRisk = 20;
+    } else if (avgShares < 50_000) {
+      // 0 股 -> 95，50,000 股 -> 75 (如日均 3,000 股約 94 分)
+      liquidityRisk = Math.round(95 - (avgShares / 50_000) * 20);
+    } else if (avgShares < 500_000) {
+      // 50,000 ~ 500,000 股：中高風險 75 -> 55
+      const ratio = (avgShares - 50_000) / (500_000 - 50_000);
+      liquidityRisk = Math.round(75 - ratio * 20);
+    } else {
+      // 500,000 ~ 2,000,000 股：中低風險 55 -> 20
+      const ratio = (avgShares - 500_000) / (2_000_000 - 500_000);
+      liquidityRisk = Math.round(55 - ratio * 35);
+    }
   } else {
-    // 200 ~ 5000 之間平滑過渡
-    const ratio = (avgVol - 200) / (5000 - 200);
-    liquidityRisk = Math.round(70 - ratio * 45);
+    // 台股以「張」為單位 (若輸入為股數先除以 1000)
+    const isSharesUnit =
+      options?.volumeUnit === 'SHARES' || options?.volumeInShares === true;
+    const avgVol = isSharesUnit ? rawAvgVol / 1000 : rawAvgVol;
+
+    // 成交量 >= 5000 張 -> 低風險 (20)
+    // 成交量 <= 200 張 -> 高風險 (70~85)
+    if (avgVol >= 5000) {
+      liquidityRisk = 20;
+    } else if (avgVol <= 200) {
+      liquidityRisk = Math.round(85 - (avgVol / 200) * 15);
+    } else {
+      // 200 ~ 5000 之間平滑過渡
+      const ratio = (avgVol - 200) / (5000 - 200);
+      liquidityRisk = Math.round(70 - ratio * 45);
+    }
   }
   liquidityRisk = Math.max(10, Math.min(100, liquidityRisk));
 
@@ -91,7 +114,14 @@ export function calculateRiskSpider(
 
   // 4. 法人風險 (Institutional Risk)
   let institutionalRisk = 50;
-  if (options?.institutionalNetVolume !== undefined) {
+  if (
+    options?.market === 'US' &&
+    options.usMicroScore !== undefined &&
+    Number.isFinite(options.usMicroScore)
+  ) {
+    // 美股微結構機構評分映射：高機構評分對應低風險
+    institutionalRisk = Math.max(10, Math.min(95, Math.round(100 - options.usMicroScore)));
+  } else if (options?.institutionalNetVolume !== undefined) {
     if (options.institutionalNetVolume < -2000) {
       institutionalRisk = 80;
     } else if (options.institutionalNetVolume < 0) {
@@ -101,6 +131,7 @@ export function calculateRiskSpider(
     } else {
       institutionalRisk = Math.round(50 - (options.institutionalNetVolume / 2000) * 20);
     }
+    institutionalRisk = Math.max(15, Math.min(95, institutionalRisk));
   } else {
     // 若無法人資料，以長黑 K 比例模擬
     let blackCandleCount = 0;
@@ -108,8 +139,8 @@ export function calculateRiskSpider(
       if (c.close < c.high * 0.98) blackCandleCount++;
     });
     institutionalRisk = Math.round(40 + (blackCandleCount / count) * 30);
+    institutionalRisk = Math.max(15, Math.min(95, institutionalRisk));
   }
-  institutionalRisk = Math.max(15, Math.min(95, institutionalRisk));
 
   // 5. 籌碼風險 (Chip Risk)
   let chipRisk = 48;

@@ -51,8 +51,24 @@ export function exportReportToCsv(report: AiForceDashboardReport): string {
 /**
  * 生成獨立可離線查看之 HTML 總結決策報告
  */
-export function generateSummaryHtml(report: AiForceDashboardReport): string {
+export function generateSummaryHtml(
+  report: AiForceDashboardReport,
+  colorTheme?: 'taiwan' | 'international'
+): string {
   const title = `${report.symbol} ${report.name} - AI 主力行為量化決策總結報告`;
+  const change = report.marketBar?.change ?? 0;
+  const isInternational =
+    colorTheme === 'international' || (!colorTheme && report.market === 'US');
+  const priceColor =
+    change > 0
+      ? isInternational
+        ? '#10b981'
+        : '#ef4444'
+      : change < 0
+      ? isInternational
+        ? '#ef4444'
+        : '#10b981'
+      : '#94a3b8';
   return `<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -62,7 +78,7 @@ export function generateSummaryHtml(report: AiForceDashboardReport): string {
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
     .card { background: rgba(30, 41, 59, 0.85); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 20px; max-width: 900px; margin: 0 auto 16px auto; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
     h1 { margin-top: 0; font-size: 20px; color: #38bdf8; }
-    .price-tag { font-size: 28px; font-weight: bold; color: #ef4444; }
+    .price-tag { font-size: 28px; font-weight: bold; color: ${priceColor}; }
     .verdict { font-size: 22px; font-weight: bold; color: #f59e0b; padding: 4px 12px; background: rgba(245, 158, 11, 0.15); border-radius: 6px; display: inline-block; margin: 10px 0; }
     .summary-text { font-size: 14px; line-height: 1.6; color: #cbd5e1; }
     @media print { body { background: #fff; color: #000; } .card { box-shadow: none; border: 1px solid #ccc; background: #fff; } }
@@ -169,7 +185,17 @@ export async function triggerAllChartsDownload(symbol: string): Promise<number> 
     const height = rect.height || parseFloat(svg.getAttribute('height') || '0') || 150;
 
     try {
-      const svgStr = serializer.serializeToString(svg);
+      const clonedSvg = svg.cloneNode(true) as SVGSVGElement;
+      if (!clonedSvg.getAttribute('width')) {
+        clonedSvg.setAttribute('width', String(width));
+      }
+      if (!clonedSvg.getAttribute('height')) {
+        clonedSvg.setAttribute('height', String(height));
+      }
+      if (!clonedSvg.getAttribute('xmlns')) {
+        clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      }
+      const svgStr = serializer.serializeToString(clonedSvg);
       const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
       const url = URL.createObjectURL(svgBlob);
 
@@ -177,6 +203,7 @@ export async function triggerAllChartsDownload(symbol: string): Promise<number> 
       canvas.width = Math.max(width * 2, 400); // 2x 高解析度
       canvas.height = Math.max(height * 2, 200);
       const ctx = canvas.getContext('2d');
+      let exportedThisChart = false;
 
       if (ctx) {
         // 深色背景鋪底
@@ -198,23 +225,30 @@ export async function triggerAllChartsDownload(symbol: string): Promise<number> 
         });
 
         if (typeof canvas.toBlob === 'function') {
-          canvas.toBlob((blob) => {
-            if (blob) {
-              const pngUrl = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = pngUrl;
-              a.download = `${symbol}_chart_${i + 1}_${new Date().toISOString().slice(0, 10)}.png`;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              URL.revokeObjectURL(pngUrl);
-            }
-          }, 'image/png');
+          exportedThisChart = await new Promise<boolean>((resolveBlob) => {
+            canvas.toBlob((blob) => {
+              if (blob) {
+                const pngUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = pngUrl;
+                a.download = `${symbol}_chart_${i + 1}_${new Date().toISOString().slice(0, 10)}.png`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(pngUrl);
+                resolveBlob(true);
+              } else {
+                resolveBlob(false);
+              }
+            }, 'image/png');
+          });
         }
       }
 
       URL.revokeObjectURL(url);
-      downloadedCount++;
+      if (exportedThisChart) {
+        downloadedCount++;
+      }
     } catch {
       // 容錯跳過單一圖表
     }

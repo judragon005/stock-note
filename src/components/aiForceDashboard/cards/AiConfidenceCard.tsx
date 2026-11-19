@@ -1,9 +1,12 @@
 import React from 'react';
 import type { AiConfidenceData } from '../../../types/aiForceDashboard';
+import type { ColorThemeMode, MarketType } from '../../../types/stock';
 import { TermTooltip } from '../../common/TermTooltip';
 
 export interface AiConfidenceCardProps {
   data?: AiConfidenceData;
+  colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
 /**
@@ -23,20 +26,23 @@ export function calculateConfidenceGrade(score: number): { label: string; color:
 }
 
 export const AiConfidenceCard: React.FC<AiConfidenceCardProps> = ({ data }) => {
-  const overall = data?.overallConfidence ?? 47;
-  const accuracy = data?.modelAccuracy ?? 32;
-  const completeness = data?.dataCompleteness ?? 100;
-  const stability = data?.signalStability ?? 80;
-  const applicability = data?.strategyApplicability ?? 44;
+  const clampPct = (v?: number, fallback: number = 0) =>
+    Math.max(0, Math.min(100, Number.isFinite(v) ? (v as number) : fallback));
+
+  const overall = clampPct(data?.overallConfidence, 0);
+  const accuracy = clampPct(data?.modelAccuracy, 0);
+  const completeness = clampPct(data?.dataCompleteness, 0);
+  const stability = clampPct(data?.signalStability, 0);
+  const applicability = clampPct(data?.strategyApplicability, 0);
 
   const grade = calculateConfidenceGrade(overall);
 
   const bars = [
     { label: 'AI CONFIDENCE', percent: overall, color: '#38bdf8', termId: 'aiConfidence' },
-    { label: '模型準確度', percent: accuracy, color: '#38bdf8' },
-    { label: '資料完整度', percent: completeness, color: '#38bdf8' },
-    { label: '經驗穩定度', percent: stability, color: '#38bdf8' },
-    { label: '策略適用度', percent: applicability, color: '#38bdf8' },
+    { label: '模型準確度', percent: accuracy, color: '#38bdf8', termId: 'aiConfidence' },
+    { label: '資料完整度', percent: completeness, color: '#38bdf8', termId: 'aiConfidence' },
+    { label: '訊號穩定度', percent: stability, color: '#38bdf8', termId: 'aiConfidence' },
+    { label: '策略適用度', percent: applicability, color: '#38bdf8', termId: 'aiConfidence' },
   ];
 
   return (

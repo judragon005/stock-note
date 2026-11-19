@@ -20,6 +20,7 @@ const DEFAULT_DB_PATH = path.resolve(__dirname, '../../.scratch/market-cache/mar
 
 let globalDbInstance = null;
 let currentDbPath = null;
+const initializedDbPaths = new Set();
 
 /**
  * 檢查當前執行階段是否支援 node:sqlite
@@ -86,6 +87,11 @@ function getSqliteDbConnection(customPath) {
  */
 function initSqliteLakehouseDb(customPath) {
   const db = getSqliteDbConnection(customPath);
+  const resolvedPath = getDbPath(customPath);
+
+  if (initializedDbPaths.has(resolvedPath) && typeof db.getMarketMultiHorizonBreadth === 'function') {
+    return db;
+  }
 
   // 1. 標的註冊表 (symbols_meta)
   db.exec(`
@@ -277,12 +283,13 @@ function initSqliteLakehouseDb(customPath) {
     );
     CREATE INDEX IF NOT EXISTS idx_valuation_symbol_date ON tw_valuation_daily(symbol, date DESC);
 
-    -- 12. 財務三表核心科目表 (Spec 0203 Ticket 08)
+    -- 12. 財務三表核心科目表 (Spec 0203 Ticket 08 / Spec 0239 T01)
     CREATE TABLE IF NOT EXISTS financial_statements_quarterly (
       symbol TEXT NOT NULL,
       market TEXT NOT NULL,              -- 'TW' | 'US'
       year INTEGER NOT NULL,
       quarter INTEGER NOT NULL,          -- 1 | 2 | 3 | 4
+      period_date TEXT,                  -- 財報截止日 YYYY-MM-DD
       revenue REAL,                      -- 營業收入
       gross_profit REAL,                 -- 營業毛利
       operating_income REAL,             -- 營業利益
@@ -295,10 +302,16 @@ function initSqliteLakehouseDb(customPath) {
       current_liabilities REAL,          -- 流動負債
       accounts_receivable REAL,          -- 應收帳款與票據
       inventory REAL,                    -- 存貨
+      cash_and_equivalents REAL,         -- 現金及約當現金
+      short_term_debt REAL,              -- 短期借款
+      long_term_debt REAL,               -- 長期借款
+      capital_stock REAL,                -- 股本
       operating_cash_flow REAL,          -- 營業活動現金流 (CFO)
       capital_expenditure REAL,          -- 資本支出 (CapEx)
       free_cash_flow REAL,               -- 自由現金流 (FCF)
       cash_dividends_paid REAL,          -- 現金股利發放
+      interest_paid REAL,                -- 支付利息
+      source TEXT,                       -- 資料來源 (SEC | FMP | FINMIND)
       updated_at INTEGER NOT NULL,
       PRIMARY KEY (symbol, year, quarter)
     );
@@ -307,6 +320,24 @@ function initSqliteLakehouseDb(customPath) {
 
   // 動態無損補齊既有資料庫之新欄位 (冪等遷移)
   try {
+    const fsqColumns = db.prepare('PRAGMA table_info(financial_statements_quarterly)').all();
+    const existingFsqCols = new Set(fsqColumns.map((c) => c.name));
+    const newFsqCols = [
+      { name: 'period_date', type: 'TEXT' },
+      { name: 'cash_and_equivalents', type: 'REAL' },
+      { name: 'short_term_debt', type: 'REAL' },
+      { name: 'long_term_debt', type: 'REAL' },
+      { name: 'capital_stock', type: 'REAL' },
+      { name: 'interest_paid', type: 'REAL' },
+      { name: 'source', type: 'TEXT' },
+    ];
+    for (const col of newFsqCols) {
+      if (!existingFsqCols.has(col.name)) {
+        try {
+          db.exec(`ALTER TABLE financial_statements_quarterly ADD COLUMN ${col.name} ${col.type};`);
+        } catch {}
+      }
+    }
     const caColumns = db.prepare('PRAGMA table_info(corporate_action_calendar)').all();
     if (!caColumns.some((c) => c.name === 'mandatory_buyback_date')) {
       db.exec('ALTER TABLE corporate_action_calendar ADD COLUMN mandatory_buyback_date TEXT;');
@@ -350,8 +381,17 @@ function initSqliteLakehouseDb(customPath) {
     // 忽略表尚未建立時的遷移檢查錯誤
   }
 
+  // 13. 美股基本面、13F 與美股 ETF 每日快取表 (Spec 0239 T06)
+  try {
+    const { ensureUsFundamentalsTable } = require('./us-fundamentals-ingestion.cjs');
+    ensureUsFundamentalsTable(db);
+  } catch (e) {
+    console.warn('[SQLite] 初始化 us_fundamentals_daily 失敗:', e?.message || e);
+  }
+
   db.getTwMarketBreadthAndSpotSummary = (options) => getTwMarketBreadthAndSpotSummary(db, options);
   db.getMarketMultiHorizonBreadth = (targetDate) => getMarketMultiHorizonBreadth(targetDate, db);
+  initializedDbPaths.add(resolvedPath);
 
   return db;
 }
@@ -629,9 +669,15 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
       ? db
       : getSqliteDbConnection(typeof db === 'string' ? db : undefined);
 
-  // 定錨全域基準日
+  // 定錨全域基準日，搭配資料庫即時水位線指紋自動失效快取 (Spec 0239 T01)
   const baseTargetDate = (typeof targetDate === 'string' && targetDate.trim()) ? targetDate.trim() : null;
-  const cacheKey = `${currentDbPath || 'default'}:${baseTargetDate || 'latest'}`;
+  let dbWatermark = '';
+  try {
+    const dv = db.prepare('PRAGMA data_version').get();
+    const maxRow = db.prepare('SELECT MAX(date) AS max_d, COUNT(*) AS cnt FROM daily_candles').get();
+    dbWatermark = `${dv?.data_version ?? 0}:${maxRow?.max_d ?? ''}:${maxRow?.cnt ?? 0}`;
+  } catch {}
+  const cacheKey = `${currentDbPath || 'default'}:${baseTargetDate || 'latest'}:${dbWatermark}`;
   if (breadthAnchorCache.has(cacheKey)) {
     return breadthAnchorCache.get(cacheKey);
   }
@@ -1104,6 +1150,7 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
  */
 function closeSqliteDb() {
   clearBreadthAnchorCache();
+  initializedDbPaths.clear();
   if (globalDbInstance) {
     try {
       globalDbInstance.close();

@@ -31,6 +31,7 @@ export interface LakehouseFinancialRow {
   currentLiabilities?: number | null;
   capitalStock?: number | null;
   dividendPaid?: number | null;
+  cashDividendsPaid?: number | null;
   interestPaid?: number | null;
   source?: string;
   updatedAt?: string;
@@ -67,6 +68,7 @@ export function mapQuarterlyRecordToLakehouseRow(
     currentLiabilities: record.balanceSheet?.currentLiabilities ?? null,
     capitalStock: record.balanceSheet?.capitalStock ?? null,
     dividendPaid: record.cashFlow?.dividendPaid ?? null,
+    cashDividendsPaid: record.cashFlow?.dividendPaid ?? null,
     interestPaid: record.cashFlow?.interestPaid ?? null,
     source,
   };
@@ -115,7 +117,7 @@ export function mapLakehouseRowToQuarterlyRecord(
       operatingCashFlow: row.operatingCashFlow ?? 0,
       capitalExpenditure: row.capitalExpenditure ?? 0,
       stockBasedCompensation: 0,
-      dividendPaid: row.dividendPaid ?? undefined,
+      dividendPaid: row.dividendPaid ?? row.cashDividendsPaid ?? undefined,
       interestPaid: row.interestPaid ?? undefined,
     },
     auditInfo: {

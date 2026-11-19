@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { VolumeProfileData, VolumeProfileBucket, HeatmapColumn } from '../../../types/aiForceDashboard';
+import { ColorThemeMode, MarketType } from '../../../types/stock';
 import { TermTooltip } from '../../common/TermTooltip';
 
 export interface BucketStyle {
@@ -74,6 +75,9 @@ export function identifyPocAndVacuum(buckets: VolumeProfileBucket[]): {
     if (buckets[i].percentage > buckets[maxIdx].percentage) maxIdx = i;
     if (buckets[i].percentage < buckets[minIdx].percentage) minIdx = i;
   }
+  if (buckets[maxIdx].percentage === buckets[minIdx].percentage) {
+    return { pocBucketIndex: maxIdx, vacuumBucketIndex: -1 };
+  }
   return { pocBucketIndex: maxIdx, vacuumBucketIndex: minIdx };
 }
 
@@ -107,6 +111,8 @@ export function calculateCurrentPricePointer(
 
 export interface VolumeProfileCardProps {
   data: VolumeProfileData;
+  colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
 export const DEFAULT_HEATMAP_COLUMNS: HeatmapColumn[] = [
@@ -144,29 +150,25 @@ export function normalizeHeatmapColumns(cols?: HeatmapColumn[]): HeatmapColumn[]
 }
 
 export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) => {
-  const buckets = data.buckets || [
-    { label: '壓力區', percentage: 4, type: 'resistance', priceMin: 2350, priceMax: 2490 },
-    { label: '大量成交區', percentage: 17, type: 'heavy', priceMin: 2200, priceMax: 2350 },
-    { label: '密集成交區', percentage: 9, type: 'dense', priceMin: 2050, priceMax: 2200 },
-    { label: '慣平區', percentage: 9, type: 'flat', priceMin: 1950, priceMax: 2050 },
-    { label: '支撐區', percentage: 87, type: 'support', priceMin: 1730, priceMax: 1950 },
-  ];
+  const buckets = useMemo(() => (data.buckets && data.buckets.length > 0 ? data.buckets : []), [data.buckets]);
+  const isEmpty = Boolean(data.isEmpty || buckets.length === 0);
 
   // 自適應價格刻度 (優先使用 engine 計算出的 priceTicks，否則由 buckets 高低價推算)
   const priceTicks = useMemo(() => {
     if (data.priceTicks && data.priceTicks.length === 5) {
       return data.priceTicks;
     }
-    const maxP = buckets[0]?.priceMax ?? 2400;
-    const minP = buckets[buckets.length - 1]?.priceMin ?? 1600;
+    if (buckets.length === 0) {
+      return [];
+    }
+    const maxP = buckets[0]?.priceMax ?? 100;
+    const minP = buckets[buckets.length - 1]?.priceMin ?? 0;
     const step = (maxP - minP) / 4;
-    return [
-      Math.round(maxP),
-      Math.round(maxP - step),
-      Math.round(maxP - step * 2),
-      Math.round(maxP - step * 3),
-      Math.round(minP),
-    ];
+    const useDecimals = maxP < 100 || (maxP - minP) < 10;
+    return [0, 1, 2, 3, 4].map((i) => {
+      const val = maxP - step * i;
+      return useDecimals ? Number(val.toFixed(2)) : Math.round(val);
+    });
   }, [data.priceTicks, buckets]);
 
   // 熱力欄位數據（優先使用 engine 動態計算的 4 欄週期熱力，否則回退）
@@ -232,8 +234,49 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
             </span>
           </TermTooltip>
         </div>
+        {data.bullBearFooterTag && !isEmpty && (
+          <span
+            data-testid="volume-profile-footer-tag"
+            style={{
+              fontSize: '0.75rem',
+              padding: '2px 8px',
+              borderRadius: '6px',
+              background: 'rgba(56, 189, 248, 0.14)',
+              color: '#38bdf8',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
+              fontWeight: 700,
+            }}
+          >
+            {data.bullBearFooterTag}
+          </span>
+        )}
       </div>
 
+      {isEmpty ? (
+        <div
+          data-testid="volume-profile-empty-state"
+          style={{
+            flex: 1,
+            minHeight: '250px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            background: 'rgba(15, 23, 42, 0.45)',
+            borderRadius: '10px',
+            border: '1px dashed rgba(148, 163, 184, 0.25)',
+            color: '#94a3b8',
+            fontSize: '0.8rem',
+            padding: '16px',
+            textAlign: 'center',
+          }}
+        >
+          <span style={{ fontWeight: 700, color: '#cbd5e1' }}>暫無足夠量價區間樣本</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>待歷史日 K 成交量回補後自動繪製籌碼熱區</span>
+        </div>
+      ) : (
+      <>
       {/* 主繪圖區：左側 Y 軸刻度 + 垂直熱力長條圖 + 右側色塊圖例 */}
       <div
         style={{
@@ -261,8 +304,8 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
             paddingBottom: '2px',
           }}
         >
-          {priceTicks.map((p) => (
-            <span key={p}>{p}</span>
+          {priceTicks.map((p, idx) => (
+            <span key={`tick-${idx}`}>{p < 100 && !Number.isInteger(p) ? p.toFixed(2) : p}</span>
           ))}
         </div>
 
@@ -307,7 +350,12 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
                   fontWeight: 800,
                   padding: '1px 5px',
                   borderRadius: '3px',
-                  transform: 'translateY(-50%)',
+                  transform:
+                    pricePointer.ratio <= 0.06
+                      ? 'translateY(0%)'
+                      : pricePointer.ratio >= 0.94
+                      ? 'translateY(-100%)'
+                      : 'translateY(-50%)',
                   marginRight: '2px',
                   fontFamily: 'monospace',
                   boxShadow: '0 1px 4px rgba(0,0,0,0.5)',
@@ -490,6 +538,8 @@ export const VolumeProfileCard: React.FC<VolumeProfileCardProps> = ({ data }) =>
         {/* 右側佔位：與圖例區完全同寬度 */}
         <div style={{ visibility: 'hidden', minWidth: '85px' }} />
       </div>
+      </>
+      )}
     </div>
   );
 };

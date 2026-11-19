@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutGrid, AlertTriangle, TrendingUp, Activity, Table2 } from 'lucide-react';
+import { LayoutGrid, AlertTriangle, TrendingUp, Activity, Table2, HelpCircle } from 'lucide-react';
 import type { AiForceTaskTabKey } from '../../types/aiForceDashboard';
 import { TermTooltip } from '../common/TermTooltip';
 
@@ -67,12 +67,10 @@ export const TaskViewsSwitcher: React.FC<TaskViewsSwitcherProps> = ({
               transition: 'all 0.15s ease',
             }}
           >
-            <TermTooltip termId={task.termId}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'help' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center' }}>{task.icon}</span>
-                <span>{task.label}</span>
-              </span>
-            </TermTooltip>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center' }}>{task.icon}</span>
+              <span>{task.label}</span>
+            </span>
             {task.badge && (
               <span
                 style={{
@@ -86,6 +84,22 @@ export const TaskViewsSwitcher: React.FC<TaskViewsSwitcherProps> = ({
               >
                 {task.badge}
               </span>
+            )}
+            {task.termId && (
+              <TermTooltip termId={task.termId}>
+                <span
+                  aria-label={`${task.label} 說明`}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    color: '#94a3b8',
+                    cursor: 'help',
+                    marginLeft: '2px',
+                  }}
+                >
+                  <HelpCircle size={12} />
+                </span>
+              </TermTooltip>
             )}
           </button>
         );

@@ -1,10 +1,13 @@
 import React from 'react';
 import type { BullBearEnergyData } from '../../../types/aiForceDashboard';
+import type { ColorThemeMode, MarketType } from '../../../types/stock';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseBullBearEnergy } from '../../../constants/aiForceGlossary';
 
 export interface BullBearEnergyCardProps {
   data?: BullBearEnergyData;
+  colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
 /**
@@ -61,10 +64,29 @@ export function calculateBullBearRatio(
   };
 }
 
-export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({ data }) => {
-  const bull = data?.bullEnergyPercent ?? 53;
-  const bear = data?.bearEnergyPercent ?? 47;
-  const ratio = data?.bullBearRatio ?? 1.13;
+export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({
+  data,
+  colorTheme,
+  market,
+}) => {
+  const effectiveTheme: ColorThemeMode = colorTheme ?? (market === 'US' ? 'international' : 'taiwan');
+  const isTaiwan = effectiveTheme === 'taiwan';
+  const bullText = isTaiwan ? '#f87171' : '#34d399';
+  const bearText = isTaiwan ? '#34d399' : '#f87171';
+  const bullGrad = isTaiwan
+    ? 'linear-gradient(90deg, #ef4444 0%, #f87171 100%)'
+    : 'linear-gradient(90deg, #10b981 0%, #34d399 100%)';
+  const bearGrad = isTaiwan
+    ? 'linear-gradient(90deg, #34d399 0%, #10b981 100%)'
+    : 'linear-gradient(90deg, #f87171 0%, #ef4444 100%)';
+
+  const rawBull = data?.bullEnergyPercent ?? data?.bullPercent ?? 53;
+  const rawBear = data?.bearEnergyPercent ?? data?.bearPercent ?? 47;
+  const bull = Math.max(0, Math.min(100, Number.isFinite(rawBull) ? rawBull : 50));
+  const bear = Math.max(0, Math.min(100, Number.isFinite(rawBear) ? rawBear : 50));
+  const rawRatio = data?.bullBearRatio ?? 1.13;
+  const ratio = Number.isFinite(rawRatio) ? rawRatio : 1.0;
+  const conclusion = data?.bullBearConclusion || data?.conclusion || (ratio > 1.05 ? '偏多' : ratio < 0.95 ? '偏空' : '均衡');
   const note = data?.noteText ?? '(20日紅K量/黑K量)';
 
   return (
@@ -114,6 +136,15 @@ export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({ data }) 
             </span>
           </TermTooltip>
         </div>
+        <span
+          style={{
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            color: ratio >= 1.05 ? bullText : ratio <= 0.95 ? bearText : '#fbbf24',
+          }}
+        >
+          {conclusion}
+        </span>
       </div>
 
       {/* 主體：多空能量水平對比條 */}
@@ -149,9 +180,8 @@ export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({ data }) 
               style={{
                 width: `${bull}%`,
                 height: '100%',
-                background: 'linear-gradient(90deg, #10b981 0%, #34d399 100%)',
+                background: bullGrad,
                 borderRadius: '5px',
-                boxShadow: '0 0 8px rgba(16, 185, 129, 0.5)',
                 transition: 'width 0.5s ease',
               }}
             />
@@ -161,7 +191,7 @@ export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({ data }) 
               fontSize: '0.78rem',
               fontWeight: 800,
               fontFamily: 'monospace',
-              color: '#34d399',
+              color: bullText,
               width: '36px',
               textAlign: 'right',
             }}
@@ -192,9 +222,8 @@ export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({ data }) 
               style={{
                 width: `${bear}%`,
                 height: '100%',
-                background: 'linear-gradient(90deg, #f87171 0%, #ef4444 100%)',
+                background: bearGrad,
                 borderRadius: '5px',
-                boxShadow: '0 0 8px rgba(239, 68, 68, 0.5)',
                 transition: 'width 0.5s ease',
               }}
             />
@@ -204,7 +233,7 @@ export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({ data }) 
               fontSize: '0.78rem',
               fontWeight: 800,
               fontFamily: 'monospace',
-              color: '#f87171',
+              color: bearText,
               width: '36px',
               textAlign: 'right',
             }}
@@ -229,7 +258,7 @@ export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({ data }) 
             <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>多空比：</span>
           </TermTooltip>
           <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', fontFamily: 'monospace' }}>
-            {ratio} 倍多
+            {ratio >= 1 ? `${ratio} 倍多` : `${ratio} (${conclusion})`}
           </span>
         </div>
         <div style={{ fontSize: '0.75rem', color: '#94a3b8', textAlign: 'right' }}>

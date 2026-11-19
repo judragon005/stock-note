@@ -93,5 +93,31 @@ d('scripts/market-sync/market-sync-core.test.cjs (Ticket 03)', () => {
       fs.rmdirSync(testDir);
     } catch {}
   });
+
+  t('4. parseTpexT86BulkData 應統一剝除上櫃代碼尾綴 O (8299O -> 8299, 00679BO -> 00679B)', () => {
+    const row8299 = new Array(24).fill('0');
+    row8299[0] = '8299O';
+    row8299[1] = '群聯';
+    row8299[10] = '1,500,000';
+    row8299[13] = '300,000';
+    row8299[22] = '-100,000';
+    row8299[23] = '1,700,000';
+
+    const rowBond = new Array(24).fill('0');
+    rowBond[0] = '00679BO';
+    rowBond[1] = '元大美債20年';
+    rowBond[10] = '4,000,000';
+    rowBond[23] = '4,000,000';
+
+    const res = parseTpexT86BulkData({ tables: [{ data: [row8299, rowBond] }] });
+    exp(res['8299O']).toBe(undefined);
+    exp(res['00679BO']).toBe(undefined);
+    exp(res['8299']).toBeDefined();
+    exp(res['8299'].symbol).toBe('8299');
+    exp(res['8299'].foreignNetShares).toBe(1500);
+    exp(res['00679B']).toBeDefined();
+    exp(res['00679B'].symbol).toBe('00679B');
+    exp(res['00679B'].foreignNetShares).toBe(4000);
+  });
 });
 

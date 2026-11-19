@@ -158,4 +158,43 @@ describe('Spec 0200 / Ticket 04: WarRoomPromptCard 戰情室外聯提示詞與�
     expect(html).toContain('共識防線');
     expect(html).toContain('全隊結案');
   });
+
+  it('6. Spec 0239 T09: 載入中、待命態或現價為 0 時不應誤觸停損警報，且勝率榜空狀態文案須對齊 WIN/LOSS 按鈕', () => {
+    const mockPin: PinnedStrategy = {
+      id: 'pin-2344-guard',
+      symbol: '2344',
+      aiModel: 'Claude 3.5 Sonnet',
+      verdict: '防守型持倉',
+      stopLoss: 153.46,
+      validityDays: 5,
+      createdAt: '2026-10-21T00:00:00.000Z',
+      expiresAt: '2026-10-26T00:00:00.000Z',
+      isExpired: false,
+    };
+
+    vi.spyOn(strategyPinEngine, 'getPinnedStrategies').mockReturnValue([mockPin]);
+    vi.spyOn(strategyPinEngine, 'getStrategyOutcomeRecords').mockReturnValue([]);
+
+    const loadingHtml = renderToStaticMarkup(
+      React.createElement(WarRoomPromptCard, {
+        digest: mockDigest,
+        isLoading: true,
+        defaultShowLeaderboard: true,
+      })
+    );
+    expect(loadingHtml).not.toContain('跌破停損線');
+    expect(loadingHtml).toContain('WIN');
+    expect(loadingHtml).toContain('LOSS');
+    expect(loadingHtml).not.toContain('點擊「獲利達標」或「停損出場」');
+
+    const zeroPriceHtml = renderToStaticMarkup(
+      React.createElement(WarRoomPromptCard, {
+        digest: {
+          ...mockDigest,
+          quote: { ...mockDigest.quote, currentPrice: 0 },
+        },
+      })
+    );
+    expect(zeroPriceHtml).not.toContain('跌破停損線');
+  });
 });

@@ -11,7 +11,7 @@ describe('Spec 0196 Ticket 09: 戰情室外聯提示詞受控聯網獵犬協議�
       high: 155,
       low: 148,
       close: 152,
-      volume: 5000, // 20D 均量 5000 張
+      volume: 5000 * 1000, // 20D 均量 5000 張 (台股日 K 原始單位為股)
     }));
 
     const mockReport4979: AiForceDashboardReport = {
@@ -147,7 +147,7 @@ describe('Spec 0196 Ticket 09: 戰情室外聯提示詞受控聯網獵犬協議�
       },
       klineSystem: {
         candles: [
-          { date: '2026-10-19', open: 99.0, high: 100.0, low: 98.0, close: 99.0, volume: 9230 },
+          { date: '2026-10-19', open: 99.0, high: 100.0, low: 98.0, close: 99.0, volume: 9230 * 1000 },
         ],
       },
       chipsSummary: {

@@ -21,6 +21,23 @@ function parseCleanNumber(val) {
   return isNaN(num) ? 0 : num;
 }
 
+/**
+ * 統一剝除上櫃代碼尾綴 O（如 8299O -> 8299、00679BO -> 00679B）
+ * @param {string} symbol
+ * @returns {string}
+ */
+function stripOtcSuffix(symbol) {
+  if (symbol === null || symbol === undefined) return '';
+  const clean = String(symbol).trim().toUpperCase();
+  if (clean.length > 2 && clean.endsWith('O')) {
+    const stripped = clean.slice(0, -1);
+    if (/^[0-9]{4,6}[A-Z]?$/.test(stripped)) {
+      return stripped;
+    }
+  }
+  return clean;
+}
+
 function parseTwseT86BulkData(rawData) {
   const result = {};
   if (!rawData || (rawData.stat !== 'OK' && rawData.stat !== 'ok') || !Array.isArray(rawData.data)) {
@@ -59,7 +76,8 @@ function parseTpexT86BulkData(rawData) {
 
     for (const row of dataRows) {
       if (!Array.isArray(row) || row.length < 9) continue;
-      const symbol = String(row[0]).trim();
+      const symbol = stripOtcSuffix(row[0]);
+      if (!symbol) continue;
       const name = String(row[1]).trim();
       let foreignNetShares = 0;
       let trustNetShares = 0;
@@ -147,10 +165,8 @@ function parseTpexDailyQuotesBulk(rawData, dateStr) {
       if (rawSymbol.length > 7) continue;
 
       // 剝除櫃買可能的 'O' 尾綴 (如 3293O -> 3293, 00679BO -> 00679B)
-      const symbol = rawSymbol.endsWith('O') && /^\d+[A-Z]?O$/.test(rawSymbol)
-        ? rawSymbol.slice(0, -1)
-        : rawSymbol;
-      if (symbol.length > 6) continue;
+      const symbol = stripOtcSuffix(rawSymbol);
+      if (!symbol || symbol.length > 6) continue;
 
       const isSplitSign = row[3] === '+' || row[3] === '-' || row[3] === 'X' || row[3] === ' ';
       const close = parseCleanNumber(row[2]);
@@ -314,6 +330,7 @@ async function retryFetch(fn, retries = 3, delayMs = 1500) {
 module.exports = {
   formatDateYMD,
   parseCleanNumber,
+  stripOtcSuffix,
   parseTwseT86BulkData,
   parseTpexT86BulkData,
   parseTwseDailyQuotesBulk,

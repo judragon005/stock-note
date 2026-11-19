@@ -21,4 +21,16 @@ describe('AiConfidenceCard & grade helpers', () => {
     expect(mockData.overallConfidence).toBe(47);
     expect(mockData.dataCompleteness).toBe(100);
   });
+
+  it('應將「經驗穩定度」正名為「訊號穩定度」並具備 0~100 夾取與無資料 0% 防禦 (T14)', async () => {
+    const React = await import('react');
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const { AiConfidenceCard } = await import('./AiConfidenceCard');
+
+    const html = renderToStaticMarkup(React.createElement(AiConfidenceCard, { data: undefined }));
+    expect(html).toContain('訊號穩定度');
+    expect(html).not.toContain('經驗穩定度');
+    expect(html).not.toContain('>100%<');
+    expect(html).toContain('>0%<');
+  });
 });

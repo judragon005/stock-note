@@ -739,8 +739,8 @@ export const AI_FORCE_GLOSSARY: Record<string, GlossaryEntry> = {
     term: '任務一：綜合分析報告',
     enTerm: 'Task 1: Comprehensive Analysis',
     category: 'view',
-    metaphor: '飛機駕駛艙的全景儀表盤，18 張卡片全面監控。',
-    meaning: '匯聚價量、均線、法人、籌碼、風險與 AI 預測之 18 張多維 Bento-Grid 卡片全景圖。',
+    metaphor: '飛機駕駛艙的全景儀表盤，21 大戰情模組全面監控。',
+    meaning: '匯聚價量、均線、法人、籌碼、13F/集保、營收、估值與 AI 預測之 21 張多維 Bento-Grid 模組全景圖。',
     buySignal: '當多數卡片呈現綠色或強勢偏多共振時，為最佳進場買點。',
     sellSignal: '當多數卡片轉為紅色高風險或主力倒貨時，應立即減碼避險。',
   },
@@ -846,6 +846,46 @@ export const AI_FORCE_GLOSSARY: Record<string, GlossaryEntry> = {
     buySignal: '個股多方優勢而大盤極度恐慌時觸發「逆勢抗跌 (Alpha 領頭羊)」，為最強抗跌買訊。',
     sellSignal: '大盤極度貪婪但個股量能偏空時觸發「拉指數出個股 (主力背離)」，應戒備誘多倒貨。',
   },
+  tdccDistribution: {
+    id: 'tdccDistribution',
+    term: 'TDCC 集保千張大戶股權分散趨勢',
+    enTerm: 'TDCC Major Shareholder Distribution (Card 19)',
+    category: 'distribution',
+    metaphor: '每週盤點籌碼是流進大戶金庫，還是散落到散戶口袋。',
+    meaning: '追蹤台灣集保結算所每週公布之 >1000 張大戶持股比率、<10 張散戶持股比率與總股東人數的近 10 週變動。',
+    buySignal: '千張大戶比率連續增持且總股東人數減少，形成「散戶退場、大戶吸籌」剪刀差。',
+    sellSignal: '大戶持股顯著下降而散戶人數暴增，代表主力高檔派發給散戶接刀。',
+  },
+  usInstitutionalHoldings: {
+    id: 'usInstitutionalHoldings',
+    term: '美股 13F 機構持股與放空籌碼結構',
+    enTerm: 'US SEC 13F Institutional & Short Float Structure (Card 19)',
+    category: 'distribution',
+    metaphor: '透視華爾街長線機構控盤力道與空頭軋空燃料庫。',
+    meaning: '整合 SEC 13F 機構持股比、內部人持股比、公眾流通比與 FINRA 空單佔流通比 (Short Float %)。',
+    buySignal: '機構持股比高 (>60%) 具長線護城河，或 Short Float >10% 配合量價突破易誘發軋空。',
+    sellSignal: '機構減碼、內部人拋售且空單持續攀升，代表基本面面臨華爾街共識下修。',
+  },
+  etf: {
+    id: 'etf',
+    term: 'ETF 資產規模、費用率與收益分配',
+    enTerm: 'ETF AUM, Expense Ratio & Distribution (Card 20)',
+    category: 'valuation',
+    metaphor: '指數基金的體格大小、年度保管費與現金配息實力。',
+    meaning: '針對台美股 ETF 展示基金資產規模 (AUM)、總費用率、受益人規模、近四季配息與折溢價率。',
+    buySignal: '規模穩健成長、內扣費用低廉且折溢價收斂於 ±0.3% 以內，適合長線分批配置。',
+    sellSignal: '大幅溢價超過 1% 時切忌市價追高，應提防造市商套利賣壓。',
+  },
+  revenue: {
+    id: 'revenue',
+    term: '營業收入與年增率成長走勢',
+    enTerm: 'Monthly / Quarterly Revenue & YoY Trend (Card 20)',
+    category: 'valuation',
+    metaphor: '公司最真實的現金收銀機流水，驗證基本面成長是否貨真價實。',
+    meaning: '台股呈現近 12 個月單月營收與 YoY/MoM 走勢；美股呈現 10-Q/10-K 近 8 季營收與年增率趨勢。',
+    buySignal: '連續多期年月/年季雙增或創歷史新高 (ATH)，確認基本面進入強勁成長軌道。',
+    sellSignal: '營收連續年減衰退且跌破關鍵季線，須防範基本面轉弱引發戴維斯雙殺。',
+  },
 };
 
 /**
@@ -856,28 +896,40 @@ export function getGlossaryEntry(id: string): GlossaryEntry | undefined {
 }
 
 /**
- * 診斷主力成本與現價多空關係 (動態數值即時評估)
+ * 診斷主力成本與現價多空關係 (動態數值即時評估，支援 TWD/USD 雙幣別)
  */
-export function diagnoseMainForceCost(currentPrice: number, mainForceCost: number): string {
+export function diagnoseMainForceCost(
+  currentPrice: number,
+  mainForceCost: number,
+  currency: 'TWD' | 'USD' = 'TWD'
+): string {
   if (!mainForceCost || mainForceCost <= 0) return '暫無主力成本資料';
   const diffPercent = ((currentPrice - mainForceCost) / mainForceCost) * 100;
-  const formattedPrice = currentPrice.toLocaleString();
-  const formattedCost = mainForceCost.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+  const formattedPrice =
+    currency === 'USD'
+      ? `$${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : `${currentPrice.toLocaleString()} 元`;
+  const formattedCost =
+    currency === 'USD'
+      ? `$${mainForceCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : `${mainForceCost.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })} 元`;
   const formattedDiff = `${diffPercent >= 0 ? '+' : ''}${diffPercent.toFixed(1)}%`;
 
   if (diffPercent >= 0) {
-    return `現價 ${formattedPrice} 元高於主力成本 ${formattedCost} 元 (${formattedDiff})。主力處於賺錢獲利區，有強烈意願守住成本價防線，屬【偏多守穩】狀態！`;
+    return `現價 ${formattedPrice} 高於主力成本 ${formattedCost} (${formattedDiff})。主力處於賺錢獲利區，有強烈意願守住成本價防線，屬【偏多守穩】狀態！`;
   } else {
-    return `現價 ${formattedPrice} 元已跌破主力成本 ${formattedCost} 元 (${formattedDiff})。主力大戶已陷入虧損套牢，可能引發認賠砍單賣壓，屬【偏空危險】狀態，建議嚴格停損！`;
+    return `現價 ${formattedPrice} 已跌破主力成本 ${formattedCost} (${formattedDiff})。主力大戶已陷入虧損套牢，可能引發認賠砍單賣壓，屬【偏空危險】狀態，建議嚴格停損！`;
   }
 }
 
 /**
  * 診斷隔日沖風險 (動態數值即時評估)
  */
-export function diagnoseDayTradeRisk(dayTradeRiskPercent: number, dayTradeRatio: number): string {
-  if (dayTradeRiskPercent >= 50 || dayTradeRatio >= 40) {
-    return `目前隔日沖比例偏高 (風險指數 ${dayTradeRiskPercent}%, 沖銷比 ${dayTradeRatio}%)。明天開盤極易出現「開高走低倒貨賣壓」，新手早盤切忌追高買進，甚至應逢高賣出！`;
+export function diagnoseDayTradeRisk(dayTradeRiskPercent: number, dayTradeRatio?: number): string {
+  const hasRatio = typeof dayTradeRatio === 'number' && Number.isFinite(dayTradeRatio);
+  if (dayTradeRiskPercent >= 50 || (hasRatio && dayTradeRatio >= 40)) {
+    const ratioNote = hasRatio ? `, 沖銷比 ${dayTradeRatio}%` : '';
+    return `目前隔日沖比例偏高 (風險指數 ${dayTradeRiskPercent}%${ratioNote})。明天開盤極易出現「開高走低倒貨賣壓」，新手早盤切忌追高買進，甚至應逢高賣出！`;
   }
   return `隔日沖風險較低 (風險指數 ${dayTradeRiskPercent}%)。籌碼以波段持有為主，短線倒貨賣壓相對溫和，走勢較為健康！`;
 }

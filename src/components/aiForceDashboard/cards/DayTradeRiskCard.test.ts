@@ -76,4 +76,104 @@ describe('DayTradeRiskCard - 隔日沖風險進度條元件規範 (Ticket 19)', 
       expect(res.marginChangeText).toBeNull();
     });
   });
+
+  describe('Spec 0239 T15: 風險指數一致性、零值中性灰、null 防護與美股語意切換', () => {
+    it('底部風險指數應優先顯示 data.riskIndex 而非重算 5 項平均', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { DayTradeRiskCard } = await import('./DayTradeRiskCard');
+
+      // 5 項平均為 (20+20+20+20+20)/5 = 20，但 data.riskIndex 為 73
+      const html = renderToStaticMarkup(
+        React.createElement(DayTradeRiskCard, {
+          data: {
+            abnormalSelling: 20,
+            turnoverRate: 20,
+            dayTradeRatio: 20,
+            pullbackRisk: 20,
+            intradayVolatility: 20,
+            riskLevel: 'HIGH',
+            riskIndex: 73,
+          },
+        })
+      );
+
+      expect(html).toContain('73%');
+      expect(html).not.toContain('風險指數：</span></span><span style="font-size:0.82rem;font-weight:800;font-family:monospace;color:#ef4444">20%');
+    });
+
+    it('shortMarginRatio 為 null 時不應渲染券資比徽章，marginBalanceChange === 0 應顯示中性灰 #94a3b8', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { DayTradeRiskCard } = await import('./DayTradeRiskCard');
+
+      const html = renderToStaticMarkup(
+        React.createElement(DayTradeRiskCard, {
+          data: {
+            abnormalSelling: 40,
+            turnoverRate: 45,
+            dayTradeRatio: 35,
+            pullbackRisk: 30,
+            intradayVolatility: 50,
+            riskLevel: 'MEDIUM',
+            riskIndex: 42,
+            shortMarginRatio: null as unknown as number,
+            marginBalanceChange: 0,
+          },
+        })
+      );
+
+      expect(html).not.toContain('data-testid="margin-ratio-badge"');
+      expect(html).toContain('0 張');
+      expect(html).toContain('color:#94a3b8;font-weight:700;font-family:monospace');
+    });
+
+    it('第 1 項指標 termId 不應與卡片總覽 dayTradeRisk 重複錯綁', () => {
+      const items = getDayTradeRiskItems({});
+      expect(items[0].termId).not.toBe('dayTradeRisk');
+      expect(items[0].termId).toBeTruthy();
+    });
+
+    it('美股模式 (market="US" 或 isUsMarket=true) 應切換為「美股日內波動與換手風險」並呈現 ATR%、RVOL、Short Float (%)，不得含台股詞彙', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { DayTradeRiskCard } = await import('./DayTradeRiskCard');
+
+      const html = renderToStaticMarkup(
+        React.createElement(DayTradeRiskCard, {
+          market: 'US',
+          colorTheme: 'international',
+          data: {
+            abnormalSelling: 48,
+            turnoverRate: 52,
+            dayTradeRatio: 44,
+            pullbackRisk: 39,
+            intradayVolatility: 61,
+            riskLevel: 'MEDIUM',
+            riskIndex: 51,
+            isUsMarket: true,
+            atrPercent: 3.45,
+            rvol: 1.82,
+            shortFloatRatio: 11.4,
+            sblBalance: 999,
+            marginBalanceChange: 120,
+            shortMarginRatio: 25,
+          },
+        })
+      );
+
+      expect(html).toContain('美股日內波動與換手風險');
+      expect(html).toContain('ATR%');
+      expect(html).toContain('3.45%');
+      expect(html).toContain('RVOL');
+      expect(html).toContain('1.82x');
+      expect(html).toContain('Short Float');
+      expect(html).toContain('11.4%');
+      expect(html).not.toContain('隔日沖');
+      expect(html).not.toContain('券資比');
+      expect(html).not.toContain('借券');
+      expect(html).not.toContain('融資');
+      expect(html).not.toContain('張');
+    });
+  });
 });

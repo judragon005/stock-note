@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { InstitutionalFlowData } from '../../../types/aiForceDashboard';
-import { ColorThemeMode } from '../../../types/stock';
+import { ColorThemeMode, MarketType } from '../../../types/stock';
 import { TermTooltip } from '../../common/TermTooltip';
 
 export interface DualAxisScales {
@@ -165,7 +165,7 @@ export function getRecentDaysSlice<T>(history: T[], count = 5): T[] {
 }
 
 /**
- * 依據歷史計算近 20 日與近 5 日總結
+ * 依據歷史計算近 20 日與近 5 日總結 (Zero-Mock: 空陣列絕不回傳 -64張 / +1,621張)
  */
 export function computeInstitutionalSummaries(history: InstitutionalFlowData['history']): {
   summary5Days: string;
@@ -173,8 +173,8 @@ export function computeInstitutionalSummaries(history: InstitutionalFlowData['hi
 } {
   if (!history || history.length === 0) {
     return {
-      summary5Days: '偏空 (-64張)',
-      summary20Days: '多頭 (20日+1,621張)',
+      summary5Days: '資料待補 (0張)',
+      summary20Days: '資料待補 (20日0張)',
     };
   }
 
@@ -186,11 +186,11 @@ export function computeInstitutionalSummaries(history: InstitutionalFlowData['hi
 
   const sum20 = history[history.length - 1]?.cumulativeTotalShares ?? sum5;
 
-  const stance5 = sum5 >= 0 ? '偏多' : '偏空';
-  const stance20 = sum20 >= 0 ? '多頭' : '空頭';
+  const stance5 = sum5 > 0 ? '偏多' : sum5 < 0 ? '偏空' : '持平';
+  const stance20 = sum20 > 0 ? '多頭' : sum20 < 0 ? '空頭' : '持平';
 
-  const s5Str = sum5 >= 0 ? `+${sum5.toLocaleString()}` : sum5.toLocaleString();
-  const s20Str = sum20 >= 0 ? `+${sum20.toLocaleString()}` : sum20.toLocaleString();
+  const s5Str = sum5 > 0 ? `+${sum5.toLocaleString()}` : sum5.toLocaleString();
+  const s20Str = sum20 > 0 ? `+${sum20.toLocaleString()}` : sum20.toLocaleString();
 
   return {
     summary5Days: `${stance5} (${s5Str}張)`,
@@ -198,9 +198,44 @@ export function computeInstitutionalSummaries(history: InstitutionalFlowData['hi
   };
 }
 
+export interface InstitutionalBarLayout {
+  centers: number[];
+  step: number;
+  barW: number;
+  gap: number;
+  groupWidth: number;
+  isDense: boolean;
+}
+
+/**
+ * 統一三大法人直方柱群組與累計折線之 X 軸中心點，並動態縮放柱寬防止 39~60 日重疊
+ */
+export function computeInstitutionalBarLayout(
+  count: number,
+  chartWidth: number = 340,
+  padX: number = 15
+): InstitutionalBarLayout {
+  if (count <= 0) {
+    return { centers: [], step: 0, barW: 0, gap: 0, groupWidth: 0, isDense: false };
+  }
+  const usableWidth = chartWidth - padX * 2;
+  const step = usableWidth / count;
+  const isDense = count > 60;
+  const gap = step < 10 ? 0.35 : 0.8;
+  const barW = isDense
+    ? Math.max(1, Math.min(4, step * 0.8))
+    : Math.max(0.9, Math.min(6, (step * 0.78 - gap * 2) / 3));
+  const groupWidth = isDense ? barW : barW * 3 + gap * 2;
+  const centers = Array.from({ length: count }, (_, i) =>
+    Number((padX + i * step + step / 2).toFixed(2))
+  );
+  return { centers, step, barW, gap, groupWidth, isDense };
+}
+
 export interface InstitutionalFlowCardProps {
   data: InstitutionalFlowData;
   colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
 export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
@@ -224,19 +259,40 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
     [history]
   );
 
-  // 累計折線 points
+  const barLayout = useMemo(
+    () => computeInstitutionalBarLayout(history.length, chartWidth, 15),
+    [history.length, chartWidth]
+  );
+
+  // 累計折線 points (與柱群組中心點 1:1 對齊)
   const cumulativePoints = useMemo(() => {
-    if (history.length === 0) return '';
-    const usableWidth = chartWidth - 30;
-    const step = usableWidth / Math.max(1, history.length - 1);
+    if (history.length <= 1) return '';
     return history
       .map((h, i) => {
-        const x = Number((15 + i * step).toFixed(1));
+        const x = barLayout.centers[i] ?? 15;
         const y = projectCumulativeToY(h.cumulativeTotalShares, scales, chartHeight, padding);
         return `${x},${y}`;
       })
       .join(' ');
-  }, [history, scales, chartHeight]);
+  }, [history, barLayout, scales, chartHeight]);
+
+  const isTaiwan = colorTheme === 'taiwan';
+  const posColor = isTaiwan ? '#ef4444' : '#10b981';
+  const negColor = isTaiwan ? '#10b981' : '#ef4444';
+  const posBg = isTaiwan ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)';
+  const negBg = isTaiwan ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)';
+  const neutralBg = 'rgba(148, 163, 184, 0.15)';
+
+  const summary20Text = data.cumulative20DaysSummary || summaries.summary20Days;
+  const summary5Text = data.recent5DaysSummary || summaries.summary5Days;
+  const getSummaryBadgeStyle = (txt: string) => {
+    if (history.length === 0) return { bg: neutralBg, color: '#94a3b8' };
+    if (txt.includes('多')) return { bg: posBg, color: posColor };
+    if (txt.includes('空')) return { bg: negBg, color: negColor };
+    return { bg: neutralBg, color: '#94a3b8' };
+  };
+  const s20Style = getSummaryBadgeStyle(summary20Text);
+  const s5Style = getSummaryBadgeStyle(summary5Text);
 
   // Ticket 04 (Spec 0169): 美股標的獨立微觀量價動能視圖 (徹底根除外資/投信/自營商假數據)
   if (data.isUsMarket || data.usMicrostructure) {
@@ -475,7 +531,31 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
         </div>
       </div>
 
-      {/* 主體區：上下結構 (Spec 0174: 上方雙軸 SVG 全寬展開 + 下方近 5 日明細表格) */}
+      {/* 主體區：空狀態或上下結構 */}
+      {history.length === 0 ? (
+        <div
+          data-testid="inst-flow-empty-state"
+          style={{
+            flex: 1,
+            minHeight: '200px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            background: 'rgba(15, 23, 42, 0.45)',
+            borderRadius: '10px',
+            border: '1px dashed rgba(148, 163, 184, 0.25)',
+            color: '#94a3b8',
+            fontSize: '0.8rem',
+            padding: '16px',
+            textAlign: 'center',
+          }}
+        >
+          <span style={{ fontWeight: 700, color: '#cbd5e1' }}>尚無三大法人買賣超日報數據</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>待證交所/櫃買中心法人日報同步後自動更新雙軸圖與近5日明細</span>
+        </div>
+      ) : (
       <div
         style={{
           display: 'flex',
@@ -485,12 +565,11 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
           minWidth: 0,
         }}
       >
-        {/* 上方雙軸 SVG 圖表 (全寬展開，釋放解析度) */}
+        {/* 上方雙軸 SVG 圖表 */}
         <div style={{ width: '100%', minHeight: '140px', position: 'relative', minWidth: 0 }}>
           <svg
             viewBox={`0 0 ${chartWidth} ${chartHeight}`}
             style={{ width: '100%', height: '100%', display: 'block' }}
-            preserveAspectRatio="none"
           >
             {/* 零軸基準線 */}
             <line
@@ -502,33 +581,35 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
               strokeWidth="1"
             />
 
-            {/* 每日直方柱 (短天期三色並排，250日等長天期自適應合計單柱) */}
+            {/* 每日直方柱 (與折線共用 center X 座標，動態柱寬永不重疊) */}
             {history.map((h, i) => {
-              const usableWidth = chartWidth - 30;
-              const isDense = history.length > 60;
-              const step = usableWidth / Math.max(1, history.length);
-              const groupX = 15 + i * step;
+              const centerX = barLayout.centers[i] ?? 15;
+              const { barW, gap, groupWidth, isDense } = barLayout;
 
               if (isDense) {
-                // 密集長天期 (如 250 日)：繪製單一法人淨買賣直方柱 (買紅賣綠，不重疊)
                 const totalNet = h.foreignShares + h.trustShares + h.dealerShares;
                 const yNet = projectBarToY(totalNet, scales, chartHeight, padding);
                 const topNet = Math.min(yNet, scales.zeroY);
                 const heightNet = Math.max(1, Math.abs(yNet - scales.zeroY));
                 const isBull = totalNet >= 0;
-                const barColor = isBull
-                  ? (colorTheme === 'taiwan' ? '#ef4444' : '#10b981')
-                  : (colorTheme === 'taiwan' ? '#10b981' : '#ef4444');
-                const barW = Math.max(1, Math.min(4, step * 0.85));
+                const barColor = isBull ? posColor : negColor;
 
                 return (
                   <g key={i}>
-                    <rect x={groupX} y={topNet} width={barW} height={heightNet} fill={barColor} opacity="0.85" rx="0.3" />
+                    <rect
+                      x={centerX - barW / 2}
+                      y={topNet}
+                      width={barW}
+                      height={heightNet}
+                      fill={barColor}
+                      opacity="0.85"
+                      rx="0.3"
+                    />
                   </g>
                 );
               }
 
-              const barW = Math.max(2, (step - 4) / 3);
+              const startX = centerX - groupWidth / 2;
 
               // 外資
               const yF = projectBarToY(h.foreignShares, scales, chartHeight, padding);
@@ -547,9 +628,9 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
 
               return (
                 <g key={i}>
-                  <rect x={groupX} y={topF} width={barW} height={heightF} fill="#38bdf8" rx="0.5" />
-                  <rect x={groupX + barW + 1} y={topT} width={barW} height={heightT} fill="#f59e0b" rx="0.5" />
-                  <rect x={groupX + (barW + 1) * 2} y={topD} width={barW} height={heightD} fill="#34d399" rx="0.5" />
+                  <rect x={startX} y={topF} width={barW} height={heightF} fill="#38bdf8" rx="0.5" />
+                  <rect x={startX + barW + gap} y={topT} width={barW} height={heightT} fill="#f59e0b" rx="0.5" />
+                  <rect x={startX + (barW + gap) * 2} y={topD} width={barW} height={heightD} fill="#34d399" rx="0.5" />
                 </g>
               );
             })}
@@ -564,15 +645,28 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
                 style={{ filter: 'drop-shadow(0 0 6px rgba(251, 191, 36, 0.4))' }}
               />
             )}
+
+            {/* 單筆資料時顯示累計圓點 */}
+            {history.length === 1 && (
+              <circle
+                data-testid="inst-cumulative-single-dot"
+                cx={barLayout.centers[0]}
+                cy={projectCumulativeToY(history[0].cumulativeTotalShares, scales, chartHeight, padding)}
+                r="4"
+                fill="#fbbf24"
+                stroke="#0f172a"
+                strokeWidth="1.5"
+              />
+            )}
           </svg>
         </div>
 
-        {/* 下方近 5 日明細表格 (Spec 0174: 全寬呈現、字體放大、對齊 5 日總結) */}
+        {/* 下方近 5 日明細表格 */}
         <div
           style={{
             display: 'flex',
             flexDirection: 'column',
-            overflowX: 'hidden',
+            overflowX: 'auto',
             background: 'rgba(15, 23, 42, 0.55)',
             borderRadius: '8px',
             padding: '6px 8px',
@@ -586,6 +680,7 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
               borderCollapse: 'collapse',
               fontSize: '0.80rem',
               fontFamily: 'monospace',
+              fontVariantNumeric: 'tabular-nums',
             }}
           >
             <thead>
@@ -626,6 +721,7 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
           </table>
         </div>
       </div>
+      )}
 
 
       {/* 底部總結標籤列 (Ticket 17) */}
@@ -651,13 +747,13 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
             style={{
               padding: '2px 8px',
               borderRadius: '5px',
-              background: summaries.summary20Days.includes('多') ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)',
-              color: summaries.summary20Days.includes('多') ? '#ef4444' : '#10b981',
+              background: s20Style.bg,
+              color: s20Style.color,
               fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
-            {data.cumulative20DaysSummary || summaries.summary20Days}
+            {summary20Text}
           </span>
         </div>
 
@@ -669,13 +765,13 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
             style={{
               padding: '2px 8px',
               borderRadius: '5px',
-              background: summaries.summary5Days.includes('多') ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)',
-              color: summaries.summary5Days.includes('多') ? '#ef4444' : '#10b981',
+              background: s5Style.bg,
+              color: s5Style.color,
               fontSize: '0.75rem',
               fontWeight: 800,
             }}
           >
-            {data.recent5DaysSummary || summaries.summary5Days}
+            {summary5Text}
           </span>
         </div>
 

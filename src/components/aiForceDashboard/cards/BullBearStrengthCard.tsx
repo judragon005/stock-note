@@ -1,10 +1,13 @@
 import React from 'react';
 import type { BullBearStrengthData } from '../../../types/aiForceDashboard';
+import type { ColorThemeMode, MarketType } from '../../../types/stock';
 import { calculateCircleProgress } from './HealthSummaryCard';
 import { TermTooltip } from '../../common/TermTooltip';
 
 export interface BullBearStrengthCardProps {
   data?: BullBearStrengthData;
+  colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
 /**
@@ -93,18 +96,28 @@ const StrengthRing: React.FC<StrengthRingProps> = ({ label, percent, color, term
   );
 };
 
-export const BullBearStrengthCard: React.FC<BullBearStrengthCardProps> = ({ data }) => {
-  const bull = data?.bullStrengthPercent ?? 58;
-  const bear = data?.bearStrengthPercent ?? 42;
-  const volume = data?.volumeStrengthPercent ?? 53;
-  const score = data?.compositeScore ?? 70;
+export const BullBearStrengthCard: React.FC<BullBearStrengthCardProps> = ({
+  data,
+  colorTheme,
+  market,
+}) => {
+  const effectiveTheme: ColorThemeMode = colorTheme ?? (market === 'US' ? 'international' : 'taiwan');
+  const isTaiwan = effectiveTheme === 'taiwan';
+  const bullColor = isTaiwan ? '#f87171' : '#34d399';
+  const bearColor = isTaiwan ? '#38bdf8' : '#f87171';
 
-  const tierMeta = calculateSignalTier(score);
+  const bull = Number.isFinite(data?.bullStrengthPercent) ? (data!.bullStrengthPercent as number) : 50;
+  const bear = Number.isFinite(data?.bearStrengthPercent) ? (data!.bearStrengthPercent as number) : 50;
+  const volume = Number.isFinite(data?.volumeStrengthPercent) ? (data!.volumeStrengthPercent as number) : 50;
+  const score = Number.isFinite(data?.compositeScore) ? (data!.compositeScore as number) : 50;
+
+  const computedTier = calculateSignalTier(score);
+  const tierLevel = data?.signalTierLevel ?? computedTier.tier;
 
   const rings = [
-    { label: '多方強度', percent: bull, color: '#f87171', termId: 'bullStrength' },
-    { label: '空方強度', percent: bear, color: '#38bdf8', termId: 'bearStrength' },
-    { label: '量能強度', percent: volume, color: '#10b981', termId: 'bullEnergy' },
+    { label: '多方強度', percent: bull, color: bullColor, termId: 'bullStrength' },
+    { label: '空方強度', percent: bear, color: bearColor, termId: 'bearStrength' },
+    { label: '量能強度', percent: volume, color: '#38bdf8', termId: 'volumeShares' },
   ];
 
   return (
@@ -160,6 +173,8 @@ export const BullBearStrengthCard: React.FC<BullBearStrengthCardProps> = ({ data
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-around',
+          flexWrap: 'wrap',
+          gap: '6px',
           flex: 1,
           padding: '10px 0',
         }}
@@ -169,7 +184,7 @@ export const BullBearStrengthCard: React.FC<BullBearStrengthCardProps> = ({ data
         ))}
       </div>
 
-      {/* 底部信號等級說明 (對齊照片) */}
+      {/* 底部信號等級說明 */}
       <div
         style={{
           paddingTop: '6px',
@@ -181,7 +196,7 @@ export const BullBearStrengthCard: React.FC<BullBearStrengthCardProps> = ({ data
       >
         <TermTooltip termId="bullStrength">
           <span style={{ cursor: 'help' }}>
-            信號等級：<strong style={{ color: tierMeta.color }}>{tierMeta.tier} 級區</strong>
+            信號等級：<strong style={{ color: computedTier.color }}>{tierLevel} 級區</strong>
           </span>
         </TermTooltip>
         <span style={{ color: '#94a3b8', marginLeft: '4px' }}>(1級最強 ~ 5級最弱，依綜合評分 {score})</span>

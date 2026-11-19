@@ -144,6 +144,7 @@ export interface VolumeProfileData {
   heatmapColumns?: HeatmapColumn[]; // 4 欄週期熱力數據 (5日/10日/20日/60日)
   currentPrice?: number; // 最新收盤價
   currentPriceYRatio?: number; // 最新現價落於熱區圖之相對高度比例 (0~1)
+  isEmpty?: boolean;
 }
 
 /**
@@ -251,12 +252,16 @@ export interface DayTradeRiskData {
   intradayVolatility: number; // 62%
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; // "中"
   riskIndex: number; // 53%
+  isUsMarket?: boolean;
   marginBalance?: number; // 融資餘額 (張)
   shortBalance?: number; // 融券餘額 (張)
   shortMarginRatio?: number; // 券資比 (%)
   dayTradeRate?: number; // 當沖率 (%)
   sblBalance?: number; // 借券賣出餘額 (張/股)
   marginBalanceChange?: number; // 融資餘額增減 (張)
+  shortFloatRatio?: number; // 美股空單佔流通比 (%)
+  rvol?: number; // 美股相對均量比
+  atrPercent?: number; // 美股 14 日 ATR%
 }
 
 /**
@@ -335,6 +340,7 @@ export interface MarketSentimentData {
     putCallRatio?: number;
     foreignFuturesOi?: number;
     trustFuturesOi?: number;
+    asOfDateText?: string;
   };
 }
 
@@ -394,6 +400,7 @@ export interface ForceDistributionData {
   retailBuyPercent: number; // 35%
   retailSellPressurePercent: number; // 36%
   asOfDateText: string; // "2026-09-18 (法人買進/賣出佔成交量比例，依 20 日平均)"
+  isUsMarket?: boolean;
 }
 
 /**
@@ -413,11 +420,12 @@ export interface BullBearStrengthData {
 export interface MainForceVerdictData {
   primaryVerb: string; // "調節減碼"
   semanticTag: string; // "法人動作"
-  fullVerdictText: string; // "AI 結論：經 5 日主力行為綜合研判（法人近 5 日合計 -64 張、收盤相對 20 日 VWAP +7.5%、RSI 60），法人小幅調節，短線宜區間操作。"
+  fullVerdictText: string;
   stopLossPrice?: number;
   takeProfitPrice?: number;
   riskRewardRatio?: string;
   avgVolume5Lots?: number;
+  isUsMarket?: boolean;
 }
 
 /**
@@ -481,6 +489,9 @@ export interface EtfYieldItem {
 
 export interface MonthlyRevenueData {
   isEtf: boolean;
+  isQuarterly?: boolean; // 美股 10-Q/10-K 季營收模式 (Spec 0239 T07)
+  isUsMarket?: boolean;
+  currency?: 'TWD' | 'USD';
   history: MonthlyRevenueItem[];
   latestRevenueText?: string; // "2,548 億元" 或 "5,620 萬元"
   latestYoyRate?: number; // +32.4%

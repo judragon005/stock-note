@@ -1,17 +1,21 @@
 import React from 'react';
 import type { HealthSummaryData } from '../../../types/aiForceDashboard';
+import type { ColorThemeMode, MarketType } from '../../../types/stock';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseHealthScore } from '../../../constants/aiForceGlossary';
 
 export interface HealthSummaryCardProps {
   data?: HealthSummaryData;
+  colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
 /**
- * 輔助計算圓形進度環之周長與 offset
+ * 輔助計算圓形進度環之周長與 offset (防禦 NaN / Infinity)
  */
 export function calculateCircleProgress(percent: number, radius = 22) {
-  const clamped = Math.max(0, Math.min(100, percent));
+  const safePct = Number.isFinite(percent) ? percent : 0;
+  const clamped = Math.max(0, Math.min(100, safePct));
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference * (1 - clamped / 100);
   return {
@@ -68,15 +72,16 @@ interface GaugeItemProps {
   percent: number;
   color: string;
   termId?: string;
+  subHint?: string;
 }
 
-const SingleGauge: React.FC<GaugeItemProps> = ({ label, percent, color, termId }) => {
+const SingleGauge: React.FC<GaugeItemProps> = ({ label, percent, color, termId, subHint }) => {
   const { size, radius, strokeWidth, percentFontSize, labelFontSize } = DONUT_GAUGE_CONFIG;
   const { circumference, strokeDashoffset, clamped } = calculateCircleProgress(percent, radius);
   const centerCoord = size / 2;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1, minWidth: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: '1 1 68px', minWidth: '64px' }}>
       <div style={{ position: 'relative', width: `${size}px`, height: `${size}px` }}>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
           {/* 背景軌道 */}
@@ -126,16 +131,23 @@ const SingleGauge: React.FC<GaugeItemProps> = ({ label, percent, color, termId }
           {label}
         </span>
       </TermTooltip>
+      {subHint && (
+        <span style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+          ({subHint})
+        </span>
+      )}
     </div>
   );
 };
 
-export const HealthSummaryCard: React.FC<HealthSummaryCardProps> = ({ data }) => {
-  const chipHealth = data?.chipHealth ?? 55;
-  const technicalStructure = data?.technicalStructure ?? 80;
-  const capitalMomentum = data?.capitalMomentum ?? 58;
-  const liquidityRisk = data?.liquidityRisk ?? 5;
-  const institutionalSupport = data?.institutionalSupport ?? 50;
+export const HealthSummaryCard: React.FC<HealthSummaryCardProps> = ({ data, market }) => {
+  const isUs = market === 'US';
+  const safeNum = (v?: number, fallback: number = 50) => (Number.isFinite(v) ? (v as number) : fallback);
+  const chipHealth = safeNum(data?.chipHealth, 55);
+  const technicalStructure = safeNum(data?.technicalStructure, 80);
+  const capitalMomentum = safeNum(data?.capitalMomentum, 58);
+  const liquidityRisk = safeNum(data?.liquidityRisk, 5);
+  const institutionalSupport = safeNum(data?.institutionalSupport, 50);
 
   const calculated = calculateOverallHealthScore({
     chipHealth,
@@ -147,12 +159,12 @@ export const HealthSummaryCard: React.FC<HealthSummaryCardProps> = ({ data }) =>
 
   const ratingText = data?.overallRatingLabel ?? calculated.ratingLabel;
 
-  const gauges = [
-    { label: '籌碼健康度', percent: chipHealth, color: '#38bdf8', termId: 'chipsHealth' },
+  const gauges: GaugeItemProps[] = [
+    { label: isUs ? '籌碼結構' : '籌碼健康度', percent: chipHealth, color: '#38bdf8', termId: 'chipsHealth' },
     { label: '技術結構度', percent: technicalStructure, color: '#10b981', termId: 'techHealth' },
     { label: '資金動能度', percent: capitalMomentum, color: '#f59e0b', termId: 'momentumHealth' },
-    { label: '波動風險度', percent: liquidityRisk, color: '#ec4899', termId: 'volatilityRisk' },
-    { label: '法人支撐度', percent: institutionalSupport, color: '#8b5cf6', termId: 'instSupport' },
+    { label: '流動性風險', percent: liquidityRisk, color: '#ec4899', termId: 'volatilityRisk', subHint: '越低越佳' },
+    { label: isUs ? '機構支撐' : '法人支撐度', percent: institutionalSupport, color: '#8b5cf6', termId: 'instSupport' },
   ];
 
   return (
@@ -201,19 +213,27 @@ export const HealthSummaryCard: React.FC<HealthSummaryCardProps> = ({ data }) =>
         </div>
       </div>
 
-      {/* 5 環橫向排列容器 */}
+      {/* 5 環橫向排列容器 (支援窄欄彈性換行) */}
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           justifyContent: 'space-between',
-          gap: '2px',
+          flexWrap: 'wrap',
+          gap: '4px',
           flex: 1,
           padding: '6px 0',
         }}
       >
         {gauges.map((g) => (
-          <SingleGauge key={g.label} label={g.label} percent={g.percent} color={g.color} termId={g.termId} />
+          <SingleGauge
+            key={g.label}
+            label={g.label}
+            percent={g.percent}
+            color={g.color}
+            termId={g.termId}
+            subHint={g.subHint}
+          />
         ))}
       </div>
 

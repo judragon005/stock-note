@@ -73,22 +73,72 @@ async function retryFetch(fn, retries = 3, delayMs = 1500) {
   throw lastErr;
 }
 
+/**
+ * 明確鎖定 Asia/Taipei 時區取得目標日期上下文，不依賴 OS 本地時區 (Spec 0239 T02)
+ * @param {string | null | undefined} targetDateInput 可選目標日期 (YYYY-MM-DD 或 YYYYMMDD)
+ * @param {Date} [now=new Date()] 基準時間
+ * @returns {{ year: number, month: number, day: number, dateStr: string, yyyymmdd: string, rocYear: number, rocDateStr: string, dayOfWeek: number, dayOfMonth: number, currentHour: number }}
+ */
+function getTaipeiDateContext(targetDateInput, now = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  });
+  const parts = formatter.formatToParts(now);
+  let year = 1970;
+  let month = 1;
+  let day = 1;
+  let currentHour = 0;
+
+  for (const p of parts) {
+    if (p.type === 'year') year = parseInt(p.value, 10);
+    if (p.type === 'month') month = parseInt(p.value, 10);
+    if (p.type === 'day') day = parseInt(p.value, 10);
+    if (p.type === 'hour') currentHour = parseInt(p.value, 10) % 24;
+  }
+
+  if (targetDateInput) {
+    const clean = String(targetDateInput).replace(/-/g, '').trim();
+    if (/^\d{8}$/.test(clean)) {
+      year = parseInt(clean.substring(0, 4), 10);
+      month = parseInt(clean.substring(4, 6), 10);
+      day = parseInt(clean.substring(6, 8), 10);
+    }
+  }
+
+  const mm = String(month).padStart(2, '0');
+  const dd = String(day).padStart(2, '0');
+  const dateStr = `${year}-${mm}-${dd}`;
+  const yyyymmdd = `${year}${mm}${dd}`;
+  const rocYear = year - 1911;
+  const rocDateStr = `${rocYear}/${mm}/${dd}`;
+  const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+
+  return {
+    year,
+    month,
+    day,
+    dateStr,
+    yyyymmdd,
+    rocYear,
+    rocDateStr,
+    dayOfWeek,
+    dayOfMonth: day,
+    currentHour,
+  };
+}
+
 async function runTwMarketSync(targetDateInput) {
   const startTime = Date.now();
   console.log(`[${new Date().toISOString()}] 開始執行台股全市場盤後自動同步 (Spec 0132)...`);
 
-  let targetDate = new Date();
-  if (targetDateInput) {
-    const clean = String(targetDateInput).replace(/-/g, '');
-    if (/^\d{8}$/.test(clean)) {
-      const y = parseInt(clean.substring(0, 4), 10);
-      const m = parseInt(clean.substring(4, 6), 10) - 1;
-      const d = parseInt(clean.substring(6, 8), 10);
-      targetDate = new Date(y, m, d);
-    }
-  }
-
-  const dateStr = formatDateYMD(targetDate);
+  const twCtx = getTaipeiDateContext(targetDateInput);
+  const { dateStr, yyyymmdd, rocDateStr, dayOfWeek, dayOfMonth, currentHour } = twCtx;
 
   // 營業日與休市守衛 (排除週末、法定休市與天災停市，Spec 0190)
   if (!targetDateInput && !isTradingDay(dateStr, 'TW')) {
@@ -96,8 +146,6 @@ async function runTwMarketSync(targetDateInput) {
     console.log(`[略過] 今日 (${dateStr}) 為台股休市日 [${reason}]，無交易數據，安全退出。`);
     return;
   }
-
-  const yyyymmdd = dateStr.replace(/-/g, '');
 
 
   console.log(`[1/4] 抓取 TWSE 台灣證交所全市場收盤行情與 T86 籌碼日報 (日期: ${yyyymmdd})...`);
@@ -123,9 +171,6 @@ async function runTwMarketSync(targetDateInput) {
   console.log(`[2/4] 抓取 TPEx 證券櫃檯買賣中心全市場收盤行情與 T86 籌碼日報...`);
   let tpexQuotesRaw = null;
   let tpexT86Raw = null;
-
-  const rocYear = targetDate.getFullYear() - 1911;
-  const rocDateStr = `${rocYear}/${String(targetDate.getMonth() + 1).padStart(2, '0')}/${String(targetDate.getDate()).padStart(2, '0')}`;
 
   try {
     tpexQuotesRaw = await retryFetch(() =>
@@ -369,9 +414,7 @@ async function runTwMarketSync(targetDateInput) {
       console.warn(`[CadenceSync] ETF 淨值同步警告:`, etfNavErr.message);
     }
 
-    // 6.2 每週五盤後（大於 18:30）自動更新 TDCC 集保千張大戶
-    const dayOfWeek = targetDate.getDay();
-    const currentHour = new Date().getHours();
+    // 6.2 每週五盤後（台北時間 18:00 後）自動更新 TDCC 集保千張大戶
     if (dayOfWeek === 5 && currentHour >= 18) {
       try {
         const { runTdccIngestion } = require('./ingest-tw-tdcc.cjs');
@@ -381,8 +424,7 @@ async function runTwMarketSync(targetDateInput) {
       }
     }
 
-    // 6.3 每月 1~11 號自動更新月營收
-    const dayOfMonth = targetDate.getDate();
+    // 6.3 每月 1~11 號（台北時區）自動更新月營收
     if (dayOfMonth >= 1 && dayOfMonth <= 11) {
       try {
         const { runMonthlyRevenueIngestion } = require('./ingest-tw-monthly-revenue.cjs');
@@ -407,4 +449,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { runTwMarketSync };
+module.exports = { runTwMarketSync, getTaipeiDateContext };

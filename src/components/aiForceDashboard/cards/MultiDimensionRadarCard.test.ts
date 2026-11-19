@@ -69,6 +69,10 @@ describe('MultiDimensionRadarCard - 六角蛛網雷達圖數學與座標規範 (
       // 150 被 clamp 為 100，不超過 maxRadius
       const distance = Math.hypot(result.vertices[1].x - 150, result.vertices[1].y - 150);
       expect(distance).toBeCloseTo(100, 1);
+
+      // NaN 應安全回退至 50 (T12)
+      const nanResult = buildRadarDataPolygon(center, maxRadius, [NaN, 50, 50, 50, 50, 50], 6);
+      expect(nanResult.vertices[0].y).toBeCloseTo(100, 1);
     });
   });
 

@@ -88,7 +88,7 @@ describe('Ticket 01 (Seam 1): 市場新鮮度領域服務 marketFreshnessService
     expect(result.us.latestDate).toBe('2026-10-02');
   });
 
-  it('4. 當資料庫為空庫或查無資料時，isStale 應為 false 且容錯處理', async () => {
+  it('4. 當資料庫為空庫或查無資料時，isStale 應為 true 觸發首次同步且容錯處理', async () => {
     // @ts-expect-error cjs import
     const { checkMarketFreshness } = await import('../../scripts/market-sync/market-freshness-service.cjs');
 
@@ -102,9 +102,9 @@ describe('Ticket 01 (Seam 1): 市場新鮮度領域服務 marketFreshnessService
     const result = checkMarketFreshness(emptyDb, now);
 
     expect(result.tw.latestDate).toBeNull();
-    expect(result.tw.isStale).toBe(false);
+    expect(result.tw.isStale).toBe(true);
     expect(result.us.latestDate).toBeNull();
-    expect(result.us.isStale).toBe(false);
+    expect(result.us.isStale).toBe(true);
   });
 
   it('5. 應正確計算 TDCC 週五結算錨定日期 (getLatestSettledTdccFriday)', async () => {

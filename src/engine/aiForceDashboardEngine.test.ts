@@ -47,16 +47,17 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
     expect(report.activeTaskTab).toBe('TASK_1_COMPREHENSIVE');
   });
 
-  it('createDefaultAiForceReport 應依據傳入之 basePrice 或標的特性自適應價格，杜絕致茂 2290 舊數據殘留', () => {
+  it('createDefaultAiForceReport 應依據傳入之 basePrice 保留真實報價且不捏造假高低價與假壓力支撐 (Spec 0239 Zero-Mock)', () => {
     const report0050 = createDefaultAiForceReport('0050', '元大台灣50', 'TW', 195.0);
 
     expect(report0050.symbol).toBe('0050');
     expect(report0050.name).toBe('元大台灣50');
     expect(report0050.marketBar.currentPrice).toBe(195.0);
-    expect(report0050.marketBar.highPrice).toBeLessThan(250);
-    expect(report0050.marketBar.lowPrice).toBeGreaterThan(150);
-    expect(report0050.klineSystem.keyLevels.highResistance).toBeLessThan(250);
-    expect(report0050.decisionCore.supportRange[0]).toBeLessThan(250);
+    expect(report0050.marketBar.highPrice).toBeUndefined();
+    expect(report0050.marketBar.lowPrice).toBeUndefined();
+    expect(report0050.klineSystem.keyLevels.highResistance).toBe(0);
+    expect(report0050.decisionCore.supportRange[0]).toBe(0);
+    expect(report0050.isDataPending).toBe(true);
   });
 
   describe('Spec 0152 / Ticket 03 - 淘汰硬編碼價格造假與盤中定錨規範', () => {

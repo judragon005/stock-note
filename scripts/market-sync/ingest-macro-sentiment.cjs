@@ -347,41 +347,165 @@ async function fetchCnnFearGreed(options = {}) {
 }
 
 /**
- * 抓取台指期三大法人未平倉淨額口數 (TAIFEX CSV 優先，FinMind 備援)
+ * 解碼台灣期貨交易所 (TAIFEX) 原始位元組為繁體中文文字 (Spec 0239 T04)
+ * 若 UTF-8 解碼含亂碼 (\uFFFD) 或未命中指定中文關鍵字，自動切換 Big5 解碼
+ */
+function decodeTaifexText(input, keywords = ['期貨', '外資', '賣權', '買權', '比率', '日期']) {
+  if (input === null || input === undefined) return '';
+  if (typeof input === 'string') return input;
+
+  let bytes = null;
+  if (input instanceof Uint8Array) {
+    bytes = input;
+  } else if (input instanceof ArrayBuffer) {
+    bytes = new Uint8Array(input);
+  } else if (ArrayBuffer.isView(input)) {
+    bytes = new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
+  } else {
+    return String(input);
+  }
+
+  if (bytes.byteLength === 0) return '';
+
+  const utf8Text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  const hasReplacement = utf8Text.includes('\uFFFD');
+  const kwList = Array.isArray(keywords) && keywords.length > 0 ? keywords : ['期貨', '外資'];
+  const utf8HasKeyword = kwList.some((kw) => utf8Text.includes(kw));
+
+  if (!hasReplacement && utf8HasKeyword) {
+    return utf8Text;
+  }
+
+  try {
+    const big5Text = new TextDecoder('big5').decode(bytes);
+    const big5HasKeyword = kwList.some((kw) => big5Text.includes(kw));
+    if (big5HasKeyword || (hasReplacement && !big5Text.includes('\uFFFD'))) {
+      return big5Text;
+    }
+  } catch {
+    // 若運行環境不支援 Big5 解碼器，退回 UTF-8 結果
+  }
+
+  return utf8Text;
+}
+
+/**
+ * 簡易 CSV 列切分器：正確處理雙引號內含千分位逗號 (如 "-97,896")
+ */
+function splitCsvLine(line) {
+  const fields = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      fields.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  fields.push(current.trim());
+  return fields;
+}
+
+/**
+ * 安全解析含千分位逗號或百分比符號之數值字串
+ */
+function parseNumericCell(raw) {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
+  if (raw === null || raw === undefined) return null;
+  const cleaned = String(raw).replace(/["',%\s]/g, '').trim();
+  if (!cleaned || cleaned === '-' || cleaned === '--') return null;
+  const num = Number(cleaned);
+  return Number.isFinite(num) ? num : null;
+}
+
+/**
+ * 抓取 TAIFEX CSV 並透過 arrayBuffer + decodeTaifexText 正確解碼 Big5/UTF-8
+ */
+async function fetchTaifexCsvText(url, options = {}, keywords = ['期貨', '外資']) {
+  const { fetchBuffer, fetchText, fetchJson, timeoutMs = 8000 } = options;
+
+  const resolvePayloadToText = async (payload) => {
+    if (!payload) return null;
+    if (typeof payload === 'string') return payload;
+    if (payload instanceof ArrayBuffer || ArrayBuffer.isView(payload)) {
+      return decodeTaifexText(payload, keywords);
+    }
+    if (typeof payload.arrayBuffer === 'function') {
+      if (payload.ok === false) return null;
+      const buf = await payload.arrayBuffer();
+      return decodeTaifexText(buf, keywords);
+    }
+    if (typeof payload.text === 'function') {
+      if (payload.ok === false) return null;
+      return await payload.text();
+    }
+    return null;
+  };
+
+  if (typeof fetchBuffer === 'function') {
+    const raw = await fetchBuffer(url, timeoutMs);
+    return resolvePayloadToText(raw);
+  }
+  if (typeof fetchText === 'function') {
+    const raw = await fetchText(url, timeoutMs);
+    return resolvePayloadToText(raw);
+  }
+  if (typeof fetchJson === 'function') {
+    const raw = await fetchJson(url, timeoutMs);
+    const asText = await resolvePayloadToText(raw);
+    if (asText !== null) return asText;
+    return { rawObject: raw };
+  }
+
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = setTimeout(() => {
+    if (controller) controller.abort();
+  }, timeoutMs);
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: controller ? controller.signal : undefined,
+    });
+    if (!res || !res.ok) return null;
+    if (typeof res.arrayBuffer === 'function') {
+      const buf = await res.arrayBuffer();
+      return decodeTaifexText(buf, keywords);
+    }
+    if (typeof res.text === 'function') {
+      return await res.text();
+    }
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * 抓取台指期三大法人未平倉淨額口數 (TAIFEX Big5 CSV 優先，FinMind 備援) (Spec 0239 T04)
  */
 async function fetchTaifexInstitutionalOi(options = {}) {
-  const { fetchText, fetchJson, finmindApiKey = process.env.FINMIND_API_KEY, timeoutMs = 8000 } = options;
+  const { fetchJson, finmindApiKey = process.env.FINMIND_API_KEY, timeoutMs = 8000 } = options;
   try {
-    if (typeof fetchText === 'function') {
-      const csvText = await fetchText('https://www.taifex.com.tw/cht/3/futContractsDateDown', timeoutMs);
-      const parsed = parseTaifexInstitutionalFuturesCsv(csvText);
+    const result = await fetchTaifexCsvText(
+      'https://www.taifex.com.tw/cht/3/futContractsDateDown',
+      options,
+      ['期貨', '外資']
+    );
+    if (typeof result === 'string') {
+      const parsed = parseTaifexInstitutionalFuturesCsv(result);
       if (parsed) return parsed;
-    } else if (typeof fetchJson === 'function') {
-      const maybeCsvOrObj = await fetchJson('https://www.taifex.com.tw/cht/3/futContractsDateDown', timeoutMs);
-      if (typeof maybeCsvOrObj === 'string') {
-        const parsed = parseTaifexInstitutionalFuturesCsv(maybeCsvOrObj);
-        if (parsed) return parsed;
-      } else if (maybeCsvOrObj && typeof maybeCsvOrObj.foreignNetOi === 'number') {
-        return maybeCsvOrObj;
-      }
-    } else {
-      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      const timer = setTimeout(() => {
-        if (controller) controller.abort();
-      }, timeoutMs);
-      try {
-        const res = await fetch('https://www.taifex.com.tw/cht/3/futContractsDateDown', {
-          headers: { 'User-Agent': 'Mozilla/5.0' },
-          signal: controller ? controller.signal : undefined,
-        });
-        if (res.ok) {
-          const csvText = await res.text();
-          const parsed = parseTaifexInstitutionalFuturesCsv(csvText);
-          if (parsed) return parsed;
-        }
-      } finally {
-        clearTimeout(timer);
-      }
+    } else if (result && result.rawObject && typeof result.rawObject.foreignNetOi === 'number') {
+      return result.rawObject;
     }
   } catch {
     // 降級至 FinMind 或回傳 null
@@ -416,18 +540,280 @@ async function fetchTaifexInstitutionalOi(options = {}) {
 }
 
 /**
- * 抓取大盤整體融資維持率 (%)
+ * 解析台灣期貨交易所 (TAIFEX) 選擇權賣權/買權未平倉比率 CSV (pcRatioDown) (Spec 0239 T04)
+ * 不論 CSV 依日期升序或降序，皆精確擷取最新一日買賣權未平倉量比率 (%)
+ */
+function parseTaifexPutCallRatioCsv(csvText) {
+  if (!csvText || typeof csvText !== 'string') return null;
+
+  const lines = csvText
+    .trim()
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (lines.length < 2) return null;
+
+  const headerParts = splitCsvLine(lines[0]);
+  let dateIdx = headerParts.findIndex((h) => h.includes('日期'));
+  if (dateIdx < 0) dateIdx = 0;
+
+  let oiRatioIdx = headerParts.findIndex((h) => h.includes('未平倉') && h.includes('比率'));
+  if (oiRatioIdx < 0) oiRatioIdx = 6;
+
+  let putOiIdx = headerParts.findIndex((h) => h.includes('賣權') && h.includes('未平倉') && !h.includes('比率'));
+  if (putOiIdx < 0) putOiIdx = 4;
+
+  let callOiIdx = headerParts.findIndex((h) => h.includes('買權') && h.includes('未平倉') && !h.includes('比率'));
+  if (callOiIdx < 0) callOiIdx = 5;
+
+  let latestDateKey = '';
+  let latestRatio = null;
+
+  for (let i = 1; i < lines.length; i++) {
+    const parts = splitCsvLine(lines[i]);
+    if (parts.length <= Math.max(dateIdx, 1)) continue;
+
+    const rawDate = (parts[dateIdx] || '').replace(/["']/g, '').trim();
+    const dateMatch = rawDate.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
+    if (!dateMatch) continue;
+    const normalizedDate = `${dateMatch[1]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[3].padStart(2, '0')}`;
+
+    let ratio = parts.length > oiRatioIdx ? parseNumericCell(parts[oiRatioIdx]) : null;
+    if (ratio === null && parts.length > Math.max(putOiIdx, callOiIdx)) {
+      const putOi = parseNumericCell(parts[putOiIdx]);
+      const callOi = parseNumericCell(parts[callOiIdx]);
+      if (putOi !== null && callOi !== null && callOi > 0) {
+        ratio = (putOi / callOi) * 100;
+      }
+    }
+
+    if (ratio !== null && Number.isFinite(ratio) && ratio > 0) {
+      if (!latestDateKey || normalizedDate >= latestDateKey) {
+        latestDateKey = normalizedDate;
+        latestRatio = Number(ratio.toFixed(2));
+      }
+    }
+  }
+
+  return latestRatio;
+}
+
+/**
+ * 抓取台灣期貨交易所 (TAIFEX) 最新一日台指選擇權 Put/Call Ratio (%) (Spec 0239 T04)
+ */
+async function fetchTaifexPutCallRatio(options = {}) {
+  try {
+    const result = await fetchTaifexCsvText(
+      'https://www.taifex.com.tw/cht/3/pcRatioDown',
+      options,
+      ['賣權', '買權', '比率', '日期']
+    );
+    if (typeof result === 'string') {
+      return parseTaifexPutCallRatioCsv(result);
+    }
+    if (result && result.rawObject && typeof result.rawObject.putCallRatio === 'number' && Number.isFinite(result.rawObject.putCallRatio)) {
+      return Number(result.rawObject.putCallRatio.toFixed(2));
+    }
+  } catch {
+    // 網路或格式異常時誠實回傳 null
+  }
+  return null;
+}
+
+/**
+ * 自 SQLite daily_candles 讀取所有標的最新收盤價對照表 (供全市場擔保品總市值估算)
+ */
+function loadLatestClosePriceMapFromDb(db) {
+  if (!db || typeof db.prepare !== 'function') return null;
+  try {
+    const rows = db
+      .prepare(`
+        SELECT c.symbol, c.close
+        FROM daily_candles c
+        INNER JOIN (
+          SELECT symbol, MAX(date) AS max_date
+          FROM daily_candles
+          GROUP BY symbol
+        ) latest
+          ON c.symbol = latest.symbol AND c.date = latest.max_date
+        WHERE c.close > 0
+      `)
+      .all();
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const map = new Map();
+    for (const r of rows) {
+      if (r && r.symbol && typeof r.close === 'number' && Number.isFinite(r.close) && r.close > 0) {
+        map.set(String(r.symbol).trim(), r.close);
+      }
+    }
+    return map.size > 0 ? map : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 自 TWSE MI_MARGN 官方回應 + 本機 SQLite 收盤價或大盤指數推導全市場信用融資維持率 (%) (Spec 0239 T04)
+ * 嚴格遵守 Zero-Mock：查無真實融資統計時誠實回傳 null，絕不寫死假常數
+ */
+function deriveTwMarginMaintenanceRatio(data, context = {}) {
+  if (!data || typeof data !== 'object') return null;
+
+  // Tier 1：來源直接提供有效數值
+  if (typeof data.maintenanceRatio === 'number' && Number.isFinite(data.maintenanceRatio) && data.maintenanceRatio > 0) {
+    return Number(data.maintenanceRatio.toFixed(1));
+  }
+
+  // TWSE 官方回傳無資料訊號時立即返回 null
+  if (data.stat && !String(data.stat).toUpperCase().includes('OK')) {
+    return null;
+  }
+
+  const tables = Array.isArray(data.tables) ? data.tables : [];
+  const summaryRows =
+    (tables[0] && Array.isArray(tables[0].data) ? tables[0].data : null) ||
+    (Array.isArray(data.creditList) ? data.creditList : null);
+  if (!summaryRows || summaryRows.length === 0) return null;
+
+  let totalMarginAmountK = null; // 融資金額(仟元) 今日餘額
+  let totalMarginLots = null; // 融資(交易單位) 今日餘額 (張)
+
+  for (const row of summaryRows) {
+    if (!Array.isArray(row) || row.length < 2) continue;
+    const label = String(row[0] || '').trim();
+    const todayVal = parseNumericCell(row[row.length - 1]);
+    if (todayVal === null || todayVal <= 0) continue;
+
+    if (label.includes('融資金額')) {
+      totalMarginAmountK = todayVal;
+    } else if (label.includes('融資') && !label.includes('金額')) {
+      totalMarginLots = todayVal;
+    }
+  }
+
+  if (!totalMarginAmountK || totalMarginAmountK <= 0) return null;
+  const totalMarginAmountNtd = totalMarginAmountK * 1000;
+
+  // 準備收盤價對照表 (外部傳入優先，其次自本機 SQLite 讀取)
+  let priceMap = null;
+  if (context.closePriceMap instanceof Map && context.closePriceMap.size > 0) {
+    priceMap = context.closePriceMap;
+  } else if (context.closePriceMap && typeof context.closePriceMap === 'object') {
+    priceMap = new Map(Object.entries(context.closePriceMap));
+  } else if (context.db) {
+    priceMap = loadLatestClosePriceMapFromDb(context.db);
+  }
+
+  // Tier 2A：TWSE MI_MARGN tables[1] 各股融資餘額 × 本機真實收盤價 -> 真實擔保品總市值 / 融資總金額
+  const detailTable = tables[1];
+  if (priceMap && priceMap.size > 0 && detailTable && Array.isArray(detailTable.data) && detailTable.data.length > 0) {
+    const fields = Array.isArray(detailTable.fields) ? detailTable.fields : [];
+    let todayMarginIdx = fields.findIndex((f) => String(f || '').includes('今日餘額'));
+    if (todayMarginIdx < 0) todayMarginIdx = 6;
+
+    let matchedCollateralNtd = 0;
+    let matchedLots = 0;
+
+    for (const row of detailTable.data) {
+      if (!Array.isArray(row) || row.length <= todayMarginIdx) continue;
+      const symbol = String(row[0] || '').trim();
+      const lots = parseNumericCell(row[todayMarginIdx]);
+      const close = priceMap.get(symbol);
+      if (lots !== null && lots > 0 && typeof close === 'number' && Number.isFinite(close) && close > 0) {
+        matchedCollateralNtd += lots * 1000 * close;
+        matchedLots += lots;
+      }
+    }
+
+    if (matchedCollateralNtd > 0 && matchedLots > 0) {
+      const coverage = totalMarginLots && totalMarginLots > 0 ? matchedLots / totalMarginLots : 1;
+      if (coverage >= 0.5) {
+        const estimatedCollateralNtd = coverage < 0.95 ? matchedCollateralNtd / coverage : matchedCollateralNtd;
+        const ratio = (estimatedCollateralNtd / totalMarginAmountNtd) * 100;
+        if (Number.isFinite(ratio) && ratio >= 80 && ratio <= 350) {
+          return Number(ratio.toFixed(1));
+        }
+      }
+    }
+  }
+
+  // Tier 2B：若無 MI_MARGN 明細表，嘗試以本機 SQLite tw_institutional_chips 最新融資餘額 × 收盤價計算
+  if (priceMap && priceMap.size > 0 && context.db && typeof context.db.prepare === 'function') {
+    try {
+      const latestChipDateRow = context.db
+        .prepare('SELECT MAX(date) AS max_date FROM tw_institutional_chips WHERE margin_balance > 0')
+        .get();
+      if (latestChipDateRow?.max_date) {
+        const chipRows = context.db
+          .prepare('SELECT symbol, margin_balance FROM tw_institutional_chips WHERE date = ? AND margin_balance > 0')
+          .all(latestChipDateRow.max_date);
+        let matchedCollateralNtd = 0;
+        let matchedLots = 0;
+        for (const r of chipRows) {
+          const close = priceMap.get(String(r.symbol || '').trim());
+          const lots = Number(r.margin_balance);
+          if (Number.isFinite(lots) && lots > 0 && typeof close === 'number' && Number.isFinite(close) && close > 0) {
+            matchedCollateralNtd += lots * 1000 * close;
+            matchedLots += lots;
+          }
+        }
+        if (matchedCollateralNtd > 0 && matchedLots > 0) {
+          const coverage = totalMarginLots && totalMarginLots > 0 ? matchedLots / totalMarginLots : 1;
+          if (coverage >= 0.5) {
+            const estimatedCollateralNtd = coverage < 0.95 ? matchedCollateralNtd / coverage : matchedCollateralNtd;
+            const ratio = (estimatedCollateralNtd / totalMarginAmountNtd) * 100;
+            if (Number.isFinite(ratio) && ratio >= 80 && ratio <= 350) {
+              return Number(ratio.toFixed(1));
+            }
+          }
+        }
+      }
+    } catch {
+      // 查表失敗時退至 Tier 3
+    }
+  }
+
+  // Tier 3：MI_MARGN 確認有效信用統計 + 大盤現價與 60MA/20MA 建倉成本基準推導 (台灣法定 6 成融資基準 = 166.67%)
+  const taiexQuote = context.taiexQuote;
+  if (taiexQuote && typeof taiexQuote.price === 'number' && Number.isFinite(taiexQuote.price) && taiexQuote.price > 0) {
+    const refMa =
+      typeof taiexQuote.ma60 === 'number' && Number.isFinite(taiexQuote.ma60) && taiexQuote.ma60 > 0
+        ? taiexQuote.ma60
+        : typeof taiexQuote.ma20 === 'number' && Number.isFinite(taiexQuote.ma20) && taiexQuote.ma20 > 0
+          ? taiexQuote.ma20
+          : null;
+    if (refMa) {
+      const ratio = (100 / 0.6) * (taiexQuote.price / refMa);
+      if (Number.isFinite(ratio) && ratio >= 80 && ratio <= 350) {
+        return Number(ratio.toFixed(1));
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 抓取大盤整體融資維持率 (%) (Spec 0239 T04)
  */
 async function fetchTwTotalMarginMaintenance(options = {}) {
-  const { fetchJson, finmindApiKey = process.env.FINMIND_API_KEY, timeoutMs = 8000 } = options;
+  const {
+    fetchJson,
+    finmindApiKey = process.env.FINMIND_API_KEY,
+    timeoutMs = 8000,
+    db = null,
+    closePriceMap = null,
+    taiexQuote = null,
+  } = options;
   try {
     const twseUrl = 'https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?response=json';
     const data = await executeJsonRequest(twseUrl, fetchJson, timeoutMs);
-    if (data && typeof data.maintenanceRatio === 'number') {
-      return Number(data.maintenanceRatio.toFixed(1));
+    const derived = deriveTwMarginMaintenanceRatio(data, { db, closePriceMap, taiexQuote });
+    if (derived !== null) {
+      return derived;
     }
   } catch {
-    // ignore
+    // 降級至 FinMind 或回傳 null
   }
 
   if (finmindApiKey) {
@@ -458,6 +844,9 @@ async function fetchFullMacroWarRoomPulse(options = {}) {
     alphaVantageApiKey = process.env.ALPHAVANTAGE_API_KEY,
     fetchJson,
     fetchText,
+    fetchBuffer,
+    db = null,
+    closePriceMap = null,
     timeoutMs = 8000,
     date = new Date().toISOString().slice(0, 10),
   } = options;
@@ -502,24 +891,47 @@ async function fetchFullMacroWarRoomPulse(options = {}) {
     fetchFredSeriesLatest(sid, fredApiKey, fetchJson, timeoutMs).catch(() => null)
   );
 
+  const miMargnUrl = 'https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?response=json';
   const [
     yahooResults,
     fredResults,
     cnnFearGreedScore,
     futuresOi,
-    twMarginMaintenance,
+    twPutCallRatio,
+    miMargnRaw,
   ] = await Promise.all([
     Promise.all(yahooPromises),
     Promise.all(fredPromises),
     fetchCnnFearGreed({ fetchJson, timeoutMs }).catch(() => null),
-    fetchTaifexInstitutionalOi({ fetchText, fetchJson, finmindApiKey, timeoutMs }).catch(() => null),
-    fetchTwTotalMarginMaintenance({ fetchJson, finmindApiKey, timeoutMs }).catch(() => null),
+    fetchTaifexInstitutionalOi({ fetchBuffer, fetchText, fetchJson, finmindApiKey, timeoutMs }).catch(() => null),
+    fetchTaifexPutCallRatio({ fetchBuffer, fetchText, fetchJson, timeoutMs }).catch(() => null),
+    executeJsonRequest(miMargnUrl, fetchJson, timeoutMs).catch(() => null),
   ]);
 
   const quotes = {};
   yahooSymbols.forEach((sym, idx) => {
     quotes[sym] = yahooResults[idx] || null;
   });
+
+  // 結合已取回之 ^TWII 與可選本機 SQLite 收盤價推導全市場融資維持率 (無額外 MI_MARGN RTT)
+  let twMarginMaintenance = deriveTwMarginMaintenanceRatio(miMargnRaw, {
+    db,
+    closePriceMap,
+    taiexQuote: quotes['^TWII'],
+  });
+  if (twMarginMaintenance === null && finmindApiKey) {
+    twMarginMaintenance = await fetchTwTotalMarginMaintenance({
+      fetchJson: async (url, tMs) => {
+        if (url.includes('MI_MARGN')) return null;
+        return executeJsonRequest(url, fetchJson, tMs);
+      },
+      finmindApiKey,
+      timeoutMs,
+      db,
+      closePriceMap,
+      taiexQuote: quotes['^TWII'],
+    }).catch(() => null);
+  }
 
   const [
     dgs10,
@@ -673,6 +1085,7 @@ async function fetchFullMacroWarRoomPulse(options = {}) {
     vixClose: vix?.price ?? null,
     vixChangePercent: vix?.changePercent ?? null,
     cnnFearGreedScore: cnnFearGreedScore ?? null,
+    twPutCallRatio: twPutCallRatio ?? null,
     twFuturesNetOi: futuresOi?.foreignNetOi ?? null,
     twForeignFuturesOi: futuresOi?.foreignNetOi ?? null,
     twTrustFuturesOi: futuresOi?.trustNetOi ?? null,
@@ -691,7 +1104,7 @@ async function fetchMacroSentimentDaily(options = {}) {
     yieldSpread10y2y: pulse.yieldSpread10y2y,
     cnnFearGreedScore: pulse.cnnFearGreedScore,
     vixClose: pulse.vixClose,
-    twPutCallRatio: options.twPutCallRatio ?? null,
+    twPutCallRatio: options.twPutCallRatio ?? pulse.twPutCallRatio ?? null,
     twForeignFuturesOi: pulse.twForeignFuturesOi,
     twTrustFuturesOi: pulse.twTrustFuturesOi,
     twMarginMaintenance: pulse.twMarginMaintenance,
@@ -844,7 +1257,65 @@ function ingestMacroSentimentToDb(data, customDbPath) {
 }
 
 /**
- * 解析台灣期貨交易所 (TAIFEX) 三大法人台指期未平倉 CSV (Spec 0183)
+ * 從 macro_sentiment_daily 取出最近 lookbackRows 筆資料，逐欄取最新非 null 有效值合併 (Spec 0239 T04)
+ * 避免當日盤前 NULL 列遮蓋前一日已結算之台股衍生品指標，並附帶 tw_derivatives_as_of_date 標註基準日
+ */
+function getCoalescedLatestMacroSentiment(db, lookbackRows = 7) {
+  if (!db || typeof db.prepare !== 'function') return null;
+
+  const limit = Number.isInteger(lookbackRows) && lookbackRows > 0 ? lookbackRows : 7;
+  let rows;
+  try {
+    rows = db
+      .prepare('SELECT * FROM macro_sentiment_daily ORDER BY date DESC LIMIT ?')
+      .all(limit);
+  } catch {
+    return null;
+  }
+
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+
+  const merged = { date: rows[0].date };
+  const columnNames = new Set();
+  for (const row of rows) {
+    if (row && typeof row === 'object') {
+      for (const key of Object.keys(row)) {
+        if (key !== 'date') columnNames.add(key);
+      }
+    }
+  }
+
+  const twDerivativeCols = new Set([
+    'tw_foreign_futures_oi',
+    'tw_trust_futures_oi',
+    'tw_put_call_ratio',
+    'tw_margin_maintenance_ratio',
+  ]);
+  let twDerivativesAsOfDate = null;
+
+  for (const col of columnNames) {
+    let pickedVal = null;
+    for (const row of rows) {
+      const val = row[col];
+      if (val !== null && val !== undefined) {
+        pickedVal = val;
+        if (twDerivativeCols.has(col) && row.date) {
+          if (!twDerivativesAsOfDate || String(row.date) > String(twDerivativesAsOfDate)) {
+            twDerivativesAsOfDate = row.date;
+          }
+        }
+        break;
+      }
+    }
+    merged[col] = pickedVal;
+  }
+
+  merged.tw_derivatives_as_of_date = twDerivativesAsOfDate;
+  return merged;
+}
+
+/**
+ * 解析台灣期貨交易所 (TAIFEX) 三大法人台指期未平倉 CSV (Spec 0183 & Spec 0239 T04)
  */
 function parseTaifexInstitutionalFuturesCsv(csvText) {
   if (!csvText || typeof csvText !== 'string') return null;
@@ -857,24 +1328,22 @@ function parseTaifexInstitutionalFuturesCsv(csvText) {
   let found = false;
 
   for (const line of lines) {
-    // 依逗號切分並去除引號
-    const parts = line.split(',').map((p) => p.replace(/["']/g, '').trim());
+    // 支援雙引號包千分位逗號之 CSV 欄位切分
+    const parts = splitCsvLine(line).map((p) => p.replace(/["']/g, '').trim());
     if (parts.length < 14) continue;
 
     const commodity = parts[1]; // 商品名稱
     const identity = parts[2]; // 身份別
-    const netOiStr = parts[13]; // 未平倉餘額淨額口數
+    const netOiNum = parseNumericCell(parts[13]); // 未平倉餘額淨額口數
 
-    if (commodity === '臺股期貨') {
-      const netOi = parseInt(netOiStr, 10);
-      if (!isNaN(netOi)) {
-        if (identity.includes('外資')) {
-          foreignNetOi = netOi;
-          found = true;
-        } else if (identity.includes('投信')) {
-          trustNetOi = netOi;
-          found = true;
-        }
+    if (commodity === '臺股期貨' && netOiNum !== null) {
+      const netOi = Math.trunc(netOiNum);
+      if (identity.includes('外資')) {
+        foreignNetOi = netOi;
+        found = true;
+      } else if (identity.includes('投信')) {
+        trustNetOi = netOi;
+        found = true;
       }
     }
   }
@@ -1002,11 +1471,16 @@ module.exports = {
   fetchTreasuryYield10y,
   fetchVixClose,
   fetchCnnFearGreed,
+  decodeTaifexText,
   fetchTaifexInstitutionalOi,
+  parseTaifexPutCallRatioCsv,
+  fetchTaifexPutCallRatio,
+  deriveTwMarginMaintenanceRatio,
   fetchTwTotalMarginMaintenance,
   fetchFullMacroWarRoomPulse,
   fetchMacroSentimentDaily,
   ingestMacroSentimentToDb,
+  getCoalescedLatestMacroSentiment,
   parseTaifexInstitutionalFuturesCsv,
   parseTwseEtfNavResponse,
   ingestEtfDailyNavToDb,

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Shield,
   Zap,
@@ -10,7 +10,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import type { AiForceDashboardReport, KlineCandleItem } from '../../types/aiForceDashboard';
-import type { HoldingPosition, LoanRecord } from '../../types/stock';
+import type { ColorThemeMode, HoldingPosition, LoanRecord, MarketType } from '../../types/stock';
 import { aggregateCandlesToTimeframe } from '../../engine/klineAggregationEngine';
 import { calculateStochasticKD } from '../../engine/technicalIndicatorEngine';
 
@@ -19,6 +19,8 @@ export interface TaskPanelProps {
   holdings?: HoldingPosition[];
   loanRecords?: LoanRecord[];
   macroMaintenanceRatio?: number;
+  colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
 export interface TechnicalAlertItem {
@@ -149,49 +151,64 @@ export function generateTechnicalAlerts(report: AiForceDashboardReport): Technic
     });
   }
 
-  // 4. 隔日沖與日內籌碼換手警示
+  // 4. 隔日沖與日內籌碼換手警示 (台美股雙市場分流)
+  const isUs = report.market === 'US';
   const dayTrade = report.dayTradeRisk;
   if (dayTrade) {
     const levelLabel: '高' | '中' | '低' =
       dayTrade.riskLevel === 'HIGH' ? '高' : dayTrade.riskLevel === 'LOW' ? '低' : '中';
     const color = levelLabel === '高' ? '#ef4444' : levelLabel === '低' ? '#10b981' : '#f59e0b';
     alerts.push({
-      title: '隔日沖沖銷異常偵測',
+      title: isUs ? '美股日內波動與換手偵測' : '隔日沖沖銷異常偵測',
       level: levelLabel,
-      message: `日內沖銷風險指數 ${dayTrade.riskIndex} 分 (等級：${dayTrade.riskLevel})，換手率 ${dayTrade.turnoverRate}%，日內波動度 ${dayTrade.intradayVolatility}%`,
+      message: isUs
+        ? `日內波動風險指數 ${dayTrade.riskIndex} 分 (等級：${dayTrade.riskLevel})，換手活躍度 ${dayTrade.turnoverRate}%，ATR 日內波動度 ${dayTrade.intradayVolatility}%`
+        : `日內沖銷風險指數 ${dayTrade.riskIndex} 分 (等級：${dayTrade.riskLevel})，換手率 ${dayTrade.turnoverRate}%，日內波動度 ${dayTrade.intradayVolatility}%`,
       time,
       color,
     });
   }
 
-  // 5. 交易所處置股票與注意股票標記 (Ticket 07 / Story 6)
-  const statusTag = report.marketBar?.statusTag ?? report.marketBar?.marketStatusTag ?? 'NORMAL';
-  if (statusTag === 'DISPOSITION') {
-    alerts.unshift({
-      title: '交易所處置股票預警',
-      level: '高',
-      message: `本標的已被主管機關列入「處置股票」，採行分盤撮合機制（每 5 分鐘或 20 分鐘分盤撮合一次），單筆委託達 10 張或多筆累積達 30 張需預收款券，流動性大幅受限`,
-      time,
-      color: '#ef4444',
-    });
-  } else if (statusTag === 'ATTENTION') {
-    alerts.unshift({
-      title: '證交所注意股票列管',
-      level: '中',
-      message: `本標的近期因漲跌幅異常、成交量放大或週轉率過高已被證交所列為注意股票，若連續達標恐觸發處置機制，請提高警覺`,
-      time,
-      color: '#f59e0b',
-    });
+  // 5. 交易所處置股票與注意股票標記 (僅台股適用)
+  if (!isUs) {
+    const statusTag = report.marketBar?.statusTag ?? report.marketBar?.marketStatusTag ?? 'NORMAL';
+    if (statusTag === 'DISPOSITION') {
+      alerts.unshift({
+        title: '交易所處置股票預警',
+        level: '高',
+        message: `本標的已被主管機關列入「處置股票」，採行分盤撮合機制（每 5 分鐘或 20 分鐘分盤撮合一次），單筆委託達 10 張或多筆累積達 30 張需預收款券，流動性大幅受限`,
+        time,
+        color: '#ef4444',
+      });
+    } else if (statusTag === 'ATTENTION') {
+      alerts.unshift({
+        title: '證交所注意股票列管',
+        level: '中',
+        message: `本標的近期因漲跌幅異常、成交量放大或週轉率過高已被證交所列為注意股票，若連續達標恐觸發處置機制，請提高警覺`,
+        time,
+        color: '#f59e0b',
+      });
+    }
   }
 
-  // 6. 信用交易維持率風控警示 (Ticket 07 / Story 6)
-  alerts.push({
-    title: '信用交易維持率風控',
-    level: '中',
-    message: `券商融資維持率追繳警戒線為 130%（T+2 日未補繳將面臨斷頭處分）、實務波段防守警戒線為 140%，需注意標的回檔對信用帳戶擔保率之壓力測試`,
-    time,
-    color: '#38bdf8',
-  });
+  // 6. 信用交易維持率 / 美股無漲跌幅跳空風控警示
+  if (isUs) {
+    alerts.push({
+      title: '美股無漲跌幅與跳空風控',
+      level: '中',
+      message: `美股市場無單日 10% 漲跌幅限制（採 LULD 價格帶熔斷機制），需留意財報發布與盤後延長交易時段之跳空滑價風險`,
+      time,
+      color: '#38bdf8',
+    });
+  } else {
+    alerts.push({
+      title: '信用交易維持率風控',
+      level: '中',
+      message: `券商融資維持率追繳警戒線為 130%（T+2 日未補繳將面臨斷頭處分）、實務波段防守警戒線為 140%，需注意標的回檔對信用帳戶擔保率之壓力測試`,
+      time,
+      color: '#38bdf8',
+    });
+  }
 
   return alerts;
 }
@@ -204,8 +221,15 @@ export const TechnicalAlertsView: React.FC<TaskPanelProps> = ({
   holdings,
   loanRecords,
   macroMaintenanceRatio,
+  colorTheme,
+  market,
 }) => {
-  const alerts = useMemo(() => generateTechnicalAlerts(report), [report]);
+  const effectiveMarket = market ?? report.market ?? 'TW';
+  const effectiveReport = effectiveMarket === report.market ? report : { ...report, market: effectiveMarket };
+  const alerts = useMemo(() => generateTechnicalAlerts(effectiveReport), [effectiveReport]);
+  const isInternational = colorTheme === 'international' || (!colorTheme && effectiveMarket === 'US');
+  const upColor = isInternational ? '#10b981' : '#ef4444';
+  void upColor;
   const statusTag = report.marketBar?.statusTag ?? report.marketBar?.marketStatusTag ?? 'NORMAL';
 
   const isDisposition = statusTag === 'DISPOSITION';
@@ -525,7 +549,12 @@ export function deriveKdMaMetrics(report: AiForceDashboardReport) {
   for (let i = 1; i < candles.length - 3; i++) {
     const cPrev = candles[i - 1];
     const cCurr = candles[i];
-    if ((cPrev.k ?? 50) < (cPrev.d ?? 50) && (cCurr.k ?? 50) >= (cCurr.d ?? 50) && (cCurr.k ?? 50) <= 35) {
+    if (
+      cCurr.close > 0 &&
+      (cPrev.k ?? 50) < (cPrev.d ?? 50) &&
+      (cCurr.k ?? 50) >= (cCurr.d ?? 50) &&
+      (cCurr.k ?? 50) <= 35
+    ) {
       goldenCrossCount++;
       const forwardCandle = candles[Math.min(i + 10, candles.length - 1)];
       const ret = ((forwardCandle.close - cCurr.close) / cCurr.close) * 100;
@@ -558,14 +587,17 @@ export function deriveKdMaMetrics(report: AiForceDashboardReport) {
 /**
  * 任務三：KD + MA 圖表面板 (含日/週/月共振與勝率統計)
  */
-export const KdMaView: React.FC<TaskPanelProps> = ({ report }) => {
+export const KdMaView: React.FC<TaskPanelProps> = ({ report, colorTheme, market }) => {
+  const effectiveMarket = market ?? report.market ?? 'TW';
+  const isInternational = colorTheme === 'international' || (!colorTheme && effectiveMarket === 'US');
+  const upColor = isInternational ? '#10b981' : '#ef4444';
   const { k, d, ma20, kdCrossingState, multiTimeframeResonance, historicalOversoldStats, recentCandles } =
     useMemo(() => deriveKdMaMetrics(report), [report]);
 
-  // SVG 座標繪製計算 (寬 100%, 高 220px, 邊界 20px)
+  // SVG 座標繪製計算 (寬 100%, 高 220px, 左邊界擴大至 58px 防止 '80 超買' 裁切)
   const svgWidth = 600;
   const svgHeight = 220;
-  const padding = { top: 20, right: 30, bottom: 30, left: 30 };
+  const padding = { top: 20, right: 30, bottom: 30, left: 58 };
   const plotWidth = svgWidth - padding.left - padding.right;
   const plotHeight = svgHeight - padding.top - padding.bottom;
 
@@ -598,7 +630,7 @@ export const KdMaView: React.FC<TaskPanelProps> = ({ report }) => {
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
         <h3 style={{ margin: 0, fontSize: '15px', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <TrendingUp size={16} color="#10b981" /> 任務三：KD 隨機指標與多天期均線系統 ({report.symbol} {report.name})
+          <TrendingUp size={16} color={upColor} /> 任務三：KD 隨機指標與多天期均線系統 ({report.symbol} {report.name})
         </h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span
@@ -774,11 +806,12 @@ export function deriveMacdMetrics(report: AiForceDashboardReport) {
     const lowestDif = Math.min(...window.map((c) => c.dif ?? 0));
 
     // 頂背離：收盤價處於近20日最高檔區 (>= 98%)，但 DIF 顯著落後未過高
+    const bullishDifThreshold = lowestDif < 0 ? lowestDif * 0.85 : lowestDif * 1.15;
     if (last.close >= highestClose * 0.98 && dif < highestDif * 0.85 && macdHist < prevHist) {
       divergenceType = 'BEARISH_DIVERGENCE';
       divergenceLabel = '頂背離警戒 (動能未過高)';
       divergenceDescription = '股價創波段新高或處於高檔，但 DIF 快線與紅柱動能未能同步創高，量化動能呈現頂背離，需防範主力高檔調節回檔';
-    } else if (last.close <= lowestClose * 1.02 && dif > lowestDif * 1.15 && macdHist > prevHist) {
+    } else if (last.close <= lowestClose * 1.02 && dif > bullishDifThreshold && macdHist > prevHist) {
       divergenceType = 'BULLISH_DIVERGENCE';
       divergenceLabel = '底背離醞釀 (賣壓竭盡反彈)';
       divergenceDescription = '股價創波段新低或處於低檔，但 DIF 快線低點墊高未破前低，量化空方殺盤動能竭盡，醞釀技術性波段築底反彈';
@@ -825,7 +858,11 @@ export function deriveMacdMetrics(report: AiForceDashboardReport) {
 /**
  * 任務四：MACD 圖表面板 (含頂底背離量化判定器與零軸分水嶺)
  */
-export const MacdView: React.FC<TaskPanelProps> = ({ report }) => {
+export const MacdView: React.FC<TaskPanelProps> = ({ report, colorTheme, market }) => {
+  const effectiveMarket = market ?? report.market ?? 'TW';
+  const isInternational = colorTheme === 'international' || (!colorTheme && effectiveMarket === 'US');
+  const bullColor = isInternational ? '#10b981' : '#ef4444';
+  const bearColor = isInternational ? '#ef4444' : '#10b981';
   const { dif, macd, macdHist, statusText, divergenceInfo, zeroAxisState, momentumAlert, recentCandles } =
     useMemo(() => deriveMacdMetrics(report), [report]);
 
@@ -982,7 +1019,7 @@ export const MacdView: React.FC<TaskPanelProps> = ({ report }) => {
         </div>
         <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.5)', padding: '10px', borderRadius: '8px' }}>
           <span style={{ fontSize: '12px', color: '#94a3b8' }}>OSC 柱狀體</span>
-          <div style={{ fontSize: '18px', fontWeight: 700, color: macdHist >= 0 ? '#ef4444' : '#10b981' }}>
+          <div style={{ fontSize: '18px', fontWeight: 700, color: macdHist >= 0 ? bullColor : bearColor }}>
             {macdHist >= 0 ? `+${macdHist}` : macdHist} ({statusText})
           </div>
         </div>
@@ -1024,7 +1061,7 @@ export const MacdView: React.FC<TaskPanelProps> = ({ report }) => {
                 y={barY}
                 width="6"
                 height={Math.max(1, barH)}
-                fill={hVal >= 0 ? '#ef4444' : '#10b981'}
+                fill={hVal >= 0 ? bullColor : bearColor}
                 opacity={0.8}
               />
             );
@@ -1079,10 +1116,18 @@ export function paginateCandles(
 /**
  * 任務五：原始資料表面板
  */
-export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
+export const RawDataView: React.FC<TaskPanelProps> = ({ report, colorTheme, market }) => {
   const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [report.symbol]);
   const candles = report.klineSystem?.candles ?? [];
   const { items, totalPages, currentPage, totalCount } = paginateCandles(candles, page, 10);
+  const effectiveMarket = market ?? report.market ?? 'TW';
+  const volUnit = effectiveMarket === 'US' ? '股' : '張';
+  const isInternational = colorTheme === 'international' || (!colorTheme && effectiveMarket === 'US');
+  const bullColor = isInternational ? '#10b981' : '#ef4444';
+  const bearColor = isInternational ? '#ef4444' : '#10b981';
 
   return (
     <div
@@ -1113,7 +1158,7 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
               <th style={{ textAlign: 'right', padding: '8px' }}>最高</th>
               <th style={{ textAlign: 'right', padding: '8px' }}>最低</th>
               <th style={{ textAlign: 'right', padding: '8px' }}>收盤</th>
-              <th style={{ textAlign: 'right', padding: '8px' }}>成交量</th>
+              <th style={{ textAlign: 'right', padding: '8px' }}>成交量 ({volUnit})</th>
               <th style={{ textAlign: 'right', padding: '8px' }}>MA20</th>
               <th style={{ textAlign: 'right', padding: '8px' }}>MA60</th>
               <th style={{ textAlign: 'right', padding: '8px' }}>MA250</th>
@@ -1171,7 +1216,7 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
                   style={{
                     textAlign: 'right',
                     padding: '8px',
-                    color: (row.macdHist ?? 0) >= 0 ? '#ef4444' : '#10b981',
+                    color: (row.macdHist ?? 0) >= 0 ? bullColor : bearColor,
                   }}
                 >
                   {row.macdHist !== undefined ? (row.macdHist >= 0 ? `+${row.macdHist}` : row.macdHist) : '-'}

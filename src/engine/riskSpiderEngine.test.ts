@@ -75,12 +75,13 @@ describe('RiskSpiderEngine - 五維量化風險評估演算法規範 (Ticket 10)
     expect(['LOW', 'MEDIUM', 'MEDIUM_HIGH', 'HIGH']).toContain(result.mainForceRiskLevel);
   });
 
-  it('當傳入空陣列時，應安全回傳預設中性數值且不中斷', () => {
+  it('當傳入空陣列時，應遵循 Spec 0239 Zero-Mock 契約回傳零造假中性基準且不中斷', () => {
     const result = calculateRiskSpider([]);
 
-    expect(result.mainForceRiskIndex).toBeGreaterThan(0);
-    expect(result.mainForceRiskLevel).toBeDefined();
-    expect(result.volatilityRisk).toBeDefined();
+    expect(result.mainForceRiskIndex).toBe(0);
+    expect(result.mainForceRiskLevel).toBe('LOW');
+    expect(result.volatilityRisk).toBe(0);
+    expect(result.liquidityRisk).toBe(0);
   });
 
   it('Spec 0237: 當 volumeUnit="SHARES" 或 volumeInShares=true 時，應先將股數換算為張數再評估流動性風險', () => {

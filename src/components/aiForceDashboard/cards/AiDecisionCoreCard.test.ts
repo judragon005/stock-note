@@ -81,9 +81,10 @@ describe('AiDecisionCoreCard - 決策核心邏輯與樣式判定規範 (Ticket 0
       expect(formatted).toBe('2,490.00 ~ 2,490.00');
     });
 
-    it('缺少價位或空值時應安全返回待確認標示', () => {
+    it('缺少價位、空值或 [0, 0] 時應安全返回待確認標示 (T12)', () => {
       const formatted = formatPriceRange(undefined as unknown as [number, number]);
       expect(formatted).toBe('資料計算中');
+      expect(formatPriceRange([0, 0])).toBe('資料計算中');
     });
   });
 

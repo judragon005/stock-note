@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-2365%2F2365%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2518%2F2518%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,22 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 主力戰情室 4.1 湖倉自癒、ETF 多型合流與零微字人體工學重構 (`Spec 0238`) *(V9.23.0 最新發布 / Spec #0238 / ADR #0238 / Issue #590)*
+### 1. 主力戰情室 5.0 台美雙市場一等公民對等架構、全鏈路資料管線修復與 21 卡零缺陷閉環 (`Spec 0239`) *(V9.24.0 最新發布 / Spec #0239 / ADR #0239 / Issue #592)*
+
+- **台美雙市場一等公民對等架構 (Issue #592 / Ticket 08 & 16)**：
+  - 嚴格隔離 `twMacroData` 與 `usMacroData`（依 `market` 專屬掛載），徹底終結台股只要庫存總經即遭美股宏觀視圖覆蓋之劫持 Bug；全域貫穿 `colorTheme` 與 `market` 至全數 21 張卡片、4 大任務子頁籤與 HTML 匯出報表，實現台股（紅漲綠跌）與美股（綠漲紅跌）視覺極性一致。
+- **統一市場能力適配層與美股評分解鎖 (Issue #592 / Ticket 08 & 09)**：
+  - 將美股微觀量價結構 (`usMicrostructure`: MFI, OBV, RVOL, VWAP 乖離) 與美股股數/成交額流動性階梯全面接入 Card 02, 05, 09, 11, 12, 14, 16, 18，徹底終結美股健康度鎖死 50%、動態信號封頂 55 分與主力總評退化為 `+0 張` 之缺陷。
+- **權威資產型態單一分類來源 (SSOT) 與點號路由 (Issue #592 / Ticket 01 & 02)**：
+  - 收斂 3 套衝突之 ETF 判斷至 `resolveAssetClass` / `isCanonicalEtfSymbol`，優先信任 `symbols_meta.type` 並移除 `/(富邦|國泰)/` 誤殺規則，精準區分金融個股 `2881` 與主動/債券/美股 ETF；擴展中介層點號代碼路由（如 `BRK.B` ↔ `BRK-B`）與單例快取，消除重複連線負擔。
+- **美股基本面/13F/季營收管線與 SEC EDGAR 本地代理 (Issue #592 / Ticket 06 & 07)**：
+  - 新增 `us_fundamentals_daily` 湖倉表整合 Yahoo `quoteSummary`（Cookie/Crumb 雙軌快取 + 24H TTL），並於本地中介層建立 SEC EDGAR 代理路由 (`/api/market/sec-edgar/companyfacts/:symbol` 搭配 `company_tickers.json` 動態解析全美股 CIK），零成本供應 Card 19 (`us13fData`)、Card 20（美股個股近 8 季營收 YoY / 美股 ETF 規模費用殖利率）與 Card 21（Forward PE、PS、30% 稅後實質殖利率）。
+- **ARINC 661 Zero-Mock 航太級零造假閘門 (Issue #592 / Ticket 09 & 15)**：
+  - 全面清除預設報表與子引擎殘留之硬編碼假數值（`-64張`、`2131`、`2400~1600`、`60k~0k`、`168.5%` 與美股靜態 ETF 回退）；歷史日 K `< 5` 根嚴格維持 `isDataPending = true`，全區遮蔽 Executive Strip、`TASK_2~5` 子頁籤與 `WarRoomPromptCard` 提示詞複製按鈕，阻斷假數據外洩與 `currentPrice=0` 誤觸停損警報。
+- **21 張卡片與 5 大分頁全鏈路零缺損精修 (Issue #592 / Ticket 10~15)**：
+  - 解除 `TaskViewsSwitcher` 點擊攔截死鎖；修復低價美股自適應小數刻度與 key 碰撞；雷達圖邊距防裁切；Card 07 動態正規化比例軸；Card 08 雙軸座標柱寬防碰撞；Card 18 正則千分位逗號相容與彈窗 ESC 關閉；首屏按需補齊縮至 $\le 300\text{ms}$ 搭配受控輪詢刷新。
+
+### 2. 主力戰情室 4.1 湖倉自癒、ETF 多型合流與零微字人體工學重構 (`Spec 0238`) *(V9.23.0 / Spec #0238 / ADR #0238 / Issue #590)*
 
 - **ETF 全分組入庫與覆蓋率躍升 (Issue #590 / Ticket 01)**：
   - 修復證交所 `all_etf.txt` 投信分組遍歷缺陷，將 `a1[0]` 單組讀取拓展至 `a1[0..N]` 全量掃描，本機 SQLite 湖倉 `etf_daily_nav` 覆蓋率由 4 檔躍升至 **365 檔**（涵蓋 `0050`、`0056`、`00878` 等全部國內與跨國 ETF 最新淨值與折溢價）。

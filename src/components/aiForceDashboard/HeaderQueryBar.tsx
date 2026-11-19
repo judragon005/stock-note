@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MarketType } from '../../types/stock';
-import { resolveOfficialSecurityName } from '../../engine/stockNameResolver';
+import { resolveOfficialSecurityName, searchStockSuggestions } from '../../engine/stockNameResolver';
 import { Search, Play, RefreshCw, Database } from 'lucide-react';
 
 /**
@@ -11,7 +11,7 @@ export function cleanSymbolInput(raw: string): string {
   return raw
     .trim()
     .toUpperCase()
-    .replace(/\.(TW|TWO)$/i, '');
+    .replace(/\.(TW|TWO|US)$/i, '');
 }
 
 /**
@@ -23,7 +23,33 @@ export function inferMarketType(symbol: string): MarketType {
   if (/^\d{4,6}[A-Z]?$/.test(clean)) {
     return 'TW';
   }
+  if (/[\u4e00-\u9fff]/.test(clean)) {
+    const match = searchStockSuggestions(clean, 'ALL', 1)[0];
+    return match ? match.market : 'TW';
+  }
   return 'US';
+}
+
+/**
+ * 解析輸入字串（支援代號或中文名稱）為正規化 { symbol, market }
+ */
+export function resolveSymbolAndMarket(
+  raw: string,
+  fallbackMarket?: MarketType
+): { symbol: string; market: MarketType } {
+  const trimmed = (raw || '').trim();
+  if (!trimmed) {
+    return { symbol: '', market: fallbackMarket || 'TW' };
+  }
+  if (/[\u4e00-\u9fff]/.test(trimmed)) {
+    const match = searchStockSuggestions(trimmed, 'ALL', 1)[0];
+    if (match) {
+      return { symbol: match.symbol, market: match.market };
+    }
+    return { symbol: cleanSymbolInput(trimmed), market: fallbackMarket || 'TW' };
+  }
+  const clean = cleanSymbolInput(trimmed);
+  return { symbol: clean, market: fallbackMarket || inferMarketType(clean) };
 }
 
 export interface DataProvenanceConfig {
@@ -71,15 +97,19 @@ export const HeaderQueryBar: React.FC<HeaderQueryBarProps> = ({
 }) => {
   const [inputVal, setInputVal] = useState(currentSymbol);
 
+  useEffect(() => {
+    setInputVal(currentSymbol);
+  }, [currentSymbol]);
+
   const clean = cleanSymbolInput(inputVal);
-  const inferredMarket = currentMarket || inferMarketType(clean);
   const resolvedName =
-    currentName || resolveOfficialSecurityName(clean, inferredMarket) || clean;
+    currentName || resolveOfficialSecurityName(clean, clean) || clean;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clean) return;
-    onAnalyze(clean, inferredMarket);
+    const resolved = resolveSymbolAndMarket(inputVal, currentMarket);
+    if (!resolved.symbol) return;
+    onAnalyze(resolved.symbol, resolved.market);
   };
 
   const provenance = buildDataProvenanceText(provenanceConfig);
@@ -117,7 +147,7 @@ export const HeaderQueryBar: React.FC<HeaderQueryBarProps> = ({
             type="text"
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}
-            placeholder="代號 (如 2360)"
+            placeholder="代號 (如 2330 / NVDA)"
             style={{
               width: '130px',
               padding: '6px 10px 6px 32px',

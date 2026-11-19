@@ -66,10 +66,13 @@ describe('ForecastConeEngine - 60日歷史漂移與波動率預測錐演算法 (
     expect(result.bullishProb + result.rangeProb + result.bearishProb).toBe(100);
   });
 
-  it('當傳入空陣列時，應安全回傳預設 4 個節點之預測路徑', () => {
+  it('當傳入空陣列時，應遵循 Spec 0239 Zero-Mock 契約回傳空節點與全 0 機率基準', () => {
     const result = calculateForecastCone([]);
 
-    expect(result.timeNodes.length).toBe(4);
-    expect(result.bullishProb + result.rangeProb + result.bearishProb).toBe(100);
+    expect(result.timeNodes).toEqual([]);
+    expect(result.bullishProb).toBe(0);
+    expect(result.rangeProb).toBe(0);
+    expect(result.bearishProb).toBe(0);
+    expect(result.annualizedDriftPercent).toBe(0);
   });
 });

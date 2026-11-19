@@ -4,7 +4,9 @@ export interface AiConfidenceInput {
   candles?: Array<{ open: number; high: number; low: number; close: number; volume: number }>;
   klineCandles?: KlineCandleItem[];
   hasInstitutionalData?: boolean;
+  hasUsMicrostructure?: boolean;
   volumeInShares?: boolean;
+  market?: 'TW' | 'US';
 }
 
 /**
@@ -15,10 +17,17 @@ function clamp(val: number, min: number = 0, max: number = 100): number {
 }
 
 /**
- * Ticket 05: Card 14 AI 信心維度量化引擎
+ * Ticket 05 / Spec 0239: Card 14 AI 信心維度量化引擎 (支援雙市場量綱)
  */
 export function calculateAiConfidence(input: AiConfidenceInput): AiConfidenceData {
-  const { candles = [], klineCandles = [], hasInstitutionalData = false, volumeInShares = false } = input;
+  const {
+    candles = [],
+    klineCandles = [],
+    hasInstitutionalData = false,
+    hasUsMicrostructure,
+    volumeInShares = false,
+    market = 'TW',
+  } = input;
   const count = candles.length;
 
   if (count === 0 || klineCandles.length === 0) {
@@ -31,14 +40,20 @@ export function calculateAiConfidence(input: AiConfidenceInput): AiConfidenceDat
     };
   }
 
-  // 1. 資料完整度 (dataCompleteness): 依日 K 筆數與法人資料有無
+  // 1. 資料完整度 (dataCompleteness): 依日 K 筆數與籌碼/美股微結構資料有無
+  // 美股具備完整日 K 與微結構時，不因無台股三大法人日報而被扣 10 分
+  const hasChipOrMicroData =
+    market === 'US'
+      ? Boolean(hasUsMicrostructure ?? (hasInstitutionalData || count >= 20))
+      : hasInstitutionalData;
+
   let dataCompleteness = 50;
   if (count >= 120) {
-    dataCompleteness = hasInstitutionalData ? 98 : 88;
+    dataCompleteness = hasChipOrMicroData ? 98 : 88;
   } else if (count >= 60) {
-    dataCompleteness = hasInstitutionalData ? 85 : 78;
+    dataCompleteness = hasChipOrMicroData ? 85 : 78;
   } else if (count >= 20) {
-    dataCompleteness = hasInstitutionalData ? 72 : 65;
+    dataCompleteness = hasChipOrMicroData ? 72 : 65;
   } else {
     dataCompleteness = 50;
   }
@@ -76,17 +91,31 @@ export function calculateAiConfidence(input: AiConfidenceInput): AiConfidenceDat
     modelAccuracy = Math.round(modelAccuracy * 0.75);
   }
 
-  // 4. 策略適用度 (strategyApplicability): 評估成交量能與趨勢清晰度
+  // 4. 策略適用度 (strategyApplicability): 評估雙市場成交量能與趨勢清晰度
   let strategyApplicability = 70;
   const last = candles[count - 1];
   const recent20 = candles.slice(-20);
   const rawAvgVol = recent20.reduce((acc, c) => acc + c.volume, 0) / Math.max(1, recent20.length);
-  const avgVol = volumeInShares ? rawAvgVol / 1000 : rawAvgVol;
-  const lastVol = volumeInShares ? last.volume / 1000 : last.volume;
-  if (avgVol > 2000 && lastVol > 1000) {
-    strategyApplicability = 82;
-  } else if (avgVol < 300) {
-    strategyApplicability = 45; // 流動性枯竭不易實施量化策略
+
+  if (market === 'US') {
+    // 美股以股數門檻評估 (>100萬股高適用度、<5萬股低適用度)
+    if (rawAvgVol > 1_000_000 && last.volume > 500_000) {
+      strategyApplicability = 82;
+    } else if (rawAvgVol < 10_000) {
+      strategyApplicability = 38;
+    } else if (rawAvgVol < 50_000) {
+      strategyApplicability = 45;
+    } else if (rawAvgVol < 300_000) {
+      strategyApplicability = 58;
+    }
+  } else {
+    const avgVol = volumeInShares ? rawAvgVol / 1000 : rawAvgVol;
+    const lastVol = volumeInShares ? last.volume / 1000 : last.volume;
+    if (avgVol > 2000 && lastVol > 1000) {
+      strategyApplicability = 82;
+    } else if (avgVol < 300) {
+      strategyApplicability = 45; // 流動性枯竭不易實施量化策略
+    }
   }
 
   if (count < 30) {

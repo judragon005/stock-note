@@ -15,10 +15,18 @@ describe('DynamicSignalsCard & signal mapping', () => {
     expect(light.color).toBe('#f87171');
   });
 
-  it('應該正確映射中性為黃色系信號', () => {
+  it('應該正確映射中性與分歧為黃色系信號，且風險可控映射為綠色系 (T14)', () => {
     const light = getSignalLightColor('籌碼中性');
     expect(light.dot).toBe('#f59e0b');
     expect(light.color).toBe('#fbbf24');
+
+    const divLight = getSignalLightColor('多空分歧');
+    expect(divLight.dot).toBe('#f59e0b');
+    expect(divLight.color).toBe('#fbbf24');
+
+    const safeRisk = getSignalLightColor('風險可控');
+    expect(safeRisk.dot).toBe('#10b981');
+    expect(safeRisk.color).toBe('#34d399');
   });
 
   it('應該正確解析三色總評判標籤設定', () => {

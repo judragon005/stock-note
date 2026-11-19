@@ -113,6 +113,98 @@ function formatRocDate(dateStr) {
 }
 
 /**
+ * 將民國年（1151019 / 115/10/19）或西元年（20261019 / 2026-10-19）正規化為 YYYY-MM-DD
+ * @param {string|number} rawDate
+ * @returns {string|null}
+ */
+function parseRocOrIsoDateToIso(rawDate) {
+  if (rawDate === null || rawDate === undefined) return null;
+  const s = String(rawDate).trim();
+  if (!s) return null;
+
+  // YYYY-MM-DD 或 YYYY/MM/DD
+  const isoMatch = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2].padStart(2, '0')}-${isoMatch[3].padStart(2, '0')}`;
+  }
+
+  // YYY/MM/DD 或 YYY-MM-DD (民國年)
+  const rocSlashMatch = s.match(/^(\d{2,3})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (rocSlashMatch) {
+    const ceYear = parseInt(rocSlashMatch[1], 10) + 1911;
+    return `${ceYear}-${rocSlashMatch[2].padStart(2, '0')}-${rocSlashMatch[3].padStart(2, '0')}`;
+  }
+
+  const digits = s.replace(/[^\d]/g, '');
+  if (digits.length === 8) {
+    const year = parseInt(digits.slice(0, 4), 10);
+    if (year >= 1912) {
+      return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+    }
+  }
+  if (digits.length === 7) {
+    const ceYear = parseInt(digits.slice(0, 3), 10) + 1911;
+    return `${ceYear}-${digits.slice(3, 5)}-${digits.slice(5, 7)}`;
+  }
+  if (digits.length === 6) {
+    const ceYear = parseInt(digits.slice(0, 2), 10) + 1911;
+    return `${ceYear}-${digits.slice(2, 4)}-${digits.slice(4, 6)}`;
+  }
+
+  return null;
+}
+
+/**
+ * 帶降噪可控記錄的警告日誌輔助函式（取代靜默空 catch）
+ * @param {string} tag
+ * @param {string} message
+ * @param {object} [options]
+ */
+function logBackfillWarn(tag, message, options = {}) {
+  if (options.silent || options.quiet) return;
+  const logger = typeof options.logger === 'function' ? options.logger : console.warn;
+  logger(`[backfill-tw-history-web][${tag}] ${message}`);
+}
+
+/**
+ * 過濾 TPEx OpenAPI 最新快照資料：嚴格比對每列民國年 Date 是否吻合 targetDateStr，防止歷史日期遭當日快照污染
+ * @param {Array<object>|object|null} rawData
+ * @param {string} targetDateStr - YYYY-MM-DD
+ * @param {string} [sourceLabel='TPEx OpenAPI']
+ * @param {object} [options]
+ * @returns {Array<object>}
+ */
+function filterTpexSnapshotByTargetDate(rawData, targetDateStr, sourceLabel = 'TPEx OpenAPI', options = {}) {
+  if (!rawData || !targetDateStr) return [];
+  const list = Array.isArray(rawData) ? rawData : Array.isArray(rawData.data) ? rawData.data : [];
+  if (list.length === 0) return [];
+
+  const topLevelDate = parseRocOrIsoDateToIso(rawData.Date || rawData.date);
+  const matched = [];
+  let sampleMismatchDate = null;
+
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    const rowDate = parseRocOrIsoDateToIso(item.Date || item.date || item['日期']) || topLevelDate;
+    if (rowDate === targetDateStr) {
+      matched.push(item);
+    } else if (!sampleMismatchDate && rowDate) {
+      sampleMismatchDate = rowDate;
+    }
+  }
+
+  if (matched.length === 0 && list.length > 0) {
+    logBackfillWarn(
+      sourceLabel,
+      `快照日期 (${sampleMismatchDate || '未知'}) 與目標日 (${targetDateStr}) 不符，跳過寫入以防止歷史污染`,
+      options
+    );
+  }
+
+  return matched;
+}
+
+/**
  * 台股代碼正規化：移除櫃買 O 尾綴
  * @param {string} symbol
  * @returns {string}
@@ -408,7 +500,8 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
         };
       }
     } catch (e) {
-      // 容錯降級：若 DB 快取查詢失敗，則繼續執行網路抓取
+      // 容錯降級：若 DB 快取查詢失敗，記錄警告並繼續執行網路抓取
+      logBackfillWarn('SmartCache', `快取查詢異常 (${dateStr})，改由網路抓取: ${e?.message || e}`, options);
     }
   }
 
@@ -500,6 +593,8 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
   let twseDayTradeRaw = null;
 
   if (options.includeValuationAndMargin !== false) {
+    const skipStaleTpex = Boolean(options.latestTradingDate && dateStr < options.latestTradingDate);
+
     if (throttleMs > 0) await sleep(throttleMs);
     try {
       twseMarginRaw = await retryFetch(
@@ -511,7 +606,9 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
         retries,
         retryDelayMs
       );
-    } catch (e) {}
+    } catch (e) {
+      logBackfillWarn('TWSE MI_MARGN', `下載失敗 (${dateStr}): ${e?.message || e}`, options);
+    }
 
     if (throttleMs > 0) await sleep(throttleMs);
     try {
@@ -524,33 +621,47 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
         retries,
         retryDelayMs
       );
-    } catch (e) {}
+    } catch (e) {
+      logBackfillWarn('TWSE BWIBBU_d', `下載失敗 (${dateStr}): ${e?.message || e}`, options);
+    }
 
-    if (throttleMs > 0) await sleep(throttleMs);
-    try {
-      tpexMarginRaw = await retryFetch(
-        () =>
-          fetcher(
-            `https://www.tpex.org.tw/openapi/v1/tpex_mainboard_margin_balance?l=zh-tw&d=${rocDateStr}`,
-            { signal: options.signal }
-          ),
-        retries,
-        retryDelayMs
-      );
-    } catch (e) {}
+    if (!skipStaleTpex) {
+      if (throttleMs > 0) await sleep(throttleMs);
+      try {
+        tpexMarginRaw = await retryFetch(
+          () =>
+            fetcher(
+              `https://www.tpex.org.tw/openapi/v1/tpex_mainboard_margin_balance?l=zh-tw&d=${rocDateStr}`,
+              { signal: options.signal }
+            ),
+          retries,
+          retryDelayMs
+        );
+      } catch (e) {
+        logBackfillWarn('TPEx Margin', `下載失敗 (${dateStr}): ${e?.message || e}`, options);
+      }
 
-    if (throttleMs > 0) await sleep(throttleMs);
-    try {
-      tpexPeratioRaw = await retryFetch(
-        () =>
-          fetcher(
-            `https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis?l=zh-tw&d=${rocDateStr}`,
-            { signal: options.signal }
-          ),
-        retries,
-        retryDelayMs
+      if (throttleMs > 0) await sleep(throttleMs);
+      try {
+        tpexPeratioRaw = await retryFetch(
+          () =>
+            fetcher(
+              `https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis?l=zh-tw&d=${rocDateStr}`,
+              { signal: options.signal }
+            ),
+          retries,
+          retryDelayMs
+        );
+      } catch (e) {
+        logBackfillWarn('TPEx Peratio', `下載失敗 (${dateStr}): ${e?.message || e}`, options);
+      }
+    } else {
+      logBackfillWarn(
+        'TPEx OpenAPI',
+        `目標日 (${dateStr}) 早於最新交易日 (${options.latestTradingDate})，略過僅支援當日快照之 TPEx OpenAPI`,
+        options
       );
-    } catch (e) {}
+    }
 
     if (throttleMs > 0) await sleep(throttleMs);
     try {
@@ -563,7 +674,9 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
         retries,
         retryDelayMs
       );
-    } catch (e) {}
+    } catch (e) {
+      logBackfillWarn('TWSE TWT93U', `下載失敗 (${dateStr}): ${e?.message || e}`, options);
+    }
 
     if (throttleMs > 0) await sleep(throttleMs);
     try {
@@ -576,7 +689,9 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
         retries,
         retryDelayMs
       );
-    } catch (e) {}
+    } catch (e) {
+      logBackfillWarn('TWSE TWTB4U', `下載失敗 (${dateStr}): ${e?.message || e}`, options);
+    }
   }
 
 
@@ -650,14 +765,15 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
   const quotesCount = Object.keys(allQuotes).length;
   const chipsCount = Object.keys(allChips).length;
 
-  // 解析資券、借券賣出、當沖比率與估值
+  // 解析資券、借券賣出、當沖比率與估值（TPEx OpenAPI 嚴格核對快照日期以防歷史污染）
   const twseMargin = parseTwseMargin(twseMarginRaw);
-  const tpexMargin = parseTpexMargin(tpexMarginRaw);
+  const safeTpexMarginRows = filterTpexSnapshotByTargetDate(tpexMarginRaw, dateStr, 'TPEx Margin', options);
+  const tpexMargin = parseTpexMargin(safeTpexMarginRows);
   const allMargin = { ...twseMargin, ...tpexMargin };
   const marginCount = Object.keys(allMargin).length;
 
   const sblMap = parseTwseSbl(twseSblRaw);
-  const dayTradeMap = parseTwseDayTrade(twseDayTradeRaw);
+  const dayTradeMap = parseTwseDayTrade(twseDayTradeRaw, allQuotes);
   const sblCount = Object.keys(sblMap).length;
   const dayTradeCount = Object.keys(dayTradeMap).length;
 
@@ -679,7 +795,20 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
   const extendedChipsCount = Object.keys(allExtendedChips).length;
 
   const twseValuation = parseTwseBwibbu(twseBwibbuRaw);
-  const tpexValuation = parseTpexPeratio(tpexPeratioRaw);
+  const safeTpexPeratioRows = filterTpexSnapshotByTargetDate(tpexPeratioRaw, dateStr, 'TPEx Peratio', options).map(
+    (item) => {
+      const normalizedCode = normalizeTwSymbol(item.SecuritiesCompanyCode || item.Code || item.symbol);
+      return normalizedCode ? { ...item, SecuritiesCompanyCode: normalizedCode } : item;
+    }
+  );
+  const rawTpexValuation = parseTpexPeratio(safeTpexPeratioRows);
+  const tpexValuation = {};
+  for (const [k, v] of Object.entries(rawTpexValuation)) {
+    const cleanK = normalizeTwSymbol(k);
+    if (cleanK) {
+      tpexValuation[cleanK] = { ...v, symbol: cleanK };
+    }
+  }
   const allValuation = { ...twseValuation, ...tpexValuation };
   const valuationCount = Object.keys(allValuation).length;
 
@@ -932,7 +1061,8 @@ function detectTwDateGaps(options = {}) {
       } else {
         gapDates.push(dateStr);
       }
-    } catch {
+    } catch (err) {
+      logBackfillWarn('detectTwDateGaps', `探測日期 ${dateStr} 發生異常: ${err?.message || err}`, options);
       gapDates.push(dateStr);
     }
   }
@@ -951,6 +1081,9 @@ module.exports = {
   defaultFetchJson,
   generateTradeDateCandidates,
   formatRocDate,
+  parseRocOrIsoDateToIso,
+  filterTpexSnapshotByTargetDate,
+  logBackfillWarn,
   normalizeTwSymbol,
   parseTwseDailyQuotesWithTransactions,
   parseTpexDailyQuotesWithTransactions,

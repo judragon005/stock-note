@@ -7,10 +7,29 @@ const https = require('https');
 const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
 const { normalizeUsSymbol } = require('./market-sync-core.cjs');
 
-function formatDateYMD(d) {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
+/**
+ * 嚴格使用指定時區（預設美股 America/New_York）將 Date 格式化為 YYYY-MM-DD，
+ * 杜絕本機 UTC+8 導致美股收盤 timestamp 偏移至隔日 (Spec 0239 T02)
+ * @param {Date} d
+ * @param {string} [timeZone='America/New_York']
+ * @returns {string}
+ */
+function formatDateYMD(d, timeZone = 'America/New_York') {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const parts = formatter.formatToParts(d);
+  let yyyy = '1970';
+  let mm = '01';
+  let dd = '01';
+  for (const p of parts) {
+    if (p.type === 'year') yyyy = p.value;
+    if (p.type === 'month') mm = p.value;
+    if (p.type === 'day') dd = p.value;
+  }
   return `${yyyy}-${mm}-${dd}`;
 }
 
@@ -50,7 +69,7 @@ function parseYahooChartData(chartResult) {
       const turnover = volumeShares * closePrice;
 
       candles.push({
-        date: formatDateYMD(d),
+        date: formatDateYMD(d, 'America/New_York'),
         open: openPrice,
         high: highPrice,
         low: lowPrice,

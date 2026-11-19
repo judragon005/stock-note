@@ -5,6 +5,10 @@
  */
 
 const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+const { stripOtcSuffix } = require('./market-sync-core.cjs');
+
+const TWSE_PLEDGE_URL = 'https://openapi.twse.com.tw/v1/opendata/t187ap11_L';
+const TPEX_PLEDGE_URL = 'https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap11_O';
 
 /**
  * 計算質押比例 (百分比，保留一位小數)
@@ -12,17 +16,48 @@ const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-co
 function computePledgeRatio(pledgedShares, totalShares) {
   if (!totalShares || totalShares <= 0) return 0;
   const ratio = (pledgedShares / totalShares) * 100;
-  return Number(ratio.toFixed(1));
+  return Number.isFinite(ratio) ? Number(ratio.toFixed(1)) : 0;
 }
 
 /**
- * 民國年月 (如 '11502' 或 '115/02') 轉化為 ISO 年月 (YYYY-MM)
+ * 民國年月/日期 (如 '11502'、'115/02'、'1150915') 或西元日期 ('2026-09'、'20260915') 轉化為 ISO 年月 (YYYY-MM)
  */
 function convertRocToYearMonth(rocYearMonth) {
   if (!rocYearMonth) return '';
-  const clean = String(rocYearMonth).replace(/[^\d]/g, '').trim();
+  const raw = String(rocYearMonth).trim();
+
+  // 西元 YYYY-MM 或 YYYY/MM 或 YYYY-MM-DD
+  const ceMatch = raw.match(/^(\d{4})[-/](\d{1,2})(?:[-/]\d{1,2})?$/);
+  if (ceMatch) {
+    return `${ceMatch[1]}-${ceMatch[2].padStart(2, '0')}`;
+  }
+
+  // 民國 YYY/MM 或 YYY/MM/DD
+  const rocSlashMatch = raw.match(/^(\d{2,3})[-/](\d{1,2})(?:[-/]\d{1,2})?$/);
+  if (rocSlashMatch) {
+    const ceYear = parseInt(rocSlashMatch[1], 10) + 1911;
+    return `${ceYear}-${rocSlashMatch[2].padStart(2, '0')}`;
+  }
+
+  const clean = raw.replace(/[^\d]/g, '').trim();
   if (clean.length < 5) return '';
 
+  // 西元 8 碼 YYYYMMDD 或 6 碼 YYYYMM
+  if (clean.length === 8 && parseInt(clean.slice(0, 4), 10) >= 1912) {
+    return `${clean.slice(0, 4)}-${clean.slice(4, 6)}`;
+  }
+  if (clean.length === 6 && parseInt(clean.slice(0, 4), 10) >= 1912) {
+    return `${clean.slice(0, 4)}-${clean.slice(4, 6)}`;
+  }
+
+  // 民國 7 碼 YYYMMDD (如 1150915 -> 2026-09)
+  if (clean.length === 7) {
+    const rocYear = parseInt(clean.slice(0, 3), 10);
+    const month = clean.slice(3, 5);
+    return `${rocYear + 1911}-${month.padStart(2, '0')}`;
+  }
+
+  // 民國 5 碼 YYYMM 或 4+ 碼 YYMM
   const rocYear = parseInt(clean.substring(0, clean.length - 2), 10);
   const month = clean.substring(clean.length - 2);
   const ceYear = rocYear + 1911;
@@ -30,29 +65,65 @@ function convertRocToYearMonth(rocYearMonth) {
 }
 
 /**
- * 解析董監事質押開放資料原始陣列
+ * 解析董監事質押開放資料原始陣列（相容上市 TWSE t187ap11_L 與上櫃 TPEx mopsfin_t187ap11_O）
  */
 function parseTwPledgeReport(rawData) {
-  if (!Array.isArray(rawData) || rawData.length === 0) {
+  const list = Array.isArray(rawData) ? rawData : Array.isArray(rawData?.data) ? rawData.data : [];
+  if (list.length === 0) {
     return [];
   }
 
+  const parseIntSafe = (val) => {
+    if (val === null || val === undefined) return 0;
+    const n = parseInt(String(val).replace(/,/g, '').trim(), 10);
+    return Number.isFinite(n) ? n : 0;
+  };
+
   const results = [];
-  for (const row of rawData) {
+  for (const row of list) {
     if (!row || typeof row !== 'object') continue;
 
-    const symbol = String(row['公司代號'] || row.CompanyCode || row.Code || '').trim();
-    if (!symbol) continue;
+    const rawSymbol = row['公司代號'] || row.SecuritiesCompanyCode || row.CompanyCode || row.Code || row.symbol || '';
+    const symbol = stripOtcSuffix(rawSymbol);
+    if (!symbol || symbol.length > 6) continue;
 
-    const rawYm = row['出表年月'] || row.YearMonth || '';
-    const reportDate = convertRocToYearMonth(rawYm) || String(rawYm);
+    const rawYm =
+      row['出表年月'] ||
+      row['資料年月'] ||
+      row['出表日期'] ||
+      row.YearMonth ||
+      row.ReportDate ||
+      row.Date ||
+      '';
+    const reportDate = convertRocToYearMonth(rawYm) || String(rawYm).trim();
     if (!reportDate) continue;
 
-    const pledged = parseInt(String(row['董監事設質股數'] || row.PledgedShares || 0).replace(/,/g, ''), 10) || 0;
-    const totalDirector = parseInt(String(row['董監事持有股數'] || row.DirectorShares || 0).replace(/,/g, ''), 10) || 0;
-    const transferShares = parseInt(String(row['內部人申報轉讓股數'] || row.TransferShares || 0).replace(/,/g, ''), 10) || 0;
+    const pledged = parseIntSafe(
+      row['董監事設質股數'] ?? row['設質股數'] ?? row['董事設質股數'] ?? row.PledgedShares ?? 0
+    );
+    const totalDirector = parseIntSafe(
+      row['董監事持有股數'] ??
+        row['全體董事持有股數'] ??
+        row['實際持有股數'] ??
+        row['持股數'] ??
+        row.DirectorShares ??
+        row.ActualHoldingShares ??
+        0
+    );
+    const transferShares = parseIntSafe(
+      row['內部人申報轉讓股數'] ?? row['申報轉讓股數'] ?? row.TransferShares ?? 0
+    );
 
-    const pledgeRatio = computePledgeRatio(pledged, totalDirector);
+    let pledgeRatio = computePledgeRatio(pledged, totalDirector);
+    if (totalDirector <= 0) {
+      const rawRatio = row['設質比例'] ?? row['質押比例'] ?? row.PledgeRatio;
+      if (rawRatio !== undefined && rawRatio !== null && String(rawRatio).trim() !== '') {
+        const parsedRatio = parseFloat(String(rawRatio).replace(/[,%]/g, '').trim());
+        if (Number.isFinite(parsedRatio) && parsedRatio >= 0) {
+          pledgeRatio = Number(parsedRatio.toFixed(1));
+        }
+      }
+    }
 
     results.push({
       symbol,
@@ -108,38 +179,88 @@ function ingestTwPledgeToDb(records, customDbPath) {
 }
 
 /**
- * 聯網自證交所 OpenAPI 抓取全市場董監設質月報並入庫 (Spec 0203 Ticket 06)
+ * 聯網自證交所 (TWSE t187ap11_L) 與櫃買中心 (TPEx mopsfin_t187ap11_O) OpenAPI 抓取上市櫃董監設質月報並入庫
+ * @param {string} [customDbPath]
+ * @param {Function} [fetcher=fetch]
+ * @param {{ logger?: Function, silent?: boolean }} [options]
  */
-async function fetchAndIngestTwPledge(customDbPath, fetcher = fetch) {
-  try {
-    const url = 'https://openapi.twse.com.tw/v1/opendata/t187ap11_L';
-    const res = await fetcher(url, {
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'StockTracker/1.0 (local-sync)',
-      },
-    });
+async function fetchAndIngestTwPledge(customDbPath, fetcher = fetch, options = {}) {
+  const logWarn = (msg) => {
+    if (options.silent) return;
+    const logger = typeof options.logger === 'function' ? options.logger : console.warn;
+    logger(`[ingest-tw-pledge] ${msg}`);
+  };
 
-    if (!res.ok) {
-      return { success: false, count: 0, error: `HTTP ${res.status}` };
-    }
+  const sources = [
+    { name: 'TWSE', url: TWSE_PLEDGE_URL },
+    { name: 'TPEx', url: TPEX_PLEDGE_URL },
+  ];
 
-    const data = await res.json();
-    const records = parseTwPledgeReport(data);
-    if (records.length > 0) {
-      const count = ingestTwPledgeToDb(records, customDbPath);
-      return { success: true, count };
+  const dedupedMap = new Map();
+  const errors = [];
+  let twseCount = 0;
+  let tpexCount = 0;
+
+  for (const src of sources) {
+    try {
+      const res = await fetcher(src.url, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'StockTracker/1.0 (local-sync)',
+        },
+      });
+
+      if (!res || !res.ok) {
+        const statusMsg = `${src.name} 抓取失敗: HTTP ${res?.status ?? 'UNKNOWN'}`;
+        logWarn(statusMsg);
+        errors.push(statusMsg);
+        continue;
+      }
+
+      const data = typeof res.json === 'function' ? await res.json() : res;
+      const records = parseTwPledgeReport(data);
+      if (src.name === 'TWSE') twseCount = records.length;
+      if (src.name === 'TPEx') tpexCount = records.length;
+
+      for (const rec of records) {
+        dedupedMap.set(`${rec.symbol}::${rec.reportDate}`, rec);
+      }
+    } catch (err) {
+      const errMsg = `${src.name} 抓取異常 (${src.url}): ${err?.message || err}`;
+      logWarn(errMsg);
+      errors.push(errMsg);
     }
-    return { success: false, count: 0, error: 'NO_VALID_RECORDS' };
-  } catch (err) {
-    return { success: false, count: 0, error: err.message };
   }
+
+  const mergedRecords = Array.from(dedupedMap.values());
+  if (mergedRecords.length > 0) {
+    const count = ingestTwPledgeToDb(mergedRecords, customDbPath);
+    return {
+      success: true,
+      count,
+      twseCount,
+      tpexCount,
+      errors,
+    };
+  }
+
+  return {
+    success: false,
+    count: 0,
+    twseCount,
+    tpexCount,
+    error: errors.length > 0 ? errors.join('; ') : 'NO_VALID_RECORDS',
+    errors,
+  };
 }
 
 module.exports = {
+  TWSE_PLEDGE_URL,
+  TPEX_PLEDGE_URL,
   computePledgeRatio,
   convertRocToYearMonth,
   parseTwPledgeReport,
+  parseTpexPledgeReport: parseTwPledgeReport,
   ingestTwPledgeToDb,
   fetchAndIngestTwPledge,
 };

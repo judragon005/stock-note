@@ -11,14 +11,44 @@ const {
   getTwMarketBreadthAndSpotSummary,
   getMarketMultiHorizonBreadth,
   getTwRevenueDiffusionAndYoY,
+  clearBreadthAnchorCache,
   isSqliteSupported,
 } = require('./sqlite-db-core.cjs');
+
+/**
+ * 雙向代碼別名產生器 (Spec 0239 T01):
+ * - 台股櫃買: 3293 <-> 3293O
+ * - 美股含點號/連字號: BRK.B <-> BRK-B
+ */
+function buildSymbolAliases(rawSymbol) {
+  const sym = decodeURIComponent(String(rawSymbol || '')).trim().toUpperCase();
+  if (!sym) return ['', ''];
+  if (/^\d{2,}[A-Z0-9]*$/.test(sym)) {
+    const alias = sym.endsWith('O') && sym.length >= 4 ? sym.slice(0, -1) : `${sym}O`;
+    return [sym, alias];
+  }
+  if (sym.includes('.')) {
+    return [sym, sym.replace(/\./g, '-')];
+  }
+  if (sym.includes('-')) {
+    return [sym, sym.replace(/-/g, '.')];
+  }
+  return [sym, sym];
+}
 const { searchSymbolsMeta } = require('./seed-symbols-universe.cjs');
 const { getMarketAnchorDate, checkMarketFreshness } = require('./market-freshness-service.cjs');
 const {
   fetchFullMacroWarRoomPulse,
   ingestMacroSentimentToDb,
+  getCoalescedLatestMacroSentiment,
 } = require('./ingest-macro-sentiment.cjs');
+const {
+  ensureUsFundamentalsTable,
+  getOrFetchUsFundamentals,
+} = require('./us-fundamentals-ingestion.cjs');
+const {
+  fetchSecCompanyFactsServer,
+} = require('./sec-edgar-proxy.cjs');
 
 const DEFAULT_CATCHUP_COOLDOWN_MS = 10 * 60 * 1000; // 預設 10 分鐘冷卻保護防線 (Spec 0165)
 const CATCHUP_COOLDOWN_MS = Number(process.env.MARKET_CATCHUP_COOLDOWN_MS) || DEFAULT_CATCHUP_COOLDOWN_MS;
@@ -32,7 +62,8 @@ let cachedMacroPulseAt = 0;
 const onDemandBackfillInFlight = new Set();
 const onDemandBackfillCooldown = new Map();
 const ON_DEMAND_COOLDOWN_MS = 5 * 60 * 1000;
-const ON_DEMAND_TIMEOUT_MS = 2500;
+const ON_DEMAND_FAILURE_COOLDOWN_MS = 15 * 1000; // 失敗僅短冷卻 15s，杜絕 5 分鐘鎖死 (Spec 0239 T05)
+const ON_DEMAND_TIMEOUT_MS = 300; // 首屏 <= 300ms 非阻塞回傳在庫資料，未完任務轉背景寫入 (Spec 0239)
 
 /**
  * 判定是否仍在回補冷卻時間內
@@ -156,10 +187,23 @@ function triggerCatchupTask(customDbPath, options = {}) {
         console.warn(`[MarketCatchup] 董監質押同步警示:`, pledgeErr.message);
       }
 
+      // Spec 0239 T03: 同步台股注意與處置股票狀態
+      try {
+        const fetchAndTagTwStockStatuses =
+          handlers.fetchAndTagTwStockStatuses ||
+          require('./tag-tw-stock-status.cjs').fetchAndTagTwStockStatuses;
+        if (typeof fetchAndTagTwStockStatuses === 'function') {
+          await fetchAndTagTwStockStatuses(customDbPath);
+        }
+      } catch (statusErr) {
+        console.warn(`[MarketCatchup] 注意/處置狀態同步警示:`, statusErr.message);
+      }
+
       console.log(`[MarketCatchup] ✔ 背景聯網追趕同步完成 (含半殘日自癒、美股、TDCC 與月營收)！`);
     } catch (err) {
       console.warn(`[MarketCatchup] 背景追趕回補警告:`, err.message);
     } finally {
+      clearBreadthAnchorCache();
       isCatchingUp = false;
     }
   });
@@ -243,32 +287,36 @@ async function backfillSymbolDividendsFromRemote(symbol, customDbPath, fetcher =
   } catch {}
 
   if (actions.length === 0) {
-    try {
-      const yhUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(querySym)}.TW?range=5y&interval=1d&events=div%2Csplit`;
-      const res = await fetcher(yhUrl, {
-        headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
-      });
-      if (res && res.ok) {
-        const json = await res.json();
-        const divs = json?.chart?.result?.[0]?.events?.dividends || {};
-        for (const item of Object.values(divs)) {
-          if (!item || !item.date) continue;
-          const exDate = new Date(item.date * 1000).toISOString().slice(0, 10);
-          const cashDiv = Number(item.amount) || 0;
-          if (cashDiv > 0) {
-            actions.push({
-              symbol: cleanSymbol,
-              market: 'TW',
-              action_type: 'DIVIDEND',
-              ex_date: exDate,
-              payment_date: null,
-              cash_dividend_per_share: Number(cashDiv.toFixed(4)),
-              stock_dividend_ratio: 0,
-            });
+    // 支援上市 (.TW) 與上櫃 (.TWO) 雙試探 (Spec 0239 T03)
+    for (const suffix of ['.TW', '.TWO']) {
+      try {
+        const yhUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(querySym)}${suffix}?range=5y&interval=1d&events=div%2Csplit`;
+        const res = await fetcher(yhUrl, {
+          headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
+        });
+        if (res && res.ok) {
+          const json = await res.json();
+          const divs = json?.chart?.result?.[0]?.events?.dividends || {};
+          for (const item of Object.values(divs)) {
+            if (!item || !item.date) continue;
+            const exDate = new Date(item.date * 1000).toISOString().slice(0, 10);
+            const cashDiv = Number(item.amount) || 0;
+            if (cashDiv > 0) {
+              actions.push({
+                symbol: cleanSymbol,
+                market: 'TW',
+                action_type: 'DIVIDEND',
+                ex_date: exDate,
+                payment_date: null,
+                cash_dividend_per_share: Number(cashDiv.toFixed(4)),
+                stock_dividend_ratio: 0,
+              });
+            }
           }
         }
-      }
-    } catch {}
+        if (actions.length > 0) break;
+      } catch {}
+    }
   }
 
   if (actions.length === 0) return 0;
@@ -304,18 +352,27 @@ async function backfillSymbolDividendsFromRemote(symbol, customDbPath, fetcher =
 }
 
 /**
- * 觸發單一標的 TDCC / 月營收 / 歷史除權息按需補齊 (帶 Circuit Breaker 防重入)
+ * 觸發單一標的 TDCC / 月營收 / 歷史除權息 / 美股基本面按需補齊 (Spec 0239 T05 & T06)
+ * - 成功入庫採 5 分鐘冷卻；全失敗或無新增僅採 15 秒短退避，絕不鎖死 5 分鐘。
  */
-async function runOnDemandSymbolBackfill(symbol, { needTdcc, needRevenue, needDividend, customDbPath }) {
+async function runOnDemandSymbolBackfill(
+  symbol,
+  { needTdcc, needRevenue, needDividend, needUsFundamentals, customDbPath }
+) {
   const now = Date.now();
-  const lastAt = onDemandBackfillCooldown.get(symbol) || 0;
-  if (onDemandBackfillInFlight.has(symbol) || now - lastAt < ON_DEMAND_COOLDOWN_MS) {
-    return;
+  const prevState = onDemandBackfillCooldown.get(symbol);
+  const lastAt = typeof prevState === 'number' ? prevState : prevState?.at || 0;
+  const cooldownMs =
+    typeof prevState === 'object' && prevState?.succeeded === false
+      ? ON_DEMAND_FAILURE_COOLDOWN_MS
+      : ON_DEMAND_COOLDOWN_MS;
+  if (onDemandBackfillInFlight.has(symbol) || now - lastAt < cooldownMs) {
+    return { skipped: true, succeeded: false };
   }
 
   onDemandBackfillInFlight.add(symbol);
-  onDemandBackfillCooldown.set(symbol, now);
 
+  let anyFulfilledWithData = false;
   try {
     const tasks = [];
     if (needTdcc) {
@@ -329,7 +386,19 @@ async function runOnDemandSymbolBackfill(symbol, { needTdcc, needRevenue, needDi
     if (needDividend) {
       tasks.push(backfillSymbolDividendsFromRemote(symbol, customDbPath));
     }
-    await Promise.allSettled(tasks);
+    if (needUsFundamentals) {
+      const db = initSqliteLakehouseDb(customDbPath);
+      tasks.push(getOrFetchUsFundamentals(db, symbol, { includeDividends: true }));
+    }
+    const results = await Promise.allSettled(tasks);
+    anyFulfilledWithData = results.some(
+      (r) => r.status === 'fulfilled' && r.value !== null && r.value !== 0 && r.value !== false
+    );
+    onDemandBackfillCooldown.set(symbol, { at: Date.now(), succeeded: anyFulfilledWithData });
+    return { skipped: false, succeeded: anyFulfilledWithData };
+  } catch {
+    onDemandBackfillCooldown.set(symbol, { at: Date.now(), succeeded: false });
+    return { skipped: false, succeeded: false };
   } finally {
     onDemandBackfillInFlight.delete(symbol);
   }
@@ -913,14 +982,14 @@ function createMarketApiMiddleware(customDbPath) {
       return res.end(JSON.stringify(results));
     }
 
-    // 2. GET /api/market/quote/:symbol
-    const quoteMatch = pathname.match(/^\/api\/market\/quote\/([A-Za-z0-9\-_]+)$/);
-    if (quoteMatch) {
-      const symbol = quoteMatch[1].toUpperCase();
-      const meta = db.prepare('SELECT * FROM symbols_meta WHERE symbol = ?').get(symbol);
+    // 2. GET /api/market/quote/:symbol (支援含點號代碼如 BRK.B 與雙向別名, Spec 0239 T01)
+    const quoteMatch = pathname.match(/^\/api\/market\/quote\/([A-Za-z0-9.\-_]+)$/);
+    if (quoteMatch && !quoteMatch[1].includes('..')) {
+      const [symbol, aliasSym] = buildSymbolAliases(quoteMatch[1]);
+      const meta = db.prepare('SELECT * FROM symbols_meta WHERE symbol IN (?, ?)').get(symbol, aliasSym);
       const latestCandle = db
-        .prepare('SELECT * FROM daily_candles WHERE symbol = ? ORDER BY date DESC LIMIT 1')
-        .get(symbol);
+        .prepare('SELECT * FROM daily_candles WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 1')
+        .get(symbol, aliasSym);
 
       if (!latestCandle && !meta) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -937,11 +1006,10 @@ function createMarketApiMiddleware(customDbPath) {
       );
     }
 
-    // 2.1 GET /api/market/corporate-actions/:symbol (Spec 0188 / Ticket 05)
-    const caMatch = pathname.match(/^\/api\/market\/corporate-actions\/([A-Za-z0-9\-_]+)$/);
-    if (caMatch) {
-      const symbol = caMatch[1].toUpperCase();
-      const aliasSym = symbol.endsWith('O') ? symbol.slice(0, -1) : `${symbol}O`;
+    // 2.1 GET /api/market/corporate-actions/:symbol (Spec 0188 / Spec 0239 T01)
+    const caMatch = pathname.match(/^\/api\/market\/corporate-actions\/([A-Za-z0-9.\-_]+)$/);
+    if (caMatch && !caMatch[1].includes('..')) {
+      const [symbol, aliasSym] = buildSymbolAliases(caMatch[1]);
       try {
         const rows = db
           .prepare(
@@ -989,11 +1057,10 @@ function createMarketApiMiddleware(customDbPath) {
       }
     }
 
-    // 2.2 GET /api/market/financials/:symbol (Spec 0203 / Ticket 08)
-    const finMatch = pathname.match(/^\/api\/market\/financials\/([A-Za-z0-9\-_]+)$/);
-    if (finMatch && (req.method || 'GET').toUpperCase() === 'GET') {
-      const symbol = finMatch[1].toUpperCase();
-      const aliasSym = symbol.endsWith('O') ? symbol.slice(0, -1) : `${symbol}O`;
+    // 2.2 GET /api/market/financials/:symbol (Spec 0203 / Spec 0239 T01 雙向欄位對齊 + 點號路由)
+    const finMatch = pathname.match(/^\/api\/market\/financials\/([A-Za-z0-9.\-_]+)$/);
+    if (finMatch && !finMatch[1].includes('..') && (req.method || 'GET').toUpperCase() === 'GET') {
+      const [symbol, aliasSym] = buildSymbolAliases(finMatch[1]);
       const isAll = String(query.limit || '').trim().toLowerCase() === 'all';
       const limit = isAll ? -1 : (parseInt(query.limit, 10) || 20);
 
@@ -1010,6 +1077,7 @@ function createMarketApiMiddleware(customDbPath) {
           market: r.market,
           year: r.year,
           quarter: r.quarter,
+          periodDate: r.period_date || `${r.year}-${String(r.quarter * 3).padStart(2, '0')}-30`,
           revenue: r.revenue,
           grossProfit: r.gross_profit,
           operatingIncome: r.operating_income,
@@ -1022,10 +1090,17 @@ function createMarketApiMiddleware(customDbPath) {
           currentLiabilities: r.current_liabilities,
           accountsReceivable: r.accounts_receivable,
           inventory: r.inventory,
+          cashAndEquivalents: r.cash_and_equivalents ?? 0,
+          shortTermDebt: r.short_term_debt ?? null,
+          longTermDebt: r.long_term_debt ?? null,
+          capitalStock: r.capital_stock ?? null,
           operatingCashFlow: r.operating_cash_flow,
           capitalExpenditure: r.capital_expenditure,
           freeCashFlow: r.free_cash_flow,
           cashDividendsPaid: r.cash_dividends_paid,
+          dividendPaid: r.cash_dividends_paid,
+          interestPaid: r.interest_paid ?? null,
+          source: r.source ?? undefined,
           updatedAt: r.updated_at,
         }));
 
@@ -1043,7 +1118,7 @@ function createMarketApiMiddleware(customDbPath) {
       }
     }
 
-    // 2.3 POST /api/market/financials (Spec 0203 / Ticket 08 批次寫入)
+    // 2.3 POST /api/market/financials (Spec 0203 / Spec 0239 T01 批次寫入雙向欄位無損保留)
     if (pathname === '/api/market/financials' && (req.method || 'GET').toUpperCase() === 'POST') {
       readJsonBody(req)
         .then((body) => {
@@ -1055,12 +1130,15 @@ function createMarketApiMiddleware(customDbPath) {
 
           const stmt = db.prepare(`
             INSERT INTO financial_statements_quarterly (
-              symbol, market, year, quarter, revenue, gross_profit, operating_income,
+              symbol, market, year, quarter, period_date, revenue, gross_profit, operating_income,
               net_income, eps, total_assets, total_liabilities, total_equity,
               current_assets, current_liabilities, accounts_receivable, inventory,
-              operating_cash_flow, capital_expenditure, free_cash_flow, cash_dividends_paid, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              cash_and_equivalents, short_term_debt, long_term_debt, capital_stock,
+              operating_cash_flow, capital_expenditure, free_cash_flow, cash_dividends_paid,
+              interest_paid, source, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(symbol, year, quarter) DO UPDATE SET
+              period_date = COALESCE(excluded.period_date, financial_statements_quarterly.period_date),
               revenue = COALESCE(excluded.revenue, financial_statements_quarterly.revenue),
               gross_profit = COALESCE(excluded.gross_profit, financial_statements_quarterly.gross_profit),
               operating_income = COALESCE(excluded.operating_income, financial_statements_quarterly.operating_income),
@@ -1073,10 +1151,16 @@ function createMarketApiMiddleware(customDbPath) {
               current_liabilities = COALESCE(excluded.current_liabilities, financial_statements_quarterly.current_liabilities),
               accounts_receivable = COALESCE(excluded.accounts_receivable, financial_statements_quarterly.accounts_receivable),
               inventory = COALESCE(excluded.inventory, financial_statements_quarterly.inventory),
+              cash_and_equivalents = COALESCE(excluded.cash_and_equivalents, financial_statements_quarterly.cash_and_equivalents),
+              short_term_debt = COALESCE(excluded.short_term_debt, financial_statements_quarterly.short_term_debt),
+              long_term_debt = COALESCE(excluded.long_term_debt, financial_statements_quarterly.long_term_debt),
+              capital_stock = COALESCE(excluded.capital_stock, financial_statements_quarterly.capital_stock),
               operating_cash_flow = COALESCE(excluded.operating_cash_flow, financial_statements_quarterly.operating_cash_flow),
               capital_expenditure = COALESCE(excluded.capital_expenditure, financial_statements_quarterly.capital_expenditure),
               free_cash_flow = COALESCE(excluded.free_cash_flow, financial_statements_quarterly.free_cash_flow),
               cash_dividends_paid = COALESCE(excluded.cash_dividends_paid, financial_statements_quarterly.cash_dividends_paid),
+              interest_paid = COALESCE(excluded.interest_paid, financial_statements_quarterly.interest_paid),
+              source = COALESCE(excluded.source, financial_statements_quarterly.source),
               updated_at = excluded.updated_at
           `);
 
@@ -1087,12 +1171,13 @@ function createMarketApiMiddleware(customDbPath) {
             for (const r of records) {
               if (!r || !r.symbol || !r.year || !r.quarter) continue;
               const sym = String(r.symbol).trim().toUpperCase();
-              const market = String(r.market || (sym.length === 4 && /^\d+$/.test(sym) ? 'TW' : 'US')).toUpperCase();
+              const market = String(r.market || (/^\d{4,6}[A-Z]?$/.test(sym) ? 'TW' : 'US')).toUpperCase();
               stmt.run(
                 sym,
                 market,
                 r.year,
                 r.quarter,
+                r.periodDate ?? r.period_date ?? null,
                 r.revenue ?? r.grossRevenue ?? null,
                 r.grossProfit ?? null,
                 r.operatingIncome ?? null,
@@ -1105,10 +1190,16 @@ function createMarketApiMiddleware(customDbPath) {
                 r.currentLiabilities ?? null,
                 r.accountsReceivable ?? null,
                 r.inventory ?? null,
+                r.cashAndEquivalents ?? r.cash_and_equivalents ?? null,
+                r.shortTermDebt ?? r.short_term_debt ?? null,
+                r.longTermDebt ?? r.long_term_debt ?? null,
+                r.capitalStock ?? r.capital_stock ?? null,
                 r.operatingCashFlow ?? null,
                 r.capitalExpenditure ?? null,
                 r.freeCashFlow ?? null,
-                r.cashDividendsPaid ?? null,
+                r.cashDividendsPaid ?? r.dividendPaid ?? r.cash_dividends_paid ?? null,
+                r.interestPaid ?? r.interest_paid ?? null,
+                r.source ?? null,
                 now
               );
               count++;
@@ -1129,14 +1220,35 @@ function createMarketApiMiddleware(customDbPath) {
       return;
     }
 
-    // 3. GET /api/market/history/:symbol?limit=250
-    const historyMatch = pathname.match(/^\/api\/market\/history\/([A-Za-z0-9\-_]+)$/);
-    if (historyMatch) {
-      const symbol = historyMatch[1].toUpperCase();
+    // 2.4 GET /api/market/sec-edgar/companyfacts/:symbol (Spec 0239 T07 本地 SEC EDGAR 代理與動態 CIK)
+    const secMatch = pathname.match(/^\/api\/market\/sec-edgar\/companyfacts\/([A-Za-z0-9.\-_]+)$/);
+    if (secMatch && !secMatch[1].includes('..') && (req.method || 'GET').toUpperCase() === 'GET') {
+      const targetSym = decodeURIComponent(secMatch[1]).trim().toUpperCase();
+      fetchSecCompanyFactsServer(targetSym)
+        .then((facts) => {
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify(facts));
+        })
+        .catch((err) => {
+          const code = Number(err?.statusCode) || 502;
+          res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(
+            JSON.stringify({
+              error: err?.message || 'SEC_EDGAR_PROXY_ERROR',
+              symbol: targetSym,
+            })
+          );
+        });
+      return;
+    }
+
+    // 3. GET /api/market/history/:symbol?limit=250 (支援含點號代碼如 BRK.B 與雙向別名, Spec 0239 T01)
+    const historyMatch = pathname.match(/^\/api\/market\/history\/([A-Za-z0-9.\-_]+)$/);
+    if (historyMatch && !historyMatch[1].includes('..')) {
+      const [symbol, aliasSym] = buildSymbolAliases(historyMatch[1]);
       const isAll = String(query.limit || '').trim().toLowerCase() === 'all';
       const limit = isAll ? 0 : (parseInt(query.limit, 10) || 250);
 
-      const aliasSym = symbol.endsWith('O') ? symbol.slice(0, -1) : `${symbol}O`;
       let meta = db.prepare('SELECT * FROM symbols_meta WHERE symbol IN (?, ?)').get(symbol, aliasSym);
 
       // 雙向別名日 K 查詢與防斷層合併 (Spec 0170 & Spec 0188: 支援全量與動態天數)
@@ -1194,24 +1306,29 @@ function createMarketApiMiddleware(customDbPath) {
         revenueRows.reverse();
       } catch {}
 
-      // 新增查詢官方每日估值與自身歷史倍數數列 (PE/PB/Yield，Spec 0197 & Spec 0199)
+      // 新增查詢官方每日估值與自身歷史倍數數列 (PE/PB/Yield，Spec 0197 & Spec 0199 & Spec 0239 T06)
       let valRow = null;
       let valHistory = [];
       try {
         valRow = db
-          .prepare('SELECT pe, pb, dividend_yield FROM tw_valuation_daily WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 1')
+          .prepare('SELECT pe, pb, dividend_yield, date FROM tw_valuation_daily WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 1')
           .get(symbol, aliasSym) || null;
 
         valHistory = db
           .prepare('SELECT pe, pb, dividend_yield, date FROM tw_valuation_daily WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 250')
           .all(symbol, aliasSym) || [];
+        valHistory.reverse();
       } catch {}
 
-      // 新增查詢最新 1 筆宏觀情緒指標 (Spec 0200 Ticket 01)
+      // 新增查詢最新 7 筆逐欄非空合併宏觀情緒指標 (Spec 0239 T04)
       let macroRow = null;
       try {
-        macroRow = db.prepare('SELECT * FROM macro_sentiment_daily ORDER BY date DESC LIMIT 1').get() || null;
-      } catch {}
+        macroRow = getCoalescedLatestMacroSentiment(db, 7);
+      } catch {
+        try {
+          macroRow = db.prepare('SELECT * FROM macro_sentiment_daily ORDER BY date DESC LIMIT 1').get() || null;
+        } catch {}
+      }
 
       // 新增查詢最新 1 筆董監質押與內部人申報轉讓 (Spec 0219 Ticket 03)
       let pledgeRow = null;
@@ -1237,17 +1354,40 @@ function createMarketApiMiddleware(customDbPath) {
           .all(symbol, aliasSym) || [];
       } catch {}
 
-      // Spec 0241 Ticket 03: 台股按需補齊 (TDCC < 4、非 ETF 月營收 < 6、無過去已除息紀錄)，帶 <= 2500ms 逾時保護與 Circuit Breaker
+      // 新增查詢美股基本面 / 13F / 美股 ETF 快取 (Spec 0239 T06)
+      let usFundamentalsRow = null;
+      try {
+        ensureUsFundamentalsTable(db);
+        usFundamentalsRow = db
+          .prepare('SELECT * FROM us_fundamentals_daily WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 1')
+          .get(symbol, aliasSym) || null;
+      } catch {}
+
+      // 新增查詢近期季度財報 (供美股 Card 20 近 8 季營收與 Card 21 首屏即時渲染, Spec 0239 T07)
+      let quarterlyFinancials = [];
+      try {
+        quarterlyFinancials = db
+          .prepare('SELECT * FROM financial_statements_quarterly WHERE symbol IN (?, ?) ORDER BY year DESC, quarter DESC LIMIT 12')
+          .all(symbol, aliasSym) || [];
+      } catch {}
+
+      // Spec 0239 T05 & T06: 雙市場按需補齊 (非阻塞背景完成 + enrichmentPending 旗標供前端自動重繪)
       const isTwStock = meta?.market === 'TW' || /^\d{4,6}[A-Z]?$/.test(symbol);
-      const isEtf = /^00/.test(symbol) || meta?.type === 'ETF';
+      const isEtf = /^(00\d{2,4}[A-Z]?|01\d{3}[A-Z]?)$/i.test(symbol) || meta?.type === 'ETF';
       const todayStr = new Date().toISOString().slice(0, 10);
       const hasPastDividend = corporateActions.some((a) => a.ex_date && a.ex_date <= todayStr);
 
       const needTdcc = isTwStock && tdccRows.length < 4;
       const needRevenue = isTwStock && !isEtf && revenueRows.length < 6;
       const needDividend = isTwStock && !hasPastDividend;
+      const usFundStale =
+        !isTwStock &&
+        (!usFundamentalsRow ||
+          !usFundamentalsRow.updated_at ||
+          Date.now() - Number(usFundamentalsRow.updated_at) > 24 * 60 * 60 * 1000);
+      const needUsFundamentals = usFundStale;
 
-      const sendHistoryResponse = () => {
+      const sendHistoryResponse = (enrichmentPending = false) => {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         return res.end(
           JSON.stringify({
@@ -1258,10 +1398,13 @@ function createMarketApiMiddleware(customDbPath) {
             tdcc: tdccRows,
             revenue: revenueRows,
             valuation: valRow ? { ...valRow, history: valHistory } : null,
+            usFundamentals: usFundamentalsRow,
+            quarterlyFinancials,
             pledge: pledgeRow,
             etfNav: etfNavRow,
             corporateActions,
             macro: macroRow,
+            enrichmentPending: Boolean(enrichmentPending),
           })
         );
       };
@@ -1270,40 +1413,58 @@ function createMarketApiMiddleware(customDbPath) {
         (process.env.NODE_ENV === 'test' || process.env.VITEST) &&
         globalThis.fetch === NATIVE_FETCH;
 
-      if ((needTdcc || needRevenue || needDividend) && typeof globalThis.fetch === 'function' && !isUnmockedTestEnv) {
+      const needsAnyBackfill = needTdcc || needRevenue || needDividend || needUsFundamentals;
+      if (needsAnyBackfill && typeof globalThis.fetch === 'function' && !isUnmockedTestEnv) {
         let timer = null;
+        let finishedBeforeTimeout = false;
+        const backfillPromise = runOnDemandSymbolBackfill(symbol, {
+          needTdcc,
+          needRevenue,
+          needDividend,
+          needUsFundamentals,
+          customDbPath,
+        }).then((result) => {
+          finishedBeforeTimeout = true;
+          return result;
+        });
+
         return Promise.race([
-          runOnDemandSymbolBackfill(symbol, { needTdcc, needRevenue, needDividend, customDbPath }),
+          backfillPromise,
           new Promise((resolve) => {
-            timer = setTimeout(resolve, ON_DEMAND_TIMEOUT_MS);
+            timer = setTimeout(() => resolve({ timedOut: true }), ON_DEMAND_TIMEOUT_MS);
           }),
-        ])
-          .finally(() => {
-            if (timer) clearTimeout(timer);
-            try {
-              if (needTdcc) {
-                tdccRows = db
-                  .prepare('SELECT * FROM tw_tdcc_distribution WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 10')
-                  .all(symbol, aliasSym);
-                tdccRows.reverse();
-              }
-              if (needRevenue) {
-                revenueRows = db
-                  .prepare('SELECT * FROM tw_monthly_revenue WHERE symbol IN (?, ?) ORDER BY year_month DESC LIMIT 12')
-                  .all(symbol, aliasSym);
-                revenueRows.reverse();
-              }
-              if (needDividend) {
-                corporateActions = db
-                  .prepare('SELECT * FROM corporate_action_calendar WHERE symbol IN (?, ?) ORDER BY ex_date DESC LIMIT 16')
-                  .all(symbol, aliasSym) || [];
-              }
-            } catch {}
-            return sendHistoryResponse();
-          });
+        ]).finally(() => {
+          if (timer) clearTimeout(timer);
+          try {
+            if (needTdcc) {
+              tdccRows = db
+                .prepare('SELECT * FROM tw_tdcc_distribution WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 10')
+                .all(symbol, aliasSym);
+              tdccRows.reverse();
+            }
+            if (needRevenue) {
+              revenueRows = db
+                .prepare('SELECT * FROM tw_monthly_revenue WHERE symbol IN (?, ?) ORDER BY year_month DESC LIMIT 12')
+                .all(symbol, aliasSym);
+              revenueRows.reverse();
+            }
+            if (needDividend || needUsFundamentals) {
+              corporateActions = db
+                .prepare('SELECT * FROM corporate_action_calendar WHERE symbol IN (?, ?) ORDER BY ex_date DESC LIMIT 16')
+                .all(symbol, aliasSym) || [];
+            }
+            if (needUsFundamentals) {
+              usFundamentalsRow = db
+                .prepare('SELECT * FROM us_fundamentals_daily WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 1')
+                .get(symbol, aliasSym) || null;
+            }
+          } catch {}
+          const stillPending = !finishedBeforeTimeout && onDemandBackfillInFlight.has(symbol);
+          return sendHistoryResponse(stillPending);
+        });
       }
 
-      return sendHistoryResponse();
+      return sendHistoryResponse(onDemandBackfillInFlight.has(symbol));
     }
 
     // 若未匹配任何端點

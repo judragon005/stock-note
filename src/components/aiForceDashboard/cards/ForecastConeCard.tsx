@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useId } from 'react';
 import { ForecastConeData } from '../../../types/aiForceDashboard';
+import { ColorThemeMode, MarketType } from '../../../types/stock';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseForecastCone } from '../../../constants/aiForceGlossary';
 
@@ -182,39 +183,56 @@ export function generateYAxisTicks(
   const usableHeight = height - padding.top - padding.bottom;
 
   const rawStep = span / (desiredCount + 1);
-  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep || 100)));
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep || 1)));
   const normalized = rawStep / magnitude;
   let step = magnitude;
   if (normalized >= 5) step = magnitude * 5;
   else if (normalized >= 2) step = magnitude * 2;
 
+  const decimals = step < 0.01 ? 3 : step < 0.1 ? 2 : step < 1 ? 1 : 0;
+  const formatTickLabel = (val: number) => {
+    const clean = Number(val.toFixed(decimals));
+    if (clean >= 1000 && decimals === 0) return clean.toLocaleString();
+    return decimals > 0 ? clean.toFixed(decimals) : `${clean}`;
+  };
+
   const ticks: YAxisTick[] = [];
   const start = Math.ceil(minPrice / step) * step;
-  for (let p = start; p <= maxPrice; p += step) {
-    const ratio = (p - minPrice) / span;
+  for (let p = start; p <= maxPrice + step * 0.001; p += step) {
+    const cleanP = Number(p.toFixed(decimals));
+    const ratio = (cleanP - minPrice) / span;
     if (ratio >= 0.08 && ratio <= 0.92) {
       const y = Number((padding.top + usableHeight * (1 - ratio)).toFixed(1));
       ticks.push({
-        price: p,
+        price: cleanP,
         y,
-        label: p >= 1000 ? `${p.toLocaleString()}` : `${p}`,
+        label: formatTickLabel(cleanP),
       });
     }
   }
 
   if (ticks.length < 2) {
-    const mid1 = Math.round((minPrice + span * 0.3) / 50) * 50;
-    const mid2 = Math.round((minPrice + span * 0.7) / 50) * 50;
+    const fallbackDecimals = span < 1 ? 2 : span < 20 ? 1 : 0;
+    const rawMid1 = minPrice + span * 0.3;
+    const rawMid2 = minPrice + span * 0.7;
+    const mid1 =
+      span >= 200
+        ? Math.round(rawMid1 / 50) * 50
+        : Number(rawMid1.toFixed(fallbackDecimals));
+    const mid2 =
+      span >= 200
+        ? Math.round(rawMid2 / 50) * 50
+        : Number(rawMid2.toFixed(fallbackDecimals));
     return [
       {
         price: mid1,
         y: Number((padding.top + usableHeight * (1 - (mid1 - minPrice) / span)).toFixed(1)),
-        label: mid1.toLocaleString(),
+        label: fallbackDecimals > 0 ? mid1.toFixed(fallbackDecimals) : mid1.toLocaleString(),
       },
       {
         price: mid2,
         y: Number((padding.top + usableHeight * (1 - (mid2 - minPrice) / span)).toFixed(1)),
-        label: mid2.toLocaleString(),
+        label: fallbackDecimals > 0 ? mid2.toFixed(fallbackDecimals) : mid2.toLocaleString(),
       },
     ];
   }
@@ -228,29 +246,48 @@ export interface MainForceDirectionStyle {
 }
 
 /**
- * 取得主力方向機率色彩與標籤 (Spec 0144 對齊照片)
+ * 取得主力方向機率色彩與標籤 (Spec 0144 對齊照片，支援 colorTheme)
  */
 export function getMainForceDirectionStyle(
   directionProb: number,
   bullishProb?: number,
-  bearishProb?: number
+  bearishProb?: number,
+  colorTheme: ColorThemeMode = 'taiwan'
 ): MainForceDirectionStyle {
   const isBull = (bullishProb ?? directionProb) >= (bearishProb ?? 50);
+  const isTaiwan = colorTheme === 'taiwan';
+  const bullColor = isTaiwan ? '#ef4444' : '#10b981';
+  const bearColor = isTaiwan ? '#10b981' : '#ef4444';
   return {
-    color: isBull ? '#ef4444' : '#10b981',
+    color: isBull ? bullColor : bearColor,
     label: isBull ? '多頭' : '空頭',
   };
 }
 
 export interface ForecastConeCardProps {
   data: ForecastConeData;
+  colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
 const CONE_WIDTH = 340;
 const CONE_HEIGHT = 180;
-const CONE_PADDING: PaddingConfig = { left: 35, right: 35, top: 20, bottom: 25 };
+const CONE_PADDING: PaddingConfig = { left: 42, right: 35, top: 20, bottom: 25 };
 
-export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
+export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({
+  data,
+  colorTheme = 'taiwan',
+}) => {
+  const uid = useId().replace(/:/g, '');
+  const bullGradId = `bullConeGrad-${uid}`;
+  const rangeGradId = `rangeConeGrad-${uid}`;
+  const bearGradId = `bearConeGrad-${uid}`;
+
+  const isTaiwan = colorTheme === 'taiwan';
+  const bullColor = isTaiwan ? '#ef4444' : '#10b981';
+  const bearColor = isTaiwan ? '#10b981' : '#ef4444';
+  const isEmpty = !data.timeNodes || data.timeNodes.length === 0;
+
   const { upperPoints, medianPoints, lowerPoints, priceRange } = useMemo(
     () => projectForecastNodesToPoints(data.timeNodes, CONE_WIDTH, CONE_HEIGHT, CONE_PADDING),
     [data.timeNodes]
@@ -271,8 +308,8 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
   );
 
   const directionStyle = useMemo(
-    () => getMainForceDirectionStyle(data.mainForceDirectionProb, data.bullishProb, data.bearishProb),
-    [data.mainForceDirectionProb, data.bullishProb, data.bearishProb]
+    () => getMainForceDirectionStyle(data.mainForceDirectionProb, data.bullishProb, data.bearishProb, colorTheme),
+    [data.mainForceDirectionProb, data.bullishProb, data.bearishProb, colorTheme]
   );
 
   return (
@@ -328,144 +365,164 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
         </div>
       </div>
 
-      {/* SVG 預測錐繪製區 */}
-      <div style={{ width: '100%', flex: 1, minHeight: '200px', position: 'relative' }}>
-        {/* 左上角精緻半透明深底方塊圖例 (對齊照片四) */}
+      {isEmpty ? (
         <div
+          data-testid="forecast-cone-empty-state"
           style={{
-            position: 'absolute',
-            top: '8px',
-            left: '40px',
-            zIndex: 10,
+            flex: 1,
+            minHeight: '200px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '3px',
-            padding: '4px 8px',
-            backgroundColor: 'rgba(15, 23, 42, 0.88)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
-            borderRadius: '6px',
-            fontSize: '0.75rem',
-            backdropFilter: 'blur(6px)',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            background: 'rgba(15, 23, 42, 0.45)',
+            borderRadius: '10px',
+            border: '1px dashed rgba(148, 163, 184, 0.25)',
+            color: '#94a3b8',
+            fontSize: '0.8rem',
+            padding: '16px',
+            textAlign: 'center',
           }}
         >
-          <TermTooltip termId="forecastUp">
-            <span style={{ color: '#f87171', fontWeight: 600 }}>■ 紅色：上漲機率 {data.bullishProb}%</span>
-          </TermTooltip>
-          <TermTooltip termId="forecastRange">
-            <span style={{ color: '#fbbf24', fontWeight: 600 }}>■ 黃色：震盪機率 {data.rangeProb}%</span>
-          </TermTooltip>
-          <TermTooltip termId="forecastDown">
-            <span style={{ color: '#34d399', fontWeight: 600 }}>■ 綠色：下跌機率 {data.bearishProb}%</span>
-          </TermTooltip>
+          <span style={{ fontWeight: 700, color: '#cbd5e1' }}>歷史樣本不足，暫無預測路徑</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>需累積至少 5 個交易日收盤報酬方可推算蒙地卡羅路徑錐</span>
         </div>
+      ) : (
+        <>
+          {/* 獨立非遮擋圖例橫列 */}
+          <div
+            data-testid="forecast-cone-legend"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '8px',
+              padding: '4px 8px',
+              marginBottom: '4px',
+              backgroundColor: 'rgba(15, 23, 42, 0.65)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '6px',
+              fontSize: '0.75rem',
+            }}
+          >
+            <TermTooltip termId="forecastUp">
+              <span style={{ color: bullColor, fontWeight: 600 }}>■ 上漲機率 {data.bullishProb}%</span>
+            </TermTooltip>
+            <TermTooltip termId="forecastRange">
+              <span style={{ color: '#fbbf24', fontWeight: 600 }}>■ 震盪機率 {data.rangeProb}%</span>
+            </TermTooltip>
+            <TermTooltip termId="forecastDown">
+              <span style={{ color: bearColor, fontWeight: 600 }}>■ 下跌機率 {data.bearishProb}%</span>
+            </TermTooltip>
+          </div>
 
-        <svg
-          viewBox={`0 0 ${CONE_WIDTH} ${CONE_HEIGHT}`}
-          style={{ width: '100%', height: '100%', overflow: 'visible' }}
-        >
-          <defs>
-            {/* 上漲扇形紅色漸層 (對齊照片四) */}
-            <linearGradient id="bullConeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.45" />
-              <stop offset="100%" stopColor="#f97316" stopOpacity="0.2" />
-            </linearGradient>
-            {/* 中間震盪黃色扇形漸層 */}
-            <linearGradient id="rangeConeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#eab308" stopOpacity="0.25" />
-              <stop offset="100%" stopColor="#ca8a04" stopOpacity="0.12" />
-            </linearGradient>
-            {/* 下跌扇形翠綠漸層 (對齊照片四) */}
-            <linearGradient id="bearConeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#10b981" stopOpacity="0.45" />
-              <stop offset="100%" stopColor="#047857" stopOpacity="0.2" />
-            </linearGradient>
-          </defs>
+          {/* SVG 預測錐繪製區 */}
+          <div style={{ width: '100%', flex: 1, minHeight: '180px', position: 'relative' }}>
+            <svg
+              viewBox={`0 0 ${CONE_WIDTH} ${CONE_HEIGHT}`}
+              style={{ width: '100%', height: '100%', overflow: 'visible' }}
+            >
+              <defs>
+                <linearGradient id={bullGradId} x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor={bullColor} stopOpacity="0.45" />
+                  <stop offset="100%" stopColor={bullColor} stopOpacity="0.18" />
+                </linearGradient>
+                <linearGradient id={rangeGradId} x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#eab308" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="#ca8a04" stopOpacity="0.12" />
+                </linearGradient>
+                <linearGradient id={bearGradId} x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor={bearColor} stopOpacity="0.45" />
+                  <stop offset="100%" stopColor={bearColor} stopOpacity="0.18" />
+                </linearGradient>
+              </defs>
 
-          {/* Y 軸橫向參考格線與左側價位刻度 (Spec 0144 對齊照片) */}
-          {yAxisTicks.map((tick, idx) => (
-            <g key={'ytick-' + idx}>
-              <text
-                x={CONE_PADDING.left - 5}
-                y={tick.y + 4}
-                textAnchor="end"
-                fill="#94a3b8"
-                fontSize="12"
-                fontFamily="monospace"
-              >
-                {tick.label}
-              </text>
-              <line
-                x1={CONE_PADDING.left}
-                y1={tick.y}
-                x2={CONE_WIDTH - CONE_PADDING.right}
-                y2={tick.y}
-                stroke="rgba(255, 255, 255, 0.07)"
-                strokeDasharray="3 3"
-              />
-            </g>
-          ))}
+              {/* Y 軸橫向參考格線與左側價位刻度 */}
+              {yAxisTicks.map((tick, idx) => (
+                <g key={'ytick-' + idx}>
+                  <text
+                    x={CONE_PADDING.left - 5}
+                    y={tick.y + 4}
+                    textAnchor="end"
+                    fill="#94a3b8"
+                    fontSize="12"
+                    fontFamily="monospace"
+                  >
+                    {tick.label}
+                  </text>
+                  <line
+                    x1={CONE_PADDING.left}
+                    y1={tick.y}
+                    x2={CONE_WIDTH - CONE_PADDING.right}
+                    y2={tick.y}
+                    stroke="rgba(255, 255, 255, 0.07)"
+                    strokeDasharray="3 3"
+                  />
+                </g>
+              ))}
 
-          {/* 雙色扇形半透明填充 (Spec 0144 對齊照片紅/綠分區) */}
-          {bullAreaPath && (
-            <path
-              d={bullAreaPath}
-              fill="url(#bullConeGrad)"
-              stroke="none"
-              style={{ filter: 'drop-shadow(0 0 8px rgba(239, 68, 68, 0.2))' }}
-            />
-          )}
-          {bearAreaPath && (
-            <path
-              d={bearAreaPath}
-              fill="url(#bearConeGrad)"
-              stroke="none"
-              style={{ filter: 'drop-shadow(0 0 8px rgba(16, 185, 129, 0.2))' }}
-            />
-          )}
+              {/* 雙色扇形半透明填充 */}
+              {bullAreaPath && (
+                <path
+                  d={bullAreaPath}
+                  fill={`url(#${bullGradId})`}
+                  stroke="none"
+                />
+              )}
+              {bearAreaPath && (
+                <path
+                  d={bearAreaPath}
+                  fill={`url(#${bearGradId})`}
+                  stroke="none"
+                />
+              )}
 
-          {/* 三條軌道曲線 (中線對齊照片四為實線加點) */}
-          {upperPath && <path d={upperPath} fill="none" stroke="#ef4444" strokeWidth="1.8" />}
-          {medianPath && (
-            <path
-              d={medianPath}
-              fill="none"
-              stroke="#fbbf24"
-              strokeWidth="1.8"
-            />
-          )}
-          {lowerPath && <path d={lowerPath} fill="none" stroke="#10b981" strokeWidth="1.8" />}
+              {/* 三條軌道曲線 */}
+              {upperPath && <path d={upperPath} fill="none" stroke={bullColor} strokeWidth="1.8" />}
+              {medianPath && (
+                <path
+                  d={medianPath}
+                  fill="none"
+                  stroke="#fbbf24"
+                  strokeWidth="1.8"
+                />
+              )}
+              {lowerPath && <path d={lowerPath} fill="none" stroke={bearColor} strokeWidth="1.8" />}
 
-          {/* 節點圓點標註 */}
-          {upperPoints.map((p, idx) => (
-            <circle key={'u' + idx} cx={p.x} cy={p.y} r="3" fill="#ef4444" stroke="#fff" strokeWidth="1" />
-          ))}
-          {lowerPoints.map((p, idx) => (
-            <circle key={'l' + idx} cx={p.x} cy={p.y} r="3" fill="#10b981" stroke="#fff" strokeWidth="1" />
-          ))}
-          {medianPoints.map((p, idx) => (
-            <circle key={'m' + idx} cx={p.x} cy={p.y} r="2.5" fill="#fbbf24" />
-          ))}
+              {/* 節點圓點標註 */}
+              {upperPoints.map((p, idx) => (
+                <circle key={'u' + idx} cx={p.x} cy={p.y} r="3" fill={bullColor} stroke="#fff" strokeWidth="1" />
+              ))}
+              {lowerPoints.map((p, idx) => (
+                <circle key={'l' + idx} cx={p.x} cy={p.y} r="3" fill={bearColor} stroke="#fff" strokeWidth="1" />
+              ))}
+              {medianPoints.map((p, idx) => (
+                <circle key={'m' + idx} cx={p.x} cy={p.y} r="2.5" fill="#fbbf24" />
+              ))}
 
-          {/* 底部時間刻度標籤 */}
-          {data.timeNodes.map((n, idx) => {
-            const x = upperPoints[idx]?.x ?? CONE_PADDING.left;
-            return (
-              <text
-                key={'t' + idx}
-                x={x}
-                y={CONE_HEIGHT - 3}
-                textAnchor="middle"
-                fill="#94a3b8"
-                fontSize="12"
-                fontFamily="sans-serif"
-              >
-                {n.label}
-              </text>
-            );
-          })}
-        </svg>
-      </div>
+              {/* 底部時間刻度標籤 */}
+              {data.timeNodes.map((n, idx) => {
+                const x = upperPoints[idx]?.x ?? CONE_PADDING.left;
+                return (
+                  <text
+                    key={'t' + idx}
+                    x={x}
+                    y={CONE_HEIGHT - 3}
+                    textAnchor="middle"
+                    fill="#94a3b8"
+                    fontSize="12"
+                    fontFamily="sans-serif"
+                  >
+                    {n.label}
+                  </text>
+                );
+              })}
+            </svg>
+          </div>
+        </>
+      )}
 
       {/* 底部主力方向機率與漂移指標 */}
       <div
@@ -488,10 +545,10 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
             style={{
               fontSize: '0.78rem',
               fontWeight: 800,
-              color: directionStyle.color,
+              color: isEmpty ? '#94a3b8' : directionStyle.color,
             }}
           >
-            {directionStyle.label} {data.mainForceDirectionProb}%
+            {isEmpty ? '待定 --' : `${directionStyle.label} ${data.mainForceDirectionProb}%`}
           </span>
         </div>
 
@@ -504,10 +561,12 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({ data }) => {
               fontSize: '0.78rem',
               fontWeight: 800,
               fontFamily: 'monospace',
-              color: data.annualizedDriftPercent >= 0 ? '#ef4444' : '#10b981',
+              color: isEmpty ? '#94a3b8' : data.annualizedDriftPercent >= 0 ? bullColor : bearColor,
             }}
           >
-            {data.annualizedDriftPercent >= 0 ? `+${data.annualizedDriftPercent}%` : `${data.annualizedDriftPercent}%`} (年化漂移)
+            {isEmpty
+              ? '-- (年化漂移)'
+              : `${data.annualizedDriftPercent >= 0 ? `+${data.annualizedDriftPercent}%` : `${data.annualizedDriftPercent}%`} (年化漂移)`}
           </span>
         </div>
       </div>

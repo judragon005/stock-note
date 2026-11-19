@@ -53,10 +53,10 @@ describe('calculateValuationPercentile - 機構級歷史倍數分位數演算法
     expect(resultLoss.valuationTierText).toContain('自身歷史偏低');
   });
 
-  it('3. 當歷史樣本數不足 (< 1 筆) 時應優雅降級為全市場常態判斷', () => {
+  it('3. 當歷史樣本數不足 (< 5 筆) 時應嚴格誠實呈現尚無歷史估值樣本，不捏造估值位階 (Spec 0239 T09)', () => {
     const resultEmpty = calculateValuationPercentile(18.5, 2.2, []);
     expect(resultEmpty.sampleCount).toBe(0);
-    expect(resultEmpty.valuationTier).toBe('FAIR');
-    expect(resultEmpty.valuationTierText).toContain('合理估值區間');
+    expect(resultEmpty.valuationTier).toBeUndefined();
+    expect(resultEmpty.valuationTierText).toContain('尚無歷史估值樣本');
   });
 });

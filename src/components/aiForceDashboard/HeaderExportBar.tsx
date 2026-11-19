@@ -39,10 +39,14 @@ export function resolveExportBarTexts(
   customSources?: string,
   customRange?: string
 ): { sourcesText: string; rangeText: string } {
+  const defaultSources =
+    report.market === 'US'
+      ? '資料來源：日 K Yahoo Finance | SEC EDGAR'
+      : '資料來源：日 K TWSE | 法人 TWSE | 融資券 FinMind';
   const sourcesText =
     customSources ||
     report.marketBar?.dataSourceText ||
-    '資料來源：日 K TWSE | 法人 TWSE | 融資券 FinMind';
+    defaultSources;
 
   const rangeText =
     customRange ||
@@ -90,8 +94,13 @@ export const HeaderExportBar: React.FC<HeaderExportBarProps> = ({
         break;
       case 'DASHBOARD_PNG': {
         const memo = getInvestmentMemo(report.symbol);
-        triggerDashboardCanvasPngDownload(report, memo || undefined);
-        showToast('已生成並下載高解析度 1920x1080 決策快照圖檔 (PNG)');
+        Promise.resolve(triggerDashboardCanvasPngDownload(report, memo || undefined)).then((ok) => {
+          if (ok !== false) {
+            showToast('已生成並下載高解析度 1920x1080 決策快照圖檔 (PNG)');
+          } else {
+            showToast('快照生成失敗，請稍後再試');
+          }
+        });
         break;
       }
       case 'ALL_CHARTS_PNG': {

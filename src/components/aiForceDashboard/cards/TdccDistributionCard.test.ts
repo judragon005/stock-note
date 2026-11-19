@@ -258,6 +258,124 @@ describe('TdccDistributionCard - TDD Unit Tests', () => {
     expect(html).toContain('首週基準建立');
     expect(html).toContain('data-testid="tdcc-single-point-baseline"');
   });
+
+  describe('Spec 0239 T13: colorTheme 語意修正、10週 X 軸疏化、leftMin >= 0 與 13F 歸一防假寬度', () => {
+    it('calculateTdccScales 當大戶比例極低時 leftMin 必須鉗制 >= 0', () => {
+      const lowRatioHistory = [
+        { date: '2026-09-04', totalShareholders: 50000, over1000Ratio: 0.5 },
+        { date: '2026-09-11', totalShareholders: 52000, over1000Ratio: 1.8 },
+      ];
+      const scales = calculateTdccScales(lowRatioHistory, 170);
+      expect(scales.leftMin).toBeGreaterThanOrEqual(0);
+    });
+
+    it('台股模式下大戶增持 (+2.20%) 與高度集中徽章應顯示紅漲 (#f87171)，美股/國際模式顯示綠漲 (#34d399)', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { TdccDistributionCard } = await import('./TdccDistributionCard');
+
+      const data: TdccDistributionData = {
+        symbol: '2330',
+        history: mockHistory,
+        latestOver1000Ratio: 67.4,
+        latestShareholders: 840000,
+        change4WeeksRatio: 2.2,
+        concentrationBadge: '籌碼高度集中 (波段起漲)',
+        asOfDateText: '集保基準日: 2026-09-25',
+        isEmpty: false,
+      };
+
+      const twHtml = renderToStaticMarkup(
+        React.createElement(TdccDistributionCard, { data, colorTheme: 'taiwan' })
+      );
+      expect(twHtml).toContain('color:#f87171');
+      expect(twHtml).not.toContain('color:#34d399');
+
+      const intlHtml = renderToStaticMarkup(
+        React.createElement(TdccDistributionCard, { data, colorTheme: 'international' })
+      );
+      expect(intlHtml).toContain('color:#34d399');
+    });
+
+    it('台股 10 週資料 X 軸應隔週疏化防日期文字重疊 (渲染 < 10 個日期標籤)', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { TdccDistributionCard } = await import('./TdccDistributionCard');
+
+      const tenWeeks = Array.from({ length: 10 }, (_, i) => ({
+        date: `2026-08-${String(i + 1).padStart(2, '0')}`,
+        totalShareholders: 800000 - i * 1000,
+        over1000Ratio: 60 + i * 0.5,
+      }));
+
+      const html = renderToStaticMarkup(
+        React.createElement(TdccDistributionCard, {
+          data: {
+            symbol: '2330',
+            history: tenWeeks,
+            latestOver1000Ratio: 64.5,
+            latestShareholders: 791000,
+            change4WeeksRatio: 1.5,
+            concentrationBadge: '大戶持續增持',
+            asOfDateText: '集保基準日: 2026-08-10',
+            isEmpty: false,
+          },
+          colorTheme: 'taiwan',
+        })
+      );
+
+      const textMatches = html.match(/<text[^>]*>08-\d\d<\/text>/g) || [];
+      expect(textMatches.length).toBeGreaterThanOrEqual(4);
+      expect(textMatches.length).toBeLessThanOrEqual(6);
+      expect(html).toContain('>08-01</text>');
+      expect(html).toContain('>08-10</text>');
+    });
+
+    it('美股 13F 當 institutional + insider > 100% 時應歸一總寬 100%，未提供結構比時不硬塞 50%/10% 假寬度，並消費 isSqueezeRisk 與 shortFloat Tooltip', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { TdccDistributionCard, normalizeUs13fOwnership } = await import('./TdccDistributionCard');
+
+      const normalizedOver = normalizeUs13fOwnership({
+        institutionalRatio: 92,
+        insiderRatio: 20,
+        publicFloatRatio: 5,
+      });
+      expect(normalizedOver.hasStructureData).toBe(true);
+      expect(normalizedOver.instWidth + normalizedOver.insiderWidth + normalizedOver.publicWidth).toBeCloseTo(100, 1);
+      expect(normalizedOver.publicWidth).toBe(0);
+
+      const normalizedEmpty = normalizeUs13fOwnership({
+        shortFloatRatio: 14.5,
+        isSqueezeRisk: true,
+      });
+      expect(normalizedEmpty.hasStructureData).toBe(false);
+
+      const html = renderToStaticMarkup(
+        React.createElement(TdccDistributionCard, {
+          data: {
+            symbol: 'AMC',
+            isUsMarket: true,
+            history: [],
+            concentrationBadge: '軋空警戒 (Squeeze Alert)',
+            asOfDateText: 'FINRA',
+            isEmpty: false,
+            us13fData: {
+              shortFloatRatio: 8.5,
+              isSqueezeRisk: true,
+              asOfQuarterText: 'SEC 13F',
+            },
+          },
+          colorTheme: 'international',
+        })
+      );
+
+      expect(html).not.toContain('width:50%');
+      expect(html).not.toContain('width:10%');
+      expect(html).toContain('rgba(239, 68, 68, 0.35)');
+      expect(html).toContain('data-testid="us13f-structure-empty"');
+    });
+  });
 });
 
 

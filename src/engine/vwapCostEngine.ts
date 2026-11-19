@@ -10,20 +10,16 @@ export interface CandleVwapInput {
 
 const BAND_TEMPLATES = [
   { name: '突破區', biasLabel: '>+5%', color: '#2563eb' },
-  { name: '套牢區', biasLabel: '-2~-5%', color: '#10b981' },
-  { name: '主力成本區', biasLabel: '±2%', color: '#eab308' },
-  { name: '大量成交區', biasLabel: '+2~5%', color: '#ea580c' },
+  { name: '大量成交區', biasLabel: '+2~+5%', color: '#f97316' },
+  { name: '主力成本區', biasLabel: '±2%', color: '#10b981' },
+  { name: '套牢區', biasLabel: '<-2%', color: '#38bdf8' },
 ];
 
-export const DEFAULT_TIME_NODES: CostBandTimeNode[] = [
-  { dateLabel: '06/26', inventoryVol: 8, trappedVol: 10, costVol: 14, heavyVol: 18, totalVolume: 50 },
-  { dateLabel: '07/20', inventoryVol: 6, trappedVol: 8, costVol: 12, heavyVol: 14, totalVolume: 40 },
-  { dateLabel: '08/10', inventoryVol: 12, trappedVol: 18, costVol: 20, heavyVol: 15, totalVolume: 65 },
-  { dateLabel: '08/31', inventoryVol: 15, trappedVol: 14, costVol: 12, heavyVol: 9, totalVolume: 50 },
-];
+// 保留匯出符號以維持相容，但遵循 Spec 0239 Zero-Mock 規範不再提供假日期與假成交量
+export const DEFAULT_TIME_NODES: CostBandTimeNode[] = [];
 
 /**
- * 依據歷史 K 線計算 20 日 VWAP 與主力成本結構帶及 4 時點堆疊山峰節點 (Spec 0144)
+ * 依據歷史 K 線計算 20 日 VWAP 與主力成本結構帶及 4 時點堆疊山峰節點 (Spec 0144 / Spec 0239)
  */
 export function calculateVwapCostStructure(
   candles: CandleVwapInput[],
@@ -31,15 +27,10 @@ export function calculateVwapCostStructure(
 ): VwapCostStructureData {
   if (!candles || candles.length === 0) {
     return {
-      mainForceVwap: 2131,
-      biasPercent: 7.5,
-      bands: [
-        { name: '倉儲區', biasLabel: '>5%', percentage: 38, color: '#f97316' },
-        { name: '套牢區', biasLabel: '-2~-5%', percentage: 32, color: '#10b981' },
-        { name: '主力成本區', biasLabel: '±2%', percentage: 18, color: '#38bdf8' },
-        { name: '大量成交區', biasLabel: '±2~5%', percentage: 12, color: '#1e40af' },
-      ],
-      timeNodes: DEFAULT_TIME_NODES,
+      mainForceVwap: 0,
+      biasPercent: 0,
+      bands: [],
+      timeNodes: [],
     };
   }
 
@@ -74,48 +65,46 @@ export function calculateVwapCostStructure(
       ? Number((((lastPrice - mainForceVwap) / mainForceVwap) * 100).toFixed(1))
       : 0;
 
-  // 3. 劃分四階成本帶持倉分佈權重 (以當前 20 根為主)
+  // 3. 劃分四階成本帶持倉分佈權重 (明確區分 >+5% 突破、+2~+5% 大量、±2% 成本、<-2% 套牢)
   let breakoutVol = 0;
-  let trappedVol = 0;
-  let costVol = 0;
   let heavyVol = 0;
+  let costVol = 0;
+  let trappedVol = 0;
 
   recent20.forEach((c) => {
     const tp = (c.high + c.low + c.close) / 3;
     const vol = c.volume > 0 ? c.volume : 1;
-    const bias = (tp - mainForceVwap) / mainForceVwap;
+    const bias = mainForceVwap > 0 ? (tp - mainForceVwap) / mainForceVwap : 0;
 
     if (bias > 0.05) {
       breakoutVol += vol;
-    } else if (bias < -0.02) {
-      trappedVol += vol;
-    } else if (Math.abs(bias) <= 0.02) {
+    } else if (bias > 0.02) {
+      heavyVol += vol;
+    } else if (bias >= -0.02) {
       costVol += vol;
     } else {
-      heavyVol += vol;
+      trappedVol += vol;
     }
   });
 
-  const sumVol = breakoutVol + trappedVol + costVol + heavyVol;
-
-  let pBreakout = 38;
-  let pTrapped = 32;
-  let pCost = 18;
-  let pHeavy = 12;
+  const sumVol = breakoutVol + heavyVol + costVol + trappedVol;
+  const percentages = [0, 0, 0, 0];
 
   if (sumVol > 0) {
-    pBreakout = Math.round((breakoutVol / sumVol) * 100);
-    pTrapped = Math.round((trappedVol / sumVol) * 100);
-    pCost = Math.round((costVol / sumVol) * 100);
-    pHeavy = 100 - pBreakout - pTrapped - pCost;
-
-    if (pHeavy < 0) {
-      pCost += pHeavy;
-      pHeavy = 0;
+    const vols = [breakoutVol, heavyVol, costVol, trappedVol];
+    for (let i = 0; i < vols.length; i++) {
+      percentages[i] = Math.round((vols[i] / sumVol) * 100);
+    }
+    // 以最大佔比桶吸收四捨五入差值，杜絕負溢位並保證總和恆為 100%
+    const diff = 100 - percentages.reduce((acc, p) => acc + p, 0);
+    if (diff !== 0) {
+      let maxIdx = 0;
+      for (let i = 1; i < percentages.length; i++) {
+        if (percentages[i] > percentages[maxIdx]) maxIdx = i;
+      }
+      percentages[maxIdx] = Math.max(0, percentages[maxIdx] + diff);
     }
   }
-
-  const percentages = [pBreakout, pTrapped, pCost, pHeavy];
 
   const bands = BAND_TEMPLATES.map((tpl, idx) => ({
     name: tpl.name,
@@ -124,9 +113,9 @@ export function calculateVwapCostStructure(
     color: tpl.color,
   }));
 
-  // 4. 計算 4 個代表性時點的成本帶成交量山峰節點 (Spec 0144)
+  // 4. 計算 4 個代表性時點的成本帶成交量山峰節點 (Spec 0144 / Spec 0239 Zero-Mock)
   const n = candles.length;
-  let timeNodes: CostBandTimeNode[] = DEFAULT_TIME_NODES;
+  let timeNodes: CostBandTimeNode[] = [];
 
   if (n >= 4) {
     const anchorIndices = [
@@ -136,7 +125,7 @@ export function calculateVwapCostStructure(
       n - 1,
     ];
 
-    const rawNodes = anchorIndices.map((anchorIdx, i) => {
+    const rawNodes = anchorIndices.map((anchorIdx) => {
       const windowCandles = candles.slice(Math.max(0, anchorIdx - 19), anchorIdx + 1);
       let winWeightedPrice = 0;
       let winVolume = 0;
@@ -157,14 +146,14 @@ export function calculateVwapCostStructure(
         const vol = c.volume > 0 ? c.volume : 1;
         const bias = (tp - winVwap) / (winVwap || 1);
         if (bias > 0.05) bVol += vol;
-        else if (bias < -0.02) tVol += vol;
-        else if (Math.abs(bias) <= 0.02) cVol += vol;
-        else hVol += vol;
+        else if (bias > 0.02) hVol += vol;
+        else if (bias >= -0.02) cVol += vol;
+        else tVol += vol;
       });
 
       const totalWinVol = bVol + tVol + cVol + hVol;
       const candleDate = candles[anchorIdx]?.date;
-      let dateLabel = DEFAULT_TIME_NODES[i].dateLabel;
+      let dateLabel = `D-${n - 1 - anchorIdx}`;
       if (candleDate && candleDate.includes('-')) {
         const parts = candleDate.split('-');
         if (parts.length >= 3) {

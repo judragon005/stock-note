@@ -36,6 +36,7 @@ export interface WarRoomPromptCardProps {
   className?: string;
   isLoading?: boolean;
   isDataPending?: boolean;
+  defaultShowLeaderboard?: boolean;
 }
 
 // 緊湊條列清單共用樣式 Tokens (Spec 0201 / Nitpick Refactor)
@@ -122,6 +123,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
   className = '',
   isLoading = false,
   isDataPending = false,
+  defaultShowLeaderboard = false,
 }) => {
   const symbol = digest.quote.symbol;
   const currentPrice = digest.quote.currentPrice;
@@ -143,7 +145,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
   const [pasteModalNotice, setPasteModalNotice] = useState<string | null>(null);
 
   // 智囊團勝率榜抽屜狀態
-  const [showLeaderboard, setShowLeaderboard] = useState<boolean>(false);
+  const [showLeaderboard, setShowLeaderboard] = useState<boolean>(defaultShowLeaderboard);
   const [outcomeRecords, setOutcomeRecords] = useState<StrategyOutcomeRecord[]>(() =>
     getStrategyOutcomeRecords()
   );
@@ -182,11 +184,19 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
     });
   }, [digest, desensitized]);
 
-  // 多模型盤中觸價評估 (最嚴格停損優先 + 共識/分歧指標)
+  // 多模型盤中觸價評估 (最嚴格停損優先 + 共識/分歧指標；Spec 0239 T09 載入/待命/無效現價防誤報防線)
   const multiTriggerStatus: MultiStrategyTriggerStatus | null = useMemo(() => {
-    if (pinnedStrategies.length === 0) return null;
+    if (
+      pinnedStrategies.length === 0 ||
+      isLoading ||
+      isDataPending ||
+      !Number.isFinite(currentPrice) ||
+      currentPrice <= 0
+    ) {
+      return null;
+    }
     return evaluateMultiStrategyTriggers(pinnedStrategies, currentPrice);
-  }, [pinnedStrategies, currentPrice]);
+  }, [pinnedStrategies, currentPrice, isLoading, isDataPending]);
 
   // 勝率計算
   const modelWinRates = useMemo(() => {
@@ -968,7 +978,7 @@ export const WarRoomPromptCard: React.FC<WarRoomPromptCardProps> = ({
 
           {modelWinRates.length === 0 ? (
             <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af', textAlign: 'center', padding: '12px 0' }}>
-              尚無結案記錄。在釘選策略後，點擊「獲利達標」或「停損出場」即可開始累積智囊團戰績！
+              尚無結案記錄。在釘選策略後，點擊單卡「WIN」/「LOSS」或「全隊達標」/「全隊停損」即可開始累積智囊團戰績！
             </p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>

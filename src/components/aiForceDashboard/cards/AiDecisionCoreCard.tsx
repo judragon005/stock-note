@@ -1,5 +1,6 @@
 import React from 'react';
 import { DecisionCoreData } from '../../../types/aiForceDashboard';
+import { ColorThemeMode, MarketType } from '../../../types/stock';
 
 export interface BadgeStyle {
   color: string;
@@ -161,7 +162,16 @@ export function getDecisionBannerStyle(
  * 格式化支撐/壓力價位區間字串
  */
 export function formatPriceRange(range?: [number, number], separator: string = ' ~ '): string {
-  if (!range || !Array.isArray(range) || range.length < 2 || range[0] === undefined || range[1] === undefined) {
+  if (
+    !range ||
+    !Array.isArray(range) ||
+    range.length < 2 ||
+    range[0] === undefined ||
+    range[1] === undefined ||
+    !Number.isFinite(range[0]) ||
+    !Number.isFinite(range[1]) ||
+    (range[0] <= 0 && range[1] <= 0)
+  ) {
     return '資料計算中';
   }
   const [p1, p2] = range;
@@ -172,18 +182,34 @@ export function formatPriceRange(range?: [number, number], separator: string = '
 
 export interface AiDecisionCoreCardProps {
   data: DecisionCoreData;
+  colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
-export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) => {
+export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({
+  data,
+  market,
+}) => {
   const trendStyle = getTrendBadgeStyle(data.trendJudgement || '中性偏多');
-  const riskBadge = getRiskBadgeStyle(data.dayTradeRiskPercent ?? 50);
-  const healthBadge = getHealthScoreStyle(data.chipHealthScore ?? 55);
+  const riskPercent = Number.isFinite(data.dayTradeRiskPercent) ? (data.dayTradeRiskPercent as number) : 0;
+  const healthScore = Number.isFinite(data.chipHealthScore) ? (data.chipHealthScore as number) : 50;
+  const riskBadge = getRiskBadgeStyle(riskPercent);
+  const healthBadge = getHealthScoreStyle(healthScore);
   const bannerStyle = getDecisionBannerStyle(
     data.warningBadgeText,
     data.trendJudgement,
-    data.chipHealthScore,
-    data.dayTradeRiskPercent
+    healthScore,
+    riskPercent
   );
+
+  const normalizedHorizon = data.riskHorizonDays
+    ? data.riskHorizonDays.replace('個', '級')
+    : '';
+  const riskHorizonText = normalizedHorizon
+    ? normalizedHorizon.endsWith('日')
+      ? normalizedHorizon
+      : `${normalizedHorizon}日`
+    : '1 ~ 4 級交易日';
 
   const items = [
     {
@@ -231,12 +257,12 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
       },
     },
     {
-      label: '隔日沖風險',
+      label: market === 'US' ? '日內波動風險' : '隔日沖風險',
       termId: 'dayTradeRisk',
-      dynamicDiagnosis: diagnoseDayTradeRisk(data.dayTradeRiskPercent ?? 53, 50),
+      dynamicDiagnosis: diagnoseDayTradeRisk(riskPercent),
       icon: <AlertTriangle size={14} strokeWidth={1.5} color={riskBadge.color} />,
       badge: {
-        text: `${data.dayTradeRiskPercent ?? 53}%`,
+        text: `${riskPercent}%`,
         color: riskBadge.color,
         bg: riskBadge.bg,
         border: riskBadge.color + '55',
@@ -245,10 +271,10 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
     {
       label: '籌碼健康度',
       termId: 'chipsHealth',
-      dynamicDiagnosis: diagnoseHealthScore(data.chipHealthScore ?? 55),
+      dynamicDiagnosis: diagnoseHealthScore(healthScore),
       icon: <Stethoscope size={14} strokeWidth={1.5} color={healthBadge.color} />,
       badge: {
-        text: `${data.chipHealthScore ?? 55}分 (${data.chipHealthLabel || healthBadge.status})`,
+        text: `${healthScore}分 (${data.chipHealthLabel || healthBadge.status})`,
         color: healthBadge.color,
         bg: healthBadge.bg,
         border: healthBadge.color + '55',
@@ -272,7 +298,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({ data }) 
       label: '風險等級',
       termId: 'volatilityRisk',
       icon: <Clock size={14} strokeWidth={1.5} color="#94a3b8" />,
-      value: data.riskHorizonDays ? `${data.riskHorizonDays.replace('個', '級')}日` : '1 ~ 4 級交易日',
+      value: riskHorizonText,
       valueColor: '#f8fafc',
     },
   ];

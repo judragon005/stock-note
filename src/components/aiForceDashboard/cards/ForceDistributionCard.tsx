@@ -1,23 +1,28 @@
 import React from 'react';
 import type { ForceDistributionData } from '../../../types/aiForceDashboard';
+import type { ColorThemeMode, MarketType } from '../../../types/stock';
 import { TermTooltip } from '../../common/TermTooltip';
 
 export interface ForceDistributionCardProps {
   data?: ForceDistributionData;
+  colorTheme?: ColorThemeMode;
+  market?: MarketType;
 }
 
 /**
- * 計算甜甜圈圓環的圓周與 strokeDasharray
+ * 計算甜甜圈圓環的圓周與 strokeDasharray (防禦 NaN / Infinity)
  */
 export function calculateDonutSegments(
   largePercent: number,
   retailPercent: number,
   radius = 32
 ) {
+  const safeLarge = Number.isFinite(largePercent) ? largePercent : 0;
+  const safeRetail = Number.isFinite(retailPercent) ? retailPercent : 0;
   const circumference = 2 * Math.PI * radius;
-  const largeClamped = Math.max(0, Math.min(100, largePercent));
+  const largeClamped = Math.max(0, Math.min(100, safeLarge));
   const largeDash = (largeClamped / 100) * circumference;
-  const retailClamped = Math.max(0, Math.min(100, retailPercent));
+  const retailClamped = Math.max(0, Math.min(100, safeRetail));
   const retailDash = (retailClamped / 100) * circumference;
 
   return {
@@ -44,11 +49,12 @@ const SingleRing: React.FC<SingleRingProps> = ({ label, percent, color, termId }
   const { size, radius, fontSize } = FORCE_DISTRIBUTION_RING_CONFIG;
   const half = size / 2;
   const circumference = 2 * Math.PI * radius;
-  const clamped = Math.max(0, Math.min(100, percent));
+  const safePct = Number.isFinite(percent) ? percent : 0;
+  const clamped = Math.max(0, Math.min(100, safePct));
   const strokeDashoffset = circumference * (1 - clamped / 100);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: 1 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: '1 1 68px', minWidth: '64px' }}>
       <div style={{ position: 'relative', width: `${size}px`, height: `${size}px` }}>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
           <circle
@@ -93,7 +99,7 @@ const SingleRing: React.FC<SingleRingProps> = ({ label, percent, color, termId }
         </div>
       </div>
       <TermTooltip termId={termId}>
-        <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#cbd5e1', cursor: 'help' }}>
+        <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#cbd5e1', cursor: 'help', whiteSpace: 'nowrap' }}>
           {label}
         </span>
       </TermTooltip>
@@ -101,11 +107,27 @@ const SingleRing: React.FC<SingleRingProps> = ({ label, percent, color, termId }
   );
 };
 
-export const ForceDistributionCard: React.FC<ForceDistributionCardProps> = ({ data }) => {
-  const large = data?.largePlayerBuyPercent ?? 65;
-  const retailBuy = data?.retailBuyPercent ?? 35;
-  const retailSell = data?.retailSellPressurePercent ?? 36;
-  const asOf = data?.asOfDateText ?? '資料時間：2026-09-18 (法人買進/賣出佔成交量比例，近 20 日平均)';
+export const ForceDistributionCard: React.FC<ForceDistributionCardProps> = ({
+  data,
+  colorTheme,
+  market,
+}) => {
+  const isUs = Boolean(market === 'US' || data?.isUsMarket);
+  const effectiveTheme: ColorThemeMode = colorTheme ?? (isUs ? 'international' : 'taiwan');
+  const isTaiwan = effectiveTheme === 'taiwan';
+  const buyColor = isTaiwan ? '#f97316' : '#10b981';
+  const sellColor = isTaiwan ? '#10b981' : '#ef4444';
+
+  const isEmpty =
+    !data ||
+    (data.largePlayerBuyPercent === undefined &&
+      data.retailBuyPercent === undefined &&
+      data.retailSellPressurePercent === undefined);
+
+  const large = data?.largePlayerBuyPercent ?? 0;
+  const retailBuy = data?.retailBuyPercent ?? 0;
+  const retailSell = data?.retailSellPressurePercent ?? 0;
+  const asOf = data?.asOfDateText ?? '暫無買賣力分布資料';
 
   return (
     <div
@@ -131,7 +153,7 @@ export const ForceDistributionCard: React.FC<ForceDistributionCardProps> = ({ da
           marginBottom: '10px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <span
             style={{
               padding: '2px 6px',
@@ -152,25 +174,45 @@ export const ForceDistributionCard: React.FC<ForceDistributionCardProps> = ({ da
             </span>
           </TermTooltip>
           <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-            | 法人 vs 散戶
+            | {isUs ? '美股機構動能 vs 散戶追價' : '法人 vs 散戶'}
           </span>
         </div>
       </div>
 
-      {/* 主體：3 個並排獨立環形圓環 */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-around',
-          flex: 1,
-          padding: '12px 0',
-        }}
-      >
-        <SingleRing label="大戶買盤" percent={large} color="#f97316" termId="bigBuyerFlow" />
-        <SingleRing label="散戶買盤" percent={retailBuy} color="#fbbf24" termId="retailBuyerFlow" />
-        <SingleRing label="散戶賣盤" percent={retailSell} color="#10b981" termId="retailSellerFlow" />
-      </div>
+      {/* 主體：空狀態或 3 個並排獨立環形圓環 */}
+      {isEmpty ? (
+        <div
+          data-testid="force-distribution-empty-state"
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            color: '#94a3b8',
+            fontSize: '0.78rem',
+            textAlign: 'center',
+          }}
+        >
+          暫無買賣力分布樣本，待成交量價回補後自動計算
+        </div>
+      ) : (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-around',
+            flexWrap: 'wrap',
+            gap: '6px',
+            flex: 1,
+            padding: '12px 0',
+          }}
+        >
+          <SingleRing label={isUs ? '機構買盤' : '大戶買盤'} percent={large} color={buyColor} termId="bigBuyerFlow" />
+          <SingleRing label="散戶買盤" percent={retailBuy} color="#fbbf24" termId="retailBuyerFlow" />
+          <SingleRing label="散戶賣盤" percent={retailSell} color={sellColor} termId="retailSellerFlow" />
+        </div>
+      )}
 
       {/* 底部時間與資料說明 */}
       <div
@@ -182,7 +224,7 @@ export const ForceDistributionCard: React.FC<ForceDistributionCardProps> = ({ da
           borderTop: '1px solid rgba(255, 255, 255, 0.05)',
         }}
       >
-        {asOf.startsWith('資料時間') ? asOf : `資料時間：${asOf}`}
+        {asOf.startsWith('資料時間') || asOf.startsWith('暫無') ? asOf : `資料時間：${asOf}`}
       </div>
     </div>
   );

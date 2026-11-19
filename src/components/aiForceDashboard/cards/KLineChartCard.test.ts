@@ -337,6 +337,14 @@ describe('KLineChartCard - 專業互動與多功能副圖 (Ticket 35 / Stage 1)'
         expect(Number(m[1]), `發現過小 SVG 字級: ${m[0]}`).toBeGreaterThanOrEqual(12);
       }
     });
+
+    it('formatKlinePriceTick 應對低價標的 (<$100) 保留 2 位小數，避免被 toFixed(0) 壓成重複整數 (T12)', async () => {
+      const { formatKlinePriceTick } = await import('./KLineChartCard');
+      expect(formatKlinePriceTick(4.25)).toBe('4.25');
+      expect(formatKlinePriceTick(12.34)).toBe('12.34');
+      expect(formatKlinePriceTick(250.5)).toBe('250.5');
+      expect(formatKlinePriceTick(1280)).toBe('1280');
+    });
   });
 });
 

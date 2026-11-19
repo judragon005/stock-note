@@ -355,7 +355,7 @@ describe('Spec 0181 Ticket 06: aiForcePromptAdapter - 主力戰情室特徵轉�
         high: 105,
         low: 95,
         close: 100,
-        volume: 2000, // 20 日均量 2000 張
+        volume: 2000000, // 台股日 K 原始單位為股：2,000,000 股 = 2000 張 (Spec 0239 T09)
       }));
 
       const reportWithChips: AiForceDashboardReport = {
@@ -395,7 +395,7 @@ describe('Spec 0181 Ticket 06: aiForcePromptAdapter - 主力戰情室特徵轉�
         },
         klineSystem: {
           candles: [
-            { date: '2026-10-19', open: 150, high: 152, low: 148, close: 150, volume: 8520 },
+            { date: '2026-10-19', open: 150, high: 152, low: 148, close: 150, volume: 8520000 }, // 8,520,000 股 = 8520 張 (Spec 0239 T09)
           ],
         },
       } as any;
@@ -546,7 +546,8 @@ describe('Spec 0181 Ticket 06: aiForcePromptAdapter - 主力戰情室特徵轉�
       const digest = createWarRoomPromptDigest(reportWithExtendedFields);
 
       expect(digest.chips.bigHolderRatioChange1000).toBe(1.75);
-      expect(digest.chips.bigHolderRatioChange400).toBe(91.4);
+      // Spec 0239 T09: bigHolderRatioChange400 應取真實 4 週變化值而非絕對比率 91.4
+      expect(digest.chips.bigHolderRatioChange400).toBe(1.75);
       expect(digest.chips.retailHolderCountChange).toBe(-2150);
       expect(digest.macro.twPutCallRatio).toBe(112.5);
       expect((digest.chips as any).sblBalance).toBe(5432);

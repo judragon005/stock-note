@@ -122,6 +122,106 @@ describe('ChipsSummaryCard & Sparkline normalization', () => {
     expect(html).toContain('ATR 日振幅');
     expect(html).toContain('機構量價增溫');
   });
+
+  describe('Spec 0239 T15: 投信連買、基準日、空 Sparkline、zeroY 基準、colorTheme 與美股去重', () => {
+    it('normalizeSparklinePoints 含負值時 areaD 應以 zeroY 封閉而非寫死封閉至最底 height', () => {
+      const { areaD, zeroY } = normalizeSparklinePoints([-100, 50, -40, 120], 160, 50);
+      expect(zeroY).toBeDefined();
+      expect(areaD).toContain(`L 160,${zeroY} L 0,${zeroY} Z`);
+    });
+
+    it('台股模式應渲染 trustConsecutiveDays、asOfDateText，空 Sparkline 顯示友善文字，且結論標籤響應 colorTheme', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { ChipsSummaryCard } = await import('./ChipsSummaryCard');
+
+      const htmlIntl = renderToStaticMarkup(
+        React.createElement(ChipsSummaryCard, {
+          colorTheme: 'international',
+          data: {
+            foreignNetShares: 520,
+            trustNetShares: 180,
+            dealerNetShares: 40,
+            threeInstitutionsTotal: 740,
+            verdictNote: '法人同步偏多買進',
+            conclusionBadge: '土洋合買偏多',
+            sparklineHistory: [],
+            trustConsecutiveDays: 4,
+            asOfDateText: '2026-10-15',
+          },
+        })
+      );
+
+      expect(htmlIntl).toContain('投信連買');
+      expect(htmlIntl).toContain('4 日');
+      expect(htmlIntl).toContain('2026-10-15');
+      expect(htmlIntl).toContain('暫無');
+      // 國際版偏多應為綠色 #10b981 而非寫死紅色 #f87171
+      expect(htmlIntl).toContain('color:#10b981;font-weight:800');
+    });
+
+    it('台股模式應相容別名欄位 (foreignInvestorsNetBuyShares 等)', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { ChipsSummaryCard } = await import('./ChipsSummaryCard');
+
+      const aliasData = {
+        foreignInvestorsNetBuyShares: 310,
+        investmentTrustNetBuyShares: -45,
+        dealerNetBuyShares: 20,
+        verdictNote: '別名資料測試',
+        conclusionBadge: '外資買超',
+        sparklineHistory: [10, 30, 50],
+      } as unknown as ChipsSummaryData;
+
+      const html = renderToStaticMarkup(React.createElement(ChipsSummaryCard, { data: aliasData }));
+      expect(html).toContain('+310 張');
+      expect(html).toContain('-45 張');
+      expect(html).toContain('+20 張');
+      expect(html).toContain('+285 張');
+    });
+
+    it('美股模式不應重複渲染兩次 conclusionLabel，且應響應 colorTheme 與掛載 RVOL 詞條提示', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { ChipsSummaryCard } = await import('./ChipsSummaryCard');
+
+      const usData: ChipsSummaryData = {
+        foreignNetShares: 0,
+        trustNetShares: 0,
+        dealerNetShares: 0,
+        threeInstitutionsTotal: 0,
+        verdictNote: '美股動能追蹤',
+        conclusionBadge: '機構量價增溫',
+        sparklineHistory: [10, 25, 40],
+        isUsMarket: true,
+        asOfDateText: '2026-10-15',
+        usMicroMetrics: {
+          rvol: 1.65,
+          vwapBiasPct: 1.85,
+          mfiScore: 72,
+          atrValue: 3.2,
+          conclusionLabel: '專屬唯一結論標記',
+        },
+      };
+
+      const html = renderToStaticMarkup(
+        React.createElement(ChipsSummaryCard, {
+          data: usData,
+          market: 'US',
+          colorTheme: 'international',
+        })
+      );
+
+      const occurrences = html.split('專屬唯一結論標記').length - 1;
+      expect(occurrences).toBe(1);
+      // 國際版偏多 (vwapBiasPct > 0, rvol >= 1.2) 應為綠 #10b981
+      expect(html).toContain('color:#10b981');
+      // RVOL 應掛載 TermTooltip (帶 cursor:help / term-tooltip)
+      expect(html).toMatch(/cursor:help[^>]*>RVOL 相對均量|RVOL 相對均量/);
+      expect(html).toContain('data-term-id="rvol"');
+    });
+  });
 });
 
 

@@ -32,12 +32,12 @@ describe('VolumeProfileEngine - 成交量價位分佈演算法 (Ticket 08)', () 
     expect(result.bullBearFooterTag).toBeTruthy();
   });
 
-  it('當無 K 線資料或為空陣列時，應安全回傳預設 5 個均勻桶且總和為 100%', () => {
+  it('當無 K 線資料或為空陣列時，應遵循 Spec 0239 Zero-Mock 契約回傳空陣列而不造假 5 桶', () => {
     const result = calculateVolumeProfile([]);
 
-    expect(result.buckets.length).toBe(5);
-    const sumPercent = result.buckets.reduce((acc, b) => acc + b.percentage, 0);
-    expect(sumPercent).toBe(100);
+    expect(result.buckets).toEqual([]);
+    expect(result.priceTicks).toEqual([]);
+    expect(result.heatmapColumns).toEqual([]);
   });
 
   it('當所有 K 線價格相同（零震幅平盤）時，應安全建立留白邊界而不引發除零錯誤', () => {

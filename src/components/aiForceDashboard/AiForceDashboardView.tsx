@@ -107,7 +107,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       initialReport ||
       createDefaultAiForceReport(
         initialSymbol,
-        resolveOfficialSecurityName(initialSymbol, initialMarket) || '元大台灣50',
+        resolveOfficialSecurityName(initialSymbol, initialSymbol) || initialSymbol,
         initialMarket
       )
   );
@@ -135,7 +135,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
     setSymbol(targetSymbol);
     setMarket(targetMarket);
     setMacroMaintenanceRatio(undefined);
-    const resolvedName = resolveOfficialSecurityName(targetSymbol, targetMarket) || targetSymbol;
+    let resolvedName = resolveOfficialSecurityName(targetSymbol, targetSymbol) || targetSymbol;
     setReport(createDefaultAiForceReport(targetSymbol, resolvedName, targetMarket));
     let quote:
       | (PriceQuote & { open?: number; high?: number; low?: number; volume?: number })
@@ -153,11 +153,37 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       let pledgeData: GenerateReportOptions['pledge'] = undefined;
       let etfNavData: GenerateReportOptions['etfNav'] = undefined;
       let corporateActionsData: GenerateReportOptions['corporateActions'] = undefined;
+      let us13fData: GenerateReportOptions['us13fData'] = undefined;
+      let etfMetaData: GenerateReportOptions['etfMeta'] = undefined;
+      let quarterlyFinancialsData: GenerateReportOptions['quarterlyFinancials'] = undefined;
+      let lakehouseMetaType: string | undefined = undefined;
+      let enrichmentPending = false;
 
-      // 1. Layer 1: 優先嘗試從本地 SQLite 數據湖倉直讀歷史日 K、籌碼、集保與月營收 (Spec 0169 & Spec 0197)
+      let lakehouseMetaStatus: 'NORMAL' | 'ATTENTION' | 'DISPOSITION' | undefined = undefined;
+
+      // 1. Layer 1: 優先嘗試從本地 SQLite 數據湖倉直讀歷史日 K、籌碼、集保與月營收 (Spec 0169 & Spec 0197 & Spec 0239)
       try {
         const lakehouseData = await loadSymbolFullLakehouseData(targetSymbol, targetMarket);
         if (!requestGuardRef.current.isCurrent(requestId)) return;
+        if (lakehouseData?.meta) {
+          const st = lakehouseData.meta.status;
+          if (st === 'NORMAL' || st === 'ATTENTION' || st === 'DISPOSITION') {
+            lakehouseMetaStatus = st;
+          }
+          if (lakehouseData.meta.type) {
+            lakehouseMetaType = lakehouseData.meta.type;
+          }
+          if (
+            resolvedName === targetSymbol &&
+            lakehouseData.meta.name &&
+            lakehouseData.meta.name !== targetSymbol
+          ) {
+            resolvedName = lakehouseData.meta.name;
+          }
+        }
+        if (lakehouseData?.enrichmentPending) {
+          enrichmentPending = true;
+        }
         if (lakehouseData && lakehouseData.candles.length >= 1) {
           candles = lakehouseData.candles;
           if (lakehouseData.institutionalRecords && lakehouseData.institutionalRecords.length > 0) {
@@ -189,10 +215,22 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           if (lakehouseData.valuation) {
             quarterlyValuationData = {
               pe: lakehouseData.valuation.pe,
+              forwardPe: lakehouseData.valuation.forwardPe,
               pb: lakehouseData.valuation.pb,
+              psRatio: lakehouseData.valuation.psRatio,
               dividendYield: lakehouseData.valuation.dividendYield,
+              asOfDate: lakehouseData.valuation.asOfDate,
               history: lakehouseData.valuation.history,
             };
+          }
+          if (lakehouseData.us13fData) {
+            us13fData = lakehouseData.us13fData;
+          }
+          if (lakehouseData.etfMeta) {
+            etfMetaData = lakehouseData.etfMeta;
+          }
+          if (lakehouseData.quarterlyFinancials && lakehouseData.quarterlyFinancials.length > 0) {
+            quarterlyFinancialsData = lakehouseData.quarterlyFinancials;
           }
           if (lakehouseData.macro) {
             macroData = lakehouseData.macro;
@@ -235,12 +273,16 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           institutionalRecords,
           undefined,
           {
-            statusTag: 'NORMAL',
+            statusTag: lakehouseMetaStatus ?? (targetMarket === 'TW' ? 'NORMAL' : undefined),
             currency: targetMarket === 'US' ? 'USD' : 'TWD',
             volumeUnit: targetMarket === 'US' ? '股' : '張',
             marginData,
             tdccRecords,
             revenueRecords,
+            us13fData,
+            etfMeta: etfMetaData,
+            metaType: lakehouseMetaType,
+            quarterlyFinancials: quarterlyFinancialsData,
             valuationData: quarterlyValuationData,
             macroData,
             pledge: pledgeData,
@@ -294,12 +336,16 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         }
       }
 
-      // 4. 取得注意與處置狀態
+      // 4. 取得注意與處置狀態（若湖倉 history meta 已回傳則直接復用，避免冗餘 /quote 請求, Spec 0239 T01）
       if (targetMarket === 'TW') {
-        try {
-          resolvedStatusTag = await loadSymbolDispositionStatus(targetSymbol, targetMarket);
-        } catch {
-          resolvedStatusTag = 'NORMAL';
+        if (lakehouseMetaStatus) {
+          resolvedStatusTag = lakehouseMetaStatus;
+        } else {
+          try {
+            resolvedStatusTag = await loadSymbolDispositionStatus(targetSymbol, targetMarket);
+          } catch {
+            resolvedStatusTag = 'NORMAL';
+          }
         }
       }
 
@@ -312,6 +358,19 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         if (!requestGuardRef.current.isCurrent(requestId)) return;
         if (forensic && Array.isArray(forensic.historicalRecords) && forensic.historicalRecords.length > 0) {
           const sorted = [...forensic.historicalRecords].sort((a, b) => (b.year * 10 + b.quarter) - (a.year * 10 + a.quarter));
+          // Spec 0239 T07: 同步將美股 10-Q/10-K 季營收歷史餵入 Card 20 季營收管線
+          if (!quarterlyFinancialsData || quarterlyFinancialsData.length < sorted.length) {
+            quarterlyFinancialsData = sorted.slice(0, 12).map((q) => ({
+              year: q.year,
+              quarter: q.quarter,
+              periodDate: q.periodDate,
+              revenue: typeof q.income?.revenue === 'number' ? q.income.revenue : null,
+              grossProfit: typeof q.income?.grossProfit === 'number' ? q.income.grossProfit : null,
+              operatingIncome: typeof q.income?.operatingIncome === 'number' ? q.income.operatingIncome : null,
+              netIncome: typeof q.income?.netIncome === 'number' ? q.income.netIncome : null,
+              eps: typeof q.income?.eps === 'number' ? q.income.eps : null,
+            }));
+          }
           const latestQ = sorted[0];
           if (latestQ && latestQ.income) {
             const rev = typeof latestQ.income.revenue === 'number' ? latestQ.income.revenue : 0;
@@ -351,12 +410,16 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           institutionalRecords,
           undefined,
           {
-            statusTag: resolvedStatusTag,
+            statusTag: targetMarket === 'TW' ? resolvedStatusTag : undefined,
             currency: targetMarket === 'US' ? 'USD' : 'TWD',
             volumeUnit: targetMarket === 'US' ? '股' : '張',
             marginData,
             tdccRecords,
             revenueRecords,
+            us13fData,
+            etfMeta: etfMetaData,
+            metaType: lakehouseMetaType,
+            quarterlyFinancials: quarterlyFinancialsData,
             valuationData: quarterlyValuationData,
             macroData,
             pledge: pledgeData,
@@ -368,9 +431,56 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           fullReport.marketBar.dataSourceText = `本地盤後歷史資料庫 (共 ${candles.length} 日 K)`;
         }
         setReport(fullReport);
+
+        // Spec 0239 T05: 若後端仍在非同步補齊歷史序列，採受控有上限輪詢（最多 3 次，間隔 1.5s，具 RequestGuard 防競態）
+        if (enrichmentPending) {
+          const pollEnrichment = (attempt: number) => {
+            if (attempt > 3) return;
+            setTimeout(async () => {
+              if (!requestGuardRef.current.isCurrent(requestId)) return;
+              try {
+                const refreshed = await loadSymbolFullLakehouseData(targetSymbol, targetMarket);
+                if (!requestGuardRef.current.isCurrent(requestId) || !refreshed || refreshed.candles.length === 0) return;
+                const hydratedReport = generateAiForceReportFromCandles(
+                  targetSymbol,
+                  resolvedName,
+                  targetMarket,
+                  refreshed.candles,
+                  quote || undefined,
+                  refreshed.institutionalRecords || institutionalRecords,
+                  undefined,
+                  {
+                    statusTag: targetMarket === 'TW' ? resolvedStatusTag : undefined,
+                    currency: targetMarket === 'US' ? 'USD' : 'TWD',
+                    volumeUnit: targetMarket === 'US' ? '股' : '張',
+                    marginData,
+                    tdccRecords: refreshed.tdccRecords || tdccRecords,
+                    revenueRecords: refreshed.revenueRecords || revenueRecords,
+                    us13fData: refreshed.us13fData || us13fData,
+                    etfMeta: refreshed.etfMeta || etfMetaData,
+                    metaType: refreshed.meta?.type || lakehouseMetaType,
+                    quarterlyFinancials: refreshed.quarterlyFinancials || quarterlyFinancialsData,
+                    valuationData: refreshed.valuation
+                      ? { ...(quarterlyValuationData || {}), ...refreshed.valuation }
+                      : quarterlyValuationData,
+                    macroData: refreshed.macro || macroData,
+                    pledge: refreshed.pledge || pledgeData,
+                    etfNav: refreshed.etfNav || etfNavData,
+                    corporateActions: refreshed.corporateActions || corporateActionsData,
+                  }
+                );
+                setReport(hydratedReport);
+                if (refreshed.enrichmentPending && attempt < 3) {
+                  pollEnrichment(attempt + 1);
+                }
+              } catch {}
+            }, 1500);
+          };
+          pollEnrichment(1);
+        }
       } else {
         const fallback = createDefaultAiForceReport(targetSymbol, resolvedName, targetMarket, quote?.price);
-        fallback.marketBar.marketStatusTag = resolvedStatusTag;
+        fallback.marketBar.marketStatusTag = targetMarket === 'TW' ? resolvedStatusTag : undefined;
         if (quote) {
           fallback.marketBar.currentPrice = quote.price;
           if (quote.change !== undefined) fallback.marketBar.change = quote.change;
@@ -378,9 +488,15 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           if (quote.open !== undefined) fallback.marketBar.openPrice = quote.open;
           if (quote.high !== undefined) fallback.marketBar.highPrice = quote.high;
           if (quote.low !== undefined) fallback.marketBar.lowPrice = quote.low;
-          if (quote.volume !== undefined) fallback.marketBar.volumeShares = quote.volume;
+          if (quote.volume !== undefined) {
+            fallback.marketBar.volumeShares =
+              targetMarket === 'TW' ? Math.round(quote.volume / 1000) : quote.volume;
+          }
         } else if (resolvedName === targetSymbol) {
-          fallback.marketBar.dataSourceText = `查無此台股標的代碼 (${targetSymbol})，請確認代碼是否輸入正確（如 00403A、2330）`;
+          fallback.marketBar.dataSourceText =
+            targetMarket === 'US'
+              ? `查無此美股標的代碼 (${targetSymbol})，請確認代碼是否輸入正確（如 NVDA、BRK.B、VT）`
+              : `查無此台股標的代碼 (${targetSymbol})，請確認代碼是否輸入正確（如 00403A、2330）`;
         }
         setReport(fallback);
       }
@@ -428,6 +544,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         data={report.marketBar}
         currentSymbol={symbol}
         currentName={report.name}
+        currentMarket={market}
         isLoading={isLoading}
         onAnalyze={handleAnalyze}
         colorTheme={resolvedColorTheme}
@@ -471,11 +588,13 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             <KLineChartCard
               data={report.klineSystem}
               colorTheme={resolvedColorTheme}
+              market={market}
               {...(userAvgCost !== undefined ? { userAvgCost } : {})}
             />
           </div>
 
-          {/* 首屏決策摘要帶 (Executive Tactical Verdict Strip) */}
+          {/* 首屏決策摘要帶 (僅於具備有效真實資料且非載入中時顯示，Spec 0239 T09 Zero-Mock 閘門) */}
+          {!report.isDataPending && !isLoading && (
           <div
             data-testid="executive-verdict-strip"
             style={{
@@ -520,7 +639,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 <span>停損防線</span>
                 <strong style={{ color: '#f8fafc' }}>
                   {report.mainForceVerdict.stopLossPrice !== undefined
-                    ? report.mainForceVerdict.stopLossPrice.toFixed(2)
+                    ? `${market === 'US' ? '$' : ''}${report.mainForceVerdict.stopLossPrice.toFixed(2)}`
                     : '-'}
                 </strong>
               </span>
@@ -529,15 +648,43 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 <span>停利目標</span>
                 <strong style={{ color: '#f8fafc' }}>
                   {report.mainForceVerdict.takeProfitPrice !== undefined
-                    ? report.mainForceVerdict.takeProfitPrice.toFixed(2)
+                    ? `${market === 'US' ? '$' : ''}${report.mainForceVerdict.takeProfitPrice.toFixed(2)}`
                     : '-'}
                 </strong>
               </span>
             </div>
           </div>
+          )}
 
-          {/* 若處於無真實資料待命狀態 (report.isDataPending)，展示高質感毛玻璃空狀態引導面板 (Ticket 07 / Spec 0162) */}
-          {report.isDataPending ? (
+          {/* 載入中骨架防閃爍 (Spec 0239 T09) 或 無真實資料待命空狀態 (Spec 0162) */}
+          {isLoading && report.isDataPending ? (
+            <div
+              data-testid="ai-force-loading-skeleton"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '48px 24px',
+                background: '#0B101B',
+                borderRadius: '12px',
+                border: '1px solid rgba(56, 189, 248, 0.18)',
+                textAlign: 'center',
+                gap: '12px',
+                margin: '12px 0',
+              }}
+            >
+              <div style={{ color: '#38bdf8' }}>
+                <Radio size={36} />
+              </div>
+              <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#f8fafc' }}>
+                正在自本地湖倉與雙市場管線載入【{symbol}】真實數據...
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
+                ARINC 661 零幻覺閘門保護中，數據就緒後將立即渲染 21 項量化模組。
+              </div>
+            </div>
+          ) : report.isDataPending ? (
             <div
               data-testid="ai-force-empty-state-card"
               style={{
@@ -662,12 +809,20 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
               >
                 {/* 03 多維度判讀 (6 維體質大雷達) */}
                 <div style={{ minWidth: 0 }}>
-                  <MultiDimensionRadarCard data={report.multiDimensionRadar} />
+                  <MultiDimensionRadarCard
+                    data={report.multiDimensionRadar}
+                    colorTheme={resolvedColorTheme}
+                    market={market}
+                  />
                 </div>
 
                 {/* 05 風險雷達圖 (5 維風控大蛛網) */}
                 <div style={{ minWidth: 0 }}>
-                  <RiskSpiderCard data={report.riskSpider} />
+                  <RiskSpiderCard
+                    data={report.riskSpider}
+                    colorTheme={resolvedColorTheme}
+                    market={market}
+                  />
                 </div>
               </div>
 
@@ -683,12 +838,20 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
               >
                 {/* 02 AI 決策核心 (訊號儀表盤) */}
                 <div style={{ minWidth: 0 }}>
-                  <AiDecisionCoreCard data={report.decisionCore} />
+                  <AiDecisionCoreCard
+                    data={report.decisionCore}
+                    colorTheme={resolvedColorTheme}
+                    market={market}
+                  />
                 </div>
 
                 {/* 04 AI 籌碼熱區圖 (動態量價與現價指針) */}
                 <div style={{ minWidth: 0 }}>
-                  <VolumeProfileCard data={report.volumeProfile} />
+                  <VolumeProfileCard
+                    data={report.volumeProfile}
+                    colorTheme={resolvedColorTheme}
+                    market={market}
+                  />
                 </div>
               </div>
 
@@ -724,6 +887,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   <InstitutionalFlowCard
                     data={report.institutionalFlow}
                     colorTheme={resolvedColorTheme}
+                    market={market}
                   />
                 </div>
 
@@ -733,6 +897,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                     key={symbol}
                     data={report.tdccDistribution}
                     colorTheme={resolvedColorTheme}
+                    market={market}
                   />
                 </div>
 
@@ -741,6 +906,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   <MonthlyRevenueCard
                     data={report.monthlyRevenue}
                     colorTheme={resolvedColorTheme}
+                    market={market}
                   />
                 </div>
               </div>
@@ -757,12 +923,20 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
               >
                 {/* 06 累積型 AI 預測路徑圖 (Cone) */}
                 <div style={{ minWidth: 0 }}>
-                  <ForecastConeCard data={report.forecastCone} />
+                  <ForecastConeCard
+                    data={report.forecastCone}
+                    colorTheme={resolvedColorTheme}
+                    market={market}
+                  />
                 </div>
 
                 {/* 07 主力成本結構分布圖 (VWAP) */}
                 <div style={{ minWidth: 0 }}>
-                  <VwapCostStructureCard data={report.vwapCostStructure} />
+                  <VwapCostStructureCard
+                    data={report.vwapCostStructure}
+                    colorTheme={resolvedColorTheme}
+                    market={market}
+                  />
                 </div>
               </div>
 
@@ -783,22 +957,35 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                     bullBearData={report.bullBearEnergy}
                     sentimentData={report.marketSentiment}
                     market={market}
+                    colorTheme={resolvedColorTheme}
                   />
                 </div>
 
                 {/* 欄 2: 12 AI 主力動態信號判斷 */}
                 <div style={{ minWidth: 0, height: '100%', minHeight: '315px', display: 'flex', flexDirection: 'column' }}>
-                  <DynamicSignalsCard data={report.dynamicSignals} />
+                  <DynamicSignalsCard
+                    data={report.dynamicSignals}
+                    colorTheme={resolvedColorTheme}
+                    market={market}
+                  />
                 </div>
 
                 {/* 欄 3: 21 估值與殖利率量化矩陣 */}
                 <div style={{ minWidth: 0, height: '100%', minHeight: '315px', display: 'flex', flexDirection: 'column' }}>
-                  <ValuationMetricsCard data={report.valuationMetrics} market={market} />
+                  <ValuationMetricsCard
+                    data={report.valuationMetrics}
+                    market={market}
+                    colorTheme={resolvedColorTheme}
+                  />
                 </div>
 
                 {/* 欄 4: 14 AI 信心維度 */}
                 <div style={{ minWidth: 0, height: '100%', minHeight: '315px', display: 'flex', flexDirection: 'column' }}>
-                  <AiConfidenceCard data={report.aiConfidence} />
+                  <AiConfidenceCard
+                    data={report.aiConfidence}
+                    colorTheme={resolvedColorTheme}
+                    market={market}
+                  />
                 </div>
               </div>
 
@@ -832,31 +1019,51 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 {/* 欄 1: 15 籌碼異動摘要 + 09 隔日沖風險 (微觀籌碼動向與短線防護) */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, height: '100%' }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <ChipsSummaryCard data={report.chipsSummary} />
+                    <ChipsSummaryCard
+                      data={report.chipsSummary}
+                      colorTheme={resolvedColorTheme}
+                      market={market}
+                    />
                   </div>
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <DayTradeRiskCard data={report.dayTradeRisk} />
+                    <DayTradeRiskCard
+                      data={report.dayTradeRisk}
+                      colorTheme={resolvedColorTheme}
+                      market={market}
+                    />
                   </div>
                 </div>
 
                 {/* 欄 2: 11 健康度綜合評估表 + 16 買賣力分布 + 17 多空強度 (結構健康度與多空籌碼對抗，圓環徹底舒展) */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, height: '100%' }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <HealthSummaryCard data={report.healthSummary} />
+                    <HealthSummaryCard
+                      data={report.healthSummary}
+                      colorTheme={resolvedColorTheme}
+                      market={market}
+                    />
                   </div>
                   <div
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(236px, 1fr))',
                       gap: '8px',
                       minWidth: 0,
                     }}
                   >
                     <div style={{ minWidth: 0 }}>
-                      <ForceDistributionCard data={report.forceDistribution} />
+                      <ForceDistributionCard
+                        data={report.forceDistribution}
+                        colorTheme={resolvedColorTheme}
+                        market={market}
+                      />
                     </div>
                     <div style={{ minWidth: 0 }}>
-                      <BullBearStrengthCard data={report.bullBearStrength} />
+                      <BullBearStrengthCard
+                        data={report.bullBearStrength}
+                        colorTheme={resolvedColorTheme}
+                        market={market}
+                      />
                     </div>
                   </div>
                 </div>
@@ -870,31 +1077,64 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   minWidth: 0,
                 }}
               >
-                <MainForceVerdictCard data={report.mainForceVerdict} />
+                <MainForceVerdictCard
+                  key={symbol}
+                  data={report.mainForceVerdict}
+                  colorTheme={resolvedColorTheme}
+                  market={market}
+                />
               </div>
             </>
           )}
         </div>
       )}
 
+      {/* 任務二～五：Zero-Mock 載入/待命閘門保護，杜絕假數據外洩 (Spec 0239) */}
+      {activeTab !== 'TASK_1_COMPREHENSIVE' && (isLoading || report.isDataPending) && (
+        <div
+          data-testid="task-panel-pending-gate"
+          style={{
+            padding: '28px 20px',
+            borderRadius: '12px',
+            background: 'rgba(15, 23, 42, 0.72)',
+            border: '1px solid rgba(56, 189, 248, 0.25)',
+            color: '#cbd5e1',
+            fontSize: '13px',
+            textAlign: 'center',
+          }}
+        >
+          {isLoading
+            ? `正在載入 ${report.symbol} 歷史量價與指標數據，請稍候...`
+            : `${report.symbol} 歷史有效日 K 不足（< 5 日），已啟動 Zero-Mock 保護閘門，暫停顯示技術警示與指標子頁籤。`}
+        </div>
+      )}
+
       {/* 任務二：技術警示報告 */}
-      {activeTab === 'TASK_2_TECHNICAL_ALERTS' && (
+      {activeTab === 'TASK_2_TECHNICAL_ALERTS' && !isLoading && !report.isDataPending && (
         <TechnicalAlertsView
           report={report}
           holdings={_holdings}
           loanRecords={loanRecords}
           macroMaintenanceRatio={macroMaintenanceRatio}
+          colorTheme={resolvedColorTheme}
+          market={market}
         />
       )}
 
       {/* 任務三：KD + MA 圖表 */}
-      {activeTab === 'TASK_3_KD_MA' && <KdMaView report={report} />}
+      {activeTab === 'TASK_3_KD_MA' && !isLoading && !report.isDataPending && (
+        <KdMaView report={report} colorTheme={resolvedColorTheme} market={market} />
+      )}
 
       {/* 任務四：MACD 圖表 */}
-      {activeTab === 'TASK_4_MACD' && <MacdView report={report} />}
+      {activeTab === 'TASK_4_MACD' && !isLoading && !report.isDataPending && (
+        <MacdView report={report} colorTheme={resolvedColorTheme} market={market} />
+      )}
 
       {/* 任務五：原始資料表 */}
-      {activeTab === 'TASK_5_RAW_DATA' && <RawDataView report={report} />}
+      {activeTab === 'TASK_5_RAW_DATA' && !isLoading && !report.isDataPending && (
+        <RawDataView report={report} colorTheme={resolvedColorTheme} market={market} />
+      )}
 
       {/* ⚡ 全域外聯 AI 戰情提示詞中樞 (Spec 0181 / Issue #243 / Spec 0182) */}
       <div style={{ marginTop: '16px', marginBottom: '16px' }}>
