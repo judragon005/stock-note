@@ -334,9 +334,9 @@ export function createWarRoomPromptDigest(
         ? { sblBalance: chipsSummary?.sblBalance ?? dayTrade?.sblBalance }
         : {}),
       dayTradeRatioPct: dayTrade?.dayTradeRatio,
-      bigHolderRatioChange1000: tdcc?.change4WeeksRatio,
-      bigHolderRatioChange400: bigHolderRatioChange400Val as unknown as number | undefined,
-      retailHolderCountChange: retailHolderCountChangeVal as unknown as number | undefined,
+      bigHolderRatioChange1000: null,
+      bigHolderRatioChange400: bigHolderRatioChange400Val,
+      retailHolderCountChange: retailHolderCountChangeVal,
       mainForceVwap20D,
       currentVwapBiasPct,
       boxResistancePrice,
@@ -353,7 +353,7 @@ export function createWarRoomPromptDigest(
     },
     macro: {
       treasuryYield10Y: report.marketSentiment?.usMacroData?.tenYearTreasury,
-      cnnFearGreedScore: cnnFearGreedScoreVal as unknown as number | undefined,
+      cnnFearGreedScore: cnnFearGreedScoreVal,
       vixClose: report.marketSentiment?.usMacroData?.vix,
       twPutCallRatio: report.marketSentiment?.twMacroData?.putCallRatio,
       macroRegimeText: isUS

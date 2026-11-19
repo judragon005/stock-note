@@ -4,6 +4,9 @@
  * 100% 免費公開來源（Yahoo Finance v10 quoteSummary + v8 Chart events=div），零第三方相依。
  */
 
+const { ensureCorporateActionCalendarTable } = require('./sqlite-db-core.cjs');
+const { normalizeYahooSymbol } = require('./market-sync-core.cjs');
+
 const CRUMB_TTL_MS = 30 * 60 * 1000; // Cookie + Crumb 快取 30 分鐘
 const CIRCUIT_BREAKER_MS = 5 * 60 * 1000; // HTTP 429 熔斷冷卻 5 分鐘
 const DEFAULT_FUNDAMENTALS_TTL_MS = 24 * 60 * 60 * 1000; // SQLite 基本面快取 24 小時
@@ -33,13 +36,6 @@ let circuitOpenUntil = 0;
  */
 function normalizeCanonicalSymbol(symbol) {
   return String(symbol || '').trim().toUpperCase();
-}
-
-/**
- * 將美股代碼轉換為 Yahoo Finance URL 格式（如 BRK.B -> BRK-B）
- */
-function normalizeYahooSymbol(symbol) {
-  return normalizeCanonicalSymbol(symbol).replace(/\./g, '-');
 }
 
 /**
@@ -127,33 +123,6 @@ function ensureUsFundamentalsTable(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_us_fundamentals_symbol_date
       ON us_fundamentals_daily(symbol, date DESC);
-  `);
-}
-
-/**
- * 確保 corporate_action_calendar 資料表存在（與 sqlite-db-core.cjs Schema 完全對齊）
- */
-function ensureCorporateActionCalendarTable(db) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS corporate_action_calendar (
-      symbol TEXT NOT NULL,
-      market TEXT NOT NULL,
-      action_type TEXT NOT NULL,
-      ex_date TEXT NOT NULL,
-      payment_date TEXT,
-      cash_dividend_per_share REAL,
-      stock_dividend_ratio REAL,
-      split_ratio REAL,
-      reference_price REAL,
-      announcement_date TEXT,
-      mandatory_buyback_date TEXT,
-      halt_start_date TEXT,
-      halt_end_date TEXT,
-      updated_at INTEGER NOT NULL,
-      PRIMARY KEY (symbol, action_type, ex_date)
-    );
-    CREATE INDEX IF NOT EXISTS idx_ca_symbol ON corporate_action_calendar(symbol, ex_date);
-    CREATE INDEX IF NOT EXISTS idx_ca_ex_date ON corporate_action_calendar(ex_date);
   `);
 }
 

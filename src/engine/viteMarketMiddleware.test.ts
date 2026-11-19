@@ -534,5 +534,74 @@ describe('Ticket 10 - Vite 原生 Connect 中介層 API (TDD Seam)', () => {
         (globalThis as any).fetch = originalFetch;
       }
     });
+
+    it('Spec 0240 T05: triggerCatchupTask 在缺質押或強制追趕時應準確呼叫 fetchAndIngestTwPledge', async () => {
+      const {
+        triggerCatchupTask,
+        resetCatchupStateForTest,
+      } = require('../../scripts/market-sync/vite-market-middleware.cjs');
+
+      resetCatchupStateForTest();
+
+      const pledgeCalls: string[] = [];
+      const mockFreshness = {
+        tw: {
+          latestDate: '2026-10-02',
+          anchorDate: '2026-10-02',
+          isStale: true,
+          incompleteDates: [],
+          missingPlanes: [],
+        },
+        us: { latestDate: '2026-10-02', anchorDate: '2026-10-02', isStale: false },
+        tdcc: { isStale: false },
+        revenue: { isStale: false },
+      };
+
+      const started = triggerCatchupTask(testDbPath, {
+        bypassTestEnv: true,
+        force: true,
+        freshnessOverride: mockFreshness,
+        handlers: {
+          runTwMarketSync: async () => {},
+          fetchAndIngestTwDailyData: async () => {},
+          fetchAndIngestEtfDailyNav: async () => {},
+          runUsMarketSync: async () => {},
+          runTdccIngestion: async () => {},
+          runMonthlyRevenueIngestion: async () => {},
+          fetchAndIngestTwPledge: async (dbPathArg: string) => {
+            pledgeCalls.push(dbPathArg);
+          },
+        },
+      });
+
+      expect(started).toBe(true);
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(pledgeCalls).toHaveLength(1);
+      expect(pledgeCalls[0]).toBe(testDbPath);
+
+      resetCatchupStateForTest();
+    });
+
+    it('Spec 0240 T04 & T06: runWithAbortTimeout 逾時觸發時應立即中止 AbortSignal 並優雅降級', async () => {
+      const { runWithAbortTimeout } = require('../../scripts/market-sync/on-demand-backfill-orchestrator.cjs');
+
+      let capturedSignal: AbortSignal | undefined;
+      const outcome = await runWithAbortTimeout(async (signal: AbortSignal) => {
+        capturedSignal = signal;
+        await new Promise((resolve) => {
+          const id = setTimeout(resolve, 500);
+          signal.addEventListener('abort', () => {
+            clearTimeout(id);
+            resolve(undefined);
+          });
+        });
+        return { skipped: false, succeeded: false };
+      }, 30);
+
+      expect(outcome.timedOut).toBe(true);
+      expect(capturedSignal).toBeDefined();
+      expect(capturedSignal?.aborted).toBe(true);
+    });
   });
 });

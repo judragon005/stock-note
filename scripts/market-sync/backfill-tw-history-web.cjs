@@ -14,6 +14,7 @@ const https = require('https');
 const http = require('http');
 const path = require('path');
 const { initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+const { MARKET_HEALTH_THRESHOLDS } = require('./sync-thresholds.cjs');
 const {
   parseCleanNumber,
   parseTwseT86BulkData,
@@ -483,8 +484,15 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
       const dayTradeCount = dayTradeRow ? Number(dayTradeRow.n) : 0;
       const valuationCount = valuationRow ? Number(valuationRow.n) : 0;
 
-      // 7 維欄位級安全快取判定：股票 >= 1800、籌碼 >= 2000、融資 >= 1500、借券 >= 500、當沖 >= 500、估值 >= 1500 (Spec 0238 Ticket 02)
-      if (stockCount >= 1800 && chipCount >= 2000 && marginCount >= 1500 && sblCount >= 500 && dayTradeCount >= 500 && valuationCount >= 1500) {
+      // 7 維欄位級安全快取判定：統一引用 MARKET_HEALTH_THRESHOLDS (Spec 0240 T01)
+      if (
+        stockCount >= MARKET_HEALTH_THRESHOLDS.STOCK_COUNT_MIN &&
+        chipCount >= MARKET_HEALTH_THRESHOLDS.CHIPS_COUNT_MIN &&
+        marginCount >= MARKET_HEALTH_THRESHOLDS.MARGIN_COUNT_MIN &&
+        sblCount >= MARKET_HEALTH_THRESHOLDS.SBL_COUNT_MIN &&
+        dayTradeCount >= MARKET_HEALTH_THRESHOLDS.DAY_TRADE_COUNT_MIN &&
+        valuationCount >= MARKET_HEALTH_THRESHOLDS.VALUATION_COUNT_MIN
+      ) {
         return {
           date: dateStr,
           isTradingDay: true,
@@ -1053,7 +1061,10 @@ function detectTwDateGaps(options = {}) {
       const stockCount = stockRow ? Number(stockRow.stockCount) : 0;
       const chipCount = chipRow ? Number(chipRow.n) : 0;
 
-      if (stockCount >= 1800 && chipCount >= 2000) {
+      if (
+        stockCount >= MARKET_HEALTH_THRESHOLDS.STOCK_COUNT_MIN &&
+        chipCount >= MARKET_HEALTH_THRESHOLDS.CHIPS_COUNT_MIN
+      ) {
         validCount++;
         if (!latestInDbDate) {
           latestInDbDate = dateStr;

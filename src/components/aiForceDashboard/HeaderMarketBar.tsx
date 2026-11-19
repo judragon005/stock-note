@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { resolveDirectionalPalette } from '../../constants/designTokens';
 import { MarketBarData } from '../../types/aiForceDashboard';
 import { ColorThemeMode, HoldingPosition, MarketType } from '../../types/stock';
 import { Activity, AlertOctagon, AlertTriangle, Briefcase, Cpu, Radio, RefreshCw, ShieldAlert } from 'lucide-react';
@@ -681,10 +682,10 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
                   style={{
                     color:
                       data.intradayQuote.change > 0
-                        ? (colorTheme === 'international' ? '#10b981' : '#ef4444')
+                        ? resolveDirectionalPalette(colorTheme).upColor
                         : data.intradayQuote.change < 0
-                        ? (colorTheme === 'international' ? '#ef4444' : '#10b981')
-                        : '#94a3b8',
+                        ? resolveDirectionalPalette(colorTheme).downColor
+                        : resolveDirectionalPalette(colorTheme).neutralColor,
                     fontWeight: 700,
                   }}
                 >

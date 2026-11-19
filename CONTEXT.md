@@ -174,6 +174,10 @@ _Avoid_: Total Row Count Guess, Blind Redundant Crawling, Hidden ETF Blind Spot
 重用 `trading-calendar-engine.cjs` 法定交易日曆。在盤中執行回補且當前本地時間未滿 15:30（盤後日報結算門檻）時，候選起始日強制自動定錨退回前一法定交易日（T-1）；15:30 後才納入今日。法定休市日直接 0 請求排除，杜絕將盤中未出報誤判為「[休市日] 略過」之語意混淆。
 _Avoid_: Naive Weekend Check, False Holiday Skipping
 
+**Architectural Fitness Guard & Wave 1 SSOT Convergence (架構適應度靜態守門與中樞單一事實來源)** _(新增於 Spec 0240 / Issue #594)_:
+將湖倉 7 維健康度門檻 (`sync-thresholds.cjs`)、`corporate_action_calendar` 建表 DDL (`sqlite-db-core.cjs`)、美股點號／連字號別名正規化 (`market-sync-core.cjs`) 與前端漲跌極性／曜石容器 Token (`designTokens.ts`) 收斂為單一事實來源；按需補齊調度抽離至 `on-demand-backfill-orchestrator.cjs` 並導入原生 `AbortController` 真中斷；主力戰情室雙市場組裝邏輯抽離至 `aiForceMarketAssembly.ts`；並於 `architecturalFitnessGuard.test.ts` 植入 4 項靜態不變量守門測試，防止同類技術債復發。
+_Avoid_: Duplicate Magic Thresholds, Split DDL, Hardcoded Directional Ternary, Type Escape Cast
+
 **TPEx Warrant Exclusion Alignment (櫃買權證排除與兩市口徑對齊)** _(新增於 V8.97.0 / Spec 0184)_:
 於 TPEx 1430 收盤行情解析時，過濾排除 6 碼以 7 開頭之櫃買認購/認售權證標的（如 `700001`~`739999`），與上市端 `ALLBUT0999` 標準齊平。單日入庫檔數由 ~8,000 檔收斂至 ~2,400 檔核心標的（股票、主要 ETF 與可轉債），削減 70% 無效記錄。
 _Avoid_: Warrant Flooding, Asymmetric Market Scope

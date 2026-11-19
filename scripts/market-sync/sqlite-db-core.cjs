@@ -198,27 +198,6 @@ function initSqliteLakehouseDb(customPath) {
     );
     CREATE INDEX IF NOT EXISTS idx_revenue_symbol ON tw_monthly_revenue(symbol, year_month DESC);
 
-    -- 7. 公司除權除息與重大行動預告表 (Spec 0167 / Spec 0183)
-    CREATE TABLE IF NOT EXISTS corporate_action_calendar (
-      symbol TEXT NOT NULL,
-      market TEXT NOT NULL,              -- 'TW' | 'US'
-      action_type TEXT NOT NULL,         -- 'DIVIDEND' | 'SPLIT' | 'CAPITAL_REDUCTION' | 'EARNINGS'
-      ex_date TEXT NOT NULL,             -- 除權息日 (YYYY-MM-DD)
-      payment_date TEXT,                 -- 現金股利發放日 (YYYY-MM-DD)
-      cash_dividend_per_share REAL,      -- 每股現金股利
-      stock_dividend_ratio REAL,         -- 每股配股比例
-      split_ratio REAL,                  -- 股票分割比例
-      reference_price REAL,              -- 除權息參考價
-      announcement_date TEXT,
-      mandatory_buyback_date TEXT,       -- 融券最後強制回補日 (YYYY-MM-DD, Spec 0183)
-      halt_start_date TEXT,              -- 停止過戶/交易起日 (YYYY-MM-DD, Spec 0183)
-      halt_end_date TEXT,                -- 停止過戶/交易迄日 (YYYY-MM-DD, Spec 0183)
-      updated_at INTEGER NOT NULL,
-      PRIMARY KEY (symbol, action_type, ex_date)
-    );
-    CREATE INDEX IF NOT EXISTS idx_ca_symbol ON corporate_action_calendar(symbol, ex_date);
-    CREATE INDEX IF NOT EXISTS idx_ca_ex_date ON corporate_action_calendar(ex_date);
-
     -- 8. 台股董監事持股質押與申報轉讓明細表 (Spec 0167 / Ticket 13)
     CREATE TABLE IF NOT EXISTS tw_insider_pledge_records (
       symbol TEXT NOT NULL,
@@ -338,6 +317,7 @@ function initSqliteLakehouseDb(customPath) {
         } catch {}
       }
     }
+    ensureCorporateActionCalendarTable(db);
     const caColumns = db.prepare('PRAGMA table_info(corporate_action_calendar)').all();
     if (!caColumns.some((c) => c.name === 'mandatory_buyback_date')) {
       db.exec('ALTER TABLE corporate_action_calendar ADD COLUMN mandatory_buyback_date TEXT;');
@@ -1146,6 +1126,33 @@ function getMarketMultiHorizonBreadth(targetDate, dbOrPath) {
 }
 
 /**
+ * 單一事實來源：確保 corporate_action_calendar 資料表與雙索引存在 (Spec 0240 T02)
+ */
+function ensureCorporateActionCalendarTable(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS corporate_action_calendar (
+      symbol TEXT NOT NULL,
+      market TEXT NOT NULL,
+      action_type TEXT NOT NULL,
+      ex_date TEXT NOT NULL,
+      payment_date TEXT,
+      cash_dividend_per_share REAL,
+      stock_dividend_ratio REAL,
+      split_ratio REAL,
+      reference_price REAL,
+      announcement_date TEXT,
+      mandatory_buyback_date TEXT,
+      halt_start_date TEXT,
+      halt_end_date TEXT,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (symbol, action_type, ex_date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ca_symbol ON corporate_action_calendar(symbol, ex_date);
+    CREATE INDEX IF NOT EXISTS idx_ca_ex_date ON corporate_action_calendar(ex_date);
+  `);
+}
+
+/**
  * 優雅關閉 SQLite 連線
  */
 function closeSqliteDb() {
@@ -1169,6 +1176,7 @@ module.exports = {
   isSqliteSupported,
   getSqliteDbConnection,
   initSqliteLakehouseDb,
+  ensureCorporateActionCalendarTable,
   getTwMarketBreadthAndSpotSummary,
   getMarketMultiHorizonBreadth,
   getTwRevenueDiffusionAndYoY,

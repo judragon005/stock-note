@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { resolveDirectionalPalette } from '../../../constants/designTokens';
 import type { MainForceVerdictData } from '../../../types/aiForceDashboard';
 import type { ColorThemeMode, MarketType } from '../../../types/stock';
 import { Sparkles, Target, Zap, AlertTriangle, BarChart3, CheckCircle2, Scale, X } from 'lucide-react';
@@ -477,12 +478,11 @@ export function parseVerdictMetrics(
   if (instMatch) {
     const val = Number(instMatch[1].replace(/,/g, ''));
     if (Number.isFinite(val)) {
-      const bullColor = colorTheme === 'international' ? '#10b981' : '#ef4444';
-      const bearColor = colorTheme === 'international' ? '#ef4444' : '#10b981';
+      const { upColor: bullColor, downColor: bearColor, neutralColor } = resolveDirectionalPalette(colorTheme);
       metrics.push({
         label: '5日法人合計',
         value: `${val > 0 ? '+' : ''}${val.toLocaleString()} 張`,
-        color: val > 0 ? bullColor : val < 0 ? bearColor : '#94a3b8',
+        color: val > 0 ? bullColor : val < 0 ? bearColor : neutralColor,
       });
     }
   }

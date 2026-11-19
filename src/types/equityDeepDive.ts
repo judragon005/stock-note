@@ -53,6 +53,7 @@ export interface EquityDeepDiveStep6Data {
   totalNetShares20D?: number;
   boxFloorPrice?: number;
   boxCeilingPrice?: number;
+  sblBalance?: number;
   microstructureSummary?: string;
 }
 

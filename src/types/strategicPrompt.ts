@@ -81,9 +81,9 @@ export interface ChipsAndMicrostructureDigest {
   marginBalance?: number; // 融資餘額 (張)
   shortBalance?: number; // 融券餘額 (張)
   dayTradeRatioPct?: number; // 當沖比率 (%)
-  bigHolderRatioChange400?: number; // 400張大戶比例 (%)
-  bigHolderRatioChange1000?: number; // 1000張大戶比例 (%)
-  retailHolderCountChange?: number; // 散戶持股比例 (<10張) (%)
+  bigHolderRatioChange400?: number | null; // 400張大戶4週比例變化 (%)，無資料時為 null
+  bigHolderRatioChange1000?: number | null; // 1000張大戶4週比例變化 (%)，無獨立來源時為 null
+  retailHolderCountChange?: number | null; // 散戶4週人數變化，無資料時為 null
   mainForceVwap20D?: number; // 主力20日 VWAP 成本價
   currentVwapBiasPct?: number; // 現價相對主力成本乖離率 (%)
   boxResistancePrice?: number; // 箱頂壓力價位
@@ -146,7 +146,7 @@ export interface EtfGovernanceAndLookThroughDigest {
 export interface MacroAndSentimentDigest {
   treasuryYield10Y?: number; // 10年期美債殖利率 (%)
   yieldSpread10Y2Y?: number; // 10Y-2Y 殖利率利差 (%)
-  cnnFearGreedScore?: number; // CNN 恐懼貪婪 (0-100)
+  cnnFearGreedScore?: number | null; // CNN 恐懼貪婪 (0-100)，無資料時為 null
   vixClose?: number; // VIX
   twPutCallRatio?: number; // 台指期 P/C Ratio
   macroRegimeText: string; // 宏觀環境一句話總結

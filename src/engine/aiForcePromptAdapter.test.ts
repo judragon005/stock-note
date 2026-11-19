@@ -545,7 +545,8 @@ describe('Spec 0181 Ticket 06: aiForcePromptAdapter - 主力戰情室特徵轉�
 
       const digest = createWarRoomPromptDigest(reportWithExtendedFields);
 
-      expect(digest.chips.bigHolderRatioChange1000).toBe(1.75);
+      // Spec 0240 T07: 無獨立 1000 張級距 4 週變化來源時誠實為 null，嚴禁複製 400 張大戶數值冒充
+      expect(digest.chips.bigHolderRatioChange1000).toBeNull();
       // Spec 0239 T09: bigHolderRatioChange400 應取真實 4 週變化值而非絕對比率 91.4
       expect(digest.chips.bigHolderRatioChange400).toBe(1.75);
       expect(digest.chips.retailHolderCountChange).toBe(-2150);

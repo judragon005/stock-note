@@ -24,6 +24,7 @@ export interface EquityDeepDiveModalProps {
   holdings?: HoldingPosition[];
   onUpdateHoldings?: (holdings: HoldingPosition[]) => void;
   reportContext?: AiForceDashboardReport;
+  sblBalance?: number;
 }
 
 export const EquityDeepDiveModal: React.FC<EquityDeepDiveModalProps> = ({
@@ -36,13 +37,18 @@ export const EquityDeepDiveModal: React.FC<EquityDeepDiveModalProps> = ({
   holdings = [],
   onUpdateHoldings,
   reportContext,
+  sblBalance,
 }) => {
   if (!isOpen) return null;
 
-  const resolvedInput: EquityDeepDiveInput = input || {
+  const baseInput: EquityDeepDiveInput = input || {
     symbol: symbol || '',
     name: name || symbol || '',
     market: market || 'TW',
+  };
+  const resolvedInput: EquityDeepDiveInput = {
+    ...baseInput,
+    sblBalance: baseInput.sblBalance ?? sblBalance,
   };
 
   const [report, setReport] = useState(() => generateFull7StepsPromptPayload(resolvedInput));

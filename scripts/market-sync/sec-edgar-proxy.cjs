@@ -10,6 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { normalizeUsTickerCandidates } = require('./market-sync-core.cjs');
 
 const SEC_EDGAR_USER_AGENT = 'StockTrackerApp/1.0 (local-analytics@stocktracker.local)';
 const SEC_TICKERS_URL = 'https://www.sec.gov/files/company_tickers.json';
@@ -44,22 +45,6 @@ function normalizeCik(cik) {
   const digits = String(cik).replace(/^CIK/i, '').trim();
   if (!/^\d+$/.test(digits)) return null;
   return digits.padStart(10, '0');
-}
-
-/**
- * 產生美股代碼雙向比對候選清單（支援 BRK.B <-> BRK-B <-> BRK_B）
- */
-function normalizeUsTickerCandidates(symbol) {
-  const raw = String(symbol || '').trim().toUpperCase();
-  if (!raw) return [];
-
-  const candidates = new Set([raw]);
-  const dashForm = raw.replace(/[._]/g, '-');
-  const dotForm = raw.replace(/[-_]/g, '.');
-  candidates.add(dashForm);
-  candidates.add(dotForm);
-
-  return Array.from(candidates);
 }
 
 /**

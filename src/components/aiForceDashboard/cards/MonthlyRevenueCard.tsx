@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { OBSIDIAN_CARD_CONTAINER } from '../../../constants/designTokens';
 import { MonthlyRevenueData } from '../../../types/aiForceDashboard';
 import { ColorThemeMode, MarketType } from '../../../types/stock';
 import { BarChart3, TrendingUp, Sparkles, Coins, Award } from 'lucide-react';
@@ -118,11 +119,7 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
         flexDirection: 'column',
         height: '100%',
         padding: '16px',
-        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(10, 15, 28, 0.92) 100%)',
-        borderRadius: '14px',
-        border: '1px solid rgba(255, 255, 255, 0.07)',
-        backdropFilter: 'blur(10px)',
-        boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.35)',
+        ...OBSIDIAN_CARD_CONTAINER,
       }}
     >
       {/* 標題列 */}
