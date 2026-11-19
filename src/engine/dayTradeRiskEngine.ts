@@ -16,10 +16,12 @@ export interface DayTradeQuoteInput {
   dayTradeRate?: number;
   sblBalance?: number;
   marginBalanceChange?: number;
+  market?: 'TW' | 'US';
+  shortFloatRatio?: number; // 美股空單佔流通比 (%)
 }
 
 /**
- * 依據價格與量能特徵計算隔日沖 5 大風險量化指標 (含真實券資比與信用浮額評估)
+ * 依據價格與量能特徵計算隔日沖 5 大風險量化指標 (含真實券資比、信用浮額與美股無漲跌幅/軋空評估)
  */
 export function calculateDayTradeRisk(
   candles: CandleDayTradeInput[],
@@ -27,13 +29,13 @@ export function calculateDayTradeRisk(
 ): DayTradeRiskData {
   if (!candles || candles.length === 0) {
     return {
-      abnormalSelling: 49,
-      turnoverRate: 57,
-      dayTradeRatio: 53,
-      pullbackRisk: 45,
-      intradayVolatility: 62,
-      riskLevel: 'MEDIUM',
-      riskIndex: 53,
+      abnormalSelling: 0,
+      turnoverRate: 0,
+      dayTradeRatio: 0,
+      pullbackRisk: 0,
+      intradayVolatility: 0,
+      riskLevel: 'LOW',
+      riskIndex: 0,
       marginBalance: quote?.marginBalance,
       shortBalance: quote?.shortBalance,
       shortMarginRatio:
@@ -107,12 +109,45 @@ export function calculateDayTradeRisk(
   } else {
     pullbackRisk = Math.round(30 + shadowRatio * 20);
   }
+
+  // 美股或高放空標的：納入 Short Float 軋空/急拉回檔風險評估 (Spec 0239)
+  if (
+    quote?.shortFloatRatio !== undefined &&
+    Number.isFinite(quote.shortFloatRatio) &&
+    quote.shortFloatRatio > 0
+  ) {
+    const squeezeBoost =
+      quote.shortFloatRatio >= 20
+        ? 25
+        : quote.shortFloatRatio >= 10
+        ? Math.round(10 + ((quote.shortFloatRatio - 10) / 10) * 15)
+        : Math.round(quote.shortFloatRatio * 0.8);
+    pullbackRisk += squeezeBoost;
+    if (quote.shortFloatRatio >= 10) {
+      abnormalSelling = Math.max(10, Math.min(95, abnormalSelling + Math.round(squeezeBoost * 0.4)));
+    }
+  }
   pullbackRisk = Math.max(10, Math.min(95, pullbackRisk));
 
   // 6. 日內波動率 (Intraday Volatility)
   const denom = latest.close > 0 ? latest.close : 1;
   const ampPct = (latest.high - latest.low) / denom;
-  let intradayVolatility = Math.round(ampPct * 1000);
+  let intradayVolatility: number;
+  if (quote?.market === 'US') {
+    // 美股無漲跌幅限制：採自適應振幅刻度 (3%≈45, 6%≈75, 10%+才達95)
+    const ampPercent = ampPct * 100;
+    if (ampPercent <= 3) {
+      intradayVolatility = Math.round(15 + (ampPercent / 3) * 30);
+    } else if (ampPercent <= 6) {
+      intradayVolatility = Math.round(45 + ((ampPercent - 3) / 3) * 30);
+    } else if (ampPercent < 10) {
+      intradayVolatility = Math.round(75 + ((ampPercent - 6) / 4) * 20);
+    } else {
+      intradayVolatility = 95;
+    }
+  } else {
+    intradayVolatility = Math.round(ampPct * 1000);
+  }
   intradayVolatility = Math.max(10, Math.min(95, intradayVolatility));
 
   // 7. 券資比計算 (Ticket 10)

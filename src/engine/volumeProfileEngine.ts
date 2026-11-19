@@ -19,26 +19,39 @@ const BUCKET_DEFINITIONS: {
 ];
 
 /**
+ * 自適應價格刻度小數位格式化 (Spec 0239)
+ * 價格 < 10 保留 2 位小數、< 100 保留 1~2 位、>= 100 取整或 1 位，並依步距確保刻度嚴格不重複
+ */
+function formatAdaptivePriceTick(price: number, tickStep: number): number {
+  let decimals = 0;
+  if (Math.abs(price) < 10) {
+    decimals = 2;
+  } else if (Math.abs(price) < 100) {
+    decimals = tickStep < 0.5 ? 2 : 1;
+  } else {
+    decimals = tickStep < 1 ? 1 : 0;
+  }
+  if (tickStep > 0 && tickStep < Math.pow(10, -decimals)) {
+    decimals = Math.min(4, Math.ceil(-Math.log10(tickStep)) + 1);
+  }
+  return Number(price.toFixed(decimals));
+}
+
+/**
  * 依據歷史 K 線與成交量計算 Volume Profile (籌碼成交量價位分佈)
  */
 export function calculateVolumeProfile(
   candles: CandleLike[],
-  defaultBasePrice: number = 2100
+  defaultBasePrice: number = 0
 ): VolumeProfileData {
   if (!candles || candles.length === 0) {
-    const step = defaultBasePrice * 0.04;
-    const defaultBuckets: VolumeProfileBucket[] = BUCKET_DEFINITIONS.map((def, idx) => ({
-      label: def.label,
-      type: def.type,
-      priceMax: Number((defaultBasePrice + (3 - idx) * step).toFixed(2)),
-      priceMin: Number((defaultBasePrice + (2 - idx) * step).toFixed(2)),
-      percentage: 20,
-    }));
     return {
-      buckets: defaultBuckets,
-      bullBearFooterTag: '多空平衡',
-      currentPrice: defaultBasePrice,
-      currentPriceYRatio: 0.5,
+      buckets: [],
+      bullBearFooterTag: '尚無資料',
+      priceTicks: [],
+      heatmapColumns: [],
+      currentPrice: undefined,
+      currentPriceYRatio: undefined,
     };
   }
 
@@ -145,14 +158,14 @@ export function calculateVolumeProfile(
     bullBearFooterTag = '高檔籌碼沉重，承壓震盪';
   }
 
-  // 5. 自適應 Y 軸 5 階價格刻度 (由大到小)
+  // 5. 自適應 Y 軸 5 階價格刻度 (由大到小，依價格量級保留適當小數防重複)
   const tickStep = span / 4;
   const priceTicks = [
-    Math.round(maxHigh),
-    Math.round(maxHigh - tickStep),
-    Math.round(maxHigh - tickStep * 2),
-    Math.round(maxHigh - tickStep * 3),
-    Math.round(minLow),
+    formatAdaptivePriceTick(maxHigh, tickStep),
+    formatAdaptivePriceTick(maxHigh - tickStep, tickStep),
+    formatAdaptivePriceTick(maxHigh - tickStep * 2, tickStep),
+    formatAdaptivePriceTick(maxHigh - tickStep * 3, tickStep),
+    formatAdaptivePriceTick(minLow, tickStep),
   ];
 
   // 6. 計算 4 欄週期熱力矩陣 (近5日、近10日、近20日、近60日)，每欄 9 格由高至低

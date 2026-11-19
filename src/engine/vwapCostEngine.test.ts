@@ -54,12 +54,13 @@ describe('VwapCostEngine - 20日 VWAP 與成本結構分佈演算法規範 (Tick
     expect(result.bands.reduce((acc, b) => acc + b.percentage, 0)).toBe(100);
   });
 
-  it('當傳入空陣列時，應安全回傳預設成本結構數據', () => {
+  it('當傳入空陣列時，應遵循 Spec 0239 Zero-Mock 契約回傳零造假空成本結構數據', () => {
     const result = calculateVwapCostStructure([]);
 
-    expect(result.mainForceVwap).toBeGreaterThan(0);
-    expect(result.bands.length).toBe(4);
-    expect(result.bands.reduce((acc, b) => acc + b.percentage, 0)).toBe(100);
+    expect(result.mainForceVwap).toBe(0);
+    expect(result.biasPercent).toBe(0);
+    expect(result.bands).toEqual([]);
+    expect(result.timeNodes).toEqual([]);
   });
 
   it('calculateVwapCostStructure (Spec 0144) 應輸出 4 個代表性時點之成本帶成交量節點 (timeNodes)', () => {

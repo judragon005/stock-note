@@ -25,6 +25,7 @@ import { estimateMarketSentiment } from './marketSentimentEngine';
 import { calculateAiConfidence } from './aiConfidenceEngine';
 import { getMarketSettlementStatus, formatDateToYMD } from './marketSettlementEngine';
 import { synthesizeMainForceVerdict } from './mainForceSemanticEngine';
+import { isCanonicalEtfSymbol } from './assetClassifier';
 
 export {
   calculateVolumeProfile,
@@ -51,24 +52,12 @@ export function createDefaultAiForceReport(
 ): AiForceDashboardReport {
   const settlement = getMarketSettlementStatus(market, referenceDate);
   const todayStr = settlement.anchorTradingDate;
+  const isUs = market === 'US';
+  const isEtf = isEtfSymbol(symbol, name, market);
 
-  // 判定是否處於無歷史資料且無即時行情之待命狀態 (Spec 0162: Zero-Mock Policy 嚴禁硬編碼造假)
-  const isDataPending = basePrice === undefined || basePrice <= 0;
-
-  let price: number | undefined = undefined;
-  if (basePrice !== undefined && basePrice > 0) {
-    price = basePrice;
-  }
-
-  const change = price !== undefined ? Number((price * 0.012).toFixed(2)) : undefined;
-  const changePercent = price !== undefined ? 1.2 : undefined;
-  const openPrice = price !== undefined ? Number((price * 0.99).toFixed(2)) : undefined;
-  const highPrice = price !== undefined ? Number((price * 1.015).toFixed(2)) : undefined;
-  const lowPrice = price !== undefined ? Number((price * 0.985).toFixed(2)) : undefined;
-  const highResistance = price !== undefined ? Number((price * 1.08).toFixed(2)) : 0;
-  const mainForceCost = price !== undefined ? Number((price * 0.96).toFixed(2)) : 0;
-  const supportLevel = price !== undefined ? Number((price * 0.92).toFixed(2)) : 0;
-  const supportLower = price !== undefined ? Number((price * 0.88).toFixed(2)) : 0;
+  // ARINC 661 Zero-Mock 硬閘門 (Spec 0239 T09): 無歷史日 K 一律維持待命態，絕不捏造假 OHLC 或假分數
+  const isDataPending = true;
+  const price: number | undefined = basePrice !== undefined && basePrice > 0 ? basePrice : undefined;
 
   return {
     symbol,
@@ -80,165 +69,160 @@ export function createDefaultAiForceReport(
 
     marketBar: {
       currentPrice: price,
-      change,
-      changePercent,
+      change: undefined,
+      changePercent: undefined,
       volumeShares: undefined,
       transactionCount: undefined,
-      openPrice,
-      highPrice,
-      lowPrice,
+      openPrice: undefined,
+      highPrice: undefined,
+      lowPrice: undefined,
       latestTradingDate: settlement.anchorTradingDate,
       dataPointsCount: 0,
-      dataSourceText: market === 'TW' ? '日 K TWSE | 法人 TWSE | 融資券 FinMind' : 'Yahoo Finance',
+      dataSourceText: isUs ? 'Yahoo Finance' : '日 K TWSE | 法人 TWSE | 融資券 FinMind',
       dataRangeText: '尚無歷史交易日資料',
       isSettled: settlement.isSettled,
       anchorTradingDate: settlement.anchorTradingDate,
       settlementReason: settlement.reason,
+      currency: isUs ? 'USD' : 'TWD',
+      volumeUnit: isUs ? '股' : '張',
       statusBadges: {
         aiScanActive: true,
-        mainForceTracking: !isDataPending,
+        mainForceTracking: false,
         marketStatus: 'NORMAL',
         volatilityAlert: false,
       },
     },
 
-
     klineSystem: {
       candles: [],
       keyLevels: {
-        highResistance,
-        mainForceCost,
-        supportLevel,
+        highResistance: 0,
+        mainForceCost: 0,
+        supportLevel: 0,
       },
     },
 
     decisionCore: {
-      warningBadgeText: 'AI WARNING',
-      trendJudgement: '中性偏多',
-      shortTermState: '區間震盪',
-      mainForceAction: '調節減碼',
-      chipStructure: '中性',
-      dayTradeRiskPercent: 53,
-      chipHealthScore: 55,
-      chipHealthLabel: '普通',
-      supportRange: [supportLevel, supportLower],
-      resistanceRange: [highResistance, highResistance],
+      warningBadgeText: 'AI STANDBY',
+      trendJudgement: '資料累積中',
+      shortTermState: '待命',
+      mainForceAction: '待命觀望',
+      chipStructure: isUs ? '量價待補' : '籌碼待補',
+      dayTradeRiskPercent: 0,
+      chipHealthScore: 0,
+      chipHealthLabel: '待評估',
+      supportRange: [0, 0],
+      resistanceRange: [0, 0],
       riskHorizonDays: '1~4 個交易日',
     },
 
     multiDimensionRadar: {
-      overallScore: 56,
-      overallGrade: 'C',
+      overallScore: 0,
+      overallGrade: 'D',
       dimensions: {
-        institutional: 50,
-        trend: 65,
-        chips: 55,
-        liquidity: 45,
-        volatility: 60,
-        momentum: 58,
+        institutional: 0,
+        trend: 0,
+        chips: 0,
+        liquidity: 0,
+        volatility: 0,
+        momentum: 0,
       },
     },
 
     volumeProfile: {
       buckets: [],
-      bullBearFooterTag: '中性整理',
+      priceTicks: [],
+      heatmapColumns: [],
+      bullBearFooterTag: '尚無量價分佈',
     },
 
     riskSpider: {
-      liquidityRisk: 30,
-      volatilityRisk: 62,
-      trendRisk: 45,
-      institutionalRisk: 55,
-      chipRisk: 48,
-      mainForceRiskLevel: 'MEDIUM_HIGH',
-      mainForceRiskIndex: 60,
+      liquidityRisk: 0,
+      volatilityRisk: 0,
+      trendRisk: 0,
+      institutionalRisk: 0,
+      chipRisk: 0,
+      mainForceRiskLevel: 'LOW',
+      mainForceRiskIndex: 0,
     },
 
     forecastCone: {
-      bullishProb: 47,
-      rangeProb: 11,
-      bearishProb: 42,
-      mainForceDirectionProb: 52,
-      annualizedDriftPercent: 19.7,
-      timeNodes: price
-        ? [
-            { dayOffset: 0, label: '今日', upperPrice: price, medianPrice: price, lowerPrice: price },
-            { dayOffset: 3, label: '3日後', upperPrice: Number((price * 1.035).toFixed(1)), medianPrice: Number((price * 1.008).toFixed(1)), lowerPrice: Number((price * 0.97).toFixed(1)) },
-            { dayOffset: 5, label: '5日後', upperPrice: Number((price * 1.065).toFixed(1)), medianPrice: Number((price * 1.017).toFixed(1)), lowerPrice: Number((price * 0.95).toFixed(1)) },
-            { dayOffset: 10, label: '10日後', upperPrice: Number((price * 1.10).toFixed(1)), medianPrice: Number((price * 1.026).toFixed(1)), lowerPrice: Number((price * 0.925).toFixed(1)) },
-          ]
-        : [],
+      bullishProb: 0,
+      rangeProb: 0,
+      bearishProb: 0,
+      mainForceDirectionProb: 0,
+      annualizedDriftPercent: 0,
+      timeNodes: [],
     },
 
     vwapCostStructure: {
-      mainForceVwap: price ? Number((price * 0.96).toFixed(1)) : 0,
+      mainForceVwap: 0,
       biasPercent: 0,
-      bands: [
-        { name: '倉儲區', biasLabel: '>5%', percentage: 38, color: '#f97316' },
-        { name: '套牢區', biasLabel: '-2~-5%', percentage: 32, color: '#10b981' },
-        { name: '主力成本區', biasLabel: '±2%', percentage: 18, color: '#38bdf8' },
-        { name: '大量成交區', biasLabel: '±2~5%', percentage: 12, color: '#1e40af' },
-      ],
+      bands: [],
       timeNodes: DEFAULT_TIME_NODES,
     },
 
     institutionalFlow: {
       history: [],
       recentDaysTable: [],
-      cumulative20DaysSummary: '尚無法人日報數據',
-      recent5DaysSummary: '待三大法人公布',
+      cumulative20DaysSummary: isUs ? '美股機構量價累積中' : '尚無法人日報數據',
+      recent5DaysSummary: isUs ? '待日 K 載入' : '待三大法人公布',
+      isUsMarket: isUs,
     },
 
     dayTradeRisk: {
-      abnormalSelling: 49,
-      turnoverRate: 57,
-      dayTradeRatio: 53,
-      pullbackRisk: 45,
-      intradayVolatility: 62,
-      riskLevel: 'MEDIUM',
-      riskIndex: 53,
+      abnormalSelling: 0,
+      turnoverRate: 0,
+      dayTradeRatio: 0,
+      pullbackRisk: 0,
+      intradayVolatility: 0,
+      riskLevel: 'LOW',
+      riskIndex: 0,
+      isUsMarket: isUs,
     },
 
     bullBearEnergy: {
-      bullEnergyPercent: 53,
-      bearEnergyPercent: 47,
-      bullBearRatio: 1.13,
-      bullBearConclusion: '偏多',
-      noteText: '(20日紅K量/黑K量)',
+      bullEnergyPercent: 50,
+      bearEnergyPercent: 50,
+      bullBearRatio: 1,
+      bullBearConclusion: '待命',
+      noteText: '(尚無 20 日量能資料)',
     },
 
     healthSummary: {
-      chipHealth: 55,
-      technicalStructure: 80,
-      capitalMomentum: 58,
-      liquidityRisk: 5,
-      institutionalSupport: 50,
-      overallRatingLabel: '普通 (平均 50 分)',
+      chipHealth: 0,
+      technicalStructure: 0,
+      capitalMomentum: 0,
+      liquidityRisk: 0,
+      institutionalSupport: 0,
+      overallRatingLabel: '待評估 (尚無完整日 K)',
     },
 
     dynamicSignals: {
-      trendSignal: '偏多偏強',
-      chipSignal: '籌碼中性',
-      momentumSignal: '動能偏強',
-      riskSignal: '波動高特偏高',
-      verdictLight: 'RED',
-      verdictLabel: '紅燈 (高風險)',
+      trendSignal: '資料累積中',
+      chipSignal: isUs ? '量價待補' : '籌碼待補',
+      momentumSignal: '待評估',
+      riskSignal: '風險待評估',
+      verdictLight: 'YELLOW',
+      verdictLabel: '黃燈 (資料待命)',
+      compositeScore: 0,
     },
 
     marketSentiment: {
       overallSentimentIndex: 50,
       sentimentState: 'NEUTRAL',
-      retailSentimentPercent: 59,
-      institutionalSentimentPercent: 55,
-      mainForceSentimentPercent: 58,
+      retailSentimentPercent: 50,
+      institutionalSentimentPercent: 50,
+      mainForceSentimentPercent: 50,
+      isUsMarket: isUs,
     },
 
     aiConfidence: {
-      overallConfidence: 47,
-      modelAccuracy: 32,
-      dataCompleteness: 100,
-      signalStability: 80,
-      strategyApplicability: 44,
+      overallConfidence: 0,
+      modelAccuracy: 0,
+      dataCompleteness: 0,
+      signalStability: 0,
+      strategyApplicability: 0,
     },
 
     chipsSummary: {
@@ -246,53 +230,67 @@ export function createDefaultAiForceReport(
       trustNetShares: 0,
       dealerNetShares: 0,
       threeInstitutionsTotal: 0,
-      verdictNote: `${todayStr} 尚無法人日報數據`,
-      conclusionBadge: '籌碼待補',
+      verdictNote: isUs ? `${todayStr} 美股量價數據累積中` : `${todayStr} 尚無法人日報數據`,
+      conclusionBadge: isUs ? '量價待補' : '籌碼待補',
       sparklineHistory: [],
+      isUsMarket: isUs,
     },
 
     forceDistribution: {
-      largePlayerBuyPercent: 65,
-      retailBuyPercent: 35,
-      retailSellPressurePercent: 36,
-      asOfDateText: `${todayStr} (法人買進/賣出佔成交量比例，依 20 日平均)`,
+      largePlayerBuyPercent: 50,
+      retailBuyPercent: 50,
+      retailSellPressurePercent: 50,
+      asOfDateText: isUs ? `${todayStr} (尚無美股量價資料)` : `${todayStr} (尚無法人買賣力資料)`,
+      isUsMarket: isUs,
     },
 
     bullBearStrength: {
-      bullStrengthPercent: 58,
-      bearStrengthPercent: 42,
-      volumeStrengthPercent: 53,
-      signalTierLevel: 2,
-      compositeScore: 70,
+      bullStrengthPercent: 50,
+      bearStrengthPercent: 50,
+      volumeStrengthPercent: 0,
+      signalTierLevel: 3,
+      compositeScore: 0,
     },
 
     mainForceVerdict: {
-      primaryVerb: '調節減碼',
-      semanticTag: '法人動作',
-      fullVerdictText:
-        'AI 結論：經 5 日主力行為綜合研判（法人近 5 日合計 -64 張、收盤相對 20 日 VWAP +7.5%、RSI 60），法人小幅調節，短線宜區間操作。',
+      primaryVerb: '待命觀望',
+      semanticTag: isUs ? '機構量價' : '法人動作',
+      fullVerdictText: '尚無足夠歷史交易日資料（需至少 5 日 K 線）以進行主力行為研判。',
+      isUsMarket: isUs,
     },
 
     tdccDistribution: {
+      symbol,
+      isUsMarket: isUs,
       history: [],
-      concentrationBadge: market === 'US' ? '美股不適用' : '集保待補',
-      asOfDateText: market === 'US' ? '美股市場' : '集保無資料',
+      concentrationBadge: isUs ? '13F 數據待補' : '集保待補',
+      asOfDateText: isUs ? '美股市場' : '集保無資料',
       isEmpty: true,
-      emptyMessage: market === 'US' ? '美股無集保機制 (採 13F 機構申報)' : '集保數據累積中 (週五盤後結算)',
+      emptyMessage: isUs ? '美股無集保機制 (採 13F 機構申報)' : '集保數據累積中 (週五盤後結算)',
     },
 
     monthlyRevenue: {
-      isEtf: isEtfSymbol(symbol, name),
+      isEtf,
+      isUsMarket: isUs,
+      currency: isUs ? 'USD' : 'TWD',
       history: [],
-      growthBadge: isEtfSymbol(symbol, name) ? 'ETF 資料待補' : '尚無營收',
-      asOfDateText: isEtfSymbol(symbol, name) ? 'ETF 規模與殖利率' : '營收無資料',
+      growthBadge: isEtf ? 'ETF 資料待補' : '尚無營收',
+      asOfDateText: isEtf ? 'ETF 規模與殖利率' : '營收無資料',
       isEmpty: true,
-      emptyMessage: isEtfSymbol(symbol, name)
-        ? 'ETF 配息與受益人資料累積中'
-        : market === 'US'
-        ? '美股採季度財報 (10-Q/10-K)'
+      emptyMessage: isEtf
+        ? 'ETF 配息與規模資料累積中'
+        : isUs
+        ? '美股季度財報營收 (10-Q/10-K) 累積中'
         : '月營收數據累積中 (每月 10 日公布)',
       etfData: undefined,
+    },
+
+    valuationMetrics: {
+      isEtf,
+      isUsMarket: isUs,
+      isEmpty: true,
+      historySampleSize: 0,
+      asOfDateText: todayStr,
     },
   };
 }
@@ -306,18 +304,15 @@ export interface RawInstitutionalRecord {
 }
 
 /**
- * 智慧識別標的是否為 ETF (台股代碼特徵、名稱、或美股主流 ETF)
+ * 單一權威資產型態判定 (委託 assetClassifier.ts，Spec 0239 T02/T08)
  */
-export function isEtfSymbol(symbol: string, name?: string): boolean {
-  const s = symbol.trim().toUpperCase().replace(/\.(TW|TWO)$/i, '');
-  if (/^00\d{2,4}[A-Z]?$/i.test(s) || /^01\d{3}[A-Z]?$/i.test(s)) return true;
-  if (name && /(ETF|指數|期信|高股息|債券|元大台灣50|富邦|國泰)/i.test(name)) return true;
-  const usEtfs = new Set([
-    'VOO', 'QQQ', 'SPY', 'IVV', 'VTI', 'VT', 'IWM', 'DIA',
-    'SOXX', 'SMH', 'SCHD', 'TLT', 'XLE', 'XLF', 'XLK', 'ARKK'
-  ]);
-  if (usEtfs.has(s)) return true;
-  return false;
+export function isEtfSymbol(
+  symbol: string,
+  name?: string,
+  market?: MarketType,
+  metaType?: string
+): boolean {
+  return isCanonicalEtfSymbol(symbol, name, market, metaType);
 }
 
 /**
@@ -471,11 +466,16 @@ const ETF_BASELINE_META: Record<string, { aumBillion: number; expenseRatio: numb
   '00940': { aumBillion: 1620, expenseRatio: 0.45 },
   '00679B': { aumBillion: 2980, expenseRatio: 0.16 },
   '00687B': { aumBillion: 2560, expenseRatio: 0.17 },
-  VOO: { aumBillion: 5600, expenseRatio: 0.03 },
-  SPY: { aumBillion: 6100, expenseRatio: 0.09 },
-  QQQ: { aumBillion: 3100, expenseRatio: 0.2 },
-  VTI: { aumBillion: 4500, expenseRatio: 0.03 },
-  SOXX: { aumBillion: 145, expenseRatio: 0.35 },
+  VOO: { aumBillion: 560, expenseRatio: 0.03 },
+  SPY: { aumBillion: 610, expenseRatio: 0.09 },
+  QQQ: { aumBillion: 310, expenseRatio: 0.2 },
+  VTI: { aumBillion: 450, expenseRatio: 0.03 },
+  VT: { aumBillion: 42, expenseRatio: 0.07 },
+  IVV: { aumBillion: 540, expenseRatio: 0.03 },
+  SCHD: { aumBillion: 65, expenseRatio: 0.06 },
+  TLT: { aumBillion: 52, expenseRatio: 0.15 },
+  GLD: { aumBillion: 75, expenseRatio: 0.4 },
+  SOXX: { aumBillion: 14.5, expenseRatio: 0.35 },
 };
 
 /**
@@ -535,14 +535,23 @@ export function buildMonthlyRevenue(
     }>;
     dividendYield?: number | null;
     aumBillion?: number | null;
+    expenseRatio?: number | null;
     currentPrice?: number;
     referenceDateStr?: string;
+    metaType?: string;
+    quarterlyFinancials?: Array<{
+      year: number;
+      quarter: number;
+      revenue?: number | null;
+      periodDate?: string;
+    }>;
   }
 ): MonthlyRevenueData {
-  const isEtf = isEtfSymbol(symbol, name);
+  const isUs = market === 'US';
+  const isEtf = isEtfSymbol(symbol, name, market, etfOptions?.metaType);
 
   if (isEtf) {
-    const cleanSym = symbol.trim().toUpperCase().replace(/\.(TW|TWO)$/i, '');
+    const cleanSym = symbol.trim().toUpperCase().replace(/\.(TW|TWO|US)$/i, '');
     const latestTdcc = tdccRecords && tdccRecords.length > 0 ? tdccRecords[tdccRecords.length - 1] : undefined;
     const beneficiaries = latestTdcc?.totalShareholders;
     const derivedYield = deriveTrailingDividendYield(
@@ -558,7 +567,8 @@ export function buildMonthlyRevenue(
       beneficiaries !== undefined ||
       dividendYield !== undefined ||
       (etfOptions?.corporateActions && etfOptions.corporateActions.length > 0) ||
-      typeof etfOptions?.aumBillion === 'number';
+      typeof etfOptions?.aumBillion === 'number' ||
+      typeof etfOptions?.expenseRatio === 'number';
     const aumBillion =
       typeof etfOptions?.aumBillion === 'number' && Number.isFinite(etfOptions.aumBillion)
         ? etfOptions.aumBillion
@@ -569,12 +579,18 @@ export function buildMonthlyRevenue(
     const quarterlyDividends = (etfOptions?.corporateActions ?? [])
       .filter((ca) => typeof ca.cashDividendPerShare === 'number' && ca.cashDividendPerShare > 0)
       .sort((a, b) => b.exDate.localeCompare(a.exDate))
-      .slice(0, 8)
-      .map((ca) => ({
-        quarter: ca.exDate,
-        amount: ca.cashDividendPerShare!,
-        yieldRate: dividendYield ?? 0,
-      }));
+      .slice(0, 4)
+      .map((ca) => {
+        const perPayoutYield =
+          etfOptions?.currentPrice && etfOptions.currentPrice > 0
+            ? Number(((ca.cashDividendPerShare! / etfOptions.currentPrice) * 100).toFixed(2))
+            : dividendYield ?? 0;
+        return {
+          quarter: ca.exDate,
+          amount: ca.cashDividendPerShare!,
+          yieldRate: perPayoutYield,
+        };
+      });
 
     const hasRealEtfData =
       quarterlyDividends.length > 0 ||
@@ -585,20 +601,28 @@ export function buildMonthlyRevenue(
     if (!hasRealEtfData) {
       return {
         isEtf: true,
+        isUsMarket: isUs,
+        currency: isUs ? 'USD' : 'TWD',
         history: [],
         latestRevenueText: undefined,
         growthBadge: 'ETF 資料待補',
         asOfDateText: 'ETF 規模與殖利率',
         etfData: undefined,
         isEmpty: true,
-        emptyMessage: 'ETF 配息與受益人資料累積中',
+        emptyMessage: isUs ? '美股 ETF 規模與配息資料累積中' : 'ETF 配息與受益人資料累積中',
       };
     }
 
-    const asOfDateText = latestTdcc?.date ? `ETF 規模與受益人 (${latestTdcc.date})` : 'ETF 規模與殖利率';
+    const asOfDateText = latestTdcc?.date
+      ? `ETF 規模與受益人 (${latestTdcc.date})`
+      : isUs
+      ? '美股 ETF 規模與收益分配 (USD)'
+      : 'ETF 規模與殖利率';
 
     return {
       isEtf: true,
+      isUsMarket: isUs,
+      currency: isUs ? 'USD' : 'TWD',
       history: [],
       latestRevenueText: undefined,
       growthBadge: 'ETF 規模穩健',
@@ -613,14 +637,87 @@ export function buildMonthlyRevenue(
     };
   }
 
+  // Spec 0239 T07: 美股個股 10-Q/10-K 近 8 季營收成長走勢
+  if (isUs && Array.isArray(etfOptions?.quarterlyFinancials) && etfOptions.quarterlyFinancials.length > 0) {
+    const validQ = etfOptions.quarterlyFinancials
+      .filter((q) => typeof q.revenue === 'number' && Number.isFinite(q.revenue) && q.revenue > 0)
+      .sort((a, b) => (a.year * 10 + a.quarter) - (b.year * 10 + b.quarter));
+
+    if (validQ.length > 0) {
+      const qMap = new Map<string, number>();
+      for (const q of validQ) {
+        qMap.set(`${q.year}-Q${q.quarter}`, q.revenue!);
+      }
+      const recentQ = validQ.slice(-8);
+      let runningMax = 0;
+      const history = recentQ.map((q, idx) => {
+        const rev = q.revenue!;
+        const lastYearRev = qMap.get(`${q.year - 1}-Q${q.quarter}`);
+        const prevQ = idx > 0 ? recentQ[idx - 1].revenue! : undefined;
+        const yoyRate =
+          lastYearRev && lastYearRev > 0
+            ? Number((((rev - lastYearRev) / lastYearRev) * 100).toFixed(1))
+            : undefined;
+        const momRate =
+          prevQ && prevQ > 0 ? Number((((rev - prevQ) / prevQ) * 100).toFixed(1)) : undefined;
+        const isAllTimeHigh = rev >= runningMax && runningMax > 0;
+        if (rev > runningMax) runningMax = rev;
+        return {
+          yearMonth: `${q.year}Q${q.quarter}`,
+          revenue: rev,
+          lastYearRevenue: lastYearRev,
+          yoyRate,
+          momRate,
+          isAllTimeHigh,
+        };
+      });
+
+      const latest = history[history.length - 1];
+      let streak = 0;
+      for (let i = history.length - 1; i >= 0; i--) {
+        if ((history[i].yoyRate ?? 0) > 0 && (history[i].momRate ?? 0) > 0) streak++;
+        else break;
+      }
+
+      const formatUsdRevenue = (val: number) => {
+        if (Math.abs(val) >= 1e9) return `$${(val / 1e9).toFixed(2)}B`;
+        if (Math.abs(val) >= 1e6) return `$${(val / 1e6).toFixed(1)}M`;
+        return `$${val.toLocaleString()}`;
+      };
+
+      let growthBadge = '季營收穩健成長';
+      if (streak >= 3) growthBadge = '連續 3 季年季雙增';
+      else if (latest.isAllTimeHigh) growthBadge = '單季創高 (ATH)';
+      else if ((latest.yoyRate ?? 0) > 20) growthBadge = '季營收強勁雙位數成長';
+      else if ((latest.yoyRate ?? 0) < 0) growthBadge = '季營收年減衰退';
+
+      return {
+        isEtf: false,
+        isQuarterly: true,
+        isUsMarket: true,
+        currency: 'USD',
+        history,
+        latestRevenueText: formatUsdRevenue(latest.revenue),
+        latestYoyRate: latest.yoyRate,
+        growthStreakMonths: streak,
+        athCount: history.filter((h) => h.isAllTimeHigh).length,
+        growthBadge,
+        asOfDateText: `10-Q/10-K 季營收基準: ${latest.yearMonth}`,
+        isEmpty: false,
+      };
+    }
+  }
+
   if (!records || records.length === 0) {
     return {
       isEtf: false,
+      isUsMarket: isUs,
+      currency: isUs ? 'USD' : 'TWD',
       history: [],
       growthBadge: '尚無營收',
       asOfDateText: '無營收資料',
       isEmpty: true,
-      emptyMessage: market === 'US' ? '美股採季度財報 (10-Q/10-K)' : '月營收數據累積中 (每月 10 日公布)',
+      emptyMessage: isUs ? '美股採季度財報 (10-Q/10-K)，季報資料累積中' : '月營收數據累積中 (每月 10 日公布)',
     };
   }
 
@@ -848,13 +945,20 @@ export function calculateBullBearEnergyFromCandles(
 export function calculateHealthSummaryFromCandles(
   candles: KlineCandleItem[],
   institutionalFlow: InstitutionalFlowData,
-  market: MarketType = 'TW'
+  market: MarketType = 'TW',
+  usMicroScore?: number
 ): HealthSummaryData {
   const last = candles[candles.length - 1];
+  const resolvedUsScore =
+    market === 'US'
+      ? (usMicroScore ?? institutionalFlow.usMicrostructure?.score ?? 50)
+      : undefined;
 
-  // 1. 籌碼健康度
+  // 1. 籌碼健康度 (Spec 0239 T08: 美股改由機構量價微結構驅動，不再鎖死 50%)
   let chipHealth = 50;
-  if (institutionalFlow.history.length > 0) {
+  if (market === 'US' && resolvedUsScore !== undefined) {
+    chipHealth = Math.max(10, Math.min(95, Math.round(resolvedUsScore)));
+  } else if (institutionalFlow.history.length > 0) {
     const last5 = institutionalFlow.history.slice(-5);
     const sum5 = last5.reduce((acc, cur) => acc + cur.foreignShares + cur.trustShares + cur.dealerShares, 0);
     if (sum5 > 1000) chipHealth = 85;
@@ -893,20 +997,36 @@ export function calculateHealthSummaryFromCandles(
   else if (!isUp && volRatio > 1.0) capitalMomentum = 40;
   else capitalMomentum = 55;
 
-  // 4. 流動性風險 (5日日均成交量，台股由股數正規化為張數)
+  // 4. 流動性風險 (5日日均成交量，嚴格區分台股張數 vs 美股股數門檻，Spec 0239 T08)
   const recent5 = candles.slice(-5);
   const rawAvgVol5 = recent5.reduce((acc, c) => acc + c.volume, 0) / Math.max(1, recent5.length);
-  const avgVol5 = market === 'TW' ? rawAvgVol5 / 1000 : rawAvgVol5;
   let liquidityRisk = 15;
-  if (avgVol5 > 3000) liquidityRisk = 5;
-  else if (avgVol5 > 1000) liquidityRisk = 12;
-  else if (avgVol5 > 300) liquidityRisk = 28;
-  else if (avgVol5 > 50) liquidityRisk = 50;
-  else liquidityRisk = 70;
+  if (market === 'US') {
+    if (rawAvgVol5 >= 2_000_000) liquidityRisk = 5;
+    else if (rawAvgVol5 >= 500_000) liquidityRisk = 15;
+    else if (rawAvgVol5 >= 100_000) liquidityRisk = 30;
+    else if (rawAvgVol5 >= 20_000) liquidityRisk = 55;
+    else liquidityRisk = 78;
+  } else {
+    const avgVol5Lots = rawAvgVol5 / 1000;
+    if (avgVol5Lots > 3000) liquidityRisk = 5;
+    else if (avgVol5Lots > 1000) liquidityRisk = 12;
+    else if (avgVol5Lots > 300) liquidityRisk = 28;
+    else if (avgVol5Lots > 50) liquidityRisk = 50;
+    else liquidityRisk = 70;
+  }
 
-  // 5. 法人支撐力 (20日法人累計買賣超)
+  // 5. 法人/機構支撐力 (Spec 0239 T08: 美股改由微結構 + OBV 趨勢驅動)
   let institutionalSupport = 50;
-  if (institutionalFlow.history.length > 0) {
+  if (market === 'US' && resolvedUsScore !== undefined) {
+    const obvBonus =
+      institutionalFlow.usMicrostructure?.obvTrend === 'UP'
+        ? 8
+        : institutionalFlow.usMicrostructure?.obvTrend === 'DOWN'
+        ? -8
+        : 0;
+    institutionalSupport = Math.max(10, Math.min(95, Math.round(resolvedUsScore + obvBonus)));
+  } else if (institutionalFlow.history.length > 0) {
     const lastInst = institutionalFlow.history[institutionalFlow.history.length - 1];
     const cum = lastInst.cumulativeTotalShares;
     if (cum > 2000) institutionalSupport = 85;
@@ -1034,6 +1154,9 @@ export function calculateDynamicSignalsFromCandles(
   mainForceCost: number,
   institutionalFlow: InstitutionalFlowData,
   options?: {
+    market?: MarketType;
+    usMicroScore?: number;
+    shortFloatRatio?: number;
     dispositionStatus?: 'NORMAL' | 'ATTENTION' | 'DISPOSITION';
     marginBalance?: number;
     marginBalanceChange?: number;
@@ -1041,6 +1164,7 @@ export function calculateDynamicSignalsFromCandles(
   }
 ): DynamicSignalsData {
   const last = candles[candles.length - 1];
+  const isUs = options?.market === 'US' || Boolean(institutionalFlow.isUsMarket);
   const vwapBias = mainForceCost > 0 ? ((last.close - mainForceCost) / mainForceCost) * 100 : 0;
 
   // 1. 趨勢信號
@@ -1060,10 +1184,28 @@ export function calculateDynamicSignalsFromCandles(
     trendScore = 35;
   }
 
-  // 2. 籌碼信號
+  // 2. 籌碼信號 (Spec 0239 T08: 美股改由機構微結構解鎖，徹底解除 55 分封頂與仲裁癱瘓)
   let chipSignal = '籌碼中性';
   let chipScore = 50;
-  if (institutionalFlow.history.length > 0) {
+  if (isUs) {
+    const usScore = options?.usMicroScore ?? institutionalFlow.usMicrostructure?.score ?? 50;
+    if (usScore >= 70) {
+      chipSignal = '機構籌碼集中';
+      chipScore = 85;
+    } else if (usScore >= 58) {
+      chipSignal = '機構集中吸籌';
+      chipScore = 72;
+    } else if (usScore <= 35) {
+      chipSignal = '機構籌碼渙散';
+      chipScore = 22;
+    } else if (usScore <= 45) {
+      chipSignal = '機構調節降溫';
+      chipScore = 38;
+    } else {
+      chipSignal = '量價籌碼中性';
+      chipScore = Math.max(45, Math.min(58, Math.round(usScore)));
+    }
+  } else if (institutionalFlow.history.length > 0) {
     const last5 = institutionalFlow.history.slice(-5);
     const sum5 = last5.reduce((acc, cur) => acc + cur.foreignShares + cur.trustShares + cur.dealerShares, 0);
     const lastInst = institutionalFlow.history[institutionalFlow.history.length - 1];
@@ -1109,7 +1251,7 @@ export function calculateDynamicSignalsFromCandles(
   if (last.close < ma20 && vwapBias < -5) {
     riskSignal = '破位警戒';
     riskScore = 85;
-  } else if (rsi > 75 || Math.abs(vwapBias) > 8) {
+  } else if (rsi > 75 || Math.abs(vwapBias) > (isUs ? 12 : 8)) {
     riskSignal = '波動偏高';
     riskScore = 60;
   }
@@ -1128,9 +1270,13 @@ export function calculateDynamicSignalsFromCandles(
   // 6. 多空矛盾智能仲裁
   const arbitration = arbitrateSignals(trendSignal, chipSignal, momentumSignal, riskSignal);
 
-  // 7. 交易所視角監理標籤
+  // 7. 交易所視角監理標籤 (美股隔離台股處置/當沖詞彙，改顯軋空警戒)
   let regulatoryBadge: string | undefined = undefined;
-  if (options?.dispositionStatus === 'DISPOSITION') {
+  if (isUs) {
+    if ((options?.shortFloatRatio ?? 0) > 10) {
+      regulatoryBadge = `高軋空警戒 (Short Float ${options!.shortFloatRatio!.toFixed(1)}%)`;
+    }
+  } else if (options?.dispositionStatus === 'DISPOSITION') {
     regulatoryBadge = '處置股票 (分盤撮合)';
   } else if (options?.dispositionStatus === 'ATTENTION') {
     regulatoryBadge = '列注意股票';
@@ -1138,15 +1284,17 @@ export function calculateDynamicSignalsFromCandles(
     regulatoryBadge = '當沖過熱投機警戒';
   }
 
-  // 8. 券商視角融資警戒
+  // 8. 券商視角融資警戒 (僅台股適用)
   let brokerMarginAlert: string | undefined = undefined;
-  if (
-    (options?.marginBalanceChange ?? 0) > 0 &&
-    (trendSignal.includes('破線') || trendSignal.includes('偏弱'))
-  ) {
-    brokerMarginAlert = '融資浮額沉重 / 斷頭防守警戒';
-  } else if ((options?.dayTradeRate ?? 0) > 60) {
-    brokerMarginAlert = '當沖高比率 浮額劇烈震盪';
+  if (!isUs) {
+    if (
+      (options?.marginBalanceChange ?? 0) > 0 &&
+      (trendSignal.includes('破線') || trendSignal.includes('偏弱'))
+    ) {
+      brokerMarginAlert = '融資浮額沉重 / 斷頭防守警戒';
+    } else if ((options?.dayTradeRate ?? 0) > 60) {
+      brokerMarginAlert = '當沖高比率 浮額劇烈震盪';
+    }
   }
 
   // 9. 法人視角 VWAP 標準差偏離
@@ -1267,7 +1415,11 @@ export function calculateForceDistributionFromCandles(
     largePlayerBuyPercent,
     retailBuyPercent,
     retailSellPressurePercent,
-    asOfDateText: `${asOfDate} (法人買進/賣出佔成交量比例，依 20 日平均)`,
+    asOfDateText:
+      market === 'US'
+        ? `${asOfDate} (美股機構量價微結構推估，依 20 日平均)`
+        : `${asOfDate} (法人買進/賣出佔成交量比例，依 20 日平均)`,
+    isUsMarket: market === 'US',
   };
 }
 
@@ -1290,9 +1442,15 @@ export function calculateBullBearStrengthFromCandles(
   const avg20 = recent20.reduce((acc, c) => acc + c.volume, 0) / Math.max(1, recent20.length);
   const recent5 = candles.slice(-5);
   const avg5 = recent5.reduce((acc, c) => acc + c.volume, 0) / Math.max(1, recent5.length);
-  const volumeStrengthPercent = Math.max(10, Math.min(95, Math.round((avg20 > 0 ? avg5 / avg20 : 1) * 50)));
+  const volRatio = avg20 > 0 ? avg5 / avg20 : 1;
+  const volumeStrengthPercent = Math.max(10, Math.min(95, Math.round(volRatio * 50)));
 
-  const compositeScore = Math.round(bullStrengthPercent * 0.6 + volumeStrengthPercent * 0.4);
+  // 放量長黑不應推升多方綜合分 (Spec 0239 T09)
+  const directionalVolScore =
+    last.close < last.open && volRatio > 1.2
+      ? Math.max(10, 100 - volumeStrengthPercent)
+      : volumeStrengthPercent;
+  const compositeScore = Math.round(bullStrengthPercent * 0.6 + directionalVolScore * 0.4);
   let tier = 3;
   if (compositeScore >= 80) tier = 1;
   else if (compositeScore >= 65) tier = 2;
@@ -1338,10 +1496,28 @@ export interface GenerateReportOptions {
   }>;
   institutionalRecords?: RawInstitutionalRecord[];
   us13fData?: Us13fChipData;
+  metaType?: string;
+  etfMeta?: {
+    aumBillion?: number | null;
+    expenseRatio?: number | null;
+  };
+  quarterlyFinancials?: Array<{
+    year: number;
+    quarter: number;
+    revenue?: number | null;
+    grossProfit?: number | null;
+    operatingIncome?: number | null;
+    netIncome?: number | null;
+    eps?: number | null;
+    periodDate?: string;
+  }>;
   valuationData?: {
     pe?: number | null;
+    forwardPe?: number | null;
     pb?: number | null;
+    psRatio?: number | null;
     dividendYield?: number | null;
+    asOfDate?: string;
     eps?: number | null;
     quarterName?: string;
     grossMargin?: number | null;
@@ -1418,8 +1594,8 @@ export function generateAiForceReportFromCandles(
     if (filtered.length >= 5) {
       effectiveCandles = filtered;
     }
-    if (institutionalRecords && institutionalRecords.length > 0) {
-      effectiveInstRecords = institutionalRecords.filter(
+    if (effectiveInstRecords && effectiveInstRecords.length > 0) {
+      effectiveInstRecords = effectiveInstRecords.filter(
         (r) => r.date <= settlement.anchorTradingDate
       );
     }
@@ -1447,7 +1623,7 @@ export function generateAiForceReportFromCandles(
   } else if (settlement.isSettled && effectiveCandles && effectiveCandles.length > 0) {
     // Spec 0160: 若市場今日已結算且湖倉日 K 稍有落後，若有外部即時收盤價，進行日 K 自適應防斷層縫合
     const lastDate = effectiveCandles[effectiveCandles.length - 1].date;
-    if (lastDate < settlement.anchorTradingDate && realtimeQuote?.price !== undefined) {
+    if (lastDate < settlement.anchorTradingDate && realtimeQuote?.price !== undefined && realtimeQuote.price > 0) {
       const stitchedCandle = {
         date: settlement.anchorTradingDate,
         open: realtimeQuote.open ?? realtimeQuote.price,
@@ -1496,7 +1672,8 @@ export function generateAiForceReportFromCandles(
       fallback.marketBar.anchorTradingDate = lastValidCandle.date;
       fallback.marketBar.dataPointsCount = effectiveCandles.length;
       fallback.marketBar.dataRangeText = `${effectiveCandles[0].date} ~ ${lastValidCandle.date}，共 ${effectiveCandles.length} 個交易日`;
-      fallback.isDataPending = false;
+      // Spec 0239 T09: 不足 5 日 K 嚴格維持 isDataPending = true，杜絕假卡片外洩
+      fallback.isDataPending = true;
     }
 
     fallback.marketBar.isSettled = settlement.isSettled;
@@ -1516,6 +1693,12 @@ export function generateAiForceReportFromCandles(
     fallback.monthlyRevenue = buildMonthlyRevenue(symbol, name, market, options?.revenueRecords, options?.tdccRecords, {
       corporateActions: options?.corporateActions,
       dividendYield: options?.valuationData?.dividendYield,
+      aumBillion: options?.etfMeta?.aumBillion,
+      expenseRatio: options?.etfMeta?.expenseRatio,
+      currentPrice: fallbackBasePrice,
+      referenceDateStr: lastValidCandle?.date,
+      metaType: options?.metaType,
+      quarterlyFinancials: options?.quarterlyFinancials,
     });
     return fallback;
   }
@@ -1591,7 +1774,9 @@ export function generateAiForceReportFromCandles(
         if (diff > 0) gain += diff;
         else loss += Math.abs(diff);
       }
-      if (loss === 0) {
+      if (gain === 0 && loss === 0) {
+        rsi14 = 50;
+      } else if (loss === 0) {
         rsi14 = 100;
       } else {
         const rs = gain / loss;
@@ -1623,13 +1808,14 @@ export function generateAiForceReportFromCandles(
   });
 
   // 3. 計算三大關鍵水線
-  // 主力成本：近 20 根 VWAP
+  // 主力成本：近 20 根典型價 Typical Price (H+L+C)/3 加權 VWAP（與 Card 07 / 微觀引擎口徑統一，Spec 0239 T09）
   const recent20 = effectiveCandles.slice(-20);
   let totalVol20 = 0;
   let totalVal20 = 0;
   recent20.forEach((c) => {
+    const typicalPrice = (c.high + c.low + c.close) / 3;
     totalVol20 += c.volume;
-    totalVal20 += c.close * c.volume;
+    totalVal20 += typicalPrice * c.volume;
   });
   const mainForceCost = totalVol20 > 0 ? Number((totalVal20 / totalVol20).toFixed(2)) : last.close;
 
@@ -1694,7 +1880,10 @@ export function generateAiForceReportFromCandles(
       ? [...effectiveInstRecords].reverse().find((r) => r.sblBalance != null)?.sblBalance
       : undefined);
 
-  // 6. 調用各量化子引擎 (含 1000x 單位正規化)
+  // 6. 調用各量化子引擎 (含雙市場量綱正規化與美股微結構注入, Spec 0239 T08)
+  const usMicroScore = market === 'US' ? calculateUsMicrostructureInstitutionalScore(effectiveCandles as any) : 50;
+  const usShortFloat = options?.us13fData?.shortFloatRatio;
+
   const volumeProfile = calculateVolumeProfile(effectiveCandles, currentPrice);
   const forecastCone = calculateForecastCone(effectiveCandles, currentPrice);
   const vwapCostStructure = calculateVwapCostStructure(effectiveCandles, currentPrice);
@@ -1703,17 +1892,22 @@ export function generateAiForceReportFromCandles(
     turnoverRate: options?.marginData?.dayTradeRate,
     volumeInShares: market === 'TW',
     market,
+    usMicroScore: market === 'US' ? usMicroScore : undefined,
   });
-  const dayTradeRisk = calculateDayTradeRisk(effectiveCandles, {
+  const dayTradeRiskBase = calculateDayTradeRisk(effectiveCandles, {
     ...options?.marginData,
     sblBalance,
+    market,
+    shortFloatRatio: usShortFloat,
   });
 
   // 7. 主力語意與 Card 15 籌碼摘要計算
   const vwapBias = mainForceCost > 0 ? ((currentPrice - mainForceCost) / mainForceCost) * 100 : 0;
 
   let chipsSummary = defaultTemplate.chipsSummary;
-  const usMicroScore = market === 'US' ? calculateUsMicrostructureInstitutionalScore(effectiveCandles as any) : 50;
+  let usRvol: number | undefined = undefined;
+  let usMfiScore: number | undefined = undefined;
+  let usAtrPercent: number | undefined = undefined;
 
   if (market === 'US') {
     const avgVol20 = totalVol20 / Math.max(1, recent20.length);
@@ -1740,6 +1934,9 @@ export function generateAiForceReportFromCandles(
     const atrValue = trCount > 0 ? Number((trSum / trCount).toFixed(2)) : Number((last.high - last.low).toFixed(2));
     const mfiScore =
       negMf === 0 ? (posMf > 0 ? 100 : 50) : Math.round(100 - 100 / (1 + posMf / negMf));
+    usRvol = rvol;
+    usMfiScore = mfiScore;
+    usAtrPercent = currentPrice > 0 ? Number(((atrValue / currentPrice) * 100).toFixed(2)) : undefined;
 
     // 近 10 日 OBV 走勢
     let obv = 0;
@@ -1844,12 +2041,25 @@ export function generateAiForceReportFromCandles(
     };
   }
 
-  // 主力追踪總評判 (MLP-AI 語意合成 + 動態停損/停利/風報比)
+  const dayTradeRisk = {
+    ...dayTradeRiskBase,
+    isUsMarket: market === 'US',
+    shortFloatRatio: usShortFloat,
+    rvol: usRvol,
+    atrPercent: usAtrPercent,
+  };
+
+  // 主力追踪總評判 (MLP-AI 雙市場語意合成 + 動態停損/停利/風報比, Spec 0239 T08)
   const lastKline = klineCandles[klineCandles.length - 1];
   const synthesizedVerdict = synthesizeMainForceVerdict({
     fiveDaysNetShares: sum5Inst,
     vwapBiasPercent: vwapBias,
     rsi: lastKline?.rsi ?? 50,
+    market,
+    usMicroScore: market === 'US' ? usMicroScore : undefined,
+    rvol: usRvol,
+    mfi: usMfiScore,
+    shortFloatRatio: usShortFloat,
   });
 
   const recent5Candles = effectiveCandles.slice(-5);
@@ -1875,6 +2085,7 @@ export function generateAiForceReportFromCandles(
     takeProfitPrice,
     riskRewardRatio,
     avgVolume5Lots,
+    isUsMarket: market === 'US',
   };
 
   // 8. Card 03 多維度判讀、Card 13 市場情緒與 Card 14 AI 信心度動態計算
@@ -1900,35 +2111,78 @@ export function generateAiForceReportFromCandles(
     mainForceConcentration: vwapBias,
     marginChangeRatio,
   });
+  marketSentiment.isUsMarket = market === 'US';
 
-  // 注入宏觀真實數據 (Spec 0200 Ticket 01)
+  // Spec 0239 T08: 嚴格雙市場宏觀隔離，徹底杜絕台股遭 usMacroData 劫持
   if (options?.macroData) {
-    marketSentiment.usMacroData = {
-      tenYearTreasury: options.macroData.treasury_yield_10y,
-      cnnScore: options.macroData.cnn_fear_greed_score,
-      vix: options.macroData.vix_close,
-      cnnRatingText:
-        options.macroData.cnn_fear_greed_score > 60
+    if (market === 'US') {
+      const cnnRaw = options.macroData.cnn_fear_greed_score;
+      const hasCnn = typeof cnnRaw === 'number' && Number.isFinite(cnnRaw);
+      const cnnLabel = hasCnn
+        ? cnnRaw >= 75
+          ? '極度貪婪'
+          : cnnRaw > 60
           ? '貪婪'
-          : options.macroData.cnn_fear_greed_score < 40
+          : cnnRaw <= 25
+          ? '極度恐懼'
+          : cnnRaw < 40
           ? '恐懼'
-          : '中性',
-    };
-    (marketSentiment as any).twMacroData = {
-      putCallRatio: options.macroData.tw_put_call_ratio,
-      foreignFuturesOi: options.macroData.tw_foreign_futures_oi,
-      trustFuturesOi: options.macroData.tw_trust_futures_oi,
-    };
+          : '中性'
+        : undefined;
+      const vixNum =
+        typeof options.macroData.vix_close === 'number' && Number.isFinite(options.macroData.vix_close)
+          ? options.macroData.vix_close
+          : undefined;
+      const us10yNum =
+        typeof options.macroData.treasury_yield_10y === 'number' &&
+        Number.isFinite(options.macroData.treasury_yield_10y)
+          ? options.macroData.treasury_yield_10y
+          : undefined;
+      marketSentiment.usMacroData = {
+        cnnScore: hasCnn ? cnnRaw : undefined,
+        cnnStateText: cnnLabel,
+        cnnRatingText: cnnLabel,
+        vixValue: vixNum,
+        vix: vixNum,
+        us10yYield: us10yNum,
+        tenYearTreasury: us10yNum,
+        asOfDateText: options.macroData.date ? `宏觀基準: ${options.macroData.date}` : undefined,
+      };
+    } else {
+      marketSentiment.twMacroData = {
+        putCallRatio:
+          typeof options.macroData.tw_put_call_ratio === 'number'
+            ? options.macroData.tw_put_call_ratio
+            : undefined,
+        foreignFuturesOi:
+          typeof options.macroData.tw_foreign_futures_oi === 'number'
+            ? options.macroData.tw_foreign_futures_oi
+            : undefined,
+        trustFuturesOi:
+          typeof options.macroData.tw_trust_futures_oi === 'number'
+            ? options.macroData.tw_trust_futures_oi
+            : undefined,
+        asOfDateText:
+          options.macroData.tw_derivatives_as_of_date || options.macroData.date || undefined,
+      };
+    }
   }
 
   const aiConfidence = calculateAiConfidence({
     candles: effectiveCandles,
     klineCandles,
     hasInstitutionalData: institutionalFlow.history.length > 0,
+    hasUsMicrostructure: market === 'US',
     volumeInShares: market === 'TW',
+    market,
   });
 
-  const healthSummary = calculateHealthSummaryFromCandles(klineCandles, institutionalFlow, market);
+  const healthSummary = calculateHealthSummaryFromCandles(
+    klineCandles,
+    institutionalFlow,
+    market,
+    market === 'US' ? usMicroScore : undefined
+  );
 
   // 9. 白話文因果 XAI 生成 (Ticket 13)
   let xaiExplanation = '';
@@ -2037,12 +2291,18 @@ export function generateAiForceReportFromCandles(
       settlementNotice,
       xaiExplanation,
       warningBadgeText:
-        changePercent >= 0 && healthSummary.chipHealth >= 70 && dayTradeRisk.riskIndex < 40
+        changePercent >= 0 && healthSummary.chipHealth >= 70 && dayTradeRisk.riskIndex < 45
           ? 'AI BULLISH'
           : healthSummary.chipHealth < 50 || dayTradeRisk.riskIndex >= 60 || changePercent < -3
           ? 'AI WARNING'
           : 'AI BALANCED',
-      trendJudgement: changePercent >= 0 ? '偏多強勢' : '偏弱整理',
+      trendJudgement: (() => {
+        const ma20 = lastKline?.ma20 ?? currentPrice;
+        if (currentPrice >= ma20 && changePercent >= 0) return '偏多強勢';
+        if (currentPrice >= ma20 && changePercent < 0) return '高檔震盪';
+        if (currentPrice < ma20 && changePercent >= 0) return '跌深反彈';
+        return '偏弱整理';
+      })(),
       shortTermState,
       mainForceAction: mainForceVerdict.primaryVerb,
       chipStructure,
@@ -2061,9 +2321,12 @@ export function generateAiForceReportFromCandles(
     dayTradeRisk,
     institutionalFlow,
     chipsSummary,
-    bullBearEnergy: calculateBullBearEnergyFromCandles(candles),
+    bullBearEnergy: calculateBullBearEnergyFromCandles(effectiveCandles),
     healthSummary,
     dynamicSignals: calculateDynamicSignalsFromCandles(klineCandles, mainForceCost, institutionalFlow, {
+      market,
+      usMicroScore: market === 'US' ? usMicroScore : undefined,
+      shortFloatRatio: usShortFloat,
       dispositionStatus: options?.statusTag,
       marginBalance: options?.marginData?.marginBalance,
       marginBalanceChange: options?.marginData?.marginBalanceChange,
@@ -2080,51 +2343,83 @@ export function generateAiForceReportFromCandles(
     monthlyRevenue: buildMonthlyRevenue(symbol, name, market, options?.revenueRecords, options?.tdccRecords, {
       corporateActions: options?.corporateActions,
       dividendYield: options?.valuationData?.dividendYield,
+      aumBillion: options?.etfMeta?.aumBillion,
+      expenseRatio: options?.etfMeta?.expenseRatio,
       currentPrice,
       referenceDateStr: last.date,
+      metaType: options?.metaType,
+      quarterlyFinancials: options?.quarterlyFinancials,
     }),
     valuationMetrics: (() => {
-      const cleanSym = symbol.trim().toUpperCase().replace(/\.(TW|TWO)$/i, '');
+      const cleanSym = symbol.trim().toUpperCase().replace(/\.(TW|TWO|US)$/i, '');
       const pe = options?.valuationData?.pe ?? undefined;
+      const forwardPe = options?.valuationData?.forwardPe ?? undefined;
       const pb = options?.valuationData?.pb ?? undefined;
-      const isEtf = isEtfSymbol(symbol, name);
+      const psRatio = options?.valuationData?.psRatio ?? undefined;
+      const isEtf = isEtfSymbol(symbol, name, market, options?.metaType);
+      const isUsMarket = market === 'US';
       const derivedYield = isEtf
         ? deriveTrailingDividendYield(options?.corporateActions, currentPrice, last.date)
         : undefined;
       const dividendYield = options?.valuationData?.dividendYield ?? derivedYield;
-      const etfExpenseRatio =
-        isEtf && (options?.valuationData || options?.etfNav || derivedYield !== undefined)
-          ? ETF_BASELINE_META[cleanSym]?.expenseRatio
+      const netDividendYieldUs =
+        isUsMarket && typeof dividendYield === 'number' && Number.isFinite(dividendYield)
+          ? Number((dividendYield * 0.7).toFixed(2))
           : undefined;
-      const isUsMarket = market === 'US';
-      const isEmpty = isEtf
-        ? !options?.valuationData &&
-          !options?.etfNav &&
-          !options?.pledge &&
-          etfExpenseRatio === undefined &&
-          dividendYield === undefined
-        : !options?.valuationData && !options?.etfNav && !options?.pledge;
+      const latestEps = options?.valuationData?.eps ?? undefined;
+      const isLossMaking =
+        !isEtf &&
+        ((typeof pe === 'number' && pe < 0) ||
+          (typeof latestEps === 'number' && latestEps < 0));
+      const liveExpenseRatio = options?.etfMeta?.expenseRatio ?? undefined;
+      const etfExpenseRatio =
+        isEtf
+          ? liveExpenseRatio ??
+            (options?.valuationData || options?.etfNav || derivedYield !== undefined || options?.etfMeta?.aumBillion != null
+              ? ETF_BASELINE_META[cleanSym]?.expenseRatio
+              : undefined)
+          : undefined;
 
-      const percentileStats = calculateValuationPercentile(
-        pe,
-        pb,
-        options?.valuationData?.history || []
-      );
+      const hasAnyStockValField =
+        pe !== undefined ||
+        forwardPe !== undefined ||
+        pb !== undefined ||
+        psRatio !== undefined ||
+        dividendYield !== undefined ||
+        latestEps !== undefined ||
+        options?.valuationData?.grossMargin != null ||
+        options?.valuationData?.operatingMargin != null ||
+        options?.pledge?.pledge_ratio != null;
+
+      const isEmpty = isEtf
+        ? options?.etfNav == null &&
+          etfExpenseRatio === undefined &&
+          dividendYield === undefined &&
+          options?.etfMeta?.aumBillion == null
+        : !hasAnyStockValField;
+
+      const percentileStats = isEtf
+        ? { valuationTier: undefined, valuationTierText: undefined, sampleCount: 0 }
+        : calculateValuationPercentile(pe, pb, options?.valuationData?.history || []);
 
       return {
         isEtf,
         isUsMarket,
         pe,
+        forwardPe,
         pb,
+        psRatio,
         dividendYield,
+        netDividendYieldUs,
+        isLossMaking,
         etfExpenseRatio,
-        latestQuarterEps: options?.valuationData?.eps ?? undefined,
+        latestQuarterEps: latestEps,
         latestQuarterName: options?.valuationData?.quarterName ?? undefined,
         grossMargin: options?.valuationData?.grossMargin ?? undefined,
         operatingMargin: options?.valuationData?.operatingMargin ?? undefined,
         directorPledgeRatio: options?.pledge?.pledge_ratio ?? undefined,
         etfPremiumDiscountRate: options?.etfNav?.premiumDiscountRatio ?? undefined,
-        asOfDateText: last.date,
+        asOfDateText: options?.valuationData?.asOfDate ?? options?.etfNav?.date ?? last.date,
         isEmpty,
         valuationTier: percentileStats.valuationTier,
         valuationTierText: percentileStats.valuationTierText,
@@ -2143,7 +2438,8 @@ export function generateAiForceReportFromCandles(
 }
 
 /**
- * 機構級歷史估值百分位數 (Percentile Rank) 演算法 (Spec 0199 Ticket 03)
+ * 機構級歷史估值百分位數 (Percentile Rank) 演算法 (Spec 0199 Ticket 03 / Spec 0239 T09)
+ * 同時計算 PE 與 PB 分位數（不互斥），且僅於樣本數 >= 5 時標定估值位階
  */
 export function calculateValuationPercentile(
   currentPe: number | null | undefined,
@@ -2158,17 +2454,15 @@ export function calculateValuationPercentile(
   pbMedian?: number;
   pbMax?: number;
   pbPercentile?: number;
-  valuationTier: 'UNDERVALUED' | 'FAIR' | 'OVERVALUED';
-  valuationTierText: string;
+  valuationTier?: 'UNDERVALUED' | 'FAIR' | 'OVERVALUED';
+  valuationTierText?: string;
   sampleCount: number;
 } {
-  // 1. 抽取有效 PE (排除 null, undefined, <= 0)
   const validPes = history
     .map((h) => h.pe)
     .filter((v): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0)
     .sort((a, b) => a - b);
 
-  // 2. 抽取有效 PB
   const validPbs = history
     .map((h) => h.pb)
     .filter((v): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0)
@@ -2189,67 +2483,56 @@ export function calculateValuationPercentile(
   const hasValidPe = typeof currentPe === 'number' && Number.isFinite(currentPe) && currentPe > 0;
   const hasValidPb = typeof currentPb === 'number' && Number.isFinite(currentPb) && currentPb > 0;
 
-  // 優先使用 PE 數列
-  if (hasValidPe && validPes.length >= 1) {
-    const min = validPes[0];
-    const max = validPes[validPes.length - 1];
-    const med = getMedian(validPes);
-    const pr = getPercentile(currentPe, validPes);
+  const peStats =
+    hasValidPe && validPes.length >= 1
+      ? {
+          peMin: validPes[0],
+          peMax: validPes[validPes.length - 1],
+          peMedian: getMedian(validPes),
+          pePercentile: getPercentile(currentPe, validPes),
+        }
+      : {};
 
+  const pbStats =
+    hasValidPb && validPbs.length >= 1
+      ? {
+          pbMin: validPbs[0],
+          pbMax: validPbs[validPbs.length - 1],
+          pbMedian: getMedian(validPbs),
+          pbPercentile: getPercentile(currentPb, validPbs),
+        }
+      : {};
+
+  const primaryIsPe = peStats.pePercentile !== undefined;
+  const primaryPr = primaryIsPe ? peStats.pePercentile : pbStats.pbPercentile;
+  const sampleCount = primaryIsPe ? validPes.length : pbStats.pbPercentile !== undefined ? validPbs.length : 0;
+
+  if (primaryPr !== undefined && sampleCount >= 5) {
+    const prefix = primaryIsPe ? '自身歷史' : 'PB 自身歷史';
     let tier: 'UNDERVALUED' | 'FAIR' | 'OVERVALUED' = 'FAIR';
-    let text = `自身歷史常態 (PR ${pr}%)`;
-    if (pr <= 20) {
+    let text = `${prefix}常態 (PR ${primaryPr}%)`;
+    if (primaryPr <= 20) {
       tier = 'UNDERVALUED';
-      text = `自身歷史偏低 (PR ${pr}%)`;
-    } else if (pr >= 80) {
+      text = `${prefix}偏低 (PR ${primaryPr}%)`;
+    } else if (primaryPr >= 80) {
       tier = 'OVERVALUED';
-      text = `自身歷史偏高 (PR ${pr}%)`;
+      text = `${prefix}偏高 (PR ${primaryPr}%)`;
     }
-
     return {
-      peMin: min,
-      peMax: max,
-      peMedian: med,
-      pePercentile: pr,
+      ...peStats,
+      ...pbStats,
       valuationTier: tier,
       valuationTierText: text,
-      sampleCount: validPes.length,
+      sampleCount,
     };
   }
 
-  // 虧損股或無有效 PE，防禦降級使用 PB 數列
-  if (hasValidPb && validPbs.length >= 1) {
-    const min = validPbs[0];
-    const max = validPbs[validPbs.length - 1];
-    const med = getMedian(validPbs);
-    const pr = getPercentile(currentPb, validPbs);
-
-    let tier: 'UNDERVALUED' | 'FAIR' | 'OVERVALUED' = 'FAIR';
-    let text = `PB 自身歷史常態 (PR ${pr}%)`;
-    if (pr <= 20) {
-      tier = 'UNDERVALUED';
-      text = `PB 自身歷史偏低 (PR ${pr}%)`;
-    } else if (pr >= 80) {
-      tier = 'OVERVALUED';
-      text = `PB 自身歷史偏高 (PR ${pr}%)`;
-    }
-
-    return {
-      pbMin: min,
-      pbMax: max,
-      pbMedian: med,
-      pbPercentile: pr,
-      valuationTier: tier,
-      valuationTierText: text,
-      sampleCount: validPbs.length,
-    };
-  }
-
-  // 若無歷史樣本，提供安全常態
   return {
-    valuationTier: 'FAIR',
-    valuationTierText: '合理估值區間',
-    sampleCount: 0,
+    ...peStats,
+    ...pbStats,
+    valuationTier: undefined,
+    valuationTierText: sampleCount > 0 ? `樣本累積中 (${sampleCount} 日)` : '尚無歷史估值樣本',
+    sampleCount,
   };
 }
 

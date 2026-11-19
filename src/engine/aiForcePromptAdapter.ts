@@ -1,7 +1,7 @@
 import { AiForceDashboardReport } from '../types/aiForceDashboard';
 import { StrategicFactDigest } from '../types/strategicPrompt';
 import { HoldingPosition } from '../types/stock';
-import { isEtfSymbol } from '../components/health/StockHealthWorkspace';
+import { isCanonicalEtfSymbol } from './assetClassifier';
 import { isCyclicalIndustry } from './industryGate';
 
 /**
@@ -25,7 +25,7 @@ export function createWarRoomPromptDigest(
       volumeShares = !isUS ? Math.round(realtimeVol / 1000) : realtimeVol;
     }
   }
-  const isEtf = isEtfSymbol(symbol);
+  const isEtf = isCanonicalEtfSymbol(symbol, name, market);
   const isCyclical = !isUS && !isEtf ? isCyclicalIndustry(symbol) : false;
 
   // 1. 在庫庫存跨帳戶加權聚合與雙態分流 (Spec 0182 / Tickets 04~07)
@@ -93,13 +93,22 @@ export function createWarRoomPromptDigest(
     };
   }
 
-  // 2. 日 K 均線真實驗算 (Spec 0182 / Ticket 11)
+  // 2. 日 K 均線真實驗算 (Spec 0182 / Ticket 11 & Spec 0239 T09 明確成交量單位換算)
   const candles = report.klineSystem?.candles || [];
   let ma20 = currentPrice;
   let ma60 = currentPrice;
   let volumeRatio20D = 1.0;
   let maArrangement: 'BULLISH' | 'BEARISH' | 'ENTANGLED' = 'ENTANGLED';
 
+  // 依據 marketBar.volumeUnit 或市場類型明確決定日 K 原始股數是否除以 1000 轉張（移除 >=10000 啟發式）
+  const shouldConvertCandleVolToLots =
+    report.marketBar?.volumeUnit === '張'
+      ? true
+      : report.marketBar?.volumeUnit === '股'
+      ? false
+      : !isUS;
+
+  let avgVol20Shares = 0;
   if (candles.length >= 20) {
     const last20 = candles.slice(-20);
     const sumClose20 = last20.reduce((acc, c) => acc + (c.close || 0), 0);
@@ -107,24 +116,22 @@ export function createWarRoomPromptDigest(
 
     const sumVol20 = last20.reduce((acc, c) => acc + (c.volume || 0), 0);
     const rawAvgVol20 = sumVol20 / 20;
-    // 依市場自適應度量衡校準 (Spec 0197 Ticket 02)：台股日 K volume 原始單位通常為「股」，若大於等於 10,000 則除以 1000 換算為張數
-    const avgVol20Shares = !isUS && (rawAvgVol20 >= 10000 || (volumeShares > 0 && rawAvgVol20 > volumeShares * 50))
-      ? rawAvgVol20 / 1000
-      : rawAvgVol20;
+    avgVol20Shares = shouldConvertCandleVolToLots ? rawAvgVol20 / 1000 : rawAvgVol20;
     if (avgVol20Shares > 0 && volumeShares > 0) {
       volumeRatio20D = Number((volumeShares / avgVol20Shares).toFixed(2));
     }
   }
 
-  // 盤中成交量回退標籤 (Spec 0196 Ticket 05 & Spec 0197)
+  // 盤中成交量回退標籤 (Spec 0196 Ticket 05 & Spec 0239 T09)
   let intradayVolumeNote: string | undefined = undefined;
   if (!report.marketBar?.isSettled && volumeShares <= 0) {
     const lastSettledVolume = candles.length > 0 ? (candles[candles.length - 1].volume || 0) : 0;
-    const lastSettledVolumeShares = !isUS && lastSettledVolume >= 10000
+    const lastSettledVolumeShares = shouldConvertCandleVolToLots
       ? Math.round(lastSettledVolume / 1000)
       : lastSettledVolume;
+    const volUnitLabel = shouldConvertCandleVolToLots ? '張' : '股';
     intradayVolumeNote = lastSettledVolumeShares > 0
-      ? `盤中撮合中 (前一交易日收盤量: ${lastSettledVolumeShares} 張)`
+      ? `盤中撮合中 (前一交易日收盤量: ${lastSettledVolumeShares} ${volUnitLabel})`
       : '盤中撮合中';
   }
 
@@ -149,29 +156,21 @@ export function createWarRoomPromptDigest(
   const tdcc = report.tdccDistribution;
   const dayTrade = report.dayTradeRisk;
 
-  // 籌碼均量比例尺計算 (Spec 0196 Ticket 04 & Spec 0197 Ticket 02)
+  // 籌碼均量比例尺計算 (Spec 0196 Ticket 04 & Spec 0239 T09)
   let foreignRatio20D: number | undefined = undefined;
   let trustRatio20D: number | undefined = undefined;
-  if (candles.length >= 20) {
-    const last20 = candles.slice(-20);
-    const sumVol20 = last20.reduce((acc, c) => acc + (c.volume || 0), 0);
-    const rawAvgVol20 = sumVol20 / 20;
-    const avgVol20Shares = !isUS && (rawAvgVol20 >= 10000 || (volumeShares > 0 && rawAvgVol20 > volumeShares * 50))
-      ? rawAvgVol20 / 1000
-      : rawAvgVol20;
-    if (avgVol20Shares > 0) {
-      const foreignNet = chipsSummary?.foreignNetShares ?? chipsSummary?.foreignInvestorsNetBuyShares;
-      const trustNet = chipsSummary?.trustNetShares ?? chipsSummary?.investmentTrustNetBuyShares;
-      if (foreignNet !== undefined) {
-        foreignRatio20D = Number(((foreignNet / avgVol20Shares) * 100).toFixed(1));
-      }
-      if (trustNet !== undefined) {
-        trustRatio20D = Number(((trustNet / avgVol20Shares) * 100).toFixed(1));
-      }
+  if (avgVol20Shares > 0) {
+    const foreignNet = chipsSummary?.foreignNetShares ?? chipsSummary?.foreignInvestorsNetBuyShares;
+    const trustNet = chipsSummary?.trustNetShares ?? chipsSummary?.investmentTrustNetBuyShares;
+    if (foreignNet !== undefined) {
+      foreignRatio20D = Number(((foreignNet / avgVol20Shares) * 100).toFixed(1));
+    }
+    if (trustNet !== undefined) {
+      trustRatio20D = Number(((trustNet / avgVol20Shares) * 100).toFixed(1));
     }
   }
 
-  // 若有 20D 歷史記錄加總；若無則保留 undefined，嚴禁以 1D 代替 20D
+  // 若有 20D 歷史記錄，明確切片近 20 個交易日加總；若無則保留 undefined，嚴禁以 1D 或全歷史代替 20D (Spec 0239 T09)
   let foreignNetShares20D: number | undefined = undefined;
   let trustNetShares20D: number | undefined = undefined;
   let dealerNetShares20D: number | undefined = undefined;
@@ -179,9 +178,10 @@ export function createWarRoomPromptDigest(
 
   const instHistory = report.institutionalFlow?.history;
   if (instHistory && instHistory.length >= 5) {
-    foreignNetShares20D = instHistory.reduce((sum, h) => sum + (h.foreignShares || 0), 0);
-    trustNetShares20D = instHistory.reduce((sum, h) => sum + (h.trustShares || 0), 0);
-    dealerNetShares20D = instHistory.reduce((sum, h) => sum + (h.dealerShares || 0), 0);
+    const recent20 = instHistory.slice(-20);
+    foreignNetShares20D = recent20.reduce((sum, h) => sum + (h.foreignShares || 0), 0);
+    trustNetShares20D = recent20.reduce((sum, h) => sum + (h.trustShares || 0), 0);
+    dealerNetShares20D = recent20.reduce((sum, h) => sum + (h.dealerShares || 0), 0);
     totalNetShares20D = foreignNetShares20D + trustNetShares20D + dealerNetShares20D;
   }
 
@@ -222,14 +222,12 @@ export function createWarRoomPromptDigest(
   // 取陣列最新月份 (Spec 0197 Ticket 02: 避免由舊到新排序誤取最舊月份)
   const latestRevItem = rev?.history && rev.history.length > 0 ? rev.history[rev.history.length - 1] : undefined;
   const val = report.valuationMetrics;
-  // 董監質押比率安全提取 (Spec 0224 Ticket 08)
-  const rawPledge =
-    val?.directorPledgeRatio ??
-    (report as any).directorPledgeRatioPct ??
-    (report as any).healthSummary?.directorPledgeRatio;
-  const directorPledgeRatioPct = typeof rawPledge === 'number' && !isNaN(rawPledge)
-    ? Number(rawPledge.toFixed(2))
-    : undefined;
+  // 董監質押比率安全提取 (Spec 0239 T09: 僅由權威欄位 valuationMetrics.directorPledgeRatio 讀取)
+  const rawPledge = val?.directorPledgeRatio;
+  const directorPledgeRatioPct =
+    typeof rawPledge === 'number' && Number.isFinite(rawPledge)
+      ? Number(rawPledge.toFixed(2))
+      : undefined;
 
   const fundamental: StrategicFactDigest['fundamental'] = !isEtf
     ? {
@@ -263,6 +261,25 @@ export function createWarRoomPromptDigest(
         topHoldings: [],
       }
     : undefined;
+
+  // 集保 4 週真實變化值提取 (Spec 0239 T09: 無資料誠實為 null，嚴禁拿絕對比率冒充變化率或人數變化)
+  const bigHolderRatioChange400Val =
+    !tdcc?.isEmpty &&
+    typeof tdcc?.change4WeeksRatio === 'number' &&
+    Number.isFinite(tdcc.change4WeeksRatio)
+      ? tdcc.change4WeeksRatio
+      : null;
+  const retailHolderCountChangeVal =
+    !tdcc?.isEmpty &&
+    typeof tdcc?.change4WeeksShareholders === 'number' &&
+    Number.isFinite(tdcc.change4WeeksShareholders)
+      ? tdcc.change4WeeksShareholders
+      : null;
+
+  // CNN 恐懼貪婪分數嚴格取自 usMacroData.cnnScore，缺失時誠實為 null (Spec 0239 T09)
+  const rawCnnScore = report.marketSentiment?.usMacroData?.cnnScore;
+  const cnnFearGreedScoreVal =
+    typeof rawCnnScore === 'number' && Number.isFinite(rawCnnScore) ? rawCnnScore : null;
 
   return {
     audit: {
@@ -318,15 +335,8 @@ export function createWarRoomPromptDigest(
         : {}),
       dayTradeRatioPct: dayTrade?.dayTradeRatio,
       bigHolderRatioChange1000: tdcc?.change4WeeksRatio,
-      bigHolderRatioChange400:
-        tdcc?.history && tdcc.history.length > 0
-          ? tdcc.history[tdcc.history.length - 1]?.over400Ratio
-          : undefined,
-      retailHolderCountChange:
-        tdcc?.change4WeeksShareholders ??
-        (tdcc?.history && tdcc.history.length > 0
-          ? tdcc.history[tdcc.history.length - 1]?.under10Ratio
-          : undefined),
+      bigHolderRatioChange400: bigHolderRatioChange400Val as unknown as number | undefined,
+      retailHolderCountChange: retailHolderCountChangeVal as unknown as number | undefined,
       mainForceVwap20D,
       currentVwapBiasPct,
       boxResistancePrice,
@@ -343,7 +353,7 @@ export function createWarRoomPromptDigest(
     },
     macro: {
       treasuryYield10Y: report.marketSentiment?.usMacroData?.tenYearTreasury,
-      cnnFearGreedScore: report.marketSentiment?.usMacroData?.cnnScore ?? report.marketSentiment?.overallSentimentIndex,
+      cnnFearGreedScore: cnnFearGreedScoreVal as unknown as number | undefined,
       vixClose: report.marketSentiment?.usMacroData?.vix,
       twPutCallRatio: report.marketSentiment?.twMacroData?.putCallRatio,
       macroRegimeText: isUS
