@@ -105,17 +105,17 @@ export async function fetchWithCORSProxy(targetUrl: string, timeoutMs: number = 
         if (res.status === 404) {
           throw new Error(`HTTP 404 Not Found: Target resource not found for ${targetUrl}`);
         }
-        // 若代理回傳 502 Gateway Error，解析並記錄熔斷失敗
-        if (res.status === 502) {
+        // 若代理回傳 429 Too Many Requests 或 5xx 伺服器/網關異常，立即記錄熔斷並 Fast-Fail (Spec 0239 T01)
+        if (res.status === 429 || res.status >= 500) {
           let errData: any = null;
           try {
             errData = await res.json();
           } catch {
             // ignore
           }
-          proxyCircuitBreaker.recordFailure(errData);
+          proxyCircuitBreaker.recordFailure(errData || { code: String(res.status) });
           throw new Error(
-            `[ProxyCircuitBreaker] Proxy Gateway Failure (${errData?.code || '502'}): ${targetUrl}`
+            `[ProxyCircuitBreaker] Proxy Gateway Failure (${errData?.code || String(res.status)}): ${targetUrl}`
           );
         }
       } catch (err: any) {

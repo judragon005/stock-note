@@ -11,8 +11,30 @@ const {
   getTwMarketBreadthAndSpotSummary,
   getMarketMultiHorizonBreadth,
   getTwRevenueDiffusionAndYoY,
+  clearBreadthAnchorCache,
   isSqliteSupported,
 } = require('./sqlite-db-core.cjs');
+
+/**
+ * 雙向代碼別名產生器 (Spec 0239 T01):
+ * - 台股櫃買: 3293 <-> 3293O
+ * - 美股含點號/連字號: BRK.B <-> BRK-B
+ */
+function buildSymbolAliases(rawSymbol) {
+  const sym = decodeURIComponent(String(rawSymbol || '')).trim().toUpperCase();
+  if (!sym) return ['', ''];
+  if (/^\d{2,}[A-Z0-9]*$/.test(sym)) {
+    const alias = sym.endsWith('O') && sym.length >= 4 ? sym.slice(0, -1) : `${sym}O`;
+    return [sym, alias];
+  }
+  if (sym.includes('.')) {
+    return [sym, sym.replace(/\./g, '-')];
+  }
+  if (sym.includes('-')) {
+    return [sym, sym.replace(/-/g, '.')];
+  }
+  return [sym, sym];
+}
 const { searchSymbolsMeta } = require('./seed-symbols-universe.cjs');
 const { getMarketAnchorDate, checkMarketFreshness } = require('./market-freshness-service.cjs');
 const {
@@ -160,6 +182,7 @@ function triggerCatchupTask(customDbPath, options = {}) {
     } catch (err) {
       console.warn(`[MarketCatchup] 背景追趕回補警告:`, err.message);
     } finally {
+      clearBreadthAnchorCache();
       isCatchingUp = false;
     }
   });
@@ -913,14 +936,14 @@ function createMarketApiMiddleware(customDbPath) {
       return res.end(JSON.stringify(results));
     }
 
-    // 2. GET /api/market/quote/:symbol
-    const quoteMatch = pathname.match(/^\/api\/market\/quote\/([A-Za-z0-9\-_]+)$/);
-    if (quoteMatch) {
-      const symbol = quoteMatch[1].toUpperCase();
-      const meta = db.prepare('SELECT * FROM symbols_meta WHERE symbol = ?').get(symbol);
+    // 2. GET /api/market/quote/:symbol (支援含點號代碼如 BRK.B 與雙向別名, Spec 0239 T01)
+    const quoteMatch = pathname.match(/^\/api\/market\/quote\/([A-Za-z0-9.\-_]+)$/);
+    if (quoteMatch && !quoteMatch[1].includes('..')) {
+      const [symbol, aliasSym] = buildSymbolAliases(quoteMatch[1]);
+      const meta = db.prepare('SELECT * FROM symbols_meta WHERE symbol IN (?, ?)').get(symbol, aliasSym);
       const latestCandle = db
-        .prepare('SELECT * FROM daily_candles WHERE symbol = ? ORDER BY date DESC LIMIT 1')
-        .get(symbol);
+        .prepare('SELECT * FROM daily_candles WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 1')
+        .get(symbol, aliasSym);
 
       if (!latestCandle && !meta) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -937,11 +960,10 @@ function createMarketApiMiddleware(customDbPath) {
       );
     }
 
-    // 2.1 GET /api/market/corporate-actions/:symbol (Spec 0188 / Ticket 05)
-    const caMatch = pathname.match(/^\/api\/market\/corporate-actions\/([A-Za-z0-9\-_]+)$/);
-    if (caMatch) {
-      const symbol = caMatch[1].toUpperCase();
-      const aliasSym = symbol.endsWith('O') ? symbol.slice(0, -1) : `${symbol}O`;
+    // 2.1 GET /api/market/corporate-actions/:symbol (Spec 0188 / Spec 0239 T01)
+    const caMatch = pathname.match(/^\/api\/market\/corporate-actions\/([A-Za-z0-9.\-_]+)$/);
+    if (caMatch && !caMatch[1].includes('..')) {
+      const [symbol, aliasSym] = buildSymbolAliases(caMatch[1]);
       try {
         const rows = db
           .prepare(
@@ -989,11 +1011,10 @@ function createMarketApiMiddleware(customDbPath) {
       }
     }
 
-    // 2.2 GET /api/market/financials/:symbol (Spec 0203 / Ticket 08)
-    const finMatch = pathname.match(/^\/api\/market\/financials\/([A-Za-z0-9\-_]+)$/);
-    if (finMatch && (req.method || 'GET').toUpperCase() === 'GET') {
-      const symbol = finMatch[1].toUpperCase();
-      const aliasSym = symbol.endsWith('O') ? symbol.slice(0, -1) : `${symbol}O`;
+    // 2.2 GET /api/market/financials/:symbol (Spec 0203 / Spec 0239 T01 雙向欄位對齊 + 點號路由)
+    const finMatch = pathname.match(/^\/api\/market\/financials\/([A-Za-z0-9.\-_]+)$/);
+    if (finMatch && !finMatch[1].includes('..') && (req.method || 'GET').toUpperCase() === 'GET') {
+      const [symbol, aliasSym] = buildSymbolAliases(finMatch[1]);
       const isAll = String(query.limit || '').trim().toLowerCase() === 'all';
       const limit = isAll ? -1 : (parseInt(query.limit, 10) || 20);
 
@@ -1010,6 +1031,7 @@ function createMarketApiMiddleware(customDbPath) {
           market: r.market,
           year: r.year,
           quarter: r.quarter,
+          periodDate: r.period_date || `${r.year}-${String(r.quarter * 3).padStart(2, '0')}-30`,
           revenue: r.revenue,
           grossProfit: r.gross_profit,
           operatingIncome: r.operating_income,
@@ -1022,10 +1044,17 @@ function createMarketApiMiddleware(customDbPath) {
           currentLiabilities: r.current_liabilities,
           accountsReceivable: r.accounts_receivable,
           inventory: r.inventory,
+          cashAndEquivalents: r.cash_and_equivalents ?? 0,
+          shortTermDebt: r.short_term_debt ?? null,
+          longTermDebt: r.long_term_debt ?? null,
+          capitalStock: r.capital_stock ?? null,
           operatingCashFlow: r.operating_cash_flow,
           capitalExpenditure: r.capital_expenditure,
           freeCashFlow: r.free_cash_flow,
           cashDividendsPaid: r.cash_dividends_paid,
+          dividendPaid: r.cash_dividends_paid,
+          interestPaid: r.interest_paid ?? null,
+          source: r.source ?? undefined,
           updatedAt: r.updated_at,
         }));
 
@@ -1043,7 +1072,7 @@ function createMarketApiMiddleware(customDbPath) {
       }
     }
 
-    // 2.3 POST /api/market/financials (Spec 0203 / Ticket 08 批次寫入)
+    // 2.3 POST /api/market/financials (Spec 0203 / Spec 0239 T01 批次寫入雙向欄位無損保留)
     if (pathname === '/api/market/financials' && (req.method || 'GET').toUpperCase() === 'POST') {
       readJsonBody(req)
         .then((body) => {
@@ -1055,12 +1084,15 @@ function createMarketApiMiddleware(customDbPath) {
 
           const stmt = db.prepare(`
             INSERT INTO financial_statements_quarterly (
-              symbol, market, year, quarter, revenue, gross_profit, operating_income,
+              symbol, market, year, quarter, period_date, revenue, gross_profit, operating_income,
               net_income, eps, total_assets, total_liabilities, total_equity,
               current_assets, current_liabilities, accounts_receivable, inventory,
-              operating_cash_flow, capital_expenditure, free_cash_flow, cash_dividends_paid, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              cash_and_equivalents, short_term_debt, long_term_debt, capital_stock,
+              operating_cash_flow, capital_expenditure, free_cash_flow, cash_dividends_paid,
+              interest_paid, source, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(symbol, year, quarter) DO UPDATE SET
+              period_date = COALESCE(excluded.period_date, financial_statements_quarterly.period_date),
               revenue = COALESCE(excluded.revenue, financial_statements_quarterly.revenue),
               gross_profit = COALESCE(excluded.gross_profit, financial_statements_quarterly.gross_profit),
               operating_income = COALESCE(excluded.operating_income, financial_statements_quarterly.operating_income),
@@ -1073,10 +1105,16 @@ function createMarketApiMiddleware(customDbPath) {
               current_liabilities = COALESCE(excluded.current_liabilities, financial_statements_quarterly.current_liabilities),
               accounts_receivable = COALESCE(excluded.accounts_receivable, financial_statements_quarterly.accounts_receivable),
               inventory = COALESCE(excluded.inventory, financial_statements_quarterly.inventory),
+              cash_and_equivalents = COALESCE(excluded.cash_and_equivalents, financial_statements_quarterly.cash_and_equivalents),
+              short_term_debt = COALESCE(excluded.short_term_debt, financial_statements_quarterly.short_term_debt),
+              long_term_debt = COALESCE(excluded.long_term_debt, financial_statements_quarterly.long_term_debt),
+              capital_stock = COALESCE(excluded.capital_stock, financial_statements_quarterly.capital_stock),
               operating_cash_flow = COALESCE(excluded.operating_cash_flow, financial_statements_quarterly.operating_cash_flow),
               capital_expenditure = COALESCE(excluded.capital_expenditure, financial_statements_quarterly.capital_expenditure),
               free_cash_flow = COALESCE(excluded.free_cash_flow, financial_statements_quarterly.free_cash_flow),
               cash_dividends_paid = COALESCE(excluded.cash_dividends_paid, financial_statements_quarterly.cash_dividends_paid),
+              interest_paid = COALESCE(excluded.interest_paid, financial_statements_quarterly.interest_paid),
+              source = COALESCE(excluded.source, financial_statements_quarterly.source),
               updated_at = excluded.updated_at
           `);
 
@@ -1087,12 +1125,13 @@ function createMarketApiMiddleware(customDbPath) {
             for (const r of records) {
               if (!r || !r.symbol || !r.year || !r.quarter) continue;
               const sym = String(r.symbol).trim().toUpperCase();
-              const market = String(r.market || (sym.length === 4 && /^\d+$/.test(sym) ? 'TW' : 'US')).toUpperCase();
+              const market = String(r.market || (/^\d{4,6}[A-Z]?$/.test(sym) ? 'TW' : 'US')).toUpperCase();
               stmt.run(
                 sym,
                 market,
                 r.year,
                 r.quarter,
+                r.periodDate ?? r.period_date ?? null,
                 r.revenue ?? r.grossRevenue ?? null,
                 r.grossProfit ?? null,
                 r.operatingIncome ?? null,
@@ -1105,10 +1144,16 @@ function createMarketApiMiddleware(customDbPath) {
                 r.currentLiabilities ?? null,
                 r.accountsReceivable ?? null,
                 r.inventory ?? null,
+                r.cashAndEquivalents ?? r.cash_and_equivalents ?? null,
+                r.shortTermDebt ?? r.short_term_debt ?? null,
+                r.longTermDebt ?? r.long_term_debt ?? null,
+                r.capitalStock ?? r.capital_stock ?? null,
                 r.operatingCashFlow ?? null,
                 r.capitalExpenditure ?? null,
                 r.freeCashFlow ?? null,
-                r.cashDividendsPaid ?? null,
+                r.cashDividendsPaid ?? r.dividendPaid ?? r.cash_dividends_paid ?? null,
+                r.interestPaid ?? r.interest_paid ?? null,
+                r.source ?? null,
                 now
               );
               count++;
@@ -1129,14 +1174,13 @@ function createMarketApiMiddleware(customDbPath) {
       return;
     }
 
-    // 3. GET /api/market/history/:symbol?limit=250
-    const historyMatch = pathname.match(/^\/api\/market\/history\/([A-Za-z0-9\-_]+)$/);
-    if (historyMatch) {
-      const symbol = historyMatch[1].toUpperCase();
+    // 3. GET /api/market/history/:symbol?limit=250 (支援含點號代碼如 BRK.B 與雙向別名, Spec 0239 T01)
+    const historyMatch = pathname.match(/^\/api\/market\/history\/([A-Za-z0-9.\-_]+)$/);
+    if (historyMatch && !historyMatch[1].includes('..')) {
+      const [symbol, aliasSym] = buildSymbolAliases(historyMatch[1]);
       const isAll = String(query.limit || '').trim().toLowerCase() === 'all';
       const limit = isAll ? 0 : (parseInt(query.limit, 10) || 250);
 
-      const aliasSym = symbol.endsWith('O') ? symbol.slice(0, -1) : `${symbol}O`;
       let meta = db.prepare('SELECT * FROM symbols_meta WHERE symbol IN (?, ?)').get(symbol, aliasSym);
 
       // 雙向別名日 K 查詢與防斷層合併 (Spec 0170 & Spec 0188: 支援全量與動態天數)

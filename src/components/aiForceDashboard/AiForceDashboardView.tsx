@@ -154,10 +154,18 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       let etfNavData: GenerateReportOptions['etfNav'] = undefined;
       let corporateActionsData: GenerateReportOptions['corporateActions'] = undefined;
 
-      // 1. Layer 1: 優先嘗試從本地 SQLite 數據湖倉直讀歷史日 K、籌碼、集保與月營收 (Spec 0169 & Spec 0197)
+      let lakehouseMetaStatus: 'NORMAL' | 'ATTENTION' | 'DISPOSITION' | undefined = undefined;
+
+      // 1. Layer 1: 優先嘗試從本地 SQLite 數據湖倉直讀歷史日 K、籌碼、集保與月營收 (Spec 0169 & Spec 0197 & Spec 0239 T01)
       try {
         const lakehouseData = await loadSymbolFullLakehouseData(targetSymbol, targetMarket);
         if (!requestGuardRef.current.isCurrent(requestId)) return;
+        if (lakehouseData?.meta) {
+          const st = lakehouseData.meta.status;
+          if (st === 'NORMAL' || st === 'ATTENTION' || st === 'DISPOSITION') {
+            lakehouseMetaStatus = st;
+          }
+        }
         if (lakehouseData && lakehouseData.candles.length >= 1) {
           candles = lakehouseData.candles;
           if (lakehouseData.institutionalRecords && lakehouseData.institutionalRecords.length > 0) {
@@ -294,12 +302,16 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         }
       }
 
-      // 4. 取得注意與處置狀態
+      // 4. 取得注意與處置狀態（若湖倉 history meta 已回傳則直接復用，避免冗餘 /quote 請求, Spec 0239 T01）
       if (targetMarket === 'TW') {
-        try {
-          resolvedStatusTag = await loadSymbolDispositionStatus(targetSymbol, targetMarket);
-        } catch {
-          resolvedStatusTag = 'NORMAL';
+        if (lakehouseMetaStatus) {
+          resolvedStatusTag = lakehouseMetaStatus;
+        } else {
+          try {
+            resolvedStatusTag = await loadSymbolDispositionStatus(targetSymbol, targetMarket);
+          } catch {
+            resolvedStatusTag = 'NORMAL';
+          }
         }
       }
 

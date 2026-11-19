@@ -4,15 +4,26 @@ import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 
-// 動態載入 market API 中介層（具備熱模組快取失效機制，Spec 0199 Ticket 01）
+// 動態載入 market API 中介層（單例快取 + 檔案變更熱重置，Spec 0239 T01）
+let cachedMarketMiddleware: ((req: any, res: any, next: any) => any) | null = null;
+function resetCachedMarketMiddleware() {
+  cachedMarketMiddleware = null;
+}
 function getMarketApiMiddlewareDynamic() {
   const middlewarePath = require.resolve('./scripts/market-sync/vite-market-middleware.cjs');
   return (req: any, res: any, next: any) => {
+    if (!req?.url || !req.url.startsWith('/api/market/')) {
+      return next();
+    }
     try {
-      const { createMarketApiMiddleware } = require(middlewarePath);
-      return createMarketApiMiddleware()(req, res, next);
+      if (!cachedMarketMiddleware) {
+        const { createMarketApiMiddleware } = require(middlewarePath);
+        cachedMarketMiddleware = createMarketApiMiddleware();
+      }
+      return cachedMarketMiddleware!(req, res, next);
     } catch (err: any) {
       console.warn('[Market Middleware Error]:', err?.message || err);
+      cachedMarketMiddleware = null;
       return next();
     }
   };
@@ -52,6 +63,7 @@ export default defineConfig({
                 delete require.cache[key];
               }
             }
+            resetCachedMarketMiddleware();
           }
         });
         server.middlewares.use(getMarketApiMiddlewareDynamic());

@@ -167,9 +167,17 @@ export async function getLatestSummaryQuote(
  * 若以標準代碼查無數據，自動嘗試尾綴 O；若帶 O 查無數據，嘗試去 O。
  */
 export function getOtcAliasCandidates(symbol: string, market: MarketType = 'TW'): string[] {
-  const clean = symbol.replace(/\.(TW|TWO)$/i, '').trim().toUpperCase();
+  const clean = symbol.replace(/\.(TW|TWO|US)$/i, '').trim().toUpperCase();
   if (!clean) return [];
-  if (market !== 'TW') return [clean];
+  if (market !== 'TW') {
+    if (clean.includes('.')) {
+      return [clean, clean.replace(/\./g, '-')];
+    }
+    if (clean.includes('-')) {
+      return [clean, clean.replace(/-/g, '.')];
+    }
+    return [clean];
+  }
 
   if (/^\d{2,}[A-Z0-9]*$/.test(clean)) {
     if (clean.endsWith('O') && clean.length >= 4) {
@@ -245,7 +253,18 @@ export async function loadSymbolHistoryFromLakehouse(
   return null;
 }
 
+export interface LakehouseSymbolMeta {
+  symbol?: string;
+  name?: string;
+  market?: string;
+  exchange?: string;
+  type?: string;
+  status?: 'NORMAL' | 'ATTENTION' | 'DISPOSITION' | string;
+  industry?: string;
+}
+
 export interface LakehouseFullPayload {
+  meta?: LakehouseSymbolMeta;
   candles: DailyCandle[];
   institutionalRecords?: Array<{
     date: string;
@@ -461,7 +480,21 @@ export async function loadSymbolFullLakehouseData(
         const sblStats = extractLatestAndDelta(sortedInst, (r) => r.sblBalance);
         const dayTradeStats = extractLatestAndDelta(sortedInst, (r) => r.dayTradeRate);
 
+          const meta: LakehouseSymbolMeta | undefined =
+            data.meta && typeof data.meta === 'object'
+              ? {
+                  symbol: data.meta.symbol,
+                  name: data.meta.name,
+                  market: data.meta.market,
+                  exchange: data.meta.exchange,
+                  type: data.meta.type,
+                  status: data.meta.status,
+                  industry: data.meta.industry,
+                }
+              : undefined;
+
           return {
+            meta,
             candles,
             institutionalRecords,
             marginBalance: marginStats.latest,
