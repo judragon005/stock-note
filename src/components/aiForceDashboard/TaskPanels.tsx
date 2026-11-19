@@ -221,8 +221,15 @@ export const TechnicalAlertsView: React.FC<TaskPanelProps> = ({
   holdings,
   loanRecords,
   macroMaintenanceRatio,
+  colorTheme,
+  market,
 }) => {
-  const alerts = useMemo(() => generateTechnicalAlerts(report), [report]);
+  const effectiveMarket = market ?? report.market ?? 'TW';
+  const effectiveReport = effectiveMarket === report.market ? report : { ...report, market: effectiveMarket };
+  const alerts = useMemo(() => generateTechnicalAlerts(effectiveReport), [effectiveReport]);
+  const isInternational = colorTheme === 'international' || (!colorTheme && effectiveMarket === 'US');
+  const upColor = isInternational ? '#10b981' : '#ef4444';
+  void upColor;
   const statusTag = report.marketBar?.statusTag ?? report.marketBar?.marketStatusTag ?? 'NORMAL';
 
   const isDisposition = statusTag === 'DISPOSITION';
@@ -580,7 +587,10 @@ export function deriveKdMaMetrics(report: AiForceDashboardReport) {
 /**
  * 任務三：KD + MA 圖表面板 (含日/週/月共振與勝率統計)
  */
-export const KdMaView: React.FC<TaskPanelProps> = ({ report }) => {
+export const KdMaView: React.FC<TaskPanelProps> = ({ report, colorTheme, market }) => {
+  const effectiveMarket = market ?? report.market ?? 'TW';
+  const isInternational = colorTheme === 'international' || (!colorTheme && effectiveMarket === 'US');
+  const upColor = isInternational ? '#10b981' : '#ef4444';
   const { k, d, ma20, kdCrossingState, multiTimeframeResonance, historicalOversoldStats, recentCandles } =
     useMemo(() => deriveKdMaMetrics(report), [report]);
 
@@ -620,7 +630,7 @@ export const KdMaView: React.FC<TaskPanelProps> = ({ report }) => {
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
         <h3 style={{ margin: 0, fontSize: '15px', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <TrendingUp size={16} color="#10b981" /> 任務三：KD 隨機指標與多天期均線系統 ({report.symbol} {report.name})
+          <TrendingUp size={16} color={upColor} /> 任務三：KD 隨機指標與多天期均線系統 ({report.symbol} {report.name})
         </h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span
@@ -848,7 +858,11 @@ export function deriveMacdMetrics(report: AiForceDashboardReport) {
 /**
  * 任務四：MACD 圖表面板 (含頂底背離量化判定器與零軸分水嶺)
  */
-export const MacdView: React.FC<TaskPanelProps> = ({ report }) => {
+export const MacdView: React.FC<TaskPanelProps> = ({ report, colorTheme, market }) => {
+  const effectiveMarket = market ?? report.market ?? 'TW';
+  const isInternational = colorTheme === 'international' || (!colorTheme && effectiveMarket === 'US');
+  const bullColor = isInternational ? '#10b981' : '#ef4444';
+  const bearColor = isInternational ? '#ef4444' : '#10b981';
   const { dif, macd, macdHist, statusText, divergenceInfo, zeroAxisState, momentumAlert, recentCandles } =
     useMemo(() => deriveMacdMetrics(report), [report]);
 
@@ -1005,7 +1019,7 @@ export const MacdView: React.FC<TaskPanelProps> = ({ report }) => {
         </div>
         <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.5)', padding: '10px', borderRadius: '8px' }}>
           <span style={{ fontSize: '12px', color: '#94a3b8' }}>OSC 柱狀體</span>
-          <div style={{ fontSize: '18px', fontWeight: 700, color: macdHist >= 0 ? '#ef4444' : '#10b981' }}>
+          <div style={{ fontSize: '18px', fontWeight: 700, color: macdHist >= 0 ? bullColor : bearColor }}>
             {macdHist >= 0 ? `+${macdHist}` : macdHist} ({statusText})
           </div>
         </div>
@@ -1047,7 +1061,7 @@ export const MacdView: React.FC<TaskPanelProps> = ({ report }) => {
                 y={barY}
                 width="6"
                 height={Math.max(1, barH)}
-                fill={hVal >= 0 ? '#ef4444' : '#10b981'}
+                fill={hVal >= 0 ? bullColor : bearColor}
                 opacity={0.8}
               />
             );
@@ -1102,14 +1116,18 @@ export function paginateCandles(
 /**
  * 任務五：原始資料表面板
  */
-export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
+export const RawDataView: React.FC<TaskPanelProps> = ({ report, colorTheme, market }) => {
   const [page, setPage] = useState(1);
   useEffect(() => {
     setPage(1);
   }, [report.symbol]);
   const candles = report.klineSystem?.candles ?? [];
   const { items, totalPages, currentPage, totalCount } = paginateCandles(candles, page, 10);
-  const volUnit = report.market === 'US' ? '股' : '張';
+  const effectiveMarket = market ?? report.market ?? 'TW';
+  const volUnit = effectiveMarket === 'US' ? '股' : '張';
+  const isInternational = colorTheme === 'international' || (!colorTheme && effectiveMarket === 'US');
+  const bullColor = isInternational ? '#10b981' : '#ef4444';
+  const bearColor = isInternational ? '#ef4444' : '#10b981';
 
   return (
     <div
@@ -1198,7 +1216,7 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report }) => {
                   style={{
                     textAlign: 'right',
                     padding: '8px',
-                    color: (row.macdHist ?? 0) >= 0 ? '#ef4444' : '#10b981',
+                    color: (row.macdHist ?? 0) >= 0 ? bullColor : bearColor,
                   }}
                 >
                   {row.macdHist !== undefined ? (row.macdHist >= 0 ? `+${row.macdHist}` : row.macdHist) : '-'}

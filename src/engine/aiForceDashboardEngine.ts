@@ -453,7 +453,8 @@ export function buildTdccDistribution(
 }
 
 /**
- * 台灣與美股主流 ETF 規模 (億元/億美元) 與總費用率基準對照 (Spec 0238 Ticket 04)
+ * 台灣主流 ETF 規模 (億元) 與總費用率基準對照 (Spec 0238 Ticket 04)
+ * 美股 ETF 一律由 us_fundamentals_daily 即時抓取，嚴禁靜態回退造假 (Spec 0239 Zero-Mock)
  */
 const ETF_BASELINE_META: Record<string, { aumBillion: number; expenseRatio: number }> = {
   '0050': { aumBillion: 4380, expenseRatio: 0.43 },
@@ -466,16 +467,6 @@ const ETF_BASELINE_META: Record<string, { aumBillion: number; expenseRatio: numb
   '00940': { aumBillion: 1620, expenseRatio: 0.45 },
   '00679B': { aumBillion: 2980, expenseRatio: 0.16 },
   '00687B': { aumBillion: 2560, expenseRatio: 0.17 },
-  VOO: { aumBillion: 560, expenseRatio: 0.03 },
-  SPY: { aumBillion: 610, expenseRatio: 0.09 },
-  QQQ: { aumBillion: 310, expenseRatio: 0.2 },
-  VTI: { aumBillion: 450, expenseRatio: 0.03 },
-  VT: { aumBillion: 42, expenseRatio: 0.07 },
-  IVV: { aumBillion: 540, expenseRatio: 0.03 },
-  SCHD: { aumBillion: 65, expenseRatio: 0.06 },
-  TLT: { aumBillion: 52, expenseRatio: 0.15 },
-  GLD: { aumBillion: 75, expenseRatio: 0.4 },
-  SOXX: { aumBillion: 14.5, expenseRatio: 0.35 },
 };
 
 /**

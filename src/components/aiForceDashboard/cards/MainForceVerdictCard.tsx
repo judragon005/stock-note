@@ -429,7 +429,10 @@ export interface MetricCapsule {
 /**
  * 從 AI 結論文字中提取結構化量化數據指標（支援新舊雙格式與千分位逗號、台美股幣別）
  */
-export function parseVerdictMetrics(text: string): MetricCapsule[] {
+export function parseVerdictMetrics(
+  text: string,
+  colorTheme?: ColorThemeMode
+): MetricCapsule[] {
   const metrics: MetricCapsule[] = [];
 
   // 1. 最新收盤價匹配 (例如: 最新收盤價 367.5 元 或 最新收盤價 $135.50 USD)
@@ -474,10 +477,12 @@ export function parseVerdictMetrics(text: string): MetricCapsule[] {
   if (instMatch) {
     const val = Number(instMatch[1].replace(/,/g, ''));
     if (Number.isFinite(val)) {
+      const bullColor = colorTheme === 'international' ? '#10b981' : '#ef4444';
+      const bearColor = colorTheme === 'international' ? '#ef4444' : '#10b981';
       metrics.push({
         label: '5日法人合計',
         value: `${val > 0 ? '+' : ''}${val.toLocaleString()} 張`,
-        color: val > 0 ? '#ef4444' : val < 0 ? '#10b981' : '#94a3b8',
+        color: val > 0 ? bullColor : val < 0 ? bearColor : '#94a3b8',
       });
     }
   }
@@ -511,6 +516,7 @@ export function parseVerdictMetrics(text: string): MetricCapsule[] {
 
 export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({
   data,
+  colorTheme,
   market = 'TW',
 }) => {
   const [showModal, setShowModal] = useState(false);
@@ -535,7 +541,7 @@ export const MainForceVerdictCard: React.FC<MainForceVerdictCardProps> = ({
 
   const statusInfo = getVerdictStatusInfo(verb);
   const spectrumPhases = getMainForceSpectrumPhases(verb);
-  const metricCapsules = parseVerdictMetrics(verdictText);
+  const metricCapsules = parseVerdictMetrics(verdictText, colorTheme);
   const playbook = getMainForcePlaybook(verb, metricCapsules, market);
   const liquidity = checkLiquidityGate(data?.avgVolume5Lots, market);
   const formatPriceUnit = (val: number) =>

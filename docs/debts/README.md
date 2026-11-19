@@ -69,6 +69,7 @@
 | [**0059**](0059-holding-position-extended-fields-type-convergence.md) | HoldingPosition 擴展欄位型別收斂與雙重轉型氣味清理 | `P3` | `RESOLVED` | /code-review 雙軸審查回饋 (Spec 0235 / Issue #584) | `Refactor` · `TypeScript` · `CleanCode` · `TypeSafety` · `WarRoom` | **已於 Spec 0236 (Issue #586) 完整解決** |
 | [**0060**](0060-equity-deep-dive-sbl-wiring-and-card-theme-token-convergence.md) | 深度投研彈窗借券餘額消費與卡片曜石主題 Token 集中化 | `P3` | `OPEN` | /code-review 雙軸審查回饋 (Spec 0237 / Issue #588) | `Refactor` · `AiForceDashboard` · `Theme` · `DesignSystem` · `Lakehouse` | 待下期深度投研籌碼視圖或主題切換演進時實作 |
 | [**0061**](0061-sync-threshold-magic-numbers-and-abort-controller.md) | 同步門檻常數跨檔收斂、按需補齊中斷控制與長照爬蟲擴展 | `P3` | `OPEN` | /code-review 雙軸審查回饋 (Spec 0238 / Issue #590) | `Refactor` · `CleanCode` · `MarketSync` · `Lakehouse` · `Resilience` · `TestSmell` | 待下期市場資料管道重構或中介層全面演進時實作 |
+| [**0062**](0062-war-room-dual-market-code-smells-consolidation.md) | 主力戰情室雙市場重構衍生之 Fowler Code Smells 收斂清單（共用別名/DDL、漲跌色票 helper 與巨石模組拆解） | `P3` | `OPEN` | /code-review 雙軸審查回饋 (Spec 0239 / Issue #592) | `Refactor` · `CleanCode` · `DRY` · `AiForceDashboard` · `MarketSync` | 待下期戰情室或湖倉中介層重構時一併清償 |
 
 ---
 

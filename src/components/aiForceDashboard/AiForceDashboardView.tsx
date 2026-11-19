@@ -432,44 +432,51 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         }
         setReport(fullReport);
 
-        // Spec 0239 T05: 若後端仍在非同步補齊歷史序列，延遲 2.5s 靜默刷新一次（具 RequestGuard 防競態）
+        // Spec 0239 T05: 若後端仍在非同步補齊歷史序列，採受控有上限輪詢（最多 3 次，間隔 1.5s，具 RequestGuard 防競態）
         if (enrichmentPending) {
-          setTimeout(async () => {
-            if (!requestGuardRef.current.isCurrent(requestId)) return;
-            try {
-              const refreshed = await loadSymbolFullLakehouseData(targetSymbol, targetMarket);
-              if (!requestGuardRef.current.isCurrent(requestId) || !refreshed || refreshed.candles.length === 0) return;
-              const hydratedReport = generateAiForceReportFromCandles(
-                targetSymbol,
-                resolvedName,
-                targetMarket,
-                refreshed.candles,
-                quote || undefined,
-                refreshed.institutionalRecords || institutionalRecords,
-                undefined,
-                {
-                  statusTag: targetMarket === 'TW' ? resolvedStatusTag : undefined,
-                  currency: targetMarket === 'US' ? 'USD' : 'TWD',
-                  volumeUnit: targetMarket === 'US' ? '股' : '張',
-                  marginData,
-                  tdccRecords: refreshed.tdccRecords || tdccRecords,
-                  revenueRecords: refreshed.revenueRecords || revenueRecords,
-                  us13fData: refreshed.us13fData || us13fData,
-                  etfMeta: refreshed.etfMeta || etfMetaData,
-                  metaType: refreshed.meta?.type || lakehouseMetaType,
-                  quarterlyFinancials: refreshed.quarterlyFinancials || quarterlyFinancialsData,
-                  valuationData: refreshed.valuation
-                    ? { ...(quarterlyValuationData || {}), ...refreshed.valuation }
-                    : quarterlyValuationData,
-                  macroData: refreshed.macro || macroData,
-                  pledge: refreshed.pledge || pledgeData,
-                  etfNav: refreshed.etfNav || etfNavData,
-                  corporateActions: refreshed.corporateActions || corporateActionsData,
+          const pollEnrichment = (attempt: number) => {
+            if (attempt > 3) return;
+            setTimeout(async () => {
+              if (!requestGuardRef.current.isCurrent(requestId)) return;
+              try {
+                const refreshed = await loadSymbolFullLakehouseData(targetSymbol, targetMarket);
+                if (!requestGuardRef.current.isCurrent(requestId) || !refreshed || refreshed.candles.length === 0) return;
+                const hydratedReport = generateAiForceReportFromCandles(
+                  targetSymbol,
+                  resolvedName,
+                  targetMarket,
+                  refreshed.candles,
+                  quote || undefined,
+                  refreshed.institutionalRecords || institutionalRecords,
+                  undefined,
+                  {
+                    statusTag: targetMarket === 'TW' ? resolvedStatusTag : undefined,
+                    currency: targetMarket === 'US' ? 'USD' : 'TWD',
+                    volumeUnit: targetMarket === 'US' ? '股' : '張',
+                    marginData,
+                    tdccRecords: refreshed.tdccRecords || tdccRecords,
+                    revenueRecords: refreshed.revenueRecords || revenueRecords,
+                    us13fData: refreshed.us13fData || us13fData,
+                    etfMeta: refreshed.etfMeta || etfMetaData,
+                    metaType: refreshed.meta?.type || lakehouseMetaType,
+                    quarterlyFinancials: refreshed.quarterlyFinancials || quarterlyFinancialsData,
+                    valuationData: refreshed.valuation
+                      ? { ...(quarterlyValuationData || {}), ...refreshed.valuation }
+                      : quarterlyValuationData,
+                    macroData: refreshed.macro || macroData,
+                    pledge: refreshed.pledge || pledgeData,
+                    etfNav: refreshed.etfNav || etfNavData,
+                    corporateActions: refreshed.corporateActions || corporateActionsData,
+                  }
+                );
+                setReport(hydratedReport);
+                if (refreshed.enrichmentPending && attempt < 3) {
+                  pollEnrichment(attempt + 1);
                 }
-              );
-              setReport(hydratedReport);
-            } catch {}
-          }, 2500);
+              } catch {}
+            }, 1500);
+          };
+          pollEnrichment(1);
         }
       } else {
         const fallback = createDefaultAiForceReport(targetSymbol, resolvedName, targetMarket, quote?.price);
@@ -1082,8 +1089,28 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
         </div>
       )}
 
+      {/* 任務二～五：Zero-Mock 載入/待命閘門保護，杜絕假數據外洩 (Spec 0239) */}
+      {activeTab !== 'TASK_1_COMPREHENSIVE' && (isLoading || report.isDataPending) && (
+        <div
+          data-testid="task-panel-pending-gate"
+          style={{
+            padding: '28px 20px',
+            borderRadius: '12px',
+            background: 'rgba(15, 23, 42, 0.72)',
+            border: '1px solid rgba(56, 189, 248, 0.25)',
+            color: '#cbd5e1',
+            fontSize: '13px',
+            textAlign: 'center',
+          }}
+        >
+          {isLoading
+            ? `正在載入 ${report.symbol} 歷史量價與指標數據，請稍候...`
+            : `${report.symbol} 歷史有效日 K 不足（< 5 日），已啟動 Zero-Mock 保護閘門，暫停顯示技術警示與指標子頁籤。`}
+        </div>
+      )}
+
       {/* 任務二：技術警示報告 */}
-      {activeTab === 'TASK_2_TECHNICAL_ALERTS' && (
+      {activeTab === 'TASK_2_TECHNICAL_ALERTS' && !isLoading && !report.isDataPending && (
         <TechnicalAlertsView
           report={report}
           holdings={_holdings}
@@ -1095,17 +1122,17 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       )}
 
       {/* 任務三：KD + MA 圖表 */}
-      {activeTab === 'TASK_3_KD_MA' && (
+      {activeTab === 'TASK_3_KD_MA' && !isLoading && !report.isDataPending && (
         <KdMaView report={report} colorTheme={resolvedColorTheme} market={market} />
       )}
 
       {/* 任務四：MACD 圖表 */}
-      {activeTab === 'TASK_4_MACD' && (
+      {activeTab === 'TASK_4_MACD' && !isLoading && !report.isDataPending && (
         <MacdView report={report} colorTheme={resolvedColorTheme} market={market} />
       )}
 
       {/* 任務五：原始資料表 */}
-      {activeTab === 'TASK_5_RAW_DATA' && (
+      {activeTab === 'TASK_5_RAW_DATA' && !isLoading && !report.isDataPending && (
         <RawDataView report={report} colorTheme={resolvedColorTheme} market={market} />
       )}
 

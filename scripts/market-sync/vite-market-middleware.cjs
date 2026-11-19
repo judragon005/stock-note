@@ -63,7 +63,7 @@ const onDemandBackfillInFlight = new Set();
 const onDemandBackfillCooldown = new Map();
 const ON_DEMAND_COOLDOWN_MS = 5 * 60 * 1000;
 const ON_DEMAND_FAILURE_COOLDOWN_MS = 15 * 1000; // 失敗僅短冷卻 15s，杜絕 5 分鐘鎖死 (Spec 0239 T05)
-const ON_DEMAND_TIMEOUT_MS = 2500;
+const ON_DEMAND_TIMEOUT_MS = 300; // 首屏 <= 300ms 非阻塞回傳在庫資料，未完任務轉背景寫入 (Spec 0239)
 
 /**
  * 判定是否仍在回補冷卻時間內

@@ -51,17 +51,21 @@ export function exportReportToCsv(report: AiForceDashboardReport): string {
 /**
  * 生成獨立可離線查看之 HTML 總結決策報告
  */
-export function generateSummaryHtml(report: AiForceDashboardReport): string {
+export function generateSummaryHtml(
+  report: AiForceDashboardReport,
+  colorTheme?: 'taiwan' | 'international'
+): string {
   const title = `${report.symbol} ${report.name} - AI 主力行為量化決策總結報告`;
   const change = report.marketBar?.change ?? 0;
-  const isUs = report.market === 'US';
+  const isInternational =
+    colorTheme === 'international' || (!colorTheme && report.market === 'US');
   const priceColor =
     change > 0
-      ? isUs
+      ? isInternational
         ? '#10b981'
         : '#ef4444'
       : change < 0
-      ? isUs
+      ? isInternational
         ? '#ef4444'
         : '#10b981'
       : '#94a3b8';

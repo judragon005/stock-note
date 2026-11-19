@@ -1,4 +1,4 @@
-# ADR 0239: 主力戰情室台美雙市場一等公民同構與 ARINC 661 Zero-Mock 零造假架構
+# ADR 0239: 主力戰情室 5.0 — 台美雙市場一等公民對等架構、統一市場能力適配層與 ARINC 661 零造假閘門
 
 - **狀態 (Status)**: Accepted
 - **日期 (Date)**: 2026-11-19
@@ -9,35 +9,35 @@
 
 ## 1. 背景與問題定義 (Context & Problem Statement)
 
-「主力戰情室 (`AiForceDashboardView`)」原先存在三大結構性斷層：
-1. **靜態假數據與合成降級污染 (Synthetic Mock Contamination)**：當外部 API 無回應或樣本數不足時，部分模組退化為合成假數據（如 `createDefaultAiForceReport` 硬編碼 `2330 / 3150 元`、法人近 5 日 `-64 張`、維持率 `168.5%`、集保線性偽插值、美股 13F 合成比例及 Volume Profile `2400~1600` 假座標）。
-2. **台股本位硬編碼與美股二等公民失語 (TW-Centric Asymmetry)**：多處管道與卡片硬編碼台股交易制度（`÷1000` 張數換算、`T+2` 交割、`0.3%` 交易稅、`130%` 融資追繳線、三大法人、千張大戶與月營收），導致美股 (`NVDA`, `BRK.B`, `VT`) 出現失真或空窗。
-3. **跨層次競態與 SVG 幾何微字級退化**：非同步請求缺乏 Epoch Guard、快取鍵未隔離市場別 (`symbol` vs `market:symbol`)，以及部分卡片殘留 `< 12px` 字級與 `#64748b` 低對比色。
+「主力戰情室 (`AiForceDashboardView`)」原先存在五大結構性斷層：
+1. **雙市場語意劫持與評分數學封殺**：`usMacroData` 未依市場隔離導致台股遭美股宏觀視圖劫持；美股未接入 `usMicrostructure` 且以股數比對台股張數門檻（1,000 倍量綱誤差），造成美股健康度鎖死 `50%`、動態信號封頂 `55` 分與主力總評判退化為 `+0 張`。
+2. **台股採集器靜默失效**：`TWTB4U` 現股當沖率漏讀 `tables[0].data`、TAIFEX 期貨未平倉 Big5 亂碼、缺少台股 P/C Ratio 與全市場融資維持率、TPEx 歷史覆寫污染與 2.5s 按需補齊阻塞。
+3. **美股基本面/13F/ETF 管線真空**：缺乏本地美股估值與 13F/Short Float 持久化表、SEC EDGAR 僅硬編碼 18 檔 CIK 且瀏覽器直傳違規 `User-Agent`。
+4. **資產分類衝突與路由攔截**：3 套衝突之 ETF 判斷誤殺金融股 (`2881`/`2882`)；中介層未支援點號代碼 (`BRK.B`) 且每請求重開資料庫。
+5. **Zero-Mock 漏洞與互動死鎖**：`TaskViewsSwitcher` 點擊攔截死鎖；預設報表與子引擎殘留假數值（`-64張`、`2131`、`2400~1600`、`60k~0k`）於載入與 `<5D` 狀態外洩。
 
 ---
 
 ## 2. 架構決策 (Architectural Decisions)
 
-### 2.1 雙市場微結構策略契約 (`MarketMicrostructureStrategy`)
-- 以顯式 `market: 'TW' | 'US'` 與 `resolveAssetCategory(symbol, name, market)` 四象限分類器（`TW_STOCK`, `TW_ETF`, `US_STOCK`, `US_ETF`）驅動全鏈路計算：
-  - **TW**：`lotSize = 1000`（張）、`settlementDays = 2`（T+2）、`10%` 漲跌幅限制、`130%` 信用維持率。
-  - **US**：`lotSize = 1`（股）、`settlementDays = 1`（T+1）、無漲跌幅限制（LULD 熔斷）、Reg T / Portfolio Margin、無現沖減半稅率。
-- 快取鍵統一升級為 `${market}:${symbol}`，並以 `requestSeqRef` 遞增序號實施非同步競態守衛 (Epoch Race Guard)。
+### 2.1 Dual-Market First-Class Parity（台美雙市場一等公民對等架構）
+- 嚴格隔離 `twMacroData` 與 `usMacroData`（依 `market` 專屬寫入），全域貫通 `colorTheme` 與 `market` 至全 21 卡、4 大任務子頁籤 (`TaskPanels.tsx`) 與 HTML 匯出 (`exportReportPipeline.ts`)。
+- 中介層 ([vite-market-middleware.cjs](file:///d:/APP/股票紀錄/scripts/market-sync/vite-market-middleware.cjs)) 改採單例快取與點號代碼路由（支援 `BRK.B` ↔ `BRK-B`），並將按需歷史補齊首屏等待上限收縮至 `300ms`（`ON_DEMAND_TIMEOUT_MS = 300`）搭配前端受控輪詢。
+- 新增 `us_fundamentals_daily` 資料表 ([us-fundamentals-ingestion.cjs](file:///d:/APP/股票紀錄/scripts/market-sync/us-fundamentals-ingestion.cjs)) 整合 Yahoo `quoteSummary` Crumb（24H TTL + 429 熔斷），並於本地中介層建置 SEC EDGAR 代理路由 `/api/market/sec-edgar/companyfacts/:symbol` ([sec-edgar-proxy.cjs](file:///d:/APP/股票紀錄/scripts/market-sync/sec-edgar-proxy.cjs)) 透過 `company_tickers.json` 動態解析全美股 CIK。
 
-### 2.2 零付費依賴之美股雙軌代理與多源級聯 (Zero-Paid-API Dual-Market Pipeline)
-- **美股 (`US`)**：結合 Yahoo Finance `v10/finance/quoteSummary`（`institutionOwnership`, `majorHoldersBreakdown`, `defaultKeyStatistics`, `financialData`, `fundProfile`）與 **SEC EDGAR 官方免費 API 本地代理** (`/api/sec-edgar/company-facts` 具備 `CIK` 自動映射與 24 小時 SQLite 快取)，零成本供應美股 13F 機構持倉、Short Float / Days to Cover 軋空指標與 10-Q/10-K 季度營收。
-- **台股 (`TW`)**：統一上市 (`TWSE`) 與上櫃 (`TPEx`) 融資融券與三大法人解析、TAIFEX 期貨外資未平倉與選擇權 P/C Ratio 真實抓取，以及基於真實歷史快照之 TDCC 集保 10 週趨勢。
+### 2.2 Unified Market Capability Adapter（統一市場能力適配層）
+- 將美股 `usMicrostructure`（MFI/OBV/RVOL/VWAP 乖離 + 13F/Short Float 權重）與美股股數/成交額流動性門檻對等接入 [aiForceDashboardEngine.ts](file:///d:/APP/股票紀錄/src/engine/aiForceDashboardEngine.ts)、[riskSpiderEngine.ts](file:///d:/APP/股票紀錄/src/engine/riskSpiderEngine.ts)、[aiConfidenceEngine.ts](file:///d:/APP/股票紀錄/src/engine/aiConfidenceEngine.ts) 與 [dayTradeRiskEngine.ts](file:///d:/APP/股票紀錄/src/engine/dayTradeRiskEngine.ts)，徹底解除美股評分封殺。
 
-### 2.3 ARINC 661 航太級誠實空態閘門 (Zero-Mock & Honest Empty State Gate)
-- 全面廢除 `generateSynthetic13fSummary`、`synthesizeHistoricalSeries` 與 `createDefaultAiForceReport` 內的靜態假數字。
-- 建立三段式 `DataReadinessNotice` (`FULL_TIER` $\ge 20\text{D}$、`DEGRADED_TIER` $5\sim 19\text{D}$、`EMPTY_TIER` $< 5\text{D}$)：當歷史日 K $< 5$ 根時，預測錐、VWAP、量價結構與法人流向強制進入 `isEmpty: true` 誠實空態，且 `WarRoomPromptCard` 物理鎖定「一鍵複製戰略提示詞」按鈕並顯示紅框止損橫幅 (`data-testid="prompt-stop-loss-banner"`)，阻斷 LLM 幻覺推論。
+### 2.3 Canonical Asset Classification SSOT（權威資產型態單一分類來源）
+- 收斂全專案衝突之 ETF 判斷至 [assetClassifier.ts](file:///d:/APP/股票紀錄/src/engine/assetClassifier.ts) 之 `resolveAssetClass` / `isCanonicalEtfSymbol`：優先信任 `symbols_meta.type === 'ETF'`，移除 `/(富邦|國泰)/` 誤殺規則，涵蓋全量台股主動/債券 ETF (`00403A`, `00679B`) 與主流美股 ETF (`VT`, `SPY`, `QQQ`)。
 
-### 2.4 全域排版與對比度物理底線 (`WAR_ROOM_TYPOGRAPHY_FLOOR`)
-- 全戰情室 21 張卡片與 `TaskPanels` 強制遵守最小字級 $\ge 12\text{px}$ (`0.75rem`)、次要文字色彩升格為 `#94a3b8` / `#cbd5e1`（清零 `#64748b` 與 `transform: scale(0.9)`），並全面支援 `colorTheme`（台股紅漲綠跌 / 美股綠漲紅跌）。
+### 2.4 ARINC 661 Zero-Mock Loading & Pending Gate（零幻覺載入與待命硬閘門）
+- 清除預設報表、子引擎與 `ETF_BASELINE_META` 內之靜態假數值與美股靜態 ETF 回退。
+- 歷史有效日 K `< 5` 根一律維持 `isDataPending = true`，於 [AiForceDashboardView.tsx](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/AiForceDashboardView.tsx) 全面隔離 Executive Verdict Strip 與 `TASK_2~5` 子頁籤，並於 [WarRoomPromptCard.tsx](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/WarRoomPromptCard.tsx) 物理鎖定複製按鈕與 `currentPrice > 0` 停損監控門禁。
 
 ---
 
 ## 3. 影響與驗證 (Consequences & Verification)
 
-- **正面影響**：台美雙市場四象限（台股個股 `2330/2881`、台股 ETF `0050/00403A`、美股個股 `NVDA/BRK.B`、美股 ETF `VT`）在同一套 21 卡架構下達成 100% 語意同構與零假字閉環。
-- **驗證契約**：由 `t16DualMarketFourQuadrantE2E.test.tsx` 與各卡片/引擎單元測試進行全量自動化回歸守護。
+- **驗證覆蓋**：由 [t16DualMarketFourQuadrantE2E.test.tsx](file:///d:/APP/股票紀錄/src/engine/t16DualMarketFourQuadrantE2E.test.tsx) 覆蓋台美四象限（`2330/2881`、`0050/00403A`、`NVDA/SOUN`、`VT`）與 `< 5D / 0D` 邊界，搭配 T01–T15 獨立單元/整合測試與 `npm run build` 零錯誤驗證。
+- **後續追蹤**：4 項非阻斷 Fowler Code Smells 已建檔至 [docs/debts/0062-war-room-dual-market-code-smells-consolidation.md](file:///d:/APP/股票紀錄/docs/debts/0062-war-room-dual-market-code-smells-consolidation.md)。
