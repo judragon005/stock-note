@@ -315,8 +315,8 @@ async function runMonthlyRevenueIngestion(customDbPath, targetYearMonthOrOptions
  * @param {Function} [fetcher]
  * @returns {Promise<{ savedCount: number, skipped?: boolean }>}
  */
-async function backfillSymbolMonthlyRevenue(symbol, months = 12, customDbPath, fetcher = globalThis.fetch) {
-  if (!symbol || typeof fetcher !== 'function') {
+async function backfillSymbolMonthlyRevenue(symbol, months = 12, customDbPath, fetcher = globalThis.fetch, signal = undefined) {
+  if (!symbol || typeof fetcher !== 'function' || signal?.aborted) {
     return { savedCount: 0 };
   }
 
@@ -350,6 +350,7 @@ async function backfillSymbolMonthlyRevenue(symbol, months = 12, customDbPath, f
 
     const res = await fetcher(apiUrl, {
       headers: { Accept: 'application/json', 'User-Agent': 'StockTracker/1.0 (local-sync)' },
+      ...(signal ? { signal } : {}),
     });
     if (!res || !res.ok) return { savedCount: 0 };
 

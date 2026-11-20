@@ -262,13 +262,28 @@ export function createWarRoomPromptDigest(
       }
     : undefined;
 
-  // 集保 4 週真實變化值提取 (Spec 0239 T09: 無資料誠實為 null，嚴禁拿絕對比率冒充變化率或人數變化)
-  const bigHolderRatioChange400Val =
+  // 集保 4 週真實變化值提取 (Spec 0240 Patch 1: 嚴格區分 1000 張與 400 張級距，無資料誠實為 null)
+  const bigHolderRatioChange1000Val =
     !tdcc?.isEmpty &&
     typeof tdcc?.change4WeeksRatio === 'number' &&
     Number.isFinite(tdcc.change4WeeksRatio)
       ? tdcc.change4WeeksRatio
       : null;
+
+  let bigHolderRatioChange400Val: number | null = null;
+  if (!tdcc?.isEmpty && Array.isArray(tdcc?.history) && tdcc.history.length >= 2) {
+    const latestTdcc = tdcc.history[tdcc.history.length - 1];
+    const baselineTdcc = tdcc.history[Math.max(0, tdcc.history.length - 4)];
+    if (
+      typeof latestTdcc?.over400Ratio === 'number' &&
+      Number.isFinite(latestTdcc.over400Ratio) &&
+      typeof baselineTdcc?.over400Ratio === 'number' &&
+      Number.isFinite(baselineTdcc.over400Ratio)
+    ) {
+      bigHolderRatioChange400Val = Number((latestTdcc.over400Ratio - baselineTdcc.over400Ratio).toFixed(2));
+    }
+  }
+
   const retailHolderCountChangeVal =
     !tdcc?.isEmpty &&
     typeof tdcc?.change4WeeksShareholders === 'number' &&
@@ -334,9 +349,9 @@ export function createWarRoomPromptDigest(
         ? { sblBalance: chipsSummary?.sblBalance ?? dayTrade?.sblBalance }
         : {}),
       dayTradeRatioPct: dayTrade?.dayTradeRatio,
-      bigHolderRatioChange1000: tdcc?.change4WeeksRatio,
-      bigHolderRatioChange400: bigHolderRatioChange400Val as unknown as number | undefined,
-      retailHolderCountChange: retailHolderCountChangeVal as unknown as number | undefined,
+      bigHolderRatioChange1000: bigHolderRatioChange1000Val,
+      bigHolderRatioChange400: bigHolderRatioChange400Val,
+      retailHolderCountChange: retailHolderCountChangeVal,
       mainForceVwap20D,
       currentVwapBiasPct,
       boxResistancePrice,
@@ -353,7 +368,7 @@ export function createWarRoomPromptDigest(
     },
     macro: {
       treasuryYield10Y: report.marketSentiment?.usMacroData?.tenYearTreasury,
-      cnnFearGreedScore: cnnFearGreedScoreVal as unknown as number | undefined,
+      cnnFearGreedScore: cnnFearGreedScoreVal,
       vixClose: report.marketSentiment?.usMacroData?.vix,
       twPutCallRatio: report.marketSentiment?.twMacroData?.putCallRatio,
       macroRegimeText: isUS

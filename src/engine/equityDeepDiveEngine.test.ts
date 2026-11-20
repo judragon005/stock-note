@@ -100,4 +100,14 @@ describe('equityDeepDiveEngine - 7 步驟獨立 Prompt 與全量聚合 (Ticket 0
     expect(report.fullPayloadPrompt).toContain('【第 7 步】投資筆記');
     expect(report.fullPayloadPrompt).toContain('核心論點失效條件');
   });
+
+  it('Spec 0240 T09: 傳入 sblBalance 時應貫通至 step6 籌碼資料與 Prompt 事實描述，未傳入時優雅省略', () => {
+    const withSbl = generateFull7StepsPromptPayload({ ...mockTwInput, sblBalance: 5432 });
+    expect(withSbl.assembledData.step6.sblBalance).toBe(5432);
+    expect(withSbl.step6Prompt).toContain('5,432 張');
+
+    const withoutSbl = generateFull7StepsPromptPayload(mockTwInput);
+    expect(withoutSbl.assembledData.step6.sblBalance).toBeUndefined();
+    expect(withoutSbl.step6Prompt).not.toContain('外資借券賣出餘額 (SBL)：');
+  });
 });

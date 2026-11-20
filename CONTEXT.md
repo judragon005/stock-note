@@ -174,6 +174,10 @@ _Avoid_: Total Row Count Guess, Blind Redundant Crawling, Hidden ETF Blind Spot
 重用 `trading-calendar-engine.cjs` 法定交易日曆。在盤中執行回補且當前本地時間未滿 15:30（盤後日報結算門檻）時，候選起始日強制自動定錨退回前一法定交易日（T-1）；15:30 後才納入今日。法定休市日直接 0 請求排除，杜絕將盤中未出報誤判為「[休市日] 略過」之語意混淆。
 _Avoid_: Naive Weekend Check, False Holiday Skipping
 
+**Architectural Fitness Guard & Wave 1 SSOT Convergence (架構適應度靜態守門與中樞單一事實來源)** _(新增於 Spec 0240 / Issue #594)_:
+將湖倉 7 維健康度門檻 (`sync-thresholds.cjs`)、`corporate_action_calendar` 建表 DDL (`sqlite-db-core.cjs`)、美股點號／連字號別名正規化 (`market-sync-core.cjs`) 與前端漲跌極性／曜石容器 Token (`designTokens.ts`) 收斂為單一事實來源；按需補齊調度抽離至 `on-demand-backfill-orchestrator.cjs` 並導入原生 `AbortController` 真中斷；主力戰情室雙市場組裝邏輯抽離至 `aiForceMarketAssembly.ts`；並於 `architecturalFitnessGuard.test.ts` 植入 4 項靜態不變量守門測試，防止同類技術債復發。
+_Avoid_: Duplicate Magic Thresholds, Split DDL, Hardcoded Directional Ternary, Type Escape Cast
+
 **TPEx Warrant Exclusion Alignment (櫃買權證排除與兩市口徑對齊)** _(新增於 V8.97.0 / Spec 0184)_:
 於 TPEx 1430 收盤行情解析時，過濾排除 6 碼以 7 開頭之櫃買認購/認售權證標的（如 `700001`~`739999`），與上市端 `ALLBUT0999` 標準齊平。單日入庫檔數由 ~8,000 檔收斂至 ~2,400 檔核心標的（股票、主要 ETF 與可轉債），削減 70% 無效記錄。
 _Avoid_: Warrant Flooding, Asymmetric Market Scope
@@ -3067,6 +3071,17 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     2. **Unified Market Capability Adapter (統一市場能力適配層)**：隔離台股（`張`、`T+2`、10% 漲跌幅、三大法人、130% 維持率）與美股（`股`、`T+1`、LULD 熔斷、SEC 13F / `usMicrostructure`、Reg T）制度差異，將美股微觀量價結構（MFI/OBV/RVOL/VWAP 乖離 + 13F/Short Float）與股數流動性門檻對等接入核心評分引擎，解除美股分數封頂與 `+0 張` 退化。_Avoid_: Hardcoded 50% Institutional Fallback, 1000x Lot/Share Mismatch
     3. **Canonical Asset Classification SSOT (權威資產型態單一分類來源)**：收斂全專案衝突之 ETF 判斷至 [src/engine/assetClassifier.ts](file:///d:/APP/股票紀錄/src/engine/assetClassifier.ts) 的 `resolveAssetClass` / `isCanonicalEtfSymbol`（優先信任 `symbols_meta.type`，移除 `富邦`/`國泰` 誤殺規則，精準區分金融個股 `2881` 與主動/債券/美股 ETF `00403A`/`VT`）。_Avoid_: Fragmented ETF Regexes, Financial Stock Misclassification
     4. **ARINC 661 Zero-Mock Loading & Pending Gate (零幻覺載入與待命硬閘門)**：全面清除預設報表與子引擎內殘留之靜態假數值（`-64張`、`2131`、`2400~1600`、`60k~0k`、`168.5%`、美股靜態 ETF 回退）；當歷史日 K `< 5` 根（`isDataPending = true`）或 `isLoading` 時，全區封鎖 Executive Verdict Strip、`TASK_2~5` 子頁籤與 `WarRoomPromptCard` 提示詞複製按鈕，阻斷假數據外洩與 `currentPrice=0` 誤觸停損警報。_Avoid_: Silent Mock Fallback, Hallucinated Prompt Export on Empty Data
+
+- **Main Force War Room & Lakehouse Wave 1 Debt Consolidation & Architectural Fitness Guard (主力戰情室與湖倉同步中樞 Wave 1 技術債清償與防復發架構守門)**:
+  - 核心模組：`scripts/market-sync/sync-thresholds.cjs`、`scripts/market-sync/sqlite-db-core.cjs`、`scripts/market-sync/market-sync-core.cjs`、`scripts/market-sync/on-demand-backfill-orchestrator.cjs`、`scripts/market-sync/vite-market-middleware.cjs`、`src/types/strategicPrompt.ts`、`src/engine/aiForcePromptAdapter.ts`、`src/constants/designTokens.ts`、`src/engine/aiForceMarketAssembly.ts`、`src/engine/aiForceDashboardEngine.ts`、`src/components/equityDeepDive/EquityDeepDiveModal.tsx`、`src/engine/architecturalFitnessGuard.test.ts`。
+  - 規格來源：Spec 0240 (v9.24.1) 與 [ADR 0240](file:///d:/APP/股票紀錄/docs/adr/0240-war-room-lakehouse-wave1-debt-consolidation-and-fitness-guard.md)，關聯 GitHub Issue #594 / Debt 0060, 0061, 0062。
+  - 核心領域術語與架構革新：
+    1. **SSOT Single Source of Truth (單一事實來源收斂)**：建立 `sync-thresholds.cjs` 統一管理 7 維健康度門檻；`sqlite-db-core.cjs` 唯一宣告 `corporate_action_calendar` DDL；`market-sync-core.cjs` 統一美股別名正規化。_Avoid_: Magic Number Duplication, Divergent DDL
+    2. **Native AbortController Cancellation Chain (原生非同步取消鏈)**：按需補齊競速於 300ms 逾時時立即發動 `abort()`，將 `AbortSignal` 深度透傳至 TDCC 集保、月營收與美股基本面抓取，徹底杜絕無效 I/O 滲漏。_Avoid_: Unaborted Background Fetches, Zombie Socket Leak
+    3. **Zero-Mock TDCC Semantics & Sound Typing (集保大戶 Zero-Mock 語意與型別健全)**：放寬提示詞籌碼介面為 `number | null | undefined`，徹底根除 `as unknown as` 型別逃逸；`bigHolderRatioChange1000` 與 `bigHolderRatioChange400` 嚴格依原始級距各自獨立推導，無數據時誠實給予 `null`，絕不以 400 張冒充 1000 張。_Avoid_: Double Type Assertion, Metric Duplication Pretending
+    4. **Directional Palette SSOT & Obsidian Tokens (方向色票與曜石主題集中化)**：集中提供 `resolveDirectionalPalette`（台股紅漲綠跌、美股綠漲紅跌）與 `OBSIDIAN_CARD_CONTAINER` Token，消滅戰情卡片內散落之硬編碼三元色票。_Avoid_: Hardcoded Palette Ternary in Cards
+    5. **Architectural Fitness Guard (防復發架構適應度測試)**：以靜態 AST/內容掃描測試自動在 CI 攔截門檻魔術數字、重複建表 DDL、裸寫色票與雙重型別斷言。_Avoid_: Manual-Only Architectural Review
+
 
 
 

@@ -545,9 +545,9 @@ describe('Spec 0181 Ticket 06: aiForcePromptAdapter - 主力戰情室特徵轉�
 
       const digest = createWarRoomPromptDigest(reportWithExtendedFields);
 
+      // Spec 0240 Patch 1: bigHolderRatioChange1000 對齊千張大戶 4 週變化 (1.75)；bigHolderRatioChange400 精確計算 400 張級距 4 週變化 (91.4 - 90.1 = 1.3)
       expect(digest.chips.bigHolderRatioChange1000).toBe(1.75);
-      // Spec 0239 T09: bigHolderRatioChange400 應取真實 4 週變化值而非絕對比率 91.4
-      expect(digest.chips.bigHolderRatioChange400).toBe(1.75);
+      expect(digest.chips.bigHolderRatioChange400).toBe(1.3);
       expect(digest.chips.retailHolderCountChange).toBe(-2150);
       expect(digest.macro.twPutCallRatio).toBe(112.5);
       expect((digest.chips as any).sblBalance).toBe(5432);

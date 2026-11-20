@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { resolveDirectionalPalette } from '../../constants/designTokens';
 import { MarketBarData } from '../../types/aiForceDashboard';
 import { ColorThemeMode, HoldingPosition, MarketType } from '../../types/stock';
 import { Activity, AlertOctagon, AlertTriangle, Briefcase, Cpu, Radio, RefreshCw, ShieldAlert } from 'lucide-react';
@@ -677,23 +678,24 @@ export const HeaderMarketBar: React.FC<HeaderMarketBarProps> = ({
                 title="盤中即時行情參考，不參與歷史量化模型運算"
               >
                 盤中即時:{' '}
-                <span
-                  style={{
-                    color:
-                      data.intradayQuote.change > 0
-                        ? (colorTheme === 'international' ? '#10b981' : '#ef4444')
-                        : data.intradayQuote.change < 0
-                        ? (colorTheme === 'international' ? '#ef4444' : '#10b981')
-                        : '#94a3b8',
-                    fontWeight: 700,
-                  }}
-                >
-                  {formatMarketMetric(data.intradayQuote.price, 2)} (
-                  {Number.isFinite(data.intradayQuote.changePercent)
-                    ? `${data.intradayQuote.changePercent >= 0 ? '+' : ''}${data.intradayQuote.changePercent.toFixed(2)}%`
-                    : '-'}
-                  )
-                </span>
+                {(() => {
+                  const palette = resolveDirectionalPalette(colorTheme);
+                  const intradayColor =
+                    data.intradayQuote.change > 0
+                      ? palette.upColor
+                      : data.intradayQuote.change < 0
+                      ? palette.downColor
+                      : palette.neutralColor;
+                  return (
+                    <span style={{ color: intradayColor, fontWeight: 700 }}>
+                      {formatMarketMetric(data.intradayQuote.price, 2)} (
+                      {Number.isFinite(data.intradayQuote.changePercent)
+                        ? `${data.intradayQuote.changePercent >= 0 ? '+' : ''}${data.intradayQuote.changePercent.toFixed(2)}%`
+                        : '-'}
+                      )
+                    </span>
+                  );
+                })()}
               </span>
             )}
           </div>

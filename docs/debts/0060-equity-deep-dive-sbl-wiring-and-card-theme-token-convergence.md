@@ -1,7 +1,7 @@
 # 技術債 0060: 深度投研彈窗借券餘額消費與卡片曜石主題 Token 集中化 (Equity Deep Dive SBL Wiring & Card Theme Token Convergence)
 
 * **建立日期**：2026-11-18
-* **狀態**：`OPEN`
+* **狀態**：`RESOLVED`（已於 Spec 0240 / Issue #594 Wave 1 完整清償）
 * **優先級**：`P3 (Low)`
 * **來源**：/code-review 雙軸審查回饋 (Spec 0237 / Issue #588)
 * **標籤**：`Refactor` · `AiForceDashboard` · `Theme` · `DesignSystem` · `Lakehouse`

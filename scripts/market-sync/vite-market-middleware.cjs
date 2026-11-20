@@ -14,27 +14,7 @@ const {
   clearBreadthAnchorCache,
   isSqliteSupported,
 } = require('./sqlite-db-core.cjs');
-
-/**
- * 雙向代碼別名產生器 (Spec 0239 T01):
- * - 台股櫃買: 3293 <-> 3293O
- * - 美股含點號/連字號: BRK.B <-> BRK-B
- */
-function buildSymbolAliases(rawSymbol) {
-  const sym = decodeURIComponent(String(rawSymbol || '')).trim().toUpperCase();
-  if (!sym) return ['', ''];
-  if (/^\d{2,}[A-Z0-9]*$/.test(sym)) {
-    const alias = sym.endsWith('O') && sym.length >= 4 ? sym.slice(0, -1) : `${sym}O`;
-    return [sym, alias];
-  }
-  if (sym.includes('.')) {
-    return [sym, sym.replace(/\./g, '-')];
-  }
-  if (sym.includes('-')) {
-    return [sym, sym.replace(/-/g, '.')];
-  }
-  return [sym, sym];
-}
+const { buildSymbolAliases } = require('./market-sync-core.cjs');
 const { searchSymbolsMeta } = require('./seed-symbols-universe.cjs');
 const { getMarketAnchorDate, checkMarketFreshness } = require('./market-freshness-service.cjs');
 const {
@@ -44,8 +24,14 @@ const {
 } = require('./ingest-macro-sentiment.cjs');
 const {
   ensureUsFundamentalsTable,
-  getOrFetchUsFundamentals,
 } = require('./us-fundamentals-ingestion.cjs');
+const {
+  ON_DEMAND_TIMEOUT_MS,
+  isOnDemandBackfillInFlight,
+  clearOnDemandBackfillState,
+  runWithAbortTimeout,
+  runOnDemandSymbolBackfill,
+} = require('./on-demand-backfill-orchestrator.cjs');
 const {
   fetchSecCompanyFactsServer,
 } = require('./sec-edgar-proxy.cjs');
@@ -59,11 +45,6 @@ let isCatchingUp = false;
 let lastCatchupTime = 0;
 let cachedMacroPulse = null;
 let cachedMacroPulseAt = 0;
-const onDemandBackfillInFlight = new Set();
-const onDemandBackfillCooldown = new Map();
-const ON_DEMAND_COOLDOWN_MS = 5 * 60 * 1000;
-const ON_DEMAND_FAILURE_COOLDOWN_MS = 15 * 1000; // 失敗僅短冷卻 15s，杜絕 5 分鐘鎖死 (Spec 0239 T05)
-const ON_DEMAND_TIMEOUT_MS = 300; // 首屏 <= 300ms 非阻塞回傳在庫資料，未完任務轉背景寫入 (Spec 0239)
 
 /**
  * 判定是否仍在回補冷卻時間內
@@ -215,8 +196,7 @@ function resetCatchupStateForTest() {
   lastCatchupTime = 0;
   cachedMacroPulse = null;
   cachedMacroPulseAt = 0;
-  onDemandBackfillInFlight.clear();
-  onDemandBackfillCooldown.clear();
+  clearOnDemandBackfillState();
 }
 
 function setLastCatchupTimeForTest(time) {
@@ -248,160 +228,6 @@ function readJsonBody(req) {
     });
     req.on('error', (err) => reject(err));
   });
-}
-
-/**
- * 按需拉取台股歷史除權息紀錄 (FinMind TaiwanStockDividend -> fallback Yahoo Chart events)
- */
-async function backfillSymbolDividendsFromRemote(symbol, customDbPath, fetcher = globalThis.fetch) {
-  if (!symbol || typeof fetcher !== 'function') return 0;
-  const cleanSymbol = String(symbol).trim().toUpperCase();
-  const querySym = cleanSymbol.endsWith('O') ? cleanSymbol.slice(0, -1) : cleanSymbol;
-  const startDate = new Date(Date.now() - 5 * 365 * 86400000).toISOString().slice(0, 10);
-
-  const actions = [];
-  try {
-    const fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockDividend&data_id=${encodeURIComponent(querySym)}&start_date=${startDate}`;
-    const res = await fetcher(fmUrl, {
-      headers: { Accept: 'application/json', 'User-Agent': 'StockTracker/1.0 (local-sync)' },
-    });
-    if (res && res.ok) {
-      const json = await res.json();
-      const rows = Array.isArray(json?.data) ? json.data : [];
-      for (const r of rows) {
-        const exDate = r.CashExDividendTradingDate || r.StockExDividendTradingDate;
-        if (!exDate || !/^\d{4}-\d{2}-\d{2}$/.test(String(exDate).slice(0, 10))) continue;
-        const cashDiv = Number(r.CashEarningsDistribution || 0) + Number(r.CashStatutorySurplus || 0);
-        const stockDiv = Number(r.StockEarningsDistribution || 0) + Number(r.StockStatutorySurplus || 0);
-        actions.push({
-          symbol: cleanSymbol,
-          market: 'TW',
-          action_type: 'DIVIDEND',
-          ex_date: String(exDate).slice(0, 10),
-          payment_date: r.CashDividendPaymentDate ? String(r.CashDividendPaymentDate).slice(0, 10) : null,
-          cash_dividend_per_share: Number.isFinite(cashDiv) ? Number(cashDiv.toFixed(4)) : 0,
-          stock_dividend_ratio: Number.isFinite(stockDiv) ? Number(stockDiv.toFixed(4)) : 0,
-        });
-      }
-    }
-  } catch {}
-
-  if (actions.length === 0) {
-    // 支援上市 (.TW) 與上櫃 (.TWO) 雙試探 (Spec 0239 T03)
-    for (const suffix of ['.TW', '.TWO']) {
-      try {
-        const yhUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(querySym)}${suffix}?range=5y&interval=1d&events=div%2Csplit`;
-        const res = await fetcher(yhUrl, {
-          headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
-        });
-        if (res && res.ok) {
-          const json = await res.json();
-          const divs = json?.chart?.result?.[0]?.events?.dividends || {};
-          for (const item of Object.values(divs)) {
-            if (!item || !item.date) continue;
-            const exDate = new Date(item.date * 1000).toISOString().slice(0, 10);
-            const cashDiv = Number(item.amount) || 0;
-            if (cashDiv > 0) {
-              actions.push({
-                symbol: cleanSymbol,
-                market: 'TW',
-                action_type: 'DIVIDEND',
-                ex_date: exDate,
-                payment_date: null,
-                cash_dividend_per_share: Number(cashDiv.toFixed(4)),
-                stock_dividend_ratio: 0,
-              });
-            }
-          }
-        }
-        if (actions.length > 0) break;
-      } catch {}
-    }
-  }
-
-  if (actions.length === 0) return 0;
-
-  try {
-    const db = initSqliteLakehouseDb(customDbPath);
-    const stmt = db.prepare(`
-      INSERT INTO corporate_action_calendar (
-        symbol, market, action_type, ex_date, payment_date, cash_dividend_per_share, stock_dividend_ratio, updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(symbol, action_type, ex_date) DO UPDATE SET
-        payment_date = COALESCE(excluded.payment_date, corporate_action_calendar.payment_date),
-        cash_dividend_per_share = COALESCE(excluded.cash_dividend_per_share, corporate_action_calendar.cash_dividend_per_share),
-        stock_dividend_ratio = COALESCE(excluded.stock_dividend_ratio, corporate_action_calendar.stock_dividend_ratio),
-        updated_at = excluded.updated_at
-    `);
-    const now = Date.now();
-    db.exec('BEGIN TRANSACTION;');
-    try {
-      for (const a of actions) {
-        stmt.run(a.symbol, a.market, a.action_type, a.ex_date, a.payment_date, a.cash_dividend_per_share, a.stock_dividend_ratio, now);
-      }
-      db.exec('COMMIT;');
-    } catch (e) {
-      db.exec('ROLLBACK;');
-      throw e;
-    }
-    return actions.length;
-  } catch {
-    return 0;
-  }
-}
-
-/**
- * 觸發單一標的 TDCC / 月營收 / 歷史除權息 / 美股基本面按需補齊 (Spec 0239 T05 & T06)
- * - 成功入庫採 5 分鐘冷卻；全失敗或無新增僅採 15 秒短退避，絕不鎖死 5 分鐘。
- */
-async function runOnDemandSymbolBackfill(
-  symbol,
-  { needTdcc, needRevenue, needDividend, needUsFundamentals, customDbPath }
-) {
-  const now = Date.now();
-  const prevState = onDemandBackfillCooldown.get(symbol);
-  const lastAt = typeof prevState === 'number' ? prevState : prevState?.at || 0;
-  const cooldownMs =
-    typeof prevState === 'object' && prevState?.succeeded === false
-      ? ON_DEMAND_FAILURE_COOLDOWN_MS
-      : ON_DEMAND_COOLDOWN_MS;
-  if (onDemandBackfillInFlight.has(symbol) || now - lastAt < cooldownMs) {
-    return { skipped: true, succeeded: false };
-  }
-
-  onDemandBackfillInFlight.add(symbol);
-
-  let anyFulfilledWithData = false;
-  try {
-    const tasks = [];
-    if (needTdcc) {
-      const { backfillSymbolTdccHistory } = require('./ingest-tw-tdcc.cjs');
-      tasks.push(backfillSymbolTdccHistory(symbol, 10, customDbPath));
-    }
-    if (needRevenue) {
-      const { backfillSymbolMonthlyRevenue } = require('./ingest-tw-monthly-revenue.cjs');
-      tasks.push(backfillSymbolMonthlyRevenue(symbol, 12, customDbPath));
-    }
-    if (needDividend) {
-      tasks.push(backfillSymbolDividendsFromRemote(symbol, customDbPath));
-    }
-    if (needUsFundamentals) {
-      const db = initSqliteLakehouseDb(customDbPath);
-      tasks.push(getOrFetchUsFundamentals(db, symbol, { includeDividends: true }));
-    }
-    const results = await Promise.allSettled(tasks);
-    anyFulfilledWithData = results.some(
-      (r) => r.status === 'fulfilled' && r.value !== null && r.value !== 0 && r.value !== false
-    );
-    onDemandBackfillCooldown.set(symbol, { at: Date.now(), succeeded: anyFulfilledWithData });
-    return { skipped: false, succeeded: anyFulfilledWithData };
-  } catch {
-    onDemandBackfillCooldown.set(symbol, { at: Date.now(), succeeded: false });
-    return { skipped: false, succeeded: false };
-  } finally {
-    onDemandBackfillInFlight.delete(symbol);
-  }
 }
 
 /**
@@ -1415,26 +1241,18 @@ function createMarketApiMiddleware(customDbPath) {
 
       const needsAnyBackfill = needTdcc || needRevenue || needDividend || needUsFundamentals;
       if (needsAnyBackfill && typeof globalThis.fetch === 'function' && !isUnmockedTestEnv) {
-        let timer = null;
-        let finishedBeforeTimeout = false;
-        const backfillPromise = runOnDemandSymbolBackfill(symbol, {
-          needTdcc,
-          needRevenue,
-          needDividend,
-          needUsFundamentals,
-          customDbPath,
-        }).then((result) => {
-          finishedBeforeTimeout = true;
-          return result;
-        });
-
-        return Promise.race([
-          backfillPromise,
-          new Promise((resolve) => {
-            timer = setTimeout(() => resolve({ timedOut: true }), ON_DEMAND_TIMEOUT_MS);
-          }),
-        ]).finally(() => {
-          if (timer) clearTimeout(timer);
+        return runWithAbortTimeout(
+          (signal) =>
+            runOnDemandSymbolBackfill(symbol, {
+              needTdcc,
+              needRevenue,
+              needDividend,
+              needUsFundamentals,
+              customDbPath,
+              signal,
+            }),
+          ON_DEMAND_TIMEOUT_MS
+        ).then(({ timedOut }) => {
           try {
             if (needTdcc) {
               tdccRows = db
@@ -1459,12 +1277,12 @@ function createMarketApiMiddleware(customDbPath) {
                 .get(symbol, aliasSym) || null;
             }
           } catch {}
-          const stillPending = !finishedBeforeTimeout && onDemandBackfillInFlight.has(symbol);
+          const stillPending = timedOut && isOnDemandBackfillInFlight(symbol);
           return sendHistoryResponse(stillPending);
         });
       }
 
-      return sendHistoryResponse(onDemandBackfillInFlight.has(symbol));
+      return sendHistoryResponse(isOnDemandBackfillInFlight(symbol));
     }
 
     // 若未匹配任何端點

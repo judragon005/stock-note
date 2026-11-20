@@ -94,7 +94,7 @@ export function buildStep5ScenarioSimulationPrompt(input: EquityDeepDiveInput): 
  * Ticket 14: 步驟 6 籌碼微觀解讀 Prompt 產生器
  */
 export function buildStep6ChipsAnalysisPrompt(input: EquityDeepDiveInput): string {
-  const { symbol, name, market, institutionalRecords = [], boxFloorPrice, boxCeilingPrice } = input;
+  const { symbol, name, market, institutionalRecords = [], boxFloorPrice, boxCeilingPrice, sblBalance } = input;
 
   if (market === 'US') {
     return `### 【第 6 步】籌碼微觀解讀 (${name} - ${symbol})
@@ -114,8 +114,13 @@ export function buildStep6ChipsAnalysisPrompt(input: EquityDeepDiveInput): strin
       ? `關鍵支撐與突破防線：近 60 日箱底防線 ${boxFloorPrice} 元，箱頂防線 ${boxCeilingPrice} 元。`
       : '關鍵支撐與突破防線：需留意近期平台整理區間下緣。';
 
+  const sblInfo =
+    typeof sblBalance === 'number' && Number.isFinite(sblBalance)
+      ? `\n外資借券賣出餘額 (SBL)：${sblBalance.toLocaleString()} 張。`
+      : '';
+
   return `### 【第 6 步】籌碼微觀解讀 (${name} - ${symbol})
-本地湖倉近 20 日三大法人累計淨買賣超：約 ${totalNet} 張。
+本地湖倉近 20 日三大法人累計淨買賣超：約 ${totalNet} 張。${sblInfo}
 ${boxInfo}
 請根據上述真實籌碼與技術價位，分析：
 1. 外資、投信近期是同向買超吃貨、還是土洋對作或主力倒貨結帳？

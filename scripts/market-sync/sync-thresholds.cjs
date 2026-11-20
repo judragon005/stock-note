@@ -1,0 +1,20 @@
+/**
+ * sync-thresholds.cjs
+ * 湖倉 7 維欄位健康度與新鮮度門檻單一事實來源 (SSOT)
+ * Spec 0240 T01 / Debt 0061 #1
+ */
+
+const MARKET_HEALTH_THRESHOLDS = Object.freeze({
+  STOCK_COUNT_MIN: 1800,
+  CHIPS_COUNT_MIN: 2000,
+  FRESHNESS_CHIPS_COUNT_MIN: 1800,
+  MARGIN_COUNT_MIN: 1500,
+  SBL_COUNT_MIN: 500,
+  DAY_TRADE_COUNT_MIN: 500,
+  VALUATION_COUNT_MIN: 1500,
+  ETF_NAV_COUNT_MIN: 100,
+});
+
+module.exports = {
+  MARKET_HEALTH_THRESHOLDS,
+};

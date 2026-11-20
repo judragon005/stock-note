@@ -1,6 +1,6 @@
 # Debt 0062: 主力戰情室雙市場重構衍生之 Fowler Code Smells 收斂清單
 
-- **狀態 (Status)**: `OPEN`
+- **狀態 (Status)**: `RESOLVED`（已於 Spec 0240 / Issue #594 Wave 1 完整清償並植入架構適應度守門測試）
 - **優先級 (Priority)**: `P3`
 - **發現來源**: `/code-review` 雙軸審查回饋（Spec 0239 / Issue `#592`）
 - **標籤**: `Refactor` · `CleanCode` · `DRY` · `AiForceDashboard` · `MarketSync`

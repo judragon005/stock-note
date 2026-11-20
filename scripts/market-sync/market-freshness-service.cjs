@@ -6,6 +6,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { MARKET_HEALTH_THRESHOLDS } = require('./sync-thresholds.cjs');
 
 // 讀取台美法定休市日字典 (若存在)
 const holidaysJsonPath = path.resolve(__dirname, '../../src/data/market-holidays.json');
@@ -262,19 +263,19 @@ function checkMarketFreshness(db, now = new Date()) {
         const valCount = Number(valCov?.count ?? 0);
 
         let dayIncomplete = false;
-        if (marginCount < 1500) {
+        if (marginCount < MARKET_HEALTH_THRESHOLDS.MARGIN_COUNT_MIN) {
           missingPlanesSet.add('margin');
           dayIncomplete = true;
         }
-        if (sblCount < 500) {
+        if (sblCount < MARKET_HEALTH_THRESHOLDS.SBL_COUNT_MIN) {
           missingPlanesSet.add('sbl');
           dayIncomplete = true;
         }
-        if (dayTradeCount < 500) {
+        if (dayTradeCount < MARKET_HEALTH_THRESHOLDS.DAY_TRADE_COUNT_MIN) {
           missingPlanesSet.add('day_trade');
           dayIncomplete = true;
         }
-        if (valCount < 1500) {
+        if (valCount < MARKET_HEALTH_THRESHOLDS.VALUATION_COUNT_MIN) {
           missingPlanesSet.add('valuation');
           dayIncomplete = true;
         }
@@ -283,11 +284,11 @@ function checkMarketFreshness(db, now = new Date()) {
         }
       }
 
-      // 最新結算日檢查 etf_daily_nav >= 100
+      // 最新結算日檢查 etf_daily_nav 門檻
       const etfNavCov = db
         .prepare('SELECT COUNT(*) AS count FROM etf_daily_nav WHERE date = ?')
         .get(twLatest);
-      if (etfNavCov && Number(etfNavCov.count) < 100) {
+      if (etfNavCov && Number(etfNavCov.count) < MARKET_HEALTH_THRESHOLDS.ETF_NAV_COUNT_MIN) {
         missingPlanesSet.add('etf_nav');
         incompleteDatesSet.add(twLatest);
       }
@@ -305,7 +306,7 @@ function checkMarketFreshness(db, now = new Date()) {
   const isTwStale = Boolean(
     !twLatest ||
     twLatest < twAnchor ||
-    (twChipsCount !== null && twChipsCount < 1800) ||
+    (twChipsCount !== null && twChipsCount < MARKET_HEALTH_THRESHOLDS.FRESHNESS_CHIPS_COUNT_MIN) ||
     incompleteDates.length > 0
   );
   const isUsStale = Boolean(!usLatest || usLatest < usAnchor);

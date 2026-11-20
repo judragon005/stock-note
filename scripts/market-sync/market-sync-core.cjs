@@ -327,10 +327,53 @@ async function retryFetch(fn, retries = 3, delayMs = 1500) {
   throw lastErr;
 }
 
+/**
+ * 雙向代碼別名產生器 (SSOT — Spec 0240 T03):
+ * - 台股櫃買: 3293 <-> 3293O
+ * - 美股含點號/連字號: BRK.B <-> BRK-B
+ */
+function buildSymbolAliases(rawSymbol) {
+  const sym = decodeURIComponent(String(rawSymbol || '')).trim().toUpperCase();
+  if (!sym) return ['', ''];
+  if (/^\d{2,}[A-Z0-9]*$/.test(sym)) {
+    const alias = sym.endsWith('O') && sym.length >= 4 ? sym.slice(0, -1) : `${sym}O`;
+    return [sym, alias];
+  }
+  if (sym.includes('.')) {
+    return [sym, sym.replace(/\./g, '-')];
+  }
+  if (sym.includes('-')) {
+    return [sym, sym.replace(/-/g, '.')];
+  }
+  return [sym, sym];
+}
+
+/**
+ * 將美股代碼轉換為 Yahoo Finance URL 格式（如 BRK.B -> BRK-B）(SSOT — Spec 0240 T03)
+ */
+function normalizeYahooSymbol(symbol) {
+  return String(symbol || '').trim().toUpperCase().replace(/\./g, '-');
+}
+
+/**
+ * 產生美股代碼雙向比對候選清單（支援 BRK.B <-> BRK-B <-> BRK_B）(SSOT — Spec 0240 T03)
+ */
+function normalizeUsTickerCandidates(symbol) {
+  const raw = String(symbol || '').trim().toUpperCase();
+  if (!raw) return [];
+  const candidates = new Set([raw]);
+  candidates.add(raw.replace(/[._]/g, '-'));
+  candidates.add(raw.replace(/[-_]/g, '.'));
+  return Array.from(candidates);
+}
+
 module.exports = {
   formatDateYMD,
   parseCleanNumber,
   stripOtcSuffix,
+  buildSymbolAliases,
+  normalizeYahooSymbol,
+  normalizeUsTickerCandidates,
   parseTwseT86BulkData,
   parseTpexT86BulkData,
   parseTwseDailyQuotesBulk,

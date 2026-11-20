@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { resolveDirectionalPalette } from '../../../constants/designTokens';
 import {
   KlineSystemData,
   KlinePeriodMode,
@@ -436,9 +437,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
     return calculateKeyLevelOverlays(levels, priceRange, klineHeight, 15, 15);
   }, [data.keyLevels, priceRange, klineHeight]);
 
-  const isTaiwan = colorTheme === 'taiwan';
-  const bullColor = isTaiwan ? '#ef4444' : '#10b981';
-  const bearColor = isTaiwan ? '#10b981' : '#ef4444';
+  const { upColor: bullColor, downColor: bearColor } = resolveDirectionalPalette(colorTheme);
 
   const isHovering = hoverIndex !== null && hoverIndex >= 0 && hoverIndex < count;
   const activeCandle = isHovering

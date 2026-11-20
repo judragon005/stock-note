@@ -12,7 +12,20 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 主力戰情室 5.0 台美雙市場一等公民對等架構、全鏈路資料管線修復與 21 卡零缺陷閉環 (`Spec 0239`) *(V9.24.0 最新發布 / Spec #0239 / ADR #0239 / Issue #592)*
+### 1. 主力戰情室與湖倉同步中樞 Wave 1 技術債清償與防復發架構守門 (`Spec 0240`) *(V9.24.1 最新發布 / Spec #0240 / ADR #0240 / Issue #594)*
+
+- **湖倉單一事實來源 (SSOT) 收斂 (Issue #594 / Ticket 01~03)**：
+  - 抽離統一的 `sync-thresholds.cjs`，終結 7 維健康度門檻常數跨檔硬編碼；`sqlite-db-core.cjs` 統一匯出 `corporate_action_calendar` DDL，消滅美股基本面模組重複建表邏輯；集中實作美股點號/連字號代碼別名正規化純函式。
+- **按需補齊原生 `AbortController` 取消鏈與質押追趕測試 (Issue #594 / Ticket 04 & 05)**：
+  - 導入原生 `AbortController` 逾時競速，300ms 降級時立即主動中止底層非同步 HTTP 與子行程抓取，釋放無效網路 I/O；補齊伺服器開機質押追趕呼叫斷言。
+- **提示詞轉接器型別安全與 Zero-Mock 大戶語意對齊 (Issue #594 / Ticket 07)**：
+  - 放寬事實摘要籌碼介面為 `number | null | undefined`，徹底拔除 `as unknown as` 型別逃逸；嚴格區分 400 張與 1,000 張大戶來源，杜絕同一指標雙重冒充。
+- **戰情室主題 Token 集中化與深度投研借券貫通 (Issue #594 / Ticket 08 & 09)**：
+  - 抽離 `resolveDirectionalPalette`（台股紅漲綠跌、美股綠漲紅跌）與 `OBSIDIAN_CARD_CONTAINER` Token，戰情室卡片全面收斂；深度投研彈窗貫通湖倉借券賣出餘額 (`sblBalance`) 強化空方分析視角。
+- **巨石模組受控拆解與防復發架構守門 (Issue #594 / Ticket 06, 10 & 11)**：
+  - 抽離中介層按需調度器與戰情室美股組裝模組，主引擎與中介層大幅瘦身；建立自動化架構適應度測試 (`architecturalFitnessGuard.test.ts`)，機械化攔截門檻魔術數字、重複建表 DDL、裸寫色票與雙重型別斷言。
+
+### 2. 主力戰情室 5.0 台美雙市場一等公民對等架構、全鏈路資料管線修復與 21 卡零缺陷閉環 (`Spec 0239`) *(V9.24.0 / Spec #0239 / ADR #0239 / Issue #592)*
 
 - **台美雙市場一等公民對等架構 (Issue #592 / Ticket 08 & 16)**：
   - 嚴格隔離 `twMacroData` 與 `usMacroData`（依 `market` 專屬掛載），徹底終結台股只要庫存總經即遭美股宏觀視圖覆蓋之劫持 Bug；全域貫穿 `colorTheme` 與 `market` 至全數 21 張卡片、4 大任務子頁籤與 HTML 匯出報表，實現台股（紅漲綠跌）與美股（綠漲紅跌）視覺極性一致。

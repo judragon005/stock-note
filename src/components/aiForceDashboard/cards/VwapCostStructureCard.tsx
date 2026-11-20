@@ -1,4 +1,5 @@
 import React, { useMemo, useId } from 'react';
+import { resolveDirectionalPalette } from '../../../constants/designTokens';
 import { VwapCostStructureData, CostBandTimeNode } from '../../../types/aiForceDashboard';
 import { ColorThemeMode, MarketType } from '../../../types/stock';
 import { TermTooltip } from '../../common/TermTooltip';
@@ -56,9 +57,7 @@ export function formatBiasMetric(
 ): BiasMetricResult {
   const isPositive = biasPercent > 0;
   const isNegative = biasPercent < 0;
-  const isTaiwan = colorTheme === 'taiwan';
-  const posColor = isTaiwan ? '#ef4444' : '#10b981';
-  const negColor = isTaiwan ? '#10b981' : '#ef4444';
+  const { upColor: posColor, downColor: negColor } = resolveDirectionalPalette(colorTheme);
   let text = `${biasPercent.toFixed(1)}%`;
   if (isPositive) {
     text = `+${biasPercent.toFixed(1)}%`;

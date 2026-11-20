@@ -1,4 +1,5 @@
 import React, { useId } from 'react';
+import { resolveDirectionalPalette } from '../../../constants/designTokens';
 import type { MarketSentimentData } from '../../../types/aiForceDashboard';
 import type { ColorThemeMode, MarketType } from '../../../types/stock';
 import { calculateGaugeNeedleAngle } from '../../../engine/marketSentimentEngine';
@@ -53,9 +54,7 @@ export const MarketSentimentCard: React.FC<MarketSentimentCardProps> = ({
     : Boolean(data?.isUsMarket || (data?.usMacroData && !data?.twMacroData));
   const usMacro = data?.usMacroData;
 
-  const isTaiwan = colorTheme === 'taiwan';
-  const bullText = isTaiwan ? '#ef4444' : '#10b981';
-  const bearText = isTaiwan ? '#10b981' : '#ef4444';
+  const { upColor: bullText, downColor: bearText } = resolveDirectionalPalette(colorTheme);
 
   const rawIndex = isUs
     ? (usMacro?.cnnScore ?? data?.overallSentimentIndex ?? 50)

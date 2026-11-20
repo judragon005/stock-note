@@ -1,4 +1,5 @@
 import React, { useId } from 'react';
+import { resolveDirectionalPalette } from '../../../constants/designTokens';
 import type { ChipsSummaryData } from '../../../types/aiForceDashboard';
 import type { ColorThemeMode, MarketType } from '../../../types/stock';
 import { TermTooltip } from '../../common/TermTooltip';
@@ -62,9 +63,7 @@ export const ChipsSummaryCard: React.FC<ChipsSummaryCardProps> = ({
   const sparkGradId = `chipsSparkGrad-${uid}`;
   const isUs = Boolean(market === 'US' || data?.isUsMarket);
   const effectiveTheme: ColorThemeMode = colorTheme ?? (isUs ? 'international' : 'taiwan');
-  const isTaiwan = effectiveTheme === 'taiwan';
-  const posColor = isTaiwan ? '#ef4444' : '#10b981';
-  const negColor = isTaiwan ? '#10b981' : '#ef4444';
+  const { upColor: posColor, downColor: negColor } = resolveDirectionalPalette(effectiveTheme);
 
   const anyData = data as Record<string, any> | undefined;
   const foreign = data?.foreignNetShares ?? anyData?.foreignInvestorsNetBuyShares ?? 0;

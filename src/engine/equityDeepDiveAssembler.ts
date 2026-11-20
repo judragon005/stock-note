@@ -140,6 +140,9 @@ export function assembleAllDeepDiveData(input: EquityDeepDiveInput): {
     ...chipsAndBox,
     symbol,
     name,
+    ...(typeof input.sblBalance === 'number' && Number.isFinite(input.sblBalance)
+      ? { sblBalance: input.sblBalance }
+      : {}),
   };
 
   return {
