@@ -48,5 +48,5 @@
 
 ## 3. 影響與驗證 (Consequences & Verification)
 
-- **測試與建置**：全數 8 組 Wave 1 專案測試檔（60/60 測試）與全庫 314 個測試檔全綠通過；`npm run build` TypeScript 0 錯誤。
+- **測試與建置**：Wave 1 核心 8 組測試套件（55/55 測試）與全庫 314 個測試檔（2,535/2,535 測試）全綠通過；`npm run build` TypeScript 0 錯誤。
 - **技術債狀態**：Debt 0060 與 Debt 0062 標記為 `RESOLVED`；Debt 0061 標記為核心 3 項架構債已清償完畢。
