@@ -68,6 +68,9 @@ export default defineConfig({
         });
         server.middlewares.use(getMarketApiMiddlewareDynamic());
       },
+      configurePreviewServer(server) {
+        server.middlewares.use(getMarketApiMiddlewareDynamic());
+      },
     },
   ],
   test: {

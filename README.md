@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-2518%2F2518%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2547%2F2547%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,20 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. Wave 2 UI 巨石元件解耦與台股全市場 ETF 動態 AUM/費率湖倉閉環 (`Spec 0241`) *(V9.25.0 最新發布 / Spec #0241 / ADR #0241 / Issue #596)*
+### 1. 台股全市場集保與配息歷史數據湖倉、每週自動更新閉環暨主力戰情室司令台重構 (`Spec 0242`) *(V9.26.0 最新發布 / Spec #0242 / ADR #0242 / Issue #598)*
+
+- **台股全市場 10 年雙官方歷年配息庫 (Issue #598 / Ticket 01 & 04)**：
+  - 整合證交所（TWSE `TWT49U`）與櫃買中心（TPEx `exDailyQ`）歷年除權息結果表，自動將民國年正規化為 ISO `YYYY-MM-DD` 並以複合主鍵 `(symbol, action_type, ex_date)` 冪等入庫（19,494 筆全市場上市櫃除權息）；Card 20 解除 4 筆截斷限制，展示歷年配息清單與單期殖利率。
+- **TDCC 51 週官方歷史回溯與非阻塞背景補齊 (Issue #598 / Ticket 02 & 03)**：
+  - 廢棄第三方付費介面，對接 TDCC 官方 `qryStock` 免費端點精確解析 15 級股權分散矩陣；導入 `runWithNonBlockingTimeout`，首屏 300ms 快速回傳不中斷背景 15s 補齊任務，徹底解決背景寫庫被逾時誤殺。
+- **Card 21 ETF 折溢價波動統計量化補全 (Issue #598 / Ticket 05)**：
+  - 由湖倉 30 日歷史淨值計算 ETF 折溢價區間（最高、最低、均值與波動率），下半部注入折溢價波動區間與合理容忍帶警示條，徹底消滅 160px 空白黑洞。
+- **Card 18 置頂司令台與直式三層垂直作戰甲板 (Issue #598 / Ticket 07)**：
+  - Card 18 移至 ZONE 01 第一位（Card 01 K 線之前），內部採用直式垂直三層作戰甲板（`data-layout="vertical-stack"`），語意大字 `34px`、操盤點位 `26px`、戰術指令 `16px`，全數符合微字人體工學。
+- **NAS 24/7 無人值守生產伺服器與 Docker 持久化 (Issue #598 / Ticket 06 & 08)**：
+  - 新增純 Node.js 22 零依賴生產伺服器 `scripts/nas-server.cjs`、自動偵測台北時間週六 10:00 與每日盤後之無頭排程器 `nas-autonomous-scheduler.cjs`，提供 `Dockerfile` 與 `docker-compose.yml` 支援 `LAKEHOUSE_DB_PATH` Docker Volume 持久化掛載。
+
+### 2. Wave 2 UI 巨石元件解耦與台股全市場 ETF 動態 AUM/費率湖倉閉環 (`Spec 0241`) *(V9.25.0 / Spec #0241 / ADR #0241 / Issue #596)*
 
 - **零新增爬蟲全市場 367 檔台股 ETF 實時 AUM 與申贖流 (Issue #596 / Debt 0061 #3)**：
   - `etf_daily_nav` 無損擴充 `issued_units`、`unit_change`、`aum_billion`，直接由 `all_etf.txt` 既有欄位 `c × f / 1e8` 衍生全台灣 367 檔（含冷門債券/期貨/主動 ETF）實時基金規模，徹底根除靜態寫死規模高達 -80%~+94% 之失真。

@@ -152,6 +152,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
       let macroData: any = undefined;
       let pledgeData: GenerateReportOptions['pledge'] = undefined;
       let etfNavData: GenerateReportOptions['etfNav'] = undefined;
+      let etfNavHistoryData: GenerateReportOptions['etfNavHistory'] = undefined;
       let corporateActionsData: GenerateReportOptions['corporateActions'] = undefined;
       let us13fData: GenerateReportOptions['us13fData'] = undefined;
       let etfMetaData: GenerateReportOptions['etfMeta'] = undefined;
@@ -245,6 +246,9 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           if (lakehouseData.etfNav) {
             etfNavData = lakehouseData.etfNav;
           }
+          if (lakehouseData.etfNavHistory && lakehouseData.etfNavHistory.length > 0) {
+            etfNavHistoryData = lakehouseData.etfNavHistory;
+          }
           if (lakehouseData.corporateActions && lakehouseData.corporateActions.length > 0) {
             corporateActionsData = lakehouseData.corporateActions;
           }
@@ -287,6 +291,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             macroData,
             pledge: pledgeData,
             etfNav: etfNavData,
+            etfNavHistory: etfNavHistoryData,
             corporateActions: corporateActionsData,
           }
         );
@@ -424,6 +429,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             macroData,
             pledge: pledgeData,
             etfNav: etfNavData,
+            etfNavHistory: etfNavHistoryData,
             corporateActions: corporateActionsData,
           }
         );
@@ -466,6 +472,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                     macroData: refreshed.macro || macroData,
                     pledge: refreshed.pledge || pledgeData,
                     etfNav: refreshed.etfNav || etfNavData,
+                    etfNavHistory: refreshed.etfNavHistory || etfNavHistoryData,
                     corporateActions: refreshed.corporateActions || corporateActionsData,
                   }
                 );
@@ -582,6 +589,24 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
           >
             <span>ZONE 01 // 價格結構與主力總判</span>
           </div>
+
+          {/* 18 主力追蹤總評判置頂司令台 (Spec 0242: 移至 Card 01 之前，第一眼定調戰術方向) */}
+          {!report.isDataPending && !isLoading && (
+            <div
+              data-layer="8-main-force-verdict-deck"
+              style={{
+                width: '100%',
+                minWidth: 0,
+              }}
+            >
+              <MainForceVerdictCard
+                key={symbol}
+                data={report.mainForceVerdict}
+                colorTheme={resolvedColorTheme}
+                market={market}
+              />
+            </div>
+          )}
 
           {/* Layer 1: 全盤態勢與趨勢主圖 (100% 滿版獨立大視野，看盤完全不壓迫) */}
           <div data-layer="1-kline" style={{ width: '100%', minWidth: 0 }}>
@@ -1067,22 +1092,6 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Layer 8: 18 主力追蹤總評判 (Spec 0211: 100% 滿版旗艦作戰指令列，如同 Card 01 頂部獨立大視野) */}
-              <div
-                data-layer="8-main-force-verdict-deck"
-                style={{
-                  width: '100%',
-                  minWidth: 0,
-                }}
-              >
-                <MainForceVerdictCard
-                  key={symbol}
-                  data={report.mainForceVerdict}
-                  colorTheme={resolvedColorTheme}
-                  market={market}
-                />
               </div>
             </>
           )}

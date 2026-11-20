@@ -44,6 +44,7 @@ describe('Ticket 08: 主力戰情室 7 層 Bento-Grid 專業動線架構驗收 (
     expect(html).toContain('data-layer="8-main-force-verdict-deck"');
 
     // 驗證 Layer 2 包含雙雷達（卡片 03 + 卡片 05）
+    const layer1Index = html.indexOf('data-layer="1-kline"');
     const layer2Index = html.indexOf('data-layer="2-radars"');
     const layer3Index = html.indexOf('data-layer="3-position-chips"');
     const layer4Index = html.indexOf('data-layer="4-big-data"');
@@ -52,14 +53,17 @@ describe('Ticket 08: 主力戰情室 7 層 Bento-Grid 專業動線架構驗收 (
     const layer7Index = html.indexOf('data-layer="7-chips-health-matrix"');
     const layer8Index = html.indexOf('data-layer="8-main-force-verdict-deck"');
 
+    // Spec 0242: Card 18 司令台置頂於 Card 01 (Layer 1) 之前
+    expect(layer8Index).toBeGreaterThan(-1);
+    expect(layer8Index).toBeLessThan(layer1Index);
+    expect(layer1Index).toBeLessThan(layer2Index);
     expect(layer2Index).toBeLessThan(layer3Index);
     expect(layer3Index).toBeLessThan(layer4Index);
     expect(layer4Index).toBeLessThan(layer5Index);
     expect(layer5Index).toBeLessThan(layer6Index);
     expect(layer6Index).toBeLessThan(layer7Index);
-    expect(layer7Index).toBeLessThan(layer8Index);
 
-    // 驗證 Card 18 獨立置於 Layer 8 滿版
+    // 驗證 Card 18 獨立置頂滿版
     expect(html).toContain('18 主力追蹤總評判');
   });
 

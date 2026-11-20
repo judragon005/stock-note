@@ -289,7 +289,7 @@ export function buildMonthlyRevenue(
     const quarterlyDividends = (etfOptions?.corporateActions ?? [])
       .filter((ca) => typeof ca.cashDividendPerShare === 'number' && ca.cashDividendPerShare > 0)
       .sort((a, b) => b.exDate.localeCompare(a.exDate))
-      .slice(0, 4)
+      .slice(0, 12)
       .map((ca) => {
         const perPayoutYield =
           etfOptions?.currentPrice && etfOptions.currentPrice > 0
