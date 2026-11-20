@@ -1,0 +1,9 @@
+node_modules
+dist
+.scratch
+.git
+nas-data
+*.db
+*.db-wal
+*.db-shm
+*.log

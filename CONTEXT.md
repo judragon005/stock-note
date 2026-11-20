@@ -3090,6 +3090,16 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     2. **TW Suffix-Safe ETF Meta & Zero-Mock Negative Cache (台股後綴保護 ETF 元數據與零造假負快取)**：`etf_meta` 表結合 TWSE OpenAPI `t187ap47_L` 與保留 `.TW`/`.TWO` 後綴之 Yahoo Crumb 按需費率自癒（30D TTL）；查無官方費率者寫入 `expense_source = 'UNAVAILABLE'` 並誠實顯示空態，絕不捏造費率或反覆重打外部 API。_Avoid_: Suffix-to-Hyphen Mangling (0050-TW), Synthetic Expense Ratio
     3. **Presentation Partitioning & Monolith Line-Ceiling Guard (純展示分區隔離與單體行數紅線守門)**：`DynamicSignalsCard.tsx`（<= 160 行）與 `AnalysisMetricView.tsx`（<= 220 行）拆解為零新依賴之純 Props 子模組，並於 `architecturalFitnessGuard.test.ts` 機械化鎖定行數上限。_Avoid_: Unbounded Monolithic Components, Context Over-Abstraction
 
+- **TW Market Lakehouse TDCC & Dividend History, NAS Autonomous Scheduler & War Room Command Deck (台股全市場集保與配息歷史數據湖倉、每週自動更新閉環暨主力戰情室司令台重構)**:
+  - 核心模組：`scripts/market-sync/ingest-tw-corporate-actions.cjs`、`scripts/market-sync/ingest-tw-tdcc.cjs`、`scripts/market-sync/on-demand-backfill-orchestrator.cjs`、`scripts/market-sync/weekly-lakehouse-sync.cjs`、`scripts/market-sync/nas-autonomous-scheduler.cjs`、`scripts/nas-server.cjs`、`src/engine/aiForceDashboardEngine.ts`、`src/engine/aiForceMarketAssembly.ts`、`src/components/aiForceDashboard/cards/MainForceVerdictCard.tsx`、`src/components/aiForceDashboard/cards/MonthlyRevenueCard.tsx`、`src/components/aiForceDashboard/cards/ValuationMetricsCard.tsx`、`src/components/aiForceDashboard/AiForceDashboardView.tsx`。
+  - 規格來源：Spec 0242 (v9.26.0) 與 [ADR 0242](file:///d:/APP/股票紀錄/docs/adr/0242-tw-lakehouse-tdcc-dividend-history-and-war-room-command-deck.md)，關聯 GitHub Issue #598。
+  - 核心領域術語與架構革新：
+    1. **Dual-Official Full-Market 10-Year Dividend Archive (台股全市場 10 年雙官方歷年配息庫)**：結合 TWSE `TWT49U` 與 TPEx `exDailyQ` 官方年份批次結果表，自動正規化為 ISO `YYYY-MM-DD` 並以複合主鍵 `(symbol, action_type, ex_date)` 冪等入庫；解除前端 4 筆寫死截斷，全面展現跨年度半年配/年配 ETF 之真實殖利率歷史。_Avoid_: Stock-Only Dividend Scraper, 4-Quarter Hardcoded Slice
+    2. **51-Week Official TDCC Ingestion & Non-Blocking Timeout Decoupling (51 週官方集保回溯與非阻塞逾時解耦)**：廢棄第三方付費端點，改接 TDCC 官方 `qryStock` 免費歷史端點並精確聚合 15 級股權分散矩陣；`runWithNonBlockingTimeout` 將 300ms 首屏回傳與 15s 背景補齊解耦，徹底終結背景寫庫被逾時誤殺。_Avoid_: Paid TDCC API Lock-In, Zombie Abort Race Condition
+    3. **NAS 24/7 Autonomous Scheduler & Single-Container Lakehouse (NAS 無人值守排程器與單容器持久化湖倉)**：提供純 Node.js 22 零依賴生產伺服器 `scripts/nas-server.cjs`、自動偵測台北時間週六 10:00 與每日盤後之無頭排程器，搭配 `LAKEHOUSE_DB_PATH` Docker Volume 持久化掛載。_Avoid_: Heavy Express/Cron Dependency, Headed Browser Dependency for Periodic Updates
+    4. **War Room Vertical Stack Command Deck & ETF Quant Range (戰情室司令台置頂垂直作戰甲板與 ETF 估值量化補全)**：Card 18 躍升為首屏置頂司令台，三欄改為垂直三層作戰甲板，大字體判讀；Card 21 注入 30 日折溢價波動區間與合理容忍帶警示條，徹底消除 160px 空白黑洞。_Avoid_: Bottom-Buried War Room Verdict, Micro-Typography in Critical Decision Cards, Empty ETF Valuation Blackhole
+
+
 
 
 

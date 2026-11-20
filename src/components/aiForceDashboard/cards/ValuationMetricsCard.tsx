@@ -468,7 +468,7 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#94a3b8' }}>
-                  <span>歷史位階</span>
+                  <span>{isEtf ? '折溢價位階' : '歷史位階'}</span>
                   <span style={{ color: tierMeta.color, fontWeight: 700 }}>{tierMeta.label}</span>
                 </div>
 
@@ -484,10 +484,28 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                   }}
                 >
                   {(() => {
+                    const hasEtfRatio =
+                      isEtf &&
+                      current.etfPremiumDiscountRate !== undefined &&
+                      Number.isFinite(current.etfPremiumDiscountRate);
+                    const etfTier = hasEtfRatio
+                      ? current.etfPremiumDiscountRate! < -0.3
+                        ? 'UNDERVALUED'
+                        : current.etfPremiumDiscountRate! > 0.5
+                          ? 'OVERVALUED'
+                          : 'FAIR'
+                      : undefined;
+                    const etfNeedlePct = hasEtfRatio
+                      ? Math.min(96, Math.max(4, ((current.etfPremiumDiscountRate! + 1.0) / 2.0) * 100))
+                      : undefined;
+
                     const hasEnoughSamples =
                       !isEtf &&
                       (current.historySampleSize === undefined || current.historySampleSize >= 5);
-                    const prValue = current.pePercentile ?? current.pbPercentile;
+                    const activeTier = isEtf ? etfTier : hasEnoughSamples ? current.valuationTier : undefined;
+                    const prValue = isEtf ? etfNeedlePct : current.pePercentile ?? current.pbPercentile;
+                    const showNeedle = isEtf ? hasEtfRatio : hasEnoughSamples;
+
                     return (
                       <>
                         <div
@@ -495,28 +513,28 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                             width: '33%',
                             borderRadius: '999px 0 0 999px',
                             background: 'linear-gradient(90deg, #10b981 0%, #34d399 100%)',
-                            opacity: hasEnoughSamples && current.valuationTier === 'UNDERVALUED' ? 1 : 0.35,
+                            opacity: activeTier === 'UNDERVALUED' ? 1 : 0.35,
                           }}
-                          title="低估便宜"
+                          title={isEtf ? '折價便宜 (<-0.3%)' : '低估便宜'}
                         />
                         <div
                           style={{
                             width: '34%',
                             background: 'linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%)',
-                            opacity: hasEnoughSamples && current.valuationTier === 'FAIR' ? 1 : 0.35,
+                            opacity: activeTier === 'FAIR' ? 1 : 0.35,
                           }}
-                          title="合理估值"
+                          title={isEtf ? '合理折溢價 (-0.3% ~ +0.5%)' : '合理估值'}
                         />
                         <div
                           style={{
                             width: '33%',
                             borderRadius: '0 999px 999px 0',
                             background: 'linear-gradient(90deg, #ef4444 0%, #f87171 100%)',
-                            opacity: hasEnoughSamples && current.valuationTier === 'OVERVALUED' ? 1 : 0.35,
+                            opacity: activeTier === 'OVERVALUED' ? 1 : 0.35,
                           }}
-                          title="高估偏貴"
+                          title={isEtf ? '溢價警戒 (>+0.5%)' : '高估偏貴'}
                         />
-                        {hasEnoughSamples && prValue !== undefined && Number.isFinite(prValue) && (
+                        {showNeedle && prValue !== undefined && Number.isFinite(prValue) && (
                           <div
                             data-testid="valuation-pr-needle"
                             style={{
@@ -530,7 +548,11 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                               boxShadow: '0 0 6px rgba(255, 255, 255, 0.9)',
                               transform: 'translateX(-50%)',
                             }}
-                            title={`PR ${prValue}%`}
+                            title={
+                              isEtf
+                                ? `即時折溢價 ${current.etfPremiumDiscountRate! > 0 ? '+' : ''}${current.etfPremiumDiscountRate!.toFixed(2)}%`
+                                : `PR ${prValue}%`
+                            }
                           />
                         )}
                       </>
@@ -538,6 +560,127 @@ export const ValuationMetricsCard: React.FC<ValuationMetricsCardProps> = ({
                   })()}
                 </div>
               </div>
+
+              {/* ETF 專屬量化面板：近 30 日折溢價波動帶與官方淨值定錨 (Spec 0242: 消滅 ETF 模式大片空白) */}
+              {isEtf && (
+                <div
+                  data-testid="valuation-etf-nav-band"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    background: 'rgba(15, 23, 42, 0.55)',
+                    border: '1px solid rgba(56, 189, 248, 0.16)',
+                    marginBottom: '10px',
+                    fontSize: '0.78rem',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#a78bfa', fontWeight: 700 }}>
+                      {current.etfNavStats?.sampleDays
+                        ? `近 ${current.etfNavStats.sampleDays} 日折溢價波動區間`
+                        : 'ETF 淨值與折溢價定錨'}
+                    </span>
+                    <span style={{ color: '#94a3b8', fontFamily: 'monospace' }}>
+                      合理帶 -0.3% ~ +0.5%
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
+                    <div
+                      style={{
+                        background: 'rgba(30, 41, 59, 0.55)',
+                        padding: '6px 8px',
+                        borderRadius: '6px',
+                        textAlign: 'center',
+                      }}
+                    >
+                      <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>區間最低</div>
+                      <div style={{ color: '#34d399', fontWeight: 800, fontFamily: 'monospace', marginTop: '2px' }}>
+                        {current.etfNavStats?.minPremiumDiscount !== undefined
+                          ? `${current.etfNavStats.minPremiumDiscount > 0 ? '+' : ''}${current.etfNavStats.minPremiumDiscount.toFixed(2)}%`
+                          : '--'}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        background: 'rgba(30, 41, 59, 0.55)',
+                        padding: '6px 8px',
+                        borderRadius: '6px',
+                        textAlign: 'center',
+                      }}
+                    >
+                      <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>區間均值</div>
+                      <div style={{ color: '#38bdf8', fontWeight: 800, fontFamily: 'monospace', marginTop: '2px' }}>
+                        {current.etfNavStats?.avgPremiumDiscount !== undefined
+                          ? `${current.etfNavStats.avgPremiumDiscount > 0 ? '+' : ''}${current.etfNavStats.avgPremiumDiscount.toFixed(2)}%`
+                          : '--'}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        background: 'rgba(30, 41, 59, 0.55)',
+                        padding: '6px 8px',
+                        borderRadius: '6px',
+                        textAlign: 'center',
+                      }}
+                    >
+                      <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>區間最高</div>
+                      <div style={{ color: '#f87171', fontWeight: 800, fontFamily: 'monospace', marginTop: '2px' }}>
+                        {current.etfNavStats?.maxPremiumDiscount !== undefined
+                          ? `${current.etfNavStats.maxPremiumDiscount > 0 ? '+' : ''}${current.etfNavStats.maxPremiumDiscount.toFixed(2)}%`
+                          : '--'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '8px',
+                      paddingTop: '4px',
+                      borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                      color: '#cbd5e1',
+                    }}
+                  >
+                    <span>
+                      官方淨值:{' '}
+                      <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>
+                        {current.etfNavStats?.latestNav !== undefined
+                          ? `${isUs ? '$' : ''}${current.etfNavStats.latestNav.toFixed(2)}`
+                          : '--'}
+                      </strong>
+                    </span>
+                    <span>
+                      市價:{' '}
+                      <strong style={{ color: '#38bdf8', fontFamily: 'monospace' }}>
+                        {current.etfNavStats?.latestMarketPrice !== undefined
+                          ? `${isUs ? '$' : ''}${current.etfNavStats.latestMarketPrice.toFixed(2)}`
+                          : '--'}
+                      </strong>
+                    </span>
+                    {current.etfNavStats?.unitChange !== undefined && (
+                      <span>
+                        淨申贖:{' '}
+                        <strong
+                          style={{
+                            color: current.etfNavStats.unitChange >= 0 ? '#34d399' : '#f87171',
+                            fontFamily: 'monospace',
+                          }}
+                        >
+                          {current.etfNavStats.unitChange >= 0 ? '+' : ''}
+                          {Math.round(current.etfNavStats.unitChange / 1000).toLocaleString()} 千單位
+                        </strong>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* 最新單季獲利基石與董監質押治理 */}
               {(current.latestQuarterEps !== undefined ||

@@ -981,7 +981,16 @@ export interface GenerateReportOptions {
     closePrice?: number;
     nav?: number;
     premiumDiscountRatio?: number;
+    issuedUnits?: number;
+    unitChange?: number;
+    aumBillion?: number;
   };
+  etfNavHistory?: Array<{
+    date: string;
+    nav?: number;
+    closePrice?: number;
+    premiumDiscountRatio?: number;
+  }>;
   pledge?: {
     report_date?: string;
     pledged_shares?: number;
@@ -1863,6 +1872,39 @@ export function generateAiForceReportFromCandles(
         operatingMargin: options?.valuationData?.operatingMargin ?? undefined,
         directorPledgeRatio: options?.pledge?.pledge_ratio ?? undefined,
         etfPremiumDiscountRate: options?.etfNav?.premiumDiscountRatio ?? undefined,
+        etfNavStats: (() => {
+          if (!isEtf) return undefined;
+          const ratios = (options?.etfNavHistory ?? [])
+            .map((h) => h.premiumDiscountRatio)
+            .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+          const minPremiumDiscount = ratios.length > 0 ? Number(Math.min(...ratios).toFixed(2)) : undefined;
+          const maxPremiumDiscount = ratios.length > 0 ? Number(Math.max(...ratios).toFixed(2)) : undefined;
+          const avgPremiumDiscount =
+            ratios.length > 0
+              ? Number((ratios.reduce((sum, v) => sum + v, 0) / ratios.length).toFixed(2))
+              : undefined;
+          const latestNav = options?.etfNav?.nav;
+          const latestMarketPrice = options?.etfNav?.closePrice ?? currentPrice;
+          const unitChange = options?.etfNav?.unitChange;
+          if (
+            ratios.length === 0 &&
+            latestNav === undefined &&
+            unitChange === undefined &&
+            dividendYield === undefined
+          ) {
+            return undefined;
+          }
+          return {
+            minPremiumDiscount,
+            maxPremiumDiscount,
+            avgPremiumDiscount,
+            sampleDays: ratios.length,
+            latestNav,
+            latestMarketPrice,
+            unitChange,
+            annualAvgYield: dividendYield,
+          };
+        })(),
         asOfDateText: options?.valuationData?.asOfDate ?? options?.etfNav?.date ?? last.date,
         isEmpty,
         valuationTier: percentileStats.valuationTier,

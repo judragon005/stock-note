@@ -46,6 +46,7 @@ htmlcov/
 # Logs & Temp
 logs/
 *.log
+nas-data/
 0-0_開發歷程自動化紀錄/
 *.jsonl
 scratch/

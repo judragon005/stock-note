@@ -1,0 +1,16 @@
+services:
+  stock-tracker:
+    build: .
+    container_name: stock-tracker-nas
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - TZ=Asia/Taipei
+      - PORT=3000
+      - LAKEHOUSE_DB_PATH=/data/market_history.db
+      # 若欲改由 NAS 外部排程接管，可取消下方註解停用內建排程器
+      # - DISABLE_BUILTIN_SCHEDULER=true
+    volumes:
+      # 請依您的 NAS 實際路徑調整左側目錄（例如 /volume1/docker/stock-tracker/data:/data）
+      - ./nas-data:/data

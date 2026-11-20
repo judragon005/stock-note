@@ -31,9 +31,14 @@ function isSqliteSupported() {
 
 /**
  * 取得或自訂 SQLite 儲存庫實體路徑
+ * 優先序：顯式傳入 customPath > 環境變數 LAKEHOUSE_DB_PATH (Docker/NAS 持久化) > 預設路徑
  */
 function getDbPath(customPath) {
-  return customPath || DEFAULT_DB_PATH;
+  if (customPath) return customPath;
+  if (process.env.LAKEHOUSE_DB_PATH && String(process.env.LAKEHOUSE_DB_PATH).trim()) {
+    return path.resolve(String(process.env.LAKEHOUSE_DB_PATH).trim());
+  }
+  return DEFAULT_DB_PATH;
 }
 
 /**

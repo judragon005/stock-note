@@ -30,6 +30,7 @@ const {
   isOnDemandBackfillInFlight,
   clearOnDemandBackfillState,
   runWithAbortTimeout,
+  runWithNonBlockingTimeout,
   runOnDemandSymbolBackfill,
 } = require('./on-demand-backfill-orchestrator.cjs');
 const {
@@ -1164,12 +1165,27 @@ function createMarketApiMiddleware(customDbPath) {
           .get(symbol, aliasSym) || null;
       } catch {}
 
-      // 新增查詢最新 1 筆 ETF 官方淨值、折溢價、發行單位與實時規模 (Spec 0237 & Spec 0241)
+      // 新增查詢最新 1 筆與近 30 日 ETF 官方淨值、折溢價、發行單位與實時規模 (Spec 0237 & Spec 0241 & Spec 0242)
       let etfNavRow = null;
+      let etfNavHistory = [];
       try {
-        etfNavRow = db
-          .prepare('SELECT * FROM etf_daily_nav WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 1')
-          .get(symbol, aliasSym) || null;
+        const navRows = db
+          .prepare('SELECT * FROM etf_daily_nav WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 30')
+          .all(symbol, aliasSym);
+        if (navRows.length > 0) {
+          etfNavRow = navRows[0];
+          etfNavHistory = navRows
+            .map((r) => ({
+              date: r.date,
+              nav: r.nav != null ? Number(r.nav) : null,
+              closePrice: (r.close_price ?? r.market_price) != null ? Number(r.close_price ?? r.market_price) : null,
+              premiumDiscountRatio:
+                (r.premium_discount_ratio ?? r.premium_discount_rate) != null
+                  ? Number(r.premium_discount_ratio ?? r.premium_discount_rate)
+                  : null,
+            }))
+            .reverse();
+        }
       } catch {}
 
       // 新增查詢台股 ETF 元數據與實時費用率 (Spec 0241 T04 / Debt 0061 #3)
@@ -1242,6 +1258,7 @@ function createMarketApiMiddleware(customDbPath) {
             quarterlyFinancials,
             pledge: pledgeRow,
             etfNav: etfNavRow,
+            etfNavHistory,
             etfMeta: etfMetaRow,
             corporateActions,
             macro: macroRow,
@@ -1257,7 +1274,7 @@ function createMarketApiMiddleware(customDbPath) {
       const needsAnyBackfill =
         needTdcc || needRevenue || needDividend || needUsFundamentals || needTwEtfMeta;
       if (needsAnyBackfill && typeof globalThis.fetch === 'function' && !isUnmockedTestEnv) {
-        return runWithAbortTimeout(
+        return runWithNonBlockingTimeout(
           (signal) =>
             runOnDemandSymbolBackfill(symbol, {
               needTdcc,

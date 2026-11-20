@@ -590,6 +590,16 @@ export interface ValuationMetricsData {
   directorPledgeRatio?: number; // 董監質押比例 (%) (Spec 0224 Ticket 08)
   // ETF 自適應欄位
   etfPremiumDiscountRate?: number; // 折溢價率 (%)
+  etfNavStats?: {
+    minPremiumDiscount?: number;
+    maxPremiumDiscount?: number;
+    avgPremiumDiscount?: number;
+    sampleDays?: number;
+    latestNav?: number;
+    latestMarketPrice?: number;
+    unitChange?: number;
+    annualAvgYield?: number;
+  };
   etfExpenseRatio?: number; // 總費用率 (%)
   asOfDateText?: string;
   isEmpty?: boolean;

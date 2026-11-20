@@ -14,6 +14,7 @@ const { getOrFetchUsFundamentals } = require('./us-fundamentals-ingestion.cjs');
 const ON_DEMAND_COOLDOWN_MS = 5 * 60 * 1000;
 const ON_DEMAND_FAILURE_COOLDOWN_MS = 15 * 1000;
 const ON_DEMAND_TIMEOUT_MS = 300;
+const ON_DEMAND_BG_MAX_MS = 15 * 1000;
 
 const onDemandBackfillInFlight = new Set();
 const onDemandBackfillCooldown = new Map();
@@ -68,6 +69,53 @@ async function runWithAbortTimeout(taskFn, timeoutMs = ON_DEMAND_TIMEOUT_MS) {
     return await Promise.race([taskPromise, timeoutPromise]);
   } finally {
     if (timer) clearTimeout(timer);
+  }
+}
+
+/**
+ * 非阻塞首屏競速封裝 (Spec 0242)：
+ * - 若任務在 waitMs (預設 300ms) 內完成，立刻回傳結果；
+ * - 若超過 waitMs，立即回傳 { timedOut: true } 讓首屏不阻塞，但【不中止】背景任務，
+ *   改由獨立的 bgMaxMs (預設 15 秒) AbortController 守護，確保 TDCC/配息補齊能真正寫庫。
+ *
+ * @template T
+ * @param {(signal: AbortSignal) => Promise<T>} taskFn
+ * @param {number} [waitMs=ON_DEMAND_TIMEOUT_MS]
+ * @param {number} [bgMaxMs=ON_DEMAND_BG_MAX_MS]
+ * @returns {Promise<{ timedOut: boolean; result?: T; bgPromise: Promise<void> }>}
+ */
+async function runWithNonBlockingTimeout(
+  taskFn,
+  waitMs = ON_DEMAND_TIMEOUT_MS,
+  bgMaxMs = ON_DEMAND_BG_MAX_MS
+) {
+  const bgController = new AbortController();
+  let bgTimer = null;
+  let waitTimer = null;
+
+  bgTimer = setTimeout(() => {
+    bgController.abort();
+  }, bgMaxMs);
+
+  const bgPromise = Promise.resolve()
+    .then(() => taskFn(bgController.signal))
+    .then((result) => ({ timedOut: false, result }))
+    .catch(() => ({ timedOut: false, result: undefined }))
+    .finally(() => {
+      if (bgTimer) clearTimeout(bgTimer);
+    });
+
+  const waitPromise = new Promise((resolve) => {
+    waitTimer = setTimeout(() => {
+      resolve({ timedOut: true });
+    }, waitMs);
+  });
+
+  try {
+    const raced = await Promise.race([bgPromise, waitPromise]);
+    return { ...raced, bgPromise: bgPromise.then(() => undefined) };
+  } finally {
+    if (waitTimer) clearTimeout(waitTimer);
   }
 }
 
@@ -212,7 +260,7 @@ async function runOnDemandSymbolBackfill(
     const tasks = [];
     if (needTdcc && !signal?.aborted) {
       const { backfillSymbolTdccHistory } = require('./ingest-tw-tdcc.cjs');
-      tasks.push(backfillSymbolTdccHistory(symbol, 10, customDbPath, globalThis.fetch, signal));
+      tasks.push(backfillSymbolTdccHistory(symbol, 12, customDbPath, globalThis.fetch, signal));
     }
     if (needRevenue && !signal?.aborted) {
       const { backfillSymbolMonthlyRevenue } = require('./ingest-tw-monthly-revenue.cjs');
@@ -248,9 +296,11 @@ module.exports = {
   ON_DEMAND_COOLDOWN_MS,
   ON_DEMAND_FAILURE_COOLDOWN_MS,
   ON_DEMAND_TIMEOUT_MS,
+  ON_DEMAND_BG_MAX_MS,
   isOnDemandBackfillInFlight,
   clearOnDemandBackfillState,
   runWithAbortTimeout,
+  runWithNonBlockingTimeout,
   backfillSymbolDividendsFromRemote,
   runOnDemandSymbolBackfill,
 };

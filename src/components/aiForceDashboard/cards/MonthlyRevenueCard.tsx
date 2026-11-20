@@ -164,8 +164,8 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
               {isEtf
                 ? 'ETF 資產規模與收益分配'
                 : isQuarterly
-                ? '美股季度營收與成長走勢 (10-Q/10-K)'
-                : '月營收與成長趨勢'}
+                  ? '美股季度營收與成長走勢 (10-Q/10-K)'
+                  : '月營收與成長趨勢'}
             </TermTooltip>
           </h3>
         </div>
@@ -274,10 +274,13 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
             </div>
           </div>
 
-          {/* 近四季配息金額與殖利率河流 */}
+          {/* 歷年配息金額與單期殖利率河流 (Spec 0242: 解除 4 筆截斷，完整涵蓋 2026~2022) */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', marginBottom: '8px' }}>
-              近四季配息紀錄與年化殖利率 {isUs ? '(USD)' : '(TWD)'}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', marginBottom: '8px' }}>
+              <span>歷年配息紀錄與單期殖利率 {isUs ? '(USD)' : '(TWD)'}</span>
+              {data.etfData.quarterlyDividends.length > 0 && (
+                <span style={{ color: '#38bdf8' }}>共 {data.etfData.quarterlyDividends.length} 期</span>
+              )}
             </div>
             {data.etfData.quarterlyDividends.length === 0 ? (
               <div
@@ -292,10 +295,20 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
                   color: '#94a3b8',
                 }}
               >
-                近四季尚無現金配息紀錄（或屬不配息累積型 ETF）
+                尚無歷史現金配息紀錄（或屬不配息累積型 ETF）
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+              <div
+                data-testid="etf-dividend-history-grid"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: '6px',
+                  maxHeight: '190px',
+                  overflowY: 'auto',
+                  paddingRight: '2px',
+                }}
+              >
                 {data.etfData.quarterlyDividends.map((q) => (
                   <div
                     key={q.quarter}

@@ -1,8 +1,19 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-11-19 15:55 (UTC+8)  
+> **交接產生時間**：2026-11-20 14:05 (UTC+8)  
 > **當前最新里程碑**：
-> - **V9.24.0 主力戰情室 5.0 — 台美雙市場一等公民對等架構、全鏈路資料管線修復與 21 卡零缺陷閉環**（ADR 0239, Spec 0239, Issue #592）：
+> - **V9.26.0 台股全市場集保與配息歷史數據湖倉、每週自動更新閉環暨主力戰情室司令台重構**（ADR 0242, Spec 0242, Issue #598）：
+>   - **台股全市場 10 年雙官方歷年配息庫 (Issue #598 / Ticket 01 & 04)**：整合 TWSE `TWT49U` 與 TPEx `exDailyQ` 官方結果表，正規化為 ISO `YYYY-MM-DD` 冪等寫入 SQLite（入庫 19,494 筆）；解除前端 4 筆寫死截斷，全面展現跨年度半年配/年配 ETF 之真實殖利率歷史。
+>   - **51 週官方 TDCC 集保回溯與非阻塞逾時解耦 (Issue #598 / Ticket 02 & 03)**：廢棄第三方付費端點，改接 TDCC 官方 `qryStock` 免費端點並精確聚合 15 級股權分散矩陣；`runWithNonBlockingTimeout` 將 300ms 首屏回傳與 15s 背景補齊解耦，徹底終結背景寫庫被逾時誤殺。
+>   - **Card 21 ETF 折溢價波動統計量化補全 (Issue #598 / Ticket 05)**：由湖倉 30 日歷史淨值計算 ETF 折溢價區間（最高、最低、均值與波動率），下半部注入折溢價波動區間與合理容忍帶警示條，徹底消滅 160px 空白黑洞。
+>   - **Card 18 置頂司令台與直式三層垂直作戰甲板 (Issue #598 / Ticket 07)**：Card 18 移至 ZONE 01 第一位（Card 01 K 線之前），內部採用直式垂直三層作戰甲板（`data-layout="vertical-stack"`），語意大字 `34px`、操盤點位 `26px`、戰術指令 `16px`，全數符合微字人體工學。
+>   - **NAS 24/7 無人值守生產伺服器與 Docker 持久化 (Issue #598 / Ticket 06 & 08)**：新增純 Node.js 22 零依賴生產伺服器 `scripts/nas-server.cjs`、自動偵測台北時間週六 10:00 與每日盤後之無頭排程器 `nas-autonomous-scheduler.cjs`，提供 `Dockerfile` 與 `docker-compose.yml` 支援 `LAKEHOUSE_DB_PATH` Docker Volume 持久化掛載。
+>   - **品質狀態**：全量單元與整合測試 **2,547/2,547 通過 (100% Passed / 316 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，生產打包 `npm run build` 100% 綠燈。
+> - **V9.25.0 Wave 2 UI 巨石元件解耦與台股全市場 ETF 動態 AUM/費率湖倉閉環**（ADR 0241, Spec 0241, Issue #596）：
+>   - **零新增爬蟲全市場 367 檔台股 ETF 實時 AUM 與申贖流 (Issue #596 / Debt 0061 #3)**：`etf_daily_nav` 無損擴充，直接由 `all_etf.txt` 既有欄位衍生實時基金規模與單日淨申贖單位差。
+>   - **台股 `etf_meta` 雙軌自癒與 ARINC 661 Zero-Mock 費率守門 (Issue #596 / Debt 0061 #3)**：結合 TWSE OpenAPI `t187ap47_L` 與保留 `.TW`/`.TWO` 後綴之 Yahoo Crumb 按需費率補齊（30D TTL + `UNAVAILABLE` 負快取）。
+>   - **Card 12 與深度財報巨石元件純展示解耦與 CI 行數紅線守門 (Issue #596 / Debt 0049 & 0050)**：`DynamicSignalsCard.tsx`（400 ➔ 147 行）拆出 3 個純展示層子元件；`AnalysisMetricView.tsx`（2,134 ➔ 190 行）剝離共用 SVG 圖表原語與 6 大財務領域 Section。
+>   - **品質狀態**：全量單元測試 **2,518/2,518 通過 (100% Passed / 309 個測試套件)**，TypeScript Strict 0 錯誤 0 警告，生產打包 `npm run build` 100% 綠燈。
 >   - **台美雙市場一等公民對等架構與全域主題貫通 (Issue #592 / Ticket 08 & 16)**：嚴格隔離 `twMacroData` 與 `usMacroData`（依 `market` 專屬寫入），根治台股遭美股總經視圖劫持缺陷；全域貫通 `colorTheme` 與 `market` 至全數 21 張卡片、4 大任務子頁籤與 HTML 匯出，達成台股（紅漲綠跌）與美股（綠漲紅跌）視覺一致。
 >   - **統一市場能力適配層與美股評分解鎖 (Issue #592 / Ticket 08 & 09)**：將美股機構微觀量價結構 (`usMicrostructure`: MFI, OBV, RVOL, VWAP 乖離) 與美股股數流動性階梯全面接入評分核心，解除美股健康度鎖死 50%、動態信號封頂 55 分與主力總評判退化為 `+0 張` 之缺陷。
 >   - **單一權威資產分類來源 (SSOT) 與點號代碼路由 (Issue #592 / Ticket 01 & 02)**：收斂衝突之 ETF 邏輯至 `resolveAssetClass`，移除 `/(富邦|國泰)/` 誤殺規則，精準區分金融個股 `2881` 與主動/債券/美股 ETF；擴展中介層點號代碼匹配（如 `BRK.B` ↔ `BRK-B`）與單例快取。

@@ -356,6 +356,12 @@ export interface LakehouseFullPayload {
     unitChange?: number;
     aumBillion?: number;
   };
+  etfNavHistory?: Array<{
+    date: string;
+    nav?: number;
+    closePrice?: number;
+    premiumDiscountRatio?: number;
+  }>;
   corporateActions?: Array<{
     exDate: string;
     paymentDate?: string;
@@ -538,6 +544,19 @@ export async function loadSymbolFullLakehouseData(
           };
         }
 
+        let etfNavHistory: LakehouseFullPayload['etfNavHistory'] = undefined;
+        if (Array.isArray(data.etfNavHistory) && data.etfNavHistory.length > 0) {
+          etfNavHistory = data.etfNavHistory.map((item: any) => ({
+            date: String(item.date || ''),
+            nav: item.nav != null ? Number(item.nav) : undefined,
+            closePrice: (item.closePrice ?? item.close_price) != null ? Number(item.closePrice ?? item.close_price) : undefined,
+            premiumDiscountRatio:
+              (item.premiumDiscountRatio ?? item.premium_discount_ratio) != null
+                ? Number(item.premiumDiscountRatio ?? item.premium_discount_ratio)
+                : undefined,
+          }));
+        }
+
         // Spec 0241 T04: 合流台股湖倉實時 AUM (etf_daily_nav.aum_billion) 與 etf_meta 費用率
         const twAumFromNav =
           etfNav?.aumBillion != null && Number.isFinite(etfNav.aumBillion) && etfNav.aumBillion > 0
@@ -645,6 +664,7 @@ export async function loadSymbolFullLakehouseData(
             pledge: data.pledge || undefined,
             macro: data.macro,
             etfNav,
+            etfNavHistory,
             corporateActions,
           };
         }
