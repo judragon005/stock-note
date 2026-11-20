@@ -330,7 +330,9 @@ export interface LakehouseFullPayload {
   };
   etfMeta?: {
     aumBillion?: number;
-    expenseRatio?: number;
+    expenseRatio?: number | null;
+    trackingIndex?: string;
+    issuer?: string;
   };
   quarterlyFinancials?: Array<{
     symbol: string;
@@ -350,6 +352,9 @@ export interface LakehouseFullPayload {
     closePrice?: number;
     nav?: number;
     premiumDiscountRatio?: number;
+    issuedUnits?: number;
+    unitChange?: number;
+    aumBillion?: number;
   };
   corporateActions?: Array<{
     exDate: string;
@@ -510,11 +515,17 @@ export async function loadSymbolFullLakehouseData(
           const rawClose = data.etfNav.closePrice ?? data.etfNav.close_price;
           const rawNav = data.etfNav.nav;
           const rawRatio = data.etfNav.premiumDiscountRatio ?? data.etfNav.premium_discount_ratio;
+          const rawUnits = data.etfNav.issuedUnits ?? data.etfNav.issued_units;
+          const rawUnitChange = data.etfNav.unitChange ?? data.etfNav.unit_change;
+          const rawAum = data.etfNav.aumBillion ?? data.etfNav.aum_billion;
           etfNav = {
             date: data.etfNav.date,
             closePrice: rawClose != null ? Number(rawClose) : undefined,
             nav: rawNav != null ? Number(rawNav) : undefined,
             premiumDiscountRatio: rawRatio != null ? Number(rawRatio) : undefined,
+            issuedUnits: rawUnits != null ? Number(rawUnits) : undefined,
+            unitChange: rawUnitChange != null ? Number(rawUnitChange) : undefined,
+            aumBillion: rawAum != null ? Number(rawAum) : undefined,
           };
         } else if (usFund && (usFund.etf_nav_price != null || usFund.etf_premium_discount_ratio != null)) {
           etfNav = {
@@ -524,6 +535,27 @@ export async function loadSymbolFullLakehouseData(
               usFund.etf_premium_discount_ratio != null
                 ? Number(usFund.etf_premium_discount_ratio)
                 : undefined,
+          };
+        }
+
+        // Spec 0241 T04: 合流台股湖倉實時 AUM (etf_daily_nav.aum_billion) 與 etf_meta 費用率
+        const twAumFromNav =
+          etfNav?.aumBillion != null && Number.isFinite(etfNav.aumBillion) && etfNav.aumBillion > 0
+            ? etfNav.aumBillion
+            : undefined;
+        const rawTwMeta = data.etfMeta && typeof data.etfMeta === 'object' ? data.etfMeta : null;
+        const twExpRatio =
+          rawTwMeta?.expense_ratio != null && Number.isFinite(Number(rawTwMeta.expense_ratio))
+            ? Number(rawTwMeta.expense_ratio)
+            : rawTwMeta?.expense_source === 'UNAVAILABLE'
+            ? null
+            : undefined;
+        if (twAumFromNav !== undefined || twExpRatio !== undefined || rawTwMeta) {
+          etfMeta = {
+            aumBillion: etfMeta?.aumBillion ?? twAumFromNav,
+            expenseRatio: etfMeta?.expenseRatio !== undefined ? etfMeta.expenseRatio : twExpRatio,
+            trackingIndex: rawTwMeta?.tracking_index ?? undefined,
+            issuer: rawTwMeta?.issuer ?? undefined,
           };
         }
 

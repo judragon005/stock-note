@@ -1377,16 +1377,35 @@ function parseTwseEtfNavResponse(rawData, dateStr) {
     const symbol = String(item.a || item.symbol || '').trim();
     if (!symbol) continue;
 
-    // 官方 all_etf.txt: e=市價, f=淨值, g=折溢價率; 舊相容: c=市價, d=淨值, e=折溢價
+    // 官方 all_etf.txt: c=已發行單位數, d=淨申贖單位差, e=市價, f=淨值, g=折溢價率; 舊相容: c=市價, d=淨值, e=折溢價
     let closePrice = 0;
     let nav = 0;
     let premiumDiscountRatio = 0;
+    let issuedUnits = null;
+    let unitChange = null;
+    let aumBillion = null;
 
     if (item.f !== undefined || item.g !== undefined) {
       closePrice = parseFloat(String(item.e || '0').replace(/,/g, ''));
       nav = parseFloat(String(item.f || '0').replace(/,/g, ''));
       const ratioStr = String(item.g || '0').replace(/,/g, '').replace('%', '').trim();
       premiumDiscountRatio = parseFloat(ratioStr);
+
+      if (item.c !== undefined && item.c !== null && String(item.c).trim() !== '') {
+        const parsedUnits = parseFloat(String(item.c).replace(/,/g, ''));
+        if (Number.isFinite(parsedUnits) && parsedUnits > 0) {
+          issuedUnits = parsedUnits;
+        }
+      }
+      if (item.d !== undefined && item.d !== null && String(item.d).trim() !== '') {
+        const parsedChange = parseFloat(String(item.d).replace(/,/g, ''));
+        if (Number.isFinite(parsedChange)) {
+          unitChange = parsedChange;
+        }
+      }
+      if (issuedUnits !== null && Number.isFinite(nav) && nav > 0) {
+        aumBillion = Number(((issuedUnits * nav) / 1e8).toFixed(2));
+      }
     } else {
       closePrice = parseFloat(String(item.c || item.close || '0').replace(/,/g, ''));
       nav = parseFloat(String(item.d || item.nav || '0').replace(/,/g, ''));
@@ -1401,6 +1420,9 @@ function parseTwseEtfNavResponse(rawData, dateStr) {
         closePrice,
         nav,
         premiumDiscountRatio: isNaN(premiumDiscountRatio) ? 0 : premiumDiscountRatio,
+        issuedUnits,
+        unitChange,
+        aumBillion,
       });
     }
   }
@@ -1408,7 +1430,7 @@ function parseTwseEtfNavResponse(rawData, dateStr) {
 }
 
 /**
- * 批次寫入 etf_daily_nav 表 (Spec 0183)
+ * 批次寫入 etf_daily_nav 表 (Spec 0183 & Spec 0241 T02)
  */
 function ingestEtfDailyNavToDb(records, customDbPath) {
   if (!Array.isArray(records) || records.length === 0) return false;
@@ -1416,15 +1438,26 @@ function ingestEtfDailyNavToDb(records, customDbPath) {
 
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO etf_daily_nav (
-      symbol, date, close_price, nav, premium_discount_ratio, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?)
+      symbol, date, close_price, nav, premium_discount_ratio,
+      issued_units, unit_change, aum_billion, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const now = Date.now();
   db.exec('BEGIN TRANSACTION;');
   try {
     for (const r of records) {
-      stmt.run(r.symbol, r.date, r.closePrice, r.nav, r.premiumDiscountRatio, now);
+      stmt.run(
+        r.symbol,
+        r.date,
+        r.closePrice,
+        r.nav,
+        r.premiumDiscountRatio,
+        r.issuedUnits ?? null,
+        r.unitChange ?? null,
+        r.aumBillion ?? null,
+        now
+      );
     }
     db.exec('COMMIT;');
     return true;

@@ -1,6 +1,6 @@
 # 技術債 0049: AI 動態信號判斷卡片 (Card 12) 專業層與決策層子元件模組化解耦重構
 
-- **狀態**：`OPEN`
+- **狀態**：`RESOLVED`（已於 v9.25.0 / Spec 0241 / Issue #596 完整解決：拆解為 `DynamicSignalsScoreBar`、`DynamicSignalsRegulatoryLayer`、`DynamicSignalsTacticalAdvice`，主檔收斂至 147 行並植入 CI 行數守門）
 - **優先級**：`P3`
 - **發現來源**：Code Review (Spec 0179 / Issue #224 / PR #231)
 - **標籤**：`Refactor` · `CleanCode` · `AiForceDashboard` · `DynamicSignals` · `Architecture`

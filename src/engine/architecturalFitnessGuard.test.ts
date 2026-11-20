@@ -82,4 +82,29 @@ describe('Spec 0240 T11: Architectural Fitness Guard (防技術債復發靜態�
     );
     expect(adapterSrc).not.toContain('as unknown as');
   });
+
+  it('不變量 5 (Spec 0241 T09): DynamicSignalsCard 與 AnalysisMetricView 主檔行數不得回脹，且 etf_meta DDL 僅歸屬 sqlite-db-core.cjs', () => {
+    const dynamicLines = fs
+      .readFileSync(path.join(ROOT, 'src/components/aiForceDashboard/cards/DynamicSignalsCard.tsx'), 'utf8')
+      .split(/\r?\n/).length;
+    const analysisLines = fs
+      .readFileSync(path.join(ROOT, 'src/components/analysis/AnalysisMetricView.tsx'), 'utf8')
+      .split(/\r?\n/).length;
+
+    expect(dynamicLines).toBeLessThanOrEqual(160);
+    expect(analysisLines).toBeLessThanOrEqual(220);
+
+    const cjsFiles = collectFiles(path.join(ROOT, 'scripts/market-sync'), '.cjs');
+    const etfMetaOwners: string[] = [];
+    for (const file of cjsFiles) {
+      const content = fs.readFileSync(file, 'utf8');
+      const matches = content.match(/CREATE TABLE IF NOT EXISTS etf_meta/g);
+      if (matches) {
+        for (let i = 0; i < matches.length; i++) {
+          etfMetaOwners.push(path.basename(file));
+        }
+      }
+    }
+    expect(etfMetaOwners).toEqual(['sqlite-db-core.cjs']);
+  });
 });
