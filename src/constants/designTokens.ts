@@ -12,8 +12,6 @@ export interface DirectionalPalette {
   upColor: string;
   downColor: string;
   neutralColor: string;
-  upBg: string;
-  downBg: string;
 }
 
 /**
@@ -33,8 +31,6 @@ export function resolveDirectionalPalette(
     upColor: isInternational ? '#10b981' : '#ef4444',
     downColor: isInternational ? '#ef4444' : '#10b981',
     neutralColor: '#94a3b8',
-    upBg: isInternational ? 'rgba(16, 185, 129, 0.14)' : 'rgba(239, 68, 68, 0.14)',
-    downBg: isInternational ? 'rgba(239, 68, 68, 0.14)' : 'rgba(16, 185, 129, 0.14)',
   };
 }
 

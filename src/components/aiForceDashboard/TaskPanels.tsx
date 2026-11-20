@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { resolveDirectionalPalette } from '../../constants/designTokens';
 import {
   Shield,
   Zap,
@@ -227,8 +228,8 @@ export const TechnicalAlertsView: React.FC<TaskPanelProps> = ({
   const effectiveMarket = market ?? report.market ?? 'TW';
   const effectiveReport = effectiveMarket === report.market ? report : { ...report, market: effectiveMarket };
   const alerts = useMemo(() => generateTechnicalAlerts(effectiveReport), [effectiveReport]);
-  const isInternational = colorTheme === 'international' || (!colorTheme && effectiveMarket === 'US');
-  const upColor = isInternational ? '#10b981' : '#ef4444';
+  const { isInternational, upColor } = resolveDirectionalPalette(colorTheme, effectiveMarket);
+  void isInternational;
   void upColor;
   const statusTag = report.marketBar?.statusTag ?? report.marketBar?.marketStatusTag ?? 'NORMAL';
 
@@ -589,8 +590,7 @@ export function deriveKdMaMetrics(report: AiForceDashboardReport) {
  */
 export const KdMaView: React.FC<TaskPanelProps> = ({ report, colorTheme, market }) => {
   const effectiveMarket = market ?? report.market ?? 'TW';
-  const isInternational = colorTheme === 'international' || (!colorTheme && effectiveMarket === 'US');
-  const upColor = isInternational ? '#10b981' : '#ef4444';
+  const { upColor } = resolveDirectionalPalette(colorTheme, effectiveMarket);
   const { k, d, ma20, kdCrossingState, multiTimeframeResonance, historicalOversoldStats, recentCandles } =
     useMemo(() => deriveKdMaMetrics(report), [report]);
 
@@ -860,9 +860,7 @@ export function deriveMacdMetrics(report: AiForceDashboardReport) {
  */
 export const MacdView: React.FC<TaskPanelProps> = ({ report, colorTheme, market }) => {
   const effectiveMarket = market ?? report.market ?? 'TW';
-  const isInternational = colorTheme === 'international' || (!colorTheme && effectiveMarket === 'US');
-  const bullColor = isInternational ? '#10b981' : '#ef4444';
-  const bearColor = isInternational ? '#ef4444' : '#10b981';
+  const { upColor: bullColor, downColor: bearColor } = resolveDirectionalPalette(colorTheme, effectiveMarket);
   const { dif, macd, macdHist, statusText, divergenceInfo, zeroAxisState, momentumAlert, recentCandles } =
     useMemo(() => deriveMacdMetrics(report), [report]);
 
@@ -1125,9 +1123,7 @@ export const RawDataView: React.FC<TaskPanelProps> = ({ report, colorTheme, mark
   const { items, totalPages, currentPage, totalCount } = paginateCandles(candles, page, 10);
   const effectiveMarket = market ?? report.market ?? 'TW';
   const volUnit = effectiveMarket === 'US' ? '股' : '張';
-  const isInternational = colorTheme === 'international' || (!colorTheme && effectiveMarket === 'US');
-  const bullColor = isInternational ? '#10b981' : '#ef4444';
-  const bearColor = isInternational ? '#ef4444' : '#10b981';
+  const { upColor: bullColor, downColor: bearColor } = resolveDirectionalPalette(colorTheme, effectiveMarket);
 
   return (
     <div

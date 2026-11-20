@@ -1,4 +1,5 @@
 import React, { useMemo, useId } from 'react';
+import { resolveDirectionalPalette } from '../../../constants/designTokens';
 import { ForecastConeData } from '../../../types/aiForceDashboard';
 import { ColorThemeMode, MarketType } from '../../../types/stock';
 import { TermTooltip } from '../../common/TermTooltip';
@@ -255,9 +256,7 @@ export function getMainForceDirectionStyle(
   colorTheme: ColorThemeMode = 'taiwan'
 ): MainForceDirectionStyle {
   const isBull = (bullishProb ?? directionProb) >= (bearishProb ?? 50);
-  const isTaiwan = colorTheme === 'taiwan';
-  const bullColor = isTaiwan ? '#ef4444' : '#10b981';
-  const bearColor = isTaiwan ? '#10b981' : '#ef4444';
+  const { upColor: bullColor, downColor: bearColor } = resolveDirectionalPalette(colorTheme);
   return {
     color: isBull ? bullColor : bearColor,
     label: isBull ? '多頭' : '空頭',
@@ -283,9 +282,7 @@ export const ForecastConeCard: React.FC<ForecastConeCardProps> = ({
   const rangeGradId = `rangeConeGrad-${uid}`;
   const bearGradId = `bearConeGrad-${uid}`;
 
-  const isTaiwan = colorTheme === 'taiwan';
-  const bullColor = isTaiwan ? '#ef4444' : '#10b981';
-  const bearColor = isTaiwan ? '#10b981' : '#ef4444';
+  const { upColor: bullColor, downColor: bearColor } = resolveDirectionalPalette(colorTheme);
   const isEmpty = !data.timeNodes || data.timeNodes.length === 0;
 
   const { upperPoints, medianPoints, lowerPoints, priceRange } = useMemo(

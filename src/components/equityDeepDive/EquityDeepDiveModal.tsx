@@ -52,6 +52,11 @@ export const EquityDeepDiveModal: React.FC<EquityDeepDiveModalProps> = ({
   };
 
   const [report, setReport] = useState(() => generateFull7StepsPromptPayload(resolvedInput));
+
+  // 當標的或湖倉借券賣出餘額 (sblBalance) 非同步更新時，同步刷新 7 步投研報告 (Spec 0240 Patch 4)
+  useEffect(() => {
+    setReport(generateFull7StepsPromptPayload(resolvedInput));
+  }, [resolvedInput.symbol, resolvedInput.market, resolvedInput.sblBalance]);
   const [allCopied, setAllCopied] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 

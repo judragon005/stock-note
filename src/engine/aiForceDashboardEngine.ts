@@ -292,8 +292,8 @@ export function createDefaultAiForceReport(
       emptyMessage: isEtf
         ? 'ETF 配息與規模資料累積中'
         : isUs
-        ? '美股季度財報營收 (10-Q/10-K) 累積中'
-        : '月營收數據累積中 (每月 10 日公布)',
+          ? '美股季度財報營收 (10-Q/10-K) 累積中'
+          : '月營收數據累積中 (每月 10 日公布)',
       etfData: undefined,
     },
 
@@ -463,8 +463,8 @@ export function calculateHealthSummaryFromCandles(
       institutionalFlow.usMicrostructure?.obvTrend === 'UP'
         ? 8
         : institutionalFlow.usMicrostructure?.obvTrend === 'DOWN'
-        ? -8
-        : 0;
+          ? -8
+          : 0;
     institutionalSupport = Math.max(10, Math.min(95, Math.round(resolvedUsScore + obvBonus)));
   } else if (institutionalFlow.history.length > 0) {
     const lastInst = institutionalFlow.history[institutionalFlow.history.length - 1];
@@ -704,8 +704,8 @@ export function calculateDynamicSignalsFromCandles(
     verdictLight === 'RED'
       ? '紅燈 (偏空 / 高風險)'
       : verdictLight === 'YELLOW'
-      ? '黃燈 (觀望 / 中性)'
-      : '綠燈 (偏多 / 安全)';
+        ? '黃燈 (觀望 / 中性)'
+        : '綠燈 (偏多 / 安全)';
 
   // 6. 多空矛盾智能仲裁
   const arbitration = arbitrateSignals(trendSignal, chipSignal, momentumSignal, riskSignal);
@@ -746,9 +746,8 @@ export function calculateDynamicSignalsFromCandles(
   let vwapBiasStdText: string | undefined = undefined;
   if (stdDev > 0) {
     const zScore = (last.close - mainForceCost) / stdDev;
-    vwapBiasStdText = `${zScore >= 0 ? '+' : ''}${zScore.toFixed(1)}σ ${
-      zScore > 2 ? '超買過熱' : zScore < -2 ? '超跌' : '常態'
-    }`;
+    vwapBiasStdText = `${zScore >= 0 ? '+' : ''}${zScore.toFixed(1)}σ ${zScore > 2 ? '超買過熱' : zScore < -2 ? '超跌' : '常態'
+      }`;
   } else {
     vwapBiasStdText = `${vwapBias >= 0 ? '+' : ''}${vwapBias.toFixed(1)}% (成本乖離)`;
   }
@@ -1562,12 +1561,12 @@ export function generateAiForceReportFromCandles(
         ? cnnRaw >= 75
           ? '極度貪婪'
           : cnnRaw > 60
-          ? '貪婪'
-          : cnnRaw <= 25
-          ? '極度恐懼'
-          : cnnRaw < 40
-          ? '恐懼'
-          : '中性'
+            ? '貪婪'
+            : cnnRaw <= 25
+              ? '極度恐懼'
+              : cnnRaw < 40
+                ? '恐懼'
+                : '中性'
         : undefined;
       const vixNum =
         typeof options.macroData.vix_close === 'number' && Number.isFinite(options.macroData.vix_close)
@@ -1575,7 +1574,7 @@ export function generateAiForceReportFromCandles(
           : undefined;
       const us10yNum =
         typeof options.macroData.treasury_yield_10y === 'number' &&
-        Number.isFinite(options.macroData.treasury_yield_10y)
+          Number.isFinite(options.macroData.treasury_yield_10y)
           ? options.macroData.treasury_yield_10y
           : undefined;
       marketSentiment.usMacroData = {
@@ -1655,11 +1654,11 @@ export function generateAiForceReportFromCandles(
       ? usMicroScore >= 65
         ? '機構吸籌'
         : usMicroScore <= 40
-        ? '機構調節'
-        : '量價平衡'
+          ? '機構調節'
+          : '量價平衡'
       : institutionalFlow.history.length > 0
-      ? chipsSummary.conclusionBadge
-      : '籌碼待補';
+        ? chipsSummary.conclusionBadge
+        : '籌碼待補';
 
   return {
     ...defaultTemplate,
@@ -1683,8 +1682,8 @@ export function generateAiForceReportFromCandles(
       transactionCount: realtimeQuote?.transactions !== undefined
         ? realtimeQuote.transactions
         : !settlement.isSettled
-        ? (anchorCandle as any)?.transactions
-        : (last as any)?.transactions,
+          ? (anchorCandle as any)?.transactions
+          : (last as any)?.transactions,
       openPrice: !settlement.isSettled
         ? anchorCandle.open
         : (realtimeQuote?.open ?? (realtimeQuote?.price && last.date !== settlement.anchorTradingDate ? undefined : last.open)),
@@ -1734,8 +1733,8 @@ export function generateAiForceReportFromCandles(
         changePercent >= 0 && healthSummary.chipHealth >= 70 && dayTradeRisk.riskIndex < 45
           ? 'AI BULLISH'
           : healthSummary.chipHealth < 50 || dayTradeRisk.riskIndex >= 60 || changePercent < -3
-          ? 'AI WARNING'
-          : 'AI BALANCED',
+            ? 'AI WARNING'
+            : 'AI BALANCED',
       trendJudgement: (() => {
         const ma20 = lastKline?.ma20 ?? currentPrice;
         if (currentPrice >= ma20 && changePercent >= 0) return '偏多強勢';
@@ -1815,9 +1814,9 @@ export function generateAiForceReportFromCandles(
       const etfExpenseRatio =
         isEtf
           ? liveExpenseRatio ??
-            (options?.valuationData || options?.etfNav || derivedYield !== undefined || options?.etfMeta?.aumBillion != null
-              ? ETF_BASELINE_META[cleanSym]?.expenseRatio
-              : undefined)
+          (options?.valuationData || options?.etfNav || derivedYield !== undefined || options?.etfMeta?.aumBillion != null
+            ? ETF_BASELINE_META[cleanSym]?.expenseRatio
+            : undefined)
           : undefined;
 
       const hasAnyStockValField =
@@ -1833,9 +1832,9 @@ export function generateAiForceReportFromCandles(
 
       const isEmpty = isEtf
         ? options?.etfNav == null &&
-          etfExpenseRatio === undefined &&
-          dividendYield === undefined &&
-          options?.etfMeta?.aumBillion == null
+        etfExpenseRatio === undefined &&
+        dividendYield === undefined &&
+        options?.etfMeta?.aumBillion == null
         : !hasAnyStockValField;
 
       const percentileStats = isEtf
@@ -1926,21 +1925,21 @@ export function calculateValuationPercentile(
   const peStats =
     hasValidPe && validPes.length >= 1
       ? {
-          peMin: validPes[0],
-          peMax: validPes[validPes.length - 1],
-          peMedian: getMedian(validPes),
-          pePercentile: getPercentile(currentPe, validPes),
-        }
+        peMin: validPes[0],
+        peMax: validPes[validPes.length - 1],
+        peMedian: getMedian(validPes),
+        pePercentile: getPercentile(currentPe, validPes),
+      }
       : {};
 
   const pbStats =
     hasValidPb && validPbs.length >= 1
       ? {
-          pbMin: validPbs[0],
-          pbMax: validPbs[validPbs.length - 1],
-          pbMedian: getMedian(validPbs),
-          pbPercentile: getPercentile(currentPb, validPbs),
-        }
+        pbMin: validPbs[0],
+        pbMax: validPbs[validPbs.length - 1],
+        pbMedian: getMedian(validPbs),
+        pbPercentile: getPercentile(currentPb, validPbs),
+      }
       : {};
 
   const primaryIsPe = peStats.pePercentile !== undefined;

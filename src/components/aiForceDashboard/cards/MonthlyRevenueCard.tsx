@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { OBSIDIAN_CARD_CONTAINER } from '../../../constants/designTokens';
+import { OBSIDIAN_CARD_CONTAINER, resolveDirectionalPalette } from '../../../constants/designTokens';
 import { MonthlyRevenueData } from '../../../types/aiForceDashboard';
 import { ColorThemeMode, MarketType } from '../../../types/stock';
 import { BarChart3, TrendingUp, Sparkles, Coins, Award } from 'lucide-react';
@@ -82,11 +82,10 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
   const history = data.history || [];
 
   const isTaiwan = colorTheme === 'taiwan';
-  const posColor = isTaiwan ? '#ef4444' : '#10b981';
+  const { upColor: posColor, downColor: negColor } = resolveDirectionalPalette(colorTheme);
   const posText = isTaiwan ? '#f87171' : '#34d399';
   const posBg = isTaiwan ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)';
   const posBorder = isTaiwan ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)';
-  const negColor = isTaiwan ? '#10b981' : '#ef4444';
   const negText = isTaiwan ? '#34d399' : '#f87171';
   const negBg = isTaiwan ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)';
   const negBorder = isTaiwan ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)';

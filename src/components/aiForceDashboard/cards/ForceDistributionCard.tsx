@@ -1,4 +1,5 @@
 import React from 'react';
+import { resolveDirectionalPalette } from '../../../constants/designTokens';
 import type { ForceDistributionData } from '../../../types/aiForceDashboard';
 import type { ColorThemeMode, MarketType } from '../../../types/stock';
 import { TermTooltip } from '../../common/TermTooltip';
@@ -116,7 +117,7 @@ export const ForceDistributionCard: React.FC<ForceDistributionCardProps> = ({
   const effectiveTheme: ColorThemeMode = colorTheme ?? (isUs ? 'international' : 'taiwan');
   const isTaiwan = effectiveTheme === 'taiwan';
   const buyColor = isTaiwan ? '#f97316' : '#10b981';
-  const sellColor = isTaiwan ? '#10b981' : '#ef4444';
+  const { downColor: sellColor } = resolveDirectionalPalette(effectiveTheme);
 
   const isEmpty =
     !data ||

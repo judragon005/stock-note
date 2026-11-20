@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { resolveDirectionalPalette } from '../../../constants/designTokens';
 import { InstitutionalFlowData } from '../../../types/aiForceDashboard';
 import { ColorThemeMode, MarketType } from '../../../types/stock';
 import { TermTooltip } from '../../common/TermTooltip';
@@ -117,9 +118,7 @@ export interface FormattedCell {
  * 格式化買賣張數儲存格字串與色彩
  */
 export function formatSharesCell(shares: number, colorTheme: ColorThemeMode = 'taiwan'): FormattedCell {
-  const isTaiwan = colorTheme === 'taiwan';
-  const posColor = isTaiwan ? '#ef4444' : '#10b981';
-  const negColor = isTaiwan ? '#10b981' : '#ef4444';
+  const { upColor: posColor, downColor: negColor } = resolveDirectionalPalette(colorTheme);
 
   if (shares > 0) {
     return {
@@ -277,8 +276,7 @@ export const InstitutionalFlowCard: React.FC<InstitutionalFlowCardProps> = ({
   }, [history, barLayout, scales, chartHeight]);
 
   const isTaiwan = colorTheme === 'taiwan';
-  const posColor = isTaiwan ? '#ef4444' : '#10b981';
-  const negColor = isTaiwan ? '#10b981' : '#ef4444';
+  const { upColor: posColor, downColor: negColor } = resolveDirectionalPalette(colorTheme);
   const posBg = isTaiwan ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)';
   const negBg = isTaiwan ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)';
   const neutralBg = 'rgba(148, 163, 184, 0.15)';

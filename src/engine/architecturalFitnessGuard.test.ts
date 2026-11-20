@@ -57,14 +57,14 @@ describe('Spec 0240 T11: Architectural Fitness Guard (防技術債復發靜態�
     expect(ddlOwners).toEqual(['sqlite-db-core.cjs']);
   });
 
-  it('不變量 3: 主力戰情室前端元件不得裸寫 colorTheme === international 漲跌色票三元式', () => {
+  it('不變量 3: 主力戰情室前端元件不得裸寫漲跌極性三元色票 (須統一引用 resolveDirectionalPalette)', () => {
     const tsxFiles = collectFiles(path.join(ROOT, 'src/components/aiForceDashboard'), '.tsx');
     const offenders: string[] = [];
 
     for (const file of tsxFiles) {
       const content = fs.readFileSync(file, 'utf8');
       if (
-        /colorTheme\s*===\s*['"]international['"]\s*\?\s*['"]#(10b981|ef4444)['"]\s*:\s*['"]#(10b981|ef4444)['"]/.test(
+        /(?:colorTheme\s*===\s*['"]international['"]|\bisTaiwan\b|\bisInternational\b)\s*\?\s*['"]#(10b981|ef4444)['"]\s*:\s*['"]#(10b981|ef4444)['"]/.test(
           content
         )
       ) {

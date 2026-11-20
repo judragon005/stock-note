@@ -245,7 +245,8 @@ describe('Spec 0239 T09: 提示詞轉接器契約修復與停損警報防線', (
         },
       });
       const digestWithChanges = createWarRoomPromptDigest(reportWithChanges);
-      expect(digestWithChanges.chips.bigHolderRatioChange400).toBe(1.75);
+      expect(digestWithChanges.chips.bigHolderRatioChange1000).toBe(1.75);
+      expect(digestWithChanges.chips.bigHolderRatioChange400).toBe(1.3);
       expect(digestWithChanges.chips.retailHolderCountChange).toBe(-2150);
 
       // 只有單週絕對比率、無 4 週變化欄位的情境 -> 誠實為 null
@@ -261,6 +262,7 @@ describe('Spec 0239 T09: 提示詞轉接器契約修復與停損警報防線', (
         },
       });
       const digestWithoutChanges = createWarRoomPromptDigest(reportWithoutChanges);
+      expect(digestWithoutChanges.chips.bigHolderRatioChange1000).toBeNull();
       expect(digestWithoutChanges.chips.bigHolderRatioChange400).toBeNull();
       expect(digestWithoutChanges.chips.retailHolderCountChange).toBeNull();
     });

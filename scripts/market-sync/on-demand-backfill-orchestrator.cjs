@@ -8,6 +8,7 @@
  */
 
 const { initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+const { stripOtcSuffix } = require('./market-sync-core.cjs');
 const { getOrFetchUsFundamentals } = require('./us-fundamentals-ingestion.cjs');
 
 const ON_DEMAND_COOLDOWN_MS = 5 * 60 * 1000;
@@ -83,7 +84,7 @@ async function backfillSymbolDividendsFromRemote(
   if (signal?.aborted) return 0;
 
   const cleanSymbol = String(symbol).trim().toUpperCase();
-  const querySym = cleanSymbol.endsWith('O') ? cleanSymbol.slice(0, -1) : cleanSymbol;
+  const querySym = stripOtcSuffix(cleanSymbol);
   const startDate = new Date(Date.now() - 5 * 365 * 86400000).toISOString().slice(0, 10);
 
   const actions = [];
@@ -195,9 +196,9 @@ async function runOnDemandSymbolBackfill(
 ) {
   const now = Date.now();
   const prevState = onDemandBackfillCooldown.get(symbol);
-  const lastAt = typeof prevState === 'number' ? prevState : prevState?.at || 0;
+  const lastAt = prevState?.at || 0;
   const cooldownMs =
-    typeof prevState === 'object' && prevState?.succeeded === false
+    prevState?.succeeded === false
       ? ON_DEMAND_FAILURE_COOLDOWN_MS
       : ON_DEMAND_COOLDOWN_MS;
   if (onDemandBackfillInFlight.has(symbol) || now - lastAt < cooldownMs) {
@@ -211,18 +212,18 @@ async function runOnDemandSymbolBackfill(
     const tasks = [];
     if (needTdcc && !signal?.aborted) {
       const { backfillSymbolTdccHistory } = require('./ingest-tw-tdcc.cjs');
-      tasks.push(backfillSymbolTdccHistory(symbol, 10, customDbPath));
+      tasks.push(backfillSymbolTdccHistory(symbol, 10, customDbPath, globalThis.fetch, signal));
     }
     if (needRevenue && !signal?.aborted) {
       const { backfillSymbolMonthlyRevenue } = require('./ingest-tw-monthly-revenue.cjs');
-      tasks.push(backfillSymbolMonthlyRevenue(symbol, 12, customDbPath));
+      tasks.push(backfillSymbolMonthlyRevenue(symbol, 12, customDbPath, globalThis.fetch, signal));
     }
     if (needDividend && !signal?.aborted) {
       tasks.push(backfillSymbolDividendsFromRemote(symbol, customDbPath, globalThis.fetch, signal));
     }
     if (needUsFundamentals && !signal?.aborted) {
       const db = initSqliteLakehouseDb(customDbPath);
-      tasks.push(getOrFetchUsFundamentals(db, symbol, { includeDividends: true }));
+      tasks.push(getOrFetchUsFundamentals(db, symbol, { includeDividends: true, signal }));
     }
     const results = await Promise.allSettled(tasks);
     anyFulfilledWithData = results.some(

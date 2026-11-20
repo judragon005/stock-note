@@ -596,8 +596,23 @@ async function getOrFetchUsFundamentals(db, symbol, options = {}) {
     return mapDbRowToFundamentals(existing, { fromCache: true, stale: false });
   }
 
+  // 若呼叫端已觸發 AbortSignal，提早安全中止避免無效外部 I/O (Spec 0240 Patch 2)
+  if (options.signal?.aborted) {
+    return existing ? mapDbRowToFundamentals(existing, { fromCache: true, stale: true }) : null;
+  }
+
+  const baseFetch = options.fetchFn || globalThis.fetch;
+  const scopedOptions =
+    options.signal && typeof baseFetch === 'function'
+      ? {
+          ...options,
+          fetchFn: (url, init = {}) =>
+            baseFetch(url, init.signal ? init : { ...init, signal: options.signal }),
+        }
+      : options;
+
   // 過期或不存在：向 Yahoo Finance v10 quoteSummary 抓取
-  const rawJson = await fetchYahooQuoteSummaryWithCrumb(cleanSymbol, options);
+  const rawJson = await fetchYahooQuoteSummaryWithCrumb(cleanSymbol, scopedOptions);
   const parsed = rawJson
     ? parseYahooQuoteSummaryToFundamentals(cleanSymbol, rawJson, { now, date: options.date })
     : null;
@@ -613,9 +628,9 @@ async function getOrFetchUsFundamentals(db, symbol, options = {}) {
   upsertUsFundamentalsRow(db, parsed, now);
 
   // 按需補齊近 2 年美股歷史配息（不阻斷基本面主回傳）
-  if (options.includeDividends !== false) {
+  if (options.includeDividends !== false && !options.signal?.aborted) {
     try {
-      await fetchAndIngestUsDividends(db, cleanSymbol, options);
+      await fetchAndIngestUsDividends(db, cleanSymbol, scopedOptions);
     } catch (divErr) {
       console.warn(`[UsFundamentals] 按需配息補齊警示 (${cleanSymbol}):`, divErr?.message || divErr);
     }
