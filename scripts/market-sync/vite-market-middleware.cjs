@@ -1164,11 +1164,19 @@ function createMarketApiMiddleware(customDbPath) {
           .get(symbol, aliasSym) || null;
       } catch {}
 
-      // 新增查詢最新 1 筆 ETF 官方淨值與折溢價 (Spec 0237 Ticket 05)
+      // 新增查詢最新 1 筆 ETF 官方淨值、折溢價、發行單位與實時規模 (Spec 0237 & Spec 0241)
       let etfNavRow = null;
       try {
         etfNavRow = db
           .prepare('SELECT * FROM etf_daily_nav WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 1')
+          .get(symbol, aliasSym) || null;
+      } catch {}
+
+      // 新增查詢台股 ETF 元數據與實時費用率 (Spec 0241 T04 / Debt 0061 #3)
+      let etfMetaRow = null;
+      try {
+        etfMetaRow = db
+          .prepare('SELECT * FROM etf_meta WHERE symbol IN (?, ?) LIMIT 1')
           .get(symbol, aliasSym) || null;
       } catch {}
 
@@ -1212,6 +1220,12 @@ function createMarketApiMiddleware(customDbPath) {
           !usFundamentalsRow.updated_at ||
           Date.now() - Number(usFundamentalsRow.updated_at) > 24 * 60 * 60 * 1000);
       const needUsFundamentals = usFundStale;
+      const needTwEtfMeta =
+        isTwStock &&
+        isEtf &&
+        (!etfMetaRow ||
+          !etfMetaRow.expense_source ||
+          Date.now() - Number(etfMetaRow.updated_at || 0) > 30 * 24 * 60 * 60 * 1000);
 
       const sendHistoryResponse = (enrichmentPending = false) => {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -1228,6 +1242,7 @@ function createMarketApiMiddleware(customDbPath) {
             quarterlyFinancials,
             pledge: pledgeRow,
             etfNav: etfNavRow,
+            etfMeta: etfMetaRow,
             corporateActions,
             macro: macroRow,
             enrichmentPending: Boolean(enrichmentPending),
@@ -1239,7 +1254,8 @@ function createMarketApiMiddleware(customDbPath) {
         (process.env.NODE_ENV === 'test' || process.env.VITEST) &&
         globalThis.fetch === NATIVE_FETCH;
 
-      const needsAnyBackfill = needTdcc || needRevenue || needDividend || needUsFundamentals;
+      const needsAnyBackfill =
+        needTdcc || needRevenue || needDividend || needUsFundamentals || needTwEtfMeta;
       if (needsAnyBackfill && typeof globalThis.fetch === 'function' && !isUnmockedTestEnv) {
         return runWithAbortTimeout(
           (signal) =>
@@ -1248,6 +1264,7 @@ function createMarketApiMiddleware(customDbPath) {
               needRevenue,
               needDividend,
               needUsFundamentals,
+              needTwEtfMeta,
               customDbPath,
               signal,
             }),
@@ -1274,6 +1291,11 @@ function createMarketApiMiddleware(customDbPath) {
             if (needUsFundamentals) {
               usFundamentalsRow = db
                 .prepare('SELECT * FROM us_fundamentals_daily WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 1')
+                .get(symbol, aliasSym) || null;
+            }
+            if (needTwEtfMeta) {
+              etfMetaRow = db
+                .prepare('SELECT * FROM etf_meta WHERE symbol IN (?, ?) LIMIT 1')
                 .get(symbol, aliasSym) || null;
             }
           } catch {}

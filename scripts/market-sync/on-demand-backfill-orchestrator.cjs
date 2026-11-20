@@ -192,7 +192,7 @@ async function backfillSymbolDividendsFromRemote(
  */
 async function runOnDemandSymbolBackfill(
   symbol,
-  { needTdcc, needRevenue, needDividend, needUsFundamentals, customDbPath, signal }
+  { needTdcc, needRevenue, needDividend, needUsFundamentals, needTwEtfMeta, customDbPath, signal }
 ) {
   const now = Date.now();
   const prevState = onDemandBackfillCooldown.get(symbol);
@@ -224,6 +224,11 @@ async function runOnDemandSymbolBackfill(
     if (needUsFundamentals && !signal?.aborted) {
       const db = initSqliteLakehouseDb(customDbPath);
       tasks.push(getOrFetchUsFundamentals(db, symbol, { includeDividends: true, signal }));
+    }
+    if (needTwEtfMeta && !signal?.aborted) {
+      const { getOrFetchTwEtfMeta } = require('./ingest-tw-etf-meta.cjs');
+      const db = initSqliteLakehouseDb(customDbPath);
+      tasks.push(getOrFetchTwEtfMeta(db, symbol, { signal }));
     }
     const results = await Promise.allSettled(tasks);
     anyFulfilledWithData = results.some(

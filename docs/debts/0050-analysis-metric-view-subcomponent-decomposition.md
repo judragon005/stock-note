@@ -1,7 +1,7 @@
 # 技術債 0050: AnalysisMetricView 單體元件子模組解耦重構 (AnalysisMetricView Subcomponent Decomposition)
 
 * **建立日期**：2026-10-13
-* **狀態**：`OPEN`
+* **狀態**：`RESOLVED`（已於 v9.25.0 / Spec 0241 / Issue #596 完整解決：抽離共用圖表原語 `metricChartPrimitives.tsx` 與 6 大財務領域 Section，主檔由 2,134 行收斂至 190 行並植入 CI 行數守門）
 * **優先級**：`P3 (Low)`
 * **來源**：Code Review (Spec 0180 / Issue #230)
 * **標籤**：`Refactor` · `UI` · `CleanCode` · `StockAnalysis` · `ForensicAccounting`

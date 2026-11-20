@@ -3082,6 +3082,14 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     4. **Directional Palette SSOT & Obsidian Tokens (方向色票與曜石主題集中化)**：集中提供 `resolveDirectionalPalette`（台股紅漲綠跌、美股綠漲紅跌）與 `OBSIDIAN_CARD_CONTAINER` Token，消滅戰情卡片內散落之硬編碼三元色票。_Avoid_: Hardcoded Palette Ternary in Cards
     5. **Architectural Fitness Guard (防復發架構適應度測試)**：以靜態 AST/內容掃描測試自動在 CI 攔截門檻魔術數字、重複建表 DDL、裸寫色票與雙重型別斷言。_Avoid_: Manual-Only Architectural Review
 
+- **Wave 2 UI Monolith Decomposition & Full-Market TW ETF Dynamic AUM/Meta Lakehouse (Wave 2 UI 巨石元件解耦與台股全市場 ETF 動態 AUM/費率湖倉閉環)**:
+  - 核心模組：`scripts/market-sync/sqlite-db-core.cjs`、`scripts/market-sync/ingest-macro-sentiment.cjs`、`scripts/market-sync/ingest-tw-etf-meta.cjs`、`scripts/market-sync/on-demand-backfill-orchestrator.cjs`、`scripts/market-sync/vite-market-middleware.cjs`、`src/engine/marketCacheLoader.ts`、`src/engine/aiForceDashboardEngine.ts`、`src/components/aiForceDashboard/cards/DynamicSignalsCard.tsx`、`src/components/aiForceDashboard/cards/dynamicSignals/*`、`src/components/analysis/AnalysisMetricView.tsx`、`src/components/analysis/sections/*`、`src/engine/architecturalFitnessGuard.test.ts`。
+  - 規格來源：Spec 0241 (v9.25.0) 與 [ADR 0241](file:///d:/APP/股票紀錄/docs/adr/0241-wave2-ui-decomposition-and-etf-meta-lakehouse.md)，關聯 GitHub Issue #596 / Debt 0049, 0050, 0061 (`RESOLVED`)。
+  - 核心領域術語與架構革新：
+    1. **Zero-Scraper Derived ETF AUM & Primary Creation/Redemption Flow (零爬蟲衍生實時 ETF 規模與初級市場申贖流)**：直接從 TWSE `all_etf.txt` 既有欄位 `c`（已發行單位數）× `f`（淨值）除以 $10^8$ 計算全台灣 367 檔 ETF 實時 AUM 並同步留存 `d`（單日淨申贖單位差）於 `etf_daily_nav`，徹底取代失真達 -80%~+94% 之靜態寫死基準表。_Avoid_: Hardcoded Stale ETF AUM, Fragile HTML Scraper
+    2. **TW Suffix-Safe ETF Meta & Zero-Mock Negative Cache (台股後綴保護 ETF 元數據與零造假負快取)**：`etf_meta` 表結合 TWSE OpenAPI `t187ap47_L` 與保留 `.TW`/`.TWO` 後綴之 Yahoo Crumb 按需費率自癒（30D TTL）；查無官方費率者寫入 `expense_source = 'UNAVAILABLE'` 並誠實顯示空態，絕不捏造費率或反覆重打外部 API。_Avoid_: Suffix-to-Hyphen Mangling (0050-TW), Synthetic Expense Ratio
+    3. **Presentation Partitioning & Monolith Line-Ceiling Guard (純展示分區隔離與單體行數紅線守門)**：`DynamicSignalsCard.tsx`（<= 160 行）與 `AnalysisMetricView.tsx`（<= 220 行）拆解為零新依賴之純 Props 子模組，並於 `architecturalFitnessGuard.test.ts` 機械化鎖定行數上限。_Avoid_: Unbounded Monolithic Components, Context Over-Abstraction
+
 
 
 

@@ -238,17 +238,34 @@ function initSqliteLakehouseDb(customPath) {
       updated_at INTEGER NOT NULL
     );
 
-    -- 10. ETF 每日收盤官方淨值與折溢價歷史表 (Spec 0183)
+    -- 10. ETF 每日收盤官方淨值、折溢價、發行單位與實時規模歷史表 (Spec 0183 & Spec 0241)
     CREATE TABLE IF NOT EXISTS etf_daily_nav (
       symbol TEXT NOT NULL,
       date TEXT NOT NULL,                  -- YYYY-MM-DD
       close_price REAL NOT NULL,           -- 當日市價收盤
       nav REAL NOT NULL,                   -- 官方淨值
       premium_discount_ratio REAL NOT NULL,-- 折溢價率 (%)
+      issued_units REAL,                   -- 已發行受益權單位數 (all_etf.txt c 欄)
+      unit_change REAL,                    -- 單日淨申贖單位差異 (all_etf.txt d 欄)
+      aum_billion REAL,                    -- 衍生實時基金規模 (億台幣 = c * f / 1e8)
       updated_at INTEGER NOT NULL,
       PRIMARY KEY (symbol, date)
     );
     CREATE INDEX IF NOT EXISTS idx_etf_nav_symbol_date ON etf_daily_nav(symbol, date DESC);
+
+    -- 10b. 台股 ETF 元數據與實時費用率快取表 (Spec 0241 / Debt 0061 #3)
+    CREATE TABLE IF NOT EXISTS etf_meta (
+      symbol TEXT NOT NULL PRIMARY KEY,
+      name TEXT,
+      fund_type TEXT,
+      tracking_index TEXT,
+      issuer TEXT,
+      listing_date TEXT,
+      custodian TEXT,
+      expense_ratio REAL,                  -- 年化總費用率 (%)，無官方數據為 NULL
+      expense_source TEXT,                 -- 'YAHOO' | 'TWSE' | 'UNAVAILABLE'
+      updated_at INTEGER NOT NULL
+    );
 
     -- 11. 台股每日官方估值表 (PE/PB/殖利率 - Spec 0196)
     CREATE TABLE IF NOT EXISTS tw_valuation_daily (
@@ -352,6 +369,23 @@ function initSqliteLakehouseDb(customPath) {
       if (!existingMacroCols.has(col.name)) {
         try {
           db.exec(`ALTER TABLE macro_sentiment_daily ADD COLUMN ${col.name} ${col.type};`);
+        } catch {
+          // 容錯防重複
+        }
+      }
+    }
+
+    // Spec 0241 T01: 舊版 etf_daily_nav 冪等補齊發行單位、申贖差異與實時規模欄
+    const etfNavColumns = db.prepare('PRAGMA table_info(etf_daily_nav)').all();
+    const existingEtfNavCols = new Set(etfNavColumns.map((c) => c.name));
+    for (const col of [
+      { name: 'issued_units', type: 'REAL' },
+      { name: 'unit_change', type: 'REAL' },
+      { name: 'aum_billion', type: 'REAL' },
+    ]) {
+      if (!existingEtfNavCols.has(col.name)) {
+        try {
+          db.exec(`ALTER TABLE etf_daily_nav ADD COLUMN ${col.name} ${col.type};`);
         } catch {
           // 容錯防重複
         }

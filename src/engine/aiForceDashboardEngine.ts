@@ -1810,13 +1810,18 @@ export function generateAiForceReportFromCandles(
         !isEtf &&
         ((typeof pe === 'number' && pe < 0) ||
           (typeof latestEps === 'number' && latestEps < 0));
-      const liveExpenseRatio = options?.etfMeta?.expenseRatio ?? undefined;
+      const hasExplicitExpenseDecision = options?.etfMeta?.expenseRatio !== undefined;
+      const liveExpenseRatio =
+        typeof options?.etfMeta?.expenseRatio === 'number' && Number.isFinite(options.etfMeta.expenseRatio)
+          ? options.etfMeta.expenseRatio
+          : undefined;
       const etfExpenseRatio =
         isEtf
-          ? liveExpenseRatio ??
-          (options?.valuationData || options?.etfNav || derivedYield !== undefined || options?.etfMeta?.aumBillion != null
-            ? ETF_BASELINE_META[cleanSym]?.expenseRatio
-            : undefined)
+          ? hasExplicitExpenseDecision
+            ? liveExpenseRatio
+            : (options?.valuationData || options?.etfNav || derivedYield !== undefined || options?.etfMeta?.aumBillion != null
+              ? ETF_BASELINE_META[cleanSym]?.expenseRatio
+              : undefined)
           : undefined;
 
       const hasAnyStockValField =

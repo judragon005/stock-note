@@ -1,7 +1,7 @@
 # 技術債 0061: 同步門檻常數跨檔收斂、按需補齊中斷控制與長照爬蟲擴展 (Market Sync Threshold Constants, Abort Controller & Long-term ETF Coverage)
 
 * **建立日期**：2026-11-19
-* **狀態**：`OPEN`（核心 3 項已於 Spec 0240 / Issue #594 Wave 1 完整清償：門檻 SSOT `sync-thresholds.cjs`、按需補齊 `AbortController`、質押追趕測試斷言；僅剩第 3 項「非主流 ETF 規模/費率月報爬蟲」屬獨立新功能延後）
+* **狀態**：`RESOLVED`（核心 3 項已於 Spec 0240 / Issue #594 Wave 1 清償；最後 1 項「全市場 ETF 動態 AUM 與 `etf_meta` 費用率管線」已於 Spec 0241 / Issue #596 Wave 2 透過 `all_etf.txt` 零爬蟲 `c × f` 衍生與 `ingest-tw-etf-meta.cjs` 雙軌自癒完整閉環）
 * **優先級**：`P3 (Low)`
 * **來源**：/code-review 雙軸審查回饋 (Spec 0238 / Issue #590)
 * **標籤**：`Refactor` · `CleanCode` · `MarketSync` · `Lakehouse` · `Resilience` · `TestSmell`

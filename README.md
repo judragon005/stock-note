@@ -12,7 +12,16 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 主力戰情室與湖倉同步中樞 Wave 1 技術債清償與防復發架構守門 (`Spec 0240`) *(V9.24.1 最新發布 / Spec #0240 / ADR #0240 / Issue #594)*
+### 1. Wave 2 UI 巨石元件解耦與台股全市場 ETF 動態 AUM/費率湖倉閉環 (`Spec 0241`) *(V9.25.0 最新發布 / Spec #0241 / ADR #0241 / Issue #596)*
+
+- **零新增爬蟲全市場 367 檔台股 ETF 實時 AUM 與申贖流 (Issue #596 / Debt 0061 #3)**：
+  - `etf_daily_nav` 無損擴充 `issued_units`、`unit_change`、`aum_billion`，直接由 `all_etf.txt` 既有欄位 `c × f / 1e8` 衍生全台灣 367 檔（含冷門債券/期貨/主動 ETF）實時基金規模，徹底根除靜態寫死規模高達 -80%~+94% 之失真。
+- **台股 `etf_meta` 雙軌自癒與 ARINC 661 Zero-Mock 費率守門 (Issue #596 / Debt 0061 #3)**：
+  - 新增 `ingest-tw-etf-meta.cjs` 結合官方 `t187ap47_L` 與保留 `.TW`/`.TWO` 後綴之 Yahoo Crumb 按需費率補齊（30D TTL + `UNAVAILABLE` 負快取 + `AbortController` 300ms 非阻塞），實時覆寫 `ETF_BASELINE_META`。
+- **Card 12 與深度財報巨石元件純展示解耦與 CI 行數紅線守門 (Issue #596 / Debt 0049 & 0050)**：
+  - `DynamicSignalsCard.tsx`（400 ➔ 147 行）拆出 3 個純展示層子元件；`AnalysisMetricView.tsx`（2,134 ➔ 190 行）剝離共用 SVG 圖表原語與 6 大財務領域 Section；同步擴充 `architecturalFitnessGuard.test.ts` 機械化防復發，Debt 0049 / 0050 / 0061 三連 `RESOLVED`。
+
+### 2. 主力戰情室與湖倉同步中樞 Wave 1 技術債清償與防復發架構守門 (`Spec 0240`) *(V9.24.1 / Spec #0240 / ADR #0240 / Issue #594)*
 
 - **湖倉單一事實來源 (SSOT) 收斂 (Issue #594 / Ticket 01~03)**：
   - 抽離統一的 `sync-thresholds.cjs`，終結 7 維健康度門檻常數跨檔硬編碼；`sqlite-db-core.cjs` 統一匯出 `corporate_action_calendar` DDL，消滅美股基本面模組重複建表邏輯；集中實作美股點號/連字號代碼別名正規化純函式。
