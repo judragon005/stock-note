@@ -1,11 +1,11 @@
 /**
  * nas-server.cjs
- * 零外部依賴 Node.js 22 原生 NAS / Docker 輕量生產伺服器 (Spec 0242)
+ * 零外部依賴 Node.js 22 原生 NAS / Docker 唯一權威生產伺服器 (Spec 0242 / Spec 0243 SSOT)
  * 單一進程整合：
  * 1. dist/ 靜態前端 SPA 託管 (記憶體佔用 < 80MB)
  * 2. /api/market/* SQLite 數據湖倉 REST API
- * 3. /api/yahoo/* Yahoo Finance 反向代理
- * 4. 24/7 無人值守自治排程器 (免開網頁自動每日/每週更新)
+ * 3. 全量外部反向代理 (/api/yahoo, /api/fred, /api/twse-www, /api/twse, /api/tpex, SSRF 白名單 /api/proxy)
+ * 4. 24/7 無人值守自治排程器 (每日台美股+宏觀、每週滾動快照) 與 SIGTERM/SIGINT WAL 優雅關機
  */
 
 const http = require('node:http');
@@ -401,4 +401,5 @@ if (require.main === module) {
 
 module.exports = {
   createNasServer,
+  getDbHealthMetrics,
 };

@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { initSqliteLakehouseDb, closeSqliteDb, checkpointSqliteWal } = require('../../scripts/market-sync/sqlite-db-core.cjs');
-const { createNasServer } = require('../../scripts/nas-server.cjs');
+const { createNasServer, getDbHealthMetrics } = require('../../scripts/nas-server.cjs');
 const {
   startNasAutonomousScheduler,
   createRollingBackup,
@@ -129,6 +129,7 @@ describe('Spec 0243: NAS 生產伺服器 SSOT 收斂、WAL 優雅關機與自治
       const [r1, r2] = await Promise.all([gracefulShutdown('SIGTERM'), gracefulShutdown('SIGINT')]);
       expect(r1.ok).toBe(true);
       expect(r1.walCheckpointed).toBe(true);
+      expect(r1.checkpoint).toMatchObject({ ok: true, skipped: false });
       expect(r2.reentrant || r2.ok).toBe(true);
 
       // HTTP 伺服器應已關閉
@@ -141,6 +142,13 @@ describe('Spec 0243: NAS 生產伺服器 SSOT 收斂、WAL 優雅關機與自治
     });
 
     it('Slice 3: /healthz 在資料庫未建立時誠實回報 dbSizeBytes=0 與 latestBackup=null，建立後回報實際大小與最新備份資訊', async () => {
+      // 0. 嚴格驗證資料庫檔案尚未建立（目錄不存在）時不拋錯且 dbSizeBytes === 0
+      const nonExistentDb = path.join(TEST_DIR, 'non-existent-sub', 'missing.db');
+      expect(getDbHealthMetrics(nonExistentDb)).toEqual({
+        dbSizeBytes: 0,
+        latestBackup: null,
+      });
+
       const { server, gracefulShutdown } = createNasServer({
         customDbPath: TEST_DB,
         enableScheduler: false,
