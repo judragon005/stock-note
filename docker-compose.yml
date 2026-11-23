@@ -3,14 +3,19 @@ services:
     build: .
     container_name: stock-tracker-nas
     restart: unless-stopped
+    stop_grace_period: 10s
     ports:
       - "3000:3000"
     environment:
       - TZ=Asia/Taipei
+      - NODE_ENV=production
       - PORT=3000
-      - LAKEHOUSE_DB_PATH=/data/market_history.db
-      # 若欲改由 NAS 外部排程接管，可取消下方註解停用內建排程器
+      # 選配：注入免費 FRED API Key 供每日無頭排程器使用（未設定時自動降級免 Key 公開 CSV）
+      # - FRED_API_KEY=your_fred_api_key
+      # 選配：覆寫預設資料庫路徑（未設定時預設落於 /app/.scratch/market-cache/market_history.db）
+      # - LAKEHOUSE_DB_PATH=/app/.scratch/market-cache/market_history.db
+      # 選配：若欲改由 NAS 外部排程接管，可取消下方註解停用內建排程器
       # - DISABLE_BUILTIN_SCHEDULER=true
     volumes:
-      # 請依您的 NAS 實際路徑調整左側目錄（例如 /volume1/docker/stock-tracker/data:/data）
-      - ./nas-data:/data
+      # 請依您的 NAS 實際路徑調整左側目錄（QNAP 既定掛載：/share/Container/stock-data:/app/.scratch/market-cache）
+      - ./nas-data:/app/.scratch/market-cache

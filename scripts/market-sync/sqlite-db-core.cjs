@@ -1192,6 +1192,32 @@ function ensureCorporateActionCalendarTable(db) {
 }
 
 /**
+ * 對開啟中的 SQLite WAL 執行強制落盤截斷 (Spec 0243 Ticket 02)
+ * @param {DatabaseSync} [targetDb]
+ */
+function checkpointSqliteWal(targetDb) {
+  const db =
+    targetDb && typeof targetDb === 'object' && typeof targetDb.prepare === 'function'
+      ? targetDb
+      : globalDbInstance;
+  if (!db) {
+    return { ok: false, skipped: true, busy: 0, log: 0, checkpointed: 0 };
+  }
+  try {
+    const row = db.prepare('PRAGMA wal_checkpoint(TRUNCATE);').get();
+    return {
+      ok: true,
+      skipped: false,
+      busy: Number(row?.busy ?? 0),
+      log: Number(row?.log ?? 0),
+      checkpointed: Number(row?.checkpointed ?? 0),
+    };
+  } catch (err) {
+    return { ok: false, skipped: false, error: err?.message || String(err) };
+  }
+}
+
+/**
  * 優雅關閉 SQLite 連線
  */
 function closeSqliteDb() {
@@ -1220,5 +1246,6 @@ module.exports = {
   getMarketMultiHorizonBreadth,
   getTwRevenueDiffusionAndYoY,
   clearBreadthAnchorCache,
+  checkpointSqliteWal,
   closeSqliteDb,
 };
