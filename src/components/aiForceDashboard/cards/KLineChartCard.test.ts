@@ -504,6 +504,81 @@ describe('KLineChartCard - 專業互動與多功能副圖 (Ticket 35 / Stage 1)'
       expect(html).toContain('data-active="true"');
       expect(html).toContain('鎖碼推升');
     });
+
+    it('Code Review Fix: K/D/J 統一 [-10,110] Y 軸座標系，K=D=J 時三線點位精確重合', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { KLineChartCard } = await import('./KLineChartCard');
+
+      const candles = buildCandles(10, 'FLAT').map((c) => ({
+        ...c,
+        k: 80,
+        d: 80,
+        j: 80,
+      }));
+      const html = renderToStaticMarkup(
+        React.createElement(KLineChartCard, {
+          data: {
+            candles,
+            keyLevels: { highResistance: 110, mainForceCost: 100, supportLevel: 90 },
+          },
+          colorTheme: 'taiwan',
+          market: 'TW',
+          timeframe: 'DAY',
+          subchartMode: 'KD',
+        })
+      );
+
+      const kMatch = html.match(/points="([^"]+)"[^>]*stroke="#fbbf24"/);
+      const dMatch = html.match(/points="([^"]+)"[^>]*stroke="#38bdf8"/);
+      const jMatch = html.match(/data-testid="kline-kd-j-line"\s+points="([^"]+)"/);
+      expect(kMatch?.[1]).toBeTruthy();
+      expect(dMatch?.[1]).toBe(kMatch?.[1]);
+      expect(jMatch?.[1]).toBe(kMatch?.[1]);
+    });
+
+    it('Code Review Fix: 不足 20 期時 volRatio20 誠實留空，週 K 時框勝率單位動態顯示「10週勝率」', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { buildTechnicalResonance } = await import('../../../engine/technicalResonanceEngine');
+      const { TechnicalResonanceCard } = await import('./TechnicalResonanceCard');
+
+      const shortRes = buildTechnicalResonance({
+        candles: buildCandles(12, 'UP'),
+        timeframe: 'MONTH',
+        market: 'TW',
+      });
+      expect(shortRes.volume.volRatio5).toBeDefined();
+      expect(shortRes.volume.volRatio20).toBeUndefined();
+
+      const weekRes = {
+        ...shortRes,
+        timeframe: 'WEEK' as const,
+        summary: {
+          ...shortRes.summary,
+          historicalWinRate: {
+            signalName: 'MACD 翻紅轉多',
+            sampleCount: 5,
+            winRatePercent: 80,
+            avgReturn10dPercent: 4.2,
+            isSufficient: true,
+          },
+        },
+      };
+      const html = renderToStaticMarkup(
+        React.createElement(TechnicalResonanceCard, {
+          resonance: weekRes,
+          activeSubchartMode: 'VOL',
+          onSelectSubchart: () => {},
+          primaryVerb: '順勢觀察',
+          verdictSummary: '週線測試摘要',
+          colorTheme: 'taiwan',
+          market: 'TW',
+        })
+      );
+      expect(html).toContain('10週勝率 80%');
+      expect(html).not.toContain('10日勝率');
+    });
   });
 });
 

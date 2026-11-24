@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 export interface ModalShellProps {
@@ -42,6 +42,9 @@ export const ModalShell: React.FC<ModalShellProps> = ({
   ariaLabelledBy,
   children,
 }) => {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!isOpen || typeof document === 'undefined') return;
 
@@ -51,7 +54,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (shouldCloseModalOnKeyDown(e.key, closeLocked)) {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
       }
     };
 
@@ -60,7 +63,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
       document.body.style.overflow = prevOverflow;
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, closeLocked, onClose]);
+  }, [isOpen, closeLocked]);
 
   if (!isOpen) return null;
 

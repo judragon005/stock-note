@@ -427,7 +427,7 @@ async function fetchSymbolTdccHistoryFromOfficial(
   delayMs = 180,
   options = {}
 ) {
-  const { onWeekParsed, forceOverwrite = false, maxRetries = 1 } = options || {};
+  const { onWeekParsed, onCalendarSynced, forceOverwrite = false, maxRetries = 1 } = options || {};
   const cleanSymbol = String(symbol).trim().toUpperCase();
   const querySym = cleanSymbol.endsWith('O') ? cleanSymbol.slice(0, -1) : cleanSymbol;
 
@@ -456,6 +456,9 @@ async function fetchSymbolTdccHistoryFromOfficial(
     const iso = `${d8.slice(0, 4)}-${d8.slice(4, 6)}-${d8.slice(6, 8)}`;
     return !existingDatesSet.has(iso);
   });
+  if (typeof onCalendarSynced === 'function') {
+    onCalendarSynced({ availableCount: dates.length, missingCount: targetDates.length });
+  }
 
   const collected = [];
   for (let i = 0; i < targetDates.length; i++) {
@@ -575,12 +578,14 @@ async function backfillSymbolTdccHistory(
     const existingDatesSet = new Set(existingRows.map((r) => r.date));
     const targetCount = Math.min(51, Math.max(4, weeks));
 
-    if (!forceOverwrite && !hasTdccSeriesGap(existingRows, { minWeeks: Math.min(targetCount, 10) })) {
+    if (!forceOverwrite && !hasTdccSeriesGap(existingRows, { minWeeks: targetCount })) {
       return { savedCount: 0, skipped: true };
     }
 
     // 1. Primary: TDCC 官方免費歷史表單 (免 Token、差集精準補缺、逐週即時 Upsert 抗中斷)
     let officialSaved = 0;
+    let officialCalendarSynced = false;
+    let officialMissingCount = -1;
     try {
       await fetchSymbolTdccHistoryFromOfficial(
         cleanSymbol,
@@ -591,6 +596,10 @@ async function backfillSymbolTdccHistory(
         delayMs,
         {
           forceOverwrite,
+          onCalendarSynced: ({ missingCount }) => {
+            officialCalendarSynced = true;
+            officialMissingCount = missingCount;
+          },
           onWeekParsed: (item) => {
             const { savedCount } = saveTdccDistributionToSqlite({ [cleanSymbol]: item }, item.date, customDbPath);
             officialSaved += savedCount;
@@ -599,6 +608,9 @@ async function backfillSymbolTdccHistory(
       );
       if (officialSaved > 0) {
         return { savedCount: officialSaved };
+      }
+      if (officialCalendarSynced && officialMissingCount === 0) {
+        return { savedCount: 0, skipped: true };
       }
     } catch (err) {
       if (err?.name === 'AbortError' || signal?.aborted) {

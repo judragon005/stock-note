@@ -404,12 +404,26 @@ describe('Ticket 08: 主力戰情室 7 層 Bento-Grid 專業動線架構驗收 (
   });
 
   describe('Spec 0245 T07: ZONE 01 Card 01B 四維量價動能共鳴解碼卡落點與 Zero-Mock 閘門', () => {
-    it('ZONE 01 應依序渲染 Card 18 -> Card 01 -> Card 01B (1b-technical-resonance)，且位於 ZONE 02 (2-radars) 之前', () => {
+    it('ZONE 01 有效 K 線 >= 5 根時應依序渲染 Card 18 -> Card 01 -> Card 01B (1b-technical-resonance)，且位於 ZONE 02 之前', () => {
+      const reportWithCandles = {
+        ...readyReport,
+        klineSystem: {
+          ...readyReport.klineSystem,
+          candles: Array.from({ length: 6 }, (_, i) => ({
+            date: `2026-11-${String(10 + i).padStart(2, '0')}`,
+            open: 100 + i,
+            high: 102 + i,
+            low: 99 + i,
+            close: 101 + i,
+            volume: 1000000,
+          })),
+        },
+      };
       const html = renderToStaticMarkup(
         React.createElement(AiForceDashboardView, {
           initialSymbol: '2330',
           initialMarket: 'TW',
-          initialReport: readyReport,
+          initialReport: reportWithCandles,
         })
       );
 
@@ -424,6 +438,32 @@ describe('Ticket 08: 主力戰情室 7 層 Bento-Grid 專業動線架構驗收 (
       expect(idxLayer2).toBeGreaterThan(idx01B);
       expect(html).toContain('data-testid="technical-resonance-grid"');
       expect(html).toContain('data-testid="executive-verdict-strip"');
+    });
+
+    it('有效 K 線不足 5 根時嚴格隱藏 Card 01B (technical-resonance-grid)，防止 Zero-Mock 誤導', () => {
+      const sparseReport = {
+        ...readyReport,
+        klineSystem: {
+          ...readyReport.klineSystem,
+          candles: Array.from({ length: 4 }, (_, i) => ({
+            date: `2026-11-${String(10 + i).padStart(2, '0')}`,
+            open: 100 + i,
+            high: 101 + i,
+            low: 99 + i,
+            close: 100.5 + i,
+            volume: 500000,
+          })),
+        },
+      };
+      const html = renderToStaticMarkup(
+        React.createElement(AiForceDashboardView, {
+          initialSymbol: '2330',
+          initialMarket: 'TW',
+          initialReport: sparseReport,
+        })
+      );
+      expect(html).not.toContain('data-layer="1b-technical-resonance"');
+      expect(html).not.toContain('data-testid="technical-resonance-grid"');
     });
 
     it('isDataPending=true 時嚴格隱藏 Card 01B，貫徹 Zero-Mock 保護閘門', () => {

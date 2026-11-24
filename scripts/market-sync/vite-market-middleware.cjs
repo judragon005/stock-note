@@ -1230,7 +1230,7 @@ function createMarketApiMiddleware(customDbPath) {
       const todayStr = new Date().toISOString().slice(0, 10);
       const hasPastDividend = corporateActions.some((a) => a.ex_date && a.ex_date <= todayStr);
 
-      const needTdcc = isTwStock && hasTdccSeriesGap(tdccRows, { minWeeks: 10 });
+      const needTdcc = isTwStock && hasTdccSeriesGap(tdccRows, { minWeeks: 12 });
       const needRevenue = isTwStock && !isEtf && revenueRows.length < 6;
       const needDividend = isTwStock && !hasPastDividend;
       const usFundStale =

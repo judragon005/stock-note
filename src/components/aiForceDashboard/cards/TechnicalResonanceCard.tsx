@@ -162,6 +162,8 @@ export const TechnicalResonanceCard: React.FC<TechnicalResonanceCardProps> = ({
   ];
 
   const winStat = resonance.summary.historicalWinRate;
+  const barUnit =
+    resonance.timeframe === 'WEEK' ? '週' : resonance.timeframe === 'MONTH' ? '月' : '日';
 
   return (
     <div
@@ -255,7 +257,7 @@ export const TechnicalResonanceCard: React.FC<TechnicalResonanceCardProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '0.75rem', flexShrink: 0, flexWrap: 'wrap' }}>
           <span style={{ color: '#94a3b8' }}>
             {winStat.isSufficient
-              ? `近250期${winStat.signalName}10日勝率 ${winStat.winRatePercent}% (${winStat.sampleCount}次 · 均報酬 ${
+              ? `近250期${winStat.signalName}10${barUnit}勝率 ${winStat.winRatePercent}% (${winStat.sampleCount}次 · 均報酬 ${
                   (winStat.avgReturn10dPercent ?? 0) >= 0 ? '+' : ''
                 }${winStat.avgReturn10dPercent}%)`
               : `${winStat.signalName} 歷史樣本不足 (${winStat.sampleCount} 次)`}

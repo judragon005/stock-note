@@ -370,6 +370,12 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
   // 副圖 Points (KD / MACD / RSI)
   const subchartTop = klineHeight + 10;
   const subchartPlotHeight = volHeight - 15;
+  // 統一 K/D/J 座標系至 [-10, 110]，避免 K=D=J 交會點在圖上上下錯位 (Code Review Fix)
+  const mapKdjY = (v: number): number => {
+    const clamped = Math.max(-10, Math.min(110, v));
+    const norm = (clamped + 10) / 120;
+    return subchartTop + (1 - norm) * subchartPlotHeight;
+  };
 
   const kdKPoints = useMemo(() => {
     if (subchartMode !== 'KD') return '';
@@ -377,7 +383,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
     displayCandles.forEach((c, idx) => {
       if (c.k !== undefined) {
         const x = getX(idx);
-        const y = subchartTop + (1 - c.k / 100) * subchartPlotHeight;
+        const y = mapKdjY(c.k);
         points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
       }
     });
@@ -390,7 +396,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
     displayCandles.forEach((c, idx) => {
       if (c.d !== undefined) {
         const x = getX(idx);
-        const y = subchartTop + (1 - c.d / 100) * subchartPlotHeight;
+        const y = mapKdjY(c.d);
         points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
       }
     });
@@ -408,10 +414,8 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
             ? 3 * c.k - 2 * c.d
             : undefined;
       if (jVal !== undefined) {
-        const clamped = Math.max(-10, Math.min(110, jVal));
-        const norm = (clamped + 10) / 120;
         const x = getX(idx);
-        const y = subchartTop + (1 - norm) * subchartPlotHeight;
+        const y = mapKdjY(jVal);
         points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
       }
     });
@@ -1099,20 +1103,20 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           {/* 副圖：KD 指標 (K9/D9 折線與 80/20 參考線) */}
           {subchartMode === 'KD' && (
             <g>
-              {/* 80 與 20 參考線 */}
+              {/* 80 與 20 參考線 (對齊 [-10, 110] 統一座標系) */}
               <line
                 x1={leftPad}
-                y1={subchartTop + 0.2 * subchartPlotHeight}
+                y1={mapKdjY(80)}
                 x2={width - rightPad}
-                y2={subchartTop + 0.2 * subchartPlotHeight}
+                y2={mapKdjY(80)}
                 stroke="rgba(239, 68, 68, 0.3)"
                 strokeDasharray="2 2"
               />
               <line
                 x1={leftPad}
-                y1={subchartTop + 0.8 * subchartPlotHeight}
+                y1={mapKdjY(20)}
                 x2={width - rightPad}
-                y2={subchartTop + 0.8 * subchartPlotHeight}
+                y2={mapKdjY(20)}
                 stroke="rgba(16, 185, 129, 0.3)"
                 strokeDasharray="2 2"
               />

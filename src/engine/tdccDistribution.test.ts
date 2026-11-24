@@ -235,5 +235,53 @@ describe('Ticket 06 - 台灣集保結算所 (TDCC) 股權分散與千張大戶�
 
       closeSqliteDb();
     });
+
+    it('T09-3 (Review Fix): 已有 10 週連續資料請求 12 週時不應早退，且官方無缺口時絕不誤觸發 FinMind 備援', async () => {
+      const { initSqliteLakehouseDb, closeSqliteDb } = require('../../scripts/market-sync/sqlite-db-core.cjs');
+      const { backfillSymbolTdccHistory } = require('../../scripts/market-sync/ingest-tw-tdcc.cjs');
+
+      closeSqliteDb();
+      const db = initSqliteLakehouseDb(testDbPath);
+      db.prepare('DELETE FROM tw_tdcc_distribution').run();
+
+      // 預先寫入 10 週連續資料（缺少第 11、12 週）
+      const tenWeeks = [
+        '2026-09-18', '2026-09-24', '2026-10-02', '2026-10-08', '2026-10-16',
+        '2026-10-22', '2026-10-30', '2026-11-06', '2026-11-13', '2026-11-20',
+      ];
+      const ins = db.prepare(`
+        INSERT INTO tw_tdcc_distribution (symbol, date, total_shareholders, over_400_ratio, over_1000_ratio, under_10_ratio, updated_at)
+        VALUES ('2330', ?, 100000, 70.0, 60.0, 20.0, 1000)
+      `);
+      for (const d of tenWeeks) ins.run(d);
+
+      // 官方日曆僅有這 10 週（模擬已與官方同步無缺口）
+      const initHtml = `
+        <input type="hidden" name="SYNCHRONIZER_TOKEN" value="tok-0" />
+        <input type="hidden" name="firDate" value="20261120" />
+        <select name="scaDate">
+          ${[...tenWeeks].reverse().map((d) => `<option value="${d.replace(/-/g, '')}">${d.replace(/-/g, '')}</option>`).join('')}
+        </select>
+      `;
+
+      const requestedUrls: string[] = [];
+      const mockFetcher = async (url: string) => {
+        requestedUrls.push(url);
+        return {
+          ok: true,
+          headers: { getSetCookie: () => [] },
+          text: async () => initHtml,
+        };
+      };
+
+      const res = await backfillSymbolTdccHistory('2330', 12, testDbPath, mockFetcher);
+      expect(res.skipped).toBe(true);
+      expect(res.savedCount).toBe(0);
+      // 驗證有向官方檢查日曆（未於 10 週早退），但因官方差集為空，絕不呼叫 FinMind
+      expect(requestedUrls.some((u) => u.includes('tdcc.com.tw'))).toBe(true);
+      expect(requestedUrls.some((u) => u.includes('finmindtrade.com'))).toBe(false);
+
+      closeSqliteDb();
+    });
   });
 });

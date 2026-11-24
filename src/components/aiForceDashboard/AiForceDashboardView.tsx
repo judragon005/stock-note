@@ -641,8 +641,8 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
             />
           </div>
 
-          {/* Layer 1B: 四維量價動能共鳴解碼卡 (Spec 0245 T07: 原地升級 executive-verdict-strip 並與主圖雙向同步) */}
-          {!report.isDataPending && !isLoading && (
+          {/* Layer 1B: 四維量價動能共鳴解碼卡 (Spec 0245 T07: 有效 K 線 >= 5 根始掛載，未滿 5 根僅保留摘要帶防 Zero-Mock) */}
+          {!report.isDataPending && !isLoading && (report.klineSystem?.candles?.length ?? 0) >= 5 && (
             <div data-layer="1b-technical-resonance" style={{ width: '100%', minWidth: 0 }}>
               <TechnicalResonanceCard
                 resonance={technicalResonance}
@@ -657,6 +657,27 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 colorTheme={resolvedColorTheme}
                 market={market}
               />
+            </div>
+          )}
+          {!report.isDataPending && !isLoading && (report.klineSystem?.candles?.length ?? 0) < 5 && (
+            <div
+              data-testid="executive-verdict-strip"
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                background: 'rgba(15, 23, 42, 0.72)',
+                border: '1px solid rgba(56, 189, 248, 0.2)',
+                fontSize: '0.75rem',
+                color: '#cbd5e1',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <strong style={{ color: '#38bdf8' }}>{report.mainForceVerdict.primaryVerb}</strong>
+              <span>{report.decisionCore.xaiExplanation || report.mainForceVerdict.fullVerdictText}</span>
             </div>
           )}
 

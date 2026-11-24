@@ -141,7 +141,7 @@ function computeHistoricalWinRate(
         ? 'MACD 翻紅轉多'
         : 'MACD 翻綠轉空';
 
-  for (let i = 1; i < windowCandles.length - 5; i++) {
+  for (let i = 1; i <= windowCandles.length - 11; i++) {
     const prev = windowCandles[i - 1];
     const curr = windowCandles[i];
     if (curr.close <= 0) continue;
@@ -172,7 +172,7 @@ function computeHistoricalWinRate(
 
     if (triggered) {
       sampleCount++;
-      const fwd = windowCandles[Math.min(i + 10, windowCandles.length - 1)];
+      const fwd = windowCandles[i + 10];
       const ret = ((fwd.close - curr.close) / curr.close) * 100;
       totalRet += ret;
       if (focus === 'MACD_FLIP_DOWN' ? ret < 0 : ret > 0) {
@@ -218,7 +218,19 @@ export function buildTechnicalResonance(
   const lows = enriched.map((c) => c.low);
   const closes = enriched.map((c) => c.close);
   const dmi = enriched.length >= 16 ? calculateDmiAdx(highs, lows, closes, 14) : undefined;
-  const bb = enriched.length >= 20 ? calculateBollingerSqueeze(enriched as any) : undefined;
+  const bb =
+    enriched.length >= 20
+      ? calculateBollingerSqueeze(
+          enriched.map(({ date, open, high, low, close, volume }) => ({
+            date,
+            open,
+            high,
+            low,
+            close,
+            volume,
+          }))
+        )
+      : undefined;
 
   let maAlignment: 'BULLISH' | 'BEARISH' | 'ENTANGLED' = 'ENTANGLED';
   if (last && last.ma5 !== undefined && last.ma20 !== undefined && last.ma60 !== undefined) {
@@ -253,7 +265,7 @@ export function buildTechnicalResonance(
   };
 
   const avg5 = avgVol(5);
-  const avg20 = avgVol(Math.min(20, effVolCandles.length));
+  const avg20 = avgVol(20);
   const volRatio5 = avg5 && avg5 > 0 ? Number((rawLatestVol / avg5).toFixed(2)) : undefined;
   const volRatio20 = avg20 && avg20 > 0 ? Number((rawLatestVol / avg20).toFixed(2)) : undefined;
   const obvRes = calculateOBV(
@@ -543,11 +555,25 @@ export function buildTechnicalResonance(
     interpretation: rsiInterp,
   };
 
-  // 6. 四維共鳴與衝突裁決
-  const tones = [volumePillar.tone, kdjPillar.tone, macdPillar.tone, rsiPillar.tone];
-  const bullCount = tones.filter((t) => t === 'BULL').length;
-  const bearCount = tones.filter((t) => t === 'BEAR').length;
-  const neutralCount = tones.length - bullCount - bearCount;
+  // 6. 四維共鳴與體制加權衝突裁決 (Spec 0245 T04: 趨勢盤提高 MACD 權重、震盪/壓縮盤提高 KDJ/RSI 權重)
+  const isTrendingRegime =
+    regimeEval.regime === 'TRENDING_BULL' || regimeEval.regime === 'TRENDING_BEAR';
+  const pillarEntries: Array<{ tone: ResonancePillarTone; weight: number }> = [
+    { tone: volumePillar.tone, weight: 1.0 },
+    { tone: kdjPillar.tone, weight: isTrendingRegime ? 0.75 : 1.35 },
+    { tone: macdPillar.tone, weight: isTrendingRegime ? 1.5 : 0.65 },
+    { tone: rsiPillar.tone, weight: isTrendingRegime ? 0.75 : 1.35 },
+  ];
+  const bullCount = pillarEntries.filter((p) => p.tone === 'BULL').length;
+  const bearCount = pillarEntries.filter((p) => p.tone === 'BEAR').length;
+  const neutralCount = pillarEntries.length - bullCount - bearCount;
+  const weightedBull = pillarEntries
+    .filter((p) => p.tone === 'BULL')
+    .reduce((acc, p) => acc + p.weight, 0);
+  const weightedBear = pillarEntries
+    .filter((p) => p.tone === 'BEAR')
+    .reduce((acc, p) => acc + p.weight, 0);
+  const netWeightedScore = Number((weightedBull - weightedBear).toFixed(2));
 
   const hasConflict =
     (bullCount >= 1 && bearCount >= 1) ||
@@ -586,6 +612,14 @@ export function buildTechnicalResonance(
     overallTone = 'BEAR';
     overallBadge = `偏空整理 (${bearCount}/4 偏空)`;
     actionAdvice = '動能持續修正中，靜待量縮止穩與 K 線黃金交叉確認再評估反彈。';
+  } else if (netWeightedScore >= 0.6) {
+    overallTone = hasConflict ? 'WARN' : 'BULL';
+    overallBadge = `體制加權偏多 (${bullCount}多·${bearCount}空)`;
+    actionAdvice = `依「${regimeEval.label}」主導維度偏多，但仍有反向雜訊，宜採分批控倉切入。`;
+  } else if (netWeightedScore <= -0.6) {
+    overallTone = 'BEAR';
+    overallBadge = `體制加權偏空 (${bullCount}多·${bearCount}空)`;
+    actionAdvice = `依「${regimeEval.label}」主導維度偏空，防禦優先並待主導動能翻正再行介入。`;
   }
 
   const supportPrice = input.keyLevels?.supportLevel;
