@@ -970,7 +970,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 data-layer="6-energy-sentiment"
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(max(440px, calc(50% - 12px)), 1fr))',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, max(440px, calc(50% - 12px))), 1fr))',
                   gap: '12px',
                   alignItems: 'stretch',
                   minHeight: '315px',

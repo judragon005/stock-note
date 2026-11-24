@@ -14,7 +14,7 @@
 ## 決策 (Decision)
 
 1. **Dual-Bound 2×2 Decision Matrix (Layer 6 雙界限 2×2 決策矩陣)**：
-   - 以零 Media Query 單行 CSS 函數 `repeat(auto-fit, minmax(max(440px, calc(50% - 12px)), 1fr))` 鎖定桌面最大 2 欄、窄螢幕（$< 900\text{px}$）自動降級 1 欄。
+   - 以零 Media Query 單行 CSS 函數 `repeat(auto-fit, minmax(min(100%, max(440px, calc(50% - 12px))), 1fr))` 鎖定桌面最大 2 欄、窄螢幕（$< 900\text{px}$）自動降級 1 欄且於 `< 440px` 行動端零水平溢出。
    - 卡片 DOM 次序固定為 `12`（主力動態）→ `21`（估值矩陣）→ `10·13`（AI 多空 × 市場情緒）→ `14`（AI 信心維度）。
 2. **Top-Anchored 12-Period Dividend Expansion & Overflow Guard (Card 20 貼頂 12 期免滑軌與溢位護欄)**：
    - 外層配息區塊改為 `justifyContent: 'flex-start'` 回收上下死區。

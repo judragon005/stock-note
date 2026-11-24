@@ -291,7 +291,7 @@ describe('Ticket 08: 主力戰情室 7 層 Bento-Grid 專業動線架構驗收 (
       });
     });
 
-    it('Layer 6 (6-energy-sentiment) 應採用 minmax(440px, 1fr) 響應式網格且不再使用 260px', () => {
+    it('Layer 6 (6-energy-sentiment) 應採用雙界限防溢位 2x2 響應式網格且不再使用 260px', () => {
       const html = renderToStaticMarkup(
         React.createElement(AiForceDashboardView, {
           initialSymbol: '2330',
@@ -300,9 +300,12 @@ describe('Ticket 08: 主力戰情室 7 層 Bento-Grid 專業動線架構驗收 (
         })
       );
 
-      expect(html).toContain('data-layer="6-energy-sentiment"');
-      expect(html).toContain('minmax(440px, 1fr)');
-      expect(html).not.toContain('minmax(260px, 1fr)');
+      const layer6Start = html.indexOf('data-layer="6-energy-sentiment"');
+      const zone04Start = html.indexOf('data-layer="7-chips-health-matrix"');
+      expect(layer6Start).toBeGreaterThan(-1);
+      const layer6Html = html.slice(layer6Start, zone04Start);
+      expect(layer6Html).toContain('minmax(min(100%, max(440px, calc(50% - 12px))), 1fr)');
+      expect(layer6Html).not.toContain('minmax(260px, 1fr)');
     });
 
     it('View 與頂部模組 (AiForceDashboardView / HeaderMarketBar / HeaderExportBar / TaskViewsSwitcher / WarRoomPromptCard) 不得含 #64748b 與 < 12px / < 0.75rem 微字級', () => {
@@ -354,7 +357,7 @@ describe('Ticket 08: 主力戰情室 7 層 Bento-Grid 專業動線架構驗收 (
       expect(zone04Start).toBeGreaterThan(layer6Start);
 
       const layer6Html = html.slice(layer6Start, zone04Start);
-      expect(layer6Html).toContain('minmax(max(440px, calc(50% - 12px)), 1fr)');
+      expect(layer6Html).toContain('minmax(min(100%, max(440px, calc(50% - 12px))), 1fr)');
 
       const idx12 = layer6Html.indexOf('AI 主力動態信號判斷');
       const idx21 = layer6Html.indexOf('估值與殖利率量化矩陣');

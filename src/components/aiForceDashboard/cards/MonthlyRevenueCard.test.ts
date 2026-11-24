@@ -252,7 +252,7 @@ describe('MonthlyRevenueCard - TDD Unit Tests', () => {
   describe('Spec 0244 T02 & T03: Card 20 ETF 配息貼頂緊湊化、12 期無滑軌全展開與 >12 期溢位護欄', () => {
     const makeDividends = (count: number) =>
       Array.from({ length: count }, (_, i) => ({
-        quarter: `2026-${String(12 - (i % 12)).padStart(2, '0')}-${String(15 - Math.floor(i / 12)).padStart(2, '0')}`,
+        quarter: `${2026 - Math.floor(i / 12)}-${String(12 - (i % 12)).padStart(2, '0')}-15`,
         amount: 0.6 + (i % 4) * 0.25,
         yieldRate: Number((0.67 + i * 0.1).toFixed(2)),
       }));

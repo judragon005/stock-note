@@ -226,7 +226,7 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
               display: 'grid',
               gridTemplateColumns: 'repeat(3, 1fr)',
               gap: '8px',
-              marginBottom: '12px',
+              marginBottom: '8px',
             }}
           >
             <div
@@ -341,7 +341,7 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              marginTop: '8px',
+              marginTop: '6px',
               fontSize: '0.75rem',
               color: '#94a3b8',
             }}
