@@ -1,15 +1,21 @@
-version: '3.8'
-
 services:
   stock-tracker:
+    # 滾動最新標籤；如需鎖定版號或快速回滾，可改為不可變版號標籤（例如 judragon003/stock-tracker:v9.26.0）
     image: judragon003/stock-tracker:latest
     container_name: stock-tracker
     restart: unless-stopped
+    stop_grace_period: 10s
     ports:
       - "13000:3000"
     environment:
       - TZ=Asia/Taipei
       - NODE_ENV=production
+      # 選配：免費 FRED API Key（未設定時每日宏觀排程自動降級免費來源）
+      # - FRED_API_KEY=your_fred_api_key
+      # 選配：覆寫資料庫路徑（未設定時預設 /app/.scratch/market-cache/market_history.db）
+      # - LAKEHOUSE_DB_PATH=/app/.scratch/market-cache/market_history.db
+      # 選配：停用容器內建 24/7 排程器
+      # - DISABLE_BUILTIN_SCHEDULER=true
     volumes:
-      # 掛載 NAS 上存放 SQLite 資料庫的實體資料夾
+      # 100% 向後相容 QNAP 既定持久化資料夾（自動承接既有 SQLite 歷史庫與每週滾動備份）
       - /share/Container/stock-data:/app/.scratch/market-cache

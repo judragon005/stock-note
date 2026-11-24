@@ -1,23 +1,36 @@
-# 採用 Node.js 22 輕量 Alpine 映像檔 (支援原生 node:sqlite)
-FROM node:22-alpine
+# [SSOT 鏡像檔] 本檔已對齊專案根目錄之權威 Multi-Stage Dockerfile (Spec 0243)
+# 建置請優先直接於專案根目錄執行：docker build --platform linux/amd64 -t judragon003/stock-tracker:latest .
 
+# Stage 1: Build Frontend SPA
+FROM node:22-alpine AS builder
 WORKDIR /app
 
-# 設定環境變數：生產模式與台北時區
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+# Stage 2: Lightweight NAS Production Runtime (Node 22 native node:sqlite, zero devDeps)
+FROM node:22-alpine AS runner
+WORKDIR /app
+
 ENV NODE_ENV=production
 ENV TZ=Asia/Taipei
+ENV PORT=3000
+ENV HOST=0.0.0.0
 
-# 複製生產環境執行所需檔案
-COPY dist ./dist
-COPY scripts ./scripts
-COPY docs/deployment/server/prod-server.cjs ./prod-server.cjs
-COPY package.json ./package.json
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/package.json ./package.json
 
-# 建立 SQLite 資料庫預設持久化目錄
-RUN mkdir -p .scratch/market-cache
+RUN mkdir -p /app/.scratch/market-cache
 
-# 暴露服務連接埠
+VOLUME ["/app/.scratch/market-cache"]
 EXPOSE 3000
+STOPSIGNAL SIGTERM
 
-# 啟動輕量整合伺服器
-CMD ["node", "prod-server.cjs"]
+HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:3000/healthz || exit 1
+
+CMD ["node", "scripts/nas-server.cjs"]

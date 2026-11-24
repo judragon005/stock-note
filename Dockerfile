@@ -16,17 +16,19 @@ ENV NODE_ENV=production
 ENV TZ=Asia/Taipei
 ENV PORT=3000
 ENV HOST=0.0.0.0
-ENV LAKEHOUSE_DB_PATH=/data/market_history.db
 
 # 僅複製靜態產物與後端湖倉腳本，大幅縮減映像體積與執行記憶體
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/package.json ./package.json
 
-RUN mkdir -p /data
+# 預設資料庫目錄對齊 /app/.scratch/market-cache，100% 向後相容 QNAP 既定掛載
+# 如需自訂路徑，可在執行時透過環境變數 LAKEHOUSE_DB_PATH 覆寫
+RUN mkdir -p /app/.scratch/market-cache
 
-VOLUME ["/data"]
+VOLUME ["/app/.scratch/market-cache"]
 EXPOSE 3000
+STOPSIGNAL SIGTERM
 
 HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1:3000/healthz || exit 1
