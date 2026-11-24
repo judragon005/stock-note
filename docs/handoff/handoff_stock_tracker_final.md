@@ -1,7 +1,12 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-11-20 14:05 (UTC+8)  
+> **交接產生時間**：2026-11-24 10:52 (UTC+8)  
 > **當前最新里程碑**：
+> - **V9.26.2 主力戰情室 Layer 6 / Card 20 / ZONE 04 佈局拓撲重構與 12 期 ETF 配息無滑軌全展開**（ADR 0244, Spec 0244, Issue #603）：
+>   - **Layer 6 雙界限防溢位 2×2 決策矩陣 (T01)**：升級為 `minmax(min(100%, max(440px, calc(50% - 12px))), 1fr)`，消除 3+1 孤兒列並確保 `< 440px` 行動端零水平溢出；DOM 次序定錨為 `12 → 21 → 10·13 → 14`。
+>   - **Card 20 ETF 貼頂緊湊化與 12 期配息免滑軌展開 (T02 & T03)**：外層配息區改採 `justifyContent: flex-start` 並收斂 KPI / 頁尾間距；`<= 12` 期無滑軌完整呈現 4×3 網格，`> 12` 期自動啟用 `maxHeight: 288px` + `overflowY: auto` 護欄。
+>   - **ZONE 04 非對稱等高雙欄矩陣 (T04 & T05)**：右欄移除雙欄並排子網格改為 `11 → 16 → 17` 全寬單欄直排；左欄 `15` 鎖定自然高度 (`flex: 0 0 auto`)、`09` 獨佔剩餘高度 (`flex: 1`) 上下拉高切齊右欄底緣。
+>   - **品質狀態**：雙軸程式碼審查 PASS，全量單元測試 **2,556/2,556 通過 (100% Passed / 317 個測試套件)**，TypeScript Strict 0 錯誤，生產打包 `npm run build` 100% 綠燈。
 > - **V9.26.0 台股全市場集保與配息歷史數據湖倉、每週自動更新閉環暨主力戰情室司令台重構**（ADR 0242, Spec 0242, Issue #598）：
 >   - **台股全市場 10 年雙官方歷年配息庫 (Issue #598 / Ticket 01 & 04)**：整合 TWSE `TWT49U` 與 TPEx `exDailyQ` 官方結果表，正規化為 ISO `YYYY-MM-DD` 冪等寫入 SQLite（入庫 19,494 筆）；解除前端 4 筆寫死截斷，全面展現跨年度半年配/年配 ETF 之真實殖利率歷史。
 >   - **51 週官方 TDCC 集保回溯與非阻塞逾時解耦 (Issue #598 / Ticket 02 & 03)**：廢棄第三方付費端點，改接 TDCC 官方 `qryStock` 免費端點並精確聚合 15 級股權分散矩陣；`runWithNonBlockingTimeout` 將 300ms 首屏回傳與 15s 背景補齊解耦，徹底終結背景寫庫被逾時誤殺。
@@ -139,6 +144,7 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0244`](file:///d:/APP/股票紀錄/docs/specs/0244-war-room-layout-topology-and-etf-dividend-grid-spec.md) | [`ADR 0244`](file:///d:/APP/股票紀錄/docs/adr/0244-war-room-layout-topology-and-etf-dividend-grid.md) | [`.scratch/v9.26.2-spec0244-war-room-layout-topology/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.26.2-spec0244-war-room-layout-topology/issues/) | Issue #603 | V9.26.2 | 主力戰情室 Layer 6 雙界限 2×2 矩陣、Card 20 12 期配息無滑軌展開與 ZONE 04 非對稱等高佈局 |
 | [`Spec 0227`](file:///d:/APP/股票紀錄/docs/specs/0227-dividend-cashflow-tri-state-reconciliation-and-calendar-precision-spec.md) | [`ADR 0227`](file:///d:/APP/股票紀錄/docs/adr/0227-dividend-cashflow-tri-state-reconciliation.md) | [`.scratch/v9.20.0-dividend-cashflow-tri-state-reconciliation/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.20.0-dividend-cashflow-tri-state-reconciliation/issues/) | Issue #516 ~ #521, #533 / PR #522 ~ #526, #534 | V9.20.0 | 現金流三態時序統一、0056發放月修正、8月硬編碼暴衝解除、長條圖待入帳堆疊與Tooltip清單穿透 |
 | [`Spec 0226`](file:///d:/APP/股票紀錄/docs/specs/0226-cross-market-dividend-cashflow-and-composition-spec.md) | [`ADR 0226`](file:///d:/APP/股票紀錄/docs/adr/0226-cross-market-dividend-cashflow-and-composition.md) | [`.scratch/v9.19.0-cross-market-dividend-cashflow-and-composition/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.19.0-cross-market-dividend-cashflow-and-composition/issues/) | Issue #507 ~ #513 / PR #514 | V9.19.0 | 台美跨市場股利發放日精準時序、ETF 配息組成穿透與被動現金流全景重構 |
 | [`Spec 0225`](file:///d:/APP/股票紀錄/docs/specs/0225-dividend-and-cashflow-holistic-refactor-and-timing-alignment-spec.md) | [`ADR 0225`](file:///d:/APP/股票紀錄/docs/adr/0225-dividend-and-cashflow-holistic-refactor.md) | [`.scratch/v9.18.0-dividend-cashflow-timing-and-modular-refactor/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.18.0-dividend-cashflow-timing-and-modular-refactor/issues/) | Issue #502, #504 / PR #503, #505 | V9.18.0 | 股利日誌與現金流全景：證交所發放日時差對齊、法人級實戰指標打通與極簡模組化重構 |
