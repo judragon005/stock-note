@@ -1048,21 +1048,31 @@ export function generateAiForceReportFromCandles(
       );
     }
 
-    // Spec 0170 / Ticket 08: 盤中 (09:00~13:30) 與盤後未結算 (13:30~15:00) 時態行情動態縫合
-    // 當外部傳入有效即時行情 realtimeQuote?.price > 0 時，動態構造當日虛擬日 K 並追加至有效數列
+    // Spec 0170 / Ticket 08 & Spec 0246 Ticket 11: 盤中 (09:00~13:30) 與盤後未結算 (13:30~15:00) 時態行情動態縫合
+    // 當外部傳入有效即時行情 realtimeQuote?.price > 0 時，動態構造當日虛擬日 K 並優先填入真實盤中 OHLCV；
+    // 若上游確實未提供有效正成交量，保留 volume: 0 以交由 Spec 0245 零量定錨守衛退回前收日
     const todayYmd = settlement.currentTradingDate || formatDateToYMD(referenceDate);
     const lastDate = effectiveCandles.length > 0 ? effectiveCandles[effectiveCandles.length - 1].date : '';
     if (realtimeQuote?.price !== undefined && realtimeQuote.price > 0 && lastDate < todayYmd) {
-      const openPrice = realtimeQuote.open ?? realtimeQuote.price;
-      const highPrice = realtimeQuote.high ?? Math.max(realtimeQuote.price, openPrice);
-      const lowPrice = realtimeQuote.low ?? Math.min(realtimeQuote.price, openPrice);
+      const hasValidOpen = typeof realtimeQuote.open === 'number' && Number.isFinite(realtimeQuote.open) && realtimeQuote.open > 0;
+      const hasValidHigh = typeof realtimeQuote.high === 'number' && Number.isFinite(realtimeQuote.high) && realtimeQuote.high > 0;
+      const hasValidLow = typeof realtimeQuote.low === 'number' && Number.isFinite(realtimeQuote.low) && realtimeQuote.low > 0;
+      const hasValidVol = typeof realtimeQuote.volume === 'number' && Number.isFinite(realtimeQuote.volume) && realtimeQuote.volume > 0;
+
+      const openPrice = hasValidOpen ? realtimeQuote.open! : realtimeQuote.price;
+      const highPrice = hasValidHigh
+        ? Math.max(realtimeQuote.high!, openPrice, realtimeQuote.price)
+        : Math.max(realtimeQuote.price, openPrice);
+      const lowPrice = hasValidLow
+        ? Math.min(realtimeQuote.low!, openPrice, realtimeQuote.price)
+        : Math.min(realtimeQuote.price, openPrice);
       const stitchedIntradayCandle = {
         date: todayYmd,
         open: openPrice,
         high: highPrice,
         low: lowPrice,
         close: realtimeQuote.price,
-        volume: realtimeQuote.volume ?? 0,
+        volume: hasValidVol ? realtimeQuote.volume! : 0,
         transactions: realtimeQuote.transactions,
         isIntraday: true,
       };
@@ -1072,13 +1082,18 @@ export function generateAiForceReportFromCandles(
     // Spec 0160: 若市場今日已結算且湖倉日 K 稍有落後，若有外部即時收盤價，進行日 K 自適應防斷層縫合
     const lastDate = effectiveCandles[effectiveCandles.length - 1].date;
     if (lastDate < settlement.anchorTradingDate && realtimeQuote?.price !== undefined && realtimeQuote.price > 0) {
+      const hasValidOpen = typeof realtimeQuote.open === 'number' && Number.isFinite(realtimeQuote.open) && realtimeQuote.open > 0;
+      const hasValidHigh = typeof realtimeQuote.high === 'number' && Number.isFinite(realtimeQuote.high) && realtimeQuote.high > 0;
+      const hasValidLow = typeof realtimeQuote.low === 'number' && Number.isFinite(realtimeQuote.low) && realtimeQuote.low > 0;
+      const hasValidVol = typeof realtimeQuote.volume === 'number' && Number.isFinite(realtimeQuote.volume) && realtimeQuote.volume > 0;
+      const openPrice = hasValidOpen ? realtimeQuote.open! : realtimeQuote.price;
       const stitchedCandle = {
         date: settlement.anchorTradingDate,
-        open: realtimeQuote.open ?? realtimeQuote.price,
-        high: realtimeQuote.high ?? Math.max(realtimeQuote.price, realtimeQuote.open ?? realtimeQuote.price),
-        low: realtimeQuote.low ?? Math.min(realtimeQuote.price, realtimeQuote.open ?? realtimeQuote.price),
+        open: openPrice,
+        high: hasValidHigh ? Math.max(realtimeQuote.high!, openPrice, realtimeQuote.price) : Math.max(realtimeQuote.price, openPrice),
+        low: hasValidLow ? Math.min(realtimeQuote.low!, openPrice, realtimeQuote.price) : Math.min(realtimeQuote.price, openPrice),
         close: realtimeQuote.price,
-        volume: realtimeQuote.volume ?? 0,
+        volume: hasValidVol ? realtimeQuote.volume! : 0,
         transactions: realtimeQuote.transactions,
       };
       effectiveCandles = [...effectiveCandles, stitchedCandle];

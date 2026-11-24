@@ -1,4 +1,16 @@
 import { MarketType } from '../types/stock';
+import marketHolidaysJson from '../data/market-holidays.json';
+
+const MARKET_HOLIDAYS: { TW: Record<string, string>; US: Record<string, string> } = {
+  TW: (marketHolidaysJson as { TW?: Record<string, string> }).TW ?? {},
+  US: (marketHolidaysJson as { US?: Record<string, string> }).US ?? {},
+};
+
+// Spec 0246 Ticket 01: 與後端 sync-thresholds.cjs 對齊的單一結算門檻常數
+export const UNIFIED_SETTLEMENT_CUTOFFS = {
+  TW_SETTLE_MINUTES: 15 * 60, // 15:00 Asia/Taipei
+  US_SETTLE_MINUTES: 17 * 60, // 17:00 America/New_York
+} as const;
 
 export interface MarketSettlementStatus {
   isSettled: boolean; // 是否已結算完成
@@ -29,29 +41,28 @@ export function formatDateToYMD(d: Date): string {
 }
 
 /**
- * 往回推算指定數量的工作日 (跳過週六、週日；使用 UTC 算術避免本機 DST 偏移)
+ * 判斷指定 UTC 日期在該市場是否為法定交易日（排除週末與 market-holidays.json 法定休市日）
  */
-function stepBackWorkingDaysUtc(baseUtcDate: Date, count: number): Date {
-  const cur = new Date(baseUtcDate.getTime());
-  let remaining = count;
-  while (remaining > 0) {
-    cur.setUTCDate(cur.getUTCDate() - 1);
-    const day = cur.getUTCDay();
-    if (day !== 0 && day !== 6) {
-      remaining--;
-    }
-  }
-  return cur;
+function isMarketTradingDateUtc(utcDate: Date, market: MarketType): boolean {
+  const day = utcDate.getUTCDay();
+  if (day === 0 || day === 6) return false;
+  const ymd = formatUtcDateToYMD(utcDate);
+  const holidays = market === 'US' ? MARKET_HOLIDAYS.US : MARKET_HOLIDAYS.TW;
+  return !Object.prototype.hasOwnProperty.call(holidays, ymd);
 }
 
 /**
- * 若為週末，退回最近一個週五 (週六 -1 天、週日 -2 天)
+ * 往回尋找最近一個有效交易日（跳過週末與法定休市日，Spec 0246）
  */
-function rewindWeekendToFridayUtc(baseUtcDate: Date): Date {
+function stepBackTradingDaysUtc(baseUtcDate: Date, market: MarketType, count: number = 1): Date {
   const cur = new Date(baseUtcDate.getTime());
-  const day = cur.getUTCDay();
-  if (day === 0) cur.setUTCDate(cur.getUTCDate() - 2);
-  else if (day === 6) cur.setUTCDate(cur.getUTCDate() - 1);
+  let remaining = Math.max(1, count);
+  for (let guard = 0; guard < 40 && remaining > 0; guard++) {
+    cur.setUTCDate(cur.getUTCDate() - 1);
+    if (isMarketTradingDateUtc(cur, market)) {
+      remaining--;
+    }
+  }
   return cur;
 }
 
@@ -122,15 +133,15 @@ export function getMarketSettlementStatus(
   const tp = getTimeZoneParts(referenceDate, 'Asia/Taipei');
 
   if (market === 'TW') {
-    // 台股時段：
-    // 開盤交易時段：週一至週五 09:00 ~ 13:30
+    const isTwTradingToday = isMarketTradingDateUtc(tp.utcDate, 'TW');
+    // 台股開盤交易時段：法定交易日 09:00 ~ 13:30
     const isTradingHours =
-      !tp.isWeekend &&
+      isTwTradingToday &&
       tp.totalMinutes >= 9 * 60 &&
       tp.totalMinutes <= 13 * 60 + 30;
 
-    // 結算門檻：週一至週五 15:00 (含) 之後
-    const isSettledTime = !tp.isWeekend && tp.totalMinutes >= 15 * 60;
+    // 結算門檻：法定交易日 15:00 (含) 之後（與後端 getMarketAnchorDate 完全一致）
+    const isSettledTime = isTwTradingToday && tp.totalMinutes >= UNIFIED_SETTLEMENT_CUTOFFS.TW_SETTLE_MINUTES;
 
     if (isSettledTime) {
       return {
@@ -141,17 +152,13 @@ export function getMarketSettlementStatus(
       };
     }
 
-    // 未達 15:00 結算門檻或週末：
-    // 若為週末：退回最近已收盤的週五
-    // 若為週一至週五 15:00 前：退回前一個已收盤交易日 (週一退至上週五)
-    const anchorDate = tp.isWeekend
-      ? rewindWeekendToFridayUtc(tp.utcDate)
-      : stepBackWorkingDaysUtc(tp.utcDate, 1);
+    // 未達 15:00 結算門檻、週末或法定休市日：退回最近一個已結算台股交易日
+    const anchorDate = stepBackTradingDaysUtc(tp.utcDate, 'TW', 1);
 
     let reason = '台股休市中，尚未完成當日盤後籌碼結算';
     if (isTradingHours) {
       reason = '台股尚未完成當日盤後籌碼結算（盤中交易中，每日 15:00 結算）';
-    } else if (!tp.isWeekend && tp.totalMinutes < 15 * 60) {
+    } else if (isTwTradingToday && tp.totalMinutes < UNIFIED_SETTLEMENT_CUTOFFS.TW_SETTLE_MINUTES) {
       reason = '台股尚未完成當日盤後籌碼結算（預計 15:00 發布完整法人數據）';
     }
 
@@ -164,16 +171,17 @@ export function getMarketSettlementStatus(
     };
   }
 
-  // 美股 (US) 市場：以 America/New_York 時區精準自動處理夏冬令 DST，並結合台北 08:00 盤後結算線
+  // 美股 (US) 市場：以 America/New_York 時區精準自動處理夏冬令 DST，並統一對齊 17:00 美東結算線 + 法定休市日曆
   const ny = getTimeZoneParts(referenceDate, 'America/New_York');
   const currentTradingDate = ny.ymd;
+  const isUsTradingToday = isMarketTradingDateUtc(ny.utcDate, 'US');
 
-  // 1. 美東週末（週六、週日，涵蓋台北週日/週一 00:00~07:59）：上週五已於週六 08:00 結算完畢
-  if (ny.isWeekend) {
-    const lastFriday = rewindWeekendToFridayUtc(ny.utcDate);
+  // 1. 美東休市日（週末或法定休市日）：前一個已結算交易日已完成結算
+  if (!isUsTradingToday) {
+    const lastTradingDay = stepBackTradingDaysUtc(ny.utcDate, 'US', 1);
     return {
       isSettled: true,
-      anchorTradingDate: formatUtcDateToYMD(lastFriday),
+      anchorTradingDate: formatUtcDateToYMD(lastTradingDay),
       currentTradingDate,
       isTradingHours: false,
     };
@@ -181,7 +189,7 @@ export function getMarketSettlementStatus(
 
   // 2. 美東平日開盤前 (00:00 ~ 09:29)：前一美東交易日早已完成結算
   if (ny.totalMinutes < 9 * 60 + 30) {
-    const prevTradingDay = stepBackWorkingDaysUtc(ny.utcDate, 1);
+    const prevTradingDay = stepBackTradingDaysUtc(ny.utcDate, 'US', 1);
     return {
       isSettled: true,
       anchorTradingDate: formatUtcDateToYMD(prevTradingDay),
@@ -192,25 +200,24 @@ export function getMarketSettlementStatus(
 
   // 3. 美東正常交易時段 (09:30 ~ 15:59)：盤中交易中，尚未結算，定錨前一美東交易日
   if (ny.totalMinutes < 16 * 60) {
-    const prevTradingDay = stepBackWorkingDaysUtc(ny.utcDate, 1);
+    const prevTradingDay = stepBackTradingDaysUtc(ny.utcDate, 'US', 1);
     return {
       isSettled: false,
       anchorTradingDate: formatUtcDateToYMD(prevTradingDay),
       currentTradingDate,
-      reason: '美股盤中交易中，尚未完成當日盤後數據結算（每日台灣時間 08:00 結算）',
+      reason: '美股盤中交易中，尚未完成當日盤後數據結算（每日美東 17:00 結算）',
       isTradingHours: true,
     };
   }
 
-  // 4. 美東盤後 (16:00 ~ 23:59，對應台北隔日 04:00/05:00 ~ 11:59/12:59)：
-  //    台北 08:00 前判定未結算（定錨前一美東交易日）；台北 08:00 (含) 後判定已結算（定錨美東當日）
-  if (tp.totalMinutes < 8 * 60) {
-    const prevTradingDay = stepBackWorkingDaysUtc(ny.utcDate, 1);
+  // 4. 美東盤後未達結算線 (16:00 ~ 16:59 NY)：尚未結算，定錨前一美東交易日
+  if (ny.totalMinutes < UNIFIED_SETTLEMENT_CUTOFFS.US_SETTLE_MINUTES) {
+    const prevTradingDay = stepBackTradingDaysUtc(ny.utcDate, 'US', 1);
     return {
       isSettled: false,
       anchorTradingDate: formatUtcDateToYMD(prevTradingDay),
       currentTradingDate,
-      reason: '美股尚未完成盤後數據結算（每日台灣時間 08:00 結算）',
+      reason: '美股尚未完成盤後數據結算（每日美東 17:00 結算）',
       isTradingHours: false,
     };
   }

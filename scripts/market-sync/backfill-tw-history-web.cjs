@@ -19,6 +19,7 @@ const {
   parseCleanNumber,
   parseTwseT86BulkData,
   parseTpexT86BulkData,
+  isTwOtcWarrantSymbol,
   retryFetch,
 } = require('./market-sync-core.cjs');
 const { saveTwT86ToSqlite } = require('./ingest-tw-t86.cjs');
@@ -40,6 +41,7 @@ const {
   normalizeDateStr,
   getHolidayReason,
 } = require('./trading-calendar-engine.cjs');
+const { getMarketAnchorDate } = require('./market-freshness-service.cjs');
 
 /**
  * 簡易非同步延遲
@@ -63,25 +65,8 @@ function generateTradeDateCandidates(daysCount = 250, endDateStr, customNow) {
   if (endDateStr) {
     cursorStr = normalizeDateStr(endDateStr);
   } else {
-    const now = customNow || new Date();
-    // 鎖定台北時間 (UTC+8) 以確保跨時區 (如 GitHub Actions Runner UTC) 判定一致
-    const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
-    const twTime = new Date(utcMs + 8 * 3600000);
-    const twHour = twTime.getHours();
-    const twMin = twTime.getMinutes();
-    const totalMinutes = twHour * 60 + twMin;
-
-    const y = twTime.getFullYear();
-    const m = String(twTime.getMonth() + 1).padStart(2, '0');
-    const d = String(twTime.getDate()).padStart(2, '0');
-    const todayStr = `${y}-${m}-${d}`;
-
-    // 若今日為法定交易日且當前時間已過盤後發布門檻 (15:30)，則起始日為今日；否則退至前一交易日
-    if (isTwTradingDay(todayStr) && totalMinutes >= 15 * 60 + 30) {
-      cursorStr = todayStr;
-    } else {
-      cursorStr = getPreviousTradingDay(todayStr);
-    }
+    // Spec 0246 Ticket 01: 統一複用單一台股結算錨定時鐘 (15:00 Asia/Taipei + 法定休市日曆)
+    cursorStr = getMarketAnchorDate('TW', customNow || new Date());
   }
 
 
@@ -342,8 +327,8 @@ function parseTpexDailyQuotesWithTransactions(rawData, dateStr) {
       const symbol = normalizeTwSymbol(rawSymbol);
       if (!symbol || symbol.length > 6) continue;
 
-      // Spec 0184 / Ticket 02: 排除 6 碼以 7 開頭之櫃買認購/認售權證，對齊上市 ALLBUT0999
-      if (/^7[0-9]{5}$/.test(symbol)) continue;
+      // Spec 0184 / Spec 0246 Ticket 04: 統一共用 isTwOtcWarrantSymbol 濾除 6 碼以 7 開頭之櫃買權證
+      if (isTwOtcWarrantSymbol(symbol)) continue;
 
       const close = parseCleanNumber(row[2]);
       const open = parseCleanNumber(row[4]);
@@ -752,8 +737,27 @@ async function fetchAndIngestTwDailyData(dateStr, options = {}) {
   const twseChipsCount = Object.keys(twseChips).length;
   const tpexChipsCount = Object.keys(tpexChips).length;
 
-  // Spec 0218 Ticket 01 (#434): 三大法人雙邊完整性檢查 (TWSE 與 TPEx 均須 > 500 筆)
+  // Spec 0218 Ticket 01 (#434) & Spec 0246 Ticket 04:
+  // 若處於盤後 Phase 1 (14:40~16:29) 且呼叫端允許先行寫入收盤價量 (allowPartialPhase1)，先入庫 daily_candles 並回報 partial，待 Phase 2 再補齊籌碼
   if (twseQuotesCount > 0 && (twseChipsCount <= 500 || tpexChipsCount <= 500)) {
+    if (options.allowPartialPhase1) {
+      const partialQuotesCount = Object.keys(allQuotes).length;
+      if (!options.inMemoryOnly && partialQuotesCount > 0) {
+        saveTwDailyQuotesBatch(allQuotes, options.dbPath);
+      }
+      return {
+        date: dateStr,
+        isTradingDay: true,
+        phase: 'PHASE_1_PRICE_ONLY',
+        partial: true,
+        quotesCount: partialQuotesCount,
+        chipsCount: 0,
+        twseQuotesCount,
+        tpexQuotesCount,
+        twseChipsCount,
+        tpexChipsCount,
+      };
+    }
     return {
       date: dateStr,
       isTradingDay: true,

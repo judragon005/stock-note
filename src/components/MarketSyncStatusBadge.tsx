@@ -1,7 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { RefreshCw, CheckCircle2, Clock, Database, X, ChevronRight } from 'lucide-react';
-import { MarketCacheSummary, loadMarketCacheSummary } from '../engine/marketCacheLoader';
+import {
+  MarketSyncStatusResponse,
+  LAKEHOUSE_SYNCED_EVENT,
+} from '../hooks/useMarketCatchupSync';
+
+/**
+ * 輕量摘要相容介面（向後相容舊測試呼叫，不依賴靜態 JSON 市場快取載入器）
+ */
+export interface LegacySyncSummaryLike {
+  date: string;
+  updatedAt: number;
+  totalSymbols: number;
+  durationMs?: number;
+}
 
 /**
  * Spec 0135: 彈窗視窗防溢出與包含塊隔離樣式定義
@@ -37,11 +50,11 @@ export const MODAL_VIEWPORT_STYLES = {
 };
 
 /**
- * 格式化同步晶片懸浮說明文案
+ * 向後相容格式化同步晶片懸浮說明文案 (Spec 0135)
  */
 export const formatSyncBadgeTooltip = (
-  twSummary: MarketCacheSummary | null,
-  usSummary: MarketCacheSummary | null
+  twSummary: LegacySyncSummaryLike | null,
+  usSummary: LegacySyncSummaryLike | null
 ): string => {
   const formatTime = (timestamp?: number) => {
     if (!timestamp) return '';
@@ -55,6 +68,46 @@ export const formatSyncBadgeTooltip = (
   return `全市場每日盤後排程快取 (Spec 0132)\n台股 (16:00)：${twSummary ? `已同步 (${twSummary.date} ${twTime}, ${twSummary.totalSymbols}檔)` : '等待排程'}\n美股 (08:00)：${usSummary ? `已同步 (${usSummary.date} ${usTime}, ${usSummary.totalSymbols}檔)` : '等待排程'}\n點擊查看完整稽核報告與排程設定`;
 };
 
+/**
+ * Spec 0246 Ticket 07: 以 SQLite 單一同步遙測事實來源格式化徽章懸浮文案
+ */
+export const formatSqliteSyncBadgeTooltip = (
+  syncStatus: MarketSyncStatusResponse | null
+): string => {
+  if (!syncStatus) {
+    return 'SQLite 湖倉同步狀態：等待連線至本地湖倉 API (/api/market/sync-status)\n點擊查看排程管理設定';
+  }
+  const tw = syncStatus.tw;
+  const us = syncStatus.us;
+  const twGapLabel =
+    typeof tw.gapCount === 'number' && tw.gapCount > 0
+      ? `（缺 ${tw.gapCount} 日待補）`
+      : tw.isStale
+      ? '（待同步）'
+      : '（零缺口）';
+  const twCountLabel = tw.symbolCount ? `, ${tw.symbolCount}檔` : '';
+  const usCountLabel = us.symbolCount ? `, ${us.symbolCount}檔` : '';
+  const catchupBanner = syncStatus.isCatchingUp ? '\n⚡ 背景缺口追趕同步進行中...' : '';
+
+  return `SQLite 湖倉同步狀態 (Spec 0246 SSOT)\n台股：${tw.latestDate ? `${tw.latestDate}${twCountLabel} ${twGapLabel}` : '尚無資料（待補齊）'}\n美股：${us.latestDate ? `${us.latestDate}${usCountLabel}${us.isStale ? '（待同步）' : '（最新）'}` : '尚無資料（待補齊）'}${catchupBanner}\n點擊查看四軌同步狀態與排程管理`;
+};
+
+/**
+ * 自 SQLite 同步狀態 API (/api/market/sync-status) 抓取最新遙測，離線時優雅降級回傳 null
+ */
+export const fetchMarketSyncStatus = async (
+  fetcher: typeof fetch = fetch
+): Promise<MarketSyncStatusResponse | null> => {
+  try {
+    if (typeof fetcher !== 'function') return null;
+    const res = await fetcher('/api/market/sync-status');
+    if (!res || !res.ok) return null;
+    return (await res.json()) as MarketSyncStatusResponse;
+  } catch {
+    return null;
+  }
+};
+
 interface MarketSyncStatusBadgeProps {
   onNavigateToSettings?: () => void;
 }
@@ -62,31 +115,30 @@ interface MarketSyncStatusBadgeProps {
 export const MarketSyncStatusBadge: React.FC<MarketSyncStatusBadgeProps> = ({
   onNavigateToSettings,
 }) => {
-  const [twSummary, setTwSummary] = useState<MarketCacheSummary | null>(null);
-  const [usSummary, setUsSummary] = useState<MarketCacheSummary | null>(null);
+  const [syncStatus, setSyncStatus] = useState<MarketSyncStatusResponse | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [tw, us] = await Promise.all([
-        loadMarketCacheSummary('TW'),
-        loadMarketCacheSummary('US'),
-      ]);
-      setTwSummary(tw);
-      setUsSummary(us);
-    } catch {
-      // 忽略載入錯誤
+      const data = await fetchMarketSyncStatus();
+      setSyncStatus(data);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchStatus();
-  }, []);
+    void fetchStatus();
+    if (typeof window === 'undefined') return;
+    const handleSynced = () => {
+      void fetchStatus();
+    };
+    window.addEventListener(LAKEHOUSE_SYNCED_EVENT, handleSynced);
+    return () => window.removeEventListener(LAKEHOUSE_SYNCED_EVENT, handleSynced);
+  }, [fetchStatus]);
 
   // 鍵盤 Escape 快捷關閉防禦
   useEffect(() => {
@@ -100,16 +152,16 @@ export const MarketSyncStatusBadge: React.FC<MarketSyncStatusBadgeProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showModal]);
 
-  const formatTime = (timestamp?: number) => {
-    if (!timestamp) return '';
-    const d = new Date(timestamp);
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const formatShortDate = (dateStr?: string | null) => {
+    if (!dateStr) return null;
+    return dateStr.length >= 10 ? dateStr.slice(5) : dateStr;
   };
 
-  const twTime = formatTime(twSummary?.updatedAt);
-  const usTime = formatTime(usSummary?.updatedAt);
-
-  const tooltipText = formatSyncBadgeTooltip(twSummary, usSummary);
+  const twShort = formatShortDate(syncStatus?.tw?.latestDate);
+  const usShort = formatShortDate(syncStatus?.us?.latestDate);
+  const twGapCount = syncStatus?.tw?.gapCount ?? 0;
+  const isCatchingUp = Boolean(syncStatus?.isCatchingUp);
+  const tooltipText = formatSqliteSyncBadgeTooltip(syncStatus);
 
   return (
     <>
@@ -133,27 +185,60 @@ export const MarketSyncStatusBadge: React.FC<MarketSyncStatusBadgeProps> = ({
           userSelect: 'none',
         }}
       >
-        <Database size={12} color="#38bdf8" />
-        <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem' }}>盤後:</span>
+        <Database size={12} color={isCatchingUp ? '#fbbf24' : '#38bdf8'} />
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem' }}>
+          {isCatchingUp ? '追趕中:' : '湖倉:'}
+        </span>
 
-        {twSummary ? (
-          <span style={{ color: '#34d399', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-            <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#10b981' }} />
-            🇹🇼 {twTime}
+        {twShort ? (
+          <span
+            style={{
+              color: twGapCount > 0 || syncStatus?.tw?.isStale ? '#fbbf24' : '#34d399',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '3px',
+            }}
+          >
+            <span
+              style={{
+                width: '5px',
+                height: '5px',
+                borderRadius: '50%',
+                background: twGapCount > 0 || syncStatus?.tw?.isStale ? '#f59e0b' : '#10b981',
+              }}
+            />
+            🇹🇼 {twShort}
+            {twGapCount > 0 ? ` (缺${twGapCount})` : ''}
           </span>
         ) : (
-          <span style={{ color: 'var(--text-muted)', opacity: 0.7 }}>🇹🇼 待排程</span>
+          <span style={{ color: 'var(--text-muted)', opacity: 0.7 }}>🇹🇼 待連線</span>
         )}
 
         <span style={{ color: 'var(--border-color)', opacity: 0.6 }}>|</span>
 
-        {usSummary ? (
-          <span style={{ color: '#38bdf8', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-            <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#38bdf8' }} />
-            🇺🇸 {usTime}
+        {usShort ? (
+          <span
+            style={{
+              color: syncStatus?.us?.isStale ? '#fbbf24' : '#38bdf8',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '3px',
+            }}
+          >
+            <span
+              style={{
+                width: '5px',
+                height: '5px',
+                borderRadius: '50%',
+                background: syncStatus?.us?.isStale ? '#f59e0b' : '#38bdf8',
+              }}
+            />
+            🇺🇸 {usShort}
           </span>
         ) : (
-          <span style={{ color: 'var(--text-muted)', opacity: 0.7 }}>🇺🇸 待排程</span>
+          <span style={{ color: 'var(--text-muted)', opacity: 0.7 }}>🇺🇸 待連線</span>
         )}
       </div>
 
@@ -171,7 +256,7 @@ export const MarketSyncStatusBadge: React.FC<MarketSyncStatusBadgeProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Database size={18} color="#10b981" />
                 <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#f8fafc', margin: 0 }}>
-                  全市場每日盤後排程同步狀態 (Spec 0132)
+                  SQLite 湖倉單一同步遙測狀態 (Spec 0246)
                 </h3>
               </div>
               <button
@@ -204,20 +289,20 @@ export const MarketSyncStatusBadge: React.FC<MarketSyncStatusBadgeProps> = ({
                   <span style={{ fontWeight: 700, color: '#34d399', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <CheckCircle2 size={15} /> 🇹🇼 台股市場 (TWSE / TPEx)
                   </span>
-                  <span style={{ fontSize: '0.68rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
-                    每日 16:00 定時排程
+                  <span style={{ fontSize: '0.68rem', padding: '2px 6px', borderRadius: '4px', background: twGapCount > 0 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)', color: twGapCount > 0 ? '#fbbf24' : '#34d399', border: `1px solid ${twGapCount > 0 ? 'rgba(245, 158, 11, 0.3)' : 'rgba(16, 185, 129, 0.3)'}` }}>
+                    {twGapCount > 0 ? `近 30 日缺 ${twGapCount} 日` : '零缺口同步'}
                   </span>
                 </div>
-                {twSummary ? (
+                {syncStatus?.tw?.latestDate ? (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                    <div>資料日期: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{twSummary.date || Object.values(twSummary.stocks || {})[0]?.date || '已同步'}</span></div>
-                    <div>同步時間: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{new Date(twSummary.updatedAt).toLocaleTimeString()}</span></div>
-                    <div>涵蓋標的: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{twSummary.totalSymbols} 檔 (全市場整包)</span></div>
-                    <div>執行耗時: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{(twSummary.durationMs / 1000).toFixed(1)} 秒</span></div>
+                    <div>最新在庫: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{syncStatus.tw.latestDate}</span></div>
+                    <div>應結算日: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{syncStatus.tw.anchorDate}</span></div>
+                    <div>涵蓋標的: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{(syncStatus.tw.symbolCount ?? 0).toLocaleString()} 檔</span></div>
+                    <div>狀態: <span style={{ color: syncStatus.tw.isStale ? '#fbbf24' : '#34d399', fontWeight: 600 }}>{syncStatus.tw.isStale ? '需補齊' : '已最新'}</span></div>
                   </div>
                 ) : (
                   <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    尚未偵測到今日台股快取。已註冊排程將於每日 16:00 自動在背景執行。
+                    尚未連線至本地 SQLite 湖倉 API 或尚無台股資料。
                   </p>
                 )}
               </div>
@@ -236,22 +321,42 @@ export const MarketSyncStatusBadge: React.FC<MarketSyncStatusBadgeProps> = ({
                     <CheckCircle2 size={15} /> 🇺🇸 美股市場 (NYSE / NASDAQ)
                   </span>
                   <span style={{ fontSize: '0.68rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
-                    每日 08:00 定時排程
+                    美東 17:00 獨立結算
                   </span>
                 </div>
-                {usSummary ? (
+                {syncStatus?.us?.latestDate ? (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                    <div>資料日期: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{usSummary.date || Object.values(usSummary.stocks || {})[0]?.date || '已同步'}</span></div>
-                    <div>同步時間: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{new Date(usSummary.updatedAt).toLocaleTimeString()}</span></div>
-                    <div>涵蓋標的: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{usSummary.totalSymbols} 檔 (核心優先)</span></div>
-                    <div>執行耗時: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{(usSummary.durationMs / 1000).toFixed(1)} 秒</span></div>
+                    <div>最新在庫: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{syncStatus.us.latestDate}</span></div>
+                    <div>應結算日: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{syncStatus.us.anchorDate}</span></div>
+                    <div>涵蓋標的: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{(syncStatus.us.symbolCount ?? 0).toLocaleString()} 檔</span></div>
+                    <div>狀態: <span style={{ color: syncStatus.us.isStale ? '#fbbf24' : '#38bdf8', fontWeight: 600 }}>{syncStatus.us.isStale ? '待同步' : '已最新'}</span></div>
                   </div>
                 ) : (
                   <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    尚未偵測到今日美股快取。已註冊排程將於每日 08:00 自動在背景執行。
+                    尚未連線至本地 SQLite 湖倉 API 或尚無美股資料。
                   </p>
                 )}
               </div>
+
+              {/* 週期指標摘要（集保與月營收） */}
+              {syncStatus?.weekly && (
+                <div
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: '10px',
+                    background: 'rgba(15, 23, 42, 0.55)',
+                    border: '1px solid rgba(51, 65, 85, 0.45)',
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '6px',
+                    fontSize: '0.72rem',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  <div>TDCC 集保: <span style={{ color: syncStatus.weekly.tdccIsStale ? '#fbbf24' : '#f8fafc', fontWeight: 600 }}>{syncStatus.weekly.tdccLatestDate || '待補齊'}</span></div>
+                  <div>月營收基準: <span style={{ color: syncStatus.weekly.revenueIsStale ? '#fbbf24' : '#f8fafc', fontWeight: 600 }}>{syncStatus.weekly.revenueLatestMonth || '待補齊'}</span></div>
+                </div>
+              )}
 
               {/* 前往設定中心管理提示 */}
               <div
@@ -268,7 +373,7 @@ export const MarketSyncStatusBadge: React.FC<MarketSyncStatusBadgeProps> = ({
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
                   <Clock size={13} color="#f59e0b" />
-                  <span>管理或卸載 Windows 背景排程？</span>
+                  <span>管理背景自動補缺與 NAS／Windows 排程？</span>
                 </div>
                 {onNavigateToSettings && (
                   <button

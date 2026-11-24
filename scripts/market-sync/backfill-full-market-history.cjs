@@ -11,6 +11,11 @@
 
 const { initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
 const { runTwDateDrivenBackfill, detectTwDateGaps } = require('./backfill-tw-history-web.cjs');
+const {
+  withGlobalSyncLock,
+  isGlobalSyncLocked,
+  releaseGlobalSyncLockByOwner,
+} = require('./lakehouse-sync-coordinator.cjs');
 
 /**
  * 預估剩餘時間 (ETA) 計算器 (Spec 0184 / Ticket 05)
@@ -195,6 +200,7 @@ function cancelBackfillTask() {
     }
     activeAbortController = null;
   }
+  releaseGlobalSyncLockByOwner('manual-backfill');
 
   const wasRunning = backfillGlobalStatus.isRunning;
   backfillGlobalStatus.isRunning = false;
@@ -219,6 +225,7 @@ function resetBackfillGlobalStatus() {
     } catch {}
     activeAbortController = null;
   }
+  releaseGlobalSyncLockByOwner('manual-backfill');
 
   backfillGlobalStatus.isRunning = false;
   backfillGlobalStatus.daysMode = 'auto';
@@ -243,12 +250,13 @@ function resetBackfillGlobalStatus() {
  * @returns {{ started: boolean, message: string }}
  */
 function triggerBackfillTask(options = {}) {
-  if (backfillGlobalStatus.isRunning) {
-    return { started: false, message: '歷史回補任務已在背景執行中' };
+  if (backfillGlobalStatus.isRunning || isGlobalSyncLocked()) {
+    return { started: false, message: '湖倉同步或歷史回補任務已在背景執行中' };
   }
 
-  activeAbortController = new AbortController();
-  const currentSignal = activeAbortController.signal;
+  const currentController = new AbortController();
+  activeAbortController = currentController;
+  const currentSignal = currentController.signal;
 
   const market = options.market || 'ALL';
   const rawDays = options.days;
@@ -269,29 +277,37 @@ function triggerBackfillTask(options = {}) {
   backfillGlobalStatus.error = null;
 
   setImmediate(async () => {
+    if (currentSignal.aborted) return;
     try {
-      await runFullMarketHistoryBackfill({
-        market,
-        days,
-        throttleMs,
-        dbPath: options.dbPath,
-        signal: currentSignal,
+      await withGlobalSyncLock('manual-backfill', async () => {
+        if (currentSignal.aborted) return;
+        await runFullMarketHistoryBackfill({
+          market,
+          days,
+          throttleMs,
+          dbPath: options.dbPath,
+          signal: currentSignal,
+        });
       });
     } catch (err) {
       if (currentSignal.aborted) {
-        backfillGlobalStatus.error = '任務已被手動取消';
+        if (activeAbortController === currentController) {
+          backfillGlobalStatus.error = '任務已被手動取消';
+        }
       } else {
         backfillGlobalStatus.error = err.message;
         console.error(`[BackfillDaemon] 背景回補任務發生錯誤:`, err);
       }
     } finally {
-      backfillGlobalStatus.isRunning = false;
-      backfillGlobalStatus.estimatedRemainingMs = 0;
-      if (!currentSignal.aborted) {
-        backfillGlobalStatus.etaFormatted = '已完成';
+      if (activeAbortController === currentController) {
+        backfillGlobalStatus.isRunning = false;
+        backfillGlobalStatus.estimatedRemainingMs = 0;
+        if (!currentSignal.aborted) {
+          backfillGlobalStatus.etaFormatted = '已完成';
+        }
+        backfillGlobalStatus.updatedAt = Date.now();
+        activeAbortController = null;
       }
-      backfillGlobalStatus.updatedAt = Date.now();
-      activeAbortController = null;
     }
   });
 

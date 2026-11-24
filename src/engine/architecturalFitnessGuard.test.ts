@@ -123,4 +123,27 @@ describe('Spec 0240 T11: Architectural Fitness Guard (防技術債復發靜態�
 
     expect(offenders).toEqual([]);
   });
+
+  it('不變量 7 (Spec 0246 T09): 前端入口與元件不得讀取靜態 /market-cache/*.json 或呼叫 syncMarketCacheToIndexedDB，且 nas-server 不得對 .json 回傳 immutable', () => {
+    const uiFiles = [
+      path.join(ROOT, 'src/App.tsx'),
+      ...collectFiles(path.join(ROOT, 'src/components'), '.tsx').filter((f) => !f.endsWith('.test.tsx')),
+    ];
+    const offenders: string[] = [];
+
+    for (const file of uiFiles) {
+      const content = fs.readFileSync(file, 'utf8');
+      if (
+        /\bloadMarketCacheSummary\b/.test(content) ||
+        /\bsyncMarketCacheToIndexedDB\b/.test(content) ||
+        /\/market-cache\/[a-z0-9_.-]+\.json/i.test(content)
+      ) {
+        offenders.push(path.relative(ROOT, file));
+      }
+    }
+    expect(offenders).toEqual([]);
+
+    const nasServerSrc = fs.readFileSync(path.join(ROOT, 'scripts/nas-server.cjs'), 'utf8');
+    expect(nasServerSrc).toMatch(/ext\s*===\s*['"]\.json['"]/);
+  });
 });

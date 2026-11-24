@@ -1,7 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   WINDOWS_SCHEDULE_COMMANDS,
   formatScheduleSummaryText,
+  formatSqliteLaneSummaryText,
+  fetchScheduleSyncStatus,
 } from './MarketScheduleHubSection';
 
 describe('MarketScheduleHubSection - Windows 背景自動化排程與卸載管理規範測試 (Spec 0133)', () => {
@@ -43,6 +45,80 @@ describe('MarketScheduleHubSection - Windows 背景自動化排程與卸載管�
       expect(text).toContain('2026-09-15');
       expect(text).toContain('2,540 檔');
       expect(text).toContain('3.5 秒');
+    });
+  });
+
+  describe('3. Spec 0246 Ticket 07 (Seam 2): 排程面板遷移至 SQLite 同步狀態 API', () => {
+    it('formatSqliteLaneSummaryText 應顯示 SQLite 最新日期、標的覆蓋數與缺口診斷', () => {
+      const okText = formatSqliteLaneSummaryText(
+        {
+          source: 'SQLITE_SSOT',
+          tw: {
+            latestDate: '2026-11-23',
+            anchorDate: '2026-11-23',
+            isStale: false,
+            symbolCount: 2350,
+            gapCount: 0,
+            gapDates: [],
+          },
+          us: {
+            latestDate: '2026-11-23',
+            anchorDate: '2026-11-23',
+            isStale: false,
+            symbolCount: 1445,
+          },
+          isCatchingUp: false,
+          lastCatchupTime: 0,
+          timestamp: Date.now(),
+        },
+        'TW'
+      );
+      expect(okText).toContain('2026-11-23');
+      expect(okText).toContain('2,350');
+      expect(okText).toContain('零缺口');
+
+      const gapText = formatSqliteLaneSummaryText(
+        {
+          source: 'SQLITE_SSOT',
+          tw: {
+            latestDate: '2026-11-19',
+            anchorDate: '2026-11-23',
+            isStale: true,
+            symbolCount: 2340,
+            gapCount: 2,
+            gapDates: ['2026-11-20', '2026-11-23'],
+          },
+          us: { latestDate: '2026-11-23', anchorDate: '2026-11-23', isStale: false, symbolCount: 1445 },
+          isCatchingUp: true,
+          lastCatchupTime: 0,
+          timestamp: Date.now(),
+        },
+        'TW'
+      );
+      expect(gapText).toContain('2026-11-19');
+      expect(gapText).toContain('缺 2 日');
+
+      expect(formatSqliteLaneSummaryText(null, 'US')).toContain('未偵測到');
+    });
+
+    it('fetchScheduleSyncStatus 應直接請求 /api/market/sync-status 且離線時安全回傳 null', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          source: 'SQLITE_SSOT',
+          tw: { latestDate: '2026-11-23', anchorDate: '2026-11-23', isStale: false, symbolCount: 2350, gapCount: 0 },
+          us: { latestDate: '2026-11-23', anchorDate: '2026-11-23', isStale: false, symbolCount: 1445 },
+          isCatchingUp: false,
+          lastCatchupTime: 0,
+          timestamp: Date.now(),
+        }),
+      });
+      const res = await fetchScheduleSyncStatus(mockFetch as any);
+      expect(mockFetch).toHaveBeenCalledWith('/api/market/sync-status');
+      expect(res?.us.symbolCount).toBe(1445);
+
+      const errFetch = vi.fn().mockRejectedValue(new Error('network down'));
+      expect(await fetchScheduleSyncStatus(errFetch as any)).toBeNull();
     });
   });
 });

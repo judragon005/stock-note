@@ -7,6 +7,8 @@ import {
 } from './aiForceDashboardEngine';
 import { calculateOverallHealthScore } from '../components/aiForceDashboard/cards/HealthSummaryCard';
 import type { AiForceDashboardReport } from '../types/aiForceDashboard';
+import { parseYahooQuoteResponse } from './priceFetcher';
+import { buildTechnicalResonance } from './technicalResonanceEngine';
 
 describe('aiForceDashboardEngine - Foundation & Contract', () => {
   it('should initialize a valid default AiForceDashboardReport for a given symbol', () => {
@@ -1266,6 +1268,124 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
 
       // Card 15: sblBalance 向前回退取得 2026-11-10 的 1200 張
       expect(report.chipsSummary.sblBalance).toBe(1200);
+    });
+  });
+
+  describe('Spec 0246 Ticket 11 (Seam 3): Card 01 盤中真實 OHLCV 縫合與 Spec 0245 零量防禦相容', () => {
+    const baseHistory = Array.from({ length: 25 }, (_, i) => ({
+      date: `2026-10-${String(i + 1).padStart(2, '0')}`,
+      open: 1000 + i,
+      high: 1015 + i,
+      low: 995 + i,
+      close: 1005 + i,
+      volume: 20_000_000 + i * 200_000,
+    }));
+    const settledHistory = [
+      ...baseHistory,
+      { date: '2026-11-20', open: 1020, high: 1035, low: 1015, close: 1030, volume: 22_000_000 },
+      { date: '2026-11-23', open: 1030, high: 1042, low: 1025, close: 1035, volume: 24_000_000 },
+    ];
+    const intradayNow = new Date('2026-11-24T11:30:00+08:00');
+
+    it('1. 盤中報價提供真實 OHLCV 時，Card 01 末筆 K 棒應縫合真實開高低量，Card 01B 亦即時反映當日實量', () => {
+      const yahooLivePayload = {
+        chart: {
+          result: [
+            {
+              meta: {
+                currency: 'TWD',
+                symbol: '2330.TW',
+                regularMarketPrice: 1055,
+                regularMarketPreviousClose: 1035,
+                regularMarketOpen: 1038,
+                regularMarketDayHigh: 1060,
+                regularMarketDayLow: 1032,
+                regularMarketVolume: 28_500_000,
+                regularMarketTime: Math.floor(intradayNow.getTime() / 1000),
+              },
+            },
+          ],
+        },
+      };
+
+      const parsedQuote = parseYahooQuoteResponse(yahooLivePayload, '2330', 'TW');
+      expect(parsedQuote).not.toBeNull();
+
+      const report = generateAiForceReportFromCandles(
+        '2330',
+        '台積電',
+        'TW',
+        settledHistory,
+        parsedQuote!,
+        undefined,
+        intradayNow
+      );
+
+      const lastBar = report.klineSystem.candles[report.klineSystem.candles.length - 1];
+      expect(lastBar.date).toBe('2026-11-24');
+      expect(lastBar.isIntraday).toBe(true);
+      expect(lastBar.open).toBe(1038);
+      expect(lastBar.high).toBe(1060);
+      expect(lastBar.low).toBe(1032);
+      expect(lastBar.close).toBe(1055);
+      expect(lastBar.volume).toBe(28_500_000);
+
+      // Card 01B 驗證：因今日已有真實正成交量，不再退回前收日
+      const resonance = buildTechnicalResonance({
+        candles: report.klineSystem.candles,
+        dailyCandles: report.klineSystem.candles,
+        timeframe: 'DAY',
+        market: 'TW',
+      });
+      expect(resonance.volume.isVolumeAnchoredToPrevClose).toBe(false);
+      expect(resonance.volume.anchorDate).toBe('2026-11-24');
+      expect(resonance.volume.volumeDisplay).toBe(28500);
+    });
+
+    it('2. 當上游盤中報價確實無有效成交量 (undefined / 0) 時，必須 100% 保留 Spec 0245 零量退回前收日防禦', () => {
+      const yahooNoVolPayload = {
+        chart: {
+          result: [
+            {
+              meta: {
+                currency: 'TWD',
+                symbol: '2330.TW',
+                regularMarketPrice: 1055,
+                regularMarketPreviousClose: 1035,
+                regularMarketTime: Math.floor(intradayNow.getTime() / 1000),
+              },
+            },
+          ],
+        },
+      };
+
+      const parsedQuote = parseYahooQuoteResponse(yahooNoVolPayload, '2330', 'TW');
+      expect(parsedQuote).not.toBeNull();
+
+      const report = generateAiForceReportFromCandles(
+        '2330',
+        '台積電',
+        'TW',
+        settledHistory,
+        parsedQuote!,
+        undefined,
+        intradayNow
+      );
+
+      const lastBar = report.klineSystem.candles[report.klineSystem.candles.length - 1];
+      expect(lastBar.date).toBe('2026-11-24');
+      expect(lastBar.isIntraday).toBe(true);
+      expect(lastBar.volume).toBe(0);
+
+      const resonance = buildTechnicalResonance({
+        candles: report.klineSystem.candles,
+        dailyCandles: report.klineSystem.candles,
+        timeframe: 'DAY',
+        market: 'TW',
+      });
+      expect(resonance.volume.isVolumeAnchoredToPrevClose).toBe(true);
+      expect(resonance.volume.anchorDate).toBe('2026-11-23');
+      expect(resonance.volume.volumeDisplay).toBe(24000);
     });
   });
 });

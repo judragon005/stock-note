@@ -92,7 +92,7 @@ import { initializeStorageAsync } from './utils/storage';
 import { createSystemSnapshot, exportFullDatabaseJSON, importFullDatabaseJSON } from './utils/db';
 import { ExportDatabaseModal } from './components/ExportDatabaseModal';
 import { StockTrackerUnifiedArchiveV2 } from './types/stock';
-import { loadMarketCacheSummary, syncMarketCacheToIndexedDB } from './engine/marketCacheLoader';
+import { useMarketCatchupSync } from './hooks/useMarketCatchupSync';
 import { WorkspaceErrorBoundary } from './components/common/WorkspaceErrorBoundary';
 
 export const App: React.FC = () => {
@@ -154,49 +154,7 @@ export const App: React.FC = () => {
       if (data.historicalFx && Object.keys(data.historicalFx).length > 0) {
         setHistoricalFx(data.historicalFx);
       }
-
-      // 盤後全市場快取秒讀熱載入與日 K / 昨收價水合 (Spec 0208 Ticket 06)
-      const hydrateCacheIntoState = (cache: import('./engine/marketCacheLoader').MarketCacheSummary | null) => {
-        if (!cache || !cache.stocks) return;
-        setCurrentPrices((prev) => {
-          const next = { ...prev };
-          for (const [sym, item] of Object.entries(cache.stocks)) {
-            if (item.quote && item.quote.close > 0) {
-              next[sym] = item.quote.close;
-            }
-          }
-          return next;
-        });
-
-        const quotesToHydrate: Record<string, import('./types/stock').PriceQuote> = {};
-        for (const [sym, item] of Object.entries(cache.stocks)) {
-          if (item.quote && item.quote.close > 0) {
-            const prevClose = (item.quote.adjClose && item.quote.adjClose > 0 && item.quote.adjClose !== item.quote.close)
-              ? item.quote.adjClose
-              : item.quote.close;
-            const isUS = inferMarketFromSymbol(sym) === 'US';
-            quotesToHydrate[sym] = {
-              symbol: sym,
-              market: isUS ? 'US' : 'TW',
-              currency: isUS ? 'USD' : 'TWD',
-              source: 'CACHE',
-              price: item.quote.close,
-              previousClose: prevClose,
-              change: item.quote.close - prevClose,
-              changePercent: prevClose > 0 ? ((item.quote.close - prevClose) / prevClose) * 100 : 0,
-              updatedAt: Date.now(),
-              status: 'CACHED',
-              candles: [item.quote],
-            };
-          }
-        }
-        hydrateQuotes(quotesToHydrate);
-
-        syncMarketCacheToIndexedDB(cache);
-      };
-
-      loadMarketCacheSummary('TW').then(hydrateCacheIntoState);
-      loadMarketCacheSummary('US').then(hydrateCacheIntoState);
+      // Spec 0246 Ticket 08: 已正式退役開機靜態 JSON 巨檔水合與 IndexedDB 單根覆寫，全面以 SQLite 湖倉 API 為單一事實來源
     } finally {
       setIsStorageInitialized(true);
     }
@@ -370,11 +328,17 @@ export const App: React.FC = () => {
     refreshAll,
     refreshSymbol,
     toggleSymbolLock,
-    hydrateQuotes,
   } = usePriceAutoRefresh({
     trades: displayedTrades,
     onPricesCalculated: handlePricesCalculated,
     onExchangeRateCalculated: handleExchangeRateCalculated,
+  });
+
+  // Spec 0246 Ticket 08: 全域啟動與分頁甦醒自動追趕（含背景輪詢至完成自動刷新）
+  useMarketCatchupSync({
+    onSyncCompleted: () => {
+      void refreshAll();
+    },
   });
 
   // 提取各標的歷史日 K 棒以驅動技術指標與警示膠囊

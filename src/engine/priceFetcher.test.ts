@@ -499,5 +499,97 @@ describe('PriceFetcher Engine (TDD Seam)', () => {
       expect(proxyCircuitBreaker.isOpen()).toBe(false);
     });
   });
+
+  describe('10. Spec 0246 Ticket 10 (Seam 3): 即時報價盤中 OHLCV 提取與缺欄安全降級', () => {
+    it('parseYahooQuoteResponse 應提取 meta 與 indicators 之盤中 open/high/low/volume（支援台美股）', () => {
+      const twIntradayPayload = {
+        chart: {
+          result: [
+            {
+              meta: {
+                currency: 'TWD',
+                symbol: '2330.TW',
+                regularMarketPrice: 1055,
+                regularMarketPreviousClose: 1035,
+                regularMarketDayHigh: 1060,
+                regularMarketDayLow: 1025,
+                regularMarketVolume: 28500000,
+                regularMarketTime: 1795491000,
+              },
+              timestamp: [1795404600, 1795491000],
+              indicators: {
+                quote: [
+                  {
+                    open: [1020, 1030],
+                    high: [1040, 1060],
+                    low: [1015, 1025],
+                    close: [1035, 1055],
+                    volume: [25000000, 28500000],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      };
+
+      const quote = parseYahooQuoteResponse(twIntradayPayload, '2330', 'TW');
+      expect(quote).not.toBeNull();
+      expect(quote?.open).toBe(1030);
+      expect(quote?.high).toBe(1060);
+      expect(quote?.low).toBe(1025);
+      expect(quote?.volume).toBe(28500000);
+    });
+
+    it('parseYahooQuoteResponse 於缺少或無效 OHLCV（null / NaN / 負數 / 0）時應安全降級為 undefined 且不產生 NaN', () => {
+      const missingOhlcvPayload = {
+        chart: {
+          result: [
+            {
+              meta: {
+                currency: 'USD',
+                symbol: 'NVDA',
+                regularMarketPrice: 142.5,
+                regularMarketPreviousClose: 140.0,
+                regularMarketDayHigh: null,
+                regularMarketDayLow: -5,
+                regularMarketVolume: 0,
+              },
+            },
+          ],
+        },
+      };
+
+      const quote = parseYahooQuoteResponse(missingOhlcvPayload, 'NVDA', 'US');
+      expect(quote).not.toBeNull();
+      expect(quote?.price).toBe(142.5);
+      expect(quote?.open).toBeUndefined();
+      expect(quote?.high).toBeUndefined();
+      expect(quote?.low).toBeUndefined();
+      expect(quote?.volume).toBeUndefined();
+    });
+
+    it('parseTWSEDayAllResponse 具備開高低量與成交筆數欄位時應一併解析', () => {
+      const mockTwse = [
+        {
+          Code: '2330',
+          Name: '台積電',
+          OpeningPrice: '1,030.00',
+          HighestPrice: '1,060.00',
+          LowestPrice: '1,025.00',
+          ClosingPrice: '1,055.00',
+          Change: '+20.00',
+          TradeVolume: '28,500,000',
+          Transaction: '42,100',
+        },
+      ];
+      const quote = parseTWSEDayAllResponse(mockTwse, '2330');
+      expect(quote?.open).toBe(1030);
+      expect(quote?.high).toBe(1060);
+      expect(quote?.low).toBe(1025);
+      expect(quote?.volume).toBe(28500000);
+      expect(quote?.transactions).toBe(42100);
+    });
+  });
 });
 

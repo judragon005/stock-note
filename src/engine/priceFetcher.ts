@@ -343,6 +343,22 @@ export function normalizeYahooSymbol(symbol: string, market: MarketType): string
 
 
 /**
+ * 安全提取正數有限數值（用於盤中 OHLCV 欄位防呆，杜絕 NaN／負數／0 污染，Spec 0246 Ticket 10）
+ */
+function toPositiveFiniteNumber(val: unknown): number | undefined {
+  if (typeof val === 'number') {
+    return Number.isFinite(val) && val > 0 ? val : undefined;
+  }
+  if (typeof val === 'string') {
+    const cleaned = val.replace(/,/g, '').trim();
+    if (!cleaned || cleaned === '--' || cleaned === '---') return undefined;
+    const parsed = parseFloat(cleaned);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  }
+  return undefined;
+}
+
+/**
  * 解析 Yahoo Finance Chart API v8 響應格式
  */
 export function parseYahooQuoteResponse(data: any, rawSymbol: string, market: MarketType): PriceQuote | null {
@@ -351,7 +367,8 @@ export function parseYahooQuoteResponse(data: any, rawSymbol: string, market: Ma
       return null;
     }
 
-    const meta = data.chart.result[0]?.meta;
+    const resultNode = data.chart.result[0];
+    const meta = resultNode?.meta;
     if (!meta) return null;
 
     const price = typeof meta.regularMarketPrice === 'number' ? meta.regularMarketPrice : 0;
@@ -395,6 +412,22 @@ export function parseYahooQuoteResponse(data: any, rawSymbol: string, market: Ma
       changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
     }
 
+    // 5. 提取盤中真實 OHLCV（Spec 0246 Ticket 10：優先取 meta，缺開盤價時回退最新 indicators 棒）
+    const quoteIndicators = resultNode?.indicators?.quote?.[0];
+    const lastIdx = Array.isArray(quoteIndicators?.close) ? quoteIndicators.close.length - 1 : -1;
+    const open =
+      toPositiveFiniteNumber(meta.regularMarketOpen) ??
+      (lastIdx >= 0 ? toPositiveFiniteNumber(quoteIndicators?.open?.[lastIdx]) : undefined);
+    const high =
+      toPositiveFiniteNumber(meta.regularMarketDayHigh) ??
+      (lastIdx >= 0 ? toPositiveFiniteNumber(quoteIndicators?.high?.[lastIdx]) : undefined);
+    const low =
+      toPositiveFiniteNumber(meta.regularMarketDayLow) ??
+      (lastIdx >= 0 ? toPositiveFiniteNumber(quoteIndicators?.low?.[lastIdx]) : undefined);
+    const volume =
+      toPositiveFiniteNumber(meta.regularMarketVolume) ??
+      (lastIdx >= 0 ? toPositiveFiniteNumber(quoteIndicators?.volume?.[lastIdx]) : undefined);
+
     const currency = market === 'TW' ? 'TWD' : 'USD';
     const candles = parseYahooHistoricalCandlesResponse(data);
 
@@ -405,6 +438,10 @@ export function parseYahooQuoteResponse(data: any, rawSymbol: string, market: Ma
       previousClose: prevClose,
       change,
       changePercent,
+      ...(open !== undefined ? { open } : {}),
+      ...(high !== undefined ? { high } : {}),
+      ...(low !== undefined ? { low } : {}),
+      ...(volume !== undefined ? { volume } : {}),
       currency,
       status: 'DELAYED',
       updatedAt: (meta.regularMarketTime ? meta.regularMarketTime * 1000 : Date.now()),
@@ -439,6 +476,11 @@ export function parseTWSEDayAllResponse(data: any, rawSymbol: string): PriceQuot
 
     const prevClose = price - change;
     const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+    const open = toPositiveFiniteNumber(item.OpeningPrice);
+    const high = toPositiveFiniteNumber(item.HighestPrice);
+    const low = toPositiveFiniteNumber(item.LowestPrice);
+    const volume = toPositiveFiniteNumber(item.TradeVolume);
+    const transactions = toPositiveFiniteNumber(item.Transaction);
 
     return {
       symbol: rawSymbol,
@@ -447,6 +489,11 @@ export function parseTWSEDayAllResponse(data: any, rawSymbol: string): PriceQuot
       previousClose: prevClose,
       change,
       changePercent,
+      ...(open !== undefined ? { open } : {}),
+      ...(high !== undefined ? { high } : {}),
+      ...(low !== undefined ? { low } : {}),
+      ...(volume !== undefined ? { volume } : {}),
+      ...(transactions !== undefined ? { transactions } : {}),
       currency: 'TWD',
       status: 'PREVIOUS_CLOSE',
       updatedAt: Date.now(),

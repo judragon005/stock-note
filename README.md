@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-2578%2F2578%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2607%2F2607%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,18 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 全域視口彈窗原語、Card 01B 主K四維量價動能共鳴卡暨台股 TDCC 集保斷層自癒 (`Spec 0245`) *(V9.27.0 最新發布 / Spec #0245 / ADR #0245 / Issue #605)*
+### 1. 外部資料更新中樞收斂（單一缺口調諧）、NAS 分軌水位線自治排程、靜態快取退役暨 Card 01 盤中實量縫合 (`Spec 0246`) *(V9.28.0 最新發布 / Spec #0246 / ADR #0246 / Issue #607)*
+
+- **單一湖倉同步調諧中樞與 30 日缺口自癒 (Issue #607 / T01–T04)**：
+  - 收斂台美結算時鐘與法定休市日曆為共享 SSOT（`sync-thresholds.cjs`、`Dockerfile` 容器補包 `market-holidays.json`，補齊 2026 實戰休市日），修復空表陳舊盲點、歷史補抓日 TWSE-only 底線與三處跨模組契約（自訂 DB 路徑傳遞、每週 ETF 淨值定錨、美股美東 Checkpoint）及上櫃權證對齊。
+  - 新增零依賴 `lakehouse-sync-coordinator.cjs`，提供同行程 token-safe 全域互斥鎖、近 30 日完全缺失日＋半殘日升冪調諧，以及台股盤後兩階段容錯收斂（14:40 Phase 1 價量寫入 / 16:30 Phase 2 全量收斂與水位線推進、每軌每日最多 4 次冷卻重試）。
+- **NAS 四軌獨立水位線排程與 SQLite 同步遙測 SSOT (Issue #607 / T05–T09)**：
+  - `nas-autonomous-scheduler.cjs` 廢除跨市場共用單日鎖，重構為 `twDaily`、`usDaily`、`macro`、`weekly` 四軌獨立水位線狀態機，徹底終結清晨美股鎖死午後台股之餓死缺陷，並透過 `/healthz` 與擴充後之 `/api/market/sync-status` 暴露完整分軌遙測。
+  - 採 Expand–Contract 正式退役靜態 JSON 市場快取：`MarketSyncStatusBadge` 與 `MarketScheduleHubSection` 全面遷移至 SQLite API；`App.tsx` 移除開機過期靜態水合與 IndexedDB 250 日單根覆寫，改掛載具備追趕自動輪詢之 `useMarketCatchupSync`；取消 `nas-server.cjs` 對 `.json` 之 `immutable` 標頭，並於 `architecturalFitnessGuard.test.ts` 不變量 7 永久防回流。
+- **Card 01 盤中真實量價縫合與 Spec 0245 零量防禦相容 (Issue #607 / T10–T12)**：
+  - 擴充 `PriceQuote` 與 `parseYahooQuoteResponse` / `parseTWSEDayAllResponse` 提取盤中真實 `open`、`high`、`low`、`volume`；`Card 01` 盤中即時縫合呈現當日實量實價，上游確實缺量時 100% 保留 Spec 0245 `isVolumeAnchoredToPrevClose` 退回定錨防禦。
+
+### 2. 全域視口彈窗原語、Card 01B 主K四維量價動能共鳴卡暨台股 TDCC 集保斷層自癒 (`Spec 0245`) *(V9.27.0 / Spec #0245 / ADR #0245 / Issue #605)*
 
 - **全域視口傳送彈窗 (`ModalShell`) 與靜態防禦守門 (Issue #605 / T01–T02)**：
   - 建立零外部依賴 `ModalShell.tsx`，透過 React `createPortal(..., document.body)` 徹底隔離毛玻璃父層疊上下文劫持，內建居中遮罩、`Escape` / 背景點擊關閉、`closeLocked` 防誤關鎖與捲動鎖定；遷移 `ExportDatabaseModal` 並於 `architecturalFitnessGuard.test.ts` 植入 CI 靜態禁令杜絕 `.modal-backdrop`。

@@ -34,41 +34,41 @@ describe('marketSettlementEngine (市場結算與前日收盤數據定錨引擎)
       expect(status.isTradingHours).toBe(false);
     });
 
-    it('週一盤中 10:00，應判定未結算，並正確跨過週末退回至「前週五」', () => {
-      // 2026-09-28 (週一) 10:00:00 (台北時間)
+    it('週一盤中 10:00，應判定未結算，並正確跨過週末與連假退回至最近有效交易日', () => {
+      // 2026-09-28 (週一 教師節) 與 2026-09-25 (週五 中秋節) 均為台股法定休市日，最近交易日為 2026-09-24
       const now = new Date('2026-09-28T10:00:00+08:00');
       const status = getMarketSettlementStatus('TW', now);
 
       expect(status.isSettled).toBe(false);
-      expect(status.anchorTradingDate).toBe('2026-09-25'); // 前週五
+      expect(status.anchorTradingDate).toBe('2026-09-24');
     });
 
-    it('週日休市期間，應判定未結算，並退回至「前週五」', () => {
-      // 2026-09-27 (週日) 14:00:00 (台北時間)
+    it('週日休市期間，應判定未結算，並退回至最近有效交易日（跳過週五中秋節）', () => {
+      // 2026-09-27 (週日) 14:00:00 (台北時間)，2026-09-25 為中秋節休市 -> 退回 2026-09-24
       const now = new Date('2026-09-27T14:00:00+08:00');
       const status = getMarketSettlementStatus('TW', now);
 
       expect(status.isSettled).toBe(false);
-      expect(status.anchorTradingDate).toBe('2026-09-25'); // 前週五
+      expect(status.anchorTradingDate).toBe('2026-09-24');
       expect(status.isTradingHours).toBe(false);
     });
   });
 
   describe('美股 (US) 市場結算判定', () => {
-    it('台北時間早上 08:00 前（如週四 07:30），美股盤後數據未完整結算，判定未結算', () => {
-      // 2026-10-01 (週四) 07:30:00 (台北時間)
-      const now = new Date('2026-10-01T07:30:00+08:00');
+    it('美東 17:00 前（如夏令 16:30 EDT = 台北週四 04:30），美股盤後數據未完整結算，判定未結算', () => {
+      // 2026-10-01 (週四) 04:30:00 (台北時間) = 美東 2026-09-30 16:30 EDT
+      const now = new Date('2026-10-01T04:30:00+08:00');
       const status = getMarketSettlementStatus('US', now);
 
       expect(status.isSettled).toBe(false);
-      // 前一交易日為週二 2026-09-29（因為週三收盤數據尚未過 08:00 結算線）
+      // 前一交易日為週二 2026-09-29（因為週三美東尚未過 17:00 結算線）
       expect(status.anchorTradingDate).toBe('2026-09-29');
       expect(status.reason).toContain('美股尚未完成盤後數據結算');
     });
 
-    it('台北時間早上 08:00 (含) 之後（如週四 08:30），美股前日數據已結算完全', () => {
-      // 2026-10-01 (週四) 08:30:00 (台北時間)
-      const now = new Date('2026-10-01T08:30:00+08:00');
+    it('美東 17:00 (含) 之後（如台北週四 05:15 或 08:30），美股當日數據已結算完全', () => {
+      // 2026-10-01 (週四) 05:15:00 (台北時間) = 美東 2026-09-30 17:15 EDT
+      const now = new Date('2026-10-01T05:15:00+08:00');
       const status = getMarketSettlementStatus('US', now);
 
       expect(status.isSettled).toBe(true);

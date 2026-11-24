@@ -604,4 +604,118 @@ describe('Ticket 10 - Vite 原生 Connect 中介層 API (TDD Seam)', () => {
       expect(capturedSignal?.aborted).toBe(true);
     });
   });
+
+  describe('Spec 0246 Ticket 06 (Seam 1): 統一同步狀態 API 契約擴充與中介層追趕合流 (Expand)', () => {
+    it('Slice 06-A: GET /api/market/sync-status 應以 SQLite SSOT 輸出分軌標的覆蓋數、缺口數與協調中樞鎖狀態', async () => {
+      const db = initSqliteLakehouseDb(testDbPath);
+      db.prepare(
+        'INSERT OR REPLACE INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume) VALUES (?, ?, 100, 105, 95, 100, 100, 1000)'
+      ).run('2330', '2026-11-19');
+      db.prepare(
+        'INSERT OR REPLACE INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume) VALUES (?, ?, 180, 182, 179, 181, 181, 5000)'
+      ).run('0050', '2026-11-19');
+      db.prepare(
+        'INSERT OR REPLACE INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume) VALUES (?, ?, 580, 585, 578, 583, 583, 20000)'
+      ).run('SPY', '2026-11-23');
+
+      const middleware = createMarketApiMiddleware(testDbPath);
+      const res = await simulateRequest(middleware, '/api/market/sync-status');
+
+      expect(res.status).toBe(200);
+      expect(res.data.source).toBe('SQLITE_SSOT');
+      expect(res.data.tw).toMatchObject({
+        latestDate: '2026-11-19',
+        symbolCount: 2,
+      });
+      expect(typeof res.data.tw.gapCount).toBe('number');
+      expect(Array.isArray(res.data.tw.gapDates)).toBe(true);
+      expect(res.data.us).toMatchObject({
+        latestDate: '2026-11-23',
+        symbolCount: 1,
+      });
+      expect(res.data.weekly).toBeDefined();
+      expect(res.data.coordinator).toBeDefined();
+      expect(res.data.coordinator.lock).toMatchObject({ locked: false });
+    });
+
+    it('Slice 06-B: triggerCatchupTask 預設合流至 30 日缺口調諧、對美股正確傳遞 customDbPath，並受全域互斥鎖保護', async () => {
+      const {
+        triggerCatchupTask,
+        resetCatchupStateForTest,
+      } = require('../../scripts/market-sync/vite-market-middleware.cjs');
+      const {
+        withGlobalSyncLock,
+        resetCoordinatorStateForTest,
+      } = require('../../scripts/market-sync/lakehouse-sync-coordinator.cjs');
+
+      resetCatchupStateForTest();
+      resetCoordinatorStateForTest();
+
+      let reconcileOpts: any = null;
+      let usSyncArg: any = null;
+
+      const started = triggerCatchupTask(testDbPath, {
+        bypassTestEnv: true,
+        force: true,
+        freshnessOverride: {
+          tw: { latestDate: '2026-11-19', anchorDate: '2026-11-23', isStale: true, incompleteDates: [], missingPlanes: [] },
+          us: { latestDate: '2026-11-20', anchorDate: '2026-11-23', isStale: true },
+          tdcc: { isStale: false },
+          revenue: { isStale: false },
+        },
+        handlers: {
+          reconcileTwLakehouse: async (opts: any) => {
+            reconcileOpts = opts;
+            return { ok: true, reconciledDates: ['2026-11-20', '2026-11-23'], failedDates: [] };
+          },
+          runUsMarketSync: async (cfg: any) => {
+            usSyncArg = cfg;
+          },
+          runTdccIngestion: async () => {},
+          runMonthlyRevenueIngestion: async () => {},
+          fetchAndIngestTwPledge: async () => {},
+          fetchAndTagTwStockStatuses: async () => {},
+        },
+      });
+
+      expect(started).toBe(true);
+      await new Promise((r) => setTimeout(r, 60));
+
+      expect(reconcileOpts).toMatchObject({ customDbPath: testDbPath, maxLookbackDays: 30 });
+      expect(usSyncArg).toMatchObject({ customDbPath: testDbPath });
+
+      // 當全域互斥鎖已被 NAS 排程佔用時，triggerCatchupTask 應被鎖保護略過
+      resetCatchupStateForTest();
+      let blockedReconcileCalls = 0;
+      let releaseLock!: () => void;
+      const holdLock = withGlobalSyncLock('nas-scheduler', async () => {
+        await new Promise<void>((r) => {
+          releaseLock = r;
+        });
+      });
+
+      triggerCatchupTask(testDbPath, {
+        bypassTestEnv: true,
+        force: true,
+        freshnessOverride: {
+          tw: { latestDate: '2026-11-19', anchorDate: '2026-11-23', isStale: true, incompleteDates: [], missingPlanes: [] },
+          us: { isStale: false },
+          tdcc: { isStale: false },
+          revenue: { isStale: false },
+        },
+        handlers: {
+          reconcileTwLakehouse: async () => {
+            blockedReconcileCalls += 1;
+            return { ok: true, reconciledDates: [], failedDates: [] };
+          },
+        },
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+      expect(blockedReconcileCalls).toBe(0);
+      releaseLock();
+      await holdLock;
+      resetCatchupStateForTest();
+    });
+  });
 });
