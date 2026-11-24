@@ -3115,6 +3115,14 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     2. **12-Period Adaptive Dividend Overflow Guard (12 期配息免滑軌與月配溢位護欄)**：Card 20 ETF 配息區塊改採 `justifyContent: 'flex-start'` 回收上下留白；$\le 12$ 期（4×3）零滑軌完整攤平顯示，$> 12$ 期（如月配息 ETF）自動啟用 `maxHeight: '288px'` 與 `overflowY: 'auto'` 防止撐爆 Layer 4 整列高度。_Avoid_: Hardcoded 190px Scroll Trap, Unbounded Monthly Dividend Bloat
     3. **Asymmetric Flush-Bottom ZONE 04 Matrix (ZONE 04 非對稱等高雙欄矩陣)**：右欄移除 `16`/`17` 橫向並排子網格改為 `11 → 16 → 17` 全寬單欄直排；左欄 `15` 鎖定自然高度 (`flex: 0 0 auto`)，由內建均分進度條之 `09` 獨佔剩餘高度 (`flex: 1`) 上下拉高切齊右欄底緣。_Avoid_: Compressed Side-by-Side Gauges, Equal-Flex Dead Space in Compact Card
 
+- **Viewport-Portaled Modal Shell, Card 01B Technical Resonance & Calendar-Anchored TDCC Gap Healing (全域視口彈窗原語、主 K 四維量價動能共鳴解碼卡暨台股 TDCC 斷層自癒)**:
+  - 核心模組：`src/components/common/ModalShell.tsx`、`src/components/ExportDatabaseModal.tsx`、`src/engine/klineOscillatorEngine.ts`、`src/engine/technicalResonanceEngine.ts`、`src/components/aiForceDashboard/cards/TechnicalResonanceCard.tsx`、`src/components/aiForceDashboard/cards/KLineChartCard.tsx`、`src/components/aiForceDashboard/AiForceDashboardView.tsx`、`scripts/market-sync/ingest-tw-tdcc.cjs`、`scripts/market-sync/vite-market-middleware.cjs`、`scripts/market-sync/backfill-portfolio-series.cjs`、`src/engine/aiForceMarketAssembly.ts`、`src/components/aiForceDashboard/cards/TdccDistributionCard.tsx`。
+  - 規格來源：Spec 0245 與 [ADR 0245](file:///d:/APP/股票紀錄/docs/adr/0245-portal-modal-kline-resonance-and-tdcc-gap-healing.md)，關聯 GitHub Issue #605 / Debt 0063。
+  - 核心領域術語與架構革新：
+    1. **Viewport-Portaled Modal Shell (全域視口傳送彈窗原語)**：以零依賴 `createPortal(..., document.body)` 統一封裝 `.modal-overlay` + `glass-card`、無障礙 `role="dialog" aria-modal="true"`、`Escape`/遮罩關閉、`closeLocked` 防誤關保護與背景捲動鎖定，徹底免疫深色毛玻璃父層 `backdrop-filter` 層疊上下文劫持，並於 CI 永久禁止未定義之 `.modal-backdrop`。_Avoid_: Document-Flow Modal Fallback, Undefined .modal-backdrop
+    2. **Regime-Gated Technical Resonance & Intraday Zero-Volume Anchor (體制閘控四維量價動能共鳴與盤中零量定錨)**：單趟 $O(N)$ 計算 `KDJ (含 J=3K-2D)`、`MACD`、`RSI(6/14)`，並以 `resolveVolumeAnchorCandles` 隔離盤中未結算 `volume = 0` 參考價避免假性量縮；Card 01B 置於 ZONE 01 主 K 線圖正下方原地升級 `executive-verdict-strip`，整合 ADX 體制權重、衝突裁決、250D 10 日歷史勝率並與主圖時框／副圖全雙向聯動。_Avoid_: Indicator Soup Without Regime Gate, Intraday Zero-Volume Contamination, O(N^2) Timeframe Recalculation
+    3. **Calendar-Anchored TDCC Gap Healing & 10-Lot Retail SSOT (日曆定錨集保差集自癒與 10 張散戶單一口徑)**：官方 `qryStock` 解析改以第 2 欄文字語意辨識「合計」（`16/17` 雙通吃）並加 1~15 級保底，全鏈路 `under10Ratio` 嚴格收斂為級距 `1~3`（1~10 張）；以 `hasTdccSeriesGap` 驅動官方日曆差集重播與逐週即時 Upsert 抗超時中斷；前端改採真實 `28 ± 7` 天日曆窗計算大戶變動並以虛線段誠實標記 `> 11` 天斷層。_Avoid_: Hardcoded Level-17 Total Row, Array-Index 4-Week Subtraction, 20-Lot Mislabeled as 10-Lot
+
 
 
 

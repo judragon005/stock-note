@@ -346,5 +346,239 @@ describe('KLineChartCard - 專業互動與多功能副圖 (Ticket 35 / Stage 1)'
       expect(formatKlinePriceTick(1280)).toBe('1280');
     });
   });
+
+  describe('Spec 0245 Seam 2 (T03–T06): O(N) 四維技術序列、盤中零量隔離、體制共鳴大腦與 Card 01B', () => {
+    const buildCandles = (count: number, trend: 'UP' | 'DOWN' | 'FLAT' = 'UP') =>
+      Array.from({ length: count }, (_, i) => {
+        const base =
+          trend === 'UP'
+            ? 100 + i * 0.8 + Math.sin(i * 0.7) * 2
+            : trend === 'DOWN'
+              ? 180 - i * 0.9 + Math.sin(i * 0.7) * 2
+              : 100 + Math.sin(i * 0.9) * 3;
+        const open = Number((base - 0.5).toFixed(2));
+        const close = Number((base + (trend === 'DOWN' ? -0.6 : 0.6)).toFixed(2));
+        const high = Number((Math.max(open, close) + 1.5).toFixed(2));
+        const low = Number((Math.min(open, close) - 1.5).toFixed(2));
+        const day = new Date(Date.UTC(2026, 0, 2 + i));
+        const date = day.toISOString().slice(0, 10);
+        return {
+          date,
+          open,
+          high,
+          low,
+          close,
+          volume: 10_000_000 + (i % 5) * 1_000_000,
+        };
+      });
+
+    it('T03: enrichCandlesWithOscillators 單趟 O(N) 產出 K/D/J (=3K-2D)、MACD、RSI(14) 與 RSI(6)，且短樣本誠實為 undefined', async () => {
+      const { enrichCandlesWithOscillators, resolveVolumeAnchorCandles } = await import(
+        '../../../engine/klineOscillatorEngine'
+      );
+
+      const enriched = enrichCandlesWithOscillators(buildCandles(40, 'UP'), { requireMinPeriod: true });
+      const last = enriched[enriched.length - 1];
+      expect(last.k).toBeDefined();
+      expect(last.d).toBeDefined();
+      expect(last.j).toBeCloseTo(3 * last.k! - 2 * last.d!, 0);
+      expect(last.dif).toBeDefined();
+      expect(last.macd).toBeDefined();
+      expect(last.macdHist).toBeDefined();
+      expect(last.rsi).toBeDefined();
+      expect(last.rsi6).toBeDefined();
+
+      // 短樣本 (10 根，如月 K 不足 26 期) 誠實不造假 MACD / RSI14
+      const shortEnriched = enrichCandlesWithOscillators(buildCandles(10, 'UP'), { requireMinPeriod: true });
+      const shortLast = shortEnriched[shortEnriched.length - 1];
+      expect(shortLast.k).toBeDefined();
+      expect(shortLast.dif).toBeUndefined();
+      expect(shortLast.rsi).toBeUndefined();
+      expect(shortLast.rsi6).toBeDefined();
+
+      // 盤中零量定錨隔離：末筆為 isIntraday=true & volume=0 時自動退回前一日已結算 K 棒
+      const withIntradayZero = [
+        ...buildCandles(25, 'UP'),
+        { date: '2026-11-24', open: 95.7, high: 95.7, low: 95.7, close: 95.7, volume: 0, isIntraday: true },
+      ];
+      const anchor = resolveVolumeAnchorCandles(withIntradayZero);
+      expect(anchor.isVolumeAnchoredToPrevClose).toBe(true);
+      expect(anchor.effectiveVolumeCandles.length).toBe(25);
+      expect(anchor.volumeAnchorDate).toBe(withIntradayZero[24].date);
+    });
+
+    it('T04: buildTechnicalResonance 正確隔離盤中零量（不誤報窒息量）、換算台股張數並輸出體制權重與四維診斷', async () => {
+      const { buildTechnicalResonance } = await import('../../../engine/technicalResonanceEngine');
+
+      const base60 = buildCandles(60, 'DOWN');
+      const withIntradayZero = [
+        ...base60,
+        { date: '2026-11-24', open: 95.7, high: 95.7, low: 95.7, close: 95.7, volume: 0, isIntraday: true },
+      ];
+
+      const res = buildTechnicalResonance({
+        candles: withIntradayZero,
+        dailyCandles: withIntradayZero,
+        timeframe: 'DAY',
+        market: 'TW',
+      });
+
+      expect(res.volume.isVolumeAnchoredToPrevClose).toBe(true);
+      expect(res.volume.volumeUnit).toBe('張');
+      // 10,000,000+ 股應換算為 ~10,000+ 張，絕不因盤中 0 變成 0 張或窒息量
+      expect(res.volume.volumeDisplay).toBeGreaterThanOrEqual(10000);
+      expect(res.volume.statusLabel).not.toContain('窒息');
+      expect(res.kdj.isAvailable).toBe(true);
+      expect(res.kdj.j).toBeDefined();
+      expect(res.macd.isAvailable).toBe(true);
+      expect(res.rsi.isAvailable).toBe(true);
+      expect(res.rsi.rsi6).toBeDefined();
+      expect(res.regime.weightHint.length).toBeGreaterThan(5);
+      expect(res.summary.actionAdvice.length).toBeGreaterThan(5);
+      expect(res.summary.invalidationRule.length).toBeGreaterThan(5);
+    });
+
+    it('T05: KLineChartCard 支援受控 subchartMode="KD" 並於查價列呈現 J 值與 J 折線', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { KLineChartCard } = await import('./KLineChartCard');
+      const { enrichCandlesWithOscillators } = await import('../../../engine/klineOscillatorEngine');
+
+      const candles = enrichCandlesWithOscillators(buildCandles(40, 'UP'), { requireMinPeriod: false });
+      const html = renderToStaticMarkup(
+        React.createElement(KLineChartCard, {
+          data: {
+            candles,
+            keyLevels: { highResistance: 140, mainForceCost: 115, supportLevel: 98 },
+          },
+          colorTheme: 'taiwan',
+          market: 'TW',
+          timeframe: 'DAY',
+          subchartMode: 'KD',
+        })
+      );
+
+      expect(html).toContain('J:');
+      expect(html).toContain('data-testid="kline-kd-j-line"');
+    });
+
+    it('T06: TechnicalResonanceCard (Card 01B) 保留 executive-verdict-strip 契約、呈現四宮格與盤中零量定錨提示', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { TechnicalResonanceCard } = await import('./TechnicalResonanceCard');
+      const { buildTechnicalResonance } = await import('../../../engine/technicalResonanceEngine');
+
+      const withIntradayZero = [
+        ...buildCandles(60, 'UP'),
+        { date: '2026-11-24', open: 150, high: 150, low: 150, close: 150, volume: 0, isIntraday: true },
+      ];
+      const resonance = buildTechnicalResonance({
+        candles: withIntradayZero,
+        dailyCandles: withIntradayZero,
+        timeframe: 'DAY',
+        market: 'TW',
+      });
+
+      const html = renderToStaticMarkup(
+        React.createElement(TechnicalResonanceCard, {
+          resonance,
+          activeSubchartMode: 'MACD',
+          onSelectSubchart: () => {},
+          primaryVerb: '鎖碼推升',
+          verdictSummary: '外資連買且站上 20 日均線，短線動能偏多。',
+          stopLossPrice: 142.5,
+          takeProfitPrice: 165.0,
+          colorTheme: 'taiwan',
+          market: 'TW',
+        })
+      );
+
+      expect(html).toContain('data-testid="executive-verdict-strip"');
+      expect(html).toContain('data-testid="technical-resonance-grid"');
+      expect(html).toContain('01B');
+      expect(html).toContain('成交量');
+      expect(html).toContain('KDJ');
+      expect(html).toContain('MACD');
+      expect(html).toContain('RSI');
+      expect(html).toContain('前收定錨');
+      expect(html).toContain('data-active="true"');
+      expect(html).toContain('鎖碼推升');
+    });
+
+    it('Code Review Fix: K/D/J 統一 [-10,110] Y 軸座標系，K=D=J 時三線點位精確重合', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { KLineChartCard } = await import('./KLineChartCard');
+
+      const candles = buildCandles(10, 'FLAT').map((c) => ({
+        ...c,
+        k: 80,
+        d: 80,
+        j: 80,
+      }));
+      const html = renderToStaticMarkup(
+        React.createElement(KLineChartCard, {
+          data: {
+            candles,
+            keyLevels: { highResistance: 110, mainForceCost: 100, supportLevel: 90 },
+          },
+          colorTheme: 'taiwan',
+          market: 'TW',
+          timeframe: 'DAY',
+          subchartMode: 'KD',
+        })
+      );
+
+      const kMatch = html.match(/points="([^"]+)"[^>]*stroke="#fbbf24"/);
+      const dMatch = html.match(/points="([^"]+)"[^>]*stroke="#38bdf8"/);
+      const jMatch = html.match(/data-testid="kline-kd-j-line"\s+points="([^"]+)"/);
+      expect(kMatch?.[1]).toBeTruthy();
+      expect(dMatch?.[1]).toBe(kMatch?.[1]);
+      expect(jMatch?.[1]).toBe(kMatch?.[1]);
+    });
+
+    it('Code Review Fix: 不足 20 期時 volRatio20 誠實留空，週 K 時框勝率單位動態顯示「10週勝率」', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { buildTechnicalResonance } = await import('../../../engine/technicalResonanceEngine');
+      const { TechnicalResonanceCard } = await import('./TechnicalResonanceCard');
+
+      const shortRes = buildTechnicalResonance({
+        candles: buildCandles(12, 'UP'),
+        timeframe: 'MONTH',
+        market: 'TW',
+      });
+      expect(shortRes.volume.volRatio5).toBeDefined();
+      expect(shortRes.volume.volRatio20).toBeUndefined();
+
+      const weekRes = {
+        ...shortRes,
+        timeframe: 'WEEK' as const,
+        summary: {
+          ...shortRes.summary,
+          historicalWinRate: {
+            signalName: 'MACD 翻紅轉多',
+            sampleCount: 5,
+            winRatePercent: 80,
+            avgReturn10dPercent: 4.2,
+            isSufficient: true,
+          },
+        },
+      };
+      const html = renderToStaticMarkup(
+        React.createElement(TechnicalResonanceCard, {
+          resonance: weekRes,
+          activeSubchartMode: 'VOL',
+          onSelectSubchart: () => {},
+          primaryVerb: '順勢觀察',
+          verdictSummary: '週線測試摘要',
+          colorTheme: 'taiwan',
+          market: 'TW',
+        })
+      );
+      expect(html).toContain('10週勝率 80%');
+      expect(html).not.toContain('10日勝率');
+    });
+  });
 });
 

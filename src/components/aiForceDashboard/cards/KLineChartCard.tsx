@@ -11,8 +11,7 @@ import { MoreVertical } from 'lucide-react';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseMainForceCost } from '../../../constants/aiForceGlossary';
 import { aggregateCandlesToTimeframe, KlineTimeframe } from '../../../engine/klineAggregationEngine';
-import { calculateStochasticKD, calculateMACD } from '../../../engine/technicalIndicatorEngine';
-import { calculateRSI } from '../../../engine/omniIndicatorEngine';
+import { enrichCandlesWithOscillators } from '../../../engine/klineOscillatorEngine';
 
 /**
  * 自適應價格刻度格式化（支援低價美股/ETF 小數精度，避免 <$10 標的四捨五入為相同整數）
@@ -227,6 +226,10 @@ export interface KLineChartCardProps {
   colorTheme?: ColorThemeMode;
   market?: MarketType;
   userAvgCost?: number;
+  timeframe?: KlineTimeframe;
+  onTimeframeChange?: (tf: KlineTimeframe) => void;
+  subchartMode?: SubchartIndicatorMode;
+  onSubchartModeChange?: (mode: SubchartIndicatorMode) => void;
 }
 
 export const KLineChartCard: React.FC<KLineChartCardProps> = ({
@@ -234,10 +237,24 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
   colorTheme = 'taiwan',
   market,
   userAvgCost,
+  timeframe: controlledTimeframe,
+  onTimeframeChange,
+  subchartMode: controlledSubchartMode,
+  onSubchartModeChange,
 }) => {
-  const [timeframe, setTimeframe] = useState<KlineTimeframe>('DAY');
+  const [internalTimeframe, setInternalTimeframe] = useState<KlineTimeframe>('DAY');
   const [period, setPeriod] = useState<KlinePeriodMode>('60D');
-  const [subchartMode, setSubchartMode] = useState<SubchartIndicatorMode>('VOL');
+  const [internalSubchartMode, setInternalSubchartMode] = useState<SubchartIndicatorMode>('VOL');
+  const timeframe = controlledTimeframe ?? internalTimeframe;
+  const subchartMode = controlledSubchartMode ?? internalSubchartMode;
+  const setTimeframe = (tf: KlineTimeframe) => {
+    setInternalTimeframe(tf);
+    onTimeframeChange?.(tf);
+  };
+  const setSubchartMode = (mode: SubchartIndicatorMode) => {
+    setInternalSubchartMode(mode);
+    onSubchartModeChange?.(mode);
+  };
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [showKeyLevels, setShowKeyLevels] = useState(true);
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
@@ -268,28 +285,22 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
     return normalizeAndSortCandles(data.candles);
   }, [data.candles]);
 
-  // 2. 依據 timeframe (日 K / 週 K / 月 K) 毫秒級聚合蠟燭，週/月線重算 KD/MACD/RSI
+  // 2. 依據 timeframe (日 K / 週 K / 月 K) 聚合蠟燭，單趟 O(N) 重算 KDJ(含 J) / MACD / RSI (Spec 0245 T05)
   const aggregatedCandles = useMemo(() => {
     const agg = aggregateCandlesToTimeframe(rawCandles, timeframe);
-    if (timeframe === 'DAY' || agg.length === 0) return agg;
-    const highs = agg.map((c) => c.high);
-    const lows = agg.map((c) => c.low);
-    const closes = agg.map((c) => c.close);
-    return agg.map((c, idx) => {
-      const end = idx + 1;
-      const kd = calculateStochasticKD(highs.slice(0, end), lows.slice(0, end), closes.slice(0, end), 9);
-      const macdRes = calculateMACD(closes.slice(0, end));
-      const rsiVal = calculateRSI(closes.slice(0, end), 14);
-      return {
+    if (agg.length === 0) return agg;
+    if (timeframe === 'DAY') {
+      return agg.map((c) => ({
         ...c,
-        k: kd.k9,
-        d: kd.d9,
-        dif: macdRes.dif12_26,
-        macd: macdRes.macd9,
-        macdHist: macdRes.macdHist,
-        rsi: rsiVal,
-      };
-    });
+        j:
+          c.j !== undefined
+            ? c.j
+            : c.k !== undefined && c.d !== undefined
+              ? Number((3 * c.k - 2 * c.d).toFixed(1))
+              : undefined,
+      }));
+    }
+    return enrichCandlesWithOscillators(agg, { requireMinPeriod: true });
   }, [rawCandles, timeframe]);
 
   // 3. 依據週期切片提取當前檢視蠟燭
@@ -359,6 +370,12 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
   // 副圖 Points (KD / MACD / RSI)
   const subchartTop = klineHeight + 10;
   const subchartPlotHeight = volHeight - 15;
+  // 統一 K/D/J 座標系至 [-10, 110]，避免 K=D=J 交會點在圖上上下錯位 (Code Review Fix)
+  const mapKdjY = (v: number): number => {
+    const clamped = Math.max(-10, Math.min(110, v));
+    const norm = (clamped + 10) / 120;
+    return subchartTop + (1 - norm) * subchartPlotHeight;
+  };
 
   const kdKPoints = useMemo(() => {
     if (subchartMode !== 'KD') return '';
@@ -366,7 +383,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
     displayCandles.forEach((c, idx) => {
       if (c.k !== undefined) {
         const x = getX(idx);
-        const y = subchartTop + (1 - c.k / 100) * subchartPlotHeight;
+        const y = mapKdjY(c.k);
         points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
       }
     });
@@ -379,7 +396,26 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
     displayCandles.forEach((c, idx) => {
       if (c.d !== undefined) {
         const x = getX(idx);
-        const y = subchartTop + (1 - c.d / 100) * subchartPlotHeight;
+        const y = mapKdjY(c.d);
+        points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+      }
+    });
+    return points.join(' ');
+  }, [displayCandles, subchartMode]);
+
+  const kdJPoints = useMemo(() => {
+    if (subchartMode !== 'KD') return '';
+    const points: string[] = [];
+    displayCandles.forEach((c, idx) => {
+      const jVal =
+        c.j !== undefined
+          ? c.j
+          : c.k !== undefined && c.d !== undefined
+            ? 3 * c.k - 2 * c.d
+            : undefined;
+      if (jVal !== undefined) {
+        const x = getX(idx);
+        const y = mapKdjY(jVal);
         points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
       }
     });
@@ -813,7 +849,12 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           )}
           {subchartMode === 'KD' && (
             <span style={{ color: '#60a5fa' }}>
-              K:{activeCandle.k ?? '-'} D:{activeCandle.d ?? '-'}
+              K:{activeCandle.k ?? '-'} D:{activeCandle.d ?? '-'} J:
+              {activeCandle.j !== undefined
+                ? activeCandle.j
+                : activeCandle.k !== undefined && activeCandle.d !== undefined
+                  ? Number((3 * activeCandle.k - 2 * activeCandle.d).toFixed(1))
+                  : '-'}
             </span>
           )}
           {subchartMode === 'MACD' && (
@@ -1062,25 +1103,35 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           {/* 副圖：KD 指標 (K9/D9 折線與 80/20 參考線) */}
           {subchartMode === 'KD' && (
             <g>
-              {/* 80 與 20 參考線 */}
+              {/* 80 與 20 參考線 (對齊 [-10, 110] 統一座標系) */}
               <line
                 x1={leftPad}
-                y1={subchartTop + 0.2 * subchartPlotHeight}
+                y1={mapKdjY(80)}
                 x2={width - rightPad}
-                y2={subchartTop + 0.2 * subchartPlotHeight}
+                y2={mapKdjY(80)}
                 stroke="rgba(239, 68, 68, 0.3)"
                 strokeDasharray="2 2"
               />
               <line
                 x1={leftPad}
-                y1={subchartTop + 0.8 * subchartPlotHeight}
+                y1={mapKdjY(20)}
                 x2={width - rightPad}
-                y2={subchartTop + 0.8 * subchartPlotHeight}
+                y2={mapKdjY(20)}
                 stroke="rgba(16, 185, 129, 0.3)"
                 strokeDasharray="2 2"
               />
               <polyline points={kdKPoints} fill="none" stroke="#fbbf24" strokeWidth="1.5" />
               <polyline points={kdDPoints} fill="none" stroke="#38bdf8" strokeWidth="1.5" />
+              {kdJPoints && (
+                <polyline
+                  data-testid="kline-kd-j-line"
+                  points={kdJPoints}
+                  fill="none"
+                  stroke="#e879f9"
+                  strokeWidth="1.2"
+                  strokeDasharray="3 2"
+                />
+              )}
             </g>
           )}
 

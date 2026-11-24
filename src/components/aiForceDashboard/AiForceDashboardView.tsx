@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Radio, SatelliteDish, ShieldAlert, Target, Zap } from 'lucide-react';
+import { Radio, SatelliteDish } from 'lucide-react';
 import {
   MarketType,
   HoldingPosition,
@@ -27,6 +27,10 @@ import {
 import { logger } from '../../utils/logger';
 import { HeaderMarketBar } from './HeaderMarketBar';
 import { KLineChartCard } from './cards/KLineChartCard';
+import { TechnicalResonanceCard } from './cards/TechnicalResonanceCard';
+import { aggregateCandlesToTimeframe, type KlineTimeframe } from '../../engine/klineAggregationEngine';
+import { buildTechnicalResonance } from '../../engine/technicalResonanceEngine';
+import type { SubchartIndicatorMode } from '../../types/aiForceDashboard';
 import { AiDecisionCoreCard } from './cards/AiDecisionCoreCard';
 import { MultiDimensionRadarCard } from './cards/MultiDimensionRadarCard';
 import { VolumeProfileCard } from './cards/VolumeProfileCard';
@@ -531,6 +535,21 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
     onSyncCompleted: handleMarketCatchupCompleted,
   });
 
+  const [klineTimeframe, setKlineTimeframe] = useState<KlineTimeframe>('DAY');
+  const [klineSubchartMode, setKlineSubchartMode] = useState<SubchartIndicatorMode>('VOL');
+
+  const technicalResonance = React.useMemo(() => {
+    const rawCandles = report.klineSystem?.candles ?? [];
+    const timeframeCandles = aggregateCandlesToTimeframe(rawCandles, klineTimeframe);
+    return buildTechnicalResonance({
+      candles: timeframeCandles,
+      dailyCandles: rawCandles,
+      timeframe: klineTimeframe,
+      market,
+      keyLevels: report.klineSystem?.keyLevels,
+    });
+  }, [report.klineSystem?.candles, report.klineSystem?.keyLevels, klineTimeframe, market]);
+
   const handleAnalyze = (newSymbol: string, newMarket: MarketType) => {
     loadDataForSymbol(newSymbol, newMarket);
   };
@@ -614,71 +633,52 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
               data={report.klineSystem}
               colorTheme={resolvedColorTheme}
               market={market}
+              timeframe={klineTimeframe}
+              onTimeframeChange={setKlineTimeframe}
+              subchartMode={klineSubchartMode}
+              onSubchartModeChange={setKlineSubchartMode}
               {...(userAvgCost !== undefined ? { userAvgCost } : {})}
             />
           </div>
 
-          {/* 首屏決策摘要帶 (僅於具備有效真實資料且非載入中時顯示，Spec 0239 T09 Zero-Mock 閘門) */}
-          {!report.isDataPending && !isLoading && (
-          <div
-            data-testid="executive-verdict-strip"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '12px',
-              padding: '12px 16px',
-              backgroundColor: '#0B101B',
-              borderRadius: '10px',
-              border: '1px solid rgba(255, 255, 255, 0.07)',
-              fontVariantNumeric: 'tabular-nums',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1 1 360px', minWidth: 0 }}>
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  padding: '4px 10px',
-                  borderRadius: '6px',
-                  backgroundColor: 'rgba(56, 189, 248, 0.14)',
-                  border: '1px solid rgba(56, 189, 248, 0.35)',
-                  color: '#38bdf8',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                <Zap size={13} />
-                <span>{report.mainForceVerdict.primaryVerb}</span>
-              </span>
-              <span style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: 1.5 }}>
-                {report.decisionCore.xaiExplanation || report.mainForceVerdict.fullVerdictText}
-              </span>
+          {/* Layer 1B: 四維量價動能共鳴解碼卡 (Spec 0245 T07: 有效 K 線 >= 5 根始掛載，未滿 5 根僅保留摘要帶防 Zero-Mock) */}
+          {!report.isDataPending && !isLoading && (report.klineSystem?.candles?.length ?? 0) >= 5 && (
+            <div data-layer="1b-technical-resonance" style={{ width: '100%', minWidth: 0 }}>
+              <TechnicalResonanceCard
+                resonance={technicalResonance}
+                activeSubchartMode={klineSubchartMode}
+                onSelectSubchart={setKlineSubchartMode}
+                primaryVerb={report.mainForceVerdict.primaryVerb}
+                verdictSummary={
+                  report.decisionCore.xaiExplanation || report.mainForceVerdict.fullVerdictText
+                }
+                stopLossPrice={report.mainForceVerdict.stopLossPrice}
+                takeProfitPrice={report.mainForceVerdict.takeProfitPrice}
+                colorTheme={resolvedColorTheme}
+                market={market}
+              />
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '12px', flexShrink: 0 }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#f87171' }}>
-                <ShieldAlert size={13} />
-                <span>停損防線</span>
-                <strong style={{ color: '#f8fafc' }}>
-                  {report.mainForceVerdict.stopLossPrice !== undefined
-                    ? `${market === 'US' ? '$' : ''}${report.mainForceVerdict.stopLossPrice.toFixed(2)}`
-                    : '-'}
-                </strong>
-              </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#34d399' }}>
-                <Target size={13} />
-                <span>停利目標</span>
-                <strong style={{ color: '#f8fafc' }}>
-                  {report.mainForceVerdict.takeProfitPrice !== undefined
-                    ? `${market === 'US' ? '$' : ''}${report.mainForceVerdict.takeProfitPrice.toFixed(2)}`
-                    : '-'}
-                </strong>
-              </span>
+          )}
+          {!report.isDataPending && !isLoading && (report.klineSystem?.candles?.length ?? 0) < 5 && (
+            <div
+              data-testid="executive-verdict-strip"
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                background: 'rgba(15, 23, 42, 0.72)',
+                border: '1px solid rgba(56, 189, 248, 0.2)',
+                fontSize: '0.75rem',
+                color: '#cbd5e1',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <strong style={{ color: '#38bdf8' }}>{report.mainForceVerdict.primaryVerb}</strong>
+              <span>{report.decisionCore.xaiExplanation || report.mainForceVerdict.fullVerdictText}</span>
             </div>
-          </div>
           )}
 
           {/* 載入中骨架防閃爍 (Spec 0239 T09) 或 無真實資料待命空狀態 (Spec 0162) */}

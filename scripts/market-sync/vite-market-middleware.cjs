@@ -36,6 +36,9 @@ const {
 const {
   fetchSecCompanyFactsServer,
 } = require('./sec-edgar-proxy.cjs');
+const {
+  hasTdccSeriesGap,
+} = require('./ingest-tw-tdcc.cjs');
 
 const DEFAULT_CATCHUP_COOLDOWN_MS = 10 * 60 * 1000; // 預設 10 分鐘冷卻保護防線 (Spec 0165)
 const CATCHUP_COOLDOWN_MS = Number(process.env.MARKET_CATCHUP_COOLDOWN_MS) || DEFAULT_CATCHUP_COOLDOWN_MS;
@@ -1115,11 +1118,11 @@ function createMarketApiMiddleware(customDbPath) {
         }
       }
 
-      // 新增查詢 TDCC 集保股權分散表 (最近 10 筆週別資料，支援雙向別名防斷層)
+      // 新增查詢 TDCC 集保股權分散表 (最近 12 筆週別資料，支援雙向別名防斷層，Spec 0245 T09)
       let tdccRows = [];
       try {
         tdccRows = db
-          .prepare('SELECT * FROM tw_tdcc_distribution WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 10')
+          .prepare('SELECT * FROM tw_tdcc_distribution WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 12')
           .all(symbol, aliasSym);
         tdccRows.reverse();
       } catch {}
@@ -1227,7 +1230,7 @@ function createMarketApiMiddleware(customDbPath) {
       const todayStr = new Date().toISOString().slice(0, 10);
       const hasPastDividend = corporateActions.some((a) => a.ex_date && a.ex_date <= todayStr);
 
-      const needTdcc = isTwStock && tdccRows.length < 4;
+      const needTdcc = isTwStock && hasTdccSeriesGap(tdccRows, { minWeeks: 12 });
       const needRevenue = isTwStock && !isEtf && revenueRows.length < 6;
       const needDividend = isTwStock && !hasPastDividend;
       const usFundStale =
@@ -1290,7 +1293,7 @@ function createMarketApiMiddleware(customDbPath) {
           try {
             if (needTdcc) {
               tdccRows = db
-                .prepare('SELECT * FROM tw_tdcc_distribution WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 10')
+                .prepare('SELECT * FROM tw_tdcc_distribution WHERE symbol IN (?, ?) ORDER BY date DESC LIMIT 12')
                 .all(symbol, aliasSym);
               tdccRows.reverse();
             }

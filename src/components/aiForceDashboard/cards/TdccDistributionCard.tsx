@@ -170,18 +170,37 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
     [history, chartHeight]
   );
 
-  const ratioLinePoints = useMemo(() => {
-    if (history.length <= 1) return '';
+  const ratioSegments = useMemo(() => {
+    if (history.length <= 1) return [] as Array<{ x1: number; y1: number; x2: number; y2: number; isGap: boolean; key: string }>;
     const usableWidth = chartWidth - 40;
     const step = usableWidth / Math.max(1, history.length - 1);
-    return history
-      .map((h, i) => {
-        const x = Number((20 + i * step).toFixed(1));
-        const y = projectTdccRatioToY(h.over1000Ratio, scales, chartHeight, padding);
-        return `${x},${y}`;
-      })
-      .join(' ');
+    const segments: Array<{ x1: number; y1: number; x2: number; y2: number; isGap: boolean; key: string }> = [];
+    for (let i = 1; i < history.length; i++) {
+      const prev = history[i - 1];
+      const curr = history[i];
+      const x1 = Number((20 + (i - 1) * step).toFixed(1));
+      const y1 = projectTdccRatioToY(prev.over1000Ratio, scales, chartHeight, padding);
+      const x2 = Number((20 + i * step).toFixed(1));
+      const y2 = projectTdccRatioToY(curr.over1000Ratio, scales, chartHeight, padding);
+      const tPrev = Date.parse(`${prev.date.slice(0, 10)}T00:00:00Z`);
+      const tCurr = Date.parse(`${curr.date.slice(0, 10)}T00:00:00Z`);
+      const diffDays = Number.isFinite(tPrev) && Number.isFinite(tCurr) ? Math.abs(tCurr - tPrev) / 86400000 : 7;
+      segments.push({
+        x1,
+        y1,
+        x2,
+        y2,
+        isGap: diffDays > 11,
+        key: `seg-${prev.date}-${curr.date}`,
+      });
+    }
+    return segments;
   }, [history, scales, chartHeight]);
+
+  const hasChartGaps = useMemo(
+    () => Boolean(data?.hasDateGaps || ratioSegments.some((s) => s.isGap)),
+    [data?.hasDateGaps, ratioSegments]
+  );
 
   const badgeColor = useMemo(() => {
     const badge = data?.concentrationBadge || '';
@@ -542,7 +561,9 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                 border: '1px solid rgba(59, 130, 246, 0.15)',
               }}
             >
-              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>近 4 週大戶變動</div>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                {data.compareLabel || '近 4 週大戶變動'}
+              </div>
               <div
                 style={{
                   fontSize: '1.05rem',
@@ -705,17 +726,22 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                 />
               )}
 
-              {/* 左軸：千張大戶持股比折線 */}
-              {ratioLinePoints && (
-                <polyline
-                  fill="none"
+              {/* 左軸：千張大戶持股比折線 (Spec 0245 T10: 相鄰週距 > 11 天之斷層段改以虛線誠實標示) */}
+              {ratioSegments.map((seg) => (
+                <line
+                  key={seg.key}
+                  data-testid={seg.isGap ? 'tdcc-gap-segment' : undefined}
+                  x1={seg.x1}
+                  y1={seg.y1}
+                  x2={seg.x2}
+                  y2={seg.y2}
                   stroke="#c084fc"
-                  strokeWidth="2.5"
+                  strokeWidth={seg.isGap ? '2' : '2.5'}
                   strokeLinecap="round"
-                  strokeLinejoin="round"
-                  points={ratioLinePoints}
+                  strokeDasharray={seg.isGap ? '4 4' : undefined}
+                  opacity={seg.isGap ? '0.65' : '1'}
                 />
-              )}
+              ))}
 
               {/* 折線資料節點圓點 */}
               {history.map((h, i) => {
@@ -760,6 +786,11 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
                 <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#38bdf8' }} />
                 總股東人數
               </span>
+              {hasChartGaps && (
+                <span style={{ color: '#fbbf24' }} title="虛線區段代表集保歷史週次存在 >11 天間隔，系統背景將自動補齊">
+                  ┄ 斷層缺口
+                </span>
+              )}
             </div>
             <span>{data.asOfDateText}</span>
           </div>

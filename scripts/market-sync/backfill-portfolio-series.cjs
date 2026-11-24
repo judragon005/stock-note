@@ -32,7 +32,10 @@ function isTwEtfSymbol(symbol) {
 async function backfillPortfolioSeries(symbols = DEFAULT_PORTFOLIO_SYMBOLS, options = {}) {
   const {
     dbPath,
-    throttleMs = 600,
+    tdccWeeks = 12,
+    forceTdccOverwrite = false,
+    tdccOnly = false,
+    throttleMs = 300,
     sleepFn = (ms) => new Promise((r) => setTimeout(r, ms)),
     handlers = {},
   } = options;
@@ -47,6 +50,7 @@ async function backfillPortfolioSeries(symbols = DEFAULT_PORTFOLIO_SYMBOLS, opti
     processed: 0,
     twSucceeded: 0,
     usSucceeded: 0,
+    tdccSavedTotal: 0,
     errors: [],
   };
 
@@ -57,13 +61,23 @@ async function backfillPortfolioSeries(symbols = DEFAULT_PORTFOLIO_SYMBOLS, opti
 
     try {
       if (isTwSymbol(raw)) {
-        await runTdcc(raw, 10, dbPath);
-        if (!isTwEtfSymbol(raw)) {
-          await runRev(raw, 12, dbPath);
+        const tdccRes = await runTdcc(
+          raw,
+          tdccWeeks,
+          dbPath,
+          globalThis.fetch,
+          undefined,
+          { forceOverwrite: forceTdccOverwrite }
+        );
+        summary.tdccSavedTotal += Number(tdccRes?.savedCount || 0);
+        if (!tdccOnly) {
+          if (!isTwEtfSymbol(raw)) {
+            await runRev(raw, 12, dbPath);
+          }
+          await runDiv(raw, dbPath);
         }
-        await runDiv(raw, dbPath);
         summary.twSucceeded++;
-      } else {
+      } else if (!tdccOnly) {
         await runUsFund(db, raw, { includeDividends: true });
         summary.usSucceeded++;
       }
@@ -80,9 +94,14 @@ async function backfillPortfolioSeries(symbols = DEFAULT_PORTFOLIO_SYMBOLS, opti
 }
 
 if (require.main === module) {
+  const flags = new Set(process.argv.slice(2).filter((s) => s.startsWith('--')));
   const cliSyms = process.argv.slice(2).filter((s) => !s.startsWith('--'));
   const target = cliSyms.length > 0 ? cliSyms : DEFAULT_PORTFOLIO_SYMBOLS;
-  backfillPortfolioSeries(target)
+  backfillPortfolioSeries(target, {
+    tdccWeeks: 12,
+    forceTdccOverwrite: flags.has('--force-tdcc'),
+    tdccOnly: flags.has('--tdcc-only'),
+  })
     .then((res) => {
       console.log('[PortfolioSeriesBackfill] 完成:', JSON.stringify(res));
       process.exit(0);

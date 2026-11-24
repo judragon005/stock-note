@@ -1248,6 +1248,7 @@ export function generateAiForceReportFromCandles(
       ma250,
       k: Number(currentK.toFixed(1)),
       d: Number(currentD.toFixed(1)),
+      j: Number((3 * currentK - 2 * currentD).toFixed(1)),
       dif,
       macd: Number(dea9.toFixed(2)),
       macdHist,

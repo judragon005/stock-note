@@ -107,4 +107,20 @@ describe('Spec 0240 T11: Architectural Fitness Guard (防技術債復發靜態�
     }
     expect(etfMetaOwners).toEqual(['sqlite-db-core.cjs']);
   });
+
+  it('不變量 6 (Spec 0245 T02): 全前端元件不得使用未定義之幽靈遮罩類別 modal-backdrop（須統一使用 ModalShell / .modal-overlay）', () => {
+    const tsxFiles = collectFiles(path.join(ROOT, 'src'), '.tsx').filter(
+      (f) => !f.endsWith('.test.tsx')
+    );
+    const offenders: string[] = [];
+
+    for (const file of tsxFiles) {
+      const content = fs.readFileSync(file, 'utf8');
+      if (/className\s*=\s*["'`][^"'`]*\bmodal-backdrop\b/.test(content)) {
+        offenders.push(path.relative(ROOT, file));
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
 });

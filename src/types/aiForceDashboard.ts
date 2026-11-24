@@ -67,10 +67,12 @@ export interface KlineCandleItem {
   ma250?: number; // MA250 (年線)
   k?: number; // KD 之 K 值 (0~100)
   d?: number; // KD 之 D 值 (0~100)
+  j?: number; // KDJ 之 J 值 (3K - 2D，Spec 0245 T03)
   dif?: number; // MACD 快線 DIF
   macd?: number; // MACD 慢線 DEA
   macdHist?: number; // MACD 柱狀體
-  rsi?: number; // RSI (0~100)
+  rsi?: number; // RSI14 (0~100)
+  rsi6?: number; // RSI6 短線速動 (0~100，Spec 0245 T03)
 }
 
 /**
@@ -462,6 +464,9 @@ export interface TdccDistributionData {
   change4WeeksRatio?: number; // 近 4 週千張大戶持股比例變化率 (%，如 +1.25%)
   change4WeeksUnder10Ratio?: number; // 近 4 週散戶持股比例變化率 (%)
   change4WeeksShareholders?: number; // 近 4 週股東人數變化 (如 -3210 人)
+  compareSpanWeeks?: number; // 實際比較跨度週數 (Spec 0245 T10)
+  compareLabel?: string; // 動態變動標題，如 "近 4 週大戶變動" 或 "近 11 週大戶變動"
+  hasDateGaps?: boolean; // 是否存在相鄰週距 > 11 天之斷層
   retailScissorsText?: string; // 散戶剪刀差狀態，如 "大戶增持·散戶退場 (籌碼集中)"
   concentrationBadge: string; // '籌碼高度集中 (波段起漲)' | '散戶接刀警戒' | '大戶持續增持' | '大戶明顯調節' | '籌碼中性整理' | '美股不適用' | '機構高度控盤' | '軋空警戒 (Squeeze Alert)'
   asOfDateText: string; // e.g. "集保基準日: 2026-10-02"

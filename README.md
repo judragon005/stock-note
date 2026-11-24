@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-2547%2F2547%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2578%2F2578%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,16 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 台股全市場集保與配息歷史數據湖倉、每週自動更新閉環暨主力戰情室司令台重構 (`Spec 0242`) *(V9.26.0 最新發布 / Spec #0242 / ADR #0242 / Issue #598)*
+### 1. 全域視口彈窗原語、Card 01B 主K四維量價動能共鳴卡暨台股 TDCC 集保斷層自癒 (`Spec 0245`) *(V9.27.0 最新發布 / Spec #0245 / ADR #0245 / Issue #605)*
+
+- **全域視口傳送彈窗 (`ModalShell`) 與靜態防禦守門 (Issue #605 / T01–T02)**：
+  - 建立零外部依賴 `ModalShell.tsx`，透過 React `createPortal(..., document.body)` 徹底隔離毛玻璃父層疊上下文劫持，內建居中遮罩、`Escape` / 背景點擊關閉、`closeLocked` 防誤關鎖與捲動鎖定；遷移 `ExportDatabaseModal` 並於 `architecturalFitnessGuard.test.ts` 植入 CI 靜態禁令杜絕 `.modal-backdrop`。
+- **ZONE 01 Card 01B 四維量價動能共鳴解碼卡與盤中零量隔離 (Issue #605 / T03–T07)**：
+  - 新增單趟 $O(N)$ `klineOscillatorEngine.ts`（`KDJ` 含 `J=3K-2D`、`MACD`、`RSI(6/14)`）與 `resolveVolumeAnchorCandles` 盤中 `volume = 0` 前收定錨隔離機制；`technicalResonanceEngine.ts` 結合 ADX/布林體制加權計分、衝突預警與近 250 期 10 bar 條件勝率；`Card 01`（統一 `[-10, 110]` KDJ 座標與 J 線）與 `Card 01B` 實現日／週／月 K 與四宮格副圖雙向同步，不足 5 根嚴守 Zero-Mock 隱藏閘門。
+- **TDCC 語意合計列、10 張散戶統一口徑與 12 週斷層自癒 (Issue #605 / T08–T11)**：
+  - 修復 TDCC `qryStock` 無「差異數調整」週次時合計列序號為 `16` 導致 80%+ 週次靜默丟棄之根本缺陷，並統一全鏈路 `under10Ratio` 為級距 `1~3`（1–10 張）；實作 `hasTdccSeriesGap` 驅動官方日曆差集補抓與逐週即時 SQLite Upsert，搭配前端真實 `28 ± 7` 天日曆窗計算變動與 SVG `> 11` 天虛線斷層視覺標記。
+
+### 2. 台股全市場集保與配息歷史數據湖倉、每週自動更新閉環暨主力戰情室司令台重構 (`Spec 0242`) *(V9.26.0 / Spec #0242 / ADR #0242 / Issue #598)*
 
 - **台股全市場 10 年雙官方歷年配息庫 (Issue #598 / Ticket 01 & 04)**：
   - 整合證交所（TWSE `TWT49U`）與櫃買中心（TPEx `exDailyQ`）歷年除權息結果表，自動將民國年正規化為 ISO `YYYY-MM-DD` 並以複合主鍵 `(symbol, action_type, ex_date)` 冪等入庫（19,494 筆全市場上市櫃除權息）；Card 20 解除 4 筆截斷限制，展示歷年配息清單與單期殖利率。
