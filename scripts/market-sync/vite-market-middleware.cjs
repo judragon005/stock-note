@@ -68,8 +68,29 @@ function isCatchupInCooldown(lastTime, now = Date.now(), cooldownMs = CATCHUP_CO
   return now - lastTime < cooldownMs;
 }
 
+function evaluateTwGapPlan(customDbPath, freshness) {
+  try {
+    return computeTwReconciliationPlan(customDbPath, {
+      maxLookbackDays: MARKET_SETTLEMENT_CUTOFFS.GAP_CATCHUP_LOOKBACK_DAYS,
+      freshnessOverride: freshness,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function shouldTriggerMarketCatchup(freshness, twPlan) {
+  return Boolean(
+    freshness?.tw?.isStale ||
+    twPlan?.hasGaps ||
+    freshness?.us?.isStale ||
+    freshness?.tdcc?.isStale ||
+    freshness?.revenue?.isStale
+  );
+}
+
 /**
- * 啟動非同步追趕任務 (具備冷卻門檻防禦)
+ * 啟動非同步追趕任務 (具備冷卻門檻防禦，搶到全域鎖後才寫入冷卻時間)
  */
 function triggerCatchupTask(customDbPath, options = {}) {
   const { bypassTestEnv = false, force = false } = options;
@@ -90,11 +111,11 @@ function triggerCatchupTask(customDbPath, options = {}) {
   }
 
   isCatchingUp = true;
-  lastCatchupTime = now;
 
   setImmediate(async () => {
     try {
       const lockOutcome = await withGlobalSyncLock('vite-catchup', async () => {
+        lastCatchupTime = Date.now();
         console.log(`[MarketCatchup] 偵測到本機資料庫過期，啟動背景聯網追趕同步 (Spec 0170 / Spec 0246 30D 缺口調諧)...`);
         const handlers = options.handlers || {};
         const fetchAndIngestTwDailyData =
@@ -144,18 +165,21 @@ function triggerCatchupTask(customDbPath, options = {}) {
               console.warn(`[MarketCatchup] ETF 淨值補抓警示:`, etfErr.message);
             }
           }
-        } else if (freshness?.tw?.isStale !== false) {
-          const reconcileFn = handlers.reconcileTwLakehouse || reconcileTwLakehouse;
-          await reconcileFn({
-            customDbPath,
-            maxLookbackDays: MARKET_SETTLEMENT_CUTOFFS.GAP_CATCHUP_LOOKBACK_DAYS,
-            throttleMs: 1000,
-            force,
-            handlers: {
-              ...(handlers.fetchAndIngestTwDailyData ? { fetchAndIngestTwDailyData: handlers.fetchAndIngestTwDailyData } : {}),
-              ...(handlers.fetchAndIngestEtfDailyNav ? { fetchAndIngestEtfDailyNav: handlers.fetchAndIngestEtfDailyNav } : {}),
-            },
-          });
+        } else {
+          const twGapPlan = options.freshnessOverride ? null : evaluateTwGapPlan(customDbPath, freshness);
+          if (freshness?.tw?.isStale !== false || Boolean(twGapPlan?.hasGaps)) {
+            const reconcileFn = handlers.reconcileTwLakehouse || reconcileTwLakehouse;
+            await reconcileFn({
+              customDbPath,
+              maxLookbackDays: MARKET_SETTLEMENT_CUTOFFS.GAP_CATCHUP_LOOKBACK_DAYS,
+              throttleMs: 1000,
+              force,
+              handlers: {
+                ...(handlers.fetchAndIngestTwDailyData ? { fetchAndIngestTwDailyData: handlers.fetchAndIngestTwDailyData } : {}),
+                ...(handlers.fetchAndIngestEtfDailyNav ? { fetchAndIngestEtfDailyNav: handlers.fetchAndIngestEtfDailyNav } : {}),
+              },
+            });
+          }
         }
 
         // 若美股陳舊，觸發美股盤後同步 (Spec 0246: 修正傳遞 customDbPath)
@@ -278,12 +302,13 @@ function readJsonBody(req) {
  * @param {string} [customDbPath]
  */
 function createMarketApiMiddleware(customDbPath) {
-  // 中介層啟動時非同步巡檢資料庫陳舊度 (委託 market-freshness-service.cjs)
+  // 中介層啟動時非同步巡檢資料庫陳舊度 (含近 30 日內部缺口檢查)
   if (isSqliteSupported()) {
     try {
       const db = initSqliteLakehouseDb(customDbPath);
       const freshness = checkMarketFreshness(db);
-      if (freshness.tw.isStale || freshness.us.isStale || freshness.tdcc?.isStale || freshness.revenue?.isStale) {
+      const bootTwPlan = evaluateTwGapPlan(customDbPath, freshness);
+      if (shouldTriggerMarketCatchup(freshness, bootTwPlan)) {
         triggerCatchupTask(customDbPath);
       }
     } catch (e) {
@@ -315,13 +340,15 @@ function createMarketApiMiddleware(customDbPath) {
     // 0. GET /api/market/sync-status (Spec 0160 / Spec 0161 / Spec 0246 SQLite-Only Sync Telemetry SSOT)
     if (pathname === '/api/market/sync-status') {
       const freshness = checkMarketFreshness(db);
+      const twPlan = evaluateTwGapPlan(customDbPath, freshness);
 
-      if (query.catchup === 'true' && (freshness.tw.isStale || freshness.us.isStale || freshness.tdcc?.isStale || freshness.revenue?.isStale)) {
+      if (query.catchup === 'true' && shouldTriggerMarketCatchup(freshness, twPlan)) {
         triggerCatchupTask(customDbPath);
       }
 
       let twSymbolCount = 0;
       let usSymbolCount = 0;
+      let macroLatest = null;
       try {
         if (freshness.tw?.latestDate) {
           const r = db
@@ -338,14 +365,16 @@ function createMarketApiMiddleware(customDbPath) {
           usSymbolCount = Number(r?.n || 0);
         }
       } catch {}
-
-      let twPlan = null;
       try {
-        twPlan = computeTwReconciliationPlan(customDbPath);
+        const mr = db.prepare('SELECT MAX(date) AS maxDate FROM macro_sentiment_daily').get();
+        macroLatest = mr?.maxDate ?? null;
       } catch {}
 
       const lockState = getCoordinatorLockState();
       const effectiveCatchingUp = Boolean(isCatchingUp || lockState.locked);
+      const macroIsStale = Boolean(
+        !macroLatest || (freshness.tw?.anchorDate && macroLatest < freshness.tw.anchorDate)
+      );
 
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(
@@ -353,6 +382,7 @@ function createMarketApiMiddleware(customDbPath) {
           source: 'SQLITE_SSOT',
           tw: {
             ...freshness.tw,
+            isStale: Boolean(freshness.tw?.isStale || (twPlan && twPlan.missingDates.length > 0)),
             symbolCount: twSymbolCount,
             gapCount: twPlan ? twPlan.reconcileDates.length : 0,
             gapDates: twPlan ? twPlan.reconcileDates : [],
@@ -365,6 +395,11 @@ function createMarketApiMiddleware(customDbPath) {
           },
           tdcc: freshness.tdcc,
           revenue: freshness.revenue,
+          macro: {
+            latestDate: macroLatest,
+            anchorDate: freshness.tw?.anchorDate ?? null,
+            isStale: macroIsStale,
+          },
           weekly: {
             tdccLatestDate: freshness.tdcc?.latestDate ?? null,
             tdccAnchorDate: freshness.tdcc?.anchorDate ?? null,

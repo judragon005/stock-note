@@ -461,8 +461,13 @@ async function runTwMarketSync(targetDateInput) {
 }
 
 if (require.main === module) {
+  const { withGlobalSyncLock, reconcileTwLakehouse } = require('./lakehouse-sync-coordinator.cjs');
+  const { MARKET_SETTLEMENT_CUTOFFS } = require('./sync-thresholds.cjs');
   const customDateArg = process.argv[2] || null;
-  runTwMarketSync(customDateArg).catch((err) => {
+  const taskFn = customDateArg
+    ? () => runTwMarketSync(customDateArg)
+    : () => reconcileTwLakehouse({ maxLookbackDays: MARKET_SETTLEMENT_CUTOFFS.GAP_CATCHUP_LOOKBACK_DAYS });
+  withGlobalSyncLock('cli-tw-sync', taskFn).catch((err) => {
     console.error(`台股盤後同步失敗:`, err);
     process.exit(1);
   });

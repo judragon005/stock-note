@@ -16,9 +16,11 @@ const {
 } = require('./sqlite-db-core.cjs');
 const {
   MARKET_HEALTH_THRESHOLDS,
+  HISTORICAL_MARKET_HEALTH_THRESHOLDS,
   MARKET_SETTLEMENT_CUTOFFS,
 } = require('./sync-thresholds.cjs');
 const {
+  getTimeZoneParts,
   checkMarketFreshness,
   getMarketAnchorDate,
 } = require('./market-freshness-service.cjs');
@@ -30,13 +32,16 @@ const {
 const { fetchAndIngestEtfDailyNav } = require('./ingest-macro-sentiment.cjs');
 
 const DEFAULT_RETRY_COOLDOWN_MS = 10 * 60 * 1000;
+const PHASE1_MAX_DAILY_ATTEMPTS = 3;
 const LANE_KEYS = ['twDaily', 'usDaily', 'macro', 'weekly'];
+const BUDGET_KEYS = ['twDaily', 'twPhase1', 'usDaily', 'macro', 'weekly'];
 
 let activeLock = null;
 
 function createEmptyRetryMap() {
   return {
     twDaily: { isoDate: null, count: 0, lastAttemptAt: 0 },
+    twPhase1: { isoDate: null, count: 0, lastAttemptAt: 0 },
     usDaily: { isoDate: null, count: 0, lastAttemptAt: 0 },
     macro: { isoDate: null, count: 0, lastAttemptAt: 0 },
     weekly: { isoDate: null, count: 0, lastAttemptAt: 0 },
@@ -46,46 +51,19 @@ function createEmptyRetryMap() {
 let laneRetryState = createEmptyRetryMap();
 
 /**
- * 以 Intl.DateTimeFormat 鎖定 Asia/Taipei 取得日期與時間分量 (hourCycle: 'h23')
+ * 複用 market-freshness-service 之 Asia/Taipei 時區分量解析
  */
 function getTaipeiClock(now = new Date()) {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Taipei',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  });
-  const parts = formatter.formatToParts(now);
-  let year = 1970;
-  let month = 1;
-  let day = 1;
-  let hour = 0;
-  let minute = 0;
-
-  for (const p of parts) {
-    if (p.type === 'year') year = parseInt(p.value, 10);
-    if (p.type === 'month') month = parseInt(p.value, 10);
-    if (p.type === 'day') day = parseInt(p.value, 10);
-    if (p.type === 'hour') hour = parseInt(p.value, 10) % 24;
-    if (p.type === 'minute') minute = parseInt(p.value, 10);
-  }
-
-  const mm = String(month).padStart(2, '0');
-  const dd = String(day).padStart(2, '0');
-  const isoDate = `${year}-${mm}-${dd}`;
-  const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  const tz = getTimeZoneParts(now, 'Asia/Taipei');
   return {
-    year,
-    month,
-    day,
-    hour,
-    minute,
-    totalMins: hour * 60 + minute,
-    dayOfWeek,
-    isoDate,
+    year: tz.year,
+    month: tz.month,
+    day: tz.day,
+    hour: tz.hour,
+    minute: tz.minute,
+    totalMins: tz.totalMins,
+    dayOfWeek: tz.dayOfWeek,
+    isoDate: tz.ymd,
   };
 }
 
@@ -105,16 +83,8 @@ function isGlobalSyncLocked() {
   return Boolean(activeLock);
 }
 
-function releaseGlobalSyncLockByOwner(owner) {
-  if (activeLock && activeLock.owner === owner) {
-    activeLock = null;
-    return true;
-  }
-  return false;
-}
-
 /**
- * 全域同行程單飛互斥鎖：防止排程、追趕與手動回補併發寫入 SQLite
+ * 全域同行程單飛互斥鎖：防止排程、追趕與手動回補併發寫入 SQLite（僅於 finally 釋放）
  */
 async function withGlobalSyncLock(owner, fn, { lane = 'all' } = {}) {
   if (activeLock) {
@@ -142,7 +112,7 @@ async function withGlobalSyncLock(owner, fn, { lane = 'all' } = {}) {
 }
 
 function getOrResetLaneBudget(lane, taipeiIsoDate) {
-  const key = LANE_KEYS.includes(lane) ? lane : 'twDaily';
+  const key = BUDGET_KEYS.includes(lane) ? lane : 'twDaily';
   const entry = laneRetryState[key];
   if (entry.isoDate !== taipeiIsoDate) {
     entry.isoDate = taipeiIsoDate;
@@ -239,6 +209,7 @@ function computeTwReconciliationPlan(
   {
     maxLookbackDays = MARKET_SETTLEMENT_CUTOFFS.GAP_CATCHUP_LOOKBACK_DAYS,
     now = new Date(),
+    freshnessOverride = null,
   } = {}
 ) {
   const resolvedDbPath = getDbPath(customDbPath);
@@ -252,7 +223,7 @@ function computeTwReconciliationPlan(
     maxLookbackDays,
     customNow: now,
   });
-  const freshness = checkMarketFreshness(db, now);
+  const freshness = freshnessOverride || checkMarketFreshness(db, now);
 
   const missingDates = Array.isArray(gapReport?.gapDates) ? gapReport.gapDates : [];
   const incompleteDates = Array.isArray(freshness?.tw?.incompleteDates)
@@ -289,15 +260,25 @@ function computeTwReconciliationPlan(
   };
 }
 
-function isTwDayResultComplete(res) {
+function isTwDayResultComplete(res, { isAnchorDate = true } = {}) {
   if (!res || res.hasError || res.partial || res.phase === 'PHASE_1_PRICE_ONLY') {
     return false;
   }
   if (res.cached) return true;
   if (!res.isTradingDay) return false;
-  const quotesOk = Number(res.quotesCount || 0) >= MARKET_HEALTH_THRESHOLDS.STOCK_COUNT_MIN;
-  const chipsOk = Number(res.chipsCount || 0) >= MARKET_HEALTH_THRESHOLDS.FRESHNESS_CHIPS_COUNT_MIN;
-  return quotesOk && chipsOk;
+  const marginMin = isAnchorDate
+    ? MARKET_HEALTH_THRESHOLDS.MARGIN_COUNT_MIN
+    : HISTORICAL_MARKET_HEALTH_THRESHOLDS.TWSE_MARGIN_COUNT_MIN;
+  const valMin = isAnchorDate
+    ? MARKET_HEALTH_THRESHOLDS.VALUATION_COUNT_MIN
+    : HISTORICAL_MARKET_HEALTH_THRESHOLDS.TWSE_VALUATION_COUNT_MIN;
+  const quotesOk = Number(res.quotesCount ?? 0) >= MARKET_HEALTH_THRESHOLDS.STOCK_COUNT_MIN;
+  const chipsOk = Number(res.chipsCount ?? 0) >= MARKET_HEALTH_THRESHOLDS.FRESHNESS_CHIPS_COUNT_MIN;
+  const marginOk = Number(res.marginCount ?? 0) >= marginMin;
+  const sblOk = Number(res.sblCount ?? 0) >= MARKET_HEALTH_THRESHOLDS.SBL_COUNT_MIN;
+  const dayTradeOk = Number(res.dayTradeCount ?? 0) >= MARKET_HEALTH_THRESHOLDS.DAY_TRADE_COUNT_MIN;
+  const valuationOk = Number(res.valuationCount ?? 0) >= valMin;
+  return quotesOk && chipsOk && marginOk && sblOk && dayTradeOk && valuationOk;
 }
 
 /**
@@ -322,8 +303,13 @@ async function reconcileTwLakehouse(options = {}) {
   const nowMs = now.getTime();
   const plan = computeTwReconciliationPlan(resolvedDbPath, { maxLookbackDays, now });
 
-  const budget = checkLaneRetryBudget('twDaily', tp.isoDate, nowMs, {
-    maxRetries,
+  // Phase 1 (14:40~16:29 TPE) 僅先行寫入價量，獨立配額節流，絕不消耗 16:30 Phase 2 的每日 4 次配額
+  const isPhase1Window = plan.phase === 'PHASE_1_PRICE_ONLY';
+  const budgetLane = isPhase1Window ? 'twPhase1' : 'twDaily';
+  const effectiveMaxRetries = isPhase1Window ? PHASE1_MAX_DAILY_ATTEMPTS : maxRetries;
+
+  const budget = checkLaneRetryBudget(budgetLane, tp.isoDate, nowMs, {
+    maxRetries: effectiveMaxRetries,
     retryCooldownMs,
     force,
   });
@@ -332,6 +318,7 @@ async function reconcileTwLakehouse(options = {}) {
     return {
       ok: false,
       skipped: true,
+      aborted: false,
       reason: budget.budgetExhausted ? 'RETRY_BUDGET_EXHAUSTED' : 'RETRY_COOLDOWN',
       budgetExhausted: budget.budgetExhausted,
       inCooldown: budget.inCooldown,
@@ -345,7 +332,7 @@ async function reconcileTwLakehouse(options = {}) {
     };
   }
 
-  recordLaneAttempt('twDaily', tp.isoDate, nowMs);
+  recordLaneAttempt(budgetLane, tp.isoDate, nowMs);
 
   const ingestFn = handlers.fetchAndIngestTwDailyData || fetchAndIngestTwDailyData;
   const navFn = handlers.fetchAndIngestEtfDailyNav || fetchAndIngestEtfDailyNav;
@@ -353,10 +340,14 @@ async function reconcileTwLakehouse(options = {}) {
   const reconciledDates = [];
   const failedDates = [];
   let anyPartial = false;
+  let aborted = Boolean(signal && signal.aborted);
 
   try {
     for (const dateStr of plan.reconcileDates) {
-      if (signal && signal.aborted) break;
+      if (signal && signal.aborted) {
+        aborted = true;
+        break;
+      }
 
       const isTodayPhase1 = plan.phase === 'PHASE_1_PRICE_ONLY' && dateStr === plan.todayIso;
       try {
@@ -369,10 +360,15 @@ async function reconcileTwLakehouse(options = {}) {
           signal,
         });
 
+        if (signal && signal.aborted) {
+          aborted = true;
+          break;
+        }
+
         if (isTodayPhase1 && res && !res.hasError && (res.partial || res.phase === 'PHASE_1_PRICE_ONLY')) {
           anyPartial = true;
           reconciledDates.push(dateStr);
-        } else if (isTwDayResultComplete(res)) {
+        } else if (isTwDayResultComplete(res, { isAnchorDate: dateStr === plan.anchorDate })) {
           reconciledDates.push(dateStr);
         } else {
           if (res?.partial || res?.phase === 'PHASE_1_PRICE_ONLY') {
@@ -384,15 +380,20 @@ async function reconcileTwLakehouse(options = {}) {
           });
         }
       } catch (err) {
+        if (signal && signal.aborted) {
+          aborted = true;
+          break;
+        }
         failedDates.push({ date: dateStr, reason: err?.message || String(err) });
       }
     }
 
     // 補齊最新結算日／今日 Phase 1 的 ETF 每日淨值
     const needNav =
-      plan.missingPlanes.includes('etf_nav') ||
-      reconciledDates.includes(plan.anchorDate) ||
-      (plan.phase === 'PHASE_1_PRICE_ONLY' && reconciledDates.includes(plan.todayIso));
+      !aborted &&
+      (plan.missingPlanes.includes('etf_nav') ||
+        reconciledDates.includes(plan.anchorDate) ||
+        (plan.phase === 'PHASE_1_PRICE_ONLY' && reconciledDates.includes(plan.todayIso)));
     let etfNavResult = null;
     if (needNav && typeof navFn === 'function') {
       const navTargetDate =
@@ -406,14 +407,21 @@ async function reconcileTwLakehouse(options = {}) {
       }
     }
 
+    const etfNavFailed = Boolean(
+      needNav && plan.phase === 'PHASE_2_FULL' && etfNavResult && etfNavResult.success === false
+    );
+
     const canAdvanceWatermark =
+      !aborted &&
       plan.phase !== 'PHASE_1_PRICE_ONLY' &&
       !anyPartial &&
+      !etfNavFailed &&
       failedDates.length === 0;
 
     return {
-      ok: failedDates.length === 0,
+      ok: !aborted && !etfNavFailed && failedDates.length === 0,
       skipped: false,
+      aborted,
       budgetExhausted: false,
       inCooldown: false,
       retryCount: getOrResetLaneBudget('twDaily', tp.isoDate).count,
@@ -472,7 +480,6 @@ module.exports = {
   getTaipeiClock,
   getCoordinatorLockState,
   isGlobalSyncLocked,
-  releaseGlobalSyncLockByOwner,
   withGlobalSyncLock,
   checkLaneRetryBudget,
   recordLaneAttempt,

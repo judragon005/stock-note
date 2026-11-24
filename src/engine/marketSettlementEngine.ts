@@ -16,6 +16,7 @@ export interface MarketSettlementStatus {
   isSettled: boolean; // 是否已結算完成
   anchorTradingDate: string; // 量化分析基準日 (YYYY-MM-DD)
   currentTradingDate?: string; // 當日自然日或交易日 (YYYY-MM-DD) (Spec 0170)
+  isTradingDayToday?: boolean; // 當日是否為所在市場法定交易日 (Spec 0246)
   reason?: string; // 尚未結算原因說明
   isTradingHours: boolean; // 是否處於盤中交易時段
 }
@@ -148,6 +149,7 @@ export function getMarketSettlementStatus(
         isSettled: true,
         anchorTradingDate: tp.ymd,
         currentTradingDate: tp.ymd,
+        isTradingDayToday: isTwTradingToday,
         isTradingHours: false,
       };
     }
@@ -166,6 +168,7 @@ export function getMarketSettlementStatus(
       isSettled: false,
       anchorTradingDate: formatUtcDateToYMD(anchorDate),
       currentTradingDate: tp.ymd,
+      isTradingDayToday: isTwTradingToday,
       reason,
       isTradingHours,
     };
@@ -183,6 +186,7 @@ export function getMarketSettlementStatus(
       isSettled: true,
       anchorTradingDate: formatUtcDateToYMD(lastTradingDay),
       currentTradingDate,
+      isTradingDayToday: false,
       isTradingHours: false,
     };
   }
@@ -194,6 +198,7 @@ export function getMarketSettlementStatus(
       isSettled: true,
       anchorTradingDate: formatUtcDateToYMD(prevTradingDay),
       currentTradingDate,
+      isTradingDayToday: true,
       isTradingHours: false,
     };
   }
@@ -205,6 +210,7 @@ export function getMarketSettlementStatus(
       isSettled: false,
       anchorTradingDate: formatUtcDateToYMD(prevTradingDay),
       currentTradingDate,
+      isTradingDayToday: true,
       reason: '美股盤中交易中，尚未完成當日盤後數據結算（每日美東 17:00 結算）',
       isTradingHours: true,
     };
@@ -217,6 +223,7 @@ export function getMarketSettlementStatus(
       isSettled: false,
       anchorTradingDate: formatUtcDateToYMD(prevTradingDay),
       currentTradingDate,
+      isTradingDayToday: true,
       reason: '美股尚未完成盤後數據結算（每日美東 17:00 結算）',
       isTradingHours: false,
     };
@@ -226,6 +233,7 @@ export function getMarketSettlementStatus(
     isSettled: true,
     anchorTradingDate: currentTradingDate,
     currentTradingDate,
+    isTradingDayToday: true,
     isTradingHours: false,
   };
 }

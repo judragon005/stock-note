@@ -412,21 +412,31 @@ export function parseYahooQuoteResponse(data: any, rawSymbol: string, market: Ma
       changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
     }
 
-    // 5. 提取盤中真實 OHLCV（Spec 0246 Ticket 10：優先取 meta，缺開盤價時回退最新 indicators 棒）
+    // 5. 提取盤中真實 OHLCV（Spec 0246 Ticket 10：優先取 meta，缺值時僅於同日時間窗內回退最新 indicators 棒；顯式 volume=0 嚴禁跨日回退）
     const quoteIndicators = resultNode?.indicators?.quote?.[0];
     const lastIdx = Array.isArray(quoteIndicators?.close) ? quoteIndicators.close.length - 1 : -1;
+    const lastTs =
+      Array.isArray(resultNode?.timestamp) && lastIdx >= 0 ? resultNode.timestamp[lastIdx] : undefined;
+    const indicatorMatchesQuoteDay =
+      lastIdx >= 0 &&
+      (lastTs === undefined ||
+        typeof meta.regularMarketTime !== 'number' ||
+        Math.abs(meta.regularMarketTime - lastTs) < 18 * 3600);
+    const hasExplicitZeroVolume = meta.regularMarketVolume === 0;
+
     const open =
       toPositiveFiniteNumber(meta.regularMarketOpen) ??
-      (lastIdx >= 0 ? toPositiveFiniteNumber(quoteIndicators?.open?.[lastIdx]) : undefined);
+      (indicatorMatchesQuoteDay ? toPositiveFiniteNumber(quoteIndicators?.open?.[lastIdx]) : undefined);
     const high =
       toPositiveFiniteNumber(meta.regularMarketDayHigh) ??
-      (lastIdx >= 0 ? toPositiveFiniteNumber(quoteIndicators?.high?.[lastIdx]) : undefined);
+      (indicatorMatchesQuoteDay ? toPositiveFiniteNumber(quoteIndicators?.high?.[lastIdx]) : undefined);
     const low =
       toPositiveFiniteNumber(meta.regularMarketDayLow) ??
-      (lastIdx >= 0 ? toPositiveFiniteNumber(quoteIndicators?.low?.[lastIdx]) : undefined);
-    const volume =
-      toPositiveFiniteNumber(meta.regularMarketVolume) ??
-      (lastIdx >= 0 ? toPositiveFiniteNumber(quoteIndicators?.volume?.[lastIdx]) : undefined);
+      (indicatorMatchesQuoteDay ? toPositiveFiniteNumber(quoteIndicators?.low?.[lastIdx]) : undefined);
+    const volume = hasExplicitZeroVolume
+      ? undefined
+      : toPositiveFiniteNumber(meta.regularMarketVolume) ??
+        (indicatorMatchesQuoteDay ? toPositiveFiniteNumber(quoteIndicators?.volume?.[lastIdx]) : undefined);
 
     const currency = market === 'TW' ? 'TWD' : 'USD';
     const candles = parseYahooHistoricalCandlesResponse(data);

@@ -569,6 +569,44 @@ describe('PriceFetcher Engine (TDD Seam)', () => {
       expect(quote?.volume).toBeUndefined();
     });
 
+    it('meta.regularMarketVolume 為 0 時絕不可回退提取昨日 indicators.quote[0].volume', () => {
+      const zeroTodayWithYesterdayIndicators = {
+        chart: {
+          result: [
+            {
+              meta: {
+                currency: 'TWD',
+                symbol: '2330.TW',
+                regularMarketPrice: 1055,
+                regularMarketPreviousClose: 1035,
+                regularMarketOpen: 1040,
+                regularMarketDayHigh: 1058,
+                regularMarketDayLow: 1035,
+                regularMarketVolume: 0,
+                regularMarketTime: 1795491000,
+              },
+              timestamp: [1795404600], // 昨日日 K 時間戳 (與 regularMarketTime 相差 >= 24h)
+              indicators: {
+                quote: [
+                  {
+                    open: [1020],
+                    high: [1040],
+                    low: [1015],
+                    close: [1035],
+                    volume: [50000000],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      };
+
+      const quote = parseYahooQuoteResponse(zeroTodayWithYesterdayIndicators, '2330', 'TW');
+      expect(quote).not.toBeNull();
+      expect(quote?.volume).toBeUndefined();
+    });
+
     it('parseTWSEDayAllResponse 具備開高低量與成交筆數欄位時應一併解析', () => {
       const mockTwse = [
         {

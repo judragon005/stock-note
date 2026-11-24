@@ -25,6 +25,7 @@ export interface MarketSyncStatusResponse {
   };
   tdcc?: { latestDate: string | null; anchorDate: string; isStale: boolean };
   revenue?: { latestMonth: string | null; anchorMonth: string; isStale: boolean };
+  macro?: { latestDate: string | null; anchorDate?: string | null; isStale?: boolean };
   weekly?: {
     tdccLatestDate: string | null;
     tdccAnchorDate: string | null;
@@ -75,24 +76,43 @@ export function shouldContinueCatchupPolling(
   return Boolean(isCatchingUp) && pollAttempts < maxPollAttempts;
 }
 
+/**
+ * 單一事實來源：自 SQLite 同步狀態 API (/api/market/sync-status) 抓取最新遙測
+ */
+export async function fetchMarketSyncStatus(
+  fetcher: typeof fetch = fetch
+): Promise<MarketSyncStatusResponse | null> {
+  try {
+    if (typeof fetcher !== 'function') return null;
+    const res = await fetcher('/api/market/sync-status');
+    if (!res || !res.ok) return null;
+    return (await res.json()) as MarketSyncStatusResponse;
+  } catch {
+    return null;
+  }
+}
+
 export interface CatchupPollControllerOptions {
   fetcher?: typeof fetch;
   pollIntervalMs?: number;
   maxPollAttempts?: number;
+  maxConsecutiveErrors?: number;
   onStatusUpdate?: (status: MarketSyncStatusResponse) => void;
   onSyncCompleted?: () => void;
 }
 
 /**
- * 可測試、有上限之背景追趕自動輪詢狀態機 (Spec 0246 Ticket 08)
+ * 可測試、有上限與瞬斷容錯之背景追趕自動輪詢狀態機 (Spec 0246 Ticket 08)
  */
 export function createCatchupPollController(options: CatchupPollControllerOptions = {}) {
   const fetcher = options.fetcher || (typeof fetch === 'function' ? fetch : undefined);
   const pollIntervalMs = options.pollIntervalMs ?? 5000;
   const maxPollAttempts = options.maxPollAttempts ?? 60;
+  const maxConsecutiveErrors = options.maxConsecutiveErrors ?? 3;
 
   let prevIsCatchingUp = false;
   let pollAttempts = 0;
+  let consecutiveErrors = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let disposed = false;
 
@@ -114,15 +134,34 @@ export function createCatchupPollController(options: CatchupPollControllerOption
     }, pollIntervalMs);
   };
 
+  const handleTransientFailure = () => {
+    consecutiveErrors += 1;
+    if (
+      prevIsCatchingUp &&
+      consecutiveErrors < maxConsecutiveErrors &&
+      shouldContinueCatchupPolling(true, pollAttempts, maxPollAttempts)
+    ) {
+      scheduleNextPoll();
+    } else {
+      clearTimer();
+      prevIsCatchingUp = false;
+      pollAttempts = 0;
+    }
+  };
+
   const checkStatus = async (triggerCatchup = true): Promise<MarketSyncStatusResponse | null> => {
     if (disposed || typeof fetcher !== 'function') return null;
     try {
       const url = triggerCatchup ? '/api/market/sync-status?catchup=true' : '/api/market/sync-status';
       const res = await fetcher(url);
-      if (!res || !res.ok) return null;
+      if (!res || !res.ok) {
+        handleTransientFailure();
+        return null;
+      }
       const data: MarketSyncStatusResponse = await res.json();
       if (disposed) return null;
 
+      consecutiveErrors = 0;
       options.onStatusUpdate?.(data);
 
       const finished = shouldNotifySyncCompleted(prevIsCatchingUp, Boolean(data.isCatchingUp));
@@ -143,8 +182,7 @@ export function createCatchupPollController(options: CatchupPollControllerOption
 
       return data;
     } catch {
-      // 離線或網路失敗時靜默降級
-      clearTimer();
+      handleTransientFailure();
       return null;
     }
   };

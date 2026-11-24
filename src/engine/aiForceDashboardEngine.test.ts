@@ -1387,6 +1387,48 @@ describe('aiForceDashboardEngine - Foundation & Contract', () => {
       expect(resonance.volume.anchorDate).toBe('2026-11-23');
       expect(resonance.volume.volumeDisplay).toBe(24000);
     });
+
+    it('3. 週末／國定休市日（非交易日）傳入前收即時報價時，絕不縫合休市日假 K 棒', () => {
+      // 2026-11-21 為週六休市日
+      const saturdayNow = new Date('2026-11-21T11:00:00+08:00');
+      const fridayHistory = settledHistory.slice(0, settledHistory.length - 1); // 最後一筆為 2026-11-20 週五
+      const staleQuote = parseYahooQuoteResponse(
+        {
+          chart: {
+            result: [
+              {
+                meta: {
+                  currency: 'TWD',
+                  symbol: '2330.TW',
+                  regularMarketPrice: 1035,
+                  regularMarketPreviousClose: 1020,
+                  regularMarketOpen: 1025,
+                  regularMarketDayHigh: 1040,
+                  regularMarketDayLow: 1020,
+                  regularMarketVolume: 20_000_000,
+                },
+              },
+            ],
+          },
+        },
+        '2330',
+        'TW'
+      )!;
+
+      const report = generateAiForceReportFromCandles(
+        '2330',
+        '台積電',
+        'TW',
+        fridayHistory,
+        staleQuote,
+        undefined,
+        saturdayNow
+      );
+
+      const lastBar = report.klineSystem.candles[report.klineSystem.candles.length - 1];
+      expect(lastBar.date).toBe('2026-11-20');
+      expect(report.klineSystem.candles.some((c) => c.date === '2026-11-21')).toBe(false);
+    });
   });
 });
 

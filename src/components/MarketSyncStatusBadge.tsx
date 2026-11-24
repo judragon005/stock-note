@@ -4,7 +4,10 @@ import { RefreshCw, CheckCircle2, Clock, Database, X, ChevronRight } from 'lucid
 import {
   MarketSyncStatusResponse,
   LAKEHOUSE_SYNCED_EVENT,
+  fetchMarketSyncStatus,
 } from '../hooks/useMarketCatchupSync';
+
+export { fetchMarketSyncStatus };
 
 /**
  * 輕量摘要相容介面（向後相容舊測試呼叫，不依賴靜態 JSON 市場快取載入器）
@@ -90,22 +93,6 @@ export const formatSqliteSyncBadgeTooltip = (
   const catchupBanner = syncStatus.isCatchingUp ? '\n⚡ 背景缺口追趕同步進行中...' : '';
 
   return `SQLite 湖倉同步狀態 (Spec 0246 SSOT)\n台股：${tw.latestDate ? `${tw.latestDate}${twCountLabel} ${twGapLabel}` : '尚無資料（待補齊）'}\n美股：${us.latestDate ? `${us.latestDate}${usCountLabel}${us.isStale ? '（待同步）' : '（最新）'}` : '尚無資料（待補齊）'}${catchupBanner}\n點擊查看四軌同步狀態與排程管理`;
-};
-
-/**
- * 自 SQLite 同步狀態 API (/api/market/sync-status) 抓取最新遙測，離線時優雅降級回傳 null
- */
-export const fetchMarketSyncStatus = async (
-  fetcher: typeof fetch = fetch
-): Promise<MarketSyncStatusResponse | null> => {
-  try {
-    if (typeof fetcher !== 'function') return null;
-    const res = await fetcher('/api/market/sync-status');
-    if (!res || !res.ok) return null;
-    return (await res.json()) as MarketSyncStatusResponse;
-  } catch {
-    return null;
-  }
 };
 
 interface MarketSyncStatusBadgeProps {

@@ -144,6 +144,10 @@ describe('Spec 0240 T11: Architectural Fitness Guard (防技術債復發靜態�
     expect(offenders).toEqual([]);
 
     const nasServerSrc = fs.readFileSync(path.join(ROOT, 'scripts/nas-server.cjs'), 'utf8');
-    expect(nasServerSrc).toMatch(/ext\s*===\s*['"]\.json['"]/);
+    expect(nasServerSrc).toMatch(/ext\s*===\s*['"]\.json['"]\s*\?\s*['"]no-cache['"]/);
+
+    const syncUsSrc = fs.readFileSync(path.join(ROOT, 'scripts/market-sync/sync-us-market.cjs'), 'utf8');
+    expect(syncUsSrc).not.toContain('readFileSync(summaryPath');
+    expect(syncUsSrc).not.toMatch(/detectLocalUsHoldingsAndWatchlist[\s\S]{0,400}us_market_summary\.json/);
   });
 });

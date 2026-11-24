@@ -74,5 +74,57 @@ describe('Ticket 01: useMarketCatchupSync 狀態切換與節流測試 (Spec 0166
         vi.useRealTimers();
       }
     });
+
+    it('5. 輪詢遭遇單次瞬斷（HTTP 503 或網路例外）應容錯繼續輪詢至成功；連續 3 次失敗才停止並重設狀態', async () => {
+      vi.useFakeTimers();
+      try {
+        let step = 0;
+        const mockFetcher = vi.fn(async () => {
+          step += 1;
+          if (step === 1) {
+            return {
+              ok: true,
+              json: async () => ({
+                isCatchingUp: true,
+                tw: { latestDate: '2026-11-19', anchorDate: '2026-11-23', isStale: true },
+                us: { latestDate: '2026-11-23', anchorDate: '2026-11-23', isStale: false },
+                lastCatchupTime: 1,
+                timestamp: 1,
+              }),
+            } as any;
+          }
+          if (step === 2) {
+            return { ok: false, status: 503 } as any;
+          }
+          return {
+            ok: true,
+            json: async () => ({
+              isCatchingUp: false,
+              tw: { latestDate: '2026-11-23', anchorDate: '2026-11-23', isStale: false },
+              us: { latestDate: '2026-11-23', anchorDate: '2026-11-23', isStale: false },
+              lastCatchupTime: 1,
+              timestamp: 3,
+            }),
+          } as any;
+        });
+
+        const onCompleted = vi.fn();
+        const controller = createCatchupPollController({
+          fetcher: mockFetcher as unknown as typeof fetch,
+          pollIntervalMs: 500,
+          maxPollAttempts: 10,
+          onSyncCompleted: onCompleted,
+        });
+
+        await controller.checkStatus(true); // step 1: catching up
+        await vi.advanceTimersByTimeAsync(500); // step 2: 503 transient failure -> should retry
+        await vi.advanceTimersByTimeAsync(500); // step 3: recovered -> completed!
+        expect(mockFetcher).toHaveBeenCalledTimes(3);
+        expect(onCompleted).toHaveBeenCalledTimes(1);
+        controller.dispose();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

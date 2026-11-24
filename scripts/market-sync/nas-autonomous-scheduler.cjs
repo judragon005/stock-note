@@ -22,6 +22,8 @@ const { runWeeklyLakehouseSync } = require('./weekly-lakehouse-sync.cjs');
 const { MARKET_SETTLEMENT_CUTOFFS } = require('./sync-thresholds.cjs');
 const {
   withGlobalSyncLock,
+  recordLaneAttempt,
+  computeTwReconciliationPlan,
   reconcileTwLakehouse,
   resolveTwPostClosePhase,
 } = require('./lakehouse-sync-coordinator.cjs');
@@ -140,10 +142,22 @@ function getTaipeiTimeParts(date = new Date()) {
   };
 }
 
+function isWeeklyReportOk(res) {
+  if (res === undefined || res === null) return true; // 相容既有無回傳值之測試替身
+  if (res.ok === false) return false;
+  const subKeys = ['tdcc', 'corporateActions', 'monthlyRevenue', 'etfNav', 'etfMeta'];
+  for (const key of subKeys) {
+    if (res[key] && typeof res[key] === 'object' && res[key].ok === false) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
- * 決定當前時間點應觸發何種自動更新任務 (純函式，Spec 0246 四軌獨立水位線，杜絕跨市場鎖死)
+ * 決定當前時間點應觸發何種自動更新任務 (純函式，Spec 0246 四軌獨立水位線，杜絕跨市場鎖死與死碼守衛)
  */
-function evaluateScheduleWindow(nowDate, freshness, lastRunState = {}) {
+function evaluateScheduleWindow(nowDate, freshness, lastRunState = {}, twPlan = null) {
   const tp = getTaipeiTimeParts(nowDate);
   const lanes = lastRunState.lanes || null;
   const maxRetries = MARKET_SETTLEMENT_CUTOFFS.MAX_DAILY_RETRIES_PER_LANE;
@@ -171,21 +185,45 @@ function evaluateScheduleWindow(nowDate, freshness, lastRunState = {}) {
     reasons.push(isSaturdayMorningWindow ? 'SATURDAY_WEEKLY_WINDOW' : 'WEEKLY_DATA_STALE');
   }
 
-  // 2. 台股日線缺口調諧軌道 (完全獨立於美股，美股清晨完成絕不阻斷台股午後同步)
+  // 2. 台股日線缺口調諧軌道 (完全獨立於美股，並納入內部缺口日與 Phase 1 盤後寫價窗)
   const twAnchor = freshness?.tw?.anchorDate || null;
   const twIsStale = Boolean(freshness?.tw?.isStale);
-  const twWatermarkDone = Boolean(twAnchor && lanes?.twDaily?.watermarkDate === twAnchor && !twIsStale);
+  const twHasInternalGaps = Boolean(twPlan?.hasGaps);
+  const twPhase = twPlan?.phase || resolveTwPostClosePhase(nowDate);
+  const twWatermarkDone = Boolean(
+    twAnchor &&
+    lanes?.twDaily?.watermarkDate === twAnchor &&
+    lanes?.twDaily?.status === 'ok' &&
+    !twHasInternalGaps
+  );
+  const twPhase1Eligible =
+    twPhase === 'PHASE_1_PRICE_ONLY' &&
+    !twWatermarkDone &&
+    lanes?.twDaily?.phase !== 'PHASE_1_PRICE_ONLY';
   const legacyDailyBlocked = !lanes && lastRunState.lastDailyIsoDate === tp.isoDate;
   const twRetries = getLaneRetryCountForDate(lanes?.twDaily, tp.isoDate);
-  if (twIsStale && !twWatermarkDone && !legacyDailyBlocked && twRetries < maxRetries) {
+  if (
+    (twIsStale || twHasInternalGaps || twPhase1Eligible) &&
+    !twWatermarkDone &&
+    !legacyDailyBlocked &&
+    (twPhase1Eligible || twRetries < maxRetries)
+  ) {
     actions.runTwDaily = true;
-    reasons.push('TW_DAILY_STALE');
+    reasons.push(
+      twPhase1Eligible && !twIsStale
+        ? 'TW_PHASE1_WINDOW'
+        : twHasInternalGaps
+          ? 'TW_GAP_RECONCILE'
+          : 'TW_DAILY_STALE'
+    );
   }
 
-  // 3. 美股日線軌道 (獨立水位線，僅看 us.isStale 與 usDaily 水位線)
+  // 3. 美股日線軌道 (獨立水位線，移除矛盾子句確保狀態機真實阻斷重複執行)
   const usAnchor = freshness?.us?.anchorDate || null;
   const usIsStale = Boolean(freshness?.us?.isStale);
-  const usWatermarkDone = Boolean(usAnchor && lanes?.usDaily?.watermarkDate === usAnchor && !usIsStale);
+  const usWatermarkDone = Boolean(
+    usAnchor && lanes?.usDaily?.watermarkDate === usAnchor && lanes?.usDaily?.status === 'ok'
+  );
   const usRetries = getLaneRetryCountForDate(lanes?.usDaily, tp.isoDate);
   if (usIsStale && !usWatermarkDone && !legacyDailyBlocked && usRetries < maxRetries) {
     actions.runUsDaily = true;
@@ -221,7 +259,7 @@ function startNasAutonomousScheduler({
   if (process.env.DISABLE_BUILTIN_SCHEDULER === 'true') {
     console.log('⏸️ [NAS Scheduler] 已透過 DISABLE_BUILTIN_SCHEDULER=true 停用內建排程器。');
     return {
-      stop: () => {},
+      stop: () => { },
       runTickNow: async () => ({ skipped: true, reason: 'DISABLED' }),
       getState: () => ({ enabled: false }),
     };
@@ -236,7 +274,7 @@ function startNasAutonomousScheduler({
     lanes: createInitialLaneState(),
   };
 
-  function bumpLaneAttempt(laneKey, isoDate) {
+  function bumpLaneAttempt(laneKey, isoDate, { syncToCoordinator = true } = {}) {
     const lane = lastRunState.lanes[laneKey];
     if (lane.lastRunIsoDate !== isoDate) {
       lane.lastRunIsoDate = isoDate;
@@ -244,7 +282,11 @@ function startNasAutonomousScheduler({
     }
     lane.retryCount += 1;
     lane.status = 'running';
-    lane.updatedAt = nowFn().toISOString();
+    const attemptNow = nowFn();
+    lane.updatedAt = attemptNow.toISOString();
+    if (syncToCoordinator) {
+      recordLaneAttempt(laneKey, isoDate, attemptNow.getTime());
+    }
     return lane;
   }
 
@@ -259,7 +301,18 @@ function startNasAutonomousScheduler({
         const now = nowFn();
         const freshness = (handlers.checkMarketFreshness || checkMarketFreshness)(db, now);
         const tp = getTaipeiTimeParts(now);
-        const plan = evaluateScheduleWindow(now, freshness, lastRunState);
+        let twPlan = null;
+        if (typeof handlers.computeTwReconciliationPlan === 'function') {
+          twPlan = handlers.computeTwReconciliationPlan(customDbPath, { now, freshnessOverride: freshness });
+        } else if (!handlers.runDailySync && !handlers.checkMarketFreshness) {
+          // 僅於未覆寫 checkMarketFreshness 測試替身時掃描 SQLite 缺口計畫，兼顧真實湖倉內部缺口偵測與單元測試隔離
+          try {
+            twPlan = computeTwReconciliationPlan(customDbPath, { now, freshnessOverride: freshness });
+          } catch {
+            twPlan = null;
+          }
+        }
+        const plan = evaluateScheduleWindow(now, freshness, lastRunState, twPlan);
         const tasks = {};
 
         if (!plan.runTwDaily && !plan.runUsDaily && !plan.runMacro && !plan.runWeekly) {
@@ -292,7 +345,9 @@ function startNasAutonomousScheduler({
         } else {
           // 軌道 1：台股缺口調諧與兩階段盤後收斂 (獨立水位線)
           if (plan.runTwDaily) {
-            const twLane = bumpLaneAttempt('twDaily', tp.isoDate);
+            const twLane = bumpLaneAttempt('twDaily', tp.isoDate, {
+              syncToCoordinator: Boolean(handlers.runTwDailySync),
+            });
             try {
               const runTwFn =
                 handlers.runTwDailySync ||
@@ -304,12 +359,14 @@ function startNasAutonomousScheduler({
                   }));
               const twRes = await runTwFn(customDbPath, { now, freshness });
               twLane.phase = twRes?.phase || resolveTwPostClosePhase(now);
-              if (twRes && twRes.ok !== false && twRes.watermarkAdvanced !== false) {
+              if (twRes && twRes.phase === 'PHASE_1_PRICE_ONLY') {
+                // Phase 1 不消耗 Phase 2 每日重試配額
+                twLane.retryCount = Math.max(0, twLane.retryCount - 1);
+                twLane.status = 'phase1_pending_chips';
+                twLane.lastError = null;
+              } else if (twRes && twRes.ok !== false && twRes.watermarkAdvanced !== false) {
                 twLane.status = 'ok';
                 twLane.watermarkDate = twRes.watermarkDate || freshness?.tw?.anchorDate || tp.isoDate;
-                twLane.lastError = null;
-              } else if (twRes && twRes.phase === 'PHASE_1_PRICE_ONLY') {
-                twLane.status = 'phase1_pending_chips';
                 twLane.lastError = null;
               } else {
                 twLane.status = 'partial_or_retry';
@@ -325,7 +382,7 @@ function startNasAutonomousScheduler({
             }
           }
 
-          // 軌道 2：美股每日盤後同步 (獨立水位線，絕不干擾台股)
+          // 軌道 2：美股每日盤後同步 (檢核實際回傳結果，靜默失敗絕不推進水位線)
           if (plan.runUsDaily) {
             const usLane = bumpLaneAttempt('usDaily', tp.isoDate);
             try {
@@ -342,10 +399,23 @@ function startNasAutonomousScheduler({
                   });
                 });
               const usRes = await runUsFn(customDbPath, { now, freshness });
-              usLane.status = 'ok';
-              usLane.watermarkDate = usRes?.date || freshness?.us?.anchorDate || tp.isoDate;
-              usLane.lastError = null;
-              tasks.usDaily = { ok: true, ...(usRes || {}) };
+              const usZeroProgressFailure = Boolean(
+                usRes &&
+                Number(usRes.failCount || 0) > 0 &&
+                Number(usRes.successCount || 0) === 0 &&
+                Number(usRes.skippedCount || 0) === 0 &&
+                !usRes.skipped
+              );
+              const usOk = Boolean(usRes && usRes.ok !== false && !usZeroProgressFailure);
+              if (usOk) {
+                usLane.status = 'ok';
+                usLane.watermarkDate = usRes?.date || freshness?.us?.anchorDate || tp.isoDate;
+                usLane.lastError = null;
+              } else {
+                usLane.status = 'error';
+                usLane.lastError = usRes?.error || 'US_SYNC_FAILED';
+              }
+              tasks.usDaily = { ...(usRes || {}), ok: usOk };
             } catch (err) {
               const msg = err?.message || String(err);
               usLane.status = 'error';
@@ -362,7 +432,7 @@ function startNasAutonomousScheduler({
           }
         }
 
-        // 軌道 3：宏觀情緒同步 (獨立隔離，同日已完成不重跑)
+        // 軌道 3：宏觀情緒同步 (檢核 ok 狀態，失敗禁止推進水位線)
         if (plan.runMacro) {
           const macroLane = bumpLaneAttempt('macro', tp.isoDate);
           try {
@@ -374,11 +444,17 @@ function startNasAutonomousScheduler({
                 return { ok: ingestMacroSentimentToDb(data, dbPath), date: data?.date };
               });
             const macroResult = await runMacroFn(customDbPath);
-            lastRunState.lastMacroIsoDate = tp.isoDate;
-            macroLane.status = 'ok';
-            macroLane.watermarkDate = tp.isoDate;
-            macroLane.lastError = null;
-            tasks.macro = { ok: true, ...(macroResult || {}) };
+            const macroOk = macroResult === undefined ? true : macroResult?.ok !== false;
+            if (macroOk) {
+              lastRunState.lastMacroIsoDate = tp.isoDate;
+              macroLane.status = 'ok';
+              macroLane.watermarkDate = tp.isoDate;
+              macroLane.lastError = null;
+            } else {
+              macroLane.status = 'error';
+              macroLane.lastError = macroResult?.error || 'MACRO_INGEST_FAILED';
+            }
+            tasks.macro = { ...(macroResult || {}), ok: macroOk };
           } catch (err) {
             const msg = err?.message || String(err);
             macroLane.status = 'error';
@@ -388,28 +464,35 @@ function startNasAutonomousScheduler({
           }
         }
 
-        // 軌道 4：每週全市場湖倉維護與滾動快照備份 (獨立隔離)
+        // 軌道 4：每週全市場湖倉維護與滾動快照備份 (任一子項失敗皆禁止推進水位線與備份)
         if (plan.runWeekly) {
           const weeklyLane = bumpLaneAttempt('weekly', tp.isoDate);
           try {
             const runWeeklyFn = handlers.runWeeklyLakehouseSync || runWeeklyLakehouseSync;
-            await runWeeklyFn({ customDbPath, now });
-            lastRunState.lastWeeklyIsoDate = tp.isoDate;
-            weeklyLane.status = 'ok';
-            weeklyLane.watermarkDate = tp.isoDate;
-            weeklyLane.lastError = null;
-            tasks.weekly = { ok: true };
+            const weeklyReport = await runWeeklyFn({ customDbPath, now });
+            const weeklyOk = isWeeklyReportOk(weeklyReport);
+            if (!weeklyOk) {
+              weeklyLane.status = 'error';
+              weeklyLane.lastError = 'WEEKLY_SUBTASK_FAILED';
+              tasks.weekly = { ok: false, report: weeklyReport };
+            } else {
+              lastRunState.lastWeeklyIsoDate = tp.isoDate;
+              weeklyLane.status = 'ok';
+              weeklyLane.watermarkDate = tp.isoDate;
+              weeklyLane.lastError = null;
+              tasks.weekly = { ok: true, report: weeklyReport };
 
-            const runBackupFn = handlers.createRollingBackup || createRollingBackup;
-            const backupResult = runBackupFn({ dbPath: customDbPath, now });
-            tasks.backup = backupResult;
-            if (backupResult?.ok) {
-              lastRunState.latestBackup = {
-                fileName: backupResult.fileName,
-                path: backupResult.path,
-                sizeBytes: backupResult.sizeBytes,
-                createdAt: now.toISOString(),
-              };
+              const runBackupFn = handlers.createRollingBackup || createRollingBackup;
+              const backupResult = runBackupFn({ dbPath: customDbPath, now });
+              tasks.backup = backupResult;
+              if (backupResult?.ok) {
+                lastRunState.latestBackup = {
+                  fileName: backupResult.fileName,
+                  path: backupResult.path,
+                  sizeBytes: backupResult.sizeBytes,
+                  createdAt: now.toISOString(),
+                };
+              }
             }
           } catch (err) {
             const msg = err?.message || String(err);
@@ -439,13 +522,13 @@ function startNasAutonomousScheduler({
   if (runOnStart) {
     // 伺服器啟動後延遲 5 秒非同步巡檢一次，避免阻塞冷啟動
     bootTimer = setTimeout(() => {
-      runTickNow().catch(() => {});
+      runTickNow().catch(() => { });
     }, 5000);
     if (typeof bootTimer.unref === 'function') bootTimer.unref();
   }
 
   const interval = setInterval(() => {
-    runTickNow().catch(() => {});
+    runTickNow().catch(() => { });
   }, tickMs);
   if (typeof interval.unref === 'function') interval.unref();
 

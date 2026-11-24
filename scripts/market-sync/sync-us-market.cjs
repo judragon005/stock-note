@@ -151,27 +151,23 @@ function buildPrioritizedUsUniverse(options = {}) {
 }
 
 /**
- * 自動偵測本機既有持股與自選標的
+ * 自 SQLite 湖倉讀取既有美股持倉／關注標的清單（移除退役靜態 JSON 依賴）
+ * @param {string} [customDbPath]
  * @returns {{ holdings: string[], watchlist: string[] }}
  */
-function detectLocalUsHoldingsAndWatchlist() {
+function detectLocalUsHoldingsAndWatchlist(customDbPath) {
   const detected = { holdings: [], watchlist: [] };
-  const projectRoot = path.resolve(__dirname, '../../');
-
-  // 嘗試從 public/market-cache/us_market_summary.json 載入既有快取
-  const summaryPath = path.join(projectRoot, 'public', 'market-cache', 'us_market_summary.json');
-  if (fs.existsSync(summaryPath)) {
-    try {
-      const raw = fs.readFileSync(summaryPath, 'utf8');
-      const data = JSON.parse(raw);
-      if (data && data.stocks) {
-        detected.watchlist = Object.keys(data.stocks).map((s) => s.toUpperCase());
-      }
-    } catch {
-      // 忽略讀取錯誤
+  try {
+    const db = initSqliteLakehouseDb(customDbPath);
+    const rows = db
+      .prepare("SELECT DISTINCT symbol FROM sync_checkpoints WHERE market = 'US' ORDER BY symbol")
+      .all();
+    if (Array.isArray(rows) && rows.length > 0) {
+      detected.watchlist = rows.map((r) => String(r.symbol || '').trim().toUpperCase()).filter(Boolean);
     }
+  } catch {
+    // 容錯降級
   }
-
   return detected;
 }
 
@@ -214,7 +210,7 @@ async function runUsMarketSync(config = {}) {
   }
 
   // 1. 構建三層優先級標的隊列
-  const localTargets = config.customUniverse ? { holdings: [], watchlist: [] } : detectLocalUsHoldingsAndWatchlist();
+  const localTargets = config.customUniverse ? { holdings: [], watchlist: [] } : detectLocalUsHoldingsAndWatchlist(customDbPath);
   const allOrderedSymbols = buildPrioritizedUsUniverse({
     holdings: config.holdings || localTargets.holdings,
     watchlist: config.watchlist || localTargets.watchlist,
@@ -277,6 +273,9 @@ async function runUsMarketSync(config = {}) {
 
   // 4. 受控單檔順序採集 (避開高頻限流)
   for (let i = 0; i < pendingSymbols.length; i++) {
+    if (config.signal && config.signal.aborted) {
+      break;
+    }
     const sym = pendingSymbols[i];
 
     try {
@@ -424,7 +423,8 @@ async function runUsMarketSync(config = {}) {
 }
 
 if (require.main === module) {
-  runUsMarketSync().catch((err) => {
+  const { withGlobalSyncLock } = require('./lakehouse-sync-coordinator.cjs');
+  withGlobalSyncLock('cli-us-sync', () => runUsMarketSync()).catch((err) => {
     console.error(`美股同步執行致命失敗:`, err);
     process.exit(1);
   });

@@ -713,9 +713,82 @@ describe('Ticket 10 - Vite 原生 Connect 中介層 API (TDD Seam)', () => {
 
       await new Promise((r) => setTimeout(r, 50));
       expect(blockedReconcileCalls).toBe(0);
+      // 撞鎖略過不得浪費 10 分鐘冷卻時間
+      const lockCheckRes = await simulateRequest(middlewareWithTestCheck(testDbPath), '/api/market/sync-status');
+      expect(lockCheckRes.data.lastCatchupTime).toBe(0);
       releaseLock();
       await holdLock;
       resetCatchupStateForTest();
     });
+
+    it('Slice 06-C: 內部交易日缺口（最新日在庫但中間日缺失）應觸發 sync-status 缺口旗標與背景調諧，並輸出 macro 遙測', async () => {
+      const db = initSqliteLakehouseDb(testDbPath);
+      const {
+        triggerCatchupTask,
+        resetCatchupStateForTest,
+      } = require('../../scripts/market-sync/vite-market-middleware.cjs');
+      resetCatchupStateForTest();
+
+      // 寫入最新結算日 2026-11-23（完整覆蓋）與 2026-11-19，刻意漏掉中間交易日 2026-11-20
+      db.exec('BEGIN TRANSACTION;');
+      const cStmt = db.prepare(
+        'INSERT OR REPLACE INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume) VALUES (?, ?, 100, 105, 95, 100, 100, 1000)'
+      );
+      const chipStmt = db.prepare(
+        'INSERT OR REPLACE INTO tw_institutional_chips (symbol, date, foreign_net, margin_balance, sbl_balance, day_trade_rate) VALUES (?, ?, 10, 100, 50, 20)'
+      );
+      const valStmt = db.prepare(
+        'INSERT OR REPLACE INTO tw_valuation_daily (symbol, date, pe, pb, dividend_yield, updated_at) VALUES (?, ?, 15, 2, 3, 1)'
+      );
+      const navStmt = db.prepare(
+        'INSERT OR REPLACE INTO etf_daily_nav (symbol, date, close_price, nav, premium_discount_ratio, updated_at) VALUES (?, ?, 100, 100, 0, 1)'
+      );
+      for (const d of ['2026-11-19', '2026-11-23']) {
+        cStmt.run('0050', d);
+        cStmt.run('2330', d);
+        for (let i = 1000; i < 2900; i++) {
+          const sym = String(i);
+          cStmt.run(sym, d);
+          chipStmt.run(sym, d);
+          valStmt.run(sym, d);
+        }
+      }
+      for (let i = 0; i < 120; i++) {
+        navStmt.run(`00${50 + i}`, '2026-11-23');
+      }
+      db.exec('COMMIT;');
+
+      const middleware = createMarketApiMiddleware(testDbPath);
+      const statusRes = await simulateRequest(middleware, '/api/market/sync-status');
+      expect(statusRes.status).toBe(200);
+      expect(statusRes.data.macro).toBeDefined();
+      expect(statusRes.data.tw.gapDates).toContain('2026-11-20');
+      expect(statusRes.data.tw.isStale).toBe(true);
+
+      let reconcileCalled = false;
+      const started = triggerCatchupTask(testDbPath, {
+        bypassTestEnv: true,
+        force: false,
+        handlers: {
+          reconcileTwLakehouse: async () => {
+            reconcileCalled = true;
+            return { ok: true, reconciledDates: ['2026-11-20'], failedDates: [] };
+          },
+          runUsMarketSync: async () => {},
+          runTdccIngestion: async () => {},
+          runMonthlyRevenueIngestion: async () => {},
+          fetchAndIngestTwPledge: async () => {},
+          fetchAndTagTwStockStatuses: async () => {},
+        },
+      });
+      expect(started).toBe(true);
+      await new Promise((r) => setTimeout(r, 60));
+      expect(reconcileCalled).toBe(true);
+      resetCatchupStateForTest();
+    });
   });
 });
+
+function middlewareWithTestCheck(dbPath: string) {
+  return createMarketApiMiddleware(dbPath);
+}

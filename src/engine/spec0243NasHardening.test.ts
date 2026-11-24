@@ -26,6 +26,14 @@ describe('Spec 0243: NAS 生產伺服器 SSOT 收斂、WAL 優雅關機與自治
     delete process.env.LAKEHOUSE_DB_PATH;
     delete process.env.DISABLE_BUILTIN_SCHEDULER;
     try {
+      const { resetCoordinatorStateForTest } = require('../../scripts/market-sync/lakehouse-sync-coordinator.cjs');
+      resetCoordinatorStateForTest();
+    } catch {}
+    try {
+      const { resetCatchupStateForTest } = require('../../scripts/market-sync/vite-market-middleware.cjs');
+      resetCatchupStateForTest();
+    } catch {}
+    try {
       closeSqliteDb();
     } catch {
       // ignore
@@ -937,6 +945,274 @@ describe('Spec 0243: NAS 生產伺服器 SSOT 收斂、WAL 優雅關機與自治
       expect(brokenHist.tw.isStale).toBe(true);
       expect(brokenHist.tw.incompleteDates).toContain('2026-11-20');
       expect(brokenHist.tw.missingPlanes).toContain('margin');
+    });
+  });
+
+  describe('Spec 0246 雙軸審查全量修繕 TDD (Seam 1)', () => {
+    it('Fix 1: 提前釋鎖函式不得暴露，Phase 1 不消耗 Phase 2 配額、Phase 2 嚴格驗證 7 維欄位，且 signal.aborted 禁止推進水位線', async () => {
+      const coordinator = require('../../scripts/market-sync/lakehouse-sync-coordinator.cjs');
+      expect(coordinator.releaseGlobalSyncLockByOwner).toBeUndefined();
+
+      coordinator.resetCoordinatorStateForTest();
+      const { reconcileTwLakehouse, getLaneRetrySnapshot } = coordinator;
+
+      // 1. 15:00 & 15:30 連續執行 Phase 1，不應消耗 twDaily 的 4 次 Phase 2 配額
+      for (const timeStr of ['2026-11-24T15:00:00+08:00', '2026-11-24T15:30:00+08:00']) {
+        const p1 = await reconcileTwLakehouse({
+          customDbPath: TEST_DB,
+          now: new Date(timeStr),
+          maxLookbackDays: 1,
+          throttleMs: 0,
+          handlers: {
+            fetchAndIngestTwDailyData: async (d: string) => ({
+              date: d,
+              isTradingDay: true,
+              phase: 'PHASE_1_PRICE_ONLY',
+              partial: true,
+              quotesCount: 2300,
+              chipsCount: 0,
+            }),
+            fetchAndIngestEtfDailyNav: async () => ({ success: true, count: 250 }),
+          },
+        });
+        expect(p1.phase).toBe('PHASE_1_PRICE_ONLY');
+        expect(p1.watermarkAdvanced).toBe(false);
+      }
+      expect(getLaneRetrySnapshot('2026-11-24').twDaily.retryCount).toBe(0);
+
+      // 2. 16:45 Phase 2：即便 quotes 與 chips 足夠，若 margin/sbl/dayTrade/valuation 缺漏仍禁止推進水位線
+      for (let i = 1; i <= 4; i++) {
+        const incompleteRes = await reconcileTwLakehouse({
+          customDbPath: TEST_DB,
+          now: new Date('2026-11-24T16:45:00+08:00'),
+          maxLookbackDays: 1,
+          throttleMs: 0,
+          retryCooldownMs: 0,
+          handlers: {
+            fetchAndIngestTwDailyData: async (d: string) => ({
+              date: d,
+              isTradingDay: true,
+              quotesCount: 2300,
+              chipsCount: 2200,
+              marginCount: 100, // 資券未齊 (< 1500)
+              sblCount: 0,
+              dayTradeCount: 0,
+              valuationCount: 0,
+            }),
+            fetchAndIngestEtfDailyNav: async () => ({ success: true, count: 250 }),
+          },
+        });
+        expect(incompleteRes.ok).toBe(false);
+        expect(incompleteRes.watermarkAdvanced).toBe(false);
+        expect(incompleteRes.budgetExhausted).toBe(false);
+      }
+
+      // 3. 第 5 次才應耗盡 Phase 2 配額
+      const exhausted = await reconcileTwLakehouse({
+        customDbPath: TEST_DB,
+        now: new Date('2026-11-24T16:45:00+08:00'),
+        maxLookbackDays: 1,
+        throttleMs: 0,
+        retryCooldownMs: 0,
+        handlers: {},
+      });
+      expect(exhausted.budgetExhausted).toBe(true);
+
+      // 4. signal.aborted 時絕不回傳 ok: true 或推進水位線
+      coordinator.resetCoordinatorStateForTest();
+      const ac = new AbortController();
+      ac.abort();
+      const abortedRes = await reconcileTwLakehouse({
+        customDbPath: TEST_DB,
+        now: new Date('2026-11-24T16:45:00+08:00'),
+        maxLookbackDays: 2,
+        throttleMs: 0,
+        signal: ac.signal,
+        handlers: {
+          fetchAndIngestTwDailyData: async () => {
+            throw new Error('should not run when aborted');
+          },
+        },
+      });
+      expect(abortedRes.ok).toBe(false);
+      expect(abortedRes.aborted).toBe(true);
+      expect(abortedRes.watermarkAdvanced).toBe(false);
+    });
+
+    it('Fix 2: NAS 排程器在 usDaily/macro/weekly 靜默失敗時禁止推進水位線與備份，水位線守衛必須真實攔截，且內部缺口日應觸發調諧', async () => {
+      const scheduler = startNasAutonomousScheduler({
+        customDbPath: TEST_DB,
+        runOnStart: false,
+        nowFn: () => new Date('2026-11-21T11:00:00+08:00'), // 週六早上觸發 weekly
+        handlers: {
+          checkMarketFreshness: () => ({
+            tw: { latestDate: '2026-11-20', anchorDate: '2026-11-20', isStale: false },
+            us: { latestDate: '2026-11-19', anchorDate: '2026-11-20', isStale: true },
+            tdcc: { latestDate: '2026-11-13', anchorDate: '2026-11-20', isStale: true },
+            revenue: { latestMonth: '2026-10', anchorMonth: '2026-10', isStale: false },
+          }),
+          // 全數不拋錯但回傳明確失敗狀態
+          runUsDailySync: async () => ({ date: '2026-11-20', successCount: 0, failCount: 10, skippedCount: 0 }),
+          runMacroSync: async () => ({ ok: false, error: 'FRED_DOWN' }),
+          runWeeklyLakehouseSync: async () => ({
+            tdcc: { ok: false, savedCount: 0, error: 'TDCC_TIMEOUT' },
+            corporateActions: { ok: true, savedCount: 10, error: null },
+            monthlyRevenue: { ok: true, savedCount: 10, error: null },
+            etfNav: { ok: true, savedCount: 10, error: null },
+            etfMeta: { ok: true, savedCount: 10, error: null },
+          }),
+          createRollingBackup: () => ({ ok: true, fileName: 'should-not-backup.db', path: '/tmp/x', sizeBytes: 1 }),
+        },
+      });
+
+      try {
+        const res = await scheduler.runTickNow();
+        expect(res.triggered).toBe(true);
+        expect(res.tasks.usDaily.ok).toBe(false);
+        expect(res.tasks.macro.ok).toBe(false);
+        expect(res.tasks.weekly.ok).toBe(false);
+        expect(res.tasks.backup).toBeUndefined();
+
+        const st = scheduler.getState();
+        expect(st.lanes.usDaily.status).toBe('error');
+        expect(st.lanes.usDaily.watermarkDate).toBeNull();
+        expect(st.lanes.macro.status).toBe('error');
+        expect(st.lanes.macro.watermarkDate).toBeNull();
+        expect(st.lanes.weekly.status).toBe('error');
+        expect(st.lanes.weekly.watermarkDate).toBeNull();
+        expect(st.latestBackup).toBeNull();
+      } finally {
+        scheduler.stop();
+      }
+
+      // 驗證水位線已完成 (watermarkDate === anchorDate, status === 'ok') 時，即便 mock freshness.isStale 仍回 true 也應真實攔截
+      const { evaluateScheduleWindow } = require('../../scripts/market-sync/nas-autonomous-scheduler.cjs');
+      const blockedPlan = evaluateScheduleWindow(
+        new Date('2026-11-24T17:00:00+08:00'),
+        {
+          tw: { latestDate: '2026-11-24', anchorDate: '2026-11-24', isStale: true },
+          us: { latestDate: '2026-11-23', anchorDate: '2026-11-23', isStale: true },
+          tdcc: { isStale: false },
+          revenue: { isStale: false },
+        },
+        {
+          lanes: {
+            twDaily: { watermarkDate: '2026-11-24', status: 'ok', lastRunIsoDate: '2026-11-24', retryCount: 1 },
+            usDaily: { watermarkDate: '2026-11-23', status: 'ok', lastRunIsoDate: '2026-11-24', retryCount: 1 },
+            macro: { watermarkDate: '2026-11-24', status: 'ok', lastRunIsoDate: '2026-11-24', retryCount: 1 },
+            weekly: { watermarkDate: '2026-11-21', status: 'ok', lastRunIsoDate: '2026-11-21', retryCount: 1 },
+          },
+        },
+        { hasGaps: false }
+      );
+      expect(blockedPlan.runTwDaily).toBe(false);
+      expect(blockedPlan.runUsDaily).toBe(false);
+
+      // 驗證最新日已齊 (isStale=false) 但內部中間日缺漏 (twPlan.hasGaps=true) 時仍必觸發台股調諧
+      const gapTriggeredPlan = evaluateScheduleWindow(
+        new Date('2026-11-24T11:00:00+08:00'),
+        {
+          tw: { latestDate: '2026-11-23', anchorDate: '2026-11-23', isStale: false },
+          us: { latestDate: '2026-11-23', anchorDate: '2026-11-23', isStale: false },
+          tdcc: { isStale: false },
+          revenue: { isStale: false },
+        },
+        {
+          lanes: {
+            twDaily: { watermarkDate: null, status: 'idle', lastRunIsoDate: null, retryCount: 0 },
+            usDaily: { watermarkDate: '2026-11-23', status: 'ok', lastRunIsoDate: '2026-11-24', retryCount: 0 },
+            macro: { watermarkDate: null, status: 'idle', lastRunIsoDate: null, retryCount: 0 },
+            weekly: { watermarkDate: null, status: 'idle', lastRunIsoDate: null, retryCount: 0 },
+          },
+        },
+        { hasGaps: true, missingDates: ['2026-11-20'] }
+      );
+      expect(gapTriggeredPlan.runTwDaily).toBe(true);
+
+      // 實 DB 端到端驗證：最新日 2026-11-23 完整在庫但中間日 2026-11-20 缺失時，runTickNow (不 mock checkMarketFreshness) 必主動觸發 twDaily
+      const gapDbPath = path.join(TEST_DIR, 'internal-gap-scheduler.db');
+      const gapDb = initSqliteLakehouseDb(gapDbPath);
+      gapDb.exec('BEGIN TRANSACTION;');
+      const gc = gapDb.prepare(
+        'INSERT OR REPLACE INTO daily_candles (symbol, date, open, high, low, close, adj_close, volume) VALUES (?, ?, 100, 105, 95, 100, 100, 1000)'
+      );
+      const gchip = gapDb.prepare(
+        'INSERT OR REPLACE INTO tw_institutional_chips (symbol, date, foreign_net, margin_balance, sbl_balance, day_trade_rate) VALUES (?, ?, 10, 100, 50, 20)'
+      );
+      const gval = gapDb.prepare(
+        'INSERT OR REPLACE INTO tw_valuation_daily (symbol, date, pe, pb, dividend_yield, updated_at) VALUES (?, ?, 15, 2, 3, 1)'
+      );
+      const gnav = gapDb.prepare(
+        'INSERT OR REPLACE INTO etf_daily_nav (symbol, date, close_price, nav, premium_discount_ratio, updated_at) VALUES (?, ?, 100, 100, 0, 1)'
+      );
+      for (const d of ['2026-11-19', '2026-11-23']) {
+        gc.run('0050', d);
+        gc.run('2330', d);
+        for (let i = 1000; i < 2900; i++) {
+          const sym = String(i);
+          gc.run(sym, d);
+          gchip.run(sym, d);
+          gval.run(sym, d);
+        }
+      }
+      for (let i = 0; i < 120; i++) {
+        gnav.run(`00${50 + i}`, '2026-11-23');
+      }
+      gapDb.exec('COMMIT;');
+
+      let realGapTwCalls = 0;
+      const gapScheduler = startNasAutonomousScheduler({
+        customDbPath: gapDbPath,
+        runOnStart: false,
+        nowFn: () => new Date('2026-11-24T11:00:00+08:00'),
+        handlers: {
+          runTwDailySync: async () => {
+            realGapTwCalls += 1;
+            return { ok: true, phase: 'PHASE_2_FULL', watermarkAdvanced: true, watermarkDate: '2026-11-23' };
+          },
+          runUsDailySync: async () => ({ ok: true, date: '2026-11-23', successCount: 1 }),
+          runMacroSync: async () => ({ ok: true, date: '2026-11-24' }),
+        },
+      });
+      try {
+        const tick = await gapScheduler.runTickNow();
+        expect(tick.plan.runTwDaily).toBe(true);
+        expect(realGapTwCalls).toBe(1);
+      } finally {
+        gapScheduler.stop();
+      }
+    });
+
+    it('Fix 3: 美股同步偵測清單不讀取退役靜態 JSON 且支援 signal.aborted，TDCC/營收截止線對齊 SSOT', async () => {
+      const { runUsMarketSync } = require('../../scripts/market-sync/sync-us-market.cjs');
+      const ac = new AbortController();
+      ac.abort();
+      const res = await runUsMarketSync({
+        mode: 'daily',
+        dbPath: TEST_DB,
+        currentDate: new Date('2026-11-24T10:00:00+08:00'),
+        customUniverse: ['AAPL', 'MSFT'],
+        baseDelayMs: 0,
+        jitterMs: 0,
+        skipMacroCadence: true,
+        signal: ac.signal,
+        fetchQuotesFn: async () => {
+          throw new Error('should not fetch after abort');
+        },
+      });
+      expect(res.successCount).toBe(0);
+
+      const syncUsSrc = fs.readFileSync(path.resolve(process.cwd(), 'scripts/market-sync/sync-us-market.cjs'), 'utf8');
+      expect(syncUsSrc).not.toContain('readFileSync(summaryPath');
+      expect(syncUsSrc).not.toMatch(/detectLocalUsHoldingsAndWatchlist[\s\S]{0,400}us_market_summary\.json/);
+
+      const freshnessSrc = fs.readFileSync(
+        path.resolve(process.cwd(), 'scripts/market-sync/market-freshness-service.cjs'),
+        'utf8'
+      );
+      expect(freshnessSrc).toContain('MARKET_SETTLEMENT_CUTOFFS.TDCC_SETTLE_MINUTES');
+      expect(freshnessSrc).toContain('MARKET_SETTLEMENT_CUTOFFS.REVENUE_DEADLINE_DAY');
+      expect(freshnessSrc).toContain('MARKET_SETTLEMENT_CUTOFFS.REVENUE_DEADLINE_MINUTES');
     });
   });
 });

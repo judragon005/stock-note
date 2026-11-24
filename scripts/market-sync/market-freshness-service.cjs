@@ -111,7 +111,7 @@ function getLatestSettledTdccFriday(now = new Date()) {
   const target = new Date(tz.utcDate.getTime());
 
   if (day === 5) {
-    if (tz.totalMins >= 21 * 60) {
+    if (tz.totalMins >= MARKET_SETTLEMENT_CUTOFFS.TDCC_SETTLE_MINUTES) {
       return tz.ymd;
     }
     target.setUTCDate(target.getUTCDate() - 7);
@@ -134,7 +134,10 @@ function getLatestSettledRevenueMonth(now = new Date()) {
   const tz = getTimeZoneParts(now, 'Asia/Taipei');
   const dayOfMonth = tz.day;
 
-  const isPastDeadline = dayOfMonth > 10 || (dayOfMonth === 10 && tz.totalMins >= 17 * 60 + 30);
+  const isPastDeadline =
+    dayOfMonth > MARKET_SETTLEMENT_CUTOFFS.REVENUE_DEADLINE_DAY ||
+    (dayOfMonth === MARKET_SETTLEMENT_CUTOFFS.REVENUE_DEADLINE_DAY &&
+      tz.totalMins >= MARKET_SETTLEMENT_CUTOFFS.REVENUE_DEADLINE_MINUTES);
   const monthsOffset = isPastDeadline ? 1 : 2;
 
   let year = tz.year;
@@ -322,6 +325,7 @@ function checkMarketFreshness(db, now = new Date()) {
 }
 
 module.exports = {
+  getTimeZoneParts,
   getMarketAnchorDate,
   getLatestSettledTdccFriday,
   getLatestTdccPublishDate,
