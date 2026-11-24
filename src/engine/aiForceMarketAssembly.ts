@@ -120,8 +120,48 @@ export function buildTdccDistribution(
     };
   }
 
-  const compareIndex = Math.max(0, history.length - 4);
-  const baseline = history[compareIndex];
+  const calcDiffDays = (dateA: string, dateB: string): number => {
+    const tA = Date.parse(`${dateA.slice(0, 10)}T00:00:00Z`);
+    const tB = Date.parse(`${dateB.slice(0, 10)}T00:00:00Z`);
+    if (!Number.isFinite(tA) || !Number.isFinite(tB)) return 0;
+    return Math.round(Math.abs(tA - tB) / 86400000);
+  };
+
+  // Spec 0245 T10: 以真實 28 天日曆窗 (21~35 天容許連假彈性) 尋找 4 週基準點，杜絕陣列索引盲減將 11 週變動偽標為 4 週
+  let baseline = history[0];
+  let bestInWindowDiff = Infinity;
+  let foundInStandardWindow = false;
+  let bestOverallDiff = Infinity;
+
+  for (let i = 0; i < history.length - 1; i++) {
+    const days = calcDiffDays(latest.date, history[i].date);
+    const distFrom28 = Math.abs(days - 28);
+    if (days >= 21 && days <= 35) {
+      if (!foundInStandardWindow || distFrom28 < bestInWindowDiff) {
+        foundInStandardWindow = true;
+        bestInWindowDiff = distFrom28;
+        baseline = history[i];
+      }
+    } else if (!foundInStandardWindow && distFrom28 < bestOverallDiff) {
+      bestOverallDiff = distFrom28;
+      baseline = history[i];
+    }
+  }
+
+  const actualSpanDays = calcDiffDays(latest.date, baseline.date);
+  const compareSpanWeeks = foundInStandardWindow
+    ? 4
+    : Math.max(1, Math.round(actualSpanDays / 7));
+  const compareLabel =
+    compareSpanWeeks === 4 ? '近 4 週大戶變動' : `近 ${compareSpanWeeks} 週大戶變動`;
+
+  let hasDateGaps = false;
+  for (let i = 1; i < history.length; i++) {
+    if (calcDiffDays(history[i].date, history[i - 1].date) > 11) {
+      hasDateGaps = true;
+      break;
+    }
+  }
 
   const change4WeeksRatio = Number((latest.over1000Ratio - baseline.over1000Ratio).toFixed(2));
   const change4WeeksShareholders = latest.totalShareholders - baseline.totalShareholders;
@@ -164,6 +204,9 @@ export function buildTdccDistribution(
     change4WeeksRatio,
     change4WeeksUnder10Ratio,
     change4WeeksShareholders,
+    compareSpanWeeks,
+    compareLabel,
+    hasDateGaps,
     retailScissorsText,
     concentrationBadge,
     asOfDateText: `集保基準日: ${latest.date}`,

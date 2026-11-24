@@ -402,5 +402,41 @@ describe('Ticket 08: 主力戰情室 7 層 Bento-Grid 專業動線架構驗收 (
       expect(zone04Html.slice(slot09Start, slot09Start + 120)).toContain('flex:1');
     });
   });
+
+  describe('Spec 0245 T07: ZONE 01 Card 01B 四維量價動能共鳴解碼卡落點與 Zero-Mock 閘門', () => {
+    it('ZONE 01 應依序渲染 Card 18 -> Card 01 -> Card 01B (1b-technical-resonance)，且位於 ZONE 02 (2-radars) 之前', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(AiForceDashboardView, {
+          initialSymbol: '2330',
+          initialMarket: 'TW',
+          initialReport: readyReport,
+        })
+      );
+
+      const idx18 = html.indexOf('data-layer="8-main-force-verdict-deck"');
+      const idx01 = html.indexOf('data-layer="1-kline"');
+      const idx01B = html.indexOf('data-layer="1b-technical-resonance"');
+      const idxLayer2 = html.indexOf('data-layer="2-radars"');
+
+      expect(idx18).toBeGreaterThan(-1);
+      expect(idx01).toBeGreaterThan(idx18);
+      expect(idx01B).toBeGreaterThan(idx01);
+      expect(idxLayer2).toBeGreaterThan(idx01B);
+      expect(html).toContain('data-testid="technical-resonance-grid"');
+      expect(html).toContain('data-testid="executive-verdict-strip"');
+    });
+
+    it('isDataPending=true 時嚴格隱藏 Card 01B，貫徹 Zero-Mock 保護閘門', () => {
+      const pendingReport = { ...createDefaultAiForceReport('9999', '測試', 'TW'), isDataPending: true };
+      const html = renderToStaticMarkup(
+        React.createElement(AiForceDashboardView, {
+          initialSymbol: '9999',
+          initialMarket: 'TW',
+          initialReport: pendingReport,
+        })
+      );
+      expect(html).not.toContain('data-layer="1b-technical-resonance"');
+    });
+  });
 });
 

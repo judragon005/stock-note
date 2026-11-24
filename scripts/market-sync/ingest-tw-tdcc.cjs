@@ -11,11 +11,12 @@ const TDCC_OPENDATA_URL = 'https://smart.tdcc.com.tw/opendata/getOD.ashx?id=1-5'
 
 /**
  * 解析 TDCC 分級記錄，聚合各標的大戶與散戶比例
- * TDCC 分級標準：
- * 1~9: 1~50 張
- * 1~5: 1~10 張 (散戶)
+ * TDCC 官方 15 級距標準 (Spec 0245 T08 口徑收斂)：
+ * 1~3: 1~10 張 (散戶: 1-999, 1,000-5,000, 5,001-10,000)
+ * 4~5: 10~20 張
  * 12~15: 400 張以上 (大戶)
  * 15: 1000 張以上 (千張大戶)
+ * 16: 差異數調整 (選配)
  * 17: 合計
  * @param {Array<{ symbol: string, level: number, shareholders: number, shares: number }>} rows
  * @param {string} dateStr - YYYY-MM-DD
@@ -33,6 +34,8 @@ function parseTdccRecords(rows, dateStr) {
       grouped[sym] = {
         totalShares: 0,
         totalShareholders: 0,
+        sumSharesFallback: 0,
+        sumShareholdersFallback: 0,
         sharesOver400: 0,
         sharesOver1000: 0,
         sharesUnder10: 0,
@@ -47,21 +50,26 @@ function parseTdccRecords(rows, dateStr) {
     if (lvl === 17) {
       g.totalShares = shares;
       g.totalShareholders = shareholders;
-    } else {
+    } else if (lvl >= 1 && lvl <= 16) {
+      g.sumSharesFallback += shares;
+      if (lvl <= 15) {
+        g.sumShareholdersFallback += shareholders;
+      }
       if (lvl >= 12 && lvl <= 15) {
         g.sharesOver400 += shares;
       }
       if (lvl === 15) {
         g.sharesOver1000 += shares;
       }
-      if (lvl >= 1 && lvl <= 5) {
+      if (lvl >= 1 && lvl <= 3) {
         g.sharesUnder10 += shares;
       }
     }
   }
 
   for (const [sym, g] of Object.entries(grouped)) {
-    const tot = g.totalShares > 0 ? g.totalShares : (g.sharesOver400 + g.sharesUnder10);
+    const tot = g.totalShares > 0 ? g.totalShares : g.sumSharesFallback;
+    const totalShareholders = g.totalShareholders > 0 ? g.totalShareholders : g.sumShareholdersFallback;
     const over400Ratio = tot > 0 ? (g.sharesOver400 / tot) * 100 : 0;
     const over1000Ratio = tot > 0 ? (g.sharesOver1000 / tot) * 100 : 0;
     const under10Ratio = tot > 0 ? (g.sharesUnder10 / tot) * 100 : 0;
@@ -69,7 +77,7 @@ function parseTdccRecords(rows, dateStr) {
     result[sym] = {
       symbol: sym,
       date: dateStr,
-      totalShareholders: g.totalShareholders,
+      totalShareholders,
       over400Ratio: Number(over400Ratio.toFixed(2)),
       over1000Ratio: Number(over1000Ratio.toFixed(2)),
       under10Ratio: Number(under10Ratio.toFixed(2)),
@@ -294,8 +302,56 @@ function parseTdccQryPageMeta(html) {
 }
 
 /**
- * 解析 TDCC 官方 qryStock 查詢結果 HTML 的 15 級股權分散表 (Spec 0242)
- * 與 parseTdccRecords 保持 100% 相同級距口徑：1~5 散戶、12~15 為 400 張以上、15 為千張大戶、17 為合計
+ * 計算兩個 YYYY-MM-DD 日期之間之絕對日曆天數差
+ */
+function calendarDiffDays(dateA, dateB) {
+  const tA = Date.parse(`${String(dateA).slice(0, 10)}T00:00:00Z`);
+  const tB = Date.parse(`${String(dateB).slice(0, 10)}T00:00:00Z`);
+  if (!Number.isFinite(tA) || !Number.isFinite(tB)) return Infinity;
+  return Math.round(Math.abs(tA - tB) / 86400000);
+}
+
+/**
+ * 偵測單一標的 TDCC 集保歷史序列是否存在筆數不足、內部斷層 (>11天) 或過期 (Spec 0245 T09)
+ * @param {Array<{ date: string }>} rows
+ * @param {{ minWeeks?: number, maxGapDays?: number, maxStaleDays?: number, latestPublishDate?: string }} [options]
+ * @returns {boolean}
+ */
+function hasTdccSeriesGap(rows, options = {}) {
+  const {
+    minWeeks = 10,
+    maxGapDays = 11,
+    maxStaleDays = 7,
+    latestPublishDate = getLatestTdccPublishDate(),
+  } = options;
+
+  if (!Array.isArray(rows) || rows.length === 0) return true;
+
+  const uniqueDates = [...new Set(rows.map((r) => String(r?.date || '').slice(0, 10)).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort();
+  if (uniqueDates.length < minWeeks) return true;
+
+  // 檢查最近 minWeeks 筆內是否存在超過 maxGapDays (預設 11 天) 的內部斷層
+  const windowDates = uniqueDates.slice(-minWeeks);
+  for (let i = 1; i < windowDates.length; i++) {
+    if (calendarDiffDays(windowDates[i], windowDates[i - 1]) > maxGapDays) {
+      return true;
+    }
+  }
+
+  // 檢查最新基準日是否落後官方最新發布日超過 maxStaleDays
+  if (latestPublishDate && /^\d{4}-\d{2}-\d{2}$/.test(latestPublishDate)) {
+    const latestLocal = windowDates[windowDates.length - 1];
+    if (latestLocal < latestPublishDate && calendarDiffDays(latestPublishDate, latestLocal) > maxStaleDays) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * 解析 TDCC 官方 qryStock 查詢結果 HTML 的 15 級股權分散表 (Spec 0242 & Spec 0245 T08 語意錨定)
+ * 以第 2 欄文字語意辨識「合計」（序號 16/17 雙通吃）與「差異數調整」，杜絕無差異數調整時靜默丟棄
  */
 function parseTdccQryResultHtml(html, symbol, dateIso) {
   if (!html || typeof html !== 'string') return null;
@@ -306,8 +362,21 @@ function parseTdccQryResultHtml(html, symbol, dateIso) {
       m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
     );
     if (tds.length !== 5) continue;
-    const lvl = parseInt(tds[0], 10);
+
+    const labelCompact = String(tds[1] || '').replace(/\s+/g, '');
+    let lvl = NaN;
+    if (labelCompact.includes('合計')) {
+      lvl = 17;
+    } else if (labelCompact.includes('差異數')) {
+      lvl = 16;
+    } else {
+      const num = parseInt(tds[0], 10);
+      if (Number.isFinite(num) && num >= 1 && num <= 15) {
+        lvl = num;
+      }
+    }
     if (!Number.isFinite(lvl) || lvl < 1 || lvl > 17) continue;
+
     const shareholders = parseInt(tds[2].replace(/,/g, ''), 10) || 0;
     const shares = parseInt(tds[3].replace(/,/g, ''), 10) || 0;
     parsedRows.push({ symbol, level: lvl, shareholders, shares });
@@ -318,7 +387,36 @@ function parseTdccQryResultHtml(html, symbol, dateIso) {
 }
 
 /**
- * 透過 TDCC 官方免費歷史查詢介面 (qryStock) 補齊單一標的近 N 週（最高 51 週）歷史集保 (Spec 0242)
+ * 合併 Set-Cookie 標頭至既有 Cookie 字串
+ */
+function mergeCookies(existingCookieStr, res) {
+  const incoming =
+    typeof res?.headers?.getSetCookie === 'function'
+      ? res.headers.getSetCookie()
+      : res?.headers?.get?.('set-cookie')
+        ? [res.headers.get('set-cookie')]
+        : [];
+  if (incoming.length === 0) return existingCookieStr;
+  const jar = new Map();
+  for (const pair of String(existingCookieStr || '').split(';')) {
+    const trimmed = pair.trim();
+    if (!trimmed) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq > 0) jar.set(trimmed.slice(0, eq).trim(), trimmed.slice(eq + 1).trim());
+  }
+  for (const c of incoming) {
+    const firstPart = String(c).split(';')[0].trim();
+    const eq = firstPart.indexOf('=');
+    if (eq > 0) jar.set(firstPart.slice(0, eq).trim(), firstPart.slice(eq + 1).trim());
+  }
+  return Array.from(jar.entries())
+    .map(([k, v]) => `${k}=${v}`)
+    .join('; ');
+}
+
+/**
+ * 透過 TDCC 官方免費歷史查詢介面 (qryStock) 補齊單一標的近 N 週（最高 51 週）歷史集保
+ * Spec 0245 T09: 支援官方發布日期差集補抓、逐週回呼即時落盤、單週暫態重試與 Cookie/Token 動態續期
  */
 async function fetchSymbolTdccHistoryFromOfficial(
   symbol,
@@ -326,32 +424,35 @@ async function fetchSymbolTdccHistoryFromOfficial(
   existingDatesSet = new Set(),
   fetcher = globalThis.fetch,
   signal = undefined,
-  delayMs = 180
+  delayMs = 180,
+  options = {}
 ) {
+  const { onWeekParsed, forceOverwrite = false, maxRetries = 1 } = options || {};
   const cleanSymbol = String(symbol).trim().toUpperCase();
   const querySym = cleanSymbol.endsWith('O') ? cleanSymbol.slice(0, -1) : cleanSymbol;
 
-  const initRes = await fetcher(TDCC_QRY_STOCK_URL, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      Accept: 'text/html,application/xhtml+xml',
-    },
-    ...(signal ? { signal } : {}),
-  });
-  if (!initRes || !initRes.ok || typeof initRes.text !== 'function') return [];
+  const initSession = async () => {
+    const initRes = await fetcher(TDCC_QRY_STOCK_URL, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        Accept: 'text/html,application/xhtml+xml',
+      },
+      ...(signal ? { signal } : {}),
+    });
+    if (!initRes || !initRes.ok || typeof initRes.text !== 'function') {
+      return { cookies: '', synToken: '', firDate: '', dates: [] };
+    }
+    const cookies = mergeCookies('', initRes);
+    const initHtml = await initRes.text();
+    const meta = parseTdccQryPageMeta(initHtml);
+    return { cookies, ...meta };
+  };
 
-  const cookieList =
-    typeof initRes.headers?.getSetCookie === 'function'
-      ? initRes.headers.getSetCookie()
-      : initRes.headers?.get?.('set-cookie')
-        ? [initRes.headers.get('set-cookie')]
-        : [];
-  const cookies = cookieList.map((c) => String(c).split(';')[0]).filter(Boolean).join('; ');
-  const initHtml = await initRes.text();
-  let { synToken, firDate, dates } = parseTdccQryPageMeta(initHtml);
+  let { cookies, synToken, firDate, dates } = await initSession();
   if (!synToken || dates.length === 0) return [];
 
   const targetDates = dates.slice(0, Math.min(51, Math.max(1, weeks))).filter((d8) => {
+    if (forceOverwrite) return true;
     const iso = `${d8.slice(0, 4)}-${d8.slice(4, 6)}-${d8.slice(6, 8)}`;
     return !existingDatesSet.has(iso);
   });
@@ -361,38 +462,75 @@ async function fetchSymbolTdccHistoryFromOfficial(
     if (signal?.aborted) break;
     const d8 = targetDates[i];
     const dateIso = `${d8.slice(0, 4)}-${d8.slice(4, 6)}-${d8.slice(6, 8)}`;
-    const body = new URLSearchParams({
-      SYNCHRONIZER_TOKEN: synToken,
-      SYNCHRONIZER_URI: '/portal/zh/smWeb/qryStock',
-      method: 'submit',
-      firDate: firDate || dates[0],
-      scaDate: d8,
-      sqlMethod: 'StockNo',
-      stockNo: querySym,
-      stockName: '',
-    });
 
-    const postRes = await fetcher(TDCC_QRY_STOCK_URL, {
-      method: 'POST',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Content-Type': 'application/x-www-form-urlencoded',
-        ...(cookies ? { Cookie: cookies } : {}),
-        Referer: TDCC_QRY_STOCK_URL,
-      },
-      body: body.toString(),
-      ...(signal ? { signal } : {}),
-    });
-    if (!postRes || !postRes.ok || typeof postRes.text !== 'function') break;
-    const postHtml = await postRes.text();
-    const nextMeta = parseTdccQryPageMeta(postHtml);
-    if (nextMeta.synToken) {
-      synToken = nextMeta.synToken;
+    let parsed = null;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      if (signal?.aborted) break;
+      try {
+        const body = new URLSearchParams({
+          SYNCHRONIZER_TOKEN: synToken,
+          SYNCHRONIZER_URI: '/portal/zh/smWeb/qryStock',
+          method: 'submit',
+          firDate: firDate || dates[0],
+          scaDate: d8,
+          sqlMethod: 'StockNo',
+          stockNo: querySym,
+          stockName: '',
+        });
+
+        const postRes = await fetcher(TDCC_QRY_STOCK_URL, {
+          method: 'POST',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            ...(cookies ? { Cookie: cookies } : {}),
+            Referer: TDCC_QRY_STOCK_URL,
+          },
+          body: body.toString(),
+          ...(signal ? { signal } : {}),
+        });
+        if (!postRes || !postRes.ok || typeof postRes.text !== 'function') {
+          if (attempt < maxRetries && !signal?.aborted) {
+            const refreshed = await initSession();
+            if (refreshed.synToken) {
+              cookies = refreshed.cookies;
+              synToken = refreshed.synToken;
+            }
+            continue;
+          }
+          break;
+        }
+        cookies = mergeCookies(cookies, postRes);
+        const postHtml = await postRes.text();
+        const nextMeta = parseTdccQryPageMeta(postHtml);
+        if (nextMeta.synToken) {
+          synToken = nextMeta.synToken;
+        }
+
+        parsed = parseTdccQryResultHtml(postHtml, cleanSymbol, dateIso);
+        if (parsed && parsed.totalShareholders > 0) {
+          break;
+        }
+        if (attempt < maxRetries && !signal?.aborted) {
+          const refreshed = await initSession();
+          if (refreshed.synToken) {
+            cookies = refreshed.cookies;
+            synToken = refreshed.synToken;
+          }
+        }
+      } catch (err) {
+        if (err?.name === 'AbortError' || signal?.aborted) {
+          return collected;
+        }
+        if (attempt >= maxRetries) break;
+      }
     }
 
-    const parsed = parseTdccQryResultHtml(postHtml, cleanSymbol, dateIso);
     if (parsed && parsed.totalShareholders > 0) {
       collected.push(parsed);
+      if (typeof onWeekParsed === 'function') {
+        onWeekParsed(parsed);
+      }
     }
 
     if (delayMs > 0 && i < targetDates.length - 1 && !signal?.aborted) {
@@ -403,19 +541,29 @@ async function fetchSymbolTdccHistoryFromOfficial(
 }
 
 /**
- * 單一標的 TDCC 集保股權分散歷史序列按需補齊 (Spec 0241 Ticket 03 & Spec 0242 官方免費升級)
- * 優先序：TDCC 官方 qryStock (免費支援近 51 週) -> FinMind (相容既有用例或自帶 FINMIND_TOKEN)
+ * 單一標的 TDCC 集保股權分散歷史序列按需補齊 (Spec 0241 / Spec 0242 / Spec 0245 T09)
+ * 優先序：TDCC 官方 qryStock (免費支援近 51 週、差集自癒、逐週寫庫) -> FinMind (自備 Token 備援)
  * @param {string} symbol
  * @param {number} [weeks=12]
  * @param {string} [customDbPath]
  * @param {Function} [fetcher]
+ * @param {AbortSignal} [signal]
+ * @param {{ forceOverwrite?: boolean, delayMs?: number }} [options]
  * @returns {Promise<{ savedCount: number, skipped?: boolean }>}
  */
-async function backfillSymbolTdccHistory(symbol, weeks = 12, customDbPath, fetcher = globalThis.fetch, signal = undefined) {
+async function backfillSymbolTdccHistory(
+  symbol,
+  weeks = 12,
+  customDbPath,
+  fetcher = globalThis.fetch,
+  signal = undefined,
+  options = {}
+) {
   if (!symbol || typeof fetcher !== 'function' || signal?.aborted) {
     return { savedCount: 0 };
   }
 
+  const { forceOverwrite = false, delayMs = 180 } = options || {};
   const cleanSymbol = String(symbol).trim().toUpperCase();
   const aliasSym = cleanSymbol.endsWith('O') ? cleanSymbol.slice(0, -1) : `${cleanSymbol}O`;
 
@@ -426,32 +574,39 @@ async function backfillSymbolTdccHistory(symbol, weeks = 12, customDbPath, fetch
       .all(cleanSymbol, aliasSym);
     const existingDatesSet = new Set(existingRows.map((r) => r.date));
     const targetCount = Math.min(51, Math.max(4, weeks));
-    if (existingDatesSet.size >= Math.min(targetCount, 8)) {
+
+    if (!forceOverwrite && !hasTdccSeriesGap(existingRows, { minWeeks: Math.min(targetCount, 10) })) {
       return { savedCount: 0, skipped: true };
     }
 
-    // 1. Primary: TDCC 官方免費歷史表單 (免 Token、支援過去 51 週)
+    // 1. Primary: TDCC 官方免費歷史表單 (免 Token、差集精準補缺、逐週即時 Upsert 抗中斷)
+    let officialSaved = 0;
     try {
-      const officialItems = await fetchSymbolTdccHistoryFromOfficial(
+      await fetchSymbolTdccHistoryFromOfficial(
         cleanSymbol,
         targetCount,
         existingDatesSet,
         fetcher,
-        signal
-      );
-      if (officialItems.length > 0) {
-        let totalSaved = 0;
-        for (const item of officialItems) {
-          const { savedCount } = saveTdccDistributionToSqlite({ [cleanSymbol]: item }, item.date, customDbPath);
-          totalSaved += savedCount;
+        signal,
+        delayMs,
+        {
+          forceOverwrite,
+          onWeekParsed: (item) => {
+            const { savedCount } = saveTdccDistributionToSqlite({ [cleanSymbol]: item }, item.date, customDbPath);
+            officialSaved += savedCount;
+          },
         }
-        return { savedCount: totalSaved };
+      );
+      if (officialSaved > 0) {
+        return { savedCount: officialSaved };
       }
     } catch (err) {
-      if (err?.name === 'AbortError') return { savedCount: 0 };
+      if (err?.name === 'AbortError' || signal?.aborted) {
+        return { savedCount: officialSaved };
+      }
     }
 
-    if (signal?.aborted) return { savedCount: 0 };
+    if (signal?.aborted) return { savedCount: officialSaved };
 
     // 2. Fallback: FinMind API (僅於自帶 FINMIND_TOKEN 或測試 mock 時生效)
     const startDateObj = new Date(Date.now() - (targetCount * 7 + 21) * 86400000);
@@ -539,6 +694,7 @@ module.exports = {
   parseTdccRecords,
   parseTdccQryPageMeta,
   parseTdccQryResultHtml,
+  hasTdccSeriesGap,
   fetchSymbolTdccHistoryFromOfficial,
   saveTdccDistributionToSqlite,
   purgeSyntheticRecords,

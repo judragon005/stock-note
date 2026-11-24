@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, ShieldCheck, AlertTriangle, Download, Database, CheckCircle2 } from 'lucide-react';
+import { ModalShell } from './common/ModalShell';
 
 export interface ExportDatabaseModalProps {
   isOpen: boolean;
@@ -38,24 +39,33 @@ export const ExportDatabaseModal: React.FC<ExportDatabaseModalProps> = ({
   };
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal-content" style={{ maxWidth: '580px', width: '92%' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid var(--border-color, #2a2e39)', paddingBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Database className="text-primary" size={20} />
-            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600 }}>
-              系統全態封包匯出 (跨裝置 / NAS 遷移)
-            </h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="btn btn-ghost btn-sm"
-            style={{ padding: '4px', cursor: 'pointer' }}
-          >
-            <X size={18} />
-          </button>
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      closeLocked={isExporting}
+      maxWidth="580px"
+      padding="24px"
+      ariaLabelledBy="export-db-modal-title"
+    >
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid var(--border-color, #2a2e39)', paddingBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Database className="text-primary" size={20} />
+          <h3 id="export-db-modal-title" style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600 }}>
+            系統全態封包匯出 (跨裝置 / NAS 遷移)
+          </h3>
         </div>
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={isExporting}
+          aria-label="關閉匯出對話框"
+          className="btn btn-ghost btn-sm"
+          style={{ padding: '4px', cursor: isExporting ? 'not-allowed' : 'pointer' }}
+        >
+          <X size={18} />
+        </button>
+      </div>
 
         {/* Payload Inventory */}
         <div style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', border: '1px solid var(--border-color, #2a2e39)' }}>
@@ -188,7 +198,6 @@ export const ExportDatabaseModal: React.FC<ExportDatabaseModalProps> = ({
             <span>{isExporting ? '匯出中...' : `立即匯出 ${isRedacted ? '安全脫敏' : '完整遷移'} JSON`}</span>
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

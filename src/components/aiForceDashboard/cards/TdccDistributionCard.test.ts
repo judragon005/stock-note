@@ -376,6 +376,48 @@ describe('TdccDistributionCard - TDD Unit Tests', () => {
       expect(html).toContain('data-testid="us13f-structure-empty"');
     });
   });
+
+  describe('Spec 0245 Seam 4 (T10): 真實 28 天日曆窗大戶變動與 SVG 斷層虛線誠實標示', () => {
+    it('含 7 週斷層之 2344 數據 (09-04, 10-22, 11-13, 11-20) 應鎖定 28 天窗之 10-22 (-0.28%) 而非誤用 11 週前之 09-04 (-1.36%)', async () => {
+      const { buildTdccDistribution } = await import('../../../engine/aiForceMarketAssembly');
+
+      const gapped2344 = [
+        { date: '2026-09-04', totalShareholders: 579356, over1000Ratio: 64.57, under10Ratio: 17.5 },
+        { date: '2026-10-22', totalShareholders: 586605, over1000Ratio: 63.49, under10Ratio: 18.0 },
+        { date: '2026-11-13', totalShareholders: 586031, over1000Ratio: 63.2, under10Ratio: 18.3 },
+        { date: '2026-11-20', totalShareholders: 584901, over1000Ratio: 63.21, under10Ratio: 18.5 },
+      ];
+
+      const result = buildTdccDistribution(gapped2344, 'TW', '2344');
+      // 11-20 (63.21) - 10-22 (63.49) = -0.28，絕非 -1.36 (11 週差)
+      expect(result.change4WeeksRatio).toBeCloseTo(-0.28, 2);
+      expect(result.compareSpanWeeks).toBe(4);
+      expect(result.compareLabel).toBe('近 4 週大戶變動');
+    });
+
+    it('當 21~35 天窗內無任何基準點時，應動態輸出真實跨度週數標籤（例如近 11 週大戶變動）並於 SVG 繪製虛線缺口段', async () => {
+      const { buildTdccDistribution } = await import('../../../engine/aiForceMarketAssembly');
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { TdccDistributionCard } = await import('./TdccDistributionCard');
+
+      const wideGap = [
+        { date: '2026-09-04', totalShareholders: 579356, over1000Ratio: 64.57, under10Ratio: 17.5 },
+        { date: '2026-11-20', totalShareholders: 584901, over1000Ratio: 63.21, under10Ratio: 18.5 },
+      ];
+
+      const result = buildTdccDistribution(wideGap, 'TW', '2344');
+      expect(result.compareSpanWeeks).toBe(11);
+      expect(result.compareLabel).toBe('近 11 週大戶變動');
+
+      const html = renderToStaticMarkup(
+        React.createElement(TdccDistributionCard, { data: result, colorTheme: 'taiwan' })
+      );
+      expect(html).toContain('近 11 週大戶變動');
+      expect(html).toContain('data-testid="tdcc-gap-segment"');
+      expect(html).toContain('stroke-dasharray');
+    });
+  });
 });
 
 
