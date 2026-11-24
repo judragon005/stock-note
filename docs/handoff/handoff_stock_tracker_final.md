@@ -1,7 +1,12 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-11-24 10:52 (UTC+8)  
+> **交接產生時間**：2026-11-24 12:45 (UTC+8)  
 > **當前最新里程碑**：
+> - **V9.27.0 全域視口傳送彈窗原語、Card 01B 主 K 四維量價動能共鳴解碼卡暨台股 TDCC 集保斷層自癒管線**（ADR 0245, Spec 0245, Issue #605）：
+>   - **全域視口傳送彈窗 (`ModalShell`) 與 CI 靜態守門 (T01–T02)**：以零依賴 `createPortal(..., document.body)` 統一遮罩、`glass-card`、`Escape`/遮罩關閉、`closeLocked` 與 `aria-modal`，遷移 `ExportDatabaseModal` 並於 `architecturalFitnessGuard.test.ts` 新增不變量 6 禁止 `.modal-backdrop`；其餘 14 顆舊彈窗納入 [Debt 0063](../debts/0063-legacy-modals-portal-shell-migration.md) 追蹤。
+>   - **Card 01B 四維量價動能共鳴解碼卡 × 盤中零量隔離 (T03–T07)**：實作單趟 $O(N)$ `klineOscillatorEngine.ts`（含 `J=3K-2D`、`RSI6/14` 與 `resolveVolumeAnchorCandles` 前收定錨）及 `technicalResonanceEngine.ts`（ADX/布林體制加權評分、衝突警戒與 250D 10 期勝率），統一 `Card 01` KDJ `[-10, 110]` 座標並與 `Card 01B` 雙向同步時框與副圖，`< 5` 根嚴守 Zero-Mock 隱藏閘門。
+>   - **TDCC 語意合計列、10 張散戶單一口徑與 12 週差集自癒 (T08–T11)**：修復 `qryStock` 序號 `16/17` 合計列丟棄與 `lvl 1~3` 散戶口徑一致化；實作 `hasTdccSeriesGap` 與逐週即時 Upsert 抗中斷回補（核心 22 檔 `262` 筆零錯寫入 + 全市場 `2,338` 檔更新至 `2026-11-20`）；前端採真實 `28 ± 7` 天日曆窗計差與 `> 11` 天虛線斷層渲染。
+>   - **品質狀態**：雙軸程式碼審查兩輪覆核 **PASS**，全量單元測試 **2,578/2,578 通過 (100% Passed / 318 個測試套件)**，TypeScript Strict 0 錯誤，生產打包 `npm run build` 100% 綠燈，全量文檔稽核 (`npm run lint:docs`) 100% 通過。
 > - **V9.26.2 主力戰情室 Layer 6 / Card 20 / ZONE 04 佈局拓撲重構與 12 期 ETF 配息無滑軌全展開**（ADR 0244, Spec 0244, Issue #603）：
 >   - **Layer 6 雙界限防溢位 2×2 決策矩陣 (T01)**：升級為 `minmax(min(100%, max(440px, calc(50% - 12px))), 1fr)`，消除 3+1 孤兒列並確保 `< 440px` 行動端零水平溢出；DOM 次序定錨為 `12 → 21 → 10·13 → 14`。
 >   - **Card 20 ETF 貼頂緊湊化與 12 期配息免滑軌展開 (T02 & T03)**：外層配息區改採 `justifyContent: flex-start` 並收斂 KPI / 頁尾間距；`<= 12` 期無滑軌完整呈現 4×3 網格，`> 12` 期自動啟用 `maxHeight: 288px` + `overflowY: auto` 護欄。
@@ -112,10 +117,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main` (已完全同步主幹，Working Tree Clean)
-- **單元測試套件**：**2,215/2,215 通過 (289 test suites / 100% 綠燈)**
+- **單元測試套件**：**2,578/2,578 通過 (318 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V9.20.0**
+- **當前釋出版本**：**V9.27.0**
 - **工作區與分支整潔度**：工作區乾淨受控，本地 feature/fix 分支已完全合併並清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -144,6 +149,7 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0245`](file:///d:/APP/股票紀錄/docs/specs/0245-portal-modal-kline-resonance-and-tdcc-gap-healing-spec.md) | [`ADR 0245`](file:///d:/APP/股票紀錄/docs/adr/0245-portal-modal-kline-resonance-and-tdcc-gap-healing.md) | [`.scratch/v9.27.0-spec0245-portal-kline-tdcc-healing/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.27.0-spec0245-portal-kline-tdcc-healing/issues/) | Issue #605 | V9.27.0 | 全域視口傳送彈窗 `ModalShell`、Card 01B 主 K 四維共鳴解碼卡暨台股 TDCC 12 週斷層自癒 |
 | [`Spec 0244`](file:///d:/APP/股票紀錄/docs/specs/0244-war-room-layout-topology-and-etf-dividend-grid-spec.md) | [`ADR 0244`](file:///d:/APP/股票紀錄/docs/adr/0244-war-room-layout-topology-and-etf-dividend-grid.md) | [`.scratch/v9.26.2-spec0244-war-room-layout-topology/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.26.2-spec0244-war-room-layout-topology/issues/) | Issue #603 | V9.26.2 | 主力戰情室 Layer 6 雙界限 2×2 矩陣、Card 20 12 期配息無滑軌展開與 ZONE 04 非對稱等高佈局 |
 | [`Spec 0227`](file:///d:/APP/股票紀錄/docs/specs/0227-dividend-cashflow-tri-state-reconciliation-and-calendar-precision-spec.md) | [`ADR 0227`](file:///d:/APP/股票紀錄/docs/adr/0227-dividend-cashflow-tri-state-reconciliation.md) | [`.scratch/v9.20.0-dividend-cashflow-tri-state-reconciliation/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.20.0-dividend-cashflow-tri-state-reconciliation/issues/) | Issue #516 ~ #521, #533 / PR #522 ~ #526, #534 | V9.20.0 | 現金流三態時序統一、0056發放月修正、8月硬編碼暴衝解除、長條圖待入帳堆疊與Tooltip清單穿透 |
 | [`Spec 0226`](file:///d:/APP/股票紀錄/docs/specs/0226-cross-market-dividend-cashflow-and-composition-spec.md) | [`ADR 0226`](file:///d:/APP/股票紀錄/docs/adr/0226-cross-market-dividend-cashflow-and-composition.md) | [`.scratch/v9.19.0-cross-market-dividend-cashflow-and-composition/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.19.0-cross-market-dividend-cashflow-and-composition/issues/) | Issue #507 ~ #513 / PR #514 | V9.19.0 | 台美跨市場股利發放日精準時序、ETF 配息組成穿透與被動現金流全景重構 |
@@ -245,12 +251,14 @@
 | **指標圖表與河流圖** | [`src/components/analysis/AnalysisMetricView.tsx`](file:///d:/APP/股票紀錄/src/components/analysis/AnalysisMetricView.tsx) | 向量 SVG 估值河流圖引擎、成長率離群值視覺封頂防禦演算法、全面整合 `industryGate.ts` 產業權威字典判定、景氣循環股 PB 估值指引與零假資料杜邦年化計算。 |
 | **AI 主力頂部行情與雙層警示** | [`src/components/aiForceDashboard/HeaderMarketBar.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/HeaderMarketBar.tsx) | 未結算時動態切換「前日收盤價」、出示橘黃警示徽章、定錨基準日標示，並次級輔助顯示盤中即時參考價。 |
 | **AI 決策核心卡片** | [`src/components/aiForceDashboard/cards/AiDecisionCoreCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/AiDecisionCoreCard.tsx) | 未結算時頂部出示顯著防禦警示橫幅，明確宣告量化基準日，確保決策透明度。 |
-| **主力 K 線卡片 (Card 01)** | [`src/components/aiForceDashboard/cards/KLineChartCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/KLineChartCard.tsx) | 實作 `normalizeAndSortCandles` 升冪排序守護，校正時間軸為左側歷史軌跡、右側最新交易日。 |
+| **主力 K 線卡片 (Card 01)** | [`src/components/aiForceDashboard/cards/KLineChartCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/KLineChartCard.tsx) | 實作 `normalizeAndSortCandles` 升冪排序守護、單趟 $O(N)$ KDJ(含 `J` 折線與統一 `[-10, 110]` 座標)/MACD/RSI 副圖切換，並支援受控 `timeframe` / `subchartMode` 與 `Card 01B` 雙向聯動。 |
+| **四維量價動能共鳴解碼卡 (Card 01B)** | [`src/components/aiForceDashboard/cards/TechnicalResonanceCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/TechnicalResonanceCard.tsx)<br>[`src/engine/klineOscillatorEngine.ts`](file:///d:/APP/股票紀錄/src/engine/klineOscillatorEngine.ts)<br>[`src/engine/technicalResonanceEngine.ts`](file:///d:/APP/股票紀錄/src/engine/technicalResonanceEngine.ts) | 盤中 `volume = 0` 前收定錨隔離、ADX/布林體制加權共鳴評分、衝突預警、250D 10 期條件勝率（`< 5` 根 K 線嚴守 Zero-Mock 隱藏）及四宮格互動切換主圖副圖。 |
+| **全域視口傳送彈窗原語** | [`src/components/common/ModalShell.tsx`](file:///d:/APP/股票紀錄/src/components/common/ModalShell.tsx) | 零依賴 `createPortal(..., document.body)` 頂層掛載原語，提供 `.modal-overlay`、無障礙 `aria-modal`、`Escape`/遮罩關閉、`closeLocked` 防誤關鎖與滾動鎖定，CI 永久封殺 `.modal-backdrop`。 |
 | **多維度六角雷達 (Card 03)** | [`src/components/aiForceDashboard/cards/MultiDimensionRadarCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/MultiDimensionRadarCard.tsx) | `RADAR_CHART_CONFIG` 有效半徑擴展至 100px，標籤 13px 加粗高對比，數值 12px 高亮，判讀體驗顯著提升。 |
 | **AI 主力動態信號判斷 (Card 12)** | [`src/components/aiForceDashboard/cards/DynamicSignalsCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/DynamicSignalsCard.tsx) | 徹底廢除寫死純紅燈，依量化分連動三色動態呼吸光暈；整合交易所處置/注意、券商融資警戒、法人 VWAP 標準差偏離與個人關鍵價位之 Bento 資訊流。 |
 | **健康度綜合評估 (Card 11)** | [`src/components/aiForceDashboard/cards/HealthSummaryCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/HealthSummaryCard.tsx) | `DONUT_GAUGE_CONFIG` 甜甜圈直徑擴大至 78px，間距緊湊無重疊，數值字級 15px，對齊照片 4 飽滿風格。 |
 | **主力追蹤總評判 (Card 18)** | [`src/components/aiForceDashboard/cards/MainForceVerdictCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/MainForceVerdictCard.tsx) | 容器 100% 高度與 Card 16、17 齊平，Bento 佈局重新層次化（狀態 ➔ 核心看板 ➔ 數據膠囊 ➔ 論述）。 |
-| **TDCC 集保千張大戶趨勢 (Card 19)** | [`src/components/aiForceDashboard/cards/TdccDistributionCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/TdccDistributionCard.tsx) | 綁定 `key={symbol}` 生命週期隔離，換股時即刻洗淨待命狀態；美股市場標的展示合規之「美股無集保機制 (採 13F 機構申報)」Honest Empty State。 |
+| **TDCC 集保千張大戶趨勢 (Card 19)** | [`src/components/aiForceDashboard/cards/TdccDistributionCard.tsx`](file:///d:/APP/股票紀錄/src/components/aiForceDashboard/cards/TdccDistributionCard.tsx) | 綁定 `key={symbol}` 生命週期隔離、真實 `28 ± 7` 天日曆窗大戶變動與動態標籤、SVG `> 11` 天虛線斷層渲染與統一 1–10 張 (`lvl 1~3`) 散戶口徑；美股呈現 Honest Empty State「美股無集保機制 (採 13F 機構申報)」。 |
 
 ---
 
@@ -258,20 +266,16 @@
 
 依據專案規範與 [`docs/debts/README.md`](file:///d:/APP/股票紀錄/docs/debts/README.md)，當前重點如下：
 
-- **待進行評估之架構改善 (Backlog / Open: 5 項)**：
+- **待進行評估之架構改善 (Backlog / Open: 4 項)**：
   - `DEBT-0046`：[中央金鑰庫與私有雲全端代理架構 (跨裝置同步與安全邊界防禦)](file:///d:/APP/股票紀錄/docs/debts/0046-centralized-key-vault-and-nas-proxy-mesh.md) (`P2`)。
-  - `DEBT-0048`：[個股分析工作區已載入之量化財務報表與本益比深度注入智策提示詞事實清單](file:///d:/APP/股票紀錄/docs/debts/0048-strategic-prompt-workspace-financial-records-injection.md) (`P3`，待下期個股財務深探或即時估值欄位對齊時實作)。
-  - `DEBT-0049`：[AI 動態信號判斷卡片 (Card 12) 專業層與決策層子元件模組化解耦重構](file:///d:/APP/股票紀錄/docs/debts/0049-dynamic-signals-card-subcomponent-decomposition.md) (`P3`，待未來自訂多因子權重偏好演進時實作)。
-  - `DEBT-0050`：[個股分析指標視圖 (AnalysisMetricView) 子元件模組化解耦重構](file:///d:/APP/股票紀錄/docs/debts/0050-analysis-metric-view-subcomponent-decomposition.md) (`P3`，已完成排雷燈子模組解耦，持續追蹤四大構面拆解)。
-  - `DEBT-0051`：[未來現金流投影慣性配息庫動態學習與跨市場擴展](file:///d:/APP/股票紀錄/docs/debts/0051-projected-cashflow-dynamic-calendar-profile-learning.md) (`P3`，待下期跨市場現金流或自動化公司行動整合時實作)。
+  - `DEBT-0051`：[未來現金流投影慣性配息庫動態學習與跨市場擴展](file:///d:/APP/股票紀錄/docs/debts/0051-projected-cashflow-dynamic-calendar-profile-learning.md) (`P3`，預計跨市場現金流自動學習時實作)。
+  - `DEBT-0063`：[全站其餘 14 顆既有彈窗漸進遷移至 ModalShell 頂層 Portal 原語](file:///d:/APP/股票紀錄/docs/debts/0063-legacy-modals-portal-shell-migration.md) (`P3`，觸及舊彈窗變更時採童子軍原則漸進遷移)。
+  - `DEBT-0064`：[主 K 四維共鳴引擎拆解與 TDCC / 擺盪引擎 DRY 收斂](file:///d:/APP/股票紀錄/docs/debts/0064-war-room-resonance-and-tdcc-smells-consolidation.md) (`P3`，擴充技術支柱或重構 TDCC 圖表時一併收斂)。
 
-- **近期已完整解決之架構技術債 (Recently Resolved: 6 項)**：
-  - `DEBT-0056`：[估值河流圖歷史收盤價匹配二元搜尋優化](file:///d:/APP/股票紀錄/docs/debts/0056-valuation-river-candle-lookup-binary-search.md) (`RESOLVED`，已於 v9.15.0 Spec 0220 / ADR 0220 解決)。
-  - `DEBT-0055`：[主力戰情室龐大單體風控計算解耦 (useWarRoomPortfolioMetrics)](file:///d:/APP/股票紀錄/docs/debts/0055-warroom-divergent-change-metrics-hook.md) (`RESOLVED`，已於 v9.15.0 Spec 0220 / ADR 0220 解決)。
-  - `DEBT-0054`：[WarRoomWorkspace 快速校準表單聚合與子元件解耦](file:///d:/APP/股票紀錄/docs/debts/0054-war-room-quick-calibration-modal-decomposition.md) (`RESOLVED`，已於 v9.02.0 Spec 0205 解決)。
-  - `DEBT-0053`：[EightQuarterStatementTable 樣式常數與子儲存格抽取](file:///d:/APP/股票紀錄/docs/debts/0053-eight-quarter-statement-table-style-constants-extraction.md) (`RESOLVED`，已於 v9.02.0 Spec 0205 解決)。
-  - `DEBT-0052`：[defaultFetchJson 雙重信號複合支援 (Compound AbortSignal)](file:///d:/APP/股票紀錄/docs/debts/0052-default-fetch-json-compound-abort-signal.md) (`RESOLVED`，已於 v9.02.0 Spec 0205 解決)。
-  - `DEBT-0047`：[Pre-push Guard 整合文檔完整性與死鏈自動化守門 (verify-docs)](file:///d:/APP/股票紀錄/docs/debts/0047-pre-push-guard-docs-integrity-linter-integration.md) (`RESOLVED`，已於 v9.02.0 Spec 0205 解決)。
+- **近期已完整解決之架構技術債 (Recently Resolved)**：
+  - `DEBT-0049`、`DEBT-0050`、`DEBT-0061`：`RESOLVED`（已於 Spec 0241 / ADR 0241 解決）。
+  - `DEBT-0060`、`DEBT-0062`：`RESOLVED`（已於 Spec 0240 / ADR 0240 解決）。
+  - `DEBT-0048`、`DEBT-0057`：`RESOLVED`（已於 Spec 0224 / ADR 0224 解決）。
 
 ---
 
@@ -281,9 +285,9 @@
 
 1. **確認當前工作分支與儲存庫狀態**：
    - 當前位於分支 `main`，與 `origin/main` 保持一致，Working Tree Clean。
-   - 所有變更均已透過 GitHub Actions CI 綠燈驗證並 Squash and Merge 回主幹（近期已合併 PR #461, #463, #465, #467, #469）。
+   - 所有變更均已透過 GitHub Actions CI 綠燈驗證並 Squash and Merge 回主幹（近期已合併 Spec 0242–0245）。
 2. **日常驗證防線**：
-   - 接手前務必執行 `npm test`（確認 277 個測試套件、2,111 個測試 100% 綠燈）與 `npm run build`（確認 0 型別錯誤）。
+   - 接手前務必執行 `npm test`（確認 **318** 個測試套件、**2,578** 個測試 100% 綠燈）、`npm run build`（確認 0 型別錯誤）與 `npm run lint:docs`（確認文檔與 Spec/ADR 1:1 對齊）。
 3. **工作流閉環準則**：
    - 嚴格遵循工作流藍圖：`/grill-with-docs` ➔ `/to-spec` ➔ `/to-tickets` ➔ `/triage` ➔ `/tdd & /implement` ➔ `/code-review` ➔ `/handoff`。
 

@@ -2,7 +2,7 @@
 
 - **狀態 (Status)**: Accepted
 - **日期 (Date)**: 2026-11-24
-- **關聯規格與 Issue**: [Spec 0245](../specs/0245-portal-modal-kline-resonance-and-tdcc-gap-healing-spec.md) / GitHub Issue `#605` / 關聯技術債 [Debt 0063](../debts/0063-legacy-modals-portal-shell-migration.md)
+- **關聯規格與 Issue**: [Spec 0245](../specs/0245-portal-modal-kline-resonance-and-tdcc-gap-healing-spec.md) / GitHub Issue `#605` / 關聯技術債 [Debt 0063](../debts/0063-legacy-modals-portal-shell-migration.md)、[Debt 0064](../debts/0064-war-room-resonance-and-tdcc-smells-consolidation.md)
 
 ## 背景 (Context)
 
@@ -21,7 +21,7 @@
    - 於 `Card 01` 補齊 `J` 折線與可選受控時框／副圖介面；於 ZONE 01 `Card 01` 正下方原地升級 `executive-verdict-strip` 槽位為互動式 `Card 01B (TechnicalResonanceCard)`，達成 `Card 01 ⇄ Card 01B` 時框與四宮格副圖雙向同步，完整保留 ADR 0244 佈局與 `WAR_ROOM_TYPOGRAPHY_FLOOR` 守門。
 3. **Calendar-Anchored TDCC Gap Healing 與 10 張散戶單一口徑收斂**：
    - `parseTdccQryResultHtml` 改以第 2 欄文字語意匹配「合計」（`16/17` 雙通吃）與「差異數」，並於 `parseTdccRecords` 補 1~15 級加總保底；全鏈路 `under10Ratio` 嚴格收斂為官方級距 `1~3`（1~10 張）。
-   - 新增 `hasTdccSeriesGap`（筆數 < 10、相鄰間隔 > 11 天、或落後最新發布日 > 7 天即判為缺口），取代中介層 `length < 4` 與早退 `size >= 8`，改採官方發布日曆差集重播 + 逐週即時 Upsert 寫庫 + 單週退避重試與 Cookie/Token 續期。
+   - 新增 `hasTdccSeriesGap`（預設 `< 10` 週、戰情室按需查詢與回補呼叫端皆對齊目標 `12` 週；相鄰間隔 `> 11` 天或落後最新發布日 `> 7` 天即判為缺口），取代中介層 `length < 4` 與早退 `size >= 8`，改採官方發布日曆差集重播 + 逐週即時 Upsert 寫庫 + 單週退避重試與 Cookie/Token 續期。
    - `buildTdccDistribution` 改以真實 `28 ± 7` 天日曆窗計算大戶變動（無點時動態輸出真實跨度標籤 `compareLabel`），`TdccDistributionCard` 對超過 11 天斷層區段改繪虛線段 (`data-testid="tdcc-gap-segment"`) 與缺口圖例。
 
 ## 後果 (Consequences)
