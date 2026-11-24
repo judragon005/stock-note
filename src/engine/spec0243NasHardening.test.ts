@@ -23,6 +23,7 @@ const TEST_DB = path.join(TEST_DIR, 'market_history.db');
 describe('Spec 0243: NAS 生產伺服器 SSOT 收斂、WAL 優雅關機與自治排程強化', () => {
   afterEach(() => {
     delete process.env.LAKEHOUSE_DB_PATH;
+    delete process.env.DISABLE_BUILTIN_SCHEDULER;
     try {
       closeSqliteDb();
     } catch {
@@ -34,13 +35,21 @@ describe('Spec 0243: NAS 生產伺服器 SSOT 收斂、WAL 優雅關機與自治
   });
 
   describe('Seam 1: NAS 生產伺服器全路由代理契約、SSRF 防護、/healthz 與優雅關機', () => {
-    it('Slice 1: 全量外部代理路由 (/api/fred, /api/twse-www, /api/twse, /api/tpex, /api/yahoo) 與 /api/proxy SSRF 白名單 + CORS + OPTIONS', async () => {
-      const capturedCalls: Array<{ url: string; method: string; headers: Record<string, string> }> = [];
+    it('Slice 1: 全量外部代理路由 (/api/fred, /api/twse-www, /api/twse, /api/tpex, /api/yahoo) 與 /api/proxy SSRF 白名單 + CORS + OPTIONS + POST body + redirect manual', async () => {
+      const capturedCalls: Array<{
+        url: string;
+        method: string;
+        headers: Record<string, string>;
+        redirect?: string;
+        body?: any;
+      }> = [];
       const mockFetcher = async (url: string, init: any = {}) => {
         capturedCalls.push({
           url,
           method: init.method || 'GET',
           headers: init.headers || {},
+          redirect: init.redirect,
+          body: init.body,
         });
         return {
           status: 200,
@@ -75,13 +84,27 @@ describe('Spec 0243: NAS 生產伺服器 SSOT 收斂、WAL 優雅關機與自治
           expect(body.proxiedUrl).toBe(expectedUrl);
         }
 
-        // 2. /api/proxy 白名單網域轉發並附帶 CORS 回應標頭
+        // 2. /api/proxy 白名單網域轉發並附帶 CORS 回應標頭，且停用自動跟隨重導向防 SSRF 繞過
         const allowedTarget = 'https://api.stlouisfed.org/fred/series?series_id=CPIAUCSL';
         const proxyOk = await fetch(`${baseUrl}/api/proxy?url=${encodeURIComponent(allowedTarget)}`);
         expect(proxyOk.status).toBe(200);
         expect(proxyOk.headers.get('access-control-allow-origin')).toBe('*');
         const proxyOkBody = await proxyOk.json();
         expect(proxyOkBody.proxiedUrl).toBe(allowedTarget);
+        expect(capturedCalls[capturedCalls.length - 1].redirect).toBe('manual');
+
+        // 2b. /api/proxy POST 請求應完整轉發請求體與 Content-Type
+        const postPayload = JSON.stringify({ query: '2330' });
+        const proxyPost = await fetch(`${baseUrl}/api/proxy?url=${encodeURIComponent(allowedTarget)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: postPayload,
+        });
+        expect(proxyPost.status).toBe(200);
+        const lastPostCall = capturedCalls[capturedCalls.length - 1];
+        expect(lastPostCall.method).toBe('POST');
+        expect(lastPostCall.headers['Content-Type']).toBe('application/json');
+        expect(new TextDecoder().decode(lastPostCall.body)).toBe(postPayload);
 
         // 3. /api/proxy 支援 OPTIONS 預檢請求
         const preflight = await fetch(`${baseUrl}/api/proxy?url=${encodeURIComponent(allowedTarget)}`, {
@@ -171,14 +194,16 @@ describe('Spec 0243: NAS 生產伺服器 SSOT 收斂、WAL 優雅關機與自治
           latestBackup: null,
         });
 
-        // 2. 建立資料庫並放置兩個快照備份檔，驗證回報實際位元組數與最新備份檔
+        // 2. 建立資料庫並放置兩個快照備份檔（含另一個無關 DB 備份），驗證僅匹配本 DB 前綴並支援 /healthz?probe=1
         initSqliteLakehouseDb(TEST_DB);
         const backupOld = path.join(TEST_DIR, 'market_history.backup-20261110.db');
         const backupNew = path.join(TEST_DIR, 'market_history.backup-20261120.db');
+        const unrelatedBackup = path.join(TEST_DIR, 'other_db.backup-20261125.db');
         fs.writeFileSync(backupOld, 'old-backup');
         fs.writeFileSync(backupNew, 'new-backup-payload');
+        fs.writeFileSync(unrelatedBackup, 'unrelated-should-be-ignored');
 
-        const resReady = await fetch(`${baseUrl}/healthz`);
+        const resReady = await fetch(`${baseUrl}/healthz?probe=1`);
         expect(resReady.status).toBe(200);
         const bodyReady = await resReady.json();
         expect(bodyReady.dbSizeBytes).toBeGreaterThan(0);
@@ -189,11 +214,26 @@ describe('Spec 0243: NAS 生產伺服器 SSOT 收斂、WAL 優雅關機與自治
       } finally {
         await gracefulShutdown('SIGTERM');
       }
+
+      // 3. DISABLE_BUILTIN_SCHEDULER=true 時 /healthz 應誠實回報 scheduler.enabled === false
+      process.env.DISABLE_BUILTIN_SCHEDULER = 'true';
+      const disabledCtx = createNasServer({ customDbPath: TEST_DB, enableScheduler: true });
+      await new Promise<void>((resolve) => disabledCtx.server.listen(0, '127.0.0.1', resolve));
+      const disabledAddr = disabledCtx.server.address() as any;
+      try {
+        const resDisabled = await fetch(`http://127.0.0.1:${disabledAddr.port}/healthz`);
+        expect(resDisabled.status).toBe(200);
+        const bodyDisabled = await resDisabled.json();
+        expect(bodyDisabled.scheduler.enabled).toBe(false);
+      } finally {
+        await disabledCtx.gracefulShutdown('SIGTERM');
+      }
     });
   });
 
   describe('Seam 2: NAS 自治排程器每日宏觀同步與每週滾動備份保留契約', () => {
-    it('Slice 4: 每日盤後視窗同時執行台美股與宏觀同步，台美股失敗時宏觀同步仍完成 (錯誤隔離)', async () => {
+    it('Slice 4: 每日盤後視窗同時執行台美股與宏觀同步，台美股失敗時宏觀同步仍完成且同日重試不重複執行宏觀', async () => {
+      let macroCalls = 0;
       const scheduler = startNasAutonomousScheduler({
         customDbPath: TEST_DB,
         runOnStart: false,
@@ -203,7 +243,10 @@ describe('Spec 0243: NAS 生產伺服器 SSOT 收斂、WAL 優雅關機與自治
           runDailySync: async () => {
             throw new Error('TWSE upstream 503');
           },
-          runMacroSync: async () => ({ ok: true, date: '2026-11-20' }),
+          runMacroSync: async () => {
+            macroCalls += 1;
+            return { ok: true, date: '2026-11-20' };
+          },
         },
       });
 
@@ -213,6 +256,10 @@ describe('Spec 0243: NAS 生產伺服器 SSOT 收斂、WAL 優雅關機與自治
         expect(result.tasks.daily).toMatchObject({ ok: false, error: 'TWSE upstream 503' });
         expect(result.tasks.macro).toMatchObject({ ok: true });
         expect(scheduler.getState().lastMacroIsoDate).toBe('2026-11-20');
+
+        // 同日重試時（台美股上次失敗仍會重試），已完成的宏觀同步不應重複呼叫
+        await scheduler.runTickNow();
+        expect(macroCalls).toBe(1);
       } finally {
         scheduler.stop();
       }

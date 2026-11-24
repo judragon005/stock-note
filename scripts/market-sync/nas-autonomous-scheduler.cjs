@@ -124,7 +124,11 @@ function startNasAutonomousScheduler({
 } = {}) {
   if (process.env.DISABLE_BUILTIN_SCHEDULER === 'true') {
     console.log('⏸️ [NAS Scheduler] 已透過 DISABLE_BUILTIN_SCHEDULER=true 停用內建排程器。');
-    return { stop: () => {}, runTickNow: async () => ({ skipped: true, reason: 'DISABLED' }) };
+    return {
+      stop: () => {},
+      runTickNow: async () => ({ skipped: true, reason: 'DISABLED' }),
+      getState: () => ({ enabled: false }),
+    };
   }
 
   let isRunning = false;
@@ -170,22 +174,24 @@ function startNasAutonomousScheduler({
           console.warn('[NAS Scheduler] 每日增量同步警示:', tasks.daily.error);
         }
 
-        // 宏觀同步獨立隔離：台美股失敗不影響宏觀指標更新 (Spec 0243 Ticket 04)
-        try {
-          const runMacroFn =
-            handlers.runMacroSync ||
-            (async (dbPath) => {
-              const { fetchMacroSentimentDaily, ingestMacroSentimentToDb } = require('./ingest-macro-sentiment.cjs');
-              // FRED_API_KEY 為選配；未設定時 ingest 模組自動降級免 Key 公開 CSV
-              const data = await fetchMacroSentimentDaily({ fredApiKey: process.env.FRED_API_KEY || undefined });
-              return { ok: ingestMacroSentimentToDb(data, dbPath), date: data?.date };
-            });
-          const macroResult = await runMacroFn(customDbPath);
-          lastRunState.lastMacroIsoDate = tp.isoDate;
-          tasks.macro = { ok: true, ...(macroResult || {}) };
-        } catch (err) {
-          tasks.macro = { ok: false, error: err?.message || String(err) };
-          console.warn('[NAS Scheduler] 每日宏觀同步警示:', tasks.macro.error);
+        // 宏觀同步獨立隔離且同日已完成時不重跑：台美股失敗不影響宏觀指標更新 (Spec 0243 Ticket 04)
+        if (lastRunState.lastMacroIsoDate !== tp.isoDate) {
+          try {
+            const runMacroFn =
+              handlers.runMacroSync ||
+              (async (dbPath) => {
+                const { fetchMacroSentimentDaily, ingestMacroSentimentToDb } = require('./ingest-macro-sentiment.cjs');
+                // FRED_API_KEY 為選配；未設定時 ingest 模組自動降級免 Key 公開 CSV
+                const data = await fetchMacroSentimentDaily({ fredApiKey: process.env.FRED_API_KEY || undefined });
+                return { ok: ingestMacroSentimentToDb(data, dbPath), date: data?.date };
+              });
+            const macroResult = await runMacroFn(customDbPath);
+            lastRunState.lastMacroIsoDate = tp.isoDate;
+            tasks.macro = { ok: true, ...(macroResult || {}) };
+          } catch (err) {
+            tasks.macro = { ok: false, error: err?.message || String(err) };
+            console.warn('[NAS Scheduler] 每日宏觀同步警示:', tasks.macro.error);
+          }
         }
       }
 

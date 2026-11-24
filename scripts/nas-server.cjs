@@ -95,26 +95,62 @@ function matchPrefixProxyRoute(reqUrl) {
   return null;
 }
 
-async function handlePrefixProxy(req, res, route, upstreamFetcher) {
+function readRequestBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+async function forwardUpstream(req, res, targetUrl, { upstreamFetcher, extraHeaders = {}, responseHeaders = {}, errorCode }) {
   try {
-    const targetPath = req.url.slice(route.prefix.length) || '/';
-    const targetUrl = `${route.targetOrigin}${targetPath.startsWith('/') ? targetPath : `/${targetPath}`}`;
-    const upstream = await upstreamFetcher(targetUrl, {
-      method: req.method || 'GET',
-      headers: {
-        'User-Agent': DEFAULT_UA,
-        Accept: 'application/json, text/plain, */*',
-        ...route.extraHeaders,
-      },
-    });
+    const method = (req.method || 'GET').toUpperCase();
+    const headers = {
+      'User-Agent': DEFAULT_UA,
+      Accept: 'application/json, text/plain, */*',
+      ...extraHeaders,
+    };
+    if (req.headers && req.headers['content-type']) {
+      headers['Content-Type'] = req.headers['content-type'];
+    }
+
+    const fetchInit = {
+      method,
+      headers,
+      redirect: 'manual',
+    };
+
+    if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+      const bodyBuf = await readRequestBody(req);
+      if (bodyBuf.length > 0) {
+        fetchInit.body = bodyBuf;
+      }
+    }
+
+    const upstream = await upstreamFetcher(targetUrl, fetchInit);
     const contentType = upstream.headers.get('content-type') || 'application/json; charset=utf-8';
     const buf = Buffer.from(await upstream.arrayBuffer());
-    res.writeHead(upstream.status, { 'Content-Type': contentType });
+    res.writeHead(upstream.status, {
+      'Content-Type': contentType,
+      ...responseHeaders,
+    });
     res.end(buf);
   } catch (err) {
-    res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ error: route.errorCode, message: err?.message || 'Upstream unavailable' }));
+    res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8', ...responseHeaders });
+    res.end(JSON.stringify({ error: errorCode, message: err?.message || 'Upstream unavailable' }));
   }
+}
+
+async function handlePrefixProxy(req, res, route, upstreamFetcher) {
+  const targetPath = req.url.slice(route.prefix.length) || '/';
+  const targetUrl = `${route.targetOrigin}${targetPath.startsWith('/') ? targetPath : `/${targetPath}`}`;
+  return forwardUpstream(req, res, targetUrl, {
+    upstreamFetcher,
+    extraHeaders: route.extraHeaders,
+    errorCode: route.errorCode,
+  });
 }
 
 async function handleGenericProxy(req, res, upstreamFetcher) {
@@ -159,25 +195,11 @@ async function handleGenericProxy(req, res, upstreamFetcher) {
     return res.end(JSON.stringify({ error: 'Host not in proxy whitelist (SSRF Guard)' }));
   }
 
-  try {
-    const upstream = await upstreamFetcher(parsedTarget.toString(), {
-      method: req.method || 'GET',
-      headers: {
-        'User-Agent': DEFAULT_UA,
-        Accept: 'application/json, text/plain, */*',
-      },
-    });
-    const contentType = upstream.headers.get('content-type') || 'application/json; charset=utf-8';
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    res.writeHead(upstream.status, {
-      'Content-Type': contentType,
-      ...corsHeaders,
-    });
-    res.end(buf);
-  } catch (err) {
-    res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders });
-    res.end(JSON.stringify({ error: 'GENERIC_PROXY_ERROR', message: err?.message || 'Upstream unavailable' }));
-  }
+  return forwardUpstream(req, res, parsedTarget.toString(), {
+    upstreamFetcher,
+    responseHeaders: corsHeaders,
+    errorCode: 'GENERIC_PROXY_ERROR',
+  });
 }
 
 function getDbHealthMetrics(dbPath) {
@@ -193,10 +215,12 @@ function getDbHealthMetrics(dbPath) {
   let latestBackup = null;
   try {
     const dir = path.dirname(dbPath);
+    const baseName = path.basename(dbPath, '.db');
     if (fs.existsSync(dir)) {
+      const backupPrefix = `${baseName}.backup-`;
       const backupFiles = fs
         .readdirSync(dir)
-        .filter((name) => /\.backup-\d{8}\.db$/.test(name))
+        .filter((name) => name.startsWith(backupPrefix) && /\.backup-\d{8}\.db$/.test(name))
         .sort();
       if (backupFiles.length > 0) {
         const latestName = backupFiles[backupFiles.length - 1];
@@ -288,11 +312,13 @@ function createNasServer({
       return;
     }
 
-    if (req.url === '/healthz') {
+    const reqPathname = (req.url || '/').split('?')[0];
+    if (reqPathname === '/healthz') {
       const resolvedDbPath = getDbPath(customDbPath);
       const { dbSizeBytes, latestBackup } = getDbHealthMetrics(resolvedDbPath);
+      const rawSchedulerState = scheduler?.getState?.();
       const schedulerState = scheduler
-        ? { enabled: true, ...(scheduler.getState?.() || {}) }
+        ? { enabled: true, ...(rawSchedulerState || {}) }
         : { enabled: false };
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(
@@ -318,8 +344,8 @@ function createNasServer({
   let shutdownPromise = null;
   async function gracefulShutdown(signal = 'SIGTERM', { timeoutMs = 8000 } = {}) {
     if (shutdownPromise) {
-      await shutdownPromise;
-      return { ok: true, signal, reentrant: true, walCheckpointed: true };
+      const firstResult = await shutdownPromise;
+      return { ...firstResult, signal, reentrant: true };
     }
 
     shutdownPromise = (async () => {
@@ -332,7 +358,7 @@ function createNasServer({
         }
       }
 
-      // 2. 停止接收新 HTTP 連線並等待進行中請求結束 (含逾時保底)
+      // 2. 停止接收新 HTTP 連線並主動釋放 Keep-Alive 閒置連線 (含逾時保底)
       if (server.listening) {
         await new Promise((resolve) => {
           const timer = setTimeout(resolve, timeoutMs);
@@ -341,6 +367,9 @@ function createNasServer({
             clearTimeout(timer);
             resolve();
           });
+          if (typeof server.closeIdleConnections === 'function') {
+            server.closeIdleConnections();
+          }
         });
       }
 
