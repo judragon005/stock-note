@@ -274,9 +274,12 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
             </div>
           </div>
 
-          {/* 歷年配息金額與單期殖利率河流 (Spec 0242: 解除 4 筆截斷，完整涵蓋 2026~2022) */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', marginBottom: '8px' }}>
+          {/* 歷年配息金額與單期殖利率河流 (Spec 0244: 貼頂緊湊化，<=12 期免滑軌全展開，>12 期啟用溢位護欄) */}
+          <div
+            data-testid="etf-dividend-section"
+            style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', marginBottom: '6px' }}>
               <span>歷年配息紀錄與單期殖利率 {isUs ? '(USD)' : '(TWD)'}</span>
               {data.etfData.quarterlyDividends.length > 0 && (
                 <span style={{ color: '#38bdf8' }}>共 {data.etfData.quarterlyDividends.length} 期</span>
@@ -304,9 +307,9 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
                   display: 'grid',
                   gridTemplateColumns: 'repeat(4, 1fr)',
                   gap: '6px',
-                  maxHeight: '190px',
-                  overflowY: 'auto',
-                  paddingRight: '2px',
+                  ...(data.etfData.quarterlyDividends.length > 12
+                    ? { maxHeight: '288px', overflowY: 'auto', paddingRight: '2px' }
+                    : {}),
                 }}
               >
                 {data.etfData.quarterlyDividends.map((q) => (

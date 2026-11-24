@@ -337,5 +337,67 @@ describe('Ticket 08: 主力戰情室 7 層 Bento-Grid 專業動線架構驗收 (
       expect(src).toContain('lakehouseData.dayTradeRate !== undefined');
     });
   });
+
+  describe('Spec 0244: 主力戰情室 Layer 6 雙界限 2x2 與 ZONE 04 拓撲契約', () => {
+    it('T01: Layer 6 應鎖定最大 2 欄雙界限軌寬且卡片順序為 12 -> 21 -> 10.13 -> 14', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(AiForceDashboardView, {
+          initialSymbol: '2330',
+          initialMarket: 'TW',
+          initialReport: readyReport,
+        })
+      );
+
+      const layer6Start = html.indexOf('data-layer="6-energy-sentiment"');
+      const zone04Start = html.indexOf('data-layer="7-chips-health-matrix"');
+      expect(layer6Start).toBeGreaterThan(-1);
+      expect(zone04Start).toBeGreaterThan(layer6Start);
+
+      const layer6Html = html.slice(layer6Start, zone04Start);
+      expect(layer6Html).toContain('minmax(max(440px, calc(50% - 12px)), 1fr)');
+
+      const idx12 = layer6Html.indexOf('AI 主力動態信號判斷');
+      const idx21 = layer6Html.indexOf('估值與殖利率量化矩陣');
+      const idx1013 = layer6Html.indexOf('市場情緒');
+      const idx14 = layer6Html.indexOf('AI 信心維度');
+
+      expect(idx12).toBeGreaterThan(-1);
+      expect(idx21).toBeGreaterThan(idx12);
+      expect(idx1013).toBeGreaterThan(idx21);
+      expect(idx14).toBeGreaterThan(idx1013);
+    });
+
+    it('T04 & T05: ZONE 04 右欄應單欄直排 11 -> 16 -> 17（無雙欄並排容器），左欄 15 緊湊定錨且 09 縱向拉高', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(AiForceDashboardView, {
+          initialSymbol: '2330',
+          initialMarket: 'TW',
+          initialReport: readyReport,
+        })
+      );
+
+      const zone04Start = html.indexOf('data-layer="7-chips-health-matrix"');
+      expect(zone04Start).toBeGreaterThan(-1);
+      const zone04Html = html.slice(zone04Start);
+
+      // T04: 右欄移除 minmax(236px, 1fr) 雙欄並排容器，三卡單欄依序堆疊 11 -> 16 -> 17
+      expect(zone04Html).not.toContain('minmax(236px, 1fr)');
+      const idx11 = zone04Html.indexOf('健康度綜合評估表');
+      const idx16 = zone04Html.indexOf('買賣力分布圖');
+      const idx17 = zone04Html.indexOf('多空強度分布');
+      expect(idx11).toBeGreaterThan(-1);
+      expect(idx16).toBeGreaterThan(idx11);
+      expect(idx17).toBeGreaterThan(idx16);
+
+      // T05: 左欄 15 緊湊定錨 (flex:0 0 auto)、09 獨佔剩餘高度拉高 (flex:1)
+      expect(zone04Html).toContain('data-slot="zone04-card-15"');
+      expect(zone04Html).toContain('data-slot="zone04-card-09"');
+      const slot15Start = zone04Html.indexOf('data-slot="zone04-card-15"');
+      const slot09Start = zone04Html.indexOf('data-slot="zone04-card-09"');
+      expect(slot09Start).toBeGreaterThan(slot15Start);
+      expect(zone04Html.slice(slot15Start, slot15Start + 120)).toContain('flex:0 0 auto');
+      expect(zone04Html.slice(slot09Start, slot09Start + 120)).toContain('flex:1');
+    });
+  });
 });
 

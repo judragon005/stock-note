@@ -965,18 +965,36 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 </div>
               </div>
 
-              {/* Layer 6: AI 多空 × 市場情緒雙子容器、主力動態信號、估值矩陣、AI 信心維度 (Spec 0199: 升級至 minHeight 315px 自適應拉伸) */}
+              {/* Layer 6: 2x2 決策矩陣 — 上排 12 主力動態 + 21 估值矩陣，下排 10+13 雙子容器 + 14 AI 信心 (Spec 0244) */}
               <div
                 data-layer="6-energy-sentiment"
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(max(440px, calc(50% - 12px)), 1fr))',
                   gap: '12px',
                   alignItems: 'stretch',
                   minHeight: '315px',
                 }}
               >
-                {/* 欄 1: 10 + 13 AI 多空 × 市場情緒雙子容器 */}
+                {/* 上排左: 12 AI 主力動態信號判斷 */}
+                <div style={{ minWidth: 0, height: '100%', minHeight: '315px', display: 'flex', flexDirection: 'column' }}>
+                  <DynamicSignalsCard
+                    data={report.dynamicSignals}
+                    colorTheme={resolvedColorTheme}
+                    market={market}
+                  />
+                </div>
+
+                {/* 上排右: 21 估值與殖利率量化矩陣 */}
+                <div style={{ minWidth: 0, height: '100%', minHeight: '315px', display: 'flex', flexDirection: 'column' }}>
+                  <ValuationMetricsCard
+                    data={report.valuationMetrics}
+                    market={market}
+                    colorTheme={resolvedColorTheme}
+                  />
+                </div>
+
+                {/* 下排左: 10 + 13 AI 多空 × 市場情緒雙子容器 */}
                 <div style={{ minWidth: 0, height: '100%', minHeight: '315px', display: 'flex', flexDirection: 'column' }}>
                   <EnergySentimentTwinCard
                     bullBearData={report.bullBearEnergy}
@@ -986,25 +1004,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   />
                 </div>
 
-                {/* 欄 2: 12 AI 主力動態信號判斷 */}
-                <div style={{ minWidth: 0, height: '100%', minHeight: '315px', display: 'flex', flexDirection: 'column' }}>
-                  <DynamicSignalsCard
-                    data={report.dynamicSignals}
-                    colorTheme={resolvedColorTheme}
-                    market={market}
-                  />
-                </div>
-
-                {/* 欄 3: 21 估值與殖利率量化矩陣 */}
-                <div style={{ minWidth: 0, height: '100%', minHeight: '315px', display: 'flex', flexDirection: 'column' }}>
-                  <ValuationMetricsCard
-                    data={report.valuationMetrics}
-                    market={market}
-                    colorTheme={resolvedColorTheme}
-                  />
-                </div>
-
-                {/* 欄 4: 14 AI 信心維度 */}
+                {/* 下排右: 14 AI 信心維度 */}
                 <div style={{ minWidth: 0, height: '100%', minHeight: '315px', display: 'flex', flexDirection: 'column' }}>
                   <AiConfidenceCard
                     data={report.aiConfidence}
@@ -1031,7 +1031,7 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                 <span>ZONE 04 // 風險控管與主力終極定調</span>
               </div>
 
-              {/* Layer 7: 籌碼收斂與體質定調 (Spec 0211: 雙欄自適應對稱矩陣，左 15+09，右 11+16+17) */}
+              {/* Layer 7: 籌碼收斂與體質定調 (Spec 0244: 左欄 15 緊湊 + 09 縱向拉高，右欄 11 -> 16 -> 17 全寬單欄直排) */}
               <div
                 data-layer="7-chips-health-matrix"
                 style={{
@@ -1041,16 +1041,16 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   alignItems: 'stretch',
                 }}
               >
-                {/* 欄 1: 15 籌碼異動摘要 + 09 隔日沖風險 (微觀籌碼動向與短線防護) */}
+                {/* 欄 1: 15 籌碼異動摘要（自然緊湊）+ 09 隔日沖風險（吃滿剩餘高度拉高對齊） */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, height: '100%' }}>
-                  <div style={{ minWidth: 0, flex: 1 }}>
+                  <div data-slot="zone04-card-15" style={{ minWidth: 0, flex: '0 0 auto' }}>
                     <ChipsSummaryCard
                       data={report.chipsSummary}
                       colorTheme={resolvedColorTheme}
                       market={market}
                     />
                   </div>
-                  <div style={{ minWidth: 0, flex: 1 }}>
+                  <div data-slot="zone04-card-09" style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column' }}>
                     <DayTradeRiskCard
                       data={report.dayTradeRisk}
                       colorTheme={resolvedColorTheme}
@@ -1059,37 +1059,28 @@ export const AiForceDashboardView: React.FC<AiForceDashboardViewProps> = ({
                   </div>
                 </div>
 
-                {/* 欄 2: 11 健康度綜合評估表 + 16 買賣力分布 + 17 多空強度 (結構健康度與多空籌碼對抗，圓環徹底舒展) */}
+                {/* 欄 2: 11 健康度綜合評估表 -> 16 買賣力分布 -> 17 多空強度（三卡全寬單欄垂直堆疊） */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, height: '100%' }}>
-                  <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ minWidth: 0 }}>
                     <HealthSummaryCard
                       data={report.healthSummary}
                       colorTheme={resolvedColorTheme}
                       market={market}
                     />
                   </div>
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(236px, 1fr))',
-                      gap: '8px',
-                      minWidth: 0,
-                    }}
-                  >
-                    <div style={{ minWidth: 0 }}>
-                      <ForceDistributionCard
-                        data={report.forceDistribution}
-                        colorTheme={resolvedColorTheme}
-                        market={market}
-                      />
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <BullBearStrengthCard
-                        data={report.bullBearStrength}
-                        colorTheme={resolvedColorTheme}
-                        market={market}
-                      />
-                    </div>
+                  <div style={{ minWidth: 0 }}>
+                    <ForceDistributionCard
+                      data={report.forceDistribution}
+                      colorTheme={resolvedColorTheme}
+                      market={market}
+                    />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <BullBearStrengthCard
+                      data={report.bullBearStrength}
+                      colorTheme={resolvedColorTheme}
+                      market={market}
+                    />
                   </div>
                 </div>
               </div>

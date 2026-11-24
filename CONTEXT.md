@@ -3107,6 +3107,14 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     2. **POSIX WAL Graceful Shutdown (POSIX 優雅關機與 SQLite WAL 強制落盤)**：攔截 `SIGTERM`/`SIGINT` 並依序停排程器 ➔ 關閉 HTTP 並主動釋放 Keep-Alive (`closeIdleConnections`) ➔ 執行 `PRAGMA wal_checkpoint(TRUNCATE)` ➔ 安全關閉 SQLite，於 Docker 10s 寬限期內以 Exit Code `0` 乾淨退出。_Avoid_: SIGKILL Dirty WAL on ZFS, Hanging Keep-Alive Drain
     3. **Autonomous Rolling Backup & Backward-Compatible Mount (自治滾動快照與向後相容掛載)**：每日排程獨立隔離並去重宏觀數據同步（`FRED_API_KEY` 選配降級）；每週同步成功後以 `VACUUM INTO` 產出 `<base>.backup-YYYYMMDD.db` 並精確保留最新 2 份；根目錄 Multi-Stage `Dockerfile` 預設對齊 `/app/.scratch/market-cache`，100% 無痛承接 QNAP 既有 `/share/Container/stock-data` 掛載。_Avoid_: Hardcoded /data Volume Drift, Unbounded Backup Bloat
 
+- **War Room Spatial Topology & 12-Period ETF Dividend Expansion (主力戰情室 Layer 6 / Card 20 / ZONE 04 空間拓撲與 12 期配息無滑軌契約)**:
+  - 核心模組：`src/components/aiForceDashboard/AiForceDashboardView.tsx`、`src/components/aiForceDashboard/cards/MonthlyRevenueCard.tsx`、`src/components/aiForceDashboard/AiForceDashboardView.test.tsx`、`src/components/aiForceDashboard/cards/MonthlyRevenueCard.test.ts`。
+  - 規格來源：Spec 0244 與 [ADR 0244](file:///d:/APP/股票紀錄/docs/adr/0244-war-room-layout-topology-and-etf-dividend-grid.md)，關聯 GitHub Issue #603。
+  - 核心領域術語與架構革新：
+    1. **Dual-Bound 2×2 Decision Matrix (雙界限 2×2 決策矩陣)**：Layer 6 採用 `repeat(auto-fit, minmax(max(440px, calc(50% - 12px)), 1fr))` 單行 CSS 雙界限軌寬，於桌面與超寬螢幕硬鎖最大 2 欄消滅 3+1 孤兒列、窄螢幕自動退回單欄；卡片順序定錨為 `12 → 21 → 10·13 → 14`（先結論與估值、後情緒與信心）。_Avoid_: Unbounded Auto-Fit Orphan Row, Buried Dynamic Signal Card
+    2. **12-Period Adaptive Dividend Overflow Guard (12 期配息免滑軌與月配溢位護欄)**：Card 20 ETF 配息區塊改採 `justifyContent: 'flex-start'` 回收上下留白；$\le 12$ 期（4×3）零滑軌完整攤平顯示，$> 12$ 期（如月配息 ETF）自動啟用 `maxHeight: '288px'` 與 `overflowY: 'auto'` 防止撐爆 Layer 4 整列高度。_Avoid_: Hardcoded 190px Scroll Trap, Unbounded Monthly Dividend Bloat
+    3. **Asymmetric Flush-Bottom ZONE 04 Matrix (ZONE 04 非對稱等高雙欄矩陣)**：右欄移除 `16`/`17` 橫向並排子網格改為 `11 → 16 → 17` 全寬單欄直排；左欄 `15` 鎖定自然高度 (`flex: 0 0 auto`)，由內建均分進度條之 `09` 獨佔剩餘高度 (`flex: 1`) 上下拉高切齊右欄底緣。_Avoid_: Compressed Side-by-Side Gauges, Equal-Flex Dead Space in Compact Card
+
 
 
 

@@ -248,4 +248,89 @@ describe('MonthlyRevenueCard - TDD Unit Tests', () => {
       expect(html).toContain('#ef4444');
     });
   });
+
+  describe('Spec 0244 T02 & T03: Card 20 ETF 配息貼頂緊湊化、12 期無滑軌全展開與 >12 期溢位護欄', () => {
+    const makeDividends = (count: number) =>
+      Array.from({ length: count }, (_, i) => ({
+        quarter: `2026-${String(12 - (i % 12)).padStart(2, '0')}-${String(15 - Math.floor(i / 12)).padStart(2, '0')}`,
+        amount: 0.6 + (i % 4) * 0.25,
+        yieldRate: Number((0.67 + i * 0.1).toFixed(2)),
+      }));
+
+    it('T02 & T03: 12 期 ETF 配息應採貼頂緊湊佈局並免滑軌完整呈現（不套用 max-height / overflow-y:auto）', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { MonthlyRevenueCard } = await import('./MonthlyRevenueCard');
+
+      const html = renderToStaticMarkup(
+        React.createElement(MonthlyRevenueCard, {
+          data: {
+            isEtf: true,
+            isUsMarket: false,
+            currency: 'TWD',
+            history: [],
+            growthBadge: 'ETF 規模穩健',
+            asOfDateText: 'ETF 規模與受益人 (2026-11-13)',
+            etfData: {
+              aumBillion: 4380,
+              dividendYield: 1.77,
+              beneficiaries: 3956621,
+              quarterlyDividends: makeDividends(12),
+            },
+            isEmpty: false,
+          },
+          colorTheme: 'taiwan',
+          market: 'TW',
+        })
+      );
+
+      // T02: 配息外層區段貼頂展開，消除上下置中留白
+      expect(html).toContain('data-testid="etf-dividend-section"');
+      const sectionIdx = html.indexOf('data-testid="etf-dividend-section"');
+      expect(html.slice(sectionIdx, sectionIdx + 140)).toContain('justify-content:flex-start');
+
+      // T03: <= 12 期免滑軌完整展示
+      const gridIdx = html.indexOf('data-testid="etf-dividend-history-grid"');
+      expect(gridIdx).toBeGreaterThan(-1);
+      const gridTag = html.slice(gridIdx, html.indexOf('>', gridIdx) + 1);
+      expect(gridTag).not.toContain('overflow-y:auto');
+      expect(gridTag).not.toContain('max-height:190px');
+      expect(html).toContain('共 12 期');
+    });
+
+    it('T03: 超過 12 期（如 16 期月配息 ETF）應自動啟用高度上限與垂直捲動護欄', async () => {
+      const React = await import('react');
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { MonthlyRevenueCard } = await import('./MonthlyRevenueCard');
+
+      const html = renderToStaticMarkup(
+        React.createElement(MonthlyRevenueCard, {
+          data: {
+            isEtf: true,
+            isUsMarket: false,
+            currency: 'TWD',
+            history: [],
+            growthBadge: 'ETF 規模穩健',
+            asOfDateText: 'ETF 規模與受益人 (2026-11-13)',
+            etfData: {
+              aumBillion: 2800,
+              dividendYield: 8.5,
+              beneficiaries: 850000,
+              quarterlyDividends: makeDividends(16),
+            },
+            isEmpty: false,
+          },
+          colorTheme: 'taiwan',
+          market: 'TW',
+        })
+      );
+
+      const gridIdx = html.indexOf('data-testid="etf-dividend-history-grid"');
+      expect(gridIdx).toBeGreaterThan(-1);
+      const gridTag = html.slice(gridIdx, html.indexOf('>', gridIdx) + 1);
+      expect(gridTag).toContain('overflow-y:auto');
+      expect(gridTag).toContain('max-height:288px');
+      expect(html).toContain('共 16 期');
+    });
+  });
 });
