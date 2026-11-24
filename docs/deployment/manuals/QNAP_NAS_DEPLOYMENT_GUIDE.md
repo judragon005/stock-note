@@ -80,12 +80,26 @@ services:
 建議採用以下任一方案啟用 HTTPS：
 
 ### 方案 A：Tailscale Serve HTTPS（推薦，跨外網與手機最省事）
-1. 於 QNAP App Center 安裝並登入 **Tailscale**，並於 Tailscale Admin Console → **DNS** 頁面啟用 **MagicDNS** 與 **HTTPS Certificates**。
-2. SSH 進入 QNAP NAS 執行：
-   ```bash
-   tailscale serve --bg 13000
-   ```
-3. 手機與筆電開啟 `https://<你的NAS名稱>.<tailnet>.ts.net`，即自動享有有效憑證 HTTPS 安全上下文與端對端加密穿透，無需於路由器開 Port。
+1. 登入 Tailscale Admin Console → **DNS** 頁面，啟用 **MagicDNS** 與 **HTTPS Certificates**（一次性設定，系統會自動申請並續簽有效 SSL 憑證）。
+2. 依您於 QNAP 上安裝 Tailscale 的方式執行 `tailscale serve`：
+   - **Docker 版 Tailscale（安裝於 Container Station 容器內，推薦）**：
+     1. 於 Container Station 左側選 **「容器」** → 點進 `tailscale` 容器 → 點選上方 **「執行 (Exec)」** → 執行 `/bin/sh`（或 SSH 進 NAS 執行 `docker exec -it tailscale sh`）。
+     2. 先測試 `wget -qO- http://127.0.0.1:13000/healthz` 判斷容器網路模式：
+        - **有回傳 JSON（`network_mode: host`）**：
+          ```sh
+          tailscale serve --bg http://127.0.0.1:13000
+          ```
+        - **無法連線（Bridge 獨立網段）**：改指 NAS 區網 IP
+          ```sh
+          tailscale serve --bg http://<NAS的區網IP>:13000
+          ```
+     3. 執行 `tailscale serve status` 確認已將 `https://<節點名>.<tailnet>.ts.net` 轉發至 Port `13000`。
+   - **QNAP App Center 原生套件版**：
+     SSH 進入 QNAP NAS 執行：
+     ```bash
+     tailscale serve --bg 13000
+     ```
+3. 手機與筆電連上 Tailscale 後開啟 `https://<節點名>.<tailnet>.ts.net`，即自動享有有效憑證 HTTPS 安全上下文與端對端加密穿透，無需於路由器開 Port。
 
 ### 方案 B：QNAP 內建反向代理 HTTPS（純區網 / 自有網域）
 1. 開啟 QNAP **控制台** → **網路與檔案服務** → **網路存取** → **反向代理** → 點選 **新增**。
