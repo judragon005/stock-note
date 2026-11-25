@@ -9,19 +9,22 @@
  */
 
 const { initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+const { getMarketAnchorDate } = require('./market-freshness-service.cjs');
 const { runTdccIngestion } = require('./ingest-tw-tdcc.cjs');
 const { runCorporateActionsIngestion } = require('./ingest-tw-corporate-actions.cjs');
 const { runMonthlyRevenueIngestion } = require('./ingest-tw-monthly-revenue.cjs');
 const { fetchAndIngestEtfDailyNav } = require('./ingest-macro-sentiment.cjs');
-const { ingestTwseEtfMetaList } = require('./ingest-tw-etf-meta.cjs');
+const { fetchAndIngestTwseEtfOpenApiMeta } = require('./ingest-tw-etf-meta.cjs');
 
 /**
  * 執行每週全市場湖倉增量累積更新 (冪等、單點錯誤隔離)
  */
-async function runWeeklyLakehouseSync({ customDbPath, handlers = {} } = {}) {
+async function runWeeklyLakehouseSync({ customDbPath, now = new Date(), handlers = {} } = {}) {
   const startedAt = Date.now();
+  const twAnchorDate = getMarketAnchorDate('TW', now);
   const report = {
     startedAt: new Date(startedAt).toISOString(),
+    anchorDate: twAnchorDate,
     tdcc: { ok: false, savedCount: 0, error: null },
     corporateActions: { ok: false, savedCount: 0, error: null },
     monthlyRevenue: { ok: false, savedCount: 0, error: null },
@@ -33,7 +36,10 @@ async function runWeeklyLakehouseSync({ customDbPath, handlers = {} } = {}) {
   const corpFn = handlers.runCorporateActionsIngestion || runCorporateActionsIngestion;
   const revFn = handlers.runMonthlyRevenueIngestion || runMonthlyRevenueIngestion;
   const navFn = handlers.fetchAndIngestEtfDailyNav || fetchAndIngestEtfDailyNav;
-  const metaFn = handlers.ingestTwseEtfMetaList || ingestTwseEtfMetaList;
+  const metaFn =
+    handlers.fetchAndIngestTwseEtfOpenApiMeta ||
+    handlers.ingestTwseEtfMetaList ||
+    fetchAndIngestTwseEtfOpenApiMeta;
 
   try {
     const res = await tdccFn(customDbPath);
@@ -57,8 +63,21 @@ async function runWeeklyLakehouseSync({ customDbPath, handlers = {} } = {}) {
   }
 
   try {
-    const count = await navFn(customDbPath);
-    report.etfNav = { ok: true, savedCount: Number(count || 0), error: null };
+    const navRes = await navFn(customDbPath, twAnchorDate);
+    const navCount =
+      typeof navRes === 'number'
+        ? navRes
+        : Number(navRes?.count ?? navRes?.savedCount ?? 0);
+    const navOk =
+      typeof navRes === 'number'
+        ? Number.isFinite(navRes)
+        : Boolean(navRes && navRes.success !== false);
+    report.etfNav = {
+      ok: navOk,
+      savedCount: Number.isFinite(navCount) ? navCount : 0,
+      anchorDate: twAnchorDate,
+      error: navOk ? null : navRes?.error || 'ETF_NAV_FAILED',
+    };
   } catch (err) {
     report.etfNav.error = err?.message || String(err);
   }
@@ -66,7 +85,19 @@ async function runWeeklyLakehouseSync({ customDbPath, handlers = {} } = {}) {
   try {
     const db = initSqliteLakehouseDb(customDbPath);
     const res = await metaFn(db);
-    report.etfMeta = { ok: true, savedCount: Number(res?.savedCount ?? res ?? 0), error: null };
+    const metaCount =
+      typeof res === 'number'
+        ? res
+        : Number(res?.savedCount ?? res?.count ?? 0);
+    const metaOk =
+      typeof res === 'number'
+        ? Number.isFinite(res)
+        : Boolean(res && res.success !== false);
+    report.etfMeta = {
+      ok: metaOk,
+      savedCount: Number.isFinite(metaCount) ? metaCount : 0,
+      error: metaOk ? null : res?.error || 'ETF_META_FAILED',
+    };
   } catch (err) {
     report.etfMeta.error = err?.message || String(err);
   }

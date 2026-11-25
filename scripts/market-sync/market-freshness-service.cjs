@@ -4,24 +4,12 @@
  * 解耦中介層依戀，提供獨立純粹的市場新鮮度計算
  */
 
-const fs = require('fs');
-const path = require('path');
-const { MARKET_HEALTH_THRESHOLDS } = require('./sync-thresholds.cjs');
-
-// 讀取台美法定休市日字典 (若存在)
-const holidaysJsonPath = path.resolve(__dirname, '../../src/data/market-holidays.json');
-let MARKET_HOLIDAYS = { TW: {}, US: {} };
-try {
-  if (fs.existsSync(holidaysJsonPath)) {
-    const parsed = JSON.parse(fs.readFileSync(holidaysJsonPath, 'utf-8'));
-    MARKET_HOLIDAYS = {
-      TW: parsed?.TW || {},
-      US: parsed?.US || {},
-    };
-  }
-} catch {
-  MARKET_HOLIDAYS = { TW: {}, US: {} };
-}
+const {
+  MARKET_HEALTH_THRESHOLDS,
+  HISTORICAL_MARKET_HEALTH_THRESHOLDS,
+  MARKET_SETTLEMENT_CUTOFFS,
+} = require('./sync-thresholds.cjs');
+const { isTradingDay, getLatestTdccPublishDate } = require('./trading-calendar-engine.cjs');
 
 /**
  * 透過 Intl.DateTimeFormat 解析指定 IANA 時區日期時間分量（自動處理夏冬令 DST，強制 hourCycle: 'h23'）
@@ -79,11 +67,7 @@ function formatUtcYMD(utcDate) {
 }
 
 function isMarketTradingDate(utcDate, market) {
-  const day = utcDate.getUTCDay();
-  if (day === 0 || day === 6) return false;
-  const ymd = formatUtcYMD(utcDate);
-  const holidays = market === 'US' ? MARKET_HOLIDAYS.US : MARKET_HOLIDAYS.TW;
-  return !Object.prototype.hasOwnProperty.call(holidays, ymd);
+  return isTradingDay(formatUtcYMD(utcDate), market);
 }
 
 /**
@@ -94,7 +78,10 @@ function isMarketTradingDate(utcDate, market) {
  */
 function getMarketAnchorDate(market = 'TW', now = new Date()) {
   const timeZone = market === 'US' ? 'America/New_York' : 'Asia/Taipei';
-  const settleThresholdMins = market === 'US' ? 17 * 60 : 15 * 60;
+  const settleThresholdMins =
+    market === 'US'
+      ? MARKET_SETTLEMENT_CUTOFFS.US_SETTLE_MINUTES
+      : MARKET_SETTLEMENT_CUTOFFS.TW_SETTLE_MINUTES;
   const tz = getTimeZoneParts(now, timeZone);
 
   // 若當日為有效交易日且已過盤後結算門檻，錨定當日
@@ -113,9 +100,6 @@ function getMarketAnchorDate(market = 'TW', now = new Date()) {
   return formatUtcYMD(cursor);
 }
 
-
-const { getLatestTdccPublishDate } = require('./trading-calendar-engine.cjs');
-
 /**
  * 計算指定時間點當前最新已結算之 TDCC 週五基準日 (每週五 21:00 結算)
  * @param {Date} [now=new Date()] 基準時間
@@ -127,7 +111,7 @@ function getLatestSettledTdccFriday(now = new Date()) {
   const target = new Date(tz.utcDate.getTime());
 
   if (day === 5) {
-    if (tz.totalMins >= 21 * 60) {
+    if (tz.totalMins >= MARKET_SETTLEMENT_CUTOFFS.TDCC_SETTLE_MINUTES) {
       return tz.ymd;
     }
     target.setUTCDate(target.getUTCDate() - 7);
@@ -150,7 +134,10 @@ function getLatestSettledRevenueMonth(now = new Date()) {
   const tz = getTimeZoneParts(now, 'Asia/Taipei');
   const dayOfMonth = tz.day;
 
-  const isPastDeadline = dayOfMonth > 10 || (dayOfMonth === 10 && tz.totalMins >= 17 * 60 + 30);
+  const isPastDeadline =
+    dayOfMonth > MARKET_SETTLEMENT_CUTOFFS.REVENUE_DEADLINE_DAY ||
+    (dayOfMonth === MARKET_SETTLEMENT_CUTOFFS.REVENUE_DEADLINE_DAY &&
+      tz.totalMins >= MARKET_SETTLEMENT_CUTOFFS.REVENUE_DEADLINE_MINUTES);
   const monthsOffset = isPastDeadline ? 1 : 2;
 
   let year = tz.year;
@@ -262,8 +249,16 @@ function checkMarketFreshness(db, now = new Date()) {
         const dayTradeCount = Number(chipCov?.dayTradeCount ?? 0);
         const valCount = Number(valCov?.count ?? 0);
 
+        const isLatestDate = d === twLatest;
+        const marginMin = isLatestDate
+          ? MARKET_HEALTH_THRESHOLDS.MARGIN_COUNT_MIN
+          : HISTORICAL_MARKET_HEALTH_THRESHOLDS.TWSE_MARGIN_COUNT_MIN;
+        const valuationMin = isLatestDate
+          ? MARKET_HEALTH_THRESHOLDS.VALUATION_COUNT_MIN
+          : HISTORICAL_MARKET_HEALTH_THRESHOLDS.TWSE_VALUATION_COUNT_MIN;
+
         let dayIncomplete = false;
-        if (marginCount < MARKET_HEALTH_THRESHOLDS.MARGIN_COUNT_MIN) {
+        if (marginCount < marginMin) {
           missingPlanesSet.add('margin');
           dayIncomplete = true;
         }
@@ -275,7 +270,7 @@ function checkMarketFreshness(db, now = new Date()) {
           missingPlanesSet.add('day_trade');
           dayIncomplete = true;
         }
-        if (valCount < MARKET_HEALTH_THRESHOLDS.VALUATION_COUNT_MIN) {
+        if (valCount < valuationMin) {
           missingPlanesSet.add('valuation');
           dayIncomplete = true;
         }
@@ -310,8 +305,9 @@ function checkMarketFreshness(db, now = new Date()) {
     incompleteDates.length > 0
   );
   const isUsStale = Boolean(!usLatest || usLatest < usAnchor);
-  const isTdccStale = Boolean(tdccLatest && tdccLatest < tdccAnchor);
-  const isRevenueStale = Boolean(revenueLatest && revenueLatest < revenueAnchor);
+  // Spec 0246 Ticket 01: 空表 (null) 必判陳舊，確保全新部署 NAS 會觸發首次週集保與月營收建庫
+  const isTdccStale = Boolean(!tdccLatest || tdccLatest < tdccAnchor);
+  const isRevenueStale = Boolean(!revenueLatest || revenueLatest < revenueAnchor);
 
   return {
     tw: {
@@ -329,6 +325,7 @@ function checkMarketFreshness(db, now = new Date()) {
 }
 
 module.exports = {
+  getTimeZoneParts,
   getMarketAnchorDate,
   getLatestSettledTdccFriday,
   getLatestTdccPublishDate,

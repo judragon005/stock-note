@@ -150,6 +150,15 @@ function parseTwseDailyQuotesBulk(rawData, dateStr) {
   return result;
 }
 
+/**
+ * 判斷是否為台股櫃買 6 碼以 7 開頭之認購／認售權證 (對齊上市 ALLBUT0999，Spec 0184 / Spec 0246 Ticket 04)
+ * @param {string} symbol
+ * @returns {boolean}
+ */
+function isTwOtcWarrantSymbol(symbol) {
+  return /^7[0-9]{5}$/.test(String(symbol || '').trim().toUpperCase());
+}
+
 function parseTpexDailyQuotesBulk(rawData, dateStr) {
   const result = {};
   if (!rawData) return result;
@@ -167,6 +176,9 @@ function parseTpexDailyQuotesBulk(rawData, dateStr) {
       // 剝除櫃買可能的 'O' 尾綴 (如 3293O -> 3293, 00679BO -> 00679B)
       const symbol = stripOtcSuffix(rawSymbol);
       if (!symbol || symbol.length > 6) continue;
+
+      // Spec 0246 Ticket 04: 與 backfill-tw-history-web 統一濾除 6 碼 7 開頭櫃買權證
+      if (isTwOtcWarrantSymbol(symbol)) continue;
 
       const isSplitSign = row[3] === '+' || row[3] === '-' || row[3] === 'X' || row[3] === ' ';
       const close = parseCleanNumber(row[2]);
@@ -371,6 +383,7 @@ module.exports = {
   formatDateYMD,
   parseCleanNumber,
   stripOtcSuffix,
+  isTwOtcWarrantSymbol,
   buildSymbolAliases,
   normalizeYahooSymbol,
   normalizeUsTickerCandidates,

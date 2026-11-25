@@ -276,6 +276,11 @@ export interface PriceQuote {
   previousClose?: number;
   change?: number;
   changePercent?: number;
+  open?: number;
+  high?: number;
+  low?: number;
+  volume?: number;
+  transactions?: number;
   currency: Currency;
   status: PriceQuoteStatus;
   updatedAt: number; // Unix timestamp in ms

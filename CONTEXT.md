@@ -106,8 +106,8 @@ _Avoid_: PayDate Key Collision, Double Counting Accruals
 **Market Settlement Status (市場結算狀態)**:
 判定標的所在市場是否已完成正式收盤與當日盤後完整籌碼數據（如三大法人、融資券）結算。
 
-- 台股 (TW)：週一至週五 15:00 (含) 之後為已結算；15:00 以前與週末為未結算。
-- 美股 (US)：台北時間每日早上 08:00 (含) 之後為已結算；08:00 前為未結算。
+- 台股 (TW)：依 `src/data/market-holidays.json` 排除週末與法定休市日，台北時間 (`Asia/Taipei`) 15:00 (含) 之後為已結算（盤後 14:40 起允許 Phase 1 收盤價量與 ETF 淨值預先寫入，16:30 起執行 Phase 2 完整籌碼／資券／借券收斂並推進水位線）。
+- 美股 (US)：依 `src/data/market-holidays.json` 排除週末與美股休市日，美東時間 (`America/New_York`) 17:00 (含) 之後為已結算（自動適配夏令／冬令 DST，前後端共用同一門檻 SSOT）。
 _Avoid_: Market Open Status, Live Flag
 
 **Anchor Trading Date (量化定錨交易日)**:
@@ -3122,6 +3122,14 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     1. **Viewport-Portaled Modal Shell (全域視口傳送彈窗原語)**：以零依賴 `createPortal(..., document.body)` 統一封裝 `.modal-overlay` + `glass-card`、無障礙 `role="dialog" aria-modal="true"`、`Escape`/遮罩關閉、`closeLocked` 防誤關保護與背景捲動鎖定，徹底免疫深色毛玻璃父層 `backdrop-filter` 層疊上下文劫持，並於 CI 永久禁止未定義之 `.modal-backdrop`。_Avoid_: Document-Flow Modal Fallback, Undefined .modal-backdrop
     2. **Regime-Gated Technical Resonance & Intraday Zero-Volume Anchor (體制閘控四維量價動能共鳴與盤中零量定錨)**：單趟 $O(N)$ 計算 `KDJ (含 J=3K-2D)`、`MACD`、`RSI(6/14)`，並以 `resolveVolumeAnchorCandles` 隔離盤中未結算 `volume = 0` 參考價避免假性量縮；Card 01B 置於 ZONE 01 主 K 線圖正下方原地升級 `executive-verdict-strip`，整合 ADX 體制權重、衝突裁決、250D 10 日歷史勝率並與主圖時框／副圖全雙向聯動。_Avoid_: Indicator Soup Without Regime Gate, Intraday Zero-Volume Contamination, O(N^2) Timeframe Recalculation
     3. **Calendar-Anchored TDCC Gap Healing & 10-Lot Retail SSOT (日曆定錨集保差集自癒與 10 張散戶單一口徑)**：官方 `qryStock` 解析改以第 2 欄文字語意辨識「合計」（`16/17` 雙通吃）並加 1~15 級保底，全鏈路 `under10Ratio` 嚴格收斂為級距 `1~3`（1~10 張）；以 `hasTdccSeriesGap` 驅動官方日曆差集重播與逐週即時 Upsert 抗超時中斷；前端改採真實 `28 ± 7` 天日曆窗計算大戶變動並以虛線段誠實標記 `> 11` 天斷層。_Avoid_: Hardcoded Level-17 Total Row, Array-Index 4-Week Subtraction, 20-Lot Mislabeled as 10-Lot
+
+- **Lakehouse Sync SSOT Convergence, NAS Per-Lane Autonomous Watermarks & Card 01 Intraday OHLCV Stitch (外部資料更新中樞收斂、NAS 分軌水位線自治排程、靜態快取退役暨 Card 01 盤中實量縫合)**:
+  - 核心模組：`scripts/market-sync/lakehouse-sync-coordinator.cjs`、`scripts/market-sync/sync-thresholds.cjs`、`scripts/market-sync/market-freshness-service.cjs`、`scripts/market-sync/nas-autonomous-scheduler.cjs`、`scripts/market-sync/vite-market-middleware.cjs`、`scripts/market-sync/backfill-tw-history-web.cjs`、`scripts/market-sync/backfill-full-market-history.cjs`、`scripts/market-sync/sync-tw-market.cjs`、`scripts/market-sync/sync-us-market.cjs`、`scripts/market-sync/weekly-lakehouse-sync.cjs`、`scripts/market-sync/market-sync-core.cjs`、`scripts/nas-server.cjs`、`Dockerfile`、`src/data/market-holidays.json`、`src/engine/marketSettlementEngine.ts`、`src/engine/priceFetcher.ts`、`src/engine/aiForceDashboardEngine.ts`、`src/hooks/useMarketCatchupSync.ts`、`src/components/MarketSyncStatusBadge.tsx`、`src/components/MarketScheduleHubSection.tsx`、`src/App.tsx`。
+  - 規格來源：Spec 0246 (v9.28.0) 與 [ADR 0246](file:///d:/APP/股票紀錄/docs/adr/0246-lakehouse-sync-ssot-convergence.md)，關聯 GitHub Issue #607。
+  - 核心領域術語與架構革新：
+    1. **Gap-Set Lakehouse Reconciliation (缺口集合湖倉調諧)**：廢除僅觸發當日空跑的缺口盲視同步，收斂至單一協調中樞 `lakehouse-sync-coordinator.cjs` 與同行程 token-safe 全域互斥鎖 `withGlobalSyncLock`，將近 30 個日曆日內「完全缺失交易日」與「主副表半殘日」合併升冪重播，搭配台股兩階段盤後容錯收斂（Phase 1 價量 $\ge 14:40$、Phase 2 完整籌碼 $\ge 16:30$）與每軌每日 4 次冷卻重試配額。_Avoid_: Gap-Blind Single-Day Catchup, Unbounded Retry Loop, Split-Lock Sync Race
+    2. **Per-Lane Watermark Convergence (分軌水位線收斂)**：NAS 自治排程器廢除跨市場共用單日鎖，將 `twDaily`、`usDaily`、`macro`、`weekly` 四條軌道解耦為獨立水位線狀態機，澈底消除週二至週五美股清晨結算鎖死台股午後盤後同步之餓死缺陷，並於 `/healthz` 完整暴露四軌狀態與協調器遙測。_Avoid_: Shared Cross-Market Daily Lock, Morning US Starving Afternoon TW
+    3. **SQLite-Only Sync Telemetry SSOT (SQLite 單一同步遙測事實來源)**：採 Expand–Contract 退役靜態 JSON 市場快取，由 `/api/market/sync-status` 統一供應 SQLite 分軌結算日、缺口數、重試配額與每週維護遙測；移除 `App.tsx` 開機靜態下載與 IndexedDB 250 日歷史單根覆寫，改掛載支援追趕自動輪詢之 `useMarketCatchupSync`；取消 `nas-server.cjs` 對 `.json` 之 `immutable` 標頭，並於 `architecturalFitnessGuard.test.ts` 不變量 7 永久封鎖靜態快取回流。_Avoid_: Static JSON Cache Split-Brain, Immutable JSON Cache Header, Single-Candle IndexedDB Overwrite
 
 
 

@@ -14,6 +14,7 @@ const path = require('node:path');
 const { createMarketApiMiddleware } = require('./market-sync/vite-market-middleware.cjs');
 const { startNasAutonomousScheduler } = require('./market-sync/nas-autonomous-scheduler.cjs');
 const { getDbPath, checkpointSqliteWal, closeSqliteDb } = require('./market-sync/sqlite-db-core.cjs');
+const { getCoordinatorTelemetry } = require('./market-sync/lakehouse-sync-coordinator.cjs');
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -271,7 +272,8 @@ function serveStaticFile(req, res, distDir) {
 
   const ext = path.extname(targetFile).toLowerCase();
   const mime = MIME_TYPES[ext] || 'application/octet-stream';
-  const cacheControl = ext === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable';
+  // Spec 0246 Ticket 09: .html 與 .json 一律 no-cache，杜絕動態資料遭瀏覽器一年期 immutable 鎖死
+  const cacheControl = ext === '.html' || ext === '.json' ? 'no-cache' : 'public, max-age=31536000, immutable';
   res.writeHead(200, {
     'Content-Type': mime,
     'Cache-Control': cacheControl,
@@ -320,6 +322,7 @@ function createNasServer({
       const schedulerState = scheduler
         ? { enabled: true, ...(rawSchedulerState || {}) }
         : { enabled: false };
+      const coordinator = getCoordinatorTelemetry(resolvedDbPath);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(
         JSON.stringify({
@@ -327,6 +330,7 @@ function createNasServer({
           dbPath: resolvedDbPath,
           dbSizeBytes,
           scheduler: schedulerState,
+          coordinator,
           latestBackup,
         })
       );

@@ -54,5 +54,43 @@ describe('MarketScheduleHubSection - 台美雙軌背景全回補控制台 (Spec 
     expect(html).toContain('value="120"');
     expect(html).toContain('value="250"');
   });
+
+  it('4. [Spec 0246 Ticket 06 & 07] 排程監控卡片應呈現 weekly/macro 水位線、台股缺口清單與背景追趕狀態徽章', () => {
+    const html = renderToStaticMarkup(
+      <MarketScheduleHubSection
+        initialSyncStatus={{
+          source: 'SQLITE_SSOT',
+          tw: {
+            latestDate: '2026-11-19',
+            anchorDate: '2026-11-23',
+            isStale: true,
+            symbolCount: 2350,
+            gapCount: 2,
+            gapDates: ['2026-11-20', '2026-11-23'],
+          },
+          us: { latestDate: '2026-11-23', anchorDate: '2026-11-23', isStale: false, symbolCount: 1445 },
+          weekly: {
+            tdccLatestDate: '2026-11-20',
+            tdccAnchorDate: '2026-11-20',
+            tdccIsStale: false,
+            revenueLatestMonth: '2026-10',
+            revenueAnchorMonth: '2026-10',
+            revenueIsStale: false,
+          },
+          macro: { latestDate: '2026-11-23', anchorDate: '2026-11-23', isStale: false },
+          isCatchingUp: true,
+          lastCatchupTime: 1,
+          timestamp: Date.now(),
+        }}
+      />
+    );
+
+    expect(html).toContain('data-testid="catchup-in-progress-badge"');
+    expect(html).toContain('data-testid="tw-gap-dates-list"');
+    expect(html).toContain('2026-11-20');
+    expect(html).toContain('2026-11-23');
+    expect(html).toContain('data-testid="weekly-lane-status"');
+    expect(html).toContain('data-testid="macro-lane-status"');
+  });
 });
 

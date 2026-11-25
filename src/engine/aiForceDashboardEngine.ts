@@ -1003,6 +1003,35 @@ export interface GenerateReportOptions {
 /**
  * 依據真實歷史日 K (OHLCV) 數列動態生成完整的 AiForceDashboardReport (Spec 0140 階段一 & Spec 0143 階段二)
  */
+function buildStitchedCandle(
+  date: string,
+  realtimeQuote: {
+    price?: number;
+    open?: number;
+    high?: number;
+    low?: number;
+    volume?: number;
+    transactions?: number;
+  },
+  isIntraday: boolean
+) {
+  const price = realtimeQuote.price ?? 0;
+  const isPos = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0;
+  const open = isPos(realtimeQuote.open) ? realtimeQuote.open : price;
+  const high = isPos(realtimeQuote.high) ? Math.max(realtimeQuote.high, open, price) : Math.max(price, open);
+  const low = isPos(realtimeQuote.low) ? Math.min(realtimeQuote.low, open, price) : Math.min(price, open);
+  return {
+    date,
+    open,
+    high,
+    low,
+    close: price,
+    volume: isPos(realtimeQuote.volume) ? realtimeQuote.volume : 0,
+    ...(realtimeQuote.transactions !== undefined ? { transactions: realtimeQuote.transactions } : {}),
+    ...(isIntraday ? { isIntraday: true } : {}),
+  };
+}
+
 export function generateAiForceReportFromCandles(
   symbol: string = '0050',
   name: string = '元大台灣50',
@@ -1048,40 +1077,25 @@ export function generateAiForceReportFromCandles(
       );
     }
 
-    // Spec 0170 / Ticket 08: 盤中 (09:00~13:30) 與盤後未結算 (13:30~15:00) 時態行情動態縫合
-    // 當外部傳入有效即時行情 realtimeQuote?.price > 0 時，動態構造當日虛擬日 K 並追加至有效數列
+    // Spec 0170 / Ticket 08 & Spec 0246 Ticket 11: 僅於法定交易日執行盤中與盤後未結算動態縫合，嚴禁在休市日縫合假 K 棒
     const todayYmd = settlement.currentTradingDate || formatDateToYMD(referenceDate);
     const lastDate = effectiveCandles.length > 0 ? effectiveCandles[effectiveCandles.length - 1].date : '';
-    if (realtimeQuote?.price !== undefined && realtimeQuote.price > 0 && lastDate < todayYmd) {
-      const openPrice = realtimeQuote.open ?? realtimeQuote.price;
-      const highPrice = realtimeQuote.high ?? Math.max(realtimeQuote.price, openPrice);
-      const lowPrice = realtimeQuote.low ?? Math.min(realtimeQuote.price, openPrice);
-      const stitchedIntradayCandle = {
-        date: todayYmd,
-        open: openPrice,
-        high: highPrice,
-        low: lowPrice,
-        close: realtimeQuote.price,
-        volume: realtimeQuote.volume ?? 0,
-        transactions: realtimeQuote.transactions,
-        isIntraday: true,
-      };
-      effectiveCandles = [...effectiveCandles, stitchedIntradayCandle];
+    if (
+      settlement.isTradingDayToday !== false &&
+      realtimeQuote?.price !== undefined &&
+      realtimeQuote.price > 0 &&
+      lastDate < todayYmd
+    ) {
+      effectiveCandles = [...effectiveCandles, buildStitchedCandle(todayYmd, realtimeQuote, true)];
     }
   } else if (settlement.isSettled && effectiveCandles && effectiveCandles.length > 0) {
     // Spec 0160: 若市場今日已結算且湖倉日 K 稍有落後，若有外部即時收盤價，進行日 K 自適應防斷層縫合
     const lastDate = effectiveCandles[effectiveCandles.length - 1].date;
     if (lastDate < settlement.anchorTradingDate && realtimeQuote?.price !== undefined && realtimeQuote.price > 0) {
-      const stitchedCandle = {
-        date: settlement.anchorTradingDate,
-        open: realtimeQuote.open ?? realtimeQuote.price,
-        high: realtimeQuote.high ?? Math.max(realtimeQuote.price, realtimeQuote.open ?? realtimeQuote.price),
-        low: realtimeQuote.low ?? Math.min(realtimeQuote.price, realtimeQuote.open ?? realtimeQuote.price),
-        close: realtimeQuote.price,
-        volume: realtimeQuote.volume ?? 0,
-        transactions: realtimeQuote.transactions,
-      };
-      effectiveCandles = [...effectiveCandles, stitchedCandle];
+      effectiveCandles = [
+        ...effectiveCandles,
+        buildStitchedCandle(settlement.anchorTradingDate, realtimeQuote, false),
+      ];
     }
   }
 

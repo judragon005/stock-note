@@ -12,8 +12,20 @@ import {
   Play,
   Database,
 } from 'lucide-react';
-import { MarketCacheSummary, loadMarketCacheSummary } from '../engine/marketCacheLoader';
+import {
+  MarketSyncStatusResponse,
+  LAKEHOUSE_SYNCED_EVENT,
+  fetchMarketSyncStatus,
+} from '../hooks/useMarketCatchupSync';
 import { getTwMarketStatus, getUsMarketStatus } from '../engine/marketStatusEngine';
+
+export const fetchScheduleSyncStatus = fetchMarketSyncStatus;
+
+export interface LegacyScheduleSummaryLike {
+  date: string;
+  totalSymbols: number;
+  durationMs: number;
+}
 
 export interface BackfillStatus {
   isRunning: boolean;
@@ -45,9 +57,9 @@ export const WINDOWS_SCHEDULE_COMMANDS = {
   TEST_US_CMD: 'node scripts/market-sync/sync-us-market.cjs',
 };
 
-// 格式化水線摘要文字
+// 向後相容格式化水線摘要文字 (Spec 0133)
 export function formatScheduleSummaryText(
-  summary: MarketCacheSummary | null,
+  summary: LegacyScheduleSummaryLike | null,
   market: 'TW' | 'US'
 ): string {
   const scheduleTime = market === 'TW' ? '16:00' : '08:00';
@@ -58,9 +70,45 @@ export function formatScheduleSummaryText(
   return `✔ 已同步最新數據 (${summary.date}，涵蓋 ${summary.totalSymbols.toLocaleString()} 檔標的，耗時 ${durationSec} 秒)`;
 }
 
-export const MarketScheduleHubSection: React.FC = () => {
-  const [twSummary, setTwSummary] = useState<MarketCacheSummary | null>(null);
-  const [usSummary, setUsSummary] = useState<MarketCacheSummary | null>(null);
+/**
+ * Spec 0246 Ticket 07: 以 SQLite 同步狀態 API 格式化分軌水位線與缺口摘要
+ */
+export function formatSqliteLaneSummaryText(
+  syncStatus: MarketSyncStatusResponse | null,
+  market: 'TW' | 'US'
+): string {
+  const scheduleTime = market === 'TW' ? '14:40 / 16:30' : '美東 17:00';
+  if (!syncStatus) {
+    return `⚪ 未偵測到 SQLite 湖倉狀態 (排程時段 ${scheduleTime} 自動執行)`;
+  }
+  if (market === 'TW') {
+    const tw = syncStatus.tw;
+    if (!tw?.latestDate) {
+      return `⚪ SQLite 湖倉尚無台股資料 (應結算日 ${tw?.anchorDate || 'N/A'})`;
+    }
+    const countText = tw.symbolCount ? `，涵蓋 ${tw.symbolCount.toLocaleString()} 檔標的` : '';
+    const gapText =
+      typeof tw.gapCount === 'number' && tw.gapCount > 0
+        ? `，近 30 日缺 ${tw.gapCount} 日待補`
+        : '，近 30 日零缺口';
+    return `${tw.isStale ? '🟡' : '✔'} SQLite 最新在庫 (${tw.latestDate}${countText}${gapText})`;
+  }
+  const us = syncStatus.us;
+  if (!us?.latestDate) {
+    return `⚪ SQLite 湖倉尚無美股資料 (應結算日 ${us?.anchorDate || 'N/A'})`;
+  }
+  const countText = us.symbolCount ? `，涵蓋 ${us.symbolCount.toLocaleString()} 檔標的` : '';
+  return `${us.isStale ? '🟡' : '✔'} SQLite 最新在庫 (${us.latestDate}${countText}，${us.isStale ? '待同步至 ' + us.anchorDate : '已達最新結算日'})`;
+}
+
+export interface MarketScheduleHubSectionProps {
+  initialSyncStatus?: MarketSyncStatusResponse | null;
+}
+
+export const MarketScheduleHubSection: React.FC<MarketScheduleHubSectionProps> = ({
+  initialSyncStatus = null,
+}) => {
+  const [syncStatus, setSyncStatus] = useState<MarketSyncStatusResponse | null>(initialSyncStatus);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -120,12 +168,8 @@ export const MarketScheduleHubSection: React.FC = () => {
   const fetchSummaries = async () => {
     setIsLoading(true);
     try {
-      const [tw, us] = await Promise.all([
-        loadMarketCacheSummary('TW'),
-        loadMarketCacheSummary('US'),
-      ]);
-      setTwSummary(tw);
-      setUsSummary(us);
+      const data = await fetchScheduleSyncStatus();
+      setSyncStatus(data);
     } catch {
       // 容錯降級
     } finally {
@@ -204,15 +248,25 @@ export const MarketScheduleHubSection: React.FC = () => {
 
 
   useEffect(() => {
-    fetchSummaries();
-    fetchBackfillStatus();
+    void fetchSummaries();
+    void fetchBackfillStatus();
+
+    const handleSynced = () => {
+      void fetchSummaries();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener(LAKEHOUSE_SYNCED_EVENT, handleSynced);
+    }
 
     const interval = setInterval(() => {
-      fetchBackfillStatus();
+      void fetchBackfillStatus();
     }, 3000);
 
     return () => {
       clearInterval(interval);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener(LAKEHOUSE_SYNCED_EVENT, handleSynced);
+      }
       if (copyTimerRef.current) {
         clearTimeout(copyTimerRef.current as any);
       }
@@ -309,26 +363,44 @@ export const MarketScheduleHubSection: React.FC = () => {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={fetchSummaries}
-          disabled={isLoading}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '6px 14px',
-            borderRadius: '8px',
-            background: 'rgba(255, 255, 255, 0.05)',
-            border: '1px solid var(--border-color)',
-            color: 'var(--text-secondary)',
-            fontSize: '0.78rem',
-            cursor: isLoading ? 'not-allowed' : 'pointer',
-          }}
-        >
-          <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
-          {isLoading ? '重新整理中...' : '重新整理快取狀態'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {syncStatus?.isCatchingUp && (
+            <span
+              data-testid="catchup-in-progress-badge"
+              style={{
+                fontSize: '0.72rem',
+                padding: '4px 10px',
+                borderRadius: '12px',
+                background: 'rgba(245, 158, 11, 0.2)',
+                color: '#fbbf24',
+                border: '1px solid rgba(245, 158, 11, 0.35)',
+                fontWeight: 600,
+              }}
+            >
+              ⚡ 背景缺口追趕同步中...
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={fetchSummaries}
+            disabled={isLoading}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 14px',
+              borderRadius: '8px',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid var(--border-color)',
+              color: 'var(--text-secondary)',
+              fontSize: '0.78rem',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
+            {isLoading ? '重新整理中...' : '重新整理快取狀態'}
+          </button>
+        </div>
       </div>
 
       {/* 排程水線監控卡片 (雙欄) */}
@@ -374,9 +446,26 @@ export const MarketScheduleHubSection: React.FC = () => {
               <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>每日 16:00 執行</span>
             </div>
           </div>
-          <div style={{ fontSize: '0.78rem', color: twSummary ? '#f8fafc' : 'var(--text-muted)', lineHeight: 1.5 }}>
-            {formatScheduleSummaryText(twSummary, 'TW')}
+          <div style={{ fontSize: '0.78rem', color: syncStatus?.tw?.latestDate ? '#f8fafc' : 'var(--text-muted)', lineHeight: 1.5 }}>
+            {formatSqliteLaneSummaryText(syncStatus, 'TW')}
           </div>
+          {syncStatus?.tw?.gapDates && syncStatus.tw.gapDates.length > 0 && (
+            <div
+              data-testid="tw-gap-dates-list"
+              style={{
+                fontSize: '0.7rem',
+                color: '#fbbf24',
+                background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.25)',
+                borderRadius: '8px',
+                padding: '6px 8px',
+              }}
+            >
+              待補缺口 ({syncStatus.tw.gapDates.length} 日)：
+              {syncStatus.tw.gapDates.slice(0, 8).join(', ')}
+              {syncStatus.tw.gapDates.length > 8 ? ` …(+${syncStatus.tw.gapDates.length - 8})` : ''}
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', color: 'var(--text-muted)', borderTop: '1px solid rgba(51, 65, 85, 0.5)', paddingTop: '8px', marginTop: '4px' }}>
             <span>任務名稱: <code style={{ color: '#38bdf8' }}>StockTracker_TW_Sync</code></span>
             <button
@@ -435,8 +524,8 @@ export const MarketScheduleHubSection: React.FC = () => {
               <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>每日 08:00 執行</span>
             </div>
           </div>
-          <div style={{ fontSize: '0.78rem', color: usSummary ? '#f8fafc' : 'var(--text-muted)', lineHeight: 1.5 }}>
-            {formatScheduleSummaryText(usSummary, 'US')}
+          <div style={{ fontSize: '0.78rem', color: syncStatus?.us?.latestDate ? '#f8fafc' : 'var(--text-muted)', lineHeight: 1.5 }}>
+            {formatSqliteLaneSummaryText(syncStatus, 'US')}
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', color: 'var(--text-muted)', borderTop: '1px solid rgba(51, 65, 85, 0.5)', paddingTop: '8px', marginTop: '4px' }}>
             <span>任務名稱: <code style={{ color: '#38bdf8' }}>StockTracker_US_Sync</code></span>
@@ -460,6 +549,49 @@ export const MarketScheduleHubSection: React.FC = () => {
               <span>{copiedKey === 'test_us' ? '已複製測試指令' : '手動測試指令'}</span>
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* 每週與宏觀雙軌水位線摘要 (Spec 0246 Ticket 07 四軌 SSOT) */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: '12px',
+          marginBottom: '20px',
+        }}
+      >
+        <div
+          data-testid="weekly-lane-status"
+          style={{
+            background: 'rgba(15, 23, 42, 0.45)',
+            padding: '12px 14px',
+            borderRadius: '10px',
+            border: '1px solid rgba(148, 163, 184, 0.2)',
+            fontSize: '0.75rem',
+            color: 'var(--text-secondary)',
+          }}
+        >
+          <strong style={{ color: '#e2e8f0' }}>📅 每週湖倉軌道 (TDCC / 月營收)：</strong>
+          {syncStatus?.weekly
+            ? `集保 ${syncStatus.weekly.tdccLatestDate || '無'} (${syncStatus.weekly.tdccIsStale ? '待更新' : '最新'}) · 營收 ${syncStatus.weekly.revenueLatestMonth || '無'} (${syncStatus.weekly.revenueIsStale ? '待更新' : '最新'})`
+            : '⚪ 等待載入每週水位線'}
+        </div>
+        <div
+          data-testid="macro-lane-status"
+          style={{
+            background: 'rgba(15, 23, 42, 0.45)',
+            padding: '12px 14px',
+            borderRadius: '10px',
+            border: '1px solid rgba(148, 163, 184, 0.2)',
+            fontSize: '0.75rem',
+            color: 'var(--text-secondary)',
+          }}
+        >
+          <strong style={{ color: '#e2e8f0' }}>🌐 宏觀情緒軌道 (FRED / VIX)：</strong>
+          {syncStatus?.macro?.latestDate
+            ? `最新 ${syncStatus.macro.latestDate} (${syncStatus.macro.isStale ? '待更新' : '最新'})`
+            : '⚪ 尚無宏觀日線紀錄'}
         </div>
       </div>
 

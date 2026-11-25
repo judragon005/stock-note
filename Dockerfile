@@ -17,9 +17,10 @@ ENV TZ=Asia/Taipei
 ENV PORT=3000
 ENV HOST=0.0.0.0
 
-# 僅複製靜態產物與後端湖倉腳本，大幅縮減映像體積與執行記憶體
+# 僅複製靜態產物、後端湖倉腳本與台美法定休市日曆 (Spec 0246)
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/src/data/market-holidays.json ./src/data/market-holidays.json
 COPY --from=builder /app/package.json ./package.json
 
 # 預設資料庫目錄對齊 /app/.scratch/market-cache，100% 向後相容 QNAP 既定掛載

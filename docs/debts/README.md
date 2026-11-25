@@ -72,6 +72,7 @@
 | [**0062**](0062-war-room-dual-market-code-smells-consolidation.md) | 主力戰情室雙市場重構衍生之 Fowler Code Smells 收斂清單（共用別名/DDL、漲跌色票 helper 與巨石模組拆解） | `P3` | `RESOLVED` | /code-review 雙軸審查回饋 (Spec 0239 / Issue #592) | `Refactor` · `CleanCode` · `DRY` · `AiForceDashboard` · `MarketSync` | **已於 Spec 0240 (Issue #594) Wave 1 完整解決** |
 | [**0063**](0063-legacy-modals-portal-shell-migration.md) | 全站其餘 14 顆既有彈窗漸進遷移至 ModalShell 頂層 Portal 原語 | `P3` | `OPEN` | Spec 0245 彈窗審計 (Issue #605) | `Refactor` · `UI` · `Accessibility` · `ModalShell` · `Portal` | 後續迭代觸及各彈窗時漸進遷移或無障礙專題清償 |
 | [**0064**](0064-war-room-resonance-and-tdcc-smells-consolidation.md) | 主 K 四維共鳴引擎拆解與 TDCC / 擺盪引擎 DRY 收斂 | `P3` | `OPEN` | Spec 0245 `/code-review` 複審 (Issue #605) | `Refactor` · `CleanCode` · `DRY` · `AiForceDashboard` · `TDCC` | 後續擴充主 K 技術支柱或演進 TDCC 圖表時重構 |
+| [**0065**](0065-nas-scheduler-retry-ledger-and-decomposition.md) | NAS 排程重試帳本單一化與長函式軌道拆解 | `P3` | `OPEN` | Spec 0246 `/code-review` 終審 (Issue #607) | `Refactor` · `CleanCode` · `DRY` · `MarketSync` · `NAS-Scheduler` | 後續擴充排程軌道或持久化排程狀態時重構 |
 
 ---
 

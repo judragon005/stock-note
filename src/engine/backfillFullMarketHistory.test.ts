@@ -295,6 +295,25 @@ describe('Spec 0168 / Ticket 08: 台美雙軌全歷史回補總控與中介層�
       expect(res.days).toBe('auto');
       expect(res.market).toBe('TW');
     });
+
+    it('Spec 0246 審查修繕: runFullMarketHistoryBackfill 遇 signal.aborted 中止時不得覆寫狀態為已完成或 DONE', async () => {
+      const { runFullMarketHistoryBackfill } = require('../../scripts/market-sync/backfill-full-market-history.cjs');
+      const ac = new AbortController();
+      ac.abort();
+      cancelBackfillTask(); // 預設寫入 etaFormatted = '已取消'
+
+      await runFullMarketHistoryBackfill({
+        market: 'TW',
+        days: 2,
+        throttleMs: 0,
+        signal: ac.signal,
+      });
+
+      const status = getBackfillGlobalStatus();
+      expect(status.etaFormatted).not.toBe('已完成');
+      expect(status.currentTask).not.toBe('DONE');
+      expect(status.tw.status).not.toBe('completed');
+    });
   });
 });
 

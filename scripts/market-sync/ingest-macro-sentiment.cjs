@@ -1468,10 +1468,15 @@ function ingestEtfDailyNavToDb(records, customDbPath) {
 }
 
 /**
- * 聯網抓取並入庫全市場 ETF 淨值與折溢價 (Spec 0203 Ticket 05)
+ * 聯網抓取並入庫全市場 ETF 淨值與折溢價 (Spec 0203 Ticket 05 / Spec 0246 Ticket 02)
  */
-async function fetchAndIngestEtfDailyNav(customDbPath, targetDateStr = new Date().toISOString().split('T')[0], fetcher = fetch) {
+async function fetchAndIngestEtfDailyNav(customDbPath, targetDateStr, fetcher = fetch) {
   try {
+    let resolvedDateStr = targetDateStr;
+    if (!resolvedDateStr) {
+      const { getMarketAnchorDate } = require('./market-freshness-service.cjs');
+      resolvedDateStr = getMarketAnchorDate('TW');
+    }
     const url = 'https://mis.twse.com.tw/stock/data/all_etf.txt';
     const res = await fetcher(url, {
       headers: {
@@ -1483,10 +1488,10 @@ async function fetchAndIngestEtfDailyNav(customDbPath, targetDateStr = new Date(
       return { success: false, count: 0, error: `HTTP ${res.status}` };
     }
     const data = await res.json();
-    const records = parseTwseEtfNavResponse(data, targetDateStr);
+    const records = parseTwseEtfNavResponse(data, resolvedDateStr);
     if (records.length > 0) {
       ingestEtfDailyNavToDb(records, customDbPath);
-      return { success: true, count: records.length };
+      return { success: true, count: records.length, date: resolvedDateStr };
     }
     return { success: false, count: 0, error: 'NO_VALID_RECORDS' };
   } catch (err) {

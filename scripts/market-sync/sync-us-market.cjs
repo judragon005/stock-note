@@ -29,6 +29,7 @@ const {
 } = require('./ingest-us-quotes.cjs');
 const { initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
 const { isTradingDay, getHolidayReason } = require('./trading-calendar-engine.cjs');
+const { getMarketAnchorDate } = require('./market-freshness-service.cjs');
 
 /**
  * 取得對應的美東交易日期字串 (YYYY-MM-DD)
@@ -150,27 +151,23 @@ function buildPrioritizedUsUniverse(options = {}) {
 }
 
 /**
- * 自動偵測本機既有持股與自選標的
+ * 自 SQLite 湖倉讀取既有美股持倉／關注標的清單（移除退役靜態 JSON 依賴）
+ * @param {string} [customDbPath]
  * @returns {{ holdings: string[], watchlist: string[] }}
  */
-function detectLocalUsHoldingsAndWatchlist() {
+function detectLocalUsHoldingsAndWatchlist(customDbPath) {
   const detected = { holdings: [], watchlist: [] };
-  const projectRoot = path.resolve(__dirname, '../../');
-
-  // 嘗試從 public/market-cache/us_market_summary.json 載入既有快取
-  const summaryPath = path.join(projectRoot, 'public', 'market-cache', 'us_market_summary.json');
-  if (fs.existsSync(summaryPath)) {
-    try {
-      const raw = fs.readFileSync(summaryPath, 'utf8');
-      const data = JSON.parse(raw);
-      if (data && data.stocks) {
-        detected.watchlist = Object.keys(data.stocks).map((s) => s.toUpperCase());
-      }
-    } catch {
-      // 忽略讀取錯誤
+  try {
+    const db = initSqliteLakehouseDb(customDbPath);
+    const rows = db
+      .prepare("SELECT DISTINCT symbol FROM sync_checkpoints WHERE market = 'US' ORDER BY symbol")
+      .all();
+    if (Array.isArray(rows) && rows.length > 0) {
+      detected.watchlist = rows.map((r) => String(r.symbol || '').trim().toUpperCase()).filter(Boolean);
     }
+  } catch {
+    // 容錯降級
   }
-
   return detected;
 }
 
@@ -182,29 +179,29 @@ async function runUsMarketSync(config = {}) {
   const startTime = Date.now();
   const mode = config.mode || parseSyncExecutionMode(process.argv);
   const isBootstrap = mode === 'bootstrap';
-  const customDbPath = config.customDbPath;
+  const customDbPath = config.customDbPath || config.dbPath;
+  const writeStaticCache = config.writeStaticCache === true;
   const projectRoot = path.resolve(__dirname, '../../');
 
   console.log(
-    `[${new Date().toISOString()}] 開始執行美股數據管線 [模式: ${mode.toUpperCase()}] (Spec 0158)...`
+    `[${new Date().toISOString()}] 開始執行美股數據管線 [模式: ${mode.toUpperCase()}] (Spec 0158 / Spec 0246)...`
   );
 
-  const today = new Date();
-  const dateStr = formatDateYMD(today);
-
-  // 美東昨日/當前收盤日計算與休市守衛 (排程 daily 模式下檢驗昨夜美東是否為美股休市日，Spec 0190)
+  const now = config.currentDate || config.now || new Date();
   const targetDateInput = config.targetDate;
-  const usDateStr = targetDateInput || getUsMarketDate(config.currentDate || today);
+  // Spec 0246 Ticket 02: Checkpoint 鍵值嚴格定錨美東已結算交易日 (America/New_York 17:00)，不再使用台北當地日期
+  const usAnchorDate = targetDateInput || getMarketAnchorDate('US', now);
+  const dateStr = usAnchorDate;
 
-  if (!isBootstrap && !config.force && !targetDateInput && !isTradingDay(usDateStr, 'US')) {
-    const reason = getHolidayReason(usDateStr, 'US') || '非營業日';
-    console.log(`[略過] 美股昨夜 (${usDateStr}) 為休市日 [${reason}]，無交易數據，安全退出。`);
+  if (!isBootstrap && !config.force && targetDateInput && !isTradingDay(targetDateInput, 'US')) {
+    const reason = getHolidayReason(targetDateInput, 'US') || '非營業日';
+    console.log(`[略過] 指定美股目標日 (${targetDateInput}) 為休市日 [${reason}]，無交易數據，安全退出。`);
     return {
-      date: usDateStr,
+      date: targetDateInput,
       market: 'US',
       mode,
       skipped: true,
-      reason: `美股昨夜為休市日 [${reason}]`,
+      reason: `美股目標日為休市日 [${reason}]`,
       successCount: 0,
       skippedCount: 0,
       total: 0,
@@ -213,7 +210,7 @@ async function runUsMarketSync(config = {}) {
   }
 
   // 1. 構建三層優先級標的隊列
-  const localTargets = detectLocalUsHoldingsAndWatchlist();
+  const localTargets = config.customUniverse ? { holdings: [], watchlist: [] } : detectLocalUsHoldingsAndWatchlist(customDbPath);
   const allOrderedSymbols = buildPrioritizedUsUniverse({
     holdings: config.holdings || localTargets.holdings,
     watchlist: config.watchlist || localTargets.watchlist,
@@ -226,12 +223,12 @@ async function runUsMarketSync(config = {}) {
 
   const targetSymbols = allOrderedSymbols.slice(0, totalUniverseCount);
 
-  // 2. 準備快取載體
+  // 2. 準備快取載體 (寫入受 writeStaticCache 控制，Spec 0246 Contract 階段正式退場)
   const targetPath1 = path.join(projectRoot, '.scratch', 'market-cache', 'us_market_summary.json');
   const targetPath2 = path.join(projectRoot, 'public', 'market-cache', 'us_market_summary.json');
 
   let stocksMap = {};
-  if (fs.existsSync(targetPath2)) {
+  if (writeStaticCache && fs.existsSync(targetPath2)) {
     try {
       const existingJson = JSON.parse(fs.readFileSync(targetPath2, 'utf8'));
       if (existingJson && existingJson.stocks) {
@@ -268,6 +265,8 @@ async function runUsMarketSync(config = {}) {
   let failCount = 0;
   const failedSymbols = [];
   let consecutive429 = 0;
+  let circuitBroken = false;
+  let aborted = false;
 
   const baseDelay = config.baseDelayMs !== undefined ? config.baseDelayMs : 800;
   const jitter = config.jitterMs !== undefined ? config.jitterMs : 400;
@@ -276,6 +275,10 @@ async function runUsMarketSync(config = {}) {
 
   // 4. 受控單檔順序採集 (避開高頻限流)
   for (let i = 0; i < pendingSymbols.length; i++) {
+    if (config.signal && config.signal.aborted) {
+      aborted = true;
+      break;
+    }
     const sym = pendingSymbols[i];
 
     try {
@@ -284,7 +287,10 @@ async function runUsMarketSync(config = {}) {
       let candles;
 
       try {
-        candles = await fetchYahooHistoricalQuotes(sym, fetchDays);
+        candles =
+          typeof config.fetchQuotesFn === 'function'
+            ? await config.fetchQuotesFn(sym, fetchDays)
+            : await fetchYahooHistoricalQuotes(sym, fetchDays);
       } catch (yahooErr) {
         // 若偵測到 429 限流或錯誤，且配置有 Tiingo API Token，則自動降級備援切換
         if (tiingoToken) {
@@ -320,8 +326,8 @@ async function runUsMarketSync(config = {}) {
         successCount++;
         consecutive429 = 0; // 重置連續 429 計數
 
-        // 階段性即時寫入快取 (每 20 檔或完成前 44 檔時刷新，確保持股秒級可用)
-        if (successCount % 20 === 0 || successCount === US_TIER_1_CORE.length) {
+        // 階段性即時寫入快取 (僅於未退役靜態快取模式下執行)
+        if (writeStaticCache && (successCount % 20 === 0 || successCount === US_TIER_1_CORE.length)) {
           const snapshotPayload = {
             date: dateStr,
             updatedAt: Date.now(),
@@ -362,6 +368,7 @@ async function runUsMarketSync(config = {}) {
         );
 
         if (backoff.isCircuitBroken) {
+          circuitBroken = true;
           console.error(`[熔斷觸發] 連續多次遭遇 429 限流，自動啟動熔斷保護公網 IP。安全退出程序。`);
           break;
         }
@@ -381,6 +388,9 @@ async function runUsMarketSync(config = {}) {
 
   // 5. 最終持久化輸出至本地 JSON 快取
   const outputPayload = {
+    ok: !circuitBroken && !aborted && !(failCount > 0 && successCount === 0),
+    circuitBroken,
+    aborted,
     date: dateStr,
     updatedAt: Date.now(),
     market: 'US',
@@ -393,8 +403,10 @@ async function runUsMarketSync(config = {}) {
     stocks: stocksMap,
   };
 
-  saveJsonAtomic(targetPath1, outputPayload);
-  saveJsonAtomic(targetPath2, outputPayload);
+  if (writeStaticCache) {
+    saveJsonAtomic(targetPath1, outputPayload);
+    saveJsonAtomic(targetPath2, outputPayload);
+  }
 
   console.log(
     `✔ 美股數據管線 [${mode.toUpperCase()}] 執行完畢！本次成功: ${successCount} 檔, 失敗: ${failCount} 檔，耗時 ${
@@ -403,20 +415,23 @@ async function runUsMarketSync(config = {}) {
   );
 
   // 6. 附掛宏觀情緒與債券殖利率指標同步 (Spec 0198 / Spec 0209 真實聯網採集)
-  try {
-    const { fetchMacroSentimentDaily, ingestMacroSentimentToDb } = require('./ingest-macro-sentiment.cjs');
-    const macroPayload = await fetchMacroSentimentDaily({ date: dateStr });
-    ingestMacroSentimentToDb(macroPayload, customDbPath);
-    console.log(`✔ [CadenceSync] 已順路更新宏觀情緒與美債殖利率至 macro_sentiment_daily`);
-  } catch (macroErr) {
-    console.warn(`[CadenceSync] 宏觀指標同步警告:`, macroErr.message);
+  if (!config.skipMacroCadence) {
+    try {
+      const { fetchMacroSentimentDaily, ingestMacroSentimentToDb } = require('./ingest-macro-sentiment.cjs');
+      const macroPayload = await fetchMacroSentimentDaily({ date: dateStr });
+      ingestMacroSentimentToDb(macroPayload, customDbPath);
+      console.log(`✔ [CadenceSync] 已順路更新宏觀情緒與美債殖利率至 macro_sentiment_daily`);
+    } catch (macroErr) {
+      console.warn(`[CadenceSync] 宏觀指標同步警告:`, macroErr.message);
+    }
   }
 
   return outputPayload;
 }
 
 if (require.main === module) {
-  runUsMarketSync().catch((err) => {
+  const { withGlobalSyncLock } = require('./lakehouse-sync-coordinator.cjs');
+  withGlobalSyncLock('cli-us-sync', () => runUsMarketSync()).catch((err) => {
     console.error(`美股同步執行致命失敗:`, err);
     process.exit(1);
   });

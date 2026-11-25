@@ -1,7 +1,13 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-11-24 12:45 (UTC+8)  
+> **交接產生時間**：2026-11-25 09:45 (UTC+8)  
 > **當前最新里程碑**：
+> - **V9.28.0 外部資料更新中樞收斂（單一缺口調諧）、NAS 分軌水位線自治排程、靜態快取退役與 Card 01 盤中實量縫合**（ADR 0246, Spec 0246, Issue #607）：
+>   - **單一結算時鐘、休市日曆容器化與跨模組契約修復 (T01–T02)**：`sync-thresholds.cjs` 集中 `MARKET_SETTLEMENT_CUTOFFS` 與歷史補抓日 TWSE-only 底線；`Dockerfile` 執行期複製 `src/data/market-holidays.json`（補齊 2026-10-23 薔琵颱風停市、2026-10-26 光復節補假、2026-12-25 行憲紀念日）；修復 `market-freshness-service.cjs` 空表陳舊與歷史門檻、`sync-tw-market.cjs` / `sync-us-market.cjs` / `weekly-lakehouse-sync.cjs` 跨模組契約與權證濾除對齊。
+>   - **單一湖倉調諧中樞與兩階段盤後容錯收斂 (T03–T04)**：新增零依賴 `lakehouse-sync-coordinator.cjs`，提供 token-safe 全域互斥鎖 `withGlobalSyncLock`、近 30 日完全缺失＋半殘日升冪調諧、台股 14:40 Phase 1（獨立節流不耗 Phase 2 配額）／16:30 Phase 2（完整 7 維檢核＋Abort 禁推水位線）與每軌每日 4 次冷卻重試配額。
+>   - **NAS 四軌獨立水位線與 SQLite 遙測 SSOT (T05–T09)**：`nas-autonomous-scheduler.cjs` 拆分 `twDaily`、`usDaily`、`macro`、`weekly` 四軌獨立水位線，根治美股清晨鎖死台股午後；`/healthz` 與 `/api/market/sync-status` 合流；退役過期靜態 JSON 市場快取並於 `App.tsx` 掛載具輪詢能力之 `useMarketCatchupSync`，同步於 `architecturalFitnessGuard.test.ts` 不變量 7 封鎖回流；2 項非阻斷重構備忘納入 [Debt 0065](../debts/0065-nas-scheduler-retry-ledger-and-decomposition.md)。
+>   - **Card 01 盤中實量縫合與實機湖倉自癒 (T10–T12)**：`priceFetcher.ts` 與 `aiForceDashboardEngine.ts` 優先寫入盤中真實 OHLCV 並保留 Spec 0245 零量定錨防禦；本機實機湖倉近 30 日缺口歸零（`tw`/`us`/`tdcc`/`revenue` 全數 `isStale: false`）。
+>   - **品質狀態**：雙軸程式碼審查終審 **PASS**，全量單元測試 **2,620/2,620 通過 (100% Passed / 318 個測試套件)**，TypeScript Strict 0 錯誤，生產打包 `npm run build` 100% 綠燈，全量文檔稽核 (`npm run lint:docs`) 100% 通過。
 > - **V9.27.0 全域視口傳送彈窗原語、Card 01B 主 K 四維量價動能共鳴解碼卡暨台股 TDCC 集保斷層自癒管線**（ADR 0245, Spec 0245, Issue #605）：
 >   - **全域視口傳送彈窗 (`ModalShell`) 與 CI 靜態守門 (T01–T02)**：以零依賴 `createPortal(..., document.body)` 統一遮罩、`glass-card`、`Escape`/遮罩關閉、`closeLocked` 與 `aria-modal`，遷移 `ExportDatabaseModal` 並於 `architecturalFitnessGuard.test.ts` 新增不變量 6 禁止 `.modal-backdrop`；其餘 14 顆舊彈窗納入 [Debt 0063](../debts/0063-legacy-modals-portal-shell-migration.md) 追蹤。
 >   - **Card 01B 四維量價動能共鳴解碼卡 × 盤中零量隔離 (T03–T07)**：實作單趟 $O(N)$ `klineOscillatorEngine.ts`（含 `J=3K-2D`、`RSI6/14` 與 `resolveVolumeAnchorCandles` 前收定錨）及 `technicalResonanceEngine.ts`（ADX/布林體制加權評分、衝突警戒與 250D 10 期勝率），統一 `Card 01` KDJ `[-10, 110]` 座標並與 `Card 01B` 雙向同步時框與副圖，`< 5` 根嚴守 Zero-Mock 隱藏閘門。
@@ -117,10 +123,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main` (已完全同步主幹，Working Tree Clean)
-- **單元測試套件**：**2,578/2,578 通過 (318 test suites / 100% 綠燈)**
+- **單元測試套件**：**2,620/2,620 通過 (318 test suites / 100% 綠燈)**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V9.27.0**
+- **當前釋出版本**：**V9.28.0**
 - **工作區與分支整潔度**：工作區乾淨受控，本地 feature/fix 分支已完全合併並清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -149,6 +155,7 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0246`](file:///d:/APP/股票紀錄/docs/specs/0246-lakehouse-sync-ssot-convergence-spec.md) | [`ADR 0246`](file:///d:/APP/股票紀錄/docs/adr/0246-lakehouse-sync-ssot-convergence.md) | [`.scratch/v9.28.0-spec0246-lakehouse-sync-ssot-convergence/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.28.0-spec0246-lakehouse-sync-ssot-convergence/issues/) | Issue #607 | V9.28.0 | 外部資料更新中樞收斂（單一缺口調諧）、NAS 四軌獨立水位線排程、靜態快取退役與 Card 01 盤中實量縫合 |
 | [`Spec 0245`](file:///d:/APP/股票紀錄/docs/specs/0245-portal-modal-kline-resonance-and-tdcc-gap-healing-spec.md) | [`ADR 0245`](file:///d:/APP/股票紀錄/docs/adr/0245-portal-modal-kline-resonance-and-tdcc-gap-healing.md) | [`.scratch/v9.27.0-spec0245-portal-kline-tdcc-healing/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.27.0-spec0245-portal-kline-tdcc-healing/issues/) | Issue #605 | V9.27.0 | 全域視口傳送彈窗 `ModalShell`、Card 01B 主 K 四維共鳴解碼卡暨台股 TDCC 12 週斷層自癒 |
 | [`Spec 0244`](file:///d:/APP/股票紀錄/docs/specs/0244-war-room-layout-topology-and-etf-dividend-grid-spec.md) | [`ADR 0244`](file:///d:/APP/股票紀錄/docs/adr/0244-war-room-layout-topology-and-etf-dividend-grid.md) | [`.scratch/v9.26.2-spec0244-war-room-layout-topology/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.26.2-spec0244-war-room-layout-topology/issues/) | Issue #603 | V9.26.2 | 主力戰情室 Layer 6 雙界限 2×2 矩陣、Card 20 12 期配息無滑軌展開與 ZONE 04 非對稱等高佈局 |
 | [`Spec 0227`](file:///d:/APP/股票紀錄/docs/specs/0227-dividend-cashflow-tri-state-reconciliation-and-calendar-precision-spec.md) | [`ADR 0227`](file:///d:/APP/股票紀錄/docs/adr/0227-dividend-cashflow-tri-state-reconciliation.md) | [`.scratch/v9.20.0-dividend-cashflow-tri-state-reconciliation/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.20.0-dividend-cashflow-tri-state-reconciliation/issues/) | Issue #516 ~ #521, #533 / PR #522 ~ #526, #534 | V9.20.0 | 現金流三態時序統一、0056發放月修正、8月硬編碼暴衝解除、長條圖待入帳堆疊與Tooltip清單穿透 |

@@ -135,16 +135,33 @@ function getTaipeiDateContext(targetDateInput, now = new Date()) {
 
 async function runTwMarketSync(targetDateInput) {
   const startTime = Date.now();
-  console.log(`[${new Date().toISOString()}] 開始執行台股全市場盤後自動同步 (Spec 0132)...`);
+  const opts =
+    typeof targetDateInput === 'string'
+      ? { targetDate: targetDateInput }
+      : targetDateInput && typeof targetDateInput === 'object'
+        ? targetDateInput
+        : {};
+  const explicitTargetDate = opts.targetDate || null;
+  const customDbPath = opts.customDbPath || opts.dbPath || undefined;
+  const now = opts.now || new Date();
+  const writeStaticCache = opts.writeStaticCache === true;
 
-  const twCtx = getTaipeiDateContext(targetDateInput);
+  console.log(`[${new Date().toISOString()}] 開始執行台股全市場盤後自動同步 (Spec 0132 / Spec 0246)...`);
+
+  const twCtx = getTaipeiDateContext(explicitTargetDate, now);
   const { dateStr, yyyymmdd, rocDateStr, dayOfWeek, dayOfMonth, currentHour } = twCtx;
 
-  // 營業日與休市守衛 (排除週末、法定休市與天災停市，Spec 0190)
-  if (!targetDateInput && !isTradingDay(dateStr, 'TW')) {
+  // 營業日與休市守衛 (排除週末、法定休市與天災停市，Spec 0190 / Spec 0246 Ticket 02)
+  if (!explicitTargetDate && !opts.force && !isTradingDay(dateStr, 'TW')) {
     const reason = getHolidayReason(dateStr, 'TW') || '非營業日';
     console.log(`[略過] 今日 (${dateStr}) 為台股休市日 [${reason}]，無交易數據，安全退出。`);
-    return;
+    return {
+      ok: true,
+      skipped: true,
+      date: dateStr,
+      reason,
+      durationMs: Date.now() - startTime,
+    };
   }
 
 
@@ -246,15 +263,17 @@ async function runTwMarketSync(targetDateInput) {
     stocks: stocksMap,
   };
 
-  console.log(`[4/4] 持久化寫入本地快取資料庫與 SQLite 數據湖倉...`);
+  console.log(`[4/4] 持久化寫入 SQLite 數據湖倉...`);
   const projectRoot = path.resolve(__dirname, '../../');
   const targetPath1 = path.join(projectRoot, '.scratch', 'market-cache', 'tw_market_summary.json');
   const targetPath2 = path.join(projectRoot, 'public', 'market-cache', 'tw_market_summary.json');
 
-  saveJsonAtomic(targetPath1, outputPayload);
-  saveJsonAtomic(targetPath2, outputPayload);
+  if (writeStaticCache) {
+    saveJsonAtomic(targetPath1, outputPayload);
+    saveJsonAtomic(targetPath2, outputPayload);
+  }
 
-  // 同步寫入本機 SQLite 數據湖倉 (Spec 0159 & Spec 0163)
+  // 同步寫入本機 SQLite 數據湖倉 (Spec 0159 & Spec 0163 & Spec 0246 Ticket 02: 貫穿 customDbPath)
   try {
     const { saveTwQuotesToSqlite } = require('./ingest-tw-quotes.cjs');
     const { saveTwT86ToSqlite } = require('./ingest-tw-t86.cjs');
@@ -271,10 +290,10 @@ async function runTwMarketSync(targetDateInput) {
       saveTwValuationToSqlite,
     } = require('./ingest-tw-valuation.cjs');
 
-    const quoteRes = saveTwQuotesToSqlite(allQuotes);
+    const quoteRes = saveTwQuotesToSqlite(allQuotes, customDbPath);
     console.log(`✔ SQLite 湖倉入庫：已寫入 ${quoteRes.savedCount} 檔台股日 K 收盤行情 (daily_candles)`);
 
-    const chipRes = saveTwT86ToSqlite(allChips, dateStr);
+    const chipRes = saveTwT86ToSqlite(allChips, dateStr, customDbPath);
     console.log(`✔ SQLite 湖倉入庫：已寫入 ${chipRes.savedCount} 檔三大法人買賣超記錄 (tw_institutional_chips)`);
 
     // 抓取並解析 TWSE/TPEx 擴展籌碼 (融資融券、借券賣出 SBL、當日沖銷) (Spec 0196 Ticket 01)
@@ -343,7 +362,7 @@ async function runTwMarketSync(targetDateInput) {
       };
     }
 
-    const extRes = saveTwExtendedChipsToSqlite(combinedExtMap, dateStr);
+    const extRes = saveTwExtendedChipsToSqlite(combinedExtMap, dateStr, customDbPath);
     console.log(`✔ SQLite 湖倉入庫：已寫入 ${extRes.savedCount} 檔擴展籌碼記錄 (上市+上櫃資券/SBL/當沖) 至 tw_institutional_chips`);
 
     // 抓取並解析 TWSE/TPEx 官方每日個股估值 (PE/PB/殖利率) (Spec 0196 Ticket 02)
@@ -373,7 +392,7 @@ async function runTwMarketSync(targetDateInput) {
     const tpexValMap = parseTpexPeratio(tpexValuationRaw);
     const combinedValMap = { ...twseValMap, ...tpexValMap };
 
-    const valRes = saveTwValuationToSqlite(combinedValMap, dateStr);
+    const valRes = saveTwValuationToSqlite(combinedValMap, dateStr, customDbPath);
     console.log(`✔ SQLite 湖倉入庫：已寫入 ${valRes.savedCount} 檔官方估值 (PE/PB/殖利率) 至 tw_valuation_daily`);
 
     // 同步注入到 stocksMap 並更新 tw_market_summary.json
@@ -388,7 +407,7 @@ async function runTwMarketSync(targetDateInput) {
         valEnrichCount++;
       }
     }
-    if (valEnrichCount > 0) {
+    if (writeStaticCache && valEnrichCount > 0) {
       saveJsonAtomic(targetPath1, outputPayload);
       saveJsonAtomic(targetPath2, outputPayload);
       console.log(`✔ 市場摘要更新：已將 ${valEnrichCount} 檔官方估值注入 tw_market_summary.json`);
@@ -398,7 +417,7 @@ async function runTwMarketSync(targetDateInput) {
     // 6.1 每日除權除息預告日程
     try {
       const { runCorporateActionsIngestion } = require('./ingest-tw-corporate-actions.cjs');
-      await runCorporateActionsIngestion();
+      await runCorporateActionsIngestion(customDbPath);
     } catch (caErr) {
       console.warn(`[CadenceSync] 除權除息同步警告:`, caErr.message);
     }
@@ -406,7 +425,7 @@ async function runTwMarketSync(targetDateInput) {
     // 6.1.1 每日全市場 ETF 收盤官方淨值與折溢價 (Spec 0203 Ticket 05)
     try {
       const { fetchAndIngestEtfDailyNav } = require('./ingest-macro-sentiment.cjs');
-      const etfNavRes = await fetchAndIngestEtfDailyNav(null, dateStr);
+      const etfNavRes = await fetchAndIngestEtfDailyNav(customDbPath, dateStr);
       if (etfNavRes.success) {
         console.log(`✔ [CadenceSync] 成功入庫 ${etfNavRes.count} 檔 ETF 官方每日淨值與折溢價至 etf_daily_nav`);
       }
@@ -418,7 +437,7 @@ async function runTwMarketSync(targetDateInput) {
     if (dayOfWeek === 5 && currentHour >= 18) {
       try {
         const { runTdccIngestion } = require('./ingest-tw-tdcc.cjs');
-        await runTdccIngestion();
+        await runTdccIngestion(customDbPath);
       } catch (tdccErr) {
         console.warn(`[CadenceSync] TDCC 集保同步警告:`, tdccErr.message);
       }
@@ -428,7 +447,7 @@ async function runTwMarketSync(targetDateInput) {
     if (dayOfMonth >= 1 && dayOfMonth <= 11) {
       try {
         const { runMonthlyRevenueIngestion } = require('./ingest-tw-monthly-revenue.cjs');
-        await runMonthlyRevenueIngestion();
+        await runMonthlyRevenueIngestion(customDbPath);
       } catch (revErr) {
         console.warn(`[CadenceSync] 月營收同步警告:`, revErr.message);
       }
@@ -438,12 +457,19 @@ async function runTwMarketSync(targetDateInput) {
   }
 
   console.log(`✔ 台股全市場盤後同步完成！共同步 ${successCount} 檔標的，耗時 ${Date.now() - startTime}ms。`);
-  console.log(`快取儲存位置: ${targetPath2}`);
+  if (writeStaticCache) {
+    console.log(`快取儲存位置: ${targetPath2}`);
+  }
 }
 
 if (require.main === module) {
+  const { withGlobalSyncLock, reconcileTwLakehouse } = require('./lakehouse-sync-coordinator.cjs');
+  const { MARKET_SETTLEMENT_CUTOFFS } = require('./sync-thresholds.cjs');
   const customDateArg = process.argv[2] || null;
-  runTwMarketSync(customDateArg).catch((err) => {
+  const taskFn = customDateArg
+    ? () => runTwMarketSync(customDateArg)
+    : () => reconcileTwLakehouse({ maxLookbackDays: MARKET_SETTLEMENT_CUTOFFS.GAP_CATCHUP_LOOKBACK_DAYS });
+  withGlobalSyncLock('cli-tw-sync', taskFn).catch((err) => {
     console.error(`台股盤後同步失敗:`, err);
     process.exit(1);
   });

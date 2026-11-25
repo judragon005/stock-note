@@ -17,6 +17,16 @@ const {
 const { buildSymbolAliases } = require('./market-sync-core.cjs');
 const { searchSymbolsMeta } = require('./seed-symbols-universe.cjs');
 const { getMarketAnchorDate, checkMarketFreshness } = require('./market-freshness-service.cjs');
+const { MARKET_SETTLEMENT_CUTOFFS } = require('./sync-thresholds.cjs');
+const {
+  withGlobalSyncLock,
+  getCoordinatorLockState,
+  getLaneRetrySnapshot,
+  computeTwReconciliationPlan,
+  reconcileTwLakehouse,
+  resolveTwPostClosePhase,
+  resetCoordinatorStateForTest,
+} = require('./lakehouse-sync-coordinator.cjs');
 const {
   fetchFullMacroWarRoomPulse,
   ingestMacroSentimentToDb,
@@ -58,8 +68,29 @@ function isCatchupInCooldown(lastTime, now = Date.now(), cooldownMs = CATCHUP_CO
   return now - lastTime < cooldownMs;
 }
 
+function evaluateTwGapPlan(customDbPath, freshness) {
+  try {
+    return computeTwReconciliationPlan(customDbPath, {
+      maxLookbackDays: MARKET_SETTLEMENT_CUTOFFS.GAP_CATCHUP_LOOKBACK_DAYS,
+      freshnessOverride: freshness,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function shouldTriggerMarketCatchup(freshness, twPlan) {
+  return Boolean(
+    freshness?.tw?.isStale ||
+    twPlan?.hasGaps ||
+    freshness?.us?.isStale ||
+    freshness?.tdcc?.isStale ||
+    freshness?.revenue?.isStale
+  );
+}
+
 /**
- * 啟動非同步追趕任務 (具備冷卻門檻防禦)
+ * 啟動非同步追趕任務 (具備冷卻門檻防禦，搶到全域鎖後才寫入冷卻時間)
  */
 function triggerCatchupTask(customDbPath, options = {}) {
   const { bypassTestEnv = false, force = false } = options;
@@ -80,111 +111,142 @@ function triggerCatchupTask(customDbPath, options = {}) {
   }
 
   isCatchingUp = true;
-  lastCatchupTime = now;
 
   setImmediate(async () => {
     try {
-      console.log(`[MarketCatchup] 偵測到本機資料庫過期，啟動背景聯網追趕同步 (Spec 0170 & Spec 0177)...`);
-      const handlers = options.handlers || {};
-      const runTwMarketSync = handlers.runTwMarketSync || require('./sync-tw-market.cjs').runTwMarketSync;
-      const fetchAndIngestTwDailyData =
-        handlers.fetchAndIngestTwDailyData || require('./backfill-tw-history-web.cjs').fetchAndIngestTwDailyData;
-      const fetchAndIngestEtfDailyNav =
-        handlers.fetchAndIngestEtfDailyNav || require('./ingest-macro-sentiment.cjs').fetchAndIngestEtfDailyNav;
-      const runUsMarketSync = handlers.runUsMarketSync || require('./sync-us-market.cjs').runUsMarketSync;
-      const runTdccIngestion = handlers.runTdccIngestion || require('./ingest-tw-tdcc.cjs').runTdccIngestion;
-      const runMonthlyRevenueIngestion =
-        handlers.runMonthlyRevenueIngestion || require('./ingest-tw-monthly-revenue.cjs').runMonthlyRevenueIngestion;
-      const fetchAndIngestTwPledge =
-        handlers.fetchAndIngestTwPledge || require('./ingest-tw-pledge.cjs').fetchAndIngestTwPledge;
+      const lockOutcome = await withGlobalSyncLock('vite-catchup', async () => {
+        lastCatchupTime = Date.now();
+        console.log(`[MarketCatchup] 偵測到本機資料庫過期，啟動背景聯網追趕同步 (Spec 0170 / Spec 0246 30D 缺口調諧)...`);
+        const handlers = options.handlers || {};
+        const fetchAndIngestTwDailyData =
+          handlers.fetchAndIngestTwDailyData || require('./backfill-tw-history-web.cjs').fetchAndIngestTwDailyData;
+        const fetchAndIngestEtfDailyNav =
+          handlers.fetchAndIngestEtfDailyNav || require('./ingest-macro-sentiment.cjs').fetchAndIngestEtfDailyNav;
+        const runUsMarketSync = handlers.runUsMarketSync || require('./sync-us-market.cjs').runUsMarketSync;
+        const runTdccIngestion = handlers.runTdccIngestion || require('./ingest-tw-tdcc.cjs').runTdccIngestion;
+        const runMonthlyRevenueIngestion =
+          handlers.runMonthlyRevenueIngestion || require('./ingest-tw-monthly-revenue.cjs').runMonthlyRevenueIngestion;
+        const fetchAndIngestTwPledge =
+          handlers.fetchAndIngestTwPledge || require('./ingest-tw-pledge.cjs').fetchAndIngestTwPledge;
 
-      let freshness = options.freshnessOverride || null;
-      if (!freshness) {
-        try {
-          const db = initSqliteLakehouseDb(customDbPath);
-          freshness = checkMarketFreshness(db);
-        } catch {}
-      }
-
-      await runTwMarketSync();
-
-      // Spec 0241 Ticket 02: 針對 incompleteDates（最多近 5 個交易日）呼叫 backfill-tw-history-web 補抓缺漏欄位
-      const incompleteDates = Array.isArray(freshness?.tw?.incompleteDates)
-        ? freshness.tw.incompleteDates.slice(0, 5)
-        : [];
-      for (const targetDate of incompleteDates) {
-        try {
-          await fetchAndIngestTwDailyData(targetDate, {
-            dbPath: customDbPath,
-            force: true,
-            throttleMs: 1000,
-          });
-        } catch (backfillErr) {
-          console.warn(`[MarketCatchup] 半殘日 ${targetDate} 補抓警示:`, backfillErr.message);
+        let freshness = options.freshnessOverride || null;
+        if (!freshness) {
+          try {
+            const db = initSqliteLakehouseDb(customDbPath);
+            freshness = checkMarketFreshness(db);
+          } catch {}
         }
-      }
 
-      // 若缺少 etf_nav，補抓最新結算日 ETF 淨值
-      if (freshness?.tw?.missingPlanes?.includes('etf_nav')) {
-        try {
-          const navDate = freshness.tw.latestDate || freshness.tw.anchorDate;
-          await fetchAndIngestEtfDailyNav(customDbPath, navDate);
-        } catch (etfErr) {
-          console.warn(`[MarketCatchup] ETF 淨值補抓警示:`, etfErr.message);
-        }
-      }
+        // Spec 0246 Ticket 06: 預設合流至單一 30 日缺口調諧中樞 (reconcileTwLakehouse)；
+        // 若測試顯式注入舊版 runTwMarketSync handler 則保留相容路徑
+        if (typeof handlers.runTwMarketSync === 'function') {
+          await handlers.runTwMarketSync({ customDbPath });
 
-      // 若美股陳舊，觸發美股盤後同步
-      if (freshness?.us?.isStale) {
-        try {
-          await runUsMarketSync({ dbPath: customDbPath });
-        } catch (usErr) {
-          console.warn(`[MarketCatchup] 美股同步警示:`, usErr.message);
-        }
-      }
+          const incompleteDates = Array.isArray(freshness?.tw?.incompleteDates)
+            ? freshness.tw.incompleteDates.slice(0, 5)
+            : [];
+          for (const targetDate of incompleteDates) {
+            try {
+              await fetchAndIngestTwDailyData(targetDate, {
+                dbPath: customDbPath,
+                force: true,
+                throttleMs: 1000,
+              });
+            } catch (backfillErr) {
+              console.warn(`[MarketCatchup] 半殘日 ${targetDate} 補抓警示:`, backfillErr.message);
+            }
+          }
 
-      try {
-        await runTdccIngestion(customDbPath);
-      } catch (tdccErr) {
-        console.warn(`[MarketCatchup] TDCC 入庫警示:`, tdccErr.message);
-      }
-
-      try {
-        await runMonthlyRevenueIngestion(customDbPath);
-      } catch (revErr) {
-        console.warn(`[MarketCatchup] 月營收入庫警示:`, revErr.message);
-      }
-
-      // Spec 0238: 每月 16 日後或質押表低於 10 筆時自動補齊董監事質押紀錄
-      try {
-        let needPledge = Boolean(handlers.fetchAndIngestTwPledge) || new Date().getDate() >= 16;
-        if (!needPledge) {
-          const db = initSqliteLakehouseDb(customDbPath);
-          const pledgeRow = db.prepare('SELECT COUNT(*) AS n FROM tw_insider_pledge_records').get();
-          if (!pledgeRow || Number(pledgeRow.n) < 10) {
-            needPledge = true;
+          if (freshness?.tw?.missingPlanes?.includes('etf_nav')) {
+            try {
+              const navDate = freshness.tw.latestDate || freshness.tw.anchorDate;
+              await fetchAndIngestEtfDailyNav(customDbPath, navDate);
+            } catch (etfErr) {
+              console.warn(`[MarketCatchup] ETF 淨值補抓警示:`, etfErr.message);
+            }
+          }
+        } else {
+          const twGapPlan = options.freshnessOverride ? null : evaluateTwGapPlan(customDbPath, freshness);
+          if (freshness?.tw?.isStale !== false || Boolean(twGapPlan?.hasGaps)) {
+            const reconcileFn = handlers.reconcileTwLakehouse || reconcileTwLakehouse;
+            await reconcileFn({
+              customDbPath,
+              maxLookbackDays: MARKET_SETTLEMENT_CUTOFFS.GAP_CATCHUP_LOOKBACK_DAYS,
+              throttleMs: 1000,
+              force,
+              handlers: {
+                ...(handlers.fetchAndIngestTwDailyData ? { fetchAndIngestTwDailyData: handlers.fetchAndIngestTwDailyData } : {}),
+                ...(handlers.fetchAndIngestEtfDailyNav ? { fetchAndIngestEtfDailyNav: handlers.fetchAndIngestEtfDailyNav } : {}),
+              },
+            });
           }
         }
-        if (needPledge && typeof fetchAndIngestTwPledge === 'function') {
-          await fetchAndIngestTwPledge(customDbPath);
-        }
-      } catch (pledgeErr) {
-        console.warn(`[MarketCatchup] 董監質押同步警示:`, pledgeErr.message);
-      }
 
-      // Spec 0239 T03: 同步台股注意與處置股票狀態
-      try {
-        const fetchAndTagTwStockStatuses =
-          handlers.fetchAndTagTwStockStatuses ||
-          require('./tag-tw-stock-status.cjs').fetchAndTagTwStockStatuses;
-        if (typeof fetchAndTagTwStockStatuses === 'function') {
-          await fetchAndTagTwStockStatuses(customDbPath);
+        // 若美股陳舊，觸發美股盤後同步 (Spec 0246: 修正傳遞 customDbPath)
+        if (freshness?.us?.isStale) {
+          try {
+            await runUsMarketSync({
+              customDbPath,
+              mode: 'daily',
+              writeStaticCache: false,
+              skipMacroCadence: true,
+            });
+          } catch (usErr) {
+            console.warn(`[MarketCatchup] 美股同步警示:`, usErr.message);
+          }
         }
-      } catch (statusErr) {
-        console.warn(`[MarketCatchup] 注意/處置狀態同步警示:`, statusErr.message);
-      }
 
-      console.log(`[MarketCatchup] ✔ 背景聯網追趕同步完成 (含半殘日自癒、美股、TDCC 與月營收)！`);
+        if (freshness?.tdcc?.isStale !== false || typeof handlers.runTdccIngestion === 'function') {
+          try {
+            await runTdccIngestion(customDbPath);
+          } catch (tdccErr) {
+            console.warn(`[MarketCatchup] TDCC 入庫警示:`, tdccErr.message);
+          }
+        }
+
+        if (freshness?.revenue?.isStale !== false || typeof handlers.runMonthlyRevenueIngestion === 'function') {
+          try {
+            await runMonthlyRevenueIngestion(customDbPath);
+          } catch (revErr) {
+            console.warn(`[MarketCatchup] 月營收入庫警示:`, revErr.message);
+          }
+        }
+
+        // Spec 0238: 每月 16 日後或質押表低於 10 筆時自動補齊董監事質押紀錄
+        try {
+          let needPledge = Boolean(handlers.fetchAndIngestTwPledge) || new Date().getDate() >= 16;
+          if (!needPledge) {
+            const db = initSqliteLakehouseDb(customDbPath);
+            const pledgeRow = db.prepare('SELECT COUNT(*) AS n FROM tw_insider_pledge_records').get();
+            if (!pledgeRow || Number(pledgeRow.n) < 10) {
+              needPledge = true;
+            }
+          }
+          if (needPledge && typeof fetchAndIngestTwPledge === 'function') {
+            await fetchAndIngestTwPledge(customDbPath);
+          }
+        } catch (pledgeErr) {
+          console.warn(`[MarketCatchup] 董監質押同步警示:`, pledgeErr.message);
+        }
+
+        // Spec 0239 T03: 同步台股注意與處置股票狀態
+        try {
+          const fetchAndTagTwStockStatuses =
+            handlers.fetchAndTagTwStockStatuses ||
+            require('./tag-tw-stock-status.cjs').fetchAndTagTwStockStatuses;
+          if (typeof fetchAndTagTwStockStatuses === 'function') {
+            await fetchAndTagTwStockStatuses(customDbPath);
+          }
+        } catch (statusErr) {
+          console.warn(`[MarketCatchup] 注意/處置狀態同步警示:`, statusErr.message);
+        }
+
+        console.log(`[MarketCatchup] ✔ 背景聯網追趕同步完成 (含 30 日缺口調諧、美股、TDCC 與月營收)！`);
+      });
+
+      if (lockOutcome.skipped) {
+        console.log(`[MarketCatchup] 全域互斥鎖由 ${lockOutcome.lockOwner} 持有中，略過重複追趕。`);
+      }
     } catch (err) {
       console.warn(`[MarketCatchup] 背景追趕回補警告:`, err.message);
     } finally {
@@ -201,6 +263,7 @@ function resetCatchupStateForTest() {
   cachedMacroPulse = null;
   cachedMacroPulseAt = 0;
   clearOnDemandBackfillState();
+  resetCoordinatorStateForTest();
 }
 
 function setLastCatchupTimeForTest(time) {
@@ -239,12 +302,13 @@ function readJsonBody(req) {
  * @param {string} [customDbPath]
  */
 function createMarketApiMiddleware(customDbPath) {
-  // 中介層啟動時非同步巡檢資料庫陳舊度 (委託 market-freshness-service.cjs)
+  // 中介層啟動時非同步巡檢資料庫陳舊度 (含近 30 日內部缺口檢查)
   if (isSqliteSupported()) {
     try {
       const db = initSqliteLakehouseDb(customDbPath);
       const freshness = checkMarketFreshness(db);
-      if (freshness.tw.isStale || freshness.us.isStale || freshness.tdcc?.isStale || freshness.revenue?.isStale) {
+      const bootTwPlan = evaluateTwGapPlan(customDbPath, freshness);
+      if (shouldTriggerMarketCatchup(freshness, bootTwPlan)) {
         triggerCatchupTask(customDbPath);
       }
     } catch (e) {
@@ -273,22 +337,82 @@ function createMarketApiMiddleware(customDbPath) {
 
     const db = initSqliteLakehouseDb(customDbPath);
 
-    // 0. GET /api/market/sync-status (Spec 0160 & Spec 0161 委託領域服務)
+    // 0. GET /api/market/sync-status (Spec 0160 / Spec 0161 / Spec 0246 SQLite-Only Sync Telemetry SSOT)
     if (pathname === '/api/market/sync-status') {
       const freshness = checkMarketFreshness(db);
+      const twPlan = evaluateTwGapPlan(customDbPath, freshness);
 
-      if (query.catchup === 'true' && (freshness.tw.isStale || freshness.us.isStale || freshness.tdcc?.isStale || freshness.revenue?.isStale)) {
+      if (query.catchup === 'true' && shouldTriggerMarketCatchup(freshness, twPlan)) {
         triggerCatchupTask(customDbPath);
       }
+
+      let twSymbolCount = 0;
+      let usSymbolCount = 0;
+      let macroLatest = null;
+      try {
+        if (freshness.tw?.latestDate) {
+          const r = db
+            .prepare("SELECT COUNT(DISTINCT symbol) AS n FROM daily_candles WHERE date = ? AND (symbol GLOB '[0-9]*')")
+            .get(freshness.tw.latestDate);
+          twSymbolCount = Number(r?.n || 0);
+        }
+      } catch {}
+      try {
+        if (freshness.us?.latestDate) {
+          const r = db
+            .prepare("SELECT COUNT(DISTINCT symbol) AS n FROM daily_candles WHERE date = ? AND NOT (symbol GLOB '[0-9]*')")
+            .get(freshness.us.latestDate);
+          usSymbolCount = Number(r?.n || 0);
+        }
+      } catch {}
+      try {
+        const mr = db.prepare('SELECT MAX(date) AS maxDate FROM macro_sentiment_daily').get();
+        macroLatest = mr?.maxDate ?? null;
+      } catch {}
+
+      const lockState = getCoordinatorLockState();
+      const effectiveCatchingUp = Boolean(isCatchingUp || lockState.locked);
+      const macroIsStale = Boolean(
+        !macroLatest || (freshness.tw?.anchorDate && macroLatest < freshness.tw.anchorDate)
+      );
 
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(
         JSON.stringify({
-          tw: freshness.tw,
-          us: freshness.us,
+          source: 'SQLITE_SSOT',
+          tw: {
+            ...freshness.tw,
+            isStale: Boolean(freshness.tw?.isStale || (twPlan && twPlan.missingDates.length > 0)),
+            symbolCount: twSymbolCount,
+            gapCount: twPlan ? twPlan.reconcileDates.length : 0,
+            gapDates: twPlan ? twPlan.reconcileDates : [],
+            phase: twPlan ? twPlan.phase : resolveTwPostClosePhase(),
+            lookbackDays: MARKET_SETTLEMENT_CUTOFFS.GAP_CATCHUP_LOOKBACK_DAYS,
+          },
+          us: {
+            ...freshness.us,
+            symbolCount: usSymbolCount,
+          },
           tdcc: freshness.tdcc,
           revenue: freshness.revenue,
-          isCatchingUp,
+          macro: {
+            latestDate: macroLatest,
+            anchorDate: freshness.tw?.anchorDate ?? null,
+            isStale: macroIsStale,
+          },
+          weekly: {
+            tdccLatestDate: freshness.tdcc?.latestDate ?? null,
+            tdccAnchorDate: freshness.tdcc?.anchorDate ?? null,
+            tdccIsStale: Boolean(freshness.tdcc?.isStale),
+            revenueLatestMonth: freshness.revenue?.latestMonth ?? null,
+            revenueAnchorMonth: freshness.revenue?.anchorMonth ?? null,
+            revenueIsStale: Boolean(freshness.revenue?.isStale),
+          },
+          coordinator: {
+            lock: lockState,
+            retryBudgets: getLaneRetrySnapshot(),
+          },
+          isCatchingUp: effectiveCatchingUp,
           lastCatchupTime,
           timestamp: Date.now(),
         })

@@ -1,7 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   MODAL_VIEWPORT_STYLES,
   formatSyncBadgeTooltip,
+  formatSqliteSyncBadgeTooltip,
+  fetchMarketSyncStatus,
 } from './MarketSyncStatusBadge';
 
 describe('MarketSyncStatusBadge - 盤後同步彈窗視窗防溢出與包含塊隔離規範測試 (Spec 0135)', () => {
@@ -69,6 +71,89 @@ describe('MarketSyncStatusBadge - 盤後同步彈窗視窗防溢出與包含塊�
       const { overlay } = MODAL_VIEWPORT_STYLES;
       expect(overlay.backgroundColor).toContain('rgba(0, 0, 0');
       expect(overlay.backdropFilter).toBe('blur(8px)');
+    });
+  });
+
+  describe('4. Spec 0246 Ticket 07 (Seam 2): 遷移至 SQLite 同步狀態 API (/api/market/sync-status)', () => {
+    it('formatSqliteSyncBadgeTooltip 應呈現台美 SQLite 最新結算日、標的覆蓋數、缺口數與背景追趕狀態', () => {
+      const tooltip = formatSqliteSyncBadgeTooltip({
+        source: 'SQLITE_SSOT',
+        tw: {
+          latestDate: '2026-11-23',
+          anchorDate: '2026-11-23',
+          isStale: false,
+          symbolCount: 2345,
+          gapCount: 0,
+          gapDates: [],
+        },
+        us: {
+          latestDate: '2026-11-23',
+          anchorDate: '2026-11-23',
+          isStale: false,
+          symbolCount: 1450,
+        },
+        weekly: {
+          tdccLatestDate: '2026-11-20',
+          tdccAnchorDate: '2026-11-20',
+          tdccIsStale: false,
+          revenueLatestMonth: '2026-10',
+          revenueAnchorMonth: '2026-10',
+          revenueIsStale: false,
+        },
+        isCatchingUp: false,
+        lastCatchupTime: 0,
+        timestamp: Date.now(),
+      });
+
+      expect(tooltip).toContain('2026-11-23');
+      expect(tooltip).toContain('2345');
+      expect(tooltip).toContain('1450');
+
+      const staleTooltip = formatSqliteSyncBadgeTooltip({
+        source: 'SQLITE_SSOT',
+        tw: {
+          latestDate: '2026-11-19',
+          anchorDate: '2026-11-23',
+          isStale: true,
+          symbolCount: 2340,
+          gapCount: 2,
+          gapDates: ['2026-11-20', '2026-11-23'],
+        },
+        us: {
+          latestDate: '2026-11-23',
+          anchorDate: '2026-11-23',
+          isStale: false,
+          symbolCount: 1450,
+        },
+        isCatchingUp: true,
+        lastCatchupTime: Date.now(),
+        timestamp: Date.now(),
+      });
+      expect(staleTooltip).toContain('缺 2 日');
+      expect(staleTooltip).toContain('追趕');
+
+      expect(formatSqliteSyncBadgeTooltip(null)).toContain('等待連線');
+    });
+
+    it('fetchMarketSyncStatus 必須請求 /api/market/sync-status 且離線時優雅降級回傳 null', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          source: 'SQLITE_SSOT',
+          tw: { latestDate: '2026-11-23', anchorDate: '2026-11-23', isStale: false, symbolCount: 2300, gapCount: 0 },
+          us: { latestDate: '2026-11-23', anchorDate: '2026-11-23', isStale: false, symbolCount: 1400 },
+          isCatchingUp: false,
+          lastCatchupTime: 0,
+          timestamp: Date.now(),
+        }),
+      });
+
+      const status = await fetchMarketSyncStatus(mockFetch as any);
+      expect(mockFetch).toHaveBeenCalledWith('/api/market/sync-status');
+      expect(status?.tw.latestDate).toBe('2026-11-23');
+
+      const failingFetch = vi.fn().mockRejectedValue(new Error('offline'));
+      expect(await fetchMarketSyncStatus(failingFetch as any)).toBeNull();
     });
   });
 });
