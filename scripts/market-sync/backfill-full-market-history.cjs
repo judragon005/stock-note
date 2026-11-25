@@ -398,17 +398,21 @@ async function runFullMarketHistoryBackfill(options = {}) {
         backfillGlobalStatus.totalDays = twGaps.gapDates.length;
         twOptions.datesOverride = twGaps.gapDates;
         const twRes = await runTwDateDrivenBackfill(twOptions);
-        backfillGlobalStatus.tw.status = 'completed';
-        backfillGlobalStatus.tw.progressPct = 100;
-        console.log(`✔ [台股軌道] 智慧補漏完成！入庫日 K: ${twRes.totalQuotesIngested} 筆, 籌碼: ${twRes.totalChipsIngested} 筆。`);
+        if (!options.signal?.aborted) {
+          backfillGlobalStatus.tw.status = 'completed';
+          backfillGlobalStatus.tw.progressPct = 100;
+          console.log(`✔ [台股軌道] 智慧補漏完成！入庫日 K: ${twRes.totalQuotesIngested} 筆, 籌碼: ${twRes.totalChipsIngested} 筆。`);
+        }
       }
     } else {
       backfillGlobalStatus.totalDays = Number(days);
       twOptions.days = Number(days);
       const twRes = await runTwDateDrivenBackfill(twOptions);
-      backfillGlobalStatus.tw.status = 'completed';
-      backfillGlobalStatus.tw.progressPct = 100;
-      console.log(`✔ [台股軌道] 回補完成！入庫日 K: ${twRes.totalQuotesIngested} 筆, 籌碼: ${twRes.totalChipsIngested} 筆。`);
+      if (!options.signal?.aborted) {
+        backfillGlobalStatus.tw.status = 'completed';
+        backfillGlobalStatus.tw.progressPct = 100;
+        console.log(`✔ [台股軌道] 回補完成！入庫日 K: ${twRes.totalQuotesIngested} 筆, 籌碼: ${twRes.totalChipsIngested} 筆。`);
+      }
     }
   }
 
@@ -429,8 +433,10 @@ async function runFullMarketHistoryBackfill(options = {}) {
       console.log(`[*] 美股軌道啟動 [模式: ${isDailyMode ? 'DAILY 增量同步' : 'BOOTSTRAP 全量建置'}]...`);
       const usRes = await runUsMarketSync(syncConfig);
 
-      backfillGlobalStatus.us.status = 'completed';
-      backfillGlobalStatus.us.progressPct = 100;
+      if (!options.signal?.aborted) {
+        backfillGlobalStatus.us.status = 'completed';
+        backfillGlobalStatus.us.progressPct = 100;
+      }
       backfillGlobalStatus.us.successCount = usRes?.successCount || 0;
       backfillGlobalStatus.us.failCount = usRes?.failCount || 0;
       backfillGlobalStatus.us.totalQuotes = (usRes?.successCount || 0) * (isAutoMode ? 1 : Number(days));
@@ -450,6 +456,11 @@ async function runFullMarketHistoryBackfill(options = {}) {
     }
   }
 
+
+  if (options.signal?.aborted) {
+    backfillGlobalStatus.updatedAt = Date.now();
+    return;
+  }
 
   backfillGlobalStatus.progressPct = 100;
   backfillGlobalStatus.globalProgressPct = 100;

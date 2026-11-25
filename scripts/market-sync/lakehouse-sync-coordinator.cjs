@@ -408,7 +408,11 @@ async function reconcileTwLakehouse(options = {}) {
     }
 
     const etfNavFailed = Boolean(
-      needNav && plan.phase === 'PHASE_2_FULL' && etfNavResult && etfNavResult.success === false
+      needNav &&
+      plan.phase === 'PHASE_2_FULL' &&
+      etfNavResult &&
+      (etfNavResult.success === false ||
+        (typeof etfNavResult.count === 'number' && etfNavResult.count < MARKET_HEALTH_THRESHOLDS.ETF_NAV_COUNT_MIN))
     );
 
     const canAdvanceWatermark =

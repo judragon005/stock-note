@@ -457,7 +457,9 @@ async function runTwMarketSync(targetDateInput) {
   }
 
   console.log(`✔ 台股全市場盤後同步完成！共同步 ${successCount} 檔標的，耗時 ${Date.now() - startTime}ms。`);
-  console.log(`快取儲存位置: ${targetPath2}`);
+  if (writeStaticCache) {
+    console.log(`快取儲存位置: ${targetPath2}`);
+  }
 }
 
 if (require.main === module) {

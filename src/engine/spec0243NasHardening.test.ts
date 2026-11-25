@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { getMarketSettlementStatus } from './marketSettlementEngine';
 
 declare const require: (id: string) => any;
@@ -1213,6 +1213,198 @@ describe('Spec 0243: NAS 生產伺服器 SSOT 收斂、WAL 優雅關機與自治
       expect(freshnessSrc).toContain('MARKET_SETTLEMENT_CUTOFFS.TDCC_SETTLE_MINUTES');
       expect(freshnessSrc).toContain('MARKET_SETTLEMENT_CUTOFFS.REVENUE_DEADLINE_DAY');
       expect(freshnessSrc).toContain('MARKET_SETTLEMENT_CUTOFFS.REVENUE_DEADLINE_MINUTES');
+    });
+
+    it('Fix 4a: macro 軌道當日失敗後即使 twDaily/usDaily 已完成，後續 Tick 仍須獨立重試', () => {
+      const { evaluateScheduleWindow } = require('../../scripts/market-sync/nas-autonomous-scheduler.cjs');
+      const plan = evaluateScheduleWindow(
+        new Date('2026-11-24T17:30:00+08:00'),
+        {
+          tw: { latestDate: '2026-11-24', anchorDate: '2026-11-24', isStale: false },
+          us: { latestDate: '2026-11-23', anchorDate: '2026-11-23', isStale: false },
+          tdcc: { isStale: false },
+          revenue: { isStale: false },
+        },
+        {
+          lanes: {
+            twDaily: { watermarkDate: '2026-11-24', status: 'ok', lastRunIsoDate: '2026-11-24', retryCount: 1 },
+            usDaily: { watermarkDate: '2026-11-23', status: 'ok', lastRunIsoDate: '2026-11-24', retryCount: 1 },
+            macro: { watermarkDate: null, status: 'error', lastRunIsoDate: '2026-11-24', retryCount: 1 },
+            weekly: { watermarkDate: '2026-11-21', status: 'ok', lastRunIsoDate: '2026-11-21', retryCount: 1 },
+          },
+        },
+        { hasGaps: false, missingDates: [], incompleteDates: [] }
+      );
+      expect(plan.runDaily).toBe(false);
+      expect(plan.runMacro).toBe(true);
+    });
+
+    it('Fix 4b: Phase 1 守衛不被 hasGaps 旁路且具跨日隔離；RETRY_COOLDOWN 回扣計數且 RETRY_BUDGET_EXHAUSTED 不誤覆寫狀態', async () => {
+      const { evaluateScheduleWindow } = require('../../scripts/market-sync/nas-autonomous-scheduler.cjs');
+      const phase1TodayPlan = {
+        phase: 'PHASE_1_PRICE_ONLY',
+        hasGaps: true,
+        missingDates: [],
+        incompleteDates: [],
+        reconcileDates: ['2026-11-24'],
+      };
+      const sameDayBlocked = evaluateScheduleWindow(
+        new Date('2026-11-24T15:30:00+08:00'),
+        {
+          tw: { latestDate: '2026-11-23', anchorDate: '2026-11-24', isStale: true },
+          us: { latestDate: '2026-11-23', anchorDate: '2026-11-23', isStale: false },
+          tdcc: { isStale: false },
+          revenue: { isStale: false },
+        },
+        {
+          lanes: {
+            twDaily: { watermarkDate: null, status: 'phase1_pending_chips', phase: 'PHASE_1_PRICE_ONLY', lastRunIsoDate: '2026-11-24', retryCount: 0 },
+            usDaily: { watermarkDate: '2026-11-23', status: 'ok', lastRunIsoDate: '2026-11-24', retryCount: 1 },
+            macro: { watermarkDate: '2026-11-24', status: 'ok', lastRunIsoDate: '2026-11-24', retryCount: 1 },
+            weekly: { watermarkDate: null, status: 'idle', lastRunIsoDate: null, retryCount: 0 },
+          },
+        },
+        phase1TodayPlan
+      );
+      expect(sameDayBlocked.runTwDaily).toBe(false);
+
+      // 隔日 (2026-11-25) 應允許重新觸發當日 Phase 1
+      const nextDayAllowed = evaluateScheduleWindow(
+        new Date('2026-11-25T15:00:00+08:00'),
+        {
+          tw: { latestDate: '2026-11-24', anchorDate: '2026-11-25', isStale: true },
+          us: { latestDate: '2026-11-24', anchorDate: '2026-11-24', isStale: false },
+          tdcc: { isStale: false },
+          revenue: { isStale: false },
+        },
+        {
+          lanes: {
+            twDaily: { watermarkDate: null, status: 'phase1_pending_chips', phase: 'PHASE_1_PRICE_ONLY', lastRunIsoDate: '2026-11-24', retryCount: 0 },
+            usDaily: { watermarkDate: '2026-11-24', status: 'ok', lastRunIsoDate: '2026-11-25', retryCount: 1 },
+            macro: { watermarkDate: '2026-11-25', status: 'ok', lastRunIsoDate: '2026-11-25', retryCount: 1 },
+            weekly: { watermarkDate: null, status: 'idle', lastRunIsoDate: null, retryCount: 0 },
+          },
+        },
+        { phase: 'PHASE_1_PRICE_ONLY', hasGaps: true, missingDates: [], incompleteDates: [], reconcileDates: ['2026-11-25'] }
+      );
+      expect(nextDayAllowed.runTwDaily).toBe(true);
+
+      // RETRY_BUDGET_EXHAUSTED 不可覆寫為 phase1_pending_chips；RETRY_COOLDOWN 應回扣 retryCount
+      let returnMode: 'exhausted' | 'cooldown' = 'exhausted';
+      const scheduler = startNasAutonomousScheduler({
+        customDbPath: TEST_DB,
+        runOnStart: false,
+        nowFn: () => new Date('2026-11-24T15:00:00+08:00'),
+        handlers: {
+          checkMarketFreshness: () => ({
+            tw: { latestDate: '2026-11-23', anchorDate: '2026-11-24', isStale: true },
+            us: { latestDate: '2026-11-23', anchorDate: '2026-11-23', isStale: false },
+            tdcc: { isStale: false },
+            revenue: { isStale: false },
+          }),
+          runTwDailySync: async () =>
+            returnMode === 'exhausted'
+              ? { ok: false, skipped: true, reason: 'RETRY_BUDGET_EXHAUSTED', budgetExhausted: true, phase: 'PHASE_1_PRICE_ONLY' }
+              : { ok: false, skipped: true, reason: 'RETRY_COOLDOWN', inCooldown: true, phase: 'PHASE_2_FULL' },
+          runMacroSync: async () => ({ ok: true }),
+        },
+      });
+      try {
+        await scheduler.runTickNow();
+        expect(scheduler.getState().lanes.twDaily.status).toBe('budget_exhausted');
+        expect(scheduler.getState().lanes.twDaily.lastError).toBe('RETRY_BUDGET_EXHAUSTED');
+
+        returnMode = 'cooldown';
+        const beforeCount = scheduler.getState().lanes.twDaily.retryCount;
+        await scheduler.runTickNow();
+        expect(scheduler.getState().lanes.twDaily.retryCount).toBe(beforeCount);
+      } finally {
+        scheduler.stop();
+      }
+    });
+
+    it('Fix 4c: 美股 429 熔斷即使前 1 檔成功仍必回傳 ok=false/circuitBroken=true 且排程器禁止推進水位線', async () => {
+      const { runUsMarketSync } = require('../../scripts/market-sync/sync-us-market.cjs');
+      const timeoutSpy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: any) => {
+        if (typeof fn === 'function') fn();
+        return 0 as any;
+      }) as any);
+      try {
+        let callIdx = 0;
+        const usRes = await runUsMarketSync({
+          mode: 'daily',
+          dbPath: TEST_DB,
+          currentDate: new Date('2026-11-24T10:00:00+08:00'),
+          holdings: ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN'],
+          customUniverse: ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN'],
+          maxSymbols: 5,
+          baseDelayMs: 0,
+          jitterMs: 0,
+          skipMacroCadence: true,
+          fetchQuotesFn: async (sym: string) => {
+            callIdx += 1;
+            if (callIdx === 1) {
+              return [{ date: '2026-11-23', open: 228, high: 231, low: 227, close: 230, adjClose: 230, volume: 42000000 }];
+            }
+            throw new Error(`HTTP 429 Too Many Requests (${sym})`);
+          },
+        });
+        expect(usRes.successCount).toBe(1);
+        expect(usRes.circuitBroken).toBe(true);
+        expect(usRes.ok).toBe(false);
+      } finally {
+        timeoutSpy.mockRestore();
+      }
+
+      const scheduler = startNasAutonomousScheduler({
+        customDbPath: TEST_DB,
+        runOnStart: false,
+        nowFn: () => new Date('2026-11-24T06:15:00+08:00'),
+        handlers: {
+          checkMarketFreshness: () => ({
+            tw: { latestDate: '2026-11-23', anchorDate: '2026-11-23', isStale: false },
+            us: { latestDate: '2026-11-20', anchorDate: '2026-11-23', isStale: true },
+            tdcc: { isStale: false },
+            revenue: { isStale: false },
+          }),
+          runUsDailySync: async () => ({ ok: false, circuitBroken: true, date: '2026-11-23', successCount: 1, failCount: 4 }),
+          runMacroSync: async () => ({ ok: true }),
+        },
+      });
+      try {
+        const res = await scheduler.runTickNow();
+        expect(res.tasks.usDaily.ok).toBe(false);
+        expect(scheduler.getState().lanes.usDaily.status).toBe('error');
+        expect(scheduler.getState().lanes.usDaily.watermarkDate).toBeNull();
+      } finally {
+        scheduler.stop();
+      }
+    });
+
+    it('Fix 4d: Phase 2 ETF 每日淨值回傳筆數低於 ETF_NAV_COUNT_MIN (100) 時拒絕推進水位線', async () => {
+      const { reconcileTwLakehouse, resetCoordinatorStateForTest } = require('../../scripts/market-sync/lakehouse-sync-coordinator.cjs');
+      resetCoordinatorStateForTest();
+      const res = await reconcileTwLakehouse({
+        customDbPath: TEST_DB,
+        now: new Date('2026-11-24T16:45:00+08:00'),
+        maxLookbackDays: 1,
+        throttleMs: 0,
+        handlers: {
+          fetchAndIngestTwDailyData: async (d: string) => ({
+            date: d,
+            isTradingDay: true,
+            quotesCount: 2300,
+            chipsCount: 2200,
+            marginCount: 1700,
+            sblCount: 800,
+            dayTradeCount: 900,
+            valuationCount: 1800,
+          }),
+          fetchAndIngestEtfDailyNav: async () => ({ success: true, count: 10 }),
+        },
+      });
+      expect(res.ok).toBe(false);
+      expect(res.watermarkAdvanced).toBe(false);
     });
   });
 });

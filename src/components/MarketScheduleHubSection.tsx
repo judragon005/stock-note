@@ -17,9 +17,9 @@ import {
   LAKEHOUSE_SYNCED_EVENT,
   fetchMarketSyncStatus,
 } from '../hooks/useMarketCatchupSync';
+import { getTwMarketStatus, getUsMarketStatus } from '../engine/marketStatusEngine';
 
 export const fetchScheduleSyncStatus = fetchMarketSyncStatus;
-import { getTwMarketStatus, getUsMarketStatus } from '../engine/marketStatusEngine';
 
 export interface LegacyScheduleSummaryLike {
   date: string;

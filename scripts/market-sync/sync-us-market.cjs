@@ -265,6 +265,8 @@ async function runUsMarketSync(config = {}) {
   let failCount = 0;
   const failedSymbols = [];
   let consecutive429 = 0;
+  let circuitBroken = false;
+  let aborted = false;
 
   const baseDelay = config.baseDelayMs !== undefined ? config.baseDelayMs : 800;
   const jitter = config.jitterMs !== undefined ? config.jitterMs : 400;
@@ -274,6 +276,7 @@ async function runUsMarketSync(config = {}) {
   // 4. 受控單檔順序採集 (避開高頻限流)
   for (let i = 0; i < pendingSymbols.length; i++) {
     if (config.signal && config.signal.aborted) {
+      aborted = true;
       break;
     }
     const sym = pendingSymbols[i];
@@ -365,6 +368,7 @@ async function runUsMarketSync(config = {}) {
         );
 
         if (backoff.isCircuitBroken) {
+          circuitBroken = true;
           console.error(`[熔斷觸發] 連續多次遭遇 429 限流，自動啟動熔斷保護公網 IP。安全退出程序。`);
           break;
         }
@@ -384,6 +388,9 @@ async function runUsMarketSync(config = {}) {
 
   // 5. 最終持久化輸出至本地 JSON 快取
   const outputPayload = {
+    ok: !circuitBroken && !aborted && !(failCount > 0 && successCount === 0),
+    circuitBroken,
+    aborted,
     date: dateStr,
     updatedAt: Date.now(),
     market: 'US',

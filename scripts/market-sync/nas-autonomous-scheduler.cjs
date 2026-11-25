@@ -21,6 +21,7 @@ const { checkMarketFreshness } = require('./market-freshness-service.cjs');
 const { runWeeklyLakehouseSync } = require('./weekly-lakehouse-sync.cjs');
 const { MARKET_SETTLEMENT_CUTOFFS } = require('./sync-thresholds.cjs');
 const {
+  getTaipeiClock,
   withGlobalSyncLock,
   recordLaneAttempt,
   computeTwReconciliationPlan,
@@ -127,18 +128,18 @@ function createRollingBackup({ dbPath, now = new Date(), keep = DEFAULT_BACKUP_K
 }
 
 /**
- * 將任意 Date 轉換為台北時間 (UTC+8) 的年月日時分與星期
+ * 將任意 Date 轉換為台北時間 (UTC+8) 的年月日時分與星期（複用 getTaipeiClock SSOT）
  */
 function getTaipeiTimeParts(date = new Date()) {
-  const shifted = new Date(date.getTime() + 8 * 3600 * 1000);
+  const tp = getTaipeiClock(date);
   return {
-    year: shifted.getUTCFullYear(),
-    month: shifted.getUTCMonth() + 1,
-    day: shifted.getUTCDate(),
-    dayOfWeek: shifted.getUTCDay(), // 0=日, 1=一 ... 6=六
-    hour: shifted.getUTCHours(),
-    minute: shifted.getUTCMinutes(),
-    isoDate: shifted.toISOString().slice(0, 10),
+    year: tp.year,
+    month: tp.month,
+    day: tp.day,
+    dayOfWeek: tp.dayOfWeek,
+    hour: tp.hour,
+    minute: tp.minute,
+    isoDate: tp.isoDate,
   };
 }
 
@@ -185,25 +186,36 @@ function evaluateScheduleWindow(nowDate, freshness, lastRunState = {}, twPlan = 
     reasons.push(isSaturdayMorningWindow ? 'SATURDAY_WEEKLY_WINDOW' : 'WEEKLY_DATA_STALE');
   }
 
-  // 2. 台股日線缺口調諧軌道 (完全獨立於美股，並納入內部缺口日與 Phase 1 盤後寫價窗)
+  // 2. 台股日線缺口調諧軌道 (區分歷史真實缺口與今日 Phase 1 寫價窗，杜絕同日重複旁路)
   const twAnchor = freshness?.tw?.anchorDate || null;
   const twIsStale = Boolean(freshness?.tw?.isStale);
-  const twHasInternalGaps = Boolean(twPlan?.hasGaps);
+  const twHasHistoricalGaps = Boolean(
+    (twPlan?.missingDates?.length || 0) > 0 ||
+    (twPlan?.incompleteDates?.length || 0) > 0 ||
+    (twPlan?.hasGaps && !Array.isArray(twPlan?.missingDates) && !Array.isArray(twPlan?.incompleteDates))
+  );
   const twPhase = twPlan?.phase || resolveTwPostClosePhase(nowDate);
+  const twPhase1DoneToday = Boolean(
+    lanes?.twDaily?.lastRunIsoDate === tp.isoDate && lanes?.twDaily?.phase === 'PHASE_1_PRICE_ONLY'
+  );
   const twWatermarkDone = Boolean(
     twAnchor &&
     lanes?.twDaily?.watermarkDate === twAnchor &&
     lanes?.twDaily?.status === 'ok' &&
-    !twHasInternalGaps
+    !twHasHistoricalGaps
   );
   const twPhase1Eligible =
     twPhase === 'PHASE_1_PRICE_ONLY' &&
     !twWatermarkDone &&
-    lanes?.twDaily?.phase !== 'PHASE_1_PRICE_ONLY';
+    !twPhase1DoneToday;
+  const twNeedsWork =
+    twHasHistoricalGaps ||
+    twPhase1Eligible ||
+    (twIsStale && !(twPhase === 'PHASE_1_PRICE_ONLY' && twPhase1DoneToday));
   const legacyDailyBlocked = !lanes && lastRunState.lastDailyIsoDate === tp.isoDate;
   const twRetries = getLaneRetryCountForDate(lanes?.twDaily, tp.isoDate);
   if (
-    (twIsStale || twHasInternalGaps || twPhase1Eligible) &&
+    twNeedsWork &&
     !twWatermarkDone &&
     !legacyDailyBlocked &&
     (twPhase1Eligible || twRetries < maxRetries)
@@ -212,7 +224,7 @@ function evaluateScheduleWindow(nowDate, freshness, lastRunState = {}, twPlan = 
     reasons.push(
       twPhase1Eligible && !twIsStale
         ? 'TW_PHASE1_WINDOW'
-        : twHasInternalGaps
+        : twHasHistoricalGaps
           ? 'TW_GAP_RECONCILE'
           : 'TW_DAILY_STALE'
     );
@@ -232,12 +244,15 @@ function evaluateScheduleWindow(nowDate, freshness, lastRunState = {}, twPlan = 
 
   actions.runDaily = actions.runTwDaily || actions.runUsDaily;
 
-  // 4. 宏觀情緒軌道 (獨立追蹤，任一日更觸發且今日宏觀尚未完成時執行)
+  // 4. 宏觀情緒軌道 (獨立追蹤：任一日更觸發或當日宏觀失敗待重試時均允許獨立重試)
   const macroDoneToday =
     lanes?.macro?.watermarkDate === tp.isoDate ||
     lastRunState.lastMacroIsoDate === tp.isoDate;
+  const macroNeedsRetry = Boolean(
+    lanes?.macro?.lastRunIsoDate === tp.isoDate && lanes?.macro?.status === 'error'
+  );
   const macroRetries = getLaneRetryCountForDate(lanes?.macro, tp.isoDate);
-  if (actions.runDaily && !macroDoneToday && macroRetries < maxRetries) {
+  if ((actions.runDaily || macroNeedsRetry) && !macroDoneToday && macroRetries < maxRetries) {
     actions.runMacro = true;
   }
 
@@ -359,7 +374,16 @@ function startNasAutonomousScheduler({
                   }));
               const twRes = await runTwFn(customDbPath, { now, freshness });
               twLane.phase = twRes?.phase || resolveTwPostClosePhase(now);
-              if (twRes && twRes.phase === 'PHASE_1_PRICE_ONLY') {
+              if (twRes && twRes.skipped) {
+                if (twRes.inCooldown) {
+                  // 冷卻略過不虛耗重試配額
+                  twLane.retryCount = Math.max(0, twLane.retryCount - 1);
+                  twLane.status = 'cooldown_skipped';
+                } else {
+                  twLane.status = twRes.budgetExhausted ? 'budget_exhausted' : 'skipped';
+                }
+                twLane.lastError = twRes.reason || 'TW_SKIPPED';
+              } else if (twRes && twRes.phase === 'PHASE_1_PRICE_ONLY' && twRes.ok !== false) {
                 // Phase 1 不消耗 Phase 2 每日重試配額
                 twLane.retryCount = Math.max(0, twLane.retryCount - 1);
                 twLane.status = 'phase1_pending_chips';
@@ -406,14 +430,22 @@ function startNasAutonomousScheduler({
                 Number(usRes.skippedCount || 0) === 0 &&
                 !usRes.skipped
               );
-              const usOk = Boolean(usRes && usRes.ok !== false && !usZeroProgressFailure);
+              const usOk = Boolean(
+                usRes && usRes.ok !== false && !usRes.circuitBroken && !usRes.aborted && !usZeroProgressFailure
+              );
               if (usOk) {
                 usLane.status = 'ok';
                 usLane.watermarkDate = usRes?.date || freshness?.us?.anchorDate || tp.isoDate;
                 usLane.lastError = null;
               } else {
                 usLane.status = 'error';
-                usLane.lastError = usRes?.error || 'US_SYNC_FAILED';
+                usLane.lastError =
+                  usRes?.error ||
+                  (usRes?.circuitBroken
+                    ? 'US_429_CIRCUIT_BROKEN'
+                    : usRes?.aborted
+                      ? 'US_ABORTED'
+                      : 'US_SYNC_FAILED');
               }
               tasks.usDaily = { ...(usRes || {}), ok: usOk };
             } catch (err) {
