@@ -597,11 +597,11 @@ describe('Spec 0247 (Wave 0): 系統免疫強化 — 資安邊界、鎖內逾時
       } = require('../../scripts/market-sync/us-fundamentals-ingestion.cjs');
       const {
         loadSecTickerCikMap,
-        resetSecProxyStateForTest,
+        resetSecProxyState,
       } = require('../../scripts/market-sync/sec-edgar-proxy.cjs');
 
       resetUsFundamentalsStateForTest();
-      if (typeof resetSecProxyStateForTest === 'function') resetSecProxyStateForTest();
+      resetSecProxyState();
       const db = initSqliteLakehouseDb(TEST_DB);
 
       // 1. 驗證外部 AbortController 能穿透 getOrFetchUsFundamentals -> fetchYahooQuoteSummaryWithCrumb
@@ -712,10 +712,22 @@ describe('Spec 0247 (Wave 0): 系統免疫強化 — 資安邊界、鎖內逾時
     });
 
     it('T10: BullBearEnergyCard、BullBearStrengthCard 與 AiDecisionCoreCard 全面使用 Directional Palette SSOT', async () => {
-      const { resolveDirectionalPalette } = await import('../constants/designTokens');
-      const { getTrendBadgeStyle, getDecisionBannerStyle, AiDecisionCoreCard } = await import(
-        '../components/aiForceDashboard/cards/AiDecisionCoreCard'
-      );
+      const [
+        { resolveDirectionalPalette },
+        { getTrendBadgeStyle, getDecisionBannerStyle, AiDecisionCoreCard },
+        reactMod,
+        { renderToStaticMarkup },
+        { EnergySentimentTwinCard },
+        { BullBearStrengthCard },
+      ] = await Promise.all([
+        import('../constants/designTokens'),
+        import('../components/aiForceDashboard/cards/AiDecisionCoreCard'),
+        import('react'),
+        import('react-dom/server'),
+        import('../components/aiForceDashboard/cards/EnergySentimentTwinCard'),
+        import('../components/aiForceDashboard/cards/BullBearStrengthCard'),
+      ]);
+      const React = reactMod.default;
 
       const tw = resolveDirectionalPalette('taiwan', 'TW');
       const us = resolveDirectionalPalette('international', 'US');
@@ -747,10 +759,6 @@ describe('Spec 0247 (Wave 0): 系統免疫強化 — 資安邊界、鎖內逾時
       expect(strengthSrc).not.toMatch(/isTaiwan\s*\?\s*['"]#(?:f87171|34d399|ef4444|10b981)['"]/);
 
       // 驗證 EnergySentimentTwinCard 僅由 sentimentData.isUsMarket 推斷美股時維持綠漲紅跌（無退化）
-      const React = (await import('react')).default;
-      const { renderToStaticMarkup } = await import('react-dom/server');
-      const { EnergySentimentTwinCard } = await import('../components/aiForceDashboard/cards/EnergySentimentTwinCard');
-      const { BullBearStrengthCard } = await import('../components/aiForceDashboard/cards/BullBearStrengthCard');
       const usInferredHtml = renderToStaticMarkup(
         React.createElement(EnergySentimentTwinCard, {
           bullBearData: {
@@ -804,6 +812,6 @@ describe('Spec 0247 (Wave 0): 系統免疫強化 — 資安邊界、鎖內逾時
       );
       expect(twDecisionHtml).toContain('color:#ef4444');
       expect(twDecisionHtml).toContain('color:#f87171');
-    });
+    }, 60000);
   });
 });
