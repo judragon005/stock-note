@@ -1237,15 +1237,17 @@ describe('Spec 0243: NAS 生產伺服器 SSOT 收斂、WAL 優雅關機與自治
       );
       expect(plan.runDaily).toBe(false);
       expect(plan.runMacro).toBe(true);
+      expect(plan.reason).toContain('MACRO_RETRY');
     });
 
     it('Fix 4b: Phase 1 守衛不被 hasGaps 旁路且具跨日隔離；RETRY_COOLDOWN 回扣計數且 RETRY_BUDGET_EXHAUSTED 不誤覆寫狀態', async () => {
       const { evaluateScheduleWindow } = require('../../scripts/market-sync/nas-autonomous-scheduler.cjs');
+      // 15:30 期間 checkMarketFreshness 會將今日列入 incompleteDates，不應旁路 twPhase1DoneToday
       const phase1TodayPlan = {
         phase: 'PHASE_1_PRICE_ONLY',
         hasGaps: true,
         missingDates: [],
-        incompleteDates: [],
+        incompleteDates: ['2026-11-24'],
         reconcileDates: ['2026-11-24'],
       };
       const sameDayBlocked = evaluateScheduleWindow(
@@ -1313,6 +1315,8 @@ describe('Spec 0243: NAS 生產伺服器 SSOT 收斂、WAL 優雅關機與自治
         await scheduler.runTickNow();
         expect(scheduler.getState().lanes.twDaily.status).toBe('budget_exhausted');
         expect(scheduler.getState().lanes.twDaily.lastError).toBe('RETRY_BUDGET_EXHAUSTED');
+        // Phase 1 配額耗盡不應消耗 16:30 Phase 2 的 twDaily 計數
+        expect(scheduler.getState().lanes.twDaily.retryCount).toBe(0);
 
         returnMode = 'cooldown';
         const beforeCount = scheduler.getState().lanes.twDaily.retryCount;

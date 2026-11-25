@@ -189,12 +189,17 @@ function evaluateScheduleWindow(nowDate, freshness, lastRunState = {}, twPlan = 
   // 2. 台股日線缺口調諧軌道 (區分歷史真實缺口與今日 Phase 1 寫價窗，杜絕同日重複旁路)
   const twAnchor = freshness?.tw?.anchorDate || null;
   const twIsStale = Boolean(freshness?.tw?.isStale);
+  const twPhase = twPlan?.phase || resolveTwPostClosePhase(nowDate);
+  const filterHistoricalDate = (d) => Boolean(d) && !(twPhase === 'PHASE_1_PRICE_ONLY' && d === tp.isoDate);
+  const historicalMissing = Array.isArray(twPlan?.missingDates) ? twPlan.missingDates.filter(filterHistoricalDate) : [];
+  const historicalIncomplete = Array.isArray(twPlan?.incompleteDates)
+    ? twPlan.incompleteDates.filter(filterHistoricalDate)
+    : [];
   const twHasHistoricalGaps = Boolean(
-    (twPlan?.missingDates?.length || 0) > 0 ||
-    (twPlan?.incompleteDates?.length || 0) > 0 ||
+    historicalMissing.length > 0 ||
+    historicalIncomplete.length > 0 ||
     (twPlan?.hasGaps && !Array.isArray(twPlan?.missingDates) && !Array.isArray(twPlan?.incompleteDates))
   );
-  const twPhase = twPlan?.phase || resolveTwPostClosePhase(nowDate);
   const twPhase1DoneToday = Boolean(
     lanes?.twDaily?.lastRunIsoDate === tp.isoDate && lanes?.twDaily?.phase === 'PHASE_1_PRICE_ONLY'
   );
@@ -254,6 +259,9 @@ function evaluateScheduleWindow(nowDate, freshness, lastRunState = {}, twPlan = 
   const macroRetries = getLaneRetryCountForDate(lanes?.macro, tp.isoDate);
   if ((actions.runDaily || macroNeedsRetry) && !macroDoneToday && macroRetries < maxRetries) {
     actions.runMacro = true;
+    if (macroNeedsRetry && !actions.runDaily) {
+      reasons.push('MACRO_RETRY');
+    }
   }
 
   actions.reason = reasons.length > 0 ? reasons.join('+') : 'UP_TO_DATE';
@@ -380,6 +388,10 @@ function startNasAutonomousScheduler({
                   twLane.retryCount = Math.max(0, twLane.retryCount - 1);
                   twLane.status = 'cooldown_skipped';
                 } else {
+                  if (twRes.phase === 'PHASE_1_PRICE_ONLY' && twRes.budgetExhausted) {
+                    // Phase 1 配額耗盡不可吃掉 16:30 Phase 2 的 twDaily 配額
+                    twLane.retryCount = Math.max(0, twLane.retryCount - 1);
+                  }
                   twLane.status = twRes.budgetExhausted ? 'budget_exhausted' : 'skipped';
                 }
                 twLane.lastError = twRes.reason || 'TW_SKIPPED';
