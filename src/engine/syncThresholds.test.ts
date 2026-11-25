@@ -16,6 +16,7 @@ describe('T01: sync-thresholds SSOT (MARKET_HEALTH_THRESHOLDS)', () => {
       DAY_TRADE_COUNT_MIN: 500,
       VALUATION_COUNT_MIN: 1500,
       ETF_NAV_COUNT_MIN: 100,
+      US_DAILY_MIN_SUCCESS_RATIO: 0.8,
     });
   });
 });

@@ -3139,6 +3139,14 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     2. **Deadlock-Free Lock-Scoped Fetch (無死鎖鎖內逾時抓取)**：透過 `market-sync-core.cjs` 之 `fetchWithTimeout`（Node 22 原生 `AbortSignal.timeout` + `AbortSignal.any` 涵蓋標頭與回應體全程）覆蓋全部 9 條全域鎖內採集管線零裸抓取，並統一 `us-fundamentals-ingestion.cjs` 之 `fetchImpl`/`fetchFn` 鍵名，確保上游 TCP 半開絕不卡死 `withGlobalSyncLock`。_Avoid_: Bare Timeout-less Fetch Inside Global Lock, Mismatched Fetch Option Keys
     3. **Full-Stack CI Immunity Gate (全端 CI 免疫閘門)**：以 `scripts/run-backend-tests.cjs` 納管全數後端同步測試至 CI 與 Pre-push Guard（確保 Node CLI 非同步測試皆經順序 `await`），於 CI 補齊 `npm run build` 與 `npm run lint:docs`，關閉 Vitest `dangerouslyIgnoreUnhandledErrors`，同步將 `architecturalFitnessGuard.test.ts` 擴充至 10 條不可繞過不變量並以 `redactApiKeysMap` SSOT 深度清洗快照明文金鑰與清除硬編碼個人交易。_Avoid_: Orphan Backend Tests, Ignored Unhandled Rejections, Unredacted Snapshot API Keys
 
+- **Lakehouse Date-First Indexing, Persistent Scheduler Lane Ledger & Tri-Lane Watermark Guard (湖倉高頻表日期索引、持久化單一排程帳本與三軌水位線防禦)**:
+  - 核心模組：`scripts/market-sync/sqlite-db-core.cjs`、`scripts/market-sync/lakehouse-sync-coordinator.cjs`、`scripts/market-sync/nas-autonomous-scheduler.cjs`、`scripts/market-sync/sync-thresholds.cjs`、`scripts/market-sync/ingest-macro-sentiment.cjs`、`scripts/market-sync/weekly-lakehouse-sync.cjs`、`scripts/market-sync/sync-us-market.cjs`、`scripts/market-sync/audit-verifier.cjs`、`scripts/market-sync/ingest-tw-quotes.cjs`。
+  - 規格來源：Spec 0248 與 [ADR 0248](file:///d:/APP/股票紀錄/docs/adr/0248-lakehouse-index-scheduler-ledger-and-watermark-guard.md)，關聯 GitHub Issue `#611`（清償 Debt 0065 & Debt 0066）。
+  - 核心領域術語與架構革新：
+    1. **SQLite Date-First Index Convergence (高頻表日期首欄索引收斂)**：為集保分佈、月營收、每日估值與 ETF 每日淨值四大高頻表補齊日期／年月首欄索引，確保健康檢查與新鮮度探針於 `EXPLAIN QUERY PLAN` 達成零全表 `SCAN`。_Avoid_: Full-Table Healthz Scan, Symbol-Only Index on Date Probes
+    2. **Persistent Scheduler Lane Ledger SSOT (持久化單一排程帳本)**：以 SQLite `scheduler_lane_state` 單表統一保存五個配額／軌道鍵值（`twDaily`、`twPhase1`、`usDaily`、`macro`、`weekly`）之水位線、當日重試計數、冷卻時間戳與狀態，由協調中樞單一讀寫並供排程器唯讀查詢，徹底消滅記憶體雙重帳本、手動回扣與容器重啟暴衝迴圈。_Avoid_: Duplicated In-Memory Retry Ledger, Manual Retry Decrement Compensation, OOM Restart Quota Reset
+    3. **Tri-Lane Watermark Poisoning Guard (三軌假性成功水位線防禦)**：針對宏觀（台北日期定錨＋至少 1 項有限數值）、每週維護（顯式失敗或無快取標記之 0 筆入庫禁止推進與備份）與美股日線（有效完成率 $\ge 0.8$）三條軌道設立硬性成功閘門，徹底阻斷殘缺或全空回傳毒化排程水位線。_Avoid_: All-Null Macro Watermark Advance, Silent Zero-Row Weekly Backup, Single-Symbol US Success False Positive
+
 
 
 

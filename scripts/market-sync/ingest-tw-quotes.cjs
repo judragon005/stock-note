@@ -6,6 +6,7 @@
 const https = require('https');
 const http = require('http');
 const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+const { isTwOtcWarrantSymbol } = require('./market-sync-core.cjs');
 
 function parseCleanNumber(val) {
   if (val === null || val === undefined) return 0;
@@ -84,6 +85,7 @@ function parseTpexDailyQuotes(rawData, dateStr) {
         ? rawSymbol.slice(0, -1)
         : rawSymbol;
       if (symbol.length > 6) continue;
+      if (isTwOtcWarrantSymbol(symbol)) continue;
 
       const isSplitSign = row[3] === '+' || row[3] === '-' || row[3] === 'X' || row[3] === ' ';
       const close = parseCleanNumber(row[2]);
@@ -159,6 +161,7 @@ function saveTwQuotesToSqlite(quotesMap, customDbPath) {
       const symbol = cleanSymbol.endsWith('O') && /^\d+[A-Z]?O$/.test(cleanSymbol)
         ? cleanSymbol.slice(0, -1)
         : cleanSymbol;
+      if (isTwOtcWarrantSymbol(symbol)) continue;
 
       const close = Number(item.close);
       if (!close || isNaN(close) || close <= 0) continue;

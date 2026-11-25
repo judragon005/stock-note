@@ -1,7 +1,13 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-11-25 15:18 (UTC+8)  
+> **交接產生時間**：2026-11-25 16:25 (UTC+8)  
 > **當前最新里程碑**：
+> - **V9.30.0 系統免疫強化 Wave 1 — SQLite 高頻表日期索引補齊、NAS 排程持久化單一帳本與三軌假性成功水位線防禦**（ADR 0248, Spec 0248, Issue #611）：
+>   - **SQLite Date-First Index Convergence (T01)**：`sqlite-db-core.cjs` 補齊 `idx_tdcc_date`、`idx_revenue_ym`、`idx_valuation_date`、`idx_etf_nav_date` 四支高頻表日期／年月首欄索引，經 `EXPLAIN QUERY PLAN` 驗證 `/healthz` 與 `checkMarketFreshness` 達零全表 `SCAN`。
+>   - **Persistent Scheduler Lane Ledger SSOT & Decomposition (T02–T05)**：建立 `scheduler_lane_state` 單一持久化表（支援 `twDaily`/`twPhase1`/`usDaily`/`macro`/`weekly`），由 `lakehouse-sync-coordinator.cjs` 統一讀寫並於跨日自動歸零前日重試計數；`nas-autonomous-scheduler.cjs` 與 `nas-server.cjs` 統一解析 `getDbPath(customDbPath)` 確保正式環境預設落盤與 `/healthz` 同源，拆解 4 個視窗決策純函式與 4 個分軌執行器並徹底拔除手動 `retryCount - 1` 回扣。
+>   - **Tri-Lane Watermark Poisoning Guard (T06–T08)**：Macro 軌改採台北日期定錨、全空列拒寫回 `false` 且雙分支複用淨化 `metrics`；Weekly 軌 5 項子任務凡顯式失敗或無快取標記之 0 筆入庫皆阻斷水位線與備份；US Daily 軌導入 `US_DAILY_MIN_SUCCESS_RATIO = 0.8` 有效完成率閘門（含早退分支 `ok`/`totalTargets`/`coverageRatio` 對齊）。
+>   - **Calendar/Warrant SSOT & Fitness Ratchet (T09–T10)**：`audit-verifier.cjs` 移除硬編碼 2026 休市表改委派共享日曆引擎；`ingest-tw-quotes.cjs` 接入 `isTwOtcWarrantSymbol`；新增 `spec0248-lakehouse-scheduler-wave1.test.cjs`（11 項契約與回歸測試）納入 `npm run test:backend`；`architecturalFitnessGuard.test.ts` 升級至 **11 條不變量**；[Debt 0065](../debts/0065-nas-scheduler-retry-ledger-and-decomposition.md) 與 [Debt 0066](../debts/0066-sqlite-date-indexes-and-scheduler-watermark-poisoning.md) 正式結案 `RESOLVED`（詳細交接見 [2026-11-25-v9.30.0-spec0248-lakehouse-scheduler-wave1-handoff.md](2026-11-25-v9.30.0-spec0248-lakehouse-scheduler-wave1-handoff.md)）。
+>   - **品質狀態**：第二輪雙軸程式碼審查終審 **PASS**，後端測試 **10/10 通過**、前端與整合測試 **2,631/2,631 通過 (100% Passed / 319 個測試套件)**，TypeScript Strict 0 錯誤，生產打包 `npm run build` 100% 綠燈，全量文檔稽核 (`npm run lint:docs`) 100% 通過。
 > - **V9.29.0 系統免疫強化 Wave 0 — 統一 SSRF 守衛、鎖內逾時防死鎖、快照深度脫敏與全端 CI 免疫閘門**（ADR 0247, Spec 0247, Issue #609）：
 >   - **Unified SSRF Origin Guard 與 NAS 代理硬護欄 (T01–T03)**：建立零依賴 `ssrf-origin-guard.cjs` 收斂 `POST /api/market/probe-key` 與 `nas-server.cjs` `/api/proxy`（僅 HTTPS/443 埠、9 大官方金融白名單、私網／IPv6／非標準 IPv4／尾點／Cloud Metadata／憑證嵌入阻斷、雙端 3xx `403` 攔截）；`nas-server.cjs` 補齊 1 MB `413`、20 MB `502`、15s `504`、Slowloris 串流清理、`safeSendJson` 與 async `.catch()`。
 >   - **雙軌快照深度脫敏 SSOT 與個人隱私淨化 (T04–T05)**：`csvSanitizer.ts` 抽出單一 `redactApiKeysMap` SSOT 供 `db.ts` 共用，深度清洗 `snapshots[*].payload.apiKeys`（含 `exportFullDatabaseJSON(true/false)` 端到端測試）；`storage.ts` 徹底移除 `autoReconcileSchwabRecords`。
@@ -129,10 +135,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main` (已完全同步主幹，Working Tree Clean)
-- **單元測試套件**：**2,620/2,620 通過 (318 test suites / 100% 綠燈)**
+- **單元測試套件**：**2,631/2,631 通過 (319 test suites / 100% 綠燈) + 後端測試 10/10 通過**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V9.28.0**
+- **當前釋出版本**：**V9.30.0**
 - **工作區與分支整潔度**：工作區乾淨受控，本地 feature/fix 分支已完全合併並清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -161,6 +167,8 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0248`](file:///d:/APP/股票紀錄/docs/specs/0248-lakehouse-index-scheduler-ledger-and-watermark-guard-spec.md) | [`ADR 0248`](file:///d:/APP/股票紀錄/docs/adr/0248-lakehouse-index-scheduler-ledger-and-watermark-guard.md) | [`.scratch/v9.30.0-spec0248-lakehouse-scheduler-wave1/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.30.0-spec0248-lakehouse-scheduler-wave1/issues/) | Issue #611 | V9.30.0 | 系統免疫強化 Wave 1：SQLite 四大高頻表日期索引、持久化單一排程帳本、三軌假性成功防禦與審計日曆／權證收斂 |
+| [`Spec 0247`](file:///d:/APP/股票紀錄/docs/specs/0247-system-immunity-wave0-security-timeout-ci-hardening-spec.md) | [`ADR 0247`](file:///d:/APP/股票紀錄/docs/adr/0247-system-immunity-wave0-security-timeout-ci-hardening.md) | [`.scratch/v9.29.0-spec0247-system-immunity-wave0/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.29.0-spec0247-system-immunity-wave0/issues/) | Issue #609 | V9.29.0 | 系統免疫強化 Wave 0：統一 SSRF 守衛、鎖內逾時防死鎖、快照深度脫敏與全端 CI 免疫閘門 |
 | [`Spec 0246`](file:///d:/APP/股票紀錄/docs/specs/0246-lakehouse-sync-ssot-convergence-spec.md) | [`ADR 0246`](file:///d:/APP/股票紀錄/docs/adr/0246-lakehouse-sync-ssot-convergence.md) | [`.scratch/v9.28.0-spec0246-lakehouse-sync-ssot-convergence/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.28.0-spec0246-lakehouse-sync-ssot-convergence/issues/) | Issue #607 | V9.28.0 | 外部資料更新中樞收斂（單一缺口調諧）、NAS 四軌獨立水位線排程、靜態快取退役與 Card 01 盤中實量縫合 |
 | [`Spec 0245`](file:///d:/APP/股票紀錄/docs/specs/0245-portal-modal-kline-resonance-and-tdcc-gap-healing-spec.md) | [`ADR 0245`](file:///d:/APP/股票紀錄/docs/adr/0245-portal-modal-kline-resonance-and-tdcc-gap-healing.md) | [`.scratch/v9.27.0-spec0245-portal-kline-tdcc-healing/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.27.0-spec0245-portal-kline-tdcc-healing/issues/) | Issue #605 | V9.27.0 | 全域視口傳送彈窗 `ModalShell`、Card 01B 主 K 四維共鳴解碼卡暨台股 TDCC 12 週斷層自癒 |
 | [`Spec 0244`](file:///d:/APP/股票紀錄/docs/specs/0244-war-room-layout-topology-and-etf-dividend-grid-spec.md) | [`ADR 0244`](file:///d:/APP/股票紀錄/docs/adr/0244-war-room-layout-topology-and-etf-dividend-grid.md) | [`.scratch/v9.26.2-spec0244-war-room-layout-topology/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.26.2-spec0244-war-room-layout-topology/issues/) | Issue #603 | V9.26.2 | 主力戰情室 Layer 6 雙界限 2×2 矩陣、Card 20 12 期配息無滑軌展開與 ZONE 04 非對稱等高佈局 |

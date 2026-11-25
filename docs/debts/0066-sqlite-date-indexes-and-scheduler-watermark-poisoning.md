@@ -1,7 +1,7 @@
 # Debt 0066: SQLite 四大高頻表日期索引補齊、NAS 排程三軌假性成功防禦與審計腳本日曆收斂 (Wave 1)
 
 - **優先級 (Priority)**: `P1`
-- **狀態 (Status)**: `OPEN`
+- **狀態 (Status)**: `RESOLVED`（已於 v9.30.0 · Spec 0248 / ADR 0248 / Issue `#611` 完整清償）
 - **發現來源**: Spec 0247 五路正交法醫審計 (Issue `#609`)
 - **標籤**: `Performance` · `Reliability` · `SQLite` · `NAS-Scheduler` · `Wave1`
 - **預計觸發時機**: Wave 1（規劃為 `Spec 0248`，與 [Debt 0065](0065-nas-scheduler-retry-ledger-and-decomposition.md) 一併清償）

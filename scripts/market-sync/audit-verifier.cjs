@@ -6,45 +6,16 @@
 const fs = require('fs');
 const path = require('path');
 const { formatDateYMD, saveJsonAtomic } = require('./market-sync-core.cjs');
+const { isTradingDay } = require('./trading-calendar-engine.cjs');
 
-// 法定休市日曆 (YYYY-MM-DD)
-const HOLIDAYS_TW_2026 = new Set([
-  '2026-01-01', // 元旦
-  '2026-02-16', '2026-02-17', '2026-02-18', '2026-02-19', '2026-02-20', // 春節
-  '2026-02-27', '2026-02-28', // 和平紀念日
-  '2026-04-03', '2026-04-06', // 兒童節與清明節
-  '2026-05-01', // 勞動節
-  '2026-06-19', // 端午節
-  '2026-09-25', // 中秋節
-  '2026-10-09', '2026-10-10', // 國慶日
-]);
-
-// 美股 2026 紐約證交所 (NYSE) 法定休市日曆
-const HOLIDAYS_US_2026 = new Set([
-  '2026-01-01', // New Year's Day
-  '2026-01-19', // Martin Luther King Jr. Day
-  '2026-02-16', // Washington's Birthday (Presidents' Day)
-  '2026-04-03', // Good Friday
-  '2026-05-25', // Memorial Day
-  '2026-06-19', // Juneteenth National Independence Day
-  '2026-07-03', // Independence Day (Observed)
-  '2026-09-07', // Labor Day
-  '2026-11-26', // Thanksgiving Day
-  '2026-12-25', // Christmas Day
-]);
-
+/**
+ * 檢查指定日期是否為目標市場交易日（委派共享交易日曆引擎 SSOT，Spec 0248 T09）
+ * @param {Date | string} [date]
+ * @param {'TW' | 'US'} [market='TW']
+ */
 function isMarketTradingDay(date = new Date(), market = 'TW') {
-  const day = date.getDay();
-  if (day === 0 || day === 6) return false; // 週末休市
-
-  const dateStr = formatDateYMD(date);
-  if (market === 'TW' && HOLIDAYS_TW_2026.has(dateStr)) {
-    return false;
-  }
-  if (market === 'US' && HOLIDAYS_US_2026.has(dateStr)) {
-    return false;
-  }
-  return true;
+  const dateStr = typeof date === 'string' ? date.trim() : formatDateYMD(date instanceof Date ? date : new Date(date));
+  return isTradingDay(dateStr, market === 'US' ? 'US' : 'TW');
 }
 
 /**
@@ -277,8 +248,6 @@ module.exports = {
   auditUsLakehouseUniverse,
   auditTwLakehouseUniverse,
   auditFullLakehouseSpectrum,
-  HOLIDAYS_TW_2026,
-  HOLIDAYS_US_2026,
 };
 
 // 若作為 CLI 腳本直接執行
