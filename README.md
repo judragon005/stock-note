@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-2630%2F2630%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2631%2F2631%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,17 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 系統免疫強化 Wave 0 — 統一 SSRF 守衛、鎖內逾時防死鎖、快照深度脫敏與全端 CI 免疫閘門 (`Spec 0247`) *(V9.29.0 最新發布 / Spec #0247 / ADR #0247 / Issue #609)*
+### 1. 系統免疫強化 Wave 1 — SQLite 高頻表日期索引補齊、NAS 排程持久化單一帳本與三軌水位線防禦 (`Spec 0248`) *(V9.30.0 最新發布 / Spec #0248 / ADR #0248 / Issue #611)*
+
+- **SQLite Date-First Index Convergence (Issue #611 / T01)**：
+  - 為 `tw_tdcc_distribution`、`tw_monthly_revenue`、`tw_valuation_daily`、`etf_daily_nav` 四張高頻查詢表補齊日期／年月首欄索引（`idx_tdcc_date`、`idx_revenue_ym`、`idx_valuation_date`、`idx_etf_nav_date`），經 `EXPLAIN QUERY PLAN` 鎖定 `/healthz` 與 `checkMarketFreshness` 達零全表 `SCAN`。
+- **Persistent Scheduler Lane Ledger SSOT & Decomposition (Issue #611 / T02–T05)**：
+  - 建立 `scheduler_lane_state` 單一持久化表由 `lakehouse-sync-coordinator.cjs` 統一讀寫（跨日自動歸零前日配額並保留水位線）；`nas-autonomous-scheduler.cjs` 與 `nas-server.cjs` 統一解析 `getDbPath(customDbPath)` 確保 24/7 生產環境預設落盤與 `/healthz` 同源，拆解 4 個視窗決策純函式與 4 個分軌執行器並徹底消除手動 `retryCount - 1` 回扣。
+- **Tri-Lane Watermark Poisoning Guard 與日曆／權證收斂 (Issue #611 / T06–T10)**：
+  - Macro 軌改以台北時間定錨並拒絕全 `null` 空列寫入；Weekly 軌 5 項子任務對無快取標記之 0 筆寫入攔截水位線與滾動備份；US Daily 軌套用 `US_DAILY_MIN_SUCCESS_RATIO = 0.8` 有效完成率閘門（涵蓋早退分支）。
+  - `audit-verifier.cjs` 移除硬編碼 2026 休市表改委派共享交易日曆引擎；`ingest-tw-quotes.cjs` 接入共享 `isTwOtcWarrantSymbol`；`architecturalFitnessGuard.test.ts` 升級至 11 條不變量，`npm run test:backend` 納管至 10 支後端測試套件，正式清償 `Debt 0065` 與 `Debt 0066`。
+
+### 2. 系統免疫強化 Wave 0 — 統一 SSRF 守衛、鎖內逾時防死鎖、快照深度脫敏與全端 CI 免疫閘門 (`Spec 0247`) *(V9.29.0 / Spec #0247 / ADR #0247 / Issue #609)*
 
 - **Unified SSRF Origin Guard 與 NAS 代理硬護欄 (Issue #609 / T01–T03)**：
   - 建立零依賴 `ssrf-origin-guard.cjs`，收斂 `POST /api/market/probe-key` 與 `nas-server.cjs` `/api/proxy` 出站驗證（僅允許 HTTPS 與預設 443 埠、9 大官方金融主機白名單、阻斷私網／IPv6／非標準數值 IPv4／尾點／Cloud Metadata／憑證嵌入，並強制 `redirect: 'manual'` 攔截 3xx 回 `403`）。
