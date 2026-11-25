@@ -64,7 +64,7 @@ describe('Spec 0240 T11: Architectural Fitness Guard (防技術債復發靜態�
     for (const file of tsxFiles) {
       const content = fs.readFileSync(file, 'utf8');
       if (
-        /(?:colorTheme\s*===\s*['"]international['"]|\bisTaiwan\b|\bisInternational\b)\s*\?\s*['"]#(10b981|ef4444|f87171|34d399)['"]\s*:\s*['"]#(10b981|ef4444|f87171|34d399|38bdf8)['"]/.test(
+        /(?:colorTheme\s*===\s*['"]international['"]|\bisTaiwan\b|\bisInternational\b)\s*\?[^;\n]*['"]#(10b981|ef4444|f87171|34d399|38bdf8)['"]/.test(
           content
         )
       ) {
@@ -162,18 +162,21 @@ describe('Spec 0240 T11: Architectural Fitness Guard (防技術債復發靜態�
     expect(syncUsSrc).not.toMatch(/detectLocalUsHoldingsAndWatchlist[\s\S]{0,400}us_market_summary\.json/);
   });
 
-  it('不變量 8 (Spec 0247 T01–T08): SSRF 統一守衛必接入 probe-key 與 nas-server，且鎖內 8 條後端採集管線全面使用 fetchWithTimeout', () => {
+  it('不變量 8 (Spec 0247 T01–T08): SSRF 統一守衛必接入 probe-key 與 nas-server（含 3xx 攔截），且鎖內 9 條後端採集管線全面使用 fetchWithTimeout 零裸抓取', () => {
     const middlewareSrc = fs.readFileSync(path.join(ROOT, 'scripts/market-sync/vite-market-middleware.cjs'), 'utf8');
     const nasServerSrc = fs.readFileSync(path.join(ROOT, 'scripts/nas-server.cjs'), 'utf8');
     expect(middlewareSrc).toContain("require('./ssrf-origin-guard.cjs')");
     expect(middlewareSrc).toContain('validateOutboundTargetUrl');
+    expect(middlewareSrc).toContain('isRedirectResponseStatus');
     expect(nasServerSrc).toContain("require('./market-sync/ssrf-origin-guard.cjs')");
     expect(nasServerSrc).toContain('validateOutboundTargetUrl');
+    expect(nasServerSrc).toContain('isRedirectResponseStatus');
 
     const lockScopedIngestionFiles = [
       'scripts/market-sync/ingest-tw-tdcc.cjs',
       'scripts/market-sync/ingest-tw-monthly-revenue.cjs',
       'scripts/market-sync/ingest-tw-corporate-actions.cjs',
+      'scripts/market-sync/ingest-tw-etf-meta.cjs',
       'scripts/market-sync/ingest-macro-sentiment.cjs',
       'scripts/market-sync/ingest-tw-pledge.cjs',
       'scripts/market-sync/tag-tw-stock-status.cjs',
@@ -183,10 +186,16 @@ describe('Spec 0240 T11: Architectural Fitness Guard (防技術債復發靜態�
     for (const relPath of lockScopedIngestionFiles) {
       const src = fs.readFileSync(path.join(ROOT, relPath), 'utf8');
       expect(src, `${relPath} 必須使用 fetchWithTimeout 防止鎖內死鎖`).toContain('fetchWithTimeout');
+      const bareFetchLines = src
+        .split(/\r?\n/)
+        .filter((line: string) => {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('*')) return false;
+          if (/fetchWithTimeout|function\s+/.test(trimmed)) return false;
+          return /\b(?:fetch|fetcher|fetchImpl|fetchFn)\s*\(/.test(trimmed);
+        });
+      expect(bareFetchLines, `${relPath} 不得殘留無逾時裸抓取呼叫`).toEqual([]);
     }
-
-    const usFundSrc = fs.readFileSync(path.join(ROOT, 'scripts/market-sync/us-fundamentals-ingestion.cjs'), 'utf8');
-    expect(usFundSrc).toContain('options.fetchImpl || options.fetchFn');
   });
 
   it('不變量 9 (Spec 0247 T09/T12/T13): 雙 Dockerfile 必對齊休市日曆、禁止 dangerouslyIgnoreUnhandledErrors 且 CI 必覆蓋後端測試與文檔守門', () => {
@@ -207,13 +216,14 @@ describe('Spec 0240 T11: Architectural Fitness Guard (防技術債復發靜態�
     expect(prePushSrc).toContain('npm run test:backend');
   });
 
-  it('不變量 10 (Spec 0247 T04/T05): 雙軌脫敏必涵蓋歷史快照金鑰，且前端儲存層不得殘留硬編碼個人交易校正邏輯', () => {
+  it('不變量 10 (Spec 0247 T04/T05): 雙軌脫敏必統一引用 redactApiKeysMap SSOT 並涵蓋歷史快照金鑰，且前端儲存層不得殘留硬編碼個人交易校正邏輯', () => {
     const dbSrc = fs.readFileSync(path.join(ROOT, 'src/utils/db.ts'), 'utf8');
+    expect(dbSrc).toContain('redactApiKeysMap');
     expect(dbSrc).toContain('redactSnapshotsForExport');
-    expect(dbSrc).toMatch(/snapshots\s*=\s*redactSnapshotsForExport\(snapshots\)/);
 
     const sanitizerSrc = fs.readFileSync(path.join(ROOT, 'src/engine/csvSanitizer.ts'), 'utf8');
-    expect(sanitizerSrc).toContain('scrubSnapshotsApiKeysInPlace');
+    expect(sanitizerSrc).toContain('export function redactApiKeysMap');
+    expect(sanitizerSrc).toContain('export function redactBackupData');
 
     const storageSrc = fs.readFileSync(path.join(ROOT, 'src/utils/storage.ts'), 'utf8');
     expect(storageSrc).not.toContain('autoReconcileSchwabRecords');

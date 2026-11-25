@@ -319,7 +319,14 @@ async function runMonthlyRevenueIngestion(customDbPath, targetYearMonthOrOptions
  * @param {Function} [fetcher]
  * @returns {Promise<{ savedCount: number, skipped?: boolean }>}
  */
-async function backfillSymbolMonthlyRevenue(symbol, months = 12, customDbPath, fetcher = globalThis.fetch, signal = undefined) {
+async function backfillSymbolMonthlyRevenue(
+  symbol,
+  months = 12,
+  customDbPath,
+  fetcher = globalThis.fetch,
+  signal = undefined,
+  options = {}
+) {
   if (!symbol || typeof fetcher !== 'function' || signal?.aborted) {
     return { savedCount: 0 };
   }
@@ -352,9 +359,11 @@ async function backfillSymbolMonthlyRevenue(symbol, months = 12, customDbPath, f
     const querySym = cleanSymbol.endsWith('O') ? cleanSymbol.slice(0, -1) : cleanSymbol;
     const apiUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockMonthRevenue&data_id=${encodeURIComponent(querySym)}&start_date=${startDate}`;
 
-    const res = await fetcher(apiUrl, {
+    const res = await fetchWithTimeout(apiUrl, {
+      fetcher,
+      signal,
+      timeoutMs: options?.timeoutMs ?? 15000,
       headers: { Accept: 'application/json', 'User-Agent': 'StockTracker/1.0 (local-sync)' },
-      ...(signal ? { signal } : {}),
     });
     if (!res || !res.ok) return { savedCount: 0 };
 

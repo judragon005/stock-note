@@ -685,6 +685,7 @@ function createMarketApiMiddleware(customDbPath) {
           const timeout = setTimeout(() => {
             if (controller) controller.abort();
           }, 10000);
+          if (typeof timeout.unref === 'function') timeout.unref();
 
           try {
             const fetchOpts = {
@@ -698,7 +699,6 @@ function createMarketApiMiddleware(customDbPath) {
             }
 
             const response = await fetch(ssrfVerdict.normalizedUrl.toString(), fetchOpts);
-            clearTimeout(timeout);
             const latencyMs = Date.now() - start;
 
             if (isRedirectResponseStatus(response.status)) {
@@ -727,7 +727,6 @@ function createMarketApiMiddleware(customDbPath) {
               })
             );
           } catch (fetchErr) {
-            clearTimeout(timeout);
             const latencyMs = Date.now() - start;
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
             return res.end(
@@ -739,6 +738,8 @@ function createMarketApiMiddleware(customDbPath) {
                 latencyMs,
               })
             );
+          } finally {
+            clearTimeout(timeout);
           }
         })
         .catch((err) => {

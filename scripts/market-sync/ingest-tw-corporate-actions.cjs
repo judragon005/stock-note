@@ -302,6 +302,7 @@ async function runHistoricalCorporateActionsBackfill({
   customDbPath,
   fetcher = globalThis.fetch,
   signal = undefined,
+  timeoutMs = 20000,
   delayMs = 250,
 } = {}) {
   const currentYear = new Date().getFullYear();
@@ -316,7 +317,7 @@ async function runHistoricalCorporateActionsBackfill({
     if (signal?.aborted) break;
     const yearRecords = [];
     try {
-      const twse = await fetchTwseHistoricalDividends(y, fetcher, signal);
+      const twse = await fetchTwseHistoricalDividends(y, fetcher, signal, timeoutMs);
       totalTwse += twse.length;
       yearRecords.push(...twse);
     } catch (err) {
@@ -326,7 +327,7 @@ async function runHistoricalCorporateActionsBackfill({
 
     if (signal?.aborted) break;
     try {
-      const tpex = await fetchTpexHistoricalDividends(y, fetcher, signal);
+      const tpex = await fetchTpexHistoricalDividends(y, fetcher, signal, timeoutMs);
       totalTpex += tpex.length;
       yearRecords.push(...tpex);
     } catch (err) {
@@ -382,6 +383,9 @@ async function runCorporateActionsIngestion(
       startYear: thisYear,
       endYear: thisYear,
       customDbPath,
+      fetcher,
+      signal,
+      timeoutMs,
       delayMs: 100,
     });
     currentYearCount = res.savedCount;

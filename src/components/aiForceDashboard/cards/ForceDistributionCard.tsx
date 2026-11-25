@@ -114,10 +114,10 @@ export const ForceDistributionCard: React.FC<ForceDistributionCardProps> = ({
   market,
 }) => {
   const isUs = Boolean(market === 'US' || data?.isUsMarket);
-  const effectiveTheme: ColorThemeMode = colorTheme ?? (isUs ? 'international' : 'taiwan');
-  const isTaiwan = effectiveTheme === 'taiwan';
-  const buyColor = isTaiwan ? '#f97316' : '#10b981';
-  const { downColor: sellColor } = resolveDirectionalPalette(effectiveTheme);
+  const { upColor: buyColor, downColor: sellColor } = resolveDirectionalPalette(
+    colorTheme,
+    isUs ? 'US' : 'TW'
+  );
 
   const isEmpty =
     !data ||

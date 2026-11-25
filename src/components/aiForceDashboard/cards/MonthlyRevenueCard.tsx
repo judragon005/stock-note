@@ -73,7 +73,7 @@ interface MonthlyRevenueCardProps {
 
 export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
   data,
-  colorTheme = 'taiwan',
+  colorTheme,
   market,
 }) => {
   const isEtf = data.isEtf;
@@ -81,7 +81,7 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
   const isUs = Boolean(data.isUsMarket || data.currency === 'USD' || market === 'US');
   const history = data.history || [];
 
-  const palette = resolveDirectionalPalette(colorTheme);
+  const palette = resolveDirectionalPalette(colorTheme, isUs ? 'US' : market);
   const posColor = palette.upColor;
   const negColor = palette.downColor;
   const posText = palette.upLightColor;

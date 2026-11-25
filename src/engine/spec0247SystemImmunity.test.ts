@@ -28,14 +28,15 @@ describe('Spec 0247 (Wave 0): 系統免疫強化 — 資安邊界、鎖內逾時
       const {
         ALLOWED_OUTBOUND_HOSTS,
         validateOutboundTargetUrl,
+        isPrivateOrReservedHost,
         isRedirectResponseStatus,
       } = require('../../scripts/market-sync/ssrf-origin-guard.cjs');
 
-      // 合法 9 大金融供應商 HTTPS 網址皆應通過
+      // 合法 9 大金融供應商 HTTPS 網址皆應通過（含顯式 :443）
       const validUrls = [
         'https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo',
         'https://finnhub.io/api/v1/stock/profile2?symbol=AAPL',
-        'https://api.stlouisfed.org/fred/series?series_id=DGS10',
+        'https://api.stlouisfed.org:443/fred/series?series_id=DGS10',
         'https://financialmodelingprep.com/api/v3/profile/AAPL',
         'https://www.alphavantage.co/query?function=GLOBAL_QUOTE',
         'https://api.coingecko.com/api/v3/ping',
@@ -48,6 +49,16 @@ describe('Spec 0247 (Wave 0): 系統免疫強化 — 資安邊界、鎖內逾時
         const res = validateOutboundTargetUrl(u);
         expect(res.ok, `Expected valid URL to pass: ${u}`).toBe(true);
       }
+
+      // 非 443 埠口繞過阻斷
+      expect(validateOutboundTargetUrl('https://api.stlouisfed.org:8443/fred/series').ok).toBe(false);
+      expect(validateOutboundTargetUrl('https://api.stlouisfed.org:8443/fred/series').code).toBe('PORT_NOT_ALLOWED');
+
+      // 尾點 localhost 與八進位／十六進位／短 IPv4 繞過阻斷
+      expect(isPrivateOrReservedHost('localhost.')).toBe(true);
+      expect(isPrivateOrReservedHost('0177.0.0.1')).toBe(true);
+      expect(isPrivateOrReservedHost('0x7f000001')).toBe(true);
+      expect(isPrivateOrReservedHost('127.1')).toBe(true);
 
       // 協定阻斷 (http, file, ftp, javascript, 畸形)
       expect(validateOutboundTargetUrl('http://api.stlouisfed.org/fred/series').ok).toBe(false);
@@ -97,7 +108,7 @@ describe('Spec 0247 (Wave 0): 系統免疫強化 — 資安邊界、鎖內逾時
         });
       });
 
-      const mw = createMarketApiMiddleware();
+      const mw = createMarketApiMiddleware(TEST_DB);
       const server = http.createServer((req: any, res: any) => {
         mw(req, res, () => {
           res.writeHead(404);
@@ -162,15 +173,30 @@ describe('Spec 0247 (Wave 0): 系統免疫強化 — 資安邊界、鎖內逾時
         expect(redirectRes.status).toBe(403);
         expect(redirectRes.body.error).toContain('REDIRECT');
       } finally {
+        server.closeAllConnections?.();
         await new Promise<void>((resolve) => server.close(() => resolve()));
       }
     });
 
-    it('T03: NAS 代理強制執行 1MB Body 上限 (413)、上游逾時中止 (504) 與 HTTPS-only 白名單', async () => {
+    it('T03: NAS 代理強制執行 Body 上限 (413)、回應體上限 (502)、3xx 攔截 (403)、上游逾時中止 (504) 與 HTTPS-only 白名單', async () => {
       const { createNasServer } = require('../../scripts/nas-server.cjs');
       let abortedSeen = false;
-      const slowFetcher = async (_url: string, init: any = {}) =>
-        new Promise<any>((_resolve, reject) => {
+      const controlledFetcher = async (url: string, init: any = {}) => {
+        if (url.includes('redirect-302')) {
+          return {
+            status: 302,
+            headers: new Headers({ location: 'http://127.0.0.1:8080/internal' }),
+            arrayBuffer: async () => new ArrayBuffer(0),
+          };
+        }
+        if (url.includes('huge-response')) {
+          return {
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            arrayBuffer: async () => new Uint8Array(4096).buffer,
+          };
+        }
+        return new Promise<any>((_resolve, reject) => {
           if (init.signal) {
             init.signal.addEventListener('abort', () => {
               abortedSeen = true;
@@ -180,12 +206,14 @@ describe('Spec 0247 (Wave 0): 系統免疫強化 — 資安邊界、鎖內逾時
             });
           }
         });
+      };
 
       const { server } = createNasServer({
         customDbPath: TEST_DB,
         enableScheduler: false,
-        upstreamFetcher: slowFetcher,
+        upstreamFetcher: controlledFetcher,
         maxRequestBodyBytes: 1024, // 1KB for fast deterministic test
+        maxResponseBodyBytes: 1024, // 1KB for fast deterministic test
         upstreamTimeoutMs: 60, // 60ms for fast deterministic test
       });
       await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -193,13 +221,23 @@ describe('Spec 0247 (Wave 0): 系統免疫強化 — 資安邊界、鎖內逾時
       const baseUrl = `http://127.0.0.1:${port}`;
 
       try {
-        // 1. /api/proxy 拒絕 http:// 降級協定
+        // 1. /api/proxy 拒絕 http:// 降級協定與非 443 埠口
         const httpDowngrade = await fetch(
           `${baseUrl}/api/proxy?url=${encodeURIComponent('http://api.stlouisfed.org/fred/series')}`
         );
         expect(httpDowngrade.status).toBe(403);
+        const badPort = await fetch(
+          `${baseUrl}/api/proxy?url=${encodeURIComponent('https://api.stlouisfed.org:8443/fred/series')}`
+        );
+        expect(badPort.status).toBe(403);
 
-        // 2. 超過 Body 上限立即回 413 Payload Too Large
+        // 2. 上游回傳 302 Open Redirect 必遭攔截回 403
+        const redirectRes = await fetch(
+          `${baseUrl}/api/proxy?url=${encodeURIComponent('https://api.stlouisfed.org/fred/redirect-302')}`
+        );
+        expect(redirectRes.status).toBe(403);
+
+        // 3. 超過 Body 上限立即回 413 Payload Too Large
         const oversized = 'x'.repeat(2048);
         const tooLargeRes = await fetch(
           `${baseUrl}/api/proxy?url=${encodeURIComponent('https://api.stlouisfed.org/fred/series')}`,
@@ -211,13 +249,20 @@ describe('Spec 0247 (Wave 0): 系統免疫強化 — 資安邊界、鎖內逾時
         );
         expect(tooLargeRes.status).toBe(413);
 
-        // 3. 上游掛起逾時自動觸發 AbortSignal 並回 504 Gateway Timeout
+        // 4. 上游回應體超過上限回 502 防 OOM
+        const hugeRes = await fetch(
+          `${baseUrl}/api/proxy?url=${encodeURIComponent('https://api.stlouisfed.org/fred/huge-response')}`
+        );
+        expect(hugeRes.status).toBe(502);
+
+        // 5. 上游掛起逾時自動觸發 AbortSignal 並回 504 Gateway Timeout
         const timeoutRes = await fetch(
           `${baseUrl}/api/proxy?url=${encodeURIComponent('https://api.stlouisfed.org/fred/series')}`
         );
         expect(timeoutRes.status).toBe(504);
         expect(abortedSeen).toBe(true);
       } finally {
+        server.closeAllConnections?.();
         await new Promise<void>((resolve) => server.close(() => resolve()));
       }
     });
@@ -286,6 +331,66 @@ describe('Spec 0247 (Wave 0): 系統免疫強化 — 資安邊界、鎖內逾時
       expect(serialized).not.toContain(secretA);
       expect(serialized).not.toContain(secretB);
       expect(serialized).not.toContain(secretC);
+
+      // 3. 驗證 exportFullDatabaseJSON(true/false) 端到端輸出契約（含雙重結構 payload/data 與快照金鑰）
+      const { exportFullDatabaseJSON, closeDB } = await import('../utils/db');
+      const fakeStores: Record<string, any[]> = {
+        trades: [{ id: 't1', symbol: '2330', shares: 1000, price: 950 }],
+        brokerAccounts: [],
+        cashTransactions: [],
+        loanRecords: [],
+        corporateActions: [],
+        snapshots: [sampleSnapshot],
+        settings: [
+          { key: 'apiKeys', value: { finmindToken: secretA, fmpApiKey: secretB, fredApiKey: secretC } },
+          { key: 'accountingView', value: 'CONSOLIDATED' },
+        ],
+      };
+      const fakeDb: any = {
+        objectStoreNames: { contains: (name: string) => name in fakeStores },
+        transaction: (storeName: string) => ({
+          objectStore: () => ({
+            getAll: () => {
+              const req: any = {};
+              queueMicrotask(() => {
+                req.result = fakeStores[storeName] || [];
+                req.onsuccess?.({ target: req });
+              });
+              return req;
+            },
+          }),
+        }),
+        close: () => {},
+      };
+      vi.stubGlobal('indexedDB', {
+        open: () => {
+          const req: any = {};
+          queueMicrotask(() => {
+            req.result = fakeDb;
+            req.onsuccess?.({ target: req });
+          });
+          return req;
+        },
+      });
+      try {
+        closeDB();
+        const redactedJson = await exportFullDatabaseJSON(true);
+        expect(redactedJson).not.toContain(secretA);
+        expect(redactedJson).not.toContain(secretB);
+        expect(redactedJson).not.toContain(secretC);
+        const parsedRedacted = JSON.parse(redactedJson);
+        expect(parsedRedacted.isRedacted).toBe(true);
+        expect(parsedRedacted.payload.snapshots[0].payload.apiKeys.finmindToken).toBe('');
+        expect(parsedRedacted.data.snapshots[0].payload.apiKeys.fmpApiKey).toBe('');
+
+        const fullJson = await exportFullDatabaseJSON(false);
+        expect(fullJson).toContain(secretA);
+        expect(fullJson).toContain(secretB);
+        expect(fullJson).toContain(secretC);
+      } finally {
+        closeDB();
+        vi.unstubAllGlobals();
+      }
     });
 
     it('T05: storage 模組移除硬編碼個人嘉信交易校正，帳本初始化不竄改 SGOV/VT 交易金額', async () => {
@@ -314,13 +419,16 @@ describe('Spec 0247 (Wave 0): 系統免疫強化 — 資安邊界、鎖內逾時
         removeItem: (k: string) => store.delete(k),
         clear: () => store.clear(),
       });
-      storageMod.saveTradesToStorage(fakeTrades);
+      try {
+        storageMod.saveTradesToStorage(fakeTrades);
 
-      const init = await storageMod.initializeStorageAsync();
-      expect(init.trades).toHaveLength(1);
-      expect(init.trades[0].price).toBe(99.5);
-      expect(init.trades[0].fee).toBe(1);
-      vi.unstubAllGlobals();
+        const init = await storageMod.initializeStorageAsync();
+        expect(init.trades).toHaveLength(1);
+        expect(init.trades[0].price).toBe(99.5);
+        expect(init.trades[0].fee).toBe(1);
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
   });
 
@@ -374,6 +482,31 @@ describe('Spec 0247 (Wave 0): 系統免疫強化 — 資安邊界、鎖內逾時
         timeoutMs: 1000,
       });
       expect(okRes.ok).toBe(true);
+
+      // 4. 關鍵生命週期測試：Response Headers 返回後、Body 讀取階段 signal 仍須受逾時與外部 abort 控制（不得過早清除）
+      let capturedBodySignal: AbortSignal | undefined;
+      const headerFastBodySlowFetch = async (_url: string, init: any = {}) => {
+        capturedBodySignal = init.signal;
+        return {
+          ok: true,
+          status: 200,
+          text: () =>
+            new Promise((_resolve, reject) => {
+              init.signal?.addEventListener('abort', () => {
+                const err: any = new Error('Body stage timed out');
+                err.name = 'AbortError';
+                reject(err);
+              });
+            }),
+        };
+      };
+      const slowBodyRes = await fetchWithTimeout('https://example.com/slow-body', {
+        fetcher: headerFastBodySlowFetch,
+        timeoutMs: 40,
+      });
+      expect(capturedBodySignal).toBeDefined();
+      await expect(slowBodyRes.text()).rejects.toThrow();
+      expect(capturedBodySignal?.aborted).toBe(true);
     });
 
     it('T07: 台股 6 條鎖內採集管線在面對掛起上游時全部於逾時內安全中止不死鎖', async () => {
@@ -441,6 +574,18 @@ describe('Spec 0247 (Wave 0): 系統免疫強化 — 資安邊界、鎖內逾時
       const t6 = makeHangingFetcher();
       await fetchAndTagTwStockStatuses(TEST_DB, { fetcher: t6.fetcher, timeoutMs: 40, silent: true });
       expect(t6.tracker.signalReceived && t6.tracker.aborted).toBe(true);
+
+      // 7. 除權息主入口 runCorporateActionsIngestion 透傳 fetcher/timeoutMs 至當年實績回補（絕不繞過直連外網）
+      const { runCorporateActionsIngestion } = require('../../scripts/market-sync/ingest-tw-corporate-actions.cjs');
+      const t7 = makeHangingFetcher();
+      await runCorporateActionsIngestion(TEST_DB, { includeCurrentYearHistory: true, fetcher: t7.fetcher, timeoutMs: 40 });
+      expect(t7.tracker.signalReceived && t7.tracker.aborted).toBe(true);
+
+      // 8. 每週鎖內 ETF 元數據攝取 (ingest-tw-etf-meta.cjs) 強制逾時
+      const { fetchAndIngestTwseEtfOpenApiMeta } = require('../../scripts/market-sync/ingest-tw-etf-meta.cjs');
+      const t8 = makeHangingFetcher();
+      await fetchAndIngestTwseEtfOpenApiMeta(db, { fetcher: t8.fetcher, timeoutMs: 40 });
+      expect(t8.tracker.signalReceived && t8.tracker.aborted).toBe(true);
     });
 
     it('T08: getOrFetchUsFundamentals 正確將 AbortSignal 穿透至底層 fetchImpl，且美股/SEC 代理強制逾時防死鎖', async () => {
@@ -568,7 +713,9 @@ describe('Spec 0247 (Wave 0): 系統免疫強化 — 資安邊界、鎖內逾時
 
     it('T10: BullBearEnergyCard、BullBearStrengthCard 與 AiDecisionCoreCard 全面使用 Directional Palette SSOT', async () => {
       const { resolveDirectionalPalette } = await import('../constants/designTokens');
-      const { getTrendBadgeStyle } = await import('../components/aiForceDashboard/cards/AiDecisionCoreCard');
+      const { getTrendBadgeStyle, getDecisionBannerStyle, AiDecisionCoreCard } = await import(
+        '../components/aiForceDashboard/cards/AiDecisionCoreCard'
+      );
 
       const tw = resolveDirectionalPalette('taiwan', 'TW');
       const us = resolveDirectionalPalette('international', 'US');
@@ -577,11 +724,13 @@ describe('Spec 0247 (Wave 0): 系統免疫強化 — 資安邊界、鎖內逾時
       expect(us.upLightColor).toBe('#34d399');
       expect(us.downLightColor).toBe('#f87171');
 
-      // AiDecisionCoreCard 傳入台股主題時應依 Directional Palette 反轉紅多綠空
+      // AiDecisionCoreCard 傳入台股主題時應依 Directional Palette 反轉紅多綠空（含趨勢徽章、頂部橫幅與主力進貨）
       const twBull = getTrendBadgeStyle('強烈多頭', 'taiwan', 'TW');
       const usBull = getTrendBadgeStyle('強烈多頭', 'international', 'US');
       expect(twBull.color).toBe('#ef4444');
       expect(usBull.color).toBe('#10b981');
+      expect(getDecisionBannerStyle('AI BULLISH', '偏多強勢', 85, 25, 'taiwan', 'TW').color).toBe('#f87171');
+      expect(getDecisionBannerStyle('AI BULLISH', '偏多強勢', 85, 25, 'international', 'US').color).toBe('#34d399');
 
       // 驗證 BullBearEnergyCard 與 BullBearStrengthCard 皆已改引 resolveDirectionalPalette 零裸色票三元式
       const energySrc = fs.readFileSync(
@@ -596,6 +745,65 @@ describe('Spec 0247 (Wave 0): 系統免疫強化 — 資安邊界、鎖內逾時
       expect(strengthSrc).toContain('resolveDirectionalPalette');
       expect(energySrc).not.toMatch(/isTaiwan\s*\?\s*['"]#(?:f87171|34d399|ef4444|10b981)['"]/);
       expect(strengthSrc).not.toMatch(/isTaiwan\s*\?\s*['"]#(?:f87171|34d399|ef4444|10b981)['"]/);
+
+      // 驗證 EnergySentimentTwinCard 僅由 sentimentData.isUsMarket 推斷美股時維持綠漲紅跌（無退化）
+      const React = (await import('react')).default;
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      const { EnergySentimentTwinCard } = await import('../components/aiForceDashboard/cards/EnergySentimentTwinCard');
+      const { BullBearStrengthCard } = await import('../components/aiForceDashboard/cards/BullBearStrengthCard');
+      const usInferredHtml = renderToStaticMarkup(
+        React.createElement(EnergySentimentTwinCard, {
+          bullBearData: {
+            bullEnergyPercent: 70,
+            bearEnergyPercent: 30,
+            bullBearRatio: 2.33,
+            bullBearConclusion: '偏多',
+            noteText: '(20日紅K量/黑K量)',
+          },
+          sentimentData: { isUsMarket: true, overallSentimentIndex: 55 } as any,
+        })
+      );
+      expect(usInferredHtml).toMatch(/color:#34d399[^>]*>[\s\S]*?多頭 70%/);
+      expect(usInferredHtml).toMatch(/color:#f87171[^>]*>[\s\S]*?空頭 30%/);
+
+      // 驗證 BullBearStrengthCard 台股空方強度使用綠色 (#34d399) 而非撞色天藍
+      const twStrengthHtml = renderToStaticMarkup(
+        React.createElement(BullBearStrengthCard, {
+          data: {
+            bullStrengthPercent: 65,
+            bearStrengthPercent: 35,
+            volumeStrengthPercent: 50,
+            signalTierLevel: 2,
+            compositeScore: 60,
+          },
+          colorTheme: 'taiwan',
+          market: 'TW',
+        })
+      );
+      expect(twStrengthHtml).toContain('#34d399');
+
+      // 驗證 AiDecisionCoreCard 台股主力進貨與橫幅採用紅多色系
+      const twDecisionHtml = renderToStaticMarkup(
+        React.createElement(AiDecisionCoreCard, {
+          data: {
+            warningBadgeText: 'AI BULLISH',
+            trendJudgement: '強烈多頭',
+            shortTermState: '多頭攻擊',
+            mainForceAction: '主力進貨',
+            chipStructure: '籌碼集中',
+            chipHealthScore: 85,
+            chipHealthLabel: '良好',
+            dayTradeRiskPercent: 20,
+            supportRange: [950, 980],
+            resistanceRange: [1050, 1080],
+            riskHorizonDays: '1~4 級交易日',
+          },
+          colorTheme: 'taiwan',
+          market: 'TW',
+        })
+      );
+      expect(twDecisionHtml).toContain('color:#ef4444');
+      expect(twDecisionHtml).toContain('color:#f87171');
     });
   });
 });

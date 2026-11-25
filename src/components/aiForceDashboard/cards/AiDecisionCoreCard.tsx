@@ -113,8 +113,14 @@ export function getDecisionBannerStyle(
   warningBadgeText?: string,
   trendJudgement?: string,
   chipHealthScore?: number,
-  dayTradeRiskPercent?: number
+  dayTradeRiskPercent?: number,
+  colorTheme?: ColorThemeMode,
+  market?: MarketType
 ): DecisionBannerStyle {
+  const palette = resolveDirectionalPalette(
+    colorTheme ?? (market ? undefined : 'international'),
+    market
+  );
   const textUpper = (warningBadgeText || '').toUpperCase();
   const trend = trendJudgement || '';
   const health = chipHealthScore ?? 55;
@@ -130,10 +136,10 @@ export function getDecisionBannerStyle(
     return {
       text: warningBadgeText && !textUpper.includes('WARNING') ? warningBadgeText : 'AI BULLISH',
       icon: '🚀',
-      color: '#34d399',
-      bg: 'rgba(16, 185, 129, 0.18)',
-      borderColor: 'rgba(16, 185, 129, 0.45)',
-      glow: '0 0 10px rgba(16, 185, 129, 0.2)',
+      color: palette.upLightColor,
+      bg: `rgba(${palette.upRgb}, 0.18)`,
+      borderColor: `rgba(${palette.upRgb}, 0.45)`,
+      glow: `0 0 10px rgba(${palette.upRgb}, 0.2)`,
     };
   }
 
@@ -150,10 +156,10 @@ export function getDecisionBannerStyle(
     return {
       text: warningBadgeText || 'AI WARNING',
       icon: '⚠️',
-      color: '#f87171',
-      bg: 'rgba(239, 68, 68, 0.18)',
-      borderColor: 'rgba(239, 68, 68, 0.45)',
-      glow: '0 0 10px rgba(239, 68, 68, 0.2)',
+      color: palette.downLightColor,
+      bg: `rgba(${palette.downRgb}, 0.18)`,
+      borderColor: `rgba(${palette.downRgb}, 0.45)`,
+      glow: `0 0 10px rgba(${palette.downRgb}, 0.2)`,
     };
   }
 
@@ -201,6 +207,7 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({
   colorTheme,
   market,
 }) => {
+  const palette = resolveDirectionalPalette(colorTheme, market);
   const trendStyle = getTrendBadgeStyle(data.trendJudgement || '中性偏多', colorTheme, market);
   const riskPercent = Number.isFinite(data.dayTradeRiskPercent) ? (data.dayTradeRiskPercent as number) : 0;
   const healthScore = Number.isFinite(data.chipHealthScore) ? (data.chipHealthScore as number) : 50;
@@ -210,7 +217,12 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({
     data.warningBadgeText,
     data.trendJudgement,
     healthScore,
-    riskPercent
+    riskPercent,
+    colorTheme,
+    market
+  );
+  const isAccumulating = Boolean(
+    data.mainForceAction?.includes('進貨') || data.mainForceAction?.includes('吸籌')
   );
 
   const normalizedHorizon = data.riskHorizonDays
@@ -251,9 +263,9 @@ export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({
       icon: <Landmark size={14} strokeWidth={1.5} color="#94a3b8" />,
       badge: {
         text: data.mainForceAction || '調節減碼',
-        color: data.mainForceAction?.includes('進貨') || data.mainForceAction?.includes('吸籌') ? '#10b981' : '#f97316',
-        bg: data.mainForceAction?.includes('進貨') || data.mainForceAction?.includes('吸籌') ? 'rgba(16, 185, 129, 0.18)' : 'rgba(249, 115, 22, 0.18)',
-        border: 'rgba(249, 115, 22, 0.35)',
+        color: isAccumulating ? palette.upColor : '#f97316',
+        bg: isAccumulating ? `rgba(${palette.upRgb}, 0.18)` : 'rgba(249, 115, 22, 0.18)',
+        border: isAccumulating ? `rgba(${palette.upRgb}, 0.35)` : 'rgba(249, 115, 22, 0.35)',
       },
     },
     {

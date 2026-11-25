@@ -143,7 +143,8 @@ interface TdccDistributionCardProps {
 
 export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
   data,
-  colorTheme = 'taiwan',
+  colorTheme,
+  market,
 }) => {
   const uid = useId().replace(/:/g, '');
   const holderBarGradId = `holderBarGrad-${uid}`;
@@ -152,7 +153,8 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
   const chartHeight = 170;
   const padding = { top: 20, bottom: 25 };
 
-  const palette = resolveDirectionalPalette(colorTheme);
+  const isUsMode = Boolean(data?.isUsMarket || data?.us13fData);
+  const palette = resolveDirectionalPalette(colorTheme, market ?? (isUsMode ? 'US' : 'TW'));
   const bullText = palette.upLightColor;
   const bullBg = `rgba(${palette.upRgb}, 0.2)`;
   const bullBorder = `rgba(${palette.upRgb}, 0.4)`;
@@ -160,7 +162,6 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
   const bearBg = `rgba(${palette.downRgb}, 0.2)`;
   const bearBorder = `rgba(${palette.downRgb}, 0.4)`;
 
-  const isUsMode = Boolean(data?.isUsMarket || data?.us13fData);
   const isDataEmpty = isUsMode
     ? Boolean(data?.isEmpty || !data?.us13fData)
     : Boolean(data?.isEmpty || !data?.history || data.history.length === 0);

@@ -258,21 +258,28 @@ export interface RedactedBackupResult<T> {
   redactedAt: string;
 }
 
-function scrubApiKeysMapInPlace(keys: unknown): void {
-  if (!keys || typeof keys !== 'object') return;
-  const map = keys as Record<string, any>;
-  for (const field of Object.keys(map)) {
-    if (typeof map[field] === 'string' && map[field].trim() !== '') {
-      map[field] = '';
+/**
+ * 統一脫敏 API Keys 映射表（SSOT，不突變原物件；所有字串欄位統一清空為空字串）
+ */
+export function redactApiKeysMap<T>(keys: T): T {
+  if (!keys || typeof keys !== 'object') return keys;
+  const cleaned: Record<string, any> = { ...(keys as Record<string, any>) };
+  for (const field of Object.keys(cleaned)) {
+    if (typeof cleaned[field] === 'string') {
+      cleaned[field] = '';
     }
   }
+  return cleaned as T;
 }
 
 function scrubSnapshotsApiKeysInPlace(snapshots: unknown): void {
   if (!Array.isArray(snapshots)) return;
   for (const snap of snapshots) {
     if (snap && typeof snap === 'object' && snap.payload && typeof snap.payload === 'object') {
-      scrubApiKeysMapInPlace((snap.payload as Record<string, any>).apiKeys);
+      const payload = snap.payload as Record<string, any>;
+      if (payload.apiKeys && typeof payload.apiKeys === 'object') {
+        payload.apiKeys = redactApiKeysMap(payload.apiKeys);
+      }
     }
   }
 }
@@ -281,13 +288,16 @@ function scrubSettingsCollectionInPlace(settings: unknown): void {
   if (!settings || typeof settings !== 'object') return;
   if (Array.isArray(settings)) {
     for (const item of settings) {
-      if (item && typeof item === 'object' && item.key === 'apiKeys') {
-        scrubApiKeysMapInPlace(item.value);
+      if (item && typeof item === 'object' && item.key === 'apiKeys' && item.value && typeof item.value === 'object') {
+        item.value = redactApiKeysMap(item.value);
       }
     }
     return;
   }
-  scrubApiKeysMapInPlace((settings as Record<string, any>).apiKeys);
+  const map = settings as Record<string, any>;
+  if (map.apiKeys && typeof map.apiKeys === 'object') {
+    map.apiKeys = redactApiKeysMap(map.apiKeys);
+  }
 }
 
 /**

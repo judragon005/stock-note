@@ -103,7 +103,7 @@ export const EnergySentimentTwinCard: React.FC<EnergySentimentTwinCardProps> = (
         sentimentData?.isUsMarket ||
           (sentimentData?.usMacroData && !sentimentData?.twMacroData)
       );
-  const palette = resolveDirectionalPalette(colorTheme, market);
+  const palette = resolveDirectionalPalette(colorTheme, isUs ? 'US' : 'TW');
   const bullText = palette.upLightColor;
   const bearText = palette.downLightColor;
   const bullGrad = palette.upGradient;

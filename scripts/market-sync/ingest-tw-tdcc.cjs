@@ -431,17 +431,19 @@ async function fetchSymbolTdccHistoryFromOfficial(
   delayMs = 180,
   options = {}
 ) {
-  const { onWeekParsed, onCalendarSynced, forceOverwrite = false, maxRetries = 1 } = options || {};
+  const { onWeekParsed, onCalendarSynced, forceOverwrite = false, maxRetries = 1, timeoutMs = 15000 } = options || {};
   const cleanSymbol = String(symbol).trim().toUpperCase();
   const querySym = cleanSymbol.endsWith('O') ? cleanSymbol.slice(0, -1) : cleanSymbol;
 
   const initSession = async () => {
-    const initRes = await fetcher(TDCC_QRY_STOCK_URL, {
+    const initRes = await fetchWithTimeout(TDCC_QRY_STOCK_URL, {
+      fetcher,
+      signal,
+      timeoutMs,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         Accept: 'text/html,application/xhtml+xml',
       },
-      ...(signal ? { signal } : {}),
     });
     if (!initRes || !initRes.ok || typeof initRes.text !== 'function') {
       return { cookies: '', synToken: '', firDate: '', dates: [] };
@@ -485,7 +487,10 @@ async function fetchSymbolTdccHistoryFromOfficial(
           stockName: '',
         });
 
-        const postRes = await fetcher(TDCC_QRY_STOCK_URL, {
+        const postRes = await fetchWithTimeout(TDCC_QRY_STOCK_URL, {
+          fetcher,
+          signal,
+          timeoutMs,
           method: 'POST',
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -494,7 +499,6 @@ async function fetchSymbolTdccHistoryFromOfficial(
             Referer: TDCC_QRY_STOCK_URL,
           },
           body: body.toString(),
-          ...(signal ? { signal } : {}),
         });
         if (!postRes || !postRes.ok || typeof postRes.text !== 'function') {
           if (attempt < maxRetries && !signal?.aborted) {
@@ -631,9 +635,11 @@ async function backfillSymbolTdccHistory(
     const tokenParam = process.env.FINMIND_TOKEN ? `&token=${encodeURIComponent(process.env.FINMIND_TOKEN)}` : '';
     const apiUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockHoldingSharesPer&data_id=${encodeURIComponent(querySym)}&start_date=${startDate}${tokenParam}`;
 
-    const res = await fetcher(apiUrl, {
+    const res = await fetchWithTimeout(apiUrl, {
+      fetcher,
+      signal,
+      timeoutMs: options?.timeoutMs ?? 15000,
       headers: { Accept: 'application/json', 'User-Agent': 'StockTracker/1.0 (local-sync)' },
-      ...(signal ? { signal } : {}),
     });
     if (!res || !res.ok || typeof res.json !== 'function') return { savedCount: 0 };
 

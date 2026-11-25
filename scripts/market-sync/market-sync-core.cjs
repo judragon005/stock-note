@@ -380,12 +380,36 @@ function normalizeUsTickerCandidates(symbol) {
 }
 
 /**
- * Deadlock-Free Lock-Scoped Fetch (Spec 0247 T06)
- * 複合逾時與外部 AbortSignal 的統一安全抓取原語，防止全域同步鎖內 TCP 半開永久死鎖
+ * Deadlock-Free Lock-Scoped Fetch (Spec 0247 T06 / Code Review Patch)
+ * 使用 Node 22 原生 AbortSignal.timeout + AbortSignal.any 複合逾時與外部取消訊號，
+ * 讓同一個複合 signal 貫穿 Response Headers 與 Body (res.text()/res.json()) 全生命週期，
+ * 徹底杜絕過早清除逾時或拆除外部取消監聽導致的 Body 半開死鎖。
  * @param {string} url
  * @param {{ fetcher?: Function, timeoutMs?: number, signal?: AbortSignal, [key: string]: any }} [options]
  */
 const DEFAULT_LOCK_SCOPED_FETCH_TIMEOUT_MS = 15000;
+
+function createTimeoutAbortSignal(timeoutMs, externalSignal) {
+  const hasValidTimeout = typeof timeoutMs === 'number' && timeoutMs > 0 && Number.isFinite(timeoutMs);
+  let timeoutSignal;
+  if (hasValidTimeout && typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    timeoutSignal = AbortSignal.timeout(timeoutMs);
+  } else if (hasValidTimeout && typeof AbortController !== 'undefined') {
+    const fallbackCtrl = new AbortController();
+    const timer = setTimeout(() => {
+      try {
+        fallbackCtrl.abort();
+      } catch {}
+    }, timeoutMs);
+    if (typeof timer.unref === 'function') timer.unref();
+    timeoutSignal = fallbackCtrl.signal;
+  }
+
+  if (externalSignal && timeoutSignal && typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function') {
+    return AbortSignal.any([externalSignal, timeoutSignal]);
+  }
+  return externalSignal || timeoutSignal;
+}
 
 async function fetchWithTimeout(url, options = {}) {
   const {
@@ -405,51 +429,11 @@ async function fetchWithTimeout(url, options = {}) {
     throw err;
   }
 
-  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  let timer = null;
-  let onExternalAbort = null;
-
-  if (controller) {
-    if (externalSignal && typeof externalSignal.addEventListener === 'function') {
-      onExternalAbort = () => {
-        try {
-          controller.abort(externalSignal.reason);
-        } catch {
-          try {
-            controller.abort();
-          } catch {}
-        }
-      };
-      externalSignal.addEventListener('abort', onExternalAbort, { once: true });
-    }
-
-    if (typeof timeoutMs === 'number' && timeoutMs > 0 && Number.isFinite(timeoutMs)) {
-      timer = setTimeout(() => {
-        try {
-          const timeoutErr = new Error(`Request timed out after ${timeoutMs}ms: ${url}`);
-          timeoutErr.name = 'AbortError';
-          controller.abort(timeoutErr);
-        } catch {
-          try {
-            controller.abort();
-          } catch {}
-        }
-      }, timeoutMs);
-      if (typeof timer.unref === 'function') timer.unref();
-    }
-  }
-
-  try {
-    return await fetcher(url, {
-      ...fetchInit,
-      ...(controller ? { signal: controller.signal } : {}),
-    });
-  } finally {
-    if (timer) clearTimeout(timer);
-    if (externalSignal && onExternalAbort && typeof externalSignal.removeEventListener === 'function') {
-      externalSignal.removeEventListener('abort', onExternalAbort);
-    }
-  }
+  const combinedSignal = createTimeoutAbortSignal(timeoutMs, externalSignal);
+  return fetcher(url, {
+    ...fetchInit,
+    ...(combinedSignal ? { signal: combinedSignal } : {}),
+  });
 }
 
 module.exports = {

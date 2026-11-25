@@ -18,6 +18,7 @@ import { getStockDictionaryStats } from '../engine/stockNameResolver';
 import { SymbolOhlcvStore, SymbolIndicatorsStore } from '../types/indicators';
 import type { QuarterlyFinancialRecord } from '../types/financialForensic';
 import { validateFullDatabaseBackup, safeSanitizeObject } from '../engine/securitySanitizer';
+import { redactApiKeysMap } from '../engine/csvSanitizer';
 
 export const DB_NAME = 'StockTrackerDB';
 export const DB_VERSION = 4;
@@ -592,17 +593,11 @@ export function redactSnapshotsForExport(snapshots: SystemSnapshot[]): SystemSna
     if (!snap || !snap.payload || !snap.payload.apiKeys || typeof snap.payload.apiKeys !== 'object') {
       return snap;
     }
-    const cleanedKeys: Record<string, any> = { ...snap.payload.apiKeys };
-    for (const k of Object.keys(cleanedKeys)) {
-      if (typeof cleanedKeys[k] === 'string') {
-        cleanedKeys[k] = '';
-      }
-    }
     return {
       ...snap,
       payload: {
         ...snap.payload,
-        apiKeys: cleanedKeys as ApiKeysConfig,
+        apiKeys: redactApiKeysMap(snap.payload.apiKeys) as ApiKeysConfig,
       },
     };
   });
@@ -655,24 +650,12 @@ export async function exportFullDatabaseJSON(redactSensitive = false): Promise<s
 
   if (redactSensitive) {
     if (settingsMap.apiKeys && typeof settingsMap.apiKeys === 'object') {
-      const cleaned: Record<string, any> = { ...settingsMap.apiKeys };
-      for (const k of Object.keys(cleaned)) {
-        if (typeof cleaned[k] === 'string') {
-          cleaned[k] = '';
-        }
-      }
-      settingsMap.apiKeys = cleaned;
+      settingsMap.apiKeys = redactApiKeysMap(settingsMap.apiKeys);
     }
 
     settings = settings.map((s) => {
       if (s.key === 'apiKeys' && s.value && typeof s.value === 'object') {
-        const cleanedKeys: Record<string, any> = { ...s.value };
-        for (const k of Object.keys(cleanedKeys)) {
-          if (typeof cleanedKeys[k] === 'string') {
-            cleanedKeys[k] = '';
-          }
-        }
-        return { ...s, value: cleanedKeys };
+        return { ...s, value: redactApiKeysMap(s.value) };
       }
       return s;
     });

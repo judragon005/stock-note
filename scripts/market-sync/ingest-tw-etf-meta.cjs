@@ -5,7 +5,7 @@
  * - 軌道 2：Yahoo Finance Crumb quoteSummary 按需自癒年化總費用率 (.TW/.TWO 後綴保護 + 30D TTL + UNAVAILABLE 負快取)
  */
 
-const { stripOtcSuffix } = require('./market-sync-core.cjs');
+const { stripOtcSuffix, fetchWithTimeout } = require('./market-sync-core.cjs');
 
 const ETF_META_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const CRUMB_TTL_MS = 6 * 60 * 60 * 1000;
@@ -60,12 +60,14 @@ function parseTwseEtfOpenApiMeta(rawList) {
 /**
  * 批次抓取並寫入 TWSE OpenAPI t187ap47_L（不覆寫既有實時費用率）
  */
-async function fetchAndIngestTwseEtfOpenApiMeta(db, { fetcher = globalThis.fetch, signal } = {}) {
+async function fetchAndIngestTwseEtfOpenApiMeta(db, { fetcher = globalThis.fetch, signal, timeoutMs = 15000 } = {}) {
   if (!db || typeof fetcher !== 'function') return { success: false, count: 0 };
   try {
-    const res = await fetcher(TWSE_ETF_OPENAPI_URL, {
-      headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+    const res = await fetchWithTimeout(TWSE_ETF_OPENAPI_URL, {
+      fetcher,
       signal,
+      timeoutMs,
+      headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
     });
     if (!res || !res.ok) return { success: false, count: 0 };
     const json = await res.json();
@@ -101,14 +103,16 @@ async function fetchAndIngestTwseEtfOpenApiMeta(db, { fetcher = globalThis.fetch
   }
 }
 
-async function getYahooCrumbSession(fetcher, signal) {
+async function getYahooCrumbSession(fetcher, signal, timeoutMs = 15000) {
   const now = Date.now();
   if (cachedCookie && cachedCrumb && now - crumbFetchedAt < CRUMB_TTL_MS) {
     return { cookie: cachedCookie, crumb: cachedCrumb };
   }
-  const cRes = await fetcher('https://fc.yahoo.com', {
-    headers: { 'User-Agent': USER_AGENT },
+  const cRes = await fetchWithTimeout('https://fc.yahoo.com', {
+    fetcher,
     signal,
+    timeoutMs,
+    headers: { 'User-Agent': USER_AGENT },
   });
   const setCookieHeader =
     typeof cRes?.headers?.getSetCookie === 'function'
@@ -121,9 +125,11 @@ async function getYahooCrumbSession(fetcher, signal) {
     .join('; ');
   if (!cookie) return null;
 
-  const crumbRes = await fetcher('https://query2.finance.yahoo.com/v1/test/getcrumb', {
-    headers: { 'User-Agent': USER_AGENT, Cookie: cookie },
+  const crumbRes = await fetchWithTimeout('https://query2.finance.yahoo.com/v1/test/getcrumb', {
+    fetcher,
     signal,
+    timeoutMs,
+    headers: { 'User-Agent': USER_AGENT, Cookie: cookie },
   });
   if (!crumbRes || !crumbRes.ok) return null;
   const crumb = String(await crumbRes.text()).trim();
@@ -151,7 +157,7 @@ function extractYahooExpenseRatioPct(resultObj) {
 async function getOrFetchTwEtfMeta(
   db,
   symbol,
-  { fetcher = globalThis.fetch, signal, ttlMs = ETF_META_TTL_MS } = {}
+  { fetcher = globalThis.fetch, signal, ttlMs = ETF_META_TTL_MS, timeoutMs = 15000 } = {}
 ) {
   if (!db || !symbol) return null;
   const cleanSym = stripOtcSuffix(String(symbol).trim().toUpperCase()).replace(/\.(TW|TWO)$/i, '');
@@ -179,7 +185,7 @@ async function getOrFetchTwEtfMeta(
   }
 
   try {
-    const session = await getYahooCrumbSession(fetcher, signal);
+    const session = await getYahooCrumbSession(fetcher, signal, timeoutMs);
     if (!session) return existing;
 
     const candidates = formatTwYahooEtfCandidates(cleanSym);
@@ -187,9 +193,11 @@ async function getOrFetchTwEtfMeta(
     for (const candidate of candidates) {
       if (signal?.aborted) return existing;
       const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(candidate)}?modules=fundProfile,defaultKeyStatistics&crumb=${encodeURIComponent(session.crumb)}`;
-      const res = await fetcher(url, {
-        headers: { 'User-Agent': USER_AGENT, Cookie: session.cookie },
+      const res = await fetchWithTimeout(url, {
+        fetcher,
         signal,
+        timeoutMs,
+        headers: { 'User-Agent': USER_AGENT, Cookie: session.cookie },
       });
       if (!res || !res.ok) continue;
       const payload = await res.json();

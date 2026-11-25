@@ -104,7 +104,7 @@ export const BullBearStrengthCard: React.FC<BullBearStrengthCardProps> = ({
 }) => {
   const palette = resolveDirectionalPalette(colorTheme, market);
   const bullColor = palette.upLightColor;
-  const bearColor = palette.isInternational ? palette.downLightColor : '#38bdf8';
+  const bearColor = palette.downLightColor;
 
   const bull = Number.isFinite(data?.bullStrengthPercent) ? (data!.bullStrengthPercent as number) : 50;
   const bear = Number.isFinite(data?.bearStrengthPercent) ? (data!.bearStrengthPercent as number) : 50;

@@ -31,7 +31,8 @@ const REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308]);
  */
 function isPrivateOrReservedHost(rawHostname) {
   if (!rawHostname || typeof rawHostname !== 'string') return true;
-  const host = rawHostname.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  // 剝除 IPv6 方括號與 DNS 尾點（防 localhost. 繞過）
+  const host = rawHostname.trim().toLowerCase().replace(/^\[|\]$/g, '').replace(/\.+$/, '');
   if (!host) return true;
 
   // 本機與內網常見保留尾綴
@@ -47,26 +48,26 @@ function isPrivateOrReservedHost(rawHostname) {
     return true;
   }
 
-  // IPv6 內部／鏈路本地／IPv4 映射
+  // 一切裸 IPv6 皆阻斷（官方金融白名單均為標準 FQDN）
   if (host.includes(':')) {
-    if (
-      host.startsWith('fe80:') ||
-      host.startsWith('fc') ||
-      host.startsWith('fd') ||
-      host.startsWith('::ffff:')
-    ) {
-      return true;
-    }
-    // 其他裸 IPv6 一律阻斷（官方金融白名單均為 FQDN）
     return true;
   }
 
-  // IPv4 格式檢查（含十進位整數或標準點分四段）
-  if (/^\d+$/.test(host)) return true;
-  const ipv4Match = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (ipv4Match) {
-    const a = Number(ipv4Match[1]);
-    const b = Number(ipv4Match[2]);
+  // 攔截非標準數字 IPv4 表示法（十進位整數、十六進位 0x7f000001、八進位 0177.0.0.1、短格式 127.1）
+  const numericParts = host.split('.');
+  const isAllNumericSegments =
+    numericParts.length >= 1 &&
+    numericParts.length <= 4 &&
+    numericParts.every((seg) => /^(?:0x[0-9a-f]+|\d+)$/i.test(seg));
+  if (isAllNumericSegments) {
+    // 若非標準四段十進位（含前導零八進位、0x 十六進位或少於四段）一律視為可疑位址阻斷
+    const isCanonicalIpv4 =
+      numericParts.length === 4 && numericParts.every((seg) => /^(?:0|[1-9]\d{0,2})$/.test(seg));
+    if (!isCanonicalIpv4) return true;
+
+    const octets = numericParts.map((seg) => Number(seg));
+    if (octets.some((n) => n < 0 || n > 255)) return true;
+    const [a, b] = octets;
     if (a === 0 || a === 10 || a === 127) return true;
     if (a === 169 && b === 254) return true; // Cloud Metadata / Link-local
     if (a === 172 && b >= 16 && b <= 31) return true; // RFC1918
@@ -112,12 +113,21 @@ function validateOutboundTargetUrl(rawUrl, options = {}) {
     };
   }
 
-  const hostname = parsed.hostname.toLowerCase();
+  const hostname = parsed.hostname.toLowerCase().replace(/\.+$/, '');
   if (isPrivateOrReservedHost(hostname)) {
     return {
       ok: false,
       code: 'PRIVATE_HOST_BLOCKED',
       message: `禁止存取本機或私網位址: ${hostname} (SSRF Guard)`,
+    };
+  }
+
+  // 僅允許預設 HTTPS 埠口 (443)
+  if (parsed.port && parsed.port !== '443') {
+    return {
+      ok: false,
+      code: 'PORT_NOT_ALLOWED',
+      message: `僅允許標準 HTTPS 443 埠口，已阻斷埠口: ${parsed.port} (SSRF Guard)`,
     };
   }
 
