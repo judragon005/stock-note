@@ -28,6 +28,7 @@ const {
   parseYahooChartData,
 } = require('./ingest-us-quotes.cjs');
 const { initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+const { MARKET_HEALTH_THRESHOLDS } = require('./sync-thresholds.cjs');
 const { isTradingDay, getHolidayReason } = require('./trading-calendar-engine.cjs');
 const { getMarketAnchorDate } = require('./market-freshness-service.cjs');
 
@@ -248,15 +249,21 @@ async function runUsMarketSync(config = {}) {
   );
 
   if (pendingSymbols.length === 0) {
+    const totalTargets = targetSymbols.length;
+    const coverageRatio = totalTargets > 0 ? 1 : 0;
     console.log(`✔ [完成] 今日 (${dateStr}) 美股所有目標標的均已標記為 SUCCESS，無需重複採集。`);
     return {
+      ok: totalTargets > 0,
       date: dateStr,
       market: 'US',
       mode,
       durationMs: Date.now() - startTime,
+      totalTargets,
       successCount: 0,
-      skippedCount: targetSymbols.length,
-      total: targetSymbols.length,
+      skippedCount: totalTargets,
+      failCount: 0,
+      coverageRatio,
+      total: totalTargets,
       stocks: stocksMap,
     };
   }
@@ -386,7 +393,6 @@ async function runUsMarketSync(config = {}) {
     }
   }
 
-  const { MARKET_HEALTH_THRESHOLDS } = require('./sync-thresholds.cjs');
   const skippedCount = Math.max(0, targetSymbols.length - pendingSymbols.length);
   const totalTargets = targetSymbols.length;
   const coverageRatio = totalTargets > 0 ? (successCount + skippedCount) / totalTargets : 0;

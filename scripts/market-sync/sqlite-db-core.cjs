@@ -1252,19 +1252,7 @@ function closeSqliteDb() {
   }
 }
 
-/**
- * 讀取單一排程軌道之持久化帳本狀態 (Spec 0248 T02)
- */
-function readSchedulerLaneState(laneKey, customDbPath) {
-  if (!laneKey || !isSqliteSupported()) return null;
-  const db = initSqliteLakehouseDb(customDbPath);
-  const row = db
-    .prepare(
-      `SELECT lane_key, watermark_date, last_run_iso_date, retry_count, last_attempt_at, status, phase, last_error, updated_at
-       FROM scheduler_lane_state WHERE lane_key = ?`
-    )
-    .get(String(laneKey));
-  if (!row) return null;
+function mapSchedulerLaneRow(row) {
   return {
     laneKey: row.lane_key,
     watermarkDate: row.watermark_date || null,
@@ -1279,19 +1267,48 @@ function readSchedulerLaneState(laneKey, customDbPath) {
 }
 
 /**
+ * 讀取單一排程軌道之持久化帳本狀態 (Spec 0248 T02)
+ */
+function readSchedulerLaneState(laneKey, customDbPath) {
+  if (!laneKey || !isSqliteSupported()) return null;
+  const db = initSqliteLakehouseDb(customDbPath);
+  const row = db
+    .prepare(
+      `SELECT lane_key, watermark_date, last_run_iso_date, retry_count, last_attempt_at, status, phase, last_error, updated_at
+       FROM scheduler_lane_state WHERE lane_key = ?`
+    )
+    .get(String(laneKey));
+  if (!row) return null;
+  return mapSchedulerLaneRow(row);
+}
+
+/**
  * 冪等寫入或部分更新單一排程軌道持久化帳本 (Spec 0248 T02)
+ * 跨日切換 lastRunIsoDate 且未顯式傳入 retryCount 時自動歸零前日重試計數與冷卻時間戳
  */
 function upsertSchedulerLaneState(laneKey, patch = {}, customDbPath) {
   if (!laneKey || !isSqliteSupported()) return null;
   const db = initSqliteLakehouseDb(customDbPath);
   const existing = readSchedulerLaneState(laneKey, customDbPath);
   const has = (k) => Object.prototype.hasOwnProperty.call(patch, k);
+  const nextIsoDate = has('lastRunIsoDate') ? patch.lastRunIsoDate ?? null : existing?.lastRunIsoDate ?? null;
+  const isDateRollover = Boolean(
+    has('lastRunIsoDate') && nextIsoDate && existing?.lastRunIsoDate && nextIsoDate !== existing.lastRunIsoDate
+  );
   const next = {
     laneKey: String(laneKey),
     watermarkDate: has('watermarkDate') ? patch.watermarkDate ?? null : existing?.watermarkDate ?? null,
-    lastRunIsoDate: has('lastRunIsoDate') ? patch.lastRunIsoDate ?? null : existing?.lastRunIsoDate ?? null,
-    retryCount: has('retryCount') ? Math.max(0, Number(patch.retryCount || 0)) : existing?.retryCount ?? 0,
-    lastAttemptAt: has('lastAttemptAt') ? Math.max(0, Number(patch.lastAttemptAt || 0)) : existing?.lastAttemptAt ?? 0,
+    lastRunIsoDate: nextIsoDate,
+    retryCount: has('retryCount')
+      ? Math.max(0, Number(patch.retryCount || 0))
+      : isDateRollover
+        ? 0
+        : existing?.retryCount ?? 0,
+    lastAttemptAt: has('lastAttemptAt')
+      ? Math.max(0, Number(patch.lastAttemptAt || 0))
+      : isDateRollover
+        ? 0
+        : existing?.lastAttemptAt ?? 0,
     status: has('status') ? String(patch.status || 'idle') : existing?.status ?? 'idle',
     phase: has('phase') ? patch.phase ?? null : existing?.phase ?? null,
     lastError: has('lastError') ? patch.lastError ?? null : existing?.lastError ?? null,
@@ -1338,17 +1355,7 @@ function listSchedulerLaneStates(customDbPath) {
     .all();
   const map = {};
   for (const row of rows) {
-    map[row.lane_key] = {
-      laneKey: row.lane_key,
-      watermarkDate: row.watermark_date || null,
-      lastRunIsoDate: row.last_run_iso_date || null,
-      retryCount: Number(row.retry_count || 0),
-      lastAttemptAt: Number(row.last_attempt_at || 0),
-      status: row.status || 'idle',
-      phase: row.phase || null,
-      lastError: row.last_error || null,
-      updatedAt: Number(row.updated_at || 0),
-    };
+    map[row.lane_key] = mapSchedulerLaneRow(row);
   }
   return map;
 }

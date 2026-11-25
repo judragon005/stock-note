@@ -40,6 +40,7 @@ const {
 } = require('./nas-autonomous-scheduler.cjs');
 const { runWeeklyLakehouseSync } = require('./weekly-lakehouse-sync.cjs');
 const { MARKET_HEALTH_THRESHOLDS } = require('./sync-thresholds.cjs');
+const { runUsMarketSync } = require('./sync-us-market.cjs');
 
 function createTempDbPath(tag) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), `spec0248-${tag}-`));
@@ -541,6 +542,130 @@ t('T08: 美股有效完成率低於 80% 應判定失敗不推進水位線，達 
     assert.strictEqual(r2.tasks.usDaily.ok, true, '有效完成率 80% 應判定成功');
     assert.strictEqual(schedPass.getState().lanes.usDaily.watermarkDate, '2026-11-24');
     schedPass.stop();
+  } finally {
+    cleanupTempDir(dir);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Review Fix 1-3: 跨日 Phase 1 不毒化 Phase 2、預設環境變數落盤、美股早退契約
+// ---------------------------------------------------------------------------
+t('Review Fix 1: 昨日 twDaily 失敗 4 次後，次日 Phase 1 成功不得洗入昨日 retryCount 鎖死當日 Phase 2', async () => {
+  const { dir, dbPath } = createTempDbPath('r1');
+  try {
+    initSqliteLakehouseDb(dbPath);
+    // 模擬昨日 2026-11-24 耗盡 4 次重試
+    upsertSchedulerLaneState(
+      'twDaily',
+      {
+        lastRunIsoDate: '2026-11-24',
+        retryCount: 4,
+        lastAttemptAt: Date.parse('2026-11-24T09:00:00Z'),
+        status: 'error',
+        phase: 'PHASE_2_FULL',
+        lastError: 'YESTERDAY_FAIL',
+      },
+      dbPath
+    );
+
+    // 次日 2026-11-25 15:00 TPE (07:00Z) Phase 1 成功
+    let clock = new Date('2026-11-25T07:00:00Z');
+    let phase2Runs = 0;
+    const sched = startNasAutonomousScheduler({
+      customDbPath: dbPath,
+      runOnStart: false,
+      nowFn: () => clock,
+      handlers: {
+        checkMarketFreshness: () => ({
+          tw: { latestDate: '2026-11-24', anchorDate: '2026-11-25', isStale: true },
+          us: { latestDate: '2026-11-24', anchorDate: '2026-11-24', isStale: false },
+          tdcc: { latestDate: '2026-11-20', anchorDate: '2026-11-20', isStale: false },
+          revenue: { latestMonth: '2026-10', anchorMonth: '2026-10', isStale: false },
+        }),
+        runTwDailySync: async (_p, ctx) => {
+          if (ctx.now.getUTCHours() < 8) {
+            return { ok: true, phase: 'PHASE_1_PRICE_ONLY', watermarkAdvanced: false };
+          }
+          phase2Runs++;
+          return { ok: true, phase: 'PHASE_2_FULL', watermarkAdvanced: true, watermarkDate: '2026-11-25' };
+        },
+        runMacroSync: async () => ({ ok: true }),
+      },
+    });
+
+    await sched.runTickNow();
+    assert.strictEqual(sched.getState().lanes.twDaily.retryCount, 0, '次日 Phase 1 後今日 retryCount 必為 0');
+
+    // 同日 16:45 TPE (08:45Z) Phase 2 必須正常觸發並推進水位線
+    clock = new Date('2026-11-25T08:45:00Z');
+    await sched.runTickNow();
+    assert.strictEqual(phase2Runs, 1, '次日 16:45 Phase 2 不得被昨日 retryCount=4 鎖死');
+    assert.strictEqual(sched.getState().lanes.twDaily.watermarkDate, '2026-11-25');
+    sched.stop();
+  } finally {
+    cleanupTempDir(dir);
+  }
+});
+
+t('Review Fix 2: 排程器未顯式傳入 customDbPath 時應透過 LAKEHOUSE_DB_PATH 持久化至 SQLite', async () => {
+  const { dir, dbPath } = createTempDbPath('r2');
+  const prevEnv = process.env.LAKEHOUSE_DB_PATH;
+  process.env.LAKEHOUSE_DB_PATH = dbPath;
+  try {
+    initSqliteLakehouseDb(dbPath);
+    const now = new Date('2026-11-25T09:00:00Z');
+    const sched = startNasAutonomousScheduler({
+      // 故意不傳 customDbPath，模擬 nas-server 預設環境啟動
+      runOnStart: false,
+      nowFn: () => now,
+      handlers: {
+        checkMarketFreshness: () => ({
+          tw: { latestDate: '2026-11-25', anchorDate: '2026-11-25', isStale: false },
+          us: { latestDate: '2026-11-23', anchorDate: '2026-11-24', isStale: true },
+          tdcc: { latestDate: '2026-11-20', anchorDate: '2026-11-20', isStale: false },
+          revenue: { latestMonth: '2026-10', anchorMonth: '2026-10', isStale: false },
+        }),
+        runUsDailySync: async () => ({ ok: true, date: '2026-11-24', successCount: 10, failCount: 0, totalTargets: 10 }),
+        runMacroSync: async () => ({ ok: true }),
+      },
+    });
+    await sched.runTickNow();
+    sched.stop();
+
+    const persisted = readSchedulerLaneState('usDaily', dbPath);
+    assert.ok(persisted, '未傳 customDbPath 時仍應落盤寫入 scheduler_lane_state');
+    assert.strictEqual(persisted.watermarkDate, '2026-11-24');
+  } finally {
+    if (prevEnv === undefined) delete process.env.LAKEHOUSE_DB_PATH;
+    else process.env.LAKEHOUSE_DB_PATH = prevEnv;
+    cleanupTempDir(dir);
+  }
+});
+
+t('Review Fix 3: sync-us-market 早退分支（全部已同步）應回傳 ok=true, totalTargets 與 coverageRatio=1', async () => {
+  const { dir, dbPath } = createTempDbPath('r3');
+  try {
+    const db = initSqliteLakehouseDb(dbPath);
+    const nyDate = '2026-11-24';
+    db.prepare(
+      `INSERT INTO sync_checkpoints (market, symbol, last_success_date, last_attempt_at, status)
+       VALUES ('US', 'AAPL', ?, ?, 'SUCCESS')`
+    ).run(nyDate, Date.now());
+
+    const res = await runUsMarketSync({
+      mode: 'daily',
+      customDbPath: dbPath,
+      currentDate: new Date('2026-11-24T23:00:00Z'), // NY 18:00 (已結算 2026-11-24)
+      holdings: ['AAPL'],
+      customUniverse: ['AAPL'],
+      maxSymbols: 1,
+      writeStaticCache: false,
+      skipMacroCadence: true,
+    });
+    assert.strictEqual(res.ok, true);
+    assert.strictEqual(res.totalTargets, 1);
+    assert.strictEqual(res.skippedCount, 1);
+    assert.strictEqual(res.coverageRatio, 1);
   } finally {
     cleanupTempDir(dir);
   }

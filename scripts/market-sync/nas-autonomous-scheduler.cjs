@@ -559,6 +559,7 @@ function startNasAutonomousScheduler({
   }
 
   let isRunning = false;
+  const effectiveDbPath = getDbPath(customDbPath);
   const metaState = {
     lastDailyIsoDate: null,
     lastWeeklyIsoDate: null,
@@ -568,7 +569,7 @@ function startNasAutonomousScheduler({
 
   function readCurrentStateSnapshot(now = nowFn()) {
     const tp = getTaipeiTimeParts(now);
-    const lanes = getLaneStateSnapshot(tp.isoDate, customDbPath);
+    const lanes = getLaneStateSnapshot(tp.isoDate, effectiveDbPath);
     return {
       lastDailyIsoDate: metaState.lastDailyIsoDate,
       lastWeeklyIsoDate: metaState.lastWeeklyIsoDate || (lanes.weekly.status === 'ok' ? lanes.weekly.watermarkDate : null),
@@ -610,35 +611,35 @@ function startNasAutonomousScheduler({
         // 相容舊版單一 handlers.runDailySync 注入（如 Spec 0243 Slice 4 測試）
         if (plan.runDaily && typeof handlers.runDailySync === 'function') {
           const nowMs = now.getTime();
-          recordLaneAttempt('twDaily', tp.isoDate, nowMs, { customDbPath });
-          recordLaneAttempt('usDaily', tp.isoDate, nowMs, { customDbPath });
+          recordLaneAttempt('twDaily', tp.isoDate, nowMs, { customDbPath: effectiveDbPath });
+          recordLaneAttempt('usDaily', tp.isoDate, nowMs, { customDbPath: effectiveDbPath });
           try {
             await handlers.runDailySync(customDbPath);
             metaState.lastDailyIsoDate = tp.isoDate;
             updateLaneExecutionState(
               'twDaily',
               { lastRunIsoDate: tp.isoDate, status: 'ok', watermarkDate: freshness?.tw?.anchorDate || tp.isoDate, lastError: null, updatedAt: nowMs },
-              customDbPath
+              effectiveDbPath
             );
             updateLaneExecutionState(
               'usDaily',
               { lastRunIsoDate: tp.isoDate, status: 'ok', watermarkDate: freshness?.us?.anchorDate || tp.isoDate, lastError: null, updatedAt: nowMs },
-              customDbPath
+              effectiveDbPath
             );
             tasks.daily = { ok: true };
           } catch (err) {
             const msg = err?.message || String(err);
-            updateLaneExecutionState('twDaily', { lastRunIsoDate: tp.isoDate, status: 'error', lastError: msg, updatedAt: nowMs }, customDbPath);
-            updateLaneExecutionState('usDaily', { lastRunIsoDate: tp.isoDate, status: 'error', lastError: msg, updatedAt: nowMs }, customDbPath);
+            updateLaneExecutionState('twDaily', { lastRunIsoDate: tp.isoDate, status: 'error', lastError: msg, updatedAt: nowMs }, effectiveDbPath);
+            updateLaneExecutionState('usDaily', { lastRunIsoDate: tp.isoDate, status: 'error', lastError: msg, updatedAt: nowMs }, effectiveDbPath);
             tasks.daily = { ok: false, error: msg };
             console.warn('[NAS Scheduler] 每日增量同步警示:', msg);
           }
         } else {
           if (plan.runTwDaily) {
-            tasks.twDaily = await executeTwDailyLane({ customDbPath, now, tp, freshness, handlers });
+            tasks.twDaily = await executeTwDailyLane({ customDbPath: effectiveDbPath, now, tp, freshness, handlers });
           }
           if (plan.runUsDaily) {
-            tasks.usDaily = await executeUsDailyLane({ customDbPath, now, tp, freshness, handlers });
+            tasks.usDaily = await executeUsDailyLane({ customDbPath: effectiveDbPath, now, tp, freshness, handlers });
           }
           if (tasks.twDaily || tasks.usDaily) {
             const dailyOk =
@@ -648,11 +649,11 @@ function startNasAutonomousScheduler({
         }
 
         if (plan.runMacro) {
-          tasks.macro = await executeMacroLane({ customDbPath, now, tp, handlers, metaState });
+          tasks.macro = await executeMacroLane({ customDbPath: effectiveDbPath, now, tp, handlers, metaState });
         }
 
         if (plan.runWeekly) {
-          const weeklyOut = await executeWeeklyLane({ customDbPath, now, tp, handlers, metaState });
+          const weeklyOut = await executeWeeklyLane({ customDbPath: effectiveDbPath, now, tp, handlers, metaState });
           tasks.weekly = weeklyOut.weekly;
           if (weeklyOut.backup) {
             tasks.backup = weeklyOut.backup;

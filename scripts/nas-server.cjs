@@ -454,8 +454,9 @@ function createNasServer({
   upstreamTimeoutMs = DEFAULT_UPSTREAM_TIMEOUT_MS,
 } = {}) {
   const proxyLimits = { maxRequestBodyBytes, maxResponseBodyBytes, upstreamTimeoutMs };
+  const resolvedDbPath = getDbPath(customDbPath);
   const marketMiddleware = createMarketApiMiddleware(customDbPath);
-  const scheduler = enableScheduler ? startNasAutonomousScheduler({ customDbPath }) : null;
+  const scheduler = enableScheduler ? startNasAutonomousScheduler({ customDbPath: resolvedDbPath }) : null;
 
   const server = http.createServer((req, res) => {
     setSecurityHeaders(res);

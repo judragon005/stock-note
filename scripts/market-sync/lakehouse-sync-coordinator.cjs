@@ -266,6 +266,16 @@ function updateLaneExecutionState(lane, patch = {}, customDbPath) {
 
   const entry = laneRetryState[key];
   const has = (k) => Object.prototype.hasOwnProperty.call(patch, k);
+  const isDateRollover = Boolean(
+    has('lastRunIsoDate') && patch.lastRunIsoDate && entry.lastRunIsoDate && patch.lastRunIsoDate !== entry.lastRunIsoDate
+  );
+  if (isDateRollover && !has('retryCount')) {
+    entry.retryCount = 0;
+    entry.count = 0;
+  }
+  if (isDateRollover && !has('lastAttemptAt')) {
+    entry.lastAttemptAt = 0;
+  }
   if (has('watermarkDate')) entry.watermarkDate = patch.watermarkDate ?? null;
   if (has('lastRunIsoDate')) {
     entry.lastRunIsoDate = patch.lastRunIsoDate ?? null;

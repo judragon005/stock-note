@@ -1188,31 +1188,7 @@ function ingestMacroSentimentToDb(data, customDbPath) {
         updated_at = excluded.updated_at
     `);
 
-    stmt.run(
-      data.date,
-      data.riskFreeRate3m ?? data.risk_free_rate_3m ?? null,
-      data.treasuryYield10y ?? data.treasury_yield_10y ?? null,
-      data.yieldSpread10y2y ?? data.yield_spread_10y_2y ?? null,
-      data.cnnFearGreedScore ?? data.cnn_fear_greed_score ?? null,
-      data.vixClose ?? data.vix_close ?? null,
-      data.twPutCallRatio ?? data.tw_put_call_ratio ?? null,
-      data.twForeignFuturesOi ?? data.tw_foreign_futures_oi ?? null,
-      data.twTrustFuturesOi ?? data.tw_trust_futures_oi ?? null,
-      data.treasuryYield2y ?? data.treasury_yield_2y ?? null,
-      data.fedFundsRate ?? data.fed_funds_rate ?? null,
-      data.usCpiYoY ?? data.cpiYoY ?? data.us_cpi_yoy ?? null,
-      data.creditSpreadOas ?? data.credit_spread_oas ?? null,
-      data.twMarginMaintenanceRatio ?? data.twMarginMaintenance ?? data.tw_margin_maintenance_ratio ?? null,
-      data.igSpreadOas ?? data.ig_spread_oas ?? null,
-      data.cccSpreadOas ?? data.ccc_spread_oas ?? null,
-      data.breakeven10y ?? data.breakeven_10y ?? null,
-      data.initialClaims ?? data.initial_claims ?? null,
-      data.usMfgNewOrdersYoY ?? data.us_mfg_new_orders_yoy ?? null,
-      data.usMfgInventoriesYoY ?? data.us_mfg_inventories_yoy ?? null,
-      data.usOrdersMinusInvSpread ?? data.us_orders_minus_inv_spread ?? null,
-      data.usIndustrialProdYoY ?? data.us_industrial_prod_yoy ?? null,
-      Date.now()
-    );
+    stmt.run(data.date, ...metrics, Date.now());
     return true;
   }
 
@@ -1244,27 +1220,7 @@ function ingestMacroSentimentToDb(data, customDbPath) {
       updated_at = excluded.updated_at
   `);
 
-  stmt.run(
-    data.date,
-    data.riskFreeRate3m ?? data.risk_free_rate_3m ?? null,
-    data.treasuryYield10y ?? data.treasury_yield_10y ?? null,
-    data.yieldSpread10y2y ?? data.yield_spread_10y_2y ?? null,
-    data.cnnFearGreedScore ?? data.cnn_fear_greed_score ?? null,
-    data.vixClose ?? data.vix_close ?? null,
-    data.twPutCallRatio ?? data.tw_put_call_ratio ?? null,
-    data.twForeignFuturesOi ?? data.tw_foreign_futures_oi ?? null,
-    data.twTrustFuturesOi ?? data.tw_trust_futures_oi ?? null,
-    data.treasuryYield2y ?? data.treasury_yield_2y ?? null,
-    data.fedFundsRate ?? data.fed_funds_rate ?? null,
-    data.usCpiYoY ?? data.cpiYoY ?? data.us_cpi_yoy ?? null,
-    data.creditSpreadOas ?? data.credit_spread_oas ?? null,
-    data.twMarginMaintenanceRatio ?? data.twMarginMaintenance ?? data.tw_margin_maintenance_ratio ?? null,
-    data.igSpreadOas ?? data.ig_spread_oas ?? null,
-    data.cccSpreadOas ?? data.ccc_spread_oas ?? null,
-    data.breakeven10y ?? data.breakeven_10y ?? null,
-    data.initialClaims ?? data.initial_claims ?? null,
-    Date.now()
-  );
+  stmt.run(data.date, ...metrics.slice(0, 17), Date.now());
 
   return true;
 }
