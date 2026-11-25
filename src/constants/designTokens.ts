@@ -11,13 +11,19 @@ export interface DirectionalPalette {
   isInternational: boolean;
   upColor: string;
   downColor: string;
+  upLightColor: string;
+  downLightColor: string;
+  upRgb: string;
+  downRgb: string;
+  upGradient: string;
+  downGradient: string;
   neutralColor: string;
 }
 
 /**
  * 依據色彩主題與市場類型解析漲跌極性色票：
- * - taiwan: 紅漲 (#ef4444) / 綠跌 (#10b981)
- * - international: 綠漲 (#10b981) / 紅跌 (#ef4444)
+ * - taiwan: 紅漲 (#ef4444 / #f87171) / 綠跌 (#10b981 / #34d399)
+ * - international: 綠漲 (#10b981 / #34d399) / 紅跌 (#ef4444 / #f87171)
  */
 export function resolveDirectionalPalette(
   colorTheme?: ColorThemeMode,
@@ -30,6 +36,16 @@ export function resolveDirectionalPalette(
     isInternational,
     upColor: isInternational ? '#10b981' : '#ef4444',
     downColor: isInternational ? '#ef4444' : '#10b981',
+    upLightColor: isInternational ? '#34d399' : '#f87171',
+    downLightColor: isInternational ? '#f87171' : '#34d399',
+    upRgb: isInternational ? '16, 185, 129' : '239, 68, 68',
+    downRgb: isInternational ? '239, 68, 68' : '16, 185, 129',
+    upGradient: isInternational
+      ? 'linear-gradient(90deg, #10b981 0%, #34d399 100%)'
+      : 'linear-gradient(90deg, #ef4444 0%, #f87171 100%)',
+    downGradient: isInternational
+      ? 'linear-gradient(90deg, #f87171 0%, #ef4444 100%)'
+      : 'linear-gradient(90deg, #34d399 0%, #10b981 100%)',
     neutralColor: '#94a3b8',
   };
 }

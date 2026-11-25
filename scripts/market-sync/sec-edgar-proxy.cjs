@@ -10,7 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { normalizeUsTickerCandidates } = require('./market-sync-core.cjs');
+const { normalizeUsTickerCandidates, fetchWithTimeout } = require('./market-sync-core.cjs');
 
 const SEC_EDGAR_USER_AGENT = 'StockTrackerApp/1.0 (local-analytics@stocktracker.local)';
 const SEC_TICKERS_URL = 'https://www.sec.gov/files/company_tickers.json';
@@ -194,7 +194,10 @@ async function loadSecTickerCikMap(options = {}) {
   const downloadPromise = (async () => {
     const response = await scheduleSecRequest(
       () =>
-        fetchImpl(SEC_TICKERS_URL, {
+        fetchWithTimeout(SEC_TICKERS_URL, {
+          fetcher: fetchImpl,
+          signal: options.signal,
+          timeoutMs: options.timeoutMs ?? 15000,
           headers: getServerSecHeaders(),
         }),
       options
@@ -273,7 +276,10 @@ async function fetchSecCompanyFactsServer(symbol, options = {}) {
   const url = `${SEC_COMPANY_FACTS_BASE_URL}/CIK${cik}.json`;
   const response = await scheduleSecRequest(
     () =>
-      fetchImpl(url, {
+      fetchWithTimeout(url, {
+        fetcher: fetchImpl,
+        signal: options.signal,
+        timeoutMs: options.timeoutMs ?? 15000,
         headers: getServerSecHeaders(),
       }),
     options

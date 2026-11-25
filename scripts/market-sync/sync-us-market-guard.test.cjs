@@ -13,9 +13,10 @@ const usDate = getUsMarketDate(simulatedTaipeiMorning);
 assert.strictEqual(usDate, '2026-01-19', '台北週二上午 8 點對應美東應為週一 2026-01-19');
 
 async function testGuard() {
-  // 2. 模擬 2026-01-19 (馬丁路德金紀念日) 美股休市
+  // 2. 模擬指定目標日為 2026-01-19 (馬丁路德金紀念日) 美股休市（Spec 0246/0247：明確傳入 targetDate 驗證休市阻斷）
   const result = await runUsMarketSync({
     currentDate: simulatedTaipeiMorning,
+    targetDate: usDate,
     mode: 'daily',
   });
 

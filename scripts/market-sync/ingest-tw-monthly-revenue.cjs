@@ -5,6 +5,7 @@
 
 const { initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
 const { getLatestSettledRevenueMonth } = require('./market-freshness-service.cjs');
+const { fetchWithTimeout } = require('./market-sync-core.cjs');
 
 const TWSE_REVENUE_URL = 'https://openapi.twse.com.tw/v1/opendata/t187ap05_L';
 const TPEX_REVENUE_URL = 'https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O';
@@ -252,7 +253,10 @@ async function runMonthlyRevenueIngestion(customDbPath, targetYearMonthOrOptions
 
   const fetchJsonSafe = async (url) => {
     try {
-      const res = await fetcher(url, {
+      const res = await fetchWithTimeout(url, {
+        fetcher,
+        timeoutMs: opts.timeoutMs ?? 15000,
+        signal: opts.signal,
         headers: {
           Accept: 'application/json',
           'User-Agent': 'StockTracker/1.0 (local-sync)',

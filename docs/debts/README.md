@@ -72,7 +72,11 @@
 | [**0062**](0062-war-room-dual-market-code-smells-consolidation.md) | 主力戰情室雙市場重構衍生之 Fowler Code Smells 收斂清單（共用別名/DDL、漲跌色票 helper 與巨石模組拆解） | `P3` | `RESOLVED` | /code-review 雙軸審查回饋 (Spec 0239 / Issue #592) | `Refactor` · `CleanCode` · `DRY` · `AiForceDashboard` · `MarketSync` | **已於 Spec 0240 (Issue #594) Wave 1 完整解決** |
 | [**0063**](0063-legacy-modals-portal-shell-migration.md) | 全站其餘 14 顆既有彈窗漸進遷移至 ModalShell 頂層 Portal 原語 | `P3` | `OPEN` | Spec 0245 彈窗審計 (Issue #605) | `Refactor` · `UI` · `Accessibility` · `ModalShell` · `Portal` | 後續迭代觸及各彈窗時漸進遷移或無障礙專題清償 |
 | [**0064**](0064-war-room-resonance-and-tdcc-smells-consolidation.md) | 主 K 四維共鳴引擎拆解與 TDCC / 擺盪引擎 DRY 收斂 | `P3` | `OPEN` | Spec 0245 `/code-review` 複審 (Issue #605) | `Refactor` · `CleanCode` · `DRY` · `AiForceDashboard` · `TDCC` | 後續擴充主 K 技術支柱或演進 TDCC 圖表時重構 |
-| [**0065**](0065-nas-scheduler-retry-ledger-and-decomposition.md) | NAS 排程重試帳本單一化與長函式軌道拆解 | `P3` | `OPEN` | Spec 0246 `/code-review` 終審 (Issue #607) | `Refactor` · `CleanCode` · `DRY` · `MarketSync` · `NAS-Scheduler` | 後續擴充排程軌道或持久化排程狀態時重構 |
+| [**0065**](0065-nas-scheduler-retry-ledger-and-decomposition.md) | NAS 排程重試帳本單一化與長函式軌道拆解 | `P3` | `OPEN` | Spec 0246 `/code-review` 終審 (Issue #607) | `Refactor` · `CleanCode` · `DRY` · `MarketSync` · `NAS-Scheduler` | 後續擴充排程軌道或持久化排程狀態時重構 (Wave 1) |
+| [**0066**](0066-sqlite-date-indexes-and-scheduler-watermark-poisoning.md) | SQLite 四大高頻表日期索引補齊、NAS 排程三軌假性成功防禦與審計腳本日曆收斂 | `P1` | `OPEN` | Spec 0247 五路法醫審計 (Issue #609) | `Performance` · `Reliability` · `SQLite` · `NAS-Scheduler` · `Wave1` | Wave 1 (`Spec 0248`) 與 Debt 0065 一併清償 |
+| [**0067**](0067-quant-indicator-ssot-and-resonance-edge-defects.md) | Card 01 與 Card 01B 日 K 指標口徑分裂收斂、重複技術指標歸一化與共鳴引擎邊界修復 | `P1` | `OPEN` | Spec 0247 五路法醫審計 (Issue #609) | `Quant` · `DataIntegrity` · `AiForceDashboard` · `DRY` · `Wave2` | Wave 2 (`Spec 0249`) 與 Debt 0064 / 0051 一併清償 |
+| [**0068**](0068-ghost-tailwind-modalshell-hardening-and-e2ee-prompt.md) | 75 處未安裝幽靈 Tailwind CSS 根除、ModalShell 原語強化與明文 E2EE prompt 汰換 | `P2` | `OPEN` | Spec 0247 五路法醫審計 (Issue #609) | `UI` · `Accessibility` · `Security` · `ModalShell` · `Wave3` | Wave 3 (`Spec 0250`) 與 Debt 0063 (23 顆彈窗) 一併清償 |
+| [**0069**](0069-isolated-vault-auth-boundary-and-frontend-perf-storage.md) | 獨立 Vault 加密隔離、NAS 認證邊界與前端 Code-Splitting／儲存競態瘦身 | `P2` | `OPEN` | Spec 0247 五路法醫審計 (Issue #609) | `Security` · `Architecture` · `Performance` · `Storage` · `Wave4` | Wave 4 (`Spec 0251`) 與 Debt 0046 一併清償 |
 
 ---
 

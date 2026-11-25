@@ -3,6 +3,7 @@ import type { BullBearEnergyData } from '../../../types/aiForceDashboard';
 import type { ColorThemeMode, MarketType } from '../../../types/stock';
 import { TermTooltip } from '../../common/TermTooltip';
 import { diagnoseBullBearEnergy } from '../../../constants/aiForceGlossary';
+import { resolveDirectionalPalette } from '../../../constants/designTokens';
 
 export interface BullBearEnergyCardProps {
   data?: BullBearEnergyData;
@@ -69,16 +70,11 @@ export const BullBearEnergyCard: React.FC<BullBearEnergyCardProps> = ({
   colorTheme,
   market,
 }) => {
-  const effectiveTheme: ColorThemeMode = colorTheme ?? (market === 'US' ? 'international' : 'taiwan');
-  const isTaiwan = effectiveTheme === 'taiwan';
-  const bullText = isTaiwan ? '#f87171' : '#34d399';
-  const bearText = isTaiwan ? '#34d399' : '#f87171';
-  const bullGrad = isTaiwan
-    ? 'linear-gradient(90deg, #ef4444 0%, #f87171 100%)'
-    : 'linear-gradient(90deg, #10b981 0%, #34d399 100%)';
-  const bearGrad = isTaiwan
-    ? 'linear-gradient(90deg, #34d399 0%, #10b981 100%)'
-    : 'linear-gradient(90deg, #f87171 0%, #ef4444 100%)';
+  const palette = resolveDirectionalPalette(colorTheme, market);
+  const bullText = palette.upLightColor;
+  const bearText = palette.downLightColor;
+  const bullGrad = palette.upGradient;
+  const bearGrad = palette.downGradient;
 
   const rawBull = data?.bullEnergyPercent ?? data?.bullPercent ?? 53;
   const rawBear = data?.bearEnergyPercent ?? data?.bearPercent ?? 47;

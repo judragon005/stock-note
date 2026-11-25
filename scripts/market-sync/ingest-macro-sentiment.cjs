@@ -5,6 +5,7 @@
  */
 
 const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+const { fetchWithTimeout } = require('./market-sync-core.cjs');
 
 /**
  * 內部安全 JSON 請求輔助器：同時相容自訂 fetchJson(url, timeoutMs) 與標準 fetch Response
@@ -1470,7 +1471,7 @@ function ingestEtfDailyNavToDb(records, customDbPath) {
 /**
  * 聯網抓取並入庫全市場 ETF 淨值與折溢價 (Spec 0203 Ticket 05 / Spec 0246 Ticket 02)
  */
-async function fetchAndIngestEtfDailyNav(customDbPath, targetDateStr, fetcher = fetch) {
+async function fetchAndIngestEtfDailyNav(customDbPath, targetDateStr, fetcher = fetch, options = {}) {
   try {
     let resolvedDateStr = targetDateStr;
     if (!resolvedDateStr) {
@@ -1478,7 +1479,10 @@ async function fetchAndIngestEtfDailyNav(customDbPath, targetDateStr, fetcher = 
       resolvedDateStr = getMarketAnchorDate('TW');
     }
     const url = 'https://mis.twse.com.tw/stock/data/all_etf.txt';
-    const res = await fetcher(url, {
+    const res = await fetchWithTimeout(url, {
+      fetcher,
+      timeoutMs: options.timeoutMs ?? 15000,
+      signal: options.signal,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         Accept: 'application/json, text/plain, */*',

@@ -3,6 +3,7 @@ import type { BullBearStrengthData } from '../../../types/aiForceDashboard';
 import type { ColorThemeMode, MarketType } from '../../../types/stock';
 import { calculateCircleProgress } from './HealthSummaryCard';
 import { TermTooltip } from '../../common/TermTooltip';
+import { resolveDirectionalPalette } from '../../../constants/designTokens';
 
 export interface BullBearStrengthCardProps {
   data?: BullBearStrengthData;
@@ -101,10 +102,9 @@ export const BullBearStrengthCard: React.FC<BullBearStrengthCardProps> = ({
   colorTheme,
   market,
 }) => {
-  const effectiveTheme: ColorThemeMode = colorTheme ?? (market === 'US' ? 'international' : 'taiwan');
-  const isTaiwan = effectiveTheme === 'taiwan';
-  const bullColor = isTaiwan ? '#f87171' : '#34d399';
-  const bearColor = isTaiwan ? '#38bdf8' : '#f87171';
+  const palette = resolveDirectionalPalette(colorTheme, market);
+  const bullColor = palette.upLightColor;
+  const bearColor = palette.isInternational ? palette.downLightColor : '#38bdf8';
 
   const bull = Number.isFinite(data?.bullStrengthPercent) ? (data!.bullStrengthPercent as number) : 50;
   const bear = Number.isFinite(data?.bearStrengthPercent) ? (data!.bearStrengthPercent as number) : 50;

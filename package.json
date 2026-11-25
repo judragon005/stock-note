@@ -11,6 +11,7 @@
     "sync:weekly": "node scripts/market-sync/weekly-lakehouse-sync.cjs",
     "backfill:dividends:10y": "node scripts/market-sync/ingest-tw-corporate-actions.cjs --years=10",
     "test": "vitest run",
+    "test:backend": "node scripts/run-backend-tests.cjs",
     "test:watch": "vitest",
     "guard:pre-push": "node scripts/pre-push-guard.cjs",
     "lint:docs": "node scripts/verify-docs.cjs",

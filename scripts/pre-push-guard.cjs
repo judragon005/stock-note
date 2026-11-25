@@ -73,11 +73,12 @@ try {
   execSync('node scripts/verify-docs.cjs', { stdio: 'inherit' });
   console.log('  ✅ 文檔完整性與成對性 100% 通過！');
 
-  // 4. 執行 TypeScript 與 Vitest 測試驗證
-  console.log('🔍 [4/4] 執行本地型別與單元測試校驗 (確保 CI 不被濫用)...');
+  // 4. 執行 TypeScript、前端 Vitest 與後端同步測試驗證 (Spec 0247 T13 全端免疫閘門)
+  console.log('🔍 [4/4] 執行本地型別與全端單元測試校驗 (確保 CI 不被濫用)...');
   execSync('npx tsc --noEmit', { stdio: 'inherit' });
   execSync('npm test', { stdio: 'inherit' });
-  console.log('  ✅ 本地型別與單元測試 100% 綠燈通過！');
+  execSync('npm run test:backend', { stdio: 'inherit' });
+  console.log('  ✅ 本地型別與全端單元測試 100% 綠燈通過！');
 
   console.log('🎉 [Pre-push Guard] 所有防禦檢查通過，核准 Push！\n');
   process.exit(0);

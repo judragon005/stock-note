@@ -4,7 +4,7 @@
  */
 
 const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
-const { stripOtcSuffix } = require('./market-sync-core.cjs');
+const { stripOtcSuffix, fetchWithTimeout } = require('./market-sync-core.cjs');
 
 const TWSE_NOTICE_URL = 'https://openapi.twse.com.tw/v1/announcement/notice';
 const TWSE_DISPOSITION_URL = 'https://openapi.twse.com.tw/v1/announcement/punish';
@@ -187,7 +187,10 @@ async function fetchAndTagTwStockStatuses(dbOrPath, options = {}) {
 
   for (const src of sources) {
     try {
-      const res = await fetcher(src.url, {
+      const res = await fetchWithTimeout(src.url, {
+        fetcher,
+        timeoutMs: options.timeoutMs ?? 15000,
+        signal: options.signal,
         headers: {
           Accept: 'application/json',
           'User-Agent': 'StockTracker/1.0 (local-sync)',

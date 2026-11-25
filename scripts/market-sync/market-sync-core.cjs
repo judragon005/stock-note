@@ -379,7 +379,82 @@ function normalizeUsTickerCandidates(symbol) {
   return Array.from(candidates);
 }
 
+/**
+ * Deadlock-Free Lock-Scoped Fetch (Spec 0247 T06)
+ * 複合逾時與外部 AbortSignal 的統一安全抓取原語，防止全域同步鎖內 TCP 半開永久死鎖
+ * @param {string} url
+ * @param {{ fetcher?: Function, timeoutMs?: number, signal?: AbortSignal, [key: string]: any }} [options]
+ */
+const DEFAULT_LOCK_SCOPED_FETCH_TIMEOUT_MS = 15000;
+
+async function fetchWithTimeout(url, options = {}) {
+  const {
+    fetcher = globalThis.fetch,
+    timeoutMs = DEFAULT_LOCK_SCOPED_FETCH_TIMEOUT_MS,
+    signal: externalSignal,
+    ...fetchInit
+  } = options || {};
+
+  if (typeof fetcher !== 'function') {
+    throw new Error('FETCH_UNAVAILABLE');
+  }
+
+  if (externalSignal && externalSignal.aborted) {
+    const err = new Error('Fetch aborted by external signal');
+    err.name = 'AbortError';
+    throw err;
+  }
+
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  let timer = null;
+  let onExternalAbort = null;
+
+  if (controller) {
+    if (externalSignal && typeof externalSignal.addEventListener === 'function') {
+      onExternalAbort = () => {
+        try {
+          controller.abort(externalSignal.reason);
+        } catch {
+          try {
+            controller.abort();
+          } catch {}
+        }
+      };
+      externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+    }
+
+    if (typeof timeoutMs === 'number' && timeoutMs > 0 && Number.isFinite(timeoutMs)) {
+      timer = setTimeout(() => {
+        try {
+          const timeoutErr = new Error(`Request timed out after ${timeoutMs}ms: ${url}`);
+          timeoutErr.name = 'AbortError';
+          controller.abort(timeoutErr);
+        } catch {
+          try {
+            controller.abort();
+          } catch {}
+        }
+      }, timeoutMs);
+      if (typeof timer.unref === 'function') timer.unref();
+    }
+  }
+
+  try {
+    return await fetcher(url, {
+      ...fetchInit,
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+  } finally {
+    if (timer) clearTimeout(timer);
+    if (externalSignal && onExternalAbort && typeof externalSignal.removeEventListener === 'function') {
+      externalSignal.removeEventListener('abort', onExternalAbort);
+    }
+  }
+}
+
 module.exports = {
+  DEFAULT_LOCK_SCOPED_FETCH_TIMEOUT_MS,
+  fetchWithTimeout,
   formatDateYMD,
   parseCleanNumber,
   stripOtcSuffix,

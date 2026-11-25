@@ -258,9 +258,41 @@ export interface RedactedBackupResult<T> {
   redactedAt: string;
 }
 
+function scrubApiKeysMapInPlace(keys: unknown): void {
+  if (!keys || typeof keys !== 'object') return;
+  const map = keys as Record<string, any>;
+  for (const field of Object.keys(map)) {
+    if (typeof map[field] === 'string' && map[field].trim() !== '') {
+      map[field] = '';
+    }
+  }
+}
+
+function scrubSnapshotsApiKeysInPlace(snapshots: unknown): void {
+  if (!Array.isArray(snapshots)) return;
+  for (const snap of snapshots) {
+    if (snap && typeof snap === 'object' && snap.payload && typeof snap.payload === 'object') {
+      scrubApiKeysMapInPlace((snap.payload as Record<string, any>).apiKeys);
+    }
+  }
+}
+
+function scrubSettingsCollectionInPlace(settings: unknown): void {
+  if (!settings || typeof settings !== 'object') return;
+  if (Array.isArray(settings)) {
+    for (const item of settings) {
+      if (item && typeof item === 'object' && item.key === 'apiKeys') {
+        scrubApiKeysMapInPlace(item.value);
+      }
+    }
+    return;
+  }
+  scrubApiKeysMapInPlace((settings as Record<string, any>).apiKeys);
+}
+
 /**
- * 全庫 JSON 備份脫敏函數 (redactBackupData)
- * 抹除備份檔案中 settings.apiKeys 的所有敏感金鑰欄位，並標記 isRedacted: true
+ * 全庫 JSON 備份脫敏函數 (redactBackupData — Spec 0247 T04 強化快照深層清洗)
+ * 抹除備份檔案中頂層 settings、payload/data 設定與每筆歷史時光機快照內的敏感金鑰欄位
  */
 export function redactBackupData<T extends Record<string, any>>(backupData: T): RedactedBackupResult<T> {
   if (!backupData || typeof backupData !== 'object') {
@@ -270,16 +302,16 @@ export function redactBackupData<T extends Record<string, any>>(backupData: T): 
   // 深層拷貝
   const cloned = JSON.parse(JSON.stringify(backupData)) as T;
 
-  if (cloned.settings && typeof cloned.settings === 'object') {
-    if (cloned.settings.apiKeys && typeof cloned.settings.apiKeys === 'object') {
-      const keys = cloned.settings.apiKeys as Record<string, any>;
-      // 清空敏感金鑰欄位
-      for (const field of Object.keys(keys)) {
-        if (typeof keys[field] === 'string' && keys[field].trim() !== '') {
-          keys[field] = '';
-        }
-      }
-    }
+  scrubSettingsCollectionInPlace(cloned.settings);
+  scrubSnapshotsApiKeysInPlace(cloned.snapshots);
+
+  if (cloned.payload && typeof cloned.payload === 'object') {
+    scrubSettingsCollectionInPlace(cloned.payload.settings);
+    scrubSnapshotsApiKeysInPlace(cloned.payload.snapshots);
+  }
+  if (cloned.data && typeof cloned.data === 'object') {
+    scrubSettingsCollectionInPlace(cloned.data.settings);
+    scrubSnapshotsApiKeysInPlace(cloned.data.snapshots);
   }
 
   return {

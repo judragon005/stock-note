@@ -19,7 +19,7 @@ describe('Ticket 03: AI 主力戰情室端到端資料庫注入與全視圖驗�
     vi.useRealTimers();
   });
 
-  it('查詢 00403A 時，若 Yahoo API 遭遇 429，系統能無縫回退本地 compact 歷史資料庫並合流當日盤後行情', async () => {
+  it('查詢 00403A 時，若 Yahoo API 遭遇 429，系統能無縫自 SQLite 數據湖倉 SSOT 載入 60 根真實日 K（Spec 0247 T09）', async () => {
     // 1. 模擬本地 IndexedDB 初次為空
     vi.spyOn(db, 'getSymbolOhlcv').mockResolvedValue(null);
     vi.spyOn(db, 'getSymbolIndicators').mockResolvedValue(null);
@@ -27,29 +27,29 @@ describe('Ticket 03: AI 主力戰情室端到端資料庫注入與全視圖驗�
     // 2. 模擬 Yahoo API 429 限流
     vi.spyOn(priceFetcher, 'fetchWithCORSProxy').mockRejectedValue(new Error('HTTP 429 Too Many Requests'));
 
-    // 3. 模擬本地 compact 資料庫返回 00403A 的 59 根歷史日 K
-    const mockCompact59 = Array.from({ length: 59 }, (_, i) => ({
-      date: `2026-06-${String(i + 1).padStart(2, '0')}`,
-      open: 10 + i * 0.05,
-      high: 10.2 + i * 0.05,
-      low: 9.9 + i * 0.05,
-      close: 10.1 + i * 0.05,
-      volume: 1000000 + i * 10000,
-    }));
-    vi.spyOn(marketCacheLoader, 'loadSymbolCompactHistory').mockResolvedValue(mockCompact59);
-
-    // 4. 模擬當日最新收盤價 (2026-09-30, 10.79 元)
-    vi.spyOn(marketCacheLoader, 'getLatestSummaryQuote').mockResolvedValue({
-      date: '2026-09-30',
-      open: 10.83,
-      high: 10.9,
-      low: 10.78,
-      close: 10.79,
-      volume: 144635371,
-    });
+    // 3. 模擬本地 SQLite 數據湖倉返回 00403A 的 60 根歷史日 K (含 2026-09-30 收盤 10.79)
+    const mockLakehouse60 = [
+      ...Array.from({ length: 59 }, (_, i) => ({
+        date: `2026-06-${String(i + 1).padStart(2, '0')}`,
+        open: 10 + i * 0.05,
+        high: 10.2 + i * 0.05,
+        low: 9.9 + i * 0.05,
+        close: 10.1 + i * 0.05,
+        volume: 1000000 + i * 10000,
+      })),
+      {
+        date: '2026-09-30',
+        open: 10.83,
+        high: 10.9,
+        low: 10.78,
+        close: 10.79,
+        volume: 144635371,
+      },
+    ];
+    vi.spyOn(marketCacheLoader, 'loadSymbolHistoryFromLakehouse').mockResolvedValue(mockLakehouse60);
 
     // 執行回補
-    const backfillResult = await backfillSymbolOhlcvAndIndicators('00403A', 'TW');
+    const backfillResult = await backfillSymbolOhlcvAndIndicators('00403A', 'TW', true);
 
     expect(backfillResult.candles.length).toBe(60); // 59 歷史 + 1 當日
     expect(backfillResult.candles[59].date).toBe('2026-09-30');

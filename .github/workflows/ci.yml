@@ -38,8 +38,17 @@ jobs:
       - name: 執行 TypeScript 語法與型別檢查 (Type Check)
         run: npx tsc --noEmit
 
-      - name: 執行 Vitest 會計引擎自動化單元測試 (Run Vitest)
+      - name: 執行 Vitest 前端與核心引擎自動化單元測試 (Run Vitest)
         run: npm test
+
+      - name: 執行後端湖倉同步測試套件 (Run Backend Tests — Spec 0247 T13)
+        run: npm run test:backend
+
+      - name: 執行正式建置驗證 (Production Build — Spec 0247 T13)
+        run: npm run build
+
+      - name: 執行全量文檔完整性與死鏈守門 (Docs Integrity Guard — Spec 0247 T13)
+        run: npm run lint:docs
 
       - name: 敏感資訊防禦檢查 (Secrets Guard)
         run: |

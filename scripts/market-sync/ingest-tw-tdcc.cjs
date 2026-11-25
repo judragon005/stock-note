@@ -5,6 +5,7 @@
 
 const { initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
 const { getLatestTdccPublishDate } = require('./trading-calendar-engine.cjs');
+const { fetchWithTimeout } = require('./market-sync-core.cjs');
 
 const TDCC_OPENDATA_URL = 'https://smart.tdcc.com.tw/opendata/getOD.ashx?id=1-5';
 
@@ -249,7 +250,10 @@ async function runTdccIngestion(customDbPath, targetDateOrOptions, backfillWeeks
 
   let csvText = '';
   try {
-    const res = await fetcher(TDCC_OPENDATA_URL, {
+    const res = await fetchWithTimeout(TDCC_OPENDATA_URL, {
+      fetcher,
+      timeoutMs: opts.timeoutMs ?? 20000,
+      signal: opts.signal,
       headers: {
         Accept: 'text/csv,text/plain,*/*',
         'User-Agent': 'StockTracker/1.0 (local-sync)',

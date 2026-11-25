@@ -15,6 +15,13 @@ const { createMarketApiMiddleware } = require('./market-sync/vite-market-middlew
 const { startNasAutonomousScheduler } = require('./market-sync/nas-autonomous-scheduler.cjs');
 const { getDbPath, checkpointSqliteWal, closeSqliteDb } = require('./market-sync/sqlite-db-core.cjs');
 const { getCoordinatorTelemetry } = require('./market-sync/lakehouse-sync-coordinator.cjs');
+const {
+  ALLOWED_OUTBOUND_HOSTS,
+  validateOutboundTargetUrl,
+} = require('./market-sync/ssrf-origin-guard.cjs');
+
+const DEFAULT_MAX_REQUEST_BODY_BYTES = 1024 * 1024; // 1MB
+const DEFAULT_UPSTREAM_TIMEOUT_MS = 15000; // 15s
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -40,16 +47,7 @@ function setSecurityHeaders(res) {
 const DEFAULT_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 
-const ALLOWED_PROXY_HOSTS = new Set([
-  'api.stlouisfed.org',
-  'finnhub.io',
-  'financialmodelingprep.com',
-  'api.finmindtrade.com',
-  'www.alphavantage.co',
-  'api.polygon.io',
-  'api.coingecko.com',
-  'data.sec.gov',
-]);
+const ALLOWED_PROXY_HOSTS = ALLOWED_OUTBOUND_HOSTS;
 
 // 注意：/api/twse-www 必須排在 /api/twse 之前避免前綴誤匹配
 const PREFIX_PROXY_ROUTES = [
@@ -96,16 +94,54 @@ function matchPrefixProxyRoute(reqUrl) {
   return null;
 }
 
-function readRequestBody(req) {
+function readRequestBody(req, maxBytes = DEFAULT_MAX_REQUEST_BODY_BYTES) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on('data', (chunk) => chunks.push(chunk));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', reject);
+    let totalBytes = 0;
+    let settled = false;
+
+    const fail = (err) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    };
+
+    req.on('data', (chunk) => {
+      if (settled) return;
+      totalBytes += chunk.length;
+      if (totalBytes > maxBytes) {
+        const err = new Error(`Request body exceeds limit (${maxBytes} bytes)`);
+        err.code = 'PAYLOAD_TOO_LARGE';
+        fail(err);
+        req.resume();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      if (settled) return;
+      settled = true;
+      resolve(Buffer.concat(chunks));
+    });
+    req.on('error', fail);
   });
 }
 
-async function forwardUpstream(req, res, targetUrl, { upstreamFetcher, extraHeaders = {}, responseHeaders = {}, errorCode }) {
+async function forwardUpstream(
+  req,
+  res,
+  targetUrl,
+  {
+    upstreamFetcher,
+    extraHeaders = {},
+    responseHeaders = {},
+    errorCode,
+    maxRequestBodyBytes = DEFAULT_MAX_REQUEST_BODY_BYTES,
+    upstreamTimeoutMs = DEFAULT_UPSTREAM_TIMEOUT_MS,
+  }
+) {
+  let controller = null;
+  let timer = null;
   try {
     const method = (req.method || 'GET').toUpperCase();
     const headers = {
@@ -117,14 +153,25 @@ async function forwardUpstream(req, res, targetUrl, { upstreamFetcher, extraHead
       headers['Content-Type'] = req.headers['content-type'];
     }
 
+    controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    if (controller && upstreamTimeoutMs > 0) {
+      timer = setTimeout(() => {
+        try {
+          controller.abort();
+        } catch {}
+      }, upstreamTimeoutMs);
+      if (typeof timer.unref === 'function') timer.unref();
+    }
+
     const fetchInit = {
       method,
       headers,
       redirect: 'manual',
+      signal: controller ? controller.signal : undefined,
     };
 
     if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
-      const bodyBuf = await readRequestBody(req);
+      const bodyBuf = await readRequestBody(req, maxRequestBodyBytes);
       if (bodyBuf.length > 0) {
         fetchInit.body = bodyBuf;
       }
@@ -139,22 +186,35 @@ async function forwardUpstream(req, res, targetUrl, { upstreamFetcher, extraHead
     });
     res.end(buf);
   } catch (err) {
+    if (err && err.code === 'PAYLOAD_TOO_LARGE') {
+      res.writeHead(413, { 'Content-Type': 'application/json; charset=utf-8', ...responseHeaders });
+      res.end(JSON.stringify({ error: 'PAYLOAD_TOO_LARGE', message: err.message }));
+      return;
+    }
+    if ((err && err.name === 'AbortError') || (controller && controller.signal && controller.signal.aborted)) {
+      res.writeHead(504, { 'Content-Type': 'application/json; charset=utf-8', ...responseHeaders });
+      res.end(JSON.stringify({ error: 'UPSTREAM_TIMEOUT', message: `Upstream request timed out after ${upstreamTimeoutMs}ms` }));
+      return;
+    }
     res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8', ...responseHeaders });
     res.end(JSON.stringify({ error: errorCode, message: err?.message || 'Upstream unavailable' }));
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
-async function handlePrefixProxy(req, res, route, upstreamFetcher) {
+async function handlePrefixProxy(req, res, route, upstreamFetcher, proxyLimits = {}) {
   const targetPath = req.url.slice(route.prefix.length) || '/';
   const targetUrl = `${route.targetOrigin}${targetPath.startsWith('/') ? targetPath : `/${targetPath}`}`;
   return forwardUpstream(req, res, targetUrl, {
     upstreamFetcher,
     extraHeaders: route.extraHeaders,
     errorCode: route.errorCode,
+    ...proxyLimits,
   });
 }
 
-async function handleGenericProxy(req, res, upstreamFetcher) {
+async function handleGenericProxy(req, res, upstreamFetcher, proxyLimits = {}) {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -180,26 +240,23 @@ async function handleGenericProxy(req, res, upstreamFetcher) {
     return res.end(JSON.stringify({ error: 'Missing target url parameter' }));
   }
 
-  let parsedTarget;
-  try {
-    parsedTarget = new URL(targetUrl);
-  } catch {
-    res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders });
-    return res.end(JSON.stringify({ error: 'Invalid target url' }));
+  const ssrfVerdict = validateOutboundTargetUrl(targetUrl, { allowedHosts: ALLOWED_PROXY_HOSTS });
+  if (!ssrfVerdict.ok) {
+    const statusCode = ssrfVerdict.code === 'INVALID_URL' ? 400 : 403;
+    res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders });
+    return res.end(
+      JSON.stringify({
+        error: statusCode === 400 ? 'Invalid target url' : 'Host not in proxy whitelist (SSRF Guard)',
+        code: ssrfVerdict.code,
+      })
+    );
   }
 
-  if (
-    (parsedTarget.protocol !== 'https:' && parsedTarget.protocol !== 'http:') ||
-    !ALLOWED_PROXY_HOSTS.has(parsedTarget.hostname.toLowerCase())
-  ) {
-    res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders });
-    return res.end(JSON.stringify({ error: 'Host not in proxy whitelist (SSRF Guard)' }));
-  }
-
-  return forwardUpstream(req, res, parsedTarget.toString(), {
+  return forwardUpstream(req, res, ssrfVerdict.normalizedUrl.toString(), {
     upstreamFetcher,
     responseHeaders: corsHeaders,
     errorCode: 'GENERIC_PROXY_ERROR',
+    ...proxyLimits,
   });
 }
 
@@ -289,7 +346,10 @@ function createNasServer({
   customDbPath = undefined,
   enableScheduler = true,
   upstreamFetcher = fetch,
+  maxRequestBodyBytes = DEFAULT_MAX_REQUEST_BODY_BYTES,
+  upstreamTimeoutMs = DEFAULT_UPSTREAM_TIMEOUT_MS,
 } = {}) {
+  const proxyLimits = { maxRequestBodyBytes, upstreamTimeoutMs };
   const marketMiddleware = createMarketApiMiddleware(customDbPath);
   const scheduler = enableScheduler ? startNasAutonomousScheduler({ customDbPath }) : null;
 
@@ -304,13 +364,13 @@ function createNasServer({
     }
 
     if (req.url && (req.url === '/api/proxy' || req.url.startsWith('/api/proxy?'))) {
-      handleGenericProxy(req, res, upstreamFetcher);
+      handleGenericProxy(req, res, upstreamFetcher, proxyLimits);
       return;
     }
 
     const prefixRoute = matchPrefixProxyRoute(req.url);
     if (prefixRoute) {
-      handlePrefixProxy(req, res, prefixRoute, upstreamFetcher);
+      handlePrefixProxy(req, res, prefixRoute, upstreamFetcher, proxyLimits);
       return;
     }
 

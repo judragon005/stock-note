@@ -1,6 +1,7 @@
 import React from 'react';
 import { DecisionCoreData } from '../../../types/aiForceDashboard';
 import { ColorThemeMode, MarketType } from '../../../types/stock';
+import { resolveDirectionalPalette } from '../../../constants/designTokens';
 
 export interface BadgeStyle {
   color: string;
@@ -11,20 +12,29 @@ export interface BadgeStyle {
 /**
  * 依據趨勢文字回傳對應的視覺色彩
  */
-export function getTrendBadgeStyle(trend: string): BadgeStyle {
+export function getTrendBadgeStyle(
+  trend: string,
+  colorTheme?: ColorThemeMode,
+  market?: MarketType
+): BadgeStyle {
+  // 未指定主題與市場時維持既有國際體系預設以保持單參數呼叫向後相容；有指定時依 Directional Palette SSOT 動態解析
+  const palette = resolveDirectionalPalette(
+    colorTheme ?? (market ? undefined : 'international'),
+    market
+  );
   if (trend.includes('強烈多頭') || trend.includes('偏多') || trend.includes('多頭')) {
     const isStrong = trend.includes('強烈');
     return {
-      color: isStrong ? '#10b981' : '#34d399',
-      bg: isStrong ? 'rgba(16, 185, 129, 0.2)' : 'rgba(52, 211, 153, 0.15)',
-      borderColor: isStrong ? 'rgba(16, 185, 129, 0.4)' : 'rgba(52, 211, 153, 0.3)',
+      color: isStrong ? palette.upColor : palette.upLightColor,
+      bg: `rgba(${palette.upRgb}, ${isStrong ? 0.2 : 0.15})`,
+      borderColor: `rgba(${palette.upRgb}, ${isStrong ? 0.4 : 0.3})`,
     };
   }
   if (trend.includes('偏空') || trend.includes('空頭') || trend.includes('弱勢')) {
     return {
-      color: '#ef4444',
-      bg: 'rgba(239, 68, 68, 0.18)',
-      borderColor: 'rgba(239, 68, 68, 0.35)',
+      color: palette.downColor,
+      bg: `rgba(${palette.downRgb}, 0.18)`,
+      borderColor: `rgba(${palette.downRgb}, 0.35)`,
     };
   }
   return {
@@ -188,9 +198,10 @@ export interface AiDecisionCoreCardProps {
 
 export const AiDecisionCoreCard: React.FC<AiDecisionCoreCardProps> = ({
   data,
+  colorTheme,
   market,
 }) => {
-  const trendStyle = getTrendBadgeStyle(data.trendJudgement || '中性偏多');
+  const trendStyle = getTrendBadgeStyle(data.trendJudgement || '中性偏多', colorTheme, market);
   const riskPercent = Number.isFinite(data.dayTradeRiskPercent) ? (data.dayTradeRiskPercent as number) : 0;
   const healthScore = Number.isFinite(data.chipHealthScore) ? (data.chipHealthScore as number) : 50;
   const riskBadge = getRiskBadgeStyle(riskPercent);

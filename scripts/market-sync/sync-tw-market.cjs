@@ -17,6 +17,14 @@ const {
 } = require('./market-sync-core.cjs');
 const { isTradingDay, getHolidayReason } = require('./trading-calendar-engine.cjs');
 
+/**
+ * Spec 0218 Ticket 01 / Spec 0247 T11:
+ * 三大法人雙邊完整性守衛純函式（上市 TWSE 與上櫃 TPEx 籌碼筆數均須 > 500 筆）
+ */
+function isDualMarketChipsComplete(twseChipsCount, tpexChipsCount, minPerExchange = 500) {
+  return Number(twseChipsCount) > minPerExchange && Number(tpexChipsCount) > minPerExchange;
+}
+
 
 async function fetchJson(url, options = {}) {
   const timeoutMs = options.timeoutMs || 15000;
@@ -223,7 +231,7 @@ async function runTwMarketSync(targetDateInput) {
   }
 
   // Spec 0218 Ticket 01 (#434): 三大法人雙邊完整性檢查 (TWSE 與 TPEx 籌碼筆數均須 > 500 筆)
-  if (twseChipsCount <= 500 || tpexChipsCount <= 500) {
+  if (!isDualMarketChipsComplete(twseChipsCount, tpexChipsCount)) {
     console.warn(`[三大法人雙邊完整性守衛] 目標日期 (${dateStr}) 籌碼尚未完全結算或單邊缺失 (上市 TWSE: ${twseChipsCount} 筆, 上櫃 TPEx: ${tpexChipsCount} 筆，門檻需雙邊 > 500)。`);
     console.warn(`[防禦保護] 判定為未結算，安全退出且絕不寫入單邊殘缺籌碼或覆蓋全市場快照。`);
     return;
@@ -475,4 +483,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { runTwMarketSync, getTaipeiDateContext };
+module.exports = { runTwMarketSync, getTaipeiDateContext, isDualMarketChipsComplete };

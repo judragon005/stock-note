@@ -81,14 +81,15 @@ export const MonthlyRevenueCard: React.FC<MonthlyRevenueCardProps> = ({
   const isUs = Boolean(data.isUsMarket || data.currency === 'USD' || market === 'US');
   const history = data.history || [];
 
-  const isTaiwan = colorTheme === 'taiwan';
-  const { upColor: posColor, downColor: negColor } = resolveDirectionalPalette(colorTheme);
-  const posText = isTaiwan ? '#f87171' : '#34d399';
-  const posBg = isTaiwan ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)';
-  const posBorder = isTaiwan ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)';
-  const negText = isTaiwan ? '#34d399' : '#f87171';
-  const negBg = isTaiwan ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)';
-  const negBorder = isTaiwan ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)';
+  const palette = resolveDirectionalPalette(colorTheme);
+  const posColor = palette.upColor;
+  const negColor = palette.downColor;
+  const posText = palette.upLightColor;
+  const posBg = `rgba(${palette.upRgb}, 0.2)`;
+  const posBorder = `rgba(${palette.upRgb}, 0.4)`;
+  const negText = palette.downLightColor;
+  const negBg = `rgba(${palette.downRgb}, 0.2)`;
+  const negBorder = `rgba(${palette.downRgb}, 0.4)`;
 
   const maxRevenue = useMemo(() => {
     if (history.length === 0) return 1;
