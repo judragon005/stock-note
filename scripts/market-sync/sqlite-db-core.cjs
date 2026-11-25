@@ -188,6 +188,7 @@ function initSqliteLakehouseDb(customPath) {
       PRIMARY KEY (symbol, date)
     );
     CREATE INDEX IF NOT EXISTS idx_tdcc_symbol_date ON tw_tdcc_distribution(symbol, date DESC);
+    CREATE INDEX IF NOT EXISTS idx_tdcc_date ON tw_tdcc_distribution(date);
 
     -- 6. 公開資訊觀測站 (MOPS) 全市場月營收與成長表 (Spec 0163)
     CREATE TABLE IF NOT EXISTS tw_monthly_revenue (
@@ -202,6 +203,7 @@ function initSqliteLakehouseDb(customPath) {
       PRIMARY KEY (symbol, year_month)
     );
     CREATE INDEX IF NOT EXISTS idx_revenue_symbol ON tw_monthly_revenue(symbol, year_month DESC);
+    CREATE INDEX IF NOT EXISTS idx_revenue_ym ON tw_monthly_revenue(year_month);
 
     -- 8. 台股董監事持股質押與申報轉讓明細表 (Spec 0167 / Ticket 13)
     CREATE TABLE IF NOT EXISTS tw_insider_pledge_records (
@@ -257,6 +259,7 @@ function initSqliteLakehouseDb(customPath) {
       PRIMARY KEY (symbol, date)
     );
     CREATE INDEX IF NOT EXISTS idx_etf_nav_symbol_date ON etf_daily_nav(symbol, date DESC);
+    CREATE INDEX IF NOT EXISTS idx_etf_nav_date ON etf_daily_nav(date);
 
     -- 10b. 台股 ETF 元數據與實時費用率快取表 (Spec 0241 / Debt 0061 #3)
     CREATE TABLE IF NOT EXISTS etf_meta (
@@ -283,6 +286,20 @@ function initSqliteLakehouseDb(customPath) {
       PRIMARY KEY (symbol, date)
     );
     CREATE INDEX IF NOT EXISTS idx_valuation_symbol_date ON tw_valuation_daily(symbol, date DESC);
+    CREATE INDEX IF NOT EXISTS idx_valuation_date ON tw_valuation_daily(date);
+
+    -- 11b. NAS 排程與協調中樞單一持久化帳本表 (Spec 0248 T02)
+    CREATE TABLE IF NOT EXISTS scheduler_lane_state (
+      lane_key TEXT PRIMARY KEY,           -- 'twDaily' | 'twPhase1' | 'usDaily' | 'macro' | 'weekly'
+      watermark_date TEXT,                 -- 最新已完整收斂之結算日 YYYY-MM-DD
+      last_run_iso_date TEXT,              -- 最後執行之台北日期 YYYY-MM-DD
+      retry_count INTEGER NOT NULL DEFAULT 0,
+      last_attempt_at INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'idle',
+      phase TEXT,
+      last_error TEXT,
+      updated_at INTEGER NOT NULL
+    );
 
     -- 12. 財務三表核心科目表 (Spec 0203 Ticket 08 / Spec 0239 T01)
     CREATE TABLE IF NOT EXISTS financial_statements_quarterly (
@@ -1235,6 +1252,116 @@ function closeSqliteDb() {
   }
 }
 
+/**
+ * 讀取單一排程軌道之持久化帳本狀態 (Spec 0248 T02)
+ */
+function readSchedulerLaneState(laneKey, customDbPath) {
+  if (!laneKey || !isSqliteSupported()) return null;
+  const db = initSqliteLakehouseDb(customDbPath);
+  const row = db
+    .prepare(
+      `SELECT lane_key, watermark_date, last_run_iso_date, retry_count, last_attempt_at, status, phase, last_error, updated_at
+       FROM scheduler_lane_state WHERE lane_key = ?`
+    )
+    .get(String(laneKey));
+  if (!row) return null;
+  return {
+    laneKey: row.lane_key,
+    watermarkDate: row.watermark_date || null,
+    lastRunIsoDate: row.last_run_iso_date || null,
+    retryCount: Number(row.retry_count || 0),
+    lastAttemptAt: Number(row.last_attempt_at || 0),
+    status: row.status || 'idle',
+    phase: row.phase || null,
+    lastError: row.last_error || null,
+    updatedAt: Number(row.updated_at || 0),
+  };
+}
+
+/**
+ * 冪等寫入或部分更新單一排程軌道持久化帳本 (Spec 0248 T02)
+ */
+function upsertSchedulerLaneState(laneKey, patch = {}, customDbPath) {
+  if (!laneKey || !isSqliteSupported()) return null;
+  const db = initSqliteLakehouseDb(customDbPath);
+  const existing = readSchedulerLaneState(laneKey, customDbPath);
+  const has = (k) => Object.prototype.hasOwnProperty.call(patch, k);
+  const next = {
+    laneKey: String(laneKey),
+    watermarkDate: has('watermarkDate') ? patch.watermarkDate ?? null : existing?.watermarkDate ?? null,
+    lastRunIsoDate: has('lastRunIsoDate') ? patch.lastRunIsoDate ?? null : existing?.lastRunIsoDate ?? null,
+    retryCount: has('retryCount') ? Math.max(0, Number(patch.retryCount || 0)) : existing?.retryCount ?? 0,
+    lastAttemptAt: has('lastAttemptAt') ? Math.max(0, Number(patch.lastAttemptAt || 0)) : existing?.lastAttemptAt ?? 0,
+    status: has('status') ? String(patch.status || 'idle') : existing?.status ?? 'idle',
+    phase: has('phase') ? patch.phase ?? null : existing?.phase ?? null,
+    lastError: has('lastError') ? patch.lastError ?? null : existing?.lastError ?? null,
+    updatedAt: has('updatedAt') ? Number(patch.updatedAt || Date.now()) : Date.now(),
+  };
+  db.prepare(
+    `INSERT INTO scheduler_lane_state (
+       lane_key, watermark_date, last_run_iso_date, retry_count, last_attempt_at, status, phase, last_error, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(lane_key) DO UPDATE SET
+       watermark_date = excluded.watermark_date,
+       last_run_iso_date = excluded.last_run_iso_date,
+       retry_count = excluded.retry_count,
+       last_attempt_at = excluded.last_attempt_at,
+       status = excluded.status,
+       phase = excluded.phase,
+       last_error = excluded.last_error,
+       updated_at = excluded.updated_at`
+  ).run(
+    next.laneKey,
+    next.watermarkDate,
+    next.lastRunIsoDate,
+    next.retryCount,
+    next.lastAttemptAt,
+    next.status,
+    next.phase,
+    next.lastError,
+    next.updatedAt
+  );
+  return next;
+}
+
+/**
+ * 列出所有持久化排程軌道狀態 (Spec 0248 T02)
+ */
+function listSchedulerLaneStates(customDbPath) {
+  if (!isSqliteSupported()) return {};
+  const db = initSqliteLakehouseDb(customDbPath);
+  const rows = db
+    .prepare(
+      `SELECT lane_key, watermark_date, last_run_iso_date, retry_count, last_attempt_at, status, phase, last_error, updated_at
+       FROM scheduler_lane_state`
+    )
+    .all();
+  const map = {};
+  for (const row of rows) {
+    map[row.lane_key] = {
+      laneKey: row.lane_key,
+      watermarkDate: row.watermark_date || null,
+      lastRunIsoDate: row.last_run_iso_date || null,
+      retryCount: Number(row.retry_count || 0),
+      lastAttemptAt: Number(row.last_attempt_at || 0),
+      status: row.status || 'idle',
+      phase: row.phase || null,
+      lastError: row.last_error || null,
+      updatedAt: Number(row.updated_at || 0),
+    };
+  }
+  return map;
+}
+
+/**
+ * 清除持久化排程軌道狀態（供單元測試重置使用）
+ */
+function clearSchedulerLaneStates(customDbPath) {
+  if (!isSqliteSupported()) return;
+  const db = initSqliteLakehouseDb(customDbPath);
+  db.exec('DELETE FROM scheduler_lane_state;');
+}
+
 module.exports = {
   DEFAULT_DB_PATH,
   getDbPath,
@@ -1242,6 +1369,10 @@ module.exports = {
   getSqliteDbConnection,
   initSqliteLakehouseDb,
   ensureCorporateActionCalendarTable,
+  readSchedulerLaneState,
+  upsertSchedulerLaneState,
+  listSchedulerLaneStates,
+  clearSchedulerLaneStates,
   getTwMarketBreadthAndSpotSummary,
   getMarketMultiHorizonBreadth,
   getTwRevenueDiffusionAndYoY,

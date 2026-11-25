@@ -13,6 +13,7 @@ const MARKET_HEALTH_THRESHOLDS = Object.freeze({
   DAY_TRADE_COUNT_MIN: 500,
   VALUATION_COUNT_MIN: 1500,
   ETF_NAV_COUNT_MIN: 100,
+  US_DAILY_MIN_SUCCESS_RATIO: 0.8, // Spec 0248 T08：美股每日同步最低有效完成率 (成功+略過 / 總目標)
 });
 
 const HISTORICAL_MARKET_HEALTH_THRESHOLDS = Object.freeze({

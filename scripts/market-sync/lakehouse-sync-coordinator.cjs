@@ -12,6 +12,11 @@
 const {
   initSqliteLakehouseDb,
   getDbPath,
+  isSqliteSupported,
+  readSchedulerLaneState,
+  upsertSchedulerLaneState,
+  listSchedulerLaneStates,
+  clearSchedulerLaneStates,
   clearBreadthAnchorCache,
 } = require('./sqlite-db-core.cjs');
 const {
@@ -38,17 +43,74 @@ const BUDGET_KEYS = ['twDaily', 'twPhase1', 'usDaily', 'macro', 'weekly'];
 
 let activeLock = null;
 
+function createDefaultLaneRecord(laneKey) {
+  return {
+    laneKey,
+    watermarkDate: null,
+    lastRunIsoDate: null,
+    isoDate: null,
+    count: 0,
+    retryCount: 0,
+    lastAttemptAt: 0,
+    status: 'idle',
+    phase: null,
+    lastError: null,
+    updatedAt: null,
+  };
+}
+
 function createEmptyRetryMap() {
   return {
-    twDaily: { isoDate: null, count: 0, lastAttemptAt: 0 },
-    twPhase1: { isoDate: null, count: 0, lastAttemptAt: 0 },
-    usDaily: { isoDate: null, count: 0, lastAttemptAt: 0 },
-    macro: { isoDate: null, count: 0, lastAttemptAt: 0 },
-    weekly: { isoDate: null, count: 0, lastAttemptAt: 0 },
+    twDaily: createDefaultLaneRecord('twDaily'),
+    twPhase1: createDefaultLaneRecord('twPhase1'),
+    usDaily: createDefaultLaneRecord('usDaily'),
+    macro: createDefaultLaneRecord('macro'),
+    weekly: createDefaultLaneRecord('weekly'),
   };
 }
 
 let laneRetryState = createEmptyRetryMap();
+const trackedPersistentDbPaths = new Set();
+
+function resolveBudgetKey(lane) {
+  return BUDGET_KEYS.includes(lane) ? lane : 'twDaily';
+}
+
+function canUsePersistentLedger(customDbPath) {
+  if (!customDbPath || !isSqliteSupported()) return false;
+  trackedPersistentDbPaths.add(customDbPath);
+  return true;
+}
+
+function readLaneEntry(lane, taipeiIsoDate, customDbPath) {
+  const key = resolveBudgetKey(lane);
+  if (canUsePersistentLedger(customDbPath)) {
+    const persisted = readSchedulerLaneState(key, customDbPath);
+    const sameDay = Boolean(persisted && persisted.lastRunIsoDate === taipeiIsoDate);
+    return {
+      laneKey: key,
+      watermarkDate: persisted?.watermarkDate || null,
+      lastRunIsoDate: persisted?.lastRunIsoDate || null,
+      isoDate: taipeiIsoDate,
+      count: sameDay ? Number(persisted.retryCount || 0) : 0,
+      retryCount: sameDay ? Number(persisted.retryCount || 0) : 0,
+      lastAttemptAt: sameDay ? Number(persisted.lastAttemptAt || 0) : 0,
+      status: persisted?.status || 'idle',
+      phase: persisted?.phase || null,
+      lastError: persisted?.lastError || null,
+      updatedAt: persisted?.updatedAt ? new Date(persisted.updatedAt).toISOString() : null,
+    };
+  }
+
+  const entry = laneRetryState[key];
+  if (entry.isoDate !== taipeiIsoDate) {
+    entry.isoDate = taipeiIsoDate;
+    entry.count = 0;
+    entry.retryCount = 0;
+    entry.lastAttemptAt = 0;
+  }
+  return entry;
+}
 
 /**
  * 複用 market-freshness-service 之 Asia/Taipei 時區分量解析
@@ -111,15 +173,8 @@ async function withGlobalSyncLock(owner, fn, { lane = 'all' } = {}) {
   }
 }
 
-function getOrResetLaneBudget(lane, taipeiIsoDate) {
-  const key = BUDGET_KEYS.includes(lane) ? lane : 'twDaily';
-  const entry = laneRetryState[key];
-  if (entry.isoDate !== taipeiIsoDate) {
-    entry.isoDate = taipeiIsoDate;
-    entry.count = 0;
-    entry.lastAttemptAt = 0;
-  }
-  return entry;
+function getOrResetLaneBudget(lane, taipeiIsoDate, customDbPath) {
+  return readLaneEntry(lane, taipeiIsoDate, customDbPath);
 }
 
 function checkLaneRetryBudget(
@@ -130,9 +185,12 @@ function checkLaneRetryBudget(
     maxRetries = MARKET_SETTLEMENT_CUTOFFS.MAX_DAILY_RETRIES_PER_LANE,
     retryCooldownMs = DEFAULT_RETRY_COOLDOWN_MS,
     force = false,
+    customDbPath,
+    dbPath,
   } = {}
 ) {
-  const entry = getOrResetLaneBudget(lane, taipeiIsoDate);
+  const resolvedDbPath = customDbPath || dbPath;
+  const entry = getOrResetLaneBudget(lane, taipeiIsoDate, resolvedDbPath);
   if (!force && entry.count >= maxRetries) {
     return {
       allowed: false,
@@ -160,23 +218,116 @@ function checkLaneRetryBudget(
   };
 }
 
-function recordLaneAttempt(lane, taipeiIsoDate, nowMs = Date.now()) {
-  const entry = getOrResetLaneBudget(lane, taipeiIsoDate);
+function recordLaneAttempt(lane, taipeiIsoDate, nowMs = Date.now(), options = {}) {
+  const key = resolveBudgetKey(lane);
+  const resolvedDbPath = typeof options === 'string' ? options : options?.customDbPath || options?.dbPath;
+  if (canUsePersistentLedger(resolvedDbPath)) {
+    const existing = readSchedulerLaneState(key, resolvedDbPath);
+    const sameDay = Boolean(existing && existing.lastRunIsoDate === taipeiIsoDate);
+    const nextCount = sameDay ? Number(existing.retryCount || 0) + 1 : 1;
+    const saved = upsertSchedulerLaneState(
+      key,
+      {
+        lastRunIsoDate: taipeiIsoDate,
+        retryCount: nextCount,
+        lastAttemptAt: nowMs,
+        status: 'running',
+        updatedAt: nowMs,
+      },
+      resolvedDbPath
+    );
+    return {
+      isoDate: taipeiIsoDate,
+      count: saved.retryCount,
+      retryCount: saved.retryCount,
+      lastAttemptAt: saved.lastAttemptAt,
+      watermarkDate: saved.watermarkDate,
+      status: saved.status,
+    };
+  }
+
+  const entry = getOrResetLaneBudget(key, taipeiIsoDate);
   entry.count += 1;
+  entry.retryCount = entry.count;
+  entry.lastRunIsoDate = taipeiIsoDate;
   entry.lastAttemptAt = nowMs;
+  entry.status = 'running';
+  entry.updatedAt = new Date(nowMs).toISOString();
   return { ...entry };
 }
 
-function getLaneRetrySnapshot(taipeiIsoDate = getTaipeiClock().isoDate) {
+function updateLaneExecutionState(lane, patch = {}, customDbPath) {
+  const key = resolveBudgetKey(lane);
+  const resolvedDbPath = typeof customDbPath === 'string' ? customDbPath : customDbPath?.customDbPath || customDbPath?.dbPath;
+  const nowMs = typeof patch.updatedAt === 'number' ? patch.updatedAt : Date.now();
+  if (canUsePersistentLedger(resolvedDbPath)) {
+    return upsertSchedulerLaneState(key, { ...patch, updatedAt: nowMs }, resolvedDbPath);
+  }
+
+  const entry = laneRetryState[key];
+  const has = (k) => Object.prototype.hasOwnProperty.call(patch, k);
+  if (has('watermarkDate')) entry.watermarkDate = patch.watermarkDate ?? null;
+  if (has('lastRunIsoDate')) {
+    entry.lastRunIsoDate = patch.lastRunIsoDate ?? null;
+    if (patch.lastRunIsoDate) entry.isoDate = patch.lastRunIsoDate;
+  }
+  if (has('retryCount')) {
+    entry.retryCount = Math.max(0, Number(patch.retryCount || 0));
+    entry.count = entry.retryCount;
+  }
+  if (has('lastAttemptAt')) entry.lastAttemptAt = Math.max(0, Number(patch.lastAttemptAt || 0));
+  if (has('status')) entry.status = String(patch.status || 'idle');
+  if (has('phase')) entry.phase = patch.phase ?? null;
+  if (has('lastError')) entry.lastError = patch.lastError ?? null;
+  entry.updatedAt = new Date(nowMs).toISOString();
+  return { ...entry };
+}
+
+function getLaneRetrySnapshot(taipeiIsoDate = getTaipeiClock().isoDate, customDbPath) {
   const snapshot = {};
   for (const lane of LANE_KEYS) {
-    const entry = getOrResetLaneBudget(lane, taipeiIsoDate);
+    const entry = getOrResetLaneBudget(lane, taipeiIsoDate, customDbPath);
     snapshot[lane] = {
       isoDate: entry.isoDate,
       retryCount: entry.count,
       maxRetries: MARKET_SETTLEMENT_CUTOFFS.MAX_DAILY_RETRIES_PER_LANE,
       lastAttemptAt: entry.lastAttemptAt || null,
     };
+  }
+  return snapshot;
+}
+
+function getLaneStateSnapshot(taipeiIsoDate = getTaipeiClock().isoDate, customDbPath) {
+  const maxRetries = MARKET_SETTLEMENT_CUTOFFS.MAX_DAILY_RETRIES_PER_LANE;
+  const persistedMap = canUsePersistentLedger(customDbPath) ? listSchedulerLaneStates(customDbPath) : null;
+  const snapshot = {};
+  for (const lane of LANE_KEYS) {
+    if (persistedMap) {
+      const p = persistedMap[lane];
+      const sameDay = Boolean(p && p.lastRunIsoDate === taipeiIsoDate);
+      snapshot[lane] = {
+        watermarkDate: p?.watermarkDate || null,
+        lastRunIsoDate: p?.lastRunIsoDate || null,
+        status: p?.status || 'idle',
+        phase: p?.phase || null,
+        retryCount: sameDay ? Number(p.retryCount || 0) : 0,
+        maxRetries,
+        lastError: p?.lastError || null,
+        updatedAt: p?.updatedAt ? new Date(p.updatedAt).toISOString() : null,
+      };
+    } else {
+      const entry = getOrResetLaneBudget(lane, taipeiIsoDate);
+      snapshot[lane] = {
+        watermarkDate: entry.watermarkDate || null,
+        lastRunIsoDate: entry.lastRunIsoDate || null,
+        status: entry.status || 'idle',
+        phase: entry.phase || null,
+        retryCount: entry.count,
+        maxRetries,
+        lastError: entry.lastError || null,
+        updatedAt: entry.updatedAt || null,
+      };
+    }
   }
   return snapshot;
 }
@@ -312,6 +463,7 @@ async function reconcileTwLakehouse(options = {}) {
     maxRetries: effectiveMaxRetries,
     retryCooldownMs,
     force,
+    customDbPath: resolvedDbPath,
   });
 
   if (!budget.allowed) {
@@ -332,7 +484,7 @@ async function reconcileTwLakehouse(options = {}) {
     };
   }
 
-  recordLaneAttempt(budgetLane, tp.isoDate, nowMs);
+  recordLaneAttempt(budgetLane, tp.isoDate, nowMs, { customDbPath: resolvedDbPath });
 
   const ingestFn = handlers.fetchAndIngestTwDailyData || fetchAndIngestTwDailyData;
   const navFn = handlers.fetchAndIngestEtfDailyNav || fetchAndIngestEtfDailyNav;
@@ -428,7 +580,7 @@ async function reconcileTwLakehouse(options = {}) {
       aborted,
       budgetExhausted: false,
       inCooldown: false,
-      retryCount: getOrResetLaneBudget('twDaily', tp.isoDate).count,
+      retryCount: getOrResetLaneBudget('twDaily', tp.isoDate, resolvedDbPath).count,
       maxRetries,
       phase: plan.phase,
       anchorDate: plan.anchorDate,
@@ -459,7 +611,7 @@ function getCoordinatorTelemetry(customDbPath, now = new Date()) {
     lock: getCoordinatorLockState(),
     phase: resolveTwPostClosePhase(now),
     taipeiIsoDate: tp.isoDate,
-    retryBudgets: getLaneRetrySnapshot(tp.isoDate),
+    retryBudgets: getLaneRetrySnapshot(tp.isoDate, customDbPath),
     twGapSummary: twPlan
       ? {
           anchorDate: twPlan.anchorDate,
@@ -474,9 +626,24 @@ function getCoordinatorTelemetry(customDbPath, now = new Date()) {
   };
 }
 
-function resetCoordinatorStateForTest() {
+function resetCoordinatorStateForTest(optionsOrDbPath) {
   activeLock = null;
   laneRetryState = createEmptyRetryMap();
+  const clearMemoryOnly =
+    optionsOrDbPath && typeof optionsOrDbPath === 'object' && optionsOrDbPath.clearMemoryOnly === true;
+  if (clearMemoryOnly || !isSqliteSupported()) {
+    return;
+  }
+  const explicitPath = typeof optionsOrDbPath === 'string' ? optionsOrDbPath : optionsOrDbPath?.customDbPath;
+  const targets = explicitPath ? [explicitPath] : Array.from(trackedPersistentDbPaths);
+  for (const dbPath of targets) {
+    try {
+      clearSchedulerLaneStates(dbPath);
+    } catch {}
+  }
+  if (!explicitPath) {
+    trackedPersistentDbPaths.clear();
+  }
 }
 
 module.exports = {
@@ -487,7 +654,9 @@ module.exports = {
   withGlobalSyncLock,
   checkLaneRetryBudget,
   recordLaneAttempt,
+  updateLaneExecutionState,
   getLaneRetrySnapshot,
+  getLaneStateSnapshot,
   resolveTwPostClosePhase,
   computeTwReconciliationPlan,
   reconcileTwLakehouse,

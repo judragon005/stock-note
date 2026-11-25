@@ -386,18 +386,27 @@ async function runUsMarketSync(config = {}) {
     }
   }
 
+  const { MARKET_HEALTH_THRESHOLDS } = require('./sync-thresholds.cjs');
+  const skippedCount = Math.max(0, targetSymbols.length - pendingSymbols.length);
+  const totalTargets = targetSymbols.length;
+  const coverageRatio = totalTargets > 0 ? (successCount + skippedCount) / totalTargets : 0;
+  const meetsCoverage = totalTargets > 0 && coverageRatio >= MARKET_HEALTH_THRESHOLDS.US_DAILY_MIN_SUCCESS_RATIO;
+
   // 5. 最終持久化輸出至本地 JSON 快取
   const outputPayload = {
-    ok: !circuitBroken && !aborted && !(failCount > 0 && successCount === 0),
+    ok: !circuitBroken && !aborted && meetsCoverage,
     circuitBroken,
     aborted,
     date: dateStr,
     updatedAt: Date.now(),
     market: 'US',
     mode,
+    totalTargets,
     totalSymbols: Object.keys(stocksMap).length,
     successCount,
+    skippedCount,
     failCount,
+    coverageRatio: Number(coverageRatio.toFixed(4)),
     failedSymbols,
     durationMs: Date.now() - startTime,
     stocks: stocksMap,

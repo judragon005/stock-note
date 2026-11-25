@@ -228,4 +228,26 @@ describe('Spec 0240 T11: Architectural Fitness Guard (防技術債復發靜態�
     const storageSrc = fs.readFileSync(path.join(ROOT, 'src/utils/storage.ts'), 'utf8');
     expect(storageSrc).not.toContain('autoReconcileSchwabRecords');
   });
+
+  it('不變量 11 (Spec 0248 Wave 1): SQLite 四表必具日期首欄索引與持久化帳本表，排程器禁回流雙重帳本/手動回扣，審計與行情解析必收斂共享日曆與權證規則', () => {
+    const dbCoreSrc = fs.readFileSync(path.join(ROOT, 'scripts/market-sync/sqlite-db-core.cjs'), 'utf8');
+    expect(dbCoreSrc).toContain('idx_tdcc_date');
+    expect(dbCoreSrc).toContain('idx_revenue_ym');
+    expect(dbCoreSrc).toContain('idx_valuation_date');
+    expect(dbCoreSrc).toContain('idx_etf_nav_date');
+    expect(dbCoreSrc).toContain('CREATE TABLE IF NOT EXISTS scheduler_lane_state');
+
+    const schedulerSrc = fs.readFileSync(path.join(ROOT, 'scripts/market-sync/nas-autonomous-scheduler.cjs'), 'utf8');
+    expect(schedulerSrc).not.toContain('retryCount - 1');
+    expect(schedulerSrc).not.toContain('createInitialLaneState');
+    expect(schedulerSrc).toContain('getLaneStateSnapshot');
+
+    const auditSrc = fs.readFileSync(path.join(ROOT, 'scripts/market-sync/audit-verifier.cjs'), 'utf8');
+    expect(auditSrc).not.toContain('HOLIDAYS_TW_2026');
+    expect(auditSrc).not.toContain('HOLIDAYS_US_2026');
+    expect(auditSrc).toContain('trading-calendar-engine.cjs');
+
+    const quotesSrc = fs.readFileSync(path.join(ROOT, 'scripts/market-sync/ingest-tw-quotes.cjs'), 'utf8');
+    expect(quotesSrc).toContain('isTwOtcWarrantSymbol');
+  });
 });

@@ -1,7 +1,7 @@
 # Debt 0065: NAS 排程重試帳本單一化與長函式軌道拆解
 
 - **優先級 (Priority)**: `P3`
-- **狀態 (Status)**: `OPEN`
+- **狀態 (Status)**: `RESOLVED`（已於 v9.30.0 · Spec 0248 / ADR 0248 / Issue `#611` 完整清償）
 - **發現來源**: Spec 0246 雙軸 `/code-review`（終審 PASS，Commit `4f439b7`，Issue `#607`）
 - **標籤**: `Refactor` · `CleanCode` · `DRY` · `MarketSync` · `NAS-Scheduler`
 - **預計觸發時機**: 後續擴充第 5 條市場同步軌道、將排程狀態持久化至 SQLite 或重構 NAS 排程器時一併收斂

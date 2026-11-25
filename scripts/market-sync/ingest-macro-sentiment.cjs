@@ -6,6 +6,7 @@
 
 const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
 const { fetchWithTimeout } = require('./market-sync-core.cjs');
+const { getTimeZoneParts } = require('./market-freshness-service.cjs');
 
 /**
  * 內部安全 JSON 請求輔助器：同時相容自訂 fetchJson(url, timeoutMs) 與標準 fetch Response
@@ -1072,8 +1073,9 @@ async function fetchFullMacroWarRoomPulse(options = {}) {
  */
 async function fetchMacroSentimentDaily(options = {}) {
   const pulse = await fetchFullMacroWarRoomPulse(options);
+  const taipeiDate = getTimeZoneParts(options.now || new Date(), 'Asia/Taipei').ymd;
   return {
-    date: pulse.date || new Date().toISOString().slice(0, 10),
+    date: options.date || taipeiDate,
     riskFreeRate3m: pulse.riskFreeRate3m,
     treasuryYield10y: pulse.treasuryYield10y,
     yieldSpread10y2y: pulse.yieldSpread10y2y,
@@ -1105,6 +1107,42 @@ async function fetchMacroSentimentDaily(options = {}) {
  */
 function ingestMacroSentimentToDb(data, customDbPath) {
   if (!data || !data.date) return false;
+
+  const toFiniteOrNull = (val) => {
+    if (val === null || val === undefined || val === '') return null;
+    const num = Number(val);
+    return Number.isFinite(num) ? num : null;
+  };
+
+  const metrics = [
+    toFiniteOrNull(data.riskFreeRate3m ?? data.risk_free_rate_3m),
+    toFiniteOrNull(data.treasuryYield10y ?? data.treasury_yield_10y),
+    toFiniteOrNull(data.yieldSpread10y2y ?? data.yield_spread_10y_2y),
+    toFiniteOrNull(data.cnnFearGreedScore ?? data.cnn_fear_greed_score),
+    toFiniteOrNull(data.vixClose ?? data.vix_close),
+    toFiniteOrNull(data.twPutCallRatio ?? data.tw_put_call_ratio),
+    toFiniteOrNull(data.twForeignFuturesOi ?? data.tw_foreign_futures_oi),
+    toFiniteOrNull(data.twTrustFuturesOi ?? data.tw_trust_futures_oi),
+    toFiniteOrNull(data.treasuryYield2y ?? data.treasury_yield_2y),
+    toFiniteOrNull(data.fedFundsRate ?? data.fed_funds_rate),
+    toFiniteOrNull(data.usCpiYoY ?? data.cpiYoY ?? data.us_cpi_yoy),
+    toFiniteOrNull(data.creditSpreadOas ?? data.credit_spread_oas),
+    toFiniteOrNull(data.twMarginMaintenanceRatio ?? data.twMarginMaintenance ?? data.tw_margin_maintenance_ratio),
+    toFiniteOrNull(data.igSpreadOas ?? data.ig_spread_oas),
+    toFiniteOrNull(data.cccSpreadOas ?? data.ccc_spread_oas),
+    toFiniteOrNull(data.breakeven10y ?? data.breakeven_10y),
+    toFiniteOrNull(data.initialClaims ?? data.initial_claims),
+    toFiniteOrNull(data.usMfgNewOrdersYoY ?? data.us_mfg_new_orders_yoy),
+    toFiniteOrNull(data.usMfgInventoriesYoY ?? data.us_mfg_inventories_yoy),
+    toFiniteOrNull(data.usOrdersMinusInvSpread ?? data.us_orders_minus_inv_spread),
+    toFiniteOrNull(data.usIndustrialProdYoY ?? data.us_industrial_prod_yoy),
+  ];
+
+  // Spec 0248 T06: 拒絕寫入全 NULL 空列，徹底阻斷全網斷線時毒化當日宏觀水位線
+  if (!metrics.some((v) => v !== null)) {
+    return false;
+  }
+
   const db = initSqliteLakehouseDb(customDbPath);
 
   let hasMfgCols = false;
