@@ -22,6 +22,7 @@ ENV HOST=0.0.0.0
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/src/data/market-holidays.json ./src/data/market-holidays.json
 COPY --from=builder /app/package.json ./package.json
 
 RUN mkdir -p /app/.scratch/market-cache

@@ -1,5 +1,6 @@
 const assert = require('assert');
 const { isTradingDay, getHolidayReason } = require('./trading-calendar-engine.cjs');
+const { isDualMarketChipsComplete } = require('./sync-tw-market.cjs');
 
 console.log('[Test] Ticket 09: 台股每日排程守衛測試 (sync-tw-market-guard)...');
 
@@ -18,13 +19,10 @@ const date3 = '2026-10-07';
 assert.strictEqual(isTradingDay(date3, 'TW'), true);
 assert.strictEqual(getHolidayReason(date3, 'TW'), null);
 
-// 4. Spec 0218 Ticket 01: 三大法人雙邊完整性檢查 (TWSE 與 TPEx 籌碼筆數均須 > 500 筆)
-const checkChipsCompleteness = (twseCount, tpexCount) => {
-  return twseCount > 500 && tpexCount > 500;
-};
-assert.strictEqual(checkChipsCompleteness(0, 980), false);
-assert.strictEqual(checkChipsCompleteness(500, 980), false);
-assert.strictEqual(checkChipsCompleteness(1350, 0), false);
-assert.strictEqual(checkChipsCompleteness(1350, 980), true);
+// 4. Spec 0218 Ticket 01 / Spec 0247 T11: 直接驗證生產模組 isDualMarketChipsComplete（嚴禁假 Lambda 自測）
+assert.strictEqual(isDualMarketChipsComplete(0, 980), false);
+assert.strictEqual(isDualMarketChipsComplete(500, 980), false);
+assert.strictEqual(isDualMarketChipsComplete(1350, 0), false);
+assert.strictEqual(isDualMarketChipsComplete(1350, 980), true);
 
 console.log('✔ Ticket 09 & Ticket 01 守衛邏輯驗證 100% 通過！');

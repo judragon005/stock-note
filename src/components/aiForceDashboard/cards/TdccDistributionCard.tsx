@@ -1,5 +1,5 @@
 import React, { useMemo, useId } from 'react';
-import { OBSIDIAN_CARD_CONTAINER } from '../../../constants/designTokens';
+import { OBSIDIAN_CARD_CONTAINER, resolveDirectionalPalette } from '../../../constants/designTokens';
 import { TdccDistributionData } from '../../../types/aiForceDashboard';
 import { ColorThemeMode, MarketType } from '../../../types/stock';
 import { Users, TrendingUp, AlertTriangle, ShieldCheck } from 'lucide-react';
@@ -143,7 +143,8 @@ interface TdccDistributionCardProps {
 
 export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
   data,
-  colorTheme = 'taiwan',
+  colorTheme,
+  market,
 }) => {
   const uid = useId().replace(/:/g, '');
   const holderBarGradId = `holderBarGrad-${uid}`;
@@ -152,15 +153,15 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
   const chartHeight = 170;
   const padding = { top: 20, bottom: 25 };
 
-  const isTaiwan = colorTheme === 'taiwan';
-  const bullText = isTaiwan ? '#f87171' : '#34d399';
-  const bullBg = isTaiwan ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)';
-  const bullBorder = isTaiwan ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)';
-  const bearText = isTaiwan ? '#34d399' : '#f87171';
-  const bearBg = isTaiwan ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)';
-  const bearBorder = isTaiwan ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)';
-
   const isUsMode = Boolean(data?.isUsMarket || data?.us13fData);
+  const palette = resolveDirectionalPalette(colorTheme, market ?? (isUsMode ? 'US' : 'TW'));
+  const bullText = palette.upLightColor;
+  const bullBg = `rgba(${palette.upRgb}, 0.2)`;
+  const bullBorder = `rgba(${palette.upRgb}, 0.4)`;
+  const bearText = palette.downLightColor;
+  const bearBg = `rgba(${palette.downRgb}, 0.2)`;
+  const bearBorder = `rgba(${palette.downRgb}, 0.4)`;
+
   const isDataEmpty = isUsMode
     ? Boolean(data?.isEmpty || !data?.us13fData)
     : Boolean(data?.isEmpty || !data?.history || data.history.length === 0);

@@ -18,6 +18,7 @@ import { getStockDictionaryStats } from '../engine/stockNameResolver';
 import { SymbolOhlcvStore, SymbolIndicatorsStore } from '../types/indicators';
 import type { QuarterlyFinancialRecord } from '../types/financialForensic';
 import { validateFullDatabaseBackup, safeSanitizeObject } from '../engine/securitySanitizer';
+import { redactApiKeysMap } from '../engine/csvSanitizer';
 
 export const DB_NAME = 'StockTrackerDB';
 export const DB_VERSION = 4;
@@ -583,13 +584,36 @@ export async function migrateFromLocalStorageIfNeeded(): Promise<boolean> {
 /**
  * 導出全量資料庫 JSON (支援 V2 全態封包與雙軌脫敏)
  */
+/**
+ * Spec 0247 T04: 深度清洗時光機快照陣列中每筆 payload.apiKeys 的明文憑證（不突變原物件）
+ */
+export function redactSnapshotsForExport(snapshots: SystemSnapshot[]): SystemSnapshot[] {
+  if (!Array.isArray(snapshots)) return [];
+  return snapshots.map((snap) => {
+    if (!snap || !snap.payload || !snap.payload.apiKeys || typeof snap.payload.apiKeys !== 'object') {
+      return snap;
+    }
+    return {
+      ...snap,
+      payload: {
+        ...snap.payload,
+        apiKeys: redactApiKeysMap(snap.payload.apiKeys) as ApiKeysConfig,
+      },
+    };
+  });
+}
+
+/**
+ * 匯出整個資料庫為全態 V2 JSON 字串 (含 Schema 版本號與實體統計)
+ * @param redactSensitive 是否啟用安全脫敏模式（抹除所有 API Key，包含歷史快照副本）
+ */
 export async function exportFullDatabaseJSON(redactSensitive = false): Promise<string> {
   const trades = await dbGetAll<TradeRecord>('trades');
   const brokerAccounts = await dbGetAll<BrokerAccount>('brokerAccounts');
   const cashTransactions = await dbGetAll<CashTransaction>('cashTransactions');
   const loanRecords = await dbGetAll<LoanRecord>('loanRecords');
   const corporateActions = await dbGetAll<StoredCorporateAction>('corporateActions');
-  const snapshots = await dbGetAll<SystemSnapshot>('snapshots');
+  let snapshots = await dbGetAll<SystemSnapshot>('snapshots');
   let settings = await dbGetAll<{ key: string; value: any }>('settings');
 
   // 若 IndexedDB 尚未寫入但 LocalStorage 有資料，執行平滑備援讀取
@@ -626,27 +650,18 @@ export async function exportFullDatabaseJSON(redactSensitive = false): Promise<s
 
   if (redactSensitive) {
     if (settingsMap.apiKeys && typeof settingsMap.apiKeys === 'object') {
-      const cleaned: Record<string, any> = { ...settingsMap.apiKeys };
-      for (const k of Object.keys(cleaned)) {
-        if (typeof cleaned[k] === 'string') {
-          cleaned[k] = '';
-        }
-      }
-      settingsMap.apiKeys = cleaned;
+      settingsMap.apiKeys = redactApiKeysMap(settingsMap.apiKeys);
     }
 
     settings = settings.map((s) => {
       if (s.key === 'apiKeys' && s.value && typeof s.value === 'object') {
-        const cleanedKeys: Record<string, any> = { ...s.value };
-        for (const k of Object.keys(cleanedKeys)) {
-          if (typeof cleanedKeys[k] === 'string') {
-            cleanedKeys[k] = '';
-          }
-        }
-        return { ...s, value: cleanedKeys };
+        return { ...s, value: redactApiKeysMap(s.value) };
       }
       return s;
     });
+
+    // Spec 0247 T04: 同步深層清洗歷史時光機快照內之明文金鑰副本
+    snapshots = redactSnapshotsForExport(snapshots);
   }
 
   const exportObj: StockTrackerUnifiedArchiveV2 = {

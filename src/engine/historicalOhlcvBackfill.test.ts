@@ -240,29 +240,22 @@ describe('Historical OHLCV & Indicators Backfill Engine (回補引擎)', () => {
       expect(saveIndicatorsSpy).not.toHaveBeenCalled();
     });
 
-    it('Ticket 02: 當台股遭遇 Yahoo 429 限流且 IndexedDB 無資料時，應自動從本地 compact 快取與最新 summary 成功合流並沉澱', async () => {
+    it('Ticket 02 (Spec 0247 T09 升級): 當台股遭遇 Yahoo 429 限流且 IndexedDB 無資料時，應改由 SQLite 數據湖倉 SSOT 兜底並沉澱（絕不觸碰退役靜態 JSON）', async () => {
       vi.spyOn(db, 'getSymbolOhlcv').mockResolvedValue(null);
       // 模擬 Yahoo 429 限流
       vi.spyOn(priceFetcher, 'fetchWithCORSProxy').mockRejectedValue(new Error('HTTP 429 Too Many Requests'));
       const saveOhlcvSpy = vi.spyOn(db, 'saveSymbolOhlcv').mockResolvedValue();
       const saveIndicatorsSpy = vi.spyOn(db, 'saveSymbolIndicators').mockResolvedValue();
 
-      // Mock marketCacheLoader
+      // Mock SQLite Lakehouse SSOT (forceRefresh=true 時 Layer 1 略過，失敗後由 SQLite Lakehouse 兜底)
       const marketCacheLoader = await import('./marketCacheLoader');
-      vi.spyOn(marketCacheLoader, 'loadSymbolCompactHistory').mockResolvedValue([
+      vi.spyOn(marketCacheLoader, 'loadSymbolHistoryFromLakehouse').mockResolvedValue([
         { date: '2026-09-14', open: 10.17, high: 10.17, low: 10.17, close: 10.17, volume: 1000 },
         { date: '2026-09-15', open: 10.04, high: 10.13, low: 10.02, close: 10.03, volume: 44852439 },
+        { date: '2026-09-30', open: 10.83, high: 10.9, low: 10.78, close: 10.79, volume: 144635371 },
       ]);
-      vi.spyOn(marketCacheLoader, 'getLatestSummaryQuote').mockResolvedValue({
-        date: '2026-09-30',
-        open: 10.83,
-        high: 10.9,
-        low: 10.78,
-        close: 10.79,
-        volume: 144635371,
-      });
 
-      const result = await backfillSymbolOhlcvAndIndicators('00403A', 'TW');
+      const result = await backfillSymbolOhlcvAndIndicators('00403A', 'TW', true);
 
       expect(result.candles.length).toBe(3);
       expect(result.candles[0].date).toBe('2026-09-14');

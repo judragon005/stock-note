@@ -15,6 +15,14 @@ const { createMarketApiMiddleware } = require('./market-sync/vite-market-middlew
 const { startNasAutonomousScheduler } = require('./market-sync/nas-autonomous-scheduler.cjs');
 const { getDbPath, checkpointSqliteWal, closeSqliteDb } = require('./market-sync/sqlite-db-core.cjs');
 const { getCoordinatorTelemetry } = require('./market-sync/lakehouse-sync-coordinator.cjs');
+const {
+  validateOutboundTargetUrl,
+  isRedirectResponseStatus,
+} = require('./market-sync/ssrf-origin-guard.cjs');
+
+const DEFAULT_MAX_REQUEST_BODY_BYTES = 1024 * 1024; // 1MB
+const DEFAULT_MAX_RESPONSE_BODY_BYTES = 20 * 1024 * 1024; // 20MB (保護 80MB 容器免於 OOM)
+const DEFAULT_UPSTREAM_TIMEOUT_MS = 15000; // 15s
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -39,17 +47,6 @@ function setSecurityHeaders(res) {
 
 const DEFAULT_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
-
-const ALLOWED_PROXY_HOSTS = new Set([
-  'api.stlouisfed.org',
-  'finnhub.io',
-  'financialmodelingprep.com',
-  'api.finmindtrade.com',
-  'www.alphavantage.co',
-  'api.polygon.io',
-  'api.coingecko.com',
-  'data.sec.gov',
-]);
 
 // 注意：/api/twse-www 必須排在 /api/twse 之前避免前綴誤匹配
 const PREFIX_PROXY_ROUTES = [
@@ -96,16 +93,112 @@ function matchPrefixProxyRoute(reqUrl) {
   return null;
 }
 
-function readRequestBody(req) {
+function safeSendJson(res, statusCode, payload, extraHeaders = {}) {
+  if (res.headersSent || res.writableEnded) return;
+  res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8', ...extraHeaders });
+  res.end(JSON.stringify(payload));
+}
+
+function readRequestBody(req, maxBytes = DEFAULT_MAX_REQUEST_BODY_BYTES, signal = undefined) {
   return new Promise((resolve, reject) => {
+    const contentLengthHeader = Number(req.headers && req.headers['content-length']);
+    if (Number.isFinite(contentLengthHeader) && contentLengthHeader > maxBytes) {
+      const err = new Error(`Request Content-Length (${contentLengthHeader}) exceeds limit (${maxBytes} bytes)`);
+      err.code = 'PAYLOAD_TOO_LARGE';
+      req.pause();
+      reject(err);
+      return;
+    }
+
     const chunks = [];
-    req.on('data', (chunk) => chunks.push(chunk));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', reject);
+    let totalBytes = 0;
+    let settled = false;
+
+    const cleanup = () => {
+      req.removeListener('data', onData);
+      req.removeListener('end', onEnd);
+      req.removeListener('error', onError);
+      req.removeListener('aborted', onAborted);
+      req.removeListener('close', onClose);
+      if (signal && typeof signal.removeEventListener === 'function') {
+        signal.removeEventListener('abort', onSignalAbort);
+      }
+    };
+
+    const fail = (err) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(err);
+    };
+
+    const onSignalAbort = () => {
+      const err = new Error('Request body read timed out');
+      err.name = 'AbortError';
+      req.pause();
+      fail(err);
+    };
+
+    const onData = (chunk) => {
+      if (settled) return;
+      totalBytes += chunk.length;
+      if (totalBytes > maxBytes) {
+        const err = new Error(`Request body exceeds limit (${maxBytes} bytes)`);
+        err.code = 'PAYLOAD_TOO_LARGE';
+        req.pause();
+        fail(err);
+        return;
+      }
+      chunks.push(chunk);
+    };
+
+    const onEnd = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(Buffer.concat(chunks));
+    };
+
+    const onError = (err) => fail(err);
+    const onAborted = () => fail(new Error('Client aborted request'));
+    const onClose = () => {
+      if (!settled && !req.complete) {
+        fail(new Error('Client closed connection before body completed'));
+      }
+    };
+
+    if (signal?.aborted) {
+      onSignalAbort();
+      return;
+    }
+    if (signal && typeof signal.addEventListener === 'function') {
+      signal.addEventListener('abort', onSignalAbort, { once: true });
+    }
+
+    req.on('data', onData);
+    req.on('end', onEnd);
+    req.on('error', onError);
+    req.on('aborted', onAborted);
+    req.on('close', onClose);
   });
 }
 
-async function forwardUpstream(req, res, targetUrl, { upstreamFetcher, extraHeaders = {}, responseHeaders = {}, errorCode }) {
+async function forwardUpstream(
+  req,
+  res,
+  targetUrl,
+  {
+    upstreamFetcher,
+    extraHeaders = {},
+    responseHeaders = {},
+    errorCode,
+    maxRequestBodyBytes = DEFAULT_MAX_REQUEST_BODY_BYTES,
+    maxResponseBodyBytes = DEFAULT_MAX_RESPONSE_BODY_BYTES,
+    upstreamTimeoutMs = DEFAULT_UPSTREAM_TIMEOUT_MS,
+  }
+) {
+  let controller = null;
+  let timer = null;
   try {
     const method = (req.method || 'GET').toUpperCase();
     const headers = {
@@ -117,44 +210,114 @@ async function forwardUpstream(req, res, targetUrl, { upstreamFetcher, extraHead
       headers['Content-Type'] = req.headers['content-type'];
     }
 
+    controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    if (controller && upstreamTimeoutMs > 0) {
+      timer = setTimeout(() => {
+        try {
+          controller.abort();
+        } catch {}
+      }, upstreamTimeoutMs);
+      if (typeof timer.unref === 'function') timer.unref();
+    }
+
     const fetchInit = {
       method,
       headers,
       redirect: 'manual',
+      signal: controller ? controller.signal : undefined,
     };
 
     if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
-      const bodyBuf = await readRequestBody(req);
+      const bodyBuf = await readRequestBody(req, maxRequestBodyBytes, controller ? controller.signal : undefined);
       if (bodyBuf.length > 0) {
         fetchInit.body = bodyBuf;
       }
     }
 
     const upstream = await upstreamFetcher(targetUrl, fetchInit);
+
+    // Spec 0247 T03: 攔截 3xx 重導向防止 Open Redirect SSRF 繞過
+    if (isRedirectResponseStatus(upstream.status)) {
+      safeSendJson(
+        res,
+        403,
+        {
+          error: 'SSRF_REDIRECT_BLOCKED',
+          status: upstream.status,
+          message: '上游回傳 3xx 重導向已遭安全護欄阻斷',
+        },
+        responseHeaders
+      );
+      return;
+    }
+
+    const upstreamContentLength = Number(upstream.headers.get('content-length'));
+    if (Number.isFinite(upstreamContentLength) && upstreamContentLength > maxResponseBodyBytes) {
+      safeSendJson(
+        res,
+        502,
+        {
+          error: 'UPSTREAM_RESPONSE_TOO_LARGE',
+          message: `Upstream Content-Length (${upstreamContentLength}) exceeds limit (${maxResponseBodyBytes} bytes)`,
+        },
+        responseHeaders
+      );
+      return;
+    }
+
     const contentType = upstream.headers.get('content-type') || 'application/json; charset=utf-8';
     const buf = Buffer.from(await upstream.arrayBuffer());
+    if (buf.length > maxResponseBodyBytes) {
+      safeSendJson(
+        res,
+        502,
+        {
+          error: 'UPSTREAM_RESPONSE_TOO_LARGE',
+          message: `Upstream response body (${buf.length}) exceeds limit (${maxResponseBodyBytes} bytes)`,
+        },
+        responseHeaders
+      );
+      return;
+    }
+
+    if (res.headersSent || res.writableEnded) return;
     res.writeHead(upstream.status, {
       'Content-Type': contentType,
       ...responseHeaders,
     });
     res.end(buf);
   } catch (err) {
-    res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8', ...responseHeaders });
-    res.end(JSON.stringify({ error: errorCode, message: err?.message || 'Upstream unavailable' }));
+    if (err && err.code === 'PAYLOAD_TOO_LARGE') {
+      safeSendJson(res, 413, { error: 'PAYLOAD_TOO_LARGE', message: err.message }, responseHeaders);
+      return;
+    }
+    if ((err && err.name === 'AbortError') || (controller && controller.signal && controller.signal.aborted)) {
+      safeSendJson(
+        res,
+        504,
+        { error: 'UPSTREAM_TIMEOUT', message: `Upstream request timed out after ${upstreamTimeoutMs}ms` },
+        responseHeaders
+      );
+      return;
+    }
+    safeSendJson(res, 502, { error: errorCode, message: err?.message || 'Upstream unavailable' }, responseHeaders);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
-async function handlePrefixProxy(req, res, route, upstreamFetcher) {
+async function handlePrefixProxy(req, res, route, upstreamFetcher, proxyLimits = {}) {
   const targetPath = req.url.slice(route.prefix.length) || '/';
   const targetUrl = `${route.targetOrigin}${targetPath.startsWith('/') ? targetPath : `/${targetPath}`}`;
   return forwardUpstream(req, res, targetUrl, {
     upstreamFetcher,
     extraHeaders: route.extraHeaders,
     errorCode: route.errorCode,
+    ...proxyLimits,
   });
 }
 
-async function handleGenericProxy(req, res, upstreamFetcher) {
+async function handleGenericProxy(req, res, upstreamFetcher, proxyLimits = {}) {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -180,26 +343,23 @@ async function handleGenericProxy(req, res, upstreamFetcher) {
     return res.end(JSON.stringify({ error: 'Missing target url parameter' }));
   }
 
-  let parsedTarget;
-  try {
-    parsedTarget = new URL(targetUrl);
-  } catch {
-    res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders });
-    return res.end(JSON.stringify({ error: 'Invalid target url' }));
+  const ssrfVerdict = validateOutboundTargetUrl(targetUrl);
+  if (!ssrfVerdict.ok) {
+    const statusCode = ssrfVerdict.code === 'INVALID_URL' ? 400 : 403;
+    res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders });
+    return res.end(
+      JSON.stringify({
+        error: statusCode === 400 ? 'Invalid target url' : 'Host not in proxy whitelist (SSRF Guard)',
+        code: ssrfVerdict.code,
+      })
+    );
   }
 
-  if (
-    (parsedTarget.protocol !== 'https:' && parsedTarget.protocol !== 'http:') ||
-    !ALLOWED_PROXY_HOSTS.has(parsedTarget.hostname.toLowerCase())
-  ) {
-    res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders });
-    return res.end(JSON.stringify({ error: 'Host not in proxy whitelist (SSRF Guard)' }));
-  }
-
-  return forwardUpstream(req, res, parsedTarget.toString(), {
+  return forwardUpstream(req, res, ssrfVerdict.normalizedUrl.toString(), {
     upstreamFetcher,
     responseHeaders: corsHeaders,
     errorCode: 'GENERIC_PROXY_ERROR',
+    ...proxyLimits,
   });
 }
 
@@ -289,7 +449,11 @@ function createNasServer({
   customDbPath = undefined,
   enableScheduler = true,
   upstreamFetcher = fetch,
+  maxRequestBodyBytes = DEFAULT_MAX_REQUEST_BODY_BYTES,
+  maxResponseBodyBytes = DEFAULT_MAX_RESPONSE_BODY_BYTES,
+  upstreamTimeoutMs = DEFAULT_UPSTREAM_TIMEOUT_MS,
 } = {}) {
+  const proxyLimits = { maxRequestBodyBytes, maxResponseBodyBytes, upstreamTimeoutMs };
   const marketMiddleware = createMarketApiMiddleware(customDbPath);
   const scheduler = enableScheduler ? startNasAutonomousScheduler({ customDbPath }) : null;
 
@@ -298,19 +462,22 @@ function createNasServer({
 
     if (req.url && req.url.startsWith('/api/market/')) {
       return marketMiddleware(req, res, () => {
-        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: 'API_NOT_FOUND' }));
+        safeSendJson(res, 404, { error: 'API_NOT_FOUND' });
       });
     }
 
     if (req.url && (req.url === '/api/proxy' || req.url.startsWith('/api/proxy?'))) {
-      handleGenericProxy(req, res, upstreamFetcher);
+      handleGenericProxy(req, res, upstreamFetcher, proxyLimits).catch((err) => {
+        safeSendJson(res, 502, { error: 'GENERIC_PROXY_ERROR', message: err?.message || 'Proxy error' });
+      });
       return;
     }
 
     const prefixRoute = matchPrefixProxyRoute(req.url);
     if (prefixRoute) {
-      handlePrefixProxy(req, res, prefixRoute, upstreamFetcher);
+      handlePrefixProxy(req, res, prefixRoute, upstreamFetcher, proxyLimits).catch((err) => {
+        safeSendJson(res, 502, { error: prefixRoute.errorCode, message: err?.message || 'Proxy error' });
+      });
       return;
     }
 

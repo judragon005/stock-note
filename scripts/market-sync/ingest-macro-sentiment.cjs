@@ -5,6 +5,7 @@
  */
 
 const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+const { fetchWithTimeout } = require('./market-sync-core.cjs');
 
 /**
  * 內部安全 JSON 請求輔助器：同時相容自訂 fetchJson(url, timeoutMs) 與標準 fetch Response
@@ -21,24 +22,15 @@ async function executeJsonRequest(url, customFetchJson, timeoutMs = 8000) {
       return result;
     }
 
-    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timer = setTimeout(() => {
-      if (controller) controller.abort();
-    }, timeoutMs);
-
-    try {
-      const res = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          Accept: 'application/json, text/plain, */*',
-        },
-        signal: controller ? controller.signal : undefined,
-      });
-      if (!res.ok) return null;
-      return await res.json();
-    } finally {
-      clearTimeout(timer);
-    }
+    const res = await fetchWithTimeout(url, {
+      timeoutMs,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        Accept: 'application/json, text/plain, */*',
+      },
+    });
+    if (!res.ok) return null;
+    return await res.json();
   } catch {
     return null;
   }
@@ -60,24 +52,15 @@ async function executeTextRequest(url, customFetch, timeoutMs = 8000) {
       return String(result);
     }
 
-    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timer = setTimeout(() => {
-      if (controller) controller.abort();
-    }, timeoutMs);
-
-    try {
-      const res = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          Accept: 'text/csv, text/plain, */*',
-        },
-        signal: controller ? controller.signal : undefined,
-      });
-      if (!res.ok) return null;
-      return await res.text();
-    } finally {
-      clearTimeout(timer);
-    }
+    const res = await fetchWithTimeout(url, {
+      timeoutMs,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        Accept: 'text/csv, text/plain, */*',
+      },
+    });
+    if (!res.ok) return null;
+    return await res.text();
   } catch {
     return null;
   }
@@ -467,27 +450,19 @@ async function fetchTaifexCsvText(url, options = {}, keywords = ['期貨', '外�
     return { rawObject: raw };
   }
 
-  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timer = setTimeout(() => {
-    if (controller) controller.abort();
-  }, timeoutMs);
-  try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      signal: controller ? controller.signal : undefined,
-    });
-    if (!res || !res.ok) return null;
-    if (typeof res.arrayBuffer === 'function') {
-      const buf = await res.arrayBuffer();
-      return decodeTaifexText(buf, keywords);
-    }
-    if (typeof res.text === 'function') {
-      return await res.text();
-    }
-    return null;
-  } finally {
-    clearTimeout(timer);
+  const res = await fetchWithTimeout(url, {
+    timeoutMs,
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+  });
+  if (!res || !res.ok) return null;
+  if (typeof res.arrayBuffer === 'function') {
+    const buf = await res.arrayBuffer();
+    return decodeTaifexText(buf, keywords);
   }
+  if (typeof res.text === 'function') {
+    return await res.text();
+  }
+  return null;
 }
 
 /**
@@ -1470,7 +1445,7 @@ function ingestEtfDailyNavToDb(records, customDbPath) {
 /**
  * 聯網抓取並入庫全市場 ETF 淨值與折溢價 (Spec 0203 Ticket 05 / Spec 0246 Ticket 02)
  */
-async function fetchAndIngestEtfDailyNav(customDbPath, targetDateStr, fetcher = fetch) {
+async function fetchAndIngestEtfDailyNav(customDbPath, targetDateStr, fetcher = fetch, options = {}) {
   try {
     let resolvedDateStr = targetDateStr;
     if (!resolvedDateStr) {
@@ -1478,7 +1453,10 @@ async function fetchAndIngestEtfDailyNav(customDbPath, targetDateStr, fetcher = 
       resolvedDateStr = getMarketAnchorDate('TW');
     }
     const url = 'https://mis.twse.com.tw/stock/data/all_etf.txt';
-    const res = await fetcher(url, {
+    const res = await fetchWithTimeout(url, {
+      fetcher,
+      timeoutMs: options.timeoutMs ?? 15000,
+      signal: options.signal,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         Accept: 'application/json, text/plain, */*',

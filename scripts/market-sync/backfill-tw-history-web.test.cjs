@@ -11,8 +11,32 @@ const {
   parseTpexDailyQuotesWithTransactions,
 } = require('./backfill-tw-history-web.cjs');
 
-const d = typeof describe !== 'undefined' ? describe : (name, fn) => fn();
-const t = typeof it !== 'undefined' ? it : typeof test !== 'undefined' ? test : (name, fn) => fn();
+const isTestRunner = typeof describe !== 'undefined';
+const standaloneQueue = [];
+const d = isTestRunner
+  ? describe
+  : (name, fn) => {
+      console.log(`\n--- ${name} ---`);
+      fn();
+      (async () => {
+        for (const item of standaloneQueue) {
+          try {
+            await item.fn();
+            console.log(`  ✔ ${item.name}`);
+          } catch (err) {
+            console.error(`  ✖ ${item.name}:`, err?.message || err);
+            process.exit(1);
+          }
+        }
+      })();
+    };
+const t = isTestRunner
+  ? typeof it !== 'undefined'
+    ? it
+    : test
+  : (name, fn) => {
+      standaloneQueue.push({ name, fn });
+    };
 const exp = typeof expect !== 'undefined' ? expect : (val) => ({
   toBe: (expected) => {
     const assert = require('assert');

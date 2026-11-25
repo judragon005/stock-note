@@ -15,6 +15,10 @@ const {
   isSqliteSupported,
 } = require('./sqlite-db-core.cjs');
 const { buildSymbolAliases } = require('./market-sync-core.cjs');
+const {
+  validateOutboundTargetUrl,
+  isRedirectResponseStatus,
+} = require('./ssrf-origin-guard.cjs');
 const { searchSymbolsMeta } = require('./seed-symbols-universe.cjs');
 const { getMarketAnchorDate, checkMarketFreshness } = require('./market-freshness-service.cjs');
 const { MARKET_SETTLEMENT_CUTOFFS } = require('./sync-thresholds.cjs');
@@ -656,6 +660,19 @@ function createMarketApiMiddleware(customDbPath) {
             );
           }
 
+          // Spec 0247 T02: 統一套用 SSRF 來源安全守衛（HTTPS-only + 金融白名單 + 禁私網）
+          const ssrfVerdict = validateOutboundTargetUrl(targetUrl);
+          if (!ssrfVerdict.ok) {
+            res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(
+              JSON.stringify({
+                error: 'SSRF_GUARD_BLOCKED',
+                code: ssrfVerdict.code,
+                message: ssrfVerdict.message,
+              })
+            );
+          }
+
           const method = (body.method || 'GET').toUpperCase();
           const incomingHeaders = body.headers || {};
           const headers = {
@@ -668,20 +685,35 @@ function createMarketApiMiddleware(customDbPath) {
           const timeout = setTimeout(() => {
             if (controller) controller.abort();
           }, 10000);
+          if (typeof timeout.unref === 'function') timeout.unref();
 
           try {
             const fetchOpts = {
               method,
               headers,
+              redirect: 'manual',
               signal: controller ? controller.signal : undefined,
             };
             if (body.payload && method !== 'GET') {
               fetchOpts.body = typeof body.payload === 'string' ? body.payload : JSON.stringify(body.payload);
             }
 
-            const response = await fetch(targetUrl, fetchOpts);
-            clearTimeout(timeout);
+            const response = await fetch(ssrfVerdict.normalizedUrl.toString(), fetchOpts);
             const latencyMs = Date.now() - start;
+
+            if (isRedirectResponseStatus(response.status)) {
+              res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+              return res.end(
+                JSON.stringify({
+                  ok: false,
+                  error: 'SSRF_REDIRECT_BLOCKED',
+                  httpStatus: response.status,
+                  message: '測活目標回傳 3xx 重導向已遭 SSRF 護欄阻斷',
+                  latencyMs,
+                })
+              );
+            }
+
             const text = await response.text();
 
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -695,7 +727,6 @@ function createMarketApiMiddleware(customDbPath) {
               })
             );
           } catch (fetchErr) {
-            clearTimeout(timeout);
             const latencyMs = Date.now() - start;
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
             return res.end(
@@ -707,6 +738,8 @@ function createMarketApiMiddleware(customDbPath) {
                 latencyMs,
               })
             );
+          } finally {
+            clearTimeout(timeout);
           }
         })
         .catch((err) => {

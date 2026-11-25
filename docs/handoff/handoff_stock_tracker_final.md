@@ -1,7 +1,13 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-11-25 09:45 (UTC+8)  
+> **交接產生時間**：2026-11-25 15:18 (UTC+8)  
 > **當前最新里程碑**：
+> - **V9.29.0 系統免疫強化 Wave 0 — 統一 SSRF 守衛、鎖內逾時防死鎖、快照深度脫敏與全端 CI 免疫閘門**（ADR 0247, Spec 0247, Issue #609）：
+>   - **Unified SSRF Origin Guard 與 NAS 代理硬護欄 (T01–T03)**：建立零依賴 `ssrf-origin-guard.cjs` 收斂 `POST /api/market/probe-key` 與 `nas-server.cjs` `/api/proxy`（僅 HTTPS/443 埠、9 大官方金融白名單、私網／IPv6／非標準 IPv4／尾點／Cloud Metadata／憑證嵌入阻斷、雙端 3xx `403` 攔截）；`nas-server.cjs` 補齊 1 MB `413`、20 MB `502`、15s `504`、Slowloris 串流清理、`safeSendJson` 與 async `.catch()`。
+>   - **雙軌快照深度脫敏 SSOT 與個人隱私淨化 (T04–T05)**：`csvSanitizer.ts` 抽出單一 `redactApiKeysMap` SSOT 供 `db.ts` 共用，深度清洗 `snapshots[*].payload.apiKeys`（含 `exportFullDatabaseJSON(true/false)` 端到端測試）；`storage.ts` 徹底移除 `autoReconcileSchwabRecords`。
+>   - **Deadlock-Free Lock-Scoped Fetch 與美股取消鏈修復 (T06–T08)**：`market-sync-core.cjs` 實作 Node 22 原生 `AbortSignal.timeout` + `AbortSignal.any` 複合逾時原語 `fetchWithTimeout`，遷移全部 9 條鎖內採集管線達 0 裸抓取；`us-fundamentals-ingestion.cjs` 統一 `fetchImpl`/`fetchFn` 閉合取消鏈。
+>   - **靜態快取退場、7 卡極性收斂與全端 CI 免疫閘門 (T09–T14)**：退役引擎層 `/market-cache/*.json` 回退並清除 21.74 MB 殘檔；雙 Dockerfile 對齊 `market-holidays.json`；7 張方向極性戰情卡片全面收斂至 `resolveDirectionalPalette`；建立 `npm run test:backend`（納管 9 支後端測試並確保 Node CLI 非同步測試順序 `await`），關閉 Vitest `dangerouslyIgnoreUnhandledErrors`，CI 與 Pre-push Guard 合流四道閘門，`architecturalFitnessGuard.test.ts` 升級至 10 條不變量；後續 Wave 1–4 暗債建檔至 [Debt 0066](../debts/0066-sqlite-date-indexes-and-scheduler-watermark-poisoning.md)–[Debt 0069](../debts/0069-isolated-vault-auth-boundary-and-frontend-perf-storage.md)（詳細交接見 [2026-11-25-v9.29.0-spec0247-system-immunity-wave0-handoff.md](2026-11-25-v9.29.0-spec0247-system-immunity-wave0-handoff.md)）。
+>   - **品質狀態**：第二輪雙軸程式碼審查終審 **PASS**，後端測試 **9/9 通過**、前端與整合測試 **2,630/2,630 通過 (100% Passed / 319 個測試套件)**，TypeScript Strict 0 錯誤，生產打包 `npm run build` 100% 綠燈，全量文檔稽核 (`npm run lint:docs`) 100% 通過。
 > - **V9.28.0 外部資料更新中樞收斂（單一缺口調諧）、NAS 分軌水位線自治排程、靜態快取退役與 Card 01 盤中實量縫合**（ADR 0246, Spec 0246, Issue #607）：
 >   - **單一結算時鐘、休市日曆容器化與跨模組契約修復 (T01–T02)**：`sync-thresholds.cjs` 集中 `MARKET_SETTLEMENT_CUTOFFS` 與歷史補抓日 TWSE-only 底線；`Dockerfile` 執行期複製 `src/data/market-holidays.json`（補齊 2026-10-23 薔琵颱風停市、2026-10-26 光復節補假、2026-12-25 行憲紀念日）；修復 `market-freshness-service.cjs` 空表陳舊與歷史門檻、`sync-tw-market.cjs` / `sync-us-market.cjs` / `weekly-lakehouse-sync.cjs` 跨模組契約與權證濾除對齊。
 >   - **單一湖倉調諧中樞與兩階段盤後容錯收斂 (T03–T04)**：新增零依賴 `lakehouse-sync-coordinator.cjs`，提供 token-safe 全域互斥鎖 `withGlobalSyncLock`、近 30 日完全缺失＋半殘日升冪調諧、台股 14:40 Phase 1（獨立節流不耗 Phase 2 配額）／16:30 Phase 2（完整 7 維檢核＋Abort 禁推水位線）與每軌每日 4 次冷卻重試配額。

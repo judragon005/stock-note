@@ -5,6 +5,7 @@
  */
 
 const { getSqliteDbConnection, initSqliteLakehouseDb } = require('./sqlite-db-core.cjs');
+const { fetchWithTimeout } = require('./market-sync-core.cjs');
 
 /**
  * 民國年月日 (如 '1150318', '115/03/18' 或 '115年11月06日') 轉化為 ISO 日期 (YYYY-MM-DD)
@@ -256,14 +257,16 @@ function parseTpexExDailyReport(rawData) {
 /**
  * 依年份抓取 TWSE 上市全市場除權息歷史結果 (TWT49U)
  */
-async function fetchTwseHistoricalDividends(year, fetcher = globalThis.fetch, signal = undefined) {
+async function fetchTwseHistoricalDividends(year, fetcher = globalThis.fetch, signal = undefined, timeoutMs = 20000) {
   const url = `https://www.twse.com.tw/rwd/zh/exRight/TWT49U?startDate=${year}0101&endDate=${year}1231&response=json`;
-  const res = await fetcher(url, {
+  const res = await fetchWithTimeout(url, {
+    fetcher,
+    signal,
+    timeoutMs,
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       Accept: 'application/json',
     },
-    ...(signal ? { signal } : {}),
   });
   if (!res || !res.ok) return [];
   const json = await res.json();
@@ -273,14 +276,16 @@ async function fetchTwseHistoricalDividends(year, fetcher = globalThis.fetch, si
 /**
  * 依年份抓取 TPEx 上櫃全市場除權息歷史結果 (exDailyQ)
  */
-async function fetchTpexHistoricalDividends(year, fetcher = globalThis.fetch, signal = undefined) {
+async function fetchTpexHistoricalDividends(year, fetcher = globalThis.fetch, signal = undefined, timeoutMs = 20000) {
   const url = `https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?startDate=${year}/01/01&endDate=${year}/12/31&response=json`;
-  const res = await fetcher(url, {
+  const res = await fetchWithTimeout(url, {
+    fetcher,
+    signal,
+    timeoutMs,
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       Accept: 'application/json',
     },
-    ...(signal ? { signal } : {}),
   });
   if (!res || !res.ok) return [];
   const json = await res.json();
@@ -297,6 +302,7 @@ async function runHistoricalCorporateActionsBackfill({
   customDbPath,
   fetcher = globalThis.fetch,
   signal = undefined,
+  timeoutMs = 20000,
   delayMs = 250,
 } = {}) {
   const currentYear = new Date().getFullYear();
@@ -311,7 +317,7 @@ async function runHistoricalCorporateActionsBackfill({
     if (signal?.aborted) break;
     const yearRecords = [];
     try {
-      const twse = await fetchTwseHistoricalDividends(y, fetcher, signal);
+      const twse = await fetchTwseHistoricalDividends(y, fetcher, signal, timeoutMs);
       totalTwse += twse.length;
       yearRecords.push(...twse);
     } catch (err) {
@@ -321,7 +327,7 @@ async function runHistoricalCorporateActionsBackfill({
 
     if (signal?.aborted) break;
     try {
-      const tpex = await fetchTpexHistoricalDividends(y, fetcher, signal);
+      const tpex = await fetchTpexHistoricalDividends(y, fetcher, signal, timeoutMs);
       totalTpex += tpex.length;
       yearRecords.push(...tpex);
     } catch (err) {
@@ -343,11 +349,17 @@ async function runHistoricalCorporateActionsBackfill({
 /**
  * 聯網抓取並同步 TWSE 最新除權除息預告表 + 當年度上市櫃實績 (Spec 0242 升級)
  */
-async function runCorporateActionsIngestion(customDbPath, { includeCurrentYearHistory = true } = {}) {
+async function runCorporateActionsIngestion(
+  customDbPath,
+  { includeCurrentYearHistory = true, fetcher = globalThis.fetch, signal = undefined, timeoutMs = 15000 } = {}
+) {
   const url = 'https://www.twse.com.tw/rwd/zh/exRight/TWT48U?response=json';
   let forecastCount = 0;
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
+      fetcher,
+      signal,
+      timeoutMs,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
         Accept: 'application/json, text/javascript, */*; q=0.01',
@@ -371,6 +383,9 @@ async function runCorporateActionsIngestion(customDbPath, { includeCurrentYearHi
       startYear: thisYear,
       endYear: thisYear,
       customDbPath,
+      fetcher,
+      signal,
+      timeoutMs,
       delayMs: 100,
     });
     currentYearCount = res.savedCount;

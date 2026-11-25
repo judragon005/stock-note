@@ -5,7 +5,7 @@
  */
 
 const { ensureCorporateActionCalendarTable } = require('./sqlite-db-core.cjs');
-const { normalizeYahooSymbol } = require('./market-sync-core.cjs');
+const { normalizeYahooSymbol, fetchWithTimeout } = require('./market-sync-core.cjs');
 
 const CRUMB_TTL_MS = 30 * 60 * 1000; // Cookie + Crumb 快取 30 分鐘
 const CIRCUIT_BREAKER_MS = 5 * 60 * 1000; // HTTP 429 熔斷冷卻 5 分鐘
@@ -247,7 +247,7 @@ function extractCookieHeaderFromResponse(res) {
 /**
  * 取得或刷新 Yahoo Finance Cookie + Crumb（含 30 分鐘快取與 429 熔斷偵測）
  */
-async function getOrRefreshYahooCrumb(fetchImpl, now, forceRefresh = false) {
+async function getOrRefreshYahooCrumb(fetchImpl, now, forceRefresh = false, reqOpts = {}) {
   if (
     !forceRefresh &&
     crumbCache.cookie &&
@@ -258,7 +258,10 @@ async function getOrRefreshYahooCrumb(fetchImpl, now, forceRefresh = false) {
   }
 
   // 步驟 1：訪問 fc.yahoo.com 取得有效 Cookie（該端點常回 404 但附帶 Set-Cookie）
-  const cookieRes = await fetchImpl('https://fc.yahoo.com', {
+  const cookieRes = await fetchWithTimeout('https://fc.yahoo.com', {
+    fetcher: fetchImpl,
+    signal: reqOpts.signal,
+    timeoutMs: reqOpts.timeoutMs ?? 15000,
     headers: {
       'User-Agent': DEFAULT_USER_AGENT,
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -277,7 +280,10 @@ async function getOrRefreshYahooCrumb(fetchImpl, now, forceRefresh = false) {
   }
 
   // 步驟 2：攜帶 Cookie 請求 getcrumb
-  const crumbRes = await fetchImpl('https://query1.finance.yahoo.com/v1/test/getcrumb', {
+  const crumbRes = await fetchWithTimeout('https://query1.finance.yahoo.com/v1/test/getcrumb', {
+    fetcher: fetchImpl,
+    signal: reqOpts.signal,
+    timeoutMs: reqOpts.timeoutMs ?? 15000,
     headers: {
       Cookie: cookie,
       'User-Agent': DEFAULT_USER_AGENT,
@@ -318,7 +324,7 @@ async function fetchYahooQuoteSummaryWithCrumb(symbol, options = {}) {
   const yahooSymbol = normalizeYahooSymbol(symbol);
   if (!yahooSymbol) return null;
 
-  const fetchImpl = options.fetchImpl || globalThis.fetch;
+  const fetchImpl = options.fetchImpl || options.fetchFn || globalThis.fetch;
   if (typeof fetchImpl !== 'function') return null;
 
   const now = options.now ?? Date.now();
@@ -326,12 +332,16 @@ async function fetchYahooQuoteSummaryWithCrumb(symbol, options = {}) {
     return null;
   }
 
+  const reqOpts = { signal: options.signal, timeoutMs: options.timeoutMs ?? 15000 };
   const executeSummaryRequest = async (auth) => {
     const url =
       `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(yahooSymbol)}` +
       `?modules=${encodeURIComponent(QUOTE_SUMMARY_MODULES)}&crumb=${encodeURIComponent(auth.crumb)}`;
 
-    return fetchImpl(url, {
+    return fetchWithTimeout(url, {
+      fetcher: fetchImpl,
+      signal: reqOpts.signal,
+      timeoutMs: reqOpts.timeoutMs,
       headers: {
         Cookie: auth.cookie,
         'User-Agent': DEFAULT_USER_AGENT,
@@ -341,7 +351,7 @@ async function fetchYahooQuoteSummaryWithCrumb(symbol, options = {}) {
   };
 
   try {
-    let auth = await getOrRefreshYahooCrumb(fetchImpl, now, Boolean(options.forceRefreshCrumb));
+    let auth = await getOrRefreshYahooCrumb(fetchImpl, now, Boolean(options.forceRefreshCrumb), reqOpts);
     if (!auth) return null;
 
     let res = await executeSummaryRequest(auth);
@@ -355,7 +365,7 @@ async function fetchYahooQuoteSummaryWithCrumb(symbol, options = {}) {
     // 遇 HTTP 401：清空快取刷新 Crumb 並重試 1 次
     if (res.status === 401) {
       crumbCache = { cookie: '', crumb: '', expiresAt: 0 };
-      auth = await getOrRefreshYahooCrumb(fetchImpl, now, true);
+      auth = await getOrRefreshYahooCrumb(fetchImpl, now, true, reqOpts);
       if (!auth) return null;
 
       res = await executeSummaryRequest(auth);
@@ -392,7 +402,7 @@ async function fetchAndIngestUsDividends(db, symbol, options = {}) {
     return { success: false, symbol: cleanSymbol, count: 0, records: [], error: 'INVALID_SYMBOL' };
   }
 
-  const fetchImpl = options.fetchImpl || globalThis.fetch;
+  const fetchImpl = options.fetchImpl || options.fetchFn || globalThis.fetch;
   if (typeof fetchImpl !== 'function') {
     return { success: false, symbol: cleanSymbol, count: 0, records: [], error: 'FETCH_UNAVAILABLE' };
   }
@@ -401,7 +411,10 @@ async function fetchAndIngestUsDividends(db, symbol, options = {}) {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?range=2y&interval=1d&events=div`;
 
   try {
-    const res = await fetchImpl(url, {
+    const res = await fetchWithTimeout(url, {
+      fetcher: fetchImpl,
+      signal: options.signal,
+      timeoutMs: options.timeoutMs ?? 15000,
       headers: {
         'User-Agent': DEFAULT_USER_AGENT,
         Accept: 'application/json',
@@ -601,15 +614,13 @@ async function getOrFetchUsFundamentals(db, symbol, options = {}) {
     return existing ? mapDbRowToFundamentals(existing, { fromCache: true, stale: true }) : null;
   }
 
-  const baseFetch = options.fetchFn || globalThis.fetch;
-  const scopedOptions =
-    options.signal && typeof baseFetch === 'function'
-      ? {
-          ...options,
-          fetchFn: (url, init = {}) =>
-            baseFetch(url, init.signal ? init : { ...init, signal: options.signal }),
-        }
-      : options;
+  // Spec 0247 T08: 統一 fetchImpl / fetchFn 鍵名並透傳 signal 與 timeoutMs，確保 AbortController 真正穿透底層請求
+  const baseFetch = options.fetchImpl || options.fetchFn || globalThis.fetch;
+  const scopedOptions = {
+    ...options,
+    fetchImpl: baseFetch,
+    fetchFn: baseFetch,
+  };
 
   // 過期或不存在：向 Yahoo Finance v10 quoteSummary 抓取
   const rawJson = await fetchYahooQuoteSummaryWithCrumb(cleanSymbol, scopedOptions);

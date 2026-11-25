@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-2620%2F2620%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2630%2F2630%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,20 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 外部資料更新中樞收斂（單一缺口調諧）、NAS 分軌水位線自治排程、靜態快取退役暨 Card 01 盤中實量縫合 (`Spec 0246`) *(V9.28.0 最新發布 / Spec #0246 / ADR #0246 / Issue #607)*
+### 1. 系統免疫強化 Wave 0 — 統一 SSRF 守衛、鎖內逾時防死鎖、快照深度脫敏與全端 CI 免疫閘門 (`Spec 0247`) *(V9.29.0 最新發布 / Spec #0247 / ADR #0247 / Issue #609)*
+
+- **Unified SSRF Origin Guard 與 NAS 代理硬護欄 (Issue #609 / T01–T03)**：
+  - 建立零依賴 `ssrf-origin-guard.cjs`，收斂 `POST /api/market/probe-key` 與 `nas-server.cjs` `/api/proxy` 出站驗證（僅允許 HTTPS 與預設 443 埠、9 大官方金融主機白名單、阻斷私網／IPv6／非標準數值 IPv4／尾點／Cloud Metadata／憑證嵌入，並強制 `redirect: 'manual'` 攔截 3xx 回 `403`）。
+  - `nas-server.cjs` 補齊 1 MB 請求體上限（`413`）、20 MB 回應體防 OOM 上限（`502`）、15 秒上游逾時中斷（`504`）、Slowloris 串流清理、`safeSendJson` 與非同步路由 `.catch()` 防護。
+- **雙軌快照深度脫敏 SSOT 與個人財務隱私淨化 (Issue #609 / T04–T05)**：
+  - 抽出單一 `redactApiKeysMap` SSOT（`csvSanitizer.ts`），使 `exportFullDatabaseJSON(true)` 與 `redactBackupData` 同步深度清洗頂層與每筆歷史時光機快照內的明文金鑰；徹底移除 `storage.ts` 中硬編碼個人嘉信交易明細之 `autoReconcileSchwabRecords`。
+- **Deadlock-Free Lock-Scoped Fetch 與美股取消鏈修復 (Issue #609 / T06–T08)**：
+  - 於 `market-sync-core.cjs` 新增採 Node 22 原生 `AbortSignal.timeout` + `AbortSignal.any` 之 `fetchWithTimeout`（貫穿標頭與回應體全生命週期），遷移全部 9 條全域鎖內採集管線達成 0 裸抓取；統一 `us-fundamentals-ingestion.cjs` `fetchImpl`/`fetchFn` 鍵名使取消訊號端到端穿透。
+- **靜態快取徹底退場、戰情卡片極性收斂與全端 CI 免疫閘門 (Issue #609 / T09–T14)**：
+  - 退役引擎層靜態 `/market-cache/*.json` 回退旁路並清除逾 21.74 MB 過期靜態檔；對齊雙 Dockerfile 休市日曆；收斂 7 張方向極性戰情卡片至 `resolveDirectionalPalette`。
+  - 建立 `npm run test:backend`（自動納管全部 9 支後端同步測試並確保 Node CLI 非同步測試順序 `await`），移除 Vitest `dangerouslyIgnoreUnhandledErrors`，於 CI 與 Pre-push Guard 合流後端測試、正式建置與文檔守門，並將 `architecturalFitnessGuard.test.ts` 升級至 10 條不可繞過不變量；後續 Wave 1–4 暗債集中建檔於 `Debt 0066–0069`。
+
+### 2. 外部資料更新中樞收斂（單一缺口調諧）、NAS 分軌水位線自治排程、靜態快取退役暨 Card 01 盤中實量縫合 (`Spec 0246`) *(V9.28.0 / Spec #0246 / ADR #0246 / Issue #607)*
 
 - **單一湖倉同步調諧中樞與 30 日缺口自癒 (Issue #607 / T01–T04)**：
   - 收斂台美結算時鐘與法定休市日曆為共享 SSOT（`sync-thresholds.cjs`、`Dockerfile` 容器補包 `market-holidays.json`，補齊 2026 實戰休市日），修復空表陳舊盲點、歷史補抓日 TWSE-only 底線與三處跨模組契約（自訂 DB 路徑傳遞、每週 ETF 淨值定錨、美股美東 Checkpoint）及上櫃權證對齊。

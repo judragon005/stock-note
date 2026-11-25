@@ -28,25 +28,12 @@ export interface MarketCacheSummary {
 }
 
 /**
- * 載入本地盤後快取總表 (0 網路延遲，熱載入秒讀)
+ * @deprecated Spec 0246 / Spec 0247 T09: 靜態 JSON 市場快取已全面退役，統一由 SQLite 湖倉 API 供應
  */
 export async function loadMarketCacheSummary(
-  market: MarketType
+  _market: MarketType
 ): Promise<MarketCacheSummary | null> {
-  const fileName = market === 'TW' ? 'tw_market_summary.json' : 'us_market_summary.json';
-  const cacheUrl = `/market-cache/${fileName}?_t=${Date.now()}`;
-
-  try {
-    const res = await fetch(cacheUrl);
-    if (!res.ok) {
-      return null;
-    }
-    const data: MarketCacheSummary = await res.json();
-    return data;
-  } catch (err) {
-    logger.warn(`無法載入本地市場快取 [${market}]:`, err);
-    return null;
-  }
+  return null;
 }
 
 /**
@@ -97,69 +84,29 @@ export interface RawCompactCandle {
   v: number;
 }
 
-let compactHistoryPromise: Promise<Record<string, RawCompactCandle[]> | null> | null = null;
-
 /**
- * 重設緊湊日 K 記憶體快取 (僅供測試或強制重載調用)
+ * 重設緊湊日 K 記憶體快取 (保留簽名供既有測試呼叫，靜態快取已於 Spec 0247 T09 退役)
  */
 export function resetCompactHistoryCache(): void {
-  compactHistoryPromise = null;
+  // no-op: static compact cache retired
 }
 
 /**
- * 按需載入台股全市場緊湊歷史日 K 數列並提取特定標的 (單例請求防重複)
+ * @deprecated Spec 0246 / Spec 0247 T09: 靜態 compact 日 K 快取已全面退役，統一改由 /api/market/history/:symbol 供應
  */
 export async function loadSymbolCompactHistory(
-  symbol: string
+  _symbol: string
 ): Promise<DailyCandle[] | null> {
-  const cleanSym = symbol.replace(/\.(TW|TWO)$/i, '').trim().toUpperCase();
-
-  if (!compactHistoryPromise) {
-    compactHistoryPromise = (async () => {
-      try {
-        const res = await fetch('/market-cache/tw_market_ohlcv_compact.json');
-        if (!res.ok) {
-          logger.warn(`無法讀取 tw_market_ohlcv_compact.json (HTTP ${res.status})`);
-          compactHistoryPromise = null;
-          return null;
-        }
-        const data: Record<string, RawCompactCandle[]> = await res.json();
-        return data;
-      } catch (err) {
-        logger.warn('載入 tw_market_ohlcv_compact.json 失敗:', err);
-        compactHistoryPromise = null;
-        return null;
-      }
-    })();
-  }
-
-  const allCompact = await compactHistoryPromise;
-  if (!allCompact || !allCompact[cleanSym] || allCompact[cleanSym].length === 0) {
-    return null;
-  }
-
-  return allCompact[cleanSym].map((c) => ({
-    date: c.d,
-    open: c.o,
-    high: c.h,
-    low: c.l,
-    close: c.c,
-    volume: c.v,
-  }));
+  return null;
 }
 
 /**
- * 從每日盤後總表快取取得標的當日最新單筆行情 (若存在)
+ * @deprecated Spec 0246 / Spec 0247 T09: 靜態盤後總表快取已全面退役
  */
 export async function getLatestSummaryQuote(
-  symbol: string
+  _symbol: string
 ): Promise<DailyCandle | null> {
-  const cleanSym = symbol.replace(/\.(TW|TWO)$/i, '').trim().toUpperCase();
-  const summary = await loadMarketCacheSummary('TW');
-  if (!summary || !summary.stocks) return null;
-
-  const stock = summary.stocks[cleanSym] || summary.stocks[symbol];
-  return stock?.quote || null;
+  return null;
 }
 
 /**
@@ -238,18 +185,7 @@ export async function loadSymbolHistoryFromLakehouse(
     }
   }
 
-  // 2. 降級策略：台股標的嘗試使用既有 compact 快取
-  if (market === 'TW') {
-    try {
-      const compactCandles = await loadSymbolCompactHistory(cleanSym);
-      if (compactCandles && compactCandles.length > 0) {
-        return compactCandles;
-      }
-    } catch (err) {
-      // 忽略
-    }
-  }
-
+  // Spec 0247 T09: 嚴守 SQLite-Only Sync Telemetry SSOT，SQLite API 離線時誠實回傳 null，絕不回退過期靜態 JSON
   return null;
 }
 
