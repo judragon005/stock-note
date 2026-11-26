@@ -1,4 +1,5 @@
 import React from 'react';
+import { ModalShell } from '../common/ModalShell';
 import { X, Zap, Shield, Compass, TrendingUp, CheckCircle2 } from 'lucide-react';
 import { ZavyComprehensiveAnalysisReport } from '../../types/zavySlowWealth';
 
@@ -13,37 +14,23 @@ export const ZavyTenSecondsModal: React.FC<ZavyTenSecondsModalProps> = ({
   onClose,
   report,
 }) => {
-  if (!isOpen) return null;
-
   const { tenSecondsExecutiveSummary, trackA } = report;
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(6px)',
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px',
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      layout="scroll"
+      maxWidth="640px"
+      padding="0"
+      ariaLabel="Zavy 十秒慢富總覽"
+      contentStyle={{
+        backgroundColor: '#1e293b',
+        border: '1px solid #334155',
+        borderRadius: '16px',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
       }}
-      onClick={onClose}
     >
-      <div
-        style={{
-          backgroundColor: '#1e293b',
-          border: '1px solid #334155',
-          borderRadius: '16px',
-          width: '100%',
-          maxWidth: '640px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-          overflow: 'hidden',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
         {/* 頂部標題 */}
         <div
           style={{
@@ -171,8 +158,7 @@ export const ZavyTenSecondsModal: React.FC<ZavyTenSecondsModalProps> = ({
             確認並回到全景工作區
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };
 

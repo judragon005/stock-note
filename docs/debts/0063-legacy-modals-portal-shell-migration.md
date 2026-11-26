@@ -1,7 +1,7 @@
 # Debt 0063: 全站其餘 23 顆有效既有彈窗漸進遷移至 ModalShell 頂層 Portal 原語
 
 - **優先級 (Priority)**: `P3`
-- **狀態 (Status)**: `OPEN`
+- **狀態 (Status)**: `RESOLVED`（已於 Spec 0250 / ADR 0250 / Issue `#615` Wave 3 完成全站 23 顆有效彈窗收斂、刪除死碼 `ImportModal.tsx` 並升級不變量 12 守門）
 - **發現來源**: Spec 0245 (`/grill-with-docs` 與全站彈窗審計，Issue `#605`)；**Spec 0247 全量法醫複審補齊子目錄與內嵌彈窗盤點（實測共 23 顆有效未遷移彈窗 + 1 顆 Dead Code `ImportModal.tsx`）**
 - **標籤**: `Refactor` · `UI` · `Accessibility` · `ModalShell` · `Portal`
 - **預計觸發時機**: 後續迭代觸及各彈窗功能變更時採「童子軍原則」漸進遷移，或於 UI 無障礙治理專題批次清償

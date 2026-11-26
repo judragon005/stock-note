@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ModalShell } from '../common/ModalShell';
 import type { MacroIndicatorSnapshot } from '../../types/macro';
 
 export interface MacroCalibrationFormState {
@@ -76,8 +77,11 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
     twPmi: '',
   });
 
+  const [isDirty, setIsDirty] = useState(false);
+
   useEffect(() => {
     if (isOpen) {
+      setIsDirty(false);
       setFormData({
         us10y: macroSnapshot.us10y.toString(),
         us2y: macroSnapshot.us2y.toString(),
@@ -106,6 +110,7 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
   if (!isOpen) return null;
 
   const handleChange = (field: keyof MacroCalibrationFormState, value: string) => {
+    setIsDirty(true);
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -194,30 +199,21 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
   };
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        backdropFilter: 'blur(4px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9999,
-        padding: '16px',
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      layout="scroll"
+      dirty={isDirty}
+      maxWidth="600px"
+      padding="0"
+      ariaLabel="宏觀指標快速校準"
+      contentStyle={{
+        background: 'var(--bg-secondary, #1e293b)',
+        borderRadius: '16px',
+        border: '1px solid rgba(148, 163, 184, 0.2)',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
       }}
     >
-      <div
-        style={{
-          background: 'var(--bg-secondary, #1e293b)',
-          borderRadius: '16px',
-          border: '1px solid rgba(148, 163, 184, 0.2)',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
-          width: '100%',
-          maxWidth: '600px',
-          overflow: 'hidden',
-        }}
-      >
         <div
           style={{
             padding: '16px 20px',
@@ -465,7 +461,6 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

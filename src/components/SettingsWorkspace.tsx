@@ -35,6 +35,8 @@ import { StockDictionaryStats } from '../types/stockDictionary';
 import { LocalStorageInspectionStats } from '../types/stock';
 import { MarketScheduleHubSection } from './MarketScheduleHubSection';
 import { UnifiedApiKeyManager } from './UnifiedApiKeyManager';
+import { ModalShell } from './common/ModalShell';
+import { PassphraseModal } from './common/PassphraseModal';
 import {
   Zap,
   Building2,
@@ -916,6 +918,25 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
 
   // 脫敏匯出開關狀態 (預設開啟保護)
   const [redactSensitiveExport, setRedactSensitiveExport] = useState(true);
+  // E2EE 遮罩主密碼彈窗狀態 (Spec 0250 T03：徹底汰換明文 window.prompt，支援解密錯誤原地重試)
+  const [e2eePassphraseDialog, setE2eePassphraseDialog] = useState<
+    | { mode: 'setup'; error?: string | null }
+    | { mode: 'unlock'; encryptedContent: string; error?: string | null }
+    | null
+  >(null);
+
+  const finalizeDatabaseImport = async (jsonContent: string, successMessage: string) => {
+    if (!window.confirm('⚠️ 匯入備份將會覆寫現有全部資料，確定要繼續嗎？')) {
+      return;
+    }
+    await importFullDatabaseJSON(jsonContent);
+    showToast(successMessage);
+    if (onDataRestored) {
+      onDataRestored();
+    } else {
+      window.location.reload();
+    }
+  };
 
   // 匯出全庫 JSON (支援脫敏選項)
   const handleExportFullDB = async () => {
@@ -939,30 +960,48 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
     }
   };
 
-  // 匯出 E2EE 零知識加密備份
-  const handleExportE2EEDB = async () => {
-    try {
-      const passphrase = window.prompt('🔒 請設定 E2EE 備份解密主密碼（請牢記，遺失無法找回）：');
-      if (!passphrase) return;
+  // 匯出 E2EE 零知識加密備份（開啟遮罩密碼原語）
+  const handleExportE2EEDB = () => {
+    setE2eePassphraseDialog({ mode: 'setup' });
+  };
 
-      const confirmPass = window.prompt('🔒 請再次輸入主密碼進行確認：');
-      if (passphrase !== confirmPass) {
-        showToast('兩次輸入的主密碼不一致，已取消加密匯出', true);
-        return;
+  // 執行 E2EE 加密匯出或解密匯入（解密失敗保留彈窗並原地提示重試）
+  const handleSubmitE2eePassphrase = async (passphrase: string) => {
+    const dialog = e2eePassphraseDialog;
+    if (!dialog) return;
+
+    if (dialog.mode === 'setup') {
+      try {
+        const json = await exportFullDatabaseJSON(false);
+        const encrypted = await exportE2EEEncryptedBackup(json, passphrase);
+        const blob = new Blob([encrypted], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `stock-tracker-e2ee-backup-${new Date().toISOString().slice(0, 10)}.e2ee.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setE2eePassphraseDialog(null);
+        showToast('🔒 E2EE 零知識主密碼加密備份檔案已成功導出！');
+      } catch (err) {
+        const msg = `加密匯出失敗: ${err instanceof Error ? err.message : String(err)}`;
+        setE2eePassphraseDialog({ mode: 'setup', error: msg });
+        showToast(msg, true);
       }
+      return;
+    }
 
-      const json = await exportFullDatabaseJSON(false);
-      const encrypted = await exportE2EEEncryptedBackup(json, passphrase);
-      const blob = new Blob([encrypted], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `stock-tracker-e2ee-backup-${new Date().toISOString().slice(0, 10)}.e2ee.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast('🔒 E2EE 零知識主密碼加密備份檔案已成功導出！');
+    try {
+      const finalJson = await decryptE2EEBackup(dialog.encryptedContent, passphrase);
+      setE2eePassphraseDialog(null);
+      await finalizeDatabaseImport(finalJson, '🎉 E2EE 加密備份資料已成功安全匯入！');
     } catch (err) {
-      showToast(`加密匯出失敗: ${err instanceof Error ? err.message : String(err)}`, true);
+      const msg = `解密失敗，請確認主密碼是否正確 (${err instanceof Error ? err.message : String(err)})`;
+      setE2eePassphraseDialog({
+        mode: 'unlock',
+        encryptedContent: dialog.encryptedContent,
+        error: msg,
+      });
     }
   };
 
@@ -977,31 +1016,15 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
     reader.onload = async (ev) => {
       try {
         const content = ev.target?.result as string;
-        let finalJson = content;
 
         if (isE2EE || content.includes('STOCK_TRACKER_E2EE_BACKUP')) {
-          const passphrase = window.prompt('🔒 偵測到 E2EE 零知識加密備份檔案，請輸入主密碼進行解密：');
-          if (!passphrase) {
-            e.target.value = '';
-            return;
-          }
-          finalJson = await decryptE2EEBackup(content, passphrase);
-        }
-
-        if (!window.confirm('⚠️ 匯入備份將會覆寫現有全部資料，確定要繼續嗎？')) {
-          e.target.value = '';
+          setE2eePassphraseDialog({ mode: 'unlock', encryptedContent: content, error: null });
           return;
         }
 
-        await importFullDatabaseJSON(finalJson);
-        alert('🎉 備份資料已成功安全匯入！');
-        if (onDataRestored) {
-          onDataRestored();
-        } else {
-          window.location.reload();
-        }
+        await finalizeDatabaseImport(content, '🎉 備份資料已成功安全匯入！');
       } catch (err) {
-        alert(`匯入失敗: ${err instanceof Error ? err.message : String(err)}`);
+        showToast(`匯入失敗: ${err instanceof Error ? err.message : String(err)}`, true);
       } finally {
         e.target.value = '';
       }
@@ -1912,32 +1935,15 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
         )}
       </div>
 
-      {/* 二次確認還原彈窗 */}
-      {restoreConfirmSnap && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: '16px',
-          }}
-        >
-          <div
-            style={{
-              background: '#0f172a',
-              border: '1px solid var(--border-color)',
-              borderRadius: '16px',
-              padding: '24px',
-              maxWidth: '440px',
-              width: '100%',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-            }}
-          >
+      {/* 二次確認還原彈窗 (Spec 0250 T10: 收斂至 ModalShell) */}
+      <ModalShell
+        isOpen={Boolean(restoreConfirmSnap)}
+        onClose={() => setRestoreConfirmSnap(null)}
+        maxWidth="440px"
+        ariaLabel="確認執行時光機還原"
+      >
+        {restoreConfirmSnap && (
+          <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#f59e0b', marginBottom: '14px' }}>
               <AlertTriangle size={24} />
               <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#fff' }}>確認執行時光機還原？</h4>
@@ -1954,39 +1960,41 @@ const DatabaseAndSnapshotsSection: React.FC<DatabaseAndSnapshotsSectionProps> = 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button
                 type="button"
+                className="btn btn-secondary"
                 onClick={() => setRestoreConfirmSnap(null)}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: '1px solid var(--border-color)',
-                  color: 'var(--text-secondary)',
-                  fontSize: '0.82rem',
-                  cursor: 'pointer',
-                }}
               >
                 取消
               </button>
               <button
                 type="button"
+                className="btn btn-danger"
                 onClick={handleConfirmRestore}
-                style={{
-                  padding: '8px 18px',
-                  borderRadius: '8px',
-                  background: 'linear-gradient(135deg, #ef4444, #dc2626)',
-                  border: 'none',
-                  color: '#fff',
-                  fontWeight: 600,
-                  fontSize: '0.82rem',
-                  cursor: 'pointer',
-                }}
               >
                 確定還原
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </ModalShell>
+
+      {/* E2EE 零知識加密主密碼遮罩輸入彈窗 (Spec 0250 T03) */}
+      <PassphraseModal
+        isOpen={Boolean(e2eePassphraseDialog)}
+        mode={e2eePassphraseDialog?.mode ?? 'unlock'}
+        externalError={e2eePassphraseDialog?.error ?? null}
+        title={
+          e2eePassphraseDialog?.mode === 'setup'
+            ? '設定 E2EE 備份加密主密碼'
+            : '解密 E2EE 零知識加密備份'
+        }
+        description={
+          e2eePassphraseDialog?.mode === 'setup'
+            ? '請牢記此主密碼；零知識加密採本機衍生金鑰，遺失將無法找回。'
+            : '偵測到 E2EE 加密備份檔案，請輸入當初設定之主密碼以解密還原。'
+        }
+        onCancel={() => setE2eePassphraseDialog(null)}
+        onSubmit={handleSubmitE2eePassphrase}
+      />
     </div>
   );
 };

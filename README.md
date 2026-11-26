@@ -3,7 +3,7 @@
 一個專為台股與美股投資人打造的現代化多資產記帳、視覺化資產配置與即時公司行動分析系統。
 
 [![GitHub CI](https://github.com/judragon005/stock-note/actions/workflows/ci.yml/badge.svg)](https://github.com/judragon005/stock-note/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Vitest-2631%2F2631%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
+[![Tests](https://img.shields.io/badge/Vitest-2671%2F2671%20Passed-brightgreen)](https://github.com/judragon005/stock-note)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-blue)](https://github.com/judragon005/stock-note)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -12,7 +12,13 @@
 
 ## ✨ 核心特色與功能 (Key Features)
 
-### 1. 系統免疫強化 Wave 1 — SQLite 高頻表日期索引補齊、NAS 排程持久化單一帳本與三軌水位線防禦 (`Spec 0248`) *(V9.30.0 最新發布 / Spec #0248 / ADR #0248 / Issue #611)*
+### 1. 系統免疫強化 Wave 3 — 視口對話層作業系統 (Viewport Overlay Kernel)、75 處幽靈 Tailwind 根除、E2EE 遮罩密碼原語與全站 23 顆彈窗收斂 (`Spec 0250`) *(V9.32.0 最新發布 / Spec #0250 / ADR #0250 / Issue #615)*
+
+- **Viewport Overlay Kernel (`ModalShell` 強化)**：支援 `scroll`／`flex-fixed` 雙版面、三層視口高度（`1000/1100/1200`）與 `TOOLTIP_Z_INDEX = 950` 分層 SSOT、模組級 `OverlayStack` 頂層 `Escape` 仲裁、`ScrollLockLedger` 非 LIFO 引用計數捲動鎖、原生 Focus Trap＋焦點復原與非阻塞髒表單內聯確認護欄。
+- **E2EE 遮罩密碼原語與死碼移除**：建立 `critical` 層級 `PassphraseModal`（支援 `setup`/`unlock`、`externalError` 原地重試與卸載清零），徹底替換明文 `window.prompt()` 並移除零引用死碼 `ImportModal.tsx`。
+- **幽靈 CSS 歸零、全站彈窗收斂與 CI 免疫棘輪**：根除 75 處未安裝幽靈 Tailwind、全站 23 顆有效彈窗 100% 收斂至 `ModalShell`，並於 `architecturalFitnessGuard.test.ts` 鎖定不變量 12–14，正式清償 `Debt 0063` 與 `Debt 0068`。
+
+### 2. 系統免疫強化 Wave 1 — SQLite 高頻表日期索引補齊、NAS 排程持久化單一帳本與三軌水位線防禦 (`Spec 0248`) *(V9.30.0 / Spec #0248 / ADR #0248 / Issue #611)*
 
 - **SQLite Date-First Index Convergence (Issue #611 / T01)**：
   - 為 `tw_tdcc_distribution`、`tw_monthly_revenue`、`tw_valuation_daily`、`etf_daily_nav` 四張高頻查詢表補齊日期／年月首欄索引（`idx_tdcc_date`、`idx_revenue_ym`、`idx_valuation_date`、`idx_etf_nav_date`），經 `EXPLAIN QUERY PLAN` 鎖定 `/healthz` 與 `checkMarketFreshness` 達零全表 `SCAN`。

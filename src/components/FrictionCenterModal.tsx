@@ -2,6 +2,7 @@ import React from 'react';
 import { FrictionSummary, BrokerAccount } from '../types/stock';
 import { TaxComplianceStatus, TwNhiAlertItem } from '../types/dividend';
 import { X, TrendingDown, Award, AlertCircle, Percent, Coins, Receipt, ShieldAlert, FileText } from 'lucide-react';
+import { ModalShell } from './common/ModalShell';
 
 interface FrictionCenterModalProps {
   isOpen: boolean;
@@ -27,35 +28,20 @@ export const FrictionCenterModal: React.FC<FrictionCenterModalProps> = ({
     : accounts.find((a) => a.id === selectedAccountId);
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px',
-        background: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(8px)',
-        animation: 'fadeIn 0.2s ease-in-out',
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      layout="flex-fixed"
+      maxWidth="780px"
+      ariaLabel="交易摩擦成本與稅務合規中心"
+      contentStyle={{
+        background: 'rgba(15, 23, 42, 0.95)',
+        border: '1px solid rgba(51, 65, 85, 0.8)',
+        borderRadius: '18px',
+        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
+        color: '#ffffff',
       }}
     >
-      <div
-        style={{
-          background: 'rgba(15, 23, 42, 0.95)',
-          border: '1px solid rgba(51, 65, 85, 0.8)',
-          borderRadius: '18px',
-          width: '100%',
-          maxWidth: '780px',
-          maxHeight: '90vh',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
-          overflow: 'hidden',
-          color: '#ffffff',
-        }}
-      >
         {/* 頂部標頭 (Header) */}
         <div
           style={{
@@ -319,7 +305,6 @@ export const FrictionCenterModal: React.FC<FrictionCenterModalProps> = ({
             關閉
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

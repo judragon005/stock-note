@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { TradeRecord, HoldingPosition } from '../types/stock';
 import { AccountingMethod, ACCOUNTING_METHOD_LABELS } from '../types/lot';
 import { processLots, calculateTaxComparison } from '../engine/lotEngine';
 import { Tooltip } from './common/Tooltip';
+import { ModalShell } from './common/ModalShell';
 import { Package, History, Lightbulb, ArrowUpDown, ArrowUp, ArrowDown, X } from 'lucide-react';
 
 interface LotsBreakdownModalProps {
@@ -40,18 +41,6 @@ export const LotsBreakdownModal: React.FC<LotsBreakdownModalProps> = ({
   const [sortField, setSortField] = useState<SortField>('buyDate');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedYear, setSelectedYear] = useState<string>('ALL');
-
-  // 鍵盤 Escape 鍵關閉監聽
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
 
   const symbolTrades = useMemo(() => {
     return trades.filter(
@@ -152,40 +141,20 @@ export const LotsBreakdownModal: React.FC<LotsBreakdownModalProps> = ({
   }, 'HIFO' as AccountingMethod);
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(8px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        padding: '16px',
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      layout="flex-fixed"
+      maxWidth="960px"
+      ariaLabel="持倉批次拆解與稅務沖銷比較"
+      contentStyle={{
+        backgroundColor: 'var(--bg-card, #0f172a)',
+        border: '1px solid var(--border-color, rgba(51, 65, 85, 0.5))',
+        borderRadius: '16px',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)',
+        color: 'var(--text-primary, #f8fafc)',
       }}
     >
-      <div
-        className="glass-card"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '100%',
-          maxWidth: '960px',
-          maxHeight: '90vh',
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: 'var(--bg-card, #0f172a)',
-          border: '1px solid var(--border-color, rgba(51, 65, 85, 0.5))',
-          borderRadius: '16px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)',
-          overflow: 'hidden',
-          color: 'var(--text-primary, #f8fafc)',
-        }}
-      >
         {/* 標頭 Header */}
         <div
           style={{
@@ -920,7 +889,6 @@ export const LotsBreakdownModal: React.FC<LotsBreakdownModalProps> = ({
             關閉
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

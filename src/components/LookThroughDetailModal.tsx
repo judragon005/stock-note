@@ -1,5 +1,6 @@
 import React from 'react';
 import { LookThroughExposure } from '../types/lookThrough';
+import { ModalShell } from './common/ModalShell';
 
 export interface LookThroughDetailModalProps {
   isOpen: boolean;
@@ -12,45 +13,29 @@ export const LookThroughDetailModal: React.FC<LookThroughDetailModalProps> = ({
   onClose,
   exposure,
 }) => {
-  if (!isOpen || !exposure) return null;
+  if (!exposure) return null;
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.65)',
-        backdropFilter: 'blur(8px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 10000,
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="560px"
+      padding="24px"
+      ariaLabel="ETF 穿透式成分股曝險詳情"
+      contentStyle={{
+        width: '90%',
+        maxHeight: '85vh',
+        backgroundColor: 'var(--bg-card, #1e293b)',
+        color: 'var(--text-main, #f8fafc)',
+        borderRadius: '16px',
+        border: exposure.isConcentrationAlert
+          ? '2px solid rgba(245, 158, 11, 0.8)'
+          : '1px solid rgba(255, 255, 255, 0.12)',
+        boxShadow: exposure.isConcentrationAlert
+          ? '0 0 25px rgba(245, 158, 11, 0.3)'
+          : '0 20px 40px rgba(0, 0, 0, 0.4)',
       }}
-      onClick={onClose}
     >
-      <div
-        className="glass-card"
-        style={{
-          width: '90%',
-          maxWidth: '560px',
-          maxHeight: '85vh',
-          overflowY: 'auto',
-          backgroundColor: 'var(--bg-card, #1e293b)',
-          color: 'var(--text-main, #f8fafc)',
-          borderRadius: '16px',
-          border: exposure.isConcentrationAlert
-            ? '2px solid rgba(245, 158, 11, 0.8)'
-            : '1px solid rgba(255, 255, 255, 0.12)',
-          padding: '24px',
-          boxShadow: exposure.isConcentrationAlert
-            ? '0 0 25px rgba(245, 158, 11, 0.3)'
-            : '0 20px 40px rgba(0, 0, 0, 0.4)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
         {/* 頂部 Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
           <div>
@@ -237,7 +222,6 @@ export const LookThroughDetailModal: React.FC<LookThroughDetailModalProps> = ({
             關閉
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

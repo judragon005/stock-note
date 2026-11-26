@@ -113,22 +113,81 @@ export const ApiKeyPoolManager: React.FC = () => {
 
   const filteredKeys = keys.filter((k) => k.provider === selectedProvider);
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    background: 'var(--bg-input)',
+    border: '1px solid var(--border-color)',
+    borderRadius: '8px',
+    padding: '8px 12px',
+    fontSize: '0.78rem',
+    color: 'var(--text-primary)',
+    outline: 'none',
+  };
+
+  const resolveHealthDotColor = (health: KeyHealthStatus): string => {
+    if (health === 'HEALTHY') return '#34d399';
+    if (health === 'COOLING_DOWN') return '#fbbf24';
+    if (health === 'QUOTA_EXHAUSTED') return '#f97316';
+    return '#f43f5e';
+  };
+
   return (
-    <div id="api-key-pool-section" className="bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-800 p-6 shadow-xl mb-8">
+    <div
+      id="api-key-pool-section"
+      className="glass-card"
+      style={{
+        padding: '24px',
+        marginBottom: '32px',
+        borderRadius: '16px',
+      }}
+    >
       {/* 標題與簡介 */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
-            <KeyRound className="w-6 h-6" />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div
+            style={{
+              padding: '10px',
+              borderRadius: '12px',
+              background: 'rgba(99, 102, 241, 0.12)',
+              border: '1px solid rgba(99, 102, 241, 0.25)',
+              color: '#818cf8',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <KeyRound size={24} />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white tracking-wide flex items-center gap-2">
+            <h3
+              style={{
+                margin: 0,
+                fontSize: '1.1rem',
+                fontWeight: 700,
+                color: '#ffffff',
+                letterSpacing: '0.02em',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                flexWrap: 'wrap',
+              }}
+            >
               外部金融 API 金鑰池管理 (API Key Pool)
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-medium">
+              <span
+                style={{
+                  fontSize: '0.72rem',
+                  padding: '2px 10px',
+                  borderRadius: '999px',
+                  background: 'rgba(16, 185, 129, 0.12)',
+                  border: '1px solid rgba(16, 185, 129, 0.25)',
+                  color: '#34d399',
+                  fontWeight: 600,
+                }}
+              >
                 本機加密保護
               </span>
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
               支援註冊多組免費帳號金鑰，自動輪替調度 (Round-Robin) 與 429 限流退避。連線測試設有 30 秒冷卻保護避免消耗外部呼叫配額。
             </p>
           </div>
@@ -136,29 +195,65 @@ export const ApiKeyPoolManager: React.FC = () => {
       </div>
 
       {toastMsg && (
-        <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2 animate-fade-in">
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
+        <div
+          style={{
+            marginBottom: '16px',
+            padding: '12px',
+            borderRadius: '12px',
+            background: 'rgba(16, 185, 129, 0.12)',
+            border: '1px solid rgba(16, 185, 129, 0.25)',
+            color: '#6ee7b7',
+            fontSize: '0.78rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <CheckCircle2 size={16} />
           {toastMsg}
         </div>
       )}
 
       {/* 供應商選擇頁籤 */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mb-6">
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))',
+          gap: '8px',
+          marginBottom: '24px',
+        }}
+      >
         {(Object.keys(PROVIDER_NAMES) as ProviderType[]).map((p) => {
           const count = keys.filter((k) => k.provider === p).length;
+          const isSelected = selectedProvider === p;
           return (
             <button
               key={p}
               type="button"
               onClick={() => setSelectedProvider(p)}
-              className={`p-3 rounded-xl text-left border transition-all text-xs font-medium flex flex-col justify-between ${
-                selectedProvider === p
-                  ? 'bg-indigo-600/20 border-indigo-500/50 text-white shadow-lg shadow-indigo-500/10'
-                  : 'bg-slate-800/40 border-slate-800/80 text-slate-400 hover:bg-slate-800/80 hover:text-slate-300'
-              }`}
+              style={{
+                padding: '12px',
+                borderRadius: '12px',
+                textAlign: 'left',
+                border: isSelected
+                  ? '1px solid rgba(99, 102, 241, 0.55)'
+                  : '1px solid rgba(51, 65, 85, 0.6)',
+                background: isSelected ? 'rgba(79, 70, 229, 0.22)' : 'rgba(30, 41, 59, 0.45)',
+                color: isSelected ? '#ffffff' : 'var(--text-secondary)',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+              }}
             >
-              <div className="truncate font-semibold">{PROVIDER_NAMES[p].label.split(' ')[0]}</div>
-              <div className="text-[10px] text-slate-500 mt-1">{count} 組金鑰</div>
+              <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {PROVIDER_NAMES[p].label.split(' ')[0]}
+              </div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                {count} 組金鑰
+              </div>
             </button>
           );
         })}
@@ -166,62 +261,112 @@ export const ApiKeyPoolManager: React.FC = () => {
 
       {/* 新增金鑰表單 */}
       {selectedProvider !== 'sec' && (
-        <form onSubmit={handleAddKey} className="bg-slate-950/40 rounded-xl border border-slate-800/80 p-4 mb-6">
-          <div className="text-xs font-semibold text-slate-300 mb-3 flex items-center justify-between">
+        <form
+          onSubmit={handleAddKey}
+          style={{
+            background: 'rgba(2, 6, 23, 0.45)',
+            borderRadius: '12px',
+            border: '1px solid rgba(51, 65, 85, 0.6)',
+            padding: '16px',
+            marginBottom: '24px',
+          }}
+        >
+          <div
+            style={{
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              color: '#cbd5e1',
+              marginBottom: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '8px',
+              flexWrap: 'wrap',
+            }}
+          >
             <span>新增 {PROVIDER_NAMES[selectedProvider].label} 金鑰</span>
-            <span className="text-[11px] text-slate-500">{PROVIDER_NAMES[selectedProvider].desc}</span>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              {PROVIDER_NAMES[selectedProvider].desc}
+            </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-            <div className="md:col-span-5">
-              <input
-                type="text"
-                value={newKeyInput}
-                onChange={(e) => setNewKeyInput(e.target.value)}
-                placeholder="貼上 API Token / Key..."
-                className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                required
-              />
-            </div>
-            <div className="md:col-span-3">
-              <input
-                type="text"
-                value={newAliasInput}
-                onChange={(e) => setNewAliasInput(e.target.value)}
-                placeholder="別名 (例: 個人帳號 1)"
-                className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <input
-                type="number"
-                value={customQuotaInput}
-                onChange={(e) => setCustomQuotaInput(e.target.value)}
-                placeholder={`單日上限 (${PROVIDER_NAMES[selectedProvider].defaultQuota})`}
-                className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <button
-                type="submit"
-                className="w-full h-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-sm"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                加入金鑰池
-              </button>
-            </div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(200px, 5fr) minmax(140px, 3fr) minmax(110px, 2fr) auto',
+              gap: '12px',
+              alignItems: 'stretch',
+            }}
+          >
+            <input
+              type="text"
+              value={newKeyInput}
+              onChange={(e) => setNewKeyInput(e.target.value)}
+              placeholder="貼上 API Token / Key..."
+              style={inputStyle}
+              required
+            />
+            <input
+              type="text"
+              value={newAliasInput}
+              onChange={(e) => setNewAliasInput(e.target.value)}
+              placeholder="別名 (例: 個人帳號 1)"
+              style={inputStyle}
+            />
+            <input
+              type="number"
+              value={customQuotaInput}
+              onChange={(e) => setCustomQuotaInput(e.target.value)}
+              placeholder={`單日上限 (${PROVIDER_NAMES[selectedProvider].defaultQuota})`}
+              style={inputStyle}
+            />
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{
+                padding: '8px 14px',
+                fontSize: '0.78rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <Plus size={14} />
+              加入金鑰池
+            </button>
           </div>
         </form>
       )}
 
       {/* 金鑰清單 */}
-      <div className="space-y-2.5">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {selectedProvider === 'sec' ? (
-          <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-emerald-400 text-xs">
+          <div
+            style={{
+              padding: '16px',
+              borderRadius: '12px',
+              background: 'rgba(16, 185, 129, 0.08)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
+              color: '#34d399',
+              fontSize: '0.78rem',
+            }}
+          >
             💡 SEC EDGAR 為美國證券交易委員會官方開放端點，系統已自帶合規 User-Agent 認證，無需設定任何 API Key 即可永久免費享受完整 10-K/10-Q 財報。
           </div>
         ) : filteredKeys.length === 0 ? (
-          <div className="p-6 text-center rounded-xl bg-slate-950/20 border border-dashed border-slate-800 text-slate-500 text-xs">
+          <div
+            style={{
+              padding: '24px',
+              textAlign: 'center',
+              borderRadius: '12px',
+              background: 'rgba(2, 6, 23, 0.25)',
+              border: '1px dashed rgba(51, 65, 85, 0.7)',
+              color: 'var(--text-muted)',
+              fontSize: '0.78rem',
+            }}
+          >
             尚未新增 {PROVIDER_NAMES[selectedProvider].label} 的 API Key。請於上方表單新增以加入輪替池。
           </div>
         ) : (
@@ -229,41 +374,67 @@ export const ApiKeyPoolManager: React.FC = () => {
             const probe = probeResults[item.id];
             const currentHealth = probe?.status || computeKeyHealthStatus(item);
             const probing = isProbing[item.id];
+            const cooldown = cooldownSecs[item.id] || 0;
 
             return (
               <div
                 key={item.id}
-                className="p-3.5 rounded-xl bg-slate-800/40 border border-slate-800 flex items-center justify-between gap-4"
+                style={{
+                  padding: '14px',
+                  borderRadius: '12px',
+                  background: 'rgba(30, 41, 59, 0.45)',
+                  border: '1px solid rgba(51, 65, 85, 0.7)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '16px',
+                }}
               >
-                <div className="flex items-center gap-3">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   {/* 狀態燈號 */}
                   <div
-                    className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                      currentHealth === 'HEALTHY'
-                        ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50'
-                        : currentHealth === 'COOLING_DOWN'
-                        ? 'bg-amber-400 animate-pulse'
-                        : currentHealth === 'QUOTA_EXHAUSTED'
-                        ? 'bg-orange-500'
-                        : 'bg-rose-500'
-                    }`}
+                    style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '999px',
+                      flexShrink: 0,
+                      backgroundColor: resolveHealthDotColor(currentHealth),
+                    }}
                   />
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-medium text-slate-200">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className="mono" style={{ fontSize: '0.78rem', fontWeight: 600, color: '#e2e8f0' }}>
                         {maskApiKey(item.key)}
                       </span>
                       {item.alias && (
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-slate-700/60 text-slate-300 font-sans">
+                        <span
+                          style={{
+                            fontSize: '0.68rem',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            background: 'rgba(51, 65, 85, 0.7)',
+                            color: '#cbd5e1',
+                          }}
+                        >
                           {item.alias}
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-3">
+                    <div
+                      style={{
+                        fontSize: '0.72rem',
+                        color: 'var(--text-muted)',
+                        marginTop: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        flexWrap: 'wrap',
+                      }}
+                    >
                       <span>今日調用: {item.totalRequestsToday} 次</span>
                       <span>上限: {item.dailyQuotaLimit === -1 ? '無限制' : `${item.dailyQuotaLimit} 次`}</span>
                       {probe && (
-                        <span className={currentHealth === 'HEALTHY' ? 'text-emerald-400' : 'text-amber-400'}>
+                        <span style={{ color: currentHealth === 'HEALTHY' ? '#34d399' : '#fbbf24' }}>
                           {probe.message}
                         </span>
                       )}
@@ -271,35 +442,44 @@ export const ApiKeyPoolManager: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {(() => {
-                    const cooldown = cooldownSecs[item.id] || 0;
-                    return (
-                      <button
-                        type="button"
-                        onClick={() => handleProbeKey(item)}
-                        disabled={probing || cooldown > 0}
-                        className={`p-2 rounded-lg text-xs flex items-center gap-1 transition-colors ${
-                          cooldown > 0
-                            ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50'
-                            : 'bg-slate-700/40 hover:bg-slate-700 text-slate-300'
-                        }`}
-                        title={cooldown > 0 ? `防連點保護中，剩餘 ${cooldown} 秒` : '測試連線 (消耗 1 次請求)'}
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${probing ? 'animate-spin' : ''}`} />
-                        <span className="hidden sm:inline">
-                          {probing ? '檢測中' : cooldown > 0 ? `冷卻 (${cooldown}s)` : '測試'}
-                        </span>
-                      </button>
-                    );
-                  })()}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleProbeKey(item)}
+                    disabled={probing || cooldown > 0}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '8px',
+                      fontSize: '0.75rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      cursor: probing || cooldown > 0 ? 'not-allowed' : 'pointer',
+                      background: cooldown > 0 ? 'rgba(30, 41, 59, 0.8)' : 'rgba(51, 65, 85, 0.5)',
+                      color: cooldown > 0 ? 'var(--text-muted)' : '#cbd5e1',
+                      border: '1px solid rgba(71, 85, 105, 0.5)',
+                    }}
+                    title={cooldown > 0 ? `防連點保護中，剩餘 ${cooldown} 秒` : '測試連線 (消耗 1 次請求)'}
+                  >
+                    <RefreshCw size={14} />
+                    <span>{probing ? '檢測中' : cooldown > 0 ? `冷卻 (${cooldown}s)` : '測試'}</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => handleDeleteKey(item.id)}
-                    className="p-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-colors"
+                    style={{
+                      padding: '8px',
+                      borderRadius: '8px',
+                      background: 'rgba(244, 63, 94, 0.12)',
+                      border: '1px solid rgba(244, 63, 94, 0.25)',
+                      color: '#fb7185',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
                     title="移除金鑰"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 size={14} />
                   </button>
                 </div>
               </div>

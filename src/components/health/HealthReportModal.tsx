@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React from 'react';
+import { ModalShell } from '../common/ModalShell';
 import { X, Check } from 'lucide-react';
 import type { HealthCheckCategoryResult } from '../../types/stockHealth';
 
@@ -20,59 +21,25 @@ export const HealthReportModal: React.FC<HealthReportModalProps> = ({
   symbol,
   stockName,
 }) => {
-  // 監聽 ESC 鍵關閉
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    if (isOpen) {
-      window.addEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'hidden';
-    }
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'unset';
-    };
-  }, [isOpen, onClose]);
-
-  if (!isOpen || !result) return null;
+  if (!result) return null;
 
   const displayName = stockName && stockName !== symbol ? `${stockName} (${symbol})` : symbol;
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px',
-        backgroundColor: 'rgba(8, 12, 20, 0.82)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      layout="flex-fixed"
+      maxWidth="680px"
+      ariaLabel={`${displayName} 健檢報告`}
+      contentStyle={{
+        position: 'relative',
+        backgroundColor: 'var(--bg-secondary)',
+        borderRadius: 'var(--radius-xl)',
+        border: '1px solid var(--border-color)',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.75), 0 0 1px 1px rgba(255, 255, 255, 0.08) inset',
       }}
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
     >
-      <div
-        style={{
-          position: 'relative',
-          width: '100%',
-          maxWidth: '680px',
-          backgroundColor: 'var(--bg-secondary)',
-          borderRadius: 'var(--radius-xl)',
-          border: '1px solid var(--border-color)',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.75), 0 0 1px 1px rgba(255, 255, 255, 0.08) inset',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-          maxHeight: '90vh',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
         {/* Header */}
         <div
           style={{
@@ -321,7 +288,6 @@ export const HealthReportModal: React.FC<HealthReportModalProps> = ({
             關閉
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

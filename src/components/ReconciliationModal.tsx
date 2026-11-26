@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { ModalShell } from './common/ModalShell';
 import { HoldingPosition, TradeRecord, BrokerAccount } from '../types/stock';
 import {
   parseBrokerSnapshotText,
@@ -67,39 +68,21 @@ export const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
   };
 
   return (
-    <div
-      className="modal-overlay"
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.65)',
-        backdropFilter: 'blur(8px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9999,
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="860px"
+      padding="28px"
+      ariaLabel="跨券商持倉對帳審計"
+      contentStyle={{
+        width: '90%',
+        backgroundColor: 'var(--bg-card, #1e293b)',
+        color: 'var(--text-main, #f8fafc)',
+        borderRadius: '16px',
+        border: '1px solid rgba(255, 255, 255, 0.12)',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
       }}
-      onClick={onClose}
     >
-      <div
-        className="modal-content glass-card"
-        style={{
-          width: '90%',
-          maxWidth: '860px',
-          maxHeight: '90vh',
-          overflowY: 'auto',
-          backgroundColor: 'var(--bg-card, #1e293b)',
-          color: 'var(--text-main, #f8fafc)',
-          borderRadius: '16px',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          padding: '28px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
         {/* 頂部標題與關閉按鈕 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -383,7 +366,6 @@ export const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
             關閉
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { ModalShell } from '../common/ModalShell';
 import {
   X,
   RefreshCw,
@@ -92,54 +93,23 @@ export const FinancialForensicModal: React.FC<FinancialForensicModalProps> = ({
     }
   }, [isOpen, symbol, loadData]);
 
-  // ESC 鍵關閉
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
-
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px',
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      layout="flex-fixed"
+      maxWidth="1080px"
+      ariaLabel="深度財務法醫透視報表"
+      contentStyle={{
+        position: 'relative',
+        maxHeight: '92vh',
+        backgroundColor: 'var(--bg-card, #0f172a)',
+        border: '1px solid rgba(59, 130, 246, 0.3)',
+        borderRadius: '16px',
+        boxShadow: '0 20px 50px rgba(0, 0, 0, 0.7)',
+        color: 'var(--text-primary, #ffffff)',
       }}
     >
-      <div
-        style={{
-          position: 'relative',
-          width: '100%',
-          maxWidth: '1080px',
-          maxHeight: '92vh',
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: 'var(--bg-card, #0f172a)',
-          border: '1px solid rgba(59, 130, 246, 0.3)',
-          borderRadius: '16px',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.7)',
-          overflow: 'hidden',
-          color: 'var(--text-primary, #ffffff)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
         <style>{`
           @keyframes modalFadeIn {
             from { opacity: 0; transform: translateY(4px); }
@@ -342,7 +312,6 @@ export const FinancialForensicModal: React.FC<FinancialForensicModalProps> = ({
             </div>
           ) : null}
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

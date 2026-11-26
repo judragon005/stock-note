@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { ModalShell } from './common/ModalShell';
 import {
   X,
   Search,
@@ -106,36 +107,21 @@ export const OmniTechnicalInspectorModal: React.FC<OmniTechnicalInspectorModalPr
   const matrix = report?.confluence.actionMatrix;
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(8px)',
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px',
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      layout="flex-fixed"
+      maxWidth="1080px"
+      ariaLabel="全能技術指標與籌碼檢測儀"
+      contentStyle={{
+        maxHeight: '94vh',
+        backgroundColor: 'var(--bg-card, #131b2e)',
+        borderRadius: '16px',
+        border: '1px solid rgba(59, 130, 246, 0.3)',
+        boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6)',
+        color: 'var(--text-primary, #ffffff)',
       }}
-      onClick={onClose}
     >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '1080px',
-          maxHeight: '94vh',
-          backgroundColor: 'var(--bg-card, #131b2e)',
-          borderRadius: '16px',
-          border: '1px solid rgba(59, 130, 246, 0.3)',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          color: 'var(--text-primary, #ffffff)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
         {/* 1. 頂部導覽列 */}
         <div
           style={{
@@ -837,7 +823,6 @@ export const OmniTechnicalInspectorModal: React.FC<OmniTechnicalInspectorModalPr
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

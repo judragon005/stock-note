@@ -175,8 +175,20 @@ _Avoid_: Total Row Count Guess, Blind Redundant Crawling, Hidden ETF Blind Spot
 _Avoid_: Naive Weekend Check, False Holiday Skipping
 
 **Architectural Fitness Guard & Wave 1 SSOT Convergence (架構適應度靜態守門與中樞單一事實來源)** _(新增於 Spec 0240 / Issue #594)_:
-將湖倉 7 維健康度門檻 (`sync-thresholds.cjs`)、`corporate_action_calendar` 建表 DDL (`sqlite-db-core.cjs`)、美股點號／連字號別名正規化 (`market-sync-core.cjs`) 與前端漲跌極性／曜石容器 Token (`designTokens.ts`) 收斂為單一事實來源；按需補齊調度抽離至 `on-demand-backfill-orchestrator.cjs` 並導入原生 `AbortController` 真中斷；主力戰情室雙市場組裝邏輯抽離至 `aiForceMarketAssembly.ts`；並於 `architecturalFitnessGuard.test.ts` 植入 4 項靜態不變量守門測試，防止同類技術債復發。
+將湖倉 7 維健康度門檻 (`sync-thresholds.cjs`)、`corporate_action_calendar` 建表 DDL (`sqlite-db-core.cjs`)、美股點號／連字號別名正規化 (`market-sync-core.cjs`) 與前端漲跌極性／曜石容器 Token (`designTokens.ts`) 收斂為單一事實來源；按需補齊調度抽離至 `on-demand-backfill-orchestrator.cjs` 並導入原生 `AbortController` 真中斷；主力戰情室雙市場組裝邏輯抽離至 `aiForceMarketAssembly.ts`；並於 `architecturalFitnessGuard.test.ts` 植入靜態不變量守門測試，防止同類技術債復發。
 _Avoid_: Duplicate Magic Thresholds, Split DDL, Hardcoded Directional Ternary, Type Escape Cast
+
+**Viewport Overlay Kernel (視口對話層作業系統)** _(新增於 Spec 0250 / ADR 0250 / Issue #615)_:
+以單一零依賴原語 (`ModalShell`) 統管全站所有阻斷式對話框之 `document.body` Portal 傳送、雙版面模式 (`scroll` / `flex-fixed`)、三層視口高度 Token (`base: 1000 < nested: 1100 < critical: 1200`)、原生焦點陷阱與非阻塞髒表單內聯確認護欄。
+_Avoid_: Raw Modal Overlay, Ad-hoc Fixed Backdrop, Unmanaged z-index
+
+**Stack-Top Arbitration & Scroll Lock Ledger (堆疊頂層仲裁與引用計數捲動鎖帳本)** _(新增於 Spec 0250 / ADR 0250)_:
+於對話層核心維護模組級堆疊 `OverlayStack`（確保巢狀彈窗按下 `Escape` 僅關閉最頂層）與 `Set<symbol>` 引用計數鎖 `ScrollLockLedger`（免疫非 LIFO 卸載競態，僅於最後一顆彈窗關閉後還原 `body.style.overflow`）。
+_Avoid_: Escape Broadcast Storm, Naive Overflow Reset
+
+**Modal Overlay vs. Floating Tooltip (阻斷式彈窗與非阻斷浮動提示分層邊界)** _(新增於 Spec 0250 / ADR 0250)_:
+阻斷式對話框（Modal Overlay）納入 `ModalShell` 堆疊與焦點陷阱管理（`z-index >= 1000`）；非阻斷浮動資訊氣泡（Floating Tooltip，如 `TermTooltip`）鎖定於 `--z-tooltip: 950` 層級，不納入彈窗堆疊且不穿透彈窗遮罩。
+_Avoid_: Tooltip-Modal Mixing, Unbounded z-999999
 
 **TPEx Warrant Exclusion Alignment (櫃買權證排除與兩市口徑對齊)** _(新增於 V8.97.0 / Spec 0184)_:
 於 TPEx 1430 收盤行情解析時，過濾排除 6 碼以 7 開頭之櫃買認購/認售權證標的（如 `700001`~`739999`），與上市端 `ALLBUT0999` 標準齊平。單日入庫檔數由 ~8,000 檔收斂至 ~2,400 檔核心標的（股票、主要 ETF 與可轉債），削減 70% 無效記錄。

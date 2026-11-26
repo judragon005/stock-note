@@ -1,7 +1,13 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-11-26 11:08 (UTC+8)  
+> **交接產生時間**：2026-11-26 12:40 (UTC+8)  
 > **當前最新里程碑**：
+> - **V9.32.0 系統免疫強化 Wave 3 — 視口對話層作業系統 (Viewport Overlay Kernel)、75 處幽靈 Tailwind 根除、E2EE 遮罩密碼原語與全站 23 顆彈窗收斂**（ADR 0250, Spec 0250, Issue #615）：
+>   - **Viewport Overlay Kernel (T01–T02)**：`ModalShell.tsx` 升級支援 `layout="scroll" | "flex-fixed"`、三層高度（`1000/1100/1200`）與 `TOOLTIP_Z_INDEX = 950` SSOT、模組級 `OverlayStack` 頂層 `Escape` 仲裁、`ScrollLockLedger` 非 LIFO 引用計數捲動鎖、原生 Focus Trap＋焦點復原、`closeLocked` Ref 穩定化、`dirty` 非阻塞內聯確認橫幅與 `.btn-danger`。
+>   - **E2EE Masked Passphrase & Dead Code Removal (T03)**：建立 `critical` 層級 `PassphraseModal.tsx`（`setup`/`unlock`＋`externalError` 原地重試＋卸載清零），徹底汰換 `SettingsWorkspace.tsx` 3 處明文 `window.prompt()` 並物理移除零引用死碼 `ImportModal.tsx`。
+>   - **75 Ghost Tailwind & 23 Legacy Modals Convergence (T04–T10)**：清零 `BrokerAccountsModal`（43）、`ApiKeyPoolManager`（24）與 `XirrDetailModal`（8）共 75 處幽靈 Tailwind；全站 18 顆獨立彈窗＋5 處內嵌阻斷遮罩 100% 收斂至 `ModalShell`，拔除殘留裸 `Escape` 監聽並對齊 `TermTooltip`/`Tooltip` 層級。
+>   - **CI Fitness Ratchet & Closure (T11–T12)**：`architecturalFitnessGuard.test.ts` 升級至 **14 條不變量**（不變量 12–14），同步更新 `CONTEXT.md` 與 `ADR 0250`，[Debt 0068](../debts/0068-ghost-tailwind-modalshell-hardening-and-e2ee-prompt.md) 與 [Debt 0063](../debts/0063-legacy-modals-portal-shell-migration.md) 正式結案 `RESOLVED`（詳細交接見 [2026-11-26-v9.32.0-spec0250-viewport-overlay-wave3-handoff.md](2026-11-26-v9.32.0-spec0250-viewport-overlay-wave3-handoff.md)）。
+>   - **品質狀態**：第二輪雙軸程式碼審查終審 **PASS**，後端測試 **11/11 通過**、前端與整合測試 **2,671/2,671 通過 (100% Passed / 323 個測試套件)**，TypeScript Strict 0 錯誤，生產打包 `npm run build` 100% 綠燈，全量文檔稽核 (`npm run lint:docs`) 100% 通過。
 > - **V9.31.0 系統免疫強化 Wave 2 — 量化指標與稅費 SSOT 收斂、共鳴引擎四態檢傷解耦與 TTM 動態現金流學習**（ADR 0249, Spec 0249, Issue #613）：
 >   - **Oscillator & Friction SSOT (T01–T04)**：確立 `klineOscillatorEngine.ts`（含 `createWilderRsiStepper` DRY）為全站 KDJ/MACD/Wilder RSI 唯一計算源，Card 01 主圖於日/週/月 K 全時框一致採用（與 Card 01B 偏差 $\max|\Delta| = 0.00$）並清除 3 處手算 `3*K-2*D`；修復 `omniIndicatorEngine.calculateRSI` 全平盤誤回 `100` 改為 `50`；`rebalancingEngine.ts` 交易摩擦收斂至 `calculator.ts` 稅費原語（台股 20 元低消、股票 ETF `0.1%`、債券 ETF `0%`）。
 >   - **Four-State Resonance Triage & 8 Defects Closure (T05–T06)**：`buildTechnicalResonance` 拆解為四支私有純函式支柱 + `arbitrateResonanceSummary`（主函式 59 行 $\le 80$）；盤中零量全四維統一前收定錨；KDJ 高檔死叉／低檔金叉（`k <= 35`）優先於鈍化；總評新增獨立 `warnCount`（四態恆和為 4）；`VOLATILITY_SQUEEZE` 獨立權重矩陣（`VOL 1.4 / MACD 1.2 / KDJ 0.7 / RSI 0.7`）並校準震盪盤「折減 35%」文案；空頭補齊 `!hasConflict` 降級、純多頭底背離防誤降、`WARN` 失效防線方向校準、`fwd.close <= 0` 守衛與 Card 01B 動態 `barUnit`。
@@ -141,10 +147,10 @@
 - **專案本機路徑**：`d:\APP\股票紀錄`
 - **遠端儲存庫**：`git@github.com:judragon005/stock-note.git`
 - **當前工作分支**：`main` (已完全同步主幹，Working Tree Clean)
-- **單元測試套件**：**2,631/2,631 通過 (319 test suites / 100% 綠燈) + 後端測試 10/10 通過**
+- **單元測試套件**：**2,671/2,671 通過 (323 test suites / 100% 綠燈) + 後端測試 11/11 通過**
 - **型別檢查**：TypeScript Strict Mode **0 Errors / 0 Warnings**
 - **生產環境構建**：`npm run build` 打包順利通過，0 錯誤
-- **當前釋出版本**：**V9.30.0**
+- **當前釋出版本**：**V9.32.0**
 - **工作區與分支整潔度**：工作區乾淨受控，本地 feature/fix 分支已完全合併並清理。
 - **資安與隱私防護**：本機所有個人交易、質押數據、財務隱私與 API Tokens 均受 Web Crypto 原生 AES-GCM 加密保護，搭配 LocalStorage / IndexedDB 本地隔離與 `.gitignore` 保護，絕不推播至遠端。
 
@@ -173,6 +179,8 @@
 
 | 規格編號 (PRD) | 架構決策紀錄 (ADR) | 本地票券目錄 (.scratch/) | 關聯 Issue / PR | 版本 | 核心主題 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| [`Spec 0250`](file:///d:/APP/股票紀錄/docs/specs/0250-viewport-overlay-kernel-ghost-tailwind-and-e2ee-passphrase-spec.md) | [`ADR 0250`](file:///d:/APP/股票紀錄/docs/adr/0250-viewport-overlay-kernel-ghost-tailwind-and-e2ee-passphrase.md) | [`.scratch/v9.32.0-spec0250-viewport-overlay-wave3/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.32.0-spec0250-viewport-overlay-wave3/issues/) | Issue #615 | V9.32.0 | 系統免疫強化 Wave 3：視口對話層作業系統、75 處幽靈 Tailwind 根除、E2EE 遮罩密碼原語與全站 23 顆彈窗收斂 |
+| [`Spec 0249`](file:///d:/APP/股票紀錄/docs/specs/0249-quant-indicator-ssot-resonance-hardening-and-ttm-cashflow-spec.md) | [`ADR 0249`](file:///d:/APP/股票紀錄/docs/adr/0249-quant-indicator-ssot-resonance-hardening-and-ttm-cashflow.md) | [`.scratch/v9.31.0-spec0249-quant-ssot-wave2/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.31.0-spec0249-quant-ssot-wave2/issues/) | Issue #613 | V9.31.0 | 系統免疫強化 Wave 2：量化指標與稅費 SSOT 收斂、共鳴引擎四態檢傷解耦與 TTM 動態現金流學習 |
 | [`Spec 0248`](file:///d:/APP/股票紀錄/docs/specs/0248-lakehouse-index-scheduler-ledger-and-watermark-guard-spec.md) | [`ADR 0248`](file:///d:/APP/股票紀錄/docs/adr/0248-lakehouse-index-scheduler-ledger-and-watermark-guard.md) | [`.scratch/v9.30.0-spec0248-lakehouse-scheduler-wave1/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.30.0-spec0248-lakehouse-scheduler-wave1/issues/) | Issue #611 | V9.30.0 | 系統免疫強化 Wave 1：SQLite 四大高頻表日期索引、持久化單一排程帳本、三軌假性成功防禦與審計日曆／權證收斂 |
 | [`Spec 0247`](file:///d:/APP/股票紀錄/docs/specs/0247-system-immunity-wave0-security-timeout-ci-hardening-spec.md) | [`ADR 0247`](file:///d:/APP/股票紀錄/docs/adr/0247-system-immunity-wave0-security-timeout-ci-hardening.md) | [`.scratch/v9.29.0-spec0247-system-immunity-wave0/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.29.0-spec0247-system-immunity-wave0/issues/) | Issue #609 | V9.29.0 | 系統免疫強化 Wave 0：統一 SSRF 守衛、鎖內逾時防死鎖、快照深度脫敏與全端 CI 免疫閘門 |
 | [`Spec 0246`](file:///d:/APP/股票紀錄/docs/specs/0246-lakehouse-sync-ssot-convergence-spec.md) | [`ADR 0246`](file:///d:/APP/股票紀錄/docs/adr/0246-lakehouse-sync-ssot-convergence.md) | [`.scratch/v9.28.0-spec0246-lakehouse-sync-ssot-convergence/issues/`](file:///d:/APP/股票紀錄/.scratch/v9.28.0-spec0246-lakehouse-sync-ssot-convergence/issues/) | Issue #607 | V9.28.0 | 外部資料更新中樞收斂（單一缺口調諧）、NAS 四軌獨立水位線排程、靜態快取退役與 Card 01 盤中實量縫合 |

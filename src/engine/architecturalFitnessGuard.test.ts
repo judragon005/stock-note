@@ -250,4 +250,73 @@ describe('Spec 0240 T11: Architectural Fitness Guard (防技術債復發靜態�
     const quotesSrc = fs.readFileSync(path.join(ROOT, 'scripts/market-sync/ingest-tw-quotes.cjs'), 'utf8');
     expect(quotesSrc).toContain('isTwOtcWarrantSymbol');
   });
+
+  it('不變量 12 (Spec 0250 Wave 3 / Debt 0063): 全站所有 *Modal*.tsx 必透過 ModalShell 掛載、禁止手寫裸遮罩且已移除舊版 ImportModal 死碼', () => {
+    const legacyDeadModal = path.join(ROOT, 'src/components/ImportModal.tsx');
+    expect(fs.existsSync(legacyDeadModal), '舊版 ImportModal.tsx 死碼必須物理移除').toBe(false);
+
+    const modalFiles = collectFiles(path.join(ROOT, 'src/components'), '.tsx').filter(
+      (f) =>
+        !f.endsWith('.test.tsx') &&
+        path.basename(f).includes('Modal') &&
+        path.basename(f) !== 'ModalShell.tsx'
+    );
+    expect(modalFiles.length).toBeGreaterThanOrEqual(19);
+
+    const missingModalShell: string[] = [];
+    const rawOverlayOffenders: string[] = [];
+    for (const file of modalFiles) {
+      const content = fs.readFileSync(file, 'utf8');
+      if (!/\bModalShell\b/.test(content)) {
+        missingModalShell.push(path.relative(ROOT, file));
+      }
+      if (/className\s*=\s*["'`][^"'`]*\bmodal-overlay\b/.test(content) || /\bfixed\s+inset-0\b/.test(content)) {
+        rawOverlayOffenders.push(path.relative(ROOT, file));
+      }
+    }
+
+    expect(missingModalShell).toEqual([]);
+    expect(rawOverlayOffenders).toEqual([]);
+  });
+
+  it('不變量 13 (Spec 0250 Wave 3 / Debt 0068): 全前端非測試元件不得殘留未安裝之幽靈 Tailwind CSS 類別', () => {
+    const tsxFiles = collectFiles(path.join(ROOT, 'src'), '.tsx').filter(
+      (f) => !f.endsWith('.test.tsx')
+    );
+    const ghostTailwindPattern =
+      /className\s*=\s*(?:["'`][^"'`]*|\{`[^`]*)\b(?:fixed\s+inset-0|bg-slate-\d+|text-slate-\d+|border-slate-\d+|backdrop-blur-(?:sm|md)|space-y-\d+|grid-cols-\d+)\b/;
+    const offenders: string[] = [];
+
+    for (const file of tsxFiles) {
+      const content = fs.readFileSync(file, 'utf8');
+      if (ghostTailwindPattern.test(content)) {
+        offenders.push(path.relative(ROOT, file));
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('不變量 14 (Spec 0250 Wave 3 / Debt 0068): 全前端非測試原始碼嚴禁呼叫明文阻塞式 window.prompt() 或裸 prompt()', () => {
+    const srcFiles = [
+      ...collectFiles(path.join(ROOT, 'src'), '.ts'),
+      ...collectFiles(path.join(ROOT, 'src'), '.tsx'),
+    ].filter((f) => !f.endsWith('.test.ts') && !f.endsWith('.test.tsx'));
+    const offenders: string[] = [];
+
+    for (const file of srcFiles) {
+      const codeLines = fs
+        .readFileSync(file, 'utf8')
+        .split(/\r?\n/)
+        .filter((line: string) => {
+          const trimmed = line.trim();
+          return trimmed.length > 0 && !trimmed.startsWith('//') && !trimmed.startsWith('*');
+        });
+      if (codeLines.some((line: string) => /\b(?:window\.)?prompt\s*\(/.test(line))) {
+        offenders.push(path.relative(ROOT, file));
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
 });
