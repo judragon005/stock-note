@@ -13,13 +13,16 @@ import { ReceivableDividend } from '../types/dividend';
 import {
   aggregateDividendReport,
   getEffectiveDividendPayDate,
-  extractHistoricalPayoutMonths,
   extractLedgerTtmDividendProfiles,
   buildUnifiedPendingReceivables,
   convertDividendAmountToTWD,
 } from '../engine/dividendAggregator';
 import { resolveEffectiveDividendTaxAndNet } from '../engine/taxComplianceEngine';
-import { generate12MonthProjectedCashflow, recommendComplementaryDividendMonths } from '../engine/projectedCashflowEngine';
+import {
+  generate12MonthProjectedCashflow,
+  recommendComplementaryDividendMonths,
+  type TtmDividendProfile,
+} from '../engine/projectedCashflowEngine';
 import { calculateDividendTaxDeductionStats } from '../engine/taxOptimizationGuard';
 import { generateUpcomingExDividendRadarEvents } from '../engine/receivableDividendEngine';
 
@@ -182,24 +185,52 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
     return aggregateDividendReport(scopedTrades, activeReceivables, selectedYear, usdToTwdRate, todayStr);
   }, [scopedTrades, activeReceivables, selectedYear, usdToTwdRate, todayStr]);
 
-  // 萃取各標的歷史已入帳交易之實際發放月份與近 12 個月 (TTM) 真實每股配息 (Spec 0249 T08)
-  const historicalPayoutMonthsMap = useMemo(() => {
-    return extractHistoricalPayoutMonths(scopedTrades, todayStr);
-  }, [scopedTrades, todayStr]);
+  const [lakehouseTtmMap, setLakehouseTtmMap] = useState<Record<string, TtmDividendProfile>>({});
 
+  // 自本機湖倉批次載入在席持倉之 TTM 真實每股配息 (Spec 0249 T07/T08)
+  const heldSymbolsKey = useMemo(
+    () =>
+      Array.from(new Set(scopedHoldings.filter((h) => h.shares > 0).map((h) => h.symbol.toUpperCase())))
+        .sort()
+        .join(','),
+    [scopedHoldings]
+  );
+
+  useEffect(() => {
+    if (!heldSymbolsKey || typeof fetch !== 'function') {
+      setLakehouseTtmMap({});
+      return;
+    }
+    const controller = new AbortController();
+    fetch(`/api/market/ttm-dividends?symbols=${encodeURIComponent(heldSymbolsKey)}&today=${encodeURIComponent(todayStr)}&sync=1`, {
+      signal: controller.signal,
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (json && json.profiles && typeof json.profiles === 'object') {
+          setLakehouseTtmMap(json.profiles as Record<string, TtmDividendProfile>);
+        }
+      })
+      .catch(() => {
+        // 離線或純靜態模式時靜默降級回帳本 TTM
+      });
+    return () => controller.abort();
+  }, [heldSymbolsKey, todayStr]);
+
+  // 合併帳本與湖倉近 12 個月 (TTM) 真實每股配息（官方湖倉優先、帳本補位，受因果屏障保護）
   const ttmDividendProfilesMap = useMemo(() => {
-    return extractLedgerTtmDividendProfiles(scopedTrades, todayStr);
-  }, [scopedTrades, todayStr]);
+    const ledgerTtm = extractLedgerTtmDividendProfiles(scopedTrades, todayStr);
+    return { ...ledgerTtm, ...lakehouseTtmMap };
+  }, [scopedTrades, todayStr, lakehouseTtmMap]);
 
   const projectedCashflow = useMemo(() => {
     return generate12MonthProjectedCashflow({
       baseYearMonth: currentYearMonth,
       holdings: scopedHoldings,
       ttmDividendProfiles: ttmDividendProfilesMap,
-      historicalPayoutMonths: historicalPayoutMonthsMap,
       usdToTwdRate,
     });
-  }, [scopedHoldings, currentYearMonth, ttmDividendProfilesMap, historicalPayoutMonthsMap, usdToTwdRate]);
+  }, [scopedHoldings, currentYearMonth, ttmDividendProfilesMap, usdToTwdRate]);
 
   const complementaryRecommendations = useMemo(() => {
     return recommendComplementaryDividendMonths(projectedCashflow.drySeasonMonths);

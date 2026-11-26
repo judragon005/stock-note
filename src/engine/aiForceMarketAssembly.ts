@@ -75,8 +75,8 @@ export function buildTdccDistribution(
         concentrationBadge: isSqueeze
           ? '軋空警戒 (Squeeze Alert)'
           : isConcentrated
-          ? '機構高度控盤'
-          : '籌碼正常分散',
+            ? '機構高度控盤'
+            : '籌碼正常分散',
         asOfDateText: us13fData.asOfQuarterText || 'SEC 13F 最新申報',
         isEmpty: false,
       };
@@ -330,8 +330,8 @@ export function buildMonthlyRevenue(
       typeof etfOptions?.aumBillion === 'number' && Number.isFinite(etfOptions.aumBillion)
         ? etfOptions.aumBillion
         : hasAnyDynamicEtfSignal
-        ? ETF_BASELINE_META[cleanSym]?.aumBillion
-        : undefined;
+          ? ETF_BASELINE_META[cleanSym]?.aumBillion
+          : undefined;
 
     const quarterlyDividends = (etfOptions?.corporateActions ?? [])
       .filter((ca) => typeof ca.cashDividendPerShare === 'number' && ca.cashDividendPerShare > 0)
@@ -373,8 +373,8 @@ export function buildMonthlyRevenue(
     const asOfDateText = latestTdcc?.date
       ? `ETF 規模與受益人 (${latestTdcc.date})`
       : isUs
-      ? '美股 ETF 規模與收益分配 (USD)'
-      : 'ETF 規模與殖利率';
+        ? '美股 ETF 規模與收益分配 (USD)'
+        : 'ETF 規模與殖利率';
 
     return {
       isEtf: true,

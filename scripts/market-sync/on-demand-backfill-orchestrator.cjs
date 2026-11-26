@@ -132,6 +132,39 @@ function isUsMarketSymbol(symbol) {
 }
 
 /**
+ * 共用 Yahoo Finance Chart API 除息事件抓取與正規化輔助函式 (Spec 0249 Review DRY)
+ */
+async function fetchYahooDividendEvents(yahooTicker, range, market, canonicalSymbol, fetcher, signal) {
+  const actions = [];
+  const yhUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?range=${range}&interval=1d&events=div%2Csplit`;
+  const res = await fetcher(yhUrl, {
+    headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
+    ...(signal ? { signal } : {}),
+  });
+  if (res && res.ok) {
+    const json = await res.json();
+    const divs = json?.chart?.result?.[0]?.events?.dividends || {};
+    for (const item of Object.values(divs)) {
+      if (!item || !item.date) continue;
+      const exDate = new Date(item.date * 1000).toISOString().slice(0, 10);
+      const cashDiv = Number(item.amount) || 0;
+      if (cashDiv > 0) {
+        actions.push({
+          symbol: canonicalSymbol,
+          market,
+          action_type: 'DIVIDEND',
+          ex_date: exDate,
+          payment_date: null,
+          cash_dividend_per_share: Number(cashDiv.toFixed(4)),
+          stock_dividend_ratio: 0,
+        });
+      }
+    }
+  }
+  return actions;
+}
+
+/**
  * 按需拉取台股或美股歷史除權息紀錄 (Spec 0249 T07)
  * - 美股：Yahoo Finance Chart API (range=2y, events=div,split) 冪等寫入 corporate_action_calendar
  * - 台股：FinMind TaiwanStockDividend -> fallback Yahoo Chart (.TW / .TWO)
@@ -153,31 +186,7 @@ async function backfillSymbolDividendsFromRemote(
   const actions = [];
   if (isUs) {
     try {
-      const yhUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(querySym)}?range=2y&interval=1d&events=div%2Csplit`;
-      const res = await fetcher(yhUrl, {
-        headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
-        ...(signal ? { signal } : {}),
-      });
-      if (res && res.ok) {
-        const json = await res.json();
-        const divs = json?.chart?.result?.[0]?.events?.dividends || {};
-        for (const item of Object.values(divs)) {
-          if (!item || !item.date) continue;
-          const exDate = new Date(item.date * 1000).toISOString().slice(0, 10);
-          const cashDiv = Number(item.amount) || 0;
-          if (cashDiv > 0) {
-            actions.push({
-              symbol: cleanSymbol,
-              market: 'US',
-              action_type: 'DIVIDEND',
-              ex_date: exDate,
-              payment_date: null,
-              cash_dividend_per_share: Number(cashDiv.toFixed(4)),
-              stock_dividend_ratio: 0,
-            });
-          }
-        }
-      }
+      actions.push(...(await fetchYahooDividendEvents(querySym, '2y', 'US', cleanSymbol, fetcher, signal)));
     } catch (err) {
       if (err && err.name === 'AbortError') return 0;
     }
@@ -216,31 +225,15 @@ async function backfillSymbolDividendsFromRemote(
       for (const suffix of ['.TW', '.TWO']) {
         if (signal?.aborted) break;
         try {
-          const yhUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(querySym)}${suffix}?range=5y&interval=1d&events=div%2Csplit`;
-          const res = await fetcher(yhUrl, {
-            headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
-            ...(signal ? { signal } : {}),
-          });
-          if (res && res.ok) {
-            const json = await res.json();
-            const divs = json?.chart?.result?.[0]?.events?.dividends || {};
-            for (const item of Object.values(divs)) {
-              if (!item || !item.date) continue;
-              const exDate = new Date(item.date * 1000).toISOString().slice(0, 10);
-              const cashDiv = Number(item.amount) || 0;
-              if (cashDiv > 0) {
-                actions.push({
-                  symbol: cleanSymbol,
-                  market: 'TW',
-                  action_type: 'DIVIDEND',
-                  ex_date: exDate,
-                  payment_date: null,
-                  cash_dividend_per_share: Number(cashDiv.toFixed(4)),
-                  stock_dividend_ratio: 0,
-                });
-              }
-            }
-          }
+          const yahooActions = await fetchYahooDividendEvents(
+            `${querySym}${suffix}`,
+            '5y',
+            'TW',
+            cleanSymbol,
+            fetcher,
+            signal
+          );
+          actions.push(...yahooActions);
           if (actions.length > 0) break;
         } catch (err) {
           if (err && err.name === 'AbortError') break;

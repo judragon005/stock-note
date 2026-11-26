@@ -26,6 +26,7 @@ export interface VolumePillarDiagnosis {
   volRatio5?: number;
   volRatio20?: number;
   obvTrend: 'RISING' | 'FALLING' | 'FLAT';
+  hasPriceUpVolumeDownDivergence?: boolean;
   statusLabel: string;
   tone: ResonancePillarTone;
   interpretation: string;
@@ -234,10 +235,25 @@ function computeHistoricalWinRate(
   };
 }
 
+function detectIndicatorDivergence(
+  enriched: KlineCandleItem[],
+  getValue: (c: KlineCandleItem) => number | undefined
+): 'BULLISH' | 'BEARISH' | 'NONE' {
+  const validSlice = enriched.filter((c) => getValue(c) !== undefined).slice(-30);
+  if (validSlice.length < 10) return 'NONE';
+  const divRes = detectDivergence(
+    validSlice.map((c) => c.close),
+    validSlice.map((c) => getValue(c)!)
+  );
+  if (divRes.hasBearishDivergence) return 'BEARISH';
+  if (divRes.hasBullishDivergence) return 'BULLISH';
+  return 'NONE';
+}
+
 /**
  * 支柱 1：成交量診斷純函式 (Spec 0249 T05)
  */
-export function diagnoseVolumePillar(
+function diagnoseVolumePillar(
   effVolCandles: KlineCandleItem[],
   volAnchor: VolumeAnchorResolution,
   market: MarketType
@@ -317,6 +333,7 @@ export function diagnoseVolumePillar(
     volRatio5,
     volRatio20,
     obvTrend: obvRes.trend,
+    hasPriceUpVolumeDownDivergence: statusLabel === '價漲量縮背離',
     statusLabel,
     tone,
     interpretation,
@@ -326,7 +343,7 @@ export function diagnoseVolumePillar(
 /**
  * 支柱 2：KDJ 擺盪診斷純函式 (Spec 0249 T05: 顯式交叉優先於高/低檔鈍化)
  */
-export function diagnoseKdjPillar(
+function diagnoseKdjPillar(
   last: KlineCandleItem | undefined,
   prev: KlineCandleItem | undefined,
   regime: MarketRegime,
@@ -372,7 +389,7 @@ export function diagnoseKdjPillar(
           ? `高檔區 K(${k}) 跌破 D(${d})、J=${j} 反轉下彎，短線過熱轉弱宜嚴守停利紀律。`
           : `K(${k}) 跌破 D(${d})、J=${j} 下彎，短線動能轉弱宜嚴守紀律。`;
     } else if (isGoldenCross) {
-      statusLabel = k <= 40 ? '低檔黃金交叉' : '中檔黃金交叉';
+      statusLabel = k <= 35 ? '低檔黃金交叉' : '中檔黃金交叉';
       tone = 'BULL';
       interpretation = `K(${k}) 上穿 D(${d})、J=${j} 轉強，短線多方動能啟動。`;
     } else if (k >= 80 && d >= 80) {
@@ -415,11 +432,9 @@ export function diagnoseKdjPillar(
 /**
  * 支柱 3：MACD 趨勢診斷純函式 (Spec 0249 T05)
  */
-export function diagnoseMacdPillar(
-  enriched: KlineCandleItem[],
-  last: KlineCandleItem | undefined,
-  prev: KlineCandleItem | undefined
-): MacdPillarDiagnosis {
+function diagnoseMacdPillar(enriched: KlineCandleItem[]): MacdPillarDiagnosis {
+  const last = enriched[enriched.length - 1];
+  const prev = enriched.length >= 2 ? enriched[enriched.length - 2] : undefined;
   const isAvailable = last?.dif !== undefined && last?.macd !== undefined && last?.macdHist !== undefined;
   let statusLabel = '樣本累積中';
   let tone: ResonancePillarTone = 'NEUTRAL';
@@ -443,15 +458,7 @@ export function diagnoseMacdPillar(
       else break;
     }
 
-    const macdValidSlice = enriched.filter((c) => c.dif !== undefined).slice(-30);
-    if (macdValidSlice.length >= 10) {
-      const divRes = detectDivergence(
-        macdValidSlice.map((c) => c.close),
-        macdValidSlice.map((c) => c.dif!)
-      );
-      if (divRes.hasBearishDivergence) divergence = 'BEARISH';
-      else if (divRes.hasBullishDivergence) divergence = 'BULLISH';
-    }
+    divergence = detectIndicatorDivergence(enriched, (c) => c.dif);
 
     const isExpanding = prevHist !== undefined ? Math.abs(hist) >= Math.abs(prevHist) : true;
     if (divergence === 'BEARISH') {
@@ -500,11 +507,9 @@ export function diagnoseMacdPillar(
 /**
  * 支柱 4：Wilder RSI(14 & 6) 診斷純函式 (Spec 0249 T05)
  */
-export function diagnoseRsiPillar(
-  enriched: KlineCandleItem[],
-  last: KlineCandleItem | undefined,
-  prev: KlineCandleItem | undefined
-): RsiPillarDiagnosis {
+function diagnoseRsiPillar(enriched: KlineCandleItem[]): RsiPillarDiagnosis {
+  const last = enriched[enriched.length - 1];
+  const prev = enriched.length >= 2 ? enriched[enriched.length - 2] : undefined;
   const isAvailable = last?.rsi !== undefined;
   let statusLabel = '樣本累積中';
   let tone: ResonancePillarTone = 'NEUTRAL';
@@ -523,15 +528,7 @@ export function diagnoseRsiPillar(
       else if (pr6 >= pr14 && r6 < r14) crossState = 'BEAR_CROSS';
     }
 
-    const rsiValidSlice = enriched.filter((c) => c.rsi !== undefined).slice(-30);
-    if (rsiValidSlice.length >= 10) {
-      const divRes = detectDivergence(
-        rsiValidSlice.map((c) => c.close),
-        rsiValidSlice.map((c) => c.rsi!)
-      );
-      if (divRes.hasBearishDivergence) divergence = 'BEARISH';
-      else if (divRes.hasBullishDivergence) divergence = 'BULLISH';
-    }
+    divergence = detectIndicatorDivergence(enriched, (c) => c.rsi);
 
     if (divergence === 'BEARISH') {
       statusLabel = 'RSI 頂背離';
@@ -614,11 +611,12 @@ export function arbitrateResonanceSummary(params: {
   const hasBearishDivergence = macd.divergence === 'BEARISH' || rsi.divergence === 'BEARISH';
   const hasBullishDivergence = macd.divergence === 'BULLISH' || rsi.divergence === 'BULLISH';
   const hasVolumeDivergence =
-    volume.statusLabel === '價漲量縮背離' && (macd.tone === 'BULL' || kdj.tone === 'BULL');
+    Boolean(volume.hasPriceUpVolumeDownDivergence) && (macd.tone === 'BULL' || kdj.tone === 'BULL');
+  // 底背離僅在空方格局 (bearCount >= 1) 構成衝突，純多頭疊加底背離屬同向強化不誤降為 WARN
   const hasConflict =
     (bullCount >= 1 && bearCount >= 1) ||
     hasBearishDivergence ||
-    hasBullishDivergence ||
+    (hasBullishDivergence && bearCount >= 1) ||
     hasVolumeDivergence;
 
   let conflictAlert: string | undefined;
@@ -712,71 +710,45 @@ export function buildTechnicalResonance(
   const timeframe: KlineTimeframe = input.timeframe ?? 'DAY';
   const market: MarketType = input.market ?? 'TW';
   const sorted = [...(input.candles || [])].sort((a, b) => a.date.localeCompare(b.date));
-
-  // 全四維統一收盤定錨：盤中未結算零量 K 棒全面退回前一已結算交易日
   const volAnchor = resolveVolumeAnchorCandles(sorted);
-  const enriched = enrichCandlesWithOscillators(volAnchor.effectiveVolumeCandles, {
-    requireMinPeriod: true,
-  });
+  const enriched = enrichCandlesWithOscillators(volAnchor.effectiveVolumeCandles, { requireMinPeriod: true });
   const last = enriched[enriched.length - 1];
   const prev = enriched.length >= 2 ? enriched[enriched.length - 2] : undefined;
-  const asOfDate = last?.date || '';
 
-  const dmi =
-    enriched.length >= 16
-      ? calculateDmiAdx(
-          enriched.map((c) => c.high),
-          enriched.map((c) => c.low),
-          enriched.map((c) => c.close),
-          14
-        )
-      : undefined;
-  const bb =
-    enriched.length >= 20
-      ? calculateBollingerSqueeze(
-          enriched.map(({ date, open, high, low, close, volume }) => ({
-            date,
-            open,
-            high,
-            low,
-            close,
-            volume,
-          }))
-        )
-      : undefined;
+  const dmi = enriched.length >= 16
+    ? calculateDmiAdx(enriched.map((c) => c.high), enriched.map((c) => c.low), enriched.map((c) => c.close), 14)
+    : undefined;
+  const bb = enriched.length >= 20
+    ? calculateBollingerSqueeze(
+        enriched.map(({ date, open, high, low, close, volume }) => ({ date, open, high, low, close, volume }))
+      )
+    : undefined;
 
-  let maAlignment: 'BULLISH' | 'BEARISH' | 'ENTANGLED' = 'ENTANGLED';
-  if (last && last.ma5 !== undefined && last.ma20 !== undefined && last.ma60 !== undefined) {
-    if (last.close > last.ma5 && last.ma5 > last.ma20 && last.ma20 > last.ma60) maAlignment = 'BULLISH';
-    else if (last.close < last.ma5 && last.ma5 < last.ma20 && last.ma20 < last.ma60) maAlignment = 'BEARISH';
-  }
+  const maAlignment: 'BULLISH' | 'BEARISH' | 'ENTANGLED' =
+    last && last.ma5 !== undefined && last.ma20 !== undefined && last.ma60 !== undefined
+      ? last.close > last.ma5 && last.ma5 > last.ma20 && last.ma20 > last.ma60
+        ? 'BULLISH'
+        : last.close < last.ma5 && last.ma5 < last.ma20 && last.ma20 < last.ma60
+          ? 'BEARISH'
+          : 'ENTANGLED'
+      : 'ENTANGLED';
 
   const regimeEval = evaluateMarketRegime({
-    adx: dmi?.adx,
-    pdi: dmi?.pdi,
-    mdi: dmi?.mdi,
-    bandwidthPercent: bb?.bandwidth,
-    maAlignment,
+    adx: dmi?.adx, pdi: dmi?.pdi, mdi: dmi?.mdi, bandwidthPercent: bb?.bandwidth, maAlignment,
   });
 
   const volume = diagnoseVolumePillar(enriched, volAnchor, market);
   const kdj = diagnoseKdjPillar(last, prev, regimeEval.regime, timeframe, input.dailyCandles);
-  const macd = diagnoseMacdPillar(enriched, last, prev);
-  const rsi = diagnoseRsiPillar(enriched, last, prev);
+  const macd = diagnoseMacdPillar(enriched);
+  const rsi = diagnoseRsiPillar(enriched);
   const summary = arbitrateResonanceSummary({
-    enriched,
-    regime: regimeEval.regime,
-    regimeLabel: regimeEval.label,
-    volume,
-    kdj,
-    macd,
-    rsi,
-    keyLevels: input.keyLevels,
+    enriched, regime: regimeEval.regime, regimeLabel: regimeEval.label,
+    volume, kdj, macd, rsi, keyLevels: input.keyLevels,
   });
 
   return {
     timeframe,
-    asOfDate,
+    asOfDate: last?.date || '',
     candleCount: enriched.length,
     regime: {
       type: regimeEval.regime,

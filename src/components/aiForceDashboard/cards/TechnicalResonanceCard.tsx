@@ -71,96 +71,91 @@ export const TechnicalResonanceCard: React.FC<TechnicalResonanceCardProps> = ({
     interpretation: string;
     extraBadge?: string;
   }> = [
-    {
-      mode: 'VOL',
-      title: '成交量 (VOL)',
-      icon: <BarChart2 size={14} color="#fbbf24" />,
-      statusLabel: resonance.volume.statusLabel,
-      colors: volColors,
-      primaryMetrics: resonance.volume.isAvailable
-        ? `${resonance.volume.volumeDisplay.toLocaleString()} ${resonance.volume.volumeUnit}`
-        : '樣本累積中',
-      secondaryMeta: resonance.volume.isAvailable
-        ? `5${barUnit}量比 ${resonance.volume.volRatio5 ?? '-'}x · 20${barUnit} ${resonance.volume.volRatio20 ?? '-'}x · OBV ${
-            resonance.volume.obvTrend === 'RISING'
-              ? '上升'
-              : resonance.volume.obvTrend === 'FALLING'
-                ? '下降'
-                : '持平'
+      {
+        mode: 'VOL',
+        title: '成交量 (VOL)',
+        icon: <BarChart2 size={14} color="#fbbf24" />,
+        statusLabel: resonance.volume.statusLabel,
+        colors: volColors,
+        primaryMetrics: resonance.volume.isAvailable
+          ? `${resonance.volume.volumeDisplay.toLocaleString()} ${resonance.volume.volumeUnit}`
+          : '樣本累積中',
+        secondaryMeta: resonance.volume.isAvailable
+          ? `5${barUnit}量比 ${resonance.volume.volRatio5 ?? '-'}x · 20${barUnit} ${resonance.volume.volRatio20 ?? '-'}x · OBV ${resonance.volume.obvTrend === 'RISING'
+            ? '上升'
+            : resonance.volume.obvTrend === 'FALLING'
+              ? '下降'
+              : '持平'
           }`
-        : '等待有效收盤量能',
-      interpretation: resonance.volume.interpretation,
-      extraBadge: resonance.volume.isVolumeAnchoredToPrevClose
-        ? `盤中量未結算 · 前收定錨 ${resonance.volume.anchorDate || ''}`
-        : undefined,
-    },
-    {
-      mode: 'KD',
-      title: 'KDJ 擺盪 (9,3,3)',
-      icon: <Gauge size={14} color="#38bdf8" />,
-      statusLabel: resonance.kdj.statusLabel,
-      colors: kdjColors,
-      primaryMetrics: resonance.kdj.isAvailable
-        ? `K:${resonance.kdj.k} · D:${resonance.kdj.d} · J:${resonance.kdj.j}`
-        : '樣本累積中',
-      secondaryMeta: resonance.kdj.weeklyResonanceLabel
-        ? `多週期：${resonance.kdj.weeklyResonanceLabel}`
-        : `時框基準：${TIMEFRAME_LABEL[resonance.timeframe]}（需滿 9 期）`,
-      interpretation: resonance.kdj.interpretation,
-    },
-    {
-      mode: 'MACD',
-      title: 'MACD 趨勢 (12,26,9)',
-      icon: <Activity size={14} color="#60a5fa" />,
-      statusLabel: resonance.macd.statusLabel,
-      colors: macdColors,
-      primaryMetrics: resonance.macd.isAvailable
-        ? `DIF:${resonance.macd.dif} · DEA:${resonance.macd.dea} · 柱:${resonance.macd.hist}`
-        : '樣本累積中',
-      secondaryMeta: resonance.macd.isAvailable
-        ? `零軸${
-            resonance.macd.zeroAxisPosition === 'ABOVE'
-              ? '上方'
-              : resonance.macd.zeroAxisPosition === 'BELOW'
-                ? '下方'
-                : '附近'
-          } · 連 ${resonance.macd.histStreakDays} 期${
-            resonance.macd.divergence === 'BEARISH'
-              ? ' · 頂背離'
-              : resonance.macd.divergence === 'BULLISH'
-                ? ' · 底背離'
-                : ''
+          : '等待有效收盤量能',
+        interpretation: resonance.volume.interpretation,
+        extraBadge: resonance.volume.isVolumeAnchoredToPrevClose
+          ? `盤中量未結算 · 前收定錨 ${resonance.volume.anchorDate || ''}`
+          : undefined,
+      },
+      {
+        mode: 'KD',
+        title: 'KDJ 擺盪 (9,3,3)',
+        icon: <Gauge size={14} color="#38bdf8" />,
+        statusLabel: resonance.kdj.statusLabel,
+        colors: kdjColors,
+        primaryMetrics: resonance.kdj.isAvailable
+          ? `K:${resonance.kdj.k} · D:${resonance.kdj.d} · J:${resonance.kdj.j}`
+          : '樣本累積中',
+        secondaryMeta: resonance.kdj.weeklyResonanceLabel
+          ? `多週期：${resonance.kdj.weeklyResonanceLabel}`
+          : `時框基準：${TIMEFRAME_LABEL[resonance.timeframe]}（需滿 9 期）`,
+        interpretation: resonance.kdj.interpretation,
+      },
+      {
+        mode: 'MACD',
+        title: 'MACD 趨勢 (12,26,9)',
+        icon: <Activity size={14} color="#60a5fa" />,
+        statusLabel: resonance.macd.statusLabel,
+        colors: macdColors,
+        primaryMetrics: resonance.macd.isAvailable
+          ? `DIF:${resonance.macd.dif} · DEA:${resonance.macd.dea} · 柱:${resonance.macd.hist}`
+          : '樣本累積中',
+        secondaryMeta: resonance.macd.isAvailable
+          ? `零軸${resonance.macd.zeroAxisPosition === 'ABOVE'
+            ? '上方'
+            : resonance.macd.zeroAxisPosition === 'BELOW'
+              ? '下方'
+              : '附近'
+          } · 連 ${resonance.macd.histStreakDays} 期${resonance.macd.divergence === 'BEARISH'
+            ? ' · 頂背離'
+            : resonance.macd.divergence === 'BULLISH'
+              ? ' · 底背離'
+              : ''
           }`
-        : `時框基準：${TIMEFRAME_LABEL[resonance.timeframe]}（需滿 26 期）`,
-      interpretation: resonance.macd.interpretation,
-    },
-    {
-      mode: 'RSI',
-      title: 'RSI 強弱 (6 / 14)',
-      icon: <Compass size={14} color="#c084fc" />,
-      statusLabel: resonance.rsi.statusLabel,
-      colors: rsiColors,
-      primaryMetrics: resonance.rsi.isAvailable
-        ? `RSI14:${resonance.rsi.rsi14} · RSI6:${resonance.rsi.rsi6 ?? '-'}`
-        : '樣本累積中',
-      secondaryMeta: resonance.rsi.isAvailable
-        ? `${
-            resonance.rsi.crossState === 'BULL_CROSS'
-              ? '快線上穿慢線'
-              : resonance.rsi.crossState === 'BEAR_CROSS'
-                ? '快線下穿慢線'
-                : '快慢線延續'
-          }${
-            resonance.rsi.divergence === 'BEARISH'
-              ? ' · 頂背離'
-              : resonance.rsi.divergence === 'BULLISH'
-                ? ' · 底背離'
-                : ''
+          : `時框基準：${TIMEFRAME_LABEL[resonance.timeframe]}（需滿 26 期）`,
+        interpretation: resonance.macd.interpretation,
+      },
+      {
+        mode: 'RSI',
+        title: 'RSI 強弱 (6 / 14)',
+        icon: <Compass size={14} color="#c084fc" />,
+        statusLabel: resonance.rsi.statusLabel,
+        colors: rsiColors,
+        primaryMetrics: resonance.rsi.isAvailable
+          ? `RSI14:${resonance.rsi.rsi14} · RSI6:${resonance.rsi.rsi6 ?? '-'}`
+          : '樣本累積中',
+        secondaryMeta: resonance.rsi.isAvailable
+          ? `${resonance.rsi.crossState === 'BULL_CROSS'
+            ? '快線上穿慢線'
+            : resonance.rsi.crossState === 'BEAR_CROSS'
+              ? '快線下穿慢線'
+              : '快慢線延續'
+          }${resonance.rsi.divergence === 'BEARISH'
+            ? ' · 頂背離'
+            : resonance.rsi.divergence === 'BULLISH'
+              ? ' · 底背離'
+              : ''
           }`
-        : `時框基準：${TIMEFRAME_LABEL[resonance.timeframe]}（需滿 15 期）`,
-      interpretation: resonance.rsi.interpretation,
-    },
-  ];
+          : `時框基準：${TIMEFRAME_LABEL[resonance.timeframe]}（需滿 15 期）`,
+        interpretation: resonance.rsi.interpretation,
+      },
+    ];
 
   const winStat = resonance.summary.historicalWinRate;
 
@@ -256,9 +251,8 @@ export const TechnicalResonanceCard: React.FC<TechnicalResonanceCardProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '0.75rem', flexShrink: 0, flexWrap: 'wrap' }}>
           <span style={{ color: '#94a3b8' }}>
             {winStat.isSufficient
-              ? `近250期${winStat.signalName}10${barUnit}勝率 ${winStat.winRatePercent}% (${winStat.sampleCount}次 · 均報酬 ${
-                  (winStat.avgReturn10dPercent ?? 0) >= 0 ? '+' : ''
-                }${winStat.avgReturn10dPercent}%)`
+              ? `近250期${winStat.signalName}10${barUnit}勝率 ${winStat.winRatePercent}% (${winStat.sampleCount}次 · 均報酬 ${(winStat.avgReturn10dPercent ?? 0) >= 0 ? '+' : ''
+              }${winStat.avgReturn10dPercent}%)`
               : `${winStat.signalName} 歷史樣本不足 (${winStat.sampleCount} 次)`}
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#f87171' }}>

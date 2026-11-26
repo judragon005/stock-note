@@ -462,8 +462,8 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
   const activeCandle = isHovering
     ? displayCandles[hoverIndex!]
     : count > 0
-    ? displayCandles[count - 1]
-    : null;
+      ? displayCandles[count - 1]
+      : null;
   const hoveredCandle = isHovering ? activeCandle : null;
 
   return (
@@ -510,10 +510,10 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
             dynamicDiagnosis={
               activeCandle
                 ? diagnoseMainForceCost(
-                    activeCandle.close,
-                    data.keyLevels.mainForceCost,
-                    market === 'US' ? 'USD' : 'TWD'
-                  )
+                  activeCandle.close,
+                  data.keyLevels.mainForceCost,
+                  market === 'US' ? 'USD' : 'TWD'
+                )
                 : undefined
             }
             showIcon={true}
@@ -905,339 +905,339 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
             onMouseLeave={() => setHoverIndex(null)}
           >
 
-          {/* 背景參考格線 */}
-          <line
-            x1={leftPad}
-            y1={klineHeight / 2}
-            x2={width - rightPad}
-            y2={klineHeight / 2}
-            stroke="rgba(255, 255, 255, 0.06)"
-            strokeDasharray="3 3"
-          />
+            {/* 背景參考格線 */}
+            <line
+              x1={leftPad}
+              y1={klineHeight / 2}
+              x2={width - rightPad}
+              y2={klineHeight / 2}
+              stroke="rgba(255, 255, 255, 0.06)"
+              strokeDasharray="3 3"
+            />
 
-          {/* 右側價格刻度 */}
-          <text
-            x={width - rightPad + 6}
-            y={20}
-            fill="#94a3b8"
-            fontSize="12"
-            fontFamily="monospace"
-          >
-            {formatKlinePriceTick(priceRange.max)}
-          </text>
-          <text
-            x={width - rightPad + 6}
-            y={klineHeight / 2 + 4}
-            fill="#94a3b8"
-            fontSize="12"
-            fontFamily="monospace"
-          >
-            {formatKlinePriceTick((priceRange.max + priceRange.min) / 2)}
-          </text>
-          <text
-            x={width - rightPad + 6}
-            y={klineHeight - 6}
-            fill="#94a3b8"
-            fontSize="12"
-            fontFamily="monospace"
-          >
-            {formatKlinePriceTick(priceRange.min)}
-          </text>
+            {/* 右側價格刻度 */}
+            <text
+              x={width - rightPad + 6}
+              y={20}
+              fill="#94a3b8"
+              fontSize="12"
+              fontFamily="monospace"
+            >
+              {formatKlinePriceTick(priceRange.max)}
+            </text>
+            <text
+              x={width - rightPad + 6}
+              y={klineHeight / 2 + 4}
+              fill="#94a3b8"
+              fontSize="12"
+              fontFamily="monospace"
+            >
+              {formatKlinePriceTick((priceRange.max + priceRange.min) / 2)}
+            </text>
+            <text
+              x={width - rightPad + 6}
+              y={klineHeight - 6}
+              fill="#94a3b8"
+              fontSize="12"
+              fontFamily="monospace"
+            >
+              {formatKlinePriceTick(priceRange.min)}
+            </text>
 
-          {/* K 線蠟燭繪製 */}
-          {displayCandles.map((c, idx) => {
-            const cx = getX(idx);
-            const isBull = c.close >= c.open;
-            const color = isBull ? bullColor : bearColor;
-
-            // K 線
-            const yHigh = projectPriceToY(c.high, priceRange, klineHeight, 15, 15);
-            const yLow = projectPriceToY(c.low, priceRange, klineHeight, 15, 15);
-            const yOpen = projectPriceToY(c.open, priceRange, klineHeight, 15, 15);
-            const yClose = projectPriceToY(c.close, priceRange, klineHeight, 15, 15);
-
-            const candleTop = Math.min(yOpen, yClose);
-            const candleBodyHeight = Math.max(1.5, Math.abs(yClose - yOpen));
-
-            return (
-              <g key={idx}>
-                {/* 影線 */}
-                <line x1={cx} y1={yHigh} x2={cx} y2={yLow} stroke={color} strokeWidth="1.2" />
-                {/* 實體 */}
-                <rect
-                  x={cx - candleWidth / 2}
-                  y={candleTop}
-                  width={candleWidth}
-                  height={candleBodyHeight}
-                  fill={color}
-                  rx="1"
-                />
-              </g>
-            );
-          })}
-
-          {/* 均線 Polyline 折線 */}
-          <polyline points={ma250Points} fill="none" stroke={KLINE_MA_COLORS.ma250} strokeWidth="1.6" opacity="0.9" />
-          <polyline points={ma60Points} fill="none" stroke={KLINE_MA_COLORS.ma60} strokeWidth="1.5" opacity="0.85" />
-          <polyline points={ma20Points} fill="none" stroke={KLINE_MA_COLORS.ma20} strokeWidth="1.5" opacity="0.85" />
-          <polyline points={ma10Points} fill="none" stroke={KLINE_MA_COLORS.ma10} strokeWidth="1.5" opacity="0.85" />
-          <polyline points={ma5Points} fill="none" stroke={KLINE_MA_COLORS.ma5} strokeWidth="1.6" />
-
-          {/* 三大水平關鍵價位引線 (Ticket 05) */}
-          {showKeyLevels && keyLevelOverlays.map((overlay) => (
-            <g key={overlay.type}>
-              {/* 水平虛線 */}
-              <line
-                x1={leftPad}
-                y1={overlay.y}
-                x2={width - rightPad}
-                y2={overlay.y}
-                stroke={overlay.color}
-                strokeWidth="1.2"
-                strokeDasharray="4 3"
-                opacity="0.85"
-              />
-              {/* 右側彩色徽章背景矩形 */}
-              <rect
-                x={width - rightPad + 4}
-                y={overlay.y - 7}
-                width="112"
-                height="15"
-                rx="3"
-                fill={overlay.bgColor}
-                stroke={overlay.color}
-                strokeWidth="0.8"
-              />
-              {/* 標籤文字 */}
-              <text
-                x={width - rightPad + 8}
-                y={overlay.y + 3.5}
-                fill={overlay.color}
-                fontSize="12"
-                fontWeight="700"
-                fontFamily="system-ui, -apple-system, sans-serif"
-              >
-                {overlay.label}
-              </text>
-            </g>
-          ))}
-
-          {/* 用戶持有均價虛線參考線 (Ticket 11) */}
-          {userAvgCost !== undefined && userAvgCost > 0 && (
-            <g data-testid="kline-user-avg-cost-line">
-              <line
-                x1={leftPad}
-                y1={projectPriceToY(userAvgCost, priceRange, klineHeight, 15, 15)}
-                x2={width - rightPad}
-                y2={projectPriceToY(userAvgCost, priceRange, klineHeight, 15, 15)}
-                stroke="#fbbf24"
-                strokeWidth="1.1"
-                strokeDasharray="3 3"
-                opacity="0.75"
-              />
-              <text
-                x={leftPad + 4}
-                y={projectPriceToY(userAvgCost, priceRange, klineHeight, 15, 15) - 4}
-                fill="#fbbf24"
-                fontSize="12"
-                fontWeight="600"
-                fontFamily="monospace"
-              >
-                持有均價 {userAvgCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </text>
-            </g>
-          )}
-
-          {/* 副圖分界線 */}
-          <line
-            x1={leftPad}
-            y1={subchartTop}
-            x2={width - rightPad}
-            y2={subchartTop}
-            stroke="rgba(255, 255, 255, 0.15)"
-          />
-
-          {/* 副圖：VOL (成交量直方柱) */}
-          {subchartMode === 'VOL' &&
-            displayCandles.map((c, idx) => {
+            {/* K 線蠟燭繪製 */}
+            {displayCandles.map((c, idx) => {
               const cx = getX(idx);
               const isBull = c.close >= c.open;
               const color = isBull ? bullColor : bearColor;
-              const volBarHeight = Math.max(2, (c.volume / maxVol) * (volHeight - 10));
-              const volY = totalHeight - 15 - volBarHeight;
+
+              // K 線
+              const yHigh = projectPriceToY(c.high, priceRange, klineHeight, 15, 15);
+              const yLow = projectPriceToY(c.low, priceRange, klineHeight, 15, 15);
+              const yOpen = projectPriceToY(c.open, priceRange, klineHeight, 15, 15);
+              const yClose = projectPriceToY(c.close, priceRange, klineHeight, 15, 15);
+
+              const candleTop = Math.min(yOpen, yClose);
+              const candleBodyHeight = Math.max(1.5, Math.abs(yClose - yOpen));
+
               return (
-                <rect
-                  key={'v' + idx}
-                  x={cx - candleWidth / 2}
-                  y={volY}
-                  width={candleWidth}
-                  height={volBarHeight}
-                  fill={color}
-                  opacity="0.75"
-                />
+                <g key={idx}>
+                  {/* 影線 */}
+                  <line x1={cx} y1={yHigh} x2={cx} y2={yLow} stroke={color} strokeWidth="1.2" />
+                  {/* 實體 */}
+                  <rect
+                    x={cx - candleWidth / 2}
+                    y={candleTop}
+                    width={candleWidth}
+                    height={candleBodyHeight}
+                    fill={color}
+                    rx="1"
+                  />
+                </g>
               );
             })}
 
-          {/* 副圖：KD 指標 (K9/D9 折線與 80/20 參考線) */}
-          {subchartMode === 'KD' && (
-            <g>
-              {/* 80 與 20 參考線 (對齊 [-10, 110] 統一座標系) */}
-              <line
-                x1={leftPad}
-                y1={mapKdjY(80)}
-                x2={width - rightPad}
-                y2={mapKdjY(80)}
-                stroke="rgba(239, 68, 68, 0.3)"
-                strokeDasharray="2 2"
-              />
-              <line
-                x1={leftPad}
-                y1={mapKdjY(20)}
-                x2={width - rightPad}
-                y2={mapKdjY(20)}
-                stroke="rgba(16, 185, 129, 0.3)"
-                strokeDasharray="2 2"
-              />
-              <polyline points={kdKPoints} fill="none" stroke="#fbbf24" strokeWidth="1.5" />
-              <polyline points={kdDPoints} fill="none" stroke="#38bdf8" strokeWidth="1.5" />
-              {kdJPoints && (
-                <polyline
-                  data-testid="kline-kd-j-line"
-                  points={kdJPoints}
-                  fill="none"
-                  stroke="#e879f9"
-                  strokeWidth="1.2"
-                  strokeDasharray="3 2"
-                />
-              )}
-            </g>
-          )}
+            {/* 均線 Polyline 折線 */}
+            <polyline points={ma250Points} fill="none" stroke={KLINE_MA_COLORS.ma250} strokeWidth="1.6" opacity="0.9" />
+            <polyline points={ma60Points} fill="none" stroke={KLINE_MA_COLORS.ma60} strokeWidth="1.5" opacity="0.85" />
+            <polyline points={ma20Points} fill="none" stroke={KLINE_MA_COLORS.ma20} strokeWidth="1.5" opacity="0.85" />
+            <polyline points={ma10Points} fill="none" stroke={KLINE_MA_COLORS.ma10} strokeWidth="1.5" opacity="0.85" />
+            <polyline points={ma5Points} fill="none" stroke={KLINE_MA_COLORS.ma5} strokeWidth="1.6" />
 
-          {/* 副圖：MACD 指標 (DIF, DEA, 柱狀體) */}
-          {subchartMode === 'MACD' && (
-            <g>
-              {/* 零軸線 */}
-              <line
-                x1={leftPad}
-                y1={subchartTop + subchartPlotHeight / 2}
-                x2={width - rightPad}
-                y2={subchartTop + subchartPlotHeight / 2}
-                stroke="rgba(255, 255, 255, 0.2)"
-              />
-              {/* 柱狀體 */}
-              {displayCandles.map((c, idx) => {
-                if (c.macdHist === undefined) return null;
+            {/* 三大水平關鍵價位引線 (Ticket 05) */}
+            {showKeyLevels && keyLevelOverlays.map((overlay) => (
+              <g key={overlay.type}>
+                {/* 水平虛線 */}
+                <line
+                  x1={leftPad}
+                  y1={overlay.y}
+                  x2={width - rightPad}
+                  y2={overlay.y}
+                  stroke={overlay.color}
+                  strokeWidth="1.2"
+                  strokeDasharray="4 3"
+                  opacity="0.85"
+                />
+                {/* 右側彩色徽章背景矩形 */}
+                <rect
+                  x={width - rightPad + 4}
+                  y={overlay.y - 7}
+                  width="112"
+                  height="15"
+                  rx="3"
+                  fill={overlay.bgColor}
+                  stroke={overlay.color}
+                  strokeWidth="0.8"
+                />
+                {/* 標籤文字 */}
+                <text
+                  x={width - rightPad + 8}
+                  y={overlay.y + 3.5}
+                  fill={overlay.color}
+                  fontSize="12"
+                  fontWeight="700"
+                  fontFamily="system-ui, -apple-system, sans-serif"
+                >
+                  {overlay.label}
+                </text>
+              </g>
+            ))}
+
+            {/* 用戶持有均價虛線參考線 (Ticket 11) */}
+            {userAvgCost !== undefined && userAvgCost > 0 && (
+              <g data-testid="kline-user-avg-cost-line">
+                <line
+                  x1={leftPad}
+                  y1={projectPriceToY(userAvgCost, priceRange, klineHeight, 15, 15)}
+                  x2={width - rightPad}
+                  y2={projectPriceToY(userAvgCost, priceRange, klineHeight, 15, 15)}
+                  stroke="#fbbf24"
+                  strokeWidth="1.1"
+                  strokeDasharray="3 3"
+                  opacity="0.75"
+                />
+                <text
+                  x={leftPad + 4}
+                  y={projectPriceToY(userAvgCost, priceRange, klineHeight, 15, 15) - 4}
+                  fill="#fbbf24"
+                  fontSize="12"
+                  fontWeight="600"
+                  fontFamily="monospace"
+                >
+                  持有均價 {userAvgCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </text>
+              </g>
+            )}
+
+            {/* 副圖分界線 */}
+            <line
+              x1={leftPad}
+              y1={subchartTop}
+              x2={width - rightPad}
+              y2={subchartTop}
+              stroke="rgba(255, 255, 255, 0.15)"
+            />
+
+            {/* 副圖：VOL (成交量直方柱) */}
+            {subchartMode === 'VOL' &&
+              displayCandles.map((c, idx) => {
                 const cx = getX(idx);
-                const midY = subchartTop + subchartPlotHeight / 2;
-                const barH = (Math.abs(c.macdHist) / maxMacdAbs) * (subchartPlotHeight / 2 - 2);
-                const y = c.macdHist >= 0 ? midY - barH : midY;
-                const color = c.macdHist >= 0 ? bullColor : bearColor;
+                const isBull = c.close >= c.open;
+                const color = isBull ? bullColor : bearColor;
+                const volBarHeight = Math.max(2, (c.volume / maxVol) * (volHeight - 10));
+                const volY = totalHeight - 15 - volBarHeight;
                 return (
                   <rect
-                    key={'mh' + idx}
+                    key={'v' + idx}
                     x={cx - candleWidth / 2}
-                    y={y}
+                    y={volY}
                     width={candleWidth}
-                    height={Math.max(1, barH)}
+                    height={volBarHeight}
                     fill={color}
-                    opacity="0.8"
+                    opacity="0.75"
                   />
                 );
               })}
-              <polyline points={macdDifPoints} fill="none" stroke="#60a5fa" strokeWidth="1.4" />
-              <polyline points={macdDeaPoints} fill="none" stroke="#f59e0b" strokeWidth="1.4" />
-            </g>
-          )}
 
-          {/* 副圖：RSI 指標 (RSI14 折線與 70/30 參考線) */}
-          {subchartMode === 'RSI' && (
-            <g>
-              <line
-                x1={leftPad}
-                y1={subchartTop + 0.3 * subchartPlotHeight}
-                x2={width - rightPad}
-                y2={subchartTop + 0.3 * subchartPlotHeight}
-                stroke="rgba(239, 68, 68, 0.3)"
-                strokeDasharray="2 2"
-              />
-              <line
-                x1={leftPad}
-                y1={subchartTop + 0.7 * subchartPlotHeight}
-                x2={width - rightPad}
-                y2={subchartTop + 0.7 * subchartPlotHeight}
-                stroke="rgba(16, 185, 129, 0.3)"
-                strokeDasharray="2 2"
-              />
-              <polyline points={rsiPoints} fill="none" stroke="#c084fc" strokeWidth="1.5" />
-            </g>
-          )}
+            {/* 副圖：KD 指標 (K9/D9 折線與 80/20 參考線) */}
+            {subchartMode === 'KD' && (
+              <g>
+                {/* 80 與 20 參考線 (對齊 [-10, 110] 統一座標系) */}
+                <line
+                  x1={leftPad}
+                  y1={mapKdjY(80)}
+                  x2={width - rightPad}
+                  y2={mapKdjY(80)}
+                  stroke="rgba(239, 68, 68, 0.3)"
+                  strokeDasharray="2 2"
+                />
+                <line
+                  x1={leftPad}
+                  y1={mapKdjY(20)}
+                  x2={width - rightPad}
+                  y2={mapKdjY(20)}
+                  stroke="rgba(16, 185, 129, 0.3)"
+                  strokeDasharray="2 2"
+                />
+                <polyline points={kdKPoints} fill="none" stroke="#fbbf24" strokeWidth="1.5" />
+                <polyline points={kdDPoints} fill="none" stroke="#38bdf8" strokeWidth="1.5" />
+                {kdJPoints && (
+                  <polyline
+                    data-testid="kline-kd-j-line"
+                    points={kdJPoints}
+                    fill="none"
+                    stroke="#e879f9"
+                    strokeWidth="1.2"
+                    strokeDasharray="3 2"
+                  />
+                )}
+              </g>
+            )}
 
-          {/* 十字光標 (Crosshair) 繪製 */}
-          {hoverIndex !== null && hoveredCandle && (
-            <g>
-              {/* 垂直線 */}
-              <line
-                x1={getX(hoverIndex)}
-                y1={10}
-                x2={getX(hoverIndex)}
-                y2={totalHeight - 15}
-                stroke="rgba(255, 255, 255, 0.45)"
-                strokeWidth="1"
-                strokeDasharray="3 3"
-              />
-              {/* 水平線 (指向收盤價) */}
-              <line
-                x1={leftPad}
-                y1={projectPriceToY(hoveredCandle.close, priceRange, klineHeight, 15, 15)}
-                x2={width - rightPad}
-                y2={projectPriceToY(hoveredCandle.close, priceRange, klineHeight, 15, 15)}
-                stroke="rgba(255, 255, 255, 0.45)"
-                strokeWidth="1"
-                strokeDasharray="3 3"
-              />
-              {/* Y 軸游標價格標籤 */}
-              <rect
-                x={width - rightPad + 2}
-                y={projectPriceToY(hoveredCandle.close, priceRange, klineHeight, 15, 15) - 8}
-                width="64"
-                height="16"
-                rx="3"
-                fill="#3b82f6"
-              />
-              <text
-                x={width - rightPad + 6}
-                y={projectPriceToY(hoveredCandle.close, priceRange, klineHeight, 15, 15) + 4}
-                fill="#ffffff"
-                fontSize="12"
-                fontWeight="700"
-                fontFamily="monospace"
-              >
-                {formatKlinePriceTick(hoveredCandle.close)}
-              </text>
-            </g>
-          )}
+            {/* 副圖：MACD 指標 (DIF, DEA, 柱狀體) */}
+            {subchartMode === 'MACD' && (
+              <g>
+                {/* 零軸線 */}
+                <line
+                  x1={leftPad}
+                  y1={subchartTop + subchartPlotHeight / 2}
+                  x2={width - rightPad}
+                  y2={subchartTop + subchartPlotHeight / 2}
+                  stroke="rgba(255, 255, 255, 0.2)"
+                />
+                {/* 柱狀體 */}
+                {displayCandles.map((c, idx) => {
+                  if (c.macdHist === undefined) return null;
+                  const cx = getX(idx);
+                  const midY = subchartTop + subchartPlotHeight / 2;
+                  const barH = (Math.abs(c.macdHist) / maxMacdAbs) * (subchartPlotHeight / 2 - 2);
+                  const y = c.macdHist >= 0 ? midY - barH : midY;
+                  const color = c.macdHist >= 0 ? bullColor : bearColor;
+                  return (
+                    <rect
+                      key={'mh' + idx}
+                      x={cx - candleWidth / 2}
+                      y={y}
+                      width={candleWidth}
+                      height={Math.max(1, barH)}
+                      fill={color}
+                      opacity="0.8"
+                    />
+                  );
+                })}
+                <polyline points={macdDifPoints} fill="none" stroke="#60a5fa" strokeWidth="1.4" />
+                <polyline points={macdDeaPoints} fill="none" stroke="#f59e0b" strokeWidth="1.4" />
+              </g>
+            )}
 
-          {/* 底部時間軸標籤 (抽樣顯示，防止倒數第二筆與最後一筆重疊) */}
-          {displayCandles.map((c, idx) => {
-            const step = Math.max(4, Math.floor(count / 7));
-            if (idx % step !== 0 && idx !== count - 1) return null;
-            if (idx !== count - 1 && count - 1 - idx <= 3) return null;
-            const cx = getX(idx);
-            return (
-              <text
-                key={'t' + idx}
-                x={cx}
-                y={totalHeight - 2}
-                textAnchor="middle"
-                fill="#94a3b8"
-                fontSize="12"
-              >
-                {c.date}
-              </text>
-            );
-          })}
-        </svg>
-      </div>
+            {/* 副圖：RSI 指標 (RSI14 折線與 70/30 參考線) */}
+            {subchartMode === 'RSI' && (
+              <g>
+                <line
+                  x1={leftPad}
+                  y1={subchartTop + 0.3 * subchartPlotHeight}
+                  x2={width - rightPad}
+                  y2={subchartTop + 0.3 * subchartPlotHeight}
+                  stroke="rgba(239, 68, 68, 0.3)"
+                  strokeDasharray="2 2"
+                />
+                <line
+                  x1={leftPad}
+                  y1={subchartTop + 0.7 * subchartPlotHeight}
+                  x2={width - rightPad}
+                  y2={subchartTop + 0.7 * subchartPlotHeight}
+                  stroke="rgba(16, 185, 129, 0.3)"
+                  strokeDasharray="2 2"
+                />
+                <polyline points={rsiPoints} fill="none" stroke="#c084fc" strokeWidth="1.5" />
+              </g>
+            )}
+
+            {/* 十字光標 (Crosshair) 繪製 */}
+            {hoverIndex !== null && hoveredCandle && (
+              <g>
+                {/* 垂直線 */}
+                <line
+                  x1={getX(hoverIndex)}
+                  y1={10}
+                  x2={getX(hoverIndex)}
+                  y2={totalHeight - 15}
+                  stroke="rgba(255, 255, 255, 0.45)"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                />
+                {/* 水平線 (指向收盤價) */}
+                <line
+                  x1={leftPad}
+                  y1={projectPriceToY(hoveredCandle.close, priceRange, klineHeight, 15, 15)}
+                  x2={width - rightPad}
+                  y2={projectPriceToY(hoveredCandle.close, priceRange, klineHeight, 15, 15)}
+                  stroke="rgba(255, 255, 255, 0.45)"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                />
+                {/* Y 軸游標價格標籤 */}
+                <rect
+                  x={width - rightPad + 2}
+                  y={projectPriceToY(hoveredCandle.close, priceRange, klineHeight, 15, 15) - 8}
+                  width="64"
+                  height="16"
+                  rx="3"
+                  fill="#3b82f6"
+                />
+                <text
+                  x={width - rightPad + 6}
+                  y={projectPriceToY(hoveredCandle.close, priceRange, klineHeight, 15, 15) + 4}
+                  fill="#ffffff"
+                  fontSize="12"
+                  fontWeight="700"
+                  fontFamily="monospace"
+                >
+                  {formatKlinePriceTick(hoveredCandle.close)}
+                </text>
+              </g>
+            )}
+
+            {/* 底部時間軸標籤 (抽樣顯示，防止倒數第二筆與最後一筆重疊) */}
+            {displayCandles.map((c, idx) => {
+              const step = Math.max(4, Math.floor(count / 7));
+              if (idx % step !== 0 && idx !== count - 1) return null;
+              if (idx !== count - 1 && count - 1 - idx <= 3) return null;
+              const cx = getX(idx);
+              return (
+                <text
+                  key={'t' + idx}
+                  x={cx}
+                  y={totalHeight - 2}
+                  textAnchor="middle"
+                  fill="#94a3b8"
+                  fontSize="12"
+                >
+                  {c.date}
+                </text>
+              );
+            })}
+          </svg>
+        </div>
       )}
     </div>
   );

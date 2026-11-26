@@ -216,4 +216,63 @@ describe('technicalResonanceEngine (四維共鳴引擎與 8 項邊界契約 — 
     expect(summary.conflictAlert).toContain('底背離');
     expect(summary.bullCount + summary.bearCount + summary.warnCount + summary.neutralCount).toBe(4);
   });
+
+  it('Review Fix：純多頭疊加底背離屬同向強化，絕不誤降級為 WARN', () => {
+    const summary = arbitrateResonanceSummary({
+      enriched: [],
+      regime: 'CHOPPY_RANGE',
+      regimeLabel: '震盪盤整體制',
+      volume: {
+        isAvailable: true,
+        isVolumeAnchoredToPrevClose: false,
+        volumeDisplay: 2000,
+        volumeUnit: '張',
+        obvTrend: 'RISING',
+        statusLabel: '溫和量增偏多',
+        tone: 'BULL',
+        interpretation: '',
+      },
+      kdj: { isAvailable: true, statusLabel: '低檔黃金交叉', tone: 'BULL', interpretation: '' },
+      macd: {
+        isAvailable: true,
+        histStreakDays: 1,
+        zeroAxisPosition: 'BELOW',
+        divergence: 'BULLISH',
+        statusLabel: '底背離築底',
+        tone: 'BULL',
+        interpretation: '',
+      },
+      rsi: {
+        isAvailable: true,
+        crossState: 'BULL_CROSS',
+        divergence: 'NONE',
+        statusLabel: '多空平衡拉鋸',
+        tone: 'NEUTRAL',
+        interpretation: '',
+      },
+      keyLevels: { supportLevel: 95, highResistance: 115 },
+    });
+
+    expect(summary.hasConflict).toBe(false);
+    expect(summary.overallTone).toBe('BULL');
+    expect(summary.conflictAlert).toBeUndefined();
+  });
+
+  it('缺陷 2b：低檔鈍化區發生黃金交叉 (k <= 35) 時，應優先識別低檔黃金交叉而非被鈍化遮蔽', () => {
+    // 連續下跌壓低 K、D 至 <= 20，最後一根長紅反彈使 K 上穿 D（且 k <= 35）
+    const candles = makeCandles(35, (i) => {
+      if (i < 34) {
+        const c = 200 - i * 3;
+        return { open: c + 1, high: c + 2, low: c - 2, close: c, volume: 1_500_000 };
+      }
+      const prevClose = 200 - 33 * 3;
+      return { open: prevClose, high: prevClose + 16, low: prevClose - 1, close: prevClose + 15, volume: 2_500_000 };
+    });
+
+    const report = buildTechnicalResonance({ candles, timeframe: 'DAY', market: 'TW' });
+    expect(report.kdj.isAvailable).toBe(true);
+    expect(report.kdj.k!).toBeGreaterThanOrEqual(report.kdj.d!);
+    expect(report.kdj.tone).toBe('BULL');
+    expect(report.kdj.statusLabel).toBe('低檔黃金交叉');
+  });
 });

@@ -5,6 +5,8 @@ import {
   resolveVolumeAnchorCandles,
 } from './klineOscillatorEngine';
 import { calculateRSI } from './omniIndicatorEngine';
+import { aggregateCandlesToTimeframe } from './klineAggregationEngine';
+import { buildTechnicalResonance } from './technicalResonanceEngine';
 
 function buildCandles(closes: number[], options?: { volume?: number; lastIntradayZero?: boolean }): KlineCandleItem[] {
   const volume = options?.volume ?? 1000000;
@@ -118,6 +120,36 @@ describe('klineOscillatorEngine (擺盪指標 SSOT 測試縫隙)', () => {
       expect(oscRsi).toBeDefined();
       expect(omniRsi).toBeDefined();
       expect(Number(omniRsi!.toFixed(1))).toBe(oscRsi);
+    });
+
+    it('Seam 1：日/週/月 K 序列灌入擺盪指標引擎與共鳴引擎，所有重疊指標偏差 max|Δ| = 0.00', () => {
+      const start = Date.UTC(2024, 0, 1);
+      const longDaily: KlineCandleItem[] = Array.from({ length: 180 }, (_, i) => {
+        const close = Number((100 + Math.sin(i * 0.17) * 15 + i * 0.1).toFixed(2));
+        return {
+          date: new Date(start + i * 86400000).toISOString().slice(0, 10),
+          open: close - 0.5,
+          high: close + 1.5,
+          low: close - 1.5,
+          close,
+          volume: 1_200_000,
+        };
+      });
+
+      for (const tf of ['DAY', 'WEEK', 'MONTH'] as const) {
+        const agg = aggregateCandlesToTimeframe(longDaily, tf);
+        const oscLast = enrichCandlesWithOscillators(agg, { requireMinPeriod: true }).slice(-1)[0];
+        const res = buildTechnicalResonance({ candles: agg, timeframe: tf, market: 'TW' });
+
+        expect(res.kdj.k).toBe(oscLast.k);
+        expect(res.kdj.d).toBe(oscLast.d);
+        expect(res.kdj.j).toBe(oscLast.j);
+        expect(res.macd.dif).toBe(oscLast.dif);
+        expect(res.macd.dea).toBe(oscLast.macd);
+        expect(res.macd.hist).toBe(oscLast.macdHist);
+        expect(res.rsi.rsi14).toBe(oscLast.rsi);
+        expect(res.rsi.rsi6).toBe(oscLast.rsi6);
+      }
     });
   });
 });
