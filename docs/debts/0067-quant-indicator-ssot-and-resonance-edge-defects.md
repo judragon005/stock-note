@@ -1,7 +1,7 @@
 # Debt 0067: Card 01 與 Card 01B 日 K 指標口徑分裂收斂、重複技術指標歸一化與共鳴引擎邊界修復 (Wave 2)
 
 - **優先級 (Priority)**: `P1`
-- **狀態 (Status)**: `OPEN`
+- **狀態 (Status)**: `RESOLVED` (Spec 0249 / ADR #0249 / Issue `#613`)
 - **發現來源**: Spec 0247 五路正交法醫審計 (Issue `#609`)
 - **標籤**: `Quant` · `DataIntegrity` · `AiForceDashboard` · `DRY` · `Wave2`
 - **預計觸發時機**: Wave 2（規劃為 `Spec 0249`，與 [Debt 0064](0064-war-room-resonance-and-tdcc-smells-consolidation.md) 及 [Debt 0051](0051-projected-cashflow-dynamic-calendar-profile-learning.md) 一併清償）

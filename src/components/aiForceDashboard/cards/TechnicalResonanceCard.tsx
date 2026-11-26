@@ -39,6 +39,7 @@ export const TechnicalResonanceCard: React.FC<TechnicalResonanceCardProps> = ({
 }) => {
   const { upColor, downColor } = resolveDirectionalPalette(colorTheme, market);
   const pricePrefix = market === 'US' ? '$' : '';
+  const barUnit = resonance.timeframe === 'WEEK' ? '週' : resonance.timeframe === 'MONTH' ? '月' : '日';
 
   const resolveToneColor = (tone: ResonancePillarTone): { text: string; bg: string; border: string } => {
     if (tone === 'BULL') {
@@ -80,7 +81,7 @@ export const TechnicalResonanceCard: React.FC<TechnicalResonanceCardProps> = ({
         ? `${resonance.volume.volumeDisplay.toLocaleString()} ${resonance.volume.volumeUnit}`
         : '樣本累積中',
       secondaryMeta: resonance.volume.isAvailable
-        ? `5日量比 ${resonance.volume.volRatio5 ?? '-'}x · 20日 ${resonance.volume.volRatio20 ?? '-'}x · OBV ${
+        ? `5${barUnit}量比 ${resonance.volume.volRatio5 ?? '-'}x · 20${barUnit} ${resonance.volume.volRatio20 ?? '-'}x · OBV ${
             resonance.volume.obvTrend === 'RISING'
               ? '上升'
               : resonance.volume.obvTrend === 'FALLING'
@@ -162,8 +163,6 @@ export const TechnicalResonanceCard: React.FC<TechnicalResonanceCardProps> = ({
   ];
 
   const winStat = resonance.summary.historicalWinRate;
-  const barUnit =
-    resonance.timeframe === 'WEEK' ? '週' : resonance.timeframe === 'MONTH' ? '月' : '日';
 
   return (
     <div

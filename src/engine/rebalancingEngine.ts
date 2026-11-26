@@ -1,4 +1,5 @@
 import { inferMarketFromSymbol } from '../utils/formatters';
+import { calculateEstimatedSellFee, calculateEstimatedSellTax } from './calculator';
 import {
   TargetAllocationConfig,
   RebalanceItemRecommendation,
@@ -125,18 +126,20 @@ export function convertAmountToOrderUnits(
 }
 
 /**
- * 預估交易摩擦成本 (台股手續費 0.1425% + 現股賣稅 0.3%，美股預設 0)
+ * 預估交易摩擦成本 (Spec 0249 T04: 收斂至 calculator.ts 稅費原語，含台股 20 元低消、ETF 0.1%、債券 ETF 0%)
  */
 export function estimateTransactionFriction(
   market: MarketType | undefined,
   action: RebalanceAction,
-  amountTwd: number
+  amountTwd: number,
+  symbol?: string,
+  discountRate: number = 1.0
 ): number {
-  if (action === 'HOLD' || amountTwd <= 0) return 0;
+  if (action === 'HOLD' || amountTwd <= 0 || !market) return 0;
   if (market === 'TW') {
-    const fee = amountTwd * 0.001425;
-    const tax = action === 'SELL' ? amountTwd * 0.003 : 0;
-    return Math.max(1, Math.round(fee + tax));
+    const fee = calculateEstimatedSellFee('TW', amountTwd, discountRate, 20);
+    const tax = action === 'SELL' ? calculateEstimatedSellTax(symbol || '', 'TW', amountTwd) : 0;
+    return fee + tax;
   }
   return 0; // 美股主流零佣金
 }
@@ -332,7 +335,7 @@ export function generateCashInRebalancePlan(
 
     if (action === 'BUY') {
       totalBuyAmountTwd += allocatedTwd;
-      totalFrictionTwd += estimateTransactionFriction(item.market, 'BUY', allocatedTwd);
+      totalFrictionTwd += estimateTransactionFriction(item.market, 'BUY', allocatedTwd, item.key);
     }
 
     return {
@@ -407,12 +410,12 @@ export function generateFullRebalancePlan(
         action = 'BUY';
         recommendedAmountTwd = Math.round(diffTwd);
         totalBuyAmountTwd += recommendedAmountTwd;
-        totalFrictionTwd += estimateTransactionFriction(item.market, 'BUY', recommendedAmountTwd);
+        totalFrictionTwd += estimateTransactionFriction(item.market, 'BUY', recommendedAmountTwd, item.key);
       } else if (diffTwd < 0) {
         action = 'SELL';
         recommendedAmountTwd = Math.round(Math.abs(diffTwd));
         totalSellAmountTwd += recommendedAmountTwd;
-        totalFrictionTwd += estimateTransactionFriction(item.market, 'SELL', recommendedAmountTwd);
+        totalFrictionTwd += estimateTransactionFriction(item.market, 'SELL', recommendedAmountTwd, item.key);
       }
     }
 

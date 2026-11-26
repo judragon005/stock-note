@@ -14,6 +14,7 @@ import {
   aggregateDividendReport,
   getEffectiveDividendPayDate,
   extractHistoricalPayoutMonths,
+  extractLedgerTtmDividendProfiles,
   buildUnifiedPendingReceivables,
   convertDividendAmountToTWD,
 } from '../engine/dividendAggregator';
@@ -181,19 +182,24 @@ export const DividendLogView: React.FC<DividendLogViewProps> = ({
     return aggregateDividendReport(scopedTrades, activeReceivables, selectedYear, usdToTwdRate, todayStr);
   }, [scopedTrades, activeReceivables, selectedYear, usdToTwdRate, todayStr]);
 
-  // 萃取各標的歷史已入帳交易之實際發放月份慣性 (SSOT Learning 純函式下沉，注入 todayStr 時序因果屏障)
+  // 萃取各標的歷史已入帳交易之實際發放月份與近 12 個月 (TTM) 真實每股配息 (Spec 0249 T08)
   const historicalPayoutMonthsMap = useMemo(() => {
     return extractHistoricalPayoutMonths(scopedTrades, todayStr);
+  }, [scopedTrades, todayStr]);
+
+  const ttmDividendProfilesMap = useMemo(() => {
+    return extractLedgerTtmDividendProfiles(scopedTrades, todayStr);
   }, [scopedTrades, todayStr]);
 
   const projectedCashflow = useMemo(() => {
     return generate12MonthProjectedCashflow({
       baseYearMonth: currentYearMonth,
       holdings: scopedHoldings,
+      ttmDividendProfiles: ttmDividendProfilesMap,
       historicalPayoutMonths: historicalPayoutMonthsMap,
       usdToTwdRate,
     });
-  }, [scopedHoldings, currentYearMonth, historicalPayoutMonthsMap, usdToTwdRate]);
+  }, [scopedHoldings, currentYearMonth, ttmDividendProfilesMap, historicalPayoutMonthsMap, usdToTwdRate]);
 
   const complementaryRecommendations = useMemo(() => {
     return recommendComplementaryDividendMonths(projectedCashflow.drySeasonMonths);

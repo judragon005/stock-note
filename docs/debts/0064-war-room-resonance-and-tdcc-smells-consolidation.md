@@ -1,7 +1,7 @@
 # Debt 0064: 主 K 四維共鳴引擎拆解與 TDCC / 擺盪引擎 DRY 收斂
 
 - **優先級 (Priority)**: `P3`
-- **狀態 (Status)**: `OPEN`
+- **狀態 (Status)**: `RESOLVED` (Spec 0249 / ADR #0249 / Issue `#613`)
 - **發現來源**: Spec 0245 雙軸 `/code-review`（第二輪複審，Commit `e37ee29`，Issue `#605`）
 - **標籤**: `Refactor` · `CleanCode` · `DRY` · `AiForceDashboard` · `TDCC`
 - **預計觸發時機**: 後續擴充主 K 技術指標（如新增籌碼／布林通道支柱）或調整 TDCC 週期視覺比例時一併重構

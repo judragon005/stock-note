@@ -285,21 +285,10 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
     return normalizeAndSortCandles(data.candles);
   }, [data.candles]);
 
-  // 2. 依據 timeframe (日 K / 週 K / 月 K) 聚合蠟燭，單趟 O(N) 重算 KDJ(含 J) / MACD / RSI (Spec 0245 T05)
+  // 2. 依據 timeframe (日 K / 週 K / 月 K) 聚合蠟燭，全時框統一走單趟 O(N) 擺盪 SSOT (Spec 0249 T03)
   const aggregatedCandles = useMemo(() => {
     const agg = aggregateCandlesToTimeframe(rawCandles, timeframe);
     if (agg.length === 0) return agg;
-    if (timeframe === 'DAY') {
-      return agg.map((c) => ({
-        ...c,
-        j:
-          c.j !== undefined
-            ? c.j
-            : c.k !== undefined && c.d !== undefined
-              ? Number((3 * c.k - 2 * c.d).toFixed(1))
-              : undefined,
-      }));
-    }
     return enrichCandlesWithOscillators(agg, { requireMinPeriod: true });
   }, [rawCandles, timeframe]);
 
@@ -407,15 +396,9 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
     if (subchartMode !== 'KD') return '';
     const points: string[] = [];
     displayCandles.forEach((c, idx) => {
-      const jVal =
-        c.j !== undefined
-          ? c.j
-          : c.k !== undefined && c.d !== undefined
-            ? 3 * c.k - 2 * c.d
-            : undefined;
-      if (jVal !== undefined) {
+      if (c.j !== undefined) {
         const x = getX(idx);
-        const y = mapKdjY(jVal);
+        const y = mapKdjY(c.j);
         points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
       }
     });
@@ -849,12 +832,7 @@ export const KLineChartCard: React.FC<KLineChartCardProps> = ({
           )}
           {subchartMode === 'KD' && (
             <span style={{ color: '#60a5fa' }}>
-              K:{activeCandle.k ?? '-'} D:{activeCandle.d ?? '-'} J:
-              {activeCandle.j !== undefined
-                ? activeCandle.j
-                : activeCandle.k !== undefined && activeCandle.d !== undefined
-                  ? Number((3 * activeCandle.k - 2 * activeCandle.d).toFixed(1))
-                  : '-'}
+              K:{activeCandle.k ?? '-'} D:{activeCandle.d ?? '-'} J:{activeCandle.j ?? '-'}
             </span>
           )}
           {subchartMode === 'MACD' && (

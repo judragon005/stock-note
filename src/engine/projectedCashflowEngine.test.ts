@@ -256,7 +256,7 @@ describe('Spec 0183 Ticket 02: projectedCashflowEngine (未來 12 個月現金�
     expect(FALLBACK_SUMMER_MONTHS).toEqual([7, 8, 9]);
   });
 
-  it('9. [Spec 0227 / Code Review Final Patch] 持倉代碼大小寫不敏感查表防禦 (美股小寫 aapl 也能命中 AAPL 歷史月份)', () => {
+  it('9. [Spec 0227 / Spec 0249 T08] 持倉代碼大小寫不敏感查表防禦 (美股小寫 aapl 命中 AAPL 真實 TTM 配息且不走 4.5% 假殖利率)', () => {
     const holdingsLowercase: HoldingPosition[] = [
       {
         symbol: 'aapl', // 小寫美股代碼
@@ -273,9 +273,10 @@ describe('Spec 0183 Ticket 02: projectedCashflowEngine (未來 12 個月現金�
 
     const input: ProjectedCashflowInput = {
       baseYearMonth: '2026-10',
+      usdToTwdRate: 32.0,
       holdings: holdingsLowercase,
-      historicalPayoutMonths: {
-        'AAPL': [2, 5, 8, 11], // 大寫 Key
+      ttmDividendProfiles: {
+        AAPL: { payoutMonths: [2, 5, 8, 11], annualPerShareDividend: 1.0, source: 'LAKEHOUSE_TTM' },
       },
     };
 
@@ -284,7 +285,38 @@ describe('Spec 0183 Ticket 02: projectedCashflowEngine (未來 12 個月現金�
     const bAapl = nov2026?.breakdown.find((b) => b.symbol.toUpperCase() === 'AAPL');
 
     expect(bAapl).toBeDefined();
-    expect(bAapl?.estimatedAmountTwd).toBeGreaterThan(0);
+    // 單季每股 0.25 USD * 100 股 * 0.7 (扣 30% 稅) * 32 = 560 TWD（絕非 4.5% 高估的 5,544 TWD）
+    expect(bAapl?.estimatedAmountTwd).toBe(560);
+  });
+
+  it('13. [Spec 0249 T08] TTM 真實配息優先級高於靜態表 DEFAULT_DIVIDEND_PROFILES（自動適應 ETF 改頻率），且無 TTM 非清單股誠實回傳 0', () => {
+    const input: ProjectedCashflowInput = {
+      baseYearMonth: '2026-01',
+      usdToTwdRate: 32.0,
+      holdings: [
+        { symbol: '0050', name: '元大台灣50', shares: 1000, avgCost: 180, currentPrice: 200, marketValue: 200000, market: 'TW' },
+        { symbol: 'VOO', name: 'Vanguard S&P 500', shares: 10, avgCost: 500, currentPrice: 550, marketValue: 5500, market: 'US', currency: 'USD' },
+      ] as unknown as HoldingPosition[],
+      // 假設 0050 實測 TTM 改為 1/4/7/10 月季配、全年每股 6 元，應覆蓋靜態庫 [2, 8]
+      ttmDividendProfiles: {
+        '0050': { payoutMonths: [1, 4, 7, 10], annualPerShareDividend: 6.0, source: 'LAKEHOUSE_TTM' },
+      },
+      // VOO 僅有舊版 historicalPayoutMonths 而無 TTM 真實每股金額：應誠實回傳 0，絕不套用 4.5% 假殖利率
+      historicalPayoutMonths: {
+        VOO: [3, 6, 9, 12],
+      },
+    };
+
+    const projection = generate12MonthProjectedCashflow(input);
+    const jan = projection.months.find((m) => m.yearMonth === '2026-01');
+    const feb = projection.months.find((m) => m.yearMonth === '2026-02');
+    const mar = projection.months.find((m) => m.yearMonth === '2026-03');
+
+    // 0050 依 TTM 於 1 月發放 6 / 4 * 1000 = 1500，2 月應為 0
+    expect(jan?.breakdown.find((b) => b.symbol === '0050')?.estimatedAmountTwd).toBe(1500);
+    expect(feb?.breakdown.find((b) => b.symbol === '0050')).toBeUndefined();
+    // VOO 無真實 TTM 時不得以 4.5% 膨脹，應誠實為 0
+    expect(mar?.breakdown.find((b) => b.symbol === 'VOO')).toBeUndefined();
   });
 
   it('10. [Spec 0230 / Issue 02] 擴充 DEFAULT_DIVIDEND_PROFILES: 華邦電 (2344, 8月)、聯電 (2303, 7月)、聯發科 (2454, 1/7月)', () => {

@@ -1,7 +1,7 @@
 # 技術債 0051: 未來現金流投影慣性配息庫動態學習與跨市場擴展 (Projected Cashflow Dynamic Profile Learning)
 
 * **建立日期**：2026-10-15
-* **狀態**：`OPEN`
+* **狀態**：`RESOLVED` (Spec 0249 / ADR #0249 / Issue `#613`)
 * **優先級**：`P3 (Low)`
 * **來源**：Code Review (Spec 0183 / Issue #254)
 * **標籤**：`Feature` · `Refactor` · `ProjectedCashflow` · `Dividend` · `Lakehouse`

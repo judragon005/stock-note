@@ -14,11 +14,18 @@ export interface PayoutRateConfig {
   payoutMonths?: number[]; // 1 ~ 12
 }
 
+export interface TtmDividendProfile {
+  payoutMonths: number[]; // 1 ~ 12 (依實質發放日或除息日推導之慣性發放月)
+  annualPerShareDividend: number; // 近 12 個月 (TTM) 真實每股累計現金股利（原幣）
+  source: 'LAKEHOUSE_TTM' | 'LEDGER_TTM';
+}
+
 export interface ProjectedCashflowInput {
   baseYearMonth: string; // 'YYYY-MM'
   holdings: HoldingPosition[];
   customPayoutRates?: Record<string, PayoutRateConfig>;
-  historicalPayoutMonths?: Record<string, number[]>; // 歷史實際除息發放月份 SSOT 映射
+  ttmDividendProfiles?: Record<string, TtmDividendProfile>; // TTM 真實配息優先級高於靜態表 (Spec 0249 T08)
+  historicalPayoutMonths?: Record<string, number[]>; // 舊版相容欄位（不再以 4.5% 假殖利率推估）
   usdToTwdRate?: number; // 美元兌台幣匯率，預設 32.0
 }
 
@@ -110,15 +117,18 @@ export interface PayoutResolutionContext {
   monthNumber: number;
   currentPrice: number;
   customConfig?: PayoutRateConfig;
+  ttmProfile?: TtmDividendProfile;
   historicalMonths?: number[];
 }
 
 /**
- * 計算指定標的在某月份是否入帳，及預估每股配息金額
+ * 計算指定標的在某月份是否入帳，及預估每股配息金額 (Spec 0249 T08 四層階梯)
+ * 嚴格優先級：customPayoutRates > TTM 真實每股配息 > DEFAULT_DIVIDEND_PROFILES > 0 (全面廢除 4.5% 假殖利率)
  */
 function resolvePayoutForMonth(ctx: PayoutResolutionContext): number {
-  const { symbol, monthNumber, currentPrice, customConfig, historicalMonths } = ctx;
+  const { symbol, monthNumber, currentPrice, customConfig, ttmProfile } = ctx;
 
+  // 1. 使用者手動自訂覆蓋 (最高優先級)
   if (customConfig) {
     if (customConfig.frequency === 'MONTHLY') {
       return customConfig.estimatedPerShare;
@@ -130,7 +140,20 @@ function resolvePayoutForMonth(ctx: PayoutResolutionContext): number {
     return 0;
   }
 
-  // 1. 若內建常態庫已有 Profile，優先以 Profile 官方常態發放月為唯一準則（保持年化累計 100% 且防止單月歷史覆蓋全季預估）
+  // 2. 本地湖倉 / 帳本近 12 個月 (TTM) 真實每股配息與慣性月份（高於靜態表，自動適應 ETF 改頻率與美股真實殖利率）
+  if (
+    ttmProfile &&
+    ttmProfile.annualPerShareDividend > 0 &&
+    Array.isArray(ttmProfile.payoutMonths) &&
+    ttmProfile.payoutMonths.length > 0
+  ) {
+    if (ttmProfile.payoutMonths.includes(monthNumber)) {
+      return ttmProfile.annualPerShareDividend / ttmProfile.payoutMonths.length;
+    }
+    return 0;
+  }
+
+  // 3. 內建台灣熱門標的常態配息庫兜底
   const sym = symbol.toUpperCase();
   const profile = DEFAULT_DIVIDEND_PROFILES[sym];
   if (profile) {
@@ -142,16 +165,7 @@ function resolvePayoutForMonth(ctx: PayoutResolutionContext): number {
     return 0;
   }
 
-  // 2. 若非內建清單標的，優先對齊真實歷史發放節奏
-  if (historicalMonths && historicalMonths.length > 0) {
-    if (historicalMonths.includes(monthNumber)) {
-      const timesPerYear = historicalMonths.length;
-      return (currentPrice * DEFAULT_HISTORICAL_ESTIMATED_YIELD) / timesPerYear;
-    }
-    return 0;
-  }
-
-  // 3. 無自訂設定、非內建常態配息標的且無歷史配息紀錄（如不配息成長股），誠實回傳 0 預期配息 (Spec 0231 #549)
+  // 4. 缺乏自訂、真實 TTM 與內建常態庫時，貫徹 Zero Mock 誠實回傳 0（廢除 4.5% 假殖利率膨脹）
   return 0;
 }
 
@@ -198,12 +212,14 @@ export function generate12MonthProjectedCashflow(input: ProjectedCashflowInput):
       if (h.shares <= 0) continue;
       const sym = h.symbol.toUpperCase();
       const customConfig = input.customPayoutRates?.[sym] || input.customPayoutRates?.[h.symbol];
+      const ttmProfile = input.ttmDividendProfiles?.[sym] || input.ttmDividendProfiles?.[h.symbol];
       const historicalMonths = input.historicalPayoutMonths?.[sym] || input.historicalPayoutMonths?.[h.symbol];
       const perShare = resolvePayoutForMonth({
         symbol: sym,
         monthNumber,
         currentPrice: h.currentPrice,
         customConfig,
+        ttmProfile,
         historicalMonths,
       });
 

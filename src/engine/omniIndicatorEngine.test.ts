@@ -34,6 +34,11 @@ describe('OmniIndicatorEngine - 純數學量化指標測試縫隙 (Test Seams)',
       expect(rsi).toBe(0);
     });
 
+    it('全平盤無漲跌序列時，RSI 應回傳中性值 50 而非 100 (Spec 0249 T02)', () => {
+      const flatCloses = Array.from({ length: 20 }, () => 100);
+      expect(calculateRSI(flatCloses, 14)).toBe(50);
+    });
+
     it('漲跌交錯標準數列計算驗證', () => {
       const closes = [44, 44.3, 44.1, 44.5, 43.8, 44.2, 44.6, 44.4, 44.8, 45.1, 45.0, 45.3, 45.5, 45.2, 45.7, 46.0];
       const rsi = calculateRSI(closes, 14);

@@ -22,6 +22,17 @@ export interface RawInstitutionalRecord {
   sblBalance?: number;
 }
 
+/** 集保週資料日曆斷層警戒門檻（天數 > 11 天即判定跨連假/缺漏斷層，Spec 0249 T09 DRY） */
+export const TDCC_GAP_THRESHOLD_DAYS = 11;
+
+/** 計算兩 ISO 日期字串之絕對日曆天數差（無法解析時安全回傳 0） */
+export function calcCalendarDayGap(dateA: string, dateB: string): number {
+  const tA = Date.parse(`${dateA.slice(0, 10)}T00:00:00Z`);
+  const tB = Date.parse(`${dateB.slice(0, 10)}T00:00:00Z`);
+  if (!Number.isFinite(tA) || !Number.isFinite(tB)) return 0;
+  return Math.round(Math.abs(tA - tB) / 86400000);
+}
+
 /**
  * 單一權威資產型態判定 (委託 assetClassifier.ts，Spec 0239 T02/T08)
  */
@@ -120,13 +131,6 @@ export function buildTdccDistribution(
     };
   }
 
-  const calcDiffDays = (dateA: string, dateB: string): number => {
-    const tA = Date.parse(`${dateA.slice(0, 10)}T00:00:00Z`);
-    const tB = Date.parse(`${dateB.slice(0, 10)}T00:00:00Z`);
-    if (!Number.isFinite(tA) || !Number.isFinite(tB)) return 0;
-    return Math.round(Math.abs(tA - tB) / 86400000);
-  };
-
   // Spec 0245 T10: 以真實 28 天日曆窗 (21~35 天容許連假彈性) 尋找 4 週基準點，杜絕陣列索引盲減將 11 週變動偽標為 4 週
   let baseline = history[0];
   let bestInWindowDiff = Infinity;
@@ -134,7 +138,7 @@ export function buildTdccDistribution(
   let bestOverallDiff = Infinity;
 
   for (let i = 0; i < history.length - 1; i++) {
-    const days = calcDiffDays(latest.date, history[i].date);
+    const days = calcCalendarDayGap(latest.date, history[i].date);
     const distFrom28 = Math.abs(days - 28);
     if (days >= 21 && days <= 35) {
       if (!foundInStandardWindow || distFrom28 < bestInWindowDiff) {
@@ -148,7 +152,7 @@ export function buildTdccDistribution(
     }
   }
 
-  const actualSpanDays = calcDiffDays(latest.date, baseline.date);
+  const actualSpanDays = calcCalendarDayGap(latest.date, baseline.date);
   const compareSpanWeeks = foundInStandardWindow
     ? 4
     : Math.max(1, Math.round(actualSpanDays / 7));
@@ -157,7 +161,7 @@ export function buildTdccDistribution(
 
   let hasDateGaps = false;
   for (let i = 1; i < history.length; i++) {
-    if (calcDiffDays(history[i].date, history[i - 1].date) > 11) {
+    if (calcCalendarDayGap(history[i].date, history[i - 1].date) > TDCC_GAP_THRESHOLD_DAYS) {
       hasDateGaps = true;
       break;
     }

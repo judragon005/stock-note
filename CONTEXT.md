@@ -3147,6 +3147,14 @@ $$\beta = \frac{\text{Cov}(r_p, r_b)}{\text{Var}(r_b)}, \quad r = \frac{\text{Co
     2. **Persistent Scheduler Lane Ledger SSOT (持久化單一排程帳本)**：以 SQLite `scheduler_lane_state` 單表統一保存五個配額／軌道鍵值（`twDaily`、`twPhase1`、`usDaily`、`macro`、`weekly`）之水位線、當日重試計數、冷卻時間戳與狀態，由協調中樞單一讀寫並供排程器唯讀查詢，徹底消滅記憶體雙重帳本、手動回扣與容器重啟暴衝迴圈。_Avoid_: Duplicated In-Memory Retry Ledger, Manual Retry Decrement Compensation, OOM Restart Quota Reset
     3. **Tri-Lane Watermark Poisoning Guard (三軌假性成功水位線防禦)**：針對宏觀（台北日期定錨＋至少 1 項有限數值）、每週維護（顯式失敗或無快取標記之 0 筆入庫禁止推進與備份）與美股日線（有效完成率 $\ge 0.8$）三條軌道設立硬性成功閘門，徹底阻斷殘缺或全空回傳毒化排程水位線。_Avoid_: All-Null Macro Watermark Advance, Silent Zero-Row Weekly Backup, Single-Symbol US Success False Positive
 
+- **Quant Indicator & Friction SSOT, Four-State Resonance Triage & TTM Cashflow Hierarchy (量化指標與稅費 SSOT 收斂、共鳴引擎四態檢傷解耦與 TTM 動態現金流學習)**:
+  - 核心模組：`src/engine/klineOscillatorEngine.ts`、`src/engine/omniIndicatorEngine.ts`、`src/engine/technicalResonanceEngine.ts`、`src/engine/rebalancingEngine.ts`、`src/engine/projectedCashflowEngine.ts`、`src/engine/dividendAggregator.ts`、`src/engine/aiForceMarketAssembly.ts`、`src/components/aiForceDashboard/cards/KLineChartCard.tsx`、`src/components/aiForceDashboard/cards/TechnicalResonanceCard.tsx`、`src/components/aiForceDashboard/cards/TdccDistributionCard.tsx`、`src/components/DividendLogView.tsx`、`scripts/market-sync/on-demand-backfill-orchestrator.cjs`。
+  - 規格來源：Spec 0249 與 [ADR 0249](file:///d:/APP/股票紀錄/docs/adr/0249-quant-indicator-ssot-resonance-hardening-and-ttm-cashflow.md)，關聯 GitHub Issue `#613`（清償 Debt 0067、Debt 0064 & Debt 0051）。
+  - 核心領域術語與架構革新：
+    1. **Oscillator Single Source of Truth (擺盪指標單一事實來源)**：確立單趟 $O(N)$ `klineOscillatorEngine.ts`（含共用 `createWilderRsiStepper`）為全站 KDJ（含 $J=3K-2D$）、MACD 與 Wilder RSI(14/6) 之唯一事實來源，Card 01 主圖於日／週／月 K 全時框一致採用並使 Card 01 vs 01B 偏差達成 $\Delta = 0.00$，且全平盤無漲跌 RSI 一律回傳 `50`。_Avoid_: Daily-Timeframe Oscillator Bypass, Flatline RSI 100, Inline J Fallback Math
+    2. **Four-State Resonance Triage (四維共鳴四態檢傷裁決)**：將 `buildTechnicalResonance` 解耦為四獨立支柱純函式與 `arbitrateResonanceSummary`，盤中零量全四維統一退回前收定錨、KDJ 顯式交叉優先於鈍化、獨立計數 `warnCount`（四態恆和為 4）、`VOLATILITY_SQUEEZE` 賦予獨立權重矩陣 (`VOL 1.4 / MACD 1.2 / KDJ 0.7 / RSI 0.7`)，並補齊空頭 `!hasConflict` 降級與 `WARN` 失效防線方向校準。_Avoid_: Warn Count Evaporation into Neutral, Dulling Shadowing Crossovers, Reversed Warn Invalidation Rule
+    3. **TTM Cashflow Projection Hierarchy (TTM 真實配息三層投影階梯)**：重構未來 12 個月現金流解析為嚴格四階（`customPayoutRates` > `TTM 真實每股配息與慣性月份` > `DEFAULT_DIVIDEND_PROFILES` > `0`），全面廢除 `4.5%` 假殖利率猜測，並擴展湖倉按需同步在席美股近 2 年真實現金股利至 `corporate_action_calendar`（受因果屏障保護）。_Avoid_: Static Profile Overriding TTM, Fake 4.5% US Yield Inflation, Unbounded Future Dividend Leakage
+
 
 
 
