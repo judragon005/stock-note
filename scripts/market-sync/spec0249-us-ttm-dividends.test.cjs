@@ -11,6 +11,7 @@ const {
   queryTtmDividendProfiles,
 } = require('./on-demand-backfill-orchestrator.cjs');
 const { closeAllSqliteLakehouseDbs } = require('./sqlite-db-core.cjs');
+const { createMarketApiMiddleware } = require('./vite-market-middleware.cjs');
 
 async function run() {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spec0249-us-ttm-'));
@@ -65,7 +66,30 @@ async function run() {
     assert.equal(profiles.VOO.source, 'LAKEHOUSE_TTM');
     assert.equal(profiles.TSLA, undefined);
 
-    console.log('✔ Spec 0249 T07 US TTM dividend sync & query contract tests passed');
+    // 5. 驗證 HTTP 中介層 GET /api/market/ttm-dividends?symbols=VOO,TSLA&today=2026-11-26 回傳 200 與正確 JSON
+    const middleware = createMarketApiMiddleware(dbPath);
+    let httpStatus = 0;
+    let httpBody = '';
+    await new Promise((resolve, reject) => {
+      const req = { url: '/api/market/ttm-dividends?symbols=VOO,TSLA&today=2026-11-26', method: 'GET' };
+      const res = {
+        writeHead(code) {
+          httpStatus = code;
+        },
+        end(payload) {
+          httpBody = String(payload || '');
+          resolve();
+        },
+      };
+      Promise.resolve(middleware(req, res, () => resolve())).catch(reject);
+    });
+    assert.equal(httpStatus, 200, `Expected HTTP 200, got ${httpStatus}: ${httpBody}`);
+    const parsedHttp = JSON.parse(httpBody);
+    assert.deepEqual(parsedHttp.profiles.VOO.payoutMonths, [3, 6, 9]);
+    assert.equal(parsedHttp.profiles.VOO.annualPerShareDividend, 5.1);
+    assert.equal(parsedHttp.profiles.TSLA, undefined);
+
+    console.log('✔ Spec 0249 T07 US TTM dividend sync, query & HTTP middleware contract tests passed');
   } finally {
     if (typeof closeAllSqliteLakehouseDbs === 'function') closeAllSqliteLakehouseDbs();
     try {

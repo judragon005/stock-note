@@ -319,6 +319,26 @@ describe('Spec 0183 Ticket 02: projectedCashflowEngine (未來 12 個月現金�
     expect(mar?.breakdown.find((b) => b.symbol === 'VOO')).toBeUndefined();
   });
 
+  it('14. [Spec 0249 Seam 5] 使用者自訂 customPayoutRates 優先級應嚴格高於 ttmDividendProfiles', () => {
+    const input: ProjectedCashflowInput = {
+      baseYearMonth: '2026-01',
+      usdToTwdRate: 32.0,
+      holdings: [
+        { symbol: '0050', name: '元大台灣50', shares: 1000, avgCost: 180, currentPrice: 200, marketValue: 200000, market: 'TW' },
+      ] as unknown as HoldingPosition[],
+      customPayoutRates: {
+        '0050': { frequency: 'SEMI_ANNUAL', estimatedPerShare: 4.0, payoutMonths: [3, 9] },
+      },
+      ttmDividendProfiles: {
+        '0050': { payoutMonths: [1, 4, 7, 10], annualPerShareDividend: 6.0, source: 'LAKEHOUSE_TTM' },
+      },
+    };
+
+    const projection = generate12MonthProjectedCashflow(input);
+    expect(projection.months.find((m) => m.yearMonth === '2026-03')?.estimatedTotalTwd).toBe(4000);
+    expect(projection.months.find((m) => m.yearMonth === '2026-01')?.estimatedTotalTwd).toBe(0);
+  });
+
   it('10. [Spec 0230 / Issue 02] 擴充 DEFAULT_DIVIDEND_PROFILES: 華邦電 (2344, 8月)、聯電 (2303, 7月)、聯發科 (2454, 1/7月)', () => {
     // 驗證預設 profiles 中明確定義了 2344, 2303, 2454 的常態月份
     const input: ProjectedCashflowInput = {

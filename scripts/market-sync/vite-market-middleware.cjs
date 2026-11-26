@@ -996,19 +996,23 @@ function createMarketApiMiddleware(customDbPath) {
     // 2.0 GET /api/market/ttm-dividends?symbols=VOO,AAPL&today=YYYY-MM-DD (Spec 0249 T07/T08)
     if (pathname === '/api/market/ttm-dividends') {
       try {
-        const { queryTtmDividendProfiles, backfillUsHoldingsDividends } = require('./on-demand-backfill-orchestrator.cjs');
-        const symbolsParam = urlObj.searchParams.get('symbols') || '';
-        const todayParam = urlObj.searchParams.get('today') || undefined;
+        const {
+          isUsMarketSymbol,
+          queryTtmDividendProfiles,
+          runOnDemandSymbolBackfill,
+        } = require('./on-demand-backfill-orchestrator.cjs');
+        const symbolsParam = String(query.symbols || '');
+        const todayParam = typeof query.today === 'string' && query.today ? query.today : undefined;
         const symbols = symbolsParam
           .split(',')
           .map((s) => s.trim().toUpperCase())
           .filter(Boolean)
           .slice(0, 100);
         const profiles = queryTtmDividendProfiles(symbols, customDbPath, todayParam);
-        if (urlObj.searchParams.get('sync') === '1' && symbols.length > 0) {
-          const missingUs = symbols.filter((s) => !profiles[s]);
-          if (missingUs.length > 0) {
-            void backfillUsHoldingsDividends(missingUs, customDbPath).catch(() => {});
+        if (String(query.sync || '') === '1' && symbols.length > 0) {
+          const missingUs = symbols.filter((s) => isUsMarketSymbol(s) && !profiles[s]).slice(0, 10);
+          for (const sym of missingUs) {
+            void runOnDemandSymbolBackfill(sym, { needDividend: true, customDbPath }).catch(() => {});
           }
         }
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
