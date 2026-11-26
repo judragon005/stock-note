@@ -21,7 +21,6 @@ export const HealthReportModal: React.FC<HealthReportModalProps> = ({
   symbol,
   stockName,
 }) => {
-  // 監聽 ESC 鍵關閉
   if (!result) return null;
 
   const displayName = stockName && stockName !== symbol ? `${stockName} (${symbol})` : symbol;

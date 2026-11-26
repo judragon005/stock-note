@@ -179,6 +179,13 @@ body {
   border: 1px solid rgba(52, 211, 153, 0.3);
 }
 
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+}
+
 .btn-primary:hover {
   background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
   box-shadow: 0 6px 18px rgba(16, 185, 129, 0.45);
@@ -392,6 +399,7 @@ body {
 }
 
 .modal-dirty-banner {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -404,6 +412,10 @@ body {
   border: 1px solid rgba(245, 158, 11, 0.45);
   color: #fde68a;
   font-size: 0.84rem;
+}
+
+.modal-content--flex-fixed > .modal-dirty-banner {
+  margin: 12px 16px 0;
 }
 
 /* 宏觀戰情室與動能雷達 (War Room & Momentum Radar CSS System) */

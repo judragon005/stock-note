@@ -74,4 +74,21 @@ describe('Spec 0250 Seam 2 (T03): PassphraseModal E2EE 遮罩密碼原語', () =
     );
     expect(closedHtml).toBe('');
   });
+
+  it('傳入 externalError 時於原視窗內渲染 role="alert" 錯誤提示供原地重試，且按鈕具完整 .btn 基類', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PassphraseModal, {
+        isOpen: true,
+        mode: 'unlock',
+        title: '解密 E2EE 備份檔案',
+        externalError: '解密失敗，請確認主密碼是否正確',
+        onCancel: () => {},
+        onSubmit: () => {},
+      })
+    );
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('解密失敗，請確認主密碼是否正確');
+    expect(html).toContain('class="btn btn-secondary"');
+    expect(html).toContain('class="btn btn-primary"');
+  });
 });

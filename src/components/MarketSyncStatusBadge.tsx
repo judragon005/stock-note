@@ -127,18 +127,6 @@ export const MarketSyncStatusBadge: React.FC<MarketSyncStatusBadgeProps> = ({
     return () => window.removeEventListener(LAKEHOUSE_SYNCED_EVENT, handleSynced);
   }, [fetchStatus]);
 
-  // 鍵盤 Escape 快捷關閉防禦
-  useEffect(() => {
-    if (!showModal) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowModal(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showModal]);
-
   const formatShortDate = (dateStr?: string | null) => {
     if (!dateStr) return null;
     return dateStr.length >= 10 ? dateStr.slice(5) : dateStr;

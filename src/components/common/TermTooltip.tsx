@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { GlossaryEntry, getGlossaryEntry } from '../../constants/aiForceGlossary';
+import { TOOLTIP_Z_INDEX } from './ModalShell';
 
 export interface TermTooltipPlacement {
   vertical: 'top' | 'bottom';
@@ -168,7 +169,7 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
       position: 'fixed',
       top: `${coords.top}px`,
       left: `${coords.left}px`,
-      zIndex: 'var(--z-tooltip, 950)' as unknown as number,
+      zIndex: TOOLTIP_Z_INDEX,
       width: TOOLTIP_POPUP_CONFIG.width,
       maxWidth: 'calc(100vw - 24px)',
       maxHeight: TOOLTIP_POPUP_CONFIG.maxHeight,

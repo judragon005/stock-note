@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { TradeRecord, HoldingPosition } from '../types/stock';
 import { AccountingMethod, ACCOUNTING_METHOD_LABELS } from '../types/lot';
 import { processLots, calculateTaxComparison } from '../engine/lotEngine';
@@ -41,18 +41,6 @@ export const LotsBreakdownModal: React.FC<LotsBreakdownModalProps> = ({
   const [sortField, setSortField] = useState<SortField>('buyDate');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedYear, setSelectedYear] = useState<string>('ALL');
-
-  // 鍵盤 Escape 鍵關閉監聽
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
 
   const symbolTrades = useMemo(() => {
     return trades.filter(

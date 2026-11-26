@@ -5,6 +5,8 @@ export type ModalLayoutMode = 'scroll' | 'flex-fixed';
 export type ModalLayer = 'base' | 'nested' | 'critical';
 export type ModalCloseDecision = 'LOCKED' | 'CONFIRM_DIRTY' | 'ALLOW';
 
+export const TOOLTIP_Z_INDEX = 950;
+
 export const MODAL_LAYER_Z_INDEX: Record<ModalLayer, number> = {
   base: 1000,
   nested: 1100,
@@ -172,7 +174,10 @@ export const ModalShell: React.FC<ModalShellProps> = ({
 }) => {
   const [showDirtyConfirm, setShowDirtyConfirm] = useState(false);
   const dialogRef = useRef<HTMLDivElement | null>(null);
-  const modalIdRef = useRef<symbol>(Symbol('ModalShell'));
+  const modalIdRef = useRef<symbol | null>(null);
+  if (modalIdRef.current === null) {
+    modalIdRef.current = Symbol('ModalShell');
+  }
 
   const onCloseRef = useRef(onClose);
   const closeLockedRef = useRef(closeLocked);
@@ -206,7 +211,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
     }
     if (typeof document === 'undefined') return;
 
-    const modalId = modalIdRef.current;
+    const modalId = modalIdRef.current!;
     const previousActive = document.activeElement as HTMLElement | null;
 
     defaultOverlayKernel.register(modalId);
@@ -305,7 +310,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
                 type="button"
-                className="btn-secondary"
+                className="btn btn-secondary"
                 style={{ padding: '4px 10px', fontSize: '0.78rem' }}
                 onClick={() => setShowDirtyConfirm(false)}
               >
@@ -313,7 +318,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
               </button>
               <button
                 type="button"
-                className="btn-danger"
+                className="btn btn-danger"
                 style={{ padding: '4px 10px', fontSize: '0.78rem' }}
                 onClick={() => {
                   setShowDirtyConfirm(false);

@@ -248,15 +248,18 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
     >
         {/* Close Button */}
         <button
+          type="button"
+          disabled={loading}
           onClick={onClose}
           style={{
             position: 'absolute',
             top: '20px',
             right: '20px',
+            opacity: loading ? 0.4 : 1,
+            cursor: loading ? 'not-allowed' : 'pointer',
             background: 'transparent',
             border: 'none',
             color: 'var(--text-muted)',
-            cursor: 'pointer',
           }}
         >
           <X size={20} />

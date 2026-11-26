@@ -77,8 +77,11 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
     twPmi: '',
   });
 
+  const [isDirty, setIsDirty] = useState(false);
+
   useEffect(() => {
     if (isOpen) {
+      setIsDirty(false);
       setFormData({
         us10y: macroSnapshot.us10y.toString(),
         us2y: macroSnapshot.us2y.toString(),
@@ -107,6 +110,7 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
   if (!isOpen) return null;
 
   const handleChange = (field: keyof MacroCalibrationFormState, value: string) => {
+    setIsDirty(true);
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -198,8 +202,10 @@ export const MacroQuickCalibrationModal: React.FC<MacroQuickCalibrationModalProp
     <ModalShell
       isOpen={isOpen}
       onClose={onClose}
-      layout="flex-fixed"
+      layout="scroll"
+      dirty={isDirty}
       maxWidth="600px"
+      padding="0"
       ariaLabel="宏觀指標快速校準"
       contentStyle={{
         background: 'var(--bg-secondary, #1e293b)',

@@ -93,17 +93,6 @@ export const FinancialForensicModal: React.FC<FinancialForensicModalProps> = ({
     }
   }, [isOpen, symbol, loadData]);
 
-  // ESC 鍵關閉
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
   return (
     <ModalShell
       isOpen={isOpen}

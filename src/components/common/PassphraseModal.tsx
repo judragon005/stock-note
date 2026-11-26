@@ -38,7 +38,8 @@ export interface PassphraseModalProps {
   title: string;
   description?: string;
   confirmLabel?: string;
-  onSubmit: (passphrase: string) => void;
+  externalError?: string | null;
+  onSubmit: (passphrase: string) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -53,6 +54,7 @@ export const PassphraseModal: React.FC<PassphraseModalProps> = ({
   title,
   description,
   confirmLabel,
+  externalError,
   onSubmit,
   onCancel,
 }) => {
@@ -201,7 +203,7 @@ export const PassphraseModal: React.FC<PassphraseModalProps> = ({
           )}
         </div>
 
-        {errorMsg && (
+        {(errorMsg || externalError) && (
           <div
             role="alert"
             style={{
@@ -217,15 +219,15 @@ export const PassphraseModal: React.FC<PassphraseModalProps> = ({
             }}
           >
             <AlertTriangle size={15} />
-            <span>{errorMsg}</span>
+            <span>{errorMsg ?? externalError}</span>
           </div>
         )}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '4px' }}>
-          <button type="button" className="btn-secondary" onClick={handleClose}>
+          <button type="button" className="btn btn-secondary" onClick={handleClose}>
             取消
           </button>
-          <button type="submit" className="btn-primary">
+          <button type="submit" className="btn btn-primary">
             {confirmLabel ?? (mode === 'setup' ? '確認加密匯出' : '確認解密匯入')}
           </button>
         </div>

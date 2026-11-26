@@ -20,8 +20,9 @@ export const ZavyTenSecondsModal: React.FC<ZavyTenSecondsModalProps> = ({
     <ModalShell
       isOpen={isOpen}
       onClose={onClose}
-      layout="flex-fixed"
+      layout="scroll"
       maxWidth="640px"
+      padding="0"
       ariaLabel="Zavy 十秒慢富總覽"
       contentStyle={{
         backgroundColor: '#1e293b',

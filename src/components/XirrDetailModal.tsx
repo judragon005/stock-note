@@ -56,42 +56,37 @@ export const XirrDetailModal: React.FC<XirrDetailModalProps> = ({
     };
   });
 
-  const renderCategoryPill = (label: string, color: string, bg: string, border: string) => (
-    <span
-      style={{
-        display: 'inline-block',
-        padding: '2px 8px',
-        fontSize: '0.75rem',
-        borderRadius: '4px',
-        fontWeight: 700,
-        color,
-        backgroundColor: bg,
-        border: `1px solid ${border}`,
-      }}
-    >
-      {label}
-    </span>
-  );
+  const CATEGORY_PILL_STYLES: Record<string, { label: string; color: string; bg: string; border: string }> = {
+    DEPOSIT: { label: '銀行入金', color: '#fbbf24', bg: 'rgba(245, 158, 11, 0.2)', border: 'rgba(245, 158, 11, 0.35)' },
+    WITHDRAWAL: { label: '銀行出金', color: '#c084fc', bg: 'rgba(168, 85, 247, 0.2)', border: 'rgba(168, 85, 247, 0.35)' },
+    BUY: { label: '股票買進', color: '#60a5fa', bg: 'rgba(59, 130, 246, 0.2)', border: 'rgba(59, 130, 246, 0.35)' },
+    SELL: { label: '股票賣出', color: '#34d399', bg: 'rgba(16, 185, 129, 0.2)', border: 'rgba(16, 185, 129, 0.35)' },
+    DIVIDEND: { label: '現金股利', color: '#f472b6', bg: 'rgba(236, 72, 153, 0.2)', border: 'rgba(236, 72, 153, 0.35)' },
+    TERMINAL_VALUE: { label: '期末結算淨值', color: '#22d3ee', bg: 'rgba(6, 182, 212, 0.2)', border: 'rgba(6, 182, 212, 0.35)' },
+  };
 
   const getCategoryBadge = (category?: string, amount?: number) => {
-    switch (category) {
-      case 'DEPOSIT':
-        return renderCategoryPill('銀行入金', '#fbbf24', 'rgba(245, 158, 11, 0.2)', 'rgba(245, 158, 11, 0.35)');
-      case 'WITHDRAWAL':
-        return renderCategoryPill('銀行出金', '#c084fc', 'rgba(168, 85, 247, 0.2)', 'rgba(168, 85, 247, 0.35)');
-      case 'BUY':
-        return renderCategoryPill('股票買進', '#60a5fa', 'rgba(59, 130, 246, 0.2)', 'rgba(59, 130, 246, 0.35)');
-      case 'SELL':
-        return renderCategoryPill('股票賣出', '#34d399', 'rgba(16, 185, 129, 0.2)', 'rgba(16, 185, 129, 0.35)');
-      case 'DIVIDEND':
-        return renderCategoryPill('現金股利', '#f472b6', 'rgba(236, 72, 153, 0.2)', 'rgba(236, 72, 153, 0.35)');
-      case 'TERMINAL_VALUE':
-        return renderCategoryPill('期末結算淨值', '#22d3ee', 'rgba(6, 182, 212, 0.2)', 'rgba(6, 182, 212, 0.35)');
-      default:
-        return (amount || 0) < 0
-          ? renderCategoryPill('現金流出', '#60a5fa', 'rgba(59, 130, 246, 0.2)', 'rgba(59, 130, 246, 0.35)')
-          : renderCategoryPill('現金流入', '#34d399', 'rgba(16, 185, 129, 0.2)', 'rgba(16, 185, 129, 0.35)');
-    }
+    const spec =
+      (category && CATEGORY_PILL_STYLES[category]) ||
+      ((amount || 0) < 0
+        ? { label: '現金流出', color: '#60a5fa', bg: 'rgba(59, 130, 246, 0.2)', border: 'rgba(59, 130, 246, 0.35)' }
+        : { label: '現金流入', color: '#34d399', bg: 'rgba(16, 185, 129, 0.2)', border: 'rgba(16, 185, 129, 0.35)' });
+    return (
+      <span
+        style={{
+          display: 'inline-block',
+          padding: '2px 8px',
+          fontSize: '0.75rem',
+          borderRadius: '4px',
+          fontWeight: 700,
+          color: spec.color,
+          backgroundColor: spec.bg,
+          border: `1px solid ${spec.border}`,
+        }}
+      >
+        {spec.label}
+      </span>
+    );
   };
 
   return (

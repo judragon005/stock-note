@@ -1,4 +1,5 @@
 import React, { useState, useId } from 'react';
+import { TOOLTIP_Z_INDEX } from './ModalShell';
 
 export type TooltipPosition = 'top' | 'bottom' | 'left' | 'right';
 export type TooltipAlign = 'center' | 'left' | 'right';
@@ -155,7 +156,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
           role="tooltip"
           style={{
             position: 'absolute',
-            zIndex: 9999,
+            zIndex: TOOLTIP_Z_INDEX,
             padding: '6px 10px',
             fontSize: '0.75rem',
             lineHeight: 1.4,

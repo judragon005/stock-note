@@ -312,7 +312,7 @@ export const BrokerAccountsModal: React.FC<BrokerAccountsModalProps> = ({
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', paddingTop: '8px' }}>
               <button
                 type="button"
-                className="btn-secondary"
+                className="btn btn-secondary"
                 onClick={() => {
                   setEditingAccount(null);
                   setIsAddingNew(false);
@@ -322,7 +322,7 @@ export const BrokerAccountsModal: React.FC<BrokerAccountsModalProps> = ({
               </button>
               <button
                 type="submit"
-                className="btn-primary"
+                className="btn btn-primary"
                 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 <Check size={14} /> 儲存帳戶
@@ -542,7 +542,7 @@ export const BrokerAccountsModal: React.FC<BrokerAccountsModalProps> = ({
           flexShrink: 0,
         }}
       >
-        <button type="button" className="btn-secondary" onClick={onClose}>
+        <button type="button" className="btn btn-secondary" onClick={onClose}>
           完成
         </button>
       </div>

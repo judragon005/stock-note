@@ -322,7 +322,7 @@ export const ApiKeyPoolManager: React.FC = () => {
             />
             <button
               type="submit"
-              className="btn-primary"
+              className="btn btn-primary"
               style={{
                 padding: '8px 14px',
                 fontSize: '0.78rem',
