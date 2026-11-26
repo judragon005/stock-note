@@ -51,9 +51,41 @@ export interface OscillatorEnrichOptions {
 }
 
 /**
- * 單趟 O(N) 技術指標序列計算引擎 (Spec 0245 T03)
+ * 建立單趟 O(1) Wilder RSI 遞推步進器 (Spec 0249 T01 DRY 收斂)
+ */
+function createWilderRsiStepper(period: number): (diff: number, barIndex: number) => number | undefined {
+  let sumGain = 0;
+  let sumLoss = 0;
+  let avgGain = 0;
+  let avgLoss = 0;
+
+  return (diff: number, barIndex: number): number | undefined => {
+    if (barIndex <= 0) return undefined;
+    const gain = diff > 0 ? diff : 0;
+    const loss = diff < 0 ? Math.abs(diff) : 0;
+
+    if (barIndex <= period) {
+      sumGain += gain;
+      sumLoss += loss;
+      if (barIndex < period) return undefined;
+      avgGain = sumGain / period;
+      avgLoss = sumLoss / period;
+    } else {
+      avgGain = (avgGain * (period - 1) + gain) / period;
+      avgLoss = (avgLoss * (period - 1) + loss) / period;
+    }
+
+    if (avgLoss === 0) {
+      return avgGain === 0 ? 50 : 100;
+    }
+    return Number((100 - 100 / (1 + avgGain / avgLoss)).toFixed(1));
+  };
+}
+
+/**
+ * 單趟 O(N) 技術指標序列計算引擎 (Spec 0245 T03 / Spec 0249 T01)
  * 一次計算整段數列之 KDJ(9,3,3 含 J=3K-2D)、MACD(12,26,9)、Wilder RSI(14) 與 RSI(6)，
- * 取代週/月 K 切換時逐根 slice 的 O(N^2) 開銷。
+ * 取代週/月 K 切換時逐根 slice 的 O(N^2) 開銷，並作為全站擺盪指標單一事實來源 (SSOT)。
  */
 export function enrichCandlesWithOscillators(
   candles: KlineCandleItem[] = [],
@@ -75,17 +107,8 @@ export function enrichCandlesWithOscillators(
   let emaSlow = candles[0].close;
   let dea = 0;
 
-  // Wilder RSI(14) 狀態
-  let sumGain14 = 0;
-  let sumLoss14 = 0;
-  let avgGain14 = 0;
-  let avgLoss14 = 0;
-
-  // Wilder RSI(6) 狀態
-  let sumGain6 = 0;
-  let sumLoss6 = 0;
-  let avgGain6 = 0;
-  let avgLoss6 = 0;
+  const stepRsi14 = createWilderRsiStepper(14);
+  const stepRsi6 = createWilderRsiStepper(6);
 
   const result: KlineCandleItem[] = new Array(len);
 
@@ -124,65 +147,10 @@ export function enrichCandlesWithOscillators(
     const rawHist = (rawDif - dea) * 2;
     const emitMacd = !requireMinPeriod || i >= 25;
 
-    // 3. Wilder RSI(14) 與 RSI(6) — 單趟遞迴 O(1)
-    let rsi14Val: number | undefined = undefined;
-    let rsi6Val: number | undefined = undefined;
-
-    if (i > 0) {
-      const diff = c.close - candles[i - 1].close;
-      const gain = diff > 0 ? diff : 0;
-      const loss = diff < 0 ? Math.abs(diff) : 0;
-
-      // RSI 14
-      if (i <= 14) {
-        sumGain14 += gain;
-        sumLoss14 += loss;
-        if (i === 14) {
-          avgGain14 = sumGain14 / 14;
-          avgLoss14 = sumLoss14 / 14;
-          rsi14Val =
-            avgLoss14 === 0
-              ? avgGain14 === 0
-                ? 50
-                : 100
-              : Number((100 - 100 / (1 + avgGain14 / avgLoss14)).toFixed(1));
-        }
-      } else {
-        avgGain14 = (avgGain14 * 13 + gain) / 14;
-        avgLoss14 = (avgLoss14 * 13 + loss) / 14;
-        rsi14Val =
-          avgLoss14 === 0
-            ? avgGain14 === 0
-              ? 50
-              : 100
-            : Number((100 - 100 / (1 + avgGain14 / avgLoss14)).toFixed(1));
-      }
-
-      // RSI 6
-      if (i <= 6) {
-        sumGain6 += gain;
-        sumLoss6 += loss;
-        if (i === 6) {
-          avgGain6 = sumGain6 / 6;
-          avgLoss6 = sumLoss6 / 6;
-          rsi6Val =
-            avgLoss6 === 0
-              ? avgGain6 === 0
-                ? 50
-                : 100
-              : Number((100 - 100 / (1 + avgGain6 / avgLoss6)).toFixed(1));
-        }
-      } else {
-        avgGain6 = (avgGain6 * 5 + gain) / 6;
-        avgLoss6 = (avgLoss6 * 5 + loss) / 6;
-        rsi6Val =
-          avgLoss6 === 0
-            ? avgGain6 === 0
-              ? 50
-              : 100
-            : Number((100 - 100 / (1 + avgGain6 / avgLoss6)).toFixed(1));
-      }
-    }
+    // 3. Wilder RSI(14) 與 RSI(6) — 共用步進器單趟遞迴 O(1)
+    const diff = i > 0 ? c.close - candles[i - 1].close : 0;
+    const rsi14Val = stepRsi14(diff, i);
+    const rsi6Val = stepRsi6(diff, i);
 
     result[i] = {
       ...c,

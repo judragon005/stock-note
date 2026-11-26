@@ -58,6 +58,9 @@ export function calculateRSI(closes: number[], period = 14): number | undefined 
     avgLoss = (avgLoss * (period - 1) + loss) / period;
   }
 
+  if (avgLoss === 0 && avgGain === 0) {
+    return 50;
+  }
   if (avgLoss === 0) {
     return 100;
   }

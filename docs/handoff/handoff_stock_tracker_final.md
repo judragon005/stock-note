@@ -1,7 +1,13 @@
 # 股票紀錄與分析儀 (Stock Tracker & Analyzer) - 專案全量交接手冊 (Final Handoff Dossier)
 
-> **交接產生時間**：2026-11-25 16:25 (UTC+8)  
+> **交接產生時間**：2026-11-26 11:08 (UTC+8)  
 > **當前最新里程碑**：
+> - **V9.31.0 系統免疫強化 Wave 2 — 量化指標與稅費 SSOT 收斂、共鳴引擎四態檢傷解耦與 TTM 動態現金流學習**（ADR 0249, Spec 0249, Issue #613）：
+>   - **Oscillator & Friction SSOT (T01–T04)**：確立 `klineOscillatorEngine.ts`（含 `createWilderRsiStepper` DRY）為全站 KDJ/MACD/Wilder RSI 唯一計算源，Card 01 主圖於日/週/月 K 全時框一致採用（與 Card 01B 偏差 $\max|\Delta| = 0.00$）並清除 3 處手算 `3*K-2*D`；修復 `omniIndicatorEngine.calculateRSI` 全平盤誤回 `100` 改為 `50`；`rebalancingEngine.ts` 交易摩擦收斂至 `calculator.ts` 稅費原語（台股 20 元低消、股票 ETF `0.1%`、債券 ETF `0%`）。
+>   - **Four-State Resonance Triage & 8 Defects Closure (T05–T06)**：`buildTechnicalResonance` 拆解為四支私有純函式支柱 + `arbitrateResonanceSummary`（主函式 59 行 $\le 80$）；盤中零量全四維統一前收定錨；KDJ 高檔死叉／低檔金叉（`k <= 35`）優先於鈍化；總評新增獨立 `warnCount`（四態恆和為 4）；`VOLATILITY_SQUEEZE` 獨立權重矩陣（`VOL 1.4 / MACD 1.2 / KDJ 0.7 / RSI 0.7`）並校準震盪盤「折減 35%」文案；空頭補齊 `!hasConflict` 降級、純多頭底背離防誤降、`WARN` 失效防線方向校準、`fwd.close <= 0` 守衛與 Card 01B 動態 `barUnit`。
+>   - **TTM Cashflow Projection Hierarchy & On-Demand US Dividend Sync (T07–T08)**：確立四層優先級（`customPayoutRates > TTM 真實每股配息 > DEFAULT_DIVIDEND_PROFILES > 0`），徹底廢除 `4.5%` 假殖利率；`on-demand-backfill-orchestrator.cjs` 補齊持倉美股近 2 年真實配息入庫與 `queryTtmDividendProfiles`（受因果屏障保護）；`vite-market-middleware.cjs` 暴露 `GET /api/market/ttm-dividends`（接入 `runOnDemandSymbolBackfill` 冷卻鎖）供 `DividendLogView.tsx` 合併消費 `LAKEHOUSE_TTM` + `LEDGER_TTM`。
+>   - **TDCC DRY、三引擎測試防線與債務結案 (T09–T10)**：於 `aiForceMarketAssembly.ts` 抽離 `TDCC_GAP_THRESHOLD_DAYS = 11` 與 `calcCalendarDayGap`；補建 `klineOscillatorEngine.test.ts`、`technicalResonanceEngine.test.ts`、`darvasBoxEngine.test.ts` 與 `spec0249-us-ttm-dividends.test.cjs`；[Debt 0051](../debts/0051-projected-cashflow-dynamic-calendar-profile-learning.md)、[Debt 0064](../debts/0064-war-room-resonance-and-tdcc-smells-consolidation.md) 與 [Debt 0067](../debts/0067-quant-indicator-ssot-and-resonance-edge-defects.md) 正式結案 `RESOLVED`。
+>   - **品質狀態**：三輪雙軸程式碼審查終審 **PASS**，後端測試 **11/11 通過**、前端與整合測試 **2,657/2,657 通過 (100% Passed / 322 個測試套件)**，TypeScript Strict 0 錯誤，生產打包 `npm run build` 100% 綠燈，全量文檔稽核 (`npm run lint:docs`) 760 檔 100% 通過。
 > - **V9.30.0 系統免疫強化 Wave 1 — SQLite 高頻表日期索引補齊、NAS 排程持久化單一帳本與三軌假性成功水位線防禦**（ADR 0248, Spec 0248, Issue #611）：
 >   - **SQLite Date-First Index Convergence (T01)**：`sqlite-db-core.cjs` 補齊 `idx_tdcc_date`、`idx_revenue_ym`、`idx_valuation_date`、`idx_etf_nav_date` 四支高頻表日期／年月首欄索引，經 `EXPLAIN QUERY PLAN` 驗證 `/healthz` 與 `checkMarketFreshness` 達零全表 `SCAN`。
 >   - **Persistent Scheduler Lane Ledger SSOT & Decomposition (T02–T05)**：建立 `scheduler_lane_state` 單一持久化表（支援 `twDaily`/`twPhase1`/`usDaily`/`macro`/`weekly`），由 `lakehouse-sync-coordinator.cjs` 統一讀寫並於跨日自動歸零前日重試計數；`nas-autonomous-scheduler.cjs` 與 `nas-server.cjs` 統一解析 `getDbPath(customDbPath)` 確保正式環境預設落盤與 `/healthz` 同源，拆解 4 個視窗決策純函式與 4 個分軌執行器並徹底拔除手動 `retryCount - 1` 回扣。

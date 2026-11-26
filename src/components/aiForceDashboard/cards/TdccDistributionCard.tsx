@@ -1,5 +1,6 @@
 import React, { useMemo, useId } from 'react';
 import { OBSIDIAN_CARD_CONTAINER, resolveDirectionalPalette } from '../../../constants/designTokens';
+import { TDCC_GAP_THRESHOLD_DAYS, calcCalendarDayGap } from '../../../engine/aiForceMarketAssembly';
 import { TdccDistributionData } from '../../../types/aiForceDashboard';
 import { ColorThemeMode, MarketType } from '../../../types/stock';
 import { Users, TrendingUp, AlertTriangle, ShieldCheck } from 'lucide-react';
@@ -183,15 +184,13 @@ export const TdccDistributionCard: React.FC<TdccDistributionCardProps> = ({
       const y1 = projectTdccRatioToY(prev.over1000Ratio, scales, chartHeight, padding);
       const x2 = Number((20 + i * step).toFixed(1));
       const y2 = projectTdccRatioToY(curr.over1000Ratio, scales, chartHeight, padding);
-      const tPrev = Date.parse(`${prev.date.slice(0, 10)}T00:00:00Z`);
-      const tCurr = Date.parse(`${curr.date.slice(0, 10)}T00:00:00Z`);
-      const diffDays = Number.isFinite(tPrev) && Number.isFinite(tCurr) ? Math.abs(tCurr - tPrev) / 86400000 : 7;
+      const diffDays = calcCalendarDayGap(curr.date, prev.date);
       segments.push({
         x1,
         y1,
         x2,
         y2,
-        isGap: diffDays > 11,
+        isGap: diffDays > TDCC_GAP_THRESHOLD_DAYS,
         key: `seg-${prev.date}-${curr.date}`,
       });
     }

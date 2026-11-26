@@ -263,12 +263,19 @@ describe('Rebalancing Engine (再平衡運算引擎)', () => {
       expect(units.lotsSummary).toBe('3.333 股');
     });
 
-    it('摩擦成本估算應考量台股 0.1425% 買費與 0.3% 賣稅', () => {
-      const frictionBuy = estimateTransactionFriction('TW', 'BUY', 100000);
-      expect(frictionBuy).toBe(Math.round(100000 * 0.001425));
-
-      const frictionSell = estimateTransactionFriction('TW', 'SELL', 100000);
-      expect(frictionSell).toBe(Math.round(100000 * (0.001425 + 0.003)));
+    it('摩擦成本估算應收斂至核心帳務原語（台股 20 元低消、個股 0.3%、股票 ETF 0.1%、債券 ETF 0%）', () => {
+      // 100,000 * 0.001425 = 142.5 -> 無條件捨去為 142
+      expect(estimateTransactionFriction('TW', 'BUY', 100000)).toBe(142);
+      // 舊版 3 參數呼叫向後相容：預設一般股賣稅 0.3% (300) + 手續費 142 = 442
+      expect(estimateTransactionFriction('TW', 'SELL', 100000)).toBe(442);
+      // 小額交易應套用台股 20 元最低手續費
+      expect(estimateTransactionFriction('TW', 'BUY', 5000, '2330')).toBe(20);
+      // 股票 ETF (0050) 賣出證交稅 0.1% (100) + 手續費 142 = 242
+      expect(estimateTransactionFriction('TW', 'SELL', 100000, '0050')).toBe(242);
+      // 債券 ETF (00679B) 賣出免證交稅 0% + 手續費 142 = 142
+      expect(estimateTransactionFriction('TW', 'SELL', 100000, '00679B')).toBe(142);
+      // 美股零佣金
+      expect(estimateTransactionFriction('US', 'SELL', 100000, 'VOO')).toBe(0);
     });
   });
 

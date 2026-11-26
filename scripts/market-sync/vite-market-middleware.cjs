@@ -993,6 +993,36 @@ function createMarketApiMiddleware(customDbPath) {
       );
     }
 
+    // 2.0 GET /api/market/ttm-dividends?symbols=VOO,AAPL&today=YYYY-MM-DD (Spec 0249 T07/T08)
+    if (pathname === '/api/market/ttm-dividends') {
+      try {
+        const {
+          isUsMarketSymbol,
+          queryTtmDividendProfiles,
+          runOnDemandSymbolBackfill,
+        } = require('./on-demand-backfill-orchestrator.cjs');
+        const symbolsParam = String(query.symbols || '');
+        const todayParam = typeof query.today === 'string' && query.today ? query.today : undefined;
+        const symbols = symbolsParam
+          .split(',')
+          .map((s) => s.trim().toUpperCase())
+          .filter(Boolean)
+          .slice(0, 100);
+        const profiles = queryTtmDividendProfiles(symbols, customDbPath, todayParam);
+        if (String(query.sync || '') === '1' && symbols.length > 0) {
+          const missingUs = symbols.filter((s) => isUsMarketSymbol(s) && !profiles[s]).slice(0, 10);
+          for (const sym of missingUs) {
+            void runOnDemandSymbolBackfill(sym, { needDividend: true, customDbPath }).catch(() => {});
+          }
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ profiles }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ profiles: {}, error: err?.message || 'TTM query failed' }));
+      }
+    }
+
     // 2.1 GET /api/market/corporate-actions/:symbol (Spec 0188 / Spec 0239 T01)
     const caMatch = pathname.match(/^\/api\/market\/corporate-actions\/([A-Za-z0-9.\-_]+)$/);
     if (caMatch && !caMatch[1].includes('..')) {

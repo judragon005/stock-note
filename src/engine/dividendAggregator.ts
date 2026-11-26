@@ -36,6 +36,51 @@ export function extractHistoricalPayoutMonths(
 }
 
 /**
+ * 萃取各標的近 12 個月 (TTM) 帳本真實每股配息與發放月份 (Spec 0249 T08)
+ * 嚴守時序因果屏障 (payDate <= currentDateStr) 與近 365 天滑動視窗，供現金流投影引擎取代 4.5% 假殖利率。
+ */
+export function extractLedgerTtmDividendProfiles(
+  trades: TradeRecord[],
+  currentDateStr: string
+): Record<string, { payoutMonths: number[]; annualPerShareDividend: number; source: 'LEDGER_TTM' }> {
+  if (!currentDateStr || currentDateStr.length < 10) return {};
+  const todayMs = Date.parse(`${currentDateStr.slice(0, 10)}T00:00:00Z`);
+  if (!Number.isFinite(todayMs)) return {};
+  const cutoffStr = new Date(todayMs - 365 * 86400 * 1000).toISOString().slice(0, 10);
+
+  const acc: Record<string, { months: Set<number>; annualPerShare: number }> = {};
+  for (const t of trades) {
+    if (t.type !== 'DIVIDEND') continue;
+    const payDate = getEffectiveDividendPayDate(t);
+    if (!payDate || payDate > currentDateStr || payDate < cutoffStr) continue;
+
+    // 單筆每股現金股利（原幣）= price（DIVIDEND 記錄中 price 為每股配息或當 shares > 0 時 price * shares 為總額）
+    const perShare = Number(t.price);
+    if (!Number.isFinite(perShare) || perShare <= 0) continue;
+
+    const monthNum = parseInt(payDate.substring(5, 7), 10);
+    if (monthNum < 1 || monthNum > 12) continue;
+
+    const sym = t.symbol.toUpperCase();
+    if (!acc[sym]) acc[sym] = { months: new Set<number>(), annualPerShare: 0 };
+    acc[sym].months.add(monthNum);
+    acc[sym].annualPerShare += perShare;
+  }
+
+  const result: Record<string, { payoutMonths: number[]; annualPerShareDividend: number; source: 'LEDGER_TTM' }> = {};
+  for (const [sym, data] of Object.entries(acc)) {
+    if (data.annualPerShare > 0 && data.months.size > 0) {
+      result[sym] = {
+        payoutMonths: Array.from(data.months).sort((a, b) => a - b),
+        annualPerShareDividend: Number(data.annualPerShare.toFixed(4)),
+        source: 'LEDGER_TTM',
+      };
+    }
+  }
+  return result;
+}
+
+/**
  * 全域單一時序事實來源 (SSOT)：解析現金股利交易之實質入帳發放日 (Effective Payment Date)
  * 優先採用交易紀錄明確指定之 payDate；若無則依據市場慣例推估
  */

@@ -512,9 +512,10 @@ describe('KLineChartCard - 專業互動與多功能副圖 (Ticket 35 / Stage 1)'
 
       const candles = buildCandles(10, 'FLAT').map((c) => ({
         ...c,
-        k: 80,
-        d: 80,
-        j: 80,
+        open: 100,
+        high: 100,
+        low: 100,
+        close: 100,
       }));
       const html = renderToStaticMarkup(
         React.createElement(KLineChartCard, {

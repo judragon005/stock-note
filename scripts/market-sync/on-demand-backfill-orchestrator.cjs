@@ -120,7 +120,54 @@ async function runWithNonBlockingTimeout(
 }
 
 /**
- * 按需拉取台股歷史除權息紀錄 (FinMind TaiwanStockDividend -> fallback Yahoo Chart events)
+ * 判斷標的代碼是否為美股代碼 (非台股 4~6 碼數字/債券/主動 ETF)
+ */
+function isUsMarketSymbol(symbol) {
+  const clean = String(symbol || '').trim().toUpperCase();
+  if (!clean) return false;
+  if (/^\d{4,6}[A-Z]?$/.test(clean) || clean.endsWith('.TW') || clean.endsWith('.TWO')) {
+    return false;
+  }
+  return /^[A-Z][A-Z0-9.-]{0,9}$/.test(clean);
+}
+
+/**
+ * 共用 Yahoo Finance Chart API 除息事件抓取與正規化輔助函式 (Spec 0249 Review DRY)
+ */
+async function fetchYahooDividendEvents(yahooTicker, range, market, canonicalSymbol, fetcher, signal) {
+  const actions = [];
+  const yhUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?range=${range}&interval=1d&events=div%2Csplit`;
+  const res = await fetcher(yhUrl, {
+    headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
+    ...(signal ? { signal } : {}),
+  });
+  if (res && res.ok) {
+    const json = await res.json();
+    const divs = json?.chart?.result?.[0]?.events?.dividends || {};
+    for (const item of Object.values(divs)) {
+      if (!item || !item.date) continue;
+      const exDate = new Date(item.date * 1000).toISOString().slice(0, 10);
+      const cashDiv = Number(item.amount) || 0;
+      if (cashDiv > 0) {
+        actions.push({
+          symbol: canonicalSymbol,
+          market,
+          action_type: 'DIVIDEND',
+          ex_date: exDate,
+          payment_date: null,
+          cash_dividend_per_share: Number(cashDiv.toFixed(4)),
+          stock_dividend_ratio: 0,
+        });
+      }
+    }
+  }
+  return actions;
+}
+
+/**
+ * 按需拉取台股或美股歷史除權息紀錄 (Spec 0249 T07)
+ * - 美股：Yahoo Finance Chart API (range=2y, events=div,split) 冪等寫入 corporate_action_calendar
+ * - 台股：FinMind TaiwanStockDividend -> fallback Yahoo Chart (.TW / .TWO)
  */
 async function backfillSymbolDividendsFromRemote(
   symbol,
@@ -132,72 +179,65 @@ async function backfillSymbolDividendsFromRemote(
   if (signal?.aborted) return 0;
 
   const cleanSymbol = String(symbol).trim().toUpperCase();
-  const querySym = stripOtcSuffix(cleanSymbol);
+  const isUs = isUsMarketSymbol(cleanSymbol);
+  const querySym = isUs ? cleanSymbol : stripOtcSuffix(cleanSymbol);
   const startDate = new Date(Date.now() - 5 * 365 * 86400000).toISOString().slice(0, 10);
 
   const actions = [];
-  try {
-    const fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockDividend&data_id=${encodeURIComponent(querySym)}&start_date=${startDate}`;
-    const res = await fetcher(fmUrl, {
-      headers: { Accept: 'application/json', 'User-Agent': 'StockTracker/1.0 (local-sync)' },
-      ...(signal ? { signal } : {}),
-    });
-    if (res && res.ok) {
-      const json = await res.json();
-      const rows = Array.isArray(json?.data) ? json.data : [];
-      for (const r of rows) {
-        const exDate = r.CashExDividendTradingDate || r.StockExDividendTradingDate;
-        if (!exDate || !/^\d{4}-\d{2}-\d{2}$/.test(String(exDate).slice(0, 10))) continue;
-        const cashDiv = Number(r.CashEarningsDistribution || 0) + Number(r.CashStatutorySurplus || 0);
-        const stockDiv = Number(r.StockEarningsDistribution || 0) + Number(r.StockStatutorySurplus || 0);
-        actions.push({
-          symbol: cleanSymbol,
-          market: 'TW',
-          action_type: 'DIVIDEND',
-          ex_date: String(exDate).slice(0, 10),
-          payment_date: r.CashDividendPaymentDate ? String(r.CashDividendPaymentDate).slice(0, 10) : null,
-          cash_dividend_per_share: Number.isFinite(cashDiv) ? Number(cashDiv.toFixed(4)) : 0,
-          stock_dividend_ratio: Number.isFinite(stockDiv) ? Number(stockDiv.toFixed(4)) : 0,
-        });
-      }
+  if (isUs) {
+    try {
+      actions.push(...(await fetchYahooDividendEvents(querySym, '2y', 'US', cleanSymbol, fetcher, signal)));
+    } catch (err) {
+      if (err && err.name === 'AbortError') return 0;
     }
-  } catch (err) {
-    if (err && err.name === 'AbortError') return 0;
-  }
-
-  if (actions.length === 0 && !signal?.aborted) {
-    // 支援上市 (.TW) 與上櫃 (.TWO) 雙試探 (Spec 0239 T03)
-    for (const suffix of ['.TW', '.TWO']) {
-      if (signal?.aborted) break;
-      try {
-        const yhUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(querySym)}${suffix}?range=5y&interval=1d&events=div%2Csplit`;
-        const res = await fetcher(yhUrl, {
-          headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
-          ...(signal ? { signal } : {}),
-        });
-        if (res && res.ok) {
-          const json = await res.json();
-          const divs = json?.chart?.result?.[0]?.events?.dividends || {};
-          for (const item of Object.values(divs)) {
-            if (!item || !item.date) continue;
-            const exDate = new Date(item.date * 1000).toISOString().slice(0, 10);
-            const cashDiv = Number(item.amount) || 0;
-            if (cashDiv > 0) {
-              actions.push({
-                symbol: cleanSymbol,
-                market: 'TW',
-                action_type: 'DIVIDEND',
-                ex_date: exDate,
-                payment_date: null,
-                cash_dividend_per_share: Number(cashDiv.toFixed(4)),
-                stock_dividend_ratio: 0,
-              });
-            }
-          }
+  } else {
+    try {
+      const fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockDividend&data_id=${encodeURIComponent(querySym)}&start_date=${startDate}`;
+      const res = await fetcher(fmUrl, {
+        headers: { Accept: 'application/json', 'User-Agent': 'StockTracker/1.0 (local-sync)' },
+        ...(signal ? { signal } : {}),
+      });
+      if (res && res.ok) {
+        const json = await res.json();
+        const rows = Array.isArray(json?.data) ? json.data : [];
+        for (const r of rows) {
+          const exDate = r.CashExDividendTradingDate || r.StockExDividendTradingDate;
+          if (!exDate || !/^\d{4}-\d{2}-\d{2}$/.test(String(exDate).slice(0, 10))) continue;
+          const cashDiv = Number(r.CashEarningsDistribution || 0) + Number(r.CashStatutorySurplus || 0);
+          const stockDiv = Number(r.StockEarningsDistribution || 0) + Number(r.StockStatutorySurplus || 0);
+          actions.push({
+            symbol: cleanSymbol,
+            market: 'TW',
+            action_type: 'DIVIDEND',
+            ex_date: String(exDate).slice(0, 10),
+            payment_date: r.CashDividendPaymentDate ? String(r.CashDividendPaymentDate).slice(0, 10) : null,
+            cash_dividend_per_share: Number.isFinite(cashDiv) ? Number(cashDiv.toFixed(4)) : 0,
+            stock_dividend_ratio: Number.isFinite(stockDiv) ? Number(stockDiv.toFixed(4)) : 0,
+          });
         }
-        if (actions.length > 0) break;
-      } catch (err) {
-        if (err && err.name === 'AbortError') break;
+      }
+    } catch (err) {
+      if (err && err.name === 'AbortError') return 0;
+    }
+
+    if (actions.length === 0 && !signal?.aborted) {
+      // 支援上市 (.TW) 與上櫃 (.TWO) 雙試探 (Spec 0239 T03)
+      for (const suffix of ['.TW', '.TWO']) {
+        if (signal?.aborted) break;
+        try {
+          const yahooActions = await fetchYahooDividendEvents(
+            `${querySym}${suffix}`,
+            '5y',
+            'TW',
+            cleanSymbol,
+            fetcher,
+            signal
+          );
+          actions.push(...yahooActions);
+          if (actions.length > 0) break;
+        } catch (err) {
+          if (err && err.name === 'AbortError') break;
+        }
       }
     }
   }
@@ -292,15 +332,104 @@ async function runOnDemandSymbolBackfill(
   }
 }
 
+/**
+ * 批次針對在席持倉美股按需同步近 2 年真實現金股利至 corporate_action_calendar (Spec 0249 T07)
+ */
+async function backfillUsHoldingsDividends(
+  symbols = [],
+  customDbPath,
+  fetcher = globalThis.fetch,
+  signal = undefined
+) {
+  const uniqueUs = Array.from(
+    new Set(
+      (symbols || [])
+        .map((s) => String(s || '').trim().toUpperCase())
+        .filter((s) => isUsMarketSymbol(s))
+    )
+  );
+  let totalSaved = 0;
+  const perSymbol = {};
+  for (const sym of uniqueUs) {
+    if (signal?.aborted) break;
+    const saved = await backfillSymbolDividendsFromRemote(sym, customDbPath, fetcher, signal);
+    perSymbol[sym] = saved;
+    totalSaved += saved;
+  }
+  return { totalSaved, perSymbol, syncedSymbols: uniqueUs };
+}
+
+/**
+ * 批次查詢 SQLite corporate_action_calendar 之 TTM (近 12 個月) 真實每股配息與慣性月份 (Spec 0249 T07)
+ * 嚴守 Causal Horizon Wall (ex_date <= todayStr)，不允許未來未到期公告倒灌歷史 TTM。
+ */
+function queryTtmDividendProfiles(symbols = [], customDbPath, todayStr) {
+  const cleanSymbols = Array.from(
+    new Set((symbols || []).map((s) => String(s || '').trim().toUpperCase()).filter(Boolean))
+  );
+  if (cleanSymbols.length === 0) return {};
+
+  const effectiveToday =
+    typeof todayStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(todayStr)
+      ? todayStr
+      : new Date().toISOString().slice(0, 10);
+  const cutoffStr = new Date(Date.parse(`${effectiveToday}T00:00:00Z`) - 365 * 86400000)
+    .toISOString()
+    .slice(0, 10);
+
+  const db = initSqliteLakehouseDb(customDbPath);
+  const placeholders = cleanSymbols.map(() => '?').join(',');
+  const rows = db
+    .prepare(
+      `SELECT symbol, ex_date, payment_date, cash_dividend_per_share
+       FROM corporate_action_calendar
+       WHERE symbol IN (${placeholders})
+         AND action_type = 'DIVIDEND'
+         AND ex_date <= ?
+         AND ex_date >= ?
+         AND cash_dividend_per_share > 0
+       ORDER BY ex_date ASC`
+    )
+    .all(...cleanSymbols, effectiveToday, cutoffStr);
+
+  const grouped = {};
+  for (const row of rows) {
+    const sym = String(row.symbol || '').toUpperCase();
+    const dateForMonth = row.payment_date || row.ex_date;
+    if (!dateForMonth || dateForMonth.length < 7) continue;
+    const monthNum = parseInt(dateForMonth.slice(5, 7), 10);
+    if (monthNum < 1 || monthNum > 12) continue;
+
+    if (!grouped[sym]) grouped[sym] = { months: new Set(), annualPerShare: 0 };
+    grouped[sym].months.add(monthNum);
+    grouped[sym].annualPerShare += Number(row.cash_dividend_per_share) || 0;
+  }
+
+  const profiles = {};
+  for (const [sym, data] of Object.entries(grouped)) {
+    if (data.annualPerShare > 0 && data.months.size > 0) {
+      profiles[sym] = {
+        payoutMonths: Array.from(data.months).sort((a, b) => a - b),
+        annualPerShareDividend: Number(data.annualPerShare.toFixed(4)),
+        source: 'LAKEHOUSE_TTM',
+      };
+    }
+  }
+  return profiles;
+}
+
 module.exports = {
   ON_DEMAND_COOLDOWN_MS,
   ON_DEMAND_FAILURE_COOLDOWN_MS,
   ON_DEMAND_TIMEOUT_MS,
   ON_DEMAND_BG_MAX_MS,
+  isUsMarketSymbol,
   isOnDemandBackfillInFlight,
   clearOnDemandBackfillState,
   runWithAbortTimeout,
   runWithNonBlockingTimeout,
   backfillSymbolDividendsFromRemote,
+  backfillUsHoldingsDividends,
+  queryTtmDividendProfiles,
   runOnDemandSymbolBackfill,
 };
