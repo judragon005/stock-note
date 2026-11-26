@@ -8,6 +8,7 @@ import type {
   UpcomingCatalyst,
 } from '../../types/macro';
 import { groupCatalystsByTimeline } from '../../engine/macroAdvisorEngine';
+import { ModalShell } from '../common/ModalShell';
 import type { MarketType } from '../../types/stock';
 
 export interface CatalystCalendarCardProps {
@@ -304,31 +305,18 @@ export const CatalystCalendarCard: React.FC<CatalystCalendarCardProps> = ({
         </div>
       )}
 
-      {isCustomModalOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.65)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: '16px',
-          }}
-          onClick={() => setIsCustomModalOpen(false)}
-        >
-          <div
-            style={{
-              background: 'var(--bg-secondary, #1e293b)',
-              border: '1px solid rgba(148, 163, 184, 0.25)',
-              borderRadius: '14px',
-              padding: '24px',
-              width: '100%',
-              maxWidth: '440px',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
+      <ModalShell
+        isOpen={isCustomModalOpen}
+        onClose={() => setIsCustomModalOpen(false)}
+        maxWidth="440px"
+        padding="24px"
+        ariaLabel="新增自訂關鍵財經事件"
+        contentStyle={{
+          background: 'var(--bg-secondary, #1e293b)',
+          border: '1px solid rgba(148, 163, 184, 0.25)',
+          borderRadius: '14px',
+        }}
+      >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
               <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Calendar size={18} style={{ color: 'var(--accent-primary)' }} />
@@ -402,9 +390,7 @@ export const CatalystCalendarCard: React.FC<CatalystCalendarCardProps> = ({
                 <button type="submit" className="btn btn-primary">確認儲存</button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </ModalShell>
     </div>
   );
 };

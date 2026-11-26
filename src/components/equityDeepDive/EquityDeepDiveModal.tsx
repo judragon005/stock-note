@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { ModalShell } from '../common/ModalShell';
 import { MarketType, HoldingPosition } from '../../types/stock';
 import { EquityDeepDiveInput, InvestmentMemoRecord } from '../../types/equityDeepDive';
 import { generateFull7StepsPromptPayload } from '../../engine/equityDeepDiveEngine';
@@ -251,34 +252,21 @@ export const EquityDeepDiveModal: React.FC<EquityDeepDiveModalProps> = ({
   };
 
   return (
-    <div
-      data-testid="equity-deep-dive-modal"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.85)',
-        backdropFilter: 'blur(8px)',
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px',
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      layout="flex-fixed"
+      dirty={Boolean(buyReason.trim() || thesisInvalidation.trim())}
+      maxWidth="1000px"
+      dataTestId="equity-deep-dive-modal"
+      ariaLabel="個股七步深度投研分析"
+      contentStyle={{
+        backgroundColor: '#0f172a',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: '16px',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)',
       }}
     >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '1000px',
-          maxHeight: '90vh',
-          backgroundColor: '#0f172a',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          borderRadius: '16px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-      >
         {/* Modal 頂部標題 */}
         <div
           style={{
@@ -803,7 +791,6 @@ export const EquityDeepDiveModal: React.FC<EquityDeepDiveModalProps> = ({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

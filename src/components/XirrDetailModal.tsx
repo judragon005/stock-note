@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { XirrResult, CashFlowEvent } from '../engine/xirrCalculator';
 import { Currency } from '../types/stock';
+import { ModalShell } from './common/ModalShell';
 
 export interface XirrDetailModalProps {
   isOpen: boolean;
@@ -55,61 +56,58 @@ export const XirrDetailModal: React.FC<XirrDetailModalProps> = ({
     };
   });
 
+  const renderCategoryPill = (label: string, color: string, bg: string, border: string) => (
+    <span
+      style={{
+        display: 'inline-block',
+        padding: '2px 8px',
+        fontSize: '0.75rem',
+        borderRadius: '4px',
+        fontWeight: 700,
+        color,
+        backgroundColor: bg,
+        border: `1px solid ${border}`,
+      }}
+    >
+      {label}
+    </span>
+  );
+
   const getCategoryBadge = (category?: string, amount?: number) => {
     switch (category) {
       case 'DEPOSIT':
-        return <span className="px-2 py-0.5 text-xs rounded font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">銀行入金</span>;
+        return renderCategoryPill('銀行入金', '#fbbf24', 'rgba(245, 158, 11, 0.2)', 'rgba(245, 158, 11, 0.35)');
       case 'WITHDRAWAL':
-        return <span className="px-2 py-0.5 text-xs rounded font-bold bg-purple-500/20 text-purple-400 border border-purple-500/30">銀行出金</span>;
+        return renderCategoryPill('銀行出金', '#c084fc', 'rgba(168, 85, 247, 0.2)', 'rgba(168, 85, 247, 0.35)');
       case 'BUY':
-        return <span className="px-2 py-0.5 text-xs rounded font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">股票買進</span>;
+        return renderCategoryPill('股票買進', '#60a5fa', 'rgba(59, 130, 246, 0.2)', 'rgba(59, 130, 246, 0.35)');
       case 'SELL':
-        return <span className="px-2 py-0.5 text-xs rounded font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">股票賣出</span>;
+        return renderCategoryPill('股票賣出', '#34d399', 'rgba(16, 185, 129, 0.2)', 'rgba(16, 185, 129, 0.35)');
       case 'DIVIDEND':
-        return <span className="px-2 py-0.5 text-xs rounded font-bold bg-pink-500/20 text-pink-400 border border-pink-500/30">現金股利</span>;
+        return renderCategoryPill('現金股利', '#f472b6', 'rgba(236, 72, 153, 0.2)', 'rgba(236, 72, 153, 0.35)');
       case 'TERMINAL_VALUE':
-        return <span className="px-2 py-0.5 text-xs rounded font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">期末結算淨值</span>;
+        return renderCategoryPill('期末結算淨值', '#22d3ee', 'rgba(6, 182, 212, 0.2)', 'rgba(6, 182, 212, 0.35)');
       default:
         return (amount || 0) < 0
-          ? <span className="px-2 py-0.5 text-xs rounded font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">現金流出</span>
-          : <span className="px-2 py-0.5 text-xs rounded font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">現金流入</span>;
+          ? renderCategoryPill('現金流出', '#60a5fa', 'rgba(59, 130, 246, 0.2)', 'rgba(59, 130, 246, 0.35)')
+          : renderCategoryPill('現金流入', '#34d399', 'rgba(16, 185, 129, 0.2)', 'rgba(16, 185, 129, 0.35)');
     }
   };
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(5, 8, 18, 0.82)',
-        backdropFilter: 'blur(10px)',
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px',
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      layout="flex-fixed"
+      maxWidth="860px"
+      ariaLabel={title}
+      contentStyle={{
+        backgroundColor: '#0f172a',
+        borderRadius: '16px',
+        border: '1px solid rgba(56, 189, 248, 0.3)',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
       }}
-      onClick={onClose}
     >
-      <div
-        className="glass-card"
-        style={{
-          width: '100%',
-          maxWidth: '860px',
-          maxHeight: '90vh',
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: '#0f172a',
-          borderRadius: '16px',
-          border: '1px solid rgba(56, 189, 248, 0.3)',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
-          overflow: 'hidden',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
         {/* 頂部標題列 */}
         <div
           style={{
@@ -407,7 +405,6 @@ export const XirrDetailModal: React.FC<XirrDetailModalProps> = ({
             關閉視窗
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

@@ -43,6 +43,12 @@
   --shadow-glow-emerald: 0 0 24px rgba(16, 185, 129, 0.18);
   --shadow-glow-blue: 0 0 24px rgba(59, 130, 246, 0.18);
   --shadow-glow-purple: 0 0 24px rgba(139, 92, 246, 0.18);
+
+  /* Spec 0250: 分層視口高度 Token (Tooltip < Base Modal < Nested Modal < Critical Security Modal) */
+  --z-tooltip: 950;
+  --z-modal-base: 1000;
+  --z-modal-nested: 1100;
+  --z-modal-critical: 1200;
 }
 
 /* 台灣市場主題：紅漲綠跌 */
@@ -357,7 +363,7 @@ body {
   background: #3b4d68;
 }
 
-/* Modal Overlay & Dialog */
+/* Modal Overlay & Dialog (Spec 0245 / Spec 0250 Viewport Overlay Kernel) */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -367,7 +373,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal-base, 1000);
   padding: 20px;
 }
 
@@ -375,6 +381,29 @@ body {
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
+  outline: none;
+}
+
+.modal-content--flex-fixed {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.modal-dirty-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  color: #fde68a;
+  font-size: 0.84rem;
 }
 
 /* 宏觀戰情室與動能雷達 (War Room & Momentum Radar CSS System) */

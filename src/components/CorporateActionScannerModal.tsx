@@ -3,6 +3,7 @@ import { TradeRecord } from '../types/stock';
 import { scanCorporateActions, ScannedCorporateAction, ScanProgress } from '../engine/corporateActionScanner';
 import { estimatePaymentDate } from '../engine/receivableDividendEngine';
 import { X, Sparkles, CheckCircle2, RefreshCw, Square, Play, AlertCircle } from 'lucide-react';
+import { ModalShell } from './common/ModalShell';
 import { logger } from '../utils/logger';
 import { formatCurrencyAmount, formatSharesCount, normalizeCurrencyPrecision } from '../utils/formatters';
 
@@ -230,32 +231,21 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
   const isPaused = !loading && progress.status === 'paused' && remainingCount > 0;
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(3, 7, 18, 0.85)',
-        backdropFilter: 'blur(10px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        padding: '20px',
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      closeLocked={loading}
+      layout="flex-fixed"
+      maxWidth="820px"
+      padding="26px"
+      ariaLabel="歷史除權息自動掃描與補登"
+      contentClassName="animate-fade-in"
+      contentStyle={{
+        position: 'relative',
+        maxHeight: '92vh',
+        boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(139, 92, 246, 0.15)',
       }}
     >
-      <div
-        className="glass-card animate-fade-in"
-        style={{
-          width: '100%',
-          maxWidth: '820px',
-          padding: '26px',
-          position: 'relative',
-          maxHeight: '92vh',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(139, 92, 246, 0.15)',
-        }}
-      >
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -598,7 +588,6 @@ export const CorporateActionScannerModal: React.FC<CorporateActionScannerModalPr
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

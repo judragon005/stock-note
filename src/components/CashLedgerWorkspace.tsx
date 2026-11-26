@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { ModalShell } from './common/ModalShell';
 import {
   BrokerAccount,
   CashTransaction,
@@ -1744,13 +1745,20 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
       </div>
 
       {/* 餘額校正彈窗 */}
-      {reconcileTarget && (
-        <div className="modal-overlay" onClick={() => setReconcileTarget(null)}>
-          <div
-            className="glass-card modal-content"
-            style={{ maxWidth: '480px', padding: '24px', borderRadius: '18px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(59, 130, 246, 0.5)' }}
-            onClick={(e) => e.stopPropagation()}
-          >
+      <ModalShell
+        isOpen={Boolean(reconcileTarget)}
+        onClose={() => setReconcileTarget(null)}
+        maxWidth="480px"
+        padding="24px"
+        ariaLabel="交割戶真實現金餘額校正"
+        contentStyle={{
+          borderRadius: '18px',
+          background: 'rgba(15, 23, 42, 0.95)',
+          border: '1px solid rgba(59, 130, 246, 0.5)',
+        }}
+      >
+        {reconcileTarget && (
+          <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid rgba(51, 65, 85, 0.5)', paddingBottom: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ padding: '8px', borderRadius: '10px', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', color: '#60a5fa' }}>
@@ -1839,9 +1847,9 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </ModalShell>
 
       {/* 借貸快速繳息 / 還款 / 一鍵結清彈窗 */}
       {payLoanTarget && (() => {
@@ -1850,12 +1858,18 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
         const currSym = payLoanTarget.loan.currency === 'USD' ? '$' : 'NT$';
 
         return (
-          <div className="modal-overlay" onClick={() => setPayLoanTarget(null)}>
-            <div
-              className="glass-card modal-content"
-              style={{ maxWidth: '480px', padding: '24px', borderRadius: '18px', background: 'rgba(15, 23, 42, 0.95)', border: `1px solid ${isFullPayoff ? 'rgba(56, 189, 248, 0.5)' : 'rgba(168, 85, 247, 0.5)'}` }}
-              onClick={(e) => e.stopPropagation()}
-            >
+          <ModalShell
+            isOpen={true}
+            onClose={() => setPayLoanTarget(null)}
+            maxWidth="480px"
+            padding="24px"
+            ariaLabel={isFullPayoff ? '一鍵全額結清借款' : '貸款還款 / 繳息沖償'}
+            contentStyle={{
+              borderRadius: '18px',
+              background: 'rgba(15, 23, 42, 0.95)',
+              border: `1px solid ${isFullPayoff ? 'rgba(56, 189, 248, 0.5)' : 'rgba(168, 85, 247, 0.5)'}`,
+            }}
+          >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid rgba(51, 65, 85, 0.5)', paddingBottom: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div style={{ padding: '8px', borderRadius: '10px', background: isFullPayoff ? 'rgba(56, 189, 248, 0.15)' : 'rgba(168, 85, 247, 0.15)', border: `1px solid ${isFullPayoff ? 'rgba(56, 189, 248, 0.3)' : 'rgba(168, 85, 247, 0.3)'}`, color: isFullPayoff ? '#38bdf8' : '#c084fc' }}>
@@ -2066,8 +2080,7 @@ export const CashLedgerWorkspace: React.FC<CashLedgerWorkspaceProps> = ({
                   </button>
                 </div>
               </form>
-            </div>
-          </div>
+          </ModalShell>
         );
       })()}
 

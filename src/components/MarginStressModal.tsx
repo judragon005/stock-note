@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { ModalShell } from './common/ModalShell';
 import { X, TrendingDown, RefreshCw, CheckCircle, Info, Calculator, ShieldCheck, ShieldAlert, LifeBuoy, Zap } from 'lucide-react';
 import { HoldingPosition, LoanRecord } from '../types/stock';
 import { calculateMarginStress } from '../engine/marginStressEngine';
@@ -89,37 +90,19 @@ export const MarginStressModal: React.FC<MarginStressModalProps> = ({
   };
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(6px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        padding: '16px',
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      layout="flex-fixed"
+      maxWidth="840px"
+      ariaLabel="質押維持率極端壓力測試與黑天鵝模擬"
+      contentStyle={{
+        backgroundColor: 'var(--bg-card, #1e293b)',
+        border: '1px solid var(--border-color, rgba(255,255,255,0.1))',
+        borderRadius: '16px',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
       }}
     >
-      <div
-        className="glass-card"
-        style={{
-          width: '100%',
-          maxWidth: '840px',
-          maxHeight: '90vh',
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: 'var(--bg-card, #1e293b)',
-          border: '1px solid var(--border-color, rgba(255,255,255,0.1))',
-          borderRadius: '16px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-          overflow: 'hidden',
-        }}
-      >
         {/* Modal 標頭 */}
         <div
           style={{
@@ -814,7 +797,6 @@ export const MarginStressModal: React.FC<MarginStressModalProps> = ({
             關閉視窗
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

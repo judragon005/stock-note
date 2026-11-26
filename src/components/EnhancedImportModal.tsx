@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { ModalShell } from './common/ModalShell';
 import {
   UploadCloud,
   X,
@@ -292,22 +293,17 @@ export const EnhancedImportModal: React.FC<EnhancedImportModalProps> = ({
     return analyzeTradesDeduplication(parsedIncomingTrades, existingTrades);
   }, [parsedIncomingTrades, existingTrades]);
 
-  if (!isOpen) return null;
-
   return (
-    <div className="modal-overlay">
-      <div
-        className="glass-card modal-content"
-        style={{
-          maxWidth: '860px',
-          width: '94%',
-          maxHeight: '90vh',
-          padding: '24px',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-      >
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      layout="flex-fixed"
+      dirty={Boolean(rawFile)}
+      maxWidth="860px"
+      padding="24px"
+      ariaLabel="增強型 CSV / JSON 智慧匯入精靈"
+      contentStyle={{ width: '94%' }}
+    >
         {/* Header & Steps Indicator */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -892,7 +888,6 @@ export const EnhancedImportModal: React.FC<EnhancedImportModalProps> = ({
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

@@ -168,7 +168,7 @@ export const TermTooltip: React.FC<TermTooltipProps> = ({
       position: 'fixed',
       top: `${coords.top}px`,
       left: `${coords.left}px`,
-      zIndex: 999999,
+      zIndex: 'var(--z-tooltip, 950)' as unknown as number,
       width: TOOLTIP_POPUP_CONFIG.width,
       maxWidth: 'calc(100vw - 24px)',
       maxHeight: TOOLTIP_POPUP_CONFIG.maxHeight,

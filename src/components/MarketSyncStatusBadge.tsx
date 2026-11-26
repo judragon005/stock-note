@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { RefreshCw, CheckCircle2, Clock, Database, X, ChevronRight } from 'lucide-react';
+import { ModalShell } from './common/ModalShell';
 import {
   MarketSyncStatusResponse,
   LAKEHOUSE_SYNCED_EVENT,
@@ -229,15 +229,14 @@ export const MarketSyncStatusBadge: React.FC<MarketSyncStatusBadgeProps> = ({
         )}
       </div>
 
-      {showModal && typeof document !== 'undefined' && createPortal(
-        <div
-          onClick={() => setShowModal(false)}
-          style={MODAL_VIEWPORT_STYLES.overlay}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={MODAL_VIEWPORT_STYLES.card}
-          >
+      <ModalShell
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        maxWidth="520px"
+        padding="24px"
+        ariaLabel="SQLite 湖倉單一同步遙測狀態"
+        contentStyle={MODAL_VIEWPORT_STYLES.card}
+      >
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(51, 65, 85, 0.4)', paddingBottom: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -424,10 +423,7 @@ export const MarketSyncStatusBadge: React.FC<MarketSyncStatusBadgeProps> = ({
                 完成
               </button>
             </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      </ModalShell>
     </>
   );
 };

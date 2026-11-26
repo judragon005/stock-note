@@ -5,6 +5,7 @@ import { calculatePlannedRiskRewardRatio } from '../engine/riskAlertEngine';
 import { searchStockSuggestions, resolveOfficialSecurityName, registerCustomStockName } from '../engine/stockNameResolver';
 import { StockDictionaryItem } from '../types/stockDictionary';
 import { X, Plus, Calculator, Zap, Sparkles, Calendar, Target, ShieldAlert, TrendingUp } from 'lucide-react';
+import { ModalShell } from './common/ModalShell';
 
 interface TradeModalProps {
   isOpen: boolean;
@@ -455,33 +456,24 @@ export const TradeModal: React.FC<TradeModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
+  const isTradeFormDirty = Boolean(
+    !editingTrade && (symbol.trim() || shares.trim() || price.trim() || note.trim())
+  );
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(3, 7, 18, 0.8)',
-        backdropFilter: 'blur(8px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        padding: '20px',
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      dirty={isTradeFormDirty}
+      maxWidth="640px"
+      padding="28px"
+      ariaLabel={editingTrade ? '編輯交易紀錄' : '新增交易紀錄'}
+      contentClassName="animate-fade-in"
+      contentStyle={{
+        position: 'relative',
+        maxHeight: '92vh',
       }}
     >
-      <div
-        className="glass-card animate-fade-in"
-        style={{
-          width: '100%',
-          maxWidth: '640px',
-          padding: '28px',
-          position: 'relative',
-          maxHeight: '92vh',
-          overflowY: 'auto',
-        }}
-      >
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -2157,7 +2149,6 @@ export const TradeModal: React.FC<TradeModalProps> = ({
             </div>
           </div>
         </form>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

@@ -7,6 +7,7 @@ import {
   Currency,
 } from '../types/stock';
 import { createFxTransferPair, getSettlementDate } from '../engine/cashLedgerEngine';
+import { ModalShell } from './common/ModalShell';
 import {
   X,
   ArrowDownRight,
@@ -212,12 +213,18 @@ export const CashTransactionModal: React.FC<CashTransactionModalProps> = ({
   ];
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="glass-card modal-content"
-        style={{ maxWidth: '540px', padding: '24px', borderRadius: '18px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(51, 65, 85, 0.8)' }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="540px"
+      padding="24px"
+      ariaLabel={initialTransaction ? '編輯現金流水' : '記錄現金收支 / 換匯調撥'}
+      contentStyle={{
+        borderRadius: '18px',
+        background: 'rgba(15, 23, 42, 0.95)',
+        border: '1px solid rgba(51, 65, 85, 0.8)',
+      }}
+    >
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid rgba(51, 65, 85, 0.5)', paddingBottom: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -588,7 +595,6 @@ export const CashTransactionModal: React.FC<CashTransactionModalProps> = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

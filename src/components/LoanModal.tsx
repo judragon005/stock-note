@@ -8,6 +8,7 @@ import {
   CollateralItem,
 } from '../types/stock';
 import { X, ShieldAlert, Plus, Trash2, ShieldCheck, Receipt } from 'lucide-react';
+import { ModalShell } from './common/ModalShell';
 
 interface LoanModalProps {
   isOpen: boolean;
@@ -182,12 +183,18 @@ export const LoanModal: React.FC<LoanModalProps> = ({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="glass-card modal-content"
-        style={{ maxWidth: '560px', padding: '24px', borderRadius: '18px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(168, 85, 247, 0.4)' }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="560px"
+      padding="24px"
+      ariaLabel={initialLoan ? '編輯借貸 / 質押項目' : '新增借貸 / 股票質押'}
+      contentStyle={{
+        borderRadius: '18px',
+        background: 'rgba(15, 23, 42, 0.95)',
+        border: '1px solid rgba(168, 85, 247, 0.4)',
+      }}
+    >
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid rgba(51, 65, 85, 0.5)', paddingBottom: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -573,7 +580,6 @@ export const LoanModal: React.FC<LoanModalProps> = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

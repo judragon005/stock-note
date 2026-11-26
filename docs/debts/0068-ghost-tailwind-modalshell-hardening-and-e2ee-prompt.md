@@ -1,7 +1,7 @@
 # Debt 0068: 75 處未安裝幽靈 Tailwind CSS 根除、ModalShell 原語強化與明文 E2EE prompt 汰換 (Wave 3)
 
 - **優先級 (Priority)**: `P2`
-- **狀態 (Status)**: `OPEN`
+- **狀態 (Status)**: `RESOLVED`（已於 Spec 0250 / ADR 0250 / Issue `#615` Wave 3 完成 75 處幽靈 Tailwind 清零、`ModalShell` Kernel 強化、`PassphraseModal` 取代明文 E2EE prompt 與不變量 13–14 守門）
 - **發現來源**: Spec 0247 五路正交法醫審計 (Issue `#609`)
 - **標籤**: `UI` · `Accessibility` · `Security` · `ModalShell` · `Wave3`
 - **預計觸發時機**: Wave 3（規劃為 `Spec 0250`，作為 [Debt 0063](0063-legacy-modals-portal-shell-migration.md) 全站 23 顆有效彈窗遷移之前置與同期任務）
